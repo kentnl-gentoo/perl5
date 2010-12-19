@@ -27,12 +27,14 @@ require 5.010_001;
 use strict;
 use warnings;
 use Carp;
+use Config;
 use File::Find;
 use File::Path;
 use File::Spec;
 use Text::Tabs;
 
 sub DEBUG () { 0 }  # Set to 0 for production; 1 for development
+my $debugging_build = $Config{"ccflags"} =~ /-DDEBUGGING/;
 
 ##########################################################################
 #
@@ -162,7 +164,10 @@ my $map_directory = 'To';        # Where map files go.
 # out.  But all the ones which can be used in regular expression \p{} and \P{}
 # constructs will.  Generally a property will have either its map table or its
 # match tables written but not both.  Again, what gets written is controlled
-# by lists which can easily be changed.
+# by lists which can easily be changed.  Properties have a 'Type', like
+# binary, or string, or enum depending on how many match tables there are and
+# the content of the maps.  This 'Type' is different than a range 'Type', so
+# don't get confused by the two concepts having the same name.
 #
 # For information about the Unicode properties, see Unicode's UAX44 document:
 
@@ -187,7 +192,7 @@ my $unicode_reference_url = 'http://www.unicode.org/reports/tr44/';
 # files for some are suppressed from apparent lack of demand for them.  You
 # can change which are output by changing lists in this program.
 #
-# The old version of mktables emphasized the term "Fuzzy" to mean Unocde's
+# The old version of mktables emphasized the term "Fuzzy" to mean Unicode's
 # loose matchings rules (from Unicode TR18):
 #
 #    The recommended names for UCD properties and property values are in
@@ -633,8 +638,9 @@ my $make_list = 1;             # ? Should we write $file_list.  Set to always
                                # special things
 my $glob_list = 0;             # ? Should we try to include unknown .txt files
                                # in the input.
-my $output_range_counts = 1;   # ? Should we include the number of code points
-                               # in ranges in the output
+my $output_range_counts = $debugging_build;   # ? Should we include the number
+                                              # of code points in ranges in
+                                              # the output
 my $annotate = 0;              # ? Should character names be in the output
 
 # Verbosity levels; 0 is quiet
@@ -694,6 +700,8 @@ while (@ARGV) {
     }
     elsif ($arg eq '-annotate') {
         $annotate = 1;
+        $debugging_build = 1;
+        $output_range_counts = 1;
     }
     else {
         my $with_c = 'with';
@@ -1374,10 +1382,11 @@ sub populate_char_info ($) {
             $end = min($block->containing_range($i)->end,
                        $unassigned_sans_noncharacters-> containing_range($i)->
                                                                          end);
-        } else {
-            my_carp_bug("Can't figure out how to annotate"
-                        . sprintf("U+%04X", $i)
-                        . "Proceeding anyway.");
+        }
+        else {
+            Carp::my_carp_bug("Can't figure out how to annotate "
+                              . sprintf("U+%04X", $i)
+                              . ".  Proceeding anyway.");
             $viacode[$i] = 'UNKNOWN';
             $annotate_char_type[$i] = $UNKNOWN_TYPE;
             $printable[$i] = 0;
@@ -4800,6 +4809,8 @@ sub trace { return main::trace(@_); }
 
     sub add_comment { # Adds the parameter as a comment.
 
+        return unless $debugging_build;
+
         my $self = shift;
         my $comment = shift;
         Carp::carp_extra_args(\@_) if main::DEBUG && @_;
@@ -4959,7 +4970,8 @@ sub trace { return main::trace(@_); }
                 # If there is a range and doesn't need a single point range
                 # output
                 if ($start != $end && ! $range_size_1) {
-                    push @OUT, sprintf "%04X\t%04X\t%s", $start, $end, $value;
+                    push @OUT, sprintf "%04X\t%04X", $start, $end;
+                    $OUT[-1] .= "\t$value" if $value ne "";
 
                     # Add a comment with the size of the range, if requested.
                     # Expand Tabs to make sure they all start in the same
@@ -5566,6 +5578,8 @@ sub trace { return main::trace(@_); }
     sub set_final_comment {
         # Just before output, create the comment that heads the file
         # containing this table.
+
+        return unless $debugging_build;
 
         my $self = shift;
         Carp::carp_extra_args(\@_) if main::DEBUG && @_;
@@ -6649,6 +6663,8 @@ sub trace { return main::trace(@_); }
         # This should be called only with the leader match table of all the
         # ones that share the same file.  It lists all such tables, ordered so
         # that related ones are together.
+
+        return unless $debugging_build;
 
         my $leader = shift;   # Should only be called on the leader table of
                               # an equivalent group
@@ -12588,7 +12604,7 @@ sub make_table_pod_entries($) {
             if ($table_property != $perl && $table->perl_extension) {
                 push @info, '(Perl extension)';
             }
-            push @info, "($string_count)" if $output_range_counts;
+            push @info, "($string_count)";
 
             # Now, we have both the entry and info so add them to the
             # list of all the properties.

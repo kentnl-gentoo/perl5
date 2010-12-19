@@ -1077,7 +1077,7 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 
 	if (mro_changes == 1) mro_isa_changed_in(hv);
 	else if (mro_changes == 2)
-	    mro_package_moved(NULL, stash, gv, NULL, 1);
+	    mro_package_moved(NULL, stash, gv, 1);
 
 	return sv;
     }
@@ -1643,9 +1643,11 @@ S_hfreeentries(pTHX_ HV *hv)
     /* This is the array that we're going to restore  */
     HE **const orig_array = HvARRAY(hv);
     HE **tmp_array = NULL;
-    const bool has_aux = SvOOK(hv);
+    const bool has_aux = (SvOOK(hv) == SVf_OOK);
     struct xpvhv_aux * current_aux = NULL;
     int attempts = 100;
+    
+    const bool mpm = PL_phase != PERL_PHASE_DESTRUCT && HvENAME(hv);
 
     PERL_ARGS_ASSERT_HFREEENTRIES;
 
@@ -1666,33 +1668,44 @@ S_hfreeentries(pTHX_ HV *hv)
 
 	struct xpvhv_aux *iter = SvOOK(hv) ? HvAUX(hv) : NULL;
 
+	/* If there are no keys, we only need to free items in the aux
+	   structure and then exit the loop. */
+	const bool empty = !((XPVHV*) SvANY(hv))->xhv_keys;
+
 	/* make everyone else think the array is empty, so that the destructors
 	 * called for freed entries can't recursively mess with us */
-	HvARRAY(hv) = NULL;
+	if (!empty) HvARRAY(hv) = NULL;
 
 	if (SvOOK(hv)) {
 	    HE *entry;
 
-	    SvFLAGS(hv) &= ~SVf_OOK; /* Goodbye, aux structure.  */
-	    /* What aux structure?  */
-	    /* (But we still have a pointer to it in iter.) */
+	    if (!empty) {
+	      SvFLAGS(hv) &= ~SVf_OOK; /* Goodbye, aux structure.  */
+	      /* What aux structure?  */
+	      /* (But we still have a pointer to it in iter.) */
 
-	    /* Copy the name and MRO stuff to a new aux structure
-	       if present. */
-	    if (iter->xhv_name || iter->xhv_mro_meta) {
+	      /* Copy the name and MRO stuff to a new aux structure
+	         if present. */
+	      if (iter->xhv_name_u.xhvnameu_name || iter->xhv_mro_meta) {
 		struct xpvhv_aux * const newaux = hv_auxinit(hv);
-		newaux->xhv_name = iter->xhv_name;
 		newaux->xhv_name_count = iter->xhv_name_count;
-		iter->xhv_name = NULL;
+		if (newaux->xhv_name_count)
+		    newaux->xhv_name_u.xhvnameu_names
+			= iter->xhv_name_u.xhvnameu_names;
+		else
+		    newaux->xhv_name_u.xhvnameu_name
+			= iter->xhv_name_u.xhvnameu_name;
+
+		iter->xhv_name_u.xhvnameu_name = NULL;
 		newaux->xhv_mro_meta = iter->xhv_mro_meta;
 		iter->xhv_mro_meta = NULL;
-	    }
+	      }
 
-	    /* Because we have taken xhv_name and
-	       xhv_mro_meta out, the only allocated
-	       pointers in the aux structure that might exist are the back-
-	       reference array and xhv_eiter.
-	     */
+	      /* Because we have taken xhv_name and xhv_mro_meta out, the
+	         only allocated pointers in the aux structure that might
+	         exist are the back-reference array and xhv_eiter.
+	       */
+	    }
 
 	    /* weak references: if called from sv_clear(), the backrefs
 	     * should already have been killed; if there are any left, its
@@ -1743,11 +1756,12 @@ S_hfreeentries(pTHX_ HV *hv)
 	    iter->xhv_riter = -1; 	/* HvRITER(hv) = -1 */
 	    iter->xhv_eiter = NULL;	/* HvEITER(hv) = NULL */
 
-	    /* There are now no allocated pointers in the aux structure.  */
+	    /* There are now no allocated pointers in the aux structure
+	       unless the hash is empty. */
 	}
 
 	/* If there are no keys, there is nothing left to free. */
-	if (!((XPVHV*) SvANY(hv))->xhv_keys) break;
+	if (empty) break;
 
 	/* Since we have removed the HvARRAY (and possibly replaced it by
 	   calling hv_auxinit), set the number of keys accordingly. */
@@ -1760,6 +1774,19 @@ S_hfreeentries(pTHX_ HV *hv)
 	    while (entry) {
 		register HE * const oentry = entry;
 		entry = HeNEXT(entry);
+		if (
+		  mpm && HeVAL(oentry) && isGV(HeVAL(oentry)) &&
+		  GvHV(HeVAL(oentry)) && HvENAME(GvHV(HeVAL(oentry)))
+		) {
+		    STRLEN klen;
+		    const char * const key = HePV(oentry,klen);
+		    if (klen > 1 && key[klen-1]==':' && key[klen-2]==':') {
+			mro_package_moved(
+			 NULL, GvHV(HeVAL(oentry)),
+			 (GV *)HeVAL(oentry), 0
+ 			);
+		    }
+		}
 		hv_free_ent(hv, oentry);
 	    }
 	} while (--i >= 0);
@@ -1780,15 +1807,18 @@ S_hfreeentries(pTHX_ HV *hv)
 	    Perl_die(aTHX_ "panic: hfreeentries failed to free hash - something is repeatedly re-creating entries");
 	}
     }
+
+    /* If the array was not replaced, the rest does not apply. */
+    if (HvARRAY(hv) == orig_array) return;
 	
     /* Set aside the current array for now, in case we still need it. */
     if (SvOOK(hv)) current_aux = HvAUX(hv);
-    if (HvARRAY(hv) && HvARRAY(hv) != orig_array)
+    if (HvARRAY(hv))
 	tmp_array = HvARRAY(hv);
 
     HvARRAY(hv) = orig_array;
 
-    if (has_aux)
+    if (has_aux && current_aux)
 	SvFLAGS(hv) |= SVf_OOK;
     else
 	SvFLAGS(hv) &=~SVf_OOK;
@@ -1798,8 +1828,13 @@ S_hfreeentries(pTHX_ HV *hv)
     if (current_aux) {
 	struct xpvhv_aux * const aux
 	 = SvOOK(hv) ? HvAUX(hv) : hv_auxinit(hv);
-	aux->xhv_name = current_aux->xhv_name;
 	aux->xhv_name_count = current_aux->xhv_name_count;
+	if(aux->xhv_name_count)
+	    aux->xhv_name_u.xhvnameu_names
+		= current_aux->xhv_name_u.xhvnameu_names;
+	else
+	    aux->xhv_name_u.xhvnameu_name
+		= current_aux->xhv_name_u.xhvnameu_name;
 	aux->xhv_mro_meta   = current_aux->xhv_mro_meta;
     }
 
@@ -1815,7 +1850,7 @@ Undefines the hash.
 */
 
 void
-Perl_hv_undef(pTHX_ HV *hv)
+Perl_hv_undef_flags(pTHX_ HV *hv, U32 flags)
 {
     dVAR;
     register XPVHV* xhv;
@@ -1826,15 +1861,15 @@ Perl_hv_undef(pTHX_ HV *hv)
     DEBUG_A(Perl_hv_assert(aTHX_ hv));
     xhv = (XPVHV*)SvANY(hv);
 
-    if ((name = HvENAME_get(hv)) && PL_phase != PERL_PHASE_DESTRUCT)
-    {
-        /* Delete the @ISA element before calling mro_package_moved, so it
-           does not see it. */
-        (void)hv_delete(hv, "ISA", 3, G_DISCARD);
-        mro_package_moved(NULL, hv, NULL, name, HvENAMELEN_get(hv));
-    }
-
-    if (name || (name = HvNAME(hv))) {
+    /* The name must be deleted before the call to hfreeeeentries so that
+       CVs are anonymised properly. But the effective name must be pre-
+       served until after that call (and only deleted afterwards if the
+       call originated from sv_clear). For stashes with one name that is
+       both the canonical name and the effective name, hv_name_set has to
+       allocate an array for storing the effective name. We can skip that
+       during global destruction, as it does not matter where the CVs point
+       if they will be freed anyway. */
+    if (PL_phase != PERL_PHASE_DESTRUCT && (name = HvNAME(hv))) {
         if (PL_stashcache)
 	    (void)hv_delete(PL_stashcache, name, HvNAMELEN_get(hv), G_DISCARD);
 	hv_name_set(hv, NULL, 0, 0);
@@ -1843,10 +1878,30 @@ Perl_hv_undef(pTHX_ HV *hv)
     if (SvOOK(hv)) {
       struct xpvhv_aux * const aux = HvAUX(hv);
       struct mro_meta *meta;
-      if (aux->xhv_name) {
-        if (PL_stashcache && (name = HvNAME(hv)))
+      bool zeroed = FALSE;
+
+      if ((name = HvENAME_get(hv))) {
+	if (PL_phase != PERL_PHASE_DESTRUCT) {
+	    /* This must come at this point in case
+	       mro_isa_changed_in dies. */
+	    Zero(HvARRAY(hv), xhv->xhv_max+1 /* HvMAX(hv)+1 */, HE*);
+	    zeroed = TRUE;
+
+	    mro_isa_changed_in(hv);
+	}
+        if (PL_stashcache)
+	    (void)hv_delete(
+	            PL_stashcache, name, HvENAMELEN_get(hv), G_DISCARD
+	          );
+      }
+
+      /* If this call originated from sv_clear, then we must check for
+       * effective names that need freeing, as well as the usual name. */
+      name = HvNAME(hv);
+      if (flags & HV_NAME_SETALL ? !!aux->xhv_name_u.xhvnameu_name : !!name) {
+        if (name && PL_stashcache)
 	    (void)hv_delete(PL_stashcache, name, HvNAMELEN_get(hv), G_DISCARD);
-	hv_name_set(hv, NULL, 0, 0);
+	hv_name_set(hv, NULL, 0, flags);
       }
       if((meta = aux->xhv_mro_meta)) {
 	if (meta->mro_linear_all) {
@@ -1865,11 +1920,16 @@ Perl_hv_undef(pTHX_ HV *hv)
 	Safefree(meta);
 	aux->xhv_mro_meta = NULL;
       }
+      if (!aux->xhv_name_u.xhvnameu_name)
+	SvFLAGS(hv) &= ~SVf_OOK;
+      else if (!zeroed)
+	Zero(HvARRAY(hv), xhv->xhv_max+1 /* HvMAX(hv)+1 */, HE*);
     }
-    SvFLAGS(hv) &= ~SVf_OOK;
-    Safefree(HvARRAY(hv));
-    xhv->xhv_max   = 7;	/* HvMAX(hv) = 7 (it's a normal hash) */
-    HvARRAY(hv) = 0;
+    if (!SvOOK(hv)) {
+	Safefree(HvARRAY(hv));
+	xhv->xhv_max   = 7;	/* HvMAX(hv) = 7 (it's a normal hash) */
+	HvARRAY(hv) = 0;
+    }
     HvPLACEHOLDERS_set(hv, 0);
 
     if (SvRMAGICAL(hv))
@@ -1930,7 +1990,7 @@ S_hv_auxinit(HV *hv) {
 
     iter->xhv_riter = -1; 	/* HvRITER(hv) = -1 */
     iter->xhv_eiter = NULL;	/* HvEITER(hv) = NULL */
-    iter->xhv_name = 0;
+    iter->xhv_name_u.xhvnameu_name = 0;
     iter->xhv_name_count = 0;
     iter->xhv_backreferences = 0;
     iter->xhv_mro_meta = NULL;
@@ -2063,10 +2123,10 @@ Perl_hv_name_set(pTHX_ HV *hv, const char *name, U32 len, U32 flags)
 
     if (SvOOK(hv)) {
 	iter = HvAUX(hv);
-	if (iter->xhv_name) {
+	if (iter->xhv_name_u.xhvnameu_name) {
 	    if(iter->xhv_name_count) {
-	      if(!name) {
-		HEK ** const name = (HEK **)HvAUX(hv)->xhv_name;
+	      if(flags & HV_NAME_SETALL) {
+		HEK ** const name = HvAUX(hv)->xhv_name_u.xhvnameu_names;
 		HEK **hekp = name + (
 		    iter->xhv_name_count < 0
 		     ? -iter->xhv_name_count
@@ -2077,38 +2137,47 @@ Perl_hv_name_set(pTHX_ HV *hv, const char *name, U32 len, U32 flags)
 		/* The first elem may be null. */
 		if(*name) unshare_hek_or_pvn(*name, 0, 0, 0);
 		Safefree(name);
-		spot = &iter->xhv_name;
+		spot = &iter->xhv_name_u.xhvnameu_name;
 		iter->xhv_name_count = 0;
 	      }
 	      else {
-		spot = (HEK **)iter->xhv_name;
 		if(iter->xhv_name_count > 0) {
 		    /* shift some things over */
-		    Renew(spot, iter->xhv_name_count, HEK *);
-		    spot[iter->xhv_name_count++] = spot[1];
+		    Renew(
+		     iter->xhv_name_u.xhvnameu_names, iter->xhv_name_count + 1, HEK *
+		    );
+		    spot = iter->xhv_name_u.xhvnameu_names;
+		    spot[iter->xhv_name_count] = spot[1];
 		    spot[1] = spot[0];
+		    iter->xhv_name_count = -(iter->xhv_name_count + 1);
 		}
-		else if(*spot) {
+		else if(*(spot = iter->xhv_name_u.xhvnameu_names)) {
 		    unshare_hek_or_pvn(*spot, 0, 0, 0);
 		}
 	      }
 	    }
+	    else if (flags & HV_NAME_SETALL) {
+		unshare_hek_or_pvn(iter->xhv_name_u.xhvnameu_name, 0, 0, 0);
+		spot = &iter->xhv_name_u.xhvnameu_name;
+	    }
 	    else {
-		unshare_hek_or_pvn(iter->xhv_name, 0, 0, 0);
-		spot = &iter->xhv_name;
+		HEK * const existing_name = iter->xhv_name_u.xhvnameu_name;
+		Newx(iter->xhv_name_u.xhvnameu_names, 2, HEK *);
+		iter->xhv_name_count = -2;
+		spot = iter->xhv_name_u.xhvnameu_names;
+		spot[1] = existing_name;
 	    }
 	}
-	else spot = &iter->xhv_name;
+	else { spot = &iter->xhv_name_u.xhvnameu_name; iter->xhv_name_count = 0; }
     } else {
 	if (name == 0)
 	    return;
 
 	iter = hv_auxinit(hv);
-	spot = &iter->xhv_name;
+	spot = &iter->xhv_name_u.xhvnameu_name;
     }
     PERL_HASH(hash, name, len);
     *spot = name ? share_hek(name, len, hash) : NULL;
-    iter->xhv_name_count = 0;
 }
 
 /*
@@ -2124,13 +2193,14 @@ table.
 */
 
 void
-Perl_hv_ename_add(pTHX_ HV *hv, const char *name, U32 len)
+Perl_hv_ename_add(pTHX_ HV *hv, const char *name, U32 len, U32 flags)
 {
     dVAR;
     struct xpvhv_aux *aux = SvOOK(hv) ? HvAUX(hv) : hv_auxinit(hv);
     U32 hash;
 
     PERL_ARGS_ASSERT_HV_ENAME_ADD;
+    PERL_UNUSED_ARG(flags);
 
     if (len > I32_MAX)
 	Perl_croak(aTHX_ "panic: hv name too long (%"UVuf")", (UV) len);
@@ -2138,7 +2208,7 @@ Perl_hv_ename_add(pTHX_ HV *hv, const char *name, U32 len)
     PERL_HASH(hash, name, len);
 
     if (aux->xhv_name_count) {
-	HEK ** const xhv_name = (HEK **)aux->xhv_name;
+	HEK ** const xhv_name = aux->xhv_name_u.xhvnameu_names;
 	I32 count = aux->xhv_name_count;
 	HEK **hekp = xhv_name + (count < 0 ? -count : count);
 	while (hekp-- > xhv_name)
@@ -2151,19 +2221,19 @@ Perl_hv_ename_add(pTHX_ HV *hv, const char *name, U32 len)
 	    }
 	if (count < 0) aux->xhv_name_count--, count = -count;
 	else aux->xhv_name_count++;
-	Renewc(aux->xhv_name, count + 1, HEK *, HEK);
-	((HEK **)aux->xhv_name)[count] = share_hek(name, len, hash);
+	Renew(aux->xhv_name_u.xhvnameu_names, count + 1, HEK *);
+	(aux->xhv_name_u.xhvnameu_names)[count] = share_hek(name, len, hash);
     }
     else {
-	HEK *existing_name = aux->xhv_name;
+	HEK *existing_name = aux->xhv_name_u.xhvnameu_name;
 	if (
 	    existing_name && HEK_LEN(existing_name) == (I32)len
 	 && memEQ(HEK_KEY(existing_name), name, len)
 	) return;
-	Newxc(aux->xhv_name, 2, HEK *, HEK);
+	Newx(aux->xhv_name_u.xhvnameu_names, 2, HEK *);
 	aux->xhv_name_count = existing_name ? 2 : -2;
-	*(HEK **)aux->xhv_name = existing_name;
-	((HEK **)aux->xhv_name)[1] = share_hek(name, len, hash);
+	*aux->xhv_name_u.xhvnameu_names = existing_name;
+	(aux->xhv_name_u.xhvnameu_names)[1] = share_hek(name, len, hash);
     }
 }
 
@@ -2180,12 +2250,13 @@ This is called when a stash is deleted from the symbol table.
 */
 
 void
-Perl_hv_ename_delete(pTHX_ HV *hv, const char *name, U32 len)
+Perl_hv_ename_delete(pTHX_ HV *hv, const char *name, U32 len, U32 flags)
 {
     dVAR;
     struct xpvhv_aux *aux;
 
     PERL_ARGS_ASSERT_HV_ENAME_DELETE;
+    PERL_UNUSED_ARG(flags);
 
     if (len > I32_MAX)
 	Perl_croak(aTHX_ "panic: hv name too long (%"UVuf")", (UV) len);
@@ -2193,10 +2264,10 @@ Perl_hv_ename_delete(pTHX_ HV *hv, const char *name, U32 len)
     if (!SvOOK(hv)) return;
 
     aux = HvAUX(hv);
-    if (!aux->xhv_name) return;
+    if (!aux->xhv_name_u.xhvnameu_name) return;
 
     if (aux->xhv_name_count) {
-	HEK ** const namep = (HEK **)aux->xhv_name;
+	HEK ** const namep = aux->xhv_name_u.xhvnameu_names;
 	I32 const count = aux->xhv_name_count;
 	HEK **victim = namep + (count < 0 ? -count : count);
 	while (victim-- > namep + 1)
@@ -2212,7 +2283,7 @@ Perl_hv_ename_delete(pTHX_ HV *hv, const char *name, U32 len)
 		 && !*namep
 		) {  /* if there are none left */
 		    Safefree(namep);
-		    aux->xhv_name = NULL;
+		    aux->xhv_name_u.xhvnameu_names = NULL;
 		    aux->xhv_name_count = 0;
 		}
 		else {
@@ -2230,12 +2301,12 @@ Perl_hv_ename_delete(pTHX_ HV *hv, const char *name, U32 len)
 	}
     }
     else if(
-        HEK_LEN(aux->xhv_name) == (I32)len
-     && memEQ(HEK_KEY(aux->xhv_name), name, len)
+        HEK_LEN(aux->xhv_name_u.xhvnameu_name) == (I32)len
+     && memEQ(HEK_KEY(aux->xhv_name_u.xhvnameu_name), name, len)
     ) {
-	const HEK * const namehek = aux->xhv_name;
-	Newxc(aux->xhv_name, 1, HEK *, HEK);
-	*(const HEK **)aux->xhv_name = namehek;
+	HEK * const namehek = aux->xhv_name_u.xhvnameu_name;
+	Newx(aux->xhv_name_u.xhvnameu_names, 1, HEK *);
+	*aux->xhv_name_u.xhvnameu_names = namehek;
 	aux->xhv_name_count = -1;
     }
 }
@@ -3366,7 +3437,7 @@ Perl_store_cop_label(pTHX_ COP *const cop, const char *label, STRLEN len,
     if (flags & ~(SVf_UTF8))
 	Perl_croak(aTHX_ "panic: store_cop_label illegal flag bits 0x%" UVxf,
 		   (UV)flags);
-    labelsv = sv_2mortal(newSVpvn(label, len));
+    labelsv = newSVpvn_flags(label, len, SVs_TEMP);
     if (flags & SVf_UTF8)
 	SvUTF8_on(labelsv);
     cop->cop_hints_hash

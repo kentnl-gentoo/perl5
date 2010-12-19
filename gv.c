@@ -317,6 +317,9 @@ Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
 
 	    /* newCONSTSUB takes ownership of the reference from us.  */
 	    cv = newCONSTSUB(stash, (name0 ? name0 : name), has_constant);
+	    /* In case op.c:S_process_special_blocks stole it: */
+	    if (!GvCV(gv))
+		GvCV(gv) = (CV *)SvREFCNT_inc_simple_NN(cv);
 	    assert(GvCV(gv) == cv); /* newCONSTSUB should have set this */
 	    if (name0)
 		Safefree(name0);
@@ -715,6 +718,20 @@ Perl_gv_fetchmethod_flags(pTHX_ HV *stash, const char *name, U32 flags)
 	    /* Right now this is exclusively for the benefit of S_method_common
 	       in pp_hot.c  */
 	    if (stash) {
+		/* If we can't find an IO::File method, it might be a call on
+		 * a filehandle. If IO:File has not been loaded, try to
+		 * require it first instead of croaking */
+		const char *stash_name = HvNAME_get(stash);
+		if (stash_name && memEQs(stash_name, HvNAMELEN_get(stash), "IO::File")
+		    && !Perl_hv_common(aTHX_ GvHVn(PL_incgv), NULL,
+				       STR_WITH_LEN("IO/File.pm"), 0,
+				       HV_FETCH_ISEXISTS, NULL, 0)
+		) {
+		    require_pv("IO/File.pm");
+		    gv = gv_fetchmeth(stash, name, nend - name, 0);
+		    if (gv)
+			return gv;
+		}
 		Perl_croak(aTHX_
 			   "Can't locate object method \"%s\" via package \"%.*s\"",
 			   name, (int)HvNAMELEN_get(stash), HvNAME_get(stash));
@@ -1072,9 +1089,17 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 		    return NULL;
 
 		if (!(stash = GvHV(gv)))
+		{
 		    stash = GvHV(gv) = newHV();
-
-		if (!HvNAME_get(stash))
+		    if (!HvNAME_get(stash)) {
+			hv_name_set(stash, nambeg, name_cursor-nambeg, 0);
+			/* If the containing stash has multiple effective
+			   names, see that this one gets them, too. */
+			if (HvAUX(GvSTASH(gv))->xhv_name_count)
+			    mro_package_moved(stash, NULL, gv, 1);
+		    }
+		}
+		else if (!HvNAME_get(stash))
 		    hv_name_set(stash, nambeg, name_cursor - nambeg, 0);
 	    }
 
@@ -1889,7 +1914,7 @@ Perl_gv_handler(pTHX_ HV *stash, I32 id)
       do_update:
 	/* If we're looking up a destructor to invoke, we must avoid
 	 * that Gv_AMupdate croaks, because we might be dying already */
-	if (Gv_AMupdate(stash, id == DESTROY_amg) == -1) {
+	if (Gv_AMupdate(stash, cBOOL(id == DESTROY_amg)) == -1) {
 	    /* and if it didn't found a destructor, we fall back
 	     * to a simpler method that will only look for the
 	     * destructor instead of the whole magic */
@@ -2051,6 +2076,7 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
   int postpr = 0, force_cpy = 0;
   int assign = AMGf_assign & flags;
   const int assignshift = assign ? 1 : 0;
+  int use_default_op = 0;
 #ifdef DEBUGGING
   int fl=0;
 #endif
@@ -2214,9 +2240,8 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
 	       && (cv = cvp[off=method])) { /* Method for right
 					     * argument found */
       lr=1;
-    } else if (((ocvp && oamtp->fallback > AMGfallNEVER
-		 && (cvp=ocvp) && (lr = -1))
-		|| (cvp && amtp->fallback > AMGfallNEVER && (lr=1)))
+    } else if (((cvp && amtp->fallback > AMGfallNEVER)
+                || (ocvp && oamtp->fallback > AMGfallNEVER))
 	       && !(flags & AMGf_unary)) {
 				/* We look for substitution for
 				 * comparison operations and
@@ -2244,7 +2269,17 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
              off = scmp_amg;
              break;
 	 }
-      if ((off != -1) && (cv = cvp[off]))
+      if (off != -1) {
+          if (ocvp && (oamtp->fallback > AMGfallNEVER)) {
+              cv = ocvp[off];
+              lr = -1;
+          }
+          if (!cv && (cvp && amtp->fallback > AMGfallNEVER)) {
+              cv = cvp[off];
+              lr = 1;
+          }
+      }
+      if (cv)
           postpr = 1;
       else
           goto not_found;
@@ -2264,7 +2299,10 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
 	notfound = 1; lr = -1;
       } else if (cvp && (cv=cvp[nomethod_amg])) {
 	notfound = 1; lr = 1;
-      } else if ((amtp && amtp->fallback >= AMGfallYES) && !DEBUG_o_TEST) {
+      } else if ((use_default_op =
+                  (!ocvp || oamtp->fallback >= AMGfallYES)
+                  && (!cvp || amtp->fallback >= AMGfallYES))
+                 && !DEBUG_o_TEST) {
 	/* Skip generating the "no method found" message.  */
 	return NULL;
       } else {
@@ -2288,7 +2326,7 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
 		      SvAMAGIC(right)?
 		        HvNAME_get(SvSTASH(SvRV(right))):
 		        ""));
-	if (amtp && amtp->fallback >= AMGfallYES) {
+        if (use_default_op) {
 	  DEBUG_o( Perl_deb(aTHX_ "%s", SvPVX_const(msg)) );
 	} else {
 	  Perl_croak(aTHX_ "%"SVf, SVfARG(msg));

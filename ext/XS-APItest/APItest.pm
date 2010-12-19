@@ -36,7 +36,7 @@ sub import {
 	}
     }
     foreach (keys %{$exports||{}}) {
-	next unless /\A(?:rpn|calcrpn|stufftest|swaptwostmts|looprest|scopelessblock|stmtasexpr|stmtsasexpr|loopblock|blockasexpr|swaplabel|labelconst)\z/;
+	next unless /\A(?:rpn|calcrpn|stufftest|swaptwostmts|looprest|scopelessblock|stmtasexpr|stmtsasexpr|loopblock|blockasexpr|swaplabel|labelconst|arrayfullexpr|arraylistexpr|arraytermexpr|arrayarithexpr|arrayexprflags)\z/;
 	$^H{"XS::APItest/$_"} = 1;
 	delete $exports->{$_};
     }
@@ -50,7 +50,7 @@ sub import {
     }
 }
 
-our $VERSION = '0.26';
+our $VERSION = '0.27';
 
 use vars '$WARNINGS_ON_BOOTSTRAP';
 use vars map "\$${_}_called_PP", qw(BEGIN UNITCHECK CHECK INIT END);

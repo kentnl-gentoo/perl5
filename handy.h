@@ -215,6 +215,7 @@ typedef U64TYPE U64;
  * HAS_CTIME64	HAS_LOCALTIME64	HAS_GMTIME64	HAS_DIFFTIME64
  * HAS_MKTIME64	HAS_ASCTIME64	HAS_GETADDRINFO	HAS_GETNAMEINFO
  * HAS_INETNTOP	HAS_INETPTON	CHARBITS	HAS_PRCTL
+ * HAS_SOCKADDR_SA_LEN
  * Not (yet) used at top level, but mention them for metaconfig
  */
 
@@ -609,6 +610,7 @@ patched there.  The file as of this writing is cpan/Devel-PPPort/parts/inc/misc
 #   define isUPPER_A(c)  cBOOL(FITS_IN_8_BITS(c) && (PL_charclass[(U8) NATIVE_TO_UNI(c)] & _CC_UPPER_A))
 #   define isWORDCHAR_A(c) cBOOL(FITS_IN_8_BITS(c) && (PL_charclass[(U8) NATIVE_TO_UNI(c)] & _CC_WORDCHAR_A))
 #   define isXDIGIT_A(c)  cBOOL(FITS_IN_8_BITS(c) && (PL_charclass[(U8) NATIVE_TO_UNI(c)] & _CC_XDIGIT_A))
+#   define _HAS_NONLATIN1_FOLD_CLOSURE_ONLY_FOR_USE_BY_REGCOMP_DOT_C_AND_REGEXEC_DOT_C(c) ((! cBOOL(FITS_IN_8_BITS(c))) || (PL_charclass[(U8) NATIVE_TO_UNI(c)] & _CC_NONLATIN1_FOLD))
 #else   /* No perl.h. */
 #   define isOCTAL_A(c)  ((c) >= '0' && (c) <= '9')
 #   ifdef EBCDIC

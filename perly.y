@@ -69,7 +69,7 @@
 #endif
 }
 
-%token <ival> GRAMPROG GRAMBLOCK GRAMBARESTMT GRAMFULLSTMT GRAMSTMTSEQ
+%token <ival> GRAMPROG GRAMEXPR GRAMBLOCK GRAMBARESTMT GRAMFULLSTMT GRAMSTMTSEQ
 
 %token <i_tkval> '{' '}' '[' ']' '-' '+' '$' '@' '%' '*' '&' ';'
 
@@ -94,14 +94,13 @@
 /* FIXME for MAD - are these two ival? */
 %type <ival> mydefsv mintro
 
-%type <opval> stmtseq fullstmt barestmt block mblock else
+%type <opval> stmtseq fullstmt labfullstmt barestmt block mblock else
 %type <opval> expr term subscripted scalar ary hsh arylen star amper sideff
-%type <opval> argexpr nexpr texpr iexpr mexpr mnexpr miexpr
-%type <opval> listexpr listexprcom indirob listop method
+%type <opval> listexpr nexpr texpr iexpr mexpr mnexpr miexpr
+%type <opval> optlistexpr optexpr indirob listop method
 %type <opval> formname subname proto subbody cont my_scalar
 %type <opval> subattrlist myattrlist myattrterm myterm
 %type <opval> termbinop termunop anonymous termdo
-%type <p_tkval> label
 
 %nonassoc <i_tkval> PREC_LOW
 %nonassoc LOOPEX
@@ -146,6 +145,15 @@ grammar	:	GRAMPROG
 		remember stmtseq
 			{
 			  newPROG(block_end($3,$4));
+			  $$ = 0;
+			}
+	|	GRAMEXPR
+			{
+			  parser->expect = XTERM;
+			}
+		optexpr
+			{
+			  PL_eval_root = $3;
 			  $$ = 0;
 			}
 	|	GRAMBLOCK
@@ -237,16 +245,29 @@ stmtseq	:	/* NULL */
 			}
 	;
 
-/* A statement in the program, including optional label */
-fullstmt:	label barestmt
+/* A statement in the program, including optional labels */
+fullstmt:	barestmt
 			{
-			  if (PVAL($1) || $2) {
-			      $$ = newSTATEOP(0, PVAL($1), $2);
-			      TOKEN_GETMAD($1,
-				  $2 ? cLISTOPx($$)->op_first : $$, 'L');
+			  if($1) {
+			      $$ = newSTATEOP(0, NULL, $1);
 			  } else {
-			      $$ = IF_MAD(newOP(OP_NULL, 0), $2);
+			      $$ = IF_MAD(newOP(OP_NULL, 0), NULL);
 			  }
+			}
+	|	labfullstmt
+			{ $$ = $1; }
+	;
+
+labfullstmt:	LABEL barestmt
+			{
+			  $$ = newSTATEOP(0, PVAL($1), $2);
+			  TOKEN_GETMAD($1,
+			      $2 ? cLISTOPx($$)->op_first : $$, 'L');
+			}
+	|	LABEL labfullstmt
+			{
+			  $$ = newSTATEOP(0, PVAL($1), $2);
+			  TOKEN_GETMAD($1, cLISTOPx($$)->op_first, 'L');
 			}
 	;
 
@@ -326,7 +347,7 @@ barestmt:	PLUGSTMT
 			}
 	|	USE startsub
 			{ CvSPECIAL_on(PL_compcv); /* It's a BEGIN {} */ }
-		WORD WORD listexpr ';'
+		WORD WORD optlistexpr ';'
 			{
 			  SvREFCNT_inc_simple_void(PL_compcv);
 #ifdef MAD
@@ -583,20 +604,6 @@ miexpr	:	iexpr
 			{ $$ = $1; intro_my(); }
 	;
 
-/* Optional "MAIN:"-style loop labels */
-label	:	/* empty */
-			{
-#ifdef MAD
-			  YYSTYPE tmplval;
-			  tmplval.pval = NULL;
-			  $$ = newTOKEN(OP_NULL, tmplval, 0);
-#else
-			  $$ = NULL;
-#endif
-			}
-	|	LABEL
-	;
-
 formname:	WORD		{ $$ = $1; }
 	|	/* NULL */	{ $$ = (OP*)NULL; }
 	;
@@ -686,11 +693,11 @@ expr	:	expr ANDOP expr
 			{ $$ = newLOGOP(OP_DOR, 0, $1, $3);
 			  TOKEN_GETMAD($2,$$,'o');
 			}
-	|	argexpr %prec PREC_LOW
+	|	listexpr %prec PREC_LOW
 	;
 
 /* Expressions are a list of terms joined by commas */
-argexpr	:	argexpr ','
+listexpr:	listexpr ','
 			{
 #ifdef MAD
 			  OP* op = newNULLLIST();
@@ -700,7 +707,7 @@ argexpr	:	argexpr ','
 			  $$ = $1;
 #endif
 			}
-	|	argexpr ',' term
+	|	listexpr ',' term
 			{ 
 			  OP* term = $3;
 			  DO_MAD(
@@ -713,7 +720,7 @@ argexpr	:	argexpr ','
 	;
 
 /* List operators */
-listop	:	LSTOP indirob argexpr /* map {...} @args or print $fh @args */
+listop	:	LSTOP indirob listexpr /* map {...} @args or print $fh @args */
 			{ $$ = convert(IVAL($1), OPf_STACKED,
 				op_prepend_elem(OP_LIST, newGVREF(IVAL($1),$2), $3) );
 			  TOKEN_GETMAD($1,$$,'o');
@@ -725,7 +732,7 @@ listop	:	LSTOP indirob argexpr /* map {...} @args or print $fh @args */
 			  TOKEN_GETMAD($2,$$,'(');
 			  TOKEN_GETMAD($5,$$,')');
 			}
-	|	term ARROW method lpar_or_qw listexprcom ')' /* $foo->bar(list) */
+	|	term ARROW method lpar_or_qw optexpr ')' /* $foo->bar(list) */
 			{ $$ = convert(OP_ENTERSUB, OPf_STACKED,
 				op_append_elem(OP_LIST,
 				    op_prepend_elem(OP_LIST, scalar($1), $5),
@@ -740,13 +747,13 @@ listop	:	LSTOP indirob argexpr /* map {...} @args or print $fh @args */
 				    newUNOP(OP_METHOD, 0, $3)));
 			  TOKEN_GETMAD($2,$$,'A');
 			}
-	|	METHOD indirob listexpr              /* new Class @args */
+	|	METHOD indirob optlistexpr           /* new Class @args */
 			{ $$ = convert(OP_ENTERSUB, OPf_STACKED,
 				op_append_elem(OP_LIST,
 				    op_prepend_elem(OP_LIST, $2, $3),
 				    newUNOP(OP_METHOD, 0, $1)));
 			}
-	|	FUNCMETH indirob '(' listexprcom ')' /* method $object (@args) */
+	|	FUNCMETH indirob '(' optexpr ')'    /* method $object (@args) */
 			{ $$ = convert(OP_ENTERSUB, OPf_STACKED,
 				op_append_elem(OP_LIST,
 				    op_prepend_elem(OP_LIST, $2, $4),
@@ -754,11 +761,11 @@ listop	:	LSTOP indirob argexpr /* map {...} @args or print $fh @args */
 			  TOKEN_GETMAD($3,$$,'(');
 			  TOKEN_GETMAD($5,$$,')');
 			}
-	|	LSTOP listexpr                       /* print @args */
+	|	LSTOP optlistexpr                    /* print @args */
 			{ $$ = convert(IVAL($1), 0, $2);
 			  TOKEN_GETMAD($1,$$,'o');
 			}
-	|	FUNC '(' listexprcom ')'             /* print (@args) */
+	|	FUNC '(' optexpr ')'                 /* print (@args) */
 			{ $$ = convert(IVAL($1), 0, $3);
 			  TOKEN_GETMAD($1,$$,'o');
 			  TOKEN_GETMAD($2,$$,'(');
@@ -767,7 +774,7 @@ listop	:	LSTOP indirob argexpr /* map {...} @args or print $fh @args */
 	|	LSTOPSUB startanonsub block /* sub f(&@);   f { foo } ... */
 			{ SvREFCNT_inc_simple_void(PL_compcv);
 			  $<opval>$ = newANONATTRSUB($2, 0, (OP*)NULL, $3); }
-		    listexpr		%prec LSTOP  /* ... @bar */
+		    optlistexpr		%prec LSTOP  /* ... @bar */
 			{ $$ = newUNOP(OP_ENTERSUB, OPf_STACKED,
 				 op_append_elem(OP_LIST,
 				   op_prepend_elem(OP_LIST, $<opval>4, $5), $1));
@@ -1172,7 +1179,7 @@ term	:	termbinop
 			      token_getmad($4,op,')');
 			  })
 			}
-	|	NOAMP WORD listexpr                  /* foo(@args) */
+	|	NOAMP WORD optlistexpr               /* foo(@args) */
 			{ $$ = newUNOP(OP_ENTERSUB, OPf_STACKED,
 			    op_append_elem(OP_LIST, $3, scalar($2)));
 			  TOKEN_GETMAD($1,$$,'o');
@@ -1186,7 +1193,7 @@ term	:	termbinop
 			{ $$ = newLOOPEX(IVAL($1),$2);
 			  TOKEN_GETMAD($1,$$,'o');
 			}
-	|	NOTOP argexpr                        /* not $foo */
+	|	NOTOP listexpr                       /* not $foo */
 			{ $$ = newUNOP(OP_NOT, 0, scalar($2));
 			  TOKEN_GETMAD($1,$$,'o');
 			}
@@ -1243,7 +1250,7 @@ term	:	termbinop
 			  TOKEN_GETMAD($2,$$,'(');
 			  TOKEN_GETMAD($4,$$,')');
 			}
-	|	PMFUNC '(' argexpr ')'		/* m//, s///, tr/// */
+	|	PMFUNC '(' listexpr ')'		/* m//, s///, tr/// */
 			{ $$ = pmruntime($1, $3, 1);
 			  TOKEN_GETMAD($2,$$,'(');
 			  TOKEN_GETMAD($4,$$,')');
@@ -1294,13 +1301,13 @@ myterm	:	'(' expr ')'
 	;
 
 /* Basic list expressions */
-listexpr:	/* NULL */ %prec PREC_LOW
+optlistexpr:	/* NULL */ %prec PREC_LOW
 			{ $$ = (OP*)NULL; }
-	|	argexpr    %prec PREC_LOW
+	|	listexpr    %prec PREC_LOW
 			{ $$ = $1; }
 	;
 
-listexprcom:	/* NULL */
+optexpr:	/* NULL */
 			{ $$ = (OP*)NULL; }
 	|	expr
 			{ $$ = $1; }

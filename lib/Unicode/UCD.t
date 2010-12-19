@@ -18,7 +18,7 @@ use strict;
 use Unicode::UCD;
 use Test::More;
 
-BEGIN { plan tests => 256 };
+BEGIN { plan tests => 258 };
 
 use Unicode::UCD 'charinfo';
 
@@ -301,6 +301,8 @@ is(Unicode::UCD::UnicodeVersion, '6.0.0', 'UnicodeVersion');
 use Unicode::UCD qw(compexcl);
 
 ok(!compexcl(0x0100), 'compexcl');
+ok(!compexcl(0xD801), 'compexcl of surrogate');
+ok(!compexcl(0x110000), 'compexcl of non-Unicode code point');
 ok( compexcl(0x0958));
 
 use Unicode::UCD qw(casefold);

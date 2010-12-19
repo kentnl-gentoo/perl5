@@ -10,7 +10,7 @@ BEGIN {
     require 'test.pl';		# we use runperl from 'test.pl', so can't use Test::More
 }
 
-plan tests => 157;
+plan tests => 159;
 
 require_ok("B::Concise");
 
@@ -424,5 +424,28 @@ $out = runperl ( switches => ["-MO=Concise,-src,-stash=FOO,-main"],
 
 like($out, qr/FUNC: \*FOO::bar/,
      "stash rendering works on inlined package");
+
+# Test that consecutive nextstate ops are not nulled out when PERLDBf_NOOPT
+# is set.
+# XXX Does this test belong here?
+
+$out = runperl ( switches => ["-MO=Concise"],
+		 prog => 'BEGIN{$^P = 0x04} 1 if 0; print',
+		 stderr => 1 );
+like $out, qr/nextstate.*nextstate/s,
+  'nulling of nextstate-nextstate happeneth not when $^P | PERLDBf_NOOPT';
+
+
+# A very basic test for -tree output
+$out =
+ runperl(
+  switches => ["-MO=Concise,-tree"], prog => 'print', stderr => 1
+ );
+ok index $out=~s/\r\n/\n/gr=~s/gvsv\(\*_\)/gvsv[*_]/r, <<'end'=~s/\r\n/\n/gr =>>= 0, '-tree output';
+<6>leave[1 ref]-+-<1>enter
+                |-<2>nextstate(main 1 -e:1)
+                `-<5>print-+-<3>pushmark
+                           `-ex-rv2sv---<4>gvsv[*_]
+end
 
 __END__

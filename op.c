@@ -910,7 +910,8 @@ S_scalarboolean(pTHX_ OP *o)
 
     PERL_ARGS_ASSERT_SCALARBOOLEAN;
 
-    if (o->op_type == OP_SASSIGN && cBINOPo->op_first->op_type == OP_CONST) {
+    if (o->op_type == OP_SASSIGN && cBINOPo->op_first->op_type == OP_CONST
+     && !(cBINOPo->op_first->op_flags & OPf_SPECIAL)) {
 	if (ckWARN(WARN_SYNTAX)) {
 	    const line_t oldline = CopLINE(PL_curcop);
 
@@ -1420,10 +1421,14 @@ Propagate lvalue ("modifiable") context to an op and its children.
 I<type> represents the context type, roughly based on the type of op that
 would do the modifying, although C<local()> is represented by OP_NULL,
 because it has no op type of its own (it is signalled by a flag on
-the lvalue op).  This function detects things that can't be modified,
-such as C<$x+1>, and generates errors for them.  It also flags things
-that need to behave specially in an lvalue context, such as C<$$x>
-which might have to vivify a reference in C<$x>.
+the lvalue op).
+
+This function detects things that can't be modified, such as C<$x+1>, and
+generates errors for them. For example, C<$x+1 = 2> would cause it to be
+called with an op of type OP_ADD and a C<type> argument of OP_SASSIGN.
+
+It also flags things that need to behave specially in an lvalue context,
+such as C<$$x = 5> which might have to vivify a reference in C<$x>.
 
 =cut
 */
@@ -1780,6 +1785,14 @@ Perl_op_lvalue(pTHX_ OP *o, I32 type)
     return o;
 }
 
+/* Do not use this. It will be removed after 5.14. */
+OP *
+Perl_mod(pTHX_ OP *o, I32 type)
+{
+    return op_lvalue(o,type);
+}
+
+
 STATIC bool
 S_scalar_mod_type(const OP *o, I32 type)
 {
@@ -2130,6 +2143,7 @@ S_my_kid(pTHX_ OP *o, OP *attrs, OP **imopsp)
 {
     dVAR;
     I32 type;
+    const bool stately = PL_parser && PL_parser->in_my == KEY_state;
 
     PERL_ARGS_ASSERT_MY_KID;
 
@@ -2200,7 +2214,7 @@ S_my_kid(pTHX_ OP *o, OP *attrs, OP **imopsp)
     }
     o->op_flags |= OPf_MOD;
     o->op_private |= OPpLVAL_INTRO;
-    if (PL_parser->in_my == KEY_state)
+    if (stately)
 	o->op_private |= OPpPAD_STATE;
     return o;
 }
@@ -2416,7 +2430,7 @@ Perl_block_end(pTHX_ I32 floor, OP *seq)
 /*
 =head1 Compile-time scope hooks
 
-=for apidoc Ao||blockhook_register
+=for apidoc Aox||blockhook_register
 
 Register a set of hooks to be called when the Perl lexical scope changes
 at compile time. See L<perlguts/"Compile-time scope hooks">.
@@ -3917,7 +3931,7 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, bool isreg)
 	    rcop->op_targ = pad_alloc(rcop->op_type, SVs_PADTMP);
 
 	/* /$x/ may cause an eval, since $x might be qr/(?{..})/  */
-	PL_cv_has_eval = 1;
+	if (PL_hints & HINT_RE_EVAL) PL_cv_has_eval = 1;
 
 	/* establish postfix order */
 	if (pm->op_pmflags & PMf_KEEP || !(PL_hints & HINT_RE_EVAL)) {
@@ -4222,6 +4236,7 @@ Perl_utilize(pTHX_ int aver, I32 floor, OP *version, OP *idop, OP *arg)
 #ifdef PERL_MAD
     OP *pegop = newOP(OP_NULL,0);
 #endif
+    SV *use_version = NULL;
 
     PERL_ARGS_ASSERT_UTILIZE;
 
@@ -4268,7 +4283,9 @@ Perl_utilize(pTHX_ int aver, I32 floor, OP *version, OP *idop, OP *arg)
     }
     else if (SvNIOKp(((SVOP*)idop)->op_sv)) {
 	imop = NULL;		/* use 5.0; */
-	if (!aver)
+	if (aver)
+	    use_version = ((SVOP*)idop)->op_sv;
+	else
 	    idop->op_private |= OPpCONST_NOVER;
     }
     else {
@@ -4299,6 +4316,26 @@ Perl_utilize(pTHX_ int aver, I32 floor, OP *version, OP *idop, OP *arg)
 	        newSTATEOP(0, NULL, newUNOP(OP_REQUIRE, 0, idop)),
 	        newSTATEOP(0, NULL, veop)),
 	    newSTATEOP(0, NULL, imop) ));
+
+    if (use_version) {
+	/* If we request a version >= 5.9.5, load feature.pm with the
+	 * feature bundle that corresponds to the required version. */
+	use_version = sv_2mortal(new_version(use_version));
+
+	if (vcmp(use_version,
+		 sv_2mortal(upg_version(newSVnv(5.009005), FALSE))) >= 0) {
+	    SV *const importsv = vnormal(use_version);
+	    *SvPVX_mutable(importsv) = ':';
+	    ENTER_with_name("load_feature");
+	    Perl_load_module(aTHX_ 0, newSVpvs("feature"), NULL, importsv, NULL);
+	    LEAVE_with_name("load_feature");
+	}
+	/* If a version >= 5.11.0 is requested, strictures are on by default! */
+	if (vcmp(use_version,
+		 sv_2mortal(upg_version(newSVnv(5.011000), FALSE))) >= 0) {
+	    PL_hints |= (HINT_STRICT_REFS | HINT_STRICT_SUBS | HINT_STRICT_VARS);
+	}
+    }
 
     /* The "did you use incorrect case?" warning used to be here.
      * The problem is that on case-insensitive filesystems one
@@ -5988,7 +6025,9 @@ Perl_op_const_sv(pTHX_ const OP *o, CV *cv)
 	if (sv && o->op_next == o)
 	    return sv;
 	if (o->op_next != o) {
-	    if (type == OP_NEXTSTATE || type == OP_NULL || type == OP_PUSHMARK)
+	    if (type == OP_NEXTSTATE
+	     || (type == OP_NULL && !(o->op_flags & OPf_KIDS))
+	     || type == OP_PUSHMARK)
 		continue;
 	    if (type == OP_DBSTATE)
 		continue;
@@ -7899,7 +7938,13 @@ Perl_ck_sassign(pTHX_ OP *o)
     }
     if (kid->op_sibling) {
 	OP *kkid = kid->op_sibling;
-	if (kkid->op_type == OP_PADSV
+	/* For state variable assignment, kkid is a list op whose op_last
+	   is a padsv. */
+	if ((kkid->op_type == OP_PADSV ||
+	     (kkid->op_type == OP_LIST &&
+	      (kkid = cLISTOPx(kkid)->op_last)->op_type == OP_PADSV
+	     )
+	    )
 		&& (kkid->op_private & OPpLVAL_INTRO)
 		&& SvPAD_STATE(*av_fetch(PL_comppad_name, kkid->op_targ, FALSE))) {
 	    const PADOFFSET target = kkid->op_targ;
@@ -9294,7 +9339,7 @@ Perl_rpeep(pTHX_ register OP *o)
 	    /* Two NEXTSTATEs in a row serve no purpose. Except if they happen
 	       to carry two labels. For now, take the easier option, and skip
 	       this optimisation if the first NEXTSTATE has a label.  */
-	    if (!CopLABEL((COP*)o)) {
+	    if (!CopLABEL((COP*)o) && !PERLDB_NOOPT) {
 		OP *nextop = o->op_next;
 		while (nextop && nextop->op_type == OP_NULL)
 		    nextop = nextop->op_next;
@@ -9626,7 +9671,8 @@ Perl_rpeep(pTHX_ register OP *o)
 
 	    /* Make the CONST have a shared SV */
 	    svp = cSVOPx_svp(((BINOP*)o)->op_last);
-	    if (!SvFAKE(sv = *svp) || !SvREADONLY(sv)) {
+	    if ((!SvFAKE(sv = *svp) || !SvREADONLY(sv))
+	     && SvTYPE(sv) < SVt_PVMG && !SvROK(sv)) {
 		key = SvPV_const(sv, keylen);
 		lexname = newSVpvn_share(key,
 					 SvUTF8(sv) ? -(I32)keylen : (I32)keylen,

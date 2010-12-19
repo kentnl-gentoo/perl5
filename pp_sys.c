@@ -826,7 +826,11 @@ PP(pp_tie)
 	    break;
 	case SVt_PVGV:
 	case SVt_PVLV:
-	    if (isGV_with_GP(varsv) && !SvFAKE(varsv)) {
+	    if (isGV_with_GP(varsv)) {
+		if (SvFAKE(varsv) && !(GvFLAGS(varsv) & GVf_TIEWARNED)) {
+		    deprecate("tie on a handle without *");
+		    GvFLAGS(varsv) |= GVf_TIEWARNED;
+		}
 		methname = "TIEHANDLE";
 		how = PERL_MAGIC_tiedscalar;
 		/* For tied filehandles, we apply tiedscalar magic to the IO
@@ -903,8 +907,14 @@ PP(pp_untie)
     const char how = (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV)
 		? PERL_MAGIC_tied : PERL_MAGIC_tiedscalar;
 
-    if (isGV_with_GP(sv) && !SvFAKE(sv) && !(sv = MUTABLE_SV(GvIOp(sv))))
+    if (isGV_with_GP(sv)) {
+      if (SvFAKE(sv) && !(GvFLAGS(sv) & GVf_TIEWARNED)) {
+	deprecate("untie on a handle without *");
+	GvFLAGS(sv) |= GVf_TIEWARNED;
+      }
+      if (!(sv = MUTABLE_SV(GvIOp(sv))))
 	RETPUSHYES;
+    }
 
     if ((mg = SvTIED_mg(sv, how))) {
 	SV * const obj = SvRV(SvTIED_obj(sv, mg));
@@ -941,8 +951,14 @@ PP(pp_tied)
     const char how = (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV)
 		? PERL_MAGIC_tied : PERL_MAGIC_tiedscalar;
 
-    if (isGV_with_GP(sv) && !SvFAKE(sv) && !(sv = MUTABLE_SV(GvIOp(sv))))
+    if (isGV_with_GP(sv)) {
+      if (SvFAKE(sv) && !(GvFLAGS(sv) & GVf_TIEWARNED)) {
+	deprecate("tied on a handle without *");
+	GvFLAGS(sv) |= GVf_TIEWARNED;
+      }
+      if (!(sv = MUTABLE_SV(GvIOp(sv))))
 	RETPUSHUNDEF;
+    }
 
     if ((mg = SvTIED_mg(sv, how))) {
 	SV *osv = SvTIED_obj(sv, mg);
@@ -3043,7 +3059,7 @@ PP(pp_ftrread)
        conditional compiling below much clearer.  */
     I32 use_access = 0;
 #endif
-    int stat_mode = S_IRUSR;
+    Mode_t stat_mode = S_IRUSR;
 
     bool effective = FALSE;
     char opchar = '?';
@@ -4457,7 +4473,7 @@ PP(pp_setpgrp)
 #endif
 }
 
-#ifdef __GLIBC__
+#if defined(__GLIBC__) && ((__GLIBC__ == 2 && __GLIBC_MINOR__ >= 3) || (__GLIBC__ > 2))
 #  define PRIORITY_WHICH_T(which) (__priority_which_t)which
 #else
 #  define PRIORITY_WHICH_T(which) which

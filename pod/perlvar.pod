@@ -1665,7 +1665,7 @@ output is to the terminal and block buffered otherwise. Setting this
 variable is useful primarily when you are outputting to a pipe or
 socket, such as when you are running a Perl program under B<rsh> and
 want to see the output as it's happening. This has no effect on input
-buffering. See L<perlfunc/getc> for that. See L<perldoc/select> on
+buffering. See L<perlfunc/getc> for that. See L<perlfunc/select> on
 how to select the output channel. See also L<IO::Handle>.
 
 Mnemonic: when you want your pipes to be piping hot.
@@ -2067,7 +2067,7 @@ Removed in Perl 5.10.
 X<$[> X<$ARRAY_BASE>
 
 This variable stores the index of the first element in an array, and
-of the first character in a substring. You use to be able to assign to
+of the first character in a substring. You used to be able to assign to
 this variable, but you can't do that anymore. It's now always 0, like
 it should be.
 

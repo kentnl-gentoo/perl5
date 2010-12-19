@@ -1450,11 +1450,6 @@ Perl_pad_free(pTHX_ PADOFFSET po)
 
     if (PL_curpad[po] && PL_curpad[po] != &PL_sv_undef) {
 	SvPADTMP_off(PL_curpad[po]);
-#ifdef USE_ITHREADS
-	/* SV could be a shared hash key (eg bugid #19022) */
-	if (!SvIsCOW(PL_curpad[po]))
-	    SvREADONLY_off(PL_curpad[po]);	/* could be a freed constant */
-#endif
     }
     if ((I32)po < PL_padix)
 	PL_padix = po - 1;
@@ -1651,7 +1646,7 @@ Perl_cv_clone(pTHX_ CV *proto)
     CvPADLIST(cv) = pad_new(padnew_CLONE|padnew_SAVE);
 
     av_fill(PL_comppad, fpad);
-    for (ix = fname; ix >= 0; ix--)
+    for (ix = fname; ix > 0; ix--)
 	av_store(PL_comppad_name, ix, SvREFCNT_inc(pname[ix]));
 
     PL_curpad = AvARRAY(PL_comppad);

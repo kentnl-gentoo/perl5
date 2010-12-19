@@ -216,7 +216,7 @@ S_mro_get_linear_isa_dfs(pTHX_ HV *stash, U32 level)
     assert(HvAUX(stash));
 
     stashhek
-     = HvAUX(stash)->xhv_name && HvENAME_HEK_NN(stash)
+     = HvAUX(stash)->xhv_name_u.xhvnameu_name && HvENAME_HEK_NN(stash)
         ? HvENAME_HEK_NN(stash)
         : HvNAME_HEK(stash);
 
@@ -679,9 +679,7 @@ S_mro_clean_isarev(pTHX_ HV * const isa, const char * const name,
 Call this function to signal to a stash that it has been assigned to
 another spot in the stash hierarchy. C<stash> is the stash that has been
 assigned. C<oldstash> is the stash it replaces, if any. C<gv> is the glob
-that is actually being assigned to. C<newname> and C<newname_len> are the
-full name of the GV. If these last two arguments are omitted, they can be
-inferred from C<gv>. C<gv> can be omitted if C<newname> is given.
+that is actually being assigned to.
 
 This can also be called with a null first argument to
 indicate that C<oldstash> has been deleted.
@@ -694,23 +692,24 @@ It also sets the effective names (C<HvENAME>) on all the stashes as
 appropriate.
 
 If the C<gv> is present and is not in the symbol table, then this function
-simply returns. This checked will be skipped if C<newname_len> is set to 1
-and C<newname> is null.
+simply returns. This checked will be skipped if C<flags & 1>.
 
 =cut
 */
 void
 Perl_mro_package_moved(pTHX_ HV * const stash, HV * const oldstash,
-                       const GV *gv, const char *newname,
-                       I32 newname_len)
+                       const GV * const gv, U32 flags)
 {
+    SV *namesv;
+    HEK **namep;
+    I32 name_count;
     HV *stashes;
     HE* iter;
 
+    PERL_ARGS_ASSERT_MRO_PACKAGE_MOVED;
     assert(stash || oldstash);
-    assert(gv || newname);
 
-    /* Determine the name of the location that stash was assigned to
+    /* Determine the name(s) of the location that stash was assigned to
      * or from which oldstash was removed.
      *
      * We cannot reliably use the name in oldstash, because it may have
@@ -723,19 +722,60 @@ Perl_mro_package_moved(pTHX_ HV * const stash, HV * const oldstash,
      *   *$globref = *frelp::;
      *      # calls mro_package_moved(%frelp::, %baz::, *$globref, NULL, 0)
      *
-     * If newname is not null, then we trust that the caller gave us the
-     * right name. Otherwise, we get it from the gv. But if the gv is not
-     * in the symbol table, then we just return. We skip that check,
-     * however, if newname_len is 1 and newname is null.
+     * So we get it from the gv. But, since the gv may no longer be in the
+     * symbol table, we check that first. The only reliable way to tell is
+     * to see whether its stash has an effective name and whether the gv
+     * resides in that stash under its name. That effective name may be
+     * different from what gv_fullname4 would use.
+     * If flags & 1, the caller has asked us to skip the check.
      */
-    if(!newname && gv) {
-	SV * const namesv = sv_newmortal();
-	STRLEN len;
-	gv_fullname4(namesv, gv, NULL, 0);
-	if( newname_len != 1
-	 && gv_fetchsv(namesv, GV_NOADD_NOINIT, SVt_PVGV) != gv ) return;
-	newname = SvPV_const(namesv, len);
-	newname_len = len - 2; /* skip trailing :: */
+    if(!(flags & 1)) {
+	SV **svp;
+	if(
+	 !GvSTASH(gv) || !HvENAME(GvSTASH(gv)) ||
+	 !(svp = hv_fetch(GvSTASH(gv), GvNAME(gv), GvNAMELEN(gv), 0)) ||
+	 *svp != (SV *)gv
+	) return;
+    }
+    assert(SvOOK(GvSTASH(gv)));
+    assert(GvNAMELEN(gv) > 1);
+    assert(GvNAME(gv)[GvNAMELEN(gv) - 1] == ':');
+    assert(GvNAME(gv)[GvNAMELEN(gv) - 2] == ':');
+    name_count = HvAUX(GvSTASH(gv))->xhv_name_count;
+    if (!name_count) {
+	name_count = 1;
+	namep = &HvAUX(GvSTASH(gv))->xhv_name_u.xhvnameu_name;
+    }
+    else {
+	namep = HvAUX(GvSTASH(gv))->xhv_name_u.xhvnameu_names;
+	if (name_count < 0) ++namep, name_count = -name_count - 1;
+    }
+    if (name_count == 1) {
+	if (HEK_LEN(*namep) == 4 && strnEQ(HEK_KEY(*namep), "main", 4)) {
+	    namesv = newSVpvs_flags("", SVs_TEMP);
+	}
+	else {
+	    namesv = sv_2mortal(newSVhek(*namep));
+	    sv_catpvs(namesv, "::");
+	}
+	sv_catpvn(namesv, GvNAME(gv), GvNAMELEN(gv) - 2);
+	                                  /* skip trailing :: */
+    }
+    else {
+	SV *aname;
+	namesv = sv_2mortal((SV *)newAV());
+	while (name_count--) {
+	    if(HEK_LEN(*namep) == 4 && strnEQ(HEK_KEY(*namep), "main", 4)){
+		aname = newSVpvs(""); namep++;
+	    }
+	    else {
+		aname = newSVhek(*namep++);
+		sv_catpvs(aname, "::");
+	    }
+	    sv_catpvn(aname, GvNAME(gv), GvNAMELEN(gv) - 2);
+	                                  /* skip trailing :: */
+	    av_push((AV *)namesv, aname);
+	}
     }
 
     /* Get a list of all the affected classes. */
@@ -754,7 +794,7 @@ Perl_mro_package_moved(pTHX_ HV * const stash, HV * const oldstash,
     stashes = (HV *) sv_2mortal((SV *)newHV());
     mro_gather_and_rename(
      stashes, (HV *) sv_2mortal((SV *)newHV()),
-     stash, oldstash, newname, newname_len
+     stash, oldstash, namesv
     );
 
     /* Once the caches have been wiped on all the classes, call
@@ -785,16 +825,17 @@ Perl_mro_package_moved(pTHX_ HV * const stash, HV * const oldstash,
 
 void
 S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
-                              HV *stash, HV *oldstash, const char *name,
-                              I32 namlen)
+                              HV *stash, HV *oldstash, SV *namesv)
 {
     register XPVHV* xhv;
     register HE *entry;
     I32 riter = -1;
+    I32 items = 0;
     const bool stash_had_name = stash && HvENAME(stash);
+    bool fetched_isarev = FALSE;
     HV *seen = NULL;
     HV *isarev = NULL;
-    SV **svp;
+    SV **svp = NULL;
 
     PERL_ARGS_ASSERT_MRO_GATHER_AND_RENAME;
 
@@ -843,29 +884,56 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
 
 	/* Update the effective name. */
 	if(HvENAME_get(oldstash)) {
-	  const HEK * const enamehek = HvENAME_HEK(oldstash);
-	  if(PL_stashcache)
-	    (void)
-	     hv_delete(PL_stashcache, name, namlen, G_DISCARD);
-	  hv_ename_delete(oldstash, name, namlen);
+	    const HEK * const enamehek = HvENAME_HEK(oldstash);
+	    if(SvTYPE(namesv) == SVt_PVAV) {
+		items = AvFILLp((AV *)namesv) + 1;
+		svp = AvARRAY((AV *)namesv);
+	    }
+	    else {
+		items = 1;
+		svp = &namesv;
+	    }
+	    while (items--) {
+		STRLEN len;
+		const char *name = SvPVx_const(*svp++, len);
+		if(PL_stashcache)
+		    (void)hv_delete(PL_stashcache, name, len, G_DISCARD);
+	        hv_ename_delete(oldstash, name, len, 0);
 
-	 /* If the name deletion caused a name change, then we are not
-	  * going to call mro_isa_changed_in with this name (and not at all
-	  * if it has become anonymous) so we need to delete old isarev
-	  * entries here, both those in the superclasses and this class’s
-	  * own list of subclasses. We simply delete the latter from
-	  * from PL_isarev, since we still need it. hv_delete mortifies it
-	  * for us, so sv_2mortal is not necessary. */
-	  if(HvENAME_HEK(oldstash) != enamehek) {
-	    if(meta->isa && HvARRAY(meta->isa))
-		mro_clean_isarev(meta->isa, name, namlen, NULL);
-	    isarev = (HV *)hv_delete(PL_isarev, name, namlen, 0);
-	  }
+		if (!fetched_isarev) {
+		    /* If the name deletion caused a name change, then we
+		     * are not going to call mro_isa_changed_in with this
+		     * name (and not at all if it has become anonymous) so
+		     * we need to delete old isarev entries here, both
+		     * those in the superclasses and this class’s own list
+		     * of subclasses. We simply delete the latter from
+		     * PL_isarev, since we still need it. hv_delete morti-
+		     * fies it for us, so sv_2mortal is not necessary. */
+		    if(HvENAME_HEK(oldstash) != enamehek) {
+			if(meta->isa && HvARRAY(meta->isa))
+			    mro_clean_isarev(meta->isa, name, len, NULL);
+			isarev = (HV *)hv_delete(PL_isarev, name, len, 0);
+			fetched_isarev=TRUE;
+		    }
+		}
+	    }
 	}
     }
    check_stash:
     if(stash) {
-	hv_ename_add(stash, name, namlen);
+	if(SvTYPE(namesv) == SVt_PVAV) {
+	    items = AvFILLp((AV *)namesv) + 1;
+	    svp = AvARRAY((AV *)namesv);
+	}
+	else {
+	    items = 1;
+	    svp = &namesv;
+	}
+	while (items--) {
+	    STRLEN len;
+	    const char *name = SvPVx_const(*svp++, len);
+	    hv_ename_add(stash, name, len, 0);
+	}
 
        /* Add it to the big list if it needs
 	* mro_isa_changed_in called on it. That happens if it was
@@ -913,14 +981,45 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
 	return;
 
     /* Add all the subclasses to the big list. */
+    if(!fetched_isarev) {
+	/* If oldstash is not null, then we can use its HvENAME to look up
+	   the isarev hash, since all its subclasses will be listed there.
+	   It will always have an HvENAME. It the HvENAME was removed
+	   above, then fetch_isarev will be true, and this code will not be
+	   reached.
+
+	   If oldstash is null, then this is an empty spot with no stash in
+	   it, so subclasses could be listed in isarev hashes belonging to
+	   any of the names, so we have to check all of them.
+	 */
+	assert(!oldstash || HvENAME(oldstash));
+	if (oldstash) {
+	    /* Extra variable to avoid a compiler warning */
+	    char * const hvename = HvENAME(oldstash);
+	    fetched_isarev = TRUE;
+	    svp = hv_fetch(PL_isarev, hvename, HvENAMELEN_get(oldstash), 0);
+	    if (svp) isarev = MUTABLE_HV(*svp);
+	}
+	else if(SvTYPE(namesv) == SVt_PVAV) {
+	    items = AvFILLp((AV *)namesv) + 1;
+	    svp = AvARRAY((AV *)namesv);
+	}
+	else {
+	    items = 1;
+	    svp = &namesv;
+	}
+    }
     if(
-        isarev
-     || (
-           (svp = hv_fetch(PL_isarev, name, namlen, 0))
-        && (isarev = MUTABLE_HV(*svp))
-        )
+        isarev || !fetched_isarev
     ) {
+      while (fetched_isarev || items--) {
 	HE *iter;
+
+	if (!fetched_isarev) {
+	    HE * const he = hv_fetch_ent(PL_isarev, *svp++, 0, 0);
+	    if (!he || !(isarev = MUTABLE_HV(HeVAL(he)))) continue;
+	}
+
 	hv_iterinit(isarev);
 	while((iter = hv_iternext(isarev))) {
 	    I32 len;
@@ -940,11 +1039,10 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
 	      );
 	    CLEAR_LINEAR(meta);
         }
-    }
 
-    if(
-     (!stash || !HvARRAY(stash)) && (!oldstash || !HvARRAY(oldstash))
-    ) return;
+	if (fetched_isarev) break;
+      }
+    }
 
     /* This is partly based on code in hv_iternext_flags. We are not call-
        ing that here, as we want to avoid resetting the hash iterator. */
@@ -989,20 +1087,29 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
 		    )
 		    {
 			/* Add :: and the key (minus the trailing ::)
-			   to newname. */
-			SV *namesv
-			 = newSVpvn_flags(name, namlen, SVs_TEMP);
-			{
-			    const char *name;
-			    STRLEN namlen;
-			    sv_catpvs(namesv, "::");
-			    sv_catpvn(namesv, key, len-2);
-			    name = SvPV_const(namesv, namlen);
-			    mro_gather_and_rename(
-			     stashes, seen_stashes,
-			     substash, oldsubstash, name, namlen
-			    );
+			   to each name. */
+			SV *subname;
+			if(SvTYPE(namesv) == SVt_PVAV) {
+			    SV *aname;
+			    items = AvFILLp((AV *)namesv) + 1;
+			    svp = AvARRAY((AV *)namesv);
+			    subname = sv_2mortal((SV *)newAV());
+			    while (items--) {
+				aname = newSVsv(*svp++);
+				sv_catpvs(aname, "::");
+				sv_catpvn(aname, key, len-2);
+				av_push((AV *)subname, aname);
+			    }
 			}
+			else {
+			    subname = sv_2mortal(newSVsv(namesv));
+			    sv_catpvs(subname, "::");
+			    sv_catpvn(subname, key, len-2);
+			}
+			mro_gather_and_rename(
+			     stashes, seen_stashes,
+			     substash, oldsubstash, subname
+			);
 		    }
 
 		    (void)hv_store(seen, key, len, &PL_sv_yes, 0);
@@ -1043,23 +1150,33 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
 
 		    substash = GvHV(HeVAL(entry));
 		    if(substash) {
-			SV *namesv;
-			const char *subname;
-			STRLEN subnamlen;
+			SV *subname;
 
 			/* Avoid checking main::main::main::... */
 			if(substash == stash) continue;
 
 			/* Add :: and the key (minus the trailing ::)
-			   to newname. */
-			namesv
-			 = newSVpvn_flags(name, namlen, SVs_TEMP);
-			sv_catpvs(namesv, "::");
-			sv_catpvn(namesv, key, len-2);
-			subname = SvPV_const(namesv, subnamlen);
+			   to each name. */
+			if(SvTYPE(namesv) == SVt_PVAV) {
+			    SV *aname;
+			    items = AvFILLp((AV *)namesv) + 1;
+			    svp = AvARRAY((AV *)namesv);
+			    subname = sv_2mortal((SV *)newAV());
+			    while (items--) {
+				aname = newSVsv(*svp++);
+				sv_catpvs(aname, "::");
+				sv_catpvn(aname, key, len-2);
+				av_push((AV *)subname, aname);
+			    }
+			}
+			else {
+			    subname = sv_2mortal(newSVsv(namesv));
+			    sv_catpvs(subname, "::");
+			    sv_catpvn(subname, key, len-2);
+			}
 			mro_gather_and_rename(
 			  stashes, seen_stashes,
-			  substash, NULL, subname, subnamlen
+			  substash, NULL, subname
 			);
 		    }
 		}
