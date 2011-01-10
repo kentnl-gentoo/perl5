@@ -2599,7 +2599,11 @@ PerlIOUnix_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
 	    mode++;
 	else {
 	    imode = PerlIOUnix_oflags(mode);
+#ifdef VMS
+	    perm = 0777; /* preserve RMS defaults, ACL inheritance, etc. */
+#else
 	    perm = 0666;
+#endif
 	}
 	if (imode != -1) {
 	    const char *path = SvPV_nolen_const(*args);
@@ -3749,6 +3753,22 @@ PerlIOBuf_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
 		 * do something about failing setmode()? --jhi
 		 */
 		PerlLIO_setmode(fd, O_BINARY);
+#endif
+#ifdef VMS
+#include <rms.h>
+		/* Enable line buffering with record-oriented regular files
+		 * so we don't introduce an extraneous record boundary when
+		 * the buffer fills up.
+		 */
+		if (PerlIOBase(f)->flags & PERLIO_F_CANWRITE) {
+		    Stat_t st;
+		    if (PerlLIO_fstat(fd, &st) == 0
+		        && S_ISREG(st.st_mode)
+		        && (st.st_fab_rfm == FAB$C_VAR 
+			    || st.st_fab_rfm == FAB$C_VFC)) {
+			PerlIOBase(f)->flags |= PERLIO_F_LINEBUF;
+		    }
+		}
 #endif
 	    }
 	}

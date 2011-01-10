@@ -227,11 +227,13 @@ done
 
 dtrace_h=''
 dtrace_o=''
+minidtrace_o=''
 case "$usedtrace" in
 define|true)
 	dtrace_h='perldtrace.h' 
 	$dtrace -G -s perldtrace.d -o perldtrace.tmp >/dev/null 2>&1 \
-		&& rm -f perldtrace.tmp && dtrace_o='perldtrace$(OBJ_EXT)'
+		&& rm -f perldtrace.tmp && dtrace_o='perldtrace$(OBJ_EXT)' \
+		&& minidtrace_o='miniperldtrace$(OBJ_EXT)'
 	;;
 esac
 
@@ -344,6 +346,7 @@ VALGRIND=valgrind
 DTRACE = $dtrace
 DTRACE_H = $dtrace_h
 DTRACE_O = $dtrace_o
+MINIDTRACE_O = $minidtrace_o
 
 FIRSTMAKEFILE = $firstmakefile
 
@@ -477,7 +480,8 @@ obj1 = $(madlyobj) $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) pad$
 obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
 obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT) perlapi$(OBJ_EXT) numeric$(OBJ_EXT) mathoms$(OBJ_EXT) locale$(OBJ_EXT) pp_pack$(OBJ_EXT) pp_sort$(OBJ_EXT)
 
-mini_obj =  $(obj1) $(obj2) $(obj3) $(ARCHOBJS) $(DTRACE_O)
+minindt_obj = $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
+mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
@@ -553,7 +557,7 @@ splintfiles = $(c1)
 .c.s:
 	$(CCCMDSRC) -S $*.c
 
-all: $(FIRSTMAKEFILE) $(MINIPERL_EXE) miniperl $(generated_pods) $(private) $(unidatafiles) $(public) $(dynamic_ext) $(nonxs_ext) extras.make
+all: $(FIRSTMAKEFILE) $(MINIPERL_EXE) $(generated_pods) $(private) $(unidatafiles) $(public) $(dynamic_ext) $(nonxs_ext) extras.make
 	@echo " ";
 	@echo "	Everything is up to date. Type '$(MAKE) test' to run test suite."
 
@@ -734,8 +738,11 @@ mydtrace.h: $(DTRACE_H)
 	case "$dtrace_o" in
 	?*)
 		$spitshell >>$Makefile <<'!NO!SUBS!'
-$(DTRACE_O): perldtrace.d
+$(DTRACE_O): perldtrace.d $(ndt_obj)
 	$(DTRACE) -G -s perldtrace.d -o $(DTRACE_O) $(ndt_obj)
+
+$(MINIDTRACE_O): perldtrace.d $(minindt_obj)
+	$(DTRACE) -G -s perldtrace.d -o $(MINIDTRACE_O) $(minindt_obj)
 
 !NO!SUBS!
 		;;
@@ -1013,8 +1020,8 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) $(Icwd) pod/perlmodlib.PL -q
 
-pod/perldelta.pod: pod/perl5122delta.pod
-	$(LNS) perl5122delta.pod pod/perldelta.pod
+pod/perldelta.pod: pod/perl5123delta.pod
+	$(LNS) perl5123delta.pod pod/perldelta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
