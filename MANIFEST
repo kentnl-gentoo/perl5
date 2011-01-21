@@ -1,4 +1,3 @@
-apollo/netinet/in.h	Apollo DomainOS port: C header file frontend
 Artistic		The "Artistic License"
 AUTHORS			Contact info for contributors
 autodoc.pl		Creates pod/perlintern.pod and pod/perlapi.pod
@@ -7,7 +6,6 @@ av.h			Array value header
 beos/beos.c		BeOS port
 beos/beosish.h		BeOS port
 beos/nm.c		BeOS port
-cc_runtime.h		Macros need by runtime of compiler-generated code
 cflags.SH		A script that emits C compilation flags per file
 Changes			Describe how to peruse changes between releases
 config_h.SH		Produces config.h
@@ -71,7 +69,7 @@ cpan/Archive-Tar/t/src/short/foo.tgz			Archive::Tar tests
 cpan/autodie/lib/autodie/exception.pm		Exception class for autodie
 cpan/autodie/lib/autodie/exception/system.pm	Exception class for autodying system()
 cpan/autodie/lib/autodie/hints.pm	Hinting interface for autodie
-cpan/autodie/lib/autodie.pm		Functions suceed or die with lexical scope
+cpan/autodie/lib/autodie.pm		Functions succeed or die with lexical scope
 cpan/autodie/lib/Fatal.pm		Make errors in functions/builtins fatal
 cpan/autodie/t/00-load.t		autodie - basic load
 cpan/autodie/t/autodie.t		autodie - Basic functionality
@@ -104,7 +102,7 @@ cpan/autodie/t/internal-backcompat.t	autodie - Back-compatibility tests
 cpan/autodie/t/internal.t		autodie - internal interface tests
 cpan/autodie/t/lethal.t			autodie - lethal is the one true name
 cpan/autodie/t/lib/autodie/test/au/exception.pm	autodie - Australian helper
-cpan/autodie/t/lib/autodie/test/au.pm		autodie - Austrlaian helper
+cpan/autodie/t/lib/autodie/test/au.pm		autodie - Australian helper
 cpan/autodie/t/lib/autodie/test/badname.pm	autodie - Bad exception class
 cpan/autodie/t/lib/autodie/test/missing.pm	autodie - Missing exception class
 cpan/autodie/t/lib/Caller_helper.pm		autodie - Caller helper
@@ -174,18 +172,21 @@ cpan/CGI/t/apache.t			See if CGI::Apache still loads
 cpan/CGI/t/autoescape.t			See if CGI.pm works
 cpan/CGI/t/can.t			See if CGI.pm works
 cpan/CGI/t/carp.t			See if CGI::Carp works
+cpan/CGI/t/charset.t			See if CGI::Carp works
 cpan/CGI/t/checkbox_group.t		See if CGI.pm works
 cpan/CGI/t/cookie.t			See if CGI::Cookie works
 cpan/CGI/t/Dump.t			See if CGI->Dump works
 cpan/CGI/t/end_form.t			See if CGI.pm works
 cpan/CGI/t/form.t			See if CGI.pm works
 cpan/CGI/t/function.t			See if CGI.pm works
+cpan/CGI/t/headers.t			See if CGI.pm works
 cpan/CGI/t/hidden.t			See if CGI.pm works
 cpan/CGI/t/html.t			See if CGI.pm works
 cpan/CGI/t/http.t			See if CGI.pm works
 cpan/CGI/t/init.t			See if CGI.pm works
 cpan/CGI/t/init_test.txt		See if CGI.pm works
 cpan/CGI/t/no_tabindex.t		See if CGI.pm works
+cpan/CGI/t/param_fetch.t			See if CGI pop menus work
 cpan/CGI/t/popup_menu.t			See if CGI pop menus work
 cpan/CGI/t/pretty.t			See if CGI.pm works
 cpan/CGI/t/push.t			See if CGI::Push works
@@ -289,6 +290,8 @@ cpan/CPAN/lib/CPAN/FirstTime.pm		Utility for creating CPAN config files
 cpan/CPAN/lib/CPAN/FTP/netrc.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/FTP.pm			helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/HandleConfig.pm	helper package for CPAN.pm
+cpan/CPAN/lib/CPAN/HTTP/Client.pm	helper package for CPAN.pm
+cpan/CPAN/lib/CPAN/HTTP/Credentials.pm	helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/Index.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/InfoObj.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/Kwalify/distroprefs.dd		helper file for validating config files
@@ -305,6 +308,34 @@ cpan/CPAN/lib/CPAN/Shell.pm
 cpan/CPAN/lib/CPAN/Tarzip.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/URL.pm
 cpan/CPAN/lib/CPAN/Version.pm		Simple math with different flavors of version strings
+cpan/CPAN-Meta-YAML/lib/CPAN/Meta/YAML.pm		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/01_compile.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/02_basic.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/03_regression.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/05_export.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/11_meta_yml.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/12_plagger.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/13_perl_smith.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/14_yaml_org.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/15_multibyte.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/16_nullrefs.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/17_toolbar.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/18_tap.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/19_errors.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/20_subclass.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/21_bom.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/22_comments.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/data/HTML-WebDAO.yml		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/data/multibyte.yml		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/data/one.yml		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/data/sample.yml		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/data/Spreadsheet-Read.yml		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/data/Template-Provider-Unicode-Japanese.yml		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/data/toolbar.yml		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/data/two.yml		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/data/utf_16_le_bom.yml		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/data/vanilla.yml		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/lib/Test.pm		CPAN-Meta-YAML files
 cpan/CPAN/PAUSE2003.pub		CPAN public key
 cpan/CPAN/PAUSE2005.pub		CPAN public key
 cpan/CPAN/PAUSE2007.pub		CPAN public key
@@ -1000,6 +1031,62 @@ cpan/Getopt-Long/t/gol-linkage.t	See if Getopt::Long works
 cpan/Getopt-Long/t/gol-oo.t		See if Getopt::Long works
 cpan/Getopt-Long/t/gol-xargv.t		See if Getopt::Long works
 cpan/Getopt-Long/t/gol-xstring.t	See if Getopt::Long works
+cpan/HTTP-Tiny/lib/HTTP/Tiny.pm
+cpan/HTTP-Tiny/t/000_load.t
+cpan/HTTP-Tiny/t/001_api.t
+cpan/HTTP-Tiny/t/002_croakage.t
+cpan/HTTP-Tiny/t/00-compile.t
+cpan/HTTP-Tiny/t/010_url.t
+cpan/HTTP-Tiny/t/020_headers.t
+cpan/HTTP-Tiny/t/030_response.t
+cpan/HTTP-Tiny/t/040_content.t
+cpan/HTTP-Tiny/t/050_chunked_body.t
+cpan/HTTP-Tiny/t/060_http_date.t
+cpan/HTTP-Tiny/t/100_get.t
+cpan/HTTP-Tiny/t/110_mirror.t
+cpan/HTTP-Tiny/t/120_put.t
+cpan/HTTP-Tiny/t/130_redirect.t
+cpan/HTTP-Tiny/t/cases/get-01.txt
+cpan/HTTP-Tiny/t/cases/get-02.txt
+cpan/HTTP-Tiny/t/cases/get-03.txt
+cpan/HTTP-Tiny/t/cases/get-04.txt
+cpan/HTTP-Tiny/t/cases/get-05.txt
+cpan/HTTP-Tiny/t/cases/get-06.txt
+cpan/HTTP-Tiny/t/cases/get-07.txt
+cpan/HTTP-Tiny/t/cases/get-08.txt
+cpan/HTTP-Tiny/t/cases/get-09.txt
+cpan/HTTP-Tiny/t/cases/get-10.txt
+cpan/HTTP-Tiny/t/cases/get-11.txt
+cpan/HTTP-Tiny/t/cases/get-12.txt
+cpan/HTTP-Tiny/t/cases/get-13.txt
+cpan/HTTP-Tiny/t/cases/get-14.txt
+cpan/HTTP-Tiny/t/cases/get-15.txt
+cpan/HTTP-Tiny/t/cases/get-16.txt
+cpan/HTTP-Tiny/t/cases/get-17.txt
+cpan/HTTP-Tiny/t/cases/get-18.txt
+cpan/HTTP-Tiny/t/cases/get-19.txt
+cpan/HTTP-Tiny/t/cases/get-20.txt
+cpan/HTTP-Tiny/t/cases/get-21.txt
+cpan/HTTP-Tiny/t/cases/mirror-01.txt
+cpan/HTTP-Tiny/t/cases/mirror-02.txt
+cpan/HTTP-Tiny/t/cases/mirror-03.txt
+cpan/HTTP-Tiny/t/cases/mirror-04.txt
+cpan/HTTP-Tiny/t/cases/mirror-05.txt
+cpan/HTTP-Tiny/t/cases/put-01.txt
+cpan/HTTP-Tiny/t/cases/put-02.txt
+cpan/HTTP-Tiny/t/cases/put-03.txt
+cpan/HTTP-Tiny/t/cases/put-04.txt
+cpan/HTTP-Tiny/t/cases/put-05.txt
+cpan/HTTP-Tiny/t/cases/redirect-01.txt
+cpan/HTTP-Tiny/t/cases/redirect-02.txt
+cpan/HTTP-Tiny/t/cases/redirect-03.txt
+cpan/HTTP-Tiny/t/cases/redirect-04.txt
+cpan/HTTP-Tiny/t/cases/redirect-05.txt
+cpan/HTTP-Tiny/t/cases/redirect-06.txt
+cpan/HTTP-Tiny/t/cases/redirect-07.txt
+cpan/HTTP-Tiny/t/cases/redirect-08.txt
+cpan/HTTP-Tiny/t/cases/redirect-09.txt
+cpan/HTTP-Tiny/t/Util.pm
 cpan/IO-Compress/Changes				IO::Compress
 cpan/IO-Compress/examples/compress-zlib/filtdef		IO::Compress
 cpan/IO-Compress/examples/compress-zlib/filtinf		IO::Compress
@@ -1180,6 +1267,43 @@ cpan/IPC-SysV/t/pod.t			IPC::SysV test file
 cpan/IPC-SysV/t/sem.t			IPC::SysV test file
 cpan/IPC-SysV/t/shm.t			IPC::SysV test file
 cpan/IPC-SysV/typemap			IPC::SysV typemap
+cpan/JSON-PP/bin/json_pp
+cpan/JSON-PP/lib/JSON/PP/Boolean.pm
+cpan/JSON-PP/lib/JSON/PP.pm
+cpan/JSON-PP/t/000_load.t
+cpan/JSON-PP/t/001_utf8.t
+cpan/JSON-PP/t/002_error.t
+cpan/JSON-PP/t/003_types.t
+cpan/JSON-PP/t/006_pc_pretty.t
+cpan/JSON-PP/t/007_pc_esc.t
+cpan/JSON-PP/t/008_pc_base.t
+cpan/JSON-PP/t/009_pc_extra_number.t
+cpan/JSON-PP/t/010_pc_keysort.t
+cpan/JSON-PP/t/011_pc_expo.t
+cpan/JSON-PP/t/012_blessed.t
+cpan/JSON-PP/t/013_limit.t
+cpan/JSON-PP/t/014_latin1.t
+cpan/JSON-PP/t/015_prefix.t
+cpan/JSON-PP/t/016_tied.t
+cpan/JSON-PP/t/017_relaxed.t
+cpan/JSON-PP/t/018_json_checker.t
+cpan/JSON-PP/t/019_incr.t
+cpan/JSON-PP/t/020_unknown.t
+cpan/JSON-PP/t/021_evans_bugrep.t
+cpan/JSON-PP/t/022_comment_at_eof.t
+cpan/JSON-PP/t/099_binary.t
+cpan/JSON-PP/t/104_sortby.t
+cpan/JSON-PP/t/105_esc_slash.t
+cpan/JSON-PP/t/106_allow_barekey.t
+cpan/JSON-PP/t/107_allow_singlequote.t
+cpan/JSON-PP/t/108_decode.t
+cpan/JSON-PP/t/109_encode.t
+cpan/JSON-PP/t/110_bignum.t
+cpan/JSON-PP/t/112_upgrade.t
+cpan/JSON-PP/t/113_overloaded_eq.t
+cpan/JSON-PP/t/114_decode_prefix.t
+cpan/JSON-PP/t/115_tie_ixhash.t
+cpan/JSON-PP/t/_unicode_handling.pm
 cpan/libnet/Changes		libnet
 cpan/libnet/Config.eg		libnet
 cpan/libnet/demos/ftp		libnet
@@ -1463,6 +1587,11 @@ cpan/Module-Load/t/to_load/LoadMe.pl		Module::Load tests
 cpan/Module-Load/t/to_load/Must/Be/Loaded.pm	Module::Load tests
 cpan/Module-Load/t/to_load/TestModule.pm	Module::Load tests
 cpan/Module-Load/t/to_load/ToBeLoaded		Module::Load tests
+cpan/Module-Metadata/lib/Module/Metadata.pm
+cpan/Module-Metadata/t/lib/DistGen.pm
+cpan/Module-Metadata/t/lib/MBTest.pm
+cpan/Module-Metadata/t/lib/Tie/CPHash.pm
+cpan/Module-Metadata/t/metadata.t
 cpan/Module-Pluggable/lib/Devel/InnerPackage.pm		Find inner packages
 cpan/Module-Pluggable/lib/Module/Pluggable/Object.pm	Module::Pluggable
 cpan/Module-Pluggable/lib/Module/Pluggable.pm		Module::Pluggable
@@ -1589,13 +1718,16 @@ cpan/Parse-CPAN-Meta/t/lib/Parse/CPAN/Meta/Test.pm	Parse::CPAN::Meta testing lib
 cpan/Parse-CPAN-Meta/uupacktool.pl			Parse::CPAN::Meta
 cpan/PerlIO-via-QuotedPrint/lib/PerlIO/via/QuotedPrint.pm	PerlIO::via::QuotedPrint
 cpan/PerlIO-via-QuotedPrint/t/QuotedPrint.t			PerlIO::via::QuotedPrint
+cpan/Perl-OSType/lib/Perl/OSType.pm			Perl::OSType
+cpan/Perl-OSType/t/00-compile.t			Perl::OSType
+cpan/Perl-OSType/t/OSType.t			Perl::OSType
 cpan/Pod-Escapes/ChangeLog		ChangeLog for Pod::Escapes
 cpan/Pod-Escapes/lib/Pod/Escapes.pm	Pod::Escapes
 cpan/Pod-Escapes/README			README for Pod::Escapes
 cpan/Pod-Escapes/t/01_about_verbose.t	test Pod::Escapes
 cpan/Pod-Escapes/t/10_main.t		test Pod::Escapes
 cpan/Pod-Escapes/t/15_name2charnum.t	test Pod::Escapes
-cpan/Pod-LaTeX/LaTeX.pm		Convert POD data to LaTeX
+cpan/Pod-LaTeX/lib/Pod/LaTeX.pm		Convert POD data to LaTeX
 cpan/Pod-LaTeX/pod2latex.PL	Precursor for translator to turn pod into LaTeX
 cpan/Pod-LaTeX/t/pod2latex.t	See if Pod::LaTeX works
 cpan/Pod-LaTeX/t/user.t		See if Pod::LaTeX works
@@ -1866,7 +1998,7 @@ cpan/Pod-Simple/t/xhtml10.t				Pod::Simple test file
 cpan/Pod-Simple/t/x_nixer.t				Pod::Simple test file
 cpan/Shell/Shell.pm		Make AUTOLOADed system() calls
 cpan/Shell/t/Shell.t		Tests for above
-cpan/Sys-Syslog/Changes			Changlog for Sys::Syslog
+cpan/Sys-Syslog/Changes			Changelog for Sys::Syslog
 cpan/Sys-Syslog/fallback/const-c.inc	Sys::Syslog constants fallback file
 cpan/Sys-Syslog/fallback/const-xs.inc	Sys::Syslog constants fallback file
 cpan/Sys-Syslog/fallback/syslog.h	Sys::Syslog header fallback file
@@ -2341,6 +2473,8 @@ cpan/Time-HiRes/HiRes.xs		Time::HiRes extension
 cpan/Time-HiRes/Makefile.PL		Time::HiRes extension
 cpan/Time-HiRes/t/HiRes.t		Test for Time::HiRes
 cpan/Time-HiRes/typemap			Time::HiRes extension
+cpan/Time-Local/lib/Time/Local.pm	Reverse translation of localtime, gmtime
+cpan/Time-Local/t/Local.t		See if Time::Local works
 cpan/Time-Piece/Changes		Time::Piece extension
 cpan/Time-Piece/Makefile.PL	Time::Piece extension
 cpan/Time-Piece/Piece.pm	Time::Piece extension
@@ -2873,7 +3007,7 @@ dist/Math-BigInt/t/mbi_ali.t		Tests for BigInt
 dist/Math-BigInt/t/mbimbf.inc		Actual BigInt/BigFloat accuracy, precision and fallback, round_mode tests
 dist/Math-BigInt/t/mbimbf.t		BigInt/BigFloat accuracy, precision and fallback, round_mode
 dist/Math-BigInt/t/mbi_rand.t		Test Math::BigInt randomly
-dist/Math-BigInt/t/nan_cmp.t		overloaded comparision involving *NaN*
+dist/Math-BigInt/t/nan_cmp.t		overloaded comparison involving *NaN*
 dist/Math-BigInt/t/new_overloaded.t	test overloaded numbers in BigFloat's new()
 dist/Math-BigInt/t/req_mbf0.t		test: require Math::BigFloat; ->bzero();
 dist/Math-BigInt/t/req_mbf1.t		test: require Math::BigFloat; ->bone();
@@ -3393,6 +3527,8 @@ ext/SDBM_File/typemap		SDBM extension interface types
 ext/Socket/Makefile.PL		Socket extension makefile writer
 ext/Socket/Socket.pm		Socket extension Perl module
 ext/Socket/Socket.xs		Socket extension external subroutines
+ext/Socket/t/getaddrinfo.t	See if Socket::getaddrinfo works
+ext/Socket/t/getnameinfo.t	See if Socket::getnameinfo works
 ext/Socket/t/socketpair.t	See if socketpair works
 ext/Socket/t/Socket.t		See if Socket works
 ext/Sys-Hostname/Hostname.pm	Sys::Hostname extension Perl module
@@ -3402,8 +3538,6 @@ ext/Tie-Hash-NamedCapture/NamedCapture.pm	Implements %- and %+ behaviour
 ext/Tie-Hash-NamedCapture/NamedCapture.xs	Implements %- and %+ behaviour
 ext/Tie-Memoize/lib/Tie/Memoize.pm	Base class for memoized tied hashes
 ext/Tie-Memoize/t/Tie-Memoize.t		Test for Tie::Memoize
-ext/Time-Local/lib/Time/Local.pm	Reverse translation of localtime, gmtime
-ext/Time-Local/t/Local.t		See if Time::Local works
 ext/VMS-DCLsym/0README.txt	ReadMe file for VMS::DCLsym
 ext/VMS-DCLsym/DCLsym.pm	Perl access to CLI symbols
 ext/VMS-DCLsym/DCLsym.xs	Perl access to CLI symbols
@@ -3531,7 +3665,6 @@ hints/aix_4.sh			Hints for named architecture
 hints/aix.sh			Hints for named architecture
 hints/altos486.sh		Hints for named architecture
 hints/amigaos.sh		Hints for named architecture
-hints/apollo.sh			Hints for named architecture
 hints/atheos.sh			Hints for named architecture
 hints/aux_3.sh			Hints for named architecture
 hints/beos.sh			Hints for named architecture
@@ -3918,6 +4051,8 @@ malloc.c			A version of malloc you might not want
 malloc_ctl.h			A version of malloc you might not want
 MANIFEST			This list of files
 mathoms.c			A home for binary-compatible code artifacts
+metaconfig.h			Control file for the metaconfig process
+metaconfig.SH			Control file for the metaconfig process
 META.yml			Distribution meta-data in YAML
 mg.c				Magic code
 mg.h				Magic header
@@ -4118,6 +4253,7 @@ pod/perl5134delta.pod		Perl changes in version 5.13.4
 pod/perl5135delta.pod		Perl changes in version 5.13.5
 pod/perl5136delta.pod		Perl changes in version 5.13.6
 pod/perl5137delta.pod		Perl changes in version 5.13.7
+pod/perl5138delta.pod		Perl changes in version 5.13.8
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl570delta.pod		Perl changes in version 5.7.0
@@ -4307,9 +4443,8 @@ pp_ctl.c			Push/Pop code for control flow
 pp.h				Push/Pop code defs
 pp_hot.c			Push/Pop code for heavily used opcodes
 pp_pack.c			Push/Pop code for pack/unpack
-pp_proto.h			Not needed, but EU::MM currently references it
+pp_proto.h			C++ definitions for Push/Pop code
 pp_sort.c			Push/Pop code for sort
-pp.sym				Push/Pop code symbols
 pp_sys.c			Push/Pop code for system interaction
 proto.h				Prototypes
 qnx/ar				QNX implementation of "ar" utility
@@ -4318,7 +4453,6 @@ qnx/qnx.c			QNX silent matherr callback
 README				The Instructions
 README.aix			Perl notes for AIX
 README.amiga			Perl notes for AmigaOS
-README.apollo			Perl notes for Apollo DomainOS
 README.beos			Perl notes for BeOS
 README.bs2000			Perl notes for POSIX-BC BS2000
 README.ce			Perl notes for WinCE
@@ -4365,6 +4499,7 @@ regcomp.sym			Data for regnodes.h
 regen/embed.pl			Produces {embed,embedvar,proto}.h, global.sym
 regen/keywords.pl		Program to write keywords.h
 regen/opcode.pl			Opcode header generator
+regen/opcodes			Opcode data
 regen/overload.pl		generate overload.h
 regen_perly.pl			generate perly.{act,h,tab} from perly.y
 regen.pl			Run all scripts that (re)generate files
@@ -4386,7 +4521,7 @@ symbian/config.pl		Configuration script for Symbian
 symbian/config.sh		Configuration data for Symbian
 symbian/cwd.pl			Helper code for config.pl
 symbian/demo_pl			"Archive" of demo code
-symbian/ext/Moped/Msg/bld.inf	Demo extension build configuraion
+symbian/ext/Moped/Msg/bld.inf	Demo extension build configuration
 symbian/ext/Moped/Msg/location.pl	Demo extension script
 symbian/ext/Moped/Msg/Msg.mmp	Demo extension building
 symbian/ext/Moped/Msg/Msg.pkg	Demo extension packaging
@@ -4439,6 +4574,7 @@ t/base/num.t			See if numbers work
 t/base/pat.t			See if pattern matching works
 t/base/rs.t			See if record-read works
 t/base/term.t			See if various terms work
+t/base/while.t			See if while work
 t/benchmark/rt26188-speed-up-keys-on-empty-hash.t	Benchmark if keys on empty hashes is fast enough
 t/cmd/elsif.t			See if else-if works
 t/cmd/for.t			See if for loops work
@@ -4453,7 +4589,7 @@ t/comp/decl.t			See if declarations work
 t/comp/final_line_num.t		See if line numbers are correct at EOF
 t/comp/fold.t			See if constant folding works
 t/comp/form_scope.t		See if format scoping works
-t/comp/hints.aux		Auxillary file for %^H test
+t/comp/hints.aux		Auxiliary file for %^H test
 t/comp/hints.t			See if %^H works
 t/comp/line_debug_0.aux		Auxiliary file for @{"_<$file"} test
 t/comp/line_debug.t		See if @{"_<$file"} works
@@ -4798,17 +4934,20 @@ t/op/yadayada.t			See if ... works
 t/perl.supp			Perl valgrind suppressions
 t/porting/args_assert.t		Check that all PERL_ARGS_ASSERT* macros are used
 t/porting/authors.t		Check that all authors have been acknowledged
+t/porting/buildtoc.t		Check that various pod lists are consistent
 t/porting/checkcase.t		Check whether we are case-insensitive-fs-friendly
 t/porting/diag.t		Test completeness of perldiag.pod
 t/porting/dual-life.t		Check that dual-life bins are in utils/
 t/porting/exec-bit.t		Check that exec-bit bins are identified
+t/porting/filenames.t		Check the MANIFEST for filename portability.
 t/porting/FindExt.t		Test win32/FindExt.pm
-t/porting/maintainers.t		Test that Porting/Maintaners.pl is up to date
+t/porting/maintainers.t		Test that Porting/Maintainers.pl is up to date
 t/porting/manifest.t		Test that this MANIFEST file is well formed
 t/porting/podcheck.t		Test the POD of shipped modules is well formed
 t/porting/regen.t		Check that regen.pl doesn't need running
 t/porting/test_bootstrap.t	Test that the instructions for test bootstrapping aren't accidentally overlooked.
 t/README			Instructions for regression tests
+t/re/charset.t			See if regex modifiers like /d, /u work properly
 t/re/fold_grind.t		See if case folding works properly
 t/re/overload.t		Test against string corruption in pattern matches on overloaded objects
 t/re/pat_advanced.t		See if advanced esoteric patterns work
@@ -4845,7 +4984,7 @@ t/re/reg_mesg.t			See if one can get regular expression errors
 t/re/reg_namedcapture.t		Make sure glob assignment doesn't break named capture
 t/re/reg_nc_tie.t		Test the tied methods of Tie::Hash::NamedCapture
 t/re/reg_pmod.t			See if regexp /p modifier works as expected
-t/re/reg_posixcc.t		See if posix character classes behave consistantly
+t/re/reg_posixcc.t		See if posix character classes behave consistently
 t/re/reg_unsafe.t		Check for unsafe match vars
 t/re/re.t			See if exportable 're' funcs in universal.c work
 t/re/ReTest.pl			Test utilities for the t/re/pat*.t tests (used by do)
@@ -4927,6 +5066,7 @@ utils/enc2xs.PL			Encode module generator
 utils/h2ph.PL			A thing to turn C .h files into perl .ph files
 utils/h2xs.PL			Program to make .xs files from C header files
 utils/instmodsh.PL		Give information about installed extensions
+utils/json_pp.PL		JSON::PP command line utility
 utils/libnetcfg.PL		libnet
 utils.lst			Lists utilities bundled with Perl
 utils/Makefile			Pregenerated from utils/Makefile.SH

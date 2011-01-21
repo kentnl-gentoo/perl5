@@ -1411,28 +1411,8 @@ Perl_write_to_stderr(pTHX_ SV* msv)
     if (PL_stderrgv && SvREFCNT(PL_stderrgv) 
 	&& (io = GvIO(PL_stderrgv))
 	&& (mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar))) 
-    {
-	dSP;
-	ENTER;
-	SAVETMPS;
-
-	save_re_context();
-	SAVESPTR(PL_stderrgv);
-	PL_stderrgv = NULL;
-
-	PUSHSTACKi(PERLSI_MAGIC);
-
-	PUSHMARK(SP);
-	EXTEND(SP,2);
-	PUSHs(SvTIED_obj(MUTABLE_SV(io), mg));
-	PUSHs(msv);
-	PUTBACK;
-	call_method("PRINT", G_SCALAR);
-
-	POPSTACK;
-	FREETMPS;
-	LEAVE;
-    }
+	Perl_magic_methcall(aTHX_ MUTABLE_SV(io), mg, "PRINT",
+			    G_SCALAR | G_DISCARD | G_WRITING_TO_STDERR, 1, msv);
     else {
 #ifdef USE_SFIO
 	/* SFIO can really mess with your errno */
@@ -3864,71 +3844,73 @@ Perl_my_fflush_all(pTHX)
 }
 
 void
-Perl_report_evil_fh(pTHX_ const GV *gv, const IO *io, I32 op)
+Perl_report_wrongway_fh(pTHX_ const GV *gv, char have)
 {
-    const char * const name
-     = gv && (isGV(gv) || isGV_with_GP(gv)) ? GvENAME(gv) : NULL;
+    if (ckWARN(WARN_IO)) {
+	const char * const name
+	    = gv && (isGV(gv) || isGV_with_GP(gv)) ? GvENAME(gv) : NULL;
+	const char * const direction = have == '>' ? "out" : "in";
 
-    if (op == OP_phoney_OUTPUT_ONLY || op == OP_phoney_INPUT_ONLY) {
-	if (ckWARN(WARN_IO)) {
-	    const char * const direction =
-		(const char *)((op == OP_phoney_INPUT_ONLY) ? "in" : "out");
-	    if (name && *name)
-		Perl_warner(aTHX_ packWARN(WARN_IO),
-			    "Filehandle %s opened only for %sput",
-			    name, direction);
-	    else
-		Perl_warner(aTHX_ packWARN(WARN_IO),
-			    "Filehandle opened only for %sput", direction);
-	}
+	if (name && *name)
+	    Perl_warner(aTHX_ packWARN(WARN_IO),
+			"Filehandle %s opened only for %sput",
+			name, direction);
+	else
+	    Perl_warner(aTHX_ packWARN(WARN_IO),
+			"Filehandle opened only for %sput", direction);
+    }
+}
+
+void
+Perl_report_evil_fh(pTHX_ const GV *gv)
+{
+    const IO *io = gv ? GvIO(gv) : NULL;
+    const PERL_BITFIELD16 op = PL_op->op_type;
+    const char *vile;
+    I32 warn_type;
+
+    if (io && IoTYPE(io) == IoTYPE_CLOSED) {
+	vile = "closed";
+	warn_type = WARN_CLOSED;
     }
     else {
-        const char *vile;
-	I32   warn_type;
+	vile = "unopened";
+	warn_type = WARN_UNOPENED;
+    }
 
-	if (gv && io && IoTYPE(io) == IoTYPE_CLOSED) {
-	    vile = "closed";
-	    warn_type = WARN_CLOSED;
+    if (ckWARN(warn_type)) {
+	const char * const name
+	    = gv && (isGV(gv) || isGV_with_GP(gv)) ? GvENAME(gv) : NULL;
+	const char * const pars =
+	    (const char *)(OP_IS_FILETEST(op) ? "" : "()");
+	const char * const func =
+	    (const char *)
+	    (op == OP_READLINE   ? "readline"  :	/* "<HANDLE>" not nice */
+	     op == OP_LEAVEWRITE ? "write" :		/* "write exit" not nice */
+	     PL_op_desc[op]);
+	const char * const type =
+	    (const char *)
+	    (OP_IS_SOCKET(op) || (io && IoTYPE(io) == IoTYPE_SOCKET)
+	     ? "socket" : "filehandle");
+	if (name && *name) {
+	    Perl_warner(aTHX_ packWARN(warn_type),
+			"%s%s on %s %s %s", func, pars, vile, type, name);
+	    if (io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
+		Perl_warner(
+			    aTHX_ packWARN(warn_type),
+			    "\t(Are you trying to call %s%s on dirhandle %s?)\n",
+			    func, pars, name
+			    );
 	}
 	else {
-	    vile = "unopened";
-	    warn_type = WARN_UNOPENED;
-	}
-
-	if (ckWARN(warn_type)) {
-	    const char * const pars =
-		(const char *)(OP_IS_FILETEST(op) ? "" : "()");
-	    const char * const func =
-		(const char *)
-		(op == OP_READLINE   ? "readline"  :	/* "<HANDLE>" not nice */
-		 op == OP_LEAVEWRITE ? "write" :		/* "write exit" not nice */
-		 op < 0              ? "" :              /* handle phoney cases */
-		 PL_op_desc[op]);
-	    const char * const type =
-		(const char *)
-		(OP_IS_SOCKET(op) ||
-		 (gv && io && IoTYPE(io) == IoTYPE_SOCKET) ?
-		 "socket" : "filehandle");
-	    if (name && *name) {
-		Perl_warner(aTHX_ packWARN(warn_type),
-			    "%s%s on %s %s %s", func, pars, vile, type, name);
-		if (io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
-		    Perl_warner(
-			aTHX_ packWARN(warn_type),
-			"\t(Are you trying to call %s%s on dirhandle %s?)\n",
-			func, pars, name
-		    );
-	    }
-	    else {
-		Perl_warner(aTHX_ packWARN(warn_type),
-			    "%s%s on %s %s", func, pars, vile, type);
-		if (gv && io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
-		    Perl_warner(
-			aTHX_ packWARN(warn_type),
-			"\t(Are you trying to call %s%s on dirhandle?)\n",
-			func, pars
-		    );
-	    }
+	    Perl_warner(aTHX_ packWARN(warn_type),
+			"%s%s on %s %s", func, pars, vile, type);
+	    if (io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
+		Perl_warner(
+			    aTHX_ packWARN(warn_type),
+			    "\t(Are you trying to call %s%s on dirhandle?)\n",
+			    func, pars
+			    );
 	}
     }
 }
@@ -4173,7 +4155,7 @@ Perl_mini_mktime(pTHX_ struct tm *ptm)
  * outside the scope for this routine.  Since we convert back based on the
  * same rules we used to build the yearday, you'll only get strange results
  * for input which needed normalising, or for the 'odd' century years which
- * were leap years in the Julian calander but not in the Gregorian one.
+ * were leap years in the Julian calendar but not in the Gregorian one.
  * I can live with that.
  *
  * This algorithm also fails to handle years before A.D. 1 gracefully, but
@@ -6176,7 +6158,7 @@ S_mem_log_common(enum mem_log_type mlt, const UV n,
     mem_log_common   (alty, num, tysz, tynm, sv, oal, nal, flnm, ln, fnnm)
 #else
 /* this is suboptimal, but bug compatible.  User is providing their
-   own implemenation, but is getting these functions anyway, and they
+   own implementation, but is getting these functions anyway, and they
    do nothing. But _NOIMPL users should be able to cope or fix */
 # define \
     mem_log_common_if(alty, num, tysz, tynm, u, oal, nal, flnm, ln, fnnm) \
@@ -6285,8 +6267,14 @@ Perl_my_snprintf(char *buffer, const Size_t len, const char *format, ...)
     retval = vsprintf(buffer, format, ap);
 #endif
     va_end(ap);
-    /* vsnprintf() shows failure with >= len, vsprintf() with < 0 */
-    if (retval < 0 || (len > 0 && (Size_t)retval >= len))
+    /* vsprintf() shows failure with < 0 */
+    if (retval < 0
+#ifdef HAS_VSNPRINTF
+    /* vsnprintf() shows failure with >= len */
+        ||
+        (len > 0 && (Size_t)retval >= len) 
+#endif
+    )
 	Perl_croak(aTHX_ "panic: my_snprintf buffer overflow");
     return retval;
 }
@@ -6325,8 +6313,14 @@ Perl_my_vsnprintf(char *buffer, const Size_t len, const char *format, va_list ap
     retval = vsprintf(buffer, format, ap);
 # endif
 #endif /* #ifdef NEED_VA_COPY */
-    /* vsnprintf() shows failure with >= len, vsprintf() with < 0 */
-    if (retval < 0 || (len > 0 && (Size_t)retval >= len))
+    /* vsprintf() shows failure with < 0 */
+    if (retval < 0
+#ifdef HAS_VSNPRINTF
+    /* vsnprintf() shows failure with >= len */
+        ||
+        (len > 0 && (Size_t)retval >= len) 
+#endif
+    )
 	Perl_croak(aTHX_ "panic: my_vsnprintf buffer overflow");
     return retval;
 }

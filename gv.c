@@ -857,7 +857,7 @@ Perl_gv_autoload4(pTHX_ HV *stash, const char *name, STRLEN len, I32 method)
 
 
 /* require_tie_mod() internal routine for requiring a module
- * that implements the logic of automatical ties like %! and %-
+ * that implements the logic of automatic ties like %! and %-
  *
  * The "gv" parameter should be the glob.
  * "varpv" holds the name of the var, used for error messages.
@@ -2383,7 +2383,7 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
        * information by hand */
       SV *tmpRef = SvRV(left);
       SV *rv_copy;
-      if (SvREFCNT(tmpRef) > 1 && (rv_copy = AMG_CALLun(left,copy))) {
+      if (SvREFCNT(tmpRef) > 1 && (rv_copy = AMG_CALLunary(left,copy_amg))) {
 	  SvRV_set(left, rv_copy);
 	  SvSETMAGIC(left);
 	  SvREFCNT_dec(tmpRef);  
@@ -2409,7 +2409,7 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
     if (PERLDB_SUB && PL_curstash != PL_debstash)
 	PL_op->op_private |= OPpENTERSUB_DB;
     PUTBACK;
-    pp_pushmark();
+    Perl_pp_pushmark(aTHX);
 
     EXTEND(SP, notfound + 5);
     PUSHs(lr>0? right: left);

@@ -17,7 +17,7 @@ use Config;
 use File::Spec::Functions;
 
 BEGIN { require './test.pl'; }
-plan tests => 338;
+plan tests => 340;
 
 $| = 1;
 
@@ -1034,6 +1034,7 @@ TODO: {
     test !tainted($^O);
     if (!$^X) { } elsif ($^O eq 'bar') { }
     test !tainted($^O);
+    local $^O;  # We're going to clobber something test infrastructure depends on.
     eval '$^O = $^X';
     test $@ =~ /Insecure dependency in/;
 }
@@ -1357,7 +1358,7 @@ foreach my $ord (78, 163, 256) {
 # when the args were tainted. This only occured on the first use of
 # sprintf; after that, its TARG has taint magic attached, so setmagic
 # at the end works.  That's why there are multiple sprintf's below, rather
-# than just one wrapped in an inner loop. Also, any plantext betwerrn
+# than just one wrapped in an inner loop. Also, any plaintext between
 # fprmat entires would correctly cause tainting to get set. so test with
 # "%s%s" rather than eg "%s %s".
 
@@ -1443,6 +1444,39 @@ end
     my $b = $2;
     ok(! tainted($a), "regex optimization of single char /[]/i doesn't taint");
     ok(! tainted($b), "regex optimization of single char /[]/i doesn't taint");
+}
+
+{
+    # RT 81230: tainted value during FETCH created extra ref to tied obj
+
+    package P81230;
+    use warnings;
+
+    my %h;
+
+    sub TIEHASH {
+	my $x = $^X; # tainted
+	bless  \$x;
+    }
+    sub FETCH { my $x = $_[0]; $$x . "" }
+
+    tie %h, 'P81230';
+
+    my $w = "";
+    local $SIG{__WARN__} = sub { $w .= "@_" };
+
+    untie %h if $h{"k"};
+
+    ::is($w, "", "RT 81230");
+}
+
+{
+    # Compiling a subroutine inside a tainted expression does not make the
+    # constant folded values tainted.
+    my $x = sub { "x" . "y" };
+    my $y = $ENV{PATH} . $x->(); # Compile $x inside a tainted expression
+    my $z = $x->();
+    ok( ! tainted($z), "Constants folded value not tainted");
 }
 
 # This may bomb out with the alarm signal so keep it last

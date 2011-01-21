@@ -235,10 +235,10 @@ and check for NULL.
 
 /* Note, includes locale, unicode */
 #define STD_PMMOD_FLAGS_CLEAR(pmfl)                        \
-    *(pmfl) &= ~(RXf_PMf_FOLD|RXf_PMf_MULTILINE|RXf_PMf_SINGLELINE|RXf_PMf_EXTENDED|RXf_PMf_LOCALE|RXf_PMf_UNICODE)
+    *(pmfl) &= ~(RXf_PMf_FOLD|RXf_PMf_MULTILINE|RXf_PMf_SINGLELINE|RXf_PMf_EXTENDED|RXf_PMf_CHARSET)
 
 /* chars and strings used as regex pattern modifiers
- * Singlular is a 'c'har, plural is a "string"
+ * Singular is a 'c'har, plural is a "string"
  *
  * NOTE, KEEPCOPY was originally 'k', but was changed to 'p' for preserve
  * for compatibility reasons with Regexp::Common which highjacked (?k:...)
@@ -257,7 +257,8 @@ and check for NULL.
 #define NONDESTRUCT_PAT_MOD  'r'
 #define LOCALE_PAT_MOD       'l'
 #define UNICODE_PAT_MOD      'u'
-#define DUAL_PAT_MOD         'd'
+#define DEPENDS_PAT_MOD      'd'
+#define ASCII_RESTRICT_PAT_MOD 'a'
 
 #define ONCE_PAT_MODS        "o"
 #define KEEPCOPY_PAT_MODS    "p"
@@ -266,7 +267,8 @@ and check for NULL.
 #define NONDESTRUCT_PAT_MODS "r"
 #define LOCALE_PAT_MODS      "l"
 #define UNICODE_PAT_MODS     "u"
-#define DUAL_PAT_MODS        "d"
+#define DEPENDS_PAT_MODS     "d"
+#define ASCII_RESTRICT_PAT_MODS "a"
 
 /* This string is expected by regcomp.c to be ordered so that the first
  * character is the flag in bit RXf_PMf_STD_PMMOD_SHIFT of extflags; the next
@@ -292,6 +294,33 @@ and check for NULL.
 /* Leave some space, so future bit allocations can go either in the shared or
  * unshared area without affecting binary compatibility */
 #define RXf_BASE_SHIFT (_RXf_PMf_SHIFT_NEXT+2)
+
+/* embed.pl doesn't yet know how to handle static inline functions, so
+   manually decorate them here with gcc-style attributes.
+*/
+PERL_STATIC_INLINE const char *
+get_regex_charset_name(const U32 flags, STRLEN* const lenp)
+    __attribute__warn_unused_result__;
+
+#define MAX_CHARSET_NAME_LENGTH 1
+
+PERL_STATIC_INLINE const char *
+get_regex_charset_name(const U32 flags, STRLEN* const lenp)
+{
+    /* Returns a string that corresponds to the name of the regex character set
+     * given by 'flags', and *lenp is set the length of that string, which
+     * cannot exceed MAX_CHARSET_NAME_LENGTH characters */
+
+    *lenp = 1;
+    switch (get_regex_charset(flags)) {
+        case REGEX_DEPENDS_CHARSET: return DEPENDS_PAT_MODS;
+        case REGEX_LOCALE_CHARSET:  return LOCALE_PAT_MODS;
+        case REGEX_UNICODE_CHARSET: return UNICODE_PAT_MODS;
+	case REGEX_ASCII_RESTRICTED_CHARSET: return ASCII_RESTRICT_PAT_MODS;
+    }
+
+    return "?";	    /* Unknown */
+}
 
 /* Anchor and GPOS related stuff */
 #define RXf_ANCH_BOL    	(1<<(RXf_BASE_SHIFT+0))
@@ -433,7 +462,7 @@ and check for NULL.
 
 #endif /* PLUGGABLE_RE_EXTENSION */
 
-/* Stuff that needs to be included in the plugable extension goes below here */
+/* Stuff that needs to be included in the pluggable extension goes below here */
 
 #ifdef PERL_OLD_COPY_ON_WRITE
 #define RX_MATCH_COPY_FREE(rx) \

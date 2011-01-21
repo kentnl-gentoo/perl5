@@ -23,7 +23,7 @@ BEGIN {
 }
 
 
-plan tests => 411;  # Update this when adding/deleting tests.
+plan tests => 423;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -305,7 +305,7 @@ sub run_tests {
         $::reg_infty   = $Config {reg_infty} // 32767;
         $::reg_infty_m = $::reg_infty - 1;
         $::reg_infty_p = $::reg_infty + 1;
-        $::reg_infty_m = $::reg_infty_m;   # Surpress warning.
+        $::reg_infty_m = $::reg_infty_m;   # Suppress warning.
 
         # As well as failing if the pattern matches do unexpected things, the
         # next three tests will fail if you should have picked up a lower-than-
@@ -640,6 +640,19 @@ sub run_tests {
         ok !defined $+ [3] && !defined $- [3] &&
            !defined $+ [4] && !defined $- [4];
 
+        # Exists has a special check for @-/@+ - bug 45147
+        ok exists $-[0];
+        ok exists $+[0];
+        ok exists $-[2];
+        ok exists $+[2];
+        ok !exists $-[3];
+        ok !exists $+[3];
+        ok exists $-[-1];
+        ok exists $+[-1];
+        ok exists $-[-3];
+        ok exists $+[-3];
+        ok !exists $-[-4];
+        ok !exists $+[-4];
 
         /.(a)(b)?(a)/;
         iseq $#+, 3;
@@ -1023,12 +1036,12 @@ sub run_tests {
     }
     {
         my $n= 50;
-        # this must be a high number and go from 0 to N, as the bug we are looking for doesnt
+        # this must be a high number and go from 0 to N, as the bug we are looking for doesn't
         # seem to be predictable. Slight changes to the test make it fail earlier or later.
         foreach my $i (0 .. $n)
         {
             my $str= "\n" x $i;
-            ok $str=~/.*\z/, "implict MBOL check string disable does not break things length=$i";
+            ok $str=~/.*\z/, "implicit MBOL check string disable does not break things length=$i";
         }
     }
     {
@@ -1106,7 +1119,7 @@ sub run_tests {
         # (without the string eval the test script might be unparseable)
 
         # Note: these test check the behaviour that currently is valid syntax
-        # If a new regex modifier is added and a test fails then there is a backwards-compatibilty issue
+        # If a new regex modifier is added and a test fails then there is a backwards-compatibility issue
         # Note-2: a new deprecate warning was added for this with commit e6897b1a5db0410e387ccbf677e89fc4a1d8c97a
         # which indicate that this syntax will be removed in 5.16.
         # When this happens the tests can be removed

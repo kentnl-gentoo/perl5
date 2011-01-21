@@ -50,7 +50,7 @@ letter.
 to check the return value of your socket() call?  See
 L<perlfunc/accept>.
 
-=item Allocation too large: %lx
+=item Allocation too large: %x
 
 (X) You can't allocate more than 64K on an MS-DOS machine.
 
@@ -84,7 +84,7 @@ dereferenced according to its overloading, not its underlying reference type.
 The warning is issued when C<%{}> overloading exists on a blessed arrayref,
 when C<@{}> overloading exists on a blessed hashref, or when both overloadings
 are defined (in which case C<%{}> is used).  You can force the interpretation
-of the object by explictly dereferencing it as an array or hash instead of
+of the object by explicitly dereferencing it as an array or hash instead of
 passing the object itself to C<keys>, C<values> or C<each>.
 
 =item Ambiguous range in transliteration operator
@@ -279,7 +279,7 @@ which is not in its key set.
 (F) The failing code attempted to delete a key whose value has been
 declared readonly from a restricted hash.
 
-=item Attempt to free non-arena SV: 0x%lx
+=item Attempt to free non-arena SV: 0x%x
 
 (P internal) All SV objects are supposed to be allocated from arenas
 that will be garbage collected on exit.  An SV was discovered to be
@@ -365,7 +365,7 @@ attribute on an array, hash or scalar reference. The :unique attribute has
 had no effect since Perl 5.8.8, and will be removed in the next major
 release of Perl 5.
 
-=item Bad arg length for %s, is %d, should be %d
+=item Bad arg length for %s, is %u, should be %d
 
 (F) You passed a buffer of the wrong size to one of msgctl(), semctl()
 or shmctl().  In C parlance, the correct sizes are, respectively,
@@ -1358,6 +1358,30 @@ This subroutine cannot be called.
 (F) You had a (sub-)template that ends with a '/'. There must be another
 template code following the slash. See L<perlfunc/pack>.
 
+=item Code point 0x%X is not Unicode, may not be portable
+
+=item Code point 0x%X is not Unicode, no properties match it; all inverse properties do
+
+(W utf8) You had a code point above the Unicode maximum of U+10FFFF.
+
+Perl allows strings to contain a superset of Unicode code
+points, up to the limit of what is storable in an unsigned integer on
+your system, but these may not be accepted by other languages/systems.
+At one time, it was legal in some standards to have code points up to
+0x7FFF_FFFF, but not higher.  Code points above 0xFFFF_FFFF require
+larger than a 32 bit word.
+
+None of the Unicode or Perl-defined properties will match a non-Unicode
+code point.  For example,
+
+    chr(0x7FF_FFFF) =~ /\p{Any}/
+
+will not match, because the code point is not in Unicode.  But
+
+    chr(0x7FF_FFFF) =~ /\P{Any}/
+
+will match.
+
 =item %s: Command not found
 
 (A) You've accidentally run your script through B<csh> instead of Perl.
@@ -1464,7 +1488,7 @@ expression compiler gave it.
 (P) The regular expression engine got passed a regexp program without a
 valid magic number.
 
-=item Corrupt malloc ptr 0x%lx at 0x%lx
+=item Corrupt malloc ptr 0x%x at 0x%x
 
 (P) The malloc package that comes with Perl had an internal failure.
 
@@ -1914,14 +1938,14 @@ a term, so it's looking for the corresponding right angle bracket, and
 not finding it.  Chances are you left some needed parentheses out
 earlier in the line, and you really meant a "less than".
 
-=item gmtime(%.0f) too large
+=item gmtime(%f) too large
 
 (W overflow) You called C<gmtime> with an number that was larger than
 it can reliably handle and C<gmtime> probably returned the wrong
 date. This warning is also triggered with nan (the special
 not-a-number value).
 
-=item gmtime(%.0f) too small
+=item gmtime(%f) too small
 
 (W overflow) You called C<gmtime> with an number that was smaller than
 it can reliably handle and C<gmtime> probably returned the wrong
@@ -2011,7 +2035,7 @@ been used, and the correct charname handler is in scope.
 binary number.  Interpretation of the binary number stopped before the
 offending digit.
 
-=item Illegal character %s (carriage return)
+=item Illegal character \%o (carriage return)
 
 (F) Perl normally treats carriage returns in the program text as it
 would any other whitespace, which means you should never see this error
@@ -2203,12 +2227,12 @@ L<perlop/Terms and List Operators (Leftward)>.
 
 =item Invalid %s attribute: %s
 
-The indicated attribute for a subroutine or variable was not recognized
+(F) The indicated attribute for a subroutine or variable was not recognized
 by Perl or by a user-supplied handler.  See L<attributes>.
 
 =item Invalid %s attributes: %s
 
-The indicated attributes for a subroutine or variable were not
+(F) The indicated attributes for a subroutine or variable were not
 recognized by Perl or by a user-supplied handler.  See L<attributes>.
 
 =item Invalid conversion in %s: "%s"
@@ -2394,14 +2418,14 @@ detectable way.
 to check the return value of your socket() call?  See
 L<perlfunc/listen>.
 
-=item localtime(%.0f) too large
+=item localtime(%f) too large
 
 (W overflow) You called C<localtime> with an number that was larger
 than it can reliably handle and C<localtime> probably returned the
 wrong date. This warning is also triggered with nan (the special
 not-a-number value).
 
-=item localtime(%.0f) too small
+=item localtime(%f) too small
 
 (W overflow) You called C<localtime> with an number that was smaller
 than it can reliably handle and C<localtime> probably returned the
@@ -2513,7 +2537,7 @@ rules and perl was unable to guess how to make more progress.
 (F) You tried to unpack something that didn't comply with UTF-8 encoding
 rules and perl was unable to guess how to make more progress.
 
-=item Maximal count of pending signals (%d) exceeded
+=item Maximal count of pending signals (%u) exceeded
 
 (F) Perl aborted due to a too high number of signals pending. This
 usually indicates that your operating system tried to deliver signals
@@ -3133,7 +3157,7 @@ which is odd, because hashes come in key/value pairs.
 
 =item Offset outside string
 
-(F, W layer) You tried to do a read/write/send/recv/seek operation
+(F|W layer) You tried to do a read/write/send/recv/seek operation
 with an offset pointing outside the buffer.  This is difficult to
 imagine.  The sole exceptions to this are that zero padding will
 take place when going past the end of the string when either
@@ -3162,14 +3186,14 @@ that isn't open.  Check your control flow.  See also L<perlfunc/-X>.
 
 =item Opening dirhandle %s also as a file
 
-(W io deprecated) You used open() to associate a filehandle to
+(W io, deprecated) You used open() to associate a filehandle to
 a symbol (glob or scalar) that already holds a dirhandle.
 Although legal, this idiom might render your code confusing
 and is deprecated.
 
 =item Opening filehandle %s also as a directory
 
-(W io deprecated) You used opendir() to associate a dirhandle to
+(W io, deprecated) You used opendir() to associate a dirhandle to
 a symbol (glob or scalar) that already holds a filehandle.
 Although legal, this idiom might render your code confusing
 and is deprecated.
@@ -3180,6 +3204,32 @@ and is deprecated.
 handler was defined.  While some handlers can be autogenerated in terms
 of other handlers, there is no default handler for any operation, unless
 C<fallback> overloading key is specified to be true.  See L<overload>.
+
+=item Operation "%s" returns its argument for UTF-16 surrogate U+%X
+
+(W) You performed an operation requiring Unicode semantics on a Unicode
+surrogate.  Unicode frowns upon the use of surrogates for anything but
+storing strings in UTF-16, but semantics are (reluctantly) defined for
+the surrogates, and they are to do nothing for this operation.  Because
+the use of surrogates can be dangerous, Perl warns.
+
+If the operation shown is "ToFold", it means that case-insensitive
+matching in a regular expression was done on the code point.
+
+If you know what you are doing you can turn off this warning by
+C<no warnings 'utf8';>.
+
+=item Operation "%s" returns its argument for non-Unicode code point 0x%X
+
+(W) You performed an operation requiring Unicode semantics on a code
+point that is not in Unicode, so what it should do is not defined.  Perl
+has chosen to have it do nothing, and warn you.
+
+If the operation shown is "ToFold", it means that case-insensitive
+matching in a regular expression was done on the code point.
+
+If you know what you are doing you can turn off this warning by
+C<no warnings 'utf8';>.
 
 =item Operator or semicolon missing before %s
 
@@ -3812,7 +3862,7 @@ before now.  Check your control flow.
 
 (W unopened) You tried to read from a filehandle that was never opened.
 
-=item Reallocation too large: %lx
+=item Reallocation too large: %x
 
 (F) You can't allocate more than 64K on an MS-DOS machine.
 
@@ -4082,7 +4132,7 @@ See Server error.
 
 =item Server error
 
-This is the error message generally seen in a browser window when trying
+(A) This is the error message generally seen in a browser window when trying
 to run a CGI program (including SSI) over the web. The actual error text
 varies widely from server to server. The most frequently-seen variants
 are "500 Server error", "Method (something) not permitted", "Document
@@ -4398,7 +4448,7 @@ will deny it.
 
 =item The %s function is unimplemented
 
-The function indicated isn't implemented on this architecture, according
+(F) The function indicated isn't implemented on this architecture, according
 to the probings of Configure.
 
 =item The stat preceding %s wasn't an lstat
@@ -4617,15 +4667,12 @@ Check the #! line, or manually feed your script into Perl yourself.
 (F) The unexec() routine failed for some reason.  See your local FSF
 representative, who probably put it there in the first place.
 
-=item Unicode non-character %s is illegal for interchange
+=item Unicode non-character U+%X is illegal for open interchange
 
 (W utf8) Certain codepoints, such as U+FFFE and U+FFFF, are defined by the
 Unicode standard to be non-characters. Those are legal codepoints, but are
 reserved for internal use; so, applications shouldn't attempt to exchange
-them.  In some cases, this message is also given if you use a codepoint that
-isn't in Unicode--that is it is above the legal maximum of U+10FFFF.  These
-aren't legal at all in Unicode, so they are illegal for interchange, but can be
-used internally in a Perl program.  If you know what you are doing you can turn
+them.  If you know what you are doing you can turn
 off this warning by C<no warnings 'utf8';>.
 
 =item Unknown BYTEORDER
@@ -4657,9 +4704,9 @@ subvert Perl's population of %ENV for nefarious purposes.
 
 =item Unknown "re" subpragma '%s' (known ones are: %s)
 
-You tried to use an unknown subpragma of the "re" pragma.
+(W) You tried to use an unknown subpragma of the "re" pragma.
 
-=item Unknown switch condition (?(%.2s in regex; marked by <-- HERE in m/%s/
+=item Unknown switch condition (?(%s in regex; marked by <-- HERE in m/%s/
 
 (F) The condition part of a (?(condition)if-clause|else-clause) construct
 is not known. The condition may be lookahead or lookbehind (the condition
@@ -4673,12 +4720,12 @@ discovered.  See L<perlre>.
 
 =item Unknown Unicode option letter '%c'
 
-You specified an unknown Unicode option.  See L<perlrun> documentation
+(F) You specified an unknown Unicode option.  See L<perlrun> documentation
 of the C<-C> switch for the list of known options.
 
 =item Unknown Unicode option value %x
 
-You specified an unknown Unicode option.  See L<perlrun> documentation
+(F) You specified an unknown Unicode option.  See L<perlrun> documentation
 of the C<-C> switch for the list of known options.
 
 =item Unknown warnings category '%s'
@@ -5125,7 +5172,7 @@ to be huge numbers, and so usually indicates programmer error.
 If you really do mean it, explicitly numify your reference, like so:
 C<$array[0+$ref]>.  This warning is not given for overloaded objects,
 either, because you can overload the numification and stringification
-operators and then you assumably know what you are doing.
+operators and then you presumably know what you are doing.
 
 =item Use of reserved word "%s" is deprecated
 
@@ -5193,15 +5240,18 @@ exceeded.  In the message, the characters in the sequence are separated by
 dots, and each is shown by its ordinal in hex.  Anything to the left of the
 C<HERE> was retained; anything to the right was discarded.
 
-=item UTF-16 surrogate %s
+=item Unicode surrogate U+%X is illegal in UTF-8
 
-(W utf8) You tried to generate half of a UTF-16 surrogate by
-requesting a Unicode character between the code points 0xD800 and
-0xDFFF (inclusive).  That range is reserved exclusively for the use of
-UTF-16 encoding (by having two 16-bit UCS-2 characters); but Perl
-encodes its characters in UTF-8, so what you got is a very illegal
-character.  If you really really know what you are doing you can turn off
-this warning by C<no warnings 'utf8';>.
+=item UTF-16 surrogate U+%X
+
+(W utf8) You had a UTF-16 surrogate in a context where they are
+not considered acceptable.  These code points, between U+D800 and
+U+DFFF (inclusive), are used by Unicode only for UTF-16.  However, Perl
+internally allows all unsigned integer code points (up to the size limit
+available on your platform), including surrogates.  But these can cause
+problems when being input or output, which is likely where this message
+came from.  If you really really know what you are doing you can turn
+off this warning by C<no warnings 'utf8';>.
 
 =item Value of %s can be "0"; test with defined()
 
@@ -5366,9 +5416,9 @@ of the codes @, /, U, u, w or a *-length. Redesign the template.
 (W closed) The filehandle you're writing to got itself closed sometime
 before now.  Check your control flow.
 
-=item %s "\x%s" does not map to Unicode
+=item %s "\x%X" does not map to Unicode
 
-When reading in different encodings Perl tries to map everything
+(F) When reading in different encodings Perl tries to map everything
 into Unicode characters.  The bytes you read in are not legal in
 this encoding, for example
 

@@ -15,7 +15,7 @@ typedef OP OP_4tree;			/* Will be redefined later. */
 /* Convert branch sequences to more efficient trie ops? */
 #define PERL_ENABLE_TRIE_OPTIMISATION 1
 
-/* Be really agressive about optimising patterns with trie sequences? */
+/* Be really aggressive about optimising patterns with trie sequences? */
 #define PERL_ENABLE_EXTENDED_TRIE_OPTIMISATION 1
 
 /* Use old style unicode mappings for perl and posix character classes
@@ -26,8 +26,8 @@ typedef OP OP_4tree;			/* Will be redefined later. */
  * both match or neither match.
  * NOTE: Disabling this will cause various backwards compatibility issues to rear 
  * their head, and tests to fail. However it will make the charclass behaviour 
- * consistant regardless of internal string type, and make character class inversions
- * consistant. The tests that fail in the regex engine are basically broken tests.
+ * consistent regardless of internal string type, and make character class inversions
+ * consistent. The tests that fail in the regex engine are basically broken tests.
  *
  * Personally I think 5.12 should disable this for sure. Its a bit more debatable for
  * 5.10, so for now im leaving it enabled.
@@ -272,8 +272,9 @@ struct regnode_charclass_class {
 #undef STRING
 
 #define	OP(p)		((p)->type)
-#define FLAGS(p)	((p)->flags)	/* Caution: Doesn't apply to all \
-					   regnode types */
+#define FLAGS(p)	((p)->flags)	/* Caution: Doesn't apply to all      \
+					   regnode types.  For some, it's the \
+					   character set of the regnode */
 #define	OPERAND(p)	(((struct regnode_string *)p)->string)
 #define MASK(p)		((char*)OPERAND(p))
 #define	STR_LEN(p)	(((struct regnode_string *)p)->str_len)
@@ -312,13 +313,40 @@ struct regnode_charclass_class {
 /* Flags for node->flags of several of the node types */
 #define USE_UNI                0x01
 
-/* Flags for node->flags of ANYOF */
+/* Flags for node->flags of ANYOF.  These are in short supply, so some games
+ * are done to share them, as described below.  If necessary, the ANYOF_LOCALE
+ * and ANYOF_CLASS bits could be shared with a space penalty for locale nodes
+ * (and the code at the time this comment was written, is written so that all
+ * that is necessary to make the change would be to redefine the ANYOF_CLASS
+ * define).  Once the planned change to compile all the above-latin1 code points
+ * is done, then the UNICODE_ALL bit can be freed up.  If flags need to be
+ * added that are applicable to the synthetic start class only, with some work,
+ * they could be put in the next-node field, or in an unused bit of the
+ * classflags field. */
 
-#define ANYOF_LOCALE		0x01
-#define ANYOF_FOLD		0x02
-#define ANYOF_INVERT		0x04
+#define ANYOF_LOCALE		 0x01
 
-/* CLASS is never set unless LOCALE is too: has runtime \d, \w, [:posix:], ... */
+/* The fold is calculated and stored in the bitmap where possible at compile
+ * time.  However there are two cases where it isn't possible.  These share
+ * this bit:  1) under locale, where the actual folding varies depending on
+ * what the locale is at the time of execution; and 2) where the folding is
+ * specified in a swash, not the bitmap, such as characters which aren't
+ * specified in the bitmap, or properties that aren't looked at at compile time
+ */
+#define ANYOF_LOC_NONBITMAP_FOLD 0x02
+
+#define ANYOF_INVERT		 0x04
+
+/* EOS, meaning that it can match an empty string too, is used for the
+ * synthetic start class (ssc) only.  It can share the INVERT bit, as the ssc
+ * is never inverted.  The bit just needs to be turned off before regexec.c
+ * gets a hold of it so that regexec.c doesn't think it's inverted, but this
+ * happens automatically, as if the ssc can match an EOS, the ssc is discarded,
+ * and never passed to regexec.c */
+#define ANYOF_EOS		ANYOF_INVERT
+
+/* CLASS is never set unless LOCALE is too: has runtime \d, \w, [:posix:], ...
+ * The non-locale ones are resolved at compile-time */
 #define ANYOF_CLASS	 0x08
 #define ANYOF_LARGE      ANYOF_CLASS    /* Same; name retained for back compat */
 
@@ -335,8 +363,9 @@ struct regnode_charclass_class {
 /* Matches every code point 0x100 and above*/
 #define ANYOF_UNICODE_ALL	0x40
 
-/* EOS used for regstclass only */
-#define ANYOF_EOS		0x80	/* Can match an empty string too */
+/* Match all Latin1 characters that aren't ASCII when the target string is not
+ * in utf8. */
+#define ANYOF_NON_UTF8_LATIN1_ALL 0x80
 
 #define ANYOF_FLAGS_ALL		0xff
 
@@ -655,7 +684,7 @@ struct _reg_ac_data {
 };
 typedef struct _reg_ac_data reg_ac_data;
 
-/* ANY_BIT doesnt use the structure, so we can borrow it here.
+/* ANY_BIT doesn't use the structure, so we can borrow it here.
    This is simpler than refactoring all of it as wed end up with
    three different sets... */
 
@@ -822,20 +851,20 @@ re.pm, especially to the documentation.
     const char * const rpv =                          \
         pv_pretty((dsv), (pv), (l), (m), \
             PL_colors[(c1)],PL_colors[(c2)], \
-            PERL_PV_ESCAPE_RE |((isuni) ? PERL_PV_ESCAPE_UNI : 0) );         \
+            PERL_PV_ESCAPE_RE|PERL_PV_ESCAPE_NONASCII |((isuni) ? PERL_PV_ESCAPE_UNI : 0) );         \
     const int rlen = SvCUR(dsv)
 
 #define RE_SV_ESCAPE(rpv,isuni,dsv,sv,m) \
     const char * const rpv =                          \
         pv_pretty((dsv), (SvPV_nolen_const(sv)), (SvCUR(sv)), (m), \
             PL_colors[(c1)],PL_colors[(c2)], \
-            PERL_PV_ESCAPE_RE |((isuni) ? PERL_PV_ESCAPE_UNI : 0) )
+            PERL_PV_ESCAPE_RE|PERL_PV_ESCAPE_NONASCII |((isuni) ? PERL_PV_ESCAPE_UNI : 0) )
 
 #define RE_PV_QUOTED_DECL(rpv,isuni,dsv,pv,l,m)                    \
     const char * const rpv =                                       \
         pv_pretty((dsv), (pv), (l), (m), \
             PL_colors[0], PL_colors[1], \
-            ( PERL_PV_PRETTY_QUOTE | PERL_PV_ESCAPE_RE | PERL_PV_PRETTY_ELLIPSES | \
+            ( PERL_PV_PRETTY_QUOTE | PERL_PV_ESCAPE_RE | PERL_PV_ESCAPE_NONASCII | PERL_PV_PRETTY_ELLIPSES | \
               ((isuni) ? PERL_PV_ESCAPE_UNI : 0))                  \
         )
 

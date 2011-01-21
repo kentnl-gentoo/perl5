@@ -189,7 +189,7 @@ The F<installman> script is slow. All it is doing text processing, which we're
 told is something Perl is good at. So it would be nice to know what it is doing
 that is taking so much CPU, and where possible address it.
 
-=head2 enable lexical enabling/disabling of inidvidual warnings
+=head2 enable lexical enabling/disabling of individual warnings
 
 Currently, warnings can only be enabled or disabled by category. There
 are times when it would be useful to quash a single warning, not a
@@ -929,7 +929,7 @@ be C<*$> instead. (This is changed in F<opcode.pl>)
 
 Currently C<$foo ~~ $object> will die with the message "Smart matching a
 non-overloaded object breaks encapsulation". It would be nice to allow
-to bypass this by using explictly the syntax C<$foo ~~ %$object> or
+to bypass this by using explicitly the syntax C<$foo ~~ %$object> or
 C<$foo ~~ @$object>.
 
 =head2 error reporting of [$a ; $b]
@@ -966,10 +966,13 @@ years for this discrepancy.
 
 =head2 UTF-8 revamp
 
-The handling of Unicode is unclean in many places. For example, the regexp
-engine matches in Unicode semantics whenever the string or the pattern is
-flagged as UTF-8, but that should not be dependent on an internal storage
-detail of the string.
+The handling of Unicode is unclean in many places.  In the regex engine
+there are especially many problems.  The swash data structure could be
+replaced my something better.  Inversion lists and maps are likely
+candidates.  The whole Unicode database could be placed in-core for a
+huge speed-up.  Only minimal work was done on the optimizer when utf8
+was added, with the result that the synthetic start class often will
+fail to narrow down the possible choices when given non-Latin1 input.
 
 =head2 Properly Unicode safe tokeniser and pads.
 

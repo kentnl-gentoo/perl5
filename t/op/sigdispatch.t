@@ -7,8 +7,9 @@ BEGIN {
 }
 
 use strict;
+use Config;
 
-plan tests => 4;
+plan tests => 12;
 
 watchdog(10);
 
@@ -36,3 +37,37 @@ eval {
 };
 
 is($@, "Alarm!\n", 'after the second loop');
+
+SKIP: {
+    skip('We can\'t test blocking without sigprocmask', 8) if $ENV{PERL_CORE_MINITEST} || !$Config{d_sigprocmask};
+
+    require POSIX;
+    my $new = POSIX::SigSet->new(&POSIX::SIGUSR1);
+    POSIX::sigprocmask(&POSIX::SIG_BLOCK, $new);
+    
+    my $gotit = 0;
+    $SIG{USR1} = sub { $gotit++ };
+    kill SIGUSR1, $$;
+    is $gotit, 0, 'Haven\'t received third signal yet';
+    
+    my $old = POSIX::SigSet->new();
+    POSIX::sigsuspend($old);
+    is $gotit, 1, 'Received third signal';
+    
+	{
+		kill SIGUSR1, $$;
+		local $SIG{USR1} = sub { die "FAIL\n" };
+		POSIX::sigprocmask(&POSIX::SIG_BLOCK, undef, $old);
+		ok $old->ismember(&POSIX::SIGUSR1), 'SIGUSR1 is blocked';
+		eval { POSIX::sigsuspend(POSIX::SigSet->new) };
+		is $@, "FAIL\n", 'Exception is thrown, so received fourth signal';
+		POSIX::sigprocmask(&POSIX::SIG_BLOCK, undef, $old);
+		ok $old->ismember(&POSIX::SIGUSR1), 'SIGUSR1 is still blocked';
+	}
+
+    kill SIGUSR1, $$;
+    is $gotit, 1, 'Haven\'t received fifth signal yet';
+    POSIX::sigprocmask(&POSIX::SIG_UNBLOCK, $new, $old);
+    ok $old->ismember(&POSIX::SIGUSR1), 'SIGUSR1 was still blocked';
+    is $gotit, 2, 'Received fifth signal';
+}

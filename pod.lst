@@ -137,7 +137,8 @@ h Miscellaneous
 
   perlhist		Perl history records
 D perldelta		Perl changes since previous version
-d perl5138delta		Perl changes in version 5.13.8
+d perl5139delta		Perl changes in version 5.13.9
+  perl5138delta		Perl changes in version 5.13.8
   perl5137delta		Perl changes in version 5.13.7
   perl5136delta		Perl changes in version 5.13.6
   perl5135delta		Perl changes in version 5.13.5
@@ -196,7 +197,6 @@ h Platform-Specific
 
 r perlaix		Perl notes for AIX
 r perlamiga		Perl notes for AmigaOS
-r perlapollo		Perl notes for Apollo DomainOS
 r perlbeos		Perl notes for BeOS
 r perlbs2000		Perl notes for POSIX-BC BS2000
 r perlce		Perl notes for WinCE

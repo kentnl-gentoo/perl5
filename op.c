@@ -2744,12 +2744,12 @@ S_gen_constant_list(pTHX_ register OP *o)
     PL_op = curop = LINKLIST(o);
     o->op_next = 0;
     CALL_PEEP(curop);
-    pp_pushmark();
+    Perl_pp_pushmark(aTHX);
     CALLRUNOPS(aTHX);
     PL_op = curop;
     assert (!(curop->op_flags & OPf_SPECIAL));
     assert(curop->op_type == OP_RANGE);
-    pp_anonlist();
+    Perl_pp_anonlist(aTHX);
     PL_tmps_floor = oldtmps_floor;
 
     o->op_type = OP_RV2AV;
@@ -3527,8 +3527,7 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 		U8 range_mark = UTF_TO_NATIVE(0xff);
 		sv_catpvn(transv, (char *)&range_mark, 1);
 	    }
-	    t = uvuni_to_utf8_flags(tmpbuf, 0x7fffffff,
-				    UNICODE_ALLOW_SUPER);
+	    t = uvuni_to_utf8(tmpbuf, 0x7fffffff);
 	    sv_catpvn(transv, (char*)tmpbuf, t - tmpbuf);
 	    t = (const U8*)SvPVX_const(transv);
 	    tlen = SvCUR(transv);
@@ -3779,10 +3778,10 @@ Perl_newPMOP(pTHX_ I32 type, I32 flags)
     if (PL_hints & HINT_RE_TAINT)
 	pmop->op_pmflags |= PMf_RETAINT;
     if (PL_hints & HINT_LOCALE) {
-	pmop->op_pmflags |= PMf_LOCALE;
+	set_regex_charset(&(pmop->op_pmflags), REGEX_LOCALE_CHARSET);
     }
     else if ((! (PL_hints & HINT_BYTES)) && (PL_hints & HINT_UNI_8_BIT)) {
-        pmop->op_pmflags |= RXf_PMf_UNICODE;
+	set_regex_charset(&(pmop->op_pmflags), REGEX_UNICODE_CHARSET);
     }
     if (PL_hints & HINT_RE_FLAGS) {
         SV *reflags = Perl_refcounted_he_fetch_pvn(aTHX_
@@ -3790,11 +3789,10 @@ Perl_newPMOP(pTHX_ I32 type, I32 flags)
         );
         if (reflags && SvOK(reflags)) pmop->op_pmflags |= SvIV(reflags);
         reflags = Perl_refcounted_he_fetch_pvn(aTHX_
-         PL_compiling.cop_hints_hash, STR_WITH_LEN("reflags_dul"), 0, 0
+         PL_compiling.cop_hints_hash, STR_WITH_LEN("reflags_charset"), 0, 0
         );
         if (reflags && SvOK(reflags)) {
-            pmop->op_pmflags &= ~(RXf_PMf_LOCALE|RXf_PMf_UNICODE);
-            pmop->op_pmflags |= SvIV(reflags);
+            set_regex_charset(&(pmop->op_pmflags), (regex_charset)SvIV(reflags));
         }
     }
 
@@ -3887,7 +3885,7 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, bool isreg)
 
     if (expr->op_type == OP_CONST) {
 	SV *pat = ((SVOP*)expr)->op_sv;
-	U32 pm_flags = pm->op_pmflags & PMf_COMPILETIME;
+	U32 pm_flags = pm->op_pmflags & RXf_PMf_COMPILETIME;
 
 	if (o->op_flags & OPf_SPECIAL)
 	    pm_flags |= RXf_SPLIT;
@@ -6000,7 +5998,7 @@ Perl_cv_const_sv(pTHX_ const CV *const cv)
  * cv && CvCONST(cv)
  *
  *	We have just cloned an anon prototype that was marked as a const
- *	candidiate. Try to grab the current value, and in the case of
+ *	candidate. Try to grab the current value, and in the case of
  *	PADSV, ignore it if it has multiple references. Return the value.
  */
 
@@ -7638,7 +7636,7 @@ Perl_ck_glob(pTHX_ OP *o)
 
     o = ck_fun(o);
     if ((o->op_flags & OPf_KIDS) && !cLISTOPo->op_first->op_sibling)
-	op_append_elem(OP_GLOB, o, newDEFSVOP());
+	op_append_elem(OP_GLOB, o, newDEFSVOP()); /* glob() => glob($_) */
 
     if (!((gv = gv_fetchpvs("glob", GV_NOTQUAL, SVt_PVCV))
 	  && GvCVu(gv) && GvIMPORTED_CV(gv)))
@@ -7663,20 +7661,31 @@ Perl_ck_glob(pTHX_ OP *o)
     }
 #endif /* PERL_EXTERNAL_GLOB */
 
+    assert(!(o->op_flags & OPf_SPECIAL));
     if (gv && GvCVu(gv) && GvIMPORTED_CV(gv)) {
+	/* convert
+	 *     glob
+	 *       \ null - const(wildcard)
+	 * into
+	 *     null
+	 *       \ enter
+	 *            \ list
+	 *                 \ mark - glob - rv2cv
+	 *                             |        \ gv(CORE::GLOBAL::glob)
+	 *                             |
+	 *                              \ null - const(wildcard) - const(ix)
+	 */
+	o->op_flags |= OPf_SPECIAL;
+	o->op_targ = pad_alloc(OP_GLOB, SVs_PADTMP);
 	op_append_elem(OP_GLOB, o,
 		    newSVOP(OP_CONST, 0, newSViv(PL_glob_index++)));
-	o->op_type = OP_LIST;
-	o->op_ppaddr = PL_ppaddr[OP_LIST];
-	cLISTOPo->op_first->op_type = OP_PUSHMARK;
-	cLISTOPo->op_first->op_ppaddr = PL_ppaddr[OP_PUSHMARK];
-	cLISTOPo->op_first->op_targ = 0;
+	o = newLISTOP(OP_LIST, 0, o, NULL);
 	o = newUNOP(OP_ENTERSUB, OPf_STACKED,
 		    op_append_elem(OP_LIST, o,
 				scalar(newUNOP(OP_RV2CV, 0,
 					       newGVOP(OP_GV, 0, gv)))));
 	o = newUNOP(OP_NULL, 0, ck_subr(o));
-	o->op_targ = OP_GLOB;		/* hint at what it used to be */
+	o->op_targ = OP_GLOB; /* hint at what it used to be: eg in newWHILEOP */
 	return o;
     }
     gv = newGVgen("main");
@@ -7963,7 +7972,7 @@ Perl_ck_sassign(pTHX_ OP *o)
 	    other->op_targ = target;
 
 	    /* Because we change the type of the op here, we will skip the
-	       assinment binop->op_last = binop->op_first->op_sibling; at the
+	       assignment binop->op_last = binop->op_first->op_sibling; at the
 	       end of Perl_newBINOP(). So need to do it here. */
 	    cBINOPo->op_last = cBINOPo->op_first->op_sibling;
 

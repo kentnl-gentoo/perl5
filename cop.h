@@ -555,7 +555,7 @@ be zero.
 
 /* If $[ is non-zero, it's stored in cop_hints under the key "$[", and
    HINT_ARYBASE is set to indicate this.
-   Setting it is ineficient due to the need to create 2 mortal SVs, but as
+   Setting it is inefficient due to the need to create 2 mortal SVs, but as
    using $[ is highly discouraged, no sane Perl code will be using it.  */
 #define CopARYBASE_get(c)	\
 	((CopHINTS_get(c) & HINT_ARYBASE)				\
@@ -1064,6 +1064,8 @@ L<perlcall>.
 #define G_UNDEF_FILL  512	/* Fill the stack with &PL_sv_undef
 				   A special case for UNSHIFT in
 				   Perl_magic_methcall().  */
+#define G_WRITING_TO_STDERR 1024 /* Perl_write_to_stderr() is calling
+				    Perl_magic_methcall().  */
 
 /* flag bits for PL_in_eval */
 #define EVAL_NULL	0	/* not in an eval */

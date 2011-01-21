@@ -27,7 +27,7 @@ BEGIN {
 }
 
 
-$VERSION = '1.17';
+$VERSION = '1.18';
 @ISA = ();
 
 $MATCH_SUPERS = 1;
@@ -787,7 +787,7 @@ sub _die_pointing {
             # tabs screw everything up!
             $pointy = substr($_[0],0,$pos);
             $pointy =~ tr/\t //cd;
-            # make everything into whitespace, but preseving tabs
+            # make everything into whitespace, but preserving tabs
             $pointy .= "^=== near there\n";
         }
     }

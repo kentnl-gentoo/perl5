@@ -389,13 +389,10 @@ typedef enum opcode {
 } opcode;
 
 #define MAXO 370
-#define OP_phoney_INPUT_ONLY -1
-#define OP_phoney_OUTPUT_ONLY -2
-
 
 /* the OP_IS_(SOCKET|FILETEST) macros are optimized to a simple range
     check because all the member OPs are contiguous in opcode.pl
-    <DATA> table.  opcode.pl verifies the range contiguity.  */
+    <OPS> table.  opcode.pl verifies the range contiguity.  */
 
 #define OP_IS_SOCKET(op)	\
 	((op) >= OP_SEND && (op) <= OP_GETPEERNAME)

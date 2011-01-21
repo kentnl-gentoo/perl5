@@ -70,7 +70,7 @@ Modifiers:
    --reverse                      # show rankings in reverse
 
 Generate git-log-output-file with git log --pretty=fuller rev1..rev2
-(or pipe by specifing '-' for stdin).  For example:
+(or pipe by specifying '-' for stdin).  For example:
   \$ git log --pretty=fuller v5.12.0..v5.12.1 > gitlog
   \$ perl Porting/checkAUTHORS.pl --rank --percentage gitlog
 EOS
@@ -736,7 +736,8 @@ public\100khwilliamson.com              khw\100karl.(none)
 
 radu\100netsoft.ro                      rgreab\100fx.ro
 raphael.manfredi\100pobox.com           raphael_manfredi\100grenoble.hp.com
-renee.baecker\100smart-websolutions.de  reneeb\100reneeb-desktop.(none)
+module@renee-baecker.de                 renee.baecker\100smart-websolutions.de
++                                       reneeb\100reneeb-desktop.(none)
 +                                       otrs\100ubuntu.(none)
 richard.foley\100rfi.net                richard.foley\100t-online.de
 +                                       richard.foley\100ubs.com
@@ -757,6 +758,7 @@ rmbarker\100cpan.org                    rmb1\100cise.npl.co.uk
 +                                       rmb\100cise.npl.co.uk
 +                                       robin\100spade-ubuntu.(none)
 +                                       r.m.barker\100btinternet.com
++                                       rmbarker.cpan\100btinternet.com
 robertmay\100cpan.org                   rob\100themayfamily.me.uk
 roberto\100keltia.freenix.fr            roberto\100eurocontrol.fr
 robin\100cpan.org                       robin\100kitsite.com
@@ -828,6 +830,7 @@ vkonovalov\100lucent.com                vkonovalov\100peterstar.ru
 +                                       vadim\100vkonovalov.ru
 +                                       vkonovalov\100spb.lucent.com
 +                                       vkonovalov\100alcatel-lucent.com
++                                       vadim.konovalov\100alcatel-lucent.com
 
 whatever\100davidnicol.com              davidnicol\100gmail.com
 wolfgang.laun\100alcatel.at             wolfgang.laun\100chello.at

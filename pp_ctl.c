@@ -98,7 +98,7 @@ PP(pp_regcomp)
     STMT_START {				\
 	SvGETMAGIC(rx);				\
 	if (SvROK(rx) && SvAMAGIC(rx)) {	\
-	    SV *sv = AMG_CALLun(rx, regexp);	\
+	    SV *sv = AMG_CALLunary(rx, regexp_amg); \
 	    if (sv) {				\
 		if (SvROK(sv))			\
 		    sv = SvRV(sv);		\
@@ -111,7 +111,7 @@ PP(pp_regcomp)
 	    
 
     if (PL_op->op_flags & OPf_STACKED) {
-	/* multiple args; concatentate them */
+	/* multiple args; concatenate them */
 	dMARK; dORIGMARK;
 	tmpstr = PAD_SV(ARGTARG);
 	sv_setpvs(tmpstr, "");
@@ -185,7 +185,7 @@ PP(pp_regcomp)
 	    memNE(RX_PRECOMP(re), t, len))
 	{
 	    const regexp_engine *eng = re ? RX_ENGINE(re) : NULL;
-            U32 pm_flags = pm->op_pmflags & PMf_COMPILETIME;
+            U32 pm_flags = pm->op_pmflags & RXf_PMf_COMPILETIME;
 	    if (re) {
 	        ReREFCNT_dec(re);
 #ifdef USE_ITHREADS
@@ -1039,8 +1039,8 @@ PP(pp_grepstart)
 	RETURNOP(PL_op->op_next->op_next);
     }
     PL_stack_sp = PL_stack_base + *PL_markstack_ptr + 1;
-    pp_pushmark();				/* push dst */
-    pp_pushmark();				/* push src */
+    Perl_pp_pushmark(aTHX);				/* push dst */
+    Perl_pp_pushmark(aTHX);				/* push src */
     ENTER_with_name("grep");					/* enter outer scope */
 
     SAVETMPS;
@@ -1060,7 +1060,7 @@ PP(pp_grepstart)
 
     PUTBACK;
     if (PL_op->op_type == OP_MAPSTART)
-	pp_pushmark();			/* push top */
+	Perl_pp_pushmark(aTHX);			/* push top */
     return ((LOGOP*)PL_op->op_next)->op_other;
 }
 
@@ -3998,7 +3998,7 @@ PP(pp_entereval)
 	}
 	return DOCATCH(PL_eval_start);
     } else {
-	/* We have already left the scope set up earler thanks to the LEAVE
+	/* We have already left the scope set up earlier thanks to the LEAVE
 	   in doeval().  */
 	if (was != PL_breakable_sub_gen /* Some subs defined here. */
 	    ? (PERLDB_LINE || PERLDB_SAVESRC)
@@ -4275,7 +4275,7 @@ S_matcher_matches_sv(pTHX_ PMOP *matcher, SV *sv)
     PL_op = (OP *) matcher;
     XPUSHs(sv);
     PUTBACK;
-    (void) pp_match();
+    (void) Perl_pp_match(aTHX);
     SPAGAIN;
     return (SvTRUEx(POPs));
 }
@@ -4758,9 +4758,9 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
 	PUSHs(d); PUSHs(e);
 	PUTBACK;
 	if (CopHINTS_get(PL_curcop) & HINT_INTEGER)
-	    (void) pp_i_eq();
+	    (void) Perl_pp_i_eq(aTHX);
 	else
-	    (void) pp_eq();
+	    (void) Perl_pp_eq(aTHX);
 	SPAGAIN;
 	if (SvTRUEx(POPs))
 	    RETPUSHYES;
@@ -4772,7 +4772,7 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
     DEBUG_M(Perl_deb(aTHX_ "    applying rule Any-Any\n"));
     PUSHs(d); PUSHs(e);
     PUTBACK;
-    return pp_seq();
+    return Perl_pp_seq(aTHX);
 }
 
 PP(pp_enterwhen)
@@ -5174,7 +5174,7 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	    if (take) {
 		sv_catpvn(buf_sv, cache_p, take);
 		sv_chop(cache, cache_p + take);
-		/* Definately not EOF  */
+		/* Definitely not EOF  */
 		return 1;
 	    }
 

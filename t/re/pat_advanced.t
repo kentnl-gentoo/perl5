@@ -21,7 +21,7 @@ BEGIN {
 }
 
 
-plan tests => 1303;  # Update this when adding/deleting tests.
+plan tests => 1304;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -943,7 +943,7 @@ sub run_tests {
     {   # TRIE related
         our @got = ();
         "words" =~ /(word|word|word)(?{push @got, $1})s$/;
-        iseq @got, 1, "TRIE optimation";
+        iseq @got, 1, "TRIE optimisation";
 
         @got = ();
         "words" =~ /(word|word|word)(?{push @got,$1})s$/i;
@@ -1758,7 +1758,7 @@ sub run_tests {
         my @notIsPunct = grep {/[[:punct:]]/ and not /\p{IsPunct}/}
                                 map {chr} 0x20 .. 0x7f;
         iseq join ('', @notIsPunct), '$+<=>^`|~',
-            '[:punct:] disagress with IsPunct on Symbols';
+            '[:punct:] disagrees with IsPunct on Symbols';
 
         my @isPrint = grep {not /[[:print:]]/ and /\p{IsPrint}/}
                             map {chr} 0 .. 0x1f, 0x7f .. 0x9f;
@@ -2072,6 +2072,16 @@ sub run_tests {
         }
     }
 
+    {   # Bleadperl v5.13.8-292-gf56b639 breaks NEZUMI/Unicode-LineBreak-1.011
+        # \xdf in lookbehind failed to compile as is multi-char fold
+        eval_ok 'qr{
+            (?u: (?<=^url:) |
+                 (?<=[/]) (?=[^/]) |
+                 (?<=[^-.]) (?=[-~.,_?\#%=&]) |
+                 (?<=[=&]) (?=.)
+            )}iox', "Lookbehind with \\xdf matchable compiles";
+    }
+
     #
     # Keep the following tests last -- they may crash perl
     #
@@ -2106,6 +2116,9 @@ sub run_tests {
         eval $a =~ /[a-z]/;
         ok(1);  # If it didn't crash, it worked.
     }
+
+    # !!! NOTE that tests that aren't at all likely to crash perl should go
+    # a ways above, above these last ones.
 } # End of sub run_tests
 
 1;

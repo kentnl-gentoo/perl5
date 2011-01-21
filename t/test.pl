@@ -84,13 +84,13 @@ sub _diag {
     $TODO ? _print(@mess) : _print_stderr(@mess);
 }
 
-# Use this instead of "print STDERR" when outputing failure diagnostic
+# Use this instead of "print STDERR" when outputting failure diagnostic
 # messages
 sub diag {
     _diag(@_);
 }
 
-# Use this instead of "print" when outputing informational messages
+# Use this instead of "print" when outputting informational messages
 sub note {
     return unless @_;
     _print( _comment(@_) );
@@ -258,12 +258,12 @@ sub cmp_ok ($$$@) {
     }
     unless ($pass) {
         # It seems Irix long doubles can have 2147483648 and 2147483648
-        # that stringify to the same thing but are acutally numerically
+        # that stringify to the same thing but are actually numerically
         # different. Display the numbers if $type isn't a string operator,
         # and the numbers are stringwise the same.
         # (all string operators have alphabetic names, so tr/a-z// is true)
-        # This will also show numbers for some uneeded cases, but will
-        # definately be helpful for things such as == and <= that fail
+        # This will also show numbers for some unneeded cases, but will
+        # definitely be helpful for things such as == and <= that fail
         if ($got eq $expected and $type !~ tr/a-z//) {
             unshift @mess, "# $got - $expected = " . ($got - $expected) . "\n";
         }
@@ -500,7 +500,7 @@ sub _create_runperl { # Create the string to qx in runperl().
     } elsif (defined $args{progfile}) {
 	$runperl = $runperl . qq( "$args{progfile}");
     } else {
-	# You probaby didn't want to be sucking in from the upstream stdin
+	# You probably didn't want to be sucking in from the upstream stdin
 	die "test.pl:runperl(): none of prog, progs, progfile, args, "
 	    . " switches or stdin specified"
 	    unless defined $args{args} or defined $args{switches}
@@ -595,7 +595,7 @@ sub which_perl {
 	$Perl = $^X;
 
 	# VMS should have 'perl' aliased properly
-	return $Perl if $^O eq 'VMS';
+	return $Perl if $is_vms;
 
 	my $exe;
 	if (! eval 'require Config; 1') {
@@ -705,7 +705,7 @@ sub _fresh_perl {
     open TEST, ">$tmpfile" or die "Cannot open $tmpfile: $!";
 
     # VMS adjustments
-    if( $^O eq 'VMS' ) {
+    if( $is_vms ) {
         $prog =~ s#/dev/null#NL:#;
 
         # VMS file locking
@@ -728,7 +728,7 @@ sub _fresh_perl {
     # various yaccs may or may not capitalize 'syntax'.
     $results =~ s/^(syntax|parse) error/syntax error/mig;
 
-    if ($^O eq 'VMS') {
+    if ($is_vms) {
         # some tests will trigger VMS messages that won't be expected
         $results =~ s/\n?%[A-Z]+-[SIWEF]-[A-Z]+,.*//;
 
@@ -902,9 +902,9 @@ sub watchdog ($;$)
 
         # On Windows and VMS, try launching a watchdog process
         #   using system(1, ...) (see perlport.pod)
-        if (($^O eq 'MSWin32') || ($^O eq 'VMS')) {
+        if ($is_mswin || $is_vms) {
             # On Windows, try to get the 'real' PID
-            if ($^O eq 'MSWin32') {
+            if ($is_mswin) {
                 eval { require Win32; };
                 if (defined(&Win32::GetCurrentProcessId)) {
                     $pid_to_kill = Win32::GetCurrentProcessId();
@@ -920,7 +920,7 @@ sub watchdog ($;$)
                 local $SIG{'__WARN__'} = sub {
                     _diag("Watchdog warning: $_[0]");
                 };
-                my $sig = $^O eq 'VMS' ? 'TERM' : 'KILL';
+                my $sig = $is_vms ? 'TERM' : 'KILL';
                 my $cmd = _create_runperl( prog =>  "sleep($timeout);" .
                                                     "warn qq/# $timeout_msg" . '\n/;' .
                                                     "kill($sig, $pid_to_kill);");
@@ -981,7 +981,7 @@ sub watchdog ($;$)
     # Use a watchdog thread because either 'threads' is loaded,
     #   or fork() failed
     if (eval 'require threads; 1') {
-        threads->create(sub {
+        'threads'->create(sub {
                 # Load POSIX if available
                 eval { require POSIX; };
 
@@ -995,7 +995,7 @@ sub watchdog ($;$)
                 select(STDERR); $| = 1;
                 _diag($timeout_msg);
                 POSIX::_exit(1) if (defined(&POSIX::_exit));
-                my $sig = $^O eq 'VMS' ? 'TERM' : 'KILL';
+                my $sig = $is_vms ? 'TERM' : 'KILL';
                 kill($sig, $pid_to_kill);
             })->detach();
         return;
@@ -1012,7 +1012,7 @@ WATCHDOG_VIA_ALARM:
             select(STDERR); $| = 1;
             _diag($timeout_msg);
             POSIX::_exit(1) if (defined(&POSIX::_exit));
-            my $sig = $^O eq 'VMS' ? 'TERM' : 'KILL';
+            my $sig = $is_vms ? 'TERM' : 'KILL';
             kill($sig, $pid_to_kill);
         };
     }

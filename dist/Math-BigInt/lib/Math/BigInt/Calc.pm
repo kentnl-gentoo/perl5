@@ -4,7 +4,7 @@ use 5.006002;
 use strict;
 # use warnings;	# dont use warnings for older Perls
 
-our $VERSION = '1.99_02';
+our $VERSION = '1.99_03';
 
 # Package to store unsigned big integers in decimal and do math with them
 
@@ -272,17 +272,22 @@ sub _str
 
 sub _num
   {
-  # Make a number (scalar int/float) from a BigInt object 
-  my $x = $_[1];
+    # Make a Perl scalar number (int/float) from a BigInt object.
+    my $x = $_[1];
 
-  return 0+$x->[0] if scalar @$x == 1;  # below $BASE
-  my $fac = 1;
-  my $num = 0;
-  foreach (@$x)
-    {
-    $num += $fac*$_; $fac *= $BASE;
+    return 0 + $x->[0] if scalar @$x == 1;      # below $BASE
+
+    # Start with the most significant element and work towards the least
+    # significant element. Avoid multiplying "inf" (which happens if the number
+    # overflows) with "0" (if there are zero elements in $x) since this gives
+    # "nan" which propagates to the output.
+
+    my $num = 0;
+    for (my $i = $#$x ; $i >= 0 ; --$i) {
+        $num *= $BASE;
+        $num += $x -> [$i];
     }
-  $num; 
+    return $num;
   }
 
 ##############################################################################
@@ -1487,7 +1492,7 @@ sub _lsft
     }
   # set lowest parts to 0
   while ($dst >= 0) { $x->[$dst--] = 0; }
-  # fix spurios last zero element
+  # fix spurious last zero element
   splice @$x,-1 if $x->[-1] == 0;
   $x;
   }
@@ -2386,7 +2391,7 @@ sub _modpow
 
   # 0^a (mod m) = 0 if m != 0, a != 0
   # 0^0 (mod m) = 1 if m != 0
-  if (_is_one($c, $num)) {
+  if (_is_zero($c, $num)) {
       if (_is_zero($c, $exp)) {
           @$num = 1;
       } else {

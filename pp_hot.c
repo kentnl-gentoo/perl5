@@ -315,7 +315,7 @@ PP(pp_readline)
 {
     dVAR;
     dSP; SvGETMAGIC(TOPs);
-    tryAMAGICunTARGET(iter, 0);
+    tryAMAGICunTARGET(iter_amg, 0, 0);
     PL_last_in_gv = MUTABLE_GV(*PL_stack_sp--);
     if (!isGV_with_GP(PL_last_in_gv)) {
 	if (SvROK(PL_last_in_gv) && isGV_with_GP(SvRV(PL_last_in_gv)))
@@ -324,7 +324,7 @@ PP(pp_readline)
 	    dSP;
 	    XPUSHs(MUTABLE_SV(PL_last_in_gv));
 	    PUTBACK;
-	    pp_rv2gv();
+	    Perl_pp_rv2gv(aTHX);
 	    PL_last_in_gv = MUTABLE_GV(*PL_stack_sp--);
 	}
     }
@@ -710,13 +710,13 @@ PP(pp_pushre)
 PP(pp_print)
 {
     dVAR; dSP; dMARK; dORIGMARK;
-    IO *io;
     register PerlIO *fp;
     MAGIC *mg;
     GV * const gv
 	= (PL_op->op_flags & OPf_STACKED) ? MUTABLE_GV(*++MARK) : PL_defoutgv;
+    IO *io = GvIO(gv);
 
-    if (gv && (io = GvIO(gv))
+    if (io
 	&& (mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar)))
     {
       had_magic:
@@ -729,39 +729,25 @@ PP(pp_print)
 	    Move(MARK, MARK + 1, (SP - MARK) + 1, SV*);
 	    ++SP;
 	}
-	PUSHMARK(MARK - 1);
-	*MARK = SvTIED_obj(MUTABLE_SV(io), mg);
-	PUTBACK;
-	ENTER_with_name("call_PRINT");
-	if( PL_op->op_type == OP_SAY ) {
-		/* local $\ = "\n" */
-		SAVEGENERICSV(PL_ors_sv);
-		PL_ors_sv = newSVpvs("\n");
-	}
-	call_method("PRINT", G_SCALAR);
-	LEAVE_with_name("call_PRINT");
-	SPAGAIN;
-	MARK = ORIGMARK + 1;
-	*MARK = *SP;
-	SP = MARK;
-	RETURN;
+	return Perl_tied_method(aTHX_ "PRINT", mark - 1, MUTABLE_SV(io),
+				mg,
+				(G_SCALAR | TIED_METHOD_ARGUMENTS_ON_STACK
+				 | (PL_op->op_type == OP_SAY
+				    ? TIED_METHOD_SAY : 0)), sp - mark);
     }
-    if (!(io = GvIO(gv))) {
+    if (!io) {
         if ( gv && GvEGVx(gv) && (io = GvIO(GvEGV(gv)))
 	    && (mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar)))
             goto had_magic;
-	if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
-	    report_evil_fh(gv, io, PL_op->op_type);
+	report_evil_fh(gv);
 	SETERRNO(EBADF,RMS_IFI);
 	goto just_say_no;
     }
     else if (!(fp = IoOFP(io))) {
-	if (ckWARN2(WARN_CLOSED, WARN_IO))  {
-	    if (IoIFP(io))
-		report_evil_fh(gv, io, OP_phoney_INPUT_ONLY);
-	    else if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
-		report_evil_fh(gv, io, PL_op->op_type);
-	}
+	if (IoIFP(io))
+	    report_wrongway_fh(gv, '<');
+	else
+	    report_evil_fh(gv);
 	SETERRNO(EBADF,IoIFP(io)?RMS_FAC:RMS_IFI);
 	goto just_say_no;
     }
@@ -891,45 +877,45 @@ PP(pp_rv2av)
 
     if (is_pp_rv2av) {
 	AV *const av = MUTABLE_AV(sv);
-	/* The guts of pp_rv2av, with no intenting change to preserve history
+	/* The guts of pp_rv2av, with no intending change to preserve history
 	   (until such time as we get tools that can do blame annotation across
 	   whitespace changes.  */
-    if (gimme == G_ARRAY) {
-	const I32 maxarg = AvFILL(av) + 1;
-	(void)POPs;			/* XXXX May be optimized away? */
-	EXTEND(SP, maxarg);
-	if (SvRMAGICAL(av)) {
-	    U32 i;
-	    for (i=0; i < (U32)maxarg; i++) {
-		SV ** const svp = av_fetch(av, i, FALSE);
-		/* See note in pp_helem, and bug id #27839 */
-		SP[i+1] = svp
-		    ? SvGMAGICAL(*svp) ? (mg_get(*svp), *svp) : *svp
-		    : &PL_sv_undef;
+	if (gimme == G_ARRAY) {
+	    const I32 maxarg = AvFILL(av) + 1;
+	    (void)POPs;			/* XXXX May be optimized away? */
+	    EXTEND(SP, maxarg);
+	    if (SvRMAGICAL(av)) {
+		U32 i;
+		for (i=0; i < (U32)maxarg; i++) {
+		    SV ** const svp = av_fetch(av, i, FALSE);
+		    /* See note in pp_helem, and bug id #27839 */
+		    SP[i+1] = svp
+			? SvGMAGICAL(*svp) ? (mg_get(*svp), *svp) : *svp
+			: &PL_sv_undef;
+		}
 	    }
+	    else {
+		Copy(AvARRAY(av), SP+1, maxarg, SV*);
+	    }
+	    SP += maxarg;
 	}
-	else {
-	    Copy(AvARRAY(av), SP+1, maxarg, SV*);
+	else if (gimme == G_SCALAR) {
+	    dTARGET;
+	    const I32 maxarg = AvFILL(av) + 1;
+	    SETi(maxarg);
 	}
-	SP += maxarg;
-    }
-    else if (gimme == G_SCALAR) {
-	dTARGET;
-	const I32 maxarg = AvFILL(av) + 1;
-	SETi(maxarg);
-    }
     } else {
 	/* The guts of pp_rv2hv  */
-    if (gimme == G_ARRAY) { /* array wanted */
-	*PL_stack_sp = sv;
-	return do_kv();
-    }
-    else if (gimme == G_SCALAR) {
-	dTARGET;
-    TARG = Perl_hv_scalar(aTHX_ MUTABLE_HV(sv));
-	SPAGAIN;
-	SETTARG;
-    }
+	if (gimme == G_ARRAY) { /* array wanted */
+	    *PL_stack_sp = sv;
+	    return Perl_do_kv(aTHX);
+	}
+	else if (gimme == G_SCALAR) {
+	    dTARGET;
+	    TARG = Perl_hv_scalar(aTHX_ MUTABLE_HV(sv));
+	    SPAGAIN;
+	    SETTARG;
+	}
     }
     RETURN;
 
@@ -1581,21 +1567,15 @@ Perl_do_readline(pTHX)
     const I32 gimme = GIMME_V;
 
     if (io) {
-	MAGIC * const mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar);
+	const MAGIC *const mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar);
 	if (mg) {
-	    PUSHMARK(SP);
-	    XPUSHs(SvTIED_obj(MUTABLE_SV(io), mg));
-	    PUTBACK;
-	    ENTER_with_name("call_READLINE");
-	    call_method("READLINE", gimme);
-	    LEAVE_with_name("call_READLINE");
-	    SPAGAIN;
+	    Perl_tied_method(aTHX_ "READLINE", SP, MUTABLE_SV(io), mg, gimme, 0);
 	    if (gimme == G_SCALAR) {
-		SV* const result = POPs;
-		SvSetSV_nosteal(TARG, result);
-		PUSHTARG;
+		SPAGAIN;
+		SvSetSV_nosteal(TARG, TOPs);
+		SETTARG;
 	    }
-	    RETURN;
+	    return NORMAL;
 	}
     }
     fp = NULL;
@@ -1624,8 +1604,8 @@ Perl_do_readline(pTHX)
 	}
 	else if (type == OP_GLOB)
 	    SP--;
-	else if (ckWARN(WARN_IO) && IoTYPE(io) == IoTYPE_WRONLY) {
-	    report_evil_fh(PL_last_in_gv, io, OP_phoney_OUTPUT_ONLY);
+	else if (IoTYPE(io) == IoTYPE_WRONLY) {
+	    report_wrongway_fh(PL_last_in_gv, '>');
 	}
     }
     if (!fp) {
@@ -1637,7 +1617,7 @@ Perl_do_readline(pTHX)
 			    "glob failed (can't start child: %s)",
 			    Strerror(errno));
 	    else
-		report_evil_fh(PL_last_in_gv, io, PL_op->op_type);
+		report_evil_fh(PL_last_in_gv);
 	}
 	if (gimme == G_SCALAR) {
 	    /* undef TARG, and push that undefined value */

@@ -28,9 +28,7 @@
 # See Porting/pumpkin.pod for more information on metaconfig.
 #
 
-# $Id: Head.U 6 2006-08-25 22:21:46Z rmanfredi $
-#
-# Generated on Fri Dec 10 12:04:58 CET 2010 [metaconfig 3.5 PL0]
+# Generated on Fri Jan  7 14:18:56 CET 2011 [metaconfig 3.5 PL0]
 # (with additional metaconfig patches by perlbug@perl.org)
 
 cat >c1$$ <<EOF
@@ -731,6 +729,7 @@ d_msg_peek=''
 d_msg_proxy=''
 d_oldsock=''
 d_scm_rights=''
+d_sin6_scope_id=''
 d_sockaddr_sa_len=''
 d_socket=''
 d_sockpair=''
@@ -2254,7 +2253,7 @@ in the default answer, as if the default line was a set of arguments given to a
 script shell.  This means you may also use $* to repeat the whole default line,
 so you do not have to re-type everything to add something to the default.
 
-Everytime there is a substitution, you will have to confirm.  If there is an
+Every time there is a substitution, you will have to confirm.  If there is an
 error (e.g. an unmatched backtick), the default answer will remain unchanged
 and you will be prompted again.
 
@@ -9898,7 +9897,7 @@ done
 
 case "$d_longdbl$uselongdouble" in
 "$define$define")
-    : again, add prefered functions to our list first
+    : again, add preferred functions to our list first
     xxx_ld_list=""
     for xxx_convert in $gconvert_ld_preference; do
         case $xxx_convert in
@@ -10059,7 +10058,7 @@ eval $inlibc
 set pthread.h i_pthread
 eval $inhdr
 
-: define a fucntion to check prototypes
+: define a function to check prototypes
 $cat > protochk <<EOSH
 $startsh
 cc="$cc"
@@ -11366,6 +11365,24 @@ set try; if eval $compile; then
 	val="$define"
 fi
 set d_sockaddr_sa_len; eval $setvar
+$rm_try
+
+echo " "
+echo "Checking the availability sin6_scope_id in struct sockaddr_in6 ..." >&4
+$cat >try.c <<EOF
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+int main() {
+struct sockaddr_in6 sin6;
+return (sin6.sin6_scope_id);
+}
+EOF
+val="$undef"
+set try; if eval $compile; then
+	val="$define"
+fi
+set d_sin6_scope_id; eval $setvar
 $rm_try
 
 echo " "
@@ -18706,7 +18723,7 @@ EOM
 	;;
 esac
 
-: Checking 32bit aligndness
+: Checking 32bit alignedness
 $cat <<EOM
 
 Checking to see whether you can access character data unalignedly...
@@ -22083,7 +22100,7 @@ avail_ext="$*"
 case "$onlyextensions" in
 '') ;;
 *)  keepextensions=''
-    echo "You have requested that only certains extensions be included..." >&4
+    echo "You have requested that only certain extensions be included..." >&4
     for i in $onlyextensions; do
         case " $avail_ext " in
         *" $i "*)
@@ -22814,6 +22831,7 @@ d_sigaction='$d_sigaction'
 d_signbit='$d_signbit'
 d_sigprocmask='$d_sigprocmask'
 d_sigsetjmp='$d_sigsetjmp'
+d_sin6_scope_id='$d_sin6_scope_id'
 d_sitearch='$d_sitearch'
 d_snprintf='$d_snprintf'
 d_sockaddr_sa_len='$d_sockaddr_sa_len'

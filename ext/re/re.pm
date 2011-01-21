@@ -4,7 +4,7 @@ package re;
 use strict;
 use warnings;
 
-our $VERSION     = "0.15";
+our $VERSION     = "0.16";
 our @ISA         = qw(Exporter);
 our @EXPORT_OK   = ('regmust',
                     qw(is_regexp regexp_pattern
@@ -25,9 +25,10 @@ my %reflags = (
     x => 1 << ($PMMOD_SHIFT + 3),
     p => 1 << ($PMMOD_SHIFT + 4),
 # special cases:
-    l => 1 << ($PMMOD_SHIFT + 5),
-    u => 1 << ($PMMOD_SHIFT + 6),
     d => 0,
+    l => 1,
+    u => 2,
+    a => 3,
 );
 
 sub setcolor {
@@ -142,24 +143,24 @@ sub bits {
 	    re->export_to_level(2, 're', $s);
 	} elsif ($s =~ s/^\///) {
 	    my $reflags = $^H{reflags} || 0;
-	    my $seen_dul;
+	    my $seen_charset;
 	    for(split//, $s) {
-		if (/[dul]/) {
+		if (/[adul]/) {
 		    if ($on) {
-			if ($seen_dul && $seen_dul ne $_) {
+			if ($seen_charset && $seen_charset ne $_) {
 			    require Carp;
 			    Carp::carp(
-			      qq 'The "$seen_dul" and "$_" flags '
+			      qq 'The "$seen_charset" and "$_" flags '
 			     .qq 'are exclusive'
 			    );
 			}
-			$^H{reflags_dul} = $reflags{$_};
-			$seen_dul = $_;
+			$^H{reflags_charset} = $reflags{$_};
+			$seen_charset = $_;
 		    }
 		    else {
-			delete $^H{reflags_dul}
-			 if  defined $^H{reflags_dul}
-			  && $^H{reflags_dul} == $reflags{$_};
+			delete $^H{reflags_charset}
+			 if  defined $^H{reflags_charset}
+			  && $^H{reflags_charset} == $reflags{$_};
 		    }
 		} elsif (exists $reflags{$_}) {
 		    $on
@@ -173,7 +174,7 @@ sub bits {
 		    next ARG;
 		}
 	    }
-	    ($^H{reflags} = $reflags or defined $^H{reflags_dul})
+	    ($^H{reflags} = $reflags or defined $^H{reflags_charset})
 	     ? $^H |= $flags_hint
 	     : ($^H &= ~$flags_hint);
 	} else {
@@ -291,16 +292,16 @@ default, simply put
 
 at the top of your code.
 
-The /dul flags cancel each other out. So, in this example,
+The character set /adul flags cancel each other out. So, in this example,
 
     use re "/u";
     "ss" =~ /\xdf/;
     use re "/d";
     "ss" =~ /\xdf/;
 
-The second C<use re> does an implicit C<no re '/u'>.
+the second C<use re> does an implicit C<no re '/u'>.
 
-Turning on the /l and /u flags with C<use re> takes precedence over the
+Turning on one of the character set flags with C<use re> takes precedence over the
 C<locale> pragma and the 'unicode_strings' C<feature>, for regular
 expressions. Turning off one of these flags when it is active reverts to
 the behaviour specified by whatever other pragmata are in scope. For

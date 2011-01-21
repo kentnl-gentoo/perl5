@@ -417,9 +417,9 @@ You should now send an email to to
 L<perlbug@perl.org|mailto:perlbug@perl.org> with a description of your
 changes, and include this patch file as an attachment. In addition to
 being tracked by RT, mail to perlbug will automatically be forwarded to
-perl5-porters. You should only send patches to
-L<perl5-porters@perl.org|mailto:perl5-porters@perl.org> directly if the
-patch is not ready to be applied, but intended for discussion.
+perl5-porters (with manual moderation, so please be patient). You should only
+send patches to L<perl5-porters@perl.org|mailto:perl5-porters@perl.org>
+directly if the patch is not ready to be applied, but intended for discussion.
 
 See the next section for how to configure and use git to send these
 emails for you.
@@ -915,6 +915,41 @@ deleted or modified. Think long and hard about whether you want to push
 a local tag to perl.git before doing so. (Pushing unannotated tags is
 not allowed.)
 
+=head1 Committing to blead
+
+If you are a committer, you have the right to commit changes directly to
+the 'blead' branch, which will become the next production release of Perl.
+
+Before pushing I<any> local change to blead, it's incredibly important
+that you do a few things, lest other committers come after you with
+pitchforks and torches:
+
+=over
+
+=item *
+
+Make sure you have a good commit message. See </Commit message> elsewhere in
+this document
+
+=item *
+
+Run the test suite.  You might not think that one typo fix would break
+a test file. You'd be wrong.  Here's an example of where not running the
+suite caused problems.  A patch was submitted that added a couple of
+tests to an existing .t.  It couldn't possibly affect anything else, so
+no need to test beyond the single affected .t, right?  But, the
+submitter's email address had changed since the last of their
+submissions, and this caused other tests to fail.  Running the test
+target given in the next item would have caught this problem.
+
+=item *
+
+If you don't run the full test suite, at least C<make test_porting>.
+This will run basic sanity checks. To see which sanity checks, have a
+look in F<t/porting>.
+
+=back
+
 =head1 Committing to maintenance versions
 
 Maintenance versions should only be altered to add critical bug fixes,
@@ -933,6 +968,9 @@ You can also cherry-pick commits from blead and another branch, by
 using the C<git cherry-pick> command. It is recommended to use the
 B<-x> option to C<git cherry-pick> in order to record the SHA1 of the
 original commit in the new commit message.
+
+Before pushing any change to a maint version, make sure you've satisfied
+the steps in L</Committing to blead> above.
 
 =head1 Grafts
 

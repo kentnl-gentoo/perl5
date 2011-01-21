@@ -5,7 +5,7 @@ use warnings;
 use vars qw($TODO $Level $using_open);
 require "test.pl";
 
-our $VERSION = '0.03';
+our $VERSION = '0.04';
 
 # now export checkOptree, and those test.pl functions used by tests
 our @EXPORT = qw( checkOptree plan skip skip_all pass is like unlike
@@ -317,7 +317,7 @@ our %gOpts = 	# values are replaced at runtime !!
      selftest	=> 'self-tests mkCheckRex vs the reference rendering',
 
      fail	=> 'force all test to fail, print to stdout',
-     dump	=> 'dump cmdline arg prcessing',
+     dump	=> 'dump cmdline arg processing',
      noanchors	=> 'dont anchor match rex',
 
      # array values are one-of selections, with 1st value as default
@@ -679,7 +679,7 @@ sub mkCheckRex {
     # make targ args wild
     $str =~ s/\[t\d+\]/[t\\d+]/msg;
 
-    # escape bracing, etc.. manual \Q (doesnt escape '+')
+    # escape bracing, etc.. manual \Q (doesn't escape '+')
     $str =~ s/([\[\]()*.\$\@\#\|{}])/\\$1/msg;
     # $str =~ s/(?<!\\)([\[\]\(\)*.\$\@\#\|{}])/\\$1/msg;
 

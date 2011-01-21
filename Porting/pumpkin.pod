@@ -313,8 +313,8 @@ information on obtaining the metaconfig units.
 This section has now been expanded and moved into its own file,
 F<Porting/release_managers_guide.pod>.
 
-I've kept some of the subsections here for now, as they don't  direclty
-eleate to building a release any more, but still contain what might be
+I've kept some of the subsections here for now, as they don't directly
+relate to building a release any more, but still contain what might be
 useful information - DAPM 7/2009.
 
 =head2 run metaconfig
@@ -450,14 +450,14 @@ and effort by manually running C<make regen_headers> myself rather
 than answering all the questions and complaints about the failing
 command.
 
-=head2 global.sym, interp.sym and perlio.sym
+=head2 global.sym, and perlio.sym
 
 Make sure these files are up-to-date.  Read the comments in these
 files and in perl_exp.SH to see what to do.
 
 =head2 Binary compatibility
 
-If you do change F<global.sym> or F<interp.sym>, think carefully about
+If you do change F<global.sym> think carefully about
 what you are doing.  To the extent reasonable, we'd like to maintain
 source and binary compatibility with older releases of perl.  That way,
 extensions built under one version of perl will continue to work with
@@ -814,7 +814,7 @@ conflicting needs of dynamic loading and namespace protection.
 
 For dynamic loading to work on AIX (and VMS) we need to provide a list
 of symbols to be exported.  This is done by the script F<perl_exp.SH>,
-which reads F<global.sym> and F<interp.sym>.  Thus, the C<pause>
+which reads F<global.sym>.  Thus, the C<pause>
 symbol would have to be added to F<global.sym>  So far, so good.
 
 On the other hand, one of the goals of Perl5 is to make it easy to
@@ -823,7 +823,7 @@ means we have to be careful to keep the visible namespace "clean".
 That is, we don't want perl's global variables to conflict with
 those in the other application library.  Although this work is still
 in progress, the way it is currently done is via the F<embed.h> file.
-This file is built from the F<global.sym> and F<interp.sym> files,
+This file is built from the F<global.sym> file,
 since those files already list the globally visible symbols.  If we
 had added C<pause> to global.sym, then F<embed.h> would contain the
 line
@@ -1124,7 +1124,7 @@ were to install /usr/lib/libperl.so.4.5.  Now, when you try to run
 perl5.004_04, ld.so might try to load libperl.so.4.5, since it has
 the right "major version" number.  If this works at all, it almost
 certainly defeats the reason for keeping perl5.004_04 around.  Worse,
-with development subversions, you certaily can't guarantee that
+with development subversions, you certainly can't guarantee that
 libperl.so.4.4 and libperl.so.4.55 will be compatible.
 
 Anyway, all this leads to quite obscure failures that are sure to drive

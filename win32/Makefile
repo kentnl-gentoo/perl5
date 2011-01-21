@@ -37,7 +37,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.13.8
+#INST_VER	= \5.13.9
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -889,7 +889,7 @@ $(CORE_OBJ)	: $(CORE_H)
 $(DLL_OBJ)	: $(CORE_H)
 $(X2P_OBJ)	: $(CORE_H)
 
-perldll.def : $(MINIPERL) $(CONFIGPM) ..\global.sym ..\pp.sym ..\makedef.pl create_perllibst_h.pl
+perldll.def : $(MINIPERL) $(CONFIGPM) ..\global.sym ..\makedef.pl create_perllibst_h.pl
 	$(MINIPERL) -I..\lib create_perllibst_h.pl
 	$(MINIPERL) -I..\lib -w ..\makedef.pl PLATFORM=win32 $(OPTIMIZE) $(DEFINES) $(BUILDOPT) \
 	    CCTYPE=$(CCTYPE) > perldll.def
@@ -1024,7 +1024,6 @@ utils: $(PERLEXE) $(X2P)
 	cd ..\pod
 	copy ..\README.aix      ..\pod\perlaix.pod
 	copy ..\README.amiga    ..\pod\perlamiga.pod
-	copy ..\README.apollo   ..\pod\perlapollo.pod
 	copy ..\README.beos     ..\pod\perlbeos.pod
 	copy ..\README.bs2000   ..\pod\perlbs2000.pod
 	copy ..\README.ce       ..\pod\perlce.pod
@@ -1060,7 +1059,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vmesa    ..\pod\perlvmesa.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5138delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5139delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(PERLEXE) $(ICWD) ..\autodoc.pl ..
@@ -1152,9 +1151,9 @@ distclean: realclean
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-cd $(PODDIR) && del /f *.html *.bat \
-	    perl5138delta.pod perlaix.pod perlamiga.pod perlapi.pod \
-	    perlapollo.pod perlbeos.pod perlbs2000.pod perlce.pod \
-	    perlcn.pod perlcygwin.pod perldgux.pod perldos.pod perlepoc.pod \
+	    perl5139delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perlbeos.pod perlbs2000.pod perlce.pod perlcn.pod \
+	    perlcygwin.pod perldgux.pod perldos.pod perlepoc.pod \
 	    perlfreebsd.pod perlhaiku.pod perlhpux.pod perlhurd.pod \
 	    perlintern.pod perlirix.pod perljp.pod perlko.pod perllinux.pod \
 	    perlmacos.pod perlmacosx.pod perlmodlib.pod perlmpeix.pod \

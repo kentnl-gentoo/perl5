@@ -2834,7 +2834,7 @@ S_scan_const(pTHX_ char *start)
 
 	/* likewise skip #-initiated comments in //x patterns */
 	else if (*s == '#' && PL_lex_inpat &&
-	  ((PMOP*)PL_lex_inpat)->op_pmflags & PMf_EXTENDED) {
+	  ((PMOP*)PL_lex_inpat)->op_pmflags & RXf_PMf_EXTENDED) {
 	    while (s+1 < send && *s != '\n')
 		*d++ = NATIVE_TO_NEED(has_utf8,*s++);
 	}
@@ -3747,7 +3747,7 @@ S_intuit_method(pTHX_ char *start, GV *gv, CV *cv)
 #endif
 	    s = PEEKSPACE(s);
 	    if ((PL_bufend - s) >= 2 && *s == '=' && *(s+1) == '>')
-		return 0;	/* no assumptions -- "=>" quotes bearword */
+		return 0;	/* no assumptions -- "=>" quotes bareword */
       bare_package:
 	    start_force(PL_curforce);
 	    NEXTVAL_NEXTTOKE.opval = (OP*)newSVOP(OP_CONST, 0,
@@ -3966,7 +3966,7 @@ S_find_in_my_stash(pTHX_ const char *pkgname, STRLEN len)
 
 /*
  * S_readpipe_override
- * Check whether readpipe() is overriden, and generates the appropriate
+ * Check whether readpipe() is overridden, and generates the appropriate
  * optree, provided sublex_start() is called afterwards.
  */
 STATIC void
@@ -6512,7 +6512,7 @@ Perl_yylex(pTHX)
 		}
 
 		/* Look for a subroutine with this name in current package,
-		   unless name is "Foo::", in which case Foo is a bearword
+		   unless name is "Foo::", in which case Foo is a bareword
 		   (and a package name). */
 
 		if (len > 2 && !PL_madskills &&
@@ -7661,7 +7661,7 @@ Perl_yylex(pTHX)
 		missingterm(NULL);
 	    pl_yylval.ival = OP_STRINGIFY;
 	    if (SvIVX(PL_lex_stuff) == '\'')
-		SvIV_set(PL_lex_stuff, 0);	/* qq'$foo' should intepolate */
+		SvIV_set(PL_lex_stuff, 0);	/* qq'$foo' should interpolate */
 	    TERM(sublex_start());
 
 	case KEY_qr:
@@ -12158,7 +12158,7 @@ S_pmflag(U32 pmfl, const char ch) {
     case GLOBAL_PAT_MOD:      pmfl |= PMf_GLOBAL; break;
     case CONTINUE_PAT_MOD:    pmfl |= PMf_CONTINUE; break;
     case ONCE_PAT_MOD:        pmfl |= PMf_KEEP; break;
-    case KEEPCOPY_PAT_MOD:    pmfl |= PMf_KEEPCOPY; break;
+    case KEEPCOPY_PAT_MOD:    pmfl |= RXf_PMf_KEEPCOPY; break;
     case NONDESTRUCT_PAT_MOD: pmfl |= PMf_NONDESTRUCT; break;
     }
     return pmfl;

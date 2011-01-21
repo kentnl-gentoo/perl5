@@ -596,9 +596,9 @@ whitespace formatting, a simple C<#> will suffice.  Note that Perl closes
 the comment as soon as it sees a C<)>, so there is no way to put a literal
 C<)> in the comment.
 
-=item C<(?dlupimsx-imsx)>
+=item C<(?adlupimsx-imsx)>
 
-=item C<(?^lupimsx)>
+=item C<(?^alupimsx)>
 X<(?)> X<(?^)>
 
 One or more embedded pattern-match modifiers, to be turned on (or
@@ -631,13 +631,17 @@ These modifiers do not carry over into named subpatterns called in the
 enclosing group. In other words, a pattern such as C<((?i)(&NAME))> does not
 change the case-sensitivity of the "NAME" pattern.
 
+Any of these modifiers can be set to apply globally to all regular
+expressions compiled within the scope of a C<use re>.  See
+L<re/'/flags' mode>.
+
 Starting in Perl 5.14, a C<"^"> (caret or circumflex accent) immediately
 after the C<"?"> is a shorthand equivalent to C<d-imsx>.  Flags (except
 C<"d">) may follow the caret to override it.
 But a minus sign is not legal with it.
 
-Also, starting in Perl 5.14, are modifiers C<"d">, C<"l">, and C<"u">,
-which for 5.14 may not be used as suffix modifiers.
+Also, starting in Perl 5.14, are modifiers C<"a">, C<"d">, C<"l">, and
+C<"u">, which for 5.14 may not be used as suffix modifiers.
 
 C<"l"> means to use a locale (see L<perllocale>) when pattern matching.
 The locale used will be the one in effect at the time of execution of
@@ -670,6 +674,22 @@ small letters C<MU>; otherwise not; and the C<LATIN CAPITAL LETTER SHARP
 S> will match any of C<SS>, C<Ss>, C<sS>, and C<ss>, otherwise not.
 (This last case is buggy, however.)
 
+C<"a"> is the same as C<"u">, except that C<\d>, C<\s>, C<\w>, and the
+Posix character classes are restricted to matching in the ASCII range
+only.  That is, with this modifier, C<\d> always means precisely the
+digits C<"0"> to C<"9">; C<\s> means the five characters C<[ \f\n\r\t]>;
+C<\w> means the 63 characters C<[A-Za-z0-9_]>; and likewise, all the
+Posix classes such as C<[[:print:]]> match only the appropriate
+ASCII-range characters.  As you would expect, this modifier causes, for
+example, C<\D> to mean the same thing as C<[^0-9]>; in fact, all
+non-ASCII characters match C<\D>, C<\S>, and C<\W>.  C<\b> still means
+to match at the boundary between C<\w> and C<\W>, using the C<"a">
+definitions of them (similarly for C<\B>).  Otherwise, C<"a"> behaves
+like the C<"u"> modifier, in that case-insensitive matching uses Unicode
+semantics; for example, "k" will match the Unicode C<\N{KELVIN SIGN}>
+under C</i> matching, and code points in the Latin1 range, above ASCII
+will have Unicode semantics when it comes to case-insensitive matching.
+
 C<"d"> means to use the traditional Perl pattern matching behavior.
 This is dualistic (hence the name C<"d">, which also could stand for
 "depends").  When this is in effect, Perl matches utf8-encoded strings
@@ -682,9 +702,9 @@ default if the regular expression is compiled neither within the scope
 of a C<"use locale"> pragma nor a <C<"use feature 'unicode_strings">
 pragma.
 
-Note that the C<d>, C<l>, C<p>, and C<u> modifiers are special in that
-they can only be enabled, not disabled, and the C<d>, C<l>, and C<u>
-modifiers are mutually exclusive: specifying one de-specifies the
+Note that the C<a>, C<d>, C<l>, C<p>, and C<u> modifiers are special in
+that they can only be enabled, not disabled, and the C<d>, C<l>, and
+C<u> modifiers are mutually exclusive: specifying one de-specifies the
 others, and a maximum of one may appear in the construct.  Thus, for
 example, C<(?-p)>, C<(?-d:...)>, and C<(?dl:...)> will warn when
 compiled under C<use warnings>.
@@ -695,9 +715,9 @@ anywhere in a pattern has a global effect.
 =item C<(?:pattern)>
 X<(?:)>
 
-=item C<(?dluimsx-imsx:pattern)>
+=item C<(?adluimsx-imsx:pattern)>
 
-=item C<(?^luimsx:pattern)>
+=item C<(?^aluimsx:pattern)>
 X<(?^:)>
 
 This is for clustering, not capturing; it groups subexpressions like
@@ -713,7 +733,7 @@ but doesn't spit out extra fields.  It's also cheaper not to capture
 characters if you don't need to.
 
 Any letters between C<?> and C<:> act as flags modifiers as with
-C<(?dluimsx-imsx)>.  For example,
+C<(?adluimsx-imsx)>.  For example,
 
     /(?s-i:more.*than).*million/i
 

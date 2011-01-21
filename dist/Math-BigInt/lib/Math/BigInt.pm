@@ -18,7 +18,7 @@ package Math::BigInt;
 my $class = "Math::BigInt";
 use 5.006002;
 
-$VERSION = '1.99_02';
+$VERSION = '1.99_03';
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(objectify bgcd blcm); 
@@ -931,7 +931,7 @@ sub round
   # Round $self according to given parameters, or given second argument's
   # parameters or global defaults 
 
-  # for speed reasons, _find_round_parameters is embeded here:
+  # for speed reasons, _find_round_parameters is embedded here:
 
   my ($self,$a,$p,$r,@args) = @_;
   # $a accuracy, if given by caller
@@ -989,7 +989,7 @@ sub round
     {
     $self->bfround(int($p),$r) if !defined $self->{_p} || $self->{_p} <= $p;
     }
-  # bround() or bfround() already callled bnorm() if nec.
+  # bround() or bfround() already called bnorm() if nec.
   $self;
   }
 
@@ -1402,7 +1402,7 @@ sub bgcd
   { 
   # (BINT or num_str, BINT or num_str) return BINT
   # does not modify arguments, but returns new object
-  # GCD -- Euclids algorithm, variant C (Knuth Vol 3, pg 341 ff)
+  # GCD -- Euclid's algorithm, variant C (Knuth Vol 3, pg 341 ff)
 
   my $y = shift;
   $y = $class->new($y) if !ref($y);
@@ -1785,10 +1785,12 @@ sub bmod
 
 sub bmodinv
   {
-  # Modular inverse.  given a number which is (hopefully) relatively
-  # prime to the modulus, calculate its inverse using Euclid's
-  # algorithm.  If the number is not relatively prime to the modulus
-  # (i.e. their gcd is not one) then NaN is returned.
+  # Return modular multiplicative inverse: z is the modular inverse of x (mod
+  # y) if and only if x*z (mod y) = 1 (mod y). If the modulus y is larger than
+  # one, x and z are relative primes (i.e., their greatest common divisor is
+  # one).
+  #
+  # If no modular multiplicative inverse exists, NaN is returned.
 
   # set up parameters
   my ($self,$x,$y,@r) = (undef,@_);
@@ -1800,52 +1802,147 @@ sub bmodinv
 
   return $x if $x->modify('bmodinv');
 
-  return $x->bnan()
-        if ($y->{sign} ne '+'                           # -, NaN, +inf, -inf
-         || $x->is_zero()                               # or num == 0
-         || $x->{sign} !~ /^[+-]$/                      # or num NaN, inf, -inf
-        );
+  # Return NaN if one or both arguments is +inf, -inf, or nan.
 
-  # put least residue into $x if $x was negative, and thus make it positive
-  $x->bmod($y) if $x->{sign} eq '-';
+  return $x->bnan() if ($y->{sign} !~ /^[+-]$/ ||
+                        $x->{sign} !~ /^[+-]$/);
 
-  my $sign;
-  ($x->{value},$sign) = $CALC->_modinv($x->{value},$y->{value});
-  return $x->bnan() if !defined $x->{value};		# in case no GCD found
-  return $x if !defined $sign;			# already real result
-  $x->{sign} = $sign;				# flip/flop see below
-  $x->bmod($y);					# calc real result
-  $x;
+  # Return NaN if $y is zero; 1 % 0 makes no sense.
+
+  return $x->bnan() if $y->is_zero();
+
+  # Return 0 in the trivial case. $x % 1 or $x % -1 is zero for all finite
+  # integers $x.
+
+  return $x->bzero() if ($y->is_one() ||
+                         $y->is_one('-'));
+
+  # Return NaN if $x = 0, or $x modulo $y is zero. The only valid case when
+  # $x = 0 is when $y = 1 or $y = -1, but that was covered above.
+  #
+  # Note that computing $x modulo $y here affects the value we'll feed to
+  # $CALC->_modinv() below when $x and $y have opposite signs. E.g., if $x =
+  # 5 and $y = 7, those two values are fed to _modinv(), but if $x = -5 and
+  # $y = 7, the values fed to _modinv() are $x = 2 (= -5 % 7) and $y = 7.
+  # The value if $x is affected only when $x and $y have opposite signs.
+
+  $x->bmod($y);
+  return $x->bnan() if $x->is_zero();
+
+  # Compute the modular multiplicative inverse of the absolute values. We'll
+  # correct for the signs of $x and $y later. Return NaN if no GCD is found.
+
+  ($x->{value}, $x->{sign}) = $CALC->_modinv($x->{value}, $y->{value});
+  return $x->bnan() if !defined $x->{value};
+
+  # When one or both arguments are negative, we have the following
+  # relations.  If x and y are positive:
+  #
+  #   modinv(-x, -y) = -modinv(x, y)
+  #   modinv(-x,  y) = y - modinv(x, y)  = -modinv(x, y) (mod y)
+  #   modinv( x, -y) = modinv(x, y) - y  =  modinv(x, y) (mod -y)
+
+  # We must swap the sign of the result if the original $x is negative.
+  # However, we must compensate for ignoring the signs when computing the
+  # inverse modulo. The net effect is that we must swap the sign of the
+  # result if $y is negative.
+
+  $x -> bneg() if $y->{sign} eq '-';
+
+  # Compute $x modulo $y again after correcting the sign.
+
+  $x -> bmod($y) if $x->{sign} ne $y->{sign};
+
+  return $x;
   }
 
 sub bmodpow
   {
   # takes a very large number to a very large exponent in a given very
-  # large modulus, quickly, thanks to binary exponentation. Supports
+  # large modulus, quickly, thanks to binary exponentiation. Supports
   # negative exponents.
   my ($self,$num,$exp,$mod,@r) = objectify(3,@_);
 
   return $num if $num->modify('bmodpow');
 
-  # check modulus for valid values
-  return $num->bnan() if ($mod->{sign} ne '+'		# NaN, - , -inf, +inf
-                       || $mod->is_zero());
+  # When the exponent 'e' is negative, use the following relation, which is
+  # based on finding the multiplicative inverse 'd' of 'b' modulo 'm':
+  #
+  #    b^(-e) (mod m) = d^e (mod m) where b*d = 1 (mod m)
 
-  # check exponent for valid values
-  if ($exp->{sign} =~ /\w/) 
-    {
-    # i.e., if it's NaN, +inf, or -inf...
-    return $num->bnan();
-    }
+  $num->bmodinv($mod) if ($exp->{sign} eq '-');
 
-  $num->bmodinv ($mod) if ($exp->{sign} eq '-');
+  # Check for valid input. All operands must be finite, and the modulus must be
+  # non-zero.
 
-  # check num for valid values (also NaN if there was no inverse but $exp < 0)
-  return $num->bnan() if $num->{sign} !~ /^[+-]$/;
+  return $num->bnan() if ($num->{sign} =~ /NaN|inf/ ||  # NaN, -inf, +inf
+                          $exp->{sign} =~ /NaN|inf/ ||  # NaN, -inf, +inf
+                          $mod->{sign} =~ /NaN|inf/ ||  # NaN, -inf, +inf
+                          $mod->is_zero());
 
-  # $mod is positive, sign on $exp is ignored, result also positive
-  $num->{value} = $CALC->_modpow($num->{value},$exp->{value},$mod->{value});
-  $num;
+  # Compute 'a (mod m)', ignoring the signs on 'a' and 'm'. If the resulting
+  # value is zero, the output is also zero, regardless of the signs on 'a' and
+  # 'm'.
+
+  my $value = $CALC->_modpow($num->{value}, $exp->{value}, $mod->{value});
+  my $sign  = '+';
+
+  # If the resulting value is non-zero, we have four special cases, depending
+  # on the signs on 'a' and 'm'.
+
+  unless ($CALC->_is_zero($num->{value})) {
+
+      # There is a negative sign on 'a' (= $num**$exp) only if the number we
+      # are exponentiating ($num) is negative and the exponent ($exp) is odd.
+
+      if ($num->{sign} eq '-' && $exp->is_odd()) {
+
+          # When both the number 'a' and the modulus 'm' have a negative sign,
+          # use this relation:
+          #
+          #    -a (mod -m) = -(a (mod m))
+
+          if ($mod->{sign} eq '-') {
+              $sign = '-';
+          }
+
+          # When only the number 'a' has a negative sign, use this relation:
+          #
+          #    -a (mod m) = m - (a (mod m))
+
+          else {
+              # Use copy of $mod since _sub() modifies the first argument.
+              my $mod = $CALC->_copy($mod->{value});
+              $value = $CALC->_sub($mod, $num->{value});
+              $sign  = '+';
+          }
+
+      } else {
+
+          # When only the modulus 'm' has a negative sign, use this relation:
+          #
+          #    a (mod -m) = (a (mod m)) - m
+          #               = -(m - (a (mod m)))
+
+          if ($mod->{sign} eq '-') {
+              my $mod = $CALC->_copy($mod->{value});
+              $value = $CALC->_sub($mod, $num->{value});
+              $sign  = '-';
+          }
+
+          # When neither the number 'a' nor the modulus 'm' have a negative
+          # sign, directly return the already computed value.
+          #
+          #    (a (mod m))
+
+      }
+
+  }
+
+  $num->{value} = $value;
+  $num->{sign}  = $sign;
+
+  return $num;
   }
 
 ###############################################################################
@@ -2848,7 +2945,7 @@ sub _split
   # invalid input.
   my $x = shift;
 
-  # strip white space at front, also extranous leading zeros
+  # strip white space at front, also extraneous leading zeros
   $x =~ s/^\s*([-]?)0*([0-9])/$1$2/g;   # will not strip '  .2'
   $x =~ s/^\s+//;                       # but this will
   $x =~ s/\s+$//g;                      # strip white space at end
@@ -3174,9 +3271,8 @@ Math::BigInt - Arbitrary size integer/float math package
   $x->bmuladd($y,$z);	# $x = $x * $y + $z
 
   $x->bmod($y);		   # modulus (x % y)
-  $x->bmodpow($exp,$mod);  # modular exponentation (($num**$exp) % $mod))
-  $x->bmodinv($mod);	   # the inverse of $x in the given modulus $mod
-
+  $x->bmodpow($y,$mod);    # modular exponentiation (($x ** $y) % $mod)
+  $x->bmodinv($mod);       # modular multiplicative inverse
   $x->bpow($y);		   # power of arguments (x ** y)
   $x->blsft($y);	   # left shift in base 2
   $x->brsft($y);	   # right shift in base 2
@@ -3694,19 +3790,28 @@ This method was added in v1.87 of Math::BigInt (June 2007).
 
 =head2 bmodinv()
 
-	num->bmodinv($mod);		# modular inverse
+	$x->bmodinv($mod);		# modular multiplicative inverse
 
-Returns the inverse of C<$num> in the given modulus C<$mod>.  'C<NaN>' is
-returned unless C<$num> is relatively prime to C<$mod>, i.e. unless
-C<bgcd($num, $mod)==1>.
+Returns the multiplicative inverse of C<$x> modulo C<$mod>. If
+
+        $y = $x -> copy() -> bmodinv($mod)
+
+then C<$y> is the number closest to zero, and with the same sign as C<$mod>,
+satisfying
+
+        ($x * $y) % $mod = 1 % $mod
+
+If C<$x> and C<$y> are non-zero, they must be relative primes, i.e.,
+C<bgcd($y, $mod)==1>. 'C<NaN>' is returned when no modular multiplicative
+inverse exists.
 
 =head2 bmodpow()
 
-	$num->bmodpow($exp,$mod);	# modular exponentation
+	$num->bmodpow($exp,$mod);	# modular exponentiation
 					# ($num**$exp % $mod)
 
 Returns the value of C<$num> taken to the power C<$exp> in the modulus
-C<$mod> using binary exponentation.  C<bmodpow> is far superior to
+C<$mod> using binary exponentiation.  C<bmodpow> is far superior to
 writing
 
 	$num ** $exp % $mod
@@ -4038,7 +4143,7 @@ the decimal point. For example, 123.45 has a precision of -2. 0 means an
 integer like 123 (or 120). A precision of 2 means two digits to the left
 of the decimal point are zero, so 123 with P = 1 becomes 120. Note that
 numbers with zeros before the decimal point may have different precisions,
-because 1200 can have p = 0, 1 or 2 (depending on what the inital value
+because 1200 can have p = 0, 1 or 2 (depending on what the initial value
 was). It could also have p < 0, when the digits after the decimal point
 are zero.
 
@@ -4185,7 +4290,7 @@ versions <= 5.7.2) is like this:
     assumption that 124 has 3 significant digits, while 120/7 will get you
     '17', not '17.1' since 120 is thought to have 2 significant digits.
     The rounding after the division then uses the remainder and $y to determine
-    wether it must round up or down.
+    whether it must round up or down.
  ?  I have no idea which is the right way. That's why I used a slightly more
  ?  simple scheme and tweaked the few failing testcases to match it.
 

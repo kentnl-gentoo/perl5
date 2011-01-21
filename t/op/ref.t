@@ -9,7 +9,7 @@ BEGIN {
 use strict qw(refs subs);
 use re ();
 
-plan(198);
+plan(200);
 
 # Test glob operations.
 
@@ -376,6 +376,25 @@ curr_test($test + 2);
     print "# good, didn't recurse\n";
 }
 
+# test that DESTROY is called on all objects during global destruction,
+# even those without hard references [perl #36347]
+
+is(
+  runperl(
+   stderr => 1, prog => 'sub DESTROY { print qq-aaa\n- } bless \$a[0]'
+  ),
+ "aaa\n", 'DESTROY called on array elem'
+);
+is(
+  runperl(
+   stderr => 1,
+   prog => '{ bless \my@x; *a=sub{@x}}sub DESTROY { print qq-aaa\n- }'
+  ),
+ "aaa\n",
+ 'DESTROY called on closure variable'
+);
+
+
 # test if refgen behaves with autoviv magic
 {
     my @a;
@@ -640,7 +659,7 @@ is( runperl(stderr => 1, prog => 'my $i;for $i (1) { for $i (2) { } }'), "");
 #    GV => blessed(AV) => RV => GV => blessed(SV)
 # all with a refcnt of 1, and hope that the second GV gets processed first
 # by do_clean_named_objs.  Then when the first GV is processed, it mustn't
-# find anything nastly left by the previous GV processing.
+# find anything nasty left by the previous GV processing.
 # The eval is stop things in the main body of the code holding a reference
 # to a GV, and the print at the end seems to bee necessary to ensure
 # the correct freeing order of *x and *y (no, I don't know why - DAPM).
