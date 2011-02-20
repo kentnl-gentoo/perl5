@@ -46,6 +46,12 @@
 :
 :         proto.h: add __attribute__format__ (or ...null_ok__)
 :
+:   i  Static inline: function in source code has a S_ prefix:
+:
+:         proto.h: function is declared as S_foo rather than foo,
+:                PERL_STATIC_INLINE is added to declaration;
+:         embed.h: "#define foo S_foo" entries added
+:
 :   M  May change:
 :
 :         any doc entry is marked that function may change
@@ -511,9 +517,12 @@ AnpP	|I32	|foldEQ_locale	|NN const char* a|NN const char* b|I32 len
 Am	|I32	|ibcmp_utf8	|NN const char *s1|NULLOK char **pe1|UV l1 \
 				|bool u1|NN const char *s2|NULLOK char **pe2 \
 				|UV l2|bool u2
-Apd	|I32	|foldEQ_utf8	|NN const char *s1|NULLOK char **pe1|UV l1 \
+Amd	|I32	|foldEQ_utf8	|NN const char *s1|NULLOK char **pe1|UV l1 \
 				|bool u1|NN const char *s2|NULLOK char **pe2 \
 				|UV l2|bool u2
+AMp	|I32	|foldEQ_utf8_flags |NN const char *s1|NULLOK char **pe1|UV l1 \
+				|bool u1|NN const char *s2|NULLOK char **pe2 \
+				|UV l2|bool u2|U32 flags
 AnpP	|I32	|foldEQ_latin1	|NN const char* a|NN const char* b|I32 len
 #if defined(PERL_IN_DOIO_C)
 sR	|bool	|ingroup	|Gid_t testgid|bool effective
@@ -574,7 +583,9 @@ Anpdmb	|bool	|is_utf8_string_loc|NN const U8 *s|STRLEN len|NULLOK const U8 **p
 Anpd	|bool	|is_utf8_string_loclen|NN const U8 *s|STRLEN len|NULLOK const U8 **ep|NULLOK STRLEN *el
 ApR	|bool	|is_utf8_alnum	|NN const U8 *p
 ApR	|bool	|is_utf8_idfirst|NN const U8 *p
+ApR	|bool	|is_utf8_xidfirst|NN const U8 *p
 ApR	|bool	|is_utf8_idcont	|NN const U8 *p
+ApR	|bool	|is_utf8_xidcont	|NN const U8 *p
 ApR	|bool	|is_utf8_alpha	|NN const U8 *p
 ApR	|bool	|is_utf8_ascii	|NN const U8 *p
 ApR	|bool	|is_utf8_space	|NN const U8 *p
@@ -650,8 +661,10 @@ Ap	|void	|vload_module|U32 flags|NN SV* name|NULLOK SV* ver|NULLOK va_list* args
 p	|OP*	|localize	|NN OP *o|I32 lex
 ApdR	|I32	|looks_like_number|NN SV *const sv
 Apd	|UV	|grok_bin	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV *result
-EXMpR	|char	|grok_bslash_c	|const char source|const bool output_warning
-EXMpR	|bool	|grok_bslash_o	|NN const char* s|NN UV* uv|NN STRLEN* len|NN const char** error_msg|const bool output_warning
+#ifdef PERL_IN_DQUOTE_STATIC_C
+EMsR	|char	|grok_bslash_c	|const char source|const bool utf8|const bool output_warning
+EMsR	|bool	|grok_bslash_o	|NN const char* s|NN UV* uv|NN STRLEN* len|NN const char** error_msg|const bool output_warning
+#endif
 Apd	|UV	|grok_hex	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV *result
 Apd	|int	|grok_number	|NN const char *pv|STRLEN len|NULLOK UV *valuep
 ApdR	|bool	|grok_numeric_radix|NN const char **sp|NN const char *send
@@ -965,6 +978,10 @@ Ap	|void	|regdump	|NN const regexp* r
 Ap	|SV*	|regclass_swash	|NULLOK const regexp *prog \
 				|NN const struct regnode *node|bool doinit \
 				|NULLOK SV **listsvp|NULLOK SV **altsvp
+#ifdef PERL_IN_REGCOMP_C
+EMi	|U8	|set_regclass_bit|NN struct RExC_state_t* pRExC_state|NN regnode* node|const U8 value|NN HV** nonbitmap_ptr
+EMs	|U8	|set_regclass_bit_fold|NN struct RExC_state_t *pRExC_state|NN regnode* node|const U8 value|NN HV** nonbitmap_ptr
+#endif
 Ap	|I32	|pregexec	|NN REGEXP * const prog|NN char* stringarg \
 				|NN char* strend|NN char* strbeg|I32 minend \
 				|NN SV* screamer|U32 nosave
@@ -982,6 +999,9 @@ Ap	|char*	|re_intuit_start|NN REGEXP * const rx|NULLOK SV* sv|NN char* strpos \
 				|NN char* strend|const U32 flags \
 				|NULLOK re_scream_pos_data *data
 Ap	|SV*	|re_intuit_string|NN REGEXP  *const r
+#if defined(PERL_IN_DQUOTE_STATIC_C)
+EiPR	|I32	|regcurly	|NN const char *s
+#endif
 Ap	|I32	|regexec_flags	|NN REGEXP *const rx|NN char *stringarg \
 				|NN char *strend|NN char *strbeg|I32 minend \
 				|NN SV *sv|NULLOK void *data|U32 flags
@@ -1275,7 +1295,24 @@ Apd	|void	|sv_vsetpvfn	|NN SV *const sv|NN const char *const pat|const STRLEN pa
 ApR	|NV	|str_to_version	|NN SV *sv
 Ap	|SV*	|swash_init	|NN const char* pkg|NN const char* name|NN SV* listsv|I32 minbits|I32 none
 Ap	|UV	|swash_fetch	|NN SV *swash|NN const U8 *ptr|bool do_utf8
-EMpRX	|HV*	|_swash_inversion_hash	|NN SV *swash
+EXMpR	|HV*	|_swash_inversion_hash	|NN SV* const swash
+EXMpR	|HV*	|_new_invlist	|IV initial_size
+EXMpR	|HV*	|_swash_to_invlist	|NN SV* const swash
+EXMp	|void	|_append_range_to_invlist   |NN HV* const invlist|const UV start|const UV end
+#ifdef PERL_IN_REGCOMP_C
+EsMR	|HV*	|add_range_to_invlist	|NN HV* const invlist|const UV start|const UV end
+EiMR	|UV*	|invlist_array	|NN HV* const invlist
+EiM	|void	|invlist_destroy	|NN HV* const invlist
+EsM	|void	|invlist_extend    |NN HV* const invlist|const UV len
+EsMR	|HV*	|invlist_intersection	|NN HV* const a|NN HV* const b
+EiMR	|UV	|invlist_len	|NN HV* const invlist
+EiMR	|UV	|invlist_max	|NN HV* const invlist
+EiM	|void	|invlist_set_array	|NN HV* const invlist|NN const UV* const array
+EiM	|void	|invlist_set_len	|NN HV* const invlist|const UV len
+EiM	|void	|invlist_set_max	|NN HV* const invlist|const UV max
+EiM	|void	|invlist_trim	|NN HV* const invlist
+EsMR	|HV*	|invlist_union	|NN HV* const a|NN HV* const b
+#endif
 Ap	|void	|taint_env
 Ap	|void	|taint_proper	|NULLOK const char* f|NN const char *const s
 Apd	|UV	|to_utf8_case	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp \
@@ -1950,7 +1987,6 @@ s	|U8*	|add_utf16_textfilter|NN U8 *const s|bool reversed
 #endif
 s	|void	|checkcomma	|NN const char *s|NN const char *name \
 				|NN const char *what
-s	|bool	|feature_is_enabled|NN const char *const name|STRLEN namelen
 s	|void	|force_ident	|NN const char *s|int kind
 s	|void	|incline	|NN const char *s
 s	|int	|intuit_method	|NN char *s|NULLOK GV *gv|NULLOK CV *cv
@@ -2421,5 +2457,8 @@ Anop	|void	|clone_params_del|NN CLONE_PARAMS *param
 
 : Used in perl.c and toke.c
 op	|void	|populate_isa	|NN const char *name|STRLEN len|...
+
+: Used in keywords.c and toke.c
+op	|bool	|feature_is_enabled|NN const char *const name|STRLEN namelen
 
 : ex: set ts=8 sts=4 sw=4 noet:

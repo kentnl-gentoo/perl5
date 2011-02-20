@@ -98,7 +98,7 @@ use File::Glob qw(:case);
 @IGNORABLE = qw(
     .cvsignore .dualLivedDiffConfig .gitignore
     ANNOUNCE Announce Artistic AUTHORS BENCHMARK BUGS Build.PL
-    CHANGELOG ChangeLog CHANGES Changes COPYING Copying CREDITS
+    CHANGELOG ChangeLog CHANGES Changes COPYING Copying CREDITS dist.ini
     GOALS HISTORY INSTALL INSTALL.SKIP LICENSE Makefile.PL
     MANIFEST MANIFEST.SKIP META.yml MYMETA.yml META.json MYMETA.json
     NEW NOTES ppport.h README SIGNATURE THANKS TODO Todo VERSION WHATSNEW
@@ -308,7 +308,7 @@ use File::Glob qw(:case);
     'CGI' =>
 	{
 	'MAINTAINER'	=> 'lstein',
-	'DISTRIBUTION'	=> 'MARKSTOS/CGI.pm-3.51.tar.gz',
+	'DISTRIBUTION'	=> 'MARKSTOS/CGI.pm-3.52.tar.gz',
 	'FILES'		=> q[cpan/CGI],
 	'EXCLUDED'	=> [ qr{^t/lib/Test},
 				qw( cgi-lib_porting.html
@@ -365,7 +365,7 @@ use File::Glob qw(:case);
     'CPAN' =>
 	{
 	'MAINTAINER'	=> 'andk',
-	'DISTRIBUTION'	=> 'ANDK/CPAN-1.94_63.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/CPAN-1.94_65.tar.gz',
 	'FILES'		=> q[cpan/CPAN],
 	'EXCLUDED'	=> [ qr{^distroprefs/},
 			     qr{^inc/Test/},
@@ -409,7 +409,7 @@ use File::Glob qw(:case);
     'CPANPLUS' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.9011.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.9101.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qr{^t/dummy-.*\.hidden$},
@@ -436,6 +436,18 @@ use File::Glob qw(:case);
 			     qw{ t/99_pod.t
 			         t/99_pod_coverage.t
 			       },
+			   ],
+	'UPSTREAM'	=> 'cpan',
+	},
+
+    'CPAN::Meta' =>
+	{
+	'MAINTAINER'	=> 'dagolden',
+	'DISTRIBUTION'	=> 'DAGOLDEN/CPAN-Meta-2.110440.tar.gz',
+	'FILES'		=> q[cpan/CPAN-Meta],
+	'EXCLUDED'	=> [
+				qr/^xt/,
+				qr/^history/,
 			   ],
 	'UPSTREAM'	=> 'cpan',
 	},
@@ -471,6 +483,14 @@ use File::Glob qw(:case);
 			       },
 			   ],
 	'UPSTREAM'	=> undef,
+	},
+
+    'Devel::DProf' =>
+	{
+	'MAINTAINER'	=> 'rafl',
+	'DISTRIBUTION'	=> 'FLORA/Devel-DProf-20110217.00.tar.gz',
+	'FILES'		=> q[cpan/Devel-DProf],
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'Devel::SelfStubber' =>
@@ -570,8 +590,8 @@ use File::Glob qw(:case);
 
     'ExtUtils::CBuilder' =>
 	{
-	'MAINTAINER'	=> 'kwilliams',
-	'DISTRIBUTION'	=> 'DAGOLDEN/ExtUtils-CBuilder-0.2802.tar.gz',
+	'MAINTAINER'	=> 'dagolden',
+	'DISTRIBUTION'	=> 'DAGOLDEN/ExtUtils-CBuilder-0.280202.tar.gz',
 	'FILES'		=> q[dist/ExtUtils-CBuilder],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -768,7 +788,7 @@ use File::Glob qw(:case);
     'HTTP::Tiny' =>
 	{
 	'MAINTAINER'	=> 'dagolden',
-	'DISTRIBUTION'	=> 'DAGOLDEN/HTTP-Tiny-0.009.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/HTTP-Tiny-0.010.tar.gz',
 	'FILES'		=> q[cpan/HTTP-Tiny],
 	'EXCLUDED'	=> [
 				't/200_live.t',
@@ -834,7 +854,7 @@ use File::Glob qw(:case);
     'IPC::Cmd' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/IPC-Cmd-0.68.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/IPC-Cmd-0.70.tar.gz',
 	'FILES'		=> q[cpan/IPC-Cmd],
 	'UPSTREAM'	=> 'cpan',
 	},
@@ -1020,10 +1040,15 @@ use File::Glob qw(:case);
     'Module::Build' =>
 	{
 	'MAINTAINER'	=> 'kwilliams',
-	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Build-0.3607.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Build-0.37_05.tar.gz',
 	'FILES'		=> q[cpan/Module-Build],
-	'EXCLUDED'	=> [ qw{ t/par.t t/signature.t },
-			     qr!^contrib/!,  qr!^devtools! ],
+	'EXCLUDED'	=> [
+		qw{ t/par.t t/signature.t },
+		qr!^contrib/!,
+		qr!^devtools!,
+		qr!^inc!,
+	],
+	'CUSTOMIZED'	=> [ 'lib/Module/Build/ConfigData.pm' ],
 	'UPSTREAM'	=> 'cpan',
 	},
 
@@ -1046,7 +1071,7 @@ use File::Glob qw(:case);
     'Module::Load::Conditional' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Module-Load-Conditional-0.40.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-Load-Conditional-0.44.tar.gz',
 	'FILES'		=> q[cpan/Module-Load-Conditional],
 	'UPSTREAM'	=> 'cpan',
 	},
@@ -1062,7 +1087,7 @@ use File::Glob qw(:case);
     'Module::Metadata' =>
 	{
 	'MAINTAINER'	=> 'dagolden',
-	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Metadata-1.000003.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Metadata-1.000004.tar.gz',
 	'FILES'		=> q[cpan/Module-Metadata],
 	'EXCLUDED'	=> [ ],
 	'UPSTREAM'	=> 'cpan',
@@ -1128,14 +1153,11 @@ use File::Glob qw(:case);
 
     'Parse::CPAN::Meta' =>
 	{
-	'MAINTAINER'	=> 'smueller',
-	'DISTRIBUTION'	=> 'SMUELLER/Parse-CPAN-Meta-1.40.tar.gz',
+	'MAINTAINER'	=> 'dagolden',
+	'DISTRIBUTION'	=> 'DAGOLDEN/Parse-CPAN-Meta-1.4401.tar.gz',
 	'FILES'		=> q[cpan/Parse-CPAN-Meta],
-	'EXCLUDED'	=> [ qw( t/97_meta.t t/98_pod.t t/99_pmv.t ) ],
+	'EXCLUDED'	=> [ ],
 	'UPSTREAM'	=> 'cpan',
-	# NOTE: 'perl uupacktool.pl t/data/utf_16_le_bom.yml.packed'
-	# run by hand after import, as the core's test harness doesn't
-	# run dists' "make test" steps
 	},
 
     'PathTools' =>
@@ -1386,7 +1408,7 @@ use File::Glob qw(:case);
     'Term::UI' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Term-UI-0.24.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Term-UI-0.26.tar.gz',
 	'FILES'		=> q[cpan/Term-UI],
 	'UPSTREAM'	=> 'cpan',
 	},
@@ -1577,7 +1599,7 @@ use File::Glob qw(:case);
     'Unicode::Collate' =>
 	{
 	'MAINTAINER'	=> 'sadahiro',
-	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.70-withoutworldwriteables.tar.gz',
+	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.72-withoutworldwriteables.tar.gz',
 	'FILES'		=> q[cpan/Unicode-Collate],
 	'EXCLUDED'	=> [ qr{N$},
                    qr{^data/},
@@ -1594,6 +1616,15 @@ use File::Glob qw(:case);
 	'FILES'		=> q[cpan/Unicode-Normalize],
 	'EXCLUDED'	=> [ qw{MANIFEST.N Normalize.pmN disableXS enableXS }],
 	'UPSTREAM'	=> 'first-come',
+	},
+
+    'Version::Requirements' =>
+	{
+	'MAINTAINER'	=> 'rjbs',
+	'DISTRIBUTION'	=> 'RJBS/Version-Requirements-0.101020.tar.gz',
+	'FILES'		=> q[cpan/Version-Requirements],
+	'EXCLUDED'	=> [ qw(t/release-pod-syntax.t) ],
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'version' =>
@@ -1737,7 +1768,6 @@ use File::Glob qw(:case);
 				ext/B/hints/openbsd.pl
 				ext/B/hints/darwin.pl
 
-				ext/Devel-DProf/
 				ext/Devel-Peek/
 				ext/DynaLoader/
 				ext/Errno

@@ -233,7 +233,7 @@ and check for NULL.
     case SINGLE_PAT_MOD:    *(pmfl) |= RXf_PMf_SINGLELINE; break;   \
     case XTENDED_PAT_MOD:   *(pmfl) |= RXf_PMf_EXTENDED;   break
 
-/* Note, includes locale, unicode */
+/* Note, includes charset ones, assumes 0 is the default for them */
 #define STD_PMMOD_FLAGS_CLEAR(pmfl)                        \
     *(pmfl) &= ~(RXf_PMf_FOLD|RXf_PMf_MULTILINE|RXf_PMf_SINGLELINE|RXf_PMf_EXTENDED|RXf_PMf_CHARSET)
 
@@ -269,11 +269,14 @@ and check for NULL.
 #define UNICODE_PAT_MODS     "u"
 #define DEPENDS_PAT_MODS     "d"
 #define ASCII_RESTRICT_PAT_MODS "a"
+#define ASCII_MORE_RESTRICT_PAT_MODS "aa"
 
 /* This string is expected by regcomp.c to be ordered so that the first
  * character is the flag in bit RXf_PMf_STD_PMMOD_SHIFT of extflags; the next
  * character is bit +1, etc. */
 #define STD_PAT_MODS        "msix"
+
+#define CHARSET_PAT_MODS    ASCII_RESTRICT_PAT_MODS DEPENDS_PAT_MODS LOCALE_PAT_MODS UNICODE_PAT_MODS
 
 /* This string is expected by XS_re_regexp_pattern() in universal.c to be ordered
  * so that the first character is the flag in bit RXf_PMf_STD_PMMOD_SHIFT of
@@ -281,7 +284,7 @@ and check for NULL.
 #define INT_PAT_MODS    STD_PAT_MODS    KEEPCOPY_PAT_MODS
 
 #define EXT_PAT_MODS    ONCE_PAT_MODS   KEEPCOPY_PAT_MODS
-#define QR_PAT_MODS     STD_PAT_MODS    EXT_PAT_MODS
+#define QR_PAT_MODS     STD_PAT_MODS    EXT_PAT_MODS	   CHARSET_PAT_MODS
 #define M_PAT_MODS      QR_PAT_MODS     LOOP_PAT_MODS
 #define S_PAT_MODS      M_PAT_MODS      EXEC_PAT_MODS      NONDESTRUCT_PAT_MODS
 
@@ -293,7 +296,7 @@ and check for NULL.
 
 /* Leave some space, so future bit allocations can go either in the shared or
  * unshared area without affecting binary compatibility */
-#define RXf_BASE_SHIFT (_RXf_PMf_SHIFT_NEXT+2)
+#define RXf_BASE_SHIFT (_RXf_PMf_SHIFT_NEXT+1)
 
 /* embed.pl doesn't yet know how to handle static inline functions, so
    manually decorate them here with gcc-style attributes.
@@ -302,7 +305,7 @@ PERL_STATIC_INLINE const char *
 get_regex_charset_name(const U32 flags, STRLEN* const lenp)
     __attribute__warn_unused_result__;
 
-#define MAX_CHARSET_NAME_LENGTH 1
+#define MAX_CHARSET_NAME_LENGTH 2
 
 PERL_STATIC_INLINE const char *
 get_regex_charset_name(const U32 flags, STRLEN* const lenp)
@@ -317,6 +320,9 @@ get_regex_charset_name(const U32 flags, STRLEN* const lenp)
         case REGEX_LOCALE_CHARSET:  return LOCALE_PAT_MODS;
         case REGEX_UNICODE_CHARSET: return UNICODE_PAT_MODS;
 	case REGEX_ASCII_RESTRICTED_CHARSET: return ASCII_RESTRICT_PAT_MODS;
+	case REGEX_ASCII_MORE_RESTRICTED_CHARSET:
+	    *lenp = 2;
+	    return ASCII_MORE_RESTRICT_PAT_MODS;
     }
 
     return "?";	    /* Unknown */
@@ -362,8 +368,12 @@ get_regex_charset_name(const U32 flags, STRLEN* const lenp)
 
 /* Copy and tainted info */
 #define RXf_COPY_DONE   	(1<<(RXf_BASE_SHIFT+16))
+
+/* during execution: pattern temporarily tainted by executing locale ops;
+ * post-execution: $1 et al are tainted */
 #define RXf_TAINTED_SEEN	(1<<(RXf_BASE_SHIFT+17))
-#define RXf_TAINTED		(1<<(RXf_BASE_SHIFT+18)) /* this pattern is tainted */
+/* this pattern was tainted during compilation */
+#define RXf_TAINTED		(1<<(RXf_BASE_SHIFT+18))
 
 /* Flags indicating special patterns */
 #define RXf_START_ONLY		(1<<(RXf_BASE_SHIFT+19)) /* Pattern is /^/ */

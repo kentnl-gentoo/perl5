@@ -4,7 +4,7 @@ package re;
 use strict;
 use warnings;
 
-our $VERSION     = "0.16";
+our $VERSION     = "0.17";
 our @ISA         = qw(Exporter);
 our @EXPORT_OK   = ('regmust',
                     qw(is_regexp regexp_pattern
@@ -29,6 +29,7 @@ my %reflags = (
     l => 1,
     u => 2,
     a => 3,
+    aa => 4,
 );
 
 sub setcolor {
@@ -144,15 +145,30 @@ sub bits {
 	} elsif ($s =~ s/^\///) {
 	    my $reflags = $^H{reflags} || 0;
 	    my $seen_charset;
-	    for(split//, $s) {
+	    while ($s =~ m/( aa | . )/gx) {
+                $_ = $1;
 		if (/[adul]/) {
 		    if ($on) {
-			if ($seen_charset && $seen_charset ne $_) {
+			if ($seen_charset) {
 			    require Carp;
-			    Carp::carp(
-			      qq 'The "$seen_charset" and "$_" flags '
-			     .qq 'are exclusive'
-			    );
+                            if ($seen_charset ne $_) {
+                                Carp::carp(
+                                qq 'The "$seen_charset" and "$_" flags '
+                                .qq 'are exclusive'
+                                );
+                            }
+                            elsif ($seen_charset eq 'a') {
+                                Carp::carp(
+                                qq 'The "a" flag may only appear twice if '
+                                .qq 'adjacent, like "aa"'
+                                );
+                            }
+                            else {
+                                Carp::carp(
+                                qq 'The "$seen_charset" flag may not appear '
+                                .qq 'twice'
+                                );
+                            }
 			}
 			$^H{reflags_charset} = $reflags{$_};
 			$seen_charset = $_;
@@ -323,7 +339,7 @@ form of output that can be used to get a colorful display on terminals
 that understand termcap color sequences.  Set C<$ENV{PERL_RE_TC}> to a
 comma-separated list of C<termcap> properties to use for highlighting
 strings on/off, pre-point part on/off.
-See L<perldebug/"Debugging regular expressions"> for additional info.
+See L<perldebug/"Debugging Regular Expressions"> for additional info.
 
 As of 5.9.5 the directive C<use re 'debug'> and its equivalents are
 lexically scoped, as the other directives are.  However they have both 

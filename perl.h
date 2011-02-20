@@ -541,6 +541,15 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 #define TAINT_ENV()	if (PL_tainting) { taint_env(); }
 #define TAINT_PROPER(s)	if (PL_tainting) { taint_proper(NULL, s); }
 
+/* flags used internally only within pp_subst and pp_substcont */
+#ifdef PERL_CORE
+#  define SUBST_TAINT_STR      1	/* string tainted */
+#  define SUBST_TAINT_PAT      2	/* pattern tainted */
+#  define SUBST_TAINT_REPL     4	/* replacement tainted */
+#  define SUBST_TAINT_RETAINT  8	/* use re'taint' in scope */
+#  define SUBST_TAINT_BOOLRET 16	/* return is boolean (don't taint) */
+#endif
+
 /* XXX All process group stuff is handled in pp_sys.c.  Should these
    defines move there?  If so, I could simplify this a lot. --AD  9/96.
 */
@@ -2425,7 +2434,6 @@ typedef struct STRUCT_SV SV;
 typedef struct av AV;
 typedef struct hv HV;
 typedef struct cv CV;
-typedef struct regexp ORANGE;	/* This is the body structure.  */
 typedef struct p5rx REGEXP;
 typedef struct gp GP;
 typedef struct gv GV;
@@ -6141,6 +6149,14 @@ extern void moncontrol(int);
 /* used by pv_display in dump.c*/
 #define PERL_PV_PRETTY_DUMP  PERL_PV_PRETTY_ELLIPSES|PERL_PV_PRETTY_QUOTE
 #define PERL_PV_PRETTY_REGPROP PERL_PV_PRETTY_ELLIPSES|PERL_PV_PRETTY_LTGT|PERL_PV_ESCAPE_RE|PERL_PV_ESCAPE_NONASCII
+
+#ifdef PERL_CORE
+#  define FEATURE_IS_ENABLED(name)				        \
+	((0 != (PL_hints & HINT_LOCALIZE_HH))				\
+	    && Perl_feature_is_enabled(aTHX_ STR_WITH_LEN(name)))
+/* The longest string we pass in.  */
+#  define MAX_FEATURE_LEN (sizeof("unicode_strings")-1)
+#endif
 
 /*
 

@@ -97,6 +97,7 @@ EXACT       EXACT,      str       ; Match this string (preceded by length).
 EXACTF      EXACT,      str       ; Match this string, folded, native charset semantics for non-utf8 (prec. by length).
 EXACTFL     EXACT,      str       ; Match this string, folded in locale (w/len).
 EXACTFU     EXACT,      str	  ; Match this string, folded, Unicode semantics for non-utf8 (prec. by length).
+EXACTFA     EXACT,      str	  ; Match this string, folded, Unicode semantics for non-utf8, but no ASCII-range character matches outside ASCII (prec. by length),.
 
 #*Do nothing types
 
@@ -131,16 +132,18 @@ CLOSE       CLOSE,      num 1     ; Analogous to OPEN.
 REF         REF,        num 1 V   ; Match some already matched string
 REFF        REF,        num 1 V   ; Match already matched string, folded using native charset semantics for non-utf8
 REFFL       REF,        num 1 V   ; Match already matched string, folded in loc.
-# REFFU and NREFFU could have been implemented using the FLAGS field of the
+# N?REFF[AU] could have been implemented using the FLAGS field of the
 # regnode, but by having a separate node type, we can use the existing switch
 # statement to avoid some tests
 REFFU       REF,        num 1 V   ; Match already matched string, folded using unicode semantics for non-utf8
+REFFA       REF,        num 1 V   ; Match already matched string, folded using unicode semantics for non-utf8, no mixing ASCII, non-ASCII
 
 #*Named references.  Code in regcomp.c assumes that these all are after the numbered references
 NREF        REF,        no-sv 1 V ; Match some already matched string
 NREFF       REF,        no-sv 1 V ; Match already matched string, folded using native charset semantics for non-utf8
 NREFFL      REF,        no-sv 1 V ; Match already matched string, folded in loc.
 NREFFU      REF,        num   1 V ; Match already matched string, folded using unicode semantics for non-utf8
+NREFFA      REF,        num   1 V ; Match already matched string, folded using unicode semantics for non-utf8, no mixing ASCII, non-ASCII
 
 IFMATCH     BRANCHJ,    off 1 . 2 ; Succeeds if the following matches.
 UNLESSM     BRANCHJ,    off 1 . 2 ; Fails if the following matches.
@@ -171,7 +174,7 @@ RENUM       BRANCHJ,    off 1 . 1 ; Group with independently numbered parens.
 # inline charclass data (ascii only), the 'C' store it in the structure.
 # NOTE: the relative order of the TRIE-like regops  is significant
 
-TRIE        TRIE,       trie 1    ; Match many EXACT(F[LU]?)? at once. flags==type
+TRIE        TRIE,       trie 1    ; Match many EXACT(F[ALU]?)? at once. flags==type
 TRIEC       TRIE,trie charclass   ; Same as TRIE, but with embedded charclass data
 
 # For start classes, contains an added fail table.

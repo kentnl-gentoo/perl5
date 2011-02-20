@@ -2,87 +2,172 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.13.9
+perldelta - what is new for perl v5.13.10
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.13.8 release and
-the 5.13.9 release.
+This document describes differences between the 5.13.9 release and
+the 5.13.10 release.
 
-If you are upgrading from an earlier release such as 5.13.7, first read
-L<perl5138delta>, which describes differences between 5.13.7 and
-5.13.8.
+If you are upgrading from an earlier release such as 5.13.8, first read
+L<perl5139delta>, which describes differences between 5.13.8 and
+5.13.9.
 
 =head1 Core Enhancements
 
-=head2 New regular expression modifier C</a>
+=head2 The new regular expression modifiers available in suffix form
 
-The C</a> regular expression modifier restricts C<\s> to match precisely
-the five characters C<[ \f\n\r\t]>, C<\d> to match precisely the 10
-characters C<[0-9]>, C<\w> to match precisely the 63 characters
-C<[A-Za-z0-9_]>, and the Posix (C<[[:posix:]]>) character classes to
-match only the appropriate ASCII characters.  The complements, of
-course, match everything but; and C<\b> and C<\B> are correspondingly
-affected.  Otherwise, C</a> behaves like the C</u> modifier, in that
-case-insensitive matching uses Unicode semantics; for example, "k" will
-match the Unicode C<\N{KELVIN SIGN}> under C</i> matching, and code
-points in the Latin1 range, above ASCII will have Unicode semantics when
-it comes to case-insensitive matching.  Like its cousins (C</u>, C</l>,
-and C</d>), and in spite of the terminology, C</a> in 5.14 will not
-actually be able to be used as a suffix at the end of a regular
-expression (this restriction is planned to be lifted in 5.16).  It must
-occur either as an infix modifier, such as C<(?a:...)> or (C<(?a)...>,
-or it can be turned on within the lexical scope of C<use re '/a'>.
-Turning on C</a> turns off the other "character set" modifiers.
+Various releases of the 5.13.x series have added new regular expression
+modifiers, C</a>, C</d>, C</l>, and C</u>.  They were only available in
+infix form (e.g., C<(?a:...)>) until this release; now they are usable
+in suffix form.  This change was made too late to change all the
+affected documentation, so there are a number of places that erroneously
+say these must be used in infix form.
 
-=head2 Any unsigned value can be encoded as a character
+However, there is an ambiguity with the construct, C<s/foo/bar/le...>.  Due
+to backward compatibility constraints, in Perl 5.14 only, it will be
+resolved as C<s/foo/bar/ le...>, that is, as meaning to take the result
+of the substitution, and see if it is stringwise less-than-or-equal-to
+what follows. In Perl 5.16 and later, it will instead be resolved as
+meaning to do the pattern match using the rules of the current locale,
+and evaluate the rhs as an expression when doing the substitution.  In
+5.14, if you want the latter interpretation, you can write "el" instead.
 
-With this release, Perl is adopting a model that any unsigned value can
-be treated as a code point and encoded internally (as utf8) without
-warnings -- not just the code points that are legal in Unicode.
-However, unless utf8 warnings have been
-explicitly lexically turned off, outputting or performing a
-Unicode-defined operation (such as upper-casing) on such a code point
-will generate a warning.  Attempting to input these using strict rules
-(such as with the C<:encoding('UTF-8')> layer) will continue to fail.
-Prior to this release the handling was very inconsistent, and incorrect
-in places.  Also, the Unicode non-characters, some of which previously were
-erroneously considered illegal in places by Perl, contrary to the Unicode
-standard, are now always legal internally.  But inputting or outputting
-them will work the same as for the non-legal Unicode code points, as the
-Unicode standard says they are illegal for "open interchange".
+=head2 Add C<\p{Titlecase}> as a synonym for C<\p{Title}>
 
-=head2 Regular expression debugging output improvement
+This synonym is added for symmetry with the Unicode property names
+C<\p{Uppercase}> and C<\p{Lowercase}>.
 
-Regular expression debugging output (turned on by C<use re 'debug';>) now
-uses hexadecimal when escaping non-ASCII characters, instead of octal.
+=head2 New regular expression modifier option C</aa>
 
-=head1 Security
+Doubling the C</a> regular expression modifier increases its effect,
+so that in case-insensitive matching, no ASCII character will match a
+non-ASCII character.  For example, normally,
 
-=head2 Restrict \p{IsUserDefined} to In\w+ and Is\w+
+    'k' =~ /\N{KELVIN SIGN}/
 
-In L<perlunicode/"User-Defined Character Properties">, it says you can
-create custom properties by defining subroutines whose names begin with
-"In" or "Is". However, perl doesn't actually enforce that naming
-restriction, so \p{foo::bar} will call foo::Bar() if it exists.
+will match; it won't under C</aa>.
 
-This commit finally enforces this convention. Note that this broke a
-number of existing tests for properties, since they didn't always use an
-Is/In prefix.
+=head2 New warnings categories for problematic (non-)Unicode code points.
+
+Three new warnings subcategories of <utf8> have been added.  These
+allow you to turn off warnings for their covered events, while allowing
+the other UTF-8 warnings to remain on.  The three categories are:
+C<surrogate> when UTF-16 surrogates are encountered;
+C<nonchar> when Unicode non-character code points are encountered;
+and C<non_unicode> when code points that are above the legal Unicode
+maximum of 0x10FFFF are encountered.
 
 =head1 Incompatible Changes
 
-=head2 All objects are destroyed
+=head2 Most C<\p{}> properties are now immune from case-insensitive matching
 
-It used to be possible to prevent a destructor from being called during
-global destruction by artificially increasing the reference count of an
-object.
+For most Unicode properties, it doesn't make sense to have them match
+differently under C</i> case-insensitive matching than not.  And doing
+so leads to unexpected results and potential security holes.  For
+example
 
-Now such objects I<will> will be destroyed, as a result of a bug fix
-L<[perl #81230]|http://rt.perl.org/rt3/Public/Bug/Display.html?id=81230>.
+ m/\p{ASCII_Hex_Digit}+/i
 
-This has the potential to break some XS modules. (In fact, it break some.
-See L</Known Problems>, below.)
+could previously match non-ASCII characters because of the Unicode
+matching rules.  There were a number of bugs in this feature until an
+earlier release in the 5.13 series.  Now this release reverts, and
+removes the feature completely except for the few properties where
+people have come to expect it, namely the ones where casing is an
+integral part of their functionality, such as C<m/\p{Uppercase}/i> and
+C<m/\p{Lowercase}/i>, both of which match the exact same code points,
+namely those matched by C<m/\p{Cased}/i>.  Details are in
+L<perlrecharclass/Unicode Properties>.
+
+User-defined property handlers that need to match differently under
+C</i> must change to read the new boolean parameter passed it which is
+non-zero if case-insensitive matching is in effect; 0 if not.  See
+L<perluniprops/User-Defined Character Properties>.
+
+=head2 regex: \p{} in pattern implies Unicode semantics
+
+Now, a Unicode property match specified in the pattern will indicate
+that the pattern is meant for matching according to Unicode rules
+(e40e74f)
+
+=head2 add GvCV_set() and GvGP_set() macros and change GvGP()
+
+This allows a future commit to eliminate some backref magic between GV
+and CVs, which will require complete control over assignment to the
+gp_cv slot.
+
+If you've been using GvGP() in lvalue context this change will break
+your code, you should use GvGP_set() instead. (c43ae56)
+
+=head2 _swash_inversion_hash is no longer exported as part of the API
+
+This function shouldn't be called from XS code. (4c2e113)
+
+=head2 Unreferenced objects in global destruction
+
+The fix for [perl #36347], which made sure that destructors were called on
+unreferenced objects, broke the tests for three CPAN modules, which
+apparently rely on the bug.
+
+To provide more time for fixing them (as this is such a minor bug), we
+have reverted the fix until after perl 5.14.0.
+
+This resolves [perl #82542] and other related tickets.
+
+=head2 C<close> on shared pipes
+
+The C<close> function no longer waits for the child process to exit if the
+underlying file descriptor is still in use by another thread, to avoid
+deadlocks. It returns true in such cases.
+
+=head1 Deprecations
+
+=over
+
+=item Deprecated Modules
+
+The following modules will be removed from the core distribution in a
+future release, and should be installed from CPAN instead. Distributions
+on CPAN which require these should add them to their prerequisites. The
+core versions of these modules warnings will issue a deprecation warning.
+
+If you ship a packaged version of Perl, either alone or as part of a
+larger system, then you should carefully consider the repercussions of
+core module deprecations. You may want to consider shipping your default
+build of Perl with packages for some or all deprecated modules which
+install into C<vendor> or C<site> perl library directories. This will
+inhibit the deprecation warnings.
+
+Alternatively, you may want to consider patching F<lib/deprecate.pm>
+to provide deprecation warnings specific to your packaging system
+or distribution of Perl, consistent with how your packaging system
+or distribution manages a staged transition from a release where the
+installation of a single package provides the given functionality, to
+a later release where the system administrator needs to know to install
+multiple packages to get that same functionality.
+
+You can silence these deprecation warnings by installing the modules
+in question from CPAN.  To install the latest version of all of them,
+just install C<Task::Deprecations::5_14>.
+
+=over
+
+=item L<Devel::DProf>
+
+We strongly recommend that you install and used L<Devel::NYTProf> in
+preference, as it offers significantly improved profiling and reporting.
+
+=back
+
+=back
+
+=head2 User-defined case-mapping
+
+This feature is being deprecated due to its many issues, as documented in
+L<perlunicode/User-Defined Case Mappings (for serious hackers only)>.
+It is planned to remove this feature in Perl 5.16.  A CPAN module
+providing improved functionality is being prepared for release by the
+time 5.14 is.
 
 =head1 Modules and Pragmata
 
@@ -92,40 +177,19 @@ See L</Known Problems>, below.)
 
 =item *
 
-C<CPAN::Meta::YAML> 0.003 has been added as a dual-life module.  It supports a
-subset of YAML sufficient for reading and writing META.yml and MYMETA.yml files
-included with CPAN distributions or generated by the module installation
-toolchain. It should not be used for any other general YAML parsing or
-generation task.
+C<CPAN::Meta> version 2.110440 has been added as a dual-life module. It
+provides a standard library to read, interpret and write CPAN distribution
+metadata files (e.g. META.json and META.yml) which describes a
+distribution, its contents, and the requirements for building it and
+installing it. The latest CPAN distribution metadata specification is
+included as C<CPAN::Meta::Spec> and notes on changes in the specification
+over time are given in C<CPAN::Meta::History>.
 
 =item *
 
-C<HTTP::Tiny> 0.009 has been added as a dual-life module.  It is a very
-small, simple HTTP/1.1 client designed for simple GET requests and file
-mirroring.  It has has been added to enable CPAN.pm and CPANPLUS to
-"bootstrap" HTTP access to CPAN using pure Perl without relying on external
-binaries like F<curl> or F<wget>.
-
-=item *
-
-C<JSON::PP> 2.27103 has been added as a dual-life module, for the sake of
-reading F<META.json> files in CPAN distributions.
-
-=item *
-
-C<Module::Metadata> 1.000003 has been added as a dual-life module.  It gathers
-package and POD information from Perl module files.  It is a standalone module
-based on Module::Build::ModuleInfo for use by other module installation
-toolchain components.  Module::Build::ModuleInfo has been deprecated in
-favor of this module instead.
-
-=item *
-
-C<Perl::OSType> 1.002 has been added as a dual-life module.  It maps Perl
-operating system names (e.g. 'dragonfly' or 'MSWin32') to more generic types
-with standardized names (e.g.  "Unix" or "Windows").  It has been refactored
-out of Module::Build and ExtUtils::CBuilder and consolidates such mappings into
-a single location for easier maintenance.
+C<Version::Requirements> version 0.101020 has been added as a dual-life
+module.  It provides a standard library to model and manipulates module
+prerequisites and version constraints as defined in the L<CPAN::Meta::Spec>.
 
 =back
 
@@ -135,127 +199,174 @@ a single location for easier maintenance.
 
 =item *
 
-C<Archive::Extract> has been upgraded from version 0.46 to 0.48
+C<B> has been upgraded from version 1.27 to 1.28.
 
 =item *
 
-C<Archive::Tar> has been upgraded from version 1.74 to 1.76
+C<Carp> has been upgraded from version 1.19 to 1.20.
+
+[perl #82854] It now avoids using regular expressions that cause perl to
+load its Unicode tables, in order to avoid the 'BEGIN not safe after
+errors' error that will ensue if there has been a syntax error.
 
 =item *
 
-C<CGI> has been upgraded from version 3.50 to 3.51
-
-Further improvements have been made to guard against newline injections
-in headers.
+C<CGI> has been upgraded from version 3.51 to 3.52
 
 =item *
 
-C<Compress::Raw::Bzip2> has been upgraded from version 2.031 to 2.033
+C<CPAN> has been upgraded from version 1.94_64 to 1.94_65
+
+Includes support for META.json and MYMETA.json.
 
 =item *
 
-C<Compress::Raw::Zlib> has been upgraded from version 2.030 to 2.033
+C<CPANPLUS> has been upgraded from version 0.9011 to 0.9101
+
+Includes support for META.json and MYMETA.json and a change to
+using Digest::SHA for CPAN checksums.
 
 =item *
 
-C<CPAN> has been upgraded from version 1.94_62 to 1.94_63
+C<deprecate> has been upgraded from version 0.01 to 0.02.
 
 =item *
 
-C<CPANPLUS> has been upgraded from version 0.9010 to 0.9011
+C<diagnostics> has been upgraded from version 1.21 to 1.22.
+
+It now renders pod links slightly better, and has been taught to find
+descriptions for messages that share their descriptions with other
+messages.
 
 =item *
 
-C<CPANPLUS::Dist::Build> has been upgraded from version 0.50 to 0.52
+C<Devel::DProf> has been upgraded from version 20080331.00 to 20110217.00.
+
+Merely loading C<Devel::DProf> now no longer triggers profiling to start.
+C<use Devel::DProf> and C<perl -d:DProf ...> still behave as before and start
+the profiler.
+
+NOTE: C<Devel::DProf> is deprecated and will be removed from a future
+version of Perl. We strongly recommend that you install and use
+L<Devel::NYTProf> instead, as it offers significantly improved
+profiling and reporting.
 
 =item *
 
-C<DB_File> has been upgraded from version 1.820 to 1.821
+C<DynaLoader> has been upgraded from version 1.12 to 1.13.
+
+[perl #84358] It no longer inherits from AutoLoader; hence it no longer
+produces weird error messages for unsuccessful method calls on classes that
+inherit from DynaLoader.
 
 =item *
 
-C<Encode> has been upgraded from version 2.40 to 2.42.
-Now, all 66 Unicode non-characters are treated the same way U+FFFF has
-always been treated; if it was disallowed, all 66 are disallowed; if it
-warned, all 66 warn.
+C<IO::Select> has been upgraded from version 1.17 to 1.18.
+
+It now allows IO::Handle objects (and objects in derived classes) to be
+removed from an IO::Select set even if the underlying file descriptor is
+closed or invalid.
 
 =item *
 
-C<File::Fetch> has been upgraded from version 0.28 to 0.32
+C<IPC::Cmd> has been upgraded from version 0.68 to 0.70
 
 =item *
 
-C<IO::Compress> has been upgraded from version 2.030 to 2.033
+C<HTTP::Tiny> has been upgraded from version 0.009 to 0.010
 
 =item *
 
-C<IPC::Cmd> has been upgraded from version 0.66 to 0.68
+C<Math::BigInt> has been upgraded from version 1.99_04 to 1.992.
 
 =item *
 
-C<Log::Message> has been upgraded from version 0.02 to 0.04
+C<Module::Build> has been upgraded from version 0.3607 to 0.37_05.
+
+A notable change is the deprecation of several modules.
+Module::Build::Version has been deprecated and Module::Build now relies
+directly upon L<version>.  Module::Build::ModuleInfo has been deprecated in
+favor of a standalone copy of it called L<Module::Metadata>.
+Module::Build::YAML has been deprecated in favor of L<CPAN::Meta::YAML>.
+
+Module::Build now also generates META.json and MYMETA.json files
+in accordance with version 2 of the CPAN distribution metadata specification,
+L<CPAN::Meta::Spec>.  The older format META.yml and MYMETA.yml files are
+still generated, as well.
 
 =item *
 
-C<Log::Message::Simple> has been upgraded from version 0.06 to 0.08
+C<Module::Load::Conditional> has been upgraded from version 0.40 to 0.44
 
 =item *
 
-C<Module::Load::Conditional> has been upgraded from version 0.38 to 0.40
+C<Module::Metadata> has been upgraded from version 1.000003 to 1.000004.
 
 =item *
 
-C<Object::Accessor> has been upgraded from version 0.36 to 0.38
+C<overload> has been upgraded from version 1.12 to 1.13.
+
+The documentation has greatly improved. See L</Documentation> below.
 
 =item *
 
-C<Params::Check> has been upgraded from version 0.26 to 0.28
+C<Parse::CPAN::Meta> has been upgraded from version 1.40 to 1.4401.
+
+The latest Parse::CPAN::Meta can now read YAML or JSON files using
+L<CPAN::Meta::YAML> and L<JSON::PP>, which are now part of the Perl core.
 
 =item *
 
-C<Pod::LaTeX> has been upgraded from version 0.58 to 0.59
+C<re> has been upgraded from version 0.16 to 0.17.
+
+It now supports the double-a flag: C<use re '/aa';>
+
+The C<regmust> function used to crash when called on a regular expression
+belonging to a pluggable engine. Now it has been disabled for those.
+
+C<regmust> no longer leaks memory.
 
 =item *
 
-C<Socket> has been updated with new affordances for IPv6,
-including implementations of the C<Socket::getaddrinfo()> and
-C<Socket::getnameinfo()> functions, along with related constants.
+C<Term::UI> has been upgraded from version 0.24 to 0.26
 
 =item *
 
-C<Term::UI> has been upgraded from version 0.20 to 0.24
+C<Unicode::Collate> has been upgraded from version 0.68 to 0.72
+
+This also sees the switch from using the pure-perl version of this
+module to the XS version.`
 
 =item *
 
-C<Thread::Queue> has been upgraded from version 2.11 to 2.12.
+C<VMS::DCLsym> has been upgraded from version 1.04 to 1.05.
+
+Two bugs have been fixed [perl #84086]:
+
+The symbol table name was lost when tying a hash, due to a thinko in
+C<TIEHASH>. The result was that all tied hashes interacted with the
+local symbol table.
+
+Unless a symbol table name had been explicitly specified in the call
+to the constructor, querying the special key ':LOCAL' failed to
+identify objects connected to the local symbol table.
 
 =item *
 
-C<Thread::Semaphore> has been upgraded from version 2.11 to 2.12.
+Added new function C<Unicode::UCD::num()>.  This function will return the
+numeric value of the string passed it; C<undef> if the string in its
+entirety has no safe numeric value.
+
+To be safe, a string must be a single character which has a numeric
+value, or consist entirely of characters that match \d, coming from the
+same Unicode block of digits.  Thus, a mix of  Bengali and Western
+digits would be considered unsafe, as well as a mix of half- and
+full-width digits, but strings consisting entirely of Devanagari digits
+or of "Mathematical Bold" digits would would be safe.
 
 =item *
 
-C<threads> has been upgraded from version 1.81_03 to 1.82
-
-=item *
-
-C<threads::shared> has been upgraded from version 1.35 to 1.36
-
-=item *
-
-C<Time::Local> has been upgraded from version 1.1901_01 to 1.2000.
-
-=item *
-
-C<Unicode::Normalize> has been upgraded from version 1.07 to 1.10
-
-=item *
-
-C<version> has been upgraded from 0.86 to 0.88.
-
-=item *
-
-C<Win32> has been upgraded from version 0.41 to 0.44.
+C<CPAN> has been upgraded from version 1.94_63 to 1.94_64.
 
 =back
 
@@ -263,37 +374,68 @@ C<Win32> has been upgraded from version 0.41 to 0.44.
 
 =head2 Changes to Existing Documentation
 
-=head3 All documentation
-
-=over
-
-=item *
-
-Numerous POD warnings were fixed.
-
-=item *
-
-Many, many spelling errors and typographical mistakes were corrected throughout Perl's core.
-
-=back
-
-=head3 C<perlhack>
+=head3 L<overload>
 
 =over 4
 
 =item *
 
-C<perlhack> was extensively reorganized.
+L<overload>'s documentation has practically undergone a rewrite. It
+is now much more straightforward and clear.
 
 =back
 
-=head3 C<perlfunc>
+=head3 L<perlhack> and perlrepository
 
 =over 4
 
 =item *
 
-It has now been documented that C<ord> returns 0 for an empty string.
+The L<perlhack> and perlrepository documents have been heavily edited and
+split up into several new documents.
+
+The L<perlhack> document is now much shorter, and focuses on the Perl 5
+development process and submitting patches to Perl. The technical content has
+been moved to several new documents, L<perlsource>, L<perlinterp>,
+L<perlhacktut>, and L<perlhacktips>. This technical content has only been
+lightly edited.
+
+The perlrepository document has been renamed to L<perlgit>. This new document
+is just a how-to on using git with the Perl source code. Any other content
+that used to be in perlrepository has been moved to perlhack.
+
+=back
+
+=head3 L<perlfunc>
+
+=over 4
+
+=item *
+
+The documentation for the C<map> function now contains more examples,
+see B<perldoc -f map> (f947627)
+
+=back
+
+=head3 L<perlfaq4>
+
+=over 4
+
+=item *
+
+Examples in L<perlfaq4> have been updated to show the use of
+L<Time::Piece>. (9243591)
+
+=back
+
+=head3 Miscellaneous
+
+=over 4
+
+=item *
+
+Many POD related RT bugs and other issues which are too numerous to
+enumerate have been solved by Michael Stevens.
 
 =back
 
@@ -307,11 +449,28 @@ diagnostic messages, see L<perldiag>.
 
 =over 4
 
-=item *
+=item "\b{" is deprecated; use "\b\{" instead
 
-Performing an operation requiring Unicode semantics (such as case-folding)
-on a Unicode surrogate or a non-Unicode character now triggers a warning:
-'Operation "%s" returns its argument for ...'.
+=item "\B{" is deprecated; use "\B\{" instead
+
+Use of an unescaped "{" immediately following a C<\b> or C<\B> is now
+deprecated so as to reserve its use for Perl itself in a future release.
+
+=item regcomp: Add warning if \p is used under locale. (fb2e24c)
+
+C<\p> implies Unicode matching rules, which are likely going to be
+different than the locale's.
+
+=item panic: gp_free failed to free glob pointer - something is repeatedly re-creating entries
+
+This new error is triggered if a destructor called on an object in a
+typeglob that is being freed creates a new typeglob entry containing an
+object with a destructor that creates a new entry containing an object....
+
+=item refcnt: fd %d%s
+
+This new error only occurs if a internal consistency check fails when a
+pipe is about to be closed.
 
 =back
 
@@ -321,35 +480,60 @@ on a Unicode surrogate or a non-Unicode character now triggers a warning:
 
 =item *
 
-Previously, if none of the C<gethostbyaddr>, C<gethostbyname> and
-C<gethostent> functions were implemented on a given platform, they would
-all die with the message 'Unsupported socket function "gethostent" called',
-with analogous messages for C<getnet*> and C<getserv*>. This has been
-corrected.
+The warning message about regex unrecognized escapes passed through is
+changed to include any literal '{' following the 2-char escape.  e.g.,
+"\q{" will include the { in the message as part of the escape
+(216bfc0).
+
+=item *
+
+C<binmode $fh, ':scalar'> no longer warns (8250589)
+
+Perl will now no longer produce this warning:
+
+    $ perl -we 'open my $f, ">", \my $x; binmode $f, "scalar"'
+    Use of uninitialized value in binmode at -e line 1.
 
 =back
 
 =head1 Utility Changes
 
-=head3 C<perlbug>
+=head3 L<perlbug>
 
 =over 4
 
 =item *
 
-C<perlbug> did not previously generate a From: header, potentially
-resulting in dropped mail. Now it does include that header.
+[perl #82996] Use the user's from address as return-path in perlbug
+
+Many systems these days don't have a valid Internet domain name and
+perlbug@perl.org does not accept email with a return-path that does
+not resolve. Therefore pass the user's address to sendmail so it's
+less likely to get stuck in a mail queue somewhere. (019cfd2)
 
 =back
 
-=head3 C<buildtoc>
+=head1 Configuration and Compilation
 
 =over 4
 
 =item *
 
-F<pod/buildtoc> has been modernized and can now be used to test the
-well-formedness of F<pod/perltoc.pod> automatically.
+make reg_eval_scope.t TODOs consistently fail (daaf7ac)
+
+Some of the TODO tests in reg_eval_scope.t spuriously passed under
+non-threaded builds. Make the tests harder so they always fail.
+
+Since one of the key bugs in (?{..}) is the trashing of the parent pad,
+add some extra lexical vars to the parent scope and check they're still
+there at the end.
+
+=item *
+
+Stop EU::CBuilder's tests from failing in parallel (cbf59d5)
+
+It used to use the same paths for temporary files in all tests. This
+blew up randomly when the tests were run in parallel.
 
 =back
 
@@ -359,93 +543,52 @@ well-formedness of F<pod/perltoc.pod> automatically.
 
 =item *
 
-C<lib/File/DosGlob.t> has been modernized and now uses C<Test::More>.
+F<porting/FindExt.t> now skips all tests on a static (-Uusedl) build
+of perl.
 
 =item *
 
-A new test script, C<t/porting/filenames.t>, makes sure that filenames and
-paths are reasonably portable.
-
-=item *
-
-C<t/porting/diag.t> is now several orders of magnitude faster.
-
-=item *
-
-C<t/porting/buildtoc.t> now tests that the documentation TOC file is current and well-formed.
-
-=item *
-
-C<t/base/while.t> now tests the basics of a while loop with minimal dependencies.
-
-=item *
-
-C<t/cmd/while.t> now uses F<test.pl> for better maintainability.
-
-=item *
-
-C<t/op/split.t> now tests calls to C<split> without any pattern specified.
+F<porting/FindExt.t> now passes on non-Win32 platforms when some
+extensions are built statically.
 
 =back
-
-
 
 =head1 Platform Support
-
-=head2 Discontinued Platforms
-
-=over 4
-
-=item Apollo DomainOS
-
-The last vestiges of support for this platform have been excised from the
-Perl distribution. It was officially discontinued in version 5.12.0. It had
-not worked for years before that.
-
-=item MacOS Classic
-
-The last vestiges of support for this platform have been excised from the
-Perl distribution. It was officially discontinued in an earlier version.
-
-=back
 
 =head2 Platform-Specific Notes
 
 =over 4
 
+=item Windows
 
-=item Cygwin
-
-=over
-
-=item *
-
-Updated MakeMaker to build man pages on cygwin.
+=over 4
 
 =item *
 
-Improved rebase behaviour
-
-If a dll is updated on cygwin reuse the old imagebase address.
-This solves most rebase errors, esp when updating on core dll's.
-See L<http://www.tishler.net/jason/software/rebase/rebase-2.4.2.README> for more information.
-
-=item *
-
-Support the standard cyg dll prefix, which is e.g. needed for FFI's.
-
-=item *
-
-Updated build hints file
+The C<test-prep> build target now depends on F<pod/perltoc.pod> to allow the
+F<t/porting/buildtoc.t> test to run successfully.
 
 =back
 
+=item MirBSD
 
-=item Solaris
+=over 4
 
-DTrace is now supported on Solaris. There used to be build failures, but
-these have been fixed
-L<[perl #73630]|http://rt.perl.org/rt3/Public/Bug/Display.html?id=73630>.
+=item *
+
+[perl #82988] Skip hanging taint.t test on MirBSD 10 (1fb83d0)
+
+Skip a hanging test under MirBSD that was already being skipped under
+OpenBSD.
+
+=item *
+
+Previously if you build perl with a shared libperl.so on MirBSD (the
+default config), it will work up to the installation; however, once
+installed, it will be unable to find libperl. Treat path handling
+like in the other BSD dialects.
+
+=back
 
 =back
 
@@ -455,58 +598,51 @@ L<[perl #73630]|http://rt.perl.org/rt3/Public/Bug/Display.html?id=73630>.
 
 =item *
 
-The opcode bodies for C<chop> and C<chomp> and for C<schop> and C<schomp> have
-been merged. The implementation functions C<Perl_do_chop()> and
-C<Perl_do_chomp()>, never part of the public API, have been merged and moved to
-a static function in F<pp.c>. This shrinks the perl binary slightly, and should
-not affect any code outside the core (unless it is relying on the order of side
-effects when C<chomp> is passed a I<list> of values).
+Fix harmless invalid read in Perl_re_compile() (f6d9469)
+
+[perl #2460] described a case where electric fence reported an invalid
+read. This could be reproduced under valgrind with blead and -e'/x/',
+but only on a non-debugging build.
+
+This was because it was checking for certain pairs of nodes (e.g. BOL + END)
+and wasn't allowing for EXACT nodes, which have the string at the next
+node position when using a naive NEXTOPER(first). In the non-debugging
+build, the nodes aren't initialised to zero, and a 1-char EXACT node isn't
+long enough to spill into the type field of the "next node".
+
+Fix this by only using NEXTOPER(first) when we know the first node is
+kosher.
 
 =item *
 
-Some of the flags parameters to the uvuni_to_utf8_flags() and
-utf8n_to_uvuni() have changed.  This is a result of Perl now allowing
-internal storage and manipulation of code points that are problematic
-in some situations.  Hence, the default actions for these functions has
-been complemented to allow these code points.  The new flags are
-documented in L<perlapi>.  Code that requires the problematic code
-points to be rejected needs to change to use these flags.  Some flag
-names are retained for backward source compatibility, though they do
-nothing, as they are now the default.  However the flags
-C<UNICODE_ALLOW_FDD0>, C<UNICODE_ALLOW_FFFF>, C<UNICODE_ILLEGAL>, and
-C<UNICODE_IS_ILLEGAL> have been removed, as they stem from a
-fundamentally broken model of how the Unicode non-character code points
-should be handled, which is now described in
-L<perlunicode/Non-character code points>.  See also L</Selected Bug Fixes>.
+Break out the generated function Perl_keywords() into F<keywords.c>, a new file. (26ea9e1)
+
+As it and Perl_yylex() both need FEATURE_IS_ENABLED, feature_is_enabled() is
+no longer static, and the two macro definitions move from toke.c to perl.h
+
+Previously, one had to cut and paste the output of perl_keywords.pl into the
+middle of toke.c, and it was not clear that it was generated code.
 
 =item *
 
-Certain shared flags in the C<pmop.op_pmflags> and C<regexp.extflags>
-structures have been removed.  These are: C<Rxf_Pmf_LOCALE>,
-C<Rxf_Pmf_UNICODE>, and C<PMf_LOCALE>.  Instead there are encodes and
-three static in-line functions for accessing the information:
-C<get_regex_charset()>, C<set_regex_charset()>, and C<get_regex_charset_name()>,
-which are defined in the places where the orginal flags were.
+A lot of tests have been ported from Test to Test::More, e.g. in
+3842ad6.
 
 =item *
 
-A new option has been added to C<pv_escape> to dump all characters above
-ASCII in hexadecimal. Before, one could get all characters as hexadecimal
-or the Latin1 non-ASCII as octal
+Increase default PerlIO buffer size. (b83080d)
 
+The previous default size of a PerlIO buffer (4096 bytes) has been increased
+to the larger of 8192 bytes and your local BUFSIZ.  Benchmarks show that doubling
+this decade-old default increases read and write performance in the neighborhood
+of 25% to 50% when using the default layers of perlio on top of unix.  To choose
+a non-default size, such as to get back the old value or to obtain and even
+larger value, configure with:
 
-=item *
+     ./Configure -Accflags=-DPERLIOBUF_DEFAULT_BUFSIZ=N
 
-Generate pp_* prototypes in pp_proto.h, and remove pp.sym
-
-Eliminate the #define pp_foo Perl_pp_foo(pTHX) macros, and update the 13
-locations that relied on them.
-
-regen/opcode.pl now generates prototypes for the PP functions directly, into
-pp_proto.h. It no longer writes pp.sym, and regen/embed.pl no longer reads
-this, removing the only ordering dependency in the regen scripts. opcode.pl
-is now responsible for prototypes for pp_* functions. (embed.pl remains
-responsible for ck_* functions, reading from regen/opcodes)
+where N is the desired size in bytes; it should probably be a multiple of
+your page size.
 
 =back
 
@@ -516,98 +652,130 @@ responsible for ck_* functions, reading from regen/opcodes)
 
 =item *
 
-The handling of Unicode non-characters has changed.
-Previously they were mostly considered illegal, except that only one of
-the 66 of them was known about in places.  The Unicode standard
-considers them legal, but forbids the "open interchange" of them.
-This is part of the change to allow the internal use of any code point
-(see L</Core Enhancements>).  Together, these changes resolve
-L<# 38722|https://rt.perl.org/rt3/Ticket/Display.html?id=38722>,
-L<# 51918|http://rt.perl.org/rt3/Ticket/Display.html?id=51918>,
-L<# 51936|http://rt.perl.org/rt3/Ticket/Display.html?id=51936>,
-L<# 63446|http://rt.perl.org/rt3/Ticket/Display.html?id=63446>
+A Unicode C<\p{}> property match in a regular expression pattern will
+now force Unicode rules for the rest of the regular expression
 
 =item *
 
-Sometimes magic (ties, tainted, etc.) attached to variables could cause an
-object to last longer than it should, or cause a crash if a tied variable
-were freed from within a tie method. These have been fixed
-L<[perl #81230]|http://rt.perl.org/rt3/Public/Bug/Display.html?id=81230>.
+[perl #38456] binmode FH, ":crlf" only modifies top crlf layer (7826b36)
+
+When pushed on top of the stack, crlf will no longer enable crlf layers
+lower in the stack. This will prevent unexpected results.
 
 =item *
 
-Most I/O functions were not warning for unopened handles unless the
-'closed' and 'unopened' warnings categories were both enabled. Now only
-C<use warnings 'unopened'> is necessary to trigger these warnings (as was
-always meant to be the case.
+Fix 'raw' layer for RT #80764 (ecfd064)
+
+Made a ':raw' open do what it advertises to do (first open the file,
+then binmode it), instead of leaving off the top layer.
 
 =item *
 
-C<< E<lt>exprE<gt> >> always respects overloading now if the expression is
-overloaded.
+Use PerlIOBase_open for pop, utf8 and bytes layers (c0888ac)
 
-Due to the way that 'E<lt>E<gt> as glob' was parsed differently from
-'E<lt>E<gt> as filehandle' from 5.6 onwards, something like C<< E<lt>$foo[0]E<gt> >> did
-not handle overloading, even if C<$foo[0]> was an overloaded object. This
-was contrary to the documentation for overload, and meant that C<< E<lt>E<gt> >>
-could not be used as a general overloaded iterator operator.
+Three of Perl's builtin PerlIO layers (C<:pop>, C<:utf8> and
+C<:bytes>) didn't allow stacking when opening a file. For example
+this:
 
-=item *
+    open FH, '>:pop:perlio', 'some.file' or die $!;
 
-Destructors on objects were not called during global destruction on objects
-that were not referenced by any scalars. This could happen if an array
-element were blessed (e.g., C<bless \$a[0]>) or if a closure referenced a
-blessed variable (C<bless \my @a; sub foo { @a }>).
-
-Now there is an extra pass during global destruction to fire destructors on
-any objects that might be left after the usual passes that check for
-objects referenced by scalars
-L<[perl #36347]|http://rt.perl.org/rt3/Public/Bug/Display.html?id=36347>.
+Would throw an error: "Invalid argument". This has been fixed in this
+release.
 
 =item *
 
-A long standing bug has now been fully fixed (partial fixes came in
-earlier releases), in which some Latin-1 non-ASCII characters on
-ASCII-platforms would match both a character class and its complement,
-such as U+00E2 being both in C<\w> and C<\W>, depending on the
-UTF-8-ness of the regular expression pattern and target string.
-Fixing this did expose some bugs in various modules and tests that
-relied on the previous behavior of C<[[:alpha:]]> not ever matching
-U+00FF, "LATIN SMALL LETTER Y WITH DIAERESIS", even when it should, in
-Unicode mode; now it does match when appropriate.
-L<[perl #60156]|http://rt.perl.org/rt3/Ticket/Display.html?id=60156>.
-
-=back
-
-=head1 Known Problems
-
-=over 4
+An issue present since 5.13.1, where s/A/B/ with A utf8 and B
+non-utf8, could cause corruption or segfaults has been
+fixed. (c95ca9b)
 
 =item *
 
-The fix for [perl #81230] causes test failures for C<Tk> version 804.029.
-This is still being investigated.
+String evals will no longer fail after 2 billion scopes have been
+compiled (d1bfb64, 2df5bdd, 0d311cd and 6012dc8)
+
+=item *
+
+[perl #81750] When strict 'refs' mode is off,
+C<%{...}> in rvalue context returns C<undef> if
+its argument is undefined. An optimisation introduced in perl 5.12.0 to
+make C<keys %{...}> faster when used as a boolean did not take this into
+account, causing C<keys %{+undef}> (and C<keys %$foo> when C<$foo> is
+undefined) to be an error, which it should only be in strict mode.
+
+=item *
+
+[perl #83194] Combining the vector (%v) flag and dynamic precision would
+cause sprintf to confuse the order of its arguments, making it treat the
+string as the precision and vice versa.
+
+=item *
+
+[perl #77692] Sometimes the UTF8 length cache would not be reset on a value
+returned by substr, causing C<length(substr($uni_string,...))> to give
+wrong answers. With C<${^UTF8CACHE}> set to -1, it would produce a 'panic'
+error message, too.
+
+=item *
+
+During the restoration of a localised typeglob on scope exit, any
+destructors called as a result would be able to see the typeglob in an
+inconsistent state, containing freed entries, which could result in a
+crash. This would affect code like this:
+
+  local *@;
+  eval { die bless [] }; # puts an object in $@
+  sub DESTROY {
+    local $@; # boom
+  }
+
+Now the glob entries are cleared before any destructors are called. This
+also means that destructors can vivify entries in the glob. So perl tries
+again and, if the entries are re-created too many times, dies with a
+'panic: gp_free...' error message.
+
+=item *
+
+[perl #78494] When pipes are shared between threads, the C<close> function
+(and any implicit close, such as on thread exit) no longer blocks.
+
+=item *
+
+Several contexts no longer allow a Unicode character to begin a word
+that should never begin words, for an example an accent that must follow
+another character previously could precede all other characters.
+
+=item *
+
+Case insensitive matching in regular expressions compiled under C<use
+locale> now works much more sanely when the pattern and/or target string
+are encoded in UTF-8.  Previously, under these conditions the localeness
+was completely lost.  Now, code points above 255 are treated as Unicode,
+but code points between 0 and 255 are treated using the current locale
+rules, regardless of whether the pattern or string are encoded in UTF-8.
+The few case insensitive matches that cross the 255/256 boundary are not
+allowed.  For example, 0xFF does not caselessly match the character at
+0x178, LATIN CAPITAL LETTER Y WITH DIAERESIS, because 0xFF may not be
+LATIN SMALL LETTER Y in the current locale, and Perl has no way of
+knowing if that character even exists in the locale, much less what code
+point it is.
 
 =back
 
 =head1 Acknowledgements
 
-Perl 5.13.9 represents approximately one month of development since
-Perl 5.13.8 and contains approximately 48000 lines of changes across
-809 files from 35 authors and committers:
+Perl 5.13.10 represents approximately one month of development since
+Perl 5.13.9 and contains approximately 63000 lines of changes across
+609 files from 38 authors and committers:
 
-Abigail, Ævar Arnfjörð Bjarmason, brian d foy, Chris 'BinGOs' Williams,
-Craig A. Berry, David Golden, David Leadbeater, David Mitchell, Father
-Chrysostomos, Florian Ragwitz, Gerard Goossen, H.Merijn Brand, Jan
-Dubois, Jerry D. Hedden, Jesse Vincent, John Peacock, Karl Williamson,
-Leon Timmermans, Michael Parker, Michael Stevens, Nicholas Clark,
-Nuno Carvalho, Paul "LeoNerd" Evans, Peter J. Acklam, Peter Martini,
-Rainer Tammer, Reini Urban, Renee Baecker, Ricardo Signes, Robin Barker,
-Tony Cook, Vadim Konovalov, Vincent Pit, Zefram, and Zsbán Ambrus.
-
-Many of the changes included in this version originated in the CPAN
-modules included in Perl's core. We're grateful to the entire CPAN
-community for helping Perl to flourish.
+Abigail, Alexander Hartmaier, brian d foy, Charles Bailey, Chip
+Salzenberg, Chris 'BinGOs' Williams, Craig A. Berry, Curtis Jewell,
+Dave Rolsky, David Golden, David Leadbeater, David Mitchell, David
+Wheeler, Father Chrysostomos, Florian Ragwitz, Franz Fasching, George
+Greer, H.Merijn Brand, Hongwen Qiu, Hugo van der Sanden, Jay Hannah,
+Jesse Vincent, Karl Williamson, Larwan Berke, Leon Timmermans, Michael
+Breen, Michael Stevens, Nicholas Clark, Noirin Shirley, Paul Evans,
+Peter John Acklam, Ricardo Signes, Robin Barker, Steven Schubiger, Tom
+Christiansen, Tony Cook, Zsbán Ambrus and Ævar Arnfjörð Bjarmason
 
 =head1 Reporting Bugs
 

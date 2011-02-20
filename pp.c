@@ -248,7 +248,10 @@ Perl_softref2xv(pTHX_ SV *const sv, const char *const what,
 	    Perl_die(aTHX_ PL_no_usym, what);
     }
     if (!SvOK(sv)) {
-	if (PL_op->op_flags & OPf_REF)
+	if (
+	  PL_op->op_flags & OPf_REF &&
+	  PL_op->op_next->op_type != OP_BOOLKEYS
+	)
 	    Perl_die(aTHX_ PL_no_usym, what);
 	if (ckWARN(WARN_UNINITIALIZED))
 	    report_uninit(sv);
@@ -1045,7 +1048,7 @@ PP(pp_undef)
 
 	    gp_free(MUTABLE_GV(sv));
 	    Newxz(gp, 1, GP);
-	    GvGP(sv) = gp_ref(gp);
+	    GvGP_set(sv, gp_ref(gp));
 	    GvSV(sv) = newSV(0);
 	    GvLINE(sv) = CopLINE(PL_curcop);
 	    GvEGV(sv) = MUTABLE_GV(sv);
@@ -3537,7 +3540,8 @@ PP(pp_substr)
 	}
     }
     SPAGAIN;
-    PUSHs(TARG);		/* avoid SvSETMAGIC here */
+    SvSETMAGIC(TARG);
+    PUSHs(TARG);
     RETURN;
 
 bound_fail:
@@ -6319,6 +6323,8 @@ PP(pp_boolkeys)
     dSP;
     HV * const hv = (HV*)POPs;
     
+    if (SvTYPE(hv) != SVt_PVHV) { XPUSHs(&PL_sv_no); RETURN; }
+
     if (SvRMAGICAL(hv)) {
 	MAGIC * const mg = mg_find((SV*)hv, PERL_MAGIC_tied);
 	if (mg) {

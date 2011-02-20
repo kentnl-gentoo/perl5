@@ -308,6 +308,61 @@ cpan/CPAN/lib/CPAN/Shell.pm
 cpan/CPAN/lib/CPAN/Tarzip.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/URL.pm
 cpan/CPAN/lib/CPAN/Version.pm		Simple math with different flavors of version strings
+cpan/CPAN-Meta/Changes
+cpan/CPAN-Meta/lib/CPAN/Meta/Converter.pm
+cpan/CPAN-Meta/lib/CPAN/Meta/Feature.pm
+cpan/CPAN-Meta/lib/CPAN/Meta/History.pm
+cpan/CPAN-Meta/lib/CPAN/Meta.pm
+cpan/CPAN-Meta/lib/CPAN/Meta/Prereqs.pm
+cpan/CPAN-Meta/lib/CPAN/Meta/Spec.pm
+cpan/CPAN-Meta/lib/CPAN/Meta/Validator.pm
+cpan/CPAN-Meta/t/converter-bad.t
+cpan/CPAN-Meta/t/converter-fail.t
+cpan/CPAN-Meta/t/converter.t
+cpan/CPAN-Meta/t/data-bad/107650337-META.yml
+cpan/CPAN-Meta/t/data-bad/1122575719-META.yml
+cpan/CPAN-Meta/t/data-bad/1206545041-META.yml
+cpan/CPAN-Meta/t/data-bad/1598804075-META.yml
+cpan/CPAN-Meta/t/data-bad/1927486199-META.yml
+cpan/CPAN-Meta/t/data-bad/1985684504-META.yml
+cpan/CPAN-Meta/t/data-bad/1985980974-META.yml
+cpan/CPAN-Meta/t/data-bad/2031017050-META.yml
+cpan/CPAN-Meta/t/data-bad/284247103-META.yml
+cpan/CPAN-Meta/t/data-bad/344981821-META.yml
+cpan/CPAN-Meta/t/data-bad/35478989-META.yml
+cpan/CPAN-Meta/t/data-bad/476602558-META.yml
+cpan/CPAN-Meta/t/data-bad/98042513-META.yml
+cpan/CPAN-Meta/t/data-bad/META-1_0.yml
+cpan/CPAN-Meta/t/data-bad/META-1_1.yml
+cpan/CPAN-Meta/t/data-bad/META-1_2.yml
+cpan/CPAN-Meta/t/data-bad/META-1_3.yml
+cpan/CPAN-Meta/t/data-bad/META-1_4.yml
+cpan/CPAN-Meta/t/data-bad/META-2.json
+cpan/CPAN-Meta/t/data-bad/restrictive-2.json
+cpan/CPAN-Meta/t/data-fail/META-1_0.yml
+cpan/CPAN-Meta/t/data-fail/META-1_1.yml
+cpan/CPAN-Meta/t/data-fail/META-1_2.yml
+cpan/CPAN-Meta/t/data-fail/META-1_3.yml
+cpan/CPAN-Meta/t/data-fail/META-1_4.yml
+cpan/CPAN-Meta/t/data-fail/META-2.json
+cpan/CPAN-Meta/t/data/META-1_0.yml
+cpan/CPAN-Meta/t/data/META-1_1.yml
+cpan/CPAN-Meta/t/data/META-1_2.yml
+cpan/CPAN-Meta/t/data/META-1_3.yml
+cpan/CPAN-Meta/t/data/META-1_4.yml
+cpan/CPAN-Meta/t/data/META-2.json
+cpan/CPAN-Meta/t/data/resources.yml
+cpan/CPAN-Meta/t/data/restricted-2.json
+cpan/CPAN-Meta/t/data/restrictive-1_4.yml
+cpan/CPAN-Meta/t/load-bad.t
+cpan/CPAN-Meta/t/meta-obj.t
+cpan/CPAN-Meta/t/no-index.t
+cpan/CPAN-Meta/t/prereqs-finalize.t
+cpan/CPAN-Meta/t/prereqs-merge.t
+cpan/CPAN-Meta/t/prereqs.t
+cpan/CPAN-Meta/t/repository.t
+cpan/CPAN-Meta/t/save-load.t
+cpan/CPAN-Meta/t/validator.t
 cpan/CPAN-Meta-YAML/lib/CPAN/Meta/YAML.pm		CPAN-Meta-YAML files
 cpan/CPAN-Meta-YAML/t/01_compile.t		CPAN-Meta-YAML files
 cpan/CPAN-Meta-YAML/t/02_basic.t		CPAN-Meta-YAML files
@@ -454,6 +509,30 @@ cpan/DB_File/t/db-hash.t	See if DB_File works
 cpan/DB_File/t/db-recno.t	See if DB_File works
 cpan/DB_File/typemap		Berkeley DB extension interface types
 cpan/DB_File/version.c		Berkeley DB extension interface version check
+cpan/Devel-DProf/bin/dprofpp	Perl code profile post-processor
+cpan/Devel-DProf/Changes		Perl code profiler changelog
+cpan/Devel-DProf/DProf.pm	Perl code profiler
+cpan/Devel-DProf/dprof/test1_t	Perl code profiler tests
+cpan/Devel-DProf/dprof/test1_v	Perl code profiler tests
+cpan/Devel-DProf/dprof/test2_t	Perl code profiler tests
+cpan/Devel-DProf/dprof/test2_v	Perl code profiler tests
+cpan/Devel-DProf/dprof/test3_t	Perl code profiler tests
+cpan/Devel-DProf/dprof/test3_v	Perl code profiler tests
+cpan/Devel-DProf/dprof/test4_t	Perl code profiler tests
+cpan/Devel-DProf/dprof/test4_v	Perl code profiler tests
+cpan/Devel-DProf/dprof/test5_t	Perl code profiler tests
+cpan/Devel-DProf/dprof/test5_v	Perl code profiler tests
+cpan/Devel-DProf/dprof/test6_t	Perl code profiler tests
+cpan/Devel-DProf/dprof/test6_v	Perl code profiler tests
+cpan/Devel-DProf/dprof/test7_t	Perl code profiler tests
+cpan/Devel-DProf/dprof/test7_v	Perl code profiler tests
+cpan/Devel-DProf/dprof/test8_t	Perl code profiler tests
+cpan/Devel-DProf/dprof/test8_v	Perl code profiler tests
+cpan/Devel-DProf/dprof/V.pm	Perl code profiler tests
+cpan/Devel-DProf/DProf.xs	Perl code profiler
+cpan/Devel-DProf/Makefile.PL	Perl code profiler makefile writer
+cpan/Devel-DProf/t/DProf.t	Perl code profiler
+cpan/Devel-DProf/Todo		Perl code profiler todo list
 cpan/Devel-PPPort/apicheck_c.PL		Devel::PPPort apicheck generator
 cpan/Devel-PPPort/Changes		Devel::PPPort changes
 cpan/Devel-PPPort/devel/buildperl.pl	Devel::PPPort perl version builder
@@ -1488,86 +1567,92 @@ cpan/MIME-Base64/t/base64.t		See whether MIME::Base64 works
 cpan/MIME-Base64/t/length.t	See whether MIME::QuotedPrint works
 cpan/MIME-Base64/t/quoted-print.t	See whether MIME::QuotedPrint works
 cpan/MIME-Base64/t/unicode.t		See whether MIME::Base64 works
-cpan/Module-Build/Changes				Module::Build
-cpan/Module-Build/lib/inc/latest.pm			Module::Build
-cpan/Module-Build/lib/inc/latest/private.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/API.pod		Module::Build
-cpan/Module-Build/lib/Module/Build/Authoring.pod	Module::Build
-cpan/Module-Build/lib/Module/Build/Base.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/Bundling.pod		Module::Build
-cpan/Module-Build/lib/Module/Build/Compat.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/ConfigData.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/Config.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/Cookbook.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/Dumper.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/ModuleInfo.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Notes.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/aix.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/Amiga.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/cygwin.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/darwin.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/Default.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/EBCDIC.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/MacOS.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/MPEiX.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/os2.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/RiscOS.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/Unix.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/VMS.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/VOS.pm	Module::Build
-cpan/Module-Build/lib/Module/Build/Platform/Windows.pm	Module::Build
-cpan/Module-Build/lib/Module/Build.pm			Module::Build
-cpan/Module-Build/lib/Module/Build/PodParser.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/PPMMaker.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/Version.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/YAML.pm		Module::Build
-cpan/Module-Build/scripts/config_data			Module::Build
-cpan/Module-Build/t/00-compile.t			Module::Build
-cpan/Module-Build/t/actions/installdeps.t		Module::Build
-cpan/Module-Build/t/add_property.t			Module::Build
-cpan/Module-Build/t/basic.t				Module::Build
-cpan/Module-Build/t/bundled/Tie/CPHash.pm		Module::Build
-cpan/Module-Build/t/bundle_inc.t			Module::Build
-cpan/Module-Build/t/compat/exit.t			Module::Build
-cpan/Module-Build/t/compat.t				Module::Build
-cpan/Module-Build/t/debug.t				Module::Build
-cpan/Module-Build/t/destinations.t			Module::Build
-cpan/Module-Build/t/extend.t				Module::Build
-cpan/Module-Build/t/ext.t				Module::Build
-cpan/Module-Build/t/files.t				Module::Build
-cpan/Module-Build/t/help.t				Module::Build
-cpan/Module-Build/t/install_extra_target.t		Module::Build
-cpan/Module-Build/t/install.t				Module::Build
-cpan/Module-Build/t/lib/DistGen.pm			Module::Build
-cpan/Module-Build/t/lib/MBTest.pm			Module::Build
-cpan/Module-Build/t/manifypods.t			Module::Build
-cpan/Module-Build/t/metadata2.t				Module::Build
-cpan/Module-Build/t/metadata.t				Module::Build
-cpan/Module-Build/t/moduleinfo.t			Module::Build
-cpan/Module-Build/t/mymeta.t				Module::Build
-cpan/Module-Build/t/new_from_context.t			Module::Build
-cpan/Module-Build/t/notes.t				Module::Build
-cpan/Module-Build/t/parents.t				Module::Build
-cpan/Module-Build/t/perl_mb_opt.t			Module::Build
-cpan/Module-Build/t/PL_files.t				Module::Build
-cpan/Module-Build/t/pod_parser.t			Module::Build
-cpan/Module-Build/t/ppm.t				Module::Build
-cpan/Module-Build/t/properties/module_name.t		Module::Build
-cpan/Module-Build/t/properties/needs_compiler.t		Module::Build
-cpan/Module-Build/t/properties/share_dir.t		Module::Build
-cpan/Module-Build/t/README.pod				Module::Build
-cpan/Module-Build/t/resume.t				Module::Build
-cpan/Module-Build/t/runthrough.t			Module::Build
-cpan/Module-Build/t/sample.t				Module::Build
-cpan/Module-Build/t/script_dist.t			Module::Build
-cpan/Module-Build/t/test_file_exts.t			Module::Build
-cpan/Module-Build/t/test_types.t			Module::Build
-cpan/Module-Build/t/test_type.t				Module::Build
-cpan/Module-Build/t/tilde.t				Module::Build
-cpan/Module-Build/t/use_tap_harness.t			Module::Build
-cpan/Module-Build/t/versions.t				Module::Build
-cpan/Module-Build/t/write_default_maniskip.t		Module::Build
-cpan/Module-Build/t/xs.t				Module::Build
+cpan/Module-Build/bin/config_data
+cpan/Module-Build/Changes
+cpan/Module-Build/lib/inc/latest.pm
+cpan/Module-Build/lib/inc/latest/private.pm
+cpan/Module-Build/lib/Module/Build/API.pod
+cpan/Module-Build/lib/Module/Build/Authoring.pod
+cpan/Module-Build/lib/Module/Build/Base.pm
+cpan/Module-Build/lib/Module/Build/Bundling.pod
+cpan/Module-Build/lib/Module/Build/Compat.pm
+cpan/Module-Build/lib/Module/Build/ConfigData.pm
+cpan/Module-Build/lib/Module/Build/Config.pm
+cpan/Module-Build/lib/Module/Build/Cookbook.pm
+cpan/Module-Build/lib/Module/Build/Dumper.pm
+cpan/Module-Build/lib/Module/Build/ModuleInfo.pm
+cpan/Module-Build/lib/Module/Build/Notes.pm
+cpan/Module-Build/lib/Module/Build/Platform/aix.pm
+cpan/Module-Build/lib/Module/Build/Platform/Amiga.pm
+cpan/Module-Build/lib/Module/Build/Platform/cygwin.pm
+cpan/Module-Build/lib/Module/Build/Platform/darwin.pm
+cpan/Module-Build/lib/Module/Build/Platform/Default.pm
+cpan/Module-Build/lib/Module/Build/Platform/EBCDIC.pm
+cpan/Module-Build/lib/Module/Build/Platform/MacOS.pm
+cpan/Module-Build/lib/Module/Build/Platform/MPEiX.pm
+cpan/Module-Build/lib/Module/Build/Platform/os2.pm
+cpan/Module-Build/lib/Module/Build/Platform/RiscOS.pm
+cpan/Module-Build/lib/Module/Build/Platform/Unix.pm
+cpan/Module-Build/lib/Module/Build/Platform/VMS.pm
+cpan/Module-Build/lib/Module/Build/Platform/VOS.pm
+cpan/Module-Build/lib/Module/Build/Platform/Windows.pm
+cpan/Module-Build/lib/Module/Build.pm
+cpan/Module-Build/lib/Module/Build/PodParser.pm
+cpan/Module-Build/lib/Module/Build/PPMMaker.pm
+cpan/Module-Build/lib/Module/Build/Version.pm
+cpan/Module-Build/lib/Module/Build/YAML.pm
+cpan/Module-Build/t/00-compile.t
+cpan/Module-Build/t/actions/installdeps.t
+cpan/Module-Build/t/actions/manifest_skip.t
+cpan/Module-Build/t/add_property.t
+cpan/Module-Build/t/basic.t
+cpan/Module-Build/t/bundled/Software/License.pm
+cpan/Module-Build/t/bundled/Tie/CPHash.pm
+cpan/Module-Build/t/bundle_inc.t
+cpan/Module-Build/t/compat/exit.t
+cpan/Module-Build/t/compat.t
+cpan/Module-Build/t/debug.t
+cpan/Module-Build/t/destinations.t
+cpan/Module-Build/t/extend.t
+cpan/Module-Build/t/ext.t
+cpan/Module-Build/t/files.t
+cpan/Module-Build/t/help.t
+cpan/Module-Build/t/install_extra_target.t
+cpan/Module-Build/t/install.t
+cpan/Module-Build/t/lib/DistGen.pm
+cpan/Module-Build/t/lib/MBTest.pm
+cpan/Module-Build/t/lib/Module/Signature.pm
+cpan/Module-Build/t/lib/Software/License/VaporWare.pm
+cpan/Module-Build/t/manifypods.t
+cpan/Module-Build/t/metadata2.t
+cpan/Module-Build/t/metadata.t
+cpan/Module-Build/t/mymeta.t
+cpan/Module-Build/t/new_from_context.t
+cpan/Module-Build/t/notes.t
+cpan/Module-Build/t/parents.t
+cpan/Module-Build/t/perl_mb_opt.t
+cpan/Module-Build/t/PL_files.t
+cpan/Module-Build/t/pod_parser.t
+cpan/Module-Build/t/ppm.t
+cpan/Module-Build/t/properties/dist_suffix.t
+cpan/Module-Build/t/properties/license.t
+cpan/Module-Build/t/properties/module_name.t
+cpan/Module-Build/t/properties/needs_compiler.t
+cpan/Module-Build/t/properties/release_status.t
+cpan/Module-Build/t/properties/share_dir.t
+cpan/Module-Build/t/README.pod
+cpan/Module-Build/t/resume.t
+cpan/Module-Build/t/runthrough.t
+cpan/Module-Build/t/sample.t
+cpan/Module-Build/t/script_dist.t
+cpan/Module-Build/t/test_file_exts.t
+cpan/Module-Build/t/test_types.t
+cpan/Module-Build/t/test_type.t
+cpan/Module-Build/t/tilde.t
+cpan/Module-Build/t/use_tap_harness.t
+cpan/Module-Build/t/versions.t
+cpan/Module-Build/t/write_default_maniskip.t
+cpan/Module-Build/t/xs.t
 cpan/Module-Load-Conditional/lib/Module/Load/Conditional.pm	Module::Conditional
 cpan/Module-Load-Conditional/t/01_Module_Load_Conditional.t	Module::Conditional tests
 cpan/Module-Load-Conditional/t/02_Parse_Version.t		Module::Load::Conditional tests
@@ -1688,34 +1773,16 @@ cpan/parent/t/parent-classfromfile.t		tests for parent.pm
 cpan/parent/t/parent-pmc.t			tests for parent.pm
 cpan/parent/t/parent-returns-false.t		tests for parent.pm
 cpan/parent/t/parent.t				tests for parent.pm
-cpan/Parse-CPAN-Meta/Changes				Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/lib/Parse/CPAN/Meta.pm		Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/01_compile.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/02_basic.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/03_regression.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/04_scalar.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/05_export.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/11_meta_yml.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/12_plagger.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/13_perl_smith.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/14_yaml_org.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/15_multibyte.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/16_nullrefs.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/17_toolbar.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/18_tap.t				Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/19_errors.t			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/21_bom.t				Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/data/HTML-WebDAO.yml		Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/data/multibyte.yml		Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/data/sample.yml			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/data/Spreadsheet-Read.yml	Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/data/Template-Provider-Unicode-Japanese.yml	Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/data/toolbar.yml			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/data/utf_16_le_bom.yml	Parse::CPAN::Meta - manually generated; see Porting/Maintainers.pl
-cpan/Parse-CPAN-Meta/t/data/utf_16_le_bom.yml.packed	Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/data/vanilla.yml			Parse::CPAN::Meta
-cpan/Parse-CPAN-Meta/t/lib/Parse/CPAN/Meta/Test.pm	Parse::CPAN::Meta testing library
-cpan/Parse-CPAN-Meta/uupacktool.pl			Parse::CPAN::Meta
+cpan/Parse-CPAN-Meta/Changes
+cpan/Parse-CPAN-Meta/lib/Parse/CPAN/Meta.pm
+cpan/Parse-CPAN-Meta/t/01_compile.t
+cpan/Parse-CPAN-Meta/t/02_api.t
+cpan/Parse-CPAN-Meta/t/03_functions.t
+cpan/Parse-CPAN-Meta/t/04_export.t
+cpan/Parse-CPAN-Meta/t/05_errors.t
+cpan/Parse-CPAN-Meta/t/data/VR-META.json
+cpan/Parse-CPAN-Meta/t/data/VR-META.yml
+cpan/Parse-CPAN-Meta/t/lib/Parse/CPAN/Meta/Test.pm
 cpan/PerlIO-via-QuotedPrint/lib/PerlIO/via/QuotedPrint.pm	PerlIO::via::QuotedPrint
 cpan/PerlIO-via-QuotedPrint/t/QuotedPrint.t			PerlIO::via::QuotedPrint
 cpan/Perl-OSType/lib/Perl/OSType.pm			Perl::OSType
@@ -2554,6 +2621,9 @@ cpan/Unicode-Collate/Collate/Locale/zh_pin.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/zh.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/zh_strk.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate.pm			Unicode::Collate
+cpan/Unicode-Collate/Collate.xs			Unicode::Collate
+cpan/Unicode-Collate/Makefile.PL			Unicode::Collate
+cpan/Unicode-Collate/mkheader			Unicode::Collate
 cpan/Unicode-Collate/README			Unicode::Collate
 cpan/Unicode-Collate/t/altern.t			Unicode::Collate
 cpan/Unicode-Collate/t/backwds.t			Unicode::Collate
@@ -2666,6 +2736,13 @@ cpan/Unicode-Normalize/t/proto.t	Unicode::Normalize
 cpan/Unicode-Normalize/t/split.t	Unicode::Normalize
 cpan/Unicode-Normalize/t/test.t		Unicode::Normalize
 cpan/Unicode-Normalize/t/tie.t		Unicode::Normalize
+cpan/Version-Requirements/Changes
+cpan/Version-Requirements/lib/Version/Requirements.pm
+cpan/Version-Requirements/t/accepts.t
+cpan/Version-Requirements/t/basic.t
+cpan/Version-Requirements/t/finalize.t
+cpan/Version-Requirements/t/from-hash.t
+cpan/Version-Requirements/t/merge.t
 cpan/Win32API-File/buffers.h	Win32API::File extension
 cpan/Win32API-File/cFile.h	Win32API::File extension
 cpan/Win32API-File/cFile.pc	Win32API::File extension
@@ -2827,7 +2904,6 @@ dist/Dumpvalue/t/Dumpvalue.t	See if Dumpvalue works
 dist/Env/lib/Env.pm		Map environment into ordinary variables
 dist/Env/t/array.t		See if Env works for arrays
 dist/Env/t/env.t		See if Env works
-dist/ExtUtils-CBuilder/Changes					Changes for ExtUtils::CBuilder
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Base.pm		Base class for ExtUtils::CBuilder methods
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/aix.pm	CBuilder methods for AIX
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/cygwin.pm	CBuilder methods for cygwin
@@ -3280,29 +3356,6 @@ ext/B/t/terse.t		See if B::Terse works
 ext/B/t/walkoptree.t	See if B::walkoptree (and friends) work
 ext/B/t/xref.t		See if B::Xref works
 ext/B/typemap			Compiler backend interface types
-ext/Devel-DProf/Changes		Perl code profiler changelog
-ext/Devel-DProf/DProf.pm	Perl code profiler
-ext/Devel-DProf/dprof/test1_t	Perl code profiler tests
-ext/Devel-DProf/dprof/test1_v	Perl code profiler tests
-ext/Devel-DProf/dprof/test2_t	Perl code profiler tests
-ext/Devel-DProf/dprof/test2_v	Perl code profiler tests
-ext/Devel-DProf/dprof/test3_t	Perl code profiler tests
-ext/Devel-DProf/dprof/test3_v	Perl code profiler tests
-ext/Devel-DProf/dprof/test4_t	Perl code profiler tests
-ext/Devel-DProf/dprof/test4_v	Perl code profiler tests
-ext/Devel-DProf/dprof/test5_t	Perl code profiler tests
-ext/Devel-DProf/dprof/test5_v	Perl code profiler tests
-ext/Devel-DProf/dprof/test6_t	Perl code profiler tests
-ext/Devel-DProf/dprof/test6_v	Perl code profiler tests
-ext/Devel-DProf/dprof/test7_t	Perl code profiler tests
-ext/Devel-DProf/dprof/test7_v	Perl code profiler tests
-ext/Devel-DProf/dprof/test8_t	Perl code profiler tests
-ext/Devel-DProf/dprof/test8_v	Perl code profiler tests
-ext/Devel-DProf/dprof/V.pm	Perl code profiler tests
-ext/Devel-DProf/DProf.xs	Perl code profiler
-ext/Devel-DProf/Makefile.PL	Perl code profiler makefile writer
-ext/Devel-DProf/t/DProf.t	Perl code profiler
-ext/Devel-DProf/Todo		Perl code profiler todo list
 ext/Devel-Peek/Changes		Data debugging tool, changelog
 ext/Devel-Peek/Makefile.PL	Data debugging tool, makefile writer
 ext/Devel-Peek/Peek.pm		Data debugging tool, module and pod
@@ -3763,6 +3816,7 @@ installperl			Perl script to do "make install" dirty work
 INTERN.h			Included before domestic .h files
 intrpvar.h			Variables held in each interpreter instance
 iperlsys.h			Perl's interface to the system
+keywords.c			Perl_keyword(), generated by regen/keywords.pl
 keywords.h			The keyword numbers
 l1_char_class_tab.h		256 word bit table of character classes (for handy.h)
 lib/abbrev.pl			An abbreviation table builder
@@ -4204,7 +4258,6 @@ perlio.c			C code for PerlIO abstraction
 perlio.h			PerlIO abstraction
 perliol.h			PerlIO Layer definition
 perlio.sym			Symbols for PerlIO abstraction
-perl_keyword.pl			A script to generate Perl_keyword() in toke.c
 perlsdio.h			Fake stdio using perlio
 perlsfio.h			Prototype sfio mapping for PerlIO
 perlsh				A poor man's perl shell
@@ -4245,6 +4298,7 @@ pod/perl5115delta.pod		Perl changes in version 5.11.5
 pod/perl5120delta.pod		Perl changes in version 5.12.0
 pod/perl5121delta.pod		Perl changes in version 5.12.1
 pod/perl5122delta.pod		Perl changes in version 5.12.2
+pod/perl5123delta.pod		Perl changes in version 5.12.3
 pod/perl5130delta.pod		Perl changes in version 5.13.0
 pod/perl5131delta.pod		Perl changes in version 5.13.1
 pod/perl5132delta.pod		Perl changes in version 5.13.2
@@ -4254,6 +4308,7 @@ pod/perl5135delta.pod		Perl changes in version 5.13.5
 pod/perl5136delta.pod		Perl changes in version 5.13.6
 pod/perl5137delta.pod		Perl changes in version 5.13.7
 pod/perl5138delta.pod		Perl changes in version 5.13.8
+pod/perl5139delta.pod		Perl changes in version 5.13.9
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl570delta.pod		Perl changes in version 5.7.0
@@ -4311,11 +4366,15 @@ pod/perlfilter.pod		Perl source filters
 pod/perlfork.pod		Perl fork() information
 pod/perlform.pod		Perl formats
 pod/perlfunc.pod		Perl built-in functions
+pod/perlgit.pod			Using git with the Perl repository
 pod/perlglossary.pod		Perl Glossary
 pod/perlgpl.pod			GNU General Public License
 pod/perlguts.pod		Perl internal functions for those doing extensions
 pod/perlhack.pod		Perl hackers guide
+pod/perlhacktips.pod		Tips for Perl core C code hacking
+pod/perlhacktut.pod		Walk through the creation of a simple C code patch
 pod/perlhist.pod		Perl history records
+pod/perlinterp.pod		Overview of the Perl intepreter source and how it works
 pod/perlintro.pod		Perl introduction for beginners
 pod/perliol.pod			C API for Perl's implementation of IO in Layers
 pod/perlipc.pod			Perl interprocess communication
@@ -4348,12 +4407,12 @@ pod/perlref.pod			Perl references, the rest of the story
 pod/perlreftut.pod		Perl references short introduction
 pod/perlreguts.pod		Perl regular expression engine internals
 pod/perlre.pod			Perl regular expressions, the rest of the story
-pod/perlrepository.pod		Perl source repository
 pod/perlrequick.pod		Perl regular expressions quick start
 pod/perlreref.pod		Perl regular expressions quick reference
 pod/perlretut.pod		Perl regular expressions tutorial
 pod/perlrun.pod			Perl execution and options
 pod/perlsec.pod			Perl security
+pod/perlsource.pod		Guide to the Perl source tree
 pod/perlstyle.pod		Perl style guide
 pod/perlsub.pod			Perl subroutines
 pod/perlsyn.pod			Perl syntax
@@ -4421,14 +4480,12 @@ Porting/makerel			Release making utility
 Porting/make_snapshot.pl	Make a tgz snapshot of our tree with a .patch file in it
 Porting/manicheck		Check against MANIFEST
 Porting/manisort		Sort the MANIFEST
-Porting/mk_PL_charclass.pl	Populate the PL_charclass table
 Porting/newtests-perldelta.pl	Generate Perldelta stub for newly added tests
 Porting/perldelta_template.pod	Template for creating new perldelta.pod files
 Porting/perlhist_calculate.pl		Perform calculations to update perlhist
 Porting/podtidy			Reformat pod using Pod::Tidy
 Porting/pumpkin.pod		Guidelines and hints for Perl maintainers
 Porting/README.y2038		Perl notes for the 2038 fix
-Porting/regcharclass.pl		Generate regcharclass.h from inline data
 Porting/release_managers_guide.pod	Release Manager's Guide
 Porting/release_schedule.pod	Schedule for future releases
 Porting/rt_list_patches		A tool to help you apply patches from RT
@@ -4492,18 +4549,20 @@ README.vos			Perl notes for Stratus VOS
 README.win32			Perl notes for Windows
 reentr.c			Reentrant interfaces
 reentr.h			Reentrant interfaces
-regcharclass.h			Generated by Porting/regcharclass.pl
+regcharclass.h			Generated by regen/regcharclass.pl
 regcomp.c			Regular expression compiler
 regcomp.h			Private declarations for above
 regcomp.sym			Data for regnodes.h
 regen/embed.pl			Produces {embed,embedvar,proto}.h, global.sym
 regen/keywords.pl		Program to write keywords.h
+regen/mk_PL_charclass.pl	Populate the PL_charclass table
 regen/opcode.pl			Opcode header generator
 regen/opcodes			Opcode data
 regen/overload.pl		generate overload.h
 regen_perly.pl			generate perly.{act,h,tab} from perly.y
 regen.pl			Run all scripts that (re)generate files
 regen/reentr.pl			Reentrant interfaces
+regen/regcharclass.pl		Generate regcharclass.h from inline data
 regen/regcomp.pl		Builder of regnodes.h
 regen/regen_lib.pl		Common file routines for generator scripts
 regen/warnings.pl		Program to write warnings.h and lib/warnings.pm
@@ -4936,6 +4995,7 @@ t/porting/args_assert.t		Check that all PERL_ARGS_ASSERT* macros are used
 t/porting/authors.t		Check that all authors have been acknowledged
 t/porting/buildtoc.t		Check that various pod lists are consistent
 t/porting/checkcase.t		Check whether we are case-insensitive-fs-friendly
+t/porting/cmp_version.t		Test whether all changed module files have their VERSION bumped
 t/porting/diag.t		Test completeness of perldiag.pod
 t/porting/dual-life.t		Check that dual-life bins are in utils/
 t/porting/exec-bit.t		Check that exec-bit bins are identified
@@ -5177,6 +5237,7 @@ win32/win32thread.h		Win32 port mapping to threads
 win32/wince.c			WinCE port
 win32/wince.h			WinCE port
 win32/wincesck.c		WinCE port
+write_buildcustomize.pl		Generate lib/buildcustomize.pl
 x2p/a2p.c			Output of a2p.y run through byacc
 x2p/a2p.h			Global declarations
 x2p/a2p.pod			Pod for awk to perl translator

@@ -79,10 +79,10 @@ there, not the list construction version of the comma.  That means it
 was never a list to start with.
 
 In general, functions in Perl that serve as wrappers for system calls ("syscalls")
-of the same name (like chown(2), fork(2), closedir(2), etc.) all return
+of the same name (like chown(2), fork(2), closedir(2), etc.) return
 true when they succeed and C<undef> otherwise, as is usually mentioned
 in the descriptions below.  This is different from the C interfaces,
-which return C<-1> on failure.  Exceptions to this rule are C<wait>,
+which return C<-1> on failure.  Exceptions to this rule include C<wait>,
 C<waitpid>, and C<syscall>.  System calls also set the special C<$!>
 variable on failure.  Other functions do not, except accidentally.
 
@@ -146,7 +146,7 @@ C<readdir>, C<rewinddir>, C<say>, C<seek>, C<seekdir>, C<select>, C<syscall>,
 C<sysread>, C<sysseek>, C<syswrite>, C<tell>, C<telldir>, C<truncate>,
 C<warn>, C<write>
 
-=item Functions for fixed length data or records
+=item Functions for fixed-length data or records
 
 C<pack>, C<read>, C<syscall>, C<sysread>, C<syswrite>, C<unpack>, C<vec>
 
@@ -349,6 +349,20 @@ Example:
         #...
     }
 
+Note that C<-s/a/b/> does not do a negated substitution.  Saying
+C<-exp($foo)> still works as expected, however: only single letters
+following a minus are interpreted as file tests.
+
+These operators are exempt from the "looks like a function rule" described
+above. That is, an opening parenthesis after the operator does not affect
+how much of the following code constitutes the argument. Put the opening
+parentheses before the operator to separate it from code that follows (this
+applies only to operators with higher precedence than unary operators, of
+course):
+
+    -s($file) + 1024   # probably wrong; same as -s($file + 1024)
+    (-s $file) + 1024  # correct
+
 The interpretation of the file permission operators C<-r>, C<-R>,
 C<-w>, C<-W>, C<-x>, and C<-X> is by default based solely on the mode
 of the file and the uids and gids of the user.  There may be other
@@ -367,8 +381,8 @@ or temporarily set their effective uid to something else.
 
 If you are using ACLs, there is a pragma called C<filetest> that may
 produce more accurate results than the bare stat() mode bits.
-When under the C<use filetest 'access'> the above-mentioned filetests
-test whether the permission can (not) be granted using the
+When under C<use filetest 'access'> the above-mentioned filetests
+test whether the permission can(not) be granted using the
 access(2) family of system calls.  Also note that the C<-x> and C<-X> may
 under this pragma return true even if there are no execute permission
 bits set (nor any extra execute permission ACLs).  This strangeness is
@@ -377,10 +391,6 @@ the implementation of C<use filetest 'access'>, the C<_> special
 filehandle won't cache the results of the file tests when this pragma is
 in effect.  Read the documentation for the C<filetest> pragma for more
 information.
-
-Note that C<-s/a/b/> does not do a negated substitution.  Saying
-C<-exp($foo)> still works as expected, however: only single letters
-following a minus are interpreted as file tests.
 
 The C<-T> and C<-B> switches work as follows.  The first block or so of the
 file is examined for odd characters such as strange control codes or
@@ -393,7 +403,7 @@ file, or a file at EOF when testing a filehandle.  Because you have to
 read a file to do the C<-T> test, on most occasions you want to use a C<-f>
 against the file first, as in C<next unless -f $file && -T $file>.
 
-If any of the file tests (or either the C<stat> or C<lstat> operators) are given
+If any of the file tests (or either the C<stat> or C<lstat> operator) is given
 the special filehandle consisting of a solitary underline, then the stat
 structure of the previous file test (or stat operator) is used, saving
 a system call.  (This doesn't work with C<-t>, and you need to remember
@@ -910,6 +920,10 @@ on the pipe to exit--in case you wish to look at the output of the pipe
 afterwards--and implicitly puts the exit status value of that command into
 C<$?> and C<${^CHILD_ERROR_NATIVE}>.
 
+If there are multiple threads running, C<close> on a filehandle from a
+piped open returns true without waiting for the child process to terminate,
+if the filehandle is still open in another thread.
+
 Closing the read end of a pipe before the process writing to it at the
 other end is done writing results in the writer receiving a SIGPIPE.  If
 the other end can't handle that, be sure to read all the data before
@@ -1267,7 +1281,7 @@ C<die> raises an exception. Inside an C<eval> the error message is stuffed
 into C<$@> and the C<eval> is terminated with the undefined value.
 If the exception is outside of all enclosing C<eval>s, then the uncaught
 exception prints LIST to C<STDERR> and exits with a non-zero value. If you
-need to exit the process with a specific exit code, see L<exit>.
+need to exit the process with a specific exit code, see L</exit>.
 
 Equivalent examples:
 
@@ -1351,7 +1365,7 @@ You can arrange for a callback to be run just before the C<die>
 does its deed, by setting the C<$SIG{__DIE__}> hook.  The associated
 handler is called with the error text and can change the error
 message, if it sees fit, by calling C<die> again.  See
-L<perlvar/$SIG{expr}> for details on setting C<%SIG> entries, and
+L<perlvar/%SIG> for details on setting C<%SIG> entries, and
 L<"eval BLOCK"> for some examples.  Although this feature was 
 to be run only right before your program was to exit, this is not
 currently so: the C<$SIG{__DIE__}> hook is currently called
@@ -1397,9 +1411,9 @@ is just like
     eval `cat stat.pl`;
 
 except that it's more efficient and concise, keeps track of the current
-filename for error messages, searches the @INC directories, and updates
-C<%INC> if the file is found.  See L<perlvar/Predefined Names> for these
-variables.  It also differs in that code evaluated with C<do FILENAME>
+filename for error messages, searches the C<@INC> directories, and updates
+C<%INC> if the file is found.  See L<perlvar/@INC> and L<perlvar/%INC> for
+these variables.  It also differs in that code evaluated with C<do FILENAME>
 cannot see lexicals in the enclosing scope; C<eval STRING> does.  It's the
 same, however, in that it does reparse the file every time you call it,
 so you probably don't want to do this inside a loop.
@@ -1605,7 +1619,7 @@ See L</warn>, L<perlvar>, L<warnings> and L<perllexwarn>.
 
 Note that, because C<eval> traps otherwise-fatal errors, it is useful for
 determining whether a particular feature (such as C<socket> or C<symlink>)
-is implemented.  It is also Perl's exception trapping mechanism, where
+is implemented.  It is also Perl's exception-trapping mechanism, where
 the die operator is used to raise exceptions.
 
 If you want to trap errors when loading an XS module, some problems with
@@ -1676,8 +1690,9 @@ normally you I<would> like to use double quotes, except that in this
 particular situation, you can just use symbolic references instead, as
 in case 6.
 
-The assignment to C<$@> occurs before restoration of localised variables,
-which means a temporary is required if you want to mask some but not all
+Before Perl 5.14, the assignment to C<$@> occurred before restoration 
+of localised variables, which means that for your code to run on older
+versions, a temporary is required if you want to mask some but not all
 errors:
 
     # alter $@ on nefarious repugnancy only
@@ -1686,7 +1701,7 @@ errors:
        {
           local $@; # protect existing $@
           eval { test_repugnancy() };
-          # $@ =~ /nefarious/ and die $@; # DOES NOT WORK
+          # $@ =~ /nefarious/ and die $@; # Perl 5.14 and higher only
           $@ =~ /nefarious/ and $e = $@;
        }
        die $e if defined $e
@@ -2771,7 +2786,8 @@ respectively.
 =item Otherwise, If EXPR has the UTF8 flag set
 
 If the current package has a subroutine named C<ToLower>, it will be used to
-change the case (See L<perlunicode/User-Defined Case Mappings>.)
+change the case
+(See L<perlunicode/"User-Defined Case Mappings (for serious hackers only)">.)
 Otherwise Unicode semantics are used for the case change.
 
 =item Otherwise, if C<use locale> is in effect
@@ -2996,9 +3012,26 @@ total number of elements so generated.  Evaluates BLOCK or EXPR in
 list context, so each element of LIST may produce zero, one, or
 more elements in the returned value.
 
-    @chars = map(chr, @nums);
+    @chars = map(chr, @numbers);
 
-translates a list of numbers to the corresponding characters.  And
+translates a list of numbers to the corresponding characters.
+
+    my @squares = map { $_ * $_ } @numbers;
+
+translates a list of numbers to their squared values.
+
+    my @squares = map { $_ > 5 ? ($_ * $_) : () } @numbers;
+
+shows that number of returned elements can differ from the number of
+input elements. To omit an element, return an empty list ().
+This could also be achieved by writing
+
+    my @squares = map { $_ * $_ } grep { $_ > 5 } @numbers;
+
+which makes the intention more clear.
+
+Map always returns a list which can be assigned to a hash where the elements
+become key/value pairs. See L<perldata> for more details.
 
     %hash = map { get_a_key_for($_) => $_ } @array;
 
@@ -3281,7 +3314,8 @@ replace dash (C<'-'>) with the command.
 See L<perlipc/"Using open() for IPC"> for more examples of this.
 (You are not allowed to C<open> to a command that pipes both in I<and>
 out, but see L<IPC::Open2>, L<IPC::Open3>, and
-L<perlipc/"Bidirectional Communication"> for alternatives.)
+L<perlipc/"Bidirectional Communication with Another Process"> for
+alternatives.)
 
 In the form of pipe opens taking three or more arguments, if LIST is specified
 (extra arguments after the command name) then LIST becomes arguments
@@ -4321,7 +4355,8 @@ unless you are very careful.  In addition, note that Perl's pipes use
 IO buffering, so you may need to set C<$|> to flush your WRITEHANDLE
 after each command, depending on the application.
 
-See L<IPC::Open2>, L<IPC::Open3>, and L<perlipc/"Bidirectional Communication">
+See L<IPC::Open2>, L<IPC::Open3>, and
+L<perlipc/"Bidirectional Communication with Another Process">
 for examples of such things.
 
 On systems that support a close-on-exec flag on files, that flag is set
@@ -7009,7 +7044,7 @@ The behavior is undefined if LENGTH is greater than the length of the
 file.
 
 The position in the file of FILEHANDLE is left unchanged.  You may want to
-call L<seek> before writing to the file.
+call L<seek|/"seek FILEHANDLE,POSITION,WHENCE"> before writing to the file.
 
 =item uc EXPR
 X<uc> X<uppercase> X<toupper>

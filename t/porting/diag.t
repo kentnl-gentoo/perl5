@@ -70,7 +70,7 @@ my $cur_entry;
 open my $diagfh, "<", $pod
   or die "Can't open $pod: $!";
 
-my $category_re = qr/ [a-z0-9]+?/;      # Note: requires an initial space
+my $category_re = qr/ [a-z0-9_]+?/;      # Note: requires an initial space
 my $severity_re = qr/ . (?: \| . )* /x; # A severity is a single char, but can
                                         # be of the form 'S|P|W'
 while (<$diagfh>) {
@@ -432,7 +432,6 @@ Invalid type '%c' in pack
 Invalid type '%c' in %s
 Invalid type '%c' in unpack
 Invalid type ',' in %s
-It is proposed that "\c{" no longer be valid. It has historically evaluated to  ";".  If you disagree with this proposal, send email to perl5-porters@perl.org Otherwise, or in the meantime, you can work around this failure by changing "\c{" to ";"
 'j' not supported on this platform
 'J' not supported on this platform
 leaving effective gid failed
@@ -460,11 +459,6 @@ Perls since %s too modern--this is %s, stopped
 ptr wrong %p != %p fl=%x nl=%p e=%p for %d
 Recompile perl with -DDEBUGGING to use -D switch (did you mean -d ?)
 Recursive call to Perl_load_module in PerlIO_find_layer
-refcnt_dec: fd %d < 0
-refcnt_dec: fd %d: %d <= 0
-refcnt_dec: fd %d >= refcnt_size %d
-refcnt_inc: fd %d < 0
-refcnt_inc: fd %d: %d <= 0
 Reversed %c= operator
 Runaway prototype
 %s(%.0

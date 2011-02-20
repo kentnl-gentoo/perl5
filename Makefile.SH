@@ -419,7 +419,7 @@ esac
 ## In the following dollars and backticks do not need the extra backslash.
 $spitshell >>$Makefile <<'!NO!SUBS!'
 
-private = preplibrary $(CONFIGPM) $(CONFIGPOD) lib/ExtUtils/Miniperl.pm git_version.h
+private = preplibrary $(CONFIGPM) $(CONFIGPOD) lib/ExtUtils/Miniperl.pm git_version.h lib/buildcustomize.pl
 
 # Files to be built with variable substitution before miniperl
 # is available.
@@ -446,14 +446,14 @@ h = $(h1) $(h2) $(h3) $(h4) $(h5)
 
 c1 = av.c scope.c op.c doop.c doio.c dump.c gv.c hv.c mg.c reentr.c mro.c perl.c
 c2 = perly.c pp.c pp_hot.c pp_ctl.c pp_sys.c regcomp.c regexec.c utf8.c sv.c
-c3 = taint.c toke.c util.c deb.c run.c universal.c pad.c globals.c
+c3 = taint.c toke.c util.c deb.c run.c universal.c pad.c globals.c keywords.c
 c4 = perlio.c perlapi.c numeric.c mathoms.c locale.c pp_pack.c pp_sort.c
 c5 = $(madlysrc) $(mallocsrc)
 
 c = $(c1) $(c2) $(c3) $(c4) $(c5) miniperlmain.c opmini.c perlmini.c
 
 obj0 = op$(OBJ_EXT) perl$(OBJ_EXT)
-obj1 = $(madlyobj) $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) pad$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT) mro$(OBJ_EXT)
+obj1 = $(madlyobj) $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) pad$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT) mro$(OBJ_EXT) keywords$(OBJ_EXT)
 obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
 obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT) perlapi$(OBJ_EXT) numeric$(OBJ_EXT) mathoms$(OBJ_EXT) locale$(OBJ_EXT) pp_pack$(OBJ_EXT) pp_sort$(OBJ_EXT)
 
@@ -462,7 +462,7 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5139delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl51310delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 
 Icwd = -Idist/Cwd -Idist/Cwd/lib
@@ -985,7 +985,7 @@ esac
 $spitshell >>$Makefile <<'!NO!SUBS!'
 
 .PHONY: preplibrary
-preplibrary: $(MINIPERL_EXE) $(CONFIGPM) lib/re.pm $(PREPLIBRARY_LIBPERL)
+preplibrary: $(MINIPERL_EXE) $(CONFIGPM) $(PREPLIBRARY_LIBPERL)
 
 $(CONFIGPM_FROM_CONFIG_SH): $(CONFIGPOD)
 
@@ -995,9 +995,8 @@ $(CONFIGPOD): config.sh $(MINIPERL_EXE) configpm Porting/Glossary lib/Config_git
 lib/ExtUtils/Miniperl.pm: miniperlmain.c $(MINIPERL_EXE) minimod.pl $(CONFIGPM)
 	$(MINIPERL) minimod.pl > lib/ExtUtils/Miniperl.pm
 
-lib/re.pm: ext/re/re.pm
-	@-rm -f $@
-	cp ext/re/re.pm lib/re.pm
+lib/buildcustomize.pl: $(MINIPERL_EXE) write_buildcustomize.pl
+	$(MINIPERL) write_buildcustomize.pl >lib/buildcustomize.pl
 
 unidatafiles $(unidatafiles) pod/perluniprops.pod: uni.data
 
@@ -1021,8 +1020,8 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) $(Icwd) pod/perlmodlib.PL -q
 
-pod/perl5139delta.pod: pod/perldelta.pod
-	$(LNS) perldelta.pod pod/perl5139delta.pod
+pod/perl51310delta.pod: pod/perldelta.pod
+	$(LNS) perldelta.pod pod/perl51310delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1117,7 +1116,6 @@ CHMOD_W = chmod +w
 # The following files are generated automatically
 #	embed.pl:	proto.h embed.h embedvar.h global.sym
 #			perlapi.h perlapi.c 
-#	keywords.pl:	keywords.h
 #	opcode.pl:	opcode.h opnames.h pp_proto.h
 #	regcomp.pl:	regnodes.h
 #	warnings.pl:	warnings.h lib/warnings.pm
@@ -1128,7 +1126,7 @@ CHMOD_W = chmod +w
 # with your existing copy of perl
 # (make regen_headers is kept for backwards compatibility)
 
-AUTOGEN_FILES = keywords.h opcode.h opnames.h pp_proto.h proto.h \
+AUTOGEN_FILES = opcode.h opnames.h pp_proto.h proto.h \
 		embed.h embedvar.h global.sym \
 		perlapi.h perlapi.c regnodes.h \
 		warnings.h lib/warnings.pm
@@ -1168,16 +1166,16 @@ manicheck:	FORCE
 #
 # DynaLoader may be needed for extensions that use Makefile.PL.
 
-$(DYNALOADER):	$(MINIPERL_EXE) preplibrary FORCE $(nonxs_ext)
+$(DYNALOADER):	$(MINIPERL_EXE) lib/buildcustomize.pl preplibrary FORCE $(nonxs_ext)
 	$(MINIPERL) make_ext.pl $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL) LINKTYPE=static $(STATIC_LDFLAGS)
 
-d_dummy $(dynamic_ext):	$(MINIPERL_EXE) preplibrary makeppport $(DYNALOADER) FORCE $(PERLEXPORT)
+d_dummy $(dynamic_ext):	$(MINIPERL_EXE) lib/buildcustomize.pl preplibrary makeppport $(DYNALOADER) FORCE $(PERLEXPORT)
 	$(MINIPERL) make_ext.pl $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL) LINKTYPE=dynamic
 
-s_dummy $(static_ext):	$(MINIPERL_EXE) preplibrary makeppport $(DYNALOADER) FORCE
+s_dummy $(static_ext):	$(MINIPERL_EXE) lib/buildcustomize.pl preplibrary makeppport $(DYNALOADER) FORCE
 	$(MINIPERL) make_ext.pl $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL) LINKTYPE=static $(STATIC_LDFLAGS)
 
-n_dummy $(nonxs_ext):	$(MINIPERL_EXE) preplibrary FORCE
+n_dummy $(nonxs_ext):	$(MINIPERL_EXE) lib/buildcustomize.pl preplibrary FORCE
 	$(MINIPERL) make_ext.pl $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
 !NO!SUBS!
 
@@ -1227,7 +1225,6 @@ _mopup:
 	-rm -f perl.Addrs perl.Counts t/perl.Addrs t/perl.Counts *perl.xok
 	-rm -f cygwin.c libperl*.def libperl*.dll cygperl*.dll *.exe.stackdump
 	-rm -f $(PERL_EXE) $(MINIPERL_EXE) $(LIBPERL) libperl.* microperl
-	-rm -f opcode.h-old opnames.h-old pp_proto.h-old
 	-rm -f config.arch config.over $(DTRACE_H) runtests
 
 # Do not 'make _tidy' directly.
@@ -1272,7 +1269,7 @@ _cleaner2:
 	rm -f lib/.exists lib/*/.exists lib/*/*/.exists
 	rm -f h2ph.man pstruct
 	rm -rf .config
-	rm -f preload lib/re.pm
+	rm -f preload
 	rm -rf lib/Encode lib/Compress lib/Hash lib/re
 	rm -rf lib/TAP lib/Module/Pluggable lib/App
 	rm -rf lib/mro
@@ -1467,7 +1464,7 @@ minitest.prep:
 
 # Can't depend on lib/Config.pm because that might be where miniperl
 # is crashing.
-minitest: $(MINIPERL_EXE) lib/re.pm minitest.prep
+minitest: $(MINIPERL_EXE) minitest.prep
 	- cd t && (rm -f $(PERL_EXE); $(LNS) ../$(MINIPERL_EXE) $(PERL_EXE)) \
 		&& $(RUN_PERL) TEST -minitest base/*.t comp/*.t cmd/*.t run/*.t io/*.t re/*.t op/*.t uni/*.t </dev/tty
 
@@ -1486,7 +1483,7 @@ test-reonly: test_prep_reonly
 # Porting tests (well-formedness of pod, manifest, etc)
 
 test_porting: test_prep
-	cd t && $(RUN_PERL) harness porting/*.t
+	cd t && $(RUN_PERL) harness porting/*.t ../lib/diagnostics.t
 
 # Handy way to run perlbug -ok without having to install and run the
 # installed perlbug. We don't re-run the tests here - we trust the user.

@@ -298,7 +298,7 @@ Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
     SvIOK_off(gv);
     isGV_with_GP_on(gv);
 
-    GvGP(gv) = Perl_newGP(aTHX_ gv);
+    GvGP_set(gv, Perl_newGP(aTHX_ gv));
     GvSTASH(gv) = stash;
     if (stash)
 	Perl_sv_add_backref(aTHX_ MUTABLE_SV(stash), MUTABLE_SV(gv));
@@ -319,7 +319,7 @@ Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
 	    cv = newCONSTSUB(stash, (name0 ? name0 : name), has_constant);
 	    /* In case op.c:S_process_special_blocks stole it: */
 	    if (!GvCV(gv))
-		GvCV(gv) = (CV *)SvREFCNT_inc_simple_NN(cv);
+		GvCV_set(gv, (CV *)SvREFCNT_inc_simple_NN(cv));
 	    assert(GvCV(gv) == cv); /* newCONSTSUB should have set this */
 	    if (name0)
 		Safefree(name0);
@@ -331,7 +331,7 @@ Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
 	} else {
 	    (void) start_subparse(0,0);	/* Create empty CV in compcv. */
 	    cv = PL_compcv;
-	    GvCV(gv) = cv;
+	    GvCV_set(gv,cv);
 	}
 	LEAVE;
 
@@ -456,7 +456,8 @@ Perl_gv_fetchmeth(pTHX_ HV *stash, const char *name, STRLEN len, I32 level)
             else {
                 /* stale cache entry, junk it and move on */
 	        SvREFCNT_dec(cand_cv);
-	        GvCV(topgv) = cand_cv = NULL;
+	        GvCV_set(topgv, NULL);
+		cand_cv = NULL;
 	        GvCVGEN(topgv) = 0;
             }
         }
@@ -506,7 +507,7 @@ Perl_gv_fetchmeth(pTHX_ HV *stash, const char *name, STRLEN len, I32 level)
             if (topgv && (GvREFCNT(topgv) == 1) && (CvROOT(cand_cv) || CvXSUB(cand_cv))) {
                   if ((old_cv = GvCV(topgv))) SvREFCNT_dec(old_cv);
                   SvREFCNT_inc_simple_void_NN(cand_cv);
-                  GvCV(topgv) = cand_cv;
+                  GvCV_set(topgv, cand_cv);
                   GvCVGEN(topgv) = topgen_cmp;
             }
 	    return candidate;
@@ -521,7 +522,7 @@ Perl_gv_fetchmeth(pTHX_ HV *stash, const char *name, STRLEN len, I32 level)
             if (topgv && (GvREFCNT(topgv) == 1) && (CvROOT(cand_cv) || CvXSUB(cand_cv))) {
                   if ((old_cv = GvCV(topgv))) SvREFCNT_dec(old_cv);
                   SvREFCNT_inc_simple_void_NN(cand_cv);
-                  GvCV(topgv) = cand_cv;
+                  GvCV_set(topgv, cand_cv);
                   GvCVGEN(topgv) = topgen_cmp;
             }
             return candidate;
@@ -1084,7 +1085,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 			GvMULTI_on(gv);
 		}
 		if (key != name)
-		    Safefree((char *)key);
+		    Safefree(key);
 		if (!gv || gv == (const GV *)&PL_sv_undef)
 		    return NULL;
 
@@ -1693,6 +1694,7 @@ Perl_gp_free(pTHX_ GV *gv)
 {
     dVAR;
     GP* gp;
+    int attempts = 100;
 
     if (!gv || !isGV_with_GP(gv) || !(gp = GvGP(gv)))
 	return;
@@ -1705,29 +1707,65 @@ Perl_gp_free(pTHX_ GV *gv)
     if (--gp->gp_refcnt > 0) {
 	if (gp->gp_egv == gv)
 	    gp->gp_egv = 0;
-	GvGP(gv) = 0;
+	GvGP_set(gv, NULL);
         return;
     }
 
-    if (gp->gp_file_hek)
-	unshare_hek(gp->gp_file_hek);
-    SvREFCNT_dec(gp->gp_sv);
-    SvREFCNT_dec(gp->gp_av);
-    /* FIXME - another reference loop GV -> symtab -> GV ?
-       Somehow gp->gp_hv can end up pointing at freed garbage.  */
-    if (gp->gp_hv && SvTYPE(gp->gp_hv) == SVt_PVHV) {
-	const char *hvname = HvNAME_get(gp->gp_hv);
+    while (1) {
+      /* Copy and null out all the glob slots, so destructors do not see
+         freed SVs. */
+      HEK * const file_hek = gp->gp_file_hek;
+      SV  * const sv       = gp->gp_sv;
+      AV  * const av       = gp->gp_av;
+      HV  * const hv       = gp->gp_hv;
+      IO  * const io       = gp->gp_io;
+      CV  * const cv       = gp->gp_cv;
+      CV  * const form     = gp->gp_form;
+
+      gp->gp_file_hek = NULL;
+      gp->gp_sv       = NULL;
+      gp->gp_av       = NULL;
+      gp->gp_hv       = NULL;
+      gp->gp_io       = NULL;
+      gp->gp_cv       = NULL;
+      gp->gp_form     = NULL;
+
+      if (file_hek)
+	unshare_hek(file_hek);
+
+      SvREFCNT_dec(sv);
+      SvREFCNT_dec(av);
+      /* FIXME - another reference loop GV -> symtab -> GV ?
+         Somehow gp->gp_hv can end up pointing at freed garbage.  */
+      if (hv && SvTYPE(hv) == SVt_PVHV) {
+	const char *hvname = HvNAME_get(hv);
 	if (PL_stashcache && hvname)
-	    (void)hv_delete(PL_stashcache, hvname, HvNAMELEN_get(gp->gp_hv),
+	    (void)hv_delete(PL_stashcache, hvname, HvNAMELEN_get(hv),
 		      G_DISCARD);
-	SvREFCNT_dec(gp->gp_hv);
+	SvREFCNT_dec(hv);
+      }
+      SvREFCNT_dec(io);
+      SvREFCNT_dec(cv);
+      SvREFCNT_dec(form);
+
+      if (!gp->gp_file_hek
+       && !gp->gp_sv
+       && !gp->gp_av
+       && !gp->gp_hv
+       && !gp->gp_io
+       && !gp->gp_cv
+       && !gp->gp_form) break;
+
+      if (--attempts == 0) {
+	Perl_die(aTHX_
+	  "panic: gp_free failed to free glob pointer - "
+	  "something is repeatedly re-creating entries"
+	);
+      }
     }
-    SvREFCNT_dec(gp->gp_io);
-    SvREFCNT_dec(gp->gp_cv);
-    SvREFCNT_dec(gp->gp_form);
 
     Safefree(gp);
-    GvGP(gv) = 0;
+    GvGP_set(gv, NULL);
 }
 
 int

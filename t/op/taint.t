@@ -17,7 +17,7 @@ use Config;
 use File::Spec::Functions;
 
 BEGIN { require './test.pl'; }
-plan tests => 340;
+plan tests => 687;
 
 $| = 1;
 
@@ -48,6 +48,7 @@ my $Is_NetWare  = $^O eq 'NetWare';
 my $Is_Dos      = $^O eq 'dos';
 my $Is_Cygwin   = $^O eq 'cygwin';
 my $Is_OpenBSD  = $^O eq 'openbsd';
+my $Is_MirBSD   = $^O eq 'mirbsd';
 my $Invoke_Perl = $Is_VMS      ? 'MCR Sys$Disk:[]Perl.exe' :
                   $Is_MSWin32  ? '.\perl'               :
                   $Is_NetWare  ? 'perl'                 :
@@ -130,6 +131,7 @@ sub test ($;$) {
 
     return $ok;
 }
+
 
 # We need an external program to call.
 my $ECHO = ($Is_MSWin32 ? ".\\echo$$" : ($Is_NetWare ? "echo$$" : "./echo$$"));
@@ -252,20 +254,715 @@ my $TEST = catfile(curdir(), 'TEST');
     ($foo) = $foo =~ /(.+)/;
     test not tainted $foo;
 
-    $foo = $1 if ('bar' . $TAINT) =~ /(.+)/;
-    test not tainted $foo;
-    test $foo eq 'bar';
+    my ($desc, $s, $res, $res2, $one);
+
+    $desc = "match with string tainted";
+
+    $s = 'abcd' . $TAINT;
+    $res = $s =~ /(.+)/;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($res, 1,        "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "match /g with string tainted";
+
+    $s = 'abcd' . $TAINT;
+    $res = $s =~ /(.)/g;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($res, 1,        "$desc: res value");
+    is($one, 'a',      "$desc: \$1 value");
+
+    $desc = "match with string tainted, list cxt";
+
+    $s = 'abcd' . $TAINT;
+    ($res) = $s =~ /(.+)/;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($res, 'abcd',   "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "match /g with string tainted, list cxt";
+
+    $s = 'abcd' . $TAINT;
+    ($res, $res2) = $s =~ /(.)/g;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok(!tainted($res2),"$desc: res2 not tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($res, 'a',      "$desc: res value");
+    is($res2,'b',      "$desc: res2 value");
+    is($one, 'd',      "$desc: \$1 value");
+
+    $desc = "match with pattern tainted";
+
+    $s = 'abcd';
+    $res = $s =~ /$TAINT(.+)/;
+    $one = $1;
+    ok(!tainted($s),   "$desc: s not tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($res, 1,        "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "match /g with pattern tainted";
+
+    $s = 'abcd';
+    $res = $s =~ /$TAINT(.)/g;
+    $one = $1;
+    ok(!tainted($s),   "$desc: s not tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($res, 1,        "$desc: res value");
+    is($one, 'a',      "$desc: \$1 value");
+
+    $desc = "match with pattern tainted via locale";
+
+    $s = 'abcd';
+    { use locale; $res = $s =~ /(\w+)/; $one = $1; }
+    ok(!tainted($s),   "$desc: s not tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($res, 1,        "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "match /g with pattern tainted via locale";
+
+    $s = 'abcd';
+    { use locale; $res = $s =~ /(\w)/g; $one = $1; }
+    ok(!tainted($s),   "$desc: s not tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($res, 1,        "$desc: res value");
+    is($one, 'a',      "$desc: \$1 value");
+
+    $desc = "match with pattern tainted, list cxt";
+
+    $s = 'abcd';
+    ($res) = $s =~ /$TAINT(.+)/;
+    $one = $1;
+    ok(!tainted($s),   "$desc: s not tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($res, 'abcd',   "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "match /g with pattern tainted, list cxt";
+
+    $s = 'abcd';
+    ($res, $res2) = $s =~ /$TAINT(.)/g;
+    $one = $1;
+    ok(!tainted($s),   "$desc: s not tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($res, 'a',      "$desc: res value");
+    is($res2,'b',      "$desc: res2 value");
+    is($one, 'd',      "$desc: \$1 value");
+
+    $desc = "match with pattern tainted via locale, list cxt";
+
+    $s = 'abcd';
+    { use locale; ($res) = $s =~ /(\w+)/; $one = $1; }
+    ok(!tainted($s),   "$desc: s not tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($res, 'abcd',   "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "match /g with pattern tainted via locale, list cxt";
+
+    $s = 'abcd';
+    { use locale; ($res, $res2) = $s =~ /(\w)/g; $one = $1; }
+    ok(!tainted($s),   "$desc: s not tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok( tainted($res2),"$desc: res2 tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($res, 'a',      "$desc: res value");
+    is($res2,'b',      "$desc: res2 value");
+    is($one, 'd',      "$desc: \$1 value");
+
+    $desc = "substitution with string tainted";
+
+    $s = 'abcd' . $TAINT;
+    $res = $s =~ s/(.+)/xyz/;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($s,   'xyz',    "$desc: s value");
+    is($res, 1,        "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "substitution /g with string tainted";
+
+    $s = 'abcd' . $TAINT;
+    $res = $s =~ s/(.)/x/g;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($s,   'xxxx',   "$desc: s value");
+    is($res, 4,        "$desc: res value");
+    is($one, 'd',      "$desc: \$1 value");
+
+    $desc = "substitution /r with string tainted";
+
+    $s = 'abcd' . $TAINT;
+    $res = $s =~ s/(.+)/xyz/r;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($s,   'abcd',   "$desc: s value");
+    is($res, 'xyz',    "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "substitution /e with string tainted";
+
+    $s = 'abcd' . $TAINT;
+    $one = '';
+    $res = $s =~ s{(.+)}{
+		$one = $one . "x"; # make sure code not tainted
+		ok(!tainted($one), "$desc: code not tainted within /e");
+		$one = $1;
+		ok(!tainted($one), "$desc: \$1 not tainted within /e");
+		"xyz";
+	    }e;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($s,   'xyz',    "$desc: s value");
+    is($res, 1,        "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "substitution with pattern tainted";
+
+    $s = 'abcd';
+    $res = $s =~ s/$TAINT(.+)/xyz/;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($s,  'xyz',     "$desc: s value");
+    is($res, 1,        "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "substitution /g with pattern tainted";
+
+    $s = 'abcd';
+    $res = $s =~ s/$TAINT(.)/x/g;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($s,  'xxxx',    "$desc: s value");
+    is($res, 4,        "$desc: res value");
+    is($one, 'd',      "$desc: \$1 value");
+
+    $desc = "substitution /ge with pattern tainted";
+
+    $s = 'abc';
+    {
+	my $i = 0;
+	my $j;
+	$res = $s =~ s{(.)$TAINT}{
+		    $j = $i; # make sure code not tainted
+		    $one = $1;
+		    ok(!tainted($j), "$desc: code not tainted within /e");
+		    $i++;
+		    if ($i == 1) {
+			ok(!tainted($s),   "$desc: s not tainted loop 1");
+		    }
+		    else {
+			ok( tainted($s),   "$desc: s tainted loop $i");
+		    }
+		    ok( tainted($one), "$desc: \$1 tainted loop $i");
+		    $i.$TAINT;
+		}ge;
+	$one = $1;
+    }
+    ok( tainted($s),   "$desc: s tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($s,  '123',     "$desc: s value");
+    is($res, 3,        "$desc: res value");
+    is($one, 'c',      "$desc: \$1 value");
+
+    $desc = "substitution /r with pattern tainted";
+
+    $s = 'abcd';
+    $res = $s =~ s/$TAINT(.+)/xyz/r;
+    $one = $1;
+    ok(!tainted($s),   "$desc: s not tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($s,  'abcd',    "$desc: s value");
+    is($res, 'xyz',    "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "substitution with pattern tainted via locale";
+
+    $s = 'abcd';
+    { use locale;  $res = $s =~ s/(\w+)/xyz/; $one = $1; }
+    ok( tainted($s),   "$desc: s tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($s,  'xyz',     "$desc: s value");
+    is($res, 1,        "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "substitution /g with pattern tainted via locale";
+
+    $s = 'abcd';
+    { use locale;  $res = $s =~ s/(\w)/x/g; $one = $1; }
+    ok( tainted($s),   "$desc: s tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($s,  'xxxx',    "$desc: s value");
+    is($res, 4,        "$desc: res value");
+    is($one, 'd',      "$desc: \$1 value");
+
+    $desc = "substitution /r with pattern tainted via locale";
+
+    $s = 'abcd';
+    { use locale;  $res = $s =~ s/(\w+)/xyz/r; $one = $1; }
+    ok(!tainted($s),   "$desc: s not tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok( tainted($one), "$desc: \$1 tainted");
+    is($s,  'abcd',    "$desc: s value");
+    is($res, 'xyz',    "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "substitution with replacement tainted";
+
+    $s = 'abcd';
+    $res = $s =~ s/(.+)/xyz$TAINT/;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($s,  'xyz',     "$desc: s value");
+    is($res, 1,        "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
+
+    $desc = "substitution /g with replacement tainted";
+
+    $s = 'abcd';
+    $res = $s =~ s/(.)/x$TAINT/g;
+    $one = $1;
+    ok( tainted($s),   "$desc: s tainted");
+    ok(!tainted($res), "$desc: res not tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($s,  'xxxx',    "$desc: s value");
+    is($res, 4,        "$desc: res value");
+    is($one, 'd',      "$desc: \$1 value");
+
+    $desc = "substitution /ge with replacement tainted";
+
+    $s = 'abc';
+    {
+	my $i = 0;
+	my $j;
+	$res = $s =~ s{(.)}{
+		    $j = $i; # make sure code not tainted
+		    $one = $1;
+		    ok(!tainted($j), "$desc: code not tainted within /e");
+		    $i++;
+		    if ($i == 1) {
+			ok(!tainted($s),   "$desc: s not tainted loop 1");
+		    }
+		    else {
+			ok( tainted($s),   "$desc: s tainted loop $i");
+		    }
+		    ok(!tainted($one), "$desc: \$1 not tainted within /e");
+		    $i.$TAINT;
+		}ge;
+	$one = $1;
+    }
+    ok( tainted($s),   "$desc: s tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($s,  '123',     "$desc: s value");
+    is($res, 3,        "$desc: res value");
+    is($one, 'c',      "$desc: \$1 value");
+
+    $desc = "substitution /r with replacement tainted";
+
+    $s = 'abcd';
+    $res = $s =~ s/(.+)/xyz$TAINT/r;
+    $one = $1;
+    ok(!tainted($s),   "$desc: s not tainted");
+    ok( tainted($res), "$desc: res tainted");
+    ok(!tainted($one), "$desc: \$1 not tainted");
+    is($s,   'abcd',   "$desc: s value");
+    is($res, 'xyz',    "$desc: res value");
+    is($one, 'abcd',   "$desc: \$1 value");
 
     {
-      use re 'taint';
+	# now do them all again with "use re 'taint"
 
-      ($foo) = ('bar' . $TAINT) =~ /(.+)/;
-      test tainted $foo;
-      test $foo eq 'bar';
+	use re 'taint';
 
-      $foo = $1 if ('bar' . $TAINT) =~ /(.+)/;
-      test tainted $foo;
-      test $foo eq 'bar';
+	$desc = "use re 'taint': match with string tainted";
+
+	$s = 'abcd' . $TAINT;
+	$res = $s =~ /(.+)/;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($res, 1,        "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': match /g with string tainted";
+
+	$s = 'abcd' . $TAINT;
+	$res = $s =~ /(.)/g;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($res, 1,        "$desc: res value");
+	is($one, 'a',      "$desc: \$1 value");
+
+	$desc = "use re 'taint': match with string tainted, list cxt";
+
+	$s = 'abcd' . $TAINT;
+	($res) = $s =~ /(.+)/;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($res, 'abcd',   "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': match /g with string tainted, list cxt";
+
+	$s = 'abcd' . $TAINT;
+	($res, $res2) = $s =~ /(.)/g;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($res2),"$desc: res2 tainted");
+	ok( tainted($one), "$desc: \$1 not tainted");
+	is($res, 'a',      "$desc: res value");
+	is($res2,'b',      "$desc: res2 value");
+	is($one, 'd',      "$desc: \$1 value");
+
+	$desc = "use re 'taint': match with pattern tainted";
+
+	$s = 'abcd';
+	$res = $s =~ /$TAINT(.+)/;
+	$one = $1;
+	ok(!tainted($s),   "$desc: s not tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($res, 1,        "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': match /g with pattern tainted";
+
+	$s = 'abcd';
+	$res = $s =~ /$TAINT(.)/g;
+	$one = $1;
+	ok(!tainted($s),   "$desc: s not tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($res, 1,        "$desc: res value");
+	is($one, 'a',      "$desc: \$1 value");
+
+	$desc = "use re 'taint': match with pattern tainted via locale";
+
+	$s = 'abcd';
+	{ use locale; $res = $s =~ /(\w+)/; $one = $1; }
+	ok(!tainted($s),   "$desc: s not tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($res, 1,        "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': match /g with pattern tainted via locale";
+
+	$s = 'abcd';
+	{ use locale; $res = $s =~ /(\w)/g; $one = $1; }
+	ok(!tainted($s),   "$desc: s not tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($res, 1,        "$desc: res value");
+	is($one, 'a',      "$desc: \$1 value");
+
+	$desc = "use re 'taint': match with pattern tainted, list cxt";
+
+	$s = 'abcd';
+	($res) = $s =~ /$TAINT(.+)/;
+	$one = $1;
+	ok(!tainted($s),   "$desc: s not tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($res, 'abcd',   "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': match /g with pattern tainted, list cxt";
+
+	$s = 'abcd';
+	($res, $res2) = $s =~ /$TAINT(.)/g;
+	$one = $1;
+	ok(!tainted($s),   "$desc: s not tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($res, 'a',      "$desc: res value");
+	is($res2,'b',      "$desc: res2 value");
+	is($one, 'd',      "$desc: \$1 value");
+
+	$desc = "use re 'taint': match with pattern tainted via locale, list cxt";
+
+	$s = 'abcd';
+	{ use locale; ($res) = $s =~ /(\w+)/; $one = $1; }
+	ok(!tainted($s),   "$desc: s not tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($res, 'abcd',   "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': match /g with pattern tainted via locale, list cxt";
+
+	$s = 'abcd';
+	{ use locale; ($res, $res2) = $s =~ /(\w)/g; $one = $1; }
+	ok(!tainted($s),   "$desc: s not tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($res2),"$desc: res2 tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($res, 'a',      "$desc: res value");
+	is($res2,'b',      "$desc: res2 value");
+	is($one, 'd',      "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution with string tainted";
+
+	$s = 'abcd' . $TAINT;
+	$res = $s =~ s/(.+)/xyz/;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($s,   'xyz',    "$desc: s value");
+	is($res, 1,        "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution /g with string tainted";
+
+	$s = 'abcd' . $TAINT;
+	$res = $s =~ s/(.)/x/g;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($s,   'xxxx',   "$desc: s value");
+	is($res, 4,        "$desc: res value");
+	is($one, 'd',      "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution /r with string tainted";
+
+	$s = 'abcd' . $TAINT;
+	$res = $s =~ s/(.+)/xyz/r;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($s,   'abcd',   "$desc: s value");
+	is($res, 'xyz',    "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution /e with string tainted";
+
+	$s = 'abcd' . $TAINT;
+	$one = '';
+	$res = $s =~ s{(.+)}{
+		    $one = $one . "x"; # make sure code not tainted
+		    ok(!tainted($one), "$desc: code not tainted within /e");
+		    $one = $1;
+		    ok(tainted($one), "$desc: $1 tainted within /e");
+		    "xyz";
+		}e;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($s,   'xyz',    "$desc: s value");
+	is($res, 1,        "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution with pattern tainted";
+
+	$s = 'abcd';
+	$res = $s =~ s/$TAINT(.+)/xyz/;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($s,  'xyz',     "$desc: s value");
+	is($res, 1,        "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution /g with pattern tainted";
+
+	$s = 'abcd';
+	$res = $s =~ s/$TAINT(.)/x/g;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($s,  'xxxx',    "$desc: s value");
+	is($res, 4,        "$desc: res value");
+	is($one, 'd',      "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution /ge with pattern tainted";
+
+	$s = 'abc';
+	{
+	    my $i = 0;
+	    my $j;
+	    $res = $s =~ s{(.)$TAINT}{
+			$j = $i; # make sure code not tainted
+			$one = $1;
+			ok(!tainted($j), "$desc: code not tainted within /e");
+			$i++;
+			if ($i == 1) {
+			    ok(!tainted($s),   "$desc: s not tainted loop 1");
+			}
+			else {
+			    ok( tainted($s),   "$desc: s tainted loop $i");
+			}
+			ok( tainted($one), "$desc: \$1 tainted loop $i");
+			$i.$TAINT;
+		    }ge;
+	    $one = $1;
+	}
+	ok( tainted($s),   "$desc: s tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($s,  '123',     "$desc: s value");
+	is($res, 3,        "$desc: res value");
+	is($one, 'c',      "$desc: \$1 value");
+
+
+	$desc = "use re 'taint': substitution /r with pattern tainted";
+
+	$s = 'abcd';
+	$res = $s =~ s/$TAINT(.+)/xyz/r;
+	$one = $1;
+	ok(!tainted($s),   "$desc: s not tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($s,  'abcd',    "$desc: s value");
+	is($res, 'xyz',    "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution with pattern tainted via locale";
+
+	$s = 'abcd';
+	{ use locale;  $res = $s =~ s/(\w+)/xyz/; $one = $1; }
+	ok( tainted($s),   "$desc: s tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($s,  'xyz',     "$desc: s value");
+	is($res, 1,        "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution /g with pattern tainted via locale";
+
+	$s = 'abcd';
+	{ use locale;  $res = $s =~ s/(\w)/x/g; $one = $1; }
+	ok( tainted($s),   "$desc: s tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($s,  'xxxx',    "$desc: s value");
+	is($res, 4,        "$desc: res value");
+	is($one, 'd',      "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution /r with pattern tainted via locale";
+
+	$s = 'abcd';
+	{ use locale;  $res = $s =~ s/(\w+)/xyz/r; $one = $1; }
+	ok(!tainted($s),   "$desc: s not tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok( tainted($one), "$desc: \$1 tainted");
+	is($s,  'abcd',    "$desc: s value");
+	is($res, 'xyz',    "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution with replacement tainted";
+
+	$s = 'abcd';
+	$res = $s =~ s/(.+)/xyz$TAINT/;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok(!tainted($one), "$desc: \$1 not tainted");
+	is($s,  'xyz',     "$desc: s value");
+	is($res, 1,        "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution /g with replacement tainted";
+
+	$s = 'abcd';
+	$res = $s =~ s/(.)/x$TAINT/g;
+	$one = $1;
+	ok( tainted($s),   "$desc: s tainted");
+	ok(!tainted($res), "$desc: res not tainted");
+	ok(!tainted($one), "$desc: \$1 not tainted");
+	is($s,  'xxxx',    "$desc: s value");
+	is($res, 4,        "$desc: res value");
+	is($one, 'd',      "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution /ge with replacement tainted";
+
+	$s = 'abc';
+	{
+	    my $i = 0;
+	    my $j;
+	    $res = $s =~ s{(.)}{
+			$j = $i; # make sure code not tainted
+			$one = $1;
+			ok(!tainted($j), "$desc: code not tainted within /e");
+			$i++;
+			if ($i == 1) {
+			    ok(!tainted($s),   "$desc: s not tainted loop 1");
+			}
+			else {
+			    ok( tainted($s),   "$desc: s tainted loop $i");
+			}
+			    ok(!tainted($one), "$desc: \$1 not tainted");
+			$i.$TAINT;
+		    }ge;
+	    $one = $1;
+	}
+	ok( tainted($s),   "$desc: s tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok(!tainted($one), "$desc: \$1 not tainted");
+	is($s,  '123',     "$desc: s value");
+	is($res, 3,        "$desc: res value");
+	is($one, 'c',      "$desc: \$1 value");
+
+	$desc = "use re 'taint': substitution /r with replacement tainted";
+
+	$s = 'abcd';
+	$res = $s =~ s/(.+)/xyz$TAINT/r;
+	$one = $1;
+	ok(!tainted($s),   "$desc: s not tainted");
+	ok( tainted($res), "$desc: res tainted");
+	ok(!tainted($one), "$desc: \$1 not tainted");
+	is($s,   'abcd',   "$desc: s value");
+	is($res, 'xyz',    "$desc: res value");
+	is($one, 'abcd',   "$desc: \$1 value");
     }
 
     $foo = $1 if 'bar' =~ /(.+)$TAINT/;
@@ -1159,8 +1856,8 @@ SKIP:
 {
     SKIP: {
 	skip "fork() is not available", 3 unless $Config{'d_fork'};
-	skip "opening |- is not stable on threaded OpenBSD with taint", 3
-            if $Config{useithreads} && $Is_OpenBSD;
+	skip "opening |- is not stable on threaded Open/MirBSD with taint", 3
+            if $Config{useithreads} and $Is_OpenBSD || $Is_MirBSD;
 
 	$ENV{'PATH'} = $TAINT;
 	local $SIG{'PIPE'} = 'IGNORE';
@@ -1477,6 +2174,18 @@ end
     my $y = $ENV{PATH} . $x->(); # Compile $x inside a tainted expression
     my $z = $x->();
     ok( ! tainted($z), "Constants folded value not tainted");
+}
+
+{
+    # now that regexes are first class SVs, make sure that they themselves
+    # as well as references to them are tainted
+
+    my $rr = qr/(.)$TAINT/;
+    my $r = $$rr; # bare REGEX
+    my $s ="abc";
+    ok($s =~ s/$r/x/, "match bare regex");
+    ok(tainted($s), "match bare regex taint");
+    is($s, 'xbc', "match bare regex taint value");
 }
 
 # This may bomb out with the alarm signal so keep it last

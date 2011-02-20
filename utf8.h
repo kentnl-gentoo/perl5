@@ -20,6 +20,11 @@
 #define uvuni_to_utf8(d, uv)		uvuni_to_utf8_flags(d, uv, 0)
 #define is_utf8_string_loc(s, len, ep)	is_utf8_string_loclen(s, len, ep, 0)
 
+#define foldEQ_utf8(s1, pe1, l1, u1, s2, pe2, l2, u2) \
+		    foldEQ_utf8_flags(s1, pe1, l1, u1, s2, pe2, l2, u2, 0)
+#define FOLDEQ_UTF8_NOMIX_ASCII (1 << 0)
+#define FOLDEQ_UTF8_LOCALE      (1 << 1)
+
 /*
 =for apidoc ibcmp_utf8
 
@@ -268,10 +273,9 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
 #define UTF8_ALLOW_FFFF 0
 #define UTF8_ALLOW_SURROGATE 0
 
-#define UTF8_DISALLOW_ILLEGAL_INTERCHANGE \
-	    (UTF8_DISALLOW_SUPER|UTF8_DISALLOW_NONCHAR|UTF8_DISALLOW_SURROGATE)
+#define UTF8_DISALLOW_ILLEGAL_INTERCHANGE (UTF8_DISALLOW_SUPER|UTF8_DISALLOW_NONCHAR|UTF8_DISALLOW_SURROGATE|UTF8_DISALLOW_FE_FF)
 #define UTF8_WARN_ILLEGAL_INTERCHANGE \
-			(UTF8_WARN_SUPER|UTF8_WARN_NONCHAR|UTF8_WARN_SURROGATE)
+	(UTF8_WARN_SUPER|UTF8_WARN_NONCHAR|UTF8_WARN_SURROGATE|UTF8_WARN_FE_FF)
 #define UTF8_ALLOW_ANY \
 	    (~(UTF8_DISALLOW_ILLEGAL_INTERCHANGE|UTF8_WARN_ILLEGAL_INTERCHANGE))
 #define UTF8_ALLOW_ANYUV                                                        \

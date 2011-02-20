@@ -522,7 +522,7 @@ do_clean_named_objs(pTHX_ SV *const sv)
     if ( ((obj = MUTABLE_SV(GvCV(sv)) )) && SvOBJECT(obj)) {
 	DEBUG_D((PerlIO_printf(Perl_debug_log,
 		"Cleaning named glob CV object:\n "), sv_dump(obj)));
-	GvCV(sv) = NULL;
+	GvCV_set(sv, NULL);
 	SvREFCNT_dec(obj);
     }
     SvREFCNT_dec(sv); /* undo the inc above */
@@ -552,6 +552,7 @@ do_clean_named_io_objs(pTHX_ SV *const sv)
 }
 
 /* Void wrapper to pass to visit() */
+/* XXX
 static void
 do_curse(pTHX_ SV * const sv) {
     if ((PL_stderrgv && GvGP(PL_stderrgv) && (SV*)GvIO(PL_stderrgv) == sv)
@@ -559,6 +560,7 @@ do_curse(pTHX_ SV * const sv) {
 	return;
     (void)curse(sv, 0);
 }
+*/
 
 /*
 =for apidoc sv_clean_objs
@@ -582,7 +584,9 @@ Perl_sv_clean_objs(pTHX)
     visit(do_clean_named_io_objs, SVt_PVGV|SVpgv_GP, SVTYPEMASK|SVp_POK|SVpgv_GP);
     /* And if there are some very tenacious barnacles clinging to arrays,
        closures, or what have you.... */
+    /* XXX This line breaks Tk and Gtk2. See [perl #82542].
     visit(do_curse, SVs_OBJECT, SVs_OBJECT);
+    */
     olddef = PL_defoutgv;
     PL_defoutgv = NULL; /* disable skip of PL_defoutgv */
     if (olddef && isGV_with_GP(olddef))
@@ -1576,6 +1580,7 @@ Perl_sv_setiv(pTHX_ register SV *const sv, const IV i)
     case SVt_PVCV:
     case SVt_PVFM:
     case SVt_PVIO:
+	/* diag_listed_as: Can't coerce %s to %s in %s */
 	Perl_croak(aTHX_ "Can't coerce %s to integer in %s", sv_reftype(sv,0),
 		   OP_DESC(PL_op));
     default: NOOP;
@@ -1685,6 +1690,7 @@ Perl_sv_setnv(pTHX_ register SV *const sv, const NV num)
     case SVt_PVCV:
     case SVt_PVFM:
     case SVt_PVIO:
+	/* diag_listed_as: Can't coerce %s to %s in %s */
 	Perl_croak(aTHX_ "Can't coerce %s to number in %s", sv_reftype(sv,0),
 		   OP_DESC(PL_op));
     default: NOOP;
@@ -3219,7 +3225,7 @@ Perl_sv_utf8_upgrade_flags_grow(pTHX_ register SV *const sv, const I32 flags, ST
 		return len;
 	    }
 	} else {
-	    (void) SvPV_force(sv,len);
+	    (void) SvPV_force_flags(sv,len,flags & SV_GMAGIC);
 	}
     }
 
@@ -3623,7 +3629,7 @@ S_glob_assign_glob(pTHX_ SV *const dstr, SV *const sstr, const int dtype)
         /* If source has method cache entry, clear it */
         if(GvCVGEN(sstr)) {
             SvREFCNT_dec(GvCV(sstr));
-            GvCV(sstr) = NULL;
+            GvCV_set(sstr, NULL);
             GvCVGEN(sstr) = 0;
         }
         /* If source has a real method, then a method is
@@ -3676,7 +3682,7 @@ S_glob_assign_glob(pTHX_ SV *const dstr, SV *const sstr, const int dtype)
     (void)SvOK_off(dstr);
     isGV_with_GP_on(dstr);
     GvINTRO_off(dstr);		/* one-shot flag */
-    GvGP(dstr) = gp_ref(GvGP(sstr));
+    GvGP_set(dstr, gp_ref(GvGP(sstr)));
     if (SvTAINTED(sstr))
 	SvTAINT(dstr);
     if (GvIMPORTED(dstr) != GVf_IMPORTED
@@ -3731,7 +3737,7 @@ S_glob_assign_ref(pTHX_ SV *const dstr, SV *const sstr)
     GvMULTI_on(dstr);
     switch (stype) {
     case SVt_PVCV:
-	location = (SV **) &GvCV(dstr);
+	location = (SV **) &(GvGP(dstr)->gp_cv); /* XXX bypassing GvCV_set */
 	import_flag = GVf_IMPORTED_CV;
 	goto common;
     case SVt_PVHV:
@@ -3757,7 +3763,7 @@ S_glob_assign_ref(pTHX_ SV *const dstr, SV *const sstr)
 		/*if (GvCVGEN(dstr) && (GvCV(dstr) != (const CV *)sref || GvCVGEN(dstr))) {*/
 		if (GvCVGEN(dstr)) {
 		    SvREFCNT_dec(GvCV(dstr));
-		    GvCV(dstr) = NULL;
+		    GvCV_set(dstr, NULL);
 		    GvCVGEN(dstr) = 0; /* Switch off cacheness. */
 		}
 	    }
@@ -4129,7 +4135,7 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, register SV* sstr, const I32 flags)
 
 		if (GvGP(dstr))
 		    gp_free(MUTABLE_GV(dstr));
-		GvGP(dstr) = gp_ref(GvGP(gv));
+		GvGP_set(dstr, gp_ref(GvGP(gv)));
 
 		if (reset_isa) {
 		    HV * const stash = GvHV(dstr);
@@ -4655,7 +4661,7 @@ we do the copy, and is also used locally. If C<SV_COW_DROP_PV> is set
 then a copy-on-write scalar drops its PV buffer (if any) and becomes
 SvPOK_off rather than making a copy. (Used where this scalar is about to be
 set to some other value.) In addition, the C<flags> parameter gets passed to
-C<sv_unref_flags()> when unrefing. C<sv_force_normal> calls this function
+C<sv_unref_flags()> when unreffing. C<sv_force_normal> calls this function
 with flags set to 0.
 
 =cut
@@ -8985,6 +8991,7 @@ Perl_sv_pvn_force_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 	}
 	if ((SvTYPE(sv) > SVt_PVLV && SvTYPE(sv) != SVt_PVFM)
 	    || isGV_with_GP(sv))
+	    /* diag_listed_as: Can't coerce %s to %s in %s */
 	    Perl_croak(aTHX_ "Can't coerce %s to string in %s", sv_reftype(sv,0),
 		OP_DESC(PL_op));
 	s = sv_2pv_flags(sv, &len, flags);
@@ -10178,59 +10185,28 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
 	    width = expect_number(&q);
 	}
 
-	if (vectorize) {
-	    if (vectorarg) {
-		if (args)
-		    vecsv = va_arg(*args, SV*);
-		else if (evix) {
-		    vecsv = (evix > 0 && evix <= svmax)
-			? svargs[evix-1] : S_vcatpvfn_missing_argument(aTHX);
-		} else {
-		    vecsv = svix < svmax
-			? svargs[svix++] : S_vcatpvfn_missing_argument(aTHX);
-		}
+	if (vectorize && vectorarg) {
+	    /* vectorizing, but not with the default "." */
+	    if (args)
+		vecsv = va_arg(*args, SV*);
+	    else if (evix) {
+		vecsv = (evix > 0 && evix <= svmax)
+		    ? svargs[evix-1] : S_vcatpvfn_missing_argument(aTHX);
+	    } else {
+		vecsv = svix < svmax
+		    ? svargs[svix++] : S_vcatpvfn_missing_argument(aTHX);
+	    }
+	    dotstr = SvPV_const(vecsv, dotstrlen);
+	    /* Keep the DO_UTF8 test *after* the SvPV call, else things go
+	       bad with tied or overloaded values that return UTF8.  */
+	    if (DO_UTF8(vecsv))
+		is_utf8 = TRUE;
+	    else if (has_utf8) {
+		vecsv = sv_mortalcopy(vecsv);
+		sv_utf8_upgrade(vecsv);
 		dotstr = SvPV_const(vecsv, dotstrlen);
-		/* Keep the DO_UTF8 test *after* the SvPV call, else things go
-		   bad with tied or overloaded values that return UTF8.  */
-		if (DO_UTF8(vecsv))
-		    is_utf8 = TRUE;
-		else if (has_utf8) {
-		    vecsv = sv_mortalcopy(vecsv);
-		    sv_utf8_upgrade(vecsv);
-		    dotstr = SvPV_const(vecsv, dotstrlen);
-		    is_utf8 = TRUE;
-		}		    
-	    }
-	    if (args) {
-		VECTORIZE_ARGS
-	    }
-	    else if (efix ? (efix > 0 && efix <= svmax) : svix < svmax) {
-		vecsv = svargs[efix ? efix-1 : svix++];
-		vecstr = (U8*)SvPV_const(vecsv,veclen);
-		vec_utf8 = DO_UTF8(vecsv);
-
-		/* if this is a version object, we need to convert
-		 * back into v-string notation and then let the
-		 * vectorize happen normally
-		 */
-		if (sv_derived_from(vecsv, "version")) {
-		    char *version = savesvpv(vecsv);
-		    if ( hv_exists(MUTABLE_HV(SvRV(vecsv)), "alpha", 5 ) ) {
-			Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
-			"vector argument not supported with alpha versions");
-			goto unknown;
-		    }
-		    vecsv = sv_newmortal();
-		    scan_vstring(version, version + veclen, vecsv);
-		    vecstr = (U8*)SvPV_const(vecsv, veclen);
-		    vec_utf8 = DO_UTF8(vecsv);
-		    Safefree(version);
-		}
-	    }
-	    else {
-		vecstr = (U8*)"";
-		veclen = 0;
-	    }
+		is_utf8 = TRUE;
+	    }		    
 	}
 
 	if (asterisk) {
@@ -10268,6 +10244,39 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
 		while (isDIGIT(*q))
 		    precis = precis * 10 + (*q++ - '0');
 		has_precis = TRUE;
+	    }
+	}
+
+	if (vectorize) {
+	    if (args) {
+		VECTORIZE_ARGS
+	    }
+	    else if (efix ? (efix > 0 && efix <= svmax) : svix < svmax) {
+		vecsv = svargs[efix ? efix-1 : svix++];
+		vecstr = (U8*)SvPV_const(vecsv,veclen);
+		vec_utf8 = DO_UTF8(vecsv);
+
+		/* if this is a version object, we need to convert
+		 * back into v-string notation and then let the
+		 * vectorize happen normally
+		 */
+		if (sv_derived_from(vecsv, "version")) {
+		    char *version = savesvpv(vecsv);
+		    if ( hv_exists(MUTABLE_HV(SvRV(vecsv)), "alpha", 5 ) ) {
+			Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
+			"vector argument not supported with alpha versions");
+			goto unknown;
+		    }
+		    vecsv = sv_newmortal();
+		    scan_vstring(version, version + veclen, vecsv);
+		    vecstr = (U8*)SvPV_const(vecsv, veclen);
+		    vec_utf8 = DO_UTF8(vecsv);
+		    Safefree(version);
+		}
+	    }
+	    else {
+		vecstr = (U8*)"";
+		veclen = 0;
 	    }
 	}
 
@@ -11847,7 +11856,7 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 		    GvSTASH(dstr) = hv_dup(GvSTASH(dstr), param);
 		    if (param->flags & CLONEf_JOIN_IN)
 			Perl_sv_add_backref(aTHX_ MUTABLE_SV(GvSTASH(dstr)), dstr);
-		    GvGP(dstr)	= gp_dup(GvGP(sstr), param);
+		    GvGP_set(dstr, gp_dup(GvGP(sstr), param));
 		    (void)GpREFCNT_inc(GvGP(dstr));
 		}
 		break;
@@ -13110,7 +13119,10 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_utf8_tolower	= sv_dup_inc(proto_perl->Iutf8_tolower, param);
     PL_utf8_tofold	= sv_dup_inc(proto_perl->Iutf8_tofold, param);
     PL_utf8_idstart	= sv_dup_inc(proto_perl->Iutf8_idstart, param);
+    PL_utf8_xidstart	= sv_dup_inc(proto_perl->Iutf8_xidstart, param);
     PL_utf8_idcont	= sv_dup_inc(proto_perl->Iutf8_idcont, param);
+    PL_utf8_xidcont	= sv_dup_inc(proto_perl->Iutf8_xidcont, param);
+    PL_utf8_foldable	= hv_dup_inc(proto_perl->Iutf8_foldable, param);
 
     /* Did the locale setup indicate UTF-8? */
     PL_utf8locale	= proto_perl->Iutf8locale;

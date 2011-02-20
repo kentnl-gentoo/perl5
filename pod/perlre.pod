@@ -52,7 +52,8 @@ X<regular expression, case-insensitive>
 Do case-insensitive pattern matching.
 
 If C<use locale> is in effect, the case map is taken from the current
-locale.  See L<perllocale>.
+locale for code points less than 255, and from Unicode rules for larger
+code points.  See L<perllocale>.
 
 =item x
 X</x>
@@ -77,9 +78,14 @@ of the g and c modifiers.
 =back
 
 These are usually written as "the C</x> modifier", even though the delimiter
-in question might not really be a slash.  Any of these
-modifiers may also be embedded within the regular expression itself using
-the C<(?...)> construct.  See below.
+in question might not really be a slash.  The modifiers C</imsx>
+may also be embedded within the regular expression itself using
+the C<(?...)> construct.  Also are new (in 5.14) character set semantics
+modifiers B<C<<"a">>, B<C<"d">>, B<C<"l">> and B<C<"u">>, which, in 5.14
+only, must be used embedded in the regular expression, and not after the
+trailing delimiter.  All this is discussed below in
+L</Extended Patterns>.
+X</a> X</d> X</l> X</u>
 
 The C</x> modifier itself needs a little more explanation.  It tells
 the regular expression parser to ignore most whitespace that is neither
@@ -633,7 +639,7 @@ change the case-sensitivity of the "NAME" pattern.
 
 Any of these modifiers can be set to apply globally to all regular
 expressions compiled within the scope of a C<use re>.  See
-L<re/'/flags' mode>.
+L<re/"'/flags' mode">.
 
 Starting in Perl 5.14, a C<"^"> (caret or circumflex accent) immediately
 after the C<"?"> is a shorthand equivalent to C<d-imsx>.  Flags (except
@@ -650,8 +656,15 @@ locale, and can differ from one match to another if there is an
 intervening call of the
 L<setlocale() function|perllocale/The setlocale function>.
 This modifier is automatically set if the regular expression is compiled
-within the scope of a C<"use locale"> pragma.  Results are not
-well-defined when using this and matching against a utf8-encoded string.
+within the scope of a C<"use locale"> pragma.
+Perl only allows single-byte locales.  This means that code points above
+255 are treated as Unicode no matter what locale is in effect.
+Under Unicode rules, there are a few case-insensitive matches that cross the
+boundary 255/256 boundary.  These are disallowed.  For example,
+0xFF does not caselessly match the character at 0x178, LATIN CAPITAL
+LETTER Y WITH DIAERESIS, because 0xFF may not be LATIN SMALL LETTER Y
+in the current locale, and Perl has no way of knowing if that character
+even exists in the locale, much less what code point it is.
 
 C<"u"> means to use Unicode semantics when pattern matching.  It is
 automatically set if the regular expression is encoded in utf8, or is
@@ -689,21 +702,26 @@ like the C<"u"> modifier, in that case-insensitive matching uses Unicode
 semantics; for example, "k" will match the Unicode C<\N{KELVIN SIGN}>
 under C</i> matching, and code points in the Latin1 range, above ASCII
 will have Unicode semantics when it comes to case-insensitive matching.
+But writing two in "a"'s in a row will increase its effect, causing the
+Kelvin sign and all other non-ASCII characters to not match any ASCII
+character under C</i> matching.
 
 C<"d"> means to use the traditional Perl pattern matching behavior.
 This is dualistic (hence the name C<"d">, which also could stand for
-"depends").  When this is in effect, Perl matches utf8-encoded strings
-using Unicode rules, and matches non-utf8-encoded strings using the
-platform's native character set rules.  (If the regular expression
-itself is encoded in utf8, Unicode rules are used regardless of the
-target string's encoding.)
-See L<perlunicode/The "Unicode Bug">.  It is automatically selected by
-default if the regular expression is compiled neither within the scope
-of a C<"use locale"> pragma nor a <C<"use feature 'unicode_strings">
-pragma.
+"depends").  When this is in effect, Perl matches according to the
+platform's native character set rules unless there is something that
+indicates to use Unicode rules.  If either the target string or the
+pattern itself is encoded in UTF-8, Unicode rules are used.  Also, if
+the pattern contains Unicode-only features, such as code points above
+255, C<\p()> Unicode properties or C<\N{}> Unicode names, Unicode rules
+will be used.  It is automatically selected by default if the regular
+expression is compiled neither within the scope of a C<"use locale">
+pragma nor a <C<"use feature 'unicode_strings"> pragma.
+This behavior causes a number of glitches, see
+L<perlunicode/The "Unicode Bug">.
 
 Note that the C<a>, C<d>, C<l>, C<p>, and C<u> modifiers are special in
-that they can only be enabled, not disabled, and the C<d>, C<l>, and
+that they can only be enabled, not disabled, and the C<a>, C<d>, C<l>, and
 C<u> modifiers are mutually exclusive: specifying one de-specifies the
 others, and a maximum of one may appear in the construct.  Thus, for
 example, C<(?-p)>, C<(?-d:...)>, and C<(?dl:...)> will warn when
@@ -894,7 +912,7 @@ X<< (?<NAME>) >> X<(?'NAME')> X<named capture> X<capture>
 
 A named capture group. Identical in every respect to normal capturing
 parentheses C<()> but for the additional fact that C<%+> or C<%-> may be
-used after a successful match to refer to a named group. See C<perlvar>
+used after a successful match to refer to a named group. See L<perlvar>
 for more details on the C<%+> and C<%-> hashes.
 
 If multiple distinct capture groups have the same name then the
@@ -1198,9 +1216,14 @@ Checks if the numbered capturing group has matched something.
 
 Checks if a group with the given name has matched something.
 
+=item (?=...) (?!...) (?<=...) (?<!...)
+
+Checks whether the pattern matches (or does not match, for the '!'
+variants).
+
 =item (?{ CODE })
 
-Treats the code block as the condition.
+Treats the return value of the code block as the condition.
 
 =item (R)
 
@@ -1825,12 +1848,12 @@ match takes a long time to finish.
 
 A powerful tool for optimizing such beasts is what is known as an
 "independent group",
-which does not backtrack (see L<C<< (?>pattern) >>>).  Note also that
+which does not backtrack (see L</C<< (?>pattern) >>>).  Note also that
 zero-length look-ahead/look-behind assertions will not backtrack to make
 the tail match, since they are in "logical" context: only
 whether they match is considered relevant.  For an example
 where side-effects of look-ahead I<might> have influenced the
-following match, see L<C<< (?>pattern) >>>.
+following match, see L</C<< (?>pattern) >>>.
 
 =head2 Version 8 Regular Expressions
 X<regular expression, version 8> X<regex, version 8> X<regexp, version 8>

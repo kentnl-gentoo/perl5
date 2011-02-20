@@ -1,3 +1,5 @@
+=encoding utf8
+
 =head1 NAME
 
 perlepigraphs - list of Perl release epigraphs
@@ -14,6 +16,44 @@ definition of I<epigraph> is closer to the way they have been used.
 Consult your favorite dictionary for details.
 
 =head1 EPIGRAPHS
+
+=head1 v5.13.10 - Egill Skalla-Grímsson, L<Egils saga Skalla-Grímssonar|http://www.heimskringla.no/wiki/Egils_saga_Skalla-Gr%C3%ADmssonar>
+
+Annonced on 2011-02-20 by Ævar Arnfjörð Bjarmason
+   
+    Skalat maðr rúnar rísta, 
+    nema ráða vel kunni. 
+    Þat verðr mörgum manni, 
+    es of myrkvan staf villisk. 
+    Sák á telgðu talkni 
+    tíu launstafi ristna. 
+    Þat hefr lauka lindi 
+    langs ofrtrega fengit.
+    
+=head2 v5.13.9 - John F Kennedy, L<Inaugural Address January 20, 1961|http://en.wikisource.org/wiki/John_F._Kennedy%27s_Inaugural_Address>
+
+L<Announced on 2011-01-20 by Jesse Vincent|http://www.nntp.perl.org/group/perl.perl5.porters/2011/01/msg168335.html>
+
+In the long history of the world, only a few generations have been
+granted the role of defending freedom in its hour of maximum danger. I
+do not shrink from this responsibility -- I welcome it. I do not believe
+that any of us would exchange places with any other people or any other
+generation. The energy, the faith, the devotion which we bring to this
+endeavor will light our country and all who serve it. And the glow from
+that fire can truly light the world.
+
+And so, my fellow Americans, ask not what your country can do for you;
+ask what you can do for your country.
+
+My fellow citizens of the world, ask not what America will do for you,
+but what together we can do for the freedom of man.
+
+Finally, whether you are citizens of America or citizens of the world,
+ask of us here the same high standards of strength and sacrifice which
+we ask of you. With a good conscience our only sure reward, with history
+the final judge of our deeds, let us go forth to lead the land we love,
+asking His blessing and His help, but knowing that here on earth God's
+work must truly be our own.
 
 =head2 v5.13.8 - Roger Williams, L<"The Fifth Gift"|http://www.kuro5hin.org/story/2005/8/19/21304/8493>
 
@@ -108,9 +148,30 @@ grounds.  Here I found that the brushwood spread a good way up the
 park, uniting with the wood that approached the little temple I have
 described. 
 
+=head2 v5.12.3 - Howard W. Campbell, Jr., "Reflections on Not Participating in Current Events"
+
+L<Announced on 2011-01-21 by Ricardo Signes|http://www.nntp.perl.org/group/perl.perl5.porters/2011/01/msg168368.html>
+
+  I saw a huge steam roller,
+  It blotted out the sun.
+  The people all lay down, lay down;
+  They did not try to run.
+  My love and I, we looked amazed
+  Upon the gory mystery.
+  'Lie down, lie down!' the people cried.
+  'The great machine is history!'
+  My love and I, we ran away,
+  The engine did not find us.
+  We ran up to a mountain top,
+  Left history far behind us.
+  Perhaps we should have stayed and died,
+  But somehow we don't think so.
+  We went to see where history'd been,
+  And my, the dead did stink so.
+
 =head2 v5.12.2 - William Gibson, "Pattern Recognition"
 
-L<Announced on 2919-09-06 by Jesse Vincent|http://www.nntp.perl.org/group/perl.perl5.porters/2010/09/msg163852.html>
+L<Announced on 2010-09-06 by Jesse Vincent|http://www.nntp.perl.org/group/perl.perl5.porters/2010/09/msg163852.html>
 
 CPUs. Cayce Pollard Units. That's what Damien calls the clothing
 she wears. CPUs are either black, white, or gray, and ideally
@@ -1322,6 +1383,8 @@ L<Announced on 2001-08-04 by Gurusamy Sarathy|http://www.nntp.perl.org/group/per
 
 =head2 v5.6.1-TRIAL3 - I can't find the announcement
 
+No announcement available.
+
 =head2 v5.6.1-TRIAL2 - no epigraph
 
 L<Announced on 2001-01-31 by Gurusamy Sarathy|http://www.nntp.perl.org/group/perl.perl5.porters/2001/01/msg29934.html>
@@ -1339,7 +1402,7 @@ but that had to be the 57th strangest.
 [footnote: he had a tidy mind]
 
 =head2 v5.6.0 - J R R Tolkien, "The Hobbit", The Last Stage
-			 
+
 L<Announced on 2000-03-23 by Gurusamy Sarathy|http://www.nntp.perl.org/group/perl.perl5.porters/2000/03/msg10341.html>
 
     The dragon is withered,

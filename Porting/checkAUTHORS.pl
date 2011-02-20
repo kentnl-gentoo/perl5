@@ -495,6 +495,7 @@ andreas.koenig\100anima.de              andreas.koenig.gmwojprw\100franz.ak.mind
 +                                       root\100dubravka.in-berlin.de
 anno4000\100lublin.zrz.tu-berlin.de     anno4000\100mailbox.tu-berlin.de
 +                                       siegel\100zrz.tu-berlin.de
+apocal@cpan.org                         perl\1000ne.us
 arnold\100gnu.ai.mit.edu                arnold\100emoryu2.arpa
 +                                       gatech!skeeve!arnold
 arodland\100cpan.org                    andrew\100hbslabs.com
@@ -597,7 +598,6 @@ jasons\100cs.unm.edu                    jasons\100sandy-home.arc.unm.edu
 jbuehler\100hekimian.com                jhpb\100hekimian.com
 jcromie\100100divsol.com                jcromie\100cpan.org
 +                                       jim.cromie\100gmail.com
-jidanni\100jidanni.org                  jidanni\100hoffa.dreamhost.com
 jdhedden\100cpan.org                    jerry\100hedden.us
 +                                       jdhedden\1001979.usna.com
 +                                       jdhedden\100gmail.com
@@ -607,7 +607,9 @@ jeremy\100zawodny.com                   jzawodn\100wcnet.org
 jesse\100sig.bsh.com                    jesse\100ginger
 jfriedl\100yahoo.com                    jfriedl\100yahoo-inc.com
 jfs\100fluent.com                       jfs\100jfs.fluent.com
-jhannah\100omnihotels.com               jay\100jays.net
+jhannah\100mutationgrid.com             jay\100jays.net
++                                       jhannah\100omnihotels.com
+jidanni\100jidanni.org                  jidanni\100hoffa.dreamhost.com
 jjore\100cpan.org                       twists\100gmail.com
 jns\100integration-house.com            jns\100gellyfish.com
 +                                       gellyfish\100gellyfish.com
@@ -771,6 +773,7 @@ rurban\100x-ray.at                      rurban\100cpan.org
 schubiger\100cpan.org                   steven\100accognoscere.org
 +                                       sts\100accognoscere.org
 +                                       schubiger\100gmail.com
++                                       stsc\100refcnt.org
 schwern\100pobox.com                    schwern\100gmail.com
 +                                       schwern\100athens.arena-i.com
 +                                       schwern\100blackrider.aocn.com

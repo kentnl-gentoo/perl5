@@ -10,6 +10,8 @@ BEGIN {
     require './test.pl';
 }
 
+my $DEBUG = 0;  # Outputs extra information for debugging this .t
+
 use strict;
 use warnings;
 use Encode;
@@ -50,11 +52,28 @@ sub range_type {
     return $Unicode;
 }
 
+my %todos;  # List of test numbers that are expected to fail
+map { $todos{$_} = '1' } (
+);
+
 sub numerically {
     return $a <=> $b
 }
 
-my %tests;
+sub format_test($$$) {
+    my ($test, $count, $debug) = @_;
+
+    # Create a test entry, with TODO set if it is one of the known problem
+    # code points
+
+    $debug = "" unless $DEBUG;
+
+    my $todo = (exists $todos{$count}) ? "Known problem" : 0;
+
+    return qq[TODO: { local \$::TODO = "$todo"; ok(eval '$test', '$test; $debug'); }];
+}
+
+my %tests;          # The final set of tests. keys are the code points to test
 my %simple_folds;
 my %multi_folds;
 
@@ -80,7 +99,7 @@ while (<$fh>) {
         @folded = map { hex $_ } @folded;
 
         # Include three code points that are handled internally by the regex
-        # engine specially, plus all non-Unicode multi folds (which actually
+        # engine specially, plus all non-above-255 multi folds (which actually
         # the only one is already included in the three, but this makes sure)
         # And if any member of the fold is not the same range type as the
         # source, add it directly to the tests.  It needs to be an array of an
@@ -105,11 +124,12 @@ while (<$fh>) {
     # Perl only deals with C and F folds
     next if $fold_type ne 'C';
 
-    # C folds are single-char $from to single-char $folded
+    # C folds are single-char $from to single-char $folded, in chr terms
+    # folded_from{'s'} = [ 'S', \N{LATIN SMALL LETTER LONG S} ]
     push @{$folded_from{hex $folded[0]}}, $from;
 }
 
-# Now try to sort the single char folds into equivalence classes of that are
+# Now try to sort the single char folds into equivalence classes that are
 # likely to have identical successes and failures.  Any fold that crosses
 # range types is suspect, and is automatically tested.  Otherwise, store by
 # the number of characters that participate in a fold.  Likely all folds in a
@@ -128,7 +148,7 @@ foreach my $folded (sort numerically keys %folded_from) {
     else {
         push @{$simple_folds{$target_range_type}{$count}},
                { $folded => $folded_from{$folded} };
-    } 
+    }
 }
 
 foreach my $from_length (keys %multi_folds) {
@@ -167,26 +187,32 @@ $tests{0x3A} = [ 0x3A ];
 $tests{0xF7} = [ 0xF7 ];
 $tests{0x2C7} = [ 0x2C7 ];
 
-my $clump_execs = 10000;    # Speed up by building an 'exec' of many tests
+my $clump_execs = 1000;    # Speed up by building an 'exec' of many tests
 my @eval_tests;
+
+# To cut down on the number of tests
+my $has_tested_aa_above_latin1;
+my $has_tested_latin1_aa;
+my $has_tested_l_above_latin1;
+my $has_tested_latin1_l;
 
 # For use by pairs() in generating combinations
 sub prefix {
     my $p = shift;
-    map [ $p, $_ ], @_ 
+    map [ $p, $_ ], @_
 }
 
 # Returns all ordered combinations of pairs of elements from the input array.
 # It doesn't return pairs like (a, a), (b, b).  Change the slice to an array
 # to do that.  This was just to have fewer tests.
-sub pairs (@) { 
+sub pairs (@) {
     #print __LINE__, ": ", join(" XXX ", @_), "\n";
-    map { prefix $_[$_], @_[0..$_-1, $_+1..$#_] } 0..$#_ 
+    map { prefix $_[$_], @_[0..$_-1, $_+1..$#_] } 0..$#_
 }
 
 
 # Finally ready to do the tests
-my $count=1;
+my $count=0;
 foreach my $test (sort { numerically } keys %tests) {
 
   my $previous_target;
@@ -224,6 +250,10 @@ foreach my $test (sort { numerically } keys %tests) {
 
     my $target_above_latin1 = grep { $_ > 255 } @target;
     my $pattern_above_latin1 = grep { $_ > 255 } @pattern;
+    my $target_has_ascii = grep { $_ < 128 } @target;
+    my $pattern_has_ascii = grep { $_ < 128 } @pattern;
+    my $target_has_latin1 = grep { $_ < 256 } @target;
+    my $pattern_has_latin1 = grep { $_ < 256 } @pattern;
     my $is_self = @target == 1 && @pattern == 1 && $target[0] == $pattern[0];
 
     # We don't test multi-char folding into other multi-chars.  We are testing
@@ -231,15 +261,38 @@ foreach my $test (sort { numerically } keys %tests) {
     # code point for diagnostic purposes.  (If both are single, choose the
     # target string)
     my $ord = @target == 1 ? $target[0] : $pattern[0];
-    my $progress = sprintf "\"%s\" and /%s/",
+    my $progress = sprintf "%04X: \"%s\" and /%s/",
+                            $test,
                             join("", @x_target),
                             join("", @x_pattern);
     #print $progress, "\n";
     #diag $progress;
 
     # Now grind out tests, using various combinations.
-    # XXX foreach my $charset ('d', 'u', 'l') {
-    foreach my $charset ('d', 'u') {
+    foreach my $charset ('d', 'l', 'u', 'aa') {
+
+      # /aa should only affect things with folds in the ASCII range.  But, try
+      # it on one pair in the other ranges just to make sure it doesn't break
+      # them.  Set these flags.  They are set to the ord of the character
+      # tested so that all pairs of that ord get tested.
+      if ($charset eq 'aa') {
+        if (! $target_has_ascii && ! $pattern_has_ascii) {
+          if ($target_above_latin1 || $pattern_above_latin1) {
+            next if defined $has_tested_aa_above_latin1
+                    && $has_tested_aa_above_latin1 != $test;
+            $has_tested_aa_above_latin1 = $test;
+          }
+          next if defined $has_tested_latin1_aa && $has_tested_latin1_aa != $test;
+          $has_tested_latin1_aa = $test;
+        }
+      }
+      elsif ($charset eq 'l') {
+        if (! $target_has_latin1 && ! $pattern_has_latin1) {
+          next if defined $has_tested_latin1_l && $has_tested_latin1_l != $test;
+          $has_tested_latin1_l = $test;
+        }
+      }
+
       foreach my $utf8_target (0, 1) {    # Both utf8 and not, for
                                           # code points < 256
         my $upgrade_target = "";
@@ -252,45 +305,47 @@ foreach my $test (sort { numerically } keys %tests) {
 
         foreach my $utf8_pattern (0, 1) {
           next if $pattern_above_latin1 && ! $utf8_pattern;
-          my $uni_semantics = $utf8_target || $charset eq 'u' || ($charset eq 'd' && $utf8_pattern);
+
+          # Our testing of 'l' uses the POSIX locale, which is ASCII-only
+          my $uni_semantics = $charset ne 'l' && ($utf8_target || $charset eq 'u' || ($charset eq 'd' && $utf8_pattern) || $charset =~ /a/);
           my $upgrade_pattern = "";
           $upgrade_pattern = ' utf8::upgrade($p);' if ! $pattern_above_latin1 && $utf8_pattern;
 
           my $lhs = join "", @x_target;
           my @rhs = @x_pattern;
           my $rhs = join "", @rhs;
-          my $should_fail = ! $uni_semantics && $ord >= 128 && $ord < 256 && ! $is_self;
+          my $should_fail = (! $uni_semantics && $ord >= 128 && $ord < 256 && ! $is_self)
+                            || ($charset eq 'aa' && $target_has_ascii != $pattern_has_ascii)
+                            || ($charset eq 'l' && $target_has_latin1 != $pattern_has_latin1);
 
           # Do simple tests of referencing capture buffers, named and
           # numbered.
           my $op = '=~';
           $op = '!~' if $should_fail;
+
           my $eval = "my \$c = \"$lhs$rhs\"; my \$p = qr/(?$charset:^($rhs)\\1\$)/i;$upgrade_target$upgrade_pattern \$c $op \$p";
-          push @eval_tests, qq[ok(eval '$eval', '$eval')];
+          push @eval_tests, format_test($eval, ++$count, "");
+
           $eval = "my \$c = \"$lhs$rhs\"; my \$p = qr/(?$charset:^(?<grind>$rhs)\\k<grind>\$)/i;$upgrade_target$upgrade_pattern \$c $op \$p";
-          push @eval_tests, qq[ok(eval '$eval', '$eval')];
-          $count += 2;
+          push @eval_tests, format_test($eval, ++$count, "");
+
           if ($lhs ne $rhs) {
             $eval = "my \$c = \"$rhs$lhs\"; my \$p = qr/(?$charset:^($rhs)\\1\$)/i;$upgrade_target$upgrade_pattern \$c $op \$p";
-            push @eval_tests, qq[ok(eval '$eval', '$eval')];
+            push @eval_tests, format_test($eval, ++$count, "");
+
             $eval = "my \$c = \"$rhs$lhs\"; my \$p = qr/(?$charset:^(?<grind>$rhs)\\k<grind>\$)/i;$upgrade_target$upgrade_pattern \$c $op \$p";
-            push @eval_tests, qq[ok(eval '$eval', '$eval')];
-            $count += 2;
+            push @eval_tests, format_test($eval, ++$count, "");
           }
-          #diag $eval_tests[-1];
-          #next;
 
           foreach my $bracketed (0, 1) {   # Put rhs in [...], or not
             foreach my $inverted (0,1) {
-                next if $inverted && ! $bracketed;
+                next if $inverted && ! $bracketed;  # inversion only valid in [^...]
 
               # In some cases, add an extra character that doesn't fold, and
               # looks ok in the output.
               my $extra_char = "_";
               foreach my $prepend ("", $extra_char) {
                 foreach my $append ("", $extra_char) {
-                  # Append a char for after quantifier, as results vary if no
-                  # char appended.
 
                   # Assemble the rhs.  Put each character in a separate
                   # bracketed if using charclasses.  This creates a stress on
@@ -334,7 +389,9 @@ foreach my $test (sort { numerically } keys %tests) {
                           # The folded part can match the null string if it
                           # isn't required to have width, and there's not
                           # something on one or both sides that force it to.
-                          my $must_match = ! $can_match_null || ($l_anchor && $r_anchor) || ($l_anchor && $append) || ($r_anchor && $prepend) || ($prepend && $append);
+                          my $both_sides = ($l_anchor && $r_anchor) || ($l_anchor && $append) || ($r_anchor && $prepend) || ($prepend && $append);
+                          my $must_match = ! $can_match_null || $both_sides;
+                          # for performance, but doing this missed many failures
                           #next unless $must_match;
                           my $quantified = "(?$charset:$l_anchor$prepend$interior${quantifier}$append$r_anchor)";
                           my $op;
@@ -346,19 +403,22 @@ foreach my $test (sort { numerically } keys %tests) {
                           $op = ! $op if $must_match && $inverted;
                           $op = ($op) ? '=~' : '!~';
 
-                          my $stuff .= " uni_semantics=$uni_semantics, should_fail=$should_fail, bracketed=$bracketed, prepend=$prepend, append=$append, parend=$parend, quantifier=$quantifier, l_anchor=$l_anchor, r_anchor=$r_anchor";
-                          $stuff .= "; pattern_above_latin1=$pattern_above_latin1; utf8_pattern=$utf8_pattern";
-                          my $eval = "my \$c = \"$prepend$lhs$append\"; my \$p = qr/$quantified/i;$upgrade_target$upgrade_pattern \$c $op \$p;";
+                          my $debug .= " uni_semantics=$uni_semantics, should_fail=$should_fail, bracketed=$bracketed, prepend=$prepend, append=$append, parend=$parend, quantifier=$quantifier, l_anchor=$l_anchor, r_anchor=$r_anchor";
+                          $debug .= "; pattern_above_latin1=$pattern_above_latin1; utf8_pattern=$utf8_pattern";
+                          my $eval = "my \$c = \"$prepend$lhs$append\"; my \$p = qr/$quantified/i;$upgrade_target$upgrade_pattern \$c $op \$p";
 
-                          # XXX Doesn't currently test multi-char folds
+                          # XXX Doesn't currently test multi-char folds in pattern
                           next if @pattern != 1;
-                          #next if ! $must_match;
-                          push @eval_tests, qq[ok(eval '$eval', '$eval')];
-                          $count++;
+                          push @eval_tests, format_test($eval, ++$count, $debug);
 
                           # Group tests
                           if (@eval_tests >= $clump_execs) {
+                              #eval "use re qw(Debug COMPILE EXECUTE);" . join ";\n", @eval_tests;
                               eval join ";\n", @eval_tests;
+                              if ($@) {
+                                fail($@);
+                                exit 1;
+                              }
                               undef @eval_tests;
                           }
                         }
@@ -377,7 +437,11 @@ foreach my $test (sort { numerically } keys %tests) {
 
 # Finish up any tests not already done
 eval join ";\n", @eval_tests;
+if ($@) {
+  fail($@);
+  exit 1;
+}
 
-plan($count-1);
+plan($count);
 
 1

@@ -1114,7 +1114,8 @@ L<perlebcdic/OPERATOR DIFFERENCES> for the complete list of what these
 sequences mean on both ASCII and EBCDIC platforms.
 
 Use of any other character following the "c" besides those listed above is
-discouraged, and may become deprecated or forbidden.  What happens for those
+discouraged, and some are deprecated with the intention of removing
+those in Perl 5.16.  What happens for any of these
 other characters currently though, is that the value is derived by inverting
 the 7th bit (0x40).
 
@@ -1196,7 +1197,7 @@ X<\l> X<\u> X<\L> X<\U> X<\E> X<\Q>
 
 If C<use locale> is in effect, the case map used by C<\l>, C<\L>,
 C<\u> and C<\U> is taken from the current locale.  See L<perllocale>.
-If Unicode (for example, C<\N{}> or wide hex characters of 0x100 or
+If Unicode (for example, C<\N{}> or code points of 0x100 or
 beyond) is being used, the case map used by C<\l>, C<\L>, C<\u> and
 C<\U> is as defined by Unicode.
 
@@ -1331,6 +1332,13 @@ If a precompiled pattern is embedded in a larger pattern then the effect
 of 'msixp' will be propagated appropriately.  The effect of the 'o'
 modifier has is not propagated, being restricted to those patterns
 explicitly using it.
+
+Several other modifiers to control the character set semantics were
+added for 5.14 that, unlike the ones listed above,  may not be used
+after the final pattern delimiter, but only following a C<"(?"> inside
+the regular expression.  (It is planned in 5.16 to make them usable in
+the suffix position.)  These are B<C<"a">>, B<C<"d">>, B<C<"l">>, and
+B<C<"u">>.  They are documented in L<perlre/Extended Patterns>.
 
 See L<perlre> for additional information on valid syntax for STRING, and
 for a detailed look at the semantics of regular expressions.
@@ -1562,7 +1570,8 @@ with the replacement text and returns the number of substitutions
 made.  Otherwise it returns false (specifically, the empty string).
 
 If the C</r> (non-destructive) option is used then it will perform the
-substitution on a copy of the string and return the copy whether or not a
+substitution on a copy of the string and instead of returning the
+number of substitutions, it returns the copy whether or not a
 substitution occurred. The original string will always remain unchanged in
 this case. The copy will always be a plain string, even if the input is an
 object or a tied variable.
@@ -2135,12 +2144,12 @@ C<tr///>), the search is repeated once more.
 If the first delimiter is not an opening punctuation, three delimiters must
 be same such as C<s!!!> and C<tr)))>, in which case the second delimiter
 terminates the left part and starts the right part at once.
-If the left part is delimited by bracketing punctuations (that is C<()>,
+If the left part is delimited by bracketing punctuation (that is C<()>,
 C<[]>, C<{}>, or C<< <> >>), the right part needs another pair of
-delimiters such as C<s(){}> and C<tr[]//>.  In these cases, whitespaces
+delimiters such as C<s(){}> and C<tr[]//>.  In these cases, whitespace
 and comments are allowed between both parts, though the comment must follow
-at least one whitespace; otherwise a character expected as the start of
-the comment may be regarded as the starting delimiter of the right part.
+at least one whitespace character; otherwise a character expected as the 
+start of the comment may be regarded as the starting delimiter of the right part.
 
 During this search no attention is paid to the semantics of the construct.
 Thus:

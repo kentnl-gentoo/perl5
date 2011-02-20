@@ -475,7 +475,16 @@ PERLVAR(Ieuid,		Uid_t)		/* current effective user id */
 PERLVAR(Igid,		Gid_t)		/* current real group id */
 PERLVAR(Iegid,		Gid_t)		/* current effective group id */
 PERLVARI(Ian,		U32,	0)	/* malloc sequence number */
-PERLVARI(Icop_seqmax,	U32,	0)	/* statement sequence number */
+
+#ifdef DEBUGGING
+    /* exercise wrap-around */
+    #define PERL_COP_SEQMAX (U32_MAX-50)
+#else
+    #define PERL_COP_SEQMAX 0
+#endif
+PERLVARI(Icop_seqmax,	U32,	PERL_COP_SEQMAX) /* statement sequence number */
+#undef PERL_COP_SEQMAX
+
 PERLVARI(Ievalseq,	U32,	0)	/* eval sequence number */
 PERLVAR(Iorigalen,	U32)
 PERLVAR(Iorigenviron,	char **)
@@ -669,6 +678,8 @@ PERLVAR(Idebug_pad,	struct perl_debug_pad)	/* always needed because of the re ex
 
 PERLVAR(Iutf8_idstart,	SV *)
 PERLVAR(Iutf8_idcont,	SV *)
+PERLVAR(Iutf8_xidstart,	SV *)
+PERLVAR(Iutf8_xidcont,	SV *)
 
 PERLVAR(Isort_RealCmp,  SVCOMPARE_t)
 
@@ -767,8 +778,13 @@ PERLVAR(Iregistered_mros, HV *)
 PERLVAR(Iblockhooks, AV *)
 
 
-/* Everything that folds to a character, for case insensitivity regex matching */
+/* Everything that folds to a given character, for case insensitivity regex
+ * matching */
 PERLVARI(Iutf8_foldclosures,	HV *, NULL)
+
+/* List of characters that participate in folds (except marks, etc in
+ * multi-char folds) */
+PERLVAR(Iutf8_foldable,	HV *)
 
 PERLVAR(Icustom_ops, HV *)      /* custom op registrations */
 

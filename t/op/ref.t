@@ -9,7 +9,7 @@ BEGIN {
 use strict qw(refs subs);
 use re ();
 
-plan(200);
+plan(213);
 
 # Test glob operations.
 
@@ -379,6 +379,7 @@ curr_test($test + 2);
 # test that DESTROY is called on all objects during global destruction,
 # even those without hard references [perl #36347]
 
+$TODO = 'bug #36347';
 is(
   runperl(
    stderr => 1, prog => 'sub DESTROY { print qq-aaa\n- } bless \$a[0]'
@@ -393,7 +394,7 @@ is(
  "aaa\n",
  'DESTROY called on closure variable'
 );
-
+$TODO = undef;
 
 # test if refgen behaves with autoviv magic
 {
@@ -669,6 +670,26 @@ is (runperl(
 		. 'delete $::{x}; delete $::{y}; print qq{ok\n};',
 	stderr => 1),
     "ok\n", 'freeing freed glob in global destruction');
+
+
+# Test undefined hash references as arguments to %{} in boolean context
+# [perl #81750]
+{
+ no strict 'refs';
+ eval { my $foo; %$foo;             }; ok !$@, '%$undef';
+ eval { my $foo; scalar %$foo;      }; ok !$@, 'scalar %$undef';
+ eval { my $foo; !%$foo;            }; ok !$@, '!%$undef';
+ eval { my $foo; if ( %$foo) {}     }; ok !$@, 'if ( %$undef) {}';
+ eval { my $foo; if (!%$foo) {}     }; ok !$@, 'if (!%$undef) {}';
+ eval { my $foo; unless ( %$foo) {} }; ok !$@, 'unless ( %$undef) {}';
+ eval { my $foo; unless (!%$foo) {} }; ok !$@, 'unless (!%$undef) {}';
+ eval { my $foo; 1 if %$foo;        }; ok !$@, '1 if %$undef';
+ eval { my $foo; 1 if !%$foo;       }; ok !$@, '1 if !%$undef';
+ eval { my $foo; 1 unless %$foo;    }; ok !$@, '1 unless %$undef;';
+ eval { my $foo; 1 unless ! %$foo;  }; ok !$@, '1 unless ! %$undef';
+ eval { my $foo;  %$foo ? 1 : 0;    }; ok !$@, ' %$undef ? 1 : 0';
+ eval { my $foo; !%$foo ? 1 : 0;    }; ok !$@, '!%$undef ? 1 : 0';
+}
 
 
 # Bit of a hack to make test.pl happy. There are 3 more tests after it leaves.
