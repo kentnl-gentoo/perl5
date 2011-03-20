@@ -1691,6 +1691,9 @@ S_Internals_V(pTHX_ CV *cv)
 #  ifdef PERL_MEM_LOG_NOIMPL
 			     " PERL_MEM_LOG_NOIMPL"
 #  endif
+#  ifdef PERL_PRESERVE_IVUV
+			     " PERL_PRESERVE_IVUV"
+#  endif
 #  ifdef PERL_USE_DEVEL
 			     " PERL_USE_DEVEL"
 #  endif
@@ -4357,6 +4360,7 @@ S_init_perllib(pTHX)
 #  define PERLLIB_MANGLE(s,n) (s)
 #endif
 
+#ifndef PERL_IS_MINIPERL
 /* Push a directory onto @INC if it exists.
    Generate a new SV if we do this, to save needing to copy the SV we push
    onto @INC  */
@@ -4378,11 +4382,13 @@ S_incpush_if_exists(pTHX_ AV *const av, SV *dir, SV *const stem)
     }
     return dir;
 }
+#endif
 
 STATIC void
 S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
 {
     dVAR;
+#ifndef PERL_IS_MINIPERL
     const U8 using_sub_dirs
 	= (U8)flags & (INCPUSH_ADD_VERSIONED_SUB_DIRS
 		       |INCPUSH_ADD_ARCHONLY_SUB_DIRS|INCPUSH_ADD_OLD_VERS);
@@ -4392,6 +4398,7 @@ S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
 	= (U8)flags & INCPUSH_ADD_ARCHONLY_SUB_DIRS;
 #ifdef PERL_INC_VERSION_LIST
     const U8 addoldvers  = (U8)flags & INCPUSH_ADD_OLD_VERS;
+#endif
 #endif
     const U8 canrelocate = (U8)flags & INCPUSH_CAN_RELOCATE;
     const U8 unshift     = (U8)flags & INCPUSH_UNSHIFT;
@@ -4412,7 +4419,9 @@ S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
 	   pushing. Hence to make it work, need to push the architecture
 	   (etc) libraries onto a temporary array, then "unshift" that onto
 	   the front of @INC.  */
+#ifndef PERL_IS_MINIPERL
 	AV *const av = (using_sub_dirs) ? (unshift ? newAV() : inc) : NULL;
+#endif
 
 	if (len) {
 	    /* I am not convinced that this is valid when PERLLIB_MANGLE is
@@ -4424,6 +4433,21 @@ S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
 	} else {
 	    libdir = newSVpv(PERLLIB_MANGLE(dir, 0), 0);
 	}
+
+#ifdef VMS
+	char *unix;
+	STRLEN len;
+
+	if ((unix = tounixspec_ts(SvPV(libdir,len),NULL)) != NULL) {
+	    len = strlen(unix);
+	    while (unix[len-1] == '/') len--;  /* Cosmetic */
+	    sv_usepvn(libdir,unix,len);
+	}
+	else
+	    PerlIO_printf(Perl_error_log,
+		          "Failed to unixify @INC element \"%s\"\n",
+			  SvPV(libdir,len));
+#endif
 
 	/* Do the if() outside the #ifdef to avoid warnings about an unused
 	   parameter.  */
@@ -4524,6 +4548,7 @@ S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
 	    }
 #endif
 	}
+#ifndef PERL_IS_MINIPERL
 	/*
 	 * BEFORE pushing libdir onto @INC we may first push version- and
 	 * archname-specific sub-directories.
@@ -4535,22 +4560,6 @@ S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
 	    const char * const incverlist[] = { PERL_INC_VERSION_LIST };
 	    const char * const *incver;
 #endif
-#ifdef VMS
-	    char *unix;
-	    STRLEN len;
-
-
-	    if ((unix = tounixspec_ts(SvPV(libdir,len),NULL)) != NULL) {
-		len = strlen(unix);
-		while (unix[len-1] == '/') len--;  /* Cosmetic */
-		sv_usepvn(libdir,unix,len);
-	    }
-	    else
-		PerlIO_printf(Perl_error_log,
-		              "Failed to unixify @INC element \"%s\"\n",
-			      SvPV(libdir,len));
-#endif
-
 	    subdir = newSVsv(libdir);
 
 	    if (add_versioned_sub_dirs) {
@@ -4583,13 +4592,18 @@ S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
 	    assert (SvREFCNT(subdir) == 1);
 	    SvREFCNT_dec(subdir);
 	}
-
+#endif /* !PERL_IS_MINIPERL */
 	/* finally add this lib directory at the end of @INC */
 	if (unshift) {
+#ifdef PERL_IS_MINIPERL
+	    const U32 extra = 0;
+#else
 	    U32 extra = av_len(av) + 1;
+#endif
 	    av_unshift(inc, extra + push_basedir);
 	    if (push_basedir)
 		av_store(inc, extra, libdir);
+#ifndef PERL_IS_MINIPERL
 	    while (extra--) {
 		/* av owns a reference, av_store() expects to be donated a
 		   reference, and av expects to be sane when it's cleared.
@@ -4604,6 +4618,7 @@ S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
 		av_store(inc, extra, SvREFCNT_inc(*av_fetch(av, extra, FALSE)));
 	    }
 	    SvREFCNT_dec(av);
+#endif
 	}
 	else if (push_basedir) {
 	    av_push(inc, libdir);
@@ -4626,7 +4641,15 @@ S_incpush_use_sep(pTHX_ const char *p, STRLEN len, U32 flags)
 
     PERL_ARGS_ASSERT_INCPUSH_USE_SEP;
 
+    /* perl compiled with -DPERL_RELOCATABLE_INCPUSH will ignore the len
+     * argument to incpush_use_sep.  This allows creation of relocatable
+     * Perl distributions that patch the binary at install time.  Those
+     * distributions will have to provide their own relocation tools; this
+     * is not a feature otherwise supported by core Perl.
+     */
+#ifndef PERL_RELOCATABLE_INCPUSH
     if (!len)
+#endif
 	len = strlen(p);
 
     end = p + len;

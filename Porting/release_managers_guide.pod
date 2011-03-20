@@ -110,11 +110,11 @@ If you don't have a PAUSE account, then request one:
 
     https://pause.perl.org/pause/query?ACTION=request_id
 
-Check that your account is allowed to upload perl distros: goto
-L<https://pause.perl.org/>, login, then select 'upload file to CPAN'; there
-should be a "For pumpkings only: Send a CC" tickbox.  If not, ask Andreas
-KE<0xf6>nig to add your ID to the list of people allowed to upload something
-called perl.  You can find Andreas' email address at:
+Check that your account is allowed to upload perl distros: go to
+L<https://pause.perl.org/pause/authenquery?ACTION=who_pumpkin> and check that
+your PAUSE ID is listed there.  If not, ask Andreas KE<0xf6>nig to add your ID
+to the list of people allowed to upload something called perl.  You can find
+Andreas' email address at:
 
     https://pause.perl.org/pause/query?ACTION=pause_04imprint
 
@@ -494,6 +494,8 @@ entry, as that is likely to reflect the previous version number.
 Also edit Module::CoreList's new version number in its F<Changes>
 file.
 
+Add a perldelta entry for the new Module::CoreList version.
+
 You should also add the version you're about to release to the
 L<Module::CoreList/CAVEATS> section which enumerates the perl releases
 that Module::CoreList covers.
@@ -601,10 +603,7 @@ I<You MUST SKIP this step for SNAPSHOT>
 
 Tag the release (e.g.):
 
-    $ git tag v5.11.0 -m'First release of the v5.11 series!'
-
-(Adjust the syntax appropriately if you're working on Win32, i.e. use
-C<-m "..."> rather than C<-m'...'>.)
+    $ git tag v5.11.0 -m "First release of the v5.11 series!"
 
 It is VERY important that from this point forward, you not push
 your git changes to the Perl master repository.  If anything goes

@@ -159,11 +159,11 @@ use warnings;
 use vars '%Config';
 
 sub bincompat_options {
-    return sort split ' ', (Internals::V())[0];
+    return split ' ', (Internals::V())[0];
 }
 
 sub non_bincompat_options {
-    return sort split ' ', (Internals::V())[1];
+    return split ' ', (Internals::V())[1];
 }
 
 sub compile_date {
@@ -203,7 +203,7 @@ sub _V {
     print "  $date\n" if defined $date;
 
     my @env = map { "$_=\"$ENV{$_}\"" } sort grep {/^PERL/} keys %ENV;
-    push @env, "CYGWIN=\"$ENV{CYGWIN}\"" if $^O eq 'cygwin';
+    push @env, "CYGWIN=\"$ENV{CYGWIN}\"" if $^O eq 'cygwin' and $ENV{CYGWIN};
 
     if (@env) {
         print "  \%ENV:\n";

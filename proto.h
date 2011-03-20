@@ -4676,6 +4676,17 @@ STATIC PerlIO *	S_doopen_pm(pTHX_ SV *name)
 
 #  endif
 #endif
+#if !defined(PERL_IS_MINIPERL)
+#  if defined(PERL_IN_PERL_C)
+STATIC SV *	S_incpush_if_exists(pTHX_ AV *const av, SV *dir, SV *const stem)
+			__attribute__nonnull__(pTHX_1)
+			__attribute__nonnull__(pTHX_2)
+			__attribute__nonnull__(pTHX_3);
+#define PERL_ARGS_ASSERT_INCPUSH_IF_EXISTS	\
+	assert(av); assert(dir); assert(stem)
+
+#  endif
+#endif
 #if !defined(PERL_NO_UTF16_FILTER)
 #  if defined(PERL_IN_TOKE_C)
 STATIC U8*	S_add_utf16_textfilter(pTHX_ U8 *const s, bool reversed)
@@ -5611,13 +5622,6 @@ STATIC void	S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
 #define PERL_ARGS_ASSERT_INCPUSH	\
 	assert(dir)
 
-STATIC SV *	S_incpush_if_exists(pTHX_ AV *const av, SV *dir, SV *const stem)
-			__attribute__nonnull__(pTHX_1)
-			__attribute__nonnull__(pTHX_2)
-			__attribute__nonnull__(pTHX_3);
-#define PERL_ARGS_ASSERT_INCPUSH_IF_EXISTS	\
-	assert(av); assert(dir); assert(stem)
-
 STATIC void	S_incpush_use_sep(pTHX_ const char *p, STRLEN len, U32 flags)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_INCPUSH_USE_SEP	\
@@ -5954,6 +5958,15 @@ STATIC SV *	S_space_join_names_mortal(pTHX_ char *const *array)
 
 #endif
 #if defined(PERL_IN_REGCOMP_C)
+STATIC void	S_add_alternate(pTHX_ AV** alternate_ptr, U8* string, STRLEN len)
+			__attribute__nonnull__(pTHX_1)
+			__attribute__nonnull__(pTHX_2);
+#define PERL_ARGS_ASSERT_ADD_ALTERNATE	\
+	assert(alternate_ptr); assert(string)
+
+PERL_STATIC_INLINE HV*	S_add_cp_to_invlist(pTHX_ HV* invlist, const UV cp)
+			__attribute__warn_unused_result__;
+
 STATIC U32	S_add_data(struct RExC_state_t *pRExC_state, U32 n, const char *s)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(1)
@@ -5961,11 +5974,8 @@ STATIC U32	S_add_data(struct RExC_state_t *pRExC_state, U32 n, const char *s)
 #define PERL_ARGS_ASSERT_ADD_DATA	\
 	assert(pRExC_state); assert(s)
 
-STATIC HV*	S_add_range_to_invlist(pTHX_ HV* const invlist, const UV start, const UV end)
-			__attribute__warn_unused_result__
-			__attribute__nonnull__(pTHX_1);
-#define PERL_ARGS_ASSERT_ADD_RANGE_TO_INVLIST	\
-	assert(invlist)
+STATIC HV*	S_add_range_to_invlist(pTHX_ HV* invlist, const UV start, const UV end)
+			__attribute__warn_unused_result__;
 
 STATIC void	S_checkposixcc(pTHX_ struct RExC_state_t *pRExC_state)
 			__attribute__nonnull__(pTHX_1);
@@ -5988,12 +5998,6 @@ STATIC void	S_cl_init(const struct RExC_state_t *pRExC_state, struct regnode_cha
 			__attribute__nonnull__(1)
 			__attribute__nonnull__(2);
 #define PERL_ARGS_ASSERT_CL_INIT	\
-	assert(pRExC_state); assert(cl)
-
-STATIC void	S_cl_init_zero(const struct RExC_state_t *pRExC_state, struct regnode_charclass_class *cl)
-			__attribute__nonnull__(1)
-			__attribute__nonnull__(2);
-#define PERL_ARGS_ASSERT_CL_INIT_ZERO	\
 	assert(pRExC_state); assert(cl)
 
 STATIC int	S_cl_is_anything(const struct regnode_charclass_class *cl)
@@ -6204,19 +6208,21 @@ STATIC void	S_scan_commit(pTHX_ const struct RExC_state_t *pRExC_state, struct s
 #define PERL_ARGS_ASSERT_SCAN_COMMIT	\
 	assert(pRExC_state); assert(data); assert(minlenp)
 
-PERL_STATIC_INLINE U8	S_set_regclass_bit(pTHX_ struct RExC_state_t* pRExC_state, regnode* node, const U8 value, HV** nonbitmap_ptr)
+PERL_STATIC_INLINE U8	S_set_regclass_bit(pTHX_ struct RExC_state_t* pRExC_state, regnode* node, const U8 value, HV** invlist_ptr, AV** alternate_ptr)
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2)
-			__attribute__nonnull__(pTHX_4);
+			__attribute__nonnull__(pTHX_4)
+			__attribute__nonnull__(pTHX_5);
 #define PERL_ARGS_ASSERT_SET_REGCLASS_BIT	\
-	assert(pRExC_state); assert(node); assert(nonbitmap_ptr)
+	assert(pRExC_state); assert(node); assert(invlist_ptr); assert(alternate_ptr)
 
-STATIC U8	S_set_regclass_bit_fold(pTHX_ struct RExC_state_t *pRExC_state, regnode* node, const U8 value, HV** nonbitmap_ptr)
+STATIC U8	S_set_regclass_bit_fold(pTHX_ struct RExC_state_t *pRExC_state, regnode* node, const U8 value, HV** invlist_ptr, AV** alternate_ptr)
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2)
-			__attribute__nonnull__(pTHX_4);
+			__attribute__nonnull__(pTHX_4)
+			__attribute__nonnull__(pTHX_5);
 #define PERL_ARGS_ASSERT_SET_REGCLASS_BIT_FOLD	\
-	assert(pRExC_state); assert(node); assert(nonbitmap_ptr)
+	assert(pRExC_state); assert(node); assert(invlist_ptr); assert(alternate_ptr)
 
 STATIC I32	S_study_chunk(pTHX_ struct RExC_state_t *pRExC_state, regnode **scanp, I32 *minlenp, I32 *deltap, regnode *last, struct scan_data_t *data, I32 stopparen, U8* recursed, struct regnode_charclass_class *and_withp, U32 flags, U32 depth)
 			__attribute__nonnull__(pTHX_1)

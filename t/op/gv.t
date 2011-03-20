@@ -12,7 +12,7 @@ BEGIN {
 
 use warnings;
 
-plan( tests => 232 );
+plan( tests => 234 );
 
 # type coersion on assignment
 $foo = 'foo';
@@ -288,10 +288,11 @@ is($j[0], 1);
     is (ref\$v{v}, 'GLOB', 'lvalue assignment preserves globs');
     my $x = readline $v{v};
     is ($x, "perl\n");
+    is ($e, '', '__DIE__ handler never called');
 }
 
 {
-    $e = '';
+    my $e = '';
     # GLOB assignment to tied element
     local $SIG{__DIE__} = sub { $e = $_[0] };
     sub T::TIEARRAY  { bless [] => "T" }
@@ -305,9 +306,10 @@ is($j[0], 1);
       ref\tied(@ary)->[0], 'GLOB',
      'tied elem assignment preserves globs'
     );
-    is ($e, '');
+    is ($e, '', '__DIE__ handler not called');
     my $x = readline $ary[0];
     is($x, "rocks\n");
+    is ($e, '', '__DIE__ handler never called');
 }
 
 {
@@ -775,10 +777,13 @@ EOF
    'PVLV: coderef assignment when the glob is detached from the symtab'
     or diag $@;
 
-  # open should accept a PVLV as its first argument
-  $_ = *hon;
-  ok eval { open $_,'<', \my $thlext }, 'PVLV can be the first arg to open'
-   or diag $@;
+SKIP: {
+    skip_if_miniperl("no dynamic loading on miniperl, so can't load PerlIO::scalar", 1);
+    # open should accept a PVLV as its first argument
+    $_ = *hon;
+    ok eval { open $_,'<', \my $thlext }, 'PVLV can be the first arg to open'
+	or diag $@;
+  }
 
   # -t should not stringify
   $_ = *thlit; delete $::{thlit};

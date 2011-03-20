@@ -150,35 +150,6 @@
 	LOAD_UTF8_CHARCLASS_NO_CHECK(X_T);      /* U+11A8 "\xe1\x86\xa8" */ \
 	LOAD_UTF8_CHARCLASS_NO_CHECK(X_V)       /* U+1160 "\xe1\x85\xa0" */  
 
-/* 
-   We dont use PERL_LEGACY_UNICODE_CHARCLASS_MAPPINGS as the direct test
-   so that it is possible to override the option here without having to 
-   rebuild the entire core. as we are required to do if we change regcomp.h
-   which is where PERL_LEGACY_UNICODE_CHARCLASS_MAPPINGS is defined.
-*/
-#if PERL_LEGACY_UNICODE_CHARCLASS_MAPPINGS
-#define BROKEN_UNICODE_CHARCLASS_MAPPINGS
-#endif
-
-#ifdef BROKEN_UNICODE_CHARCLASS_MAPPINGS
-#define LOAD_UTF8_CHARCLASS_PERL_WORD()   LOAD_UTF8_CHARCLASS_ALNUM()
-#define LOAD_UTF8_CHARCLASS_PERL_SPACE()  LOAD_UTF8_CHARCLASS_SPACE()
-#define LOAD_UTF8_CHARCLASS_POSIX_DIGIT() LOAD_UTF8_CHARCLASS_DIGIT()
-#define RE_utf8_perl_word   PL_utf8_alnum
-#define RE_utf8_perl_space  PL_utf8_space
-#define RE_utf8_posix_digit PL_utf8_digit
-#define perl_word  alnum
-#define perl_space space
-#define posix_digit digit
-#else
-#define LOAD_UTF8_CHARCLASS_PERL_WORD()   LOAD_UTF8_CHARCLASS(perl_word,"a")
-#define LOAD_UTF8_CHARCLASS_PERL_SPACE()  LOAD_UTF8_CHARCLASS(perl_space," ")
-#define LOAD_UTF8_CHARCLASS_POSIX_DIGIT() LOAD_UTF8_CHARCLASS(posix_digit,"0")
-#define RE_utf8_perl_word   PL_utf8_perl_word
-#define RE_utf8_perl_space  PL_utf8_perl_space
-#define RE_utf8_posix_digit PL_utf8_posix_digit
-#endif
-
 #define PLACEHOLDER	/* Something for the preprocessor to grab onto */
 
 /* The actual code for CCC_TRY, which uses several variables from the routine
@@ -1442,23 +1413,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                           reginclass(prog, c, (U8*)s, &inclasslen, utf8_target));
 	    }
 	    else {
-		 while (s < strend) {
-		      STRLEN skip = 1;
-
-		      if (REGINCLASS(prog, c, (U8*)s) ||
-			  (ANYOF_FOLD_SHARP_S(c, s, strend) &&
-			   /* The assignment of 2 is intentional:
-			    * for the folded sharp s, the skip is 2. */
-			   (skip = SHARP_S_SKIP))) {
-			   if (tmp && (!reginfo || regtry(reginfo, &s)))
-				goto got_it;
-			   else
-				tmp = doevery;
-		      }
-		      else 
-			   tmp = 1;
-		      s += skip;
-		 }
+		REXEC_FBC_CLASS_SCAN(REGINCLASS(prog, c, (U8*)s));
 	    }
 	    break;
 	case CANY:
@@ -1619,15 +1574,15 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	    break;
 	case ALNUMU:
 	    REXEC_FBC_CSCAN_PRELOAD(
-		LOAD_UTF8_CHARCLASS_PERL_WORD(),
-		swash_fetch(RE_utf8_perl_word,(U8*)s, utf8_target),
+		LOAD_UTF8_CHARCLASS_ALNUM(),
+		swash_fetch(PL_utf8_alnum,(U8*)s, utf8_target),
                 isWORDCHAR_L1((U8) *s)
 	    );
 	    break;
 	case ALNUM:
 	    REXEC_FBC_CSCAN_PRELOAD(
-		LOAD_UTF8_CHARCLASS_PERL_WORD(),
-		swash_fetch(RE_utf8_perl_word,(U8*)s, utf8_target),
+		LOAD_UTF8_CHARCLASS_ALNUM(),
+		swash_fetch(PL_utf8_alnum,(U8*)s, utf8_target),
                 isWORDCHAR((U8) *s)
 	    );
 	    break;
@@ -1638,15 +1593,15 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	    break;
 	case NALNUMU:
 	    REXEC_FBC_CSCAN_PRELOAD(
-		LOAD_UTF8_CHARCLASS_PERL_WORD(),
-		swash_fetch(RE_utf8_perl_word,(U8*)s, utf8_target),
+		LOAD_UTF8_CHARCLASS_ALNUM(),
+		swash_fetch(PL_utf8_alnum,(U8*)s, utf8_target),
                 ! isWORDCHAR_L1((U8) *s)
 	    );
 	    break;
 	case NALNUM:
 	    REXEC_FBC_CSCAN_PRELOAD(
-		LOAD_UTF8_CHARCLASS_PERL_WORD(),
-		!swash_fetch(RE_utf8_perl_word, (U8*)s, utf8_target),
+		LOAD_UTF8_CHARCLASS_ALNUM(),
+		!swash_fetch(PL_utf8_alnum, (U8*)s, utf8_target),
                 ! isALNUM(*s)
 	    );
 	    break;
@@ -1664,15 +1619,15 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	    break;
 	case SPACEU:
 	    REXEC_FBC_CSCAN_PRELOAD(
-		LOAD_UTF8_CHARCLASS_PERL_SPACE(),
-		*s == ' ' || swash_fetch(RE_utf8_perl_space,(U8*)s, utf8_target),
+		LOAD_UTF8_CHARCLASS_SPACE(),
+		*s == ' ' || swash_fetch(PL_utf8_space,(U8*)s, utf8_target),
                 isSPACE_L1((U8) *s)
 	    );
 	    break;
 	case SPACE:
 	    REXEC_FBC_CSCAN_PRELOAD(
-		LOAD_UTF8_CHARCLASS_PERL_SPACE(),
-		*s == ' ' || swash_fetch(RE_utf8_perl_space,(U8*)s, utf8_target),
+		LOAD_UTF8_CHARCLASS_SPACE(),
+		*s == ' ' || swash_fetch(PL_utf8_space,(U8*)s, utf8_target),
                 isSPACE((U8) *s)
 	    );
 	    break;
@@ -1689,15 +1644,15 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	    break;
 	case NSPACEU:
 	    REXEC_FBC_CSCAN_PRELOAD(
-		LOAD_UTF8_CHARCLASS_PERL_SPACE(),
-		!( *s == ' ' || swash_fetch(RE_utf8_perl_space,(U8*)s, utf8_target)),
+		LOAD_UTF8_CHARCLASS_SPACE(),
+		!( *s == ' ' || swash_fetch(PL_utf8_space,(U8*)s, utf8_target)),
                 ! isSPACE_L1((U8) *s)
 	    );
 	    break;
 	case NSPACE:
 	    REXEC_FBC_CSCAN_PRELOAD(
-		LOAD_UTF8_CHARCLASS_PERL_SPACE(),
-		!(*s == ' ' || swash_fetch(RE_utf8_perl_space,(U8*)s, utf8_target)),
+		LOAD_UTF8_CHARCLASS_SPACE(),
+		!(*s == ' ' || swash_fetch(PL_utf8_space,(U8*)s, utf8_target)),
                 ! isSPACE((U8) *s)
 	    );
 	    break;
@@ -1715,8 +1670,8 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	    break;
 	case DIGIT:
 	    REXEC_FBC_CSCAN_PRELOAD(
-		LOAD_UTF8_CHARCLASS_POSIX_DIGIT(),
-		swash_fetch(RE_utf8_posix_digit,(U8*)s, utf8_target),
+		LOAD_UTF8_CHARCLASS_DIGIT(),
+		swash_fetch(PL_utf8_digit,(U8*)s, utf8_target),
 		isDIGIT(*s)
 	    );
 	    break;
@@ -1733,8 +1688,8 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	    break;
 	case NDIGIT:
 	    REXEC_FBC_CSCAN_PRELOAD(
-		LOAD_UTF8_CHARCLASS_POSIX_DIGIT(),
-		!swash_fetch(RE_utf8_posix_digit,(U8*)s, utf8_target),
+		LOAD_UTF8_CHARCLASS_DIGIT(),
+		!swash_fetch(PL_utf8_digit,(U8*)s, utf8_target),
 		!isDIGIT(*s)
 	    );
 	    break;
@@ -3808,18 +3763,18 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		  ALNUML, NALNUML, isALNUM_LC, isALNUM_LC_utf8,
 		  ALNUMU, NALNUMU, isWORDCHAR_L1,
 		  ALNUMA, NALNUMA, isWORDCHAR_A,
-		  perl_word, "a");
+		  alnum, "a");
 
         CCC_TRY_U(SPACE,  NSPACE,  isSPACE,
 		  SPACEL, NSPACEL, isSPACE_LC, isSPACE_LC_utf8,
 		  SPACEU, NSPACEU, isSPACE_L1,
 		  SPACEA, NSPACEA, isSPACE_A,
-		  perl_space, " ");
+		  space, " ");
 
         CCC_TRY(DIGIT,  NDIGIT,  isDIGIT,
 		DIGITL, NDIGITL, isDIGIT_LC, isDIGIT_LC_utf8,
 		DIGITA, NDIGITA, isDIGIT_A,
-		posix_digit, "0");
+		digit, "0");
 
 	case CLUMP: /* Match \X: logical Unicode character.  This is defined as
 		       a Unicode extended Grapheme Cluster */
@@ -4693,7 +4648,10 @@ NULL
 	    /* First just match a string of min A's. */
 
 	    if (n < min) {
+		ST.cp = regcppush(cur_curlyx->u.curlyx.parenfloor);
 		cur_curlyx->u.curlyx.lastloc = locinput;
+		REGCP_SET(ST.lastcp);
+
 		PUSH_STATE_GOTO(WHILEM_A_pre, A);
 		/* NOTREACHED */
 	    }
@@ -4799,10 +4757,10 @@ NULL
 	    /* NOTREACHED */
 
 	case WHILEM_A_min_fail: /* just failed to match A in a minimal match */
-	    REGCP_UNWIND(ST.lastcp);
-	    regcppop(rex);
 	    /* FALL THROUGH */
 	case WHILEM_A_pre_fail: /* just failed to match even minimal A */
+	    REGCP_UNWIND(ST.lastcp);
+	    regcppop(rex);
 	    cur_curlyx->u.curlyx.lastloc = ST.save_lastloc;
 	    cur_curlyx->u.curlyx.count--;
 	    CACHEsayNO;
@@ -6465,6 +6423,8 @@ Perl_regclass_swash(pTHX_ const regexp *prog, register const regnode* node, bool
 
     PERL_ARGS_ASSERT_REGCLASS_SWASH;
 
+    assert(ANYOF_NONBITMAP(node));
+
     if (data && data->count) {
 	const U32 n = ARG(node);
 
@@ -6620,16 +6580,22 @@ S_reginclass(pTHX_ const regexp * const prog, register const regnode * const n, 
     /* If the bitmap didn't (or couldn't) match, and something outside the
      * bitmap could match, try that.  Locale nodes specifiy completely the
      * behavior of code points in the bit map (otherwise, a utf8 target would
-     * cause them to be treated as Unicode and not locale), except XXX in
+     * cause them to be treated as Unicode and not locale), except in
      * the very unlikely event when this node is a synthetic start class, which
-     * could be a combination of locale and non-locale nodes */
+     * could be a combination of locale and non-locale nodes.  So allow locale
+     * to match for the synthetic start class, which will give a false
+     * positive that will be resolved when the match is done again as not part
+     * of the synthetic start class */
     if (!match) {
 	if (utf8_target && (flags & ANYOF_UNICODE_ALL) && c >= 256) {
 	    match = TRUE;	/* Everything above 255 matches */
 	}
-	else if ((flags & ANYOF_NONBITMAP_NON_UTF8
-		  || (utf8_target && flags & ANYOF_UTF8
-		      && (c >=256 || ! (flags & ANYOF_LOCALE)))))
+	else if (ANYOF_NONBITMAP(n)
+		 && ((flags & ANYOF_NONBITMAP_NON_UTF8)
+		     || (utf8_target
+		         && (c >=256
+			     || (! (flags & ANYOF_LOCALE))
+			     || (flags & ANYOF_IS_SYNTHETIC)))))
 	{
 	    AV *av;
 	    SV * const sw = regclass_swash(prog, n, TRUE, 0, (SV**)&av);
@@ -6662,31 +6628,19 @@ S_reginclass(pTHX_ const regexp * const prog, register const regnode * const n, 
 		else if (flags & ANYOF_LOC_NONBITMAP_FOLD) {
 
 		    /* Here, we need to test if the fold of the target string
-		     * matches.  In the case of a multi-char fold that is
-		     * caught by regcomp.c, it has stored all such folds into
-		     * 'av'; we linearly check to see if any match the target
-		     * string (folded).   We know that the originals were each
-		     * one character, but we don't currently know how many
-		     * characters/bytes each folded to, except we do know that
-		     * there are small limits imposed by Unicode.  XXX A
-		     * performance enhancement would be to have regcomp.c store
-		     * the max number of chars/bytes that are in an av entry,
-		     * as, say the 0th element.  Even better would be to have a
-		     * hash of the few characters that can start a multi-char
-		     * fold to the max number of chars of those folds.
-		     *
-		     * Further down, if there isn't a
-		     * match in the av, we will check if there is another
-		     * fold-type match.  For that, we also need the fold, but
-		     * only the first character.  No sense in folding it twice,
-		     * so we do it here, even if there isn't any multi-char
-		     * fold, so we always fold at least the first character.
-		     * If the node is a straight ANYOF node, or there is only
-		     * one character available in the string, or if there isn't
-		     * any av, that's all we have to fold.  In the case of a
-		     * multi-char fold, we do have guarantees in Unicode that
-		     * it can only expand up to so many characters and so many
-		     * bytes.  We keep track so don't exceed either.
+		     * matches.  The non-multi char folds have all been moved to
+                     * the compilation phase, and the multi-char folds have
+                     * been stored by regcomp into 'av'; we linearly check to
+                     * see if any match the target string (folded).   We know
+                     * that the originals were each one character, but we don't
+                     * currently know how many characters/bytes each folded to,
+                     * except we do know that there are small limits imposed by
+                     * Unicode.  XXX A performance enhancement would be to have
+                     * regcomp.c store the max number of chars/bytes that are
+                     * in an av entry, as, say the 0th element.  Even better
+                     * would be to have a hash of the few characters that can
+                     * start a multi-char fold to the max number of chars of
+                     * those folds.
 		     *
 		     * If there is a match, we will need to advance (if lenp is
 		     * specified) the match pointer in the target string.  But
@@ -6696,28 +6650,34 @@ S_reginclass(pTHX_ const regexp * const prog, register const regnode * const n, 
 		     * create a map so that we know how many bytes in the
 		     * source to advance given that we have matched a certain
 		     * number of bytes in the fold.  This map is stored in
-		     * 'map_fold_len_back'.  The first character in the fold
-		     * has array element 1 contain the number of bytes in the
-		     * source that folded to it; the 2nd is the cumulative
-		     * number to match it; ... */
-		    U8 map_fold_len_back[UTF8_MAX_FOLD_CHAR_EXPAND] = { 0 };
+		     * 'map_fold_len_back'.  Let n mean the number of bytes in
+		     * the fold of the first character that we are folding.
+		     * Then map_fold_len_back[n] is set to the number of bytes
+		     * in that first character.  Similarly let m be the
+		     * corresponding number for the second character to be
+		     * folded.  Then map_fold_len_back[n+m] is set to the
+		     * number of bytes occupied by the first two source
+		     * characters. ... */
+		    U8 map_fold_len_back[UTF8_MAXBYTES_CASE+1] = { 0 };
 		    U8 folded[UTF8_MAXBYTES_CASE+1];
 		    STRLEN foldlen = 0; /* num bytes in fold of 1st char */
-		    STRLEN foldlen_for_av; /* num bytes in fold of all chars */
+		    STRLEN total_foldlen = 0; /* num bytes in fold of all
+						  chars */
 
 		    if (OP(n) == ANYOF || maxlen == 1 || ! lenp || ! av) {
 
 			/* Here, only need to fold the first char of the target
-			 * string */
+			 * string.  It the source wasn't utf8, is 1 byte long */
 			to_utf8_fold(utf8_p, folded, &foldlen);
-			foldlen_for_av = foldlen;
-			map_fold_len_back[1] = UTF8SKIP(utf8_p);
+			total_foldlen = foldlen;
+			map_fold_len_back[foldlen] = (utf8_target)
+						     ? UTF8SKIP(utf8_p)
+						     : 1;
 		    }
 		    else {
 
 			/* Here, need to fold more than the first char.  Do so
 			 * up to the limits */
-			UV which_char = 0;
 			U8* source_ptr = utf8_p;    /* The source for the fold
 						       is the regex target
 						       string */
@@ -6725,8 +6685,10 @@ S_reginclass(pTHX_ const regexp * const prog, register const regnode * const n, 
 			U8* e = utf8_p + maxlen;    /* Can't go beyond last
 						       available byte in the
 						       target string */
-			while (which_char < UTF8_MAX_FOLD_CHAR_EXPAND
-			       && source_ptr < e)
+			U8 i;
+			for (i = 0;
+			     i < UTF8_MAX_FOLD_CHAR_EXPAND && source_ptr < e;
+			     i++)
 			{
 
 			    /* Fold the next character */
@@ -6744,39 +6706,38 @@ S_reginclass(pTHX_ const regexp * const prog, register const regnode * const n, 
 				break;
 			    }
 
-			    /* Save the first character's folded length, in
-			     * case we have to use it later */
-			    if (! foldlen) {
-				foldlen = this_char_foldlen;
-			    }
-
-			    /* Here, add the fold of this character */
+			    /* Add the fold of this character */
 			    Copy(this_char_folded,
 				 folded_ptr,
 				 this_char_foldlen,
 				 U8);
-			    which_char++;
-			    map_fold_len_back[which_char] =
-				map_fold_len_back[which_char - 1]
-				+ UTF8SKIP(source_ptr);
-			    folded_ptr += this_char_foldlen;
 			    source_ptr += UTF8SKIP(source_ptr);
+			    folded_ptr += this_char_foldlen;
+			    total_foldlen = folded_ptr - folded;
+
+			    /* Create map from the number of bytes in the fold
+			     * back to the number of bytes in the source.  If
+			     * the source isn't utf8, the byte count is just
+			     * the number of characters so far */
+			    map_fold_len_back[total_foldlen]
+						      = (utf8_target)
+							? source_ptr - utf8_p
+							: i + 1;
 			}
 			*folded_ptr = '\0';
-			foldlen_for_av = folded_ptr - folded;
 		    }
 
 
 		    /* Do the linear search to see if the fold is in the list
-		     * of multi-char folds.  (Useless to look if won't be able
-		     * to store that it is a multi-char fold in *lenp) */
-		    if (lenp && av) {
+		     * of multi-char folds. */
+		    if (av) {
 		        I32 i;
 			for (i = 0; i <= av_len(av); i++) {
 			    SV* const sv = *av_fetch(av, i, FALSE);
 			    STRLEN len;
 			    const char * const s = SvPV_const(sv, len);
-			    if (len <= foldlen_for_av && memEQ(s,
+
+			    if (len <= total_foldlen && memEQ(s,
 							       (char*)folded,
 							       len))
 			    {
@@ -6784,85 +6745,16 @@ S_reginclass(pTHX_ const regexp * const prog, register const regnode * const n, 
 				/* Advance the target string ptr to account for
 				 * this fold, but have to translate from the
 				 * folded length to the corresponding source
-				 * length.  The array is indexed by how many
-				 * characters in the match */
-			        *lenp = map_fold_len_back[
-					utf8_length(folded, folded + len)];
+				 * length. */
+				if (lenp) {
+				    *lenp = map_fold_len_back[len];
+				    assert(*lenp != 0);	/* Otherwise will loop */
+				}
 				match = TRUE;
 				break;
 			    }
 			}
 		    }
-#if 0
-		    if (!match) { /* See if the folded version matches */
-			SV** listp;
-
-			/* Consider "k" =~ /[K]/i.  The line above would have
-			 * just folded the 'k' to itself, and that isn't going
-			 * to match 'K'.  So we look through the closure of
-			 * everything that folds to 'k'.  That will find the
-			 * 'K'.  Initialize the list, if necessary */
-			if (! PL_utf8_foldclosures) {
-
-			    /* If the folds haven't been read in, call a fold
-			     * function to force that */
-			    if (! PL_utf8_tofold) {
-				U8 dummy[UTF8_MAXBYTES+1];
-				STRLEN dummy_len;
-				to_utf8_fold((U8*) "A", dummy, &dummy_len);
-			    }
-			    PL_utf8_foldclosures =
-				  _swash_inversion_hash(PL_utf8_tofold);
-			}
-
-			/* The data structure is a hash with the keys every
-			 * character that is folded to, like 'k', and the
-			 * values each an array of everything that folds to its
-			 * key.  e.g. [ 'k', 'K', KELVIN_SIGN ] */
-			if ((listp = hv_fetch(PL_utf8_foldclosures,
-				      (char *) folded, foldlen, FALSE)))
-			{
-			    AV* list = (AV*) *listp;
-			    IV i;
-			    for (i = 0; i <= av_len(list); i++) {
-				SV** try_p = av_fetch(list, i, FALSE);
-				char* try_c;
-				if (try_p == NULL) {
-				    Perl_croak(aTHX_ "panic: invalid PL_utf8_foldclosures structure");
-				}
-				/* Don't have to worry about embedded nulls
-				 * since NULL isn't folded or foldable */
-				try_c = SvPVX(*try_p);
-
-				/* The fold in a few cases  of an above Latin1
-				 * char is in the Latin1 range, and hence may
-				 * be in the bitmap */
-				if (UTF8_IS_INVARIANT(*try_c)
-				    && ANYOF_BITMAP_TEST(n,
-						    UNI_TO_NATIVE(*try_c)))
-				{
-				    match = TRUE;
-				    break;
-				}
-				else if
-				    (UTF8_IS_DOWNGRADEABLE_START(*try_c)
-				     && ANYOF_BITMAP_TEST(n, UNI_TO_NATIVE(
-						TWO_BYTE_UTF8_TO_UNI(try_c[0],
-								    try_c[1]))))
-				{
-				   /* Since the fold comes from internally
-				    * generated data, we can safely assume it
-				    * is valid utf8 in the test above */
-				    match = TRUE;
-				    break;
-				} else if (swash_fetch(sw, (U8*) try_c, TRUE)) {
-				    match = TRUE;
-				    break;
-				}
-			    }
-			}
-		    }
-#endif
 		}
 
 		/* If we allocated a string above, free it */

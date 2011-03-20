@@ -10,6 +10,8 @@
 # The use of this database for anything else than Perl development
 # is strictly forbidden.  (Passive distribution with the Perl source
 # code kit is, of course, allowed.)
+#
+# After editing, please run: make test_porting
 -- 
 A. C. Yardley			<yardley@tanet.net>
 A. Sinan Unur			<nanis@cpan.org>
@@ -36,6 +38,7 @@ Alan Grow			<agrow@thegotonerd.com>
 Alan Harder			<Alan.Harder@Ebay.Sun.COM>
 Alan Modra
 Alan Ferrency			<alan@pair.com>
+Alastair Douglas		<alastair.douglas@gmail.com>
 Albert Chin-A-Young		<china@thewrittenword.com>
 Albert Dvornik			<bert@alum.mit.edu>
 Alessandro Forghieri		<alf@orion.it>
@@ -100,6 +103,7 @@ Art Green			<Art_Green@mercmarine.com>
 Art Haas			<ahaas@airmail.net>
 Artiom Morozov			<artiom@phreaker.net>
 Artur Bergman			<artur@contiller.se>
+Arvan				<apritchard@zeus.com>
 Ash Berlin			<ash@cpan.org>
 Ask Bjöern Hansen		<ask@develooper.com>
 Audrey Tang			<cpan@audreyt.org>
@@ -130,6 +134,7 @@ Bo Borgerson			<gigabo@gmail.com>
 Bo Lindbergh			<blgl@stacken.kth.se>
 Bob Dalgleish			<Robert.Dalgleish@sk.sympatico.ca>
 Bob Wilkinson			<bob@fourtheye.org>
+Boris Ratner			<ratner2@gmail.com>
 Boris Zentner			<bzm@2bz.de>
 Boyd Gerber			<gerberb@zenez.com>
 Brad Appleton			<bradapp@enteract.com>
@@ -240,7 +245,7 @@ Daniel P. Berrange		<dan@berrange.com>
 Daniel S. Lewart		<lewart@uiuc.edu>
 Daniel Yacob			<perl@geez.org>
 Danny R. Faught			<faught@mailhost.rsn.hp.com>
-Danny Sadinoff			<sadinoff@olf.com>
+Danny Sadinoff			<danny-cpan@sadinoff.com>
 Darrell Kindred			<dkindred+@cmu.edu>
 Darrell Schiebel		<drs@nrao.edu>
 Darren/Torin/Who Ever...	<torin@daft.com>
@@ -601,6 +606,7 @@ Kevin Brintnall			<kbrint@rufus.net>
 Kevin Chase			<kevincha99@hotmail.com>
 Kevin O'Gorman			<kevin.kosman@nrc.com>
 Kevin Ruscoe			<Kevin.Ruscoe@ubsw.com>
+Kevin Ryde			<user42@zip.com.au>
 Kevin White			<klwhite@magnus.acs.ohio-state.edu>
 Kim Frutiger
 Kingpin				<mthurn@copper.dulles.tasc.com>

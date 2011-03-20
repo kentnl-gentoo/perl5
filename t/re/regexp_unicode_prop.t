@@ -8,7 +8,10 @@ use strict;
 use warnings;
 use 5.010;
 
-my $IS_EBCDIC = ord ('A') == 193;
+BEGIN {
+    require './test.pl';
+    skip_all_if_miniperl("no dynamic loading on miniperl, no File::Spec (used by charnames)");
+}
 
 sub run_tests;
 
@@ -61,8 +64,8 @@ my @CLASSES = (
     # It's ok to repeat class names.
     #
     InLatin1Supplement        =>
-               $IS_EBCDIC ? ['!\x{7f}',  '\x{80}',            '!\x{100}']
-                          : ['!\x{7f}',  '\x{80}',  '\x{ff}', '!\x{100}'],
+               $::IS_EBCDIC ? ['!\x{7f}',  '\x{80}',            '!\x{100}']
+                            : ['!\x{7f}',  '\x{80}',  '\x{ff}', '!\x{100}'],
     InLatinExtendedA          =>
                             ['!\x{7f}', '!\x{80}', '!\x{ff}',  '\x{100}'],
 
@@ -153,7 +156,7 @@ while (my ($class, $chars) = each %SHORT_PROPERTIES) {
                                                      ? $_ : "!$_"} @$chars;
 }
 
-delete $d {IsASCII} if $IS_EBCDIC;
+delete $d {IsASCII} if $::IS_EBCDIC;
 
 push @CLASSES => "# Short properties"        => %SHORT_PROPERTIES,
                  "# POSIX like properties"   => %d,
@@ -166,15 +169,13 @@ push @CLASSES => "# Short properties"        => %SHORT_PROPERTIES,
 my $count = 0;
 for (my $i = 0; $i < @CLASSES; $i += 2) {
     $i ++, redo if $CLASSES [$i] =~ /^\h*#\h*(.*)/;
-    $count += (length $CLASSES [$i] == 1 ? 4 : 2) * @{$CLASSES [$i + 1]};
+    $count += 2 * (length $CLASSES [$i] == 1 ? 4 : 2) * @{$CLASSES [$i + 1]};
 }
-$count += 2 * @ILLEGAL_PROPERTIES;
-$count += 2 * grep {length $_ == 1} @ILLEGAL_PROPERTIES;
-$count += 4 * @USER_CASELESS_PROPERTIES;
+$count += 4 * @ILLEGAL_PROPERTIES;
+$count += 4 * grep {length $_ == 1} @ILLEGAL_PROPERTIES;
+$count += 8 * @USER_CASELESS_PROPERTIES;
 
-my $tests = 0;
-
-say "1..$count";
+plan(tests => $count);
 
 run_tests unless caller ();
 
@@ -202,13 +203,13 @@ sub match {
 
     undef $@;
     my $match_pat = eval "qr/$match/$caseless";
-    print "not " if $@ || ! ($str =~ /$match_pat/);
-    print "ok ", ++ $tests, " - $name =~ $match_pat\n";
+    is($@, '', "$name compiled correctly to a regexp");
+    like($str, $match_pat, "$name correctly matched");
 
     undef $@;
     my $nomatch_pat = eval "qr/$nomatch/$caseless";
-    print "not " if $@ || ! ($str !~ /$nomatch_pat/);
-    print "ok ", ++ $tests, " - $name !~ $nomatch_pat\n";
+    is($@, '', "$name compiled correctly to a regexp");
+    unlike($str, $nomatch_pat, "$name correctly did not match");
 }
 
 sub run_tests {
@@ -244,21 +245,21 @@ sub run_tests {
     foreach my $p (@ILLEGAL_PROPERTIES) {
         undef $@;
         my $r = eval "'a' =~ /\\p{$p}/; 1";
-        print "not " unless !$r && $@ && $@ =~ $pat;
-        print "ok ", ++ $tests, " - Unknown Unicode property \\p{$p}\n";
+        is($r, undef, "Unknown Unicode property \\p{$p}");
+        like($@, $pat, "Unknown Unicode property \\p{$p}");
         undef $@;
         my $s = eval "'a' =~ /\\P{$p}/; 1";
-        print "not " unless !$s && $@ && $@ =~ $pat;
-        print "ok ", ++ $tests, " - Unknown Unicode property \\P{$p}\n";
+        is($s, undef, "Unknown Unicode property \\p{$p}");
+        like($@, $pat, "Unknown Unicode property \\p{$p}");
         if (length $p == 1) {
             undef $@;
             my $r = eval "'a' =~ /\\p$p/; 1";
-            print "not " unless !$r && $@ && $@ =~ $pat;
-            print "ok ", ++ $tests, " - Unknown Unicode property \\p$p\n";
+            is($r, undef, "Unknown Unicode property \\p$p");
+            like($@, $pat, "Unknown Unicode property \\p$p");
             undef $@;
             my $s = eval "'a' =~ /\\P$p/; 1";
-            print "not " unless !$s && $@ && $@ =~ $pat;
-            print "ok ", ++ $tests, " - Unknown Unicode property \\P$p\n";
+            is($r, undef, "Unknown Unicode property \\P$p");
+            like($@, $pat, "Unknown Unicode property \\P$p");
         }
     }
 

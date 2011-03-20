@@ -25,7 +25,8 @@
 
 /* The 'I' prefix is only needed for vars that need appropriate #defines
  * generated when built with or without MULTIPLICITY.  It is also used
- * to generate the appropriate export list for win32.
+ * to generate the appropriate export list for win32.  If the variable
+ * needs to be initialized, use PERLVARI.
  *
  * When building without MULTIPLICITY, these variables will be truly global.
  *
@@ -784,7 +785,7 @@ PERLVARI(Iutf8_foldclosures,	HV *, NULL)
 
 /* List of characters that participate in folds (except marks, etc in
  * multi-char folds) */
-PERLVAR(Iutf8_foldable,	HV *)
+PERLVARI(Iutf8_foldable,	HV *, NULL)
 
 PERLVAR(Icustom_ops, HV *)      /* custom op registrations */
 

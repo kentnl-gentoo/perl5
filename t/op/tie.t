@@ -11,28 +11,13 @@
 
 chdir 't' if -d 't';
 @INC = '../lib';
-$ENV{PERL5LIB} = "../lib";
+require './test.pl';
 
 $|=1;
 
-undef $/;
-@prgs = split /^########\n/m, <DATA>;
+run_multiple_progs('', \*DATA);
 
-require './test.pl';
-plan(tests => scalar @prgs);
-for (@prgs){
-    ++$i;
-    my($prog,$expected) = split(/\nEXPECT\n/, $_, 2);
-    print("not ok $i # bad test format\n"), next
-        unless defined $expected;
-    my ($testname) = $prog =~ /^# (.*)\n/m;
-    $testname ||= '';
-    $TODO = $testname =~ s/^TODO //;
-    $results =~ s/\n+$//;
-    $expected =~ s/\n+$//;
-
-    fresh_perl_is($prog, $expected, {}, $testname);
-}
+done_testing();
 
 __END__
 
@@ -995,3 +980,37 @@ tie @a, 'main';
 print $#a,"\n"
 EXPECT
 99
+########
+#
+# [perl #86328] Crash when freeing tie magic that can increment the refcnt
+
+eval { require Scalar::Util } or print("ok\n"), exit;
+
+sub TIEHASH {
+    return $_[1];
+}
+*TIEARRAY = *TIEHASH;
+
+sub DESTROY {
+    my ($tied) = @_;
+    my $b = $tied->[0];
+}
+
+my $a = {};
+my $o = bless [];
+Scalar::Util::weaken($o->[0] = $a);
+tie %$a, "main", $o;
+
+my $b = [];
+my $p = bless [];
+Scalar::Util::weaken($p->[0] = $b);
+tie @$b, "main", $p;
+
+# Done setting up the evil data structures
+
+$a = undef;
+$b = undef;
+print "ok\n";
+
+EXPECT
+ok

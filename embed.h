@@ -866,13 +866,14 @@
 #define regcurly(a)		S_regcurly(aTHX_ a)
 #  endif
 #  if defined(PERL_IN_REGCOMP_C)
+#define add_alternate(a,b,c)	S_add_alternate(aTHX_ a,b,c)
+#define add_cp_to_invlist(a,b)	S_add_cp_to_invlist(aTHX_ a,b)
 #define add_data		S_add_data
 #define add_range_to_invlist(a,b,c)	S_add_range_to_invlist(aTHX_ a,b,c)
 #define checkposixcc(a)		S_checkposixcc(aTHX_ a)
 #define cl_and			S_cl_and
 #define cl_anything		S_cl_anything
 #define cl_init			S_cl_init
-#define cl_init_zero		S_cl_init_zero
 #define cl_is_anything		S_cl_is_anything
 #define cl_or			S_cl_or
 #define invlist_array(a)	S_invlist_array(aTHX_ a)
@@ -907,8 +908,8 @@
 #define reguni(a,b,c)		S_reguni(aTHX_ a,b,c)
 #define regwhite		S_regwhite
 #define scan_commit(a,b,c,d)	S_scan_commit(aTHX_ a,b,c,d)
-#define set_regclass_bit(a,b,c,d)	S_set_regclass_bit(aTHX_ a,b,c,d)
-#define set_regclass_bit_fold(a,b,c,d)	S_set_regclass_bit_fold(aTHX_ a,b,c,d)
+#define set_regclass_bit(a,b,c,d,e)	S_set_regclass_bit(aTHX_ a,b,c,d,e)
+#define set_regclass_bit_fold(a,b,c,d,e)	S_set_regclass_bit_fold(aTHX_ a,b,c,d,e)
 #define study_chunk(a,b,c,d,e,f,g,h,i,j,k)	S_study_chunk(aTHX_ a,b,c,d,e,f,g,h,i,j,k)
 #  endif
 #  if defined(PERL_IN_REGEXEC_C)
@@ -1188,6 +1189,11 @@
 #define doopen_pm(a)		S_doopen_pm(aTHX_ a)
 #    endif
 #  endif
+#  if !defined(PERL_IS_MINIPERL)
+#    if defined(PERL_IN_PERL_C)
+#define incpush_if_exists(a,b,c)	S_incpush_if_exists(aTHX_ a,b,c)
+#    endif
+#  endif
 #  if !defined(PERL_NO_UTF16_FILTER)
 #    if defined(PERL_IN_TOKE_C)
 #define add_utf16_textfilter(a,b)	S_add_utf16_textfilter(aTHX_ a,b)
@@ -1356,7 +1362,6 @@
 #define find_beginning(a,b)	S_find_beginning(aTHX_ a,b)
 #define forbid_setid(a,b)	S_forbid_setid(aTHX_ a,b)
 #define incpush(a,b,c)		S_incpush(aTHX_ a,b,c)
-#define incpush_if_exists(a,b,c)	S_incpush_if_exists(aTHX_ a,b,c)
 #define incpush_use_sep(a,b,c)	S_incpush_use_sep(aTHX_ a,b,c)
 #define init_ids()		S_init_ids(aTHX)
 #define init_interp()		S_init_interp(aTHX)

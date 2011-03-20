@@ -792,9 +792,11 @@ nesting levels, the following is missing its final parenthesis:
 
     print q(The character '(' starts a side comment.);
 
-If you're getting this error from a here-document, you may have included
-unseen whitespace before or after your closing tag. A good programmer's
-editor will have a way to help you find these characters.
+If you're getting this error from a here-document, you may have
+included unseen whitespace before or after your closing tag or there
+may not be a linebreak after it.  A good programmer's editor will have
+a way to help you find these characters (or lack of characters).  See
+L<perlop> for the full details on here-documents.
 
 =item Can't find Unicode property definition "%s"
 
@@ -2008,11 +2010,10 @@ Further error messages would likely be uninformative.
 (D syntax)
 
 You had a word that isn't a regex modifier immediately following a
-pattern without an intervening space or you used one of the regex
-modifiers ("a", "d", "l", and "u") that in 5.14 are disallowed as
-suffixes. In that case, use the infix form, like C</(?a:...)/>.  In the
-other case, add white space between the pattern and following word.
-As an example of the latter, the two constructs:
+pattern without an intervening space.  If you are trying to use the C</le>
+flags on a substitution, use C</el> instead.  Otherwise, add white space
+between the pattern and following word to eliminate the warning. As an
+example of the latter, the two constructs:
 
  $a =~ m/$foo/sand $bar
  $a =~ m/$foo/s and $bar
@@ -2188,6 +2189,14 @@ setgid script if any of C<$ENV{PATH}>, C<$ENV{IFS}>, C<$ENV{CDPATH}>,
 C<$ENV{ENV}>, C<$ENV{BASH_ENV}> or C<$ENV{TERM}> are derived from data
 supplied (or potentially supplied) by the user.  The script must set
 the path to a known value, using trustworthy data.  See L<perlsec>.
+
+=item Insecure user-defined property %s
+
+(F) Perl detected tainted data when trying to compile a regular
+expression that contains a call to a user-defined character property
+function, i.e. C<\p{IsFoo}> or C<\p{InFoo}>.
+See L<perlunicode/User-Defined Character Properties> and L<perlsec>.
+
 
 =item Integer overflow in format string for %s
 
@@ -3600,6 +3609,15 @@ redirected it with select().)
 "Can't locate object method \"%s\" via package \"%s\"".  It often means
 that a method requires a package that has not been loaded.
 
+=item Perl folding rules are not up-to-date for 0x%x; please use the perlbug utility to report;
+
+(W regex, deprecated) You used a regular expression with
+case-insensitive matching, and there is a bug in Perl in which the
+built-in regular expression folding rules are not accurate.  This may
+lead to incorrect results.  Please report this as a bug using the
+"perlbug" utility.  (This message is marked deprecated, so that it by
+default will be turned-on.)
+
 =item Perl_my_%s() not available
 
 (F) Your platform has very uncommon byte-order and integer size,
@@ -3995,6 +4013,18 @@ discovered.
 
 (P) The regular expression engine got confused by what the regular
 expression compiler gave it.
+
+=item Regexp modifier "/%c" may not appear twice
+
+(F syntax) The regular expression pattern had one of the
+mutually exclusive modifiers repeated.  Remove all but one of the
+occurrences.
+
+=item Regexp modifiers "/%c" and "/%c" are mutually exclusive
+
+(F syntax) The regular expression pattern had more than one of the
+mutually exclusive modifiers.  Retain only the modifier that is
+supposed to be there.
 
 =item Regexp out of space
 

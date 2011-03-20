@@ -1511,6 +1511,7 @@ S_incline(pTHX_ const char *s)
     const char *t;
     const char *n;
     const char *e;
+    line_t line_num;
 
     PERL_ARGS_ASSERT_INCLINE;
 
@@ -1554,9 +1555,10 @@ S_incline(pTHX_ const char *s)
     if (*e != '\n' && *e != '\0')
 	return;		/* false alarm */
 
+    line_num = atoi(n)-1;
+
     if (t - s > 0) {
 	const STRLEN len = t - s;
-#ifndef USE_ITHREADS
 	SV *const temp_sv = CopFILESV(PL_curcop);
 	const char *cf;
 	STRLEN tmplen;
@@ -1611,19 +1613,35 @@ S_incline(pTHX_ const char *s)
 		    gv_init(gv2, PL_defstash, tmpbuf2, tmplen2, FALSE);
 		    /* adjust ${"::_<newfilename"} to store the new file name */
 		    GvSV(gv2) = newSVpvn(tmpbuf2 + 2, tmplen2 - 2);
-		    GvHV(gv2) = MUTABLE_HV(SvREFCNT_inc(GvHV(*gvp)));
-		    GvAV(gv2) = MUTABLE_AV(SvREFCNT_inc(GvAV(*gvp)));
+		    /* The line number may differ. If that is the case,
+		       alias the saved lines that are in the array.
+		       Otherwise alias the whole array. */
+		    if (CopLINE(PL_curcop) == line_num) {
+			GvHV(gv2) = MUTABLE_HV(SvREFCNT_inc(GvHV(*gvp)));
+			GvAV(gv2) = MUTABLE_AV(SvREFCNT_inc(GvAV(*gvp)));
+		    }
+		    else if (GvAV(*gvp)) {
+			AV * const av = GvAV(*gvp);
+			const I32 start = CopLINE(PL_curcop)+1;
+			I32 items = AvFILLp(av) - start;
+			if (items > 0) {
+			    AV * const av2 = GvAVn(gv2);
+			    SV **svp = AvARRAY(av) + start;
+			    I32 l = (I32)line_num+1;
+			    while (items--)
+				av_store(av2, l++, SvREFCNT_inc(*svp++));
+			}
+		    }
 		}
 
 		if (tmpbuf2 != smallbuf) Safefree(tmpbuf2);
 	    }
 	    if (tmpbuf != smallbuf) Safefree(tmpbuf);
 	}
-#endif
 	CopFILE_free(PL_curcop);
 	CopFILE_setn(PL_curcop, s, len);
     }
-    CopLINE_set(PL_curcop, atoi(n)-1);
+    CopLINE_set(PL_curcop, line_num);
 }
 
 #ifdef PERL_MAD
@@ -8756,13 +8774,17 @@ S_scan_ident(pTHX_ register char *s, register const char *send, char *dest, STRL
 }
 
 static bool
-S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s) {
+S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s, char* charset) {
 
     /* Adds, subtracts to/from 'pmfl' based on regex modifier flags found in
      * the parse starting at 's', based on the subset that are valid in this
      * context input to this routine in 'valid_flags'. Advances s.  Returns
      * TRUE if the input was a valid flag, so the next char may be as well;
-     * otherwise FALSE */
+     * otherwise FALSE. 'charset' should point to a NUL upon first call on the
+     * current regex.  This routine will set it to any charset modifier found.
+     * The caller shouldn't change it.  This way, another charset modifier
+     * encountered in the parse can be detected as an error, as we have decided
+     * allow only one */
 
     const char c = **s;
 
@@ -8791,18 +8813,30 @@ S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s) {
 	     * following the 'e').  Otherwise, we resolve to the backwards-
 	     * compatible, but less likely 's/// le ...', i.e. as meaning
 	     * less-than-or-equal.  The reason it's not likely is that s//
-	     * returns a number, and so '<=' should be used for comparing, not
-	     * 'le'. */
+	     * returns a number for code in the field (/r returns a string, but
+	     * that wasn't added until the 5.13 series), and so '<=' should be
+	     * used for comparing, not 'le'. */
 	    if (*((*s) + 1) == 't') {
 		goto deprecate;
 	    }
-	    else if (*((*s) + 1) == 'e' && ! isALNUM(*((*s) + 2)))
-	    {
+	    else if (*((*s) + 1) == 'e' && ! isALNUM(*((*s) + 2))) {
+
+		/* 'e' is valid only for substitutes, s///e.  If it is not
+		 * valid in the current context, then 'm//le' must mean the
+		 * comparison operator, so use the regular deprecation message.
+		 */
+		if (! strchr(valid_flags, 'e')) {
+		    goto deprecate;
+		}
 		Perl_ck_warner_d(aTHX_ packWARN(WARN_AMBIGUOUS),
 		    "Ambiguous use of 's//le...' resolved as 's// le...'; Rewrite as 's//el' if you meant 'use locale rules and evaluate rhs as an expression'.  In Perl 5.16, it will be resolved the other way");
 		return FALSE;
 	    }
+	    if (*charset) {
+		goto multiple_charsets;
+	    }
 	    set_regex_charset(pmfl, REGEX_LOCALE_CHARSET);
+	    *charset = c;
 	    break;
 	case UNICODE_PAT_MOD:
 	    /* In 5.14, qr//unless and qr//until are legal but deprecated; the
@@ -8810,7 +8844,11 @@ S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s) {
 	    if (*((*s) + 1) == 'n') {
 		goto deprecate;
 	    }
+	    if (*charset) {
+		goto multiple_charsets;
+	    }
 	    set_regex_charset(pmfl, REGEX_UNICODE_CHARSET);
+	    *charset = c;
 	    break;
 	case ASCII_RESTRICT_PAT_MOD:
 	    /* In 5.14, qr//and is legal but deprecated; the 'n' means they
@@ -8826,9 +8864,18 @@ S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s) {
 	    else {
 		set_regex_charset(pmfl, REGEX_ASCII_RESTRICTED_CHARSET);
 	    }
+	    if (*charset) { /* Do this after the increment of *s in /aa, so
+			       the return advances the ptr correctly */
+		goto multiple_charsets;
+	    }
+	    *charset = c;
 	    break;
 	case DEPENDS_PAT_MOD:
+	    if (*charset) {
+		goto multiple_charsets;
+	    }
 	    set_regex_charset(pmfl, REGEX_DEPENDS_CHARSET);
+	    *charset = c;
 	    break;
     }
 
@@ -8839,6 +8886,18 @@ S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s) {
 	Perl_ck_warner_d(aTHX_ packWARN(WARN_SYNTAX),
 	    "Having no space between pattern and following word is deprecated");
         return FALSE;
+
+    multiple_charsets:
+	if (*charset != c) {
+	    yyerror(Perl_form(aTHX_ "Regexp modifiers \"/%c\" and \"/%c\" are mutually exclusive", *charset, c));
+	}
+	else {
+	    yyerror(Perl_form(aTHX_ "Regexp modifier \"/%c\" may not appear twice", c));
+	}
+
+	/* Pretend that it worked, so will continue processing before dieing */
+	(*s)++;
+	return TRUE;
 }
 
 STATIC char *
@@ -8849,6 +8908,7 @@ S_scan_pat(pTHX_ char *start, I32 type)
     char *s = scan_str(start,!!PL_madskills,FALSE);
     const char * const valid_flags =
 	(const char *)((type == OP_QR) ? QR_PAT_MODS : M_PAT_MODS);
+    char charset = '\0';    /* character set modifier */
 #ifdef PERL_MAD
     char *modstart;
 #endif
@@ -8890,7 +8950,7 @@ S_scan_pat(pTHX_ char *start, I32 type)
 #ifdef PERL_MAD
     modstart = s;
 #endif
-    while (*s && S_pmflag(aTHX_ valid_flags, &(pm->op_pmflags), &s)) {};
+    while (*s && S_pmflag(aTHX_ valid_flags, &(pm->op_pmflags), &s, &charset)) {};
 #ifdef PERL_MAD
     if (PL_madskills && modstart != s) {
 	SV* tmptoken = newSVpvn(modstart, s - modstart);
@@ -8917,6 +8977,7 @@ S_scan_subst(pTHX_ char *start)
     register PMOP *pm;
     I32 first_start;
     I32 es = 0;
+    char charset = '\0';    /* character set modifier */
 #ifdef PERL_MAD
     char *modstart;
 #endif
@@ -8969,7 +9030,8 @@ S_scan_subst(pTHX_ char *start)
 	    s++;
 	    es++;
 	}
-	else if (! S_pmflag(aTHX_ S_PAT_MODS, &(pm->op_pmflags), &s)) {
+	else if (! S_pmflag(aTHX_ S_PAT_MODS, &(pm->op_pmflags), &s, &charset))
+	{
 	    break;
 	}
     }

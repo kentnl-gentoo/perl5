@@ -24,6 +24,10 @@ my $planned;
 my $noplan;
 my $Perl;       # Safer version of $^X set by which_perl()
 
+# This defines ASCII/UTF-8 vs EBCDIC/UTF-EBCDIC
+$::IS_ASCII  = ord 'A' ==  65;
+$::IS_EBCDIC = ord 'A' == 193;
+
 $TODO = 0;
 $NO_ENDING = 0;
 $Tests_Are_Passing = 1;
@@ -96,6 +100,10 @@ sub note {
     _print( _comment(@_) );
 }
 
+sub is_miniperl {
+    return !defined &DynaLoader::boot_DynaLoader;
+}
+
 sub _comment {
     return map { /^#/ ? "$_\n" : "# $_\n" }
            map { split /\n/ } @_;
@@ -108,6 +116,40 @@ sub skip_all {
 	_print "1..0\n";
     }
     exit(0);
+}
+
+sub skip_all_if_miniperl {
+    skip_all(@_) if is_miniperl();
+}
+
+sub skip_all_without_dynamic_extension {
+    my $extension = shift;
+    skip_all("no dynamic loading on miniperl, no $extension") if is_miniperl();
+    unless (eval {require Config; 1}) {
+	warn "test.pl had problems loading Config: $@";
+	return;
+    }
+    $extension =~ s!::!/!g;
+    return if ($Config::Config{extensions} =~ /\b$extension\b/);
+    skip_all("$extension was not built");
+}
+
+sub skip_all_without_perlio {
+    skip_all('no PerlIO') unless PerlIO::Layer->find('perlio');
+}
+
+sub skip_all_without_config {
+    unless (eval {require Config; 1}) {
+	warn "test.pl had problems loading Config: $@";
+	return;
+    }
+    foreach (@_) {
+	next if $Config::Config{$_};
+	my $key = $_; # Need to copy, before trying to modify.
+	$key =~ s/^use//;
+	$key =~ s/^d_//;
+	skip_all("no $key");
+    }
 }
 
 sub _ok {
@@ -317,12 +359,12 @@ sub like   ($$@) { like_yn (0,@_) }; # 0 for -
 sub unlike ($$@) { like_yn (1,@_) }; # 1 for un-
 
 sub like_yn ($$$@) {
-    my ($flip, $got, $expected, $name, @mess) = @_;
+    my ($flip, undef, $expected, $name, @mess) = @_;
     my $pass;
-    $pass = $got =~ /$expected/ if !$flip;
-    $pass = $got !~ /$expected/ if $flip;
+    $pass = $_[1] =~ /$expected/ if !$flip;
+    $pass = $_[1] !~ /$expected/ if $flip;
     unless ($pass) {
-	unshift(@mess, "#      got '$got'\n",
+	unshift(@mess, "#      got '$_[1]'\n",
 		$flip
 		? "# expected !~ /$expected/\n" : "# expected /$expected/\n");
     }
@@ -360,6 +402,10 @@ sub skip {
     }
     local $^W = 0;
     last SKIP;
+}
+
+sub skip_if_miniperl {
+    skip(@_) if is_miniperl();
 }
 
 sub todo_skip {
@@ -558,7 +604,7 @@ sub runperl {
 	# run a fresh perl, so we'll brute force launder everything for you
 	my $sep;
 
-	if (! eval 'require Config; 1') {
+	if (! eval {require Config; 1}) {
 	    warn "test.pl had problems loading Config: $@";
 	    $sep = ':';
 	} else {
@@ -608,7 +654,7 @@ sub which_perl {
 	return $Perl if $is_vms;
 
 	my $exe;
-	if (! eval 'require Config; 1') {
+	if (! eval {require Config; 1}) {
 	    warn "test.pl had problems loading Config: $@";
 	    $exe = '';
 	} else {
@@ -622,7 +668,7 @@ sub which_perl {
 
 	if ($Perl =~ /^perl\Q$exe\E$/i) {
 	    my $perl = "perl$exe";
-	    if (! eval 'require File::Spec; 1') {
+	    if (! eval {require File::Spec; 1}) {
 		warn "test.pl had problems loading File::Spec: $@";
 		$Perl = "./$perl";
 	    } else {
@@ -690,16 +736,8 @@ sub tempfile {
 # This is the temporary file for _fresh_perl
 my $tmpfile = tempfile();
 
-#
-# _fresh_perl
-#
-# The $resolve must be a subref that tests the first argument
-# for success, or returns the definition of success (e.g. the
-# expected scalar) if given no arguments.
-#
-
 sub _fresh_perl {
-    my($prog, $resolve, $runperl_args, $name) = @_;
+    my($prog, $action, $expect, $runperl_args, $name) = @_;
 
     # Given the choice of the mis-parsable {}
     # (we want an anon hash, but a borked lexer might think that it's a block)
@@ -746,21 +784,31 @@ sub _fresh_perl {
         $results =~ s/\n\n/\n/g;
     }
 
-    my $pass = $resolve->($results);
-    unless ($pass) {
-        _diag "# PROG: \n$prog\n";
-        _diag "# EXPECTED:\n", $resolve->(), "\n";
-        _diag "# GOT:\n$results\n";
-        _diag "# STATUS: $status\n";
-    }
-
     # Use the first line of the program as a name if none was given
     unless( $name ) {
         ($first_line, $name) = $prog =~ /^((.{1,50}).*)/;
         $name = $name . '...' if length $first_line > length $name;
     }
 
-    _ok($pass, _where(), "fresh_perl - $name");
+    # Historically this was implemented using a closure, but then that means
+    # that the tests for closures avoid using this code. Given that there
+    # are exactly two callers, doing exactly two things, the simpler approach
+    # feels like a better trade off.
+    my $pass;
+    if ($action eq 'eq') {
+	$pass = is($results, $expect, $name);
+    } elsif ($action eq '=~') {
+	$pass = like($results, $expect, $name);
+    } else {
+	die "_fresh_perl can't process action '$action'";
+    }
+	
+    unless ($pass) {
+        _diag "# PROG: \n$prog\n";
+        _diag "# STATUS: $status\n";
+    }
+
+    return $pass;
 }
 
 #
@@ -777,9 +825,7 @@ sub fresh_perl_is {
     $expected =~ s/\n+$//;
 
     local $Level = 2;
-    _fresh_perl($prog,
-		sub { @_ ? $_[0] eq $expected : $expected },
-		$runperl_args, $name);
+    _fresh_perl($prog, 'eq', $expected, $runperl_args, $name);
 }
 
 #
@@ -791,9 +837,175 @@ sub fresh_perl_is {
 sub fresh_perl_like {
     my($prog, $expected, $runperl_args, $name) = @_;
     local $Level = 2;
-    _fresh_perl($prog,
-		sub { @_ ? $_[0] =~ $expected : $expected },
-		$runperl_args, $name);
+    _fresh_perl($prog, '=~', $expected, $runperl_args, $name);
+}
+
+# Many tests use the same format in __DATA__ or external files to specify a
+# sequence of (fresh) tests to run, extra files they may temporarily need, and
+# what the expected output is. So have excatly one copy of the code to run that
+
+sub run_multiple_progs {
+    my $up = shift;
+    my @prgs;
+    if ($up) {
+	# The tests in lib run in a temporary subdirectory of t, and always
+	# pass in a list of "programs" to run
+	@prgs = @_;
+    } else {
+	# The tests below t run in t and pass in a file handle.
+	my $fh = shift;
+	local $/;
+	@prgs = split "\n########\n", <$fh>;
+    }
+
+    my $tmpfile = tempfile();
+
+    for (@prgs){
+	unless (/\n/) {
+	    print "# From $_\n";
+	    next;
+	}
+	my $switch = "";
+	my @temps ;
+	my @temp_path;
+	if (s/^(\s*-\w+)//) {
+	    $switch = $1;
+	}
+	my ($prog, $expected) = split(/\nEXPECT(?:\n|$)/, $_, 2);
+
+	my %reason;
+	foreach my $what (qw(skip todo)) {
+	    $prog =~ s/^#\s*\U$what\E\s*(.*)\n//m and $reason{$what} = $1;
+	    # If the SKIP reason starts ? then it's taken as a code snippet to
+	    # evaluate. This provides the flexibility to have conditional SKIPs
+	    if ($reason{$what} && $reason{$what} =~ s/^\?//) {
+		my $temp = eval $reason{$what};
+		if ($@) {
+		    die "# In \U$what\E code reason:\n# $reason{$what}\n$@";
+		}
+		$reason{$what} = $temp;
+	    }
+	}
+
+	if ($prog =~ /--FILE--/) {
+	    my @files = split(/\n--FILE--\s*([^\s\n]*)\s*\n/, $prog) ;
+	    shift @files ;
+	    die "Internal error: test $_ didn't split into pairs, got " .
+		scalar(@files) . "[" . join("%%%%", @files) ."]\n"
+		    if @files % 2;
+	    while (@files > 2) {
+		my $filename = shift @files;
+		my $code = shift @files;
+		push @temps, $filename;
+		if ($filename =~ m#(.*)/# && $filename !~ m#^\.\./#) {
+		    require File::Path;
+		    File::Path::mkpath($1);
+		    push(@temp_path, $1);
+		}
+		open my $fh, '>', $filename or die "Cannot open $filename: $!\n";
+		print $fh $code;
+		close $fh or die "Cannot close $filename: $!\n";
+	    }
+	    shift @files;
+	    $prog = shift @files;
+	}
+
+	open my $fh, '>', $tmpfile or die "Cannot open >$tmpfile: $!";
+	print $fh q{
+        BEGIN {
+            open STDERR, '>&', STDOUT
+              or die "Can't dup STDOUT->STDERR: $!;";
+        }
+	};
+	print $fh "\n#line 1\n";  # So the line numbers don't get messed up.
+	print $fh $prog,"\n";
+	close $fh or die "Cannot close $tmpfile: $!";
+	my $results = runperl( stderr => 1, progfile => $tmpfile, $up
+			       ? (switches => ["-I$up/lib", $switch], nolib => 1)
+			       : (switches => [$switch])
+			        );
+	my $status = $?;
+	$results =~ s/\n+$//;
+	# allow expected output to be written as if $prog is on STDIN
+	$results =~ s/$::tempfile_regexp/-/g;
+	if ($^O eq 'VMS') {
+	    # some tests will trigger VMS messages that won't be expected
+	    $results =~ s/\n?%[A-Z]+-[SIWEF]-[A-Z]+,.*//;
+
+	    # pipes double these sometimes
+	    $results =~ s/\n\n/\n/g;
+	}
+	# bison says 'parse error' instead of 'syntax error',
+	# various yaccs may or may not capitalize 'syntax'.
+	$results =~ s/^(syntax|parse) error/syntax error/mig;
+	# allow all tests to run when there are leaks
+	$results =~ s/Scalars leaked: \d+\n//g;
+
+	$expected =~ s/\n+$//;
+	my $prefix = ($results =~ s#^PREFIX(\n|$)##) ;
+	# any special options? (OPTIONS foo bar zap)
+	my $option_regex = 0;
+	my $option_random = 0;
+	if ($expected =~ s/^OPTIONS? (.+)\n//) {
+	    foreach my $option (split(' ', $1)) {
+		if ($option eq 'regex') { # allow regular expressions
+		    $option_regex = 1;
+		}
+		elsif ($option eq 'random') { # all lines match, but in any order
+		    $option_random = 1;
+		}
+		else {
+		    die "$0: Unknown OPTION '$option'\n";
+		}
+	    }
+	}
+	die "$0: can't have OPTION regex and random\n"
+	    if $option_regex + $option_random > 1;
+	my $ok = 0;
+	if ($results =~ s/^SKIPPED\n//) {
+	    print "$results\n" ;
+	    $ok = 1;
+	}
+	elsif ($option_random) {
+	    my @got = sort split "\n", $results;
+	    my @expected = sort split "\n", $expected;
+
+	    $ok = "@got" eq "@expected";
+	}
+	elsif ($option_regex) {
+	    $ok = $results =~ /^$expected/;
+	}
+	elsif ($prefix) {
+	    $ok = $results =~ /^\Q$expected/;
+	}
+	else {
+	    $ok = $results eq $expected;
+	}
+
+	local $::TODO = $reason{todo};
+
+	unless ($ok) {
+	    my $err_line = "PROG: $switch\n$prog\n" .
+			   "EXPECTED:\n$expected\n" .
+			   "GOT:\n$results\n";
+	    if ($::TODO) {
+		$err_line =~ s/^/# /mg;
+		print $err_line;  # Harness can't filter it out from STDERR.
+	    }
+	    else {
+		print STDERR $err_line;
+	    }
+	}
+
+	ok($ok);
+
+	foreach (@temps) {
+	    unlink $_ if $_;
+	}
+	foreach (@temp_path) {
+	    File::Path::rmtree $_ if -d $_;
+	}
+    }
 }
 
 sub can_ok ($@) {
@@ -883,6 +1095,77 @@ WHOA
     }
 
     _ok( !$diag, _where(), $name );
+}
+
+# Purposefully avoiding a closure.
+sub __capture {
+    push @::__capture, join "", @_;
+}
+    
+sub capture_warnings {
+    my $code = shift;
+
+    local @::__capture;
+    local $SIG {__WARN__} = \&__capture;
+    &$code;
+    return @::__capture;
+}
+
+# This will generate a variable number of tests.
+# Use done_testing() instead of a fixed plan.
+sub warnings_like {
+    my ($code, $expect, $name) = @_;
+    local $Level = $Level + 1;
+
+    my @w = capture_warnings($code);
+
+    cmp_ok(scalar @w, '==', scalar @$expect, $name);
+    foreach my $e (@$expect) {
+	if (ref $e) {
+	    like(shift @w, $e, $name);
+	} else {
+	    is(shift @w, $e, $name);
+	}
+    }
+    if (@w) {
+	diag("Saw these additional warnings:");
+	diag($_) foreach @w;
+    }
+}
+
+sub _fail_excess_warnings {
+    my($expect, $got, $name) = @_;
+    local $Level = $Level + 1;
+    # This will fail, and produce diagnostics
+    is($expect, scalar @$got, $name);
+    diag("Saw these warnings:");
+    diag($_) foreach @$got;
+}
+
+sub warning_is {
+    my ($code, $expect, $name) = @_;
+    die sprintf "Expect must be a string or undef, not a %s reference", ref $expect
+	if ref $expect;
+    local $Level = $Level + 1;
+    my @w = capture_warnings($code);
+    if (@w > 1) {
+	_fail_excess_warnings(0 + defined $expect, \@w, $name);
+    } else {
+	is($w[0], $expect, $name);
+    }
+}
+
+sub warning_like {
+    my ($code, $expect, $name) = @_;
+    die sprintf "Expect must be a regexp object"
+	unless ref $expect eq 'Regexp';
+    local $Level = $Level + 1;
+    my @w = capture_warnings($code);
+    if (@w > 1) {
+	_fail_excess_warnings(0 + defined $expect, \@w, $name);
+    } else {
+	like($w[0], $expect, $name);
+    }
 }
 
 # Set a watchdog to timeout the entire test file
@@ -990,7 +1273,7 @@ sub watchdog ($;$)
 
     # Use a watchdog thread because either 'threads' is loaded,
     #   or fork() failed
-    if (eval 'require threads; 1') {
+    if (eval {require threads; 1}) {
         'threads'->create(sub {
                 # Load POSIX if available
                 eval { require POSIX; };

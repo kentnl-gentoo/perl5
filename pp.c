@@ -3330,8 +3330,11 @@ PP(pp_length)
 			   SV_UNDEF_RETURNS_NULL|SV_CONST_RETURN|SV_GMAGIC);
 
 	if (!p) {
-	    sv_setsv(TARG, &PL_sv_undef);
-	    SETTARG;
+	    if (!SvPADTMP(TARG)) {
+		sv_setsv(TARG, &PL_sv_undef);
+		SETTARG;
+	    }
+	    SETs(&PL_sv_undef);
 	}
 	else if (DO_UTF8(sv)) {
 	    SETi(utf8_length((U8*)p, (U8*)p + len));
@@ -3345,8 +3348,11 @@ PP(pp_length)
 	else
 	    SETi(sv_len(sv));
     } else {
-	sv_setsv_nomg(TARG, &PL_sv_undef);
-	SETTARG;
+	if (!SvPADTMP(TARG)) {
+	    sv_setsv_nomg(TARG, &PL_sv_undef);
+	    SETTARG;
+	}
+	SETs(&PL_sv_undef);
     }
     RETURN;
 }
@@ -3702,8 +3708,6 @@ PP(pp_index)
 PP(pp_sprintf)
 {
     dVAR; dSP; dMARK; dORIGMARK; dTARGET;
-    if (SvTAINTED(MARK[1]))
-	TAINT_PROPER("sprintf");
     SvTAINTED_off(TARG);
     do_sprintf(TARG, SP-MARK, MARK+1);
     TAINT_IF(SvTAINTED(TARG));
@@ -3841,12 +3845,6 @@ PP(pp_crypt)
 
 /* Generally UTF-8 and UTF-EBCDIC are indistinguishable at this level.  So 
  * most comments below say UTF-8, when in fact they mean UTF-EBCDIC as well */
-
-/* Both the characters below can be stored in two UTF-8 bytes.  In UTF-8 the max
- * character that 2 bytes can hold is U+07FF, and in UTF-EBCDIC it is U+03FF.
- * See http://www.unicode.org/unicode/reports/tr16 */
-#define LATIN_CAPITAL_LETTER_Y_WITH_DIAERESIS 0x0178	/* Also is title case */
-#define GREEK_CAPITAL_LETTER_MU 0x039C	/* Upper and title case of MICRON */
 
 /* Below are several macros that generate code */
 /* Generates code to store a unicode codepoint c that is known to occupy

@@ -979,8 +979,9 @@ Ap	|SV*	|regclass_swash	|NULLOK const regexp *prog \
 				|NN const struct regnode *node|bool doinit \
 				|NULLOK SV **listsvp|NULLOK SV **altsvp
 #ifdef PERL_IN_REGCOMP_C
-EMi	|U8	|set_regclass_bit|NN struct RExC_state_t* pRExC_state|NN regnode* node|const U8 value|NN HV** nonbitmap_ptr
-EMs	|U8	|set_regclass_bit_fold|NN struct RExC_state_t *pRExC_state|NN regnode* node|const U8 value|NN HV** nonbitmap_ptr
+EMi	|U8	|set_regclass_bit|NN struct RExC_state_t* pRExC_state|NN regnode* node|const U8 value|NN HV** invlist_ptr|NN AV** alternate_ptr
+EMs	|U8	|set_regclass_bit_fold|NN struct RExC_state_t *pRExC_state|NN regnode* node|const U8 value|NN HV** invlist_ptr|NN AV** alternate_ptr
+EMs	|void	|add_alternate	|NN AV** alternate_ptr|NN U8* string|STRLEN len
 #endif
 Ap	|I32	|pregexec	|NN REGEXP * const prog|NN char* stringarg \
 				|NN char* strend|NN char* strbeg|I32 minend \
@@ -1300,7 +1301,8 @@ EXMpR	|HV*	|_new_invlist	|IV initial_size
 EXMpR	|HV*	|_swash_to_invlist	|NN SV* const swash
 EXMp	|void	|_append_range_to_invlist   |NN HV* const invlist|const UV start|const UV end
 #ifdef PERL_IN_REGCOMP_C
-EsMR	|HV*	|add_range_to_invlist	|NN HV* const invlist|const UV start|const UV end
+EiMR	|HV*	|add_cp_to_invlist	|NULLOK HV* invlist|const UV cp
+EsMR	|HV*	|add_range_to_invlist	|NULLOK HV* invlist|const UV start|const UV end
 EiMR	|UV*	|invlist_array	|NN HV* const invlist
 EiM	|void	|invlist_destroy	|NN HV* const invlist
 EsM	|void	|invlist_extend    |NN HV* const invlist|const UV len
@@ -1680,7 +1682,9 @@ so	|void	|validate_suid	|NN PerlIO *rsfp
 
 s	|void*	|parse_body	|NULLOK char **env|XSINIT_t xsinit
 rs	|void	|run_body	|I32 oldscope
+#  ifndef PERL_IS_MINIPERL
 s	|SV *	|incpush_if_exists|NN AV *const av|NN SV *dir|NN SV *const stem
+#  endif
 #endif
 
 #if defined(PERL_IN_PP_C)
@@ -1803,8 +1807,6 @@ Esn	|void	|cl_anything	|NN const struct RExC_state_t *pRExC_state \
 				|NN struct regnode_charclass_class *cl
 EsRn	|int	|cl_is_anything	|NN const struct regnode_charclass_class *cl
 Esn	|void	|cl_init	|NN const struct RExC_state_t *pRExC_state \
-				|NN struct regnode_charclass_class *cl
-Esn	|void	|cl_init_zero	|NN const struct RExC_state_t *pRExC_state \
 				|NN struct regnode_charclass_class *cl
 Esn	|void	|cl_and		|NN struct regnode_charclass_class *cl \
 				|NN const struct regnode_charclass_class *and_with

@@ -18,7 +18,7 @@ package Math::BigInt;
 my $class = "Math::BigInt";
 use 5.006002;
 
-$VERSION = '1.992';
+$VERSION = '1.994';
 
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(objectify bgcd blcm); 
@@ -172,8 +172,8 @@ $_trap_nan = 0;				# are NaNs ok? set w/ config()
 $_trap_inf = 0;				# are infs ok? set w/ config()
 my $nan = 'NaN'; 			# constants for easier life
 
-my $CALC = 'Math::BigInt::FastCalc';	# module to do the low level math
-					# default is FastCalc.pm
+my $CALC = 'Math::BigInt::Calc';	# module to do the low level math
+					# default is Calc.pm
 my $IMPORT = 0;				# was import() called yet?
 					# used to make require work
 my %WARN;				# warn only once for low-level libs
@@ -1573,12 +1573,7 @@ sub bmuladd
   # (BINT or num_str, BINT or num_str, BINT or num_str) return BINT
 
   # set up parameters
-  my ($self,$x,$y,$z,@r) = (ref($_[0]),@_);
-  # objectify is costly, so avoid it
-  if ((!ref($_[0])) || (ref($_[0]) ne ref($_[1])))
-    {
-    ($self,$x,$y,$z,@r) = objectify(3,@_);
-    }
+  my ($self,$x,$y,$z,@r) = objectify(3,@_);
 
   return $x if $x->modify('bmuladd');
 
@@ -2742,7 +2737,7 @@ sub import
     {
     $_ =~ tr/a-zA-Z0-9://cd;			# limit to sane characters
     }
-  push @c, \'FastCalc', \'Calc'			# if all fail, try these
+  push @c, \'Calc'				# if all fail, try these
     if $warn_or_die < 2;			# but not for "only"
   $CALC = '';					# signal error
   foreach my $l (@c)
@@ -3656,13 +3651,26 @@ See L<Input> for more info on accepted input formats.
 
 	$x = Math::BigInt->from_oct("0775");	# input is octal
 
+Interpret the input as an octal string and return the corresponding value. A
+"0" (zero) prefix is optional. A single underscore character may be placed
+right after the prefix, if present, or between any two digits. If the input is
+invalid, a NaN is returned.
+
 =head2 from_hex()
 
 	$x = Math::BigInt->from_hex("0xcafe");	# input is hexadecimal
 
+Interpret input as a hexadecimal string. A "0x" or "x" prefix is optional. A
+single underscore character may be placed right after the prefix, if present,
+or between any two digits. If the input is invalid, a NaN is returned.
+
 =head2 from_bin()
 
 	$x = Math::BigInt->from_bin("0b10011");	# input is binary
+
+Interpret the input as a binary string. A "0b" or "b" prefix is optional. A
+single underscore character may be placed right after the prefix, if present,
+or between any two digits. If the input is invalid, a NaN is returned.
 
 =head2 bnan()
 

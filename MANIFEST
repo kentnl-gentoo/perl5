@@ -395,6 +395,7 @@ cpan/CPAN/PAUSE2003.pub		CPAN public key
 cpan/CPAN/PAUSE2005.pub		CPAN public key
 cpan/CPAN/PAUSE2007.pub		CPAN public key
 cpan/CPAN/PAUSE2009.pub		CPAN public key
+cpan/CPAN/PAUSE2011.pub
 cpan/CPANPLUS/bin/cpan2dist			the cpan2dist utility
 cpan/CPANPLUS/bin/cpanp				the cpanp utility
 cpan/CPANPLUS/bin/cpanp-run-perl		the cpanp-run-perl utility
@@ -510,7 +511,6 @@ cpan/DB_File/t/db-recno.t	See if DB_File works
 cpan/DB_File/typemap		Berkeley DB extension interface types
 cpan/DB_File/version.c		Berkeley DB extension interface version check
 cpan/Devel-DProf/bin/dprofpp	Perl code profile post-processor
-cpan/Devel-DProf/Changes		Perl code profiler changelog
 cpan/Devel-DProf/DProf.pm	Perl code profiler
 cpan/Devel-DProf/dprof/test1_t	Perl code profiler tests
 cpan/Devel-DProf/dprof/test1_v	Perl code profiler tests
@@ -530,7 +530,6 @@ cpan/Devel-DProf/dprof/test8_t	Perl code profiler tests
 cpan/Devel-DProf/dprof/test8_v	Perl code profiler tests
 cpan/Devel-DProf/dprof/V.pm	Perl code profiler tests
 cpan/Devel-DProf/DProf.xs	Perl code profiler
-cpan/Devel-DProf/Makefile.PL	Perl code profiler makefile writer
 cpan/Devel-DProf/t/DProf.t	Perl code profiler
 cpan/Devel-DProf/Todo		Perl code profiler todo list
 cpan/Devel-PPPort/apicheck_c.PL		Devel::PPPort apicheck generator
@@ -740,6 +739,7 @@ cpan/Digest-SHA/t/allfcns.t		See if Digest::SHA works
 cpan/Digest-SHA/t/base64.t		See if Digest::SHA works
 cpan/Digest-SHA/t/bitbuf.t		See if Digest::SHA works
 cpan/Digest-SHA/t/dumpload.t		See if Digest::SHA works
+cpan/Digest-SHA/t/fips180-4.t		See if Digest::SHA works
 cpan/Digest-SHA/t/fips198.t		See if Digest::SHA works
 cpan/Digest-SHA/t/gglong.t		See if Digest::SHA works
 cpan/Digest-SHA/t/gg.t			See if Digest::SHA works
@@ -1639,6 +1639,7 @@ cpan/Module-Build/t/properties/license.t
 cpan/Module-Build/t/properties/module_name.t
 cpan/Module-Build/t/properties/needs_compiler.t
 cpan/Module-Build/t/properties/release_status.t
+cpan/Module-Build/t/properties/requires.t
 cpan/Module-Build/t/properties/share_dir.t
 cpan/Module-Build/t/README.pod
 cpan/Module-Build/t/resume.t
@@ -2011,6 +2012,7 @@ cpan/Pod-Simple/t/junk1.pod				Pod::Simple test file
 cpan/Pod-Simple/t/junk2o.txt				Pod::Simple test file
 cpan/Pod-Simple/t/junk2.pod				Pod::Simple test file
 cpan/Pod-Simple/t/linkclas.t				Pod::Simple test file
+cpan/Pod-Simple/t/output.t				Pod::Simple test file
 cpan/Pod-Simple/t/perlcygo.txt				Pod::Simple test file
 cpan/Pod-Simple/t/perlcyg.pod				Pod::Simple test file
 cpan/Pod-Simple/t/perlfaqo.txt				Pod::Simple test file
@@ -2419,6 +2421,7 @@ cpan/Test-Simple/t/subtest/plan.t			Test::Builder tests
 cpan/Test-Simple/t/subtest/predicate.t			Test::Builder tests
 cpan/Test-Simple/t/subtest/singleton.t			Test::More test
 cpan/Test-Simple/t/subtest/todo.t			Test::Builder tests
+cpan/Test-Simple/t/subtest/wstat.t			Test::More test
 cpan/Test-Simple/t/tbm_doesnt_set_exported_to.t		Test::Builder::Module test
 cpan/Test-Simple/t/Tester/tbt_01basic.t			Test::Builder::Tester test
 cpan/Test-Simple/t/Tester/tbt_02fhrestore.t		Test::Builder::Tester test
@@ -3546,6 +3549,7 @@ ext/re/t/lexical_debug.t	test that lexical re 'debug' works
 ext/re/t/qr.t			test that qr// is a Regexp
 ext/re/t/reflags.t		see if re '/xism' pragma works
 ext/re/t/re_funcs.t		See if exportable 're' funcs in re.xs work
+ext/re/t/re_funcs_u.t		See if exportable 're' funcs in universal.c work
 ext/re/t/regop.pl		generate debug output for various patterns
 ext/re/t/regop.t		test RE optimizations by scraping debug output
 ext/re/t/re.t			see if re pragma works
@@ -3589,6 +3593,7 @@ ext/Sys-Hostname/Hostname.xs	Sys::Hostname extension external subroutines
 ext/Sys-Hostname/t/Hostname.t	See if Sys::Hostname works
 ext/Tie-Hash-NamedCapture/NamedCapture.pm	Implements %- and %+ behaviour
 ext/Tie-Hash-NamedCapture/NamedCapture.xs	Implements %- and %+ behaviour
+ext/Tie-Hash-NamedCapture/t/tiehash.t		Tests TIEHASH
 ext/Tie-Memoize/lib/Tie/Memoize.pm	Base class for memoized tied hashes
 ext/Tie-Memoize/t/Tie-Memoize.t		Test for Tie::Memoize
 ext/VMS-DCLsym/0README.txt	ReadMe file for VMS::DCLsym
@@ -4300,6 +4305,7 @@ pod/perl5121delta.pod		Perl changes in version 5.12.1
 pod/perl5122delta.pod		Perl changes in version 5.12.2
 pod/perl5123delta.pod		Perl changes in version 5.12.3
 pod/perl5130delta.pod		Perl changes in version 5.13.0
+pod/perl51310delta.pod		Perl changes in version 5.13.10
 pod/perl5131delta.pod		Perl changes in version 5.13.1
 pod/perl5132delta.pod		Perl changes in version 5.13.2
 pod/perl5133delta.pod		Perl changes in version 5.13.3
@@ -4676,6 +4682,7 @@ t/io/argv.t			See if ARGV stuff works
 t/io/binmode.t			See if binmode() works
 t/io/crlf.t			See if :crlf works
 t/io/crlf_through.t		See if pipe passes data intact with :crlf
+t/io/data.t			See if DATA works
 t/io/defout.t			See if PL_defoutgv works
 t/io/dup.t			See if >& works right
 t/io/eintr.t			See if code called during EINTR is safe
@@ -4901,6 +4908,7 @@ t/op/localref.t			See if local ${deref} works
 t/op/local.t			See if local works
 t/op/loopctl.t			See if next/last/redo work
 t/op/lop.t			See if logical operators work
+t/op/magic-27839.t		Test for #27839, skipped for minitest
 t/op/magic_phase.t		See if ${^GLOBAL_PHASE} works
 t/op/magic.t			See if magic variables work
 t/op/method.t			See if method calls work
@@ -4947,6 +4955,7 @@ t/op/smartmatch.t		See if the ~~ operator works
 t/op/sort.t			See if sort works
 t/op/splice.t			See if splice works
 t/op/split.t			See if split works
+t/op/split_unicode.t		Test split /\s/ and Unicode
 t/op/sprintf2.t			See if sprintf works
 t/op/sprintf.t			See if sprintf works
 t/op/srand.t			See if srand works
@@ -4993,6 +5002,7 @@ t/op/yadayada.t			See if ... works
 t/perl.supp			Perl valgrind suppressions
 t/porting/args_assert.t		Check that all PERL_ARGS_ASSERT* macros are used
 t/porting/authors.t		Check that all authors have been acknowledged
+t/porting/bincompat.t		Check that {non_,}bincompat_options are ordered
 t/porting/buildtoc.t		Check that various pod lists are consistent
 t/porting/checkcase.t		Check whether we are case-insensitive-fs-friendly
 t/porting/cmp_version.t		Test whether all changed module files have their VERSION bumped
@@ -5022,6 +5032,7 @@ t/re/pat_special_cc.t		See if special charclasses (\s \w \d) work the same as (\
 t/re/pat_special_cc_thr.t	See if special charclasses (\s \w \d) work the same as (\s and [\s]) under threads
 t/re/pat.t			See if esoteric patterns work
 t/re/pat_thr.t			See if esoteric patterns work in another thread
+t/re/qr-72922.t			Test for bug #72922
 t/re/qr_gc.t			See if qr doesn't leak
 t/re/qrstack.t			See if qr expands the stack properly
 t/re/qr.t			See if qr works
@@ -5045,9 +5056,6 @@ t/re/reg_namedcapture.t		Make sure glob assignment doesn't break named capture
 t/re/reg_nc_tie.t		Test the tied methods of Tie::Hash::NamedCapture
 t/re/reg_pmod.t			See if regexp /p modifier works as expected
 t/re/reg_posixcc.t		See if posix character classes behave consistently
-t/re/reg_unsafe.t		Check for unsafe match vars
-t/re/re.t			See if exportable 're' funcs in universal.c work
-t/re/ReTest.pl			Test utilities for the t/re/pat*.t tests (used by do)
 t/re/re_tests			Regular expressions for regexp.t
 t/re/rxcode.t			See if /(?{ code })/ works
 t/re/subst_amp.t		See if $&-related substitution works

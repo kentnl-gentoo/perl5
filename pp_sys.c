@@ -449,7 +449,9 @@ PP(pp_warn)
     else {
 	exsv = newSVpvs_flags("Warning: something's wrong", SVs_TEMP);
     }
-    warn_sv(exsv);
+    if (SvROK(exsv) && !PL_warnhook)
+	 Perl_warn(aTHX_ "%"SVf, SVfARG(exsv));
+    else warn_sv(exsv);
     RETSETYES;
 }
 
@@ -1529,8 +1531,6 @@ PP(pp_prtf)
 	goto just_say_no;
     }
     else {
-	if (SvTAINTED(MARK[1]))
-	    TAINT_PROPER("printf");
 	do_sprintf(sv, SP - MARK, MARK + 1);
 	if (!do_print(sv, fp))
 	    goto just_say_no;

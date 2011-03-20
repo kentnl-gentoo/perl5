@@ -1,14 +1,16 @@
 #!./perl
 
 BEGIN {
-    chdir 't' if -d 't';
-    @INC = '../lib';
-    require './test.pl';
+    require Config;
+    if (($Config::Config{'extensions'} !~ /\bre\b/) ){
+	print "1..0 # Skip -- Perl configured without re module\n";
+	    exit 0;
+    }
+    require 'test.pl'; # For watchdog
 }
 
 use strict;
 use warnings;
-use POSIX;
 
 use re qw(is_regexp regexp_pattern
           regname regnames regnames_count);
@@ -89,6 +91,8 @@ if ('1234'=~/(?:(?<A>\d)|(?<C>!))(?<B>\d)(?<A>\d)(?<B>\d)/){
     }
 
     SKIP: {
+        skip_if_miniperl("no dynamic loading on miniperl, no POSIX", 3);
+        require POSIX;
         my $current_locale = POSIX::setlocale( &POSIX::LC_CTYPE, 'de_DE.ISO-8859-1' );
         if ( !$current_locale || $current_locale ne 'de_DE.ISO-8859-1' ) {
             skip( 'cannot use locale de_DE.ISO-8859-1', 3 );
@@ -103,6 +107,8 @@ if ('1234'=~/(?:(?<A>\d)|(?<C>!))(?<B>\d)(?<A>\d)(?<B>\d)/){
     }
 
     SKIP: {
+        skip_if_miniperl("no dynamic loading on miniperl, no POSIX", 3);
+        require POSIX;
         my $current_locale = POSIX::setlocale( &POSIX::LC_CTYPE, 'C' );
         if ( !$current_locale || $current_locale ne 'C' ) {
             skip( 'cannot set locale C', 3 );
@@ -117,6 +123,7 @@ if ('1234'=~/(?:(?<A>\d)|(?<C>!))(?<B>\d)(?<A>\d)(?<B>\d)/){
     }
 }
 
+# New tests go here ^^^
 
     { # Keep these tests last, as whole script will be interrupted if times out
         # Bug #72998; this can loop 
@@ -130,6 +137,7 @@ if ('1234'=~/(?:(?<A>\d)|(?<C>!))(?<B>\d)(?<A>\d)(?<B>\d)/){
         pass(q"qr/\18/ didn't loop");
     }
 
-# New tests above this line, don't forget to update the test count below!
-BEGIN { plan tests => 33 }
-# No tests here!
+done_testing();
+
+__END__
+# New tests go up there^^^
