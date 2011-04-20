@@ -2869,6 +2869,7 @@ dist/B-Lint/t/lint.t				See if B::Lint works
 dist/B-Lint/t/pluglib/B/Lint/Plugin/Test.pm	See if B::Lint works
 dist/constant/lib/constant.pm	For "use constant"
 dist/constant/t/constant.t	See if compile-time constants work
+dist/constant/t/utf8.t		Test Unicode constants under utf8 pragma
 dist/Cwd/Cwd.pm				Various cwd routines (getcwd, fastcwd, chdir)
 dist/Cwd/Cwd.xs				Cwd extension external subroutines
 dist/Cwd/lib/File/Spec/Cygwin.pm	portable operations on Cygwin file names
@@ -3009,6 +3010,7 @@ dist/IO/README			IO extension maintenance notice
 dist/IO/t/io_const.t		See if constants from IO work
 dist/IO/t/io_dir.t		See if directory-related methods from IO work
 dist/IO/t/io_dup.t		See if dup()-related methods from IO work
+dist/IO/t/io_file_export.t	Test IO::File exports
 dist/IO/t/io_file.t		See if binmode()-related methods on IO::File work
 dist/IO/t/io_linenum.t		See if I/O line numbers are tracked correctly
 dist/IO/t/io_multihomed.t	See if INET sockets work with multi-homed hosts
@@ -3633,6 +3635,7 @@ ext/XS-APItest/t/cleanup.t	test stack behaviour on unwinding
 ext/XS-APItest/t/cophh.t	test COPHH API
 ext/XS-APItest/t/copyhints.t	test hv_copy_hints_hv() API
 ext/XS-APItest/t/customop.t	XS::APItest: tests for custom ops
+ext/XS-APItest/t/eval-filter.t	Simple source filter/eval test
 ext/XS-APItest/t/exception.t	XS::APItest extension
 ext/XS-APItest/t/grok.t		XS::APItest: tests for grok* functions
 ext/XS-APItest/t/hash.t		XS::APItest: tests for hash related APIs
@@ -4306,6 +4309,7 @@ pod/perl5122delta.pod		Perl changes in version 5.12.2
 pod/perl5123delta.pod		Perl changes in version 5.12.3
 pod/perl5130delta.pod		Perl changes in version 5.13.0
 pod/perl51310delta.pod		Perl changes in version 5.13.10
+pod/perl51311delta.pod		Perl changes in version 5.13.11
 pod/perl5131delta.pod		Perl changes in version 5.13.1
 pod/perl5132delta.pod		Perl changes in version 5.13.2
 pod/perl5133delta.pod		Perl changes in version 5.13.3
@@ -4571,6 +4575,7 @@ regen/reentr.pl			Reentrant interfaces
 regen/regcharclass.pl		Generate regcharclass.h from inline data
 regen/regcomp.pl		Builder of regnodes.h
 regen/regen_lib.pl		Common file routines for generator scripts
+regen/uconfig_h.pl		generate uconfig.h (requires /bin/sh)
 regen/warnings.pl		Program to write warnings.h and lib/warnings.pm
 regexec.c			Regular expression evaluator
 regexp.h			Public declarations for the above
@@ -4680,6 +4685,7 @@ time64_config.h			64 bit clean time.h (configuration)
 time64.h			64 bit clean time.h (header)
 t/io/argv.t			See if ARGV stuff works
 t/io/binmode.t			See if binmode() works
+t/io/bom.t			See if scripts can start with a byte order mark
 t/io/crlf.t			See if :crlf works
 t/io/crlf_through.t		See if pipe passes data intact with :crlf
 t/io/data.t			See if DATA works
@@ -5019,6 +5025,7 @@ t/porting/test_bootstrap.t	Test that the instructions for test bootstrapping are
 t/README			Instructions for regression tests
 t/re/charset.t			See if regex modifiers like /d, /u work properly
 t/re/fold_grind.t		See if case folding works properly
+t/re/no_utf8_pm.t		Verify utf8.pm doesn't get loaded unless required
 t/re/overload.t		Test against string corruption in pattern matches on overloaded objects
 t/re/pat_advanced.t		See if advanced esoteric patterns work
 t/re/pat_advanced_thr.t		See if advanced esoteric patterns work in another thread
@@ -5113,6 +5120,7 @@ t/uni/write.t			See if Unicode formats work
 t/win32/system.t		See if system works in Win*
 t/win32/system_tests		Test runner for system.t
 t/x2p/s2p.t			See if s2p/psed work
+uconfig64.sh			Configuration script for microperl for LP64
 uconfig.h			Configuration header for microperl
 uconfig.sh			Configuration script for microperl
 universal.c			The default UNIVERSAL package methods

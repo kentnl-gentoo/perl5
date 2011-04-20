@@ -876,7 +876,7 @@ my %why_obsolete;    # Documentation only
 
     my $other_properties = 'other properties';
     my $contributory = "Used by Unicode internally for generating $other_properties and not intended to be used stand-alone";
-    my $why_no_expand  = "Deprecated by Unicode: less useful than UTF-specific calculations",
+    my $why_no_expand  = "Deprecated by Unicode.  These are characters that expand to more than one character in the specified normalization form, but whether they actually take up more bytes or not depends on the encoding being used.  For example, a UTF-8 encoded character may expand to a different number of bytes than a UTF-32 encoded character.";
 
     %why_deprecated = (
         'Grapheme_Link' => 'Deprecated by Unicode:  Duplicates ccc=vr (Canonical_Combining_Class=Virama)',
@@ -13032,7 +13032,7 @@ Perl extension.  There is some detail about Blocks, Scripts, General_Category,
 and Bidi_Class in L<perlunicode>, but to find out about the intricacies of the
 Unicode properties, refer to the Unicode standard.  A good starting place is
 L<$unicode_reference_url>.  More information on the Perl extensions is in
-L<perlrecharclass>.
+L<perlunicode/Other Properties>.
 
 Note that you can define your own properties; see
 L<perlunicode/"User-Defined Character Properties">.
@@ -13097,8 +13097,8 @@ adjacent to (but within) the braces and the colon or equal sign.
 
 =back
 
-Some properties are considered obsolete, but still available.  There are
-several varieties of obsolescence:
+Some properties are considered obsolete by Unicode, but still available.
+There are several varieties of obsolescence:
 
 =over 4
 
@@ -13118,8 +13118,8 @@ table.
 =item Deprecated
 
 An obsolete property may be deprecated, perhaps because its original intent
-has been replaced by another property or because its specification was somehow
-defective.  This means that its use is strongly
+has been replaced by another property, or because its specification was
+somehow defective.  This means that its use is strongly
 discouraged, so much so that a warning will be issued if used, unless the
 regular expression is in the scope of a C<S<no warnings 'deprecated'>>
 statement.  $A_bold_deprecated flags each such entry in the table, and
@@ -13228,6 +13228,7 @@ $zero_matches
 
 A few properties are accessible in Perl via various function calls only.
 These are:
+
  Lowercase_Mapping          lc() and lcfirst()
  Titlecase_Mapping          ucfirst()
  Uppercase_Mapping          uc()
@@ -13252,9 +13253,11 @@ the properties are listed enclosed in (parentheses).
 
 =back
 
-An installation can choose to allow any of these to be matched by changing the
+An installation can choose to allow any of these to be matched by downloading
+the Unicode database from L<http://www.unicode.org/Public/> to
+C<\$Config{privlib}>/F<unicore/> in the Perl source tree, changing the
 controlling lists contained in the program
-C<\$Config{privlib}>/F<unicore/mktables> and then re-running F<mktables>.
+C<\$Config{privlib}>/F<unicore/mktables> and then re-compiling and installing.
 (C<\%Config> is available from the Config module).
 
 =head1 Files in the I<To> directory (for serious hackers only)
@@ -13262,33 +13265,19 @@ C<\$Config{privlib}>/F<unicore/mktables> and then re-running F<mktables>.
 All Unicode properties are really mappings (in the mathematical sense) from
 code points to their respective values.  As part of its build process,
 Perl constructs tables containing these mappings for all properties that it
-deals with.  But only a few of these are written out into files.
+deals with.  Some, but not all, of these are written out into files.
 Those written out are in the directory C<\$Config{privlib}>/F<unicore/To/>
 (%Config is available from the Config module).
 
-Those ones written are ones needed by Perl internally during execution, or for
-which there is some demand, and those for which there is no access through the
-Perl core.  Generally, properties that can be used in regular expression
-matching do not have their map tables written, like Script.  Nor are the
-simplistic properties that have a better, more complete version, such as
-Simple_Uppercase_Mapping  (Uppercase_Mapping is written instead).
-
-None of the properties in the I<To> directory are currently directly
-accessible through the Perl core, although some may be accessed indirectly.
-For example, the uc() function implements the Uppercase_Mapping property and
-uses the F<Upper.pl> file found in this directory.
-
-The available files in the current installation, with their properties (short
-names in parentheses), and any flags or comments about them, are:
+Perl reserves the right to change the format and even the existence of any of
+those files without notice, except the ones that were in existence prior to
+release 5.13.  If those change, a deprecation cycle will be done first.  These
+are:
 
 @map_tables_actually_output
 
-An installation can choose to change which files are generated by changing the
-controlling lists contained in the program
-C<\$Config{privlib}>/F<unicore/mktables> and then re-running F<mktables>.
-
-Each of these files defines two hash entries to help reading programs decipher
-it.  One of them looks like this:
+Each of the files in this directory defines two hash entries to help reading
+programs decipher it.  One of them looks like this:
 
     \$utf8::SwashInfo{'ToNAME'}{'format'} = 's';
 

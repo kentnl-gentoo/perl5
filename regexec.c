@@ -1594,7 +1594,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	case NALNUMU:
 	    REXEC_FBC_CSCAN_PRELOAD(
 		LOAD_UTF8_CHARCLASS_ALNUM(),
-		swash_fetch(PL_utf8_alnum,(U8*)s, utf8_target),
+		!swash_fetch(PL_utf8_alnum,(U8*)s, utf8_target),
                 ! isWORDCHAR_L1((U8) *s)
 	    );
 	    break;
@@ -2555,7 +2555,7 @@ S_regtry(pTHX_ regmatch_info *reginfo, char **startpos)
 	/* This is safe against NULLs: */
 	ReREFCNT_dec(PM_GETRE(PL_reg_curpm));
 	/* PM_reg_curpm owns a reference to this regexp.  */
-	ReREFCNT_inc(rx);
+	(void)ReREFCNT_inc(rx);
 #endif
 	PM_SETRE(PL_reg_curpm, rx);
 	PL_reg_oldcurpm = PL_curpm;
@@ -3625,20 +3625,9 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		char *e = PL_regeol;
 
 		if (! foldEQ_utf8_flags(s, 0,  ln, cBOOL(UTF_PATTERN),
-			       l, &e, 0,  utf8_target, fold_utf8_flags)) {
-		     /* One more case for the sharp s:
-		      * pack("U0U*", 0xDF) =~ /ss/i,
-		      * the 0xC3 0x9F are the UTF-8
-		      * byte sequence for the U+00DF. */
-
-		     if (!(utf8_target &&
-		           toLOWER(s[0]) == 's' &&
-			   ln >= 2 &&
-			   toLOWER(s[1]) == 's' &&
-			   (U8)l[0] == 0xC3 &&
-			   e - l >= 2 &&
-			   (U8)l[1] == 0x9F))
-			  sayNO;
+			       l, &e, 0,  utf8_target, fold_utf8_flags))
+		{
+		    sayNO;
 		}
 		locinput = e;
 		nextchr = UCHARAT(locinput);
@@ -5412,7 +5401,7 @@ NULL
 		rex = (struct regexp *)SvANY(rex_sv);
 		rexi = RXi_GET(rex);
 		cur_curlyx = cur_eval->u.eval.prev_curlyx;
-		ReREFCNT_inc(rex_sv);
+		(void)ReREFCNT_inc(rex_sv);
 		st->u.eval.cp = regcppush(0);	/* Save *all* the positions. */
 
 		/* rex was changed so update the pointer in PL_reglastparen and PL_reglastcloseparen */

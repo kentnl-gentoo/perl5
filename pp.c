@@ -4209,6 +4209,8 @@ PP(pp_ucfirst)
 	    SvCUR_set(dest, need - 1);
 	}
     }
+    if (dest != source && SvTAINTED(source))
+	SvTAINT(dest);
     SvSETMAGIC(dest);
     RETURN;
 }
@@ -4479,6 +4481,8 @@ PP(pp_uc)
 	    SvCUR_set(dest, d - (U8*)SvPVX_const(dest));
 	}
     } /* End of isn't utf8 */
+    if (dest != source && SvTAINTED(source))
+	SvTAINT(dest);
     SvSETMAGIC(dest);
     RETURN;
 }
@@ -4701,6 +4705,8 @@ PP(pp_lc)
 	    SvCUR_set(dest, d - (U8*)SvPVX_const(dest));
 	}
     }
+    if (dest != source && SvTAINTED(source))
+	SvTAINT(dest);
     SvSETMAGIC(dest);
     RETURN;
 }
@@ -4830,53 +4836,25 @@ PP(pp_rkeys)
     dSP;
     dPOPss;
 
-    if (!SvOK(sv))
-	RETURN;
+    SvGETMAGIC(sv);
 
-    if (SvROK(sv)) {
-	SvGETMAGIC(sv);
-	if (SvAMAGIC(sv)) {
-	    /* N.B.: AMG macros return sv if no overloading is found */
-	    SV *maybe_hv = AMG_CALLunary(sv, to_hv_amg);
-	    SV *maybe_av = AMG_CALLunary(sv, to_av_amg);
-	    if ( maybe_hv != sv && maybe_av != sv ) {
-		Perl_ck_warner(aTHX_ packWARN(WARN_AMBIGUOUS), "%s",
-		    Perl_form(aTHX_ "Ambiguous overloaded argument to %s resolved as %%{}",
-			PL_op_desc[PL_op->op_type]
-		    )
-		);
-		sv = maybe_hv;
-	    }
-	    else if ( maybe_av != sv ) {
-		if ( SvTYPE(SvRV(sv)) == SVt_PVHV ) {
-		    /* @{} overload, but underlying reftype is HV */
-		    Perl_ck_warner(aTHX_ packWARN(WARN_AMBIGUOUS), "%s",
-			Perl_form(aTHX_ "Ambiguous overloaded argument to %s resolved as @{}",
-			    PL_op_desc[PL_op->op_type]
-			)
-		    );
-		}
-		sv = maybe_av;
-	    }
-	    else if ( maybe_hv != sv ) {
-		if ( SvTYPE(SvRV(sv)) == SVt_PVAV ) {
-		    /* %{} overload, but underlying reftype is AV */
-		    Perl_ck_warner(aTHX_ packWARN(WARN_AMBIGUOUS), "%s",
-			Perl_form(aTHX_ "Ambiguous overloaded argument to %s resolved as %%{}",
-			    PL_op_desc[PL_op->op_type]
-			)
-		    );
-		}
-		sv = maybe_hv;
-	    }
-	}
-	sv = SvRV(sv);
-    }
-
-    if ( SvTYPE(sv) != SVt_PVHV && SvTYPE(sv) != SVt_PVAV ) {
-	DIE(aTHX_ "Type of argument to %s must be hashref or arrayref",
+    if (
+         !SvROK(sv)
+      || (sv = SvRV(sv),
+            (SvTYPE(sv) != SVt_PVHV && SvTYPE(sv) != SVt_PVAV)
+          || SvOBJECT(sv)
+         )
+    ) {
+	DIE(aTHX_
+	   "Type of argument to %s must be unblessed hashref or arrayref",
 	    PL_op_desc[PL_op->op_type] );
     }
+
+    if (PL_op->op_flags & OPf_SPECIAL && SvTYPE(sv) == SVt_PVAV)
+	DIE(aTHX_
+	   "Can't modify %s in %s",
+	    PL_op_desc[PL_op->op_type], PL_op_desc[PL_op->op_next->op_type]
+	);
 
     /* Delegate to correct function for op type */
     PUSHs(sv);
@@ -5418,10 +5396,40 @@ PP(pp_anonhash)
     RETURN;
 }
 
+static AV *
+S_deref_plain_array(pTHX_ AV *ary)
+{
+    if (SvTYPE(ary) == SVt_PVAV) return ary;
+    SvGETMAGIC((SV *)ary);
+    if (!SvROK(ary) || SvTYPE(SvRV(ary)) != SVt_PVAV)
+	Perl_die(aTHX_ "Not an ARRAY reference");
+    else if (SvOBJECT(SvRV(ary)))
+	Perl_die(aTHX_ "Not an unblessed ARRAY reference");
+    return (AV *)SvRV(ary);
+}
+
+#if defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN)
+# define DEREF_PLAIN_ARRAY(ary)       \
+   ({                                  \
+     AV *aRrRay = ary;                  \
+     SvTYPE(aRrRay) == SVt_PVAV          \
+      ? aRrRay                            \
+      : S_deref_plain_array(aTHX_ aRrRay); \
+   })
+#else
+# define DEREF_PLAIN_ARRAY(ary)            \
+   (                                        \
+     PL_Sv = (SV *)(ary),                    \
+     SvTYPE(PL_Sv) == SVt_PVAV                \
+      ? (AV *)PL_Sv                            \
+      : S_deref_plain_array(aTHX_ (AV *)PL_Sv)  \
+   )
+#endif
+
 PP(pp_splice)
 {
     dVAR; dSP; dMARK; dORIGMARK;
-    register AV *ary = MUTABLE_AV(*++MARK);
+    register AV *ary = DEREF_PLAIN_ARRAY(MUTABLE_AV(*++MARK));
     register SV **src;
     register SV **dst;
     register I32 i;
@@ -5624,7 +5632,7 @@ PP(pp_splice)
 PP(pp_push)
 {
     dVAR; dSP; dMARK; dORIGMARK; dTARGET;
-    register AV * const ary = MUTABLE_AV(*++MARK);
+    register AV * const ary = DEREF_PLAIN_ARRAY(MUTABLE_AV(*++MARK));
     const MAGIC * const mg = SvTIED_mg((const SV *)ary, PERL_MAGIC_tied);
 
     if (mg) {
@@ -5661,7 +5669,7 @@ PP(pp_shift)
     dVAR;
     dSP;
     AV * const av = PL_op->op_flags & OPf_SPECIAL
-	? MUTABLE_AV(GvAV(PL_defgv)) : MUTABLE_AV(POPs);
+	? MUTABLE_AV(GvAV(PL_defgv)) : DEREF_PLAIN_ARRAY(MUTABLE_AV(POPs));
     SV * const sv = PL_op->op_type == OP_SHIFT ? av_shift(av) : av_pop(av);
     EXTEND(SP, 1);
     assert (sv);
@@ -5674,7 +5682,7 @@ PP(pp_shift)
 PP(pp_unshift)
 {
     dVAR; dSP; dMARK; dORIGMARK; dTARGET;
-    register AV *ary = MUTABLE_AV(*++MARK);
+    register AV *ary = DEREF_PLAIN_ARRAY(MUTABLE_AV(*++MARK));
     const MAGIC * const mg = SvTIED_mg((const SV *)ary, PERL_MAGIC_tied);
 
     if (mg) {

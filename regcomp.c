@@ -143,6 +143,7 @@ typedef struct RExC_state_t {
     I32		recurse_count;		/* Number of recurse regops */
     I32		in_lookbehind;
     I32		contains_locale;
+    I32		override_recoding;
 #if ADD_TO_REGEXEC
     char 	*starttry;		/* -Dr: where regtry was called. */
 #define RExC_starttry	(pRExC_state->starttry)
@@ -192,6 +193,7 @@ typedef struct RExC_state_t {
 #define RExC_recurse_count	(pRExC_state->recurse_count)
 #define RExC_in_lookbehind	(pRExC_state->in_lookbehind)
 #define RExC_contains_locale	(pRExC_state->contains_locale)
+#define RExC_override_recoding	(pRExC_state->override_recoding)
 
 
 #define	ISMULT1(c)	((c) == '*' || (c) == '+' || (c) == '?')
@@ -728,15 +730,7 @@ S_cl_anything(const RExC_state_t *pRExC_state, struct regnode_charclass_class *c
 
     ANYOF_BITMAP_SETALL(cl);
     cl->flags = ANYOF_CLASS|ANYOF_EOS|ANYOF_UNICODE_ALL
-		|ANYOF_LOC_NONBITMAP_FOLD|ANYOF_NON_UTF8_LATIN1_ALL
-		    /* Even though no bitmap is in use here, we need to set
-		     * the flag below so an AND with a node that does have one
-		     * doesn't lose that one.  The flag should get cleared if
-		     * the other one doesn't; and the code in regexec.c is
-		     * structured so this being set when not needed does no
-		     * harm.  It seemed a little cleaner to set it here than do
-		     * a special case in cl_and() */
-		|ANYOF_NONBITMAP_NON_UTF8;
+		|ANYOF_LOC_NONBITMAP_FOLD|ANYOF_NON_UTF8_LATIN1_ALL;
 
     /* If any portion of the regex is to operate under locale rules,
      * initialization includes it.  The reason this isn't done for all regexes
@@ -839,6 +833,8 @@ S_cl_and(struct regnode_charclass_class *cl,
 	}
     }
     else {   /* and'd node is not inverted */
+	U8 outside_bitmap_but_not_utf8; /* Temp variable */
+
 	if (! ANYOF_NONBITMAP(and_with)) {
 
             /* Here 'and_with' doesn't match anything outside the bitmap
@@ -857,14 +853,18 @@ S_cl_and(struct regnode_charclass_class *cl,
 	    /* Here, 'and_with' does match something outside the bitmap, and cl
 	     * doesn't have a list of things to match outside the bitmap.  If
              * cl can match all code points above 255, the intersection will
-             * be those above-255 code points that 'and_with' matches.  There
-             * may be false positives from code points in 'and_with' that are
-             * outside the bitmap but below 256, but those get sorted out
-             * after the synthetic start class succeeds).  If cl can't match
-             * all Unicode code points, it means here that it can't match *
-             * anything outside the bitmap, so we leave the bitmap empty */
+             * be those above-255 code points that 'and_with' matches.  If cl
+             * can't match all Unicode code points, it means that it can't
+             * match anything outside the bitmap (since the 'if' that got us
+             * into this block tested for that), so we leave the bitmap empty.
+             */
 	    if (cl->flags & ANYOF_UNICODE_ALL) {
 		ARG_SET(cl, ARG(and_with));
+
+                /* and_with's ARG may match things that don't require UTF8.
+                 * And now cl's will too, in spite of this being an 'and'.  See
+                 * the comments below about the kludge */
+		cl->flags |= and_with->flags & ANYOF_NONBITMAP_NON_UTF8;
 	    }
 	}
 	else {
@@ -874,8 +874,33 @@ S_cl_and(struct regnode_charclass_class *cl,
 	}
 
 
-        /* Take the intersection of the two sets of flags */
+        /* Take the intersection of the two sets of flags.  However, the
+         * ANYOF_NONBITMAP_NON_UTF8 flag is treated as an 'or'.  This is a
+         * kludge around the fact that this flag is not treated like the others
+         * which are initialized in cl_anything().  The way the optimizer works
+         * is that the synthetic start class (SSC) is initialized to match
+         * anything, and then the first time a real node is encountered, its
+         * values are AND'd with the SSC's with the result being the values of
+         * the real node.  However, there are paths through the optimizer where
+         * the AND never gets called, so those initialized bits are set
+         * inappropriately, which is not usually a big deal, as they just cause
+         * false positives in the SSC, which will just mean a probably
+         * imperceptible slow down in execution.  However this bit has a
+         * higher false positive consequence in that it can cause utf8.pm,
+         * utf8_heavy.pl ... to be loaded when not necessary, which is a much
+         * bigger slowdown and also causes significant extra memory to be used.
+         * In order to prevent this, the code now takes a different tack.  The
+         * bit isn't set unless some part of the regular expression needs it,
+         * but once set it won't get cleared.  This means that these extra
+         * modules won't get loaded unless there was some path through the
+         * pattern that would have required them anyway, and  so any false
+         * positives that occur by not ANDing them out when they could be
+         * aren't as severe as they would be if we treated this bit like all
+         * the others */
+        outside_bitmap_but_not_utf8 = (cl->flags | and_with->flags)
+                                      & ANYOF_NONBITMAP_NON_UTF8;
 	cl->flags &= and_with->flags;
+	cl->flags |= outside_bitmap_but_not_utf8;
     }
 }
 
@@ -970,10 +995,10 @@ S_cl_or(const RExC_state_t *pRExC_state, struct regnode_charclass_class *cl, con
 		    cl->flags |= ANYOF_UNICODE_ALL;
 		}
 	    }
+	}
 
         /* Take the union */
 	cl->flags |= or_with->flags;
-	}
     }
 }
 
@@ -4611,6 +4636,7 @@ Perl_re_compile(pTHX_ SV * const pattern, U32 orig_pm_flags)
     RExC_seen_zerolen = *exp == '^' ? -1 : 0;
     RExC_seen_evals = 0;
     RExC_extralen = 0;
+    RExC_override_recoding = 0;
 
     /* First pass: determine size, legality. */
     RExC_parse = exp;
@@ -7044,7 +7070,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 	    {
                 U32 posflags = 0, negflags = 0;
 	        U32 *flagsp = &posflags;
-                bool has_charset_modifier = 0;
+                char has_charset_modifier = '\0';
 		regex_charset cs = (RExC_utf8 || RExC_uni_semantics)
 				    ? REGEX_UNICODE_CHARSET
 				    : REGEX_DEPENDS_CHARSET;
@@ -7056,40 +7082,51 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                     switch (*RExC_parse) {
 	            CASE_STD_PMMOD_FLAGS_PARSE_SET(flagsp);
                     case LOCALE_PAT_MOD:
-                        if (has_charset_modifier || flagsp == &negflags) {
-                            goto fail_modifiers;
+                        if (has_charset_modifier) {
+			    goto excess_modifier;
+			}
+			else if (flagsp == &negflags) {
+                            goto neg_modifier;
                         }
 			cs = REGEX_LOCALE_CHARSET;
-                        has_charset_modifier = 1;
+                        has_charset_modifier = LOCALE_PAT_MOD;
 			RExC_contains_locale = 1;
                         break;
                     case UNICODE_PAT_MOD:
-                        if (has_charset_modifier || flagsp == &negflags) {
-                            goto fail_modifiers;
+                        if (has_charset_modifier) {
+			    goto excess_modifier;
+			}
+			else if (flagsp == &negflags) {
+                            goto neg_modifier;
                         }
 			cs = REGEX_UNICODE_CHARSET;
-                        has_charset_modifier = 1;
+                        has_charset_modifier = UNICODE_PAT_MOD;
                         break;
                     case ASCII_RESTRICT_PAT_MOD:
-                        if (has_charset_modifier || flagsp == &negflags) {
-                            goto fail_modifiers;
+                        if (flagsp == &negflags) {
+                            goto neg_modifier;
                         }
-			if (*(RExC_parse + 1) == ASCII_RESTRICT_PAT_MOD) {
+                        if (has_charset_modifier) {
+                            if (cs != REGEX_ASCII_RESTRICTED_CHARSET) {
+                                goto excess_modifier;
+                            }
 			    /* Doubled modifier implies more restricted */
-			    cs = REGEX_ASCII_MORE_RESTRICTED_CHARSET;
-			    RExC_parse++;
-			}
+                            cs = REGEX_ASCII_MORE_RESTRICTED_CHARSET;
+                        }
 			else {
 			    cs = REGEX_ASCII_RESTRICTED_CHARSET;
 			}
-                        has_charset_modifier = 1;
+                        has_charset_modifier = ASCII_RESTRICT_PAT_MOD;
                         break;
                     case DEPENDS_PAT_MOD:
-                        if (has_use_defaults
-                            || has_charset_modifier
-                            || flagsp == &negflags)
-                        {
+                        if (has_use_defaults) {
                             goto fail_modifiers;
+			}
+			else if (flagsp == &negflags) {
+                            goto neg_modifier;
+			}
+			else if (has_charset_modifier) {
+			    goto excess_modifier;
                         }
 
 			/* The dual charset means unicode semantics if the
@@ -7099,8 +7136,24 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 			cs = (RExC_utf8 || RExC_uni_semantics)
 			     ? REGEX_UNICODE_CHARSET
 			     : REGEX_DEPENDS_CHARSET;
-                        has_charset_modifier = 1;
+                        has_charset_modifier = DEPENDS_PAT_MOD;
                         break;
+		    excess_modifier:
+			RExC_parse++;
+			if (has_charset_modifier == ASCII_RESTRICT_PAT_MOD) {
+			    vFAIL2("Regexp modifier \"%c\" may appear a maximum of twice", ASCII_RESTRICT_PAT_MOD);
+			}
+			else if (has_charset_modifier == *(RExC_parse - 1)) {
+			    vFAIL2("Regexp modifier \"%c\" may not appear twice", *(RExC_parse - 1));
+			}
+			else {
+			    vFAIL3("Regexp modifiers \"%c\" and \"%c\" are mutually exclusive", has_charset_modifier, *(RExC_parse - 1));
+			}
+			/*NOTREACHED*/
+		    neg_modifier:
+			RExC_parse++;
+			vFAIL2("Regexp modifier \"%c\" may not appear after the \"-\"", *(RExC_parse - 1));
+			/*NOTREACHED*/
                     case ONCE_PAT_MOD: /* 'o' */
                     case GLOBAL_PAT_MOD: /* 'g' */
 			if (SIZE_ONLY && ckWARN(WARN_REGEXP)) {
@@ -7630,7 +7683,7 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 }
 
 
-/* reg_namedseq(pRExC_state,UVp)
+/* reg_namedseq(pRExC_state,UVp, UV depth)
    
    This is expected to be called by a parser routine that has 
    recognized '\N' and needs to handle the rest. RExC_parse is
@@ -7673,13 +7726,10 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
    Parsing failures will generate a fatal error via vFAIL(...)
  */
 STATIC regnode *
-S_reg_namedseq(pTHX_ RExC_state_t *pRExC_state, UV *valuep, I32 *flagp)
+S_reg_namedseq(pTHX_ RExC_state_t *pRExC_state, UV *valuep, I32 *flagp, U32 depth)
 {
     char * endbrace;    /* '}' following the name */
     regnode *ret = NULL;
-#ifdef DEBUGGING
-    char* parse_start = RExC_parse - 2;	    /* points to the '\N' */
-#endif
     char* p;
 
     GET_RE_DEBUG_FLAGS_DECL;
@@ -7792,168 +7842,55 @@ S_reg_namedseq(pTHX_ RExC_state_t *pRExC_state, UV *valuep, I32 *flagp)
         ret = (regnode *) &RExC_parse;	/* Invalid regnode pointer */
     }
     else {	/* Not a char class */
-	char *s;	    /* String to put in generated EXACT node */
-	STRLEN len = 0;	    /* Its current byte length */
+
+	/* What is done here is to convert this to a sub-pattern of the form
+	 * (?:\x{char1}\x{char2}...)
+	 * and then call reg recursively.  That way, it retains its atomicness,
+	 * while not having to worry about special handling that some code
+	 * points may have.  toke.c has converted the original Unicode values
+	 * to native, so that we can just pass on the hex values unchanged.  We
+	 * do have to set a flag to keep recoding from happening in the
+	 * recursion */
+
+	SV * substitute_parse = newSVpvn_flags("?:", 2, SVf_UTF8|SVs_TEMP);
+	STRLEN len;
 	char *endchar;	    /* Points to '.' or '}' ending cur char in the input
 			       stream */
-	ret = reg_node(pRExC_state,
-			   (U8) ((! FOLD) ? EXACT
-					  : (LOC)
-					     ? EXACTFL
-					     : (MORE_ASCII_RESTRICTED)
-					       ? EXACTFA
-					       : (AT_LEAST_UNI_SEMANTICS)
-					         ? EXACTFU
-					         : EXACTF));
-	s= STRING(ret);
+	char *orig_end = RExC_end;
 
-	/* Exact nodes can hold only a U8 length's of text = 255.  Loop through
-	 * the input which is of the form now 'c1.c2.c3...}' until find the
-	 * ending brace or exceed length 255.  The characters that exceed this
-	 * limit are dropped.  The limit could be relaxed should it become
-	 * desirable by reparsing this as (?:\N{NAME}), so could generate
-	 * multiple EXACT nodes, as is done for just regular input.  But this
-	 * is primarily a named character, and not intended to be a huge long
-	 * string, so 255 bytes should be good enough */
-	while (1) {
-	    STRLEN length_of_hex;
-	    I32 grok_flags = PERL_SCAN_ALLOW_UNDERSCORES
-			    | PERL_SCAN_DISALLOW_PREFIX
-			    | (SIZE_ONLY ? PERL_SCAN_SILENT_ILLDIGIT : 0);
-	    UV cp;  /* Ord of current character */
-	    bool use_this_char_fold = FOLD;
+	while (RExC_parse < endbrace) {
 
 	    /* Code points are separated by dots.  If none, there is only one
 	     * code point, and is terminated by the brace */
 	    endchar = RExC_parse + strcspn(RExC_parse, ".}");
 
-	    /* The values are Unicode even on EBCDIC machines */
-	    length_of_hex = (STRLEN)(endchar - RExC_parse);
-	    cp = grok_hex(RExC_parse, &length_of_hex, &grok_flags, NULL);
-	    if ( length_of_hex == 0 
-		|| length_of_hex != (STRLEN)(endchar - RExC_parse) )
-	    {
-		RExC_parse += length_of_hex;	    /* Includes all the valid */
-		RExC_parse += (RExC_orig_utf8)	/* point to after 1st invalid */
-				? UTF8SKIP(RExC_parse)
-				: 1;
-		/* Guard against malformed utf8 */
-		if (RExC_parse >= endchar) RExC_parse = endchar;
-		vFAIL("Invalid hexadecimal number in \\N{U+...}");
-	    }    
-
-	    /* XXX ? Change to ANYOF node
-	    if (FOLD
-		&& (cp > 255 || (! MORE_ASCII_RESTRICTED && ! LOC))
-		&& is_TRICKYFOLD_cp(cp))
-	    {
-	    }
-	    */
-
-	    /* Under /aa, we can't mix ASCII with non- in a fold.  If we are
-	     * folding, and the source isn't ASCII, look through all the
-	     * characters it folds to.  If any one of them is ASCII, forbid
-	     * this fold.  (cp is uni, so the 127 below is correct even for
-	     * EBCDIC).  Similarly under locale rules, we don't mix under 256
-	     * with above 255.  XXX It really doesn't make sense to have \N{}
-	     * which means a Unicode rules under locale.  I (khw) think this
-	     * should be warned about, but the counter argument is that people
-	     * who have programmed around Perl's earlier lack of specifying the
-	     * rules and used \N{} to force Unicode things in a local
-	     * environment shouldn't get suddenly a warning */
-	    if (use_this_char_fold) {
-		if (LOC && cp < 256) {	/* Fold not known until run-time */
-		    use_this_char_fold = FALSE;
-		}
-		else if ((cp > 127 && MORE_ASCII_RESTRICTED)
-		         || (cp > 255 && LOC))
-		{
-		U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
-		U8* s = tmpbuf;
-		U8* e;
-		STRLEN foldlen;
-
-		(void) toFOLD_uni(cp, tmpbuf, &foldlen);
-		e = s + foldlen;
-
-		while (s < e) {
-		    if (isASCII(*s)
-			|| (LOC && (UTF8_IS_INVARIANT(*s)
-				    || UTF8_IS_DOWNGRADEABLE_START(*s))))
-		    {
-			use_this_char_fold = FALSE;
-			break;
-		    }
-		    s += UTF8SKIP(s);
-		}
-		}
-	    }
-
-	    if (! use_this_char_fold) {	/* Not folding, just append to the
-					   string */
-		STRLEN unilen;
-
-		/* Quit before adding this character if would exceed limit */
-		if (len + UNISKIP(cp) > U8_MAX) break;
-
-		unilen = reguni(pRExC_state, cp, s);
-		if (unilen > 0) {
-		    s   += unilen;
-		    len += unilen;
-		}
-	    } else {	/* Folding, output the folded equivalent */
-		STRLEN foldlen,numlen;
-		U8 tmpbuf[UTF8_MAXBYTES_CASE+1], *foldbuf;
-		cp = toFOLD_uni(cp, tmpbuf, &foldlen);
-
-		/* Quit before exceeding size limit */
-		if (len + foldlen > U8_MAX) break;
-		
-		for (foldbuf = tmpbuf;
-		    foldlen;
-		    foldlen -= numlen) 
-		{
-		    cp = utf8_to_uvchr(foldbuf, &numlen);
-		    if (numlen > 0) {
-			const STRLEN unilen = reguni(pRExC_state, cp, s);
-			s       += unilen;
-			len     += unilen;
-			/* In EBCDIC the numlen and unilen can differ. */
-			foldbuf += numlen;
-			if (numlen >= foldlen)
-			    break;
-		    }
-		    else
-			break; /* "Can't happen." */
-		}                          
-	    }
+	    /* Convert to notation the rest of the code understands */
+	    sv_catpv(substitute_parse, "\\x{");
+	    sv_catpvn(substitute_parse, RExC_parse, endchar - RExC_parse);
+	    sv_catpv(substitute_parse, "}");
 
 	    /* Point to the beginning of the next character in the sequence. */
 	    RExC_parse = endchar + 1;
-
-	    /* Quit if no more characters */
-	    if (RExC_parse >= endbrace) break;
 	}
+	sv_catpv(substitute_parse, ")");
 
+	RExC_parse = SvPV(substitute_parse, len);
 
-	if (SIZE_ONLY) {
-	    if (RExC_parse < endbrace) {
-		ckWARNreg(RExC_parse - 1,
-			  "Using just the first characters returned by \\N{}");
-	    }
-
-	    RExC_size += STR_SZ(len);
-	} else {
-	    STR_LEN(ret) = len;
-	    RExC_emit += STR_SZ(len);
+	/* Don't allow empty number */
+	if (len < 8) {
+	    vFAIL("Invalid hexadecimal number in \\N{U+...}");
 	}
+	RExC_end = RExC_parse + len;
 
-	RExC_parse = endbrace + 1;
+	/* The values are Unicode, and therefore not subject to recoding */
+	RExC_override_recoding = 1;
 
-	*flagp |= HASWIDTH; /* Not SIMPLE, as that causes the engine to fail
-			       with malformed in t/re/pat_advanced.t */
-	RExC_parse --;
-	Set_Node_Cur_Length(ret); /* MJD */
+	ret = reg(pRExC_state, 1, flagp, depth+1);
+
+	RExC_parse = endbrace;
+	RExC_end = orig_end;
+	RExC_override_recoding = 0;
+
 	nextchar(pRExC_state);
     }
 
@@ -8116,27 +8053,6 @@ tryagain:
 	RExC_parse++;
 	vFAIL("Quantifier follows nothing");
 	break;
-    case LATIN_SMALL_LETTER_SHARP_S:
-    case UTF8_TWO_BYTE_HI_nocast(LATIN_SMALL_LETTER_SHARP_S):
-    case UTF8_TWO_BYTE_HI_nocast(IOTA_D_T):
-#if UTF8_TWO_BYTE_HI_nocast(UPSILON_D_T) != UTF8_TWO_BYTE_HI_nocast(IOTA_D_T)
-#error The beginning utf8 byte of IOTA_D_T and UPSILON_D_T unexpectedly differ.  Other instances in this code should have the case statement below.
-    case UTF8_TWO_BYTE_HI_nocast(UPSILON_D_T):
-#endif
-        do_foldchar:
-        if (!LOC && FOLD) {
-            U32 len,cp;
-	    len=0; /* silence a spurious compiler warning */
-            if ((cp = what_len_TRICKYFOLD_safe(RExC_parse,RExC_end,UTF,len))) {
-                *flagp |= HASWIDTH; /* could be SIMPLE too, but needs a handler in regexec.regrepeat */
-                RExC_parse+=len-1; /* we get one from nextchar() as well. :-( */
-                ret = reganode(pRExC_state, FOLDCHAR, cp);
-                Set_Node_Length(ret, 1); /* MJD */
-                nextchar(pRExC_state); /* kill whitespace under /x */
-                return ret;
-            }
-        }
-        goto outer_default;
     case '\\':
 	/* Special Escapes
 
@@ -8151,10 +8067,6 @@ tryagain:
 	   literal text handling code.
 	*/
 	switch ((U8)*++RExC_parse) {
-	case LATIN_SMALL_LETTER_SHARP_S:
-	case UTF8_TWO_BYTE_HI_nocast(LATIN_SMALL_LETTER_SHARP_S):
-	case UTF8_TWO_BYTE_HI_nocast(IOTA_D_T):
-	           goto do_foldchar;	    
 	/* Special Escapes */
 	case 'A':
 	    RExC_seen_zerolen++;
@@ -8437,7 +8349,7 @@ tryagain:
             Also this makes sure that things like /\N{BLAH}+/ and 
             \N{BLAH} being multi char Just Happen. dmq*/
             ++RExC_parse;
-            ret= reg_namedseq(pRExC_state, NULL, flagp); 
+            ret= reg_namedseq(pRExC_state, NULL, flagp, depth);
             break;
 	case 'k':    /* Handle \k<NAME> and \k'NAME' */
 	parse_named_seq:
@@ -8575,7 +8487,21 @@ tryagain:
 	/* FALL THROUGH */
 
     default:
-        outer_default:{
+
+            parse_start = RExC_parse - 1;
+
+	    RExC_parse++;
+
+	defchar: {
+	    typedef enum {
+		generic_char = 0,
+		char_s,
+		upsilon_1,
+		upsilon_2,
+		iota_1,
+		iota_2,
+	    } char_state;
+	    char_state latest_char_state = generic_char;
 	    register STRLEN len;
 	    register UV ender;
 	    register char *p;
@@ -8584,11 +8510,6 @@ tryagain:
 	    U8 tmpbuf[UTF8_MAXBYTES_CASE+1], *foldbuf;
 	    regnode * orig_emit;
 
-            parse_start = RExC_parse - 1;
-
-	    RExC_parse++;
-
-	defchar:
 	    ender = 0;
 	    orig_emit = RExC_emit; /* Save the original output node position in
 				      case we need to output a different node
@@ -8613,11 +8534,6 @@ tryagain:
 		if (RExC_flags & RXf_PMf_EXTENDED)
 		    p = regwhite( pRExC_state, p );
 		switch ((U8)*p) {
-		case LATIN_SMALL_LETTER_SHARP_S:
-		case UTF8_TWO_BYTE_HI_nocast(LATIN_SMALL_LETTER_SHARP_S):
-		case UTF8_TWO_BYTE_HI_nocast(IOTA_D_T):
-		           if (LOC || !FOLD || !is_TRICKYFOLD_safe(p,RExC_end,UTF))
-		                goto normal_default;
 		case '^':
 		case '$':
 		case '.':
@@ -8642,11 +8558,6 @@ tryagain:
 
 		    switch ((U8)*++p) {
 		    /* These are all the special escapes. */
-                    case LATIN_SMALL_LETTER_SHARP_S:
-                    case UTF8_TWO_BYTE_HI_nocast(LATIN_SMALL_LETTER_SHARP_S):
-                    case UTF8_TWO_BYTE_HI_nocast(IOTA_D_T):
-    		           if (LOC || !FOLD || !is_TRICKYFOLD_safe(p,RExC_end,UTF))
-    		                goto normal_default;		    
 		    case 'A':             /* Start assertion */
 		    case 'b': case 'B':   /* Word-boundary assertion*/
 		    case 'C':             /* Single char !DANGEROUS! */
@@ -8773,7 +8684,7 @@ tryagain:
 			    goto recode_encoding;
 			break;
 		    recode_encoding:
-			{
+			if (! RExC_override_recoding) {
 			    SV* enc = PL_encoding;
 			    ender = reg_recode((const char)(U8)ender, &enc);
 			    if (!enc && SIZE_ONLY)
@@ -8817,55 +8728,196 @@ tryagain:
 		 * putting it in a special node keeps regexec from having to
 		 * deal with a non-utf8 multi-char fold */
 		if (FOLD
-		    && (ender > 255 || (! MORE_ASCII_RESTRICTED && ! LOC))
-		    && is_TRICKYFOLD_cp(ender))
+		    && (ender > 255 || (! MORE_ASCII_RESTRICTED && ! LOC)))
 		{
-		    /* If is in middle of outputting characters into an
-		     * EXACTish node, go output what we have so far, and
-		     * position the parse so that this will be called again
-		     * immediately */
-		    if (len) {
-			p  = oldp;
-			goto loopdone;
-		    }
-		    else {
+		    /* We look for either side of the fold.  For example \xDF
+		     * folds to 'ss'.  We look for both the single character
+		     * \xDF and the sequence 'ss'.  When we find something that
+		     * could be one of those, we stop and flush whatever we
+		     * have output so far into the EXACTish node that was being
+		     * built.  Then restore the input pointer to what it was.
+		     * regatom will return that EXACT node, and will be called
+		     * again, positioned so the first character is the one in
+		     * question, which we return in a different node type.
+		     * The multi-char folds are a sequence, so the occurrence
+		     * of the first character in that sequence doesn't
+		     * necessarily mean that what follows is the rest of the
+		     * sequence.  We keep track of that with a state machine,
+		     * with the state being set to the latest character
+		     * processed before the current one.  Most characters will
+		     * set the state to 0, but if one occurs that is part of a
+		     * potential tricky fold sequence, the state is set to that
+		     * character, and the next loop iteration sees if the state
+		     * should progress towards the final folded-from character,
+		     * or if it was a false alarm.  If it turns out to be a
+		     * false alarm, the character(s) will be output in a new
+		     * EXACTish node, and join_exact() will later combine them.
+		     * In the case of the 'ss' sequence, which is more common
+		     * and more easily checked, some look-ahead is done to
+		     * save time by ruling-out some false alarms */
+		    switch (ender) {
+			default:
+			    latest_char_state = generic_char;
+			    break;
+			case 's':
+			case 'S':
+			     if (AT_LEAST_UNI_SEMANTICS) {
+				if (latest_char_state == char_s) {  /* 'ss' */
+				    ender = LATIN_SMALL_LETTER_SHARP_S;
+				    goto do_tricky;
+				}
+				else if (p < RExC_end) {
 
-			/* Here we are ready to output our tricky fold
-			 * character.  What's done is to pretend it's in a
-			 * [bracketed] class, and let the code that deals with
-			 * those handle it, as that code has all the
-			 * intelligence necessary.  First save the current
-			 * parse state, get rid of the already allocated EXACT
-			 * node that the ANYOFV node will replace, and point
-			 * the parse to a buffer which we fill with the
-			 * character we want the regclass code to think is
-			 * being parsed */
-			char* const oldregxend = RExC_end;
-			char tmpbuf[2];
-			RExC_emit = orig_emit;
-			RExC_parse = tmpbuf;
-			if (UTF) {
-			    tmpbuf[0] = UTF8_TWO_BYTE_HI(ender);
-			    tmpbuf[1] = UTF8_TWO_BYTE_LO(ender);
-			    RExC_end = RExC_parse + 2;
+				    /* Look-ahead at the next character.  If it
+				     * is also an s, we handle as a sharp s
+				     * tricky regnode.  */
+				    if (*p == 's' || *p == 'S') {
+
+					/* But first flush anything in the
+					 * EXACTish buffer */
+					if (len != 0) {
+					    p = oldp;
+					    goto loopdone;
+					}
+					p++;	/* Account for swallowing this
+						   's' up */
+					ender = LATIN_SMALL_LETTER_SHARP_S;
+					goto do_tricky;
+				    }
+					/* Here, the next character is not a
+					 * literal 's', but still could
+					 * evaluate to one if part of a \o{},
+					 * \x or \OCTAL-DIGIT.  The minimum
+					 * length required for that is 4, eg
+					 * \x53 or \123 */
+				    else if (*p == '\\'
+					     && p < RExC_end - 4
+					     && (isDIGIT(*(p + 1))
+						 || *(p + 1) == 'x'
+						 || *(p + 1) == 'o' ))
+				    {
+
+					/* Here, it could be an 's', too much
+					 * bother to figure it out here.  Flush
+					 * the buffer if any; when come back
+					 * here, set the state so know that the
+					 * previous char was an 's' */
+					if (len != 0) {
+					    latest_char_state = generic_char;
+					    p = oldp;
+					    goto loopdone;
+					}
+					latest_char_state = char_s;
+					break;
+				    }
+				}
+			    }
+
+			    /* Here, can't be an 'ss' sequence, or at least not
+			     * one that could fold to/from the sharp ss */
+			    latest_char_state = generic_char;
+			    break;
+			case 0x03C5:	/* First char in upsilon series */
+			    if (p < RExC_end - 4) { /* Need >= 4 bytes left */
+				latest_char_state = upsilon_1;
+				if (len != 0) {
+				    p = oldp;
+				    goto loopdone;
+				}
+			    }
+			    else {
+				latest_char_state = generic_char;
+			    }
+			    break;
+			case 0x03B9:	/* First char in iota series */
+			    if (p < RExC_end - 4) {
+				latest_char_state = iota_1;
+				if (len != 0) {
+				    p = oldp;
+				    goto loopdone;
+				}
+			    }
+			    else {
+				latest_char_state = generic_char;
+			    }
+			    break;
+			case 0x0308:
+			    if (latest_char_state == upsilon_1) {
+				latest_char_state = upsilon_2;
+			    }
+			    else if (latest_char_state == iota_1) {
+				latest_char_state = iota_2;
+			    }
+			    else {
+				latest_char_state = generic_char;
+			    }
+			    break;
+			case 0x301:
+			    if (latest_char_state == upsilon_2) {
+				ender = GREEK_SMALL_LETTER_UPSILON_WITH_DIALYTIKA_AND_TONOS;
+				goto do_tricky;
+			    }
+			    else if (latest_char_state == iota_2) {
+				ender = GREEK_SMALL_LETTER_IOTA_WITH_DIALYTIKA_AND_TONOS;
+				goto do_tricky;
+			    }
+			    latest_char_state = generic_char;
+			    break;
+
+			/* These are the tricky fold characters.  Flush any
+			 * buffer first. */
+			case GREEK_SMALL_LETTER_UPSILON_WITH_DIALYTIKA_AND_TONOS:
+			case GREEK_SMALL_LETTER_IOTA_WITH_DIALYTIKA_AND_TONOS:
+			case LATIN_SMALL_LETTER_SHARP_S:
+			case LATIN_CAPITAL_LETTER_SHARP_S:
+			case 0x1FD3:
+			case 0x1FE3:
+			    if (len != 0) {
+				p = oldp;
+				goto loopdone;
+			    }
+			    /* FALL THROUGH */
+			do_tricky: {
+			    char* const oldregxend = RExC_end;
+			    U8 tmpbuf[UTF8_MAXBYTES+1];
+
+			    /* Here, we know we need to generate a special
+			     * regnode, and 'ender' contains the tricky
+			     * character.  What's done is to pretend it's in a
+			     * [bracketed] class, and let the code that deals
+			     * with those handle it, as that code has all the
+			     * intelligence necessary.  First save the current
+			     * parse state, get rid of the already allocated
+			     * but empty EXACT node that the ANYOFV node will
+			     * replace, and point the parse to a buffer which
+			     * we fill with the character we want the regclass
+			     * code to think is being parsed */
+			    RExC_emit = orig_emit;
+			    RExC_parse = (char *) tmpbuf;
+			    if (UTF) {
+				U8 *d = uvchr_to_utf8(tmpbuf, ender);
+				*d = '\0';
+				RExC_end = (char *) d;
+			    }
+			    else {  /* ender above 255 already excluded */
+				tmpbuf[0] = (U8) ender;
+				tmpbuf[1] = '\0';
+				RExC_end = RExC_parse + 1;
+			    }
+
+			    ret = regclass(pRExC_state,depth+1);
+
+			    /* Here, have parsed the buffer.  Reset the parse to
+			     * the actual input, and return */
+			    RExC_end = oldregxend;
+			    RExC_parse = p - 1;
+
+			    Set_Node_Offset(ret, RExC_parse);
+			    Set_Node_Cur_Length(ret);
+			    nextchar(pRExC_state);
+			    *flagp |= HASWIDTH|SIMPLE;
+			    return ret;
 			}
-			else {
-			    tmpbuf[0] = (char) ender;
-			    RExC_end = RExC_parse + 1;
-			}
-
-			ret = regclass(pRExC_state,depth+1);
-
-			/* Here, have parsed the buffer.  Reset the parse to
-			 * the actual input, and return */
-			RExC_end = oldregxend;
-			RExC_parse = p - 1;
-
-			Set_Node_Offset(ret, RExC_parse);
-			Set_Node_Cur_Length(ret);
-			nextchar(pRExC_state);
-			*flagp |= HASWIDTH|SIMPLE;
-			return ret;
 		    }
 		}
 
@@ -9001,8 +9053,9 @@ tryagain:
 		     }
 		     len--;
 		}
-		else
+		else {
 		    REGC((char)ender, s++);
+		}
 	    }
 	loopdone:   /* Jumped to when encounters something that shouldn't be in
 		       the node */
@@ -9382,8 +9435,8 @@ S_set_regclass_bit_fold(pTHX_ RExC_state_t *pRExC_state, regnode* node, const U8
 					LATIN_CAPITAL_LETTER_Y_WITH_DIAERESIS);
 		break;
 	    case LATIN_SMALL_LETTER_SHARP_S:
-		/* 0x1E9E is LATIN CAPITAL LETTER SHARP S */
-		*invlist_ptr = add_cp_to_invlist(*invlist_ptr, 0x1E9E);
+		*invlist_ptr = add_cp_to_invlist(*invlist_ptr,
+					LATIN_CAPITAL_LETTER_SHARP_S);
 
 		/* Under /a, /d, and /u, this can match the two chars "ss" */
 		if (! MORE_ASCII_RESTRICTED) {
@@ -9400,21 +9453,17 @@ S_set_regclass_bit_fold(pTHX_ RExC_state_t *pRExC_state, regnode* node, const U8
 	    case 'I': case 'i':
 	    case 'L': case 'l':
 	    case 'T': case 't':
-		/* These all are targets of multi-character folds, which can
-		 * occur with only non-Latin1 characters in the fold, so they
-		 * can match if the target string isn't UTF-8 */
-		ANYOF_FLAGS(node) |= ANYOF_NONBITMAP_NON_UTF8;
-		break;
 	    case 'A': case 'a':
 	    case 'H': case 'h':
 	    case 'J': case 'j':
 	    case 'N': case 'n':
 	    case 'W': case 'w':
 	    case 'Y': case 'y':
-		/* These all are targets of multi-character folds, which occur
-		 * only with a non-Latin1 character as part of the fold, so
-		 * they can't match unless the target string is in UTF-8, so no
-		 * action here is necessary */
+                /* These all are targets of multi-character folds from code
+                 * points that require UTF8 to express, so they can't match
+                 * unless the target string is in UTF-8, so no action here is
+                 * necessary, as regexec.c properly handles the general case
+                 * for UTF-8 matching */
 		break;
 	    default:
 		/* Use deprecated warning to increase the chances of this
@@ -9638,7 +9687,7 @@ parseit:
                     from earlier versions, OTOH that behaviour was broken
                     as well. */
                     UV v; /* value is register so we cant & it /grrr */
-                    if (reg_namedseq(pRExC_state, &v, NULL)) {
+                    if (reg_namedseq(pRExC_state, &v, NULL, depth)) {
                         goto parseit;
                     }
                     value= v; 
@@ -9763,7 +9812,7 @@ parseit:
 		    break;
 		}
 	    recode_encoding:
-		{
+		if (! RExC_override_recoding) {
 		    SV* enc = PL_encoding;
 		    value = reg_recode((const char)(U8)value, &enc);
 		    if (!enc && SIZE_ONLY)
@@ -10135,6 +10184,18 @@ parseit:
 
 			add_alternate(&unicode_alternate, foldbuf, foldlen);
 		    end_multi_fold: ;
+		    }
+
+		    /* This is special-cased, as it is the only letter which
+		     * has both a multi-fold and single-fold in Latin1.  All
+		     * the other chars that have single and multi-folds are
+		     * always in utf8, and the utf8 folding algorithm catches
+		     * them */
+		    if (! LOC && j == LATIN_CAPITAL_LETTER_SHARP_S) {
+			stored += set_regclass_bit(pRExC_state,
+					ret,
+					LATIN_SMALL_LETTER_SHARP_S,
+					&l1_fold_invlist, &unicode_alternate);
 		    }
 		}
 		else {

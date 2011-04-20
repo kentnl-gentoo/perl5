@@ -667,10 +667,14 @@ code in I<line> comes first and must consist of complete lines of input,
 and I<rsfp> supplies the remainder of the source.
 
 The I<flags> parameter is reserved for future use, and must always
-be zero.
+be zero, except for one flag that is currently reserved for perl's internal
+use.
 
 =cut
 */
+
+/* LEX_START_SAME_FILTER indicates that this is not a new file, so it
+   can share filters with the current parser. */
 
 void
 Perl_lex_start(pTHX_ SV *line, PerlIO *rsfp, U32 flags)
@@ -679,7 +683,7 @@ Perl_lex_start(pTHX_ SV *line, PerlIO *rsfp, U32 flags)
     const char *s = NULL;
     STRLEN len;
     yy_parser *parser, *oparser;
-    if (flags)
+    if (flags && flags != LEX_START_SAME_FILTER)
 	Perl_croak(aTHX_ "Lexing code internal error (%s)", "lex_start");
 
     /* create and initialise a parser */
@@ -708,7 +712,10 @@ Perl_lex_start(pTHX_ SV *line, PerlIO *rsfp, U32 flags)
     parser->lex_state = LEX_NORMAL;
     parser->expect = XSTATE;
     parser->rsfp = rsfp;
-    parser->rsfp_filters = newAV();
+    parser->rsfp_filters =
+      !(flags & LEX_START_SAME_FILTER) || !oparser
+        ? newAV()
+        : MUTABLE_AV(SvREFCNT_inc(oparser->rsfp_filters));
 
     Newx(parser->lex_brackstack, 120, char);
     Newx(parser->lex_casestack, 12, char);
@@ -3140,12 +3147,22 @@ S_scan_const(pTHX_ char *start)
 
 		    if (PL_lex_inpat) {
 
-			/* Pass through to the regex compiler unchanged.  The
-			 * reason we evaluated the number above is to make sure
-			 * there wasn't a syntax error. */
+			/* On non-EBCDIC platforms, pass through to the regex
+			 * compiler unchanged.  The reason we evaluated the
+			 * number above is to make sure there wasn't a syntax
+			 * error.  But on EBCDIC we convert to native so
+			 * downstream code can continue to assume it's native
+			 */
 			s -= 5;	    /* Include the '\N{U+' */
+#ifdef EBCDIC
+			d += my_snprintf(d, e - s + 1 + 1,  /* includes the }
+							       and the \0 */
+				    "\\N{U+%X}",
+				    (unsigned int) UNI_TO_NATIVE(uv));
+#else
 			Copy(s, d, e - s + 1, char);	/* 1 = include the } */
 			d += e - s + 1;
+#endif
 		    }
 		    else {  /* Not a pattern: convert the hex to string */
 
@@ -3239,10 +3256,13 @@ S_scan_const(pTHX_ char *start)
 			    }
 
 			    /* Convert first code point to hex, including the
-			     * boiler plate before it */
+			     * boiler plate before it.  For all these, we
+			     * convert to native format so that downstream code
+			     * can continue to assume the input is native */
 			    output_length =
 				my_snprintf(hex_string, sizeof(hex_string),
-					    "\\N{U+%X", (unsigned int) uv);
+					    "\\N{U+%X",
+					    (unsigned int) UNI_TO_NATIVE(uv));
 
 			    /* Make sure there is enough space to hold it */
 			    d = off + SvGROW(sv, off
@@ -3267,7 +3287,8 @@ S_scan_const(pTHX_ char *start)
 
 				output_length =
 				    my_snprintf(hex_string, sizeof(hex_string),
-						".%X", (unsigned int) uv);
+					    ".%X",
+					    (unsigned int) UNI_TO_NATIVE(uv));
 
 				d = off + SvGROW(sv, off
 						     + output_length
@@ -4771,7 +4792,13 @@ Perl_yylex(pTHX)
 		      *(U8*)s == 0xEF ||
 		      *(U8*)s >= 0xFE ||
 		      s[1] == 0)) {
-		bof = PerlIO_tell(PL_rsfp) == (Off_t)SvCUR(PL_linestr);
+		IV offset = (IV)PerlIO_tell(PL_rsfp);
+		bof = (offset == SvCUR(PL_linestr));
+#if defined(PERLIO_USING_CRLF) && defined(PERL_TEXTMODE_SCRIPTS)
+		/* offset may include swallowed CR */
+		if (!bof)
+		    bof = (offset == SvCUR(PL_linestr)+1);
+#endif
 		if (bof) {
 		    PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
 		    s = swallow_bom((U8*)s);
@@ -6583,7 +6610,7 @@ Perl_yylex(pTHX)
 		    goto safe_bareword;
 
 		{
-		    OP *const_op = newSVOP(OP_CONST, 0, SvREFCNT_inc(sv));
+		    OP *const_op = newSVOP(OP_CONST, 0, SvREFCNT_inc_NN(sv));
 		    const_op->op_private = OPpCONST_BARE;
 		    rv2cv_op = newCVREF(0, const_op);
 		}
@@ -8856,17 +8883,21 @@ S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s, char* charse
 	    if (*((*s) + 1) == 'n') {
 		goto deprecate;
 	    }
-	    if (*((*s) + 1) == ASCII_RESTRICT_PAT_MOD) {
-		/* Doubled modifier implies more restricted */
-		set_regex_charset(pmfl, REGEX_ASCII_MORE_RESTRICTED_CHARSET);
-		(*s)++;
-	    }
-	    else {
+
+	    if (! *charset) {
 		set_regex_charset(pmfl, REGEX_ASCII_RESTRICTED_CHARSET);
 	    }
-	    if (*charset) { /* Do this after the increment of *s in /aa, so
-			       the return advances the ptr correctly */
-		goto multiple_charsets;
+	    else {
+
+		/* Error if previous modifier wasn't an 'a', but if it was, see
+		 * if, and accept, a second occurrence (only) */
+		if (*charset != 'a'
+		    || get_regex_charset(*pmfl)
+			!= REGEX_ASCII_RESTRICTED_CHARSET)
+		{
+			goto multiple_charsets;
+		}
+		set_regex_charset(pmfl, REGEX_ASCII_MORE_RESTRICTED_CHARSET);
 	    }
 	    *charset = c;
 	    break;
@@ -8890,6 +8921,9 @@ S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s, char* charse
     multiple_charsets:
 	if (*charset != c) {
 	    yyerror(Perl_form(aTHX_ "Regexp modifiers \"/%c\" and \"/%c\" are mutually exclusive", *charset, c));
+	}
+	else if (c == 'a') {
+	    yyerror("Regexp modifier \"/a\" may appear a maximum of twice");
 	}
 	else {
 	    yyerror(Perl_form(aTHX_ "Regexp modifier \"/%c\" may not appear twice", c));

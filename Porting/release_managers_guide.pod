@@ -296,6 +296,14 @@ to an earlier release. When releasing a stable perl version, the C<PERL_API_*>
 constants C<MUST NOT> be changed as we aim to guarantee binary compatibility
 in maint branches.
 
+
+
+Test your changes:
+
+    $ ./Configure -des -Dusedevel
+    $ make
+    $ make test
+
 Commit your changes:
 
     $ git st
@@ -391,14 +399,14 @@ Finalize the perldelta.  In particular, fill in the Acknowledgements
 section.  You can generate a list of contributors with checkAUTHORS.pl.
 For example:
 
-  $ git log --pretty=fuller v5.13.2..HEAD | \
+  $ git log --pretty=fuller v5.13.${last}..HEAD | \
     perl Porting/checkAUTHORS.pl --who -
 
 Look at the previous L<perldelta> for how to write the opening
 paragraph of the Acknowledgements section. To get the amount of
 changed files and number of lines use this command:
 
-  $ git diff --shortstat v5.13.8..v5.13.9 | \
+  $ git diff --shortstat v5.13.${last}..HEAD | \
     ./perl -Ilib -nE 'my ($files, $insert, $delete) = /(\d+)/ga; say "$files files and ", $insert + $delete, " lines changed"'
 
 Making sure to round off the number of lines changed.
@@ -637,6 +645,19 @@ your changes were all committed, you can override the suffix with:
 
 XXX if we go for extra tags and branches stuff, then add the extra details
 here
+
+Optionally, you might want to compress your tarball more. Unix F<gzip>
+doesn't actually produce the smallest possible DEFLATE output. If you have the
+AdvanceCOMP suite (e.g. the C<advancecomp> port on macports), you can run
+
+    $ advdef -z -4 ../perl-x.y.z-RC1.tar.gz
+
+which will probably shrink your tarball by about 5%. Over the lifetime of
+your distribution this will save a lot of people a small amount of download
+time and disk space, which adds up.
+
+(7-Zip on Windows is the same code as AdvanceCOMP, so Windows users get the
+smallest files first time)
 
 =item *
 
@@ -910,7 +931,6 @@ the following files:
 
     MANIFEST
     Makefile.SH
-    pod.lst
     pod/perl.pod
     vms/descrip_mms.template
     win32/Makefile
