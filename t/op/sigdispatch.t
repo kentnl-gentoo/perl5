@@ -41,6 +41,8 @@ is($@, "Alarm!\n", 'after the second loop');
 SKIP: {
     skip('We can\'t test blocking without sigprocmask', 11)
 	if is_miniperl() || !$Config{d_sigprocmask};
+    skip('This doesn\'t work on OpenBSD threaded builds RT#88814', 11)
+        if $^O eq 'openbsd' && $Config{useithreads};
 
     require POSIX;
     my $new = POSIX::SigSet->new(&POSIX::SIGUSR1);
@@ -95,7 +97,7 @@ TODO:
 
 SKIP: {
     skip("alarm cannot interrupt blocking system calls on $^O", 2)
-	if $^O eq 'MSWin32';
+	if ($^O eq 'MSWin32' || $^O eq 'VMS');
     # RT #88774
     # make sure the signal handler's called in an eval block *before*
     # the eval is popped

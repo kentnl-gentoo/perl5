@@ -56,6 +56,8 @@ This release provides full functionality for C<use feature
 'unicode_strings'>.  Under its scope, all string operations executed and
 regular expressions compiled (even if executed outside its scope) have
 Unicode semantics.  See L<feature/"the 'unicode_strings' feature">.
+However, see L</Inverted bracketed character classes and multi-character folds>,
+below.
 
 This feature avoids most forms of the "Unicode Bug" (see
 L<perlunicode/The "Unicode Bug"> for details).  If there is any
@@ -167,7 +169,7 @@ See L<perlre/Extended Patterns>.
 This change is likely to break code that compares stringified regular
 expressions with fixed strings containing C<?-xism>.
 
-=head3 C</d>, C</l>, C</u>, C</a>, and C</aa> modifiers
+=head3 C</d>, C</l>, C</u>, and C</a> modifiers
 
 Four new regular expression modifiers have been added.  These are mutually
 exclusive: one only can be turned on at a time.
@@ -198,9 +200,7 @@ complements and C<\b> and C<\B> are correspondingly
 affected.  Otherwise, C</a> behaves like the C</u> modifier, in that
 case-insensitive matching uses Unicode semantics.
 
-=item *
-
-The C</aa> modifier is like C</a>, except that, in case-insensitive
+If the C</a> modifier is repeated, then additionally in case-insensitive
 matching, no ASCII character can match a non-ASCII character.
 For example,
 
@@ -531,6 +531,29 @@ In addition to the sections that follow, see L</C API Changes>.
 
 =head2 Regular Expressions and String Escapes
 
+=head3 Inverted bracketed character classes and multi-character folds
+
+Some characters match a sequence of two or three characters in C</i>
+regular expression matching under Unicode rules.  One example is
+C<LATIN SMALL LETTER SHARP S> which matches the sequence C<ss>.
+
+ 'ss' =~ /\A[\N{LATIN SMALL LETTER SHARP S}]\z/i  # Matches
+
+This, however, can lead to very counter-intuitive results, especially
+when inverted.  Because of this, Perl 5.14 does not use multi-character C</i>
+matching in inverted character classes.
+
+ 'ss' =~ /\A[^\N{LATIN SMALL LETTER SHARP S}]+\z/i  # ???
+
+This should match any sequences of characters that aren't the C<SHARP S>
+nor what C<SHARP S> matches under C</i>.  C<"s"> isn't C<SHARP S>, but
+Unicode says that C<"ss"> is what C<SHARP S> matches under C</i>.  So
+which one "wins"? Do you fail the match because the string has C<ss> or
+accept it because it has an C<s> followed by another C<s>?
+
+Earlier releases of Perl did allow this multi-character matching,
+but due to bugs, it mostly did not work.
+
 =head3 \400-\777
 
 In certain circumstances, C<\400>-C<\777> in regexes have behaved
@@ -773,7 +796,7 @@ using the C<(*)>, C<(;$)> and C<(;*)> prototypes
 are parsed with higher precedence than before.  So
 in the following example:
 
-  sub foo($);
+  sub foo(;$);
   foo $a < $b;
 
 the second line is now parsed correctly as C<< foo($a) < $b >>, rather than
@@ -789,6 +812,7 @@ an unparenthesised argument:
   .. ...
   ?:
   = += -= *= etc.
+  , =>
 
 =head3 Smart-matching against array slices
 
@@ -916,7 +940,12 @@ In regular expressions, a literal C<"{"> immediately following a C<"\b">
 (not in a bracketed character class) or a C<"\B{"> is now deprecated
 to allow for its future use by Perl itself.
 
-=head2 Deprecation warning added for deprecated-in-core Perl 4-era .pl libraries
+=head2 Perl 4-era .pl libraries
+
+Perl bundles a handful of library files that predate Perl 5.
+This bundling is now deprecated for most of these files, which are now
+available from CPAN.  The affected files now warn when run, if they were
+installed as part of the core.
 
 This is a mandatory warning, not obeying B<-X> or lexical warning bits.
 The warning is modelled on that supplied by F<deprecate.pm> for
@@ -943,26 +972,18 @@ parentheses like this:
 
     for $x (qw(a b c)) { ... }
 
-This is being deprecated because C<qw(a b c)> is supposed to mean
-C<"a", "b", "c"> not C<("a", "b", "c")>. In other words, this doesn't compile:
-
-    for my $i "a", "b", "c" { }
-
-So neither should this:
-
-    for my $i qw(a b c) {}
-
-But these both work:
-
-    for my $i ("a", "b", "c") { }
-    for my $i (qw(a b c)) {}
+This is being deprecated because the parentheses in C<for $i (1,2,3) { ... }>
+are not part of expression syntax.  They are part of the statement
+syntax, with the C<for> statement wanting literal parentheses.
+The synthetic parentheses that a C<qw> expression acquired were only
+intended to be treated as part of expression syntax.
 
 Note that this does not change the behaviour of cases like:
 
-    use POSIX qw(setlocale localeconv)
+    use POSIX qw(setlocale localeconv);
     our @EXPORT = qw(foo bar baz);
 
-Where a list with or without parentheses could have been provided.
+where parentheses were never required around the expression.
 
 =head2 C<\N{BELL}>
 
@@ -998,16 +1019,16 @@ L<Unicode::Casing>, which provides improved functionality.
 
 =head2 Deprecated modules
 
-The following modules will be removed from the core distribution in a
+The following module will be removed from the core distribution in a
 future release, and should be installed from CPAN instead.  Distributions
-on CPAN that require these should add them to their prerequisites.  The
-core versions of these modules now issue a deprecation warning.
+on CPAN that require this should add it to their prerequisites.  The
+core version of these module now issues a deprecation warning.
 
 If you ship a packaged version of Perl, either alone or as part of a
 larger system, then you should carefully consider the repercussions of
 core module deprecations.  You may want to consider shipping your default
-build of Perl with packages for some or all deprecated modules that
-install into C<vendor> or C<site> Perl library directories.  This will
+build of Perl with a package for the deprecated module that
+installs into C<vendor> or C<site> Perl library directories.  This will
 inhibit the deprecation warnings.
 
 Alternatively, you may want to consider patching F<lib/deprecate.pm>
@@ -1018,16 +1039,16 @@ installation of a single package provides the given functionality, to
 a later release where the system administrator needs to know to install
 multiple packages to get that same functionality.
 
-You can silence these deprecation warnings by installing the modules
-in question from CPAN.  To install the latest version of all of them,
-just install C<Task::Deprecations::5_14>.
+You can silence these deprecation warnings by installing the module
+in question from CPAN.  To install the latest version of it by role
+rather than by name, just install C<Task::Deprecations::5_14>.
 
 =over
 
 =item L<Devel::DProf>
 
 We strongly recommend that you install and use L<Devel::NYTProf> instead
-of L<Devel::Dprof>, as L<Devel::NYTProf> offers significantly 
+of L<Devel::DProf>, as L<Devel::NYTProf> offers significantly
 improved profiling and reporting.
 
 =back
@@ -1843,7 +1864,6 @@ L<Module::Load::Conditional> has been upgraded from version 0.34 to 0.44.
 
 The L<mro> pragma has been upgraded from version 1.02 to 1.07.
 
-
 =item *
 
 L<NDBM_File> has been upgraded from version 1.08 to 1.12.
@@ -2324,6 +2344,13 @@ L<Ambiguous use of %c resolved as operator %c|perldiag/"Ambiguous use of %c reso
 
 L<Ambiguous use of %c{%s} resolved to %c%s|perldiag/"Ambiguous use of %c{%s} resolved to %c%s">
 
+=item *
+
+L<Ambiguous use of %c{%s[...]} resolved to %c%s[...]|perldiag/"Ambiguous use of %c{%s[...]} resolved to %c%s[...]">
+
+=item *
+
+L<Ambiguous use of %c{%s{...}} resolved to %c%s{...}|perldiag/"Ambiguous use of %c{%s{...}} resolved to %c%s{...}">
 
 =item *
 
@@ -2352,6 +2379,10 @@ L<perlbook> has been expanded to cover many more popular books.
 The documentation for the C<SvTRUE> macro in
 L<perlapi> was simply wrong in stating that
 get-magic is not processed.  It has been corrected.
+
+=head3 op manipulation functions
+
+Several API functions that process optrees have been newly documented.
 
 =head3 L<perlvar> revamp
 
@@ -2964,45 +2995,47 @@ it is correctly allocated and initialised.
 
 =head3 New parsing functions
 
-Several functions have been added for parsing statements or multiple
-statements:
+Several functions have been added for parsing Perl statements and
+expressions.  These functions are meant to be used by XS code invoked
+during Perl parsing, in a recursive-descent manner, to allow modules to
+augment the standard Perl syntax.
 
 =over
 
 =item *
 
-C<parse_fullstmt> parses a complete Perl statement.
+L<parse_stmtseq()|perlapi/parse_stmtseq>
+parses a sequence of statements, up to closing brace or EOF.
 
 =item *
 
-C<parse_stmtseq> parses a sequence of statements, up
-to closing brace or EOF.
+L<parse_fullstmt()|perlapi/parse_fullstmt>
+parses a complete Perl statement, including optional label.
 
 =item *
 
-C<parse_block> parses a block [perl #78222].
+L<parse_barestmt()|perlapi/parse_barestmt>
+parses a statement without a label.
 
 =item *
 
-C<parse_barestmt> parses a statement
-without a label.
+L<parse_block()|perlapi/parse_block>
+parses a code block.
 
 =item *
 
-C<parse_label> parses a statement label, separate from statements.
+L<parse_label()|perlapi/parse_label>
+parses a statement label, separate from statements.
 
-=back
+=item *
 
-The
 L<C<parse_fullexpr()>|perlapi/parse_fullexpr>,
 L<C<parse_listexpr()>|perlapi/parse_listexpr>,
 L<C<parse_termexpr()>|perlapi/parse_termexpr>, and
 L<C<parse_arithexpr()>|perlapi/parse_arithexpr>
-functions have been added to the API.  They run
-recursive-descent parsing of expressions at various precedence levels.
-They are expected to be used by syntax plugins.
+parse expressions at various precedence levels.
 
-See L<perlapi> for details.
+=back
 
 =head3 Hints hash API
 
@@ -3071,8 +3104,8 @@ side-chains of the optree.
 
 The following functions/macros have been added to the API.  The C<*_nomg>
 macros are equivalent to their non-C<_nomg> variants, except that they ignore
-C<get-magic>.  Those ending in C<_flags> allow one to specify whether
-C<get-magic> is processed.
+get-magic.  Those ending in C<_flags> allow one to specify whether
+get-magic is processed.
 
   sv_2bool_flags
   SvTRUE_nomg
@@ -3191,7 +3224,7 @@ exception if they don't match.
 =head3 Perl_fetch_cop_label
 
 The first argument of the C API function C<Perl_fetch_cop_label> has changed
-from C<struct refcounted he *> to C<COP *>, to insulate the user from
+from C<struct refcounted_he *> to C<COP *>, to insulate the user from
 implementation details.
 
 This API function was marked as "may change", and likely isn't in use outside
@@ -3918,7 +3951,7 @@ reference already (such as from a previous FETCH) [perl #72144].
 
 =item *
 
-C<splice> now calls C<set-magic> (so changes made
+C<splice> now calls set-magic (so changes made
 by C<splice @ISA> are respected by method calls) [perl #78400].
 
 =item *
@@ -3928,7 +3961,7 @@ FETCH/STORE at all [perl #43789] (5.12.2).
 
 =item *
 
-utf8::is_utf8() now respects C<get-magic> (like C<$1>) (5.12.1).
+utf8::is_utf8() now respects get-magic (like C<$1>) (5.12.1).
 
 =back
 
@@ -4378,7 +4411,7 @@ due to their arguments being swapped [perl #72704] (5.12.1).
 
 =item *
 
-A possible segfault in the C<T_PRTOBJ> default typemap has been fixed
+A possible segfault in the C<T_PTROBJ> default typemap has been fixed
 (5.12.2).
 
 =item *
@@ -4417,11 +4450,6 @@ interrupted by a signal.
 
 =item *
 
-L<version> now prevents object methods from being called as class methods
-(d808b68)
-
-=item *
-
 The changes in prototype handling break L<Switch>.  A patch has been sent
 upstream and will hopefully appear on CPAN soon.
 
@@ -4429,10 +4457,23 @@ upstream and will hopefully appear on CPAN soon.
 
 The upgrade to F<ExtUtils-MakeMaker-6.57_05> has caused
 some tests in the F<Module-Install> distribution on CPAN to
-fail. (Specifically, F<02_mymeta.t> tests 5 and 21l; F<18_all_from.t>
+fail. (Specifically, F<02_mymeta.t> tests 5 and 21; F<18_all_from.t>
 tests 6 and 15; F<19_authors.t> tests 5, 13, 21, and 29; and
 F<20_authors_with_special_characters.t> tests 6, 15, and 23 in version
 1.00 of that distribution now fail.)
+
+=item *
+
+On VMS, C<Time::HiRes> tests will fail due to a bug in the CRTL's
+implementation of C<setitimer>: previous timer values would be cleared
+if a timer expired but not if the timer was reset before expiring.  HP
+OpenVMS Engineering have corrected the problem and will release a patch
+in due course (Quix case # QXCM1001115136).
+
+=item *
+
+On VMS, there were a handful of C<Module::Build> test failures we didn't
+get to before the release; please watch CPAN for updates.
 
 =back
 
@@ -4449,7 +4490,7 @@ that release's L<perl5120delta>.
 
 split() no longer modifies C<@_> when called in scalar or void context.
 In void context it now produces a "Useless use of split" warning.
-This was also a perl 5.12.0 changed that missed the perldelta.
+This was also a perl 5.12.0 change that missed the perldelta.
 
 =head1 Obituary
 
@@ -4459,7 +4500,6 @@ away on September 18, 2010 after a battle with lung cancer.  The community
 was richer for his involvement.  He will be missed.
 
 =head1 Acknowledgements
-
 
 Perl 5.14.0 represents one year of development since
 Perl 5.12.0 and contains nearly 550,000 lines of changes across nearly
@@ -4512,7 +4552,6 @@ file in the Perl 5.14.0 distribution.
 Many of the changes included in this version originated in the CPAN
 modules included in Perl's core. We're grateful to the entire CPAN
 community for helping Perl to flourish.
-
 
 =head1 Reporting Bugs
 

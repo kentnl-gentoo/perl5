@@ -562,7 +562,8 @@ ApPR	|bool	|is_uni_xdigit	|UV c
 Ap	|UV	|to_uni_upper	|UV c|NN U8 *p|NN STRLEN *lenp
 Ap	|UV	|to_uni_title	|UV c|NN U8 *p|NN STRLEN *lenp
 Ap	|UV	|to_uni_lower	|UV c|NN U8 *p|NN STRLEN *lenp
-Ap	|UV	|to_uni_fold	|UV c|NN U8 *p|NN STRLEN *lenp
+Amp	|UV	|to_uni_fold	|UV c|NN U8 *p|NN STRLEN *lenp
+AMp	|UV	|_to_uni_fold_flags|UV c|NN U8 *p|NN STRLEN *lenp|U8 flags
 ApPR	|bool	|is_uni_alnum_lc|UV c
 ApPR	|bool	|is_uni_idfirst_lc|UV c
 ApPR	|bool	|is_uni_alpha_lc|UV c
@@ -1318,11 +1319,12 @@ EsMR	|HV*	|invlist_union	|NN HV* const a|NN HV* const b
 Ap	|void	|taint_env
 Ap	|void	|taint_proper	|NULLOK const char* f|NN const char *const s
 Apd	|UV	|to_utf8_case	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp \
-				|NN SV **swashp|NN const char *normal|NN const char *special
+				|NN SV **swashp|NN const char *normal|NULLOK const char *special
 Apd	|UV	|to_utf8_lower	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
 Apd	|UV	|to_utf8_upper	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
 Apd	|UV	|to_utf8_title	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
-Apd	|UV	|to_utf8_fold	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
+Ampd	|UV	|to_utf8_fold	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
+AMp	|UV	|_to_utf8_fold_flags|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp|U8 flags
 #if defined(UNLINK_ALL_VERSIONS)
 Ap	|I32	|unlnk		|NN const char* f
 #endif
