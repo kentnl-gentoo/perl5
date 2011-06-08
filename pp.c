@@ -242,7 +242,10 @@ Perl_softref2xv(pTHX_ SV *const sv, const char *const what,
 	    Perl_die(aTHX_ PL_no_usym, what);
     }
     if (!SvOK(sv)) {
-	if (PL_op->op_flags & OPf_REF)
+	if (
+	  PL_op->op_flags & OPf_REF &&
+	  PL_op->op_next->op_type != OP_BOOLKEYS
+	)
 	    Perl_die(aTHX_ PL_no_usym, what);
 	if (ckWARN(WARN_UNINITIALIZED))
 	    report_uninit(sv);
@@ -3949,6 +3952,8 @@ PP(pp_ucfirst)
 	    SvCUR_set(dest, need - 1);
 	}
     }
+    if (dest != source && SvTAINTED(source))
+	SvTAINT(dest);
     SvSETMAGIC(dest);
     RETURN;
 }
@@ -4222,6 +4227,8 @@ PP(pp_uc)
 	    SvCUR_set(dest, d - (U8*)SvPVX_const(dest));
 	}
     } /* End of isn't utf8 */
+    if (dest != source && SvTAINTED(source))
+	SvTAINT(dest);
     SvSETMAGIC(dest);
     RETURN;
 }
@@ -4433,6 +4440,8 @@ PP(pp_lc)
 	    SvCUR_set(dest, d - (U8*)SvPVX_const(dest));
 	}
     }
+    if (dest != source && SvTAINTED(source))
+	SvTAINT(dest);
     SvSETMAGIC(dest);
     RETURN;
 }
@@ -5982,6 +5991,8 @@ PP(pp_boolkeys)
     dSP;
     HV * const hv = (HV*)POPs;
     
+    if (SvTYPE(hv) != SVt_PVHV) { XPUSHs(&PL_sv_no); RETURN; }
+
     if (SvRMAGICAL(hv)) {
 	MAGIC * const mg = mg_find((SV*)hv, PERL_MAGIC_tied);
 	if (mg) {
