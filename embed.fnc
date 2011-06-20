@@ -1310,7 +1310,6 @@ EsM	|void	|invlist_extend    |NN HV* const invlist|const UV len
 EsMR	|HV*	|invlist_intersection	|NN HV* const a|NN HV* const b
 EiMR	|UV	|invlist_len	|NN HV* const invlist
 EiMR	|UV	|invlist_max	|NN HV* const invlist
-EiM	|void	|invlist_set_array	|NN HV* const invlist|NN const UV* const array
 EiM	|void	|invlist_set_len	|NN HV* const invlist|const UV len
 EiM	|void	|invlist_set_max	|NN HV* const invlist|const UV max
 EiM	|void	|invlist_trim	|NN HV* const invlist
@@ -1583,9 +1582,14 @@ s	|HV*	|require_tie_mod|NN GV *gv|NN const char *varpv|NN SV* namesv \
 				|NN const char *methpv|const U32 flags
 #endif
 
+#if defined(PERL_IN_HV_C) || defined(PERL_IN_SV_C)
+po	|SV*	|hfree_next_entry	|NN HV *hv|NN STRLEN *indexp
+#endif
+
 #if defined(PERL_IN_HV_C)
 s	|void	|hsplit		|NN HV *hv
 s	|void	|hfreeentries	|NN HV *hv
+s	|SV*	|hv_free_ent_ret|NN HV *hv|NULLOK HE *entryK
 sa	|HE*	|new_he
 sanR	|HEK*	|save_hek_flags	|NN const char *str|I32 len|U32 hash|int flags
 sn	|void	|hv_magic_check	|NN HV *hv|NN bool *needs_copy|NN bool *needs_store
@@ -1721,7 +1725,7 @@ snR	|char *	|bytes_to_uni	|NN const U8 *start|STRLEN len|NN char *dest
 #if defined(PERL_IN_PP_CTL_C)
 sR	|OP*	|docatch	|NULLOK OP *o
 sR	|OP*	|dofindlabel	|NN OP *o|NN const char *label|NN OP **opstack|NN OP **oplimit
-sR	|OP*	|doparseform	|NN SV *sv
+s	|MAGIC *|doparseform	|NN SV *sv
 snR	|bool	|num_overflow	|NV value|I32 fldsize|I32 frcsize
 sR	|I32	|dopoptoeval	|I32 startingblock
 sR	|I32	|dopoptogiven	|I32 startingblock
