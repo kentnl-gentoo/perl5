@@ -575,7 +575,7 @@ and you'll need to use a new version number for your release.
 =head3 build the tarball
 
 Before you run the following, you might want to install 7-Zip (the
-C<p7-full> package under Debian or the C<p7zip> port on MacPorts) or
+C<p7zip-full> package under Debian or the C<p7zip> port on MacPorts) or
 the AdvanceCOMP suite (e.g. the C<advancecomp> package under Debian,
 or the C<advancecomp> port on macports - 7-Zip on Windows is the
 same code as AdvanceCOMP, so Windows users get the smallest files
@@ -829,7 +829,9 @@ Mail p5p to announce your new release, with a quote you prepared earlier.
 =head3 update epigraphs.pod
 
 Add your quote to F<Porting/epigraphs.pod> and commit it.
-
+Your release announcement will probably not have reached the web-visible
+archives yet, so you won't be able to include the customary link to the
+release announcement yet.
 
 =head3 Module::CoreList nagging
 
@@ -931,6 +933,36 @@ Then follow the section L<"Bump the version number"> to bump the version
 in the remaining files and test and commit.
 
 
+=head3 clean build and test
+
+Run a clean build and test to make sure nothing obvious is broken.
+
+In particular, F<Porting/perldelta_template.pod> is intentionally exempted
+from podchecker tests, to avoid false positives about placeholder text.
+However, once it's copied to F<pod/perldelta.pod> the contents can now
+cause test failures. Problems should resolved by doing one of the
+following:
+
+=over
+
+=item 1
+
+Replace placeholder text with correct text.
+
+=item 2
+
+If the problem is from a broken placeholder link, you can add it to the
+array C<@perldelta_ignore_links> in F<t/porting/podcheck.t>.  Lines
+containing such links should be marked with C<XXX> so that they get
+cleaned up before the next release.
+
+=item 3
+
+Following the instructions output by F<t/porting/podcheck.t> on how to
+update its exceptions database.
+
+=back
+
 =head3 push commits
 
 Finally, push any commits done above.
@@ -1012,6 +1044,11 @@ Thanks for releasing perl!
 
 =head2 Building a release - the day after
 
+=head3 link announcement in epigraphs.pod
+
+Add, to your quote to F<Porting/epigraphs.pod>, a link to the release
+announcement in the web-visible mailing list archive.  Commit it.
+
 =head3 check tarball availability
 
 Check various website entries to make sure the that tarball has appeared
@@ -1052,7 +1089,7 @@ It should be visible at a URL like C<http://search.cpan.org/dist/perl-5.10.1/>.
 
 =head3 update dev.perl.org
 
-I<This step ONLY for BLEAD-POINT and MAINT>
+I<This step ONLY for BLEAD-FINAL and MAINT>
 
 Ask Leo Lapworth to update L<http://dev.perl.org/perl5/>.
 

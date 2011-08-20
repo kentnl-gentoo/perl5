@@ -43,13 +43,20 @@ PP(pp_wantarray)
     dVAR;
     dSP;
     I32 cxix;
+    const PERL_CONTEXT *cx;
     EXTEND(SP, 1);
 
-    cxix = dopoptosub(cxstack_ix);
-    if (cxix < 0)
+    if (PL_op->op_private & OPpOFFBYONE) {
+	if (!(cx = caller_cx(1,NULL))) RETPUSHUNDEF;
+    }
+    else {
+      cxix = dopoptosub(cxstack_ix);
+      if (cxix < 0)
 	RETPUSHUNDEF;
+      cx = &cxstack[cxix];
+    }
 
-    switch (cxstack[cxix].blk_gimme) {
+    switch (cx->blk_gimme) {
     case G_ARRAY:
 	RETPUSHYES;
     case G_SCALAR:
@@ -1950,7 +1957,7 @@ PP(pp_caller)
 	AV * const ary = cx->blk_sub.argarray;
 	const int off = AvARRAY(ary) - AvALLOC(ary);
 
-	if (!PL_dbargs)
+	if (!PL_dbargs || AvREAL(PL_dbargs))
 	    Perl_init_dbargs(aTHX);
 
 	if (AvMAX(PL_dbargs) < AvFILLp(ary) + off)
@@ -2499,13 +2506,13 @@ PP(pp_return)
 			*++newsp = SvREFCNT_inc(*SP);
 			FREETMPS;
 			sv_2mortal(*newsp);
+			if (gmagic) SvGETMAGIC(*newsp);
 		    }
 		    else {
 			sv = SvREFCNT_inc(*SP);	/* FREETMPS could clobber it */
 			FREETMPS;
 			*++newsp = sv_mortalcopy(sv);
 			SvREFCNT_dec(sv);
-			if (gmagic) SvGETMAGIC(sv);
 		    }
 		}
 		else if (SvTEMP(*SP) && SvREFCNT(*SP) == 1) {
@@ -3471,6 +3478,7 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
     CvEVAL_on(PL_compcv);
     assert(CxTYPE(&cxstack[cxstack_ix]) == CXt_EVAL);
     cxstack[cxstack_ix].blk_eval.cv = PL_compcv;
+    cxstack[cxstack_ix].blk_gimme = gimme;
 
     CvOUTSIDE_SEQ(PL_compcv) = seq;
     CvOUTSIDE(PL_compcv) = MUTABLE_CV(SvREFCNT_inc_simple(outside));
@@ -3522,11 +3530,13 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 
     if (yystatus || PL_parser->error_count || !PL_eval_root) {
 	SV **newsp;			/* Used by POPBLOCK. */
-	PERL_CONTEXT *cx = NULL;
+	PERL_CONTEXT *cx;
 	I32 optype;			/* Used by POPEVAL. */
-	SV *namesv = NULL;
+	SV *namesv;
 	const char *msg;
 
+	cx = NULL;
+	namesv = NULL;
 	PERL_UNUSED_VAR(newsp);
 	PERL_UNUSED_VAR(optype);
 
@@ -3585,15 +3595,6 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	*startop = PL_eval_root;
     } else
 	SAVEFREEOP(PL_eval_root);
-
-    /* Set the context for this new optree.
-     * Propagate the context from the eval(). */
-    if ((gimme & G_WANT) == G_VOID)
-	scalarvoid(PL_eval_root);
-    else if ((gimme & G_WANT) == G_ARRAY)
-	list(PL_eval_root);
-    else
-	scalar(PL_eval_root);
 
     DEBUG_x(dump_eval());
 

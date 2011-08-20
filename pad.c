@@ -341,13 +341,10 @@ Perl_cv_undef(pTHX_ CV *cv)
 	    PTR2UV(cv), PTR2UV(PL_comppad))
     );
 
-#ifdef USE_ITHREADS
-    if (CvFILE(cv) && !CvISXSUB(cv)) {
-	/* for XSUBs CvFILE point directly to static memory; __FILE__ */
+    if (CvFILE(cv) && CvDYNFILE(cv)) {
 	Safefree(CvFILE(cv));
     }
     CvFILE(cv) = NULL;
-#endif
 
     if (!CvISXSUB(cv) && CvROOT(cv)) {
 	if (SvTYPE(cv) == SVt_PVCV && CvDEPTH(cv))
@@ -1047,7 +1044,7 @@ S_pad_findlex(pTHX_ const char *namepv, STRLEN namelen, U32 flags, const CV* cv,
 
     DEBUG_Xv(PerlIO_printf(Perl_debug_log,
 	"Pad findlex cv=0x%"UVxf" searching \"%.*s\" seq=%d%s\n",
-	PTR2UV(cv), namelen, namepv, (int)seq,
+			   PTR2UV(cv), (int)namelen, namepv, (int)seq,
 	out_capture ? " capturing" : "" ));
 
     /* first, search this pad */
@@ -1875,12 +1872,8 @@ Perl_cv_clone(pTHX_ CV *proto)
     CvFLAGS(cv) = CvFLAGS(proto) & ~(CVf_CLONE|CVf_WEAKOUTSIDE|CVf_CVGV_RC);
     CvCLONED_on(cv);
 
-#ifdef USE_ITHREADS
-    CvFILE(cv)		= CvISXSUB(proto) ? CvFILE(proto)
-					  : savepv(CvFILE(proto));
-#else
-    CvFILE(cv)		= CvFILE(proto);
-#endif
+    CvFILE(cv)		= CvDYNFILE(proto) ? savepv(CvFILE(proto))
+					   : CvFILE(proto);
     CvGV_set(cv,CvGV(proto));
     CvSTASH_set(cv, CvSTASH(proto));
     OP_REFCNT_LOCK;

@@ -314,6 +314,13 @@ PERL_CALLCONV OP *	Perl_ck_each(pTHX_ OP *o)
 #define PERL_ARGS_ASSERT_CK_EACH	\
 	assert(o)
 
+PERL_CALLCONV OP*	Perl_ck_entersub_args_core(pTHX_ OP *entersubop, GV *namegv, SV *protosv)
+			__attribute__nonnull__(pTHX_1)
+			__attribute__nonnull__(pTHX_2)
+			__attribute__nonnull__(pTHX_3);
+#define PERL_ARGS_ASSERT_CK_ENTERSUB_ARGS_CORE	\
+	assert(entersubop); assert(namegv); assert(protosv)
+
 PERL_CALLCONV OP*	Perl_ck_entersub_args_list(pTHX_ OP *entersubop)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_CK_ENTERSUB_ARGS_LIST	\
@@ -570,6 +577,11 @@ PERL_CALLCONV void	Perl_cop_store_label(pTHX_ COP *const cop, const char *label,
 			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_COP_STORE_LABEL	\
 	assert(cop); assert(label)
+
+PERL_CALLCONV SV *	Perl_core_prototype(pTHX_ SV *sv, const char *name, const int code, int * const opnum)
+			__attribute__nonnull__(pTHX_2);
+#define PERL_ARGS_ASSERT_CORE_PROTOTYPE	\
+	assert(name)
 
 PERL_CALLCONV PERL_CONTEXT*	Perl_create_eval_scope(pTHX_ U32 flags);
 PERL_CALLCONV void	Perl_croak(pTHX_ const char* pat, ...)
@@ -959,6 +971,11 @@ PERL_CALLCONV I32	Perl_filter_read(pTHX_ int idx, SV *buf_sv, int maxlen)
 			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_FILTER_READ	\
 	assert(buf_sv)
+
+PERL_CALLCONV void	Perl_finalize_optree(pTHX_ OP* o)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_FINALIZE_OPTREE	\
+	assert(o)
 
 PERL_CALLCONV CV*	Perl_find_runcv(pTHX_ U32 *db_seqp)
 			__attribute__warn_unused_result__;
@@ -2272,7 +2289,6 @@ PERL_CALLCONV void	Perl_mini_mktime(pTHX_ struct tm *ptm)
 #define PERL_ARGS_ASSERT_MINI_MKTIME	\
 	assert(ptm)
 
-PERL_CALLCONV OP*	Perl_mod(pTHX_ OP* o, I32 type);
 PERL_CALLCONV int	Perl_mode_from_discipline(pTHX_ const char* s, STRLEN len);
 PERL_CALLCONV void *	Perl_more_bodies(pTHX_ const svtype sv_type, const size_t body_size, const size_t arena_size);
 PERL_CALLCONV const char*	Perl_moreswitches(pTHX_ const char* s)
@@ -2367,13 +2383,6 @@ PERL_CALLCONV I32	Perl_my_fflush_all(pTHX);
 PERL_CALLCONV Pid_t	Perl_my_fork(void);
 /* PERL_CALLCONV I32	Perl_my_lstat(pTHX); */
 PERL_CALLCONV I32	Perl_my_lstat_flags(pTHX_ const U32 flags);
-PERL_CALLCONV I32	Perl_my_pclose(pTHX_ PerlIO* ptr);
-PERL_CALLCONV PerlIO*	Perl_my_popen(pTHX_ const char* cmd, const char* mode)
-			__attribute__nonnull__(pTHX_1)
-			__attribute__nonnull__(pTHX_2);
-#define PERL_ARGS_ASSERT_MY_POPEN	\
-	assert(cmd); assert(mode)
-
 PERL_CALLCONV PerlIO*	Perl_my_popen_list(pTHX_ const char* mode, int n, SV ** args)
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_3);
@@ -4690,6 +4699,15 @@ STATIC PerlIO *	S_doopen_pm(pTHX_ SV *name)
 
 #  endif
 #endif
+#if !defined(PERL_IMPLICIT_SYS)
+PERL_CALLCONV I32	Perl_my_pclose(pTHX_ PerlIO* ptr);
+PERL_CALLCONV PerlIO*	Perl_my_popen(pTHX_ const char* cmd, const char* mode)
+			__attribute__nonnull__(pTHX_1)
+			__attribute__nonnull__(pTHX_2);
+#define PERL_ARGS_ASSERT_MY_POPEN	\
+	assert(cmd); assert(mode)
+
+#endif
 #if !defined(PERL_IS_MINIPERL)
 #  if defined(PERL_IN_PERL_C)
 STATIC SV *	S_incpush_if_exists(pTHX_ AV *const av, SV *dir, SV *const stem)
@@ -5008,8 +5026,6 @@ PERL_CALLCONV void	Perl_pending_Slabs_to_ro(pTHX);
 #if defined(PERL_DEFAULT_DO_EXEC3_IMPLEMENTATION)
 /* PERL_CALLCONV bool	Perl_do_exec(pTHX_ const char* cmd)
 			__attribute__nonnull__(pTHX_1); */
-#define PERL_ARGS_ASSERT_DO_EXEC	\
-	assert(cmd)
 
 #endif
 #if defined(PERL_DONT_CREATE_GVSV)
@@ -5449,6 +5465,7 @@ STATIC AV*	S_mro_get_linear_isa_dfs(pTHX_ HV* stash, U32 level)
 STATIC NV	S_mulexp10(NV value, I32 exponent);
 #endif
 #if defined(PERL_IN_OP_C)
+PERL_STATIC_INLINE bool	S_aassign_common_vars(pTHX_ OP* o);
 STATIC void	S_apply_attrs(pTHX_ HV *stash, SV *target, OP *attrs, bool for_my)
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2);
@@ -5477,6 +5494,11 @@ STATIC void	S_cop_free(pTHX_ COP *cop)
 STATIC OP *	S_dup_attrlist(pTHX_ OP *o)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_DUP_ATTRLIST	\
+	assert(o)
+
+STATIC void	S_finalize_op(pTHX_ OP* o)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_FINALIZE_OP	\
 	assert(o)
 
 STATIC void	S_find_and_forget_pmops(pTHX_ OP *o)
@@ -5537,7 +5559,7 @@ STATIC OP*	S_new_logop(pTHX_ I32 type, I32 flags, OP **firstp, OP **otherp)
 #define PERL_ARGS_ASSERT_NEW_LOGOP	\
 	assert(firstp); assert(otherp)
 
-STATIC void	S_no_bareword_allowed(pTHX_ const OP *o)
+STATIC void	S_no_bareword_allowed(pTHX_ OP *o)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_NO_BAREWORD_ALLOWED	\
 	assert(o)
@@ -5570,10 +5592,7 @@ STATIC void	S_process_special_blocks(pTHX_ const char *const fullname, GV *const
 STATIC OP*	S_ref_array_or_hash(pTHX_ OP* cond);
 STATIC OP*	S_refkids(pTHX_ OP* o, I32 type);
 STATIC bool	S_scalar_mod_type(const OP *o, I32 type)
-			__attribute__warn_unused_result__
-			__attribute__nonnull__(1);
-#define PERL_ARGS_ASSERT_SCALAR_MOD_TYPE	\
-	assert(o)
+			__attribute__warn_unused_result__;
 
 STATIC OP*	S_scalarboolean(pTHX_ OP *o)
 			__attribute__nonnull__(pTHX_1);
@@ -5601,7 +5620,6 @@ STATIC OP*	S_too_few_arguments(pTHX_ OP *o, const char* name)
 	assert(o); assert(name)
 
 STATIC OP*	S_too_many_arguments(pTHX_ OP *o, const char* name)
-			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_TOO_MANY_ARGUMENTS	\

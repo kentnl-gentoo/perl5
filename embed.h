@@ -302,8 +302,6 @@
 #define my_failure_exit()	Perl_my_failure_exit(aTHX)
 #define my_fflush_all()		Perl_my_fflush_all(aTHX)
 #define my_fork			Perl_my_fork
-#define my_pclose(a)		Perl_my_pclose(aTHX_ a)
-#define my_popen(a,b)		Perl_my_popen(aTHX_ a,b)
 #define my_popen_list(a,b,c)	Perl_my_popen_list(aTHX_ a,b,c)
 #define my_setenv(a,b)		Perl_my_setenv(aTHX_ a,b)
 #define my_socketpair		Perl_my_socketpair
@@ -703,6 +701,10 @@
 #if !defined(HAS_TRUNCATE) && !defined(HAS_CHSIZE) && defined(F_FREESP)
 #define my_chsize(a,b)		Perl_my_chsize(aTHX_ a,b)
 #endif
+#if !defined(PERL_IMPLICIT_SYS)
+#define my_pclose(a)		Perl_my_pclose(aTHX_ a)
+#define my_popen(a,b)		Perl_my_popen(aTHX_ a,b)
+#endif
 #if (!defined(HAS_MEMCPY) && !defined(HAS_BCOPY)) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY) && !defined(HAS_SAFE_BCOPY))
 #define my_bcopy		Perl_my_bcopy
 #endif
@@ -838,7 +840,6 @@
 #define is_utf8_X_extend(a)	Perl_is_utf8_X_extend(aTHX_ a)
 #define is_utf8_X_non_hangul(a)	Perl_is_utf8_X_non_hangul(aTHX_ a)
 #define is_utf8_X_prepend(a)	Perl_is_utf8_X_prepend(aTHX_ a)
-#define mod(a,b)		Perl_mod(aTHX_ a,b)
 #define op_clear(a)		Perl_op_clear(aTHX_ a)
 #define qerror(a)		Perl_qerror(aTHX_ a)
 #define reg_named_buff(a,b,c,d)	Perl_reg_named_buff(aTHX_ a,b,c,d)
@@ -1007,6 +1008,7 @@
 #define ck_trunc(a)		Perl_ck_trunc(aTHX_ a)
 #define ck_unpack(a)		Perl_ck_unpack(aTHX_ a)
 #define convert(a,b,c)		Perl_convert(aTHX_ a,b,c)
+#define core_prototype(a,b,c,d)	Perl_core_prototype(aTHX_ a,b,c,d)
 #define create_eval_scope(a)	Perl_create_eval_scope(aTHX_ a)
 #define cv_ckproto_len(a,b,c,d)	Perl_cv_ckproto_len(aTHX_ a,b,c,d)
 #define cvgv_set(a,b)		Perl_cvgv_set(aTHX_ a,b)
@@ -1032,6 +1034,7 @@
 #define dump_all_perl(a)	Perl_dump_all_perl(aTHX_ a)
 #define dump_packsubs_perl(a,b)	Perl_dump_packsubs_perl(aTHX_ a,b)
 #define dump_sub_perl(a,b)	Perl_dump_sub_perl(aTHX_ a,b)
+#define finalize_optree(a)	Perl_finalize_optree(aTHX_ a)
 #define find_script(a,b,c,d)	Perl_find_script(aTHX_ a,b,c,d)
 #define free_tied_hv_pool()	Perl_free_tied_hv_pool(aTHX)
 #define get_hash_seed()		Perl_get_hash_seed(aTHX)
@@ -1328,11 +1331,13 @@
 #define mulexp10		S_mulexp10
 #  endif
 #  if defined(PERL_IN_OP_C)
+#define aassign_common_vars(a)	S_aassign_common_vars(aTHX_ a)
 #define apply_attrs(a,b,c,d)	S_apply_attrs(aTHX_ a,b,c,d)
 #define apply_attrs_my(a,b,c,d)	S_apply_attrs_my(aTHX_ a,b,c,d)
 #define bad_type(a,b,c,d)	S_bad_type(aTHX_ a,b,c,d)
 #define cop_free(a)		S_cop_free(aTHX_ a)
 #define dup_attrlist(a)		S_dup_attrlist(aTHX_ a)
+#define finalize_op(a)		S_finalize_op(aTHX_ a)
 #define find_and_forget_pmops(a)	S_find_and_forget_pmops(aTHX_ a)
 #define fold_constants(a)	S_fold_constants(aTHX_ a)
 #define force_list(a)		S_force_list(aTHX_ a)

@@ -47,6 +47,7 @@ POD = perl.pod	\
 	perl5141delta.pod	\
 	perl5150delta.pod	\
 	perl5151delta.pod	\
+	perl5152delta.pod	\
 	perl561delta.pod	\
 	perl56delta.pod	\
 	perl570delta.pod	\
@@ -79,7 +80,6 @@ POD = perl.pod	\
 	perlcheat.pod	\
 	perlclib.pod	\
 	perlcommunity.pod	\
-	perlcompile.pod	\
 	perldata.pod	\
 	perldbmfilter.pod	\
 	perldebguts.pod	\
@@ -91,6 +91,7 @@ POD = perl.pod	\
 	perldtrace.pod	\
 	perlebcdic.pod	\
 	perlembed.pod	\
+	perlexperiment.pod	\
 	perlfilter.pod	\
 	perlfork.pod	\
 	perlform.pod	\
@@ -193,6 +194,7 @@ MAN = perl.man	\
 	perl5141delta.man	\
 	perl5150delta.man	\
 	perl5151delta.man	\
+	perl5152delta.man	\
 	perl561delta.man	\
 	perl56delta.man	\
 	perl570delta.man	\
@@ -225,7 +227,6 @@ MAN = perl.man	\
 	perlcheat.man	\
 	perlclib.man	\
 	perlcommunity.man	\
-	perlcompile.man	\
 	perldata.man	\
 	perldbmfilter.man	\
 	perldebguts.man	\
@@ -237,6 +238,7 @@ MAN = perl.man	\
 	perldtrace.man	\
 	perlebcdic.man	\
 	perlembed.man	\
+	perlexperiment.man	\
 	perlfilter.man	\
 	perlfork.man	\
 	perlform.man	\
@@ -339,6 +341,7 @@ HTML = perl.html	\
 	perl5141delta.html	\
 	perl5150delta.html	\
 	perl5151delta.html	\
+	perl5152delta.html	\
 	perl561delta.html	\
 	perl56delta.html	\
 	perl570delta.html	\
@@ -371,7 +374,6 @@ HTML = perl.html	\
 	perlcheat.html	\
 	perlclib.html	\
 	perlcommunity.html	\
-	perlcompile.html	\
 	perldata.html	\
 	perldbmfilter.html	\
 	perldebguts.html	\
@@ -383,6 +385,7 @@ HTML = perl.html	\
 	perldtrace.html	\
 	perlebcdic.html	\
 	perlembed.html	\
+	perlexperiment.html	\
 	perlfilter.html	\
 	perlfork.html	\
 	perlform.html	\
@@ -485,6 +488,7 @@ TEX = perl.tex	\
 	perl5141delta.tex	\
 	perl5150delta.tex	\
 	perl5151delta.tex	\
+	perl5152delta.tex	\
 	perl561delta.tex	\
 	perl56delta.tex	\
 	perl570delta.tex	\
@@ -517,7 +521,6 @@ TEX = perl.tex	\
 	perlcheat.tex	\
 	perlclib.tex	\
 	perlcommunity.tex	\
-	perlcompile.tex	\
 	perldata.tex	\
 	perldbmfilter.tex	\
 	perldebguts.tex	\
@@ -529,6 +532,7 @@ TEX = perl.tex	\
 	perldtrace.tex	\
 	perlebcdic.tex	\
 	perlembed.tex	\
+	perlexperiment.tex	\
 	perlfilter.tex	\
 	perlfork.tex	\
 	perlform.tex	\

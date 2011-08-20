@@ -263,6 +263,9 @@ Afnp	|void	|sv_setpvf_mg_nocontext|NN SV *const sv|NN const char *const pat|...
 Afnp	|int	|fprintf_nocontext|NN PerlIO *stream|NN const char *format|...
 Afnp	|int	|printf_nocontext|NN const char *format|...
 #endif
+: Used in pp.c
+p	|SV *	|core_prototype	|NULLOK SV *sv|NN const char *name \
+				|const int code|NULLOK int * const opnum
 : Used in sv.c
 p	|void	|cv_ckproto_len	|NN const CV* cv|NULLOK const GV* gv\
 				|NULLOK const char* p|const STRLEN len
@@ -311,7 +314,7 @@ Ap	|bool	|do_close	|NULLOK GV* gv|bool not_implicit
 p	|bool	|do_eof		|NN GV* gv
 
 #ifdef PERL_DEFAULT_DO_EXEC3_IMPLEMENTATION
-pmb	|bool	|do_exec	|NN const char* cmd
+pm	|bool	|do_exec	|NN const char* cmd
 #else
 p	|bool	|do_exec	|NN const char* cmd
 #endif
@@ -755,8 +758,10 @@ Ap	|I32	|mg_size	|NN SV* sv
 Ap	|void	|mini_mktime	|NN struct tm *ptm
 AMmd	|OP*	|op_lvalue	|NULLOK OP* o|I32 type
 poX	|OP*	|op_lvalue_flags|NULLOK OP* o|I32 type|U32 flags
-: To be removed after 5.14 (see [perl #78908]):
-EXp	|OP*	|mod		|NULLOK OP* o|I32 type
+p	|void	|finalize_optree		|NN OP* o
+#if defined(PERL_IN_OP_C)
+s	|void	|finalize_op	|NN OP* o
+#endif
 : Used in op.c and pp_sys.c
 p	|int	|mode_from_discipline|NULLOK const char* s|STRLEN len
 Ap	|const char*	|moreswitches	|NN const char* s
@@ -781,8 +786,10 @@ AnpP	|I32	|my_memcmp	|NN const char* s1|NN const char* s2|I32 len
 #if !defined(HAS_MEMSET)
 Anp	|void*	|my_memset	|NN char* loc|I32 ch|I32 len
 #endif
+#if !defined(PERL_IMPLICIT_SYS)
 Ap	|I32	|my_pclose	|NULLOK PerlIO* ptr
 Ap	|PerlIO*|my_popen	|NN const char* cmd|NN const char* mode
+#endif
 Ap	|PerlIO*|my_popen_list	|NN const char* mode|int n|NN SV ** args
 Ap	|void	|my_setenv	|NULLOK const char* nam|NULLOK const char* val
 Apmb	|I32	|my_stat
@@ -798,6 +805,9 @@ p	|void	|my_unexec
 Apa	|OP*	|newANONLIST	|NULLOK OP* o
 Apa	|OP*	|newANONHASH	|NULLOK OP* o
 Ap	|OP*	|newANONSUB	|I32 floor|NULLOK OP* proto|NULLOK OP* block
+#if defined(PERL_IN_OP_C)
+i	|bool	|aassign_common_vars	|NULLOK OP* o
+#endif
 Apda	|OP*	|newASSIGNOP	|I32 flags|NULLOK OP* left|I32 optype|NULLOK OP* right
 Apda	|OP*	|newCONDOP	|I32 flags|NN OP* first|NULLOK OP* trueop|NULLOK OP* falseop
 Apd	|CV*	|newCONSTSUB	|NULLOK HV* stash|NULLOK const char* name|NULLOK SV* sv
@@ -869,6 +879,8 @@ Apd	|CV*	|rv2cv_op_cv	|NN OP *cvop|U32 flags
 Apd	|OP*	|ck_entersub_args_list|NN OP *entersubop
 Apd	|OP*	|ck_entersub_args_proto|NN OP *entersubop|NN GV *namegv|NN SV *protosv
 Apd	|OP*	|ck_entersub_args_proto_or_list|NN OP *entersubop|NN GV *namegv|NN SV *protosv
+po	|OP*	|ck_entersub_args_core|NN OP *entersubop|NN GV *namegv \
+				      |NN SV *protosv
 Apd	|void	|cv_get_call_checker|NN CV *cv|NN Perl_call_checker *ckfun_p|NN SV **ckobj_p
 Apd	|void	|cv_set_call_checker|NN CV *cv|NN Perl_call_checker ckfun|NN SV *ckobj
 Apa	|PERL_SI*|new_stackinfo|I32 stitems|I32 cxitems
@@ -1300,10 +1312,10 @@ EiM	|void	|invlist_iterinit|NN SV* invlist
 EsMR	|bool	|invlist_iternext|NN SV* invlist|NN UV* start|NN UV* end
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_UTF8_C)
-EpM	|void	|_invlist_intersection	|NN SV* const a|NN SV* const b|NN SV** i
-EpM	|void	|_invlist_union	|NN SV* const a|NN SV* const b|NN SV** output
-EpM	|void	|_invlist_subtract|NN SV* const a|NN SV* const b|NN SV** result
-EpM	|void	|_invlist_invert|NN SV* const invlist
+EXpM	|void	|_invlist_intersection	|NN SV* const a|NN SV* const b|NN SV** i
+EXpM	|void	|_invlist_union	|NN SV* const a|NN SV* const b|NN SV** output
+EXpM	|void	|_invlist_subtract|NN SV* const a|NN SV* const b|NN SV** result
+EXpM	|void	|_invlist_invert|NN SV* const invlist
 EXMpR	|HV*	|_swash_inversion_hash	|NN SV* const swash
 EXMpR	|SV*	|_new_invlist	|IV initial_size
 EXMpR	|SV*	|_swash_to_invlist	|NN SV* const swash
@@ -1625,16 +1637,16 @@ sR	|OP*	|search_const	|NN OP *o
 sR	|OP*	|new_logop	|I32 type|I32 flags|NN OP **firstp|NN OP **otherp
 s	|void	|simplify_sort	|NN OP *o
 s	|const char*	|gv_ename	|NN GV *gv
-sRn	|bool	|scalar_mod_type|NN const OP *o|I32 type
+sRn	|bool	|scalar_mod_type|NULLOK const OP *o|I32 type
 s	|OP *	|my_kid		|NULLOK OP *o|NULLOK OP *attrs|NN OP **imopsp
 s	|OP *	|dup_attrlist	|NN OP *o
 s	|void	|apply_attrs	|NN HV *stash|NN SV *target|NULLOK OP *attrs|bool for_my
 s	|void	|apply_attrs_my	|NN HV *stash|NN OP *target|NULLOK OP *attrs|NN OP **imopsp
 s	|void	|bad_type	|I32 n|NN const char *t|NN const char *name|NN const OP *kid
-s	|void	|no_bareword_allowed|NN const OP *o
+s	|void	|no_bareword_allowed|NN OP *o
 sR	|OP*	|no_fh_allowed|NN OP *o
 sR	|OP*	|too_few_arguments|NN OP *o|NN const char* name
-sR	|OP*	|too_many_arguments|NN OP *o|NN const char* name
+s	|OP*	|too_many_arguments|NN OP *o|NN const char* name
 s	|bool	|looks_like_bool|NN const OP* o
 s	|OP*	|newGIVWHENOP	|NULLOK OP* cond|NN OP *block \
 				|I32 enter_opcode|I32 leave_opcode \

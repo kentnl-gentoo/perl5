@@ -457,16 +457,17 @@ c5 = $(madlysrc) $(mallocsrc)
 c = $(c1) $(c2) $(c3) $(c4) $(c5) miniperlmain.c opmini.c perlmini.c
 
 obj0 = op$(OBJ_EXT) perl$(OBJ_EXT)
+obj0mini = perlmini$(OBJ_EXT) opmini$(OBJ_EXT) miniperlmain$(OBJ_EXT)
 obj1 = $(madlyobj) $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) pad$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT) mro$(OBJ_EXT) keywords$(OBJ_EXT)
 obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
 obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT) perlapi$(OBJ_EXT) numeric$(OBJ_EXT) mathoms$(OBJ_EXT) locale$(OBJ_EXT) pp_pack$(OBJ_EXT) pp_sort$(OBJ_EXT)
 
-minindt_obj = $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
+minindt_obj = $(obj0mini) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5151delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5152delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 
 Icwd = -Idist/Cwd -Idist/Cwd/lib
@@ -748,8 +749,11 @@ else
 	case "$dtrace_h" in
 	?*)
 		$spitshell >>$Makefile <<'!NO!SUBS!'
+# dtrace dicards const qualifiers from arguments, put them back
 $(DTRACE_H): perldtrace.d
-	$(DTRACE) -h -s perldtrace.d -o $(DTRACE_H)
+	$(DTRACE) -h -s perldtrace.d -o $(DTRACE_H).in
+	sed -e '/const/!s/char \*/const char */g' $(DTRACE_H).in >$(DTRACE_H)
+	$(RMS) $(DTRACE_H).in
 
 mydtrace.h: $(DTRACE_H)
 
@@ -762,8 +766,8 @@ mydtrace.h: $(DTRACE_H)
 $(DTRACE_O): perldtrace.d $(ndt_obj)
 	$(DTRACE) -G -s perldtrace.d -o $(DTRACE_O) $(ndt_obj)
 
-$(MINIDTRACE_O): perldtrace.d $(minindt_obj)
-	$(DTRACE) -G -s perldtrace.d -o $(MINIDTRACE_O) $(minindt_obj)
+$(MINIDTRACE_O): perldtrace.d $(minindt_obj) perlmini$(OBJ_EXT)
+	$(DTRACE) -G -s perldtrace.d -o $(MINIDTRACE_O) $(minindt_obj) perlmini$(OBJ_EXT)
 
 !NO!SUBS!
 		;;
@@ -812,18 +816,15 @@ $(LIBPERL): $& $(obj) $(DYNALOADER) $(LIBPERLEXPORT)
 	case "${osname}${osvers}" in
 	aix*|beos*)
 		$spitshell >>$Makefile <<'!NO!SUBS!'
-$(MINIPERL_EXE): $& miniperlmain$(OBJ_EXT) $(mini_obj) opmini$(OBJ_EXT) perlmini$(OBJ_EXT)
-	$(CC) -o $(MINIPERL_EXE) $(CLDFLAGS) \
-	    $(mini_obj) \
-	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) perlmini$(OBJ_EXT) $(libs)
+$(MINIPERL_EXE): $& $(mini_obj)
+	$(CC) -o $(MINIPERL_EXE) $(CLDFLAGS) $(mini_obj) $(libs)
 	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
 	next4*)
 		$spitshell >>$Makefile <<'!NO!SUBS!'
-$(MINIPERL_EXE): $& miniperlmain$(OBJ_EXT) $(mini_obj) perlmini$(OBJ_EXT) opmini$(OBJ_EXT)
-	$(CC) -o $(MINIPERL_EXE) $(mini_obj) \
-	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) perlmini$(OBJ_EXT) $(libs)
+$(MINIPERL_EXE): $& $(mini_obj)
+	$(CC) -o $(MINIPERL_EXE) $(mini_obj) $(libs)
 	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
@@ -841,21 +842,19 @@ NAMESPACEFLAGS = -force_flat_namespace
 		    ;;
 		esac
 		$spitshell >>$Makefile <<'!NO!SUBS!'
-$(MINIPERL_EXE): $& miniperlmain$(OBJ_EXT) $(mini_obj) opmini$(OBJ_EXT) perlmini$(OBJ_EXT)
+$(MINIPERL_EXE): $& $(mini_obj)
 	-@rm -f miniperl.xok
 	$(CC) $(CLDFLAGS) $(NAMESPACEFLAGS) -o $(MINIPERL_EXE) \
-	    $(mini_obj) \
-	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) perlmini$(OBJ_EXT) $(libs)
+	    $(mini_obj) $(libs)
 	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
 	*)
 		$spitshell >>$Makefile <<'!NO!SUBS!'
-$(MINIPERL_EXE): $& miniperlmain$(OBJ_EXT) $(mini_obj) opmini$(OBJ_EXT) perlmini$(OBJ_EXT)
+$(MINIPERL_EXE): $& $(mini_obj)
 	-@rm -f miniperl.xok
 	$(LDLIBPTH) $(CC) $(CLDFLAGS) -o $(MINIPERL_EXE) \
-	    $(mini_obj) \
-	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) perlmini$(OBJ_EXT) $(libs)
+	    $(mini_obj) $(libs)
 	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
@@ -1033,8 +1032,8 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) $(Icwd) pod/perlmodlib.PL -q
 
-pod/perl5151delta.pod: pod/perldelta.pod
-	$(LNS) perldelta.pod pod/perl5151delta.pod
+pod/perl5152delta.pod: pod/perldelta.pod
+	$(LNS) perldelta.pod pod/perl5152delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
