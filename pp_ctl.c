@@ -1959,7 +1959,7 @@ PP(pp_caller)
 	AV * const ary = cx->blk_sub.argarray;
 	const int off = AvARRAY(ary) - AvALLOC(ary);
 
-	if (!PL_dbargs)
+	if (!PL_dbargs || AvREAL(PL_dbargs))
 	    Perl_init_dbargs(aTHX);
 
 	if (AvMAX(PL_dbargs) < AvFILLp(ary) + off)
@@ -5240,6 +5240,7 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
        I'm going to use a mortal in case the upstream filter croaks.  */
     upstream = ((SvOK(buf_sv) && sv_len(buf_sv)) || SvGMAGICAL(buf_sv))
 	? sv_newmortal() : buf_sv;
+    SvTEMP_off(upstream);
     SvUPGRADE(upstream, SVt_PV);
 	
     if (filter_has_file) {
@@ -5251,11 +5252,14 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	int count;
 
 	ENTER_with_name("call_filter_sub");
-	SAVE_DEFSV;
+	save_gp(PL_defgv, 0);
+	GvINTRO_off(PL_defgv);
+	SAVEGENERICSV(GvSV(PL_defgv));
 	SAVETMPS;
 	EXTEND(SP, 2);
 
 	DEFSV_set(upstream);
+	SvREFCNT_inc_simple_void_NN(upstream);
 	PUSHMARK(SP);
 	mPUSHi(0);
 	if (filter_state) {
