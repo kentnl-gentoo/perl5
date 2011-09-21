@@ -1871,11 +1871,15 @@ PP(pp_caller)
     I32 gimme;
     const char *stashname;
     I32 count = 0;
+    bool has_arg = MAXARG && TOPs;
 
-    if (MAXARG)
+    if (MAXARG) {
+      if (has_arg)
 	count = POPi;
+      else (void)POPs;
+    }
 
-    cx = caller_cx(count, &dbcx);
+    cx = caller_cx(count + !!(PL_op->op_private & OPpOFFBYONE), &dbcx);
     if (!cx) {
 	if (GIMME != G_ARRAY) {
 	    EXTEND(SP, 1);
@@ -1905,7 +1909,7 @@ PP(pp_caller)
 	mPUSHs(newSVpv(stashname, 0));
     mPUSHs(newSVpv(OutCopFILE(cx->blk_oldcop), 0));
     mPUSHi((I32)CopLINE(cx->blk_oldcop));
-    if (!MAXARG)
+    if (!has_arg)
 	RETURN;
     if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
 	GV * const cvgv = CvGV(dbcx->blk_sub.cv);
@@ -1957,8 +1961,7 @@ PP(pp_caller)
 	AV * const ary = cx->blk_sub.argarray;
 	const int off = AvARRAY(ary) - AvALLOC(ary);
 
-	if (!PL_dbargs || AvREAL(PL_dbargs))
-	    Perl_init_dbargs(aTHX);
+	Perl_init_dbargs(aTHX);
 
 	if (AvMAX(PL_dbargs) < AvFILLp(ary) + off)
 	    av_extend(PL_dbargs, AvFILLp(ary) + off);
@@ -2004,7 +2007,8 @@ PP(pp_reset)
 {
     dVAR;
     dSP;
-    const char * const tmps = (MAXARG < 1) ? (const char *)"" : POPpconstx;
+    const char * const tmps =
+	(MAXARG < 1 || (!TOPs && !POPs)) ? (const char *)"" : POPpconstx;
     sv_reset(tmps, CopSTASH(PL_curcop));
     PUSHs(&PL_sv_yes);
     RETURN;
@@ -2361,24 +2365,15 @@ S_return_lvalues(pTHX_ SV **mark, SV **sp, SV **newsp, I32 gimme,
 	    EXTEND(newsp,1);
 	    *++newsp = &PL_sv_undef;
 	}
-	if (CxLVAL(cx) & OPpENTERSUB_DEREF) {
+	if (CxLVAL(cx) & OPpDEREF) {
 	    SvGETMAGIC(TOPs);
 	    if (!SvOK(TOPs)) {
-		U8 deref_type;
-		if (cx->blk_sub.retop->op_type == OP_RV2SV)
-		    deref_type = OPpDEREF_SV;
-		else if (cx->blk_sub.retop->op_type == OP_RV2AV)
-		    deref_type = OPpDEREF_AV;
-		else {
-		    assert(cx->blk_sub.retop->op_type == OP_RV2HV);
-		    deref_type = OPpDEREF_HV;
-		}
-		vivify_ref(TOPs, deref_type);
+		TOPs = vivify_ref(TOPs, CxLVAL(cx) & OPpDEREF);
 	    }
 	}
     }
     else if (gimme == G_ARRAY) {
-	assert (!(CxLVAL(cx) & OPpENTERSUB_DEREF));
+	assert (!(CxLVAL(cx) & OPpDEREF));
 	if (ref || !CxLVAL(cx))
 	    while (++MARK <= SP)
 		*++newsp =
@@ -2423,7 +2418,6 @@ PP(pp_return)
     bool popsub2 = FALSE;
     bool clear_errsv = FALSE;
     bool lval = FALSE;
-    bool gmagic = FALSE;
     I32 gimme;
     SV **newsp;
     PMOP *newpm;
@@ -2466,7 +2460,6 @@ PP(pp_return)
 	popsub2 = TRUE;
 	lval = !!CvLVALUE(cx->blk_sub.cv);
 	retop = cx->blk_sub.retop;
-	gmagic = CxLVAL(cx) & OPpENTERSUB_DEREF;
 	cxstack_ix++; /* preserve cx entry on stack for use by POPSUB */
 	break;
     case CXt_EVAL:
@@ -2506,7 +2499,6 @@ PP(pp_return)
 			*++newsp = SvREFCNT_inc(*SP);
 			FREETMPS;
 			sv_2mortal(*newsp);
-			if (gmagic) SvGETMAGIC(*newsp);
 		    }
 		    else {
 			sv = SvREFCNT_inc(*SP);	/* FREETMPS could clobber it */
@@ -2517,7 +2509,6 @@ PP(pp_return)
 		}
 		else if (SvTEMP(*SP) && SvREFCNT(*SP) == 1) {
 		    *++newsp = *SP;
-		    if (gmagic) SvGETMAGIC(*SP);
 		}
 		else
 		    *++newsp = sv_mortalcopy(*SP);
@@ -2571,7 +2562,6 @@ PP(pp_leavesublv)
 
     POPBLOCK(cx,newpm);
     cxstack_ix++; /* temporarily protect top context */
-    assert(CvLVALUE(cx->blk_sub.cv));
 
     TAINT_NOT;
 
@@ -2927,6 +2917,7 @@ PP(pp_goto)
 			sub_crush_depth(cv);
 		    pad_push(padlist, CvDEPTH(cv));
 		}
+		PL_curcop = cx->blk_oldcop;
 		SAVECOMPPAD();
 		PAD_SET_CUR_NOSAVE(padlist, CvDEPTH(cv));
 		if (CxHASARGS(cx))
@@ -3140,6 +3131,9 @@ PP(pp_exit)
 
     if (MAXARG < 1)
 	anum = 0;
+    else if (!TOPs) {
+	anum = 0; (void)POPs;
+    }
     else {
 	anum = SvIVx(POPs);
 #ifdef VMS
@@ -3515,7 +3509,6 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 
     PL_eval_root = NULL;
     PL_curcop = &PL_compiling;
-    CopARYBASE_set(PL_curcop, 0);
     if (saveop && (saveop->op_type != OP_REQUIRE) && (saveop->op_flags & OPf_SPECIAL))
 	PL_in_eval |= EVAL_KEEPERR;
     else
@@ -4374,6 +4367,7 @@ PP(pp_entergiven)
     ENTER_with_name("given");
     SAVETMPS;
 
+    SAVECLEARSV(PAD_SVl(PL_op->op_targ));
     sv_setsv_mg(PAD_SV(PL_op->op_targ), POPs);
 
     PUSHBLOCK(cx, CXt_GIVEN, SP);

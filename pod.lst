@@ -20,10 +20,7 @@ h Tutorials
   perlrequick		Perl regular expressions quick start
   perlretut		Perl regular expressions tutorial
 
-  perlboot		Perl OO tutorial for beginners
-  perltoot		Perl OO tutorial, part 1
-  perltooc		Perl OO tutorial, part 2
-  perlbot		Perl OO tricks and examples
+  perlootut		Perl OO tutorial for beginners
 
   perlperf		Perl Performance and Optimization Techniques
 
@@ -33,16 +30,16 @@ h Tutorials
   perltrap		Perl traps for the unwary
   perldebtut		Perl debugging tutorial
 
-  dist/perlfaq/lib/perlfaq		Perl frequently asked questions
-2 dist/perlfaq/lib/perlfaq1		General Questions About Perl
-2 dist/perlfaq/lib/perlfaq2		Obtaining and Learning about Perl
-2 dist/perlfaq/lib/perlfaq3		Programming Tools
-2 dist/perlfaq/lib/perlfaq4		Data Manipulation
-2 dist/perlfaq/lib/perlfaq5		Files and Formats
-2 dist/perlfaq/lib/perlfaq6		Regexes
-2 dist/perlfaq/lib/perlfaq7		Perl Language Issues
-2 dist/perlfaq/lib/perlfaq8		System Interaction
-2 dist/perlfaq/lib/perlfaq9		Networking
+  cpan/perlfaq/lib/perlfaq		Perl frequently asked questions
+2 cpan/perlfaq/lib/perlfaq1		General Questions About Perl
+2 cpan/perlfaq/lib/perlfaq2		Obtaining and Learning about Perl
+2 cpan/perlfaq/lib/perlfaq3		Programming Tools
+2 cpan/perlfaq/lib/perlfaq4		Data Manipulation
+2 cpan/perlfaq/lib/perlfaq5		Files and Formats
+2 cpan/perlfaq/lib/perlfaq6		Regexes
+2 cpan/perlfaq/lib/perlfaq7		Perl Language Issues
+2 cpan/perlfaq/lib/perlfaq8		System Interaction
+2 cpan/perlfaq/lib/perlfaq9		Networking
 
 h Reference Manual
 
@@ -139,42 +136,19 @@ h Miscellaneous
 
   perlhist		Perl history records
   perldelta		Perl changes since previous version
+  perl5153delta		Perl changes in version 5.15.3
   perl5152delta		Perl changes in version 5.15.2
   perl5151delta		Perl changes in version 5.15.1
   perl5150delta		Perl changes in version 5.15.0
   perl5141delta		Perl changes in version 5.14.1
   perl5140delta		Perl changes in version 5.14.0
-  perl51311delta	Perl changes in version 5.13.11
-  perl51310delta	Perl changes in version 5.13.10
-  perl5139delta		Perl changes in version 5.13.9
-  perl5138delta		Perl changes in version 5.13.8
-  perl5137delta		Perl changes in version 5.13.7
-  perl5136delta		Perl changes in version 5.13.6
-  perl5135delta		Perl changes in version 5.13.5
-  perl5134delta		Perl changes in version 5.13.4
-  perl5133delta		Perl changes in version 5.13.3
-  perl5132delta		Perl changes in version 5.13.2
-  perl5131delta		Perl changes in version 5.13.1
-  perl5130delta		Perl changes in version 5.13.0
   perl5124delta		Perl changes in version 5.12.4
   perl5123delta		Perl changes in version 5.12.3
   perl5122delta		Perl changes in version 5.12.2
   perl5121delta		Perl changes in version 5.12.1
   perl5120delta		Perl changes in version 5.12.0
-  perl5115delta		Perl changes in version 5.11.5
-  perl5114delta		Perl changes in version 5.11.4
-  perl5113delta		Perl changes in version 5.11.3
-  perl5112delta		Perl changes in version 5.11.2
-  perl5111delta		Perl changes in version 5.11.1
-  perl5110delta		Perl changes in version 5.11.0
   perl5101delta		Perl changes in version 5.10.1
   perl5100delta		Perl changes in version 5.10.0
-  perl595delta		Perl changes in version 5.9.5
-  perl594delta		Perl changes in version 5.9.4
-  perl593delta		Perl changes in version 5.9.3
-  perl592delta		Perl changes in version 5.9.2
-  perl591delta		Perl changes in version 5.9.1
-  perl590delta		Perl changes in version 5.9.0
   perl589delta		Perl changes in version 5.8.9
   perl588delta		Perl changes in version 5.8.8
   perl587delta		Perl changes in version 5.8.7
@@ -185,10 +159,6 @@ h Miscellaneous
   perl582delta		Perl changes in version 5.8.2
   perl581delta		Perl changes in version 5.8.1
   perl58delta		Perl changes in version 5.8.0
-  perl573delta		Perl changes in version 5.7.3
-  perl572delta		Perl changes in version 5.7.2
-  perl571delta		Perl changes in version 5.7.1
-  perl570delta		Perl changes in version 5.7.0
   perl561delta		Perl changes in version 5.6.1
   perl56delta		Perl changes in version 5.6
   perl5005delta		Perl changes in version 5.005
@@ -242,6 +212,13 @@ r perlvmesa		Perl notes for VM/ESA
   perlvms		Perl notes for VMS
 r perlvos		Perl notes for Stratus VOS
 r perlwin32		Perl notes for Windows
+
+oh Stubs for Deleted Documents
+
+  perlboot
+  perlbot
+  perltooc
+  perltoot
 
 aoh Auxiliary Documentation
 

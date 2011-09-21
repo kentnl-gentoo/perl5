@@ -413,7 +413,7 @@ S_visit(pTHX_ SVFUNC_t f, const U32 flags, const U32 mask)
 	register const SV * const svend = &sva[SvREFCNT(sva)];
 	register SV* sv;
 	for (sv = sva + 1; sv < svend; ++sv) {
-	    if (SvTYPE(sv) != SVTYPEMASK
+	    if (SvTYPE(sv) != (svtype)SVTYPEMASK
 		    && (sv->sv_flags & mask) == flags
 		    && SvREFCNT(sv))
 	    {
@@ -432,7 +432,7 @@ S_visit(pTHX_ SVFUNC_t f, const U32 flags, const U32 mask)
 static void
 do_report_used(pTHX_ SV *const sv)
 {
-    if (SvTYPE(sv) != SVTYPEMASK) {
+    if (SvTYPE(sv) != (svtype)SVTYPEMASK) {
 	PerlIO_printf(Perl_debug_log, "****\n");
 	sv_dump(sv);
     }
@@ -4161,7 +4161,7 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, register SV* sstr, const I32 flags)
 			   "Undefined value assigned to typeglob");
 	}
 	else {
-	    GV *gv = gv_fetchsv(sstr, GV_ADD, SVt_PVGV);
+	    GV *gv = gv_fetchsv_nomg(sstr, GV_ADD, SVt_PVGV);
 	    if (dstr != (const SV *)gv) {
 		const char * const name = GvNAME((const GV *)dstr);
 		const STRLEN len = GvNAMELEN(dstr);
@@ -5395,6 +5395,7 @@ Perl_sv_rvweaken(pTHX_ SV *const sv)
 	Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "Reference is already weak");
 	return sv;
     }
+    else if (SvREADONLY(sv)) croak_no_modify();
     tsv = SvRV(sv);
     Perl_sv_add_backref(aTHX_ tsv, sv);
     SvWEAKREF_on(sv);
@@ -5917,7 +5918,7 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 	type = SvTYPE(sv);
 
 	assert(SvREFCNT(sv) == 0);
-	assert(SvTYPE(sv) != SVTYPEMASK);
+	assert(SvTYPE(sv) != (svtype)SVTYPEMASK);
 
 	if (type <= SVt_IV) {
 	    /* See the comment in sv.h about the collusion between this
@@ -7847,7 +7848,7 @@ Perl_sv_inc_nomg(pTHX_ register SV *const sv)
     if (!sv)
 	return;
     if (SvTHINKFIRST(sv)) {
-	if (SvIsCOW(sv))
+	if (SvIsCOW(sv) || isGV_with_GP(sv))
 	    sv_force_normal_flags(sv, 0);
 	if (SvREADONLY(sv)) {
 	    if (IN_PERL_RUNTIME)
@@ -8028,7 +8029,7 @@ Perl_sv_dec_nomg(pTHX_ register SV *const sv)
     if (!sv)
 	return;
     if (SvTHINKFIRST(sv)) {
-	if (SvIsCOW(sv))
+	if (SvIsCOW(sv) || isGV_with_GP(sv))
 	    sv_force_normal_flags(sv, 0);
 	if (SvREADONLY(sv)) {
 	    if (IN_PERL_RUNTIME)
@@ -8639,7 +8640,7 @@ Perl_newSVsv(pTHX_ register SV *const old)
 
     if (!old)
 	return NULL;
-    if (SvTYPE(old) == SVTYPEMASK) {
+    if (SvTYPE(old) == (svtype)SVTYPEMASK) {
 	Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL), "semi-panic: attempt to dup freed string");
 	return NULL;
     }
@@ -8837,18 +8838,9 @@ Perl_sv_2cv(pTHX_ SV *sv, HV **const st, GV **const gvp, const I32 lref)
 	*st = NULL;
 	*gvp = NULL;
 	return NULL;
-    case SVt_PVGV:
-	if (isGV_with_GP(sv)) {
-	    gv = MUTABLE_GV(sv);
-	    *gvp = gv;
-	    *st = GvESTASH(gv);
-	    goto fix_gv;
-	}
-	/* FALL THROUGH */
-
     default:
+	SvGETMAGIC(sv);
 	if (SvROK(sv)) {
-	    SvGETMAGIC(sv);
 	    if (SvAMAGIC(sv))
 		sv = amagic_deref_call(sv, to_cv_amg);
 	    /* At this point I'd like to do SPAGAIN, but really I need to
@@ -8867,11 +8859,11 @@ Perl_sv_2cv(pTHX_ SV *sv, HV **const st, GV **const gvp, const I32 lref)
 		Perl_croak(aTHX_ "Not a subroutine reference");
 	}
 	else if (isGV_with_GP(sv)) {
-	    SvGETMAGIC(sv);
 	    gv = MUTABLE_GV(sv);
 	}
-	else
-	    gv = gv_fetchsv(sv, lref, SVt_PVCV); /* Calls get magic */
+	else {
+	    gv = gv_fetchsv_nomg(sv, lref, SVt_PVCV);
+	}
 	*gvp = gv;
 	if (!gv) {
 	    *st = NULL;
@@ -8883,8 +8875,7 @@ Perl_sv_2cv(pTHX_ SV *sv, HV **const st, GV **const gvp, const I32 lref)
 	    return NULL;
 	}
 	*st = GvESTASH(gv);
-    fix_gv:
-	if (lref && !GvCVu(gv)) {
+	if (lref & ~GV_ADDMG && !GvCVu(gv)) {
 	    SV *tmpsv;
 	    ENTER;
 	    tmpsv = newSV(0);
@@ -11681,7 +11672,7 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 
     PERL_ARGS_ASSERT_SV_DUP_COMMON;
 
-    if (SvTYPE(sstr) == SVTYPEMASK) {
+    if (SvTYPE(sstr) == (svtype)SVTYPEMASK) {
 #ifdef DEBUG_LEAKING_SCALARS_ABORT
 	abort();
 #endif
@@ -12339,7 +12330,6 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl, CLONE_PARAMS* param)
 	    TOPLONG(nss,ix) = longval;
 	    break;
 	case SAVEt_I32:				/* I32 reference */
-	case SAVEt_COP_ARYBASE:			/* call CopARYBASE_set */
 	    ptr = POPPTR(ss,ix);
 	    TOPPTR(nss,ix) = any_dup(ptr, proto_perl);
 	    i = POPINT(ss,ix);
@@ -13840,6 +13830,19 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 				    keysv, index, subscript_type);
       }
 
+    case OP_RV2SV:
+	if (cUNOPx(obase)->op_first->op_type == OP_GV) {
+	    /* $global */
+	    gv = cGVOPx_gv(cUNOPx(obase)->op_first);
+	    if (!gv || !GvSTASH(gv))
+		break;
+	    if (match && (GvSV(gv) != uninit_sv))
+		break;
+	    return varname(gv, '$', 0, NULL, 0, FUV_SUBSCRIPT_NONE);
+	}
+	/* ${expr} */
+	return find_uninit_var(cUNOPx(obase)->op_first, uninit_sv, 1);
+
     case OP_PADSV:
 	if (match && PAD_SVl(obase->op_targ) != uninit_sv)
 	    break;
@@ -13892,6 +13895,9 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 
     case OP_AELEM:
     case OP_HELEM:
+    {
+	bool negate = FALSE;
+
 	if (PL_op == obase)
 	    /* $a[uninit_expr] or $h{uninit_expr} */
 	    return find_uninit_var(cBINOPx(obase)->op_last, uninit_sv, match);
@@ -13917,28 +13923,43 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 	if (!sv)
 	    break;
 
+	if (kid && kid->op_type == OP_NEGATE) {
+	    negate = TRUE;
+	    kid = cUNOPx(kid)->op_first;
+	}
+
 	if (kid && kid->op_type == OP_CONST && SvOK(cSVOPx_sv(kid))) {
 	    /* index is constant */
+	    SV* kidsv;
+	    if (negate) {
+		kidsv = sv_2mortal(newSVpvs("-"));
+		sv_catsv(kidsv, cSVOPx_sv(kid));
+	    }
+	    else
+		kidsv = cSVOPx_sv(kid);
 	    if (match) {
 		if (SvMAGICAL(sv))
 		    break;
 		if (obase->op_type == OP_HELEM) {
-		    HE* he = hv_fetch_ent(MUTABLE_HV(sv), cSVOPx_sv(kid), 0, 0);
+		    HE* he = hv_fetch_ent(MUTABLE_HV(sv), kidsv, 0, 0);
 		    if (!he || HeVAL(he) != uninit_sv)
 			break;
 		}
 		else {
-		    SV * const * const svp = av_fetch(MUTABLE_AV(sv), SvIV(cSVOPx_sv(kid)), FALSE);
+		    SV * const * const svp = av_fetch(MUTABLE_AV(sv),
+			negate ? - SvIV(cSVOPx_sv(kid)) : SvIV(cSVOPx_sv(kid)),
+			FALSE);
 		    if (!svp || *svp != uninit_sv)
 			break;
 		}
 	    }
 	    if (obase->op_type == OP_HELEM)
 		return varname(gv, '%', o->op_targ,
-			    cSVOPx_sv(kid), 0, FUV_SUBSCRIPT_HASH);
+			    kidsv, 0, FUV_SUBSCRIPT_HASH);
 	    else
 		return varname(gv, '@', o->op_targ, NULL,
-			    SvIV(cSVOPx_sv(kid)), FUV_SUBSCRIPT_ARRAY);
+		    negate ? - SvIV(cSVOPx_sv(kid)) : SvIV(cSVOPx_sv(kid)),
+		    FUV_SUBSCRIPT_ARRAY);
 	}
 	else  {
 	    /* index is an expression;
@@ -13964,6 +13985,7 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 		o->op_targ, NULL, 0, FUV_SUBSCRIPT_WITHIN);
 	}
 	break;
+    }
 
     case OP_AASSIGN:
 	/* only examine RHS */
@@ -14020,7 +14042,6 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 
 
     case OP_ENTEREVAL: /* could be eval $undef or $x='$undef'; eval $x */
-    case OP_RV2SV:
     case OP_CUSTOM: /* XS or custom code could trigger random warnings */
 
 	/* the following ops are capable of returning PL_sv_undef even for

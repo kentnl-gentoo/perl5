@@ -12,7 +12,7 @@
 :
 :   A  Member of public API:
 :
-:         add entry to global.sym (unless x or m);
+:         add entry to the list of exported symbols (unless x or m);
 :         any doc entry goes in perlapi.pod rather than perlintern.pod
 :         makes '#define foo Perl_foo' scope not just for PERL_CORE/PERL_EXT
 :
@@ -23,7 +23,7 @@
 :   b  Binary backward compatibility; function is a macro
 :      but has also Perl_ implementation (which is exported):
 :
-:         add entry to global.sym;
+:         add entry to the list of exported symbols;
 :         don't define PERL_ARGS_ASSERT_FOO
 :
 :   D  Function is deprecated:
@@ -59,7 +59,7 @@
 :   m  Implemented as a macro:
 :
 :         suppress proto.h entry
-:         suppress global.sym entry
+:         suppress entry in the list of exported symbols
 :         suppress embed.h entry
 :
 :   n  Has no implicit interpreter/thread context argument:
@@ -107,11 +107,11 @@
 :
 :   X  Explicitly exported:
 :
-:         add entry to global.sym, unless x or m
+:         add entry to the list of exported symbols, unless x or m
 :
 :   x  Not exported
 :
-:         suppress entry in global.sym
+:         suppress entry in the list of exported symbols
 :
 : (see also L<perlguts/Internal Functions> for those flags.)
 :
@@ -266,6 +266,9 @@ Afnp	|int	|printf_nocontext|NN const char *format|...
 : Used in pp.c
 p	|SV *	|core_prototype	|NULLOK SV *sv|NN const char *name \
 				|const int code|NULLOK int * const opnum
+: Used in gv.c
+p	|OP *	|coresub_op	|NN SV *coreargssv|const int code \
+				|const int opnum
 : Used in sv.c
 p	|void	|cv_ckproto_len	|NN const CV* cv|NULLOK const GV* gv\
 				|NULLOK const char* p|const STRLEN len
@@ -403,6 +406,8 @@ p	|char*	|find_script	|NN const char *scriptname|bool dosearch \
 				|NULLOK const char *const *const search_ext|I32 flags
 #if defined(PERL_IN_OP_C)
 s	|OP*	|force_list	|NULLOK OP* arg
+i	|OP*	|op_integerize	|NN OP *o
+i	|OP*	|op_std_init	|NN OP *o
 : FIXME
 s	|OP*	|fold_constants	|NN OP *o
 #endif
@@ -623,7 +628,7 @@ p	|OP*	|jmaybe		|NN OP *o
 pP	|I32	|keyword	|NN const char *name|I32 len|bool all_keywords
 #if defined(PERL_IN_OP_C)
 s	|OP*	|opt_scalarhv	|NN OP* rep_op
-s	|OP*	|is_inplace_av	|NN OP* o|NULLOK OP* oright
+s	|void	|inplace_aassign	|NN OP* o
 #endif
 Ap	|void	|leave_scope	|I32 base
 : Public lexer API
@@ -1101,7 +1106,6 @@ Ap	|void	|save_padsv_and_mortalize|PADOFFSET off
 Ap	|void	|save_sptr	|NN SV** sptr
 Ap	|SV*	|save_svref	|NN SV** sptr
 Ap	|void	|save_pushptr	|NULLOK void *const ptr|const int type
-: Used by SAVECOPARYBASE() in op.c
 Ap	|void	|save_pushi32ptr|const I32 i|NULLOK void *const ptr|const int type
 : Used by SAVESWITCHSTACK() in pp.c
 Ap	|void	|save_pushptrptr|NULLOK void *const ptr1 \
@@ -1384,7 +1388,7 @@ ApdR	|char*	|sv_uni_display	|NN SV *dsv|NN SV *ssv|STRLEN pvlim|UV flags
 : Used by Data::Alias
 EXp	|void	|vivify_defelem	|NN SV* sv
 : Used in pp.c
-p	|void	|vivify_ref	|NN SV* sv|U32 to_what
+pR	|SV*	|vivify_ref	|NN SV* sv|U32 to_what
 : Used in pp_sys.c
 p	|I32	|wait4pid	|Pid_t pid|NN int* statusp|int flags
 : Used in locale.c and perl.c
@@ -2152,6 +2156,8 @@ ApdR	|PADOFFSET|pad_findmy_pv|NN const char* name|U32 flags
 ApdR	|PADOFFSET|pad_findmy_sv|NN SV* name|U32 flags
 ApdD	|PADOFFSET|find_rundefsvoffset	|
 Apd	|SV*	|find_rundefsv	|
+: Used in pp.c
+p	|SV*	|find_rundefsv2	|NN CV *cv|U32 seq
 #if defined(PERL_IN_PAD_C)
 sd	|PADOFFSET|pad_findlex	|NN const char *namepv|STRLEN namelen|U32 flags \
 				|NN const CV* cv|U32 seq|int warn \
@@ -2310,8 +2316,6 @@ np	|void	|my_swabn	|NN void* ptr|int n
 
 Ap	|GV*	|gv_fetchpvn_flags|NN const char* name|STRLEN len|I32 flags|const svtype sv_type
 Ap	|GV*	|gv_fetchsv|NN SV *name|I32 flags|const svtype sv_type
-: Only used in pp.c
-dpR	|bool	|is_gv_magical_sv|NN SV *const name_sv|U32 flags
 
 ApR	|bool	|stashpv_hvname_match|NN const COP *c|NN const HV *hv
 

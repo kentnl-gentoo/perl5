@@ -5,7 +5,7 @@ BEGIN {
     @INC = qw(. ../lib);
     require './test.pl';
 }
-plan tests => 306;
+plan tests => 305;
 
 my $list_assignment_supported = 1;
 
@@ -666,16 +666,6 @@ is($@, "");
 eval { for("a") { for $x (1,2) { local $_="b"; s/(.*)/+$1/ } } };
 is($@, "");
 
-# RT #4342 Special local() behavior for $[
-{
-    no warnings 'deprecated';
-    local $[ = 1;
-    ok(1 == $[, 'lexcical scope of local $[');
-    f();
-}
-
-sub f { ok(0 == $[); }
-
 # sub localisation
 {
 	package Other;
@@ -792,11 +782,15 @@ like( runperl(stderr => 1,
                       'index(q(a), foo);' .
                       'local *g=${::}{foo};print q(ok);'), "ok", "[perl #52740]");
 
-# Keep this test last, as it can SEGV
+# Keep these tests last, as they can SEGV
 {
     local *@;
     pass("Localised *@");
     eval {1};
     pass("Can eval with *@ localised");
-}
 
+    local @{"nugguton"};
+    local %{"netgonch"};
+    delete $::{$_} for 'nugguton','netgonch';
+}
+pass ('localised arrays and hashes do not crash if glob is deleted');

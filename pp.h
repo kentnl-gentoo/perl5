@@ -448,8 +448,12 @@ Does not use C<TARG>.  See also C<XPUSHu>, C<mPUSHu> and C<PUSHu>.
 	    SETTARG;						\
 	    PUTBACK;						\
 	    if (jump) {						\
+	        OP *jump_o = NORMAL->op_next;                   \
+		while (jump_o->op_type == OP_NULL)		\
+		    jump_o = jump_o->op_next;			\
+		assert(jump_o->op_type == OP_ENTERSUB);		\
 		PL_markstack_ptr--;				\
-		return NORMAL->op_next->op_next;		\
+		return jump_o->op_next;				\
 	    }							\
 	    return NORMAL;					\
 	}							\
@@ -492,12 +496,28 @@ True if this op will be the return value of an lvalue subroutine
   )
 
 #ifdef PERL_CORE
+
 /* These are just for Perl_tied_method(), which is not part of the public API.
    Use 0x04 rather than the next available bit, to help the compiler if the
    architecture can generate more efficient instructions.  */
 #  define TIED_METHOD_MORTALIZE_NOT_NEEDED	0x04
 #  define TIED_METHOD_ARGUMENTS_ON_STACK	0x08
 #  define TIED_METHOD_SAY			0x10
+
+/* Used in various places that need to dereference a glob or globref */
+#  define MAYBE_DEREF_GV_flags(sv,phlags)                          \
+    (                                                               \
+	(void)(phlags & SV_GMAGIC && (SvGETMAGIC(sv),0)),            \
+	isGV_with_GP(sv)                                              \
+	  ? (GV *)sv                                                   \
+	  : SvROK(sv) && SvTYPE(SvRV(sv)) <= SVt_PVLV &&               \
+	    (SvGETMAGIC(SvRV(sv)), isGV_with_GP(SvRV(sv)))              \
+	     ? (GV *)SvRV(sv)                                            \
+	     : NULL                                                       \
+    )
+#  define MAYBE_DEREF_GV(sv)      MAYBE_DEREF_GV_flags(sv,SV_GMAGIC)
+#  define MAYBE_DEREF_GV_nomg(sv) MAYBE_DEREF_GV_flags(sv,0)
+
 #endif
 
 /*

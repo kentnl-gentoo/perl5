@@ -359,7 +359,7 @@
 /* Rats: if dTHR is just blank then the subsequent ";" throws an error */
 /* Declaring a *function*, instead of a variable, ensures that we don't rely
    on being able to suppress "unused" warnings.  */
-#define dNOOP extern int Perl___notused()
+#define dNOOP extern int Perl___notused(void)
 
 #ifndef pTHX
 /* Don't bother defining tTHX and sTHX; using them outside
@@ -490,9 +490,6 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 #  endif
 # endif
 #endif
-
-#define WITH_THX(s) STMT_START { dTHX; s; } STMT_END
-#define WITH_THR(s) WITH_THX(s)
 
 #ifndef BYTEORDER  /* Should never happen -- byteorder is in config.h */
 #   define BYTEORDER 0x1234
@@ -1243,7 +1240,7 @@ EXTERN_C int usleep(unsigned int);
 #   define _SOCKADDR_LEN
 #endif
 
-#if defined(HAS_SOCKET) && !defined(VMS) && !defined(WIN32) /* VMS/WIN32 handle sockets via vmsish.h/win32.h */
+#if defined(HAS_SOCKET) && !defined(WIN32) /* WIN32 handles sockets via win32.h */
 # include <sys/socket.h>
 # if defined(USE_SOCKS) && defined(I_SOCKS)
 #   if !defined(INCLUDE_PROTOTYPES)
@@ -4292,10 +4289,18 @@ EXTCONST char PL_uuemap[65]
 
 #ifdef DOINIT
 EXTCONST char PL_uudmap[256] =
-#include "uudmap.h"
+#  ifdef PERL_MICRO
+#    include "uuudmap.h"
+#  else
+#    include "uudmap.h"
+#  endif
 ;
 EXTCONST char PL_bitcount[256] =
-#  include "bitcount.h"
+#  ifdef PERL_MICRO
+#    include "ubitcount.h"
+#else
+#    include "bitcount.h"
+#  endif
 ;
 EXTCONST char* const PL_sig_name[] = { SIG_NAME };
 EXTCONST int         PL_sig_num[]  = { SIG_NUM };
@@ -4817,7 +4822,6 @@ typedef enum {
 #define HINT_STRICT_REFS	0x00000002 /* strict pragma */
 #define HINT_LOCALE		0x00000004 /* locale pragma */
 #define HINT_BYTES		0x00000008 /* bytes pragma */
-#define HINT_ARYBASE		0x00000010 /* $[ is non-zero */
 				/* Note: 20,40,80 used for NATIVE_HINTS */
 				/* currently defined by vms/vmsish.h */
 
@@ -5106,7 +5110,11 @@ EXTCONST runops_proc_t PL_runops_dbg
 
 #ifdef DOINIT
 EXTCONST U8 PL_magic_data[256] =
-#include "mg_data.h"
+#  ifdef PERL_MICRO
+#    include "umg_data.h"
+#  else
+#    include "mg_data.h"
+#  endif
 ;
 #else
 EXTCONST U8 PL_magic_data[256];

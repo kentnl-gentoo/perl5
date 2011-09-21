@@ -1,0 +1,632 @@
+=head1 NAME
+
+perlfaq9 - Networking
+
+=head1 DESCRIPTION
+
+This section deals with questions related to networking, the internet,
+and a few on the web.
+
+=head2 What is the correct form of response from a CGI script?
+
+(Alan Flavell <flavell+www@a5.ph.gla.ac.uk> answers...)
+
+The Common Gateway Interface (CGI) specifies a software interface between
+a program ("CGI script") and a web server (HTTPD). It is not specific
+to Perl, and has its own FAQs and tutorials, and usenet group,
+comp.infosystems.L<www.authoring.cgi>
+
+The CGI specification is outlined in an informational RFC:
+L<http://www.ietf.org/rfc/rfc3875>
+
+These Perl FAQs very selectively cover some CGI issues. However, Perl
+programmers are strongly advised to use the C<CGI.pm> module, to take care
+of the details for them.
+
+The similarity between CGI response headers (defined in the CGI
+specification) and HTTP response headers (defined in the HTTP
+specification, RFC2616) is intentional, but can sometimes be confusing.
+
+The CGI specification defines two kinds of script: the "Parsed Header"
+script, and the "Non Parsed Header" (NPH) script. Check your server
+documentation to see what it supports. "Parsed Header" scripts are
+simpler in various respects. The CGI specification allows any of the
+usual newline representations in the CGI response (it's the server's
+job to create an accurate HTTP response based on it). So "\n" written in
+text mode is technically correct, and recommended. NPH scripts are more
+tricky: they must put out a complete and accurate set of HTTP
+transaction response headers; the HTTP specification calls for records
+to be terminated with carriage-return and line-feed; i.e., ASCII \015\012
+written in binary mode.
+
+Using C<CGI.pm> gives excellent platform independence, including EBCDIC
+systems. C<CGI.pm> selects an appropriate newline representation
+(C<$CGI::CRLF>) and sets binmode as appropriate.
+
+=head2 My CGI script runs from the command line but not the browser. (500 Server Error)
+
+(contributed by brian d foy)
+
+There are many things that might be wrong with your CGI program, and only
+some of them might be related to Perl. Try going through the L<troubleshooting
+guide|L<http://www.perlmonks.org/?node_id=380424>> on 
+L<Perlmonks|L<http://www.perlmonks.org>>
+
+=head2 How can I get better error messages from a CGI program?
+
+Use the L<CGI::Carp> module. It replaces C<warn> and C<die>, plus the
+normal L<Carp> module's C<carp>, C<croak>, and C<confess> functions with
+more verbose and safer versions. It still sends them to the normal
+server error log.
+
+    use CGI::Carp;
+    warn "This is a complaint";
+    die "But this one is serious";
+
+The following use of L<CGI::Carp> also redirects errors to a file of your choice,
+placed in a C<BEGIN> block to catch compile-time warnings as well:
+
+    BEGIN {
+        use CGI::Carp qw(carpout);
+        open(LOG, ">>/var/local/cgi-logs/mycgi-log")
+            or die "Unable to append to mycgi-log: $!\n";
+        carpout(*LOG);
+    }
+
+You can even arrange for fatal errors to go back to the client browser,
+which is nice for your own debugging, but might confuse the end user.
+
+    use CGI::Carp qw(fatalsToBrowser);
+    die "Bad error here";
+
+Even if the error happens before you get the HTTP header out, the module
+will try to take care of this to avoid the dreaded server 500 errors.
+Normal warnings still go out to the server error log (or wherever
+you've sent them with C<carpout>) with the application name and date
+stamp prepended.
+
+=head2 How do I remove HTML from a string?
+
+The most correct way (albeit not the fastest) is to use L<HTML::Parser>
+from CPAN. Another mostly correct
+way is to use L<HTML::FormatText> which not only removes HTML but also
+attempts to do a little simple formatting of the resulting plain text.
+
+Many folks attempt a simple-minded regular expression approach, like
+C<< s/<.*?>//g >>, but that fails in many cases because the tags
+may continue over line breaks, they may contain quoted angle-brackets,
+or HTML comments may be present. Plus, folks forget to convert
+entities--like C<&lt;> for example.
+
+Here's one "simple-minded" approach, that works for most files:
+
+    #!/usr/bin/perl -p0777
+    s/<(?:[^>'"]*|(['"]).*?\g1)*>//gs
+
+If you want a more complete solution, see the 3-stage striphtml
+program in
+L<http://www.cpan.org/authors/Tom_Christiansen/scripts/striphtml.gz>
+.
+
+Here are some tricky cases that you should think about when picking
+a solution:
+
+    <IMG SRC = "foo.gif" ALT = "A > B">
+
+    <IMG SRC = "foo.gif"
+     ALT = "A > B">
+
+    <!-- <A comment> -->
+
+    <script>if (a<b && a>c)</script>
+
+    <# Just data #>
+
+    <![INCLUDE CDATA [ >>>>>>>>>>>> ]]>
+
+If HTML comments include other tags, those solutions would also break
+on text like this:
+
+    <!-- This section commented out.
+        <B>You can't see me!</B>
+    -->
+
+=head2 How do I extract URLs?
+
+You can easily extract all sorts of URLs from HTML with
+L<HTML::SimpleLinkExtor> which handles anchors, images, objects,
+frames, and many other tags that can contain a URL. If you need
+anything more complex, you can create your own subclass of
+L<HTML::LinkExtor> or L<HTML::Parser>. You might even use
+L<HTML::SimpleLinkExtor> as an example for something specifically
+suited to your needs.
+
+You can use L<URI::Find> to extract URLs from an arbitrary text document.
+
+Less complete solutions involving regular expressions can save
+you a lot of processing time if you know that the input is simple. One
+solution from Tom Christiansen runs 100 times faster than most
+module-based approaches but only extracts URLs from anchors where the first
+attribute is HREF and there are no other attributes.
+
+    #!/usr/bin/perl -n00
+    # qxurl - tchrist@perl.com
+    print "$2\n" while m{
+        < \s*
+          A \s+ HREF \s* = \s* (["']) (.*?) \g1
+        \s* >
+    }gsix;
+
+=head2 How do I download a file from the user's machine? How do I open a file on another machine?
+
+In this case, download means to use the file upload feature of HTML
+forms. You allow the web surfer to specify a file to send to your web
+server. To you it looks like a download, and to the user it looks
+like an upload. No matter what you call it, you do it with what's
+known as B<multipart/form-data> encoding. The C<CGI.pm> module (which
+comes with Perl as part of the Standard Library) supports this in the
+C<start_multipart_form()> method, which isn't the same as the C<startform()>
+method.
+
+See the section in the C<CGI.pm> documentation on file uploads for code
+examples and details.
+
+=head2 How do I make an HTML pop-up menu with Perl?
+
+(contributed by brian d foy)
+
+The C<CGI.pm> module (which comes with Perl) has functions to create
+the HTML form widgets. See the C<CGI.pm> documentation for more
+examples.
+
+    use CGI qw/:standard/;
+    print header,
+        start_html('Favorite Animals'),
+
+        start_form,
+            "What's your favorite animal? ",
+        popup_menu(
+            -name   => 'animal',
+            -values => [ qw( Llama Alpaca Camel Ram ) ]
+            ),
+        submit,
+
+        end_form,
+        end_html;
+
+=head2 How do I fetch an HTML file?
+
+(contributed by brian d foy)
+
+Use the libwww-perl distribution. The L<LWP::Simple> module can fetch web
+resources and give their content back to you as a string:
+
+    use LWP::Simple qw(get);
+
+    my $html = get( "L<http://www.example.com/index.html"> );
+
+It can also store the resource directly in a file:
+
+    use LWP::Simple qw(getstore);
+
+    getstore( "L<http://www.example.com/index.html">, "foo.html" );
+
+If you need to do something more complicated, you can use
+L<LWP::UserAgent> module to create your own user-agent (e.g. browser)
+to get the job done. If you want to simulate an interactive web
+browser, you can use the L<WWW::Mechanize> module.
+
+=head2 How do I automate an HTML form submission?
+
+If you are doing something complex, such as moving through many pages
+and forms or a web site, you can use L<WWW::Mechanize>. See its
+documentation for all the details.
+
+If you're submitting values using the GET method, create a URL and encode
+the form using the C<query_form> method:
+
+    use LWP::Simple;
+    use URI::URL;
+
+    my $url = url('L<http://www.perl.com/cgi-bin/cpan_mod')>;
+    $url->query_form(module => 'DB_File', readme => 1);
+    $content = get($url);
+
+If you're using the POST method, create your own user agent and encode
+the content appropriately.
+
+    use HTTP::Request::Common qw(POST);
+    use LWP::UserAgent;
+
+    $ua = LWP::UserAgent->new();
+    my $req = POST 'L<http://www.perl.com/cgi-bin/cpan_mod'>,
+                   [ module => 'DB_File', readme => 1 ];
+    $content = $ua->request($req)->as_string;
+
+=head2 How do I decode or create those %-encodings on the web?
+X<URI> X<CGI.pm> X<CGI> X<URI::Escape> X<RFC 2396>
+
+(contributed by brian d foy)
+
+Those C<%> encodings handle reserved characters in URIs, as described
+in RFC 2396, Section 2. This encoding replaces the reserved character
+with the hexadecimal representation of the character's number from
+the US-ASCII table. For instance, a colon, C<:>, becomes C<%3A>.
+
+In CGI scripts, you don't have to worry about decoding URIs if you are
+using C<CGI.pm>. You shouldn't have to process the URI yourself,
+either on the way in or the way out.
+
+If you have to encode a string yourself, remember that you should
+never try to encode an already-composed URI. You need to escape the
+components separately then put them together. To encode a string, you
+can use the L<URI::Escape> module. The C<uri_escape> function
+returns the escaped string:
+
+    my $original = "Colon : Hash # Percent %";
+
+    my $escaped = uri_escape( $original );
+
+    print "$escaped\n"; # 'Colon%20%3A%20Hash%20%23%20Percent%20%25'
+
+To decode the string, use the C<uri_unescape> function:
+
+    my $unescaped = uri_unescape( $escaped );
+
+    print $unescaped; # back to original
+
+If you wanted to do it yourself, you simply need to replace the
+reserved characters with their encodings. A global substitution
+is one way to do it:
+
+    # encode
+    $string =~ s/([^^A-Za-z0-9\-_.!~*'()])/ sprintf "%%%0x", ord $1 /eg;
+
+    #decode
+    $string =~ s/%([A-Fa-f\d]{2})/chr hex $1/eg;
+
+=head2 How do I redirect to another page?
+
+Specify the complete URL of the destination (even if it is on the same
+server). This is one of the two different kinds of CGI "Location:"
+responses which are defined in the CGI specification for a Parsed Headers
+script. The other kind (an absolute URLpath) is resolved internally to
+the server without any HTTP redirection. The CGI specifications do not
+allow relative URLs in either case.
+
+Use of C<CGI.pm> is strongly recommended. This example shows redirection
+with a complete URL. This redirection is handled by the web browser.
+
+    use CGI qw/:standard/;
+
+    my $url = 'L<http://www.cpan.org/'>;
+    print redirect($url);
+
+This example shows a redirection with an absolute URLpath. This
+redirection is handled by the local web server.
+
+    my $url = '/CPAN/index.html';
+    print redirect($url);
+
+But if coded directly, it could be as follows (the final "\n" is
+shown separately, for clarity), using either a complete URL or
+an absolute URLpath.
+
+    print "Location: $url\n";   # CGI response header
+    print "\n";                 # end of headers
+
+=head2 How do I put a password on my web pages?
+
+To enable authentication for your web server, you need to configure
+your web server. The configuration is different for different sorts
+of web servers--apache does it differently from iPlanet which does
+it differently from IIS. Check your web server documentation for
+the details for your particular server.
+
+=head2 How do I edit my .htpasswd and .htgroup files with Perl?
+
+The L<HTTPD::UserAdmin> and L<HTTPD::GroupAdmin> modules provide a
+consistent OO interface to these files, regardless of how they're
+stored. Databases may be text, dbm, Berkeley DB or any database with
+a DBI compatible driver. L<HTTPD::UserAdmin> supports files used by the
+"Basic" and "Digest" authentication schemes. Here's an example:
+
+    use HTTPD::UserAdmin ();
+    HTTPD::UserAdmin
+      ->new(DB => "/foo/.htpasswd")
+      ->add($username => $password);
+
+=head2 How do I make sure users can't enter values into a form that cause my CGI script to do bad things?
+
+(contributed by brian d foy)
+
+You can't prevent people from sending your script bad data. Even if
+you add some client-side checks, people may disable them or bypass
+them completely. For instance, someone might use a module such as
+L<LWP> to access your CGI program. If you want to prevent data that
+try to use SQL injection or other sorts of attacks (and you should
+want to), you have to not trust any data that enter your program.
+
+The L<perlsec> documentation has general advice about data security.
+If you are using the L<DBI> module, use placeholder to fill in data.
+If you are running external programs with C<system> or C<exec>, use
+the list forms. There are many other precautions that you should take,
+too many to list here, and most of them fall under the category of not
+using any data that you don't intend to use. Trust no one.
+
+=head2 How do I parse a mail header?
+
+Use the L<Email::MIME> module. It's well-tested and supports all the
+craziness that you'll see in the real world (comment-folding whitespace,
+encodings, comments, etc.).
+
+  use Email::MIME;
+
+  my $message = Email::MIME->new($rfc2822);
+  my $subject = $message->header('Subject');
+  my $from    = $message->header('From');
+
+If you've already got some other kind of email object, consider passing
+it to L<Email::Abstract> and then using its cast method to get an
+L<Email::MIME> object:
+
+  my $mail_message_object = read_message();
+  my $abstract = Email::Abstract->new($mail_message_object);
+  my $email_mime_object = $abstract->cast('Email::MIME');
+
+=head2 How do I decode a CGI form?
+
+(contributed by brian d foy)
+
+Use the C<CGI.pm> module that comes with Perl. It's quick,
+it's easy, and it actually does quite a bit of work to
+ensure things happen correctly. It handles GET, POST, and
+HEAD requests, multipart forms, multivalued fields, query
+string and message body combinations, and many other things
+you probably don't want to think about.
+
+It doesn't get much easier: the C<CGI.pm> module automatically
+parses the input and makes each value available through the
+C<param()> function.
+
+    use CGI qw(:standard);
+
+    my $total = param( 'price' ) + param( 'shipping' );
+
+    my @items = param( 'item' ); # multiple values, same field name
+
+If you want an object-oriented approach, C<CGI.pm> can do that too.
+
+    use CGI;
+
+    my $cgi = CGI->new();
+
+    my $total = $cgi->param( 'price' ) + $cgi->param( 'shipping' );
+
+    my @items = $cgi->param( 'item' );
+
+You might also try L<CGI::Minimal> which is a lightweight version
+of the same thing. Other CGI::* modules on CPAN might work better
+for you, too.
+
+Many people try to write their own decoder (or copy one from
+another program) and then run into one of the many "gotchas"
+of the task. It's much easier and less hassle to use C<CGI.pm>.
+
+=head2 How do I check a valid mail address?
+
+(partly contributed by Aaron Sherman)
+
+This isn't as simple a question as it sounds. There are two parts:
+
+a) How do I verify that an email address is correctly formatted?
+
+b) How do I verify that an email address targets a valid recipient?
+
+Without sending mail to the address and seeing whether there's a human
+on the other end to answer you, you cannot fully answer part I<b>, but
+the L<Email::Valid> module will do both part I<a> and part I<b> as far
+as you can in real-time.
+
+Our best advice for verifying a person's mail address is to have them
+enter their address twice, just as you normally do to change a
+password. This usually weeds out typos. If both versions match, send
+mail to that address with a personal message. If you get the message
+back and they've followed your directions, you can be reasonably
+assured that it's real.
+
+A related strategy that's less open to forgery is to give them a PIN
+(personal ID number). Record the address and PIN (best that it be a
+random one) for later processing. In the mail you send, include a link to
+your site with the PIN included. If the mail bounces, you know it's not
+valid. If they don't click on the link, either they forged the address or
+(assuming they got the message) following through wasn't important so you
+don't need to worry about it.
+
+=head2 How do I decode a MIME/BASE64 string?
+
+The L<MIME::Base64> package handles this as well as the MIME/QP encoding.
+Decoding base 64 becomes as simple as:
+
+    use MIME::Base64;
+    $decoded = decode_base64($encoded);
+
+The L<Email::MIME> module can decode base 64-encoded email message parts
+transparently so the developer doesn't need to worry about it.
+
+=head2 How do I return the user's mail address?
+
+Ask them for it. There are so many email providers available that it's
+rather unlikely the local system has any idea how to determine a user's
+email address. The one notable exception is for organization-specific
+email (e.g. foo@yourcompany.com) where policy can be codified in your
+program. In that case, you can look at $ENV{USER}, $ENV{LOGNAME}, and
+getpwuid($<) in scalar context, like so:
+
+  my $user_name = getpwuid($<)
+
+But note that you still cannot make any assumptions about whether this
+is correct unless your policy says it is. And then there are things like
+localpart extensions (foo+bar@example.com). You really are best off
+asking the user.
+
+=head2 How do I send mail?
+
+Use the L<Email::MIME> and L<Email::Sender::Simple> modules, like so:
+
+  # first, create your message
+  my $message = Email::MIME->create(
+    header_str => [
+      From    => 'you@example.com',
+      To      => 'friend@example.com',
+      Subject => 'Happy birthday!',
+    ],
+    body_str => 'Happy birthday to you!',
+  );
+
+  use Email::Sender::Simple qw(sendmail);
+  sendmail($message);
+
+By default, L<Email::Sender::Simple> will try `sendmail` first, if it exists
+in your $PATH. This generally isn't the case. If there's a remote mail
+server you use to send mail, consider investigating one of the Transport
+classes. At time of writing, the available transports include:
+
+=over 4
+
+=item L<Email::Sender::Transport::Sendmail>
+
+This is the default. If you can use the L<mail(1)> or L<mailx(1)>
+program to send mail from the machine where your code runs, you should
+be able to use this.
+
+=item L<Email::Sender::Transport::SMTP>
+
+This transport contacts a remote SMTP server over TCP. It optionally
+uses SSL and can authenticate to the server via SASL.
+
+=item L<Email::Sender::Transport::SMTP::TLS>
+
+This is like the SMTP transport, but uses TLS security. You can
+authenticate with this module as well, using any mechanisms your server
+supports after STARTTLS. 
+
+=back
+
+Telling L<Email::Sender::Simple> to use your transport is straightforward.
+
+  sendmail(
+    $message,
+    {
+      transport => $email_sender_transport_object,
+    }
+  );
+
+=head2 How do I use MIME to make an attachment to a mail message?
+
+L<Email::MIME> directly supports multipart messages. L<Email::MIME>
+objects themselves are parts and can be attached to other L<Email::MIME>
+objects. Consult the L<Email::MIME> documentation for more information,
+including all of the supported methods and examples of their use.
+
+=head2 How do I read mail?
+
+Use the L<Email::Folder> module, like so:
+
+  use Email::Folder;
+
+  my $folder = Email::Folder->new('/path/to/email/folder');
+  while(my $message = $folder->next_message) {
+    # next_message returns Email::Simple objects, but we want
+    # Email::MIME objects as they're more robust
+    my $mime = Email::MIME->new($message->as_string);
+  }
+
+There are different classes in the L<Email::Folder> namespace for
+supporting various mailbox types. Note that these modules are generally
+rather limited and only support B<reading> rather than writing.
+
+=head2 How do I find out my hostname, domainname, or IP address?
+X<hostname, domainname, IP address, host, domain, hostfqdn, inet_ntoa,
+gethostbyname, Socket, Net::Domain, Sys::Hostname>
+
+(contributed by brian d foy)
+
+The L<Net::Domain> module, which is part of the Standard Library starting
+in Perl 5.7.3, can get you the fully qualified domain name (FQDN), the host
+name, or the domain name.
+
+    use Net::Domain qw(hostname hostfqdn hostdomain);
+
+    my $host = hostfqdn();
+
+The L<Sys::Hostname> module, part of the Standard Library, can also get the
+hostname:
+
+    use Sys::Hostname;
+
+    $host = hostname();
+
+
+The L<Sys::Hostname::Long> module takes a different approach and tries
+harder to return the fully qualified hostname:
+
+  use Sys::Hostname::Long 'hostname_long';
+
+  my $hostname = hostname_long();
+
+To get the IP address, you can use the C<gethostbyname> built-in function
+to turn the name into a number. To turn that number into the dotted octet
+form (a.b.c.d) that most people expect, use the C<inet_ntoa> function
+from the L<Socket> module, which also comes with perl.
+
+    use Socket;
+
+    my $address = inet_ntoa(
+        scalar gethostbyname( $host || 'localhost' )
+    );
+
+=head2 How do I fetch a news article or the active newsgroups?
+
+Use the L<Net::NNTP> or L<News::NNTPClient> modules, both available from CPAN.
+This can make tasks like fetching the newsgroup list as simple as
+
+    perl -MNews::NNTPClient
+      -e 'print News::NNTPClient->new->list("newsgroups")'
+
+=head2 How do I fetch/put an FTP file?
+
+(contributed by brian d foy)
+
+The L<LWP> family of modules (available on CPAN as the libwww-perl distribution)
+can work with FTP just like it can with many other protocols. L<LWP::Simple>
+makes it quite easy to fetch a file:
+
+    use LWP::Simple;
+
+    my $data = get( 'L<ftp://some.ftp.site/some/file.txt'> );
+
+If you want more direct or low-level control of the FTP process, you can use
+the L<Net::FTP> module (in the Standard Library since Perl 5.8). It's
+documentation has examples showing you just how to do that.
+
+=head2 How can I do RPC in Perl?
+
+(contributed by brian d foy)
+
+Use one of the RPC modules you can find on CPAN (
+L<http://search.cpan.org/search?query=RPC&mode=all> ).
+
+=head1 AUTHOR AND COPYRIGHT
+
+Copyright (c) 1997-2010 Tom Christiansen, Nathan Torkington, and
+other authors as noted. All rights reserved.
+
+This documentation is free; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+Irrespective of its distribution, all code examples in this file
+are hereby placed into the public domain. You are permitted and
+encouraged to use this code in your own programs for fun
+or for profit as you see fit. A simple comment in the code giving
+credit would be courteous but is not required.

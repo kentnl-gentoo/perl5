@@ -821,7 +821,6 @@ const struct flag_to_name op_const_names[] = {
     {OPpCONST_SHORTCIRCUIT, ",SHORTCIRCUIT"},
     {OPpCONST_STRICT, ",STRICT"},
     {OPpCONST_ENTERED, ",ENTERED"},
-    {OPpCONST_ARYBASE, ",ARYBASE"},
     {OPpCONST_BARE, ",BARE"},
     {OPpCONST_WARNING, ",WARNING"}
 };
@@ -1019,10 +1018,6 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
 		if (o->op_private & OPpMAYBE_LVSUB)
 		    sv_catpv(tmpsv, ",MAYBE_LVSUB");
 	    }
-
-	    if ((optype==OP_RV2SV || optype==OP_RV2AV || optype==OP_RV2HV)
-		    && (o->op_private & OPpDEREFed))
-		sv_catpv(tmpsv, ",DEREFed");
 
 	    if (optype == OP_AELEM || optype == OP_HELEM) {
 		if (o->op_private & OPpLVAL_DEFER)
@@ -2994,8 +2989,6 @@ Perl_do_op_xmldump(pTHX_ I32 level, PerlIO *file, const OP *o)
 		sv_catpv(tmpsv, ",BARE");
 	    if (o->op_private & OPpCONST_STRICT)
 		sv_catpv(tmpsv, ",STRICT");
-	    if (o->op_private & OPpCONST_ARYBASE)
-		sv_catpv(tmpsv, ",ARYBASE");
 	    if (o->op_private & OPpCONST_WARNING)
 		sv_catpv(tmpsv, ",WARNING");
 	    if (o->op_private & OPpCONST_ENTERED)

@@ -10,13 +10,14 @@
 #
 #    %Config::Config (ie config.sh)
 #    config.h
-#    global.sym
+#    embed.fnc
 #    globvar.sym
 #    intrpvar.h
 #    miniperl.map (on OS/2)
 #    perl5.def    (on OS/2; this is the old version of the file being made)
 #    perlio.sym
 #    perlvars.h
+#    regen/opcodes
 #
 # plus long lists of function names hard-coded directly in this script.
 #
@@ -35,7 +36,7 @@ BEGIN { unshift @INC, "lib" }
 use Config;
 use strict;
 
-my %ARGS = (CCTYPE => 'MSVC');
+my %ARGS = (CCTYPE => 'MSVC', TARG_DIR => '');
 
 my %define;
 
@@ -54,8 +55,10 @@ while (@ARGV) {
     }
 }
 
+require "$ARGS{TARG_DIR}regen/embed_lib.pl";
+
 {
-    my @PLATFORM = qw(aix win32 wince os2 netware vms);
+    my @PLATFORM = qw(aix win32 wince os2 netware vms test);
     my %PLATFORM;
     @PLATFORM{@PLATFORM} = ();
 
@@ -81,7 +84,7 @@ process_cc_flags(@Config{qw(ccflags optimize)})
 # minimal configs that don't include any of those options.
 
 my @options = sort(Config::bincompat_options(), Config::non_bincompat_options());
-print STDERR "Options: (@options)\n";
+print STDERR "Options: (@options)\n" unless $ARGS{PLATFORM} eq 'test';
 $define{$_} = 1 foreach @options;
 
 my %exportperlmalloc =
@@ -94,19 +97,7 @@ my %exportperlmalloc =
 
 my $exportperlmalloc = $ARGS{PLATFORM} eq 'os2';
 
-my $config_h    = "config.h";
-my $intrpvar_h  = "intrpvar.h";
-my $perlvars_h  = "perlvars.h";
-my $global_sym  = "global.sym";
-my $globvar_sym = "globvar.sym";
-my $perlio_sym  = "perlio.sym";
-
-if (exists $ARGS{TARG_DIR}) {
-    s/^/$ARGS{TARG_DIR}/
-	foreach $intrpvar_h, $perlvars_h, $global_sym, $globvar_sym, $perlio_sym;
-}
-
-open(CFG,$config_h) || die "Cannot open $config_h: $!\n";
+open(CFG, '<', 'config.h') || die "Cannot open config.h: $!\n";
 while (<CFG>) {
     $define{$1} = 1 if /^\s*\#\s*define\s+(MYMALLOC|MULTIPLICITY
                                            |SPRINTF_RETURNS_STRLEN
@@ -136,7 +127,8 @@ if ($define{USE_ITHREADS} && $ARGS{PLATFORM} ne 'win32' && $^O ne 'darwin') {
 
 # perl.h logic duplication ends
 
-print STDERR "Defines: (" . join(' ', sort keys %define) . ")\n";
+print STDERR "Defines: (" . join(' ', sort keys %define) . ")\n"
+     unless $ARGS{PLATFORM} eq 'test';
 
 my $sym_ord = 0;
 my %ordinal;
@@ -171,7 +163,9 @@ sub readvar {
     # we're doing, as in that case we skip adding something to the skip hash
     # for the second time.
 
-    my ($file, $hash, $proc) = @_;
+    my $file = $ARGS{TARG_DIR} . shift;
+    my $hash = shift;
+    my $proc = shift;
     open my $vars, '<', $file or die die "Cannot open $file: $!\n";
 
     while (<$vars>) {
@@ -529,7 +523,10 @@ if ($define{HAS_SIGNBIT}) {
 }
 
 if ($define{'PERL_GLOBAL_STRUCT'}) {
-    readvar($perlvars_h, \%skip);
+    readvar('perlvars.h', \%skip);
+    # This seems like the least ugly way to cope with the fact that PL_sh_path
+    # is mentioned in perlvar.h and globvar.sym, and always exported.
+    delete $skip{PL_sh_path};
     ++$export{Perl_GetVars};
     try_symbols(qw(PL_Vars PL_VarsPtr)) unless $ARGS{CCTYPE} eq 'GCC';
 } else {
@@ -538,7 +535,7 @@ if ($define{'PERL_GLOBAL_STRUCT'}) {
 
 # functions from *.sym files
 
-my @syms = ($global_sym, $globvar_sym);
+my @syms = qw(globvar.sym);
 
 # Symbols that are the public face of the PerlIO layers implementation
 # These are in _addition to_ the public face of the abstraction
@@ -624,7 +621,7 @@ if ($ARGS{PLATFORM} eq 'netware') {
 if ($define{'USE_PERLIO'}) {
     # Export the symols that make up the PerlIO abstraction, regardless
     # of its implementation - read from a file
-    push @syms, $perlio_sym;
+    push @syms, 'perlio.sym';
 
     # This part is then dependent on how the abstraction is implemented
     if ($define{'USE_SFIO'}) {
@@ -735,7 +732,29 @@ if ($define{'USE_PERLIO'}) {
 # At this point all skip lists should be completed, as we are about to test
 # many symbols against them.
 
-for my $syms (@syms) {
+{
+    my %seen;
+    my ($embed) = setup_embed($ARGS{TARG_DIR});
+
+    foreach (@$embed) {
+	my ($flags, $retval, $func, @args) = @$_;
+	next unless $func;
+	if ($flags =~ /[AX]/ && $flags !~ /[xm]/ || $flags =~ /b/) {
+	    # public API, so export
+
+	    # If a function is defined twice, for example before and after
+	    # an #else, only export its name once. Important to do this test
+	    # within the block, as the *first* definition may have flags which
+	    # mean "don't export"
+	    next if $seen{$func}++;
+	    $func = "Perl_$func" if $flags =~ /[pbX]/;
+	    ++$export{$func} unless exists $skip{$func};
+	}
+    }
+}
+
+foreach (@syms) {
+    my $syms = $ARGS{TARG_DIR} . $_;
     open my $global, '<', $syms or die "failed to open $syms: $!\n";
     # Functions already have a Perl_ prefix
     # Variables need a PL_ prefix
@@ -750,18 +769,18 @@ for my $syms (@syms) {
 # variables
 
 if ($define{'MULTIPLICITY'} && $define{PERL_GLOBAL_STRUCT}) {
-    readvar($perlvars_h, \%export, sub { "Perl_" . $_[1] . $_[2] . "_ptr" });
+    readvar('perlvars.h', \%export, sub { "Perl_" . $_[1] . $_[2] . "_ptr" });
     # XXX AIX seems to want the perlvars.h symbols, for some reason
     if ($ARGS{PLATFORM} eq 'aix' or $ARGS{PLATFORM} eq 'os2') {	# OS/2 needs PL_thr_key
-	readvar($perlvars_h, \%export);
+	readvar('perlvars.h', \%export);
     }
 }
 else {
     unless ($define{'PERL_GLOBAL_STRUCT'}) {
-	readvar($perlvars_h, \%export);
+	readvar('perlvars.h', \%export);
     }
     unless ($define{MULTIPLICITY}) {
-	readvar($intrpvar_h, \%export);
+	readvar('intrpvar.h', \%export);
     }
 }
 
@@ -946,9 +965,6 @@ if ($ARGS{PLATFORM} =~ /^win(?:32|ce)$/) {
 			    win32_getchar
 			    win32_putchar
 		 ));
-    if ($ARGS{CCTYPE} eq "BORLAND") {
-	try_symbols('_matherr');
-    }
 }
 elsif ($ARGS{PLATFORM} eq 'vms') {
     try_symbols(qw(
@@ -1286,7 +1302,7 @@ if ($ARGS{PLATFORM} =~ /^win(?:32|ce)$/) {
     print "LIBRARY $dll\n";
     # The DESCRIPTION module definition file statement is not supported
     # by VC7 onwards.
-    if ($ARGS{CCTYPE} =~ /^(?:MSVC60|GCC|BORLAND)$/) {
+    if ($ARGS{CCTYPE} =~ /^(?:MSVC60|GCC)$/) {
 	print "DESCRIPTION 'Perl interpreter'\n";
     }
     print "EXPORTS\n";
@@ -1330,7 +1346,6 @@ elsif ($ARGS{PLATFORM} eq 'netware') {
 
 foreach my $symbol (sort keys %export) {
     if ($ARGS{PLATFORM} =~ /^win(?:32|ce)$/) {
-	$symbol = "_$symbol" if $ARGS{CCTYPE} eq 'BORLAND';
 	print "\t$symbol\n";
     }
     elsif ($ARGS{PLATFORM} eq 'os2') {

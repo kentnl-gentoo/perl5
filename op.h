@@ -201,14 +201,12 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpDEREF_AV		32	/*   Want ref to AV. */
 #define OPpDEREF_HV		64	/*   Want ref to HV. */
 #define OPpDEREF_SV		(32|64)	/*   Want ref to SV. */
-/* Private for OP_RV2SV, OP_RV2AV, OP_RV2AV */
-#define OPpDEREFed		4	/* prev op was OPpDEREF */
 
   /* OP_ENTERSUB only */
 #define OPpENTERSUB_DB		16	/* Debug subroutine. */
-#define OPpENTERSUB_HASTARG	32	/* Called from OP tree. */
-#define OPpENTERSUB_INARGS	4	/* Lval used as arg to a sub. */
-#define OPpENTERSUB_DEREF	1	/* Lval call that autovivifies. */
+#define OPpENTERSUB_HASTARG	4	/* Called from OP tree. */
+#define OPpENTERSUB_INARGS	1	/* Lval used as arg to a sub. */
+/* used by OPpDEREF             (32|64) */
 /* used by HINT_STRICT_SUBS     2          */
   /* Mask for OP_ENTERSUB flags, the absence of which must be propagated
      in dynamic context */
@@ -246,7 +244,6 @@ Deprecated.  Use C<GIMME_V> instead.
 #define	OPpCONST_SHORTCIRCUIT	4	/* eg the constant 5 in (5 || foo) */
 #define	OPpCONST_STRICT		8	/* bareword subject to strict 'subs' */
 #define OPpCONST_ENTERED	16	/* Has been entered as symbol. */
-#define OPpCONST_ARYBASE	32	/* Was a $[ translated to constant. */
 #define OPpCONST_BARE		64	/* Was a bare word (filehandle?). */
 #define OPpCONST_WARNING	128	/* Was a $^W translated to constant. */
 
@@ -298,6 +295,13 @@ Deprecated.  Use C<GIMME_V> instead.
     
 /* Private for OP_CALLER and OP_WANTARRAY */
 #define OPpOFFBYONE		128	/* Treat caller(1) as caller(2) */
+
+/* Private for OP_COREARGS */
+/* These must not conflict with OPpDONT_INIT_GV.  See pp.c:S_rv2gv. */
+#define OPpCOREARGS_DEREF1	1	/* Arg 1 is a handle constructor */
+#define OPpCOREARGS_DEREF2	2	/* Arg 2 is a handle constructor */
+#define OPpCOREARGS_SCALARMOD	64	/* \$ rather than \[$@%*] */
+#define OPpCOREARGS_PUSHMARK	128	/* Call pp_pushmark */
 
 struct op {
     BASEOP

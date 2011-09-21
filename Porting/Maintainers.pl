@@ -7,7 +7,9 @@
 
 package Maintainers;
 
+use utf8;
 use File::Glob qw(:case);
+
 
 %Maintainers =
     (
@@ -18,7 +20,7 @@ use File::Glob qw(:case);
     'andya'	=> 'Andy Armstrong <andy@hexten.net>',
     'arandal'	=> 'Allison Randal <allison@perl.org>',
     'audreyt'	=> 'Audrey Tang <cpan@audreyt.org>',
-    'avar'	=> 'Ævar Arnfjörð Bjarmason <avar@cpan.org>',
+    'avar'	=> 'Ã†var ArnfjÃ¶rÃ° Bjarmason <avar@cpan.org>',
     'bingos'	=> 'Chris Williams <chris@bingosnet.co.uk>',
     'chorny'	=> 'Alexandr Ciornii <alexchorny@gmail.com>',
     'corion'	=> 'Max Maischein <corion@corion.net>',
@@ -74,8 +76,8 @@ use File::Glob qw(:case);
     'rra'	=> 'Russ Allbery <rra@cpan.org>',
     'rurban'	=> 'Reini Urban <rurban@cpan.org>',
     'sadahiro'	=> 'SADAHIRO Tomoyuki <SADAHIRO@cpan.org>',
-    'salva'	=> 'Salvador Fandiño García <salva@cpan.org>',
-    'saper'	=> 'Sébastien Aperghis-Tramoni <saper@cpan.org>',
+    'salva'	=> 'Salvador FandiÃ±o GarcÃ­a <salva@cpan.org>',
+    'saper'	=> 'SÃ©bastien Aperghis-Tramoni <saper@cpan.org>',
     'sartak'	=> 'Shawn M Moore <sartak@gmail.com>',
     'sbeck'     => 'Sullivan Beck <sbeck@cpan.org>',
     'sburke'	=> 'Sean Burke <sburke@cpan.org>',
@@ -198,7 +200,7 @@ use File::Glob qw(:case);
     'Archive::Extract' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Archive-Extract-0.52.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Archive-Extract-0.56.tar.gz',
 	'FILES'		=> q[cpan/Archive-Extract],
 	'UPSTREAM'	=> 'cpan',
 	'BUGS'		=> 'bug-archive-extract@rt.cpan.org',
@@ -207,7 +209,7 @@ use File::Glob qw(:case);
     'Archive::Tar' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Archive-Tar-1.76.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Archive-Tar-1.78.tar.gz',
 	'FILES'		=> q[cpan/Archive-Tar],
 	'EXCLUDED'	=> [ qw(Makefile.PL) ],
 	'UPSTREAM'	=> 'cpan',
@@ -342,8 +344,9 @@ use File::Glob qw(:case);
 
     'Carp' =>
 	{
-	'MAINTAINER'	=> 'p5p',
-	'FILES'		=> q[lib/Carp.{pm,t} lib/Carp/Heavy.pm],
+	'MAINTAINER'	=> 'zefram',
+	'DISTRIBUTION'	=> 'ZEFRAM/Carp-1.23.tar.gz',
+	'FILES'		=> q[dist/Carp],
 	'UPSTREAM'	=> 'blead',
 	},
 
@@ -459,7 +462,7 @@ use File::Glob qw(:case);
     'CPANPLUS' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.9109.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.9111.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qr{^t/dummy-.*\.hidden$},
@@ -480,7 +483,7 @@ use File::Glob qw(:case);
     'CPANPLUS::Dist::Build' =>
 	{
 	'MAINTAINER'	=> 'bingos',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.56.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.58.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS-Dist-Build],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qw{ t/99_pod.t
@@ -493,7 +496,7 @@ use File::Glob qw(:case);
     'CPAN::Meta' =>
 	{
 	'MAINTAINER'	=> 'dagolden',
-	'DISTRIBUTION'	=> 'DAGOLDEN/CPAN-Meta-2.112150.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/CPAN-Meta-2.112621.tar.gz',
 	'FILES'		=> q[cpan/CPAN-Meta],
 	'EXCLUDED'	=> [
 				qr/^xt/,
@@ -505,7 +508,7 @@ use File::Glob qw(:case);
     'CPAN::Meta::YAML' =>
 	{
 	'MAINTAINER'	=> 'dagolden',
-	'DISTRIBUTION'	=> 'DAGOLDEN/CPAN-Meta-YAML-0.003.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/CPAN-Meta-YAML-0.004.tar.gz',
 	'FILES'		=> q[cpan/CPAN-Meta-YAML],
 	'EXCLUDED'	=> [
 		't/04_scalar.t',    # requires YAML.pm
@@ -560,7 +563,7 @@ use File::Glob qw(:case);
     'Devel::PPPort' =>
 	{
 	'MAINTAINER'	=> 'mhx',
-	'DISTRIBUTION'	=> 'MHX/Devel-PPPort-3.19.tar.gz',
+	'DISTRIBUTION'	=> 'MHX/Devel-PPPort-3.20.tar.gz',
 	'FILES'		=> q[cpan/Devel-PPPort],
 	'EXCLUDED'	=> [ qw{PPPort.pm} ], # we use PPPort_pm.PL instead
 	'UPSTREAM'	=> 'cpan',
@@ -667,7 +670,7 @@ use File::Glob qw(:case);
     'Exporter' =>
 	{
 	'MAINTAINER'	=> 'ferreira',
-	'DISTRIBUTION'	=> 'FERREIRA/Exporter-5.63.tar.gz',
+	'DISTRIBUTION'	=> 'TODDR/Exporter-5.65.tar.gz',
 	'FILES'		=> q[lib/Exporter.pm
 			     lib/Exporter.t
 			     lib/Exporter/Heavy.pm
@@ -753,7 +756,7 @@ use File::Glob qw(:case);
     'ExtUtils::ParseXS' =>
 	{
 	'MAINTAINER'	=> 'smueller',
-	'DISTRIBUTION'	=> 'SMUELLER/ExtUtils-ParseXS-3.03.tar.gz',
+	'DISTRIBUTION'	=> 'SMUELLER/ExtUtils-ParseXS-3.04_04.tar.gz',
 	'FILES'		=> q[dist/ExtUtils-ParseXS],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -761,10 +764,10 @@ use File::Glob qw(:case);
     'perlfaq' =>
 	{
 	'MAINTAINER'	=> 'perlfaq',
-	'DISTRIBUTION'  => 'FLORA/perlfaq-5.015000.tar.gz',
-	'FILES'		=> q[dist/perlfaq],
+	'DISTRIBUTION'  => 'LLAP/perlfaq-5.0150034.tar.gz',
+	'FILES'		=> q[cpan/perlfaq],
 	'EXCLUDED'	=> [ qw(t/release-pod-syntax.t) ],
-	'UPSTREAM'	=> 'blead',
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'File::Basename' =>
@@ -1101,7 +1104,7 @@ use File::Glob qw(:case);
     'Locale-Codes' =>
 	{
 	'MAINTAINER'	=> 'sbeck',
-	'DISTRIBUTION'	=> 'SBECK/Locale-Codes-3.17.tar.gz',
+	'DISTRIBUTION'	=> 'SBECK/Locale-Codes-3.18.tar.gz',
 	'FILES'		=> q[cpan/Locale-Codes],
 	'EXCLUDED'	=> [ qw{t/pod_coverage.t t/pod.t}, qr{^t/runtests}, qr{^t/runtests\.bat},
 			     qr{^internal/}, qr{^examples/} ],
@@ -1152,7 +1155,7 @@ use File::Glob qw(:case);
     'Math::BigInt' =>
 	{
 	'MAINTAINER'	=> 'rafl',
-	'DISTRIBUTION'	=> 'PJACKLAM/Math-BigInt-1.993.tar.gz',
+	'DISTRIBUTION'	=> 'PJACKLAM/Math-BigInt-1.997.tar.gz',
 	'FILES'		=> q[dist/Math-BigInt],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qr{^examples/},
@@ -1166,7 +1169,7 @@ use File::Glob qw(:case);
     'Math::BigInt::FastCalc' =>
 	{
 	'MAINTAINER'	=> 'rafl',
-	'DISTRIBUTION'	=> 'FLORA/Math-BigInt-FastCalc-0.29.tar.gz',
+	'DISTRIBUTION'	=> 'PJACKLAM/Math-BigInt-FastCalc-0.30.tar.gz',
 	'FILES'		=> q[dist/Math-BigInt-FastCalc],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qw{
@@ -1255,7 +1258,7 @@ use File::Glob qw(:case);
     'Module::CoreList' =>
 	{
 	'MAINTAINER'	=> 'bingos',
-	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.54.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.55.tar.gz',
 	'FILES'		=> q[dist/Module-CoreList],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -1271,7 +1274,7 @@ use File::Glob qw(:case);
     'Module::Load::Conditional' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Module-Load-Conditional-0.44.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-Load-Conditional-0.46.tar.gz',
 	'FILES'		=> q[cpan/Module-Load-Conditional],
 	'UPSTREAM'	=> 'cpan',
 	},
@@ -1287,7 +1290,7 @@ use File::Glob qw(:case);
     'Module::Metadata' =>
 	{
 	'MAINTAINER'	=> 'dagolden',
-	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Metadata-1.000005.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Metadata-1.000007.tar.gz',
 	'FILES'		=> q[cpan/Module-Metadata],
 	'EXCLUDED'	=> [ qr{^maint}, qr{^xt} ],
 	'UPSTREAM'	=> 'cpan',
@@ -1563,7 +1566,7 @@ use File::Glob qw(:case);
     'Pod::Simple' =>
 	{
 	'MAINTAINER'	=> 'arandal',
-	'DISTRIBUTION'	=> 'DWHEELER/Pod-Simple-3.18.tar.gz',
+	'DISTRIBUTION'	=> 'DWHEELER/Pod-Simple-3.19.tar.gz',
 	'FILES'		=> q[cpan/Pod-Simple],
 	'UPSTREAM'	=> 'cpan',
 	},
@@ -1805,7 +1808,7 @@ use File::Glob qw(:case);
 	'DISTRIBUTION'	=> 'ADAMK/Text-Balanced-2.02.tar.gz',
 	'FILES'		=> q[cpan/Text-Balanced],
 	'EXCLUDED'	=> [ qw( t/97_meta.t t/98_pod.t t/99_pmv.t ) ],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'Text::ParseWords' =>
@@ -1878,7 +1881,7 @@ use File::Glob qw(:case);
     'threads' =>
 	{
 	'MAINTAINER'	=> 'jdhedden',
-	'DISTRIBUTION'	=> 'JDHEDDEN/threads-1.83.tar.gz',
+	'DISTRIBUTION'	=> 'JDHEDDEN/threads-1.85.tar.gz',
 	'FILES'		=> q[dist/threads],
 	'EXCLUDED'	=> [ qr{^examples/},
 			     qw(t/pod.t
@@ -1891,7 +1894,7 @@ use File::Glob qw(:case);
     'threads::shared' =>
 	{
 	'MAINTAINER'	=> 'jdhedden',
-	'DISTRIBUTION'	=> 'JDHEDDEN/threads-shared-1.37.tar.gz',
+	'DISTRIBUTION'	=> 'JDHEDDEN/threads-shared-1.40.tar.gz',
 	'FILES'		=> q[dist/threads-shared],
 	'EXCLUDED'	=> [ qw(examples/class.pl
 				shared.h

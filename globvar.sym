@@ -1,5 +1,4 @@
 # Global variables that must be exported for embedded applications.
-# *** Do NOT add functions here, those go in global.sym.
 # *** Only structures/arrays with constant initializers should go here.
 # *** Usual globals initialized at runtime should be added in *var*.h.
 
@@ -47,6 +46,7 @@ regkind
 revision
 runops_dbg
 runops_std
+sh_path
 sig_name
 sig_num
 simple

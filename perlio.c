@@ -155,23 +155,6 @@ perlsio_binmode(FILE *fp, int iotype, int mode)
 #else
     if (PerlLIO_setmode(fileno(fp), mode) != -1) {
 #endif
-#    if defined(WIN32) && defined(__BORLANDC__)
-        /*
-         * The translation mode of the stream is maintained independent 
-of
-         * the translation mode of the fd in the Borland RTL (heavy
-         * digging through their runtime sources reveal).  User has to 
-set
-         * the mode explicitly for the stream (though they don't 
-document
-         * this anywhere). GSAR 97-5-24
-         */
-        fseek(fp, 0L, 0);
-        if (mode & O_BINARY)
-            fp->flags |= _F_BIN;
-        else
-            fp->flags &= ~_F_BIN;
-#    endif
         return 1;
     }
     else
@@ -468,13 +451,6 @@ PerlIO_findFILE(PerlIO *pio)
 
 #include "perliol.h"
 
-/*
- * We _MUST_ have <unistd.h> if we are using lseek() and may have large
- * files
- */
-#ifdef I_UNISTD
-#include <unistd.h>
-#endif
 #ifdef HAS_MMAP
 #include <sys/mman.h>
 #endif
@@ -3241,9 +3217,7 @@ PerlIOStdio_invalidate_fileno(pTHX_ FILE *f)
     f->_file = -1;
     return 1;
 #  elif defined(WIN32)
-#    if defined(__BORLANDC__)
-    f->fd = PerlLIO_dup(fileno(f));
-#    elif defined(UNDER_CE)
+#    if defined(UNDER_CE)
     /* WIN_CE does not have access to FILE internals, it hardly has FILE
        structure at all
      */

@@ -14,7 +14,7 @@ use warnings; # uses #3 and #4, since warnings uses Carp
 
 use Exporter (); # use #5
 
-our $VERSION   = "0.85";
+our $VERSION   = "0.86";
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw( set_style set_style_standard add_callback
 		     concise_subref concise_cv concise_main
@@ -613,7 +613,7 @@ $priv{$_}{4} = "DREFed" for (qw(rv2sv rv2av rv2hv));
   for (qw(rv2gv rv2sv padsv aelem helem));
 $priv{$_}{16} = "STATE" for ("padav", "padhv", "padsv");
 $priv{rv2gv}{4} = "NOINIT";
-@{$priv{"entersub"}}{1,4,16,32,64} = qw( DREF INARGS DBG TARG );
+@{$priv{"entersub"}}{1,4,16,32,64} = qw( INARGS TARG DBG DEREF );
 @{$priv{rv2cv}}{1,8,128} = ("CONST","AMPER","NO()");
 $priv{"gv"}{32} = "EARLYCV";
 $priv{"aelem"}{16} = $priv{"helem"}{16} = "LVDEFER";
@@ -634,7 +634,7 @@ $priv{$_}{16} = "TARGMY"
        "exec", "kill", "getppid", "getpgrp", "setpgrp", "getpriority",
        "setpriority", "time", "sleep");
 $priv{$_}{4} = "REVERSED" for ("enteriter", "iter");
-@{$priv{"const"}}{4,8,16,32,64,128} = ("SHORT","STRICT","ENTERED",'$[',"BARE","WARN");
+@{$priv{"const"}}{4,8,16,64,128} = ("SHORT","STRICT","ENTERED","BARE","WARN");
 $priv{"flip"}{64} = $priv{"flop"}{64} = "LINENUM";
 $priv{"list"}{64} = "GUESSED";
 $priv{"delete"}{64} = "SLICE";
@@ -650,7 +650,7 @@ $priv{$_}{2} = "FTACCESS"
 $priv{"entereval"}{2} = "HAS_HH";
 if ($] >= 5.009) {
   # Stacked filetests are post 5.8.x
-  $priv{$_}{4} = "FTSTACKED"
+  @{$priv{$_}}{4,8} = ("FTSTACKED","FTSTACKING")
     for ("ftrread", "ftrwrite", "ftrexec", "fteread", "ftewrite", "fteexec",
          "ftis", "fteowned", "ftrowned", "ftzero", "ftsize", "ftmtime",
 	 "ftatime", "ftctime", "ftsock", "ftchr", "ftblk", "ftfile", "ftdir",
@@ -661,13 +661,14 @@ if ($] >= 5.009) {
     for ("mapwhile", "mapstart", "grepwhile", "grepstart");
 }
 $priv{$_}{128} = '+1' for qw "caller wantarray";
+@{$priv{coreargs}}{1,2,64,128} = ('DREF1','DREF2','$MOD','MARK');
 
 our %hints; # used to display each COP's op_hints values
 
 # strict refs, subs, vars
 @hints{2,512,1024} = ('$', '&', '*');
-# integers, locale, bytes, arybase
-@hints{1,4,8,16,32} = ('i', 'l', 'b', '[');
+# integers, locale, bytes
+@hints{1,4,8,16} = ('i', 'l', 'b');
 # block scope, localise %^H, $^OPEN (in), $^OPEN (out)
 @hints{256,131072,262144,524288} = ('{','%','<','>');
 # overload new integer, float, binary, string, re
@@ -855,9 +856,7 @@ sub concise_op {
 	my $ln = $op->line;
 	$loc .= ":$ln";
 	my($stash, $cseq) = ($op->stash->NAME, $op->cop_seq - $cop_seq_base);
-	my $arybase = $op->arybase;
-	$arybase = $arybase ? ' $[=' . $arybase : "";
-	$h{arg} = "($label$stash $cseq $loc$arybase)";
+	$h{arg} = "($label$stash $cseq $loc)";
 	if ($show_src) {
 	    fill_srclines($pathnm) unless exists $srclines{$pathnm};
 	    # Would love to retain Jim's use of // but this code needs to be
@@ -1549,7 +1548,6 @@ string if this is not a COP. Here are the symbols used:
     i integers
     l locale
     b bytes
-    [ arybase
     { block scope
     % localise %^H
     < open in

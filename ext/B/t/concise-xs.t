@@ -158,7 +158,7 @@ my $testpkgs = {
 		     OP_GLOB
 		     OP_STRINGIFY OPf_KIDS OPf_MOD OPf_REF OPf_SPECIAL
 		     OPf_STACKED OPf_WANT OPf_WANT_LIST OPf_WANT_SCALAR
-		     OPf_WANT_VOID OPpCONST_ARYBASE OPpCONST_BARE OPpCONST_NOVER
+		     OPf_WANT_VOID OPpCONST_BARE OPpCONST_NOVER
 		     OPpENTERSUB_AMPER OPpEXISTS_SUB OPpITER_REVERSED
 		     OPpLVAL_INTRO OPpOUR_INTRO OPpSLICE OPpSORT_DESCEND
 		     OPpSORT_INPLACE OPpSORT_INTEGER OPpSORT_NUMERIC
@@ -169,6 +169,7 @@ my $testpkgs = {
 		     PMf_MULTILINE PMf_ONCE PMf_SINGLELINE
 		     POSTFIX SVf_FAKE SVf_IOK SVf_NOK SVf_POK SVf_ROK
 		     SVpad_OUR SVs_RMG SVs_SMG SWAP_CHILDREN OPpPAD_STATE
+		     OPpCONST_ARYBASE
 		     /, $] > 5.009 ? ('RXf_SKIPWHITE') : ('PMf_SKIPWHITE'),
 		    'CVf_LOCKED', # This ends up as a constant, pre or post 5.10
 		    ],
@@ -185,7 +186,8 @@ my $testpkgs = {
 			    WSTOPSIG WTERMSIG/,
 		       'int_macro_int', # Removed in POSIX 1.16
 		       ],
-	       perl => [qw/ import croak AUTOLOAD /],
+	       perl => [qw/ import load_imports croak usage printf sprintf
+			perror AUTOLOAD /],
 
 	       XS => [qw/ write wctomb wcstombs uname tzset tzname
 		      ttyname tmpnam times tcsetpgrp tcsendbreak

@@ -333,7 +333,8 @@ $make_set_make
 
 # If you're going to use valgrind and it can't be invoked as plain valgrind
 # then you'll need to change this, or override it on the make command line.
-VALGRIND=valgrind
+VALGRIND ?= valgrind
+VG_TEST  ?= ./perl -e 1 2>/dev/null
 
 DTRACE = $dtrace
 DTRACE_H = $dtrace_h
@@ -467,10 +468,11 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5152delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5153delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
+generated_headers = uudmap.h bitcount.h mg_data.h
 
-Icwd = -Idist/Cwd -Idist/Cwd/lib
+Icwd = -Idist/Cwd -Idist/Cwd/lib -Idist/Carp/lib
 
 lintflags = \
     -b \
@@ -631,12 +633,12 @@ done
 
 $spitshell >>$Makefile <<'!NO!SUBS!'
 
-globals$(OBJ_EXT): uudmap.h bitcount.h mg_data.h
+globals$(OBJ_EXT): $(generated_headers)
 
 uudmap.h mg_data.h: bitcount.h
 
 bitcount.h: generate_uudmap$(HOST_EXE_EXT)
-	$(RUN) ./generate_uudmap$(HOST_EXE_EXT) uudmap.h bitcount.h mg_data.h
+	$(RUN) ./generate_uudmap$(HOST_EXE_EXT) $(generated_headers)
 
 generate_uudmap$(OBJ_EXT): mg_raw.h
 
@@ -886,7 +888,7 @@ perl.valgrind.config: config.sh
 	@grep "^usemymalloc="    config.sh
 	@grep "^usemymalloc='n'" config.sh >/dev/null || exit 1
 	@echo "And of course you have to have valgrind..."
-	$(VALGRIND) ./perl -e 1 2>/dev/null || exit 1
+	$(VALGRIND) $(VG_TEST) || exit 1
 
 # Third Degree Perl (Tru64 only)
 
@@ -1032,8 +1034,8 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) $(Icwd) pod/perlmodlib.PL -q
 
-pod/perl5152delta.pod: pod/perldelta.pod
-	$(LNS) perldelta.pod pod/perl5152delta.pod
+pod/perl5153delta.pod: pod/perldelta.pod
+	$(LNS) perldelta.pod pod/perl5153delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1119,15 +1121,14 @@ perly.c: perly.y
 perly.h: perly.y
 	-@sh -c true
 
-SYM  = global.sym globvar.sym perlio.sym
+SYM  = globvar.sym perlio.sym
 
 SYMH = perlvars.h intrpvar.h
 
 CHMOD_W = chmod +w
 
 # The following files are generated automatically
-#	embed.pl:	proto.h embed.h embedvar.h global.sym
-#			perlapi.h perlapi.c 
+#	embed.pl:	proto.h embed.h embedvar.h perlapi.h perlapi.c
 #	opcode.pl:	opcode.h opnames.h pp_proto.h
 #	regcomp.pl:	regnodes.h
 #	warnings.pl:	warnings.h lib/warnings.pm
@@ -1138,18 +1139,18 @@ CHMOD_W = chmod +w
 # with your existing copy of perl
 # (make regen_headers is kept for backwards compatibility)
 
-AUTOGEN_FILES = opcode.h opnames.h pp_proto.h proto.h \
-		embed.h embedvar.h global.sym \
-		perlapi.h perlapi.c regnodes.h \
-		warnings.h lib/warnings.pm
+AUTOGEN_FILES = opcode.h opnames.h pp_proto.h proto.h embed.h embedvar.h \
+		perlapi.h perlapi.c regnodes.h warnings.h lib/warnings.pm
 
 .PHONY: regen_headers regen_all
 
 regen:	FORCE
 	-perl regen.pl
+	-perl regen/uconfig_h.pl
 
 regen_headers:	FORCE
 	-perl regen.pl -v
+	-perl regen/uconfig_h.pl -v
 
 regen_meta:  META.yml
 
@@ -1225,7 +1226,7 @@ veryclean:	_verycleaner _mopup _clobber
 
 # Do not 'make _mopup' directly.
 _mopup:
-	rm -f *$(OBJ_EXT) *$(LIB_EXT) all perlmain.c opmini.c perlmini.c uudmap.h generate_uudmap$(EXE_EXT) bitcount.h mg_data.h
+	rm -f *$(OBJ_EXT) *$(LIB_EXT) all perlmain.c opmini.c perlmini.c generate_uudmap$(EXE_EXT) $(generated_headers)
 	-rmdir .depending
 	-@test -f extra.pods && rm -f `cat extra.pods`
 	-@test -f vms/README_vms.pod && rm -f vms/README_vms.pod
@@ -1296,7 +1297,7 @@ _cleaner2:
 	-rmdir cpan/CPANPLUS-Dist-Build/t/dummy-cpanplus cpan/CPANPLUS/t/dummy-cpanplus cpan/CPANPLUS/t/dummy-localmirror
 	-rmdir ext/B/lib
 	-rmdir lib/Archive/Tar lib/Archive lib/Attribute
-	-rmdir lib/CGI
+	-rmdir lib/CGI lib/Carp
 	-rmdir lib/Data lib/Devel lib/Digest
 	-rmdir lib/ExtUtils/Command lib/ExtUtils/Constant lib/ExtUtils/Liblist lib/ExtUtils/MakeMaker
 	-rmdir lib/File/Spec lib/Filter/Util lib/Filter

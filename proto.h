@@ -544,12 +544,6 @@ PERL_CALLCONV OP *	Perl_ck_trunc(pTHX_ OP *o)
 #define PERL_ARGS_ASSERT_CK_TRUNC	\
 	assert(o)
 
-PERL_CALLCONV OP *	Perl_ck_unpack(pTHX_ OP *o)
-			__attribute__warn_unused_result__
-			__attribute__nonnull__(pTHX_1);
-#define PERL_ARGS_ASSERT_CK_UNPACK	\
-	assert(o)
-
 PERL_CALLCONV void	Perl_ck_warner(pTHX_ U32 err, const char* pat, ...)
 			__attribute__format__(__printf__,pTHX_2,pTHX_3)
 			__attribute__nonnull__(pTHX_2);
@@ -582,6 +576,11 @@ PERL_CALLCONV SV *	Perl_core_prototype(pTHX_ SV *sv, const char *name, const int
 			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_CORE_PROTOTYPE	\
 	assert(name)
+
+PERL_CALLCONV OP *	Perl_coresub_op(pTHX_ SV *coreargssv, const int code, const int opnum)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_CORESUB_OP	\
+	assert(coreargssv)
 
 PERL_CALLCONV PERL_CONTEXT*	Perl_create_eval_scope(pTHX_ U32 flags);
 PERL_CALLCONV void	Perl_croak(pTHX_ const char* pat, ...)
@@ -981,6 +980,11 @@ PERL_CALLCONV CV*	Perl_find_runcv(pTHX_ U32 *db_seqp)
 			__attribute__warn_unused_result__;
 
 PERL_CALLCONV SV*	Perl_find_rundefsv(pTHX);
+PERL_CALLCONV SV*	Perl_find_rundefsv2(pTHX_ CV *cv, U32 seq)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_FIND_RUNDEFSV2	\
+	assert(cv)
+
 PERL_CALLCONV PADOFFSET	Perl_find_rundefsvoffset(pTHX)
 			__attribute__deprecated__;
 
@@ -1515,12 +1519,6 @@ PERL_CALLCONV bool	Perl_is_ascii_string(const U8 *s, STRLEN len)
 			__attribute__nonnull__(1);
 #define PERL_ARGS_ASSERT_IS_ASCII_STRING	\
 	assert(s)
-
-PERL_CALLCONV bool	Perl_is_gv_magical_sv(pTHX_ SV *const name_sv, U32 flags)
-			__attribute__warn_unused_result__
-			__attribute__nonnull__(pTHX_1);
-#define PERL_ARGS_ASSERT_IS_GV_MAGICAL_SV	\
-	assert(name_sv)
 
 PERL_CALLCONV I32	Perl_is_lvalue_sub(pTHX)
 			__attribute__warn_unused_result__;
@@ -4430,7 +4428,8 @@ PERL_CALLCONV void	Perl_vivify_defelem(pTHX_ SV* sv)
 #define PERL_ARGS_ASSERT_VIVIFY_DEFELEM	\
 	assert(sv)
 
-PERL_CALLCONV void	Perl_vivify_ref(pTHX_ SV* sv, U32 to_what)
+PERL_CALLCONV SV*	Perl_vivify_ref(pTHX_ SV* sv, U32 to_what)
+			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_VIVIFY_REF	\
 	assert(sv)
@@ -5518,15 +5517,15 @@ STATIC const char*	S_gv_ename(pTHX_ GV *gv)
 #define PERL_ARGS_ASSERT_GV_ENAME	\
 	assert(gv)
 
+STATIC void	S_inplace_aassign(pTHX_ OP* o)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_INPLACE_AASSIGN	\
+	assert(o)
+
 STATIC bool	S_is_handle_constructor(const OP *o, I32 numargs)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(1);
 #define PERL_ARGS_ASSERT_IS_HANDLE_CONSTRUCTOR	\
-	assert(o)
-
-STATIC OP*	S_is_inplace_av(pTHX_ OP* o, OP* oright)
-			__attribute__nonnull__(pTHX_1);
-#define PERL_ARGS_ASSERT_IS_INPLACE_AV	\
 	assert(o)
 
 STATIC I32	S_is_list_assignment(pTHX_ const OP *o)
@@ -5568,6 +5567,16 @@ STATIC OP*	S_no_fh_allowed(pTHX_ OP *o)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_NO_FH_ALLOWED	\
+	assert(o)
+
+PERL_STATIC_INLINE OP*	S_op_integerize(pTHX_ OP *o)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_OP_INTEGERIZE	\
+	assert(o)
+
+PERL_STATIC_INLINE OP*	S_op_std_init(pTHX_ OP *o)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_OP_STD_INIT	\
 	assert(o)
 
 STATIC OP*	S_opt_scalarhv(pTHX_ OP* rep_op)

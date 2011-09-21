@@ -141,15 +141,25 @@ PP(pp_padhv)
 static const char S_no_symref_sv[] =
     "Can't use string (\"%" SVf32 "\"%s) as %s ref while \"strict refs\" in use";
 
-PP(pp_rv2gv)
-{
-    dVAR; dSP; dTOPss;
+/* In some cases this function inspects PL_op.  If this function is called
+   for new op types, more bool parameters may need to be added in place of
+   the checks.
 
+   When noinit is true, the absence of a gv will cause a retval of undef.
+   This is unrelated to the cv-to-gv assignment case.
+
+   Make sure to use SPAGAIN after calling this.
+*/
+
+static SV *
+S_rv2gv(pTHX_ SV *sv, const bool vivify_sv, const bool strict,
+              const bool noinit)
+{
+    dVAR;
     if (!isGV(sv) || SvFAKE(sv)) SvGETMAGIC(sv);
     if (SvROK(sv)) {
 	if (SvAMAGIC(sv)) {
 	    sv = amagic_deref_call(sv, to_gv_amg);
-	    SPAGAIN;
 	}
       wasref:
 	sv = SvRV(sv);
@@ -161,18 +171,18 @@ PP(pp_rv2gv)
 	    sv = MUTABLE_SV(gv);
 	}
 	else if (!isGV_with_GP(sv))
-	    DIE(aTHX_ "Not a GLOB reference");
+	    return (SV *)Perl_die(aTHX_ "Not a GLOB reference");
     }
     else {
 	if (!isGV_with_GP(sv)) {
-	    if (!SvOK(sv) && sv != &PL_sv_undef) {
+	    if (!SvOK(sv)) {
 		/* If this is a 'my' scalar and flag is set then vivify
 		 * NI-S 1999/05/07
 		 */
-		if (SvREADONLY(sv))
-		    Perl_croak_no_modify(aTHX);
-		if (PL_op->op_private & OPpDEREF) {
+		if (vivify_sv && sv != &PL_sv_undef) {
 		    GV *gv;
+		    if (SvREADONLY(sv))
+			Perl_croak_no_modify(aTHX);
 		    if (cUNOP->op_targ) {
 			STRLEN len;
 			SV * const namesv = PAD_SV(cUNOP->op_targ);
@@ -190,55 +200,61 @@ PP(pp_rv2gv)
 		    SvSETMAGIC(sv);
 		    goto wasref;
 		}
-		if (PL_op->op_flags & OPf_REF ||
-		    PL_op->op_private & HINT_STRICT_REFS)
-		    DIE(aTHX_ PL_no_usym, "a symbol");
+		if (PL_op->op_flags & OPf_REF || strict)
+		    return (SV *)Perl_die(aTHX_ PL_no_usym, "a symbol");
 		if (ckWARN(WARN_UNINITIALIZED))
 		    report_uninit(sv);
-		RETSETUNDEF;
+		return &PL_sv_undef;
 	    }
-	    if ((PL_op->op_flags & OPf_SPECIAL) &&
-		!(PL_op->op_flags & OPf_MOD))
+	    if (noinit)
 	    {
-		SV * const temp = MUTABLE_SV(gv_fetchsv(sv, 0, SVt_PVGV));
-		if (!temp
-		    && (!is_gv_magical_sv(sv,0)
-			|| !(sv = MUTABLE_SV(gv_fetchsv(sv, GV_ADD,
-							SVt_PVGV))))) {
-		    RETSETUNDEF;
-		}
-		sv = temp;
+		if (!(sv = MUTABLE_SV(gv_fetchsv_nomg(
+		           sv, GV_ADDMG, SVt_PVGV
+		   ))))
+		    return &PL_sv_undef;
 	    }
 	    else {
-		if (PL_op->op_private & HINT_STRICT_REFS)
-		    DIE(aTHX_ S_no_symref_sv, sv, (SvPOK(sv) && SvCUR(sv)>32 ? "..." : ""), "a symbol");
+		if (strict)
+		    return
+		     (SV *)Perl_die(aTHX_
+		            S_no_symref_sv,
+		            sv,
+		            (SvPOK(sv) && SvCUR(sv)>32 ? "..." : ""),
+		            "a symbol"
+		           );
 		if ((PL_op->op_private & (OPpLVAL_INTRO|OPpDONT_INIT_GV))
 		    == OPpDONT_INIT_GV) {
 		    /* We are the target of a coderef assignment.  Return
 		       the scalar unchanged, and let pp_sasssign deal with
 		       things.  */
-		    RETURN;
+		    return sv;
 		}
-		{
-		    STRLEN len;
-		    const char * const nambeg = SvPV_nomg_const(sv, len);
-		    sv = MUTABLE_SV(
-			gv_fetchpvn_flags(
-			    nambeg, len, GV_ADD | SvUTF8(sv), SVt_PVGV
-			)
-		    );
-		}
+		sv = MUTABLE_SV(gv_fetchsv_nomg(sv, GV_ADD, SVt_PVGV));
 	    }
 	    /* FAKE globs in the symbol table cause weird bugs (#77810) */
-	    if (sv) SvFAKE_off(sv);
+	    SvFAKE_off(sv);
 	}
     }
-    if (sv && SvFAKE(sv)) {
+    if (SvFAKE(sv)) {
 	SV *newsv = sv_newmortal();
 	sv_setsv_flags(newsv, sv, 0);
 	SvFAKE_off(newsv);
 	sv = newsv;
     }
+    return sv;
+}
+
+PP(pp_rv2gv)
+{
+    dVAR; dSP; dTOPss;
+
+    sv = S_rv2gv(aTHX_
+          sv, PL_op->op_private & OPpDEREF,
+          PL_op->op_private & HINT_STRICT_REFS,
+          ((PL_op->op_flags & OPf_SPECIAL) && !(PL_op->op_flags & OPf_MOD))
+             || PL_op->op_type == OP_READLINE
+         );
+    SPAGAIN;
     if (PL_op->op_private & OPpLVAL_INTRO)
 	save_gp(MUTABLE_GV(sv), !(PL_op->op_flags & OPf_SPECIAL));
     SETs(sv);
@@ -279,19 +295,14 @@ Perl_softref2xv(pTHX_ SV *const sv, const char *const what,
     if ((PL_op->op_flags & OPf_SPECIAL) &&
 	!(PL_op->op_flags & OPf_MOD))
 	{
-	    gv = gv_fetchsv(sv, 0, type);
-	    if (!gv
-		&& (!is_gv_magical_sv(sv,0)
-		    || !(gv = gv_fetchsv(sv, GV_ADD, type))))
+	    if (!(gv = gv_fetchsv_nomg(sv, GV_ADDMG, type)))
 		{
 		    **spp = &PL_sv_undef;
 		    return NULL;
 		}
 	}
     else {
-	STRLEN len;
-	const char * const nambeg = SvPV_nomg_const(sv, len);
-	gv = gv_fetchpvn_flags(nambeg, len, GV_ADD | SvUTF8(sv), type);
+	gv = gv_fetchsv_nomg(sv, GV_ADD, type);
     }
     return gv;
 }
@@ -301,8 +312,7 @@ PP(pp_rv2sv)
     dVAR; dSP; dTOPss;
     GV *gv = NULL;
 
-    if (!(PL_op->op_private & OPpDEREFed))
-	SvGETMAGIC(sv);
+    SvGETMAGIC(sv);
     if (SvROK(sv)) {
 	if (SvAMAGIC(sv)) {
 	    sv = amagic_deref_call(sv, to_sv_amg);
@@ -340,7 +350,7 @@ PP(pp_rv2sv)
 		Perl_croak(aTHX_ "%s", PL_no_localize_ref);
 	}
 	else if (PL_op->op_private & OPpDEREF)
-	    vivify_ref(sv, PL_op->op_private & OPpDEREF);
+	    sv = vivify_ref(sv, PL_op->op_private & OPpDEREF);
     }
     SETs(sv);
     RETURN;
@@ -359,9 +369,7 @@ PP(pp_av2arylen)
 	}
 	SETs(*sv);
     } else {
-	SETs(sv_2mortal(newSViv(
-	    AvFILL(MUTABLE_AV(av)) + CopARYBASE_get(PL_curcop)
-	)));
+	SETs(sv_2mortal(newSViv(AvFILL(MUTABLE_AV(av)))));
     }
     RETURN;
 }
@@ -386,7 +394,7 @@ PP(pp_pos)
 		I32 i = mg->mg_len;
 		if (DO_UTF8(sv))
 		    sv_pos_b2u(sv, &i);
-		PUSHi(i + CopARYBASE_get(PL_curcop));
+		PUSHi(i);
 		RETURN;
 	    }
 	}
@@ -400,7 +408,7 @@ PP(pp_rv2cv)
     GV *gv;
     HV *stash_unused;
     const I32 flags = (PL_op->op_flags & OPf_SPECIAL)
-	? 0
+	? GV_ADDMG
 	: ((PL_op->op_private & (OPpLVAL_INTRO|OPpMAY_RETURN_CONSTANT)) == OPpMAY_RETURN_CONSTANT)
 	    ? GV_ADD|GV_NOEXPAND
 	    : GV_ADD;
@@ -550,13 +558,15 @@ PP(pp_bless)
     HV *stash;
 
     if (MAXARG == 1)
+      curstash:
 	stash = CopSTASH(PL_curcop);
     else {
 	SV * const ssv = POPs;
 	STRLEN len;
 	const char *ptr;
 
-	if (ssv && !SvGMAGICAL(ssv) && !SvAMAGIC(ssv) && SvROK(ssv))
+	if (!ssv) goto curstash;
+	if (!SvGMAGICAL(ssv) && !SvAMAGIC(ssv) && SvROK(ssv))
 	    Perl_croak(aTHX_ "Attempt to bless into a reference");
 	ptr = SvPV_const(ssv,len);
 	if (len == 0)
@@ -1041,64 +1051,29 @@ PP(pp_undef)
     RETPUSHUNDEF;
 }
 
-PP(pp_predec)
-{
-    dVAR; dSP;
-    if (SvTYPE(TOPs) >= SVt_PVAV || isGV_with_GP(TOPs))
-	Perl_croak_no_modify(aTHX);
-    if (!SvREADONLY(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
-        && SvIVX(TOPs) != IV_MIN)
-    {
-	SvIV_set(TOPs, SvIVX(TOPs) - 1);
-	SvFLAGS(TOPs) &= ~(SVp_NOK|SVp_POK);
-    }
-    else
-	sv_dec(TOPs);
-    SvSETMAGIC(TOPs);
-    return NORMAL;
-}
-
 PP(pp_postinc)
 {
     dVAR; dSP; dTARGET;
-    if (SvTYPE(TOPs) >= SVt_PVAV || isGV_with_GP(TOPs))
+    const bool inc =
+	PL_op->op_type == OP_POSTINC || PL_op->op_type == OP_I_POSTINC;
+    if (SvTYPE(TOPs) >= SVt_PVAV || (isGV_with_GP(TOPs) && !SvFAKE(TOPs)))
 	Perl_croak_no_modify(aTHX);
     if (SvROK(TOPs))
 	TARG = sv_newmortal();
     sv_setsv(TARG, TOPs);
     if (!SvREADONLY(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
-        && SvIVX(TOPs) != IV_MAX)
+        && SvIVX(TOPs) != (inc ? IV_MAX : IV_MIN))
     {
-	SvIV_set(TOPs, SvIVX(TOPs) + 1);
+	SvIV_set(TOPs, SvIVX(TOPs) + (inc ? 1 : -1));
 	SvFLAGS(TOPs) &= ~(SVp_NOK|SVp_POK);
     }
-    else
+    else if (inc)
 	sv_inc_nomg(TOPs);
+    else sv_dec_nomg(TOPs);
     SvSETMAGIC(TOPs);
     /* special case for undef: see thread at 2003-03/msg00536.html in archive */
-    if (!SvOK(TARG))
+    if (inc && !SvOK(TARG))
 	sv_setiv(TARG, 0);
-    SETs(TARG);
-    return NORMAL;
-}
-
-PP(pp_postdec)
-{
-    dVAR; dSP; dTARGET;
-    if (SvTYPE(TOPs) >= SVt_PVAV || isGV_with_GP(TOPs))
-	Perl_croak_no_modify(aTHX);
-    if (SvROK(TOPs))
-	TARG = sv_newmortal();
-    sv_setsv(TARG, TOPs);
-    if (!SvREADONLY(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
-        && SvIVX(TOPs) != IV_MIN)
-    {
-	SvIV_set(TOPs, SvIVX(TOPs) - 1);
-	SvFLAGS(TOPs) &= ~(SVp_NOK|SVp_POK);
-    }
-    else
-	sv_dec_nomg(TOPs);
-    SvSETMAGIC(TOPs);
     SETs(TARG);
     return NORMAL;
 }
@@ -2772,6 +2747,9 @@ PP(pp_rand)
     NV value;
     if (MAXARG < 1)
 	value = 1.0;
+    else if (!TOPs) {
+	value = 1.0; (void)POPs;
+    }
     else
 	value = POPn;
     if (value == 0.0)
@@ -2788,7 +2766,7 @@ PP(pp_rand)
 PP(pp_srand)
 {
     dVAR; dSP; dTARGET;
-    const UV anum = (MAXARG < 1) ? seed() : POPu;
+    const UV anum = (MAXARG < 1 || (!TOPs && !POPs)) ? seed() : POPu;
     (void)seedDrand01((Rand_seed_t)anum);
     PL_srand_called = TRUE;
     if (anum)
@@ -2991,23 +2969,26 @@ PP(pp_substr)
     int    len_is_uv = 1;
     const I32 lvalue = PL_op->op_flags & OPf_MOD || LVRET;
     const char *tmps;
-    const IV arybase = CopARYBASE_get(PL_curcop);
     SV *repl_sv = NULL;
     const char *repl = NULL;
     STRLEN repl_len;
-    const int num_args = PL_op->op_private & 7;
+    int num_args = PL_op->op_private & 7;
     bool repl_need_utf8_upgrade = FALSE;
     bool repl_is_utf8 = FALSE;
 
     if (num_args > 2) {
 	if (num_args > 3) {
-	    repl_sv = POPs;
+	  if((repl_sv = POPs)) {
 	    repl = SvPV_const(repl_sv, repl_len);
 	    repl_is_utf8 = DO_UTF8(repl_sv) && SvCUR(repl_sv);
+	  }
+	  else num_args--;
 	}
-	len_sv    = POPs;
-	len_iv    = SvIV(len_sv);
-	len_is_uv = SvIOK_UV(len_sv);
+	if ((len_sv = POPs)) {
+	    len_iv    = SvIV(len_sv);
+	    len_is_uv = SvIOK_UV(len_sv);
+	}
+	else num_args--;
     }
     pos_sv     = POPs;
     pos1_iv    = SvIV(pos_sv);
@@ -3033,32 +3014,12 @@ PP(pp_substr)
     else
 	utf8_curlen = 0;
 
-    if ( (pos1_is_uv && arybase < 0) || (pos1_iv >= arybase) ) { /* pos >= $[ */
-	UV pos1_uv = pos1_iv-arybase;
-	/* Overflow can occur when $[ < 0 */
-	if (arybase < 0 && pos1_uv < (UV)pos1_iv)
-	    goto bound_fail;
-	pos1_iv = pos1_uv;
-	pos1_is_uv = 1;
+    if (!pos1_is_uv && pos1_iv < 0 && curlen) {
+	pos1_is_uv = curlen-1 > ~(UV)pos1_iv;
+	pos1_iv += curlen;
     }
-    else if (pos1_is_uv ? (UV)pos1_iv > 0 : pos1_iv > 0) {
-	goto bound_fail;  /* $[=3; substr($_,2,...) */
-    }
-    else { /* pos < $[ */
-	if (pos1_iv == 0) { /* $[=1; substr($_,0,...) */
-	    pos1_iv = curlen;
-	    pos1_is_uv = 1;
-	} else {
-	    if (curlen) {
-		pos1_is_uv = curlen-1 > ~(UV)pos1_iv;
-		pos1_iv += curlen;
-	   }
-	}
-    }
-    if (pos1_is_uv || pos1_iv > 0) {
-	if ((UV)pos1_iv > curlen)
-	    goto bound_fail;
-    }
+    if ((pos1_is_uv || pos1_iv > 0) && (UV)pos1_iv > curlen)
+	goto bound_fail;
 
     if (num_args > 2) {
 	if (!len_is_uv && len_iv < 0) {
@@ -3215,16 +3176,13 @@ PP(pp_index)
     I32 retval;
     const char *big_p;
     const char *little_p;
-    const I32 arybase = CopARYBASE_get(PL_curcop);
     bool big_utf8;
     bool little_utf8;
     const bool is_index = PL_op->op_type == OP_INDEX;
+    const bool threeargs = MAXARG >= 3 && (TOPs || ((void)POPs,0));
 
-    if (MAXARG >= 3) {
-	/* arybase is in characters, like offset, so combine prior to the
-	   UTF-8 to bytes calculation.  */
-	offset = POPi - arybase;
-    }
+    if (threeargs)
+	offset = POPi;
     little = POPs;
     big = POPs;
     big_p = SvPV_const(big, biglen);
@@ -3294,7 +3252,7 @@ PP(pp_index)
 	little_p = SvPVX(little);
     }
 
-    if (MAXARG < 3)
+    if (!threeargs)
 	offset = is_index ? 0 : biglen;
     else {
 	if (big_utf8 && offset > 0)
@@ -3319,7 +3277,7 @@ PP(pp_index)
     }
     SvREFCNT_dec(temp);
  fail:
-    PUSHi(retval + arybase);
+    PUSHi(retval);
     RETURN;
 }
 
@@ -3572,14 +3530,6 @@ PP(pp_ucfirst)
     else if (DO_UTF8(source)) {	/* Is the source utf8? */
 	doing_utf8 = TRUE;
 
-/* TODO: This is #ifdefd out because it has hard-coded the standard mappings,
- * and doesn't allow for the user to specify their own.  When code is added to
- * detect if there is a user-defined mapping in force here, and if so to use
- * that, then the code below can be compiled.  The detection would be a good
- * thing anyway, as currently the user-defined mappings only work on utf8
- * strings, and thus depend on the chosen internal storage method, which is a
- * bad thing */
-#ifdef GO_AHEAD_AND_BREAK_USER_DEFINED_CASE_MAPPINGS
 	if (UTF8_IS_INVARIANT(*s)) {
 
 	    /* An invariant source character is either ASCII or, in EBCDIC, an
@@ -3651,7 +3601,6 @@ PP(pp_ucfirst)
 	    }
 	}
 	else {
-#endif	/* end of dont want to break user-defined casing */
 
 	    /* Here, can't short-cut the general case */
 
@@ -3662,9 +3611,7 @@ PP(pp_ucfirst)
 	    /* we can't do in-place if the length changes.  */
 	    if (ulen != tculen) inplace = FALSE;
 	    need = slen + 1 - ulen + tculen;
-#ifdef GO_AHEAD_AND_BREAK_USER_DEFINED_CASE_MAPPINGS
 	}
-#endif
     }
     else { /* Non-zero length, non-UTF-8,  Need to consider locale and if
 	    * latin1 is treated as caseless.  Note that a locale takes
@@ -3921,10 +3868,6 @@ PP(pp_uc)
 		in_iota_subscript = FALSE;
 	    }
 
-
-/* See comments at the first instance in this file of this ifdef */
-#ifdef GO_AHEAD_AND_BREAK_USER_DEFINED_CASE_MAPPINGS
-
 	    /* If the UTF-8 character is invariant, then it is in the range
 	     * known by the standard macro; result is only one byte long */
 	    if (UTF8_IS_INVARIANT(*s)) {
@@ -3935,15 +3878,12 @@ PP(pp_uc)
 
 		/* Likewise, if it fits in a byte, its case change is in our
 		 * table */
-		U8 orig = TWO_BYTE_UTF8_TO_UNI(*s, *s++);
+		U8 orig = TWO_BYTE_UTF8_TO_UNI(*s, *(s+1));
 		U8 upper = toUPPER_LATIN1_MOD(orig);
 		CAT_TWO_BYTE_UNI_UPPER_MOD(d, orig, upper);
-		s++;
+		s += 2;
 	    }
 	    else {
-#else
-	    {
-#endif
 
 		/* Otherwise, need the general UTF-8 case.  Get the changed
 		 * case value and copy it to the output buffer */
@@ -4163,8 +4103,6 @@ PP(pp_lc)
 	U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
 
 	while (s < send) {
-/* See comments at the first instance in this file of this ifdef */
-#ifdef GO_AHEAD_AND_BREAK_USER_DEFINED_CASE_MAPPINGS
 	    if (UTF8_IS_INVARIANT(*s)) {
 
 		/* Invariant characters use the standard mappings compiled in.
@@ -4175,12 +4113,11 @@ PP(pp_lc)
 	    else if (UTF8_IS_DOWNGRADEABLE_START(*s)) {
 
 		/* As do the ones in the Latin1 range */
-		U8 lower = toLOWER_LATIN1(TWO_BYTE_UTF8_TO_UNI(*s, *s++));
+		U8 lower = toLOWER_LATIN1(TWO_BYTE_UTF8_TO_UNI(*s, *(s+1)));
 		CAT_UNI_TO_UTF8_TWO_BYTE(d, lower);
-		s++;
+		s += 2;
 	    }
 	    else {
-#endif
 		/* Here, is utf8 not in Latin-1 range, have to go out and get
 		 * the mappings from the tables. */
 
@@ -4190,20 +4127,14 @@ PP(pp_lc)
 #ifndef CONTEXT_DEPENDENT_CASING
 		toLOWER_utf8(s, tmpbuf, &ulen);
 #else
-/* This is ifdefd out because it needs more work and thought.  It isn't clear
- * that we should do it.
- * A minor objection is that this is based on a hard-coded rule from the
- *  Unicode standard, and may change, but this is not very likely at all.
- *  mktables should check and warn if it does.
- * More importantly, if the sigma occurs at the end of the string, we don't
- * have enough context to know whether it is part of a larger string or going
- * to be or not.  It may be that we are passed a subset of the context, via
- * a \U...\E, for example, and we could conceivably know the larger context if
- * code were changed to pass that in.  But, if the string passed in is an
- * intermediate result, and the user concatenates two strings together
- * after we have made a final sigma, that would be wrong.  If the final sigma
- * occurs in the middle of the string we are working on, then we know that it
- * should be a final sigma, but otherwise we can't be sure. */
+/* This is ifdefd out because it probably is the wrong thing to do.  The right
+ * thing is probably to have an I/O layer that converts final sigma to regular
+ * on input and vice versa (under the correct circumstances) on output.  In
+ * effect, the final sigma is just a glyph variation when the regular one
+ * occurs at the end of a word.   And we don't really know what's going to be
+ * the end of the word until it is finally output, as splitting and joining can
+ * occur at any time and change what once was the word end to be in the middle,
+ * and vice versa. */
 
 		const UV uv = toLOWER_utf8(s, tmpbuf, &ulen);
 
@@ -4287,9 +4218,7 @@ PP(pp_lc)
 		Copy(tmpbuf, d, ulen, U8);
 		d += ulen;
 		s += u;
-#ifdef GO_AHEAD_AND_BREAK_USER_DEFINED_CASE_MAPPINGS
 	    }
-#endif
 	}   /* End of looping through the source string */
 	SvUTF8_on(dest);
 	*d = '\0';
@@ -4387,7 +4316,6 @@ PP(pp_aslice)
     register const I32 lval = (PL_op->op_flags & OPf_MOD || LVRET);
 
     if (SvTYPE(av) == SVt_PVAV) {
-	const I32 arybase = CopARYBASE_get(PL_curcop);
 	const bool localizing = PL_op->op_private & OPpLVAL_INTRO;
 	bool can_preserve = FALSE;
 
@@ -4415,8 +4343,6 @@ PP(pp_aslice)
 	    I32 elem = SvIV(*MARK);
 	    bool preeminent = TRUE;
 
-	    if (elem > 0)
-		elem -= arybase;
 	    if (localizing && can_preserve) {
 		/* If we can determine whether the element exist,
 		 * Try to preserve the existenceness of a tied array
@@ -4502,7 +4428,7 @@ PP(pp_aeach)
     }
 
     EXTEND(SP, 2);
-    mPUSHi(CopARYBASE_get(PL_curcop) + current);
+    mPUSHi(current);
     if (gimme == G_ARRAY) {
 	SV **const element = av_fetch(array, current, 0);
         PUSHs(element ? *element : &PL_sv_undef);
@@ -4525,13 +4451,12 @@ PP(pp_akeys)
     }
     else if (gimme == G_ARRAY) {
         IV n = Perl_av_len(aTHX_ array);
-        IV i = CopARYBASE_get(PL_curcop);
+        IV i;
 
         EXTEND(SP, n + 1);
 
 	if (PL_op->op_type == OP_AKEYS || PL_op->op_type == OP_RKEYS) {
-	    n += i;
-	    for (;  i <= n;  i++) {
+	    for (i = 0;  i <= n;  i++) {
 		mPUSHi(i);
 	    }
 	}
@@ -4937,7 +4862,6 @@ PP(pp_lslice)
     SV ** const lastlelem = PL_stack_base + POPMARK;
     SV ** const firstlelem = PL_stack_base + POPMARK + 1;
     register SV ** const firstrelem = lastlelem + 1;
-    const I32 arybase = CopARYBASE_get(PL_curcop);
     I32 is_something_there = FALSE;
 
     register const I32 max = lastrelem - lastlelem;
@@ -4947,8 +4871,6 @@ PP(pp_lslice)
 	I32 ix = SvIV(*lastlelem);
 	if (ix < 0)
 	    ix += max;
-	else
-	    ix -= arybase;
 	if (ix < 0 || ix >= max)
 	    *firstlelem = &PL_sv_undef;
 	else
@@ -4966,8 +4888,6 @@ PP(pp_lslice)
 	I32 ix = SvIV(*lelem);
 	if (ix < 0)
 	    ix += max;
-	else
-	    ix -= arybase;
 	if (ix < 0 || ix >= max)
 	    *lelem = &PL_sv_undef;
 	else {
@@ -5071,8 +4991,6 @@ PP(pp_splice)
 	offset = i = SvIV(*MARK);
 	if (offset < 0)
 	    offset += AvFILLp(ary) + 1;
-	else
-	    offset -= CopARYBASE_get(PL_curcop);
 	if (offset < 0)
 	    DIE(aTHX_ PL_no_aelem, i);
 	if (++MARK < SP) {
@@ -5968,14 +5886,22 @@ PP(pp_coreargs)
 {
     dSP;
     int opnum = SvIOK(cSVOP_sv) ? (int)SvUV(cSVOP_sv) : 0;
+    int defgv = PL_opargs[opnum] & OA_DEFGV, whicharg = 0;
     AV * const at_ = GvAV(PL_defgv);
+    SV **svp = AvARRAY(at_);
     I32 minargs = 0, maxargs = 0, numargs = AvFILLp(at_)+1;
     I32 oa = opnum ? PL_opargs[opnum] >> OASHIFT : 0;
+    bool seen_question = 0;
     const char *err = NULL;
+    const bool pushmark = PL_op->op_private & OPpCOREARGS_PUSHMARK;
 
-    /* Count how many args there are. */
+    /* Count how many args there are first, to get some idea how far to
+       extend the stack. */
     while (oa) {
+	if ((oa & 7) == OA_LIST) { maxargs = I32_MAX; break; }
 	maxargs++;
+	if (oa & OA_OPTIONAL) seen_question = 1;
+	if (!seen_question) minargs++;
 	oa >>= 4;
     }
 
@@ -5994,6 +5920,103 @@ PP(pp_coreargs)
        to run the next op with the caller’s hints, so we cannot have a
        nextstate. */
     SP = PL_stack_base + cxstack[cxstack_ix].blk_oldsp;
+
+    if(!maxargs) RETURN;
+
+    /* We do this here, rather than with a separate pushmark op, as it has
+       to come in between two things this function does (stack reset and
+       arg pushing).  This seems the easiest way to do it. */
+    if (pushmark) {
+	PUTBACK;
+	(void)Perl_pp_pushmark(aTHX);
+    }
+
+    EXTEND(SP, maxargs == I32_MAX ? numargs : maxargs);
+    PUTBACK; /* The code below can die in various places. */
+
+    oa = PL_opargs[opnum] >> OASHIFT;
+    for (; oa&&(numargs||!pushmark); (void)(numargs&&(++svp,--numargs))) {
+	whicharg++;
+	switch (oa & 7) {
+	case OA_SCALAR:
+	    if (!numargs && defgv && whicharg == minargs + 1) {
+		PERL_SI * const oldsi = PL_curstackinfo;
+		I32 const oldcxix = oldsi->si_cxix;
+		CV *caller;
+		if (oldcxix) oldsi->si_cxix--;
+		else PL_curstackinfo = oldsi->si_prev;
+		caller = find_runcv(NULL);
+		PL_curstackinfo = oldsi;
+		oldsi->si_cxix = oldcxix;
+		PUSHs(find_rundefsv2(
+		    caller,cxstack[cxstack_ix].blk_oldcop->cop_seq
+		));
+	    }
+	    else PUSHs(numargs ? svp && *svp ? *svp : &PL_sv_undef : NULL);
+	    break;
+	case OA_LIST:
+	    while (numargs--) {
+		PUSHs(svp && *svp ? *svp : &PL_sv_undef);
+		svp++;
+	    }
+	    RETURN;
+	case OA_HVREF:
+	    if (!svp || !*svp || !SvROK(*svp)
+	     || SvTYPE(SvRV(*svp)) != SVt_PVHV)
+		DIE(aTHX_
+		/* diag_listed_as: Type of arg %d to &CORE::%s must be %s*/
+		 "Type of arg %d to &CORE::%s must be hash reference",
+		  whicharg, OP_DESC(PL_op->op_next)
+		);
+	    PUSHs(SvRV(*svp));
+	    break;
+	case OA_FILEREF:
+	    if (!numargs) PUSHs(NULL);
+	    else if(svp && *svp && SvROK(*svp) && isGV_with_GP(SvRV(*svp)))
+		/* no magic here, as the prototype will have added an extra
+		   refgen and we just want what was there before that */
+		PUSHs(SvRV(*svp));
+	    else {
+		const bool constr = PL_op->op_private & whicharg;
+		PUSHs(S_rv2gv(aTHX_
+		    svp && *svp ? *svp : &PL_sv_undef,
+		    constr, CopHINTS_get(PL_curcop) & HINT_STRICT_REFS,
+		    !constr
+		));
+	    }
+	    break;
+	case OA_SCALARREF:
+	  {
+	    const bool wantscalar =
+		PL_op->op_private & OPpCOREARGS_SCALARMOD;
+	    if (!svp || !*svp || !SvROK(*svp)
+	        /* We have to permit globrefs even for the \$ proto, as
+	           *foo is indistinguishable from ${\*foo}, and the proto-
+	           type permits the latter. */
+	     || SvTYPE(SvRV(*svp)) > (
+	             wantscalar       ? SVt_PVLV
+	           : opnum == OP_LOCK ? SVt_PVCV
+	           :                    SVt_PVHV
+	        )
+	       )
+		DIE(aTHX_
+		/* diag_listed_as: Type of arg %d to &CORE::%s must be %s*/
+		 "Type of arg %d to &CORE::%s must be %s",
+		  whicharg, OP_DESC(PL_op->op_next),
+		  wantscalar
+		    ? "scalar reference"
+		    : opnum == OP_LOCK
+		       ? "reference to one of [$@%&*]"
+		       : "reference to one of [$@%*]"
+		);
+	    PUSHs(SvRV(*svp));
+	    break;
+	  }
+	default:
+	    DIE(aTHX_ "panic: unknown OA_*: %x", (unsigned)(oa&7));
+	}
+	oa = oa >> 4;
+    }
 
     RETURN;
 }

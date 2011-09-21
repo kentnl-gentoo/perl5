@@ -37,7 +37,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.15.2
+#INST_VER	= \5.15.3
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -588,6 +588,7 @@ UTILS		=			\
 		..\utils\shasum		\
 		..\utils\instmodsh	\
 		..\utils\json_pp	\
+		..\utils\pod2html	\
 		..\x2p\find2perl	\
 		..\x2p\psed		\
 		..\x2p\s2p		\
@@ -726,6 +727,7 @@ CORE_H		= $(CORE_NOCFG_H) .\config.h ..\git_version.h
 UUDMAP_H	= ..\uudmap.h
 BITCOUNT_H	= ..\bitcount.h
 MG_DATA_H	= ..\mg_data.h
+GENERATED_HEADERS = $(UUDMAP_H) $(BITCOUNT_H) $(MG_DATA_H)
 
 MICROCORE_OBJ	= $(MICROCORE_SRC:.c=.obj)
 CORE_OBJ	= $(MICROCORE_OBJ) $(EXTRACORE_SRC:.c=.obj)
@@ -841,13 +843,13 @@ config.w32 : $(CFGSH_TMPL)
 
 # this target is for when changes to the main config.sh happen.
 # edit config.vc, then make perl in a minimal configuration (i.e. with MULTI,
-# ITHREADS, IMP_SYS, LARGE_FILES, PERLIO and CRYPT off), then make this target
+# ITHREADS, IMP_SYS, LARGE_FILES and PERLIO off), then make this target
 # to regenerate config_H.vc.
+# unfortunately, some further manual editing is also then required to restore all
+# the special __GNUC__ handling that is otherwise lost.
 # repeat for config.vc64 and config_H.vc64 if you have a suitable build
 # environment, otherwise hand-edit them to maintain the same differences with
 # config.vc and config_H.vc as before.
-# unfortunately, some further manual editing is also then required to restore all
-# the special __GNUC__ handling that is otherwise lost.
 regen_config_h:
 	$(MINIPERL) -I..\lib config_sh.PL $(CFG_VARS) $(CFGSH_TMPL) > ..\config.sh
 	$(MINIPERL) -I..\lib ..\configpm --chdir=..
@@ -899,7 +901,7 @@ $(CORE_OBJ)	: $(CORE_H)
 $(DLL_OBJ)	: $(CORE_H)
 $(X2P_OBJ)	: $(CORE_H)
 
-perldll.def : $(MINIPERL) $(CONFIGPM) ..\global.sym ..\makedef.pl create_perllibst_h.pl
+perldll.def : $(MINIPERL) $(CONFIGPM) ..\embed.fnc ..\makedef.pl create_perllibst_h.pl
 	$(MINIPERL) -I..\lib create_perllibst_h.pl
 	$(MINIPERL) -I..\lib -w ..\makedef.pl PLATFORM=win32 $(OPTIMIZE) $(DEFINES) $(BUILDOPT) \
 	    CCTYPE=$(CCTYPE) TARG_DIR=..\ > perldll.def
@@ -947,12 +949,12 @@ $(X2P) : $(MINIPERL) $(X2P_OBJ) Extensions
 <<
 	$(EMBED_EXE_MANI)
 
-$(MINIDIR)\globals$(o) : $(UUDMAP_H) $(BITCOUNT_H) $(MG_DATA_H)
+$(MINIDIR)\globals$(o) : $(GENERATED_HEADERS)
 
 $(UUDMAP_H) $(MG_DATA_H) : $(BITCOUNT_H)
 
 $(BITCOUNT_H) : $(GENUUDMAP)
-	$(GENUUDMAP) $(UUDMAP_H) $(BITCOUNT_H) $(MG_DATA_H)
+	$(GENUUDMAP) $(GENERATED_HEADERS)
 
 $(GENUUDMAP_OBJ) : ..\mg_raw.h
 
@@ -1071,7 +1073,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vmesa    ..\pod\perlvmesa.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5152delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5153delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(PERLEXE) $(ICWD) ..\autodoc.pl ..
@@ -1164,7 +1166,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-cd $(PODDIR) && del /f *.html *.bat \
-	    perl5152delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perl5153delta.pod perlaix.pod perlamiga.pod perlapi.pod \
 	    perlbeos.pod perlbs2000.pod perlce.pod perlcn.pod \
 	    perlcygwin.pod perldgux.pod perldos.pod perlepoc.pod \
 	    perlfreebsd.pod perlhaiku.pod perlhpux.pod perlhurd.pod \
@@ -1177,7 +1179,7 @@ distclean: realclean
 	    perlvos.pod perlwin32.pod
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph pstruct h2xs \
 	    perldoc perlivp libnetcfg enc2xs piconv cpan *.bat \
-	    xsubpp instmodsh json_pp prove ptar ptardiff ptargrep cpanp-run-perl cpanp cpan2dist shasum corelist config_data
+	    xsubpp pod2html instmodsh json_pp prove ptar ptardiff ptargrep cpanp-run-perl cpanp cpan2dist shasum corelist config_data
 	-cd ..\x2p && del /f find2perl s2p psed *.bat
 	-del /f ..\config.sh perlmain.c dlutils.c config.h.new \
 	        perlmainst.c
@@ -1281,7 +1283,7 @@ _clean :
 	-@$(DEL) $(PERLSTATICLIB)
 	-@$(DEL) $(PERLDLL)
 	-@$(DEL) $(CORE_OBJ)
-	-@$(DEL) $(GENUUDMAP) $(GENUUDMAP_OBJ) $(UUDMAP_H) $(BITCOUNT_H) $(MG_DATA_H)
+	-@$(DEL) $(GENUUDMAP) $(GENUUDMAP_OBJ) $(GENERATED_HEADERS)
 	-if exist $(MINIDIR) rmdir /s /q $(MINIDIR)
 	-if exist $(UNIDATADIR1) rmdir /s /q $(UNIDATADIR1)
 	-if exist $(UNIDATADIR2) rmdir /s /q $(UNIDATADIR2)
