@@ -987,6 +987,7 @@ Perl_scalarvoid(pTHX_ OP *o)
     dVAR;
     OP *kid;
     const char* useless = NULL;
+    U32 useless_is_utf8 = 0;
     SV* sv;
     U8 want;
 
@@ -1167,6 +1168,7 @@ Perl_scalarvoid(pTHX_ OP *o)
 		    SV* msv = sv_2mortal(Perl_newSVpvf(aTHX_
 				"a constant (%"SVf")", sv));
 		    useless = SvPV_nolen(msv);
+                    useless_is_utf8 = SvUTF8(msv);
 		}
 		else
 		    useless = "a constant (undef)";
@@ -1316,7 +1318,9 @@ Perl_scalarvoid(pTHX_ OP *o)
 	return scalar(o);
     }
     if (useless)
-	Perl_ck_warner(aTHX_ packWARN(WARN_VOID), "Useless use of %s in void context", useless);
+       Perl_ck_warner(aTHX_ packWARN(WARN_VOID), "Useless use of %"SVf" in void context",
+                       newSVpvn_flags(useless, strlen(useless),
+                            SVs_TEMP | ( useless_is_utf8 ? SVf_UTF8 : 0 )));
     return o;
 }
 
@@ -1463,7 +1467,7 @@ Perl_finalize_optree(pTHX_ OP* o)
     LEAVE;
 }
 
-void
+STATIC void
 S_finalize_op(pTHX_ OP* o)
 {
     PERL_ARGS_ASSERT_FINALIZE_OP;
@@ -6243,14 +6247,26 @@ Perl_newWHENOP(pTHX_ OP *cond, OP *block)
 }
 
 void
-Perl_cv_ckproto_len(pTHX_ const CV *cv, const GV *gv, const char *p,
-		    const STRLEN len)
+Perl_cv_ckproto_len_flags(pTHX_ const CV *cv, const GV *gv, const char *p,
+		    const STRLEN len, const U32 flags)
 {
-    PERL_ARGS_ASSERT_CV_CKPROTO_LEN;
+    const char * const cvp = CvPROTO(cv);
+    const STRLEN clen = CvPROTOLEN(cv);
 
-    if (((!p != !SvPOK(cv)) /* One has prototype, one has not.  */
-	 || (p && (len != SvCUR(cv) /* Not the same length.  */
-		   || memNE(p, SvPVX_const(cv), len))))
+    PERL_ARGS_ASSERT_CV_CKPROTO_LEN_FLAGS;
+
+    if (((!p != !cvp) /* One has prototype, one has not.  */
+	|| (p && (
+		  (flags & SVf_UTF8) == SvUTF8(cv)
+		   ? len != clen || memNE(cvp, p, len)
+		   : flags & SVf_UTF8
+		      ? bytes_cmp_utf8((const U8 *)cvp, clen,
+				       (const U8 *)p, len)
+		      : bytes_cmp_utf8((const U8 *)p, len,
+				       (const U8 *)cvp, clen)
+		 )
+	   )
+        )
 	 && ckWARN_d(WARN_PROTOTYPE)) {
 	SV* const msg = sv_newmortal();
 	SV* name = NULL;
@@ -6261,12 +6277,14 @@ Perl_cv_ckproto_len(pTHX_ const CV *cv, const GV *gv, const char *p,
 	if (name)
 	    Perl_sv_catpvf(aTHX_ msg, " sub %"SVf, SVfARG(name));
 	if (SvPOK(cv))
-	    Perl_sv_catpvf(aTHX_ msg, " (%"SVf")", SVfARG(cv));
+	    Perl_sv_catpvf(aTHX_ msg, " (%"SVf")",
+		SVfARG(newSVpvn_flags(cvp,clen, SvUTF8(cv)|SVs_TEMP))
+	    );
 	else
 	    sv_catpvs(msg, ": none");
 	sv_catpvs(msg, " vs ");
 	if (p)
-	    Perl_sv_catpvf(aTHX_ msg, "(%.*s)", (int) len, p);
+	    Perl_sv_catpvf(aTHX_ msg, "(%"SVf")", SVfARG(newSVpvn_flags(p, len, flags | SVs_TEMP)));
 	else
 	    sv_catpvs(msg, "none");
 	Perl_warner(aTHX_ packWARN(WARN_PROTOTYPE), "%"SVf, SVfARG(msg));
@@ -6417,6 +6435,7 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     GV *gv;
     const char *ps;
     STRLEN ps_len = 0; /* init it to avoid false uninit warning from icc */
+    U32 ps_utf8 = 0;
     register CV *cv = NULL;
     SV *const_sv;
     /* If the subroutine has no body, no attributes, and no builtin attributes
@@ -6430,10 +6449,12 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	? GV_ADDMULTI : GV_ADDMULTI | GV_NOINIT;
     const char * const name = o ? SvPV_nolen_const(cSVOPo->op_sv) : NULL;
     bool has_name;
+    bool name_is_utf8 = o ? (SvUTF8(cSVOPo->op_sv) ? 1 : 0) : 0;
 
     if (proto) {
 	assert(proto->op_type == OP_CONST);
 	ps = SvPV_const(((SVOP*)proto)->op_sv, ps_len);
+        ps_utf8 = SvUTF8(((SVOP*)proto)->op_sv);
     }
     else
 	ps = NULL;
@@ -6473,10 +6494,12 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    {
 		Perl_ck_warner_d(aTHX_ packWARN(WARN_PROTOTYPE), "Runaway prototype");
 	    }
-	    cv_ckproto_len((const CV *)gv, NULL, ps, ps_len);
+	    cv_ckproto_len_flags((const CV *)gv, NULL, ps, ps_len, ps_utf8);
 	}
-	if (ps)
+	if (ps) {
 	    sv_setpvn(MUTABLE_SV(gv), ps, ps_len);
+            if ( ps_utf8 ) SvUTF8_on(MUTABLE_SV(gv));
+        }
 	else
 	    sv_setiv(MUTABLE_SV(gv), -1);
 
@@ -6505,7 +6528,7 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
          * skipping the prototype check
          */
         if (exists || SvPOK(cv))
-	    cv_ckproto_len(cv, gv, ps, ps_len);
+            cv_ckproto_len_flags(cv, gv, ps, ps_len, ps_utf8);
 	/* already defined (or promised)? */
 	if (exists || GvASSUMECV(gv)) {
 	    if ((!block
@@ -6541,8 +6564,9 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 		    if (PL_parser && PL_parser->copline != NOLINE)
 			CopLINE_set(PL_curcop, PL_parser->copline);
 		    Perl_warner(aTHX_ packWARN(WARN_REDEFINE),
-			CvCONST(cv) ? "Constant subroutine %s redefined"
-				    : "Subroutine %s redefined", name);
+			CvCONST(cv) ? "Constant subroutine %"SVf" redefined"
+				    : "Subroutine %"SVf" redefined",
+                                    SVfARG(cSVOPo->op_sv));
 		    CopLINE_set(PL_curcop, oldline);
 		}
 #ifdef PERL_MAD
@@ -6568,7 +6592,7 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	}
 	else {
 	    GvCV_set(gv, NULL);
-	    cv = newCONSTSUB(NULL, name, const_sv);
+	    cv = newCONSTSUB_flags(NULL, name, name_is_utf8 ? SVf_UTF8 : 0, const_sv);
 	}
         mro_method_changed_in( /* sub Foo::Bar () { 123 } */
             (CvGV(cv) && GvSTASH(CvGV(cv)))
@@ -6646,15 +6670,11 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	CvFILE_set_from_cop(cv, PL_curcop);
 	CvSTASH_set(cv, PL_curstash);
     }
-  attrs:
-    if (attrs) {
-	/* Need to do a C<use attributes $stash_of_cv,\&cv,@attrs>. */
-	HV *stash = name && GvSTASH(CvGV(cv)) ? GvSTASH(CvGV(cv)) : PL_curstash;
-	apply_attrs(stash, MUTABLE_SV(cv), attrs, FALSE);
-    }
 
-    if (ps)
+    if (ps) {
 	sv_setpvn(MUTABLE_SV(cv), ps, ps_len);
+        if ( ps_utf8 ) SvUTF8_on(MUTABLE_SV(cv));
+    }
 
     if (PL_parser && PL_parser->error_count) {
 	op_free(block);
@@ -6677,7 +6697,7 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     }
  install_block:
     if (!block)
-	goto done;
+	goto attrs;
 
     /* If we assign an optree to a PVCV, then we've defined a subroutine that
        the debugger could be able to set a breakpoint in, so signal to
@@ -6717,7 +6737,14 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    CvCONST_on(cv);
     }
 
-    if (has_name) {
+  attrs:
+    if (attrs) {
+	/* Need to do a C<use attributes $stash_of_cv,\&cv,@attrs>. */
+	HV *stash = name && GvSTASH(CvGV(cv)) ? GvSTASH(CvGV(cv)) : PL_curstash;
+	apply_attrs(stash, MUTABLE_SV(cv), attrs, FALSE);
+    }
+
+    if (block && has_name) {
 	if (PERLDB_SUBLINE && PL_curstash != PL_debstash) {
 	    SV * const tmpstr = sv_newmortal();
 	    GV * const db_postponed = gv_fetchpvs("DB::postponed",
@@ -6729,9 +6756,9 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 					  (long)CopLINE(PL_curcop));
 	    gv_efullname3(tmpstr, gv, NULL);
 	    (void)hv_store(GvHV(PL_DBsub), SvPVX_const(tmpstr),
-		    SvCUR(tmpstr), sv, 0);
+		    SvUTF8(tmpstr) ? -(I32)SvCUR(tmpstr) : (I32)SvCUR(tmpstr), sv, 0);
 	    hv = GvHVn(db_postponed);
-	    if (HvTOTALKEYS(hv) > 0 && hv_exists(hv, SvPVX_const(tmpstr), SvCUR(tmpstr))) {
+	    if (HvTOTALKEYS(hv) > 0 && hv_exists(hv, SvPVX_const(tmpstr), SvUTF8(tmpstr) ? -(I32)SvCUR(tmpstr) : (I32)SvCUR(tmpstr))) {
 		CV * const pcv = GvCV(db_postponed);
 		if (pcv) {
 		    dSP;
@@ -6823,8 +6850,24 @@ S_process_special_blocks(pTHX_ const char *const fullname, GV *const gv,
 /*
 =for apidoc newCONSTSUB
 
+See L</newCONSTSUB_flags>.
+
+=cut
+*/
+
+CV *
+Perl_newCONSTSUB(pTHX_ HV *stash, const char *name, SV *sv)
+{
+    return newCONSTSUB_flags(stash, name, 0, sv);
+}
+
+/*
+=for apidoc newCONSTSUB_flags
+
 Creates a constant sub equivalent to Perl C<sub FOO () { 123 }> which is
 eligible for inlining at compile-time.
+
+Currently, the only useful value for C<flags> is SVf_UTF8.
 
 Passing NULL for SV creates a constant sub equivalent to C<sub BAR () {}>,
 which won't be called if used as a destructor, but will suppress the overhead
@@ -6835,7 +6878,7 @@ compile time.)
 */
 
 CV *
-Perl_newCONSTSUB(pTHX_ HV *stash, const char *name, SV *sv)
+Perl_newCONSTSUB_flags(pTHX_ HV *stash, const char *name, U32 flags, SV *sv)
 {
     dVAR;
     CV* cv;
@@ -6873,7 +6916,7 @@ Perl_newCONSTSUB(pTHX_ HV *stash, const char *name, SV *sv)
        processor __FILE__ directive). But we need a dynamically allocated one,
        and we need it to get freed.  */
     cv = newXS_flags(name, const_sv_xsub, file ? file : "", "",
-		     XS_DYNAMIC_FILENAME);
+		     XS_DYNAMIC_FILENAME | flags);
     CvXSUBANY(cv).any_ptr = sv;
     CvCONST_on(cv);
 
@@ -6891,9 +6934,74 @@ Perl_newXS_flags(pTHX_ const char *name, XSUBADDR_t subaddr,
 		 const char *const filename, const char *const proto,
 		 U32 flags)
 {
-    CV *cv = newXS(name, subaddr, filename);
+    CV *cv;
 
     PERL_ARGS_ASSERT_NEWXS_FLAGS;
+
+    {
+        GV * const gv = gv_fetchpv(name ? name :
+                            (PL_curstash ? "__ANON__" : "__ANON__::__ANON__"),
+                            GV_ADDMULTI | flags, SVt_PVCV);
+    
+        if (!subaddr)
+            Perl_croak(aTHX_ "panic: no address for '%s' in '%s'", name, filename);
+    
+        if ((cv = (name ? GvCV(gv) : NULL))) {
+            if (GvCVGEN(gv)) {
+                /* just a cached method */
+                SvREFCNT_dec(cv);
+                cv = NULL;
+            }
+            else if (CvROOT(cv) || CvXSUB(cv) || GvASSUMECV(gv)) {
+                /* already defined (or promised) */
+                if (ckWARN(WARN_REDEFINE)) {
+                    GV * const gvcv = CvGV(cv);
+                    if (gvcv) {
+                        HV * const stash = GvSTASH(gvcv);
+                        if (stash) {
+                            const char *redefined_name = HvNAME_get(stash);
+                            if ( redefined_name &&
+                                 strEQ(redefined_name,"autouse") ) {
+                                const line_t oldline = CopLINE(PL_curcop);
+                                if (PL_parser && PL_parser->copline != NOLINE)
+                                    CopLINE_set(PL_curcop, PL_parser->copline);
+                                Perl_warner(aTHX_ packWARN(WARN_REDEFINE),
+                                            CvCONST(cv) ? "Constant subroutine %s redefined"
+                                                        : "Subroutine %s redefined"
+                                            ,name);
+                                CopLINE_set(PL_curcop, oldline);
+                            }
+                        }
+                    }
+                }
+                SvREFCNT_dec(cv);
+                cv = NULL;
+            }
+        }
+    
+        if (cv)				/* must reuse cv if autoloaded */
+            cv_undef(cv);
+        else {
+            cv = MUTABLE_CV(newSV_type(SVt_PVCV));
+            if (name) {
+                GvCV_set(gv,cv);
+                GvCVGEN(gv) = 0;
+                mro_method_changed_in(GvSTASH(gv)); /* newXS */
+            }
+        }
+        if (!name)
+            CvANON_on(cv);
+        CvGV_set(cv, gv);
+        (void)gv_fetchfile(filename);
+        CvFILE(cv) = (char *)filename; /* NOTE: not copied, as it is expected to be
+                                    an external constant string */
+        assert(!CvDYNFILE(cv)); /* cv_undef should have turned it off */
+        CvISXSUB_on(cv);
+        CvXSUB(cv) = subaddr;
+    
+        if (name)
+            process_special_blocks(name, gv, cv);
+    }
 
     if (flags & XS_DYNAMIC_FILENAME) {
 	CvFILE(cv) = savepv(filename);
@@ -6915,74 +7023,8 @@ static storage, as it is used directly as CvFILE(), without a copy being made.
 CV *
 Perl_newXS(pTHX_ const char *name, XSUBADDR_t subaddr, const char *filename)
 {
-    dVAR;
-    GV * const gv = gv_fetchpv(name ? name :
-			(PL_curstash ? "__ANON__" : "__ANON__::__ANON__"),
-			GV_ADDMULTI, SVt_PVCV);
-    register CV *cv;
-
     PERL_ARGS_ASSERT_NEWXS;
-
-    if (!subaddr)
-	Perl_croak(aTHX_ "panic: no address for '%s' in '%s'", name, filename);
-
-    if ((cv = (name ? GvCV(gv) : NULL))) {
-	if (GvCVGEN(gv)) {
-	    /* just a cached method */
-	    SvREFCNT_dec(cv);
-	    cv = NULL;
-	}
-	else if (CvROOT(cv) || CvXSUB(cv) || GvASSUMECV(gv)) {
-	    /* already defined (or promised) */
-	    /* XXX It's possible for this HvNAME_get to return null, and get passed into strEQ */
-	    if (ckWARN(WARN_REDEFINE)) {
-		GV * const gvcv = CvGV(cv);
-		if (gvcv) {
-		    HV * const stash = GvSTASH(gvcv);
-		    if (stash) {
-			const char *redefined_name = HvNAME_get(stash);
-			if ( strEQ(redefined_name,"autouse") ) {
-			    const line_t oldline = CopLINE(PL_curcop);
-			    if (PL_parser && PL_parser->copline != NOLINE)
-				CopLINE_set(PL_curcop, PL_parser->copline);
-			    Perl_warner(aTHX_ packWARN(WARN_REDEFINE),
-					CvCONST(cv) ? "Constant subroutine %s redefined"
-						    : "Subroutine %s redefined"
-					,name);
-			    CopLINE_set(PL_curcop, oldline);
-			}
-		    }
-		}
-	    }
-	    SvREFCNT_dec(cv);
-	    cv = NULL;
-	}
-    }
-
-    if (cv)				/* must reuse cv if autoloaded */
-	cv_undef(cv);
-    else {
-	cv = MUTABLE_CV(newSV_type(SVt_PVCV));
-	if (name) {
-	    GvCV_set(gv,cv);
-	    GvCVGEN(gv) = 0;
-            mro_method_changed_in(GvSTASH(gv)); /* newXS */
-	}
-    }
-    if (!name)
-	CvANON_on(cv);
-    CvGV_set(cv, gv);
-    (void)gv_fetchfile(filename);
-    CvFILE(cv) = (char *)filename; /* NOTE: not copied, as it is expected to be
-				   an external constant string */
-    assert(!CvDYNFILE(cv)); /* cv_undef should have turned it off */
-    CvISXSUB_on(cv);
-    CvXSUB(cv) = subaddr;
-
-    if (name)
-	process_special_blocks(name, gv, cv);
-
-    return cv;
+    return newXS_flags(name, subaddr, filename, NULL, 0);
 }
 
 #ifdef PERL_MAD
@@ -7804,6 +7846,7 @@ Perl_ck_fun(pTHX_ OP *o)
 			if (is_handle_constructor(o,numargs)) {
                             const char *name = NULL;
 			    STRLEN len = 0;
+                            U32 name_utf8 = 0;
 
 			    flags = 0;
 			    /* Set a flag to tell rv2gv to vivify
@@ -7815,6 +7858,7 @@ Perl_ck_fun(pTHX_ OP *o)
 				SV *const namesv
 				    = PAD_COMPNAME_SV(kid->op_targ);
 				name = SvPV_const(namesv, len);
+                                name_utf8 = SvUTF8(namesv);
 			    }
 			    else if (kid->op_type == OP_RV2SV
 				     && kUNOP->op_first->op_type == OP_GV)
@@ -7822,6 +7866,7 @@ Perl_ck_fun(pTHX_ OP *o)
 				GV * const gv = cGVOPx_gv(kUNOP->op_first);
 				name = GvNAME(gv);
 				len = GvNAMELEN(gv);
+                                name_utf8 = GvNAMEUTF8(gv) ? SVf_UTF8 : 0;
 			    }
 			    else if (kid->op_type == OP_AELEM
 				     || kid->op_type == OP_HELEM)
@@ -7861,6 +7906,7 @@ Perl_ck_fun(pTHX_ OP *o)
 				      }
 				      if (tmpstr) {
 					   name = SvPV_const(tmpstr, len);
+                                           name_utf8 = SvUTF8(tmpstr);
 					   sv_2mortal(tmpstr);
 				      }
 				 }
@@ -7878,6 +7924,7 @@ Perl_ck_fun(pTHX_ OP *o)
 				if (*name != '$')
 				    sv_setpvs(namesv, "$");
 				sv_catpvn(namesv, name, len);
+                                if ( name_utf8 ) SvUTF8_on(namesv);
 			    }
 			}
 			kid->op_sibling = 0;
@@ -8321,7 +8368,7 @@ Perl_ck_method(pTHX_ OP *o)
 	if (!(strchr(method, ':') || strchr(method, '\''))) {
 	    OP *cmop;
 	    if (!SvREADONLY(sv) || !SvFAKE(sv)) {
-		sv = newSVpvn_share(method, SvCUR(sv), 0);
+		sv = newSVpvn_share(method, SvUTF8(sv) ? -(I32)SvCUR(sv) : (I32)SvCUR(sv), 0);
 	    }
 	    else {
 		kSVOP->op_sv = NULL;
@@ -8967,7 +9014,9 @@ Perl_ck_entersub_args_proto(pTHX_ OP *entersubop, GV *namegv, SV *protosv)
     PERL_ARGS_ASSERT_CK_ENTERSUB_ARGS_PROTO;
     if (SvTYPE(protosv) == SVt_PVCV ? !SvPOK(protosv) : !SvOK(protosv))
 	Perl_croak(aTHX_ "panic: ck_entersub_args_proto CV with no proto");
-    proto = SvPV(protosv, proto_len);
+    if (SvTYPE(protosv) == SVt_PVCV)
+	 proto = CvPROTO(protosv), proto_len = CvPROTOLEN(protosv);
+    else proto = SvPV(protosv, proto_len);
     proto_end = proto + proto_len;
     aop = cUNOPx(entersubop)->op_first;
     if (!aop->op_sibling)
@@ -9171,9 +9220,12 @@ Perl_ck_entersub_args_proto(pTHX_ OP *entersubop, GV *namegv, SV *protosv)
 		proto++;
 		continue;
 	    default:
-	    oops:
-		Perl_croak(aTHX_ "Malformed prototype for %s: %"SVf,
-			gv_ename(namegv), SVfARG(protosv));
+	    oops: {
+                SV* const tmpsv = sv_newmortal();
+                gv_efullname3(tmpsv, namegv, NULL);
+		Perl_croak(aTHX_ "Malformed prototype for %"SVf": %"SVf,
+			SVfARG(tmpsv), SVfARG(protosv));
+            }
 	}
 
 	op_lvalue(aop, OP_ENTERSUB);

@@ -1516,22 +1516,40 @@ PP(pp_sort)
 	    stash = CopSTASH(PL_curcop);
 	}
 	else {
-	    cv = sv_2cv(*++MARK, &stash, &gv, 0);
+	    GV *autogv = NULL;
+	    cv = sv_2cv(*++MARK, &stash, &gv, GV_ADD);
+	  check_cv:
 	    if (cv && SvPOK(cv)) {
 		const char * const proto = SvPV_nolen_const(MUTABLE_SV(cv));
 		if (proto && strEQ(proto, "$$")) {
 		    hasargs = TRUE;
 		}
 	    }
-	    if (!(cv && CvROOT(cv))) {
-		if (cv && CvISXSUB(cv)) {
-		    is_xsub = 1;
+	    if (cv && CvISXSUB(cv) && CvXSUB(cv)) {
+		is_xsub = 1;
+	    }
+	    else if (!(cv && CvROOT(cv))) {
+		if (gv) {
+		    goto autoload;
 		}
-		else if (gv) {
+		else if (!CvANON(cv) && (gv = CvGV(cv))) {
+		  if (cv != GvCV(gv)) cv = GvCV(gv);
+		 autoload:
+		  if (!autogv && (
+			autogv = gv_autoload_pvn(
+			    GvSTASH(gv), GvNAME(gv), GvNAMELEN(gv),
+			    GvNAMEUTF8(gv) ? SVf_UTF8 : 0
+			)
+		     )) {
+		    cv = GvCVu(autogv);
+		    goto check_cv;
+		  }
+		  else {
 		    SV *tmpstr = sv_newmortal();
 		    gv_efullname3(tmpstr, gv, NULL);
 		    DIE(aTHX_ "Undefined sort subroutine \"%"SVf"\" called",
 			SVfARG(tmpstr));
+		  }
 		}
 		else {
 		    DIE(aTHX_ "Undefined subroutine in sort");
@@ -1746,6 +1764,8 @@ S_sortcv(pTHX_ SV *const a, SV *const b)
     const I32 oldscopeix = PL_scopestack_ix;
     I32 result;
     PMOP * const pm = PL_curpm;
+    OP * const sortop = PL_op;
+    SV **pad;
  
     PERL_ARGS_ASSERT_SORTCV;
 
@@ -1756,7 +1776,10 @@ S_sortcv(pTHX_ SV *const a, SV *const b)
     CALLRUNOPS(aTHX);
     if (PL_stack_sp != PL_stack_base + 1)
 	Perl_croak(aTHX_ "Sort subroutine didn't return single value");
+    PL_op = sortop;
+    pad = PL_curpad; PL_curpad = 0;
     result = SvIV(*PL_stack_sp);
+    PL_curpad = pad;
     while (PL_scopestack_ix > oldscopeix) {
 	LEAVE;
     }
@@ -1774,6 +1797,8 @@ S_sortcv_stacked(pTHX_ SV *const a, SV *const b)
     I32 result;
     AV * const av = GvAV(PL_defgv);
     PMOP * const pm = PL_curpm;
+    OP * const sortop = PL_op;
+    SV **pad;
 
     PERL_ARGS_ASSERT_SORTCV_STACKED;
 
@@ -1804,7 +1829,10 @@ S_sortcv_stacked(pTHX_ SV *const a, SV *const b)
     CALLRUNOPS(aTHX);
     if (PL_stack_sp != PL_stack_base + 1)
 	Perl_croak(aTHX_ "Sort subroutine didn't return single value");
+    PL_op = sortop;
+    pad = PL_curpad; PL_curpad = 0;
     result = SvIV(*PL_stack_sp);
+    PL_curpad = pad;
     while (PL_scopestack_ix > oldscopeix) {
 	LEAVE;
     }
@@ -1852,6 +1880,14 @@ S_sv_ncmp(pTHX_ SV *const a, SV *const b)
 
     PERL_ARGS_ASSERT_SV_NCMP;
 
+#if defined(NAN_COMPARE_BROKEN) && defined(Perl_isnan)
+    if (Perl_isnan(right) || Perl_isnan(left)) {
+#else
+    if (nv1 != nv1 || nv2 != nv2) {
+#endif
+	if (ckWARN(WARN_UNINITIALIZED)) report_uninit(NULL);
+	return 0;
+    }
     return nv1 < nv2 ? -1 : nv1 > nv2 ? 1 : 0;
 }
 

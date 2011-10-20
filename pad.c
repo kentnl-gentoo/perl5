@@ -43,7 +43,7 @@ but that is really the callers pad (a slot of which is allocated by
 every entersub).
 
 The CvPADLIST AV has the REFCNT of its component items managed "manually"
-(mostly in pad.c) rather than by normal av.c rules.  So we mark it AvREAL
+(mostly in pad.c) rather than by normal av.c rules.  So we turn off AvREAL
 just before freeing it, to let av.c know not to touch the entries.
 The items in the AV are not SVs as for a normal AV, but other AVs:
 
@@ -762,13 +762,15 @@ Perl_pad_add_anon(pTHX_ CV* func, I32 optype)
 }
 
 /*
-=for apidoc m|pad_check_dup|SV *name|U32 flags|const HV *ourstash
+=for apidoc pad_check_dup
 
 Check for duplicate declarations: report any of:
+
      * a my in the current scope with the same name;
-     * an our (anywhere in the pad) with the same name and the same stash
-       as C<ourstash>
-C<is_our> indicates that the name to check is an 'our' declaration
+     * an our (anywhere in the pad) with the same name and the
+       same stash as C<ourstash>
+
+C<is_our> indicates that the name to check is an 'our' declaration.
 
 =cut
 */
@@ -1720,7 +1722,7 @@ Perl_pad_free(pTHX_ PADOFFSET po)
     );
 
     if (PL_curpad[po] && PL_curpad[po] != &PL_sv_undef) {
-	SvPADTMP_off(PL_curpad[po]);
+	SvFLAGS(PL_curpad[po]) &= ~SVs_PADTMP; /* also clears SVs_PADSTALE */
     }
     if ((I32)po < PL_padix)
 	PL_padix = po - 1;

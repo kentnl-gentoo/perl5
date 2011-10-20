@@ -24,6 +24,8 @@ sub import {
 	    if ($sym_name =~ /::$/) {
 		# Skip any subpackages that are clearly OO
 		next if *{$glob}{HASH}{'new'};
+		# and any that have AUTOLOAD
+		next if *{$glob}{HASH}{AUTOLOAD};
 		push @stashes, "$stash_name$sym_name", *{$glob}{HASH};
 	    } elsif (ref $glob eq 'SCALAR' || *{$glob}{CODE}) {
 		if ($exports) {
@@ -50,7 +52,7 @@ sub import {
     }
 }
 
-our $VERSION = '0.31';
+our $VERSION = '0.32';
 
 use vars '$WARNINGS_ON_BOOTSTRAP';
 use vars map "\$${_}_called_PP", qw(BEGIN UNITCHECK CHECK INIT END);

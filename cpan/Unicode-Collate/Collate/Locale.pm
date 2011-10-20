@@ -4,7 +4,7 @@ use strict;
 use Carp;
 use base qw(Unicode::Collate);
 
-our $VERSION = '0.76';
+our $VERSION = '0.80';
 
 use File::Spec;
 
@@ -12,21 +12,23 @@ use File::Spec;
 my $PL_EXT  = '.pl';
 
 my %LocaleFile = map { ($_, $_) } qw(
-   af ar az ca cs cy da eo es et fi fil fo fr ha haw
-   hr hu hy ig is ja kk kl ko lt lv mt nb nn nso om pl ro ru
-   se sk sl sq sv tn to tr uk vi wo yo zh
+   af ar as az be bg ca cs cy da eo es et fi fil fo fr gu
+   ha haw hi hr hu hy ig is ja kk kl kn ko kok ln lt lv
+   mt nb nn nso om pl ro ru se sk sl sq sv tn to tr uk vi wo yo zh
 );
-   $LocaleFile{'default'}         = '';
-   $LocaleFile{'de__phonebook'}   = 'de_phone';
-   $LocaleFile{'es__traditional'} = 'es_trad';
-   $LocaleFile{'be'} = 'ru';
-   $LocaleFile{'bg'} = 'ru';
+   $LocaleFile{'default'} = '';
+# aliases
+   $LocaleFile{'bs'} = 'hr';
    $LocaleFile{'mk'} = 'ru';
    $LocaleFile{'sr'} = 'ru';
-   $LocaleFile{'zh__big5han'}   = 'zh_big5';
-   $LocaleFile{'zh__gb2312han'} = 'zh_gb';
-   $LocaleFile{'zh__pinyin'}    = 'zh_pin';
-   $LocaleFile{'zh__stroke'}    = 'zh_strk';
+# short file names
+   $LocaleFile{'de__phonebook'}   = 'de_phone';
+   $LocaleFile{'es__traditional'} = 'es_trad';
+   $LocaleFile{'fi__phonebook'}   = 'fi_phone';
+   $LocaleFile{'zh__big5han'}     = 'zh_big5';
+   $LocaleFile{'zh__gb2312han'}   = 'zh_gb';
+   $LocaleFile{'zh__pinyin'}      = 'zh_pin';
+   $LocaleFile{'zh__stroke'}      = 'zh_strk';
 
 sub _locale {
     my $locale = shift;
@@ -83,6 +85,78 @@ sub new {
 
 1;
 __END__
+
+MEMORANDA for developing
+
+locale		based CLDR
+----------------------------------------------------------------------------
+af		2.0 = 1.8.1
+ar		2.0
+as		2.0 = 1.8.1
+az		2.0 = 1.8.1
+be		2.0
+bg		2.0
+bs		2.0
+ca		2.0 = 1.8.1 (alt="proposed" type="standard")
+cs		2.0 = 1.8.1 (type="standard")
+cy		2.0 = 1.8.1
+da		2.0 = 1.8.1 (type="standard") [modify aA to pass CLDR tests]
+de__phonebook	2.0 (type="phonebook")
+eo		2.0 = 1.8.1
+es		2.0 (type="standard")
+es__traditional 2.0 = 1.8.1 (type="traditional")
+et		2.0 = 1.8.1
+fi		2.0 = 1.8.1 (type="standard" alt="proposed")
+fi__phonebook	2.0 = 1.8.1 (type="phonebook")
+fil		2.0 (type="standard") = 1.8.1
+fo		2.0 = 1.8.1 (alt="proposed" type="standard")
+fr		2.0 (fr_CA, backwards="on")
+gu		2.0 (type="standard")
+ha		2.0
+haw		2.0 = 1.8.1
+hi		2.0
+hr		2.0
+hu		2.0 = 1.8.1 (alt="proposed" type="standard")
+hy		2.0 = 1.8.1
+ig		2.0 = 1.8.1
+is		2.0 = 1.8.1
+ja		2.0 = 1.8.1 (type="standard")
+kk		2.0
+kl		2.0 = 1.8.1
+kn		2.0 (type="standard")
+ko		2.0 = 1.8.1 (type="standard")
+kok		2.0 = 1.8.1
+ln		2.0 (type="standard") = 1.8.1
+lt		2.0
+lv		2.0 (type="standard") = 1.8.1
+mk
+mt
+nb
+nn
+nso
+om
+pl
+ro
+ru
+se
+sk
+sl
+sq
+sr
+sv
+tn
+to
+tr
+uk
+vi
+wo
+yo
+zh
+zh__big5han
+zh__gb2312han
+zh__pinyin
+zh__stroke
+----------------------------------------------------------------------------
 
 =head1 NAME
 
@@ -190,9 +264,11 @@ this method returns a string C<'default'> meaning no special tailoring.
     ----------------------------------------------------------
       af                Afrikaans
       ar                Arabic
+      as                Assamese
       az                Azerbaijani (Azeri)
       be                Belarusian
       bg                Bulgarian
+      bs                Bosnian
       ca                Catalan
       cs                Czech
       cy                Welsh
@@ -202,12 +278,15 @@ this method returns a string C<'default'> meaning no special tailoring.
       es                Spanish
       es__traditional   Spanish ('ch' and 'll' as a grapheme)
       et                Estonian
-      fi                Finnish
+      fi                Finnish (v and w are primary equal)
+      fi__phonebook     Finnish (v and w as separate characters)
       fil               Filipino
       fo                Faroese
       fr                French
+      gu                Gujarati
       ha                Hausa
       haw               Hawaiian
+      hi                Hindi
       hr                Croatian
       hu                Hungarian
       hy                Armenian
@@ -216,7 +295,10 @@ this method returns a string C<'default'> meaning no special tailoring.
       ja                Japanese [1]
       kk                Kazakh
       kl                Kalaallisut
+      kn                Kannada
       ko                Korean [2]
+      kok               Konkani
+      ln                Lingala
       lt                Lithuanian
       lv                Latvian
       mk                Macedonian
@@ -255,7 +337,6 @@ ga (Irish),
 id (Indonesian),
 it (Italian),
 ka (Georgian),
-ln (Lingala),
 ms (Malay),
 nl (Dutch),
 pt (Portuguese),

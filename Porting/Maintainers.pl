@@ -209,7 +209,7 @@ use File::Glob qw(:case);
     'Archive::Tar' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Archive-Tar-1.78.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Archive-Tar-1.80.tar.gz',
 	'FILES'		=> q[cpan/Archive-Tar],
 	'EXCLUDED'	=> [ qw(Makefile.PL) ],
 	'UPSTREAM'	=> 'cpan',
@@ -579,7 +579,7 @@ use File::Glob qw(:case);
     'Digest' =>
 	{
 	'MAINTAINER'	=> 'gaas',
-	'DISTRIBUTION'	=> 'GAAS/Digest-1.16.tar.gz',
+	'DISTRIBUTION'	=> 'GAAS/Digest-1.17.tar.gz',
 	'FILES'		=> q[cpan/Digest],
 	'EXCLUDED'	=> [ qw{digest-bench} ],
 	'UPSTREAM'	=> "cpan",
@@ -734,7 +734,7 @@ use File::Glob qw(:case);
     'ExtUtils::MakeMaker' =>
 	{
 	'MAINTAINER'	=> 'mschwern',
-	'DISTRIBUTION'	=> 'MSTROUT/ExtUtils-MakeMaker-6.59.tar.gz',
+	'DISTRIBUTION'	=> 'MSCHWERN/ExtUtils-MakeMaker-6.61_01.tar.gz',
 	'FILES'		=> q[cpan/ExtUtils-MakeMaker],
 	'EXCLUDED'	=> [ qr{^t/lib/Test/},
            qr{^(bundled|my)/},
@@ -756,7 +756,7 @@ use File::Glob qw(:case);
     'ExtUtils::ParseXS' =>
 	{
 	'MAINTAINER'	=> 'smueller',
-	'DISTRIBUTION'	=> 'SMUELLER/ExtUtils-ParseXS-3.04_04.tar.gz',
+	'DISTRIBUTION'	=> 'SMUELLER/ExtUtils-ParseXS-3.05.tar.gz',
 	'FILES'		=> q[dist/ExtUtils-ParseXS],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -764,9 +764,10 @@ use File::Glob qw(:case);
     'perlfaq' =>
 	{
 	'MAINTAINER'	=> 'perlfaq',
-	'DISTRIBUTION'  => 'LLAP/perlfaq-5.0150034.tar.gz',
+	'DISTRIBUTION'  => 'LLAP/perlfaq-5.0150035.tar.gz',
 	'FILES'		=> q[cpan/perlfaq],
-	'EXCLUDED'	=> [ qw(t/release-pod-syntax.t) ],
+	'EXCLUDED'	=> [ qw(t/release-pod-syntax.t t/release-eol.t
+				t/release-no-tabs.t) ],
 	'UPSTREAM'	=> 'cpan',
 	},
 
@@ -1258,7 +1259,7 @@ use File::Glob qw(:case);
     'Module::CoreList' =>
 	{
 	'MAINTAINER'	=> 'bingos',
-	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.55.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.56.tar.gz',
 	'FILES'		=> q[dist/Module-CoreList],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -1266,7 +1267,7 @@ use File::Glob qw(:case);
     'Module::Load' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Module-Load-0.20.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-Load-0.22.tar.gz',
 	'FILES'		=> q[cpan/Module-Load],
 	'UPSTREAM'	=> 'cpan',
 	},
@@ -1969,7 +1970,7 @@ use File::Glob qw(:case);
     'Unicode::Collate' =>
 	{
 	'MAINTAINER'	=> 'sadahiro',
-	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.78.tar.gz',
+	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.80.tar.gz',
 	'FILES'		=> q[cpan/Unicode-Collate],
 	'EXCLUDED'	=> [ qr{N$},
                    qr{^data/},

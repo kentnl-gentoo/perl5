@@ -184,15 +184,14 @@ S_rv2gv(pTHX_ SV *sv, const bool vivify_sv, const bool strict,
 		    if (SvREADONLY(sv))
 			Perl_croak_no_modify(aTHX);
 		    if (cUNOP->op_targ) {
-			STRLEN len;
 			SV * const namesv = PAD_SV(cUNOP->op_targ);
-			const char * const name = SvPV(namesv, len);
 			gv = MUTABLE_GV(newSV(0));
-			gv_init(gv, CopSTASH(PL_curcop), name, len, 0);
+			gv_init_sv(gv, CopSTASH(PL_curcop), namesv, 0);
 		    }
 		    else {
 			const char * const name = CopSTASHPV(PL_curcop);
-			gv = newGVgen(name);
+			gv = newGVgen_flags(name,
+                                        HvNAMEUTF8(CopSTASH(PL_curcop)) ? SVf_UTF8 : 0 );
 		    }
 		    prepare_SV_for_RV(sv);
 		    SvRV_set(sv, MUTABLE_SV(gv));
@@ -420,7 +419,7 @@ PP(pp_rv2cv)
 	if (CvCLONE(cv))
 	    cv = MUTABLE_CV(sv_2mortal(MUTABLE_SV(cv_clone(cv))));
 	if ((PL_op->op_private & OPpLVAL_INTRO)) {
-	    if (gv && GvCV(gv) == cv && (gv = gv_autoload4(GvSTASH(gv), GvNAME(gv), GvNAMELEN(gv), FALSE)))
+	    if (gv && GvCV(gv) == cv && (gv = gv_autoload_pvn(GvSTASH(gv), GvNAME(gv), GvNAMELEN(gv), GvNAMEUTF8(gv) ? SVf_UTF8 : 0)))
 		cv = GvCV(gv);
 	    if (!CvLVALUE(cv))
 		DIE(aTHX_ "Can't modify non-lvalue subroutine call");
@@ -458,7 +457,9 @@ PP(pp_prototype)
     }
     cv = sv_2cv(TOPs, &stash, &gv, 0);
     if (cv && SvPOK(cv))
-	ret = newSVpvn_flags(SvPVX_const(cv), SvCUR(cv), SVs_TEMP);
+	ret = newSVpvn_flags(
+	    CvPROTO(cv), CvPROTOLEN(cv), SVs_TEMP | SvUTF8(cv)
+	);
   set:
     SETs(ret);
     RETURN;
@@ -538,7 +539,6 @@ S_refto(pTHX_ SV *sv)
 PP(pp_ref)
 {
     dVAR; dSP; dTARGET;
-    const char *pv;
     SV * const sv = POPs;
 
     if (sv)
@@ -547,8 +547,8 @@ PP(pp_ref)
     if (!sv || !SvROK(sv))
 	RETPUSHNO;
 
-    pv = sv_reftype(SvRV(sv),TRUE);
-    PUSHp(pv, strlen(pv));
+    (void)sv_ref(TARG,SvRV(sv),TRUE);
+    PUSHTARG;
     RETURN;
 }
 
@@ -572,7 +572,7 @@ PP(pp_bless)
 	if (len == 0)
 	    Perl_ck_warner(aTHX_ packWARN(WARN_MISC),
 			   "Explicit blessing to '' (assuming package main)");
-	stash = gv_stashpvn(ptr, len, GV_ADD);
+	stash = gv_stashpvn(ptr, len, GV_ADD|SvUTF8(ssv));
     }
 
     (void)sv_bless(TOPs, stash);
@@ -584,7 +584,8 @@ PP(pp_gelem)
     dVAR; dSP;
 
     SV *sv = POPs;
-    const char * const elem = SvPV_nolen_const(sv);
+    STRLEN len;
+    const char * const elem = SvPV_const(sv, len);
     GV * const gv = MUTABLE_GV(POPs);
     SV * tmpRef = NULL;
 
@@ -594,48 +595,48 @@ PP(pp_gelem)
 	const char * const second_letter = elem + 1;
 	switch (*elem) {
 	case 'A':
-	    if (strEQ(second_letter, "RRAY"))
+	    if (len == 5 && strEQ(second_letter, "RRAY"))
 		tmpRef = MUTABLE_SV(GvAV(gv));
 	    break;
 	case 'C':
-	    if (strEQ(second_letter, "ODE"))
+	    if (len == 4 && strEQ(second_letter, "ODE"))
 		tmpRef = MUTABLE_SV(GvCVu(gv));
 	    break;
 	case 'F':
-	    if (strEQ(second_letter, "ILEHANDLE")) {
+	    if (len == 10 && strEQ(second_letter, "ILEHANDLE")) {
 		/* finally deprecated in 5.8.0 */
 		deprecate("*glob{FILEHANDLE}");
 		tmpRef = MUTABLE_SV(GvIOp(gv));
 	    }
 	    else
-		if (strEQ(second_letter, "ORMAT"))
+		if (len == 6 && strEQ(second_letter, "ORMAT"))
 		    tmpRef = MUTABLE_SV(GvFORM(gv));
 	    break;
 	case 'G':
-	    if (strEQ(second_letter, "LOB"))
+	    if (len == 4 && strEQ(second_letter, "LOB"))
 		tmpRef = MUTABLE_SV(gv);
 	    break;
 	case 'H':
-	    if (strEQ(second_letter, "ASH"))
+	    if (len == 4 && strEQ(second_letter, "ASH"))
 		tmpRef = MUTABLE_SV(GvHV(gv));
 	    break;
 	case 'I':
-	    if (*second_letter == 'O' && !elem[2])
+	    if (*second_letter == 'O' && !elem[2] && len == 2)
 		tmpRef = MUTABLE_SV(GvIOp(gv));
 	    break;
 	case 'N':
-	    if (strEQ(second_letter, "AME"))
+	    if (len == 4 && strEQ(second_letter, "AME"))
 		sv = newSVhek(GvNAME_HEK(gv));
 	    break;
 	case 'P':
-	    if (strEQ(second_letter, "ACKAGE")) {
+	    if (len == 7 && strEQ(second_letter, "ACKAGE")) {
 		const HV * const stash = GvSTASH(gv);
 		const HEK * const hek = stash ? HvNAME_HEK(stash) : NULL;
 		sv = hek ? newSVhek(hek) : newSVpvs("__ANON__");
 	    }
 	    break;
 	case 'S':
-	    if (strEQ(second_letter, "CALAR"))
+	    if (len == 6 && strEQ(second_letter, "CALAR"))
 		tmpRef = GvSVn(gv);
 	    break;
 	}
@@ -982,9 +983,11 @@ PP(pp_undef)
 	break;
     case SVt_PVCV:
 	if (cv_const_sv((const CV *)sv))
-	    Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "Constant subroutine %s undefined",
-			   CvANON((const CV *)sv) ? "(anonymous)"
-			   : GvENAME(CvGV((const CV *)sv)));
+	    Perl_ck_warner(aTHX_ packWARN(WARN_MISC),
+                          "Constant subroutine %"SVf" undefined",
+			   SVfARG(CvANON((const CV *)sv)
+                             ? newSVpvs_flags("(anonymous)", SVs_TEMP)
+                             : sv_2mortal(newSVhek(GvENAME_HEK(CvGV((const CV *)sv))))));
 	/* FALLTHROUGH */
     case SVt_PVFM:
 	{
@@ -2968,6 +2971,7 @@ PP(pp_substr)
     IV     len_iv = 0;
     int    len_is_uv = 1;
     const I32 lvalue = PL_op->op_flags & OPf_MOD || LVRET;
+    const bool rvalue = (GIMME_V != G_VOID);
     const char *tmps;
     SV *repl_sv = NULL;
     const char *repl = NULL;
@@ -2980,7 +2984,7 @@ PP(pp_substr)
 	if (num_args > 3) {
 	  if((repl_sv = POPs)) {
 	    repl = SvPV_const(repl_sv, repl_len);
-	    repl_is_utf8 = DO_UTF8(repl_sv) && SvCUR(repl_sv);
+	    repl_is_utf8 = DO_UTF8(repl_sv) && repl_len;
 	  }
 	  else num_args--;
 	}
@@ -3096,16 +3100,18 @@ PP(pp_substr)
 	    RETURN;
 	}
 
-	SvTAINTED_off(TARG);			/* decontaminate */
-	SvUTF8_off(TARG);			/* decontaminate */
-
 	tmps += byte_pos;
-	sv_setpvn(TARG, tmps, byte_len);
+
+	if (rvalue) {
+	    SvTAINTED_off(TARG);			/* decontaminate */
+	    SvUTF8_off(TARG);			/* decontaminate */
+	    sv_setpvn(TARG, tmps, byte_len);
 #ifdef USE_LOCALE_COLLATE
-	sv_unmagic(TARG, PERL_MAGIC_collxfrm);
+	    sv_unmagic(TARG, PERL_MAGIC_collxfrm);
 #endif
-	if (utf8_curlen)
-	    SvUTF8_on(TARG);
+	    if (utf8_curlen)
+		SvUTF8_on(TARG);
+	}
 
 	if (repl) {
 	    SV* repl_sv_copy = NULL;
@@ -3114,7 +3120,7 @@ PP(pp_substr)
 		repl_sv_copy = newSVsv(repl_sv);
 		sv_utf8_upgrade(repl_sv_copy);
 		repl = SvPV_const(repl_sv_copy, repl_len);
-		repl_is_utf8 = DO_UTF8(repl_sv_copy) && SvCUR(sv);
+		repl_is_utf8 = DO_UTF8(repl_sv_copy) && repl_len;
 	    }
 	    if (!SvOK(sv))
 		sv_setpvs(sv, "");
@@ -3125,8 +3131,10 @@ PP(pp_substr)
 	}
     }
     SPAGAIN;
-    SvSETMAGIC(TARG);
-    PUSHs(TARG);
+    if (rvalue) {
+	SvSETMAGIC(TARG);
+	PUSHs(TARG);
+    }
     RETURN;
 
 bound_fail:
@@ -4124,95 +4132,28 @@ PP(pp_lc)
 		const STRLEN u = UTF8SKIP(s);
 		STRLEN ulen;
 
-#ifndef CONTEXT_DEPENDENT_CASING
 		toLOWER_utf8(s, tmpbuf, &ulen);
-#else
-/* This is ifdefd out because it probably is the wrong thing to do.  The right
- * thing is probably to have an I/O layer that converts final sigma to regular
- * on input and vice versa (under the correct circumstances) on output.  In
- * effect, the final sigma is just a glyph variation when the regular one
- * occurs at the end of a word.   And we don't really know what's going to be
- * the end of the word until it is finally output, as splitting and joining can
- * occur at any time and change what once was the word end to be in the middle,
- * and vice versa. */
 
-		const UV uv = toLOWER_utf8(s, tmpbuf, &ulen);
+		/* Here is where we would do context-sensitive actions.  See
+		 * the commit message for this comment for why there isn't any
+		 */
 
-		/* If the lower case is a small sigma, it may be that we need
-		 * to change it to a final sigma.  This happens at the end of 
-		 * a word that contains more than just this character, and only
-		 * when we started with a capital sigma. */
-		if (uv == UNICODE_GREEK_SMALL_LETTER_SIGMA &&
-		    s > send - len &&	/* Makes sure not the first letter */
-		    utf8_to_uvchr(s, 0) == UNICODE_GREEK_CAPITAL_LETTER_SIGMA
-		) {
+		if (ulen > u && (SvLEN(dest) < (min += ulen - u))) {
 
-		    /* We use the algorithm in:
-		     * http://www.unicode.org/versions/Unicode5.0.0/ch03.pdf (C
-		     * is a CAPITAL SIGMA): If C is preceded by a sequence
-		     * consisting of a cased letter and a case-ignorable
-		     * sequence, and C is not followed by a sequence consisting
-		     * of a case ignorable sequence and then a cased letter,
-		     * then when lowercasing C, C becomes a final sigma */
+		    /* If the eventually required minimum size outgrows the
+		     * available space, we need to grow. */
+		    const UV o = d - (U8*)SvPVX_const(dest);
 
-		    /* To determine if this is the end of a word, need to peek
-		     * ahead.  Look at the next character */
-		    const U8 *peek = s + u;
-
-		    /* Skip any case ignorable characters */
-		    while (peek < send && is_utf8_case_ignorable(peek)) {
-			peek += UTF8SKIP(peek);
-		    }
-
-		    /* If we reached the end of the string without finding any
-		     * non-case ignorable characters, or if the next such one
-		     * is not-cased, then we have met the conditions for it
-		     * being a final sigma with regards to peek ahead, and so
-		     * must do peek behind for the remaining conditions. (We
-		     * know there is stuff behind to look at since we tested
-		     * above that this isn't the first letter) */
-		    if (peek >= send || ! is_utf8_cased(peek)) {
-			peek = utf8_hop(s, -1);
-
-			/* Here are at the beginning of the first character
-			 * before the original upper case sigma.  Keep backing
-			 * up, skipping any case ignorable characters */
-			while (is_utf8_case_ignorable(peek)) {
-			    peek = utf8_hop(peek, -1);
-			}
-
-			/* Here peek points to the first byte of the closest
-			 * non-case-ignorable character before the capital
-			 * sigma.  If it is cased, then by the Unicode
-			 * algorithm, we should use a small final sigma instead
-			 * of what we have */
-			if (is_utf8_cased(peek)) {
-			    STORE_UNI_TO_UTF8_TWO_BYTE(tmpbuf,
-					UNICODE_GREEK_SMALL_LETTER_FINAL_SIGMA);
-			}
-		    }
+		    /* If someone lowercases one million U+0130s we SvGROW()
+		     * one million times.  Or we could try guessing how much to
+		     * allocate without allocating too much.  Such is life.
+		     * Another option would be to grow an extra byte or two
+		     * more each time we need to grow, which would cut down the
+		     * million to 500K, with little waste */
+		    SvGROW(dest, min);
+		    d = (U8*)SvPVX(dest) + o;
 		}
-		else {	/* Not a context sensitive mapping */
-#endif	/* End of commented out context sensitive */
-		    if (ulen > u && (SvLEN(dest) < (min += ulen - u))) {
 
-			/* If the eventually required minimum size outgrows
-			 * the available space, we need to grow. */
-			const UV o = d - (U8*)SvPVX_const(dest);
-
-			/* If someone lowercases one million U+0130s we
-			 * SvGROW() one million times.  Or we could try
-			 * guessing how much to allocate without allocating too
-			 * much.  Such is life.  Another option would be to
-			 * grow an extra byte or two more each time we need to
-			 * grow, which would cut down the million to 500K, with
-			 * little waste */
-			SvGROW(dest, min);
-			d = (U8*)SvPVX(dest) + o;
-		    }
-#ifdef CONTEXT_DEPENDENT_CASING
-		}
-#endif
 		/* Copy the newly lowercased letter to the output buffer we're
 		 * building */
 		Copy(tmpbuf, d, ulen, U8);

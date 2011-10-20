@@ -1312,11 +1312,11 @@ PP(pp_flop)
 	if (RANGE_IS_NUMERIC(left,right)) {
 	    register IV i, j;
 	    IV max;
-	    if ((SvOK(left) && SvNV(left) < IV_MIN) ||
-		(SvOK(right) && SvNV(right) > IV_MAX))
+	    if ((SvOK(left) && SvNV_nomg(left) < IV_MIN) ||
+		(SvOK(right) && SvNV_nomg(right) > IV_MAX))
 		DIE(aTHX_ "Range iterator outside integer range");
-	    i = SvIV(left);
-	    max = SvIV(right);
+	    i = SvIV_nomg(left);
+	    max = SvIV_nomg(right);
 	    if (max >= i) {
 		j = max - i + 1;
 		EXTEND_MORTAL(j);
@@ -1330,12 +1330,11 @@ PP(pp_flop)
 	    }
 	}
 	else {
-	    SV * const final = sv_mortalcopy(right);
-	    STRLEN len;
-	    const char * const tmps = SvPV_const(final, len);
+	    STRLEN len, llen;
+	    const char * const lpv = SvPV_nomg_const(left, llen);
+	    const char * const tmps = SvPV_nomg_const(right, len);
 
-	    SV *sv = sv_mortalcopy(left);
-	    SvPV_force_nolen(sv);
+	    SV *sv = newSVpvn_flags(lpv, llen, SvUTF8(left)|SVs_TEMP);
 	    while (!SvNIOKp(sv) && SvCUR(sv) <= len) {
 		XPUSHs(sv);
 	        if (strEQ(SvPVX_const(sv),tmps))
@@ -1657,8 +1656,8 @@ Perl_qerror(pTHX_ SV *err)
 
     if (PL_in_eval) {
 	if (PL_in_eval & EVAL_KEEPERR) {
-		Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "\t(in cleanup) %s",
-			       SvPV_nolen_const(err));
+		Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "\t(in cleanup) %"SVf,
+                                                    SVfARG(err));
 	}
 	else
 	    sv_catsv(ERRSV, err);
@@ -1763,20 +1762,21 @@ Perl_die_unwind(pTHX_ SV *msv)
 	    PL_curcop = oldcop;
 
 	    if (optype == OP_REQUIRE) {
-                const char* const msg = SvPVx_nolen_const(exceptsv);
                 (void)hv_store(GvHVn(PL_incgv),
-                               SvPVX_const(namesv), SvCUR(namesv),
+                               SvPVX_const(namesv),
+                               SvUTF8(namesv) ? -(I32)SvCUR(namesv) : (I32)SvCUR(namesv),
                                &PL_sv_undef, 0);
 		/* note that unlike pp_entereval, pp_require isn't
 		 * supposed to trap errors. So now that we've popped the
 		 * EVAL that pp_require pushed, and processed the error
 		 * message, rethrow the error */
-		Perl_croak(aTHX_ "%sCompilation failed in require",
-			   *msg ? msg : "Unknown error\n");
+		Perl_croak(aTHX_ "%"SVf"Compilation failed in require",
+			   SVfARG(exceptsv ? exceptsv : newSVpvs_flags("Unknown error\n",
+                                                                    SVs_TEMP)));
 	    }
 	    if (in_eval & EVAL_KEEPERR) {
-		Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "\t(in cleanup) %s",
-			       SvPV_nolen_const(exceptsv));
+		Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "\t(in cleanup) %"SVf,
+			       SVfARG(exceptsv));
 	    }
 	    else {
 		sv_setsv(ERRSV, exceptsv);
@@ -1869,7 +1869,7 @@ PP(pp_caller)
     register const PERL_CONTEXT *cx;
     const PERL_CONTEXT *dbcx;
     I32 gimme;
-    const char *stashname;
+    const HEK *stash_hek;
     I32 count = 0;
     bool has_arg = MAXARG && TOPs;
 
@@ -1888,14 +1888,14 @@ PP(pp_caller)
 	RETURN;
     }
 
-    stashname = CopSTASHPV(cx->blk_oldcop);
+    stash_hek = HvNAME_HEK((HV*)CopSTASH(cx->blk_oldcop));
     if (GIMME != G_ARRAY) {
         EXTEND(SP, 1);
-	if (!stashname)
+	if (!stash_hek)
 	    PUSHs(&PL_sv_undef);
 	else {
 	    dTARGET;
-	    sv_setpv(TARG, stashname);
+	    sv_sethek(TARG, stash_hek);
 	    PUSHs(TARG);
 	}
 	RETURN;
@@ -1903,10 +1903,13 @@ PP(pp_caller)
 
     EXTEND(SP, 11);
 
-    if (!stashname)
+    if (!stash_hek)
 	PUSHs(&PL_sv_undef);
-    else
-	mPUSHs(newSVpv(stashname, 0));
+    else {
+	dTARGET;
+	sv_sethek(TARG, stash_hek);
+	PUSHTARG;
+    }
     mPUSHs(newSVpv(OutCopFILE(cx->blk_oldcop), 0));
     mPUSHi((I32)CopLINE(cx->blk_oldcop));
     if (!has_arg)
@@ -2078,11 +2081,17 @@ PP(pp_dbstate)
 STATIC SV **
 S_adjust_stack_on_leave(pTHX_ SV **newsp, SV **sp, SV **mark, I32 gimme, U32 flags)
 {
+    bool padtmp = 0;
     PERL_ARGS_ASSERT_ADJUST_STACK_ON_LEAVE;
 
+    if (flags & SVs_PADTMP) {
+	flags &= ~SVs_PADTMP;
+	padtmp = 1;
+    }
     if (gimme == G_SCALAR) {
 	if (MARK < SP)
-	    *++newsp = (SvFLAGS(*SP) & flags) ? *SP : sv_mortalcopy(*SP);
+	    *++newsp = ((SvFLAGS(*SP) & flags) || (padtmp && SvPADTMP(*SP)))
+			    ? *SP : sv_mortalcopy(*SP);
 	else {
 	    /* MEXTEND() only updates MARK, so reuse it instead of newsp. */
 	    MARK = newsp;
@@ -2094,7 +2103,7 @@ S_adjust_stack_on_leave(pTHX_ SV **newsp, SV **sp, SV **mark, I32 gimme, U32 fla
     else if (gimme == G_ARRAY) {
 	/* in case LEAVE wipes old return values */
 	while (++MARK <= SP) {
-	    if (SvFLAGS(*MARK) & flags)
+	    if ((SvFLAGS(*MARK) & flags) || (padtmp && SvPADTMP(*MARK)))
 		*++newsp = *MARK;
 	    else {
 		*++newsp = sv_mortalcopy(*MARK);
@@ -2201,27 +2210,28 @@ PP(pp_enteriter)
 		   assumptions */
 		assert(CxTYPE(cx) == CXt_LOOP_LAZYIV);
 #ifdef NV_PRESERVES_UV
-		if ((SvOK(sv) && ((SvNV(sv) < (NV)IV_MIN) ||
-				  (SvNV(sv) > (NV)IV_MAX)))
+		if ((SvOK(sv) && ((SvNV_nomg(sv) < (NV)IV_MIN) ||
+				  (SvNV_nomg(sv) > (NV)IV_MAX)))
 			||
-		    (SvOK(right) && ((SvNV(right) > (NV)IV_MAX) ||
-				     (SvNV(right) < (NV)IV_MIN))))
+		    (SvOK(right) && ((SvNV_nomg(right) > (NV)IV_MAX) ||
+				     (SvNV_nomg(right) < (NV)IV_MIN))))
 #else
-		if ((SvOK(sv) && ((SvNV(sv) <= (NV)IV_MIN)
+		if ((SvOK(sv) && ((SvNV_nomg(sv) <= (NV)IV_MIN)
 				  ||
-		                  ((SvNV(sv) > 0) &&
-					((SvUV(sv) > (UV)IV_MAX) ||
-					 (SvNV(sv) > (NV)UV_MAX)))))
+		                  ((SvNV_nomg(sv) > 0) &&
+					((SvUV_nomg(sv) > (UV)IV_MAX) ||
+					 (SvNV_nomg(sv) > (NV)UV_MAX)))))
 			||
-		    (SvOK(right) && ((SvNV(right) <= (NV)IV_MIN)
+		    (SvOK(right) && ((SvNV_nomg(right) <= (NV)IV_MIN)
 				     ||
-				     ((SvNV(right) > 0) &&
-					((SvUV(right) > (UV)IV_MAX) ||
-					 (SvNV(right) > (NV)UV_MAX))))))
+				     ((SvNV_nomg(right) > 0) &&
+					((SvUV_nomg(right) > (UV)IV_MAX) ||
+					 (SvNV_nomg(right) > (NV)UV_MAX))
+				     ))))
 #endif
 		    DIE(aTHX_ "Range iterator outside integer range");
-		cx->blk_loop.state_u.lazyiv.cur = SvIV(sv);
-		cx->blk_loop.state_u.lazyiv.end = SvIV(right);
+		cx->blk_loop.state_u.lazyiv.cur = SvIV_nomg(sv);
+		cx->blk_loop.state_u.lazyiv.end = SvIV_nomg(right);
 #ifdef DEBUGGING
 		/* for correct -Dstv display */
 		cx->blk_oldsp = sp - PL_stack_base;
@@ -2475,7 +2485,8 @@ PP(pp_return)
 	{
 	    /* Unassume the success we assumed earlier. */
 	    (void)hv_delete(GvHVn(PL_incgv),
-			    SvPVX_const(namesv), SvCUR(namesv),
+			    SvPVX_const(namesv),
+                            SvUTF8(namesv) ? -(I32)SvCUR(namesv) : (I32)SvCUR(namesv),
 			    G_DISCARD);
 	    DIE(aTHX_ "%"SVf" did not return a true value", SVfARG(namesv));
 	}
@@ -2813,8 +2824,9 @@ PP(pp_goto)
 		    /* autoloaded stub? */
 		    if (cv != GvCV(gv) && (cv = GvCV(gv)))
 			goto retry;
-		    autogv = gv_autoload4(GvSTASH(gv), GvNAME(gv),
-					  GvNAMELEN(gv), FALSE);
+		    autogv = gv_autoload_pvn(GvSTASH(gv), GvNAME(gv),
+					  GvNAMELEN(gv),
+                                          GvNAMEUTF8(gv) ? SVf_UTF8 : 0);
 		    if (autogv && (cv = GvCV(autogv)))
 			goto retry;
 		    tmpstr = sv_newmortal();
@@ -3526,7 +3538,6 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	PERL_CONTEXT *cx;
 	I32 optype;			/* Used by POPEVAL. */
 	SV *namesv;
-	const char *msg;
 
 	cx = NULL;
 	namesv = NULL;
@@ -3551,7 +3562,6 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	if (yystatus != 3)
 	    LEAVE_with_name("eval"); /* pp_entereval knows about this LEAVE.  */
 
-	msg = SvPVx_nolen_const(ERRSV);
 	if (in_require) {
 	    if (!cx) {
 		/* If cx is still NULL, it means that we didn't go in the
@@ -3561,21 +3571,26 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 		namesv = cx->blk_eval.old_namesv;
 	    }
 	    (void)hv_store(GvHVn(PL_incgv),
-			   SvPVX_const(namesv), SvCUR(namesv),
+			   SvPVX_const(namesv),
+                           SvUTF8(namesv) ? -(I32)SvCUR(namesv) : (I32)SvCUR(namesv),
 			   &PL_sv_undef, 0);
-	    Perl_croak(aTHX_ "%sCompilation failed in require",
-		       *msg ? msg : "Unknown error\n");
+	    Perl_croak(aTHX_ "%"SVf"Compilation failed in require",
+		       SVfARG(ERRSV
+                                ? ERRSV
+                                : newSVpvs_flags("Unknown error\n", SVs_TEMP)));
 	}
 	else if (startop) {
 	    if (yystatus != 3) {
 		POPBLOCK(cx,PL_curpm);
 		POPEVAL(cx);
 	    }
-	    Perl_croak(aTHX_ "%sCompilation failed in regexp",
-		       (*msg ? msg : "Unknown error\n"));
+	    Perl_croak(aTHX_ "%"SVf"Compilation failed in regexp",
+		       SVfARG(ERRSV
+                                ? ERRSV
+                                : newSVpvs_flags("Unknown error\n", SVs_TEMP)));
 	}
 	else {
-	    if (!*msg) {
+	    if (!*(SvPVx_nolen_const(ERRSV))) {
 	        sv_setpvs(ERRSV, "Compilation error");
 	    }
 	}
@@ -3634,7 +3649,7 @@ S_check_type_and_open(pTHX_ SV *name)
     }
 
 #if !defined(PERLIO_IS_STDIO) && !defined(USE_SFIO)
-    return PerlIO_openn(aTHX_ NULL, PERL_SCRIPT_MODE, -1, 0, 0, NULL, 1, &name);
+    return PerlIO_openn(aTHX_ ":", PERL_SCRIPT_MODE, -1, 0, 0, NULL, 1, &name);
 #else
     return PerlIO_open(p, PERL_SCRIPT_MODE);
 #endif
@@ -4266,7 +4281,8 @@ PP(pp_leaveeval)
     {
 	/* Unassume the success we assumed earlier. */
 	(void)hv_delete(GvHVn(PL_incgv),
-			SvPVX_const(namesv), SvCUR(namesv),
+			SvPVX_const(namesv),
+                        SvUTF8(namesv) ? -(I32)SvCUR(namesv) : (I32)SvCUR(namesv),
 			G_DISCARD);
 	retop = Perl_die(aTHX_ "%"SVf" did not return a true value",
 			       SVfARG(namesv));
@@ -4445,14 +4461,14 @@ S_destroy_matcher(pTHX_ PMOP *matcher)
 PP(pp_smartmatch)
 {
     DEBUG_M(Perl_deb(aTHX_ "Starting smart match resolution\n"));
-    return do_smartmatch(NULL, NULL);
+    return do_smartmatch(NULL, NULL, 0);
 }
 
 /* This version of do_smartmatch() implements the
  * table of smart matches that is found in perlsyn.
  */
 STATIC OP *
-S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
+S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 {
     dVAR;
     dSP;
@@ -4464,7 +4480,7 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
     /* Take care only to invoke mg_get() once for each argument.
      * Currently we do this by copying the SV if it's magical. */
     if (d) {
-	if (SvGMAGICAL(d))
+	if (!copied && SvGMAGICAL(d))
 	    d = sv_mortalcopy(d);
     }
     else
@@ -4775,7 +4791,7 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
 			
 			PUTBACK;
 			DEBUG_M(Perl_deb(aTHX_ "        recursively comparing array element...\n"));
-			(void) do_smartmatch(seen_this, seen_other);
+			(void) do_smartmatch(seen_this, seen_other, 0);
 			SPAGAIN;
 			DEBUG_M(Perl_deb(aTHX_ "        recursion finished\n"));
 			
@@ -4837,7 +4853,7 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
 		    PUTBACK;
 		    /* infinite recursion isn't supposed to happen here */
 		    DEBUG_M(Perl_deb(aTHX_ "        recursively testing array element...\n"));
-		    (void) do_smartmatch(NULL, NULL);
+		    (void) do_smartmatch(NULL, NULL, 1);
 		    SPAGAIN;
 		    DEBUG_M(Perl_deb(aTHX_ "        recursion finished\n"));
 		    if (SvTRUEx(POPs))

@@ -309,10 +309,10 @@ perform the upgrade if necessary.  See C<svtype>.
 				       subroutine in another package. Set the
 				       CvIMPORTED_CV_ON() if it needs to be
 				       expanded to a real GV */
-
-#define SVs_PADSTALE	0x00010000  /* lexical has gone out of scope */
-#define SVpad_STATE	0x00010000  /* pad name is a "state" var */
-#define SVs_PADTMP	0x00020000  /* in use as tmp */
+/*                      0x00010000  *** FREE SLOT */
+#define SVs_PADTMP	0x00020000  /* in use as tmp; only if ! SVs_PADMY */
+#define SVs_PADSTALE	0x00020000  /* lexical has gone out of scope;
+					only valid for SVs_PADMY */
 #define SVpad_TYPED	0x00020000  /* pad name is a Typed Lexical */
 #define SVs_PADMY	0x00040000  /* in use a "my" variable */
 #define SVpad_OUR	0x00040000  /* pad name is "our" instead of "my" */
@@ -409,6 +409,8 @@ perform the upgrade if necessary.  See C<svtype>.
 #define SVpbm_TAIL	0x80000000
 /* RV upwards. However, SVf_ROK and SVp_IOK are exclusive  */
 #define SVprv_WEAKREF   0x80000000  /* Weak reference */
+/* pad name vars only */
+#define SVpad_STATE	0x80000000  /* pad name is a "state" var */
 
 #define _XPV_HEAD							\
     HV*		xmg_stash;	/* class package */			\
@@ -683,6 +685,9 @@ Only use when you are sure SvNOK is true. See also C<SvNV()>.
 Returns a pointer to the physical string in the SV.  The SV must contain a
 string.
 
+This is also used to store the name of an autoloaded subroutine in an XS
+AUTOLOAD routine.  See L<perlguts/Autoloading with XSUBs>.
+
 =for apidoc Am|STRLEN|SvCUR|SV* sv
 Returns the length of the string which is in the SV.  See C<SvLEN>.
 
@@ -691,8 +696,13 @@ Returns the size of the string buffer in the SV, not including any part
 attributable to C<SvOOK>.  See C<SvCUR>.
 
 =for apidoc Am|char*|SvEND|SV* sv
-Returns a pointer to the last character in the string which is in the SV.
+Returns a pointer to the spot just after the last character in
+the string which is in the SV, where there is usually a trailing
+null (even though Perl scalars do not strictly require it).
 See C<SvCUR>.  Access the character as *(SvEND(sv)).
+
+Warning: If C<SvCUR> is equal to C<SvLEN>, then C<SvEND> points to
+unallocated memory.
 
 =for apidoc Am|HV*|SvSTASH|SV* sv
 Returns the stash of the SV.
@@ -909,34 +919,41 @@ the scalar's value cannot change unless written to.
 
 #define SvTHINKFIRST(sv)	(SvFLAGS(sv) & SVf_THINKFIRST)
 
-#define SvPADSTALE(sv)		(SvFLAGS(sv) & SVs_PADSTALE)
-#define SvPADSTALE_off(sv)	(SvFLAGS(sv) &= ~SVs_PADSTALE)
-
-#define SvPADTMP(sv)		(SvFLAGS(sv) & SVs_PADTMP)
-#define SvPADTMP_off(sv)	(SvFLAGS(sv) &= ~SVs_PADTMP)
-
 #define SvPADMY(sv)		(SvFLAGS(sv) & SVs_PADMY)
+#define SvPADMY_on(sv)		(SvFLAGS(sv) |= SVs_PADMY)
+
+/* SVs_PADTMP and SVs_PADSTALE share the same bit, mediated by SVs_PADMY */
+
+#define SvPADTMP(sv)	((SvFLAGS(sv) & (SVs_PADMY|SVs_PADTMP)) == SVs_PADTMP)
+#define SvPADSTALE(sv)	((SvFLAGS(sv) & (SVs_PADMY|SVs_PADSTALE)) \
+				    == (SVs_PADMY|SVs_PADSTALE))
 
 #if defined (DEBUGGING) && defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN)
-#  define SvPADTMP_on(sv)	({					\
-	    SV *const _svpad = MUTABLE_SV(sv);				\
-	    assert(!(SvFLAGS(_svpad) & (SVs_PADMY|SVs_PADSTALE)));	\
-	    (SvFLAGS(_svpad) |= SVs_PADTMP);		\
+#  define SvPADTMP_on(sv)	({			\
+	    SV *const _svpad = MUTABLE_SV(sv);		\
+	    assert(!(SvFLAGS(_svpad) & SVs_PADMY));	\
+	    SvFLAGS(_svpad) |= SVs_PADTMP;		\
 	})
-#  define SvPADMY_on(sv)	({					\
-	    SV *const _svpad = MUTABLE_SV(sv);				\
-	    assert(!(SvFLAGS(_svpad) & SVs_PADTMP));	\
-	    (SvFLAGS(_svpad) |= SVs_PADMY);		\
+#  define SvPADTMP_off(sv)	({			\
+	    SV *const _svpad = MUTABLE_SV(sv);		\
+	    assert(!(SvFLAGS(_svpad) & SVs_PADMY));	\
+	    SvFLAGS(_svpad) &= ~SVs_PADTMP;		\
 	})
-#  define SvPADSTALE_on(sv)	({					\
-	    SV *const _svpad = MUTABLE_SV(sv);				\
-	    assert(!(SvFLAGS(_svpad) & SVs_PADTMP));	\
-	    (SvFLAGS(_svpad) |= SVs_PADSTALE);		\
+#  define SvPADSTALE_on(sv)	({			\
+	    SV *const _svpad = MUTABLE_SV(sv);		\
+	    assert(SvFLAGS(_svpad) & SVs_PADMY);	\
+	    SvFLAGS(_svpad) |= SVs_PADSTALE;		\
+	})
+#  define SvPADSTALE_off(sv)	({			\
+	    SV *const _svpad = MUTABLE_SV(sv);		\
+	    assert(SvFLAGS(_svpad) & SVs_PADMY);	\
+	    SvFLAGS(_svpad) &= ~SVs_PADSTALE;		\
 	})
 #else
 #  define SvPADTMP_on(sv)	(SvFLAGS(sv) |= SVs_PADTMP)
-#  define SvPADMY_on(sv)	(SvFLAGS(sv) |= SVs_PADMY)
+#  define SvPADTMP_off(sv)	(SvFLAGS(sv) &= ~SVs_PADTMP)
 #  define SvPADSTALE_on(sv)	(SvFLAGS(sv) |= SVs_PADSTALE)
+#  define SvPADSTALE_off(sv)	(SvFLAGS(sv) &= ~SVs_PADSTALE)
 #endif
 
 #define SvTEMP(sv)		(SvFLAGS(sv) & SVs_TEMP)
@@ -1750,6 +1767,12 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>
 /* if (after resolving magic etc), the SV is found to be overloaded,
  * don't call the overload magic, just return as-is */
 #define SV_SKIP_OVERLOAD	8192
+/* It is not yet clear whether we want this as an API, or what the
+ * constants should be named. */
+#ifdef PERL_CORE
+# define SV_CATBYTES		16384
+# define SV_CATUTF8		32768
+#endif
 
 /* The core is safe for this COW optimisation. XS code on CPAN may not be.
    So only default to doing the COW setup if we're in the core.
@@ -1955,6 +1978,16 @@ Returns a pointer to the character buffer.
 #endif
 
 #define SvIMMORTAL(sv) ((sv)==&PL_sv_undef || (sv)==&PL_sv_yes || (sv)==&PL_sv_no || (sv)==&PL_sv_placeholder)
+
+/*
+=for apidoc Am|SV *|boolSV|bool b
+
+Returns a true SV if C<b> is a true value, or a false SV if C<b> is 0.
+
+See also C<PL_sv_yes> and C<PL_sv_no>.
+
+=cut
+*/
 
 #define boolSV(b) ((b) ? &PL_sv_yes : &PL_sv_no)
 

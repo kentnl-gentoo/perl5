@@ -794,6 +794,8 @@ cpan/Digest-SHA/typemap			Typemap for Digest::SHA
 cpan/Digest/t/base.t		See if Digest extensions work
 cpan/Digest/t/digest.t		See if Digest extensions work
 cpan/Digest/t/file.t		See if Digest extensions work
+cpan/Digest/t/lib/Digest/Dummy.pm		See if Digest extensions work
+cpan/Digest/t/security.t		See if Digest extensions work
 cpan/Encode/AUTHORS		List of authors
 cpan/Encode/bin/enc2xs		Encode module generator
 cpan/Encode/bin/piconv		iconv by perl
@@ -1867,6 +1869,7 @@ cpan/perlfaq/lib/perlfaq8.pod	System Interaction
 cpan/perlfaq/lib/perlfaq9.pod	Networking
 cpan/perlfaq/lib/perlfaq.pm	Perl frequently asked questions
 cpan/perlfaq/lib/perlfaq.pod	Perl frequently asked questions
+cpan/perlfaq/lib/perlglossary.pod	Perl Glossary
 cpan/PerlIO-via-QuotedPrint/lib/PerlIO/via/QuotedPrint.pm	PerlIO::via::QuotedPrint
 cpan/PerlIO-via-QuotedPrint/t/QuotedPrint.t			PerlIO::via::QuotedPrint
 cpan/Perl-OSType/lib/Perl/OSType.pm			Perl::OSType
@@ -2667,7 +2670,10 @@ cpan/Unicode-Collate/Collate/CJK/Stroke.pm			Unicode::Collate
 cpan/Unicode-Collate/Collate/keys.txt		Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/af.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/ar.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/as.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/az.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/be.pl	Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/bg.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/ca.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/cs.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/cy.pl			Unicode::Collate
@@ -2678,11 +2684,14 @@ cpan/Unicode-Collate/Collate/Locale/es.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/es_trad.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/et.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/fil.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/fi_phone.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/fi.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/fo.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/fr.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/gu.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/ha.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/haw.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/hi.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/hr.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/hu.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/hy.pl			Unicode::Collate
@@ -2691,7 +2700,10 @@ cpan/Unicode-Collate/Collate/Locale/is.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/ja.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/kk.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/kl.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/kn.pl	Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/kok.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/ko.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/ln.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/lt.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/lv.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/mt.pl			Unicode::Collate
@@ -2746,9 +2758,11 @@ cpan/Unicode-Collate/t/illegal.t		Unicode::Collate
 cpan/Unicode-Collate/t/index.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_af.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_ar.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_as.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_az.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_be.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_bg.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_bs.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_ca.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_cs.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_cyrl.t			Unicode::Collate
@@ -2761,11 +2775,14 @@ cpan/Unicode-Collate/t/loc_es.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_estr.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_et.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_fil.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_fiph.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_fi.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_fo.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_fr.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_gu.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_ha.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_haw.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_hi.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_hr.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_hu.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_hy.t			Unicode::Collate
@@ -2776,7 +2793,10 @@ cpan/Unicode-Collate/t/loc_japr.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_ja.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_kk.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_kl.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_kn.t	Unicode::Collate
+cpan/Unicode-Collate/t/loc_kok.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_ko.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_ln.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_lt.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_lv.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_mk.t			Unicode::Collate
@@ -3789,6 +3809,7 @@ ext/XS-APItest/notcore.c	Test API functions when PERL_CORE is not defined
 ext/XS-APItest/numeric.xs	XS::APItest wrappers for numeric.c
 ext/XS-APItest/README		XS::APItest extension
 ext/XS-APItest/t/arrayexpr.t	test recursive descent expression parsing
+ext/XS-APItest/t/autoload.t	Test XS AUTOLOAD routines
 ext/XS-APItest/t/BHK.pm		Helper for ./blockhooks.t
 ext/XS-APItest/t/blockasexpr.t	test recursive descent block parsing
 ext/XS-APItest/t/blockhooks-csc.t	XS::APItest: more tests for PL_blockhooks
@@ -3808,6 +3829,11 @@ ext/XS-APItest/t/exception.t	XS::APItest extension
 ext/XS-APItest/t/fetch_pad_names.t	Tests for UTF8 names in pad
 ext/XS-APItest/t/gotosub.t	XS::APItest: tests goto &xsub and hints
 ext/XS-APItest/t/grok.t		XS::APItest: tests for grok* functions
+ext/XS-APItest/t/gv_autoload4.t	XS::APItest: tests for gv_autoload4() and variants
+ext/XS-APItest/t/gv_fetchmeth_autoload.t	XS::APItest: tests for gv_fetchmeth_autoload() and variants
+ext/XS-APItest/t/gv_fetchmethod_flags.t	XS::APItest: tests for gv_fetchmethod_flags() and variants
+ext/XS-APItest/t/gv_fetchmeth.t		XS::APItest: tests for gv_fetchmeth() and variants
+ext/XS-APItest/t/gv_init.t	XS::APItest: tests for gv_init and variants
 ext/XS-APItest/t/hash.t		XS::APItest: tests for hash related APIs
 ext/XS-APItest/t/keyword_multiline.t	test keyword plugin parsing across lines
 ext/XS-APItest/t/keyword_plugin.t	test keyword plugin mechanism
@@ -3819,9 +3845,11 @@ ext/XS-APItest/t/lvalue.t	Test XS lvalue functions
 ext/XS-APItest/t/magic_chain.t	test low-level MAGIC chain handling
 ext/XS-APItest/t/magic.t	test attaching, finding, and removing magic
 ext/XS-APItest/t/Markers.pm	Helper for ./blockhooks.t
+ext/XS-APItest/t/mro.t		Test mro plugin api
 ext/XS-APItest/t/multicall.t	XS::APItest: test MULTICALL macros
 ext/XS-APItest/t/my_cxt.t	XS::APItest: test MY_CXT interface
 ext/XS-APItest/t/my_exit.t	XS::APItest: test my_exit
+ext/XS-APItest/t/newCONSTSUB.t	XS::APItest: test newCONSTSUB(_flags)
 ext/XS-APItest/t/Null.pm	Helper for ./blockhooks.t
 ext/XS-APItest/t/op_contextualize.t	test op_contextualize() API
 ext/XS-APItest/t/op_list.t	test OP list construction API
@@ -3839,6 +3867,7 @@ ext/XS-APItest/t/rmagical.t	XS::APItest extension
 ext/XS-APItest/t/rv2cv_op_cv.t	test rv2cv_op_cv() API
 ext/XS-APItest/t/savehints.t	test SAVEHINTS() API
 ext/XS-APItest/t/scopelessblock.t	test recursive descent statement-sequence parsing
+ext/XS-APItest/t/sort.t		Test sort(xs_cmp ...)
 ext/XS-APItest/t/stmtasexpr.t	test recursive descent statement parsing
 ext/XS-APItest/t/stmtsasexpr.t	test recursive descent statement-sequence parsing
 ext/XS-APItest/t/stuff_modify_bug.t	test for eval side-effecting source string
@@ -3853,6 +3882,7 @@ ext/XS-APItest/t/temp_lv_sub.t	XS::APItest: tests for lvalue subs returning temp
 ext/XS-APItest/t/underscore_length.t	Test find_rundefsv()
 ext/XS-APItest/t/utf16_to_utf8.t	Test behaviour of utf16_to_utf8{,reversed}
 ext/XS-APItest/t/utf8.t		Tests for code in utf8.c
+ext/XS-APItest/t/whichsig.t	XS::APItest: tests for whichsig() and variants
 ext/XS-APItest/t/xs_special_subs_require.t	for require too
 ext/XS-APItest/t/xs_special_subs.t	Test that XS BEGIN/CHECK/INIT/END work
 ext/XS-APItest/t/xsub_h.t	Tests for XSUB.h
@@ -4443,9 +4473,11 @@ pod/perl5123delta.pod		Perl changes in version 5.12.3
 pod/perl5124delta.pod		Perl changes in version 5.12.4
 pod/perl5140delta.pod		Perl changes in version 5.14.0
 pod/perl5141delta.pod		Perl changes in version 5.14.1
+pod/perl5142delta.pod		Perl changes in version 5.14.2
 pod/perl5150delta.pod		Perl changes in version 5.15.0
 pod/perl5151delta.pod		Perl changes in version 5.15.1
 pod/perl5152delta.pod		Perl changes in version 5.15.2
+pod/perl5153delta.pod		Perl changes in version 5.15.3
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4484,7 +4516,6 @@ pod/perlfork.pod		Perl fork() information
 pod/perlform.pod		Perl formats
 pod/perlfunc.pod		Perl built-in functions
 pod/perlgit.pod			Using git with the Perl repository
-pod/perlglossary.pod		Perl Glossary
 pod/perlgpl.pod			GNU General Public License
 pod/perlguts.pod		Perl internal functions for those doing extensions
 pod/perlhack.pod		Perl hackers guide
@@ -4554,6 +4585,8 @@ pod/splitpod			Splits perlfunc into multiple pod pages
 Policy_sh.SH			Hold site-wide preferences between Configure runs.
 Porting/acknowledgements.pl	Generate perldelta acknowledgements text
 Porting/add-package.pl		Add/Update CPAN modules that are part of Core
+Porting/bisect.pl		A tool to make bisecting easy
+Porting/bisect-runner.pl	Tool to be called by git bisect run
 Porting/bump-perl-version	bump the perl version in relevant files
 Porting/check83.pl		Check whether we are 8.3-friendly
 Porting/checkansi.pl		Check source code for ANSI-C violations
@@ -4897,42 +4930,78 @@ t/lib/warnings/universal	Tests for universal.c for warnings.t
 t/lib/warnings/utf8		Tests for utf8.c for warnings.t
 t/lib/warnings/util		Tests for util.c for warnings.t
 t/mro/basic_01_c3.t		mro tests
+t/mro/basic_01_c3_utf8.t	utf8 mro tests
 t/mro/basic_01_dfs.t		mro tests
+t/mro/basic_01_dfs_utf8.t	utf8 mro tests
 t/mro/basic_02_c3.t		mro tests
+t/mro/basic_02_c3_utf8.t	utf8 mro tests
 t/mro/basic_02_dfs.t		mro tests
+t/mro/basic_02_dfs_utf8.t	utf8 mro tests
 t/mro/basic_03_c3.t		mro tests
+t/mro/basic_03_c3_utf8.t	utf8 mro tests
 t/mro/basic_03_dfs.t		mro tests
+t/mro/basic_03_dfs_utf8.t	utf8 mro tests
 t/mro/basic_04_c3.t		mro tests
+t/mro/basic_04_c3_utf8.t	utf8 mro tests
 t/mro/basic_04_dfs.t		mro tests
+t/mro/basic_04_dfs_utf8.t	utf8 mro tests
 t/mro/basic_05_c3.t		mro tests
+t/mro/basic_05_c3_utf8.t	utf8 mro tests
 t/mro/basic_05_dfs.t		mro tests
+t/mro/basic_05_dfs_utf8.t	utf8 mro tests
 t/mro/basic.t			mro tests
+t/mro/basic_utf8.t		utf8 mro tests
 t/mro/c3_with_overload.t	mro tests
+t/mro/c3_with_overload_utf8.t	utf8 mro tests
 t/mro/complex_c3.t		mro tests
+t/mro/complex_c3_utf8.t		utf8 mro tests
 t/mro/complex_dfs.t		mro tests
+t/mro/complex_dfs_utf8.t	utf8 mro tests
 t/mro/dbic_c3.t			mro tests
+t/mro/dbic_c3_utf8.t		utf8 mro tests
 t/mro/dbic_dfs.t		mro tests
+t/mro/dbic_dfs_utf8.t		utf8 mro tests
 t/mro/inconsistent_c3.t		mro tests
+t/mro/inconsistent_c3_utf8.t	utf8 mro tests
 t/mro/isa_aliases.t		tests for shared @ISA arrays
+t/mro/isa_aliases_utf8.t	utf8 mro tests
 t/mro/isa_c3.t			test for optimisatised mro_get_linear_isa_c3
+t/mro/isa_c3_utf8.t		utf8 mro tests
 t/mro/isa_dfs.t			test for optimisatised mro_get_linear_isa_dfs
+t/mro/isa_dfs_utf8.t		utf8 mro tests
 t/mro/isarev.t			PL_isarev/mro::get_isarev tests
+t/mro/isarev_utf8.t		utf8 mro tests
 t/mro/method_caching.t		mro tests
+t/mro/method_caching_utf8.t	utf8 mro tests
 t/mro/next_edgecases.t		mro tests
+t/mro/next_edgecases_utf8.t	utf8 mro tests
 t/mro/next_goto.t		mro tests
+t/mro/next_goto_utf8.t		utf8 mro tests
 t/mro/next_inanon.t		mro tests
+t/mro/next_inanon_utf8.t	utf8 mro tests
 t/mro/next_ineval.t		mro tests
+t/mro/next_ineval_utf8.t	utf8 mro tests
 t/mro/next_method.t		mro tests
+t/mro/next_method_utf8.t	utf8 mro tests
 t/mro/next_NEXT.t		mro tests
+t/mro/next_NEXT_utf8.t		utf8 mro tests
 t/mro/next_skip.t		mro tests
+t/mro/next_skip_utf8.t		utf8 mro tests
 t/mro/overload_c3.t		mro tests
+t/mro/overload_c3_utf8.t	utf8 mro tests
 t/mro/overload_dfs.t		mro tests
 t/mro/package_aliases.t		mro tests
+t/mro/package_aliases_utf8.t	utf8 mro tests
 t/mro/pkg_gen.t			mro tests
+t/mro/pkg_gen_utf8.t		utf8 mro tests
 t/mro/recursion_c3.t		mro tests
+t/mro/recursion_c3_utf8.t	utf8 mro tests
 t/mro/recursion_dfs.t		mro tests
+t/mro/recursion_dfs_utf8.t	utf8 mro tests
 t/mro/vulcan_c3.t		mro tests
+t/mro/vulcan_c3_utf8.t		utf8 mro tests
 t/mro/vulcan_dfs.t		mro tests
+t/mro/vulcan_dfs_utf8.t		utf8 mro tests
 toke.c				The tokener
 t/op/64bitint.t			See if 64 bit integers work
 t/op/alarm.t			See if alarm works
@@ -5122,6 +5191,7 @@ t/porting/authors.t		Check that all authors have been acknowledged
 t/porting/bincompat.t		Check that {non_,}bincompat_options are ordered
 t/porting/buildtoc.t		Check that various pod lists are consistent
 t/porting/checkcase.t		Check whether we are case-insensitive-fs-friendly
+t/porting/checkcfgvar.t		Check that all config.sh-like files are good
 t/porting/cmp_version.t		Test whether all changed module files have their VERSION bumped
 t/porting/diag.t		Test completeness of perldiag.pod
 t/porting/dual-life.t		Check that dual-life bins are in utils/
@@ -5211,24 +5281,36 @@ t/run/switchx.t			Test the -x switch
 t/TEST				The regression tester
 t/test.pl			Simple testing library
 t/thread_it.pl			Run regression tests in a new thread
+t/uni/attrs.t			See if Unicode attributes work
+t/uni/bless.t			See if Unicode bless works
 t/uni/cache.t			See if Unicode swash caching works
+t/uni/caller.t			See if Unicode doesn't get mangled in caller()
 t/uni/case.pl			See if Unicode casing works
 t/uni/chomp.t			See if Unicode chomp works
 t/uni/chr.t			See if Unicode chr works
 t/uni/class.t			See if Unicode classes work (\p)
 t/uni/fold.t			See if Unicode folding works
+t/uni/goto.t			See if Unicode goto &sub works
 t/uni/greek.t			See if Unicode in greek works
+t/uni/gv.t			See if Unicode GVs work.
 t/uni/latin2.t			See if Unicode in latin2 works
 t/uni/lex_utf8.t		See if Unicode in lexer works
 t/uni/lower.t			See if Unicode casing works
+t/uni/method.t			See if Unicode methods work
 t/uni/overload.t		See if Unicode overloading works
+t/uni/package.t			See if Unicode in package declarations works
+t/uni/parser.t			See if Unicode in the parser works in edge cases.
+t/uni/readline.t		See if Unicode filehandles in <FH> work
+t/uni/select.t			See if Unicode filehandles aren't mangled by select()
 t/uni/sprintf.t			See if Unicode sprintf works
+t/uni/stash.t			See if Unicode stashes work
 t/uni/tie.t			See if Unicode tie works
 t/uni/title.t			See if Unicode casing works
 t/uni/tr_7jis.t			See if Unicode tr/// in 7jis works
 t/uni/tr_eucjp.t		See if Unicode tr/// in eucjp works
 t/uni/tr_sjis.t			See if Unicode tr/// in sjis works
 t/uni/tr_utf8.t			See if Unicode tr/// in utf8 works
+t/uni/universal.t		See if Unicode in calls to UNIVERSAL works
 t/uni/upper.t			See if Unicode casing works
 t/uni/write.t			See if Unicode formats work
 t/win32/runenv.t		Test if Win* perl honors its env variables

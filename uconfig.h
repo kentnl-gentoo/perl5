@@ -4652,6 +4652,13 @@
 /*#define	USE_FAST_STDIO		/ **/
 #endif
 
+/* USE_KERN_PROC_PATHNAME:
+ *	This symbol, if defined, indicates that we can use sysctl with
+ *	KERN_PROC_PATHNAME to get a full path for the executable, and hence
+ * 	convert $^X to an absolute path.
+ */
+/*#define USE_KERN_PROC_PATHNAME	/ **/
+
 /* USE_LARGE_FILES:
  *	This symbol, if defined, indicates that large file support
  *	should be used when available.
@@ -4684,6 +4691,13 @@
 /*#define	MULTIPLICITY		/ **/
 #endif
 
+/* USE_NSGETEXECUTABLEPATH:
+ *	This symbol, if defined, indicates that we can use _NSGetExecutablePath
+ *	and realpath to get a full path for the executable, and hence convert
+ *	$^X to an absolute path.
+ */
+/*#define USE_NSGETEXECUTABLEPATH	/ **/
+
 /* USE_PERLIO:
  *	This symbol, if defined, indicates that the PerlIO abstraction should
  *	be used throughout.  If not defined, stdio should be
@@ -4704,6 +4718,6 @@
 #endif
 
 /* Generated from:
- * 5c3a0864433ad4da7f3248b108cf8e17c19bd4d71799cd56b6c2a73bb647561a config_h.SH
- * 572c1e5ebb7563dcf5fa02c1ff0b1ca588d8aab1d52e0ffed24245c95dc7a137 uconfig.sh
+ * 5978363d841cd8e6e743461b9dfb3d8fd5cfdef099e8e8de43cac45a4170a300 config_h.SH
+ * b5e74633486412bbc4d2a1c3847f3e85b10a86e96fb5d1efb7b8bc885956d746 uconfig.sh
  * ex: set ro: */

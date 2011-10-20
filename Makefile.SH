@@ -331,11 +331,21 @@ $make_set_make
 
 # Mention $gmake here so it gets probed for by Configure.
 
+!GROK!THIS!
+
+case "${osname}" in
+linux*|darwin)
+$spitshell >>$Makefile <<!GROK!THIS!
 # If you're going to use valgrind and it can't be invoked as plain valgrind
 # then you'll need to change this, or override it on the make command line.
 VALGRIND ?= valgrind
 VG_TEST  ?= ./perl -e 1 2>/dev/null
 
+!GROK!THIS!
+	;;
+esac
+
+$spitshell >>$Makefile <<!GROK!THIS!
 DTRACE = $dtrace
 DTRACE_H = $dtrace_h
 DTRACE_O = $dtrace_o
@@ -468,7 +478,7 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5153delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5154delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -879,7 +889,12 @@ purecov$(PERL_EXE): $& perlmain$(OBJ_EXT) $(LIBPERL) $(static_ext) ext.libs $(PE
 quant$(PERL_EXE): $& perlmain$(OBJ_EXT) $(LIBPERL) $(static_ext) ext.libs $(PERLEXPORT)
 	$(SHRPENV) $(LDLIBPTH) quantify $(CC) -o quantperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
-# Valgrind perl (currently Linux only)
+!NO!SUBS!
+
+case "${osname}${osvers}" in
+linux*|darwin*)
+	$spitshell >>$Makefile <<'!NO!SUBS!'
+# Valgrind perl (currently Linux, Darwin only)
 
 perl.valgrind.config: config.sh
 	@echo "To build perl.valgrind you must Configure -Doptimize=-g -Uusemymalloc, checking..."
@@ -889,6 +904,11 @@ perl.valgrind.config: config.sh
 	@grep "^usemymalloc='n'" config.sh >/dev/null || exit 1
 	@echo "And of course you have to have valgrind..."
 	$(VALGRIND) $(VG_TEST) || exit 1
+!NO!SUBS!
+	;;
+esac	
+
+$spitshell >>$Makefile <<'!NO!SUBS!'
 
 # Third Degree Perl (Tru64 only)
 
@@ -1034,8 +1054,8 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) $(Icwd) pod/perlmodlib.PL -q
 
-pod/perl5153delta.pod: pod/perldelta.pod
-	$(LNS) perldelta.pod pod/perl5153delta.pod
+pod/perl5154delta.pod: pod/perldelta.pod
+	$(LNS) perldelta.pod pod/perl5154delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1058,19 +1078,19 @@ extras.install: $(PERL_EXE)
 .PHONY: install install-strip install-all install-verbose install-silent \
 	no-install install.perl install.man install.html
 
-install-strip:
+install_strip install-strip:
 	$(MAKE) STRIPFLAGS=-s install DESTDIR="$(DESTDIR)"
 
-install install-all:
+install install_all install-all:
 	$(MAKE) install.perl install.man STRIPFLAGS=$(STRIPFLAGS) DESTDIR="$(DESTDIR)"
 
-install-verbose:
+install_verbose install-verbose:
 	$(MAKE) install.perl install.man STRIPFLAGS=$(STRIPFLAGS) INSTALLFLAGS=-V DESTDIR="$(DESTDIR)"
 
-install-silent:
+install_silent install-silent:
 	$(MAKE) install.perl install.man STRIPFLAGS=$(STRIPFLAGS) INSTALLFLAGS=-S DESTDIR="$(DESTDIR)"
 
-no-install:
+no_install no-install:
 	$(MAKE) install.perl install.man STRIPFLAGS=$(STRIPFLAGS) INSTALLFLAGS=-n DESTDIR="$(DESTDIR)"
 
 # Set this to an empty string to avoid an attempt of rebuild before install
@@ -1105,11 +1125,11 @@ install.html: all installhtml
 
 .PHONY: regen_perly
 
-run_byacc:
+run_byacc run-byacc:
 	@echo "run_byacc is obsolete; try 'make regen_perly' instead"
 
 # this outputs perly.h, perly.act and perly.tab
-regen_perly:
+regen_perly regen-perly:
 	perl regen_perly.pl
 
 # We don't want to regenerate perly.c and perly.h, but they might
@@ -1148,17 +1168,17 @@ regen:	FORCE
 	-perl regen.pl
 	-perl regen/uconfig_h.pl
 
-regen_headers:	FORCE
+regen_headers regen-headers:	FORCE
 	-perl regen.pl -v
 	-perl regen/uconfig_h.pl -v
 
-regen_meta:  META.yml
+regen_meta regen-meta:  META.yml
 
 META.yml:   FORCE
 	PATH="`pwd`:${PATH}" PERL5LIB="`pwd`/lib" $(RUN_PERL) -Ilib Porting/makemeta
 
 
-regen_all: regen regen_meta
+regen_all regen-all: regen regen_meta
 
 .PHONY:	manisort manicheck
 
@@ -1384,7 +1404,7 @@ _test:
 
 test_prep_pre: preplibrary utilities $(nonxs_ext)
 
-test_prep: test_prep_pre $(MINIPERL_EXE) $(unidatafiles) $(PERL_EXE) \
+test_prep test-prep: test_prep_pre $(MINIPERL_EXE) $(unidatafiles) $(PERL_EXE) \
 	$(dynamic_ext) $(TEST_PERL_DLL) runtests x2p/s2p x2p/find2perl \
 	$(generated_pods)
 	cd t && (rm -f $(PERL_EXE); $(LNS) ../$(PERL_EXE) $(PERL_EXE))
@@ -1396,10 +1416,10 @@ test_prep_reonly: $(MINIPERL_EXE) $(PERL_EXE) $(dynamic_ext_re) $(TEST_PERL_DLL)
 test check: test_prep
 	$(RUN_TESTS) choose
 
-test_tty: test_prep
+test_tty test-tty: test_prep
 	$(RUN_TESTS) tty
 
-test_notty: test_prep
+test_notty test-notty: test_prep
 	$(RUN_TESTS) no-tty
 
 utest ucheck test.utf8 check.utf8: test_prep
@@ -1407,12 +1427,6 @@ utest ucheck test.utf8 check.utf8: test_prep
 
 coretest: test_prep
 	TEST_ARGS=-core $(RUN_TESTS) choose
-
-test-prep:	test_prep
-
-test-tty:	test_tty
-
-test-notty:	test_notty
 
 # Torture testing
 
@@ -1431,6 +1445,11 @@ test.utf16 check.utf16: test_prep
 utest.utf16 ucheck.utf16: test_prep
 	TEST_ARGS="-utf8 -utf16" $(RUN_TESTS) choose
 
+!NO!SUBS!
+
+case "${osname}${osvers}" in
+linux*|darwin*)
+	$spitshell >>$Makefile <<'!NO!SUBS!'
 # Targets for valgrind testing:
 
 test_prep.valgrind: test_prep perl.valgrind
@@ -1443,6 +1462,11 @@ utest.valgrind ucheck.valgrind: test_prep.valgrind perl.valgrind.config
 
 test_notty.valgrind: test_prep.valgrind perl.valgrind.config
 	PERL_VALGRIND=1 $(RUN_TESTS) no-tty
+!NO!SUBS!
+	;;
+esac
+
+$spitshell >>$Makefile <<'!NO!SUBS!'
 
 # Targets for Third Degree testing.
 
@@ -1486,19 +1510,19 @@ minitest: $(MINIPERL_EXE) minitest.prep
 
 # Test via harness
 
-test_harness: test_prep
+test_harness test-harness: test_prep
 	TESTFILE=harness $(RUN_TESTS) choose
 
 test_harness_notty: test_prep
 	HARNESS_NOTTY=1 TESTFILE=harness $(RUN_TESTS) choose
 
-test-reonly: test_prep_reonly
+test_reonly test-reonly: test_prep_reonly
 	TEST_ARGS='-re \bre\/' TESTFILE=harness $(RUN_TESTS) choose
 
 
 # Porting tests (well-formedness of pod, manifest, etc)
 
-test_porting: test_prep
+test_porting test-porting: test_prep
 	cd t && $(RUN_PERL) harness porting/*.t ../lib/diagnostics.t
 
 # Handy way to run perlbug -ok without having to install and run the

@@ -1091,6 +1091,9 @@ see sv_recode_to_utf8().
 =cut
 */
 
+/* This logic is duplicated in sv_catpvn_flags, so any bug fixes will
+   likewise need duplication. */
+
 U8*
 Perl_bytes_to_utf8(pTHX_ const U8 *s, STRLEN *len)
 {
@@ -1207,7 +1210,9 @@ Perl_utf16_to_utf8_reversed(pTHX_ U8* p, U8* d, I32 bytelen, I32 *newlen)
     return utf16_to_utf8(p, d, bytelen, newlen);
 }
 
-/* for now these are all defined (inefficiently) in terms of the utf8 versions */
+/* for now these are all defined (inefficiently) in terms of the utf8 versions.
+ * Note that the macros in handy.h that call these short-circuit calling them
+ * for Latin-1 range inputs */
 
 bool
 Perl_is_uni_alnum(pTHX_ UV c)
@@ -1236,9 +1241,7 @@ Perl_is_uni_alpha(pTHX_ UV c)
 bool
 Perl_is_uni_ascii(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXBYTES+1];
-    uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_ascii(tmpbuf);
+    return isASCII(c);
 }
 
 bool
@@ -1276,9 +1279,7 @@ Perl_is_uni_lower(pTHX_ UV c)
 bool
 Perl_is_uni_cntrl(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXBYTES+1];
-    uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_cntrl(tmpbuf);
+    return isCNTRL_L1(c);
 }
 
 bool
@@ -1313,9 +1314,18 @@ Perl_is_uni_xdigit(pTHX_ UV c)
     return is_utf8_xdigit(tmpbuf);
 }
 
+
 UV
 Perl_to_uni_upper(pTHX_ UV c, U8* p, STRLEN *lenp)
 {
+    /* Convert the Unicode character whose ordinal is c to its uppercase
+     * version and store that in UTF-8 in p and its length in bytes in lenp.
+     * Note that the p needs to be at least UTF8_MAXBYTES_CASE+1 bytes since
+     * the changed version may be longer than the original character.
+     *
+     * The ordinal of the first character of the changed version is returned
+     * (but note, as explained above, that there may be more.) */
+
     PERL_ARGS_ASSERT_TO_UNI_UPPER;
 
     uvchr_to_utf8(p, c);
@@ -1336,8 +1346,24 @@ Perl_to_uni_lower(pTHX_ UV c, U8* p, STRLEN *lenp)
 {
     PERL_ARGS_ASSERT_TO_UNI_LOWER;
 
-    uvchr_to_utf8(p, c);
-    return to_utf8_lower(p, p, lenp);
+    if (c > 255) {
+	uvchr_to_utf8(p, c);
+	return to_utf8_lower(p, p, lenp);
+    }
+
+    /* We have the latin1-range values compiled into the core, so just use
+     * those, converting the result to utf8 */
+    c = toLOWER_LATIN1(c);
+    if (UNI_IS_INVARIANT(c)) {
+	*p = c;
+	*lenp = 1;
+    }
+    else {
+	*p = UTF8_TWO_BYTE_HI(c);
+	*(p+1) = UTF8_TWO_BYTE_LO(c);
+	*lenp = 2;
+    }
+    return c;
 }
 
 UV
@@ -1514,14 +1540,22 @@ Perl_is_utf8_xidfirst(pTHX_ const U8 *p) /* The naming is historical. */
 }
 
 bool
+Perl__is_utf8__perl_idstart(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT__IS_UTF8__PERL_IDSTART;
+
+    return is_utf8_common(p, &PL_utf8_perl_idstart, "_Perl_IDStart");
+}
+
+bool
 Perl_is_utf8_idcont(pTHX_ const U8 *p)
 {
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_IDCONT;
 
-    if (*p == '_')
-	return TRUE;
     return is_utf8_common(p, &PL_utf8_idcont, "IdContinue");
 }
 
@@ -1532,8 +1566,6 @@ Perl_is_utf8_xidcont(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_XIDCONT;
 
-    if (*p == '_')
-	return TRUE;
     return is_utf8_common(p, &PL_utf8_idcont, "XIdContinue");
 }
 
@@ -1554,7 +1586,9 @@ Perl_is_utf8_ascii(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_ASCII;
 
-    return is_utf8_common(p, &PL_utf8_ascii, "IsAscii");
+    /* ASCII characters are the same whether in utf8 or not.  So the macro
+     * works on both utf8 and non-utf8 representations. */
+    return isASCII(*p);
 }
 
 bool
@@ -1564,7 +1598,7 @@ Perl_is_utf8_space(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_SPACE;
 
-    return is_utf8_common(p, &PL_utf8_space, "IsSpacePerl");
+    return is_utf8_common(p, &PL_utf8_space, "IsXPerlSpace");
 }
 
 bool
@@ -1574,7 +1608,9 @@ Perl_is_utf8_perl_space(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_PERL_SPACE;
 
-    return is_utf8_common(p, &PL_utf8_perl_space, "IsPerlSpace");
+    /* Only true if is an ASCII space-like character, and ASCII is invariant
+     * under utf8, so can just use the macro */
+    return isSPACE_A(*p);
 }
 
 bool
@@ -1584,7 +1620,9 @@ Perl_is_utf8_perl_word(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_PERL_WORD;
 
-    return is_utf8_common(p, &PL_utf8_perl_word, "IsPerlWord");
+    /* Only true if is an ASCII word character, and ASCII is invariant
+     * under utf8, so can just use the macro */
+    return isWORDCHAR_A(*p);
 }
 
 bool
@@ -1604,7 +1642,9 @@ Perl_is_utf8_posix_digit(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_POSIX_DIGIT;
 
-    return is_utf8_common(p, &PL_utf8_posix_digit, "IsPosixDigit");
+    /* Only true if is an ASCII digit character, and ASCII is invariant
+     * under utf8, so can just use the macro */
+    return isDIGIT_A(*p);
 }
 
 bool
@@ -1634,7 +1674,15 @@ Perl_is_utf8_cntrl(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_CNTRL;
 
-    return is_utf8_common(p, &PL_utf8_cntrl, "IsCntrl");
+    if (isASCII(*p)) {
+	return isCNTRL_A(*p);
+    }
+
+    /* All controls are in Latin1 */
+    if (! UTF8_IS_DOWNGRADEABLE_START(*p)) {
+	return 0;
+    }
+    return isCNTRL_L1(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)));
 }
 
 bool
@@ -2050,6 +2098,8 @@ Perl_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 minbits
     ENTER;
     SAVEHINTS();
     save_re_context();
+    if (PL_parser && PL_parser->error_count)
+	SAVEI8(PL_parser->error_count), PL_parser->error_count = 0;
     method = gv_fetchmeth(stash, "SWASHNEW", 8, -1);
     if (!method) {	/* demand load utf8 */
 	ENTER;
@@ -2162,12 +2212,13 @@ Perl_swash_fetch(pTHX_ SV *swash, const U8 *ptr, bool do_utf8)
 	    const UV code_point = utf8n_to_uvuni(ptr, UTF8_MAXBYTES, 0, 0);
 
 	    /* This outputs warnings for binary properties only, assuming that
-	     * to_utf8_case() will output any.  Also, surrogates aren't checked
-	     * for, as that would warn on things like /\p{Gc=Cs}/ */
+	     * to_utf8_case() will output any for non-binary.  Also, surrogates
+	     * aren't checked for, as that would warn on things like
+	     * /\p{Gc=Cs}/ */
 	    SV** const bitssvp = hv_fetchs(hv, "BITS", FALSE);
 	    if (SvUV(*bitssvp) == 1) {
 		Perl_warner(aTHX_ packWARN(WARN_NON_UNICODE),
-		    "Code point 0x%04"UVXf" is not Unicode, no properties match it; all inverse properties do", code_point);
+		    "Code point 0x%04"UVXf" is not Unicode, all \\p{} matches fail; all \\P{} matches succeed", code_point);
 	    }
 	}
     }
@@ -2472,12 +2523,26 @@ S_swash_get(pTHX_ SV* swash, UV start, UV span)
     } /* while */
   go_out_list:
 
-    /* Invert if the data says it should be */
+    /* Invert if the data says it should be.  Assumes that bits == 1 */
     if (invert_it_svp && SvUV(*invert_it_svp)) {
-	send = s + scur;
-	while (s < send) {
-	    *s = ~(*s);
-	    s++;
+
+	/* Unicode properties should come with all bits above PERL_UNICODE_MAX
+	 * be 0, and their inversion should also be 0, as we don't succeed any
+	 * Unicode property matches for non-Unicode code points */
+	if (start <= PERL_UNICODE_MAX) {
+
+	    /* The code below assumes that we never cross the
+	     * Unicode/above-Unicode boundary in a range, as otherwise we would
+	     * have to figure out where to stop flipping the bits.  Since this
+	     * boundary is divisible by a large power of 2, and swatches comes
+	     * in small powers of 2, this should be a valid assumption */
+	    assert(start + span - 1 <= PERL_UNICODE_MAX);
+
+	    send = s + scur;
+	    while (s < send) {
+		*s = ~(*s);
+		s++;
+	    }
 	}
     }
 
@@ -2961,7 +3026,7 @@ Perl__swash_to_invlist(pTHX_ SV* const swash)
 
     /* Invert if the data says it should be */
     if (invert_it_svp && SvUV(*invert_it_svp)) {
-	_invlist_invert(invlist);
+	_invlist_invert_prop(invlist);
     }
 
     /* This code is copied from swash_get()
@@ -3305,6 +3370,9 @@ http://www.unicode.org/unicode/reports/tr21/ (Case Mappings).
  *			    points below 256; unicode rules for above 255; and
  *			    folds that cross those boundaries are disallowed,
  *			    like the NOMIX_ASCII option
+ *  FOLDEQ_S1_ALREADY_FOLDED s1 has already been folded before calling this
+ *                           routine.  This allows that step to be skipped.
+ *  FOLDEQ_S2_ALREADY_FOLDED   Similarly.
  */
 I32
 Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, register UV l1, bool u1, const char *s2, char **pe2, register UV l2, bool u2, U32 flags)
@@ -3325,6 +3393,11 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, register UV l1, bool u1
                                    these always fit in 2 bytes */
 
     PERL_ARGS_ASSERT_FOLDEQ_UTF8_FLAGS;
+
+    /* The algorithm requires that input with the flags on the first line of
+     * the assert not be pre-folded. */
+    assert( ! ((flags & (FOLDEQ_UTF8_NOMIX_ASCII | FOLDEQ_UTF8_LOCALE))
+	&& (flags & (FOLDEQ_S1_ALREADY_FOLDED | FOLDEQ_S2_ALREADY_FOLDED))));
 
     if (pe1) {
         e1 = *(U8**)pe1;
@@ -3367,6 +3440,10 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, register UV l1, bool u1
 	assert(e2);
     }
 
+    /* If both operands are already folded, we could just do a memEQ on the
+     * whole strings at once, but it would be better if the caller realized
+     * this and didn't even call us */
+
     /* Look through both strings, a character at a time */
     while (p1 < e1 && p2 < e2) {
 
@@ -3374,96 +3451,111 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, register UV l1, bool u1
 	 * and the length of the fold.  (exception: locale rules just get the
 	 * character to a single byte) */
         if (n1 == 0) {
+	    if (flags & FOLDEQ_S1_ALREADY_FOLDED) {
+		f1 = (U8 *) p1;
+		n1 = UTF8SKIP(f1);
 
 	    /* If in locale matching, we use two sets of rules, depending on if
 	     * the code point is above or below 255.  Here, we test for and
 	     * handle locale rules */
-	    if ((flags & FOLDEQ_UTF8_LOCALE)
-		&& (! u1 || UTF8_IS_INVARIANT(*p1) || UTF8_IS_DOWNGRADEABLE_START(*p1)))
-	    {
-		/* There is no mixing of code points above and below 255. */
-		if (u2 && (! UTF8_IS_INVARIANT(*p2)
-		    && ! UTF8_IS_DOWNGRADEABLE_START(*p2)))
+	    }
+	    else {
+		if ((flags & FOLDEQ_UTF8_LOCALE)
+		    && (! u1 || UTF8_IS_INVARIANT(*p1)
+			|| UTF8_IS_DOWNGRADEABLE_START(*p1)))
 		{
-		    return 0;
-		}
+		    /* There is no mixing of code points above and below 255. */
+		    if (u2 && (! UTF8_IS_INVARIANT(*p2)
+			&& ! UTF8_IS_DOWNGRADEABLE_START(*p2)))
+		    {
+			return 0;
+		    }
 
-		/* We handle locale rules by converting, if necessary, the code
-		 * point to a single byte. */
-		if (! u1 || UTF8_IS_INVARIANT(*p1)) {
-		    *foldbuf1 = *p1;
+		    /* We handle locale rules by converting, if necessary, the
+		     * code point to a single byte. */
+		    if (! u1 || UTF8_IS_INVARIANT(*p1)) {
+			*foldbuf1 = *p1;
+		    }
+		    else {
+			*foldbuf1 = TWO_BYTE_UTF8_TO_UNI(*p1, *(p1 + 1));
+		    }
+		    n1 = 1;
 		}
-		else {
-		    *foldbuf1 = TWO_BYTE_UTF8_TO_UNI(*p1, *(p1 + 1));
-		}
-		n1 = 1;
-	    }
-	    else if (isASCII(*p1)) {	/* Note, that here won't be both ASCII
-					   and using locale rules */
+		else if (isASCII(*p1)) {	/* Note, that here won't be
+						   both ASCII and using locale
+						   rules */
 
-		/* If trying to mix non- with ASCII, and not supposed to, fail */
-		if ((flags & FOLDEQ_UTF8_NOMIX_ASCII) && ! isASCII(*p2)) {
-		    return 0;
+		    /* If trying to mix non- with ASCII, and not supposed to,
+		     * fail */
+		    if ((flags & FOLDEQ_UTF8_NOMIX_ASCII) && ! isASCII(*p2)) {
+			return 0;
+		    }
+		    n1 = 1;
+		    *foldbuf1 = toLOWER(*p1);   /* Folds in the ASCII range are
+						   just lowercased */
 		}
-		n1 = 1;
-		*foldbuf1 = toLOWER(*p1);   /* Folds in the ASCII range are
-					       just lowercased */
+		else if (u1) {
+		    to_utf8_fold(p1, foldbuf1, &n1);
+		}
+		else {  /* Not utf8, convert to it first and then get fold */
+		    uvuni_to_utf8(natbuf, (UV) NATIVE_TO_UNI(((UV)*p1)));
+		    to_utf8_fold(natbuf, foldbuf1, &n1);
+		}
+		f1 = foldbuf1;
 	    }
-	    else if (u1) {
-                to_utf8_fold(p1, foldbuf1, &n1);
-            }
-            else {  /* Not utf8, convert to it first and then get fold */
-                uvuni_to_utf8(natbuf, (UV) NATIVE_TO_UNI(((UV)*p1)));
-                to_utf8_fold(natbuf, foldbuf1, &n1);
-            }
-            f1 = foldbuf1;
         }
 
         if (n2 == 0) {    /* Same for s2 */
-	    if ((flags & FOLDEQ_UTF8_LOCALE)
-		&& (! u2 || UTF8_IS_INVARIANT(*p2) || UTF8_IS_DOWNGRADEABLE_START(*p2)))
-	    {
-		/* Here, the next char in s2 is < 256.  We've already worked on
-		 * s1, and if it isn't also < 256, can't match */
-		if (u1 && (! UTF8_IS_INVARIANT(*p1)
-		    && ! UTF8_IS_DOWNGRADEABLE_START(*p1)))
+	    if (flags & FOLDEQ_S2_ALREADY_FOLDED) {
+		f2 = (U8 *) p2;
+		n2 = UTF8SKIP(f2);
+	    }
+	    else {
+		if ((flags & FOLDEQ_UTF8_LOCALE)
+		    && (! u2 || UTF8_IS_INVARIANT(*p2) || UTF8_IS_DOWNGRADEABLE_START(*p2)))
 		{
-		    return 0;
+		    /* Here, the next char in s2 is < 256.  We've already
+		     * worked on s1, and if it isn't also < 256, can't match */
+		    if (u1 && (! UTF8_IS_INVARIANT(*p1)
+			&& ! UTF8_IS_DOWNGRADEABLE_START(*p1)))
+		    {
+			return 0;
+		    }
+		    if (! u2 || UTF8_IS_INVARIANT(*p2)) {
+			*foldbuf2 = *p2;
+		    }
+		    else {
+			*foldbuf2 = TWO_BYTE_UTF8_TO_UNI(*p2, *(p2 + 1));
+		    }
+
+		    /* Use another function to handle locale rules.  We've made
+		     * sure that both characters to compare are single bytes */
+		    if (! foldEQ_locale((char *) f1, (char *) foldbuf2, 1)) {
+			return 0;
+		    }
+		    n1 = n2 = 0;
 		}
-		if (! u2 || UTF8_IS_INVARIANT(*p2)) {
-		    *foldbuf2 = *p2;
+		else if (isASCII(*p2)) {
+		    if (flags && ! isASCII(*p1)) {
+			return 0;
+		    }
+		    n2 = 1;
+		    *foldbuf2 = toLOWER(*p2);
+		}
+		else if (u2) {
+		    to_utf8_fold(p2, foldbuf2, &n2);
 		}
 		else {
-		    *foldbuf2 = TWO_BYTE_UTF8_TO_UNI(*p2, *(p2 + 1));
+		    uvuni_to_utf8(natbuf, (UV) NATIVE_TO_UNI(((UV)*p2)));
+		    to_utf8_fold(natbuf, foldbuf2, &n2);
 		}
-
-		/* Use another function to handle locale rules.  We've made
-		 * sure that both characters to compare are single bytes */
-		if (! foldEQ_locale((char *) f1, (char *) foldbuf2, 1)) {
-		    return 0;
-		}
-		n1 = n2 = 0;
+		f2 = foldbuf2;
 	    }
-	    else if (isASCII(*p2)) {
-		if (flags && ! isASCII(*p1)) {
-		    return 0;
-		}
-		n2 = 1;
-		*foldbuf2 = toLOWER(*p2);
-	    }
-	    else if (u2) {
-                to_utf8_fold(p2, foldbuf2, &n2);
-            }
-            else {
-                uvuni_to_utf8(natbuf, (UV) NATIVE_TO_UNI(((UV)*p2)));
-                to_utf8_fold(natbuf, foldbuf2, &n2);
-            }
-            f2 = foldbuf2;
         }
 
 	/* Here f1 and f2 point to the beginning of the strings to compare.
-	 * These strings are the folds of the input characters, stored in utf8.
-	 */
+	 * These strings are the folds of the next character from each input
+	 * string, stored in utf8. */
 
         /* While there is more to look for in both folds, see if they
         * continue to match */
