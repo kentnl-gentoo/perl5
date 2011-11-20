@@ -2723,10 +2723,6 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    PL_ors_sv = NULL;
 	}
 	break;
-    case '[':
-	if (SvIV(sv) != 0)
-	    Perl_croak(aTHX_ "Assigning non-zero to $[ is no longer possible");
-	break;
     case '?':
 #ifdef COMPLEX_STATUS
 	if (PL_localizing == 2) {
@@ -2824,7 +2820,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	(void)setregid((Gid_t)PL_gid, (Gid_t)-1);
 #else
 #ifdef HAS_SETRESGID
-      (void)setresgid((Gid_t)PL_gid, (Gid_t)-1, (Gid_t) 1);
+      (void)setresgid((Gid_t)PL_gid, (Gid_t)-1, (Gid_t) -1);
 #else
 	if (PL_gid == PL_egid)			/* special case $( = $) */
 	    (void)PerlProc_setgid(PL_gid);

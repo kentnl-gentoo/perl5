@@ -17,9 +17,7 @@
 
  * Don't forget to re-run regen/embed.pl to propagate changes! */
 
-/* New variables must be added to the very end for binary compatibility.
- * XSUB.h provides wrapper functions via perlapi.h that make this
- * irrelevant, but not all code may be expected to #include XSUB.h. */
+/* New variables must be added to the very end for binary compatibility. */
 
 /* Don't forget to add your variable also to perl_clone()! */
 
@@ -229,8 +227,6 @@ When you replace this variable, it is considered a good practice to store the po
 
 PERLVARI(I, opfreehook,	Perl_ophook_t, 0) /* op_free() hook */
 
-/* Space for U32 */
-PERLVARI(I, reginterp_cnt,I32,	 0)	/* Whether "Regexp" was interpolated. */
 PERLVARI(I, watchaddr,	char **, 0)
 PERLVAR(I, watchok,	char *)
 
@@ -299,9 +295,9 @@ PERLVAR(I, dowarn,	U8)
 PERLVAR(I, sawampersand, bool)		/* must save all match strings */
 PERLVAR(I, unsafe,	bool)
 PERLVAR(I, exit_flags,	U8)		/* was exit() unexpected, etc. */
-PERLVAR(I, srand_called, bool)
-PERLVARI(I, in_load_module, bool, FALSE)	/* to prevent recursions in PerlIO_find_layer */
-     /* Space for a U16  */
+
+PERLVARI(I, reginterp_cnt, I32,	 0)	/* Whether "Regexp" was interpolated. */
+
 PERLVAR(I, inplace,	char *)
 PERLVAR(I, e_script,	SV *)
 
@@ -598,17 +594,16 @@ PERLVAR(I, utf8_tofold,	SV *)
 PERLVAR(I, last_swash_hv, HV *)
 PERLVAR(I, last_swash_tmps, U8 *)
 PERLVAR(I, last_swash_slen, STRLEN)
-PERLVARA(I, last_swash_key,10, U8)
-PERLVAR(I, last_swash_klen, U8)		/* Only needs to store 0-10  */
+PERLVARA(I, last_swash_key,12, U8)
+PERLVAR(I, last_swash_klen, U8)		/* Only needs to store 0-12  */
 
 #ifdef FCRYPT
 PERLVARI(I, cryptseen,	bool,	FALSE)	/* has fast crypt() been initialized? */
 #endif
 
 PERLVAR(I, pad_reset_pending, bool)	/* reset pad on next attempted alloc */
-
-PERLVARI(I, glob_index,	int,	0)
-
+PERLVAR(I, srand_called, bool)
+PERLVARI(I, in_load_module, bool, FALSE)	/* to prevent recursions in PerlIO_find_layer */
 
 PERLVAR(I, parser,	yy_parser *)	/* current parser state */
 
@@ -726,6 +721,10 @@ PERLVARI(I, utf8_foldable, SV *, NULL)
 
 PERLVAR(I, custom_ops,	HV *)		/* custom op registrations */
 
+/* Hook for File::Glob */
+PERLVARI(I, globhook,	globhook_t, NULL)
+
+PERLVARI(I, glob_index,	int,	0)
 PERLVAR(I, reentrant_retint, int)	/* Integer return value from reentrant functions */
 
 /* The last unconditional member of the interpreter structure when 5.10.0 was
@@ -735,8 +734,8 @@ PERLVAR(I, reentrant_retint, int)	/* Integer return value from reentrant functio
 #define PERL_LAST_5_16_0_INTERP_MEMBER	Ireentrant_retint
 
 #ifdef PERL_IMPLICIT_CONTEXT
-PERLVARI(I, my_cxt_size, int,	0)	/* size of PL_my_cxt_list */
 PERLVARI(I, my_cxt_list, void **, NULL) /* per-module array of MY_CXT pointers */
+PERLVARI(I, my_cxt_size, int,	0)	/* size of PL_my_cxt_list */
 #  ifdef PERL_GLOBAL_STRUCT_PRIVATE
 PERLVARI(I, my_cxt_keys, const char **, NULL) /* per-module array of pointers to MY_CXT_KEY constants */
 #  endif

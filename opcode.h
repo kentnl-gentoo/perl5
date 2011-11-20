@@ -1381,14 +1381,14 @@ EXT Perl_check_t PL_check[] /* or perlvars.h */
 	Perl_ck_fun,		/* stringify */
 	Perl_ck_bitop,		/* left_shift */
 	Perl_ck_bitop,		/* right_shift */
-	Perl_ck_null,		/* lt */
-	Perl_ck_null,		/* i_lt */
-	Perl_ck_null,		/* gt */
-	Perl_ck_null,		/* i_gt */
-	Perl_ck_null,		/* le */
-	Perl_ck_null,		/* i_le */
-	Perl_ck_null,		/* ge */
-	Perl_ck_null,		/* i_ge */
+	Perl_ck_cmp,		/* lt */
+	Perl_ck_cmp,		/* i_lt */
+	Perl_ck_cmp,		/* gt */
+	Perl_ck_cmp,		/* i_gt */
+	Perl_ck_cmp,		/* le */
+	Perl_ck_cmp,		/* i_le */
+	Perl_ck_cmp,		/* ge */
+	Perl_ck_cmp,		/* i_ge */
 	Perl_ck_null,		/* eq */
 	Perl_ck_null,		/* i_eq */
 	Perl_ck_null,		/* ne */
@@ -1422,7 +1422,7 @@ EXT Perl_check_t PL_check[] /* or perlvars.h */
 	Perl_ck_fun,		/* hex */
 	Perl_ck_fun,		/* oct */
 	Perl_ck_fun,		/* abs */
-	Perl_ck_fun,		/* length */
+	Perl_ck_length,		/* length */
 	Perl_ck_substr,		/* substr */
 	Perl_ck_fun,		/* vec */
 	Perl_ck_index,		/* index */
@@ -2023,7 +2023,7 @@ EXTCONST U32 PL_opargs[] = {
 	0x00009bc0,	/* require */
 	0x00001140,	/* dofile */
 	0x00000604,	/* hintseval */
-	0x00001b40,	/* entereval */
+	0x00009bc0,	/* entereval */
 	0x00001100,	/* leaveeval */
 	0x00000340,	/* entertry */
 	0x00000400,	/* leavetry */

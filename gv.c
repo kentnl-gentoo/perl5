@@ -1174,7 +1174,7 @@ Perl_gv_autoload_pvn(pTHX_ HV *stash, const char *name, STRLEN len, U32 flags)
          * via the SvPVX field in the CV, and the stash in CvSTASH.
          *
          * Due to an unfortunate accident of history, the SvPVX field
-         * serves two purposes.  It is also used for the subroutine’s pro-
+         * serves two purposes.  It is also used for the subroutine's pro-
          * type.  Since SvPVX has been documented as returning the sub name
          * for a long time, but not as returning the prototype, we have
          * to preserve the SvPVX AUTOLOAD behaviour and put the prototype
@@ -1278,6 +1278,7 @@ S_require_tie_mod(pTHX_ GV *gv, const char *varpv, SV* namesv, const char *methp
 	char varname = *varpv; /* varpv might be clobbered by load_module,
 				  so save it. For the moment it's always
 				  a single char. */
+	const char type = varname == '[' ? '$' : '%';
 	dSP;
 	ENTER;
 	if ( flags & 1 )
@@ -1289,11 +1290,11 @@ S_require_tie_mod(pTHX_ GV *gv, const char *varpv, SV* namesv, const char *methp
 	SPAGAIN;
 	stash = gv_stashsv(namesv, 0);
 	if (!stash)
-	    Perl_croak(aTHX_ "panic: Can't use %%%c because %"SVf" is not available",
-		    varname, SVfARG(namesv));
+	    Perl_croak(aTHX_ "panic: Can't use %c%c because %"SVf" is not available",
+		    type, varname, SVfARG(namesv));
 	else if (!gv_fetchmethod(stash, methpv))
-	    Perl_croak(aTHX_ "panic: Can't use %%%c because %"SVf" does not support method %s",
-		    varname, SVfARG(namesv), methpv);
+	    Perl_croak(aTHX_ "panic: Can't use %c%c because %"SVf" does not support method %s",
+		    type, varname, SVfARG(namesv), methpv);
     }
     SvREFCNT_dec(namesv);
     return stash;
@@ -1659,12 +1660,15 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 	if (add) {
 	    GvMULTI_on(gv);
 	    gv_init_svtype(gv, sv_type);
-	    if (len == 1 && stash == PL_defstash
-		&& (sv_type == SVt_PVHV || sv_type == SVt_PVGV)) {
+	    if (len == 1 && stash == PL_defstash) {
+	      if (sv_type == SVt_PVHV || sv_type == SVt_PVGV) {
 	        if (*name == '!')
 		    require_tie_mod(gv, "!", newSVpvs("Errno"), "TIEHASH", 1);
 		else if (*name == '-' || *name == '+')
 		    require_tie_mod(gv, name, newSVpvs("Tie::Hash::NamedCapture"), "TIEHASH", 0);
+	      }
+	      if ((sv_type==SVt_PV || sv_type==SVt_PVGV) && *name == '[')
+		require_tie_mod(gv,name,newSVpvs("arybase"),"FETCH",0);
 	    }
 	    else if (len == 3 && sv_type == SVt_PVAV
 	          && strnEQ(name, "ISA", 3)
@@ -1940,6 +1944,13 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 		hv_magic(hv, NULL, PERL_MAGIC_hints);
 	    }
 	    goto magicalize;
+	case '[':		/* $[ */
+	    if (sv_type == SVt_PV || sv_type == SVt_PVGV) {
+		if (addmg) (void)hv_store(stash,name,len,(SV *)gv,0);
+		require_tie_mod(gv,name,newSVpvs("arybase"),"FETCH",0);
+		addmg = 0;
+	    }
+            break;
 	case '\023':	/* $^S */
 	ro_magicalize:
 	    SvREADONLY_on(GvSVn(gv));
@@ -1954,7 +1965,6 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 	case '7':		/* $7 */
 	case '8':		/* $8 */
 	case '9':		/* $9 */
-	case '[':		/* $[ */
 	case '^':		/* $^ */
 	case '~':		/* $~ */
 	case '=':		/* $= */
@@ -2029,13 +2039,9 @@ Perl_gv_fullname4(pTHX_ SV *sv, const GV *gv, const char *prefix, bool keepmain)
 
     PERL_ARGS_ASSERT_GV_FULLNAME4;
 
-    if (!hv) {
-	SvOK_off(sv);
-	return;
-    }
     sv_setpv(sv, prefix ? prefix : "");
 
-    if ((name = HvNAME(hv))) {
+    if (hv && (name = HvNAME(hv))) {
       const STRLEN len = HvNAMELEN(hv);
       if (keepmain || strnNE(name, "main", len)) {
 	sv_catpvn_flags(sv,name,len,HvNAMEUTF8(hv)?SV_CATUTF8:SV_CATBYTES);

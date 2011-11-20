@@ -988,6 +988,7 @@
 #define ck_anoncode(a)		Perl_ck_anoncode(aTHX_ a)
 #define ck_bitop(a)		Perl_ck_bitop(aTHX_ a)
 #define ck_chdir(a)		Perl_ck_chdir(aTHX_ a)
+#define ck_cmp(a)		Perl_ck_cmp(aTHX_ a)
 #define ck_concat(a)		Perl_ck_concat(aTHX_ a)
 #define ck_defined(a)		Perl_ck_defined(aTHX_ a)
 #define ck_delete(a)		Perl_ck_delete(aTHX_ a)
@@ -1004,6 +1005,7 @@
 #define ck_grep(a)		Perl_ck_grep(aTHX_ a)
 #define ck_index(a)		Perl_ck_index(aTHX_ a)
 #define ck_join(a)		Perl_ck_join(aTHX_ a)
+#define ck_length(a)		Perl_ck_length(aTHX_ a)
 #define ck_lfun(a)		Perl_ck_lfun(aTHX_ a)
 #define ck_listiob(a)		Perl_ck_listiob(aTHX_ a)
 #define ck_match(a)		Perl_ck_match(aTHX_ a)
@@ -1427,7 +1429,7 @@
 #define destroy_matcher(a)	S_destroy_matcher(aTHX_ a)
 #define do_smartmatch(a,b,c)	S_do_smartmatch(aTHX_ a,b,c)
 #define docatch(a)		S_docatch(aTHX_ a)
-#define doeval(a,b,c,d)		S_doeval(aTHX_ a,b,c,d)
+#define doeval(a,b,c,d,e)	S_doeval(aTHX_ a,b,c,d,e)
 #define dofindlabel(a,b,c,d)	S_dofindlabel(aTHX_ a,b,c,d)
 #define doparseform(a)		S_doparseform(aTHX_ a)
 #define dopoptoeval(a)		S_dopoptoeval(aTHX_ a)
@@ -1509,7 +1511,6 @@
 #define uiv_2buf		S_uiv_2buf
 #define utf8_mg_len_cache_update(a,b,c)	S_utf8_mg_len_cache_update(aTHX_ a,b,c)
 #define utf8_mg_pos_cache_update(a,b,c,d,e)	S_utf8_mg_pos_cache_update(aTHX_ a,b,c,d,e)
-#define varname(a,b,c,d,e,f)	S_varname(aTHX_ a,b,c,d,e,f)
 #define visit(a,b,c)		S_visit(aTHX_ a,b,c)
 #    if defined(PERL_OLD_COPY_ON_WRITE)
 #define sv_release_COW(a,b,c)	S_sv_release_COW(aTHX_ a,b,c)
@@ -1519,6 +1520,9 @@
 #define sv_dup_inc_multiple(a,b,c,d)	S_sv_dup_inc_multiple(aTHX_ a,b,c,d)
 #define unreferenced_to_tmp_stack(a)	S_unreferenced_to_tmp_stack(aTHX_ a)
 #    endif
+#  endif
+#  if defined(PERL_IN_SV_C) || defined (PERL_IN_OP_C)
+#define varname(a,b,c,d,e,f)	Perl_varname(aTHX_ a,b,c,d,e,f)
 #  endif
 #  if defined(PERL_IN_TOKE_C)
 #define ao(a)			S_ao(aTHX_ a)
@@ -1570,9 +1574,14 @@
 #define isa_lookup(a,b,c,d)	S_isa_lookup(aTHX_ a,b,c,d)
 #  endif
 #  if defined(PERL_IN_UTF8_C)
+#define _to_fold_latin1(a,b,c,d)	Perl__to_fold_latin1(aTHX_ a,b,c,d)
 #define is_utf8_char_slow	S_is_utf8_char_slow
 #define is_utf8_common(a,b,c)	S_is_utf8_common(aTHX_ a,b,c)
 #define swash_get(a,b,c)	S_swash_get(aTHX_ a,b,c)
+#define to_lower_latin1(a,b,c)	S_to_lower_latin1(aTHX_ a,b,c)
+#  endif
+#  if defined(PERL_IN_UTF8_C) || defined(PERL_IN_PP_C)
+#define _to_upper_title_latin1(a,b,c,d)	Perl__to_upper_title_latin1(aTHX_ a,b,c,d)
 #  endif
 #  if defined(PERL_IN_UTIL_C)
 #define ckwarn_common(a)	S_ckwarn_common(aTHX_ a)

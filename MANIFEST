@@ -1046,6 +1046,7 @@ cpan/ExtUtils-MakeMaker/MANIFEST				ExtUtils::MakeMaker MANIFEST
 cpan/ExtUtils-MakeMaker/NOTES					Notes about MakeMaker internals
 cpan/ExtUtils-MakeMaker/PATCHING				Suggestions for patching MakeMaker
 cpan/ExtUtils-MakeMaker/README					MakeMaker README
+cpan/ExtUtils-MakeMaker/README.packaging			MakeMaker packaging README
 cpan/ExtUtils-MakeMaker/t/00compile.t				See if MakeMaker modules compile
 cpan/ExtUtils-MakeMaker/t/arch_check.t				Test MakeMaker's arch_check()
 cpan/ExtUtils-MakeMaker/t/backwards.t				Check MakeMaker's backwards compatibility
@@ -1054,6 +1055,7 @@ cpan/ExtUtils-MakeMaker/t/build_man.t				Set if MakeMaker builds manpages
 cpan/ExtUtils-MakeMaker/t/cd.t					Test to see cd works
 cpan/ExtUtils-MakeMaker/t/config.t				Test ExtUtils::MakeMaker::Config
 cpan/ExtUtils-MakeMaker/t/dir_target.t				Verify if dir_target() is supported
+cpan/ExtUtils-MakeMaker/t/echo.t				Test for ExtUtils::MakeMaker
 cpan/ExtUtils-MakeMaker/t/FIRST_MAKEFILE.t			See if FIRST_MAKEFILE works
 cpan/ExtUtils-MakeMaker/t/fixin.t				See if ExtUtils::MakeMaker works
 cpan/ExtUtils-MakeMaker/t/fix_libs.t				Test for ExtUtils::MakeMaker
@@ -1161,10 +1163,19 @@ cpan/HTTP-Tiny/t/040_content.t
 cpan/HTTP-Tiny/t/050_chunked_body.t
 cpan/HTTP-Tiny/t/060_http_date.t
 cpan/HTTP-Tiny/t/100_get.t
+cpan/HTTP-Tiny/t/101_head.t
+cpan/HTTP-Tiny/t/102_put.t
+cpan/HTTP-Tiny/t/103_delete.t
+cpan/HTTP-Tiny/t/104_post.t
 cpan/HTTP-Tiny/t/110_mirror.t
-cpan/HTTP-Tiny/t/120_put.t
 cpan/HTTP-Tiny/t/130_redirect.t
 cpan/HTTP-Tiny/t/140_proxy.t
+cpan/HTTP-Tiny/t/150_post_form.t
+cpan/HTTP-Tiny/t/cases/delete-01.txt
+cpan/HTTP-Tiny/t/cases/form-01.txt
+cpan/HTTP-Tiny/t/cases/form-02.txt
+cpan/HTTP-Tiny/t/cases/form-03.txt
+cpan/HTTP-Tiny/t/cases/form-04.txt
 cpan/HTTP-Tiny/t/cases/get-01.txt
 cpan/HTTP-Tiny/t/cases/get-02.txt
 cpan/HTTP-Tiny/t/cases/get-03.txt
@@ -1186,11 +1197,13 @@ cpan/HTTP-Tiny/t/cases/get-18.txt
 cpan/HTTP-Tiny/t/cases/get-19.txt
 cpan/HTTP-Tiny/t/cases/get-20.txt
 cpan/HTTP-Tiny/t/cases/get-21.txt
+cpan/HTTP-Tiny/t/cases/head-01.txt
 cpan/HTTP-Tiny/t/cases/mirror-01.txt
 cpan/HTTP-Tiny/t/cases/mirror-02.txt
 cpan/HTTP-Tiny/t/cases/mirror-03.txt
 cpan/HTTP-Tiny/t/cases/mirror-04.txt
 cpan/HTTP-Tiny/t/cases/mirror-05.txt
+cpan/HTTP-Tiny/t/cases/post-01.txt
 cpan/HTTP-Tiny/t/cases/put-01.txt
 cpan/HTTP-Tiny/t/cases/put-02.txt
 cpan/HTTP-Tiny/t/cases/put-03.txt
@@ -2674,6 +2687,7 @@ cpan/Unicode-Collate/Collate/Locale/as.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/az.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/be.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/bg.pl	Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/bn.pl		Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/ca.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/cs.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/cy.pl			Unicode::Collate
@@ -2683,6 +2697,7 @@ cpan/Unicode-Collate/Collate/Locale/eo.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/es.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/es_trad.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/et.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/fa.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/fil.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/fi_phone.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/fi.pl			Unicode::Collate
@@ -2706,25 +2721,40 @@ cpan/Unicode-Collate/Collate/Locale/ko.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/ln.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/lt.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/lv.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/mk.pl	Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/ml.pl	Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/mr.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/mt.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/nb.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/nn.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/nso.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/om.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/or.pl	Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/pa.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/pl.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale.pm			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/ro.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/ru.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/sa.pl		Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/se.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/si_dict.pl	Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/si.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/sk.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/sl.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/sq.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/sr.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/sv.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/sv_refo.pl	Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/ta.pl	Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/te.pl	Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/th.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/tn.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/to.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/tr.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/uk.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/ur.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/vi.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/wae.pl	Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/wo.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/yo.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/zh_big5.pl			Unicode::Collate
@@ -2762,8 +2792,10 @@ cpan/Unicode-Collate/t/loc_as.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_az.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_be.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_bg.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_bn.t		Unicode::Collate
 cpan/Unicode-Collate/t/loc_bs.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_ca.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_cjk.t		Unicode::Collate
 cpan/Unicode-Collate/t/loc_cs.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_cyrl.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_cy.t			Unicode::Collate
@@ -2774,6 +2806,7 @@ cpan/Unicode-Collate/t/loc_eo.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_es.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_estr.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_et.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_fa.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_fil.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_fiph.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_fi.t			Unicode::Collate
@@ -2800,27 +2833,41 @@ cpan/Unicode-Collate/t/loc_ln.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_lt.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_lv.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_mk.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_ml.t	Unicode::Collate
+cpan/Unicode-Collate/t/loc_mr.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_mt.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_nb.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_nn.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_nso.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_om.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_or.t	Unicode::Collate
+cpan/Unicode-Collate/t/loc_pa.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_pl.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_ro.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_ru.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_sa.t		Unicode::Collate
 cpan/Unicode-Collate/t/loc_se.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_sidt.t	Unicode::Collate
+cpan/Unicode-Collate/t/loc_si.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_sk.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_sl.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_sq.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_srla.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_sr.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_svrf.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_sv.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_sw.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_ta.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_test.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_te.t	Unicode::Collate
+cpan/Unicode-Collate/t/loc_th.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_tn.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_to.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_tr.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_uk.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_ur.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_vi.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_wae.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_wo.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_yo.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_zhb5.t			Unicode::Collate
@@ -3403,6 +3450,7 @@ dist/Storable/t/overload.t		See if Storable works
 dist/Storable/t/recurse.t		See if Storable works
 dist/Storable/t/restrict.t		See if Storable works
 dist/Storable/t/retrieve.t		See if Storable works
+dist/Storable/t/robust.t		See if it survives mangled %INC
 dist/Storable/t/sig_die.t		See if Storable works
 dist/Storable/t/st-dump.pl		See if Storable works
 dist/Storable/t/store.t			See if Storable works
@@ -3507,6 +3555,22 @@ epoc/epocish.c		EPOC port
 epoc/epocish.h		EPOC port
 epoc/epoc_stubs.c	EPOC port
 epoc/link.pl		EPOC port link a exe
+ext/arybase/arybase.pm		For $[
+ext/arybase/arybase.xs		For $[
+ext/arybase/ptable.h		For $[
+ext/arybase/t/aeach.t		For $[
+ext/arybase/t/aelem.t		For $[
+ext/arybase/t/akeys.t		For $[
+ext/arybase/t/arybase.t		For $[
+ext/arybase/t/aslice.t		For $[
+ext/arybase/t/av2arylen.t	For $[
+ext/arybase/t/index.t		For $[
+ext/arybase/t/lslice.t		For $[
+ext/arybase/t/pos.t		For $[
+ext/arybase/t/scope_0.pm	For $[
+ext/arybase/t/scope.t		For $[
+ext/arybase/t/splice.t		For $[
+ext/arybase/t/substr.t		For $[
 ext/attributes/attributes.pm		For "sub foo : attrlist"
 ext/attributes/attributes.xs		For "sub foo : attrlist"
 ext/B/B/Concise.pm	Compiler Concise backend
@@ -3642,6 +3706,7 @@ ext/NDBM_File/hints/dec_osf.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/dynixptx.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/gnukfreebsd.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/gnuknetbsd.pl	Hint for NDBM_File for named architecture
+ext/NDBM_File/hints/gnu.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/linux.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/sco.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/solaris.pl	Hint for NDBM_File for named architecture
@@ -3655,6 +3720,7 @@ ext/ODBM_File/hints/cygwin.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/dec_osf.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/gnukfreebsd.pl	Hint for NDBM_File for named architecture
 ext/ODBM_File/hints/gnuknetbsd.pl	Hint for NDBM_File for named architecture
+ext/ODBM_File/hints/gnu.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/hpux.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/linux.pl	Hint for NDBM_File for named architecture
 ext/ODBM_File/hints/sco.pl	Hint for ODBM_File for named architecture
@@ -3774,6 +3840,7 @@ ext/Socket/Socket.pm		Socket extension Perl module
 ext/Socket/Socket.xs		Socket extension external subroutines
 ext/Socket/t/getaddrinfo.t	See if Socket::getaddrinfo works
 ext/Socket/t/getnameinfo.t	See if Socket::getnameinfo works
+ext/Socket/t/ipv6_mreq.t	See if (un)pack_ipv6_mreq work
 ext/Socket/t/socketpair.t	See if socketpair works
 ext/Socket/t/Socket.t		See if Socket works
 ext/Sys-Hostname/Hostname.pm	Sys::Hostname extension Perl module
@@ -3818,6 +3885,7 @@ ext/XS-APItest/t/Block.pm	Helper for ./blockhooks.t
 ext/XS-APItest/t/call_checker.t	test call checker plugin API
 ext/XS-APItest/t/caller.t	XS::APItest: tests for caller_cx
 ext/XS-APItest/t/call.t		XS::APItest extension
+ext/XS-APItest/t/check_warnings.t	test scope of "Too late for CHECK"
 ext/XS-APItest/t/cleanup.t	test stack behaviour on unwinding
 ext/XS-APItest/t/clone-with-stack.t	test clone with CLONEf_COPY_STACKS works
 ext/XS-APItest/t/cophh.t	test COPHH API
@@ -4478,6 +4546,7 @@ pod/perl5150delta.pod		Perl changes in version 5.15.0
 pod/perl5151delta.pod		Perl changes in version 5.15.1
 pod/perl5152delta.pod		Perl changes in version 5.15.2
 pod/perl5153delta.pod		Perl changes in version 5.15.3
+pod/perl5154delta.pod		Perl changes in version 5.15.4
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4628,12 +4697,16 @@ Porting/makerel			Release making utility
 Porting/make_snapshot.pl	Make a tgz snapshot of our tree with a .patch file in it
 Porting/manicheck		Check against MANIFEST
 Porting/manisort		Sort the MANIFEST
+Porting/new-perldelta.pl	Generate a new perldelta
 Porting/newtests-perldelta.pl	Generate Perldelta stub for newly added tests
 Porting/perldelta_template.pod	Template for creating new perldelta.pod files
 Porting/perlhist_calculate.pl		Perform calculations to update perlhist
+Porting/pod_lib.pl		Code for handling pod.lst
+Porting/pod_rules.pl		generate lists of pod files for Makefiles
 Porting/podtidy			Reformat pod using Pod::Tidy
 Porting/pumpkin.pod		Guidelines and hints for Perl maintainers
 Porting/README.y2038		Perl notes for the 2038 fix
+Porting/release_announcement_template.txt
 Porting/release_managers_guide.pod	Release Manager's Guide
 Porting/release_schedule.pod	Schedule for future releases
 Porting/rt_list_patches		A tool to help you apply patches from RT
@@ -5047,6 +5120,7 @@ t/op/dor.t			See if defined-or (//) works
 t/op/do.t			See if subroutines work
 t/op/each_array.t		See if array iterators work
 t/op/each.t			See if hash iterators work
+t/op/evalbytes.t		See if evalbytes operator works
 t/op/eval.t			See if eval operator works
 t/op/exec.t			See if exec, system and qx work
 t/op/exists_sub.t		See if exists(&sub) works
@@ -5189,7 +5263,6 @@ t/perl.supp			Perl valgrind suppressions
 t/porting/args_assert.t		Check that all PERL_ARGS_ASSERT* macros are used
 t/porting/authors.t		Check that all authors have been acknowledged
 t/porting/bincompat.t		Check that {non_,}bincompat_options are ordered
-t/porting/buildtoc.t		Check that various pod lists are consistent
 t/porting/checkcase.t		Check whether we are case-insensitive-fs-friendly
 t/porting/checkcfgvar.t		Check that all config.sh-like files are good
 t/porting/cmp_version.t		Test whether all changed module files have their VERSION bumped
@@ -5203,6 +5276,7 @@ t/porting/known_pod_issues.dat	Data file for porting/podcheck.t
 t/porting/maintainers.t		Test that Porting/Maintainers.pl is up to date
 t/porting/manifest.t		Test that this MANIFEST file is well formed
 t/porting/podcheck.t		Test the POD of shipped modules is well formed
+t/porting/pod_rules.t		Check that various pod lists are consistent
 t/porting/regen.t		Check that regen.pl doesn't need running
 t/porting/test_bootstrap.t	Test that the instructions for test bootstrapping aren't accidentally overlooked.
 t/README			Instructions for regression tests
@@ -5280,6 +5354,7 @@ t/run/switchx.aux		Data for switchx.t
 t/run/switchx.t			Test the -x switch
 t/TEST				The regression tester
 t/test.pl			Simple testing library
+t/test_pl/can_isa_ok.t		Tests for the simple testing library
 t/thread_it.pl			Run regression tests in a new thread
 t/uni/attrs.t			See if Unicode attributes work
 t/uni/bless.t			See if Unicode bless works
@@ -5289,6 +5364,7 @@ t/uni/case.pl			See if Unicode casing works
 t/uni/chomp.t			See if Unicode chomp works
 t/uni/chr.t			See if Unicode chr works
 t/uni/class.t			See if Unicode classes work (\p)
+t/uni/eval.t			See if Unicode hints don't affect eval()
 t/uni/fold.t			See if Unicode folding works
 t/uni/goto.t			See if Unicode goto &sub works
 t/uni/greek.t			See if Unicode in greek works
@@ -5378,7 +5454,6 @@ vos/Changes			Changes made to port Perl to the VOS operating system
 vos/compile_full_perl.cm	VOS command macro to build "full" Perl
 vos/configure_full_perl.sh	VOS shell script to configure "full" perl before building
 vos/make_full_perl.sh		VOS shell script to build and test "full" perl
-vos/syslog.h			syslog header for VOS
 vos/vos.c			VOS emulations for missing POSIX functions
 vos/vosish.h			VOS-specific header file
 warnings.h			The warning numbers

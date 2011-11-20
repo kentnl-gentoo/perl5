@@ -200,7 +200,7 @@ use File::Glob qw(:case);
     'Archive::Extract' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Archive-Extract-0.56.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Archive-Extract-0.58.tar.gz',
 	'FILES'		=> q[cpan/Archive-Extract],
 	'UPSTREAM'	=> 'cpan',
 	'BUGS'		=> 'bug-archive-extract@rt.cpan.org',
@@ -353,7 +353,7 @@ use File::Glob qw(:case);
     'CGI' =>
 	{
 	'MAINTAINER'	=> 'lstein',
-	'DISTRIBUTION'	=> 'MARKSTOS/CGI.pm-3.55.tar.gz',
+	'DISTRIBUTION'	=> 'MARKSTOS/CGI.pm-3.58.tar.gz',
 	'FILES'		=> q[cpan/CGI],
 	'EXCLUDED'	=> [ qr{^t/lib/Test},
 				qw( cgi-lib_porting.html
@@ -377,7 +377,7 @@ use File::Glob qw(:case);
     'Compress::Raw::Bzip2' =>
 	{
 	'MAINTAINER'	=> 'pmqs',
-	'DISTRIBUTION'	=> 'PMQS/Compress-Raw-Bzip2-2.037.tar.gz',
+	'DISTRIBUTION'	=> 'PMQS/Compress-Raw-Bzip2-2.042.tar.gz',
 	'FILES'		=> q[cpan/Compress-Raw-Bzip2],
 	'EXCLUDED'	=> [ qr{^t/Test/},
 			     qw( bzip2-src/bzip2-cpp.patch
@@ -389,7 +389,7 @@ use File::Glob qw(:case);
     'Compress::Raw::Zlib' =>
 	{
 	'MAINTAINER'	=> 'pmqs',
-	'DISTRIBUTION'	=> 'PMQS/Compress-Raw-Zlib-2.037.tar.gz',
+	'DISTRIBUTION'	=> 'PMQS/Compress-Raw-Zlib-2.042.tar.gz',
 
 	'FILES'		=> q[cpan/Compress-Raw-Zlib],
 	'EXCLUDED'	=> [ qr{^t/Test/},
@@ -462,7 +462,7 @@ use File::Glob qw(:case);
     'CPANPLUS' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.9111.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.9112.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qr{^t/dummy-.*\.hidden$},
@@ -483,7 +483,7 @@ use File::Glob qw(:case);
     'CPANPLUS::Dist::Build' =>
 	{
 	'MAINTAINER'	=> 'bingos',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.58.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.60.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS-Dist-Build],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qw{ t/99_pod.t
@@ -597,7 +597,7 @@ use File::Glob qw(:case);
     'Digest::SHA' =>
 	{
 	'MAINTAINER'	=> 'mshelor',
-	'DISTRIBUTION'	=> 'MSHELOR/Digest-SHA-5.62.tar.gz',
+	'DISTRIBUTION'	=> 'MSHELOR/Digest-SHA-5.63.tar.gz',
 	'FILES' 	=> q[cpan/Digest-SHA],
 	'EXCLUDED'	=> [ qw{t/pod.t t/podcover.t examples/dups} ],
 	'UPSTREAM'	=> 'cpan',
@@ -734,7 +734,7 @@ use File::Glob qw(:case);
     'ExtUtils::MakeMaker' =>
 	{
 	'MAINTAINER'	=> 'mschwern',
-	'DISTRIBUTION'	=> 'MSCHWERN/ExtUtils-MakeMaker-6.61_01.tar.gz',
+	'DISTRIBUTION'	=> 'MSCHWERN/ExtUtils-MakeMaker-6.63_02.tar.gz',
 	'FILES'		=> q[cpan/ExtUtils-MakeMaker],
 	'EXCLUDED'	=> [ qr{^t/lib/Test/},
            qr{^(bundled|my)/},
@@ -764,7 +764,7 @@ use File::Glob qw(:case);
     'perlfaq' =>
 	{
 	'MAINTAINER'	=> 'perlfaq',
-	'DISTRIBUTION'  => 'LLAP/perlfaq-5.0150035.tar.gz',
+	'DISTRIBUTION'  => 'LLAP/perlfaq-5.0150036.tar.gz',
 	'FILES'		=> q[cpan/perlfaq],
 	'EXCLUDED'	=> [ qw(t/release-pod-syntax.t t/release-eol.t
 				t/release-no-tabs.t) ],
@@ -978,7 +978,7 @@ use File::Glob qw(:case);
     'HTTP::Tiny' =>
 	{
 	'MAINTAINER'	=> 'dagolden',
-	'DISTRIBUTION'	=> 'DAGOLDEN/HTTP-Tiny-0.013.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/HTTP-Tiny-0.016.tar.gz',
 	'FILES'		=> q[cpan/HTTP-Tiny],
 	'EXCLUDED'	=> [
 				't/200_live.t',
@@ -1034,7 +1034,7 @@ use File::Glob qw(:case);
     'IO-Compress' =>
 	{
 	'MAINTAINER'	=> 'pmqs',
-	'DISTRIBUTION'	=> 'PMQS/IO-Compress-2.037.tar.gz',
+	'DISTRIBUTION'	=> 'PMQS/IO-Compress-2.042.tar.gz',
 	'FILES'		=> q[cpan/IO-Compress],
 	'EXCLUDED'	=> [ qr{t/Test/} ],
 	'UPSTREAM'	=> 'cpan',
@@ -1259,7 +1259,7 @@ use File::Glob qw(:case);
     'Module::CoreList' =>
 	{
 	'MAINTAINER'	=> 'bingos',
-	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.56.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.57.tar.gz',
 	'FILES'		=> q[dist/Module-CoreList],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -1707,7 +1707,7 @@ use File::Glob qw(:case);
     'Term::ANSIColor' =>
 	{
 	'MAINTAINER'	=> 'rra',
-	'DISTRIBUTION'	=> 'RRA/ANSIColor-3.01.tar.gz',
+	'DISTRIBUTION'	=> 'RRA/Term-ANSIColor-3.01.tar.gz',
 	'FILES'		=> q[cpan/Term-ANSIColor],
 	'EXCLUDED'	=> [ qr{^tests/}, qw(t/pod-spelling.t t/pod.t) ],
 	'UPSTREAM'	=> 'cpan',
@@ -1970,7 +1970,7 @@ use File::Glob qw(:case);
     'Unicode::Collate' =>
 	{
 	'MAINTAINER'	=> 'sadahiro',
-	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.80.tar.gz',
+	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.85.tar.gz',
 	'FILES'		=> q[cpan/Unicode-Collate],
 	'EXCLUDED'	=> [ qr{N$},
                    qr{^data/},
@@ -2120,6 +2120,7 @@ use File::Glob qw(:case);
 	{
 	'MAINTAINER'	=> 'p5p',
 	'FILES'		=> q[
+				ext/arybase/
 				ext/XS-APItest/
 				lib/CORE.pod
 				lib/Config.t

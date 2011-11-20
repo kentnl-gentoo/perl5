@@ -26,15 +26,9 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
 	 ($] < 5.009 ? 'PMf_SKIPWHITE' : qw(RXf_SKIPWHITE)),
 	 ($] < 5.011 ? 'CVf_LOCKED' : 'OPpREVERSE_INPLACE'),
 	 ($] < 5.013 ? () : 'PMf_NONDESTRUCT'),
-	 ($] < 5.015003 &&
-	     # This empirical feature test is required during the
-	     # transitional phase where blead still identifies itself
-	     # as 5.15.2 but has had $[ removed.  After blead has its
-	     # version number bumped to 5.15.3, this can be reduced to
-	     # just test $] < 5.015003.
-	     ($] < 5.015002 || do { require B; exists(&B::OPpCONST_ARYBASE) })
-	     ? qw(OPpCONST_ARYBASE) : ());
-$VERSION = "1.08";
+	 ($] < 5.015003 ? qw(OPpCONST_ARYBASE) : ()),
+	 ($] < 5.015005 ? () : qw(OPpEVAL_BYTES));
+$VERSION = "1.09";
 use strict;
 use vars qw/$AUTOLOAD/;
 use warnings ();
@@ -44,7 +38,7 @@ BEGIN {
     # be to fake up a dummy constant that will never actually be true.
     foreach (qw(OPpSORT_INPLACE OPpSORT_DESCEND OPpITER_REVERSED OPpCONST_NOVER
 		OPpPAD_STATE RXf_SKIPWHITE CVf_LOCKED OPpREVERSE_INPLACE
-		PMf_NONDESTRUCT OPpCONST_ARYBASE)) {
+		PMf_NONDESTRUCT OPpCONST_ARYBASE OPpEVAL_BYTES)) {
 	no strict 'refs';
 	*{$_} = sub () {0} unless *{$_}{CODE};
     }
@@ -1557,6 +1551,7 @@ my %feature_keywords = (
     when    => 'switch',
     default => 'switch',
     break   => 'switch',
+    evalbytes=>'evalbytes',
 );
 
 sub keyword {
@@ -1564,14 +1559,12 @@ sub keyword {
     my $name = shift;
     return $name if $name =~ /^CORE::/; # just in case
     if (exists $feature_keywords{$name}) {
-	return
-	  $self->{'hinthash'}
-	   && $self->{'hinthash'}{"feature_$feature_keywords{$name}"}
-	    ? $name
-	    : "CORE::$name";
+	return "CORE::$name"
+	 if !$self->{'hinthash'}
+	 || !$self->{'hinthash'}{"feature_$feature_keywords{$name}"}
     }
     if (
-      $name !~ /^(?:chom?p|exec|s(?:elect|ystem))\z/
+      $name !~ /^(?:chom?p|do|exec|glob|s(?:elect|ystem))\z/
        && !defined eval{prototype "CORE::$name"}
     ) { return $name }
     if (
@@ -1766,7 +1759,12 @@ sub pp_alarm { unop(@_, "alarm") }
 sub pp_sleep { maybe_targmy(@_, \&unop, "sleep") }
 
 sub pp_dofile { unop(@_, "do") }
-sub pp_entereval { unop(@_, "eval") }
+sub pp_entereval {
+    unop(
+      @_,
+      $_[1]->private & OPpEVAL_BYTES ? $_[0]->keyword('evalbytes') : "eval"
+    )
+}
 
 sub pp_ghbyname { unop(@_, "gethostbyname") }
 sub pp_gnbyname { unop(@_, "getnetbyname") }
@@ -2468,9 +2466,12 @@ sub pp_glob {
     my $self = shift;
     my($op, $cx) = @_;
     my $text = $self->dq($op->first->sibling);  # skip pushmark
+    my $keyword =
+	$op->flags & OPf_SPECIAL ? 'glob' : $self->keyword('glob');
     if ($text =~ /^\$?(\w|::|\`)+$/ # could look like a readline
-	or $text =~ /[<>]/) {
-	return 'glob(' . single_delim('qq', '"', $text) . ')';
+	or $keyword =~ /^CORE::/
+        or $text =~ /[<>]/) {
+	return "$keyword(" . single_delim('qq', '"', $text) . ')';
     } else {
 	return '<' . $text . '>';
     }
@@ -2597,6 +2598,7 @@ sub pp_list {
     my($op, $cx) = @_;
     my($expr, @exprs);
     my $kid = $op->first->sibling; # skip pushmark
+    return '' if class($kid) eq 'NULL';
     my $lop;
     my $local = "either"; # could be local(...), my(...), state(...) or our(...)
     for ($lop = $kid; !null($lop); $lop = $lop->sibling) {

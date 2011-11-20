@@ -94,7 +94,7 @@ Perl_safesysmalloc(MEM_SIZE size)
     size += sTHX;
 #endif
 #ifdef DEBUGGING
-    if ((long)size < 0)
+    if ((SSize_t)size < 0)
 	Perl_croak_nocontext("panic: malloc");
 #endif
     ptr = (Malloc_t)PerlMem_malloc(size?size:1);	/* malloc(0) is NASTY on our system */
@@ -187,7 +187,7 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
     }
 #endif
 #ifdef DEBUGGING
-    if ((long)size < 0)
+    if ((SSize_t)size < 0)
 	Perl_croak_nocontext("panic: realloc");
 #endif
     ptr = (Malloc_t)PerlMem_realloc(where,size);
@@ -316,7 +316,7 @@ Perl_safesyscalloc(MEM_SIZE count, MEM_SIZE size)
     }
 #endif /* HAS_64K_LIMIT */
 #ifdef DEBUGGING
-    if ((long)size < 0 || (long)count < 0)
+    if ((SSize_t)size < 0 || (SSize_t)count < 0)
 	Perl_croak_nocontext("panic: calloc");
 #endif
 #ifdef PERL_TRACK_MEMPOOL
@@ -3404,7 +3404,7 @@ Perl_my_pclose(pTHX_ PerlIO *ptr)
 
 #define PERL_REPEATCPY_LINEAR 4
 void
-Perl_repeatcpy(register char *to, register const char *from, I32 len, register I32 count)
+Perl_repeatcpy(register char *to, register const char *from, I32 len, register IV count)
 {
     PERL_ARGS_ASSERT_REPEATCPY;
 
@@ -3412,19 +3412,19 @@ Perl_repeatcpy(register char *to, register const char *from, I32 len, register I
 	memset(to, *from, count);
     else if (count) {
 	register char *p = to;
-	I32 items, linear, half;
+	IV items, linear, half;
 
 	linear = count < PERL_REPEATCPY_LINEAR ? count : PERL_REPEATCPY_LINEAR;
 	for (items = 0; items < linear; ++items) {
 	    register const char *q = from;
-	    I32 todo;
+	    IV todo;
 	    for (todo = len; todo > 0; todo--)
 		*p++ = *q++;
         }
 
 	half = count / 2;
 	while (items <= half) {
-	    I32 size = items * len;
+	    IV size = items * len;
 	    memcpy(p, to, size);
 	    p     += size;
 	    items *= 2;
@@ -6523,6 +6523,19 @@ long _ftol( double ); /* Defined by VC6 C libs. */
 long _ftol2( double dblSource ) { return _ftol( dblSource ); }
 #endif
 
+PERL_STATIC_INLINE bool
+S_gv_has_usable_name(pTHX_ GV *gv)
+{
+    GV **gvp;
+    return GvSTASH(gv)
+	&& HvENAME(GvSTASH(gv))
+	&& (gvp = (GV **)hv_fetch(
+			GvSTASH(gv), GvNAME(gv),
+			GvNAMEUTF8(gv) ? -GvNAMELEN(gv) : GvNAMELEN(gv), 0
+	   ))
+	&& *gvp == gv;
+}
+
 void
 Perl_get_db_sub(pTHX_ SV **svp, CV *cv)
 {
@@ -6530,7 +6543,8 @@ Perl_get_db_sub(pTHX_ SV **svp, CV *cv)
     SV * const dbsv = GvSVn(PL_DBsub);
     const bool save_taint = PL_tainted;
 
-    /* We do not care about using sv to call CV;
+    /* When we are called from pp_goto (svp is null),
+     * we do not care about using dbsv to call CV;
      * it's for informational purposes only.
      */
 
@@ -6541,23 +6555,33 @@ Perl_get_db_sub(pTHX_ SV **svp, CV *cv)
     if (!PERLDB_SUB_NN) {
 	GV *gv = CvGV(cv);
 
-	if ( svp && ((CvFLAGS(cv) & (CVf_ANON | CVf_CLONED))
+	if (!svp) {
+	    gv_efullname3(dbsv, gv, NULL);
+	}
+	else if ( (CvFLAGS(cv) & (CVf_ANON | CVf_CLONED))
 	     || strEQ(GvNAME(gv), "END")
-	     || ((GvCV(gv) != cv) && /* Could be imported, and old sub redefined. */
+	     || ( /* Could be imported, and old sub redefined. */
+		 (GvCV(gv) != cv || !S_gv_has_usable_name(aTHX_ gv))
+		 &&
 		 !( (SvTYPE(*svp) == SVt_PVGV)
 		    && (GvCV((const GV *)*svp) == cv)
-		    && (gv = (GV *)*svp) 
+		    /* Use GV from the stack as a fallback. */
+		    && S_gv_has_usable_name(aTHX_ gv = (GV *)*svp) 
 		  )
 		)
-	)) {
-	    /* Use GV from the stack as a fallback. */
+	) {
 	    /* GV is potentially non-unique, or contain different CV. */
 	    SV * const tmp = newRV(MUTABLE_SV(cv));
 	    sv_setsv(dbsv, tmp);
 	    SvREFCNT_dec(tmp);
 	}
 	else {
-	    gv_efullname3(dbsv, gv, NULL);
+	    sv_sethek(dbsv, HvENAME_HEK(GvSTASH(gv)));
+	    sv_catpvs(dbsv, "::");
+	    sv_catpvn_flags(
+	      dbsv, GvNAME(gv), GvNAMELEN(gv),
+	      GvNAMEUTF8(gv) ? SV_CATUTF8 : SV_CATBYTES
+	    );
 	}
     }
     else {

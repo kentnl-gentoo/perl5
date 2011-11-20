@@ -232,16 +232,11 @@ spots.  This is now heavily deprecated.
 
 =item assertion botched: %s
 
-(P) The malloc package that comes with Perl had an internal failure.
+(X) The malloc package that comes with Perl had an internal failure.
 
 =item Assertion failed: file "%s"
 
-(P) A general assertion failed.  The file in question must be examined.
-
-=item Assigning non-zero to $[ is no longer possible
-
-(F) The special variable C<$[>, deprecated in older perls, is now a fixed
-zero value, because the feature that it used to control has been removed.
+(X) A general assertion failed.  The file in question must be examined.
 
 =item Assignment to both a list and a scalar
 
@@ -2468,6 +2463,19 @@ effective uids or gids failed.
 length/code combination tried to obtain more data. This results in
 an undefined value for the length. See L<perlfunc/pack>.
 
+=item length() used on %s
+
+(W syntax) You used length() on either an array or a hash when you
+probably wanted a count of the items.
+
+Array size can be obtained by doing:
+
+    scalar(@array);
+
+The number of items in a hash can be obtained by doing:
+
+    scalar(keys %hash);
+
 =item Lexing code attempted to stuff non-Latin-1 character into Latin-1 input
 
 (F) An extension is attempting to insert text into the current parse
@@ -4339,6 +4347,13 @@ But before sort was a keyword, people sometimes used it as a filehandle.
 (F) A sort comparison subroutine may not return a list value with more
 or less than one element.  See L<perlfunc/sort>.
 
+=item Source filters apply only to byte streams
+
+(F) You tried to activate a source filter (usually by loading a
+source filter module) within a string passed to C<eval>.  This is
+not permitted under the C<unicode_eval> feature.  Consider using
+C<evalbytes> instead.  See L<feature>.
+
 =item splice() offset past end of array
 
 (W misc) You attempted to specify an offset that was past the end of
@@ -4518,6 +4533,21 @@ a dirhandle.  Check your control flow.
 
 (W unopened) You tried to use the tell() function on a filehandle that
 was either never opened or has since been closed.
+
+=item That use of $[ is unsupported
+
+(F) Assignment to C<$[> is now strictly circumscribed, and interpreted
+as a compiler directive.  You may say only one of
+
+    $[ = 0;
+    $[ = 1;
+    ...
+    local $[ = 0;
+    local $[ = 1;
+    ...
+
+This is to prevent the problem of one module changing the array base out
+from under another module inadvertently.  See L<perlvar/$[> and L<arybase>.
 
 =item The crypt() function is unimplemented due to excessive paranoia
 
@@ -5007,6 +5037,17 @@ See L<POSIX/FUNCTIONS> for more information.
 (F) You called a Win32 function with incorrect arguments.
 See L<Win32> for more information.
 
+=item $[ used in %s (did you mean $] ?)
+
+(W syntax) You used C<$[> in a comparison, such as:
+
+    if ($[ > 5.006) {
+	...
+    }
+
+You probably meant to use C<$]> instead.  C<$[> is the base for indexing
+arrays.  C<$]> is the Perl version number in decimal.
+
 =item Useless assignment to a temporary
 
 (W misc) You assigned to an lvalue subroutine, but what
@@ -5118,6 +5159,11 @@ you can write it as C<push(@tied_array,())> to avoid this warning.
 
 (F) The "use" keyword is recognized and executed at compile time, and
 returns no useful value.  See L<perlmod>.
+
+=item Use of assignment to $[ is deprecated
+
+(D deprecated) The C<$[> variable (index of the first element in an array)
+is deprecated. See L<perlvar/"$[">.
 
 =item Use of bare << to mean <<"" is deprecated
 

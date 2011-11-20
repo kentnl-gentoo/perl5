@@ -143,7 +143,10 @@ Deprecated.  Use C<GIMME_V> instead.
 				    that was optimised away, so it should
 				    not be bound via =~ */
 				/*  On OP_CONST, from a constant CV */
-				/*  On OP_GLOB, use Perl glob function */
+				/*  On OP_GLOB, two meanings:
+				    - Before ck_glob, called as CORE::glob
+				    - After ck_glob, use Perl glob function
+			         */
 
 /* old names; don't use in new code, but don't break them, either */
 #define OPf_LIST	OPf_WANT_LIST
@@ -292,6 +295,9 @@ Deprecated.  Use C<GIMME_V> instead.
     
 /* Private for OP_ENTEREVAL */
 #define OPpEVAL_HAS_HH		2	/* Does it have a copy of %^H */
+#define OPpEVAL_UNICODE		4
+#define OPpEVAL_BYTES		8
+#define OPpEVAL_COPHH		16	/* Construct %^H from cop hints */
     
 /* Private for OP_CALLER and OP_WANTARRAY */
 #define OPpOFFBYONE		128	/* Treat caller(1) as caller(2) */

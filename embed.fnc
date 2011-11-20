@@ -600,6 +600,13 @@ ApPR	|bool	|is_uni_punct	|UV c
 ApPR	|bool	|is_uni_xdigit	|UV c
 Ap	|UV	|to_uni_upper	|UV c|NN U8 *p|NN STRLEN *lenp
 Ap	|UV	|to_uni_title	|UV c|NN U8 *p|NN STRLEN *lenp
+#ifdef PERL_IN_UTF8_C
+sR	|U8	|to_lower_latin1|const U8 c|NULLOK U8 *p|NULLOK STRLEN *lenp
+p	|UV	|_to_fold_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const U8 flags
+#endif
+#if defined(PERL_IN_UTF8_C) || defined(PERL_IN_PP_C)
+p	|UV	|_to_upper_title_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const char S_or_s
+#endif
 Ap	|UV	|to_uni_lower	|UV c|NN U8 *p|NN STRLEN *lenp
 Amp	|UV	|to_uni_fold	|UV c|NN U8 *p|NN STRLEN *lenp
 AMp	|UV	|_to_uni_fold_flags|UV c|NN U8 *p|NN STRLEN *lenp|U8 flags
@@ -1066,7 +1073,7 @@ EXp	|SV*|reg_qr_package|NN REGEXP * const rx
 
 : FIXME - why the E?
 Ep	|void	|regprop	|NULLOK const regexp *prog|NN SV* sv|NN const regnode* o
-Anp	|void	|repeatcpy	|NN char* to|NN const char* from|I32 len|I32 count
+Anp	|void	|repeatcpy	|NN char* to|NN const char* from|I32 len|IV count
 AnpP	|char*	|rninstr	|NN const char* big|NN const char* bigend \
 				|NN const char* little|NN const char* lend
 Ap	|Sighandler_t|rsignal	|int i|Sighandler_t t
@@ -1576,8 +1583,6 @@ ApR	|MAGIC*	|mg_dup		|NULLOK MAGIC *mg|NN CLONE_PARAMS *const param
 #if defined(PERL_IN_SV_C)
 s	|SV **	|sv_dup_inc_multiple|NN SV *const *source|NN SV **dest \
 				|SSize_t items|NN CLONE_PARAMS *const param
-#endif
-#if defined(PERL_IN_SV_C)
 sR	|SV*	|sv_dup_common	|NN const SV *const sstr \
 				|NN CLONE_PARAMS *const param
 #endif
@@ -1790,7 +1795,8 @@ sR	|I32	|dopoptoloop	|I32 startingblock
 sR	|I32	|dopoptosub_at	|NN const PERL_CONTEXT* cxstk|I32 startingblock
 sR	|I32	|dopoptowhen	|I32 startingblock
 s	|void	|save_lines	|NULLOK AV *array|NN SV *sv
-s	|bool	|doeval		|int gimme|NULLOK OP** startop|NULLOK CV* outside|U32 seq
+s	|bool	|doeval		|int gimme|NULLOK OP** startop \
+				|NULLOK CV* outside|U32 seq|NULLOK HV* hh
 sR	|PerlIO *|check_type_and_open|NN SV *name
 #ifndef PERL_DISABLE_PMC
 sR	|PerlIO *|doopen_pm	|NN SV *name
@@ -1967,15 +1973,18 @@ po	|void	|sv_add_backref	|NN SV *const tsv|NN SV *const sv
 poM	|void	|sv_kill_backrefs	|NN SV *const sv|NULLOK AV *const av
 #endif
 
+#if defined(PERL_IN_SV_C) || defined (PERL_IN_OP_C)
+pR	|SV *	|varname	|NULLOK const GV *const gv|const char gvtype \
+				|PADOFFSET targ|NULLOK const SV *const keyname \
+				|I32 aindex|int subscript_type
+#endif
+
 pX	|void	|sv_del_backref	|NN SV *const tsv|NN SV *const sv
 #if defined(PERL_IN_SV_C)
 nsR	|char *	|uiv_2buf	|NN char *const buf|const IV iv|UV uv|const int is_uv|NN char **const peob
 s	|void	|sv_unglob	|NN SV *const sv
 s	|void	|not_a_number	|NN SV *const sv
 s	|I32	|visit		|NN SVFUNC_t f|const U32 flags|const U32 mask
-sR	|SV *	|varname	|NULLOK const GV *const gv|const char gvtype \
-				|PADOFFSET targ|NULLOK const SV *const keyname \
-				|I32 aindex|int subscript_type
 #  ifdef DEBUGGING
 s	|void	|del_sv	|NN SV *p
 #  endif
@@ -2261,8 +2270,7 @@ p	|void	|hv_ename_delete|NN HV *hv|NN const char *name|U32 len \
 				|U32 flags
 : Used in dump.c and hv.c
 poM	|AV**	|hv_backreferences_p	|NN HV *hv
-#if defined(PERL_IN_DUMP_C) || defined(PERL_IN_HV_C) || defined(PERL_IN_SV_C)
-: Only used in sv.c
+#if defined(PERL_IN_DUMP_C) || defined(PERL_IN_HV_C) || defined(PERL_IN_SV_C) || defined(PERL_IN_SCOPE_C)
 poM	|void	|hv_kill_backrefs	|NN HV *hv
 #endif
 Apd	|void	|hv_clear_placeholders	|NN HV *hv

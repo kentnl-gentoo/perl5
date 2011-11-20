@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 use strict;
-my ($committer, $patch, $author, $date);
+my ($committer, $patch, $author);
 use utf8;
 use Getopt::Long;
 use Text::Wrap;
@@ -94,10 +94,10 @@ sub parse_commits_from_stdin {
     for (@lines) {
         next if m/^$/;
         next if m/^(\S*?)^Merge:/ism;    # skip merge commits
-        if (m/^(.*?)^Author:\s*(.*?)^AuthorDate:\s*(.*?)^Commit:\s*(.*?)^(.*)$/gism) {
+        if (m/^(.*?)^Author:\s*(.*?)^AuthorDate:\s*.*?^Commit:\s*(.*?)^(.*)$/gism) {
 
             # new patch
-            ( $patch, $author, $date, $committer ) = ( $1, $2, $3, $4 );
+            ( $patch, $author, $committer ) = ( $1, $2, $3 );
             chomp($author);
             unless ($author) { die $_ }
             chomp($committer);
@@ -719,6 +719,8 @@ ilya\100math.berkeley.edu               ilya\100math.ohio-state.edu
 ilya\100martynov.org                    ilya\100juil.nonet
 
 joshua.pritikin\100db.com               joshua\100paloalto.com
+
+meyering@asic.sc.ti.com                 jim\100meyering.net
 
 okamoto\100corp.hp.com                  okamoto\100hpcc123.corp.hp.com
 orwant\100oreilly.com                   orwant\100media.mit.edu

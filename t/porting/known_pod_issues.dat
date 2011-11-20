@@ -1,4 +1,4 @@
-# This file is the data file for porting/podcheck.t.
+# This file is the data file for t/porting/podcheck.t.
 # There are three types of lines.
 # Comment lines are white-space only or begin with a '#', like this one.  Any
 #   changes you make to the comment lines will be lost when the file is
@@ -100,6 +100,7 @@ pwd_mkdb(8)
 recvmsg(3)
 s2p
 Scalar::Readonly
+Semi::Semicolons
 sendmail(1)
 sendmsg(3)
 sha1sum(1)
@@ -111,6 +112,7 @@ SOM
 splain
 sprintf(3)
 stat(2)
+String::Base
 String::Scanf
 Switch
 tar(1)
@@ -234,7 +236,7 @@ pod/perlirix.pod	Verbatim line length including indents exceeds 79 by	4
 pod/perllocale.pod	Verbatim line length including indents exceeds 79 by	4
 pod/perllol.pod	Verbatim line length including indents exceeds 79 by	4
 pod/perlmacosx.pod	Verbatim line length including indents exceeds 79 by	3
-pod/perlmod.pod	Verbatim line length including indents exceeds 79 by	3
+pod/perlmod.pod	Verbatim line length including indents exceeds 79 by	2
 pod/perlmodlib.pod	Verbatim line length including indents exceeds 79 by	3
 pod/perlmodstyle.pod	Verbatim line length including indents exceeds 79 by	2
 pod/perlmpeix.pod	Verbatim line length including indents exceeds 79 by	2
@@ -296,12 +298,12 @@ utils/pod2html	Pod NAME already used	1
 vms/ext/filespec.pm	Verbatim line length including indents exceeds 79 by	1
 x2p/a2p.pod	empty section in previous paragraph	2
 lib/benchmark.pm	Verbatim line length including indents exceeds 79 by	4
-lib/cpan/debug.pm	There is no NAME	1
-lib/cpan/handleconfig.pm	=head2 without preceding higher level	1
-lib/cpan/handleconfig.pm	There is no NAME	1
 lib/class/struct.pm	Verbatim line length including indents exceeds 79 by	7
 lib/config.pod	? Should you be using L<...> instead of	-1
 lib/config.pod	nested commands F<...F<...>...>	3
+lib/cpan/debug.pm	There is no NAME	1
+lib/cpan/handleconfig.pm	=head2 without preceding higher level	1
+lib/cpan/handleconfig.pm	There is no NAME	1
 lib/db.pm	Verbatim line length including indents exceeds 79 by	2
 lib/dbm_filter.pm	Verbatim line length including indents exceeds 79 by	1
 lib/dbm_filter/compress.pm	Verbatim line length including indents exceeds 79 by	1
@@ -309,7 +311,7 @@ lib/dbm_filter/encode.pm	Verbatim line length including indents exceeds 79 by	1
 lib/dbm_filter/int32.pm	Verbatim line length including indents exceeds 79 by	1
 lib/dbm_filter/null.pm	Verbatim line length including indents exceeds 79 by	1
 lib/dbm_filter/utf8.pm	Verbatim line length including indents exceeds 79 by	1
-lib/devel/ppport.pm	Pod NAME already used	1
+lib/deprecate.pm	Verbatim line length including indents exceeds 79 by	2
 lib/english.pm	Verbatim line length including indents exceeds 79 by	1
 lib/exporter.pm	Verbatim line length including indents exceeds 79 by	2
 lib/extutils/embed.pm	Verbatim line length including indents exceeds 79 by	2
@@ -317,17 +319,16 @@ lib/extutils/xssymset.pm	Verbatim line length including indents exceeds 79 by	1
 lib/file/basename.pm	Verbatim line length including indents exceeds 79 by	2
 lib/file/find.pm	Verbatim line length including indents exceeds 79 by	1
 lib/getopt/std.pm	Verbatim line length including indents exceeds 79 by	1
-lib/perlio.pm	Verbatim line length including indents exceeds 79 by	2
-lib/pod/text/overstrike.pm	Verbatim line length including indents exceeds 79 by	1
-lib/tie/array.pm	Verbatim line length including indents exceeds 79 by	1
-lib/tie/hash.pm	Verbatim line length including indents exceeds 79 by	3
-lib/tie/scalar.pm	Verbatim line length including indents exceeds 79 by	1
-lib/deprecate.pm	Verbatim line length including indents exceeds 79 by	2
 lib/integer.pm	Verbatim line length including indents exceeds 79 by	1
 lib/overload.pm	Verbatim line length including indents exceeds 79 by	1
 lib/perl5db.pl	? Should you be using L<...> instead of	1
 lib/perl5db.pl	Verbatim line length including indents exceeds 79 by	1
+lib/perlio.pm	Verbatim line length including indents exceeds 79 by	2
+lib/pod/text/overstrike.pm	Verbatim line length including indents exceeds 79 by	1
 lib/strict.pm	Verbatim line length including indents exceeds 79 by	1
+lib/tie/array.pm	Verbatim line length including indents exceeds 79 by	1
+lib/tie/hash.pm	Verbatim line length including indents exceeds 79 by	3
+lib/tie/scalar.pm	Verbatim line length including indents exceeds 79 by	1
 lib/utf8.pm	Verbatim line length including indents exceeds 79 by	4
 lib/version.pod	Verbatim line length including indents exceeds 79 by	2
 lib/version/internals.pod	Verbatim line length including indents exceeds 79 by	2

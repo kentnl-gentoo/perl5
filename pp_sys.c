@@ -355,9 +355,9 @@ PP(pp_glob)
     dVAR;
     OP *result;
     dSP;
-    /* make a copy of the pattern, to ensure that magic is called once
-     * and only once */
-    TOPm1s = sv_2mortal(newSVsv(TOPm1s));
+    /* make a copy of the pattern if it is gmagical, to ensure that magic
+     * is called once and only once */
+    if (SvGMAGICAL(TOPm1s)) TOPm1s = sv_2mortal(newSVsv(TOPm1s));
 
     tryAMAGICunTARGET(iter_amg, -1, (PL_op->op_flags & OPf_SPECIAL));
 
@@ -370,6 +370,11 @@ PP(pp_glob)
     }
     /* stack args are: wildcard, gv(_GEN_n) */
 
+    if (PL_globhook) {
+	SETs(GvSV(TOPs));
+	PL_globhook(aTHX);
+	return NORMAL;
+    }
 
     /* Note that we only ever get here if File::Glob fails to load
      * without at the same time croaking, for some reason, or if

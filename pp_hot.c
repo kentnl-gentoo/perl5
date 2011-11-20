@@ -1964,7 +1964,7 @@ PP(pp_iter)
 /*
 A description of how taint works in pattern matching and substitution.
 
-While the pattern is being assembled/concatenated and them compiled,
+While the pattern is being assembled/concatenated and then compiled,
 PL_tainted will get set if any component of the pattern is tainted, e.g.
 /.*$tainted/.  At the end of pattern compilation, the RXf_TAINTED flag
 is set on the pattern if PL_tainted is set.
@@ -2549,8 +2549,6 @@ PP(pp_entersub)
     switch (SvTYPE(sv)) {
 	/* This is overwhelming the most common case:  */
     case SVt_PVGV:
-	if (!isGV_with_GP(sv))
-	    DIE(aTHX_ "Not a CODE reference");
       we_have_a_glob:
 	if (!(cv = GvCVu((const GV *)sv))) {
 	    HV *stash;

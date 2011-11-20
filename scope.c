@@ -181,7 +181,7 @@ S_save_scalar_at(pTHX_ SV **sptr, const U32 flags)
     osv = *sptr;
     sv  = (flags & SAVEf_KEEPOLDELEM) ? osv : (*sptr = newSV(0));
 
-    if (SvTYPE(osv) >= SVt_PVMG && SvMAGIC(osv) && SvTYPE(osv) != SVt_PVGV) {
+    if (SvTYPE(osv) >= SVt_PVMG && SvMAGIC(osv)) {
 	if (SvGMAGICAL(osv)) {
 	    SvFLAGS(osv) |= (SvFLAGS(osv) &
 	       (SVp_IOK|SVp_NOK|SVp_POK)) >> PRIVSHIFT;
@@ -901,7 +901,10 @@ Perl_leave_scope(pTHX_ I32 base)
 
 		if (SvTHINKFIRST(sv))
 		    sv_force_normal_flags(sv, SV_IMMEDIATE_UNREF);
+		if (SvTYPE(sv) == SVt_PVHV)
+		    Perl_hv_kill_backrefs(aTHX_ MUTABLE_HV(sv));
 		if (SvMAGICAL(sv))
+		    sv_unmagic(sv, PERL_MAGIC_backref),
 		    mg_free(sv);
 
 		switch (SvTYPE(sv)) {
