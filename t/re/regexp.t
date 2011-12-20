@@ -44,7 +44,7 @@
 # Note that columns 2,3 and 5 are all enclosed in double quotes and then
 # evalled; so something like a\"\x{100}$1 has length 3+length($1).
 
-my $file;
+my ($file, $iters);
 BEGIN {
     $iters = shift || 1;	# Poor man performance suite, 10000 is OK.
 
@@ -66,13 +66,12 @@ sub _comment {
 
 use strict;
 use warnings FATAL=>"all";
-use vars qw($iters $numtests $bang $ffff $nulnul $OP);
+use vars qw($bang $ffff $nulnul); # used by the tests
 use vars qw($qr $skip_amp $qr_embed $qr_embed_thr); # set by our callers
 
 
 if (!defined $file) {
-    open(TESTS,'re/re_tests') || open(TESTS,'t/re/re_tests')
-	|| open(TESTS,':re:re_tests') || die "Can't open re_tests";
+    open TESTS, 're/re_tests' or die "Can't open re/re_tests: $!";
 }
 
 my @tests = <TESTS>;
@@ -82,7 +81,7 @@ close TESTS;
 $bang = sprintf "\\%03o", ord "!"; # \41 would not be portable.
 $ffff  = chr(0xff) x 2;
 $nulnul = "\0" x 2;
-$OP = $qr ? 'qr' : 'm';
+my $OP = $qr ? 'qr' : 'm';
 
 $| = 1;
 printf "1..%d\n# $iters iterations\n", scalar @tests;
@@ -168,7 +167,7 @@ EOFCODE
 	}
 	chomp( my $err = $@ );
 	if ($result eq 'c') {
-	    if ($err !~ m!^\Q$expect!) { print "not ok $test$todo (compile) $input => `$err'\n"; next TEST }
+	    if ($err !~ m!^\Q$expect!) { print "not ok $test$todo (compile) $input => '$err'\n"; next TEST }
 	    last;  # no need to study a syntax error
 	}
 	elsif ( $skip ) {
@@ -180,7 +179,7 @@ EOFCODE
 	    next TEST;
 	}
 	elsif ($@) {
-	    print "not ok $test$todo $input => error `$err'\n", _comment("$code\n$@\n"); next TEST;
+	    print "not ok $test$todo $input => error '$err'\n", _comment("$code\n$@\n"); next TEST;
 	}
 	elsif ($result =~ /^n/) {
 	    if ($match) { print "not ok $test$todo ($study) $input => false positive\n"; next TEST }
@@ -189,12 +188,12 @@ EOFCODE
 	    if (!$match || $got ne $expect) {
 	        eval { require Data::Dumper };
 		if ($@) {
-		    print "not ok $test$todo ($study) $input => `$got', match=$match\n", _comment("$code\n");
+		    print "not ok $test$todo ($study) $input => '$got', match=$match\n", _comment("$code\n");
 		}
 		else { # better diagnostics
 		    my $s = Data::Dumper->new([$subject],['subject'])->Useqq(1)->Dump;
 		    my $g = Data::Dumper->new([$got],['got'])->Useqq(1)->Dump;
-		    print "not ok $test$todo ($study) $input => `$got', match=$match\n", _comment("$s\n$g\n$code\n");
+		    print "not ok $test$todo ($study) $input => '$got', match=$match\n", _comment("$s\n$g\n$code\n");
 		}
 		next TEST;
 	    }

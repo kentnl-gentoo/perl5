@@ -640,6 +640,11 @@ sub frobnicate($$) { undef }
 no warnings;
 sub pyfg { undef }
 sub pyfgc($$) { undef }
+use warnings;
+sub dog {}
+sub dogwood($$) {}
+@sort = sort dog     1,2;
+@sort = sort dogwood 1,2;
 EXPECT
 Use of uninitialized value $m1 in sort at - line 6.
 Use of uninitialized value $g1 in sort at - line 6.
@@ -661,6 +666,8 @@ Use of uninitialized value in sort at - line 10.
 Use of uninitialized value in sort at - line 12.
 Use of uninitialized value in sort at - line 13.
 Use of uninitialized value in sort at - line 14.
+Use of uninitialized value in sort at - line 21.
+Use of uninitialized value in sort at - line 22.
 ########
 my $nan = sin 9**9**9;
 if ($nan == $nan) {
@@ -1012,17 +1019,17 @@ Use of uninitialized value $m1 in substr at - line 5.
 Use of uninitialized value $m2 in substr at - line 6.
 Use of uninitialized value $g1 in substr at - line 6.
 Use of uninitialized value $m1 in substr at - line 6.
-Use of uninitialized value $g2 in substr at - line 7.
 Use of uninitialized value $m2 in substr at - line 7.
 Use of uninitialized value $g1 in substr at - line 7.
+Use of uninitialized value $g2 in substr at - line 7.
 Use of uninitialized value $m1 in substr at - line 7.
 Use of uninitialized value $g1 in substr at - line 8.
+Use of uninitialized value $g2 in substr at - line 8.
 Use of uninitialized value $m1 in substr at - line 8.
-Use of uninitialized value in scalar assignment at - line 8.
 Use of uninitialized value $m2 in substr at - line 9.
 Use of uninitialized value $g1 in substr at - line 9.
+Use of uninitialized value $g2 in substr at - line 9.
 Use of uninitialized value $m1 in substr at - line 9.
-Use of uninitialized value in scalar assignment at - line 9.
 Use of uninitialized value $m2 in vec at - line 11.
 Use of uninitialized value $g1 in vec at - line 11.
 Use of uninitialized value $m1 in vec at - line 11.
@@ -2011,3 +2018,22 @@ my $moo = $Foo::BAR + 42;
 __END__
 EXPECT
 Use of uninitialized value in addition (+) at - line 3.
+########
+use warnings 'uninitialized';
+use constant {u=>undef, v=>undef};
+sub foo () {u}
+sub foo () {v}
+EXPECT
+########
+# [perl #72090]
+use warnings 'uninitialized';
+$a = @$a > 0;
+EXPECT
+Use of uninitialized value $a in array dereference at - line 3.
+Use of uninitialized value in numeric gt (>) at - line 3.
+########
+# [perl #103766]
+use warnings 'uninitialized';
+"@{[ $x ]}";
+EXPECT
+Use of uninitialized value in join or string at - line 3.

@@ -661,7 +661,7 @@ sub safe_rename {
 	for ($i = 1; $i < 50; $i++) {
 	    last if rename($to, "$to.$i");
 	}
-	warn("Cannot rename to `$to.$i': $!"), return 0
+	warn("Cannot rename to '$to.$i': $!"), return 0
 	   if $i >= 50;	# Give up!
     }
     link($from,$to) || return 0;
@@ -707,8 +707,9 @@ sub installlib {
     # scripts in lib/ExtUtils, the prove script in lib/Test/Harness,
     # the corelist script from lib/Module/CoreList/bin and ptar* in
     # lib/Archive/Tar/bin, the config_data script in lib/Module/Build/scripts
+    # and zipdetails in cpan/IO-Compress/bin
     # (they're installed later with other utils)
-    return if $name =~ /^(?:cpan|instmodsh|prove|corelist|ptar|cpan2dist|cpanp|cpanp-run-perl|ptardiff|ptargrep|config_data)\z/;
+    return if $name =~ /^(?:cpan|instmodsh|prove|corelist|ptar|cpan2dist|cpanp|cpanp-run-perl|ptardiff|ptargrep|config_data|zipdetails)\z/;
     # ignore the Makefiles
     return if $name =~ /^makefile$/i;
     # ignore the test extensions
@@ -728,7 +729,7 @@ sub installlib {
         # TestProp only needed during testing
         return if $name =~ /\ATestProp.pl\z/;
         # we need version and *.pl files and can skip the rest
-        return unless $name =~ /\A(?:version|\w+\.pl)\z/;
+        return unless $name =~ /\A(?:version|\w+\.p[lm])\z/;
       }
     }
 

@@ -323,6 +323,9 @@ character.  Note that an INVARIANT (i.e. ASCII on non-EBCDIC machines)
 character is a valid UTF-8 character.  The actual number of bytes in the UTF-8
 character will be returned if it is valid, otherwise 0.
 
+WARNING: use only if you *know* that C<s> has at least either UTF8_MAXBYTES or
+UTF8SKIP(s) bytes.
+
 =cut */
 STRLEN
 Perl_is_utf8_char(const U8 *s)
@@ -343,9 +346,9 @@ Perl_is_utf8_char(const U8 *s)
 
 Returns true if first C<len> bytes of the given string form a valid
 UTF-8 string, false otherwise.  If C<len> is 0, it will be calculated
-using C<strlen(s)>.  Note that 'a valid UTF-8 string' does not mean 'a
-string that contains code points above 0x7F encoded in UTF-8' because a
-valid ASCII string is a valid UTF-8 string.
+using C<strlen(s)> (which means if you use this option, that C<s> has to have a
+terminating NUL byte).  Note that all characters being ASCII constitute 'a
+valid UTF-8 string'.
 
 See also is_ascii_string(), is_utf8_string_loclen(), and is_utf8_string_loc().
 
@@ -361,34 +364,31 @@ Perl_is_utf8_string(const U8 *s, STRLEN len)
     PERL_ARGS_ASSERT_IS_UTF8_STRING;
 
     while (x < send) {
-	STRLEN c;
 	 /* Inline the easy bits of is_utf8_char() here for speed... */
-	 if (UTF8_IS_INVARIANT(*x))
-	      c = 1;
+	 if (UTF8_IS_INVARIANT(*x)) {
+	    x++;
+	 }
 	 else if (!UTF8_IS_START(*x))
-	     goto out;
+	     return FALSE;
 	 else {
 	      /* ... and call is_utf8_char() only if really needed. */
-#ifdef IS_UTF8_CHAR
-	     c = UTF8SKIP(x);
+	     const STRLEN c = UTF8SKIP(x);
+	     const U8* const next_char_ptr = x + c;
+
+	     if (next_char_ptr > send) {
+		 return FALSE;
+	     }
+
 	     if (IS_UTF8_CHAR_FAST(c)) {
 	         if (!IS_UTF8_CHAR(x, c))
-		     c = 0;
+		     return FALSE;
 	     }
-	     else
-		c = is_utf8_char_slow(x, c);
-#else
-	     c = is_utf8_char(x);
-#endif /* #ifdef IS_UTF8_CHAR */
-	      if (!c)
-		  goto out;
+	     else if (! is_utf8_char_slow(x, c)) {
+		 return FALSE;
+	     }
+	     x = next_char_ptr;
 	 }
-        x += c;
     }
-
- out:
-    if (x != send)
-	return FALSE;
 
     return TRUE;
 }
@@ -427,27 +427,29 @@ Perl_is_utf8_string_loclen(const U8 *s, STRLEN len, const U8 **ep, STRLEN *el)
     PERL_ARGS_ASSERT_IS_UTF8_STRING_LOCLEN;
 
     while (x < send) {
+	 const U8* next_char_ptr;
+
 	 /* Inline the easy bits of is_utf8_char() here for speed... */
 	 if (UTF8_IS_INVARIANT(*x))
-	     c = 1;
+	     next_char_ptr = x + 1;
 	 else if (!UTF8_IS_START(*x))
 	     goto out;
 	 else {
 	     /* ... and call is_utf8_char() only if really needed. */
-#ifdef IS_UTF8_CHAR
 	     c = UTF8SKIP(x);
+	     next_char_ptr = c + x;
+	     if (next_char_ptr > send) {
+		 goto out;
+	     }
 	     if (IS_UTF8_CHAR_FAST(c)) {
 	         if (!IS_UTF8_CHAR(x, c))
 		     c = 0;
 	     } else
 	         c = is_utf8_char_slow(x, c);
-#else
-	     c = is_utf8_char(x);
-#endif /* #ifdef IS_UTF8_CHAR */
 	     if (!c)
 	         goto out;
 	 }
-         x += c;
+         x = next_char_ptr;
 	 outlen++;
     }
 
@@ -493,7 +495,7 @@ C<retlen> to C<-1> and return zero.
 Certain code points are considered problematic.  These are Unicode surrogates,
 Unicode non-characters, and code points above the Unicode maximum of 0x10FFF.
 By default these are considered regular code points, but certain situations
-warrant special handling for them.  if C<flags> contains
+warrant special handling for them.  If C<flags> contains
 UTF8_DISALLOW_ILLEGAL_INTERCHANGE, all three classes are treated as
 malformations and handled as such.  The flags UTF8_DISALLOW_SURROGATE,
 UTF8_DISALLOW_NONCHAR, and UTF8_DISALLOW_SUPER (meaning above the legal Unicode
@@ -511,7 +513,7 @@ Very large code points (above 0x7FFF_FFFF) are considered more problematic than
 the others that are above the Unicode legal maximum.  There are several
 reasons, one of which is that the original UTF-8 specification never went above
 this number (the current 0x10FFF limit was imposed later).  The UTF-8 encoding
-on ASCII platforms for these large code point begins with a byte containing
+on ASCII platforms for these large code points begins with a byte containing
 0xFE or 0xFF.  The UTF8_DISALLOW_FE_FF flag will cause them to be treated as
 malformations, while allowing smaller above-Unicode code points.  (Of course
 UTF8_DISALLOW_SUPER will treat all above-Unicode code points, including these,
@@ -1459,8 +1461,11 @@ Perl_to_uni_lower(pTHX_ UV c, U8* p, STRLEN *lenp)
 }
 
 UV
-Perl__to_fold_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp, const U8 flags)
+Perl__to_fold_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp, const bool flags)
 {
+    /* Corresponds to to_lower_latin1(), flags is TRUE if to use full case
+     * folding */
+
     UV converted;
 
     PERL_ARGS_ASSERT__TO_FOLD_LATIN1;
@@ -1493,8 +1498,12 @@ Perl__to_fold_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp, const U8 flags)
 }
 
 UV
-Perl__to_uni_fold_flags(pTHX_ UV c, U8* p, STRLEN *lenp, U8 flags)
+Perl__to_uni_fold_flags(pTHX_ UV c, U8* p, STRLEN *lenp, const bool flags)
 {
+
+    /* Not currently externally documented, and subject to change, <flags> is
+     * TRUE iff full folding is to be used */
+
     PERL_ARGS_ASSERT__TO_UNI_FOLD_FLAGS;
 
     if (c < 256) {
@@ -2102,6 +2111,53 @@ Perl_to_utf8_case(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp,
     return len ? utf8_to_uvchr(ustrp, 0) : 0;
 }
 
+STATIC UV
+S_check_locale_boundary_crossing(pTHX_ const U8* const p, const UV result, U8* const ustrp, STRLEN *lenp)
+{
+    /* This is called when changing the case of a utf8-encoded character above
+     * the Latin1 range, and the operation is in locale.  If the result
+     * contains a character that crosses the 255/256 boundary, disallow the
+     * change, and return the original code point.  See L<perlfunc/lc> for why;
+     *
+     * p	points to the original string whose case was changed
+     * result	the code point of the first character in the changed-case string
+     * ustrp	points to the changed-case string (<result> represents its first char)
+     * lenp	points to the length of <ustrp> */
+
+    UV original;    /* To store the first code point of <p> */
+
+    PERL_ARGS_ASSERT_CHECK_LOCALE_BOUNDARY_CROSSING;
+
+    assert(! UTF8_IS_INVARIANT(*p) && ! UTF8_IS_DOWNGRADEABLE_START(*p));
+
+    /* We know immediately if the first character in the string crosses the
+     * boundary, so can skip */
+    if (result > 255) {
+
+	/* Look at every character in the result; if any cross the
+	* boundary, the whole thing is disallowed */
+	U8* s = ustrp + UTF8SKIP(ustrp);
+	U8* e = ustrp + *lenp;
+	while (s < e) {
+	    if (UTF8_IS_INVARIANT(*s) || UTF8_IS_DOWNGRADEABLE_START(*s))
+	    {
+		goto bad_crossing;
+	    }
+	    s += UTF8SKIP(s);
+	}
+
+	/* Here, no characters crossed, result is ok as-is */
+	return result;
+    }
+
+bad_crossing:
+
+    /* Failed, have to return the original */
+    original = utf8_to_uvchr(p, lenp);
+    Copy(p, ustrp, *lenp, char);
+    return original;
+}
+
 /*
 =for apidoc to_utf8_upper
 
@@ -2115,22 +2171,61 @@ The first character of the uppercased version is returned
 
 =cut */
 
+/* Not currently externally documented, and subject to change:
+ * <flags> is set iff locale semantics are to be used for code points < 256
+ * <tainted_ptr> if non-null, *tainted_ptr will be set TRUE iff locale rules
+ *		 were used in the calculation; otherwise unchanged. */
+
 UV
-Perl_to_utf8_upper(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp)
+Perl__to_utf8_upper_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, const bool flags, bool* tainted_ptr)
 {
     dVAR;
 
-    PERL_ARGS_ASSERT_TO_UTF8_UPPER;
+    UV result;
+
+    PERL_ARGS_ASSERT__TO_UTF8_UPPER_FLAGS;
 
     if (UTF8_IS_INVARIANT(*p)) {
-	return _to_upper_title_latin1(*p, ustrp, lenp, 'S');
+	if (flags) {
+	    result = toUPPER_LC(*p);
+	}
+	else {
+	    return _to_upper_title_latin1(*p, ustrp, lenp, 'S');
+	}
     }
     else if UTF8_IS_DOWNGRADEABLE_START(*p) {
-	return _to_upper_title_latin1(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)),
-				      ustrp, lenp, 'S');
+	if (flags) {
+	    result = toUPPER_LC(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)));
+	}
+	else {
+	    return _to_upper_title_latin1(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)),
+				          ustrp, lenp, 'S');
+	}
+    }
+    else {  /* utf8, ord above 255 */
+	result = CALL_UPPER_CASE(p, ustrp, lenp);
+
+	if (flags) {
+	    result = check_locale_boundary_crossing(p, result, ustrp, lenp);
+	}
+	return result;
     }
 
-    return CALL_UPPER_CASE(p, ustrp, lenp);
+    /* Here, used locale rules.  Convert back to utf8 */
+    if (UTF8_IS_INVARIANT(result)) {
+	*ustrp = (U8) result;
+	*lenp = 1;
+    }
+    else {
+	*ustrp = UTF8_EIGHT_BIT_HI(result);
+	*(ustrp + 1) = UTF8_EIGHT_BIT_LO(result);
+	*lenp = 2;
+    }
+
+    if (tainted_ptr) {
+	*tainted_ptr = TRUE;
+    }
+    return result;
 }
 
 /*
@@ -2146,22 +2241,63 @@ The first character of the titlecased version is returned
 
 =cut */
 
+/* Not currently externally documented, and subject to change:
+ * <flags> is set iff locale semantics are to be used for code points < 256
+ *	   Since titlecase is not defined in POSIX, uppercase is used instead
+ *	   for these/
+ * <tainted_ptr> if non-null, *tainted_ptr will be set TRUE iff locale rules
+ *		 were used in the calculation; otherwise unchanged. */
+
 UV
-Perl_to_utf8_title(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp)
+Perl__to_utf8_title_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, const bool flags, bool* tainted_ptr)
 {
     dVAR;
 
-    PERL_ARGS_ASSERT_TO_UTF8_TITLE;
+    UV result;
+
+    PERL_ARGS_ASSERT__TO_UTF8_TITLE_FLAGS;
 
     if (UTF8_IS_INVARIANT(*p)) {
-	return _to_upper_title_latin1(*p, ustrp, lenp, 's');
+	if (flags) {
+	    result = toUPPER_LC(*p);
+	}
+	else {
+	    return _to_upper_title_latin1(*p, ustrp, lenp, 's');
+	}
     }
     else if UTF8_IS_DOWNGRADEABLE_START(*p) {
-	return _to_upper_title_latin1(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)),
-				      ustrp, lenp, 's');
+	if (flags) {
+	    result = toUPPER_LC(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)));
+	}
+	else {
+	    return _to_upper_title_latin1(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)),
+				          ustrp, lenp, 's');
+	}
+    }
+    else {  /* utf8, ord above 255 */
+	result = CALL_TITLE_CASE(p, ustrp, lenp);
+
+	if (flags) {
+	    result = check_locale_boundary_crossing(p, result, ustrp, lenp);
+	}
+	return result;
     }
 
-    return CALL_TITLE_CASE(p, ustrp, lenp);
+    /* Here, used locale rules.  Convert back to utf8 */
+    if (UTF8_IS_INVARIANT(result)) {
+	*ustrp = (U8) result;
+	*lenp = 1;
+    }
+    else {
+	*ustrp = UTF8_EIGHT_BIT_HI(result);
+	*(ustrp + 1) = UTF8_EIGHT_BIT_LO(result);
+	*lenp = 2;
+    }
+
+    if (tainted_ptr) {
+	*tainted_ptr = TRUE;
+    }
+    return result;
 }
 
 /*
@@ -2177,21 +2313,62 @@ The first character of the lowercased version is returned
 
 =cut */
 
+/* Not currently externally documented, and subject to change:
+ * <flags> is set iff locale semantics are to be used for code points < 256
+ * <tainted_ptr> if non-null, *tainted_ptr will be set TRUE iff locale rules
+ *		 were used in the calculation; otherwise unchanged. */
+
 UV
-Perl_to_utf8_lower(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp)
+Perl__to_utf8_lower_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, const bool flags, bool* tainted_ptr)
 {
+    UV result;
+
     dVAR;
 
-    PERL_ARGS_ASSERT_TO_UTF8_LOWER;
+    PERL_ARGS_ASSERT__TO_UTF8_LOWER_FLAGS;
 
     if (UTF8_IS_INVARIANT(*p)) {
-	return to_lower_latin1(*p, ustrp, lenp);
+	if (flags) {
+	    result = toLOWER_LC(*p);
+	}
+	else {
+	    return to_lower_latin1(*p, ustrp, lenp);
+	}
     }
     else if UTF8_IS_DOWNGRADEABLE_START(*p) {
-	return to_lower_latin1(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)), ustrp, lenp);
+	if (flags) {
+	    result = toLOWER_LC(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)));
+	}
+	else {
+	    return to_lower_latin1(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)),
+		                   ustrp, lenp);
+	}
+    }
+    else {  /* utf8, ord above 255 */
+	result = CALL_LOWER_CASE(p, ustrp, lenp);
+
+	if (flags) {
+	    result = check_locale_boundary_crossing(p, result, ustrp, lenp);
+	}
+
+	return result;
     }
 
-    return CALL_LOWER_CASE(p, ustrp, lenp);
+    /* Here, used locale rules.  Convert back to utf8 */
+    if (UTF8_IS_INVARIANT(result)) {
+	*ustrp = (U8) result;
+	*lenp = 1;
+    }
+    else {
+	*ustrp = UTF8_EIGHT_BIT_HI(result);
+	*(ustrp + 1) = UTF8_EIGHT_BIT_LO(result);
+	*lenp = 2;
+    }
+
+    if (tainted_ptr) {
+	*tainted_ptr = TRUE;
+    }
+    return result;
 }
 
 /*
@@ -2208,25 +2385,68 @@ The first character of the foldcased version is returned
 
 =cut */
 
-/* Not currently externally documented is 'flags', which currently is non-zero
- * if full case folds are to be used; otherwise simple folds */
+/* Not currently externally documented, and subject to change,
+ * in <flags>
+ *	bit FOLD_FLAGS_LOCALE is set iff locale semantics are to be used for code
+ *			      points < 256.  Since foldcase is not defined in
+ *			      POSIX, lowercase is used instead
+ *      bit FOLD_FLAGS_FULL   is set iff full case folds are to be used;
+ *			      otherwise simple folds
+ * <tainted_ptr> if non-null, *tainted_ptr will be set TRUE iff locale rules
+ *		 were used in the calculation; otherwise unchanged. */
 
 UV
-Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags)
+Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags, bool* tainted_ptr)
 {
     dVAR;
+
+    UV result;
 
     PERL_ARGS_ASSERT__TO_UTF8_FOLD_FLAGS;
 
     if (UTF8_IS_INVARIANT(*p)) {
-	return _to_fold_latin1(*p, ustrp, lenp, flags);
+	if (flags & FOLD_FLAGS_LOCALE) {
+	    result = toLOWER_LC(*p);
+	}
+	else {
+	    return _to_fold_latin1(*p, ustrp, lenp,
+		                   cBOOL(flags & FOLD_FLAGS_FULL));
+	}
     }
     else if UTF8_IS_DOWNGRADEABLE_START(*p) {
-	return _to_fold_latin1(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)),
-		                                    ustrp, lenp, flags);
+	if (flags & FOLD_FLAGS_LOCALE) {
+	    result = toLOWER_LC(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)));
+	}
+	else {
+	    return _to_fold_latin1(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)),
+		                   ustrp, lenp, cBOOL(flags & FOLD_FLAGS_FULL));
+	}
+    }
+    else {  /* utf8, ord above 255 */
+	result = CALL_FOLD_CASE(p, ustrp, lenp, flags);
+
+	if ((flags & FOLD_FLAGS_LOCALE)) {
+	    result = check_locale_boundary_crossing(p, result, ustrp, lenp);
+	}
+
+	return result;
     }
 
-    return CALL_FOLD_CASE(p, ustrp, lenp, flags);
+    /* Here, used locale rules.  Convert back to utf8 */
+    if (UTF8_IS_INVARIANT(result)) {
+	*ustrp = (U8) result;
+	*lenp = 1;
+    }
+    else {
+	*ustrp = UTF8_EIGHT_BIT_HI(result);
+	*(ustrp + 1) = UTF8_EIGHT_BIT_LO(result);
+	*lenp = 2;
+    }
+
+    if (tainted_ptr) {
+	*tainted_ptr = TRUE;
+    }
+    return result;
 }
 
 /* Note:
@@ -3659,12 +3879,12 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, register UV l1, bool u1
 	    if (flags & FOLDEQ_S1_ALREADY_FOLDED) {
 		f1 = (U8 *) p1;
 		n1 = UTF8SKIP(f1);
-
-	    /* If in locale matching, we use two sets of rules, depending on if
-	     * the code point is above or below 255.  Here, we test for and
-	     * handle locale rules */
 	    }
+
 	    else {
+		/* If in locale matching, we use two sets of rules, depending
+		 * on if the code point is above or below 255.  Here, we test
+		 * for and handle locale rules */
 		if ((flags & FOLDEQ_UTF8_LOCALE)
 		    && (! u1 || UTF8_IS_INVARIANT(*p1)
 			|| UTF8_IS_DOWNGRADEABLE_START(*p1)))
@@ -3686,9 +3906,8 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, register UV l1, bool u1
 		    }
 		    n1 = 1;
 		}
-		else if (isASCII(*p1)) {	/* Note, that here won't be
-						   both ASCII and using locale
-						   rules */
+		else if (isASCII(*p1)) {    /* Note, that here won't be both
+					       ASCII and using locale rules */
 
 		    /* If trying to mix non- with ASCII, and not supposed to,
 		     * fail */
@@ -3740,7 +3959,7 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, register UV l1, bool u1
 		    n1 = n2 = 0;
 		}
 		else if (isASCII(*p2)) {
-		    if (flags && ! isASCII(*p1)) {
+		    if ((flags & FOLDEQ_UTF8_NOMIX_ASCII) && ! isASCII(*p1)) {
 			return 0;
 		    }
 		    n2 = 1;
@@ -3767,7 +3986,7 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, register UV l1, bool u1
             if (fold_length != UTF8SKIP(f2)
                 || (fold_length == 1 && *f1 != *f2) /* Short circuit memNE
                                                        function call for single
-                                                       character */
+                                                       byte */
                 || memNE((char*)f1, (char*)f2, fold_length))
             {
                 return 0; /* mismatch */

@@ -147,8 +147,6 @@ static const char S_no_symref_sv[] =
 
    When noinit is true, the absence of a gv will cause a retval of undef.
    This is unrelated to the cv-to-gv assignment case.
-
-   Make sure to use SPAGAIN after calling this.
 */
 
 static SV *
@@ -165,7 +163,7 @@ S_rv2gv(pTHX_ SV *sv, const bool vivify_sv, const bool strict,
 	sv = SvRV(sv);
 	if (SvTYPE(sv) == SVt_PVIO) {
 	    GV * const gv = MUTABLE_GV(sv_newmortal());
-	    gv_init(gv, 0, "$__ANONIO__", 11, 0);
+	    gv_init(gv, 0, "__ANONIO__", 10, 0);
 	    GvIOp(gv) = MUTABLE_IO(sv);
 	    SvREFCNT_inc_void_NN(sv);
 	    sv = MUTABLE_SV(gv);
@@ -234,7 +232,7 @@ S_rv2gv(pTHX_ SV *sv, const bool vivify_sv, const bool strict,
 	    SvFAKE_off(sv);
 	}
     }
-    if (SvFAKE(sv)) {
+    if (SvFAKE(sv) && !(PL_op->op_private & OPpALLOW_FAKE)) {
 	SV *newsv = sv_newmortal();
 	sv_setsv_flags(newsv, sv, 0);
 	SvFAKE_off(newsv);
@@ -253,7 +251,6 @@ PP(pp_rv2gv)
           ((PL_op->op_flags & OPf_SPECIAL) && !(PL_op->op_flags & OPf_MOD))
              || PL_op->op_type == OP_READLINE
          );
-    SPAGAIN;
     if (PL_op->op_private & OPpLVAL_INTRO)
 	save_gp(MUTABLE_GV(sv), !(PL_op->op_flags & OPf_SPECIAL));
     SETs(sv);
@@ -315,7 +312,6 @@ PP(pp_rv2sv)
     if (SvROK(sv)) {
 	if (SvAMAGIC(sv)) {
 	    sv = amagic_deref_call(sv, to_sv_amg);
-	    SPAGAIN;
 	}
 
 	sv = SvRV(sv);
@@ -801,7 +797,7 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
             /* SV is copy-on-write */
 	    sv_force_normal_flags(sv, 0);
         }
-        if (SvREADONLY(sv))
+        else
             Perl_croak_no_modify(aTHX);
     }
 
@@ -886,7 +882,7 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 		    SvIVX(retval) += rs_charlen;
 		}
 	    }
-	    s = SvPV_force_nolen(sv);
+	    s = SvPV_force_nomg_nolen(sv);
 	    SvCUR_set(sv, len);
 	    *SvEND(sv) = '\0';
 	    SvNIOK_off(sv);
@@ -2958,76 +2954,29 @@ PP(pp_length)
     RETURN;
 }
 
-PP(pp_substr)
+/* Returns false if substring is completely outside original string.
+   No length is indicated by len_iv = 0 and len_is_uv = 0.  len_is_uv must
+   always be true for an explicit 0.
+*/
+bool
+Perl_translate_substr_offsets(pTHX_ STRLEN curlen, IV pos1_iv,
+				    bool pos1_is_uv, IV len_iv,
+				    bool len_is_uv, STRLEN *posp,
+				    STRLEN *lenp)
 {
-    dVAR; dSP; dTARGET;
-    SV *sv;
-    STRLEN curlen;
-    STRLEN utf8_curlen;
-    SV *   pos_sv;
-    IV     pos1_iv;
-    int    pos1_is_uv;
-    IV     pos2_iv;
+    IV pos2_iv;
     int    pos2_is_uv;
-    SV *   len_sv;
-    IV     len_iv = 0;
-    int    len_is_uv = 1;
-    const I32 lvalue = PL_op->op_flags & OPf_MOD || LVRET;
-    const bool rvalue = (GIMME_V != G_VOID);
-    const char *tmps;
-    SV *repl_sv = NULL;
-    const char *repl = NULL;
-    STRLEN repl_len;
-    int num_args = PL_op->op_private & 7;
-    bool repl_need_utf8_upgrade = FALSE;
-    bool repl_is_utf8 = FALSE;
 
-    if (num_args > 2) {
-	if (num_args > 3) {
-	  if((repl_sv = POPs)) {
-	    repl = SvPV_const(repl_sv, repl_len);
-	    repl_is_utf8 = DO_UTF8(repl_sv) && repl_len;
-	  }
-	  else num_args--;
-	}
-	if ((len_sv = POPs)) {
-	    len_iv    = SvIV(len_sv);
-	    len_is_uv = SvIOK_UV(len_sv);
-	}
-	else num_args--;
-    }
-    pos_sv     = POPs;
-    pos1_iv    = SvIV(pos_sv);
-    pos1_is_uv = SvIOK_UV(pos_sv);
-    sv = POPs;
-    PUTBACK;
-    if (repl_sv) {
-	if (repl_is_utf8) {
-	    if (!DO_UTF8(sv))
-		sv_utf8_upgrade(sv);
-	}
-	else if (DO_UTF8(sv))
-	    repl_need_utf8_upgrade = TRUE;
-    }
-    tmps = SvPV_const(sv, curlen);
-    if (DO_UTF8(sv)) {
-        utf8_curlen = sv_len_utf8(sv);
-	if (utf8_curlen == curlen)
-	    utf8_curlen = 0;
-	else
-	    curlen = utf8_curlen;
-    }
-    else
-	utf8_curlen = 0;
+    PERL_ARGS_ASSERT_TRANSLATE_SUBSTR_OFFSETS;
 
     if (!pos1_is_uv && pos1_iv < 0 && curlen) {
 	pos1_is_uv = curlen-1 > ~(UV)pos1_iv;
 	pos1_iv += curlen;
     }
     if ((pos1_is_uv || pos1_iv > 0) && (UV)pos1_iv > curlen)
-	goto bound_fail;
+	return FALSE;
 
-    if (num_args > 2) {
+    if (len_iv || len_is_uv) {
 	if (!len_is_uv && len_iv < 0) {
 	    pos2_iv = curlen + len_iv;
 	    if (curlen)
@@ -3054,7 +3003,7 @@ PP(pp_substr)
 
     if (!pos2_is_uv && pos2_iv < 0) {
 	if (!pos1_is_uv && pos1_iv < 0)
-	    goto bound_fail;
+	    return FALSE;
 	pos2_iv = 0;
     }
     else if (!pos1_is_uv && pos1_iv < 0)
@@ -3065,42 +3014,104 @@ PP(pp_substr)
     if ((UV)pos2_iv > curlen)
 	pos2_iv = curlen;
 
-    {
-	/* pos1_iv and pos2_iv both in 0..curlen, so the cast is safe */
-	const STRLEN pos = (STRLEN)( (UV)pos1_iv );
-	const STRLEN len = (STRLEN)( (UV)pos2_iv - (UV)pos1_iv );
-	STRLEN byte_len = len;
-	STRLEN byte_pos = utf8_curlen
-	    ? sv_pos_u2b_flags(sv, pos, &byte_len, SV_CONST_RETURN) : pos;
+    /* pos1_iv and pos2_iv both in 0..curlen, so the cast is safe */
+    *posp = (STRLEN)( (UV)pos1_iv );
+    *lenp = (STRLEN)( (UV)pos2_iv - (UV)pos1_iv );
 
-	if (lvalue && !repl) {
-	    SV * ret;
+    return TRUE;
+}
 
-	    if (!SvGMAGICAL(sv)) {
-		if (SvROK(sv)) {
-		    SvPV_force_nolen(sv);
-		    Perl_ck_warner(aTHX_ packWARN(WARN_SUBSTR),
-				   "Attempt to use reference as lvalue in substr");
-		}
-		if (isGV_with_GP(sv))
-		    SvPV_force_nolen(sv);
-		else if (SvOK(sv))	/* is it defined ? */
-		    (void)SvPOK_only_UTF8(sv);
-		else
-		    sv_setpvs(sv, ""); /* avoid lexical reincarnation */
-	    }
+PP(pp_substr)
+{
+    dVAR; dSP; dTARGET;
+    SV *sv;
+    STRLEN curlen;
+    STRLEN utf8_curlen;
+    SV *   pos_sv;
+    IV     pos1_iv;
+    int    pos1_is_uv;
+    SV *   len_sv;
+    IV     len_iv = 0;
+    int    len_is_uv = 0;
+    I32 lvalue = PL_op->op_flags & OPf_MOD || LVRET;
+    const bool rvalue = (GIMME_V != G_VOID);
+    const char *tmps;
+    SV *repl_sv = NULL;
+    const char *repl = NULL;
+    STRLEN repl_len;
+    int num_args = PL_op->op_private & 7;
+    bool repl_need_utf8_upgrade = FALSE;
+    bool repl_is_utf8 = FALSE;
 
-	    ret = sv_2mortal(newSV_type(SVt_PVLV));  /* Not TARG RT#67838 */
-	    sv_magic(ret, NULL, PERL_MAGIC_substr, NULL, 0);
-	    LvTYPE(ret) = 'x';
-	    LvTARG(ret) = SvREFCNT_inc_simple(sv);
-	    LvTARGOFF(ret) = pos;
-	    LvTARGLEN(ret) = len;
-
-	    SPAGAIN;
-	    PUSHs(ret);    /* avoid SvSETMAGIC here */
-	    RETURN;
+    if (num_args > 2) {
+	if (num_args > 3) {
+	  if(!(repl_sv = POPs)) num_args--;
 	}
+	if ((len_sv = POPs)) {
+	    len_iv    = SvIV(len_sv);
+	    len_is_uv = len_iv ? SvIOK_UV(len_sv) : 1;
+	}
+	else num_args--;
+    }
+    pos_sv     = POPs;
+    pos1_iv    = SvIV(pos_sv);
+    pos1_is_uv = SvIOK_UV(pos_sv);
+    sv = POPs;
+    if (PL_op->op_private & OPpSUBSTR_REPL_FIRST) {
+	assert(!repl_sv);
+	repl_sv = POPs;
+    }
+    PUTBACK;
+    if (repl_sv) {
+	repl = SvPV_const(repl_sv, repl_len);
+	repl_is_utf8 = DO_UTF8(repl_sv) && repl_len;
+	if (repl_is_utf8) {
+	    if (!DO_UTF8(sv))
+		sv_utf8_upgrade(sv);
+	}
+	else if (DO_UTF8(sv))
+	    repl_need_utf8_upgrade = TRUE;
+    }
+    else if (lvalue) {
+	SV * ret;
+	ret = sv_2mortal(newSV_type(SVt_PVLV));  /* Not TARG RT#67838 */
+	sv_magic(ret, NULL, PERL_MAGIC_substr, NULL, 0);
+	LvTYPE(ret) = 'x';
+	LvTARG(ret) = SvREFCNT_inc_simple(sv);
+	LvTARGOFF(ret) =
+	    pos1_is_uv || pos1_iv >= 0
+		? (STRLEN)(UV)pos1_iv
+		: (LvFLAGS(ret) |= 1, (STRLEN)(UV)-pos1_iv);
+	LvTARGLEN(ret) =
+	    len_is_uv || len_iv > 0
+		? (STRLEN)(UV)len_iv
+		: (LvFLAGS(ret) |= 2, (STRLEN)(UV)-len_iv);
+
+	SPAGAIN;
+	PUSHs(ret);    /* avoid SvSETMAGIC here */
+	RETURN;
+    }
+    tmps = SvPV_const(sv, curlen);
+    if (DO_UTF8(sv)) {
+        utf8_curlen = sv_len_utf8(sv);
+	if (utf8_curlen == curlen)
+	    utf8_curlen = 0;
+	else
+	    curlen = utf8_curlen;
+    }
+    else
+	utf8_curlen = 0;
+
+    {
+	STRLEN pos, len, byte_len, byte_pos;
+
+	if (!translate_substr_offsets(
+		curlen, pos1_iv, pos1_is_uv, len_iv, len_is_uv, &pos, &len
+	)) goto bound_fail;
+
+	byte_len = len;
+	byte_pos = utf8_curlen
+	    ? sv_pos_u2b_flags(sv, pos, &byte_len, SV_CONST_RETURN) : pos;
 
 	tmps += byte_pos;
 
@@ -3124,6 +3135,10 @@ PP(pp_substr)
 		repl = SvPV_const(repl_sv_copy, repl_len);
 		repl_is_utf8 = DO_UTF8(repl_sv_copy) && repl_len;
 	    }
+	    if (SvROK(sv))
+		Perl_ck_warner(aTHX_ packWARN(WARN_SUBSTR),
+			    "Attempt to use reference as lvalue in substr"
+		);
 	    if (!SvOK(sv))
 		sv_setpvs(sv, "");
 	    sv_insert_flags(sv, byte_pos, byte_len, repl, repl_len, 0);
@@ -3140,7 +3155,7 @@ PP(pp_substr)
     RETURN;
 
 bound_fail:
-    if (lvalue || repl)
+    if (repl)
 	Perl_croak(aTHX_ "substr outside of string");
     Perl_ck_warner(aTHX_ packWARN(WARN_SUBSTR), "substr outside of string");
     RETPUSHUNDEF;
@@ -3466,6 +3481,7 @@ PP(pp_ucfirst)
     STRLEN tculen;  /* tculen is the byte length of the freshly titlecased (or
 		     * lowercased) character stored in tmpbuf.  May be either
 		     * UTF-8 or not, but in either case is the number of bytes */
+    bool tainted = FALSE;
 
     SvGETMAGIC(source);
     if (SvOK(source)) {
@@ -3493,8 +3509,14 @@ PP(pp_ucfirst)
     else if (DO_UTF8(source)) {	/* Is the source utf8? */
 	doing_utf8 = TRUE;
         ulen = UTF8SKIP(s);
-        if (op_type == OP_UCFIRST) toTITLE_utf8(s, tmpbuf, &tculen);
-        else toLOWER_utf8(s, tmpbuf, &tculen);
+        if (op_type == OP_UCFIRST) {
+	    _to_utf8_title_flags(s, tmpbuf, &tculen,
+				 cBOOL(IN_LOCALE_RUNTIME), &tainted);
+	}
+        else {
+	    _to_utf8_lower_flags(s, tmpbuf, &tculen,
+				 cBOOL(IN_LOCALE_RUNTIME), &tainted);
+	}
 
         /* we can't do in-place if the length changes.  */
         if (ulen != tculen) inplace = FALSE;
@@ -3626,6 +3648,11 @@ PP(pp_ucfirst)
 	    Copy(tmpbuf, d, tculen, U8);
 	    SvCUR_set(dest, need - 1);
 	}
+
+	if (tainted) {
+	    TAINT;
+	    SvTAINTED_on(dest);
+	}
     }
     else {  /* Neither source nor dest are in or need to be UTF-8 */
 	if (slen) {
@@ -3731,6 +3758,7 @@ PP(pp_uc)
     if (DO_UTF8(source)) {
 	const U8 *const send = s + len;
 	U8 tmpbuf[UTF8_MAXBYTES+1];
+	bool tainted = FALSE;
 
 	/* All occurrences of these are to be moved to follow any other marks.
 	 * This is context-dependent.  We may not be passed enough context to
@@ -3762,7 +3790,8 @@ PP(pp_uc)
              * and copy it to the output buffer */
 
             u = UTF8SKIP(s);
-            uv = toUPPER_utf8(s, tmpbuf, &ulen);
+            uv = _to_utf8_upper_flags(s, tmpbuf, &ulen,
+				      cBOOL(IN_LOCALE_RUNTIME), &tainted);
             if (uv == GREEK_CAPITAL_LETTER_IOTA
                 && utf8_to_uvchr(s, 0) == COMBINING_GREEK_YPOGEGRAMMENI)
             {
@@ -3792,7 +3821,12 @@ PP(pp_uc)
 	}
 	SvUTF8_on(dest);
 	*d = '\0';
+
 	SvCUR_set(dest, d - (U8*)SvPVX_const(dest));
+	if (tainted) {
+	    TAINT;
+	    SvTAINTED_on(dest);
+	}
     }
     else {	/* Not UTF-8 */
 	if (len) {
@@ -3961,12 +3995,14 @@ PP(pp_lc)
     if (DO_UTF8(source)) {
 	const U8 *const send = s + len;
 	U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
+	bool tainted = FALSE;
 
 	while (s < send) {
 	    const STRLEN u = UTF8SKIP(s);
 	    STRLEN ulen;
 
-	    toLOWER_utf8(s, tmpbuf, &ulen);
+	    _to_utf8_lower_flags(s, tmpbuf, &ulen,
+				 cBOOL(IN_LOCALE_RUNTIME), &tainted);
 
 	    /* Here is where we would do context-sensitive actions.  See the
 	     * commit message for this comment for why there isn't any */
@@ -3996,6 +4032,10 @@ PP(pp_lc)
 	SvUTF8_on(dest);
 	*d = '\0';
 	SvCUR_set(dest, d - (U8*)SvPVX_const(dest));
+	if (tainted) {
+	    TAINT;
+	    SvTAINTED_on(dest);
+	}
     } else {	/* Not utf8 */
 	if (len) {
 	    const U8 *const send = s + len;
@@ -5793,6 +5833,25 @@ PP(pp_coreargs)
 
     RETURN;
 }
+
+PP(pp_runcv)
+{
+    dSP;
+    CV *cv;
+    if (PL_op->op_private & OPpOFFBYONE) {
+	PERL_SI * const oldsi = PL_curstackinfo;
+	I32 const oldcxix = oldsi->si_cxix;
+	if (oldcxix) oldsi->si_cxix--;
+	else PL_curstackinfo = oldsi->si_prev;
+	cv = find_runcv(NULL);
+	PL_curstackinfo = oldsi;
+	oldsi->si_cxix = oldcxix;
+    }
+    else cv = find_runcv(NULL);
+    XPUSHs(CvUNIQUE(cv) ? &PL_sv_undef : sv_2mortal(newRV((SV *)cv)));
+    RETURN;
+}
+
 
 /*
  * Local variables:

@@ -28,7 +28,6 @@
 
 #define Gv_AMupdate(a,b)	Perl_Gv_AMupdate(aTHX_ a,b)
 #define _to_uni_fold_flags(a,b,c,d)	Perl__to_uni_fold_flags(aTHX_ a,b,c,d)
-#define _to_utf8_fold_flags(a,b,c,d)	Perl__to_utf8_fold_flags(aTHX_ a,b,c,d)
 #define amagic_call(a,b,c,d)	Perl_amagic_call(aTHX_ a,b,c,d)
 #define amagic_deref_call(a,b)	Perl_amagic_deref_call(aTHX_ a,b)
 #define apply_attrs_string(a,b,c,d)	Perl_apply_attrs_string(aTHX_ a,b,c,d)
@@ -326,7 +325,7 @@
 #define newBINOP(a,b,c,d)	Perl_newBINOP(aTHX_ a,b,c,d)
 #define newCONDOP(a,b,c,d)	Perl_newCONDOP(aTHX_ a,b,c,d)
 #define newCONSTSUB(a,b,c)	Perl_newCONSTSUB(aTHX_ a,b,c)
-#define newCONSTSUB_flags(a,b,c,d)	Perl_newCONSTSUB_flags(aTHX_ a,b,c,d)
+#define newCONSTSUB_flags(a,b,c,d,e)	Perl_newCONSTSUB_flags(aTHX_ a,b,c,d,e)
 #define newCVREF(a,b)		Perl_newCVREF(aTHX_ a,b)
 #define newFOROP(a,b,c,d,e)	Perl_newFOROP(aTHX_ a,b,c,d,e)
 #define newGIVENOP(a,b,c)	Perl_newGIVENOP(aTHX_ a,b,c)
@@ -657,9 +656,6 @@
 #define to_uni_upper(a,b,c)	Perl_to_uni_upper(aTHX_ a,b,c)
 #define to_uni_upper_lc(a)	Perl_to_uni_upper_lc(aTHX_ a)
 #define to_utf8_case(a,b,c,d,e,f)	Perl_to_utf8_case(aTHX_ a,b,c,d,e,f)
-#define to_utf8_lower(a,b,c)	Perl_to_utf8_lower(aTHX_ a,b,c)
-#define to_utf8_title(a,b,c)	Perl_to_utf8_title(aTHX_ a,b,c)
-#define to_utf8_upper(a,b,c)	Perl_to_utf8_upper(aTHX_ a,b,c)
 #define unpack_str(a,b,c,d,e,f,g,h)	Perl_unpack_str(aTHX_ a,b,c,d,e,f,g,h)
 #define unpackstring(a,b,c,d,e)	Perl_unpackstring(aTHX_ a,b,c,d,e)
 #define unsharepvn(a,b,c)	Perl_unsharepvn(aTHX_ a,b,c)
@@ -849,6 +845,10 @@
 #endif
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #define _is_utf8__perl_idstart(a)	Perl__is_utf8__perl_idstart(aTHX_ a)
+#define _to_utf8_fold_flags(a,b,c,d,e)	Perl__to_utf8_fold_flags(aTHX_ a,b,c,d,e)
+#define _to_utf8_lower_flags(a,b,c,d,e)	Perl__to_utf8_lower_flags(aTHX_ a,b,c,d,e)
+#define _to_utf8_title_flags(a,b,c,d,e)	Perl__to_utf8_title_flags(aTHX_ a,b,c,d,e)
+#define _to_utf8_upper_flags(a,b,c,d,e)	Perl__to_utf8_upper_flags(aTHX_ a,b,c,d,e)
 #define av_reify(a)		Perl_av_reify(aTHX_ a)
 #define is_utf8_X_L(a)		Perl_is_utf8_X_L(aTHX_ a)
 #define is_utf8_X_LV(a)		Perl_is_utf8_X_LV(aTHX_ a)
@@ -1028,6 +1028,7 @@
 #define ck_subr(a)		Perl_ck_subr(aTHX_ a)
 #define ck_substr(a)		Perl_ck_substr(aTHX_ a)
 #define ck_svconst(a)		Perl_ck_svconst(aTHX_ a)
+#define ck_tell(a)		Perl_ck_tell(aTHX_ a)
 #define ck_trunc(a)		Perl_ck_trunc(aTHX_ a)
 #define convert(a,b,c)		Perl_convert(aTHX_ a,b,c)
 #define core_prototype(a,b,c,d)	Perl_core_prototype(aTHX_ a,b,c,d)
@@ -1137,6 +1138,7 @@
 #define my_stat_flags(a)	Perl_my_stat_flags(aTHX_ a)
 #define my_swabn		Perl_my_swabn
 #define my_unexec()		Perl_my_unexec(aTHX)
+#define newXS_len_flags(a,b,c,d,e,f,g)	Perl_newXS_len_flags(aTHX_ a,b,c,d,e,f,g)
 #define nextargv(a)		Perl_nextargv(aTHX_ a)
 #define oopsAV(a)		Perl_oopsAV(aTHX_ a)
 #define oopsHV(a)		Perl_oopsHV(aTHX_ a)
@@ -1345,6 +1347,9 @@
 #define save_magic(a,b)		S_save_magic(aTHX_ a,b)
 #define unwind_handler_stack(a)	S_unwind_handler_stack(aTHX_ a)
 #  endif
+#  if defined(PERL_IN_MG_C) || defined(PERL_IN_PP_C)
+#define translate_substr_offsets(a,b,c,d,e,f,g)	Perl_translate_substr_offsets(aTHX_ a,b,c,d,e,f,g)
+#  endif
 #  if defined(PERL_IN_MRO_C)
 #define mro_clean_isarev(a,b,c,d,e)	S_mro_clean_isarev(aTHX_ a,b,c,d,e)
 #define mro_gather_and_rename(a,b,c,d,e)	S_mro_gather_and_rename(aTHX_ a,b,c,d,e)
@@ -1394,6 +1399,9 @@
 #define too_few_arguments(a,b)	S_too_few_arguments(aTHX_ a,b)
 #define too_many_arguments(a,b)	S_too_many_arguments(aTHX_ a,b)
 #  endif
+#  if defined(PERL_IN_OP_C) || defined(PERL_IN_SV_C)
+#define report_redefined_cv(a,b,c)	Perl_report_redefined_cv(aTHX_ a,b,c)
+#  endif
 #  if defined(PERL_IN_PAD_C)
 #define pad_alloc_name(a,b,c,d)	S_pad_alloc_name(aTHX_ a,b,c,d)
 #define pad_check_dup(a,b,c)	S_pad_check_dup(aTHX_ a,b,c)
@@ -1411,12 +1419,14 @@
 #define init_perllib()		S_init_perllib(aTHX)
 #define init_postdump_symbols(a,b,c)	S_init_postdump_symbols(aTHX_ a,b,c)
 #define init_predump_symbols()	S_init_predump_symbols(aTHX)
+#define mayberelocate(a,b,c)	S_mayberelocate(aTHX_ a,b,c)
+#define minus_v()		S_minus_v(aTHX)
 #define my_exit_jump()		S_my_exit_jump(aTHX)
 #define nuke_stacks()		S_nuke_stacks(aTHX)
 #define open_script(a,b,c,d)	S_open_script(aTHX_ a,b,c,d)
 #define parse_body(a,b)		S_parse_body(aTHX_ a,b)
 #define run_body(a)		S_run_body(aTHX_ a)
-#define usage(a)		S_usage(aTHX_ a)
+#define usage()			S_usage(aTHX)
 #  endif
 #  if defined(PERL_IN_PP_C)
 #define do_chomp(a,b,c)		S_do_chomp(aTHX_ a,b,c)
@@ -1507,7 +1517,7 @@
 #define sv_pos_u2b_cached(a,b,c,d,e,f,g)	S_sv_pos_u2b_cached(aTHX_ a,b,c,d,e,f,g)
 #define sv_pos_u2b_forwards	S_sv_pos_u2b_forwards
 #define sv_pos_u2b_midway	S_sv_pos_u2b_midway
-#define sv_unglob(a)		S_sv_unglob(aTHX_ a)
+#define sv_unglob(a,b)		S_sv_unglob(aTHX_ a,b)
 #define uiv_2buf		S_uiv_2buf
 #define utf8_mg_len_cache_update(a,b,c)	S_utf8_mg_len_cache_update(aTHX_ a,b,c)
 #define utf8_mg_pos_cache_update(a,b,c,d,e)	S_utf8_mg_pos_cache_update(aTHX_ a,b,c,d,e)
@@ -1575,6 +1585,7 @@
 #  endif
 #  if defined(PERL_IN_UTF8_C)
 #define _to_fold_latin1(a,b,c,d)	Perl__to_fold_latin1(aTHX_ a,b,c,d)
+#define check_locale_boundary_crossing(a,b,c,d)	S_check_locale_boundary_crossing(aTHX_ a,b,c,d)
 #define is_utf8_char_slow	S_is_utf8_char_slow
 #define is_utf8_common(a,b,c)	S_is_utf8_common(aTHX_ a,b,c)
 #define swash_get(a,b,c)	S_swash_get(aTHX_ a,b,c)

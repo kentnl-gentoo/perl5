@@ -85,7 +85,7 @@
         fred() ; sub fred ($$) {}
 
 
-    Package `%s' not found (did you use the incorrect case?)
+    Package '%s' not found (did you use the incorrect case?)
 
     Use of /g modifier is meaningless in split
 
@@ -203,6 +203,8 @@ eval { getpwuid 1 };	# OP_GPWUID
 prototype "foo";	# OP_PROTOTYPE
 $a ~~ $b;		# OP_SMARTMATCH
 $a <=> $b;		# OP_NCMP
+use 5.015;
+__SUB__			# OP_RUNCV
 EXPECT
 Useless use of repeat (x) in void context at - line 3.
 Useless use of wantarray in void context at - line 5.
@@ -244,6 +246,7 @@ Useless use of getpwuid in void context at - line 53.
 Useless use of subroutine prototype in void context at - line 54.
 Useless use of smart match in void context at - line 55.
 Useless use of numeric comparison (<=>) in void context at - line 56.
+Useless use of __SUB__ in void context at - line 58.
 ########
 # op.c
 use warnings 'void' ; close STDIN ;
@@ -732,18 +735,28 @@ EXPECT
 Constant subroutine fred redefined at - line 4.
 ########
 # op.c
+sub fred () { 1 }
+sub fred () { 2 }
+EXPECT
+Constant subroutine fred redefined at - line 3.
+########
+# op.c
+sub fred () { 1 }
+*fred = sub () { 2 };
+EXPECT
+Constant subroutine main::fred redefined at - line 3.
+########
+# op.c
 no warnings 'redefine' ;
 sub fred () { 1 }
 sub fred () { 2 }
 EXPECT
-Constant subroutine fred redefined at - line 4.
 ########
 # op.c
 no warnings 'redefine' ;
 sub fred () { 1 }
 *fred = sub () { 2 };
 EXPECT
-Constant subroutine main::fred redefined at - line 4.
 ########
 # op.c
 use warnings 'redefine' ;
@@ -1240,22 +1253,20 @@ EXPECT
 Constant subroutine frèd redefined at - line 6.
 ########
 # op.c
-no warnings 'redefine' ;
 use utf8;
 use open qw( :utf8 :std );
 sub frèd () { 1 }
 sub frèd () { 2 }
 EXPECT
-Constant subroutine frèd redefined at - line 6.
+Constant subroutine frèd redefined at - line 5.
 ########
 # op.c
-no warnings 'redefine' ;
 use utf8;
 use open qw( :utf8 :std );
 sub frèd () { 1 }
 *frèd = sub () { 2 };
 EXPECT
-Constant subroutine main::frèd redefined at - line 6.
+Constant subroutine main::frèd redefined at - line 5.
 ########
 # op.c
 use warnings 'redefine' ;
@@ -1280,20 +1291,18 @@ EXPECT
 Constant subroutine ᚠርƊ redefined at - line 6.
 ########
 # op.c
-no warnings 'redefine' ;
 use utf8;
 use open qw( :utf8 :std );
 sub ᚠርƊ () { 1 }
 sub ᚠርƊ () { 2 }
 EXPECT
-Constant subroutine ᚠርƊ redefined at - line 6.
+Constant subroutine ᚠርƊ redefined at - line 5.
 ########
 # op.c
-no warnings 'redefine' ;
 use utf8;
 use open qw( :utf8 :std );
 sub ᚠርƊ () { 1 }
 *ᚠርƊ = sub () { 2 };
 EXPECT
-Constant subroutine main::ᚠርƊ redefined at - line 6.
+Constant subroutine main::ᚠርƊ redefined at - line 5.
 ########

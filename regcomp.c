@@ -5409,7 +5409,8 @@ Perl_reg_named_buff_fetch(pTHX_ REGEXP * const r, SV * const namesv,
                     if (!retarray)
                         return ret;
                 } else {
-                    ret = newSVsv(&PL_sv_undef);
+                    if (retarray)
+                        ret = newSVsv(&PL_sv_undef);
                 }
                 if (retarray)
                     av_push(retarray, ret);
@@ -12045,7 +12046,8 @@ Perl_re_dup_guts(pTHX_ const REGEXP *sstr, REGEXP *dstr, CLONE_PARAMS *param)
 	       1: a buffer in a different thread
 	       2: something we no longer hold a reference on
 	       so we need to copy it locally.  */
-	    /* Note we need to sue SvCUR() on our mother_re, because it, in
+	    /* Note we need to use SvCUR(), rather than
+	       SvLEN(), on our mother_re, because it, in
 	       turn, may well be pointing to its own mother_re.  */
 	    SvPV_set(dstr, SAVEPVN(SvPVX_const(ret->mother_re),
 				   SvCUR(ret->mother_re)+1));

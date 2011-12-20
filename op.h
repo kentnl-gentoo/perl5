@@ -131,7 +131,8 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  On OP_DBSTATE, indicates breakpoint
 				 *    (runtime property) */
 				/*  On OP_REQUIRE, was seen as CORE::require */
-				/*  On OP_ENTERWHEN, there's no condition */
+				/*  On OP_(ENTER|LEAVE)WHEN, there's
+				    no condition */
 				/*  On OP_SMARTMATCH, an implicit smartmatch */
 				/*  On OP_ANONHASH and OP_ANONLIST, create a
 				    reference to the new anon hash or array */
@@ -224,11 +225,15 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpEARLY_CV		32	/* foo() called before sub foo was parsed */
   /* OP_?ELEM only */
 #define OPpLVAL_DEFER		16	/* Defer creation of array/hash elem */
-  /* OP_RV2?V, OP_GVSV, OP_ENTERITER only */
+  /* OP_RV2[SAH]V, OP_GVSV, OP_ENTERITER only */
 #define OPpOUR_INTRO		16	/* Variable was in an our() */
   /* OP_RV2[AGH]V, OP_PAD[AH]V, OP_[AH]ELEM, OP_[AH]SLICE OP_AV2ARYLEN,
      OP_R?KEYS, OP_SUBSTR, OP_POS, OP_VEC */
 #define OPpMAYBE_LVSUB		8	/* We might be an lvalue to return */
+
+  /* OP_SUBSTR only */
+#define OPpSUBSTR_REPL_FIRST	16	/* 1st arg is replacement string */
+
   /* OP_PADSV only */
 #define OPpPAD_STATE		16	/* is a "state" pad */
   /* for OP_RV2?V, lower bits carry hints (currently only HINT_STRICT_REFS) */
@@ -237,6 +242,7 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpDONT_INIT_GV		4	/* Call gv_fetchpv with GV_NOINIT */
 /* (Therefore will return whatever is currently in the symbol table, not
    guaranteed to be a PVGV)  */
+#define OPpALLOW_FAKE		16	/* OK to return fake glob */
 
 /* Private for OP_ENTERITER and OP_ITER */
 #define OPpITER_REVERSED	4	/* for (reverse ...) */
@@ -299,11 +305,12 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpEVAL_BYTES		8
 #define OPpEVAL_COPHH		16	/* Construct %^H from cop hints */
     
-/* Private for OP_CALLER and OP_WANTARRAY */
+/* Private for OP_CALLER, OP_WANTARRAY and OP_RUNCV */
 #define OPpOFFBYONE		128	/* Treat caller(1) as caller(2) */
 
 /* Private for OP_COREARGS */
-/* These must not conflict with OPpDONT_INIT_GV.  See pp.c:S_rv2gv. */
+/* These must not conflict with OPpDONT_INIT_GV or OPpALLOW_FAKE.
+   See pp.c:S_rv2gv. */
 #define OPpCOREARGS_DEREF1	1	/* Arg 1 is a handle constructor */
 #define OPpCOREARGS_DEREF2	2	/* Arg 2 is a handle constructor */
 #define OPpCOREARGS_SCALARMOD	64	/* \$ rather than \[$@%*] */

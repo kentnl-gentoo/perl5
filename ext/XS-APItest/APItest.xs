@@ -1878,20 +1878,25 @@ call_method(methname, flags, ...)
 	PUSHs(sv_2mortal(newSViv(i)));
 
 void
-newCONSTSUB_type(stash, name, flags, type)
+newCONSTSUB_type(stash, name, flags, type, sv)
     HV* stash
     SV* name
     I32 flags
     int type
+    SV* sv
     PREINIT:
 	CV* cv;
+	STRLEN len;
+	const char *pv = SvPV(name, len);
     PPCODE:
         switch (type) {
            case 0:
-	       cv = newCONSTSUB(stash, SvPV_nolen(name), NULL);
+	       cv = newCONSTSUB(stash, pv, SvOK(sv) ? sv : NULL);
                break;
            case 1:
-               cv = newCONSTSUB_flags(stash, SvPV_nolen(name), flags | SvUTF8(name), NULL);
+               cv = newCONSTSUB_flags(
+                 stash, pv, len, flags | SvUTF8(name), SvOK(sv) ? sv : NULL
+               );
                break;
         }
         EXTEND(SP, 2);

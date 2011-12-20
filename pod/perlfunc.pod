@@ -164,7 +164,10 @@ X<control flow>
 C<caller>, C<continue>, C<die>, C<do>,
 C<dump>, C<eval>, C<evalbytes> C<exit>,
 C<__FILE__>, C<goto>, C<last>, C<__LINE__>, C<next>, C<__PACKAGE__>,
-C<redo>, C<return>, C<sub>, C<wantarray>,
+C<redo>, C<return>, C<sub>, C<__SUB__>, C<wantarray>
+
+C<__SUB__> is only available with a C<use v5.16> (or higher) declaration or
+with the C<"current_sub"> feature (see L<feature>).
 
 =item Keywords related to the switch feature
 
@@ -1666,11 +1669,10 @@ determined.
 
 If there is a syntax error or runtime error, or a C<die> statement is
 executed, C<eval> returns C<undef> in scalar context
-or an empty list--or, for syntax errors, a list containing a single
-undefined value--in list context, and C<$@> is set to the error
-message.  The discrepancy in the return values in list context is
-considered a bug by some, and will probably be fixed in a future
-release.  If there was no error, C<$@> is set to the empty string.  A
+or an empty list in list context, and C<$@> is set to the error
+message.  (Prior to 5.16, a bug caused C<undef> to be returned
+in list context for syntax errors, but not for runtime errors.)
+If there was no error, C<$@> is set to the empty string.  A
 control flow operator like C<last> or C<goto> can bypass the setting of
 C<$@>.  Beware that using C<eval> neither silences Perl from printing
 warnings to STDERR, nor does it stuff the text of warning messages into C<$@>.
@@ -2865,6 +2867,8 @@ experimental.  The exact behaviour may change in a future version of Perl.
 See also C<each>, C<values>, and C<sort>.
 
 =item kill SIGNAL, LIST
+
+=item kill SIGNAL
 X<kill> X<signal>
 
 Sends a signal to a list of processes.  Returns the number of
@@ -2897,6 +2901,11 @@ This emulation has limitations related to kill that have to be considered,
 for code running on Windows and in code intended to be portable.
 
 See L<perlfork> for more details.
+
+If there is no I<LIST> of processes, no signal is sent, and the return
+value is 0.  This form is sometimes used, however, because it causes
+tainting checks to be run.  But see
+L<perlsec/Laundering and Detecting Tainted Data>.
 
 Portability issues: L<perlport/kill>.
 
@@ -2955,13 +2964,25 @@ respectively.
 
 =back
 
+=item Otherwise, if C<use locale> is in effect
+
+Respects current LC_CTYPE locale for code points < 256; and uses Unicode
+semantics for the remaining code points (this last can only happen if
+the UTF8 flag is also set).  See L<perllocale>.
+
+A deficiency in this is that case changes that cross the 255/256
+boundary are not well-defined.  For example, the lower case of LATIN CAPITAL
+LETTER SHARP S (U+1E9E) in Unicode semantics is U+00DF (on ASCII
+platforms).   But under C<use locale>, the lower case of U+1E9E is
+itself, because 0xDF may not be LATIN SMALL LETTER SHARP S in the
+current locale, and Perl has no way of knowing if that character even
+exists in the locale, much less what code point it is.  Perl returns
+the input character unchanged, for all instances (and there aren't
+many) where the 255/256 boundary would otherwise be crossed.
+
 =item Otherwise, If EXPR has the UTF8 flag set
 
 Unicode semantics are used for the case change.
-
-=item Otherwise, if C<use locale> is in effect
-
-Respects current LC_CTYPE locale.  See L<perllocale>.
 
 =item Otherwise, if C<use feature 'unicode_strings'> is in effect:
 
@@ -4873,8 +4894,8 @@ B<C<rand()> is not cryptographically secure.  You should not rely
 on it in security-sensitive situations.>  As of this writing, a
 number of third-party CPAN modules offer random number generators
 intended by their authors to be cryptographically secure,
-including: L<Math::Random::Secure>, L<Math::Random::MT::Perl>, and
-L<Math::TrulyRandom>.
+including: L<Data::Entropy>, L<Crypt::Random>, L<Math::Random::Secure>,
+and L<Math::TrulyRandom>.
 
 =item read FILEHANDLE,SCALAR,LENGTH,OFFSET
 X<read> X<file, read>
@@ -6624,10 +6645,7 @@ C<srand()> at all.
 But there are a few situations in recent Perls where programs are likely to
 want to call C<srand>.  One is for generating predictable results generally for
 testing or debugging.  There, you use C<srand($seed)>, with the same C<$seed>
-each time.  Another other case is where you need a cryptographically-strong
-starting point rather than the generally acceptable default, which is based on
-time of day, process ID, and memory allocation, or the F</dev/urandom> device
-if available.  And still another case is that you may want to call C<srand()>
+each time.  Another case is that you may want to call C<srand()>
 after a C<fork()> to avoid child processes sharing the same seed value as the
 parent (and consequently each other).
 
@@ -6646,16 +6664,6 @@ current C<time>.  This isn't a particularly good seed, so many old
 programs supply their own seed value (often C<time ^ $$> or C<time ^
 ($$ + ($$ << 15))>), but that isn't necessary any more.
 
-For cryptographic purposes, however, you need something much more random 
-than the default seed.  Checksumming the compressed output of one or more
-rapidly changing operating system status programs is the usual method.  For
-example:
-
-    srand (time ^ $$ ^ unpack "%L*", `ps axww | gzip -f`);
-
-If you're particularly concerned with this, search the CPAN for
-random number generator modules instead of rolling out your own.
-
 Frequently called programs (like CGI scripts) that simply use
 
     time ^ $$
@@ -6670,6 +6678,13 @@ A typical use of the returned seed is for a test program which has too many
 combinations to test comprehensively in the time available to it each run.  It
 can test a random subset each time, and should there be a failure, log the seed
 used for that run so that it can later be used to reproduce the same results.
+
+B<C<rand()> is not cryptographically secure.  You should not rely
+on it in security-sensitive situations.>  As of this writing, a
+number of third-party CPAN modules offer random number generators
+intended by their authors to be cryptographically secure,
+including: L<Data::Entropy>, L<Crypt::Random>, L<Math::Random::Secure>,
+and L<Math::TrulyRandom>.
 
 =item stat FILEHANDLE
 X<stat> X<file, status> X<ctime>
@@ -6905,6 +6920,15 @@ See L<perlsub> and L<perlref> for details about subroutines and
 references; see L<attributes> and L<Attribute::Handlers> for more
 information about attributes.
 
+=item __SUB__
+X<__SUB__>
+
+A special token that returns the a reference to the current subroutine, or
+C<undef> outside of a subroutine.
+
+This token is only available under C<use v5.16> or the "current_sub"
+feature.  See L<feature>.
+
 =item substr EXPR,OFFSET,LENGTH,REPLACEMENT
 X<substr> X<substring> X<mid> X<left> X<right>
 
@@ -6965,7 +6989,18 @@ of the original string is being modified; for example:
         $_ = 'pq';  print $x,"\n";    # prints 5pq9
     }
 
-Prior to Perl version 5.9.1, the result of using an lvalue multiple times was
+With negative offsets, it remembers its position from the end of the string
+when the target string is modified:
+
+    $x = '1234';
+    for (substr($x, -3, 2)) {
+        $_ = 'a';   print $x,"\n";    # prints 1a4, as above
+        $x = 'abcdefg';
+        print $_,"\n";                # prints f
+    }
+
+Prior to Perl version 5.10, the result of using an lvalue multiple times was
+unspecified.  Prior to 5.16, the result with negative offsets was
 unspecified.
 
 =item symlink OLDFILE,NEWFILE
@@ -7693,12 +7728,16 @@ This is often useful if you need to check the current Perl version before
 C<use>ing library modules that won't work with older versions of Perl.
 (We try not to do this more than we have to.)
 
-Also, if the specified Perl version is greater than or equal to 5.9.5,
-C<use VERSION> will also load the C<feature> pragma and enable all
-features available in the requested version.  See L<feature>.
+C<use VERSION> also loads the C<feature> pragma and enables all features
+available in the requested version, disabling any features not in
+the current version's feature bundle.  See L<feature>.  (Whether
+it actually loads the F<feature.pm> module is subject to
+change.  In some cases it is skipped for efficiency reasons.)
 Similarly, if the specified Perl version is greater than or equal to
 5.11.0, strictures are enabled lexically as with C<use strict> (except
-that the F<strict.pm> file is not actually loaded).
+that the F<strict.pm> file is not actually loaded).  Any explicit use of
+C<use strict> or C<no strict> overrides C<use VERSION>, even if it comes
+before it.
 
 The C<BEGIN> forces the C<require> and C<import> to happen at compile time.  The
 C<require> makes sure the module is loaded into memory if it hasn't been

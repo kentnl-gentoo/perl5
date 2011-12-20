@@ -2,10 +2,11 @@ package charnames;
 use strict;
 use warnings;
 use File::Spec;
-our $VERSION = '1.24';
+our $VERSION = '1.27';
 use unicore::Name;    # mktables-generated algorithmically-defined names
 
 use bytes ();          # for $bytes::hint_bits
+use re "/aa";          # Everything in here should be ASCII
 
 # Translate between Unicode character names and their code points.
 #
@@ -906,6 +907,7 @@ sub lookup_name ($$$) {
     }
   }
 
+$Carp::Internal{ (__PACKAGE__) } = 1;
 
   # Here, have the utf8.  If the return is to be an ord, must be any single
   # character.
@@ -966,7 +968,7 @@ sub import
   shift; ## ignore class name
 
   if (not @_) {
-    carp("`use charnames' needs explicit imports list");
+    carp("'use charnames' needs explicit imports list");
   }
   $^H{charnames} = \&charnames ;
   $^H{charnames_ord_aliases} = {};
@@ -1268,7 +1270,7 @@ this pragma.  The character it inserts is the one whose code point
 the Unicode (white background, black foreground) smiley face; it doesn't
 require this pragma, whereas the equivalent, C<"\N{WHITE SMILING FACE}">
 does.
-Also, C<\N{I<...>}> can mean a regex quantifier instead of a character
+Also note, C<\N{I<...>}> can mean a regex quantifier instead of a character
 name, when the I<...> is a number (or comma separated pair of numbers
 (see L<perlreref/QUANTIFIERS>), and is not related to this pragma.
 
@@ -1315,7 +1317,8 @@ there are no official Unicode names but you can use instead the ISO 6429
 names (LINE FEED, ESCAPE, and so forth, and their abbreviations, LF,
 ESC, ...).  In Unicode 3.2 (as of Perl 5.8) some naming changes took
 place, and ISO 6429 was updated, see L</ALIASES>.  Since Unicode 6.0, it
-is deprecated to use C<BELL>.  Instead use C<ALERT> (but C<BEL> works).
+is deprecated to use C<BELL>.  Instead use C<ALERT> (but C<BEL> will continue
+to work).
 
 If the input name is unknown, C<\N{NAME}> raises a warning and
 substitutes the Unicode REPLACEMENT CHARACTER (U+FFFD).
@@ -1549,7 +1552,7 @@ hexadecimal integer.  A literal numeric constant must be unsigned; it
 will be interpreted as hex if it has a leading zero or contains
 non-decimal hex digits; otherwise it will be interpreted as decimal.
 
-Notice that the name returned for of U+FEFF is "ZERO WIDTH NO-BREAK
+Notice that the name returned for U+FEFF is "ZERO WIDTH NO-BREAK
 SPACE", not "BYTE ORDER MARK".
 
 =head1 charnames::string_vianame(I<name>)

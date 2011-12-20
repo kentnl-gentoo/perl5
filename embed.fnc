@@ -602,14 +602,14 @@ Ap	|UV	|to_uni_upper	|UV c|NN U8 *p|NN STRLEN *lenp
 Ap	|UV	|to_uni_title	|UV c|NN U8 *p|NN STRLEN *lenp
 #ifdef PERL_IN_UTF8_C
 sR	|U8	|to_lower_latin1|const U8 c|NULLOK U8 *p|NULLOK STRLEN *lenp
-p	|UV	|_to_fold_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const U8 flags
+p	|UV	|_to_fold_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const bool flags
 #endif
 #if defined(PERL_IN_UTF8_C) || defined(PERL_IN_PP_C)
 p	|UV	|_to_upper_title_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const char S_or_s
 #endif
 Ap	|UV	|to_uni_lower	|UV c|NN U8 *p|NN STRLEN *lenp
 Amp	|UV	|to_uni_fold	|UV c|NN U8 *p|NN STRLEN *lenp
-AMp	|UV	|_to_uni_fold_flags|UV c|NN U8 *p|NN STRLEN *lenp|U8 flags
+AMp	|UV	|_to_uni_fold_flags|UV c|NN U8 *p|NN STRLEN *lenp|const bool flags
 ApPR	|bool	|is_uni_alnum_lc|UV c
 ApPR	|bool	|is_uni_idfirst_lc|UV c
 ApPR	|bool	|is_uni_alpha_lc|UV c
@@ -853,7 +853,9 @@ i	|bool	|aassign_common_vars	|NULLOK OP* o
 Apda	|OP*	|newASSIGNOP	|I32 flags|NULLOK OP* left|I32 optype|NULLOK OP* right
 Apda	|OP*	|newCONDOP	|I32 flags|NN OP* first|NULLOK OP* trueop|NULLOK OP* falseop
 Apd	|CV*	|newCONSTSUB	|NULLOK HV* stash|NULLOK const char* name|NULLOK SV* sv
-Apd	|CV*	|newCONSTSUB_flags	|NULLOK HV* stash|NULLOK const char* name|U32 flags|NULLOK SV* sv
+Apd	|CV*	|newCONSTSUB_flags|NULLOK HV* stash \
+				  |NULLOK const char* name|STRLEN len \
+				  |U32 flags|NULLOK SV* sv
 #ifdef PERL_MAD
 Ap	|OP*	|newFORM	|I32 floor|NULLOK OP* o|NULLOK OP* block
 #else
@@ -872,6 +874,11 @@ Apda	|OP*	|newSLICEOP	|I32 flags|NULLOK OP* subscript|NULLOK OP* listop
 Apda	|OP*	|newSTATEOP	|I32 flags|NULLOK char* label|NULLOK OP* o
 Abm	|CV*	|newSUB		|I32 floor|NULLOK OP* o|NULLOK OP* proto \
 				|NULLOK OP* block
+p	|CV *	|newXS_len_flags|NULLOK const char *name|STRLEN len \
+				|NN XSUBADDR_t subaddr\
+				|NN const char *const filename \
+				|NULLOK const char *const proto \
+				|NULLOK SV **const_svp|U32 flags
 ApM	|CV *	|newXS_flags	|NULLOK const char *name|NN XSUBADDR_t subaddr\
 				|NN const char *const filename \
 				|NULLOK const char *const proto|U32 flags
@@ -1379,11 +1386,20 @@ Ap	|void	|taint_env
 Ap	|void	|taint_proper	|NULLOK const char* f|NN const char *const s
 Apd	|UV	|to_utf8_case	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp \
 				|NN SV **swashp|NN const char *normal|NULLOK const char *special
-Apd	|UV	|to_utf8_lower	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
-Apd	|UV	|to_utf8_upper	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
-Apd	|UV	|to_utf8_title	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
+Apdm	|UV	|to_utf8_lower	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
+EXMp	|UV	|_to_utf8_lower_flags	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp|const bool flags|NULLOK bool* tainted_ptr
+Apdm	|UV	|to_utf8_upper	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
+EXMp	|UV	|_to_utf8_upper_flags	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp|const bool flags|NULLOK bool* tainted_ptr
+Apdm	|UV	|to_utf8_title	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
+EXMp	|UV	|_to_utf8_title_flags	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp|const bool flags|NULLOK bool* tainted_ptr
 Ampd	|UV	|to_utf8_fold	|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp
-AMp	|UV	|_to_utf8_fold_flags|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp|U8 flags
+EXMp	|UV	|_to_utf8_fold_flags|NN const U8 *p|NN U8* ustrp|NULLOK STRLEN *lenp|U8 flags|NULLOK bool* tainted_ptr
+#if defined(PERL_IN_MG_C) || defined(PERL_IN_PP_C)
+p	|bool	|translate_substr_offsets|STRLEN curlen|IV pos1_iv \
+					 |bool pos1_is_uv|IV len_iv \
+					 |bool len_is_uv|NN STRLEN *posp \
+					 |NN STRLEN *lenp
+#endif
 #if defined(UNLINK_ALL_VERSIONS)
 Ap	|I32	|unlnk		|NN const char* f
 #endif
@@ -1452,6 +1468,11 @@ p	|void	|report_evil_fh	|NULLOK const GV *gv
 p	|void	|report_wrongway_fh|NULLOK const GV *gv|const char have
 : Used in mg.c, pp.c, pp_hot.c, regcomp.c
 XEpd	|void	|report_uninit	|NULLOK const SV *uninit_sv
+#if defined(PERL_IN_OP_C) || defined(PERL_IN_SV_C)
+p	|void	|report_redefined_cv|NN const SV *name \
+				    |NN const CV *old_cv \
+				    |NULLOK SV * const *new_const_svp
+#endif
 Apd	|void	|warn_sv	|NN SV *baseex
 Afpd	|void	|warn		|NN const char* pat|...
 Apd	|void	|vwarn		|NN const char* pat|NULLOK va_list* args
@@ -1731,6 +1752,8 @@ s	|void	|find_beginning	|NN SV* linestr_sv|NN PerlIO *rsfp
 s	|void	|forbid_setid	|const char flag|const bool suidscript
 s	|void	|incpush	|NN const char *const dir|STRLEN len \
 				|U32 flags
+s	|SV*	|mayberelocate	|NN const char *const dir|STRLEN len \
+				|U32 flags
 s	|void	|incpush_use_sep|NN const char *p|STRLEN len|U32 flags
 s	|void	|init_interp
 s	|void	|init_ids
@@ -1742,10 +1765,11 @@ rs	|void	|my_exit_jump
 s	|void	|nuke_stacks
 s	|int	|open_script	|NN const char *scriptname|bool dosearch \
 				|NN bool *suidscript|NN PerlIO **rsfpp
-s	|void	|usage		|NN const char *name
+sr	|void	|usage
 #ifndef SETUID_SCRIPTS_ARE_SECURE_NOW
 so	|void	|validate_suid	|NN PerlIO *rsfp
 #endif
+sr	|void	|minus_v
 
 s	|void*	|parse_body	|NULLOK char **env|XSINIT_t xsinit
 rs	|void	|run_body	|I32 oldscope
@@ -1982,7 +2006,7 @@ pR	|SV *	|varname	|NULLOK const GV *const gv|const char gvtype \
 pX	|void	|sv_del_backref	|NN SV *const tsv|NN SV *const sv
 #if defined(PERL_IN_SV_C)
 nsR	|char *	|uiv_2buf	|NN char *const buf|const IV iv|UV uv|const int is_uv|NN char **const peob
-s	|void	|sv_unglob	|NN SV *const sv
+i	|void	|sv_unglob	|NN SV *const sv|U32 flags
 s	|void	|not_a_number	|NN SV *const sv
 s	|I32	|visit		|NN SVFUNC_t f|const U32 flags|const U32 mask
 #  ifdef DEBUGGING
@@ -2121,6 +2145,7 @@ sn	|NV|mulexp10	|NV value|I32 exponent
 
 #if defined(PERL_IN_UTF8_C)
 sRn	|STRLEN	|is_utf8_char_slow|NN const U8 *s|const STRLEN len
+sRM	|UV	|check_locale_boundary_crossing|NN const U8* const p|const UV result|NN U8* const ustrp|NN STRLEN *lenp
 sR	|bool	|is_utf8_common	|NN const U8 *const p|NN SV **swash|NN const char * const swashname
 sR	|SV*	|swash_get	|NN SV* swash|UV start|UV span
 #endif
@@ -2547,6 +2572,7 @@ Anop	|void	|clone_params_del|NN CLONE_PARAMS *param
 op	|void	|populate_isa	|NN const char *name|STRLEN len|...
 
 : Used in keywords.c and toke.c
-op	|bool	|feature_is_enabled|NN const char *const name|STRLEN namelen
+Xop	|bool	|feature_is_enabled|NN const char *const name \
+		|STRLEN namelen|bool negate
 
 : ex: set ts=8 sts=4 sw=4 noet:

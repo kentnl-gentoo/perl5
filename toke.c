@@ -285,6 +285,10 @@ static const char* const lex_state_names[] = {
 	}
 #define UNI(f)    UNI2(f,XTERM)
 #define UNIDOR(f) UNI2(f,XTERMORDORDOR)
+#define UNIPROTO(f,optional) { \
+	if (optional) PL_last_uni = PL_oldbufptr; \
+	OPERATOR(f); \
+	}
 
 #define UNIBRACK(f) { \
 	pl_yylval.ival = f; \
@@ -595,19 +599,27 @@ S_missingterm(pTHX_ char *s)
  * Check whether the named feature is enabled.
  */
 bool
-Perl_feature_is_enabled(pTHX_ const char *const name, STRLEN namelen)
+Perl_feature_is_enabled(pTHX_ const char *const name, STRLEN namelen,
+			      bool negate)
 {
     dVAR;
-    HV * const hinthv = GvHV(PL_hintgv);
     char he_name[8 + MAX_FEATURE_LEN] = "feature_";
 
     PERL_ARGS_ASSERT_FEATURE_IS_ENABLED;
 
     if (namelen > MAX_FEATURE_LEN)
 	return FALSE;
-    memcpy(&he_name[8], name, namelen);
+    if (negate) he_name[8] = 'n', he_name[9] = 'o';
+    memcpy(&he_name[8 + 2*negate], name, namelen);
 
-    return (hinthv && hv_exists(hinthv, he_name, 8 + namelen));
+    return
+	(
+	    cop_hints_fetch_pvn(
+		PL_curcop, he_name, 8 + 2*negate + namelen, 0, 0
+	    )
+	    != &PL_sv_placeholder
+	)
+	!= negate;
 }
 
 /*
@@ -2181,11 +2193,13 @@ S_force_version(pTHX_ char *s, int guessing)
         if (*d == ';' || isSPACE(*d) || *d == '{' || *d == '}' || !*d) {
 	    SV *ver;
 #ifdef USE_LOCALE_NUMERIC
-	    char *loc = setlocale(LC_NUMERIC, "C");
+	    char *loc = savepv(setlocale(LC_NUMERIC, NULL));
+	    setlocale(LC_NUMERIC, "C");
 #endif
             s = scan_num(s, &pl_yylval);
 #ifdef USE_LOCALE_NUMERIC
 	    setlocale(LC_NUMERIC, loc);
+	    Safefree(loc);
 #endif
             version = pl_yylval.opval;
 	    ver = cSVOPx(version)->op_sv;
@@ -6847,10 +6861,13 @@ Perl_yylex(pTHX)
 		    {
 			STRLEN protolen = CvPROTOLEN(cv);
 			const char *proto = CvPROTO(cv);
+			bool optional;
 			if (!protolen)
 			    TERM(FUNC0SUB);
-			while (*proto == ';')
+			if ((optional = *proto == ';'))
+			  do
 			    proto++;
+			  while (*proto == ';');
 			if (
 			    (
 			        (
@@ -6863,12 +6880,13 @@ Perl_yylex(pTHX)
 			     *proto == '\\' && proto[1] && proto[2] == '\0'
 			    )
 			)
-			    OPERATOR(UNIOPSUB);
+			    UNIPROTO(UNIOPSUB,optional);
 			if (*proto == '\\' && proto[1] == '[') {
 			    const char *p = proto + 2;
 			    while(*p && *p != ']')
 				++p;
-			    if(*p == ']' && !p[1]) OPERATOR(UNIOPSUB);
+			    if(*p == ']' && !p[1])
+				UNIPROTO(UNIOPSUB,optional);
 			}
 			if (*proto == '&' && *s == '{') {
 			    if (PL_curstash)
@@ -7118,6 +7136,9 @@ Perl_yylex(pTHX)
 	    }
 	    goto fake_eof;
 	}
+
+	case KEY___SUB__:
+	    FUN0OP(newPVOP(OP_RUNCV,0,NULL));
 
 	case KEY_AUTOLOAD:
 	case KEY_DESTROY:
@@ -7661,6 +7682,7 @@ Perl_yylex(pTHX)
 		if ( *t && strchr("|&*+-=!?:.", *t) && ckWARN_d(WARN_PRECEDENCE)
 		    /* [perl #16184] */
 		    && !(t[0] == '=' && t[1] == '>')
+		    && !keyword(s, d-s, 0)
 		) {
 		    int parms_len = (int)(d-s);
 		    Perl_warner(aTHX_ packWARN(WARN_PRECEDENCE),
@@ -8962,7 +8984,7 @@ S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s, char* charse
 		    goto deprecate;
 		}
 		Perl_ck_warner_d(aTHX_ packWARN(WARN_AMBIGUOUS),
-		    "Ambiguous use of 's//le...' resolved as 's// le...'; Rewrite as 's//el' if you meant 'use locale rules and evaluate rhs as an expression'.  In Perl 5.16, it will be resolved the other way");
+		    "Ambiguous use of 's//le...' resolved as 's// le...'; Rewrite as 's//el' if you meant 'use locale rules and evaluate rhs as an expression'.  In Perl 5.18, it will be resolved the other way");
 		return FALSE;
 	    }
 	    if (*charset) {

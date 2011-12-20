@@ -14,7 +14,7 @@ use warnings; # uses #3 and #4, since warnings uses Carp
 
 use Exporter (); # use #5
 
-our $VERSION   = "0.87";
+our $VERSION   = "0.88";
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw( set_style set_style_standard add_callback
 		     concise_subref concise_cv concise_main
@@ -612,7 +612,7 @@ $priv{$_}{4} = "DREFed" for (qw(rv2sv rv2av rv2hv));
 @{$priv{$_}}{32,64,96} = ("DREFAV", "DREFHV", "DREFSV")
   for (qw(rv2gv rv2sv padsv aelem helem));
 $priv{$_}{16} = "STATE" for ("padav", "padhv", "padsv");
-$priv{rv2gv}{4} = "NOINIT";
+@{$priv{rv2gv}}{4,16} = qw "NOINIT FAKE";
 @{$priv{"entersub"}}{1,4,16,32,64} = qw( INARGS TARG DBG DEREF );
 @{$priv{rv2cv}}{1,8,128} = ("CONST","AMPER","NO()");
 $priv{"gv"}{32} = "EARLYCV";
@@ -621,6 +621,7 @@ $priv{$_}{16} = "OURINTR" for ("gvsv", "rv2sv", "rv2av", "rv2hv", "r2gv",
 	"enteriter");
 $priv{$_}{8} = 'LVSUB' for qw(rv2av rv2gv rv2hv padav padhv aelem helem
                         aslice hslice av2arylen keys rkeys substr pos vec);
+$priv{substr}{16} = 'REPL1ST';
 $priv{$_}{16} = "TARGMY"
   for (map(($_,"s$_"),"chop", "chomp"),
        map(($_,"i_$_"), "postinc", "postdec", "multiply", "divide", "modulo",
@@ -634,7 +635,8 @@ $priv{$_}{16} = "TARGMY"
        "exec", "kill", "getppid", "getpgrp", "setpgrp", "getpriority",
        "setpriority", "time", "sleep");
 $priv{$_}{4} = "REVERSED" for ("enteriter", "iter");
-@{$priv{"const"}}{4,8,16,64,128} = ("SHORT","STRICT","ENTERED","BARE","WARN");
+@{$priv{"const"}}{2,4,8,16,64,128} =
+    ("NOVER","SHORT","STRICT","ENTERED","BARE","WARN");
 $priv{"flip"}{64} = $priv{"flop"}{64} = "LINENUM";
 $priv{"list"}{64} = "GUESSED";
 $priv{"delete"}{64} = "SLICE";
@@ -660,7 +662,7 @@ if ($] >= 5.009) {
   $priv{$_}{2} = "GREPLEX"
     for ("mapwhile", "mapstart", "grepwhile", "grepstart");
 }
-$priv{$_}{128} = '+1' for qw "caller wantarray";
+$priv{$_}{128} = '+1' for qw "caller wantarray runcv";
 @{$priv{coreargs}}{1,2,64,128} = ('DREF1','DREF2','$MOD','MARK');
 
 our %hints; # used to display each COP's op_hints values

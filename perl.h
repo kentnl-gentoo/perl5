@@ -974,17 +974,6 @@ EXTERN_C int usleep(unsigned int);
 #define PERL_DEFAULT_DO_EXEC3_IMPLEMENTATION
 #endif
 
-/* Cannot include embed.h here on Win32 as win32.h has not
-   yet been included and defines some config variables e.g. HAVE_INTERP_INTERN
- */
-#if !defined(PERL_FOR_X2P) && !(defined(WIN32)||defined(VMS))
-#  include "embed.h"
-#  ifndef PERL_MAD
-#    undef op_getmad
-#    define op_getmad(arg,pegop,slot) NOOP
-#  endif
-#endif
-
 #define MEM_SIZE Size_t
 
 /* Round all values passed to malloc up, by default to a multiple of
@@ -2581,11 +2570,6 @@ typedef struct clone_params CLONE_PARAMS;
 
 #if defined(VMS)
 #   include "vmsish.h"
-#   include "embed.h"
-#  ifndef PERL_MAD
-#    undef op_getmad
-#    define op_getmad(arg,pegop,slot) NOOP
-#  endif
 #   define ISHISH "vms"
 #endif
 
@@ -2615,11 +2599,6 @@ typedef struct clone_params CLONE_PARAMS;
 
 #ifdef __SYMBIAN32__
 #   include "symbian/symbianish.h"
-#   include "embed.h"
-#  ifndef PERL_MAD
-#    undef op_getmad
-#    define op_getmad(arg,pegop,slot) NOOP
-#  endif
 #   define ISHISH "symbian"
 #endif
 
@@ -5073,13 +5052,13 @@ END_EXTERN_C
 #  undef PL_na
 #endif
 
-#if defined(WIN32)
-/* Now all the config stuff is setup we can include embed.h */
-#  include "embed.h"
-#  ifndef PERL_MAD
-#    undef op_getmad
-#    define op_getmad(arg,pegop,slot) NOOP
-#  endif
+/* Now all the config stuff is setup we can include embed.h
+   In particular, need the relevant *ish file included already, as it may
+   define HAVE_INTERP_INTERN  */
+#include "embed.h"
+#ifndef PERL_MAD
+#  undef op_getmad
+#  define op_getmad(arg,pegop,slot) NOOP
 #endif
 
 #ifndef PERL_GLOBAL_STRUCT
@@ -5766,10 +5745,15 @@ extern void moncontrol(int);
 #define PERL_PV_PRETTY_DUMP  PERL_PV_PRETTY_ELLIPSES|PERL_PV_PRETTY_QUOTE
 #define PERL_PV_PRETTY_REGPROP PERL_PV_PRETTY_ELLIPSES|PERL_PV_PRETTY_LTGT|PERL_PV_ESCAPE_RE|PERL_PV_ESCAPE_NONASCII
 
-#ifdef PERL_CORE
+#if defined(PERL_CORE) || defined(PERL_EXT)
 #  define FEATURE_IS_ENABLED(name)				        \
-	((0 != (PL_hints & HINT_LOCALIZE_HH))				\
-	    && Perl_feature_is_enabled(aTHX_ STR_WITH_LEN(name)))
+	(((PL_curcop == &PL_compiling ? PL_hints : PL_curcop->cop_hints) \
+	   & HINT_LOCALIZE_HH)						\
+	    && Perl_feature_is_enabled(aTHX_ STR_WITH_LEN(name), 0))
+#  define FEATURE_IS_ENABLED_d(name)				        \
+	(!((PL_curcop == &PL_compiling ? PL_hints : PL_curcop->cop_hints) \
+	    & HINT_LOCALIZE_HH)						\
+	    || Perl_feature_is_enabled(aTHX_ STR_WITH_LEN(name), 1))
 /* The longest string we pass in.  */
 #  define MAX_FEATURE_LEN (sizeof("unicode_strings")-1)
 #endif

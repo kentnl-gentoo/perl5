@@ -1,6 +1,6 @@
 package strict;
 
-$strict::VERSION = "1.05";
+$strict::VERSION = "1.06";
 
 # Verify that we're called correctly so that strictures will work.
 unless ( __FILE__ =~ /(^|[\/\\])\Q${\__PACKAGE__}\E\.pmc?$/ ) {
@@ -19,7 +19,10 @@ sub bits {
     my $bits = 0;
     my @wrong;
     foreach my $s (@_) {
-	push @wrong, $s unless exists $bitmask{$s};
+	if (exists $bitmask{$s}) {
+	    $^H{"strict/$s"} = undef;
+	}
+	else { push @wrong, $s };
         $bits |= $bitmask{$s} || 0;
     }
     if (@wrong) {
@@ -29,16 +32,16 @@ sub bits {
     $bits;
 }
 
-my $default_bits = bits(qw(refs subs vars));
+my @default_bits = qw(refs subs vars);
 
 sub import {
     shift;
-    $^H |= @_ ? bits(@_) : $default_bits;
+    $^H |= bits(@_ ? @_ : @default_bits);
 }
 
 sub unimport {
     shift;
-    $^H &= ~ (@_ ? bits(@_) : $default_bits);
+    $^H &= ~ bits(@_ ? @_ : @default_bits);
 }
 
 1;
@@ -91,12 +94,12 @@ is allowed so that C<goto &$AUTOLOAD> would not break under stricture.
 
 =item C<strict vars>
 
-This generates a compile-time error if you access a variable that wasn't
-declared via C<our>, C<use vars>, or C<my()>, and wasn't fully qualified.
-Because this is to avoid
-variable suicide problems and subtle dynamic scoping issues, a merely
-local() variable isn't good enough.  See L<perlfunc/my> and
-L<perlfunc/local>.
+This generates a compile-time error if you access a variable that was
+neither explicitly declared (using any of C<my>, C<our>, C<state>, or C<use
+vars>) nor fully qualified.  (Because this is to avoid variable suicide
+problems and subtle dynamic scoping issues, a merely C<local> variable isn't
+good enough.)  See L<perlfunc/my>, L<perlfunc/our>, L<perlfunc/state>,
+L<perlfunc/local>, and L<vars>.
 
     use strict 'vars';
     $X::foo = 1;	 # ok, fully qualified

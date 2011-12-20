@@ -4857,7 +4857,8 @@ Perl_new_version(pTHX_ SV *ver)
     dVAR;
     SV * const rv = newSV(0);
     PERL_ARGS_ASSERT_NEW_VERSION;
-    if ( sv_derived_from(ver,"version") ) /* can just copy directly */
+    if ( sv_isobject(ver) && sv_derived_from(ver, "version") )
+	 /* can just copy directly */
     {
 	I32 key;
 	AV * const av = newAV();
@@ -4949,14 +4950,18 @@ Perl_upg_version(pTHX_ SV *ver, bool qv)
 
     if ( SvNOK(ver) && !( SvPOK(ver) && sv_len(ver) == 3 ) )
     {
+	STRLEN len;
+
 	/* may get too much accuracy */ 
 	char tbuf[64];
 #ifdef USE_LOCALE_NUMERIC
-	char *loc = setlocale(LC_NUMERIC, "C");
+	char *loc = savepv(setlocale(LC_NUMERIC, NULL));
+	setlocale(LC_NUMERIC, "C");
 #endif
-	STRLEN len = my_snprintf(tbuf, sizeof(tbuf), "%.9"NVff, SvNVX(ver));
+	len = my_snprintf(tbuf, sizeof(tbuf), "%.9"NVff, SvNVX(ver));
 #ifdef USE_LOCALE_NUMERIC
 	setlocale(LC_NUMERIC, loc);
+	Safefree(loc);
 #endif
 	while (tbuf[len-1] == '0' && len > 0) len--;
 	if ( tbuf[len-1] == '.' ) len--; /* eat the trailing decimal */
@@ -6429,7 +6434,7 @@ Perl_xs_version_bootcheck(pTHX_ U32 items, U32 ax, const char *xs_p,
     }
     if (sv) {
 	SV *xssv = Perl_newSVpvn_flags(aTHX_ xs_p, xs_len, SVs_TEMP);
-	SV *pmsv = sv_derived_from(sv, "version")
+	SV *pmsv = sv_isobject(sv) && sv_derived_from(sv, "version")
 	    ? sv : sv_2mortal(new_version(sv));
 	xssv = upg_version(xssv, 0);
 	if ( vcmp(pmsv,xssv) ) {
