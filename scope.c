@@ -594,8 +594,10 @@ Perl_save_hints(pTHX)
     dVAR;
     COPHH *save_cophh = cophh_copy(CopHINTHASH_get(&PL_compiling));
     if (PL_hints & HINT_LOCALIZE_HH) {
-	save_pushptri32ptr(GvHV(PL_hintgv), PL_hints, save_cophh, SAVEt_HINTS);
-	GvHV(PL_hintgv) = hv_copy_hints_hv(GvHV(PL_hintgv));
+	HV *oldhh = GvHV(PL_hintgv);
+	save_pushptri32ptr(oldhh, PL_hints, save_cophh, SAVEt_HINTS);
+	GvHV(PL_hintgv) = NULL; /* in case copying dies */
+	GvHV(PL_hintgv) = hv_copy_hints_hv(oldhh);
     } else {
 	save_pushi32ptr(PL_hints, save_cophh, SAVEt_HINTS);
     }
@@ -712,7 +714,7 @@ Perl_leave_scope(pTHX_ I32 base)
     bool was = PL_tainted;
 
     if (base < -1)
-	Perl_croak(aTHX_ "panic: corrupt saved stack index");
+	Perl_croak(aTHX_ "panic: corrupt saved stack index %ld", (long) base);
     DEBUG_l(Perl_deb(aTHX_ "savestack: releasing items %ld -> %ld\n",
 			(long)PL_savestack_ix, (long)base));
     while (PL_savestack_ix > base) {
@@ -1158,7 +1160,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	    parser_free((yy_parser *) ptr);
 	    break;
 	default:
-	    Perl_croak(aTHX_ "panic: leave_scope inconsistency");
+	    Perl_croak(aTHX_ "panic: leave_scope inconsistency %u", type);
 	}
     }
 
