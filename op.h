@@ -295,6 +295,7 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpFT_ACCESS		2	/* use filetest 'access' */
 #define OPpFT_STACKED		4	/* stacked filetest, as "-f" in "-f -x $f" */
 #define OPpFT_STACKING		8	/* stacking filetest, as "-x" in "-f -x $f" */
+#define OPpFT_AFTER_t		16	/* previous op was -t */
 
 /* Private for OP_(MAP|GREP)(WHILE|START) */
 #define OPpGREP_LEX		2	/* iterate over lexical $_ */
@@ -997,6 +998,22 @@ struct token {
  * _       whitespace/comments preceding anything else
  * ~       =~ operator
  */
+
+/*
+=head1 Hook manipulation
+*/
+
+#ifdef USE_ITHREADS
+#  define OP_CHECK_MUTEX_INIT		MUTEX_INIT(&PL_check_mutex)
+#  define OP_CHECK_MUTEX_LOCK		MUTEX_LOCK(&PL_check_mutex)
+#  define OP_CHECK_MUTEX_UNLOCK		MUTEX_UNLOCK(&PL_check_mutex)
+#  define OP_CHECK_MUTEX_TERM		MUTEX_DESTROY(&PL_check_mutex)
+#else
+#  define OP_CHECK_MUTEX_INIT		NOOP
+#  define OP_CHECK_MUTEX_LOCK		NOOP
+#  define OP_CHECK_MUTEX_UNLOCK		NOOP
+#  define OP_CHECK_MUTEX_TERM		NOOP
+#endif
 
 /*
  * Local variables:

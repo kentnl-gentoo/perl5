@@ -673,6 +673,11 @@ PP(pp_study)
 	RETPUSHNO;
     }
 
+    /* Make study a no-op. It's no longer useful and its existence
+       complicates matters elsewhere. This is a low-impact band-aid.
+       The relevant code will be neatly removed in a future release. */
+    RETPUSHYES;
+
     if (len < 0xFF) {
 	quanta = 1;
     } else if (len < 0xFFFF) {
@@ -4083,26 +4088,51 @@ PP(pp_quotemeta)
 	d = SvPVX(TARG);
 	if (DO_UTF8(sv)) {
 	    while (len) {
-		if (UTF8_IS_CONTINUED(*s)) {
-		    STRLEN ulen = UTF8SKIP(s);
-		    if (ulen > len)
-			ulen = len;
-		    len -= ulen;
-		    while (ulen--)
-			*d++ = *s++;
+		STRLEN ulen = UTF8SKIP(s);
+		bool to_quote = FALSE;
+
+		if (UTF8_IS_INVARIANT(*s)) {
+		    if (_isQUOTEMETA(*s)) {
+			to_quote = TRUE;
+		    }
 		}
-		else {
-		    if (!isALNUM(*s))
-			*d++ = '\\';
+		else if (UTF8_IS_DOWNGRADEABLE_START(*s)) {
+
+		    /* In locale, we quote all non-ASCII Latin1 chars.
+		     * Otherwise use the quoting rules */
+		    if (IN_LOCALE_RUNTIME
+			|| _isQUOTEMETA(TWO_BYTE_UTF8_TO_UNI(*s, *(s + 1))))
+		    {
+			to_quote = TRUE;
+		    }
+		}
+		else if (_is_utf8_quotemeta((U8 *) s)) {
+		    to_quote = TRUE;
+		}
+
+		if (to_quote) {
+		    *d++ = '\\';
+		}
+		if (ulen > len)
+		    ulen = len;
+		len -= ulen;
+		while (ulen--)
 		    *d++ = *s++;
-		    len--;
-		}
 	    }
 	    SvUTF8_on(TARG);
 	}
-	else {
+	else if (IN_UNI_8_BIT) {
 	    while (len--) {
-		if (!isALNUM(*s))
+		if (_isQUOTEMETA(*s))
+		    *d++ = '\\';
+		*d++ = *s++;
+	    }
+	}
+	else {
+	    /* For non UNI_8_BIT (and hence in locale) just quote all \W
+	     * including everything above ASCII */
+	    while (len--) {
+		if (!isWORDCHAR_A(*s))
 		    *d++ = '\\';
 		*d++ = *s++;
 	    }
@@ -4114,6 +4144,159 @@ PP(pp_quotemeta)
     else
 	sv_setpvn(TARG, s, len);
     SETTARG;
+    RETURN;
+}
+
+PP(pp_fc)
+{
+    dVAR;
+    dTARGET;
+    dSP;
+    SV *source = TOPs;
+    STRLEN len;
+    STRLEN min;
+    SV *dest;
+    const U8 *s;
+    const U8 *send;
+    U8 *d;
+    U8 tmpbuf[UTF8_MAXBYTES * UTF8_MAX_FOLD_CHAR_EXPAND + 1];
+    const bool full_folding = TRUE;
+    const U8 flags = ( full_folding      ? FOLD_FLAGS_FULL   : 0 )
+                   | ( IN_LOCALE_RUNTIME ? FOLD_FLAGS_LOCALE : 0 );
+
+    /* This is a facsimile of pp_lc, but with a thousand bugs thanks to me.
+     * You are welcome(?) -Hugmeir
+     */
+
+    SvGETMAGIC(source);
+
+    dest = TARG;
+
+    if (SvOK(source)) {
+        s = (const U8*)SvPV_nomg_const(source, len);
+    } else {
+        if (ckWARN(WARN_UNINITIALIZED))
+	    report_uninit(source);
+	s = (const U8*)"";
+	len = 0;
+    }
+
+    min = len + 1;
+
+    SvUPGRADE(dest, SVt_PV);
+    d = (U8*)SvGROW(dest, min);
+    (void)SvPOK_only(dest);
+
+    SETs(dest);
+
+    send = s + len;
+    if (DO_UTF8(source)) { /* UTF-8 flagged string. */
+        bool tainted = FALSE;
+        while (s < send) {
+            const STRLEN u = UTF8SKIP(s);
+            STRLEN ulen;
+
+            _to_utf8_fold_flags(s, tmpbuf, &ulen, flags, &tainted);
+
+            if (ulen > u && (SvLEN(dest) < (min += ulen - u))) {
+                const UV o = d - (U8*)SvPVX_const(dest);
+                SvGROW(dest, min);
+                d = (U8*)SvPVX(dest) + o;
+            }
+
+            Copy(tmpbuf, d, ulen, U8);
+            d += ulen;
+            s += u;
+        }
+        SvUTF8_on(dest);
+	if (tainted) {
+	    TAINT;
+	    SvTAINTED_on(dest);
+	}
+    } /* Unflagged string */
+    else if (len) {
+        /* For locale, bytes, and nothing, the behavior is supposed to be the
+         * same as lc().
+         */
+        if ( IN_LOCALE_RUNTIME ) { /* Under locale */
+            TAINT;
+            SvTAINTED_on(dest);
+            for (; s < send; d++, s++)
+                *d = toLOWER_LC(*s);
+        }
+        else if ( !IN_UNI_8_BIT ) { /* Under nothing, or bytes */
+            for (; s < send; d++, s++)
+                *d = toLOWER(*s);
+        }
+        else {
+            /* For ASCII and the Latin-1 range, there's only two troublesome folds,
+            * \x{DF} (\N{LATIN SMALL LETTER SHARP S}), which under full casefolding
+            * becomes 'ss', and \x{B5} (\N{MICRO SIGN}), which under any fold becomes
+            * \x{3BC} (\N{GREEK SMALL LETTER MU}) -- For the rest, the casefold is
+            * their lowercase.
+            */
+            for (; s < send; d++, s++) {
+                if (*s == MICRO_SIGN) {
+                    /* \N{MICRO SIGN}'s casefold is \N{GREEK SMALL LETTER MU}, which
+                    * is outside of the latin-1 range. There's a couple of ways to
+                    * deal with this -- khw discusses them in pp_lc/uc, so go there :)
+                    * What we do here is upgrade what we had already casefolded,
+                    * then enter an inner loop that appends the rest of the characters
+                    * as UTF-8.
+                    */
+                    len = d - (U8*)SvPVX_const(dest);
+                    SvCUR_set(dest, len);
+                    len = sv_utf8_upgrade_flags_grow(dest,
+                                                SV_GMAGIC|SV_FORCE_UTF8_UPGRADE,
+						/* The max expansion for latin1
+						 * chars is 1 byte becomes 2 */
+                                                (send -s) * 2 + 1);
+                    d = (U8*)SvPVX(dest) + len;
+
+                    CAT_UNI_TO_UTF8_TWO_BYTE(d, GREEK_SMALL_LETTER_MU);
+                    s++;
+                    for (; s < send; s++) {
+                        STRLEN ulen;
+                        UV fc = _to_uni_fold_flags(*s, tmpbuf, &ulen, flags);
+                        if UNI_IS_INVARIANT(fc) {
+                            if ( full_folding && *s == LATIN_SMALL_LETTER_SHARP_S) {
+                                *d++ = 's';
+                                *d++ = 's';
+                            }
+                            else
+                                *d++ = (U8)fc;
+                        }
+                        else {
+                            Copy(tmpbuf, d, ulen, U8);
+                            d += ulen;
+                        }
+                    }
+                    break;
+                }
+                else if (full_folding && *s == LATIN_SMALL_LETTER_SHARP_S) {
+                    /* Under full casefolding, LATIN SMALL LETTER SHARP S becomes "ss",
+                    * which may require growing the SV.
+                    */
+                    if (SvLEN(dest) < ++min) {
+                        const UV o = d - (U8*)SvPVX_const(dest);
+                        SvGROW(dest, min);
+                        d = (U8*)SvPVX(dest) + o;
+                     }
+                    *(d)++ = 's';
+                    *d = 's';
+                }
+                else { /* If it's not one of those two, the fold is their lower case */
+                    *d = toLOWER_LATIN1(*s);
+                }
+             }
+        }
+    }
+    *d = '\0';
+    SvCUR_set(dest, d - (U8*)SvPVX_const(dest));
+
+    if (SvTAINTED(source))
+	SvTAINT(dest);
+    SvSETMAGIC(dest);
     RETURN;
 }
 

@@ -11,9 +11,10 @@ package Module::Metadata;
 
 use strict;
 use vars qw($VERSION);
-$VERSION = '1.000007';
+$VERSION = '1.000009';
 $VERSION = eval $VERSION;
 
+use Carp qw/croak/;
 use File::Spec;
 use IO::File;
 use version 0.87;
@@ -160,6 +161,44 @@ sub new_from_module {
     return \%result;
   };
 
+  sub provides {
+    my $class = shift;
+
+    croak "provides() requires key/value pairs \n" if @_ % 2;
+    my %args = @_;
+
+    croak "provides() takes only one of 'dir' or 'files'\n"
+      if $args{dir} && $args{files};
+
+    croak "provides() requires a 'version' argument"
+      unless defined $args{version};
+
+    croak "provides() does not support version '$args{version}' metadata"
+        unless grep { $args{version} eq $_ } qw/1.4 2/;
+
+    $args{prefix} = 'lib' unless defined $args{prefix};
+
+    my $p;
+    if ( $args{dir} ) {
+      $p = $class->package_versions_from_directory($args{dir});
+    }
+    else {
+      croak "provides() requires 'files' to be an array reference\n"
+        unless ref $args{files} eq 'ARRAY';
+      $p = $class->package_versions_from_directory($args{files});
+    }
+
+    # Now, fix up files with prefix
+    if ( length $args{prefix} ) { # check in case disabled with q{}
+      $args{prefix} =~ s{/$}{};
+      for my $v ( values %$p ) {
+        $v->{file} = "$args{prefix}/$v->{file}";
+      }
+    }
+
+    return $p
+  }
+
   sub package_versions_from_directory {
     my ( $class, $dir, $files ) = @_;
 
@@ -195,7 +234,7 @@ sub new_from_module {
   
         if ( $package eq $prime_package ) {
           if ( exists( $prime{$package} ) ) {
-            die "Unexpected conflict in '$package'; multiple versions found.\n";
+            croak "Unexpected conflict in '$package'; multiple versions found.\n";
           } else {
             $prime{$package}{file} = $mapped_filename;
             $prime{$package}{version} = $version if defined( $version );
@@ -347,7 +386,7 @@ sub _init {
 # class method
 sub _do_find_module {
   my $class   = shift;
-  my $module  = shift || die 'find_module_by_name() requires a package name';
+  my $module  = shift || croak 'find_module_by_name() requires a package name';
   my $dirs    = shift || \@INC;
 
   my $file = File::Spec->catfile(split( /::/, $module));
@@ -397,7 +436,7 @@ sub _parse_file {
 
   my $filename = $self->{filename};
   my $fh = IO::File->new( $filename )
-    or die( "Can't open '$filename': $!" );
+    or croak( "Can't open '$filename': $!" );
 
   $self->_parse_fh($fh);
 }
@@ -554,15 +593,15 @@ sub _evaluate_version_line {
   warn "Error evaling version line '$eval' in $self->{filename}: $@\n"
     if $@;
   (ref($vsub) eq 'CODE') or
-    die "failed to build version sub for $self->{filename}";
+    croak "failed to build version sub for $self->{filename}";
   my $result = eval { $vsub->() };
-  die "Could not get version from $self->{filename} by executing:\n$eval\n\nThe fatal error was: $@\n"
+  croak "Could not get version from $self->{filename} by executing:\n$eval\n\nThe fatal error was: $@\n"
     if $@;
 
   # Upgrade it into a version object
   my $version = eval { _dwim_version($result) };
 
-  die "Version '$result' from $self->{filename} does not appear to be valid:\n$eval\n\nThe fatal error was: $@\n"
+  croak "Version '$result' from $self->{filename} does not appear to be valid:\n$eval\n\nThe fatal error was: $@\n"
     unless defined $version; # "0" is OK!
 
   return $version;
@@ -620,7 +659,7 @@ sub _evaluate_version_line {
       last if defined $version;
     }
 
-    die $error unless defined $version;
+    croak $error unless defined $version;
 
     return $version;
   }
@@ -673,9 +712,10 @@ Module::Metadata - Gather package and POD information from perl module files
   my $info = Module::Metadata->new_from_file( $file );
   my $version = $info->version;
 
-  # information about a directory full of .pm files
-  my $provides =
-    Module::Metadata->package_versions_from_directory('lib');
+  # CPAN META 'provides' field for .pm files in a directory
+  my $provides = Module::Metadata->provides(
+    dir => 'lib', version => 2
+  );
 
 =head1 DESCRIPTION
 
@@ -728,6 +768,55 @@ optional parameter, otherwise @INC is searched.
 
 Can be called as either an object or a class method.
 
+=item C<< provides( %options ) >>
+
+This is a convenience wrapper around C<package_versions_from_directory>
+to generate a CPAN META C<provides> data structure.  It takes key/value
+pairs.  Valid option keys include:
+
+=over
+
+=item version B<(required)>
+
+Specifies which version of the L<CPAN::Meta::Spec> should be used as
+the format of the C<provides> output.  Currently only '1.4' and '2'
+are supported (and their format is identical).  This may change in
+the future as the definition of C<provides> changes.
+
+The C<version> option is required.  If it is omitted or if
+an unsupported version is given, then C<provides> will throw an error.
+
+=item dir
+
+Directory to search recursively for F<.pm> files.  May not be specified with
+C<files>.
+
+=item files
+
+Array reference of files to examine.  May not be specified with C<dir>.
+
+=item prefix
+
+String to prepend to the C<file> field of the resulting output. This defaults
+to F<lib>, which is the common case for most CPAN distributions with their
+F<.pm> files in F<lib>.  This option ensures the META information has the
+correct relative path even when the C<dir> or C<files> arguments are
+absolute or have relative paths from a location other than the distribution
+root.
+
+=back
+
+For example, given C<dir> of 'lib' and C<prefix> of 'lib', the return value
+is a hashref of the form:
+
+  {
+    'Package::Name' => {
+      version => '0.123',
+      file => 'lib/Package/Name.pm'
+    },
+    'OtherPackage::Name' => ...
+  }
+
 =item C<< package_versions_from_directory($dir, \@files?) >>
 
 Scans C<$dir> for .pm files (unless C<@files> is given, in which case looks
@@ -741,6 +830,14 @@ returning a hashref of the form:
     },
     'OtherPackage::Name' => ...
   }
+
+The C<DB> and C<main> packages are always omitted, as are any "private"
+packages that have leading underscores in the namespace (e.g.
+C<Foo::_private>)
+
+Note that the file path is relative to C<$dir> if that is specified.
+This B<must not> be used directly for CPAN META C<provides>.  See
+the C<provides> method instead.
 
 =item C<< log_info (internal) >>
 
@@ -773,7 +870,10 @@ Returns the absolute path to the file.
 
 =item C<< packages_inside() >>
 
-Returns a list of packages.
+Returns a list of packages. Note: this is a raw list of packages
+discovered (or assumed, in the case of C<main>).  It is not
+filtered for C<DB>, C<main> or private packages the way the
+C<provides> method does.
 
 =item C<< pod_inside() >>
 

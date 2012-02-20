@@ -1763,7 +1763,7 @@ asctime(sec, min, hour, mday, mon, year, wday = 0, yday = 0, isdst = -1)
 	{
 	    dXSTARG;
 	    struct tm mytm;
-	    init_tm(&mytm);	/* XXX workaround - see init_tm() above */
+	    init_tm(&mytm);	/* XXX workaround - see init_tm() in core util.c */
 	    mytm.tm_sec = sec;
 	    mytm.tm_min = min;
 	    mytm.tm_hour = hour;
@@ -1907,24 +1907,10 @@ sleep(seconds)
 SysRet
 setgid(gid)
 	Gid_t		gid
-    CLEANUP:
-#ifndef WIN32
-	if (RETVAL >= 0) {
-	    PL_gid  = getgid();
-	    PL_egid = getegid();
-	}
-#endif
 
 SysRet
 setuid(uid)
 	Uid_t		uid
-    CLEANUP:
-#ifndef WIN32
-	if (RETVAL >= 0) {
-	    PL_uid  = getuid();
-	    PL_euid = geteuid();
-	}
-#endif
 
 SysRetLong
 sysconf(name)

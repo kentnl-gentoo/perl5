@@ -1292,14 +1292,15 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
 	report_evil_fh(gv);
 	return -1;
     }
-    else if (PL_op->op_private & OPpFT_STACKED) {
-	return PL_laststatval;
-    }
     else {
-	SV* const sv = POPs;
+      SV* const sv = PL_op->op_private & OPpFT_STACKING ? TOPs : POPs;
+      PUTBACK;
+      if ((PL_op->op_private & (OPpFT_STACKED|OPpFT_AFTER_t))
+	     == OPpFT_STACKED)
+	return PL_laststatval;
+      else {
 	const char *s;
 	STRLEN len;
-	PUTBACK;
 	if ((gv = MAYBE_DEREF_GV_flags(sv,flags))) {
 	    goto do_fstat;
 	}
@@ -1318,6 +1319,7 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
 	if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(s, '\n'))
 	    Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "stat");
 	return PL_laststatval;
+      }
     }
 }
 
@@ -1345,7 +1347,10 @@ Perl_my_lstat_flags(pTHX_ const U32 flags)
 	}
 	return -1;
     }
-    else if (PL_op->op_private & OPpFT_STACKED) {
+    sv = PL_op->op_private & OPpFT_STACKING ? TOPs : POPs;
+    PUTBACK;
+    if ((PL_op->op_private & (OPpFT_STACKED|OPpFT_AFTER_t))
+	     == OPpFT_STACKED) {
       if (PL_laststype != OP_LSTAT)
 	Perl_croak(aTHX_ no_prev_lstat);
       return PL_laststatval;
@@ -1353,8 +1358,6 @@ Perl_my_lstat_flags(pTHX_ const U32 flags)
 
     PL_laststype = OP_LSTAT;
     PL_statgv = NULL;
-    sv = POPs;
-    PUTBACK;
     file = SvPV_flags_const_nolen(sv, flags);
     sv_setpv(PL_statname,file);
     PL_laststatval = PerlLIO_lstat(file,&PL_statcache);
@@ -1768,7 +1771,7 @@ nothing in the core.
 	while (++mark <= sp) {
 	    s = SvPV_nolen_const(*mark);
 	    APPLY_TAINT_PROPER();
-	    if (PL_euid || PL_unsafe) {
+	    if (PerlProc_geteuid() || PL_unsafe) {
 		if (UNLINK(s))
 		    tot--;
 	    }
@@ -1906,7 +1909,7 @@ Perl_cando(pTHX_ Mode_t mode, bool effective, register const Stat_t *statbufp)
 # ifdef __CYGWIN__
     if (ingroup(544,effective)) {     /* member of Administrators */
 # else
-    if ((effective ? PL_euid : PL_uid) == 0) {	/* root is special */
+    if ((effective ? PerlProc_geteuid() : PerlProc_getuid()) == 0) {	/* root is special */
 # endif
 	if (mode == S_IXUSR) {
 	    if (statbufp->st_mode & 0111 || S_ISDIR(statbufp->st_mode))
@@ -1916,7 +1919,7 @@ Perl_cando(pTHX_ Mode_t mode, bool effective, register const Stat_t *statbufp)
 	    return TRUE;		/* root reads and writes anything */
 	return FALSE;
     }
-    if (statbufp->st_uid == (effective ? PL_euid : PL_uid) ) {
+    if (statbufp->st_uid == (effective ? PerlProc_geteuid() : PerlProc_getuid()) ) {
 	if (statbufp->st_mode & mode)
 	    return TRUE;	/* ok as "user" */
     }
@@ -1935,7 +1938,7 @@ static bool
 S_ingroup(pTHX_ Gid_t testgid, bool effective)
 {
     dVAR;
-    if (testgid == (effective ? PL_egid : PL_gid))
+    if (testgid == (effective ? PerlProc_getegid() : PerlProc_getgid()))
 	return TRUE;
 #ifdef HAS_GETGROUPS
     {

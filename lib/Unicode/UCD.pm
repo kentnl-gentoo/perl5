@@ -6,7 +6,7 @@ no warnings 'surrogate';    # surrogates can be inputs to this
 use charnames ();
 use Unicode::Normalize qw(getCombinClass NFD);
 
-our $VERSION = '0.39';
+our $VERSION = '0.41';
 
 use Storable qw(dclone);
 
@@ -106,6 +106,7 @@ you want a code point to be interpreted as a hexadecimal number, you must
 prefix it with either C<0x> or C<U+>, because a string like e.g. C<123> will be
 interpreted as a decimal code point.  Note that the largest code point in
 Unicode is U+10FFFF.
+
 =cut
 
 my $BLOCKSFH;
@@ -303,30 +304,6 @@ my %SIMPLE_TITLE;
 my %SIMPLE_UPPER;
 my %UNICODE_1_NAMES;
 
-sub _charinfo_case {
-
-    # Returns the value to set into one of the case fields in the charinfo
-    # structure.
-    #   $char is the character,
-    #   $cased is the case-changed character
-    #   $file is the file in lib/unicore/To/$file that contains the data
-    #       needed for this, in the form that _search() understands.
-    #   $hash_ref points to the hash holding the contents of $file.  It will
-    #       be populated if empty.
-    # By using the 'uc', etc. functions, we avoid loading more files into
-    # memory except for those rare cases where the simple casing (which has
-    # been what charinfo() has always returned, is different than the full
-    # casing.
-    my ($char, $cased, $file, $hash_ref) = @_;
-
-    return "" if $cased eq $char;
-
-    return sprintf("%04X", ord $cased) if length($cased) == 1;
-
-    %$hash_ref =_read_table("unicore/To/$file", 'use_hash') unless %$hash_ref;
-    return $hash_ref->{ord $char} // "";
-}
-
 sub charinfo {
 
     # This function has traditionally mimicked what is in UnicodeData.txt,
@@ -348,7 +325,7 @@ sub charinfo {
     my %prop;
     my $char = chr($code);
 
-    @CATEGORIES =_read_table("unicore/To/Gc.pl") unless @CATEGORIES;
+    @CATEGORIES =_read_table("To/Gc.pl") unless @CATEGORIES;
     $prop{'category'} = _search(\@CATEGORIES, 0, $#CATEGORIES, $code)
                         // $utf8::SwashInfo{'ToGc'}{'missing'};
 
@@ -360,7 +337,7 @@ sub charinfo {
 
     $prop{'combining'} = getCombinClass($code);
 
-    @BIDIS =_read_table("unicore/To/Bc.pl") unless @BIDIS;
+    @BIDIS =_read_table("To/Bc.pl") unless @BIDIS;
     $prop{'bidi'} = _search(\@BIDIS, 0, $#BIDIS, $code)
                     // $utf8::SwashInfo{'ToBc'}{'missing'};
 
@@ -383,7 +360,7 @@ sub charinfo {
                                            unpack "U*", NFD($char);
     }
     else {
-        @DECOMPOSITIONS = _read_table("unicore/Decomposition.pl")
+        @DECOMPOSITIONS = _read_table("Decomposition.pl")
                           unless @DECOMPOSITIONS;
         $prop{'decomposition'} = _search(\@DECOMPOSITIONS, 0, $#DECOMPOSITIONS,
                                                                 $code) // "";
@@ -405,8 +382,7 @@ sub charinfo {
             # e.g., TAMIL NUMBER TEN.
             $prop{'decimal'} = "";
 
-            @NUMERIC_TYPES =_read_table("unicore/To/Nt.pl")
-                                unless @NUMERIC_TYPES;
+            @NUMERIC_TYPES =_read_table("To/Nt.pl") unless @NUMERIC_TYPES;
             if ((_search(\@NUMERIC_TYPES, 0, $#NUMERIC_TYPES, $code) // "")
                 eq 'Digit')
             {
@@ -421,17 +397,27 @@ sub charinfo {
 
     $prop{'mirrored'} = ($char =~ /\p{Bidi_Mirrored}/) ? 'Y' : 'N';
 
-    %UNICODE_1_NAMES =_read_table("unicore/To/Na1.pl", "use_hash") unless %UNICODE_1_NAMES;
+    %UNICODE_1_NAMES =_read_table("To/Na1.pl", "use_hash") unless %UNICODE_1_NAMES;
     $prop{'unicode10'} = $UNICODE_1_NAMES{$code} // "";
 
     # This is true starting in 6.0, but, num() also requires 6.0, so
     # don't need to test for version again here.
     $prop{'comment'} = "";
 
-    $prop{'upper'} = _charinfo_case($char, uc $char, '_suc.pl', \%SIMPLE_UPPER);
-    $prop{'lower'} = _charinfo_case($char, lc $char, '_slc.pl', \%SIMPLE_LOWER);
-    $prop{'title'} = _charinfo_case($char, ucfirst $char, '_stc.pl',
-                                                                \%SIMPLE_TITLE);
+    %SIMPLE_UPPER = _read_table("To/Uc.pl", "use_hash") unless %SIMPLE_UPPER;
+    $prop{'upper'} = (defined $SIMPLE_UPPER{$code})
+                     ? sprintf("%04X", $SIMPLE_UPPER{$code})
+                     : "";
+
+    %SIMPLE_LOWER = _read_table("To/Lc.pl", "use_hash") unless %SIMPLE_LOWER;
+    $prop{'lower'} = (defined $SIMPLE_LOWER{$code})
+                     ? sprintf("%04X", $SIMPLE_LOWER{$code})
+                     : "";
+
+    %SIMPLE_TITLE = _read_table("To/Tc.pl", "use_hash") unless %SIMPLE_TITLE;
+    $prop{'title'} = (defined $SIMPLE_TITLE{$code})
+                     ? sprintf("%04X", $SIMPLE_TITLE{$code})
+                     : "";
 
     $prop{block}  = charblock($code);
     $prop{script} = charscript($code);
@@ -489,8 +475,17 @@ sub _read_table ($;$) {
     my @return;
     my %return;
     local $_;
+    my $list = do "unicore/$table";
 
-    for (split /^/m, do $table) {
+    # Look up if this property requires adjustments, which we do below if it
+    # does.
+    require "unicore/Heavy.pl";
+    my $property = $table =~ s/\.pl//r;
+    $property = $utf8::file_to_swash_name{$property};
+    my $to_adjust = defined $property
+                    && $utf8::SwashInfo{$property}{'format'} eq 'a';
+
+    for (split /^/m, $list) {
         my ($start, $end, $value) = / ^ (.+?) \t (.*?) \t (.+?)
                                         \s* ( \# .* )?  # Optional comment
                                         $ /x;
@@ -498,11 +493,14 @@ sub _read_table ($;$) {
         my $decimal_end = ($end eq "") ? $decimal_start : hex $end;
         if ($return_hash) {
             foreach my $i ($decimal_start .. $decimal_end) {
-                $return{$i} = $value;
+                $return{$i} = ($to_adjust)
+                              ? $value + $i - $decimal_start
+                              : $value;
             }
         }
-        elsif (@return &&
-               $return[-1][1] == $decimal_start - 1
+        elsif (! $to_adjust
+               && @return
+               && $return[-1][1] == $decimal_start - 1
                && $return[-1][2] eq $value)
         {
             # If this is merely extending the previous range, do just that.
@@ -626,7 +624,7 @@ my @SCRIPTS;
 my %SCRIPTS;
 
 sub _charscripts {
-    @SCRIPTS =_read_table("unicore/To/Sc.pl") unless @SCRIPTS;
+    @SCRIPTS =_read_table("To/Sc.pl") unless @SCRIPTS;
     foreach my $entry (@SCRIPTS) {
         $entry->[2] =~ s/(_\w)/\L$1/g;  # Preserve old-style casing
         push @{$SCRIPTS{$entry->[2]}}, $entry;
@@ -1316,7 +1314,7 @@ sub _numeric {
     if ((pack "C*", split /\./, UnicodeVersion()) lt 6.0.0) {
 	croak __PACKAGE__, "::num requires Unicode 6.0 or greater"
     }
-    my @numbers = _read_table("unicore/To/Nv.pl");
+    my @numbers = _read_table("To/Nv.pl");
     foreach my $entry (@numbers) {
         my ($start, $end, $value) = @$entry;
 
@@ -1326,10 +1324,17 @@ sub _numeric {
             my $real = $rational[0] / $rational[1];
             $real_to_rational{$real} = $value;
             $value = $real;
-        }
 
-        for my $i ($start .. $end) {
-            $NUMERIC{$i} = $value;
+            # Should only be single element, but just in case...
+            for my $i ($start .. $end) {
+                $NUMERIC{$i} = $value;
+            }
+        }
+        else {
+            # The values require adjusting, as is in 'a' format
+            for my $i ($start .. $end) {
+                $NUMERIC{$i} = $value + $i - $start;
+            }
         }
     }
 
@@ -2189,7 +2194,7 @@ The first line (with Index [0]) means that the value for code point 0 is "Basic
 Latin".  The entry "0x0080" in the @blocks_ranges column in the second line
 means that the value from the first line, "Basic Latin", extends to all code
 points in the range from 0 up to but not including 0x0080, that is, through
-255.  In other words, the code points from 0 to 255 are all in the "Basic
+127.  In other words, the code points from 0 to 127 are all in the "Basic
 Latin" block.  Similarly, all code points in the range from 0x0080 up to (but
 not including) 0x0100 are in the block named "Latin-1 Supplement", etc.
 (Notice that the return is the old-style block names; see L</Old-style versus
@@ -2223,19 +2228,19 @@ There are exceptions to the simple scalar maps.  Some properties have some
 elements in their map list that are themselves lists of scalars; and some
 special strings are returned that are not to be interpreted as-is.  Element
 [2] (placed into C<$format> in the example above) of the returned four element
-list tells you if the map has any of these special elements, as follows:
+list tells you if the map has any of these special elements or not, as follows:
 
 =over
 
-=item C<s>
+=item B<C<s>>
 
 means all the elements of the map array are simple scalars, with no special
 elements.  Almost all properties are like this, like the C<block> example
 above.
 
-=item C<sl>
+=item B<C<sl>>
 
-means that some of the map array elements have the form given by C<s>, and
+means that some of the map array elements have the form given by C<"s">, and
 the rest are lists of scalars.  For example, here is a portion of the output
 of calling C<prop_invmap>() with the "Script Extensions" property:
 
@@ -2246,70 +2251,67 @@ of calling C<prop_invmap>() with the "Script Extensions" property:
       0x0966      Devanagari
       0x0970      Common
 
-Here, the code points 0x964 and 0x965 are used in the Bengali,
-Devanagari, Gurmukhi, and Oriya  scripts.
+Here, the code points 0x964 and 0x965 are both used in Bengali,
+Devanagari, Gurmukhi, and Oriya, but no other scripts.
 
-The Name_Alias property is of this form.  But each scalar consists of two
+The Name_Alias property is also of this form.  But each scalar consists of two
 components:  1) the name, and 2) the type of alias this is.  They are
-separated by a colon and a space.  In Unicode 6.0, there are two alias types:
-C<"correction">, which indicates that the name is a corrected form for the
-original name (which remains valid) for the same code point; and C<"control">,
-which adds a new name for a control character.
+separated by a colon and a space.  In Unicode 6.1, there are several alias types:
+
+=over
+
+=item C<correction>
+
+indicates that the name is a corrected form for the
+original name (which remains valid) for the same code point.
+
+=item C<control>
+
+adds a new name for a control character.
+
+=item C<alternate>
+
+is an alternate name for a character
+
+=item C<figment>
+
+is a name for a character that has been documented but was never in any
+actual standard.
+
+=item C<abbreviation>
+
+is a common abbreviation for a character
+
+=back
+
+The lists are ordered (roughly) so the most preferred names come before less
+preferred ones.
 
 For example,
 
- @aliases_ranges  @alias_maps
+ @aliases_ranges        @alias_maps
     ...
-    0x01A2        LATIN CAPITAL LETTER GHA: correction
-    0x01A3        LATIN SMALL LETTER GHA: correction
+    0x009E        [ 'PRIVACY MESSAGE: control', 'PM: abbreviation' ]
+    0x009F        [ 'APPLICATION PROGRAM COMMAND: control',
+                    'APC: abbreviation'
+                  ]
+    0x00A0        'NBSP: abbreviation'
+    0x00A1        ""
+    0x00AD        'SHY: abbreviation'
+    0x00AE        ""
+    0x01A2        'LATIN CAPITAL LETTER GHA: correction'
+    0x01A3        'LATIN SMALL LETTER GHA: correction'
+    0x01A4        ""
+    ...
 
-Unicode 6.1 will introduce other types, and some map entries will be lists of
-multiple name-alias pairs for a single code point.
+A map to the empty string means that there is no alias defined for the code
+point.
 
-=item C<r>
+=item B<C<a>>
 
-means that all the elements of the map array are either rational numbers or
-the string C<"NaN">, meaning "Not a Number".  A rational number is either an
-integer, or two integers separated by a solidus (C<"/">).  The second integer
-represents the denominator of the division implied by the solidus, and is
-guaranteed not to be 0.  If you want to convert them to scalar numbers, you
-can use something like this:
-
- my ($invlist_ref, $invmap_ref, $format) = prop_invmap($property);
- if ($format && $format eq "r") {
-     map { $_ = eval $_ } @$invmap_ref;
- }
-
-Here's some entries from the output of the property "Nv", which has format
-C<"r">.
-
- @numerics_ranges  @numerics_maps        Note
-        0x00             "NaN"
-        0x30             0              DIGIT 0
-        0x31             1
-        0x32             2
-        ...
-        0x37             7
-        0x38             8
-        0x39             9              DIGIT 9
-        0x3A             "NaN"
-        0xB2             2              SUPERSCRIPT 2
-        0xB3             3              SUPERSCRIPT 2
-        0xB4             "NaN"
-        0xB9             1              SUPERSCRIPT 1
-        0xBA             "NaN"
-        0xBC             1/4            VULGAR FRACTION 1/4
-        0xBD             1/2            VULGAR FRACTION 1/2
-        0xBE             3/4            VULGAR FRACTION 3/4
-        0xBF             "NaN"
-        0x660            0              ARABIC-INDIC DIGIT ZERO
-
-=item C<c>
-
-is like C<s> in that all the map array elements are scalars, but some of them
-are the special string S<C<"E<lt>code pointE<gt>">>, meaning that the map of
-each code point in the corresponding range in the inversion list is the code
-point itself.  For example, in:
+is like C<"s"> in that all the map array elements are scalars, but here they are
+restricted to all being integers, and some have to be adjusted (hence the name
+C<"a">) to get the correct result.  For example, in:
 
  my ($uppers_ranges_ref, $uppers_maps_ref, $format)
                           = prop_invmap("Simple_Uppercase_Mapping");
@@ -2317,28 +2319,33 @@ point itself.  For example, in:
 the returned arrays look like this:
 
  @$uppers_ranges_ref    @$uppers_maps_ref   Note
-       0                 "<code point>"
-      97                     65          'a' maps to 'A'
-      98                     66          'b' => 'B'
-      99                     67          'c' => 'C'
-      ...
-     120                     88          'x' => 'X'
-     121                     89          'y' => 'Y'
-     122                     90          'z' => 'Z'
-     123                "<code point>"
+       0                      0
+      97                     65          'a' maps to 'A', b => B ...
+     123                      0
      181                    924          MICRO SIGN => Greek Cap MU
-     182                "<code point>"
+     182                      0
      ...
 
-The first line means that the uppercase of code point 0 is 0;
-the uppercase of code point 1 is 1; ...  of code point 96 is 96.  Without the
-C<"E<lt>code_pointE<gt>"> notation, every code point would have to have an
-entry.  This would mean that the arrays would each have more than a million
-entries to list just the legal Unicode code points!
+Let's start with the second line.  It says that the uppercase of code point 97
+is 65; or C<uc("a")> == "A".  But the line is for the entire range of code
+points 97 through 122.  To get the mapping for any code point in a range, you
+take the offset it has from the beginning code point of the range, and add
+that to the mapping for that first code point.  So, the mapping for 122 ("z")
+is derived by taking the offset of 122 from 97 (=25) and adding that to 65,
+yielding 90 ("z").  Likewise for everything in between.
 
-=item C<cl>
+The first line works the same way.  The first map in a range is always the
+correct value for its code point (because the adjustment is 0).  Thus the
+C<uc(chr(0))> is just itself.  Also, C<uc(chr(1))> is also itself, as the
+adjustment is 0+1-0 .. C<uc(chr(96))> is 96.
 
-means that some of the map array elements have the form given by C<c>, and
+Requiring this simple adjustment allows the returned arrays to be
+significantly smaller than otherwise, up to a factor of 10, speeding up
+searching through them.
+
+=item B<C<al>>
+
+means that some of the map array elements have the form given by C<"a">, and
 the rest are ordered lists of code points.
 For example, in:
 
@@ -2348,43 +2355,112 @@ For example, in:
 the returned arrays look like this:
 
  @$uppers_ranges_ref    @$uppers_maps_ref
-       0                 "<code point>"
+       0                      0
       97                     65
-     ...
-     122                     90
-     123                "<code point>"
+     123                      0
      181                    924
-     182                "<code point>"
+     182                      0
      ...
     0x0149              [ 0x02BC 0x004E ]
-    0x014A              "<code point>"
-    0x014B                 0x014A
+    0x014A                    0
+    0x014B                  330
      ...
 
 This is the full Uppercase_Mapping property (as opposed to the
-Simple_Uppercase_Mapping given in the example for format C<"c">).  The only
+Simple_Uppercase_Mapping given in the example for format C<"a">).  The only
 difference between the two in the ranges shown is that the code point at
 0x0149 (LATIN SMALL LETTER N PRECEDED BY APOSTROPHE) maps to a string of two
 characters, 0x02BC (MODIFIER LETTER APOSTROPHE) followed by 0x004E (LATIN
 CAPITAL LETTER N).
 
-=item C<cle>
+No adjustments are needed to entries that are references to arrays; each such
+entry will have exactly one element in its range, so the offset is always 0.
 
-means that some of the map array elements have the forms given by C<cl>, and
+=item B<C<ae>>
+
+This is like C<"a">, but some elements are the empty string, and should not be
+adjusted.
+The one internal Perl property accessible by C<prop_invmap> is of this type:
+"Perl_Decimal_Digit" returns an inversion map which gives the numeric values
+that are represented by the Unicode decimal digit characters.  Characters that
+don't represent decimal digits map to the empty string, like so:
+
+ @digits    @values
+ 0x0000       ""
+ 0x0030        0
+ 0x003A:      ""
+ 0x0660:       0
+ 0x066A:      ""
+ 0x06F0:       0
+ 0x06FA:      ""
+ 0x07C0:       0
+ 0x07CA:      ""
+ 0x0966:       0
+ ...
+
+This means that the code points from 0 to 0x2F do not represent decimal digits;
+the code point 0x30 (DIGIT ZERO) represents 0;  code point 0x31, (DIGIT ONE),
+represents 0+1-0 = 1; ... code point 0x39, (DIGIT NINE), represents 0+9-0 = 9;
+... code points 0x3A through 0x65F do not represent decimal digits; 0x660
+(ARABIC-INDIC DIGIT ZERO), represents 0; ... 0x07C1 (NKO DIGIT ONE),
+represents 0+1-0 = 1 ...
+
+=item B<C<ale>>
+
+is a combination of the C<"al"> type and the C<"ae"> type.  Some of
+the map array elements have the forms given by C<"al">, and
 the rest are the empty string.  The property C<NFKC_Casefold> has this form.
 An example slice is:
 
  @$ranges_ref  @$maps_ref         Note
     ...
-   0x00AA     0x0061              FEMININE ORDINAL INDICATOR => 'a'
-   0x00AB     <code point>
+   0x00AA       97                FEMININE ORDINAL INDICATOR => 'a'
+   0x00AB        0
    0x00AD                         SOFT HYPHEN => ""
-   0x00AE     <code point>
+   0x00AE        0
    0x00AF     [ 0x0020, 0x0304 ]  MACRON => SPACE . COMBINING MACRON
-   0x00B0     <code point>
+   0x00B0        0
    ...
 
-=item C<n>
+=item B<C<ar>>
+
+means that all the elements of the map array are either rational numbers or
+the string C<"NaN">, meaning "Not a Number".  A rational number is either an
+integer, or two integers separated by a solidus (C<"/">).  The second integer
+represents the denominator of the division implied by the solidus, and is
+guaranteed not to be 0.  When the element is a plain integer (without the
+solidus), it may need to be adjusted to get the correct value by adding the
+offset, just as other C<"a"> properties.  No adjustment is needed for
+fractions, as the range is guaranteed to have just a single element, and so
+the offset is always 0.
+
+If you want to convert the returned map to entirely scalar numbers, you
+can use something like this:
+
+ my ($invlist_ref, $invmap_ref, $format) = prop_invmap($property);
+ if ($format && $format eq "ar") {
+     map { $_ = eval $_ } @$invmap_ref;
+ }
+
+Here's some entries from the output of the property "Nv", which has format
+C<"ar">.
+
+ @numerics_ranges  @numerics_maps       Note
+        0x00           "NaN"
+        0x30             0           DIGIT 0 .. DIGIT 9
+        0x3A           "NaN"
+        0xB2             2           SUPERSCRIPTs 2 and 3
+        0xB4           "NaN"
+        0xB9             1           SUPERSCRIPT 1
+        0xBA           "NaN"
+        0xBC            1/4          VULGAR FRACTION 1/4
+        0xBD            1/2          VULGAR FRACTION 1/2
+        0xBE            3/4          VULGAR FRACTION 3/4
+        0xBF           "NaN"
+        0x660            0           ARABIC-INDIC DIGIT ZERO .. NINE
+        0x66A          "NaN"
+
+=item B<C<n>>
 
 means the Name property.  All the elements of the map array are simple
 scalars, but some of them contain special strings that require more work to
@@ -2396,8 +2472,8 @@ Entries such as:
 
 mean that the name for the code point is "CJK UNIFIED IDEOGRAPH-"
 with the code point (expressed in hexadecimal) appended to it, like "CJK
-UNIFIED IDEOGRAPH-3403" (similarly for C<CJK COMPATIBILITY IDEOGRAPH-E<lt>code
-pointE<gt>>).
+UNIFIED IDEOGRAPH-3403" (similarly for S<C<CJK COMPATIBILITY IDEOGRAPH-E<lt>code
+pointE<gt>>>).
 
 Also, entries like
 
@@ -2408,24 +2484,37 @@ the function L<charnames/charnames::viacode(code)>.
 
 Note that for control characters (C<Gc=cc>), Unicode's data files have the
 string "C<E<lt>controlE<gt>>", but the real name of each of these characters is the empty
-string.  This function returns that real name, the empty string.
+string.  This function returns that real name, the empty string.  (There are
+names for these characters, but they are considered aliases, not the Name
+property name, and are contained in the C<Name_Alias> property.)
 
-=item C<d>
+=item B<C<ad>>
 
-means the Decomposition_Mapping property.  This property is like C<cl>
-properties, except it has an additional entry type:
+means the Decomposition_Mapping property.  This property is like C<"al">
+properties, except that one of the scalar elements is of the form:
 
  <hangul syllable>
 
-for those code points whose decomposition is algorithmically calculated.  (The
-C<n> format has this same entry.)  These can be generated via the function
+This signifies that this entry should be replaced by the decompositions for
+all the code points whose decomposition is algorithmically calculated.  (All
+of them are currently in one range and likely to remain so; the C<"n"> format
+has this same entry.)  These can be generated via the function
 L<Unicode::Normalize::NFD()|Unicode::Normalize>.
-
 
 Note that the mapping is the one that is specified in the Unicode data files,
 and to get the final decomposition, it may need to be applied recursively.
 
 =back
+
+Note that a format begins with the letter "a" if and only the property it is
+for requires adjustments by adding the offsets in multi-element ranges.  For
+all these properties, an entry should be adjusted only if the map is a scalar
+which is an integer.  That is, it must match the regular expression:
+
+    / ^ -? \d+ $ /xa
+
+Further, the first element in a range never needs adjustment, as the
+adjustment would be just adding 0.
 
 A binary search can be used to quickly find a code point in the inversion
 list, and hence its corresponding mapping.
@@ -2440,7 +2529,7 @@ potentially make your data structure much smaller.  As you construct your data
 structure from the one returned by this function, simply ignore those ranges
 that map to this value, generally called the "default" value.  For example, to
 convert to the data structure searchable by L</charinrange()>, you can follow
-this recipe:
+this recipe (valid only for properties that don't require adjustments):
 
  my ($list_ref, $map_ref, $format, $missing) = prop_invmap($property);
  my @range_list;
@@ -2459,27 +2548,6 @@ With this, C<charinrange()> will return C<undef> if its input code point maps
 to C<$missing>.  You can avoid this by omitting the C<next> statement, and adding
 a line after the loop to handle the final element of the inversion map.
 
-One internal Perl property is accessible by this function.
-"Perl_Decimal_Digit" returns an inversion map in which all the Unicode decimal
-digits map to their numeric values, and everything else to the empty string,
-like so:
-
- @digits    @values
- 0x0000       ""
- 0x0030       0
- 0x0031       1
- 0x0032       2
- 0x0033       3
- 0x0034       4
- 0x0035       5
- 0x0036       6
- 0x0037       7
- 0x0038       8
- 0x0039       9
- 0x003A       ""
- 0x0660       0
- 0x0661       1
- ...
 
 Note that the inversion maps returned for the C<Case_Folding> and
 C<Simple_Case_Folding> properties do not include the Turkic-locale mappings.
@@ -2529,23 +2597,24 @@ sub prop_invmap ($) {
 
 RETRY:
 
+    # If there are multiple entries for a single code point
+    my $has_multiples = 0;
+
     # Try to get the map swash for the property.  They have 'To' prepended to
     # the property name, and 32 means we will accept 32 bit return values.
+    # The 0 means we aren't calling this from tr///.
     my $swash = utf8::SWASHNEW(__PACKAGE__, "To$prop", undef, 32, 0);
-
-    # If there are multiple entries for a single code point;
-    my $has_multiples = 0;
 
     # If didn't find it, could be because needs a proxy.  And if was the
     # 'Block' or 'Name' property, use a proxy even if did find it.  Finding it
-    # would be the result of the installation changing mktables to output the
-    # Block or Name tables.  The Block table gives block names in the
-    # new-style, and this routine is supposed to return old-style block names.
-    # The Name table is valid, but we need to execute the special code below
-    # to add in the algorithmic-defined name entries.
+    # in these cases would be the result of the installation changing mktables
+    # to output the Block or Name tables.  The Block table gives block names
+    # in the new-style, and this routine is supposed to return old-style block
+    # names.  The Name table is valid, but we need to execute the special code
+    # below to add in the algorithmic-defined name entries.
+    # And NFKCCF needs conversion, so handle that here too.
     if (ref $swash eq ""
-        || $swash->{'TYPE'} eq 'ToBlk'
-        || $swash->{'TYPE'} eq 'ToNa')
+        || $swash->{'TYPE'} =~ / ^ To (?: Blk | Na | NFKCCF ) $ /x)
     {
 
         # Get the short name of the input property, in standard form
@@ -2559,50 +2628,15 @@ RETRY:
             $prop = "age";
             goto RETRY;
         }
-        elsif ($second_try eq 'scf') {
+        elsif ($second_try =~ / ^ s ( cf | [ltu] c ) $ /x) {
 
-            # This property uses just the LIST part of cf which includes the
-            # simple folds that are otherwise overridden by the SPECIALS.  So
-            # all we need do is to not look at the SPECIALS; set $overrides to
-            # indicate that
+            # These properties use just the LIST part of the full mapping,
+            # which includes the simple maps that are otherwise overridden by
+            # the SPECIALS.  So all we need do is to not look at the SPECIALS;
+            # set $overrides to indicate that
             $overrides = -1;
-            $prop = "cf";
-            goto RETRY;
-        }
-        elsif ($second_try =~ / ^ s[ltu]c $ /x) {
 
-            # Because some applications may be reading the full mapping
-            # equivalent files directly, they haven't been changed to include
-            # the simple mappings as well, as was done with the cf file (which
-            # doesn't have those backward compatibility issues) in 5.14.
-            # Instead, separate internal-only files were created that
-            # contain just the simple mappings that get overridden by the
-            # SPECIALS.  Thus, these simple case mappings use the LIST part of
-            # their full mapping equivalents; plus the ones that are in those
-            # additional files.  These special files are used by other
-            # functions in this module, so use the same hashes that those
-            # functions use.
-            my $file;
-            if ($second_try eq "suc") {
-                $file = '_suc.pl';
-                $overrides = \%SIMPLE_UPPER;
-            }
-            elsif ($second_try eq "slc") {
-                $file = '_slc.pl';
-                $overrides = \%SIMPLE_LOWER;
-            }
-            else {
-                $file = '_stc.pl';
-                $overrides = \%SIMPLE_TITLE;
-            }
-
-            # The files are already handled by the _read_table() function.
-            # Don't read them in if already done.
-            %$overrides =_read_table("unicore/To/$file", 'use_hash')
-                                                            unless %$overrides;
-
-            # Convert to the full mapping name, and go handle that; e.g.,
-            # suc => uc.
+            # The full name is the simple name stripped of its initial 's'
             $prop = $second_try =~ s/^s//r;
             goto RETRY;
         }
@@ -2633,15 +2667,29 @@ RETRY:
             my %names;
             $names{'LIST'} = "";
             my $original = do "unicore/Name.pl";
-            my $previous_hex_code_point = "";
             my $algorithm_names = \@algorithmic_named_code_points;
 
-            # We hold off on adding the next entry to the list until we know,
-            # that the next line isn't for the same code point.  We only
-            # output the final line.  That one is the original Name property
-            # value.  The others are the Name_Alias corrections, which are
-            # listed first in the file.
-            my $staging = "";
+            # We need to remove the names from it that are aliases.  For that
+            # we need to also read in that table.  Create a hash with the keys
+            # being the code points, and the values being a list of the
+            # aliases for the code point key.
+            my ($aliases_code_points, $aliases_maps, undef, undef) =
+                                                &prop_invmap('Name_Alias');
+            my %aliases;
+            for (my $i = 0; $i < @$aliases_code_points; $i++) {
+                my $code_point = $aliases_code_points->[$i];
+                $aliases{$code_point} = $aliases_maps->[$i];
+
+                # If not already a list, make it into one, so that later we
+                # can treat things uniformly
+                if (! ref $aliases{$code_point}) {
+                    $aliases{$code_point} = [ $aliases{$code_point} ];
+                }
+
+                # Remove the alias type from the entry, retaining just the
+                # name.
+                map { s/:.*// } @{$aliases{$code_point}};
+            }
 
             my $i = 0;
             foreach my $line (split "\n", $original) {
@@ -2658,43 +2706,32 @@ RETRY:
                 next if $code_point <= 0x9F
                         && ($code_point <= 0x1F || $code_point >= 0x7F);
 
-                # Output the last iteration's result, but only output the
-                # final name if a code point has more than one.
-                $names{'LIST'} .= $staging
-                                if $hex_code_point ne $previous_hex_code_point;
+                # If this is a name_alias, it isn't a name
+                next if grep { $_ eq $name } @{$aliases{$code_point}};
 
                 # If we are beyond where one of the special lines needs to
                 # be inserted ...
-                if ($i < @$algorithm_names
+                while ($i < @$algorithm_names
                     && $code_point > $algorithm_names->[$i]->{'low'})
                 {
 
                     # ... then insert it, ahead of what we were about to
                     # output
-                    $staging = sprintf "%x\t%x\t%s\n",
+                    $names{'LIST'} .= sprintf "%x\t%x\t%s\n",
                                             $algorithm_names->[$i]->{'low'},
                                             $algorithm_names->[$i]->{'high'},
                                             $algorithm_names->[$i]->{'name'};
 
-                    # And pretend that what we last saw was the final code
-                    # point of the inserted range.
-                    $previous_hex_code_point = sprintf "%04X",
-                                            $algorithm_names->[$i]->{'high'};
-
                     # Done with this range.
                     $i++;
 
-                    # Except we actually need to output the inserted line.
-                    redo;
+                    # We loop until all special lines that precede the next
+                    # regular one are output.
                 }
 
-                # Normal name.
-                $staging = sprintf "%x\t\t%s\n", $code_point, $name;
-                $previous_hex_code_point = $hex_code_point;
-            }
-
-            # Add the name from the final iteration
-            $names{'LIST'} .= $staging;
+                # Here, is a normal name.
+                $names{'LIST'} .= sprintf "%x\t\t%s\n", $code_point, $name;
+            } # End of loop through all the names
 
             $names{'TYPE'} = "ToNa";
             $utf8::SwashInfo{ToNa}{'missing'} = "";
@@ -2712,15 +2749,7 @@ RETRY:
                 $decomps{'TYPE'} = "ToDt";
                 $utf8::SwashInfo{'ToDt'}{'missing'} = "None";
                 $utf8::SwashInfo{'ToDt'}{'format'} = "s";
-            }
-            else {
-                $decomps{'TYPE'} = "ToDm";
-                $utf8::SwashInfo{'ToDm'}{'missing'} = "<code point>";
-
-                # Use a special internal-to-this_routine format, 'dm', to
-                # distinguish from 'd', meaning decimal.
-                $utf8::SwashInfo{'ToDm'}{'format'} = "dm";
-            }
+            }   # 'dm' is handled below, with 'nfkccf'
 
             $decomps{'LIST'} = "";
 
@@ -2731,6 +2760,7 @@ RETRY:
                 my ($hex_lower, $hex_upper, $type_and_map) = split "\t", $line;
                 my $code_point = hex $hex_lower;
                 my $value;
+                my $redo = 0;
 
                 # The type, enclosed in <...>, precedes the mapping separated
                 # by blanks
@@ -2757,11 +2787,154 @@ RETRY:
 
                 # And append this to our constructed LIST.
                 $decomps{'LIST'} .= "$hex_lower\t$hex_upper\t$value\n";
+
+                redo if $redo;
             }
             $swash = \%decomps;
         }
-        else {  # Don't know this property. Fail.
+        elsif ($second_try ne 'nfkccf') { # Don't know this property. Fail.
             return;
+        }
+
+        if ($second_try eq 'nfkccf' || $second_try eq 'dm') {
+
+            # The 'nfkccf' property is stored in the old format for backwards
+            # compatibility for any applications that has read its file
+            # directly before prop_invmap() existed.
+            # And the code above has extracted the 'dm' property from its file
+            # yielding the same format.  So here we convert them to adjusted
+            # format for compatibility with the other properties similar to
+            # them.
+            my %revised_swash;
+
+            # We construct a new converted list.
+            my $list = "";
+
+            my @ranges = split "\n", $swash->{'LIST'};
+            for (my $i = 0; $i < @ranges; $i++) {
+                my ($hex_begin, $hex_end, $map) = split "\t", $ranges[$i];
+
+                # The dm property has maps that are space separated sequences
+                # of code points, as well as the special entry "<hangul
+                # syllable>, which also contains a blank.
+                my @map = split " ", $map;
+                if (@map > 1) {
+
+                    # If it's just the special entry, append as-is.
+                    if ($map eq '<hangul syllable>') {
+                        $list .= "$ranges[$i]\n";
+                    }
+                    else {
+
+                        # These should all single-element ranges.
+                        croak __PACKAGE__, "Not expecting a mapping with multiple code points in a multi-element range, $ranges[$i]" if $hex_end ne "";
+
+                        # Convert them to decimal, as that's what's expected.
+                        $list .= "$hex_begin\t\t"
+                            . join(" ", map { hex } @map)
+                            . "\n";
+                    }
+                    next;
+                }
+
+                # Here, the mapping doesn't have a blank, is for a single code
+                # point.
+                my $begin = hex $hex_begin;
+                my $end = (defined $hex_end && $hex_end ne "")
+                        ? hex $hex_end
+                        : $begin;
+
+                # Again, the output is to be in decimal.
+                my $decimal_map = hex $map;
+
+                # We know that multi-element ranges with the same mapping
+                # should not be adjusted, as after the adjustment
+                # multi-element ranges are for consecutive increasing code
+                # points.  Further, the final element in the list won't be
+                # adjusted, as there is nothing after it to include in the
+                # adjustment
+                if ($begin != $end || $i == @ranges -1) {
+
+                    # So just convert these to single-element ranges
+                    foreach my $code_point ($begin .. $end) {
+                        $list .= sprintf("%04X\t\t%d\n",
+                                        $code_point, $decimal_map);
+                    }
+                }
+                else {
+
+                    # Here, we have a candidate for adjusting.  What we do is
+                    # look through the subsequent adjacent elements in the
+                    # input.  If the map to the next one differs by 1 from the
+                    # one before, then we combine into a larger range with the
+                    # initial map.  Loop doing this until we find one that
+                    # can't be combined.
+
+                    my $offset = 0;     # How far away are we from the initial
+                                        # map
+                    my $squished = 0;   # ? Did we squish at least two
+                                        # elements together into one range
+                    for ( ; $i < @ranges; $i++) {
+                        my ($next_hex_begin, $next_hex_end, $next_map)
+                                                = split "\t", $ranges[$i+1];
+
+                        # In the case of 'dm', the map may be a sequence of
+                        # multiple code points, which are never combined with
+                        # another range
+                        last if $next_map =~ / /;
+
+                        $offset++;
+                        my $next_decimal_map = hex $next_map;
+
+                        # If the next map is not next in sequence, it
+                        # shouldn't be combined.
+                        last if $next_decimal_map != $decimal_map + $offset;
+
+                        my $next_begin = hex $next_hex_begin;
+
+                        # Likewise, if the next element isn't adjacent to the
+                        # previous one, it shouldn't be combined.
+                        last if $next_begin != $begin + $offset;
+
+                        my $next_end = (defined $next_hex_end
+                                        && $next_hex_end ne "")
+                                            ? hex $next_hex_end
+                                            : $next_begin;
+
+                        # And finally, if the next element is a multi-element
+                        # range, it shouldn't be combined.
+                        last if $next_end != $next_begin;
+
+                        # Here, we will combine.  Loop to see if we should
+                        # combine the next element too.
+                        $squished = 1;
+                    }
+
+                    if ($squished) {
+
+                        # Here, 'i' is the element number of the last element to
+                        # be combined, and the range is single-element, or we
+                        # wouldn't be combining.  Get it's code point.
+                        my ($hex_end, undef, undef) = split "\t", $ranges[$i];
+                        $list .= "$hex_begin\t$hex_end\t$decimal_map\n";
+                    } else {
+
+                        # Here, no combining done.  Just appen the initial
+                        # (and current) values.
+                        $list .= "$hex_begin\t\t$decimal_map\n";
+                    }
+                }
+            } # End of loop constructing the converted list
+
+            # Finish up the data structure for our converted swash
+            my $type = ($second_try eq 'nfkccf') ? 'ToNFKCCF' : 'ToDm';
+            $revised_swash{'LIST'} = $list;
+            $revised_swash{'TYPE'} = $type;
+            $revised_swash{'SPECIALS'} = $swash->{'SPECIALS'};
+            $swash = \%revised_swash;
+
+            $utf8::SwashInfo{$type}{'missing'} = 0;
+            $utf8::SwashInfo{$type}{'format'} = 'a';
         }
     }
 
@@ -2771,7 +2944,7 @@ RETRY:
     }
 
     # Here, have a valid swash return.  Examine it.
-    my $returned_prop = $swash->{TYPE};
+    my $returned_prop = $swash->{'TYPE'};
 
     # All properties but binary ones should have 'missing' and 'format'
     # entries
@@ -2780,6 +2953,8 @@ RETRY:
 
     $format = $utf8::SwashInfo{$returned_prop}{'format'};
     $format = 'b' unless defined $format;
+
+    my $requires_adjustment = $format =~ /^a/;
 
     # The LIST input lines look like:
     # ...
@@ -2820,7 +2995,7 @@ RETRY:
         #
         # Thus, things are set up for the typical case of a new non-adjacent
         # range of non-missings to be added.  But, if the new range is
-        # adjacent, it needs to replace the [-1] elements; and if the new
+        # adjacent, it needs to replace the [-1] element; and if the new
         # range is a multiple value of the previous one, it needs to be added
         # to the [-2] map element.
 
@@ -2861,10 +3036,12 @@ RETRY:
 
             # If the input isn't in the most compact form, so that there are
             # two adjacent ranges that map to the same thing, they should be
-            # combined.  This happens in our constructed dt mapping, as
-            # Element [-2] is the map for the latest range so far processed.
-            # Just set the beginning point of the map to $missing (in
-            # invlist[-1]) to 1 beyond where this range ends.  For example, in
+            # combined (EXCEPT where the arrays require adjustments, in which
+            # case everything is already set up correctly).  This happens in
+            # our constructed dt mapping, as Element [-2] is the map for the
+            # latest range so far processed.  Just set the beginning point of
+            # the map to $missing (in invlist[-1]) to 1 beyond where this
+            # range ends.  For example, in
             # 12\t13\tXYZ
             # 14\t17\tXYZ
             # we have set it up so that it looks like
@@ -2874,7 +3051,7 @@ RETRY:
             # We now see that it should be
             # 12 => XYZ
             # 18 => $missing
-            if (@invlist > 1 && ( (defined $map)
+            if (! $requires_adjustment && @invlist > 1 && ( (defined $map)
                                   ? $invmap[-2] eq $map
                                   : $invmap[-2] eq 'Y'))
             {
@@ -2892,7 +3069,7 @@ RETRY:
 
         # Add the range beginning, and the range's map.
         push @invlist, $begin;
-        if ($format eq 'dm') {
+        if ($returned_prop eq 'ToDm') {
 
             # The decomposition maps are either a line like <hangul syllable>
             # which are to be taken as is; or a sequence of code points in hex
@@ -2902,7 +3079,7 @@ RETRY:
                 push @invmap, $map;
             }
             else {
-                my @map = map { hex } split " ", $map;
+                my @map = split " ", $map;
                 if (@map == 1) {
                     push @invmap, $map[0];
                 }
@@ -2942,7 +3119,7 @@ RETRY:
         push @invmap, $missing;
     }
 
-    # And add in standard element that all non-Unicode code points map to
+    # And add in standard element that all non-Unicode code points map to:
     # $missing
     push @invlist, $MAX_UNICODE_CODEPOINT + 1;
     push @invmap, $missing;
@@ -2955,16 +3132,16 @@ RETRY:
     if ($overrides) {
 
         # A negative $overrides implies that the SPECIALS should be ignored,
-        # and a simple 'c' list is the value.
+        # and a simple 'a' list is the value.
         if ($overrides < 0) {
-            $format = 'c';
+            $format = 'a';
         }
         else {
 
             # Currently, all overrides are for properties that normally map to
             # single code points, but now some will map to lists of code
             # points (but there is an exception case handled below).
-            $format = 'cl';
+            $format = 'al';
 
             # Look through the overrides.
             foreach my $cp_maybe_utf8 (keys %$overrides) {
@@ -2979,16 +3156,16 @@ RETRY:
 
                     # The empty string will show up unpacked as an empty
                     # array.
-                    $format = 'cle' if @map == 0;
+                    $format = 'ale' if @map == 0;
                 }
                 else {
 
                     # But if we generated the overrides, we didn't bother to
                     # pack them, and we, so far, do this only for properties
-                    # that are 'c' ones.
+                    # that are 'a' ones.
                     $cp = $cp_maybe_utf8;
                     @map = hex $overrides->{$cp};
-                    $format = 'c';
+                    $format = 'a';
                 }
 
                 # Find the range that the override applies to.
@@ -3063,11 +3240,12 @@ RETRY:
     }
     elsif ($format eq 'x') {
 
-        # All hex-valued properties are really to code points
-        $format = 'c';
+        # All hex-valued properties are really to code points, and have been
+        # converted to decimal.
+        $format = 'i';
     }
-    elsif ($format eq 'dm') {
-        $format = 'd';
+    elsif ($returned_prop eq 'ToDm') {
+        $format = 'ad';
     }
     elsif ($format eq 'sw') { # blank-separated elements to form a list.
         map { $_ = [ split " ", $_  ] if $_ =~ / / } @invmap;
@@ -3079,7 +3257,16 @@ RETRY:
         # could
         $format = 'sl';
     }
-    elsif ($format ne 'n' && $format ne 'r') {
+    elsif ($returned_prop eq 'ToPerlDecimalDigit') {
+        $format = 'ae';
+    }
+    elsif ($returned_prop eq 'ToNv') {
+
+        # The one property that has this format is stored as a delta, so needs
+        # to indicate that need to add code point to it.
+        $format = 'ar';
+    }
+    elsif ($format ne 'n') {
 
         # All others are simple scalars
         $format = 's';
@@ -3169,6 +3356,9 @@ To convert from new-style to old-style, follow this recipe:
 (which finds the range of code points in the block using C<prop_invlist>,
 gets the lower end of the range (0th element) and then looks up the old name
 for its block using C<charblock>).
+
+Note that starting in Unicode 6.1, many of the block names have shorter
+synonyms.  These are always given in the new style.
 
 =head1 BUGS
 

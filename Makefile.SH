@@ -177,7 +177,9 @@ done
 : Prepare dependency lists for Makefile.
 dynamic_list=' '
 dynamic_ext_re="lib/auto/re/re.$dlext"
-extra_dep=''
+extra_dep='
+ext/Pod-Functions/pm_to_blib: cpan/Pod-Simple/pm_to_blib pod/perlfunc.pod
+'
 for f in $dynamic_ext; do
     : the dependency named here will never exist
       base=`echo "$f" | sed 's/.*\///'`
@@ -458,7 +460,8 @@ h2 = embed.h form.h gv.h handy.h hv.h keywords.h mg.h op.h opcode.h
 h3 = pad.h patchlevel.h perl.h perlapi.h perly.h pp.h proto.h regcomp.h
 h4 = regexp.h scope.h sv.h unixish.h util.h iperlsys.h thread.h
 h5 = utf8.h warnings.h mydtrace.h op_reg_common.h l1_char_class_tab.h
-h = $(h1) $(h2) $(h3) $(h4) $(h5)
+h6 = charclass_invlists.h
+h = $(h1) $(h2) $(h3) $(h4) $(h5) $(h6)
 
 c1 = av.c scope.c op.c doop.c doio.c dump.c gv.c hv.c mg.c reentr.c mro.c perl.c
 c2 = perly.c pp.c pp_hot.c pp_ctl.c pp_sys.c regcomp.c regexec.c utf8.c sv.c
@@ -479,7 +482,7 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5157delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5158delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -1055,8 +1058,8 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) $(Icwd) pod/perlmodlib.PL -q
 
-pod/perl5157delta.pod: pod/perldelta.pod
-	$(LNS) perldelta.pod pod/perl5157delta.pod
+pod/perl5158delta.pod: pod/perldelta.pod
+	$(LNS) perldelta.pod pod/perl5158delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1316,6 +1319,7 @@ _cleaner2:
 	rm -fr lib/B
 	rm -fr lib/CPAN lib/CPANPLUS
 	rm -fr lib/ExtUtils/CBuilder
+	rm -f pod2htmd.tmp
 	rm -rf pod/perlfunc pod/perlipc
 	-rmdir cpan/CPANPLUS-Dist-Build/t/dummy-cpanplus cpan/CPANPLUS/t/dummy-cpanplus cpan/CPANPLUS/t/dummy-localmirror
 	-rmdir ext/B/lib

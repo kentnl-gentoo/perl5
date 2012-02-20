@@ -464,10 +464,10 @@ PERLVARI(I, in_clean_all, bool,    FALSE)	/* ptrs to freed SVs now legal */
 PERLVAR(I, nomemok,	bool)		/* let malloc context handle nomem */
 PERLVARI(I, savebegin,	bool,	FALSE)	/* save BEGINs for compiler	*/
 
-PERLVAR(I, uid,		Uid_t)		/* current real user id */
-PERLVAR(I, euid,	Uid_t)		/* current effective user id */
-PERLVAR(I, gid,		Gid_t)		/* current real group id */
-PERLVAR(I, egid,	Gid_t)		/* current effective group id */
+PERLVAR(I, delaymagic_uid,	Uid_t)	/* current real user id, only for delaymagic */
+PERLVAR(I, delaymagic_euid,	Uid_t)	/* current effective user id, only for delaymagic */
+PERLVAR(I, delaymagic_gid,	Gid_t)	/* current real group id, only for delaymagic */
+PERLVAR(I, delaymagic_egid,	Gid_t)	/* current effective group id, only for delaymagic */
 PERLVARI(I, an,		U32,	0)	/* malloc sequence number */
 
 #ifdef DEBUGGING
@@ -565,7 +565,57 @@ PERLVAR(I, numeric_radix_sv, SV *)	/* The radix separator if not '.' */
 
 #endif /* !USE_LOCALE_NUMERIC */
 
-/* utf8 character classes */
+/* Unicode inversion lists */
+PERLVAR(I, ASCII,	SV *)
+PERLVAR(I, Latin1,	SV *)
+PERLVAR(I, AboveLatin1,	SV *)
+
+PERLVAR(I, PerlSpace,	SV *)
+PERLVAR(I, XPerlSpace,	SV *)
+
+PERLVAR(I, L1PosixAlnum,SV *)
+PERLVAR(I, PosixAlnum,	SV *)
+
+PERLVAR(I, L1PosixAlpha,SV *)
+PERLVAR(I, PosixAlpha,	SV *)
+
+PERLVAR(I, PosixBlank,	SV *)
+PERLVAR(I, XPosixBlank,	SV *)
+
+PERLVAR(I, L1Cased,	SV *)
+
+PERLVAR(I, PosixCntrl,	SV *)
+PERLVAR(I, XPosixCntrl,	SV *)
+
+PERLVAR(I, PosixDigit,	SV *)
+
+PERLVAR(I, L1PosixGraph,SV *)
+PERLVAR(I, PosixGraph,	SV *)
+
+PERLVAR(I, L1PosixLower,SV *)
+PERLVAR(I, PosixLower,	SV *)
+
+PERLVAR(I, L1PosixPrint,SV *)
+PERLVAR(I, PosixPrint,	SV *)
+
+PERLVAR(I, L1PosixPunct,SV *)
+PERLVAR(I, PosixPunct,	SV *)
+
+PERLVAR(I, PosixSpace,	SV *)
+PERLVAR(I, XPosixSpace,	SV *)
+
+PERLVAR(I, L1PosixUpper,SV *)
+PERLVAR(I, PosixUpper,	SV *)
+
+PERLVAR(I, L1PosixWord,	SV *)
+PERLVAR(I, PosixWord,	SV *)
+
+PERLVAR(I, PosixXDigit,	SV *)
+PERLVAR(I, XPosixXDigit, SV *)
+
+PERLVAR(I, VertSpace,   SV *)
+
+/* utf8 character class swashes */
 PERLVAR(I, utf8_alnum,	SV *)
 PERLVAR(I, utf8_alpha,	SV *)
 PERLVAR(I, utf8_space,	SV *)
@@ -591,6 +641,7 @@ PERLVAR(I, utf8_toupper, SV *)
 PERLVAR(I, utf8_totitle, SV *)
 PERLVAR(I, utf8_tolower, SV *)
 PERLVAR(I, utf8_tofold,	SV *)
+PERLVAR(I, utf8_quotemeta, SV *)
 PERLVAR(I, last_swash_hv, HV *)
 PERLVAR(I, last_swash_tmps, U8 *)
 PERLVAR(I, last_swash_slen, STRLEN)
@@ -749,11 +800,6 @@ PERLVAR(I, memory_debug_header, struct perl_memory_debug_header)
 #ifdef DEBUG_LEAKING_SCALARS_FORK_DUMP
 /* File descriptor to talk to the child which dumps scalars.  */
 PERLVARI(I, dumper_fd,	int,	-1)
-#endif
-
-/* Stores the PPID */
-#ifdef THREADS_HAVE_PIDS
-PERLVARI(I, ppid,	IV,	0)
 #endif
 
 #ifdef PERL_MAD

@@ -1167,14 +1167,6 @@ Perl_scalarvoid(pTHX_ OP *o)
 	    no_bareword_allowed(o);
 	else {
 	    if (ckWARN(WARN_VOID)) {
-		if (SvOK(sv)) {
-		    SV* msv = sv_2mortal(Perl_newSVpvf(aTHX_
-				"a constant (%"SVf")", sv));
-		    useless = SvPV_nolen(msv);
-                    useless_is_utf8 = SvUTF8(msv);
-		}
-		else
-		    useless = "a constant (undef)";
 		/* don't warn on optimised away booleans, eg 
 		 * use constant Foo, 5; Foo || print; */
 		if (cSVOPo->op_private & OPpCONST_SHORTCIRCUIT)
@@ -1196,7 +1188,24 @@ Perl_scalarvoid(pTHX_ OP *o)
 			strnEQ(maybe_macro, "ds", 2) ||
 			strnEQ(maybe_macro, "ig", 2))
 			    useless = NULL;
+		    else {
+			SV * const dsv = newSVpvs("");
+			SV* msv = sv_2mortal(Perl_newSVpvf(aTHX_
+				    "a constant (%s)",
+				    pv_pretty(dsv, maybe_macro, SvCUR(sv), 32, NULL, NULL,
+					    PERL_PV_PRETTY_DUMP | PERL_PV_ESCAPE_NOCLEAR | PERL_PV_ESCAPE_UNI_DETECT )));
+			SvREFCNT_dec(dsv);
+			useless = SvPV_nolen(msv);
+			useless_is_utf8 = SvUTF8(msv);
+		    }
 		}
+		else if (SvOK(sv)) {
+		    SV* msv = sv_2mortal(Perl_newSVpvf(aTHX_
+				"a constant (%"SVf")", sv));
+		    useless = SvPV_nolen(msv);
+		}
+		else
+		    useless = "a constant (undef)";
 	    }
 	}
 	op_null(o);		/* don't execute or even remember it */
@@ -1767,7 +1776,6 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 	    else {                      /* Compile-time error message: */
 		OP *kid = cUNOPo->op_first;
 		CV *cv;
-		OP *okid;
 
 		if (kid->op_type != OP_PUSHMARK) {
 		    if (kid->op_type != OP_NULL || kid->op_targ != OP_LIST)
@@ -1783,7 +1791,6 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 		    break;	/* Postpone until runtime */
 		}
 
-		okid = kid;
 		kid = kUNOP->op_first;
 		if (kid->op_type == OP_NULL && kid->op_targ == OP_RV2SV)
 		    kid = kUNOP->op_first;
@@ -2393,6 +2400,7 @@ S_my_kid(pTHX_ OP *o, OP *attrs, OP **imopsp)
         OP *kid;
 	for (kid = cLISTOPo->op_first; kid; kid = kid->op_sibling)
 	    my_kid(kid, attrs, imopsp);
+	return o;
     } else if (type == OP_UNDEF
 #ifdef PERL_MAD
 	       || type == OP_STUB
@@ -2936,7 +2944,7 @@ S_fold_constants(pTHX_ register OP *o)
     case OP_SCMP:
     case OP_SPRINTF:
 	/* XXX what about the numeric ops? */
-	if (PL_hints & HINT_LOCALE)
+	if (IN_LOCALE_COMPILETIME)
 	    goto nope;
 	break;
     }
@@ -4099,10 +4107,13 @@ Perl_newPMOP(pTHX_ I32 type, I32 flags)
 
     if (PL_hints & HINT_RE_TAINT)
 	pmop->op_pmflags |= PMf_RETAINT;
-    if (PL_hints & HINT_LOCALE) {
+    if (IN_LOCALE_COMPILETIME) {
 	set_regex_charset(&(pmop->op_pmflags), REGEX_LOCALE_CHARSET);
     }
-    else if ((! (PL_hints & HINT_BYTES)) && (PL_hints & HINT_UNI_8_BIT)) {
+    else if ((! (PL_hints & HINT_BYTES))
+                /* Both UNI_8_BIT and locale :not_characters imply Unicode */
+	     && (PL_hints & (HINT_UNI_8_BIT|HINT_LOCALE_NOT_CHARS)))
+    {
 	set_regex_charset(&(pmop->op_pmflags), REGEX_UNICODE_CHARSET);
     }
     if (PL_hints & HINT_RE_FLAGS) {
@@ -6442,6 +6453,13 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 CV *
 Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 {
+    return newATTRSUB_flags(floor, o, proto, attrs, block, 0);
+}
+
+CV *
+Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
+			    OP *block, U32 flags)
+{
     dVAR;
     GV *gv;
     const char *ps;
@@ -6459,9 +6477,11 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	   || PL_madskills)
 	? GV_ADDMULTI : GV_ADDMULTI | GV_NOINIT;
     STRLEN namlen = 0;
-    const char * const name = o ? SvPV_const(cSVOPo->op_sv, namlen) : NULL;
+    const bool o_is_gv = flags & 1;
+    const char * const name =
+	 o ? SvPV_const(o_is_gv ? (SV *)o : cSVOPo->op_sv, namlen) : NULL;
     bool has_name;
-    bool name_is_utf8 = o ? (SvUTF8(cSVOPo->op_sv) ? 1 : 0) : 0;
+    bool name_is_utf8 = o && !o_is_gv && SvUTF8(cSVOPo->op_sv);
 
     if (proto) {
 	assert(proto->op_type == OP_CONST);
@@ -6471,10 +6491,12 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     else
 	ps = NULL;
 
-    if (name) {
-	gv = isGV(cSVOPo->op_sv)
-	      ? (GV *)cSVOPo->op_sv
-	      : gv_fetchsv(cSVOPo->op_sv, gv_fetch_flags, SVt_PVCV);
+    if (o_is_gv) {
+	gv = (GV*)o;
+	o = NULL;
+	has_name = TRUE;
+    } else if (name) {
+	gv = gv_fetchsv(cSVOPo->op_sv, gv_fetch_flags, SVt_PVCV);
 	has_name = TRUE;
     } else if (PERLDB_NAMEANON && CopLINE(PL_curcop)) {
 	SV * const sv = sv_newmortal();
@@ -7727,6 +7749,11 @@ Perl_ck_ftst(pTHX_ OP *o)
 	        && kidtype != OP_STAT && kidtype != OP_LSTAT) {
 	    o->op_private |= OPpFT_STACKED;
 	    kid->op_private |= OPpFT_STACKING;
+	    if (kidtype == OP_FTTTY && (
+		   !(kid->op_private & OPpFT_STACKED)
+		|| kid->op_private & OPpFT_AFTER_t
+	       ))
+		o->op_private |= OPpFT_AFTER_t;
 	}
     }
     else {
@@ -9084,7 +9111,7 @@ Perl_ck_entersub_args_proto(pTHX_ OP *entersubop, GV *namegv, SV *protosv)
     const char *e = NULL;
     PERL_ARGS_ASSERT_CK_ENTERSUB_ARGS_PROTO;
     if (SvTYPE(protosv) == SVt_PVCV ? !SvPOK(protosv) : !SvOK(protosv))
-	Perl_croak(aTHX_ "panic: ck_entersub_args_proto CV with no proto,"
+	Perl_croak(aTHX_ "panic: ck_entersub_args_proto CV with no proto, "
 		   "flags=%lx", (unsigned long) SvFLAGS(protosv));
     if (SvTYPE(protosv) == SVt_PVCV)
 	 proto = CvPROTO(protosv), proto_len = CvPROTOLEN(protosv);
@@ -9117,7 +9144,7 @@ Perl_ck_entersub_args_proto(pTHX_ OP *entersubop, GV *namegv, SV *protosv)
 		continue;
 	    case '_':
 		/* _ must be at the end */
-		if (proto[1] && proto[1] != ';')
+		if (proto[1] && !strchr(";@%", proto[1]))
 		    goto oops;
 	    case '$':
 		proto++;
@@ -10648,6 +10675,71 @@ Perl_report_redefined_cv(pTHX_ const SV *name, const CV *old_cv,
 			    ? "Constant subroutine %"SVf" redefined"
 			    : "Subroutine %"SVf" redefined",
 			  name);
+}
+
+/*
+=head1 Hook manipulation
+
+These functions provide convenient and thread-safe means of manipulating
+hook variables.
+
+=cut
+*/
+
+/*
+=for apidoc Am|void|wrap_op_checker|Optype opcode|Perl_check_t new_checker|Perl_check_t *old_checker_p
+
+Puts a C function into the chain of check functions for a specified op
+type.  This is the preferred way to manipulate the L</PL_check> array.
+I<opcode> specifies which type of op is to be affected.  I<new_checker>
+is a pointer to the C function that is to be added to that opcode's
+check chain, and I<old_checker_p> points to the storage location where a
+pointer to the next function in the chain will be stored.  The value of
+I<new_pointer> is written into the L</PL_check> array, while the value
+previously stored there is written to I<*old_checker_p>.
+
+L</PL_check> is global to an entire process, and a module wishing to
+hook op checking may find itself invoked more than once per process,
+typically in different threads.  To handle that situation, this function
+is idempotent.  The location I<*old_checker_p> must initially (once
+per process) contain a null pointer.  A C variable of static duration
+(declared at file scope, typically also marked C<static> to give
+it internal linkage) will be implicitly initialised appropriately,
+if it does not have an explicit initialiser.  This function will only
+actually modify the check chain if it finds I<*old_checker_p> to be null.
+This function is also thread safe on the small scale.  It uses appropriate
+locking to avoid race conditions in accessing L</PL_check>.
+
+When this function is called, the function referenced by I<new_checker>
+must be ready to be called, except for I<*old_checker_p> being unfilled.
+In a threading situation, I<new_checker> may be called immediately,
+even before this function has returned.  I<*old_checker_p> will always
+be appropriately set before I<new_checker> is called.  If I<new_checker>
+decides not to do anything special with an op that it is given (which
+is the usual case for most uses of op check hooking), it must chain the
+check function referenced by I<*old_checker_p>.
+
+If you want to influence compilation of calls to a specific subroutine,
+then use L</cv_set_call_checker> rather than hooking checking of all
+C<entersub> ops.
+
+=cut
+*/
+
+void
+Perl_wrap_op_checker(pTHX_ Optype opcode,
+    Perl_check_t new_checker, Perl_check_t *old_checker_p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT_WRAP_OP_CHECKER;
+    if (*old_checker_p) return;
+    OP_CHECK_MUTEX_LOCK;
+    if (!*old_checker_p) {
+	*old_checker_p = PL_check[opcode];
+	PL_check[opcode] = new_checker;
+    }
+    OP_CHECK_MUTEX_UNLOCK;
 }
 
 #include "XSUB.h"

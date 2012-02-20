@@ -250,6 +250,7 @@
 #define is_utf8_alpha(a)	Perl_is_utf8_alpha(aTHX_ a)
 #define is_utf8_ascii(a)	Perl_is_utf8_ascii(aTHX_ a)
 #define is_utf8_char		Perl_is_utf8_char
+#define is_utf8_char_buf	Perl_is_utf8_char_buf
 #define is_utf8_cntrl(a)	Perl_is_utf8_cntrl(aTHX_ a)
 #define is_utf8_digit(a)	Perl_is_utf8_digit(aTHX_ a)
 #define is_utf8_graph(a)	Perl_is_utf8_graph(aTHX_ a)
@@ -698,6 +699,7 @@
 #define whichsig_pv(a)		Perl_whichsig_pv(aTHX_ a)
 #define whichsig_pvn(a,b)	Perl_whichsig_pvn(aTHX_ a,b)
 #define whichsig_sv(a)		Perl_whichsig_sv(aTHX_ a)
+#define wrap_op_checker(a,b,c)	Perl_wrap_op_checker(aTHX_ a,b,c)
 #if !(defined(HAS_SIGACTION) && defined(SA_SIGINFO))
 #define csighandler		Perl_csighandler
 #endif
@@ -778,6 +780,9 @@
 #define sv_setpvf_nocontext	Perl_sv_setpvf_nocontext
 #define warn_nocontext		Perl_warn_nocontext
 #define warner_nocontext	Perl_warner_nocontext
+#endif
+#if defined(PERL_IN_UTF8_C) || defined(PERL_IN_PP_C)
+#define _is_utf8_quotemeta(a)	Perl__is_utf8_quotemeta(aTHX_ a)
 #endif
 #if defined(PERL_MAD)
 #define newFORM(a,b,c)		Perl_newFORM(aTHX_ a,b,c)
@@ -895,6 +900,7 @@
 #  endif
 #  if defined(PERL_IN_REGCOMP_C)
 #define _invlist_array_init(a,b)	S__invlist_array_init(aTHX_ a,b)
+#define _new_invlist_C_array(a)	S__new_invlist_C_array(aTHX_ a)
 #define add_alternate(a,b,c)	S_add_alternate(aTHX_ a,b,c)
 #define add_cp_to_invlist(a,b)	S_add_cp_to_invlist(aTHX_ a,b)
 #define add_data		S_add_data
@@ -907,6 +913,7 @@
 #define cl_or			S_cl_or
 #define get_invlist_iter_addr(a)	S_get_invlist_iter_addr(aTHX_ a)
 #define get_invlist_len_addr(a)	S_get_invlist_len_addr(aTHX_ a)
+#define get_invlist_version_id_addr(a)	S_get_invlist_version_id_addr(aTHX_ a)
 #define get_invlist_zero_addr(a)	S_get_invlist_zero_addr(aTHX_ a)
 #define invlist_array(a)	S_invlist_array(aTHX_ a)
 #define invlist_clone(a)	S_invlist_clone(aTHX_ a)
@@ -949,12 +956,11 @@
 #  endif
 #  if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_UTF8_C)
 #define _append_range_to_invlist(a,b,c)	Perl__append_range_to_invlist(aTHX_ a,b,c)
-#define _invlist_intersection(a,b,c)	Perl__invlist_intersection(aTHX_ a,b,c)
+#define _invlist_intersection_maybe_complement_2nd(a,b,c,d)	Perl__invlist_intersection_maybe_complement_2nd(aTHX_ a,b,c,d)
 #define _invlist_invert(a)	Perl__invlist_invert(aTHX_ a)
 #define _invlist_invert_prop(a)	Perl__invlist_invert_prop(aTHX_ a)
 #define _invlist_populate_swatch(a,b,c,d)	Perl__invlist_populate_swatch(aTHX_ a,b,c,d)
-#define _invlist_subtract(a,b,c)	Perl__invlist_subtract(aTHX_ a,b,c)
-#define _invlist_union(a,b,c)	Perl__invlist_union(aTHX_ a,b,c)
+#define _invlist_union_maybe_complement_2nd(a,b,c,d)	Perl__invlist_union_maybe_complement_2nd(aTHX_ a,b,c,d)
 #define _new_invlist(a)		Perl__new_invlist(aTHX_ a)
 #define _swash_inversion_hash(a)	Perl__swash_inversion_hash(aTHX_ a)
 #define _swash_to_invlist(a)	Perl__swash_to_invlist(aTHX_ a)
@@ -983,6 +989,7 @@
 #endif
 #ifdef PERL_CORE
 #define allocmy(a,b,c)		Perl_allocmy(aTHX_ a,b,c)
+#define amagic_is_enabled(a)	Perl_amagic_is_enabled(aTHX_ a)
 #define apply(a,b,c)		Perl_apply(aTHX_ a,b,c)
 #define bind_match(a,b,c)	Perl_bind_match(aTHX_ a,b,c)
 #define block_end(a,b)		Perl_block_end(aTHX_ a,b)
@@ -1146,6 +1153,7 @@
 #define my_stat_flags(a)	Perl_my_stat_flags(aTHX_ a)
 #define my_swabn		Perl_my_swabn
 #define my_unexec()		Perl_my_unexec(aTHX)
+#define newATTRSUB_flags(a,b,c,d,e,f)	Perl_newATTRSUB_flags(aTHX_ a,b,c,d,e,f)
 #define newXS_len_flags(a,b,c,d,e,f,g)	Perl_newXS_len_flags(aTHX_ a,b,c,d,e,f,g)
 #define nextargv(a)		Perl_nextargv(aTHX_ a)
 #define oopsAV(a)		Perl_oopsAV(aTHX_ a)

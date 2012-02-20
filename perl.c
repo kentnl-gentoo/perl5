@@ -92,7 +92,7 @@ static I32 read_e_script(pTHX_ int idx, SV *buf_sv, int maxlen);
 
 #define CALL_LIST_BODY(cv) \
     PUSHMARK(PL_stack_sp); \
-    call_sv(MUTABLE_SV((cv)), G_EVAL|G_DISCARD);
+    call_sv(MUTABLE_SV((cv)), G_EVAL|G_DISCARD|G_VOID);
 
 static void
 S_init_tls_and_interp(PerlInterpreter *my_perl)
@@ -105,6 +105,7 @@ S_init_tls_and_interp(PerlInterpreter *my_perl)
 	ALLOC_THREAD_KEY;
 	PERL_SET_THX(my_perl);
 	OP_REFCNT_INIT;
+	OP_CHECK_MUTEX_INIT;
 	HINTS_REFCNT_INIT;
 	MUTEX_INIT(&PL_dollarzero_mutex);
 	MUTEX_INIT(&PL_my_ctx_mutex);
@@ -1714,6 +1715,9 @@ S_Internals_V(pTHX_ CV *cv)
 #  endif
 #  ifdef PERL_PRESERVE_IVUV
 			     " PERL_PRESERVE_IVUV"
+#  endif
+#  ifdef PERL_RELOCATABLE_INCPUSH
+			     " PERL_RELOCATABLE_INCPUSH"
 #  endif
 #  ifdef PERL_USE_DEVEL
 			     " PERL_USE_DEVEL"
@@ -3748,15 +3752,20 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch,
 STATIC void
 S_validate_suid(pTHX_ PerlIO *rsfp)
 {
+    const UV  my_uid = PerlProc_getuid();
+    const UV my_euid = PerlProc_geteuid();
+    const UV  my_gid = PerlProc_getgid();
+    const UV my_egid = PerlProc_getegid();
+
     PERL_ARGS_ASSERT_VALIDATE_SUID;
 
-    if (PL_euid != PL_uid || PL_egid != PL_gid) {	/* (suidperl doesn't exist, in fact) */
+    if (my_euid != my_uid || my_egid != my_gid) {	/* (suidperl doesn't exist, in fact) */
 	dVAR;
 
 	PerlLIO_fstat(PerlIO_fileno(rsfp),&PL_statbuf);	/* may be either wrapped or real suid */
-	if ((PL_euid != PL_uid && PL_euid == PL_statbuf.st_uid && PL_statbuf.st_mode & S_ISUID)
+	if ((my_euid != my_uid && my_euid == PL_statbuf.st_uid && PL_statbuf.st_mode & S_ISUID)
 	    ||
-	    (PL_egid != PL_gid && PL_egid == PL_statbuf.st_gid && PL_statbuf.st_mode & S_ISGID)
+	    (my_egid != my_gid && my_egid == PL_statbuf.st_gid && PL_statbuf.st_mode & S_ISGID)
 	   )
 	    if (!PL_do_undump)
 		Perl_croak(aTHX_ "YOU HAVEN'T DISABLED SET-ID SCRIPTS IN THE KERNEL YET!\n\
@@ -3800,17 +3809,14 @@ STATIC void
 S_init_ids(pTHX)
 {
     dVAR;
-    PL_uid = PerlProc_getuid();
-    PL_euid = PerlProc_geteuid();
-    PL_gid = PerlProc_getgid();
-    PL_egid = PerlProc_getegid();
-#ifdef VMS
-    PL_uid |= PL_gid << 16;
-    PL_euid |= PL_egid << 16;
-#endif
+    const UV my_uid = PerlProc_getuid();
+    const UV my_euid = PerlProc_geteuid();
+    const UV my_gid = PerlProc_getgid();
+    const UV my_egid = PerlProc_getegid();
+
     /* Should not happen: */
-    CHECK_MALLOC_TAINT(PL_uid && (PL_euid != PL_uid || PL_egid != PL_gid));
-    PL_tainting |= (PL_uid && (PL_euid != PL_uid || PL_egid != PL_gid));
+    CHECK_MALLOC_TAINT(my_uid && (my_euid != my_uid || my_egid != my_gid));
+    PL_tainting |= (my_uid && (my_euid != my_uid || my_egid != my_gid));
     /* BUG */
     /* PSz 27 Feb 04
      * Should go by suidscript, not uid!=euid: why disallow
@@ -3876,9 +3882,9 @@ S_forbid_setid(pTHX_ const char flag, const bool suidscript) /* g */
     }
 
 #ifdef SETUID_SCRIPTS_ARE_SECURE_NOW
-    if (PL_euid != PL_uid)
+    if (PerlProc_getuid() != PerlProc_geteuid())
         Perl_croak(aTHX_ "No %s allowed while running setuid", message);
-    if (PL_egid != PL_gid)
+    if (PerlProc_getgid() != PerlProc_getegid())
         Perl_croak(aTHX_ "No %s allowed while running setgid", message);
 #endif /* SETUID_SCRIPTS_ARE_SECURE_NOW */
     if (suidscript)
@@ -4203,9 +4209,6 @@ S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register 
 #endif /* !PERL_MICRO */
     }
     TAINT_NOT;
-#ifdef THREADS_HAVE_PIDS
-    PL_ppid = (IV)getppid();
-#endif
 
     /* touch @F array to prevent spurious warnings 20020415 MJD */
     if (PL_minus_a) {
@@ -4565,7 +4568,8 @@ S_mayberelocate(pTHX_ const char *const dir, STRLEN len, U32 flags)
 		    /* And this is the new libdir.  */
 		    libdir = tempsv;
 		    if (PL_tainting &&
-			(PL_uid != PL_euid || PL_gid != PL_egid)) {
+			(PerlProc_getuid() != PerlProc_geteuid() ||
+			 PerlProc_getgid() != PerlProc_getegid())) {
 			/* Need to taint relocated paths if running set ID  */
 			SvTAINTED_on(libdir);
 		    }

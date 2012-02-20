@@ -257,9 +257,9 @@ Perl_uvuni_to_utf8_flags(pTHX_ U8 *d, UV uv, UV flags)
 
 /*
 
-Tests if some arbitrary number of bytes begins in a valid UTF-8
+Tests if the first C<len> bytes of string C<s> form a valid UTF-8
 character.  Note that an INVARIANT (i.e. ASCII) character is a valid
-UTF-8 character.  The actual number of bytes in the UTF-8 character
+UTF-8 character.  The number of bytes in the UTF-8 character
 will be returned if it is valid, otherwise 0.
 
 This is the "slow" version as opposed to the "fast" version which is
@@ -283,7 +283,7 @@ S_is_utf8_char_slow(const U8 *s, const STRLEN len)
     PERL_ARGS_ASSERT_IS_UTF8_CHAR_SLOW;
 
     if (UTF8_IS_INVARIANT(u))
-	return 1;
+	return len == 1;
 
     if (!UTF8_IS_START(u))
 	return 0;
@@ -316,28 +316,65 @@ S_is_utf8_char_slow(const U8 *s, const STRLEN len)
 }
 
 /*
+=for apidoc is_utf8_char_buf
+
+Returns the number of bytes that comprise the first UTF-8 encoded character in
+buffer C<buf>.  C<buf_end> should point to one position beyond the end of the
+buffer.  0 is returned if C<buf> does not point to a complete, valid UTF-8
+encoded character.
+
+Note that an INVARIANT character (i.e. ASCII on non-EBCDIC
+machines) is a valid UTF-8 character.
+
+=cut */
+
+STRLEN
+Perl_is_utf8_char_buf(const U8 *buf, const U8* buf_end)
+{
+
+    STRLEN len;
+
+    PERL_ARGS_ASSERT_IS_UTF8_CHAR_BUF;
+
+    if (buf_end <= buf) {
+	return 0;
+    }
+
+    len = buf_end - buf;
+    if (len > UTF8SKIP(buf)) {
+	len = UTF8SKIP(buf);
+    }
+
+#ifdef IS_UTF8_CHAR
+    if (IS_UTF8_CHAR_FAST(len))
+        return IS_UTF8_CHAR(buf, len) ? len : 0;
+#endif /* #ifdef IS_UTF8_CHAR */
+    return is_utf8_char_slow(buf, len);
+}
+
+/*
 =for apidoc is_utf8_char
+
+DEPRECATED!
 
 Tests if some arbitrary number of bytes begins in a valid UTF-8
 character.  Note that an INVARIANT (i.e. ASCII on non-EBCDIC machines)
 character is a valid UTF-8 character.  The actual number of bytes in the UTF-8
 character will be returned if it is valid, otherwise 0.
 
-WARNING: use only if you *know* that C<s> has at least either UTF8_MAXBYTES or
-UTF8SKIP(s) bytes.
+This function is deprecated due to the possibility that malformed input could
+cause reading beyond the end of the input buffer.  Use C<is_utf8_char_buf>
+instead.
 
 =cut */
+
 STRLEN
 Perl_is_utf8_char(const U8 *s)
 {
-    const STRLEN len = UTF8SKIP(s);
-
     PERL_ARGS_ASSERT_IS_UTF8_CHAR;
-#ifdef IS_UTF8_CHAR
-    if (IS_UTF8_CHAR_FAST(len))
-        return IS_UTF8_CHAR(s, len) ? len : 0;
-#endif /* #ifdef IS_UTF8_CHAR */
-    return is_utf8_char_slow(s, len);
+
+    /* Assumes we have enough space, which is why this is deprecated */
+    return is_utf8_char_buf(s, s + UTF8SKIP(s));
 }
 
 
@@ -1375,14 +1412,14 @@ Perl__to_upper_title_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp, const char S_
  * LENP will be set to the length in bytes of the string of changed characters
  *
  * The functions return the ordinal of the first character in the string of OUTP */
-#define CALL_UPPER_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_toupper, "ToUc", "utf8::ToSpecUpper")
-#define CALL_TITLE_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_totitle, "ToTc", "utf8::ToSpecTitle")
-#define CALL_LOWER_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_tolower, "ToLc", "utf8::ToSpecLower")
+#define CALL_UPPER_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_toupper, "ToUc", "utf8::ToSpecUc")
+#define CALL_TITLE_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_totitle, "ToTc", "utf8::ToSpecTc")
+#define CALL_LOWER_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_tolower, "ToLc", "utf8::ToSpecLc")
 
 /* This additionally has the input parameter SPECIALS, which if non-zero will
  * cause this to use the SPECIALS hash for folding (meaning get full case
  * folding); otherwise, when zero, this implies a simple case fold */
-#define CALL_FOLD_CASE(INP, OUTP, LENP, SPECIALS) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_tofold, "ToCf", (SPECIALS) ? "utf8::ToSpecFold" : NULL)
+#define CALL_FOLD_CASE(INP, OUTP, LENP, SPECIALS) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_tofold, "ToCf", (SPECIALS) ? "utf8::ToSpecCf" : NULL)
 
 UV
 Perl_to_uni_upper(pTHX_ UV c, U8* p, STRLEN *lenp)
@@ -1514,7 +1551,9 @@ Perl__to_uni_fold_flags(pTHX_ UV c, U8* p, STRLEN *lenp, const bool flags)
     return CALL_FOLD_CASE(p, p, lenp, flags);
 }
 
-/* for now these all assume no locale info available for Unicode > 255 */
+/* for now these all assume no locale info available for Unicode > 255; and
+ * the corresponding macros in handy.h (like isALNUM_LC_uvchr) should have been
+ * called instead, so that these don't get called for < 255 */
 
 bool
 Perl_is_uni_alnum_lc(pTHX_ UV c)
@@ -1628,11 +1667,27 @@ static bool
 S_is_utf8_common(pTHX_ const U8 *const p, SV **swash,
 		 const char *const swashname)
 {
+    /* returns a boolean giving whether or not the UTF8-encoded character that
+     * starts at <p> is in the swash indicated by <swashname>.  <swash>
+     * contains a pointer to where the swash indicated by <swashname>
+     * is to be stored; which this routine will do, so that future calls will
+     * look at <*swash> and only generate a swash if it is not null
+     *
+     * Note that it is assumed that the buffer length of <p> is enough to
+     * contain all the bytes that comprise the character.  Thus, <*p> should
+     * have been checked before this call for mal-formedness enough to assure
+     * that. */
+
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_COMMON;
 
-    if (!is_utf8_char(p))
+    /* The API should have included a length for the UTF-8 character in <p>,
+     * but it doesn't.  We therefor assume that p has been validated at least
+     * as far as there being enough bytes available in it to accommodate the
+     * character without reading beyond the end, and pass that number on to the
+     * validating routine */
+    if (!is_utf8_char_buf(p, p + UTF8SKIP(p)))
 	return FALSE;
     if (!*swash)
 	*swash = swash_init("utf8", swashname, &PL_sv_undef, 1, 0);
@@ -1972,6 +2027,18 @@ Perl_is_utf8_X_LV_LVT_V(pTHX_ const U8 *p)
     PERL_ARGS_ASSERT_IS_UTF8_X_LV_LVT_V;
 
     return is_utf8_common(p, &PL_utf8_X_LV_LVT_V, "_X_LV_LVT_V");
+}
+
+bool
+Perl__is_utf8_quotemeta(pTHX_ const U8 *p)
+{
+    /* For exclusive use of pp_quotemeta() */
+
+    dVAR;
+
+    PERL_ARGS_ASSERT__IS_UTF8_QUOTEMETA;
+
+    return is_utf8_common(p, &PL_utf8_quotemeta, "_Perl_Quotemeta");
 }
 
 /*
@@ -2450,7 +2517,7 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags, b
 }
 
 /* Note:
- * Returns a "swash" which is a hash described in utf8.c:S_swash_fetch().
+ * Returns a "swash" which is a hash described in utf8.c:Perl_swash_fetch().
  * C<pkg> is a pointer to a package name for SWASHNEW, should be "utf8".
  * For other parameters, see utf8::SWASHNEW in lib/utf8_heavy.pl.
  */
@@ -2888,15 +2955,26 @@ S_swash_scan_list_line(pTHX_ U8* l, U8* const lend, UV* min, UV* max, UV* val,
 	if (wants_value) {
 	    if (isBLANK(*l)) {
 		++l;
-		flags = PERL_SCAN_SILENT_ILLDIGIT
-		      | PERL_SCAN_DISALLOW_PREFIX
-		      | PERL_SCAN_SILENT_NON_PORTABLE;
-		numlen = lend - l;
-		*val = grok_hex((char *)l, &numlen, &flags, NULL);
-		if (numlen)
-		    l += numlen;
-		else
-		    *val = 0;
+
+		/* The ToLc, etc table mappings are not in hex, and must be
+		 * corrected by adding the code point to them */
+		if (typeto) {
+		    char *after_strtol = (char *) lend;
+		    *val = Strtol((char *)l, &after_strtol, 10);
+		    l = (U8 *) after_strtol;
+		}
+		else { /* Other tables are in hex, and are the correct result
+			  without tweaking */
+		    flags = PERL_SCAN_SILENT_ILLDIGIT
+			| PERL_SCAN_DISALLOW_PREFIX
+			| PERL_SCAN_SILENT_NON_PORTABLE;
+		    numlen = lend - l;
+		    *val = grok_hex((char *)l, &numlen, &flags, NULL);
+		    if (numlen)
+			l += numlen;
+		    else
+			*val = 0;
+		}
 	    }
 	    else {
 		*val = 0;

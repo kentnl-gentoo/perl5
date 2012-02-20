@@ -2,9 +2,9 @@ package ExtUtils::Typemaps::Type;
 use 5.006001;
 use strict;
 use warnings;
-our $VERSION = '0.06';
-#use Carp qw(croak);
 require ExtUtils::Typemaps;
+
+our $VERSION = '3.16';
 
 =head1 NAME
 
@@ -110,7 +110,7 @@ Steffen Mueller C<<smueller@cpan.org>>
 
 =head1 COPYRIGHT & LICENSE
 
-Copyright 2009-2011 Steffen Mueller
+Copyright 2009, 2010, 2011, 2012 Steffen Mueller
 
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

@@ -2245,8 +2245,8 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, register char *stre
                     /*XXX: The s-- is almost definitely wrong here under unicode - demeprhq*/
 		    s--;
 		}
-                /* We can use a more efficient search as newlines are the same in unicode as they are in latin */
-		while (s < end) {
+		/* We can use a more efficient search as newlines are the same in unicode as they are in latin */
+		while (s <= end) { /* note it could be possible to match at the end of the string */
 		    if (*s++ == '\n') {	/* don't need PL_utf8skip here */
 			if (regtry(&reginfo, &s))
 			    goto got_it;
@@ -6687,8 +6687,8 @@ S_reginclass(pTHX_ const regexp * const prog, register const regnode * const n, 
 		      (ANYOF_CLASS_TEST(n, ANYOF_NALNUMC) && !isALNUMC_LC(c)) ||
 		      (ANYOF_CLASS_TEST(n, ANYOF_ALPHA)   &&  isALPHA_LC(c))  ||
 		      (ANYOF_CLASS_TEST(n, ANYOF_NALPHA)  && !isALPHA_LC(c))  ||
-		      (ANYOF_CLASS_TEST(n, ANYOF_ASCII)   &&  isASCII(c))     ||
-		      (ANYOF_CLASS_TEST(n, ANYOF_NASCII)  && !isASCII(c))     ||
+		      (ANYOF_CLASS_TEST(n, ANYOF_ASCII)   &&  isASCII_LC(c))  ||
+		      (ANYOF_CLASS_TEST(n, ANYOF_NASCII)  && !isASCII_LC(c))  ||
 		      (ANYOF_CLASS_TEST(n, ANYOF_CNTRL)   &&  isCNTRL_LC(c))  ||
 		      (ANYOF_CLASS_TEST(n, ANYOF_NCNTRL)  && !isCNTRL_LC(c))  ||
 		      (ANYOF_CLASS_TEST(n, ANYOF_GRAPH)   &&  isGRAPH_LC(c))  ||
@@ -6705,8 +6705,8 @@ S_reginclass(pTHX_ const regexp * const prog, register const regnode * const n, 
 		      (ANYOF_CLASS_TEST(n, ANYOF_NXDIGIT) && !isXDIGIT(c))    ||
 		      (ANYOF_CLASS_TEST(n, ANYOF_PSXSPC)  &&  isPSXSPC(c))    ||
 		      (ANYOF_CLASS_TEST(n, ANYOF_NPSXSPC) && !isPSXSPC(c))    ||
-		      (ANYOF_CLASS_TEST(n, ANYOF_BLANK)   &&  isBLANK(c))     ||
-		      (ANYOF_CLASS_TEST(n, ANYOF_NBLANK)  && !isBLANK(c))
+		      (ANYOF_CLASS_TEST(n, ANYOF_BLANK)   &&  isBLANK_LC(c))  ||
+		      (ANYOF_CLASS_TEST(n, ANYOF_NBLANK)  && !isBLANK_LC(c))
 		     ) /* How's that for a conditional? */
 	    ) {
 		match = TRUE;

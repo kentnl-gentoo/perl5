@@ -347,6 +347,7 @@ unless ($define{'USE_ITHREADS'}) {
 
 unless ($define{'USE_ITHREADS'}) {
     ++$skip{$_} foreach qw(
+		    PL_check_mutex
 		    PL_op_mutex
 		    PL_regex_pad
 		    PL_regex_padav
@@ -419,10 +420,6 @@ unless ($define{'PERL_DEBUG_READONLY_OPS'}) {
 		    PL_slab_count
 		    PL_slabs
 			 );
-}
-
-unless ($define{'THREADS_HAVE_PIDS'}) {
-    ++$skip{PL_ppid};
 }
 
 unless ($define{'PERL_NEED_APPCTX'}) {

@@ -2764,11 +2764,7 @@ freeing any remaining Perl interpreters.
 #      define MAXPATHLEN (PATH_MAX+1)
 #    endif
 #  else
-#    ifdef _POSIX_PATH_MAX
-#       define MAXPATHLEN _POSIX_PATH_MAX
-#    else
-#       define MAXPATHLEN 1024	/* Err on the large side. */
-#    endif
+#    define MAXPATHLEN 1024	/* Err on the large side. */
 #  endif
 #endif
 
@@ -4693,9 +4689,6 @@ EXTCONST char PL_bincompat_options[] =
 #  ifdef PL_OP_SLAB_ALLOC
 			     " PL_OP_SLAB_ALLOC"
 #  endif
-#  ifdef THREADS_HAVE_PIDS
-			     " THREADS_HAVE_PIDS"
-#  endif
 #  ifdef USE_64_BIT_ALL
 			     " USE_64_BIT_ALL"
 #  endif
@@ -4824,6 +4817,7 @@ typedef enum {
 #define HINT_STRICT_REFS	0x00000002 /* strict pragma */
 #define HINT_LOCALE		0x00000004 /* locale pragma */
 #define HINT_BYTES		0x00000008 /* bytes pragma */
+#define HINT_LOCALE_NOT_CHARS	0x00000010 /* locale ':not_characters' pragma */
 				/* Note: 20,40,80 used for NATIVE_HINTS */
 				/* currently defined by vms/vmsish.h */
 
@@ -5264,11 +5258,23 @@ typedef struct am_table_short AMTS;
 #define SET_NUMERIC_LOCAL() \
 	set_numeric_local();
 
+/* Returns non-zero If the plain locale pragma without a parameter is in effect
+ */
 #define IN_LOCALE_RUNTIME	(CopHINTS_get(PL_curcop) & HINT_LOCALE)
+
+/* Returns non-zero If either form of the locale pragma is in effect */
+#define IN_SOME_LOCALE_FORM_RUNTIME   \
+		(CopHINTS_get(PL_curcop) & (HINT_LOCALE|HINT_LOCALE_NOT_CHARS))
+
 #define IN_LOCALE_COMPILETIME	(PL_hints & HINT_LOCALE)
+#define IN_SOME_LOCALE_FORM_COMPILETIME \
+			    (PL_hints & (HINT_LOCALE|HINT_LOCALE_NOT_CHARS))
 
 #define IN_LOCALE \
 	(IN_PERL_COMPILETIME ? IN_LOCALE_COMPILETIME : IN_LOCALE_RUNTIME)
+#define IN_SOME_LOCALE_FORM \
+	(IN_PERL_COMPILETIME ? IN_SOME_LOCALE_FORM_COMPILETIME \
+	                     : IN_SOME_LOCALE_FORM_RUNTIME)
 
 #define STORE_NUMERIC_LOCAL_SET_STANDARD() \
 	bool was_local = PL_numeric_local && IN_LOCALE; \
@@ -5488,10 +5494,12 @@ typedef struct am_table_short AMTS;
  * the interpreter goes away.) */
 #  define MY_CXT_INIT \
 	my_cxt_t *my_cxtp = \
-	    (my_cxt_t*)Perl_my_cxt_init(aTHX_ MY_CXT_INIT_ARG, sizeof(my_cxt_t))
+	    (my_cxt_t*)Perl_my_cxt_init(aTHX_ MY_CXT_INIT_ARG, sizeof(my_cxt_t)); \
+	PERL_UNUSED_VAR(my_cxtp)
 #  define MY_CXT_INIT_INTERP(my_perl) \
 	my_cxt_t *my_cxtp = \
-	    (my_cxt_t*)Perl_my_cxt_init(my_perl, MY_CXT_INIT_ARG, sizeof(my_cxt_t))
+	    (my_cxt_t*)Perl_my_cxt_init(my_perl, MY_CXT_INIT_ARG, sizeof(my_cxt_t)); \
+	PERL_UNUSED_VAR(my_cxtp)
 
 /* This declaration should be used within all functions that use the
  * interpreter-local data. */
@@ -5508,7 +5516,7 @@ typedef struct am_table_short AMTS;
 
 
 /* This macro must be used to access members of the my_cxt_t structure.
- * e.g. MYCXT.some_data */
+ * e.g. MY_CXT.some_data */
 #  define MY_CXT		(*my_cxtp)
 
 /* Judicious use of these macros can reduce the number of times dMY_CXT

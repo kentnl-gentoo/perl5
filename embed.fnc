@@ -179,6 +179,7 @@ XEop	|bool	|try_amagic_bin	|int method|int flags
 XEop	|bool	|try_amagic_un	|int method|int flags
 Ap	|SV*	|amagic_call	|NN SV* left|NN SV* right|int method|int dir
 Ap	|SV *	|amagic_deref_call|NN SV *ref|int method
+p	|bool	|amagic_is_enabled|int method
 Ap	|int	|Gv_AMupdate	|NN HV* stash|bool destructing
 ApR	|CV*	|gv_handler	|NULLOK HV* stash|I32 id
 Apd	|OP*	|op_append_elem	|I32 optype|NULLOK OP* first|NULLOK OP* last
@@ -607,6 +608,7 @@ p	|UV	|_to_fold_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const bool flags
 #endif
 #if defined(PERL_IN_UTF8_C) || defined(PERL_IN_PP_C)
 p	|UV	|_to_upper_title_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const char S_or_s
+ApR	|bool	|_is_utf8_quotemeta|NN const U8 *p
 #endif
 Ap	|UV	|to_uni_lower	|UV c|NN U8 *p|NN STRLEN *lenp
 Amp	|UV	|to_uni_fold	|UV c|NN U8 *p|NN STRLEN *lenp
@@ -625,7 +627,8 @@ ApPR	|bool	|is_uni_print_lc|UV c
 ApPR	|bool	|is_uni_punct_lc|UV c
 ApPR	|bool	|is_uni_xdigit_lc|UV c
 Anpd	|bool	|is_ascii_string|NN const U8 *s|STRLEN len
-Anpd	|STRLEN	|is_utf8_char	|NN const U8 *s
+AnpdD	|STRLEN	|is_utf8_char	|NN const U8 *s
+Anpd	|STRLEN	|is_utf8_char_buf|NN const U8 *buf|NN const U8 *buf_end
 Anpd	|bool	|is_utf8_string	|NN const U8 *s|STRLEN len
 Anpdmb	|bool	|is_utf8_string_loc|NN const U8 *s|STRLEN len|NULLOK const U8 **p
 Anpd	|bool	|is_utf8_string_loclen|NN const U8 *s|STRLEN len|NULLOK const U8 **ep|NULLOK STRLEN *el
@@ -936,6 +939,7 @@ po	|OP*	|ck_entersub_args_core|NN OP *entersubop|NN GV *namegv \
 				      |NN SV *protosv
 Apd	|void	|cv_get_call_checker|NN CV *cv|NN Perl_call_checker *ckfun_p|NN SV **ckobj_p
 Apd	|void	|cv_set_call_checker|NN CV *cv|NN Perl_call_checker ckfun|NN SV *ckobj
+Apd	|void	|wrap_op_checker|Optype opcode|NN Perl_check_t new_checker|NN Perl_check_t *old_checker_p
 Apa	|PERL_SI*|new_stackinfo|I32 stitems|I32 cxitems
 Ap	|char*	|scan_vstring	|NN const char *s|NN const char *const e \
 				|NN SV *sv
@@ -1033,6 +1037,7 @@ Ap	|SV*	|regclass_swash	|NULLOK const regexp *prog \
 EMi	|U8	|set_regclass_bit|NN struct RExC_state_t* pRExC_state|NN regnode* node|const U8 value|NN SV** invlist_ptr|NN AV** alternate_ptr
 EMs	|U8	|set_regclass_bit_fold|NN struct RExC_state_t *pRExC_state|NN regnode* node|const U8 value|NN SV** invlist_ptr|NN AV** alternate_ptr
 EMs	|void	|add_alternate	|NN AV** alternate_ptr|NN U8* string|STRLEN len
+EMsR	|SV*	|_new_invlist_C_array|NN UV* list
 #endif
 Ap	|I32	|pregexec	|NN REGEXP * const prog|NN char* stringarg \
 				|NN char* strend|NN char* strbeg|I32 minend \
@@ -1210,8 +1215,8 @@ Apd	|NV	|sv_2nv_flags	|NULLOK SV *const sv|const I32 flags
 pMd	|SV*	|sv_2num	|NN SV *const sv
 Amb	|char*	|sv_2pv		|NULLOK SV *sv|NULLOK STRLEN *lp
 Apd	|char*	|sv_2pv_flags	|NULLOK SV *const sv|NULLOK STRLEN *const lp|const I32 flags
-Apd	|char*	|sv_2pvutf8	|NN SV *const sv|NULLOK STRLEN *const lp
-Apd	|char*	|sv_2pvbyte	|NN SV *const sv|NULLOK STRLEN *const lp
+Apd	|char*	|sv_2pvutf8	|NN SV *sv|NULLOK STRLEN *const lp
+Apd	|char*	|sv_2pvbyte	|NN SV *sv|NULLOK STRLEN *const lp
 Ap	|char*	|sv_pvn_nomg	|NN SV* sv|NULLOK STRLEN* lp
 Amb	|UV	|sv_2uv		|NULLOK SV *sv
 Apd	|UV	|sv_2uv_flags	|NULLOK SV *const sv|const I32 flags
@@ -1370,14 +1375,17 @@ EiM	|void	|invlist_set_len	|NN SV* const invlist|const UV len
 EiM	|void	|invlist_trim	|NN SV* const invlist
 EiMR	|SV*	|invlist_clone	|NN SV* const invlist
 EiMR	|UV*	|get_invlist_iter_addr	|NN SV* invlist
+EiMR	|UV*	|get_invlist_version_id_addr	|NN SV* invlist
 EiM	|void	|invlist_iterinit|NN SV* invlist
 EsMR	|bool	|invlist_iternext|NN SV* invlist|NN UV* start|NN UV* end
 EsMR	|IV	|invlist_search	|NN SV* const invlist|const UV cp
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_UTF8_C)
-EXpM	|void	|_invlist_intersection	|NN SV* const a|NN SV* const b|NN SV** i
-EXpM	|void	|_invlist_union	|NN SV* const a|NN SV* const b|NN SV** output
-EXpM	|void	|_invlist_subtract|NN SV* const a|NN SV* const b|NN SV** result
+EXmM	|void	|_invlist_intersection	|NN SV* const a|NN SV* const b|NN SV** i
+EXpM	|void	|_invlist_intersection_maybe_complement_2nd|NULLOK SV* const a|NN SV* const b|bool complement_b|NN SV** i
+EXmM	|void	|_invlist_union	|NULLOK SV* const a|NN SV* const b|NN SV** output
+EXpM	|void	|_invlist_union_maybe_complement_2nd|NULLOK SV* const a|NN SV* const b|bool complement_b|NN SV** output
+EXmM	|void	|_invlist_subtract|NN SV* const a|NN SV* const b|NN SV** result
 EXpM	|void	|_invlist_invert|NN SV* const invlist
 EXpM	|void	|_invlist_invert_prop|NN SV* const invlist
 EXMpR	|HV*	|_swash_inversion_hash	|NN SV* const swash
@@ -1590,6 +1598,9 @@ Apd	|SV*	|sv_rvweaken	|NN SV *const sv
 p	|int	|magic_killbackrefs|NN SV *sv|NN MAGIC *mg
 Ap	|OP*	|newANONATTRSUB	|I32 floor|NULLOK OP *proto|NULLOK OP *attrs|NULLOK OP *block
 Ap	|CV*	|newATTRSUB	|I32 floor|NULLOK OP *o|NULLOK OP *proto|NULLOK OP *attrs|NULLOK OP *block
+p	|CV*	|newATTRSUB_flags|I32 floor|NULLOK OP *o|NULLOK OP *proto \
+				 |NULLOK OP *attrs|NULLOK OP *block \
+				 |U32 flags
 #ifdef PERL_MAD
 Apr	|OP *	|newMYSUB	|I32 floor|NULLOK OP *o|NULLOK OP *proto \
 				|NULLOK OP *attrs|NULLOK OP *block
@@ -2246,9 +2257,9 @@ Apd	|PADOFFSET|pad_add_anon	|NN CV* func|I32 optype
 #if defined(PERL_IN_PAD_C)
 sd	|void	|pad_check_dup	|NN SV *name|U32 flags|NULLOK const HV *ourstash
 #endif
-ApdR	|PADOFFSET|pad_findmy_pvn|NN const char* namepv|STRLEN namelen|U32 flags
-ApdR	|PADOFFSET|pad_findmy_pv|NN const char* name|U32 flags
-ApdR	|PADOFFSET|pad_findmy_sv|NN SV* name|U32 flags
+Apd	|PADOFFSET|pad_findmy_pvn|NN const char* namepv|STRLEN namelen|U32 flags
+Apd	|PADOFFSET|pad_findmy_pv|NN const char* name|U32 flags
+Apd	|PADOFFSET|pad_findmy_sv|NN SV* name|U32 flags
 ApdD	|PADOFFSET|find_rundefsvoffset	|
 Apd	|SV*	|find_rundefsv	|
 : Used in pp.c

@@ -8,6 +8,7 @@ beos/beosish.h		BeOS port
 beos/nm.c		BeOS port
 cflags.SH		A script that emits C compilation flags per file
 Changes			Describe how to peruse changes between releases
+charclass_invlists.h	Compiled-in inversion lists
 config_h.SH		Produces config.h
 configpm		Produces lib/Config.pm
 Configure		Portability tool
@@ -1348,6 +1349,7 @@ cpan/IO-Compress/t/110encode-deflate.t			IO::Compress
 cpan/IO-Compress/t/110encode-gzip.t			IO::Compress
 cpan/IO-Compress/t/110encode-rawdeflate.t		IO::Compress
 cpan/IO-Compress/t/110encode-zip.t			IO::Compress
+cpan/IO-Compress/t/111const-deflate.t			IO::Compress
 cpan/IO-Compress/t/999pod.t				IO::Compress
 cpan/IO-Compress/t/compress/any.pl			Compress::Zlib
 cpan/IO-Compress/t/compress/anyunc.pl			Compress::Zlib
@@ -1967,6 +1969,7 @@ cpan/Pod-Parser/t/pod/contains_pod.t		Pod-Parser test
 cpan/Pod-Parser/t/pod/contains_pod.xr		Pod-Parser test file
 cpan/Pod-Parser/t/pod/emptycmd.t		Test empty pod directives
 cpan/Pod-Parser/t/pod/emptycmd.xr		Expected results for emptycmd.t
+cpan/Pod-Parser/t/pod/empty.xr
 cpan/Pod-Parser/t/pod/find.t			See if Pod::Find works
 cpan/Pod-Parser/t/pod/for.t			Test =for directive
 cpan/Pod-Parser/t/pod/for.xr			Expected results for for.t
@@ -1996,6 +1999,7 @@ cpan/Pod-Parser/t/pod/poderrs.t			Test POD errors
 cpan/Pod-Parser/t/pod/poderrs.xr		Expected results for poderrs.t
 cpan/Pod-Parser/t/pod/podselect.t		Test Pod::Select
 cpan/Pod-Parser/t/pod/podselect.xr		Expected results for podselect.t
+cpan/Pod-Parser/t/pod/selfcheck.t
 cpan/Pod-Parser/t/pod/special_seqs.t		Test "special" interior sequences
 cpan/Pod-Parser/t/pod/special_seqs.xr		Expected results for special_seqs.t
 cpan/Pod-Parser/t/pod/testcmp.pl		Module to compare output against expected results
@@ -2005,6 +2009,26 @@ cpan/Pod-Parser/t/pod/testpods/lib/Pod/Stuff.pm	Sample data for t/pod/find.t
 cpan/Pod-Parser/t/pod/twice.t			Test Pod::Parser
 cpan/Pod-Parser/t/pod/usage2.pod		Test POD for pod2usage tests
 cpan/Pod-Parser/t/pod/usage.pod			Test POD for pod2usage tests
+cpan/Pod-Perldoc/corpus/no-head.pod		test file for Pod-Perldoc
+cpan/Pod-Perldoc/corpus/perlfunc.pod		test file for Pod-Perldoc
+cpan/Pod-Perldoc/corpus/utf8.pod		test file for Pod-Perldoc
+cpan/Pod-Perldoc/lib/perldoc.pod		Look up Perl documentation in Pod format
+cpan/Pod-Perldoc/lib/Pod/Perldoc/BaseTo.pm	utility module for perldoc
+cpan/Pod-Perldoc/lib/Pod/Perldoc/GetOptsOO.pm	options parsing for perldoc
+cpan/Pod-Perldoc/lib/Pod/Perldoc.pm		guts of the 'perldoc' utility
+cpan/Pod-Perldoc/lib/Pod/Perldoc/ToANSI.pm	convert POD to ANSI text
+cpan/Pod-Perldoc/lib/Pod/Perldoc/ToChecker.pm	let perldoc check POD for errors
+cpan/Pod-Perldoc/lib/Pod/Perldoc/ToMan.pm	render POD as man pages
+cpan/Pod-Perldoc/lib/Pod/Perldoc/ToNroff.pm	convert POD to nroff
+cpan/Pod-Perldoc/lib/Pod/Perldoc/ToPod.pm	convert POD to POD
+cpan/Pod-Perldoc/lib/Pod/Perldoc/ToRtf.pm	convert POD to RTF
+cpan/Pod-Perldoc/lib/Pod/Perldoc/ToTerm.pm	convert POD to terminal output
+cpan/Pod-Perldoc/lib/Pod/Perldoc/ToText.pm	convert POD to plain text
+cpan/Pod-Perldoc/lib/Pod/Perldoc/ToTk.pm	convert POD via Tk::Pod
+cpan/Pod-Perldoc/lib/Pod/Perldoc/ToXml.pm	convert POD to XML
+cpan/Pod-Perldoc/t/load.t			test file for Pod-Perldoc
+cpan/Pod-Perldoc/t/man/_get_columns.t		test file for Pod-Perldoc
+cpan/Pod-Perldoc/t/pod.t			test file for Pod-Perldoc
 cpan/Pod-Simple/ChangeLog				Pod::Simple ChangeLog
 cpan/Pod-Simple/lib/Pod/Simple/BlackBox.pm		Pod::Simple::BlackBox
 cpan/Pod-Simple/lib/Pod/Simple/Checker.pm		check the Pod syntax of a document
@@ -2195,6 +2219,7 @@ cpan/Socket/t/getnameinfo.t		See if Socket::getnameinfo works
 cpan/Socket/t/ipv6_mreq.t		See if (un)pack_ipv6_mreq work
 cpan/Socket/t/socketpair.t		See if socketpair works
 cpan/Socket/t/Socket.t			See if Socket works
+cpan/Socket/typemap
 cpan/Sys-Syslog/Changes			Changelog for Sys::Syslog
 cpan/Sys-Syslog/fallback/const-c.inc	Sys::Syslog constants fallback file
 cpan/Sys-Syslog/fallback/const-xs.inc	Sys::Syslog constants fallback file
@@ -3027,7 +3052,10 @@ dist/Carp/lib/Carp.pm		Error message extension
 dist/Carp/Makefile.PL		makefile writer for Carp
 dist/Carp/t/Carp.t		See if Carp works
 dist/Carp/t/heavy.t		See if Carp::Heavy works
+dist/Carp/t/swash.t		See if Carp avoids breaking swash loading
 dist/Carp/t/vivify_gv.t		See if Carp leaves utf8:: stuff alone
+dist/Carp/t/vivify_stash.t		See if Carp leaves utf8:: stash alone
+dist/Carp/t/with_warnings.t		See if Carp plays nicely with warnings
 dist/constant/lib/constant.pm	For "use constant"
 dist/constant/t/constant.t	See if compile-time constants work
 dist/constant/t/utf8.t		Test Unicode constants under utf8 pragma
@@ -3062,6 +3090,7 @@ dist/Data-Dumper/Todo		Data pretty printer, futures
 dist/Data-Dumper/t/overload.t	See if Data::Dumper works for overloaded data
 dist/Data-Dumper/t/pair.t	See if Data::Dumper pair separator works
 dist/Data-Dumper/t/perl-74170.t	Regression test for stack reallocation
+dist/Data-Dumper/t/qr.t		See if Data::Dumper works with qr|/|
 dist/Data-Dumper/t/terse.t	See if Data::Dumper terse option works
 dist/Devel-SelfStubber/lib/Devel/SelfStubber.pm	Generate stubs for SelfLoader.pm
 dist/Devel-SelfStubber/t/Devel-SelfStubber.t	See if Devel::SelfStubber works
@@ -3120,8 +3149,9 @@ dist/ExtUtils-ParseXS/lib/ExtUtils/Typemaps/OutputMap.pm	ExtUtils::Typemaps guts
 dist/ExtUtils-ParseXS/lib/ExtUtils/Typemaps.pm			ExtUtils::Typemaps, a PXS helper
 dist/ExtUtils-ParseXS/lib/ExtUtils/Typemaps/Type.pm		ExtUtils::Typemaps guts
 dist/ExtUtils-ParseXS/lib/ExtUtils/xsubpp			External subroutine preprocessor
-dist/ExtUtils-ParseXS/lib/perlxs.pod	Perl XS application programming interface
-dist/ExtUtils-ParseXS/lib/perlxstut.pod	Perl XS tutorial
+dist/ExtUtils-ParseXS/lib/perlxs.pod				Perl XS application programming interface
+dist/ExtUtils-ParseXS/lib/perlxstut.pod				Perl XS tutorial
+dist/ExtUtils-ParseXS/lib/perlxstypemap.pod			Perl XS C/Perl type conversion tools
 dist/ExtUtils-ParseXS/t/001-basic.t				See if ExtUtils::ParseXS works
 dist/ExtUtils-ParseXS/t/002-more.t				Extended ExtUtils::ParseXS testing
 dist/ExtUtils-ParseXS/t/003-usage.t				ExtUtils::ParseXS tests
@@ -3369,26 +3399,6 @@ dist/Net-Ping/t/410_syn_host.t		Ping Net::Ping
 dist/Net-Ping/t/450_service.t		Ping Net::Ping
 dist/Net-Ping/t/500_ping_icmp.t		Ping Net::Ping
 dist/Net-Ping/t/510_ping_udp.t		Ping Net::Ping
-dist/Pod-Perldoc/corpus/no-head.pod		test file for Pod-Perldoc
-dist/Pod-Perldoc/corpus/perlfunc.pod		test file for Pod-Perldoc
-dist/Pod-Perldoc/corpus/utf8.pod		test file for Pod-Perldoc
-dist/Pod-Perldoc/lib/perldoc.pod		Look up Perl documentation in Pod format
-dist/Pod-Perldoc/lib/Pod/Perldoc/BaseTo.pm	utility module for perldoc
-dist/Pod-Perldoc/lib/Pod/Perldoc/GetOptsOO.pm	options parsing for perldoc
-dist/Pod-Perldoc/lib/Pod/Perldoc.pm		guts of the 'perldoc' utility
-dist/Pod-Perldoc/lib/Pod/Perldoc/ToANSI.pm	convert POD to ANSI text
-dist/Pod-Perldoc/lib/Pod/Perldoc/ToChecker.pm	let perldoc check POD for errors
-dist/Pod-Perldoc/lib/Pod/Perldoc/ToMan.pm	render POD as man pages
-dist/Pod-Perldoc/lib/Pod/Perldoc/ToNroff.pm	convert POD to nroff
-dist/Pod-Perldoc/lib/Pod/Perldoc/ToPod.pm	convert POD to POD
-dist/Pod-Perldoc/lib/Pod/Perldoc/ToRtf.pm	convert POD to RTF
-dist/Pod-Perldoc/lib/Pod/Perldoc/ToTerm.pm	convert POD to terminal output
-dist/Pod-Perldoc/lib/Pod/Perldoc/ToText.pm	convert POD to plain text
-dist/Pod-Perldoc/lib/Pod/Perldoc/ToTk.pm	convert POD via Tk::Pod
-dist/Pod-Perldoc/lib/Pod/Perldoc/ToXml.pm	convert POD to XML
-dist/Pod-Perldoc/t/load.t			test file for Pod-Perldoc
-dist/Pod-Perldoc/t/man/_get_columns.t		test file for Pod-Perldoc
-dist/Pod-Perldoc/t/pod.t			test file for Pod-Perldoc
 dist/Safe/Changes		Changes for Safe.pm
 dist/Safe/Makefile.PL		Makefile.PL for Safe.pm
 dist/Safe/MANIFEST		MANIFEST for Safe.pm
@@ -3465,6 +3475,8 @@ dist/Term-Complete/lib/Term/Complete.pm	A command completion subroutine
 dist/Term-Complete/t/Complete.t		See if Term::Complete works
 dist/Term-ReadLine/lib/Term/ReadLine.pm		Stub readline library
 dist/Term-ReadLine/t/ReadLine.t			See if Term::ReadLine works
+dist/Term-ReadLine/t/TkExternal.t	Test Tk
+dist/Term-ReadLine/t/Tk.t			See if Term::ReadLine works
 dist/Text-Abbrev/lib/Text/Abbrev.pm		An abbreviation table builder
 dist/Text-Abbrev/t/Abbrev.t		Test Text::Abbrev
 dist/Thread-Queue/lib/Thread/Queue.pm	Thread-safe queues
@@ -3781,6 +3793,8 @@ ext/PerlIO-encoding/MANIFEST	PerlIO::encoding list of files
 ext/PerlIO-encoding/t/encoding.t	See if PerlIO encoding conversion works
 ext/PerlIO-encoding/t/fallback.t	See if PerlIO fallbacks work
 ext/PerlIO-encoding/t/nolooping.t	Tests for PerlIO::encoding
+ext/PerlIO-mmap/mmap.pm	PerlIO layer for memory maps
+ext/PerlIO-mmap/mmap.xs	PerlIO layer for memory maps
 ext/PerlIO-scalar/scalar.pm	PerlIO layer for scalars
 ext/PerlIO-scalar/scalar.xs	PerlIO layer for scalars
 ext/PerlIO-scalar/t/scalar.t	See if PerlIO::scalar works
@@ -3789,10 +3803,16 @@ ext/PerlIO-via/hints/aix.pl	Hint for PerlIO::via for named architecture
 ext/PerlIO-via/t/via.t		See if PerlIO::via works
 ext/PerlIO-via/via.pm		PerlIO layer for layers in perl
 ext/PerlIO-via/via.xs		PerlIO layer for layers in perl
+ext/Pod-Functions/Functions_pm.PL	Writes Functions.pm
+ext/Pod-Functions/Makefile.PL		Makefile writer
+ext/Pod-Functions/t/Functions.t		See if Pod::Functions works
 ext/Pod-Html/bin/pod2html	Translator to turn pod into HTML
 ext/Pod-Html/lib/Pod/Html.pm	Convert POD data to HTML
+ext/Pod-Html/t/cache.pod
+ext/Pod-Html/t/cache.t
 ext/Pod-Html/t/crossref.pod
 ext/Pod-Html/t/crossref.t
+ext/Pod-Html/t/eol.t		test end of line agnosticism
 ext/Pod-Html/testdir/perlpodspec-copy.pod
 ext/Pod-Html/testdir/perlvar-copy.pod
 ext/Pod-Html/t/feature2.pod
@@ -3927,6 +3947,7 @@ ext/XS-APItest/MANIFEST		XS::APItest extension
 ext/XS-APItest/notcore.c	Test API functions when PERL_CORE is not defined
 ext/XS-APItest/numeric.xs	XS::APItest wrappers for numeric.c
 ext/XS-APItest/README		XS::APItest extension
+ext/XS-APItest/t/addissub.t	test op check wrapping
 ext/XS-APItest/t/arrayexpr.t	test recursive descent expression parsing
 ext/XS-APItest/t/autoload.t	Test XS AUTOLOAD routines
 ext/XS-APItest/t/BHK.pm		Helper for ./blockhooks.t
@@ -3994,7 +4015,8 @@ ext/XS-APItest/t/stuff_modify_bug.t	test for eval side-effecting source string
 ext/XS-APItest/t/stuff_svcur_bug.t	test for a bug in lex_stuff_pvn
 ext/XS-APItest/t/sviscow.t	Test SvIsCOW
 ext/XS-APItest/t/svpeek.t	XS::APItest extension
-ext/XS-APItest/t/svpv_magic.t	Test behaviour of SvPVbyte and get magic
+ext/XS-APItest/t/svpv_magic.t	Test behaviour of SvPVbyte/utf8 & get magic
+ext/XS-APItest/t/svpv.t		More generic SvPVbyte and SvPVutf8 tests
 ext/XS-APItest/t/svsetsv.t	Test behaviour of sv_setsv with/without PERL_CORE
 ext/XS-APItest/t/swaplabel.t	test recursive descent label parsing
 ext/XS-APItest/t/swaptwostmts.t	test recursive descent statement parsing
@@ -4013,7 +4035,6 @@ ext/XS-Typemap/Makefile.PL	XS::Typemap extension
 ext/XS-Typemap/README		XS::Typemap extension
 ext/XS-Typemap/stdio.c		XS::Typemap extension
 ext/XS-Typemap/t/Typemap.t	test that typemaps work
-ext/XS-Typemap/typemap		XS::Typemap extension
 ext/XS-Typemap/Typemap.pm	XS::Typemap extension
 ext/XS-Typemap/Typemap.xs	XS::Typemap extension
 fakesdio.h			stdio in terms of PerlIO
@@ -4272,9 +4293,6 @@ lib/perl5db/t/taint		Tests for the Perl debugger
 lib/perl5db/t/uncalled-subroutine	Tests for the Perl debugger
 lib/perl5db/t/with-subroutine		Tests for the Perl debugger
 lib/PerlIO.pm			PerlIO support module
-lib/Pod/Functions.pm		used by pod/splitpod
-lib/Pod/t/eol.t			end of line agnosticism
-lib/Pod/t/Functions.t		See if Pod::Functions works
 lib/Pod/t/InputObjects.t	See if Pod::InputObjects works
 lib/Pod/t/Select.t		See if Pod::Select works
 lib/Pod/t/Usage.t		See if Pod::Usage works
@@ -4613,6 +4631,7 @@ pod/perl5153delta.pod		Perl changes in version 5.15.3
 pod/perl5154delta.pod		Perl changes in version 5.15.4
 pod/perl5155delta.pod		Perl changes in version 5.15.5
 pod/perl5156delta.pod		Perl changes in version 5.15.6
+pod/perl5157delta.pod		Perl changes in version 5.15.7
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4846,6 +4865,7 @@ regen/embed.pl			Produces {embed,embedvar,proto}.h
 regen/feature.pl		Generates feature.pm
 regen/keywords.pl		Program to write keywords.h
 regen/mg_vtable.pl		generate mg_vtable.h
+regen/mk_invlists.pl		Generates charclass_invlists.h
 regen/mk_PL_charclass.pl	Populate the PL_charclass table
 regen/opcode.pl			Opcode header generator
 regen/opcodes			Opcode data
@@ -5354,6 +5374,8 @@ t/porting/globvar.t		Check that globvar.sym is sane
 t/porting/known_pod_issues.dat	Data file for porting/podcheck.t
 t/porting/maintainers.t		Test that Porting/Maintainers.pl is up to date
 t/porting/manifest.t		Test that this MANIFEST file is well formed
+t/porting/pending-author.t	Check if any pending commit would break tests
+t/porting/perlfunc.t		Test that Functions_pm.PL can parse perlfunc.pod
 t/porting/podcheck.t		Test the POD of shipped modules is well formed
 t/porting/pod_rules.t		Check that various pod lists are consistent
 t/porting/regen.t		Check that regen.pl doesn't need running

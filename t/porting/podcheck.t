@@ -200,7 +200,7 @@ For example,
     ./perl -I../lib porting/podcheck.t --add_link Unicode::Casing
 
 causes the external module "Unicode::Casing" to be added to the data base, so
-C<LE<lt>Unicode::Casing<gt>> will be considered valid.
+C<LE<lt>Unicode::CasingE<gt>> will be considered valid.
 
 =item --regen
 
@@ -365,9 +365,9 @@ my %excluded_files = (
                         canonicalize("configpm") => 1,
                         canonicalize("miniperl") => 1,
                         canonicalize("perl") => 1,
-                        canonicalize('dist/Pod-Perldoc/corpus/no-head.pod') => 1,
-                        canonicalize('dist/Pod-Perldoc/corpus/perlfunc.pod') => 1,
-                        canonicalize('dist/Pod-Perldoc/corpus/utf8.pod') => 1,
+                        canonicalize('cpan/Pod-Perldoc/corpus/no-head.pod') => 1,
+                        canonicalize('cpan/Pod-Perldoc/corpus/perlfunc.pod') => 1,
+                        canonicalize('cpan/Pod-Perldoc/corpus/utf8.pod') => 1,
                         canonicalize("lib/unicore/mktables") => 1,
                     );
 
@@ -1276,6 +1276,7 @@ sub is_pod_file {
                
     my $filename = $File::Find::name;
 
+    # $filename is relative, like './path'.  Strip that initial part away.
     # Assumes that the path separator is exactly one character.
     $filename =~ s/^\..//;
 

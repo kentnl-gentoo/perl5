@@ -292,8 +292,8 @@ is("\N{BOM}", chr(0xFEFF), 'Verify "\N{BOM}" is correct');
 
     is("\N{HORIZONTAL TABULATION}", "\t", 'Verify "\N{HORIZONTAL TABULATION}" eq "\t"');
 
-    my $ok = grep { /"HORIZONTAL TABULATION" is deprecated.*"CHARACTER TABULATION"/ } @WARN;
-    ok($ok, '... and that gives deprecated warning');
+    my $ok = ! grep { /"HORIZONTAL TABULATION" is deprecated.*"CHARACTER TABULATION"/ } @WARN;
+    ok($ok, '... and doesnt give deprecated warning');
 
     # XXX These tests should be changed for 5.16, when we convert BELL to the
     # Unicode version.
@@ -312,6 +312,19 @@ is("\N{BOM}", chr(0xFEFF), 'Verify "\N{BOM}" is correct');
 
 is(charnames::viacode(0xFEFF), "ZERO WIDTH NO-BREAK SPACE",
    'Verify viacode(0xFEFF) is correct');
+
+# These test that the changes to these in 6.1 are recognized.  (The double
+# test of using viacode and vianame is less than optimal as two errors could
+# cancel each other out, but later each is tested individually, and this
+# sidesteps and EBCDIC issues.
+is(charnames::viacode(charnames::vianame("CR")), "CARRIAGE RETURN",
+            'Verify viacode(vianame("CR")) is "CARRIAGE RETURN"');
+is(charnames::viacode(charnames::vianame("LF")), "LINE FEED",
+            'Verify viacode(vianame("LF")) is "LINE FEED"');
+is(charnames::viacode(charnames::vianame("FF")), "FORM FEED",
+            'Verify viacode(vianame("FF")) is "FORM FEED"');
+is(charnames::viacode(charnames::vianame("NEL")), "NEXT LINE",
+            'Verify viacode(vianame("NEL")) is "NEXT LINE"');
 
 {
     use warnings;
@@ -444,9 +457,13 @@ is(charnames::viacode("U+00000000000FEED"), "ARABIC LETTER WAW ISOLATED FORM", '
     is("\N{VERTICAL TABULATION SET}", "\N{LINE TABULATION SET}", 'Verify "\N{VERTICAL TABULATION SET}" eq "\N{LINE TABULATION SET}"');
     is("\N{REVERSE INDEX}", "\N{REVERSE LINE FEED}", 'Verify "\N{REVERSE INDEX}" eq "\N{REVERSE LINE FEED}"');
     is("\N{SINGLE-SHIFT 2}", "\N{SINGLE SHIFT TWO}", 'Verify "\N{SINGLE-SHIFT 2}" eq "\N{SINGLE SHIFT TWO}"');
+    is("\N{SINGLE-SHIFT-2}", "\N{SINGLE-SHIFT 2}", 'Verify "\N{SINGLE-SHIFT-2}" eq "\N{SINGLE SHIFT 2}"');
     is("\N{SINGLE-SHIFT 3}", "\N{SINGLE SHIFT THREE}", 'Verify "\N{SINGLE-SHIFT 3}" eq "\N{SINGLE SHIFT THREE}"');
+    is("\N{SINGLE-SHIFT-3}", "\N{SINGLE-SHIFT 3}", 'Verify "\N{SINGLE-SHIFT-3}" eq "\N{SINGLE SHIFT 3}"');
     is("\N{PRIVATE USE 1}", "\N{PRIVATE USE ONE}", 'Verify "\N{PRIVATE USE 1}" eq "\N{PRIVATE USE ONE}"');
+    is("\N{PRIVATE USE-1}", "\N{PRIVATE USE 1}", 'Verify "\N{PRIVATE USE-1}" eq "\N{PRIVATE USE 1}"');
     is("\N{PRIVATE USE 2}", "\N{PRIVATE USE TWO}", 'Verify "\N{PRIVATE USE 2}" eq "\N{PRIVATE USE TWO}"');
+    is("\N{PRIVATE USE-2}", "\N{PRIVATE USE 2}", 'Verify "\N{PRIVATE USE-2}" eq "\N{PRIVATE USE 2}"');
     is("\N{START OF PROTECTED AREA}", "\N{START OF GUARDED AREA}", 'Verify "\N{START OF PROTECTED AREA}" eq "\N{START OF GUARDED AREA}"');
     is("\N{END OF PROTECTED AREA}", "\N{END OF GUARDED AREA}", 'Verify "\N{END OF PROTECTED AREA}" eq "\N{END OF GUARDED AREA}"');
     is("\N{VS1}", "\N{VARIATION SELECTOR-1}", 'Verify "\N{VS1}" eq "\N{VARIATION SELECTOR-1}"');
@@ -1056,7 +1073,7 @@ is("\N{U+1D0C5}", "\N{BYZANTINE MUSICAL SYMBOL FTHORA SKLIRON CHROMA VASIS}", 'V
         chomp;
         s/^\s*#.*//;
         next unless $_;
-        my ($hex, $name) = split ";";
+        my ($hex, $name, $type) = split ";";
         my $i = CORE::hex $hex;
 
         # Make sure that both aliases (the one in UnicodeData, and the one we
@@ -1070,7 +1087,7 @@ is("\N{U+1D0C5}", "\N{BYZANTINE MUSICAL SYMBOL FTHORA SKLIRON CHROMA VASIS}", 'V
         # aliases for the same code point, and viacode should return only the
         # final one.  So don't do it here; instead rely on the loop below to
         # pick up the test.
-        $names[$i] = $name;
+        $names[$i] = $name if $type eq 'correction';
     }
     close $fh;
 
@@ -1131,6 +1148,11 @@ is("\N{U+1D0C5}", "\N{BYZANTINE MUSICAL SYMBOL FTHORA SKLIRON CHROMA VASIS}", 'V
             my $hex = sprintf("%04X", $i);
             if (! $names[$i]) {
 
+                # These four code points now have names, from NameAlias, but
+                # aren't listed as having names in UnicodeData.txt, so viacode
+                # returns their alias names, not undef
+                next if $i == 0x80 || $i == 0x81 || $i == 0x84 || $i == 0x99;
+
                 # If there is no name for this code point, all we can
                 # test is that.
                 $all_pass &= ok(! defined charnames::viacode($i), "Verify viacode(0x$hex) is undefined");
@@ -1139,7 +1161,13 @@ is("\N{U+1D0C5}", "\N{BYZANTINE MUSICAL SYMBOL FTHORA SKLIRON CHROMA VASIS}", 'V
                 # Otherwise, test that the name and code point map
                 # correctly.
                 $all_pass &= test_vianame($i, $hex, $names[$i]);
-                $all_pass &= is(charnames::viacode($i), $names[$i], "Verify viacode(0x$hex) is \"$names[$i]\"");
+
+                # These four code points have a different Unicode1 name than
+                # regular name, and viacode has already specifically tested
+                # for the regular name
+                if ($i != 0x0a && $i != 0x0c && $i != 0x0d && $i != 0x85) {
+                    $all_pass &= is(charnames::viacode($i), $names[$i], "Verify viacode(0x$hex) is \"$names[$i]\"");
+                }
 
                 # And make sure that a non-algorithmically named code
                 # point doesn't also map to one that is.

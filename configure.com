@@ -4849,7 +4849,6 @@ $   d_sockaddr_sa_len="undef"
 $   echo "You do not have sa_len in the sockaddr struct."
 $ ENDIF
 $!
-$!
 $! Check for sin6_scope_id
 $!
 $ echo4 "Checking the availability of sin6_scope_id in the struct sockaddr_in6 ..."
@@ -6094,6 +6093,7 @@ $ WC "d_inetaton='undef'"
 $ WC "d_inetntop='undef'"
 $ WC "d_inetpton='undef'"
 $ WC "d_int64_t='" + d_int64_t + "'"
+$ WC "d_ipv6_mreq='define'"
 $ WC "d_isascii='define'"
 $ WC "d_isblank='undef'"
 $ WC "d_isfinite='undef'"
@@ -6238,6 +6238,7 @@ $ WC "d_sigprocmask='" + d_sigprocmask + "'"
 $ WC "d_sigsetjmp='" + d_sigsetjmp + "'"
 $ WC "d_sin6_scope_id='" + d_sin6_scope_id + "'"
 $ WC "d_sitearch='define'"
+$ WC "d_sockaddr_in6='define'"
 $ WC "d_sockaddr_sa_len='" + d_sockaddr_sa_len + "'"
 $ WC "d_sockatmark='undef'"
 $ WC "d_sockatmarkproto='undef'"

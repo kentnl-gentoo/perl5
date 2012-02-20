@@ -7,22 +7,24 @@ Documentation for this is in bisect-runner.pl
 
 =cut
 
-my $start_time = time;
-
 # The default, auto_abbrev will treat -e as an abbreviation of --end
 # Which isn't what we want.
 use Getopt::Long qw(:config pass_through no_auto_abbrev);
 
-my ($start, $end, $validate);
-unshift @ARGV, '--help' unless GetOptions('start=s' => \$start,
-                                          'end=s' => \$end,
-                                          validate => \$validate);
+my ($start, $end, $validate, $usage, $bad);
+$bad = !GetOptions('start=s' => \$start, 'end=s' => \$end,
+                   validate => \$validate, 'usage|help|?' => \$usage);
+unshift @ARGV, '--help' if $bad || $usage;
 unshift @ARGV, '--validate' if $validate;
 
 my $runner = $0;
 $runner =~ s/bisect\.pl/bisect-runner.pl/;
 
 die "Can't find bisect runner $runner" unless -f $runner;
+
+system $^X, $runner, '--check-args', '--check-shebang', @ARGV and exit 255;
+exit 255 if $bad;
+exit 0 if $usage;
 
 {
     my ($dev0, $ino0) = stat $0;
@@ -32,7 +34,7 @@ die "Can't find bisect runner $runner" unless -f $runner;
       if defined $dev1 && $dev0 == $dev1 && $ino0 == $ino1;
 }
 
-system $^X, $runner, '--check-args', '--check-shebang', @ARGV and exit 255;
+my $start_time = time;
 
 # We try these in this order for the start revision if none is specified.
 my @stable = qw(perl-5.005 perl-5.6.0 perl-5.8.0 v5.10.0 v5.12.0 v5.14.0);
@@ -119,15 +121,24 @@ if (defined $start) {
     die "Runner returned $ret, not 0 for start revision" if $ret;
 } else {
     # Try to find the earliest version for which the test works
+    my @tried;
     foreach my $try (@stable) {
+        if (`git rev-list -n1 $end ^$try^` eq "") {
+            print "Skipping $try, as it is more recent than end commit "
+                . (substr $end, 0, 16) . "\n";
+            # As @stable is supposed to be in age order, arguably we should
+            # last; here.
+            next;
+        }
         system "git checkout $try" and die;
         my $ret = system $^X, $runner, @ARGV;
         if (!$ret) {
             $start = $try;
             last;
         }
+        push @tried, $try;
     }
-    die "Can't find a suitable start revision to default to. Tried @stable"
+    die "Can't find a suitable start revision to default to.\nTried @tried"
         unless defined $start;
 }
 

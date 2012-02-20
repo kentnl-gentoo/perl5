@@ -86,6 +86,9 @@
 #endif
 
 #include "dquote_static.c"
+#ifndef PERL_IN_XSUB_RE
+#  include "charclass_invlists.h"
+#endif
 
 #ifdef op
 #undef op
@@ -4813,6 +4816,64 @@ Perl_re_compile(pTHX_ SV * const pattern, U32 orig_pm_flags)
 
     DEBUG_r(if (!PL_colorset) reginitcolors());
 
+#ifndef PERL_IN_XSUB_RE
+    /* Initialize these here instead of as-needed, as is quick and avoids
+     * having to test them each time otherwise */
+    if (! PL_AboveLatin1) {
+	PL_AboveLatin1 = _new_invlist_C_array(AboveLatin1_invlist);
+	PL_ASCII = _new_invlist_C_array(ASCII_invlist);
+	PL_Latin1 = _new_invlist_C_array(Latin1_invlist);
+
+	PL_L1PosixAlnum = _new_invlist_C_array(L1PosixAlnum_invlist);
+	PL_PosixAlnum = _new_invlist_C_array(PosixAlnum_invlist);
+
+	PL_L1PosixAlpha = _new_invlist_C_array(L1PosixAlpha_invlist);
+	PL_PosixAlpha = _new_invlist_C_array(PosixAlpha_invlist);
+
+	PL_PosixBlank = _new_invlist_C_array(PosixBlank_invlist);
+	PL_XPosixBlank = _new_invlist_C_array(XPosixBlank_invlist);
+
+	PL_L1Cased = _new_invlist_C_array(L1Cased_invlist);
+
+	PL_PosixCntrl = _new_invlist_C_array(PosixCntrl_invlist);
+	PL_XPosixCntrl = _new_invlist_C_array(XPosixCntrl_invlist);
+
+	PL_PosixDigit = _new_invlist_C_array(PosixDigit_invlist);
+
+	PL_L1PosixGraph = _new_invlist_C_array(L1PosixGraph_invlist);
+	PL_PosixGraph = _new_invlist_C_array(PosixGraph_invlist);
+
+	PL_L1PosixAlnum = _new_invlist_C_array(L1PosixAlnum_invlist);
+	PL_PosixAlnum = _new_invlist_C_array(PosixAlnum_invlist);
+
+	PL_L1PosixLower = _new_invlist_C_array(L1PosixLower_invlist);
+	PL_PosixLower = _new_invlist_C_array(PosixLower_invlist);
+
+	PL_L1PosixPrint = _new_invlist_C_array(L1PosixPrint_invlist);
+	PL_PosixPrint = _new_invlist_C_array(PosixPrint_invlist);
+
+	PL_L1PosixPunct = _new_invlist_C_array(L1PosixPunct_invlist);
+	PL_PosixPunct = _new_invlist_C_array(PosixPunct_invlist);
+
+	PL_PerlSpace = _new_invlist_C_array(PerlSpace_invlist);
+	PL_XPerlSpace = _new_invlist_C_array(XPerlSpace_invlist);
+
+	PL_PosixSpace = _new_invlist_C_array(PosixSpace_invlist);
+	PL_XPosixSpace = _new_invlist_C_array(XPosixSpace_invlist);
+
+	PL_L1PosixUpper = _new_invlist_C_array(L1PosixUpper_invlist);
+	PL_PosixUpper = _new_invlist_C_array(PosixUpper_invlist);
+
+	PL_VertSpace = _new_invlist_C_array(VertSpace_invlist);
+
+	PL_PosixWord = _new_invlist_C_array(PosixWord_invlist);
+	PL_L1PosixWord = _new_invlist_C_array(L1PosixWord_invlist);
+
+	PL_PosixXDigit = _new_invlist_C_array(PosixXDigit_invlist);
+	PL_XPosixXDigit = _new_invlist_C_array(XPosixXDigit_invlist);
+    }
+#endif
+
     exp = SvPV(pattern, plen);
 
     if (plen == 0) { /* ignore the utf8ness if the pattern is 0 length */
@@ -6140,7 +6201,19 @@ S_reg_scan_name(pTHX_ RExC_state_t *pRExC_state, U32 flags)
 #define INVLIST_LEN_OFFSET 0	/* Number of elements in the inversion list */
 #define INVLIST_ITER_OFFSET 1	/* Current iteration position */
 
-#define INVLIST_ZERO_OFFSET 2	/* 0 or 1; must be last element in header */
+/* This is a combination of a version and data structure type, so that one
+ * being passed in can be validated to be an inversion list of the correct
+ * vintage.  When the structure of the header is changed, a new random number
+ * in the range 2**31-1 should be generated and the new() method changed to
+ * insert that at this location.  Then, if an auxiliary program doesn't change
+ * correspondingly, it will be discovered immediately */
+#define INVLIST_VERSION_ID_OFFSET 2
+#define INVLIST_VERSION_ID 1064334010
+
+/* For safety, when adding new elements, remember to #undef them at the end of
+ * the inversion list code section */
+
+#define INVLIST_ZERO_OFFSET 3	/* 0 or 1; must be last element in header */
 /* The UV at position ZERO contains either 0 or 1.  If 0, the inversion list
  * contains the code point U+00000, and begins here.  If 1, the inversion list
  * doesn't contain U+0000, and it begins at the next UV in the array.
@@ -6300,9 +6373,38 @@ Perl__new_invlist(pTHX_ IV initial_size)
      * properly */
     *get_invlist_zero_addr(new_list) = UV_MAX;
 
+    *get_invlist_version_id_addr(new_list) = INVLIST_VERSION_ID;
+#if HEADER_LENGTH != 4
+#   error Need to regenerate VERSION_ID by running perl -E 'say int(rand 2**31-1)', and then changing the #if to the new length
+#endif
+
     return new_list;
 }
 #endif
+
+STATIC SV*
+S__new_invlist_C_array(pTHX_ UV* list)
+{
+    /* Return a pointer to a newly constructed inversion list, initialized to
+     * point to <list>, which has to be in the exact correct inversion list
+     * form, including internal fields.  Thus this is a dangerous routine that
+     * should not be used in the wrong hands */
+
+    SV* invlist = newSV_type(SVt_PV);
+
+    PERL_ARGS_ASSERT__NEW_INVLIST_C_ARRAY;
+
+    SvPV_set(invlist, (char *) list);
+    SvLEN_set(invlist, 0);  /* Means we own the contents, and the system
+			       shouldn't touch it */
+    SvCUR_set(invlist, TO_INTERNAL_SIZE(invlist_len(invlist)));
+
+    if (*get_invlist_version_id_addr(invlist) != INVLIST_VERSION_ID) {
+        Perl_croak(aTHX_ "panic: Incorrect version for previously generated inversion list");
+    }
+
+    return invlist;
+}
 
 STATIC void
 S_invlist_extend(pTHX_ SV* const invlist, const UV new_max)
@@ -6329,6 +6431,8 @@ S_invlist_trim(pTHX_ SV* const invlist)
  * etc */
 #define ELEMENT_RANGE_MATCHES_INVLIST(i) (! ((i) & 1))
 #define PREV_RANGE_MATCHES_INVLIST(i) (! ELEMENT_RANGE_MATCHES_INVLIST(i))
+
+#define _invlist_union_complement_2nd(a, b, output) _invlist_union_maybe_complement_2nd(a, b, TRUE, output)
 
 #ifndef PERL_IN_XSUB_RE
 void
@@ -6535,12 +6639,17 @@ Perl__invlist_populate_swatch(pTHX_ SV* const invlist, const UV start, const UV 
     return;
 }
 
+
 void
-Perl__invlist_union(pTHX_ SV* const a, SV* const b, SV** output)
+Perl__invlist_union_maybe_complement_2nd(pTHX_ SV* const a, SV* const b, bool complement_b, SV** output)
 {
     /* Take the union of two inversion lists and point <output> to it.  *output
      * should be defined upon input, and if it points to one of the two lists,
-     * the reference count to that list will be decremented.
+     * the reference count to that list will be decremented.  The first list,
+     * <a>, may be NULL, in which case a copy of the second list is returned.
+     * If <complement_b> is TRUE, the union is taken of the complement
+     * (inversion) of <b> instead of b itself.
+     *
      * The basis for this comes from "Unicode Demystified" Chapter 13 by
      * Richard Gillam, published by Addison-Wesley, and explained at some
      * length there.  The preface says to incorporate its examples into your
@@ -6575,17 +6684,21 @@ Perl__invlist_union(pTHX_ SV* const a, SV* const b, SV** output)
      */
     UV count = 0;
 
-    PERL_ARGS_ASSERT__INVLIST_UNION;
+    PERL_ARGS_ASSERT__INVLIST_UNION_MAYBE_COMPLEMENT_2ND;
     assert(a != b);
 
     /* If either one is empty, the union is the other one */
-    len_a = invlist_len(a);
-    if (len_a == 0) {
+    if (a == NULL || ((len_a = invlist_len(a)) == 0)) {
 	if (*output == a) {
-	    SvREFCNT_dec(a);
+            if (a != NULL) {
+                SvREFCNT_dec(a);
+            }
 	}
 	if (*output != b) {
 	    *output = invlist_clone(b);
+            if (complement_b) {
+                _invlist_invert(*output);
+            }
 	} /* else *output already = b; */
 	return;
     }
@@ -6593,16 +6706,51 @@ Perl__invlist_union(pTHX_ SV* const a, SV* const b, SV** output)
 	if (*output == b) {
 	    SvREFCNT_dec(b);
 	}
-	if (*output != a) {
-	    *output = invlist_clone(a);
-	}
-	/* else *output already = a; */
+
+        /* The complement of an empty list is a list that has everything in it,
+         * so the union with <a> includes everything too */
+        if (complement_b) {
+            if (a == *output) {
+                SvREFCNT_dec(a);
+            }
+            *output = _new_invlist(1);
+            _append_range_to_invlist(*output, 0, UV_MAX);
+        }
+        else if (*output != a) {
+            *output = invlist_clone(a);
+        }
+        /* else *output already = a; */
 	return;
     }
 
     /* Here both lists exist and are non-empty */
     array_a = invlist_array(a);
     array_b = invlist_array(b);
+
+    /* If are to take the union of 'a' with the complement of b, set it
+     * up so are looking at b's complement. */
+    if (complement_b) {
+
+	/* To complement, we invert: if the first element is 0, remove it.  To
+	 * do this, we just pretend the array starts one later, and clear the
+	 * flag as we don't have to do anything else later */
+        if (array_b[0] == 0) {
+            array_b++;
+            len_b--;
+            complement_b = FALSE;
+        }
+        else {
+
+            /* But if the first element is not zero, we unshift a 0 before the
+             * array.  The data structure reserves a space for that 0 (which
+             * should be a '1' right now), so physical shifting is unneeded,
+             * but temporarily change that element to 0.  Before exiting the
+             * routine, we must restore the element to '1' */
+            array_b--;
+            len_b++;
+            array_b[0] = 0;
+        }
+    }
 
     /* Size the union for the worst case: that the sets are completely
      * disjoint */
@@ -6722,16 +6870,24 @@ Perl__invlist_union(pTHX_ SV* const a, SV* const b, SV** output)
 	SvREFCNT_dec(*output);
     }
 
+    /* If we've changed b, restore it */
+    if (complement_b) {
+        array_b[0] = 1;
+    }
+
     *output = u;
     return;
 }
 
 void
-Perl__invlist_intersection(pTHX_ SV* const a, SV* const b, SV** i)
+Perl__invlist_intersection_maybe_complement_2nd(pTHX_ SV* const a, SV* const b, bool complement_b, SV** i)
 {
     /* Take the intersection of two inversion lists and point <i> to it.  *i
      * should be defined upon input, and if it points to one of the two lists,
      * the reference count to that list will be decremented.
+     * If <complement_b> is TRUE, the result will be the intersection of <a>
+     * and the complement (or inversion) of <b> instead of <b> directly.
+     *
      * The basis for this comes from "Unicode Demystified" Chapter 13 by
      * Richard Gillam, published by Addison-Wesley, and explained at some
      * length there.  The preface says to incorporate its examples into your
@@ -6762,22 +6918,38 @@ Perl__invlist_intersection(pTHX_ SV* const a, SV* const b, SV** i)
      */
     UV count = 0;
 
-    PERL_ARGS_ASSERT__INVLIST_INTERSECTION;
+    PERL_ARGS_ASSERT__INVLIST_INTERSECTION_MAYBE_COMPLEMENT_2ND;
     assert(a != b);
 
-    /* If either one is empty, the intersection is null */
+    /* Special case if either one is empty */
     len_a = invlist_len(a);
     if ((len_a == 0) || ((len_b = invlist_len(b)) == 0)) {
 
-	/* If the result is the same as one of the inputs, the input is being
-	 * overwritten */
+        if (len_a != 0 && complement_b) {
+
+            /* Here, 'a' is not empty, therefore from the above 'if', 'b' must
+             * be empty.  Here, also we are using 'b's complement, which hence
+             * must be every possible code point.  Thus the intersection is
+             * simply 'a'. */
+            if (*i != a) {
+                *i = invlist_clone(a);
+
+                if (*i == b) {
+                    SvREFCNT_dec(b);
+                }
+            }
+            /* else *i is already 'a' */
+            return;
+        }
+
+        /* Here, 'a' or 'b' is empty and not using the complement of 'b'.  The
+         * intersection must be empty */
 	if (*i == a) {
 	    SvREFCNT_dec(a);
 	}
 	else if (*i == b) {
 	    SvREFCNT_dec(b);
 	}
-
 	*i = _new_invlist(0);
 	return;
     }
@@ -6785,6 +6957,31 @@ Perl__invlist_intersection(pTHX_ SV* const a, SV* const b, SV** i)
     /* Here both lists exist and are non-empty */
     array_a = invlist_array(a);
     array_b = invlist_array(b);
+
+    /* If are to take the intersection of 'a' with the complement of b, set it
+     * up so are looking at b's complement. */
+    if (complement_b) {
+
+	/* To complement, we invert: if the first element is 0, remove it.  To
+	 * do this, we just pretend the array starts one later, and clear the
+	 * flag as we don't have to do anything else later */
+        if (array_b[0] == 0) {
+            array_b++;
+            len_b--;
+            complement_b = FALSE;
+        }
+        else {
+
+            /* But if the first element is not zero, we unshift a 0 before the
+             * array.  The data structure reserves a space for that 0 (which
+             * should be a '1' right now), so physical shifting is unneeded,
+             * but temporarily change that element to 0.  Before exiting the
+             * routine, we must restore the element to '1' */
+            array_b--;
+            len_b++;
+            array_b[0] = 0;
+        }
+    }
 
     /* Size the intersection for the worst case: that the intersection ends up
      * fragmenting everything to be completely disjoint */
@@ -6892,6 +7089,11 @@ Perl__invlist_intersection(pTHX_ SV* const a, SV* const b, SV** i)
     /*  We may be removing a reference to one of the inputs */
     if (a == *i || b == *i) {
 	SvREFCNT_dec(*i);
+    }
+
+    /* If we've changed b, restore it */
+    if (complement_b) {
+        array_b[0] = 1;
     }
 
     *i = r;
@@ -7035,46 +7237,6 @@ S_invlist_clone(pTHX_ SV* const invlist)
     return new_invlist;
 }
 
-#ifndef PERL_IN_XSUB_RE
-void
-Perl__invlist_subtract(pTHX_ SV* const a, SV* const b, SV** result)
-{
-    /* Point <result> to an inversion list which consists of all elements in
-     * <a> that aren't also in <b>.  *result should be defined upon input, and
-     * if it points to C<b> its reference count will be decremented. */
-
-    PERL_ARGS_ASSERT__INVLIST_SUBTRACT;
-    assert(a != b);
-
-    /* Subtracting nothing retains the original */
-    if (invlist_len(b) == 0) {
-
-	if (*result == b) {
-	    SvREFCNT_dec(b);
-	}
-
-	/* If the result is not to be the same variable as the original, create
-	 * a copy */
-	if (*result != a) {
-	    *result = invlist_clone(a);
-	}
-    } else {
-	SV *b_copy = invlist_clone(b);
-	_invlist_invert(b_copy);	/* Everything not in 'b' */
-
-	if (*result == b) {
-	    SvREFCNT_dec(b);
-	}
-
-	_invlist_intersection(a, b_copy, result);    /* Everything in 'a' not in
-						       'b' */
-	SvREFCNT_dec(b_copy);
-    }
-
-    return;
-}
-#endif
-
 PERL_STATIC_INLINE UV*
 S_get_invlist_iter_addr(pTHX_ SV* invlist)
 {
@@ -7084,6 +7246,16 @@ S_get_invlist_iter_addr(pTHX_ SV* invlist)
     PERL_ARGS_ASSERT_GET_INVLIST_ITER_ADDR;
 
     return (UV *) (SvPVX(invlist) + (INVLIST_ITER_OFFSET * sizeof (UV)));
+}
+
+PERL_STATIC_INLINE UV*
+S_get_invlist_version_id_addr(pTHX_ SV* invlist)
+{
+    /* Return the address of the UV that contains the version id. */
+
+    PERL_ARGS_ASSERT_GET_INVLIST_VERSION_ID_ADDR;
+
+    return (UV *) (SvPVX(invlist) + (INVLIST_VERSION_ID_OFFSET * sizeof (UV)));
 }
 
 PERL_STATIC_INLINE void
@@ -7191,6 +7363,7 @@ S_invlist_dump(pTHX_ SV* const invlist, const char * const header)
 #undef INVLIST_LEN_OFFSET
 #undef INVLIST_ZERO_OFFSET
 #undef INVLIST_ITER_OFFSET
+#undef INVLIST_VERSION_ID
 
 /* End of inversion list object */
 
@@ -9271,7 +9444,6 @@ tryagain:
 	    char *s;
 	    STRLEN foldlen;
 	    U8 tmpbuf[UTF8_MAXBYTES_CASE+1], *foldbuf;
-	    regnode * orig_emit;
             U8 node_type;
 
 	    /* Is this a LATIN LOWER CASE SHARP S in an EXACTFU node?  If so,
@@ -9279,9 +9451,6 @@ tryagain:
 	    bool is_exactfu_sharp_s;
 
 	    ender = 0;
-	    orig_emit = RExC_emit; /* Save the original output node position in
-				      case we need to output a different node
-				      type */
             node_type = ((! FOLD) ? EXACT
 		        : (LOC)
 			  ? EXACTFL
@@ -9864,91 +10033,132 @@ S_checkposixcc(pTHX_ RExC_state_t *pRExC_state)
     }
 }
 
-/* No locale test, and always Unicode semantics, no ignore-case differences */
-#define _C_C_T_NOLOC_(NAME,TEST,WORD)                                          \
-ANYOF_##NAME:                                                                  \
-	for (value = 0; value < 256; value++)                                  \
-	    if (TEST)                                                          \
-	    stored += set_regclass_bit(pRExC_state, ret, (U8) value, &l1_fold_invlist, &unicode_alternate);  \
-    yesno = '+';                                                               \
-    what = WORD;                                                               \
-    break;                                                                     \
-case ANYOF_N##NAME:                                                            \
-	for (value = 0; value < 256; value++)                                  \
-	    if (!TEST)                                                         \
-	    stored += set_regclass_bit(pRExC_state, ret, (U8) value, &l1_fold_invlist, &unicode_alternate);  \
-    yesno = '!';                                                               \
-    what = WORD;                                                               \
-    break
+/* Generate the code to add a full posix character <class> to the bracketed
+ * character class given by <node>.  (<node> is needed only under locale rules)
+ * destlist     is the inversion list for non-locale rules that this class is
+ *              to be added to
+ * sourcelist   is the ASCII-range inversion list to add under /a rules
+ * Xsourcelist  is the full Unicode range list to use otherwise. */
+#define DO_POSIX(node, class, destlist, sourcelist, Xsourcelist)           \
+    if (LOC) {                                                             \
+	SV* scratch_list = NULL;                                           \
+                                                                           \
+        /* Set this class in the node for runtime matching */              \
+        ANYOF_CLASS_SET(node, class);                                      \
+                                                                           \
+        /* For above Latin1 code points, we use the full Unicode range */  \
+        _invlist_intersection(PL_AboveLatin1,                              \
+                              Xsourcelist,                                 \
+                              &scratch_list);                              \
+        /* And set the output to it, adding instead if there already is an \
+	 * output.  Checking if <destlist> is NULL first saves an extra    \
+	 * clone.  Its reference count will be decremented at the next     \
+	 * union, etc, or if this is the only instance, at the end of the  \
+	 * routine */                                                      \
+        if (! destlist) {                                                  \
+            destlist = scratch_list;                                       \
+        }                                                                  \
+        else {                                                             \
+            _invlist_union(destlist, scratch_list, &destlist);             \
+            SvREFCNT_dec(scratch_list);                                    \
+        }                                                                  \
+    }                                                                      \
+    else {                                                                 \
+        /* For non-locale, just add it to any existing list */             \
+        _invlist_union(destlist,                                           \
+                       (AT_LEAST_ASCII_RESTRICTED)                         \
+                           ? sourcelist                                    \
+                           : Xsourcelist,                                  \
+                       &destlist);                                         \
+    }
 
-/* Like the above, but there are differences if we are in uni-8-bit or not, so
- * there are two tests passed in, to use depending on that. There aren't any
- * cases where the label is different from the name, so no need for that
- * parameter.
- * Sets 'what' to WORD which is the property name for non-bitmap code points;
- * But, uses FOLD_WORD instead if /i has been selected, to allow a different
- * property name */
-#define _C_C_T_(NAME, TEST_8, TEST_7, WORD, FOLD_WORD)                         \
-ANYOF_##NAME:                                                                  \
-    if (LOC) ANYOF_CLASS_SET(ret, ANYOF_##NAME);                               \
-    else if (UNI_SEMANTICS) {                                                  \
-        for (value = 0; value < 256; value++) {                                \
-            if (TEST_8(value)) stored +=                                       \
-                      set_regclass_bit(pRExC_state, ret, (U8) value, &l1_fold_invlist, &unicode_alternate);  \
-        }                                                                      \
-    }                                                                          \
-    else {                                                                     \
-        for (value = 0; value < 128; value++) {                                \
-            if (TEST_7(UNI_TO_NATIVE(value))) stored +=                        \
-		set_regclass_bit(pRExC_state, ret,                     \
-			           (U8) UNI_TO_NATIVE(value), &l1_fold_invlist, &unicode_alternate);                 \
-        }                                                                      \
-    }                                                                          \
-    yesno = '+';                                                               \
-    if (FOLD) {                                                                \
-        what = FOLD_WORD;                                                      \
-    }                                                                          \
-    else {                                                                     \
-        what = WORD;                                                           \
-    }                                                                          \
-    break;                                                                     \
-case ANYOF_N##NAME:                                                            \
-    if (LOC) ANYOF_CLASS_SET(ret, ANYOF_N##NAME);                              \
-    else if (UNI_SEMANTICS) {                                                  \
-        for (value = 0; value < 256; value++) {                                \
-            if (! TEST_8(value)) stored +=                                     \
-		    set_regclass_bit(pRExC_state, ret, (U8) value, &l1_fold_invlist, &unicode_alternate);    \
-        }                                                                      \
-    }                                                                          \
-    else {                                                                     \
-        for (value = 0; value < 128; value++) {                                \
-            if (! TEST_7(UNI_TO_NATIVE(value))) stored += set_regclass_bit(  \
-			pRExC_state, ret, (U8) UNI_TO_NATIVE(value), &l1_fold_invlist, &unicode_alternate);    \
-        }                                                                      \
-	if (AT_LEAST_ASCII_RESTRICTED) {                                       \
-	    for (value = 128; value < 256; value++) {                          \
-             stored += set_regclass_bit(                                     \
-			   pRExC_state, ret, (U8) UNI_TO_NATIVE(value), &l1_fold_invlist, &unicode_alternate); \
-	    }                                                                  \
-	    ANYOF_FLAGS(ret) |= ANYOF_UNICODE_ALL;                             \
-	}                                                                      \
-	else {                                                                 \
-	    /* For a non-ut8 target string with DEPENDS semantics, all above   \
-	     * ASCII Latin1 code points match the complement of any of the     \
-	     * classes.  But in utf8, they have their Unicode semantics, so    \
-	     * can't just set them in the bitmap, or else regexec.c will think \
-	     * they matched when they shouldn't. */                            \
-	    ANYOF_FLAGS(ret) |= ANYOF_NON_UTF8_LATIN1_ALL;                     \
-	}                                                                      \
-    }                                                                          \
-    yesno = '!';                                                               \
-    if (FOLD) {                                                                \
-        what = FOLD_WORD;                                                      \
-    }                                                                          \
-    else {                                                                     \
-        what = WORD;                                                           \
-    }                                                                          \
-    break
+/* Like DO_POSIX, but matches the complement of <sourcelist> and <Xsourcelist>.
+ */
+#define DO_N_POSIX(node, class, destlist, sourcelist, Xsourcelist)         \
+    if (LOC) {                                                             \
+        SV* scratch_list = NULL;                                           \
+        ANYOF_CLASS_SET(node, class);					   \
+        _invlist_subtract(PL_AboveLatin1, Xsourcelist, &scratch_list);	   \
+        if (! destlist) {					           \
+            destlist = scratch_list;					   \
+        }                                                                  \
+        else {                                                             \
+            _invlist_union(destlist, scratch_list, &destlist);             \
+            SvREFCNT_dec(scratch_list);                                    \
+        }                                                                  \
+    }                                                                      \
+    else {                                                                 \
+        _invlist_union_complement_2nd(destlist,                            \
+                                    (AT_LEAST_ASCII_RESTRICTED)            \
+                                        ? sourcelist                       \
+                                        : Xsourcelist,                     \
+                                    &destlist);                            \
+        /* Under /d, everything in the upper half of the Latin1 range      \
+         * matches this complement */                                      \
+        if (DEPENDS_SEMANTICS) {                                           \
+            ANYOF_FLAGS(node) |= ANYOF_NON_UTF8_LATIN1_ALL;                \
+        }                                                                  \
+    }
+
+/* Generate the code to add a posix character <class> to the bracketed
+ * character class given by <node>.  (<node> is needed only under locale rules)
+ * destlist       is the inversion list for non-locale rules that this class is
+ *                to be added to
+ * sourcelist     is the ASCII-range inversion list to add under /a rules
+ * l1_sourcelist  is the Latin1 range list to use otherwise.
+ * Xpropertyname  is the name to add to <run_time_list> of the property to
+ *                specify the code points above Latin1 that will have to be
+ *                determined at run-time
+ * run_time_list  is a SV* that contains text names of properties that are to
+ *                be computed at run time.  This concatenates <Xpropertyname>
+ *                to it, apppropriately
+ * This is essentially DO_POSIX, but we know only the Latin1 values at compile
+ * time */
+#define DO_POSIX_LATIN1_ONLY_KNOWN(node, class, destlist, sourcelist,      \
+                              l1_sourcelist, Xpropertyname, run_time_list) \
+    /* If not /a matching, there are going to be code points we will have  \
+     * to defer to runtime to look-up */                                   \
+    if (! AT_LEAST_ASCII_RESTRICTED) {                                     \
+        Perl_sv_catpvf(aTHX_ run_time_list, "+utf8::%s\n", Xpropertyname); \
+    }                                                                      \
+    if (LOC) {                                                             \
+        ANYOF_CLASS_SET(node, class);                                      \
+    }                                                                      \
+    else {                                                                 \
+        _invlist_union(destlist,                                           \
+                       (AT_LEAST_ASCII_RESTRICTED)                         \
+                           ? sourcelist                                    \
+                           : l1_sourcelist,                                \
+                       &destlist);                                         \
+    }
+
+/* Like DO_POSIX_LATIN1_ONLY_KNOWN, but for the complement.  A combination of
+ * this and DO_N_POSIX */
+#define DO_N_POSIX_LATIN1_ONLY_KNOWN(node, class, destlist, sourcelist,    \
+                              l1_sourcelist, Xpropertyname, run_time_list) \
+    if (AT_LEAST_ASCII_RESTRICTED) {                                       \
+        _invlist_union_complement_2nd(destlist, sourcelist, &destlist);    \
+    }                                                                      \
+    else {                                                                 \
+        Perl_sv_catpvf(aTHX_ run_time_list, "!utf8::%s\n", Xpropertyname); \
+	if (LOC) {                                                         \
+	    ANYOF_CLASS_SET(node, namedclass);				   \
+	}                                                                  \
+	else {                                                             \
+            SV* scratch_list = NULL;                                       \
+	    _invlist_subtract(PL_Latin1, l1_sourcelist, &scratch_list);    \
+	    if (! destlist) {                                              \
+		destlist = scratch_list;                                   \
+	    }                                                              \
+	    else {                                                         \
+		_invlist_union(destlist, scratch_list, &destlist);         \
+		SvREFCNT_dec(scratch_list);                                \
+	    }                                                              \
+	    if (DEPENDS_SEMANTICS) {                                       \
+		ANYOF_FLAGS(node) |= ANYOF_NON_UTF8_LATIN1_ALL;            \
+	    }                                                              \
+	}                                                                  \
+    }
 
 STATIC U8
 S_set_regclass_bit_fold(pTHX_ RExC_state_t *pRExC_state, regnode* node, const U8 value, SV** invlist_ptr, AV** alternate_ptr)
@@ -10425,18 +10635,7 @@ parseit:
 
                         /* Invert if asking for the complement */
                         if (value == 'P') {
-
-			    /* Add to any existing list */
-			    if (! properties) {
-				properties = invlist_clone(invlist);
-				_invlist_invert(properties);
-			    }
-			    else {
-				invlist = invlist_clone(invlist);
-				_invlist_invert(invlist);
-				_invlist_union(properties, invlist, &properties);
-				SvREFCNT_dec(invlist);
-			    }
+			    _invlist_union_complement_2nd(properties, invlist, &properties);
 
                             /* The swash can't be used as-is, because we've
 			     * inverted things; delay removing it to here after
@@ -10445,12 +10644,7 @@ parseit:
                             swash = NULL;
                         }
                         else {
-			    if (! properties) {
-				properties = invlist_clone(invlist);
-			    }
-			    else {
-				_invlist_union(properties, invlist, &properties);
-			    }
+                            _invlist_union(properties, invlist, &properties);
 			}
 		    }
 		    Safefree(name);
@@ -10594,95 +10788,215 @@ parseit:
 	    }
 
 	    if (!SIZE_ONLY) {
-		const char *what = NULL;
-		char yesno = 0;
 
 		/* Possible truncation here but in some 64-bit environments
 		 * the compiler gets heartburn about switch on 64-bit values.
 		 * A similar issue a little earlier when switching on value.
 		 * --jhi */
 		switch ((I32)namedclass) {
-		
-		case _C_C_T_(ALNUMC, isALNUMC_L1, isALNUMC, "XPosixAlnum", "XPosixAlnum");
-		case _C_C_T_(ALPHA, isALPHA_L1, isALPHA, "XPosixAlpha", "XPosixAlpha");
-		case _C_C_T_(BLANK, isBLANK_L1, isBLANK, "XPosixBlank", "XPosixBlank");
-		case _C_C_T_(CNTRL, isCNTRL_L1, isCNTRL, "XPosixCntrl", "XPosixCntrl");
-		case _C_C_T_(GRAPH, isGRAPH_L1, isGRAPH, "XPosixGraph", "XPosixGraph");
-		case _C_C_T_(LOWER, isLOWER_L1, isLOWER, "XPosixLower", "__XPosixLower_i");
-		case _C_C_T_(PRINT, isPRINT_L1, isPRINT, "XPosixPrint", "XPosixPrint");
-		case _C_C_T_(PSXSPC, isPSXSPC_L1, isPSXSPC, "XPosixSpace", "XPosixSpace");
-		case _C_C_T_(PUNCT, isPUNCT_L1, isPUNCT, "XPosixPunct", "XPosixPunct");
-		case _C_C_T_(UPPER, isUPPER_L1, isUPPER, "XPosixUpper", "__XPosixUpper_i");
-                /* \s, \w match all unicode if utf8. */
-                case _C_C_T_(SPACE, isSPACE_L1, isSPACE, "SpacePerl", "SpacePerl");
-                case _C_C_T_(ALNUM, isWORDCHAR_L1, isALNUM, "Word", "Word");
-		case _C_C_T_(XDIGIT, isXDIGIT_L1, isXDIGIT, "XPosixXDigit", "XPosixXDigit");
-		case _C_C_T_NOLOC_(VERTWS, is_VERTWS_latin1(&value), "VertSpace");
-		case _C_C_T_NOLOC_(HORIZWS, is_HORIZWS_latin1(&value), "HorizSpace");
+
+		case ANYOF_ALNUMC: /* C's alnum, in contrast to \w */
+		    DO_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixAlnum, PL_L1PosixAlnum, "XPosixAlnum", listsv);
+		    break;
+		case ANYOF_NALNUMC:
+		    DO_N_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixAlnum, PL_L1PosixAlnum, "XPosixAlnum", listsv);
+		    break;
+		case ANYOF_ALPHA:
+		    DO_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixAlpha, PL_L1PosixAlpha, "XPosixAlpha", listsv);
+		    break;
+		case ANYOF_NALPHA:
+		    DO_N_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixAlpha, PL_L1PosixAlpha, "XPosixAlpha", listsv);
+		    break;
 		case ANYOF_ASCII:
-		    if (LOC)
-			ANYOF_CLASS_SET(ret, ANYOF_ASCII);
-		    else {
-			for (value = 0; value < 128; value++)
-			    stored +=
-                              set_regclass_bit(pRExC_state, ret, (U8) ASCII_TO_NATIVE(value), &l1_fold_invlist, &unicode_alternate);
+		    if (LOC) {
+			ANYOF_CLASS_SET(ret, namedclass);
 		    }
-		    yesno = '+';
-		    what = NULL;	/* Doesn't match outside ascii, so
-					   don't want to add +utf8:: */
+                    else {
+                        _invlist_union(properties, PL_ASCII, &properties);
+                    }
 		    break;
 		case ANYOF_NASCII:
-		    if (LOC)
-			ANYOF_CLASS_SET(ret, ANYOF_NASCII);
-		    else {
-			for (value = 128; value < 256; value++)
-			    stored +=
-                              set_regclass_bit(pRExC_state, ret, (U8) ASCII_TO_NATIVE(value), &l1_fold_invlist, &unicode_alternate);
+		    if (LOC) {
+			ANYOF_CLASS_SET(ret, namedclass);
 		    }
-		    ANYOF_FLAGS(ret) |= ANYOF_UNICODE_ALL;
-		    yesno = '!';
-		    what = "ASCII";
-		    break;		
+                    else {
+                        _invlist_union_complement_2nd(properties,
+                                                    PL_ASCII, &properties);
+                        if (DEPENDS_SEMANTICS) {
+                            ANYOF_FLAGS(ret) |= ANYOF_NON_UTF8_LATIN1_ALL;
+                        }
+                    }
+		    break;
+		case ANYOF_BLANK:
+                    DO_POSIX(ret, namedclass, properties,
+                                            PL_PosixBlank, PL_XPosixBlank);
+		    break;
+		case ANYOF_NBLANK:
+                    DO_N_POSIX(ret, namedclass, properties,
+                                            PL_PosixBlank, PL_XPosixBlank);
+		    break;
+		case ANYOF_CNTRL:
+                    DO_POSIX(ret, namedclass, properties,
+                                            PL_PosixCntrl, PL_XPosixCntrl);
+		    break;
+		case ANYOF_NCNTRL:
+                    DO_N_POSIX(ret, namedclass, properties,
+                                            PL_PosixCntrl, PL_XPosixCntrl);
+		    break;
 		case ANYOF_DIGIT:
-		    if (LOC)
-			ANYOF_CLASS_SET(ret, ANYOF_DIGIT);
-		    else {
-			/* consecutive digits assumed */
-			for (value = '0'; value <= '9'; value++)
-			    stored +=
-                              set_regclass_bit(pRExC_state, ret, (U8) value, &l1_fold_invlist, &unicode_alternate);
-		    }
-		    yesno = '+';
-		    what = "Digit";
+		    DO_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixDigit, PL_PosixDigit, "XPosixDigit", listsv);
 		    break;
 		case ANYOF_NDIGIT:
-		    if (LOC)
-			ANYOF_CLASS_SET(ret, ANYOF_NDIGIT);
+		    DO_N_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixDigit, PL_PosixDigit, "XPosixDigit", listsv);
+		    break;
+		case ANYOF_GRAPH:
+		    DO_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixGraph, PL_L1PosixGraph, "XPosixGraph", listsv);
+		    break;
+		case ANYOF_NGRAPH:
+		    DO_N_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixGraph, PL_L1PosixGraph, "XPosixGraph", listsv);
+		    break;
+		case ANYOF_HORIZWS:
+		    /* For these, we use the nonbitmap, as /d doesn't make a
+		     * difference in what these match.  There would be problems
+		     * if these characters had folds other than themselves, as
+		     * nonbitmap is subject to folding.  It turns out that \h
+		     * is just a synonym for XPosixBlank */
+		    _invlist_union(nonbitmap, PL_XPosixBlank, &nonbitmap);
+		    break;
+		case ANYOF_NHORIZWS:
+                    _invlist_union_complement_2nd(nonbitmap,
+                                                 PL_XPosixBlank, &nonbitmap);
+		    break;
+		case ANYOF_LOWER:
+		case ANYOF_NLOWER:
+                {   /* These require special handling, as they differ under
+		       folding, matching Cased there (which in the ASCII range
+		       is the same as Alpha */
+
+		    SV* ascii_source;
+		    SV* l1_source;
+		    const char *Xname;
+
+		    if (FOLD && ! LOC) {
+			ascii_source = PL_PosixAlpha;
+			l1_source = PL_L1Cased;
+			Xname = "Cased";
+		    }
 		    else {
-			/* consecutive digits assumed */
-			for (value = 0; value < '0'; value++)
-			    stored +=
-                              set_regclass_bit(pRExC_state, ret, (U8) value, &l1_fold_invlist, &unicode_alternate);
-			for (value = '9' + 1; value < 256; value++)
-			    stored +=
-                              set_regclass_bit(pRExC_state, ret, (U8) value, &l1_fold_invlist, &unicode_alternate);
+			ascii_source = PL_PosixLower;
+			l1_source = PL_L1PosixLower;
+			Xname = "XPosixLower";
 		    }
-		    yesno = '!';
-		    what = "Digit";
-		    if (AT_LEAST_ASCII_RESTRICTED ) {
-			ANYOF_FLAGS(ret) |= ANYOF_UNICODE_ALL;
+		    if (namedclass == ANYOF_LOWER) {
+			DO_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                                    ascii_source, l1_source, Xname, listsv);
 		    }
-		    break;		
+		    else {
+			DO_N_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass,
+                            properties, ascii_source, l1_source, Xname, listsv);
+		    }
+		    break;
+		}
+		case ANYOF_PRINT:
+		    DO_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixPrint, PL_L1PosixPrint, "XPosixPrint", listsv);
+		    break;
+		case ANYOF_NPRINT:
+		    DO_N_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixPrint, PL_L1PosixPrint, "XPosixPrint", listsv);
+		    break;
+		case ANYOF_PUNCT:
+		    DO_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixPunct, PL_L1PosixPunct, "XPosixPunct", listsv);
+		    break;
+		case ANYOF_NPUNCT:
+		    DO_N_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                        PL_PosixPunct, PL_L1PosixPunct, "XPosixPunct", listsv);
+		    break;
+		case ANYOF_PSXSPC:
+                    DO_POSIX(ret, namedclass, properties,
+                                            PL_PosixSpace, PL_XPosixSpace);
+		    break;
+		case ANYOF_NPSXSPC:
+                    DO_N_POSIX(ret, namedclass, properties,
+                                            PL_PosixSpace, PL_XPosixSpace);
+		    break;
+		case ANYOF_SPACE:
+                    DO_POSIX(ret, namedclass, properties,
+                                            PL_PerlSpace, PL_XPerlSpace);
+		    break;
+		case ANYOF_NSPACE:
+                    DO_N_POSIX(ret, namedclass, properties,
+                                            PL_PerlSpace, PL_XPerlSpace);
+		    break;
+		case ANYOF_UPPER:   /* Same as LOWER, above */
+		case ANYOF_NUPPER:
+		{
+		    SV* ascii_source;
+		    SV* l1_source;
+		    const char *Xname;
+
+		    if (FOLD && ! LOC) {
+			ascii_source = PL_PosixAlpha;
+			l1_source = PL_L1Cased;
+			Xname = "Cased";
+		    }
+		    else {
+			ascii_source = PL_PosixUpper;
+			l1_source = PL_L1PosixUpper;
+			Xname = "XPosixUpper";
+		    }
+		    if (namedclass == ANYOF_UPPER) {
+			DO_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                                    ascii_source, l1_source, Xname, listsv);
+		    }
+		    else {
+			DO_N_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass,
+                        properties, ascii_source, l1_source, Xname, listsv);
+		    }
+		    break;
+		}
+		case ANYOF_ALNUM:   /* Really is 'Word' */
+		    DO_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                            PL_PosixWord, PL_L1PosixWord, "XPosixWord", listsv);
+		    break;
+		case ANYOF_NALNUM:
+		    DO_N_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
+                            PL_PosixWord, PL_L1PosixWord, "XPosixWord", listsv);
+		    break;
+		case ANYOF_VERTWS:
+		    /* For these, we use the nonbitmap, as /d doesn't make a
+		     * difference in what these match.  There would be problems
+		     * if these characters had folds other than themselves, as
+		     * nonbitmap is subject to folding */
+		    _invlist_union(nonbitmap, PL_VertSpace, &nonbitmap);
+		    break;
+		case ANYOF_NVERTWS:
+                    _invlist_union_complement_2nd(nonbitmap,
+                                                    PL_VertSpace, &nonbitmap);
+		    break;
+		case ANYOF_XDIGIT:
+                    DO_POSIX(ret, namedclass, properties,
+                                            PL_PosixXDigit, PL_XPosixXDigit);
+		    break;
+		case ANYOF_NXDIGIT:
+                    DO_N_POSIX(ret, namedclass, properties,
+                                            PL_PosixXDigit, PL_XPosixXDigit);
+		    break;
 		case ANYOF_MAX:
 		    /* this is to handle \p and \P */
 		    break;
 		default:
 		    vFAIL("Invalid [::] class");
 		    break;
-		}
-		if (what && ! (AT_LEAST_ASCII_RESTRICTED)) {
-		    /* Strings such as "+utf8::isWord\n" */
-		    Perl_sv_catpvf(aTHX_ listsv, "%cutf8::%s\n", yesno, what);
 		}
 
 		continue;
@@ -11021,13 +11335,14 @@ parseit:
 	    }
 	}
 
-	/* Done with loop; set <nonbitmap> to not include any code points that
-	 * are in the bitmap */
+        /* Done with loop; remove any code points that are in the bitmap from
+         * <nonbitmap> */
 	if (change_invlist) {
-	    SV* keep_list = _new_invlist(2);
-	    _append_range_to_invlist(keep_list, max_cp_to_set + 1, UV_MAX);
-	    _invlist_intersection(nonbitmap, keep_list, &nonbitmap);
-	    SvREFCNT_dec(keep_list);
+	    _invlist_subtract(nonbitmap,
+		              (DEPENDS_SEMANTICS)
+			        ? PL_ASCII
+			        : PL_Latin1,
+                              &nonbitmap);
 	}
 
 	/* If have completely emptied it, remove it completely */
@@ -11114,6 +11429,12 @@ parseit:
 	     * there should not be overlap unless is /d rules. */
 	    _invlist_invert(nonbitmap);
 
+	    /* Any swash can't be used as-is, because we've inverted things */
+	    if (swash) {
+		SvREFCNT_dec(swash);
+		swash = NULL;
+	    }
+
 	    for (i = 0; i < 256; ++i) {
 		if (ANYOF_BITMAP_TEST(ret, i)) {
 		    ANYOF_BITMAP_CLEAR(ret, i);
@@ -11141,10 +11462,7 @@ parseit:
 	    else {
 		/* There is no overlap for non-/d, so just delete anything
 		 * below 256 */
-		SV* keep_list = _new_invlist(2);
-		_append_range_to_invlist(keep_list, 256, UV_MAX);
-		_invlist_intersection(nonbitmap, keep_list, &nonbitmap);
-		SvREFCNT_dec(keep_list);
+		_invlist_intersection(nonbitmap, PL_AboveLatin1, &nonbitmap);
 	    }
 	}
 
@@ -11326,7 +11644,6 @@ parseit:
     }
     return ret;
 }
-#undef _C_C_T_
 
 
 /* reg_skipcomment()

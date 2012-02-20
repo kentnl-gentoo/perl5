@@ -2857,9 +2857,6 @@ Perl_my_popen(pTHX_ const char *cmd, const char *mode)
       default, binary, low-level mode; see PerlIOBuf_open(). */
    PerlLIO_setmode((*mode == 'r'), O_BINARY);
 #endif 
-#ifdef THREADS_HAVE_PIDS
-	PL_ppid = (IV)getppid();
-#endif
 	PL_forkprocess = 0;
 #ifdef PERL_USES_PL_PIDSTATUS
 	hv_clear(PL_pidstatus);	/* we have no children */
@@ -4549,7 +4546,7 @@ dotted_decimal_version:
 
 	/* and we never support negative versions */
 	if ( *d == '-') {
-		BADVERSION(s,errstr,"Invalid version format (negative version number)");                
+	    BADVERSION(s,errstr,"Invalid version format (negative version number)");
 	}
 
 	/* consume all of the integer part */
