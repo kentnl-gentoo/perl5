@@ -17,7 +17,7 @@ BEGIN {
 use strict;
 use Config;
 
-plan tests => 791;
+plan tests => 794;
 
 $| = 1;
 
@@ -2176,6 +2176,13 @@ for(1,2) {
 }
 pass("no death when TARG of ref is tainted");
 
+# $$ should not be tainted by being read in a tainted expression.
+{
+    isnt_tainted $$, "PID not tainted initially";
+    my $x = $ENV{PATH}.$$;
+    isnt_tainted $$, "PID not tainted when read in tainted expression";
+}
+
 {
     use feature 'fc';
     use locale;
@@ -2188,6 +2195,14 @@ pass("no death when TARG of ref is tainted");
 
     is_tainted "\F$latin1", "under locale, \\Flatin1 taints the result";
     is_tainted "\F$utf8", "under locale, \\Futf8 taints the result";
+}
+
+{ # 111654
+  eval {
+    eval { die "Test\n".substr($ENV{PATH}, 0, 0); };
+    die;
+  };
+  like($@, qr/^Test\n\t\.\.\.propagated at /, "error should be propagated");
 }
 
 # This may bomb out with the alarm signal so keep it last

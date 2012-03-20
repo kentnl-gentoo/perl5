@@ -325,6 +325,7 @@ cpan/CPAN-Meta/lib/CPAN/Meta/Requirements.pm
 cpan/CPAN-Meta/lib/CPAN/Meta/Spec.pm
 cpan/CPAN-Meta/lib/CPAN/Meta/Validator.pm
 cpan/CPAN-Meta/t/accepts.t
+cpan/CPAN-Meta/t/bad_version_hook.t
 cpan/CPAN-Meta/t/basic.t
 cpan/CPAN-Meta/t/converter-bad.t
 cpan/CPAN-Meta/t/converter-fail.t
@@ -349,6 +350,7 @@ cpan/CPAN-Meta/t/data-bad/META-1_3.yml
 cpan/CPAN-Meta/t/data-bad/META-1_4.yml
 cpan/CPAN-Meta/t/data-bad/META-2.json
 cpan/CPAN-Meta/t/data-bad/restrictive-2.json
+cpan/CPAN-Meta/t/data-bad/version-ranges-2.json
 cpan/CPAN-Meta/t/data-fail/META-1_0.yml
 cpan/CPAN-Meta/t/data-fail/META-1_1.yml
 cpan/CPAN-Meta/t/data-fail/META-1_2.yml
@@ -366,6 +368,9 @@ cpan/CPAN-Meta/t/data/resources.yml
 cpan/CPAN-Meta/t/data/restricted-2.json
 cpan/CPAN-Meta/t/data/restrictive-1_4.yml
 cpan/CPAN-Meta/t/data/unicode.yml
+cpan/CPAN-Meta/t/data/version-not-normal.json
+cpan/CPAN-Meta/t/data/version-ranges-1_4.yml
+cpan/CPAN-Meta/t/data/version-ranges-2.json
 cpan/CPAN-Meta/t/finalize.t
 cpan/CPAN-Meta/t/from-hash.t
 cpan/CPAN-Meta/t/load-bad.t
@@ -377,6 +382,7 @@ cpan/CPAN-Meta/t/prereqs-merge.t
 cpan/CPAN-Meta/t/prereqs.t
 cpan/CPAN-Meta/t/repository.t
 cpan/CPAN-Meta/t/save-load.t
+cpan/CPAN-Meta/t/strings.t
 cpan/CPAN-Meta/t/validator.t
 cpan/CPAN-Meta-YAML/lib/CPAN/Meta/YAML.pm		CPAN-Meta-YAML files
 cpan/CPAN-Meta-YAML/t/01_compile.t		CPAN-Meta-YAML files
@@ -2217,6 +2223,7 @@ cpan/Socket/Socket.xs			Socket extension external subroutines
 cpan/Socket/t/getaddrinfo.t		See if Socket::getaddrinfo works
 cpan/Socket/t/getnameinfo.t		See if Socket::getnameinfo works
 cpan/Socket/t/ipv6_mreq.t		See if (un)pack_ipv6_mreq work
+cpan/Socket/t/sockaddr.t
 cpan/Socket/t/socketpair.t		See if socketpair works
 cpan/Socket/t/Socket.t			See if Socket works
 cpan/Socket/typemap
@@ -3099,6 +3106,7 @@ dist/Dumpvalue/t/Dumpvalue.t	See if Dumpvalue works
 dist/Env/lib/Env.pm		Map environment into ordinary variables
 dist/Env/t/array.t		See if Env works for arrays
 dist/Env/t/env.t		See if Env works
+dist/ExtUtils-CBuilder/Changes		EU-CB change log
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Base.pm		Base class for ExtUtils::CBuilder methods
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/aix.pm	CBuilder methods for AIX
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/cygwin.pm	CBuilder methods for cygwin
@@ -3112,6 +3120,10 @@ dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/Windows/GCC.pm	CBuilder me
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/Windows/MSVC.pm	CBuilder methods for Windows
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/Windows.pm	CBuilder methods for Windows
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder.pm			Compile and link C code for Perl modules
+dist/ExtUtils-CBuilder/LICENSE		EU-CB license
+dist/ExtUtils-CBuilder/Makefile.PL		EU-CB configuration script
+dist/ExtUtils-CBuilder/README.patching		EU-CB patching nstructions
+dist/ExtUtils-CBuilder/README.release		EU-CB release instructions
 dist/ExtUtils-CBuilder/t/00-have-compiler.t			ExtUtils::CBuilder tests
 dist/ExtUtils-CBuilder/t/01-basic.t				tests for ExtUtils::CBuilder
 dist/ExtUtils-CBuilder/t/02-link.t				tests for ExtUtils::CBuilder
@@ -3375,6 +3387,7 @@ dist/Module-CoreList/Changes			Module::CoreList Changes
 dist/Module-CoreList/corelist			The corelist command-line utility
 dist/Module-CoreList/identify-dependencies	A usage example for Module::CoreList
 dist/Module-CoreList/lib/Module/CoreList.pm	Module::CoreList
+dist/Module-CoreList/lib/Module/CoreList.pod	Module::CoreList
 dist/Module-CoreList/Makefile.PL		Module::CoreList
 dist/Module-CoreList/MANIFEST			Module::CoreList
 dist/Module-CoreList/README			Module::CoreList
@@ -3474,8 +3487,9 @@ dist/Storable/t/weak.t			Can Storable store weakrefs
 dist/Term-Complete/lib/Term/Complete.pm	A command completion subroutine
 dist/Term-Complete/t/Complete.t		See if Term::Complete works
 dist/Term-ReadLine/lib/Term/ReadLine.pm		Stub readline library
+dist/Term-ReadLine/t/AE.t			See if Term::ReadLine works
+dist/Term-ReadLine/t/AETk.t			See if Term::ReadLine works
 dist/Term-ReadLine/t/ReadLine.t			See if Term::ReadLine works
-dist/Term-ReadLine/t/TkExternal.t	Test Tk
 dist/Term-ReadLine/t/Tk.t			See if Term::ReadLine works
 dist/Text-Abbrev/lib/Text/Abbrev.pm		An abbreviation table builder
 dist/Text-Abbrev/t/Abbrev.t		Test Text::Abbrev
@@ -3810,6 +3824,8 @@ ext/Pod-Html/bin/pod2html	Translator to turn pod into HTML
 ext/Pod-Html/lib/Pod/Html.pm	Convert POD data to HTML
 ext/Pod-Html/t/cache.pod
 ext/Pod-Html/t/cache.t
+ext/Pod-Html/t/crossref2.t
+ext/Pod-Html/t/crossref3.t
 ext/Pod-Html/t/crossref.pod
 ext/Pod-Html/t/crossref.t
 ext/Pod-Html/t/eol.t		test end of line agnosticism
@@ -4632,6 +4648,7 @@ pod/perl5154delta.pod		Perl changes in version 5.15.4
 pod/perl5155delta.pod		Perl changes in version 5.15.5
 pod/perl5156delta.pod		Perl changes in version 5.15.6
 pod/perl5157delta.pod		Perl changes in version 5.15.7
+pod/perl5158delta.pod		Perl changes in version 5.15.8
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4721,7 +4738,7 @@ pod/perlsub.pod			Perl subroutines
 pod/perlsyn.pod			Perl syntax
 pod/perlthrtut.pod		Perl threads tutorial
 pod/perltie.pod			Perl objects hidden behind simple variables
-pod/perltodo.pod		Perl things to do
+pod/perltodo.pod		
 pod/perltooc.pod		
 pod/perltoot.pod		
 pod/perltrap.pod		Perl traps for the unwary
@@ -4738,6 +4755,7 @@ pod/splitpod			Splits perlfunc into multiple pod pages
 Policy_sh.SH			Hold site-wide preferences between Configure runs.
 Porting/acknowledgements.pl	Generate perldelta acknowledgements text
 Porting/add-package.pl		Add/Update CPAN modules that are part of Core
+Porting/bisect-example.sh	Example script to use with git bisect run
 Porting/bisect.pl		A tool to make bisecting easy
 Porting/bisect-runner.pl	Tool to be called by git bisect run
 Porting/bump-perl-version	bump the perl version in relevant files
@@ -4797,10 +4815,12 @@ Porting/release_managers_guide.pod	Release Manager's Guide
 Porting/release_schedule.pod	Schedule for future releases
 Porting/rt_list_patches		A tool to help you apply patches from RT
 Porting/sort_perldiag.pl	Keep our diagnostics orderly
+Porting/sync-with-cpan		Sync with CPAN
 Porting/testall.atom		Cumulative profile with Third Degree
 Porting/thirdclean		Cleanup Third Degree reports
 Porting/timecheck2.c		Test program for the 2038 fix
 Porting/timecheck.c		Test program for the 2038 fix
+Porting/todo.pod		Perl things to do
 Porting/valgrindpp.pl		Summarize valgrind reports
 pp.c				Push/Pop code
 pp_ctl.c			Push/Pop code for control flow
@@ -5296,6 +5316,7 @@ t/op/read.t			See if read() works
 t/op/recurse.t			See if deep recursion works
 t/op/ref.t			See if refs and objects work
 t/op/repeat.t			See if x operator works
+t/op/require_37033.t		See if require always closes rsfp
 t/op/require_errors.t		See if errors from require are reported correctly
 t/op/reset.t			See if reset operator works
 t/op/reverse.t			See if reverse operator works
@@ -5450,6 +5471,7 @@ t/run/switchn.t			Test the -n switch
 t/run/switchp.t			Test the -p switch
 t/run/switcht.t			Test the -t switch
 t/run/switchx2.aux		Data for switchx.t
+t/run/switchx3.aux		Data for switchx.t
 t/run/switchx.aux		Data for switchx.t
 t/run/switchx.t			Test the -x switch
 t/TEST				The regression tester

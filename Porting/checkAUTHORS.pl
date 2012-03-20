@@ -329,7 +329,21 @@ sub process {
 sub _raw_address {
     my $addr = shift;
     my $real_name;
-    if ( $addr =~ /<.*>/ ) {
+    if ($addr =~ /(?:\\?")?\s*\(via RT\) <perlbug-followup\@perl\.org>$/p) {
+        my $name = ${^PREMATCH};
+        $addr = 'perlbug-followup@perl.org';
+        #
+        # Try to find the author
+        #
+        while (my ($email, $author_name) = each %authors) {
+            if ($name eq $author_name) {
+                $addr = $email;
+                $real_name = $name;
+                last;
+            }
+        }
+    }
+    elsif ( $addr =~ /<.*>/ ) {
         $addr =~ s/^\s*(.*)\s*<\s*(.*?)\s*>.*$/$2/;
         $real_name = $1;
     }
@@ -682,6 +696,7 @@ lutherh\100stratcom.com                 lutherh\100infinet.com
 mab\100wdl.loral.com                    markb\100rdcf.sm.unisys.com
 marcel\100codewerk.com                  gr\100univie.ac.at
 marcgreen\100cpan.org                   marcgreen\100wpi.edu
+markleightonfisher\100gmail.com         fisherm\100tce.com
 mark.p.lutz\100boeing.com               tecmpl1\100triton.ca.boeing.com
 marnix\100gmail.com                     pttesac!marnix!vanam
 marty+p5p\100kasei.com                  marty\100martian.org

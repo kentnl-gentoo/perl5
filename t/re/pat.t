@@ -2,9 +2,7 @@
 #
 # This is a home for regular expression tests that don't fit into
 # the format supported by re/regexp.t.  If you want to add a test
-# that does fit that format, add it to re/re_tests, not here.  Tests for \N
-# should be added here because they are treated as single quoted strings
-# there, which means they avoid the lexer which otherwise would look at them.
+# that does fit that format, add it to re/re_tests, not here.
 
 use strict;
 use warnings;
@@ -21,7 +19,7 @@ BEGIN {
     require './test.pl';
 }
 
-plan tests => 469;  # Update this when adding/deleting tests.
+plan tests => 472;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1182,7 +1180,7 @@ sub run_tests {
     }
 
     {
-        # Test that IDstart works, but doing because the author (khw) knows
+        # Test that IDstart works, but because the author (khw) knows
         # regexes much better than the rest of the core, it is being done here
         # in the context of a regex which relies on buffer names beginng with
         # IDStarts.
@@ -1252,6 +1250,15 @@ EOP
         my $anch_count= 0;
         $anch_count++ while $str=~/^.*/mg;
         is $anch_count, 1, 'while "\n"=~/^.*/mg should match only once';
+    }
+
+    { # [perl #111174]
+        use re '/u';
+        like "\xe0", qr/(?i:\xc0)/, "(?i: shouldn't lose the passed in /u";
+        use re '/a';
+        unlike "\x{100}", qr/(?i:\w)/, "(?i: shouldn't lose the passed in /a";
+        use re '/aa';
+        unlike 'k', qr/(?i:\N{KELVIN SIGN})/, "(?i: shouldn't lose the passed in /aa";
     }
 } # End of sub run_tests
 

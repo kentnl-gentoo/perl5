@@ -730,7 +730,7 @@ S_forget_pmop(pTHX_ PMOP *const o
 
     PERL_ARGS_ASSERT_FORGET_PMOP;
 
-    if (pmstash && !SvIS_FREED(pmstash)) {
+    if (pmstash && !SvIS_FREED(pmstash) && SvMAGICAL(pmstash)) {
 	MAGIC * const mg = mg_find((const SV *)pmstash, PERL_MAGIC_symtab);
 	if (mg) {
 	    PMOP **const array = (PMOP**) mg->mg_ptr;
@@ -3956,9 +3956,6 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 	else
 	    bits = 8;
 
-	PerlMemShared_free(cPVOPo->op_pv);
-	cPVOPo->op_pv = NULL;
-
 	swash = MUTABLE_SV(swash_init("utf8", "", listsv, bits, none));
 #ifdef USE_ITHREADS
 	cPADOPo->op_padix = pad_alloc(OP_TRANS, SVs_PADTMP);
@@ -3992,9 +3989,12 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 	return o;
     }
 
-    tbl = (short*)cPVOPo->op_pv;
+    tbl = (short*)PerlMemShared_calloc(
+	(o->op_private & OPpTRANS_COMPLEMENT) &&
+	    !(o->op_private & OPpTRANS_DELETE) ? 258 : 256,
+	sizeof(short));
+    cPVOPo->op_pv = (char*)tbl;
     if (complement) {
-	Zero(tbl, 256, short);
 	for (i = 0; i < (I32)tlen; i++)
 	    tbl[t[i]] = -1;
 	for (i = 0, j = 0; i < 256; i++) {

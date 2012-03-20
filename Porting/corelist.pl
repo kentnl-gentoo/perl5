@@ -22,6 +22,7 @@ use HTTP::Tiny;
 use IO::Uncompress::Gunzip;
 
 my $corelist_file = 'dist/Module-CoreList/lib/Module/CoreList.pm';
+my $pod_file = 'dist/Module-CoreList/lib/Module/CoreList.pod';
 
 my %lines;
 my %module_to_file;
@@ -151,7 +152,7 @@ my %module_to_deprecated;
 while ( my ( $module, $file ) = each %module_to_file ) {
     my $M = $file_to_M->{$file};
     next unless $M;
-    next if $Modules{$M}{MAINTAINER} eq 'p5p';
+    next if $Modules{$M}{MAINTAINER} && $Modules{$M}{MAINTAINER} eq 'p5p';
     $module_to_upstream{$module} = $Modules{$M}{UPSTREAM};
     $module_to_deprecated{$module} = 1 if $Modules{$M}{DEPRECATED};
     next
@@ -234,11 +235,6 @@ $tracker .= ");";
 
 $corelist =~ s/^%bug_tracker .*? ;/$tracker/eismx;
 
-unless ( $corelist =~ /and $perl_vstring releases of perl/ ) {
-    warn "Adding $perl_vstring to the list of perl versions covered by Module::CoreList\n";
-    $corelist =~ s/(currently covers (?:.*?))\s*and (.*?) releases of perl/$1, $2 and $perl_vstring releases of perl/ism;
-}
-
 unless (
     $corelist =~ /^%released \s* = \s* \(
         .*?
@@ -251,14 +247,25 @@ unless (
                 /$1  $perl_vnum => '????-??-??',\n  $2/ismx;
 }
 
-write_corelist($corelist);
+write_corelist($corelist,$corelist_file);
 
-warn "All done. Please check over $corelist_file carefully before committing. Thanks!\n";
+open( my $pod_fh, '<', $pod_file );
+my $pod = join( '', <$pod_fh> );
+
+unless ( $pod =~ /and $perl_vstring releases of perl/ ) {
+    warn "Adding $perl_vstring to the list of perl versions covered by Module::CoreList\n";
+    $pod =~ s/(currently covers (?:.*?))\s*and (.*?) releases of perl/$1, $2 and $perl_vstring releases of perl/ism;
+}
+
+write_corelist($pod,$pod_file);
+
+warn "All done. Please check over $corelist_file and $pod_file carefully before committing. Thanks!\n";
 
 
 sub write_corelist {
     my $content = shift;
-    open (my $clfh, ">", $corelist_file);
+    my $filename = shift;
+    open (my $clfh, ">", $filename);
     print $clfh $content;
     close($clfh);
 }

@@ -13,6 +13,7 @@ use File::Glob qw(:case);
 %Maintainers = (
     'abergman'  => 'Arthur Bergman <abergman@cpan.org>',
     'abigail'   => 'Abigail <abigail@abigail.be>',
+    'ambs'      => 'Alberto Simões <ambs@cpan.org>',
     'ams'       => 'Abhijit Menon-Sen <ams@cpan.org>',
     'andk'      => 'Andreas J. Koenig <andk@cpan.org>',
     'andya'     => 'Andy Armstrong <andy@hexten.net>',
@@ -103,8 +104,8 @@ use File::Glob qw(:case);
     CHANGELOG ChangeLog CHANGES Changes COPYING Copying CREDITS dist.ini
     GOALS HISTORY INSTALL INSTALL.SKIP LICENSE Makefile.PL
     MANIFEST MANIFEST.SKIP META.yml MYMETA.yml META.json MYMETA.json
-    NEW NOTES ppport.h README README.PATCHING SIGNATURE THANKS TODO Todo
-    VERSION WHATSNEW
+    NEW NOTES perlcritic.rc ppport.h README README.PATCHING SIGNATURE
+    THANKS TODO Todo VERSION WHATSNEW
 );
 
 # Each entry in the  %Modules hash roughly represents a distribution,
@@ -447,7 +448,7 @@ use File::Glob qw(:case);
 
     'CPANPLUS' => {
         'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/CPANPLUS-0.9118.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/CPANPLUS-0.9121.tar.gz',
         'FILES'        => q[cpan/CPANPLUS],
         'EXCLUDED'     => [
             qr{^inc/},
@@ -481,7 +482,7 @@ use File::Glob qw(:case);
 
     'CPAN::Meta' => {
         'MAINTAINER'   => 'dagolden',
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.120351.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.120630.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta],
         'EXCLUDED'     => [
             qw(t/00-compile.t),
@@ -576,7 +577,7 @@ use File::Glob qw(:case);
 
     'Digest::SHA' => {
         'MAINTAINER'   => 'mshelor',
-        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.70.tar.gz',
+        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.71.tar.gz',
         'FILES'        => q[cpan/Digest-SHA],
         'EXCLUDED'     => [
             qw( t/pod.t
@@ -671,10 +672,9 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::CBuilder' => {
-        'MAINTAINER'   => 'dagolden',
-        'DISTRIBUTION' => 'DAGOLDEN/ExtUtils-CBuilder-0.280202.tar.gz',
+        'MAINTAINER'   => 'ambs',
+        'DISTRIBUTION' => 'DAGOLDEN/ExtUtils-CBuilder-0.280205.tar.gz',
         'FILES'        => q[dist/ExtUtils-CBuilder],
-        'EXCLUDED'     => [qr/^xt/],
         'UPSTREAM'     => 'blead',
     },
 
@@ -842,7 +842,7 @@ use File::Glob qw(:case);
                 misc/results.txt
                 ),
         ],
-        'UPSTREAM' => undef,
+        'UPSTREAM' => 'cpan',
     },
 
     'FileCache' => {
@@ -955,7 +955,7 @@ use File::Glob qw(:case);
 
     'HTTP::Tiny' => {
         'MAINTAINER'   => 'dagolden',
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.016.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.017.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/200_live.t',
@@ -1082,7 +1082,7 @@ use File::Glob qw(:case);
 
     'Locale-Codes' => {
         'MAINTAINER'   => 'sbeck',
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.20.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.21.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( t/pod_coverage.t
@@ -1223,7 +1223,7 @@ use File::Glob qw(:case);
 
     #
     # To update Module-Build in blead see
-    # http://github.com/dagolden/module-build/blob/master/devtools/patching_blead.pod
+    # https://github.com/Perl-Toolchain-Gang/Module-Build/blob/master/devtools/patching_blead.pod
     #
 
     'Module::Build' => {
@@ -1244,7 +1244,7 @@ use File::Glob qw(:case);
 
     'Module::CoreList' => {
         'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.60.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.61.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
         'UPSTREAM'     => 'blead',
     },
@@ -1527,7 +1527,7 @@ use File::Glob qw(:case);
 
     'Pod::Simple' => {
         'MAINTAINER'   => 'arandal',
-        'DISTRIBUTION' => 'DWHEELER/Pod-Simple-3.19.tar.gz',
+        'DISTRIBUTION' => 'DWHEELER/Pod-Simple-3.20.tar.gz',
         'FILES'        => q[cpan/Pod-Simple],
         'UPSTREAM'     => 'cpan',
     },
@@ -1621,7 +1621,7 @@ use File::Glob qw(:case);
 
     'Socket' => {
         'MAINTAINER'   => 'pevans',
-        'DISTRIBUTION' => 'PEVANS/Socket-1.98.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Socket-2.000.tar.gz',
         'FILES'        => q[cpan/Socket],
         'UPSTREAM'     => 'cpan',
     },
@@ -1930,7 +1930,7 @@ use File::Glob qw(:case);
 
     'Unicode::Collate' => {
         'MAINTAINER'   => 'sadahiro',
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-0.87.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-0.89.tar.gz',
         'FILES'        => q[cpan/Unicode-Collate],
         'EXCLUDED'     => [
             qr{N$},
@@ -1946,7 +1946,7 @@ use File::Glob qw(:case);
 
     'Unicode::Normalize' => {
         'MAINTAINER'   => 'sadahiro',
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Normalize-1.13.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Normalize-1.14.tar.gz',
         'FILES'        => q[cpan/Unicode-Normalize],
         'EXCLUDED'     => [
             qw( MANIFEST.N

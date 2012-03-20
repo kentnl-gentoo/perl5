@@ -31,6 +31,7 @@ x2p/cflags.SH
 Porting/Maintainers.pl
 Porting/add-package.pl
 Porting/bisect.pl
+Porting/bisect-example.sh
 Porting/bisect-runner.pl
 Porting/check83.pl
 Porting/checkAUTHORS.pl
@@ -53,6 +54,7 @@ Porting/make_snapshot.pl
 Porting/newtests-perldelta.pl
 Porting/perlhist_calculate.pl
 Porting/sort_perldiag.pl
+Porting/sync-with-cpan
 Porting/valgrindpp.pl
 mpeix/nm
 mpeix/relink

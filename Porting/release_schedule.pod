@@ -17,9 +17,12 @@ Code freezes (which happen in the 5.15.X series)
 
 Release schedule (with release manager):
 
-  2012-04-01  5.16.0-RC0      Ricardo Signes?
+  2012-04-??  5.16.0-RC0      Ricardo Signes
   ...(interim RC releases)...
   2012-05-16  5.16.0 (final)  Ricardo Signes
+
+(RC0 will be released once we think that all the blockers have been
+addressed.  This typically means some time in April.)
 
 =head2 Perl 5.14
 
@@ -28,7 +31,7 @@ Release schedule (with release managers):
   2011-05-14  5.14.0 (final)  Jesse Vincent
   2011-06-16  5.14.1 ✓        Jesse Vincent
   2011-09-14  5.14.2 ✓        Florian Ragwitz
-  2012-0?-??  5.14.3 ✓        Ricardo Signes
+  2012-0?-??  5.14.3          Ricardo Signes
   ????-??-??  5.14.4          ??
 
 =head2 Perl 5.12
@@ -68,14 +71,14 @@ Release schedule (with release managers and code freeze points):
   2011-11-20  5.15.5 ✓        Steve Hay
   2011-12-20  5.15.6 ✓        Dave Rolsky (Contentious code freeze)
   2012-01-20  5.15.7 ✓        Chris Williams
-  2012-02-20  5.15.8          Max Maischein (User-visible code freeze)
+  2012-02-20  5.15.8 ✓        Max Maischein (User-visible code freeze)
   2012-03-20  5.15.9          Abigail (Full code freeze)
 
 =head2 Perl 5.17
 
   2012-04-20  5.17.0          Dave Cross
-  2012-05-20  5.17.1
-  2012-06-20  5.17.2
+  2012-05-20  5.17.1          Zefram
+  2012-06-20  5.17.2          Jesse Luehrs
   2012-07-20  5.17.3
 
 =head1 VICTIMS

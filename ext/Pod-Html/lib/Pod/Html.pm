@@ -3,7 +3,7 @@ use strict;
 require Exporter;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-$VERSION = 1.14;
+$VERSION = 1.15_01;
 @ISA = qw(Exporter);
 @EXPORT = qw(pod2html htmlify);
 @EXPORT_OK = qw(anchorify);
@@ -94,10 +94,13 @@ Displays the usage message.
 
     --htmldir=name
 
-Sets the directory in which the resulting HTML file is placed.  This
-is used to generate relative links to other files. Not passing this
-causes all links to be absolute, since this is the value that tells
-Pod::Html the root of the documentation tree.
+Sets the directory to which all cross references in the resulting
+html file will be relative. Not passing this causes all links to be
+absolute since this is the value that tells Pod::Html the root of the 
+documentation tree.
+
+Do not use this and --htmlroot in the same call to pod2html; they are
+mutually exclusive.
 
 =item htmlroot
 
@@ -105,6 +108,11 @@ Pod::Html the root of the documentation tree.
 
 Sets the base URL for the HTML files.  When cross-references are made,
 the HTML root is prepended to the URL.
+
+Do not use this if relative links are desired: use --htmldir instead.
+
+Do not pass both this and --htmldir to pod2html; they are mutually
+exclusive.
 
 =item index
 
@@ -248,7 +256,7 @@ sub init_globals {
     $Htmlroot = "/";            # http-server base directory from which all
                                 #   relative paths in $podpath stem.
     $Htmldir = "";              # The directory to which the html pages
-                                # will (eventually) be written.
+                                #   will (eventually) be written.
     $Htmlfile = "";             # write to stdout by default
     $Htmlfileurl = "";          # The url that other files would use to
                                 # refer to this file.  This is only used
@@ -317,7 +325,16 @@ sub pod2html {
             or die "$0: error open $Dircache for writing: $!\n";
 
         print $cache join(":", @Podpath) . "\n$Podroot\n";
+        my $_updirs_only = ($Podroot =~ /\.\./) && !($Podroot =~ /[^\.\\\/]/);
         foreach my $key (keys %Pages) {
+            if($_updirs_only) {
+              my $_dirlevel = $Podroot;
+              while($_dirlevel =~ /\.\./) {
+                $_dirlevel =~ s/\.\.//;
+                # Assume $Pages{$key} has '/' separators (html dir separators).
+                $Pages{$key} =~ s/^[\w\s\-]+\///;
+              }
+            }
             print $cache "$key $Pages{$key}\n";
         }
 
@@ -494,21 +511,21 @@ sub parse_command_line {
 
     @Podpath  = split(":", $opt_podpath) if defined $opt_podpath;
 
-    $Backlink  = $opt_backlink  if defined $opt_backlink;
-    $Cachedir  = $opt_cachedir  if defined $opt_cachedir;
-    $Css       = $opt_css       if defined $opt_css;
-    $Header    = $opt_header    if defined $opt_header;
-    $Htmldir   = $opt_htmldir   if defined $opt_htmldir;
-    $Htmlroot  = $opt_htmlroot  if defined $opt_htmlroot;
-    $Doindex   = $opt_index     if defined $opt_index;
-    $Podfile   = $opt_infile    if defined $opt_infile;
-    $Htmlfile  = $opt_outfile   if defined $opt_outfile;
-    $Poderrors = $opt_poderrors if defined $opt_poderrors;
-    $Podroot   = $opt_podroot   if defined $opt_podroot;
-    $Quiet     = $opt_quiet     if defined $opt_quiet;
-    $Recurse   = $opt_recurse   if defined $opt_recurse;
-    $Title     = $opt_title     if defined $opt_title;
-    $Verbose   = $opt_verbose   if defined $opt_verbose;
+    $Backlink  =          $opt_backlink   if defined $opt_backlink;
+    $Cachedir  = _unixify($opt_cachedir)  if defined $opt_cachedir;
+    $Css       =          $opt_css        if defined $opt_css;
+    $Header    =          $opt_header     if defined $opt_header;
+    $Htmldir   = _unixify($opt_htmldir)   if defined $opt_htmldir;
+    $Htmlroot  = _unixify($opt_htmlroot)  if defined $opt_htmlroot;
+    $Doindex   =          $opt_index      if defined $opt_index;
+    $Podfile   = _unixify($opt_infile)    if defined $opt_infile;
+    $Htmlfile  = _unixify($opt_outfile)   if defined $opt_outfile;
+    $Poderrors =          $opt_poderrors  if defined $opt_poderrors;
+    $Podroot   = _unixify($opt_podroot)   if defined $opt_podroot;
+    $Quiet     =          $opt_quiet      if defined $opt_quiet;
+    $Recurse   =          $opt_recurse    if defined $opt_recurse;
+    $Title     =          $opt_title      if defined $opt_title;
+    $Verbose   =          $opt_verbose    if defined $opt_verbose;
 
     warn "Flushing directory caches\n"
         if $opt_verbose && defined $opt_flush;
@@ -637,14 +654,10 @@ sub _save_page {
     my ($modspec, $modname) = @_;
 
     # Remove Podroot from path
-    foreach my $podpath (@Podpath) {
-        my $beg_path = File::Spec->catdir($Podroot, $podpath);
-        if ($beg_path eq substr($modspec, 0, length($beg_path))) {
-            # Replace $Podroot/$podpath with $podpath
-            substr($modspec, 0, length($beg_path), $podpath);
-            last;
-        }
-    }
+    $modspec = $Podroot eq File::Spec->curdir
+               ? File::Spec->abs2rel($modspec)
+               : File::Spec->abs2rel($modspec,
+                                     File::Spec->canonpath($Podroot));
 
     # Convert path to unix style path
     $modspec = Pod::Html::_unixify($modspec);
@@ -656,9 +669,28 @@ sub _save_page {
 sub _unixify {
     my $full_path = shift;
     return '' unless $full_path;
+    return $full_path if $full_path eq '/';
 
-    return File::Spec::Unix->catfile( # change \s to /s and such
-               File::Spec->splitdir($full_path));
+    my ($vol, $dirs, $file) = File::Spec->splitpath($full_path);
+    my @dirs = $dirs eq File::Spec->curdir()
+               ? (File::Spec::Unix->curdir())
+               : File::Spec->splitdir($dirs);
+    if (defined($vol) && $vol) {
+        $vol =~ s/:$// if $^O eq 'VMS';
+
+        if( $dirs[0] ) {
+            unshift @dirs, $vol;
+        }
+        else {
+            $dirs[0] = $vol;
+        }
+    }
+    unshift @dirs, '' if File::Spec->file_name_is_absolute($full_path);
+    return $file unless scalar(@dirs);
+    $full_path = File::Spec::Unix->catfile(File::Spec::Unix->catdir(@dirs),
+                                           $file);
+    $full_path =~ s|^\/|| if $^O eq 'MSWin32'; # C:/foo works, /C:/foo doesn't
+    return $full_path;
 }
 
 package Pod::Simple::XHTML::LocalPodLinks;
@@ -721,17 +753,15 @@ sub resolve_pod_page_link {
         $path = $self->pages->{$to};
     }
 
-    # The use of catdir here (instead of catfile) ensures there will be one
-    # '/' between htmlroot and $path; not zero (if htmlroot == ''), not two
-    # (if htmlroot =~ m#/\z# and $path =~ m#\a/#), just one.
-    my $url = File::Spec::Unix->catdir( Pod::Html::_unixify($self->htmlroot),
+    my $url = File::Spec::Unix->catfile(Pod::Html::_unixify($self->htmlroot),
                                         $path);
+
     if ($self->htmlfileurl ne '') {
         # then $self->htmlroot eq '' (by definition of htmlfileurl) so
         # $self->htmldir needs to be prepended to link to get the absolute path
         # that will be relativized
         $url = relativize_url(
-            File::Spec::Unix->catdir( Pod::Html::_unixify($self->htmldir), $url),
+            File::Spec::Unix->catdir(Pod::Html::_unixify($self->htmldir), $url),
             $self->htmlfileurl # already unixified
         );
     }

@@ -13,7 +13,7 @@ use Pod::Html;
 use Data::Dumper;
 use Test::More tests => 10;
 
-my $cwd = Cwd::cwd();
+my $cwd = Pod::Html::_unixify(Cwd::cwd());
 my $infile = "t/cache.pod";
 my $outfile = "cacheout.html";
 my $cachefile = "pod2htmd.tmp";
@@ -59,13 +59,14 @@ while (<$cache>) {
 chdir("t");
 my %expected_pages = 
     # chop off the .pod and set the path
-    map { my $f = substr($_, 0, -4); $f => "$cwd/t/$f" }
+    map { my $f = substr($_, 0, -4); $f => "t/$f" }
     <*.pod>;
 chdir($cwd);
 is_deeply(\%pages, \%expected_pages, "cache contents");
 close $cache;
 
-unlink $outfile;
-unlink $cachefile, $tcachefile;
+1 while unlink $outfile;
+1 while unlink $cachefile;
+1 while unlink $tcachefile;
 is(-f $cachefile, undef, "No cache file to end");
 is(-f $tcachefile, undef, "No cache file to end");

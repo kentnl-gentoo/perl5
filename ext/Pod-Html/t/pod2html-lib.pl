@@ -33,11 +33,11 @@ sub convert_n_test {
     my $cwd = Cwd::cwd();
     my ($vol, $dir) = splitpath($cwd, 1);
     my $relcwd = substr($dir, length(File::Spec->rootdir()));
-	
-    my $new_dir  = catdir $cwd, "t";
-    my $infile   = catfile $new_dir, "$podfile.pod";
-    my $outfile  = catfile $new_dir, "$podfile.html";
-    
+
+    my $new_dir  = catdir $dir, "t";
+    my $infile   = catpath $vol, $new_dir, "$podfile.pod";
+    my $outfile  = catpath $vol, $new_dir, "$podfile.html";
+
     # To add/modify args to p2h, use @p2h_args
     Pod::Html::pod2html(
         "--infile=$infile",
@@ -56,6 +56,7 @@ sub convert_n_test {
 	$expect = <DATA>;
 	$expect =~ s/\[PERLADMIN\]/$Config::Config{perladmin}/;
 	$expect =~ s/\[RELCURRENTWORKINGDIRECTORY\]/$relcwd/g;
+	$expect =~ s/\[ABSCURRENTWORKINGDIRECTORY\]/$cwd/g;
 	if (ord("A") == 193) { # EBCDIC.
 	    $expect =~ s/item_mat_3c_21_3e/item_mat_4c_5a_6e/;
 	}
@@ -66,21 +67,29 @@ sub convert_n_test {
 	close $in;
     }
 
-    ok($expect eq $result, $testname) or do {
-	my $diff = '/bin/diff';
-	-x $diff or $diff = '/usr/bin/diff';
-	if (-x $diff) {
-	    my $expectfile = "pod2html-lib.tmp";
-	    open my $tmpfile, ">", $expectfile or die $!;
-	    print $tmpfile $expect;
-	    close $tmpfile;
-	    my $diffopt = $^O eq 'linux' ? 'u' : 'c';
-	    open my $diff, "diff -$diffopt $expectfile $outfile |" or die $!;
-	    print "# $_" while <$diff>;
-	    close $diff;
-	    unlink $expectfile;
-	}
-    };
+    my $diff = '/bin/diff';
+    -x $diff or $diff = '/usr/bin/diff';
+    -x $diff or $diff = undef;
+    my $diffopt = $diff ? $^O =~ m/(linux|darwin)/ ? '-u' : '-c'
+                        : '';
+    $diff = 'fc/n' if $^O =~ /^MSWin/;
+    $diff = 'differences' if $^O eq 'VMS';
+    if ($diff) {
+	ok($expect eq $result, $testname) or do {
+	  my $expectfile = "${podfile}_expected.tmp";
+	  open my $tmpfile, ">", $expectfile or die $!;
+	  print $tmpfile $expect;
+	  close $tmpfile;
+	  open my $diff_fh, "$diff $diffopt $expectfile $outfile |" or die $!;
+	  print STDERR "# $_" while <$diff_fh>;
+	  close $diff_fh;
+	  unlink $expectfile;
+	};
+    } else {
+	# This is fairly evil, but lets us get detailed failure modes
+	# anywhere that we've failed to identify a diff program.
+	is($expect, $result, $testname);
+    }
 
     # pod2html creates these
     1 while unlink $outfile;

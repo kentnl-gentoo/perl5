@@ -6,12 +6,40 @@ use lib 'Porting';
 use Maintainers qw/%Modules/;
 use Module::CoreList;
 use Getopt::Long;
-require Algorithm::Diff;
+
+=head1 USAGE
+
+  # generate the module changes for the Perl you are currently building
+  ./perl Porting/corelist-perldelta.pl
+  
+  # generate a diff between the corelist sections of two perldelta* files:
+  perl Porting/corelist-perldelta.pl --mode=check 5.17.1 5.17.2 <perl5172delta.pod
+
+=head1 ABOUT
+
+corelist-perldelta.pl is a bit schizophrenic. The part to generate the
+new Perldelta text does not need Algorithm::Diff, but wants to be
+run with the freshly built Perl.
+
+The part to check the diff wants to be run with a Perl that has an up-to-date
+L<Module::CoreList>, but needs the outside L<Algorithm::Diff>.
+
+Ideally, the program will be split into two separate programs, one
+to generate the text and one to show the diff between the 
+corelist sections of the last perldelta and the next perldelta.
+
+=cut
 
 my %sections = (
-  new     => 'New Modules and Pragma',
-  updated => 'Updated Modules and Pragma',
-  removed => 'Removed Modules and Pragma',
+  new     => qr/New Modules and Pragma(ta)?/,
+  updated => qr/Updated Modules and Pragma(ta)?/,
+  removed => qr/Removed Modules and Pragma(ta)?/,
+);
+
+my %titles = (
+  new     => 'New Modules and Pragmata',
+  updated => 'Updated Modules and Pragmata',
+  removed => 'Removed Modules and Pragmata',
 );
 
 my $deprecated;
@@ -133,9 +161,9 @@ sub do_generate {
   my ($old, $new) = @_;
   my ($added, $removed, $pragmas, $modules) = corelist_delta($old => $new);
 
-  generate_section($sections{new}, \&added, @{ $added });
-  generate_section($sections{updated}, \&updated, @{ $pragmas }, @{ $modules });
-  generate_section($sections{removed}, \&removed, @{ $removed });
+  generate_section($titles{new}, \&added, @{ $added });
+  generate_section($titles{updated}, \&updated, @{ $pragmas }, @{ $modules });
+  generate_section($titles{removed}, \&removed, @{ $removed });
 }
 
 sub do_check {
@@ -152,6 +180,7 @@ sub do_check {
 
     printf $ck->[0] . ":\n";
 
+    require Algorithm::Diff;
     my $diff = Algorithm::Diff->new(map {
       [map { join q{ } => grep defined, @{ $_ } } @{ $_ }]
     } \@delta, \@corelist);
@@ -187,7 +216,7 @@ sub do_check {
 
     my $parsed_pod = Pod::Simple::SimpleTree->new->parse_file($input)->root;
     splice @{ $parsed_pod }, 0, 2; # we don't care about the document structure,
-                                   # just the nods within it
+                                   # just the nodes within it
 
     $self->_parse_delta($parsed_pod);
 
@@ -205,6 +234,14 @@ sub do_check {
 
     map {
         my ($t, $s) = @{ $_ };
+        
+        # Keep the section title if it has one:
+        if( $s->[0]->[0] eq 'head2' ) {
+          #warn "Keeping section title '$s->[0]->[2]'";
+          $titles{ $t } = $s->[0]->[2]
+              if $s->[0]->[2];
+        };
+
         $self->${\"_parse_${t}_section"}($s)
     } map {
         my $s = $self->_look_for_section($pod => $sections{$_})
@@ -312,7 +349,7 @@ sub do_check {
       sub {
         my ($el) = @_;
         my ($heading) = $el->[0] =~ /^head(\d)$/;
-        my $f = $heading && $el->[2] =~ /^\Q$section\E/;
+        my $f = $heading && $el->[2] =~ /^$section/;        
         $level = $heading if $f && !$level;
         return $f;
       },

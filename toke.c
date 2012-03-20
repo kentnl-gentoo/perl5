@@ -684,7 +684,13 @@ used by perl internally, so extensions should always pass zero.
 */
 
 /* LEX_START_SAME_FILTER indicates that this is not a new file, so it
-   can share filters with the current parser. */
+   can share filters with the current parser.
+   LEX_START_DONT_CLOSE indicates that the file handle wasn't opened by the
+   caller, hence isn't owned by the parser, so shouldn't be closed on parser
+   destruction. This is used to handle the case of defaulting to reading the
+   script from the standard input because no filename was given on the command
+   line (without getting confused by situation where STDIN has been closed, so
+   the script handle is opened on fd 0)  */
 
 void
 Perl_lex_start(pTHX_ SV *line, PerlIO *rsfp, U32 flags)
@@ -751,7 +757,8 @@ Perl_lex_start(pTHX_ SV *line, PerlIO *rsfp, U32 flags)
 	parser->linestart = SvPVX(parser->linestr);
     parser->bufend = parser->bufptr + SvCUR(parser->linestr);
     parser->last_lop = parser->last_uni = NULL;
-    parser->lex_flags = flags & (LEX_IGNORE_UTF8_HINTS|LEX_EVALBYTES);
+    parser->lex_flags = flags & (LEX_IGNORE_UTF8_HINTS|LEX_EVALBYTES
+				 |LEX_DONT_CLOSE_RSFP);
 
     parser->in_pod = parser->filtered = 0;
 }
@@ -767,7 +774,7 @@ Perl_parser_free(pTHX_  const yy_parser *parser)
     PL_curcop = parser->saved_curcop;
     SvREFCNT_dec(parser->linestr);
 
-    if (parser->rsfp == PerlIO_stdin())
+    if (PL_parser->lex_flags & LEX_DONT_CLOSE_RSFP)
 	PerlIO_clearerr(parser->rsfp);
     else if (parser->rsfp && (!parser->old_parser ||
 		(parser->old_parser && parser->rsfp != parser->old_parser->rsfp)))
@@ -1283,7 +1290,7 @@ Perl_lex_next_chunk(pTHX_ U32 flags)
 	/* End of real input.  Close filehandle (unless it was STDIN),
 	 * then add implicit termination.
 	 */
-	if ((PerlIO*)PL_parser->rsfp == PerlIO_stdin())
+	if (PL_parser->lex_flags & LEX_DONT_CLOSE_RSFP)
 	    PerlIO_clearerr(PL_parser->rsfp);
 	else if (PL_parser->rsfp)
 	    (void)PerlIO_close(PL_parser->rsfp);
@@ -9272,7 +9279,6 @@ S_scan_trans(pTHX_ char *start)
     dVAR;
     register char* s;
     OP *o;
-    short *tbl;
     U8 squash;
     U8 del;
     U8 complement;
@@ -9340,8 +9346,7 @@ S_scan_trans(pTHX_ char *start)
     }
   no_more:
 
-    tbl = (short *)PerlMemShared_calloc(complement&&!del?258:256, sizeof(short));
-    o = newPVOP(nondestruct ? OP_TRANSR : OP_TRANS, 0, (char*)tbl);
+    o = newPVOP(nondestruct ? OP_TRANSR : OP_TRANS, 0, (char*)NULL);
     o->op_private &= ~OPpTRANS_ALL;
     o->op_private |= del|squash|complement|
       (DO_UTF8(PL_lex_stuff)? OPpTRANS_FROM_UTF : 0)|
@@ -9878,7 +9883,7 @@ S_scan_str(pTHX_ char *start, int keep_quoted, int keep_delims)
 	termlen = 1;
     }
     else {
-	termcode = utf8_to_uvchr((U8*)s, &termlen);
+	termcode = utf8_to_uvchr_buf((U8*)s, (U8*)PL_bufend, &termlen);
 	Copy(s, termstr, termlen, U8);
 	if (!UTF8_IS_INVARIANT(term))
 	    has_utf8 = TRUE;
