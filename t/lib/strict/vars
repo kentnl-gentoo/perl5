@@ -536,3 +536,40 @@ use strict 'vars';
 no warnings;
 eval q/$dweck/;
 EXPECT
+########
+# [perl #112316] strict vars getting confused by nulls
+# Assigning to a package whose name contains a null
+BEGIN { *Foo:: = *{"foo\0bar::"} }
+package foo;
+*Foo::bar = [];
+use strict;
+eval 'package Foo; @bar = 1' or die;
+EXPECT
+########
+# [perl #112316] strict vars getting confused by nulls
+# Assigning from within a package whose name contains a null
+BEGIN { *Foo:: = *{"foo\0bar::"} }
+package Foo;
+*foo::bar = [];
+use strict;
+eval 'package foo; @bar = 1' or die;
+EXPECT
+########
+# [perl #112316] strict vars getting confused by nulls
+# Assigning from one null package to another, with a common prefix
+BEGIN { *Foo:: = *{"foo\0foo::"};
+        *Bar:: = *{"foo\0bar::"} }
+package Foo;
+*Bar::bar = [];
+use strict;
+eval 'package Bar; @bar = 1' or die;
+EXPECT
+########
+# UTF8 and Latin1 package names equivalent at the byte level
+use utf8;
+# ĵ in UTF-8 is the same as Äµ in Latin-1
+package ĵ;
+*Äµ::bar = [];
+use strict;
+eval 'package Äµ; @bar = 1' or die;
+EXPECT

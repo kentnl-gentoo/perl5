@@ -3556,10 +3556,7 @@ PERL_CALLCONV char*	Perl_savesharedpv(pTHX_ const char* pv)
 
 PERL_CALLCONV char*	Perl_savesharedpvn(pTHX_ const char *const pv, const STRLEN len)
 			__attribute__malloc__
-			__attribute__warn_unused_result__
-			__attribute__nonnull__(pTHX_1);
-#define PERL_ARGS_ASSERT_SAVESHAREDPVN	\
-	assert(pv)
+			__attribute__warn_unused_result__;
 
 PERL_CALLCONV char*	Perl_savesharedsvpv(pTHX_ SV *sv)
 			__attribute__malloc__
@@ -4769,6 +4766,16 @@ PERL_CALLCONV int	Perl_yyerror(pTHX_ const char *const s)
 #define PERL_ARGS_ASSERT_YYERROR	\
 	assert(s)
 
+PERL_CALLCONV int	Perl_yyerror_pv(pTHX_ const char *const s, U32 flags)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_YYERROR_PV	\
+	assert(s)
+
+PERL_CALLCONV int	Perl_yyerror_pvn(pTHX_ const char *const s, STRLEN len, U32 flags)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_YYERROR_PVN	\
+	assert(s)
+
 PERL_CALLCONV int	Perl_yylex(pTHX);
 PERL_CALLCONV int	Perl_yyparse(pTHX_ int gramtype);
 PERL_CALLCONV void	Perl_yyunlex(pTHX);
@@ -5716,12 +5723,19 @@ STATIC void	S_apply_attrs_my(pTHX_ HV *stash, OP *target, OP *attrs, OP **imopsp
 #define PERL_ARGS_ASSERT_APPLY_ATTRS_MY	\
 	assert(stash); assert(target); assert(imopsp)
 
-STATIC void	S_bad_type(pTHX_ I32 n, const char *t, const char *name, const OP *kid)
+STATIC void	S_bad_type_pv(pTHX_ I32 n, const char *t, const char *name, U32 flags, const OP *kid)
 			__attribute__nonnull__(pTHX_2)
 			__attribute__nonnull__(pTHX_3)
-			__attribute__nonnull__(pTHX_4);
-#define PERL_ARGS_ASSERT_BAD_TYPE	\
+			__attribute__nonnull__(pTHX_5);
+#define PERL_ARGS_ASSERT_BAD_TYPE_PV	\
 	assert(t); assert(name); assert(kid)
+
+STATIC void	S_bad_type_sv(pTHX_ I32 n, const char *t, SV *namesv, U32 flags, const OP *kid)
+			__attribute__nonnull__(pTHX_2)
+			__attribute__nonnull__(pTHX_3)
+			__attribute__nonnull__(pTHX_5);
+#define PERL_ARGS_ASSERT_BAD_TYPE_SV	\
+	assert(t); assert(namesv); assert(kid)
 
 STATIC void	S_cop_free(pTHX_ COP *cop)
 			__attribute__nonnull__(pTHX_1);
@@ -5750,7 +5764,7 @@ STATIC OP*	S_fold_constants(pTHX_ OP *o)
 
 STATIC OP*	S_force_list(pTHX_ OP* arg);
 STATIC OP*	S_gen_constant_list(pTHX_ OP* o);
-STATIC const char*	S_gv_ename(pTHX_ GV *gv)
+STATIC SV*	S_gv_ename(pTHX_ GV *gv)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_GV_ENAME	\
 	assert(gv)
@@ -5859,18 +5873,32 @@ STATIC void	S_simplify_sort(pTHX_ OP *o)
 #define PERL_ARGS_ASSERT_SIMPLIFY_SORT	\
 	assert(o)
 
-STATIC OP*	S_too_few_arguments(pTHX_ OP *o, const char* name)
+STATIC OP*	S_too_few_arguments_pv(pTHX_ OP *o, const char* name, U32 flags)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2);
-#define PERL_ARGS_ASSERT_TOO_FEW_ARGUMENTS	\
+#define PERL_ARGS_ASSERT_TOO_FEW_ARGUMENTS_PV	\
 	assert(o); assert(name)
 
-STATIC OP*	S_too_many_arguments(pTHX_ OP *o, const char* name)
+STATIC OP*	S_too_few_arguments_sv(pTHX_ OP *o, SV* namesv, U32 flags)
+			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2);
-#define PERL_ARGS_ASSERT_TOO_MANY_ARGUMENTS	\
+#define PERL_ARGS_ASSERT_TOO_FEW_ARGUMENTS_SV	\
+	assert(o); assert(namesv)
+
+STATIC OP*	S_too_many_arguments_pv(pTHX_ OP *o, const char* name, U32 flags)
+			__attribute__nonnull__(pTHX_1)
+			__attribute__nonnull__(pTHX_2);
+#define PERL_ARGS_ASSERT_TOO_MANY_ARGUMENTS_PV	\
 	assert(o); assert(name)
+
+STATIC OP*	S_too_many_arguments_sv(pTHX_ OP *o, SV* namesv, U32 flags)
+			__attribute__warn_unused_result__
+			__attribute__nonnull__(pTHX_1)
+			__attribute__nonnull__(pTHX_2);
+#define PERL_ARGS_ASSERT_TOO_MANY_ARGUMENTS_SV	\
+	assert(o); assert(namesv)
 
 #  if defined(USE_ITHREADS)
 STATIC void	S_forget_pmop(pTHX_ PMOP *const o, U32 flags)
@@ -6012,12 +6040,12 @@ STATIC OP*	S_docatch(pTHX_ OP *o)
 			__attribute__warn_unused_result__;
 
 STATIC bool	S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq, HV* hh);
-STATIC OP*	S_dofindlabel(pTHX_ OP *o, const char *label, OP **opstack, OP **oplimit)
+STATIC OP*	S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstack, OP **oplimit)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2)
-			__attribute__nonnull__(pTHX_3)
-			__attribute__nonnull__(pTHX_4);
+			__attribute__nonnull__(pTHX_5)
+			__attribute__nonnull__(pTHX_6);
 #define PERL_ARGS_ASSERT_DOFINDLABEL	\
 	assert(o); assert(label); assert(opstack); assert(oplimit)
 
@@ -6032,7 +6060,7 @@ STATIC I32	S_dopoptoeval(pTHX_ I32 startingblock)
 STATIC I32	S_dopoptogiven(pTHX_ I32 startingblock)
 			__attribute__warn_unused_result__;
 
-STATIC I32	S_dopoptolabel(pTHX_ const char *label)
+STATIC I32	S_dopoptolabel(pTHX_ const char *label, STRLEN len, U32 flags)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_DOPOPTOLABEL	\
@@ -6269,6 +6297,11 @@ STATIC SV *	S_space_join_names_mortal(pTHX_ char *const *array)
 
 #endif
 #if defined(PERL_IN_REGCOMP_C)
+STATIC void	S__append_range_to_invlist(pTHX_ SV* const invlist, const UV start, const UV end)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT__APPEND_RANGE_TO_INVLIST	\
+	assert(invlist)
+
 PERL_STATIC_INLINE UV*	S__invlist_array_init(pTHX_ SV* const invlist, const bool will_have_0)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1);
@@ -6296,9 +6329,6 @@ STATIC U32	S_add_data(struct RExC_state_t *pRExC_state, U32 n, const char *s)
 			__attribute__nonnull__(3);
 #define PERL_ARGS_ASSERT_ADD_DATA	\
 	assert(pRExC_state); assert(s)
-
-STATIC SV*	S_add_range_to_invlist(pTHX_ SV* invlist, const UV start, const UV end)
-			__attribute__warn_unused_result__;
 
 STATIC void	S_checkposixcc(pTHX_ struct RExC_state_t *pRExC_state)
 			__attribute__nonnull__(pTHX_1);
@@ -6593,10 +6623,8 @@ PERL_CALLCONV SV*	Perl__invlist_contents(pTHX_ SV* const invlist)
 
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_UTF8_C)
-PERL_CALLCONV void	Perl__append_range_to_invlist(pTHX_ SV* const invlist, const UV start, const UV end)
-			__attribute__nonnull__(pTHX_1);
-#define PERL_ARGS_ASSERT__APPEND_RANGE_TO_INVLIST	\
-	assert(invlist)
+PERL_CALLCONV SV*	Perl__add_range_to_invlist(pTHX_ SV* invlist, const UV start, const UV end)
+			__attribute__warn_unused_result__;
 
 /* PERL_CALLCONV void	_invlist_intersection(pTHX_ SV* const a, SV* const b, SV** i)
 			__attribute__nonnull__(pTHX_1)
@@ -7104,7 +7132,7 @@ STATIC SV*	S_tokeq(pTHX_ SV *sv)
 	assert(sv)
 
 STATIC void	S_update_debugger_info(pTHX_ SV *orig_sv, const char *const buf, STRLEN len);
-STATIC int	S_yywarn(pTHX_ const char *const s)
+STATIC int	S_yywarn(pTHX_ const char *const s, U32 flags)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_YYWARN	\
 	assert(s)

@@ -163,8 +163,8 @@ Deprecated.  Use C<GIMME_V> instead.
 /* Lower bits of op_private often carry the number of arguments, as
  * set by newBINOP, newUNOP and ck_fun */
 
-/* NOTE: OP_NEXTSTATE and OP_DBSTATE (i.e. COPs) carry lower
- * bits of PL_hints in op_private */
+/* NOTE: OP_NEXTSTATE and OP_DBSTATE (i.e. COPs) carry NATIVE_HINTS
+ * in op_private */
 
 /* Private for lvalues */
 #define OPpLVAL_INTRO	128	/* Lvalue must be localized or lvalue sub */
@@ -316,6 +316,9 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpCOREARGS_DEREF2	2	/* Arg 2 is a handle constructor */
 #define OPpCOREARGS_SCALARMOD	64	/* \$ rather than \[$@%*] */
 #define OPpCOREARGS_PUSHMARK	128	/* Call pp_pushmark */
+
+/* Private for OP_(LAST|REDO|NEXT|GOTO|DUMP) */
+#define OPpPV_IS_UTF8		128	/* label is in UTF8 */
 
 struct op {
     BASEOP

@@ -139,12 +139,12 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
 */
 
 #define UNI_IS_INVARIANT(c)		(((UV)c) <  0x80)
-/* Note that C0 and C1 are invalid in legal UTF8, so the lower bound of the
- * below might ought to be C2 */
-#define UTF8_IS_START(c)		(((U8)c) >= 0xc0)
+#define UTF8_IS_START(c)		(((U8)c) >= 0xc2)
 #define UTF8_IS_CONTINUATION(c)		(((U8)c) >= 0x80 && (((U8)c) <= 0xbf))
 #define UTF8_IS_CONTINUED(c) 		(((U8)c) &  0x80)
-#define UTF8_IS_DOWNGRADEABLE_START(c)	(((U8)c & 0xfc) == 0xc0)
+
+/* Masking with 0xfe allows low bit to be 0 or 1; thus this matches 0xc[23] */
+#define UTF8_IS_DOWNGRADEABLE_START(c)	(((U8)c & 0xfe) == 0xc2)
 
 #define UTF_START_MARK(len) (((len) >  7) ? 0xFF : (0xFE << (7-(len))))
 #define UTF_START_MASK(len) (((len) >= 7) ? 0x00 : (0x1F >> ((len)-2)))
@@ -152,6 +152,12 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
 #define UTF_CONTINUATION_MARK		0x80
 #define UTF_ACCUMULATION_SHIFT		6
 #define UTF_CONTINUATION_MASK		((U8)0x3f)
+
+/* This sets the UTF_CONTINUATION_MASK in the upper bits of a word.  If a value
+ * is anded with it, and the result is non-zero, then using the original value
+ * in UTF8_ACCUMULATE will overflow, shifting bits off the left */
+#define UTF_ACCUMULATION_OVERFLOW_MASK					\
+    (((UV) UTF_CONTINUATION_MASK) << ((sizeof(UV) * CHARBITS) - UTF_ACCUMULATION_SHIFT))
 
 #ifdef HAS_QUAD
 #define UNISKIP(uv) ( (uv) < 0x80           ? 1 : \

@@ -584,6 +584,15 @@ SKIP: {
 	}
 	pass('no crash with version->new($tied) where $tied returns "version"');
     }
+
+    { # [perl #112478]
+	$_112478::VERSION = 9e99;
+	ok eval { _112478->VERSION(9e99); 1 }, '->VERSION(9e99) succeeds'
+	    or diag $@;
+	$_112478::VERSION = 1;
+	eval { _112478->VERSION(9e99) };
+	unlike $@, qr/panic/, '->VERSION(9e99) does not panic';
+    }
 }
 
 1;

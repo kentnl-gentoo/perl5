@@ -1182,7 +1182,7 @@ Perl_savesharedpvn(pTHX_ const char *const pv, const STRLEN len)
 {
     char *const newaddr = (char*)PerlMemShared_malloc(len + 1);
 
-    PERL_ARGS_ASSERT_SAVESHAREDPVN;
+    /* PERL_ARGS_ASSERT_SAVESHAREDPVN; */
 
     if (!newaddr) {
 	return write_no_mem();
@@ -4959,18 +4959,28 @@ Perl_upg_version(pTHX_ SV *ver, bool qv)
 
 	/* may get too much accuracy */ 
 	char tbuf[64];
+	SV *sv = SvNVX(ver) > 10e50 ? newSV(64) : 0;
+	char *buf;
 #ifdef USE_LOCALE_NUMERIC
 	char *loc = savepv(setlocale(LC_NUMERIC, NULL));
 	setlocale(LC_NUMERIC, "C");
 #endif
-	len = my_snprintf(tbuf, sizeof(tbuf), "%.9"NVff, SvNVX(ver));
+	if (sv) {
+	    Perl_sv_setpvf(aTHX_ sv, "%.9"NVff, SvNVX(ver));
+	    buf = SvPV(sv, len);
+	}
+	else {
+	    len = my_snprintf(tbuf, sizeof(tbuf), "%.9"NVff, SvNVX(ver));
+	    buf = tbuf;
+	}
 #ifdef USE_LOCALE_NUMERIC
 	setlocale(LC_NUMERIC, loc);
 	Safefree(loc);
 #endif
-	while (tbuf[len-1] == '0' && len > 0) len--;
-	if ( tbuf[len-1] == '.' ) len--; /* eat the trailing decimal */
-	version = savepvn(tbuf, len);
+	while (buf[len-1] == '0' && len > 0) len--;
+	if ( buf[len-1] == '.' ) len--; /* eat the trailing decimal */
+	version = savepvn(buf, len);
+	SvREFCNT_dec(sv);
     }
 #ifdef SvVOK
     else if ( (mg = SvVSTRING_mg(ver)) ) { /* already a v-string */
@@ -5844,25 +5854,28 @@ Perl_stashpv_hvname_match(pTHX_ const COP *c, const HV *hv)
 {
     const char * stashpv = CopSTASHPV(c);
     const char * name    = HvNAME_get(hv);
+    const bool utf8 = CopSTASH_len(c) < 0;
+    const I32  len  = utf8 ? -CopSTASH_len(c) : CopSTASH_len(c);
     PERL_UNUSED_CONTEXT;
     PERL_ARGS_ASSERT_STASHPV_HVNAME_MATCH;
 
     if (!stashpv || !name)
 	return stashpv == name;
-    if ( HvNAMEUTF8(hv) && !(CopSTASH_flags(c) & SVf_UTF8 ? 1 : 0) ) {
-        if (CopSTASH_flags(c) & SVf_UTF8) {
+    if ( !HvNAMEUTF8(hv) != !utf8 ) {
+        if (utf8) {
             return (bytes_cmp_utf8(
-                        (const U8*)stashpv, strlen(stashpv),
+                        (const U8*)stashpv, len,
                         (const U8*)name, HEK_LEN(HvNAME_HEK(hv))) == 0);
         } else {
             return (bytes_cmp_utf8(
                         (const U8*)name, HEK_LEN(HvNAME_HEK(hv)),
-                        (const U8*)stashpv, strlen(stashpv)) == 0);
+                        (const U8*)stashpv, len) == 0);
         }
     }
     else
         return (stashpv == name
-                    || strEQ(stashpv, name));
+                    || (HEK_LEN(HvNAME_HEK(hv)) == len
+			 && memEQ(stashpv, name, len)));
     /*NOTREACHED*/
     return FALSE;
 }

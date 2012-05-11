@@ -32,6 +32,7 @@ curl(1)
 Data::Entropy
 Data::Float
 Data::Types
+Date::Pcalc
 DateTime
 DB_File(3)
 DBIx::Profile
@@ -47,6 +48,7 @@ fetch(1)
 File::chdir
 File::Copy::Recursive
 File::Findgrep
+File::MMagic
 File::ShareDir
 flock(3)
 fsync(3c)
@@ -70,6 +72,8 @@ Math::Random::MT::Perl
 Math::Random::Secure
 Math::TrulyRandom
 md5sum(1)
+Module::CPANTS::Analyse
+Module::Find
 Module::Info
 Module::Starter
 MRO::Compat
@@ -84,6 +88,7 @@ perl(1)
 Perl::Unsafe::Signals
 perlbug(1)
 PerlIO::locale
+PerlIO::Util
 PerlIO::via::Base64
 PerlIO::via::StripHTML
 perllexwarn(1)
@@ -294,15 +299,14 @@ porting/how_to_write_a_perldelta.pod	Verbatim line length including indents exce
 porting/pumpkin.pod	Verbatim line length including indents exceeds 79 by	9
 porting/release_managers_guide.pod	Verbatim line length including indents exceeds 79 by	7
 porting/release_schedule.pod	There is no NAME	1
+porting/todo.pod	Apparent broken link	1
 porting/todo.pod	Verbatim line length including indents exceeds 79 by	7
-porting/todo.pod	empty section in previous paragraph	2
 symbian/perlutil.pod	Verbatim line length including indents exceeds 79 by	4
 utils/c2ph	Verbatim line length including indents exceeds 79 by	44
 utils/libnetcfg	Apparent broken link	1
 utils/pod2html	Pod NAME already used	1
 vms/ext/filespec.pm	Verbatim line length including indents exceeds 79 by	1
 x2p/a2p.pod	empty section in previous paragraph	2
-x2p/psed	Spurious =cut command	1
 lib/benchmark.pm	Verbatim line length including indents exceeds 79 by	4
 lib/class/struct.pm	Verbatim line length including indents exceeds 79 by	7
 lib/config.pod	? Should you be using L<...> instead of	-1

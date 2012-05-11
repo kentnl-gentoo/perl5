@@ -6,7 +6,7 @@ BEGIN {
     @INC = qw(. ../lib);
 }
 
-BEGIN { print "1..29\n"; }
+BEGIN { print "1..31\n"; }
 BEGIN {
     print "not " if exists $^H{foo};
     print "ok 1 - \$^H{foo} doesn't exist initially\n";
@@ -216,6 +216,57 @@ print "ok 26 - no crash when cloning a tied hint hash\n";
           "setting \${^WARNING_BITS} to its own value has no effect\n";
 }
 
+# [perl #112326]
+# this code could cause a crash, due to PL_hints continuing to point to th
+# hints hash currently being freed
+
+{
+    package Foo;
+    my @h = qw(a 1 b 2);
+    BEGIN {
+	$^H{FOO} = bless {};
+    }
+    sub DESTROY {
+	@h = %^H;
+	delete $INC{strict}; require strict; # boom!
+    }
+    my $h = join ':', %h;
+    # this isn't the main point of the test; the main point is that
+    # it doesn't crash!
+    print "not " if $h ne '';
+    print "ok 29 - #112326\n";
+}
+
+
+# [perl #112444]
+# A destructor called while %^H is freed should not be able to stop %^H
+# from being magical (due to *^H{HASH} being undef).
+{
+    BEGIN {
+	# Make sure %^H is clear and not localised, to begin with
+	%^H = ();
+	$^H = 0;
+    }
+    DESTROY { %^H }
+    {
+	{
+	    BEGIN {
+		$^H{foom} = bless[];
+	    }
+	} # scope exit triggers destructor, which autovivifies a non-
+	  # magical %^H
+	BEGIN {
+	    # Here we have the %^H created by DESTROY, which is
+	    # not localised
+	    $^H{112444} = 'baz';
+	}
+    } # %^H leaks on scope exit
+    BEGIN { @keez = keys %^H }
+}
+print "not " if @keez;
+print "ok 30 - %^H does not leak when autovivified in destructor\n";
+print "# keys are: @keez\n" if @keez;
+
 
 # Add new tests above this require, in case it fails.
 require './test.pl';
@@ -226,7 +277,7 @@ my $result = runperl(
     stderr => 1
 );
 print "not " if length $result;
-print "ok 29 - double-freeing hints hash\n";
+print "ok 31 - double-freeing hints hash\n";
 print "# got: $result\n" if length $result;
 
 __END__

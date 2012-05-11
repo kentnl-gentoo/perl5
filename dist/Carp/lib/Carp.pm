@@ -24,7 +24,7 @@ BEGIN {
     }
 }
 
-our $VERSION = '1.25';
+our $VERSION = '1.26';
 
 our $MaxEvalLen = 0;
 our $Verbose    = 0;
@@ -291,7 +291,7 @@ sub ret_backtrace {
         local $@ = '';
         local $SIG{__DIE__};
         eval {
-            die;
+            CORE::die;
         };
         if($@ =~ /^Died at .*(, <.*?> line \d+).$/ ) {
             $mess .= $1;

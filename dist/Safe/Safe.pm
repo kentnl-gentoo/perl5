@@ -1,10 +1,9 @@
 package Safe;
 
 use 5.003_11;
-use strict;
 use Scalar::Util qw(reftype refaddr);
 
-$Safe::VERSION = "2.31";
+$Safe::VERSION = "2.31_01";
 
 # *** Don't declare any lexicals above this point ***
 #
@@ -22,10 +21,11 @@ sub lexless_anon_sub {
     # Uses a closure (on $__ExPr__) to pass in the code to be executed.
     # (eval on one line to keep line numbers as expected by caller)
     eval sprintf
-    'package %s; %s strict; sub { @_=(); eval q[my $__ExPr__;] . $__ExPr__; }',
-                $_[0], $_[1] ? 'use' : 'no';
+    'package %s; %s sub { @_=(); eval q[my $__ExPr__;] . $__ExPr__; }',
+                $_[0], $_[1] ? 'use strict;' : '';
 }
 
+use strict;
 use Carp;
 BEGIN { eval q{
     use Carp::Heavy;

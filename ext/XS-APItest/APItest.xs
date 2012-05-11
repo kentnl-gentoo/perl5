@@ -891,7 +891,9 @@ static OP *THX_parse_keyword_swaplabel(pTHX)
     OP *sop = parse_barestmt(0);
     SV *label = parse_label(PARSE_OPTIONAL);
     if (label) sv_2mortal(label);
-    return newSTATEOP(0, label ? savepv(SvPVX(label)) : NULL, sop);
+    return newSTATEOP(label ? SvUTF8(label) : 0,
+                      label ? savepv(SvPVX(label)) : NULL,
+                      sop);
 }
 
 #define parse_keyword_labelconst() THX_parse_keyword_labelconst(aTHX)
@@ -1124,6 +1126,41 @@ bytes_cmp_utf8(bytes, utf8)
 	RETVAL = bytes_cmp_utf8(b, blen, u, ulen);
     OUTPUT:
 	RETVAL
+
+AV *
+test_utf8n_to_uvuni(s, len, flags)
+
+        SV *s
+        SV *len
+        SV *flags
+    PREINIT:
+        STRLEN retlen;
+        UV ret;
+        STRLEN slen;
+
+    CODE:
+        /* Call utf8n_to_uvuni() with the inputs.  It always asks for the
+         * actual length to be returned
+         *
+         * Length to assume <s> is; not checked, so could have buffer overflow
+         */
+        RETVAL = newAV();
+        sv_2mortal((SV*)RETVAL);
+
+        ret
+         = utf8n_to_uvuni((U8*) SvPV(s, slen), SvUV(len), &retlen, SvUV(flags));
+
+        /* Returns the return value in [0]; <retlen> in [1] */
+        av_push(RETVAL, newSVuv(ret));
+        if (retlen == (STRLEN) -1) {
+            av_push(RETVAL, newSViv(-1));
+        }
+        else {
+            av_push(RETVAL, newSVuv(retlen));
+        }
+
+    OUTPUT:
+        RETVAL
 
 MODULE = XS::APItest:Overload	PACKAGE = XS::APItest::Overload
 

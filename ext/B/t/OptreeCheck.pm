@@ -5,7 +5,7 @@ use warnings;
 use vars qw($TODO $Level $using_open);
 require "test.pl";
 
-our $VERSION = '0.06';
+our $VERSION = '0.07';
 
 # now export checkOptree, and those test.pl functions used by tests
 our @EXPORT = qw( checkOptree plan skip skip_all pass is like unlike
@@ -482,7 +482,7 @@ sub getRendering {
 	    #  in caller's package ( to test arg-fixup, comment next line)
 	    my $pkg = '{ package '.caller(1) .';';
 	    {
-		no strict;
+		BEGIN { $^H = 0 }
 		no warnings;
 		$code = eval "$pkg sub { $code } }";
 	    }

@@ -3259,6 +3259,9 @@ dist/IO/Makefile.PL		IO extension makefile writer
 dist/IO/poll.c			IO poll() emulation using select()
 dist/IO/poll.h			IO poll() emulation using select()
 dist/IO/README			IO extension maintenance notice
+dist/IO/t/cachepropagate-tcp.t	See if IO::Socket duplication works
+dist/IO/t/cachepropagate-udp.t	See if IO::Socket duplication works
+dist/IO/t/cachepropagate-unix.t	See if IO::Socket duplication works
 dist/IO/t/io_const.t		See if constants from IO work
 dist/IO/t/io_dir.t		See if directory-related methods from IO work
 dist/IO/t/io_dup.t		See if dup()-related methods from IO work
@@ -3996,6 +3999,7 @@ ext/XS-APItest/t/keyword_multiline.t	test keyword plugin parsing across lines
 ext/XS-APItest/t/keyword_plugin.t	test keyword plugin mechanism
 ext/XS-APItest/t/labelconst.aux	auxiliary file for label test
 ext/XS-APItest/t/labelconst.t	test recursive descent label parsing
+ext/XS-APItest/t/labelconst_utf8.aux	auxiliary file for label test in UTF-8
 ext/XS-APItest/t/loopblock.t	test recursive descent block parsing
 ext/XS-APItest/t/looprest.t	test recursive descent statement-sequence parsing
 ext/XS-APItest/t/lvalue.t	Test XS lvalue functions
@@ -4640,15 +4644,6 @@ pod/perl5124delta.pod		Perl changes in version 5.12.4
 pod/perl5140delta.pod		Perl changes in version 5.14.0
 pod/perl5141delta.pod		Perl changes in version 5.14.1
 pod/perl5142delta.pod		Perl changes in version 5.14.2
-pod/perl5150delta.pod		Perl changes in version 5.15.0
-pod/perl5151delta.pod		Perl changes in version 5.15.1
-pod/perl5152delta.pod		Perl changes in version 5.15.2
-pod/perl5153delta.pod		Perl changes in version 5.15.3
-pod/perl5154delta.pod		Perl changes in version 5.15.4
-pod/perl5155delta.pod		Perl changes in version 5.15.5
-pod/perl5156delta.pod		Perl changes in version 5.15.6
-pod/perl5157delta.pod		Perl changes in version 5.15.7
-pod/perl5158delta.pod		Perl changes in version 5.15.8
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4802,7 +4797,6 @@ Porting/manicheck		Check against MANIFEST
 Porting/manisort		Sort the MANIFEST
 Porting/new-perldelta.pl	Generate a new perldelta
 Porting/newtests-perldelta.pl	Generate Perldelta stub for newly added tests
-Porting/perl5160delta.pod	The perldelta that will be perl5160delta
 Porting/perldelta_template.pod	Template for creating new perldelta.pod files
 Porting/perlhist_calculate.pl		Perform calculations to update perlhist
 Porting/pod_lib.pl		Code for handling generated pods
@@ -5491,10 +5485,12 @@ t/uni/fold.t			See if Unicode folding works
 t/uni/goto.t			See if Unicode goto &sub works
 t/uni/greek.t			See if Unicode in greek works
 t/uni/gv.t			See if Unicode GVs work.
+t/uni/labels.t			See if Unicode labels work
 t/uni/latin2.t			See if Unicode in latin2 works
 t/uni/lex_utf8.t		See if Unicode in lexer works
 t/uni/lower.t			See if Unicode casing works
 t/uni/method.t			See if Unicode methods work
+t/uni/opcroak.t			See if Unicode croaks from op.c work
 t/uni/overload.t		See if Unicode overloading works
 t/uni/package.t			See if Unicode in package declarations works
 t/uni/parser.t			See if Unicode in the parser works in edge cases.

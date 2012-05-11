@@ -14,7 +14,7 @@ use warnings; # uses #3 and #4, since warnings uses Carp
 
 use Exporter (); # use #5
 
-our $VERSION   = "0.88";
+our $VERSION   = "0.89";
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw( set_style set_style_standard add_callback
 		     concise_subref concise_cv concise_main
@@ -668,7 +668,7 @@ $priv{$_}{128} = '+1' for qw "caller wantarray runcv";
 our %hints; # used to display each COP's op_hints values
 
 # strict refs, subs, vars
-@hints{2,512,1024} = ('$', '&', '*');
+@hints{2,512,1024,32,64,128} = ('$', '&', '*', 'x$', 'x&', 'x*');
 # integers, locale, bytes
 @hints{1,4,8,16} = ('i', 'l', 'b');
 # block scope, localise %^H, $^OPEN (in), $^OPEN (out)
@@ -1547,6 +1547,9 @@ string if this is not a COP. Here are the symbols used:
     $ strict refs
     & strict subs
     * strict vars
+   x$ explicit use/no strict refs
+   x& explicit use/no strict subs
+   x* explicit use/no strict vars
     i integers
     l locale
     b bytes

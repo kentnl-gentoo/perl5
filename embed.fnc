@@ -1111,7 +1111,10 @@ p	|I32	|same_dirent	|NN const char* a|NN const char* b
 Apda	|char*	|savepv		|NULLOK const char* pv
 Apda	|char*	|savepvn	|NULLOK const char* pv|I32 len
 Apda	|char*	|savesharedpv	|NULLOK const char* pv
-Apda	|char*	|savesharedpvn	|NN const char *const pv|const STRLEN len
+
+: NULLOK only to suppress a compiler warning
+Apda	|char*	|savesharedpvn	|NULLOK const char *const pv \
+				|const STRLEN len
 Apda	|char*	|savesharedsvpv	|NN SV *sv
 Apda	|char*	|savesvpv	|NN SV* sv
 Ap	|void	|savestack_grow
@@ -1365,7 +1368,7 @@ ApR	|SV*	|swash_init	|NN const char* pkg|NN const char* name|NN SV* listsv|I32 m
 Ap	|UV	|swash_fetch	|NN SV *swash|NN const U8 *ptr|bool do_utf8
 #ifdef PERL_IN_REGCOMP_C
 EiMR	|SV*	|add_cp_to_invlist	|NULLOK SV* invlist|const UV cp
-EsMR	|SV*	|add_range_to_invlist	|NULLOK SV* invlist|const UV start|const UV end
+EsM	|void	|_append_range_to_invlist   |NN SV* const invlist|const UV start|const UV end
 EiMR	|UV*	|_invlist_array_init	|NN SV* const invlist|const bool will_have_0
 EiMR	|UV*	|invlist_array	|NN SV* const invlist
 EsM	|void	|invlist_extend    |NN SV* const invlist|const UV len
@@ -1393,7 +1396,7 @@ EXpM	|void	|_invlist_invert_prop|NN SV* const invlist
 EXMpR	|HV*	|_swash_inversion_hash	|NN SV* const swash
 EXMpR	|SV*	|_new_invlist	|IV initial_size
 EXMpR	|SV*	|_swash_to_invlist	|NN SV* const swash
-EXMp	|void	|_append_range_to_invlist   |NN SV* const invlist|const UV start|const UV end
+EXMpR	|SV*	|_add_range_to_invlist	|NULLOK SV* invlist|const UV start|const UV end
 EXMp	|void	|_invlist_populate_swatch   |NN SV* const invlist|const UV start|const UV end|NN U8* swatch
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C) || defined(PERL_IN_UTF8_C)
@@ -1450,8 +1453,8 @@ ApMd	|U8*	|bytes_from_utf8|NN const U8 *s|NN STRLEN *len|NULLOK bool *is_utf8
 ApMd	|U8*	|bytes_to_utf8	|NN const U8 *s|NN STRLEN *len
 ApdD	|UV	|utf8_to_uvchr	|NN const U8 *s|NULLOK STRLEN *retlen
 ApdD	|UV	|utf8_to_uvuni	|NN const U8 *s|NULLOK STRLEN *retlen
-ApdM	|UV	|valid_utf8_to_uvchr	|NN const U8 *s|NULLOK STRLEN *retlen
-ApdM	|UV	|valid_utf8_to_uvuni	|NN const U8 *s|NULLOK STRLEN *retlen
+ApM	|UV	|valid_utf8_to_uvchr	|NN const U8 *s|NULLOK STRLEN *retlen
+ApM	|UV	|valid_utf8_to_uvuni	|NN const U8 *s|NULLOK STRLEN *retlen
 Apd	|UV	|utf8_to_uvchr_buf	|NN const U8 *s|NN const U8 *send|NULLOK STRLEN *retlen
 Apd	|UV	|utf8_to_uvuni_buf	|NN const U8 *s|NN const U8 *send|NULLOK STRLEN *retlen
 pM	|bool	|check_utf8_print	|NN const U8 *s|const STRLEN len
@@ -1514,6 +1517,8 @@ Ap     |I32    |whichsig_pvn   |NN const char* sig|STRLEN len
 p	|void	|write_to_stderr|NN SV* msv
 : Used in op.c
 p	|int	|yyerror	|NN const char *const s
+p	|int	|yyerror_pv	|NN const char *const s|U32 flags
+p	|int	|yyerror_pvn	|NN const char *const s|STRLEN len|U32 flags
 : Used in perly.y, and by Data::Alias
 EXp	|int	|yylex
 p	|void	|yyunlex
@@ -1522,7 +1527,7 @@ p	|int	|yyparse	|int gramtype
 : Only used in scope.c
 p	|void	|parser_free	|NN const yy_parser *parser
 #if defined(PERL_IN_TOKE_C)
-s	|int	|yywarn		|NN const char *const s
+s	|int	|yywarn		|NN const char *const s|U32 flags
 #endif
 #if defined(MYMALLOC)
 Ap	|void	|dump_mstats	|NN const char* s
@@ -1739,17 +1744,20 @@ sR	|OP*	|newDEFSVOP
 sR	|OP*	|search_const	|NN OP *o
 sR	|OP*	|new_logop	|I32 type|I32 flags|NN OP **firstp|NN OP **otherp
 s	|void	|simplify_sort	|NN OP *o
-s	|const char*	|gv_ename	|NN GV *gv
+s	|SV*	|gv_ename	|NN GV *gv
 sRn	|bool	|scalar_mod_type|NULLOK const OP *o|I32 type
 s	|OP *	|my_kid		|NULLOK OP *o|NULLOK OP *attrs|NN OP **imopsp
 s	|OP *	|dup_attrlist	|NN OP *o
 s	|void	|apply_attrs	|NN HV *stash|NN SV *target|NULLOK OP *attrs|bool for_my
 s	|void	|apply_attrs_my	|NN HV *stash|NN OP *target|NULLOK OP *attrs|NN OP **imopsp
-s	|void	|bad_type	|I32 n|NN const char *t|NN const char *name|NN const OP *kid
+s	|void	|bad_type_pv	|I32 n|NN const char *t|NN const char *name|U32 flags|NN const OP *kid
+s	|void	|bad_type_sv	|I32 n|NN const char *t|NN SV *namesv|U32 flags|NN const OP *kid
 s	|void	|no_bareword_allowed|NN OP *o
 sR	|OP*	|no_fh_allowed|NN OP *o
-sR	|OP*	|too_few_arguments|NN OP *o|NN const char* name
-s	|OP*	|too_many_arguments|NN OP *o|NN const char* name
+sR	|OP*	|too_few_arguments_sv|NN OP *o|NN SV* namesv|U32 flags
+sR	|OP*	|too_few_arguments_pv|NN OP *o|NN const char* name|U32 flags
+s	|OP*	|too_many_arguments_pv|NN OP *o|NN const char* name|U32 flags
+sR	|OP*	|too_many_arguments_sv|NN OP *o|NN SV* namesv|U32 flags
 s	|bool	|looks_like_bool|NN const OP* o
 s	|OP*	|newGIVWHENOP	|NULLOK OP* cond|NN OP *block \
 				|I32 enter_opcode|I32 leave_opcode \
@@ -1836,12 +1844,13 @@ snR	|char *	|bytes_to_uni	|NN const U8 *start|STRLEN len|NN char *dest
 
 #if defined(PERL_IN_PP_CTL_C)
 sR	|OP*	|docatch	|NULLOK OP *o
-sR	|OP*	|dofindlabel	|NN OP *o|NN const char *label|NN OP **opstack|NN OP **oplimit
+sR	|OP*	|dofindlabel	|NN OP *o|NN const char *label|STRLEN len \
+                                |U32 flags|NN OP **opstack|NN OP **oplimit
 s	|MAGIC *|doparseform	|NN SV *sv
 snR	|bool	|num_overflow	|NV value|I32 fldsize|I32 frcsize
 sR	|I32	|dopoptoeval	|I32 startingblock
 sR	|I32	|dopoptogiven	|I32 startingblock
-sR	|I32	|dopoptolabel	|NN const char *label
+sR	|I32	|dopoptolabel	|NN const char *label|STRLEN len|U32 flags
 sR	|I32	|dopoptoloop	|I32 startingblock
 sR	|I32	|dopoptosub_at	|NN const PERL_CONTEXT* cxstk|I32 startingblock
 sR	|I32	|dopoptowhen	|I32 startingblock

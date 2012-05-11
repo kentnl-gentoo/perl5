@@ -6,7 +6,7 @@ no warnings 'surrogate';    # surrogates can be inputs to this
 use charnames ();
 use Unicode::Normalize qw(getCombinClass NFD);
 
-our $VERSION = '0.42';
+our $VERSION = '0.43';
 
 use Storable qw(dclone);
 
@@ -3279,7 +3279,7 @@ RETRY:
 
         # All hex-valued properties are really to code points, and have been
         # converted to decimal.
-        $format = 'i';
+        $format = 's';
     }
     elsif ($returned_prop eq 'ToDm') {
         $format = 'ad';

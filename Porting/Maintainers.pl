@@ -192,7 +192,7 @@ use File::Glob qw(:case);
 %Modules = (
 
     'AnyDBM_File' => {
-        'MAINTAINERS' => 'p5p',
+        'MAINTAINER'  => 'p5p',
         'FILES'       => q[lib/AnyDBM_File.{pm,t}],
         'UPSTREAM'    => 'blead',
     },
@@ -283,7 +283,7 @@ use File::Glob qw(:case);
     'B::Concise' => {
         'MAINTAINER' => 'smccam',
         'FILES'      => q[ext/B/B/Concise.pm ext/B/t/concise.t],
-        'UPSTREAM'   => undef,
+        'UPSTREAM'   => 'blead',
     },
 
     'B::Debug' => {
@@ -1974,7 +1974,7 @@ use File::Glob qw(:case);
 
     'version' => {
         'MAINTAINER'   => 'jpeacock',
-        'DISTRIBUTION' => 'JPEACOCK/version-0.93.tar.gz',
+        'DISTRIBUTION' => 'JPEACOCK/version-0.97.tar.gz',
         'FILES'        => q[lib/version.pm lib/version.pod lib/version],
         'EXCLUDED' => [
             qr{^t/.*\.t$},

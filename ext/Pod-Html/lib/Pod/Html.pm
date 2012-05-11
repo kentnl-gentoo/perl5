@@ -3,7 +3,7 @@ use strict;
 require Exporter;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-$VERSION = 1.15_01;
+$VERSION = 1.15_02;
 @ISA = qw(Exporter);
 @EXPORT = qw(pod2html htmlify);
 @EXPORT_OK = qw(anchorify);
@@ -332,7 +332,7 @@ sub pod2html {
               while($_dirlevel =~ /\.\./) {
                 $_dirlevel =~ s/\.\.//;
                 # Assume $Pages{$key} has '/' separators (html dir separators).
-                $Pages{$key} =~ s/^[\w\s\-]+\///;
+                $Pages{$key} =~ s/^[\w\s\-\.]+\///;
               }
             }
             print $cache "$key $Pages{$key}\n";
@@ -343,6 +343,7 @@ sub pod2html {
 
     # set options for the parser
     my $parser = Pod::Simple::XHTML::LocalPodLinks->new();
+    $parser->codes_in_verbatim(0);
     $parser->anchor_items(1); # the old Pod::Html always did
     $parser->backlink($Backlink); # linkify =head1 directives
     $parser->htmldir($Htmldir);
@@ -433,6 +434,7 @@ HTMLFOOT
     }
     print $fhout $output;
     close $fhout or die "Failed to close $Htmlfile: $!";
+    chmod 0644, $Htmlfile unless $Htmlfile eq '-';
 }
 
 ##############################################################################
@@ -481,7 +483,7 @@ sub parse_command_line {
     my ($opt_backlink,$opt_cachedir,$opt_css,$opt_flush,$opt_header,
         $opt_help,$opt_htmldir,$opt_htmlroot,$opt_index,$opt_infile,
         $opt_outfile,$opt_poderrors,$opt_podpath,$opt_podroot,
-        $opt_quiet,$opt_recurse,$opt_title,$opt_verbose);
+        $opt_quiet,$opt_recurse,$opt_title,$opt_verbose,$opt_libpods);
 
     unshift @ARGV, split ' ', $Config{pod2html} if $Config{pod2html};
     my $result = GetOptions(
@@ -495,6 +497,7 @@ sub parse_command_line {
                        'htmlroot=s' => \$opt_htmlroot,
                        'index!'     => \$opt_index,
                        'infile=s'   => \$opt_infile,
+                       'libpods=s'  => \$opt_libpods, # deprecated
                        'outfile=s'  => \$opt_outfile,
                        'poderrors!' => \$opt_poderrors,
                        'podpath=s'  => \$opt_podpath,
@@ -510,6 +513,7 @@ sub parse_command_line {
     $opt_help = "";                     # just to make -w shut-up.
 
     @Podpath  = split(":", $opt_podpath) if defined $opt_podpath;
+    warn "--libpods is no longer supported" if defined $opt_libpods;
 
     $Backlink  =          $opt_backlink   if defined $opt_backlink;
     $Cachedir  = _unixify($opt_cachedir)  if defined $opt_cachedir;
@@ -677,6 +681,7 @@ sub _unixify {
                : File::Spec->splitdir($dirs);
     if (defined($vol) && $vol) {
         $vol =~ s/:$// if $^O eq 'VMS';
+        $vol = uc $vol if $^O eq 'MSWin32';
 
         if( $dirs[0] ) {
             unshift @dirs, $vol;

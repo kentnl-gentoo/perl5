@@ -439,7 +439,7 @@ case "$ccisgcc" in
 			B3910B*A.06.15)
 			# > cc --version
 			# cc: HP C/aC++ B3910B A.06.15 [May 16 2007]
-			# Has optimizing problems with +O2 for blead (5.15.9),
+			# Has optimizing problems with +O2 for blead (5.16.0),
 			# see https://rt.perl.org:443/rt3/Ticket/Display.html?id=103668.
 			#
 			# +O2 +Onolimit +Onoprocelim  +Ostore_ordering \
@@ -531,6 +531,27 @@ EOF
 
     rm -f t001$_o t001$_exe
     fi
+EOCBU
+
+cat >config.arch <<'EOCBU'
+# This script UU/config.arch will get 'called-back' by Configure after
+# all other configurations are done just before config.h is generated
+case "$archname:$optimize" in
+  PA*:*-g*[-+]O*|PA*:*[-+]O*-g*)
+    case "$ccflags" in
+      *DD64*) ;;
+      *) case "$ccversion" in
+	  # Only on PA-RISC. B3910B (aCC) is not faulty
+	  # B.11.* and A.10.* are
+	  [AB].1*)
+	      # cc: error 1414: Can't handle preprocessed file foo.i if -g and -O specified.
+	      echo "HP-UX C-ANSI-C on PA-RISC does not accept both -g and -O on preprocessed files" >&4
+	      echo "when compiling in 32bit mode. The optimizer will be disabled." >&4
+	      optimize=`echo "$optimize" | sed -e 's/[-+]O[0-9]*//' -e 's/+Onolimit//' -e 's/^ *//'`
+	      ;;
+	  esac
+      esac
+  esac
 EOCBU
 
 cat >UU/uselargefiles.cbu <<'EOCBU'
