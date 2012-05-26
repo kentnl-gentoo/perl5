@@ -19,7 +19,7 @@ BEGIN {
     require './test.pl';
 }
 
-plan tests => 472;  # Update this when adding/deleting tests.
+plan tests => 474;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -152,7 +152,7 @@ sub run_tests {
 
     {
         $_ = 'now is the {time for all} good men to come to.';
-        / {([^}]*)}/;
+        / \{([^}]*)}/;
         is($1, 'time for all', "Match braces");
     }
 
@@ -676,10 +676,11 @@ sub run_tests {
         is($#-, 1, $message);
     }
 
-    foreach ('$+[0] = 13', '$-[0] = 13', '@+ = (7, 6, 5)', '@- = qw (foo bar)') {
+    foreach ('$+[0] = 13', '$-[0] = 13', '@+ = (7, 6, 5)',
+	     '@- = qw (foo bar)', '$^N = 42') {
 	is(eval $_, undef);
         like($@, qr/^Modification of a read-only value attempted/,
-	     'Elements of @- and @+ are read-only');
+	     '$^N, @- and @+ are read-only');
     }
 
     {
@@ -984,7 +985,7 @@ sub run_tests {
         my @space1 = sort grep {$space {$_} =~ /[[:space:]]/} keys %space;
         my @space2 = sort grep {$space {$_} =~ /[[:blank:]]/} keys %space;
 
-        is("@space0", "cr ff lf spc tab", $message);
+        is("@space0", "cr ff lf spc tab vt", $message);
         is("@space1", "cr ff lf spc tab vt", $message);
         is("@space2", "spc tab", $message);
     }

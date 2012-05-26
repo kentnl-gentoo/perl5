@@ -90,6 +90,8 @@
 #  include "charclass_invlists.h"
 #endif
 
+#define HAS_NONLATIN1_FOLD_CLOSURE(i) _HAS_NONLATIN1_FOLD_CLOSURE_ONLY_FOR_USE_BY_REGCOMP_DOT_C_AND_REGEXEC_DOT_C(i)
+
 #ifdef op
 #undef op
 #endif /* op */
@@ -213,7 +215,8 @@ typedef struct RExC_state_t {
 #define	HASWIDTH	0x01	/* Known to match non-null strings. */
 
 /* Simple enough to be STAR/PLUS operand, in an EXACT node must be a single
- * character, and if utf8, must be invariant.  Note that this is not the same thing as REGNODE_SIMPLE */
+ * character, and if utf8, must be invariant.  Note that this is not the same
+ * thing as REGNODE_SIMPLE */
 #define	SIMPLE		0x02
 #define	SPSTART		0x04	/* Starts with * or +. */
 #define TRYAGAIN	0x08	/* Weeded out a declaration. */
@@ -3559,7 +3562,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		     * elsewhere that does compute the fold settles down, it
 		     * can be extracted out and re-used here */
 		    for (i = 0; i < 256; i++){
-			if (_HAS_NONLATIN1_FOLD_CLOSURE_ONLY_FOR_USE_BY_REGCOMP_DOT_C_AND_REGEXEC_DOT_C(i)) {
+			if (HAS_NONLATIN1_FOLD_CLOSURE(i)) {
 			    ANYOF_BITMAP_SET(data->start_class, i);
 			}
 		    }
@@ -9074,12 +9077,6 @@ tryagain:
 	vFAIL("Internal urp");
 				/* Supposed to be caught earlier. */
 	break;
-    case '{':
-	if (!regcurly(RExC_parse)) {
-	    RExC_parse++;
-	    goto defchar;
-	}
-	/* FALL THROUGH */
     case '?':
     case '+':
     case '*':
@@ -9205,9 +9202,6 @@ tryagain:
 	    ret = reg_node(pRExC_state, op);
 	    FLAGS(ret) = get_regex_charset(RExC_flags);
 	    *flagp |= SIMPLE;
-	    if (! SIZE_ONLY && (U8) *(RExC_parse + 1) == '{') {
-		ckWARNregdep(RExC_parse, "\"\\b{\" is deprecated; use \"\\b\\{\" instead");
-	    }
 	    goto finish_meta_pat;
 	case 'B':
 	    RExC_seen_zerolen++;
@@ -9232,9 +9226,6 @@ tryagain:
 	    ret = reg_node(pRExC_state, op);
 	    FLAGS(ret) = get_regex_charset(RExC_flags);
 	    *flagp |= SIMPLE;
-	    if (! SIZE_ONLY && (U8) *(RExC_parse + 1) == '{') {
-		ckWARNregdep(RExC_parse, "\"\\B{\" is deprecated; use \"\\B\\{\" instead");
-	    }
 	    goto finish_meta_pat;
 	case 's':
 	    switch (get_regex_charset(RExC_flags)) {
@@ -9741,15 +9732,22 @@ tryagain:
 			/* FALL THROUGH */
 		    default:
 			if (!SIZE_ONLY&& isALPHA(*p)) {
-			    /* Include any { following the alpha to emphasize
-			     * that it could be part of an escape at some point
-			     * in the future */
-			    int len = (*(p + 1) == '{') ? 2 : 1;
-			    ckWARN3reg(p + len, "Unrecognized escape \\%.*s passed through", len, p);
+			    ckWARN2reg(p + 1, "Unrecognized escape \\%.1s passed through", p);
 			}
 			goto normal_default;
 		    }
 		    break;
+		case '{':
+		    /* Currently we don't warn when the lbrace is at the start
+		     * of a construct.  This catches it in the middle of a
+		     * literal string, or when its the first thing after
+		     * something like "\b" */
+		    if (! SIZE_ONLY
+			&& (len || (p > RExC_start && isALPHA_A(*(p -1)))))
+		    {
+			ckWARNregdep(p + 1, "Unescaped left brace in regex is deprecated, passed through");
+		    }
+		    /*FALLTHROUGH*/
 		default:
 		  normal_default:
 		    if (UTF8_IS_START(*p) && UTF) {
@@ -10207,6 +10205,14 @@ S_checkposixcc(pTHX_ RExC_state_t *pRExC_state)
  * time */
 #define DO_POSIX_LATIN1_ONLY_KNOWN(node, class, destlist, sourcelist,      \
                               l1_sourcelist, Xpropertyname, run_time_list) \
+	/* First, resolve whether to use the ASCII-only list or the L1     \
+	 * list */	                                                   \
+        DO_POSIX_LATIN1_ONLY_KNOWN_L1_RESOLVED(node, class, destlist,      \
+                ((AT_LEAST_ASCII_RESTRICTED) ? sourcelist : l1_sourcelist),\
+                Xpropertyname, run_time_list)
+
+#define DO_POSIX_LATIN1_ONLY_KNOWN_L1_RESOLVED(node, class, destlist, sourcelist, \
+                Xpropertyname, run_time_list)                              \
     /* If not /a matching, there are going to be code points we will have  \
      * to defer to runtime to look-up */                                   \
     if (! AT_LEAST_ASCII_RESTRICTED) {                                     \
@@ -10216,11 +10222,7 @@ S_checkposixcc(pTHX_ RExC_state_t *pRExC_state)
         ANYOF_CLASS_SET(node, class);                                      \
     }                                                                      \
     else {                                                                 \
-        _invlist_union(destlist,                                           \
-                       (AT_LEAST_ASCII_RESTRICTED)                         \
-                           ? sourcelist                                    \
-                           : l1_sourcelist,                                \
-                       &destlist);                                         \
+        _invlist_union(destlist, sourcelist, &destlist);                   \
     }
 
 /* Like DO_POSIX_LATIN1_ONLY_KNOWN, but for the complement.  A combination of
@@ -10939,10 +10941,11 @@ parseit:
                                             PL_PosixCntrl, PL_XPosixCntrl);
 		    break;
 		case ANYOF_DIGIT:
-		    /* Ignore the compiler warning for this macro, planned to
-		     * be eliminated later */
-		    DO_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
-                        PL_PosixDigit, PL_PosixDigit, "XPosixDigit", listsv);
+		    /* There are no digits in the Latin1 range outside of
+		     * ASCII, so call the macro that doesn't have to resolve
+		     * them */
+		    DO_POSIX_LATIN1_ONLY_KNOWN_L1_RESOLVED(ret, namedclass, properties,
+                        PL_PosixDigit, "XPosixDigit", listsv);
 		    break;
 		case ANYOF_NDIGIT:
 		    DO_N_POSIX_LATIN1_ONLY_KNOWN(ret, namedclass, properties,
@@ -11248,7 +11251,8 @@ parseit:
 		U8 foldbuf[UTF8_MAXBYTES_CASE+1];
 		STRLEN foldlen;
 		const UV f =
-                    _to_uni_fold_flags(j, foldbuf, &foldlen, allow_full_fold);
+                    _to_uni_fold_flags(j, foldbuf, &foldlen,
+                                       (allow_full_fold) ? FOLD_FLAGS_FULL : 0);
 
 		if (foldlen > (STRLEN)UNISKIP(f)) {
 

@@ -2370,13 +2370,24 @@ S_return_lvalues(pTHX_ SV **mark, SV **sp, SV **newsp, I32 gimme,
 	if (MARK < SP) {
 	      copy_sv:
 		if (cx->blk_sub.cv && CvDEPTH(cx->blk_sub.cv) > 1) {
+		    if (!SvPADTMP(*SP)) {
 			*++newsp = SvREFCNT_inc(*SP);
 			FREETMPS;
 			sv_2mortal(*newsp);
+		    }
+		    else {
+			/* FREETMPS could clobber it */
+			SV *sv = SvREFCNT_inc(*SP);
+			FREETMPS;
+			*++newsp = sv_mortalcopy(sv);
+			SvREFCNT_dec(sv);
+		    }
 		}
 		else
 		    *++newsp =
-		        !SvTEMP(*SP)
+		      SvPADTMP(*SP)
+		       ? sv_mortalcopy(*SP)
+		       : !SvTEMP(*SP)
 		          ? sv_2mortal(SvREFCNT_inc_simple_NN(*SP))
 		          : *SP;
 	}
@@ -2396,10 +2407,10 @@ S_return_lvalues(pTHX_ SV **mark, SV **sp, SV **newsp, I32 gimme,
 	if (ref || !CxLVAL(cx))
 	    while (++MARK <= SP)
 		*++newsp =
-		     SvTEMP(*MARK)
-		       ? *MARK
-		       : ref && SvFLAGS(*MARK) & SVs_PADTMP
+		       SvFLAGS(*MARK) & SVs_PADTMP
 		           ? sv_mortalcopy(*MARK)
+		     : SvTEMP(*MARK)
+		           ? *MARK
 		           : sv_2mortal(SvREFCNT_inc_simple_NN(*MARK));
 	else while (++MARK <= SP) {
 	    if (*MARK != &PL_sv_undef
@@ -3044,23 +3055,18 @@ PP(pp_goto)
 	else {
 	    label       = SvPV_const(sv, label_len);
             label_flags = SvUTF8(sv);
-	    if (!(do_dump || *label))
-		DIE(aTHX_ must_have_label);
 	}
     }
-    else if (PL_op->op_flags & OPf_SPECIAL) {
-	if (! do_dump)
-	    DIE(aTHX_ must_have_label);
-    }
-    else {
+    else if (!(PL_op->op_flags & OPf_SPECIAL)) {
  	label       = cPVOP->op_pv;
         label_flags = (cPVOP->op_private & OPpPV_IS_UTF8) ? SVf_UTF8 : 0;
         label_len   = strlen(label);
     }
+    if (!(do_dump || label_len)) DIE(aTHX_ must_have_label);
 
     PERL_ASYNC_CHECK();
 
-    if (label && *label) {
+    if (label_len) {
 	OP *gotoprobe = NULL;
 	bool leaving_eval = FALSE;
 	bool in_block = FALSE;

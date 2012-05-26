@@ -5290,25 +5290,12 @@ NULL
 		    }
 		    else { /* UTF_PATTERN */
 			if (IS_TEXTFU(text_node) || IS_TEXTF(text_node)) {
-			     STRLEN ulen1, ulen2;
-			     U8 tmpbuf1[UTF8_MAXBYTES_CASE+1];
-			     U8 tmpbuf2[UTF8_MAXBYTES_CASE+1];
+			     STRLEN ulen;
+			     U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
 
-			     to_utf8_lower((U8*)s, tmpbuf1, &ulen1);
-			     to_utf8_upper((U8*)s, tmpbuf2, &ulen2);
-#ifdef EBCDIC
-			     ST.c1 = utf8n_to_uvchr(tmpbuf1, UTF8_MAXLEN, 0,
-						    ckWARN(WARN_UTF8) ?
-                                                    0 : UTF8_ALLOW_ANY);
-			     ST.c2 = utf8n_to_uvchr(tmpbuf2, UTF8_MAXLEN, 0,
-                                                    ckWARN(WARN_UTF8) ?
-                                                    0 : UTF8_ALLOW_ANY);
-#else
-			     ST.c1 = utf8n_to_uvuni(tmpbuf1, UTF8_MAXBYTES, 0,
+			     to_utf8_fold((U8*)s, tmpbuf, &ulen);
+			     ST.c1 = ST.c2 = utf8n_to_uvchr(tmpbuf, UTF8_MAXLEN, 0,
 						    uniflags);
-			     ST.c2 = utf8n_to_uvuni(tmpbuf2, UTF8_MAXBYTES, 0,
-						    uniflags);
-#endif
 			}
 			else {
 			    ST.c2 = ST.c1 = utf8n_to_uvchr(s, UTF8_MAXBYTES, 0,

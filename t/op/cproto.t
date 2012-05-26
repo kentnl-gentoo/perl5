@@ -7,7 +7,7 @@ BEGIN {
 }
 
 BEGIN { require './test.pl'; }
-plan tests => 248;
+plan tests => 254;
 
 while (<DATA>) {
     chomp;
@@ -20,7 +20,10 @@ while (<DATA>) {
 	like( $@, qr/Can't find an opnumber for/, $keyword );
     }
     else {
-	is( "(".prototype("CORE::".$keyword).")", $proto, $keyword );
+	is(
+	    "(".(prototype("CORE::".$keyword) // 'undef').")", $proto,
+	    $keyword
+	);
     }
 }
 
@@ -33,7 +36,13 @@ __PACKAGE__ ()
 __DATA__ undef
 __END__ undef
 __SUB__ ()
+AUTOLOAD undef
+BEGIN undef
 CORE unknown
+DESTROY undef
+END undef
+INIT undef
+CHECK undef
 abs (_)
 accept (**)
 alarm (_)

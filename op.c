@@ -1775,7 +1775,6 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 
     switch (o->op_type) {
     case OP_UNDEF:
-	localize = 0;
 	PL_modcount++;
 	return o;
     case OP_STUB:
@@ -2060,10 +2059,10 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 STATIC bool
 S_scalar_mod_type(const OP *o, I32 type)
 {
-    assert(o || type != OP_SASSIGN);
-
     switch (type) {
+    case OP_POS:
     case OP_SASSIGN:
+	assert(o);
 	if (o->op_type == OP_RV2GV)
 	    return FALSE;
 	/* FALL THROUGH */
@@ -4859,10 +4858,10 @@ Perl_dofile(pTHX_ OP *term, I32 force_builtin)
     }
 
     if (gv && GvCVu(gv) && GvIMPORTED_CV(gv)) {
-	doop = ck_subr(newUNOP(OP_ENTERSUB, OPf_STACKED,
+	doop = newUNOP(OP_ENTERSUB, OPf_STACKED,
 			       op_append_elem(OP_LIST, term,
 					   scalar(newUNOP(OP_RV2CV, 0,
-							  newGVOP(OP_GV, 0, gv))))));
+							  newGVOP(OP_GV, 0, gv)))));
     }
     else {
 	doop = newUNOP(OP_DOFILE, 0, scalar(term));
@@ -5714,6 +5713,7 @@ Perl_newLOOPOP(pTHX_ I32 flags, I32 debuggable, OP *expr, OP *block)
 	if (expr->op_type == OP_READLINE
 	    || expr->op_type == OP_READDIR
 	    || expr->op_type == OP_GLOB
+	    || expr->op_type == OP_EACH || expr->op_type == OP_AEACH
 	    || (expr->op_type == OP_NULL && expr->op_targ == OP_GLOB)) {
 	    expr = newUNOP(OP_DEFINED, 0,
 		newASSIGNOP(0, newDEFSVOP(), 0, expr) );
@@ -5803,6 +5803,7 @@ Perl_newWHILEOP(pTHX_ I32 flags, I32 debuggable, LOOP *loop,
 	if (expr->op_type == OP_READLINE
          || expr->op_type == OP_READDIR
          || expr->op_type == OP_GLOB
+	 || expr->op_type == OP_EACH || expr->op_type == OP_AEACH
 		     || (expr->op_type == OP_NULL && expr->op_targ == OP_GLOB)) {
 	    expr = newUNOP(OP_DEFINED, 0,
 		newASSIGNOP(0, newDEFSVOP(), 0, expr) );
@@ -6058,11 +6059,12 @@ Perl_newLOOPEX(pTHX_ I32 type, OP *label)
 
     assert((PL_opargs[type] & OA_CLASS_MASK) == OA_LOOPEXOP);
 
-    if (type != OP_GOTO || label->op_type == OP_CONST) {
+    if (type != OP_GOTO) {
 	/* "last()" means "last" */
 	if (label->op_type == OP_STUB && (label->op_flags & OPf_PARENS))
 	    o = newOP(type, OPf_SPECIAL);
 	else {
+	  const_label:
 	    o = newPVOP(type,
                         label->op_type == OP_CONST
                             ? SvUTF8(((SVOP*)label)->op_sv)
@@ -6082,6 +6084,12 @@ Perl_newLOOPEX(pTHX_ I32 type, OP *label)
 	if (label->op_type == OP_ENTERSUB
 		&& !(label->op_flags & OPf_STACKED))
 	    label = newUNOP(OP_REFGEN, 0, op_lvalue(label, OP_REFGEN));
+	else if (label->op_type == OP_CONST) {
+	    SV * const sv = ((SVOP *)label)->op_sv;
+	    STRLEN l;
+	    const char *s = SvPV_const(sv,l);
+	    if (l == strlen(s)) goto const_label;
+	}
 	o = newUNOP(type, OPf_STACKED, label);
     }
     PL_hints |= HINT_BLOCK_SCOPE;
@@ -7116,7 +7124,9 @@ CV *
 Perl_newXS(pTHX_ const char *name, XSUBADDR_t subaddr, const char *filename)
 {
     PERL_ARGS_ASSERT_NEWXS;
-    return newXS_flags(name, subaddr, filename, NULL, 0);
+    return newXS_len_flags(
+	name, name ? strlen(name) : 0, subaddr, filename, NULL, NULL, 0
+    );
 }
 
 #ifdef PERL_MAD
@@ -8135,17 +8145,10 @@ Perl_ck_glob(pTHX_ OP *o)
     else if (!((gv = gv_fetchpvs("glob", GV_NOTQUAL, SVt_PVCV))
 	  && GvCVu(gv) && GvIMPORTED_CV(gv)))
     {
-	gv = gv_fetchpvs("CORE::GLOBAL::glob", 0, SVt_PVCV);
+	GV * const * const gvp =
+	    (GV **)hv_fetchs(PL_globalstash, "glob", FALSE);
+	gv = gvp ? *gvp : NULL;
     }
-
-#if !defined(PERL_EXTERNAL_GLOB)
-    if (!(gv && GvCVu(gv) && GvIMPORTED_CV(gv))) {
-	ENTER;
-	Perl_load_module(aTHX_ PERL_LOADMOD_NOIMPORT,
-		newSVpvs("File::Glob"), NULL, NULL, NULL);
-	LEAVE;
-    }
-#endif /* !PERL_EXTERNAL_GLOB */
 
     if (gv && GvCVu(gv) && GvIMPORTED_CV(gv)) {
 	/* convert
@@ -8169,11 +8172,19 @@ Perl_ck_glob(pTHX_ OP *o)
 		    op_append_elem(OP_LIST, o,
 				scalar(newUNOP(OP_RV2CV, 0,
 					       newGVOP(OP_GV, 0, gv)))));
-	o = newUNOP(OP_NULL, 0, ck_subr(o));
+	o = newUNOP(OP_NULL, 0, o);
 	o->op_targ = OP_GLOB; /* hint at what it used to be: eg in newWHILEOP */
 	return o;
     }
     else o->op_flags &= ~OPf_SPECIAL;
+#if !defined(PERL_EXTERNAL_GLOB)
+    if (!PL_globhook) {
+	ENTER;
+	Perl_load_module(aTHX_ PERL_LOADMOD_NOIMPORT,
+			       newSVpvs("File::Glob"), NULL, NULL, NULL);
+	LEAVE;
+    }
+#endif /* !PERL_EXTERNAL_GLOB */
     gv = newGVgen("main");
     gv_IOadd(gv);
 #ifndef PERL_EXTERNAL_GLOB
@@ -8676,11 +8687,11 @@ Perl_ck_require(pTHX_ OP *o)
 #ifndef PERL_MAD
 	op_free(o);
 #endif
-	newop = ck_subr(newUNOP(OP_ENTERSUB, OPf_STACKED,
+	newop = newUNOP(OP_ENTERSUB, OPf_STACKED,
 				op_append_elem(OP_LIST, kid,
 					    scalar(newUNOP(OP_RV2CV, 0,
 							   newGVOP(OP_GV, 0,
-								   gv))))));
+								   gv)))));
 	op_getmad(o,newop,'O');
 	return newop;
     }
@@ -9611,6 +9622,7 @@ Perl_cv_set_call_checker(pTHX_ CV *cv, Perl_call_checker ckfun, SV *ckobj)
 	    SvREFCNT_inc_simple_void_NN(ckobj);
 	    callmg->mg_flags |= MGf_REFCOUNTED;
 	}
+	callmg->mg_flags |= MGf_COPY;
     }
 }
 

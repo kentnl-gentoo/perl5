@@ -10,7 +10,7 @@ BEGIN {
 
 use warnings;
 use strict;
-plan tests => 80;
+plan tests => 85;
 our $TODO;
 
 my $deprecated = 0;
@@ -636,3 +636,15 @@ ok(
    same_prefix_labels(),
    "perl 112316: goto and labels with the same prefix doesn't get mixed up"
 );
+
+eval { my $x = ""; goto $x };
+like $@, qr/^goto must have label at /, 'goto $x where $x is empty string';
+eval { goto "" };
+like $@, qr/^goto must have label at /, 'goto ""';
+eval { goto };
+like $@, qr/^goto must have label at /, 'argless goto';
+
+eval { my $x = "\0"; goto $x };
+like $@, qr/^Can't find label \0 at /, 'goto $x where $x begins with \0';
+eval { goto "\0" };
+like $@, qr/^Can't find label \0 at /, 'goto "\0"';

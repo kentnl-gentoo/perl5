@@ -1818,16 +1818,16 @@ Perl_looks_like_number(pTHX_ SV *const sv)
 STATIC bool
 S_glob_2number(pTHX_ GV * const gv)
 {
-    SV *const buffer = sv_newmortal();
-
     PERL_ARGS_ASSERT_GLOB_2NUMBER;
-
-    gv_efullname3(buffer, gv, "*");
 
     /* We know that all GVs stringify to something that is not-a-number,
 	so no need to test that.  */
     if (ckWARN(WARN_NUMERIC))
+    {
+	SV *const buffer = sv_newmortal();
+	gv_efullname3(buffer, gv, "*");
 	not_a_number(buffer);
+    }
     /* We just want something true to return, so that S_sv_2iuv_common
 	can tail call us and return true.  */
     return TRUE;
@@ -3960,7 +3960,6 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, register SV* sstr, const I32 flags)
     stype = SvTYPE(sstr);
     dtype = SvTYPE(dstr);
 
-    (void)SvAMAGIC_off(dstr);
     if ( SvVOK(dstr) )
     {
 	/* need to nuke the magic */
@@ -9331,7 +9330,6 @@ Perl_newSVrv(pTHX_ SV *const rv, const char *const classname)
     new_SV(sv);
 
     SV_CHECK_THINKFIRST_COW_DROP(rv);
-    (void)SvAMAGIC_off(rv);
 
     if (SvTYPE(rv) >= SVt_PVMG) {
 	const U32 refcnt = SvREFCNT(rv);
@@ -9517,11 +9515,6 @@ Perl_sv_bless(pTHX_ SV *const sv, HV *const stash)
 	++PL_sv_objcount;
     SvUPGRADE(tmpRef, SVt_PVMG);
     SvSTASH_set(tmpRef, MUTABLE_HV(SvREFCNT_inc_simple(stash)));
-
-    if (Gv_AMG(stash))
-	SvAMAGIC_on(sv);
-    else
-	(void)SvAMAGIC_off(sv);
 
     if(SvSMAGICAL(tmpRef))
         if(mg_find(tmpRef, PERL_MAGIC_ext) || mg_find(tmpRef, PERL_MAGIC_uvar))
@@ -13063,8 +13056,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     PL_hints		= proto_perl->Ihints;
 
-    PL_amagic_generation	= proto_perl->Iamagic_generation;
-
 #ifdef USE_LOCALE_COLLATE
     PL_collation_ix	= proto_perl->Icollation_ix;
     PL_collation_standard	= proto_perl->Icollation_standard;
@@ -13966,7 +13957,7 @@ Perl_varname(pTHX_ const GV *const gv, const char gvtype, PADOFFSET targ,
 	}
     }
     else {
-	CV * const cv = gv ? (CV *)gv : find_runcv(NULL);
+	CV * const cv = gv ? ((CV *)gv) : find_runcv(NULL);
 	SV *sv;
 	AV *av;
 

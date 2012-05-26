@@ -228,6 +228,13 @@ sub test_proto {
   }
 }
 
+# Test that &CORE::foo calls without parentheses (no new @_) can handle the
+# total absence of any @_ without crashing.
+undef *_;
+&CORE::wantarray;
+$tests++;
+pass('no crash with &CORE::foo when *_{ARRAY} is undef');
+
 test_proto '__FILE__';
 test_proto '__LINE__';
 test_proto '__PACKAGE__';
@@ -637,12 +644,12 @@ $tests += 2;
 my $oncer = sub { "a" =~ m?a? };
 &$oncer;
 &myreset;
-ok &$oncer, '&reset with one arg';
+ok &$oncer, '&reset with no args';
 package resettest {
   $b = "c";
   $banana = "cream";
   &::myreset('b');
-  ::lis [$b,$banana],[(undef)x2], '2-arg &reset';
+  ::lis [$b,$banana],[(undef)x2], '1-arg &reset';
 }
 
 test_proto 'reverse';

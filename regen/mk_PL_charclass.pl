@@ -38,7 +38,6 @@ my @properties = qw(
     IDFIRST_L1
     LOWER_A
     LOWER_L1
-    OCTAL_A
     PRINT_A
     PRINT_L1
     PSXSPC_A
@@ -126,15 +125,15 @@ for my $ord (0..255) {
             # just \pP outside it.
             $re = qr/\p{Punct}|[^\P{Symbol}\P{ASCII}]/;
         } elsif ($name eq 'CHARNAME_CONT') {;
-            $re = qr/[-\w ():\xa0]/;
+            $re = qr/[-\p{XPosixWord} ():\xa0]/;
         } elsif ($name eq 'SPACE') {;
-            $re = qr/\s/;
+            $re = qr/\p{XPerlSpace}/;
         } elsif ($name eq 'IDFIRST') {
             $re = qr/[_\p{Alpha}]/;
         } elsif ($name eq 'PSXSPC') {
             $re = qr/[\v\p{Space}]/;
         } elsif ($name eq 'WORDCHAR') {
-            $re = qr/\w/;
+            $re = qr/\p{XPosixWord}/;
         } elsif ($name eq 'ALNUMC') {
             # Like \w, but no underscore
             $re = qr/\p{Alnum}/;

@@ -1244,7 +1244,7 @@ use File::Glob qw(:case);
 
     'Module::CoreList' => {
         'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.61.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.66.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
         'UPSTREAM'     => 'blead',
     },
@@ -1962,14 +1962,6 @@ use File::Glob qw(:case);
         'MAINTAINER' => 'blead',
         'FILES'      => q[lib/Unicode/UCD.{pm,t}],
         'UPSTREAM'   => 'blead',
-    },
-
-    'Version::Requirements' => {
-        'MAINTAINER'   => 'rjbs',
-        'DISTRIBUTION' => 'RJBS/Version-Requirements-0.101022.tar.gz',
-        'FILES'        => q[cpan/Version-Requirements],
-        'EXCLUDED'     => ['t/release-pod-syntax.t'],
-        'UPSTREAM'     => 'cpan',
     },
 
     'version' => {

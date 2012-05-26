@@ -8892,8 +8892,6 @@ S_scan_ident(pTHX_ register char *s, register const char *send, char *dest, STRL
 	bracket = s;
 	s++;
     }
-    else if (ck_uni)
-	check_uni();
     if (s < send) {
         if (UTF) {
             const STRLEN skip = UTF8SKIP(s);
@@ -8911,6 +8909,8 @@ S_scan_ident(pTHX_ register char *s, register const char *send, char *dest, STRL
 	*d = toCTRL(*s);
 	s++;
     }
+    else if (ck_uni && !bracket)
+	check_uni();
     if (bracket) {
 	if (isSPACE(s[-1])) {
 	    while (s < send) {
@@ -11627,23 +11627,6 @@ Perl_parse_stmtseq(pTHX_ U32 flags)
     if (c != -1 && c != /*{*/'}')
 	qerror(Perl_mess(aTHX_ "Parse error"));
     return stmtseqop;
-}
-
-void
-Perl_munge_qwlist_to_paren_list(pTHX_ OP *qwlist)
-{
-    PERL_ARGS_ASSERT_MUNGE_QWLIST_TO_PAREN_LIST;
-    deprecate("qw(...) as parentheses");
-    force_next((4<<24)|')');
-    if (qwlist->op_type == OP_STUB) {
-	op_free(qwlist);
-    }
-    else {
-	start_force(PL_curforce);
-	NEXTVAL_NEXTTOKE.opval = qwlist;
-	force_next(THING);
-    }
-    force_next((2<<24)|'(');
 }
 
 /*

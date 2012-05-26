@@ -2174,6 +2174,7 @@ sub trace { return main::trace(@_); }
         fallback => 0,
         qw("") => "_operator_stringify",
         "." => \&main::_operator_dot,
+        ".=" => \&main::_operator_dot_equal,
     ;
 
     sub _operator_stringify {
@@ -2851,6 +2852,7 @@ sub trace { return main::trace(@_); }
         fallback => 0,
         qw("") => "_operator_stringify",
         "." => \&main::_operator_dot,
+        ".=" => \&main::_operator_dot_equal,
     ;
 
     sub _operator_stringify {
@@ -3001,6 +3003,7 @@ sub trace { return main::trace(@_); }
         fallback => 0,
         qw("") => "_operator_stringify",
         "." => \&main::_operator_dot,
+        ".=" => \&main::_operator_dot_equal,
     ;
 
     sub _operator_stringify {
@@ -3443,6 +3446,9 @@ sub trace { return main::trace(@_); }
         unless ($end >= $start) {
             Carp::my_carp_bug("$owner_name_of{$addr}End of range (" . sprintf("%04X", $end) . ") must not be before start (" . sprintf("%04X", $start) . ").  No action taken.");
             return;
+        }
+        if ($end > $MAX_UNICODE_CODEPOINT && $operation eq '+') {
+            Carp::my_carp("$owner_name_of{$addr}Warning: Range '" . sprintf("%04X..%04X", $start, $end) . ") is above the Unicode maximum of " . sprintf("%04X", $MAX_UNICODE_CODEPOINT) . ".  Adding it anyway");
         }
         #local $to_trace = 1 if main::DEBUG;
 
@@ -4174,6 +4180,21 @@ sub trace { return main::trace(@_); }
 
                     return $self->_union($other)
                 },
+        '+=' => sub { my $self = shift;
+                    my $other = shift;
+                    my $reversed = shift;
+
+                    if ($reversed) {
+                        Carp::my_carp_bug("Bad news.  Can't cope with '"
+                        . ref($other)
+                        . ' += '
+                        . ref($self)
+                        . "'.  undef returned.");
+                        return;
+                    }
+
+                    return $self->_union($other)
+                },
         '&' => sub { my $self = shift;
                     my $other = shift;
 
@@ -4860,6 +4881,7 @@ END
     use overload
         fallback => 0,
         "." => \&main::_operator_dot,
+        ".=" => \&main::_operator_dot_equal,
         '!=' => \&main::_operator_not_equal,
         '==' => \&main::_operator_equal,
     ;
@@ -6797,6 +6819,16 @@ sub trace { return main::trace(@_); }
         '+=' => sub {
                         my $self = shift;
                         my $other = shift;
+                        my $reversed = shift;
+
+                        if ($reversed) {
+                            Carp::my_carp_bug("Bad news.  Can't cope with '"
+                            . ref($other)
+                            . ' += '
+                            . ref($self)
+                            . "'.  undef returned.");
+                            return;
+                        }
 
                         return if $self->carp_if_locked;
 
@@ -7661,6 +7693,7 @@ sub trace { return main::trace(@_) if main::DEBUG && $to_trace }
         fallback => 0,
         qw("") => "_operator_stringify",
         "." => \&main::_operator_dot,
+        ".=" => \&main::_operator_dot_equal,
         '==' => \&main::_operator_equal,
         '!=' => \&main::_operator_not_equal,
         '=' => sub { return shift },
@@ -8752,6 +8785,24 @@ sub _operator_dot {
             : "$self$other";
 }
 
+sub _operator_dot_equal {
+    # Overloaded '.=' method that is common to all packages.
+
+    my $self = shift;
+    my $other = shift;
+    my $reversed = shift;
+    Carp::carp_extra_args(\@_) if main::DEBUG && @_;
+
+    $other = "" unless defined $other;
+
+    if ($reversed) {
+        return $other .= "$self";
+    }
+    else {
+        return "$self" . "$other";
+    }
+}
+
 sub _operator_equal {
     # Generic overloaded '==' routine.  To be equal, they must be the exact
     # same object
@@ -9155,6 +9206,9 @@ sub process_PropValueAliases {
 
     # Process each line of the file ...
     while ($file->next_line) {
+
+        # Fix typo in input file
+        s/CCC133/CCC132/g if $v_version eq v6.1.0;
 
         my ($property, @data) = split /\s*;\s*/;
 
@@ -10758,7 +10812,7 @@ END
                             # http://www.unicode.org/versions/corrigendum8.html
             $fields[$BIDI] = "AL";
         }
-        elsif ($^V lt v5.17.0) { # For 5.18 will convert to use Unicode's name
+        elsif ($^V lt v5.18.0) { # For 5.18 will convert to use Unicode's name
             $fields[$CHARNAME] = "";
         }
 
@@ -12521,11 +12575,12 @@ sub compile_perl() {
     # Perl's traditional space doesn't include Vertical Tab
     my $XPerlSpace = $perl->add_match_table('XPerlSpace',
                                   Description => '\s, including beyond ASCII',
-                                  Initialize => $Space - 0x000B,
+                                  #Initialize => $Space - 0x000B,
+                                  Initialize => $Space,
                                 );
     $XPerlSpace->add_alias('SpacePerl');    # A pre-existing synonym
     my $PerlSpace = $perl->add_match_table('PerlSpace',
-                        Description => '\s, restricted to ASCII = [ \f\n\r\t]',
+                        Description => '\s, restricted to ASCII = [ \f\n\r\t] plus vertical tab',
                         Initialize => $XPerlSpace & $ASCII,
                             );
 

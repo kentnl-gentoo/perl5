@@ -1690,10 +1690,10 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		    len = UTF8SKIP(result);
 		    if (!uni_to_bytes(aTHX_ &ptr, strend,
 				      (char *) &result[1], len-1, 'U')) break;
-		    auv = utf8n_to_uvuni(result, len, &retlen, ckWARN(WARN_UTF8) ? 0 : UTF8_ALLOW_ANYUV);
+		    auv = utf8n_to_uvuni(result, len, &retlen, UTF8_ALLOW_DEFAULT);
 		    s = ptr;
 		} else {
-		    auv = utf8n_to_uvuni((U8*)s, strend - s, &retlen, ckWARN(WARN_UTF8) ? 0 : UTF8_ALLOW_ANYUV);
+		    auv = utf8n_to_uvuni((U8*)s, strend - s, &retlen, UTF8_ALLOW_DEFAULT);
 		    if (retlen == (STRLEN) -1 || retlen == 0)
 			Perl_croak(aTHX_ "Malformed UTF-8 string in unpack");
 		    s += retlen;
@@ -2234,7 +2234,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 
         if (symptr->flags & FLAG_SLASH){
             if (SP - PL_stack_base - start_sp_offset <= 0)
-                Perl_croak(aTHX_ "'/' must follow a numeric type in unpack");
+		break;
             if( next_symbol(symptr) ){
               if( symptr->howlen == e_number )
 		Perl_croak(aTHX_ "Count after length/code in unpack" );

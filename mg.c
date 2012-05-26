@@ -789,6 +789,11 @@ Perl_emulate_cop_io(pTHX_ const COP *const c, SV *const sv)
     }
 }
 
+#ifdef VMS
+#include <descrip.h>
+#include <starlet.h>
+#endif
+
 int
 Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 {
@@ -823,8 +828,6 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	 if (nextchar == '\0') {
 #if defined(VMS)
 	     {
-#	          include <descrip.h>
-#	          include <starlet.h>
 		  char msg[255];
 		  $DESCRIPTOR(msgdsc,msg);
 		  sv_setnv(sv,(NV) vaxc$errno);
@@ -1691,18 +1694,6 @@ Perl_magic_clearisa(pTHX_ SV *sv, MAGIC *mg)
 }
 
 int
-Perl_magic_setamagic(pTHX_ SV *sv, MAGIC *mg)
-{
-    dVAR;
-    PERL_ARGS_ASSERT_MAGIC_SETAMAGIC;
-    PERL_UNUSED_ARG(sv);
-    PERL_UNUSED_ARG(mg);
-    PL_amagic_generation++;
-
-    return 0;
-}
-
-int
 Perl_magic_getnkeys(pTHX_ SV *sv, MAGIC *mg)
 {
     HV * const hv = MUTABLE_HV(LvTARG(sv));
@@ -2519,11 +2510,13 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
       paren = atoi(mg->mg_ptr);
       setparen:
 	if (PL_curpm && (rx = PM_GETRE(PL_curpm))) {
+      setparen_got_rx:
             CALLREG_NUMBUF_STORE((REGEXP * const)rx,paren,sv);
 	} else {
             /* Croak with a READONLY error when a numbered match var is
              * set without a previous pattern match. Unless it's C<local $1>
              */
+      croakparen:
             if (!PL_localizing) {
                 Perl_croak_no_modify(aTHX);
             }
@@ -2598,6 +2591,10 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	Safefree(PL_inplace);
 	PL_inplace = SvOK(sv) ? savesvpv(sv) : NULL;
 	break;
+    case '\016':	/* ^N */
+	if (PL_curpm && (rx = PM_GETRE(PL_curpm))
+	 && (paren = RX_LASTCLOSEPAREN(rx))) goto setparen_got_rx;
+	goto croakparen;
     case '\017':	/* ^O */
 	if (*(mg->mg_ptr+1) == '\0') {
 	    Safefree(PL_osname);
@@ -3355,14 +3352,13 @@ Perl_magic_clearhint(pTHX_ SV *sv, MAGIC *mg)
     PERL_ARGS_ASSERT_MAGIC_CLEARHINT;
     PERL_UNUSED_ARG(sv);
 
-    assert(mg->mg_len == HEf_SVKEY);
-
-    PERL_UNUSED_ARG(sv);
-
     PL_hints |= HINT_LOCALIZE_HH;
     CopHINTHASH_set(&PL_compiling,
-	cophh_delete_sv(CopHINTHASH_get(&PL_compiling),
-				 MUTABLE_SV(mg->mg_ptr), 0, 0));
+	mg->mg_len == HEf_SVKEY
+	 ? cophh_delete_sv(CopHINTHASH_get(&PL_compiling),
+				 MUTABLE_SV(mg->mg_ptr), 0, 0)
+	 : cophh_delete_pvn(CopHINTHASH_get(&PL_compiling),
+				 mg->mg_ptr, mg->mg_len, 0, 0));
     return 0;
 }
 
@@ -3382,6 +3378,25 @@ Perl_magic_clearhints(pTHX_ SV *sv, MAGIC *mg)
     cophh_free(CopHINTHASH_get(&PL_compiling));
     CopHINTHASH_set(&PL_compiling, cophh_new_empty());
     return 0;
+}
+
+int
+Perl_magic_copycallchecker(pTHX_ SV *sv, MAGIC *mg, SV *nsv,
+				 const char *name, I32 namlen)
+{
+    MAGIC *nmg;
+
+    PERL_ARGS_ASSERT_MAGIC_COPYCALLCHECKER;
+    PERL_UNUSED_ARG(name);
+    PERL_UNUSED_ARG(namlen);
+
+    sv_magic(nsv, &PL_sv_undef, mg->mg_type, NULL, 0);
+    nmg = mg_find(nsv, mg->mg_type);
+    if (nmg->mg_flags & MGf_REFCOUNTED) SvREFCNT_dec(nmg->mg_obj);
+    nmg->mg_ptr = mg->mg_ptr;
+    nmg->mg_obj = SvREFCNT_inc_simple(mg->mg_obj);
+    nmg->mg_flags |= MGf_REFCOUNTED;
+    return 1;
 }
 
 /*

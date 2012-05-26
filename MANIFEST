@@ -2925,13 +2925,6 @@ cpan/Unicode-Normalize/t/proto.t	Unicode::Normalize
 cpan/Unicode-Normalize/t/split.t	Unicode::Normalize
 cpan/Unicode-Normalize/t/test.t		Unicode::Normalize
 cpan/Unicode-Normalize/t/tie.t		Unicode::Normalize
-cpan/Version-Requirements/Changes
-cpan/Version-Requirements/lib/Version/Requirements.pm
-cpan/Version-Requirements/t/accepts.t
-cpan/Version-Requirements/t/basic.t
-cpan/Version-Requirements/t/finalize.t
-cpan/Version-Requirements/t/from-hash.t
-cpan/Version-Requirements/t/merge.t
 cpan/Win32API-File/buffers.h	Win32API::File extension
 cpan/Win32API-File/cFile.h	Win32API::File extension
 cpan/Win32API-File/cFile.pc	Win32API::File extension
@@ -4641,6 +4634,7 @@ pod/perl5124delta.pod		Perl changes in version 5.12.4
 pod/perl5140delta.pod		Perl changes in version 5.14.0
 pod/perl5141delta.pod		Perl changes in version 5.14.1
 pod/perl5142delta.pod		Perl changes in version 5.14.2
+pod/perl5160delta.pod		Perl changes in version 5.16.0
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4958,6 +4952,8 @@ t/base/rs.t			See if record-read works
 t/base/term.t			See if various terms work
 t/base/while.t			See if while work
 t/benchmark/rt26188-speed-up-keys-on-empty-hash.t	Benchmark if keys on empty hashes is fast enough
+t/bigmem/read.t			Check read() handles large offsets
+t/bigmem/vec.t			Check vec() handles large offsets
 t/cmd/elsif.t			See if else-if works
 t/cmd/for.t			See if for loops work
 t/cmd/mod.t			See if statement modifiers work

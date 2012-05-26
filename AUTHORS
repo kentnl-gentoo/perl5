@@ -3,9 +3,9 @@
 # (hopefully) current and preferred email addresses from the commits.
 # These people have either submitted patches or suggestions, or their bug
 # reports or comments have inspired the appropriate patches.  Corrections,
-# additions, deletions welcome; send them to perl5-porters@perl.org,
-# preferably as the output of diff(1), diff -u or diff -c between the
-# original and a corrected version of this file.
+# additions, deletions welcome; send them to perlbug@perl.org, preferably
+# as the output of diff(1), diff -u or diff -c between the original and a
+# corrected version of this file.
 #
 # The use of this database for anything else than Perl development
 # is strictly forbidden.  (Passive distribution with the Perl source
@@ -452,6 +452,7 @@ Ian Maloney			<ian.malonet@ubs.com>
 Ian Phillipps			<Ian.Phillipps@iname.com>
 Ignasi Roca Carrió		<ignasi.roca@fujitsu-siemens.com>
 Igor Sutton			<izut@cpan.org>
+Igor Zaytsev			<igor.zaytsev@gmail.com>
 Ilmari Karonen			<iltzu@sci.fi>
 Ilya Martynov			<ilya@martynov.org>
 Ilya N. Golubev			<gin@mo.msk.ru>

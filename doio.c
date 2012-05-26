@@ -1219,8 +1219,8 @@ Perl_do_print(pTHX_ register SV *sv, PerlIO *fp)
 	U8 *tmpbuf = NULL;
 	bool happy = TRUE;
 
-	if (PerlIO_isutf8(fp)) {
-	    if (!SvUTF8(sv)) {
+	if (PerlIO_isutf8(fp)) { /* If the stream is utf8 ... */
+	    if (!SvUTF8(sv)) {	/* Convert to utf8 if necessary */
 		/* We don't modify the original scalar.  */
 		tmpbuf = bytes_to_utf8((const U8*) tmps, &len);
 		tmps = (char *) tmpbuf;
@@ -1228,17 +1228,22 @@ Perl_do_print(pTHX_ register SV *sv, PerlIO *fp)
 	    else if (ckWARN4_d(WARN_UTF8, WARN_SURROGATE, WARN_NON_UNICODE, WARN_NONCHAR)) {
 		(void) check_utf8_print((const U8*) tmps, len);
 	    }
-	}
-	else if (DO_UTF8(sv)) {
+	} /* else stream isn't utf8 */
+	else if (DO_UTF8(sv)) { /* But if is utf8 internally, attempt to
+				   convert to bytes */
 	    STRLEN tmplen = len;
 	    bool utf8 = TRUE;
 	    U8 * const result = bytes_from_utf8((const U8*) tmps, &tmplen, &utf8);
 	    if (!utf8) {
+
+		/* Here, succeeded in downgrading from utf8.  Set up to below
+		 * output the converted value */
 		tmpbuf = result;
 		tmps = (char *) tmpbuf;
 		len = tmplen;
 	    }
-	    else {
+	    else {  /* Non-utf8 output stream, but string only representable in
+		       utf8 */
 		assert((char *)result == tmps);
 		Perl_ck_warner_d(aTHX_ packWARN(WARN_UTF8),
 				 "Wide character in %s",
@@ -1271,7 +1276,6 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
     GV* gv;
 
     if (PL_op->op_flags & OPf_REF) {
-	EXTEND(SP,1);
 	gv = cGVOP_gv;
       do_fstat:
         if (gv == PL_defgv)
@@ -1292,13 +1296,11 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
 	report_evil_fh(gv);
 	return -1;
     }
-    else {
-      SV* const sv = PL_op->op_private & OPpFT_STACKING ? TOPs : POPs;
-      PUTBACK;
-      if ((PL_op->op_private & (OPpFT_STACKED|OPpFT_AFTER_t))
+    else if ((PL_op->op_private & (OPpFT_STACKED|OPpFT_AFTER_t))
 	     == OPpFT_STACKED)
 	return PL_laststatval;
-      else {
+    else {
+	SV* const sv = TOPs;
 	const char *s;
 	STRLEN len;
 	if ((gv = MAYBE_DEREF_GV_flags(sv,flags))) {
@@ -1319,7 +1321,6 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
 	if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(s, '\n'))
 	    Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "stat");
 	return PL_laststatval;
-      }
     }
 }
 
@@ -1330,10 +1331,8 @@ Perl_my_lstat_flags(pTHX_ const U32 flags)
     dVAR;
     static const char no_prev_lstat[] = "The stat preceding -l _ wasn't an lstat";
     dSP;
-    SV *sv;
     const char *file;
     if (PL_op->op_flags & OPf_REF) {
-	EXTEND(SP,1);
 	if (cGVOP_gv == PL_defgv) {
 	    if (PL_laststype != OP_LSTAT)
 		Perl_croak(aTHX_ no_prev_lstat);
@@ -1347,8 +1346,6 @@ Perl_my_lstat_flags(pTHX_ const U32 flags)
 	}
 	return -1;
     }
-    sv = PL_op->op_private & OPpFT_STACKING ? TOPs : POPs;
-    PUTBACK;
     if ((PL_op->op_private & (OPpFT_STACKED|OPpFT_AFTER_t))
 	     == OPpFT_STACKED) {
       if (PL_laststype != OP_LSTAT)
@@ -1358,7 +1355,7 @@ Perl_my_lstat_flags(pTHX_ const U32 flags)
 
     PL_laststype = OP_LSTAT;
     PL_statgv = NULL;
-    file = SvPV_flags_const_nolen(sv, flags);
+    file = SvPV_flags_const_nolen(TOPs, flags);
     sv_setpv(PL_statname,file);
     PL_laststatval = PerlLIO_lstat(file,&PL_statcache);
     if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(file, '\n'))
@@ -1565,6 +1562,10 @@ Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report)
 
 #endif /* OS2 || WIN32 */
 
+#ifdef VMS
+#include <starlet.h> /* for sys$delprc */
+#endif
+
 I32
 Perl_apply(pTHX_ I32 type, register SV **mark, register SV **sp)
 {
@@ -1701,7 +1702,6 @@ nothing in the core.
 	/* kill() doesn't do process groups (job trees?) under VMS */
 	if (val < 0) val = -val;
 	if (val == SIGKILL) {
-#	    include <starlet.h>
 	    /* Use native sys$delprc() to insure that target process is
 	     * deleted; supervisor-mode images don't pay attention to
 	     * CRTL's emulation of Unix-style signals and kill()

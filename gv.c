@@ -1403,18 +1403,6 @@ S_gv_magicalize_isa(pTHX_ GV *gv)
 	     NULL, 0);
 }
 
-STATIC void
-S_gv_magicalize_overload(pTHX_ GV *gv)
-{
-    HV* hv;
-
-    PERL_ARGS_ASSERT_GV_MAGICALIZE_OVERLOAD;
-
-    hv = GvHVn(gv);
-    GvMULTI_on(gv);
-    hv_magic(hv, NULL, PERL_MAGIC_overload);
-}
-
 GV *
 Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 		       const svtype sv_type)
@@ -1697,7 +1685,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 
     /* set up magic where warranted */
     if (stash != PL_defstash) { /* not the main stash */
-	/* We only have to check for four names here: EXPORT, ISA, OVERLOAD
+	/* We only have to check for three names here: EXPORT, ISA
 	   and VERSION. All the others apply only to the main stash or to
 	   CORE (which is checked right after this). */
 	if (len > 2) {
@@ -1710,10 +1698,6 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 	    case 'I':
 		if (strEQ(name2, "SA"))
 		    gv_magicalize_isa(gv);
-		break;
-	    case 'O':
-		if (strEQ(name2, "VERLOAD"))
-		    gv_magicalize_overload(gv);
 		break;
 	    case 'V':
 		if (strEQ(name2, "ERSION"))
@@ -1760,11 +1744,6 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 	    case 'I':
 		if (strEQ(name2, "SA")) {
 		    gv_magicalize_isa(gv);
-		}
-		break;
-	    case 'O':
-		if (strEQ(name2, "VERLOAD")) {
-		    gv_magicalize_overload(gv);
 		}
 		break;
 	    case 'S':
@@ -2264,8 +2243,7 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
   newgen = PL_sub_generation + stash_meta->pkg_gen + stash_meta->cache_gen;
   if (mg) {
       const AMT * const amtp = (AMT*)mg->mg_ptr;
-      if (amtp->was_ok_am == PL_amagic_generation
-	  && amtp->was_ok_sub == newgen) {
+      if (amtp->was_ok_sub == newgen) {
 	  return AMT_OVERLOADED(amtp) ? 1 : 0;
       }
       sv_unmagic(MUTABLE_SV(stash), PERL_MAGIC_overload_table);
@@ -2274,7 +2252,6 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
   DEBUG_o( Perl_deb(aTHX_ "Recalcing overload magic in package %s\n",HvNAME_get(stash)) );
 
   Zero(&amt,1,AMT);
-  amt.was_ok_am = PL_amagic_generation;
   amt.was_ok_sub = newgen;
   amt.fallback = AMGfallNO;
   amt.flags = 0;
@@ -2291,7 +2268,10 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
     CV* cv;
 
     if (!gv)
+    {
+      if (!gv_fetchmeth_pvn(stash, "((", 2, -1, 0))
 	lim = DESTROY_amg;		/* Skip overloading entries. */
+    }
 #ifdef PERL_DONT_CREATE_GVSV
     else if (!sv) {
 	NOOP;   /* Equivalent to !SvTRUE and !SvOK  */
@@ -2429,8 +2409,7 @@ Perl_gv_handler(pTHX_ HV *stash, I32 id)
     }
     assert(mg);
     amtp = (AMT*)mg->mg_ptr;
-    if ( amtp->was_ok_am != PL_amagic_generation
-	 || amtp->was_ok_sub != newgen )
+    if ( amtp->was_ok_sub != newgen )
 	goto do_update;
     if (AMT_AMAGIC(amtp)) {
 	CV * const ret = amtp->table[id];
@@ -2626,7 +2605,7 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
   }
 
   if (!(AMGf_noleft & flags) && SvAMAGIC(left)
-      && (stash = SvSTASH(SvRV(left)))
+      && (stash = SvSTASH(SvRV(left))) && Gv_AMG(stash)
       && (mg = mg_find((const SV *)stash, PERL_MAGIC_overload_table))
       && (ocvp = cvp = (AMT_AMAGIC((AMT*)mg->mg_ptr)
 			? (oamtp = amtp = (AMT*)mg->mg_ptr)->table
@@ -2691,12 +2670,8 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
 		 */
 		SV* const newref = newSVsv(tmpRef);
 		SvOBJECT_on(newref);
-		/* As a bit of a source compatibility hack, SvAMAGIC() and
-		   friends dereference an RV, to behave the same was as when
-		   overloading was stored on the reference, not the referant.
-		   Hence we can't use SvAMAGIC_on()
-		*/
-		SvFLAGS(newref) |= SVf_AMAGIC;
+		/* No need to do SvAMAGIC_on here, as SvAMAGIC macros
+		   delegate to the stash. */
 		SvSTASH_set(newref, MUTABLE_HV(SvREFCNT_inc(SvSTASH(tmpRef))));
 		return newref;
 	     }
@@ -2753,14 +2728,21 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
 	 }
 	 if (!cv) goto not_found;
     } else if (!(AMGf_noright & flags) && SvAMAGIC(right)
-	       && (stash = SvSTASH(SvRV(right)))
+	       && (stash = SvSTASH(SvRV(right))) && Gv_AMG(stash)
 	       && (mg = mg_find((const SV *)stash, PERL_MAGIC_overload_table))
 	       && (cvp = (AMT_AMAGIC((AMT*)mg->mg_ptr)
 			  ? (amtp = (AMT*)mg->mg_ptr)->table
 			  : NULL))
-	       && (cv = cvp[off=method])) { /* Method for right
-					     * argument found */
-      lr=1;
+	       && ((cv = cvp[off=method+assignshift])
+		   || (assign && amtp->fallback > AMGfallNEVER && /* fallback to
+								   * usual method */
+		       (
+#ifdef DEBUGGING
+			fl = 1,
+#endif
+			cv = cvp[off=method])))) { /* Method for right
+						    * argument found */
+	lr=1;
     } else if (((cvp && amtp->fallback > AMGfallNEVER)
                 || (ocvp && oamtp->fallback > AMGfallNEVER))
 	       && !(flags & AMGf_unary)) {

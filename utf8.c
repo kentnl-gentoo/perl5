@@ -137,7 +137,10 @@ Perl_uvuni_to_utf8_flags(pTHX_ U8 *d, UV uv, UV flags)
 {
     PERL_ARGS_ASSERT_UVUNI_TO_UTF8_FLAGS;
 
-    if (ckWARN4_d(WARN_UTF8, WARN_SURROGATE, WARN_NON_UNICODE, WARN_NONCHAR)) {
+    /* The first problematic code point is the first surrogate */
+    if (uv >= UNICODE_SURROGATE_FIRST
+        && ckWARN4_d(WARN_UTF8, WARN_SURROGATE, WARN_NON_UNICODE, WARN_NONCHAR))
+    {
 	if (UNICODE_IS_SURROGATE(uv)) {
 	    if (flags & UNICODE_WARN_SURROGATE) {
 		Perl_ck_warner_d(aTHX_ packWARN(WARN_SURROGATE),
@@ -587,7 +590,7 @@ Perl_utf8n_to_uvuni(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
      * sequence and process the rest, inappropriately */
 
     /* Zero length strings, if allowed, of necessity are zero */
-    if (curlen == 0) {
+    if (UNLIKELY(curlen == 0)) {
 	if (retlen) {
 	    *retlen = 0;
 	}
@@ -617,7 +620,7 @@ Perl_utf8n_to_uvuni(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
     }
 
     /* A continuation character can't start a valid sequence */
-    if (UTF8_IS_CONTINUATION(uv)) {
+    if (UNLIKELY(UTF8_IS_CONTINUATION(uv))) {
 	if (flags & UTF8_ALLOW_CONTINUATION) {
 	    if (retlen) {
 		*retlen = 1;
@@ -650,7 +653,7 @@ Perl_utf8n_to_uvuni(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
     send =  (U8*) s0 + ((expectlen <= curlen) ? expectlen : curlen);
 
     for (s = s0 + 1; s < send; s++) {
-	if (UTF8_IS_CONTINUATION(*s)) {
+	if (LIKELY(UTF8_IS_CONTINUATION(*s))) {
 #ifndef EBCDIC	/* Can't overflow in EBCDIC */
 	    if (uv & UTF_ACCUMULATION_OVERFLOW_MASK) {
 
@@ -695,7 +698,7 @@ Perl_utf8n_to_uvuni(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
      * ones are present.  I don't know of any real reason to prefer one over
      * the other, except that it seems to me that multiple-byte errors trumps
      * errors from a single byte */
-    if (unexpected_non_continuation) {
+    if (UNLIKELY(unexpected_non_continuation)) {
 	if (!(flags & UTF8_ALLOW_NON_CONTINUATION)) {
 	    if (! (flags & UTF8_CHECK_ONLY)) {
 		if (curlen == 1) {
@@ -716,7 +719,7 @@ Perl_utf8n_to_uvuni(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
 	    *retlen = curlen;
 	}
     }
-    else if (curlen < expectlen) {
+    else if (UNLIKELY(curlen < expectlen)) {
 	if (! (flags & UTF8_ALLOW_SHORT)) {
 	    if (! (flags & UTF8_CHECK_ONLY)) {
 		sv = sv_2mortal(Perl_newSVpvf(aTHX_ "%s (%d byte%s, need %d, after start byte 0x%02x)", malformed_text, (int)curlen, curlen == 1 ? "" : "s", (int)expectlen, *s0));
@@ -739,6 +742,10 @@ Perl_utf8n_to_uvuni(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
 	if ((flags & (UTF8_WARN_FE_FF|UTF8_CHECK_ONLY)) == UTF8_WARN_FE_FF
 	    && ckWARN_d(WARN_UTF8))
 	{
+	    /* This message is deliberately not of the same syntax as the other
+	     * messages for malformations, for backwards compatibility in the
+	     * unlikely event that code is relying on its precise earlier text
+	     */
 	    sv = sv_2mortal(Perl_newSVpvf(aTHX_ "%s Code point beginning with byte 0x%02X is not Unicode, and not portable", malformed_text, *s0));
 	    pack_warn = packWARN(WARN_UTF8);
 	}
@@ -746,7 +753,7 @@ Perl_utf8n_to_uvuni(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
 	    goto malformed;
 	}
     }
-    if (overflowed) {
+    if (UNLIKELY(overflowed)) {
 
 	/* If the first byte is FF, it will overflow a 32-bit word.  If the
 	 * first byte is FE, it will overflow a signed 32-bit word.  The
@@ -788,17 +795,6 @@ Perl_utf8n_to_uvuni(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
 		goto disallowed;
 	    }
 	}
-	else if (UNICODE_IS_NONCHAR(uv)) {
-	    if ((flags & (UTF8_WARN_NONCHAR|UTF8_CHECK_ONLY)) == UTF8_WARN_NONCHAR
-		&& ckWARN2_d(WARN_UTF8, WARN_NONCHAR))
-	    {
-		sv = sv_2mortal(Perl_newSVpvf(aTHX_ "Unicode non-character U+%04"UVXf" is illegal for open interchange", uv));
-		pack_warn = packWARN2(WARN_UTF8, WARN_NONCHAR);
-	    }
-	    if (flags & UTF8_DISALLOW_NONCHAR) {
-		goto disallowed;
-	    }
-	}
 	else if ((uv > PERL_UNICODE_MAX)) {
 	    if ((flags & (UTF8_WARN_SUPER|UTF8_CHECK_ONLY)) == UTF8_WARN_SUPER
 		&& ckWARN2_d(WARN_UTF8, WARN_NON_UNICODE))
@@ -807,6 +803,17 @@ Perl_utf8n_to_uvuni(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
 		pack_warn = packWARN2(WARN_UTF8, WARN_NON_UNICODE);
 	    }
 	    if (flags & UTF8_DISALLOW_SUPER) {
+		goto disallowed;
+	    }
+	}
+	else if (UNICODE_IS_NONCHAR(uv)) {
+	    if ((flags & (UTF8_WARN_NONCHAR|UTF8_CHECK_ONLY)) == UTF8_WARN_NONCHAR
+		&& ckWARN2_d(WARN_UTF8, WARN_NONCHAR))
+	    {
+		sv = sv_2mortal(Perl_newSVpvf(aTHX_ "Unicode non-character U+%04"UVXf" is illegal for open interchange", uv));
+		pack_warn = packWARN2(WARN_UTF8, WARN_NONCHAR);
+	    }
+	    if (flags & UTF8_DISALLOW_NONCHAR) {
 		goto disallowed;
 	    }
 	}
@@ -912,16 +919,17 @@ Perl_utf8_to_uvchr_buf(pTHX_ const U8 *s, const U8 *send, STRLEN *retlen)
 }
 
 /* Like L</utf8_to_uvchr_buf>(), but should only be called when it is known that
- * there are no malformations in the input UTF-8 string C<s>.  Currently, some
- * malformations are checked for, but this checking likely will be removed in
- * the future */
+ * there are no malformations in the input UTF-8 string C<s>.  surrogates,
+ * non-character code points, and non-Unicode code points are allowed */
 
 UV
 Perl_valid_utf8_to_uvchr(pTHX_ const U8 *s, STRLEN *retlen)
 {
+    const UV uv = valid_utf8_to_uvuni(s, retlen);
+
     PERL_ARGS_ASSERT_VALID_UTF8_TO_UVCHR;
 
-    return utf8_to_uvchr_buf(s, s + UTF8_MAXBYTES, retlen);
+    return UNI_TO_NATIVE(uv);
 }
 
 /*
@@ -953,7 +961,7 @@ Perl_utf8_to_uvchr(pTHX_ const U8 *s, STRLEN *retlen)
 {
     PERL_ARGS_ASSERT_UTF8_TO_UVCHR;
 
-    return valid_utf8_to_uvchr(s, retlen);
+    return utf8_to_uvchr_buf(s, s + UTF8_MAXBYTES, retlen);
 }
 
 /*
@@ -990,16 +998,38 @@ Perl_utf8_to_uvuni_buf(pTHX_ const U8 *s, const U8 *send, STRLEN *retlen)
 }
 
 /* Like L</utf8_to_uvuni_buf>(), but should only be called when it is known that
- * there are no malformations in the input UTF-8 string C<s>.  Currently, some
- * malformations are checked for, but this checking likely will be removed in
- * the future */
+ * there are no malformations in the input UTF-8 string C<s>.  surrogates,
+ * non-character code points, and non-Unicode code points are allowed */
 
 UV
 Perl_valid_utf8_to_uvuni(pTHX_ const U8 *s, STRLEN *retlen)
 {
+    UV expectlen = UTF8SKIP(s);
+    const U8* send = s + expectlen;
+    UV uv = NATIVE_TO_UTF(*s);
+
     PERL_ARGS_ASSERT_VALID_UTF8_TO_UVUNI;
 
-    return utf8_to_uvuni_buf(s, s + UTF8_MAXBYTES, retlen);
+    if (retlen) {
+	*retlen = expectlen;
+    }
+
+    /* An invariant is trivially returned */
+    if (expectlen == 1) {
+	return uv;
+    }
+
+    /* Remove the leading bits that indicate the number of bytes, leaving just
+     * the bits that are part of the value */
+    uv &= UTF_START_MASK(expectlen);
+
+    /* Now, loop through the remaining bytes, accumulating each into the
+     * working total as we go */
+    for (++s; s < send; s++) {
+	uv = UTF8_ACCUMULATE(uv, *s);
+    }
+
+    return uv;
 }
 
 /*
@@ -1731,20 +1761,44 @@ Perl__to_fold_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp, const bool flags)
 }
 
 UV
-Perl__to_uni_fold_flags(pTHX_ UV c, U8* p, STRLEN *lenp, const bool flags)
+Perl__to_uni_fold_flags(pTHX_ UV c, U8* p, STRLEN *lenp, const U8 flags)
 {
 
-    /* Not currently externally documented, and subject to change, <flags> is
-     * TRUE iff full folding is to be used */
+    /* Not currently externally documented, and subject to change
+     *  <flags> bits meanings:
+     *	    FOLD_FLAGS_FULL  iff full folding is to be used;
+     *	    FOLD_FLAGS_LOCALE iff in locale
+     *	    FOLD_FLAGS_NOMIX_ASCII iff non-ASCII to ASCII folds are prohibited
+     */
 
     PERL_ARGS_ASSERT__TO_UNI_FOLD_FLAGS;
 
     if (c < 256) {
-	return _to_fold_latin1((U8) c, p, lenp, flags);
+	UV result = _to_fold_latin1((U8) c, p, lenp,
+			       cBOOL(((flags & FOLD_FLAGS_FULL)
+				   /* If ASCII-safe, don't allow full folding,
+				    * as that could include SHARP S => ss;
+				    * otherwise there is no crossing of
+				    * ascii/non-ascii in the latin1 range */
+				   && ! (flags & FOLD_FLAGS_NOMIX_ASCII))));
+	/* It is illegal for the fold to cross the 255/256 boundary under
+	 * locale; in this case return the original */
+	return (result > 256 && flags & FOLD_FLAGS_LOCALE)
+	       ? c
+	       : result;
     }
 
-    uvchr_to_utf8(p, c);
-    return CALL_FOLD_CASE(p, p, lenp, flags);
+    /* If no special needs, just use the macro */
+    if ( ! (flags & (FOLD_FLAGS_LOCALE|FOLD_FLAGS_NOMIX_ASCII))) {
+	uvchr_to_utf8(p, c);
+	return CALL_FOLD_CASE(p, p, lenp, flags & FOLD_FLAGS_FULL);
+    }
+    else {  /* Otherwise, _to_utf8_fold_flags has the intelligence to deal with
+	       the special flags. */
+	U8 utf8_c[UTF8_MAXBYTES + 1];
+	uvchr_to_utf8(utf8_c, c);
+	return _to_utf8_fold_flags(utf8_c, p, lenp, flags, NULL);
+    }
 }
 
 /* for now these all assume no locale info available for Unicode > 255; and
@@ -2665,6 +2719,8 @@ The character at C<p> is assumed by this routine to be well-formed.
  *			      POSIX, lowercase is used instead
  *      bit FOLD_FLAGS_FULL   is set iff full case folds are to be used;
  *			      otherwise simple folds
+ *      bit FOLD_FLAGS_NOMIX_ASCII is set iff folds of non-ASCII to ASCII are
+ *			      prohibited
  * <tainted_ptr> if non-null, *tainted_ptr will be set TRUE iff locale rules
  *		 were used in the calculation; otherwise unchanged. */
 
@@ -2676,6 +2732,11 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags, b
     UV result;
 
     PERL_ARGS_ASSERT__TO_UTF8_FOLD_FLAGS;
+
+    /* These are mutually exclusive */
+    assert (! ((flags & FOLD_FLAGS_LOCALE) && (flags & FOLD_FLAGS_NOMIX_ASCII)));
+
+    assert(p != ustrp); /* Otherwise overwrites */
 
     if (UTF8_IS_INVARIANT(*p)) {
 	if (flags & FOLD_FLAGS_LOCALE) {
@@ -2692,17 +2753,49 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags, b
 	}
 	else {
 	    return _to_fold_latin1(TWO_BYTE_UTF8_TO_UNI(*p, *(p+1)),
-		                   ustrp, lenp, cBOOL(flags & FOLD_FLAGS_FULL));
+		                   ustrp, lenp,
+				   cBOOL((flags & FOLD_FLAGS_FULL
+				       /* If ASCII safe, don't allow full
+					* folding, as that could include SHARP
+					* S => ss; otherwise there is no
+					* crossing of ascii/non-ascii in the
+					* latin1 range */
+				       && ! (flags & FOLD_FLAGS_NOMIX_ASCII))));
 	}
     }
     else {  /* utf8, ord above 255 */
-	result = CALL_FOLD_CASE(p, ustrp, lenp, flags);
+	result = CALL_FOLD_CASE(p, ustrp, lenp, flags & FOLD_FLAGS_FULL);
 
 	if ((flags & FOLD_FLAGS_LOCALE)) {
-	    result = check_locale_boundary_crossing(p, result, ustrp, lenp);
+	    return check_locale_boundary_crossing(p, result, ustrp, lenp);
 	}
+	else if (! (flags & FOLD_FLAGS_NOMIX_ASCII)) {
+	    return result;
+	}
+	else {
+	    /* This is called when changing the case of a utf8-encoded
+	     * character above the Latin1 range, and the result should not
+	     * contain an ASCII character. */
 
-	return result;
+	    UV original;    /* To store the first code point of <p> */
+
+	    /* Look at every character in the result; if any cross the
+	    * boundary, the whole thing is disallowed */
+	    U8* s = ustrp;
+	    U8* e = ustrp + *lenp;
+	    while (s < e) {
+		if (isASCII(*s)) {
+		    /* Crossed, have to return the original */
+		    original = valid_utf8_to_uvchr(p, lenp);
+		    Copy(p, ustrp, *lenp, char);
+		    return original;
+		}
+		s += UTF8SKIP(s);
+	    }
+
+	    /* Here, no characters crossed, result is ok as-is */
+	    return result;
+	}
     }
 
     /* Here, used locale rules.  Convert back to utf8 */
