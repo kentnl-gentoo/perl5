@@ -864,6 +864,7 @@ threadsv_names()
 #define OP_private_ix		U8p | offsetof(struct op, op_private)
 
 #define PMOP_pmflags_ix		U32p | offsetof(struct pmop, op_pmflags)
+#define PMOP_code_list_ix	OPp | offsetof(struct pmop, op_code_list)
 
 #ifdef USE_ITHREADS
 #define PMOP_pmoffset_ix	IVp | offsetof(struct pmop, op_pmoffset)
@@ -885,6 +886,7 @@ threadsv_names()
 
 #ifdef USE_ITHREADS
 #define COP_stashpv_ix		char_pp | offsetof(struct cop, cop_stashpv)
+#define COP_stashoff_ix	    PADOFFSETp | offsetof(struct cop, cop_stashoff)
 #define COP_file_ix		char_pp | offsetof(struct cop, cop_file)
 #else
 #define COP_stash_ix		SVp | offsetof(struct cop, cop_stash)
@@ -921,6 +923,7 @@ next(o)
 	B::LOOP::nextop = LOOP_nextop_ix
 	B::LOOP::lastop = LOOP_lastop_ix
 	B::PMOP::pmflags = PMOP_pmflags_ix
+	B::PMOP::code_list = PMOP_code_list_ix
 	B::SVOP::sv = SVOP_sv_ix
 	B::SVOP::gv = SVOP_gv_ix
 	B::PADOP::padix = PADOP_padix_ix
@@ -1163,8 +1166,13 @@ BOOT:
 #ifdef USE_ITHREADS
         cv = newXS("B::PMOP::pmoffset", XS_B__OP_next, __FILE__);
         XSANY.any_i32 = PMOP_pmoffset_ix;
+# if PERL_VERSION < 17 || defined(CopSTASH_len)
         cv = newXS("B::COP::stashpv", XS_B__OP_next, __FILE__);
         XSANY.any_i32 = COP_stashpv_ix;
+# else
+        cv = newXS("B::COP::stashoff", XS_B__OP_next, __FILE__);
+        XSANY.any_i32 = COP_stashoff_ix;
+# endif
         cv = newXS("B::COP::file", XS_B__OP_next, __FILE__);
         XSANY.any_i32 = COP_file_ix;
 #else
@@ -1227,9 +1235,6 @@ pv(o)
 	    ST(0) = newSVpvn_flags(o->op_pv, strlen(o->op_pv), SVs_TEMP);
 
 #define COP_label(o)	CopLABEL(o)
-#ifdef CopSTASH_len
-#define COP_stashlen(o)	CopSTASH_len(o)
-#endif
 
 MODULE = B	PACKAGE = B::COP		PREFIX = COP_
 
@@ -1253,23 +1258,37 @@ COP_stash(o)
 	PUSHs(make_sv_object(aTHX_
 			     ix ? (SV *)CopFILEGV(o) : (SV *)CopSTASH(o)));
 
-#ifdef CopSTASH_len
+#else
 
-U32
-COP_stashlen(o)
+char *
+COP_file(o)
 	B::COP	o
+    CODE:
+	RETVAL = CopFILE(o);
+    OUTPUT:
+	RETVAL
 
 #endif
+
+#if PERL_VERSION >= 10
+
+SV *
+COP_stashpv(o)
+	B::COP	o
+    CODE:
+	RETVAL = CopSTASH(o) && SvTYPE(CopSTASH(o)) == SVt_PVHV
+	    ? newSVhek(HvNAME_HEK(CopSTASH(o)))
+	    : &PL_sv_undef;
+    OUTPUT:
+	RETVAL
 
 #else
 
 char *
 COP_stashpv(o)
 	B::COP	o
-    ALIAS:
-	file = 1
     CODE:
-	RETVAL = ix ? CopFILE(o) : CopSTASHPV(o);
+	RETVAL = CopSTASHPV(o);
     OUTPUT:
 	RETVAL
 

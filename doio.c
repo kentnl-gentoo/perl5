@@ -320,7 +320,10 @@ Perl_do_openn(pTHX_ GV *gv, register const char *oname, I32 len, int as_raw,
 		    }
 		    while (isSPACE(*type))
 			type++;
-		    if (num_svs && (SvIOK(*svp) || (SvPOK(*svp) && looks_like_number(*svp)))) {
+		    if (num_svs && (
+			     SvIOK(*svp)
+			  || (SvPOKp(*svp) && looks_like_number(*svp))
+		       )) {
 			fd = SvUV(*svp);
 			num_svs = 0;
 		    }
@@ -2400,8 +2403,8 @@ Perl_vms_start_glob
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

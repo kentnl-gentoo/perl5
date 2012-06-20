@@ -505,9 +505,7 @@ PP(pp_add)
        unsigned code below is actually shorter than the old code. :-)
     */
 
-    SvIV_please_nomg(svr);
-
-    if (SvIOK(svr)) {
+    if (SvIV_please_nomg(svr)) {
 	/* Unless the left argument is integer in range we are going to have to
 	   use NV maths. Hence only attempt to coerce the right argument if
 	   we know the left is integer.  */
@@ -523,8 +521,7 @@ PP(pp_add)
 	       lots of code to speed up what is probably a rarish case.  */
 	} else {
 	    /* Left operand is defined, so is it IV? */
-	    SvIV_please_nomg(svl);
-	    if (SvIOK(svl)) {
+	    if (SvIV_please_nomg(svl)) {
 		if ((auvok = SvUOK(svl)))
 		    auv = SvUVX(svl);
 		else {
@@ -1211,6 +1208,8 @@ PP(pp_qr)
     REGEXP * rx = PM_GETRE(pm);
     SV * const pkg = rx ? CALLREG_PACKAGE(rx) : NULL;
     SV * const rv = sv_newmortal();
+    CV **cvp;
+    CV *cv;
 
     SvUPGRADE(rv, SVt_IV);
     /* For a subroutine describing itself as "This is a hacky workaround" I'm
@@ -1221,6 +1220,12 @@ PP(pp_qr)
        optree.  */
     SvRV_set(rv, MUTABLE_SV(reg_temp_copy(NULL, rx)));
     SvROK_on(rv);
+
+    cvp = &( ((struct regexp*)SvANY(SvRV(rv)))->qr_anoncv);
+    if ((cv = *cvp) && CvCLONE(*cvp)) {
+	*cvp = cv_clone(cv);
+	SvREFCNT_dec(cv);
+    }
 
     if (pkg) {
 	HV *const stash = gv_stashsv(pkg, GV_ADD);
@@ -1289,7 +1294,9 @@ PP(pp_match)
         pm->op_pmflags & PMf_USED
 #endif
     ) {
+        DEBUG_r(PerlIO_printf(Perl_debug_log, "?? already matched once"));
       failure:
+
 	if (gimme == G_ARRAY)
 	    RETURN;
 	RETPUSHNO;
@@ -1303,8 +1310,10 @@ PP(pp_match)
 	rx = PM_GETRE(pm);
     }
 
-    if (RX_MINLEN(rx) > (I32)len)
+    if (RX_MINLEN(rx) > (I32)len) {
+        DEBUG_r(PerlIO_printf(Perl_debug_log, "String shorter than min possible regex match\n"));
 	goto failure;
+    }
 
     truebase = t = s;
 
@@ -1337,14 +1346,14 @@ PP(pp_match)
 	    || SvTEMP(TARG) || SvAMAGIC(TARG) || PL_sawampersand
 	    || (RX_EXTFLAGS(rx) & (RXf_EVAL_SEEN|RXf_PMf_KEEPCOPY)))
 	r_flags |= REXEC_COPY_STR;
-    if (SvSCREAM(TARG))
-	r_flags |= REXEC_SCREAM;
 
   play_it_again:
     if (global && RX_OFFS(rx)[0].start != -1) {
 	t = s = RX_OFFS(rx)[0].end + truebase - RX_GOFS(rx);
-	if ((s + RX_MINLEN(rx)) > strend || s < truebase)
+	if ((s + RX_MINLEN(rx)) > strend || s < truebase) {
+	    DEBUG_r(PerlIO_printf(Perl_debug_log, "Regex match can't succeed, so not even tried\n"));
 	    goto nope;
+	}
 	if (update_minmatch++)
 	    minmatch = had_zerolen;
     }
@@ -1359,9 +1368,6 @@ PP(pp_match)
 	if ( (RX_EXTFLAGS(rx) & RXf_CHECK_ALL)
 	     && !PL_sawampersand
 	     && !(RX_EXTFLAGS(rx) & RXf_PMf_KEEPCOPY)
-	     && ((RX_EXTFLAGS(rx) & RXf_NOSCAN)
-		 || !((RX_EXTFLAGS(rx) & RXf_INTUIT_TAIL)
-		      && (r_flags & REXEC_SCREAM)))
 	     && !SvROK(TARG))	/* Cannot trust since INTUIT cannot guess ^ */
 	    goto yup;
     }
@@ -1527,9 +1533,9 @@ yup:					/* Confirmed by INTUIT */
 	RX_OFFS(rx)[0].start = s - truebase;
 	RX_OFFS(rx)[0].end = s - truebase + RX_MINLENRET(rx);
     }
-    /* including RX_NPARENS(rx) in the below code seems highly suspicious.
-       -dmq */
-    RX_NPARENS(rx) = RX_LASTPAREN(rx) = RX_LASTCLOSEPAREN(rx) = 0;	/* used by @-, @+, and $^N */
+    /* match via INTUIT shouldn't have any captures. Let @-, @+, $^N know */
+    assert(!RX_NPARENS(rx));
+    RX_LASTPAREN(rx) = RX_LASTCLOSEPAREN(rx) = 0;
     LEAVE_SCOPE(oldsave);
     RETPUSHYES;
 
@@ -1720,7 +1726,7 @@ Perl_do_readline(pTHX)
 		}
 	    }
 	    for (t1 = SvPVX_const(sv); *t1; t1++)
-		if (!isALPHA(*t1) && !isDIGIT(*t1) &&
+		if (!isALNUMC(*t1) &&
 		    strchr("$&*(){}[]'\";\\|?<>~`", *t1))
 			break;
 	    if (*t1 && PerlLIO_lstat(SvPVX_const(sv), &PL_statbuf) < 0) {
@@ -1891,7 +1897,7 @@ PP(pp_iter)
 	/* don't risk potential race */
 	if (SvREFCNT(*itersvp) == 1 && !SvMAGICAL(*itersvp)) {
 	    /* safe to reuse old SV */
-	    sv_setiv(*itersvp, cx->blk_loop.state_u.lazyiv.cur++);
+	    sv_setiv(*itersvp, cx->blk_loop.state_u.lazyiv.cur);
 	}
 	else
 	{
@@ -1899,17 +1905,15 @@ PP(pp_iter)
 	     * completely new SV for closures/references to work as they
 	     * used to */
 	    oldsv = *itersvp;
-	    *itersvp = newSViv(cx->blk_loop.state_u.lazyiv.cur++);
+	    *itersvp = newSViv(cx->blk_loop.state_u.lazyiv.cur);
 	    SvREFCNT_dec(oldsv);
 	}
 
-	/* Handle end of range at IV_MAX */
-	if ((cx->blk_loop.state_u.lazyiv.cur == IV_MIN) &&
-	    (cx->blk_loop.state_u.lazyiv.end == IV_MAX))
-	{
-	    cx->blk_loop.state_u.lazyiv.cur++;
-	    cx->blk_loop.state_u.lazyiv.end++;
-	}
+	if (cx->blk_loop.state_u.lazyiv.cur == IV_MAX) {
+	    /* Handle end of range at IV_MAX */
+	    cx->blk_loop.state_u.lazyiv.end = IV_MIN;
+	} else
+	    ++cx->blk_loop.state_u.lazyiv.cur;
 
 	RETPUSHYES;
     }
@@ -2143,8 +2147,6 @@ PP(pp_subst)
     r_flags = (RX_NPARENS(rx) || SvTEMP(TARG) || PL_sawampersand
 	    || (RX_EXTFLAGS(rx) & (RXf_EVAL_SEEN|RXf_PMf_KEEPCOPY)) )
 	       ? REXEC_COPY_STR : 0;
-    if (SvSCREAM(TARG))
-	r_flags |= REXEC_SCREAM;
 
     orig = m = s;
     if (RX_EXTFLAGS(rx) & RXf_USE_INTUIT) {
@@ -2156,10 +2158,7 @@ PP(pp_subst)
 	/* How to do it in subst? */
 /*	if ( (RX_EXTFLAGS(rx) & RXf_CHECK_ALL)
 	     && !PL_sawampersand
-	     && !(RX_EXTFLAGS(rx) & RXf_KEEPCOPY)
-	     && ((RX_EXTFLAGS(rx) & RXf_NOSCAN)
-		 || !((RX_EXTFLAGS(rx) & RXf_INTUIT_TAIL)
-		      && (r_flags & REXEC_SCREAM))))
+	     && !(RX_EXTFLAGS(rx) & RXf_KEEPCOPY))
 	    goto yup;
 */
     }
@@ -2240,7 +2239,6 @@ PP(pp_subst)
 	}
 	d = s;
 	PL_curpm = pm;
-	SvSCREAM_off(TARG);	/* disable possible screamer */
 	if (once) {
 	    if (RX_MATCH_TAINTED(rx)) /* run time pattern taint, eg locale */
 		rxtainted |= SUBST_TAINT_PAT;
@@ -3062,8 +3060,8 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

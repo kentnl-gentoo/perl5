@@ -120,7 +120,7 @@ aux a2p c2ph h2ph h2xs perlbug pl2pm pod2html pod2man s2p splain xsubpp
     perluniintro	Perl Unicode introduction
     perlunicode 	Perl Unicode support
     perlunifaq		Perl Unicode FAQ
-    perluniprops	Index of Unicode Version 6.0.0 properties in Perl
+    perluniprops	Index of Unicode properties in Perl
     perlunitut		Perl Unicode tutorial
     perlebcdic		Considerations for running Perl on EBCDIC platforms
 
@@ -177,6 +177,7 @@ aux a2p c2ph h2ph h2xs perlbug pl2pm pod2html pod2man s2p splain xsubpp
 
     perlhist		Perl history records
     perldelta		Perl changes since previous version
+    perl5170delta	Perl changes in version 5.17.0
     perl5160delta	Perl changes in version 5.16.0
     perl5142delta	Perl changes in version 5.14.2
     perl5141delta	Perl changes in version 5.14.1

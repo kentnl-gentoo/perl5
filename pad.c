@@ -652,11 +652,6 @@ but is used for debugging.
 
 /* XXX DAPM integrate alloc(), add_name() and add_anon(),
  * or at least rationalise ??? */
-/* And flag whether the incoming name is UTF8 or 8 bit?
-   Could do this either with the +ve/-ve hack of the HV code, or expanding
-   the flag bits. Either way, this makes proper Unicode safe pad support.
-   NWC
-*/
 
 PADOFFSET
 Perl_pad_alloc(pTHX_ I32 optype, U32 tmptype)
@@ -2160,8 +2155,7 @@ Perl_padlist_dup(pTHX_ AV *srcpad, CLONE_PARAMS *param)
 	AV *args;
 	/* Look for it in the table first, as the padlist may have ended up
 	   as an element of @DB::args (or theoretically even @_), so it may
-	   may have been cloned already.  It may also be there because of
-	   how Perl_sv_compile_2op() "works". :-(   */
+	   may have been cloned already. */
 	dstpad = (AV*)ptr_table_fetch(PL_ptr_table, srcpad);
 
 	if (dstpad)
@@ -2250,8 +2244,8 @@ Perl_padlist_dup(pTHX_ AV *srcpad, CLONE_PARAMS *param)
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

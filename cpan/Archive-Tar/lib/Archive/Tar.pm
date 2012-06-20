@@ -31,7 +31,7 @@ use vars qw[$DEBUG $error $VERSION $WARN $FOLLOW_SYMLINK $CHOWN $CHMOD
 $DEBUG                  = 0;
 $WARN                   = 1;
 $FOLLOW_SYMLINK         = 0;
-$VERSION                = "1.82";
+$VERSION                = "1.88";
 $CHOWN                  = 1;
 $CHMOD                  = 1;
 $SAME_PERMISSIONS       = $> == 0 ? 1 : 0;
@@ -335,8 +335,15 @@ sub _read_tar {
     LOOP:
     while( $handle->read( $chunk, HEAD ) ) {
         ### IO::Zlib doesn't support this yet
-        my $offset = eval { tell $handle } || 'unknown';
-        $@ = '';
+        my $offset;
+        if ( ref($handle) ne 'IO::Zlib' ) {
+            local $@;
+            $offset = eval { tell $handle } || 'unknown';
+            $@ = '';
+        }
+        else {
+            $offset = 'unknown';
+        }
 
         unless( $read++ ) {
             my $gzip = GZIP_MAGIC_NUM;
@@ -867,7 +874,7 @@ sub _extract_file {
             $self->_error( qq[Could not update timestamp] );
     }
 
-    if( $CHOWN && CAN_CHOWN->() ) {
+    if( $CHOWN && CAN_CHOWN->() and not -l $full ) {
         chown $entry->uid, $entry->gid, $full or
             $self->_error( qq[Could not set uid/gid on '$full'] );
     }
@@ -1450,6 +1457,12 @@ sub add_files {
             push @rv, $file->clone;
             next;
         }
+
+        eval {
+            if( utf8::is_utf8( $file )) {
+              utf8::encode( $file );
+            }
+        };
 
         unless( -e $file || -l $file ) {
             $self->_error( qq[No such file: '$file'] );

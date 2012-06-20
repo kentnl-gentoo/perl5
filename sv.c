@@ -2332,6 +2332,28 @@ Perl_sv_2iv_flags(pTHX_ register SV *const sv, const I32 flags)
 }
 
 /*
+=for apidoc sv_gmagical_2iv_please
+
+Used internally by C<SvIV_please_nomg>, this function sets the C<SvIVX>
+slot if C<sv_2iv> would have made the scalar C<SvIOK> had it not been
+magical.  In that case it returns true.
+
+=cut
+*/
+
+bool
+Perl_sv_gmagical_2iv_please(pTHX_ register SV *sv)
+{
+    bool has_int;
+    PERL_ARGS_ASSERT_SV_GMAGICAL_2IV_PLEASE;
+    assert(SvGMAGICAL(sv) && !SvIOKp(sv) && (SvNOKp(sv) || SvPOKp(sv)));
+    if (S_sv_2iuv_common(aTHX_ sv)) { SvNIOK_off(sv); return 0; }
+    has_int = !!SvIOK(sv);
+    SvFLAGS(sv) &= ~(SVf_IOK|SVf_NOK);
+    return has_int;
+}
+
+/*
 =for apidoc sv_2uv_flags
 
 Return the unsigned integer value of an SV, doing any necessary string
@@ -2817,7 +2839,6 @@ Perl_sv_2pv_flags(pTHX_ register SV *const sv, STRLEN *const lp, const I32 flags
 			   || amagic_is_enabled(string_amg)
 			  )) {
 		    REGEXP * const re = (REGEXP *)MUTABLE_PTR(referent);
-		    I32 seen_evals = 0;
 
 		    assert(re);
 			
@@ -2827,9 +2848,6 @@ Perl_sv_2pv_flags(pTHX_ register SV *const sv, STRLEN *const lp, const I32 flags
 			SvUTF8_on(sv);
 		    else
 			SvUTF8_off(sv);	
-
-		    if ((seen_evals = RX_SEEN_EVALS(re)))
-			PL_reginterp_cnt += seen_evals;
 
 		    if (lp)
 			*lp = RX_WRAPLEN(re);
@@ -7621,8 +7639,6 @@ Perl_sv_gets(pTHX_ register SV *const sv, register PerlIO *const fp, I32 append)
        Swings and roundabouts.  */
     SvUPGRADE(sv, SVt_PV);
 
-    SvSCREAM_off(sv);
-
     if (append) {
 	if (PerlIO_isutf8(fp)) {
 	    if (!SvUTF8(sv)) {
@@ -9005,20 +9021,10 @@ Perl_sv_2cv(pTHX_ SV *sv, HV **const st, GV **const gvp, const I32 lref)
 	}
 	*st = GvESTASH(gv);
 	if (lref & ~GV_ADDMG && !GvCVu(gv)) {
-	    SV *tmpsv;
-	    ENTER;
-	    tmpsv = newSV(0);
-	    gv_efullname3(tmpsv, gv, NULL);
 	    /* XXX this is probably not what they think they're getting.
 	     * It has the same effect as "sub name;", i.e. just a forward
 	     * declaration! */
-	    newSUB(start_subparse(FALSE, 0),
-		   newSVOP(OP_CONST, 0, tmpsv),
-		   NULL, NULL);
-	    LEAVE;
-	    if (!GvCVu(gv))
-		Perl_croak(aTHX_ "Unable to create sub named \"%"SVf"\"",
-			   SVfARG(SvOK(sv) ? sv : &PL_sv_no));
+	    newSTUB(gv,0);
 	}
 	return GvCVu(gv);
     }
@@ -9112,6 +9118,9 @@ Perl_sv_pvn_force_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 	    Perl_croak(aTHX_ "Can't coerce %s to string in %s", sv_reftype(sv,0),
 		OP_DESC(PL_op));
 	s = sv_2pv_flags(sv, &len, flags &~ SV_GMAGIC);
+	if (!s) {
+	  s = (char *)"";
+	}
 	if (lp)
 	    *lp = len;
 
@@ -12289,6 +12298,7 @@ Perl_cx_dup(pTHX_ PERL_CONTEXT *cxs, I32 ix, I32 max, CLONE_PARAMS* param)
 	    Perl_croak(aTHX_ "Cloning substitution context is unimplemented");
 	}
 	else {
+	    ncx->blk_oldcop = (COP*)any_dup(ncx->blk_oldcop, param->proto_perl);
 	    switch (CxTYPE(ncx)) {
 	    case CXt_SUB:
 		ncx->blk_sub.cv		= (ncx->blk_sub.olddepth == 0
@@ -12688,28 +12698,6 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl, CLONE_PARAMS* param)
 		    = pv_dup(old_state->re_state_reginput);
 		new_state->re_state_regeol
 		    = pv_dup(old_state->re_state_regeol);
-		new_state->re_state_regoffs
-		    = (regexp_paren_pair*)
-			any_dup(old_state->re_state_regoffs, proto_perl);
-		new_state->re_state_reglastparen
-		    = (U32*) any_dup(old_state->re_state_reglastparen, 
-			      proto_perl);
-		new_state->re_state_reglastcloseparen
-		    = (U32*)any_dup(old_state->re_state_reglastcloseparen,
-			      proto_perl);
-		/* XXX This just has to be broken. The old save_re_context
-		   code did SAVEGENERICPV(PL_reg_start_tmp);
-		   PL_reg_start_tmp is char **.
-		   Look above to what the dup code does for
-		   SAVEt_GENERIC_PVREF
-		   It can never have worked.
-		   So this is merely a faithful copy of the exiting bug:  */
-		new_state->re_state_reg_start_tmp
-		    = (char **) pv_dup((char *)
-				      old_state->re_state_reg_start_tmp);
-		/* I assume that it only ever "worked" because no-one called
-		   (pseudo)fork while the regexp engine had re-entered itself.
-		*/
 #ifdef PERL_OLD_COPY_ON_WRITE
 		new_state->re_state_nrs
 		    = sv_dup(old_state->re_state_nrs, param);
@@ -13001,7 +12989,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     /* RE engine related */
     Zero(&PL_reg_state, 1, struct re_save_state);
-    PL_reginterp_cnt	= 0;
     PL_regmatch_slab	= NULL;
 
     PL_sub_generation	= proto_perl->Isub_generation;
@@ -13209,10 +13196,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     hv_ksplit(PL_strtab, HvTOTALKEYS(proto_perl->Istrtab));
     ptr_table_store(PL_ptr_table, proto_perl->Istrtab, PL_strtab);
 
-    /* These two PVs will be free'd special way so must set them same way op.c does */
-    PL_compiling.cop_stashpv = savesharedpv(PL_compiling.cop_stashpv);
-    ptr_table_store(PL_ptr_table, proto_perl->Icompiling.cop_stashpv, PL_compiling.cop_stashpv);
-
+    /* This PV will be free'd special way so must set it same way op.c does */
     PL_compiling.cop_file    = savesharedpv(PL_compiling.cop_file);
     ptr_table_store(PL_ptr_table, proto_perl->Icompiling.cop_file, PL_compiling.cop_file);
 
@@ -13269,6 +13253,15 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     */
     PL_regex_padav = av_dup_inc(proto_perl->Iregex_padav, param);
     PL_regex_pad = AvARRAY(PL_regex_padav);
+
+    PL_stashpadmax	= proto_perl->Istashpadmax;
+    PL_stashpadix	= proto_perl->Istashpadix ;
+    Newx(PL_stashpad, PL_stashpadmax, HV *);
+    {
+	PADOFFSET o = 0;
+	for (; o < PL_stashpadmax; ++o)
+	    PL_stashpad[o] = hv_dup(proto_perl->Istashpad[o], param);
+    }
 
     /* shortcuts to various I/O objects */
     PL_ofsgv            = gv_dup_inc(proto_perl->Iofsgv, param);
@@ -14476,8 +14469,8 @@ Perl_report_uninit(pTHX_ const SV *uninit_sv)
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

@@ -235,14 +235,12 @@ scope has the given name. Name must be a literal string.
 #define SAVEPARSER(p) save_pushptr((p), SAVEt_PARSER)
 
 #ifdef USE_ITHREADS
-#  define SAVECOPSTASH(c)	(SAVEPPTR(CopSTASHPV(c)), \
-				 SAVEI32(CopSTASH_len(c)))
-#  define SAVECOPSTASH_FREE(c)	SAVESHAREDPV(CopSTASHPV(c))
+#  define SAVECOPSTASH_FREE(c)	SAVEIV((c)->cop_stashoff)
 #  define SAVECOPFILE(c)	SAVEPPTR(CopFILE(c))
 #  define SAVECOPFILE_FREE(c)	SAVESHAREDPV(CopFILE(c))
 #else
-#  define SAVECOPSTASH(c)	SAVESPTR(CopSTASH(c))
-#  define SAVECOPSTASH_FREE(c)	SAVECOPSTASH(c)	/* XXX not refcounted */
+#  /* XXX not refcounted */
+#  define SAVECOPSTASH_FREE(c)	SAVESPTR(CopSTASH(c))
 #  define SAVECOPFILE(c)	SAVESPTR(CopFILEGV(c))
 #  define SAVECOPFILE_FREE(c)	SAVEGENERICSV(CopFILEGV(c))
 #endif
@@ -279,8 +277,8 @@ scope has the given name. Name must be a literal string.
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

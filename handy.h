@@ -778,7 +778,7 @@ EXTCONST U32 PL_charclass[];
 #   define toLOWER(c)	tolower(c)
 #   define toUPPER(c)	toupper(c)
 #else /* Not EBCDIC: ASCII-only matching */
-#   define isALNUMC(c)  isALNUMC_A(c)
+#   define isALNUMC(c)  isALNUMC_A(c)	/* Mnemonic: "C's alnum" = alpha + digit */
 #   define isALPHA(c)   isALPHA_A(c)
 #   define isBLANK(c)   isBLANK_A(c)
 #   define isCNTRL(c)   isCNTRL_A(c)
@@ -1316,8 +1316,8 @@ void Perl_mem_log_del_sv(const SV *sv, const char *filename, const int linenumbe
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

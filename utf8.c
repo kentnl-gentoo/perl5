@@ -998,7 +998,7 @@ Perl_utf8_to_uvuni_buf(pTHX_ const U8 *s, const U8 *send, STRLEN *retlen)
 }
 
 /* Like L</utf8_to_uvuni_buf>(), but should only be called when it is known that
- * there are no malformations in the input UTF-8 string C<s>.  surrogates,
+ * there are no malformations in the input UTF-8 string C<s>.  Surrogates,
  * non-character code points, and non-Unicode code points are allowed */
 
 UV
@@ -1619,7 +1619,7 @@ Perl__to_upper_title_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp, const char S_
 		return 'S';
 	    default:
 		Perl_croak(aTHX_ "panic: to_upper_title_latin1 did not expect '%c' to map to '%c'", c, LATIN_SMALL_LETTER_Y_WITH_DIAERESIS);
-		/* NOTREACHED */
+		assert(0); /* NOTREACHED */
 	}
     }
 
@@ -2206,7 +2206,7 @@ Perl_is_utf8_X_prepend(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_X_PREPEND;
 
-    return is_utf8_common(p, &PL_utf8_X_prepend, "GCB=Prepend");
+    return is_utf8_common(p, &PL_utf8_X_prepend, "_X_GCB_Prepend");
 }
 
 bool
@@ -2216,7 +2216,7 @@ Perl_is_utf8_X_non_hangul(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_X_NON_HANGUL;
 
-    return is_utf8_common(p, &PL_utf8_X_non_hangul, "HST=Not_Applicable");
+    return is_utf8_common(p, &PL_utf8_X_non_hangul, "_X_HST_Not_Applicable");
 }
 
 bool
@@ -2226,7 +2226,7 @@ Perl_is_utf8_X_L(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_X_L;
 
-    return is_utf8_common(p, &PL_utf8_X_L, "GCB=L");
+    return is_utf8_common(p, &PL_utf8_X_L, "_X_GCB_L");
 }
 
 bool
@@ -2236,7 +2236,7 @@ Perl_is_utf8_X_LV(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_X_LV;
 
-    return is_utf8_common(p, &PL_utf8_X_LV, "GCB=LV");
+    return is_utf8_common(p, &PL_utf8_X_LV, "_X_GCB_LV");
 }
 
 bool
@@ -2246,7 +2246,7 @@ Perl_is_utf8_X_LVT(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_X_LVT;
 
-    return is_utf8_common(p, &PL_utf8_X_LVT, "GCB=LVT");
+    return is_utf8_common(p, &PL_utf8_X_LVT, "_X_GCB_LVT");
 }
 
 bool
@@ -2256,7 +2256,7 @@ Perl_is_utf8_X_T(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_X_T;
 
-    return is_utf8_common(p, &PL_utf8_X_T, "GCB=T");
+    return is_utf8_common(p, &PL_utf8_X_T, "_X_GCB_T");
 }
 
 bool
@@ -2266,7 +2266,7 @@ Perl_is_utf8_X_V(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_X_V;
 
-    return is_utf8_common(p, &PL_utf8_X_V, "GCB=V");
+    return is_utf8_common(p, &PL_utf8_X_V, "_X_GCB_V");
 }
 
 bool
@@ -2410,7 +2410,7 @@ Perl_to_utf8_case(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp,
     }
 
     if (!len && *swashp) {
-	const UV uv2 = swash_fetch(*swashp, tmpbuf, TRUE);
+	const UV uv2 = swash_fetch(*swashp, tmpbuf, TRUE /* => is utf8 */);
 
 	 if (uv2) {
 	      /* It was "normal" (a single character mapping). */
@@ -2419,14 +2419,23 @@ Perl_to_utf8_case(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp,
 	 }
     }
 
-    if (!len) /* Neither: just copy.  In other words, there was no mapping
-		 defined, which means that the code point maps to itself */
-	 len = uvchr_to_utf8(ustrp, uv0) - ustrp;
+    if (len) {
+        if (lenp) {
+            *lenp = len;
+        }
+        return valid_utf8_to_uvchr(ustrp, 0);
+    }
+
+    /* Here, there was no mapping defined, which means that the code point maps
+     * to itself.  Return the inputs */
+    len = UTF8SKIP(p);
+    Copy(p, ustrp, len, U8);
 
     if (lenp)
 	 *lenp = len;
 
-    return len ? valid_utf8_to_uvchr(ustrp, 0) : 0;
+    return uv0;
+
 }
 
 STATIC UV
@@ -4557,8 +4566,8 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, register UV l1, bool u1
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

@@ -1136,9 +1136,6 @@ Perl_leave_scope(pTHX_ I32 base)
 		     - SAVESTACK_ALLOC_FOR_RE_SAVE_STATE);
 		PL_savestack_ix -= SAVESTACK_ALLOC_FOR_RE_SAVE_STATE;
 
-		if (PL_reg_start_tmp != state->re_state_reg_start_tmp) {
-		    Safefree(PL_reg_start_tmp);
-		}
 		if (PL_reg_poscache != state->re_state_reg_poscache) {
 		    Safefree(PL_reg_poscache);
 		}
@@ -1273,8 +1270,8 @@ Perl_cx_dump(pTHX_ PERL_CONTEXT *cx)
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

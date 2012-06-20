@@ -356,8 +356,8 @@ XS(XS_UNIVERSAL_can)
 
     SvGETMAGIC(sv);
 
-    if (!SvOK(sv) || !(SvROK(sv) || (SvPOK(sv) && SvCUR(sv))
-		|| (SvGMAGICAL(sv) && SvPOKp(sv) && SvCUR(sv))))
+    if (!SvOK(sv) || !(SvROK(sv) || SvNIOK(sv) || (SvPOK(sv) && SvCUR(sv))
+	|| (SvGMAGICAL(sv) && (SvNIOKp(sv) || (SvPOKp(sv) && SvCUR(sv))))))
 	XSRETURN_UNDEF;
 
     rv = &PL_sv_undef;
@@ -1433,8 +1433,8 @@ Perl_boot_core_UNIVERSAL(pTHX)
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

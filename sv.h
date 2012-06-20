@@ -302,12 +302,12 @@ perform the upgrade if necessary.  See C<svtype>.
 #define SVp_IOK		0x00001000  /* has valid non-public integer value */
 #define SVp_NOK		0x00002000  /* has valid non-public numeric value */
 #define SVp_POK		0x00004000  /* has valid non-public pointer value */
-#define SVp_SCREAM	0x00008000  /* has been studied? */
+#define SVp_SCREAM	0x00008000  /* method name is DOES */
 #define SVphv_CLONEABLE	SVp_SCREAM  /* PVHV (stashes) clone its objects */
 #define SVpgv_GP	SVp_SCREAM  /* GV has a valid GP */
 #define SVprv_PCS_IMPORTED  SVp_SCREAM  /* RV is a proxy for a constant
 				       subroutine in another package. Set the
-				       CvIMPORTED_CV_ON() if it needs to be
+				       GvIMPORTED_CV_on() if it needs to be
 				       expanded to a real GV */
 /*                      0x00010000  *** FREE SLOT */
 #define SVs_PADTMP	0x00020000  /* in use as tmp; only if ! SVs_PADMY */
@@ -378,7 +378,7 @@ perform the upgrade if necessary.  See C<svtype>.
 
    SVf_POK, SVp_POK also set:
    0x00004400   Normal
-   0x0000C400   Studied (SvSCREAM)
+   0x0000C400   method name for DOES (SvSCREAM)
    0x40004400   FBM compiled (SvVALID)
    0x4000C400   pad name.
 
@@ -494,8 +494,6 @@ struct xpvgv {
     union _xnvu xnv_u;
 };
 
-/* This structure must match XPVCV in cv.h */
-
 typedef U16 cv_flags_t;
 
 #define _XPVCV_COMMON								\
@@ -516,6 +514,8 @@ typedef U16 cv_flags_t;
 				  * compilation) in the lexically enclosing	\
 				  * sub */					\
     cv_flags_t	xcv_flags
+
+/* This structure must match XPVCV in cv.h */
 
 struct xpvfm {
     _XPV_HEAD;
@@ -1208,8 +1208,14 @@ the scalar's value cannot change unless written to.
 	STMT_START {if (!SvIOKp(sv) && (SvNOK(sv) || SvPOK(sv))) \
 		(void) SvIV(sv); } STMT_END
 #define SvIV_please_nomg(sv) \
-	STMT_START {if (!SvIOKp(sv) && (SvNOK(sv) || SvPOK(sv))) \
-		(void) SvIV_nomg(sv); } STMT_END
+	(!SvIOKp(sv) && (SvNOK(sv) || SvPOK(sv)) \
+	    ? (SvIV_nomg(sv), SvIOK(sv))	  \
+	    : SvGMAGICAL(sv)			   \
+		? SvIOKp(sv) || (		    \
+		       (SvNOKp(sv) || SvPOKp(sv))    \
+		    && sv_gmagical_2iv_please(sv)     \
+		  )				       \
+		: SvIOK(sv))
 #define SvIV_set(sv, val) \
 	STMT_START { \
 		assert(PL_valid_types_IV_set[SvTYPE(sv) & SVt_MASK]);	\
@@ -2125,8 +2131,8 @@ Evaluates I<sv> more than once.  Sets I<len> to 0 if C<SvOOK(sv)> is false.
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

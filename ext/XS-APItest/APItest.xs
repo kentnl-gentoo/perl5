@@ -3084,7 +3084,8 @@ CODE:
     PERL_SET_CONTEXT(interp_dup);
 
     /* continue after 'clone_with_stack' */
-    interp_dup->Iop = interp_dup->Iop->op_next;
+    if (interp_dup->Iop)
+	interp_dup->Iop = interp_dup->Iop->op_next;
 
     /* run with new perl */
     Perl_runops_standard(interp_dup);
@@ -3347,6 +3348,17 @@ void
 setup_addissub()
 CODE:
     wrap_op_checker(OP_ADD, addissub_myck_add, &addissub_nxck_add);
+
+#ifdef USE_ITHREADS
+
+bool
+test_alloccopstash()
+CODE:
+    RETVAL = PL_stashpad[alloccopstash(PL_defstash)] == PL_defstash;
+OUTPUT:
+    RETVAL
+
+#endif
 
 MODULE = XS::APItest PACKAGE = XS::APItest::AUTOLOADtest
 

@@ -218,7 +218,7 @@ S_rv2gv(pTHX_ SV *sv, const bool vivify_sv, const bool strict,
 		     (SV *)Perl_die(aTHX_
 		            S_no_symref_sv,
 		            sv,
-		            (SvPOK(sv) && SvCUR(sv)>32 ? "..." : ""),
+		            (SvPOKp(sv) && SvCUR(sv)>32 ? "..." : ""),
 		            "a symbol"
 		           );
 		if ((PL_op->op_private & (OPpLVAL_INTRO|OPpDONT_INIT_GV))
@@ -271,7 +271,8 @@ Perl_softref2xv(pTHX_ SV *const sv, const char *const what,
 
     if (PL_op->op_private & HINT_STRICT_REFS) {
 	if (SvOK(sv))
-	    Perl_die(aTHX_ S_no_symref_sv, sv, (SvPOK(sv) && SvCUR(sv)>32 ? "..." : ""), what);
+	    Perl_die(aTHX_ S_no_symref_sv, sv,
+		     (SvPOKp(sv) && SvCUR(sv)>32 ? "..." : ""), what);
 	else
 	    Perl_die(aTHX_ PL_no_usym, what);
     }
@@ -413,10 +414,7 @@ PP(pp_rv2cv)
     /* (But not in defined().) */
 
     CV *cv = sv_2cv(TOPs, &stash_unused, &gv, flags);
-    if (cv) {
-	if (CvCLONE(cv))
-	    cv = MUTABLE_CV(sv_2mortal(MUTABLE_SV(cv_clone(cv))));
-    }
+    if (cv) NOOP;
     else if ((flags == (GV_ADD|GV_NOEXPAND)) && gv && SvROK(gv)) {
 	cv = MUTABLE_CV(gv);
     }    
@@ -434,13 +432,17 @@ PP(pp_prototype)
     GV *gv;
     SV *ret = &PL_sv_undef;
 
+    if (SvGMAGICAL(TOPs)) SETs(sv_mortalcopy(TOPs));
     if (SvPOK(TOPs) && SvCUR(TOPs) >= 7) {
 	const char * s = SvPVX_const(TOPs);
 	if (strnEQ(s, "CORE::", 6)) {
 	    const int code = keyword(s + 6, SvCUR(TOPs) - 6, 1);
 	    if (!code || code == -KEY_CORE)
-		DIE(aTHX_ "Can't find an opnumber for \"%s\"", s+6);
-	    if (code < 0) {	/* Overridable. */
+		DIE(aTHX_ "Can't find an opnumber for \"%"SVf"\"",
+		    SVfARG(newSVpvn_flags(
+			s+6, SvCUR(TOPs)-6, SvFLAGS(TOPs) & SVf_UTF8
+		    )));
+	    {
 		SV * const sv = core_prototype(NULL, s + 6, code, NULL);
 		if (sv) ret = sv;
 	    }
@@ -649,89 +651,16 @@ PP(pp_study)
 {
     dVAR; dSP; dPOPss;
     register unsigned char *s;
-    char *sfirst_raw;
     STRLEN len;
-    MAGIC *mg = SvMAGICAL(sv) ? mg_find(sv, PERL_MAGIC_study) : NULL;
-    U8 quanta;
-    STRLEN size;
-
-    if (mg && SvSCREAM(sv))
-	RETPUSHYES;
 
     s = (unsigned char*)(SvPV(sv, len));
     if (len == 0 || len > I32_MAX || !SvPOK(sv) || SvUTF8(sv) || SvVALID(sv)) {
-	/* No point in studying a zero length string, and not safe to study
-	   anything that doesn't appear to be a simple scalar (and hence might
-	   change between now and when the regexp engine runs without our set
-	   magic ever running) such as a reference to an object with overloaded
-	   stringification.  Also refuse to study an FBM scalar, as this gives
-	   more flexibility in SV flag usage.  No real-world code would ever
-	   end up studying an FBM scalar, so this isn't a real pessimisation.
-	   Endemic use of I32 in Perl_screaminstr makes it hard to safely push
-	   the study length limit from I32_MAX to U32_MAX - 1.
-	*/
+	/* Historically, study was skipped in these cases. */
 	RETPUSHNO;
     }
 
     /* Make study a no-op. It's no longer useful and its existence
-       complicates matters elsewhere. This is a low-impact band-aid.
-       The relevant code will be neatly removed in a future release. */
-    RETPUSHYES;
-
-    if (len < 0xFF) {
-	quanta = 1;
-    } else if (len < 0xFFFF) {
-	quanta = 2;
-    } else
-	quanta = 4;
-
-    size = (256 + len) * quanta;
-    sfirst_raw = (char *)safemalloc(size);
-
-    if (!sfirst_raw)
-	DIE(aTHX_ "do_study: out of memory");
-
-    SvSCREAM_on(sv);
-    if (!mg)
-	mg = sv_magicext(sv, NULL, PERL_MAGIC_study, &PL_vtbl_regexp, NULL, 0);
-    mg->mg_ptr = sfirst_raw;
-    mg->mg_len = size;
-    mg->mg_private = quanta;
-
-    memset(sfirst_raw, ~0, 256 * quanta);
-
-    /* The assumption here is that most studied strings are fairly short, hence
-       the pain of the extra code is worth it, given the memory savings.
-       80 character string, 336 bytes as U8, down from 1344 as U32
-       800 character string, 2112 bytes as U16, down from 4224 as U32
-    */
-       
-    if (quanta == 1) {
-	U8 *const sfirst = (U8 *)sfirst_raw;
-	U8 *const snext = sfirst + 256;
-	while (len-- > 0) {
-	    const U8 ch = s[len];
-	    snext[len] = sfirst[ch];
-	    sfirst[ch] = len;
-	}
-    } else if (quanta == 2) {
-	U16 *const sfirst = (U16 *)sfirst_raw;
-	U16 *const snext = sfirst + 256;
-	while (len-- > 0) {
-	    const U8 ch = s[len];
-	    snext[len] = sfirst[ch];
-	    sfirst[ch] = len;
-	}
-    } else  {
-	U32 *const sfirst = (U32 *)sfirst_raw;
-	U32 *const snext = sfirst + 256;
-	while (len-- > 0) {
-	    const U8 ch = s[len];
-	    snext[len] = sfirst[ch];
-	    sfirst[ch] = len;
-	}
-    }
-
+       complicates matters elsewhere. */
     RETPUSHYES;
 }
 
@@ -1095,11 +1024,7 @@ PP(pp_pow)
     /* For integer to integer power, we do the calculation by hand wherever
        we're sure it is safe; otherwise we call pow() and try to convert to
        integer afterwards. */
-    {
-	SvIV_please_nomg(svr);
-	if (SvIOK(svr)) {
-	    SvIV_please_nomg(svl);
-	    if (SvIOK(svl)) {
+    if (SvIV_please_nomg(svr) && SvIV_please_nomg(svl)) {
 		UV power;
 		bool baseuok;
 		UV baseuv;
@@ -1197,8 +1122,6 @@ PP(pp_pow)
 			RETURN;
 		    } 
 		}
-	    }
-	}
     }
   float_it:
 #endif    
@@ -1262,14 +1185,12 @@ PP(pp_multiply)
     svr = TOPs;
     svl = TOPm1s;
 #ifdef PERL_PRESERVE_IVUV
-    SvIV_please_nomg(svr);
-    if (SvIOK(svr)) {
+    if (SvIV_please_nomg(svr)) {
 	/* Unless the left argument is integer in range we are going to have to
 	   use NV maths. Hence only attempt to coerce the right argument if
 	   we know the left is integer.  */
 	/* Left operand is defined, so is it IV? */
-	SvIV_please_nomg(svl);
-	if (SvIOK(svl)) {
+	if (SvIV_please_nomg(svl)) {
 	    bool auvok = SvUOK(svl);
 	    bool buvok = SvUOK(svr);
 	    const UV topmask = (~ (UV)0) << (4 * sizeof (UV));
@@ -1407,10 +1328,7 @@ PP(pp_divide)
 #endif
 
 #ifdef PERL_TRY_UV_DIVIDE
-    SvIV_please_nomg(svr);
-    if (SvIOK(svr)) {
-        SvIV_please_nomg(svl);
-        if (SvIOK(svl)) {
+    if (SvIV_please_nomg(svr) && SvIV_please_nomg(svl)) {
             bool left_non_neg = SvUOK(svl);
             bool right_non_neg = SvUOK(svr);
             UV left;
@@ -1485,8 +1403,7 @@ PP(pp_divide)
                     RETURN;
                 } /* tried integer divide but it was not an integer result */
             } /* else (PERL_ABS(result) < 1.0) or (both UVs in range for NV) */
-        } /* left wasn't SvIOK */
-    } /* right wasn't SvIOK */
+    } /* one operand wasn't SvIOK */
 #endif /* PERL_TRY_UV_DIVIDE */
     {
 	NV right = SvNV_nomg(svr);
@@ -1518,8 +1435,7 @@ PP(pp_modulo)
 	NV dleft  = 0.0;
 	SV * const svr = TOPs;
 	SV * const svl = TOPm1s;
-	SvIV_please_nomg(svr);
-        if (SvIOK(svr)) {
+        if (SvIV_please_nomg(svr)) {
             right_neg = !SvUOK(svr);
             if (!right_neg) {
                 right = SvUVX(svr);
@@ -1549,9 +1465,7 @@ PP(pp_modulo)
         /* At this point use_double is only true if right is out of range for
            a UV.  In range NV has been rounded down to nearest UV and
            use_double false.  */
-        SvIV_please_nomg(svl);
-	if (!use_double && SvIOK(svl)) {
-            if (SvIOK(svl)) {
+	if (!use_double && SvIV_please_nomg(svl)) {
                 left_neg = !SvUOK(svl);
                 if (!left_neg) {
                     left = SvUVX(svl);
@@ -1564,7 +1478,6 @@ PP(pp_modulo)
                         left = -aiv;
                     }
                 }
-            }
         }
 	else {
 	    dleft = SvNV_nomg(svl);
@@ -1779,8 +1692,7 @@ PP(pp_subtract)
 #ifdef PERL_PRESERVE_IVUV
     /* See comments in pp_add (in pp_hot.c) about Overflow, and how
        "bad things" happen if you rely on signed integers wrapping.  */
-    SvIV_please_nomg(svr);
-    if (SvIOK(svr)) {
+    if (SvIV_please_nomg(svr)) {
 	/* Unless the left argument is integer in range we are going to have to
 	   use NV maths. Hence only attempt to coerce the right argument if
 	   we know the left is integer.  */
@@ -1794,8 +1706,7 @@ PP(pp_subtract)
 	    /* left operand is undef, treat as zero.  */
 	} else {
 	    /* Left operand is defined, so is it IV? */
-	    SvIV_please_nomg(svl);
-	    if (SvIOK(svl)) {
+	    if (SvIV_please_nomg(svl)) {
 		if ((auvok = SvUOK(svl)))
 		    auv = SvUVX(svl);
 		else {
@@ -2023,11 +1934,8 @@ Perl_do_ncmp(pTHX_ SV* const left, SV * const right)
 
     PERL_ARGS_ASSERT_DO_NCMP;
 #ifdef PERL_PRESERVE_IVUV
-    SvIV_please_nomg(right);
     /* Fortunately it seems NaN isn't IOK */
-    if (SvIOK(right)) {
-	SvIV_please_nomg(left);
-	if (SvIOK(left)) {
+    if (SvIV_please_nomg(right) && SvIV_please_nomg(left)) {
 	    if (!SvUOK(left)) {
 		const IV leftiv = SvIVX(left);
 		if (!SvUOK(right)) {
@@ -2062,8 +1970,7 @@ Perl_do_ncmp(pTHX_ SV* const left, SV * const right)
 		    return (leftuv > (UV)rightiv) - (leftuv < (UV)rightiv);
 		}
 	    }
-	    /* NOTREACHED */
-	}
+	    assert(0); /* NOTREACHED */
     }
 #endif
     {
@@ -2249,14 +2156,9 @@ PP(pp_negate)
     tryAMAGICun_MG(neg_amg, AMGf_numeric);
     {
 	SV * const sv = TOPs;
-	const int flags = SvFLAGS(sv);
 
-        if( !SvNIOK( sv ) && looks_like_number( sv ) ){
-           SvIV_please( sv );
-        }   
-
-	if ((flags & SVf_IOK) || ((flags & (SVp_IOK | SVp_NOK)) == SVp_IOK)) {
-	    /* It's publicly an integer, or privately an integer-not-float */
+	if (SvIOK(sv) || (SvGMAGICAL(sv) && SvIOKp(sv))) {
+	    /* It's publicly an integer */
 	oops_its_an_int:
 	    if (SvIsUV(sv)) {
 		if (SvIVX(sv) == IV_MIN) {
@@ -2280,7 +2182,7 @@ PP(pp_negate)
 	    }
 #endif
 	}
-	if (SvNIOKp(sv))
+	if (SvNIOKp(sv) && (SvNIOK(sv) || !SvPOK(sv)))
 	    SETn(-SvNV_nomg(sv));
 	else if (SvPOKp(sv)) {
 	    STRLEN len;
@@ -2289,27 +2191,14 @@ PP(pp_negate)
 		sv_setpvs(TARG, "-");
 		sv_catsv(TARG, sv);
 	    }
-	    else if (*s == '+' || *s == '-') {
+	    else if (*s == '+' || (*s == '-' && !looks_like_number(sv))) {
 		sv_setsv_nomg(TARG, sv);
 		*SvPV_force_nomg(TARG, len) = *s == '-' ? '+' : '-';
 	    }
-	    else if (DO_UTF8(sv)) {
-		SvIV_please_nomg(sv);
-		if (SvIOK(sv))
-		    goto oops_its_an_int;
-		if (SvNOK(sv))
-		    sv_setnv(TARG, -SvNV_nomg(sv));
-		else {
-		    sv_setpvs(TARG, "-");
-		    sv_catsv(TARG, sv);
-		}
-	    }
-	    else {
-		SvIV_please_nomg(sv);
-		if (SvIOK(sv))
+	    else if (SvIV_please_nomg(sv))
 		  goto oops_its_an_int;
+	    else
 		sv_setnv(TARG, -SvNV_nomg(sv));
-	    }
 	    SETTARG;
 	}
 	else
@@ -5678,7 +5567,7 @@ PP(pp_split)
 	    I32 rex_return;
 	    PUTBACK;
 	    rex_return = CALLREGEXEC(rx, (char*)s, (char*)strend, (char*)orig, 1 ,
-				     sv, NULL, SvSCREAM(sv) ? REXEC_SCREAM : 0);
+				     sv, NULL, 0);
 	    SPAGAIN;
 	    if (rex_return == 0)
 		break;
@@ -5881,7 +5770,7 @@ PP(pp_coreargs)
 {
     dSP;
     int opnum = SvIOK(cSVOP_sv) ? (int)SvUV(cSVOP_sv) : 0;
-    int defgv = PL_opargs[opnum] & OA_DEFGV, whicharg = 0;
+    int defgv = PL_opargs[opnum] & OA_DEFGV ||opnum==OP_GLOB, whicharg = 0;
     AV * const at_ = GvAV(PL_defgv);
     SV **svp = at_ ? AvARRAY(at_) : NULL;
     I32 minargs = 0, maxargs = 0, numargs = at_ ? AvFILLp(at_)+1 : 0;
@@ -5906,7 +5795,7 @@ PP(pp_coreargs)
 	/* diag_listed_as: Too many arguments for %s */
 	Perl_croak(aTHX_
 	  "%s arguments for %s", err,
-	   opnum ? OP_DESC(PL_op->op_next) : SvPV_nolen_const(cSVOP_sv)
+	   opnum ? PL_op_desc[opnum] : SvPV_nolen_const(cSVOP_sv)
 	);
 
     /* Reset the stack pointer.  Without this, we end up returning our own
@@ -5934,6 +5823,7 @@ PP(pp_coreargs)
 	whicharg++;
 	switch (oa & 7) {
 	case OA_SCALAR:
+	  try_defsv:
 	    if (!numargs && defgv && whicharg == minargs + 1) {
 		PERL_SI * const oldsi = PL_curstackinfo;
 		I32 const oldcxix = oldsi->si_cxix;
@@ -5981,7 +5871,8 @@ PP(pp_coreargs)
 	    }
 	    break;
 	case OA_SCALARREF:
-	  {
+	  if (!numargs) goto try_defsv;
+	  else {
 	    const bool wantscalar =
 		PL_op->op_private & OPpCOREARGS_SCALARMOD;
 	    if (!svp || !*svp || !SvROK(*svp)
@@ -5990,23 +5881,33 @@ PP(pp_coreargs)
 	           type permits the latter. */
 	     || SvTYPE(SvRV(*svp)) > (
 	             wantscalar       ? SVt_PVLV
-	           : opnum == OP_LOCK ? SVt_PVCV
+	           : opnum == OP_LOCK || opnum == OP_UNDEF
+	                              ? SVt_PVCV
 	           :                    SVt_PVHV
 	        )
 	       )
 		DIE(aTHX_
 		/* diag_listed_as: Type of arg %d to &CORE::%s must be %s*/
 		 "Type of arg %d to &CORE::%s must be %s",
-		  whicharg, OP_DESC(PL_op->op_next),
+		  whicharg, PL_op_name[opnum],
 		  wantscalar
 		    ? "scalar reference"
-		    : opnum == OP_LOCK
+		    : opnum == OP_LOCK || opnum == OP_UNDEF
 		       ? "reference to one of [$@%&*]"
 		       : "reference to one of [$@%*]"
 		);
 	    PUSHs(SvRV(*svp));
-	    break;
+	    if (opnum == OP_UNDEF && SvRV(*svp) == (SV *)PL_defgv
+	     && cxstack[cxstack_ix].cx_type & CXp_HASARGS) {
+		/* Undo @_ localisation, so that sub exit does not undo
+		   part of our undeffing. */
+		PERL_CONTEXT *cx = &cxstack[cxstack_ix];
+		POP_SAVEARRAY();
+		cx->cx_type &= ~ CXp_HASARGS;
+		assert(!AvREAL(cx->blk_sub.argarray));
+	    }
 	  }
+	  break;
 	default:
 	    DIE(aTHX_ "panic: unknown OA_*: %x", (unsigned)(oa&7));
 	}
@@ -6030,7 +5931,7 @@ PP(pp_runcv)
 	oldsi->si_cxix = oldcxix;
     }
     else cv = find_runcv(NULL);
-    XPUSHs(CvUNIQUE(cv) ? &PL_sv_undef : sv_2mortal(newRV((SV *)cv)));
+    XPUSHs(CvEVAL(cv) ? &PL_sv_undef : sv_2mortal(newRV((SV *)cv)));
     RETURN;
 }
 
@@ -6039,8 +5940,8 @@ PP(pp_runcv)
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

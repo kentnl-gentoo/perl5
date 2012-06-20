@@ -368,9 +368,8 @@ Perl_gv_init_pvn(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, U32 flag
     gv_name_set(gv, name, len, GV_ADD | ( flags & SVf_UTF8 ? SVf_UTF8 : 0 ));
     if (flags & GV_ADDMULTI || doproto)	/* doproto means it */
 	GvMULTI_on(gv);			/* _was_ mentioned */
-    if (doproto) {			/* Replicate part of newSUB here. */
+    if (doproto) {
 	CV *cv;
-	ENTER;
 	if (has_constant) {
 	    /* newCONSTSUB takes ownership of the reference from us.  */
 	    cv = newCONSTSUB_flags(stash, name, len, flags, has_constant);
@@ -383,17 +382,10 @@ Perl_gv_init_pvn(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, U32 flag
 	       from a reference to CV.  */
 	    if (exported_constant)
 		GvIMPORTED_CV_on(gv);
+	    CvSTASH_set(cv, PL_curstash); /* XXX Why is this needed? */
 	} else {
-	    (void) start_subparse(0,0);	/* Create empty CV in compcv. */
-	    cv = PL_compcv;
-	    GvCV_set(gv,cv);
+	    cv = newSTUB(gv,1);
 	}
-	LEAVE;
-
-        mro_method_changed_in(GvSTASH(gv)); /* sub Foo::bar($) { (shift) } sub ASDF::baz($); *ASDF::baz = \&Foo::bar */
-	CvGV_set(cv, gv);
-	CvFILE_set_from_cop(cv, PL_curcop);
-	CvSTASH_set(cv, PL_curstash);
 	if (proto) {
 	    sv_usepvn_flags(MUTABLE_SV(cv), proto, protolen,
 			    SV_HAS_TRAILING_NUL);
@@ -452,25 +444,38 @@ S_maybe_add_coresub(pTHX_ HV * const stash, GV *gv,
     assert(gv || stash);
     assert(name);
 
-    if (code >= 0) return NULL; /* not overridable */
-    switch (-code) {
+    if (!code) return NULL; /* Not a keyword */
+    switch (code < 0 ? -code : code) {
      /* no support for \&CORE::infix;
-        no support for funcs that take labels, as their parsing is
-        weird  */
-    case KEY_and: case KEY_cmp: case KEY_CORE: case KEY_dump:
-    case KEY_eq: case KEY_ge:
-    case KEY_gt: case KEY_le: case KEY_lt: case KEY_ne:
-    case KEY_or: case KEY_x: case KEY_xor:
+        no support for funcs that do not parse like funcs */
+    case KEY___DATA__: case KEY___END__: case KEY_and: case KEY_AUTOLOAD:
+    case KEY_BEGIN   : case KEY_CHECK  : case KEY_cmp: case KEY_CORE    :
+    case KEY_default : case KEY_DESTROY:
+    case KEY_do      : case KEY_dump   : case KEY_else  : case KEY_elsif  :
+    case KEY_END     : case KEY_eq     : case KEY_eval  :
+    case KEY_for     : case KEY_foreach: case KEY_format: case KEY_ge     :
+    case KEY_given   : case KEY_goto   : case KEY_grep  :
+    case KEY_gt   : case KEY_if: case KEY_INIT: case KEY_last: case KEY_le:
+    case KEY_local: case KEY_lt: case KEY_m   : case KEY_map : case KEY_my:
+    case KEY_ne   : case KEY_next : case KEY_no: case KEY_or: case KEY_our:
+    case KEY_package: case KEY_print: case KEY_printf:
+    case KEY_q    : case KEY_qq   : case KEY_qr     : case KEY_qw    :
+    case KEY_qx   : case KEY_redo : case KEY_require: case KEY_return:
+    case KEY_s    : case KEY_say  : case KEY_sort   :
+    case KEY_state: case KEY_sub  :
+    case KEY_tr   : case KEY_UNITCHECK: case KEY_unless:
+    case KEY_until: case KEY_use  : case KEY_when     : case KEY_while :
+    case KEY_x    : case KEY_xor  : case KEY_y        :
 	return NULL;
     case KEY_chdir:
-    case KEY_chomp: case KEY_chop:
-    case KEY_each: case KEY_eof: case KEY_exec:
+    case KEY_chomp: case KEY_chop: case KEY_defined: case KEY_delete:
+    case KEY_each : case KEY_eof : case KEY_exec   : case KEY_exists:
     case KEY_keys:
     case KEY_lstat:
     case KEY_pop:
     case KEY_push:
     case KEY_shift:
-    case KEY_splice:
+    case KEY_splice: case KEY_split:
     case KEY_stat:
     case KEY_system:
     case KEY_truncate: case KEY_unlink:
@@ -529,7 +534,8 @@ S_maybe_add_coresub(pTHX_ HV * const stash, GV *gv,
 	           1
 	);
 	assert(GvCV(gv) == cv);
-	if (opnum != OP_VEC && opnum != OP_SUBSTR)
+	if (opnum != OP_VEC && opnum != OP_SUBSTR && opnum != OP_POS
+	 && opnum != OP_UNDEF)
 	    CvLVALUE_off(cv); /* Now *that* was a neat trick. */
 	LEAVE;
 	PL_parser = oldparser;
@@ -909,17 +915,8 @@ S_gv_get_super_pkg(pTHX_ const char* name, I32 namelen, U32 flags)
     superisa = GvAVn(gv);
     GvMULTI_on(gv);
     sv_magic(MUTABLE_SV(superisa), MUTABLE_SV(gv), PERL_MAGIC_isa, NULL, 0);
-#ifdef USE_ITHREADS
-    av_push(superisa, newSVpvn_flags(CopSTASHPV(PL_curcop),
-                                     CopSTASH_len(PL_curcop) < 0
-					? -CopSTASH_len(PL_curcop)
-					:  CopSTASH_len(PL_curcop),
-                                     SVf_UTF8*(CopSTASH_len(PL_curcop) < 0)
-                                    ));
-#else
     av_push(superisa, newSVhek(CopSTASH(PL_curcop)
 			       ? HvNAME_HEK(CopSTASH(PL_curcop)) : NULL));
-#endif
 
     return stash;
 }
@@ -1973,7 +1970,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 
 	case '\014':	/* $^L */
 	    sv_setpvs(GvSVn(gv),"\f");
-	    PL_formfeed = GvSVn(gv);
+	    PL_formfeed = GvSV(gv);
 	    break;
 	case ';':		/* $; */
 	    sv_setpvs(GvSVn(gv),"\034");
@@ -3084,8 +3081,8 @@ core_xsub(pTHX_ CV* cv)
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

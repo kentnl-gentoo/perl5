@@ -321,12 +321,16 @@ cpan/CPAN-Meta/lib/CPAN/Meta/Feature.pm
 cpan/CPAN-Meta/lib/CPAN/Meta/History.pm
 cpan/CPAN-Meta/lib/CPAN/Meta.pm
 cpan/CPAN-Meta/lib/CPAN/Meta/Prereqs.pm
-cpan/CPAN-Meta/lib/CPAN/Meta/Requirements.pm
 cpan/CPAN-Meta/lib/CPAN/Meta/Spec.pm
 cpan/CPAN-Meta/lib/CPAN/Meta/Validator.pm
-cpan/CPAN-Meta/t/accepts.t
-cpan/CPAN-Meta/t/bad_version_hook.t
-cpan/CPAN-Meta/t/basic.t
+cpan/CPAN-Meta-Requirements/Changes
+cpan/CPAN-Meta-Requirements/lib/CPAN/Meta/Requirements.pm
+cpan/CPAN-Meta-Requirements/t/accepts.t
+cpan/CPAN-Meta-Requirements/t/bad_version_hook.t
+cpan/CPAN-Meta-Requirements/t/basic.t
+cpan/CPAN-Meta-Requirements/t/finalize.t
+cpan/CPAN-Meta-Requirements/t/from-hash.t
+cpan/CPAN-Meta-Requirements/t/merge.t
 cpan/CPAN-Meta/t/converter-bad.t
 cpan/CPAN-Meta/t/converter-fail.t
 cpan/CPAN-Meta/t/converter.t
@@ -371,10 +375,7 @@ cpan/CPAN-Meta/t/data/unicode.yml
 cpan/CPAN-Meta/t/data/version-not-normal.json
 cpan/CPAN-Meta/t/data/version-ranges-1_4.yml
 cpan/CPAN-Meta/t/data/version-ranges-2.json
-cpan/CPAN-Meta/t/finalize.t
-cpan/CPAN-Meta/t/from-hash.t
 cpan/CPAN-Meta/t/load-bad.t
-cpan/CPAN-Meta/t/merge.t
 cpan/CPAN-Meta/t/meta-obj.t
 cpan/CPAN-Meta/t/no-index.t
 cpan/CPAN-Meta/t/prereqs-finalize.t
@@ -433,6 +434,7 @@ cpan/CPANPLUS-Dist-Build/t/src/noxs/Foo-Bar-0.01.tar.gz		CPANPLUS::Dist::Build t
 cpan/CPANPLUS-Dist-Build/t/src/xs/Foo-Bar-0.01.tar.gz		CPANPLUS::Dist::Build tests
 cpan/CPANPLUS/lib/CPANPLUS/Backend.pm				CPANPLUS
 cpan/CPANPLUS/lib/CPANPLUS/Backend/RV.pm			CPANPLUS
+cpan/CPANPLUS/lib/CPANPLUS/Config/HomeEnv.pm
 cpan/CPANPLUS/lib/CPANPLUS/Config.pm				CPANPLUS
 cpan/CPANPLUS/lib/CPANPLUS/Configure.pm				CPANPLUS
 cpan/CPANPLUS/lib/CPANPLUS/Configure/Setup.pm			CPANPLUS
@@ -1491,10 +1493,8 @@ cpan/libnet/t/smtp.t		libnet
 cpan/libnet/t/time.t		libnet
 cpan/List-Util/Changes			Util extension
 cpan/List-Util/lib/List/Util.pm		List::Util
-cpan/List-Util/lib/List/Util/PP.pm	List::Util
 cpan/List-Util/lib/List/Util/XS.pm	List::Util
 cpan/List-Util/lib/Scalar/Util.pm	Scalar::Util
-cpan/List-Util/lib/Scalar/Util/PP.pm	Scalar::Util
 cpan/List-Util/ListUtil.xs		Util extension
 cpan/List-Util/Makefile.PL		Util extension
 cpan/List-Util/multicall.h		Util extension
@@ -1502,8 +1502,8 @@ cpan/List-Util/README			Util extension
 cpan/List-Util/t/00version.t		Scalar::Util
 cpan/List-Util/t/blessed.t		Scalar::Util
 cpan/List-Util/t/dualvar.t		Scalar::Util
-cpan/List-Util/t/expfail.t		List::Util
 cpan/List-Util/t/first.t		List::Util
+cpan/List-Util/t/getmagic-once.t
 cpan/List-Util/t/isvstring.t		Scalar::Util
 cpan/List-Util/t/lln.t			Scalar::Util
 cpan/List-Util/t/maxstr.t		List::Util
@@ -1511,23 +1511,7 @@ cpan/List-Util/t/max.t			List::Util
 cpan/List-Util/t/minstr.t		List::Util
 cpan/List-Util/t/min.t			List::Util
 cpan/List-Util/t/openhan.t		Scalar::Util
-cpan/List-Util/t/p_00version.t		Scalar::Util
-cpan/List-Util/t/p_blessed.t		Scalar::Util
-cpan/List-Util/t/p_first.t		List::Util
-cpan/List-Util/t/p_lln.t		Scalar::Util
-cpan/List-Util/t/p_maxstr.t		List::Util
-cpan/List-Util/t/p_max.t		List::Util
-cpan/List-Util/t/p_minstr.t		List::Util
-cpan/List-Util/t/p_min.t		List::Util
-cpan/List-Util/t/p_openhan.t		Scalar::Util
-cpan/List-Util/t/p_readonly.t		Scalar::Util
-cpan/List-Util/t/p_reduce.t		List::Util
-cpan/List-Util/t/p_refaddr.t		Scalar::Util
-cpan/List-Util/t/p_reftype.t		Scalar::Util
 cpan/List-Util/t/proto.t		Scalar::Util
-cpan/List-Util/t/p_shuffle.t		List::Util
-cpan/List-Util/t/p_sum.t		List::Util
-cpan/List-Util/t/p_tainted.t		Scalar::Util
 cpan/List-Util/t/readonly.t		Scalar::Util
 cpan/List-Util/t/reduce.t		List::Util
 cpan/List-Util/t/refaddr.t		Scalar::Util
@@ -1537,7 +1521,6 @@ cpan/List-Util/t/stack-corruption.t	List::Util
 cpan/List-Util/t/sum.t			List::Util
 cpan/List-Util/t/tainted.t		Scalar::Util
 cpan/List-Util/t/weak.t			Scalar::Util
-cpan/List-Util/XS.pp			List::Util
 cpan/Locale-Codes/ChangeLog			Locale::Codes
 cpan/Locale-Codes/lib/Locale/Codes/API.pod	Locale::Codes documentation
 cpan/Locale-Codes/lib/Locale/Codes/Changes.pod	Locale::Codes documentation
@@ -2248,6 +2231,7 @@ cpan/Term-ANSIColor/ANSIColor.pm	Perl module supporting termcap usage
 cpan/Term-ANSIColor/ChangeLog		Term::ANSIColor
 cpan/Term-ANSIColor/README		Term::ANSIColor
 cpan/Term-ANSIColor/t/basic.t		Tests for Term::ANSIColor
+cpan/Term-ANSIColor/t/eval.t
 cpan/Term-ANSIColor/t/stringify.t		Tests for Term::ANSIColor
 cpan/Term-Cap/Cap.pm			Perl module supporting termcap usage
 cpan/Term-Cap/test.pl			See if Term::Cap works
@@ -2314,6 +2298,7 @@ cpan/Test-Harness/t/aggregator.t			Test::Harness test
 cpan/Test-Harness/t/bailout.t				Test::Harness test
 cpan/Test-Harness/t/base.t				Test::Harness test
 cpan/Test-Harness/t/callbacks.t				Test::Harness test
+cpan/Test-Harness/t/compat/env.opts.t
 cpan/Test-Harness/t/compat/env.t			Test::Harness test
 cpan/Test-Harness/t/compat/failure.t			Test::Harness test
 cpan/Test-Harness/t/compat/inc-propagation.t		Test::Harness test
@@ -2358,6 +2343,7 @@ cpan/Test-Harness/t/multiplexer.t			Test::Harness test
 cpan/Test-Harness/t/nested.t				Test::Harness test
 cpan/Test-Harness/t/nofork-mux.t			Test::Harness test
 cpan/Test-Harness/t/nofork.t				Test::Harness test
+cpan/Test-Harness/t/nowarn.t
 cpan/Test-Harness/t/object.t				Test::Harness test
 cpan/Test-Harness/t/parser-config.t			Test::Harness test
 cpan/Test-Harness/t/parser-subclass.t			Test::Harness test
@@ -3417,6 +3403,7 @@ dist/Safe/t/safe3.t		See if Safe works
 dist/Safe/t/safeload.t		Tests that some modules can be loaded by Safe
 dist/Safe/t/safenamedcap.t	Tests that Tie::Hash::NamedCapture can be loaded
 dist/Safe/t/safeops.t		Tests that all ops can be trapped by Safe
+dist/Safe/t/saferegexp.t
 dist/Safe/t/safesort.t		Tests Safe with sort
 dist/Safe/t/safeuniversal.t	Tests Safe with functions from universal.c
 dist/Safe/t/safeutf8.t		Tests Safe with utf8.pm
@@ -3972,6 +3959,7 @@ ext/XS-APItest/t/cleanup.t	test stack behaviour on unwinding
 ext/XS-APItest/t/clone-with-stack.t	test clone with CLONEf_COPY_STACKS works
 ext/XS-APItest/t/cophh.t	test COPHH API
 ext/XS-APItest/t/coplabel.t	test cop_*_label
+ext/XS-APItest/t/copstash.t	test alloccopstash
 ext/XS-APItest/t/copyhints.t	test hv_copy_hints_hv() API
 ext/XS-APItest/t/customop.t	XS::APItest: tests for custom ops
 ext/XS-APItest/t/eval-filter.t	Simple source filter/eval test
@@ -4635,6 +4623,7 @@ pod/perl5140delta.pod		Perl changes in version 5.14.0
 pod/perl5141delta.pod		Perl changes in version 5.14.1
 pod/perl5142delta.pod		Perl changes in version 5.14.2
 pod/perl5160delta.pod		Perl changes in version 5.16.0
+pod/perl5170delta.pod		Perl changes in version 5.17.0
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5410,6 +5399,7 @@ t/re/qr-72922.t			Test for bug #72922
 t/re/qr_gc.t			See if qr doesn't leak
 t/re/qrstack.t			See if qr expands the stack properly
 t/re/qr.t			See if qr works
+t/re/recompile.t		See if pattern caching/recompilation works
 t/re/reg_60508.t		See if bug #60508 is fixed
 t/re/reg_email.t		See if regex recursion works by parsing email addresses
 t/re/reg_email_thr.t		See if regex recursion works by parsing email addresses in another thread
@@ -5500,6 +5490,7 @@ t/uni/tr_utf8.t			See if Unicode tr/// in utf8 works
 t/uni/universal.t		See if Unicode in calls to UNIVERSAL works
 t/uni/upper.t			See if Unicode casing works
 t/uni/write.t			See if Unicode formats work
+t/win32/fs.t			Test Win32 link for compatibility
 t/win32/runenv.t		Test if Win* perl honors its env variables
 t/win32/system.t		See if system works in Win*
 t/win32/system_tests		Test runner for system.t
@@ -5583,11 +5574,9 @@ win32/ce-helpers/registry.bat	WinCE port
 win32/config.ce			WinCE port
 win32/config.gc			Win32 base line config.sh (MinGW build)
 win32/config.gc64		Win64 base line config.sh (MinGW build)
-win32/config.gc64nox		Win64 base line config.sh (MinGW build)
 win32/config_H.ce		WinCE port
 win32/config_H.gc		Win32 config header (MinGW build)
 win32/config_H.gc64		Win64 config header (MinGW build)
-win32/config_H.gc64nox		Win64 config header (MinGW build)
 win32/config_h.PL		Perl code to convert Win32 config.sh to config.h
 win32/config_H.vc		Win32 config header (Visual C++ build)
 win32/config_H.vc64		Win64 config header (Visual C++ build)

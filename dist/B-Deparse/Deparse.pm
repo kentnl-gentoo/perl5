@@ -20,7 +20,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
          CVf_METHOD CVf_LVALUE
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED);
-$VERSION = '1.14';
+$VERSION = '1.15';
 use strict;
 use vars qw/$AUTOLOAD/;
 use warnings ();
@@ -2500,7 +2500,7 @@ sub rv2gv_or_string {
     my($self,$op) = @_;
     if ($op->name eq "gv") { # could be open("open") or open("###")
 	my($name,$quoted) =
-	    $self->stash_variable_name(undef,$self->gv_or_padgv($op));
+	    $self->stash_variable_name("", $self->gv_or_padgv($op));
 	$quoted ? $name : "*$name";
     }
     else {
@@ -4587,7 +4587,10 @@ sub matchop {
 	carp("found ".$kid->name." where regcomp expected");
     } else {
 	($re, $quote) = $self->regcomp($kid, 21, $extended);
-	my $matchop = $kid->first->first;
+	my $matchop = $kid->first;
+	if ($matchop->name eq 'regcrest') {
+	    $matchop = $matchop->first;
+	}
 	if ($matchop->name =~ /^(?:match|transr?|subst)\z/
 	   && $matchop->flags & OPf_SPECIAL) {
 	    $rhs_bound_to_defsv = 1;

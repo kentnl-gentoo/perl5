@@ -376,8 +376,8 @@ number may use '_' characters to separate digits.
 
 =cut
 
-Not documented yet because experimental is C<PERL_SCAN_SILENT_NON_PORTABLE
-which suppresses any message for non-portable numbers that are still valid
+Not documented yet because experimental is C<PERL_SCAN_SILENT_NON_PORTABLE>
+which suppresses any message for non-portable numbers, but which are valid
 on this platform.
  */
 
@@ -1105,8 +1105,8 @@ Perl_signbit(NV x) {
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

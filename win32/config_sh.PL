@@ -1,4 +1,7 @@
+#!perl -w
+use strict;
 use FindExt;
+
 # take a semicolon separated path list and turn it into a quoted
 # list of paths that Text::Parsewords will grok
 sub mungepath {
@@ -18,7 +21,7 @@ sub loadopts {
     if ($ARGV[0] =~ /--cfgsh-option-file/) {
 	shift @ARGV;
 	my $optfile = shift @ARGV;
-	local (*F);
+	local (*OPTF);
 	open OPTF, $optfile or die "Can't open $optfile: $!\n";
 	my @opts;
 	chomp(my $line = <OPTF>);
@@ -45,13 +48,13 @@ while (@{$optref} && $optref->[0] =~ /^([\w_]+)=(.*)$/) {
 FindExt::scan_ext("../cpan");
 FindExt::scan_ext("../dist");
 FindExt::scan_ext("../ext");
-FindExt::set_static_extensions(split ' ', $opt{'static_ext'});
+FindExt::set_static_extensions(split ' ', $opt{static_ext});
 
-$opt{'nonxs_ext'}        = join(' ',FindExt::nonxs_ext()) || ' ';
-$opt{'static_ext'}       = join(' ',FindExt::static_ext()) || ' ';
-$opt{'dynamic_ext'}      = join(' ',FindExt::dynamic_ext()) || ' ';
-$opt{'extensions'}       = join(' ',FindExt::extensions()) || ' ';
-$opt{'known_extensions'} = join(' ',FindExt::known_extensions()) || ' ';
+$opt{nonxs_ext}        = join(' ',FindExt::nonxs_ext()) || ' ';
+$opt{static_ext}       = join(' ',FindExt::static_ext()) || ' ';
+$opt{dynamic_ext}      = join(' ',FindExt::dynamic_ext()) || ' ';
+$opt{extensions}       = join(' ',FindExt::extensions()) || ' ';
+$opt{known_extensions} = join(' ',FindExt::known_extensions()) || ' ';
 
 my $pl_h = '../patchlevel.h';
 
@@ -76,17 +79,16 @@ if (-e $patch_file) {
     close $fh;
 }
 
-$opt{VERSION} = "$opt{PERL_REVISION}.$opt{PERL_VERSION}.$opt{PERL_SUBVERSION}";
-$opt{INST_VER} =~ s|~VERSION~|$opt{VERSION}|g;
-$opt{'version_patchlevel_string'} = "version $opt{PERL_VERSION} subversion $opt{PERL_SUBVERSION}";
-$opt{'version_patchlevel_string'} .= " patch $opt{PERL_PATCHLEVEL}" if exists $opt{PERL_PATCHLEVEL};
+$opt{version} = "$opt{PERL_REVISION}.$opt{PERL_VERSION}.$opt{PERL_SUBVERSION}";
+$opt{version_patchlevel_string} = "version $opt{PERL_VERSION} subversion $opt{PERL_SUBVERSION}";
+$opt{version_patchlevel_string} .= " patch $opt{PERL_PATCHLEVEL}" if exists $opt{PERL_PATCHLEVEL};
 
 my $ver = `ver 2>nul`;
 if ($ver =~ /Version (\d+\.\d+)/) {
-    $opt{'osvers'} = $1;
+    $opt{osvers} = $1;
 }
 else {
-    $opt{'osvers'} = '4.0';
+    $opt{osvers} = '4.0';
 }
 
 if (exists $opt{cc}) {
@@ -100,19 +102,13 @@ if (exists $opt{cc}) {
     }
 }
 
-$opt{'cf_by'} = $ENV{USERNAME} unless $opt{'cf_by'};
-$opt{'cf_email'} = $opt{'cf_by'} . '@' . (gethostbyname('localhost'))[0]
-	unless $opt{'cf_email'};
-$opt{'usemymalloc'} = 'y' if $opt{'d_mymalloc'} eq 'define';
+$opt{cf_by} = $ENV{USERNAME} unless $opt{cf_by};
+$opt{cf_email} = $opt{cf_by} . '@' . (gethostbyname('localhost'))[0]
+	unless $opt{cf_email};
+$opt{usemymalloc} = 'y' if $opt{d_mymalloc} eq 'define';
 
 $opt{libpth} = mungepath($opt{libpth}) if exists $opt{libpth};
 $opt{incpath} = mungepath($opt{incpath}) if exists $opt{incpath};
-
-# some functions are not available on Win9x
-unless (defined $ENV{SYSTEMROOT}) { # SystemRoot has been introduced by WinNT
-    $opt{d_flock} = 'undef';
-    $opt{d_link} = 'undef';
-}
 
 # change the lseeksize and lseektype from their canned default values (which
 # are set-up for a non-uselargefiles build) if we are building with
@@ -143,7 +139,7 @@ if ($opt{useithreads} eq 'define' && $opt{ccflags} =~ /-DPERL_IMPLICIT_SYS\b/) {
 }
 
 while (<>) {
-    s/~([\w_]+)~/$opt{$1}/g;
+    s/~([\w_]+)~/exists $opt{$1} ? $opt{$1} : ''/eg;
     if (/^([\w_]+)=(.*)$/) {
 	my($k,$v) = ($1,$2);
 	# this depends on cf_time being empty in the template (or we'll

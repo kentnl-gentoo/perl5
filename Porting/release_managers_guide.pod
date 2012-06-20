@@ -184,20 +184,27 @@ but all I<must> be done in the run up to a release.
 
 =head3 dual-life CPAN module synchronisation
 
-Ensure that dual-life CPAN modules are synchronised with CPAN.  Basically,
-run the following:
-
-    $ ./perl -Ilib Porting/core-cpan-diff -a -o /tmp/corediffs
-
-to see any inconsistencies between the core and CPAN versions of distros,
-then fix the core, or cajole CPAN authors as appropriate. See also the
-C<-d> and C<-v> options for more detail.  You'll probably want to use the
-C<-c cachedir> option to avoid repeated CPAN downloads and may want to
-use C<-m file:///mirror/path> if you made a local CPAN mirror.
-
 To see which core distro versions differ from the current CPAN versions:
 
     $ ./perl -Ilib Porting/core-cpan-diff -x -a
+
+Passing C<-u cpan> (and maybe C<-u undef>) will probably be helpful, since
+those are the only types of distributions that you can actually affect as a
+perl release manager (as opposed to a CPAN module maintainer).
+
+You can also run an actual diff of the contents of the modules, comparing core
+to CPAN, to ensure that there were no erroneous/extraneous changes that need to
+be dealt with. You do this by not passing the C<-x> option:
+
+    $ ./perl -Ilib Porting/core-cpan-diff -a -o /tmp/corediffs
+
+then fix the core, or cajole CPAN authors as appropriate. See also the C<-d>
+and C<-v> options for more detail (and the C<-u> option as mentioned above).
+You'll probably want to use the C<-c cachedir> option to avoid repeated CPAN
+downloads and may want to use C<-m file:///mirror/path> if you made a local
+CPAN mirror. Note that a minicpan mirror won't actually work, but can provide a
+good first pass to quickly get a list of modules which definitely haven't
+changed, to avoid having to download absolutely everything.
 
 If you are making a MAINT release, run C<core-cpan-diff> on both blead and
 maint, then diff the two outputs. Compare this with what you expect, and if
@@ -220,7 +227,7 @@ directory to the original name.
 
 =item *
 
-Restore any F<.gitignore> file. This can be done by issueing 
+Restore any F<.gitignore> file. This can be done by issuing
 C<git checkout .gitignore> in the F<cpan/Distro> directory.
 
 =item *
@@ -966,6 +973,8 @@ Mail p5p to announce your new release, with a quote you prepared earlier.
 
 Use the template at Porting/release_announcement_template.txt
 
+Send a carbon copy to C<noc@metacpan.org>
+
 =head3 update epigraphs.pod
 
 Add your quote to F<Porting/epigraphs.pod> and commit it.
@@ -1221,10 +1230,13 @@ It should be visible at a URL like C<http://search.cpan.org/dist/perl-5.10.1/>.
 
 I<You MUST SKIP this step for a RC release>
 
-In the C<perlorg> repository, edit F<docs/dev/perl5/index.html>
-to link to this new release. Then make a pull request to Leo Lapworth.
-If this fails for some reason and you cannot cajole anybody else into
-submitting that change, you can mail Leo as last resort.
+In your C<perlorg> repository, link to the new release.  For a new
+latest-maint release, edit F<docs/shared/tpl/stats.html>.  Otherwise,
+edit F<docs/dev/perl5/index.html>.
+
+Then make a pull request to Leo Lapworth.  If this fails for some reason
+and you cannot cajole anybody else into submitting that change, you can
+mail Leo as last resort.
 
 This repository can be found on L<github|https://github.com/perlorg/perlweb>.
 

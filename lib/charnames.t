@@ -295,11 +295,11 @@ is("\N{BOM}", chr(0xFEFF), 'Verify "\N{BOM}" is correct');
     my $ok = ! grep { /"HORIZONTAL TABULATION" is deprecated.*"CHARACTER TABULATION"/ } @WARN;
     ok($ok, '... and doesnt give deprecated warning');
 
-    # XXX These tests should be changed for 5.16, when we convert BELL to the
-    # Unicode version.
-    is("\N{BELL}", "\a", 'Verify "\N{BELL}" eq "\a"');
-    my $ok = grep { /"BELL" is deprecated.*"ALERT"/ } @WARN;
-    ok($ok, '... and that gives correct deprecated warning');
+    if ($^V lt v5.17.0) {
+        is("\N{BELL}", "\a", 'Verify "\N{BELL}" eq "\a"');
+        my $ok = grep { /"BELL" is deprecated.*"ALERT"/ } @WARN;
+        ok($ok, '... and that gives correct deprecated warning');
+    }
 
     no warnings 'deprecated';
 
@@ -365,7 +365,7 @@ is(charnames::viacode("U+00000000000FEED"), "ARABIC LETTER WAW ISOLATED FORM", '
     is("\N{EOT}", "\N{END OF TRANSMISSION}", 'Verify "\N{EOT}" eq "\N{END OF TRANSMISSION}"');
     is("\N{ENQ}", "\N{ENQUIRY}", 'Verify "\N{ENQ}" eq "\N{ENQUIRY}"');
     is("\N{ACK}", "\N{ACKNOWLEDGE}", 'Verify "\N{ACK}" eq "\N{ACKNOWLEDGE}"');
-    is("\N{BEL}", "\N{BELL}", 'Verify "\N{BEL}" eq "\N{BELL}"');
+    is("\N{BEL}", "\N{BELL}", 'Verify "\N{BEL}" eq "\N{BELL}"') if $^V lt v5.17.0;
     is("\N{BS}", "\N{BACKSPACE}", 'Verify "\N{BS}" eq "\N{BACKSPACE}"');
     is("\N{HT}", "\N{HORIZONTAL TABULATION}", 'Verify "\N{HT}" eq "\N{HORIZONTAL TABULATION}"');
     is("\N{LF}", "\N{LINE FEED (LF)}", 'Verify "\N{LF}" eq "\N{LINE FEED (LF)}"');
@@ -1013,14 +1013,14 @@ is("\N{U+1D0C5}", "\N{BYZANTINE MUSICAL SYMBOL FTHORA SKLIRON CHROMA VASIS}", 'V
         my $decimal = hex $code;
 
         # The Unicode version 1 name is used instead of any that are
-        # marked <control>
+        # marked <control>.
         $name = $u1name if $name eq "<control>";
 
-        $name = 'ALERT' if $decimal == 7;
+        # In earlier Perls, we reject this code point's name (BELL)
+        $name = "" if $^V lt v5.17.0 && $decimal == 0x1F514;
 
-        # XXX This test should be changed for 5.16 when we convert to use
-        # Unicode's BELL
-        $name = "" if $decimal == 0x1F514;
+        # ALERT overrides BELL
+        $name = 'ALERT' if $decimal == 7;
 
         # Some don't have names, leave those array elements undefined
         next unless $name;
@@ -1053,23 +1053,67 @@ is("\N{U+1D0C5}", "\N{BYZANTINE MUSICAL SYMBOL FTHORA SKLIRON CHROMA VASIS}", 'V
     }
     close $fh;
 
-    # The Hangul syllable names aren't in the file above; their names
-    # are algorithmically determinable, but to avoid perpetuating any
-    # programming errors, this file contains the complete list, gathered
-    # from the web.
-    while (<DATA>) {
-        chomp;
-        next unless $_;     # Guard against empty lines getting inserted.
-        my ($code, $name) = split ";";
-        my $decimal = hex $code;
-        $names[$decimal] = $name;
-        my $block = $decimal >> $block_size_bits;
-        $algorithmic_names_count[$block] = 1;
+    use Unicode::UCD;
+    if (pack("C*", split /\./, Unicode::UCD::UnicodeVersion()) gt v1.1.5) {
+        # The Hangul syllable names aren't in the file above; their names
+        # are algorithmically determinable, but to avoid perpetuating any
+        # programming errors, this file contains the complete list, gathered
+        # from the web.
+        while (<DATA>) {
+            chomp;
+            next unless $_;     # Guard against empty lines getting inserted.
+            my ($code, $name) = split ";";
+            my $decimal = hex $code;
+            $names[$decimal] = $name;
+            my $block = $decimal >> $block_size_bits;
+            $algorithmic_names_count[$block] = 1;
+        }
     }
 
-    open $fh, "<", "../../lib/unicore/NameAliases.txt" or
-        die "Can't open ../../lib/unicore/NameAliases.txt: $!";
-    while (<$fh>) {
+    my @name_aliases;
+    use Unicode::UCD;
+    if (ord('A') != 65
+        || pack( "C*", split /\./, Unicode::UCD::UnicodeVersion()) ge v6.1.0)
+    {
+        open my $fh, "<", "../../lib/unicore/NameAliases.txt"
+            or die "Can't open ../../lib/unicore/NameAliases.txt: $!";
+        @name_aliases = <$fh>
+    }
+    else {
+
+        # If this Unicode version doesn't have the full .txt file, or are on
+        # an EBCDIC platform where they need to be translated, get the data
+        # from prop_invmap() (which should do the translation) and convert it
+        # to the file's format
+        use Unicode::UCD 'prop_invmap';
+        my ($invlist_ref, $invmap_ref, undef, $default)
+                                                = prop_invmap('Name_Alias');
+        for my $i (0 .. @$invlist_ref - 1) {
+
+            # Convert the aliases for code points that have just one alias to
+            # single element arrays for uniform handling below.
+            if (! ref $invmap_ref->[$i]) {
+
+                # But we test only the real aliases, not the ones which are
+                # just really placeholders.
+                next if $invmap_ref->[$i] eq $default;
+
+                $invmap_ref->[$i] = [ $invmap_ref->[$i] ];
+            }
+
+
+            # Change each alias for the code point to the form that the file
+            # has
+            foreach my $j ($invlist_ref->[$i] .. $invlist_ref->[$i+1] - 1) {
+                foreach my $value (@{$invmap_ref->[$i]}) {
+                    $value =~ s/: /;/;
+                    push @name_aliases, sprintf("%04X;%s\n", $j, $value);
+                }
+            }
+        }
+    }
+
+    for (@name_aliases) {
         chomp;
         s/^\s*#.*//;
         next unless $_;
@@ -1185,21 +1229,26 @@ is("\N{U+1D0C5}", "\N{BYZANTINE MUSICAL SYMBOL FTHORA SKLIRON CHROMA VASIS}", 'V
         $block = $end_block + 1;
     }
 
-    open $fh, "<", "../../lib/unicore/NamedSequences.txt" or
-        die "Can't open ../../lib/unicore/NamedSequences.txt: $!";
-    while (<$fh>) {
-        chomp;
-        s/^\s*#.*//;
-        next unless $_;
-        my ($name, $codes) = split ";";
-        my $utf8 = pack("U*", map { hex } split " ", $codes);
-        is(charnames::string_vianame($name), $utf8, "Verify string_vianame(\"$name\") is the proper utf8");
-        my $loose_name = get_loose_name($name);
-        use charnames ":loose";
-        is(charnames::string_vianame($loose_name), $utf8, "Verify string_vianame(\"$loose_name\") is the proper utf8");
-        #diag("$name, $utf8");
+    if (open my $fh, "<", "../../lib/unicore/NamedSequences.txt") {
+        while (<$fh>) {
+            chomp;
+            s/^\s*#.*//;
+            next unless $_;
+            my ($name, $codes) = split ";";
+            my $utf8 = pack("U*", map { hex } split " ", $codes);
+            is(charnames::string_vianame($name), $utf8, "Verify string_vianame(\"$name\") is the proper utf8");
+            my $loose_name = get_loose_name($name);
+            use charnames ":loose";
+            is(charnames::string_vianame($loose_name), $utf8, "Verify string_vianame(\"$loose_name\") is the proper utf8");
+            #diag("$name, $utf8");
+        }
+        close $fh;
     }
-    close $fh;
+    else {
+        use Unicode::UCD;
+        die "Can't open ../../lib/unicore/NamedSequences.txt: $!"
+        if pack("C*", split /\./, Unicode::UCD::UnicodeVersion()) ge v4.1.0;
+    }
 
 
     unless ($all_pass) {

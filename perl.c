@@ -307,6 +307,7 @@ perl_construct(pTHXx)
        else all hell breaks loose in S_find_uninit_var().  */
     Perl_av_create_and_push(aTHX_ &PL_regex_padav, newSVpvs(""));
     PL_regex_pad = AvARRAY(PL_regex_padav);
+    Newxz(PL_stashpad, PL_stashpadmax, HV *);
 #endif
 #ifdef USE_REENTRANT_API
     Perl_reentrant_init(aTHX);
@@ -736,10 +737,10 @@ perl_destruct(pTHXx)
     /* We must account for everything.  */
 
     /* Destroy the main CV and syntax tree */
-    /* Do this now, because destroying ops can cause new SVs to be generated
-       in Perl_pad_swipe, and when running with -DDEBUG_LEAKING_SCALARS they
-       PL_curcop to point to a valid op from which the filename structure
-       member is copied.  */
+    /* Set PL_curcop now, because destroying ops can cause new SVs
+       to be generated in Perl_pad_swipe, and when running with
+      -DDEBUG_LEAKING_SCALARS they expect PL_curcop to point to a valid
+       op from which the filename structure member is copied.  */
     PL_curcop = &PL_compiling;
     if (PL_main_root) {
 	/* ensure comppad/curpad to refer to main's pad */
@@ -828,7 +829,6 @@ perl_destruct(pTHXx)
 #endif
 
 	CopFILE_free(&PL_compiling);
-	CopSTASH_free(&PL_compiling);
 
 	/* The exit() function will do everything that needs doing. */
         return STATUS_EXIT;
@@ -840,10 +840,18 @@ perl_destruct(pTHXx)
      * REGEXPs in the parent interpreter
      * we need to manually ReREFCNT_dec for the clones
      */
-    SvREFCNT_dec(PL_regex_padav);
-    PL_regex_padav = NULL;
-    PL_regex_pad = NULL;
+    {
+	I32 i = AvFILLp(PL_regex_padav);
+	SV **ary = AvARRAY(PL_regex_padav);
+
+	for (; i; i--) {
+	    SvREFCNT_dec(ary[i]);
+	    ary[i] = &PL_sv_undef;
+	}
+    }
+    Safefree(PL_stashpad);
 #endif
+
 
     SvREFCNT_dec(MUTABLE_SV(PL_stashcache));
     PL_stashcache = NULL;
@@ -1024,7 +1032,6 @@ perl_destruct(pTHXx)
     cophh_free(CopHINTHASH_get(&PL_compiling));
     CopHINTHASH_set(&PL_compiling, cophh_new_empty());
     CopFILE_free(&PL_compiling);
-    CopSTASH_free(&PL_compiling);
 
     /* Prepare to destruct main symbol table.  */
 
@@ -1059,6 +1066,12 @@ perl_destruct(pTHXx)
 	    Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL),"Unbalanced context: %ld more PUSHes than POPs\n",
 			     (long)cxstack_ix + 1);
     }
+
+#ifdef USE_ITHREADS
+    SvREFCNT_dec(PL_regex_padav);
+    PL_regex_padav = NULL;
+    PL_regex_pad = NULL;
+#endif
 
 #ifdef PERL_IMPLICIT_CONTEXT
     /* the entries in this list are allocated via SV PVX's, so get freed
@@ -1223,9 +1236,6 @@ perl_destruct(pTHXx)
 
     Safefree(PL_origfilename);
     PL_origfilename = NULL;
-    Safefree(PL_reg_start_tmp);
-    PL_reg_start_tmp = (char**)NULL;
-    PL_reg_start_tmpl = 0;
     Safefree(PL_reg_curpm);
     Safefree(PL_reg_poscache);
     free_tied_hv_pool();
@@ -2402,7 +2412,7 @@ S_run_body(pTHX_ I32 oldscope)
 	CALLRUNOPS(aTHX);
     }
     my_exit(0);
-    /* NOTREACHED */
+    assert(0); /* NOTREACHED */
 }
 
 /*
@@ -2510,17 +2520,14 @@ CV*
 Perl_get_cvn_flags(pTHX_ const char *name, STRLEN len, I32 flags)
 {
     GV* const gv = gv_fetchpvn_flags(name, len, flags, SVt_PVCV);
-    /* XXX this is probably not what they think they're getting.
-     * It has the same effect as "sub name;", i.e. just a forward
-     * declaration! */
 
     PERL_ARGS_ASSERT_GET_CVN_FLAGS;
 
+    /* XXX this is probably not what they think they're getting.
+     * It has the same effect as "sub name;", i.e. just a forward
+     * declaration! */
     if ((flags & ~GV_NOADD_MASK) && !GvCVu(gv)) {
-	SV *const sv = newSVpvn_flags(name, len, flags & SVf_UTF8);
-    	return newSUB(start_subparse(FALSE, 0),
-		      newSVOP(OP_CONST, 0, sv),
-		      NULL, NULL);
+    	return newSTUB(gv,0);
     }
     if (gv)
 	return GvCVu(gv);
@@ -2717,7 +2724,7 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
 	    FREETMPS;
 	    JMPENV_POP;
 	    my_exit_jump();
-	    /* NOTREACHED */
+	    assert(0); /* NOTREACHED */
 	case 3:
 	    if (PL_restartop) {
 		PL_restartjmpenv = NULL;
@@ -2795,6 +2802,8 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
     myop.op_flags |= OP_GIMME_REVERSE(flags);
     if (flags & G_KEEPERR)
 	myop.op_flags |= OPf_SPECIAL;
+    if (PL_reg_state.re_reparsing)
+	myop.op_private = OPpEVAL_COPHH;
 
     /* fail now; otherwise we could fail after the JMPENV_PUSH but
      * before a PUSHEVAL, which corrupts the stack after a croak */
@@ -2824,7 +2833,7 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
 	FREETMPS;
 	JMPENV_POP;
 	my_exit_jump();
-	/* NOTREACHED */
+	assert(0); /* NOTREACHED */
     case 3:
 	if (PL_restartop) {
 	    PL_restartjmpenv = NULL;
@@ -4820,7 +4829,7 @@ Perl_call_list(pTHX_ I32 oldscope, AV *paramList)
 	    CopLINE_set(PL_curcop, oldline);
 	    JMPENV_POP;
 	    my_exit_jump();
-	    /* NOTREACHED */
+	    assert(0); /* NOTREACHED */
 	case 3:
 	    if (PL_restartop) {
 		PL_curcop = &PL_compiling;
@@ -4980,8 +4989,8 @@ read_e_script(pTHX_ int idx, SV *buf_sv, int maxlen)
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

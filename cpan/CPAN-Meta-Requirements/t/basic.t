@@ -221,4 +221,16 @@ sub foo_1 {
   dies_ok { $req->add_exclusion(Foo => 1); } qr/excluded exact/, "!= && ==";
 }
 
+{
+  my $req = foo_1;
+
+  is($req->requirements_for_module('Foo'), '== 1', 'requirements_for_module');
+
+  # test empty/undef returns
+  my @list = $req->requirements_for_module('FooBarBamBaz');
+  my $scalar = $req->requirements_for_module('FooBarBamBaz');
+  is ( scalar @list, 0, "requirements_for_module() returns empty for not found (list)" );
+  is ( $scalar, undef, "requirements_for_module() returns undef for not found (scalar)" );
+}
+
 done_testing;

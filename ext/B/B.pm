@@ -15,7 +15,7 @@ require Exporter;
 # walkoptree comes from B.xs
 
 BEGIN {
-    $B::VERSION = '1.35';
+    $B::VERSION = '1.36';
     @B::EXPORT_OK = ();
 
     # Our BOOT code needs $VERSION set, and will append to @EXPORT_OK.
@@ -1163,6 +1163,10 @@ Since Perl 5.9.5
 
 Only when perl was compiled with ithreads.
 
+=item code_list
+
+Since perl 5.17.1
+
 =back
 
 =head2 B::SVOP METHOD
@@ -1213,7 +1217,7 @@ Only when perl was compiled with ithreads.
 
 =item stashpv
 
-=item stashlen
+=item stashoff (threaded only)
 
 =item file
 

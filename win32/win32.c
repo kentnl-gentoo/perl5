@@ -1650,6 +1650,41 @@ win32_ansipath(const WCHAR *widename)
 }
 
 DllExport char *
+win32_getenvironmentstrings(void)
+{
+    LPWSTR lpWStr, lpWTmp;
+    LPSTR lpStr, lpTmp;
+    DWORD env_len, wenvstrings_len = 0, aenvstrings_len = 0;
+
+    /* Get the process environment strings */
+    lpWTmp = lpWStr = (LPWSTR) GetEnvironmentStringsW();
+    for (wenvstrings_len = 1; *lpWTmp != '\0'; lpWTmp += env_len + 1) {
+        env_len = wcslen(lpWTmp);
+        /* calculate the size of the environment strings */
+        wenvstrings_len += env_len + 1;
+    }
+
+    /* Get the number of bytes required to store the ACP encoded string */
+    aenvstrings_len = WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, 
+                                          lpWStr, wenvstrings_len, NULL, 0, NULL, NULL);
+    lpTmp = lpStr = (char *)win32_calloc(aenvstrings_len, sizeof(char));
+    if(!lpTmp)
+        out_of_memory();
+
+    /* Convert the string from UTF-16 encoding to ACP encoding */
+    WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, lpWStr, wenvstrings_len, lpStr, 
+                        aenvstrings_len, NULL, NULL);
+
+    return(lpStr);
+}
+
+DllExport void
+win32_freeenvironmentstrings(void* block)
+{
+    win32_free(block);
+}
+
+DllExport char *
 win32_getenv(const char *name)
 {
     dTHX;
@@ -2925,7 +2960,37 @@ win32_link(const char *oldname, const char *newname)
     {
 	return 0;
     }
-    errno = (GetLastError() == ERROR_FILE_NOT_FOUND) ? ENOENT : EINVAL;
+    /* This isn't perfect, eg. Win32 returns ERROR_ACCESS_DENIED for
+       both permissions errors and if the source is a directory, while
+       POSIX wants EACCES and EPERM respectively.
+
+       Determined by experimentation on Windows 7 x64 SP1, since MS
+       don't document what error codes are returned.
+    */
+    switch (GetLastError()) {
+    case ERROR_BAD_NET_NAME:
+    case ERROR_BAD_NETPATH:
+    case ERROR_BAD_PATHNAME:
+    case ERROR_FILE_NOT_FOUND:
+    case ERROR_FILENAME_EXCED_RANGE:
+    case ERROR_INVALID_DRIVE:
+    case ERROR_PATH_NOT_FOUND:
+      errno = ENOENT;
+      break;
+    case ERROR_ALREADY_EXISTS:
+      errno = EEXIST;
+      break;
+    case ERROR_ACCESS_DENIED:
+      errno = EACCES;
+      break;
+    case ERROR_NOT_SAME_DEVICE:
+      errno = EXDEV;
+      break;
+    default:
+      /* ERROR_INVALID_FUNCTION - eg. on a FAT volume */
+      errno = EINVAL;
+      break;
+    }
     return -1;
 }
 

@@ -3,7 +3,7 @@ use strict;
 require Exporter;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-$VERSION = 1.15_02;
+$VERSION = 1.16;
 @ISA = qw(Exporter);
 @EXPORT = qw(pod2html htmlify);
 @EXPORT_OK = qw(anchorify);
@@ -432,6 +432,7 @@ HTMLFOOT
     } else {
         open $fhout, ">-";
     }
+    binmode $fhout, ":utf8";
     print $fhout $output;
     close $fhout or die "Failed to close $Htmlfile: $!";
     chmod 0644, $Htmlfile unless $Htmlfile eq '-';

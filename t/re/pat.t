@@ -19,7 +19,7 @@ BEGIN {
     require './test.pl';
 }
 
-plan tests => 474;  # Update this when adding/deleting tests.
+plan tests => 452;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1069,51 +1069,6 @@ sub run_tests {
     }
 
     {
-        # Test that a regex followed by an operator and/or a statement modifier work
-        # These tests use string-eval so that it reports a clean error when it fails
-        # (without the string eval the test script might be unparseable)
-
-        # Note: these test check the behaviour that currently is valid syntax
-        # If a new regex modifier is added and a test fails then there is a backwards-compatibility issue
-        # Note-2: a new deprecate warning was added for this with commit e6897b1a5db0410e387ccbf677e89fc4a1d8c97a
-        # which indicate that this syntax will be removed in 5.16.
-        # When this happens the tests can be removed
-
-	foreach (['my $r = "a" =~ m/a/lt 2', 'm', 'lt'],
-		 ['my $r = "a" =~ m/a/le 1', 'm', 'le'],
-		 ['my $r = "a" =~ m/a/eq 1', 'm', 'eq'],
-		 ['my $r = "a" =~ m/a/ne 0', 'm', 'ne'],
-		 ['my $r = "a" =~ m/a/and 1', 'm', 'and'],
-		 ['my $r = "a" =~ m/a/unless 0', 'm', 'unless'],
-		 ['my $c = 1; my $r; $r = "a" =~ m/a/while $c--', 'm', 'while'],
-		 ['my $c = 0; my $r; $r = "a" =~ m/a/until $c++', 'm', 'until'],
-		 ['my $r; $r = "a" =~ m/a/for 1', 'm', 'for'],
-		 ['my $r; $r = "a" =~ m/a/foreach 1', 'm', 'foreach'],
-
-		 ['my $t = "a"; my $r = $t =~ s/a//lt 2', 's', 'lt'],
-		 ['my $t = "a"; my $r = $t =~ s/a//le 1', 's', 'le'],
-		 ['my $t = "a"; my $r = $t =~ s/a//ne 0', 's', 'ne'],
-		 ['my $t = "a"; my $r = $t =~ s/a//and 1', 's', 'and'],
-		 ['my $t = "a"; my $r = $t =~ s/a//unless 0', 's', 'unless'],
-
-		 ['my $c = 1; my $r; my $t = "a"; $r = $t =~ s/a//while $c--', 's', 'while'],
-		 ['my $c = 0; my $r; my $t = "a"; $r = $t =~ s/a//until $c++', 's', 'until'],
-		 ['my $r; my $t = "a"; $r = $t =~ s/a//for 1', 's', 'for'],
-		 ['my $r; my $t = "a"; $r = $t =~ s/a//for 1', 's', 'foreach'],
-		) {
-	    my $message = sprintf 'regex (%s) followed by $_->[2]',
-		$_->[1] eq 'm' ? 'm//' : 's///';
-	    my $code = "$_->[0]; 'eval_ok ' . \$r";
-	    my $result = do {
-		no warnings 'syntax';
-		eval $code;
-	    };
-	    is($@, '', $message);
-	    is($result, 'eval_ok 1', $message);
-	}
-    }
-
-    {
         my $str= "\x{100}";
         chop $str;
         my $qr= qr/$str/;
@@ -1261,6 +1216,67 @@ EOP
         use re '/aa';
         unlike 'k', qr/(?i:\N{KELVIN SIGN})/, "(?i: shouldn't lose the passed in /aa";
     }
+
+    {
+	# the test for whether the pattern should be re-compiled should
+	# consider the UTF8ness of the previous and current pattern
+	# string, as well as the physical bytes of the pattern string
+
+	for my $s ("\xc4\x80", "\x{100}") {
+	    ok($s =~ /^$s$/, "re-compile check is UTF8-aware");
+	}
+    }
+
+    #  #113682 more overloading and qr//
+    # when doing /foo$overloaded/, if $overloaded returns
+    # a qr/(?{})/ via qr or "" overloading, then 'use re 'eval'
+    # shouldn't be required. Via '.', it still is.
+    {
+        package Qr0;
+	use overload 'qr' => sub { qr/(??{50})/ };
+
+        package Qr1;
+	use overload '""' => sub { qr/(??{51})/ };
+
+        package Qr2;
+	use overload '.'  => sub { $_[1] . qr/(??{52})/ };
+
+        package Qr3;
+	use overload '""' => sub { qr/(??{7})/ },
+		     '.'  => sub { $_[1] . qr/(??{53})/ };
+
+        package Qr_indirect;
+	use overload '""'  => sub { $_[0][0] };
+
+	package main;
+
+	for my $i (0..3) {
+	    my $o = bless [], "Qr$i";
+	    if ((0,0,1,1)[$i]) {
+		eval { "A5$i" =~ /^A$o$/ };
+		like($@, qr/Eval-group not allowed/, "Qr$i");
+		eval { "5$i" =~ /$o/ };
+		like($@, ($i == 3 ? qr/^$/ : qr/no method found,/),
+			"Qr$i bare");
+		{
+		    use re 'eval';
+		    ok("A5$i" =~ /^A$o$/, "Qr$i - with use re eval");
+		    eval { "5$i" =~ /$o/ };
+		    like($@, ($i == 3 ? qr/^$/ : qr/no method found,/),
+			    "Qr$i bare - with use re eval");
+		}
+	    }
+	    else {
+		ok("A5$i" =~ /^A$o$/, "Qr$i");
+		ok("5$i" =~ /$o/, "Qr$i bare");
+	    }
+	}
+
+	my $o = bless [ bless [], "Qr1" ], 'Qr_indirect';
+	ok("A51" =~ /^A$o/, "Qr_indirect");
+	ok("51" =~ /$o/, "Qr_indirect bare");
+    }
+
 } # End of sub run_tests
 
 1;

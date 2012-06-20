@@ -1618,7 +1618,8 @@ is equivalent to
 The result may be used as a subpattern in a match:
 
     $re = qr/$pattern/;
-    $string =~ /foo${re}bar/;	# can be interpolated in other patterns
+    $string =~ /foo${re}bar/;	# can be interpolated in other
+                                # patterns
     $string =~ $re;		# or used standalone
     $string =~ /$re/;		# or this way
 
@@ -1651,11 +1652,12 @@ Options (specified by the following modifiers) are:
     i	Do case-insensitive pattern matching.
     x	Use extended regular expressions.
     p	When matching preserve a copy of the matched string so
-        that ${^PREMATCH}, ${^MATCH}, ${^POSTMATCH} will be defined.
+        that ${^PREMATCH}, ${^MATCH}, ${^POSTMATCH} will be
+        defined.
     o	Compile pattern only once.
-    a   ASCII-restrict: Use ASCII for \d, \s, \w; specifying two a's
-        further restricts /i matching so that no ASCII character will
-        match a non-ASCII one
+    a   ASCII-restrict: Use ASCII for \d, \s, \w; specifying two
+        a's further restricts /i matching so that no ASCII
+        character will match a non-ASCII one
     l   Use the locale
     u   Use Unicode rules
     d   Use Unicode or native charset, as in 5.12 and earlier
@@ -1693,7 +1695,8 @@ Options are as described in C<qr//> above; in addition, the following match
 process modifiers are available:
 
  g  Match globally, i.e., find all occurrences.
- c  Do not reset search position on a failed match when /g is in effect.
+ c  Do not reset search position on a failed match when /g is
+    in effect.
 
 If "/" is the delimiter then the initial C<m> is optional.  With the C<m>
 you can use any pair of non-whitespace (ASCII) characters
@@ -1734,6 +1737,18 @@ you want the pattern to use the initial values of the variables
 regardless of whether they change or not.  (But there are saner ways
 of accomplishing this than using C</o>.)
 
+=item 3
+
+If the pattern contains embedded code, such as
+
+    use re 'eval';
+    $code = 'foo(?{ $x })';
+    /$code/
+
+then perl will recompile each time, even though the pattern string hasn't
+changed, to ensure that the current value of C<$x> is seen each time.
+Use C</o> if you want to avoid this.
+
 =back
 
 The bottom line is that using C</o> is almost never a good idea.
@@ -1768,22 +1783,22 @@ failure.
 
 Examples:
 
-    open(TTY, "+</dev/tty")
-	|| die "can't access /dev/tty: $!";
+ open(TTY, "+</dev/tty")
+    || die "can't access /dev/tty: $!";
 
-    <TTY> =~ /^y/i && foo();	# do foo if desired
+ <TTY> =~ /^y/i && foo();	# do foo if desired
 
-    if (/Version: *([0-9.]*)/) { $version = $1; }
+ if (/Version: *([0-9.]*)/) { $version = $1; }
 
-    next if m#^/usr/spool/uucp#;
+ next if m#^/usr/spool/uucp#;
 
-    # poor man's grep
-    $arg = shift;
-    while (<>) {
-	print if /$arg/o;	# compile only once (no longer needed!)
-    }
+ # poor man's grep
+ $arg = shift;
+ while (<>) {
+    print if /$arg/o; # compile only once (no longer needed!)
+ }
 
-    if (($F1, $F2, $Etc) = ($foo =~ /^(\S+)\s+(\S+)\s*(.*)/))
+ if (($F1, $F2, $Etc) = ($foo =~ /^(\S+)\s+(\S+)\s*(.*)/))
 
 This last example splits $foo into the first two words and the
 remainder of the line, and assigns those three fields to $F1, $F2, and
@@ -1835,26 +1850,30 @@ Examples:
 
 Here's another way to check for sentences in a paragraph:
 
-    my $sentence_rx = qr{
-	(?: (?<= ^ ) | (?<= \s ) )  # after start-of-string or whitespace
-	\p{Lu}                      # capital letter
-	.*?                         # a bunch of anything
-	(?<= \S )                   # that ends in non-whitespace
-	(?<! \b [DMS]r  )           # but isn't a common abbreviation
-	(?<! \b Mrs )
-	(?<! \b Sra )
-	(?<! \b St  )
-	[.?!]                       # followed by a sentence ender
-	(?= $ | \s )                # in front of end-of-string or whitespace
-    }sx;
-    local $/ = "";
-    while (my $paragraph = <>) {
-	say "NEW PARAGRAPH";
-	my $count = 0;
-	while ($paragraph =~ /($sentence_rx)/g) {
-	    printf "\tgot sentence %d: <%s>\n", ++$count, $1;
-	}
+ my $sentence_rx = qr{
+    (?: (?<= ^ ) | (?<= \s ) )  # after start-of-string or
+                                # whitespace
+    \p{Lu}                      # capital letter
+    .*?                         # a bunch of anything
+    (?<= \S )                   # that ends in non-
+                                # whitespace
+    (?<! \b [DMS]r  )           # but isn't a common abbr.
+    (?<! \b Mrs )
+    (?<! \b Sra )
+    (?<! \b St  )
+    [.?!]                       # followed by a sentence
+                                # ender
+    (?= $ | \s )                # in front of end-of-string
+                                # or whitespace
+ }sx;
+ local $/ = "";
+ while (my $paragraph = <>) {
+    say "NEW PARAGRAPH";
+    my $count = 0;
+    while ($paragraph =~ /($sentence_rx)/g) {
+        printf "\tgot sentence %d: <%s>\n", ++$count, $1;
     }
+ }
 
 Here's how to use C<m//gc> with C<\G>:
 
@@ -1891,26 +1910,31 @@ doing different actions depending on which regexp matched.  Each
 regexp tries to match where the previous one leaves off.
 
  $_ = <<'EOL';
-    $url = URI::URL->new( "http://example.com/" ); die if $url eq "xXx";
+    $url = URI::URL->new( "http://example.com/" );
+    die if $url eq "xXx";
  EOL
 
  LOOP: {
      print(" digits"),       redo LOOP if /\G\d+\b[,.;]?\s*/gc;
-     print(" lowercase"),    redo LOOP if /\G\p{Ll}+\b[,.;]?\s*/gc;
-     print(" UPPERCASE"),    redo LOOP if /\G\p{Lu}+\b[,.;]?\s*/gc;
-     print(" Capitalized"),  redo LOOP if /\G\p{Lu}\p{Ll}+\b[,.;]?\s*/gc;
+     print(" lowercase"),    redo LOOP
+                                    if /\G\p{Ll}+\b[,.;]?\s*/gc;
+     print(" UPPERCASE"),    redo LOOP
+                                    if /\G\p{Lu}+\b[,.;]?\s*/gc;
+     print(" Capitalized"),  redo LOOP
+                              if /\G\p{Lu}\p{Ll}+\b[,.;]?\s*/gc;
      print(" MiXeD"),        redo LOOP if /\G\pL+\b[,.;]?\s*/gc;
-     print(" alphanumeric"), redo LOOP if /\G[\p{Alpha}\pN]+\b[,.;]?\s*/gc;
+     print(" alphanumeric"), redo LOOP
+                            if /\G[\p{Alpha}\pN]+\b[,.;]?\s*/gc;
      print(" line-noise"),   redo LOOP if /\G\W+/gc;
      print ". That's all!\n";
  }
 
 Here is the output (split into several lines):
 
-    line-noise lowercase line-noise UPPERCASE line-noise UPPERCASE
-    line-noise lowercase line-noise lowercase line-noise lowercase
-    lowercase line-noise lowercase lowercase line-noise lowercase
-    lowercase line-noise MiXeD line-noise. That's all!
+ line-noise lowercase line-noise UPPERCASE line-noise UPPERCASE
+ line-noise lowercase line-noise lowercase line-noise lowercase
+ lowercase line-noise lowercase lowercase line-noise lowercase
+ lowercase line-noise MiXeD line-noise. That's all!
 
 =item m?PATTERN?msixpodualgc
 X<?> X<operator, match-once>
@@ -1978,8 +2002,10 @@ Options are as with m// with the addition of the following replacement
 specific options:
 
     e	Evaluate the right side as an expression.
-    ee  Evaluate the right side as a string then eval the result.
-    r   Return substitution and leave the original string untouched.
+    ee  Evaluate the right side as a string then eval the
+        result.
+    r   Return substitution and leave the original string
+        untouched.
 
 Any non-whitespace delimiter may replace the slashes.  Add space after
 the C<s> when using a character allowed in identifiers.  If single quotes
@@ -1996,20 +2022,24 @@ to be C<eval>ed before being run as a Perl expression.
 
 Examples:
 
-    s/\bgreen\b/mauve/g;		# don't change wintergreen
+    s/\bgreen\b/mauve/g;	      # don't change wintergreen
 
     $path =~ s|/usr/bin|/usr/local/bin|;
 
     s/Login: $foo/Login: $bar/; # run-time pattern
 
-    ($foo = $bar) =~ s/this/that/;	# copy first, then change
-    ($foo = "$bar") =~ s/this/that/;	# convert to string, copy, then change
+    ($foo = $bar) =~ s/this/that/;	# copy first, then
+                                        # change
+    ($foo = "$bar") =~ s/this/that/;	# convert to string,
+                                        # copy, then change
     $foo = $bar =~ s/this/that/r;	# Same as above using /r
     $foo = $bar =~ s/this/that/r
-                =~ s/that/the other/r;	# Chained substitutes using /r
-    @foo = map { s/this/that/r } @bar	# /r is very useful in maps
+                =~ s/that/the other/r;	# Chained substitutes
+                                        # using /r
+    @foo = map { s/this/that/r } @bar	# /r is very useful in
+                                        # maps
 
-    $count = ($paragraph =~ s/Mister\b/Mr./g);  # get change-count
+    $count = ($paragraph =~ s/Mister\b/Mr./g);  # get change-cnt
 
     $_ = 'abc123xyz';
     s/\d+/$&*2/e;		# yields 'abc246xyz'
@@ -2046,9 +2076,11 @@ Examples:
 	\*/	# Match the closing delimiter.
     } []gsx;
 
-    s/^\s*(.*?)\s*$/$1/;	# trim whitespace in $_, expensively
+    s/^\s*(.*?)\s*$/$1/;	# trim whitespace in $_,
+                                # expensively
 
-    for ($variable) {		# trim whitespace in $variable, cheap
+    for ($variable) {		# trim whitespace in $variable,
+                                # cheap
 	s/^\s+//;
 	s/\s+$//;
     }
@@ -2067,14 +2099,6 @@ to occur that you might want.  Here are two common cases:
 
     # expand tabs to 8-column spacing
     1 while s/\t+/' ' x (length($&)*8 - length($`)%8)/e;
-
-C<s///le> is treated as a substitution followed by the C<le> operator, not
-the C</le> flags.  This may change in a future version of Perl.  It
-produces a warning if warnings are enabled.  To disambiguate, use a space
-or change the order of the flags:
-
-    s/foo/bar/ le 5;  # "le" infix operator
-    s/foo/bar/el;     # "e" and "l" flags
 
 =back
 
@@ -2545,7 +2569,7 @@ and C<\[> are all skipped, and nested C<[> and C<]> are skipped as well.
 However, when backslashes are used as the delimiters (like C<qq\\> and
 C<tr\\\>), nothing is skipped.
 During the search for the end, backslashes that escape delimiters or
-backslashes are removed (exactly speaking, they are not copied to the
+other backslashes are removed (exactly speaking, they are not copied to the
 safe location).
 
 For constructs with three-part delimiters (C<s///>, C<y///>, and
@@ -2697,6 +2721,10 @@ As C<\c> is skipped at this step, C<@> of C<\c@> in RE is possibly
 treated as an array symbol (for example C<@foo>),
 even though the same text in C<qq//> gives interpolation of C<\c@>.
 
+Code blocks such as C<(?{BLOCK})> are handled by temporarily passing control
+back to the perl parser, in a similar way that an interpolated array
+subscript expression such as C<"foo$array[1+f("[xyz")]bar"> would be.
+
 Moreover, inside C<(?{BLOCK})>, C<(?# comment )>, and
 a C<#>-comment in a C<//x>-regular expression, no processing is
 performed whatsoever.  This is the first step at which the presence
@@ -2765,9 +2793,11 @@ rather different than the rule used for the rest of the pattern.
 The terminator of this construct is found using the same rules as
 for finding the terminator of a C<{}>-delimited construct, the only
 exception being that C<]> immediately following C<[> is treated as
-though preceded by a backslash.  Similarly, the terminator of
-C<(?{...})> is found using the same rules as for finding the
-terminator of a C<{}>-delimited construct.
+though preceded by a backslash.
+
+The terminator of runtime C<(?{...})> is found by temporarily switching
+control to the perl parser, which should stop at the point where the
+logically balancing terminating C<}> is found.
 
 It is possible to inspect both the string given to RE engine and the
 resulting finite automaton.  See the arguments C<debug>/C<debugcolor>
@@ -3169,7 +3199,7 @@ need yourself.
 X<number, arbitrary precision>
 
 The standard C<Math::BigInt>, C<Math::BigRat>, and C<Math::BigFloat> modules,
-along with the C<bigint>, C<bigrat>, and C<bitfloat> pragmas, provide
+along with the C<bignum>, C<bigint>, and C<bigrat> pragmas, provide
 variable-precision arithmetic and overloaded operators, although
 they're currently pretty slow. At the cost of some space and
 considerable speed, they avoid the normal pitfalls associated with

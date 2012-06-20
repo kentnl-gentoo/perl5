@@ -829,15 +829,6 @@ sub run_tests {
     }
 
     {
-        # XXX DAPM 13-Apr-06. Recursive split is still broken. It's only luck it
-        # hasn't been crashing. Disable this test until it is fixed properly.
-        # XXX also check what it returns rather than just doing ok(1,...)
-        # split /(?{ split "" })/, "abc";
-        local $::TODO = "Recursive split is still broken";
-        ok 0, 'cache_re & "(?{": it dumps core in 5.6.1 & 5.8.0';
-    }
-
-    {
         ok "\x{100}\n" =~ /\x{100}\n$/, "UTF-8 length cache and fbm_compile";
     }
 
@@ -1734,7 +1725,7 @@ EOP
 
         my @notIsPunct = grep {/[[:punct:]]/ and not /\p{IsPunct}/}
                                 map {chr} 0x20 .. 0x7f;
-        is(join ('', @notIsPunct), '$+<=>^`|~',
+        is(join ('', @notIsPunct), '#$%&*+-<=>@^`|~',
 	   '[:punct:] disagrees with IsPunct on Symbols');
 
         my @isPrint = grep {not /[[:print:]]/ and /\p{IsPrint}/}

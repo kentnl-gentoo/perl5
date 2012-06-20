@@ -359,7 +359,11 @@
 /* Rats: if dTHR is just blank then the subsequent ";" throws an error */
 /* Declaring a *function*, instead of a variable, ensures that we don't rely
    on being able to suppress "unused" warnings.  */
+#ifdef __cplusplus
+#define dNOOP (void)0
+#else
 #define dNOOP extern int Perl___notused(void)
+#endif
 
 #ifndef pTHX
 /* Don't bother defining tTHX and sTHX; using them outside
@@ -3277,9 +3281,9 @@ typedef pthread_key_t	perl_key;
    appropriate to call return.  In either case, include the lint directive.
  */
 #ifdef HASATTRIBUTE_NORETURN
-#  define NORETURN_FUNCTION_END /* NOTREACHED */
+#  define NORETURN_FUNCTION_END assert(0); /* NOTREACHED */
 #else
-#  define NORETURN_FUNCTION_END /* NOTREACHED */ return 0
+#  define NORETURN_FUNCTION_END assert(0); /* NOTREACHED */ return 0
 #endif
 
 /* Some OS warn on NULL format to printf */
@@ -3466,6 +3470,7 @@ struct _sublex_info {
     OP *sub_op;		/* "lex_op" to use */
     char *super_bufptr;	/* PL_parser->bufptr that was */
     char *super_bufend;	/* PL_parser->bufend that was */
+    char *re_eval_start;/* start of "(?{..." text */
 };
 
 #include "parser.h"
@@ -4595,7 +4600,9 @@ EXTCONST unsigned char PL_freq[] = {	/* letter frequencies for mixed English/C *
 EXTCONST unsigned char PL_freq[];
 #endif
 
-#ifdef DEBUGGING
+/* Although only used for debugging, these constants must be available in
+ * non-debugging builds too, since they're used in ext/re/re_exec.c,
+ * which has DEBUGGING enabled always */
 #ifdef DOINIT
 EXTCONST char* const PL_block_type[] = {
 	"NULL",
@@ -4613,7 +4620,6 @@ EXTCONST char* const PL_block_type[] = {
 };
 #else
 EXTCONST char* PL_block_type[];
-#endif
 #endif
 
 /* These are all the compile time options that affect binary compatibility.
@@ -5828,8 +5834,8 @@ extern void moncontrol(int);
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

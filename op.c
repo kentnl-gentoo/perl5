@@ -103,6 +103,7 @@ recursive, but it's recursive on basic blocks, not on tree nodes.
 #include "perl.h"
 #include "keywords.h"
 #include "feature.h"
+#include "regcomp.h"
 
 #define CALL_PEEP(o) PL_peepp(aTHX_ o)
 #define CALL_RPEEP(o) PL_rpeepp(aTHX_ o)
@@ -465,6 +466,43 @@ Perl_allocmy(pTHX_ const char *const name, const STRLEN len, const U32 flags)
     return off;
 }
 
+/*
+=for apidoc alloccopstash
+
+Available only under threaded builds, this function allocates an entry in
+C<PL_stashpad> for the stash passed to it.
+
+=cut
+*/
+
+#ifdef USE_ITHREADS
+PADOFFSET
+Perl_alloccopstash(pTHX_ HV *hv)
+{
+    PADOFFSET off = 0, o = 1;
+    bool found_slot = FALSE;
+
+    PERL_ARGS_ASSERT_ALLOCCOPSTASH;
+
+    if (PL_stashpad[PL_stashpadix] == hv) return PL_stashpadix;
+
+    for (; o < PL_stashpadmax; ++o) {
+	if (PL_stashpad[o] == hv) return PL_stashpadix = o;
+	if (!PL_stashpad[o] || SvTYPE(PL_stashpad[o]) != SVt_PVHV)
+	    found_slot = TRUE, off = o;
+    }
+    if (!found_slot) {
+	Renew(PL_stashpad, PL_stashpadmax + 10, HV *);
+	Zero(PL_stashpad + PL_stashpadmax, 10, HV *);
+	off = PL_stashpadmax;
+	PL_stashpadmax += 10;
+    }
+
+    PL_stashpad[PL_stashpadix = off] = hv;
+    return off;
+}
+#endif
+
 /* free the body of an op without examining its contents.
  * Always use this rather than FreeOp directly */
 
@@ -705,6 +743,9 @@ Perl_op_clear(pTHX_ OP *o)
     case OP_MATCH:
     case OP_QR:
 clear_pmop:
+	if (!(cPMOPo->op_pmflags & PMf_CODELIST_PRIVATE))
+	    op_free(cPMOPo->op_code_list);
+	cPMOPo->op_code_list = NULL;
 	forget_pmop(cPMOPo, 1);
 	cPMOPo->op_pmreplrootu.op_pmreplroot = NULL;
         /* we use the same protection as the "SAFE" version of the PM_ macros
@@ -741,7 +782,6 @@ S_cop_free(pTHX_ COP* cop)
     PERL_ARGS_ASSERT_COP_FREE;
 
     CopFILE_free(cop);
-    CopSTASH_free(cop);
     if (! specialWARN(cop->cop_warnings))
 	PerlMemShared_free(cop->cop_warnings);
     cophh_free(CopHINTHASH_get(cop));
@@ -2022,6 +2062,9 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 	if (type != OP_LEAVESUBLV)
 	    goto nomod;
 	break; /* op_lvalue()ing was handled by ck_return() */
+
+    case OP_COREARGS:
+	return o;
     }
 
     /* [20011101.069] File test operators interpret OPf_REF to mean that
@@ -2062,8 +2105,7 @@ S_scalar_mod_type(const OP *o, I32 type)
     switch (type) {
     case OP_POS:
     case OP_SASSIGN:
-	assert(o);
-	if (o->op_type == OP_RV2GV)
+	if (o && o->op_type == OP_RV2GV)
 	    return FALSE;
 	/* FALL THROUGH */
     case OP_PREINC:
@@ -2632,7 +2674,7 @@ Perl_bind_match(pTHX_ I32 type, OP *left, OP *right)
     }
     else
 	return bind_match(type, left,
-		pmruntime(newPMOP(OP_MATCH, 0), right, 0));
+		pmruntime(newPMOP(OP_MATCH, 0), right, 0, 0));
 }
 
 OP *
@@ -2785,9 +2827,6 @@ Perl_newPROG(pTHX_ OP *o)
 	else
 	    scalar(PL_eval_root);
 
-	/* don't use LINKLIST, since PL_eval_root might indirect through
-	 * a rather expensive function call and LINKLIST evaluates its
-	 * argument more than once */
 	PL_eval_start = op_linklist(PL_eval_root);
 	PL_eval_root->op_private |= OPpREFCOUNTED;
 	OpREFCNT_set(PL_eval_root, 1);
@@ -2981,6 +3020,8 @@ S_fold_constants(pTHX_ register OP *o)
 	if (IN_LOCALE_COMPILETIME)
 	    goto nope;
 	break;
+    case OP_REPEAT:
+	if (o->op_private & OPpREPEAT_DOLIST) goto nope;
     }
 
     if (PL_parser && PL_parser->error_count)
@@ -4200,25 +4241,29 @@ Perl_newPMOP(pTHX_ I32 type, I32 flags)
  * split "pattern", which aren't. In the former case, expr will be a list
  * if the pattern contains more than one term (eg /a$b/) or if it contains
  * a replacement, ie s/// or tr///.
+ *
+ * When the pattern has been compiled within a new anon CV (for
+ * qr/(?{...})/ ), then floor indicates the savestack level just before
+ * the new sub was created
  */
 
 OP *
-Perl_pmruntime(pTHX_ OP *o, OP *expr, bool isreg)
+Perl_pmruntime(pTHX_ OP *o, OP *expr, bool isreg, I32 floor)
 {
     dVAR;
     PMOP *pm;
     LOGOP *rcop;
     I32 repl_has_vars = 0;
     OP* repl = NULL;
-    bool reglist;
+    bool is_trans = (o->op_type == OP_TRANS || o->op_type == OP_TRANSR);
+    bool is_compiletime;
+    bool has_code;
 
     PERL_ARGS_ASSERT_PMRUNTIME;
 
-    if (
-        o->op_type == OP_SUBST
-     || o->op_type == OP_TRANS || o->op_type == OP_TRANSR
-    ) {
-	/* last element in list is the replacement; pop it */
+    /* for s/// and tr///, last element in list is the replacement; pop it */
+
+    if (is_trans || o->op_type == OP_SUBST) {
 	OP* kid;
 	repl = cLISTOPx(expr)->op_last;
 	kid = cLISTOPx(expr)->op_first;
@@ -4228,60 +4273,222 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, bool isreg)
 	cLISTOPx(expr)->op_last = kid;
     }
 
-    if (isreg && expr->op_type == OP_LIST &&
-	cLISTOPx(expr)->op_first->op_sibling == cLISTOPx(expr)->op_last)
-    {
-	/* convert single element list to element */
+    /* for TRANS, convert LIST/PUSH/CONST into CONST, and pass to pmtrans() */
+
+    if (is_trans) {
 	OP* const oe = expr;
-	expr = cLISTOPx(oe)->op_first->op_sibling;
+	assert(expr->op_type == OP_LIST);
+	assert(cLISTOPx(expr)->op_first->op_type == OP_PUSHMARK);
+	assert(cLISTOPx(expr)->op_first->op_sibling == cLISTOPx(expr)->op_last);
+	expr = cLISTOPx(oe)->op_last;
 	cLISTOPx(oe)->op_first->op_sibling = NULL;
 	cLISTOPx(oe)->op_last = NULL;
 	op_free(oe);
-    }
 
-    if (o->op_type == OP_TRANS || o->op_type == OP_TRANSR) {
 	return pmtrans(o, expr, repl);
     }
 
-    reglist = isreg && expr->op_type == OP_LIST;
-    if (reglist)
-	op_null(expr);
+    /* find whether we have any runtime or code elements;
+     * at the same time, temporarily set the op_next of each DO block;
+     * then when we LINKLIST, this will cause the DO blocks to be excluded
+     * from the op_next chain (and from having LINKLIST recursively
+     * applied to them). We fix up the DOs specially later */
+
+    is_compiletime = 1;
+    has_code = 0;
+    if (expr->op_type == OP_LIST) {
+	OP *o;
+	for (o = cLISTOPx(expr)->op_first; o; o = o->op_sibling) {
+	    if (o->op_type == OP_NULL && (o->op_flags & OPf_SPECIAL)) {
+		has_code = 1;
+		assert(!o->op_next && o->op_sibling);
+		o->op_next = o->op_sibling;
+	    }
+	    else if (o->op_type != OP_CONST && o->op_type != OP_PUSHMARK)
+		is_compiletime = 0;
+	}
+    }
+    else if (expr->op_type != OP_CONST)
+	is_compiletime = 0;
+
+    LINKLIST(expr);
+
+    /* fix up DO blocks; treat each one as a separate little sub */
+
+    if (expr->op_type == OP_LIST) {
+	OP *o;
+	for (o = cLISTOPx(expr)->op_first; o; o = o->op_sibling) {
+	    if (!(o->op_type == OP_NULL && (o->op_flags & OPf_SPECIAL)))
+		continue;
+	    o->op_next = NULL; /* undo temporary hack from above */
+	    scalar(o);
+	    LINKLIST(o);
+	    if (cLISTOPo->op_first->op_type == OP_LEAVE) {
+		LISTOP *leave = cLISTOPx(cLISTOPo->op_first);
+		/* skip ENTER */
+		assert(leave->op_first->op_type == OP_ENTER);
+		assert(leave->op_first->op_sibling);
+		o->op_next = leave->op_first->op_sibling;
+		/* skip LEAVE */
+		assert(leave->op_flags & OPf_KIDS);
+		assert(leave->op_last->op_next = (OP*)leave);
+		leave->op_next = NULL; /* stop on last op */
+		op_null((OP*)leave);
+	    }
+	    else {
+		/* skip SCOPE */
+		OP *scope = cLISTOPo->op_first;
+		assert(scope->op_type == OP_SCOPE);
+		assert(scope->op_flags & OPf_KIDS);
+		scope->op_next = NULL; /* stop on last op */
+		op_null(scope);
+	    }
+	    /* have to peep the DOs individually as we've removed it from
+	     * the op_next chain */
+	    CALL_PEEP(o);
+	    if (is_compiletime)
+		/* runtime finalizes as part of finalizing whole tree */
+		finalize_optree(o);
+	}
+    }
 
     PL_hints |= HINT_BLOCK_SCOPE;
     pm = (PMOP*)o;
+    assert(floor==0 || (pm->op_pmflags & PMf_HAS_CV));
 
-    if (expr->op_type == OP_CONST) {
-	SV *pat = ((SVOP*)expr)->op_sv;
-	U32 pm_flags = pm->op_pmflags & RXf_PMf_COMPILETIME;
+    if (is_compiletime) {
+	U32 rx_flags = pm->op_pmflags & RXf_PMf_COMPILETIME;
+	regexp_engine const *eng = current_re_engine();
 
 	if (o->op_flags & OPf_SPECIAL)
-	    pm_flags |= RXf_SPLIT;
+	    rx_flags |= RXf_SPLIT;
 
-	if (DO_UTF8(pat)) {
-	    assert (SvUTF8(pat));
-	} else if (SvUTF8(pat)) {
-	    /* Not doing UTF-8, despite what the SV says. Is this only if we're
-	       trapped in use 'bytes'?  */
-	    /* Make a copy of the octet sequence, but without the flag on, as
-	       the compiler now honours the SvUTF8 flag on pat.  */
-	    STRLEN len;
-	    const char *const p = SvPV(pat, len);
-	    pat = newSVpvn_flags(p, len, SVs_TEMP);
-	}
+	if (!has_code || !eng->op_comp) {
+	    /* compile-time simple constant pattern */
 
-	PM_SETRE(pm, CALLREGCOMP(pat, pm_flags));
+	    if ((pm->op_pmflags & PMf_HAS_CV) && !has_code) {
+		/* whoops! we guessed that a qr// had a code block, but we
+		 * were wrong (e.g. /[(?{}]/ ). Throw away the PL_compcv
+		 * that isn't required now. Note that we have to be pretty
+		 * confident that nothing used that CV's pad while the
+		 * regex was parsed */
+		assert(AvFILLp(PL_comppad) == 0); /* just @_ */
+		LEAVE_SCOPE(floor);
+		pm->op_pmflags &= ~PMf_HAS_CV;
+	    }
 
+	    PM_SETRE(pm,
+		eng->op_comp
+		    ? eng->op_comp(aTHX_ NULL, 0, expr, eng, NULL, NULL,
+					rx_flags, pm->op_pmflags)
+		    : Perl_re_op_compile(aTHX_ NULL, 0, expr, eng, NULL, NULL,
+					rx_flags, pm->op_pmflags)
+	    );
 #ifdef PERL_MAD
-	op_getmad(expr,(OP*)pm,'e');
+	    op_getmad(expr,(OP*)pm,'e');
 #else
-	op_free(expr);
+	    op_free(expr);
 #endif
+	}
+	else {
+	    /* compile-time pattern that includes literal code blocks */
+	    REGEXP* re = eng->op_comp(aTHX_ NULL, 0, expr, eng, NULL, NULL,
+			rx_flags,
+			(pm->op_pmflags |
+			    ((PL_hints & HINT_RE_EVAL) ? PMf_USE_RE_EVAL : 0))
+		    );
+	    PM_SETRE(pm, re);
+	    if (pm->op_pmflags & PMf_HAS_CV) {
+		CV *cv;
+		/* this QR op (and the anon sub we embed it in) is never
+		 * actually executed. It's just a placeholder where we can
+		 * squirrel away expr in op_code_list without the peephole
+		 * optimiser etc processing it for a second time */
+		OP *qr = newPMOP(OP_QR, 0);
+		((PMOP*)qr)->op_code_list = expr;
+
+		/* handle the implicit sub{} wrapped round the qr/(?{..})/ */
+		SvREFCNT_inc_simple_void(PL_compcv);
+		cv = newATTRSUB(floor, 0, NULL, NULL, qr);
+		((struct regexp *)SvANY(re))->qr_anoncv = cv;
+
+		/* attach the anon CV to the pad so that
+		 * pad_fixup_inner_anons() can find it */
+		(void)pad_add_anon(cv, o->op_type);
+		SvREFCNT_inc_simple_void(cv);
+	    }
+	    else {
+		pm->op_code_list = expr;
+	    }
+	}
     }
     else {
-	if (pm->op_pmflags & PMf_KEEP || !(PL_hints & HINT_RE_EVAL))
-	    expr = newUNOP((!(PL_hints & HINT_RE_EVAL)
-			    ? OP_REGCRESET
-			    : OP_REGCMAYBE),0,expr);
+	/* runtime pattern: build chain of regcomp etc ops */
+	bool reglist;
+	PADOFFSET cv_targ = 0;
+
+	reglist = isreg && expr->op_type == OP_LIST;
+	if (reglist)
+	    op_null(expr);
+
+	if (has_code) {
+	    pm->op_code_list = expr;
+	    /* don't free op_code_list; its ops are embedded elsewhere too */
+	    pm->op_pmflags |= PMf_CODELIST_PRIVATE;
+	}
+
+	/* the OP_REGCMAYBE is a placeholder in the non-threaded case
+	 * to allow its op_next to be pointed past the regcomp and
+	 * preceding stacking ops;
+	 * OP_REGCRESET is there to reset taint before executing the
+	 * stacking ops */
+	if (pm->op_pmflags & PMf_KEEP || PL_tainting)
+	    expr = newUNOP((PL_tainting ? OP_REGCRESET : OP_REGCMAYBE),0,expr);
+
+	if (pm->op_pmflags & PMf_HAS_CV) {
+	    /* we have a runtime qr with literal code. This means
+	     * that the qr// has been wrapped in a new CV, which
+	     * means that runtime consts, vars etc will have been compiled
+	     * against a new pad. So... we need to execute those ops
+	     * within the environment of the new CV. So wrap them in a call
+	     * to a new anon sub. i.e. for
+	     *
+	     *     qr/a$b(?{...})/,
+	     *
+	     * we build an anon sub that looks like
+	     *
+	     *     sub { "a", $b, '(?{...})' }
+	     *
+	     * and call it, passing the returned list to regcomp.
+	     * Or to put it another way, the list of ops that get executed
+	     * are:
+	     *
+	     *     normal              PMf_HAS_CV
+	     *     ------              -------------------
+	     *                         pushmark (for regcomp)
+	     *                         pushmark (for entersub)
+	     *                         pushmark (for refgen)
+	     *                         anoncode
+	     *                         refgen
+	     *                         entersub
+	     *     regcreset                  regcreset
+	     *     pushmark                   pushmark
+	     *     const("a")                 const("a")
+	     *     gvsv(b)                    gvsv(b)
+	     *     const("(?{...})")          const("(?{...})")
+	     *                                leavesub
+	     *     regcomp             regcomp
+	     */
+
+	    SvREFCNT_inc_simple_void(PL_compcv);
+	    /* these lines are just an unrolled newANONATTRSUB */
+	    expr = newSVOP(OP_ANONCODE, 0,
+		    MUTABLE_SV(newATTRSUB(floor, 0, NULL, NULL, expr)));
+	    cv_targ = expr->op_targ;
+	    expr = newUNOP(OP_REFGEN, 0, expr);
+
+	    expr = list(force_list(newUNOP(OP_ENTERSUB, 0, scalar(expr))));
+	}
 
 	NewOp(1101, rcop, 1, LOGOP);
 	rcop->op_type = OP_REGCOMP;
@@ -4290,16 +4497,15 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, bool isreg)
 	rcop->op_flags |= OPf_KIDS
 			    | ((PL_hints & HINT_RE_EVAL) ? OPf_SPECIAL : 0)
 			    | (reglist ? OPf_STACKED : 0);
-	rcop->op_private = 1;
+	rcop->op_private = 0;
 	rcop->op_other = o;
-	if (reglist)
-	    rcop->op_targ = pad_alloc(rcop->op_type, SVs_PADTMP);
+	rcop->op_targ = cv_targ;
 
 	/* /$x/ may cause an eval, since $x might be qr/(?{..})/  */
 	if (PL_hints & HINT_RE_EVAL) PL_cv_has_eval = 1;
 
 	/* establish postfix order */
-	if (pm->op_pmflags & PMf_KEEP || !(PL_hints & HINT_RE_EVAL)) {
+	if (expr->op_type == OP_REGCRESET || expr->op_type == OP_REGCMAYBE) {
 	    LINKLIST(expr);
 	    rcop->op_next = expr;
 	    ((UNOP*)expr)->op_first->op_next = (OP*)rcop;
@@ -4604,7 +4810,7 @@ Perl_utilize(pTHX_ int aver, I32 floor, OP *version, OP *idop, OP *arg)
     OP *imop;
     OP *veop;
 #ifdef PERL_MAD
-    OP *pegop = newOP(OP_NULL,0);
+    OP *pegop = PL_madskills ? newOP(OP_NULL,0) : NULL;
 #endif
     SV *use_version = NULL;
 
@@ -4739,11 +4945,6 @@ Perl_utilize(pTHX_ int aver, I32 floor, OP *version, OP *idop, OP *arg)
 	PL_cop_seqmax++;
 
 #ifdef PERL_MAD
-    if (!PL_madskills) {
-	/* FIXME - don't allocate pegop if !PL_madskills */
-	op_free(pegop);
-	return NULL;
-    }
     return pegop;
 #endif
 }
@@ -6576,11 +6777,6 @@ Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
     if (SvTYPE(gv) != SVt_PVGV) {	/* Maybe prototype now, and had at
 					   maximum a prototype before. */
 	if (SvTYPE(gv) > SVt_NULL) {
-	    if (!SvPOK((const SV *)gv)
-		&& !(SvIOK((const SV *)gv) && SvIVX((const SV *)gv) == -1))
-	    {
-		Perl_ck_warner_d(aTHX_ packWARN(WARN_PROTOTYPE), "Runaway prototype");
-	    }
 	    cv_ckproto_len_flags((const CV *)gv, NULL, ps, ps_len, ps_utf8);
 	}
 	if (ps) {
@@ -6660,7 +6856,6 @@ Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 	}
     }
     if (const_sv) {
-	HV *stash;
 	SvREFCNT_inc_simple_void_NN(const_sv);
 	if (cv) {
 	    assert(!CvROOT(cv) && !CvCONST(cv));
@@ -6677,14 +6872,6 @@ Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 		const_sv
 	    );
 	}
-	stash =
-            (CvGV(cv) && GvSTASH(CvGV(cv)))
-                ? GvSTASH(CvGV(cv))
-                : CvSTASH(cv)
-                    ? CvSTASH(cv)
-                    : PL_curstash;
-	if (HvENAME_HEK(stash))
-            mro_method_changed_in(stash); /* sub Foo::Bar () { 123 } */
 	if (PL_madskills)
 	    goto install_block;
 	op_free(block);
@@ -6997,9 +7184,7 @@ Perl_newCONSTSUB_flags(pTHX_ HV *stash, const char *name, STRLEN len,
 
     if (stash) {
 	SAVEGENERICSV(PL_curstash);
-	SAVECOPSTASH(PL_curcop);
 	PL_curstash = (HV *)SvREFCNT_inc_simple_NN(stash);
-	CopSTASH_set(PL_curcop,stash);
     }
 
     /* file becomes the CvFILE. For an XS, it's usually static storage,
@@ -7011,10 +7196,6 @@ Perl_newCONSTSUB_flags(pTHX_ HV *stash, const char *name, STRLEN len,
     CvXSUBANY(cv).any_ptr = sv;
     CvCONST_on(cv);
 
-#ifdef USE_ITHREADS
-    if (stash)
-	CopSTASH_free(PL_curcop);
-#endif
     LEAVE;
 
     return cv;
@@ -7108,6 +7289,23 @@ Perl_newXS_len_flags(pTHX_ const char *name, STRLEN len,
 	CvDYNFILE_on(cv);
     }
     sv_setpv(MUTABLE_SV(cv), proto);
+    return cv;
+}
+
+CV *
+Perl_newSTUB(pTHX_ GV *gv, bool fake)
+{
+    register CV *cv = MUTABLE_CV(newSV_type(SVt_PVCV));
+    PERL_ARGS_ASSERT_NEWSTUB;
+    assert(!GvCVu(gv));
+    GvCV_set(gv, cv);
+    GvCVGEN(gv) = 0;
+    if (!fake && HvENAME_HEK(GvSTASH(gv)))
+	mro_method_changed_in(GvSTASH(gv));
+    CvGV_set(cv, gv);
+    CvFILE_set_from_cop(cv, PL_curcop);
+    CvSTASH_set(cv, PL_curstash);
+    GvMULTI_on(gv);
     return cv;
 }
 
@@ -8088,6 +8286,10 @@ Perl_ck_fun(pTHX_ OP *o)
 		scalar(kid);
 		break;
 	    case OA_SCALARREF:
+		if ((type == OP_UNDEF || type == OP_POS)
+		    && numargs == 1 && !(oa >> 4)
+		    && kid->op_type == OP_LIST)
+		    return too_many_arguments_pv(o,PL_op_desc[type], 0);
 		op_lvalue(scalar(kid), type);
 		break;
 	    }
@@ -8953,7 +9155,7 @@ Perl_ck_split(pTHX_ OP *o)
     if (kid->op_type != OP_MATCH || kid->op_flags & OPf_STACKED) {
 	OP * const sibl = kid->op_sibling;
 	kid->op_sibling = 0;
-	kid = pmruntime( newPMOP(OP_MATCH, OPf_SPECIAL), kid, 0);
+	kid = pmruntime( newPMOP(OP_MATCH, OPf_SPECIAL), kid, 0, 0);
 	if (cLISTOPo->op_first == cLISTOPo->op_last)
 	    cLISTOPo->op_last = kid;
 	cLISTOPo->op_first = kid;
@@ -10019,8 +10221,7 @@ Perl_rpeep(pTHX_ register OP *o)
 		       data.  */
 		    firstcop->cop_line = secondcop->cop_line;
 #ifdef USE_ITHREADS
-		    firstcop->cop_stashpv = secondcop->cop_stashpv;
-		    firstcop->cop_stashlen = secondcop->cop_stashlen;
+		    firstcop->cop_stashoff = secondcop->cop_stashoff;
 		    firstcop->cop_file = secondcop->cop_file;
 #else
 		    firstcop->cop_stash = secondcop->cop_stash;
@@ -10032,7 +10233,7 @@ Perl_rpeep(pTHX_ register OP *o)
 		    firstcop->cop_hints_hash = secondcop->cop_hints_hash;
 
 #ifdef USE_ITHREADS
-		    secondcop->cop_stashpv = NULL;
+		    secondcop->cop_stashoff = 0;
 		    secondcop->cop_file = NULL;
 #else
 		    secondcop->cop_stash = NULL;
@@ -10383,7 +10584,7 @@ Perl_rpeep(pTHX_ register OP *o)
 	case OP_RUNCV:
 	    if (!(o->op_private & OPpOFFBYONE) && !CvCLONE(PL_compcv)) {
 		SV *sv;
-		if (CvUNIQUE(PL_compcv)) sv = &PL_sv_undef;
+		if (CvEVAL(PL_compcv)) sv = &PL_sv_undef;
 		else {
 		    sv = newRV((SV *)PL_compcv);
 		    sv_rvweaken(sv);
@@ -10527,7 +10728,7 @@ Perl_custom_op_register(pTHX_ Perl_ppaddr_t ppaddr, const XOP *xop)
 This function assigns the prototype of the named core function to C<sv>, or
 to a new mortal SV if C<sv> is NULL.  It returns the modified C<sv>, or
 NULL if the core function has no prototype.  C<code> is a code as returned
-by C<keyword()>.  It must be negative and unequal to -KEY_CORE.
+by C<keyword()>.  It must not be equal to 0 or -KEY_CORE.
 
 =cut
 */
@@ -10544,19 +10745,24 @@ Perl_core_prototype(pTHX_ SV *sv, const char *name, const int code,
 
     PERL_ARGS_ASSERT_CORE_PROTOTYPE;
 
-    assert (code < 0 && code != -KEY_CORE);
+    assert (code && code != -KEY_CORE);
 
     if (!sv) sv = sv_newmortal();
 
 #define retsetpvs(x,y) sv_setpvs(sv, x); if(opnum) *opnum=(y); return sv
 
-    switch (-code) {
+    switch (code < 0 ? -code : code) {
     case KEY_and   : case KEY_chop: case KEY_chomp:
-    case KEY_cmp   : case KEY_exec: case KEY_eq   :
-    case KEY_ge    : case KEY_gt  : case KEY_le   :
-    case KEY_lt    : case KEY_ne  : case KEY_or   :
-    case KEY_select: case KEY_system: case KEY_x  : case KEY_xor:
+    case KEY_cmp   : case KEY_defined: case KEY_delete: case KEY_exec  :
+    case KEY_exists: case KEY_eq     : case KEY_ge    : case KEY_goto  :
+    case KEY_grep  : case KEY_gt     : case KEY_last  : case KEY_le    :
+    case KEY_lt    : case KEY_map    : case KEY_ne    : case KEY_next  :
+    case KEY_or    : case KEY_print  : case KEY_printf: case KEY_qr    :
+    case KEY_redo  : case KEY_require: case KEY_return: case KEY_say   :
+    case KEY_select: case KEY_sort   : case KEY_split : case KEY_system:
+    case KEY_x     : case KEY_xor    :
 	if (!opnum) return NULL; nullret = TRUE; goto findopnum;
+    case KEY_glob:    retsetpvs("_;", OP_GLOB);
     case KEY_keys:    retsetpvs("+", OP_KEYS);
     case KEY_values:  retsetpvs("+", OP_VALUES);
     case KEY_each:    retsetpvs("+", OP_EACH);
@@ -10564,6 +10770,7 @@ Perl_core_prototype(pTHX_ SV *sv, const char *name, const int code,
     case KEY_unshift: retsetpvs("+@", OP_UNSHIFT);
     case KEY_pop:     retsetpvs(";+", OP_POP);
     case KEY_shift:   retsetpvs(";+", OP_SHIFT);
+    case KEY_pos:     retsetpvs(";\\[$*]", OP_POS);
     case KEY_splice:
 	retsetpvs("+;$$@", OP_SPLICE);
     case KEY___FILE__: case KEY___LINE__: case KEY___PACKAGE__:
@@ -10586,7 +10793,7 @@ Perl_core_prototype(pTHX_ SV *sv, const char *name, const int code,
 	}
 	i++;
     }
-    assert(0); return NULL;    /* Should not happen... */
+    return NULL;
   found:
     defgv = PL_opargs[i] & OA_DEFGV;
     oa = PL_opargs[i] >> OASHIFT;
@@ -10610,7 +10817,7 @@ Perl_core_prototype(pTHX_ SV *sv, const char *name, const int code,
 	    str[n++] = '$';
 	    str[n++] = '@';
 	    str[n++] = '%';
-	    if (i == OP_LOCK) str[n++] = '&';
+	    if (i == OP_LOCK || i == OP_UNDEF) str[n++] = '&';
 	    str[n++] = '*';
 	    str[n++] = ']';
 	}
@@ -10678,14 +10885,14 @@ Perl_coresub_op(pTHX_ SV * const coreargssv, const int code,
 	  onearg:
 	      if (is_handle_constructor(o, 1))
 		argop->op_private |= OPpCOREARGS_DEREF1;
+	      if (scalar_mod_type(NULL, opnum))
+		argop->op_private |= OPpCOREARGS_SCALARMOD;
 	    }
 	    return o;
 	default:
-	    o = convert(opnum,0,argop);
+	    o = convert(opnum,OPf_SPECIAL*(opnum == OP_GLOB),argop);
 	    if (is_handle_constructor(o, 2))
 		argop->op_private |= OPpCOREARGS_DEREF2;
-	    if (scalar_mod_type(NULL, opnum))
-		argop->op_private |= OPpCOREARGS_SCALARMOD;
 	    if (opnum == OP_SUBSTR) {
 		o->op_private |= OPpMAYBE_LVSUB;
 		return o;
@@ -10828,8 +11035,8 @@ const_sv_xsub(pTHX_ CV* cv)
  * Local variables:
  * c-indentation-style: bsd
  * c-basic-offset: 4
- * indent-tabs-mode: t
+ * indent-tabs-mode: nil
  * End:
  *
- * ex: set ts=8 sts=4 sw=4 noet:
+ * ex: set ts=8 sts=4 sw=4 et:
  */

@@ -4207,7 +4207,7 @@ zero, typically at scope exit:
     }
 
 B<WARNING:> The previous example has a bug because the automatic
-close that happens when the refcount on C<handle> does not
+close that happens when the refcount on C<handle> reaches zero does not
 properly detect and report failures.  I<Always> close the handle
 yourself and inspect the return value.
 
@@ -5154,8 +5154,8 @@ function has no prototype).  FUNCTION is a reference to, or the name of,
 the function whose prototype you want to retrieve.
 
 If FUNCTION is a string starting with C<CORE::>, the rest is taken as a
-name for a Perl builtin.  If the builtin is not I<overridable> (such as
-C<qw//>) or if its arguments cannot be adequately expressed by a prototype
+name for a Perl builtin.  If the builtin's arguments
+cannot be adequately expressed by a prototype
 (such as C<system>), prototype() returns C<undef>, because the builtin
 does not really behave like a Perl function.  Otherwise, the string
 describing the equivalent prototype is returned.
@@ -6807,9 +6807,9 @@ In time-critical applications, it is worthwhile to avoid splitting
 into more fields than necessary.  Thus, when assigning to a list,
 if LIMIT is omitted (or zero), then LIMIT is treated as though it
 were one larger than the number of variables in the list; for the
-following, LIMIT is implicitly 4:
+following, LIMIT is implicitly 3:
 
-    ($login, $passwd, $remainder) = split(/:/);
+    ($login, $passwd) = split(/:/);
 
 Note that splitting an EXPR that evaluates to the empty string always
 produces zero fields, regardless of the LIMIT specified.
@@ -7252,7 +7252,7 @@ Perl versions, it should call C<srand>; otherwise most programs won't call
 C<srand()> at all.
 
 But there are a few situations in recent Perls where programs are likely to
-want to call C<srand>.  One is for generating predictable results generally for
+want to call C<srand>.  One is for generating predictable results, generally for
 testing or debugging.  There, you use C<srand($seed)>, with the same C<$seed>
 each time.  Another case is that you may want to call C<srand()>
 after a C<fork()> to avoid child processes sharing the same seed value as the

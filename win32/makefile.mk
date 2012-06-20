@@ -38,7 +38,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.17.0
+#INST_VER	*= \5.17.1
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -694,13 +694,8 @@ UTILS		=			\
 .IF "$(CCTYPE)" == "GCC"
 
 .IF "$(WIN64)" == "define"
-.IF "$(GCCCROSS)" == "define"
 CFGSH_TMPL	= config.gc64
 CFGH_TMPL	= config_H.gc64
-.ELSE
-CFGSH_TMPL	= config.gc64nox
-CFGH_TMPL	= config_H.gc64nox
-.ENDIF
 .ELSE
 CFGSH_TMPL	= config.gc
 CFGH_TMPL	= config_H.gc
@@ -881,7 +876,6 @@ DYNALOADER	= ..\DynaLoader$(o)
 # trying to fit them all on the command line)
 #	-- BKS 10-17-1999
 CFG_VARS	=					\
-		INST_DRV=$(INST_DRV)		~	\
 		INST_TOP=$(INST_TOP)	~	\
 		INST_VER=$(INST_VER)	~	\
 		INST_ARCH=$(INST_ARCH)		~	\
@@ -909,7 +903,8 @@ CFG_VARS	=					\
 		uselargefiles=$(USE_LARGE_FILES)	~	\
 		usesitecustomize=$(USE_SITECUST)	~	\
 		LINK_FLAGS=$(LINK_FLAGS)	~	\
-		optimize=$(OPTIMIZE)
+		optimize=$(OPTIMIZE)	~	\
+		ARCHPREFIX=$(ARCHPREFIX)
 
 ICWD = -I..\dist\Cwd -I..\dist\Cwd\lib
 
@@ -976,17 +971,15 @@ config.w32 : $(CFGSH_TMPL)
 # edit config.gc, then make perl using GCC in a minimal configuration (i.e.
 # with MULTI, ITHREADS, IMP_SYS, LARGE_FILES and PERLIO off), then make
 # this target to regenerate config_H.gc.
-# unfortunately, some further manual editing is also then required to restore all
-# the special _MSC_VER handling that is otherwise lost.
-# repeat for config.gc64 and config_H.gc64, and again for config.gc64nox and
-# config_H.gc64nox, if you have suitable build environments, otherwise hand-edit
-# them to maintain the same differences with config.gc and config_H.gc as before.
+# repeat for config.gc64 and config_H.gc64, if you have a suitable build
+# environment, otherwise hand-edit them to maintain the same differences with
+# config.gc and config_H.gc as before.
 regen_config_h:
 	$(MINIPERL) -I..\lib config_sh.PL --cfgsh-option-file $(mktmp $(CFG_VARS)) \
 	    $(CFGSH_TMPL) > ..\config.sh
 	$(MINIPERL) -I..\lib ..\configpm --chdir=..
 	-del /f $(CFGH_TMPL)
-	-$(MINIPERL) -I..\lib $(ICWD) config_h.PL "INST_VER=$(INST_VER)"
+	-$(MINIPERL) -I..\lib $(ICWD) config_h.PL "ARCHPREFIX=$(ARCHPREFIX)"
 	rename config.h $(CFGH_TMPL)
 
 $(CONFIGPM) : $(MINIPERL) ..\config.sh config_h.PL ..\minimod.pl
@@ -995,7 +988,7 @@ $(CONFIGPM) : $(MINIPERL) ..\config.sh config_h.PL ..\minimod.pl
 	$(XCOPY) ..\*.h $(COREDIR)\*.*
 	$(XCOPY) *.h $(COREDIR)\*.*
 	$(RCOPY) include $(COREDIR)\*.*
-	$(MINIPERL) -I..\lib $(ICWD) config_h.PL "INST_VER=$(INST_VER)" \
+	$(MINIPERL) -I..\lib $(ICWD) config_h.PL "ARCHPREFIX=$(ARCHPREFIX)" \
 	    || $(MAKE) $(MAKEMACROS) $(CONFIGPM) $(MAKEFILE)
 
 ..\lib\buildcustomize.pl: $(MINIPERL) ..\write_buildcustomize.pl
@@ -1217,7 +1210,7 @@ Extensions_realclean :
 
 doc: $(PERLEXE) ..\pod\perltoc.pod
 	$(PERLEXE) -I..\lib ..\installhtml --podroot=.. --htmldir=$(HTMLDIR) \
-	    --podpath=pod:lib:ext:utils --htmlroot="file://$(INST_HTML:s,:,|,)"\
+	    --podpath=pod:lib:utils --htmlroot="file://$(INST_HTML:s,:,|,)"\
 	    --recurse
 
 # Note that this next section is parsed (and regenerated) by pod/buildtoc
@@ -1261,7 +1254,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vmesa    ..\pod\perlvmesa.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5170delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5171delta.pod
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(PERLEXE) $(ICWD) ..\autodoc.pl ..
 	$(PERLEXE) $(ICWD) ..\pod\perlmodlib.pl -q
@@ -1353,7 +1346,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5170delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perl5171delta.pod perlaix.pod perlamiga.pod perlapi.pod \
 	    perlbeos.pod perlbs2000.pod perlce.pod perlcn.pod \
 	    perlcygwin.pod perldgux.pod perldos.pod perlepoc.pod \
 	    perlfreebsd.pod perlhaiku.pod perlhpux.pod perlhurd.pod \
