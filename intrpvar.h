@@ -614,6 +614,7 @@ PERLVAR(I, VertSpace,   SV *)
 /* utf8 character class swashes */
 PERLVAR(I, utf8_alnum,	SV *)
 PERLVAR(I, utf8_alpha,	SV *)
+PERLVAR(I, utf8_blank,	SV *)
 PERLVAR(I, utf8_space,	SV *)
 PERLVAR(I, utf8_graph,	SV *)
 PERLVAR(I, utf8_digit,	SV *)
@@ -805,17 +806,6 @@ PERLVARI(I, dumper_fd,	int,	-1)
 PERLVARI(I, madskills,	bool,	FALSE)	/* preserve all syntactic info */
 					/* (MAD = Misc Attribute Decoration) */
 PERLVARI(I, xmlfp,	PerlIO *, NULL)
-#endif
-
-#ifdef PL_OP_SLAB_ALLOC
-PERLVAR(I, OpPtr,	I32 **)
-PERLVARI(I, OpSpace,	I32,	0)
-PERLVAR(I, OpSlab,	I32 *)
-#endif
-
-#ifdef PERL_DEBUG_READONLY_OPS
-PERLVARI(I, slabs,	I32**,	NULL)	/* Array of slabs that have been allocated */
-PERLVARI(I, slab_count, U32,	0)	/* Size of the array */
 #endif
 
 #ifdef DEBUG_LEAKING_SCALARS

@@ -2,6 +2,8 @@
 #
 # Regenerate (overwriting only if changed):
 #
+#    mg_names.c
+#    mg_raw.h
 #    mg_vtable.h
 #    pod/perlguts.pod
 #
@@ -121,7 +123,7 @@ my %sig =
      'isa' => {set => 'setisa', clear => 'clearisa'},
      'isaelem' => {set => 'setisa'},
      'arylen' => {get => 'getarylen', set => 'setarylen', const => 1},
-     'arylen_p' => {free => 'freearylen_p'},
+     'arylen_p' => {clear => 'cleararylen_p', free => 'freearylen_p'},
      'mglob' => {set => 'setmglob'},
      'nkeys' => {get => 'getnkeys', set => 'setnkeys'},
      'taint' => {get => 'gettaint', set => 'settaint'},

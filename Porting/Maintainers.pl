@@ -229,7 +229,7 @@ use File::Glob qw(:case);
 
     'autodie' => {
         'MAINTAINER'   => 'pjf',
-        'DISTRIBUTION' => 'PJF/autodie-2.11.tar.gz',
+        'DISTRIBUTION' => 'PJF/autodie-2.12.tar.gz',
         'FILES'        => q[cpan/autodie],
         'EXCLUDED'     => [
             qr{^inc/Module/},
@@ -807,7 +807,7 @@ use File::Glob qw(:case);
 
     'File::Fetch' => {
         'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/File-Fetch-0.34.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/File-Fetch-0.36.tar.gz',
         'FILES'        => q[cpan/File-Fetch],
         'UPSTREAM'     => 'cpan',
     },
@@ -842,7 +842,7 @@ use File::Glob qw(:case);
 
     'File::stat' => {
         'MAINTAINER' => 'p5p',
-        'FILES'      => q[lib/File/stat.{pm,t}],
+        'FILES'      => q[lib/File/stat{.pm,*.t}],
         'UPSTREAM'   => 'blead',
     },
 
@@ -1260,7 +1260,7 @@ use File::Glob qw(:case);
 
     'Module::CoreList' => {
         'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.67.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.68.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
         'UPSTREAM'     => 'blead',
     },
@@ -1637,7 +1637,7 @@ use File::Glob qw(:case);
 
     'Socket' => {
         'MAINTAINER'   => 'pevans',
-        'DISTRIBUTION' => 'PEVANS/Socket-2.001.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Socket-2.002.tar.gz',
         'FILES'        => q[cpan/Socket],
         'UPSTREAM'     => 'cpan',
     },

@@ -397,6 +397,7 @@ Does not use C<TARG>.  See also C<XPUSHu>, C<mPUSHu> and C<PUSHu>.
 #define AMGf_unary	8
 #define AMGf_numeric	0x10	/* for Perl_try_amagic_bin */
 #define AMGf_set	0x20	/* for Perl_try_amagic_bin */
+#define AMGf_want_list	0x40
 
 
 /* do SvGETMAGIC on the stack args before checking for overload */
@@ -418,21 +419,41 @@ Does not use C<TARG>.  See also C<XPUSHu>, C<mPUSHu> and C<PUSHu>.
 /* No longer used in core. Use AMG_CALLunary instead */
 #define AMG_CALLun(sv,meth) AMG_CALLunary(sv, CAT2(meth,_amg))
 
-#define tryAMAGICunTARGET(meth, shift, jump)			\
+#define tryAMAGICunTARGET(meth, shift, jump) \
+    tryAMAGICunTARGET_flags(meth, shift, jump, 0)
+#define tryAMAGICunTARGETlist(meth, shift, jump)          \
+    tryAMAGICunTARGET_flags(meth, shift, jump, AMGf_want_list)
+#define tryAMAGICunTARGET_flags(meth, shift, jump, flags)	\
     STMT_START {						\
-	dATARGET;						\
 	dSP;							\
 	SV *tmpsv;						\
 	SV *arg= sp[shift];					\
+        int gimme = GIMME_V;                                    \
 	if (SvAMAGIC(arg) &&					\
 	    (tmpsv = amagic_call(arg, &PL_sv_undef, meth,	\
-				 AMGf_noright | AMGf_unary))) {	\
+				 flags | AMGf_noright | AMGf_unary))) {	\
 	    SPAGAIN;						\
 	    sp += shift;					\
-	    sv_setsv(TARG, tmpsv);				\
-	    if (opASSIGN)					\
-		sp--;						\
-	    SETTARG;						\
+            if (gimme == G_VOID) {                              \
+                (void)POPs; /* XXX ??? */                       \
+            }                                                   \
+            else if ((flags & AMGf_want_list) && gimme == G_ARRAY) { \
+                int i;                                          \
+                I32 len;                                        \
+                assert(SvTYPE(tmpsv) == SVt_PVAV);              \
+                len = av_len((AV *)tmpsv) + 1;                  \
+                (void)POPs; /* get rid of the arg */            \
+                EXTEND(sp, len);                                \
+                for (i = 0; i < len; ++i)                       \
+                    PUSHs(av_shift((AV *)tmpsv));               \
+            }                                                   \
+            else { /* AMGf_want_scalar */                       \
+                dATARGET; /* just use the arg's location */     \
+                sv_setsv(TARG, tmpsv);                          \
+                if (opASSIGN)                                   \
+                    sp--;                                       \
+                SETTARG;                                        \
+            }                                                   \
 	    PUTBACK;						\
 	    if (jump) {						\
 	        OP *jump_o = NORMAL->op_next;                   \
@@ -475,8 +496,8 @@ True if this op will be the return value of an lvalue subroutine
 
 #define SvCANEXISTDELETE(sv) \
  (!SvRMAGICAL(sv)            \
-  || ((mg = mg_find((const SV *) sv, PERL_MAGIC_tied))           \
-      && (stash = SvSTASH(SvRV(SvTIED_obj(MUTABLE_SV(sv), mg)))) \
+  || !(mg = mg_find((const SV *) sv, PERL_MAGIC_tied))           \
+  || (   (stash = SvSTASH(SvRV(SvTIED_obj(MUTABLE_SV(sv), mg)))) \
       && gv_fetchmethod_autoload(stash, "EXISTS", TRUE)          \
       && gv_fetchmethod_autoload(stash, "DELETE", TRUE)          \
      )                       \
@@ -504,6 +525,9 @@ True if this op will be the return value of an lvalue subroutine
     )
 #  define MAYBE_DEREF_GV(sv)      MAYBE_DEREF_GV_flags(sv,SV_GMAGIC)
 #  define MAYBE_DEREF_GV_nomg(sv) MAYBE_DEREF_GV_flags(sv,0)
+
+#  define FIND_RUNCV_root_eq	1
+#  define FIND_RUNCV_level_eq	2
 
 #endif
 

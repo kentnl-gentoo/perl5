@@ -38,7 +38,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.17.1
+#INST_VER	*= \5.17.2
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -194,11 +194,13 @@ CCHOME		*= $(MSVCDIR)
 #
 
 .IF "$(GCCCROSS)" == "define"
-CCINCDIR *= $(CCHOME)\mingw\include
-CCLIBDIR *= $(CCHOME)\mingw\lib
+CCINCDIR *= $(CCHOME)\x86_64-w64-mingw32\include
+CCLIBDIR *= $(CCHOME)\x86_64-w64-mingw32\lib
+CCDLLDIR *= $(CCLIBDIR)
 .ELSE
 CCINCDIR *= $(CCHOME)\include
 CCLIBDIR *= $(CCHOME)\lib
+CCDLLDIR *= $(CCHOME)\bin
 .ENDIF
 
 #
@@ -290,7 +292,7 @@ BUILDOPT	+= -DPERL_IMPLICIT_CONTEXT
 BUILDOPT	+= -DPERL_IMPLICIT_SYS
 .ENDIF
 
-.IMPORT .IGNORE : PROCESSOR_ARCHITECTURE PROCESSOR_ARCHITEW6432 WIN64
+.IMPORT .IGNORE : PROCESSOR_ARCHITECTURE PROCESSOR_ARCHITEW6432 WIN64 CCHOME
 
 PROCESSOR_ARCHITECTURE *= x86
 
@@ -1254,7 +1256,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vmesa    ..\pod\perlvmesa.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5171delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5172delta.pod
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(PERLEXE) $(ICWD) ..\autodoc.pl ..
 	$(PERLEXE) $(ICWD) ..\pod\perlmodlib.pl -q
@@ -1346,7 +1348,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5171delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perl5172delta.pod perlaix.pod perlamiga.pod perlapi.pod \
 	    perlbeos.pod perlbs2000.pod perlce.pod perlcn.pod \
 	    perlcygwin.pod perldgux.pod perldos.pod perlepoc.pod \
 	    perlfreebsd.pod perlhaiku.pod perlhpux.pod perlhurd.pod \
@@ -1412,7 +1414,6 @@ test-prep : all utils ..\pod\perltoc.pod
 	$(XCOPY) $(PERLEXE) ..\t\$(NULL)
 	$(XCOPY) $(PERLDLL) ..\t\$(NULL)
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
-
 .IF "$(CCTYPE)" == "GCC"
 # If building with gcc versions 4.x.x or greater, then
 # the GCC helper DLL will also need copied to the test directory.
@@ -1420,11 +1421,9 @@ test-prep : all utils ..\pod\perltoc.pod
 # your compiler, and upon the values of "x".
 # libstdc++-6.dll is copied if it exists as it, too, may then be needed.
 # Without this copying, the op/taint.t test script will fail.
-	if exist $(CCHOME)\bin\libgcc_s_sjlj-1.dll $(XCOPY) $(CCHOME)\bin\libgcc_s_sjlj-1.dll ..\t\$(NULL)
-	if exist $(CCHOME)\bin\libgcc_s_dw2-1.dll $(XCOPY) $(CCHOME)\bin\libgcc_s_dw2-1.dll ..\t\$(NULL)
-	if exist $(CCHOME)\bin\libgcc_s_1.dll $(XCOPY) $(CCHOME)\bin\libgcc_s_1.dll ..\t\$(NULL)
-	if exist $(CCHOME)\bin\w64gcc_s_sjlj-1.dll $(XCOPY) $(CCHOME)\bin\w64gcc_s_sjlj-1.dll ..\t\$(NULL)
-	if exist $(CCHOME)\bin\libstdc++-6.dll $(XCOPY) $(CCHOME)\bin\libstdc++-6.dll ..\t\$(NULL)
+	if exist $(CCDLLDIR)\libgcc_s_sjlj-1.dll $(XCOPY) $(CCDLLDIR)\libgcc_s_sjlj-1.dll ..\t\$(NULL)
+	if exist $(CCDLLDIR)\libgcc_s_dw2-1.dll $(XCOPY) $(CCDLLDIR)\libgcc_s_dw2-1.dll ..\t\$(NULL)
+	if exist $(CCDLLDIR)\libstdc++-6.dll $(XCOPY) $(CCDLLDIR)\libstdc++-6.dll ..\t\$(NULL)
 .ENDIF
 
 test : test-prep

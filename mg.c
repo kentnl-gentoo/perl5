@@ -76,6 +76,7 @@ void setegid(uid_t id);
 #endif
 
 /*
+ * Pre-magic setup and post-magic takedown.
  * Use the "DESTRUCTOR" scope cleanup to reinstate magic.
  */
 
@@ -97,6 +98,8 @@ S_save_magic(pTHX_ I32 mgs_ix, SV *sv)
 
     PERL_ARGS_ASSERT_SAVE_MAGIC;
 
+    assert(SvMAGICAL(sv));
+
     /* we shouldn't really be called here with RC==0, but it can sometimes
      * happen via mg_clear() (which also shouldn't be called when RC==0,
      * but it can happen). Handle this case gracefully(ish) by not RC++
@@ -108,7 +111,6 @@ S_save_magic(pTHX_ I32 mgs_ix, SV *sv)
 	bumped = TRUE;
     }
 
-    assert(SvMAGICAL(sv));
     /* Turning READONLY off for a copy-on-write scalar (including shared
        hash keys) is a bad idea.  */
     if (SvIsCOW(sv))
@@ -125,10 +127,6 @@ S_save_magic(pTHX_ I32 mgs_ix, SV *sv)
 
     SvMAGICAL_off(sv);
     SvREADONLY_off(sv);
-    if (!(SvFLAGS(sv) & (SVf_IOK|SVf_NOK|SVf_POK))) {
-	/* No public flags are set, so promote any private flags to public.  */
-	SvFLAGS(sv) |= (SvFLAGS(sv) & (SVp_IOK|SVp_NOK|SVp_POK)) >> PRIVSHIFT;
-    }
 }
 
 /*
@@ -952,21 +950,17 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
             else if (PL_compiling.cop_warnings == pWARN_ALL) {
 		/* Get the bit mask for $warnings::Bits{all}, because
 		 * it could have been extended by warnings::register */
-		HV * const bits=get_hv("warnings::Bits", 0);
-		if (bits) {
-		    SV ** const bits_all = hv_fetchs(bits, "all", FALSE);
-		    if (bits_all)
-			sv_setsv(sv, *bits_all);
-		}
-	        else {
-		    sv_setpvn(sv, WARN_ALLstring, WARNsize) ;
-		}
+		HV * const bits = get_hv("warnings::Bits", 0);
+		SV ** const bits_all = bits ? hv_fetchs(bits, "all", FALSE) : NULL;
+		if (bits_all)
+		    sv_copypv(sv, *bits_all);
+	        else
+		    sv_setpvn(sv, WARN_ALLstring, WARNsize);
 	    }
             else {
 	        sv_setpvn(sv, (char *) (PL_compiling.cop_warnings + 1),
 			  *PL_compiling.cop_warnings);
 	    }
-	    SvPOK_only(sv);
 	}
 	break;
     case '\015': /* $^MATCH */
@@ -1078,6 +1072,8 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
     case '\\':
 	if (PL_ors_sv)
 	    sv_copypv(sv, PL_ors_sv);
+	else
+	    sv_setsv(sv, &PL_sv_undef);
 	break;
     case '$': /* $$ */
 	{
@@ -1106,8 +1102,6 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	else
 #endif
 	sv_setpv(sv, errno ? Strerror(errno) : "");
-	if (SvPOKp(sv))
-	    SvPOK_on(sv);    /* may have got removed during taint processing */
 	RESTORE_ERRNO;
 	}
 
@@ -2043,6 +2037,25 @@ Perl_magic_setarylen(pTHX_ SV *sv, MAGIC *mg)
 }
 
 int
+Perl_magic_cleararylen_p(pTHX_ SV *sv, MAGIC *mg)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT_MAGIC_CLEARARYLEN_P;
+    PERL_UNUSED_ARG(sv);
+
+    /* Reset the iterator when the array is cleared */
+#if IVSIZE == I32SIZE
+    *((IV *) &(mg->mg_len)) = 0;
+#else
+    if (mg->mg_ptr)
+        *((IV *) mg->mg_ptr) = 0;
+#endif
+
+    return 0;
+}
+
+int
 Perl_magic_freearylen_p(pTHX_ SV *sv, MAGIC *mg)
 {
     dVAR;
@@ -2121,7 +2134,7 @@ Perl_magic_setpos(pTHX_ SV *sv, MAGIC *mg)
 	found->mg_len = -1;
 	return 0;
     }
-    len = SvPOK(lsv) ? SvCUR(lsv) : sv_len(lsv);
+    len = SvPOK_nog(lsv) ? SvCUR(lsv) : sv_len(lsv);
 
     pos = SvIV(sv);
 
@@ -2753,7 +2766,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	break;
     case '\\':
 	SvREFCNT_dec(PL_ors_sv);
-	if (SvOK(sv) || SvGMAGICAL(sv)) {
+	if (SvOK(sv)) {
 	    PL_ors_sv = newSVsv(sv);
 	}
 	else {
@@ -3092,6 +3105,7 @@ Perl_sighandler(int sig)
     U32 flags = 0;
     XPV * const tXpv = PL_Xpv;
     I32 old_ss_ix = PL_savestack_ix;
+    SV *errsv_save = NULL;
 
 
     if (!PL_psig_ptr[sig]) {
@@ -3170,10 +3184,13 @@ Perl_sighandler(int sig)
 #endif
     PUTBACK;
 
+    errsv_save = newSVsv(ERRSV);
+
     call_sv(MUTABLE_SV(cv), G_DISCARD|G_EVAL);
 
     POPSTACK;
     if (SvTRUE(ERRSV)) {
+        SvREFCNT_dec(errsv_save);
 #ifndef PERL_MICRO
 	/* Handler "died", for example to get out of a restart-able read().
 	 * Before we re-do that on its behalf re-enable the signal which was
@@ -3197,6 +3214,11 @@ Perl_sighandler(int sig)
 #endif /* !PERL_MICRO */
 	die_sv(ERRSV);
     }
+    else {
+        sv_setsv(ERRSV, errsv_save);
+        SvREFCNT_dec(errsv_save);
+    }
+
 cleanup:
     /* pop any of SAVEFREESV, SAVEDESTRUCTOR_X and "save in progress" */
     PL_savestack_ix = old_ss_ix;
@@ -3221,31 +3243,20 @@ S_restore_magic(pTHX_ const void *p)
     if (!sv)
         return;
 
-    if (SvTYPE(sv) >= SVt_PVMG && SvMAGIC(sv))
-    {
+    if (SvTYPE(sv) >= SVt_PVMG && SvMAGIC(sv)) {
+	SvTEMP_off(sv); /* if it's still magical, this value isn't temporary */
 #ifdef PERL_OLD_COPY_ON_WRITE
 	/* While magic was saved (and off) sv_setsv may well have seen
 	   this SV as a prime candidate for COW.  */
 	if (SvIsCOW(sv))
 	    sv_force_normal_flags(sv, 0);
 #endif
-
 	if (mgs->mgs_readonly)
 	    SvREADONLY_on(sv);
 	if (mgs->mgs_magical)
 	    SvFLAGS(sv) |= mgs->mgs_magical;
 	else
 	    mg_magical(sv);
-	if (SvGMAGICAL(sv)) {
-	    /* downgrade public flags to private,
-	       and discard any other private flags */
-
-	    const U32 pubflags = SvFLAGS(sv) & (SVf_IOK|SVf_NOK|SVf_POK);
-	    if (pubflags) {
-		SvFLAGS(sv) &= ~( pubflags | (SVp_IOK|SVp_NOK|SVp_POK) );
-		SvFLAGS(sv) |= ( pubflags << PRIVSHIFT );
-	    }
-	}
     }
 
     bumped = mgs->mgs_bumped;
@@ -3274,12 +3285,8 @@ S_restore_magic(pTHX_ const void *p)
 	       So artificially keep it alive a bit longer.
 	       We avoid turning on the TEMP flag, which can cause the SV's
 	       buffer to get stolen (and maybe other stuff). */
-	    int was_temp = SvTEMP(sv);
 	    sv_2mortal(sv);
-	    if (!was_temp) {
-		SvTEMP_off(sv);
-	    }
-	    SvOK_off(sv);
+	    SvTEMP_off(sv);
 	}
 	else
 	    SvREFCNT_dec(sv); /* undo the inc in S_save_magic() */
@@ -3384,6 +3391,7 @@ Perl_magic_copycallchecker(pTHX_ SV *sv, MAGIC *mg, SV *nsv,
     MAGIC *nmg;
 
     PERL_ARGS_ASSERT_MAGIC_COPYCALLCHECKER;
+    PERL_UNUSED_ARG(sv);
     PERL_UNUSED_ARG(name);
     PERL_UNUSED_ARG(namlen);
 

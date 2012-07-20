@@ -281,6 +281,7 @@ ApdR	|SV*	|cv_const_sv	|NULLOK const CV *const cv
 : Used in pad.c
 pR	|SV*	|op_const_sv	|NULLOK const OP* o|NULLOK CV* cv
 Apd	|void	|cv_undef	|NN CV* cv
+p	|void	|cv_forget_slab	|NN CV *cv
 Ap	|void	|cx_dump	|NN PERL_CONTEXT* cx
 Ap	|SV*	|filter_add	|NULLOK filter_t funcp|NULLOK SV* datasv
 Ap	|void	|filter_del	|NN filter_t funcp
@@ -591,6 +592,7 @@ ApPR	|bool	|is_uni_alnum	|UV c
 ApPR	|bool	|is_uni_idfirst	|UV c
 ApPR	|bool	|is_uni_alpha	|UV c
 ApPR	|bool	|is_uni_ascii	|UV c
+ApPR	|bool	|is_uni_blank	|UV c
 ApPR	|bool	|is_uni_space	|UV c
 ApPR	|bool	|is_uni_cntrl	|UV c
 ApPR	|bool	|is_uni_graph	|UV c
@@ -642,6 +644,7 @@ ApR	|bool	|is_utf8_idcont	|NN const U8 *p
 ApR	|bool	|is_utf8_xidcont	|NN const U8 *p
 ApR	|bool	|is_utf8_alpha	|NN const U8 *p
 ApR	|bool	|is_utf8_ascii	|NN const U8 *p
+ApR	|bool	|is_utf8_blank	|NN const U8 *p
 ApR	|bool	|is_utf8_space	|NN const U8 *p
 ApR	|bool	|is_utf8_perl_space	|NN const U8 *p
 ApR	|bool	|is_utf8_perl_word	|NN const U8 *p
@@ -718,6 +721,7 @@ Apd	|UV	|grok_bin	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV
 #ifdef PERL_IN_DQUOTE_STATIC_C
 EMsR	|char	|grok_bslash_c	|const char source|const bool utf8|const bool output_warning
 EMsR	|bool	|grok_bslash_o	|NN const char* s|NN UV* uv|NN STRLEN* len|NN const char** error_msg|const bool output_warning
+EMiR	|bool	|grok_bslash_x	|NN const char* s|NN UV* uv|NN STRLEN* len|NN const char** error_msg|const bool output_warning
 #endif
 Apd	|UV	|grok_hex	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV *result
 Apd	|int	|grok_number	|NN const char *pv|STRLEN len|NULLOK UV *valuep
@@ -753,6 +757,7 @@ p	|int	|magic_regdatum_get|NN SV* sv|NN MAGIC* mg
 pr	|int	|magic_regdatum_set|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_set	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setarylen|NN SV* sv|NN MAGIC* mg
+p	|int	|magic_cleararylen_p|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_freearylen_p|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setdbline|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setdefelem|NN SV* sv|NN MAGIC* mg
@@ -962,6 +967,11 @@ p	|PerlIO*|nextargv	|NN GV* gv
 AnpP	|char*	|ninstr		|NN const char* big|NN const char* bigend \
 				|NN const char* little|NN const char* lend
 Ap	|void	|op_free	|NULLOK OP* arg
+#ifdef PERL_CORE
+p	|void	|opslab_free	|NN OPSLAB *slab
+p	|void	|opslab_free_nopad|NN OPSLAB *slab
+p	|void	|opslab_force_free|NN OPSLAB *slab
+#endif
 : Used in perly.y
 #ifdef PERL_MAD
 p	|OP*	|package	|NN OP* o
@@ -1040,8 +1050,6 @@ Ap	|SV*	|regclass_swash	|NULLOK const regexp *prog \
 				|NN const struct regnode *node|bool doinit \
 				|NULLOK SV **listsvp|NULLOK SV **altsvp
 #ifdef PERL_IN_REGCOMP_C
-EMi	|U8	|set_regclass_bit|NN struct RExC_state_t* pRExC_state|NN regnode* node|const U8 value|NN SV** invlist_ptr|NN AV** alternate_ptr
-EMs	|U8	|set_regclass_bit_fold|NN struct RExC_state_t *pRExC_state|NN regnode* node|const U8 value|NN SV** invlist_ptr|NN AV** alternate_ptr
 EMs	|void	|add_alternate	|NN AV** alternate_ptr|NN U8* string|STRLEN len
 EMsR	|SV*	|_new_invlist_C_array|NN UV* list
 #endif
@@ -1365,6 +1373,9 @@ Apd	|void	|sv_usepvn_flags|NN SV *const sv|NULLOK char* ptr|const STRLEN len\
 Apd	|void	|sv_vcatpvfn	|NN SV *const sv|NN const char *const pat|const STRLEN patlen \
 				|NULLOK va_list *const args|NULLOK SV **const svargs|const I32 svmax \
 				|NULLOK bool *const maybe_tainted
+Apd	|void	|sv_vcatpvfn_flags|NN SV *const sv|NN const char *const pat|const STRLEN patlen \
+				|NULLOK va_list *const args|NULLOK SV **const svargs|const I32 svmax \
+				|NULLOK bool *const maybe_tainted|const U32 flags
 Apd	|void	|sv_vsetpvfn	|NN SV *const sv|NN const char *const pat|const STRLEN patlen \
 				|NULLOK va_list *const args|NULLOK SV **const svargs \
 				|const I32 svmax|NULLOK bool *const maybe_tainted
@@ -1389,6 +1400,7 @@ EiMR	|UV*	|get_invlist_version_id_addr	|NN SV* invlist
 EiM	|void	|invlist_iterinit|NN SV* invlist
 EsMR	|bool	|invlist_iternext|NN SV* invlist|NN UV* start|NN UV* end
 EsMR	|IV	|invlist_search	|NN SV* const invlist|const UV cp
+EiMR	|UV	|invlist_highest|NN SV* const invlist
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_UTF8_C)
 EXmM	|void	|_invlist_intersection	|NN SV* const a|NN SV* const b|NN SV** i
@@ -1409,6 +1421,7 @@ EXp	|SV*	|_core_swash_init|NN const char* pkg|NN const char* name|NN SV* listsv|
                 |I32 none|bool return_if_undef|NULLOK SV* invlist \
 		|bool passed_in_invlist_has_user_defined_property
 EXMpR	|SV*	|_invlist_contents|NN SV* const invlist
+EXMpR	|bool	|_is_swash_user_defined|NN SV *swash
 #endif
 Ap	|void	|taint_env
 Ap	|void	|taint_proper	|NULLOK const char* f|NN const char *const s
@@ -1771,12 +1784,12 @@ s	|OP*	|ref_array_or_hash|NULLOK OP* cond
 s	|void	|process_special_blocks	|NN const char *const fullname\
 					|NN GV *const gv|NN CV *const cv
 #endif
-#if defined(PL_OP_SLAB_ALLOC)
-Apa	|void*	|Slab_Alloc	|size_t sz
-Ap	|void	|Slab_Free	|NN void *op
-#  if defined(PERL_DEBUG_READONLY_OPS)
-: Used in perl.c
-poxM	|void	|pending_Slabs_to_ro
+Xpa	|void*	|Slab_Alloc	|size_t sz
+Xp	|void	|Slab_Free	|NN void *op
+#if defined(PERL_DEBUG_READONLY_OPS)
+#    if defined(PERL_CORE)
+px	|void	|Slab_to_ro	|NN OPSLAB *slab
+#    endif
 : Used in OpREFCNT_inc() in sv.c
 poxM	|OP *	|op_refcnt_inc	|NULLOK OP *o
 : FIXME - can be static.
@@ -1784,7 +1797,6 @@ poxM	|PADOFFSET	|op_refcnt_dec	|NN OP *o
 #    if defined(PERL_IN_OP_C)
 s	|void	|Slab_to_rw	|NN void *op
 #    endif
-#  endif
 #endif
 
 #if defined(PERL_IN_PERL_C)
@@ -2206,7 +2218,9 @@ Apd	|void	|sv_catsv_flags	|NN SV *const dsv|NULLOK SV *const ssv|const I32 flags
 Apmd	|STRLEN	|sv_utf8_upgrade_flags|NN SV *const sv|const I32 flags
 Ap	|STRLEN	|sv_utf8_upgrade_flags_grow|NN SV *const sv|const I32 flags|STRLEN extra
 Apd	|char*	|sv_pvn_force_flags|NN SV *const sv|NULLOK STRLEN *const lp|const I32 flags
-Apd	|void	|sv_copypv	|NN SV *const dsv|NN SV *const ssv
+pmb	|void	|sv_copypv	|NN SV *const dsv|NN SV *const ssv
+Apmd	|void	|sv_copypv_nomg	|NN SV *const dsv|NN SV *const ssv
+Apd	|void	|sv_copypv_flags	|NN SV *const dsv|NN SV *const ssv|const I32 flags
 Ap	|char*	|my_atof2	|NN const char *s|NN NV* value
 Apn	|int	|my_socketpair	|int family|int type|int protocol|int fd[2]
 Ap	|int	|my_dirfd	|NULLOK DIR* dir
@@ -2319,6 +2333,8 @@ pdR	|AV*	|padlist_dup	|NULLOK AV *srcpad|NN CLONE_PARAMS *param
 #endif
 
 ApdR	|CV*	|find_runcv	|NULLOK U32 *db_seqp
+pR	|CV*	|find_runcv_where|U8 cond|NULLOK void *arg \
+				 |NULLOK U32 *db_seqp
 : Only used in perl.c
 p	|void	|free_tied_hv_pool
 #if defined(DEBUGGING)

@@ -111,10 +111,6 @@ close(CFG);
 
 # perl.h logic duplication begins
 
-if ($define{PERL_IMPLICIT_SYS}) {
-    $define{PL_OP_SLAB_ALLOC} = 1;
-}
-
 if ($define{USE_ITHREADS}) {
     if (!$define{MULTIPLICITY}) {
         $define{MULTIPLICITY} = 1;
@@ -405,23 +401,6 @@ unless ($define{'PERL_IMPLICIT_CONTEXT'}) {
 		    Perl_sv_setpvf_mg_nocontext
 		    Perl_my_cxt_init
 		    Perl_my_cxt_index
-			 );
-}
-
-unless ($define{'PL_OP_SLAB_ALLOC'}) {
-    ++$skip{$_} foreach qw(
-                     PL_OpPtr
-                     PL_OpSlab
-                     PL_OpSpace
-		     Perl_Slab_Alloc
-		     Perl_Slab_Free
-			 );
-}
-
-unless ($define{'PERL_DEBUG_READONLY_OPS'}) {
-    ++$skip{$_} foreach qw(
-		    PL_slab_count
-		    PL_slabs
 			 );
 }
 

@@ -1510,6 +1510,14 @@ Perl_is_uni_ascii(pTHX_ UV c)
 }
 
 bool
+Perl_is_uni_blank(pTHX_ UV c)
+{
+    U8 tmpbuf[UTF8_MAXBYTES+1];
+    uvchr_to_utf8(tmpbuf, c);
+    return is_utf8_blank(tmpbuf);
+}
+
+bool
 Perl_is_uni_space(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
@@ -1830,6 +1838,12 @@ Perl_is_uni_ascii_lc(pTHX_ UV c)
 }
 
 bool
+Perl_is_uni_blank_lc(pTHX_ UV c)
+{
+    return is_uni_blank(c);	/* XXX no locale support yet */
+}
+
+bool
 Perl_is_uni_space_lc(pTHX_ UV c)
 {
     return is_uni_space(c);	/* XXX no locale support yet */
@@ -2033,6 +2047,16 @@ Perl_is_utf8_ascii(pTHX_ const U8 *p)
     /* ASCII characters are the same whether in utf8 or not.  So the macro
      * works on both utf8 and non-utf8 representations. */
     return isASCII(*p);
+}
+
+bool
+Perl_is_utf8_blank(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT_IS_UTF8_BLANK;
+
+    return is_utf8_common(p, &PL_utf8_blank, "XPosixBlank");
 }
 
 bool
@@ -3165,24 +3189,6 @@ Perl_swash_fetch(pTHX_ SV *swash, const U8 *ptr, bool do_utf8)
 	    Copy(ptr, PL_last_swash_key, klen, U8);
     }
 
-    if (UTF8_IS_SUPER(ptr) && ckWARN_d(WARN_NON_UNICODE)) {
-	SV** const bitssvp = hv_fetchs(hv, "BITS", FALSE);
-
-	/* This outputs warnings for binary properties only, assuming that
-	 * to_utf8_case() will output any for non-binary.  Also, surrogates
-	 * aren't checked for, as that would warn on things like /\p{Gc=Cs}/ */
-
-	if (! bitssvp || SvUV(*bitssvp) == 1) {
-	    /* User-defined properties can silently match above-Unicode */
-	    SV** const user_defined_svp = hv_fetchs(hv, "USER_DEFINED", FALSE);
-	    if (! user_defined_svp || ! SvUV(*user_defined_svp)) {
-		const UV code_point = utf8n_to_uvuni(ptr, UTF8_MAXBYTES, 0, 0);
-		Perl_warner(aTHX_ packWARN(WARN_NON_UNICODE),
-		    "Code point 0x%04"UVXf" is not Unicode, all \\p{} matches fail; all \\P{} matches succeed", code_point);
-	    }
-	}
-    }
-
     switch ((int)((slen << 3) / needents)) {
     case 1:
 	bit = 1 << (off & 7);
@@ -4064,6 +4070,19 @@ Perl__swash_to_invlist(pTHX_ SV* const swash)
     }
 
     return invlist;
+}
+
+bool
+Perl__is_swash_user_defined(pTHX_ SV* const swash)
+{
+    SV** ptr = hv_fetchs(MUTABLE_HV(SvRV(swash)), "USER_DEFINED", FALSE);
+
+    PERL_ARGS_ASSERT__IS_SWASH_USER_DEFINED;
+
+    if (! ptr) {
+        return FALSE;
+    }
+    return cBOOL(SvUV(*ptr));
 }
 
 /*

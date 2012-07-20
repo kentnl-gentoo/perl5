@@ -1,7 +1,7 @@
 /*    handy.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1999, 2000,
- *    2001, 2002, 2004, 2005, 2006, 2007, 2008 by Larry Wall and others
+ *    2001, 2002, 2004, 2005, 2006, 2007, 2008, 2012 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -191,24 +191,28 @@ typedef U64TYPE U64;
 #endif /* PERL_CORE */
 
 #if defined(HAS_QUAD) && defined(USE_64_BIT_INT)
-#   ifndef UINT64_C /* usually from <inttypes.h> */
-#       if defined(HAS_LONG_LONG) && QUADKIND == QUAD_IS_LONG_LONG
-#           define INT64_C(c)	CAT2(c,LL)
-#           define UINT64_C(c)	CAT2(c,ULL)
+#   if defined(HAS_LONG_LONG) && QUADKIND == QUAD_IS_LONG_LONG
+#       define PeRl_INT64_C(c)	CAT2(c,LL)
+#       define PeRl_UINT64_C(c)	CAT2(c,ULL)
+#   else
+#       if LONGSIZE == 8 && QUADKIND == QUAD_IS_LONG
+#           define PeRl_INT64_C(c)	CAT2(c,L)
+#           define PeRl_UINT64_C(c)	CAT2(c,UL)
 #       else
-#           if LONGSIZE == 8 && QUADKIND == QUAD_IS_LONG
-#               define INT64_C(c)	CAT2(c,L)
-#               define UINT64_C(c)	CAT2(c,UL)
+#           if defined(_WIN64) && defined(_MSC_VER)
+#               define PeRl_INT64_C(c)	CAT2(c,I64)
+#               define PeRl_UINT64_C(c)	CAT2(c,UI64)
 #           else
-#               if defined(_WIN64) && defined(_MSC_VER)
-#                   define INT64_C(c)	CAT2(c,I64)
-#                   define UINT64_C(c)	CAT2(c,UI64)
-#               else
-#                   define INT64_C(c)	((I64TYPE)(c))
-#                   define UINT64_C(c)	((U64TYPE)(c))
-#               endif
+#               define PeRl_INT64_C(c)	((I64TYPE)(c))
+#               define PeRl_UINT64_C(c)	((U64TYPE)(c))
 #           endif
 #       endif
+#   endif
+#   ifndef UINT64_C
+#   define UINT64_C(c) PeRl_UINT64_C(c)
+#   endif
+#   ifndef INT64_C
+#   define INT64_C(c) PeRl_INT64_C(c)
 #   endif
 #endif
 
@@ -912,6 +916,7 @@ EXTCONST U32 PL_charclass[];
 /* Note that all ignore 'use bytes' */
 
 #define isALNUM_uni(c)		generic_uni(isWORDCHAR, is_uni_alnum, c)
+#define isBLANK_uni(c)		generic_uni(isBLANK, is_uni_blank, c)
 #define isIDFIRST_uni(c)        generic_uni(isIDFIRST, is_uni_idfirst, c)
 #define isALPHA_uni(c)		generic_uni(isALPHA, is_uni_alpha, c)
 #define isSPACE_uni(c)		generic_uni(isSPACE, is_uni_space, c)
@@ -932,7 +937,6 @@ EXTCONST U32 PL_charclass[];
 
 /* Posix and regular space differ only in U+000B, which is in Latin1 */
 #define isPSXSPC_uni(c)		((c) < 256 ? isPSXSPC_L1(c) : isSPACE_uni(c))
-#define isBLANK_uni(c)		isBLANK(c) /* could be wrong */
 
 #define isALNUM_LC_uvchr(c)	(c < 256 ? isALNUM_LC(c) : is_uni_alnum_lc(c))
 #define isIDFIRST_LC_uvchr(c)	(c < 256 ? isIDFIRST_LC(c) : is_uni_idfirst_lc(c))
@@ -981,12 +985,13 @@ EXTCONST U32 PL_charclass[];
                                   : Perl__is_utf8__perl_idstart(aTHX_ p))
 #define isIDCONT_utf8(p)	generic_utf8(isWORDCHAR, is_utf8_xidcont, p)
 #define isALPHA_utf8(p)		generic_utf8(isALPHA, is_utf8_alpha, p)
+#define isBLANK_utf8(p)		generic_utf8(isBLANK, is_utf8_blank, p)
 #define isSPACE_utf8(p)		generic_utf8(isSPACE, is_utf8_space, p)
 #define isDIGIT_utf8(p)		generic_utf8(isDIGIT, is_utf8_digit, p)
 #define isUPPER_utf8(p)		generic_utf8(isUPPER, is_utf8_upper, p)
 #define isLOWER_utf8(p)		generic_utf8(isLOWER, is_utf8_lower, p)
 /* Because ASCII is invariant under utf8, the non-utf8 macro works */
-#define isASCII_utf8(p)		isASCII(p)
+#define isASCII_utf8(p)		isASCII(*p)
 #define isCNTRL_utf8(p)		generic_utf8(isCNTRL, is_utf8_cntrl, p)
 #define isGRAPH_utf8(p)		generic_utf8(isGRAPH, is_utf8_graph, p)
 #define isPRINT_utf8(p)		generic_utf8(isPRINT, is_utf8_print, p)
@@ -1004,11 +1009,10 @@ EXTCONST U32 PL_charclass[];
 				  ? isPSXSPC_L1(TWO_BYTE_UTF8_TO_UNI(*(p),     \
                                                                      *((p)+1)))\
                                   : isSPACE_utf8(p)))
-#define isBLANK_utf8(c)		isBLANK(c) /* could be wrong */
-
 #define isALNUM_LC_utf8(p)	isALNUM_LC_uvchr(valid_utf8_to_uvchr(p,  0))
 #define isIDFIRST_LC_utf8(p)	isIDFIRST_LC_uvchr(valid_utf8_to_uvchr(p,  0))
 #define isALPHA_LC_utf8(p)	isALPHA_LC_uvchr(valid_utf8_to_uvchr(p,  0))
+#define isBLANK_LC_utf8(p)	isBLANK_LC_uvchr(valid_utf8_to_uvchr(p,  0))
 #define isSPACE_LC_utf8(p)	isSPACE_LC_uvchr(valid_utf8_to_uvchr(p,  0))
 #define isDIGIT_LC_utf8(p)	isDIGIT_LC_uvchr(valid_utf8_to_uvchr(p,  0))
 #define isUPPER_LC_utf8(p)	isUPPER_LC_uvchr(valid_utf8_to_uvchr(p,  0))
@@ -1020,7 +1024,6 @@ EXTCONST U32 PL_charclass[];
 #define isPUNCT_LC_utf8(p)	isPUNCT_LC_uvchr(valid_utf8_to_uvchr(p,  0))
 
 #define isPSXSPC_LC_utf8(c)	(isSPACE_LC_utf8(c) ||(c) == '\f')
-#define isBLANK_LC_utf8(c)	isBLANK(c) /* could be wrong */
 
 /* This conversion works both ways, strangely enough. On EBCDIC platforms,
  * CTRL-@ is 0, CTRL-A is 1, etc, just like on ASCII */
@@ -1102,7 +1105,7 @@ destination, C<nitems> is the number of items, and C<type> is the type.
 Like C<Zero> but returns dest. Useful for encouraging compilers to tail-call
 optimise.
 
-=for apidoc Am|void|StructCopy|type src|type dest|type
+=for apidoc Am|void|StructCopy|type *src|type *dest|type
 This is an architecture-independent macro to copy one structure to another.
 
 =for apidoc Am|void|PoisonWith|void* dest|int nitems|type|U8 byte

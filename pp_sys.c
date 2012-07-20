@@ -363,7 +363,7 @@ PP(pp_glob)
      * is called once and only once */
     if (SvGMAGICAL(TOPm1s)) TOPm1s = sv_2mortal(newSVsv(TOPm1s));
 
-    tryAMAGICunTARGET(iter_amg, -1, (PL_op->op_flags & OPf_SPECIAL));
+    tryAMAGICunTARGETlist(iter_amg, -1, (PL_op->op_flags & OPf_SPECIAL));
 
     if (PL_op->op_flags & OPf_SPECIAL) {
 	/* call Perl-level glob function instead. Stack args are:
@@ -1379,7 +1379,7 @@ PP(pp_enterwrite)
 	DIE(aTHX_ "Undefined format \"%"SVf"\" called", SVfARG(tmpsv));
     }
     IoFLAGS(io) &= ~IOf_DIDTOP;
-    return doform(cv,gv,PL_op->op_next);
+    RETURNOP(doform(cv,gv,PL_op->op_next));
 }
 
 PP(pp_leavewrite)
@@ -1393,6 +1393,12 @@ PP(pp_leavewrite)
     I32 gimme;
     register PERL_CONTEXT *cx;
     OP *retop;
+
+    /* I'm not sure why, but executing the format leaves an extra value on the
+     * stack. There's probably a better place to be handling this (probably
+     * by avoiding pushing it in the first place!) but I don't quite know
+     * where to look. -doy */
+    (void)POPs;
 
     if (!io || !(ofp = IoOFP(io)))
         goto forget_top;
@@ -1463,7 +1469,7 @@ PP(pp_leavewrite)
 	    gv_efullname4(sv, fgv, NULL, FALSE);
 	    DIE(aTHX_ "Undefined top format \"%"SVf"\" called", SVfARG(sv));
 	}
-	return doform(cv, gv, PL_op);
+	RETURNOP(doform(cv, gv, PL_op));
     }
 
   forget_top:
@@ -1497,10 +1503,9 @@ PP(pp_leavewrite)
     }
     /* bad_ofp: */
     PL_formtarget = PL_bodytarget;
-    PUTBACK;
     PERL_UNUSED_VAR(newsp);
     PERL_UNUSED_VAR(gimme);
-    return retop;
+    RETURNOP(retop);
 }
 
 PP(pp_prtf)
@@ -1625,6 +1630,8 @@ PP(pp_sysread)
     if (! SvOK(bufsv))
 	sv_setpvs(bufsv, "");
     length = SvIVx(*++MARK);
+    if (length < 0)
+	DIE(aTHX_ "Negative length");
     SETERRNO(0,0);
     if (MARK < SP)
 	offset = SvIVx(*++MARK);
@@ -1646,13 +1653,19 @@ PP(pp_sysread)
 	buffer = SvPV_force(bufsv, blen);
 	buffer_utf8 = !IN_BYTES && SvUTF8(bufsv);
     }
-    if (length < 0)
-	DIE(aTHX_ "Negative length");
-    wanted = length;
+    if (DO_UTF8(bufsv)) {
+	/* offset adjust in characters not bytes */
+        /* SV's length cache is only safe for non-magical values */
+        if (SvGMAGICAL(bufsv))
+            blen = utf8_length((const U8 *)buffer, (const U8 *)buffer + blen);
+        else
+            blen = sv_len_utf8(bufsv);
+    }
 
     charstart = TRUE;
     charskip  = 0;
     skip = 0;
+    wanted = length;
 
 #ifdef HAS_SOCKET
     if (PL_op->op_type == OP_RECV) {
@@ -1695,10 +1708,6 @@ PP(pp_sysread)
 	RETURN;
     }
 #endif
-    if (DO_UTF8(bufsv)) {
-	/* offset adjust in characters not bytes */
-	blen = sv_len_utf8(bufsv);
-    }
     if (offset < 0) {
 	if (-offset > (SSize_t)blen)
 	    DIE(aTHX_ "Offset outside string");
@@ -1706,7 +1715,7 @@ PP(pp_sysread)
     }
     if (DO_UTF8(bufsv)) {
 	/* convert offset-as-chars to offset-as-bytes */
-	if (offset >= (int)blen)
+	if (offset >= (SSize_t)blen)
 	    offset += SvCUR(bufsv) - blen;
 	else
 	    offset = utf8_hop((U8 *)buffer,offset) - (U8 *) buffer;
@@ -2814,6 +2823,7 @@ PP(pp_stat)
             goto do_fstat_have_io; 
         }
         
+	SvTAINTED_off(PL_statname); /* previous tainting irrelevant */
 	sv_setpv(PL_statname, SvPV_nomg_const_nolen(sv));
 	PL_statgv = NULL;
 	PL_laststype = PL_op->op_type;
@@ -5451,7 +5461,7 @@ PP(pp_syscall)
     register I32 items = SP - MARK;
     unsigned long a[20];
     register I32 i = 0;
-    I32 retval = -1;
+    IV retval = -1;
 
     if (PL_tainting) {
 	while (++MARK <= SP) {

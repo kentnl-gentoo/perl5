@@ -9,10 +9,10 @@
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
+    require './test.pl';
 }
 
 use Config;
-require './test.pl';
 
 my $i = 1;
 sub foo { $i = shift if @_; $i }
@@ -699,7 +699,56 @@ BEGIN {
     isnt($s[0], $s[1], "cloneable with //ee");
 }
 
+# [perl #89544]
+{
+   sub trace::DESTROY {
+       push @trace::trace, "destroyed";
+   }
 
+   my $outer2 = sub {
+       my $a = bless \my $dummy, trace::;
+
+       my $outer = sub {
+	   my $b;
+	   my $inner = sub {
+	       undef $b;
+	   };
+
+	   $a;
+
+	   $inner
+       };
+
+       $outer->()
+   };
+
+   my $inner = $outer2->();
+   is "@trace::trace", "destroyed",
+      'closures only close over named variables, not entire subs';
+}
+
+# [perl #113812] Closure prototypes with no CvOUTSIDE (crash caused by the
+#                fix for #89544)
+do "./op/closure_test.pl" or die $@||$!;
+is $closure_test::s2->()(), '10 cubes',
+  'cloning closure proto with no CvOUTSIDE';
+
+# Also brought up in #113812: Even when being cloned, a closure prototype
+# might have its CvOUTSIDE pointing to the wrong thing.
+{
+    package main::113812;
+    $s1 = sub {
+	my $x = 3;
+	$s2 = sub {
+	    $x;
+	    $s3 = sub { $x };
+	};
+    };
+    $s1->();
+    undef &$s1; # frees $s2’s prototype, causing the $s3 proto to have its
+                # CvOUTSIDE point to $s1
+    ::is $s2->()(), 3, 'cloning closure proto whose CvOUTSIDE has changed';
+}
 
 
 done_testing();

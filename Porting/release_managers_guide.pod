@@ -344,10 +344,12 @@ edit the whole document.
 
 =head3 Bump the version number
 
+Do not do this yet for a BLEAD-POINT release! You will do this at the end of
+the release process.
+
 Increase the version number (e.g. from 5.12.0 to 5.12.1).
 
-For a BLEAD-POINT release, this can happen on the day of the release.  For a
-release candidate for a stable perl, this should happen a week or two
+For a release candidate for a stable perl, this should happen a week or two
 before the first release candidate to allow sufficient time for testing and
 smoking with the target version built into the perl executable. For
 subsequent release candidates and the final release, it it not necessary to
@@ -381,6 +383,8 @@ After editing, regenerate uconfig.h (this must be run on a system with a
 /bin/sh available):
 
     $ perl regen/uconfig_h.pl
+
+This might not cause any new changes.
 
 Test your changes:
 
@@ -453,6 +457,16 @@ that are performed on the actual day.
 Review all the actions in the previous section,
 L<"Building a release - advance actions"> to ensure they are all done and
 up-to-date.
+
+
+=head3 create a release branch
+
+For BLEAD-POINT releases, making a release from a release branch avoids the
+need to freeze blead during the release. This is less important for
+BLEAD-FINAL, MAINT, and RC releases, since blead will already be frozen in
+those cases. Create the branch by running
+
+  git checkout -b release-5.xx.yy
 
 
 =head3 bump version number
@@ -688,9 +702,9 @@ directory, they will still identify themselves using git tags and
 commits. (Note that for an odd-numbered version, perl will install
 itself as C<perl5.x.y>). C<perl -v> will identify itself as:
 
- This is perl 5, version X, subversion Y (v5.X.Y (v5.X.Z-NNN-deadbeef))
+ This is perl 5, version X, subversion Y (v5.X.Y (v5.X.Z-NNN-gdeadbeef))
 
-where 5.X.Z is the latest tag, Z the number of commits since this tag,
+where 5.X.Z is the latest tag, NNN the number of commits since this tag,
 and C<< deadbeef >> commit of that tag.
 
 Then delete the temporary installation.
@@ -975,6 +989,18 @@ Use the template at Porting/release_announcement_template.txt
 
 Send a carbon copy to C<noc@metacpan.org>
 
+=head3 merge release branch back to blead
+
+If you made a release branch for this release, merge it back into master now,
+and delete it.
+
+  git checkout blead
+  git pull
+  git merge release-5.xx.yy
+  git push
+  git push origin :release-5.xx.yy
+  git branch -d release-5.xx.yy
+
 =head3 update epigraphs.pod
 
 Add your quote to F<Porting/epigraphs.pod> and commit it.
@@ -1040,11 +1066,11 @@ At this point you may want to compare the commit with a previous bump to
 see if they look similar.  See commit e3c71926d3 for an example of a
 previous version bump.
 
-=for checklist skip BLEAD-POINT MAINT RC
+=for checklist skip MAINT RC
 
 =head3 bump version
 
-I<You MUST SKIP this step for RC, BLEAD-POINT, MAINT>
+I<You MUST SKIP this step for RC and MAINT>
 
 If this was a BLEAD-FINAL release (i.e. the first release of a new maint
 series, 5.x.0 where x is even), then bump the version in the blead branch
@@ -1061,6 +1087,9 @@ Run F<regen/feature.pl> to propagate the changes to F<lib/feature.pm>.
 
 Then follow the section L<"Bump the version number"> to bump the version
 in the remaining files and test and commit.
+
+If this was a BLEAD-POINT release, then just follow the section
+L<"Bump the version number">.
 
 
 =head3 clean build and test

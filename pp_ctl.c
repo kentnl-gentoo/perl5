@@ -225,9 +225,9 @@ PP(pp_substcont)
 	    assert(cx->sb_strend >= s);
 	    if(cx->sb_strend > s) {
 		 if (DO_UTF8(dstr) && !SvUTF8(targ))
-		      sv_catpvn_utf8_upgrade(dstr, s, cx->sb_strend - s, nsv);
+		      sv_catpvn_nomg_utf8_upgrade(dstr, s, cx->sb_strend - s, nsv);
 		 else
-		      sv_catpvn(dstr, s, cx->sb_strend - s);
+		      sv_catpvn_nomg(dstr, s, cx->sb_strend - s);
 	    }
 	    if (RX_MATCH_TAINTED(rx)) /* run time pattern taint, eg locale */
 		cx->sb_rxtainted |= SUBST_TAINT_PAT;
@@ -296,9 +296,9 @@ PP(pp_substcont)
     cx->sb_m = m = RX_OFFS(rx)[0].start + orig;
     if (m > s) {
 	if (DO_UTF8(dstr) && !SvUTF8(cx->sb_targ))
-	    sv_catpvn_utf8_upgrade(dstr, s, m - s, nsv);
+	    sv_catpvn_nomg_utf8_upgrade(dstr, s, m - s, nsv);
 	else
-	    sv_catpvn(dstr, s, m-s);
+	    sv_catpvn_nomg(dstr, s, m-s);
     }
     cx->sb_s = RX_OFFS(rx)[0].end + orig;
     { /* Update the pos() information. */
@@ -3245,8 +3245,16 @@ than in the scope of the debugger itself).
 CV*
 Perl_find_runcv(pTHX_ U32 *db_seqp)
 {
+    return Perl_find_runcv_where(aTHX_ 0, NULL, db_seqp);
+}
+
+/* If this becomes part of the API, it might need a better name. */
+CV *
+Perl_find_runcv_where(pTHX_ U8 cond, void *arg, U32 *db_seqp)
+{
     dVAR;
     PERL_SI	 *si;
+    int		 level = 0;
 
     if (db_seqp)
 	*db_seqp = PL_curcop->cop_seq;
@@ -3254,20 +3262,32 @@ Perl_find_runcv(pTHX_ U32 *db_seqp)
         I32 ix;
 	for (ix = si->si_cxix; ix >= 0; ix--) {
 	    const PERL_CONTEXT *cx = &(si->si_cxstack[ix]);
+	    CV *cv = NULL;
 	    if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
-		CV * const cv = cx->blk_sub.cv;
+		cv = cx->blk_sub.cv;
 		/* skip DB:: code */
 		if (db_seqp && PL_debstash && CvSTASH(cv) == PL_debstash) {
 		    *db_seqp = cx->blk_oldcop->cop_seq;
 		    continue;
 		}
-		return cv;
 	    }
 	    else if (CxTYPE(cx) == CXt_EVAL && !CxTRYBLOCK(cx))
-		return cx->blk_eval.cv;
+		cv = cx->blk_eval.cv;
+	    if (cv) {
+		switch (cond) {
+		case FIND_RUNCV_root_eq:
+		    if (CvROOT(cv) != (OP *)arg) continue;
+		    return cv;
+		case FIND_RUNCV_level_eq:
+		    if (level++ != PTR2IV(arg)) continue;
+		    /* GERONIMO! */
+		default:
+		    return cv;
+		}
+	    }
 	}
     }
-    return PL_main_cv;
+    return cond == FIND_RUNCV_root_eq ? NULL : PL_main_cv;
 }
 
 
@@ -3444,6 +3464,7 @@ S_doeval(pTHX_ int gimme, CV* outside, U32 seq, HV *hh)
 	PL_op = saveop;
 	if (yystatus != 3) {
 	    if (PL_eval_root) {
+		cv_forget_slab(evalcv);
 		op_free(PL_eval_root);
 		PL_eval_root = NULL;
 	    }
@@ -3486,6 +3507,7 @@ S_doeval(pTHX_ int gimme, CV* outside, U32 seq, HV *hh)
 
     CopLINE_set(&PL_compiling, 0);
     SAVEFREEOP(PL_eval_root);
+    cv_forget_slab(evalcv);
 
     DEBUG_x(dump_eval());
 
@@ -3928,6 +3950,7 @@ PP(pp_require)
 	    DIE(aTHX_ "Can't locate %s", name);
 	}
 
+	CLEAR_ERRSV();
 	RETPUSHUNDEF;
     }
     else
@@ -5236,6 +5259,7 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
     char *prune_from = NULL;
     bool read_from_cache = FALSE;
     STRLEN umaxlen;
+    SV *err = NULL;
 
     PERL_ARGS_ASSERT_RUN_USER_FILTER;
 
@@ -5314,7 +5338,7 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	    PUSHs(filter_state);
 	}
 	PUTBACK;
-	count = call_sv(filter_sub, G_SCALAR);
+	count = call_sv(filter_sub, G_SCALAR|G_EVAL);
 	SPAGAIN;
 
 	if (count > 0) {
@@ -5322,6 +5346,9 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	    if (SvOK(out)) {
 		status = SvIV(out);
 	    }
+            else if (SvTRUE(ERRSV)) {
+                err = newSVsv(ERRSV);
+            }
 	}
 
 	PUTBACK;
@@ -5329,7 +5356,7 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	LEAVE_with_name("call_filter_sub");
     }
 
-    if(SvOK(upstream)) {
+    if(!err && SvOK(upstream)) {
 	got_p = SvPV(upstream, got_len);
 	if (umaxlen) {
 	    if (got_len > umaxlen) {
@@ -5343,7 +5370,7 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	    }
 	}
     }
-    if (prune_from) {
+    if (!err && prune_from) {
 	/* Oh. Too long. Stuff some in our cache.  */
 	STRLEN cached_len = got_p + got_len - prune_from;
 	SV *const cache = datasv;
@@ -5372,7 +5399,8 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
        have touched the SV upstream, so it may be undefined.  If we naively
        concatenate it then we get a warning about use of uninitialised value.
     */
-    if (upstream != buf_sv && (SvOK(upstream) || SvGMAGICAL(upstream))) {
+    if (!err && upstream != buf_sv &&
+        (SvOK(upstream) || SvGMAGICAL(upstream))) {
 	sv_catsv(buf_sv, upstream);
     }
 
@@ -5388,6 +5416,10 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	}
 	filter_del(S_run_user_filter);
     }
+
+    if (err)
+        croak_sv(err);
+
     if (status == 0 && read_from_cache) {
 	/* If we read some data from the cache (and by getting here it implies
 	   that we emptied the cache) then we aren't yet at EOF, and mustn't

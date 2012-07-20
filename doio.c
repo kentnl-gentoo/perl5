@@ -747,6 +747,7 @@ Perl_nextargv(pTHX_ register GV *gv)
 	STRLEN oldlen;
 	sv = av_shift(GvAV(gv));
 	SAVEFREESV(sv);
+	SvTAINTED_off(GvSVn(gv)); /* previous tainting irrelevant */
 	sv_setsv(GvSVn(gv),sv);
 	SvSETMAGIC(GvSV(gv));
 	PL_oldname = SvPVx(GvSV(gv), oldlen);
@@ -1579,6 +1580,7 @@ Perl_apply(pTHX_ I32 type, register SV **mark, register SV **sp)
     const char *s;
     STRLEN len;
     SV ** const oldmark = mark;
+    bool killgp = FALSE;
 
     PERL_ARGS_ASSERT_APPLY;
 
@@ -1689,6 +1691,12 @@ nothing in the core.
 	if (mark == sp)
 	    break;
 	s = SvPVx_const(*++mark, len);
+	if (*s == '-' && isALPHA(s[1]))
+	{
+	    s++;
+	    len--;
+            killgp = TRUE;
+	}
 	if (isALPHA(*s)) {
 	    if (*s == 'S' && s[1] == 'I' && s[2] == 'G') {
 		s += 3;
@@ -1698,12 +1706,18 @@ nothing in the core.
                Perl_croak(aTHX_ "Unrecognized signal name \"%"SVf"\"", SVfARG(*mark));
 	}
 	else
+	{
 	    val = SvIV(*mark);
+	    if (val < 0)
+	    {
+		killgp = TRUE;
+                val = -val;
+	    }
+	}
 	APPLY_TAINT_PROPER();
 	tot = sp - mark;
 #ifdef VMS
 	/* kill() doesn't do process groups (job trees?) under VMS */
-	if (val < 0) val = -val;
 	if (val == SIGKILL) {
 	    /* Use native sys$delprc() to insure that target process is
 	     * deleted; supervisor-mode images don't pay attention to
@@ -1736,34 +1750,19 @@ nothing in the core.
 	    break;
 	}
 #endif
-	if (val < 0) {
-	    val = -val;
-	    while (++mark <= sp) {
-		I32 proc;
-		SvGETMAGIC(*mark);
-		if (!(SvIOK(*mark) || SvNOK(*mark) || looks_like_number(*mark)))
-		    Perl_croak(aTHX_ "Can't kill a non-numeric process ID");
-		proc = SvIV_nomg(*mark);
-		APPLY_TAINT_PROPER();
-#ifdef HAS_KILLPG
-		if (PerlProc_killpg(proc,val))	/* BSD */
-#else
-		if (PerlProc_kill(-proc,val))	/* SYSV */
-#endif
-		    tot--;
+	while (++mark <= sp) {
+	    Pid_t proc;
+	    SvGETMAGIC(*mark);
+	    if (!(SvNIOK(*mark) || looks_like_number(*mark)))
+		Perl_croak(aTHX_ "Can't kill a non-numeric process ID");
+	    proc = SvIV_nomg(*mark);
+	    if (killgp)
+	    {
+                proc = -proc;
 	    }
-	}
-	else {
-	    while (++mark <= sp) {
-		I32 proc;
-		SvGETMAGIC(*mark);
-		if (!(SvIOK(*mark) || SvNOK(*mark) || looks_like_number(*mark)))
-		    Perl_croak(aTHX_ "Can't kill a non-numeric process ID");
-		proc = SvIV_nomg(*mark);
-		APPLY_TAINT_PROPER();
-		if (PerlProc_kill(proc, val))
-		    tot--;
-	    }
+	    APPLY_TAINT_PROPER();
+	    if (PerlProc_kill(proc, val))
+		tot--;
 	}
 	PERL_ASYNC_CHECK();
 	break;
@@ -2285,9 +2284,10 @@ Perl_do_shmio(pTHX_ I32 optype, SV **mark, SV **sp)
     if (optype == OP_SHMREAD) {
 	char *mbuf;
 	/* suppress warning when reading into undef var (tchrist 3/Mar/00) */
+	SvGETMAGIC(mstr);
+	SvUPGRADE(mstr, SVt_PV);
 	if (! SvOK(mstr))
 	    sv_setpvs(mstr, "");
-	SvUPGRADE(mstr, SVt_PV);
 	SvPOK_only(mstr);
 	mbuf = SvGROW(mstr, (STRLEN)msize+1);
 
@@ -2387,9 +2387,12 @@ Perl_vms_start_glob
     {
 	GV * const envgv = gv_fetchpvs("ENV", 0, SVt_PVHV);
 	SV ** const home = hv_fetchs(GvHV(envgv), "HOME", 0);
+	SV ** const path = hv_fetchs(GvHV(envgv), "PATH", 0);
 	if (home && *home) SvGETMAGIC(*home);
+	if (path && *path) SvGETMAGIC(*path);
 	save_hash(gv_fetchpvs("ENV", 0, SVt_PVHV));
 	if (home && *home) SvSETMAGIC(*home);
+	if (path && *path) SvSETMAGIC(*path);
     }
     (void)do_open(PL_last_in_gv, (char*)SvPVX_const(tmpcmd), SvCUR(tmpcmd),
 		  FALSE, O_RDONLY, 0, NULL);

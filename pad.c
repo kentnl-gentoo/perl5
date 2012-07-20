@@ -333,6 +333,7 @@ Perl_cv_undef(pTHX_ CV *cv)
 {
     dVAR;
     const PADLIST *padlist = CvPADLIST(cv);
+    bool const slabbed = !!CvSLABBED(cv);
 
     PERL_ARGS_ASSERT_CV_UNDEF;
 
@@ -346,6 +347,7 @@ Perl_cv_undef(pTHX_ CV *cv)
     }
     CvFILE(cv) = NULL;
 
+    CvSLABBED_off(cv);
     if (!CvISXSUB(cv) && CvROOT(cv)) {
 	if (SvTYPE(cv) == SVt_PVCV && CvDEPTH(cv))
 	    Perl_croak(aTHX_ "Can't undef active subroutine");
@@ -353,11 +355,25 @@ Perl_cv_undef(pTHX_ CV *cv)
 
 	PAD_SAVE_SETNULLPAD();
 
+	if (slabbed) OpslabREFCNT_dec_padok(OpSLAB(CvROOT(cv)));
 	op_free(CvROOT(cv));
 	CvROOT(cv) = NULL;
 	CvSTART(cv) = NULL;
 	LEAVE;
     }
+    else if (slabbed && CvSTART(cv)) {
+	ENTER;
+	PAD_SAVE_SETNULLPAD();
+
+	/* discard any leaked ops */
+	opslab_force_free((OPSLAB *)CvSTART(cv));
+	CvSTART(cv) = NULL;
+
+	LEAVE;
+    }
+#ifdef DEBUGGING
+    else if (slabbed) Perl_warn(aTHX_ "Slab leaked from cv %p", cv);
+#endif
     SvPOK_off(MUTABLE_SV(cv));		/* forget prototype */
     CvGV_set(cv, NULL);
 
@@ -400,6 +416,7 @@ Perl_cv_undef(pTHX_ CV *cv)
 			CV * const innercv = MUTABLE_CV(curpad[ix]);
 			U32 inner_rc = SvREFCNT(innercv);
 			assert(inner_rc);
+			assert(SvTYPE(innercv) != SVt_PVFM);
 			namepad[ix] = NULL;
 			SvREFCNT_dec(namesv);
 
@@ -467,6 +484,41 @@ Perl_cv_undef(pTHX_ CV *cv)
      * ref status of CvOUTSIDE and CvGV, and ANON, which pp_entersub uses
      * to choose an error message */
     CvFLAGS(cv) &= (CVf_WEAKOUTSIDE|CVf_CVGV_RC|CVf_ANON);
+}
+
+void
+Perl_cv_forget_slab(pTHX_ CV *cv)
+{
+    const bool slabbed = !!CvSLABBED(cv);
+#ifdef PERL_DEBUG_READONLY_OPS
+    OPSLAB *slab = NULL;
+#endif
+
+    PERL_ARGS_ASSERT_CV_FORGET_SLAB;
+
+    if (!slabbed) return;
+
+    CvSLABBED_off(cv);
+
+#ifdef PERL_DEBUG_READONLY_OPS
+    if      (CvROOT(cv))  slab = OpSLAB(CvROOT(cv));
+    else if (CvSTART(cv)) slab = (OPSLAB *)CvSTART(cv);
+#else
+    if      (CvROOT(cv))  OpslabREFCNT_dec(OpSLAB(CvROOT(cv)));
+    else if (CvSTART(cv)) OpslabREFCNT_dec((OPSLAB *)CvSTART(cv));
+#endif
+#ifdef DEBUGGING
+    else if (slabbed)     Perl_warn(aTHX_ "Slab leaked from cv %p", cv);
+#endif
+
+#ifdef PERL_DEBUG_READONLY_OPS
+    if (slab) {
+	size_t refcnt;
+	refcnt = slab->opslab_refcnt;
+	OpslabREFCNT_dec(slab);
+	if (refcnt > 1) Slab_to_ro(slab);
+    }
+#endif
 }
 
 /*
@@ -744,12 +796,19 @@ Perl_pad_add_anon(pTHX_ CV* func, I32 optype)
     ix = pad_alloc(optype, SVs_PADMY);
     av_store(PL_comppad_name, ix, name);
     /* XXX DAPM use PL_curpad[] ? */
-    av_store(PL_comppad, ix, (SV*)func);
+    if (SvTYPE(func) == SVt_PVCV || !CvOUTSIDE(func))
+	av_store(PL_comppad, ix, (SV*)func);
+    else {
+	SV *rv = newRV_inc((SV *)func);
+	sv_rvweaken(rv);
+	assert (SvTYPE(func) == SVt_PVFM);
+	av_store(PL_comppad, ix, rv);
+    }
     SvPADMY_on((SV*)func);
 
     /* to avoid ref loops, we never have parent + child referencing each
      * other simultaneously */
-    if (CvOUTSIDE(func)) {
+    if (CvOUTSIDE(func) && SvTYPE(func) == SVt_PVCV) {
 	assert(!CvWEAKOUTSIDE(func));
 	CvWEAKOUTSIDE_on(func);
 	SvREFCNT_dec(CvOUTSIDE(func));
@@ -1396,7 +1455,9 @@ Perl_pad_block_start(pTHX_ int full)
 /*
 =for apidoc m|U32|intro_my
 
-"Introduce" my variables to visible status.
+"Introduce" my variables to visible status.  This is called during parsing
+at the end of each statement to make lexical variables visible to
+subsequent statements.
 
 =cut
 */
@@ -1624,6 +1685,7 @@ Perl_pad_tidy(pTHX_ padtidy_type type)
 		DEBUG_Xv(PerlIO_printf(Perl_debug_log,
 		    "Pad clone on cv=0x%"UVxf"\n", PTR2UV(cv)));
 		CvCLONE_on(cv);
+		CvHASEVAL_on(cv);
 	    }
 	}
     }
@@ -1874,24 +1936,37 @@ Perl_cv_clone(pTHX_ CV *proto)
 
     assert(!CvUNIQUE(proto));
 
-    /* Since cloneable anon subs can be nested, CvOUTSIDE may point
+    /* Anonymous subs have a weak CvOUTSIDE pointer, so its value is not
+     * reliable.  The currently-running sub is always the one we need to
+     * close over.
+     * Note that in general for formats, CvOUTSIDE != find_runcv.
+     * Since formats may be nested inside closures, CvOUTSIDE may point
      * to a prototype; we instead want the cloned parent who called us.
-     * Note that in general for formats, CvOUTSIDE != find_runcv */
+     */
 
-    outside = CvOUTSIDE(proto);
-    if (outside && CvCLONE(outside) && ! CvCLONED(outside))
+    if (SvTYPE(proto) == SVt_PVCV)
 	outside = find_runcv(NULL);
+    else {
+	outside = CvOUTSIDE(proto);
+	if (CvCLONE(outside) && ! CvCLONED(outside)) {
+	    CV * const runcv = find_runcv_where(
+		FIND_RUNCV_root_eq, (void *)CvROOT(outside), NULL
+	    );
+	    if (runcv) outside = runcv;
+	}
+    }
     depth = CvDEPTH(outside);
     assert(depth || SvTYPE(proto) == SVt_PVFM);
     if (!depth)
 	depth = 1;
-    assert(CvPADLIST(outside));
+    assert(CvPADLIST(outside) || SvTYPE(proto) == SVt_PVFM);
 
     ENTER;
     SAVESPTR(PL_compcv);
 
     cv = PL_compcv = MUTABLE_CV(newSV_type(SvTYPE(proto)));
-    CvFLAGS(cv) = CvFLAGS(proto) & ~(CVf_CLONE|CVf_WEAKOUTSIDE|CVf_CVGV_RC);
+    CvFLAGS(cv) = CvFLAGS(proto) & ~(CVf_CLONE|CVf_WEAKOUTSIDE|CVf_CVGV_RC
+				    |CVf_SLABBED);
     CvCLONED_on(cv);
 
     CvFILE(cv)		= CvDYNFILE(proto) ? savepv(CvFILE(proto))
@@ -1902,7 +1977,8 @@ Perl_cv_clone(pTHX_ CV *proto)
     CvROOT(cv)		= OpREFCNT_inc(CvROOT(proto));
     OP_REFCNT_UNLOCK;
     CvSTART(cv)		= CvSTART(proto);
-    CvOUTSIDE(cv)	= MUTABLE_CV(SvREFCNT_inc_simple(outside));
+    if (CvHASEVAL(cv))
+	CvOUTSIDE(cv)	= MUTABLE_CV(SvREFCNT_inc_simple(outside));
     CvOUTSIDE_SEQ(cv) = CvOUTSIDE_SEQ(proto);
 
     if (SvPOK(proto))
@@ -1918,19 +1994,20 @@ Perl_cv_clone(pTHX_ CV *proto)
 
     PL_curpad = AvARRAY(PL_comppad);
 
-    outpad = AvARRAY(AvARRAY(CvPADLIST(outside))[depth]);
+    outpad = CvPADLIST(outside)
+	? AvARRAY(AvARRAY(CvPADLIST(outside))[depth])
+	: NULL;
 
     for (ix = fpad; ix > 0; ix--) {
 	SV* const namesv = (ix <= fname) ? pname[ix] : NULL;
 	SV *sv = NULL;
 	if (namesv && namesv != &PL_sv_undef) { /* lexical */
 	    if (SvFAKE(namesv)) {   /* lexical from outside? */
-		sv = outpad[PARENT_PAD_INDEX(namesv)];
-		assert(sv);
-		/* formats may have an inactive parent,
+		/* formats may have an inactive, or even undefined, parent,
 		   while my $x if $false can leave an active var marked as
 		   stale. And state vars are always available */
-		if (SvPADSTALE(sv) && !SvPAD_STATE(namesv)) {
+		if (!outpad || !(sv = outpad[PARENT_PAD_INDEX(namesv)])
+		 || (SvPADSTALE(sv) && !SvPAD_STATE(namesv))) {
 		    Perl_ck_warner(aTHX_ packWARN(WARN_CLOSURE),
 				   "Variable \"%"SVf"\" is not available", namesv);
 		    sv = NULL;
@@ -2020,10 +2097,23 @@ Perl_pad_fixup_inner_anons(pTHX_ PADLIST *padlist, CV *old_cv, CV *new_cv)
 	if (namesv && namesv != &PL_sv_undef
 	    && *SvPVX_const(namesv) == '&')
 	{
+	  if (SvTYPE(curpad[ix]) == SVt_PVCV) {
 	    CV * const innercv = MUTABLE_CV(curpad[ix]);
 	    assert(CvWEAKOUTSIDE(innercv));
 	    assert(CvOUTSIDE(innercv) == old_cv);
 	    CvOUTSIDE(innercv) = new_cv;
+	  }
+	  else { /* format reference */
+	    SV * const rv = curpad[ix];
+	    CV *innercv;
+	    if (!SvOK(rv)) continue;
+	    assert(SvROK(rv));
+	    assert(SvWEAKREF(rv));
+	    innercv = (CV *)SvRV(rv);
+	    assert(!CvWEAKOUTSIDE(innercv));
+	    SvREFCNT_dec(CvOUTSIDE(innercv));
+	    CvOUTSIDE(innercv) = (CV *)SvREFCNT_inc_simple_NN(new_cv);
+	  }
 	}
     }
 }

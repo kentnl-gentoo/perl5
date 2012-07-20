@@ -523,7 +523,7 @@ BEGIN {
 # Debugger for Perl 5.00x; perl5db.pl patch level:
 use vars qw($VERSION $header);
 
-$VERSION = '1.39';
+$VERSION = '1.39_02';
 
 $header = "perl5db.pl version $VERSION";
 
@@ -1801,7 +1801,7 @@ sub DB {
     local (*dbline) = $main::{ '_<' . $filename };
 
     # Last line in the program.
-    my $max = $#dbline;
+    $max = $#dbline;
 
     # if we have something here, see if we should break.
     if ( $dbline{$line}
@@ -4057,7 +4057,7 @@ sub delete_action {
         print $OUT "Deleting all actions...\n";
         for my $file ( keys %had_breakpoints ) {
             local *dbline = $main::{ '_<' . $file };
-            my $max = $#dbline;
+            $max = $#dbline;
             my $was;
             for ( $i = 1 ; $i <= $max ; $i++ ) {
                 if ( defined $dbline{$i} ) {
@@ -4118,7 +4118,7 @@ sub cmd_b {
         $subname =~ s/\'/::/g;
 
         # Qualify it into the current package unless it's already qualified.
-        $subname = "${'package'}::" . $subname unless $subname =~ /::/;
+        $subname = "${package}::" . $subname unless $subname =~ /::/;
 
         # Add main if it starts with ::.
         $subname = "main" . $subname if substr( $subname, 0, 2 ) eq "::";
@@ -4565,7 +4565,7 @@ sub cmd_b_sub {
         my $s = $subname;
 
         # Put it in this package unless it's already qualified.
-        $subname = "${'package'}::" . $subname
+        $subname = "${package}::" . $subname
           unless $subname =~ /::/;
 
         # Requalify it into CORE::GLOBAL if qualifying it into this
@@ -4688,7 +4688,7 @@ sub delete_breakpoint {
             # Switch to the desired file temporarily.
             local *dbline = $main::{ '_<' . $file };
 
-            my $max = $#dbline;
+            $max = $#dbline;
             my $was;
 
             # For all lines in this file ...
@@ -5127,7 +5127,7 @@ sub cmd_L {
             local *dbline = $main::{ '_<' . $file };
 
             # Set up to look through the whole file.
-            my $max = $#dbline;
+            $max = $#dbline;
             my $was;    # Flag: did we print something
                         # in this file?
 
@@ -5500,7 +5500,7 @@ sub postponed_sub {
             $had_breakpoints{$file} |= 1;
 
             # Last line in file.
-            my $max = $#dbline;
+            $max = $#dbline;
 
             # Search forward until we hit a breakable line or get to
             # the end of the file.
@@ -7202,8 +7202,9 @@ sub list_modules {    # versions
 
         # If the package has a $VERSION package global (as all good packages
         # should!) decode it and save as partial message.
-        if ( defined ${ $_ . '::VERSION' } ) {
-            $version{$file} = "${ $_ . '::VERSION' } from ";
+        my $pkg_version = do { no strict 'refs'; ${ $_ . '::VERSION' } };
+        if ( defined $pkg_version ) {
+            $version{$file} = "$pkg_version from ";
         }
 
         # Finish up the message with the file the package came from.
@@ -8493,7 +8494,7 @@ sub db_complete {
     # The search pattern is current package, ::, extract the next qualifier
     # Prefix and pack are set to undef.
     my ( $itext, $search, $prefix, $pack ) =
-      ( $text, "^\Q${'package'}::\E([^:]+)\$" );
+      ( $text, "^\Q${package}::\E([^:]+)\$" );
 
 =head3 C<b postpone|compile> 
 
@@ -8565,7 +8566,8 @@ start with 'main::'. Return this list.
 
     return sort map { ( $_, db_complete( $_ . "::", "V ", 2 ) ) }
       grep !/^main::/, grep /^\Q$text/,
-      map { /^(.*)::$/ ? ( $prefix . "::$1" ) : () } keys %{ $prefix . '::' }
+      map { /^(.*)::$/ ? ( $prefix . "::$1" ) : () }
+      do { no strict 'refs'; keys %{ $prefix . '::' } }
       if ( substr $line, 0, $start ) =~ /^\|*[Vm]\s+$/
       and $text =~ /^(.*[^:])::?(\w*)$/
       and $prefix = $1;
@@ -9015,8 +9017,9 @@ sub restart {
     # the 'require perl5db.pl;' line), and add them back on
     # to the command line to be executed.
     if ( $0 eq '-e' ) {
-        for ( 1 .. $#{'::_<-e'} ) {  # The first line is PERL5DB
-            chomp( $cl = ${'::_<-e'}[$_] );
+        my $lines = *{$main::{'_<-e'}}{ARRAY};
+        for ( 1 .. $#$lines ) {  # The first line is PERL5DB
+            chomp( $cl = $lines->[$_] );
             push @script, '-e', $cl;
         }
     } ## end if ($0 eq '-e')
@@ -9326,7 +9329,7 @@ sub cmd_pre580_b {
         $subname =~ s/\'/::/g;
 
         # Qualify it into the current package unless it's already qualified.
-        $subname = "${'package'}::" . $subname
+        $subname = "${package}::" . $subname
           unless $subname =~ /::/;
 
         # Add main if it starts with ::.
@@ -9370,7 +9373,7 @@ sub cmd_pre580_D {
             # Switch to the desired file temporarily.
             local *dbline = $main::{ '_<' . $file };
 
-            my $max = $#dbline;
+            $max = $#dbline;
             my $was;
 
             # For all lines in this file ...

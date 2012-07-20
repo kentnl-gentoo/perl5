@@ -991,6 +991,7 @@ perl_destruct(pTHXx)
     /* clear utf8 character classes */
     SvREFCNT_dec(PL_utf8_alnum);
     SvREFCNT_dec(PL_utf8_alpha);
+    SvREFCNT_dec(PL_utf8_blank);
     SvREFCNT_dec(PL_utf8_space);
     SvREFCNT_dec(PL_utf8_graph);
     SvREFCNT_dec(PL_utf8_digit);
@@ -1009,6 +1010,7 @@ perl_destruct(pTHXx)
     SvREFCNT_dec(PL_utf8_foldclosures);
     PL_utf8_alnum	= NULL;
     PL_utf8_alpha	= NULL;
+    PL_utf8_blank	= NULL;
     PL_utf8_space	= NULL;
     PL_utf8_graph	= NULL;
     PL_utf8_digit	= NULL;
@@ -1215,12 +1217,6 @@ perl_destruct(pTHXx)
 	abort();
 #endif
     PL_sv_count = 0;
-
-#ifdef PERL_DEBUG_READONLY_OPS
-    free(PL_slabs);
-    PL_slabs = NULL;
-    PL_slab_count = 0;
-#endif
 
 #if defined(PERLIO_LAYERS)
     /* No more IO - including error messages ! */
@@ -2392,7 +2388,8 @@ S_run_body(pTHX_ I32 oldscope)
 	    call_list(oldscope, PL_initav);
 	}
 #ifdef PERL_DEBUG_READONLY_OPS
-	Perl_pending_Slabs_to_ro(aTHX);
+	if (PL_main_root && PL_main_root->op_slabbed)
+	    Slab_to_ro(OpSLAB(PL_main_root));
 #endif
     }
 
@@ -3000,6 +2997,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
       "  H  Hash dump -- usurps values()\n"
       "  X  Scratchpad allocation\n"
       "  D  Cleaning up\n"
+      "  S  Op slab allocation\n"
       "  T  Tokenising\n"
       "  R  Include reference counts of dumped variables (eg when using -Ds)\n",
       "  J  Do not s,t,P-debug (Jump over) opcodes within package DB\n"
@@ -4150,6 +4148,11 @@ Perl_init_argv_symbols(pTHX_ register int argc, register char **argv)
 		 (void)sv_utf8_decode(sv);
 	}
     }
+
+    if (PL_inplace && (!PL_argvgv || AvFILL(GvAV(PL_argvgv)) == -1))
+        Perl_ck_warner_d(aTHX_ packWARN(WARN_INPLACE),
+                         "-i used with no filenames on the command line, "
+                         "reading from STDIN");
 }
 
 STATIC void

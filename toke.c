@@ -275,9 +275,9 @@ static const char* const lex_state_names[] = {
  * The UNIDOR macro is for unary functions that can be followed by the //
  * operator (such as C<shift // 0>).
  */
-#define UNI2(f,x) { \
+#define UNI3(f,x,have_x) { \
 	pl_yylval.ival = f; \
-	PL_expect = x; \
+	if (have_x) PL_expect = x; \
 	PL_bufptr = s; \
 	PL_last_uni = PL_oldbufptr; \
 	PL_last_lop_op = f; \
@@ -286,22 +286,14 @@ static const char* const lex_state_names[] = {
 	s = PEEKSPACE(s); \
 	return REPORT( *s=='(' ? (int)FUNC1 : (int)UNIOP ); \
 	}
-#define UNI(f)    UNI2(f,XTERM)
-#define UNIDOR(f) UNI2(f,XTERMORDORDOR)
+#define UNI(f)    UNI3(f,XTERM,1)
+#define UNIDOR(f) UNI3(f,XTERMORDORDOR,1)
 #define UNIPROTO(f,optional) { \
 	if (optional) PL_last_uni = PL_oldbufptr; \
 	OPERATOR(f); \
 	}
 
-#define UNIBRACK(f) { \
-	pl_yylval.ival = f; \
-	PL_bufptr = s; \
-	PL_last_uni = PL_oldbufptr; \
-	if (*s == '(') \
-	    return REPORT( (int)FUNC1 ); \
-	s = PEEKSPACE(s); \
-	return REPORT( (*s == '(') ? (int)FUNC1 : (int)UNIOP ); \
-	}
+#define UNIBRACK(f) UNI3(f,0,0)
 
 /* grandfather return to old style */
 #define OLDLOP(f) \
@@ -3027,28 +3019,15 @@ S_scan_const(pTHX_ char *start)
 
 	    /* eg. \x24 indicates the hex constant 0x24 */
 	    case 'x':
-		++s;
-		if (*s == '{') {
-		    char* const e = strchr(s, '}');
-                    I32 flags = PERL_SCAN_ALLOW_UNDERSCORES |
-                      PERL_SCAN_DISALLOW_PREFIX;
+		{
 		    STRLEN len;
+		    const char* error;
 
-                    ++s;
-		    if (!e) {
-			yyerror("Missing right brace on \\x{}");
+		    bool valid = grok_bslash_x(s, &uv, &len, &error, 1);
+		    s += len;
+		    if (! valid) {
+			yyerror(error);
 			continue;
-		    }
-                    len = e - s;
-		    uv = NATIVE_TO_UNI(grok_hex(s, &len, &flags, NULL));
-		    s = e + 1;
-		}
-		else {
-		    {
-			STRLEN len = 2;
-                        I32 flags = PERL_SCAN_DISALLOW_PREFIX;
-			uv = NATIVE_TO_UNI(grok_hex(s, &len, &flags, NULL));
-			s += len;
 		    }
 		}
 
@@ -3756,7 +3735,7 @@ S_intuit_more(pTHX_ register char *s)
  *
  * First argument is the stuff after the first token, e.g. "bar".
  *
- * Not a method if bar is a filehandle.
+ * Not a method if foo is a filehandle.
  * Not a method if foo is a subroutine prototyped to take a filehandle.
  * Not a method if it's really "Foo $bar"
  * Method if it's "foo $bar"
@@ -3781,11 +3760,9 @@ S_intuit_method(pTHX_ char *start, GV *gv, CV *cv)
 
     PERL_ARGS_ASSERT_INTUIT_METHOD;
 
-    if (gv) {
-	if (SvTYPE(gv) == SVt_PVGV && GvIO(gv))
+    if (gv && SvTYPE(gv) == SVt_PVGV && GvIO(gv))
 	    return 0;
-	if (cv) {
-	    if (SvPOK(cv)) {
+    if (cv && SvPOK(cv)) {
 		const char *proto = CvPROTO(cv);
 		if (proto) {
 		    if (*proto == ';')
@@ -3793,9 +3770,6 @@ S_intuit_method(pTHX_ char *start, GV *gv, CV *cv)
 		    if (*proto == '*')
 			return 0;
 		}
-	    }
-	} else
-	    gv = NULL;
     }
     s = scan_word(s, tmpbuf, sizeof tmpbuf, TRUE, &len);
     /* start is the beginning of the possible filehandle/object,
@@ -3804,7 +3778,7 @@ S_intuit_method(pTHX_ char *start, GV *gv, CV *cv)
      */
 
     if (*start == '$') {
-	if (gv || PL_last_lop_op == OP_PRINT || PL_last_lop_op == OP_SAY ||
+	if (cv || PL_last_lop_op == OP_PRINT || PL_last_lop_op == OP_SAY ||
 		isUPPER(*PL_tokenbuf))
 	    return 0;
 #ifdef PERL_MAD
@@ -3831,7 +3805,7 @@ S_intuit_method(pTHX_ char *start, GV *gv, CV *cv)
 	if (indirgv && GvCVu(indirgv))
 	    return 0;
 	/* filehandle or package name makes it a method */
-	if (!gv || GvIO(indirgv) || gv_stashpvn(tmpbuf, len, UTF ? SVf_UTF8 : 0)) {
+	if (!cv || GvIO(indirgv) || gv_stashpvn(tmpbuf, len, UTF ? SVf_UTF8 : 0)) {
 #ifdef PERL_MAD
 	    soff = s - SvPVX(PL_linestr);
 #endif
@@ -6933,7 +6907,7 @@ Perl_yylex(pTHX)
 			op_free(rv2cv_op);
 			SvREFCNT_dec(((SVOP*)pl_yylval.opval)->op_sv);
 			((SVOP*)pl_yylval.opval)->op_sv = SvREFCNT_inc_simple(sv);
-			pl_yylval.opval->op_private = 0;
+			pl_yylval.opval->op_private = OPpCONST_FOLDED;
 			pl_yylval.opval->op_flags |= OPf_SPECIAL;
 			TOKEN(WORD);
 		    }
@@ -7248,10 +7222,19 @@ Perl_yylex(pTHX)
 
 	case KEY_CORE:
 	    if (*s == ':' && s[1] == ':') {
-		s += 2;
+		STRLEN olen = len;
 		d = s;
+		s += 2;
 		s = scan_word(s, PL_tokenbuf, sizeof PL_tokenbuf, FALSE, &len);
-		if (!(tmp = keyword(PL_tokenbuf, len, 1)))
+		if ((*s == ':' && s[1] == ':')
+		 || (!(tmp = keyword(PL_tokenbuf, len, 1)) && *s == '\''))
+		{
+		    s = d;
+		    len = olen;
+		    Copy(PL_bufptr, PL_tokenbuf, olen, char);
+		    goto just_a_word;
+		}
+		if (!tmp)
 		    Perl_croak(aTHX_ "CORE::%"SVf" is not a keyword",
                                     SVfARG(newSVpvn_flags(PL_tokenbuf, len,
                                                 (UTF ? SVf_UTF8 : 0) | SVs_TEMP)));
@@ -7362,8 +7345,13 @@ Perl_yylex(pTHX)
 	    s = SKIPSPACE1(s);
 	    if (*s == '{')
 		PRETERMBLOCK(DO);
-	    if (*s != '\'')
-		s = force_word(s,WORD,TRUE,TRUE,FALSE);
+	    if (*s != '\'') {
+		d = scan_word(s, PL_tokenbuf, sizeof PL_tokenbuf, 1, &len);
+		if (len) {
+		    d = SKIPSPACE1(d);
+		    if (*d == '(') s = force_word(s,WORD,TRUE,TRUE,FALSE);
+		}
+	    }
 	    if (orig_keyword == KEY_do) {
 		orig_keyword = 0;
 		pl_yylval.ival = 1;
@@ -8519,7 +8507,6 @@ static int
 S_pending_ident(pTHX)
 {
     dVAR;
-    register char *d;
     PADOFFSET tmp = 0;
     /* pit holds the identifier we read and pending_ident is reset */
     char pit = PL_pending_ident;
@@ -8561,14 +8548,6 @@ S_pending_ident(pTHX)
 
     /*
        build the ops for accesses to a my() variable.
-
-       Deny my($a) or my($b) in a sort block, *if* $a or $b is
-       then used in a comparison.  This catches most, but not
-       all cases.  For instance, it catches
-           sort { my($a); $a <=> $b }
-       but not
-           sort { my($a); $a < $b ? -1 : $a == $b ? 0 : 1; }
-       (although why you'd do that is anyone's guess).
     */
 
     if (!has_colon) {
@@ -8595,23 +8574,6 @@ S_pending_ident(pTHX)
                      : (PL_tokenbuf[0] == '@') ? SVt_PVAV
                      : SVt_PVHV));
                 return WORD;
-            }
-
-            /* if it's a sort block and they're naming $a or $b */
-            if (PL_last_lop_op == OP_SORT &&
-                PL_tokenbuf[0] == '$' &&
-                (PL_tokenbuf[1] == 'a' || PL_tokenbuf[1] == 'b')
-                && !PL_tokenbuf[2])
-            {
-                for (d = PL_in_eval ? PL_oldoldbufptr : PL_linestart;
-                     d < PL_bufend && *d != '\n';
-                     d++)
-                {
-                    if (strnEQ(d,"<=>",3) || strnEQ(d,"cmp",3)) {
-                        Perl_croak(aTHX_ "Can't use \"my %s\" in sort comparison",
-                              PL_tokenbuf);
-                    }
-                }
             }
 
             pl_yylval.opval = newOP(OP_PADANY, 0);
@@ -9061,19 +9023,23 @@ S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s, char* charse
     /* Adds, subtracts to/from 'pmfl' based on regex modifier flags found in
      * the parse starting at 's', based on the subset that are valid in this
      * context input to this routine in 'valid_flags'. Advances s.  Returns
-     * TRUE if the input was a valid flag, so the next char may be as well;
-     * otherwise FALSE. 'charset' should point to a NUL upon first call on the
-     * current regex.  This routine will set it to any charset modifier found.
-     * The caller shouldn't change it.  This way, another charset modifier
-     * encountered in the parse can be detected as an error, as we have decided
-     * to allow only one */
+     * TRUE if the input should be treated as a valid flag, so the next char
+     * may be as well; otherwise FALSE. 'charset' should point to a NUL upon
+     * first call on the current regex.  This routine will set it to any
+     * charset modifier found.  The caller shouldn't change it.  This way,
+     * another charset modifier encountered in the parse can be detected as an
+     * error, as we have decided to allow only one */
 
     const char c = **s;
+    STRLEN charlen = UTF ? UTF8SKIP(*s) : 1;
 
-    if (! strchr(valid_flags, c)) {
-        if (isALNUM(c)) {
-	    yyerror(Perl_form(aTHX_ "Unknown regexp modifier \"/%c\"", c));
-            (*s)++;
+    if ( charlen != 1 || ! strchr(valid_flags, c) ) {
+        if (isALNUM_lazy_if(*s, UTF)) {
+            yyerror_pv(Perl_form(aTHX_ "Unknown regexp modifier \"/%.*s\"", (int)charlen, *s),
+                       UTF ? SVf_UTF8 : 0);
+            (*s) += charlen;
+            /* Pretend that it worked, so will continue processing before
+             * dieing */
             return TRUE;
         }
         return FALSE;

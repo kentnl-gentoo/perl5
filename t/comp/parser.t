@@ -3,7 +3,7 @@
 # Checks if the parser behaves correctly in edge cases
 # (including weird syntax errors)
 
-print "1..123\n";
+print "1..137\n";
 
 sub failed {
     my ($got, $expected, $name) = @_;
@@ -68,6 +68,13 @@ like( $@, qr/^Missing right brace on \\N/,
 eval q/"\Nfoo"/;
 like( $@, qr/^Missing braces on \\N/,
     'syntax error in string with incomplete \N' );
+
+eval q/"\o{"/;
+like( $@, qr/^Missing right brace on \\o/,
+    'syntax error in string with incomplete \o' );
+eval q/"\ofoo"/;
+like( $@, qr/^Missing braces on \\o/,
+    'syntax error in string with incomplete \o' );
 
 eval "a.b.c.d.e.f;sub";
 like( $@, qr/^Illegal declaration of anonymous subroutine/,
@@ -341,6 +348,12 @@ like($@, qr/BEGIN failed--compilation aborted/, 'BEGIN 7' );
   is(defined &zlonk, '', 'but no body defined');
 }
 
+# [perl #113016] CORE::print::foo
+sub CORE'print'foo { 43 } # apostrophes intentional; do not tempt fate
+sub CORE'foo'bar { 43 }
+is CORE::print::foo, 43, 'CORE::print::foo is not CORE::print ::foo';
+is scalar eval "CORE::foo'bar", 43, "CORE::foo'bar is not an error";
+
 # bug #71748
 eval q{
 	$_ = "";
@@ -354,6 +367,28 @@ eval q{
 is($@, "", "multiline whitespace inside substitute expression");
 
 # Add new tests HERE:
+
+eval '@A =~ s/a/b/; # compilation error
+      sub tahi {}
+      sub rua;
+      sub toru ($);
+      sub wha :lvalue;
+      sub rima ($%&*$&*\$%\*&$%*&) :method;
+      sub ono :lvalue { die }
+      sub whitu (_) { die }
+      sub waru ($;) :method { die }
+      sub iwa { die }
+      BEGIN { }';
+is $::{tahi}, undef, 'empty sub decl ignored after compilation error';
+is $::{rua}, undef, 'stub decl ignored after compilation error';
+is $::{toru}, undef, 'stub+proto decl ignored after compilation error';
+is $::{wha}, undef, 'stub+attr decl ignored after compilation error';
+is $::{rima}, undef, 'stub+proto+attr ignored after compilation error';
+is $::{ono}, undef, 'sub decl with attr ignored after compilation error';
+is $::{whitu}, undef, 'sub decl w proto ignored after compilation error';
+is $::{waru}, undef, 'sub w attr+proto ignored after compilation error';
+is $::{iwa}, undef, 'non-empty sub decl ignored after compilation error';
+is *BEGIN{CODE}, undef, 'BEGIN leaves no stub after compilation error';
 
 # bug #74022: Loop on characters in \p{OtherIDContinue}
 # This test hangs if it fails.

@@ -2205,6 +2205,7 @@ cpan/Socket/Socket.pm			Socket extension Perl module
 cpan/Socket/Socket.xs			Socket extension external subroutines
 cpan/Socket/t/getaddrinfo.t		See if Socket::getaddrinfo works
 cpan/Socket/t/getnameinfo.t		See if Socket::getnameinfo works
+cpan/Socket/t/ip_mreq.t			See if (un)pack_ip_mreq work
 cpan/Socket/t/ipv6_mreq.t		See if (un)pack_ipv6_mreq work
 cpan/Socket/t/sockaddr.t
 cpan/Socket/t/socketpair.t		See if socketpair works
@@ -2298,7 +2299,7 @@ cpan/Test-Harness/t/aggregator.t			Test::Harness test
 cpan/Test-Harness/t/bailout.t				Test::Harness test
 cpan/Test-Harness/t/base.t				Test::Harness test
 cpan/Test-Harness/t/callbacks.t				Test::Harness test
-cpan/Test-Harness/t/compat/env.opts.t
+cpan/Test-Harness/t/compat/env_opts.t			Test::Harness test
 cpan/Test-Harness/t/compat/env.t			Test::Harness test
 cpan/Test-Harness/t/compat/failure.t			Test::Harness test
 cpan/Test-Harness/t/compat/inc-propagation.t		Test::Harness test
@@ -3238,6 +3239,9 @@ dist/IO/Makefile.PL		IO extension makefile writer
 dist/IO/poll.c			IO poll() emulation using select()
 dist/IO/poll.h			IO poll() emulation using select()
 dist/IO/README			IO extension maintenance notice
+dist/IO/t/cachepropagate-tcp.t	See if IO::Socket duplication works
+dist/IO/t/cachepropagate-udp.t	See if IO::Socket duplication works
+dist/IO/t/cachepropagate-unix.t	See if IO::Socket duplication works
 dist/IO/t/io_const.t		See if constants from IO work
 dist/IO/t/io_dir.t		See if directory-related methods from IO work
 dist/IO/t/io_dup.t		See if dup()-related methods from IO work
@@ -3972,6 +3976,7 @@ ext/XS-APItest/t/gv_fetchmeth_autoload.t	XS::APItest: tests for gv_fetchmeth_aut
 ext/XS-APItest/t/gv_fetchmethod_flags.t	XS::APItest: tests for gv_fetchmethod_flags() and variants
 ext/XS-APItest/t/gv_fetchmeth.t		XS::APItest: tests for gv_fetchmeth() and variants
 ext/XS-APItest/t/gv_init.t	XS::APItest: tests for gv_init and variants
+ext/XS-APItest/t/handy.t	XS::APItest: tests for handy.h
 ext/XS-APItest/t/hash.t		XS::APItest: tests for hash related APIs
 ext/XS-APItest/t/keyword_multiline.t	test keyword plugin parsing across lines
 ext/XS-APItest/t/keyword_plugin.t	test keyword plugin mechanism
@@ -4018,6 +4023,7 @@ ext/XS-APItest/t/svpv.t		More generic SvPVbyte and SvPVutf8 tests
 ext/XS-APItest/t/svsetsv.t	Test behaviour of sv_setsv with/without PERL_CORE
 ext/XS-APItest/t/swaplabel.t	test recursive descent label parsing
 ext/XS-APItest/t/swaptwostmts.t	test recursive descent statement parsing
+ext/XS-APItest/t/sym-hook.t	Test rv2cv hooks for bareword lookup
 ext/XS-APItest/t/temp_lv_sub.t	XS::APItest: tests for lvalue subs returning temps
 ext/XS-APItest/t/underscore_length.t	Test find_rundefsv()
 ext/XS-APItest/t/utf16_to_utf8.t	Test behaviour of utf16_to_utf8{,reversed}
@@ -4237,6 +4243,7 @@ lib/File/Find/t/find.t		See if File::Find works
 lib/File/Find/t/taint.t		See if File::Find works with taint
 lib/FileHandle.pm		Backward-compatible front end to IO extension
 lib/FileHandle.t		See if FileHandle works
+lib/File/stat-7896.t		A test for ID 20011110.104
 lib/File/stat.pm		By-name interface to Perl's builtin stat
 lib/File/stat.t			See if File::stat works
 lib/filetest.pm			For "use filetest"
@@ -4279,7 +4286,9 @@ lib/perl5db/t/disable-breakpoints-2	Test script used by perl5db.t
 lib/perl5db/t/disable-breakpoints-3	Test script used by perl5db.t
 lib/perl5db/t/EnableModule.pm	Tests for the Perl debugger
 lib/perl5db/t/eval-line-bug	Tests for the Perl debugger
+lib/perl5db/t/fact		Tests for the Perl debugger
 lib/perl5db/t/filename-line-breakpoint		Tests for the Perl debugger
+lib/perl5db/t/load-modules	Tests for the Perl debugger
 lib/perl5db/t/lvalue-bug	Tests for the Perl debugger
 lib/perl5db/t/MyModule.pm	Tests for the Perl debugger
 lib/perl5db/t/proxy-constants	Tests for the Perl debugger
@@ -4288,6 +4297,8 @@ lib/perl5db/t/rt-61222		Tests for the Perl debugger
 lib/perl5db/t/rt-66110		Tests for the Perl debugger
 lib/perl5db/t/symbol-table-bug	Tests for the Perl debugger
 lib/perl5db/t/taint		Tests for the Perl debugger
+lib/perl5db/t/test-l-statement-1	Tests for the Perl debugger
+lib/perl5db/t/test-r-statement	Tests for the Perl debugger
 lib/perl5db/t/uncalled-subroutine	Tests for the Perl debugger
 lib/perl5db/t/with-subroutine		Tests for the Perl debugger
 lib/PerlIO.pm			PerlIO support module
@@ -4624,6 +4635,7 @@ pod/perl5141delta.pod		Perl changes in version 5.14.1
 pod/perl5142delta.pod		Perl changes in version 5.14.2
 pod/perl5160delta.pod		Perl changes in version 5.16.0
 pod/perl5170delta.pod		Perl changes in version 5.17.0
+pod/perl5171delta.pod		Perl changes in version 5.17.1
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5023,7 +5035,9 @@ t/lib/compmod.pl		Helper for 1_compile.t
 t/lib/croak/mg			Test croak calls from mg.c
 t/lib/croak/op			Test croak calls from op.c
 t/lib/croak/pp_ctl		Test croak calls from pp_ctl.c
+t/lib/croak/pp_hot		Test croak calls from pp_hot.c
 t/lib/croak.t			Test calls to Perl_croak() in the C source.
+t/lib/croak/toke		Test croak calls from toke.c
 t/lib/cygwin.t			Builtin cygwin function tests
 t/lib/dbmt_common.pl		Common functionality for ?DBM_File tests
 t/lib/deprecate/Deprecated.pm	Deprecated module to test deprecate.pm
@@ -5187,6 +5201,7 @@ t/op/chdir.t			See if chdir works
 t/op/chop.t			See if chop works
 t/op/chr.t			See if chr works
 t/op/closure.t			See if closures work
+t/op/closure_test.pl		Extra file for closure.t
 t/op/cmp.t			See if the various string and numeric compare work
 t/op/concat2.t			Tests too complex for concat.t
 t/op/concat.t			See if string concatenation works

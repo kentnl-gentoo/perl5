@@ -28,7 +28,7 @@ BEGIN {
     }
 }
 
-plan(30);
+plan(34);
 
 my $rc_filename = '.perldb';
 
@@ -806,6 +806,100 @@ package main;
         qr/<1,2,3,4,5>\n/,
         'uncalled_subroutine was called after n EXPR()',
         );
+}
+
+{
+    my $wrapper = DebugWrap->new(
+        {
+            cmds =>
+            [
+                'b fact',
+                'c',
+                'c',
+                'c',
+                'n',
+                'print "<$n>"',
+                'q',
+            ],
+            prog => '../lib/perl5db/t/fact',
+        }
+    );
+
+    $wrapper->output_like(
+        qr/<3>/,
+        'b subroutine works fine',
+    );
+}
+
+# Test for 'M' (module list).
+{
+    my $wrapper = DebugWrap->new(
+        {
+            cmds =>
+            [
+                'M',
+                'q',
+            ],
+            prog => '../lib/perl5db/t/load-modules'
+        }
+    );
+
+    $wrapper->contents_like(
+        qr[Scalar/Util\.pm],
+        'M (module list) works fine',
+    );
+}
+
+{
+    my $wrapper = DebugWrap->new(
+        {
+            cmds =>
+            [
+                'b 14',
+                'c',
+                '$flag = 1;',
+                'r',
+                'print "Var=$var\n";',
+                'q',
+            ],
+            prog => '../lib/perl5db/t/test-r-statement',
+        }
+    );
+
+    $wrapper->output_like(
+        qr/
+            ^Foo$
+                .*?
+            ^Bar$
+                .*?
+            ^Var=Test$
+        /msx,
+        'r statement is working properly.',
+    );
+}
+
+{
+    my $wrapper = DebugWrap->new(
+        {
+            cmds =>
+            [
+                'l',
+                'q',
+            ],
+            prog => '../lib/perl5db/t/test-l-statement-1',
+        }
+    );
+
+    $wrapper->contents_like(
+        qr/
+            ^1==>\s+\$x\ =\ 1;\n
+            2:\s+print\ "1\\n";\n
+            3\s*\n
+            4:\s+\$x\ =\ 2;\n
+            5:\s+print\ "2\\n";\n
+        /msx,
+        'l statement is working properly (test No. 1).',
+    );
 }
 
 END {

@@ -164,6 +164,8 @@ Perl_sv_derived_from_pvn(pTHX_ SV *sv, const char *const name, const STRLEN len,
     }
     else {
         stash = gv_stashsv(sv, 0);
+        if (!stash)
+            stash = gv_stashpv("UNIVERSAL", 0);
     }
 
     return stash ? isa_lookup(stash, name, len, flags) : FALSE;
@@ -369,6 +371,8 @@ XS(XS_UNIVERSAL_can)
     }
     else {
         pkg = gv_stashsv(sv, 0);
+        if (!pkg)
+            pkg = gv_stashpv("UNIVERSAL", 0);
     }
 
     if (pkg) {

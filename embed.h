@@ -226,6 +226,7 @@
 #define is_uni_alpha_lc(a)	Perl_is_uni_alpha_lc(aTHX_ a)
 #define is_uni_ascii(a)		Perl_is_uni_ascii(aTHX_ a)
 #define is_uni_ascii_lc(a)	Perl_is_uni_ascii_lc(aTHX_ a)
+#define is_uni_blank(a)		Perl_is_uni_blank(aTHX_ a)
 #define is_uni_cntrl(a)		Perl_is_uni_cntrl(aTHX_ a)
 #define is_uni_cntrl_lc(a)	Perl_is_uni_cntrl_lc(aTHX_ a)
 #define is_uni_digit(a)		Perl_is_uni_digit(aTHX_ a)
@@ -249,6 +250,7 @@
 #define is_utf8_alnum(a)	Perl_is_utf8_alnum(aTHX_ a)
 #define is_utf8_alpha(a)	Perl_is_utf8_alpha(aTHX_ a)
 #define is_utf8_ascii(a)	Perl_is_utf8_ascii(aTHX_ a)
+#define is_utf8_blank(a)	Perl_is_utf8_blank(aTHX_ a)
 #define is_utf8_char		Perl_is_utf8_char
 #define is_utf8_char_buf	Perl_is_utf8_char_buf
 #define is_utf8_cntrl(a)	Perl_is_utf8_cntrl(aTHX_ a)
@@ -558,7 +560,7 @@
 #define sv_clear(a)		Perl_sv_clear(aTHX_ a)
 #define sv_cmp_flags(a,b,c)	Perl_sv_cmp_flags(aTHX_ a,b,c)
 #define sv_cmp_locale_flags(a,b,c)	Perl_sv_cmp_locale_flags(aTHX_ a,b,c)
-#define sv_copypv(a,b)		Perl_sv_copypv(aTHX_ a,b)
+#define sv_copypv_flags(a,b,c)	Perl_sv_copypv_flags(aTHX_ a,b,c)
 #define sv_dec(a)		Perl_sv_dec(aTHX_ a)
 #define sv_dec_nomg(a)		Perl_sv_dec_nomg(aTHX_ a)
 #define sv_derived_from(a,b)	Perl_sv_derived_from(aTHX_ a,b)
@@ -648,6 +650,7 @@
 #define sv_vcatpvf(a,b,c)	Perl_sv_vcatpvf(aTHX_ a,b,c)
 #define sv_vcatpvf_mg(a,b,c)	Perl_sv_vcatpvf_mg(aTHX_ a,b,c)
 #define sv_vcatpvfn(a,b,c,d,e,f,g)	Perl_sv_vcatpvfn(aTHX_ a,b,c,d,e,f,g)
+#define sv_vcatpvfn_flags(a,b,c,d,e,f,g,h)	Perl_sv_vcatpvfn_flags(aTHX_ a,b,c,d,e,f,g,h)
 #define sv_vsetpvf(a,b,c)	Perl_sv_vsetpvf(aTHX_ a,b,c)
 #define sv_vsetpvf_mg(a,b,c)	Perl_sv_vsetpvf_mg(aTHX_ a,b,c)
 #define sv_vsetpvfn(a,b,c,d,e,f,g)	Perl_sv_vsetpvfn(aTHX_ a,b,c,d,e,f,g)
@@ -794,10 +797,6 @@
 #define newFORM(a,b,c)		Perl_newFORM(aTHX_ a,b,c)
 #define newMYSUB(a,b,c,d,e)	Perl_newMYSUB(aTHX_ a,b,c,d,e)
 #endif
-#if defined(PL_OP_SLAB_ALLOC)
-#define Slab_Alloc(a)		Perl_Slab_Alloc(aTHX_ a)
-#define Slab_Free(a)		Perl_Slab_Free(aTHX_ a)
-#endif
 #if defined(UNLINK_ALL_VERSIONS)
 #define unlnk(a)		Perl_unlnk(aTHX_ a)
 #endif
@@ -898,6 +897,7 @@
 #  if defined(PERL_IN_DQUOTE_STATIC_C)
 #define grok_bslash_c(a,b,c)	S_grok_bslash_c(aTHX_ a,b,c)
 #define grok_bslash_o(a,b,c,d,e)	S_grok_bslash_o(aTHX_ a,b,c,d,e)
+#define grok_bslash_x(a,b,c,d,e)	S_grok_bslash_x(aTHX_ a,b,c,d,e)
 #define regcurly(a)		S_regcurly(aTHX_ a)
 #  endif
 #  if defined(PERL_IN_REGCOMP_C)
@@ -920,6 +920,7 @@
 #define invlist_array(a)	S_invlist_array(aTHX_ a)
 #define invlist_clone(a)	S_invlist_clone(aTHX_ a)
 #define invlist_extend(a,b)	S_invlist_extend(aTHX_ a,b)
+#define invlist_highest(a)	S_invlist_highest(aTHX_ a)
 #define invlist_iterinit(a)	S_invlist_iterinit(aTHX_ a)
 #define invlist_iternext(a,b,c)	S_invlist_iternext(aTHX_ a,b,c)
 #define invlist_len(a)		S_invlist_len(aTHX_ a)
@@ -948,13 +949,12 @@
 #define reguni(a,b,c)		S_reguni(aTHX_ a,b,c)
 #define regwhite		S_regwhite
 #define scan_commit(a,b,c,d)	S_scan_commit(aTHX_ a,b,c,d)
-#define set_regclass_bit(a,b,c,d,e)	S_set_regclass_bit(aTHX_ a,b,c,d,e)
-#define set_regclass_bit_fold(a,b,c,d,e)	S_set_regclass_bit_fold(aTHX_ a,b,c,d,e)
 #define study_chunk(a,b,c,d,e,f,g,h,i,j,k)	S_study_chunk(aTHX_ a,b,c,d,e,f,g,h,i,j,k)
 #  endif
 #  if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C) || defined(PERL_IN_UTF8_C)
 #define _core_swash_init(a,b,c,d,e,f,g,h)	Perl__core_swash_init(aTHX_ a,b,c,d,e,f,g,h)
 #define _invlist_contents(a)	Perl__invlist_contents(aTHX_ a)
+#define _is_swash_user_defined(a)	Perl__is_swash_user_defined(aTHX_ a)
 #  endif
 #  if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_UTF8_C)
 #define _add_range_to_invlist(a,b,c)	Perl__add_range_to_invlist(aTHX_ a,b,c)
@@ -993,6 +993,8 @@
 #  endif
 #endif
 #ifdef PERL_CORE
+#define Slab_Alloc(a)		Perl_Slab_Alloc(aTHX_ a)
+#define Slab_Free(a)		Perl_Slab_Free(aTHX_ a)
 #define allocmy(a,b,c)		Perl_allocmy(aTHX_ a,b,c)
 #define amagic_is_enabled(a)	Perl_amagic_is_enabled(aTHX_ a)
 #define apply(a,b,c)		Perl_apply(aTHX_ a,b,c)
@@ -1054,6 +1056,7 @@
 #define coresub_op(a,b,c)	Perl_coresub_op(aTHX_ a,b,c)
 #define create_eval_scope(a)	Perl_create_eval_scope(aTHX_ a)
 #define cv_ckproto_len_flags(a,b,c,d,e)	Perl_cv_ckproto_len_flags(aTHX_ a,b,c,d,e)
+#define cv_forget_slab(a)	Perl_cv_forget_slab(aTHX_ a)
 #define cvgv_set(a,b)		Perl_cvgv_set(aTHX_ a,b)
 #define cvstash_set(a,b)	Perl_cvstash_set(aTHX_ a,b)
 #define deb_stack_all()		Perl_deb_stack_all(aTHX)
@@ -1078,6 +1081,7 @@
 #define dump_packsubs_perl(a,b)	Perl_dump_packsubs_perl(aTHX_ a,b)
 #define dump_sub_perl(a,b)	Perl_dump_sub_perl(aTHX_ a,b)
 #define finalize_optree(a)	Perl_finalize_optree(aTHX_ a)
+#define find_runcv_where(a,b,c)	Perl_find_runcv_where(aTHX_ a,b,c)
 #define find_rundefsv2(a,b)	Perl_find_rundefsv2(aTHX_ a,b)
 #define find_script(a,b,c,d)	Perl_find_script(aTHX_ a,b,c,d)
 #define free_tied_hv_pool()	Perl_free_tied_hv_pool(aTHX)
@@ -1097,6 +1101,7 @@
 #define list(a)			Perl_list(aTHX_ a)
 #define localize(a,b)		Perl_localize(aTHX_ a,b)
 #define magic_clear_all_env(a,b)	Perl_magic_clear_all_env(aTHX_ a,b)
+#define magic_cleararylen_p(a,b)	Perl_magic_cleararylen_p(aTHX_ a,b)
 #define magic_clearenv(a,b)	Perl_magic_clearenv(aTHX_ a,b)
 #define magic_clearhint(a,b)	Perl_magic_clearhint(aTHX_ a,b)
 #define magic_clearhints(a,b)	Perl_magic_clearhints(aTHX_ a,b)
@@ -1301,6 +1306,14 @@
 #define malloc_good_size	Perl_malloc_good_size
 #define malloced_size		Perl_malloced_size
 #  endif
+#  if defined(PERL_CORE)
+#define opslab_force_free(a)	Perl_opslab_force_free(aTHX_ a)
+#define opslab_free(a)		Perl_opslab_free(aTHX_ a)
+#define opslab_free_nopad(a)	Perl_opslab_free_nopad(aTHX_ a)
+#    if defined(PERL_DEBUG_READONLY_OPS)
+#define Slab_to_ro(a)		Perl_Slab_to_ro(aTHX_ a)
+#    endif
+#  endif
 #  if defined(PERL_CR_FILTER)
 #    if defined(PERL_IN_TOKE_C)
 #define cr_textfilter(a,b,c)	S_cr_textfilter(aTHX_ a,b,c)
@@ -1309,9 +1322,7 @@
 #  endif
 #  if defined(PERL_DEBUG_READONLY_OPS)
 #    if defined(PERL_IN_OP_C)
-#      if defined(PL_OP_SLAB_ALLOC)
 #define Slab_to_rw(a)		S_Slab_to_rw(aTHX_ a)
-#      endif
 #    endif
 #  endif
 #  if defined(PERL_IN_AV_C)

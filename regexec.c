@@ -129,6 +129,7 @@
 	bool ok; \
 	ENTER; save_re_context(); \
 	ok=CAT2(is_utf8_,class)((const U8*)str); \
+        PERL_UNUSED_VAR(ok); \
 	assert(ok); assert(CAT2(PL_utf8_,class)); LEAVE; } } STMT_END
 #endif
 
@@ -3167,6 +3168,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
     multicall_oldcatch = 0;
     multicall_cv = NULL;
     cx = NULL;
+    PERL_UNUSED_VAR(multicall_cop);
+    PERL_UNUSED_VAR(newsp);
 
 
     PERL_ARGS_ASSERT_REGMATCH;
@@ -6038,6 +6041,7 @@ no_silent:
     if (last_pushed_cv) {
 	dSP;
 	POP_MULTICALL;
+        PERL_UNUSED_VAR(SP);
     }
 
     /* clean up; in particular, free all slabs above current one */
@@ -7018,6 +7022,14 @@ S_reginclass(pTHX_ const regexp * const prog, register const regnode * const n, 
 		if (! utf8_target) Safefree(utf8_p);
 	    }
 	}
+
+        if (UNICODE_IS_SUPER(c)
+            && (flags & ANYOF_WARN_SUPER)
+            && ckWARN_d(WARN_NON_UNICODE))
+        {
+            Perl_warner(aTHX_ packWARN(WARN_NON_UNICODE),
+                "Code point 0x%04"UVXf" is not Unicode, all \\p{} matches fail; all \\P{} matches succeed", c);
+        }
     }
 
     return (flags & ANYOF_INVERT) ? !match : match;

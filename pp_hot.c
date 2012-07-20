@@ -74,7 +74,7 @@ PP(pp_null)
     return NORMAL;
 }
 
-/* This is sometimes called directly by pp_coreargs. */
+/* This is sometimes called directly by pp_coreargs and pp_grepstart. */
 PP(pp_pushmark)
 {
     dVAR;
@@ -112,30 +112,34 @@ PP(pp_and)
 
 PP(pp_sassign)
 {
-    dVAR; dSP; dPOPTOPssrl;
+    dVAR; dSP;
+    /* sassign keeps its args in the optree traditionally backwards.
+       So we pop them differently.
+    */
+    SV *left = POPs; SV *right = TOPs;
 
     if (PL_op->op_private & OPpASSIGN_BACKWARDS) {
 	SV * const temp = left;
 	left = right; right = temp;
     }
-    if (PL_tainting && PL_tainted && !SvTAINTED(left))
+    if (PL_tainting && PL_tainted && !SvTAINTED(right))
 	TAINT_NOT;
     if (PL_op->op_private & OPpASSIGN_CV_TO_GV) {
-	SV * const cv = SvRV(left);
+	SV * const cv = SvRV(right);
 	const U32 cv_type = SvTYPE(cv);
-	const bool is_gv = isGV_with_GP(right);
+	const bool is_gv = isGV_with_GP(left);
 	const bool got_coderef = cv_type == SVt_PVCV || cv_type == SVt_PVFM;
 
 	if (!got_coderef) {
 	    assert(SvROK(cv));
 	}
 
-	/* Can do the optimisation if right (LVALUE) is not a typeglob,
-	   left (RVALUE) is a reference to something, and we're in void
+	/* Can do the optimisation if left (LVALUE) is not a typeglob,
+	   right (RVALUE) is a reference to something, and we're in void
 	   context. */
 	if (!got_coderef && !is_gv && GIMME_V == G_VOID) {
 	    /* Is the target symbol table currently empty?  */
-	    GV * const gv = gv_fetchsv_nomg(right, GV_NOINIT, SVt_PVGV);
+	    GV * const gv = gv_fetchsv_nomg(left, GV_NOINIT, SVt_PVGV);
 	    if (SvTYPE(gv) != SVt_PVGV && !SvOK(gv)) {
 		/* Good. Create a new proxy constant subroutine in the target.
 		   The gv becomes a(nother) reference to the constant.  */
@@ -145,7 +149,7 @@ PP(pp_sassign)
 		SvPCS_IMPORTED_on(gv);
 		SvRV_set(gv, value);
 		SvREFCNT_inc_simple_void(value);
-		SETs(right);
+		SETs(left);
 		RETURN;
 	    }
 	}
@@ -153,7 +157,7 @@ PP(pp_sassign)
 	/* Need to fix things up.  */
 	if (!is_gv) {
 	    /* Need to fix GV.  */
-	    right = MUTABLE_SV(gv_fetchsv_nomg(right,GV_ADD, SVt_PVGV));
+	    left = MUTABLE_SV(gv_fetchsv_nomg(left,GV_ADD, SVt_PVGV));
 	}
 
 	if (!got_coderef) {
@@ -167,7 +171,7 @@ PP(pp_sassign)
 		   all sorts of fun as the reference to our new sub is
 		   donated to the GV that we're about to assign to.
 		*/
-		SvRV_set(left, MUTABLE_SV(newCONSTSUB(GvSTASH(right), NULL,
+		SvRV_set(right, MUTABLE_SV(newCONSTSUB(GvSTASH(left), NULL,
 						      SvRV(cv))));
 		SvREFCNT_dec(cv);
 		LEAVE_with_name("sassign_coderef");
@@ -193,20 +197,20 @@ PP(pp_sassign)
 
 		SvREFCNT_inc_void(source);
 		SvREFCNT_dec(upgraded);
-		SvRV_set(left, MUTABLE_SV(source));
+		SvRV_set(right, MUTABLE_SV(source));
 	    }
 	}
 
     }
     if (
-      SvTEMP(right) && !SvSMAGICAL(right) && SvREFCNT(right) == 1 &&
-      (!isGV_with_GP(right) || SvFAKE(right)) && ckWARN(WARN_MISC)
+      SvTEMP(left) && !SvSMAGICAL(left) && SvREFCNT(left) == 1 &&
+      (!isGV_with_GP(left) || SvFAKE(left)) && ckWARN(WARN_MISC)
     )
 	Perl_warner(aTHX_
 	    packWARN(WARN_MISC), "Useless assignment to a temporary"
 	);
-    SvSetMagicSV(right, left);
-    SETs(right);
+    SvSetMagicSV(left, right);
+    SETs(left);
     RETURN;
 }
 
@@ -325,7 +329,7 @@ PP(pp_readline)
     dSP;
     if (TOPs) {
 	SvGETMAGIC(TOPs);
-	tryAMAGICunTARGET(iter_amg, 0, 0);
+	tryAMAGICunTARGETlist(iter_amg, 0, 0);
 	PL_last_in_gv = MUTABLE_GV(*PL_stack_sp--);
     }
     else PL_last_in_gv = PL_argvgv, PL_stack_sp--;
@@ -366,7 +370,7 @@ PP(pp_preinc)
 	PL_op->op_type == OP_PREINC || PL_op->op_type == OP_I_PREINC;
     if (SvTYPE(TOPs) >= SVt_PVAV || (isGV_with_GP(TOPs) && !SvFAKE(TOPs)))
 	Perl_croak_no_modify(aTHX);
-    if (!SvREADONLY(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
+    if (!SvREADONLY(TOPs) && !SvGMAGICAL(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
         && SvIVX(TOPs) != (inc ? IV_MAX : IV_MIN))
     {
 	SvIV_set(TOPs, SvIVX(TOPs) + (inc ? 1 : -1));
@@ -1588,6 +1592,7 @@ Perl_do_readline(pTHX)
 		    if (av_len(GvAVn(PL_last_in_gv)) < 0) {
 			IoFLAGS(io) &= ~IOf_START;
 			do_open(PL_last_in_gv,"-",1,FALSE,O_RDONLY,0,NULL);
+			SvTAINTED_off(GvSVn(PL_last_in_gv)); /* previous tainting irrelevant */
 			sv_setpvs(GvSVn(PL_last_in_gv), "-");
 			SvSETMAGIC(GvSV(PL_last_in_gv));
 			fp = IoIFP(io);
@@ -1788,7 +1793,7 @@ PP(pp_helem)
 	 * Try to preserve the existenceness of a tied hash
 	 * element by using EXISTS and DELETE if possible.
 	 * Fallback to FETCH and STORE otherwise. */
-	if (SvCANEXISTDELETE(hv) || mg_find((const SV *)hv, PERL_MAGIC_env))
+	if (SvCANEXISTDELETE(hv))
 	    preeminent = hv_exists_ent(hv, keysv, 0);
     }
 
@@ -2354,20 +2359,20 @@ PP(pp_subst)
 	    }
 	    m = RX_OFFS(rx)[0].start + orig;
 	    if (doutf8 && !SvUTF8(dstr))
-		sv_catpvn_utf8_upgrade(dstr, s, m - s, nsv);
+		sv_catpvn_nomg_utf8_upgrade(dstr, s, m - s, nsv);
             else
-		sv_catpvn(dstr, s, m-s);
+		sv_catpvn_nomg(dstr, s, m-s);
 	    s = RX_OFFS(rx)[0].end + orig;
 	    if (clen)
-		sv_catpvn(dstr, c, clen);
+		sv_catpvn_nomg(dstr, c, clen);
 	    if (once)
 		break;
 	} while (CALLREGEXEC(rx, s, strend, orig, s == m,
 			     TARG, NULL, r_flags));
 	if (doutf8 && !DO_UTF8(TARG))
-	    sv_catpvn_utf8_upgrade(dstr, s, strend - s, nsv);
+	    sv_catpvn_nomg_utf8_upgrade(dstr, s, strend - s, nsv);
 	else
-	    sv_catpvn(dstr, s, strend - s);
+	    sv_catpvn_nomg(dstr, s, strend - s);
 
 	if (rpm->op_pmflags & PMf_NONDESTRUCT) {
 	    /* From here on down we're using the copy, and leaving the original
@@ -2597,9 +2602,9 @@ PP(pp_entersub)
 	else {
 	    const char *sym;
 	    STRLEN len;
-	    sym = SvPV_nomg_const(sv, len);
-	    if (!sym)
+	    if (!SvOK(sv))
 		DIE(aTHX_ PL_no_usym, "a subroutine");
+	    sym = SvPV_nomg_const(sv, len);
 	    if (PL_op->op_private & HINT_STRICT_REFS)
 		DIE(aTHX_ "Can't use string (\"%" SVf32 "\"%s) as a subroutine ref while \"strict refs\" in use", sv, len>32 ? "..." : "");
 	    cv = get_cvn_flags(sym, len, GV_ADD|SvUTF8(sv));
@@ -2644,15 +2649,15 @@ try_autoload:
 	    {
 		cv = GvCV(autogv);
 	    }
-	    /* sorry */
 	    else {
+	       sorry:
 		sub_name = sv_newmortal();
 		gv_efullname3(sub_name, gv, NULL);
 		DIE(aTHX_ "Undefined subroutine &%"SVf" called", SVfARG(sub_name));
 	    }
 	}
 	if (!cv)
-	    DIE(aTHX_ "Not a CODE reference");
+	    goto sorry;
 	goto retry;
     }
 
