@@ -400,6 +400,7 @@ Perl_cv_undef(pTHX_ CV *cv)
 			CV * const innercv = MUTABLE_CV(curpad[ix]);
 			U32 inner_rc = SvREFCNT(innercv);
 			assert(inner_rc);
+			assert(SvTYPE(innercv) != SVt_PVFM);
 			namepad[ix] = NULL;
 			SvREFCNT_dec(namesv);
 
@@ -749,12 +750,19 @@ Perl_pad_add_anon(pTHX_ CV* func, I32 optype)
     ix = pad_alloc(optype, SVs_PADMY);
     av_store(PL_comppad_name, ix, name);
     /* XXX DAPM use PL_curpad[] ? */
-    av_store(PL_comppad, ix, (SV*)func);
+    if (SvTYPE(func) == SVt_PVCV || !CvOUTSIDE(func))
+	av_store(PL_comppad, ix, (SV*)func);
+    else {
+	SV *rv = newRV_inc((SV *)func);
+	sv_rvweaken(rv);
+	assert (SvTYPE(func) == SVt_PVFM);
+	av_store(PL_comppad, ix, rv);
+    }
     SvPADMY_on((SV*)func);
 
     /* to avoid ref loops, we never have parent + child referencing each
      * other simultaneously */
-    if (CvOUTSIDE(func)) {
+    if (CvOUTSIDE(func) && SvTYPE(func) == SVt_PVCV) {
 	assert(!CvWEAKOUTSIDE(func));
 	CvWEAKOUTSIDE_on(func);
 	SvREFCNT_dec(CvOUTSIDE(func));
@@ -1881,16 +1889,21 @@ Perl_cv_clone(pTHX_ CV *proto)
 
     /* Since cloneable anon subs can be nested, CvOUTSIDE may point
      * to a prototype; we instead want the cloned parent who called us.
-     * Note that in general for formats, CvOUTSIDE != find_runcv */
+     * Note that in general for formats, CvOUTSIDE != find_runcv; formats
+     * inside closures, however, only work if CvOUTSIDE == find_runcv.
+     */
 
     outside = CvOUTSIDE(proto);
     if (outside && CvCLONE(outside) && ! CvCLONED(outside))
 	outside = find_runcv(NULL);
+    if (SvTYPE(proto) == SVt_PVFM
+     && CvROOT(outside) != CvROOT(CvOUTSIDE(proto)))
+	outside = CvOUTSIDE(proto);
     depth = CvDEPTH(outside);
     assert(depth || SvTYPE(proto) == SVt_PVFM);
     if (!depth)
 	depth = 1;
-    assert(CvPADLIST(outside));
+    assert(CvPADLIST(outside) || SvTYPE(proto) == SVt_PVFM);
 
     ENTER;
     SAVESPTR(PL_compcv);
@@ -1921,19 +1934,20 @@ Perl_cv_clone(pTHX_ CV *proto)
 
     PL_curpad = AvARRAY(PL_comppad);
 
-    outpad = AvARRAY(AvARRAY(CvPADLIST(outside))[depth]);
+    outpad = CvPADLIST(outside)
+	? AvARRAY(AvARRAY(CvPADLIST(outside))[depth])
+	: NULL;
 
     for (ix = fpad; ix > 0; ix--) {
 	SV* const namesv = (ix <= fname) ? pname[ix] : NULL;
 	SV *sv = NULL;
 	if (namesv && namesv != &PL_sv_undef) { /* lexical */
 	    if (SvFAKE(namesv)) {   /* lexical from outside? */
-		sv = outpad[PARENT_PAD_INDEX(namesv)];
-		assert(sv);
-		/* formats may have an inactive parent,
+		/* formats may have an inactive, or even undefined, parent,
 		   while my $x if $false can leave an active var marked as
 		   stale. And state vars are always available */
-		if (SvPADSTALE(sv) && !SvPAD_STATE(namesv)) {
+		if (!outpad || !(sv = outpad[PARENT_PAD_INDEX(namesv)])
+		 || (SvPADSTALE(sv) && !SvPAD_STATE(namesv))) {
 		    Perl_ck_warner(aTHX_ packWARN(WARN_CLOSURE),
 				   "Variable \"%"SVf"\" is not available", namesv);
 		    sv = NULL;
@@ -2023,10 +2037,23 @@ Perl_pad_fixup_inner_anons(pTHX_ PADLIST *padlist, CV *old_cv, CV *new_cv)
 	if (namesv && namesv != &PL_sv_undef
 	    && *SvPVX_const(namesv) == '&')
 	{
+	  if (SvTYPE(curpad[ix]) == SVt_PVCV) {
 	    CV * const innercv = MUTABLE_CV(curpad[ix]);
 	    assert(CvWEAKOUTSIDE(innercv));
 	    assert(CvOUTSIDE(innercv) == old_cv);
 	    CvOUTSIDE(innercv) = new_cv;
+	  }
+	  else { /* format reference */
+	    SV * const rv = curpad[ix];
+	    CV *innercv;
+	    if (!SvOK(rv)) continue;
+	    assert(SvROK(rv));
+	    assert(SvWEAKREF(rv));
+	    innercv = (CV *)SvRV(rv);
+	    assert(!CvWEAKOUTSIDE(innercv));
+	    SvREFCNT_dec(CvOUTSIDE(innercv));
+	    CvOUTSIDE(innercv) = (CV *)SvREFCNT_inc_simple_NN(new_cv);
+	  }
 	}
     }
 }
