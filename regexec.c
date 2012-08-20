@@ -579,16 +579,16 @@ Perl_re_intuit_start(pTHX_ REGEXP * const rx, SV *sv, char *strpos,
 {
     dVAR;
     struct regexp *const prog = (struct regexp *)SvANY(rx);
-    register I32 start_shift = 0;
+    I32 start_shift = 0;
     /* Should be nonnegative! */
-    register I32 end_shift   = 0;
-    register char *s;
-    register SV *check;
+    I32 end_shift   = 0;
+    char *s;
+    SV *check;
     char *strbeg;
     char *t;
     const bool utf8_target = (sv && SvUTF8(sv)) ? 1 : 0; /* if no sv we have to assume bytes */
     I32 ml_anch;
-    register char *other_last = NULL;	/* other substr checked before this */
+    char *other_last = NULL;	/* other substr checked before this */
     char *check_at = NULL;		/* check substr found at this pos */
     char *checked_upto = NULL;          /* how far into the string we have already checked using find_byclass*/
     const I32 multiline = prog->extflags & RXf_PMf_MULTILINE;
@@ -1429,12 +1429,12 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	const U8 *fold_array;   /* array for folding ords < 256 */
 	STRLEN ln;
 	STRLEN lnc;
-	register STRLEN uskip;
+	STRLEN uskip;
 	U8 c1;
 	U8 c2;
 	char *e;
-	register I32 tmp = 1;	/* Scratch variable? */
-	register const bool utf8_target = PL_reg_match_utf8;
+	I32 tmp = 1;	/* Scratch variable? */
+	const bool utf8_target = PL_reg_match_utf8;
 	UV utf8_fold_flags = 0;
         RXi_GET_DECL(prog,progi);
 
@@ -1814,6 +1814,20 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 		!is_HORIZWS_latin1(s)
 	    );	    
 	    break;
+	case POSIXA:
+	    /* Don't need to worry about utf8, as it can match only a single
+            * byte invariant character.  The flag in this node type is the
+            * class number to pass to _generic_isCC() to build a mask for
+            * searching in PL_charclass[] */
+	    REXEC_FBC_CLASS_SCAN( _generic_isCC_A(*s, FLAGS(c)));
+	    break;
+	case NPOSIXA:
+	    REXEC_FBC_CSCAN(
+		!_generic_isCC_A(*s, FLAGS(c)),
+		!_generic_isCC_A(*s, FLAGS(c))
+	    );
+	    break;
+
 	case AHOCORASICKC:
 	case AHOCORASICK: 
 	    {
@@ -2056,7 +2070,7 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, register char *stre
     dVAR;
     struct regexp *const prog = (struct regexp *)SvANY(rx);
     /*register*/ char *s;
-    register regnode *c;
+    regnode *c;
     /*register*/ char *startpos = stringarg;
     I32 minlen;		/* must match at least this many chars */
     I32 dontbother = 0;	/* how many characters not to try at end */
@@ -2717,7 +2731,7 @@ S_regtry(pTHX_ regmatch_info *reginfo, char **startpos)
 #if 1
     if (prog->nparens) {
 	regexp_paren_pair *pp = prog->offs;
-	register I32 i;
+	I32 i;
 	for (i = prog->nparens; i > (I32)prog->lastparen; i--) {
 	    ++pp;
 	    pp->start = -1;
@@ -3099,21 +3113,21 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
     dMY_CXT;
 #endif
     dVAR;
-    register const bool utf8_target = PL_reg_match_utf8;
+    const bool utf8_target = PL_reg_match_utf8;
     const U32 uniflags = UTF8_ALLOW_DEFAULT;
     REGEXP *rex_sv = reginfo->prog;
     regexp *rex = (struct regexp *)SvANY(rex_sv);
     RXi_GET_DECL(rex,rexi);
     I32	oldsave;
     /* the current state. This is a cached copy of PL_regmatch_state */
-    register regmatch_state *st;
+    regmatch_state *st;
     /* cache heavy used fields of st in registers */
-    register regnode *scan;
-    register regnode *next;
-    register U32 n = 0;	/* general value; init to avoid compiler warning */
-    register I32 ln = 0; /* len or last;  init to avoid compiler warning */
-    register char *locinput = PL_reginput;
-    register I32 nextchr;   /* is always set to UCHARAT(locinput) */
+    regnode *scan;
+    regnode *next;
+    U32 n = 0;	/* general value; init to avoid compiler warning */
+    I32 ln = 0; /* len or last;  init to avoid compiler warning */
+    char *locinput = PL_reginput;
+    I32 nextchr;   /* is always set to UCHARAT(locinput) */
 
     bool result = 0;	    /* return value of S_regmatch */
     int depth = 0;	    /* depth of backtrack stack */
@@ -3522,10 +3536,10 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 	    {
 		/* Find next-highest word to process.  Note that this code
 		 * is O(N^2) per trie run (O(N) per branch), so keep tight */
-		register U16 min = 0;
-		register U16 word;
-		register U16 const nextword = ST.nextword;
-		register reg_trie_wordinfo * const wordinfo
+		U16 min = 0;
+		U16 word;
+		U16 const nextword = ST.nextword;
+		reg_trie_wordinfo * const wordinfo
 		    = ((reg_trie_data*)rexi->data->data[ARG(ST.me)])->wordinfo;
 		for (word=ST.topword; word; word=wordinfo[word].prev) {
 		    if (word > nextword && (!min || word < min))
@@ -3880,6 +3894,26 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		DIGITL, NDIGITL, isDIGIT_LC, isDIGIT_LC_utf8,
 		DIGITA, NDIGITA, isDIGIT_A,
 		digit, "0");
+
+        case POSIXA:
+            if (locinput >= PL_regeol || ! _generic_isCC_A(nextchr, FLAGS(scan))) {
+                sayNO;
+            }
+            /* Matched a utf8-invariant, so don't have to worry about utf8 */
+            nextchr = UCHARAT(++locinput);
+            break;
+        case NPOSIXA:
+            if (locinput >= PL_regeol || _generic_isCC_A(nextchr, FLAGS(scan))) {
+                sayNO;
+            }
+            if (utf8_target) {
+                locinput += PL_utf8skip[nextchr];
+                nextchr = UCHARAT(locinput);
+            }
+            else {
+                nextchr = UCHARAT(++locinput);
+            }
+            break;
 
 	case CLUMP: /* Match \X: logical Unicode character.  This is defined as
 		       a Unicode extended Grapheme Cluster */
@@ -6062,11 +6096,11 @@ STATIC I32
 S_regrepeat(pTHX_ const regexp *prog, const regnode *p, I32 max, int depth)
 {
     dVAR;
-    register char *scan;
-    register I32 c;
-    register char *loceol = PL_regeol;
-    register I32 hardcount = 0;
-    register bool utf8_target = PL_reg_match_utf8;
+    char *scan;
+    I32 c;
+    char *loceol = PL_regeol;
+    I32 hardcount = 0;
+    bool utf8_target = PL_reg_match_utf8;
     UV utf8_flags;
 #ifndef DEBUGGING
     PERL_UNUSED_ARG(depth);
@@ -6296,6 +6330,24 @@ S_regrepeat(pTHX_ const regexp *prog, const regnode *p, I32 max, int depth)
 	    goto utf8_Nwordchar;
 	while (scan < loceol && ! isALNUM((U8) *scan)) {
 	    scan++;
+	}
+	break;
+
+    case POSIXA:
+       while (scan < loceol && _generic_isCC_A((U8) *scan, FLAGS(p))) {
+	    scan++;
+	}
+	break;
+    case NPOSIXA:
+	if (utf8_target) {
+	    while (scan < loceol && ! _generic_isCC_A((U8) *scan, FLAGS(p))) {
+		scan += UTF8SKIP(scan);
+	    }
+	}
+	else {
+	    while (scan < loceol && ! _generic_isCC_A((U8) *scan, FLAGS(p))) {
+		scan++;
+	    }
 	}
 	break;
     case NALNUMA:

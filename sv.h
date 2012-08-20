@@ -348,7 +348,7 @@ perform the upgrade if necessary.  See C<svtype>.
 
 
 
-#define SVf_THINKFIRST	(SVf_READONLY|SVf_ROK|SVf_FAKE)
+#define SVf_THINKFIRST	(SVf_READONLY|SVf_ROK|SVf_FAKE|SVs_RMG)
 
 #define SVf_OK		(SVf_IOK|SVf_NOK|SVf_POK|SVf_ROK| \
 			 SVp_IOK|SVp_NOK|SVp_POK|SVpgv_GP)
@@ -412,10 +412,26 @@ perform the upgrade if necessary.  See C<svtype>.
 /* pad name vars only */
 #define SVpad_STATE	0x80000000  /* pad name is a "state" var */
 
+/* MSVC6 generates "error C2099: initializer is not a constant" when
+ * initializing bodies_by_type in sv.c. Workaround the compiler bug by
+ * using an anonymous union, but only for MSVC6 since that isn't C89.
+ */
+#if defined(_MSC_VER) && _MSC_VER < 1300
+# define _XPV_CUR_U_NAME
+# define xpv_cur	xpvcuru_cur
+# define xpv_fmdepth	xpvcuru_fmdepth
+#else
+# define _XPV_CUR_U_NAME xpv_cur_u
+# define xpv_cur	xpv_cur_u.xpvcuru_cur
+# define xpv_fmdepth	xpv_cur_u.xpvcuru_fmdepth
+#endif
 #define _XPV_HEAD							\
     HV*		xmg_stash;	/* class package */			\
     union _xmgu	xmg_u;							\
-    STRLEN	xpv_cur;	/* length of svu_pv as a C string */    \
+    union {								\
+	STRLEN	xpvcuru_cur;	/* length of svu_pv as a C string */    \
+	I32	xpvcuru_fmdepth;					\
+    }		_XPV_CUR_U_NAME;					\
     STRLEN	xpv_len 	/* allocated size */
 
 union _xnvu {
@@ -520,7 +536,6 @@ typedef U16 cv_flags_t;
 struct xpvfm {
     _XPV_HEAD;
     _XPVCV_COMMON;
-    IV		xfm_lines;
 };
 
 
@@ -748,13 +763,8 @@ Set the actual length of the string which is in the SV.  See C<SvIV_set>.
 #define SvNIOK_off(sv)		(SvFLAGS(sv) &= ~(SVf_IOK|SVf_NOK| \
 						  SVp_IOK|SVp_NOK|SVf_IVisUV))
 
-#if defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN)
-#define assert_not_ROK(sv)	({assert(!SvROK(sv) || !SvRV(sv));}),
-#define assert_not_glob(sv)	({assert(!isGV_with_GP(sv));}),
-#else
-#define assert_not_ROK(sv)	
-#define assert_not_glob(sv)	
-#endif
+#define assert_not_ROK(sv)	assert_(!SvROK(sv) || !SvRV(sv))
+#define assert_not_glob(sv)	assert_(!isGV_with_GP(sv))
 
 #define SvOK(sv)		((SvTYPE(sv) == SVt_BIND)		\
 				 ? (SvFLAGS(SvRV(sv)) & SVf_OK)		\
@@ -924,6 +934,13 @@ in gv.h: */
 #define SvPOK_byte_nog(sv)	((SvFLAGS(sv) & (SVf_POK|SVf_UTF8|SVs_GMG)) == SVf_POK)
 #define SvPOK_byte_nogthink(sv)	((SvFLAGS(sv) & (SVf_POK|SVf_UTF8|SVf_THINKFIRST|SVs_GMG)) == SVf_POK)
 
+#define SvPOK_pure_nogthink(sv) \
+    ((SvFLAGS(sv) & (SVf_POK|SVf_IOK|SVf_NOK|SVf_ROK|SVpgv_GP|SVf_THINKFIRST|SVs_GMG)) == SVf_POK)
+#define SvPOK_utf8_pure_nogthink(sv) \
+    ((SvFLAGS(sv) & (SVf_POK|SVf_UTF8|SVf_IOK|SVf_NOK|SVf_ROK|SVpgv_GP|SVf_THINKFIRST|SVs_GMG)) == (SVf_POK|SVf_UTF8))
+#define SvPOK_byte_pure_nogthink(sv) \
+    ((SvFLAGS(sv) & (SVf_POK|SVf_UTF8|SVf_IOK|SVf_NOK|SVf_ROK|SVpgv_GP|SVf_THINKFIRST|SVs_GMG)) == SVf_POK)
+
 /*
 =for apidoc Am|U32|SvGAMAGIC|SV* sv
 
@@ -954,6 +971,30 @@ the scalar's value cannot change unless written to.
 				 == (SVf_ROK|SVprv_PCS_IMPORTED))
 #define SvPCS_IMPORTED_on(sv)	(SvFLAGS(sv) |=  (SVf_ROK|SVprv_PCS_IMPORTED))
 #define SvPCS_IMPORTED_off(sv)	(SvFLAGS(sv) &= ~(SVf_ROK|SVprv_PCS_IMPORTED))
+
+/*
+=for apidoc m|U32|SvTHINKFIRST|SV *sv
+
+A quick flag check to see whether an sv should be passed to sv_force_normal
+to be "downgraded" before SvIVX or SvPVX can be modified directly.
+
+For example, if your scalar is a reference and you want to modify the SvIVX
+slot, you can't just do SvROK_off, as that will leak the referent.
+
+This is used internally by various sv-modifying functions, such as
+sv_setsv, sv_setiv and sv_pvn_force.
+
+One case that this does not handle is a gv without SvFAKE set.  After
+
+    if (SvTHINKFIRST(gv)) sv_force_normal(gv);
+
+it will still be a gv.
+
+SvTHINKFIRST sometimes produces false positives.  In those cases
+sv_force_normal does nothing.
+
+=cut
+*/
 
 #define SvTHINKFIRST(sv)	(SvFLAGS(sv) & SVf_THINKFIRST)
 
@@ -1104,7 +1145,7 @@ the scalar's value cannot change unless written to.
 #  define SvRV_const(sv) (0 + (sv)->sv_u.svu_rv)
 /* Don't test the core XS code yet.  */
 #  if defined (PERL_CORE) && PERL_DEBUG_COW > 1
-#    define SvPVX(sv) (0 + (assert(!SvREADONLY(sv)), (sv)->sv_u.svu_pv))
+#    define SvPVX(sv) (0 + (assert_(!SvREADONLY(sv)) (sv)->sv_u.svu_pv))
 #  else
 #  define SvPVX(sv) SvPVX_mutable(sv)
 #  endif
@@ -1112,13 +1153,8 @@ the scalar's value cannot change unless written to.
 #  define SvLEN(sv) (0 + ((XPV*) SvANY(sv))->xpv_len)
 #  define SvEND(sv) ((sv)->sv_u.svu_pv + ((XPV*)SvANY(sv))->xpv_cur)
 
-#  ifdef DEBUGGING
-#    define SvMAGIC(sv)	(0 + *(assert(SvTYPE(sv) >= SVt_PVMG), &((XPVMG*)  SvANY(sv))->xmg_u.xmg_magic))
-#    define SvSTASH(sv)	(0 + *(assert(SvTYPE(sv) >= SVt_PVMG), &((XPVMG*)  SvANY(sv))->xmg_stash))
-#  else
-#    define SvMAGIC(sv)	(0 + ((XPVMG*)  SvANY(sv))->xmg_u.xmg_magic)
-#    define SvSTASH(sv)	(0 + ((XPVMG*)  SvANY(sv))->xmg_stash)
-#  endif
+#  define SvMAGIC(sv)	(0 + *(assert_(SvTYPE(sv) >= SVt_PVMG) &((XPVMG*)  SvANY(sv))->xmg_u.xmg_magic))
+#  define SvSTASH(sv)	(0 + *(assert_(SvTYPE(sv) >= SVt_PVMG) &((XPVMG*)  SvANY(sv))->xmg_stash))
 #else
 #  define SvLEN(sv) ((XPV*) SvANY(sv))->xpv_len
 #  define SvEND(sv) ((sv)->sv_u.svu_pv + ((XPV*)SvANY(sv))->xpv_cur)
@@ -1229,12 +1265,7 @@ the scalar's value cannot change unless written to.
 #define SvIV_please_nomg(sv) \
 	(!SvIOKp(sv) && (SvNOK(sv) || SvPOK(sv)) \
 	    ? (SvIV_nomg(sv), SvIOK(sv))	  \
-	    : SvGMAGICAL(sv)			   \
-		? SvIOKp(sv) || (		    \
-		       (SvNOKp(sv) || SvPOKp(sv))    \
-		    && sv_gmagical_2iv_please(sv)     \
-		  )				       \
-		: SvIOK(sv))
+	    : SvIOK(sv))
 #define SvIV_set(sv, val) \
 	STMT_START { \
 		assert(PL_valid_types_IV_set[SvTYPE(sv) & SVt_MASK]);	\
@@ -1361,7 +1392,7 @@ the scalar's value cannot change unless written to.
 
 #endif
 
-#define FmLINES(sv)	((XPVFM*)  SvANY(sv))->xfm_lines
+#define FmLINES(sv)	((XPVIV*)  SvANY(sv))->xiv_iv
 
 #define LvTYPE(sv)	((XPVLV*)  SvANY(sv))->xlv_type
 #define LvTARG(sv)	((XPVLV*)  SvANY(sv))->xlv_targ
@@ -1440,14 +1471,14 @@ attention to precisely which outputs are influenced by which inputs.
 
 /*
 =for apidoc Am|char*|SvPV_force|SV* sv|STRLEN len
-Like C<SvPV> but will force the SV into containing just a string
-(C<SvPOK_only>).  You want force if you are going to update the C<SvPVX>
-directly.
+Like C<SvPV> but will force the SV into containing a string (C<SvPOK>), and
+only a string (C<SvPOK_only>), by hook or by crook.  You want force if you are
+going to update the C<SvPVX> directly.  Processes get magic.
 
 =for apidoc Am|char*|SvPV_force_nomg|SV* sv|STRLEN len
-Like C<SvPV> but will force the SV into containing just a string
-(C<SvPOK_only>).  You want force if you are going to update the C<SvPVX>
-directly.  Doesn't process magic.
+Like C<SvPV> but will force the SV into containing a string (C<SvPOK>), and
+only a string (C<SvPOK_only>), by hook or by crook.  You want force if you are
+going to update the C<SvPVX> directly.  Doesn't process get magic.
 
 =for apidoc Am|char*|SvPV|SV* sv|STRLEN len
 Returns a pointer to the string in the SV, or a stringified form of
@@ -1625,15 +1656,15 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>.
 #define SvPV_force_nomg_nolen(sv) SvPV_force_flags_nolen(sv, 0)
 
 #define SvPV_force_flags(sv, lp, flags) \
-    (SvPOK_nogthink(sv) \
+    (SvPOK_pure_nogthink(sv) \
      ? ((lp = SvCUR(sv)), SvPVX(sv)) : sv_pvn_force_flags(sv, &lp, flags))
 
 #define SvPV_force_flags_nolen(sv, flags) \
-    (SvPOK_nogthink(sv) \
+    (SvPOK_pure_nogthink(sv) \
      ? SvPVX(sv) : sv_pvn_force_flags(sv, 0, flags))
 
 #define SvPV_force_flags_mutable(sv, lp, flags) \
-    (SvPOK_nogthink(sv) \
+    (SvPOK_pure_nogthink(sv) \
      ? ((lp = SvCUR(sv)), SvPVX_mutable(sv)) \
      : sv_pvn_force_flags(sv, &lp, flags|SV_MUTABLE_RETURN))
 
@@ -1660,7 +1691,7 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>.
      ? ((lp = SvCUR(sv)), SvPVX(sv)) : sv_2pvutf8(sv, &lp))
 
 #define SvPVutf8_force(sv, lp) \
-    (SvPOK_utf8_nogthink(sv) \
+    (SvPOK_utf8_pure_nogthink(sv) \
      ? ((lp = SvCUR(sv)), SvPVX(sv)) : sv_pvutf8n_force(sv, &lp))
 
 #define SvPVutf8_nolen(sv) \
@@ -1674,7 +1705,7 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>.
      ? ((lp = SvCUR(sv)), SvPVX(sv)) : sv_2pvbyte(sv, &lp))
 
 #define SvPVbyte_force(sv, lp) \
-    (SvPOK_byte_nogthink(sv) \
+    (SvPOK_byte_pure_nogthink(sv) \
      ? ((lp = SvCUR(sv)), SvPVX(sv)) : sv_pvbyten_force(sv, &lp))
 
 #define SvPVbyte_nolen(sv) \
@@ -2074,23 +2105,23 @@ Evaluates I<sv> more than once.  Sets I<len> to 0 if C<SvOOK(sv)> is false.
 #  define SvOOK_offset(sv, offset) STMT_START {				\
 	assert(sizeof(offset) == sizeof(STRLEN));			\
 	if (SvOOK(sv)) {						\
-	    const U8 *crash = (U8*)SvPVX_const(sv);			\
-	    offset = *--crash;						\
- 	    if (!offset) {						\
-		crash -= sizeof(STRLEN);				\
-		Copy(crash, (U8 *)&offset, sizeof(STRLEN), U8);		\
+	    const U8 *_crash = (U8*)SvPVX_const(sv);			\
+	    (offset) = *--_crash;					\
+	    if (!(offset)) {						\
+		_crash -= sizeof(STRLEN);				\
+		Copy(_crash, (U8 *)&(offset), sizeof(STRLEN), U8);	\
 	    }								\
 	    {								\
 		/* Validate the preceding buffer's sentinels to		\
 		   verify that no-one is using it.  */			\
-		const U8 *const bonk = (U8 *) SvPVX_const(sv) - offset;	\
-		while (crash > bonk) {					\
-		    --crash;						\
-		    assert (*crash == (U8)PTR2UV(crash));		\
+		const U8 *const _bonk = (U8*)SvPVX_const(sv) - (offset);\
+		while (_crash > _bonk) {				\
+		    --_crash;						\
+		    assert (*_crash == (U8)PTR2UV(_crash));		\
 		}							\
 	    }								\
 	} else {							\
-	    offset = 0;							\
+	    (offset) = 0;						\
 	}								\
     } STMT_END
 #else
@@ -2098,13 +2129,13 @@ Evaluates I<sv> more than once.  Sets I<len> to 0 if C<SvOOK(sv)> is false.
 #  define SvOOK_offset(sv, offset) STMT_START {				\
 	assert(sizeof(offset) == sizeof(STRLEN));			\
 	if (SvOOK(sv)) {						\
-	    offset = ((U8*)SvPVX_const(sv))[-1];			\
-	    if (!offset) {						\
+	    (offset) = ((U8*)SvPVX_const(sv))[-1];			\
+	    if (!(offset)) {						\
 		Copy(SvPVX_const(sv) - 1 - sizeof(STRLEN),		\
-		     (U8 *)&offset, sizeof(STRLEN), U8);		\
+		     (U8*)&(offset), sizeof(STRLEN), U8);		\
 	    }								\
 	} else {							\
-	    offset = 0;							\
+	    (offset) = 0;						\
 	}								\
     } STMT_END
 #endif

@@ -268,7 +268,7 @@ bit, or edit F<Porting/exec-bit.txt>
 
 =item *
 
-Run C<make>, see if C<perl> compiles.
+Run C<make> (or C<nmake> on Windows), see if C<perl> compiles.
 
 =item *
 
@@ -296,7 +296,10 @@ For entries with a non-simple C<FILES> section, or with a C<MAP>, you
 may have to take more steps than listed above.
 
 F<Porting/sync-with-cpan> is a script that automates most of the steps
-above; but see the comments at the beginning of the file.
+above; but see the comments at the beginning of the file.  In particular,
+it has not yet been exercised on Windows, but will certainly require a set
+of Unix tools such as Cygwin, and steps that run C<make> will need to run
+C<nmake> instead.
 
 
 =head3 dual-life CPAN module stability
@@ -469,12 +472,6 @@ those cases. Create the branch by running
   git checkout -b release-5.xx.yy
 
 
-=head3 bump version number
-
-For a BLEAD-POINT release, if you did not bump the perl version number as
-part of I<advance actions>, do that now.
-
-
 =head3 finalize perldelta
 
 Finalize the perldelta.  In particular, fill in the Acknowledgements
@@ -590,10 +587,6 @@ F<dist/Module-CoreList/lib/Module/CoreList.pm>.
 Check that file over carefully:
 
     $ git diff dist/Module-CoreList/lib/Module/CoreList.pm
-
-If this is a .0 Perl version, add the appropriate lines in F<Corelist.pm>
-to alias "5.nnn000" to "5.nnn" in each hash.  (If feeling energetic,
-amend F<corelist.pl> to automate this.)
 
 =head4 Bump C<$Module::CoreList::VERSION>
 
@@ -832,17 +825,13 @@ previous is 5.10.0:
     find . -type f | sort > /tmp/f2
     diff -u /tmp/f[12]
 
-=head4 Test the CPAN client
+=head4 Bootstrap the CPAN client
 
 Bootstrap the CPAN client on the clean install:
 
-    $ bin/perl -MCPAN -e "shell"
+    $ bin/cpan
 
-If you're running this on Win32 you probably also need a set of Unix
-command-line tools available for CPAN to function correctly without
-Perl alternatives like LWP installed. Cygwin is an obvious choice.)
-
-=head4 Install the Inline module and test it
+=head4 Install the Inline module with CPAN and test it
 
 Try installing a popular CPAN module that's reasonably complex and that
 has dependencies; for example:
@@ -861,10 +850,6 @@ Check that your perl can run this:
 Bootstrap the CPANPLUS client on the clean install:
 
     $ bin/cpanp
-
-(Again, on Win32 you'll need something like Cygwin installed, but make sure
-that you don't end up with its various F<bin/cpan*> programs being found on
-the PATH before those of the Perl that you're trying to test.)
 
 =head4 Install the DBI module with CPANPLUS
 
@@ -1175,7 +1160,7 @@ Edit F<pod/perl.pod> to add an entry for the file, e.g.:
 
 Then rebuild various files:
 
-    $ perl pod/buildtoc --build-all
+    $ perl Porting/pod_rules.pl
 
 Finally, commit:
 

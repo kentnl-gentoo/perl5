@@ -510,7 +510,7 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
  */
 
 /* define this once if either system, instead of cluttering up the src */
-#if defined(MSDOS) || defined(atarist) || defined(WIN32) || defined(NETWARE)
+#if defined(MSDOS) || defined(WIN32) || defined(NETWARE)
 #define DOSISH 1
 #endif
 
@@ -729,6 +729,8 @@ EXTERN_C int usleep(unsigned int);
 #   define U64_CONST(x) ((U64)x##UL)
 #  elif QUADKIND == QUAD_IS_LONG_LONG
 #   define U64_CONST(x) ((U64)x##ULL)
+#  elif QUADKIND == QUAD_IS___INT64
+#   define U64_CONST(x) ((U64)x##UI64)
 #  else /* best guess we can make */
 #   define U64_CONST(x) ((U64)x##UL)
 #  endif
@@ -1170,7 +1172,7 @@ EXTERN_C int usleep(unsigned int);
 #   define S_IFIFO _S_IFIFO
 #endif
 
-/* The stat macros for Amdahl UTS, Unisoft System V/88 (and derivatives
+/* The stat macros for Unisoft System V/88 (and derivatives
    like UTekV) are broken, sometimes giving false positives.  Undefine
    them here and let the code below set them to proper values.
 
@@ -1179,7 +1181,7 @@ EXTERN_C int usleep(unsigned int);
    This header file bug is corrected in gcc-2.5.8 and later versions.
    --Kaveh Ghazi (ghazi@noc.rutgers.edu) 10/3/94.  */
 
-#if defined(uts) || (defined(m88k) && defined(ghs))
+#if defined(m88k) && defined(ghs)
 #   undef S_ISDIR
 #   undef S_ISCHR
 #   undef S_ISBLK
@@ -1622,10 +1624,6 @@ EXTERN_C char *crypt(const char *, const char *);
 #undef UV
 #endif
 
-#ifdef	SPRINTF_E_BUG
-#  define sprintf UTS_sprintf_wrap
-#endif
-
 /* For the times when you want the return value of sprintf, and you want it
    to be the length. Can't have a thread variable passed in, because C89 has
    no varargs macros.
@@ -1686,13 +1684,6 @@ EXTERN_C char *crypt(const char *, const char *);
 #  define my_strlcpy	strlcpy
 #else
 #  define my_strlcpy	Perl_my_strlcpy
-#endif
-
-/* Configure gets this right but the UTS compiler gets it wrong.
-   -- Hal Morris <hom00@utsglobal.com> */
-#ifdef UTS
-#  undef  UVTYPE
-#  define UVTYPE unsigned
 #endif
 
 /*
@@ -1758,11 +1749,6 @@ typedef UVTYPE UV;
 # undef PERL_NEED_MY_LETOH64
 # undef PERL_NEED_MY_HTOBE64
 # undef PERL_NEED_MY_BETOH64
-#endif
-
-#if defined(uts) || defined(UTS)
-#	undef UV_MAX
-#	define UV_MAX (4294967295u)
 #endif
 
 #define IV_DIG (BIT_DIGITS(IVSIZE * 8))
@@ -2419,9 +2405,8 @@ typedef struct custom_op XOP;
 
 typedef struct interpreter PerlInterpreter;
 
-/* Amdahl's <ksync.h> has struct sv */
 /* SGI's <sys/sema.h> has struct sv */
-#if defined(UTS) || defined(__sgi)
+#if defined(__sgi)
 #   define STRUCT_SV perl_sv
 #else
 #   define STRUCT_SV sv
@@ -2721,12 +2706,12 @@ typedef struct clone_params CLONE_PARAMS;
 #endif
 
 /*
-=for apidoc Am|void|PERL_SYS_INIT|int argc|char** argv
+=for apidoc Am|void|PERL_SYS_INIT|int *argc|char*** argv
 Provides system-specific tune up of the C runtime environment necessary to
 run Perl interpreters. This should be called only once, before creating
 any Perl interpreters.
 
-=for apidoc Am|void|PERL_SYS_INIT3|int argc|char** argv|char** env
+=for apidoc Am|void|PERL_SYS_INIT3|int *argc|char*** argv|char*** env
 Provides system-specific tune up of the C runtime environment necessary to
 run Perl interpreters. This should be called only once, before creating
 any Perl interpreters.
@@ -3491,10 +3476,6 @@ struct ptr_tbl {
     struct ptr_tbl_ent		*tbl_arena_end;
 };
 
-#if defined(iAPX286) || defined(M_I286) || defined(I80286)
-#   define I286
-#endif
-
 #if defined(htonl) && !defined(HAS_HTONL)
 #define HAS_HTONL
 #endif
@@ -3871,6 +3852,11 @@ Gid_t getegid (void);
 
 #ifndef assert
 #  define assert(what)	Perl_assert(what)
+#endif
+#ifdef DEBUGGING
+#  define assert_(what)	assert(what),
+#else
+#  define assert_(what)
 #endif
 
 struct ufuncs {
@@ -5319,10 +5305,12 @@ typedef struct am_table_short AMTS;
 #define RESTORE_NUMERIC_STANDARD()	/**/
 #define Atof				my_atof
 #define IN_LOCALE_RUNTIME		0
+#define IN_LOCALE_COMPILETIME		0
 
 #endif /* !USE_LOCALE_NUMERIC */
 
-#if !defined(Strtol) && defined(USE_64_BIT_INT) && defined(IV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG
+#if !defined(Strtol) && defined(USE_64_BIT_INT) && defined(IV_IS_QUAD) && \
+	(QUADKIND == QUAD_IS_LONG_LONG || QUADKIND == QUAD_IS___INT64)
 #    ifdef __hpux
 #        define strtoll __strtoll	/* secret handshake */
 #    endif
@@ -5344,7 +5332,8 @@ typedef struct am_table_short AMTS;
 /* It would be more fashionable to use Strtol() to define atol()
  * (as is done for Atoul(), see below) but for backward compatibility
  * we just assume atol(). */
-#   if defined(USE_64_BIT_INT) && defined(IV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG && defined(HAS_ATOLL)
+#   if defined(USE_64_BIT_INT) && defined(IV_IS_QUAD) && defined(HAS_ATOLL) && \
+	(QUADKIND == QUAD_IS_LONG_LONG || QUADKIND == QUAD_IS___INT64)
 #    ifdef WIN64
 #       define atoll    _atoi64		/* secret handshake */
 #    endif
@@ -5354,7 +5343,8 @@ typedef struct am_table_short AMTS;
 #   endif
 #endif
 
-#if !defined(Strtoul) && defined(USE_64_BIT_INT) && defined(UV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG
+#if !defined(Strtoul) && defined(USE_64_BIT_INT) && defined(UV_IS_QUAD) && \
+	(QUADKIND == QUAD_IS_LONG_LONG || QUADKIND == QUAD_IS___INT64)
 #    ifdef __hpux
 #        define strtoull __strtoull	/* secret handshake */
 #    endif

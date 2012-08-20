@@ -669,8 +669,8 @@ PP(pp_pipe_op)
 #ifdef HAS_PIPE
     dVAR;
     dSP;
-    register IO *rstio;
-    register IO *wstio;
+    IO *rstio;
+    IO *wstio;
     int fd[2];
 
     GV * const wgv = MUTABLE_GV(POPs);
@@ -1059,10 +1059,10 @@ PP(pp_sselect)
 {
 #ifdef HAS_SELECT
     dVAR; dSP; dTARGET;
-    register I32 i;
-    register I32 j;
-    register char *s;
-    register SV *sv;
+    I32 i;
+    I32 j;
+    char *s;
+    SV *sv;
     NV value;
     I32 maxlen = 0;
     I32 nfound;
@@ -1322,7 +1322,7 @@ STATIC OP *
 S_doform(pTHX_ CV *cv, GV *gv, OP *retop)
 {
     dVAR;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     const I32 gimme = GIMME_V;
 
     PERL_ARGS_ASSERT_DOFORM;
@@ -1335,8 +1335,12 @@ S_doform(pTHX_ CV *cv, GV *gv, OP *retop)
 
     PUSHBLOCK(cx, CXt_FORMAT, PL_stack_sp);
     PUSHFORMAT(cx, retop);
+    if (CvDEPTH(cv) >= 2) {
+	PERL_STACK_OVERFLOW_CHECK();
+	pad_push(CvPADLIST(cv), CvDEPTH(cv));
+    }
     SAVECOMPPAD();
-    PAD_SET_CUR_NOSAVE(CvPADLIST(cv), 1);
+    PAD_SET_CUR_NOSAVE(CvPADLIST(cv), CvDEPTH(cv));
 
     setdefout(gv);	    /* locally select filehandle so $% et al work */
     return CvSTART(cv);
@@ -1346,8 +1350,8 @@ PP(pp_enterwrite)
 {
     dVAR;
     dSP;
-    register GV *gv;
-    register IO *io;
+    GV *gv;
+    IO *io;
     GV *fgv;
     CV *cv = NULL;
     SV *tmpsv = NULL;
@@ -1386,19 +1390,13 @@ PP(pp_leavewrite)
 {
     dVAR; dSP;
     GV * const gv = cxstack[cxstack_ix].blk_format.gv;
-    register IO * const io = GvIOp(gv);
+    IO * const io = GvIOp(gv);
     PerlIO *ofp;
     PerlIO *fp;
     SV **newsp;
     I32 gimme;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     OP *retop;
-
-    /* I'm not sure why, but executing the format leaves an extra value on the
-     * stack. There's probably a better place to be handling this (probably
-     * by avoiding pushing it in the first place!) but I don't quite know
-     * where to look. -doy */
-    (void)POPs;
 
     if (!io || !(ofp = IoOFP(io)))
         goto forget_top;
@@ -1469,18 +1467,18 @@ PP(pp_leavewrite)
 	    gv_efullname4(sv, fgv, NULL, FALSE);
 	    DIE(aTHX_ "Undefined top format \"%"SVf"\" called", SVfARG(sv));
 	}
-	RETURNOP(doform(cv, gv, PL_op));
+	return doform(cv, gv, PL_op);
     }
 
   forget_top:
     POPBLOCK(cx,PL_curpm);
     POPFORMAT(cx);
     retop = cx->blk_sub.retop;
+    SP = newsp; /* ignore retval of formline */
     LEAVE;
 
-    fp = IoOFP(io);
-    if (!fp) {
-	if (IoIFP(io))
+    if (!io || !(fp = IoOFP(io))) {
+	if (io && IoIFP(io))
 	    report_wrongway_fh(gv, '<');
 	else
 	    report_evil_fh(gv);
@@ -1501,9 +1499,7 @@ PP(pp_leavewrite)
 	    PUSHs(&PL_sv_yes);
 	}
     }
-    /* bad_ofp: */
     PL_formtarget = PL_bodytarget;
-    PERL_UNUSED_VAR(newsp);
     PERL_UNUSED_VAR(gimme);
     RETURNOP(retop);
 }
@@ -2215,9 +2211,9 @@ PP(pp_truncate)
 	GV *tmpgv;
 	IO *io;
 
-	if ((tmpgv = PL_op->op_flags & OPf_SPECIAL
-	               ? gv_fetchsv(sv, 0, SVt_PVIO)
-	               : MAYBE_DEREF_GV(sv) )) {
+	if (PL_op->op_flags & OPf_SPECIAL
+	               ? (tmpgv = gv_fetchsv(sv, 0, SVt_PVIO), 1)
+	               : !!(tmpgv = MAYBE_DEREF_GV(sv)) ) {
 	    io = GvIO(tmpgv);
 	    if (!io)
 		result = 0;
@@ -2384,7 +2380,7 @@ PP(pp_socket)
     const int type = POPi;
     const int domain = POPi;
     GV * const gv = MUTABLE_GV(POPs);
-    register IO * const io = gv ? GvIOn(gv) : NULL;
+    IO * const io = gv ? GvIOn(gv) : NULL;
     int fd;
 
     if (!io) {
@@ -2432,8 +2428,8 @@ PP(pp_sockpair)
     const int domain = POPi;
     GV * const gv2 = MUTABLE_GV(POPs);
     GV * const gv1 = MUTABLE_GV(POPs);
-    register IO * const io1 = gv1 ? GvIOn(gv1) : NULL;
-    register IO * const io2 = gv2 ? GvIOn(gv2) : NULL;
+    IO * const io1 = gv1 ? GvIOn(gv1) : NULL;
+    IO * const io2 = gv2 ? GvIOn(gv2) : NULL;
     int fd[2];
 
     if (!io1)
@@ -2487,7 +2483,7 @@ PP(pp_bind)
     /* OK, so on what platform does bind modify addr?  */
     const char *addr;
     GV * const gv = MUTABLE_GV(POPs);
-    register IO * const io = GvIOn(gv);
+    IO * const io = GvIOn(gv);
     STRLEN len;
     const int op_type = PL_op->op_type;
 
@@ -2515,7 +2511,7 @@ PP(pp_listen)
     dVAR; dSP;
     const int backlog = POPi;
     GV * const gv = MUTABLE_GV(POPs);
-    register IO * const io = gv ? GvIOn(gv) : NULL;
+    IO * const io = gv ? GvIOn(gv) : NULL;
 
     if (!io || !IoIFP(io))
 	goto nuts;
@@ -2534,8 +2530,8 @@ nuts:
 PP(pp_accept)
 {
     dVAR; dSP; dTARGET;
-    register IO *nstio;
-    register IO *gstio;
+    IO *nstio;
+    IO *gstio;
     char namebuf[MAXPATHLEN];
 #if (defined(VMS_DO_SOCKETS) && defined(DECCRTL_SOCKETS)) || defined(MPE) || defined(__QNXNTO__)
     Sock_size_t len = sizeof (struct sockaddr_in);
@@ -2610,7 +2606,7 @@ PP(pp_shutdown)
     dVAR; dSP; dTARGET;
     const int how = POPi;
     GV * const gv = MUTABLE_GV(POPs);
-    register IO * const io = GvIOn(gv);
+    IO * const io = GvIOn(gv);
 
     if (!io || !IoIFP(io))
 	goto nuts;
@@ -2632,7 +2628,7 @@ PP(pp_ssockopt)
     const unsigned int optname = (unsigned int) POPi;
     const unsigned int lvl = (unsigned int) POPi;
     GV * const gv = MUTABLE_GV(POPs);
-    register IO * const io = GvIOn(gv);
+    IO * const io = GvIOn(gv);
     int fd;
     Sock_size_t len;
 
@@ -2701,7 +2697,7 @@ PP(pp_getpeername)
     dVAR; dSP;
     const int optype = PL_op->op_type;
     GV * const gv = MUTABLE_GV(POPs);
-    register IO * const io = GvIOn(gv);
+    IO * const io = GvIOn(gv);
     Sock_size_t len;
     SV *sv;
     int fd;
@@ -2907,6 +2903,13 @@ PP(pp_stat)
     RETURN;
 }
 
+/* All filetest ops avoid manipulating the perl stack pointer in their main
+   bodies (since commit d2c4d2d1e22d3125), and return using either
+   S_ft_return_false() or S_ft_return_true().  These two helper functions are
+   the only two which manipulate the perl stack.  To ensure that no stack
+   manipulation macros are used, the filetest ops avoid defining a local copy
+   of the stack pointer with dSP.  */
+
 /* If the next filetest is stacked up with this one
    (PL_op->op_private & OPpFT_STACKING), we leave
    the original argument on the stack for success,
@@ -2915,39 +2918,39 @@ PP(pp_stat)
 */
 
 static OP *
-S_ft_stacking_return_false(pTHX_ SV *ret) {
-    dSP;
+S_ft_return_false(pTHX_ SV *ret) {
     OP *next = NORMAL;
-    while (OP_IS_FILETEST(next->op_type)
-	&& next->op_private & OPpFT_STACKED)
-	next = next->op_next;
+    dSP;
+
     if (PL_op->op_flags & OPf_REF) XPUSHs(ret);
     else			   SETs(ret);
     PUTBACK;
+
+    if (PL_op->op_private & OPpFT_STACKING) {
+        while (OP_IS_FILETEST(next->op_type)
+               && next->op_private & OPpFT_STACKED)
+            next = next->op_next;
+    }
     return next;
 }
 
-#define FT_RETURN_FALSE(X)			     \
-    STMT_START {				      \
-	if (PL_op->op_private & OPpFT_STACKING)	       \
-	    return S_ft_stacking_return_false(aTHX_ X);	\
-	RETURNX(PL_op->op_flags & OPf_REF ? XPUSHs(X) : SETs(X)); \
-    } STMT_END
-#define FT_RETURN_TRUE(X)		 \
-    RETURNX((void)(			  \
-	PL_op->op_flags & OPf_REF	   \
-	    ? (bool)XPUSHs(		    \
-		PL_op->op_private & OPpFT_STACKING ? (SV *)cGVOP_gv : (X) \
-	      )								  \
-	    : (PL_op->op_private & OPpFT_STACKING || SETs(X))		  \
-    ))
+PERL_STATIC_INLINE OP *
+S_ft_return_true(pTHX_ SV *ret) {
+    dSP;
+    if (PL_op->op_flags & OPf_REF)
+        XPUSHs(PL_op->op_private & OPpFT_STACKING ? (SV *)cGVOP_gv : (ret));
+    else if (!(PL_op->op_private & OPpFT_STACKING))
+        SETs(ret);
+    PUTBACK;
+    return NORMAL;
+}
 
-#define FT_RETURNNO	FT_RETURN_FALSE(&PL_sv_no)
-#define FT_RETURNUNDEF	FT_RETURN_FALSE(&PL_sv_undef)
-#define FT_RETURNYES	FT_RETURN_TRUE(&PL_sv_yes)
+#define FT_RETURNNO	return S_ft_return_false(aTHX_ &PL_sv_no)
+#define FT_RETURNUNDEF	return S_ft_return_false(aTHX_ &PL_sv_undef)
+#define FT_RETURNYES	return S_ft_return_true(aTHX_ &PL_sv_yes)
 
 #define tryAMAGICftest_MG(chr) STMT_START { \
-	if ( (SvFLAGS(TOPs) & (SVf_ROK|SVs_GMG)) \
+	if ( (SvFLAGS(*PL_stack_sp) & (SVf_ROK|SVs_GMG)) \
 		&& PL_op->op_flags & OPf_KIDS) {     \
 	    OP *next = S_try_amagic_ftest(aTHX_ chr);	\
 	    if (next) return next;			  \
@@ -2957,13 +2960,12 @@ S_ft_stacking_return_false(pTHX_ SV *ret) {
 STATIC OP *
 S_try_amagic_ftest(pTHX_ char chr) {
     dVAR;
-    dSP;
-    SV* const arg = TOPs;
+    SV *const arg = *PL_stack_sp;
 
     assert(chr != '?');
     if (!(PL_op->op_private & OPpFT_STACKING)) SvGETMAGIC(arg);
 
-    if (SvAMAGIC(TOPs))
+    if (SvAMAGIC(arg))
     {
 	const char tmpchr = chr;
 	SV * const tmpsv = amagic_call(arg,
@@ -2973,8 +2975,8 @@ S_try_amagic_ftest(pTHX_ char chr) {
 	if (!tmpsv)
 	    return NULL;
 
-	if (SvTRUE(tmpsv)) FT_RETURN_TRUE(tmpsv);
-	FT_RETURN_FALSE(tmpsv);
+	return SvTRUE(tmpsv)
+            ? S_ft_return_true(aTHX_ tmpsv) : S_ft_return_false(aTHX_ tmpsv);
     }
     return NULL;
 }
@@ -3003,7 +3005,6 @@ PP(pp_ftrread)
 
     bool effective = FALSE;
     char opchar = '?';
-    dSP;
 
     switch (PL_op->op_type) {
     case OP_FTRREAD:	opchar = 'R'; break;
@@ -3067,7 +3068,7 @@ PP(pp_ftrread)
 
     if (use_access) {
 #if defined(HAS_ACCESS) || defined (PERL_EFF_ACCESS)
-	const char *name = TOPpx;
+	const char *name = SvPV_nolen(*PL_stack_sp);
 	if (effective) {
 #  ifdef PERL_EFF_ACCESS
 	    result = PERL_EFF_ACCESS(name, access_mode);
@@ -3105,7 +3106,6 @@ PP(pp_ftis)
     I32 result;
     const int op_type = PL_op->op_type;
     char opchar = '?';
-    dSP;
 
     switch (op_type) {
     case OP_FTIS:	opchar = 'e'; break;
@@ -3147,8 +3147,8 @@ PP(pp_ftis)
 	    break;
 	}
 	SvSETMAGIC(TARG);
-	if (SvTRUE_nomg(TARG)) FT_RETURN_TRUE(TARG);
-	else		       FT_RETURN_FALSE(TARG);
+	return SvTRUE_nomg(TARG)
+            ? S_ft_return_true(aTHX_ TARG) : S_ft_return_false(aTHX_ TARG);
     }
 }
 
@@ -3157,7 +3157,6 @@ PP(pp_ftrowned)
     dVAR;
     I32 result;
     char opchar = '?';
-    dSP;
 
     switch (PL_op->op_type) {
     case OP_FTROWNED:	opchar = 'O'; break;
@@ -3258,7 +3257,6 @@ PP(pp_ftrowned)
 PP(pp_ftlink)
 {
     dVAR;
-    dSP;
     I32 result;
 
     tryAMAGICftest_MG('l');
@@ -3274,7 +3272,6 @@ PP(pp_ftlink)
 PP(pp_fttty)
 {
     dVAR;
-    dSP;
     int fd;
     GV *gv;
     char *name = NULL;
@@ -3285,7 +3282,7 @@ PP(pp_fttty)
     if (PL_op->op_flags & OPf_REF)
 	gv = cGVOP_gv;
     else {
-      SV *tmpsv = TOPs;
+      SV *tmpsv = *PL_stack_sp;
       if (!(gv = MAYBE_DEREF_GV_nomg(tmpsv))) {
 	name = SvPV_nomg(tmpsv, namelen);
 	gv = gv_fetchpvn_flags(name, namelen, SvUTF8(tmpsv), SVt_PVIO);
@@ -3303,25 +3300,16 @@ PP(pp_fttty)
     FT_RETURNNO;
 }
 
-#if defined(atarist) /* this will work with atariST. Configure will
-			make guesses for other systems. */
-# define FILE_base(f) ((f)->_base)
-# define FILE_ptr(f) ((f)->_ptr)
-# define FILE_cnt(f) ((f)->_cnt)
-# define FILE_bufsiz(f) ((f)->_cnt + ((f)->_ptr - (f)->_base))
-#endif
-
 PP(pp_fttext)
 {
     dVAR;
-    dSP;
     I32 i;
     I32 len;
     I32 odd = 0;
     STDCHAR tbuf[512];
-    register STDCHAR *s;
-    register IO *io;
-    register SV *sv = NULL;
+    STDCHAR *s;
+    IO *io;
+    SV *sv = NULL;
     GV *gv;
     PerlIO *fp;
 
@@ -3333,7 +3321,7 @@ PP(pp_fttext)
 	     == OPpFT_STACKED)
 	gv = PL_defgv;
     else {
-	sv = TOPs;
+	sv = *PL_stack_sp;
 	gv = MAYBE_DEREF_GV_nomg(sv);
     }
 
@@ -3832,7 +3820,7 @@ PP(pp_open_dir)
     dVAR; dSP;
     const char * const dirname = POPpconstx;
     GV * const gv = MUTABLE_GV(POPs);
-    register IO * const io = GvIOn(gv);
+    IO * const io = GvIOn(gv);
 
     if (!io)
 	goto nope;
@@ -3870,8 +3858,8 @@ PP(pp_readdir)
     SV *sv;
     const I32 gimme = GIMME;
     GV * const gv = MUTABLE_GV(POPs);
-    register const Direntry_t *dp;
-    register IO * const io = GvIOn(gv);
+    const Direntry_t *dp;
+    IO * const io = GvIOn(gv);
 
     if (!io || !IoDIRP(io)) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_IO),
@@ -3923,7 +3911,7 @@ PP(pp_telldir)
     long telldir (DIR *);
 # endif
     GV * const gv = MUTABLE_GV(POPs);
-    register IO * const io = GvIOn(gv);
+    IO * const io = GvIOn(gv);
 
     if (!io || !IoDIRP(io)) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_IO),
@@ -3949,7 +3937,7 @@ PP(pp_seekdir)
     dVAR; dSP;
     const long along = POPl;
     GV * const gv = MUTABLE_GV(POPs);
-    register IO * const io = GvIOn(gv);
+    IO * const io = GvIOn(gv);
 
     if (!io || !IoDIRP(io)) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_IO),
@@ -3974,7 +3962,7 @@ PP(pp_rewinddir)
 #if defined(HAS_REWINDDIR) || defined(rewinddir)
     dVAR; dSP;
     GV * const gv = MUTABLE_GV(POPs);
-    register IO * const io = GvIOn(gv);
+    IO * const io = GvIOn(gv);
 
     if (!io || !IoDIRP(io)) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_IO),
@@ -3998,7 +3986,7 @@ PP(pp_closedir)
 #if defined(Direntry_t) && defined(HAS_READDIR)
     dVAR; dSP;
     GV * const gv = MUTABLE_GV(POPs);
-    register IO * const io = GvIOn(gv);
+    IO * const io = GvIOn(gv);
 
     if (!io || !IoDIRP(io)) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_IO),
@@ -4734,8 +4722,8 @@ PP(pp_ghostent)
 #if defined(HAS_GETHOSTBYNAME) || defined(HAS_GETHOSTBYADDR) || defined(HAS_GETHOSTENT)
     dVAR; dSP;
     I32 which = PL_op->op_type;
-    register char **elem;
-    register SV *sv;
+    char **elem;
+    SV *sv;
 #ifndef HAS_GETHOST_PROTOS /* XXX Do we need individual probes? */
     struct hostent *gethostbyaddr(Netdb_host_t, Netdb_hlen_t, int);
     struct hostent *gethostbyname(Netdb_name_t);
@@ -4824,7 +4812,7 @@ PP(pp_gnetent)
 #if defined(HAS_GETNETBYNAME) || defined(HAS_GETNETBYADDR) || defined(HAS_GETNETENT)
     dVAR; dSP;
     I32 which = PL_op->op_type;
-    register SV *sv;
+    SV *sv;
 #ifndef HAS_GETNET_PROTOS /* XXX Do we need individual probes? */
     struct netent *getnetbyaddr(Netdb_net_t, int);
     struct netent *getnetbyname(Netdb_name_t);
@@ -4897,7 +4885,7 @@ PP(pp_gprotoent)
 #if defined(HAS_GETPROTOBYNAME) || defined(HAS_GETPROTOBYNUMBER) || defined(HAS_GETPROTOENT)
     dVAR; dSP;
     I32 which = PL_op->op_type;
-    register SV *sv;
+    SV *sv;
 #ifndef HAS_GETPROTO_PROTOS /* XXX Do we need individual probes? */
     struct protoent *getprotobyname(Netdb_name_t);
     struct protoent *getprotobynumber(int);
@@ -4957,7 +4945,7 @@ PP(pp_gservent)
 #if defined(HAS_GETSERVBYNAME) || defined(HAS_GETSERVBYPORT) || defined(HAS_GETSERVENT)
     dVAR; dSP;
     I32 which = PL_op->op_type;
-    register SV *sv;
+    SV *sv;
 #ifndef HAS_GETSERV_PROTOS /* XXX Do we need individual probes? */
     struct servent *getservbyname(Netdb_name_t, Netdb_name_t);
     struct servent *getservbyport(int, Netdb_name_t);
@@ -5134,7 +5122,7 @@ PP(pp_gpwent)
 #ifdef HAS_PASSWD
     dVAR; dSP;
     I32 which = PL_op->op_type;
-    register SV *sv;
+    SV *sv;
     struct passwd *pwent  = NULL;
     /*
      * We currently support only the SysV getsp* shadow password interface.
@@ -5458,9 +5446,9 @@ PP(pp_syscall)
 {
 #ifdef HAS_SYSCALL
     dVAR; dSP; dMARK; dORIGMARK; dTARGET;
-    register I32 items = SP - MARK;
+    I32 items = SP - MARK;
     unsigned long a[20];
-    register I32 i = 0;
+    I32 i = 0;
     IV retval = -1;
 
     if (PL_tainting) {
@@ -5517,30 +5505,6 @@ PP(pp_syscall)
     case 8:
 	retval = syscall(a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7]);
 	break;
-#ifdef atarist
-    case 9:
-	retval = syscall(a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8]);
-	break;
-    case 10:
-	retval = syscall(a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9]);
-	break;
-    case 11:
-	retval = syscall(a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],
-	  a[10]);
-	break;
-    case 12:
-	retval = syscall(a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],
-	  a[10],a[11]);
-	break;
-    case 13:
-	retval = syscall(a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],
-	  a[10],a[11],a[12]);
-	break;
-    case 14:
-	retval = syscall(a[0],a[1],a[2],a[3],a[4],a[5],a[6],a[7],a[8],a[9],
-	  a[10],a[11],a[12],a[13]);
-	break;
-#endif /* atarist */
     }
     SP = ORIGMARK;
     PUSHi(retval);

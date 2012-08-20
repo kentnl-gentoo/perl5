@@ -77,7 +77,7 @@ PP(pp_regcomp)
 {
     dVAR;
     dSP;
-    register PMOP *pm = (PMOP*)cLOGOP->op_other;
+    PMOP *pm = (PMOP*)cLOGOP->op_other;
     SV **args;
     int nargs;
     REGEXP *re = NULL;
@@ -177,13 +177,13 @@ PP(pp_substcont)
 {
     dVAR;
     dSP;
-    register PERL_CONTEXT *cx = &cxstack[cxstack_ix];
-    register PMOP * const pm = (PMOP*) cLOGOP->op_other;
-    register SV * const dstr = cx->sb_dstr;
-    register char *s = cx->sb_s;
-    register char *m = cx->sb_m;
+    PERL_CONTEXT *cx = &cxstack[cxstack_ix];
+    PMOP * const pm = (PMOP*) cLOGOP->op_other;
+    SV * const dstr = cx->sb_dstr;
+    char *s = cx->sb_s;
+    char *m = cx->sb_m;
     char *orig = cx->sb_orig;
-    register REGEXP * const rx = cx->sb_rx;
+    REGEXP * const rx = cx->sb_rx;
     SV *nsv = NULL;
     REGEXP *old = PM_GETRE(pm);
 
@@ -445,13 +445,13 @@ S_rxres_free(pTHX_ void **rsp)
 PP(pp_formline)
 {
     dVAR; dSP; dMARK; dORIGMARK;
-    register SV * const tmpForm = *++MARK;
+    SV * const tmpForm = *++MARK;
     SV *formsv;		    /* contains text of original format */
-    register U32 *fpc;	    /* format ops program counter */
-    register char *t;	    /* current append position in target string */
+    U32 *fpc;	    /* format ops program counter */
+    char *t;	    /* current append position in target string */
     const char *f;	    /* current position in format string */
-    register I32 arg;
-    register SV *sv = NULL; /* current item */
+    I32 arg;
+    SV *sv = NULL; /* current item */
     const char *item = NULL;/* string value of current item */
     I32 itemsize  = 0;	    /* length of current item, possibly truncated */
     I32 fieldsize = 0;	    /* width of current field */
@@ -1209,7 +1209,7 @@ PP(pp_flop)
 	SvGETMAGIC(right);
 
 	if (RANGE_IS_NUMERIC(left,right)) {
-	    register IV i, j;
+	    IV i, j;
 	    IV max;
 	    if ((SvOK(left) && SvNV_nomg(left) < IV_MIN) ||
 		(SvOK(right) && SvNV_nomg(right) > IV_MAX))
@@ -1293,12 +1293,12 @@ STATIC I32
 S_dopoptolabel(pTHX_ const char *label, STRLEN len, U32 flags)
 {
     dVAR;
-    register I32 i;
+    I32 i;
 
     PERL_ARGS_ASSERT_DOPOPTOLABEL;
 
     for (i = cxstack_ix; i >= 0; i--) {
-	register const PERL_CONTEXT * const cx = &cxstack[i];
+	const PERL_CONTEXT * const cx = &cxstack[i];
 	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
 	case CXt_SUB:
@@ -1410,7 +1410,7 @@ S_dopoptosub_at(pTHX_ const PERL_CONTEXT *cxstk, I32 startingblock)
     PERL_ARGS_ASSERT_DOPOPTOSUB_AT;
 
     for (i = startingblock; i >= 0; i--) {
-	register const PERL_CONTEXT * const cx = &cxstk[i];
+	const PERL_CONTEXT * const cx = &cxstk[i];
 	switch (CxTYPE(cx)) {
 	default:
 	    continue;
@@ -1430,7 +1430,7 @@ S_dopoptoeval(pTHX_ I32 startingblock)
     dVAR;
     I32 i;
     for (i = startingblock; i >= 0; i--) {
-	register const PERL_CONTEXT *cx = &cxstack[i];
+	const PERL_CONTEXT *cx = &cxstack[i];
 	switch (CxTYPE(cx)) {
 	default:
 	    continue;
@@ -1448,7 +1448,7 @@ S_dopoptoloop(pTHX_ I32 startingblock)
     dVAR;
     I32 i;
     for (i = startingblock; i >= 0; i--) {
-	register const PERL_CONTEXT * const cx = &cxstack[i];
+	const PERL_CONTEXT * const cx = &cxstack[i];
 	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
 	case CXt_SUB:
@@ -1478,7 +1478,7 @@ S_dopoptogiven(pTHX_ I32 startingblock)
     dVAR;
     I32 i;
     for (i = startingblock; i >= 0; i--) {
-	register const PERL_CONTEXT *cx = &cxstack[i];
+	const PERL_CONTEXT *cx = &cxstack[i];
 	switch (CxTYPE(cx)) {
 	default:
 	    continue;
@@ -1506,7 +1506,7 @@ S_dopoptowhen(pTHX_ I32 startingblock)
     dVAR;
     I32 i;
     for (i = startingblock; i >= 0; i--) {
-	register const PERL_CONTEXT *cx = &cxstack[i];
+	const PERL_CONTEXT *cx = &cxstack[i];
 	switch (CxTYPE(cx)) {
 	default:
 	    continue;
@@ -1529,7 +1529,7 @@ Perl_dounwind(pTHX_ I32 cxix)
 
     while (cxstack_ix > cxix) {
 	SV *sv;
-        register PERL_CONTEXT *cx = &cxstack[cxstack_ix];
+        PERL_CONTEXT *cx = &cxstack[cxstack_ix];
 	DEBUG_CX("UNWIND");						\
 	/* Note: we don't need to restore the base context info till the end. */
 	switch (CxTYPE(cx)) {
@@ -1639,7 +1639,7 @@ Perl_die_unwind(pTHX_ SV *msv)
 	if (cxix >= 0) {
 	    I32 optype;
 	    SV *namesv;
-	    register PERL_CONTEXT *cx;
+	    PERL_CONTEXT *cx;
 	    SV **newsp;
 	    COP *oldcop;
 	    JMPENV *restartjmpenv;
@@ -1737,9 +1737,9 @@ frame for the sub call itself.
 const PERL_CONTEXT *
 Perl_caller_cx(pTHX_ I32 count, const PERL_CONTEXT **dbcxp)
 {
-    register I32 cxix = dopoptosub(cxstack_ix);
-    register const PERL_CONTEXT *cx;
-    register const PERL_CONTEXT *ccstack = cxstack;
+    I32 cxix = dopoptosub(cxstack_ix);
+    const PERL_CONTEXT *cx;
+    const PERL_CONTEXT *ccstack = cxstack;
     const PERL_SI *top_si = PL_curstackinfo;
 
     for (;;) {
@@ -1779,7 +1779,7 @@ PP(pp_caller)
 {
     dVAR;
     dSP;
-    register const PERL_CONTEXT *cx;
+    const PERL_CONTEXT *cx;
     const PERL_CONTEXT *dbcx;
     I32 gimme;
     const HEK *stash_hek;
@@ -1950,11 +1950,11 @@ PP(pp_dbstate)
 	    || SvIV(PL_DBsingle) || SvIV(PL_DBsignal) || SvIV(PL_DBtrace))
     {
 	dSP;
-	register PERL_CONTEXT *cx;
+	PERL_CONTEXT *cx;
 	const I32 gimme = G_ARRAY;
 	U8 hasargs;
 	GV * const gv = PL_DBgv;
-	register CV * const cv = GvCV(gv);
+	CV * const cv = GvCV(gv);
 
 	if (!cv)
 	    DIE(aTHX_ "No DB::DB routine defined");
@@ -1973,10 +1973,8 @@ PP(pp_dbstate)
 	SPAGAIN;
 
 	if (CvISXSUB(cv)) {
-	    CvDEPTH(cv)++;
 	    PUSHMARK(SP);
 	    (void)(*CvXSUB(cv))(aTHX_ cv);
-	    CvDEPTH(cv)--;
 	    FREETMPS;
 	    LEAVE;
 	    return NORMAL;
@@ -2037,7 +2035,7 @@ S_adjust_stack_on_leave(pTHX_ SV **newsp, SV **sp, SV **mark, I32 gimme, U32 fla
 PP(pp_enter)
 {
     dVAR; dSP;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     I32 gimme = GIMME_V;
 
     ENTER_with_name("block");
@@ -2051,7 +2049,7 @@ PP(pp_enter)
 PP(pp_leave)
 {
     dVAR; dSP;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     SV **newsp;
     PMOP *newpm;
     I32 gimme;
@@ -2077,7 +2075,7 @@ PP(pp_leave)
 PP(pp_enteriter)
 {
     dVAR; dSP; dMARK;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     const I32 gimme = GIMME_V;
     void *itervar; /* location of the iteration variable */
     U8 cxtype = CXt_LOOP_FOR;
@@ -2200,7 +2198,7 @@ PP(pp_enteriter)
 PP(pp_enterloop)
 {
     dVAR; dSP;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     const I32 gimme = GIMME_V;
 
     ENTER_with_name("loop1");
@@ -2216,7 +2214,7 @@ PP(pp_enterloop)
 PP(pp_leaveloop)
 {
     dVAR; dSP;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     I32 gimme;
     SV **newsp;
     PMOP *newpm;
@@ -2353,7 +2351,7 @@ S_return_lvalues(pTHX_ SV **mark, SV **sp, SV **newsp, I32 gimme,
 PP(pp_return)
 {
     dVAR; dSP; dMARK;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     bool popsub2 = FALSE;
     bool clear_errsv = FALSE;
     bool lval = FALSE;
@@ -2497,7 +2495,7 @@ PP(pp_leavesublv)
     SV **newsp;
     PMOP *newpm;
     I32 gimme;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     SV *sv;
 
     if (CxMULTICALL(&cxstack[cxstack_ix]))
@@ -2519,11 +2517,50 @@ PP(pp_leavesublv)
     return cx->blk_sub.retop;
 }
 
+static I32
+S_unwind_loop(pTHX_ const char * const opname)
+{
+    dVAR;
+    I32 cxix;
+    if (PL_op->op_flags & OPf_SPECIAL) {
+	cxix = dopoptoloop(cxstack_ix);
+	if (cxix < 0)
+	    /* diag_listed_as: Can't "last" outside a loop block */
+	    Perl_croak(aTHX_ "Can't \"%s\" outside a loop block", opname);
+    }
+    else {
+	dSP;
+	STRLEN label_len;
+	const char * const label =
+	    PL_op->op_flags & OPf_STACKED
+		? SvPV(TOPs,label_len)
+		: (label_len = strlen(cPVOP->op_pv), cPVOP->op_pv);
+	const U32 label_flags =
+	    PL_op->op_flags & OPf_STACKED
+		? SvUTF8(POPs)
+		: (cPVOP->op_private & OPpPV_IS_UTF8) ? SVf_UTF8 : 0;
+	PUTBACK;
+        cxix = dopoptolabel(label, label_len, label_flags);
+	if (cxix < 0)
+	    /* diag_listed_as: Label not found for "last %s" */
+	    Perl_croak(aTHX_ "Label not found for \"%s %"SVf"\"",
+				       opname,
+                                       SVfARG(PL_op->op_flags & OPf_STACKED
+                                              && !SvGMAGICAL(TOPp1s)
+                                              ? TOPp1s
+                                              : newSVpvn_flags(label,
+                                                    label_len,
+                                                    label_flags | SVs_TEMP)));
+    }
+    if (cxix < cxstack_ix)
+	dounwind(cxix);
+    return cxix;
+}
+
 PP(pp_last)
 {
-    dVAR; dSP;
-    I32 cxix;
-    register PERL_CONTEXT *cx;
+    dVAR;
+    PERL_CONTEXT *cx;
     I32 pop2 = 0;
     I32 gimme;
     I32 optype;
@@ -2533,24 +2570,7 @@ PP(pp_last)
     SV **mark;
     SV *sv = NULL;
 
-
-    if (PL_op->op_flags & OPf_SPECIAL) {
-	cxix = dopoptoloop(cxstack_ix);
-	if (cxix < 0)
-	    DIE(aTHX_ "Can't \"last\" outside a loop block");
-    }
-    else {
-        cxix = dopoptolabel(cPVOP->op_pv, strlen(cPVOP->op_pv),
-                           (cPVOP->op_private & OPpPV_IS_UTF8) ? SVf_UTF8 : 0);
-	if (cxix < 0)
-	    DIE(aTHX_ "Label not found for \"last %"SVf"\"",
-                                        SVfARG(newSVpvn_flags(cPVOP->op_pv,
-                                                    strlen(cPVOP->op_pv),
-                                                    ((cPVOP->op_private & OPpPV_IS_UTF8)
-                                                    ? SVf_UTF8 : 0) | SVs_TEMP)));
-    }
-    if (cxix < cxstack_ix)
-	dounwind(cxix);
+    S_unwind_loop(aTHX_ "last");
 
     POPBLOCK(cx,newpm);
     cxstack_ix++; /* temporarily protect top context */
@@ -2581,9 +2601,8 @@ PP(pp_last)
     }
 
     TAINT_NOT;
-    SP = adjust_stack_on_leave(newsp, SP, MARK, gimme,
+    PL_stack_sp = adjust_stack_on_leave(newsp, PL_stack_sp, MARK, gimme,
 				pop2 == CXt_SUB ? SVs_TEMP : 0);
-    PUTBACK;
 
     LEAVE;
     cxstack_ix--;
@@ -2611,31 +2630,13 @@ PP(pp_last)
 PP(pp_next)
 {
     dVAR;
-    I32 cxix;
-    register PERL_CONTEXT *cx;
-    I32 inner;
+    PERL_CONTEXT *cx;
+    const I32 inner = PL_scopestack_ix;
 
-    if (PL_op->op_flags & OPf_SPECIAL) {
-	cxix = dopoptoloop(cxstack_ix);
-	if (cxix < 0)
-	    DIE(aTHX_ "Can't \"next\" outside a loop block");
-    }
-    else {
-	cxix = dopoptolabel(cPVOP->op_pv, strlen(cPVOP->op_pv),
-                           (cPVOP->op_private & OPpPV_IS_UTF8) ? SVf_UTF8 : 0);
- 	if (cxix < 0)
-	    DIE(aTHX_ "Label not found for \"next %"SVf"\"",
-                                        SVfARG(newSVpvn_flags(cPVOP->op_pv, 
-                                                    strlen(cPVOP->op_pv),
-                                                    ((cPVOP->op_private & OPpPV_IS_UTF8)
-                                                    ? SVf_UTF8 : 0) | SVs_TEMP)));
-    }
-    if (cxix < cxstack_ix)
-	dounwind(cxix);
+    S_unwind_loop(aTHX_ "next");
 
     /* clear off anything above the scope we're re-entering, but
      * save the rest until after a possible continue block */
-    inner = PL_scopestack_ix;
     TOPBLOCK(cx);
     if (PL_scopestack_ix < inner)
 	leave_scope(PL_scopestack[PL_scopestack_ix]);
@@ -2646,30 +2647,11 @@ PP(pp_next)
 PP(pp_redo)
 {
     dVAR;
-    I32 cxix;
-    register PERL_CONTEXT *cx;
+    const I32 cxix = S_unwind_loop(aTHX_ "redo");
+    PERL_CONTEXT *cx;
     I32 oldsave;
-    OP* redo_op;
+    OP* redo_op = cxstack[cxix].blk_loop.my_op->op_redoop;
 
-    if (PL_op->op_flags & OPf_SPECIAL) {
-	cxix = dopoptoloop(cxstack_ix);
-	if (cxix < 0)
-	    DIE(aTHX_ "Can't \"redo\" outside a loop block");
-    }
-    else {
-	cxix = dopoptolabel(cPVOP->op_pv, strlen(cPVOP->op_pv),
-                           (cPVOP->op_private & OPpPV_IS_UTF8) ? SVf_UTF8 : 0);
- 	if (cxix < 0)
-	    DIE(aTHX_ "Label not found for \"redo %"SVf"\"",
-                                        SVfARG(newSVpvn_flags(cPVOP->op_pv,
-                                                    strlen(cPVOP->op_pv),
-                                                    ((cPVOP->op_private & OPpPV_IS_UTF8)
-                                                    ? SVf_UTF8 : 0) | SVs_TEMP)));
-    }
-    if (cxix < cxstack_ix)
-	dounwind(cxix);
-
-    redo_op = cxstack[cxix].blk_loop.my_op->op_redoop;
     if (redo_op->op_type == OP_ENTER) {
 	/* pop one less context to avoid $x being freed in while (my $x..) */
 	cxstack_ix++;
@@ -2755,7 +2737,7 @@ PP(pp_goto)
     dVAR; dSP;
     OP *retop = NULL;
     I32 ix;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
 #define GOTO_DEPTH 64
     OP *enterops[GOTO_DEPTH];
     const char *label = NULL;
@@ -2770,7 +2752,7 @@ PP(pp_goto)
 	/* This egregious kludge implements goto &subroutine */
 	if (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVCV) {
 	    I32 cxix;
-	    register PERL_CONTEXT *cx;
+	    PERL_CONTEXT *cx;
 	    CV *cv = MUTABLE_CV(SvRV(sv));
 	    SV** mark;
 	    I32 items = 0;
@@ -3588,7 +3570,7 @@ S_doopen_pm(pTHX_ SV *name)
 PP(pp_require)
 {
     dVAR; dSP;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     SV *sv;
     const char *name;
     STRLEN len;
@@ -3596,6 +3578,9 @@ PP(pp_require)
     STRLEN unixlen;
 #ifdef VMS
     int vms_unixname = 0;
+    char *unixnamebuf;
+    char *unixdir;
+    char *unixdirbuf;
 #endif
     const char *tryname = NULL;
     SV *namesv = NULL;
@@ -3681,7 +3666,9 @@ PP(pp_require)
      * To prevent this, the key must be stored in UNIX format if the VMS
      * name can be translated to UNIX.
      */
-    if ((unixname = tounixspec(name, NULL)) != NULL) {
+    
+    if ((unixnamebuf = SvPVX(sv_2mortal(newSVpv("", VMS_MAXRSS-1))))
+        && (unixname = tounixspec(name, unixnamebuf)) != NULL) {
 	unixlen = strlen(unixname);
 	vms_unixname = 1;
     }
@@ -3856,8 +3843,8 @@ PP(pp_require)
 		    }
 
 #ifdef VMS
-		    char *unixdir;
-		    if ((unixdir = tounixpath(dir, NULL)) == NULL)
+		    if (((unixdirbuf = SvPVX(sv_2mortal(newSVpv("", VMS_MAXRSS-1)))) == NULL)
+			|| ((unixdir = tounixpath(dir, unixdirbuf)) == NULL))
 			continue;
 		    sv_setpv(namesv, unixdir);
 		    sv_catpv(namesv, unixname);
@@ -3939,9 +3926,9 @@ PP(pp_require)
 		    DIE(aTHX_
 			"Can't locate %s in @INC%s%s (@INC contains:%" SVf ")",
 			name,
-			(memEQ(name + len - 2, ".h", 3)
+			(len >= 2 && memEQ(name + len - 2, ".h", 3)
 			 ? " (change .h to .ph maybe?) (did you run h2ph?)" : ""),
-			(memEQ(name + len - 3, ".ph", 4)
+			(len >= 3 && memEQ(name + len - 3, ".ph", 4)
 			 ? " (did you run h2ph?)" : ""),
 			inc
 			);
@@ -4027,7 +4014,7 @@ PP(pp_hintseval)
 PP(pp_entereval)
 {
     dVAR; dSP;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     SV *sv;
     const I32 gimme = GIMME_V;
     const U32 was = PL_breakable_sub_gen;
@@ -4158,7 +4145,7 @@ PP(pp_leaveeval)
     SV **newsp;
     PMOP *newpm;
     I32 gimme;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     OP *retop;
     const U8 save_flags = PL_op -> op_flags;
     I32 optype;
@@ -4212,7 +4199,7 @@ Perl_delete_eval_scope(pTHX)
     SV **newsp;
     PMOP *newpm;
     I32 gimme;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     I32 optype;
 	
     POPBLOCK(cx,newpm);
@@ -4263,7 +4250,7 @@ PP(pp_leavetry)
     SV **newsp;
     PMOP *newpm;
     I32 gimme;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     I32 optype;
 
     PERL_ASYNC_CHECK();
@@ -4283,14 +4270,21 @@ PP(pp_leavetry)
 PP(pp_entergiven)
 {
     dVAR; dSP;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     const I32 gimme = GIMME_V;
     
     ENTER_with_name("given");
     SAVETMPS;
 
-    SAVECLEARSV(PAD_SVl(PL_op->op_targ));
-    sv_setsv_mg(PAD_SV(PL_op->op_targ), POPs);
+    if (PL_op->op_targ) {
+	SAVEPADSVANDMORTALIZE(PL_op->op_targ);
+	SvREFCNT_dec(PAD_SVl(PL_op->op_targ));
+	PAD_SVl(PL_op->op_targ) = SvREFCNT_inc_NN(POPs);
+    }
+    else {
+	SAVE_DEFSV;
+	DEFSV_set(POPs);
+    }
 
     PUSHBLOCK(cx, CXt_GIVEN, SP);
     PUSHGIVEN(cx);
@@ -4301,7 +4295,7 @@ PP(pp_entergiven)
 PP(pp_leavegiven)
 {
     dVAR; dSP;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     I32 gimme;
     SV **newsp;
     PMOP *newpm;
@@ -4849,7 +4843,7 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 PP(pp_enterwhen)
 {
     dVAR; dSP;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     const I32 gimme = GIMME_V;
 
     /* This is essentially an optimization: if the match
@@ -4874,7 +4868,7 @@ PP(pp_leavewhen)
 {
     dVAR; dSP;
     I32 cxix;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     I32 gimme;
     SV **newsp;
     PMOP *newpm;
@@ -4918,7 +4912,7 @@ PP(pp_continue)
 {
     dVAR; dSP;
     I32 cxix;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
     I32 gimme;
     SV **newsp;
     PMOP *newpm;
@@ -4946,7 +4940,7 @@ PP(pp_break)
 {
     dVAR;   
     I32 cxix;
-    register PERL_CONTEXT *cx;
+    PERL_CONTEXT *cx;
 
     cxix = dopoptogiven(cxstack_ix); 
     if (cxix < 0)
@@ -4969,17 +4963,17 @@ static MAGIC *
 S_doparseform(pTHX_ SV *sv)
 {
     STRLEN len;
-    register char *s = SvPV(sv, len);
-    register char *send;
-    register char *base = NULL; /* start of current field */
-    register I32 skipspaces = 0; /* number of contiguous spaces seen */
+    char *s = SvPV(sv, len);
+    char *send;
+    char *base = NULL; /* start of current field */
+    I32 skipspaces = 0; /* number of contiguous spaces seen */
     bool noblank   = FALSE; /* ~ or ~~ seen on this line */
     bool repeat    = FALSE; /* ~~ seen on this line */
     bool postspace = FALSE; /* a text field may need right padding */
     U32 *fops;
-    register U32 *fpc;
+    U32 *fpc;
     U32 *linepc = NULL;	    /* position of last FF_LINEMARK */
-    register I32 arg;
+    I32 arg;
     bool ischop;	    /* it's a ^ rather than a @ */
     bool unchopnum = FALSE; /* at least one @ (i.e. non-chop) num field seen */
     int maxops = 12; /* FF_LINEMARK + FF_END + 10 (\0 without preceding \n) */

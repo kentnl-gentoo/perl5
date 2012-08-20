@@ -3536,6 +3536,12 @@ an ACL related-function, but that function is not available on this
 platform.  Earlier checks mean that it should not be possible to
 enter this branch on this platform.
 
+=item panic: child pseudo-process was never scheduled
+
+(P) A child pseudo-process in the ithreads implementation on Windows
+was not scheduled within the time period allowed and therefore was not
+able to initialize properly.
+
 =item panic: ck_grep, type=%u
 
 (P) Failed an internal consistency check trying to compile a grep.
@@ -5202,6 +5208,18 @@ character to get your parentheses to balance.  See L<attributes>.
 (F) An argument to unpack("w",...) was incompatible with the BER
 compressed integer format and could not be converted to an integer.
 See L<perlfunc/pack>.
+
+=item Unterminated delimiter for here document
+
+(F) This message occurs when a here document label has an initial
+quotation mark but the final quotation mark is missing.  Perhaps
+you wrote:
+
+    <<"foo
+
+instead of:
+
+    <<"foo"
 
 =item Unterminated \g{...} pattern in regex; marked by <-- HERE in m/%s/
 

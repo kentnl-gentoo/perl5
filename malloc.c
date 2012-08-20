@@ -197,14 +197,7 @@
 #define MIN_BUC_POW2 (sizeof(void*) > 4 ? 3 : 2) /* Allow for 4-byte arena. */
 #define MIN_BUCKET (MIN_BUC_POW2 * BUCKETS_PER_POW2)
 
-#if !(defined(I286) || defined(atarist))
-	/* take 2k unless the block is bigger than that */
-#  define LOG_OF_MIN_ARENA 11
-#else
-	/* take 16k unless the block is bigger than that 
-	   (80286s like large segments!), probably good on the atari too */
-#  define LOG_OF_MIN_ARENA 14
-#endif
+#define LOG_OF_MIN_ARENA 11
 
 #if defined(DEBUGGING) && !defined(NO_RCHECK)
 #  define RCHECK
@@ -376,8 +369,7 @@
  */
 #define u_short unsigned short
 
-/* 286 and atarist like big chunks, which gives too much overhead. */
-#if (defined(RCHECK) || defined(I286) || defined(atarist)) && defined(PACK_MALLOC)
+#if defined(RCHECK) && defined(PACK_MALLOC)
 #  undef PACK_MALLOC
 #endif 
 
@@ -1271,8 +1263,8 @@ Malloc_t
 Perl_malloc(size_t nbytes)
 {
         dVAR;
-  	register union overhead *p;
-  	register int bucket;
+  	union overhead *p;
+  	int bucket;
 
 #if defined(DEBUGGING) || defined(RCHECK)
 	MEM_SIZE size = nbytes;
@@ -1549,16 +1541,12 @@ getpages(MEM_SIZE needed, int *nblksp, int bucket)
 	/* Second, check alignment. */
 	slack = 0;
 
-#if !defined(atarist) /* on the atari we dont have to worry about this */
-#  ifndef I286 	/* The sbrk(0) call on the I286 always returns the next segment */
 	/* WANTED_ALIGNMENT may be more than NEEDED_ALIGNMENT, but this may
 	   improve performance of memory access. */
 	if (PTR2UV(cp) & (WANTED_ALIGNMENT - 1)) { /* Not aligned. */
 	    slack = WANTED_ALIGNMENT - (PTR2UV(cp) & (WANTED_ALIGNMENT - 1));
 	    add += slack;
 	}
-#  endif
-#endif /* !atarist */
 		
 	if (add) {
 	    DEBUG_m(PerlIO_printf(Perl_debug_log, 
@@ -1619,7 +1607,6 @@ getpages(MEM_SIZE needed, int *nblksp, int bucket)
 	    fatalcroak("Misalignment of sbrk()\n");
 	else
 #  endif
-#ifndef I286	/* Again, this should always be ok on an 80286 */
 	if (PTR2UV(ovp) & (MEM_ALIGNBYTES - 1)) {
 	    DEBUG_m(PerlIO_printf(Perl_debug_log, 
 				  "fixing sbrk(): %d bytes off machine alignment\n",
@@ -1632,7 +1619,6 @@ getpages(MEM_SIZE needed, int *nblksp, int bucket)
 	    sbrk_slack += (1 << (bucket >> BUCKET_POW2_SHIFT));
 # endif
 	}
-#endif
 	;				/* Finish "else" */
 	sbrked_remains = require - needed;
 	last_op = cp;
@@ -1695,10 +1681,10 @@ static void
 morecore(register int bucket)
 {
         dVAR;
-  	register union overhead *ovp;
-  	register int rnu;       /* 2^rnu bytes will be requested */
+  	union overhead *ovp;
+  	int rnu;       /* 2^rnu bytes will be requested */
   	int nblks;		/* become nblks blocks of the desired size */
-	register MEM_SIZE siz, needed;
+	MEM_SIZE siz, needed;
 	static int were_called = 0;
 
   	if (nextf[bucket])
@@ -1830,8 +1816,8 @@ Free_t
 Perl_mfree(Malloc_t where)
 {
         dVAR;
-  	register MEM_SIZE size;
-	register union overhead *ovp;
+  	MEM_SIZE size;
+	union overhead *ovp;
 	char *cp = (char*)where;
 #ifdef PACK_MALLOC
 	u_char bucket;
@@ -1926,11 +1912,11 @@ Malloc_t
 Perl_realloc(void *mp, size_t nbytes)
 {
         dVAR;
-  	register MEM_SIZE onb;
+  	MEM_SIZE onb;
 	union overhead *ovp;
   	char *res;
 	int prev_bucket;
-	register int bucket;
+	int bucket;
 	int incr;		/* 1 if does not fit, -1 if "easily" fits in a
 				   smaller bucket, otherwise 0.  */
 	char *cp = (char*)mp;
@@ -2202,8 +2188,8 @@ int
 Perl_get_mstats(pTHX_ perl_mstats_t *buf, int buflen, int level)
 {
 #ifdef DEBUGGING_MSTATS
-  	register int i, j;
-  	register union overhead *p;
+  	int i, j;
+  	union overhead *p;
 	struct chunk_chain_s* nextchain;
 
 	PERL_ARGS_ASSERT_GET_MSTATS;
@@ -2264,7 +2250,7 @@ void
 Perl_dump_mstats(pTHX_ const char *s)
 {
 #ifdef DEBUGGING_MSTATS
-  	register int i;
+  	int i;
 	perl_mstats_t buffer;
 	UV nf[NBUCKETS];
 	UV nt[NBUCKETS];

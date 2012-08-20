@@ -175,14 +175,13 @@ Perl_mg_get(pTHX_ SV *sv)
 {
     dVAR;
     const I32 mgs_ix = SSNEW(sizeof(MGS));
+    bool saved = FALSE;
     bool have_new = 0;
     MAGIC *newmg, *head, *cur, *mg;
 
     PERL_ARGS_ASSERT_MG_GET;
 
     if (PL_localizing == 1 && sv == DEFSV) return 0;
-
-    save_magic(mgs_ix, sv);
 
     /* We must call svt_get(sv, mg) for each valid entry in the linked
        list of magic. svt_get() may delete the current entry, add new
@@ -194,6 +193,13 @@ Perl_mg_get(pTHX_ SV *sv)
 	MAGIC * const nextmg = mg->mg_moremagic;	/* it may delete itself */
 
 	if (!(mg->mg_flags & MGf_GSKIP) && vtbl && vtbl->svt_get) {
+
+	    /* taint's mg get is so dumb it doesn't need flag saving */
+	    if (!saved && mg->mg_type != PERL_MAGIC_taint) {
+		save_magic(mgs_ix, sv);
+		saved = TRUE;
+	    }
+
 	    vtbl->svt_get(aTHX_ sv, mg);
 
 	    /* guard against magic having been deleted - eg FETCH calling
@@ -229,7 +235,9 @@ Perl_mg_get(pTHX_ SV *sv)
 	}
     }
 
-    restore_magic(INT2PTR(void *, (IV)mgs_ix));
+    if (saved)
+	restore_magic(INT2PTR(void *, (IV)mgs_ix));
+
     return 0;
 }
 
@@ -604,7 +612,7 @@ Perl_magic_regdata_cnt(pTHX_ SV *sv, MAGIC *mg)
     PERL_ARGS_ASSERT_MAGIC_REGDATA_CNT;
 
     if (PL_curpm) {
-	register const REGEXP * const rx = PM_GETRE(PL_curpm);
+	const REGEXP * const rx = PM_GETRE(PL_curpm);
 	if (rx) {
 	    if (mg->mg_obj) {			/* @+ */
 		/* return the number possible */
@@ -633,18 +641,18 @@ Perl_magic_regdatum_get(pTHX_ SV *sv, MAGIC *mg)
     PERL_ARGS_ASSERT_MAGIC_REGDATUM_GET;
 
     if (PL_curpm) {
-	register const REGEXP * const rx = PM_GETRE(PL_curpm);
+	const REGEXP * const rx = PM_GETRE(PL_curpm);
 	if (rx) {
-	    register const I32 paren = mg->mg_len;
-	    register I32 s;
-	    register I32 t;
+	    const I32 paren = mg->mg_len;
+	    I32 s;
+	    I32 t;
 	    if (paren < 0)
 		return 0;
 	    if (paren <= (I32)RX_NPARENS(rx) &&
 		(s = RX_OFFS(rx)[paren].start) != -1 &&
 		(t = RX_OFFS(rx)[paren].end) != -1)
 		{
-		    register I32 i;
+		    I32 i;
 		    if (mg->mg_obj)		/* @+ */
 			i = t;
 		    else			/* @- */
@@ -677,9 +685,9 @@ U32
 Perl_magic_len(pTHX_ SV *sv, MAGIC *mg)
 {
     dVAR;
-    register I32 paren;
-    register I32 i;
-    register const REGEXP * rx;
+    I32 paren;
+    I32 i;
+    const REGEXP * rx;
     const char * const remaining = mg->mg_ptr + 1;
 
     PERL_ARGS_ASSERT_MAGIC_LEN;
@@ -796,9 +804,9 @@ int
 Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 {
     dVAR;
-    register I32 paren;
-    register const char *s = NULL;
-    register REGEXP *rx;
+    I32 paren;
+    const char *s = NULL;
+    REGEXP *rx;
     const char * const remaining = mg->mg_ptr + 1;
     const char nextchar = *remaining;
 
@@ -806,7 +814,8 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 
     switch (*mg->mg_ptr) {
     case '\001':		/* ^A */
-	sv_setsv(sv, PL_bodytarget);
+	if (SvOK(PL_bodytarget)) sv_copypv(sv, PL_bodytarget);
+	else sv_setsv(sv, &PL_sv_undef);
 	if (SvTAINTED(PL_bodytarget))
 	    SvTAINTED_on(sv);
 	break;
@@ -1156,17 +1165,31 @@ Perl_magic_setenv(pTHX_ SV *sv, MAGIC *mg)
 {
     dVAR;
     STRLEN len = 0, klen;
-    const char *s = SvOK(sv) ? SvPV_const(sv,len) : "";
-    const char * const ptr = MgPV_const(mg,klen);
-    my_setenv(ptr, s);
+    const char * const key = MgPV_const(mg,klen);
+    const char *s = NULL;
 
     PERL_ARGS_ASSERT_MAGIC_SETENV;
+
+    SvGETMAGIC(sv);
+    if (SvOK(sv)) {
+        /* defined environment variables are byte strings; unfortunately
+           there is no SvPVbyte_force_nomg(), so we must do this piecewise */
+        (void)SvPV_force_nomg_nolen(sv);
+        sv_utf8_downgrade(sv, /* fail_ok */ TRUE);
+        if (SvUTF8(sv)) {
+            Perl_ck_warner_d(aTHX_ packWARN(WARN_UTF8), "Wide character in %s", "setenv");
+            SvUTF8_off(sv);
+        }
+        s = SvPVX(sv);
+        len = SvCUR(sv);
+    }
+    my_setenv(key, s); /* does the deed */
 
 #ifdef DYNAMIC_ENV_FETCH
      /* We just undefd an environment var.  Is a replacement */
      /* waiting in the wings? */
     if (!len) {
-	SV ** const valp = hv_fetch(GvHVn(PL_envgv), ptr, klen, FALSE);
+	SV ** const valp = hv_fetch(GvHVn(PL_envgv), key, klen, FALSE);
 	if (valp)
 	    s = SvOK(*valp) ? SvPV_const(*valp, len) : "";
     }
@@ -1178,7 +1201,7 @@ Perl_magic_setenv(pTHX_ SV *sv, MAGIC *mg)
     if (PL_tainting) {
 	MgTAINTEDDIR_off(mg);
 #ifdef VMS
-	if (s && klen == 8 && strEQ(ptr, "DCL$PATH")) {
+	if (s && klen == 8 && strEQ(key, "DCL$PATH")) {
 	    char pathbuf[256], eltbuf[256], *cp, *elt;
 	    int i = 0, j = 0;
 
@@ -1204,7 +1227,7 @@ Perl_magic_setenv(pTHX_ SV *sv, MAGIC *mg)
 	    } while (my_trnlnm(s, pathbuf, i++) && (elt = pathbuf));
 	}
 #endif /* VMS */
-	if (s && klen == 4 && strEQ(ptr,"PATH")) {
+	if (s && klen == 4 && strEQ(key,"PATH")) {
 	    const char * const strend = s + len;
 
 	    while (s < strend) {
@@ -1491,7 +1514,7 @@ Perl_magic_setsig(pTHX_ SV *sv, MAGIC *mg)
     sigset_t set, save;
     SV* save_sv;
 #endif
-    register const char *s = MgPV_const(mg,len);
+    const char *s = MgPV_const(mg,len);
 
     PERL_ARGS_ASSERT_MAGIC_SETSIG;
 
@@ -2304,19 +2327,6 @@ Perl_magic_setvec(pTHX_ SV *sv, MAGIC *mg)
 }
 
 int
-Perl_magic_setvstring(pTHX_ SV *sv, MAGIC *mg)
-{
-    PERL_ARGS_ASSERT_MAGIC_SETVSTRING;
-
-    if (SvPOKp(sv)) {
-	SV * const vecsv = sv_newmortal();
-	scan_vstring(mg->mg_ptr, mg->mg_ptr + mg->mg_len, vecsv);
-	if (sv_eq_flags(vecsv, sv, 0 /*nomg*/)) return 0;
-    }
-    return sv_unmagic(sv, mg->mg_type);
-}
-
-int
 Perl_magic_getdefelem(pTHX_ SV *sv, MAGIC *mg)
 {
     dVAR;
@@ -2489,9 +2499,9 @@ int
 Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 {
     dVAR;
-    register const char *s;
-    register I32 paren;
-    register const REGEXP * rx;
+    const char *s;
+    I32 paren;
+    const REGEXP * rx;
     const char * const remaining = mg->mg_ptr + 1;
     I32 i;
     STRLEN len;
@@ -2533,7 +2543,8 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
         }
         break;
     case '\001':	/* ^A */
-	sv_setsv(PL_bodytarget, sv);
+	if (SvOK(sv)) sv_copypv(PL_bodytarget, sv);
+	else SvOK_off(PL_bodytarget);
 	FmLINES(PL_bodytarget) = 0;
 	if (SvPOK(PL_bodytarget)) {
 	    char *s = SvPVX(PL_bodytarget);
@@ -3065,7 +3076,7 @@ Perl_whichsig_pv(pTHX_ const char *sig)
 I32
 Perl_whichsig_pvn(pTHX_ const char *sig, STRLEN len)
 {
-    register char* const* sigv;
+    char* const* sigv;
 
     PERL_ARGS_ASSERT_WHICHSIG_PVN;
     PERL_UNUSED_CONTEXT;

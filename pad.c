@@ -375,6 +375,7 @@ Perl_cv_undef(pTHX_ CV *cv)
     else if (slabbed) Perl_warn(aTHX_ "Slab leaked from cv %p", cv);
 #endif
     SvPOK_off(MUTABLE_SV(cv));		/* forget prototype */
+    sv_unmagic((SV *)cv, PERL_MAGIC_checkcall);
     CvGV_set(cv, NULL);
 
     /* This statement and the subsequence if block was pad_undef().  */
@@ -485,6 +486,18 @@ Perl_cv_undef(pTHX_ CV *cv)
      * to choose an error message */
     CvFLAGS(cv) &= (CVf_WEAKOUTSIDE|CVf_CVGV_RC|CVf_ANON);
 }
+
+/*
+=for apidoc cv_forget_slab
+
+When a CV has a reference count on its slab (CvSLABBED), it is responsible
+for making sure it is freed.  (Hence, no two CVs should ever have a
+reference count on the same slab.)  The CV only needs to reference the slab
+during compilation.  Once it is compiled and CvROOT attached, it has
+finished its job, so it can forget the slab.
+
+=cut
+*/
 
 void
 Perl_cv_forget_slab(pTHX_ CV *cv)
@@ -771,6 +784,8 @@ currently-compiling function.
 The function I<func> is linked into the pad, and its C<CvOUTSIDE> link
 to the outer scope is weakened to avoid a reference loop.
 
+One reference count is stolen, so you may need to do C<SvREFCNT_inc(func)>.
+
 I<optype> should be an opcode indicating the type of operation that the
 pad entry is to support.  This doesn't affect operational semantics,
 but is used for debugging.
@@ -799,7 +814,7 @@ Perl_pad_add_anon(pTHX_ CV* func, I32 optype)
     if (SvTYPE(func) == SVt_PVCV || !CvOUTSIDE(func))
 	av_store(PL_comppad, ix, (SV*)func);
     else {
-	SV *rv = newRV_inc((SV *)func);
+	SV *rv = newRV_noinc((SV *)func);
 	sv_rvweaken(rv);
 	assert (SvTYPE(func) == SVt_PVFM);
 	av_store(PL_comppad, ix, rv);
@@ -1110,12 +1125,14 @@ S_pad_findlex(pTHX_ const char *namepv, STRLEN namelen, U32 flags, const CV* cv,
     SV *new_capture;
     SV **new_capturep;
     const AV * const padlist = CvPADLIST(cv);
+    const bool staleok = !!(flags & padadd_STALEOK);
 
     PERL_ARGS_ASSERT_PAD_FINDLEX;
 
-    if (flags & ~padadd_UTF8_NAME)
+    if (flags & ~(padadd_UTF8_NAME|padadd_STALEOK))
 	Perl_croak(aTHX_ "panic: pad_findlex illegal flag bits 0x%" UVxf,
 		   (UV)flags);
+    flags &= ~ padadd_STALEOK; /* one-shot flag */
 
     *out_flags = 0;
 
@@ -1266,6 +1283,7 @@ S_pad_findlex(pTHX_ const char *namepv, STRLEN namelen, U32 flags, const CV* cv,
 			PTR2UV(cv), PTR2UV(*out_capture)));
 
 		    if (SvPADSTALE(*out_capture)
+			&& (!CvDEPTH(cv) || !staleok)
 			&& !SvPAD_STATE(name_svp[offset]))
 		    {
 			Perl_ck_warner(aTHX_ packWARN(WARN_CLOSURE),
@@ -1300,7 +1318,9 @@ S_pad_findlex(pTHX_ const char *namepv, STRLEN namelen, U32 flags, const CV* cv,
     new_capturep = out_capture ? out_capture :
 		CvLATE(cv) ? NULL : &new_capture;
 
-    offset = pad_findlex(namepv, namelen, flags, CvOUTSIDE(cv), CvOUTSIDE_SEQ(cv), 1,
+    offset = pad_findlex(namepv, namelen,
+		flags | padadd_STALEOK*(new_capturep == &new_capture),
+		CvOUTSIDE(cv), CvOUTSIDE_SEQ(cv), 1,
 		new_capturep, out_name_sv, out_flags);
     if ((PADOFFSET)offset == NOT_IN_PAD)
 	return NOT_IN_PAD;
@@ -1421,7 +1441,7 @@ Perl_pad_setsv(pTHX_ PADOFFSET po, SV* sv)
 /*
 =for apidoc m|void|pad_block_start|int full
 
-Update the pad compilation state variables on entry to a new block
+Update the pad compilation state variables on entry to a new block.
 
 =cut
 */
@@ -1629,7 +1649,7 @@ S_pad_reset(pTHX)
     );
 
     if (!PL_tainting) {	/* Can't mix tainted and non-tainted temporaries. */
-        register I32 po;
+        I32 po;
 	for (po = AvMAX(PL_comppad); po > PL_padix_floor; po--) {
 	    if (PL_curpad[po] && !SvIMMORTAL(PL_curpad[po]))
 		SvPADTMP_off(PL_curpad[po]);
@@ -1997,17 +2017,19 @@ Perl_cv_clone(pTHX_ CV *proto)
     outpad = CvPADLIST(outside)
 	? AvARRAY(AvARRAY(CvPADLIST(outside))[depth])
 	: NULL;
+    assert(outpad || SvTYPE(cv) == SVt_PVFM);
 
     for (ix = fpad; ix > 0; ix--) {
 	SV* const namesv = (ix <= fname) ? pname[ix] : NULL;
 	SV *sv = NULL;
 	if (namesv && namesv != &PL_sv_undef) { /* lexical */
 	    if (SvFAKE(namesv)) {   /* lexical from outside? */
-		/* formats may have an inactive, or even undefined, parent,
-		   while my $x if $false can leave an active var marked as
-		   stale. And state vars are always available */
+		/* formats may have an inactive, or even undefined, parent;
+		   but state vars are always available. */
 		if (!outpad || !(sv = outpad[PARENT_PAD_INDEX(namesv)])
-		 || (SvPADSTALE(sv) && !SvPAD_STATE(namesv))) {
+		 || (  SvPADSTALE(sv) && !SvPAD_STATE(namesv)
+		    && !CvDEPTH(outside))  ) {
+		    assert(SvTYPE(cv) == SVt_PVFM);
 		    Perl_ck_warner(aTHX_ packWARN(WARN_CLOSURE),
 				   "Variable \"%"SVf"\" is not available", namesv);
 		    sv = NULL;
@@ -2059,6 +2081,9 @@ Perl_cv_clone(pTHX_ CV *proto)
 	SV* const const_sv = op_const_sv(CvSTART(cv), cv);
 	if (const_sv) {
 	    SvREFCNT_dec(cv);
+            /* For this calling case, op_const_sv returns a *copy*, which we
+               donate to newCONSTSUB. Yes, this is ugly, and should be killed.
+               Need to fix how lib/constant.pm works to eliminate this.  */
 	    cv = newCONSTSUB(CvSTASH(proto), NULL, const_sv);
 	}
 	else {
