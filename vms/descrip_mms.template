@@ -326,7 +326,7 @@ x2p : [.x2p]$(DBG)a2p$(E) [.x2p]s2p.com [.x2p]find2perl.com
 extra.pods : miniperl
 	@ @extra_pods.com
 
-PERLDELTA_CURRENT = [.pod]perl5173delta.pod
+PERLDELTA_CURRENT = [.pod]perl5174delta.pod
 
 $(PERLDELTA_CURRENT) : [.pod]perldelta.pod
 	Copy/NoConfirm/Log $(MMS$SOURCE) $(MMS$TARGET)
@@ -559,7 +559,7 @@ nonxsext : $(LIBPREREQ) preplibrary $(MINIPERL_EXE) [.pod]perlfunc.pod
 # search in same dir as source file
 [.x2p]a2p$(O) : [.x2p]a2p.c [.x2p]a2py.c [.x2p]INTERN.h [.x2p]a2p.h [.x2p]hash.h [.x2p]str.h config.h handy.h vmsish.h $(MINIPERL_EXE)
 	$(MINIPERL) -pe "s/^#line\s+(\d+)\s+\Q""y.tab.c""/#line $1 ""y_tab.c""/;" $(MMS$SOURCE) >$(MMS$TARGET_NAME)_vms.c
-	$(CC) $(X2PCFLAGS) /Object=$(MMS$TARGET)/Include=([.x2p],[]) $(MMS$TARGET_NAME)_vms.c
+	$(CC) $(X2PCFLAGS) /Object=$(MMS$TARGET)/Include=([.x2p],[],"./x2p") $(MMS$TARGET_NAME)_vms.c
 	Delete/Log/NoConfirm $(MMS$TARGET_NAME)_vms.c;
 
 # gcc cpp broken -- doesn't look in directory of source file for #include ""

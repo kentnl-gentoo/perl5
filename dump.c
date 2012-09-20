@@ -943,6 +943,12 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
 		if (o->op_private & OPpLVAL_DEFER)
 		    sv_catpv(tmpsv, ",LVAL_DEFER");
 	    }
+	    else if (optype == OP_RV2HV || optype == OP_PADHV) {
+	      if (o->op_private & OPpMAYBE_TRUEBOOL)
+		sv_catpvs(tmpsv, ",OPpMAYBE_TRUEBOOL");
+	      if (o->op_private & OPpTRUEBOOL)
+		sv_catpvs(tmpsv, ",OPpTRUEBOOL");
+	    }
 	    else {
 		if (o->op_private & HINT_STRICT_REFS)
 		    sv_catpv(tmpsv, ",STRICT_REFS");
@@ -1918,7 +1924,10 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 				 (IV)CvXSUBANY(sv).any_i32);
 	    }
 	}
- 	do_gvgv_dump(level, file, "  GVGV::GV", CvGV(sv));
+	if (CvNAMED(sv))
+	    Perl_dump_indent(aTHX_ level, file, "  NAME = \"%s\"\n",
+				   HEK_KEY(CvNAME_HEK((CV *)sv)));
+	else do_gvgv_dump(level, file, "  GVGV::GV", CvGV(sv));
 	Perl_dump_indent(aTHX_ level, file, "  FILE = \"%s\"\n", CvFILE(sv));
 	Perl_dump_indent(aTHX_ level, file, "  DEPTH = %"IVdf"\n", (IV)CvDEPTH(sv));
 	Perl_dump_indent(aTHX_ level, file, "  FLAGS = 0x%"UVxf"\n", (UV)CvFLAGS(sv));
@@ -2050,6 +2059,10 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 				(UV)(r->pre_prefix));
 	    Perl_dump_indent(aTHX_ level, file, "  SUBLEN = %"IVdf"\n",
 				(IV)(r->sublen));
+	    Perl_dump_indent(aTHX_ level, file, "  SUBOFFSET = %"IVdf"\n",
+				(IV)(r->suboffset));
+	    Perl_dump_indent(aTHX_ level, file, "  SUBCOFFSET = %"IVdf"\n",
+				(IV)(r->subcoffset));
 	    if (r->subbeg)
 		Perl_dump_indent(aTHX_ level, file, "  SUBBEG = 0x%"UVxf" %s\n",
 			    PTR2UV(r->subbeg),
@@ -2123,6 +2136,8 @@ Perl_runops_debug(pTHX)
 	    if (DEBUG_t_TEST_) debop(PL_op);
 	    if (DEBUG_P_TEST_) debprof(PL_op);
 	}
+
+        OP_ENTRY_PROBE(OP_NAME(PL_op));
     } while ((PL_op = PL_op->op_ppaddr(aTHX)));
     DEBUG_l(Perl_deb(aTHX_ "leaving RUNOPS level\n"));
 
@@ -2177,8 +2192,8 @@ Perl_debop(pTHX_ const OP *o)
 	CV * const cv = deb_curcv(cxstack_ix);
 	SV *sv;
         if (cv) {
-	    AV * const padlist = CvPADLIST(cv);
-            AV * const comppad = MUTABLE_AV(*av_fetch(padlist, 0, FALSE));
+	    PADLIST * const padlist = CvPADLIST(cv);
+            PAD * const comppad = *PadlistARRAY(padlist);
             sv = *av_fetch(comppad, o->op_targ, FALSE);
         } else
             sv = NULL;

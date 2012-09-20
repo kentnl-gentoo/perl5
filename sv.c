@@ -4356,7 +4356,7 @@ Perl_sv_setsv_cow(pTHX_ SV *dstr, SV *sstr)
 	if (SvTHINKFIRST(dstr))
 	    sv_force_normal_flags(dstr, SV_COW_DROP_PV);
 	else if (SvPVX_const(dstr))
-	    Safefree(SvPVX_const(dstr));
+	    Safefree(SvPVX_mutable(dstr));
     }
     else
 	new_SV(dstr);
@@ -5906,10 +5906,11 @@ S_anonymise_cv_maybe(pTHX_ GV *gv, CV* cv)
     assert(GvGP(gv));
     assert(!CvANON(cv));
     assert(CvGV(cv) == gv);
+    assert(!CvNAMED(cv));
 
     /* will the CV shortly be freed by gp_free() ? */
     if (GvCV(gv) == cv && GvGP(gv)->gp_refcnt < 2 && SvREFCNT(cv) < 2) {
-	SvANY(cv)->xcv_gv = NULL;
+	SvANY(cv)->xcv_gv_u.xcv_gv = NULL;
 	return;
     }
 
@@ -5923,7 +5924,7 @@ S_anonymise_cv_maybe(pTHX_ GV *gv, CV* cv)
 
     CvANON_on(cv);
     CvCVGV_RC_on(cv);
-    SvANY(cv)->xcv_gv = MUTABLE_GV(SvREFCNT_inc(anongv));
+    SvANY(cv)->xcv_gv_u.xcv_gv = MUTABLE_GV(SvREFCNT_inc(anongv));
 }
 
 
@@ -6160,7 +6161,7 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 
 		    SvFAKE_off(sv);
 		} else if (SvLEN(sv)) {
-		    Safefree(SvPVX_const(sv));
+		    Safefree(SvPVX_mutable(sv));
 		}
 	    }
 #else
@@ -6507,10 +6508,21 @@ Perl_sv_len_utf8(pTHX_ register SV *const sv)
 	return mg_length(sv);
     else
     {
-	STRLEN len;
-	const U8 *s = (U8*)SvPV_const(sv, len);
+	SvGETMAGIC(sv);
+	return sv_len_utf8_nomg(sv);
+    }
+}
 
-	if (PL_utf8cache) {
+STRLEN
+Perl_sv_len_utf8_nomg(pTHX_ SV * const sv)
+{
+    dVAR;
+    STRLEN len;
+    const U8 *s = (U8*)SvPV_nomg_const(sv, len);
+
+    PERL_ARGS_ASSERT_SV_LEN_UTF8_NOMG;
+
+    if (PL_utf8cache) {
 	    STRLEN ulen;
 	    MAGIC *mg = SvMAGICAL(sv) ? mg_find(sv, PERL_MAGIC_utf8) : NULL;
 
@@ -6536,9 +6548,8 @@ Perl_sv_len_utf8(pTHX_ register SV *const sv)
 		utf8_mg_len_cache_update(sv, &mg, ulen);
 	    }
 	    return ulen;
-	}
-	return Perl_utf8_length(aTHX_ s, s + len);
     }
+    return Perl_utf8_length(aTHX_ s, s + len);
 }
 
 /* Walk forwards to find the byte corresponding to the passed in UTF-8
@@ -6928,7 +6939,6 @@ S_utf8_mg_pos_cache_update(pTHX_ SV *const sv, MAGIC **const mgp, const STRLEN b
 	   calculation in bytes simply because we always know the byte
 	   length.  squareroot has the same ordering as the positive value,
 	   so don't bother with the actual square root.  */
-	const float existing = THREEWAY_SQUARE(0, cache[3], cache[1], blen);
 	if (byte > cache[1]) {
 	    /* New position is after the existing pair of pairs.  */
 	    const float keep_earlier
@@ -6937,18 +6947,14 @@ S_utf8_mg_pos_cache_update(pTHX_ SV *const sv, MAGIC **const mgp, const STRLEN b
 		= THREEWAY_SQUARE(0, cache[1], byte, blen);
 
 	    if (keep_later < keep_earlier) {
-		if (keep_later < existing) {
-		    cache[2] = cache[0];
-		    cache[3] = cache[1];
-		    cache[0] = utf8;
-		    cache[1] = byte;
-		}
+                cache[2] = cache[0];
+                cache[3] = cache[1];
+                cache[0] = utf8;
+                cache[1] = byte;
 	    }
 	    else {
-		if (keep_earlier < existing) {
-		    cache[0] = utf8;
-		    cache[1] = byte;
-		}
+                cache[0] = utf8;
+                cache[1] = byte;
 	    }
 	}
 	else if (byte > cache[3]) {
@@ -6959,16 +6965,12 @@ S_utf8_mg_pos_cache_update(pTHX_ SV *const sv, MAGIC **const mgp, const STRLEN b
 		= THREEWAY_SQUARE(0, byte, cache[1], blen);
 
 	    if (keep_later < keep_earlier) {
-		if (keep_later < existing) {
-		    cache[2] = utf8;
-		    cache[3] = byte;
-		}
+                cache[2] = utf8;
+                cache[3] = byte;
 	    }
 	    else {
-		if (keep_earlier < existing) {
-		    cache[0] = utf8;
-		    cache[1] = byte;
-		}
+                cache[0] = utf8;
+                cache[1] = byte;
 	    }
 	}
 	else {
@@ -6979,18 +6981,14 @@ S_utf8_mg_pos_cache_update(pTHX_ SV *const sv, MAGIC **const mgp, const STRLEN b
 		= THREEWAY_SQUARE(0, byte, cache[1], blen);
 
 	    if (keep_later < keep_earlier) {
-		if (keep_later < existing) {
-		    cache[2] = utf8;
-		    cache[3] = byte;
-		}
+                cache[2] = utf8;
+                cache[3] = byte;
 	    }
 	    else {
-		if (keep_earlier < existing) {
-		    cache[0] = cache[2];
-		    cache[1] = cache[3];
-		    cache[2] = utf8;
-		    cache[3] = byte;
-		}
+                cache[0] = cache[2];
+                cache[1] = cache[3];
+                cache[2] = utf8;
+                cache[3] = byte;
 	    }
 	}
     }
@@ -10378,20 +10376,20 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		 * vectorize happen normally
 		 */
 		if (sv_isobject(vecsv) && sv_derived_from(vecsv, "version")) {
-		    char *version = savesvpv(vecsv);
 		    if ( hv_exists(MUTABLE_HV(SvRV(vecsv)), "alpha", 5 ) ) {
-			Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
+			Perl_ck_warner_d(aTHX_ packWARN(WARN_PRINTF),
 			"vector argument not supported with alpha versions");
-			goto unknown;
+			goto vdblank;
 		    }
 		    vecsv = sv_newmortal();
-		    scan_vstring(version, version + veclen, vecsv);
+		    scan_vstring((char *)vecstr, (char *)vecstr + veclen,
+				 vecsv);
 		    vecstr = (U8*)SvPV_const(vecsv, veclen);
 		    vec_utf8 = DO_UTF8(vecsv);
-		    Safefree(version);
 		}
 	    }
 	    else {
+	      vdblank:
 		vecstr = (U8*)"";
 		veclen = 0;
 	    }
@@ -10520,16 +10518,16 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		if (DO_UTF8(argsv)) {
 		    STRLEN old_precis = precis;
 		    if (has_precis && precis < elen) {
-			STRLEN ulen = sv_len_utf8(argsv);
-			I32 p = precis > ulen ? ulen : precis;
-			sv_pos_u2b(argsv, &p, 0); /* sticks at end */
-			precis = p;
+			STRLEN ulen = sv_len_utf8_nomg(argsv);
+			STRLEN p = precis > ulen ? ulen : precis;
+			precis = sv_pos_u2b_flags(argsv, p, 0, 0);
+							/* sticks at end */
 		    }
 		    if (width) { /* fudge width (can't fudge elen) */
 			if (has_precis && precis < elen)
 			    width += precis - old_precis;
 			else
-			    width += elen - sv_len_utf8(argsv);
+			    width += elen - sv_len_utf8_nomg(argsv);
 		    }
 		    is_utf8 = TRUE;
 		}
@@ -11234,7 +11232,6 @@ Perl_parser_dup(pTHX_ const yy_parser *const proto, CLONE_PARAMS *const param)
     parser->multi_open	= proto->multi_open;
     parser->multi_start	= proto->multi_start;
     parser->multi_end	= proto->multi_end;
-    parser->pending_ident = proto->pending_ident;
     parser->preambled	= proto->preambled;
     parser->sublex_info	= proto->sublex_info; /* XXX not quite right */
     parser->linestr	= sv_dup_inc(proto->linestr, param);
@@ -12132,6 +12129,7 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
                         daux->xhv_mro_meta = saux->xhv_mro_meta
                             ? mro_meta_dup(saux->xhv_mro_meta, param)
                             : 0;
+			daux->xhv_super = NULL;
 
 			/* Record stashes for possible cloning in Perl_clone(). */
 			if (HvNAME(sstr))
@@ -12163,9 +12161,13 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 		}
 		assert(!CvSLABBED(dstr));
 		if (CvDYNFILE(dstr)) CvFILE(dstr) = SAVEPV(CvFILE(dstr));
+		if (CvNAMED(dstr))
+		    SvANY((CV *)dstr)->xcv_gv_u.xcv_hek =
+			share_hek_hek(CvNAME_HEK((CV *)sstr));
 		/* don't dup if copying back - CvGV isn't refcounted, so the
 		 * duped GV may never be freed. A bit of a hack! DAPM */
-		SvANY(MUTABLE_CV(dstr))->xcv_gv =
+		else
+		  SvANY(MUTABLE_CV(dstr))->xcv_gv_u.xcv_gv =
 		    CvCVGV_RC(dstr)
 		    ? gv_dup_inc(CvGV(sstr), param)
 		    : (param->flags & CLONEf_JOIN_IN)
@@ -12647,8 +12649,6 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl, CLONE_PARAMS* param)
 
 		new_state->re_state_bostr
 		    = pv_dup(old_state->re_state_bostr);
-		new_state->re_state_reginput
-		    = pv_dup(old_state->re_state_reginput);
 		new_state->re_state_regeol
 		    = pv_dup(old_state->re_state_regeol);
 #ifdef PERL_OLD_COPY_ON_WRITE
@@ -13377,16 +13377,9 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_utf8_punct	= sv_dup_inc(proto_perl->Iutf8_punct, param);
     PL_utf8_xdigit	= sv_dup_inc(proto_perl->Iutf8_xdigit, param);
     PL_utf8_mark	= sv_dup_inc(proto_perl->Iutf8_mark, param);
-    PL_utf8_X_begin	= sv_dup_inc(proto_perl->Iutf8_X_begin, param);
+    PL_utf8_X_regular_begin	= sv_dup_inc(proto_perl->Iutf8_X_regular_begin, param);
     PL_utf8_X_extend	= sv_dup_inc(proto_perl->Iutf8_X_extend, param);
-    PL_utf8_X_prepend	= sv_dup_inc(proto_perl->Iutf8_X_prepend, param);
-    PL_utf8_X_non_hangul	= sv_dup_inc(proto_perl->Iutf8_X_non_hangul, param);
-    PL_utf8_X_L	= sv_dup_inc(proto_perl->Iutf8_X_L, param);
-    PL_utf8_X_LV	= sv_dup_inc(proto_perl->Iutf8_X_LV, param);
     PL_utf8_X_LVT	= sv_dup_inc(proto_perl->Iutf8_X_LVT, param);
-    PL_utf8_X_T	= sv_dup_inc(proto_perl->Iutf8_X_T, param);
-    PL_utf8_X_V	= sv_dup_inc(proto_perl->Iutf8_X_V, param);
-    PL_utf8_X_LV_LVT_V	= sv_dup_inc(proto_perl->Iutf8_X_LV_LVT_V, param);
     PL_utf8_toupper	= sv_dup_inc(proto_perl->Iutf8_toupper, param);
     PL_utf8_totitle	= sv_dup_inc(proto_perl->Iutf8_totitle, param);
     PL_utf8_tolower	= sv_dup_inc(proto_perl->Iutf8_tolower, param);
@@ -13397,7 +13390,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_utf8_idcont	= sv_dup_inc(proto_perl->Iutf8_idcont, param);
     PL_utf8_xidcont	= sv_dup_inc(proto_perl->Iutf8_xidcont, param);
     PL_utf8_foldable	= sv_dup_inc(proto_perl->Iutf8_foldable, param);
-    PL_utf8_quotemeta	= sv_dup_inc(proto_perl->Iutf8_quotemeta, param);
     PL_ASCII		= sv_dup_inc(proto_perl->IASCII, param);
     PL_AboveLatin1	= sv_dup_inc(proto_perl->IAboveLatin1, param);
     PL_Latin1		= sv_dup_inc(proto_perl->ILatin1, param);
@@ -13917,7 +13909,7 @@ Perl_varname(pTHX_ const GV *const gv, const char gvtype, PADOFFSET targ,
 
 	if (!cv || !CvPADLIST(cv))
 	    return NULL;
-	av = MUTABLE_AV((*av_fetch(CvPADLIST(cv), 0, FALSE)));
+	av = *PadlistARRAY(CvPADLIST(cv));
 	sv = *av_fetch(av, targ, FALSE);
 	sv_setsv(name, sv);
     }

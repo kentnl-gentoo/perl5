@@ -207,7 +207,7 @@ use File::Glob qw(:case);
 
     'Archive::Tar' => {
         'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/Archive-Tar-1.88.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Archive-Tar-1.90.tar.gz',
         'FILES'        => q[cpan/Archive-Tar],
         'EXCLUDED'     => ['Makefile.PL'],
         'UPSTREAM'     => 'cpan',
@@ -262,7 +262,7 @@ use File::Glob qw(:case);
 
     'autouse' => {
         'MAINTAINER'   => 'p5p',
-        'DISTRIBUTION' => 'FLORA/autouse-1.06.tar.gz',
+        'DISTRIBUTION' => 'FLORA/autouse-1.07.tar.gz',
         'FILES'        => q[dist/autouse],
         'EXCLUDED'     => [qr{^t/release-.*\.t}],
         'UPSTREAM'     => 'blead',
@@ -301,7 +301,7 @@ use File::Glob qw(:case);
 
     'B::Lint' => {
         'MAINTAINER'   => 'jjore',
-        'DISTRIBUTION' => 'FLORA/B-Lint-1.13.tar.gz',
+        'DISTRIBUTION' => 'FLORA/B-Lint-1.14.tar.gz',
         'FILES'        => q[dist/B-Lint],
         'EXCLUDED'     => ['t/test.pl'],
         'UPSTREAM'     => 'blead',
@@ -322,7 +322,7 @@ use File::Glob qw(:case);
 
     'bignum' => {
         'MAINTAINER'   => 'rafl',
-        'DISTRIBUTION' => 'FLORA/bignum-0.29.tar.gz',
+        'DISTRIBUTION' => 'FLORA/bignum-0.30.tar.gz',
         'FILES'        => q[dist/bignum],
         'EXCLUDED'     => [
             qr{^inc/Module/},
@@ -451,7 +451,7 @@ use File::Glob qw(:case);
 
     'CPANPLUS' => {
         'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/CPANPLUS-0.9130.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/CPANPLUS-0.9131.tar.gz',
         'FILES'        => q[cpan/CPANPLUS],
         'EXCLUDED'     => [
             qr{^inc/},
@@ -529,7 +529,7 @@ use File::Glob qw(:case);
 
     'DB_File' => {
         'MAINTAINER'   => 'pmqs',
-        'DISTRIBUTION' => 'PMQS/DB_File-1.826.tar.gz',
+        'DISTRIBUTION' => 'PMQS/DB_File-1.827.tar.gz',
         'FILES'        => q[cpan/DB_File],
         'EXCLUDED'     => [
             qr{^patches/},
@@ -612,7 +612,7 @@ use File::Glob qw(:case);
 
     'Dumpvalue' => {
         'MAINTAINER'   => 'p5p',
-        'DISTRIBUTION' => 'FLORA/Dumpvalue-1.16.tar.gz',
+        'DISTRIBUTION' => 'FLORA/Dumpvalue-1.17.tar.gz',
         'FILES'        => q[dist/Dumpvalue],
         'EXCLUDED'     => [qr{^t/release-.*\.t}],
         'UPSTREAM'     => 'blead',
@@ -750,7 +750,7 @@ use File::Glob qw(:case);
 
     'ExtUtils::Manifest' => {
         'MAINTAINER'   => 'p5p',
-        'DISTRIBUTION' => 'FLORA/ExtUtils-Manifest-1.60.tar.gz',
+        'DISTRIBUTION' => 'FLORA/ExtUtils-Manifest-1.61.tar.gz',
         'FILES'        => q[dist/ExtUtils-Manifest],
         'EXCLUDED'     => [qr(t/release-.*\.t)],
         'UPSTREAM'     => 'blead',
@@ -1100,7 +1100,7 @@ use File::Glob qw(:case);
 
     'Locale-Codes' => {
         'MAINTAINER'   => 'sbeck',
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.22.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.23.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( t/pod_coverage.t
@@ -1261,7 +1261,7 @@ use File::Glob qw(:case);
 
     'Module::CoreList' => {
         'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.70.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.72.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
         'UPSTREAM'     => 'blead',
     },
@@ -1636,14 +1636,14 @@ use File::Glob qw(:case);
 
     'Socket' => {
         'MAINTAINER'   => 'pevans',
-        'DISTRIBUTION' => 'PEVANS/Socket-2.004.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Socket-2.006.tar.gz',
         'FILES'        => q[cpan/Socket],
         'UPSTREAM'     => 'cpan',
     },
 
     'Storable' => {
         'MAINTAINER'   => 'ams',
-        'DISTRIBUTION' => 'AMS/Storable-2.35.tar.gz',
+        'DISTRIBUTION' => 'AMS/Storable-2.39.tar.gz',
         'FILES'        => q[dist/Storable],
         'EXCLUDED'     => [qr{^t/Test/}],
         'UPSTREAM'     => 'blead',
@@ -1657,7 +1657,7 @@ use File::Glob qw(:case);
 
     'Sys::Syslog' => {
         'MAINTAINER'   => 'saper',
-        'DISTRIBUTION' => 'SAPER/Sys-Syslog-0.31.tar.gz',
+        'DISTRIBUTION' => 'SAPER/Sys-Syslog-0.32.tar.gz',
         'FILES'        => q[cpan/Sys-Syslog],
         'EXCLUDED'     => [
             qr{^eg/},
@@ -1703,7 +1703,7 @@ use File::Glob qw(:case);
 
     'Term::ReadLine' => {
         'MAINTAINER'   => 'p5p',
-        'DISTRIBUTION' => 'FLORA/Term-ReadLine-1.09.tar.gz',
+        'DISTRIBUTION' => 'FLORA/Term-ReadLine-1.10.tar.gz',
         'FILES'        => q[dist/Term-ReadLine],
         'EXCLUDED'     => [qr{^t/release-.*\.t}],
         'UPSTREAM'     => 'blead',
@@ -1817,7 +1817,7 @@ use File::Glob qw(:case);
 
     'Text::Abbrev' => {
         'MAINTAINER'   => 'p5p',
-        'DISTRIBUTION' => 'FLORA/Text-Abbrev-1.01.tar.gz',
+        'DISTRIBUTION' => 'FLORA/Text-Abbrev-1.02.tar.gz',
         'FILES'        => q[dist/Text-Abbrev],
         'EXCLUDED'     => [qr{^t/release-.*\.t}],
         'UPSTREAM'     => 'blead',
@@ -1937,7 +1937,7 @@ use File::Glob qw(:case);
 
     'threads::shared' => {
         'MAINTAINER'   => 'jdhedden',
-        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.40.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.41.tar.gz',
         'FILES'        => q[dist/threads-shared],
         'EXCLUDED'     => [
             qw( examples/class.pl
@@ -2046,7 +2046,7 @@ use File::Glob qw(:case);
 
     'version' => {
         'MAINTAINER'   => 'jpeacock',
-        'DISTRIBUTION' => 'JPEACOCK/version-0.99.tar.gz',
+        'DISTRIBUTION' => 'JPEACOCK/version-0.9901.tar.gz',
         'FILES'        => q[lib/version.pm lib/version.pod lib/version],
         'EXCLUDED' => [
             qr{^t/.*\.t$},
@@ -2122,7 +2122,7 @@ use File::Glob qw(:case);
 
     'XSLoader' => {
         'MAINTAINER'   => 'saper',
-        'DISTRIBUTION' => 'SAPER/XSLoader-0.15.tar.gz',
+        'DISTRIBUTION' => 'SAPER/XSLoader-0.16.tar.gz',
         'FILES'        => q[dist/XSLoader],
         'EXCLUDED'     => [
             qr{^eg/},
@@ -2132,7 +2132,8 @@ use File::Glob qw(:case);
                 ),
             'XSLoader.pm',    # we use XSLoader_pm.PL
         ],
-        'UPSTREAM' => 'blead',
+        # Revert UPSTREAM to 'blead' after 0.17 is released
+        'UPSTREAM' => undef,
     },
 
     's2p' => {

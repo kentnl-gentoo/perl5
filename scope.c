@@ -160,8 +160,10 @@ Perl_free_tmps(pTHX)
     /* XXX should tmps_floor live in cxstack? */
     const I32 myfloor = PL_tmps_floor;
     while (PL_tmps_ix > myfloor) {      /* clean up after last statement */
-	SV* const sv = PL_tmps_stack[PL_tmps_ix];
-	PL_tmps_stack[PL_tmps_ix--] = NULL;
+	SV* const sv = PL_tmps_stack[PL_tmps_ix--];
+#ifdef PERL_POISON
+	PoisonWith(PL_tmps_stack + PL_tmps_ix + 1, 1, SV *, 0xAB);
+#endif
 	if (sv && sv != &PL_sv_undef) {
 	    SvTEMP_off(sv);
 	    SvREFCNT_dec(sv);		/* note, can modify tmps_ix!!! */
@@ -916,8 +918,11 @@ Perl_leave_scope(pTHX_ I32 base)
 		if (SvTYPE(sv) == SVt_PVHV)
 		    Perl_hv_kill_backrefs(aTHX_ MUTABLE_HV(sv));
 		if (SvMAGICAL(sv))
-		    sv_unmagic(sv, PERL_MAGIC_backref),
+		{
+		  sv_unmagic(sv, PERL_MAGIC_backref);
+		  if (SvTYPE(sv) != SVt_PVCV)
 		    mg_free(sv);
+		}
 
 		switch (SvTYPE(sv)) {
 		case SVt_NULL:
@@ -929,7 +934,14 @@ Perl_leave_scope(pTHX_ I32 base)
 		    hv_clear(MUTABLE_HV(sv));
 		    break;
 		case SVt_PVCV:
-		    Perl_croak(aTHX_ "panic: leave_scope pad code");
+		{
+		    HEK * const hek = CvNAME_HEK((CV *)sv);
+		    assert(hek);
+		    share_hek_hek(hek);
+		    cv_undef((CV *)sv);
+		    CvNAME_HEK_set(sv, hek);
+		    break;
+		}
 		default:
 		    SvOK_off(sv);
 		    break;
@@ -942,6 +954,19 @@ Perl_leave_scope(pTHX_ I32 base)
 		switch (SvTYPE(sv)) {	/* Console ourselves with a new value */
 		case SVt_PVAV:	*(SV**)ptr = MUTABLE_SV(newAV());	break;
 		case SVt_PVHV:	*(SV**)ptr = MUTABLE_SV(newHV());	break;
+		case SVt_PVCV:
+		{
+		    SV ** const svp = (SV **)ptr;
+
+		    /* Create a stub */
+		    *svp = newSV_type(SVt_PVCV);
+
+		    /* Share name */
+		    assert(CvNAMED(sv));
+		    CvNAME_HEK_set(*svp,
+			share_hek_hek(CvNAME_HEK((CV *)sv)));
+		    break;
+		}
 		default:	*(SV**)ptr = newSV(0);		break;
 		}
 		SvREFCNT_dec(sv);	/* Cast current value to the winds. */
@@ -1167,6 +1192,7 @@ Perl_cx_dump(pTHX_ PERL_CONTEXT *cx)
 #ifdef DEBUGGING
     PerlIO_printf(Perl_debug_log, "CX %ld = %s\n", (long)(cx - cxstack), PL_block_type[CxTYPE(cx)]);
     if (CxTYPE(cx) != CXt_SUBST) {
+	const char *gimme_text;
 	PerlIO_printf(Perl_debug_log, "BLK_OLDSP = %ld\n", (long)cx->blk_oldsp);
 	PerlIO_printf(Perl_debug_log, "BLK_OLDCOP = 0x%"UVxf"\n",
 		      PTR2UV(cx->blk_oldcop));
@@ -1174,7 +1200,21 @@ Perl_cx_dump(pTHX_ PERL_CONTEXT *cx)
 	PerlIO_printf(Perl_debug_log, "BLK_OLDSCOPESP = %ld\n", (long)cx->blk_oldscopesp);
 	PerlIO_printf(Perl_debug_log, "BLK_OLDPM = 0x%"UVxf"\n",
 		      PTR2UV(cx->blk_oldpm));
-	PerlIO_printf(Perl_debug_log, "BLK_GIMME = %s\n", cx->blk_gimme ? "LIST" : "SCALAR");
+	switch (cx->blk_gimme) {
+	    case G_VOID:
+		gimme_text = "VOID";
+		break;
+	    case G_SCALAR:
+		gimme_text = "SCALAR";
+		break;
+	    case G_ARRAY:
+		gimme_text = "LIST";
+		break;
+	    default:
+		gimme_text = "UNKNOWN";
+		break;
+	}
+	PerlIO_printf(Perl_debug_log, "BLK_GIMME = %s\n", gimme_text);
     }
     switch (CxTYPE(cx)) {
     case CXt_NULL:

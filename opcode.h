@@ -291,7 +291,6 @@ EXTCONST char* const PL_op_name[] = {
 	"rv2hv",
 	"helem",
 	"hslice",
-	"boolkeys",
 	"unpack",
 	"pack",
 	"split",
@@ -522,6 +521,9 @@ EXTCONST char* const PL_op_name[] = {
 	"coreargs",
 	"runcv",
 	"fc",
+	"padcv",
+	"introcv",
+	"clonecv",
 	"freed",
 };
 #endif
@@ -673,7 +675,6 @@ EXTCONST char* const PL_op_desc[] = {
 	"hash dereference",
 	"hash element",
 	"hash slice",
-	"boolkeys",
 	"unpack",
 	"pack",
 	"split",
@@ -904,6 +905,9 @@ EXTCONST char* const PL_op_desc[] = {
 	"CORE:: subroutine",
 	"__SUB__",
 	"fc",
+	"private subroutine",
+	"private subroutine",
+	"private subroutine",
 	"freed op",
 };
 #endif
@@ -1069,7 +1073,6 @@ EXT Perl_ppaddr_t PL_ppaddr[] /* or perlvars.h */
 	Perl_pp_rv2hv,	/* implemented by Perl_pp_rv2av */
 	Perl_pp_helem,
 	Perl_pp_hslice,
-	Perl_pp_boolkeys,
 	Perl_pp_unpack,
 	Perl_pp_pack,
 	Perl_pp_split,
@@ -1300,6 +1303,9 @@ EXT Perl_ppaddr_t PL_ppaddr[] /* or perlvars.h */
 	Perl_pp_coreargs,
 	Perl_pp_runcv,
 	Perl_pp_fc,
+	Perl_pp_padcv,
+	Perl_pp_introcv,
+	Perl_pp_clonecv,
 }
 #endif
 #ifdef PERL_PPADDR_INITED
@@ -1461,7 +1467,6 @@ EXT Perl_check_t PL_check[] /* or perlvars.h */
 	Perl_ck_rvconst,	/* rv2hv */
 	Perl_ck_null,		/* helem */
 	Perl_ck_null,		/* hslice */
-	Perl_ck_fun,		/* boolkeys */
 	Perl_ck_fun,		/* unpack */
 	Perl_ck_fun,		/* pack */
 	Perl_ck_split,		/* split */
@@ -1692,6 +1697,9 @@ EXT Perl_check_t PL_check[] /* or perlvars.h */
 	Perl_ck_null,		/* coreargs */
 	Perl_ck_null,		/* runcv */
 	Perl_ck_fun,		/* fc */
+	Perl_ck_null,		/* padcv */
+	Perl_ck_null,		/* introcv */
+	Perl_ck_null,		/* clonecv */
 }
 #endif
 #ifdef PERL_CHECK_INITED
@@ -1847,7 +1855,6 @@ EXTCONST U32 PL_opargs[] = {
 	0x00000148,	/* rv2hv */
 	0x00014204,	/* helem */
 	0x00024401,	/* hslice */
-	0x00004b00,	/* boolkeys */
 	0x00091480,	/* unpack */
 	0x0002140f,	/* pack */
 	0x00111408,	/* split */
@@ -2078,6 +2085,9 @@ EXTCONST U32 PL_opargs[] = {
 	0x00000600,	/* coreargs */
 	0x00000004,	/* runcv */
 	0x00009b8e,	/* fc */
+	0x00000040,	/* padcv */
+	0x00000040,	/* introcv */
+	0x00000040,	/* clonecv */
 };
 #endif
 

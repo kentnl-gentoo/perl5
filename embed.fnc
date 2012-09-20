@@ -74,7 +74,7 @@
 :
 :      The really OLD name for API funcs
 :
-:   o  Has no Perl_foo compatibility macro:
+:   o  Has no Perl_foo or S_foo compatibility macro:
 :
 :         embed.h: suppress "#define foo Perl_foo"
 :
@@ -193,6 +193,8 @@ Apd	|void	|av_clear	|NN AV *av
 Apd	|SV*	|av_delete	|NN AV *av|I32 key|I32 flags
 ApdR	|bool	|av_exists	|NN AV *av|I32 key
 Apd	|void	|av_extend	|NN AV *av|I32 key
+p	|void	|av_extend_guts	|NULLOK AV *av|I32 key|NN SSize_t *maxp \
+				|NN SV ***allocp|NN SV ***arrayp
 ApdR	|SV**	|av_fetch	|NN AV *av|I32 key|I32 lval
 Apd	|void	|av_fill	|NN AV *av|I32 fill
 ApdR	|I32	|av_len		|NN AV *av
@@ -612,7 +614,6 @@ EXp        |UV        |_to_fold_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const
 #endif
 #if defined(PERL_IN_UTF8_C) || defined(PERL_IN_PP_C)
 p	|UV	|_to_upper_title_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const char S_or_s
-ApR	|bool	|_is_utf8_quotemeta|NN const U8 *p
 #endif
 Ap	|UV	|to_uni_lower	|UV c|NN U8 *p|NN STRLEN *lenp
 Amp	|UV	|to_uni_fold	|UV c|NN U8 *p|NN STRLEN *lenp
@@ -658,22 +659,13 @@ ApR	|bool	|is_utf8_print	|NN const U8 *p
 ApR	|bool	|is_utf8_punct	|NN const U8 *p
 ApR	|bool	|is_utf8_xdigit	|NN const U8 *p
 ApR	|bool	|is_utf8_mark	|NN const U8 *p
-EXpR	|bool	|is_utf8_X_begin	|NN const U8 *p
 EXpR	|bool	|is_utf8_X_extend	|NN const U8 *p
-EXpR	|bool	|is_utf8_X_prepend	|NN const U8 *p
-EXpR	|bool	|is_utf8_X_non_hangul	|NN const U8 *p
-EXpR	|bool	|is_utf8_X_L		|NN const U8 *p
-EXpR	|bool	|is_utf8_X_LV		|NN const U8 *p
-EXpR	|bool	|is_utf8_X_LVT		|NN const U8 *p
-EXpR	|bool	|is_utf8_X_LV_LVT_V	|NN const U8 *p
-EXpR	|bool	|is_utf8_X_T		|NN const U8 *p
-EXpR	|bool	|is_utf8_X_V		|NN const U8 *p
+EXpR	|bool	|is_utf8_X_regular_begin|NN const U8 *p
 : Used in perly.y
 p	|OP*	|jmaybe		|NN OP *o
 : Used in pp.c 
 pP	|I32	|keyword	|NN const char *name|I32 len|bool all_keywords
 #if defined(PERL_IN_OP_C)
-s	|OP*	|opt_scalarhv	|NN OP* rep_op
 s	|void	|inplace_aassign	|NN OP* o
 #endif
 Ap	|void	|leave_scope	|I32 base
@@ -1052,7 +1044,6 @@ Ap	|SV*	|regclass_swash	|NULLOK const regexp *prog \
 EMs	|void	|add_alternate	|NN AV** alternate_ptr|NN U8* string|STRLEN len
 EMsR	|SV*	|_new_invlist_C_array|NN UV* list
 : Not used currently: EXMs	|bool	|_invlistEQ	|NN SV* const a|NN SV* const b|bool complement_b
-EMiR	|bool	|_invlist_contains_cp|NN SV* const invlist|const UV cp
 #endif
 Ap	|I32	|pregexec	|NN REGEXP * const prog|NN char* stringarg \
 				|NN char* strend|NN char* strbeg|I32 minend \
@@ -1318,6 +1309,7 @@ Apd	|int	|sv_isa		|NULLOK SV* sv|NN const char *const name
 Apd	|int	|sv_isobject	|NULLOK SV* sv
 Apd	|STRLEN	|sv_len		|NULLOK SV *const sv
 Apd	|STRLEN	|sv_len_utf8	|NULLOK SV *const sv
+p	|STRLEN	|sv_len_utf8_nomg|NN SV *const sv
 Apd	|void	|sv_magic	|NN SV *const sv|NULLOK SV *const obj|const int how \
 				|NULLOK const char *const name|const I32 namlen
 Apd	|MAGIC *|sv_magicext	|NN SV *const sv|NULLOK SV *const obj|const int how \
@@ -1388,18 +1380,18 @@ EsM	|void	|_append_range_to_invlist   |NN SV* const invlist|const UV start|const
 EiMR	|UV*	|_invlist_array_init	|NN SV* const invlist|const bool will_have_0
 EiMR	|UV*	|invlist_array	|NN SV* const invlist
 EsM	|void	|invlist_extend    |NN SV* const invlist|const UV len
-EiMR	|UV*	|get_invlist_len_addr	|NN SV* invlist
 EiMR	|UV*	|get_invlist_zero_addr	|NN SV* invlist
-EiMR	|UV	|invlist_len	|NN SV* const invlist
 EiMR	|UV	|invlist_max	|NN SV* const invlist
-EiM	|void	|invlist_set_len	|NN SV* const invlist|const UV len
+EiM	|void	|invlist_set_len|NN SV* const invlist|const UV len
+EiMR	|IV*	|get_invlist_previous_index_addr|NN SV* invlist
+EiMR	|IV	|invlist_previous_index|NN SV* const invlist
+EiM	|void	|invlist_set_previous_index|NN SV* const invlist|const IV index
 EiM	|void	|invlist_trim	|NN SV* const invlist
 EiMR	|SV*	|invlist_clone	|NN SV* const invlist
 EiMR	|UV*	|get_invlist_iter_addr	|NN SV* invlist
 EiMR	|UV*	|get_invlist_version_id_addr	|NN SV* invlist
 EiM	|void	|invlist_iterinit|NN SV* invlist
 EsMR	|bool	|invlist_iternext|NN SV* invlist|NN UV* start|NN UV* end
-EXpMR	|IV	|_invlist_search	|NN SV* const invlist|const UV cp
 EiMR	|UV	|invlist_highest|NN SV* const invlist
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_UTF8_C)
@@ -1417,11 +1409,14 @@ EXMpR	|SV*	|_add_range_to_invlist	|NULLOK SV* invlist|const UV start|const UV en
 EXMp	|void	|_invlist_populate_swatch   |NN SV* const invlist|const UV start|const UV end|NN U8* swatch
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C) || defined(PERL_IN_UTF8_C)
-EXp	|SV*	|_core_swash_init|NN const char* pkg|NN const char* name|NN SV* listsv|I32 minbits \
-                |I32 none|bool return_if_undef|NULLOK SV* invlist \
-		|bool passed_in_invlist_has_user_defined_property
+EXp	|SV*	|_core_swash_init|NN const char* pkg|NN const char* name \
+		|NN SV* listsv|I32 minbits|I32 none \
+		|NULLOK SV* invlist|NULLOK U8* const flags_p
 EXMpR	|SV*	|_invlist_contents|NN SV* const invlist
-EXMpR	|bool	|_is_swash_user_defined|NN SV* const swash
+EiMR	|UV*	|_get_invlist_len_addr	|NN SV* invlist
+EiMR	|UV	|_invlist_len	|NN SV* const invlist
+EMiR	|bool	|_invlist_contains_cp|NN SV* const invlist|const UV cp
+EXpMR	|IV	|_invlist_search	|NN SV* const invlist|const UV cp
 EXMpR	|SV*	|_get_swash_invlist|NN SV* const swash
 #endif
 Ap	|void	|taint_env
@@ -1472,7 +1467,6 @@ ApMd	|U8*	|bytes_from_utf8|NN const U8 *s|NN STRLEN *len|NULLOK bool *is_utf8
 ApMd	|U8*	|bytes_to_utf8	|NN const U8 *s|NN STRLEN *len
 ApdD	|UV	|utf8_to_uvchr	|NN const U8 *s|NULLOK STRLEN *retlen
 ApdD	|UV	|utf8_to_uvuni	|NN const U8 *s|NULLOK STRLEN *retlen
-ApM	|UV	|valid_utf8_to_uvchr	|NN const U8 *s|NULLOK STRLEN *retlen
 ApM	|UV	|valid_utf8_to_uvuni	|NN const U8 *s|NULLOK STRLEN *retlen
 Apd	|UV	|utf8_to_uvchr_buf	|NN const U8 *s|NN const U8 *send|NULLOK STRLEN *retlen
 Apd	|UV	|utf8_to_uvuni_buf	|NN const U8 *s|NN const U8 *send|NULLOK STRLEN *retlen
@@ -1480,8 +1474,10 @@ pM	|bool	|check_utf8_print	|NN const U8 *s|const STRLEN len
 
 #ifdef EBCDIC
 Adp	|UV	|utf8n_to_uvchr	|NN const U8 *s|STRLEN curlen|NULLOK STRLEN *retlen|U32 flags
+ApM	|UV	|valid_utf8_to_uvchr	|NN const U8 *s|NULLOK STRLEN *retlen
 #else
 Adpbm	|UV	|utf8n_to_uvchr	|NN const U8 *s|STRLEN curlen|NULLOK STRLEN *retlen|U32 flags
+ApbmM	|UV	|valid_utf8_to_uvchr	|NN const U8 *s|NULLOK STRLEN *retlen
 #endif
 
 Adp	|UV	|utf8n_to_uvuni	|NN const U8 *s|STRLEN curlen|NULLOK STRLEN *retlen|U32 flags
@@ -1631,12 +1627,8 @@ Ap	|CV*	|newATTRSUB	|I32 floor|NULLOK OP *o|NULLOK OP *proto|NULLOK OP *attrs|NU
 p	|CV*	|newATTRSUB_flags|I32 floor|NULLOK OP *o|NULLOK OP *proto \
 				 |NULLOK OP *attrs|NULLOK OP *block \
 				 |U32 flags
-#ifdef PERL_MAD
-Apr	|OP *	|newMYSUB	|I32 floor|NULLOK OP *o|NULLOK OP *proto \
+Ap	|CV *	|newMYSUB	|I32 floor|NN OP *o|NULLOK OP *proto \
 				|NULLOK OP *attrs|NULLOK OP *block
-#else
-Apr	|void	|newMYSUB	|I32 floor|NULLOK OP *o|NULLOK OP *proto|NULLOK OP *attrs|NULLOK OP *block
-#endif
 p	|CV*	|newSTUB	|NN GV *gv|bool fake
 : Used in perly.y
 p	|OP *	|my_attrs	|NN OP *o|NULLOK OP *attrs
@@ -1711,7 +1703,6 @@ sR	|I32	|do_trans_complex_utf8	|NN SV * const sv
 #if defined(PERL_IN_GV_C)
 s	|void	|gv_init_svtype	|NN GV *gv|const svtype sv_type
 s	|void	|gv_magicalize_isa	|NN GV *gv
-s	|HV*	|gv_get_super_pkg|NN const char* name|I32 namelen|U32 flags
 s	|HV*	|require_tie_mod|NN GV *gv|NN const char *varpv|NN SV* namesv \
 				|NN const char *methpv|const U32 flags
 #endif
@@ -1791,14 +1782,12 @@ Xp	|void	|Slab_Free	|NN void *op
 #if defined(PERL_DEBUG_READONLY_OPS)
 #    if defined(PERL_CORE)
 px	|void	|Slab_to_ro	|NN OPSLAB *slab
+px	|void	|Slab_to_rw	|NN OPSLAB *const slab
 #    endif
 : Used in OpREFCNT_inc() in sv.c
 poxM	|OP *	|op_refcnt_inc	|NULLOK OP *o
 : FIXME - can be static.
 poxM	|PADOFFSET	|op_refcnt_dec	|NN OP *o
-#    if defined(PERL_IN_OP_C)
-s	|void	|Slab_to_rw	|NN void *op
-#    endif
 #endif
 
 #if defined(PERL_IN_PERL_C)
@@ -2012,9 +2001,9 @@ Es	|U8	|regtail_study	|NN struct RExC_state_t *pRExC_state \
 #endif
 
 #if defined(PERL_IN_REGEXEC_C)
-ERs	|I32	|regmatch	|NN regmatch_info *reginfo|NN regnode *prog
-ERs	|I32	|regrepeat	|NN const regexp *prog|NN const regnode *p|I32 max|int depth
-ERs	|I32	|regtry		|NN regmatch_info *reginfo|NN char **startpos
+ERs	|I32	|regmatch	|NN regmatch_info *reginfo|NN char *startpos|NN regnode *prog
+ERs	|I32	|regrepeat	|NN const regexp *prog|NN char **startposp|NN const regnode *p|I32 max|int depth
+ERs	|I32	|regtry		|NN regmatch_info *reginfo|NN char **startposp
 ERs	|bool	|reginclass	|NULLOK const regexp * const prog|NN const regnode * const n|NN const U8 * const p|NULLOK STRLEN *lenp\
 				|bool const do_utf8sv_is_utf8
 Es	|CHECKPOINT|regcppush	|NN const regexp *rex|I32 parenfloor
@@ -2023,6 +2012,8 @@ ERsn	|U8*	|reghop3	|NN U8 *s|I32 off|NN const U8 *lim
 ERsM	|SV*	|core_regclass_swash|NULLOK const regexp *prog \
 				|NN const struct regnode *node|bool doinit \
 				|NULLOK SV **listsvp|NULLOK SV **altsvp
+:not currently used EiR	|bool	|is_utf8_X_LV		|NN const U8 *p
+EiR	|bool	|is_utf8_X_LVT		|NN const U8 *p
 #ifdef XXX_dmq
 ERsn	|U8*	|reghop4	|NN U8 *s|I32 off|NN const U8 *llim \
 				|NN const U8 *rlim
@@ -2152,12 +2143,14 @@ s	|U8*	|add_utf16_textfilter|NN U8 *const s|bool reversed
 s	|void	|checkcomma	|NN const char *s|NN const char *name \
 				|NN const char *what
 s	|void	|force_ident	|NN const char *s|int kind
+s	|void	|force_ident_maybe_lex|char pit
 s	|void	|incline	|NN const char *s
 s	|int	|intuit_method	|NN char *s|NULLOK GV *gv|NULLOK CV *cv
 s	|int	|intuit_more	|NN char *s
 s	|I32	|lop		|I32 f|int x|NN char *s
 rs	|void	|missingterm	|NULLOK char *s
 s	|void	|no_op		|NN const char *const what|NULLOK char *s
+s	|int	|pending_ident
 sR	|I32	|sublex_done
 sR	|I32	|sublex_push
 sR	|I32	|sublex_start
@@ -2319,7 +2312,7 @@ Apd	|void	|pad_setsv	|PADOFFSET po|NN SV* sv
 #endif
 pd	|void	|pad_block_start|int full
 pd	|U32	|intro_my
-pd	|void	|pad_leavemy
+pd	|OP *	|pad_leavemy
 pd	|void	|pad_swipe	|PADOFFSET po|bool refadjust
 #if defined(PERL_IN_PAD_C)
 sd	|void	|pad_reset
@@ -2333,15 +2326,19 @@ sd	|void	|cv_dump	|NN const CV *cv|NN const char *title
 #  endif
 #endif
 Apd	|CV*	|cv_clone	|NN CV* proto
+pd	|CV*	|cv_clone_into	|NN CV* proto|NN CV *target
 pd	|void	|pad_fixup_inner_anons|NN PADLIST *padlist|NN CV *old_cv|NN CV *new_cv
 pdX	|void	|pad_push	|NN PADLIST *padlist|int depth
 ApdR	|HV*	|pad_compname_type|const PADOFFSET po
 #if defined(USE_ITHREADS)
-pdR	|AV*	|padlist_dup	|NULLOK AV *srcpad|NN CLONE_PARAMS *param
+pdR	|PADLIST *|padlist_dup	|NULLOK PADLIST *srcpad \
+				|NN CLONE_PARAMS *param
 #endif
+p	|PAD **	|padlist_store	|NN PADLIST *padlist|I32 key \
+				|NULLOK PAD *val
 
 ApdR	|CV*	|find_runcv	|NULLOK U32 *db_seqp
-pR	|CV*	|find_runcv_where|U8 cond|NULLOK void *arg \
+pR	|CV*	|find_runcv_where|U8 cond|IV arg \
 				 |NULLOK U32 *db_seqp
 : Only used in perl.c
 p	|void	|free_tied_hv_pool

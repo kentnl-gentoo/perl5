@@ -1,5 +1,5 @@
 name: perl
-version: 5.017003
+version: 5.017004
 abstract: The Perl 5 language interpreter
 author: perl5-porters@perl.org
 license: perl
@@ -57,6 +57,7 @@ no_index:
     - dist/Tie-File
     - dist/XSLoader
     - lib/version
+    - mad
     - win32
   file:
     - autodoc.pl

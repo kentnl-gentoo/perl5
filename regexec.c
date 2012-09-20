@@ -80,6 +80,9 @@
 #  include "regcomp.h"
 #endif
 
+#include "inline_invlist.c"
+#include "unicode_constants.h"
+
 #define RF_tainted	1	/* tainted information used? e.g. locale */
 #define RF_warned	2		/* warned about big count? */
 
@@ -119,20 +122,13 @@
 #define HOP3c(pos,off,lim) ((char*)HOP3(pos,off,lim))
 
 /* these are unrolled below in the CCC_TRY_XXX defined */
-#ifdef EBCDIC
-    /* Often 'str' is a hard-coded utf8 string instead of utfebcdic. so just
-     * skip the check on EBCDIC platforms */
-#   define LOAD_UTF8_CHARCLASS(class,str) LOAD_UTF8_CHARCLASS_NO_CHECK(class)
-#else
-#   define LOAD_UTF8_CHARCLASS(class,str) STMT_START { \
+#define LOAD_UTF8_CHARCLASS(class,str) STMT_START { \
     if (!CAT2(PL_utf8_,class)) { \
 	bool ok; \
 	ENTER; save_re_context(); \
 	ok=CAT2(is_utf8_,class)((const U8*)str); \
         PERL_UNUSED_VAR(ok); \
 	assert(ok); assert(CAT2(PL_utf8_,class)); LEAVE; } } STMT_END
-#endif
-
 /* Doesn't do an assert to verify that is correct */
 #define LOAD_UTF8_CHARCLASS_NO_CHECK(class) STMT_START { \
     if (!CAT2(PL_utf8_,class)) { \
@@ -146,21 +142,10 @@
 #define LOAD_UTF8_CHARCLASS_SPACE() LOAD_UTF8_CHARCLASS(space," ")
 
 #define LOAD_UTF8_CHARCLASS_GCB()  /* Grapheme cluster boundaries */        \
-	LOAD_UTF8_CHARCLASS(X_begin, " ");                                  \
-	LOAD_UTF8_CHARCLASS(X_non_hangul, "A");                             \
-	/* These are utf8 constants, and not utf-ebcdic constants, so the   \
-	    * assert should likely and hopefully fail on an EBCDIC machine */ \
-	LOAD_UTF8_CHARCLASS(X_extend, "\xcc\x80"); /* U+0300 */             \
-									    \
-	/* No asserts are done for these, in case called on an early        \
-	    * Unicode version in which they map to nothing */               \
-	LOAD_UTF8_CHARCLASS_NO_CHECK(X_prepend);/* U+0E40 "\xe0\xb9\x80" */ \
-	LOAD_UTF8_CHARCLASS_NO_CHECK(X_L);	    /* U+1100 "\xe1\x84\x80" */ \
-	LOAD_UTF8_CHARCLASS_NO_CHECK(X_LV);     /* U+AC00 "\xea\xb0\x80" */ \
-	LOAD_UTF8_CHARCLASS_NO_CHECK(X_LVT);    /* U+AC01 "\xea\xb0\x81" */ \
-	LOAD_UTF8_CHARCLASS_NO_CHECK(X_LV_LVT_V);/* U+AC01 "\xea\xb0\x81" */\
-	LOAD_UTF8_CHARCLASS_NO_CHECK(X_T);      /* U+11A8 "\xe1\x86\xa8" */ \
-	LOAD_UTF8_CHARCLASS_NO_CHECK(X_V)       /* U+1160 "\xe1\x85\xa0" */  
+        /* No asserts are done for some of these, in case called on a   */  \
+        /* Unicode version in which they map to nothing */                  \
+	LOAD_UTF8_CHARCLASS(X_regular_begin, HYPHEN_UTF8);                          \
+	LOAD_UTF8_CHARCLASS(X_extend, COMBINING_GRAVE_ACCENT_UTF8);         \
 
 #define PLACEHOLDER	/* Something for the preprocessor to grab onto */
 
@@ -510,10 +495,13 @@ S_regcp_restore(pTHX_ regexp *rex, I32 ix)
 I32
 Perl_pregexec(pTHX_ REGEXP * const prog, char* stringarg, register char *strend,
 	 char *strbeg, I32 minend, SV *screamer, U32 nosave)
-/* strend: pointer to null at end of string */
-/* strbeg: real beginning of string */
-/* minend: end of match must be >=minend after stringarg. */
-/* nosave: For optimizations. */
+/* stringarg: the point in the string at which to begin matching */
+/* strend:    pointer to null at end of string */
+/* strbeg:    real beginning of string */
+/* minend:    end of match must be >= minend bytes after stringarg. */
+/* screamer:  SV being matched: only used for utf8 flag, pos() etc; string
+ *            itself is accessed via the pointers above */
+/* nosave:    For optimizations. */
 {
     PERL_ARGS_ASSERT_PREGEXEC;
 
@@ -2059,13 +2047,17 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 I32
 Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, register char *strend,
 	      char *strbeg, I32 minend, SV *sv, void *data, U32 flags)
-/* strend: pointer to null at end of string */
-/* strbeg: real beginning of string */
-/* minend: end of match must be >=minend after stringarg. */
-/* data: May be used for some additional optimizations. 
-         Currently its only used, with a U32 cast, for transmitting 
-         the ganch offset when doing a /g match. This will change */
-/* nosave: For optimizations. */
+/* stringarg: the point in the string at which to begin matching */
+/* strend:    pointer to null at end of string */
+/* strbeg:    real beginning of string */
+/* minend:    end of match must be >= minend bytes after stringarg. */
+/* sv:        SV being matched: only used for utf8 flag, pos() etc; string
+ *            itself is accessed via the pointers above */
+/* data:      May be used for some additional optimizations.
+              Currently its only used, with a U32 cast, for transmitting
+              the ganch offset when doing a /g match. This will change */
+/* nosave:    For optimizations. */
+
 {
     dVAR;
     struct regexp *const prog = (struct regexp *)SvANY(rx);
@@ -2567,9 +2559,7 @@ got_it:
 
     /* make sure $`, $&, $', and $digit will work later */
     if ( !(flags & REXEC_NOT_FIRST) ) {
-	RX_MATCH_COPY_FREE(rx);
 	if (flags & REXEC_COPY_STR) {
-	    const I32 i = PL_regeol - startpos + (stringarg - strbeg);
 #ifdef PERL_OLD_COPY_ON_WRITE
 	    if ((SvIsCOW(sv)
 		 || (SvFLAGS(sv) & CAN_COW_MASK) == CAN_COW_FLAGS)) {
@@ -2578,20 +2568,109 @@ got_it:
 				  "Copy on write: regexp capture, type %d\n",
 				  (int) SvTYPE(sv));
 		}
+                RX_MATCH_COPY_FREE(rx);
 		prog->saved_copy = sv_setsv_cow(prog->saved_copy, sv);
 		prog->subbeg = (char *)SvPVX_const(prog->saved_copy);
 		assert (SvPOKp(prog->saved_copy));
+                prog->sublen  = PL_regeol - strbeg;
+                prog->suboffset = 0;
+                prog->subcoffset = 0;
 	    } else
 #endif
 	    {
-		RX_MATCH_COPIED_on(rx);
-		s = savepvn(strbeg, i);
-		prog->subbeg = s;
+                I32 min = 0;
+                I32 max = PL_regeol - strbeg;
+                I32 sublen;
+
+                if (    (flags & REXEC_COPY_SKIP_POST)
+                    && !(RX_EXTFLAGS(rx) & RXf_PMf_KEEPCOPY) /* //p */
+                    && !(PL_sawampersand & SAWAMPERSAND_RIGHT)
+                ) { /* don't copy $' part of string */
+                    U32 n = 0;
+                    max = -1;
+                    /* calculate the right-most part of the string covered
+                     * by a capture. Due to look-ahead, this may be to
+                     * the right of $&, so we have to scan all captures */
+                    while (n <= prog->lastparen) {
+                        if (prog->offs[n].end > max)
+                            max = prog->offs[n].end;
+                        n++;
+                    }
+                    if (max == -1)
+                        max = (PL_sawampersand & SAWAMPERSAND_LEFT)
+                                ? prog->offs[0].start
+                                : 0;
+                    assert(max >= 0 && max <= PL_regeol - strbeg);
+                }
+
+                if (    (flags & REXEC_COPY_SKIP_PRE)
+                    && !(RX_EXTFLAGS(rx) & RXf_PMf_KEEPCOPY) /* //p */
+                    && !(PL_sawampersand & SAWAMPERSAND_LEFT)
+                ) { /* don't copy $` part of string */
+                    U32 n = 0;
+                    min = max;
+                    /* calculate the left-most part of the string covered
+                     * by a capture. Due to look-behind, this may be to
+                     * the left of $&, so we have to scan all captures */
+                    while (min && n <= prog->lastparen) {
+                        if (   prog->offs[n].start != -1
+                            && prog->offs[n].start < min)
+                        {
+                            min = prog->offs[n].start;
+                        }
+                        n++;
+                    }
+                    if ((PL_sawampersand & SAWAMPERSAND_RIGHT)
+                        && min >  prog->offs[0].end
+                    )
+                        min = prog->offs[0].end;
+
+                }
+
+                assert(min >= 0 && min <= max && min <= PL_regeol - strbeg);
+                sublen = max - min;
+
+                if (RX_MATCH_COPIED(rx)) {
+                    if (sublen > prog->sublen)
+                        prog->subbeg =
+                                (char*)saferealloc(prog->subbeg, sublen+1);
+                }
+                else
+                    prog->subbeg = (char*)safemalloc(sublen+1);
+                Copy(strbeg + min, prog->subbeg, sublen, char);
+                prog->subbeg[sublen] = '\0';
+                prog->suboffset = min;
+                prog->sublen = sublen;
+                RX_MATCH_COPIED_on(rx);
 	    }
-	    prog->sublen = i;
+            prog->subcoffset = prog->suboffset;
+            if (prog->suboffset && utf8_target) {
+                /* Convert byte offset to chars.
+                 * XXX ideally should only compute this if @-/@+
+                 * has been seen, a la PL_sawampersand ??? */
+
+                /* If there's a direct correspondence between the
+                 * string which we're matching and the original SV,
+                 * then we can use the utf8 len cache associated with
+                 * the SV. In particular, it means that under //g,
+                 * sv_pos_b2u() will use the previously cached
+                 * position to speed up working out the new length of
+                 * subcoffset, rather than counting from the start of
+                 * the string each time. This stops
+                 *   $x = "\x{100}" x 1E6; 1 while $x =~ /(.)/g;
+                 * from going quadratic */
+                if (SvPOKp(sv) && SvPVX(sv) == strbeg)
+                    sv_pos_b2u(sv, &(prog->subcoffset));
+                else
+                    prog->subcoffset = utf8_length((U8*)strbeg,
+                                        (U8*)(strbeg+prog->suboffset));
+            }
 	}
 	else {
+            RX_MATCH_COPY_FREE(rx);
 	    prog->subbeg = strbeg;
+	    prog->suboffset = 0;
+	    prog->subcoffset = 0;
 	    prog->sublen = PL_regeol - strbeg;	/* strend may have been modified */
 	}
     }
@@ -2633,12 +2712,13 @@ phooey:
  - regtry - try match at specific point
  */
 STATIC I32			/* 0 failure, 1 success */
-S_regtry(pTHX_ regmatch_info *reginfo, char **startpos)
+S_regtry(pTHX_ regmatch_info *reginfo, char **startposp)
 {
     dVAR;
     CHECKPOINT lastcp;
     REGEXP *const rx = reginfo->prog;
     regexp *const prog = (struct regexp *)SvANY(rx);
+    I32 result;
     RXi_GET_DECL(prog,progi);
     GET_RE_DEBUG_FLAGS_DECL;
 
@@ -2696,6 +2776,8 @@ S_regtry(pTHX_ regmatch_info *reginfo, char **startpos)
 		$` inside (?{}) could fail... */
 	    PL_reg_oldsaved = prog->subbeg;
 	    PL_reg_oldsavedlen = prog->sublen;
+	    PL_reg_oldsavedoffset = prog->suboffset;
+	    PL_reg_oldsavedcoffset = prog->suboffset;
 #ifdef PERL_OLD_COPY_ON_WRITE
 	    PL_nrs = prog->saved_copy;
 #endif
@@ -2704,13 +2786,14 @@ S_regtry(pTHX_ regmatch_info *reginfo, char **startpos)
 	else
 	    PL_reg_oldsaved = NULL;
 	prog->subbeg = PL_bostr;
+	prog->suboffset = 0;
+	prog->subcoffset = 0;
 	prog->sublen = PL_regeol - PL_bostr; /* strend may have been modified */
     }
 #ifdef DEBUGGING
-    PL_reg_starttry = *startpos;
+    PL_reg_starttry = *startposp;
 #endif
-    prog->offs[0].start = *startpos - PL_bostr;
-    PL_reginput = *startpos;
+    prog->offs[0].start = *startposp - PL_bostr;
     prog->lastparen = 0;
     prog->lastcloseparen = 0;
     PL_regsize = 0;
@@ -2740,12 +2823,13 @@ S_regtry(pTHX_ regmatch_info *reginfo, char **startpos)
     }
 #endif
     REGCP_SET(lastcp);
-    if (regmatch(reginfo, progi->program + 1)) {
-	prog->offs[0].end = PL_reginput - PL_bostr;
+    result = regmatch(reginfo, *startposp, progi->program + 1);
+    if (result != -1) {
+	prog->offs[0].end = result;
 	return 1;
     }
     if (reginfo->cutpoint)
-        *startpos= reginfo->cutpoint;
+        *startposp= reginfo->cutpoint;
     REGCP_UNWIND(lastcp);
     return 0;
 }
@@ -2797,17 +2881,20 @@ S_push_slab(pTHX)
 
 /* push a new state then goto it */
 
-#define PUSH_STATE_GOTO(state, node) \
+#define PUSH_STATE_GOTO(state, node, input) \
+    pushinput = input; \
     scan = node; \
     st->resume_state = state; \
     goto push_state;
 
 /* push a new state with success backtracking, then goto it */
 
-#define PUSH_YES_STATE_GOTO(state, node) \
+#define PUSH_YES_STATE_GOTO(state, node, input) \
+    pushinput = input; \
     scan = node; \
     st->resume_state = state; \
     goto push_yes_state;
+
 
 
 
@@ -2876,7 +2963,7 @@ implementation:
 	// push a yes backtrack state with a resume value of
 	// IFMATCH_A/IFMATCH_A_fail, then continue execution at the
 	// first node of A:
-	PUSH_YES_STATE_GOTO(IFMATCH_A, A);
+	PUSH_YES_STATE_GOTO(IFMATCH_A, A, newinput);
 	// NOTREACHED
 
     case IFMATCH_A: // we have successfully executed A; now continue with B
@@ -2913,8 +3000,8 @@ The topmost backtrack state, pointed to by st, is usually free. If you
 want to claim it, populate any ST.foo fields in it with values you wish to
 save, then do one of
 
-	PUSH_STATE_GOTO(resume_state, node);
-	PUSH_YES_STATE_GOTO(resume_state, node);
+	PUSH_STATE_GOTO(resume_state, node, newinput);
+	PUSH_YES_STATE_GOTO(resume_state, node, newinput);
 
 which sets that backtrack state's resume value to 'resume_state', pushes a
 new free entry to the top of the backtrack stack, then goes to 'node'.
@@ -3106,8 +3193,9 @@ S_clear_backtrack_stack(pTHX_ void *p)
 }
 
 
-STATIC I32			/* 0 failure, 1 success */
-S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
+/* returns -1 on failure, $+[0] on success */
+STATIC I32
+S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 {
 #if PERL_VERSION < 9 && !defined(PERL_CORE)
     dMY_CXT;
@@ -3126,7 +3214,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
     regnode *next;
     U32 n = 0;	/* general value; init to avoid compiler warning */
     I32 ln = 0; /* len or last;  init to avoid compiler warning */
-    char *locinput = PL_reginput;
+    char *locinput = startpos;
+    char *pushinput; /* where to continue after a PUSH */
     I32 nextchr;   /* is always set to UCHARAT(locinput) */
 
     bool result = 0;	    /* return value of S_regmatch */
@@ -3145,7 +3234,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
     U32 state_num;
     bool no_final = 0;      /* prevent failure from backtracking? */
     bool do_cutgroup = 0;   /* no_final only until next branch/trie entry */
-    char *startpoint = PL_reginput;
+    char *startpoint = locinput;
     SV *popmark = NULL;     /* are we looking for a mark? */
     SV *sv_commit = NULL;   /* last mark name seen in failure */
     SV *sv_yes_mark = NULL; /* last mark name we have seen 
@@ -3262,9 +3351,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 	case KEEPS:
 	    /* update the startpoint */
 	    st->u.keeper.val = rex->offs[0].start;
-	    PL_reginput = locinput;
 	    rex->offs[0].start = locinput - PL_bostr;
-	    PUSH_STATE_GOTO(KEEPS_next, next);
+	    PUSH_STATE_GOTO(KEEPS_next, next, locinput);
 	    /*NOT-REACHED*/
 	case KEEPS_next_fail:
 	    /* rollback the start point change */
@@ -3519,6 +3607,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 	    assert(0); /* NOTREACHED */
 
 	case TRIE_next_fail: /* we failed - try next alternative */
+        {
+            U8 *uc;
             if ( ST.jump) {
                 REGCP_UNWIND(ST.cp);
                 UNWIND_PAREN(ST.lastparen, ST.lastcloseparen);
@@ -3563,7 +3653,6 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 	    /* find start char of end of current word */
 	    {
 		U32 chars; /* how many chars to skip */
-		U8 *uc = ST.firstpos;
 		reg_trie_data * const trie
 		    = (reg_trie_data*)rexi->data->data[ARG(ST.me)];
 
@@ -3571,6 +3660,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 			    >=  ST.firstchars);
 		chars = (trie->wordinfo[ST.nextword].len - trie->prefixlen)
 			    - ST.firstchars;
+		uc = ST.firstpos;
 
 		if (ST.longfold) {
 		    /* the hard option - fold each char in turn and find
@@ -3610,7 +3700,6 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		    else
 			uc += chars;
 		}
-		PL_reginput = (char *)uc;
 	    }
 
 	    scan = ST.me + ((ST.jump && ST.jump[ST.nextword])
@@ -3628,7 +3717,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 	    });
 
 	    if (ST.accepted > 1 || has_cutgroup) {
-		PUSH_STATE_GOTO(TRIE_next, scan);
+		PUSH_STATE_GOTO(TRIE_next, scan, (char*)uc);
 		assert(0); /* NOTREACHED */
 	    }
 	    /* only one choice left - just continue */
@@ -3651,10 +3740,11 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		    PL_colors[5] );
 	    });
 
-	    locinput = PL_reginput;
+	    locinput = (char*)uc;
 	    nextchr = UCHARAT(locinput);
 	    continue; /* execute rest of RE */
 	    assert(0); /* NOTREACHED */
+        }
 #undef  ST
 
 	case EXACT: {
@@ -3666,31 +3756,56 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		const char * const e = s + ln;
 
 		if (utf8_target) {
-		    /* The target is utf8, the pattern is not utf8. */
+                    /* The target is utf8, the pattern is not utf8.
+                     * Above-Latin1 code points can't match the pattern;
+                     * invariants match exactly, and the other Latin1 ones need
+                     * to be downgraded to a single byte in order to do the
+                     * comparison.  (If we could be confident that the target
+                     * is not malformed, this could be refactored to have fewer
+                     * tests by just assuming that if the first bytes match, it
+                     * is an invariant, but there are tests in the test suite
+                     * dealing with (??{...}) which violate this) */
 		    while (s < e) {
-			STRLEN ulen;
 			if (l >= PL_regeol)
 			     sayNO;
-			if (NATIVE_TO_UNI(*(U8*)s) !=
-			    utf8n_to_uvuni((U8*)l, UTF8_MAXBYTES, &ulen,
-					    uniflags))
-			     sayNO;
-			l += ulen;
-			s ++;
+                        if (UTF8_IS_ABOVE_LATIN1(* (U8*) l)) {
+                            sayNO;
+                        }
+                        if (UTF8_IS_INVARIANT(*(U8*)l)) {
+			    if (*l != *s) {
+                                sayNO;
+                            }
+                            l++;
+                        }
+                        else {
+                            if (TWO_BYTE_UTF8_TO_UNI(*l, *(l+1)) != * (U8*) s) {
+                                sayNO;
+                            }
+                            l += 2;
+                        }
+			s++;
 		    }
 		}
 		else {
 		    /* The target is not utf8, the pattern is utf8. */
 		    while (s < e) {
-			STRLEN ulen;
-			if (l >= PL_regeol)
-			    sayNO;
-			if (NATIVE_TO_UNI(*((U8*)l)) !=
-			    utf8n_to_uvuni((U8*)s, UTF8_MAXBYTES, &ulen,
-					   uniflags))
-			    sayNO;
-			s += ulen;
-			l ++;
+                        if (l >= PL_regeol || UTF8_IS_ABOVE_LATIN1(* (U8*) s))
+                        {
+                            sayNO;
+                        }
+                        if (UTF8_IS_INVARIANT(*(U8*)s)) {
+			    if (*s != *l) {
+                                sayNO;
+                            }
+                            s++;
+                        }
+                        else {
+                            if (TWO_BYTE_UTF8_TO_UNI(*s, *(s+1)) != * (U8*) l) {
+                                sayNO;
+                            }
+                            s += 2;
+                        }
+			l++;
 		    }
 		}
 		locinput = l;
@@ -3924,43 +4039,20 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 	       | Prepend* Begin Extend*
 	       | .
 
-	       Begin is (Hangul-syllable | ! Control)
-	       Extend is (Grapheme_Extend | Spacing_Mark)
-	       Control is [ GCB_Control CR LF ]
+               Begin is:           ( Special_Begin | ! Control )
+               Special_Begin is:   ( Regional-Indicator+ | Hangul-syllable )
+               Extend is:          ( Grapheme_Extend | Spacing_Mark )
+               Control is:         [ GCB_Control  CR  LF ]
+               Hangul-syllable is: ( T+ | ( L* ( L | ( LVT | ( V | LV ) V* ) T* ) ))
 
-	       The discussion below shows how the code for CLUMP is derived
-	       from this regex.  Note that most of these concepts are from
-	       property values of the Grapheme Cluster Boundary (GCB) property.
-	       No code point can have multiple property values for a given
-	       property.  Thus a code point in Prepend can't be in Control, but
-	       it must be in !Control.  This is why Control above includes
-	       GCB_Control plus CR plus LF.  The latter two are used in the GCB
-	       property separately, and so can't be in GCB_Control, even though
-	       they logically are controls.  Control is not the same as gc=cc,
-	       but includes format and other characters as well.
+               If we create a 'Regular_Begin' = Begin - Special_Begin, then
+               we can rewrite
 
-	       The Unicode definition of Hangul-syllable is:
-		   L+
-		   | (L* ( ( V | LV ) V* | LVT ) T*)
-		   | T+ 
-		  )
-	       Each of these is a value for the GCB property, and hence must be
-	       disjoint, so the order they are tested is immaterial, so the
-	       above can safely be changed to
-		   T+
-		   | L+
-		   | (L* ( LVT | ( V | LV ) V*) T*)
+                   Begin is ( Regular_Begin + Special Begin )
 
-	       The last two terms can be combined like this:
-		   L* ( L
-		        | (( LVT | ( V | LV ) V*) T*))
-
-	       And refactored into this:
-		   L* (L | LVT T* | V  V* T* | LV  V* T*)
-
-	       That means that if we have seen any L's at all we can quit
-	       there, but if the next character is an LVT, a V, or an LV we
-	       should keep going.
+               It turns out that 98.4% of all Unicode code points match
+               Regular_Begin.  Doing it this way eliminates a table match in
+               the previous implementation for almost all Unicode code points.
 
 	       There is a subtlety with Prepend* which showed up in testing.
 	       Note that the Begin, and only the Begin is required in:
@@ -3992,6 +4084,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		    locinput += 2;
 		}
 		else {
+                    STRLEN len;
+
 		    /* In case have to backtrack to beginning, then match '.' */
 		    char *starting = locinput;
 
@@ -4000,22 +4094,23 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 
 		    LOAD_UTF8_CHARCLASS_GCB();
 
-		    /* Match (prepend)* */
-		    while (locinput < PL_regeol
-			   && swash_fetch(PL_utf8_X_prepend,
-					  (U8*)locinput, utf8_target))
-		    {
-			previous_prepend = locinput;
-			locinput += UTF8SKIP(locinput);
-		    }
+                    /* Match (prepend)*   */
+                    while (locinput < PL_regeol
+                           && (len = is_GCB_Prepend_utf8(locinput)))
+                    {
+                        previous_prepend = locinput;
+                        locinput += len;
+                    }
 
 		    /* As noted above, if we matched a prepend character, but
 		     * the next thing won't match, back off the last prepend we
 		     * matched, as it is guaranteed to match the begin */
 		    if (previous_prepend
 			&& (locinput >=  PL_regeol
-			    || ! swash_fetch(PL_utf8_X_begin,
-					     (U8*)locinput, utf8_target)))
+			    || (! swash_fetch(PL_utf8_X_regular_begin,
+					     (U8*)locinput, utf8_target)
+			         && ! is_GCB_SPECIAL_BEGIN_utf8(locinput)))
+                        )
 		    {
 			locinput = previous_prepend;
 		    }
@@ -4025,105 +4120,97 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		     * moved locinput forward, we tested the result just above
 		     * and it either passed, or we backed off so that it will
 		     * now pass */
-		    if (! swash_fetch(PL_utf8_X_begin, (U8*)locinput, utf8_target)) {
+		    if (swash_fetch(PL_utf8_X_regular_begin,
+                                    (U8*)locinput, utf8_target)) {
+                        locinput += UTF8SKIP(locinput);
+                    }
+                    else if (! is_GCB_SPECIAL_BEGIN_utf8(locinput)) {
 
 			/* Here did not match the required 'Begin' in the
 			 * second term.  So just match the very first
 			 * character, the '.' of the final term of the regex */
 			locinput = starting + UTF8SKIP(starting);
+                        goto exit_utf8;
 		    } else {
 
-			/* Here is the beginning of a character that can have
-			 * an extender.  It is either a hangul syllable, or a
-			 * non-control */
-			if (swash_fetch(PL_utf8_X_non_hangul,
-					(U8*)locinput, utf8_target))
-			{
+                        /* Here is a special begin.  It can be composed of
+                         * several individual characters.  One possibility is
+                         * RI+ */
+                        if ((len = is_GCB_RI_utf8(locinput))) {
+                            locinput += len;
+                            while (locinput < PL_regeol
+                                   && (len = is_GCB_RI_utf8(locinput)))
+                            {
+                                locinput += len;
+                            }
+                        } else if ((len = is_GCB_T_utf8(locinput))) {
+                            /* Another possibility is T+ */
+                            locinput += len;
+                            while (locinput < PL_regeol
+                                && (len = is_GCB_T_utf8(locinput)))
+                            {
+                                locinput += len;
+                            }
+                        } else {
 
-			    /* Here not a Hangul syllable, must be a
-			     * ('!  * Control') */
-			    locinput += UTF8SKIP(locinput);
-			} else {
+                            /* Here, neither RI+ nor T+; must be some other
+                             * Hangul.  That means it is one of the others: L,
+                             * LV, LVT or V, and matches:
+                             * L* (L | LVT T* | V * V* T* | LV  V* T*) */
 
-			    /* Here is a Hangul syllable.  It can be composed
-			     * of several individual characters.  One
-			     * possibility is T+ */
-			    if (swash_fetch(PL_utf8_X_T,
-					    (U8*)locinput, utf8_target))
-			    {
-				while (locinput < PL_regeol
-					&& swash_fetch(PL_utf8_X_T,
-							(U8*)locinput, utf8_target))
-				{
-				    locinput += UTF8SKIP(locinput);
-				}
-			    } else {
+                            /* Match L*           */
+                            while (locinput < PL_regeol
+                                   && (len = is_GCB_L_utf8(locinput)))
+                            {
+                                locinput += len;
+                            }
 
-				/* Here, not T+, but is a Hangul.  That means
-				 * it is one of the others: L, LV, LVT or V,
-				 * and matches:
-				 * L* (L | LVT T* | V  V* T* | LV  V* T*) */
+                            /* Here, have exhausted L*.  If the next character
+                             * is not an LV, LVT nor V, it means we had to have
+                             * at least one L, so matches L+ in the original
+                             * equation, we have a complete hangul syllable.
+                             * Are done. */
 
-				/* Match L*           */
-				while (locinput < PL_regeol
-					&& swash_fetch(PL_utf8_X_L,
-							(U8*)locinput, utf8_target))
-				{
-				    locinput += UTF8SKIP(locinput);
-				}
+                            if (locinput < PL_regeol
+                                && is_GCB_LV_LVT_V_utf8(locinput))
+                            {
 
-				/* Here, have exhausted L*.  If the next
-				 * character is not an LV, LVT nor V, it means
-				 * we had to have at least one L, so matches L+
-				 * in the original equation, we have a complete
-				 * hangul syllable.  Are done. */
+                                /* Otherwise keep going.  Must be LV, LVT or V.
+                                 * See if LVT */
+                                if (is_utf8_X_LVT((U8*)locinput)) {
+                                    locinput += UTF8SKIP(locinput);
+                                } else {
 
-				if (locinput < PL_regeol
-				    && swash_fetch(PL_utf8_X_LV_LVT_V,
-						    (U8*)locinput, utf8_target))
-				{
+                                    /* Must be  V or LV.  Take it, then match
+                                     * V*     */
+                                    locinput += UTF8SKIP(locinput);
+                                    while (locinput < PL_regeol
+                                           && (len = is_GCB_V_utf8(locinput)))
+                                    {
+                                        locinput += len;
+                                    }
+                                }
 
-				    /* Otherwise keep going.  Must be LV, LVT
-				     * or V.  See if LVT */
-				    if (swash_fetch(PL_utf8_X_LVT,
-						    (U8*)locinput, utf8_target))
-				    {
-					locinput += UTF8SKIP(locinput);
-				    } else {
+                                /* And any of LV, LVT, or V can be followed
+                                 * by T*            */
+                                while (locinput < PL_regeol
+                                       && (len = is_GCB_T_utf8(locinput)))
+                                {
+                                    locinput += len;
+                                }
+                            }
+                        }
+                    }
 
-					/* Must be  V or LV.  Take it, then
-					 * match V*     */
-					locinput += UTF8SKIP(locinput);
-					while (locinput < PL_regeol
-						&& swash_fetch(PL_utf8_X_V,
-							 (U8*)locinput, utf8_target))
-					{
-					    locinput += UTF8SKIP(locinput);
-					}
-				    }
-
-				    /* And any of LV, LVT, or V can be followed
-				     * by T*            */
-				    while (locinput < PL_regeol
-					   && swash_fetch(PL_utf8_X_T,
-							   (U8*)locinput,
-							   utf8_target))
-				    {
-					locinput += UTF8SKIP(locinput);
-				    }
-				}
-			    }
-			}
-
-			/* Match any extender */
-			while (locinput < PL_regeol
-				&& swash_fetch(PL_utf8_X_extend,
-						(U8*)locinput, utf8_target))
-			{
-			    locinput += UTF8SKIP(locinput);
-			}
-		    }
+                    /* Match any extender */
+                    while (locinput < PL_regeol
+                            && swash_fetch(PL_utf8_X_extend,
+                                            (U8*)locinput, utf8_target))
+                    {
+                        locinput += UTF8SKIP(locinput);
+                    }
 		}
+            exit_utf8:
 		if (locinput > PL_regeol) sayNO;
 	    }
 	    nextchr = UCHARAT(locinput);
@@ -4550,6 +4637,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
                 RXp_MATCH_COPIED_off(re);
                 re->subbeg = rex->subbeg;
                 re->sublen = rex->sublen;
+                re->suboffset = rex->suboffset;
+                re->subcoffset = rex->subcoffset;
 		rei = RXi_GET(re);
                 DEBUG_EXECUTE_r(
                     debug_start_match(re_sv, utf8_target, locinput, PL_regeol,
@@ -4566,7 +4655,6 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		re->lastparen = 0;
 		re->lastcloseparen = 0;
 
-		PL_reginput = locinput;
 		PL_regsize = 0;
 
 		/* XXXX This is too dramatic a measure... */
@@ -4590,7 +4678,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		ST.prev_eval = cur_eval;
 		cur_eval = st;
 		/* now continue from first node in postoned RE */
-		PUSH_YES_STATE_GOTO(EVAL_AB, startpoint);
+		PUSH_YES_STATE_GOTO(EVAL_AB, startpoint, locinput);
 		assert(0); /* NOTREACHED */
 	}
 
@@ -4620,7 +4708,6 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 	    rex = (struct regexp *)SvANY(rex_sv);
 	    rexi = RXi_GET(rex); 
 
-	    PL_reginput = locinput;
 	    REGCP_UNWIND(ST.lastcp);
 	    regcppop(rex);
 	    cur_eval = ST.prev_eval;
@@ -4840,8 +4927,7 @@ NULL
 	    ST.count = -1;	/* this will be updated by WHILEM */
 	    ST.lastloc = NULL;  /* this will be updated by WHILEM */
 
-	    PL_reginput = locinput;
-	    PUSH_YES_STATE_GOTO(CURLYX_end, PREVOPER(next));
+	    PUSH_YES_STATE_GOTO(CURLYX_end, PREVOPER(next), locinput);
 	    assert(0); /* NOTREACHED */
 	}
 
@@ -4874,7 +4960,6 @@ NULL
 	    ST.cache_offset = 0;
 	    ST.cache_mask = 0;
 	    
-	    PL_reginput = locinput;
 
 	    DEBUG_EXECUTE_r( PerlIO_printf(Perl_debug_log,
 		  "%*s  whilem: matched %ld out of %d..%d\n",
@@ -4888,7 +4973,7 @@ NULL
 		cur_curlyx->u.curlyx.lastloc = locinput;
 		REGCP_SET(ST.lastcp);
 
-		PUSH_STATE_GOTO(WHILEM_A_pre, A);
+		PUSH_STATE_GOTO(WHILEM_A_pre, A, locinput);
 		assert(0); /* NOTREACHED */
 	    }
 
@@ -4962,7 +5047,8 @@ NULL
 		cur_curlyx = cur_curlyx->u.curlyx.prev_curlyx;
 		ST.cp = regcppush(rex, ST.save_curlyx->u.curlyx.parenfloor);
 		REGCP_SET(ST.lastcp);
-		PUSH_YES_STATE_GOTO(WHILEM_B_min, ST.save_curlyx->u.curlyx.B);
+		PUSH_YES_STATE_GOTO(WHILEM_B_min, ST.save_curlyx->u.curlyx.B,
+                                    locinput);
 		assert(0); /* NOTREACHED */
 	    }
 
@@ -4972,7 +5058,7 @@ NULL
 		ST.cp = regcppush(rex, cur_curlyx->u.curlyx.parenfloor);
 		cur_curlyx->u.curlyx.lastloc = locinput;
 		REGCP_SET(ST.lastcp);
-		PUSH_STATE_GOTO(WHILEM_A_max, A);
+		PUSH_STATE_GOTO(WHILEM_A_max, A, locinput);
 		assert(0); /* NOTREACHED */
 	    }
 	    goto do_whilem_B_max;
@@ -5005,7 +5091,6 @@ NULL
 	case WHILEM_A_max_fail: /* just failed to match A in a maximal match */
 	    REGCP_UNWIND(ST.lastcp);
 	    regcppop(rex);	/* Restore some previous $<digit>s? */
-	    PL_reginput = locinput;
 	    DEBUG_EXECUTE_r(PerlIO_printf(Perl_debug_log,
 		"%*s  whilem: failed, trying continuation...\n",
 		REPORT_CODE_OFF+depth*2, "")
@@ -5025,7 +5110,8 @@ NULL
 	    /* now try B */
 	    ST.save_curlyx = cur_curlyx;
 	    cur_curlyx = cur_curlyx->u.curlyx.prev_curlyx;
-	    PUSH_YES_STATE_GOTO(WHILEM_B_max, ST.save_curlyx->u.curlyx.B);
+	    PUSH_YES_STATE_GOTO(WHILEM_B_max, ST.save_curlyx->u.curlyx.B,
+                                locinput);
 	    assert(0); /* NOTREACHED */
 
 	case WHILEM_B_min_fail: /* just failed to match B in a minimal match */
@@ -5053,12 +5139,12 @@ NULL
 		"%*s  trying longer...\n", REPORT_CODE_OFF+depth*2, "")
 	    );
 	    /* Try grabbing another A and see if it helps. */
-	    PL_reginput = locinput;
 	    cur_curlyx->u.curlyx.lastloc = locinput;
 	    ST.cp = regcppush(rex, cur_curlyx->u.curlyx.parenfloor);
 	    REGCP_SET(ST.lastcp);
 	    PUSH_STATE_GOTO(WHILEM_A_min,
-		/*A*/ NEXTOPER(ST.save_curlyx->u.curlyx.me) + EXTRA_STEP_2ARGS);
+		/*A*/ NEXTOPER(ST.save_curlyx->u.curlyx.me) + EXTRA_STEP_2ARGS,
+                locinput);
 	    assert(0); /* NOTREACHED */
 
 #undef  ST
@@ -5077,20 +5163,18 @@ NULL
 	    ST.lastcloseparen = rex->lastcloseparen;
 	    ST.next_branch = next;
 	    REGCP_SET(ST.cp);
-	    PL_reginput = locinput;
 
 	    /* Now go into the branch */
 	    if (has_cutgroup) {
-	        PUSH_YES_STATE_GOTO(BRANCH_next, scan);    
+	        PUSH_YES_STATE_GOTO(BRANCH_next, scan, locinput);
 	    } else {
-	        PUSH_STATE_GOTO(BRANCH_next, scan);
+	        PUSH_STATE_GOTO(BRANCH_next, scan, locinput);
 	    }
 	    assert(0); /* NOTREACHED */
         case CUTGROUP:
-            PL_reginput = locinput;
             sv_yes_mark = st->u.mark.mark_name = scan->flags ? NULL :
                 MUTABLE_SV(rexi->data->data[ ARG( scan ) ]);
-            PUSH_STATE_GOTO(CUTGROUP_next,next);
+            PUSH_STATE_GOTO(CUTGROUP_next, next, locinput);
             assert(0); /* NOTREACHED */
         case CUTGROUP_next_fail:
             do_cutgroup = 1;
@@ -5165,26 +5249,22 @@ NULL
 		goto curlym_do_B;
 
 	  curlym_do_A: /* execute the A in /A{m,n}B/  */
-	    PL_reginput = locinput;
-	    PUSH_YES_STATE_GOTO(CURLYM_A, ST.A); /* match A */
+	    PUSH_YES_STATE_GOTO(CURLYM_A, ST.A, locinput); /* match A */
 	    assert(0); /* NOTREACHED */
 
 	case CURLYM_A: /* we've just matched an A */
-	    locinput = st->locinput;
-	    nextchr = UCHARAT(locinput);
-
 	    ST.count++;
 	    /* after first match, determine A's length: u.curlym.alen */
 	    if (ST.count == 1) {
 		if (PL_reg_match_utf8) {
-		    char *s = locinput;
-		    while (s < PL_reginput) {
+		    char *s = st->locinput;
+		    while (s < locinput) {
 			ST.alen++;
 			s += UTF8SKIP(s);
 		    }
 		}
 		else {
-		    ST.alen = PL_reginput - locinput;
+		    ST.alen = locinput - st->locinput;
 		}
 		if (ST.alen == 0)
 		    ST.count = ST.minmod ? ARG1(ST.me) : ARG2(ST.me);
@@ -5196,8 +5276,6 @@ NULL
 			  (IV) ST.count, (IV)ST.alen)
 	    );
 
-	    locinput = PL_reginput;
-	                
 	    if (cur_eval && cur_eval->u.eval.close_paren && 
 	        cur_eval->u.eval.close_paren == (U32)ST.me->flags) 
 	        goto fake_end;
@@ -5218,7 +5296,6 @@ NULL
 		sayNO;
 
 	  curlym_do_B: /* execute the B in /A{m,n}B/  */
-	    PL_reginput = locinput;
 	    if (ST.c1 == CHRTEST_UNINIT) {
 		/* calculate c1 and c2 for possible match of 1st char
 		 * following curly */
@@ -5260,8 +5337,8 @@ NULL
 		    "", (IV)ST.count)
 		);
 	    if (ST.c1 != CHRTEST_VOID
-		    && UCHARAT(PL_reginput) != ST.c1
-		    && UCHARAT(PL_reginput) != ST.c2)
+		    && nextchr != ST.c1
+		    && nextchr != ST.c2)
 	    {
 		/* simulate B failing */
 		DEBUG_OPTIMISE_r(
@@ -5279,8 +5356,8 @@ NULL
 		I32 paren = ST.me->flags;
 		if (ST.count) {
 		    rex->offs[paren].start
-			= HOPc(PL_reginput, -ST.alen) - PL_bostr;
-		    rex->offs[paren].end = PL_reginput - PL_bostr;
+			= HOPc(locinput, -ST.alen) - PL_bostr;
+		    rex->offs[paren].end = locinput - PL_bostr;
 		    if ((U32)paren > rex->lastparen)
 			rex->lastparen = paren;
 		    rex->lastcloseparen = paren;
@@ -5297,7 +5374,7 @@ NULL
 	        }
 	    }
 	    
-	    PUSH_STATE_GOTO(CURLYM_B, ST.B); /* match B */
+	    PUSH_STATE_GOTO(CURLYM_B, ST.B, locinput); /* match B */
 	    assert(0); /* NOTREACHED */
 
 	case CURLYM_B_fail: /* just failed to match a B */
@@ -5314,6 +5391,7 @@ NULL
 		sayNO;
 	    ST.count--;
 	    locinput = HOPc(locinput, -ST.alen);
+            nextchr = UCHARAT(locinput);
 	    goto curlym_do_B; /* try to match B */
 
 #undef ST
@@ -5436,13 +5514,14 @@ NULL
 
 	    ST.A = scan;
 	    ST.B = next;
-	    PL_reginput = locinput;
 	    if (minmod) {
+                char *li = locinput;
 		minmod = 0;
-		if (ST.min && regrepeat(rex, ST.A, ST.min, depth) < ST.min)
+		if (ST.min && regrepeat(rex, &li, ST.A, ST.min, depth) < ST.min)
 		    sayNO;
+                locinput = li;
+                nextchr = UCHARAT(locinput);
 		ST.count = ST.min;
-		locinput = PL_reginput;
 		REGCP_SET(ST.cp);
 		if (ST.c1 == CHRTEST_VOID)
 		    goto curly_try_B_min;
@@ -5472,10 +5551,14 @@ NULL
 
 	    }
 	    else {
-		ST.count = regrepeat(rex, ST.A, ST.max, depth);
-		locinput = PL_reginput;
+                /* avoid taking address of locinput, so it can remain
+                 * a register var */
+                char *li = locinput;
+		ST.count = regrepeat(rex, &li, ST.A, ST.max, depth);
 		if (ST.count < ST.min)
 		    sayNO;
+                locinput = li;
+                nextchr = UCHARAT(locinput);
 		if ((ST.count > ST.min)
 		    && (PL_regkind[OP(ST.B)] == EOL) && (OP(ST.B) != MEOL))
 		{
@@ -5485,7 +5568,7 @@ NULL
 		    /* ...except that $ and \Z can match before *and* after
 		       newline at the end.  Consider "\n\n" =~ /\n+\Z\n/.
 		       We may back off by one in this case. */
-		    if (UCHARAT(PL_reginput - 1) == '\n' && OP(ST.B) != EOS)
+		    if (UCHARAT(locinput - 1) == '\n' && OP(ST.B) != EOS)
 			ST.min--;
 		}
 		REGCP_SET(ST.cp);
@@ -5497,7 +5580,6 @@ NULL
 	case CURLY_B_min_known_fail:
 	    /* failed to find B in a non-greedy match where c1,c2 valid */
 
-	    PL_reginput = locinput;	/* Could be reset... */
 	    REGCP_UNWIND(ST.cp);
             if (ST.paren) {
                 UNWIND_PAREN(ST.lastparen, ST.lastcloseparen);
@@ -5556,19 +5638,22 @@ NULL
 		}
 		if (locinput > ST.maxpos)
 		    sayNO;
-		/* PL_reginput == oldloc now */
 		if (n) {
+                    /* In /a{m,n}b/, ST.oldloc is at "a" x m, locinput is
+                     * at b; check that everything between oldloc and
+                     * locinput matches */
+                    char *li = ST.oldloc;
 		    ST.count += n;
-		    if (regrepeat(rex, ST.A, n, depth) < n)
+		    if (regrepeat(rex, &li, ST.A, n, depth) < n)
 			sayNO;
+                    assert(n == REG_INFTY || locinput == li);
 		}
-		PL_reginput = locinput;
 		CURLY_SETPAREN(ST.paren, ST.count);
 		if (cur_eval && cur_eval->u.eval.close_paren && 
 		    cur_eval->u.eval.close_paren == (U32)ST.paren) {
 		    goto fake_end;
 	        }
-		PUSH_STATE_GOTO(CURLY_B_min_known, ST.B);
+		PUSH_STATE_GOTO(CURLY_B_min_known, ST.B, locinput);
 	    }
 	    assert(0); /* NOTREACHED */
 
@@ -5581,10 +5666,15 @@ NULL
                 UNWIND_PAREN(ST.lastparen, ST.lastcloseparen);
             }
 	    /* failed -- move forward one */
-	    PL_reginput = locinput;
-	    if (regrepeat(rex, ST.A, 1, depth)) {
+            {
+                char *li = locinput;
+                if (!regrepeat(rex, &li, ST.A, 1, depth)) {
+                    sayNO;
+                }
+                locinput = li;
+            }
+            {
 		ST.count++;
-		locinput = PL_reginput;
 		if (ST.count <= ST.max || (ST.max == REG_INFTY &&
 			ST.count > 0)) /* count overflow ? */
 		{
@@ -5594,10 +5684,9 @@ NULL
 		        cur_eval->u.eval.close_paren == (U32)ST.paren) {
                         goto fake_end;
                     }
-		    PUSH_STATE_GOTO(CURLY_B_min, ST.B);
+		    PUSH_STATE_GOTO(CURLY_B_min, ST.B, locinput);
 		}
 	    }
-	    sayNO;
 	    assert(0); /* NOTREACHED */
 
 
@@ -5610,13 +5699,13 @@ NULL
 	    {
 		UV c = 0;
 		if (ST.c1 != CHRTEST_VOID)
-		    c = utf8_target ? utf8n_to_uvchr((U8*)PL_reginput,
+		    c = utf8_target ? utf8n_to_uvchr((U8*)locinput,
 					   UTF8_MAXBYTES, 0, uniflags)
-				: (UV) UCHARAT(PL_reginput);
+				: (UV) UCHARAT(locinput);
 		/* If it could work, try it. */
 		if (ST.c1 == CHRTEST_VOID || c == (UV)ST.c1 || c == (UV)ST.c2) {
 		    CURLY_SETPAREN(ST.paren, ST.count);
-		    PUSH_STATE_GOTO(CURLY_B_max, ST.B);
+		    PUSH_STATE_GOTO(CURLY_B_max, ST.B, locinput);
 		    assert(0); /* NOTREACHED */
 		}
 	    }
@@ -5631,7 +5720,7 @@ NULL
 	    /*  back up. */
 	    if (--ST.count < ST.min)
 		sayNO;
-	    PL_reginput = locinput = HOPc(locinput, -1);
+	    locinput = HOPc(locinput, -1);
 	    goto curly_try_B_max;
 
 #undef ST
@@ -5653,7 +5742,6 @@ NULL
 		cur_curlyx = cur_eval->u.eval.prev_curlyx;
 
 		REGCP_SET(st->u.eval.lastcp);
-		PL_reginput = locinput;
 
 		/* Restore parens of the outer rex without popping the
 		 * savestack */
@@ -5667,8 +5755,8 @@ NULL
                 if ( nochange_depth )
 	            nochange_depth--;
 
-                PUSH_YES_STATE_GOTO(EVAL_AB,
-			st->u.eval.prev_eval->u.eval.B); /* match B */
+                PUSH_YES_STATE_GOTO(EVAL_AB, st->u.eval.prev_eval->u.eval.B,
+                                    locinput); /* match B */
 	    }
 
 	    if (locinput < reginfo->till) {
@@ -5681,7 +5769,6 @@ NULL
                				      
 		sayNO_SILENT;		/* Cannot match: too short. */
 	    }
-	    PL_reginput = locinput;	/* put where regtry can find it */
 	    sayYES;			/* Success! */
 
 	case SUCCEED: /* successful SUSPEND/UNLESSM/IFMATCH/CURLYM */
@@ -5689,15 +5776,17 @@ NULL
 	    PerlIO_printf(Perl_debug_log,
 		"%*s  %ssubpattern success...%s\n",
 		REPORT_CODE_OFF+depth*2, "", PL_colors[4], PL_colors[5]));
-	    PL_reginput = locinput;	/* put where regtry can find it */
 	    sayYES;			/* Success! */
 
 #undef  ST
 #define ST st->u.ifmatch
 
+        {
+            char *newstart;
+
 	case SUSPEND:	/* (?>A) */
 	    ST.wanted = 1;
-	    PL_reginput = locinput;
+	    newstart = locinput;
 	    goto do_ifmatch;	
 
 	case UNLESSM:	/* -ve lookaround: (?!A), or with flags, (?<!A) */
@@ -5722,10 +5811,10 @@ NULL
 			next = NULL;
 		    break;
 		}
-		PL_reginput = s;
+		newstart = s;
 	    }
 	    else
-		PL_reginput = locinput;
+		newstart = locinput;
 
 	  do_ifmatch:
 	    ST.me = scan;
@@ -5733,8 +5822,9 @@ NULL
 	    logical = 0; /* XXX: reset state of logical once it has been saved into ST */
 	    
 	    /* execute body of (?...A) */
-	    PUSH_YES_STATE_GOTO(IFMATCH_A, NEXTOPER(NEXTOPER(scan)));
+	    PUSH_YES_STATE_GOTO(IFMATCH_A, NEXTOPER(NEXTOPER(scan)), newstart);
 	    assert(0); /* NOTREACHED */
+        }
 
 	case IFMATCH_A_fail: /* body of (?...A) failed */
 	    ST.wanted = !ST.wanted;
@@ -5747,10 +5837,9 @@ NULL
 	    else if (!ST.wanted)
 		sayNO;
 
-	    if (OP(ST.me) == SUSPEND)
-		locinput = PL_reginput;
-	    else {
-		locinput = PL_reginput = st->locinput;
+	    if (OP(ST.me) != SUSPEND) {
+                /* restore old position except for (?>...) */
+		locinput = st->locinput;
 		nextchr = UCHARAT(locinput);
 	    }
 	    scan = ST.me + ARG(ST.me);
@@ -5769,10 +5858,9 @@ NULL
 	    reginfo->cutpoint = PL_regeol;
 	    /* FALLTHROUGH */
 	case PRUNE:
-	    PL_reginput = locinput;
 	    if (!scan->flags)
 	        sv_yes_mark = sv_commit = MUTABLE_SV(rexi->data->data[ ARG( scan ) ]);
-	    PUSH_STATE_GOTO(COMMIT_next,next);
+	    PUSH_STATE_GOTO(COMMIT_next, next, locinput);
 	    assert(0); /* NOTREACHED */
 	case COMMIT_next_fail:
 	    no_final = 1;    
@@ -5787,8 +5875,8 @@ NULL
             ST.mark_name = sv_commit = sv_yes_mark 
                 = MUTABLE_SV(rexi->data->data[ ARG( scan ) ]);
             mark_state = st;
-            ST.mark_loc = PL_reginput = locinput;
-            PUSH_YES_STATE_GOTO(MARKPOINT_next,next);
+            ST.mark_loc = locinput;
+            PUSH_YES_STATE_GOTO(MARKPOINT_next, next, locinput);
             assert(0); /* NOTREACHED */
         case MARKPOINT_next:
             mark_state = ST.prev_mark;
@@ -5815,12 +5903,11 @@ NULL
             sayNO;
             assert(0); /* NOTREACHED */
         case SKIP:
-            PL_reginput = locinput;
             if (scan->flags) {
                 /* (*SKIP) : if we fail we cut here*/
                 ST.mark_name = NULL;
                 ST.mark_loc = locinput;
-                PUSH_STATE_GOTO(SKIP_next,next);    
+                PUSH_STATE_GOTO(SKIP_next,next, locinput);
             } else {
                 /* (*SKIP:NAME) : if there is a (*MARK:NAME) fail where it was, 
                    otherwise do nothing.  Meaning we need to scan 
@@ -5833,7 +5920,7 @@ NULL
                                 find ) ) 
                     {
                         ST.mark_name = find;
-                        PUSH_STATE_GOTO( SKIP_next, next );
+                        PUSH_STATE_GOTO( SKIP_next, next, locinput);
                     }
                     cur = cur->u.mark.prev_mark;
                 }
@@ -5942,7 +6029,7 @@ NULL
 		newst = S_push_slab(aTHX);
 	    PL_regmatch_state = newst;
 
-	    locinput = PL_reginput;
+	    locinput = pushinput;
 	    nextchr = UCHARAT(locinput);
 	    st = newst;
 	    continue;
@@ -6081,19 +6168,22 @@ no_silent:
     /* clean up; in particular, free all slabs above current one */
     LEAVE_SCOPE(oldsave);
 
-    return result;
+    assert(!result ||  locinput - PL_bostr >= 0);
+    return result ?  locinput - PL_bostr : -1;
 }
 
 /*
  - regrepeat - repeatedly match something simple, report how many
- */
-/*
- * [This routine now assumes that it will only match on things of length 1.
- * That was true before, but now we assume scan - reginput is the count,
- * rather than incrementing count on every character.  [Er, except utf8.]]
+ *
+ * startposp - pointer a pointer to the start position.  This is updated
+ *             to point to the byte following the highest successful
+ *             match.
+ * p         - the regnode to be repeatedly matched against.
+ * max       - maximum number of characters to match.
+ * depth     - (for debugging) backtracking depth.
  */
 STATIC I32
-S_regrepeat(pTHX_ const regexp *prog, const regnode *p, I32 max, int depth)
+S_regrepeat(pTHX_ const regexp *prog, char **startposp, const regnode *p, I32 max, int depth)
 {
     dVAR;
     char *scan;
@@ -6108,7 +6198,7 @@ S_regrepeat(pTHX_ const regexp *prog, const regnode *p, I32 max, int depth)
 
     PERL_ARGS_ASSERT_REGREPEAT;
 
-    scan = PL_reginput;
+    scan = *startposp;
     if (max == REG_INFTY)
 	max = I32_MAX;
     else if (max < loceol - scan)
@@ -6632,8 +6722,8 @@ S_regrepeat(pTHX_ const regexp *prog, const regnode *p, I32 max, int depth)
     if (hardcount)
 	c = hardcount;
     else
-	c = scan - PL_reginput;
-    PL_reginput = scan;
+	c = scan - *startposp;
+    *startposp = scan;
 
     DEBUG_r({
 	GET_RE_DEBUG_FLAGS_DECL;
@@ -6695,7 +6785,7 @@ S_core_regclass_swash(pTHX_ const regexp *prog, register const regnode* node, bo
 	    SV * const rv = MUTABLE_SV(data->data[n]);
 	    AV * const av = MUTABLE_AV(SvRV(rv));
 	    SV **const ary = AvARRAY(av);
-	    bool invlist_has_user_defined_property;
+	    U8 swash_init_flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;
 	
 	    si = *ary;	/* ary[0] = the string to initialize the swash with */
 
@@ -6704,11 +6794,12 @@ S_core_regclass_swash(pTHX_ const regexp *prog, register const regnode* node, bo
 	     * that inversion list has any user-defined properties in it. */
 	    if (av_len(av) >= 3) {
 		invlist = ary[3];
-		invlist_has_user_defined_property = cBOOL(SvUV(ary[4]));
+		if (SvUV(ary[4])) {
+                    swash_init_flags |= _CORE_SWASH_INIT_USER_DEFINED_PROPERTY;
+                }
 	    }
 	    else {
 		invlist = NULL;
-		invlist_has_user_defined_property = FALSE;
 	    }
 
 	    /* Element [1] is reserved for the set-up swash.  If already there,
@@ -6723,10 +6814,8 @@ S_core_regclass_swash(pTHX_ const regexp *prog, register const regnode* node, bo
 				      si,
 				      1, /* binary */
 				      0, /* not from tr/// */
-				      FALSE, /* is error if can't find
-						property */
 				      invlist,
-				      invlist_has_user_defined_property);
+				      &swash_init_flags);
 		(void)av_store(av, 1, sw);
 	    }
 
@@ -6741,20 +6830,14 @@ S_core_regclass_swash(pTHX_ const regexp *prog, register const regnode* node, bo
 	
     if (listsvp) {
 	SV* matches_string = newSVpvn("", 0);
-	SV** invlistsvp;
 
 	/* Use the swash, if any, which has to have incorporated into it all
 	 * possibilities */
-	if (   sw
-	    && SvROK(sw)
-	    && SvTYPE(SvRV(sw)) == SVt_PVHV
-	    && (invlistsvp = hv_fetchs(MUTABLE_HV(SvRV(sw)), "INVLIST", FALSE)))
-	{
-	    invlist = *invlistsvp;
-	}
-	else if (si && si != &PL_sv_undef) {
+	if ((! sw || (invlist = _get_swash_invlist(sw)) == NULL)
+            && (si && si != &PL_sv_undef))
+        {
 
-	    /* If no swash, use the input nitialization string, if available */
+	    /* If no swash, use the input initialization string, if available */
 	    sv_catsv(matches_string, si);
 	}
 
@@ -7084,7 +7167,8 @@ S_reginclass(pTHX_ const regexp * const prog, register const regnode * const n, 
         }
     }
 
-    return (flags & ANYOF_INVERT) ? !match : match;
+    /* The xor complements the return if to invert: 1^1 = 0, 1^0 = 1 */
+    return cBOOL(flags & ANYOF_INVERT) ^ match;
 }
 
 STATIC U8 *
@@ -7188,6 +7272,8 @@ restore_pos(pTHX_ void *arg)
 	if (PL_reg_oldsaved) {
 	    rex->subbeg = PL_reg_oldsaved;
 	    rex->sublen = PL_reg_oldsavedlen;
+	    rex->suboffset = PL_reg_oldsavedoffset;
+	    rex->subcoffset = PL_reg_oldsavedcoffset;
 #ifdef PERL_OLD_COPY_ON_WRITE
 	    rex->saved_copy = PL_nrs;
 #endif
@@ -7261,6 +7347,74 @@ S_to_byte_substr(pTHX_ register regexp *prog)
 		prog->check_substr = sv;
 	}
     } while (i--);
+}
+
+/* These constants are for finding GCB=LV and GCB=LVT.  These are for the
+ * pre-composed Hangul syllables, which are all in a contiguous block and
+ * arranged there in such a way so as to facilitate alorithmic determination of
+ * their characteristics.  As such, they don't need a swash, but can be
+ * determined by simple arithmetic.  Almost all are GCB=LVT, but every 28th one
+ * is a GCB=LV */
+#define SBASE 0xAC00    /* Start of block */
+#define SCount 11172    /* Length of block */
+#define TCount 28
+
+#if 0   /* This routine is not currently used */
+PERL_STATIC_INLINE bool
+S_is_utf8_X_LV(pTHX_ const U8 *p)
+{
+    /* Unlike most other similarly named routines here, this does not create a
+     * swash, so swash_fetch() cannot be used on PL_utf8_X_LV. */
+
+    dVAR;
+
+    UV cp = valid_utf8_to_uvchr(p, NULL);
+
+    PERL_ARGS_ASSERT_IS_UTF8_X_LV;
+
+    /* The earliest Unicode releases did not have these precomposed Hangul
+     * syllables.  Set to point to undef in that case, so will return false on
+     * every call */
+    if (! PL_utf8_X_LV) {   /* Set up if this is the first time called */
+        PL_utf8_X_LV = swash_init("utf8", "_X_GCB_LV", &PL_sv_undef, 1, 0);
+        if (_invlist_len(_get_swash_invlist(PL_utf8_X_LV)) == 0) {
+            SvREFCNT_dec(PL_utf8_X_LV);
+            PL_utf8_X_LV = &PL_sv_undef;
+        }
+    }
+
+    return (PL_utf8_X_LV != &PL_sv_undef
+            && cp >= SBASE && cp < SBASE + SCount
+            && (cp - SBASE) % TCount == 0); /* Only every TCount one is LV */
+}
+#endif
+
+PERL_STATIC_INLINE bool
+S_is_utf8_X_LVT(pTHX_ const U8 *p)
+{
+    /* Unlike most other similarly named routines here, this does not create a
+     * swash, so swash_fetch() cannot be used on PL_utf8_X_LVT. */
+
+    dVAR;
+
+    UV cp = valid_utf8_to_uvchr(p, NULL);
+
+    PERL_ARGS_ASSERT_IS_UTF8_X_LVT;
+
+    /* The earliest Unicode releases did not have these precomposed Hangul
+     * syllables.  Set to point to undef in that case, so will return false on
+     * every call */
+    if (! PL_utf8_X_LVT) {   /* Set up if this is the first time called */
+        PL_utf8_X_LVT = swash_init("utf8", "_X_GCB_LVT", &PL_sv_undef, 1, 0);
+        if (_invlist_len(_get_swash_invlist(PL_utf8_X_LVT)) == 0) {
+            SvREFCNT_dec(PL_utf8_X_LVT);
+            PL_utf8_X_LVT = &PL_sv_undef;
+        }
+    }
+
+    return (PL_utf8_X_LVT != &PL_sv_undef
+            && cp >= SBASE && cp < SBASE + SCount
+            && (cp - SBASE) % TCount != 0); /* All but every TCount one is LV */
 }
 
 /*

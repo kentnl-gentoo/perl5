@@ -3,7 +3,7 @@
 # Checks if the parser behaves correctly in edge cases
 # (including weird syntax errors)
 
-print "1..141\n";
+print "1..154\n";
 
 sub failed {
     my ($got, $expected, $name) = @_;
@@ -318,9 +318,9 @@ like($@, qr/BEGIN failed--compilation aborted/, 'BEGIN 7' );
   eval qq[ %$xFC ];
   like($@, qr/Identifier too long/, "too long id in % sigil ctx");
 
-  eval qq[ \\&$xFC ]; # take a ref since I don't want to call it
-  is($@, "", "252 character & sigil ident ok");
-  eval qq[ \\&$xFD ];
+  eval qq[ \\&$xFB ]; # take a ref since I don't want to call it
+  is($@, "", "251 character & sigil ident ok");
+  eval qq[ \\&$xFC ];
   like($@, qr/Identifier too long/, "too long id in & sigil ctx");
 
   eval qq[ *$xFC ];
@@ -416,8 +416,39 @@ is $@, "", 'pod inside string in string eval';
 }";
 print "ok ", ++$test, " - pod inside string outside of string eval\n";
 
+like "blah blah blah\n", qr/${\ <<END
+blah blah blah
+END
+ }/, 'here docs in multiline quoted construct';
+like "blah blah blah\n", eval q|qr/${\ <<END
+blah blah blah
+END
+ }/|, 'here docs in multiline quoted construct in string eval';
+
+# Unterminated here-docs in subst in eval; used to crash
+eval 's/${<<END}//';
+eval 's//${<<END}/';
+print "ok ", ++$test, " - unterminated here-docs in s/// in string eval\n";
+
 sub 'Hello'_he_said (_);
 is prototype "Hello::_he_said", '_', 'initial tick in sub declaration';
+
+{
+    my @x = 'string';
+    is(eval q{ "$x[0]->strung" }, 'string->strung',
+	'literal -> after an array subscript within ""');
+    @x = ['string'];
+    # this used to give "string"
+    like("$x[0]-> [0]", qr/^ARRAY\([^)]*\)-> \[0]\z/,
+	'literal -> [0] after an array subscript within ""');
+}
+
+eval 'no if $] >= 5.17.4 warnings => "deprecated"';
+is 1,1, ' no crash for "no ... syntax error"';
+
+for my $pkg(()){}
+$pkg = 3;
+is $pkg, 3, '[perl #114942] for my $foo()){} $foo';
 
 # Add new tests HERE (above this line)
 
@@ -503,15 +534,16 @@ eval <<'EOSTANZA'; die $@ if $@;
 check(qr/^Great hail!.*no more\.$/, 61, "Overflow both small buffer checks");
 EOSTANZA
 
-{
-    my @x = 'string';
-    is(eval q{ "$x[0]->strung" }, 'string->strung',
-	'literal -> after an array subscript within ""');
-    @x = ['string'];
-    # this used to give "string"
-    like("$x[0]-> [0]", qr/^ARRAY\([^)]*\)-> \[0]\z/,
-	'literal -> [0] after an array subscript within ""');
-}
+#line 531 parser.t
+<<EOU; check('parser\.t', 531, 'on same line as heredoc');
+EOU
+s//<<EOV/e if 0;
+EOV
+check('parser\.t', 535, 'after here-doc in quotes');
+<<EOW;
+${check('parser\.t', 537, 'first line of interp in here-doc');;
+  check('parser\.t', 538, 'second line of interp in here-doc');}
+EOW
 
 __END__
 # Don't add new tests HERE. See note above

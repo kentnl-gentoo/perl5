@@ -13,7 +13,7 @@ BEGIN {
 use strict;
 no warnings 'once';
 
-plan(tests => 98);
+plan(tests => 111);
 
 @A::ISA = 'B';
 @B::ISA = 'C';
@@ -223,7 +223,50 @@ like ($@, qr/^\QCan't locate object method "foo" via package "E::F" at/);
 eval '$e = bless {}, "UNIVERSAL"; $e->E::F::foo()';
 like ($@, qr/^\QCan't locate object method "foo" via package "E::F" at/);
 
-# TODO: we need some tests for the SUPER:: pseudoclass
+# SUPER:: pseudoclass
+@Saab::ISA = "Souper";
+sub Souper::method { @_ }
+@OtherSaab::ISA = "OtherSouper";
+sub OtherSouper::method { "Isidore Ropen, Draft Manager" }
+{
+   my $o = bless [], "Saab";
+   package Saab;
+   my @ret = $o->SUPER::method('whatever');
+   ::is $ret[0], $o, 'object passed to SUPER::method';
+   ::is $ret[1], 'whatever', 'argument passed to SUPER::method';
+   @ret = $o->SUPER'method('whatever');
+   ::is $ret[0], $o, "object passed to SUPER'method";
+   ::is $ret[1], 'whatever', "argument passed to SUPER'method";
+   @ret = Saab->SUPER::method;
+   ::is $ret[0], 'Saab', "package name passed to SUPER::method";
+   @ret = OtherSaab->SUPER::method;
+   ::is $ret[0], 'OtherSaab',
+      "->SUPER::method uses current package, not invocant";
+}  
+() = *SUPER::;
+{
+   local our @ISA = "Souper";
+   is eval { (main->SUPER::method)[0] }, 'main',
+      'Mentioning *SUPER:: does not stop ->SUPER from working in main';
+}
+{
+    BEGIN {
+        *Mover:: = *Mover2::;
+        *Mover2:: = *foo;
+    }
+    package Mover;
+    no strict;
+    # Not our(@ISA), because the bug we are testing for interacts with an
+    # our() bug that cancels this bug out.
+    @ISA = 'door';
+    sub door::dohtem { 'dohtem' }
+    ::is eval { Mover->SUPER::dohtem; }, 'dohtem',
+        'SUPER inside moved package';
+    undef *door::dohtem;
+    *door::dohtem = sub { 'method' };
+    ::is eval { Mover->SUPER::dohtem; }, 'method',
+        'SUPER inside moved package respects method changes';
+}
 
 # failed method call or UNIVERSAL::can() should not autovivify packages
 is( $::{"Foo::"} || "none", "none");  # sanity check 1
@@ -417,3 +460,20 @@ eval { () = undef; new {} };
 like $@,
      qr/^Can't call method "new" without a package or object reference/,
     'Err msg from new{} when stack contains undef';
+
+package egakacp {
+  our @ISA = 'ASI';
+  sub ASI::m { shift; "@_" };
+  my @a = (bless([]), 'arg');
+  my $r = SUPER::m{@a};
+  ::is $r, 'arg', 'method{@array}';
+  $r = SUPER::m{}@a;
+  ::is $r, 'arg', 'method{}@array';
+  $r = SUPER::m{@a}"b";
+  ::is $r, 'arg b', 'method{@array}$more_args';
+}
+
+# [perl #114924] SUPER->method
+@SUPER::ISA = "SUPPER";
+sub SUPPER::foo { "supper" }
+is "SUPER"->foo, 'supper', 'SUPER->method';

@@ -544,7 +544,6 @@ be zero.
 /* OutCopFILE() is CopFILE for output (caller, die, warn, etc.) */
 #define OutCopFILE(c) CopFILE(c)
 
-/* FIXME NATIVE_HINTS if this is changed from op_private (see perl.h)  */
 #define CopHINTS_get(c)		((c)->cop_hints + 0)
 #define CopHINTS_set(c, h)	STMT_START {				\
 				    (c)->cop_hints = (h);		\
@@ -717,6 +716,8 @@ struct block_eval {
 	PL_in_eval = CxOLD_IN_EVAL(cx);					\
 	optype = CxOLD_OP_TYPE(cx);					\
 	PL_eval_root = cx->blk_eval.old_eval_root;			\
+	if (cx->blk_eval.cur_text && SvSCREAM(cx->blk_eval.cur_text))	\
+	    SvREFCNT_dec(cx->blk_eval.cur_text);			\
 	if (cx->blk_eval.old_namesv)					\
 	    sv_2mortal(cx->blk_eval.old_namesv);			\
     } STMT_END
@@ -1189,7 +1190,7 @@ See L<perlcall/LIGHTWEIGHT CALLBACKS>.
     STMT_START {							\
 	CV * const _nOnclAshIngNamE_ = the_cv;				\
 	CV * const cv = _nOnclAshIngNamE_;				\
-	AV * const padlist = CvPADLIST(cv);				\
+	PADLIST * const padlist = CvPADLIST(cv);			\
 	ENTER;								\
  	multicall_oldcatch = CATCH_GET;					\
 	SAVETMPS; SAVEVPTR(PL_op);					\
@@ -1233,7 +1234,7 @@ See L<perlcall/LIGHTWEIGHT CALLBACKS>.
     STMT_START {							\
 	CV * const _nOnclAshIngNamE_ = the_cv;				\
 	CV * const cv = _nOnclAshIngNamE_;				\
-	AV * const padlist = CvPADLIST(cv);				\
+	PADLIST * const padlist = CvPADLIST(cv);			\
 	cx = &cxstack[cxstack_ix];					\
 	assert(cx->cx_type & CXp_MULTICALL);				\
 	if (! ((CvDEPTH(multicall_cv) = cx->blk_sub.olddepth)) ) {	\

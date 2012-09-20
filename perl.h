@@ -2442,6 +2442,13 @@ typedef struct ptr_tbl_ent PTR_TBL_ENT_t;
 typedef struct ptr_tbl PTR_TBL_t;
 typedef struct clone_params CLONE_PARAMS;
 
+/* a pad or name pad is currently just an AV; but that might change,
+ * so hide the type.  */
+typedef struct padlist PADLIST;
+typedef AV PAD;
+typedef AV PADNAMELIST;
+typedef SV PADNAME;
+
 #include "handy.h"
 
 #if defined(USE_LARGE_FILES) && !defined(NO_64_BIT_RAWIO)
@@ -2546,11 +2553,6 @@ typedef struct clone_params CLONE_PARAMS;
 
 #if defined(OS2)
 #  include "iperlsys.h"
-#endif
-
-#if defined(__OPEN_VM)
-#   include "vmesa/vmesaish.h"
-#   define ISHISH "vmesa"
 #endif
 
 #ifdef DOSISH
@@ -3449,9 +3451,7 @@ struct _sublex_info {
     U8 super_state;	/* lexer state to save */
     U16 sub_inwhat;	/* "lex_inwhat" to use */
     OP *sub_op;		/* "lex_op" to use */
-    char *super_bufptr;	/* PL_parser->bufptr that was */
-    char *super_bufend;	/* PL_parser->bufend that was */
-    char *re_eval_start;/* start of "(?{..." text */
+    SV *repl;		/* replacement of s/// or y/// */
 };
 
 #include "parser.h"
@@ -3899,7 +3899,7 @@ double atof (const char*);
 /* All of these are in stdlib.h or time.h for ANSI C */
 Time_t time();
 struct tm *gmtime(), *localtime();
-#if defined(OEMVS) || defined(__OPEN_VM)
+#if defined(OEMVS)
 char *(strchr)(), *(strrchr)();
 char *(strcpy)(), *(strcat)();
 #else
@@ -4854,6 +4854,12 @@ typedef enum {
 #define HINT_SORT_MERGESORT	0x00000002
 #define HINT_SORT_STABLE	0x00000100 /* sort styles (currently one) */
 
+/* flags for PL_sawampersand */
+
+#define SAWAMPERSAND_LEFT       1   /* saw $` */
+#define SAWAMPERSAND_MIDDLE     2   /* saw $& */
+#define SAWAMPERSAND_RIGHT      4   /* saw $' */
+
 /* Various states of the input record separator SV (rs) */
 #define RsSNARF(sv)   (! SvOK(sv))
 #define RsSIMPLE(sv)  (SvOK(sv) && (! SvPOK(sv) || SvCUR(sv)))
@@ -5150,6 +5156,8 @@ EXTCONST bool PL_valid_types_NV_set[];
 
 #endif
 
+/* Static inline funcs that depend on includes and declarations above */
+#include "inline.h"
 
 #include "overload.h"
 
@@ -5645,15 +5653,7 @@ extern void moncontrol(int);
 
 /* ISO 6429 NEL - C1 control NExt Line */
 /* See http://www.unicode.org/unicode/reports/tr13/ */
-#ifdef EBCDIC	/* In EBCDIC NEL is just an alias for LF */
-#   if '^' == 95	/* CP 1047: MVS OpenEdition - OS/390 - z/OS */
-#       define NEXT_LINE_CHAR	0x15
-#   else		/* CDRA */
-#       define NEXT_LINE_CHAR	0x25
-#   endif
-#else
-#   define NEXT_LINE_CHAR	0x85
-#endif
+#define NEXT_LINE_CHAR	NEXT_LINE_NATIVE
 
 /* The UTF-8 bytes of the Unicode LS and PS, U+2028 and U+2029 */
 #define UNICODE_LINE_SEPA_0	0xE2

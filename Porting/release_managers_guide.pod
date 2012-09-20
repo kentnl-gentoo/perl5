@@ -328,7 +328,8 @@ Ensure dual-life CPAN modules are stable, which comes down to:
 =head3 monitor smoke tests for failures
 
 Similarly, monitor the smoking of core tests, and try to fix.  See
-L<http://doc.procura.nl/smoke/index.html> for a summary. See also
+L<http://doc.procura.nl/smoke/index.html> and L<http://perl5.test-smoke.org/>
+for a summary. See also
 L<http://www.nntp.perl.org/group/perl.daily-build.reports/> which has
 the raw reports.
 
@@ -405,7 +406,7 @@ Commit your changes:
     $ git commit -a -m 'Bump the perl version in various places for 5.x.y'
 
 At this point you may want to compare the commit with a previous bump to
-see if they look similar.  See commit 8891dd8d for an example of a
+see if they look similar.  See commit 0e79a3d1bc for an example of a
 previous version bump.
 
 When the version number is bumped, you should also update Module::CoreList
@@ -550,10 +551,8 @@ I<blead> and subsequently cherry-pick any releases since the last
 maint release and then your recent commit.  XXX need a better example
 
 F<corelist.pl> uses ftp.funet.fi to verify information about dual-lived
-modules on CPAN. It can use a full, local CPAN mirror or fall back
-to C<wget> or C<curl> to fetch only package metadata remotely. (If you're
-on Win32, then installing Cygwin is one way to have commands like C<wget>
-and C<curl> available.)
+modules on CPAN. It can use a full, local CPAN mirror and/or fall back
+on HTTP::Tiny to fetch package metadata remotely.
 
 (If you'd prefer to have a full CPAN mirror, see 
 http://www.cpan.org/misc/cpan-faq.html#How_mirror_CPAN)
@@ -599,6 +598,12 @@ number as a CPAN release.)
 
 Edit the version number in the new C<< 'Module::CoreList' => 'X.YZ' >>
 entry, as that is likely to reflect the previous version number.
+
+=head4 Bump C<$Module::CoreList::TieHashDelta::VERSION>
+
+C<$Module::CoreList::TieHashDelta::VERSION> should always be equal to
+C<$Module::CoreList::VERSION>. Make sure the two versions match before
+proceeding.
 
 =head4 Bump version in Module::CoreList F<Changes>
 
@@ -651,6 +656,10 @@ Make sure that the correct pumpking is listed in the left-hand column, and
 if this is the first release under the stewardship of a new pumpking, make
 sure that his or her name is listed in the section entitled
 C<THE KEEPERS OF THE PUMPKIN>.
+
+I<If you're making a BLEAD-POINT release>, also update the "SELECTED
+RELEASE SIZES" section with the output of
+F<Porting/perlhist_calculate.pl>.
 
 Be sure to commit your changes:
 
@@ -707,8 +716,7 @@ Then delete the temporary installation.
 
 Push all your recent commits:
 
-    $ git push origin ....
-
+    $ git push origin release-5.xx.yy
 
 =head3 tag the release
 
@@ -1048,7 +1056,7 @@ When C<make test_porting> passes, commit the new perldelta.
 =back
 
 At this point you may want to compare the commit with a previous bump to
-see if they look similar.  See commit e3c71926d3 for an example of a
+see if they look similar.  See commit 4eabcf701b for an example of a
 previous version bump.
 
 =for checklist skip MAINT RC
@@ -1217,12 +1225,11 @@ to ensure that the tarballs are available on the website.
 
 Check C</src> on CPAN (on a fast mirror) to ensure that links to
 the new tarballs have appeared.  There should be links in C</src/5.0>
-(which is accumulating all new versions), links in C</src> (which shows
-only the latest version on each branch), and an appropriate mention in
-C</src/README.html> (which describes the latest versions).
+(which is accumulating all new versions), and an appropriate mention in
+C</src> (which describes the latest versions in each branch, with links).
 
 These links should appear automatically, some hours after upload.
-If they don't, or the C<README.html> description is inadequate,
+If they don't, or the C</src> description is inadequate,
 ask Ask <ask@perl.org>.
 
 =item *

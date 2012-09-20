@@ -216,9 +216,7 @@ PP(pp_substcont)
 	if (CxONCE(cx) || s < orig ||
 		!CALLREGEXEC(rx, s, cx->sb_strend, orig,
 			     (s == m) + RX_GOFS(rx), cx->sb_targ, NULL,
-			     ((cx->sb_rflags & REXEC_COPY_STR)
-			      ? (REXEC_IGNOREPOS|REXEC_NOT_FIRST)
-			      : (REXEC_COPY_STR|REXEC_IGNOREPOS|REXEC_NOT_FIRST))))
+                                (REXEC_IGNOREPOS|REXEC_NOT_FIRST)))
 	{
 	    SV *targ = cx->sb_targ;
 
@@ -289,6 +287,7 @@ PP(pp_substcont)
     if (RX_MATCH_COPIED(rx) && RX_SUBBEG(rx) != orig) {
 	m = s;
 	s = orig;
+        assert(!RX_SUBOFFSET(rx));
 	cx->sb_orig = orig = RX_SUBBEG(rx);
 	s = orig + (m - s);
 	cx->sb_strend = s + (cx->sb_strend - m);
@@ -353,9 +352,9 @@ Perl_rxres_save(pTHX_ void **rsp, REGEXP *rx)
 
     if (!p || p[1] < RX_NPARENS(rx)) {
 #ifdef PERL_OLD_COPY_ON_WRITE
-	i = 7 + RX_NPARENS(rx) * 2;
+	i = 7 + (RX_NPARENS(rx)+1) * 2;
 #else
-	i = 6 + RX_NPARENS(rx) * 2;
+	i = 6 + (RX_NPARENS(rx)+1) * 2;
 #endif
 	if (!p)
 	    Newx(p, i, UV);
@@ -364,18 +363,20 @@ Perl_rxres_save(pTHX_ void **rsp, REGEXP *rx)
 	*rsp = (void*)p;
     }
 
+    /* what (if anything) to free on croak */
     *p++ = PTR2UV(RX_MATCH_COPIED(rx) ? RX_SUBBEG(rx) : NULL);
     RX_MATCH_COPIED_off(rx);
+    *p++ = RX_NPARENS(rx);
 
 #ifdef PERL_OLD_COPY_ON_WRITE
     *p++ = PTR2UV(RX_SAVED_COPY(rx));
     RX_SAVED_COPY(rx) = NULL;
 #endif
 
-    *p++ = RX_NPARENS(rx);
-
     *p++ = PTR2UV(RX_SUBBEG(rx));
     *p++ = (UV)RX_SUBLEN(rx);
+    *p++ = (UV)RX_SUBOFFSET(rx);
+    *p++ = (UV)RX_SUBCOFFSET(rx);
     for (i = 0; i <= RX_NPARENS(rx); ++i) {
 	*p++ = (UV)RX_OFFS(rx)[i].start;
 	*p++ = (UV)RX_OFFS(rx)[i].end;
@@ -394,6 +395,7 @@ S_rxres_restore(pTHX_ void **rsp, REGEXP *rx)
     RX_MATCH_COPY_FREE(rx);
     RX_MATCH_COPIED_set(rx, *p);
     *p++ = 0;
+    RX_NPARENS(rx) = *p++;
 
 #ifdef PERL_OLD_COPY_ON_WRITE
     if (RX_SAVED_COPY(rx))
@@ -402,10 +404,10 @@ S_rxres_restore(pTHX_ void **rsp, REGEXP *rx)
     *p++ = 0;
 #endif
 
-    RX_NPARENS(rx) = *p++;
-
     RX_SUBBEG(rx) = INT2PTR(char*,*p++);
     RX_SUBLEN(rx) = (I32)(*p++);
+    RX_SUBOFFSET(rx) = (I32)*p++;
+    RX_SUBCOFFSET(rx) = (I32)*p++;
     for (i = 0; i <= RX_NPARENS(rx); ++i) {
 	RX_OFFS(rx)[i].start = (I32)(*p++);
 	RX_OFFS(rx)[i].end = (I32)(*p++);
@@ -421,19 +423,23 @@ S_rxres_free(pTHX_ void **rsp)
     PERL_UNUSED_CONTEXT;
 
     if (p) {
-#ifdef PERL_POISON
 	void *tmp = INT2PTR(char*,*p);
-	Safefree(tmp);
-	if (*p)
-	    PoisonFree(*p, 1, sizeof(*p));
-#else
-	Safefree(INT2PTR(char*,*p));
-#endif
+#ifdef PERL_POISON
 #ifdef PERL_OLD_COPY_ON_WRITE
-	if (p[1]) {
-	    SvREFCNT_dec (INT2PTR(SV*,p[1]));
-	}
+	U32 i = 9 + p[1] * 2;
+#else
+	U32 i = 8 + p[1] * 2;
 #endif
+#endif
+
+#ifdef PERL_OLD_COPY_ON_WRITE
+        SvREFCNT_dec (INT2PTR(SV*,p[2]));
+#endif
+#ifdef PERL_POISON
+        PoisonFree(p, i, sizeof(UV));
+#endif
+
+	Safefree(tmp);
 	Safefree(p);
 	*rsp = NULL;
     }
@@ -1857,7 +1863,9 @@ PP(pp_caller)
     if (CxTYPE(cx) == CXt_EVAL) {
 	/* eval STRING */
 	if (CxOLD_OP_TYPE(cx) == OP_ENTEREVAL) {
-	    PUSHs(cx->blk_eval.cur_text);
+	    PUSHs(newSVpvn_flags(SvPVX(cx->blk_eval.cur_text),
+				 SvCUR(cx->blk_eval.cur_text)-2,
+				 SvUTF8(cx->blk_eval.cur_text)|SVs_TEMP));
 	    PUSHs(&PL_sv_no);
 	}
 	/* require */
@@ -1888,17 +1896,15 @@ PP(pp_caller)
 	Copy(AvALLOC(ary), AvARRAY(PL_dbargs), AvFILLp(ary) + 1 + off, SV*);
 	AvFILLp(PL_dbargs) = AvFILLp(ary) + off;
     }
-    /* XXX only hints propagated via op_private are currently
-     * visible (others are not easily accessible, since they
-     * use the global PL_hints) */
     mPUSHi(CopHINTS_get(cx->blk_oldcop));
     {
 	SV * mask ;
 	STRLEN * const old_warnings = cx->blk_oldcop->cop_warnings ;
 
-	if  (old_warnings == pWARN_NONE ||
-		(old_warnings == pWARN_STD && (PL_dowarn & G_WARN_ON) == 0))
+	if  (old_warnings == pWARN_NONE)
             mask = newSVpvn(WARN_NONEstring, WARNsize) ;
+	else if (old_warnings == pWARN_STD && (PL_dowarn & G_WARN_ON) == 0)
+            mask = &PL_sv_undef ;
         else if (old_warnings == pWARN_ALL ||
 		  (old_warnings == pWARN_STD && PL_dowarn & G_WARN_ON)) {
 	    /* Get the bit mask for $warnings::Bits{all}, because
@@ -2871,7 +2877,7 @@ PP(pp_goto)
 		return retop;
 	    }
 	    else {
-		AV* const padlist = CvPADLIST(cv);
+		PADLIST * const padlist = CvPADLIST(cv);
 		if (CxTYPE(cx) == CXt_EVAL) {
 		    PL_in_eval = CxOLD_IN_EVAL(cx);
 		    PL_eval_root = cx->blk_eval.old_eval_root;
@@ -3227,12 +3233,12 @@ than in the scope of the debugger itself).
 CV*
 Perl_find_runcv(pTHX_ U32 *db_seqp)
 {
-    return Perl_find_runcv_where(aTHX_ 0, NULL, db_seqp);
+    return Perl_find_runcv_where(aTHX_ 0, 0, db_seqp);
 }
 
 /* If this becomes part of the API, it might need a better name. */
 CV *
-Perl_find_runcv_where(pTHX_ U8 cond, void *arg, U32 *db_seqp)
+Perl_find_runcv_where(pTHX_ U8 cond, IV arg, U32 *db_seqp)
 {
     dVAR;
     PERL_SI	 *si;
@@ -3257,11 +3263,12 @@ Perl_find_runcv_where(pTHX_ U8 cond, void *arg, U32 *db_seqp)
 		cv = cx->blk_eval.cv;
 	    if (cv) {
 		switch (cond) {
-		case FIND_RUNCV_root_eq:
-		    if (CvROOT(cv) != (OP *)arg) continue;
+		case FIND_RUNCV_padid_eq:
+		    if (!CvPADLIST(cv)
+		     || CvPADLIST(cv)->xpadl_id != (U32)arg) continue;
 		    return cv;
 		case FIND_RUNCV_level_eq:
-		    if (level++ != PTR2IV(arg)) continue;
+		    if (level++ != arg) continue;
 		    /* GERONIMO! */
 		default:
 		    return cv;
@@ -3269,7 +3276,7 @@ Perl_find_runcv_where(pTHX_ U8 cond, void *arg, U32 *db_seqp)
 	    }
 	}
     }
-    return cond == FIND_RUNCV_root_eq ? NULL : PL_main_cv;
+    return cond == FIND_RUNCV_padid_eq ? NULL : PL_main_cv;
 }
 
 
@@ -3693,6 +3700,8 @@ PP(pp_require)
 	}
     }
 
+    LOADING_FILE_PROBE(unixname);
+
     /* prepare to compile file */
 
     if (path_is_absolute(name)) {
@@ -3994,6 +4003,8 @@ PP(pp_require)
 
     /* Restore encoding. */
     PL_encoding = encoding;
+
+    LOADED_FILE_PROBE(unixname);
 
     return op;
 }
