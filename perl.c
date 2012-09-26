@@ -2,7 +2,7 @@
 /*    perl.c
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001
- *    2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011
+ *    2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
  *     by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
@@ -1980,10 +1980,19 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
     }
     }
 
+    /* Set $^X early so that it can be used for relocatable paths in @INC  */
+    /* and for SITELIB_EXP in USE_SITECUSTOMIZE                            */
+    assert (!PL_tainted);
+    TAINT;
+    S_set_caret_X(aTHX);
+    TAINT_NOT;
+
 #if defined(USE_SITECUSTOMIZE)
     if (!minus_f) {
 	/* The games with local $! are to avoid setting errno if there is no
-	   sitecustomize script.  */
+	   sitecustomize script.  "q%c...%c", 0, ..., 0 becomes "q\0...\0",
+	   ie a q() operator with a NUL byte as a the delimiter. This avoids
+	   problems with pathnames containing (say) '  */
 #  ifdef PERL_IS_MINIPERL
 	AV *const inc = GvAV(PL_incgv);
 	SV **const inc0 = inc ? av_fetch(inc, 0, FALSE) : NULL;
@@ -1991,14 +2000,24 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	if (inc0) {
 	    (void)Perl_av_create_and_unshift_one(aTHX_ &PL_preambleav,
 						 Perl_newSVpvf(aTHX_
-							       "BEGIN { do {local $!; -f '%"SVf"/buildcustomize.pl'} && do '%"SVf"/buildcustomize.pl' }", *inc0, *inc0));
+							       "BEGIN { do {local $!; -f q%c%"SVf"/buildcustomize.pl%c} && do q%c%"SVf"/buildcustomize.pl%c }",
+							       0, *inc0, 0,
+							       0, *inc0, 0));
 	}
 #  else
 	/* SITELIB_EXP is a function call on Win32.  */
-	const char *const sitelib = SITELIB_EXP;
+	const char *const raw_sitelib = SITELIB_EXP;
+	/* process .../.. if PERL_RELOCATABLE_INC is defined */
+	SV *sitelib_sv = mayberelocate(raw_sitelib, strlen(raw_sitelib),
+				       INCPUSH_CAN_RELOCATE);
+	const char *const sitelib = SvPVX(sitelib_sv);
 	(void)Perl_av_create_and_unshift_one(aTHX_ &PL_preambleav,
 					     Perl_newSVpvf(aTHX_
-							   "BEGIN { do {local $!; -f '%s/sitecustomize.pl'} && do '%s/sitecustomize.pl' }", sitelib, sitelib));
+							   "BEGIN { do {local $!; -f q%c%s/sitecustomize.pl%c} && do q%c%s/sitecustomize.pl%c }",
+							   0, sitelib, 0,
+							   0, sitelib, 0));
+	assert (SvREFCNT(sitelib_sv) == 1);
+	SvREFCNT_dec(sitelib_sv);
 #  endif
     }
 #endif
@@ -2017,11 +2036,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	scriptname = "-";
     }
 
-    /* Set $^X early so that it can be used for relocatable paths in @INC  */
     assert (!PL_tainted);
-    TAINT;
-    S_set_caret_X(aTHX);
-    TAINT_NOT;
     init_perllib();
 
     {
@@ -3322,7 +3337,7 @@ Perl_moreswitches(pTHX_ const char *s)
 #endif
 
 	PerlIO_printf(PerlIO_stdout(),
-		      "\n\nCopyright 1987-2011, Larry Wall\n");
+		      "\n\nCopyright 1987-2012, Larry Wall\n");
 #ifdef MSDOS
 	PerlIO_printf(PerlIO_stdout(),
 		      "\nMS-DOS port Copyright (c) 1989, 1990, Diomidis Spinellis\n");
@@ -4384,44 +4399,14 @@ S_incpush_if_exists(pTHX_ AV *const av, SV *dir, SV *const stem)
 }
 #endif
 
-STATIC void
-S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
+STATIC SV *
+S_mayberelocate(pTHX_ const char *const dir, STRLEN len, U32 flags)
 {
-    dVAR;
-#ifndef PERL_IS_MINIPERL
-    const U8 using_sub_dirs
-	= (U8)flags & (INCPUSH_ADD_VERSIONED_SUB_DIRS
-		       |INCPUSH_ADD_ARCHONLY_SUB_DIRS|INCPUSH_ADD_OLD_VERS);
-    const U8 add_versioned_sub_dirs
-	= (U8)flags & INCPUSH_ADD_VERSIONED_SUB_DIRS;
-    const U8 add_archonly_sub_dirs
-	= (U8)flags & INCPUSH_ADD_ARCHONLY_SUB_DIRS;
-#ifdef PERL_INC_VERSION_LIST
-    const U8 addoldvers  = (U8)flags & INCPUSH_ADD_OLD_VERS;
-#endif
-#endif
     const U8 canrelocate = (U8)flags & INCPUSH_CAN_RELOCATE;
-    const U8 unshift     = (U8)flags & INCPUSH_UNSHIFT;
-    const U8 push_basedir = (flags & INCPUSH_NOT_BASEDIR) ? 0 : 1;
-    AV *const inc = GvAVn(PL_incgv);
+    SV *libdir;
 
-    PERL_ARGS_ASSERT_INCPUSH;
+    PERL_ARGS_ASSERT_MAYBERELOCATE;
     assert(len > 0);
-
-    /* Could remove this vestigial extra block, if we don't mind a lot of
-       re-indenting diff noise.  */
-    {
-	SV *libdir;
-	/* Change 20189146be79a0596543441fa369c6bf7f85103f, to fix RT#6665,
-	   arranged to unshift #! line -I onto the front of @INC. However,
-	   -I can add version and architecture specific libraries, and they
-	   need to go first. The old code assumed that it was always
-	   pushing. Hence to make it work, need to push the architecture
-	   (etc) libraries onto a temporary array, then "unshift" that onto
-	   the front of @INC.  */
-#ifndef PERL_IS_MINIPERL
-	AV *const av = (using_sub_dirs) ? (unshift ? newAV() : inc) : NULL;
-#endif
 
 	if (len) {
 	    /* I am not convinced that this is valid when PERLLIB_MANGLE is
@@ -4548,6 +4533,50 @@ S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
 	    }
 #endif
 	}
+    return libdir;
+
+}
+
+STATIC void
+S_incpush(pTHX_ const char *const dir, STRLEN len, U32 flags)
+{
+    dVAR;
+#ifndef PERL_IS_MINIPERL
+    const U8 using_sub_dirs
+	= (U8)flags & (INCPUSH_ADD_VERSIONED_SUB_DIRS
+		       |INCPUSH_ADD_ARCHONLY_SUB_DIRS|INCPUSH_ADD_OLD_VERS);
+    const U8 add_versioned_sub_dirs
+	= (U8)flags & INCPUSH_ADD_VERSIONED_SUB_DIRS;
+    const U8 add_archonly_sub_dirs
+	= (U8)flags & INCPUSH_ADD_ARCHONLY_SUB_DIRS;
+#ifdef PERL_INC_VERSION_LIST
+    const U8 addoldvers  = (U8)flags & INCPUSH_ADD_OLD_VERS;
+#endif
+#endif
+    const U8 unshift     = (U8)flags & INCPUSH_UNSHIFT;
+    const U8 push_basedir = (flags & INCPUSH_NOT_BASEDIR) ? 0 : 1;
+    AV *const inc = GvAVn(PL_incgv);
+
+    PERL_ARGS_ASSERT_INCPUSH;
+    assert(len > 0);
+
+    /* Could remove this vestigial extra block, if we don't mind a lot of
+       re-indenting diff noise.  */
+    {
+	SV *libdir;
+	/* Change 20189146be79a0596543441fa369c6bf7f85103f, to fix RT#6665,
+	   arranged to unshift #! line -I onto the front of @INC. However,
+	   -I can add version and architecture specific libraries, and they
+	   need to go first. The old code assumed that it was always
+	   pushing. Hence to make it work, need to push the architecture
+	   (etc) libraries onto a temporary array, then "unshift" that onto
+	   the front of @INC.  */
+#ifndef PERL_IS_MINIPERL
+	AV *const av = (using_sub_dirs) ? (unshift ? newAV() : inc) : NULL;
+#endif
+
+	libdir = mayberelocate(dir, len, flags);
+
 #ifndef PERL_IS_MINIPERL
 	/*
 	 * BEFORE pushing libdir onto @INC we may first push version- and

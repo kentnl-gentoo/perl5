@@ -759,6 +759,7 @@ cpan/Digest-SHA/typemap			Typemap for Digest::SHA
 cpan/Digest/t/base.t		See if Digest extensions work
 cpan/Digest/t/digest.t		See if Digest extensions work
 cpan/Digest/t/file.t		See if Digest extensions work
+cpan/Digest/t/security.t	See if Digest extensions work
 cpan/Encode/AUTHORS		List of authors
 cpan/Encode/bin/enc2xs		Encode module generator
 cpan/Encode/bin/piconv		iconv by perl
@@ -3461,6 +3462,7 @@ ext/NDBM_File/hints/dec_osf.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/dynixptx.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/gnukfreebsd.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/gnuknetbsd.pl	Hint for NDBM_File for named architecture
+ext/NDBM_File/hints/gnu.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/linux.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/sco.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/solaris.pl	Hint for NDBM_File for named architecture
@@ -3474,6 +3476,7 @@ ext/ODBM_File/hints/cygwin.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/dec_osf.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/gnukfreebsd.pl	Hint for NDBM_File for named architecture
 ext/ODBM_File/hints/gnuknetbsd.pl	Hint for NDBM_File for named architecture
+ext/ODBM_File/hints/gnu.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/hpux.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/linux.pl	Hint for NDBM_File for named architecture
 ext/ODBM_File/hints/sco.pl	Hint for ODBM_File for named architecture
@@ -4321,6 +4324,7 @@ pod/perl5138delta.pod		Perl changes in version 5.13.8
 pod/perl5139delta.pod		Perl changes in version 5.13.9
 pod/perl5140delta.pod		Perl changes in version 5.14.0
 pod/perl5141delta.pod		Perl changes in version 5.14.1
+pod/perl5142delta.pod		Perl changes in version 5.14.2
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl570delta.pod		Perl changes in version 5.7.0
