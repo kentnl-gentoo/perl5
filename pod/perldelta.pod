@@ -30,6 +30,16 @@ the algorithm name used, or be able to execute arbitrary Perl code already.
 
 This problem has been fixed.
 
+=head2 Heap buffer overrun in 'x' string repeat operator (CVE-2012-5195)
+
+Poorly written perl code that allows an attacker to specify the count to
+perl's 'x' string repeat operator can already cause a memory exhaustion
+denial-of-service attack. A flaw in versions of perl before 5.15.5 can
+escalate that into a heap buffer overrun; coupled with versions of glibc
+before 2.16, it possibly allows the execution of arbitrary code.
+
+This problem has been fixed.
+
 =head1 Incompatible Changes
 
 There are no changes intentionally incompatible with 5.14.0. If any
@@ -150,6 +160,10 @@ Various build and test fixes were included for GNU/Hurd.
 
 LFS support was enabled in GNU/Hurd.
 
+=item NetBSD
+
+The NetBSD hints file was corrected to be compatible with NetBSD 6.*
+
 =back
 
 =head1 Bug Fixes
@@ -204,18 +218,18 @@ C</[[:lower:]]/i> and C</[[:upper:]]/i> no longer matched the opposite case.
 =head1 Acknowledgements
 
 Perl 5.14.3 represents approximately 12 months of development since Perl 5.14.2
-and contains approximately 1,900 lines of changes across 61 files from 20
+and contains approximately 2,300 lines of changes across 64 files from 22
 authors.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers. The following people are known to have contributed the
 improvements that became Perl 5.14.3:
 
-Abigail, Carl Hayter, Dave Rolsky, David Mitchell, Dominic Hargreaves, Father
-Chrysostomos, Florian Ragwitz, H.Merijn Brand, Jilles Tjoelker, Karl
-Williamson, Leon Timmermans, Michael G Schwern, Nicholas Clark, Niko Tyni, Pino
-Toscano, Ricardo Signes, Salvador Fandiño, Samuel Thibault, Steve Hay, Tony
-Cook.
+Abigail, Andy Dougherty, Carl Hayter, Chris 'BinGOs' Williams, Dave Rolsky,
+David Mitchell, Dominic Hargreaves, Father Chrysostomos, Florian Ragwitz,
+H.Merijn Brand, Jilles Tjoelker, Karl Williamson, Leon Timmermans, Michael G
+Schwern, Nicholas Clark, Niko Tyni, Pino Toscano, Ricardo Signes, Salvador
+Fandiño, Samuel Thibault, Steve Hay, Tony Cook.
 
 The list above is almost certainly incomplete as it is automatically generated
 from version control history. In particular, it does not include the names of
