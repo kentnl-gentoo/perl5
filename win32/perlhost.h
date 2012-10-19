@@ -26,11 +26,10 @@
 #endif
 
 START_EXTERN_C
-extern char *		g_win32_get_privlib(const char *pl, STRLEN *const len);
-extern char *		g_win32_get_sitelib(const char *pl, STRLEN *const len);
-extern char *		g_win32_get_vendorlib(const char *pl,
-					      STRLEN *const len);
-extern char *		g_getlogin(void);
+extern char *	g_win32_get_privlib(const char *pl, STRLEN *const len);
+extern char *	g_win32_get_sitelib(const char *pl, STRLEN *const len);
+extern char *	g_win32_get_vendorlib(const char *pl, STRLEN *const len);
+extern char *	g_getlogin(void);
 END_EXTERN_C
 
 class CPerlHost
@@ -1535,13 +1534,13 @@ PerlProcCrypt(struct IPerlProc* piPerl, const char* clear, const char* salt)
     return win32_crypt(clear, salt);
 }
 
-void
+PERL_CALLCONV_NO_RET void
 PerlProcExit(struct IPerlProc* piPerl, int status)
 {
     exit(status);
 }
 
-void
+PERL_CALLCONV_NO_RET void
 PerlProc_Exit(struct IPerlProc* piPerl, int status)
 {
     _exit(status);

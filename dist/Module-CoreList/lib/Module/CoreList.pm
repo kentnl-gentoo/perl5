@@ -3,7 +3,7 @@ use strict;
 use vars qw/$VERSION %released %version %families %upstream
 	    %bug_tracker %deprecated/;
 use Module::CoreList::TieHashDelta;
-$VERSION = '2.73';
+$VERSION = '2.75';
 
 my $dumpinc = 0;
 sub import {
@@ -207,6 +207,8 @@ sub changes_between {
     5.017002 => '2012-07-20',
     5.017003 => '2012-08-20',
     5.017004 => '2012-09-20',
+    5.014003 => '2012-10-12',
+    5.017005 => '2012-10-20',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -5565,6 +5567,16 @@ my %delta = (
         removed => {
         }
     },
+    5.014003 => {
+        delta_from => 5.014002,
+        changed => {
+            'Digest'                => '1.16_01',
+            'IPC::Open3'            => '1.09_01',
+            'Module::CoreList'      => '2.49_04',
+        },
+        removed => {
+        }
+    },
     5.015 => {
         delta_from => 5.014001,
         changed => {
@@ -7225,6 +7237,54 @@ my %delta = (
         removed => {
         }
     },
+    5.017005 => {
+        delta_from => 5.017004,
+        changed => {
+            'AutoLoader'            => '5.73',
+            'B'                     => '1.39',
+            'B::Deparse'            => '1.18',
+            'CPANPLUS'              => '0.9133',
+            'CPANPLUS::Internals'   => '0.9133',
+            'CPANPLUS::Shell::Default'=> '0.9133',
+            'Carp'                  => '1.27',
+            'Carp::Heavy'           => '1.27',
+            'Data::Dumper'          => '2.136',
+            'Digest::SHA'           => '5.72',
+            'ExtUtils::CBuilder'    => '0.280209',
+            'ExtUtils::CBuilder::Base'=> '0.280209',
+            'ExtUtils::CBuilder::Platform::Unix'=> '0.280209',
+            'ExtUtils::CBuilder::Platform::VMS'=> '0.280209',
+            'ExtUtils::CBuilder::Platform::Windows'=> '0.280209',
+            'ExtUtils::CBuilder::Platform::Windows::BCC'=> '0.280209',
+            'ExtUtils::CBuilder::Platform::Windows::GCC'=> '0.280209',
+            'ExtUtils::CBuilder::Platform::Windows::MSVC'=> '0.280209',
+            'ExtUtils::CBuilder::Platform::aix'=> '0.280209',
+            'ExtUtils::CBuilder::Platform::cygwin'=> '0.280209',
+            'ExtUtils::CBuilder::Platform::darwin'=> '0.280209',
+            'ExtUtils::CBuilder::Platform::dec_osf'=> '0.280209',
+            'ExtUtils::CBuilder::Platform::os2'=> '0.280209',
+            'File::Copy'            => '2.25',
+            'File::Glob'            => '1.18',
+            'HTTP::Tiny'            => '0.024',
+            'Module::CoreList'      => '2.75',
+            'Module::CoreList::TieHashDelta'=> '2.75',
+            'PerlIO::encoding'      => '0.16',
+            'Unicode::Collate'      => '0.90',
+            'Unicode::Collate::Locale'=> '0.90',
+            'Unicode::Normalize'    => '1.15',
+            'Win32CORE'             => '0.04',
+            'XS::APItest'           => '0.44',
+            'attributes'            => '0.21',
+            'bigint'                => '0.31',
+            'bignum'                => '0.31',
+            'bigrat'                => '0.31',
+            'feature'               => '1.31',
+            'threads::shared'       => '1.42',
+            'warnings'              => '1.15',
+        },
+        removed => {
+        }
+    },
 );
 
 for my $version (sort { $a <=> $b } keys %delta) {
@@ -7386,6 +7446,11 @@ for my $version (sort { $a <=> $b } keys %delta) {
     5.017003 => {
     },
     5.017004 => {
+    },
+    5.014003 => {
+	'Shell'                 => '1',
+    },
+    5.017005 => {
     },
 );
 
@@ -8156,7 +8221,7 @@ for my $version (sort { $a <=> $b } keys %delta) {
     'Filter::Simple'        => undef,
     'Filter::Util::Call'    => undef,
     'Getopt::Long'          => undef,
-    'HTTP::Tiny'            => 'http://rt.cpan.org/Public/Dist/Display.html?Name=HTTP-Tiny',
+    'HTTP::Tiny'            => 'https://rt.cpan.org/Public/Dist/Display.html?Name=HTTP-Tiny',
     'IO::Compress::Adapter::Bzip2'=> undef,
     'IO::Compress::Adapter::Deflate'=> undef,
     'IO::Compress::Adapter::Identity'=> undef,
@@ -8446,9 +8511,13 @@ for my $version (sort { $a <=> $b } keys %delta) {
     'Unicode::Collate::Locale'=> undef,
     'Unicode::Normalize'    => undef,
     'Unicode::UCD'          => undef,
+    'VMS::DCLsym'           => undef,
+    'VMS::Filespec'         => undef,
+    'VMS::Stdio'            => undef,
     'Win32'                 => undef,
     'Win32API::File'        => undef,
     'Win32API::File::ExtUtils::Myconst2perl'=> undef,
+    'Win32CORE'             => undef,
     'XSLoader'              => 'https://rt.perl.org/rt3/Search/Results.html?Query=Queue=\'perl5\' AND Content LIKE \'module=XSLoader\' AND (Status=\'open\' OR Status=\'new\' OR Status=\'stalled\')',
     'autodie'               => 'http://rt.cpan.org/NoAuth/Bugs.html?Dist=autodie',
     'autodie::exception'    => 'http://rt.cpan.org/NoAuth/Bugs.html?Dist=autodie',

@@ -861,9 +861,16 @@ PP(pp_tie)
 
     switch(SvTYPE(varsv)) {
 	case SVt_PVHV:
+	{
+	    HE *entry;
 	    methname = "TIEHASH";
+	    if (HvLAZYDEL(varsv) && (entry = HvEITER((HV *)varsv))) {
+		HvLAZYDEL_off(varsv);
+		hv_free_ent((HV *)varsv, entry);
+	    }
 	    HvEITER_set(MUTABLE_HV(varsv), 0);
 	    break;
+	}
 	case SVt_PVAV:
 	    methname = "TIEARRAY";
 	    if (!AvREAL(varsv)) {
@@ -1453,7 +1460,7 @@ PP(pp_leavewrite)
 	    }
 	}
 	if (IoLINES_LEFT(io) >= 0 && IoPAGE(io) > 0)
-	    do_print(PL_formfeed, ofp);
+	    do_print(GvSV(gv_fetchpvs("\f", GV_ADD, SVt_PV)), ofp);
 	IoLINES_LEFT(io) = IoPAGE_LEN(io);
 	IoPAGE(io)++;
 	PL_formtarget = PL_toptarget;
@@ -1513,6 +1520,9 @@ PP(pp_prtf)
     GV * const gv
 	= (PL_op->op_flags & OPf_STACKED) ? MUTABLE_GV(*++MARK) : PL_defoutgv;
     IO *const io = GvIO(gv);
+
+    /* Treat empty list as "" */
+    if (MARK == SP) XPUSHs(&PL_sv_no);
 
     if (io) {
 	const MAGIC * const mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar);
@@ -1650,12 +1660,7 @@ PP(pp_sysread)
 	buffer_utf8 = !IN_BYTES && SvUTF8(bufsv);
     }
     if (DO_UTF8(bufsv)) {
-	/* offset adjust in characters not bytes */
-        /* SV's length cache is only safe for non-magical values */
-        if (SvGMAGICAL(bufsv))
-            blen = utf8_length((const U8 *)buffer, (const U8 *)buffer + blen);
-        else
-            blen = sv_len_utf8(bufsv);
+	blen = sv_len_utf8_nomg(bufsv);
     }
 
     charstart = TRUE;
@@ -1667,7 +1672,7 @@ PP(pp_sysread)
     if (PL_op->op_type == OP_RECV) {
 	Sock_size_t bufsize;
 	char namebuf[MAXPATHLEN];
-#if (defined(VMS_DO_SOCKETS) && defined(DECCRTL_SOCKETS)) || defined(MPE) || defined(__QNXNTO__)
+#if (defined(VMS_DO_SOCKETS) && defined(DECCRTL_SOCKETS)) || defined(__QNXNTO__)
 	bufsize = sizeof (struct sockaddr_in);
 #else
 	bufsize = sizeof namebuf;
@@ -1936,15 +1941,9 @@ PP(pp_syswrite)
 		blen_chars = orig_blen_bytes;
 	    } else {
 		/* The SV really is UTF-8.  */
-		if (SvGMAGICAL(bufsv) || SvAMAGIC(bufsv)) {
-		    /* Don't call sv_len_utf8 again because it will call magic
-		       or overloading a second time, and we might get back a
-		       different result.  */
-		    blen_chars = utf8_length((U8*)buffer, (U8*)buffer + blen);
-		} else {
-		    /* It's safe, and it may well be cached.  */
-		    blen_chars = sv_len_utf8(bufsv);
-		}
+		/* Don't call sv_len_utf8 on a magical or overloaded
+		   scalar, as we might get back a different result.  */
+		blen_chars = sv_or_pv_len_utf8(bufsv, buffer, blen);
 	    }
 	} else {
 	    blen_chars = blen;
@@ -2533,7 +2532,7 @@ PP(pp_accept)
     IO *nstio;
     IO *gstio;
     char namebuf[MAXPATHLEN];
-#if (defined(VMS_DO_SOCKETS) && defined(DECCRTL_SOCKETS)) || defined(MPE) || defined(__QNXNTO__)
+#if (defined(VMS_DO_SOCKETS) && defined(DECCRTL_SOCKETS)) || defined(__QNXNTO__)
     Sock_size_t len = sizeof (struct sockaddr_in);
 #else
     Sock_size_t len = sizeof namebuf;

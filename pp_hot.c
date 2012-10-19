@@ -955,9 +955,11 @@ PP(pp_aassign)
 		    Perl_croak(aTHX_ "panic: attempt to copy freed scalar %p",
 			       (void*)sv);
 		}
-		/* Specifically *not* sv_mortalcopy(), as that will steal TEMPs,
-		   and we need a second copy of a temp here.  */
-		*relem = sv_2mortal(newSVsv(sv));
+		/* Not newSVsv(), as it does not allow copy-on-write,
+		   resulting in wasteful copies.  We need a second copy of
+		   a temp here, hence the SV_NOSTEAL.  */
+		*relem = sv_mortalcopy_flags(sv,SV_GMAGIC|SV_DO_COW_SVSETSV
+					       |SV_NOSTEAL);
 	    }
 	}
     }
@@ -982,15 +984,16 @@ PP(pp_aassign)
 	    while (relem <= lastrelem) {	/* gobble up all the rest */
 		SV **didstore;
 		assert(*relem);
+		SvGETMAGIC(*relem); /* before newSV, in case it dies */
 		sv = newSV(0);
-		sv_setsv(sv, *relem);
+		sv_setsv_nomg(sv, *relem);
 		*(relem++) = sv;
 		didstore = av_store(ary,i++,sv);
 		if (magic) {
-		    if (SvSMAGICAL(sv))
-			mg_set(sv);
 		    if (!didstore)
 			sv_2mortal(sv);
+		    if (SvSMAGICAL(sv))
+			mg_set(sv);
 		}
 		TAINT_NOT;
 	    }
@@ -1013,7 +1016,7 @@ PP(pp_aassign)
 		    HE *didstore;
 		    sv = *relem ? *relem : &PL_sv_no;
 		    relem++;
-		    tmpstr = newSV(0);
+		    tmpstr = sv_newmortal();
 		    if (*relem)
 			sv_setsv(tmpstr,*relem);	/* value */
 		    relem++;
@@ -1030,11 +1033,10 @@ PP(pp_aassign)
 			}
 		    }
 		    didstore = hv_store_ent(hash,sv,tmpstr,0);
+		    if (didstore) SvREFCNT_inc_simple_void_NN(tmpstr);
 		    if (magic) {
 			if (SvSMAGICAL(tmpstr))
 			    mg_set(tmpstr);
-			if (!didstore)
-			    sv_2mortal(tmpstr);
 		    }
 		    TAINT_NOT;
 		}
@@ -1286,8 +1288,10 @@ PP(pp_match)
 
 
 
-    /* empty pattern special-cased to use last successful pattern if possible */
-    if (!RX_PRELEN(rx) && PL_curpm) {
+    /* empty pattern special-cased to use last successful pattern if
+       possible, except for qr// */
+    if (!((struct regexp *)SvANY(rx))->mother_re && !RX_PRELEN(rx)
+     && PL_curpm) {
 	pm = PL_curpm;
 	rx = PM_GETRE(pm);
     }
@@ -1763,7 +1767,6 @@ PP(pp_helem)
     const U32 lval = PL_op->op_flags & OPf_MOD || LVRET;
     const U32 defer = PL_op->op_private & OPpLVAL_DEFER;
     SV *sv;
-    const U32 hash = (SvIsCOW_shared_hash(keysv)) ? SvSHARED_HASH(keysv) : 0;
     const bool localizing = PL_op->op_private & OPpLVAL_INTRO;
     bool preeminent = TRUE;
 
@@ -1782,7 +1785,7 @@ PP(pp_helem)
 	    preeminent = hv_exists_ent(hv, keysv, 0);
     }
 
-    he = hv_fetch_ent(hv, keysv, lval && !defer, hash);
+    he = hv_fetch_ent(hv, keysv, lval && !defer, 0);
     svp = he ? &HeVAL(he) : NULL;
     if (lval) {
 	if (!svp || !*svp || *svp == &PL_sv_undef) {
@@ -2061,7 +2064,7 @@ PP(pp_subst)
     int force_on_match = 0;
     const I32 oldsave = PL_savestack_ix;
     STRLEN slen;
-    bool doutf8 = FALSE;
+    bool doutf8 = FALSE; /* whether replacement is in utf8 */
 #ifdef PERL_OLD_COPY_ON_WRITE
     bool is_cow;
 #endif
@@ -2080,6 +2083,7 @@ PP(pp_subst)
 	EXTEND(SP,1);
     }
 
+    SvGETMAGIC(TARG); /* must come before cow check */
 #ifdef PERL_OLD_COPY_ON_WRITE
     /* Awooga. Awooga. "bool" types that are actually char are dangerous,
        because they make integers such as 256 "false".  */
@@ -2099,8 +2103,7 @@ PP(pp_subst)
 	Perl_croak_no_modify(aTHX);
     PUTBACK;
 
-  setup_match:
-    s = SvPV_mutable(TARG, len);
+    s = SvPV_nomg(TARG, len);
     if (!SvPOKp(TARG) || SvTYPE(TARG) == SVt_PVGV || SvVOK(TARG))
 	force_on_match = 1;
 
@@ -2130,7 +2133,8 @@ PP(pp_subst)
 				   position, once with zero-length,
 				   second time with non-zero. */
 
-    if (!RX_PRELEN(rx) && PL_curpm) {
+    if (!RX_PRELEN(rx) && PL_curpm
+     && !((struct regexp *)SvANY(rx))->mother_re) {
 	pm = PL_curpm;
 	rx = PM_GETRE(pm);
     }
@@ -2167,27 +2171,10 @@ PP(pp_subst)
 	RETURN;
     }
 
+    PL_curpm = pm;
+
     /* known replacement string? */
     if (dstr) {
-	if (SvTAINTED(dstr))
-	    rxtainted |= SUBST_TAINT_REPL;
-
-	/* Upgrade the source if the replacement is utf8 but the source is not,
-	 * but only if it matched; see
-	 * http://www.nntp.perl.org/group/perl.perl5.porters/2010/04/msg158809.html
-	 */
-	if (DO_UTF8(dstr) && ! DO_UTF8(TARG)) {
-	    char * const orig_pvx =  SvPVX(TARG);
-	    const STRLEN new_len = sv_utf8_upgrade_nomg(TARG);
-
-	    /* If the lengths are the same, the pattern contains only
-	     * invariants, can keep going; otherwise, various internal markers
-	     * could be off, so redo */
-	    if (new_len != len || orig_pvx != SvPVX(TARG)) {
-		goto setup_match;
-	    }
-	}
-
 	/* replacement needing upgrading? */
 	if (DO_UTF8(TARG) && !doutf8) {
 	     nsv = sv_newmortal();
@@ -2203,6 +2190,9 @@ PP(pp_subst)
 	    c = SvPV_const(dstr, clen);
 	    doutf8 = DO_UTF8(dstr);
 	}
+
+	if (SvTAINTED(dstr))
+	    rxtainted |= SUBST_TAINT_REPL;
     }
     else {
 	c = NULL;
@@ -2216,7 +2206,7 @@ PP(pp_subst)
 #endif
         && (I32)clen <= RX_MINLENRET(rx)
         && (once || !(r_flags & REXEC_COPY_STR))
-	&& !(RX_EXTFLAGS(rx) & RXf_LOOKBEHIND_SEEN)
+	&& !(RX_EXTFLAGS(rx) & (RXf_LOOKBEHIND_SEEN|RXf_MODIFIES_VARS))
 	&& (!doutf8 || SvUTF8(TARG))
 	&& !(rpm->op_pmflags & PMf_NONDESTRUCT))
     {
@@ -2229,11 +2219,10 @@ PP(pp_subst)
 #endif
 	if (force_on_match) {
 	    force_on_match = 0;
-	    s = SvPV_force(TARG, len);
+	    s = SvPV_force_nomg(TARG, len);
 	    goto force_it;
 	}
 	d = s;
-	PL_curpm = pm;
 	if (once) {
 	    if (RX_MATCH_TAINTED(rx)) /* run time pattern taint, eg locale */
 		rxtainted |= SUBST_TAINT_PAT;
@@ -2303,6 +2292,8 @@ PP(pp_subst)
 	}
     }
     else {
+	bool first;
+	SV *repl;
 	if (force_on_match) {
 	    force_on_match = 0;
 	    if (rpm->op_pmflags & PMf_NONDESTRUCT) {
@@ -2313,7 +2304,7 @@ PP(pp_subst)
 		   cases where it would be viable to drop into the copy code. */
 		TARG = sv_2mortal(newSVsv(TARG));
 	    }
-	    s = SvPV_force(TARG, len);
+	    s = SvPV_force_nomg(TARG, len);
 	    goto force_it;
 	}
 #ifdef PERL_OLD_COPY_ON_WRITE
@@ -2321,8 +2312,8 @@ PP(pp_subst)
 #endif
 	if (RX_MATCH_TAINTED(rx)) /* run time pattern taint, eg locale */
 	    rxtainted |= SUBST_TAINT_PAT;
+	repl = dstr;
 	dstr = newSVpvn_flags(m, s-m, SVs_TEMP | (DO_UTF8(TARG) ? SVf_UTF8 : 0));
-	PL_curpm = pm;
 	if (!c) {
 	    PERL_CONTEXT *cx;
 	    SPAGAIN;
@@ -2335,6 +2326,7 @@ PP(pp_subst)
 	    RETURNOP(cPMOP->op_pmreplrootu.op_pmreplroot);
 	}
 	r_flags |= REXEC_IGNOREPOS | REXEC_NOT_FIRST;
+	first = TRUE;
 	do {
 	    if (iters++ > maxiters)
 		DIE(aTHX_ "Substitution loop");
@@ -2349,21 +2341,30 @@ PP(pp_subst)
 		strend = s + (strend - m);
 	    }
 	    m = RX_OFFS(rx)[0].start + orig;
-	    if (doutf8 && !SvUTF8(dstr))
-		sv_catpvn_nomg_utf8_upgrade(dstr, s, m - s, nsv);
-            else
-		sv_catpvn_nomg(dstr, s, m-s);
+	    sv_catpvn_nomg_maybeutf8(dstr, s, m - s, DO_UTF8(TARG));
 	    s = RX_OFFS(rx)[0].end + orig;
-	    if (clen)
-		sv_catpvn_nomg(dstr, c, clen);
+	    if (first) {
+		/* replacement already stringified */
+	      if (clen)
+		sv_catpvn_nomg_maybeutf8(dstr, c, clen, doutf8);
+	      first = FALSE;
+	    }
+	    else {
+		if (PL_encoding) {
+		    if (!nsv) nsv = sv_newmortal();
+		    sv_copypv(nsv, repl);
+		    if (!DO_UTF8(nsv)) sv_recode_to_utf8(nsv, PL_encoding);
+		    sv_catsv(dstr, nsv);
+		}
+		else sv_catsv(dstr, repl);
+		if (SvTAINTED(repl))
+		    rxtainted |= SUBST_TAINT_REPL;
+	    }
 	    if (once)
 		break;
 	} while (CALLREGEXEC(rx, s, strend, orig, s == m,
 			     TARG, NULL, r_flags));
-	if (doutf8 && !DO_UTF8(TARG))
-	    sv_catpvn_nomg_utf8_upgrade(dstr, s, strend - s, nsv);
-	else
-	    sv_catpvn_nomg(dstr, s, strend - s);
+	sv_catpvn_nomg_maybeutf8(dstr, s, strend - s, DO_UTF8(TARG));
 
 	if (rpm->op_pmflags & PMf_NONDESTRUCT) {
 	    /* From here on down we're using the copy, and leaving the original
@@ -2388,7 +2389,7 @@ PP(pp_subst)
 	    SvPV_set(TARG, SvPVX(dstr));
 	    SvCUR_set(TARG, SvCUR(dstr));
 	    SvLEN_set(TARG, SvLEN(dstr));
-	    doutf8 |= DO_UTF8(dstr);
+	    SvFLAGS(TARG) |= SvUTF8(dstr);
 	    SvPV_set(dstr, NULL);
 
 	    SPAGAIN;
@@ -2398,8 +2399,6 @@ PP(pp_subst)
 
     if (!(rpm->op_pmflags & PMf_NONDESTRUCT)) {
 	(void)SvPOK_only_UTF8(TARG);
-	if (doutf8)
-	    SvUTF8_on(TARG);
     }
 
     /* See "how taint works" above */
@@ -2956,51 +2955,44 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
     PERL_ARGS_ASSERT_METHOD_COMMON;
 
     if (!sv)
+       undefined:
 	Perl_croak(aTHX_ "Can't call method \"%"SVf"\" on an undefined value",
 		   SVfARG(meth));
 
     SvGETMAGIC(sv);
     if (SvROK(sv))
 	ob = MUTABLE_SV(SvRV(sv));
+    else if (!SvOK(sv)) goto undefined;
     else {
+	/* this isn't a reference */
 	GV* iogv;
         STRLEN packlen;
-        const char * packname = NULL;
-	bool packname_is_utf8 = FALSE;
-
-	/* this isn't a reference */
-        if(SvOK(sv) && (packname = SvPV_nomg_const(sv, packlen))) {
-          const HE* const he =
-	    (const HE *)hv_common_key_len(
-	      PL_stashcache, packname,
-	      packlen * -(packname_is_utf8 = !!SvUTF8(sv)), 0, NULL, 0
+        const char * const packname = SvPV_nomg_const(sv, packlen);
+        const bool packname_is_utf8 = !!SvUTF8(sv);
+        const HE* const he =
+	    (const HE *)hv_common(
+                PL_stashcache, NULL, packname, packlen,
+                packname_is_utf8 ? HVhek_UTF8 : 0, 0, NULL, 0
 	    );
 	  
-          if (he) { 
+        if (he) { 
             stash = INT2PTR(HV*,SvIV(HeVAL(he)));
+            DEBUG_o(Perl_deb(aTHX_ "PL_stashcache hit %p for '%"SVf"'\n",
+                             stash, sv));
             goto fetch;
-          }
         }
 
-	if (!SvOK(sv) ||
-	    !(packname) ||
-	    !(iogv = gv_fetchpvn_flags(
+	if (!(iogv = gv_fetchpvn_flags(
 	        packname, packlen, SVf_UTF8 * packname_is_utf8, SVt_PVIO
 	     )) ||
 	    !(ob=MUTABLE_SV(GvIO(iogv))))
 	{
 	    /* this isn't the name of a filehandle either */
-	    if (!packname ||
-		((UTF8_IS_START(*packname) && DO_UTF8(sv))
-		    ? !isIDFIRST_utf8((U8*)packname)
-		    : !isIDFIRST_L1((U8)*packname)
-		))
+	    if (!packlen)
 	    {
-		/* diag_listed_as: Can't call method "%s" without a package or object reference */
-		Perl_croak(aTHX_ "Can't call method \"%"SVf"\" %s",
-			   SVfARG(meth),
-			   SvOK(sv) ? "without a package or object reference"
-				    : "on an undefined value");
+		Perl_croak(aTHX_ "Can't call method \"%"SVf"\" "
+				 "without a package or object reference",
+				  SVfARG(meth));
 	    }
 	    /* assume it's a package name */
 	    stash = gv_stashpvn(packname, packlen, packname_is_utf8 ? SVf_UTF8 : 0);
@@ -3010,6 +3002,8 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	        SV* const ref = newSViv(PTR2IV(stash));
 	        (void)hv_store(PL_stashcache, packname,
                                 packname_is_utf8 ? -(I32)packlen : (I32)packlen, ref, 0);
+                DEBUG_o(Perl_deb(aTHX_ "PL_stashcache caching %p for '%"SVf"'\n",
+                                 stash, sv));
 	    }
 	    goto fetch;
 	}

@@ -1559,6 +1559,12 @@ S_incline(pTHX_ const char *s)
     PERL_ARGS_ASSERT_INCLINE;
 
     COPLINE_INC_WITH_HERELINES;
+    if (!PL_rsfp && !PL_parser->filtered && PL_lex_state == LEX_NORMAL
+     && s+1 == PL_bufend && *s == ';') {
+	/* fake newline in string eval */
+	CopLINE_dec(PL_curcop);
+	return;
+    }
     if (*s++ != '#')
 	return;
     while (SPACE_OR_TAB(*s))
@@ -4400,21 +4406,40 @@ S_word_takes_any_delimeter(char *p, STRLEN len)
   stitching them into a tree.
 
   Returns:
-    PRIVATEREF
+    The type of the next token
 
   Structure:
-      if read an identifier
-          if we're in a my declaration
-	      croak if they tried to say my($foo::bar)
-	      build the ops for a my() declaration
-	  if it's an access to a my() variable
-	      are we in a sort block?
-	          croak if my($a); $a <=> $b
-	      build ops for access to a my() variable
-	  if in a dq string, and they've said @foo and we can't find @foo
-	      croak
-	  build ops for a bareword
-      if we already built the token before, use it.
+      Switch based on the current state:
+	  - if we already built the token before, use it
+	  - if we have a case modifier in a string, deal with that
+	  - handle other cases of interpolation inside a string
+	  - scan the next line if we are inside a format
+      In the normal state switch on the next character:
+	  - default:
+	    if alphabetic, go to key lookup
+	    unrecoginized character - croak
+	  - 0/4/26: handle end-of-line or EOF
+	  - cases for whitespace
+	  - \n and #: handle comments and line numbers
+	  - various operators, brackets and sigils
+	  - numbers
+	  - quotes
+	  - 'v': vstrings (or go to key lookup)
+	  - 'x' repetition operator (or go to key lookup)
+	  - other ASCII alphanumerics (key lookup begins here):
+	      word before => ?
+	      keyword plugin
+	      scan built-in keyword (but do nothing with it yet)
+	      check for statement label
+	      check for lexical subs
+		  goto just_a_word if there is one
+	      see whether built-in keyword is overridden
+	      switch on keyword number:
+		  - default: just_a_word:
+		      not a built-in keyword; handle bareword lookup
+		      disambiguate between method and sub call
+		      fall back to bareword
+		  - cases for built-in keywords
 */
 
 
@@ -6553,8 +6578,16 @@ Perl_yylex(pTHX)
 		s = scan_num(s, &pl_yylval);
 		TERM(THING);
 	    }
+	    else if ((*start == ':' && start[1] == ':')
+		  || (PL_expect == XSTATE && *start == ':'))
+		goto keylookup;
+	    else if (PL_expect == XSTATE) {
+		d = start;
+		while (d < PL_bufend && isSPACE(*d)) d++;
+		if (*d == ':') goto keylookup;
+	    }
 	    /* avoid v123abc() or $h{v1}, allow C<print v10;> */
-	    else if (!isALPHA(*start) && (PL_expect == XTERM
+	    if (!isALPHA(*start) && (PL_expect == XTERM
 			|| PL_expect == XREF || PL_expect == XSTATE
 			|| PL_expect == XTERMORDORDOR)) {
 		GV *const gv = gv_fetchpvn_flags(s, start - s,
@@ -6786,6 +6819,10 @@ Perl_yylex(pTHX)
 	  just_a_word: {
 		int pkgname = 0;
 		const char lastchar = (PL_bufptr == PL_oldoldbufptr ? 0 : PL_bufptr[-1]);
+		const char penultchar =
+		    lastchar && PL_bufptr - 2 >= PL_linestart
+			 ? PL_bufptr[-2]
+			 : 0;
 #ifdef PERL_MAD
 		SV *nextPL_nextwhite = 0;
 #endif
@@ -7014,7 +7051,7 @@ Perl_yylex(pTHX)
 		/* Not a method, so call it a subroutine (if defined) */
 
 		if (cv) {
-		    if (lastchar == '-') {
+		    if (lastchar == '-' && penultchar != '-') {
                         const SV *tmpsv = newSVpvn_flags( PL_tokenbuf, len ? len : strlen(PL_tokenbuf), (UTF ? SVf_UTF8 : 0) | SVs_TEMP );
  			Perl_ck_warner_d(aTHX_ packWARN(WARN_AMBIGUOUS),
 				"Ambiguous use of -%"SVf" resolved as -&%"SVf"()",
@@ -7508,6 +7545,7 @@ Perl_yylex(pTHX)
 	    UNI(OP_DBMCLOSE);
 
 	case KEY_dump:
+	    PL_expect = XOPERATOR;
 	    s = force_word(s,WORD,TRUE,FALSE,FALSE);
 	    LOOPX(OP_DUMP);
 
@@ -7640,6 +7678,7 @@ Perl_yylex(pTHX)
 	    LOP(OP_GREPSTART, XREF);
 
 	case KEY_goto:
+	    PL_expect = XOPERATOR;
 	    s = force_word(s,WORD,TRUE,FALSE,FALSE);
 	    LOOPX(OP_GOTO);
 
@@ -7762,6 +7801,7 @@ Perl_yylex(pTHX)
 	    LOP(OP_KILL,XTERM);
 
 	case KEY_last:
+	    PL_expect = XOPERATOR;
 	    s = force_word(s,WORD,TRUE,FALSE,FALSE);
 	    LOOPX(OP_LAST);
 	
@@ -7866,6 +7906,7 @@ Perl_yylex(pTHX)
 	    OPERATOR(MY);
 
 	case KEY_next:
+	    PL_expect = XOPERATOR;
 	    s = force_word(s,WORD,TRUE,FALSE,FALSE);
 	    LOOPX(OP_NEXT);
 
@@ -8051,6 +8092,7 @@ Perl_yylex(pTHX)
 
 	case KEY_require:
 	    s = SKIPSPACE1(s);
+	    PL_expect = XOPERATOR;
 	    if (isDIGIT(*s)) {
 		s = force_version(s, FALSE);
 	    }
@@ -8082,6 +8124,7 @@ Perl_yylex(pTHX)
 	    UNI(OP_RESET);
 
 	case KEY_redo:
+	    PL_expect = XOPERATOR;
 	    s = force_word(s,WORD,TRUE,FALSE,FALSE);
 	    LOOPX(OP_REDO);
 
@@ -8635,6 +8678,26 @@ Perl_yylex(pTHX)
 #ifdef __SC__
 #pragma segment Main
 #endif
+
+/*
+  S_pending_ident
+
+  Looks up an identifier in the pad or in a package
+
+  Returns:
+    PRIVATEREF if this is a lexical name.
+    WORD       if this belongs to a package.
+
+  Structure:
+      if we're in a my declaration
+	  croak if they tried to say my($foo::bar)
+	  build the ops for a my() declaration
+      if it's an access to a my() variable
+	  build ops for access to a my() variable
+      if in a dq string, and they've said @foo and we can't find @foo
+	  warn
+      build ops for a bareword
+*/
 
 static int
 S_pending_ident(pTHX)
@@ -10922,7 +10985,8 @@ Perl_start_subparse(pTHX_ I32 is_format, U32 flags)
     CvOUTSIDE(PL_compcv) = MUTABLE_CV(SvREFCNT_inc_simple(outsidecv));
     CvOUTSIDE_SEQ(PL_compcv) = PL_cop_seqmax;
     if (outsidecv && CvPADLIST(outsidecv))
-	CvPADLIST(PL_compcv)->xpadl_outid = CvPADLIST(outsidecv)->xpadl_id;
+	CvPADLIST(PL_compcv)->xpadl_outid =
+	    PadlistNAMES(CvPADLIST(outsidecv));
 
     return oldsavestack_ix;
 }

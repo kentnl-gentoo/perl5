@@ -250,6 +250,7 @@ PP(pp_substcont)
 		    SvUTF8_on(targ);
 		SvPV_set(dstr, NULL);
 
+		PL_tainted = 0;
 		mPUSHi(saviters - 1);
 
 		(void)SvPOK_only_UTF8(targ);
@@ -1933,9 +1934,13 @@ PP(pp_reset)
 {
     dVAR;
     dSP;
-    const char * const tmps =
-	(MAXARG < 1 || (!TOPs && !POPs)) ? (const char *)"" : POPpconstx;
-    sv_reset(tmps, CopSTASH(PL_curcop));
+    const char * tmps;
+    STRLEN len = 0;
+    if (MAXARG < 1 || (!TOPs && !POPs))
+	tmps = NULL, len = 0;
+    else
+	tmps = SvPVx_const(POPs, len);
+    sv_resetpvn(tmps, len, CopSTASH(PL_curcop));
     PUSHs(&PL_sv_yes);
     RETURN;
 }
@@ -1960,9 +1965,12 @@ PP(pp_dbstate)
 	const I32 gimme = G_ARRAY;
 	U8 hasargs;
 	GV * const gv = PL_DBgv;
-	CV * const cv = GvCV(gv);
+	CV * cv = NULL;
 
-	if (!cv)
+        if (gv && isGV_with_GP(gv))
+            cv = GvCV(gv);
+
+	if (!cv || (!CvROOT(cv) && !CvXSUB(cv)))
 	    DIE(aTHX_ "No DB::DB routine defined");
 
 	if (CvDEPTH(cv) >= 1 && !(PL_debug & DEBUG_DB_RECURSE_FLAG))
@@ -3265,7 +3273,8 @@ Perl_find_runcv_where(pTHX_ U8 cond, IV arg, U32 *db_seqp)
 		switch (cond) {
 		case FIND_RUNCV_padid_eq:
 		    if (!CvPADLIST(cv)
-		     || CvPADLIST(cv)->xpadl_id != (U32)arg) continue;
+		     || PadlistNAMES(CvPADLIST(cv)) != (PADNAMELIST *)arg)
+			continue;
 		    return cv;
 		case FIND_RUNCV_level_eq:
 		    if (level++ != arg) continue;
@@ -3925,22 +3934,36 @@ PP(pp_require)
 	        if (namesv) {			/* did we lookup @INC? */
 		    AV * const ar = GvAVn(PL_incgv);
 		    I32 i;
+		    SV *const msg = newSVpv("", 0);
 		    SV *const inc = newSVpvs_flags("", SVs_TEMP);
 		    for (i = 0; i <= AvFILL(ar); i++) {
 			sv_catpvs(inc, " ");
 			sv_catsv(inc, *av_fetch(ar, i, TRUE));
 		    }
+		    if (len >= 4 && memEQ(name + len - 3, ".pm", 4)) {
+			const char *c, *e = name + len - 3;
+			sv_catpv(msg, " (you may need to install the ");
+			for (c = name; c < e; c++) {
+			    if (*c == '/') {
+				sv_catpvn(msg, "::", 2);
+			    }
+			    else {
+				sv_catpvn(msg, c, 1);
+			    }
+			}
+			sv_catpv(msg, " module)");
+		    }
+		    else if (len >= 2 && memEQ(name + len - 2, ".h", 3)) {
+			sv_catpv(msg, " (change .h to .ph maybe?) (did you run h2ph?)");
+		    }
+		    else if (len >= 3 && memEQ(name + len - 3, ".ph", 4)) {
+			sv_catpv(msg, " (did you run h2ph?)");
+		    }
 
 		    /* diag_listed_as: Can't locate %s */
 		    DIE(aTHX_
-			"Can't locate %s in @INC%s%s (@INC contains:%" SVf ")",
-			name,
-			(len >= 2 && memEQ(name + len - 2, ".h", 3)
-			 ? " (change .h to .ph maybe?) (did you run h2ph?)" : ""),
-			(len >= 3 && memEQ(name + len - 3, ".ph", 4)
-			 ? " (did you run h2ph?)" : ""),
-			inc
-			);
+			"Can't locate %s in @INC%" SVf " (@INC contains:%" SVf ")",
+			name, msg, inc);
 		}
 	    }
 	    DIE(aTHX_ "Can't locate %s", name);
@@ -5361,6 +5384,7 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	LEAVE_with_name("call_filter_sub");
     }
 
+    if (SvIsCOW(upstream)) sv_force_normal(upstream);
     if(!err && SvOK(upstream)) {
 	got_p = SvPV(upstream, got_len);
 	if (umaxlen) {

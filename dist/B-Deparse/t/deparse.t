@@ -322,6 +322,8 @@ my $foo = "Ab\x{100}\200\x{200}\237Cd\000Ef\x{1000}\cA\x{2000}\cZ";
 ####
 # s///e
 s/x/'y';/e;
+s/x/$a;/e;
+s/x/complex_expression();/e;
 ####
 # block
 { my $x; }
@@ -1263,3 +1265,17 @@ foreach my $i (1 .. 3) {
 continue {
     ();
 }
+####
+# file handles
+no strict;
+my $mfh;
+open F;
+open *F;
+open $fh;
+open $mfh;
+open 'a+b';
+select *F;
+select F;
+select $f;
+select $mfh;
+select 'a+b';

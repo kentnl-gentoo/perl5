@@ -38,10 +38,17 @@ typedef signed char yysigned_char;
 /* YYINITDEPTH -- initial size of the parser's stacks.  */
 #define YYINITDEPTH 200
 
+#ifdef YYDEBUG
+#  undef YYDEBUG
+#endif
 #ifdef DEBUGGING
 #  define YYDEBUG 1
 #else
 #  define YYDEBUG 0
+#endif
+
+#ifndef YY_NULL
+# define YY_NULL 0
 #endif
 
 /* contains all the parser state tables; auto-generated from perly.y */

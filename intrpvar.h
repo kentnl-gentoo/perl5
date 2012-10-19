@@ -299,10 +299,7 @@ PERLVAR(I, exit_flags,	U8)		/* was exit() unexpected, etc. */
 PERLVAR(I, inplace,	char *)
 PERLVAR(I, e_script,	SV *)
 
-/* magical thingies */
 PERLVAR(I, basetime,	Time_t)		/* $^T */
-PERLVAR(I, formfeed,	SV *)		/* $^L */
-
 
 PERLVARI(I, maxsysfd,	I32,	MAXSYSFD)
 					/* top fd to pass to subprocesses */
@@ -612,6 +609,7 @@ PERLVAR(I, XPosixXDigit, SV *)
 PERLVAR(I, VertSpace,   SV *)
 
 PERLVAR(I, NonL1NonFinalFold,   SV *)
+PERLVAR(I, HasMultiCharFold,   SV *)
 
 /* utf8 character class swashes */
 PERLVAR(I, utf8_alnum,	SV *)
@@ -770,7 +768,6 @@ PERLVAR(I, custom_ops,	HV *)		/* custom op registrations */
 PERLVARI(I, globhook,	globhook_t, NULL)
 
 PERLVARI(I, glob_index,	int,	0)
-PERLVARI(I, padlist_generation, U32, 1)	/* id to identify padlist clones */
 PERLVAR(I, reentrant_retint, int)	/* Integer return value from reentrant functions */
 
 /* The last unconditional member of the interpreter structure when 5.10.0 was

@@ -85,7 +85,7 @@ my $tree = {
        	'threads'	=> [ 5.008, DEFAULT_OFF],
        	'imprecision'	=> [ 5.011, DEFAULT_OFF],
        	'experimental'	=> [ 5.017, {
-                                'experimental:lexical_subs' =>
+                                'experimental::lexical_subs' =>
                                     [ 5.017, DEFAULT_ON ],
                         }],
 
@@ -212,7 +212,7 @@ sub printTree
 	}
 
 	my ($ver, $rest) = @{ $v } ;
-	if (ref $rest && $k ne 'experimental')
+	if (ref $rest)
 	{
 	    my $bar = @keys ? "|" : " ";
 	    print " -" . "-" x ($max - length $k ) . "+\n" ;
@@ -437,7 +437,7 @@ read_only_bottom_close_and_rename($pm);
 __END__
 package warnings;
 
-our $VERSION = '1.14';
+our $VERSION = '1.15';
 
 # Verify that we're called correctly so that warnings will work.
 # see also strict.pm.
@@ -486,10 +486,6 @@ If no import list is supplied, all possible warnings are either enabled
 or disabled.
 
 A number of functions are provided to assist module authors.
-
-In all the descriptions below, $category can also be a warnings category
-and ID separated by a colon, such as "experimental:lexical_subs".  See
-L<perllexwarn/Individual Warning IDs>.
 
 =over 4
 

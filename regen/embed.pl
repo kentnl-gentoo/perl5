@@ -85,7 +85,13 @@ my ($embed, $core, $ext, $api) = setup_embed();
 	}
 
 	if ($flags =~ /([si])/) {
-	    my $type = ($1 eq 's') ? "STATIC" : "PERL_STATIC_INLINE";
+	    my $type;
+	    if ($never_returns) {
+		$type = $1 eq 's' ? "PERL_STATIC_NO_RET" : "PERL_STATIC_INLINE_NO_RET";
+	    }
+	    else {
+		$type = $1 eq 's' ? "STATIC" : "PERL_STATIC_INLINE";
+	    }
 	    warn "$func: i and s flags are mutually exclusive"
 					    if $flags =~ /s/ && $flags =~ /i/;
 	    $retval = "$type $splint_flags$retval";

@@ -1096,10 +1096,7 @@ Perl_utf8_length(pTHX_ const U8 *s, const U8 *e)
     if (e < s)
 	goto warn_and_return;
     while (s < e) {
-	if (!UTF8_IS_INVARIANT(*s))
-	    s += UTF8SKIP(s);
-	else
-	    s++;
+        s += UTF8SKIP(s);
 	len++;
     }
 
@@ -3609,7 +3606,7 @@ HV*
 Perl__swash_inversion_hash(pTHX_ SV* const swash)
 {
 
-   /* Subject to change or removal.  For use only in one place in regcomp.c.
+   /* Subject to change or removal.  For use only in regcomp.c and regexec.c
     * Can't be used on a property that is subject to user override, as it
     * relies on the value of SPECIALS in the swash which would be set by
     * utf8_heavy.pl to the hash in the non-overriden file, and hence is not set

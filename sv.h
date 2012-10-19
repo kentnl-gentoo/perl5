@@ -1805,6 +1805,8 @@ mg.c:1024: warning: left-hand operand of comma expression has no effect
 #define sv_insert(bigstr, offset, len, little, littlelen)		\
 	Perl_sv_insert_flags(aTHX_ (bigstr),(offset), (len), (little),	\
 			     (littlelen), SV_GMAGIC)
+#define sv_mortalcopy(sv) \
+	Perl_sv_mortalcopy_flags(aTHX_ sv, SV_GMAGIC|SV_DO_COW_SVSETSV)
 
 /* Should be named SvCatPVN_utf8_upgrade? */
 #define sv_catpvn_nomg_utf8_upgrade(dsv, sstr, slen, nsv)	\
@@ -1817,6 +1819,16 @@ mg.c:1024: warning: left-hand operand of comma expression has no effect
 	    sv_utf8_upgrade(nsv);			\
 	    sv_catsv_nomg(dsv, nsv);			\
 	} STMT_END
+#define sv_catpvn_nomg_maybeutf8(dsv, sstr, slen, is_utf8) \
+	sv_catpvn_flags(dsv, sstr, slen, (is_utf8)?SV_CATUTF8:SV_CATBYTES)
+
+#ifdef PERL_CORE
+# define sv_or_pv_len_utf8(sv, pv, bytelen)	      \
+    (SvGAMAGIC(sv)				       \
+	? utf8_length((U8 *)(pv), (U8 *)(pv)+(bytelen))	\
+	: sv_len_utf8(sv))
+# define sv_or_pv_pos_u2b(sv,s,p,lp) S_sv_or_pv_pos_u2b(aTHX_ sv,s,p,lp)
+#endif
 
 /*
 =for apidoc Am|SV*|newRV_inc|SV* sv

@@ -808,6 +808,7 @@ XS(XS_utf8_encode)
     if (items != 1)
 	croak_xs_usage(cv, "sv");
     sv_utf8_encode(ST(0));
+    SvSETMAGIC(ST(0));
     XSRETURN_EMPTY;
 }
 
@@ -822,6 +823,7 @@ XS(XS_utf8_decode)
 	bool RETVAL;
 	SvPV_force_nolen(sv);
 	RETVAL = sv_utf8_decode(sv);
+	SvSETMAGIC(sv);
 	ST(0) = boolSV(RETVAL);
     }
     XSRETURN(1);
@@ -1353,7 +1355,7 @@ struct xsub_details {
     const char *proto;
 };
 
-struct xsub_details details[] = {
+const struct xsub_details details[] = {
     {"UNIVERSAL::isa", XS_UNIVERSAL_isa, NULL},
     {"UNIVERSAL::can", XS_UNIVERSAL_can, NULL},
     {"UNIVERSAL::DOES", XS_UNIVERSAL_DOES, NULL},
@@ -1413,7 +1415,7 @@ Perl_boot_core_UNIVERSAL(pTHX)
 {
     dVAR;
     static const char file[] = __FILE__;
-    struct xsub_details *xsub = details;
+    const struct xsub_details *xsub = details;
     const struct xsub_details *end
 	= details + sizeof(details) / sizeof(details[0]);
 

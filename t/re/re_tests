@@ -1543,7 +1543,8 @@ a\97	a97	y	$&	a97
 /^\p{L}/	\x{3400}	y	$&	\x{3400}
 
 # RT #89774
-/[s\xDF]a/ui	ssa	ybT	$&	ssa
+/[s\xDF]a/ui	ssa	y	$&	ssa
+/[s\xDF]a/ui	sa	y	$&	sa
 
 # RT #99928
 /^\R\x0A$/	\x0D\x0A	n	-	-
@@ -1707,5 +1708,7 @@ ab[c\\\](??{"x"})]{3}d	ab\\](d	y	-	-
 # string is not copied
 
 (\x{100})	\x{2000}\x{2000}\x{2000}\x{100}	y	$-[0]:$-[1]:$+[0]:$+[1]	3:3:4:4
+
+^\R{2}$	\r\n\r\n	y	$&	\r\n\r\n
 
 # vim: softtabstop=0 noexpandtab

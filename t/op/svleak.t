@@ -15,7 +15,7 @@ BEGIN {
 
 use Config;
 
-plan tests => 27;
+plan tests => 32;
 
 # run some code N times. If the number of SVs at the end of loop N is
 # greater than (N-1)*delta at the end of loop 1, we've got a leak
@@ -183,3 +183,56 @@ SKIP: {
     leak(2, 0, sub { eval 'tr/9-0//' }, 'tr/9-0//');
     leak(2, 0, sub { eval 'tr/a-z-0//' }, 'tr/a-z-0//');
 }
+
+# [perl #114764] Attributes leak scalars
+leak(2, 0, sub { eval 'my $x : shared' }, 'my $x :shared used to leak');
+
+# Tied hash iteration was leaking if the hash was freed before itera-
+# tion was over.
+package t {
+    sub TIEHASH { bless [] }
+    sub FIRSTKEY { 0 }
+}
+leak(2, 0, sub {
+    my $h = {};
+    tie %$h, t;
+    each %$h;
+    undef $h;
+}, 'tied hash iteration does not leak');
+
+# List assignment was leaking when assigning explosive scalars to
+# aggregates.
+package sty {
+    sub TIESCALAR { bless [] }
+    sub FETCH    { die }
+}
+leak(2, 0, sub {
+    tie my $x, sty;
+    eval {%a = ($x, 0)}; # key
+    eval {%a = (0, $x)}; # value
+    eval {%a = ($x,$x)}; # both
+}, 'hash assignment does not leak');
+leak(2, 0, sub {
+    tie my $x, sty;
+    eval {@a = ($x)};
+}, 'array assignment does not leak');
+
+# [perl #107000]
+package hhtie {
+    sub TIEHASH { bless [] }
+    sub STORE    { $_[0][0]{$_[1]} = $_[2] }
+    sub FETCH    { die if $explosive; $_[0][0]{$_[1]} }
+    sub FIRSTKEY { keys %{$_[0][0]}; each %{$_[0][0]} }
+    sub NEXTKEY  { each %{$_[0][0]} }
+}
+leak(2,!!$Config{mad}, sub {
+    eval q`
+    	BEGIN {
+	    $hhtie::explosive = 0;
+	    tie %^H, hhtie;
+	    $^H{foo} = bar;
+	    $hhtie::explosive = 1;
+    	}
+	{ 1; }
+    `;
+}, 'hint-hash copying does not leak');

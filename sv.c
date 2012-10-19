@@ -1397,6 +1397,7 @@ Perl_sv_upgrade(pTHX_ register SV *const sv, svtype new_type)
 	    SvOBJECT_on(io);
 	    /* Clear the stashcache because a new IO could overrule a package
 	       name */
+            DEBUG_o(Perl_deb(aTHX_ "sv_upgrade clearing PL_stashcache\n"));
 	    hv_clear(PL_stashcache);
 
 	    SvSTASH_set(io, MUTABLE_HV(SvREFCNT_inc(GvHV(iogv))));
@@ -3099,7 +3100,7 @@ Always sets the SvUTF8 flag to avoid future validity checks even
 if the whole string is the same in UTF-8 as not.
 Returns the number of bytes in the converted string
 
-This is not as a general purpose byte encoding to Unicode interface:
+This is not a general purpose byte encoding to Unicode interface:
 use the Encode extension for that.
 
 =for apidoc sv_utf8_upgrade_nomg
@@ -3118,7 +3119,7 @@ Returns the number of bytes in the converted string
 C<sv_utf8_upgrade> and
 C<sv_utf8_upgrade_nomg> are implemented in terms of this function.
 
-This is not as a general purpose byte encoding to Unicode interface:
+This is not a general purpose byte encoding to Unicode interface:
 use the Encode extension for that.
 
 =cut
@@ -3163,7 +3164,7 @@ Perl_sv_utf8_upgrade_flags_grow(pTHX_ register SV *const sv, const I32 flags, ST
 
     if (sv == &PL_sv_undef)
 	return 0;
-    if (!SvPOK(sv)) {
+    if (!SvPOK_nog(sv)) {
 	STRLEN len = 0;
 	if (SvREADONLY(sv) && (SvPOKp(sv) || SvIOKp(sv) || SvNOKp(sv))) {
 	    (void) sv_2pv_flags(sv,&len, flags);
@@ -3421,7 +3422,7 @@ in a byte, this conversion will fail;
 in this case, either returns false or, if C<fail_ok> is not
 true, croaks.
 
-This is not as a general purpose Unicode to byte encoding interface:
+This is not a general purpose Unicode to byte encoding interface:
 use the Encode extension for that.
 
 =cut
@@ -3882,6 +3883,14 @@ S_glob_assign_ref(pTHX_ SV *const dstr, SV *const sstr)
 	    assert(mg);
 	    Perl_magic_clearisa(aTHX_ NULL, mg);
 	}
+        else if (stype == SVt_PVIO) {
+            DEBUG_o(Perl_deb(aTHX_ "glob_assign_ref clearing PL_stashcache\n"));
+            /* It's a cache. It will rebuild itself quite happily.
+               It's a lot of effort to work out exactly which key (or keys)
+               might be invalidated by the creation of the this file handle.
+            */
+            hv_clear(PL_stashcache);
+        }
 	break;
     }
     SvREFCNT_dec(dref);
@@ -4711,7 +4720,7 @@ Perl_sv_force_normal_flags(pTHX_ register SV *const sv, const U32 flags)
 
 #ifdef PERL_OLD_COPY_ON_WRITE
     if (SvREADONLY(sv)) {
-	if (SvFAKE(sv)) {
+	if (SvIsCOW(sv)) {
 	    const char * const pvx = SvPVX_const(sv);
 	    const STRLEN len = SvLEN(sv);
 	    const STRLEN cur = SvCUR(sv);
@@ -6047,9 +6056,12 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 		if (   PL_phase != PERL_PHASE_DESTRUCT
 		    && (name = HvNAME((HV*)sv)))
 		{
-		    if (PL_stashcache)
+		    if (PL_stashcache) {
+                    DEBUG_o(Perl_deb(aTHX_ "sv_clear clearing PL_stashcache for '%"SVf"'\n",
+                                     sv));
 			(void)hv_delete(PL_stashcache, name,
 			    HvNAMEUTF8((HV*)sv) ? -HvNAMELEN_get((HV*)sv) : HvNAMELEN_get((HV*)sv), G_DISCARD);
+                    }
 		    hv_name_set((HV*)sv, NULL, 0, 0);
 		}
 
@@ -6460,7 +6472,8 @@ Perl_sv_free2(pTHX_ SV *const sv)
 =for apidoc sv_len
 
 Returns the length of the string in the SV.  Handles magic and type
-coercion.  See also C<SvCUR>, which gives raw access to the xpv_cur slot.
+coercion and sets the UTF8 flag appropriately.  See also C<SvCUR>, which
+gives raw access to the xpv_cur slot.
 
 =cut
 */
@@ -6473,10 +6486,7 @@ Perl_sv_len(pTHX_ register SV *const sv)
     if (!sv)
 	return 0;
 
-    if (SvGMAGICAL(sv))
-	len = mg_length(sv);
-    else
-        (void)SvPV_const(sv, len);
+    (void)SvPV_const(sv, len);
     return len;
 }
 
@@ -6504,13 +6514,8 @@ Perl_sv_len_utf8(pTHX_ register SV *const sv)
     if (!sv)
 	return 0;
 
-    if (SvGMAGICAL(sv))
-	return mg_length(sv);
-    else
-    {
-	SvGETMAGIC(sv);
-	return sv_len_utf8_nomg(sv);
-    }
+    SvGETMAGIC(sv);
+    return sv_len_utf8_nomg(sv);
 }
 
 STRLEN
@@ -6522,7 +6527,7 @@ Perl_sv_len_utf8_nomg(pTHX_ SV * const sv)
 
     PERL_ARGS_ASSERT_SV_LEN_UTF8_NOMG;
 
-    if (PL_utf8cache) {
+    if (PL_utf8cache && SvUTF8(sv)) {
 	    STRLEN ulen;
 	    MAGIC *mg = SvMAGICAL(sv) ? mg_find(sv, PERL_MAGIC_utf8) : NULL;
 
@@ -6549,7 +6554,7 @@ Perl_sv_len_utf8_nomg(pTHX_ SV * const sv)
 	    }
 	    return ulen;
     }
-    return Perl_utf8_length(aTHX_ s, s + len);
+    return SvUTF8(sv) ? Perl_utf8_length(aTHX_ s, s + len) : len;
 }
 
 /* Walk forwards to find the byte corresponding to the passed in UTF-8
@@ -6637,7 +6642,7 @@ S_sv_pos_u2b_cached(pTHX_ SV *const sv, MAGIC **const mgp, const U8 *const start
     if (!uoffset)
 	return 0;
 
-    if (!SvREADONLY(sv)
+    if (!SvREADONLY(sv) && !SvGMAGICAL(sv) && SvPOK(sv)
 	&& PL_utf8cache
 	&& (*mgp || (SvTYPE(sv) >= SVt_PVMG &&
 		     (*mgp = mg_find(sv, PERL_MAGIC_utf8))))) {
@@ -6720,7 +6725,7 @@ S_sv_pos_u2b_cached(pTHX_ SV *const sv, MAGIC **const mgp, const U8 *const start
 	boffset = real_boffset;
     }
 
-    if (PL_utf8cache) {
+    if (PL_utf8cache && !SvGMAGICAL(sv) && SvPOK(sv)) {
 	if (at_end)
 	    utf8_mg_len_cache_update(sv, mgp, uoffset);
 	else
@@ -6832,7 +6837,7 @@ S_utf8_mg_len_cache_update(pTHX_ SV *const sv, MAGIC **const mgp,
 			   const STRLEN ulen)
 {
     PERL_ARGS_ASSERT_UTF8_MG_LEN_CACHE_UPDATE;
-    if (SvREADONLY(sv))
+    if (SvREADONLY(sv) || SvGMAGICAL(sv) || !SvPOK(sv))
 	return;
 
     if (!*mgp && (SvTYPE(sv) < SVt_PVMG ||
@@ -8220,13 +8225,13 @@ statement boundaries.  See also C<sv_newmortal> and C<sv_2mortal>.
  * permanent location. */
 
 SV *
-Perl_sv_mortalcopy(pTHX_ SV *const oldstr)
+Perl_sv_mortalcopy_flags(pTHX_ SV *const oldstr, U32 flags)
 {
     dVAR;
     SV *sv;
 
     new_SV(sv);
-    sv_setsv(sv,oldstr);
+    sv_setsv_flags(sv,oldstr,flags);
     PUSH_EXTEND_MORTAL__SV_C(sv);
     SvTEMP_on(sv);
     return sv;
@@ -8709,11 +8714,12 @@ Perl_newSVsv(pTHX_ register SV *const old)
 	Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL), "semi-panic: attempt to dup freed string");
 	return NULL;
     }
+    /* Do this here, otherwise we leak the new SV if this croaks. */
+    SvGETMAGIC(old);
     new_SV(sv);
-    /* SV_GMAGIC is the default for sv_setv()
-       SV_NOSTEAL prevents TEMP buffers being, well, stolen, and saves games
+    /* SV_NOSTEAL prevents TEMP buffers being, well, stolen, and saves games
        with SvTEMP_off and SvTEMP_on round a call to sv_setsv.  */
-    sv_setsv_flags(sv, old, SV_GMAGIC | SV_NOSTEAL);
+    sv_setsv_flags(sv, old, SV_NOSTEAL);
     return sv;
 }
 
@@ -8729,15 +8735,22 @@ Note that the perl-level function is vaguely deprecated.
 void
 Perl_sv_reset(pTHX_ register const char *s, HV *const stash)
 {
+    PERL_ARGS_ASSERT_SV_RESET;
+
+    sv_resetpvn(*s ? s : NULL, strlen(s), stash);
+}
+
+void
+Perl_sv_resetpvn(pTHX_ const char *s, STRLEN len, HV * const stash)
+{
     dVAR;
     char todo[PERL_UCHAR_MAX+1];
-
-    PERL_ARGS_ASSERT_SV_RESET;
+    const char *send;
 
     if (!stash)
 	return;
 
-    if (!*s) {		/* reset ?? searches */
+    if (!s) {		/* reset ?? searches */
 	MAGIC * const mg = mg_find((const SV *)stash, PERL_MAGIC_symtab);
 	if (mg) {
 	    const U32 count = mg->mg_len / sizeof(PMOP**);
@@ -8762,7 +8775,8 @@ Perl_sv_reset(pTHX_ register const char *s, HV *const stash)
 	return;
 
     Zero(todo, 256, char);
-    while (*s) {
+    send = s + len;
+    while (s < send) {
 	I32 max;
 	I32 i = (unsigned char)*s;
 	if (s[1] == '-') {
@@ -9108,8 +9122,8 @@ Perl_sv_pvutf8n_force(pTHX_ SV *const sv, STRLEN *const lp)
 {
     PERL_ARGS_ASSERT_SV_PVUTF8N_FORCE;
 
-    sv_pvn_force(sv,lp);
-    sv_utf8_upgrade(sv);
+    sv_pvn_force(sv,0);
+    sv_utf8_upgrade_nomg(sv);
     *lp = SvCUR(sv);
     return SvPVX(sv);
 }
@@ -10518,16 +10532,17 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		if (DO_UTF8(argsv)) {
 		    STRLEN old_precis = precis;
 		    if (has_precis && precis < elen) {
-			STRLEN ulen = sv_len_utf8_nomg(argsv);
+			STRLEN ulen = sv_or_pv_len_utf8(argsv, eptr, elen);
 			STRLEN p = precis > ulen ? ulen : precis;
-			precis = sv_pos_u2b_flags(argsv, p, 0, 0);
+			precis = sv_or_pv_pos_u2b(argsv, eptr, p, 0);
 							/* sticks at end */
 		    }
 		    if (width) { /* fudge width (can't fudge elen) */
 			if (has_precis && precis < elen)
 			    width += precis - old_precis;
 			else
-			    width += elen - sv_len_utf8_nomg(argsv);
+			    width +=
+				elen - sv_or_pv_len_utf8(argsv,eptr,elen);
 		    }
 		    is_utf8 = TRUE;
 		}
@@ -13161,7 +13176,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_e_script		= sv_dup_inc(proto_perl->Ie_script, param);
 
     /* magical thingies */
-    PL_formfeed		= sv_dup(proto_perl->Iformfeed, param);
 
     PL_encoding		= sv_dup(proto_perl->Iencoding, param);
 
@@ -13363,6 +13377,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_VertSpace	= sv_dup_inc(proto_perl->IVertSpace, param);
 
     PL_NonL1NonFinalFold = sv_dup_inc(proto_perl->INonL1NonFinalFold, param);
+    PL_HasMultiCharFold= sv_dup_inc(proto_perl->IHasMultiCharFold, param);
 
     /* utf8 character class swashes */
     PL_utf8_alnum	= sv_dup_inc(proto_perl->Iutf8_alnum, param);
@@ -13393,7 +13408,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_ASCII		= sv_dup_inc(proto_perl->IASCII, param);
     PL_AboveLatin1	= sv_dup_inc(proto_perl->IAboveLatin1, param);
     PL_Latin1		= sv_dup_inc(proto_perl->ILatin1, param);
-
 
     if (proto_perl->Ipsig_pend) {
 	Newxz(PL_psig_pend, SIG_SIZE, int);
@@ -13911,7 +13925,7 @@ Perl_varname(pTHX_ const GV *const gv, const char gvtype, PADOFFSET targ,
 	    return NULL;
 	av = *PadlistARRAY(CvPADLIST(cv));
 	sv = *av_fetch(av, targ, FALSE);
-	sv_setsv(name, sv);
+	sv_setsv_flags(name, sv, 0);
     }
 
     if (subscript_type == FUV_SUBSCRIPT_HASH) {

@@ -381,7 +381,7 @@ get_emd_part(SV **prev_pathp, STRLEN *const len, char *trailing_path, ...)
     return NULL;
 }
 
-char *
+EXTERN_C char *
 win32_get_privlib(const char *pl, STRLEN *const len)
 {
     dTHX;
@@ -439,7 +439,7 @@ win32_get_xlib(const char *pl, const char *xlib, const char *libname,
     return SvPVX(sv1);
 }
 
-char *
+EXTERN_C char *
 win32_get_sitelib(const char *pl, STRLEN *const len)
 {
     return win32_get_xlib(pl, "sitelib", "site", len);
@@ -449,7 +449,7 @@ win32_get_sitelib(const char *pl, STRLEN *const len)
 #  define PERL_VENDORLIB_NAME	"vendor"
 #endif
 
-char *
+EXTERN_C char *
 win32_get_vendorlib(const char *pl, STRLEN *const len)
 {
     return win32_get_xlib(pl, "vendorlib", PERL_VENDORLIB_NAME, len);
@@ -1020,7 +1020,7 @@ win32_dirp_dup(DIR *const dirp, CLONE_PARAMS *const param)
 {
     dVAR;
     PerlInterpreter *const from = param->proto_perl;
-    PerlInterpreter *const to   = PERL_GET_THX;
+    PerlInterpreter *const to   = (PerlInterpreter *)PERL_GET_THX;
 
     long pos;
     DIR *dup;
@@ -1109,7 +1109,7 @@ setgid(gid_t agid)
     return (agid == ROOT_GID ? 0 : -1);
 }
 
-char *
+EXTERN_C char *
 getlogin(void)
 {
     dTHX;
@@ -1686,7 +1686,7 @@ wstr_to_str(const wchar_t* wstr)
     size_t wlen = wcslen(wstr) + 1;
     int len = WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wstr, wlen,
                                    NULL, 0, NULL, NULL);
-    char* str = malloc(len);
+    char* str = (char*)malloc(len);
     if (!str)
         out_of_memory();
     WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, wstr, wlen,
@@ -1719,7 +1719,7 @@ win32_ansipath(const WCHAR *widename)
     size_t widelen = wcslen(widename)+1;
     int len = WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, widename, widelen,
                                   NULL, 0, NULL, NULL);
-    name = win32_malloc(len);
+    name = (char*)win32_malloc(len);
     if (!name)
         out_of_memory();
 
@@ -1728,14 +1728,14 @@ win32_ansipath(const WCHAR *widename)
     if (use_default) {
         DWORD shortlen = GetShortPathNameW(widename, NULL, 0);
         if (shortlen) {
-            WCHAR *shortname = win32_malloc(shortlen*sizeof(WCHAR));
+            WCHAR *shortname = (WCHAR*)win32_malloc(shortlen*sizeof(WCHAR));
             if (!shortname)
                 out_of_memory();
             shortlen = GetShortPathNameW(widename, shortname, shortlen)+1;
 
             len = WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, shortname, shortlen,
                                       NULL, 0, NULL, NULL);
-            name = win32_realloc(name, len);
+            name = (char*)win32_realloc(name, len);
             if (!name)
                 out_of_memory();
             WideCharToMultiByte(CP_ACP, WC_NO_BEST_FIT_CHARS, shortname, shortlen,
@@ -1746,6 +1746,10 @@ win32_ansipath(const WCHAR *widename)
     return name;
 }
 
+/* the returned string must be freed with win32_freeenvironmentstrings which is
+ * implemented as a macro
+ * void win32_freeenvironmentstrings(void* block)
+ */
 DllExport char *
 win32_getenvironmentstrings(void)
 {
@@ -1773,12 +1777,6 @@ win32_getenvironmentstrings(void)
                         aenvstrings_len, NULL, NULL);
 
     return(lpStr);
-}
-
-DllExport void
-win32_freeenvironmentstrings(void* block)
-{
-    win32_free(block);
 }
 
 DllExport char *
@@ -2702,11 +2700,6 @@ win32_fopen(const char *filename, const char *mode)
 	win32_fseek(f, 0, SEEK_END);
     return f;
 }
-
-#ifndef USE_SOCKETS_AS_HANDLES
-#undef fdopen
-#define fdopen my_fdopen
-#endif
 
 DllExport FILE *
 win32_fdopen(int handle, const char *mode)
@@ -4098,7 +4091,7 @@ win32_dynaload(const char* filename)
 {
     dTHX;
     char buf[MAX_PATH+1];
-    char *first;
+    const char *first;
 
     /* LoadLibrary() doesn't recognize forward slashes correctly,
      * so turn 'em back. */
@@ -4151,10 +4144,12 @@ Perl_init_os_extras(void)
     char *file = __FILE__;
 
     /* Initialize Win32CORE if it has been statically linked. */
+#ifndef PERL_IS_MINIPERL
     void (*pfn_init)(pTHX);
     pfn_init = (void (*)(pTHX))GetProcAddress((HMODULE)w32_perldll_handle, "init_Win32CORE");
     if (pfn_init)
         pfn_init(aTHX);
+#endif
 
     newXS("Win32::SetChildShowWindow", w32_SetChildShowWindow, file);
 }
@@ -4242,13 +4237,13 @@ ansify_path(void)
 
     /* fetch Unicode version of PATH */
     len = 2000;
-    wide_path = win32_malloc(len*sizeof(WCHAR));
+    wide_path = (WCHAR*)win32_malloc(len*sizeof(WCHAR));
     while (wide_path) {
         size_t newlen = GetEnvironmentVariableW(L"PATH", wide_path, len);
         if (newlen < len)
             break;
         len = newlen;
-        wide_path = win32_realloc(wide_path, len*sizeof(WCHAR));
+        wide_path = (WCHAR*)win32_realloc(wide_path, len*sizeof(WCHAR));
     }
     if (!wide_path)
         return;
@@ -4277,7 +4272,7 @@ ansify_path(void)
         ansi_len = strlen(ansi_dir);
         if (ansi_path) {
             size_t newlen = len + 1 + ansi_len;
-            ansi_path = win32_realloc(ansi_path, newlen+1);
+            ansi_path = (char*)win32_realloc(ansi_path, newlen+1);
             if (!ansi_path)
                 break;
             ansi_path[len] = ';';
@@ -4286,7 +4281,7 @@ ansify_path(void)
         }
         else {
             len = ansi_len;
-            ansi_path = win32_malloc(5+len+1);
+            ansi_path = (char*)win32_malloc(5+len+1);
             if (!ansi_path)
                 break;
             memcpy(ansi_path, "PATH=", 5);

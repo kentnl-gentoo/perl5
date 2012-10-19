@@ -1913,10 +1913,6 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 		Perl_ck_warner_d(aTHX_ packWARN2(WARN_DEPRECATED, WARN_SYNTAX),
 				 "$%c is no longer supported", *name);
 	    break;
-	case '|':		/* $| */
-	    sv_setiv(GvSVn(gv), (IV)(IoFLAGS(GvIOp(PL_defoutgv)) & IOf_FLUSH) != 0);
-	    goto magicalize;
-
 	case '\010':	/* $^H */
 	    {
 		HV *const hv = GvHVn(gv);
@@ -1957,6 +1953,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 	case '>':		/* $> */
 	case '\\':		/* $\ */
 	case '/':		/* $/ */
+	case '|':		/* $| */
 	case '$':		/* $$ */
 	case '\001':	/* $^A */
 	case '\003':	/* $^C */
@@ -1975,7 +1972,6 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 
 	case '\014':	/* $^L */
 	    sv_setpvs(GvSVn(gv),"\f");
-	    PL_formfeed = GvSV(gv);
 	    break;
 	case ';':		/* $; */
 	    sv_setpvs(GvSVn(gv),"\034");
@@ -2173,6 +2169,7 @@ Perl_gp_free(pTHX_ GV *gv)
          Somehow gp->gp_hv can end up pointing at freed garbage.  */
       if (hv && SvTYPE(hv) == SVt_PVHV) {
         const HEK *hvname_hek = HvNAME_HEK(hv);
+        DEBUG_o(Perl_deb(aTHX_ "gp_free clearing PL_stashcache for '%"HEKf"'\n", hvname_hek));
         if (PL_stashcache && hvname_hek)
            (void)hv_delete(PL_stashcache, HEK_KEY(hvname_hek),
                       (HEK_UTF8(hvname_hek) ? -HEK_LEN(hvname_hek) : HEK_LEN(hvname_hek)),

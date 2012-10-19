@@ -5,7 +5,7 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require './test.pl';
-    plan (tests => 176);
+    plan (tests => 178);
 }
 
 # Test that defined() returns true for magic variables created on the fly,
@@ -55,7 +55,6 @@ $Is_VMS      = $^O eq 'VMS';
 $Is_Dos      = $^O eq 'dos';
 $Is_os2      = $^O eq 'os2';
 $Is_Cygwin   = $^O eq 'cygwin';
-$Is_MPE      = $^O eq 'mpeix';		
 $Is_BeOS     = $^O eq 'beos';
 
 $PERL = $ENV{PERL}
@@ -107,7 +106,7 @@ close FOO; # just mention it, squelch used-only-once
 
 SKIP: {
     skip('SIGINT not safe on this platform', 5)
-	if $Is_MSWin32 || $Is_NetWare || $Is_Dos || $Is_MPE;
+	if $Is_MSWin32 || $Is_NetWare || $Is_Dos;
   # the next tests are done in a subprocess because sh spits out a
   # newline onto stderr when a child process kills itself with SIGINT.
   # We use a pipe rather than system() because the VMS command buffer
@@ -617,6 +616,14 @@ is ${^LAST_FH}, \*STDIN, '${^LAST_FH} after another tell';
 }
 # This also tests that ${^LAST_FH} is a weak reference:
 is ${^LAST_FH}, undef, '${^LAST_FH} is undef when PL_last_in_gv is NULL';
+
+
+# $|
+fresh_perl_is 'print $| = ~$|', "1\n", {switches => ['-l']}, 
+ '[perl #4760] print $| = ~$|';
+fresh_perl_is
+ 'select f; undef *f; ${q/|/}; print STDOUT qq|ok\n|', "ok\n", {}, 
+ '[perl #115206] no crash when vivifying $| while *{+select}{IO} is undef';
 
 
 # ^^^^^^^^^ New tests go here ^^^^^^^^^

@@ -2574,11 +2574,6 @@ typedef SV PADNAME;
 #   define ISHISH "plan9"
 #endif
 
-#if defined(MPE)
-#  include "mpeix/mpeixish.h"
-#  define ISHISH "mpeix"
-#endif
-
 #if defined(__VOS__)
 #   ifdef __GNUC__
 #     include "./vos/vosish.h"
@@ -3601,7 +3596,7 @@ long vtohl(long n);
 #endif
 
 #ifndef __cplusplus
-#if !(defined(UNDER_CE) || defined(SYMBIAN))
+#if !(defined(WIN32) || defined(UNDER_CE) || defined(SYMBIAN))
 Uid_t getuid (void);
 Uid_t geteuid (void);
 Gid_t getgid (void);
@@ -3998,9 +3993,11 @@ Off_t lseek (int,Off_t,int);
 #      endif
 #    endif
 #  endif /* !DONT_DECLARE_STD */
-#ifndef getlogin
+#  ifndef WIN32
+#    ifndef getlogin
 char *getlogin (void);
-#endif
+#    endif
+#  endif /* !WIN32 */
 #endif /* !__cplusplus */
 
 /* Fixme on VMS.  This needs to be a run-time, not build time options */
@@ -5019,6 +5016,20 @@ struct tempsym; /* defined in pp_pack.c */
 #ifndef PERL_CALLCONV_NO_RET
 #    define PERL_CALLCONV_NO_RET PERL_CALLCONV
 #endif
+
+/* PERL_STATIC_NO_RET is supposed to be equivalent to STATIC on builds that
+   dont have a noreturn as a declaration specifier
+*/
+#ifndef PERL_STATIC_NO_RET
+#  define PERL_STATIC_NO_RET STATIC
+#endif
+/* PERL_STATIC_NO_RET is supposed to be equivalent to PERL_STATIC_INLINE on
+   builds that dont have a noreturn as a declaration specifier
+*/
+#ifndef PERL_STATIC_INLINE_NO_RET
+#  define PERL_STATIC_INLINE_NO_RET PERL_STATIC_INLINE
+#endif
+
 
 #undef PERL_CKDEF
 #undef PERL_PPDEF

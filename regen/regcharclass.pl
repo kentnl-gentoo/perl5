@@ -1,3 +1,4 @@
+#!perl
 package CharClass::Matcher;
 use strict;
 use 5.008;
@@ -200,14 +201,38 @@ sub __uni_latin1 {
 
 sub __clean {
     my ( $expr )= @_;
+
+    #return $expr;
+
     our $parens;
     $parens= qr/ (?> \( (?> (?: (?> [^()]+ ) | (??{ $parens }) )* ) \) ) /x;
 
-    #print "$parens\n$expr\n";
+    ## remove redundant parens
     1 while $expr =~ s/ \( \s* ( $parens ) \s* \) /$1/gx;
-    1 while $expr =~ s/ \( \s* ($parens) \s* \? \s*
-        \( \s* ($parens) \s* \? \s* ($parens|[^:]+?) \s* : \s* ($parens|[^)]+?) \s* \)
-        \s* : \s* \4 \s* \)/( ( $1 && $2 ) ? $3 : 0 )/gx;
+
+
+    # repeatedly simplify conditions like
+    #       ( (cond1) ? ( (cond2) ? X : Y ) : Y )
+    # into
+    #       ( ( (cond1) && (cond2) ) ? X : Y )
+    # Also similarly handles expressions like:
+    #       : (cond1) ? ( (cond2) ? X : Y ) : Y )
+    # Note the inclusion of the close paren in ([:()]) and the open paren in ([()]) is
+    # purely to ensure we have a balanced set of parens in the expression which makes
+    # it easier to understand the pattern in an editor that understands paren's, we do
+    # not expect either of these cases to actually fire. - Yves
+    1 while $expr =~ s/
+        ([:()])  \s*
+            ($parens) \s*
+            \? \s*
+                \( \s* ($parens) \s*
+                    \? \s* ($parens|[^()?:\s]+?) \s*
+                    :  \s* ($parens|[^()?:\s]+?) \s*
+                \) \s*
+            : \s* \5 \s*
+        ([()])
+    /$1 ( $2 && $3 ) ? $4 : $5 $6/gx;
+
     return $expr;
 }
 
@@ -337,6 +362,14 @@ sub new {
                 }
             }
             next;
+        } elsif ($str =~ / ^ do \s+ ( .* ) /x) {
+            die "do '$1' failed: $!$@" if ! do $1 or $@;
+            next;
+        } elsif ($str =~ / ^ & \s* ( .* ) /x) { # user-furnished sub() call
+            my @results = eval "$1";
+            die "eval '$1' failed: $@" if $@;
+            push @{$opt{txt}}, @results;
+            next;
         } else {
             die "Unparsable line: $txt\n";
         }
@@ -428,8 +461,12 @@ sub _optree {
     $else= 0  unless defined $else;
     $depth= 0 unless defined $depth;
 
-    my @conds= sort { $a <=> $b } grep { length $_ } keys %$trie;
+    # if we have an emptry string as a key it means we are in an
+    # accepting state and unless we can match further on should
+    # return the value of the '' key.
     if (exists $trie->{''} ) {
+        # we can now update the "else" value, anything failing to match
+        # after this point should return the value from this.
         if ( $ret_type eq 'cp' ) {
             $else= $self->{strs}{ $trie->{''} }{cp}[0];
             $else= sprintf "$self->{val_fmt}", $else if $else > 9;
@@ -441,37 +478,54 @@ sub _optree {
             $else= "len=$depth, $else";
         }
     }
+    # extract the meaningful keys from the trie, filter out '' as
+    # it means we are an accepting state (end of sequence).
+    my @conds= sort { $a <=> $b } grep { length $_ } keys %$trie;
+
+    # if we havent any keys there is no further we can match and we
+    # can return the "else" value.
     return $else if !@conds;
-    my $node= {};
-    my $root= $node;
-    my ( $yes_res, $as_code, @cond );
+
+
     my $test= $test_type eq 'cp' ? "cp" : "((U8*)s)[$depth]";
-    my $Update= sub {
-        $node->{vals}= [@cond];
-        $node->{test}= $test;
-        $node->{yes}= $yes_res;
-        $node->{depth}= $depth;
-        $node->{no}= shift;
-    };
-    while ( @conds ) {
-        my $cond= shift @conds;
-        my $res=
-          $self->_optree( $trie->{$cond}, $test_type, $ret_type, $else,
-            $depth + 1 );
+    # first we loop over the possible keys/conditions and find out what they look like
+    # we group conditions with the same optree together.
+    my %dmp_res;
+    my @res_order;
+    local $Data::Dumper::Sortkeys=1;
+    foreach my $cond ( @conds ) {
+
+        # get the optree for this child/condition
+        my $res= $self->_optree( $trie->{$cond}, $test_type, $ret_type, $else, $depth + 1 );
+        # convert it to a string with Dumper
         my $res_code= Dumper( $res );
-        if ( !$yes_res || $res_code ne $as_code ) {
-            if ( $yes_res ) {
-                $Update->( {} );
-                $node= $node->{no};
-            }
-            ( $yes_res, $as_code )= ( $res, $res_code );
-            @cond= ( $cond );
-        } else {
-            push @cond, $cond;
+
+        push @{$dmp_res{$res_code}{vals}}, $cond;
+        if (!$dmp_res{$res_code}{optree}) {
+            $dmp_res{$res_code}{optree}= $res;
+            push @res_order, $res_code;
         }
     }
-    $Update->( $else );
-    return $root;
+
+    # now that we have deduped the optrees we construct a new optree containing the merged
+    # results.
+    my %root;
+    my $node= \%root;
+    foreach my $res_code_idx (0 .. $#res_order) {
+        my $res_code= $res_order[$res_code_idx];
+        $node->{vals}= $dmp_res{$res_code}{vals};
+        $node->{test}= $test;
+        $node->{yes}= $dmp_res{$res_code}{optree};
+        $node->{depth}= $depth;
+        if ($res_code_idx < $#res_order) {
+            $node= $node->{no}= {};
+        } else {
+            $node->{no}= $else;
+        }
+    }
+
+    # return the optree.
+    return \%root;
 }
 
 # my $optree= optree(%opts);
@@ -986,7 +1040,7 @@ if ( !caller ) {
         s/^ \s* (?: \# .* ) ? $ //x;    # squeeze out comment and blanks
         next unless /\S/;
         chomp;
-        if ( /^([A-Z]+)/ ) {
+        if ( /^[A-Z]/ ) {
             $doit->();  # This starts a new definition; do the previous one
             ( $op, $title )= split /\s*:\s*/, $_, 2;
             @txt= ();
@@ -1025,10 +1079,21 @@ if ( !caller ) {
 #
 # The subsequent lines give what code points go into the class defined by the
 # macro.  Multiple characters may be specified via a string like "\x0D\x0A",
-# enclosed in quotes.  Otherwise the lines consist of single Unicode code
-# point, prefaced by 0x; or a single range of Unicode code points separated by
-# a minus (and optional space); or a single Unicode property specified in the
-# standard Perl form "\p{...}".
+# enclosed in quotes.  Otherwise the lines consist of one of:
+#   1)  a single Unicode code point, prefaced by 0x
+#   2)  a single range of Unicode code points separated by a minus (and
+#       optional space)
+#   3)  a single Unicode property specified in the standard Perl form
+#       "\p{...}"
+#   4)  a line like 'do path'.  This will do a 'do' on the file given by
+#       'path'.  It is assumed that this does nothing but load subroutines
+#       (See item 5 below).  The reason 'require path' is not used instead is
+#       because 'do' doesn't assume that path is in @INC.
+#   5)  a subroutine call
+#           &pkg::foo(arg1, ...)
+#       where pkg::foo was loaded by a 'do' line (item 4).  The subroutine
+#       returns an array of entries of forms like items 1-3 above.  This
+#       allows more complex inputs than achievable from the other input types.
 #
 # A blank line or one whose first non-blank character is '#' is a comment.
 # The definition of the macro is terminated by a line unlike those described.
@@ -1180,3 +1245,16 @@ UTF8_CHAR: Matches utf8 from 1 to 5 bytes
 QUOTEMETA: Meta-characters that \Q should quote
 => high :fast
 \p{_Perl_Quotemeta}
+
+MULTI_CHAR_FOLD: multi-char strings that are folded to by a single character
+=> UTF8 :safe
+do regen/regcharclass_multi_char_folds.pl
+
+# 1 => All folds
+&regcharclass_multi_char_folds::multi_char_folds(1)
+
+MULTI_CHAR_FOLD: multi-char strings that are folded to by a single character
+=> LATIN1 :safe
+
+&regcharclass_multi_char_folds::multi_char_folds(0)
+# 0 => Latin1-only
