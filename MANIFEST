@@ -3369,6 +3369,7 @@ dist/Module-CoreList/corelist			The corelist command-line utility
 dist/Module-CoreList/identify-dependencies	A usage example for Module::CoreList
 dist/Module-CoreList/lib/Module/CoreList.pm	Module::CoreList
 dist/Module-CoreList/lib/Module/CoreList.pod	Module::CoreList
+dist/Module-CoreList/lib/Module/CoreList/TieHashDelta.pm	Module::CoreList
 dist/Module-CoreList/Makefile.PL		Module::CoreList
 dist/Module-CoreList/MANIFEST			Module::CoreList
 dist/Module-CoreList/README			Module::CoreList
@@ -4622,7 +4623,9 @@ pod/perl5124delta.pod		Perl changes in version 5.12.4
 pod/perl5140delta.pod		Perl changes in version 5.14.0
 pod/perl5141delta.pod		Perl changes in version 5.14.1
 pod/perl5142delta.pod		Perl changes in version 5.14.2
+pod/perl5143delta.pod		Perl changes in version 5.14.3
 pod/perl5160delta.pod		Perl changes in version 5.16.0
+pod/perl5161delta.pod		Perl changes in version 5.16.1
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
