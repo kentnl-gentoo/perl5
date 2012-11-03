@@ -3257,7 +3257,7 @@ Perl_moreswitches(pTHX_ const char *s)
 #endif
 
 	PerlIO_printf(PerlIO_stdout(),
-		      "\n\nCopyright 1987-2010, Larry Wall\n");
+		      "\n\nCopyright 1987-2012, Larry Wall\n");
 #ifdef MSDOS
 	PerlIO_printf(PerlIO_stdout(),
 		      "\nMS-DOS port Copyright (c) 1989, 1990, Diomidis Spinellis\n");
@@ -3779,7 +3779,7 @@ Perl_init_dbargs(pTHX)
 	   "leak" until global destruction.  */
 	av_clear(args);
     }
-    AvREAL_off(PL_dbargs);	/* XXX should be REIFY (see av.h) */
+    AvREIFY_only(PL_dbargs);
 }
 
 void

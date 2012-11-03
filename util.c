@@ -3033,6 +3033,9 @@ Perl_repeatcpy(register char *to, register const char *from, I32 len, register I
 {
     PERL_ARGS_ASSERT_REPEATCPY;
 
+    if (count < 0)
+	Perl_croak_nocontext("%s",PL_memory_wrap);
+
     if (len == 1)
 	memset(to, *from, count);
     else if (count) {
@@ -3982,7 +3985,7 @@ Perl_my_strftime(pTHX_ const char *fmt, int sec, int min, int hour, int mday, in
     const int fmtlen = strlen(fmt);
     int bufsize = fmtlen + buflen;
 
-    Newx(buf, bufsize, char);
+    Renew(buf, bufsize, char);
     while (buf) {
       buflen = strftime(buf, bufsize, fmt, &mytm);
       if (buflen > 0 && buflen < bufsize)

@@ -6088,19 +6088,23 @@ Perl_sv_len_utf8(pTHX_ register SV *const sv)
    offset.  */
 static STRLEN
 S_sv_pos_u2b_forwards(const U8 *const start, const U8 *const send,
-		      STRLEN uoffset)
+		      STRLEN *const uoffset_p)
 {
     const U8 *s = start;
+    STRLEN uoffset = *uoffset_p;
 
     PERL_ARGS_ASSERT_SV_POS_U2B_FORWARDS;
 
-    while (s < send && uoffset--)
+    while (s < send && uoffset) {
+	--uoffset;
 	s += UTF8SKIP(s);
+    }
     if (s > send) {
 	/* This is the existing behaviour. Possibly it should be a croak, as
 	   it's actually a bounds error  */
 	s = send;
     }
+    *uoffset_p -= uoffset;
     return s - start;
 }
 
@@ -6109,7 +6113,7 @@ S_sv_pos_u2b_forwards(const U8 *const start, const U8 *const send,
    the passed in UTF-8 offset.  */
 static STRLEN
 S_sv_pos_u2b_midway(const U8 *const start, const U8 *send,
-		      const STRLEN uoffset, const STRLEN uend)
+		    STRLEN uoffset, const STRLEN uend)
 {
     STRLEN backw = uend - uoffset;
 
@@ -6119,7 +6123,14 @@ S_sv_pos_u2b_midway(const U8 *const start, const U8 *send,
 	/* The assumption is that going forwards is twice the speed of going
 	   forward (that's where the 2 * backw comes from).
 	   (The real figure of course depends on the UTF-8 data.)  */
-	return sv_pos_u2b_forwards(start, send, uoffset);
+	const U8 *s = start;
+
+	while (s < send && uoffset--)
+	    s += UTF8SKIP(s);
+	assert (s <= send);
+	if (s > send)
+	    s = send;
+	return s - start;
     }
 
     while (backw--) {
@@ -6140,7 +6151,7 @@ S_sv_pos_u2b_midway(const U8 *const start, const U8 *send,
    created if necessary, and the found value offered to it for update.  */
 static STRLEN
 S_sv_pos_u2b_cached(pTHX_ SV *const sv, MAGIC **const mgp, const U8 *const start,
-		    const U8 *const send, const STRLEN uoffset,
+		    const U8 *const send, STRLEN uoffset,
 		    STRLEN uoffset0, STRLEN boffset0)
 {
     STRLEN boffset = 0; /* Actually always set, but let's keep gcc happy.  */
@@ -6149,6 +6160,9 @@ S_sv_pos_u2b_cached(pTHX_ SV *const sv, MAGIC **const mgp, const U8 *const start
     PERL_ARGS_ASSERT_SV_POS_U2B_CACHED;
 
     assert (uoffset >= uoffset0);
+
+    if (!uoffset)
+	return 0;
 
     if (!SvREADONLY(sv)
 	&& PL_utf8cache
@@ -6179,9 +6193,11 @@ S_sv_pos_u2b_cached(pTHX_ SV *const sv, MAGIC **const mgp, const U8 *const start
 					      uoffset - uoffset0,
 					      (*mgp)->mg_len - uoffset0);
 		} else {
+		    uoffset -= uoffset0;
 		    boffset = boffset0
 			+ sv_pos_u2b_forwards(start + boffset0,
-						send, uoffset - uoffset0);
+						send, &uoffset);
+		    uoffset += uoffset0;
 		}
 	    }
 	    else if (cache[2] < uoffset) {
@@ -6219,9 +6235,11 @@ S_sv_pos_u2b_cached(pTHX_ SV *const sv, MAGIC **const mgp, const U8 *const start
     }
 
     if (!found || PL_utf8cache < 0) {
-	const STRLEN real_boffset
-	    = boffset0 + sv_pos_u2b_forwards(start + boffset0,
-					       send, uoffset - uoffset0);
+	STRLEN real_boffset;
+	uoffset -= uoffset0;
+	real_boffset = boffset0 + sv_pos_u2b_forwards(start + boffset0,
+						      send, &uoffset);
+	uoffset += uoffset0;
 
 	if (found && PL_utf8cache < 0) {
 	    if (real_boffset != boffset) {
@@ -6279,7 +6297,9 @@ Perl_sv_pos_u2b_flags(pTHX_ SV *const sv, STRLEN uoffset, STRLEN *const lenp,
 	MAGIC *mg = NULL;
 	boffset = sv_pos_u2b_cached(sv, &mg, start, send, uoffset, 0, 0);
 
-	if (lenp) {
+	if (lenp
+	    && *lenp /* don't bother doing work for 0, as its bytes equivalent
+			is 0, and *lenp is already set to that.  */) {
 	    /* Convert the relative offset to absolute.  */
 	    const STRLEN uoffset2 = uoffset + *lenp;
 	    const STRLEN boffset2
