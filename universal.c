@@ -165,7 +165,7 @@ Perl_sv_derived_from_pvn(pTHX_ SV *sv, const char *const name, const STRLEN len,
     else {
         stash = gv_stashsv(sv, 0);
         if (!stash)
-            stash = gv_stashpv("UNIVERSAL", 0);
+            stash = gv_stashpvs("UNIVERSAL", 0);
     }
 
     return stash ? isa_lookup(stash, name, len, flags) : FALSE;
@@ -298,7 +298,7 @@ C<croak()>. Hence if C<cv> is C<&ouch::awk>, it would call C<croak> as:
 */
 
 void
-Perl_croak_xs_usage(pTHX_ const CV *const cv, const char *const params)
+Perl_croak_xs_usage(const CV *const cv, const char *const params)
 {
     const GV *const gv = CvGV(cv);
 
@@ -308,16 +308,16 @@ Perl_croak_xs_usage(pTHX_ const CV *const cv, const char *const params)
 	const HV *const stash = GvSTASH(gv);
 
 	if (HvNAME_get(stash))
-	    Perl_croak(aTHX_ "Usage: %"HEKf"::%"HEKf"(%s)",
+	    Perl_croak_nocontext("Usage: %"HEKf"::%"HEKf"(%s)",
                                 HEKfARG(HvNAME_HEK(stash)),
                                 HEKfARG(GvNAME_HEK(gv)),
                                 params);
 	else
-	    Perl_croak(aTHX_ "Usage: %"HEKf"(%s)",
+	    Perl_croak_nocontext("Usage: %"HEKf"(%s)",
                                 HEKfARG(GvNAME_HEK(gv)), params);
     } else {
 	/* Pants. I don't think that it should be possible to get here. */
-	Perl_croak(aTHX_ "Usage: CODE(0x%"UVxf")(%s)", PTR2UV(cv), params);
+	Perl_croak_nocontext("Usage: CODE(0x%"UVxf")(%s)", PTR2UV(cv), params);
     }
 }
 
@@ -922,29 +922,29 @@ XS(XS_Internals_SvREADONLY)	/* This is dangerous stuff. */
     }
     XSRETURN_UNDEF; /* Can't happen. */
 }
-
 XS(XS_Internals_SvREFCNT)	/* This is dangerous stuff. */
 {
     dVAR;
     dXSARGS;
     SV * const svz = ST(0);
     SV * sv;
+    U32 refcnt;
     PERL_UNUSED_ARG(cv);
 
     /* [perl #77776] - called as &foo() not foo() */
-    if (!SvROK(svz))
+    if ((items != 1 && items != 2) || !SvROK(svz))
         croak_xs_usage(cv, "SCALAR[, REFCOUNT]");
 
     sv = SvRV(svz);
 
-    if (items == 1)
-	 XSRETURN_UV(SvREFCNT(sv) - 1); /* Minus the ref created for us. */
-    else if (items == 2) {
          /* I hope you really know what you are doing. */
-	 SvREFCNT(sv) = SvUV(ST(1)) + 1; /* we free one ref on exit */
-	 XSRETURN_UV(SvREFCNT(sv) - 1);
-    }
-    XSRETURN_UNDEF; /* Can't happen. */
+    /* idea is for SvREFCNT(sv) to be accessed only once */
+    refcnt = items == 2 ?
+                /* we free one ref on exit */
+                (SvREFCNT(sv) = SvUV(ST(1)) + 1)
+                : SvREFCNT(sv);
+    XSRETURN_UV(refcnt - 1); /* Minus the ref created for us. */        
+
 }
 
 XS(XS_Internals_hv_clear_placehold)
@@ -1035,40 +1035,41 @@ XS(XS_PerlIO_get_layers)
 		  const bool argok = argsvp && *argsvp && SvPOK(*argsvp);
 		  const bool flgok = flgsvp && *flgsvp && SvIOK(*flgsvp);
 
+		  EXTEND(SP, 3); /* Three is the max in all branches: better check just once */
 		  if (details) {
 		      /* Indents of 5? Yuck.  */
 		      /* We know that PerlIO_get_layers creates a new SV for
 			 the name and flags, so we can just take a reference
 			 and "steal" it when we free the AV below.  */
-		       XPUSHs(namok
+		       PUSHs(namok
 			      ? sv_2mortal(SvREFCNT_inc_simple_NN(*namsvp))
 			      : &PL_sv_undef);
-		       XPUSHs(argok
+		       PUSHs(argok
 			      ? newSVpvn_flags(SvPVX_const(*argsvp),
 					       SvCUR(*argsvp),
 					       (SvUTF8(*argsvp) ? SVf_UTF8 : 0)
 					       | SVs_TEMP)
 			      : &PL_sv_undef);
-		       XPUSHs(flgok
+		       PUSHs(flgok
 			      ? sv_2mortal(SvREFCNT_inc_simple_NN(*flgsvp))
 			      : &PL_sv_undef);
 		       nitem += 3;
 		  }
 		  else {
 		       if (namok && argok)
-			    XPUSHs(sv_2mortal(Perl_newSVpvf(aTHX_ "%"SVf"(%"SVf")",
+			    PUSHs(sv_2mortal(Perl_newSVpvf(aTHX_ "%"SVf"(%"SVf")",
 						 SVfARG(*namsvp),
 						 SVfARG(*argsvp))));
 		       else if (namok)
-			   XPUSHs(sv_2mortal(SvREFCNT_inc_simple_NN(*namsvp)));
+			    PUSHs(sv_2mortal(SvREFCNT_inc_simple_NN(*namsvp)));
 		       else
-			    XPUSHs(&PL_sv_undef);
+			    PUSHs(&PL_sv_undef);
 		       nitem++;
 		       if (flgok) {
 			    const IV flags = SvIVX(*flgsvp);
 
 			    if (flags & PERLIO_F_UTF8) {
-				 XPUSHs(newSVpvs_flags("utf8", SVs_TEMP));
+				 PUSHs(newSVpvs_flags("utf8", SVs_TEMP));
 				 nitem++;
 			    }
 		       }
@@ -1085,44 +1086,6 @@ XS(XS_PerlIO_get_layers)
     XSRETURN(0);
 }
 
-XS(XS_Internals_hash_seed)
-{
-    dVAR;
-    /* Using dXSARGS would also have dITEM and dSP,
-     * which define 2 unused local variables.  */
-    dAXMARK;
-    PERL_UNUSED_ARG(cv);
-    PERL_UNUSED_VAR(mark);
-    XSRETURN_UV(PERL_HASH_SEED);
-}
-
-XS(XS_Internals_rehash_seed)
-{
-    dVAR;
-    /* Using dXSARGS would also have dITEM and dSP,
-     * which define 2 unused local variables.  */
-    dAXMARK;
-    PERL_UNUSED_ARG(cv);
-    PERL_UNUSED_VAR(mark);
-    XSRETURN_UV(PL_rehash_seed);
-}
-
-XS(XS_Internals_HvREHASH)	/* Subject to change  */
-{
-    dVAR;
-    dXSARGS;
-    PERL_UNUSED_ARG(cv);
-    if (SvROK(ST(0))) {
-	const HV * const hv = (const HV *) SvRV(ST(0));
-	if (items == 1 && SvTYPE(hv) == SVt_PVHV) {
-	    if (HvREHASH(hv))
-		XSRETURN_YES;
-	    else
-		XSRETURN_NO;
-	}
-    }
-    Perl_croak(aTHX_ "Internals::HvREHASH $hashref");
-}
 
 XS(XS_re_is_regexp)
 {
@@ -1234,13 +1197,14 @@ XS(XS_re_regnames)
     av = MUTABLE_AV(SvRV(ret));
     length = av_len(av);
 
+    EXTEND(SP, length+1); /* better extend stack just once */
     for (i = 0; i <= length; i++) {
         entry = av_fetch(av, i, FALSE);
         
         if (!entry)
             Perl_croak(aTHX_ "NULL array element in re::regnames()");
 
-        mXPUSHs(SvREFCNT_inc_simple_NN(*entry));
+        mPUSHs(SvREFCNT_inc_simple_NN(*entry));
     }
 
     SvREFCNT_dec(ret);
@@ -1311,8 +1275,9 @@ XS(XS_re_regexp_pattern)
 				     (RX_UTF8(re) ? SVf_UTF8 : 0) | SVs_TEMP);
 
             /* return the pattern and the modifiers */
-            XPUSHs(pattern);
-            XPUSHs(newSVpvn_flags(reflags, left, SVs_TEMP));
+            EXTEND(SP, 2);
+            PUSHs(pattern);
+            PUSHs(newSVpvn_flags(reflags, left, SVs_TEMP));
             XSRETURN(2);
         } else {
             /* Scalar, so use the string that Perl would return */
@@ -1400,9 +1365,6 @@ const struct xsub_details details[] = {
     {"Internals::SvREFCNT", XS_Internals_SvREFCNT, "\\[$%@];$"},
     {"Internals::hv_clear_placeholders", XS_Internals_hv_clear_placehold, "\\%"},
     {"PerlIO::get_layers", XS_PerlIO_get_layers, "*;@"},
-    {"Internals::hash_seed", XS_Internals_hash_seed, ""},
-    {"Internals::rehash_seed", XS_Internals_rehash_seed, ""},
-    {"Internals::HvREHASH", XS_Internals_HvREHASH, "\\%"},
     {"re::is_regexp", XS_re_is_regexp, "$"},
     {"re::regname", XS_re_regname, ";$$"},
     {"re::regnames", XS_re_regnames, ";$"},

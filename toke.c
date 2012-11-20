@@ -358,7 +358,7 @@ static struct debug_tokens {
     { GIVEN,		TOKENTYPE_IVAL,		"GIVEN" },
     { HASHBRACK,	TOKENTYPE_NONE,		"HASHBRACK" },
     { IF,		TOKENTYPE_IVAL,		"IF" },
-    { LABEL,		TOKENTYPE_OPVAL,	"LABEL" },
+    { LABEL,		TOKENTYPE_PVAL,		"LABEL" },
     { LOCAL,		TOKENTYPE_IVAL,		"LOCAL" },
     { LOOPEX,		TOKENTYPE_OPNUM,	"LOOPEX" },
     { LSTOP,		TOKENTYPE_OPNUM,	"LSTOP" },
@@ -784,12 +784,45 @@ Perl_parser_free(pTHX_  const yy_parser *parser)
 		(parser->old_parser && parser->rsfp != parser->old_parser->rsfp)))
 	PerlIO_close(parser->rsfp);
     SvREFCNT_dec(parser->rsfp_filters);
+    SvREFCNT_dec(parser->lex_stuff);
+    SvREFCNT_dec(parser->sublex_info.repl);
 
     Safefree(parser->lex_brackstack);
     Safefree(parser->lex_casestack);
     Safefree(parser->lex_shared);
     PL_parser = parser->old_parser;
     Safefree(parser);
+}
+
+void
+Perl_parser_free_nexttoke_ops(pTHX_  yy_parser *parser, OPSLAB *slab)
+{
+#ifdef PERL_MAD
+    I32 nexttoke = parser->lasttoke;
+#else
+    I32 nexttoke = parser->nexttoke;
+#endif
+    PERL_ARGS_ASSERT_PARSER_FREE_NEXTTOKE_OPS;
+    while (nexttoke--) {
+#ifdef PERL_MAD
+	if (S_is_opval_token(parser->nexttoke[nexttoke].next_type
+				& 0xffff)
+	 && parser->nexttoke[nexttoke].next_val.opval
+	 && parser->nexttoke[nexttoke].next_val.opval->op_slabbed
+	 && OpSLAB(parser->nexttoke[nexttoke].next_val.opval) == slab) {
+		op_free(parser->nexttoke[nexttoke].next_val.opval);
+		parser->nexttoke[nexttoke].next_val.opval = NULL;
+	}
+#else
+	if (S_is_opval_token(parser->nexttype[nexttoke] & 0xffff)
+	 && parser->nextval[nexttoke].opval
+	 && parser->nextval[nexttoke].opval->op_slabbed
+	 && OpSLAB(parser->nextval[nexttoke].opval) == slab) {
+	    op_free(parser->nextval[nexttoke].opval);
+	    parser->nextval[nexttoke].opval = NULL;
+	}
+#endif
+    }
 }
 
 
@@ -976,10 +1009,13 @@ Perl_lex_stuff_pvn(pTHX_ const char *pv, STRLEN len, U32 flags)
 	if (flags & LEX_STUFF_UTF8) {
 	    goto plain_copy;
 	} else {
-	    STRLEN highhalf = 0;
+	    STRLEN highhalf = 0;    /* Count of variants */
 	    const char *p, *e = pv+len;
-	    for (p = pv; p != e; p++)
-		highhalf += !!(((U8)*p) & 0x80);
+	    for (p = pv; p != e; p++) {
+		if (! UTF8_IS_INVARIANT(*p)) {
+                    highhalf++;
+                }
+            }
 	    if (!highhalf)
 		goto plain_copy;
 	    lex_grow_linestr(SvCUR(PL_parser->linestr)+1+len+highhalf);
@@ -990,9 +1026,9 @@ Perl_lex_stuff_pvn(pTHX_ const char *pv, STRLEN len, U32 flags)
 	    PL_parser->bufend += len+highhalf;
 	    for (p = pv; p != e; p++) {
 		U8 c = (U8)*p;
-		if (c & 0x80) {
-		    *bufptr++ = (char)(0xc0 | (c >> 6));
-		    *bufptr++ = (char)(0x80 | (c & 0x3f));
+		if (! UTF8_IS_INVARIANT(c)) {
+		    *bufptr++ = UTF8_TWO_BYTE_HI(c);
+		    *bufptr++ = UTF8_TWO_BYTE_LO(c);
 		} else {
 		    *bufptr++ = (char)c;
 		}
@@ -1004,14 +1040,13 @@ Perl_lex_stuff_pvn(pTHX_ const char *pv, STRLEN len, U32 flags)
 	    const char *p, *e = pv+len;
 	    for (p = pv; p != e; p++) {
 		U8 c = (U8)*p;
-		if (c >= 0xc4) {
+		if (UTF8_IS_ABOVE_LATIN1(c)) {
 		    Perl_croak(aTHX_ "Lexing code attempted to stuff "
 				"non-Latin-1 character into Latin-1 input");
-		} else if (c >= 0xc2 && p+1 != e &&
-			    (((U8)p[1]) & 0xc0) == 0x80) {
+		} else if (UTF8_IS_NEXT_CHAR_DOWNGRADEABLE(p, e)) {
 		    p++;
 		    highhalf++;
-		} else if (c >= 0x80) {
+		} else if (! UTF8_IS_INVARIANT(c)) {
 		    /* malformed UTF-8 */
 		    ENTER;
 		    SAVESPTR(PL_warnhook);
@@ -1028,17 +1063,20 @@ Perl_lex_stuff_pvn(pTHX_ const char *pv, STRLEN len, U32 flags)
 	    SvCUR_set(PL_parser->linestr,
 	    	SvCUR(PL_parser->linestr) + len-highhalf);
 	    PL_parser->bufend += len-highhalf;
-	    for (p = pv; p != e; p++) {
-		U8 c = (U8)*p;
-		if (c & 0x80) {
-		    *bufptr++ = (char)(((c & 0x3) << 6) | (p[1] & 0x3f));
-		    p++;
-		} else {
-		    *bufptr++ = (char)c;
+	    p = pv;
+	    while (p < e) {
+		if (UTF8_IS_INVARIANT(*p)) {
+		    *bufptr++ = *p;
+                    p++;
 		}
+		else {
+                    assert(p < e -1 );
+		    *bufptr++ = TWO_BYTE_UTF8_TO_UNI(*p, *(p+1));
+		    p += 2;
+                }
 	    }
 	} else {
-	    plain_copy:
+	  plain_copy:
 	    lex_grow_linestr(SvCUR(PL_parser->linestr)+1+len);
 	    bufptr = PL_parser->bufptr;
 	    Move(bufptr, bufptr+len, PL_parser->bufend+1-bufptr, char);
@@ -1386,10 +1424,10 @@ Perl_lex_peek_unichar(pTHX_ U32 flags)
 	    bufend = PL_parser->bufend;
 	}
 	head = (U8)*s;
-	if (!(head & 0x80))
+	if (UTF8_IS_INVARIANT(head))
 	    return head;
-	if (head & 0x40) {
-	    len = PL_utf8skip[head];
+	if (UTF8_IS_START(head)) {
+	    len = UTF8SKIP(&head);
 	    while ((STRLEN)(bufend-s) < len) {
 		if (!lex_next_chunk(flags | LEX_KEEP_PREVIOUS))
 		    break;
@@ -2000,11 +2038,6 @@ S_force_next(pTHX_ I32 type)
 	tokereport(type, &NEXTVAL_NEXTTOKE);
     }
 #endif
-    /* Don’t let opslab_force_free snatch it */
-    if (S_is_opval_token(type & 0xffff) && NEXTVAL_NEXTTOKE.opval) {
-	assert(!NEXTVAL_NEXTTOKE.opval->op_savefree);
-	NEXTVAL_NEXTTOKE.opval->op_savefree = 1;
-    }	
 #ifdef PERL_MAD
     if (PL_curforce < 0)
 	start_force(PL_lasttoke);
@@ -2132,8 +2165,8 @@ S_force_ident(pTHX_ register const char *s, int kind)
 
     PERL_ARGS_ASSERT_FORCE_IDENT;
 
-    if (*s) {
-	const STRLEN len = strlen(s);
+    if (s[0]) {
+	const STRLEN len = s[1] ? strlen(s) : 1; /* s = "\"" see yylex */
 	OP* const o = (OP*)newSVOP(OP_CONST, 0, newSVpvn_flags(s, len,
                                                                 UTF ? SVf_UTF8 : 0));
 	start_force(PL_curforce);
@@ -2614,6 +2647,189 @@ S_sublex_done(pTHX)
     }
 }
 
+PERL_STATIC_INLINE SV*
+S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
+{
+    /* <s> points to first character of interior of \N{}, <e> to one beyond the
+     * interior, hence to the "}".  Finds what the name resolves to, returning
+     * an SV* containing it; NULL if no valid one found */
+
+    SV* res = newSVpvn_flags(s, e - s, UTF ? SVf_UTF8 : 0);
+
+    HV * table;
+    SV **cvp;
+    SV *cv;
+    SV *rv;
+    HV *stash;
+    const U8* first_bad_char_loc;
+    const char* backslash_ptr = s - 3; /* Points to the <\> of \N{... */
+
+    PERL_ARGS_ASSERT_GET_AND_CHECK_BACKSLASH_N_NAME;
+
+    if (UTF && ! is_utf8_string_loc((U8 *) backslash_ptr,
+                                     e - backslash_ptr,
+                                     &first_bad_char_loc))
+    {
+        /* If warnings are on, this will print a more detailed analysis of what
+         * is wrong than the error message below */
+        utf8n_to_uvuni(first_bad_char_loc,
+                       e - ((char *) first_bad_char_loc),
+                       NULL, 0);
+
+        /* We deliberately don't try to print the malformed character, which
+         * might not print very well; it also may be just the first of many
+         * malformations, so don't print what comes after it */
+        yyerror(Perl_form(aTHX_
+            "Malformed UTF-8 character immediately after '%.*s'",
+            (int) (first_bad_char_loc - (U8 *) backslash_ptr), backslash_ptr));
+	return NULL;
+    }
+
+    res = new_constant( NULL, 0, "charnames", res, NULL, backslash_ptr,
+                        /* include the <}> */
+                        e - backslash_ptr + 1);
+    if (! SvPOK(res)) {
+        return NULL;
+    }
+
+    /* See if the charnames handler is the Perl core's, and if so, we can skip
+     * the validation needed for a user-supplied one, as Perl's does its own
+     * validation. */
+    table = GvHV(PL_hintgv);		 /* ^H */
+    cvp = hv_fetchs(table, "charnames", FALSE);
+    cv = *cvp;
+    if (((rv = SvRV(cv)) != NULL)
+        && ((stash = CvSTASH(rv)) != NULL))
+    {
+        const char * const name = HvNAME(stash);
+        if strEQ(name, "_charnames") {
+           return res;
+       }
+    }
+
+    /* Here, it isn't Perl's charname handler.  We can't rely on a
+     * user-supplied handler to validate the input name.  For non-ut8 input,
+     * look to see that the first character is legal.  Then loop through the
+     * rest checking that each is a continuation */
+
+    /* This code needs to be sync'ed with a regex in _charnames.pm which does
+     * the same thing */
+
+    if (! UTF) {
+        if (! isALPHAU(*s)) {
+            goto bad_charname;
+        }
+        s++;
+        while (s < e) {
+            if (! isCHARNAME_CONT(*s)) {
+                goto bad_charname;
+            }
+            s++;
+        }
+    }
+    else {
+        /* Similarly for utf8.  For invariants can check directly; for other
+         * Latin1, can calculate their code point and check; otherwise  use a
+         * swash */
+        if (UTF8_IS_INVARIANT(*s)) {
+            if (! isALPHAU(*s)) {
+                goto bad_charname;
+            }
+            s++;
+        } else if (UTF8_IS_DOWNGRADEABLE_START(*s)) {
+            if (! isALPHAU(UNI_TO_NATIVE(TWO_BYTE_UTF8_TO_UNI(*s, *(s+1))))) {
+                goto bad_charname;
+            }
+            s += 2;
+        }
+        else {
+            if (! PL_utf8_charname_begin) {
+                U8 flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;
+                PL_utf8_charname_begin = _core_swash_init("utf8",
+                                                        "_Perl_Charname_Begin",
+                                                        &PL_sv_undef,
+                                                        1, 0, NULL, &flags);
+            }
+            if (! swash_fetch(PL_utf8_charname_begin, (U8 *) s, TRUE)) {
+                goto bad_charname;
+            }
+            s += UTF8SKIP(s);
+        }
+
+        while (s < e) {
+            if (UTF8_IS_INVARIANT(*s)) {
+                if (! isCHARNAME_CONT(*s)) {
+                    goto bad_charname;
+                }
+                s++;
+            }
+            else if (UTF8_IS_DOWNGRADEABLE_START(*s)) {
+                if (! isCHARNAME_CONT(UNI_TO_NATIVE(TWO_BYTE_UTF8_TO_UNI(*s,
+                                                                    *(s+1)))))
+                {
+                    goto bad_charname;
+                }
+                s += 2;
+            }
+            else {
+                if (! PL_utf8_charname_continue) {
+                    U8 flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;
+                    PL_utf8_charname_continue = _core_swash_init("utf8",
+                                                "_Perl_Charname_Continue",
+                                                &PL_sv_undef,
+                                                1, 0, NULL, &flags);
+                }
+                if (! swash_fetch(PL_utf8_charname_continue, (U8 *) s, TRUE)) {
+                    goto bad_charname;
+                }
+                s += UTF8SKIP(s);
+            }
+        }
+    }
+
+    if (SvUTF8(res)) { /* Don't accept malformed input */
+        const U8* first_bad_char_loc;
+        STRLEN len;
+        const char* const str = SvPV_const(res, len);
+        if (! is_utf8_string_loc((U8 *) str, len, &first_bad_char_loc)) {
+            /* If warnings are on, this will print a more detailed analysis of
+             * what is wrong than the error message below */
+            utf8n_to_uvuni(first_bad_char_loc,
+                           (char *) first_bad_char_loc - str,
+                           NULL, 0);
+
+            /* We deliberately don't try to print the malformed character,
+             * which might not print very well; it also may be just the first
+             * of many malformations, so don't print what comes after it */
+            yyerror_pv(
+              Perl_form(aTHX_
+                "Malformed UTF-8 returned by %.*s immediately after '%.*s'",
+                 (int) (e - backslash_ptr + 1), backslash_ptr,
+                 (int) ((char *) first_bad_char_loc - str), str
+              ),
+              SVf_UTF8);
+            return NULL;
+        }
+    }
+
+    return res;
+
+  bad_charname: {
+        int bad_char_size = ((UTF) ? UTF8SKIP(s) : 1);
+
+        /* The final %.*s makes sure that should the trailing NUL be missing
+         * that this print won't run off the end of the string */
+        yyerror_pv(
+          Perl_form(aTHX_
+            "Invalid character in \\N{...}; marked by <-- HERE in %.*s<-- HERE %.*s",
+            (int)(s - backslash_ptr + bad_char_size), backslash_ptr,
+            (int)(e - s + bad_char_size), s + bad_char_size
+          ),
+          UTF ? SVf_UTF8 : 0);
+        return NULL;
+    }
+}
+
 /*
   scan_const
 
@@ -2721,6 +2937,7 @@ S_scan_const(pTHX_ char *start)
 						   isn't utf8, as for example
 						   when it is entirely composed
 						   of hex constants */
+    SV *res;		                /* result from charnames */
 
     /* Note on sizing:  The scanned constant is placed into sv, which is
      * initialized by newSV() assuming one byte of output for every byte of
@@ -2768,7 +2985,7 @@ S_scan_const(pTHX_ char *start)
 #ifdef EBCDIC
 		    && !native_range
 #endif
-		    ) {
+                ) {
 		    char * const c = (char*)utf8_hop((U8*)d, -1);
 		    char *e = d++;
 		    while (e-- > c)
@@ -3184,31 +3401,6 @@ S_scan_const(pTHX_ char *start)
 
 		/* Here it looks like a named character */
 
-		if (PL_lex_inpat) {
-
-		    /* XXX This block is temporary code.  \N{} implies that the
-		     * pattern is to have Unicode semantics, and therefore
-		     * currently has to be encoded in utf8.  By putting it in
-		     * utf8 now, we save a whole pass in the regular expression
-		     * compiler.  Once that code is changed so Unicode
-		     * semantics doesn't necessarily have to be in utf8, this
-		     * block should be removed.  However, the code that parses
-		     * the output of this would have to be changed to not
-		     * necessarily expect utf8 */
-		    if (!has_utf8) {
-			SvCUR_set(sv, d - SvPVX_const(sv));
-			SvPOK_on(sv);
-			*d = '\0';
-			/* See Note on sizing above.  */
-			sv_utf8_upgrade_flags_grow(sv,
-					SV_GMAGIC|SV_FORCE_UTF8_UPGRADE,
-					/* 5 = '\N{' + cur char + NUL */
-					(STRLEN)(send - s) + 5);
-			d = SvPVX(sv) + SvCUR(sv);
-			has_utf8 = TRUE;
-		    }
-		}
-
 		if (*s == 'U' && s[1] == '+') { /* \N{U+...} */
 		    I32 flags = PERL_SCAN_ALLOW_UNDERSCORES
 				| PERL_SCAN_DISALLOW_PREFIX;
@@ -3270,32 +3462,12 @@ S_scan_const(pTHX_ char *start)
 			else d = (char*)uvuni_to_utf8((U8*)d, uv);
 		    }
 		}
-		else { /* Here is \N{NAME} but not \N{U+...}. */
-
-		    SV *res;		/* result from charnames */
-		    const char *str;    /* the string in 'res' */
-		    STRLEN len;		/* its length */
-
-		    /* Get the value for NAME */
-		    res = newSVpvn(s, e - s);
-		    res = new_constant( NULL, 0, "charnames",
-					/* includes all of: \N{...} */
-					res, NULL, s - 3, e - s + 4 );
-
-		    /* Most likely res will be in utf8 already since the
-		     * standard charnames uses pack U, but a custom translator
-		     * can leave it otherwise, so make sure.  XXX This can be
-		     * revisited to not have charnames use utf8 for characters
-		     * that don't need it when regexes don't have to be in utf8
-		     * for Unicode semantics.  If doing so, remember EBCDIC */
-		    sv_utf8_upgrade(res);
-		    str = SvPV_const(res, len);
-
-		    /* Don't accept malformed input */
-		    if (! is_utf8_string((U8 *) str, len)) {
-			yyerror("Malformed UTF-8 returned by \\N");
-		    }
-		    else if (PL_lex_inpat) {
+		else /* Here is \N{NAME} but not \N{U+...}. */
+                     if ((res = get_and_check_backslash_N_name(s, e)))
+                {
+                    STRLEN len;
+                    const char *str = SvPV_const(res, len);
+                    if (PL_lex_inpat) {
 
 			if (! len) { /* The name resolved to an empty string */
 			    Copy("\\N{}", d, 4, char);
@@ -3309,73 +3481,88 @@ S_scan_const(pTHX_ char *start)
 			    * returned by charnames */
 
 			    const char *str_end = str + len;
-			    STRLEN char_length;	    /* cur char's byte length */
-			    STRLEN output_length;   /* and the number of bytes
-						       after this is translated
-						       into hex digits */
 			    const STRLEN off = d - SvPVX_const(sv);
 
-			    /* 2 hex per byte; 2 chars for '\N'; 2 chars for
-			     * max('U+', '.'); and 1 for NUL */
-			    char hex_string[2 * UTF8_MAXBYTES + 5];
+                            if (! SvUTF8(res)) {
+                                /* For the non-UTF-8 case, we can determine the
+                                 * exact length needed without having to parse
+                                 * through the string.  Each character takes up
+                                 * 2 hex digits plus either a trailing dot or
+                                 * the "}" */
+                                d = off + SvGROW(sv, off
+                                                    + 3 * len
+                                                    + 6 /* For the "\N{U+", and
+                                                           trailing NUL */
+                                                    + (STRLEN)(send - e));
+                                Copy("\\N{U+", d, 5, char);
+                                d += 5;
+                                while (str < str_end) {
+                                    char hex_string[4];
+                                    my_snprintf(hex_string, sizeof(hex_string),
+                                                "%02X.", (U8) *str);
+                                    Copy(hex_string, d, 3, char);
+                                    d += 3;
+                                    str++;
+                                }
+                                d--;    /* We will overwrite below the final
+                                           dot with a right brace */
+                            }
+                            else {
+                                STRLEN char_length; /* cur char's byte length */
 
-			    /* Get the first character of the result. */
-			    U32 uv = utf8n_to_uvuni((U8 *) str,
-						    len,
-						    &char_length,
-						    UTF8_ALLOW_ANYUV);
+                                /* and the number of bytes after this is
+                                 * translated into hex digits */
+                                STRLEN output_length;
 
-			    /* The call to is_utf8_string() above hopefully
-			     * guarantees that there won't be an error.  But
-			     * it's easy here to make sure.  The function just
-			     * above warns and returns 0 if invalid utf8, but
-			     * it can also return 0 if the input is validly a
-			     * NUL. Disambiguate */
-			    if (uv == 0 && NATIVE_TO_ASCII(*str) != '\0') {
-				uv = UNICODE_REPLACEMENT;
-			    }
+                                /* 2 hex per byte; 2 chars for '\N'; 2 chars
+                                 * for max('U+', '.'); and 1 for NUL */
+                                char hex_string[2 * UTF8_MAXBYTES + 5];
 
-			    /* Convert first code point to hex, including the
-			     * boiler plate before it.  For all these, we
-			     * convert to native format so that downstream code
-			     * can continue to assume the input is native */
-			    output_length =
-				my_snprintf(hex_string, sizeof(hex_string),
-					    "\\N{U+%X",
-					    (unsigned int) UNI_TO_NATIVE(uv));
+                                /* Get the first character of the result. */
+                                U32 uv = utf8n_to_uvuni((U8 *) str,
+                                                        len,
+                                                        &char_length,
+                                                        UTF8_ALLOW_ANYUV);
+                                /* Convert first code point to hex, including
+                                 * the boiler plate before it.  For all these,
+                                 * we convert to native format so that
+                                 * downstream code can continue to assume the
+                                 * input is native */
+                                output_length =
+                                    my_snprintf(hex_string, sizeof(hex_string),
+                                            "\\N{U+%X",
+                                            (unsigned int) UNI_TO_NATIVE(uv));
 
-			    /* Make sure there is enough space to hold it */
-			    d = off + SvGROW(sv, off
-						 + output_length
-						 + (STRLEN)(send - e)
-						 + 2);	/* '}' + NUL */
-			    /* And output it */
-			    Copy(hex_string, d, output_length, char);
-			    d += output_length;
+                                /* Make sure there is enough space to hold it */
+                                d = off + SvGROW(sv, off
+                                                    + output_length
+                                                    + (STRLEN)(send - e)
+                                                    + 2);	/* '}' + NUL */
+                                /* And output it */
+                                Copy(hex_string, d, output_length, char);
+                                d += output_length;
 
-			    /* For each subsequent character, append dot and
-			     * its ordinal in hex */
-			    while ((str += char_length) < str_end) {
-				const STRLEN off = d - SvPVX_const(sv);
-				U32 uv = utf8n_to_uvuni((U8 *) str,
-							str_end - str,
-							&char_length,
-							UTF8_ALLOW_ANYUV);
-				if (uv == 0 && NATIVE_TO_ASCII(*str) != '\0') {
-				    uv = UNICODE_REPLACEMENT;
-				}
+                                /* For each subsequent character, append dot and
+                                * its ordinal in hex */
+                                while ((str += char_length) < str_end) {
+                                    const STRLEN off = d - SvPVX_const(sv);
+                                    U32 uv = utf8n_to_uvuni((U8 *) str,
+                                                            str_end - str,
+                                                            &char_length,
+                                                            UTF8_ALLOW_ANYUV);
+                                    output_length =
+                                        my_snprintf(hex_string,
+                                            sizeof(hex_string),
+                                            ".%X",
+                                            (unsigned int) UNI_TO_NATIVE(uv));
 
-				output_length =
-				    my_snprintf(hex_string, sizeof(hex_string),
-					    ".%X",
-					    (unsigned int) UNI_TO_NATIVE(uv));
-
-				d = off + SvGROW(sv, off
-						     + output_length
-						     + (STRLEN)(send - e)
-						     + 2);	/* '}' +  NUL */
-				Copy(hex_string, d, output_length, char);
-				d += output_length;
+                                    d = off + SvGROW(sv, off
+                                                        + output_length
+                                                        + (STRLEN)(send - e)
+                                                        + 2);	/* '}' +  NUL */
+                                    Copy(hex_string, d, output_length, char);
+                                    d += output_length;
+                                }
 			    }
 
 			    *d++ = '}';	/* Done.  Add the trailing brace */
@@ -3408,68 +3595,9 @@ S_scan_const(pTHX_ char *start)
 			Copy(str, d, len, char);
 			d += len;
 		    }
+
 		    SvREFCNT_dec(res);
 
-		    /* Deprecate non-approved name syntax */
-		    if (ckWARN_d(WARN_DEPRECATED)) {
-			bool problematic = FALSE;
-			char* i = s;
-
-			/* For non-ut8 input, look to see that the first
-			 * character is an alpha, then loop through the rest
-			 * checking that each is a continuation */
-			if (! this_utf8) {
-			    if (! isALPHAU(*i)) problematic = TRUE;
-			    else for (i = s + 1; i < e; i++) {
-				if (isCHARNAME_CONT(*i)) continue;
-				problematic = TRUE;
-				break;
-			    }
-			}
-			else {
-			    /* Similarly for utf8.  For invariants can check
-			     * directly.  We accept anything above the latin1
-			     * range because it is immaterial to Perl if it is
-			     * correct or not, and is expensive to check.  But
-			     * it is fairly easy in the latin1 range to convert
-			     * the variants into a single character and check
-			     * those */
-			    if (UTF8_IS_INVARIANT(*i)) {
-				if (! isALPHAU(*i)) problematic = TRUE;
-			    } else if (UTF8_IS_DOWNGRADEABLE_START(*i)) {
-				if (! isALPHAU(UNI_TO_NATIVE(TWO_BYTE_UTF8_TO_UNI(*i,
-									    *(i+1)))))
-				{
-				    problematic = TRUE;
-				}
-			    }
-			    if (! problematic) for (i = s + UTF8SKIP(s);
-						    i < e;
-						    i+= UTF8SKIP(i))
-			    {
-				if (UTF8_IS_INVARIANT(*i)) {
-				    if (isCHARNAME_CONT(*i)) continue;
-				} else if (! UTF8_IS_DOWNGRADEABLE_START(*i)) {
-				    continue;
-				} else if (isCHARNAME_CONT(
-					    UNI_TO_NATIVE(
-					    TWO_BYTE_UTF8_TO_UNI(*i, *(i+1)))))
-				{
-				    continue;
-				}
-				problematic = TRUE;
-				break;
-			    }
-			}
-			if (problematic) {
-			    /* The e-i passed to the final %.*s makes sure that
-			     * should the trailing NUL be missing that this
-			     * print won't run off the end of the string */
-			    Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
-					"Deprecated character in \\N{...}; marked by <-- HERE  in \\N{%.*s<-- HERE %.*s",
-					(int)(i - s + 1), s, (int)(e - i), i + 1);
-			}
-		    }
 		} /* End \N{NAME} */
 #ifdef EBCDIC
 		if (!dorange) 
@@ -4276,7 +4404,6 @@ Perl_madlex(pTHX)
     case FUNC0SUB:
     case UNIOPSUB:
     case LSTOPSUB:
-    case LABEL:
 	if (pl_yylval.opval)
 	    append_madprops(PL_thismad, pl_yylval.opval, 0);
 	PL_thismad = 0;
@@ -4289,6 +4416,10 @@ Perl_madlex(pTHX)
 	    addmad(newMADsv('p', PL_endwhite), &PL_thismad, 0);
 	    PL_endwhite = 0;
 	}
+	break;
+
+    /* pval */
+    case LABEL:
 	break;
 
     case ']':
@@ -4532,8 +4663,6 @@ Perl_yylex(pTHX)
 		    PL_lex_allbrackets--;
 		next_type &= 0xffff;
 	    }
-	    if (S_is_opval_token(next_type) && pl_yylval.opval)
-		pl_yylval.opval->op_savefree = 0; /* release */
 	    return REPORT(next_type == 'p' ? pending_ident() : next_type);
 	}
 
@@ -4575,9 +4704,11 @@ Perl_yylex(pTHX)
 #ifdef PERL_MAD
 	    while (PL_bufptr != PL_bufend &&
 	      PL_bufptr[0] == '\\' && PL_bufptr[1] == 'E') {
-		if (!PL_thiswhite)
+		if (PL_madskills) {
+		  if (!PL_thiswhite)
 		    PL_thiswhite = newSVpvs("");
-		sv_catpvn(PL_thiswhite, PL_bufptr, 2);
+		  sv_catpvn(PL_thiswhite, PL_bufptr, 2);
+		}
 		PL_bufptr += 2;
 	    }
 #else
@@ -4593,9 +4724,11 @@ Perl_yylex(pTHX)
 	    s = PL_bufptr + 1;
 	    if (s[1] == '\\' && s[2] == 'E') {
 #ifdef PERL_MAD
-		if (!PL_thiswhite)
+		if (PL_madskills) {
+		  if (!PL_thiswhite)
 		    PL_thiswhite = newSVpvs("");
-		sv_catpvn(PL_thiswhite, PL_bufptr, 4);
+		  sv_catpvn(PL_thiswhite, PL_bufptr, 4);
+		}
 #endif
 	        PL_bufptr = s + 3;
 		PL_lex_state = LEX_INTERPCONCAT;
@@ -5253,9 +5386,11 @@ Perl_yylex(pTHX)
     case ' ': case '\t': case '\f': case 013:
 #ifdef PERL_MAD
 	PL_realtokenstart = -1;
-	if (!PL_thiswhite)
+	if (PL_madskills) {
+	  if (!PL_thiswhite)
 	    PL_thiswhite = newSVpvs("");
-	sv_catpvn(PL_thiswhite, s, 1);
+	  sv_catpvn(PL_thiswhite, s, 1);
+	}
 #endif
 	s++;
 	goto retry;
@@ -5969,7 +6104,7 @@ Perl_yylex(pTHX)
 	force_next(formbrack ? '.' : '}');
 	if (formbrack) LEAVE;
 #ifdef PERL_MAD
-	if (!PL_thistoken)
+	if (PL_madskills && !PL_thistoken)
 	    PL_thistoken = newSVpvs("");
 #endif
 	if (formbrack == 2) { /* means . where arguments were expected */
@@ -6710,9 +6845,9 @@ Perl_yylex(pTHX)
 	if (!anydelim && PL_expect == XSTATE
 	      && d < PL_bufend && *d == ':' && *(d + 1) != ':') {
 	    s = d + 1;
-	    pl_yylval.opval = (OP*)newSVOP(OP_CONST, 0,
-                                            newSVpvn_flags(PL_tokenbuf,
-                                                        len, UTF ? SVf_UTF8 : 0));
+	    pl_yylval.pval = savepvn(PL_tokenbuf, len+1);
+	    pl_yylval.pval[len] = '\0';
+	    pl_yylval.pval[len+1] = UTF ? 1 : 0;
 	    CLINE;
 	    TOKEN(LABEL);
 	}
@@ -8307,7 +8442,9 @@ Perl_yylex(pTHX)
 		SV *tmpwhite = 0;
 
 		char *tstart = SvPVX(PL_linestr) + PL_realtokenstart;
-		SV *subtoken = newSVpvn_flags(tstart, s - tstart, SvUTF8(PL_linestr));
+		SV *subtoken = PL_madskills
+		   ? newSVpvn_flags(tstart, s - tstart, SvUTF8(PL_linestr))
+		   : NULL;
 		PL_thistoken = 0;
 
 		d = s;
@@ -8872,7 +9009,8 @@ S_checkcomma(pTHX_ const char *s, const char *name, const char *what)
 /* Either returns sv, or mortalizes sv and returns a new SV*.
    Best used as sv=new_constant(..., sv, ...).
    If s, pv are NULL, calls subroutine with one argument,
-   and type is used with error messages only. */
+   and <type> is used with error messages only.
+   <type> is assumed to be well formed UTF-8 */
 
 STATIC SV *
 S_new_constant(pTHX_ const char *s, STRLEN len, const char *key, STRLEN keylen,
@@ -8926,13 +9064,23 @@ S_new_constant(pTHX_ const char *s, STRLEN len, const char *key, STRLEN keylen,
 			    "Constant(%s) unknown", (type ? type: "undef"));
 	}
 	else {
-	why1 = "$^H{";
-	why2 = key;
-	why3 = "} is not defined";
-    report:
-	msg = Perl_newSVpvf(aTHX_ "Constant(%s): %s%s%s",
-			    (type ? type: "undef"), why1, why2, why3);
-	}
+            why1 = "$^H{";
+            why2 = key;
+            why3 = "} is not defined";
+        report:
+            if (strEQ(key,"charnames")) {
+                yyerror_pv(Perl_form(aTHX_
+                            /* The +3 is for '\N{'; -4 for that, plus '}' */
+                            "Unknown charname '%.*s'", (int)typelen - 4, type + 3
+                           ),
+                           UTF ? SVf_UTF8 : 0);
+                return sv;
+            }
+            else {
+                msg = Perl_newSVpvf(aTHX_ "Constant(%s): %s%s%s",
+                                (type ? type: "undef"), why1, why2, why3);
+            }
+        }
 	yyerror(SvPVX_const(msg));
  	SvREFCNT_dec(msg);
   	return sv;
@@ -8965,8 +9113,11 @@ now_ok:
 
     /* Check the eval first */
     if (!PL_in_eval && SvTRUE(ERRSV)) {
- 	sv_catpvs(ERRSV, "Propagated");
-	yyerror(SvPV_nolen_const(ERRSV)); /* Duplicates the message inside eval */
+	STRLEN errlen;
+	const char * errstr;
+	sv_catpvs(ERRSV, "Propagated");
+	errstr = SvPV_const(ERRSV, errlen);
+	yyerror_pvn(errstr, errlen, 0); /* Duplicates the message inside eval */
 	(void)POPs;
 	res = SvREFCNT_inc_simple(sv);
     }
@@ -9817,8 +9968,10 @@ S_scan_heredoc(pTHX_ register char *s)
 				bufend - shared->re_eval_start);
 	    shared->re_eval_start -= s-d;
 	}
-	if (CxTYPE(cx) == CXt_EVAL && CxOLD_OP_TYPE(cx) == OP_ENTEREVAL
-	 && cx->blk_eval.cur_text == linestr) {
+	if (cxstack_ix >= 0 && CxTYPE(cx) == CXt_EVAL &&
+            CxOLD_OP_TYPE(cx) == OP_ENTEREVAL &&
+            cx->blk_eval.cur_text == linestr)
+        {
 	    cx->blk_eval.cur_text = newSVsv(linestr);
 	    SvSCREAM_on(cx->blk_eval.cur_text);
 	}
@@ -10199,7 +10352,7 @@ S_scan_str(pTHX_ char *start, int keep_quoted, int keep_delims, int re_reparse)
     s += termlen;
 #ifdef PERL_MAD
     tstart = SvPVX(PL_linestr) + stuffstart;
-    if (!PL_thisopen && !keep_delims) {
+    if (PL_madskills && !PL_thisopen && !keep_delims) {
 	PL_thisopen = newSVpvn(tstart, s - tstart);
 	stuffstart = s - SvPVX(PL_linestr);
     }
@@ -11030,7 +11183,6 @@ Perl_yyerror_pvn(pTHX_ const char *const s, STRLEN len, U32 flags)
     SV *msg;
     SV * const where_sv = newSVpvs_flags("", SVs_TEMP);
     int yychar  = PL_parser->yychar;
-    U32 is_utf8 = flags & SVf_UTF8;
 
     PERL_ARGS_ASSERT_YYERROR_PVN;
 
@@ -11091,7 +11243,7 @@ Perl_yyerror_pvn(pTHX_ const char *const s, STRLEN len, U32 flags)
 	else
 	    Perl_sv_catpvf(aTHX_ where_sv, "\\%03o", yychar & 255);
     }
-    msg = sv_2mortal(newSVpvn_flags(s, len, is_utf8));
+    msg = newSVpvn_flags(s, len, (flags & SVf_UTF8) | SVs_TEMP);
     Perl_sv_catpvf(aTHX_ msg, " at %s line %"IVdf", ",
         OutCopFILE(PL_curcop), (IV)CopLINE(PL_curcop));
     if (context)
@@ -11750,11 +11902,10 @@ Perl_parse_label(pTHX_ U32 flags)
     if (PL_lex_state == LEX_KNOWNEXT) {
 	PL_parser->yychar = yylex();
 	if (PL_parser->yychar == LABEL) {
-	    SV *lsv;
+	    char * const lpv = pl_yylval.pval;
+	    STRLEN llen = strlen(lpv);
 	    PL_parser->yychar = YYEMPTY;
-	    lsv = newSV_type(SVt_PV);
-	    sv_copypv(lsv, cSVOPx(pl_yylval.opval)->op_sv);
-	    return lsv;
+	    return newSVpvn_flags(lpv, llen, lpv[llen+1] ? SVf_UTF8 : 0);
 	} else {
 	    yyunlex();
 	    goto no_label;

@@ -162,17 +162,38 @@ Perl_newGP(pTHX_ GV *const gv)
 {
     GP *gp;
     U32 hash;
-#ifdef USE_ITHREADS
-    const char *const file
-	= (PL_curcop && CopFILE(PL_curcop)) ? CopFILE(PL_curcop) : "";
-    const STRLEN len = strlen(file);
-#else
-    SV *const temp_sv = CopFILESV(PL_curcop);
     const char *file;
     STRLEN len;
+#ifndef USE_ITHREADS
+    SV * temp_sv;
+#endif
+    dVAR;
 
     PERL_ARGS_ASSERT_NEWGP;
+    Newxz(gp, 1, GP);
+    gp->gp_egv = gv; /* allow compiler to reuse gv after this */
+#ifndef PERL_DONT_CREATE_GVSV
+    gp->gp_sv = newSV(0);
+#endif
 
+#ifdef USE_ITHREADS
+    if (PL_curcop) {
+	gp->gp_line = CopLINE(PL_curcop); /* 0 otherwise Newxz */
+	if (CopFILE(PL_curcop)) {
+	    file = CopFILE(PL_curcop);
+	    len = strlen(file);
+	}
+	else goto no_file;
+    }
+    else {
+	no_file:
+	file = "";
+	len = 0;
+    }
+#else
+    if(PL_curcop)
+	gp->gp_line = CopLINE(PL_curcop); /* 0 otherwise Newxz */
+    temp_sv = CopFILESV(PL_curcop);
     if (temp_sv) {
 	file = SvPVX(temp_sv);
 	len = SvCUR(temp_sv);
@@ -183,18 +204,7 @@ Perl_newGP(pTHX_ GV *const gv)
 #endif
 
     PERL_HASH(hash, file, len);
-
-    Newxz(gp, 1, GP);
-
-#ifndef PERL_DONT_CREATE_GVSV
-    gp->gp_sv = newSV(0);
-#endif
-
-    gp->gp_line = PL_curcop ? CopLINE(PL_curcop) : 0;
-    /* XXX Ideally this cast would be replaced with a change to const char*
-       in the struct.  */
     gp->gp_file_hek = share_hek(file, len, hash);
-    gp->gp_egv = gv;
     gp->gp_refcnt = 1;
 
     return gp;
@@ -1239,13 +1249,12 @@ S_require_tie_mod(pTHX_ GV *gv, const char *varpv, SV* namesv, const char *methp
 	const char type = varname == '[' ? '$' : '%';
 	dSP;
 	ENTER;
+	SAVEFREESV(namesv);
 	if ( flags & 1 )
 	    save_scalar(gv);
 	PUSHSTACKi(PERLSI_MAGIC);
 	Perl_load_module(aTHX_ PERL_LOADMOD_NOIMPORT, module, NULL);
 	POPSTACK;
-	LEAVE;
-	SPAGAIN;
 	stash = gv_stashsv(namesv, 0);
 	if (!stash)
 	    Perl_croak(aTHX_ "panic: Can't use %c%c because %"SVf" is not available",
@@ -1253,8 +1262,9 @@ S_require_tie_mod(pTHX_ GV *gv, const char *varpv, SV* namesv, const char *methp
 	else if (!gv_fetchmethod(stash, methpv))
 	    Perl_croak(aTHX_ "panic: Can't use %c%c because %"SVf" does not support method %s",
 		    type, varname, SVfARG(namesv), methpv);
+	LEAVE;
     }
-    SvREFCNT_dec(namesv);
+    else SvREFCNT_dec(namesv);
     return stash;
 }
 
@@ -2243,7 +2253,7 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
   if (mg) {
       const AMT * const amtp = (AMT*)mg->mg_ptr;
       if (amtp->was_ok_sub == newgen) {
-	  return AMT_OVERLOADED(amtp) ? 1 : 0;
+	  return AMT_AMAGIC(amtp) ? 1 : 0;
       }
       sv_unmagic(MUTABLE_SV(stash), PERL_MAGIC_overload_table);
   }
@@ -2256,8 +2266,8 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
   amt.flags = 0;
 
   {
-    int filled = 0, have_ovl = 0;
-    int i, lim = 1;
+    int filled = 0;
+    int i;
 
     /* Work with "fallback" key, which we assume to be first in PL_AMG_names */
 
@@ -2269,7 +2279,7 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
     if (!gv)
     {
       if (!gv_fetchmeth_pvn(stash, "((", 2, -1, 0))
-	lim = DESTROY_amg;		/* Skip overloading entries. */
+	goto no_table;
     }
 #ifdef PERL_DONT_CREATE_GVSV
     else if (!sv) {
@@ -2283,19 +2293,15 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
     else if (SvOK(sv)) {
 	amt.fallback=AMGfallNEVER;
         filled = 1;
-        have_ovl = 1;
     }
     else {
         filled = 1;
-        have_ovl = 1;
     }
 
-    for (i = 1; i < lim; i++)
-	amt.table[i] = NULL;
-    for (; i < NofAMmeth; i++) {
+    for (i = 1; i < NofAMmeth; i++) {
 	const char * const cooky = PL_AMG_names[i];
 	/* Human-readable form, for debugging: */
-	const char * const cp = (i >= DESTROY_amg ? cooky : AMG_id2name(i));
+	const char * const cp = AMG_id2name(i);
 	const STRLEN l = PL_AMG_namelens[i];
 
 	DEBUG_o( Perl_deb(aTHX_ "Checking overloading of \"%s\" in package \"%.256s\"\n",
@@ -2307,10 +2313,7 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
 	   then we could have created stubs for "(+0" in A and C too.
 	   But if B overloads "bool", we may want to use it for
 	   numifying instead of C's "+0". */
-	if (i >= DESTROY_amg)
-	    gv = Perl_gv_fetchmeth_pvn_autoload(aTHX_ stash, cooky, l, 0, 0);
-	else				/* Autoload taken care of below */
-	    gv = Perl_gv_fetchmeth_pvn(aTHX_ stash, cooky, l, -1, 0);
+	gv = Perl_gv_fetchmeth_pvn(aTHX_ stash, cooky, l, -1, 0);
         cv = 0;
         if (gv && (cv = GvCV(gv))) {
 	    if(GvNAMELEN(CvGV(cv)) == 3 && strEQ(GvNAME(CvGV(cv)), "nil")){
@@ -2356,8 +2359,6 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
 			 cp, HvNAME_get(stash), HvNAME_get(GvSTASH(CvGV(cv))),
 			 GvNAME(CvGV(cv))) );
 	    filled = 1;
-	    if (i < DESTROY_amg)
-		have_ovl = 1;
 	} else if (gv) {		/* Autoloaded... */
 	    cv = MUTABLE_CV(gv);
 	    filled = 1;
@@ -2366,15 +2367,13 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
     }
     if (filled) {
       AMT_AMAGIC_on(&amt);
-      if (have_ovl)
-	  AMT_OVERLOADED_on(&amt);
       sv_magic(MUTABLE_SV(stash), 0, PERL_MAGIC_overload_table,
 						(char*)&amt, sizeof(AMT));
-      return have_ovl;
+      return TRUE;
     }
   }
   /* Here we have no table: */
-  /* no_table: */
+ no_table:
   AMT_AMAGIC_off(&amt);
   sv_magic(MUTABLE_SV(stash), 0, PERL_MAGIC_overload_table,
 						(char*)&amt, sizeof(AMTS));
@@ -2400,19 +2399,8 @@ Perl_gv_handler(pTHX_ HV *stash, I32 id)
     mg = mg_find((const SV *)stash, PERL_MAGIC_overload_table);
     if (!mg) {
       do_update:
-	/* If we're looking up a destructor to invoke, we must avoid
-	 * that Gv_AMupdate croaks, because we might be dying already */
-	if (Gv_AMupdate(stash, cBOOL(id == DESTROY_amg)) == -1) {
-	    /* and if it didn't found a destructor, we fall back
-	     * to a simpler method that will only look for the
-	     * destructor instead of the whole magic */
-	    if (id == DESTROY_amg) {
-		GV * const gv = gv_fetchmethod(stash, "DESTROY");
-		if (gv)
-		    return GvCV(gv);
-	    }
+	if (Gv_AMupdate(stash, 0) == -1)
 	    return NULL;
-	}
 	mg = mg_find((const SV *)stash, PERL_MAGIC_overload_table);
     }
     assert(mg);

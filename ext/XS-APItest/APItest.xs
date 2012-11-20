@@ -3262,7 +3262,7 @@ CODE:
 OUTPUT:
     RETVAL
 
-bool
+U32
 SvIsCOW(SV *sv)
 CODE:
     RETVAL = SvIsCOW(sv);
@@ -3581,6 +3581,20 @@ bool
 test_isBLANK_utf8(unsigned char * p)
     CODE:
         RETVAL = isBLANK_utf8(p);
+    OUTPUT:
+        RETVAL
+
+bool
+test_isVERTWS_uni(UV ord)
+    CODE:
+        RETVAL = isVERTWS_uni(ord);
+    OUTPUT:
+        RETVAL
+
+bool
+test_isVERTWS_utf8(unsigned char * p)
+    CODE:
+        RETVAL = isVERTWS_utf8(p);
     OUTPUT:
         RETVAL
 

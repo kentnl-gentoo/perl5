@@ -116,7 +116,7 @@ PP(pp_regcomp)
 		pm->op_pmflags |
 		    (PL_op->op_flags & OPf_SPECIAL ? PMf_USE_RE_EVAL : 0));
     if (pm->op_pmflags & PMf_HAS_CV)
-	((struct regexp *)SvANY(new_re))->qr_anoncv
+	ReANY(new_re)->qr_anoncv
 			= (CV*) SvREFCNT_inc(PAD_SV(PL_op->op_targ));
 
     if (is_bare_re) {
@@ -129,7 +129,7 @@ PP(pp_regcomp)
 	   some day. */
 	if (pm->op_type == OP_MATCH) {
 	    SV *lhs;
-	    const bool was_tainted = PL_tainted;
+	    const bool was_tainted = TAINT_get;
 	    if (pm->op_flags & OPf_STACKED)
 		lhs = args[-1];
 	    else if (pm->op_private & OPpTARGET_MY)
@@ -138,8 +138,8 @@ PP(pp_regcomp)
 	    SvGETMAGIC(lhs);
 	    /* Restore the previous value of PL_tainted (which may have been
 	       modified by get-magic), to avoid incorrectly setting the
-	       RXf_TAINTED flag further down. */
-	    PL_tainted = was_tainted;
+	       RXf_TAINTED flag with RX_TAINT_on further down. */
+	    TAINT_set(was_tainted);
 	}
 	tmp = reg_temp_copy(NULL, new_re);
 	ReREFCNT_dec(new_re);
@@ -151,9 +151,9 @@ PP(pp_regcomp)
     }
 
 #ifndef INCOMPLETE_TAINTS
-    if (PL_tainting && PL_tainted) {
+    if (TAINTING_get && TAINT_get) {
 	SvTAINTED_on((SV*)new_re);
-	RX_EXTFLAGS(new_re) |= RXf_TAINTED;
+        RX_TAINT_on(new_re);
     }
 #endif
 
@@ -259,7 +259,7 @@ PP(pp_substcont)
 	    /* update the taint state of various various variables in
 	     * preparation for final exit.
 	     * See "how taint works" above pp_subst() */
-	    if (PL_tainting) {
+	    if (TAINTING_get) {
 		if ((cx->sb_rxtainted & SUBST_TAINT_PAT) ||
 		    ((cx->sb_rxtainted & (SUBST_TAINT_STR|SUBST_TAINT_RETAINT))
 				    == (SUBST_TAINT_STR|SUBST_TAINT_RETAINT))
@@ -271,8 +271,10 @@ PP(pp_substcont)
 		)
 		    SvTAINTED_on(TOPs);  /* taint return value */
 		/* needed for mg_set below */
-		PL_tainted = cBOOL(cx->sb_rxtainted &
-			    (SUBST_TAINT_STR|SUBST_TAINT_PAT|SUBST_TAINT_REPL));
+		TAINT_set(
+                    cBOOL(cx->sb_rxtainted &
+			  (SUBST_TAINT_STR|SUBST_TAINT_PAT|SUBST_TAINT_REPL))
+                );
 		SvTAINT(TARG);
 	    }
 	    /* PL_tainted must be correctly set for this mg_set */
@@ -321,7 +323,7 @@ PP(pp_substcont)
     /* update the taint state of various various variables in preparation
      * for calling the code block.
      * See "how taint works" above pp_subst() */
-    if (PL_tainting) {
+    if (TAINTING_get) {
 	if (RX_MATCH_TAINTED(rx)) /* run time pattern taint, eg locale */
 	    cx->sb_rxtainted |= SUBST_TAINT_PAT;
 
@@ -1998,8 +2000,12 @@ PP(pp_dbstate)
 	    PUSHSUB_DB(cx);
 	    cx->blk_sub.retop = PL_op->op_next;
 	    CvDEPTH(cv)++;
+	    if (CvDEPTH(cv) >= 2) {
+		PERL_STACK_OVERFLOW_CHECK();
+		pad_push(CvPADLIST(cv), CvDEPTH(cv));
+	    }
 	    SAVECOMPPAD();
-	    PAD_SET_CUR_NOSAVE(CvPADLIST(cv), 1);
+	    PAD_SET_CUR_NOSAVE(CvPADLIST(cv), CvDEPTH(cv));
 	    RETURNOP(CvSTART(cv));
 	}
     }
@@ -2768,10 +2774,8 @@ PP(pp_goto)
 	    I32 cxix;
 	    PERL_CONTEXT *cx;
 	    CV *cv = MUTABLE_CV(SvRV(sv));
-	    SV** mark;
-	    I32 items = 0;
+	    AV *arg = GvAV(PL_defgv);
 	    I32 oldsave;
-	    bool reified = 0;
 
 	retry:
 	    if (!CvROOT(cv) && !CvXSUB(cv)) {
@@ -2799,13 +2803,17 @@ PP(pp_goto)
 	    FREETMPS;
 	    cxix = dopoptosub(cxstack_ix);
 	    if (cxix < 0)
+	    {
+		SvREFCNT_dec(cv);
 		DIE(aTHX_ "Can't goto subroutine outside a subroutine");
+	    }
 	    if (cxix < cxstack_ix)
 		dounwind(cxix);
 	    TOPBLOCK(cx);
 	    SPAGAIN;
 	    /* ban goto in eval: see <20050521150056.GC20213@iabyn.com> */
 	    if (CxTYPE(cx) == CXt_EVAL) {
+		SvREFCNT_dec(cv);
 		if (CxREALEVAL(cx))
 		/* diag_listed_as: Can't goto subroutine from an eval-%s */
 		    DIE(aTHX_ "Can't goto subroutine from an eval-string");
@@ -2814,35 +2822,25 @@ PP(pp_goto)
 		    DIE(aTHX_ "Can't goto subroutine from an eval-block");
 	    }
 	    else if (CxMULTICALL(cx))
+	    {
+		SvREFCNT_dec(cv);
 		DIE(aTHX_ "Can't goto subroutine from a sort sub (or similar callback)");
+	    }
 	    if (CxTYPE(cx) == CXt_SUB && CxHASARGS(cx)) {
-		/* put @_ back onto stack */
 		AV* av = cx->blk_sub.argarray;
 
-		items = AvFILLp(av) + 1;
-		EXTEND(SP, items+1); /* @_ could have been extended. */
-		Copy(AvARRAY(av), SP + 1, items, SV*);
-		SvREFCNT_dec(GvAV(PL_defgv));
-		GvAV(PL_defgv) = cx->blk_sub.savearray;
-		CLEAR_ARGARRAY(av);
-		/* abandon @_ if it got reified */
-		if (AvREAL(av)) {
-		    reified = 1;
+		/* abandon the original @_ if it got reified or if it is
+		   the same as the current @_ */
+		if (AvREAL(av) || av == arg) {
 		    SvREFCNT_dec(av);
 		    av = newAV();
-		    av_extend(av, items-1);
 		    AvREIFY_only(av);
 		    PAD_SVl(0) = MUTABLE_SV(cx->blk_sub.argarray = av);
 		}
+		else CLEAR_ARGARRAY(av);
 	    }
-	    else if (CvISXSUB(cv)) {	/* put GvAV(defgv) back onto stack */
-		AV* const av = GvAV(PL_defgv);
-		items = AvFILLp(av) + 1;
-		EXTEND(SP, items+1); /* @_ could have been extended. */
-		Copy(AvARRAY(av), SP + 1, items, SV*);
-	    }
-	    mark = SP;
-	    SP += items;
+	    /* We donate this refcount later to the callee’s pad. */
+	    SvREFCNT_inc_simple_void(arg);
 	    if (CxTYPE(cx) == CXt_SUB &&
 		!(CvDEPTH(cx->blk_sub.cv) = cx->blk_sub.olddepth))
 		SvREFCNT_dec(cx->blk_sub.cv);
@@ -2853,6 +2851,7 @@ PP(pp_goto)
 	     * our precious cv.  See bug #99850. */
 	    if (!CvROOT(cv) && !CvXSUB(cv)) {
 		const GV * const gv = CvGV(cv);
+		SvREFCNT_dec(arg);
 		if (gv) {
 		    SV * const tmpstr = sv_newmortal();
 		    gv_efullname3(tmpstr, gv, NULL);
@@ -2869,10 +2868,25 @@ PP(pp_goto)
 		OP* const retop = cx->blk_sub.retop;
 		SV **newsp PERL_UNUSED_DECL;
 		I32 gimme PERL_UNUSED_DECL;
-		if (reified) {
+		const SSize_t items = AvFILLp(arg) + 1;
+		SV** mark;
+
+		/* put GvAV(defgv) back onto stack */
+		EXTEND(SP, items+1); /* @_ could have been extended. */
+		Copy(AvARRAY(arg), SP + 1, items, SV*);
+		mark = SP;
+		SP += items;
+		if (AvREAL(arg)) {
 		    I32 index;
 		    for (index=0; index<items; index++)
-			sv_2mortal(SP[-index]);
+			SvREFCNT_inc_void(sv_2mortal(SP[-index]));
+		}
+		SvREFCNT_dec(arg);
+		if (CxTYPE(cx) == CXt_SUB && CxHASARGS(cx)) {
+		    /* Restore old @_ */
+		    arg = GvAV(PL_defgv);
+		    GvAV(PL_defgv) = cx->blk_sub.savearray;
+		    SvREFCNT_dec(arg);
 		}
 
 		/* XS subs don't have a CxSUB, so pop it */
@@ -2886,11 +2900,6 @@ PP(pp_goto)
 	    }
 	    else {
 		PADLIST * const padlist = CvPADLIST(cv);
-		if (CxTYPE(cx) == CXt_EVAL) {
-		    PL_in_eval = CxOLD_IN_EVAL(cx);
-		    PL_eval_root = cx->blk_eval.old_eval_root;
-		    cx->cx_type = CXt_SUB;
-		}
 		cx->blk_sub.cv = cv;
 		cx->blk_sub.olddepth = CvDEPTH(cv);
 
@@ -2907,41 +2916,26 @@ PP(pp_goto)
 		PAD_SET_CUR_NOSAVE(padlist, CvDEPTH(cv));
 		if (CxHASARGS(cx))
 		{
-		    AV *const av = MUTABLE_AV(PAD_SVl(0));
-
-		    cx->blk_sub.savearray = GvAV(PL_defgv);
-		    GvAV(PL_defgv) = MUTABLE_AV(SvREFCNT_inc_simple(av));
 		    CX_CURPAD_SAVE(cx->blk_sub);
-		    cx->blk_sub.argarray = av;
 
-		    if (items >= AvMAX(av) + 1) {
-			SV **ary = AvALLOC(av);
-			if (AvARRAY(av) != ary) {
-			    AvMAX(av) += AvARRAY(av) - AvALLOC(av);
-			    AvARRAY(av) = ary;
-			}
-			if (items >= AvMAX(av) + 1) {
-			    AvMAX(av) = items - 1;
-			    Renew(ary,items+1,SV*);
-			    AvALLOC(av) = ary;
-			    AvARRAY(av) = ary;
-			}
-		    }
-		    ++mark;
-		    Copy(mark,AvARRAY(av),items,SV*);
-		    AvFILLp(av) = items - 1;
-		    assert(!AvREAL(av));
-		    if (reified) {
-			/* transfer 'ownership' of refcnts to new @_ */
-			AvREAL_on(av);
-			AvREIFY_off(av);
-		    }
-		    while (items--) {
-			if (*mark)
-			    SvTEMP_off(*mark);
-			mark++;
+		    /* cx->blk_sub.argarray has no reference count, so we
+		       need something to hang on to our argument array so
+		       that cx->blk_sub.argarray does not end up pointing
+		       to freed memory as the result of undef *_.  So put
+		       it in the callee’s pad, donating our refer-
+		       ence count. */
+		    SvREFCNT_dec(PAD_SVl(0));
+		    PAD_SVl(0) = (SV *)(cx->blk_sub.argarray = arg);
+
+		    /* GvAV(PL_defgv) might have been modified on scope
+		       exit, so restore it. */
+		    if (arg != GvAV(PL_defgv)) {
+			AV * const av = GvAV(PL_defgv);
+			GvAV(PL_defgv) = (AV *)SvREFCNT_inc_simple(arg);
+			SvREFCNT_dec(av);
 		    }
 		}
+		else SvREFCNT_dec(arg);
 		if (PERLDB_SUB) {	/* Checking curstash breaks DProf. */
 		    Perl_get_db_sub(aTHX_ NULL, cv);
 		    if (PERLDB_GOTO) {
@@ -3273,7 +3267,7 @@ Perl_find_runcv_where(pTHX_ U8 cond, IV arg, U32 *db_seqp)
 		switch (cond) {
 		case FIND_RUNCV_padid_eq:
 		    if (!CvPADLIST(cv)
-		     || PadlistNAMES(CvPADLIST(cv)) != (PADNAMELIST *)arg)
+		     || PadlistNAMES(CvPADLIST(cv)) != INT2PTR(PADNAMELIST *, arg))
 			continue;
 		    return cv;
 		case FIND_RUNCV_level_eq:
@@ -3462,7 +3456,6 @@ S_doeval(pTHX_ int gimme, CV* outside, U32 seq, HV *hh)
 	PL_op = saveop;
 	if (yystatus != 3) {
 	    if (PL_eval_root) {
-		cv_forget_slab(evalcv);
 		op_free(PL_eval_root);
 		PL_eval_root = NULL;
 	    }
@@ -3614,7 +3607,7 @@ PP(pp_require)
     sv = POPs;
     if ( (SvNIOKp(sv) || SvVOK(sv)) && PL_op->op_type != OP_DOFILE) {
 	sv = sv_2mortal(new_version(sv));
-	if (!sv_derived_from(PL_patchlevel, "version"))
+	if (!Perl_sv_derived_from_pvn(aTHX_ PL_patchlevel, STR_WITH_LEN("version"), 0))
 	    upg_version(PL_patchlevel, TRUE);
 	if (cUNOP->op_first->op_type == OP_CONST && cUNOP->op_first->op_private & OPpCONST_NOVER) {
 	    if ( vcmp(sv,PL_patchlevel) <= 0 )
@@ -3934,7 +3927,7 @@ PP(pp_require)
 	        if (namesv) {			/* did we lookup @INC? */
 		    AV * const ar = GvAVn(PL_incgv);
 		    I32 i;
-		    SV *const msg = newSVpv("", 0);
+		    SV *const msg = newSVpvs_flags("", SVs_TEMP);
 		    SV *const inc = newSVpvs_flags("", SVs_TEMP);
 		    for (i = 0; i <= AvFILL(ar); i++) {
 			sv_catpvs(inc, " ");

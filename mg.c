@@ -111,22 +111,19 @@ S_save_magic(pTHX_ I32 mgs_ix, SV *sv)
 	bumped = TRUE;
     }
 
-    /* Turning READONLY off for a copy-on-write scalar (including shared
-       hash keys) is a bad idea.  */
-    if (SvIsCOW(sv))
-      sv_force_normal_flags(sv, 0);
-
     SAVEDESTRUCTOR_X(S_restore_magic, INT2PTR(void*, (IV)mgs_ix));
 
     mgs = SSPTR(mgs_ix, MGS*);
     mgs->mgs_sv = sv;
     mgs->mgs_magical = SvMAGICAL(sv);
-    mgs->mgs_readonly = SvREADONLY(sv) != 0;
+    mgs->mgs_readonly = SvREADONLY(sv) && !SvIsCOW(sv);
     mgs->mgs_ss_ix = PL_savestack_ix;   /* points after the saved destructor */
     mgs->mgs_bumped = bumped;
 
     SvMAGICAL_off(sv);
-    SvREADONLY_off(sv);
+    /* Turning READONLY off for a copy-on-write scalar (including shared
+       hash keys) is a bad idea.  */
+    if (!SvIsCOW(sv)) SvREADONLY_off(sv);
 }
 
 /*
@@ -685,7 +682,7 @@ Perl_magic_regdatum_set(pTHX_ SV *sv, MAGIC *mg)
     PERL_ARGS_ASSERT_MAGIC_REGDATUM_SET;
     PERL_UNUSED_ARG(sv);
     PERL_UNUSED_ARG(mg);
-    Perl_croak_no_modify(aTHX);
+    Perl_croak_no_modify();
     NORETURN_FUNCTION_END;
 }
 
@@ -879,8 +876,8 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 #endif
         }
 	else if (strEQ(remaining, "AINT"))
-            sv_setiv(sv, PL_tainting
-		    ? (PL_taint_warn || PL_unsafe ? -1 : 1)
+            sv_setiv(sv, TAINTING_get
+		    ? (TAINT_WARN_get || PL_unsafe ? -1 : 1)
 		    : 0);
         break;
     case '\025':		/* $^UNICODE, $^UTF8LOCALE, $^UTF8CACHE */
@@ -1135,7 +1132,7 @@ Perl_magic_setenv(pTHX_ SV *sv, MAGIC *mg)
 #if !defined(OS2) && !defined(AMIGAOS) && !defined(WIN32) && !defined(MSDOS)
 			    /* And you'll never guess what the dog had */
 			    /*   in its mouth... */
-    if (PL_tainting) {
+    if (TAINTING_get) {
 	MgTAINTEDDIR_off(mg);
 #ifdef VMS
 	if (s && klen == 8 && strEQ(key, "DCL$PATH")) {
@@ -1835,7 +1832,7 @@ Perl_magic_setpack(pTHX_ SV *sv, MAGIC *mg)
      * fake up a temporary tainted value (this is easier than temporarily
      * re-enabling magic on sv). */
 
-    if (PL_tainting && (tmg = mg_find(sv, PERL_MAGIC_taint))
+    if (TAINTING_get && (tmg = mg_find(sv, PERL_MAGIC_taint))
 	&& (tmg->mg_len & 1))
     {
 	val = sv_mortalcopy(sv);
@@ -2236,7 +2233,7 @@ Perl_magic_settaint(pTHX_ SV *sv, MAGIC *mg)
     PERL_UNUSED_ARG(sv);
 
     /* update taint status */
-    if (PL_tainted)
+    if (TAINT_get)
 	mg->mg_len |= 1;
     else
 	mg->mg_len &= ~1;
@@ -2480,7 +2477,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
              */
       croakparen:
             if (!PL_localizing) {
-                Perl_croak_no_modify(aTHX);
+                Perl_croak_no_modify();
             }
         }
         break;
@@ -2496,7 +2493,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    }
 	}
 	/* mg_set() has temporarily made sv non-magical */
-	if (PL_tainting) {
+	if (TAINTING_get) {
 	    if ((tmg = mg_find(sv,PERL_MAGIC_taint)) && tmg->mg_len & 1)
 		SvTAINTED_on(PL_bodytarget);
 	    else

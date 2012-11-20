@@ -497,7 +497,10 @@ sub eq_hash {
     # Force a hash recompute if this perl's internals can cache the hash key.
     $key = "" . $key;
     if (exists $orig->{$key}) {
-      if ($orig->{$key} ne $value) {
+      if (
+        defined $orig->{$key} != defined $value
+        || (defined $value && $orig->{$key} ne $value)
+      ) {
         _print "# key ", _qq($key), " was ", _qq($orig->{$key}),
                      " now ", _qq($value), "\n";
         $fail = 1;
@@ -951,9 +954,6 @@ sub fresh_perl_like {
 # The expected output may contain:
 #   OPTION list of options
 #   OPTIONS list of options
-#   PREFIX
-#     indicates that the supplied output is only a prefix to the
-#     expected output
 #
 # The possible options for OPTION may be:
 #   regex - the expected output is a regular expression
@@ -962,6 +962,9 @@ sub fresh_perl_like {
 #
 # If the actual output contains a line "SKIPPED" the test will be
 # skipped.
+#
+# If the actual output contains a line "PREFIX", any output starting with that
+# line will be ignored when comparing with the expected output
 #
 # If the global variable $FATAL is true then OPTION fatal is the
 # default.
@@ -1014,7 +1017,7 @@ sub run_multiple_progs {
 	}
 
 	if ($prog =~ /--FILE--/) {
-	    my @files = split(/\n--FILE--\s*([^\s\n]*)\s*\n/, $prog) ;
+	    my @files = split(/\n?--FILE--\s*([^\s\n]*)\s*\n/, $prog) ;
 	    shift @files ;
 	    die "Internal error: test $_ didn't split into pairs, got " .
 		scalar(@files) . "[" . join("%%%%", @files) ."]\n"

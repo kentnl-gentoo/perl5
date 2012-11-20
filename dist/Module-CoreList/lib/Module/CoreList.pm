@@ -3,7 +3,7 @@ use strict;
 use vars qw/$VERSION %released %version %families %upstream
 	    %bug_tracker %deprecated/;
 use Module::CoreList::TieHashDelta;
-$VERSION = '2.75';
+$VERSION = '2.78';
 
 my $dumpinc = 0;
 sub import {
@@ -76,6 +76,17 @@ sub is_deprecated {
     $perl_version ||= $];
     return unless $module && exists $deprecated{$perl_version}{$module};
     return $deprecated{$perl_version}{$module};
+}
+
+sub deprecated_in {
+    my $module = shift;
+    $module = shift if eval { $module->isa(__PACKAGE__) }
+      and scalar @_ and $_[0] =~ m#\A[a-zA-Z_][0-9a-zA-Z_]*(?:(::|')[0-9a-zA-Z_]+)*\z#;
+    return unless $module;
+    my @perls = grep { exists $deprecated{$_}{$module} } keys %deprecated;
+    return unless @perls;
+    require List::Util;
+    return List::Util::minstr(@perls);
 }
 
 sub removed_from {
@@ -188,6 +199,7 @@ sub changes_between {
     5.013011 => '2011-03-20',
     5.014000 => '2011-05-14',
     5.012004 => '2011-06-20',
+    5.012005 => '2012-11-10',
     5.014001 => '2011-06-16',
     5.015000 => '2011-06-20',
     5.015001 => '2011-07-20',
@@ -202,6 +214,7 @@ sub changes_between {
     5.015009 => '2012-03-20',
     5.016000 => '2012-05-20',
     5.016001 => '2012-08-08',
+    5.016002 => '2012-11-01',
     5.017000 => '2012-05-26',
     5.017001 => '2012-06-20',
     5.017002 => '2012-07-20',
@@ -209,6 +222,7 @@ sub changes_between {
     5.017004 => '2012-09-20',
     5.014003 => '2012-10-12',
     5.017005 => '2012-10-20',
+    5.017006 => '2012-11-20',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -4344,6 +4358,19 @@ my %delta = (
         removed => {
         }
     },
+    5.012005 => {
+        delta_from => 5.012004,
+        changed => {
+            'B::Concise'            => '0.78_01',
+            'Encode'                => '2.39_01',
+            'File::Glob'            => '1.07_01',
+            'Module::CoreList'      => '2.50_02',
+            'Unicode::UCD'          => '0.29',
+            'charnames'             => '1.07_01',
+        },
+        removed => {
+        }
+    },
     5.013 => {
         delta_from => 5.012,
         changed => {
@@ -6723,6 +6750,13 @@ my %delta = (
         removed => {
         }
     },
+    5.016002 => {
+        delta_from => 5.016001,
+        changed => {
+        },
+        removed => {
+        }
+    },
     5.017 => {
         delta_from => 5.016,
         changed => {
@@ -7285,6 +7319,88 @@ my %delta = (
         removed => {
         }
     },
+    5.017006 => {
+        delta_from => 5.017005,
+        changed => {
+            'B'                     => '1.40',
+            'B::Concise'            => '0.94',
+            'B::Deparse'            => '1.19',
+            'B::Xref'               => '1.05',
+            'CGI'                   => '3.63',
+            'CGI::Util'             => '3.62',
+            'CPAN'                  => '1.99_51',
+            'CPANPLUS::Dist::Build' => '0.64',
+            'CPANPLUS::Dist::Build::Constants'=> '0.64',
+            'Carp'                  => '1.28',
+            'Carp::Heavy'           => '1.28',
+            'Compress::Raw::Bzip2'  => '2.058',
+            'Compress::Raw::Zlib'   => '2.058',
+            'Compress::Zlib'        => '2.058',
+            'Data::Dumper'          => '2.137',
+            'Digest::SHA'           => '5.73',
+            'DynaLoader'            => '1.17',
+            'Env'                   => '1.04',
+            'Errno'                 => '1.17',
+            'ExtUtils::Manifest'    => '1.62',
+            'ExtUtils::Typemaps'    => '3.18',
+            'ExtUtils::Typemaps::Cmd'=> '3.18',
+            'ExtUtils::Typemaps::InputMap'=> '3.18',
+            'ExtUtils::Typemaps::OutputMap'=> '3.18',
+            'ExtUtils::Typemaps::Type'=> '3.18',
+            'Fatal'                 => '2.13',
+            'File::Find'            => '1.23',
+            'Hash::Util'            => '0.13',
+            'IO::Compress::Adapter::Bzip2'=> '2.058',
+            'IO::Compress::Adapter::Deflate'=> '2.058',
+            'IO::Compress::Adapter::Identity'=> '2.058',
+            'IO::Compress::Base'    => '2.058',
+            'IO::Compress::Base::Common'=> '2.058',
+            'IO::Compress::Bzip2'   => '2.058',
+            'IO::Compress::Deflate' => '2.058',
+            'IO::Compress::Gzip'    => '2.058',
+            'IO::Compress::Gzip::Constants'=> '2.058',
+            'IO::Compress::RawDeflate'=> '2.058',
+            'IO::Compress::Zip'     => '2.058',
+            'IO::Compress::Zip::Constants'=> '2.058',
+            'IO::Compress::Zlib::Constants'=> '2.058',
+            'IO::Compress::Zlib::Extra'=> '2.058',
+            'IO::Uncompress::Adapter::Bunzip2'=> '2.058',
+            'IO::Uncompress::Adapter::Identity'=> '2.058',
+            'IO::Uncompress::Adapter::Inflate'=> '2.058',
+            'IO::Uncompress::AnyInflate'=> '2.058',
+            'IO::Uncompress::AnyUncompress'=> '2.058',
+            'IO::Uncompress::Base'  => '2.058',
+            'IO::Uncompress::Bunzip2'=> '2.058',
+            'IO::Uncompress::Gunzip'=> '2.058',
+            'IO::Uncompress::Inflate'=> '2.058',
+            'IO::Uncompress::RawInflate'=> '2.058',
+            'IO::Uncompress::Unzip' => '2.058',
+            'Module::CoreList'      => '2.78',
+            'Module::CoreList::TieHashDelta'=> '2.77',
+            'Module::Pluggable'     => '4.5',
+            'Module::Pluggable::Object'=> '4.5',
+            'Opcode'                => '1.25',
+            'Sys::Hostname'         => '1.17',
+            'Term::UI'              => '0.32',
+            'Thread::Queue'         => '3.01',
+            'Tie::Hash::NamedCapture'=> '0.09',
+            'Unicode::Collate'      => '0.93',
+            'Unicode::Collate::CJK::Korean'=> '0.93',
+            'Unicode::Collate::Locale'=> '0.93',
+            'Unicode::Normalize'    => '1.16',
+            'Unicode::UCD'          => '0.47',
+            'XS::APItest'           => '0.46',
+            '_charnames'            => '1.33',
+            'autodie'               => '2.13',
+            'autodie::exception'    => '2.13',
+            'autodie::exception::system'=> '2.13',
+            'autodie::hints'        => '2.13',
+            'charnames'             => '1.33',
+            're'                    => '0.23',
+        },
+        removed => {
+        }
+    },
 );
 
 for my $version (sort { $a <=> $b } keys %delta) {
@@ -7404,6 +7520,12 @@ for my $version (sort { $a <=> $b } keys %delta) {
 	'Shell'                 => '1',
 	'Switch'                => '1',
     },
+    5.012005 => {
+	'Class::ISA'            => '1',
+	'Pod::Plainer'          => '1',
+	'Shell'                 => '1',
+	'Switch'                => '1',
+    },
     5.014001 => {
         'Shell'                 => '1',
     },
@@ -7437,6 +7559,8 @@ for my $version (sort { $a <=> $b } keys %delta) {
     },
     5.016001 => {
     },
+    5.016002 => {
+    },
     5.017000 => {
     },
     5.017001 => {
@@ -7451,6 +7575,8 @@ for my $version (sort { $a <=> $b } keys %delta) {
 	'Shell'                 => '1',
     },
     5.017005 => {
+    },
+    5.017006 => {
     },
 );
 

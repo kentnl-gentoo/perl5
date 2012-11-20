@@ -246,10 +246,13 @@ Aprd	|void	|croak_sv	|NN SV *baseex
 : croak()'s first parm can be NULL.  Otherwise, mod_perl breaks.
 Afprd	|void	|croak		|NULLOK const char* pat|...
 Aprd	|void	|vcroak		|NULLOK const char* pat|NULLOK va_list* args
-Aprd	|void	|croak_no_modify
-Aprd	|void	|croak_xs_usage	|NN const CV *const cv \
+Anprd	|void	|croak_no_modify
+Anprd	|void	|croak_xs_usage	|NN const CV *const cv \
 				|NN const char *const params
-
+npr	|void	|croak_no_mem
+#if defined(WIN32)
+norx	|void	|win32_croak_not_implemented|NN const char * fname
+#endif
 #if defined(PERL_IMPLICIT_CONTEXT)
 Afnrp	|void	|croak_nocontext|NULLOK const char* pat|...
 Afnp	|OP*	|die_nocontext	|NULLOK const char* pat|...
@@ -611,6 +614,8 @@ sR	|U8	|to_lower_latin1|const U8 c|NULLOK U8 *p|NULLOK STRLEN *lenp
 #endif
 #if defined(PERL_IN_UTF8_C) || defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C)
 EXp        |UV        |_to_fold_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const bool flags
+EMXpR	|bool	|is_utf8_X_extend	|NN const U8 *p
+EMXpR	|bool	|is_utf8_X_regular_begin|NN const U8 *p
 #endif
 #if defined(PERL_IN_UTF8_C) || defined(PERL_IN_PP_C)
 p	|UV	|_to_upper_title_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const char S_or_s
@@ -640,7 +645,7 @@ Anpd	|bool	|is_utf8_string_loclen|NN const U8 *s|STRLEN len|NULLOK const U8 **ep
 ApR	|bool	|is_utf8_alnum	|NN const U8 *p
 ApR	|bool	|is_utf8_idfirst|NN const U8 *p
 ApR	|bool	|is_utf8_xidfirst|NN const U8 *p
-EXpR	|bool	|_is_utf8__perl_idstart|NN const U8 *p
+ApR	|bool	|_is_utf8__perl_idstart|NN const U8 *p
 ApR	|bool	|is_utf8_idcont	|NN const U8 *p
 ApR	|bool	|is_utf8_xidcont	|NN const U8 *p
 ApR	|bool	|is_utf8_alpha	|NN const U8 *p
@@ -659,8 +664,6 @@ ApR	|bool	|is_utf8_print	|NN const U8 *p
 ApR	|bool	|is_utf8_punct	|NN const U8 *p
 ApR	|bool	|is_utf8_xdigit	|NN const U8 *p
 ApR	|bool	|is_utf8_mark	|NN const U8 *p
-EXpR	|bool	|is_utf8_X_extend	|NN const U8 *p
-EXpR	|bool	|is_utf8_X_regular_begin|NN const U8 *p
 : Used in perly.y
 p	|OP*	|jmaybe		|NN OP *o
 : Used in pp.c 
@@ -841,9 +844,9 @@ Apmb	|I32	|my_stat
 pX	|I32	|my_stat_flags	|NULLOK const U32 flags
 Ap	|char *	|my_strftime	|NN const char *fmt|int sec|int min|int hour|int mday|int mon|int year|int wday|int yday|int isdst
 #if defined(MYSWAP)
-ApPa	|short	|my_swap	|short s
-ApPa	|long	|my_htonl	|long l
-ApPa	|long	|my_ntohl	|long l
+ApPR	|short	|my_swap	|short s
+ApPR	|long	|my_htonl	|long l
+ApPR	|long	|my_ntohl	|long l
 #endif
 : Used in pp_ctl.c
 p	|void	|my_unexec
@@ -1408,10 +1411,12 @@ EXMpR	|SV*	|_swash_to_invlist	|NN SV* const swash
 EXMpR	|SV*	|_add_range_to_invlist	|NULLOK SV* invlist|const UV start|const UV end
 EXMp	|void	|_invlist_populate_swatch   |NN SV* const invlist|const UV start|const UV end|NN U8* swatch
 #endif
-#if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C) || defined(PERL_IN_UTF8_C)
+#if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C) || defined(PERL_IN_UTF8_C) || defined(PERL_IN_TOKE_C)
 EXp	|SV*	|_core_swash_init|NN const char* pkg|NN const char* name \
 		|NN SV* listsv|I32 minbits|I32 none \
 		|NULLOK SV* invlist|NULLOK U8* const flags_p
+#endif
+#if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C) || defined(PERL_IN_UTF8_C)
 EXMpR	|SV*	|_invlist_contents|NN SV* const invlist
 EiMR	|UV*	|_get_invlist_len_addr	|NN SV* invlist
 EiMR	|UV	|_invlist_len	|NN SV* const invlist
@@ -1419,6 +1424,7 @@ EMiR	|bool	|_invlist_contains_cp|NN SV* const invlist|const UV cp
 EXpMR	|IV	|_invlist_search	|NN SV* const invlist|const UV cp
 EXMpR	|SV*	|_get_swash_invlist|NN SV* const swash
 EXMpR	|HV*	|_swash_inversion_hash	|NN SV* const swash
+: Not used currently: Mp	|void	|_invlist_dump	|NN SV* const invlist|NN const char * const header
 #endif
 Ap	|void	|taint_env
 Ap	|void	|taint_proper	|NULLOK const char* f|NN const char *const s
@@ -1504,7 +1510,7 @@ p	|I32	|wait4pid	|Pid_t pid|NN int* statusp|int flags
 p	|U32	|parse_unicode_opts|NN const char **popt
 Ap	|U32	|seed
 : Only used in perl.c
-pR	|UV	|get_hash_seed
+p        |void        |get_hash_seed        |NN unsigned char *seed_buffer
 : Used in doio.c, pp_hot.c, pp_sys.c
 p	|void	|report_evil_fh	|NULLOK const GV *gv
 : Used in doio.c, pp_hot.c, pp_sys.c
@@ -1542,6 +1548,10 @@ p	|void	|yyunlex
 p	|int	|yyparse	|int gramtype
 : Only used in scope.c
 p	|void	|parser_free	|NN const yy_parser *parser
+#ifdef PERL_CORE
+p	|void	|parser_free_nexttoke_ops|NN yy_parser *parser \
+					 |NN OPSLAB *slab
+#endif
 #if defined(PERL_IN_TOKE_C)
 s	|int	|yywarn		|NN const char *const s|U32 flags
 #endif
@@ -1553,6 +1563,7 @@ Anpa	|Malloc_t|safesysmalloc	|MEM_SIZE nbytes
 Anpa	|Malloc_t|safesyscalloc	|MEM_SIZE elements|MEM_SIZE size
 Anpa	|Malloc_t|safesysrealloc|Malloc_t where|MEM_SIZE nbytes
 Anp	|Free_t	|safesysfree	|Malloc_t where
+Asrnx	|void	|croak_memory_wrap
 #if defined(PERL_GLOBAL_STRUCT)
 Ap	|struct perl_vars *|GetVars
 Ap	|struct perl_vars*|init_global_struct
@@ -1971,8 +1982,8 @@ Es	|I32	|study_chunk	|NN struct RExC_state_t *pRExC_state \
 EsRn	|U32	|add_data	|NN struct RExC_state_t *pRExC_state|U32 n \
 				|NN const char *s
 rs	|void	|re_croak2	|NN const char* pat1|NN const char* pat2|...
-Es	|I32	|regpposixcc	|NN struct RExC_state_t *pRExC_state|I32 value
-Es	|void	|checkposixcc	|NN struct RExC_state_t *pRExC_state
+Ei	|I32	|regpposixcc	|NN struct RExC_state_t *pRExC_state \
+				|I32 value|NULLOK SV *free_me
 Es	|I32	|make_trie	|NN struct RExC_state_t *pRExC_state \
 				|NN regnode *startbranch|NN regnode *first \
 				|NN regnode *last|NN regnode *tail \
@@ -2006,8 +2017,8 @@ Es	|U8	|regtail_study	|NN struct RExC_state_t *pRExC_state \
 ERs	|I32	|regmatch	|NN regmatch_info *reginfo|NN char *startpos|NN regnode *prog
 ERs	|I32	|regrepeat	|NN const regexp *prog|NN char **startposp|NN const regnode *p|I32 max|int depth
 ERs	|I32	|regtry		|NN regmatch_info *reginfo|NN char **startposp
-ERs	|bool	|reginclass	|NULLOK const regexp * const prog|NN const regnode * const n|NN const U8 * const p|NULLOK STRLEN *lenp\
-				|bool const do_utf8sv_is_utf8
+ERs	|bool	|reginclass	|NULLOK const regexp * const prog|NN const regnode * const n|NN const U8 * const p\
+				|bool const utf8_target
 Es	|CHECKPOINT|regcppush	|NN const regexp *rex|I32 parenfloor
 Es	|void	|regcppop	|NN regexp *rex
 ERsn	|U8*	|reghop3	|NN U8 *s|I32 off|NN const U8 *lim
@@ -2122,6 +2133,8 @@ s	|char*	|force_word	|NN char *start|int token|int check_keyword \
 s	|SV*	|tokeq		|NN SV *sv
 s	|void	|readpipe_override|
 sR	|char*	|scan_const	|NN char *start
+iR	|SV*	|get_and_check_backslash_N_name|NN const char* s \
+				|NN const char* const e
 sR	|char*	|scan_formline	|NN char *s
 sR	|char*	|scan_heredoc	|NN char *s
 s	|char*	|scan_ident	|NN char *s|NN const char *send|NN char *dest \
@@ -2191,7 +2204,6 @@ s	|const COP*|closest_cop	|NN const COP *cop|NULLOK const OP *o
 s	|SV*	|mess_alloc
 s	|SV *|with_queued_errors|NN SV *ex
 s	|bool	|invoke_exception_hook|NULLOK SV *ex|bool warn
-sr	|char *	|write_no_mem
 #if defined(PERL_MEM_LOG) && !defined(PERL_MEM_LOG_NOIMPL)
 sn	|void	|mem_log_common	|enum mem_log_type mlt|const UV n|const UV typesize \
 				|NN const char *type_name|NULLOK const SV *sv \
@@ -2208,7 +2220,7 @@ sn	|NV|mulexp10	|NV value|I32 exponent
 #if defined(PERL_IN_UTF8_C)
 sRn	|STRLEN	|is_utf8_char_slow|NN const U8 *s|const STRLEN len
 sRM	|UV	|check_locale_boundary_crossing|NN const U8* const p|const UV result|NN U8* const ustrp|NN STRLEN *lenp
-sR	|bool	|is_utf8_common	|NN const U8 *const p|NN SV **swash|NN const char * const swashname
+iR	|bool	|is_utf8_common	|NN const U8 *const p|NN SV **swash|NN const char * const swashname
 sR	|SV*	|swatch_get	|NN SV* swash|UV start|UV span
 #endif
 

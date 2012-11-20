@@ -522,13 +522,13 @@ Perl_save_clearsv(pTHX_ SV **svp)
     PERL_ARGS_ASSERT_SAVE_CLEARSV;
 
     ASSERT_CURPAD_ACTIVE("save_clearsv");
+    SvPADSTALE_off(*svp); /* mark lexical as active */
     if ((offset_shifted >> SAVE_TIGHT_SHIFT) != offset)
 	Perl_croak(aTHX_ "panic: pad offset %"UVuf" out of range (%p-%p)",
 		   offset, svp, PL_curpad);
 
     SSCHECK(1);
     SSPUSHUV(offset_shifted | SAVEt_CLEARSV);
-    SvPADSTALE_off(*svp); /* mark lexical as active */
 }
 
 void
@@ -627,9 +627,10 @@ Perl_save_aelem_flags(pTHX_ AV *av, I32 idx, SV **sptr, const U32 flags)
     SvGETMAGIC(*sptr);
     save_pushptri32ptr(SvREFCNT_inc_simple(av), idx, SvREFCNT_inc(*sptr),
 		       SAVEt_AELEM);
-    /* if it gets reified later, the restore will have the wrong refcnt */
+    /* The array needs to hold a reference count on its new element, so it
+       must be AvREAL. */
     if (!AvREAL(av) && AvREIFY(av))
-	SvREFCNT_inc_void(*sptr);
+	av_reify(av);
     save_scalar_at(sptr, flags); /* XXX - FIXME - see #60360 */
     if (flags & SAVEf_KEEPOLDELEM)
 	return;
@@ -713,7 +714,7 @@ Perl_leave_scope(pTHX_ I32 base)
     char* str;
     I32 i;
     /* Localise the effects of the TAINT_NOT inside the loop.  */
-    bool was = PL_tainted;
+    bool was = TAINT_get;
 
     if (base < -1)
 	Perl_croak(aTHX_ "panic: corrupt saved stack index %ld", (long) base);
@@ -817,8 +818,8 @@ Perl_leave_scope(pTHX_ I32 base)
 	case SAVEt_BOOL:			/* bool reference */
 	    ptr = SSPOPPTR;
 	    *(bool*)ptr = cBOOL(uv >> 8);
-
-	    if (ptr == &PL_tainted) {
+#if !NO_TAINT_SUPPORT
+	    if (ptr == &(TAINT_get)) {
 		/* If we don't update <was>, to reflect what was saved on the
 		 * stack for PL_tainted, then we will overwrite this attempt to
 		 * restore it when we exit this routine.  Note that this won't
@@ -826,6 +827,7 @@ Perl_leave_scope(pTHX_ I32 base)
 		 * such as I32 */
 		was = *(bool*)ptr;
 	    }
+#endif
 	    break;
 	case SAVEt_I32_SMALL:
 	    ptr = SSPOPPTR;
@@ -891,90 +893,101 @@ Perl_leave_scope(pTHX_ I32 base)
 	    ptr = SSPOPPTR;
 	    Safefree(ptr);
 	    break;
+
+        {
+          SV **svp;
+        case SAVEt_CLEARPADRANGE:
+            i = (I32)((uv >> SAVE_TIGHT_SHIFT) & OPpPADRANGE_COUNTMASK);
+	    svp = &PL_curpad[uv >>
+                    (OPpPADRANGE_COUNTSHIFT + SAVE_TIGHT_SHIFT)] + i - 1;
+            goto clearsv;
 	case SAVEt_CLEARSV:
-	    ptr = (void*)&PL_curpad[uv >> SAVE_TIGHT_SHIFT];
-	    sv = *(SV**)ptr;
+	    svp = &PL_curpad[uv >> SAVE_TIGHT_SHIFT];
+            i = 1;
+          clearsv:
+            for (; i; i--, svp--) {
+                sv = *svp;
 
-	    DEBUG_Xv(PerlIO_printf(Perl_debug_log,
-	     "Pad 0x%"UVxf"[0x%"UVxf"] clearsv: %ld sv=0x%"UVxf"<%"IVdf"> %s\n",
-		PTR2UV(PL_comppad), PTR2UV(PL_curpad),
-		(long)((SV **)ptr-PL_curpad), PTR2UV(sv), (IV)SvREFCNT(sv),
-		(SvREFCNT(sv) <= 1 && !SvOBJECT(sv)) ? "clear" : "abandon"
-	    ));
+                DEBUG_Xv(PerlIO_printf(Perl_debug_log,
+             "Pad 0x%"UVxf"[0x%"UVxf"] clearsv: %ld sv=0x%"UVxf"<%"IVdf"> %s\n",
+                    PTR2UV(PL_comppad), PTR2UV(PL_curpad),
+                    (long)(svp-PL_curpad), PTR2UV(sv), (IV)SvREFCNT(sv),
+                    (SvREFCNT(sv) <= 1 && !SvOBJECT(sv)) ? "clear" : "abandon"
+                ));
 
-	    /* Can clear pad variable in place? */
-	    if (SvREFCNT(sv) <= 1 && !SvOBJECT(sv)) {
-		/*
-		 * if a my variable that was made readonly is going out of
-		 * scope, we want to remove the readonlyness so that it can
-		 * go out of scope quietly
-		 */
-		if (SvPADMY(sv) && !SvFAKE(sv))
-		    SvREADONLY_off(sv);
+                /* Can clear pad variable in place? */
+                if (SvREFCNT(sv) <= 1 && !SvOBJECT(sv)) {
+                    /*
+                     * if a my variable that was made readonly is going out of
+                     * scope, we want to remove the readonlyness so that it can
+                     * go out of scope quietly
+                     */
+                    if (SvPADMY(sv) && !SvFAKE(sv))
+                        SvREADONLY_off(sv);
 
-		if (SvTHINKFIRST(sv))
-		    sv_force_normal_flags(sv, SV_IMMEDIATE_UNREF
-					     |SV_COW_DROP_PV);
-		if (SvTYPE(sv) == SVt_PVHV)
-		    Perl_hv_kill_backrefs(aTHX_ MUTABLE_HV(sv));
-		if (SvMAGICAL(sv))
-		{
-		  sv_unmagic(sv, PERL_MAGIC_backref);
-		  if (SvTYPE(sv) != SVt_PVCV)
-		    mg_free(sv);
-		}
+                    if (SvTHINKFIRST(sv))
+                        sv_force_normal_flags(sv, SV_IMMEDIATE_UNREF
+                                                 |SV_COW_DROP_PV);
+                    if (SvTYPE(sv) == SVt_PVHV)
+                        Perl_hv_kill_backrefs(aTHX_ MUTABLE_HV(sv));
+                    if (SvMAGICAL(sv))
+                    {
+                      sv_unmagic(sv, PERL_MAGIC_backref);
+                      if (SvTYPE(sv) != SVt_PVCV)
+                        mg_free(sv);
+                    }
 
-		switch (SvTYPE(sv)) {
-		case SVt_NULL:
-		    break;
-		case SVt_PVAV:
-		    av_clear(MUTABLE_AV(sv));
-		    break;
-		case SVt_PVHV:
-		    hv_clear(MUTABLE_HV(sv));
-		    break;
-		case SVt_PVCV:
-		{
-		    HEK * const hek = CvNAME_HEK((CV *)sv);
-		    assert(hek);
-		    share_hek_hek(hek);
-		    cv_undef((CV *)sv);
-		    CvNAME_HEK_set(sv, hek);
-		    break;
-		}
-		default:
-		    SvOK_off(sv);
-		    break;
-		}
-		SvPADSTALE_on(sv); /* mark as no longer live */
-	    }
-	    else {	/* Someone has a claim on this, so abandon it. */
-		assert(  SvFLAGS(sv) & SVs_PADMY);
-		assert(!(SvFLAGS(sv) & SVs_PADTMP));
-		switch (SvTYPE(sv)) {	/* Console ourselves with a new value */
-		case SVt_PVAV:	*(SV**)ptr = MUTABLE_SV(newAV());	break;
-		case SVt_PVHV:	*(SV**)ptr = MUTABLE_SV(newHV());	break;
-		case SVt_PVCV:
-		{
-		    SV ** const svp = (SV **)ptr;
+                    switch (SvTYPE(sv)) {
+                    case SVt_NULL:
+                        break;
+                    case SVt_PVAV:
+                        av_clear(MUTABLE_AV(sv));
+                        break;
+                    case SVt_PVHV:
+                        hv_clear(MUTABLE_HV(sv));
+                        break;
+                    case SVt_PVCV:
+                    {
+                        HEK * const hek = CvNAME_HEK((CV *)sv);
+                        assert(hek);
+                        share_hek_hek(hek);
+                        cv_undef((CV *)sv);
+                        CvNAME_HEK_set(sv, hek);
+                        break;
+                    }
+                    default:
+                        SvOK_off(sv);
+                        break;
+                    }
+                    SvPADSTALE_on(sv); /* mark as no longer live */
+                }
+                else {	/* Someone has a claim on this, so abandon it. */
+                    assert(  SvFLAGS(sv) & SVs_PADMY);
+                    assert(!(SvFLAGS(sv) & SVs_PADTMP));
+                    switch (SvTYPE(sv)) {	/* Console ourselves with a new value */
+                    case SVt_PVAV:	*svp = MUTABLE_SV(newAV());	break;
+                    case SVt_PVHV:	*svp = MUTABLE_SV(newHV());	break;
+                    case SVt_PVCV:
+                    {
+                        /* Create a stub */
+                        *svp = newSV_type(SVt_PVCV);
 
-		    /* Create a stub */
-		    *svp = newSV_type(SVt_PVCV);
-
-		    /* Share name */
-		    assert(CvNAMED(sv));
-		    CvNAME_HEK_set(*svp,
-			share_hek_hek(CvNAME_HEK((CV *)sv)));
-		    break;
-		}
-		default:	*(SV**)ptr = newSV(0);		break;
-		}
-		SvREFCNT_dec(sv);	/* Cast current value to the winds. */
-		/* preserve pad nature, but also mark as not live
-		 * for any closure capturing */
-		SvFLAGS(*(SV**)ptr) |= (SVs_PADMY|SVs_PADSTALE);
-	    }
+                        /* Share name */
+                        assert(CvNAMED(sv));
+                        CvNAME_HEK_set(*svp,
+                            share_hek_hek(CvNAME_HEK((CV *)sv)));
+                        break;
+                    }
+                    default:	*svp = newSV(0);		break;
+                    }
+                    SvREFCNT_dec(sv);	/* Cast current value to the winds. */
+                    /* preserve pad nature, but also mark as not live
+                     * for any closure capturing */
+                    SvFLAGS(*svp) |= (SVs_PADMY|SVs_PADSTALE);
+                }
+            }
 	    break;
+        }
 	case SAVEt_DELETE:
 	    ptr = SSPOPPTR;
 	    hv = MUTABLE_HV(ptr);
@@ -1177,7 +1190,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	}
     }
 
-    PL_tainted = was;
+    TAINT_set(was);
 
     PERL_ASYNC_CHECK();
 }

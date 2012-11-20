@@ -384,7 +384,6 @@ get_emd_part(SV **prev_pathp, STRLEN *const len, char *trailing_path, ...)
 EXTERN_C char *
 win32_get_privlib(const char *pl, STRLEN *const len)
 {
-    dTHX;
     char *stdlib = "lib";
     char buffer[MAX_PATH+1];
     SV *sv = NULL;
@@ -544,7 +543,6 @@ tokenize(const char *str, char **dest, char ***destv)
     char **retvstart = 0;
     int items = -1;
     if (str) {
-	dTHX;
 	int slen = strlen(str);
 	char *ret;
 	char **retv;
@@ -924,7 +922,6 @@ win32_readdir(DIR *dirp)
 	/* Now set up for the next call to readdir */
 	dirp->curr += len + 1;
 	if (dirp->curr >= dirp->end) {
-	    dTHX;
 	    BOOL res;
 	    char buffer[MAX_PATH*2];
 
@@ -1006,7 +1003,6 @@ win32_rewinddir(DIR *dirp)
 DllExport int
 win32_closedir(DIR *dirp)
 {
-    dTHX;
     if (dirp->handle != INVALID_HANDLE_VALUE)
 	FindClose(dirp->handle);
     Safefree(dirp->start);
@@ -1666,14 +1662,17 @@ win32_longpath(char *path)
 static void
 out_of_memory(void)
 {
-    if (PL_curinterp) {
-        dTHX;
-        /* Can't use PerlIO to write as it allocates memory */
-        PerlLIO_write(PerlIO_fileno(Perl_error_log),
-                      PL_no_mem, strlen(PL_no_mem));
-        my_exit(1);
-    }
+    if (PL_curinterp)
+	croak_no_mem();
     exit(1);
+}
+
+void
+win32_croak_not_implemented(const char * fname)
+{
+    PERL_ARGS_ASSERT_WIN32_CROAK_NOT_IMPLEMENTED;
+
+    Perl_croak_nocontext("%s not implemented!\n", fname);
 }
 
 /* Converts a wide character (UTF-16) string to the Windows ANSI code page,
@@ -1839,13 +1838,12 @@ win32_getenv(const char *name)
 DllExport int
 win32_putenv(const char *name)
 {
-    dTHX;
     char* curitem;
     char* val;
     int relval = -1;
 
     if (name) {
-        Newx(curitem,strlen(name)+1,char);
+        curitem = (char *) win32_malloc(strlen(name)+1);
         strcpy(curitem, name);
         val = strchr(curitem, '=');
         if (val) {
@@ -1869,7 +1867,7 @@ win32_putenv(const char *name)
             if (SetEnvironmentVariableA(curitem, *val ? val : NULL))
                 relval = 0;
         }
-        Safefree(curitem);
+        win32_free(curitem);
     }
     return relval;
 }
@@ -2588,10 +2586,11 @@ win32_strerror(int e)
 #endif
 
     if (e < 0 || e > sys_nerr) {
-        dTHX;
+        dTHXa(NULL);
 	if (e < 0)
 	    e = GetLastError();
 
+	aTHXa(PERL_GET_THX);
 	if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM
                          |FORMAT_MESSAGE_IGNORE_INSERTS, NULL, e, 0,
 			  w32_strerror_buffer, sizeof(w32_strerror_buffer),
@@ -2704,7 +2703,6 @@ win32_fopen(const char *filename, const char *mode)
 DllExport FILE *
 win32_fdopen(int handle, const char *mode)
 {
-    dTHX;
     FILE *f;
     f = fdopen(handle, (char *) mode);
     /* avoid buffering headaches for child processes */
@@ -2726,7 +2724,11 @@ win32_freopen(const char *path, const char *mode, FILE *stream)
 DllExport int
 win32_fclose(FILE *pf)
 {
+#ifdef WIN32_NO_SOCKETS
+    return fclose(pf);
+#else
     return my_fclose(pf);	/* defined in win32sck.c */
+#endif
 }
 
 DllExport int
@@ -2835,7 +2837,6 @@ win32_rewind(FILE *pf)
 DllExport int
 win32_tmpfd(void)
 {
-    dTHX;
     char prefix[MAX_PATH+1];
     char filename[MAX_PATH+1];
     DWORD len = GetTempPath(MAX_PATH, prefix);
@@ -2852,6 +2853,7 @@ win32_tmpfd(void)
 	    if (fh != INVALID_HANDLE_VALUE) {
 		int fd = win32_open_osfhandle((intptr_t)fh, 0);
 		if (fd >= 0) {
+		    PERL_DEB(dTHX;)
 		    DEBUG_p(PerlIO_printf(Perl_debug_log,
 					  "Created tmpfile=%s\n",filename));
 		    return fd;
@@ -2897,8 +2899,7 @@ win32_pipe(int *pfd, unsigned int size, int mode)
 DllExport PerlIO*
 win32_popenlist(const char *mode, IV narg, SV **args)
 {
- dTHX;
- Perl_croak(aTHX_ "List form of pipe open not implemented");
+ Perl_croak_nocontext("List form of pipe open not implemented");
  return NULL;
 }
 
@@ -2914,7 +2915,6 @@ win32_popen(const char *command, const char *mode)
 #ifdef USE_RTL_POPEN
     return _popen(command, mode);
 #else
-    dTHX;
     int p[2];
     int parent, child;
     int stdfd, oldfd;
@@ -3245,7 +3245,11 @@ extern int my_close(int);	/* in win32sck.c */
 DllExport int
 win32_close(int fd)
 {
+#ifdef WIN32_NO_SOCKETS
+    return close(fd);
+#else
     return my_close(fd);
+#endif
 }
 
 DllExport int
@@ -3316,7 +3320,6 @@ win32_rmdir(const char *dir)
 DllExport int
 win32_chdir(const char *dir)
 {
-    dTHX;
     if (!dir) {
 	errno = ENOENT;
 	return -1;
@@ -3342,7 +3345,7 @@ win32_chmod(const char *path, int mode)
 static char *
 create_command_line(char *cname, STRLEN clen, const char * const *args)
 {
-    dTHX;
+    PERL_DEB(dTHX;)
     int index, argc;
     char *cmd, *ptr;
     const char *arg;
@@ -3621,7 +3624,6 @@ win32_clearenv(void)
 DllExport char*
 win32_get_childdir(void)
 {
-    dTHX;
     char* ptr;
     char szfilename[MAX_PATH+1];
 
@@ -3634,7 +3636,6 @@ win32_get_childdir(void)
 DllExport void
 win32_free_childdir(char* d)
 {
-    dTHX;
     Safefree(d);
 }
 
@@ -3656,7 +3657,7 @@ win32_spawnvp(int mode, const char *cmdname, const char *const *argv)
 #ifdef USE_RTL_SPAWNVP
     return spawnvp(mode, cmdname, (char * const *)argv);
 #else
-    dTHX;
+    dTHXa(NULL);
     int ret;
     void* env;
     char* dir;
@@ -3689,6 +3690,7 @@ win32_spawnvp(int mode, const char *cmdname, const char *const *argv)
 
     cmd = create_command_line(cname, clen, argv);
 
+    aTHXa(PERL_GET_THX);
     env = PerlEnv_get_childenv();
     dir = PerlEnv_get_childdir();
 
@@ -4240,6 +4242,10 @@ ansify_path(void)
     wide_path = (WCHAR*)win32_malloc(len*sizeof(WCHAR));
     while (wide_path) {
         size_t newlen = GetEnvironmentVariableW(L"PATH", wide_path, len);
+        if (newlen == 0) {
+            win32_free(wide_path);
+            return;
+        }
         if (newlen < len)
             break;
         len = newlen;
@@ -4360,7 +4366,6 @@ Perl_win32_init(int *argcp, char ***argvp)
 void
 Perl_win32_term(void)
 {
-    dTHX;
     HINTS_REFCNT_TERM;
     OP_REFCNT_TERM;
     PERLIO_TERM;

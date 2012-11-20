@@ -230,7 +230,7 @@ use File::Glob qw(:case);
 
     'autodie' => {
         'MAINTAINER'   => 'pjf',
-        'DISTRIBUTION' => 'PJF/autodie-2.12.tar.gz',
+        'DISTRIBUTION' => 'PJF/autodie-2.13.tar.gz',
         'FILES'        => q[cpan/autodie],
         'EXCLUDED'     => [
             qr{^inc/Module/},
@@ -343,7 +343,7 @@ use File::Glob qw(:case);
 
     'CGI' => {
         'MAINTAINER'   => 'lstein',
-        'DISTRIBUTION' => 'MARKSTOS/CGI.pm-3.60.tar.gz',
+        'DISTRIBUTION' => 'MARKSTOS/CGI.pm-3.63.tar.gz',
         'FILES'        => q[cpan/CGI],
         'EXCLUDED'     => [
             qw( cgi_docs.html
@@ -363,7 +363,7 @@ use File::Glob qw(:case);
 
     'Compress::Raw::Bzip2' => {
         'MAINTAINER'   => 'pmqs',
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.055.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.058.tar.gz',
         'FILES'        => q[cpan/Compress-Raw-Bzip2],
         'EXCLUDED'     => [
             qr{^t/Test/},
@@ -374,7 +374,7 @@ use File::Glob qw(:case);
 
     'Compress::Raw::Zlib' => {
         'MAINTAINER'   => 'pmqs',
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.056.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.058.tar.gz',
 
         'FILES'    => q[cpan/Compress-Raw-Zlib],
         'EXCLUDED' => [
@@ -474,7 +474,7 @@ use File::Glob qw(:case);
 
     'CPANPLUS::Dist::Build' => {
         'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/CPANPLUS-Dist-Build-0.62.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/CPANPLUS-Dist-Build-0.64.tar.gz',
         'FILES'        => q[cpan/CPANPLUS-Dist-Build],
         'EXCLUDED'     => [
             qr{^inc/},
@@ -594,7 +594,7 @@ use File::Glob qw(:case);
 
     'Digest::SHA' => {
         'MAINTAINER'   => 'mshelor',
-        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.72.tar.gz',
+        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.73.tar.gz',
         'FILES'        => q[cpan/Digest-SHA],
         'EXCLUDED'     => [
             qw( t/pod.t
@@ -759,7 +759,7 @@ use File::Glob qw(:case);
 
     'ExtUtils::ParseXS' => {
         'MAINTAINER'   => 'smueller',
-        'DISTRIBUTION' => 'SMUELLER/ExtUtils-ParseXS-3.15.tar.gz',
+        'DISTRIBUTION' => 'SMUELLER/ExtUtils-ParseXS-3.18.tar.gz',
         'FILES'        => q[dist/ExtUtils-ParseXS],
         'UPSTREAM'     => 'blead',
     },
@@ -1025,7 +1025,7 @@ use File::Glob qw(:case);
 
     'IO-Compress' => {
         'MAINTAINER'   => 'pmqs',
-        'DISTRIBUTION' => 'PMQS/IO-Compress-2.055.tar.gz',
+        'DISTRIBUTION' => 'PMQS/IO-Compress-2.058.tar.gz',
         'FILES'        => q[cpan/IO-Compress],
         'EXCLUDED'     => [qr{t/Test/}],
         'UPSTREAM'     => 'cpan',
@@ -1262,7 +1262,7 @@ use File::Glob qw(:case);
 
     'Module::CoreList' => {
         'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.74.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.77.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
         'UPSTREAM'     => 'blead',
     },
@@ -1301,7 +1301,7 @@ use File::Glob qw(:case);
 
     'Module::Pluggable' => {
         'MAINTAINER'   => 'simonw',
-        'DISTRIBUTION' => 'SIMONW/Module-Pluggable-4.3.tar.gz',
+        'DISTRIBUTION' => 'SIMONW/Module-Pluggable-4.5.tar.gz',
         'FILES'        => q[cpan/Module-Pluggable],
         'UPSTREAM'     => 'cpan',
         'CUSTOMIZED'   => ['Makefile.PL'],
@@ -1712,7 +1712,7 @@ use File::Glob qw(:case);
 
     'Term::UI' => {
         'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/Term-UI-0.30.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Term-UI-0.32.tar.gz',
         'FILES'        => q[cpan/Term-UI],
         'UPSTREAM'     => 'cpan',
     },
@@ -1896,11 +1896,11 @@ use File::Glob qw(:case);
 
     'Thread::Queue' => {
         'MAINTAINER'   => 'jdhedden',
-        'DISTRIBUTION' => 'JDHEDDEN/Thread-Queue-2.12.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/Thread-Queue-3.01.tar.gz',
         'FILES'        => q[dist/Thread-Queue],
         'EXCLUDED'     => [
-            qw( examples/queue.pl
-                t/00_load.t
+            qr{^examples/},
+            qw( t/00_load.t
                 t/99_pod.t
                 t/test.pl
                 ),
@@ -2011,7 +2011,7 @@ use File::Glob qw(:case);
 
     'Unicode::Collate' => {
         'MAINTAINER'   => 'sadahiro',
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-0.90.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-0.93.tar.gz',
         'FILES'        => q[cpan/Unicode-Collate],
         'EXCLUDED'     => [
             qr{N$},
@@ -2027,7 +2027,7 @@ use File::Glob qw(:case);
 
     'Unicode::Normalize' => {
         'MAINTAINER'   => 'sadahiro',
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Normalize-1.15.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Normalize-1.16.tar.gz',
         'FILES'        => q[cpan/Unicode-Normalize],
         'EXCLUDED'     => [
             qw( MANIFEST.N

@@ -711,7 +711,7 @@ error if you use an explicit C<continue>.)
 =item Can't do inplace edit: %s is not a regular file
 
 (S inplace) You tried to use the B<-i> switch on a special file, such as
-a file in /dev, or a FIFO.  The file was ignored.
+a file in /dev, a FIFO or an uneditable directory.  The file was ignored.
 
 =item Can't do inplace edit on %s: %s
 
@@ -1636,14 +1636,6 @@ there are neither package declarations nor a C<$VERSION>.
 long for Perl to handle.  You have to be seriously twisted to write code
 that triggers this error.
 
-=item Deprecated character in \N{...}; marked by <-- HERE  in \N{%s<-- HERE %s
-
-(D deprecated) Just about anything is legal for the C<...> in C<\N{...}>.
-But starting in 5.12, non-reasonable ones that don't look like names
-are deprecated.  A reasonable name begins with an alphabetic character
-and continues with any combination of alphanumerics, dashes, spaces,
-parentheses or colons.
-
 =item Deprecated use of my() in false conditional
 
 (D deprecated) You used a declaration similar to C<my $x if 0>.  There
@@ -1913,7 +1905,7 @@ is not possible.
 
 =item Field too wide in 'u' format in pack
 
-(W pack) Each line in an uuencoded string start with a length indicator
+(W pack) Each line in an uuencoded string starts with a length indicator
 which can't encode values above 63.  So there is no point in asking for
 a line length bigger than that.  Perl will behave as if you specified
 C<u63> as the format.
@@ -2368,6 +2360,17 @@ by Perl or by a user-supplied handler.  See L<attributes>.
 (F) The indicated attributes for a subroutine or variable were not
 recognized by Perl or by a user-supplied handler.  See L<attributes>.
 
+=item Invalid character in \N{...}; marked by <-- HERE in \N{%s}
+
+(F) Only certain characters are valid for character names.  The
+indicated one isn't.  See L<charnames/CUSTOM ALIASES>.
+
+=item Invalid character in charnames alias definition; marked by <-- HERE in '%s
+
+(F) You tried to create a custom alias for a character name, with
+the C<:alias> option to C<use charnames> and the specified character in
+the indicated name isn't valid.  See L<charnames/CUSTOM ALIASES>.
+
 =item Invalid conversion in %s: "%s"
 
 (W printf) Perl does not understand the given format conversion.  See
@@ -2699,7 +2702,15 @@ message.
 
 See also L<Encode/"Handling Malformed Data">.
 
-=item Malformed UTF-8 returned by \N
+=item Malformed UTF-8 character immediately after '%s'
+
+(F) You said C<use utf8>, but the program file doesn't comply with UTF-8
+encoding rules.  The message prints out the properly encoded characters
+just before the first bad one.  If C<utf8> warnings are enabled, a
+warning is generated that gives more details about the type of
+malformation.
+
+=item Malformed UTF-8 returned by \N{%s} immediately after '%s'
 
 (F) The charnames handler returned malformed UTF-8.
 
@@ -5058,6 +5069,16 @@ off this warning by C<no warnings 'surrogate';>.
 
 (F) There are no byte-swapping functions for a machine with this byte
 order.
+
+=item Unknown charname '%s'
+
+(F) The name you used inside C<\N{}> is unknown to Perl.  Check the
+spelling.  You can say C<use charnames ":loose"> to not have to be
+so precise about spaces, hyphens, and capitalization on standard Unicode
+names.  (Any custom aliases that have been created must be specified
+exactly, regardless of whether C<:loose> is used or not.)  This error may
+also happen if the C<\N{}> is not in the scope of the corresponding
+C<S<use charnames>>.
 
 =item Unknown error
 

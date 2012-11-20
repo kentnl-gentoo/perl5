@@ -231,10 +231,12 @@ typedef struct RExC_state_t {
 #define	WORST		0	/* Worst case. */
 #define	HASWIDTH	0x01	/* Known to match non-null strings. */
 
-/* Simple enough to be STAR/PLUS operand; in an EXACT node must be a single
- * character.  Note that this is not the same thing as REGNODE_SIMPLE */
+/* Simple enough to be STAR/PLUS operand; in an EXACTish node must be a single
+ * character.  (There needs to be a case: in the switch statement in regexec.c
+ * for any node marked SIMPLE.)  Note that this is not the same thing as
+ * REGNODE_SIMPLE */
 #define	SIMPLE		0x02
-#define	SPSTART		0x04	/* Starts with * or +. */
+#define	SPSTART		0x04	/* Starts with * or + */
 #define TRYAGAIN	0x08	/* Weeded out a declaration. */
 #define POSTPONED	0x10    /* (?1),(?&name), (??{...}) or similar */
 
@@ -5003,7 +5005,7 @@ S_has_runtime_code(pTHX_ RExC_state_t * const pRExC_state, OP *expr,
  *
  * becomes
  *
- *    qr'a\\bc                       def\'ghi\\\\jkl(?{"this is runtime"})mno'
+ *    qr'a\\bc_______________________def\'ghi\\\\jkl(?{"this is runtime"})mno'
  *
  * After eval_sv()-ing that, grab any new code blocks from the returned qr
  * and merge them with any code blocks of the original regexp.
@@ -5056,7 +5058,7 @@ S_compile_runtime_code(pTHX_ RExC_state_t * const pRExC_state,
 		/* blank out literal code block */
 		assert(pat[s] == '(');
 		while (s <= pRExC_state->code_blocks[n].end) {
-		    *p++ = ' ';
+		    *p++ = '_';
 		    s++;
 		}
 		s--;
@@ -5094,7 +5096,10 @@ S_compile_runtime_code(pTHX_ RExC_state_t * const pRExC_state,
 	qr_ref = POPs;
 	PUTBACK;
 	if (SvTRUE(ERRSV))
+	{
+	    Safefree(pRExC_state->code_blocks);
 	    Perl_croak(aTHX_ "%s", SvPVx_nolen_const(ERRSV));
+	}
 	assert(SvROK(qr_ref));
 	qr = SvRV(qr_ref);
 	assert(SvTYPE(qr) == SVt_REGEXP && RX_ENGINE((REGEXP*)qr)->op_comp);
@@ -5121,13 +5126,16 @@ S_compile_runtime_code(pTHX_ RExC_state_t * const pRExC_state,
 
     /* merge the main (r1) and run-time (r2) code blocks into one */
     {
-	RXi_GET_DECL(((struct regexp*)SvANY(qr)), r2);
+	RXi_GET_DECL(ReANY((REGEXP *)qr), r2);
 	struct reg_code_block *new_block, *dst;
 	RExC_state_t * const r1 = pRExC_state; /* convenient alias */
 	int i1 = 0, i2 = 0;
 
 	if (!r2->num_code_blocks) /* we guessed wrong */
+	{
+	    SvREFCNT_dec(qr);
 	    return 1;
+	}
 
 	Newx(new_block,
 	    r1->num_code_blocks + r2->num_code_blocks,
@@ -5284,6 +5292,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
     I32 minlen = 0;
     U32 rx_flags;
     SV * VOL pat;
+    SV * VOL code_blocksv = NULL;
 
     /* these are all flags - maybe they should be turned
      * into a single int with different bit masks */
@@ -5424,7 +5433,9 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 
 	    if (pRExC_state->num_code_blocks) {
 		o = cLISTOPx(expr)->op_first;
-		assert(o->op_type == OP_PUSHMARK);
+		assert(   o->op_type == OP_PUSHMARK
+                       || (o->op_type == OP_NULL && o->op_targ == OP_PUSHMARK)
+                       || o->op_type == OP_PADRANGE);
 		o = o->op_sibling;
 	    }
 
@@ -5448,6 +5459,17 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 		SV *sv, *msv = *svp;
 		SV *rx;
 		bool code = 0;
+                /* we make the assumption here that each op in the list of
+                 * op_siblings maps to one SV pushed onto the stack,
+                 * except for code blocks, with have both an OP_NULL and
+                 * and OP_CONST.
+                 * This allows us to match up the list of SVs against the
+                 * list of OPs to find the next code block.
+                 *
+                 * Note that       PUSHMARK PADSV PADSV ..
+                 * is optimised to
+                 *                 PADRANGE NULL  NULL  ..
+                 * so the alignment still works. */
 		if (o) {
 		    if (o->op_type == OP_NULL && (o->op_flags & OPf_SPECIAL)) {
 			assert(n < pRExC_state->num_code_blocks);
@@ -5498,7 +5520,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 		    && RX_ENGINE((REGEXP*)rx)->op_comp)
 		{
 
-		    RXi_GET_DECL(((struct regexp*)SvANY(rx)), ri);
+		    RXi_GET_DECL(ReANY((REGEXP *)rx), ri);
 		    if (ri->num_code_blocks) {
 			int i;
 			/* the presence of an embedded qr// with code means
@@ -5513,7 +5535,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 			for (i=0; i < ri->num_code_blocks; i++) {
 			    struct reg_code_block *src, *dst;
 			    STRLEN offset =  orig_patlen
-				+ ((struct regexp *)SvANY(rx))->pre_prefix;
+				+ ReANY((REGEXP *)rx)->pre_prefix;
 			    assert(n < pRExC_state->num_code_blocks);
 			    src = &ri->code_blocks[i];
 			    dst = &pRExC_state->code_blocks[n];
@@ -5753,7 +5775,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
     RExC_pm_flags = pm_flags;
 
     if (runtime_code) {
-	if (PL_tainting && PL_tainted)
+	if (TAINTING_get && TAINT_get)
 	    Perl_croak(aTHX_ "Eval-group in insecure regular expression");
 
 	if (!S_compile_runtime_code(aTHX_ pRExC_state, exp, plen)) {
@@ -5803,11 +5825,23 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
         RExC_lastnum=0;
         RExC_lastparse=NULL;
     );
+    /* reg may croak on us, not giving us a chance to free
+       pRExC_state->code_blocks.  We cannot SAVEFREEPV it now, as we may
+       need it to survive as long as the regexp (qr/(?{})/).
+       We must check that code_blocksv is not already set, because we may
+       have longjmped back. */
+    if (pRExC_state->code_blocks && !code_blocksv) {
+	code_blocksv = newSV_type(SVt_PV);
+	SAVEFREESV(code_blocksv);
+	SvPV_set(code_blocksv, (char *)pRExC_state->code_blocks);
+	SvLEN_set(code_blocksv, 1); /*sufficient to make sv_clear free it*/
+    }
     if (reg(pRExC_state, 0, &flags,1) == NULL) {
 	RExC_precomp = NULL;
-	Safefree(pRExC_state->code_blocks);
 	return(NULL);
     }
+    if (code_blocksv)
+	SvLEN_set(code_blocksv,0); /* no you can't have it, sv_clear */
 
     /* Here, finished first pass.  Get rid of any added setjmp */
     if (used_setjump) {
@@ -5843,7 +5877,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
        of zeroing when in debug mode, thus anything assigned has to 
        happen after that */
     rx = (REGEXP*) newSV_type(SVt_REGEXP);
-    r = (struct regexp*)SvANY(rx);
+    r = ReANY(rx);
     Newxc(ri, sizeof(regexp_internal) + (unsigned)RExC_size * sizeof(regnode),
 	 char, regexp_internal);
     if ( r == NULL || ri == NULL )
@@ -5865,7 +5899,13 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 	ri->num_code_blocks = pRExC_state->num_code_blocks;
     }
     else
+    {
+	int n;
+	for (n = 0; n < pRExC_state->num_code_blocks; n++)
+	    if (pRExC_state->code_blocks[n].src_regex)
+		SAVEFREESV(pRExC_state->code_blocks[n].src_regex);
 	SAVEFREEPV(pRExC_state->code_blocks);
+    }
 
     {
         bool has_p     = ((r->extflags & RXf_PMf_KEEPCOPY) == RXf_PMf_KEEPCOPY);
@@ -5896,8 +5936,8 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
             + (sizeof(STD_PAT_MODS) - 1)
             + (sizeof("(?:)") - 1);
 
-        p = sv_grow(MUTABLE_SV(rx), wraplen + 1); /* +1 for the ending NUL */
-	SvPOK_on(rx);
+        Newx(p, wraplen + 1, char); /* +1 for the ending NUL */
+	r->xpv_len_u.xpvlenu_pv = p;
 	if (RExC_utf8)
 	    SvFLAGS(rx) |= SVf_UTF8;
         *p++='('; *p++='?';
@@ -5932,7 +5972,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
             *p++ = '\n';
         *p++ = ')';
         *p = 0;
-	SvCUR_set(rx, p - SvPVX_const(rx));
+	SvCUR_set(rx, p - RX_WRAPPED(rx));
     }
 
     r->intflags = 0;
@@ -6448,7 +6488,7 @@ Perl_reg_named_buff(pTHX_ REGEXP * const rx, SV * const key, SV * const value,
     if (flags & RXapif_FETCH) {
         return reg_named_buff_fetch(rx, key, flags);
     } else if (flags & (RXapif_STORE | RXapif_DELETE | RXapif_CLEAR)) {
-        Perl_croak_no_modify(aTHX);
+        Perl_croak_no_modify();
         return NULL;
     } else if (flags & RXapif_EXISTS) {
         return reg_named_buff_exists(rx, key, flags)
@@ -6487,7 +6527,7 @@ Perl_reg_named_buff_fetch(pTHX_ REGEXP * const r, SV * const namesv,
 {
     AV *retarray = NULL;
     SV *ret;
-    struct regexp *const rx = (struct regexp *)SvANY(r);
+    struct regexp *const rx = ReANY(r);
 
     PERL_ARGS_ASSERT_REG_NAMED_BUFF_FETCH;
 
@@ -6527,7 +6567,7 @@ bool
 Perl_reg_named_buff_exists(pTHX_ REGEXP * const r, SV * const key,
                            const U32 flags)
 {
-    struct regexp *const rx = (struct regexp *)SvANY(r);
+    struct regexp *const rx = ReANY(r);
 
     PERL_ARGS_ASSERT_REG_NAMED_BUFF_EXISTS;
 
@@ -6551,7 +6591,7 @@ Perl_reg_named_buff_exists(pTHX_ REGEXP * const r, SV * const key,
 SV*
 Perl_reg_named_buff_firstkey(pTHX_ REGEXP * const r, const U32 flags)
 {
-    struct regexp *const rx = (struct regexp *)SvANY(r);
+    struct regexp *const rx = ReANY(r);
 
     PERL_ARGS_ASSERT_REG_NAMED_BUFF_FIRSTKEY;
 
@@ -6567,7 +6607,7 @@ Perl_reg_named_buff_firstkey(pTHX_ REGEXP * const r, const U32 flags)
 SV*
 Perl_reg_named_buff_nextkey(pTHX_ REGEXP * const r, const U32 flags)
 {
-    struct regexp *const rx = (struct regexp *)SvANY(r);
+    struct regexp *const rx = ReANY(r);
     GET_RE_DEBUG_FLAGS_DECL;
 
     PERL_ARGS_ASSERT_REG_NAMED_BUFF_NEXTKEY;
@@ -6603,7 +6643,7 @@ Perl_reg_named_buff_scalar(pTHX_ REGEXP * const r, const U32 flags)
     SV *ret;
     AV *av;
     I32 length;
-    struct regexp *const rx = (struct regexp *)SvANY(r);
+    struct regexp *const rx = ReANY(r);
 
     PERL_ARGS_ASSERT_REG_NAMED_BUFF_SCALAR;
 
@@ -6627,7 +6667,7 @@ Perl_reg_named_buff_scalar(pTHX_ REGEXP * const r, const U32 flags)
 SV*
 Perl_reg_named_buff_all(pTHX_ REGEXP * const r, const U32 flags)
 {
-    struct regexp *const rx = (struct regexp *)SvANY(r);
+    struct regexp *const rx = ReANY(r);
     AV *av = newAV();
 
     PERL_ARGS_ASSERT_REG_NAMED_BUFF_ALL;
@@ -6663,7 +6703,7 @@ void
 Perl_reg_numbered_buff_fetch(pTHX_ REGEXP * const r, const I32 paren,
 			     SV * const sv)
 {
-    struct regexp *const rx = (struct regexp *)SvANY(r);
+    struct regexp *const rx = ReANY(r);
     char *s = NULL;
     I32 i = 0;
     I32 s1, t1;
@@ -6716,10 +6756,14 @@ Perl_reg_numbered_buff_fetch(pTHX_ REGEXP * const r, const I32 paren,
     assert(s >= rx->subbeg);
     assert(rx->sublen >= (s - rx->subbeg) + i );
     if (i >= 0) {
-        const int oldtainted = PL_tainted;
+#if NO_TAINT_SUPPORT
+        sv_setpvn(sv, s, i);
+#else
+        const int oldtainted = TAINT_get;
         TAINT_NOT;
         sv_setpvn(sv, s, i);
-        PL_tainted = oldtainted;
+        TAINT_set(oldtainted);
+#endif
         if ( (rx->extflags & RXf_CANY_SEEN)
             ? (RXp_MATCH_UTF8(rx)
                         && (!i || is_utf8_string((U8*)s, i)))
@@ -6729,12 +6773,12 @@ Perl_reg_numbered_buff_fetch(pTHX_ REGEXP * const r, const I32 paren,
         }
         else
             SvUTF8_off(sv);
-        if (PL_tainting) {
+        if (TAINTING_get) {
             if (RXp_MATCH_TAINTED(rx)) {
                 if (SvTYPE(sv) >= SVt_PVMG) {
                     MAGIC* const mg = SvMAGIC(sv);
                     MAGIC* mgt;
-                    PL_tainted = 1;
+                    TAINT;
                     SvMAGIC_set(sv, mg->mg_moremagic);
                     SvTAINT(sv);
                     if ((mgt = SvMAGIC(sv))) {
@@ -6742,7 +6786,7 @@ Perl_reg_numbered_buff_fetch(pTHX_ REGEXP * const r, const I32 paren,
                         SvMAGIC_set(sv, mg);
                     }
                 } else {
-                    PL_tainted = 1;
+                    TAINT;
                     SvTAINT(sv);
                 }
             } else 
@@ -6766,14 +6810,14 @@ Perl_reg_numbered_buff_store(pTHX_ REGEXP * const rx, const I32 paren,
     PERL_UNUSED_ARG(value);
 
     if (!PL_localizing)
-        Perl_croak_no_modify(aTHX);
+        Perl_croak_no_modify();
 }
 
 I32
 Perl_reg_numbered_buff_length(pTHX_ REGEXP * const r, const SV * const sv,
                               const I32 paren)
 {
-    struct regexp *const rx = (struct regexp *)SvANY(r);
+    struct regexp *const rx = ReANY(r);
     I32 i;
     I32 s1, t1;
 
@@ -7339,8 +7383,8 @@ Perl__invlist_search(pTHX_ SV* const invlist, const UV cp)
      * And benchmarks show that caching gives better results.  We also test
      * here if the code point is within the bounds of the list.  These tests
      * replace others that would have had to be made anyway to make sure that
-     * the array bounds were not exceeded, and give us extra information at the
-     * same time */
+     * the array bounds were not exceeded, and these give us extra information
+     * at the same time */
     if (cp >= array[mid]) {
         if (cp >= array[highest_element]) {
             return highest_element;
@@ -8208,14 +8252,16 @@ Perl__invlist_contents(pTHX_ SV* const invlist)
 }
 #endif
 
-#if 0
+#ifdef PERL_ARGS_ASSERT__INVLIST_DUMP
 void
-S_invlist_dump(pTHX_ SV* const invlist, const char * const header)
+Perl__invlist_dump(pTHX_ SV* const invlist, const char * const header)
 {
     /* Dumps out the ranges in an inversion list.  The string 'header'
      * if present is output on a line before the first range */
 
     UV start, end;
+
+    PERL_ARGS_ASSERT__INVLIST_DUMP;
 
     if (header && strlen(header)) {
 	PerlIO_printf(Perl_debug_log, "%s\n", header);
@@ -8225,8 +8271,12 @@ S_invlist_dump(pTHX_ SV* const invlist, const char * const header)
 	if (end == UV_MAX) {
 	    PerlIO_printf(Perl_debug_log, "0x%04"UVXf" .. INFINITY\n", start);
 	}
+	else if (end != start) {
+	    PerlIO_printf(Perl_debug_log, "0x%04"UVXf" .. 0x%04"UVXf"\n",
+		                                 start,         end);
+	}
 	else {
-	    PerlIO_printf(Perl_debug_log, "0x%04"UVXf" .. 0x%04"UVXf"\n", start, end);
+	    PerlIO_printf(Perl_debug_log, "0x%04"UVXf"\n", start);
 	}
     }
 }
@@ -10274,7 +10324,7 @@ tryagain:
 	    goto finish_meta_pat;
 	case 'R':
 	    ret = reg_node(pRExC_state, LNBREAK);
-	    *flagp |= HASWIDTH;
+	    *flagp |= HASWIDTH|SIMPLE;
 	    goto finish_meta_pat;
 	case 'h':
 	    ret = reg_node(pRExC_state, HORIZWS);
@@ -11118,8 +11168,8 @@ S_regwhite( RExC_state_t *pRExC_state, char *p )
 #define POSIXCC_NOTYET(c) ((c) == '=' || (c) == '.')
 #define POSIXCC(c) (POSIXCC_DONE(c) || POSIXCC_NOTYET(c))
 
-STATIC I32
-S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value)
+PERL_STATIC_INLINE I32
+S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value, SV *free_me)
 {
     dVAR;
     I32 namedclass = OOB_NAMEDCLASS;
@@ -11229,7 +11279,8 @@ S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value)
 		       the class closes */
 		    while (UCHARAT(RExC_parse) && UCHARAT(RExC_parse) != ']')
 			RExC_parse++;
-		    Simple_vFAIL3("POSIX syntax [%c %c] is reserved for future extensions", c, c);
+		    SvREFCNT_dec(free_me);
+		    vFAIL3("POSIX syntax [%c %c] is reserved for future extensions", c, c);
 		}
 	    } else {
 		/* Maternal grandfather:
@@ -11240,36 +11291,6 @@ S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value)
     }
 
     return namedclass;
-}
-
-STATIC void
-S_checkposixcc(pTHX_ RExC_state_t *pRExC_state)
-{
-    dVAR;
-
-    PERL_ARGS_ASSERT_CHECKPOSIXCC;
-
-    if (POSIXCC(UCHARAT(RExC_parse))) {
-	const char *s = RExC_parse;
-	const char  c = *s++;
-
-	while (isALNUM(*s))
-	    s++;
-	if (*s && c == *s && s[1] == ']') {
-	    ckWARN3reg(s+2,
-		       "POSIX syntax [%c %c] belongs inside character classes",
-		       c, c);
-
-	    /* [[=foo=]] and [[.foo.]] are still future. */
-	    if (POSIXCC_NOTYET(c)) {
-		/* adjust RExC_parse so the error shows after
-		   the class closes */
-		while (UCHARAT(RExC_parse) && UCHARAT(RExC_parse++) != ']')
-		    NOOP;
-		Simple_vFAIL3("POSIX syntax [%c %c] is reserved for future extensions", c, c);
-	    }
-	}
-    }
 }
 
 /* Generate the code to add a full posix character <class> to the bracketed
@@ -11429,7 +11450,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
      * reg() gets called (recursively) on the rewritten version, and this
      * function will return what it constructs.  (Actually the <multi-fold>s
      * aren't physically removed from the [abcdefghi], it's just that they are
-     * ignored in the recursion by means of a a flag:
+     * ignored in the recursion by means of a flag:
      * <RExC_in_multi_char_class>.)
      *
      * ANYOF nodes contain a bit map for the first 256 characters, with the
@@ -11448,7 +11469,6 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
     IV namedclass = OOB_NAMEDCLASS;
     char *rangebegin = NULL;
     bool need_class = 0;
-    bool allow_full_fold = TRUE;   /* Assume wants multi-char folding */
     SV *listsv = NULL;
     STRLEN initial_listsv_len = 0; /* Kind of a kludge to see if it is more
 				      than just initialized.  */
@@ -11515,20 +11535,8 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 
     if (UCHARAT(RExC_parse) == '^') {	/* Complement of range. */
 	RExC_parse++;
-        if (! RExC_in_multi_char_class) {
-            invert = TRUE;
-            RExC_naughty++;
-
-            /* We have decided to not allow multi-char folds in inverted
-             * character classes, due to the confusion that can happen,
-             * especially with classes that are designed for a non-Unicode
-             * world:  You have the peculiar case that:
-                "s s" =~ /^[^\xDF]+$/i => Y
-                "ss"  =~ /^[^\xDF]+$/i => N
-            *
-            * See [perl #89750] */
-            allow_full_fold = FALSE;
-        }
+        invert = TRUE;
+        RExC_naughty++;
     }
 
     if (SIZE_ONLY) {
@@ -11547,7 +11555,28 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
     nextvalue = RExC_parse < RExC_end ? UCHARAT(RExC_parse) : 0;
 
     if (!SIZE_ONLY && POSIXCC(nextvalue))
-	checkposixcc(pRExC_state);
+    {
+	const char *s = RExC_parse;
+	const char  c = *s++;
+
+	while (isALNUM(*s))
+	    s++;
+	if (*s && c == *s && s[1] == ']') {
+	    ckWARN3reg(s+2,
+		       "POSIX syntax [%c %c] belongs inside character classes",
+		       c, c);
+
+	    /* [[=foo=]] and [[.foo.]] are still future. */
+	    if (POSIXCC_NOTYET(c)) {
+		/* adjust RExC_parse so the error shows after
+		   the class closes */
+		while (UCHARAT(RExC_parse) && UCHARAT(RExC_parse++) != ']')
+		    NOOP;
+		SvREFCNT_dec(listsv);
+		vFAIL3("POSIX syntax [%c %c] is reserved for future extensions", c, c);
+	    }
+	}
+    }
 
     /* allow 1st char to be ] (allowing it to be - is dealt with later) */
     if (UCHARAT(RExC_parse) == ']')
@@ -11577,7 +11606,7 @@ parseit:
 
 	nextvalue = RExC_parse < RExC_end ? UCHARAT(RExC_parse) : 0;
 	if (value == '[' && POSIXCC(nextvalue))
-	    namedclass = regpposixcc(pRExC_state, value);
+	    namedclass = regpposixcc(pRExC_state, value, listsv);
 	else if (value == '\\') {
 	    if (UTF) {
 		value = utf8n_to_uvchr((U8*)RExC_parse,
@@ -11733,7 +11762,7 @@ parseit:
 		    Safefree(name);
 		}
 		RExC_parse = e + 1;
-		namedclass = ANYOF_MAX;  /* no official name, but it's named */
+		namedclass = ANYOF_UNIPROP;  /* no official name, but it's named */
 
 		/* \p means they want Unicode semantics */
 		RExC_uni_semantics = 1;
@@ -12131,8 +12160,7 @@ parseit:
                     DO_N_POSIX(ret, namedclass, posixes,
                                             PL_PosixXDigit, PL_XPosixXDigit);
 		    break;
-		case ANYOF_MAX:
-		    /* this is to handle \p and \P */
+		case ANYOF_UNIPROP: /* this is to handle \p and \P */
 		    break;
 		default:
 		    vFAIL("Invalid [::] class");
@@ -12191,7 +12219,11 @@ parseit:
          * For single-valued non-inverted ranges, we consider the possibility
          * of multi-char folds.  (We made a conscious decision to not do this
          * for the other cases because it can often lead to non-intuitive
-         * results) */
+         * results.  For example, you have the peculiar case that:
+         *  "s s" =~ /^[^\xDF]+$/i => Y
+         *  "ss"  =~ /^[^\xDF]+$/i => N
+         *
+         * See [perl #89750] */
         if (FOLD && ! invert && value == prevvalue) {
             if (value == LATIN_SMALL_LETTER_SHARP_S
                 || (value > 255 && _invlist_contains_cp(PL_HasMultiCharFold,
@@ -12374,12 +12406,13 @@ parseit:
 
 	ret = reg(pRExC_state, 1, &reg_flags, depth+1);
 
-	*flagp |= reg_flags&(HASWIDTH|SPSTART|POSTPONED);
+	*flagp |= reg_flags&(HASWIDTH|SIMPLE|SPSTART|POSTPONED);
 
 	RExC_parse = save_parse;
 	RExC_end = save_end;
 	RExC_in_multi_char_class = 0;
         SvREFCNT_dec(multi_char_matches);
+        SvREFCNT_dec(listsv);
         return ret;
     }
 
@@ -12470,7 +12503,7 @@ parseit:
                     *flagp |= HASWIDTH|SIMPLE;
                     break;
 
-                case ANYOF_MAX:
+                case ANYOF_UNIPROP:
                     break;
 
                 case ANYOF_NBLANK:
@@ -12552,7 +12585,7 @@ parseit:
 
             ret = reg_node(pRExC_state, op);
 
-            if (PL_regkind[op] == POSIXD) {
+            if (PL_regkind[op] == POSIXD || PL_regkind[op] == NPOSIXD) {
                 if (! SIZE_ONLY) {
                     FLAGS(ret) = arg;
                 }
@@ -12564,7 +12597,9 @@ parseit:
 
             RExC_parse = (char *) cur_parse;
 
+            SvREFCNT_dec(posixes);
             SvREFCNT_dec(listsv);
+            SvREFCNT_dec(cp_list);
             return ret;
         }
     }
@@ -12651,7 +12686,6 @@ parseit:
 
 		U8 foldbuf[UTF8_MAXBYTES_CASE+1];
 		STRLEN foldlen;
-                UV f;
                 SV** listp;
 
                 if (j < 256) {
@@ -12751,12 +12785,12 @@ parseit:
                  * hard-coded for it.  First, get its fold.  This is the simple
                  * fold, as the multi-character folds have been handled earlier
                  * and separated out */
-		f = _to_uni_fold_flags(j, foldbuf, &foldlen,
-                                        ((LOC)
-                                        ? FOLD_FLAGS_LOCALE
-                                        : (ASCII_FOLD_RESTRICTED)
-                                            ? FOLD_FLAGS_NOMIX_ASCII
-                                            : 0));
+		_to_uni_fold_flags(j, foldbuf, &foldlen,
+                                               ((LOC)
+                                               ? FOLD_FLAGS_LOCALE
+                                               : (ASCII_FOLD_RESTRICTED)
+                                                  ? FOLD_FLAGS_NOMIX_ASCII
+                                                  : 0));
 
                 /* Single character fold of above Latin1.  Add everything in
                  * its fold closure to the list that this node should match.
@@ -13050,6 +13084,7 @@ parseit:
                 alloc_maybe_populate_EXACT(pRExC_state, ret, flagp, 0, value);
             }
 
+            SvREFCNT_dec(cp_list);
             SvREFCNT_dec(listsv);
             return ret;
         }
@@ -13155,7 +13190,7 @@ parseit:
 
 	av_store(av, 0, (HAS_NONLOCALE_RUNTIME_PROPERTY_DEFINITION)
 			? listsv
-			: &PL_sv_undef);
+			: (SvREFCNT_dec(listsv), &PL_sv_undef));
 	if (swash) {
 	    av_store(av, 1, swash);
 	    SvREFCNT_dec(cp_list);
@@ -14062,7 +14097,7 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
 
 	Perl_sv_catpvf(aTHX_ sv, "%s]", PL_colors[1]);
     }
-    else if (k == POSIXD) {
+    else if (k == POSIXD || k == NPOSIXD) {
         U8 index = FLAGS(o) * 2;
         if (index > (sizeof(anyofs) / sizeof(anyofs[0]))) {
             Perl_sv_catpvf(aTHX_ sv, "[illegal type=%d])", index);
@@ -14085,7 +14120,7 @@ SV *
 Perl_re_intuit_string(pTHX_ REGEXP * const r)
 {				/* Assume that RE_INTUIT is set */
     dVAR;
-    struct regexp *const prog = (struct regexp *)SvANY(r);
+    struct regexp *const prog = ReANY(r);
     GET_RE_DEBUG_FLAGS_DECL;
 
     PERL_ARGS_ASSERT_RE_INTUIT_STRING;
@@ -14133,7 +14168,7 @@ void
 Perl_pregfree2(pTHX_ REGEXP *rx)
 {
     dVAR;
-    struct regexp *const r = (struct regexp *)SvANY(rx);
+    struct regexp *const r = ReANY(rx);
     GET_RE_DEBUG_FLAGS_DECL;
 
     PERL_ARGS_ASSERT_PREGFREE2;
@@ -14143,6 +14178,7 @@ Perl_pregfree2(pTHX_ REGEXP *rx)
     } else {
         CALLREGFREE_PVT(rx); /* free the private data */
         SvREFCNT_dec(RXp_PAREN_NAMES(r));
+	Safefree(r->xpv_len_u.xpvlenu_pv);
     }        
     if (r->substrs) {
         SvREFCNT_dec(r->anchored_substr);
@@ -14157,6 +14193,7 @@ Perl_pregfree2(pTHX_ REGEXP *rx)
 #endif
     Safefree(r->offs);
     SvREFCNT_dec(r->qr_anoncv);
+    rx->sv_u.svu_rx = 0;
 }
 
 /*  reg_temp_copy()
@@ -14180,26 +14217,42 @@ REGEXP *
 Perl_reg_temp_copy (pTHX_ REGEXP *ret_x, REGEXP *rx)
 {
     struct regexp *ret;
-    struct regexp *const r = (struct regexp *)SvANY(rx);
+    struct regexp *const r = ReANY(rx);
+    const bool islv = ret_x && SvTYPE(ret_x) == SVt_PVLV;
 
     PERL_ARGS_ASSERT_REG_TEMP_COPY;
 
     if (!ret_x)
 	ret_x = (REGEXP*) newSV_type(SVt_REGEXP);
-    ret = (struct regexp *)SvANY(ret_x);
+    else {
+	SvOK_off((SV *)ret_x);
+	if (islv) {
+	    /* For PVLVs, SvANY points to the xpvlv body while sv_u points
+	       to the regexp.  (For SVt_REGEXPs, sv_upgrade has already
+	       made both spots point to the same regexp body.) */
+	    REGEXP *temp = (REGEXP *)newSV_type(SVt_REGEXP);
+	    assert(!SvPVX(ret_x));
+	    ret_x->sv_u.svu_rx = temp->sv_any;
+	    temp->sv_any = NULL;
+	    SvFLAGS(temp) = (SvFLAGS(temp) & ~SVTYPEMASK) | SVt_NULL;
+	    SvREFCNT_dec(temp);
+	    /* SvCUR still resides in the xpvlv struct, so the regexp copy-
+	       ing below will not set it. */
+	    SvCUR_set(ret_x, SvCUR(rx));
+	}
+    }
+    /* This ensures that SvTHINKFIRST(sv) is true, and hence that
+       sv_force_normal(sv) is called.  */
+    SvFAKE_on(ret_x);
+    ret = ReANY(ret_x);
     
-    (void)ReREFCNT_inc(rx);
-    /* We can take advantage of the existing "copied buffer" mechanism in SVs
-       by pointing directly at the buffer, but flagging that the allocated
-       space in the copy is zero. As we've just done a struct copy, it's now
-       a case of zero-ing that, rather than copying the current length.  */
-    SvPV_set(ret_x, RX_WRAPPED(rx));
-    SvFLAGS(ret_x) |= SvFLAGS(rx) & (SVf_POK|SVp_POK|SVf_UTF8);
+    SvFLAGS(ret_x) |= SvUTF8(rx);
+    /* We share the same string buffer as the original regexp, on which we
+       hold a reference count, incremented when mother_re is set below.
+       The string pointer is copied here, being part of the regexp struct.
+     */
     memcpy(&(ret->xpv_cur), &(r->xpv_cur),
 	   sizeof(regexp) - STRUCT_OFFSET(regexp, xpv_cur));
-    SvLEN_set(ret_x, 0);
-    SvSTASH_set(ret_x, NULL);
-    SvMAGIC_set(ret_x, NULL);
     if (r->offs) {
         const I32 npar = r->nparens+1;
         Newx(ret->offs, npar, regexp_paren_pair);
@@ -14221,7 +14274,7 @@ Perl_reg_temp_copy (pTHX_ REGEXP *ret_x, REGEXP *rx)
 #ifdef PERL_OLD_COPY_ON_WRITE
     ret->saved_copy = NULL;
 #endif
-    ret->mother_re = rx;
+    ret->mother_re = ReREFCNT_inc(r->mother_re ? r->mother_re : rx);
     SvREFCNT_inc_void(ret->qr_anoncv);
     
     return ret_x;
@@ -14244,7 +14297,7 @@ void
 Perl_regfree_internal(pTHX_ REGEXP * const rx)
 {
     dVAR;
-    struct regexp *const r = (struct regexp *)SvANY(rx);
+    struct regexp *const r = ReANY(rx);
     RXi_GET_DECL(r,ri);
     GET_RE_DEBUG_FLAGS_DECL;
 
@@ -14365,8 +14418,8 @@ Perl_re_dup_guts(pTHX_ const REGEXP *sstr, REGEXP *dstr, CLONE_PARAMS *param)
 {
     dVAR;
     I32 npar;
-    const struct regexp *r = (const struct regexp *)SvANY(sstr);
-    struct regexp *ret = (struct regexp *)SvANY(dstr);
+    const struct regexp *r = ReANY(sstr);
+    struct regexp *ret = ReANY(dstr);
     
     PERL_ARGS_ASSERT_RE_DUP_GUTS;
 
@@ -14430,21 +14483,14 @@ Perl_re_dup_guts(pTHX_ const REGEXP *sstr, REGEXP *dstr, CLONE_PARAMS *param)
     ret->saved_copy = NULL;
 #endif
 
-    if (ret->mother_re) {
-	if (SvPVX_const(dstr) == SvPVX_const(ret->mother_re)) {
-	    /* Our storage points directly to our mother regexp, but that's
+    /* Whether mother_re be set or no, we need to copy the string.  We
+       cannot refrain from copying it when the storage points directly to
+       our mother regexp, because that's
 	       1: a buffer in a different thread
 	       2: something we no longer hold a reference on
 	       so we need to copy it locally.  */
-	    /* Note we need to use SvCUR(), rather than
-	       SvLEN(), on our mother_re, because it, in
-	       turn, may well be pointing to its own mother_re.  */
-	    SvPV_set(dstr, SAVEPVN(SvPVX_const(ret->mother_re),
-				   SvCUR(ret->mother_re)+1));
-	    SvLEN_set(dstr, SvCUR(ret->mother_re)+1);
-	}
-	ret->mother_re      = NULL;
-    }
+    RX_WRAPPED(dstr) = SAVEPVN(RX_WRAPPED(sstr), SvCUR(sstr)+1);
+    ret->mother_re   = NULL;
     ret->gofs = 0;
 }
 #endif /* PERL_IN_XSUB_RE */
@@ -14467,7 +14513,7 @@ void *
 Perl_regdupe_internal(pTHX_ REGEXP * const rx, CLONE_PARAMS *param)
 {
     dVAR;
-    struct regexp *const r = (struct regexp *)SvANY(rx);
+    struct regexp *const r = ReANY(rx);
     regexp_internal *reti;
     int len;
     RXi_GET_DECL(r,ri);

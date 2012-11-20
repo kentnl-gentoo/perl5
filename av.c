@@ -211,6 +211,31 @@ The rough perl equivalent is C<$myarray[$idx]>.
 =cut
 */
 
+static bool
+S_adjust_index(pTHX_ AV *av, const MAGIC *mg, I32 *keyp)
+{
+    bool adjust_index = 1;
+    if (mg) {
+	/* Handle negative array indices 20020222 MJD */
+	SV * const ref = SvTIED_obj(MUTABLE_SV(av), mg);
+	SvGETMAGIC(ref);
+	if (SvROK(ref) && SvOBJECT(SvRV(ref))) {
+	    SV * const * const negative_indices_glob =
+		hv_fetchs(SvSTASH(SvRV(ref)), NEGATIVE_INDICES_VAR, 0);
+
+	    if (negative_indices_glob && SvTRUE(GvSV(*negative_indices_glob)))
+		adjust_index = 0;
+	}
+    }
+
+    if (adjust_index) {
+	*keyp += AvFILL(av) + 1;
+	if (*keyp < 0)
+	    return FALSE;
+    }
+    return TRUE;
+}
+
 SV**
 Perl_av_fetch(pTHX_ register AV *av, I32 key, I32 lval)
 {
@@ -225,23 +250,8 @@ Perl_av_fetch(pTHX_ register AV *av, I32 key, I32 lval)
         if (tied_magic || mg_find((const SV *)av, PERL_MAGIC_regdata)) {
 	    SV *sv;
 	    if (key < 0) {
-		I32 adjust_index = 1;
-		if (tied_magic) {
-		    /* Handle negative array indices 20020222 MJD */
-		    SV * const * const negative_indices_glob =
-			hv_fetch(SvSTASH(SvRV(SvTIED_obj(MUTABLE_SV(av),
-							 tied_magic))),
-				NEGATIVE_INDICES_VAR, 16, 0);
-
-		    if (negative_indices_glob && SvTRUE(GvSV(*negative_indices_glob)))
-			adjust_index = 0;
-		}
-
-		if (adjust_index) {
-		    key += AvFILL(av) + 1;
-		    if (key < 0)
+		if (!S_adjust_index(aTHX_ av, tied_magic, &key))
 			return NULL;
-		}
 	    }
 
             sv = sv_newmortal();
@@ -316,21 +326,9 @@ Perl_av_store(pTHX_ register AV *av, I32 key, SV *val)
     if (SvRMAGICAL(av)) {
         const MAGIC * const tied_magic = mg_find((const SV *)av, PERL_MAGIC_tied);
         if (tied_magic) {
-            /* Handle negative array indices 20020222 MJD */
             if (key < 0) {
-		bool adjust_index = 1;
-		SV * const * const negative_indices_glob =
-                    hv_fetch(SvSTASH(SvRV(SvTIED_obj(MUTABLE_SV(av), 
-                                                     tied_magic))), 
-                             NEGATIVE_INDICES_VAR, 16, 0);
-                if (negative_indices_glob
-                    && SvTRUE(GvSV(*negative_indices_glob)))
-                    adjust_index = 0;
-                if (adjust_index) {
-                    key += AvFILL(av) + 1;
-                    if (key < 0)
+		if (!S_adjust_index(aTHX_ av, tied_magic, &key))
                         return 0;
-                }
             }
 	    if (val != &PL_sv_undef) {
 		mg_copy(MUTABLE_SV(av), val, 0, key);
@@ -347,7 +345,7 @@ Perl_av_store(pTHX_ register AV *av, I32 key, SV *val)
     }
 
     if (SvREADONLY(av) && key >= AvFILL(av))
-	Perl_croak_no_modify(aTHX);
+	Perl_croak_no_modify();
 
     if (!AvREAL(av) && AvREIFY(av))
 	av_reify(av);
@@ -412,7 +410,10 @@ Perl_av_make(pTHX_ register I32 size, register SV **strp)
 	Newx(ary,size,SV*);
 	AvALLOC(av) = ary;
 	AvARRAY(av) = ary;
-	AvFILLp(av) = AvMAX(av) = size - 1;
+	AvMAX(av) = size - 1;
+	AvFILLp(av) = -1;
+	ENTER;
+	SAVEFREESV(av);
 	for (i = 0; i < size; i++) {
 	    assert (*strp);
 
@@ -420,11 +421,15 @@ Perl_av_make(pTHX_ register I32 size, register SV **strp)
 	       have multiple references to the same temp scalar (e.g.
 	       from a list slice) */
 
+	    SvGETMAGIC(*strp); /* before newSV, in case it dies */
+	    AvFILLp(av)++;
 	    ary[i] = newSV(0);
 	    sv_setsv_flags(ary[i], *strp,
-			   SV_GMAGIC|SV_DO_COW_SVSETSV|SV_NOSTEAL);
+			   SV_DO_COW_SVSETSV|SV_NOSTEAL);
 	    strp++;
 	}
+	SvREFCNT_inc_simple_void_NN(av);
+	LEAVE;
     }
     return av;
 }
@@ -458,7 +463,7 @@ Perl_av_clear(pTHX_ register AV *av)
 #endif
 
     if (SvREADONLY(av))
-	Perl_croak_no_modify(aTHX);
+	Perl_croak_no_modify();
 
     /* Give any tie a chance to cleanup first */
     if (SvRMAGICAL(av)) {
@@ -574,7 +579,7 @@ Perl_av_push(pTHX_ register AV *av, SV *val)
     assert(SvTYPE(av) == SVt_PVAV);
 
     if (SvREADONLY(av))
-	Perl_croak_no_modify(aTHX);
+	Perl_croak_no_modify();
 
     if ((mg = SvTIED_mg((const SV *)av, PERL_MAGIC_tied))) {
 	Perl_magic_methcall(aTHX_ MUTABLE_SV(av), mg, "PUSH", G_DISCARD, 1,
@@ -606,7 +611,7 @@ Perl_av_pop(pTHX_ register AV *av)
     assert(SvTYPE(av) == SVt_PVAV);
 
     if (SvREADONLY(av))
-	Perl_croak_no_modify(aTHX);
+	Perl_croak_no_modify();
     if ((mg = SvTIED_mg((const SV *)av, PERL_MAGIC_tied))) {
 	retval = Perl_magic_methcall(aTHX_ MUTABLE_SV(av), mg, "POP", 0, 0);
 	if (retval)
@@ -667,7 +672,7 @@ Perl_av_unshift(pTHX_ register AV *av, register I32 num)
     assert(SvTYPE(av) == SVt_PVAV);
 
     if (SvREADONLY(av))
-	Perl_croak_no_modify(aTHX);
+	Perl_croak_no_modify();
 
     if ((mg = SvTIED_mg((const SV *)av, PERL_MAGIC_tied))) {
 	Perl_magic_methcall(aTHX_ MUTABLE_SV(av), mg, "UNSHIFT",
@@ -732,7 +737,7 @@ Perl_av_shift(pTHX_ register AV *av)
     assert(SvTYPE(av) == SVt_PVAV);
 
     if (SvREADONLY(av))
-	Perl_croak_no_modify(aTHX);
+	Perl_croak_no_modify();
     if ((mg = SvTIED_mg((const SV *)av, PERL_MAGIC_tied))) {
 	retval = Perl_magic_methcall(aTHX_ MUTABLE_SV(av), mg, "SHIFT", 0, 0);
 	if (retval)
@@ -848,30 +853,16 @@ Perl_av_delete(pTHX_ AV *av, I32 key, I32 flags)
     assert(SvTYPE(av) == SVt_PVAV);
 
     if (SvREADONLY(av))
-	Perl_croak_no_modify(aTHX);
+	Perl_croak_no_modify();
 
     if (SvRMAGICAL(av)) {
         const MAGIC * const tied_magic
 	    = mg_find((const SV *)av, PERL_MAGIC_tied);
         if ((tied_magic || mg_find((const SV *)av, PERL_MAGIC_regdata))) {
-            /* Handle negative array indices 20020222 MJD */
             SV **svp;
             if (key < 0) {
-                unsigned adjust_index = 1;
-                if (tied_magic) {
-		    SV * const * const negative_indices_glob =
-                        hv_fetch(SvSTASH(SvRV(SvTIED_obj(MUTABLE_SV(av), 
-                                                         tied_magic))), 
-                                 NEGATIVE_INDICES_VAR, 16, 0);
-                    if (negative_indices_glob
-                        && SvTRUE(GvSV(*negative_indices_glob)))
-                        adjust_index = 0;
-                }
-                if (adjust_index) {
-                    key += AvFILL(av) + 1;
-                    if (key < 0)
+		if (!S_adjust_index(aTHX_ av, tied_magic, &key))
 			return NULL;
-                }
             }
             svp = av_fetch(av, key, TRUE);
             if (svp) {
@@ -947,23 +938,8 @@ Perl_av_exists(pTHX_ AV *av, I32 key)
             MAGIC *mg;
             /* Handle negative array indices 20020222 MJD */
             if (key < 0) {
-                unsigned adjust_index = 1;
-                if (tied_magic) {
-		    SV * const * const negative_indices_glob =
-                        hv_fetch(SvSTASH(SvRV(SvTIED_obj(MUTABLE_SV(av), 
-                                                         tied_magic))), 
-                                 NEGATIVE_INDICES_VAR, 16, 0);
-                    if (negative_indices_glob
-                        && SvTRUE(GvSV(*negative_indices_glob)))
-                        adjust_index = 0;
-                }
-                if (adjust_index) {
-                    key += AvFILL(av) + 1;
-                    if (key < 0)
+		if (!S_adjust_index(aTHX_ av, tied_magic, &key))
                         return FALSE;
-                    else
-                        return TRUE;
-                }
             }
 
             if(key >= 0 && regdata_magic) {

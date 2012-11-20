@@ -370,6 +370,8 @@ Perl_cv_undef(pTHX_ CV *cv)
 	PAD_SAVE_SETNULLPAD();
 
 	/* discard any leaked ops */
+	if (PL_parser)
+	    parser_free_nexttoke_ops(PL_parser, (OPSLAB *)CvSTART(cv));
 	opslab_force_free((OPSLAB *)CvSTART(cv));
 	CvSTART(cv) = NULL;
 
@@ -1669,7 +1671,7 @@ S_pad_reset(pTHX)
 	    )
     );
 
-    if (!PL_tainting) {	/* Can't mix tainted and non-tainted temporaries. */
+    if (!TAINTING_get) {	/* Can't mix tainted and non-tainted temporaries. */
         I32 po;
 	for (po = AvMAX(PL_comppad); po > PL_padix_floor; po--) {
 	    if (PL_curpad[po] && !SvIMMORTAL(PL_curpad[po]))
@@ -1810,6 +1812,7 @@ void
 Perl_pad_free(pTHX_ PADOFFSET po)
 {
     dVAR;
+    SV *sv;
     ASSERT_CURPAD_LEGAL("pad_free");
     if (!PL_curpad)
 	return;
@@ -1824,9 +1827,11 @@ Perl_pad_free(pTHX_ PADOFFSET po)
 	    PTR2UV(PL_comppad), PTR2UV(PL_curpad), (long)po)
     );
 
-    if (PL_curpad[po] && PL_curpad[po] != &PL_sv_undef) {
-	SvFLAGS(PL_curpad[po]) &= ~SVs_PADTMP; /* also clears SVs_PADSTALE */
-    }
+
+    sv = PL_curpad[po];
+    if (sv && sv != &PL_sv_undef && !SvPADMY(sv))
+	SvFLAGS(sv) &= ~SVs_PADTMP;
+
     if ((I32)po < PL_padix)
 	PL_padix = po - 1;
 }
@@ -1996,7 +2001,7 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside)
 	    || PadlistNAMES(CvPADLIST(outside))
 		 != protopadlist->xpadl_outid) {
 	    outside = find_runcv_where(
-		FIND_RUNCV_padid_eq, (IV)protopadlist->xpadl_outid, NULL
+		FIND_RUNCV_padid_eq, PTR2IV(protopadlist->xpadl_outid), NULL
 	    );
 	    /* outside could be null */
 	}

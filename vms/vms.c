@@ -85,29 +85,6 @@ struct item_list_3 {
 };
 #pragma member_alignment restore
 
-#if __CRTL_VER >= 70300000 && !defined(__VAX)
-
-static int set_feature_default(const char *name, int value)
-{
-    int status;
-    int index;
-
-    index = decc$feature_get_index(name);
-
-    status = decc$feature_set_value(index, 1, value);
-    if (index == -1 || (status == -1)) {
-      return -1;
-    }
-
-    status = decc$feature_get_value(index, 1);
-    if (status != value) {
-      return -1;
-    }
-
-return 0;
-}
-#endif
-
 /* Older versions of ssdef.h don't have these */
 #ifndef SS$_INVFILFOROP
 #  define SS$_INVFILFOROP 3930
@@ -1072,7 +1049,7 @@ int Perl_my_trnlnm(pTHX_ const char *lnm, char *eqv, unsigned long int idx)
     if (aTHX != NULL)
 #endif
 #ifdef SECURE_INTERNAL_GETENV
-        flags = (PL_curinterp ? PL_tainting : will_taint) ?
+        flags = (PL_curinterp ? TAINTING_get : will_taint) ?
                  PERL__TRNENV_SECURE : 0;
 #endif
 
@@ -1145,7 +1122,7 @@ Perl_my_getenv(pTHX_ const char *lnm, bool sys)
       /* Impose security constraints only if tainting */
       if (sys) {
         /* Impose security constraints only if tainting */
-        secure = PL_curinterp ? PL_tainting : will_taint;
+        secure = PL_curinterp ? TAINTING_get : will_taint;
         saverr = errno;  savvmserr = vaxc$errno;
       }
       else {
@@ -1244,7 +1221,7 @@ Perl_my_getenv_len(pTHX_ const char *lnm, unsigned long *len, bool sys)
     else {
       if (sys) {
         /* Impose security constraints only if tainting */
-        secure = PL_curinterp ? PL_tainting : will_taint;
+        secure = PL_curinterp ? TAINTING_get : will_taint;
         saverr = errno;  savvmserr = vaxc$errno;
       }
       else {
@@ -1716,14 +1693,9 @@ Perl_my_setenv(pTHX_ const char *lnm, const char *eqv)
 /*  vmssetuserlnm
  *  sets a user-mode logical in the process logical name table
  *  used for redirection of sys$error
- *
- *  Fix-me: The pTHX is not needed for this routine, however doio.c
- *          is calling it with one instead of using a macro.
- *          A macro needs to be added to vmsish.h and doio.c updated to use it.
- *
  */
 void
-Perl_vmssetuserlnm(pTHX_ const char *name, const char *eqv)
+Perl_vmssetuserlnm(const char *name, const char *eqv)
 {
     $DESCRIPTOR(d_tab, "LNM$PROCESS");
     struct dsc$descriptor_d d_name = {0,DSC$K_DTYPE_T,DSC$K_CLASS_D,0};
@@ -4264,7 +4236,7 @@ safe_popen(pTHX_ const char *cmd, const char *in_mode, int *psts)
 	    info->fp  = PerlIO_open(mbx, mode);
         } else {
             info->fp = (PerlIO *) freopen(mbx, mode, stdin);
-            Perl_vmssetuserlnm(aTHX_ "SYS$INPUT",mbx);
+            vmssetuserlnm("SYS$INPUT", mbx);
         }
 
         if (!info->fp && info->out) {
@@ -4319,7 +4291,7 @@ safe_popen(pTHX_ const char *cmd, const char *in_mode, int *psts)
 	    info->fp  = PerlIO_open(mbx, mode);
         } else {
             info->fp = (PerlIO *) freopen(mbx, mode, stdout);
-            Perl_vmssetuserlnm(aTHX_ "SYS$OUTPUT",mbx);
+            vmssetuserlnm("SYS$OUTPUT", mbx);
         }
 
         if (info->in) {
@@ -9164,12 +9136,12 @@ mp_getredirection(pTHX_ int *ac, char ***av)
 	fprintf(stderr,"Can't open output file %s as stdout",out);
 	exit(vaxc$errno);
 	}
-	if (out != NULL) Perl_vmssetuserlnm(aTHX_ "SYS$OUTPUT",out);
+	if (out != NULL) vmssetuserlnm("SYS$OUTPUT", out);
 
     if (err != NULL) {
         if (strcmp(err,"&1") == 0) {
             dup2(fileno(stdout), fileno(stderr));
-            Perl_vmssetuserlnm(aTHX_ "SYS$ERROR","SYS$OUTPUT");
+            vmssetuserlnm("SYS$ERROR", "SYS$OUTPUT");
         } else {
 	FILE *tmperr;
 	if (NULL == (tmperr = fopen(err, errmode, "mbc=32", "mbf=2")))
@@ -9182,7 +9154,7 @@ mp_getredirection(pTHX_ int *ac, char ***av)
 		{
 		exit(vaxc$errno);
 		}
-	    Perl_vmssetuserlnm(aTHX_ "SYS$ERROR",err);
+	    vmssetuserlnm("SYS$ERROR", err);
 	}
         }
 #ifdef ARGPROC_DEBUG
@@ -13895,6 +13867,35 @@ int Perl_vms_case_tolerant(void)
 
  /* Start of DECC RTL Feature handling */
 
+#if __CRTL_VER >= 70300000 && !defined(__VAX)
+
+static int
+set_feature_default(const char *name, int value)
+{
+    int status;
+    int index;
+
+    index = decc$feature_get_index(name);
+
+    status = decc$feature_set_value(index, 1, value);
+    if (index == -1 || (status == -1)) {
+      return -1;
+    }
+
+    status = decc$feature_get_value(index, 1);
+    if (status != value) {
+      return -1;
+    }
+
+    /* Various things may check for an environment setting
+     * rather than the feature directly, so set that too.
+     */
+    vmssetuserlnm(name, value ? "ENABLE" : "DISABLE");
+
+    return 0;
+}
+#endif
+
 
 /* C RTL Feature settings */
 
@@ -13983,13 +13984,12 @@ vmsperl_set_features(void)
 	 vms_unlink_all_versions = 0;
     }
 
-    /* Dectect running under GNV Bash or other UNIX like shell */
 #if __CRTL_VER >= 70300000 && !defined(__VAX)
+    /* Detect running under GNV Bash or other UNIX like shell */
     gnv_unix_shell = 0;
     status = simple_trnlnm("GNV$UNIX_SHELL", val_str, sizeof(val_str));
     if ($VMS_STATUS_SUCCESS(status)) {
 	 gnv_unix_shell = 1;
-	 set_feature_default("DECC$EFS_CASE_PRESERVE", 1);
 	 set_feature_default("DECC$EFS_CHARSET", 1);
 	 set_feature_default("DECC$FILENAME_UNIX_NO_VERSION", 1);
 	 set_feature_default("DECC$FILENAME_UNIX_REPORT", 1);
@@ -13998,6 +13998,9 @@ vmsperl_set_features(void)
 	 vms_unlink_all_versions = 1;
 	 vms_posix_exit = 1;
     }
+    /* Some reasonable defaults that are not CRTL defaults */
+    set_feature_default("DECC$EFS_CASE_PRESERVE", 1);
+    set_feature_default("DECC$ARGV_PARSE_STYLE", 1);     /* Requires extended parse. */
 #endif
 
     /* hacks to see if known bugs are still present for testing */
@@ -14190,7 +14193,7 @@ extern void (*vmsperl_unused_global_1)(void) = LIB$INITIALIZE;
  * LIB$INITIALIZE section. In our case, the array only has one entry.
  */ 
 #pragma extern_model save 
-#pragma extern_model strict_refdef "LIB$INITIALIZE" gbl,noexe,nowrt,noshr,long 
+#pragma extern_model strict_refdef "LIB$INITIALIZE" nopic,gbl,nowrt,noshr,long 
 extern void (* const vmsperl_unused_global_2[])() = 
 { 
    vmsperl_set_features,

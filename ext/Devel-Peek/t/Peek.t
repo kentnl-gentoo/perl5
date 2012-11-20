@@ -241,7 +241,7 @@ do_test('reference to hash',
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 1
+    REFCNT = [12]
     FLAGS = \\(SHAREKEYS\\)
     IV = 1					# $] < 5.009
     NV = $FLOAT					# $] < 5.009
@@ -333,10 +333,11 @@ do_test('reference to regexp',
   RV = $ADDR
   SV = REGEXP\\($ADDR\\) at $ADDR
     REFCNT = 1
-    FLAGS = \\(OBJECT,POK,FAKE,pPOK\\)
+    FLAGS = \\(OBJECT,POK,FAKE,pPOK\\)		# $] < 5.017006
+    FLAGS = \\(OBJECT,FAKE\\)			# $] >= 5.017006
     PV = $ADDR "\\(\\?\\^:tic\\)"
     CUR = 8
-    LEN = 0
+    LEN = 0					# $] < 5.017006
     STASH = $ADDR\\t"Regexp"'
 . ($] < 5.013 ? '' :
 '
@@ -390,7 +391,7 @@ do_test('reference to blessed hash',
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 1
+    REFCNT = [12]
     FLAGS = \\(OBJECT,SHAREKEYS\\)
     IV = 0					# $] < 5.009
     NV = 0					# $] < 5.009
@@ -466,7 +467,7 @@ do_test('reference to hash containing Unicode',
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 1
+    REFCNT = [12]
     FLAGS = \\(SHAREKEYS,HASKFLAGS\\)
     UV = 1					# $] < 5.009
     NV = $FLOAT					# $] < 5.009
@@ -497,7 +498,7 @@ do_test('reference to hash containing Unicode',
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 1
+    REFCNT = [12]
     FLAGS = \\(SHAREKEYS,HASKFLAGS\\)
     UV = 1					# $] < 5.009
     NV = 0					# $] < 5.009
@@ -549,8 +550,9 @@ do_test('scalar with pos magic',
 # VMS is setting FAKE and READONLY flags.  What VMS uses for storing
 # ENV hashes is also not always null terminated.
 #
-do_test('tainted value in %ENV',
-        $ENV{PATH}=@ARGV,  # scalar(@ARGV) is a handy known tainted value
+if (${^TAINT}) {
+  do_test('tainted value in %ENV',
+          $ENV{PATH}=@ARGV,  # scalar(@ARGV) is a handy known tainted value
 'SV = PVMG\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(GMG,SMG,RMG(?:,POK)?(?:,pIOK)?,pPOK\\)
@@ -576,6 +578,7 @@ do_test('tainted value in %ENV',
   MAGIC = $ADDR
     MG_VIRTUAL = &PL_vtbl_taint
     MG_TYPE = PERL_MAGIC_taint\\(t\\)');
+}
 
 do_test('blessed reference',
 	bless(\\undef, 'Foobar'),
@@ -710,7 +713,7 @@ do_test('blessing to a class with embedded NUL characters',
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 1
+    REFCNT = [12]
     FLAGS = \\(OBJECT,SHAREKEYS\\)
     IV = 0					# $] < 5.009
     NV = 0					# $] < 5.009

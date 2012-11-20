@@ -312,8 +312,7 @@ S_mro_get_linear_isa_dfs(pTHX_ HV *stash, U32 level)
 			sv_upgrade(val, SVt_PV);
 			SvPV_set(val, HEK_KEY(share_hek_hek(key)));
 			SvCUR_set(val, HEK_LEN(key));
-			SvREADONLY_on(val);
-			SvFAKE_on(val);
+			SvIsCOW_on(val);
 			SvPOK_on(val);
 			if (HEK_UTF8(key))
 			    SvUTF8_on(val);
@@ -544,6 +543,9 @@ Perl_mro_isa_changed_in(pTHX_ HV* stash)
 
     /* Changes to @ISA might turn overloading on */
     HvAMAGIC_on(stash);
+
+    /* DESTROY can be cached in SvSTASH. */
+    if (!SvOBJECT(stash)) SvSTASH(stash) = NULL;
 
     /* Iterate the isarev (classes that are our children),
        wiping out their linearization, method and isa caches
@@ -1327,6 +1329,9 @@ Perl_mro_method_changed_in(pTHX_ HV *stash)
 
     /* Inc the package generation, since a local method changed */
     HvMROMETA(stash)->pkg_gen++;
+
+    /* DESTROY can be cached in SvSTASH. */
+    if (!SvOBJECT(stash)) SvSTASH(stash) = NULL;
 
     /* If stash is UNIVERSAL, or one of UNIVERSAL's parents,
        invalidate all method caches globally */

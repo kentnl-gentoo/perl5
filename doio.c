@@ -623,9 +623,9 @@ Perl_do_openn(pTHX_ GV *gv, register const char *oname, I32 len, int as_raw,
                 char newname[FILENAME_MAX+1];
                 if (PerlIO_getname(fp, newname)) {
                     if (fd == PerlIO_fileno(PerlIO_stdout()))
-                        Perl_vmssetuserlnm(aTHX_ "SYS$OUTPUT", newname);
+                        vmssetuserlnm("SYS$OUTPUT", newname);
                     if (fd == PerlIO_fileno(PerlIO_stderr()))
-                        Perl_vmssetuserlnm(aTHX_ "SYS$ERROR",  newname);
+                        vmssetuserlnm("SYS$ERROR", newname);
                 }
 	    }
 #endif
@@ -806,7 +806,7 @@ Perl_nextargv(pTHX_ register GV *gv)
 		    }
 #endif
 #ifdef HAS_RENAME
-#if !defined(DOSISH) && !defined(__CYGWIN__) && !defined(EPOC)
+#if !defined(DOSISH) && !defined(__CYGWIN__)
 		    if (PerlLIO_rename(PL_oldname,SvPVX_const(sv)) < 0) {
 			Perl_ck_warner_d(aTHX_ packWARN(WARN_INPLACE),
 					 "Can't rename %s to %"SVf": %s, skipping file",
@@ -1599,11 +1599,11 @@ Perl_apply(pTHX_ I32 type, register SV **mark, register SV **sp)
 
 #define APPLY_TAINT_PROPER() \
     STMT_START {							\
-	if (PL_tainted) { TAINT_PROPER(what); }				\
+	if (TAINT_get) { TAINT_PROPER(what); }				\
     } STMT_END
 
     /* This is a first heuristic; it doesn't catch tainting magic. */
-    if (PL_tainting) {
+    if (TAINTING_get) {
 	while (++mark <= sp) {
 	    if (SvTAINTED(*mark)) {
 		TAINT;

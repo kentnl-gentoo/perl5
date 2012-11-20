@@ -526,13 +526,13 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 	    bool needs_store;
 	    hv_magic_check (hv, &needs_copy, &needs_store);
 	    if (needs_copy) {
-		const bool save_taint = PL_tainted;
+		const bool save_taint = TAINT_get; /* Unused var warning under NO_TAINT_SUPPORT */
 		if (keysv || is_utf8) {
 		    if (!keysv) {
 			keysv = newSVpvn_utf8(key, klen, TRUE);
 		    }
-		    if (PL_tainting)
-			PL_tainted = SvTAINTED(keysv);
+		    if (TAINTING_get)
+			TAINT_set(SvTAINTED(keysv));
 		    keysv = sv_2mortal(newSVsv(keysv));
 		    mg_copy(MUTABLE_SV(hv), val, (char*)keysv, HEf_SVKEY);
 		} else {
@@ -613,18 +613,12 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 	}
     }
 
-    if (HvREHASH(hv) || (!hash && !(keysv && (SvIsCOW_shared_hash(keysv)))))
-	PERL_HASH_INTERNAL_(hash, key, klen, HvREHASH(hv));
-    else if (!hash)
-	hash = SvSHARED_HASH(keysv);
-
-    /* We don't have a pointer to the hv, so we have to replicate the
-       flag into every HEK, so that hv_iterkeysv can see it.
-       And yes, you do need this even though you are not "storing" because
-       you can flip the flags below if doing an lval lookup.  (And that
-       was put in to give the semantics Andreas was expecting.)  */
-    if (HvREHASH(hv))
-	flags |= HVhek_REHASH;
+    if (!hash) {
+        if (keysv && (SvIsCOW_shared_hash(keysv)))
+            hash = SvSHARED_HASH(keysv);
+        else
+            PERL_HASH(hash, key, klen);
+    }
 
     masked_flags = (flags & HVhek_MASK);
 
@@ -813,7 +807,7 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 		   as we repeatedly double the number of buckets on every
 		   entry. Linear search feels a less worse thing to do.  */
 	    hsplit(hv);
-	} else if(!HvREHASH(hv)) {
+        } else {
 	    U32 n_links = 1;
 
 	    while ((counter = HeNEXT(counter)))
@@ -978,10 +972,12 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
         HvHASKFLAGS_on(MUTABLE_SV(hv));
     }
 
-    if (HvREHASH(hv) || (!hash && !(keysv && (SvIsCOW_shared_hash(keysv)))))
-	PERL_HASH_INTERNAL_(hash, key, klen, HvREHASH(hv));
-    else if (!hash)
-	hash = SvSHARED_HASH(keysv);
+    if (!hash) {
+        if (keysv && (SvIsCOW_shared_hash(keysv)))
+            hash = SvSHARED_HASH(keysv);
+        else
+            PERL_HASH(hash, key, klen);
+    }
 
     masked_flags = (k_flags & HVhek_MASK);
 
@@ -1118,8 +1114,6 @@ S_hsplit(pTHX_ HV *hv)
     I32 i;
     char *a = (char*) HvARRAY(hv);
     HE **aep;
-    int longest_chain = 0;
-    int was_shared;
 
     PERL_ARGS_ASSERT_HSPLIT;
 
@@ -1166,8 +1160,6 @@ S_hsplit(pTHX_ HV *hv)
     aep = (HE**)a;
 
     for (i=0; i<oldsize; i++,aep++) {
-	int left_length = 0;
-	int right_length = 0;
 	HE **oentry = aep;
 	HE *entry = *aep;
 	HE **bep;
@@ -1180,91 +1172,16 @@ S_hsplit(pTHX_ HV *hv)
 		*oentry = HeNEXT(entry);
 		HeNEXT(entry) = *bep;
 		*bep = entry;
-		right_length++;
 	    }
 	    else {
 		oentry = &HeNEXT(entry);
-		left_length++;
 	    }
 	    entry = *oentry;
 	} while (entry);
 	/* I think we don't actually need to keep track of the longest length,
 	   merely flag if anything is too long. But for the moment while
 	   developing this code I'll track it.  */
-	if (left_length > longest_chain)
-	    longest_chain = left_length;
-	if (right_length > longest_chain)
-	    longest_chain = right_length;
     }
-
-
-    /* Pick your policy for "hashing isn't working" here:  */
-    if (longest_chain <= HV_MAX_LENGTH_BEFORE_SPLIT /* split worked?  */
-	|| HvREHASH(hv)) {
-	return;
-    }
-
-    if (hv == PL_strtab) {
-	/* Urg. Someone is doing something nasty to the string table.
-	   Can't win.  */
-	return;
-    }
-
-    /* Awooga. Awooga. Pathological data.  */
-    /*PerlIO_printf(PerlIO_stderr(), "%p %d of %d with %d/%d buckets\n", (void*)hv,
-      longest_chain, HvTOTALKEYS(hv), HvFILL(hv),  1+HvMAX(hv));*/
-
-    ++newsize;
-    Newxz(a, PERL_HV_ARRAY_ALLOC_BYTES(newsize)
-	 + (SvOOK(hv) ? sizeof(struct xpvhv_aux) : 0), char);
-    if (SvOOK(hv)) {
-	Copy(HvAUX(hv), &a[newsize * sizeof(HE*)], 1, struct xpvhv_aux);
-    }
-
-    was_shared = HvSHAREKEYS(hv);
-
-    HvSHAREKEYS_off(hv);
-    HvREHASH_on(hv);
-
-    aep = HvARRAY(hv);
-
-    for (i=0; i<newsize; i++,aep++) {
-	HE *entry = *aep;
-	while (entry) {
-	    /* We're going to trash this HE's next pointer when we chain it
-	       into the new hash below, so store where we go next.  */
-	    HE * const next = HeNEXT(entry);
-	    UV hash;
-	    HE **bep;
-
-	    /* Rehash it */
-	    PERL_HASH_INTERNAL(hash, HeKEY(entry), HeKLEN(entry));
-
-	    if (was_shared) {
-		/* Unshare it.  */
-		HEK * const new_hek
-		    = save_hek_flags(HeKEY(entry), HeKLEN(entry),
-				     hash, HeKFLAGS(entry));
-		unshare_hek (HeKEY_hek(entry));
-		HeKEY_hek(entry) = new_hek;
-	    } else {
-		/* Not shared, so simply write the new hash in. */
-		HeHASH(entry) = hash;
-	    }
-	    /*PerlIO_printf(PerlIO_stderr(), "%d ", HeKFLAGS(entry));*/
-	    HEK_REHASH_on(HeKEY_hek(entry));
-	    /*PerlIO_printf(PerlIO_stderr(), "%d\n", HeKFLAGS(entry));*/
-
-	    /* Copy oentry to the correct new chain.  */
-	    bep = ((HE**)a) + (hash & (I32) xhv->xhv_max);
-	    HeNEXT(entry) = *bep;
-	    *bep = entry;
-
-	    entry = next;
-	}
-    }
-    Safefree (HvARRAY(hv));
-    HvARRAY(hv) = (HE **)a;
 }
 
 void
@@ -1606,7 +1523,6 @@ Perl_hv_clear(pTHX_ HV *hv)
 	    mg_clear(MUTABLE_SV(hv));
 
 	HvHASKFLAGS_off(hv);
-	HvREHASH_off(hv);
     }
     if (SvOOK(hv)) {
         if(HvENAME_get(hv))
@@ -2478,9 +2394,6 @@ Perl_hv_iternext_flags(pTHX_ HV *hv, I32 flags)
 	hv_free_ent(hv, oldentry);
     }
 
-    /*if (HvREHASH(hv) && entry && !HeKREHASH(entry))
-      PerlIO_printf(PerlIO_stderr(), "Awooga %p %p\n", (void*)hv, (void*)entry);*/
-
     iter->xhv_eiter = entry; /* HvEITER(hv) = entry */
     return entry;
 }
@@ -2725,6 +2638,7 @@ Perl_share_hek(pTHX_ const char *str, I32 len, register U32 hash)
          we should flag that it needs upgrading on keys or each.  Also flag
          that we need share_hek_flags to free the string.  */
       if (str != save) {
+          dVAR;
           PERL_HASH(hash, str, len);
           flags |= HVhek_WASUTF8 | HVhek_FREEKEY;
       }

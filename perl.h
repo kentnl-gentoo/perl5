@@ -91,8 +91,8 @@
 /* Any stack-challenged places.  The limit varies (and often
  * is configurable), but using more than a kilobyte of stack
  * is usually dubious in these systems. */
-#if defined(EPOC) || defined(__SYMBIAN32__)
-/* EPOC/Symbian: need to work around the SDK features. *
+#if defined(__SYMBIAN32__)
+/* Symbian: need to work around the SDK features. *
  * On WINS: MS VC5 generates calls to _chkstk,         *
  * if a "large" stack frame is allocated.              *
  * gcc on MARM does not generate calls like these.     */
@@ -172,6 +172,7 @@
 #  define tTHX	PerlInterpreter*
 #  define pTHX  register tTHX my_perl PERL_UNUSED_DECL
 #  define aTHX	my_perl
+#  define aTHXa(a) aTHX = (tTHX)a
 #  ifdef PERL_GLOBAL_STRUCT
 #    define dTHXa(a)	dVAR; pTHX = (tTHX)a
 #  else
@@ -364,6 +365,7 @@
 #  define pTHX_
 #  define aTHX
 #  define aTHX_
+#  define aTHXa(a)      NOOP
 #  define dTHXa(a)	dNOOP
 #  define dTHX		dNOOP
 #  define pTHX_1	1	
@@ -514,11 +516,11 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 #define DOSISH 1
 #endif
 
-#if defined(__STDC__) || defined(_AIX) || defined(__stdc__) || defined(__cplusplus) || defined(EPOC) || defined(NETWARE) || defined(__SYMBIAN32__)
+#if defined(__STDC__) || defined(_AIX) || defined(__stdc__) || defined(__cplusplus) || defined(NETWARE) || defined(__SYMBIAN32__)
 # define STANDARD_C 1
 #endif
 
-#if defined(__cplusplus) || defined(WIN32) || defined(__sgi) || defined(__EMX__) || defined(__DGUX) || defined(EPOC) || defined(__QNX__) || defined(NETWARE) || defined(PERL_MICRO)
+#if defined(__cplusplus) || defined(WIN32) || defined(__sgi) || defined(__EMX__) || defined(__DGUX) || defined(__QNX__) || defined(NETWARE) || defined(PERL_MICRO)
 # define DONT_DECLARE_STD 1
 #endif
 
@@ -528,11 +530,54 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 #   define VOL
 #endif
 
-#define TAINT		(PL_tainted = TRUE)
-#define TAINT_NOT	(PL_tainted = FALSE)
-#define TAINT_IF(c)	if (c) { PL_tainted = TRUE; }
-#define TAINT_ENV()	if (PL_tainting) { taint_env(); }
-#define TAINT_PROPER(s)	if (PL_tainting) { taint_proper(NULL, s); }
+/* By compiling a perl with -DNO_TAINT_SUPPORT or -DSILENT_NO_TAINT_SUPPORT,
+ * you get a perl without taint support, but doubtlessly with a lesser
+ * degree of support. Do not do so unless you know exactly what it means
+ * technically, have a good reason to do so, and know exactly how the
+ * perl will be used. perls with -DSILENT_NO_TAINT_SUPPORT are considered
+ * a potential security risk due to flat out ignoring the security-relevant
+ * taint flags. This being said, a perl without taint support compiled in
+ * has marginal run-time performance benefits.
+ * SILENT_NO_TAINT_SUPPORT implies NO_TAINT_SUPPORT.
+ * SILENT_NO_TAINT_SUPPORT is the same as NO_TAINT_SUPPORT except it
+ * silently ignores -t/-T instead of throwing an exception.
+ *
+ * DANGER! Using NO_TAINT_SUPPORT or SILENT_NO_TAINT_SUPPORT
+ *         voids your nonexistent warranty!
+ */
+#if SILENT_NO_TAINT_SUPPORT && !defined(NO_TAINT_SUPPORT)
+#  define NO_TAINT_SUPPORT 1
+#endif
+
+/* NO_TAINT_SUPPORT can be set to transform virtually all taint-related
+ * operations into no-ops for a very modest speed-up. Enable only if you
+ * know what you're doing: tests and CPAN modules' tests are bound to fail.
+ */
+#if NO_TAINT_SUPPORT
+#   define TAINT		NOOP
+#   define TAINT_NOT		NOOP
+#   define TAINT_IF(c)		NOOP
+#   define TAINT_ENV()		NOOP
+#   define TAINT_PROPER(s)	NOOP
+#   define TAINT_set(s)		NOOP
+#   define TAINT_get		0
+#   define TAINTING_get		0
+#   define TAINTING_set(s)	NOOP
+#   define TAINT_WARN_get       0
+#   define TAINT_WARN_set(s)    NOOP
+#else
+#   define TAINT		(PL_tainted = TRUE)
+#   define TAINT_NOT	(PL_tainted = FALSE)
+#   define TAINT_IF(c)	if (c) { PL_tainted = TRUE; }
+#   define TAINT_ENV()	if (PL_tainting) { taint_env(); }
+#   define TAINT_PROPER(s)	if (PL_tainting) { taint_proper(NULL, s); }
+#   define TAINT_set(s)		(PL_tainted = (s))
+#   define TAINT_get		(PL_tainted)
+#   define TAINTING_get		(PL_tainting)
+#   define TAINTING_set(s)	(PL_tainting = (s))
+#   define TAINT_WARN_get       (PL_taint_warn)
+#   define TAINT_WARN_set(s)    (PL_taint_warn = (s))
+#endif
 
 /* flags used internally only within pp_subst and pp_substcont */
 #ifdef PERL_CORE
@@ -967,7 +1012,7 @@ EXTERN_C int usleep(unsigned int);
 #define PERL_USES_PL_PIDSTATUS
 #endif
 
-#if !defined(OS2) && !defined(WIN32) && !defined(DJGPP) && !defined(EPOC) && !defined(__SYMBIAN32__)
+#if !defined(OS2) && !defined(WIN32) && !defined(DJGPP) && !defined(__SYMBIAN32__)
 #define PERL_DEFAULT_DO_EXEC3_IMPLEMENTATION
 #endif
 
@@ -2583,11 +2628,6 @@ typedef SV PADNAME;
 #   define ISHISH "vos"
 #endif
 
-#if defined(EPOC)
-#   include "epocish.h"
-#   define ISHISH "epoc"
-#endif
-
 #ifdef __SYMBIAN32__
 #   include "symbian/symbianish.h"
 #   define ISHISH "symbian"
@@ -3985,7 +4025,7 @@ char *crypt (const char*, const char*);
 #    ifndef getenv
 char *getenv (const char*);
 #    endif /* !getenv */
-#    if !defined(HAS_LSEEK_PROTO) && !defined(EPOC) && !defined(__hpux)
+#    if !defined(HAS_LSEEK_PROTO) && !defined(__hpux)
 #      ifdef _FILE_OFFSET_BITS
 #        if _FILE_OFFSET_BITS == 64
 Off_t lseek (int,Off_t,int);
@@ -4224,7 +4264,7 @@ EXTCONST char PL_no_helem_sv[]
   INIT("Modification of non-creatable hash value attempted, subscript \"%"SVf"\"");
 EXTCONST char PL_no_modify[]
   INIT("Modification of a read-only value attempted");
-EXTCONST char PL_no_mem[]
+EXTCONST char PL_no_mem[sizeof("Out of memory!\n")]
   INIT("Out of memory!\n");
 EXTCONST char PL_no_security[]
   INIT("Insecure dependency in %s%s");
@@ -5148,7 +5188,7 @@ PL_valid_types_IVX[]    = { 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0 };
 EXTCONST bool
 PL_valid_types_NVX[]    = { 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0 };
 EXTCONST bool
-PL_valid_types_PVX[]    = { 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1 };
+PL_valid_types_PVX[]    = { 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 1 };
 EXTCONST bool
 PL_valid_types_RV[]     = { 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1 };
 EXTCONST bool
@@ -5195,13 +5235,9 @@ typedef struct am_table_short AMTS;
 #define AMGfallYES	3
 
 #define AMTf_AMAGIC		1
-#define AMTf_OVERLOADED		2
 #define AMT_AMAGIC(amt)		((amt)->flags & AMTf_AMAGIC)
 #define AMT_AMAGIC_on(amt)	((amt)->flags |= AMTf_AMAGIC)
 #define AMT_AMAGIC_off(amt)	((amt)->flags &= ~AMTf_AMAGIC)
-#define AMT_OVERLOADED(amt)	((amt)->flags & AMTf_OVERLOADED)
-#define AMT_OVERLOADED_on(amt)	((amt)->flags |= AMTf_OVERLOADED)
-#define AMT_OVERLOADED_off(amt)	((amt)->flags &= ~AMTf_OVERLOADED)
 
 #define StashHANDLER(stash,meth)	gv_handler((stash),CAT2(meth,_amg))
 

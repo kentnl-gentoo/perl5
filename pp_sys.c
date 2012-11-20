@@ -387,7 +387,7 @@ PP(pp_glob)
     ENTER_with_name("glob");
 
 #ifndef VMS
-    if (PL_tainting) {
+    if (TAINTING_get) {
 	/*
 	 * The external globbing program may use things we can't control,
 	 * so for security reasons we must assume the worst.
@@ -1096,12 +1096,10 @@ PP(pp_sselect)
 	SvGETMAGIC(sv);
 	if (!SvOK(sv))
 	    continue;
-	if (SvREADONLY(sv)) {
-	    if (SvIsCOW(sv))
+	if (SvIsCOW(sv))
 		sv_force_normal_flags(sv, 0);
-	    if (SvREADONLY(sv) && !(SvPOK(sv) && SvCUR(sv) == 0))
-		Perl_croak_no_modify(aTHX);
-	}
+	if (SvREADONLY(sv) && !(SvPOK(sv) && SvCUR(sv) == 0))
+		Perl_croak_no_modify();
 	if (!SvPOK(sv)) {
 	    if (!SvPOKp(sv))
 		Perl_ck_warner(aTHX_ packWARN(WARN_MISC),
@@ -1515,7 +1513,6 @@ PP(pp_prtf)
 {
     dVAR; dSP; dMARK; dORIGMARK;
     PerlIO *fp;
-    SV *sv;
 
     GV * const gv
 	= (PL_op->op_flags & OPf_STACKED) ? MUTABLE_GV(*++MARK) : PL_defoutgv;
@@ -1540,7 +1537,6 @@ PP(pp_prtf)
 	}
     }
 
-    sv = newSV(0);
     if (!io) {
 	report_evil_fh(gv);
 	SETERRNO(EBADF,RMS_IFI);
@@ -1555,6 +1551,7 @@ PP(pp_prtf)
 	goto just_say_no;
     }
     else {
+	SV *sv = sv_newmortal();
 	do_sprintf(sv, SP - MARK, MARK + 1);
 	if (!do_print(sv, fp))
 	    goto just_say_no;
@@ -1563,13 +1560,11 @@ PP(pp_prtf)
 	    if (PerlIO_flush(fp) == EOF)
 		goto just_say_no;
     }
-    SvREFCNT_dec(sv);
     SP = ORIGMARK;
     PUSHs(&PL_sv_yes);
     RETURN;
 
   just_say_no:
-    SvREFCNT_dec(sv);
     SP = ORIGMARK;
     PUSHs(&PL_sv_undef);
     RETURN;
@@ -1690,10 +1685,6 @@ PP(pp_sysread)
 	/* MSG_TRUNC can give oversized count; quietly lose it */
 	if (count > length)
 	    count = length;
-#ifdef EPOC
-        /* Bogus return without padding */
-	bufsize = sizeof (struct sockaddr_in);
-#endif
 	SvCUR_set(bufsv, count);
 	*SvEND(bufsv) = '\0';
 	(void)SvPOK_only(bufsv);
@@ -2410,10 +2401,6 @@ PP(pp_socket)
     fcntl(fd, F_SETFD, fd > PL_maxsysfd);	/* ensure close-on-exec */
 #endif
 
-#ifdef EPOC
-    setbuf( IoIFP(io), NULL); /* EPOC gets confused about sockets */
-#endif
-
     RETPUSHYES;
 }
 #endif
@@ -2580,10 +2567,6 @@ PP(pp_accept)
     fcntl(fd, F_SETFD, fd > PL_maxsysfd);	/* ensure close-on-exec */
 #endif
 
-#ifdef EPOC
-    len = sizeof (struct sockaddr_in); /* EPOC somehow truncates info */
-    setbuf( IoIFP(nstio), NULL); /* EPOC gets confused about sockets */
-#endif
 #ifdef __SCO_VERSION__
     len = sizeof (struct sockaddr_in); /* OpenUNIX 8 somehow truncates info */
 #endif
@@ -4046,7 +4029,7 @@ PP(pp_fork)
     }
 #endif
     if (childpid < 0)
-	RETSETUNDEF;
+	RETPUSHUNDEF;
     if (!childpid) {
 #ifdef PERL_USES_PL_PIDSTATUS
 	hv_clear(PL_pidstatus);	/* no kids, so don't wait for 'em */
@@ -4063,7 +4046,7 @@ PP(pp_fork)
     PERL_FLUSHALL_FOR_CHILD;
     childpid = PerlProc_fork();
     if (childpid == -1)
-	RETSETUNDEF;
+	RETPUSHUNDEF;
     PUSHi(childpid);
     RETURN;
 #  else
@@ -4141,11 +4124,11 @@ PP(pp_system)
     I32 value;
     int result;
 
-    if (PL_tainting) {
+    if (TAINTING_get) {
 	TAINT_ENV();
 	while (++MARK <= SP) {
 	    (void)SvPV_nolen_const(*MARK);      /* stringify for taint check */
-	    if (PL_tainted)
+	    if (TAINT_get)
 		break;
 	}
 	MARK = ORIGMARK;
@@ -4288,11 +4271,11 @@ PP(pp_exec)
     dVAR; dSP; dMARK; dORIGMARK; dTARGET;
     I32 value;
 
-    if (PL_tainting) {
+    if (TAINTING_get) {
 	TAINT_ENV();
 	while (++MARK <= SP) {
 	    (void)SvPV_nolen_const(*MARK);      /* stringify for taint check */
-	    if (PL_tainted)
+	    if (TAINT_get)
 		break;
 	}
 	MARK = ORIGMARK;
@@ -5438,7 +5421,7 @@ PP(pp_syscall)
     I32 i = 0;
     IV retval = -1;
 
-    if (PL_tainting) {
+    if (TAINTING_get) {
 	while (++MARK <= SP) {
 	    if (SvTAINTED(*MARK)) {
 		TAINT;

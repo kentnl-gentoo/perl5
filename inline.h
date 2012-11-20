@@ -21,6 +21,15 @@ S_CvDEPTHp(const CV * const sv)
     return &((XPVCV*)SvANY(sv))->xcv_depth;
 }
 
+/* ----------------------------- regexp.h ----------------------------- */
+
+PERL_STATIC_INLINE struct regexp *
+S_ReANY(const REGEXP * const re)
+{
+    assert(isREGEXP(re));
+    return re->sv_u.svu_rx;
+}
+
 /* ------------------------------- sv.h ------------------------------- */
 
 PERL_STATIC_INLINE SV *
@@ -104,3 +113,12 @@ S_sv_or_pv_pos_u2b(pTHX_ SV *sv, const char *pv, STRLEN pos, STRLEN *lenp)
     return sv_pos_u2b_flags(sv,pos,lenp,SV_CONST_RETURN);
 }
 #endif
+
+/* ------------------------------- handy.h ------------------------------- */
+
+/* saves machine code for a common noreturn idiom typically used in Newx*() */
+static void
+S_croak_memory_wrap(void)
+{
+    Perl_croak_nocontext("%s",PL_memory_wrap);
+}

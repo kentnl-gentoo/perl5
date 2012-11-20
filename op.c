@@ -303,7 +303,8 @@ Perl_Slab_Free(pTHX_ void *op)
     PERL_ARGS_ASSERT_SLAB_FREE;
 
     if (!o->op_slabbed) {
-	PerlMemShared_free(op);
+        if (!o->op_static)
+	    PerlMemShared_free(op);
 	return;
     }
 
@@ -379,9 +380,8 @@ Perl_opslab_force_free(pTHX_ OPSLAB *slab)
 		 )
 	    ) {
 		assert(slot->opslot_op.op_slabbed);
-		slab->opslab_refcnt++; /* op_free may free slab */
 		op_free(&slot->opslot_op);
-		if (!--slab->opslab_refcnt) goto free;
+		if (slab->opslab_refcnt == 1) goto free;
 	    }
 	}
     } while ((slab2 = slab2->opslab_next));
@@ -390,6 +390,8 @@ Perl_opslab_force_free(pTHX_ OPSLAB *slab)
 #ifdef DEBUGGING
 	assert(savestack_count == slab->opslab_refcnt-1);
 #endif
+	/* Remove the CV’s reference count. */
+	slab->opslab_refcnt--;
 	return;
     }
    free:
@@ -1760,7 +1762,7 @@ S_finalize_op(pTHX_ OP* o)
 		/* If op_sv is already a PADTMP/MY then it is being used by
 		 * some pad, so make a copy. */
 		sv_setsv(PAD_SVl(ix),cSVOPo->op_sv);
-		SvREADONLY_on(PAD_SVl(ix));
+		if (!SvIsCOW(PAD_SVl(ix))) SvREADONLY_on(PAD_SVl(ix));
 		SvREFCNT_dec(cSVOPo->op_sv);
 	    }
 	    else if (o->op_type != OP_METHOD_NAMED
@@ -1780,7 +1782,7 @@ S_finalize_op(pTHX_ OP* o)
 		SvPADTMP_on(cSVOPo->op_sv);
 		PAD_SETSV(ix, cSVOPo->op_sv);
 		/* XXX I don't know how this isn't readonly already. */
-		SvREADONLY_on(PAD_SVl(ix));
+		if (!SvIsCOW(PAD_SVl(ix))) SvREADONLY_on(PAD_SVl(ix));
 	    }
 	    cSVOPo->op_sv = NULL;
 	    o->op_targ = ix;
@@ -1801,7 +1803,7 @@ S_finalize_op(pTHX_ OP* o)
 
 	/* Make the CONST have a shared SV */
 	svp = cSVOPx_svp(((BINOP*)o)->op_last);
-	if ((!SvFAKE(sv = *svp) || !SvREADONLY(sv))
+	if ((!SvIsCOW(sv = *svp))
 	    && SvTYPE(sv) < SVt_PVMG && !SvROK(sv)) {
 	    key = SvPV_const(sv, keylen);
 	    lexname = newSVpvn_share(key,
@@ -1890,6 +1892,7 @@ S_finalize_op(pTHX_ OP* o)
 	}
 	break;
     }
+
     case OP_SUBST: {
 	if (cPMOPo->op_pmreplrootu.op_pmreplroot)
 	    finalize_op(cPMOPo->op_pmreplrootu.op_pmreplroot);
@@ -2829,7 +2832,7 @@ Perl_op_scope(pTHX_ OP *o)
 {
     dVAR;
     if (o) {
-	if (o->op_flags & OPf_PARENS || PERLDB_NOOPT || PL_tainting) {
+	if (o->op_flags & OPf_PARENS || PERLDB_NOOPT || TAINTING_get) {
 	    o = op_prepend_elem(OP_LINESEQ, newOP(OP_ENTER, 0), o);
 	    o->op_type = OP_LEAVE;
 	    o->op_ppaddr = PL_ppaddr[OP_LEAVE];
@@ -3795,7 +3798,7 @@ Perl_mad_free(pTHX_ MADPROP* mp)
     case MAD_NULL:
 	break;
     case MAD_PV:
-	Safefree((char*)mp->mad_val);
+	Safefree(mp->mad_val);
 	break;
     case MAD_OP:
 	if (mp->mad_vlen)	/* vlen holds "strong/weak" boolean */
@@ -4643,7 +4646,7 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, bool isreg, I32 floor)
 		/* handle the implicit sub{} wrapped round the qr/(?{..})/ */
 		SvREFCNT_inc_simple_void(PL_compcv);
 		cv = newATTRSUB(floor, 0, NULL, NULL, qr);
-		((struct regexp *)SvANY(re))->qr_anoncv = cv;
+		ReANY(re)->qr_anoncv = cv;
 
 		/* attach the anon CV to the pad so that
 		 * pad_fixup_inner_anons() can find it */
@@ -4675,8 +4678,8 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, bool isreg, I32 floor)
 	 * preceding stacking ops;
 	 * OP_REGCRESET is there to reset taint before executing the
 	 * stacking ops */
-	if (pm->op_pmflags & PMf_KEEP || PL_tainting)
-	    expr = newUNOP((PL_tainting ? OP_REGCRESET : OP_REGCMAYBE),0,expr);
+	if (pm->op_pmflags & PMf_KEEP || TAINTING_get)
+	    expr = newUNOP((TAINTING_get ? OP_REGCRESET : OP_REGCMAYBE),0,expr);
 
 	if (pm->op_pmflags & PMf_HAS_CV) {
 	    /* we have a runtime qr with literal code. This means
@@ -6967,6 +6970,8 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 
     if (PL_parser && PL_parser->error_count) {
 	op_free(block);
+	SvREFCNT_dec(PL_compcv);
+	PL_compcv = 0;
 	goto done;
     }
 
@@ -7367,6 +7372,9 @@ Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 
     if (ec) {
 	op_free(block);
+	if (name) SvREFCNT_dec(PL_compcv);
+	else cv = PL_compcv;
+	PL_compcv = 0;
 	if (name && block) {
 	    const char *s = strrchr(name, ':');
 	    s = s ? s+1 : name;
@@ -7382,7 +7390,6 @@ Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 		}
 	    }
 	}
-	cv = PL_compcv;
 	goto done;
     }
 
@@ -7619,7 +7626,9 @@ Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
     if (attrs) {
 	/* Need to do a C<use attributes $stash_of_cv,\&cv,@attrs>. */
 	HV *stash = name && GvSTASH(CvGV(cv)) ? GvSTASH(CvGV(cv)) : PL_curstash;
+	if (!name) SAVEFREESV(cv);
 	apply_attrs(stash, MUTABLE_SV(cv), attrs);
+	if (!name) SvREFCNT_inc_simple_void_NN(cv);
     }
 
     if (block && has_name) {
@@ -9011,12 +9020,14 @@ Perl_ck_glob(pTHX_ OP *o)
 	LEAVE;
     }
 #endif /* !PERL_EXTERNAL_GLOB */
-    gv = newGVgen("main");
+    gv = (GV *)newSV(0);
+    gv_init(gv, 0, "", 0, 0);
     gv_IOadd(gv);
 #ifndef PERL_EXTERNAL_GLOB
     sv_setiv(GvSVn(gv),PL_glob_index++);
 #endif
     op_append_elem(OP_GLOB, o, newGVOP(OP_GV, 0, gv));
+    SvREFCNT_dec(gv); /* newGVOP increased it */
     scalarkids(o);
     return o;
 }
@@ -9088,9 +9099,9 @@ Perl_ck_index(pTHX_ OP *o)
 	if (kid)
 	    kid = kid->op_sibling;			/* get past "big" */
 	if (kid && kid->op_type == OP_CONST) {
-	    const bool save_taint = PL_tainted;
+	    const bool save_taint = TAINT_get; /* accepted unused var warning if NO_TAINT_SUPPORT */
 	    fbm_compile(((SVOP*)kid)->op_sv, 0);
-	    PL_tainted = save_taint;
+	    TAINT_set(save_taint);
 	}
     }
     return ck_fun(o);
@@ -9333,7 +9344,7 @@ Perl_ck_method(pTHX_ OP *o)
 	const char * const method = SvPVX_const(sv);
 	if (!(strchr(method, ':') || strchr(method, '\''))) {
 	    OP *cmop;
-	    if (!SvREADONLY(sv) || !SvFAKE(sv)) {
+	    if (!SvIsCOW(sv)) {
 		sv = newSVpvn_share(method, SvUTF8(sv) ? -(I32)SvCUR(sv) : (I32)SvCUR(sv), 0);
 	    }
 	    else {
@@ -9458,14 +9469,9 @@ Perl_ck_require(pTHX_ OP *o)
 	    const char *end;
 
 	    if (was_readonly) {
-		if (SvFAKE(sv)) {
-		    sv_force_normal_flags(sv, 0);
-		    assert(!SvREADONLY(sv));
-		    was_readonly = 0;
-		} else {
 		    SvREADONLY_off(sv);
-		}
 	    }   
+	    if (SvIsCOW(sv)) sv_force_normal_flags(sv, 0);
 
 	    s = SvPVX(sv);
 	    len = SvCUR(sv);
@@ -10532,7 +10538,7 @@ Perl_ck_svconst(pTHX_ OP *o)
 {
     PERL_ARGS_ASSERT_CK_SVCONST;
     PERL_UNUSED_CONTEXT;
-    SvREADONLY_on(cSVOPo->op_sv);
+    if (!SvIsCOW(cSVOPo->op_sv)) SvREADONLY_on(cSVOPo->op_sv);
     return o;
 }
 
@@ -10783,6 +10789,7 @@ Perl_rpeep(pTHX_ register OP *o)
 {
     dVAR;
     OP* oldop = NULL;
+    OP* oldoldop = NULL;
     OP* defer_queue[MAX_DEFERRED]; /* small queue of deferred branches */
     int defer_base = 0;
     int defer_ix = -1;
@@ -10906,6 +10913,247 @@ Perl_rpeep(pTHX_ register OP *o)
 		continue;
 	    }
 	    break;
+
+        case OP_PUSHMARK:
+
+            /* Convert a series of PAD ops for my vars plus support into a
+             * single padrange op. Basically
+             *
+             *    pushmark -> pad[ahs]v -> pad[ahs]?v -> ... -> (list) -> rest
+             *
+             * becomes, depending on circumstances, one of
+             *
+             *    padrange  ----------------------------------> (list) -> rest
+             *    padrange  --------------------------------------------> rest
+             *
+             * where all the pad indexes are sequential and of the same type
+             * (INTRO or not).
+             * We convert the pushmark into a padrange op, then skip
+             * any other pad ops, and possibly some trailing ops.
+             * Note that we don't null() the skipped ops, to make it
+             * easier for Deparse to undo this optimisation (and none of
+             * the skipped ops are holding any resourses). It also makes
+             * it easier for find_uninit_var(), as it can just ignore
+             * padrange, and examine the original pad ops.
+             */
+        {
+            OP *p;
+            OP *followop = NULL; /* the op that will follow the padrange op */
+            U8 count = 0;
+            U8 intro = 0;
+            PADOFFSET base = 0; /* init only to stop compiler whining */
+            U8 gimme       = 0; /* init only to stop compiler whining */
+            bool defav = 0;  /* seen (...) = @_ */
+            bool reuse = 0;  /* reuse an existing padrange op */
+
+            /* look for a pushmark -> gv[_] -> rv2av */
+
+            {
+                GV *gv;
+                OP *rv2av, *q;
+                p = o->op_next;
+                if (   p->op_type == OP_GV
+                    && (gv = cGVOPx_gv(p))
+                    && GvNAMELEN_get(gv) == 1
+                    && *GvNAME_get(gv) == '_'
+                    && GvSTASH(gv) == PL_defstash
+                    && (rv2av = p->op_next)
+                    && rv2av->op_type == OP_RV2AV
+                    && !(rv2av->op_flags & OPf_REF)
+                    && !(rv2av->op_private & (OPpLVAL_INTRO|OPpMAYBE_LVSUB))
+                    && ((rv2av->op_flags & OPf_WANT) == OPf_WANT_LIST)
+                    && o->op_sibling == rv2av /* these two for Deparse */
+                    && cUNOPx(rv2av)->op_first == p
+                ) {
+                    q = rv2av->op_next;
+                    if (q->op_type == OP_NULL)
+                        q = q->op_next;
+                    if (q->op_type == OP_PUSHMARK) {
+                        defav = 1;
+                        p = q;
+                    }
+                }
+            }
+            if (!defav) {
+                /* To allow Deparse to pessimise this, it needs to be able
+                 * to restore the pushmark's original op_next, which it
+                 * will assume to be the same as op_sibling. */
+                if (o->op_next != o->op_sibling)
+                    break;
+                p = o;
+            }
+
+            /* scan for PAD ops */
+
+            for (p = p->op_next; p; p = p->op_next) {
+                if (p->op_type == OP_NULL)
+                    continue;
+
+                if ((     p->op_type != OP_PADSV
+                       && p->op_type != OP_PADAV
+                       && p->op_type != OP_PADHV
+                    )
+                      /* any private flag other than INTRO? e.g. STATE */
+                   || (p->op_private & ~OPpLVAL_INTRO)
+                )
+                    break;
+
+                /* let $a[N] potentially be optimised into ALEMFAST_LEX
+                 * instead */
+                if (   p->op_type == OP_PADAV
+                    && p->op_next
+                    && p->op_next->op_type == OP_CONST
+                    && p->op_next->op_next
+                    && p->op_next->op_next->op_type == OP_AELEM
+                )
+                    break;
+
+                /* for 1st padop, note what type it is and the range
+                 * start; for the others, check that it's the same type
+                 * and that the targs are contiguous */
+                if (count == 0) {
+                    intro = (p->op_private & OPpLVAL_INTRO);
+                    base = p->op_targ;
+                    gimme = (p->op_flags & OPf_WANT);
+                }
+                else {
+                    if ((p->op_private & OPpLVAL_INTRO) != intro)
+                        break;
+                    /* Note that you'd normally  expect targs to be
+                     * contiguous in my($a,$b,$c), but that's not the case
+                     * when external modules start doing things, e.g.
+                     i* Function::Parameters */
+                    if (p->op_targ != base + count)
+                        break;
+                    assert(p->op_targ == base + count);
+                    /* all the padops should be in the same context */
+                    if (gimme != (p->op_flags & OPf_WANT))
+                        break;
+                }
+
+                /* for AV, HV, only when we're not flattening */
+                if (   p->op_type != OP_PADSV
+                    && gimme != OPf_WANT_VOID
+                    && !(p->op_flags & OPf_REF)
+                )
+                    break;
+
+                if (count >= OPpPADRANGE_COUNTMASK)
+                    break;
+
+                /* there's a biggest base we can fit into a
+                 * SAVEt_CLEARPADRANGE in pp_padrange */
+                if (intro && base >
+                        (UV_MAX >> (OPpPADRANGE_COUNTSHIFT+SAVE_TIGHT_SHIFT)))
+                    break;
+
+                /* Success! We've got another valid pad op to optimise away */
+                count++;
+                followop = p->op_next;
+            }
+
+            if (count < 1)
+                break;
+
+            /* pp_padrange in specifically compile-time void context
+             * skips pushing a mark and lexicals; in all other contexts
+             * (including unknown till runtime) it pushes a mark and the
+             * lexicals. We must be very careful then, that the ops we
+             * optimise away would have exactly the same effect as the
+             * padrange.
+             * In particular in void context, we can only optimise to
+             * a padrange if see see the complete sequence
+             *     pushmark, pad*v, ...., list, nextstate
+             * which has the net effect of of leaving the stack empty
+             * (for now we leave the nextstate in the execution chain, for
+             * its other side-effects).
+             */
+            assert(followop);
+            if (gimme == OPf_WANT_VOID) {
+                if (followop->op_type == OP_LIST
+                        && gimme == (followop->op_flags & OPf_WANT)
+                        && (   followop->op_next->op_type == OP_NEXTSTATE
+                            || followop->op_next->op_type == OP_DBSTATE))
+                {
+                    followop = followop->op_next; /* skip OP_LIST */
+
+                    /* consolidate two successive my(...);'s */
+
+                    if (   oldoldop
+                        && oldoldop->op_type == OP_PADRANGE
+                        && (oldoldop->op_flags & OPf_WANT) == OPf_WANT_VOID
+                        && (oldoldop->op_private & OPpLVAL_INTRO) == intro
+                        && !(oldoldop->op_flags & OPf_SPECIAL)
+                    ) {
+                        U8 old_count;
+                        assert(oldoldop->op_next == oldop);
+                        assert(   oldop->op_type == OP_NEXTSTATE
+                               || oldop->op_type == OP_DBSTATE);
+                        assert(oldop->op_next == o);
+
+                        old_count
+                            = (oldoldop->op_private & OPpPADRANGE_COUNTMASK);
+                        assert(oldoldop->op_targ + old_count == base);
+
+                        if (old_count < OPpPADRANGE_COUNTMASK - count) {
+                            base = oldoldop->op_targ;
+                            count += old_count;
+                            reuse = 1;
+                        }
+                    }
+
+                    /* if there's any immediately following singleton
+                     * my var's; then swallow them and the associated
+                     * nextstates; i.e.
+                     *    my ($a,$b); my $c; my $d;
+                     * is treated as
+                     *    my ($a,$b,$c,$d);
+                     */
+
+                    while (    ((p = followop->op_next))
+                            && (  p->op_type == OP_PADSV
+                               || p->op_type == OP_PADAV
+                               || p->op_type == OP_PADHV)
+                            && (p->op_flags & OPf_WANT) == OPf_WANT_VOID
+                            && (p->op_private & OPpLVAL_INTRO) == intro
+                            && p->op_next
+                            && (   p->op_next->op_type == OP_NEXTSTATE
+                                || p->op_next->op_type == OP_DBSTATE)
+                            && count < OPpPADRANGE_COUNTMASK
+                    ) {
+                        assert(base + count == p->op_targ);
+                        count++;
+                        followop = p->op_next;
+                    }
+                }
+                else
+                    break;
+            }
+
+            if (reuse) {
+                assert(oldoldop->op_type == OP_PADRANGE);
+                oldoldop->op_next = followop;
+                oldoldop->op_private = (intro | count);
+                o = oldoldop;
+                oldop = NULL;
+                oldoldop = NULL;
+            }
+            else {
+                /* Convert the pushmark into a padrange.
+                 * To make Deparse easier, we guarantee that a padrange was
+                 * *always* formerly a pushmark */
+                assert(o->op_type == OP_PUSHMARK);
+                o->op_next = followop;
+                o->op_type = OP_PADRANGE;
+                o->op_ppaddr = PL_ppaddr[OP_PADRANGE];
+                o->op_targ = base;
+                /* bit 7: INTRO; bit 6..0: count */
+                o->op_private = (intro | count);
+                o->op_flags = ((o->op_flags & ~(OPf_WANT|OPf_SPECIAL))
+                                    | gimme | (defav ? OPf_SPECIAL : 0));
+            }
+            break;
+        }
 
 	case OP_PADAV:
 	case OP_GV:
@@ -11263,6 +11511,7 @@ Perl_rpeep(pTHX_ register OP *o)
 	}
 	    
 	}
+	oldoldop = oldop;
 	oldop = o;
     }
     LEAVE;

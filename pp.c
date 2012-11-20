@@ -84,6 +84,7 @@ PP(pp_padav)
     }
     gimme = GIMME_V;
     if (gimme == G_ARRAY) {
+        /* XXX see also S_pushav in pp_hot.c */
 	const I32 maxarg = AvFILL(MUTABLE_AV(TARG)) + 1;
 	EXTEND(SP, maxarg);
 	if (SvMAGICAL(TARG)) {
@@ -230,7 +231,7 @@ S_rv2gv(pTHX_ SV *sv, const bool vivify_sv, const bool strict,
 		if (vivify_sv && sv != &PL_sv_undef) {
 		    GV *gv;
 		    if (SvREADONLY(sv))
-			Perl_croak_no_modify(aTHX);
+			Perl_croak_no_modify();
 		    if (cUNOP->op_targ) {
 			SV * const namesv = PAD_SV(cUNOP->op_targ);
 			gv = MUTABLE_GV(newSV(0));
@@ -487,7 +488,8 @@ PP(pp_prototype)
 	    if (!code || code == -KEY_CORE)
 		DIE(aTHX_ "Can't find an opnumber for \"%"SVf"\"",
 		    SVfARG(newSVpvn_flags(
-			s+6, SvCUR(TOPs)-6, SvFLAGS(TOPs) & SVf_UTF8
+			s+6, SvCUR(TOPs)-6,
+			(SvFLAGS(TOPs) & SVf_UTF8)|SVs_TEMP
 		    )));
 	    {
 		SV * const sv = core_prototype(NULL, s + 6, code, NULL);
@@ -637,7 +639,12 @@ PP(pp_gelem)
 	switch (*elem) {
 	case 'A':
 	    if (len == 5 && strEQ(second_letter, "RRAY"))
+	    {
 		tmpRef = MUTABLE_SV(GvAV(gv));
+		if (tmpRef && !AvREAL((const AV *)tmpRef)
+		 && AvREIFY((const AV *)tmpRef))
+		    av_reify(MUTABLE_AV(tmpRef));
+	    }
 	    break;
 	case 'C':
 	    if (len == 4 && strEQ(second_letter, "ODE"))
@@ -771,12 +778,10 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 	return;
     }
     else if (SvREADONLY(sv)) {
-        if (SvFAKE(sv)) {
-            /* SV is copy-on-write */
-	    sv_force_normal_flags(sv, 0);
-        }
-        else
-            Perl_croak_no_modify(aTHX);
+            Perl_croak_no_modify();
+    }
+    else if (SvIsCOW(sv)) {
+	sv_force_normal_flags(sv, 0);
     }
 
     if (PL_encoding) {
@@ -1039,7 +1044,7 @@ PP(pp_postinc)
     const bool inc =
 	PL_op->op_type == OP_POSTINC || PL_op->op_type == OP_I_POSTINC;
     if (SvTYPE(TOPs) >= SVt_PVAV || (isGV_with_GP(TOPs) && !SvFAKE(TOPs)))
-	Perl_croak_no_modify(aTHX);
+	Perl_croak_no_modify();
     if (SvROK(TOPs))
 	TARG = sv_newmortal();
     sv_setsv(TARG, TOPs);
@@ -2696,24 +2701,37 @@ extern double drand48 (void);
 
 PP(pp_rand)
 {
-    dVAR; dSP; dTARGET;
-    NV value;
-    if (MAXARG < 1)
-	value = 1.0;
-    else if (!TOPs) {
-	value = 1.0; (void)POPs;
-    }
-    else
-	value = POPn;
-    if (value == 0.0)
-	value = 1.0;
+    dVAR;
     if (!PL_srand_called) {
 	(void)seedDrand01((Rand_seed_t)seed());
 	PL_srand_called = TRUE;
     }
-    value *= Drand01();
-    XPUSHn(value);
-    RETURN;
+    {
+	dSP;
+	NV value;
+	EXTEND(SP, 1);
+    
+	if (MAXARG < 1)
+	    value = 1.0;
+	else {
+	    SV * const sv = POPs;
+	    if(!sv)
+		value = 1.0;
+	    else
+		value = SvNV(sv);
+	}
+    /* 1 of 2 things can be carried through SvNV, SP or TARG, SP was carried */
+	if (value == 0.0)
+	    value = 1.0;
+	{
+	    dTARGET;
+	    PUSHs(TARG);
+	    PUTBACK;
+	    value *= Drand01();
+	    sv_setnv_mg(TARG, value);
+	}
+    }
+    return NORMAL;
 }
 
 PP(pp_srand)
@@ -4804,20 +4822,30 @@ PP(pp_anonlist)
 PP(pp_anonhash)
 {
     dVAR; dSP; dMARK; dORIGMARK;
-    HV* const hv = newHV();
+    HV* const hv = (HV *)sv_2mortal((SV *)newHV());
 
     while (MARK < SP) {
-	SV * const key = *++MARK;
-	SV * const val = newSV(0);
+	SV * const key =
+	    (MARK++, SvGMAGICAL(*MARK) ? sv_mortalcopy(*MARK) : *MARK);
+	SV *val;
 	if (MARK < SP)
-	    sv_setsv(val, *++MARK);
+	{
+	    MARK++;
+	    SvGETMAGIC(*MARK);
+	    val = newSV(0);
+	    sv_setsv(val, *MARK);
+	}
 	else
+	{
 	    Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "Odd number of elements in anonymous hash");
+	    val = newSV(0);
+	}
 	(void)hv_store_ent(hv,key,val,0);
     }
     SP = ORIGMARK;
-    mXPUSHs((PL_op->op_flags & OPf_SPECIAL)
-	    ? newRV_noinc(MUTABLE_SV(hv)) : MUTABLE_SV(hv));
+    if (PL_op->op_flags & OPf_SPECIAL)
+	mXPUSHs(newRV_inc(MUTABLE_SV(hv)));
+    else XPUSHs(MUTABLE_SV(hv));
     RETURN;
 }
 
@@ -5070,11 +5098,14 @@ PP(pp_push)
 	SPAGAIN;
     }
     else {
+	if (SvREADONLY(ary) && MARK < SP) Perl_croak_no_modify();
 	PL_delaymagic = DM_DELAY;
 	for (++MARK; MARK <= SP; MARK++) {
-	    SV * const sv = newSV(0);
+	    SV *sv;
+	    if (*MARK) SvGETMAGIC(*MARK);
+	    sv = newSV(0);
 	    if (*MARK)
-		sv_setsv(sv, *MARK);
+		sv_setsv_nomg(sv, *MARK);
 	    av_store(ary, AvFILLp(ary)+1, sv);
 	}
 	if (PL_delaymagic & DM_ARRAY_ISA)
