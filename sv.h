@@ -286,6 +286,11 @@ and faster.
 =for apidoc Am|void|SvREFCNT_dec|SV* sv
 Decrements the reference count of the given SV.
 
+=for apidoc Am|void|SvREFCNT_dec_NN|SV* sv
+Same as SvREFCNT_dec, but can only be used if you know I<sv>
+is not NULL.  Since we don't have to check the NULLness, it's faster
+and smaller.
+
 =for apidoc Am|svtype|SvTYPE|SV* sv
 Returns the type of the SV.  See C<svtype>.
 
@@ -312,6 +317,7 @@ perform the upgrade if necessary.  See C<svtype>.
 #define SvREFCNT_inc_simple_void_NN(sv)	(void)(++SvREFCNT(MUTABLE_SV(sv)))
 
 #define SvREFCNT_dec(sv)	S_SvREFCNT_dec(aTHX_ MUTABLE_SV(sv))
+#define SvREFCNT_dec_NN(sv)	S_SvREFCNT_dec_NN(aTHX_ MUTABLE_SV(sv))
 
 #define SVTYPEMASK	0xff
 #define SvTYPE(sv)	((svtype)((sv)->sv_flags & SVTYPEMASK))
@@ -321,7 +327,10 @@ perform the upgrade if necessary.  See C<svtype>.
    them all by using a consistent macro.  */
 #define SvIS_FREED(sv)	((sv)->sv_flags == SVTYPEMASK)
 
-#define SvUPGRADE(sv, mt) (SvTYPE(sv) >= (mt) || (sv_upgrade(sv, mt), 1))
+/* this is defined in this peculiar way to avoid compiler warnings.
+ * See the <20121213131428.GD1842@iabyn.com> thread in p5p */
+#define SvUPGRADE(sv, mt) \
+    ((void)(SvTYPE(sv) >= (mt) || (sv_upgrade(sv, mt),1)))
 
 #define SVf_IOK		0x00000100  /* has valid public integer value */
 #define SVf_NOK		0x00000200  /* has valid public numeric value */
@@ -751,7 +760,12 @@ C<SvIV_set> instead of the lvalue assignment to C<SvIVX>.
 Set the value of the NV pointer in sv to val.  See C<SvIV_set>.
 
 =for apidoc Am|void|SvPV_set|SV* sv|char* val
-Set the value of the PV pointer in sv to val.  See C<SvIV_set>.
+Set the value of the PV pointer in sv to val.  See also C<SvIV_set>.
+
+Beware that the existing pointer may be involved in copy-on-write or other
+mischief, so do C<SvOOK_off(sv)> and use C<sv_force_normal> or
+C<SvPV_force> (or check the SvIsCOW flag) first to make sure this
+modification is safe.
 
 =for apidoc Am|void|SvUV_set|SV* sv|UV val
 Set the value of the UV pointer in sv to val.  See C<SvIV_set>.
@@ -1708,6 +1722,8 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>.
 
 #define SvTRUE(sv)        ((sv) && (SvGMAGICAL(sv) ? sv_2bool(sv) : SvTRUE_common(sv, sv_2bool_nomg(sv))))
 #define SvTRUE_nomg(sv)   ((sv) && (                                SvTRUE_common(sv, sv_2bool_nomg(sv))))
+#define SvTRUE_NN(sv)              (SvGMAGICAL(sv) ? sv_2bool(sv) : SvTRUE_common(sv, sv_2bool_nomg(sv)))
+#define SvTRUE_nomg_NN(sv) (                                        SvTRUE_common(sv, sv_2bool_nomg(sv)))
 #define SvTRUE_common(sv,fallback) (			\
       !SvOK(sv)						\
 	? 0						\
@@ -1731,11 +1747,6 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>.
 #  define SvPVbytex_nolen(sv) ({SV *_sv = (sv); SvPVbyte_nolen(_sv); })
 #  define SvTRUEx(sv)      ({SV *_sv = (sv); SvTRUE(_sv); })
 #  define SvTRUEx_nomg(sv) ({SV *_sv = (sv); SvTRUE_nomg(_sv); })
-#  define SvPVXtrue(sv)						\
-    ({XPV *nxpv;						\
-     (nxpv = (XPV*)SvANY(sv))					\
-      && (nxpv->xpv_cur > 1					\
-	  || (nxpv->xpv_cur && *(sv)->sv_u.svu_pv != '0'));})
 
 #else /* __GNUC__ */
 
@@ -1754,11 +1765,18 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>.
 #  define SvPVbytex_nolen(sv) ((PL_Sv = (sv)), SvPVbyte_nolen(PL_Sv))
 #  define SvTRUEx(sv)      ((PL_Sv = (sv)), SvTRUE(PL_Sv))
 #  define SvTRUEx_nomg(sv) ((PL_Sv = (sv)), SvTRUE_nomg(PL_Sv))
-#  define SvPVXtrue(sv)						\
-    ((PL_Xpv = (XPV*)SvANY(PL_Sv = (sv)))			\
-     && (PL_Xpv->xpv_cur > 1					\
-	 || (PL_Xpv->xpv_cur && *PL_Sv->sv_u.svu_pv != '0')))
 #endif /* __GNU__ */
+
+#define SvPVXtrue(sv)	(					\
+    ((XPV*)SvANY((sv))) 					\
+     && (							\
+	((XPV*)SvANY((sv)))->xpv_cur > 1			\
+	|| (							\
+	    ((XPV*)SvANY((sv)))->xpv_cur			\
+	    && *(sv)->sv_u.svu_pv != '0'				\
+	)							\
+    )								\
+)
 
 #define SvIsCOW(sv)		(SvFLAGS(sv) & SVf_IsCOW)
 #define SvIsCOW_on(sv)		(SvFLAGS(sv) |= SVf_IsCOW)
@@ -1831,6 +1849,13 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>.
     ((SvIsCOW(sv) ? sv_force_normal_flags(sv, 0) : (void) 0), 0)
 #  define SvIsCOW_normal(sv)	(SvIsCOW(sv) && SvLEN(sv))
 #  define SvRELEASE_IVX_(sv)	SvRELEASE_IVX(sv),
+#  define SvCANCOW(sv) \
+	(SvIsCOW(sv) || (SvFLAGS(sv) & CAN_COW_MASK) == CAN_COW_FLAGS)
+/* This is a pessimistic view. Scalar must be purely a read-write PV to copy-
+   on-write.  */
+#  define CAN_COW_MASK	(SVs_OBJECT|SVs_GMG|SVs_SMG|SVs_RMG|SVf_IOK|SVf_NOK| \
+			 SVf_POK|SVf_ROK|SVp_IOK|SVp_NOK|SVp_POK|SVf_FAKE| \
+			 SVf_OOK|SVf_BREAK|SVf_READONLY)
 #else
 #  define SvRELEASE_IVX(sv)   0
 /* This little game brought to you by the need to shut this warning up:
@@ -1838,11 +1863,26 @@ mg.c: In function 'Perl_magic_get':
 mg.c:1024: warning: left-hand operand of comma expression has no effect
 */
 #  define SvRELEASE_IVX_(sv)  /**/
+#  ifdef PERL_NEW_COPY_ON_WRITE
+#   define SvCANCOW(sv)					    \
+	(SvIsCOW(sv)					     \
+	 ? SvLEN(sv) ? CowREFCNT(sv) != SV_COW_REFCNT_MAX : 1 \
+	 : (SvFLAGS(sv) & CAN_COW_MASK) == CAN_COW_FLAGS       \
+			    && SvCUR(sv)+1 < SvLEN(sv))
+   /* Note: To allow 256 COW "copies", a refcnt of 0 means 1. */
+#   define CowREFCNT(sv)	(*(U8 *)(SvPVX(sv)+SvLEN(sv)-1))
+#   define SV_COW_REFCNT_MAX	((1 << sizeof(U8)*8) - 1)
+#   ifndef SV_COW_THRESHOLD
+#    define SV_COW_THRESHOLD	0	/* min string length for cow */
+#   endif
+#   ifndef SV_COWBUF_THRESHOLD
+#    define SV_COWBUF_THRESHOLD	1250	/* min string length for cow */
+#   endif				/* over existing buffer */
+#   define CAN_COW_MASK	(SVf_POK|SVf_ROK|SVp_POK|SVf_FAKE| \
+			 SVf_OOK|SVf_BREAK|SVf_READONLY)
+#  endif
 #endif /* PERL_OLD_COPY_ON_WRITE */
 
-#define CAN_COW_MASK	(SVs_OBJECT|SVs_GMG|SVs_SMG|SVs_RMG|SVf_IOK|SVf_NOK| \
-			 SVf_POK|SVf_ROK|SVp_IOK|SVp_NOK|SVp_POK|SVf_FAKE| \
-			 SVf_OOK|SVf_BREAK|SVf_READONLY)
 #define CAN_COW_FLAGS	(SVp_POK|SVf_POK)
 
 #define SV_CHECK_THINKFIRST(sv) if (SvTHINKFIRST(sv)) \
@@ -1973,7 +2013,8 @@ has been loaded.
 Expands the character buffer in the SV so that it has room for the
 indicated number of bytes (remember to reserve space for an extra trailing
 NUL character).  Calls C<sv_grow> to perform the expansion if necessary.
-Returns a pointer to the character buffer.
+Returns a pointer to the character buffer. SV must be of type >= SVt_PV. One
+alternative is to call C<sv_grow> if you are not sure of the type of SV.
 
 =cut
 */
@@ -2056,7 +2097,12 @@ See also C<PL_sv_yes> and C<PL_sv_no>.
 	 == (SVt_PVLV|SVf_FAKE))
 
 
-#define SvGROW(sv,len) (SvLEN(sv) < (len) ? sv_grow(sv,len) : SvPVX(sv))
+#ifdef PERL_NEW_COPY_ON_WRITE
+# define SvGROW(sv,len) \
+	(SvIsCOW(sv) || SvLEN(sv) < (len) ? sv_grow(sv,len) : SvPVX(sv))
+#else
+# define SvGROW(sv,len) (SvLEN(sv) < (len) ? sv_grow(sv,len) : SvPVX(sv))
+#endif
 #define SvGROW_mutable(sv,len) \
     (SvLEN(sv) < (len) ? sv_grow(sv,len) : SvPVX_mutable(sv))
 #define Sv_Grow sv_grow

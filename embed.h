@@ -27,7 +27,8 @@
 /* Hide global symbols */
 
 #define Gv_AMupdate(a,b)	Perl_Gv_AMupdate(aTHX_ a,b)
-#define _is_utf8__perl_idstart(a)	Perl__is_utf8__perl_idstart(aTHX_ a)
+#define _is_uni_perl_idstart(a)	Perl__is_uni_perl_idstart(aTHX_ a)
+#define _is_utf8_perl_idstart(a)	Perl__is_utf8_perl_idstart(aTHX_ a)
 #define _to_uni_fold_flags(a,b,c,d)	Perl__to_uni_fold_flags(aTHX_ a,b,c,d)
 #define _to_utf8_fold_flags(a,b,c,d,e)	Perl__to_utf8_fold_flags(aTHX_ a,b,c,d,e)
 #define _to_utf8_lower_flags(a,b,c,d,e)	Perl__to_utf8_lower_flags(aTHX_ a,b,c,d,e)
@@ -224,11 +225,14 @@
 #define is_lvalue_sub()		Perl_is_lvalue_sub(aTHX)
 #define is_uni_alnum(a)		Perl_is_uni_alnum(aTHX_ a)
 #define is_uni_alnum_lc(a)	Perl_is_uni_alnum_lc(aTHX_ a)
+#define is_uni_alnumc(a)	Perl_is_uni_alnumc(aTHX_ a)
+#define is_uni_alnumc_lc(a)	Perl_is_uni_alnumc_lc(aTHX_ a)
 #define is_uni_alpha(a)		Perl_is_uni_alpha(aTHX_ a)
 #define is_uni_alpha_lc(a)	Perl_is_uni_alpha_lc(aTHX_ a)
 #define is_uni_ascii(a)		Perl_is_uni_ascii(aTHX_ a)
 #define is_uni_ascii_lc(a)	Perl_is_uni_ascii_lc(aTHX_ a)
 #define is_uni_blank(a)		Perl_is_uni_blank(aTHX_ a)
+#define is_uni_blank_lc(a)	Perl_is_uni_blank_lc(aTHX_ a)
 #define is_uni_cntrl(a)		Perl_is_uni_cntrl(aTHX_ a)
 #define is_uni_cntrl_lc(a)	Perl_is_uni_cntrl_lc(aTHX_ a)
 #define is_uni_digit(a)		Perl_is_uni_digit(aTHX_ a)
@@ -250,6 +254,7 @@
 #define is_uni_xdigit(a)	Perl_is_uni_xdigit(aTHX_ a)
 #define is_uni_xdigit_lc(a)	Perl_is_uni_xdigit_lc(aTHX_ a)
 #define is_utf8_alnum(a)	Perl_is_utf8_alnum(aTHX_ a)
+#define is_utf8_alnumc(a)	Perl_is_utf8_alnumc(aTHX_ a)
 #define is_utf8_alpha(a)	Perl_is_utf8_alpha(aTHX_ a)
 #define is_utf8_ascii(a)	Perl_is_utf8_ascii(aTHX_ a)
 #define is_utf8_blank(a)	Perl_is_utf8_blank(aTHX_ a)
@@ -879,11 +884,8 @@
 #define dump_exec_pos(a,b,c,d,e,f)	S_dump_exec_pos(aTHX_ a,b,c,d,e,f)
 #    endif
 #  endif
-#  if defined(PERL_IN_DQUOTE_STATIC_C)
-#define grok_bslash_c(a,b,c)	S_grok_bslash_c(aTHX_ a,b,c)
-#define grok_bslash_o(a,b,c,d,e)	S_grok_bslash_o(aTHX_ a,b,c,d,e)
-#define grok_bslash_x(a,b,c,d,e)	S_grok_bslash_x(aTHX_ a,b,c,d,e)
-#define regcurly(a)		S_regcurly(aTHX_ a)
+#  if defined(PERL_ANY_COW)
+#define sv_setsv_cow(a,b)	Perl_sv_setsv_cow(aTHX_ a,b)
 #  endif
 #  if defined(PERL_IN_REGCOMP_C)
 #define _append_range_to_invlist(a,b,c)	S__append_range_to_invlist(aTHX_ a,b,c)
@@ -948,6 +950,12 @@
 #  if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C) || defined(PERL_IN_UTF8_C) || defined(PERL_IN_TOKE_C)
 #define _core_swash_init(a,b,c,d,e,f,g)	Perl__core_swash_init(aTHX_ a,b,c,d,e,f,g)
 #  endif
+#  if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_TOKE_C)
+#define grok_bslash_c(a,b,c)	S_grok_bslash_c(aTHX_ a,b,c)
+#define grok_bslash_o(a,b,c,d,e)	S_grok_bslash_o(aTHX_ a,b,c,d,e)
+#define grok_bslash_x(a,b,c,d,e)	S_grok_bslash_x(aTHX_ a,b,c,d,e)
+#define regcurly(a)		S_regcurly(aTHX_ a)
+#  endif
 #  if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_UTF8_C)
 #define _add_range_to_invlist(a,b,c)	Perl__add_range_to_invlist(aTHX_ a,b,c)
 #define _invlist_intersection_maybe_complement_2nd(a,b,c,d)	Perl__invlist_intersection_maybe_complement_2nd(aTHX_ a,b,c,d)
@@ -961,10 +969,10 @@
 #  if defined(PERL_IN_REGEXEC_C)
 #define core_regclass_swash(a,b,c,d)	S_core_regclass_swash(aTHX_ a,b,c,d)
 #define find_byclass(a,b,c,d,e)	S_find_byclass(aTHX_ a,b,c,d,e)
-#define is_utf8_X_LVT(a)	S_is_utf8_X_LVT(aTHX_ a)
+#define isFOO_lc(a,b)		S_isFOO_lc(aTHX_ a,b)
 #define reg_check_named_buff_matched(a,b)	S_reg_check_named_buff_matched(aTHX_ a,b)
-#define regcppop(a)		S_regcppop(aTHX_ a)
-#define regcppush(a,b)		S_regcppush(aTHX_ a,b)
+#define regcppop(a,b)		S_regcppop(aTHX_ a,b)
+#define regcppush(a,b,c)	S_regcppush(aTHX_ a,b,c)
 #define reghop3			S_reghop3
 #define reghopmaybe3		S_reghopmaybe3
 #define reginclass(a,b,c,d)	S_reginclass(aTHX_ a,b,c,d)
@@ -981,9 +989,6 @@
 #define _to_fold_latin1(a,b,c,d)	Perl__to_fold_latin1(aTHX_ a,b,c,d)
 #define is_utf8_X_extend(a)	Perl_is_utf8_X_extend(aTHX_ a)
 #define is_utf8_X_regular_begin(a)	Perl_is_utf8_X_regular_begin(aTHX_ a)
-#  endif
-#  if defined(PERL_OLD_COPY_ON_WRITE)
-#define sv_setsv_cow(a,b)	Perl_sv_setsv_cow(aTHX_ a,b)
 #  endif
 #endif
 #ifdef PERL_CORE
@@ -1400,6 +1405,7 @@
 #define find_and_forget_pmops(a)	S_find_and_forget_pmops(aTHX_ a)
 #define fold_constants(a)	S_fold_constants(aTHX_ a)
 #define force_list(a)		S_force_list(aTHX_ a)
+#define forget_pmop(a)		S_forget_pmop(aTHX_ a)
 #define gen_constant_list(a)	S_gen_constant_list(aTHX_ a)
 #define gv_ename(a)		S_gv_ename(aTHX_ a)
 #define inplace_aassign(a)	S_inplace_aassign(aTHX_ a)
@@ -1490,7 +1496,7 @@
 #define save_lines(a,b)		S_save_lines(aTHX_ a,b)
 #  endif
 #  if defined(PERL_IN_PP_HOT_C)
-#define do_oddball(a,b,c)	S_do_oddball(aTHX_ a,b,c)
+#define do_oddball(a,b)		S_do_oddball(aTHX_ a,b)
 #define method_common(a,b)	S_method_common(aTHX_ a,b)
 #  endif
 #  if defined(PERL_IN_PP_PACK_C)

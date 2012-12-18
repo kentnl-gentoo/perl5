@@ -2,95 +2,130 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.17.6
+perldelta - what is new for perl v5.17.7
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.17.5 release and the 5.17.6
+This document describes differences between the 5.17.6 release and the 5.17.7
 release.
 
-If you are upgrading from an earlier release such as 5.17.4, first read
-L<perl5175delta>, which describes differences between 5.17.4 and 5.17.5.
+If you are upgrading from an earlier release such as 5.17.5, first read
+L<perl5176delta>, which describes differences between 5.17.5 and 5.17.6.
 
 =head1 Core Enhancements
 
-=head2 Character name aliases may now include non-Latin1-range characters
+=head2 $&, $` and $' are no longer slow
 
-It is possible to define your own names for characters for use in
-C<\N{...}>, C<charnames::vianame()>, etc.  These names can now be
-comprised of characters from the whole Unicode range.  This allows for
-names to be in your native language, and not just English.  Certain
-restrictions apply to the characters that may be used (you can't define
-a name that has punctuation in it, for example).  See L<charnames/CUSTOM
-ALIASES>.
+These three infamous variables have been redeemed and no longer slow down
+your program when used.  Hence, the /p regular expression flag now does
+nothing.
 
-=head2 New hash function Murmurhash-32 (v3)
+=head1 Security
 
-We have switched Perl's hash function to use Murmurhash-32, and added build
-support for several other hash functions.  This new function is expected to
-perform equivalently to the old one for shorter strings and is faster,
-potentially twice as fast, for hashing longer strings.
+=head2 C<Storable> security warning in documentation
+
+The documentation for C<Storable> now includes a section which warns readers
+of the danger of accepting Storable documents from untrusted sources. The
+short version is that deserializing certain types of data can lead to loading
+modules and other code execution. This is documented behavior and wanted
+behavior, but this opens an attack vector for malicious entities.
+
+=head2 C<Locale::Maketext> allowed code injection via a malicious template
+
+If users could provide a translation string to Locale::Maketext, this could be
+used to invoke arbitrary Perl subroutines available in the current process.
+
+This has been fixed, but it is still possible to invoke any method provided by
+C<Locale::Maketext> itself or a subclass that you are using. One of these
+methods in turn will invoke the Perl core's C<sprintf> subroutine.
+
+In summary, allowing users to provide translation strings without auditing
+them is a bad idea.
+
+This vulnerability is documented in CVE-2012-6329.
 
 =head1 Incompatible Changes
 
-=head2 An unknown character name in C<\N{...}> is now a syntax error
+=head2 readline() with C<$/ = \N> now reads N characters, not N bytes
 
-Previously, it warned, and the Unicode REPLACEMENT CHARACTER was
-substituted.  Unicode now recommends that this situation be a syntax
-error.  Also, the previous behavior led to some confusing warnings and
-behaviors, and since the REPLACEMENT CHARACTER has no use other than as
-a stand-in for some unknown character, any code that has this problem is
-buggy.
+Previously, when reading from a stream with I/O layers such as
+C<encoding>, the readline() function, otherwise known as the C<< <> >>
+operator, would read I<N> bytes from the top-most layer. [perl #79960]
 
-=head2 Formerly deprecated characters in C<\N{}> character name aliases are now errors.
+Now, I<N> characters are read instead.
 
-Since v5.12.0, it has been deprecated to use certain characters in
-user-defined C<\N{...}> character names.  These now cause a syntax
-error.  For example, it is now an error to begin a name with a digit,
-such as in
+There is no change in behaviour when reading from streams with no
+extra layers, since bytes map exactly to characters.
 
- my $undraftable = "\N{4F}";    # Syntax error!
+=head2 Lexical subroutine warnings have moved
 
-or to have commas anywhere in the name.  See L<charnames/CUSTOM ALIASES>
+The warning about the use of an experimental feature emitted when lexical
+subroutines (added in 5.17.4) are used now happens when the subroutine
+itself is declared, not when the "lexical_subs" feature is activated via
+C<use feature>.
 
-=head2 Per process hash randomization
+This stops C<use feature ':all'> from warning, but causes
+C<my sub foo; my sub bar> to warn twice.
 
-The seed used by Perl's hash function is now random.  This means that the
-order which keys/values will be returned from functions like C<keys()>,
-C<values()>, and C<each()> will differ from run to run.
+=head2 Overridden C<glob> is now passed one argument
 
-This change was introduced to make Perl's hashes more robust to algorithmic
-complexity attacks, and also because we discovered that it exposes hash
-ordering dependency bugs and makes them easier to track down.
+C<glob> overrides used to be passed a magical undocumented second argument
+that identified the caller.  Nothing on CPAN was using this, and it got in
+the way of a bug fix, so it was removed.  If you really need to identify
+the caller, see L<Devel::Callsite> on CPAN.
 
-Toolchain maintainers might want to invest in additional infrastructure to
-test for things like this.  Running tests several times in a row and then
-comparing results will make it easier to spot hash order dependencies in
-code.  Authors are strongly encouraged not to expose the key order of
-Perl's hashes to insecure audiences.
+=head1 Deprecations
 
-=head2 PERL_HASH_SEED enviornment variable now takes a hex value
+=head2 Lexical $_ is now deprecated
 
-PERL_HASH_SEED no longer accepts an integer as a parameter, instead the
-value is expected to be a binary string encoded in hex.  This is to make
-the infrastructure support hash seeds of arbitrary lengths which might
-exceed that of an integer.  (SipHash uses a 16 byte seed).
+Since it was introduced in Perl 5.10, it has caused much confusion with no
+obvious solution:
 
-=head2 Hash::Util::hash_seed() now returns a string
+=over
 
-Hash::Util::hash_seed() now returns a string instead of an integer.  This
-is to make the infrastructure support hash seeds of arbitrary lengths
-which might exceed that of an integer.  (SipHash uses a 16 byte seed).
+=item *
 
-=head2 Output of PERL_HASH_SEED_DEBUG has been changed
+Various modules (e.g., List::Util) expect callback routines to use the
+global $_.  C<use List::Util 'first'; my $_; first { $_ == 1 } @list> does
+not work as one would expect.
 
-The environment variable PERL_HASH_SEED_DEBUG now shows both the hash
-function perl was built with AND the seed, in hex in use for that process.
-Code parsing this output, should it exist, must change to accomodate the
-new format.  Example of the new format:
+=item *
 
-    $ PERL_HASH_SEED_DEBUG=1 ./perl -e1
-    HASH_FUNCTION = MURMUR3 HASH_SEED = 0x1476bb9f
+A C<my $_> declaration earlier in the same file can cause confusing closure
+warnings.
+
+=item *
+
+The "_" subroutine prototype character allows called subroutines to access
+your lexical $_, so it is not really private after all.
+
+=item *
+
+Nevertheless, subroutines with a "(@)" prototype and methods cannot access
+the caller's lexical $_, unless they are written in XS.
+
+=item *
+
+But even XS routines cannot access a lexical $_ declared, not in the
+calling subroutine, but in an outer scope, iff that subroutine happened not
+to mention $_ or use any operators that default to $_.
+
+=back
+
+=head2 Various XS-callable functions are now deprecated
+
+The following functions will be removed from a future version of Perl,
+and should not be used.  With participating C compilers (e.g., gcc),
+compiling any file that uses any of these will generate a warning.
+These were not intended for public use; there are equivalent, faster,
+macros for most of them.  See L<perlapi/Character classes>:
+C<is_uni_ascii>, C<is_uni_ascii_lc>, C<is_uni_blank>, C<is_uni_blank_lc>,
+C<is_uni_cntrl>, C<is_uni_cntrl_lc>, C<is_uni_idfirst_lc>, C<is_uni_space>,
+C<is_uni_space_lc>, C<is_uni_xdigit>, C<is_uni_xdigit_lc>, C<is_utf8_ascii>,
+C<is_utf8_blank>, C<is_utf8_cntrl>, C<is_utf8_idcont>, C<is_utf8_idfirst>,
+C<is_utf8_perl_space>, C<is_utf8_perl_word>, C<is_utf8_posix_digit>,
+C<is_utf8_space>, C<is_utf8_xdigit>. C<is_utf8_xidcont>, C<is_utf8_xidfirst>,
+C<to_uni_lower_lc>, C<to_uni_title_lc>, and C<to_uni_upper_lc>.
 
 =head1 Performance Enhancements
 
@@ -98,19 +133,11 @@ new format.  Example of the new format:
 
 =item *
 
-Lists of lexical variable declarations (C<my($x, $y)>) are now optimised
-down to a single op, and are hence faster than before.
-
-=item *
-
-A new C preprocessor define NO_TAINT_SUPPORT was added that, if set, disables
-Perl's taint support altogether.  Using the -T or -t command line flags will
-cause a fatal error.  Beware that both core tests as well as many a CPAN
-distribution's tests will fail with this change.  On the upside, it provides
-a small performance benefit due to reduced branching.
-
-B<Do not enable this unless you know exactly what you are getting yourself
-into.>
+Perl has a new copy-on-write mechanism that avoids the need to copy the
+internal string buffer when assigning from one scalar to another.  This
+makes copying large strings appear much faster.  Modifying one of the two
+(or more) strings after an assignment will force a copy internally.  This
+makes it unnecessary to pass strings by reference for efficiency.
 
 =back
 
@@ -122,77 +149,68 @@ into.>
 
 =item *
 
-L<Carp> has been upgraded from version 1.27 to 1.28.
-
-Carp is no longer confused when C<caller> returns undef for a package that
-has been deleted.
-
-=item *
-
-L<CPAN> has been upgraded from version 1.98 to 1.99_51.
+L<File::DosGlob> has been upgraded from version 1.08 to 1.09.  The internal
+cache of file names that it keeps for each caller is now freed when that
+caller is freed.  This means
+C<< use File::DosGlob 'glob'; eval 'scalar <*>' >> no longer leaks memory.
 
 =item *
 
-L<DynaLoader> has been upgraded from version 1.16 to 1.17.
+L<File::Glob> has been upgraded from version 1.18 to 1.19.  File::Glob has
+had exactly the same fix as File::DosGlob.  Since it is what Perl's own
+C<glob> operator itself uses (except on VMS), this means
+C<< eval 'scalar <*>' >> no longer leaks.
 
 =item *
 
-L<Env> has been upgraded from version 1.03 to 1.04.
-
-Its SPLICE implementation no longer misbehaves in list context.
+L<GDBM_File> has been upgraded from version 1.14 to 1.15. The undocumented
+optional fifth parameter to C<TIEHASH> has been removed. This was intended
+to provide control of the callback used by C<gdbm*> functions in case of
+fatal errors (such as filesystem problems), but did not work (and could
+never have worked). No code on CPAN even attempted to use it. The callback
+is now always the previous default, C<croak>. Problems on some platforms with
+how the C<C> C<croak> function is called have also been resolved.
 
 =item *
 
-L<Module::CoreList> has been upgraded from version 2.77 to 2.78.
-
-=item *
-
-L<Tie::Hash::NamedCapture> has been upgraded from version 0.08 to 0.09.
+L<Module::CoreList> has been upgraded from version 2.78 to 2.79.
 
 =back
+
+=head1 Documentation
 
 =head2 Changes to Existing Documentation
 
-=head3 L<perlref>
+=head3 L<perlapi/Character classes>
 
 =over 4
 
 =item *
 
-C<*foo{NAME}> and C<*foo{PACKAGE}>, which have existed since perl 5.005,
-are now documented.
+There are quite a few macros callable from XS modules that classify
+characters into things like alphabetic, punctuation, etc.  More of these
+are now documented, including ones which work on characters whose code
+points are outside the Latin-1 range.
 
 =back
 
-=head1 Platform Support
+=head1 Diagnostics
 
-=head2 Discontinued Platforms
+The following additions or changes have been made to diagnostic output,
+including warnings and fatal error messages.  For the complete list of
+diagnostic messages, see L<perldiag>.
 
-=over 4
-
-=item EPOC
-
-Support code relating to EPOC has been removed.  EPOC was a family of
-operating systems developed by Psion for mobile devices.  It was the
-predecessor of Symbian.  The port was last updated in April 2002.
-
-=back
-
-=head2 Platform-Specific Notes
+=head2 Changes to Existing Diagnostics
 
 =over 4
 
-=item VMS
+=item *
 
-Where possible, the case of filenames and command-line arguments is now
-preserved by enabling the CRTL features C<DECC$EFS_CASE_PRESERVE> and
-C<DECC$ARGV_PARSE_STYLE> at start-up time.  The latter only takes effect
-when extended parse is enabled in the process from which Perl is run.
+L<Constant(%s): Call to &{$^H{%s}} did not return a defined value|perldiag/Constant(%s): Call to &{$^H{%s}} did not return a defined value>
 
-=item WinCE
-
-Building on WinCE is now possible once again, although more work is required
-to fully restore a clean build.
+Constant overloading that returns C<undef> results in this error message.
+For numeric constants, it used to say "Constant(undef)".  "undef" has been
+replaced with the number itself.
 
 =back
 
@@ -202,24 +220,59 @@ to fully restore a clean build.
 
 =item *
 
-The private Perl_croak_no_modify has had its context parameter removed.  It is
-now has a void prototype.  Users of the public API croak_no_modify remain
-unaffected.
+SvUPGRADE() is no longer an expression. Originally this macro (and its
+underlying function, sv_upgrade()) were documented as boolean, although
+in reality they always croaked on error and never returned false. In 2005
+the documentation was updated to specify a void return value, but
+SvUPGRADE() was left always returning 1 for backwards compatibility. This
+has now been removed, and SvUPGRADE() is now a statement with no return
+value.
+
+So this is now a syntax error:
+
+    if (!SvUPGRADE(sv)) { croak(...); }
+
+If you have code like that, simply replace it with
+
+    SvUPGRADE(sv);
+
+or to to avoid compiler warnings with older perls, possibly
+
+    (void)SvUPGRADE(sv);
 
 =item *
 
-Copy-on-write (shared hash key) scalars are no longer marked read-only.
-C<SvREADONLY> returns false on such an SV, but C<SvIsCOW> still returns
-true.
+Perl has a new copy-on-write mechanism that allows any SvPOK scalar to be
+upgraded to a copy-on-write scalar.  A reference count on the string buffer
+is stored in the string buffer itself.
+
+This breaks a few XS modules by allowing copy-on-write scalars to go
+through code paths that never encountered them before.
+
+This behaviour can still be disabled by running F<Configure> with
+B<-Accflags=-DPERL_NO_COW>.  This option will probably be removed in Perl
+5.20.
 
 =item *
 
-A new op type, C<OP_PADRANGE> has been introduced.  The perl peephole
-optimiser will, where possible, substitute a single padrange op for a
-pushmark followed by one or more pad ops, and possibly also skipping list
-and nextstate ops.  In addition, the op can carry out the tasks associated
-with the RHS of a my(...) = @_ assignment, so those ops may be optimised
-away too.
+Copy-on-write no longer uses the SvFAKE and SvREADONLY flags.  Hence,
+SvREADONLY indicates a true read-only SV.
+
+Use the SvIsCOW macro (as before) to identify a copy-on-write scalar.
+
+=item *
+
+C<PL_sawampersand> is now a constant.  The switch this variable provided
+(to enable/disable the pre-match copy depending on whether C<$&> had been
+seen) has been removed and replaced with copy-on-write, eliminating a few
+bugs.
+
+The previous behaviour can still be enabled by running F<Configure> with
+B<-Accflags=-DPERL_SAWAMPERSAND>.
+
+=item *
+
+PL_glob_index is gone.
 
 =back
 
@@ -229,116 +282,135 @@ away too.
 
 =item *
 
-Uninitialized warnings mentioning hash elements would only mention the
-element name if it was not in the first bucket of the hash, due to an
-off-by-one error.
+C<sort {undef} ...> under fatal warnings no longer crashes.  It started
+crashing in Perl 5.16.
 
 =item *
 
-A regular expression optimizer bug could cause multiline "^" to behave
-incorrectly in the presence of line breaks, such that
-C<"/\n\n" =~ m#\A(?:^/$)#im> would not match [perl #115242].
+Stashes blessed into each other
+(C<bless \%Foo::, 'Bar'; bless \%Bar::, 'Foo'>) no longer result in double
+frees.  This bug started happening in Perl 5.16.
 
 =item *
 
-Failed C<fork> in list context no longer currupts the stack.
-C<@a = (1, 2, fork, 3)> used to gobble up the 2 and assign C<(1, undef, 3)>
-if the C<fork> call failed.
+Numerous memory leaks have been fixed, mostly involving fatal warnings and
+syntax errors.
 
 =item *
 
-Numerous memory leaks have been fixed, mostly involving tied variables that
-die, regular expression character classes and code blocks, and syntax
-errors.
+Lexical constants (C<my sub answer () { 42 }>) no longer cause double
+frees.
 
 =item *
 
-Assigning a regular expression (C<${qr//}>) to a variable that happens to
-hold a floating point number no longer causes assertion failures on
-debugging builds.
+Constant subroutine redefinition warns by default, but lexical constants
+were accidentally exempt from default warnings.  This has been corrected.
 
 =item *
 
-Assigning a regular expression to a scalar containing a number no longer
-causes subsequent nummification to produce random numbers.
+Some failed regular expression matches such as C<'f' =~ /../g> were not
+resetting C<pos>.  Also, "match-once" patterns (C<m?...?g>) failed to reset
+it, too, when invoked a second time [perl #23180].
 
 =item *
 
-Assigning a regular expression to a magic variable no longer wipes away the
-magic.  This is a regression from 5.10.
+Accessing C<$&> after a pattern match now works if it had not been seen
+before the match.  I.e., this applies to C<${'&'}> (under C<no strict>) and
+C<eval '$&'>.  The same applies to C<$'> and C<$`> [perl #4289].
 
 =item *
 
-Assigning a regular expression to a blessed scalar no longer results in
-crashes.  This is also a regression from 5.10.
+Several bugs involving C<local *ISA> and C<local *Foo::> causing stale
+MRO caches have been fixed.  
 
 =item *
 
-Regular expression can now be assigned to tied hash and array elements with
-flattening into strings.
+Defining a subroutine when its typeglob has been aliased no longer results
+in stale method caches.  This bug was introduced in Perl 5.10.
 
 =item *
 
-Nummifying a regular expression no longer results in an uninitialized
-warning.
+Localising a typeglob containing a subroutine when the typeglob's package
+has been deleted from its parent stash no longer produces an error.  This
+bug was introduced in Perl 5.14.
 
 =item *
 
-Negative array indices no longer cause EXISTS methods of tied variables to
-be ignored.  This is a regression from 5.12.
+Under some circumstances, C<local *method=...> would fail to reset method
+caches upon scope exit.
 
 =item *
 
-Negative array indices no longer result in crashes on arrays tied to
-non-objects.
+C</[.foo.]/> is no longer an error, but produces a warning (as before) and
+is treated as C</[.fo]/> [perl #115818].
 
 =item *
 
-C<$x = "(?{})"; /a++(?{})+$x/x> no longer erroneous produces an error (just
-a warning, as expected).  This was broken in 5.17.1.
+C<goto $tied_var> now calls FETCH before deciding what type of goto
+(subroutine or label) this is.
 
 =item *
 
-C<$byte_overload .= $utf8> no longer results in doubly-encoded UTF8 if the
-left-hand scalar happened to have produced a UTF8 string the last time
-overloading was invoked.
+Renaming packages through glob assignment
+(C<*Foo:: = *Bar::; *Bar:: = *Baz::>) in combination with C<m?...?> and
+C<reset> no longer makes threaded builds crash.
 
 =item *
 
-C<goto &sub> now uses the current value of @_, instead of using the array
-the subroutine was originally called with.  This means
-C<local @_ = (...); goto &sub> now works [perl #43077].
+An earlier release in the 5.17.x series could crash if user code prevented
+_charnames from loading via C<$INC{'_charnames.pm'}++>.
 
 =item *
 
-If a debugger is invoked recursively, it no longer stomps on its own
-lexical variables.  Formerly under recursion all calls would share the same
-set of lexical variables [perl #115742].
+A number of bugs related to assigning a list to hash have been fixed. Many of
+these involve lists with repeated keys like C<(1, 1, 1, 1)>.
 
-=item *
+=over 8
 
-C<*_{ARRAY}> returned from a subroutine no longer spontaneously
-becomes empty.
+=item -
+
+The expression C<scalar(%h = (1, 1, 1, 1))> now returns C<4>, not C<2>.
+
+=item -
+
+The return value of C<%h = (1, 1, 1)> in list context was wrong. Previously
+this would return C<(1, undef, 1)>, now it returns C<(1, undef)>.
+
+=item -
+
+Perl now issues the same warning on C<($s, %h) = (1, {})> as it does for
+C<(%h) = ({})>, "Reference found where even-sized list expected".
+
+=item -
+
+A number of additional edge cases in list assignment to hashes were
+corrected. For more details see commit 23b7025ebc.
 
 =back
 
+=back
+
+=head1 Known Problems
+
+There may be a failure in the F<t/op/require_errors.t> test if you run the
+test suite as the root user.
+
 =head1 Acknowledgements
 
-Perl 5.17.6 represents approximately 5 weeks of development since Perl 5.17.5
-and contains approximately 79,000 lines of changes across 460 files from 30
+Perl 5.17.7 represents approximately 4 weeks of development since Perl 5.17.6
+and contains approximately 30,000 lines of changes across 490 files from 26
 authors.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.17.6:
+improvements that became Perl 5.17.7:
 
-Alexandr Ciornii, Brian Fraser, Chris 'BinGOs' Williams, Craig A. Berry,
-Dagfinn Ilmari Mannsåker, Daniel Dragan, David Golden, David Mitchell, Dominic
-Hargreaves, Eric Brine, Father Chrysostomos, Florian Ragwitz, Hugo van der
-Sanden, James E Keenan, Jerry D. Hedden, Jesse Luehrs, Karl Williamson, Lukas
-Mai, Nicholas Clark, Paul Johnson, Reini Urban, Ricardo Signes, Ruslan Zakirov,
-Shlomi Fish, Steffen Müller, Steve Hay, Tom Wyant, Tony Cook, Vadim Konovalov,
-Yves Orton.
+Alexandr Ciornii, Bob Ernst, Brian Carlson, Chris 'BinGOs' Williams, Craig A.
+Berry, Daniel Dragan, Dave Rolsky, David Mitchell, Father Chrysostomos, Hugo
+van der Sanden, James E Keenan, Joel Berger, Karl Williamson, Lukas Mai, Martin
+Hasch, Matthew Horsfall, Nicholas Clark, Ricardo Signes, Ruslan Zakirov, Sergey
+Alekseev, Steffen Müller, Sullivan Beck, Sven Strickroth, Sébastien
+Aperghis-Tramoni, Tony Cook, Yves Orton.
 
 The list above is almost certainly incomplete as it is automatically generated
 from version control history. In particular, it does not include the names of

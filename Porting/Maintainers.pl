@@ -363,7 +363,7 @@ use File::Glob qw(:case);
 
     'Compress::Raw::Bzip2' => {
         'MAINTAINER'   => 'pmqs',
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.058.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.059.tar.gz',
         'FILES'        => q[cpan/Compress-Raw-Bzip2],
         'EXCLUDED'     => [
             qr{^t/Test/},
@@ -374,7 +374,7 @@ use File::Glob qw(:case);
 
     'Compress::Raw::Zlib' => {
         'MAINTAINER'   => 'pmqs',
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.058.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.059.tar.gz',
 
         'FILES'    => q[cpan/Compress-Raw-Zlib],
         'EXCLUDED' => [
@@ -474,7 +474,7 @@ use File::Glob qw(:case);
 
     'CPANPLUS::Dist::Build' => {
         'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/CPANPLUS-Dist-Build-0.64.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/CPANPLUS-Dist-Build-0.68.tar.gz',
         'FILES'        => q[cpan/CPANPLUS-Dist-Build],
         'EXCLUDED'     => [
             qr{^inc/},
@@ -523,7 +523,7 @@ use File::Glob qw(:case);
 
     'Data::Dumper' => {
         'MAINTAINER' => 'p5p',    # Not gsar. Not ilyam. Not really smueller
-        'DISTRIBUTION' => 'SMUELLER/Data-Dumper-2.136.tar.gz',
+        'DISTRIBUTION' => 'SMUELLER/Data-Dumper-2.139.tar.gz',
         'FILES'        => q[dist/Data-Dumper],
         'UPSTREAM'     => 'blead',
     },
@@ -594,7 +594,7 @@ use File::Glob qw(:case);
 
     'Digest::SHA' => {
         'MAINTAINER'   => 'mshelor',
-        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.73.tar.gz',
+        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.80.tar.gz',
         'FILES'        => q[cpan/Digest-SHA],
         'EXCLUDED'     => [
             qw( t/pod.t
@@ -738,7 +738,7 @@ use File::Glob qw(:case);
 
     'ExtUtils::MakeMaker' => {
         'MAINTAINER'   => 'mschwern',
-        'DISTRIBUTION' => 'MSCHWERN/ExtUtils-MakeMaker-6.63_02.tar.gz',
+        'DISTRIBUTION' => 'MSCHWERN/ExtUtils-MakeMaker-6.64.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -805,7 +805,7 @@ use File::Glob qw(:case);
 
     'File::DosGlob' => {
         'MAINTAINER' => 'p5p',
-        'FILES'      => q[lib/File/DosGlob.{pm,t}],
+        'FILES'      => q[ext/File-DosGlob],
         'UPSTREAM'   => 'blead',
     },
 
@@ -1025,7 +1025,7 @@ use File::Glob qw(:case);
 
     'IO-Compress' => {
         'MAINTAINER'   => 'pmqs',
-        'DISTRIBUTION' => 'PMQS/IO-Compress-2.058.tar.gz',
+        'DISTRIBUTION' => 'PMQS/IO-Compress-2.059.tar.gz',
         'FILES'        => q[cpan/IO-Compress],
         'EXCLUDED'     => [qr{t/Test/}],
         'UPSTREAM'     => 'cpan',
@@ -1101,7 +1101,7 @@ use File::Glob qw(:case);
 
     'Locale-Codes' => {
         'MAINTAINER'   => 'sbeck',
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.23.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.24.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( t/pod_coverage.t
@@ -1116,7 +1116,7 @@ use File::Glob qw(:case);
 
     'Locale::Maketext' => {
         'MAINTAINER'   => 'ferreira',
-        'DISTRIBUTION' => 'TODDR/Locale-Maketext-1.22.tar.gz',
+        'DISTRIBUTION' => 'TODDR/Locale-Maketext-1.23.tar.gz',
         'FILES'        => q[dist/Locale-Maketext],
         'EXCLUDED'     => [
             qw(
@@ -1262,7 +1262,7 @@ use File::Glob qw(:case);
 
     'Module::CoreList' => {
         'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.77.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.78.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
         'UPSTREAM'     => 'blead',
     },
@@ -1595,7 +1595,7 @@ use File::Glob qw(:case);
 
     'Scalar-List-Utils' => {
         'MAINTAINER'   => 'gbarr',
-        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.25.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.26.tar.gz',
 
         # Note that perl uses its own version of Makefile.PL
         'FILES'    => q[cpan/List-Util],
@@ -2011,7 +2011,7 @@ use File::Glob qw(:case);
 
     'Unicode::Collate' => {
         'MAINTAINER'   => 'sadahiro',
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-0.93.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-0.96.tar.gz',
         'FILES'        => q[cpan/Unicode-Collate],
         'EXCLUDED'     => [
             qr{N$},

@@ -196,7 +196,7 @@ sv_eq_pvn_flags(pTHX_ const SV *sv, const char* pv, const STRLEN pvlen, const U3
 		   sv_recode_to_utf8(svrecode, PL_encoding);
 		   pv1      = SvPV_const(svrecode, cur1);
 	      }
-              SvREFCNT_dec(svrecode);
+              SvREFCNT_dec_NN(svrecode);
         }
         if (flags & SVf_UTF8)
             return (bytes_cmp_utf8(
@@ -427,7 +427,7 @@ Perl_cv_undef(pTHX_ CV *cv)
 
 			if (SvREFCNT(comppad) < 2) { /* allow for /(?{ sub{} })/  */
 			    curpad[ix] = NULL;
-			    SvREFCNT_dec(innercv);
+			    SvREFCNT_dec_NN(innercv);
 			    inner_rc--;
 			}
 
@@ -457,7 +457,7 @@ Perl_cv_undef(pTHX_ CV *cv)
 		    PL_comppad = NULL;
 		    PL_curpad = NULL;
 		}
-		SvREFCNT_dec(sv);
+		SvREFCNT_dec_NN(sv);
 	    }
 	}
 	{
@@ -627,8 +627,12 @@ Perl_pad_add_name_pvn(pTHX_ const char *namepv, STRLEN namelen,
         flags &= ~padadd_UTF8_NAME;
 
     if ((flags & padadd_NO_DUP_CHECK) == 0) {
+	ENTER;
+	SAVEFREESV(namesv); /* in case of fatal warnings */
 	/* check for duplicate declaration */
 	pad_check_dup(namesv, flags & padadd_OUR, ourstash);
+	SvREFCNT_inc_simple_void_NN(namesv);
+	LEAVE;
     }
 
     offset = pad_alloc_name(namesv, flags & ~padadd_UTF8_NAME, typestash, ourstash);
@@ -826,7 +830,7 @@ Perl_pad_add_anon(pTHX_ CV* func, I32 optype)
     if (CvOUTSIDE(func) && SvTYPE(func) == SVt_PVCV) {
 	assert(!CvWEAKOUTSIDE(func));
 	CvWEAKOUTSIDE_on(func);
-	SvREFCNT_dec(CvOUTSIDE(func));
+	SvREFCNT_dec_NN(CvOUTSIDE(func));
     }
     return ix;
 }
@@ -1964,7 +1968,7 @@ the immediately surrounding code.
 static CV *S_cv_clone(pTHX_ CV *proto, CV *cv, CV *outside);
 
 static void
-S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside)
+S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, bool newcv)
 {
     dVAR;
     I32 ix;
@@ -2014,6 +2018,7 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside)
     ENTER;
     SAVESPTR(PL_compcv);
     PL_compcv = cv;
+    if (newcv) SAVEFREESV(cv); /* in case of fatal warnings */
 
     if (CvHASEVAL(cv))
 	CvOUTSIDE(cv)	= MUTABLE_CV(SvREFCNT_inc_simple(outside));
@@ -2108,6 +2113,7 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside)
 		S_cv_clone(aTHX_ (CV *)ppad[ix], (CV *)PL_curpad[ix], cv);
 	}
 
+    if (newcv) SvREFCNT_inc_simple_void_NN(cv);
     LEAVE;
 }
 
@@ -2115,6 +2121,7 @@ static CV *
 S_cv_clone(pTHX_ CV *proto, CV *cv, CV *outside)
 {
     dVAR;
+    const bool newcv = !cv;
 
     assert(!CvUNIQUE(proto));
 
@@ -2140,7 +2147,7 @@ S_cv_clone(pTHX_ CV *proto, CV *cv, CV *outside)
     if (SvMAGIC(proto))
 	mg_copy((SV *)proto, (SV *)cv, 0, 0);
 
-    if (CvPADLIST(proto)) S_cv_clone_pad(aTHX_ proto, cv, outside);
+    if (CvPADLIST(proto)) S_cv_clone_pad(aTHX_ proto, cv, outside, newcv);
 
     DEBUG_Xv(
 	PerlIO_printf(Perl_debug_log, "\nPad CV clone\n");
@@ -2157,7 +2164,7 @@ S_cv_clone(pTHX_ CV *proto, CV *cv, CV *outside)
 	 */
 	SV* const const_sv = op_const_sv(CvSTART(cv), cv);
 	if (const_sv) {
-	    SvREFCNT_dec(cv);
+	    SvREFCNT_dec_NN(cv);
             /* For this calling case, op_const_sv returns a *copy*, which we
                donate to newCONSTSUB. Yes, this is ugly, and should be killed.
                Need to fix how lib/constant.pm works to eliminate this.  */
@@ -2462,7 +2469,7 @@ Perl_padlist_dup(pTHX_ PADLIST *srcpad, CLONE_PARAMS *param)
 #endif /* USE_ITHREADS */
 
 PAD **
-Perl_padlist_store(pTHX_ register PADLIST *padlist, I32 key, PAD *val)
+Perl_padlist_store(pTHX_ PADLIST *padlist, I32 key, PAD *val)
 {
     dVAR;
     PAD **ary;

@@ -178,7 +178,6 @@ struct regnode_2 {
 
 
 #define ANYOF_BITMAP_SIZE	32	/* 256 b/(8 b/B) */
-#define ANYOF_CLASSBITMAP_SIZE	 4	/* up to 32 (8*4) named classes */
 
 /* also used by trie */
 struct regnode_charclass {
@@ -196,7 +195,7 @@ struct regnode_charclass_class {
     U16 next_off;
     U32 arg1;					/* used as ptr in S_regclass */
     char bitmap[ANYOF_BITMAP_SIZE];		/* both compile-time */
-    char classflags[ANYOF_CLASSBITMAP_SIZE];	/* and run-time */
+    U32 classflags;	                        /* and run-time */
 };
 
 /* XXX fix this description.
@@ -415,24 +414,27 @@ struct regnode_charclass_class {
 #define ANYOF_BLANK    ((_CC_BLANK) * 2)     /* GNU extension: space and tab: non-vertical space */
 #define ANYOF_NBLANK   ((ANYOF_BLANK) + 1)
 
-#define ANYOF_MAX      ((ANYOF_NBLANK) + 1) /* So upper loop limit is written:
-                                               '< ANYOF_MAX' */
-#if (ANYOF_MAX > 32)                        /* Must fit in 32-bit word */
-#   error Problem with handy.h _CC_foo #defines
-#endif
-
 /* pseudo classes below this, not stored in the class bitmap, but used as flags
    during compilation of char classes */
 
-#define ANYOF_VERTWS    ((ANYOF_MAX)+0)
-#define ANYOF_NVERTWS   ((ANYOF_MAX)+1)
+#define ANYOF_VERTWS    ((_CC_VERTSPACE) * 2)
+#define ANYOF_NVERTWS   ((ANYOF_VERTWS)+1)
 
-#if (ANYOF_VERTWS != (_CC_VERTSPACE) * 2) \
-     || (_CC_VERTSPACE != _HIGHEST_REGCOMP_DOT_H_SYNC)
-#   error Problem with handy.h _CC_VERTSPACE #define
+/* It is best if this is the last one, as all above it are stored as bits in a
+ * bitmap, and it isn't part of that bitmap */
+#if _CC_VERTSPACE != _HIGHEST_REGCOMP_DOT_H_SYNC
+#   error Problem with handy.h _HIGHEST_REGCOMP_DOT_H_SYNC #define
 #endif
 
-#define ANYOF_HORIZWS	((ANYOF_MAX)+2)
+#define ANYOF_MAX      (ANYOF_VERTWS) /* So upper loop limit is written:
+                                       *       '< ANYOF_MAX'
+                                       * Hence doesn't include VERTWS, as that
+                                       * is a pseudo class */
+#if (ANYOF_MAX > 32)   /* Must fit in 32-bit word */
+#   error Problem with handy.h _CC_foo #defines
+#endif
+
+#define ANYOF_HORIZWS	((ANYOF_MAX)+2) /* = (ANYOF_NVERTWS + 1) */
 #define ANYOF_NHORIZWS	((ANYOF_MAX)+3)
 
 #define ANYOF_UNIPROP   ((ANYOF_MAX)+4)  /* Used to indicate a Unicode
@@ -456,16 +458,18 @@ struct regnode_charclass_class {
 
 #define ANYOF_BIT(c)		(1 << ((c) & 7))
 
-#define ANYOF_CLASS_BYTE(p, c)	(((struct regnode_charclass_class*)(p))->classflags[((c) >> 3) & 3])
-#define ANYOF_CLASS_SET(p, c)	(ANYOF_CLASS_BYTE(p, c) |=  ANYOF_BIT(c))
-#define ANYOF_CLASS_CLEAR(p, c)	(ANYOF_CLASS_BYTE(p, c) &= ~ANYOF_BIT(c))
-#define ANYOF_CLASS_TEST(p, c)	(ANYOF_CLASS_BYTE(p, c) &   ANYOF_BIT(c))
+#define ANYOF_CLASS_SET(p, c)	(((struct regnode_charclass_class*) (p))->classflags |= (1U << (c)))
+#define ANYOF_CLASS_CLEAR(p, c)	(((struct regnode_charclass_class*) (p))->classflags &= ~ (1U <<(c)))
+#define ANYOF_CLASS_TEST(p, c)	(((struct regnode_charclass_class*) (p))->classflags & (1U << (c)))
 
-#define ANYOF_CLASS_ZERO(ret)	Zero(((struct regnode_charclass_class*)(ret))->classflags, ANYOF_CLASSBITMAP_SIZE, char)
-#define ANYOF_CLASS_SETALL(ret)		\
-	memset (((struct regnode_charclass_class*)(ret))->classflags, 255, ANYOF_CLASSBITMAP_SIZE)
+#define ANYOF_CLASS_ZERO(ret)	STMT_START { ((struct regnode_charclass_class*) (ret))->classflags = 0; } STMT_END
+
+/* Shifts a bit to get, eg. 0x4000_0000, then subtracts 1 to get 0x3FFF_FFFF */
+#define ANYOF_CLASS_SETALL(ret) STMT_START { ((struct regnode_charclass_class*) (ret))->classflags = ((1U << ((ANYOF_MAX) - 1))) - 1; } STMT_END
+
+#define ANYOF_CLASS_OR(source, dest) STMT_START { (dest)->classflags |= source->classflags ; } STMT_END
+
 #define ANYOF_BITMAP_ZERO(ret)	Zero(((struct regnode_charclass*)(ret))->bitmap, ANYOF_BITMAP_SIZE, char)
-
 #define ANYOF_BITMAP(p)		(((struct regnode_charclass*)(p))->bitmap)
 #define ANYOF_BITMAP_BYTE(p, c)	(ANYOF_BITMAP(p)[(((U8)(c)) >> 3) & 31])
 #define ANYOF_BITMAP_SET(p, c)	(ANYOF_BITMAP_BYTE(p, c) |=  ANYOF_BIT(c))
@@ -483,12 +487,9 @@ struct regnode_charclass_class {
 #define ANYOF_SKIP		((ANYOF_SIZE - 1)/sizeof(regnode))
 #define ANYOF_CLASS_SKIP	((ANYOF_CLASS_SIZE - 1)/sizeof(regnode))
 
-#if ANYOF_CLASSBITMAP_SIZE != 4
-#   error ANYOF_CLASSBITMAP_SIZE is expected to be 4
-#endif
-#define ANYOF_CLASS_TEST_ANY_SET(p) ((ANYOF_FLAGS(p) & ANYOF_CLASS)         \
-	&& memNE (((struct regnode_charclass_class*)(p))->classflags,	    \
-		    "\0\0\0\0", ANYOF_CLASSBITMAP_SIZE))
+#define ANYOF_CLASS_TEST_ANY_SET(p)                               \
+        ((ANYOF_FLAGS(p) & (ANYOF_CLASS|ANYOF_IS_SYNTHETIC))         \
+	 && (((struct regnode_charclass_class*)(p))->classflags))
 /*#define ANYOF_CLASS_ADD_SKIP	(ANYOF_CLASS_SKIP - ANYOF_SKIP)
  * */
 
@@ -861,8 +862,8 @@ re.pm, especially to the documentation.
 
 #ifdef DEBUGGING
 
-#define GET_RE_DEBUG_FLAGS_DECL VOL IV re_debug_flags \
-	PERL_UNUSED_DECL = 0; GET_RE_DEBUG_FLAGS;
+#define GET_RE_DEBUG_FLAGS_DECL VOL IV re_debug_flags  = 0; \
+        PERL_UNUSED_VAR(re_debug_flags); GET_RE_DEBUG_FLAGS;
 
 #define RE_PV_COLOR_DECL(rpv,rlen,isuni,dsv,pv,l,m,c1,c2) \
     const char * const rpv =                          \

@@ -225,7 +225,7 @@ Perl_cvgv_set(pTHX_ CV* cv, GV* gv)
 
     if (oldgv) {
 	if (CvCVGV_RC(cv)) {
-	    SvREFCNT_dec(oldgv);
+	    SvREFCNT_dec_NN(oldgv);
 	    CvCVGV_RC_off(cv);
 	}
 	else {
@@ -697,7 +697,7 @@ Perl_gv_fetchmeth_pvn(pTHX_ HV *stash, const char *name, STRLEN len, I32 level, 
             }
             else {
                 /* stale cache entry, junk it and move on */
-	        SvREFCNT_dec(cand_cv);
+	        SvREFCNT_dec_NN(cand_cv);
 	        GvCV_set(topgv, NULL);
 		cand_cv = NULL;
 	        GvCVGEN(topgv) = 0;
@@ -1159,7 +1159,7 @@ Perl_gv_autoload_pvn(pTHX_ HV *stash, const char *name, STRLEN len, U32 flags)
          */
 	CvSTASH_set(cv, stash);
 	if (SvPOK(cv)) { /* Ouch! */
-	    SV *tmpsv = newSVpvn_flags(name, len, is_utf8);
+	    SV * const tmpsv = newSVpvn_flags(name, len, is_utf8);
 	    STRLEN ulen;
 	    const char *proto = CvPROTO(cv);
 	    assert(proto);
@@ -1173,7 +1173,7 @@ Perl_gv_autoload_pvn(pTHX_ HV *stash, const char *name, STRLEN len, U32 flags)
 	    SvTEMP_on(tmpsv); /* Allow theft */
 	    sv_setsv_nomg((SV *)cv, tmpsv);
 	    SvTEMP_off(tmpsv);
-	    SvREFCNT_dec(tmpsv);
+	    SvREFCNT_dec_NN(tmpsv);
 	    SvLEN(cv) = SvCUR(cv) + 1;
 	    SvCUR(cv) = ulen;
 	}
@@ -1264,7 +1264,7 @@ S_require_tie_mod(pTHX_ GV *gv, const char *varpv, SV* namesv, const char *methp
 		    type, varname, SVfARG(namesv), methpv);
 	LEAVE;
     }
-    else SvREFCNT_dec(namesv);
+    else SvREFCNT_dec_NN(namesv);
     return stash;
 }
 
@@ -1588,14 +1588,16 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
     /* By this point we should have a stash and a name */
 
     if (!stash) {
-	if (add) {
+	if (add && !PL_in_clean_all) {
+	    SV * const namesv = newSVpvn_flags(name, len, is_utf8);
 	    SV * const err = Perl_mess(aTHX_
 		 "Global symbol \"%s%"SVf"\" requires explicit package name",
 		 (sv_type == SVt_PV ? "$"
 		  : sv_type == SVt_PVAV ? "@"
 		  : sv_type == SVt_PVHV ? "%"
-		  : ""), SVfARG(newSVpvn_flags(name, len, SVs_TEMP | is_utf8)));
+		  : ""), SVfARG(namesv));
 	    GV *gv;
+	    SvREFCNT_dec_NN(namesv);
 	    if (USE_UTF8_IN_NAMES)
 		SvUTF8_on(err);
 	    qerror(err);
@@ -1638,6 +1640,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 	        case '[':
 		    require_tie_mod(gv,name,newSVpvs("arybase"),"FETCH",0);
                     break;
+#ifdef PERL_SAWAMPERSAND
 	        case '`':
 		    PL_sawampersand |= SAWAMPERSAND_LEFT;
                     (void)GvSVn(gv);
@@ -1650,6 +1653,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 		    PL_sawampersand |= SAWAMPERSAND_RIGHT;
                     (void)GvSVn(gv);
                     break;
+#endif
                 }
 	      }
 	    }
@@ -1854,6 +1858,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 	case '&':		/* $& */
 	case '`':		/* $` */
 	case '\'':		/* $' */
+#ifdef PERL_SAWAMPERSAND
 	    if (!(
 		sv_type == SVt_PVAV ||
 		sv_type == SVt_PVHV ||
@@ -1867,6 +1872,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
                                 ? SAWAMPERSAND_MIDDLE
                                 : SAWAMPERSAND_RIGHT;
                 }
+#endif
 	    goto magicalize;
 
 	case ':':		/* $: */
@@ -2012,7 +2018,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 	     GvSV(gv) && (SvOK(GvSV(gv)) || SvMAGICAL(GvSV(gv)))
 	   ))
 	    (void)hv_store(stash,name,len,(SV *)gv,0);
-	else SvREFCNT_dec(gv), gv = NULL;
+	else SvREFCNT_dec_NN(gv), gv = NULL;
     }
     if (gv) gv_init_svtype(gv, faking_it ? SVt_PVCV : sv_type);
     return gv;
@@ -2121,7 +2127,7 @@ Perl_gp_ref(pTHX_ GP *gp)
 	    /* If the GP they asked for a reference to contains
                a method cache entry, clear it first, so that we
                don't infect them with our cached entry */
-	    SvREFCNT_dec(gp->gp_cv);
+	    SvREFCNT_dec_NN(gp->gp_cv);
 	    gp->gp_cv = NULL;
 	    gp->gp_cvgen = 0;
 	}
@@ -2223,7 +2229,7 @@ Perl_magic_freeovrld(pTHX_ SV *sv, MAGIC *mg)
 	for (i = 1; i < NofAMmeth; i++) {
 	    CV * const cv = amtp->table[i];
 	    if (cv) {
-		SvREFCNT_dec(MUTABLE_SV(cv));
+		SvREFCNT_dec_NN(MUTABLE_SV(cv));
 		amtp->table[i] = NULL;
 	    }
 	}
@@ -2944,7 +2950,7 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
       if (SvREFCNT(tmpRef) > 1 && (rv_copy = AMG_CALLunary(left,copy_amg))) {
 	  SvRV_set(left, rv_copy);
 	  SvSETMAGIC(left);
-	  SvREFCNT_dec(tmpRef);  
+	  SvREFCNT_dec_NN(tmpRef);  
       }
   }
 

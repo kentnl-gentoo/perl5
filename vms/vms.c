@@ -6467,13 +6467,26 @@ static char * int_pathify_dirspec_simple(const char * dir, char * buf,
             len += n_len;
             if (e_len > 0) {
                 if (decc_efs_charset) {
-                    buf[len] = '^';
-                    len++;
-                    memcpy(&buf[len], e_spec, e_len);
-                    len += e_len;
-                } else {
-                    set_vaxc_errno(RMS$_DIR);
-                    set_errno(ENOTDIR);
+                    if (e_len == 4 
+                        && (toupper(e_spec[1]) == 'D')
+                        && (toupper(e_spec[2]) == 'I')
+                        && (toupper(e_spec[3]) == 'R')) {
+
+                        /* Corner case: directory spec with invalid version.
+                         * Valid would have followed is_dir path above.
+                         */
+                        SETERRNO(ENOTDIR, RMS$_DIR);
+                        return NULL;
+                    }
+                    else {
+                        buf[len] = '^';
+                        len++;
+                        memcpy(&buf[len], e_spec, e_len);
+                        len += e_len;
+                    }
+                }
+                else {
+                    SETERRNO(ENOTDIR, RMS$_DIR);
                     return NULL;
                 }
             }
@@ -8235,7 +8248,21 @@ int utf8_flag;
    return result;
 }
 
-
+/* A convenience macro for copying dots in filenames and escaping
+ * them when they haven't already been escaped, with guards to
+ * avoid checking before the start of the buffer or advancing
+ * beyond the end of it (allowing room for the NUL terminator).
+ */
+#define VMSEFS_DOT_WITH_ESCAPE(vmsefsdot,vmsefsbuf,vmsefsbufsiz) STMT_START { \
+    if ( ((vmsefsdot) > (vmsefsbuf) && *((vmsefsdot) - 1) != '^' \
+          || ((vmsefsdot) == (vmsefsbuf))) \
+         && (vmsefsdot) < (vmsefsbuf) + (vmsefsbufsiz) - 3 \
+       ) { \
+        *((vmsefsdot)++) = '^'; \
+    } \
+    if ((vmsefsdot) < (vmsefsbuf) + (vmsefsbufsiz) - 2) \
+        *((vmsefsdot)++) = '.'; \
+} STMT_END
 
 /*{{{ char *tovmsspec[_ts](char *path, char *buf, int * utf8_flag)*/
 static char *int_tovmsspec
@@ -8355,40 +8382,22 @@ static char *int_tovmsspec
   dirend = strrchr(path,'/');
 
   if (dirend == NULL) {
-     char *macro_start;
-     int has_macro;
-
      /* If we get here with no UNIX directory delimiters, then this is
-        not a complete file specification, either garbage a UNIX glob
-	specification that can not be converted to a VMS wildcard, or
-	it a UNIX shell macro.  MakeMaker wants shell macros passed
-	through AS-IS,
-
-	utf8 flag setting needs to be preserved.
+      * not a complete file specification, such as a Unix glob
+      * specification, shell macro, make macro, or even a valid VMS
+      * filespec but with unescaped extended characters.  The safest
+      * thing in all these cases is to pass it through as-is.
       */
-      hasdir = 0;
-
-      has_macro = 0;
-      macro_start = strchr(path,'$');
-      if (macro_start != NULL) {
-          if (macro_start[1] == '(') {
-              has_macro = 1;
-          }
+      my_strlcpy(rslt, path, VMS_MAXRSS);
+      if (vms_debug_fileify) {
+          fprintf(stderr, "int_tovmsspec: rslt = %s\n", rslt);
       }
-      if ((decc_efs_charset == 0) || (has_macro)) {
-          my_strlcpy(rslt, path, VMS_MAXRSS);
-          if (vms_debug_fileify) {
-              fprintf(stderr, "int_tovmsspec: rslt = %s\n", rslt);
-          }
-          return rslt;
-      }
+      return rslt;
   }
   else if (*(dirend+1) == '.') {  /* do we have trailing "/." or "/.." or "/..."? */
     if (!*(dirend+2)) dirend +=2;
     if (*(dirend+2) == '.' && !*(dirend+3)) dirend += 3;
-    if (decc_efs_charset == 0) {
-      if (*(dirend+2) == '.' && *(dirend+3) == '.' && !*(dirend+4)) dirend += 4;
-    }
+    if (*(dirend+2) == '.' && *(dirend+3) == '.' && !*(dirend+4)) dirend += 4;
   }
 
   cp1 = rslt;
@@ -8538,22 +8547,26 @@ static char *int_tovmsspec
         else cp2 += 3;  /* Trailing '/' was there, so skip it, too */
       }
       else {
-        if (decc_efs_charset == 0)
+        if (decc_efs_charset == 0) {
+	  if (*(cp1-1) == '^')
+	    cp1--;         /* remove the escape, if any */
 	  *(cp1++) = '_';  /* fix up syntax - '.' in name not allowed */
+	}
 	else {
-	  *(cp1++) = '^';  /* fix up syntax - '.' in name is allowed */
-	  *(cp1++) = '.';
+	  VMSEFS_DOT_WITH_ESCAPE(cp1, rslt, VMS_MAXRSS);
 	}
       }
     }
     else {
       if (!infront && *(cp1-1) == '-')  *(cp1++) = '.';
       if (*cp2 == '.') {
-        if (decc_efs_charset == 0)
+        if (decc_efs_charset == 0) {
+	  if (*(cp1-1) == '^')
+	    cp1--;         /* remove the escape, if any */
 	  *(cp1++) = '_';
+	}
 	else {
-	  *(cp1++) = '^';
-	  *(cp1++) = '.';
+	  VMSEFS_DOT_WITH_ESCAPE(cp1, rslt, VMS_MAXRSS);
 	}
       }
       else                  *(cp1++) =  *cp2;
@@ -8576,15 +8589,15 @@ static char *int_tovmsspec
 	  *(cp1++) = '?';
 	cp2++;
     case ' ':
-	*(cp1)++ = '^';
+	if (cp2 > path && *(cp2-1) != '^') /* not previously escaped */
+	    *(cp1)++ = '^';
 	*(cp1)++ = '_';
 	cp2++;
 	break;
     case '.':
 	if (((cp2 < lastdot) || (cp2[1] == '\0')) &&
 	    decc_readdir_dropdotnotype) {
-	  *(cp1)++ = '^';
-	  *(cp1)++ = '.';
+	  VMSEFS_DOT_WITH_ESCAPE(cp1, rslt, VMS_MAXRSS);
 	  cp2++;
 
 	  /* trailing dot ==> '^..' on VMS */
@@ -8661,7 +8674,8 @@ static char *int_tovmsspec
     case '|':
     case '<':
     case '>':
-	*(cp1++) = '^';
+	if (cp2 > path && *(cp2-1) != '^') /* not previously escaped */
+	    *(cp1++) = '^';
 	*(cp1++) = *(cp2++);
 	break;
     case ';':
@@ -10108,20 +10122,23 @@ Perl_readdir(pTHX_ DIR *dd)
 
     tmpsts = lib$find_file
 	(&dd->pat, &res, &dd->context, NULL, NULL, &rsts, &flags);
-    if ( tmpsts == RMS$_NMF || dd->context == 0) return NULL;  /* None left. */
+    if (dd->context == 0)
+        tmpsts = RMS$_NMF;  /* None left. (should be set, but make sure) */
+
     if (!(tmpsts & 1)) {
-      set_vaxc_errno(tmpsts);
       switch (tmpsts) {
+        case RMS$_NMF:
+          break;  /* no more files considered success */
         case RMS$_PRV:
-          set_errno(EACCES); break;
+          SETERRNO(EACCES, tmpsts); break;
         case RMS$_DEV:
-          set_errno(ENODEV); break;
+          SETERRNO(ENODEV, tmpsts); break;
         case RMS$_DIR:
-          set_errno(ENOTDIR); break;
+          SETERRNO(ENOTDIR, tmpsts); break;
         case RMS$_FNF: case RMS$_DNF:
-          set_errno(ENOENT); break;
+          SETERRNO(ENOENT, tmpsts); break;
         default:
-          set_errno(EVMSERR);
+          SETERRNO(EVMSERR, tmpsts);
       }
       Safefree(buff);
       return NULL;
@@ -10156,7 +10173,7 @@ Perl_readdir(pTHX_ DIR *dd)
 
         /* In Unix report mode, remove the ".dir;1" from the name */
         /* if it is a real directory. */
-        if (decc_filename_unix_report || decc_efs_charset) {
+        if (decc_filename_unix_report && decc_efs_charset) {
             if (is_dir_ext(e_spec, e_len, vs_spec, vs_len)) {
                 Stat_t statbuf;
                 int ret_sts;
@@ -10178,7 +10195,7 @@ Perl_readdir(pTHX_ DIR *dd)
 
     memcpy(dd->entry.d_name, n_spec, n_len + e_len);
     dd->entry.d_name[n_len + e_len] = '\0';
-    dd->entry.d_namlen = strlen(dd->entry.d_name);
+    dd->entry.d_namlen = n_len + e_len;
 
     /* Convert the filename to UNIX format if needed */
     if (dd->flags & PERL_VMSDIR_M_UNIXSPECS) {
@@ -13184,7 +13201,7 @@ Perl_vms_start_glob
 
                 /* In Unix report mode, remove the ".dir;1" from the name */
                 /* if it is a real directory */
-                if (decc_filename_unix_report || decc_efs_charset) {
+                if (decc_filename_unix_report && decc_efs_charset) {
                     if (is_dir_ext(e_spec, e_len, vs_spec, vs_len)) {
                         Stat_t statbuf;
                         int ret_sts;

@@ -89,13 +89,21 @@ sub is_tainted { # hello, camel two.
     not eval { $dummy = join("", @_), kill 0; 1 }
 }
 
-sub check_taint ($) {
-    ok is_tainted($_[0]), "verify that is tainted";
+sub check_taint ($;$) {
+    my $message_tail = $_[1] // "";
+    $message_tail = ": $message_tail" if $message_tail;
+    ok is_tainted($_[0]), "verify that is tainted$message_tail";
 }
 
-sub check_taint_not ($) {
-    ok((not is_tainted($_[0])), "verify that isn't tainted");
+sub check_taint_not ($;$) {
+    my $message_tail = $_[1] // "";
+    $message_tail = ": $message_tail" if $message_tail;
+    ok((not is_tainted($_[0])), "verify that isn't tainted$message_tail");
 }
+
+"\tb\t" =~ /^m?(\s)(.*)\1$/;
+check_taint_not   $&, "not tainted outside 'use locale'";
+;
 
 use locale;	# engage locale and therefore locale taint.
 

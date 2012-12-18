@@ -24,8 +24,8 @@ for(`find .`) {
     next if /rm -rf/; # Could be an example from perlsec, e.g.
      # Creating one of these special blocks creates SVs, obviously
     next if /(?:END|CHECK|INIT)\s*\{/;
-    next if /^\s*(?:push|unshift|(?:\@r = )?splice|binmode|sleep)/;
-    next if /\bselect(?:\s*\()[^()]+,/; # 4-arg select hangs
+    next if /^[{(]?\s*(?:push|unshift|(?:\@r = )?splice|binmode|sleep)/;
+    next if /\bselect(?:\s*|\()[^()]+,/; # 4-arg select hangs
     next if /use parent/;
     my $q = s/[\\']/sprintf "\\%02x", ord $&/gore
          =~ s/\0/'."\\0".'/grid;
@@ -59,11 +59,14 @@ $aliases{$code_point} = [ $aliases{$code_point} ];
 $aliases_maps->[$i] = [ $aliases_maps->[$i] ]
 $allow ? $hash{$acc} = $allow : push @list, $acc;
 /(a*(*MARK:a)b?)(*MARK:x)(*SKIP:a)(?{$count++; push @res,$1})(*FAIL)/g;
+$^A .= new version ~$_ for "\xce", v205, "\xcc";
 A rare race condition that would lead to L<sleep|perlfunc/sleep> taking more
 $args{include_dirs} = [ $args{include_dirs} ] 
 $ARRAY[++$#ARRAY] = $value;
 @a = sort ($b, @a)
 $a = {x => $a};
+$base =~ /^[cwnv]/i or push @tmpl, "$base>", "$base<";
+$base =~ /^[nv]/i or push @formats, "$base>", "$base<";
 BEGIN { unshift(@INC, "./blib") }
 BEGIN { unshift @INC, "lib" }
 BEGIN { unshift(@INC, LIST) }
@@ -82,7 +85,7 @@ do { $tainted_value = shift @ENV_values  } while(!$tainted_value || ref $tainted
 do {$x[$x] = $x;} while ($x++) < 10;
 eval {CHECK {print ":c3"}};
 eval {INIT {print ":i2"}};
-eval { $proto->can($method) } || push @nok, $method
+eval { $proto->can($method) } || push @nok, $method;
 eval { push \@ISA, __FILE__ };
 eval 'v23: $counter++; goto v23 unless $counter == 2';
 eval 'v23 : $counter++; goto v23 unless $counter == 2';
@@ -92,6 +95,7 @@ $got_arrayref ? unshift(@{$args[0]}, $cmd) : unshift(@args, $cmd);
 $h{ []} = 123;
 { $h[++$i] = $_ }
 High resolution alarm, sleep, gettimeofday, interval timers
+if (-d "$directory/$_") { push    @ARGV, "$directory/$_" }
 $i = int($i/2) until defined $self->[$i/2];
 $invmap_ref->[$i] = [ $invmap_ref->[$i] ];
 is(push(@ary,4), 3);
@@ -127,12 +131,10 @@ print "LA LA LA\n" while 1;          # loops forever
 prog => 'use Config; CHECK { $Config{awk} }',
 $p->{share_dir} = { dist => [ $p->{share_dir} ] };
 $p->{share_dir} = { dist => $p->{share_dir} };
-{ push (@Bad, $key) }
-( push @hard, $file ), next
-{ push @keep, $_ }
-{ push @$output, $x->{buff} }
-{ push (@values, $value) }
+-sleep
 $resp = [$resp]
+$r = eval q[ qr/$r(??{$x})/; ];
+$r = qr/$r(??{$x})/;
 s/a|/push @bar, 1/e;
 $self->{DIR} = [grep $_, split ":", $self->{DIR}];
 $share_dir->{dist} = [ $share_dir->{dist} ];
@@ -154,8 +156,8 @@ weaken($objs[@objs] = $$h{$_} = []);
 while (1) { my $k; }
 while(1) { sleep(1); }
 while($foo--) { print("In thread $thread\n"); }
-"words" =~ /(word|word|word)(?{push \@got, $1})s$/;
-"words" =~ /(word|word|word)(?{push \@got,$1})s$/i;
+"words" =~ /(word|word|word)(?{push @got, $1})s$/;
+"words" =~ /(word|word|word)(?{push @got,$1})s$/i;
 $x->[$j] -= $BASE if $car = (($x->[$j] += $car) >= $BASE) ? 1 : 0; $j++;
 $x->[scalar @$x] = 0;		# avoid || 0 test inside loop
 $z = splice @a, 3, 1, "recordZ";

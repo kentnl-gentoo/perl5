@@ -279,7 +279,7 @@ the "Perl extended UTF-8" (the infamous 'v-strings') will encode into
 five bytes or more.
 
 =cut */
-STATIC STRLEN
+PERL_STATIC_INLINE STRLEN
 S_is_utf8_char_slow(const U8 *s, const STRLEN len)
 {
     dTHX;   /* The function called below requires thread context */
@@ -1491,11 +1491,39 @@ Perl_is_uni_alnum(pTHX_ UV c)
 }
 
 bool
+Perl_is_uni_alnumc(pTHX_ UV c)
+{
+    U8 tmpbuf[UTF8_MAXBYTES+1];
+    uvchr_to_utf8(tmpbuf, c);
+    return is_utf8_alnumc(tmpbuf);
+}
+
+bool    /* Internal function so we can deprecate the external one, and call
+           this one from other deprecated functions in this file */
+S_is_utf8_idfirst(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    if (*p == '_')
+	return TRUE;
+    /* is_utf8_idstart would be more logical. */
+    return is_utf8_common(p, &PL_utf8_idstart, "IdStart");
+}
+
+bool
 Perl_is_uni_idfirst(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_idfirst(tmpbuf);
+    return S_is_utf8_idfirst(aTHX_ tmpbuf);
+}
+
+bool
+Perl__is_uni_perl_idstart(pTHX_ UV c)
+{
+    U8 tmpbuf[UTF8_MAXBYTES+1];
+    uvchr_to_utf8(tmpbuf, c);
+    return _is_utf8_perl_idstart(tmpbuf);
 }
 
 bool
@@ -1806,92 +1834,139 @@ Perl__to_uni_fold_flags(pTHX_ UV c, U8* p, STRLEN *lenp, const U8 flags)
     }
 }
 
-/* for now these all assume no locale info available for Unicode > 255; and
- * the corresponding macros in handy.h (like isALNUM_LC_uvchr) should have been
- * called instead, so that these don't get called for < 255 */
-
 bool
 Perl_is_uni_alnum_lc(pTHX_ UV c)
 {
-    return is_uni_alnum(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isALNUM_LC(UNI_TO_NATIVE(c));
+    }
+    return is_uni_alnum(c);
+}
+
+bool
+Perl_is_uni_alnumc_lc(pTHX_ UV c)
+{
+    if (c < 256) {
+        return isALNUMC_LC(UNI_TO_NATIVE(c));
+    }
+    return is_uni_alnumc(c);
 }
 
 bool
 Perl_is_uni_idfirst_lc(pTHX_ UV c)
 {
-    return is_uni_idfirst(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isIDFIRST_LC(UNI_TO_NATIVE(c));
+    }
+    return _is_uni_perl_idstart(c);
 }
 
 bool
 Perl_is_uni_alpha_lc(pTHX_ UV c)
 {
-    return is_uni_alpha(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isALPHA_LC(UNI_TO_NATIVE(c));
+    }
+    return is_uni_alpha(c);
 }
 
 bool
 Perl_is_uni_ascii_lc(pTHX_ UV c)
 {
-    return is_uni_ascii(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isASCII_LC(UNI_TO_NATIVE(c));
+    }
+    return 0;
 }
 
 bool
 Perl_is_uni_blank_lc(pTHX_ UV c)
 {
-    return is_uni_blank(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isBLANK_LC(UNI_TO_NATIVE(c));
+    }
+    return isBLANK_uni(c);
 }
 
 bool
 Perl_is_uni_space_lc(pTHX_ UV c)
 {
-    return is_uni_space(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isSPACE_LC(UNI_TO_NATIVE(c));
+    }
+    return isSPACE_uni(c);
 }
 
 bool
 Perl_is_uni_digit_lc(pTHX_ UV c)
 {
-    return is_uni_digit(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isDIGIT_LC(UNI_TO_NATIVE(c));
+    }
+    return is_uni_digit(c);
 }
 
 bool
 Perl_is_uni_upper_lc(pTHX_ UV c)
 {
-    return is_uni_upper(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isUPPER_LC(UNI_TO_NATIVE(c));
+    }
+    return is_uni_upper(c);
 }
 
 bool
 Perl_is_uni_lower_lc(pTHX_ UV c)
 {
-    return is_uni_lower(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isLOWER_LC(UNI_TO_NATIVE(c));
+    }
+    return is_uni_lower(c);
 }
 
 bool
 Perl_is_uni_cntrl_lc(pTHX_ UV c)
 {
-    return is_uni_cntrl(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isCNTRL_LC(UNI_TO_NATIVE(c));
+    }
+    return 0;
 }
 
 bool
 Perl_is_uni_graph_lc(pTHX_ UV c)
 {
-    return is_uni_graph(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isGRAPH_LC(UNI_TO_NATIVE(c));
+    }
+    return is_uni_graph(c);
 }
 
 bool
 Perl_is_uni_print_lc(pTHX_ UV c)
 {
-    return is_uni_print(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isPRINT_LC(UNI_TO_NATIVE(c));
+    }
+    return is_uni_print(c);
 }
 
 bool
 Perl_is_uni_punct_lc(pTHX_ UV c)
 {
-    return is_uni_punct(c);	/* XXX no locale support yet */
+    if (c < 256) {
+        return isPUNCT_LC(UNI_TO_NATIVE(c));
+    }
+    return is_uni_punct(c);
 }
 
 bool
 Perl_is_uni_xdigit_lc(pTHX_ UV c)
 {
-    return is_uni_xdigit(c);	/* XXX no locale support yet */
+    if (c < 256) {
+       return isXDIGIT_LC(UNI_TO_NATIVE(c));
+    }
+    return isXDIGIT_uni(c);
 }
 
 U32
@@ -1971,16 +2046,23 @@ Perl_is_utf8_alnum(pTHX_ const U8 *p)
 }
 
 bool
+Perl_is_utf8_alnumc(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT_IS_UTF8_ALNUMC;
+
+    return is_utf8_common(p, &PL_utf8_alnumc, "IsAlnum");
+}
+
+bool
 Perl_is_utf8_idfirst(pTHX_ const U8 *p) /* The naming is historical. */
 {
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_IDFIRST;
 
-    if (*p == '_')
-	return TRUE;
-    /* is_utf8_idstart would be more logical. */
-    return is_utf8_common(p, &PL_utf8_idstart, "IdStart");
+    return S_is_utf8_idfirst(aTHX_ p);
 }
 
 bool
@@ -1997,11 +2079,11 @@ Perl_is_utf8_xidfirst(pTHX_ const U8 *p) /* The naming is historical. */
 }
 
 bool
-Perl__is_utf8__perl_idstart(pTHX_ const U8 *p)
+Perl__is_utf8_perl_idstart(pTHX_ const U8 *p)
 {
     dVAR;
 
-    PERL_ARGS_ASSERT__IS_UTF8__PERL_IDSTART;
+    PERL_ARGS_ASSERT__IS_UTF8_PERL_IDSTART;
 
     return is_utf8_common(p, &PL_utf8_perl_idstart, "_Perl_IDStart");
 }
@@ -2849,8 +2931,8 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
 	method = gv_fetchmeth(stash, "SWASHNEW", 8, -1);
 	if (!method) {	/* demand load utf8 */
 	    ENTER;
-	    errsv_save = newSVsv(ERRSV);
-	    SAVEFREESV(errsv_save);
+	    if ((errsv_save = GvSV(PL_errgv))) SAVEFREESV(errsv_save);
+	    GvSV(PL_errgv) = NULL;
 	    /* It is assumed that callers of this routine are not passing in
 	     * any user derived data.  */
 	    /* Need to do this after save_re_context() as it will set
@@ -2863,8 +2945,15 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
 #endif
 	    Perl_load_module(aTHX_ PERL_LOADMOD_NOIMPORT, newSVpvn(pkg,pkg_len),
 			     NULL);
-	    if (!SvTRUE(ERRSV))
-		sv_setsv(ERRSV, errsv_save);
+	    {
+		/* Not ERRSV, as there is no need to vivify a scalar we are
+		   about to discard. */
+		SV * const errsv = GvSV(PL_errgv);
+		if (!SvTRUE(errsv)) {
+		    GvSV(PL_errgv) = SvREFCNT_inc_simple(errsv_save);
+		    SvREFCNT_dec(errsv);
+		}
+	    }
 	    LEAVE;
 	}
 	SPAGAIN;
@@ -2876,8 +2965,8 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
 	mPUSHi(minbits);
 	mPUSHi(none);
 	PUTBACK;
-	errsv_save = newSVsv(ERRSV);
-	SAVEFREESV(errsv_save);
+	if ((errsv_save = GvSV(PL_errgv))) SAVEFREESV(errsv_save);
+	GvSV(PL_errgv) = NULL;
 	/* If we already have a pointer to the method, no need to use
 	 * call_method() to repeat the lookup.  */
 	if (method
@@ -2887,8 +2976,14 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
 	    retval = *PL_stack_sp--;
 	    SvREFCNT_inc(retval);
 	}
-	if (!SvTRUE(ERRSV))
-	    sv_setsv(ERRSV, errsv_save);
+	{
+	    /* Not ERRSV.  See above. */
+	    SV * const errsv = GvSV(PL_errgv);
+	    if (!SvTRUE(errsv)) {
+		GvSV(PL_errgv) = SvREFCNT_inc_simple(errsv_save);
+		SvREFCNT_dec(errsv);
+	    }
+	}
 	LEAVE;
 	POPSTACK;
 	if (IN_PERL_COMPILETIME) {
@@ -3903,6 +3998,8 @@ Perl__swash_to_invlist(pTHX_ SV* const swash)
 
     SV* invlist;
 
+    PERL_ARGS_ASSERT__SWASH_TO_INVLIST;
+
     /* If not a hash, it must be the swash's inversion list instead */
     if (SvTYPE(hv) != SVt_PVHV) {
         return (SV*) hv;
@@ -3918,8 +4015,6 @@ Perl__swash_to_invlist(pTHX_ SV* const swash)
     typestr = (U8*)SvPV_nolen(*typesvp);
     bits  = SvUV(*bitssvp);
     octets = bits >> 3; /* if bits == 1, then octets == 0 */
-
-    PERL_ARGS_ASSERT__SWASH_TO_INVLIST;
 
     /* read $swash->{LIST} */
     if (SvPOK(*listsvp)) {
@@ -4034,8 +4129,7 @@ Perl__swash_to_invlist(pTHX_ SV* const swash)
 	    _invlist_union(invlist, other, &invlist);
 	    break;
 	case '!':
-	    _invlist_invert(other);
-	    _invlist_union(invlist, other, &invlist);
+            _invlist_union_maybe_complement_2nd(invlist, other, TRUE, &invlist);
 	    break;
 	case '-':
 	    _invlist_subtract(invlist, other, &invlist);
@@ -4140,7 +4234,7 @@ U32 flags)
 }
 
 bool
-Perl_check_utf8_print(pTHX_ register const U8* s, const STRLEN len)
+Perl_check_utf8_print(pTHX_ const U8* s, const STRLEN len)
 {
     /* May change: warns if surrogates, non-character code points, or
      * non-Unicode code points are in s which has length len bytes.  Returns
@@ -4351,7 +4445,7 @@ L<http://www.unicode.org/unicode/reports/tr21/> (Case Mappings).
  *  FOLDEQ_S2_ALREADY_FOLDED   Similarly.
  */
 I32
-Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, register UV l1, bool u1, const char *s2, char **pe2, register UV l2, bool u2, U32 flags)
+Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, UV l1, bool u1, const char *s2, char **pe2, UV l2, bool u2, U32 flags)
 {
     dVAR;
     const U8 *p1  = (const U8*)s1; /* Point to current char */

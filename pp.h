@@ -67,7 +67,7 @@ Refetch the stack pointer.  Used after a callback.  See L<perlcall>.
 
 #define dSP		SV **sp = PL_stack_sp
 #define djSP		dSP
-#define dMARK		register SV **mark = PL_stack_base + POPMARK
+#define dMARK		SV **mark = PL_stack_base + POPMARK
 #define dORIGMARK	const I32 origmark = (I32)(mark - PL_stack_base)
 #define ORIGMARK	(PL_stack_base + origmark)
 
@@ -420,25 +420,21 @@ Does not use C<TARG>.  See also C<XPUSHu>, C<mPUSHu> and C<PUSHu>.
 /* No longer used in core. Use AMG_CALLunary instead */
 #define AMG_CALLun(sv,meth) AMG_CALLunary(sv, CAT2(meth,_amg))
 
-#define tryAMAGICunTARGET(meth, shift, jump) \
-    tryAMAGICunTARGET_flags(meth, shift, jump, 0)
-#define tryAMAGICunTARGETlist(meth, shift, jump)          \
-    tryAMAGICunTARGET_flags(meth, shift, jump, AMGf_want_list)
-#define tryAMAGICunTARGET_flags(meth, shift, jump, flags)	\
+#define tryAMAGICunTARGETlist(meth, jump)			\
     STMT_START {						\
 	dSP;							\
 	SV *tmpsv;						\
-	SV *arg= sp[shift];					\
+	SV *arg= *sp;						\
         int gimme = GIMME_V;                                    \
 	if (SvAMAGIC(arg) &&					\
 	    (tmpsv = amagic_call(arg, &PL_sv_undef, meth,	\
-				 flags | AMGf_noright | AMGf_unary))) {	\
+				 AMGf_want_list | AMGf_noright	\
+				|AMGf_unary))) {		\
 	    SPAGAIN;						\
-	    sp += shift;					\
             if (gimme == G_VOID) {                              \
                 (void)POPs; /* XXX ??? */                       \
             }                                                   \
-            else if ((flags & AMGf_want_list) && gimme == G_ARRAY) { \
+            else if (gimme == G_ARRAY) {			\
                 int i;                                          \
                 I32 len;                                        \
                 assert(SvTYPE(tmpsv) == SVt_PVAV);              \

@@ -157,7 +157,7 @@
 #  endif
 #endif
 
-#define pVAR    register struct perl_vars* my_vars PERL_UNUSED_DECL
+#define pVAR    struct perl_vars* my_vars PERL_UNUSED_DECL
 
 #ifdef PERL_GLOBAL_STRUCT
 #  define dVAR		pVAR    = (struct perl_vars*)PERL_GET_VARS()
@@ -170,7 +170,7 @@
 #    define MULTIPLICITY
 #  endif
 #  define tTHX	PerlInterpreter*
-#  define pTHX  register tTHX my_perl PERL_UNUSED_DECL
+#  define pTHX  tTHX my_perl PERL_UNUSED_DECL
 #  define aTHX	my_perl
 #  define aTHXa(a) aTHX = (tTHX)a
 #  ifdef PERL_GLOBAL_STRUCT
@@ -394,7 +394,7 @@
 #endif
 
 #ifndef pTHXx
-#  define pTHXx		register PerlInterpreter *my_perl
+#  define pTHXx		PerlInterpreter *my_perl
 #  define pTHXx_	pTHXx,
 #  define aTHXx		my_perl
 #  define aTHXx_	aTHXx,
@@ -442,7 +442,7 @@
 #  ifdef __GNUC__
 #    define stringify_immed(s) #s
 #    define stringify(s) stringify_immed(s)
-register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
+struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 #  endif
 #endif
 
@@ -1641,15 +1641,15 @@ EXTERN_C char *crypt(const char *, const char *);
 #   define S_IRWXO (S_IROTH|S_IWOTH|S_IXOTH)
 #endif
 
-/* BeOS 5.0 and Haiku R1 seem to define S_IREAD and S_IWRITE in <posix/fcntl.h>
+/* Haiku R1 seems to define S_IREAD and S_IWRITE in <posix/fcntl.h>
  * which would get included through <sys/file.h >, but that is 3000
  * lines in the future.  --jhi */
 
-#if !defined(S_IREAD) && !(defined(__BEOS__) || defined(__HAIKU__))
+#if !defined(S_IREAD) && !defined(__HAIKU__)
 #   define S_IREAD S_IRUSR
 #endif
 
-#if !defined(S_IWRITE) && !(defined(__BEOS__) || defined(__HAIKU__))
+#if !defined(S_IWRITE) && !defined(__HAIKU__)
 #   define S_IWRITE S_IWUSR
 #endif
 
@@ -1709,7 +1709,7 @@ EXTERN_C char *crypt(const char *, const char *);
 
 #if defined(HAS_VSNPRINTF) && defined(HAS_C99_VARIADIC_MACROS) && !(defined(DEBUGGING) && !defined(PERL_USE_GCC_BRACE_GROUPS)) && !defined(PERL_GCC_PEDANTIC)
 #  ifdef PERL_USE_GCC_BRACE_GROUPS
-#      define my_vsnprintf(buffer, len, ...) ({ int __len__ = vsnprintf(buffer, len, __VA_ARGS__); if ((len) > 0 && (Size_t)__len__ >= (len)) Perl_croak_nocontext("panic: vsnprintf buffer overflow"); __len__; })
+#      define my_vsnprintf(buffer, len, ...) ({ int __len__ = vsnprintf(buffer, len, __VA_ARGS__); if ((len) > 0 && (Size_t)__len__ >= (Size_t)(len)) Perl_croak_nocontext("panic: vsnprintf buffer overflow"); __len__; })
 #      define PERL_MY_VSNPRINTF_GUARDED
 #  else
 #    define my_vsnprintf(buffer, len, ...) vsnprintf(buffer, len, __VA_ARGS__)
@@ -2494,6 +2494,18 @@ typedef AV PAD;
 typedef AV PADNAMELIST;
 typedef SV PADNAME;
 
+#if !defined(PERL_OLD_COPY_ON_WRITE) && !defined(PERL_NEW_COPY_ON_WRITE) && !defined(PERL_NO_COW)
+# define PERL_NEW_COPY_ON_WRITE
+#endif
+
+#if defined(PERL_OLD_COPY_ON_WRITE) || defined(PERL_NEW_COPY_ON_WRITE)
+# if defined(PERL_OLD_COPY_ON_WRITE) && defined(PERL_NEW_COPY_ON_WRITE)
+#  error PERL_OLD_COPY_ON_WRITE and PERL_NEW_COPY_ON_WRITE are exclusive
+# else
+#  define PERL_ANY_COW
+# endif
+#endif
+
 #include "handy.h"
 
 #if defined(USE_LARGE_FILES) && !defined(NO_64_BIT_RAWIO)
@@ -2637,9 +2649,6 @@ typedef SV PADNAME;
 #if defined(__HAIKU__)
 #   include "haiku/haikuish.h"
 #   define ISHISH "haiku"
-#elif defined(__BEOS__)
-#   include "beos/beosish.h"
-#   define ISHISH "beos"
 #endif
 
 #ifndef ISHISH
@@ -4707,8 +4716,14 @@ EXTCONST char PL_bincompat_options[] =
 #  ifdef PERL_OLD_COPY_ON_WRITE
 			     " PERL_OLD_COPY_ON_WRITE"
 #  endif
+#  ifdef PERL_NEW_COPY_ON_WRITE
+			     " PERL_NEW_COPY_ON_WRITE"
+#  endif
 #  ifdef PERL_POISON
 			     " PERL_POISON"
+#  endif
+#  ifdef PERL_SAWAMPERSAND
+			     " PERL_SAWAMPERSAND"
 #  endif
 #  ifdef PERL_TRACK_MEMPOOL
 			     " PERL_TRACK_MEMPOOL"
@@ -4897,6 +4912,11 @@ typedef enum {
 #define SAWAMPERSAND_MIDDLE     2   /* saw $& */
 #define SAWAMPERSAND_RIGHT      4   /* saw $' */
 
+#ifndef PERL_SAWAMPERSAND
+# define PL_sawampersand \
+	(SAWAMPERSAND_LEFT|SAWAMPERSAND_MIDDLE|SAWAMPERSAND_RIGHT)
+#endif
+
 /* Various states of the input record separator SV (rs) */
 #define RsSNARF(sv)   (! SvOK(sv))
 #define RsSIMPLE(sv)  (SvOK(sv) && (! SvPOK(sv) || SvCUR(sv)))
@@ -4983,8 +5003,14 @@ struct interpreter {
 
 /* Set up PERLVAR macros for populating structs */
 #  define PERLVAR(prefix,var,type) type prefix##var;
+
+/* 'var' is an array of length 'n' */
 #  define PERLVARA(prefix,var,n,type) type prefix##var[n];
+
+/* initialize 'var' to init' */
 #  define PERLVARI(prefix,var,type,init) type prefix##var;
+
+/* like PERLVARI, but make 'var' a const */
 #  define PERLVARIC(prefix,var,type,init) type prefix##var;
 
 struct interpreter {
@@ -5643,10 +5669,9 @@ int flock(int fd, int op);
 #if O_TEXT != O_BINARY
     /* If you have different O_TEXT and O_BINARY and you are a CLRF shop,
      * that is, you are somehow DOSish. */
-#   if defined(__BEOS__) || defined(__HAIKU__) || defined(__VOS__) || \
-	defined(__CYGWIN__)
-    /* BeOS/Haiku has O_TEXT != O_BINARY but O_TEXT and O_BINARY have no effect;
-     * BeOS/Haiku is always UNIXoid (LF), not DOSish (CRLF). */
+#   if defined(__HAIKU__) || defined(__VOS__) || defined(__CYGWIN__)
+    /* Haiku has O_TEXT != O_BINARY but O_TEXT and O_BINARY have no effect;
+     * Haiku is always UNIXoid (LF), not DOSish (CRLF). */
     /* VOS has O_TEXT != O_BINARY, and they have effect,
      * but VOS always uses LF, never CRLF. */
     /* If you have O_TEXT different from your O_BINARY but you still are

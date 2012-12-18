@@ -110,7 +110,7 @@ Individual members of C<PL_parser> have their own documentation.
 #  define PL_nextval		(PL_parser->nextval)
 #endif
 
-static const char ident_too_long[] = "Identifier too long";
+static const char* const ident_too_long = "Identifier too long";
 
 #ifdef PERL_MAD
 #  define CURMAD(slot,sv) if (PL_madskills) { curmad(slot,sv); sv = 0; }
@@ -1735,7 +1735,7 @@ S_incline(pTHX_ const char *s)
 /* skip space before PL_thistoken */
 
 STATIC char *
-S_skipspace0(pTHX_ register char *s)
+S_skipspace0(pTHX_ char *s)
 {
     PERL_ARGS_ASSERT_SKIPSPACE0;
 
@@ -1756,7 +1756,7 @@ S_skipspace0(pTHX_ register char *s)
 /* skip space after PL_thistoken */
 
 STATIC char *
-S_skipspace1(pTHX_ register char *s)
+S_skipspace1(pTHX_ char *s)
 {
     const char *start = s;
     I32 startoff = start - SvPVX(PL_linestr);
@@ -1783,7 +1783,7 @@ S_skipspace1(pTHX_ register char *s)
 }
 
 STATIC char *
-S_skipspace2(pTHX_ register char *s, SV **svp)
+S_skipspace2(pTHX_ char *s, SV **svp)
 {
     char *start;
     const I32 bufptroff = PL_bufptr - SvPVX(PL_linestr);
@@ -1836,7 +1836,7 @@ S_update_debugger_info(pTHX_ SV *orig_sv, const char *const buf, STRLEN len)
  */
 
 STATIC char *
-S_skipspace(pTHX_ register char *s)
+S_skipspace(pTHX_ char *s)
 {
 #ifdef PERL_MAD
     char *start = s;
@@ -2110,7 +2110,7 @@ S_newSV_maybe_utf8(pTHX_ const char *const start, STRLEN len)
  */
 
 STATIC char *
-S_force_word(pTHX_ register char *start, int token, int check_keyword, int allow_pack, int allow_initial_tick)
+S_force_word(pTHX_ char *start, int token, int check_keyword, int allow_pack, int allow_initial_tick)
 {
     dVAR;
     char *s;
@@ -2159,7 +2159,7 @@ S_force_word(pTHX_ register char *start, int token, int check_keyword, int allow
  */
 
 STATIC void
-S_force_ident(pTHX_ register const char *s, int kind)
+S_force_ident(pTHX_ const char *s, int kind)
 {
     dVAR;
 
@@ -2689,6 +2689,7 @@ S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
                         /* include the <}> */
                         e - backslash_ptr + 1);
     if (! SvPOK(res)) {
+        SvREFCNT_dec_NN(res);
         return NULL;
     }
 
@@ -2697,9 +2698,8 @@ S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
      * validation. */
     table = GvHV(PL_hintgv);		 /* ^H */
     cvp = hv_fetchs(table, "charnames", FALSE);
-    cv = *cvp;
-    if (((rv = SvRV(cv)) != NULL)
-        && ((stash = CvSTASH(rv)) != NULL))
+    if (cvp && (cv = *cvp) && SvROK(cv) && ((rv = SvRV(cv)) != NULL)
+        && SvTYPE(rv) == SVt_PVCV && ((stash = CvSTASH(rv)) != NULL))
     {
         const char * const name = HvNAME(stash);
         if strEQ(name, "_charnames") {
@@ -2966,6 +2966,9 @@ S_scan_const(pTHX_ char *start)
 	this_utf8  = PL_sublex_info.sub_op->op_private & (PL_lex_repl ? OPpTRANS_FROM_UTF : OPpTRANS_TO_UTF);
     }
 
+    /* Protect sv from errors and fatal warnings. */
+    ENTER_with_name("scan_const");
+    SAVEFREESV(sv);
 
     while (s < send || dorange) {
 
@@ -3037,7 +3040,6 @@ S_scan_const(pTHX_ char *start)
 #endif
 
                 if (min > max) {
-		    SvREFCNT_dec(sv);
 		    Perl_croak(aTHX_
 			       "Invalid range \"%c-%c\" in transliteration operator",
 			       (char)min, (char)max);
@@ -3096,7 +3098,6 @@ S_scan_const(pTHX_ char *start)
 	    /* range begins (ignore - as first or last char) */
 	    else if (*s == '-' && s+1 < send  && s != start) {
 		if (didrange) {
-		    SvREFCNT_dec(sv);
 		    Perl_croak(aTHX_ "Ambiguous range in transliteration operator");
 		}
 		if (has_utf8
@@ -3723,6 +3724,7 @@ S_scan_const(pTHX_ char *start)
 
     /* return the substring (via pl_yylval) only if we parsed anything */
     if (s > PL_bufptr) {
+	SvREFCNT_inc_simple_void_NN(sv);
 	if ( PL_hints & ( PL_lex_inpat ? HINT_NEW_RE : HINT_NEW_STRING ) ) {
 	    const char *const key = PL_lex_inpat ? "qr" : "q";
 	    const STRLEN keylen = PL_lex_inpat ? 2 : 1;
@@ -3747,8 +3749,8 @@ S_scan_const(pTHX_ char *start)
 				type, typelen);
 	}
 	pl_yylval.opval = (OP*)newSVOP(OP_CONST, 0, sv);
-    } else
-	SvREFCNT_dec(sv);
+    }
+    LEAVE_with_name("scan_const");
     return s;
 }
 
@@ -3774,7 +3776,7 @@ S_scan_const(pTHX_ char *start)
 /* This is the one truly awful dwimmer necessary to conflate C and sed. */
 
 STATIC int
-S_intuit_more(pTHX_ register char *s)
+S_intuit_more(pTHX_ char *s)
 {
     dVAR;
 
@@ -4223,7 +4225,7 @@ Perl_filter_read(pTHX_ int idx, SV *buf_sv, int maxlen)
 }
 
 STATIC char *
-S_filter_gets(pTHX_ register SV *sv, STRLEN append)
+S_filter_gets(pTHX_ SV *sv, STRLEN append)
 {
     dVAR;
 
@@ -8020,6 +8022,9 @@ Perl_yylex(pTHX)
 				  "Experimental \"%s\" subs not enabled",
 				   tmp == KEY_my    ? "my"    :
 				   tmp == KEY_state ? "state" : "our");
+		    Perl_ck_warner_d(aTHX_
+			packWARN(WARN_EXPERIMENTAL__LEXICAL_SUBS),
+			"The lexical_subs feature is experimental");
 		    goto really_sub;
 		}
 		PL_in_my_stash = find_in_my_stash(PL_tokenbuf, len);
@@ -9006,7 +9011,7 @@ S_checkcomma(pTHX_ const char *s, const char *name, const char *what)
     }
 }
 
-/* Either returns sv, or mortalizes sv and returns a new SV*.
+/* Either returns sv, or mortalizes/frees sv and returns a new SV*.
    Best used as sv=new_constant(..., sv, ...).
    If s, pv are NULL, calls subroutine with one argument,
    and <type> is used with error messages only.
@@ -9019,26 +9024,34 @@ S_new_constant(pTHX_ const char *s, STRLEN len, const char *key, STRLEN keylen,
     dVAR; dSP;
     HV * table = GvHV(PL_hintgv);		 /* ^H */
     SV *res;
+    SV *errsv = NULL;
     SV **cvp;
     SV *cv, *typesv;
     const char *why1 = "", *why2 = "", *why3 = "";
 
     PERL_ARGS_ASSERT_NEW_CONSTANT;
+    /* We assume that this is true: */
+    if (*key == 'c') { assert (strEQ(key, "charnames")); }
+    assert(type || s);
 
     /* charnames doesn't work well if there have been errors found */
-    if (PL_error_count > 0 && strEQ(key,"charnames"))
+    if (PL_error_count > 0 && *key == 'c')
+    {
+	SvREFCNT_dec_NN(sv);
 	return &PL_sv_undef;
+    }
 
+    sv_2mortal(sv);			/* Parent created it permanently */
     if (!table
 	|| ! (PL_hints & HINT_LOCALIZE_HH)
 	|| ! (cvp = hv_fetch(table, key, keylen, FALSE))
 	|| ! SvOK(*cvp))
     {
-	SV *msg;
+	char *msg;
 	
 	/* Here haven't found what we're looking for.  If it is charnames,
 	 * perhaps it needs to be loaded.  Try doing that before giving up */
-	if (strEQ(key,"charnames")) {
+	if (*key == 'c') {
 	    Perl_load_module(aTHX_
 		            0,
 			    newSVpvs("_charnames"),
@@ -9060,33 +9073,32 @@ S_new_constant(pTHX_ const char *s, STRLEN len, const char *key, STRLEN keylen,
 	    }
 	}
 	if (!table || !(PL_hints & HINT_LOCALIZE_HH)) {
-	    msg = Perl_newSVpvf(aTHX_
-			    "Constant(%s) unknown", (type ? type: "undef"));
+	    msg = Perl_form(aTHX_
+			       "Constant(%.*s) unknown",
+				(int)(type ? typelen : len),
+				(type ? type: s));
 	}
 	else {
             why1 = "$^H{";
             why2 = key;
             why3 = "} is not defined";
         report:
-            if (strEQ(key,"charnames")) {
-                yyerror_pv(Perl_form(aTHX_
+            if (*key == 'c') {
+                msg = Perl_form(aTHX_
                             /* The +3 is for '\N{'; -4 for that, plus '}' */
                             "Unknown charname '%.*s'", (int)typelen - 4, type + 3
-                           ),
-                           UTF ? SVf_UTF8 : 0);
-                return sv;
+                      );
             }
             else {
-                msg = Perl_newSVpvf(aTHX_ "Constant(%s): %s%s%s",
-                                (type ? type: "undef"), why1, why2, why3);
+                msg = Perl_form(aTHX_ "Constant(%.*s): %s%s%s",
+                                    (int)(type ? typelen : len),
+                                    (type ? type: s), why1, why2, why3);
             }
         }
-	yyerror(SvPVX_const(msg));
- 	SvREFCNT_dec(msg);
-  	return sv;
+	yyerror_pv(msg, UTF ? SVf_UTF8 : 0);
+  	return SvREFCNT_inc_simple_NN(sv);
     }
 now_ok:
-    sv_2mortal(sv);			/* Parent created it permanently */
     cv = *cvp;
     if (!pv && s)
   	pv = newSVpvn_flags(s, len, SVs_TEMP);
@@ -9112,18 +9124,18 @@ now_ok:
     SPAGAIN ;
 
     /* Check the eval first */
-    if (!PL_in_eval && SvTRUE(ERRSV)) {
+    if (!PL_in_eval && ((errsv = ERRSV), SvTRUE_NN(errsv))) {
 	STRLEN errlen;
 	const char * errstr;
-	sv_catpvs(ERRSV, "Propagated");
-	errstr = SvPV_const(ERRSV, errlen);
+	sv_catpvs(errsv, "Propagated");
+	errstr = SvPV_const(errsv, errlen);
 	yyerror_pvn(errstr, errlen, 0); /* Duplicates the message inside eval */
 	(void)POPs;
-	res = SvREFCNT_inc_simple(sv);
+	res = SvREFCNT_inc_simple_NN(sv);
     }
     else {
  	res = POPs;
-	SvREFCNT_inc_simple_void(res);
+	SvREFCNT_inc_simple_void_NN(res);
     }
 
     PUTBACK ;
@@ -9136,6 +9148,7 @@ now_ok:
  	why2 = key;
  	why3 = "}} did not return a defined value";
  	sv = res;
+	(void)sv_2mortal(sv);
  	goto report;
     }
 
@@ -9146,7 +9159,7 @@ now_ok:
    *slp
    */
 STATIC char *
-S_scan_word(pTHX_ register char *s, char *dest, STRLEN destlen, int allow_package, STRLEN *slp)
+S_scan_word(pTHX_ char *s, char *dest, STRLEN destlen, int allow_package, STRLEN *slp)
 {
     dVAR;
     char *d = dest;
@@ -9189,7 +9202,7 @@ S_scan_word(pTHX_ register char *s, char *dest, STRLEN destlen, int allow_packag
 }
 
 STATIC char *
-S_scan_ident(pTHX_ register char *s, register const char *send, char *dest, STRLEN destlen, I32 ck_uni)
+S_scan_ident(pTHX_ char *s, const char *send, char *dest, STRLEN destlen, I32 ck_uni)
 {
     dVAR;
     char *bracket = NULL;
@@ -9773,7 +9786,7 @@ S_scan_trans(pTHX_ char *start)
 */
 
 STATIC char *
-S_scan_heredoc(pTHX_ register char *s)
+S_scan_heredoc(pTHX_ char *s)
 {
     dVAR;
     I32 op_type = OP_SCALAR;
@@ -10633,7 +10646,7 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
     SV *sv = NULL;			/* place to put the converted number */
     bool floatit;			/* boolean: int or float? */
     const char *lastub = NULL;		/* position of last underbar */
-    static char const number_too_long[] = "Number too long";
+    static const char* const number_too_long = "Number too long";
 
     PERL_ARGS_ASSERT_SCAN_NUM;
 
@@ -10981,7 +10994,11 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
     case 'v':
 vstring:
 		sv = newSV(5); /* preallocate storage space */
+		ENTER_with_name("scan_vstring");
+		SAVEFREESV(sv);
 		s = scan_vstring(s, PL_bufend, sv);
+		SvREFCNT_inc_simple_void_NN(sv);
+		LEAVE_with_name("scan_vstring");
 	break;
     }
 
@@ -10996,7 +11013,7 @@ vstring:
 }
 
 STATIC char *
-S_scan_formline(pTHX_ register char *s)
+S_scan_formline(pTHX_ char *s)
 {
     dVAR;
     char *eol;
@@ -11264,9 +11281,10 @@ Perl_yyerror_pvn(pTHX_ const char *const s, STRLEN len, U32 flags)
     else
 	qerror(msg);
     if (PL_error_count >= 10) {
-	if (PL_in_eval && SvCUR(ERRSV))
+	SV * errsv;
+	if (PL_in_eval && ((errsv = ERRSV), SvCUR(errsv)))
 	    Perl_croak(aTHX_ "%"SVf"%s has too many errors.\n",
-		       SVfARG(ERRSV), OutCopFILE(PL_curcop));
+		       SVfARG(errsv), OutCopFILE(PL_curcop));
 	else
 	    Perl_croak(aTHX_ "%s has too many errors.\n",
             OutCopFILE(PL_curcop));
@@ -11530,12 +11548,17 @@ vstring, as well as updating the passed in sv.
 
 Function must be called like
 
-	sv = newSV(5);
+	sv = sv_2mortal(newSV(5));
 	s = scan_vstring(s,e,sv);
 
 where s and e are the start and end of the string.
 The sv should already be large enough to store the vstring
 passed in, for performance reasons.
+
+This function may croak if fatal warnings are enabled in the
+calling scope, hence the sv_2mortal in the example (to prevent
+a leak).  Make sure to do SvREFCNT_inc afterwards if you use
+sv_2mortal.
 
 */
 

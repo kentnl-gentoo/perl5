@@ -523,7 +523,7 @@ BEGIN {
 # Debugger for Perl 5.00x; perl5db.pl patch level:
 use vars qw($VERSION $header);
 
-$VERSION = '1.39_05';
+$VERSION = '1.39_06';
 
 $header = "perl5db.pl version $VERSION";
 
@@ -3030,6 +3030,9 @@ any variables we might want to address in the C<DB> package.
 =cut
 
             }    # PIPE:
+
+            # trace an expression
+            $cmd =~ s/^t\s/\$DB::trace |= 1;\n/;
 
             # Make sure the flag that says "the debugger's running" is
             # still on, to make sure we get control again.
@@ -8755,7 +8758,6 @@ my %_is_in_pods = (map { $_ => 1 }
     apio
     api
     artistic
-    beos
     book
     boot
     bot

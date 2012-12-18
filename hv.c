@@ -35,7 +35,7 @@ holds the key and hash value.
 #define PERL_HASH_INTERNAL_ACCESS
 #include "perl.h"
 
-#define HV_MAX_LENGTH_BEFORE_SPLIT 14
+#define DO_HSPLIT(xhv) ((xhv)->xhv_keys > (xhv)->xhv_max) /* HvTOTALKEYS(hv) > HvMAX(hv) */
 
 static const char S_strtab_error[]
     = "Cannot modify shared string table in hv_%s";
@@ -337,7 +337,7 @@ Perl_hv_common_key_len(pTHX_ HV *hv, const char *key, I32 klen_i32,
 
 void *
 Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
-	       int flags, int action, SV *val, register U32 hash)
+	       int flags, int action, SV *val, U32 hash)
 {
     dVAR;
     XPVHV* xhv;
@@ -794,29 +794,9 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
     if (masked_flags & HVhek_ENABLEHVKFLAGS)
 	HvHASKFLAGS_on(hv);
 
-    {
-	const HE *counter = HeNEXT(entry);
-
-	xhv->xhv_keys++; /* HvTOTALKEYS(hv)++ */
-	if (!counter) {				/* initial entry? */
-	} else if (xhv->xhv_keys > xhv->xhv_max) {
-		/* Use only the old HvUSEDKEYS(hv) > HvMAX(hv) condition to limit
-		   bucket splits on a rehashed hash, as we're not going to
-		   split it again, and if someone is lucky (evil) enough to
-		   get all the keys in one list they could exhaust our memory
-		   as we repeatedly double the number of buckets on every
-		   entry. Linear search feels a less worse thing to do.  */
-	    hsplit(hv);
-        } else {
-	    U32 n_links = 1;
-
-	    while ((counter = HeNEXT(counter)))
-		n_links++;
-
-	    if (n_links > HV_MAX_LENGTH_BEFORE_SPLIT) {
-		hsplit(hv);
-	    }
-	}
+    xhv->xhv_keys++; /* HvTOTALKEYS(hv)++ */
+    if ( DO_HSPLIT(xhv) ) {
+        hsplit(hv);
     }
 
     if (return_svp) {
@@ -1412,7 +1392,7 @@ Perl_hv_copy_hints_hv(pTHX_ HV *const ohv)
 
 /* like hv_free_ent, but returns the SV rather than freeing it */
 STATIC SV*
-S_hv_free_ent_ret(pTHX_ HV *hv, register HE *entry)
+S_hv_free_ent_ret(pTHX_ HV *hv, HE *entry)
 {
     dVAR;
     SV *val;
@@ -1436,7 +1416,7 @@ S_hv_free_ent_ret(pTHX_ HV *hv, register HE *entry)
 
 
 void
-Perl_hv_free_ent(pTHX_ HV *hv, register HE *entry)
+Perl_hv_free_ent(pTHX_ HV *hv, HE *entry)
 {
     dVAR;
     SV *val;
@@ -1451,7 +1431,7 @@ Perl_hv_free_ent(pTHX_ HV *hv, register HE *entry)
 
 
 void
-Perl_hv_delayfree_ent(pTHX_ HV *hv, register HE *entry)
+Perl_hv_delayfree_ent(pTHX_ HV *hv, HE *entry)
 {
     dVAR;
 
@@ -1773,16 +1753,14 @@ Perl_hv_undef_flags(pTHX_ HV *hv, U32 flags)
       }
       if((meta = aux->xhv_mro_meta)) {
 	if (meta->mro_linear_all) {
-	    SvREFCNT_dec(MUTABLE_SV(meta->mro_linear_all));
-	    meta->mro_linear_all = NULL;
-	    /* This is just acting as a shortcut pointer.  */
-	    meta->mro_linear_current = NULL;
-	} else if (meta->mro_linear_current) {
+	    SvREFCNT_dec_NN(meta->mro_linear_all);
+	    /* mro_linear_current is just acting as a shortcut pointer,
+	       hence the else.  */
+	}
+	else
 	    /* Only the current MRO is stored, so this owns the data.
 	     */
 	    SvREFCNT_dec(meta->mro_linear_current);
-	    meta->mro_linear_current = NULL;
-	}
 	SvREFCNT_dec(meta->mro_nextmethod);
 	SvREFCNT_dec(meta->isa);
 	Safefree(meta);
@@ -2235,7 +2213,7 @@ Perl_hv_kill_backrefs(pTHX_ HV *hv) {
 	HvAUX(hv)->xhv_backreferences = 0;
 	Perl_sv_kill_backrefs(aTHX_ MUTABLE_SV(hv), av);
 	if (SvTYPE(av) == SVt_PVAV)
-	    SvREFCNT_dec(av);
+	    SvREFCNT_dec_NN(av);
     }
 }
 
@@ -2408,7 +2386,7 @@ C<hv_iterinit>.
 */
 
 char *
-Perl_hv_iterkey(pTHX_ register HE *entry, I32 *retlen)
+Perl_hv_iterkey(pTHX_ HE *entry, I32 *retlen)
 {
     PERL_ARGS_ASSERT_HV_ITERKEY;
 
@@ -2436,7 +2414,7 @@ see C<hv_iterinit>.
 */
 
 SV *
-Perl_hv_iterkeysv(pTHX_ register HE *entry)
+Perl_hv_iterkeysv(pTHX_ HE *entry)
 {
     PERL_ARGS_ASSERT_HV_ITERKEYSV;
 
@@ -2453,7 +2431,7 @@ C<hv_iterkey>.
 */
 
 SV *
-Perl_hv_iterval(pTHX_ HV *hv, register HE *entry)
+Perl_hv_iterval(pTHX_ HV *hv, HE *entry)
 {
     PERL_ARGS_ASSERT_HV_ITERVAL;
 
@@ -2616,7 +2594,7 @@ S_unshare_hek_or_pvn(pTHX_ const HEK *hek, const char *str, I32 len, U32 hash)
  * len and hash must both be valid for str.
  */
 HEK *
-Perl_share_hek(pTHX_ const char *str, I32 len, register U32 hash)
+Perl_share_hek(pTHX_ const char *str, I32 len, U32 hash)
 {
     bool is_utf8 = FALSE;
     int flags = 0;
@@ -2648,7 +2626,7 @@ Perl_share_hek(pTHX_ const char *str, I32 len, register U32 hash)
 }
 
 STATIC HEK *
-S_share_hek_flags(pTHX_ const char *str, I32 len, register U32 hash, int flags)
+S_share_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags)
 {
     dVAR;
     HE *entry;
@@ -2718,8 +2696,8 @@ S_share_hek_flags(pTHX_ const char *str, I32 len, register U32 hash, int flags)
 
 	xhv->xhv_keys++; /* HvTOTALKEYS(hv)++ */
 	if (!next) {			/* initial entry? */
-	} else if (xhv->xhv_keys > xhv->xhv_max /* HvUSEDKEYS(hv) > HvMAX(hv) */) {
-		hsplit(PL_strtab);
+	} else if ( DO_HSPLIT(xhv) ) {
+            hsplit(PL_strtab);
 	}
     }
 

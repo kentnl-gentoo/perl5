@@ -6,9 +6,12 @@
 
 package File::DosGlob;
 
-our $VERSION = '1.08';
+our $VERSION = '1.09';
 use strict;
 use warnings;
+
+require XSLoader;
+XSLoader::load();
 
 sub doglob {
     my $cond = shift;
@@ -100,17 +103,14 @@ sub doglob {
 #
 
 # context (keyed by second cxix arg provided by core)
-my %entries;
+our %entries;
 
 sub glob {
-    my($pat,$cxix) = @_;
+    my($pat,$cxix) = ($_[0], _callsite());
     my @pat;
 
     # glob without args defaults to $_
     $pat = $_ unless defined $pat;
-
-    # assume global context if not provided one
-    $cxix = '_G_' unless defined $cxix;
 
     # if we're just beginning, do it all first
     if (!$entries{$cxix}) {

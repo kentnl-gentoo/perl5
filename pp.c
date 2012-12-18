@@ -174,7 +174,7 @@ PP(pp_clonecv)
 	/* If this changes to use SAVECLEARSV, we can move the SAVECLEARSV
 	   to introcv and remove the SvPADSTALE_off. */
 	SAVEPADSVANDMORTALIZE(ARGTARG);
-	PAD_SVl(ARGTARG) = mg->mg_obj;
+	PAD_SVl(ARGTARG) = SvREFCNT_inc_simple_NN(mg->mg_obj);
     }
     else {
 	if (CvROOT(mg->mg_obj)) {
@@ -1646,7 +1646,7 @@ PP(pp_repeat)
 
     if (GIMME == G_ARRAY && PL_op->op_private & OPpREPEAT_DOLIST) {
 	dMARK;
-	static const char oom_list_extend[] = "Out of memory during list extend";
+	static const char* const oom_list_extend = "Out of memory during list extend";
 	const I32 items = SP - MARK;
 	const I32 max = items * count;
 
@@ -1698,7 +1698,7 @@ PP(pp_repeat)
 	SV * const tmpstr = POPs;
 	STRLEN len;
 	bool isutf;
-	static const char oom_string_extend[] =
+	static const char* const oom_string_extend =
 	  "Out of memory during string extend";
 
 	if (TARG != tmpstr)
@@ -5353,7 +5353,7 @@ PP(pp_split)
 #endif
     else
 	ary = NULL;
-    if (ary && (gimme != G_ARRAY || (pm->op_pmflags & PMf_ONCE))) {
+    if (ary) {
 	realarray = 1;
 	PUTBACK;
 	av_extend(ary,0);
@@ -5380,7 +5380,7 @@ PP(pp_split)
     orig = s;
     if (skipwhite) {
 	if (do_utf8) {
-	    while (*s == ' ' || is_utf8_space((U8*)s))
+	    while (isSPACE_utf8(s))
 		s += UTF8SKIP(s);
 	}
 	else if (get_regex_charset(RX_EXTFLAGS(rx)) == REGEX_LOCALE_CHARSET) {
@@ -5405,9 +5405,9 @@ PP(pp_split)
 	    m = s;
 	    /* this one uses 'm' and is a negative test */
 	    if (do_utf8) {
-		while (m < strend && !( *m == ' ' || is_utf8_space((U8*)m) )) {
+		while (m < strend && ! isSPACE_utf8(m) ) {
 		    const int t = UTF8SKIP(m);
-		    /* is_utf8_space returns FALSE for malform utf8 */
+		    /* isSPACE_utf8 returns FALSE for malform utf8 */
 		    if (strend - m < t)
 			m = strend;
 		    else
@@ -5444,7 +5444,7 @@ PP(pp_split)
 
 	    /* this one uses 's' and is a positive test */
 	    if (do_utf8) {
-		while (s < strend && ( *s == ' ' || is_utf8_space((U8*)s) ))
+		while (s < strend && isSPACE_utf8(s) )
 	            s +=  UTF8SKIP(s);
 	    }
 	    else if (get_regex_charset(RX_EXTFLAGS(rx)) == REGEX_LOCALE_CHARSET) {

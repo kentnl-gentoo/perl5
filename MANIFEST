@@ -3,9 +3,6 @@ AUTHORS			Contact info for contributors
 autodoc.pl		Creates pod/perlintern.pod and pod/perlapi.pod
 av.c			Array value code
 av.h			Array value header
-beos/beos.c		BeOS port
-beos/beosish.h		BeOS port
-beos/nm.c		BeOS port
 cflags.SH		A script that emits C compilation flags per file
 Changes			Describe how to peruse changes between releases
 charclass_invlists.h	Compiled-in inversion lists
@@ -1064,6 +1061,7 @@ cpan/ExtUtils-MakeMaker/PATCHING				Suggestions for patching MakeMaker
 cpan/ExtUtils-MakeMaker/README					MakeMaker README
 cpan/ExtUtils-MakeMaker/README.packaging			MakeMaker packaging README
 cpan/ExtUtils-MakeMaker/t/00compile.t				See if MakeMaker modules compile
+cpan/ExtUtils-MakeMaker/t/01perl_bugs.t
 cpan/ExtUtils-MakeMaker/t/arch_check.t				Test MakeMaker's arch_check()
 cpan/ExtUtils-MakeMaker/t/backwards.t				Check MakeMaker's backwards compatibility
 cpan/ExtUtils-MakeMaker/t/basic.t				See if MakeMaker can build a module
@@ -1512,6 +1510,7 @@ cpan/List-Util/t/maxstr.t		List::Util
 cpan/List-Util/t/max.t			List::Util
 cpan/List-Util/t/minstr.t		List::Util
 cpan/List-Util/t/min.t			List::Util
+cpan/List-Util/t/multicall-refcount.t
 cpan/List-Util/t/openhan.t		Scalar::Util
 cpan/List-Util/t/proto.t		Scalar::Util
 cpan/List-Util/t/readonly.t		Scalar::Util
@@ -1520,6 +1519,7 @@ cpan/List-Util/t/refaddr.t		Scalar::Util
 cpan/List-Util/t/reftype.t		Scalar::Util
 cpan/List-Util/t/shuffle.t		List::Util
 cpan/List-Util/t/stack-corruption.t	List::Util
+cpan/List-Util/t/sum0.t
 cpan/List-Util/t/sum.t			List::Util
 cpan/List-Util/t/tainted.t		Scalar::Util
 cpan/List-Util/t/weak.t			Scalar::Util
@@ -2713,6 +2713,7 @@ cpan/Unicode-Collate/Collate/CJK/JISX0208.pm			Unicode::Collate
 cpan/Unicode-Collate/Collate/CJK/Korean.pm			Unicode::Collate
 cpan/Unicode-Collate/Collate/CJK/Pinyin.pm			Unicode::Collate
 cpan/Unicode-Collate/Collate/CJK/Stroke.pm			Unicode::Collate
+cpan/Unicode-Collate/Collate/CJK/Zhuyin.pm
 cpan/Unicode-Collate/Collate/keys.txt		Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/af.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/ar.pl			Unicode::Collate
@@ -2726,6 +2727,7 @@ cpan/Unicode-Collate/Collate/Locale/cs.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/cy.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/da.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/de_phone.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/ee.pl
 cpan/Unicode-Collate/Collate/Locale/eo.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/es.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/es_trad.pl			Unicode::Collate
@@ -2795,6 +2797,7 @@ cpan/Unicode-Collate/Collate/Locale/zh_gb.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/zh_pin.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/zh.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate/Locale/zh_strk.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/zh_zhu.pl
 cpan/Unicode-Collate/Collate.pm			Unicode::Collate
 cpan/Unicode-Collate/Collate.xs			Unicode::Collate
 cpan/Unicode-Collate/Makefile.PL			Unicode::Collate
@@ -2809,6 +2812,7 @@ cpan/Unicode-Collate/t/cjk_ko.t		Unicode::Collate
 cpan/Unicode-Collate/t/cjk_py.t		Unicode::Collate
 cpan/Unicode-Collate/t/cjkrange.t		Unicode::Collate
 cpan/Unicode-Collate/t/cjk_st.t		Unicode::Collate
+cpan/Unicode-Collate/t/cjk_zy.t
 cpan/Unicode-Collate/t/compatui.t		Unicode::Collate
 cpan/Unicode-Collate/t/contract.t		Unicode::Collate
 cpan/Unicode-Collate/t/default.t		Unicode::Collate
@@ -2827,6 +2831,7 @@ cpan/Unicode-Collate/t/loc_az.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_be.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_bg.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_bn.t		Unicode::Collate
+cpan/Unicode-Collate/t/loc_bscy.t
 cpan/Unicode-Collate/t/loc_bs.t	Unicode::Collate
 cpan/Unicode-Collate/t/loc_ca.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_cjkc.t		Unicode::Collate
@@ -2837,6 +2842,7 @@ cpan/Unicode-Collate/t/loc_cy.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_da.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_deph.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_de.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_ee.t
 cpan/Unicode-Collate/t/loc_eo.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_es.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_estr.t			Unicode::Collate
@@ -2910,6 +2916,7 @@ cpan/Unicode-Collate/t/loc_zhgb.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_zhpy.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_zhst.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_zh.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_zhzy.t
 cpan/Unicode-Collate/t/nonchar.t			Unicode::Collate
 cpan/Unicode-Collate/t/normal.t			Unicode::Collate
 cpan/Unicode-Collate/t/overcjk0.t		Unicode::Collate
@@ -3693,7 +3700,6 @@ ext/Devel-Peek/Peek.pm		Data debugging tool, module and pod
 ext/Devel-Peek/Peek.xs		Data debugging tool, externals
 ext/Devel-Peek/t/Peek.t		See if Devel::Peek works
 ext/DynaLoader/dl_aix.xs	AIX implementation
-ext/DynaLoader/dl_beos.xs	BeOS implementation
 ext/DynaLoader/dl_dld.xs	GNU dld style implementation
 ext/DynaLoader/dl_dllload.xs	S/390 dllload() style implementation
 ext/DynaLoader/dl_dlopen.xs	BSD/SunOS4&5 dlopen() style implementation
@@ -3735,6 +3741,9 @@ ext/FileCache/t/04twoarg.t	See if FileCache works
 ext/FileCache/t/05override.t	See if FileCache works
 ext/FileCache/t/06export.t	See if FileCache exporting works
 ext/FileCache/t/07noimport.t	See if FileCache works without importing
+ext/File-DosGlob/DosGlob.xs		Win32 DOS-globbing module
+ext/File-DosGlob/lib/File/DosGlob.pm	Win32 DOS-globbing module
+ext/File-DosGlob/t/DosGlob.t		See if File::DosGlob works
 ext/File-Glob/bsd_glob.c	File::Glob extension run time code
 ext/File-Glob/bsd_glob.h	File::Glob extension header file
 ext/File-Glob/Changes		File::Glob extension changelog
@@ -3751,6 +3760,7 @@ ext/GDBM_File/GDBM_File.pm	GDBM extension Perl module
 ext/GDBM_File/GDBM_File.xs	GDBM extension external subroutines
 ext/GDBM_File/hints/sco.pl	Hint for GDBM_File for named architecture
 ext/GDBM_File/Makefile.PL	GDBM extension makefile writer
+ext/GDBM_File/t/fatal.t		Test the fatal_func argument to gdbm_open
 ext/GDBM_File/t/gdbm.t		See if GDBM_File works
 ext/GDBM_File/typemap		GDBM extension interface types
 ext/Hash-Util/Changes		Change history of Hash::Util
@@ -4108,7 +4118,6 @@ hints/altos486.sh		Hints for named architecture
 hints/amigaos.sh		Hints for named architecture
 hints/atheos.sh			Hints for named architecture
 hints/aux_3.sh			Hints for named architecture
-hints/beos.sh			Hints for named architecture
 hints/broken-db.msg		Warning message for systems with broken DB library
 hints/bsdos.sh			Hints for named architecture
 hints/catamount.sh		Hints for named architecture
@@ -4266,8 +4275,6 @@ lib/File/Compare.pm		Emulation of cmp command
 lib/File/Compare.t		See if File::Compare works
 lib/File/Copy.pm		Emulation of cp command
 lib/File/Copy.t			See if File::Copy works
-lib/File/DosGlob.pm		Win32 DOS-globbing module
-lib/File/DosGlob.t		See if File::DosGlob works
 lib/File/Find.pm		Routines to do a find
 lib/File/Find/t/find.t		See if File::Find works
 lib/File/Find/t/taint.t		See if File::Find works with taint
@@ -4679,6 +4686,7 @@ pod/perl5172delta.pod		Perl changes in version 5.17.2
 pod/perl5173delta.pod		Perl changes in version 5.17.3
 pod/perl5174delta.pod		Perl changes in version 5.17.4
 pod/perl5175delta.pod		Perl changes in version 5.17.5
+pod/perl5176delta.pod		Perl changes in version 5.17.6
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4868,7 +4876,6 @@ qnx/qnx.c			QNX silent matherr callback
 README				The Instructions
 README.aix			Perl notes for AIX
 README.amiga			Perl notes for AmigaOS
-README.beos			Perl notes for BeOS
 README.bs2000			Perl notes for POSIX-BC BS2000
 README.ce			Perl notes for WinCE
 README.cn			Perl for Simplified Chinese (in EUC-CN)
@@ -5230,7 +5237,6 @@ t/op/alarm.t			See if alarm works
 t/op/anonsub.t			See if anonymous subroutines work
 t/op/append.t			See if . works
 t/op/args.t			See if operations on @_ work
-t/op/arith.t			See if arithmetic works
 t/op/array_base.t		Tests for the remnant of $[
 t/op/array.t			See if array operations work
 t/op/assignwarn.t		See if OP= operators warn correctly for undef targets
@@ -5238,6 +5244,11 @@ t/op/attrhand.t			See if attribute handlers work
 t/op/attrs.t			See if attributes on declarations work
 t/op/auto.t			See if autoincrement et all work
 t/op/avhv.t			See if pseudo-hashes work
+t/opbasic/arith.t			See if arithmetic works
+t/opbasic/cmp.t			See if the various string and numeric compare work
+t/opbasic/concat.t			See if string concatenation works
+t/opbasic/magic_phase.t		See if ${^GLOBAL_PHASE} works
+t/opbasic/qq.t			See if qq works
 t/op/bless.t			See if bless works
 t/op/blocks.t			See if BEGIN and friends work
 t/op/bop.t			See if bitops work
@@ -5249,13 +5260,11 @@ t/op/chop.t			See if chop works
 t/op/chr.t			See if chr works
 t/op/closure.t			See if closures work
 t/op/closure_test.pl		Extra file for closure.t
-t/op/cmp.t			See if the various string and numeric compare work
 t/op/concat2.t			Tests too complex for concat.t
-t/op/concat.t			See if string concatenation works
 t/op/cond.t			See if conditional expressions work
 t/op/context.t			See if context propagation works
 t/op/coreamp.t			Test &foo() calls for CORE subs
-t/op/coresubs.t			Generics tests for CORE subs
+t/op/coresubs.t			Generic tests for CORE subs
 t/op/cproto.t			Check builtin prototypes
 t/op/crypt.t			See if crypt works
 t/op/current_sub.t		__SUB__ tests
@@ -5322,7 +5331,6 @@ t/op/lock.t			Tests for lock args & retval (no threads)
 t/op/loopctl.t			See if next/last/redo work
 t/op/lop.t			See if logical operators work
 t/op/magic-27839.t		Test for #27839, skipped for minitest
-t/op/magic_phase.t		See if ${^GLOBAL_PHASE} works
 t/op/magic.t			See if magic variables work
 t/op/method.t			See if method calls work
 t/op/mkdir.t			See if mkdir works
@@ -5345,7 +5353,6 @@ t/op/print.t			See if print works
 t/op/protowarn.t		See if the illegalproto warnings work
 t/op/push.t			See if push and pop work
 t/op/pwent.t			See if getpw*() functions work
-t/op/qq.t			See if qq works
 t/op/qr.t			See if qr works
 t/op/quotemeta.t		See if quotemeta works
 t/op/rand.t			See if rand works
@@ -5459,6 +5466,7 @@ t/re/pat_special_cc.t		See if special charclasses (\s \w \d) work the same as (\
 t/re/pat_special_cc_thr.t	See if special charclasses (\s \w \d) work the same as (\s and [\s]) under threads
 t/re/pat.t			See if esoteric patterns work
 t/re/pat_thr.t			See if esoteric patterns work in another thread
+t/re/pos.t			Ensure pos() gets set properly after pre-match failures in pp_match
 t/re/qr-72922.t			Test for bug #72922
 t/re/qr_gc.t			See if qr doesn't leak
 t/re/qrstack.t			See if qr expands the stack properly

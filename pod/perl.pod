@@ -179,6 +179,7 @@ aux a2p c2ph h2ph h2xs perlbug pl2pm pod2html pod2man s2p splain xsubpp
 
     perlhist		Perl history records
     perldelta		Perl changes since previous version
+    perl5176delta	Perl changes in version 5.17.6
     perl5175delta	Perl changes in version 5.17.5
     perl5174delta	Perl changes in version 5.17.4
     perl5173delta	Perl changes in version 5.17.3
@@ -233,7 +234,6 @@ aux a2p c2ph h2ph h2xs perlbug pl2pm pod2html pod2man s2p splain xsubpp
 
     perlaix		Perl notes for AIX
     perlamiga		Perl notes for AmigaOS
-    perlbeos		Perl notes for BeOS
     perlbs2000		Perl notes for POSIX-BC BS2000
     perlce		Perl notes for WinCE
     perlcygwin		Perl notes for Cygwin

@@ -85,9 +85,12 @@ PP(pp_pushmark)
 PP(pp_stringify)
 {
     dVAR; dSP; dTARGET;
-    sv_copypv(TARG,TOPs);
-    SETTARG;
-    RETURN;
+    SV * const sv = TOPs;
+    SETs(TARG);
+    sv_copypv(TARG, sv);
+    SvSETMAGIC(TARG);
+    /* no PUTBACK, SETs doesn't inc/dec SP */
+    return NORMAL;
 }
 
 PP(pp_gv)
@@ -99,14 +102,22 @@ PP(pp_gv)
 
 PP(pp_and)
 {
-    dVAR; dSP;
+    dVAR;
     PERL_ASYNC_CHECK();
-    if (!SvTRUE(TOPs))
-	RETURN;
-    else {
-        if (PL_op->op_type == OP_AND)
-	    --SP;
-	RETURNOP(cLOGOP->op_other);
+    {
+	/* SP is not used to remove a variable that is saved across the
+	  sv_2bool_flags call in SvTRUE_NN, if a RISC/CISC or low/high machine
+	  register or load/store vs direct mem ops macro is introduced, this
+	  should be a define block between direct PL_stack_sp and dSP operations,
+	  presently, using PL_stack_sp is bias towards CISC cpus */
+	SV * const sv = *PL_stack_sp;
+	if (!SvTRUE_NN(sv))
+	    return NORMAL;
+	else {
+	    if (PL_op->op_type == OP_AND)
+		--PL_stack_sp;
+	    return cLOGOP->op_other;
+	}
     }
 }
 
@@ -173,7 +184,7 @@ PP(pp_sassign)
 		*/
 		SvRV_set(right, MUTABLE_SV(newCONSTSUB(GvSTASH(left), NULL,
 						      SvRV(cv))));
-		SvREFCNT_dec(cv);
+		SvREFCNT_dec_NN(cv);
 		LEAVE_with_name("sassign_coderef");
 	    } else {
 		/* What can happen for the corner case *{"BONK"} = \&{"BONK"};
@@ -196,7 +207,7 @@ PP(pp_sassign)
 		assert(CvFLAGS(source) & CVf_CONST);
 
 		SvREFCNT_inc_void(source);
-		SvREFCNT_dec(upgraded);
+		SvREFCNT_dec_NN(upgraded);
 		SvRV_set(right, MUTABLE_SV(source));
 	    }
 	}
@@ -365,8 +376,11 @@ PP(pp_padrange)
                     | SAVEt_CLEARPADRANGE);
         assert(OPpPADRANGE_COUNTMASK + 1 == (1 <<OPpPADRANGE_COUNTSHIFT));
         assert((payload >> (OPpPADRANGE_COUNTSHIFT+SAVE_TIGHT_SHIFT)) == base);
-        SSCHECK(1);
-        SSPUSHUV(payload);
+        {
+            dSS_ADD;
+            SS_ADD_UV(payload);
+            SS_ADD_END(1);
+        }
 
         for (i = 0; i <count; i++)
             SvPADSTALE_off(*svp++); /* mark lexical as active */
@@ -411,7 +425,7 @@ PP(pp_readline)
     dSP;
     if (TOPs) {
 	SvGETMAGIC(TOPs);
-	tryAMAGICunTARGETlist(iter_amg, 0, 0);
+	tryAMAGICunTARGETlist(iter_amg, 0);
 	PL_last_in_gv = MUTABLE_GV(*PL_stack_sp--);
     }
     else PL_last_in_gv = PL_argvgv, PL_stack_sp--;
@@ -936,22 +950,19 @@ PP(pp_rv2av)
 }
 
 STATIC void
-S_do_oddball(pTHX_ HV *hash, SV **relem, SV **firstrelem)
+S_do_oddball(pTHX_ SV **oddkey, SV **firstkey)
 {
     dVAR;
 
     PERL_ARGS_ASSERT_DO_ODDBALL;
 
-    if (*relem) {
-	SV *tmpstr;
-        const HE *didstore;
-
+    if (*oddkey) {
         if (ckWARN(WARN_MISC)) {
 	    const char *err;
-	    if (relem == firstrelem &&
-		SvROK(*relem) &&
-		(SvTYPE(SvRV(*relem)) == SVt_PVAV ||
-		 SvTYPE(SvRV(*relem)) == SVt_PVHV))
+	    if (oddkey == firstkey &&
+		SvROK(*oddkey) &&
+		(SvTYPE(SvRV(*oddkey)) == SVt_PVAV ||
+		 SvTYPE(SvRV(*oddkey)) == SVt_PVHV))
 	    {
 		err = "Reference found where even-sized list expected";
 	    }
@@ -960,15 +971,6 @@ S_do_oddball(pTHX_ HV *hash, SV **relem, SV **firstrelem)
 	    Perl_warner(aTHX_ packWARN(WARN_MISC), "%s", err);
 	}
 
-        tmpstr = newSV(0);
-        didstore = hv_store_ent(hash,*relem,tmpstr,0);
-        if (SvMAGICAL(hash)) {
-            if (SvSMAGICAL(tmpstr))
-                mg_set(tmpstr);
-            if (!didstore)
-                sv_2mortal(tmpstr);
-        }
-        TAINT_NOT;
     }
 }
 
@@ -990,11 +992,12 @@ PP(pp_aassign)
     HV *hash;
     I32 i;
     int magic;
-    int duplicates = 0;
-    SV **firsthashrelem = NULL;	/* "= 0" keeps gcc 2.95 quiet  */
+    U32 lval = 0;
 
     PL_delaymagic = DM_DELAY;		/* catch simultaneous items */
     gimme = GIMME_V;
+    if (gimme == G_ARRAY)
+        lval = PL_op->op_flags & OPf_MOD || LVRET;
 
     /* If there's a common identifier on both sides we have to take
      * special care that assigning the identifier on the left doesn't
@@ -1072,48 +1075,76 @@ PP(pp_aassign)
 	    break;
 	case SVt_PVHV: {				/* normal hash */
 		SV *tmpstr;
+                int odd;
+                int duplicates = 0;
 		SV** topelem = relem;
+                SV **firsthashrelem = relem;
 
 		hash = MUTABLE_HV(sv);
 		magic = SvMAGICAL(hash) != 0;
+
+                odd = ((lastrelem - firsthashrelem)&1)? 0 : 1;
+                if ( odd ) {
+                    do_oddball(lastrelem, firsthashrelem);
+                    /* we have firstlelem to reuse, it's not needed anymore
+		     */
+                    *(lastrelem+1) = &PL_sv_undef;
+                }
+
 		ENTER;
 		SAVEFREESV(SvREFCNT_inc_simple_NN(sv));
 		hv_clear(hash);
-		firsthashrelem = relem;
-
-		while (relem < lastrelem) {	/* gobble up all the rest */
+		while (relem < lastrelem+odd) {	/* gobble up all the rest */
 		    HE *didstore;
-		    sv = *relem ? *relem : &PL_sv_no;
+                    assert(*relem);
+		    /* Copy the key if aassign is called in lvalue context,
+		       to avoid having the next op modify our rhs.  Copy
+		       it also if it is gmagical, lest it make the
+		       hv_store_ent call below croak, leaking the value. */
+		    sv = lval || SvGMAGICAL(*relem)
+			 ? sv_mortalcopy(*relem)
+			 : *relem;
 		    relem++;
-		    tmpstr = sv_newmortal();
-		    if (*relem)
-			sv_setsv(tmpstr,*relem);	/* value */
-		    relem++;
-		    if (gimme != G_VOID) {
+                    assert(*relem);
+		    SvGETMAGIC(*relem);
+                    tmpstr = newSV(0);
+		    sv_setsv_nomg(tmpstr,*relem++);	/* value */
+		    if (gimme == G_ARRAY) {
 			if (hv_exists_ent(hash, sv, 0))
 			    /* key overwrites an existing entry */
 			    duplicates += 2;
-			else
-			if (gimme == G_ARRAY) {
+			else {
 			    /* copy element back: possibly to an earlier
-			     * stack location if we encountered dups earlier */
+			     * stack location if we encountered dups earlier,
+			     * possibly to a later stack location if odd */
 			    *topelem++ = sv;
 			    *topelem++ = tmpstr;
 			}
 		    }
 		    didstore = hv_store_ent(hash,sv,tmpstr,0);
-		    if (didstore) SvREFCNT_inc_simple_void_NN(tmpstr);
 		    if (magic) {
-			if (SvSMAGICAL(tmpstr))
-			    mg_set(tmpstr);
-		    }
+			if (!didstore) sv_2mortal(tmpstr);
+			SvSETMAGIC(tmpstr);
+                    }
 		    TAINT_NOT;
 		}
-		if (relem == lastrelem) {
-		    do_oddball(hash, relem, firstrelem);
-		    relem++;
-		}
 		LEAVE;
+                if (duplicates && gimme == G_ARRAY) {
+                    /* at this point we have removed the duplicate key/value
+                     * pairs from the stack, but the remaining values may be
+                     * wrong; i.e. with (a 1 a 2 b 3) on the stack we've removed
+                     * the (a 2), but the stack now probably contains
+                     * (a <freed> b 3), because { hv_save(a,1); hv_save(a,2) }
+                     * obliterates the earlier key. So refresh all values. */
+                    lastrelem -= duplicates;
+                    relem = firsthashrelem;
+                    while (relem < lastrelem+odd) {
+                        HE *he;
+                        he = hv_fetch_ent(hash, *relem++, 0, 0);
+                        *relem++ = (he ? HeVAL(he) : &PL_sv_undef);
+                    }
+                }
+                if (odd && gimme == G_ARRAY) lastrelem++;
 	    }
 	    break;
 	default:
@@ -1220,35 +1251,19 @@ PP(pp_aassign)
     else if (gimme == G_SCALAR) {
 	dTARGET;
 	SP = firstrelem;
-	SETi(lastrelem - firstrelem + 1 - duplicates);
+	SETi(lastrelem - firstrelem + 1);
     }
     else {
-	if (ary)
+	if (ary || hash)
+	    /* note that in this case *firstlelem may have been overwritten
+	       by sv_undef in the odd hash case */
 	    SP = lastrelem;
-	else if (hash) {
-	    if (duplicates) {
-		/* at this point we have removed the duplicate key/value
-		 * pairs from the stack, but the remaining values may be
-		 * wrong; i.e. with (a 1 a 2 b 3) on the stack we've removed
-		 * the (a 2), but the stack now probably contains
-		 * (a <freed> b 3), because { hv_save(a,1); hv_save(a,2) }
-		 * obliterates the earlier key. So refresh all values. */
-		lastrelem -= duplicates;
-		relem = firsthashrelem;
-		while (relem < lastrelem) {
-		    HE *he;
-		    sv = *relem++;
-		    he = hv_fetch_ent(hash, sv, 0, 0);
-		    *relem++ = (he ? HeVAL(he) : &PL_sv_undef);
-		}
-	    }
-	    SP = lastrelem;
-	}
-	else
+	else {
 	    SP = firstrelem + (lastlelem - firstlelem);
-	lelem = firstlelem + (relem - firstrelem);
-	while (relem <= SP)
-	    *relem++ = (lelem <= lastlelem) ? *lelem++ : &PL_sv_undef;
+            lelem = firstlelem + (relem - firstrelem);
+            while (relem <= SP)
+                *relem++ = (lelem <= lastlelem) ? *lelem++ : &PL_sv_undef;
+        }
     }
 
     RETURN;
@@ -1277,12 +1292,12 @@ PP(pp_qr)
     cvp = &( ReANY((REGEXP *)SvRV(rv))->qr_anoncv);
     if ((cv = *cvp) && CvCLONE(*cvp)) {
 	*cvp = cv_clone(cv);
-	SvREFCNT_dec(cv);
+	SvREFCNT_dec_NN(cv);
     }
 
     if (pkg) {
 	HV *const stash = gv_stashsv(pkg, GV_ADD);
-	SvREFCNT_dec(pkg);
+	SvREFCNT_dec_NN(pkg);
 	(void)sv_bless(rv, stash);
     }
 
@@ -1339,6 +1354,9 @@ PP(pp_match)
 
     RX_MATCH_UTF8_set(rx, DO_UTF8(TARG));
 
+    /* We need to know this in case we fail out early - pos() must be reset */
+    global = dynpm->op_pmflags & PMf_GLOBAL;
+
     /* PMdf_USED is set after a ?? matches once */
     if (
 #ifdef USE_ITHREADS
@@ -1348,14 +1366,8 @@ PP(pp_match)
 #endif
     ) {
         DEBUG_r(PerlIO_printf(Perl_debug_log, "?? already matched once"));
-      failure:
-
-	if (gimme == G_ARRAY)
-	    RETURN;
-	RETPUSHNO;
+	goto nope;
     }
-
-
 
     /* empty pattern special-cased to use last successful pattern if
        possible, except for qr// */
@@ -1367,13 +1379,13 @@ PP(pp_match)
 
     if (RX_MINLEN(rx) > (I32)len) {
         DEBUG_r(PerlIO_printf(Perl_debug_log, "String shorter than min possible regex match\n"));
-	goto failure;
+	goto nope;
     }
 
     truebase = t = s;
 
     /* XXXX What part of this is needed with true \G-support? */
-    if ((global = dynpm->op_pmflags & PMf_GLOBAL)) {
+    if (global) {
 	RX_OFFS(rx)[0].start = -1;
 	if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG)) {
 	    MAGIC* const mg = mg_find(TARG, PERL_MAGIC_regex_global);
@@ -1392,10 +1404,13 @@ PP(pp_match)
 	    }
 	}
     }
+#ifdef PERL_SAWAMPERSAND
     if (       RX_NPARENS(rx)
             || PL_sawampersand
             || (RX_EXTFLAGS(rx) & (RXf_EVAL_SEEN|RXf_PMf_KEEPCOPY))
-    ) {
+    )
+#endif
+    {
 	r_flags |= (REXEC_COPY_STR|REXEC_COPY_SKIP_PRE);
         /* in @a =~ /(.)/g, we iterate multiple times, but copy the buffer
          * only on the first iteration. Therefore we need to copy $' as well
@@ -1423,11 +1438,13 @@ PP(pp_match)
 
 	if (!s)
 	    goto nope;
+#ifdef PERL_SAWAMPERSAND
 	if ( (RX_EXTFLAGS(rx) & RXf_CHECK_ALL)
 	     && !PL_sawampersand
 	     && !(RX_EXTFLAGS(rx) & RXf_PMf_KEEPCOPY)
 	     && !SvROK(TARG))	/* Cannot trust since INTUIT cannot guess ^ */
 	    goto yup;
+#endif
     }
     if (!CALLREGEXEC(rx, (char*)s, (char *)strend, (char*)truebase,
 		     minmatch, TARG, NUM2PTR(void*, gpos), r_flags))
@@ -1529,7 +1546,9 @@ PP(pp_match)
 	RETPUSHYES;
     }
 
+#ifdef PERL_SAWAMPERSAND
 yup:					/* Confirmed by INTUIT */
+#endif
     if (rxtainted)
 	RX_MATCH_TAINTED_on(rx);
     TAINT_IF(RX_MATCH_TAINTED(rx));
@@ -1561,10 +1580,13 @@ yup:					/* Confirmed by INTUIT */
 	RX_SUBLEN(rx) = strend - truebase;
 	goto gotcha;
     }
-    if (PL_sawampersand || RX_EXTFLAGS(rx) & RXf_PMf_KEEPCOPY) {
+#ifdef PERL_SAWAMPERSAND
+    if (PL_sawampersand || RX_EXTFLAGS(rx) & RXf_PMf_KEEPCOPY)
+#endif
+    {
 	I32 off;
-#ifdef PERL_OLD_COPY_ON_WRITE
-	if (SvIsCOW(TARG) || (SvFLAGS(TARG) & CAN_COW_MASK) == CAN_COW_FLAGS) {
+#ifdef PERL_ANY_COW
+	if (SvCANCOW(TARG)) {
 	    if (DEBUG_C_TEST) {
 		PerlIO_printf(Perl_debug_log,
 			      "Copy on write: pp_match $& capture, type %d, truebase=%p, t=%p, difference %d\n",
@@ -1580,7 +1602,7 @@ yup:					/* Confirmed by INTUIT */
 	{
 
 	    RX_SUBBEG(rx) = savepvn(t, strend - t);
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
 	    RX_SAVED_COPY(rx) = NULL;
 #endif
 	}
@@ -1591,10 +1613,12 @@ yup:					/* Confirmed by INTUIT */
 	off = RX_OFFS(rx)[0].start = s - t;
 	RX_OFFS(rx)[0].end = off + RX_MINLENRET(rx);
     }
+#ifdef PERL_SAWAMPERSAND
     else {			/* startp/endp are used by @- @+. */
 	RX_OFFS(rx)[0].start = s - truebase;
 	RX_OFFS(rx)[0].end = s - truebase + RX_MINLENRET(rx);
     }
+#endif
     /* match via INTUIT shouldn't have any captures. Let @-, @+, $^N know */
     assert(!RX_NPARENS(rx));
     RX_LASTPAREN(rx) = RX_LASTCLOSEPAREN(rx) = 0;
@@ -1867,7 +1891,7 @@ PP(pp_helem)
 	    sv_upgrade(lv, SVt_PVLV);
 	    LvTYPE(lv) = 'y';
 	    sv_magic(lv, key2 = newSVsv(keysv), PERL_MAGIC_defelem, NULL, 0);
-	    SvREFCNT_dec(key2);	/* sv_magic() increments refcount */
+	    SvREFCNT_dec_NN(key2);	/* sv_magic() increments refcount */
 	    LvTARG(lv) = SvREFCNT_inc_simple(hv);
 	    LvTARGLEN(lv) = 1;
 	    PUSHs(lv);
@@ -1941,7 +1965,7 @@ PP(pp_iter)
              * completely new SV for closures/references to work as
              * they used to */
             *itersvp = newSVsv(cur);
-            SvREFCNT_dec(oldsv);
+            SvREFCNT_dec_NN(oldsv);
         }
         if (strEQ(SvPVX_const(cur), max))
             sv_setiv(cur, 0); /* terminate next time */
@@ -1968,7 +1992,7 @@ PP(pp_iter)
 	     * completely new SV for closures/references to work as they
 	     * used to */
 	    *itersvp = newSViv(cur);
-	    SvREFCNT_dec(oldsv);
+	    SvREFCNT_dec_NN(oldsv);
 	}
 
 	if (cur == IV_MAX) {
@@ -2140,7 +2164,7 @@ PP(pp_subst)
     const I32 oldsave = PL_savestack_ix;
     STRLEN slen;
     bool doutf8 = FALSE; /* whether replacement is in utf8 */
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
     bool is_cow;
 #endif
     SV *nsv = NULL;
@@ -2159,7 +2183,7 @@ PP(pp_subst)
     }
 
     SvGETMAGIC(TARG); /* must come before cow check */
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
     /* Awooga. Awooga. "bool" types that are actually char are dangerous,
        because they make integers such as 256 "false".  */
     is_cow = SvIsCOW(TARG) ? TRUE : FALSE;
@@ -2168,7 +2192,7 @@ PP(pp_subst)
 	sv_force_normal_flags(TARG,0);
 #endif
     if (!(rpm->op_pmflags & PMf_NONDESTRUCT)
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
 	&& !is_cow
 #endif
 	&& (SvREADONLY(TARG)
@@ -2214,12 +2238,16 @@ PP(pp_subst)
 	rx = PM_GETRE(pm);
     }
 
+#ifdef PERL_SAWAMPERSAND
     r_flags = (    RX_NPARENS(rx)
                 || PL_sawampersand
                 || (RX_EXTFLAGS(rx) & (RXf_EVAL_SEEN|RXf_PMf_KEEPCOPY))
               )
           ? REXEC_COPY_STR
           : 0;
+#else
+    r_flags = REXEC_COPY_STR;
+#endif
 
     orig = m = s;
     if (RX_EXTFLAGS(rx) & RXf_USE_INTUIT) {
@@ -2276,7 +2304,7 @@ PP(pp_subst)
     
     /* can do inplace substitution? */
     if (c
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
 	&& !is_cow
 #endif
         && (I32)clen <= RX_MINLENRET(rx)
@@ -2286,10 +2314,11 @@ PP(pp_subst)
 	&& !(rpm->op_pmflags & PMf_NONDESTRUCT))
     {
 
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
 	if (SvIsCOW(TARG)) {
-	    assert (!force_on_match);
+	  if (!force_on_match)
 	    goto have_a_cow;
+	  assert(SvVOK(TARG));
 	}
 #endif
 	if (force_on_match) {
@@ -2382,7 +2411,7 @@ PP(pp_subst)
 	    s = SvPV_force_nomg(TARG, len);
 	    goto force_it;
 	}
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
       have_a_cow:
 #endif
 	if (RX_MATCH_TAINTED(rx)) /* run time pattern taint, eg locale */
@@ -2448,7 +2477,7 @@ PP(pp_subst)
 	    SPAGAIN;
 	    PUSHs(dstr);
 	} else {
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
 	    /* The match may make the string COW. If so, brilliant, because
 	       that's just saved us one malloc, copy and free - the regexp has
 	       donated the old buffer, and we malloc an entirely new one, rather
@@ -2586,7 +2615,7 @@ PP(pp_leavesub)
 		    sv = SvREFCNT_inc(TOPs);	/* FREETMPS could clobber it */
 		    FREETMPS;
 		    *MARK = sv_mortalcopy(sv);
-		    SvREFCNT_dec(sv);
+		    SvREFCNT_dec_NN(sv);
 		}
 	    }
 	    else if (SvTEMP(TOPs) && SvREFCNT(TOPs) == 1

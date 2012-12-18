@@ -449,7 +449,7 @@ static const scan_data_t zero_scan_data =
     IV len = RExC_end - RExC_precomp;					\
 									\
     if (!SIZE_ONLY)							\
-	SAVEDESTRUCTOR_X(clear_re,(void*)RExC_rx_sv);			\
+	SAVEFREESV(RExC_rx_sv);						\
     if (len > RegexLengthToShowInErrorMessages) {			\
 	/* chop 10 shorter than the max, to ensure meaning of "..." */	\
 	len = RegexLengthToShowInErrorMessages - 10;			\
@@ -480,7 +480,7 @@ static const scan_data_t zero_scan_data =
  */
 #define	vFAIL(m) STMT_START {				\
     if (!SIZE_ONLY)					\
-	SAVEDESTRUCTOR_X(clear_re,(void*)RExC_rx_sv);	\
+	SAVEFREESV(RExC_rx_sv);				\
     Simple_vFAIL(m);					\
 } STMT_END
 
@@ -498,7 +498,7 @@ static const scan_data_t zero_scan_data =
  */
 #define	vFAIL2(m,a1) STMT_START {			\
     if (!SIZE_ONLY)					\
-	SAVEDESTRUCTOR_X(clear_re,(void*)RExC_rx_sv);	\
+	SAVEFREESV(RExC_rx_sv);				\
     Simple_vFAIL2(m, a1);				\
 } STMT_END
 
@@ -517,7 +517,7 @@ static const scan_data_t zero_scan_data =
  */
 #define	vFAIL3(m,a1,a2) STMT_START {			\
     if (!SIZE_ONLY)					\
-	SAVEDESTRUCTOR_X(clear_re,(void*)RExC_rx_sv);	\
+	SAVEFREESV(RExC_rx_sv);				\
     Simple_vFAIL3(m, a1, a2);				\
 } STMT_END
 
@@ -694,8 +694,6 @@ DEBUG_OPTIMISE_MORE_r(if(data){                                      \
         );                                                           \
     PerlIO_printf(Perl_debug_log,"\n");                              \
 });
-
-static void clear_re(pTHX_ void *r);
 
 /* Mark that we cannot extend a found fixed substring at this point.
    Update the longest found anchored substring and the longest found
@@ -994,11 +992,7 @@ S_cl_or(const RExC_state_t *pRExC_state, struct regnode_charclass_class *cl, con
 	    /* OR char bitmap and class bitmap separately */
 	    for (i = 0; i < ANYOF_BITMAP_SIZE; i++)
 		cl->bitmap[i] |= or_with->bitmap[i];
-	    if (ANYOF_CLASS_TEST_ANY_SET(or_with)) {
-		for (i = 0; i < ANYOF_CLASSBITMAP_SIZE; i++)
-		    cl->classflags[i] |= or_with->classflags[i];
-		cl->flags |= ANYOF_CLASS;
-	    }
+            ANYOF_CLASS_OR(or_with, cl);
 	}
 	else { /* XXXX: logic is complicated, leave it along for a moment. */
 	    cl_anything(pRExC_state, cl);
@@ -3873,8 +3867,11 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		    && data && !(data->flags & (SF_HAS_PAR|SF_IN_PAR))
 		    && maxcount <= REG_INFTY/3) /* Complement check for big count */
 		{
+		    /* Fatal warnings may leak the regexp without this: */
+		    SAVEFREESV(RExC_rx_sv);
 		    ckWARNreg(RExC_parse,
 			      "Quantifier unexpected on zero-length expression");
+		    (void)ReREFCNT_inc(RExC_rx_sv);
 		}
 
 		min += minnext * mincount;
@@ -4872,13 +4869,18 @@ Perl_reginitcolors(pTHX)
 
 
 #ifdef TRIE_STUDY_OPT
-#define CHECK_RESTUDY_GOTO                                  \
+#define CHECK_RESTUDY_GOTO_butfirst(dOsomething)            \
+    STMT_START {                                            \
         if (                                                \
               (data.flags & SCF_TRIE_RESTUDY)               \
               && ! restudied++                              \
-        )     goto reStudy
+        ) {                                                 \
+            dOsomething;                                    \
+            goto reStudy;                                   \
+        }                                                   \
+    } STMT_END
 #else
-#define CHECK_RESTUDY_GOTO
+#define CHECK_RESTUDY_GOTO_butfirst
 #endif        
 
 /*
@@ -5095,10 +5097,14 @@ S_compile_runtime_code(pTHX_ RExC_state_t * const pRExC_state,
 	SPAGAIN;
 	qr_ref = POPs;
 	PUTBACK;
-	if (SvTRUE(ERRSV))
 	{
-	    Safefree(pRExC_state->code_blocks);
-	    Perl_croak(aTHX_ "%s", SvPVx_nolen_const(ERRSV));
+	    SV * const errsv = ERRSV;
+	    if (SvTRUE_NN(errsv))
+	    {
+		Safefree(pRExC_state->code_blocks);
+                /* use croak_sv ? */
+		Perl_croak_nocontext("%s", SvPV_nolen_const(errsv));
+	    }
 	}
 	assert(SvROK(qr_ref));
 	qr = SvRV(qr_ref);
@@ -6040,11 +6046,6 @@ reStudy:
             RExC_seen |= REG_TOP_LEVEL_BRANCHES;
         else
             RExC_seen &= ~REG_TOP_LEVEL_BRANCHES;
-        if (data.last_found) {
-            SvREFCNT_dec(data.longest_fixed);
-	    SvREFCNT_dec(data.longest_float);
-	    SvREFCNT_dec(data.last_found);
-	}
 	StructCopy(&zero_scan_data, &data, scan_data_t);
     }
 #else
@@ -6210,6 +6211,10 @@ reStudy:
 	data.longest_float = newSVpvs("");
 	data.last_found = newSVpvs("");
 	data.longest = &(data.longest_fixed);
+	ENTER_with_name("study_chunk");
+	SAVEFREESV(data.longest_fixed);
+	SAVEFREESV(data.longest_float);
+	SAVEFREESV(data.last_found);
 	first = scan;
 	if (!ri->regstclass) {
 	    cl_init(pRExC_state, &ch_class);
@@ -6224,7 +6229,7 @@ reStudy:
             SCF_DO_SUBSTR | SCF_WHILEM_VISITED_POS | stclass_flag,0);
 
 
-        CHECK_RESTUDY_GOTO;
+        CHECK_RESTUDY_GOTO_butfirst(LEAVE_with_name("study_chunk"));
 
 
 	if ( RExC_npar == 1 && data.longest == &(data.longest_fixed)
@@ -6234,7 +6239,6 @@ reStudy:
 	     && (!(RExC_seen & REG_SEEN_GPOS) || (r->extflags & RXf_ANCH_GPOS)))
 	    r->extflags |= RXf_CHECK_ALL;
 	scan_commit(pRExC_state, &data,&minlen,0);
-	SvREFCNT_dec(data.last_found);
 
 	longest_float_length = CHR_SVLEN(data.longest_float);
 
@@ -6257,10 +6261,10 @@ reStudy:
 	    r->float_max_offset = data.offset_float_max;
 	    if (data.offset_float_max < I32_MAX) /* Don't offset infinity */
 	        r->float_max_offset -= data.lookbehind_float;
+	    SvREFCNT_inc_simple_void_NN(data.longest_float);
 	}
 	else {
 	    r->float_substr = r->float_utf8 = NULL;
-	    SvREFCNT_dec(data.longest_float);
 	    longest_float_length = 0;
 	}
 
@@ -6279,12 +6283,13 @@ reStudy:
                                 data.flags & SF_FIX_BEFORE_MEOL))
         {
 	    r->anchored_offset = data.offset_fixed - data.lookbehind_fixed;
+	    SvREFCNT_inc_simple_void_NN(data.longest_fixed);
 	}
 	else {
 	    r->anchored_substr = r->anchored_utf8 = NULL;
-	    SvREFCNT_dec(data.longest_fixed);
 	    longest_fixed_length = 0;
 	}
+	LEAVE_with_name("study_chunk");
 
 	if (ri->regstclass
 	    && (OP(ri->regstclass) == REG_ANY || OP(ri->regstclass) == SANY))
@@ -6359,7 +6364,7 @@ reStudy:
 	minlen = study_chunk(pRExC_state, &scan, &minlen, &fake, scan + RExC_size,
 	    &data, -1, NULL, NULL, SCF_DO_STCLASS_AND|SCF_WHILEM_VISITED_POS,0);
         
-        CHECK_RESTUDY_GOTO;
+        CHECK_RESTUDY_GOTO_butfirst(NOOP);
 
 	r->check_substr = r->check_utf8 = r->anchored_substr = r->anchored_utf8
 		= r->float_substr = r->float_utf8 = NULL;
@@ -9644,10 +9649,12 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
     }
   nest_check:
     if (!SIZE_ONLY && !(flags&(HASWIDTH|POSTPONED)) && max > REG_INFTY/3) {
+	SAVEFREESV(RExC_rx_sv); /* in case of fatal warnings */
 	ckWARN3reg(RExC_parse,
 		   "%.*s matches null string many times",
 		   (int)(RExC_parse >= origparse ? RExC_parse - origparse : 0),
 		   origparse);
+	(void)ReREFCNT_inc(RExC_rx_sv);
     }
 
     if (RExC_parse < RExC_end && *RExC_parse == '?') {
@@ -11562,19 +11569,13 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 	while (isALNUM(*s))
 	    s++;
 	if (*s && c == *s && s[1] == ']') {
+	    SAVEFREESV(RExC_rx_sv);
+	    SAVEFREESV(listsv);
 	    ckWARN3reg(s+2,
 		       "POSIX syntax [%c %c] belongs inside character classes",
 		       c, c);
-
-	    /* [[=foo=]] and [[.foo.]] are still future. */
-	    if (POSIXCC_NOTYET(c)) {
-		/* adjust RExC_parse so the error shows after
-		   the class closes */
-		while (UCHARAT(RExC_parse) && UCHARAT(RExC_parse++) != ']')
-		    NOOP;
-		SvREFCNT_dec(listsv);
-		vFAIL3("POSIX syntax [%c %c] is reserved for future extensions", c, c);
-	    }
+	    (void)ReREFCNT_inc(RExC_rx_sv);
+	    SvREFCNT_inc_simple_void_NN(listsv);
 	}
     }
 
@@ -11837,9 +11838,13 @@ parseit:
 	    default:
 		/* Allow \_ to not give an error */
 		if (!SIZE_ONLY && isALNUM(value) && value != '_') {
+		    SAVEFREESV(RExC_rx_sv);
+		    SAVEFREESV(listsv);
 		    ckWARN2reg(RExC_parse,
 			       "Unrecognized escape \\%c in character class passed through",
 			       (int)value);
+		    (void)ReREFCNT_inc(RExC_rx_sv);
+		    SvREFCNT_inc_simple_void_NN(listsv);
 		}
 		break;
 	    }
@@ -11884,9 +11889,13 @@ parseit:
 		    const int w =
 			RExC_parse >= rangebegin ?
 			RExC_parse - rangebegin : 0;
+		    SAVEFREESV(RExC_rx_sv); /* in case of fatal warnings */
+		    SAVEFREESV(listsv);
 		    ckWARN4reg(RExC_parse,
 			       "False [] range \"%*.*s\"",
 			       w, w, rangebegin);
+		    (void)ReREFCNT_inc(RExC_rx_sv);
+		    SvREFCNT_inc_simple_void_NN(listsv);
                     cp_list = add_cp_to_invlist(cp_list, '-');
                     cp_list = add_cp_to_invlist(cp_list, prevvalue);
 		}
@@ -12617,7 +12626,7 @@ parseit:
 
         /* If the highest code point is within Latin1, we can use the
          * compiled-in Alphas list, and not have to go out to disk.  This
-         * yields two false positives, the masculine and feminine oridinal
+         * yields two false positives, the masculine and feminine ordinal
          * indicators, which are weeded out below using the
          * IS_IN_SOME_FOLD_L1() macro */
         if (invlist_highest(cp_list) < 256) {
@@ -12659,7 +12668,7 @@ parseit:
                         assert(PL_utf8_tofold); /* Verify that worked */
                     }
                     PL_utf8_foldclosures =
-                                        _swash_inversion_hash(PL_utf8_tofold);
+                                    _swash_inversion_hash(PL_utf8_tofold);
                 }
             }
 
@@ -13809,36 +13818,45 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
 
     /* Should be synchronized with * ANYOF_ #xdefines in regcomp.h */
     static const char * const anyofs[] = {
-        "\\w",
-        "\\W",
-        "\\s",
-        "\\S",
-        "\\d",
-        "\\D",
-        "[:alnum:]",
-        "[:^alnum:]",
+#if _CC_WORDCHAR != 0 || _CC_DIGIT != 1 || _CC_ALPHA != 2 || _CC_LOWER != 3 \
+    || _CC_UPPER != 4 || _CC_PUNCT != 5 || _CC_PRINT != 6 || _CC_ALNUMC != 7 \
+    || _CC_GRAPH != 8 || _CC_SPACE != 9 || _CC_BLANK != 10 \
+    || _CC_XDIGIT != 11 || _CC_PSXSPC != 12 || _CC_CNTRL != 13 \
+    || _CC_ASCII != 14 || _CC_VERTSPACE != 15
+  #error Need to adjust order of anyofs[]
+#endif
+        "[\\w]",
+        "[\\W]",
+        "[\\d]",
+        "[\\D]",
         "[:alpha:]",
         "[:^alpha:]",
-        "[:ascii:]",
-        "[:^ascii:]",
-        "[:cntrl:]",
-        "[:^cntrl:]",
-        "[:graph:]",
-        "[:^graph:]",
         "[:lower:]",
         "[:^lower:]",
-        "[:print:]",
-        "[:^print:]",
-        "[:punct:]",
-        "[:^punct:]",
         "[:upper:]",
         "[:^upper:]",
+        "[:punct:]",
+        "[:^punct:]",
+        "[:print:]",
+        "[:^print:]",
+        "[:alnum:]",
+        "[:^alnum:]",
+        "[:graph:]",
+        "[:^graph:]",
+        "[\\s]",
+        "[\\S]",
+        "[:blank:]",
+        "[:^blank:]",
         "[:xdigit:]",
         "[:^xdigit:]",
         "[:space:]",
         "[:^space:]",
-        "[:blank:]",
-        "[:^blank:]"
+        "[:cntrl:]",
+        "[:^cntrl:]",
+        "[:ascii:]",
+        "[:^ascii:]",
+        "[\\v]",
+        "[\\V]"
     };
     RXi_GET_DECL(prog,progi);
     GET_RE_DEBUG_FLAGS_DECL;
@@ -14188,7 +14206,7 @@ Perl_pregfree2(pTHX_ REGEXP *rx)
 	Safefree(r->substrs);
     }
     RX_MATCH_COPY_FREE(rx);
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
     SvREFCNT_dec(r->saved_copy);
 #endif
     Safefree(r->offs);
@@ -14271,7 +14289,7 @@ Perl_reg_temp_copy (pTHX_ REGEXP *ret_x, REGEXP *rx)
 	   anchored or float namesakes, and don't hold a second reference.  */
     }
     RX_MATCH_COPIED_off(ret_x);
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
     ret->saved_copy = NULL;
 #endif
     ret->mother_re = ReREFCNT_inc(r->mother_re ? r->mother_re : rx);
@@ -14479,7 +14497,7 @@ Perl_re_dup_guts(pTHX_ const REGEXP *sstr, REGEXP *dstr, CLONE_PARAMS *param)
 	ret->subbeg  = SAVEPVN(ret->subbeg, ret->sublen);
     else
 	ret->subbeg = NULL;
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
     ret->saved_copy = NULL;
 #endif
 
@@ -14617,7 +14635,7 @@ Perl_regdupe_internal(pTHX_ REGEXP * const rx, CLONE_PARAMS *param)
  - regnext - dig the "next" pointer out of a node
  */
 regnode *
-Perl_regnext(pTHX_ register regnode *p)
+Perl_regnext(pTHX_ regnode *p)
 {
     dVAR;
     I32 offset;
@@ -14700,7 +14718,7 @@ Perl_save_re_context(pTHX)
     PL_reg_leftiter = 0;
     PL_reg_poscache = NULL;
     PL_reg_poscache_size = 0;
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
     PL_nrs = NULL;
 #endif
 
@@ -14725,13 +14743,6 @@ Perl_save_re_context(pTHX)
     }
 }
 #endif
-
-static void
-clear_re(pTHX_ void *r)
-{
-    dVAR;
-    ReREFCNT_dec((REGEXP *)r);
-}
 
 #ifdef DEBUGGING
 

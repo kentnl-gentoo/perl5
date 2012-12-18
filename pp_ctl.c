@@ -354,7 +354,7 @@ Perl_rxres_save(pTHX_ void **rsp, REGEXP *rx)
     PERL_UNUSED_CONTEXT;
 
     if (!p || p[1] < RX_NPARENS(rx)) {
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
 	i = 7 + (RX_NPARENS(rx)+1) * 2;
 #else
 	i = 6 + (RX_NPARENS(rx)+1) * 2;
@@ -371,7 +371,7 @@ Perl_rxres_save(pTHX_ void **rsp, REGEXP *rx)
     RX_MATCH_COPIED_off(rx);
     *p++ = RX_NPARENS(rx);
 
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
     *p++ = PTR2UV(RX_SAVED_COPY(rx));
     RX_SAVED_COPY(rx) = NULL;
 #endif
@@ -400,7 +400,7 @@ S_rxres_restore(pTHX_ void **rsp, REGEXP *rx)
     *p++ = 0;
     RX_NPARENS(rx) = *p++;
 
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
     if (RX_SAVED_COPY(rx))
 	SvREFCNT_dec (RX_SAVED_COPY(rx));
     RX_SAVED_COPY(rx) = INT2PTR(SV*,*p);
@@ -428,14 +428,14 @@ S_rxres_free(pTHX_ void **rsp)
     if (p) {
 	void *tmp = INT2PTR(char*,*p);
 #ifdef PERL_POISON
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
 	U32 i = 9 + p[1] * 2;
 #else
 	U32 i = 8 + p[1] * 2;
 #endif
 #endif
 
-#ifdef PERL_OLD_COPY_ON_WRITE
+#ifdef PERL_ANY_COW
         SvREFCNT_dec (INT2PTR(SV*,p[2]));
 #endif
 #ifdef PERL_POISON
@@ -2692,7 +2692,7 @@ S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstac
 {
     dVAR;
     OP **ops = opstack;
-    static const char too_deep[] = "Target of goto is too deeply nested";
+    static const char* const too_deep = "Target of goto is too deeply nested";
 
     PERL_ARGS_ASSERT_DOFINDLABEL;
 
@@ -2764,10 +2764,11 @@ PP(pp_goto)
     STRLEN label_len = 0;
     U32 label_flags = 0;
     const bool do_dump = (PL_op->op_type == OP_DUMP);
-    static const char must_have_label[] = "goto must have label";
+    static const char* const must_have_label = "goto must have label";
 
     if (PL_op->op_flags & OPf_STACKED) {
 	SV * const sv = POPs;
+	SvGETMAGIC(sv);
 
 	/* This egregious kludge implements goto &subroutine */
 	if (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVCV) {
@@ -2866,10 +2867,13 @@ PP(pp_goto)
 	    SAVEFREESV(cv); /* later, undo the 'avoid premature free' hack */
 	    if (CvISXSUB(cv)) {
 		OP* const retop = cx->blk_sub.retop;
-		SV **newsp PERL_UNUSED_DECL;
-		I32 gimme PERL_UNUSED_DECL;
+		SV **newsp;
+		I32 gimme;
 		const SSize_t items = AvFILLp(arg) + 1;
 		SV** mark;
+
+                PERL_UNUSED_VAR(newsp);
+                PERL_UNUSED_VAR(gimme);
 
 		/* put GvAV(defgv) back onto stack */
 		EXTEND(SP, items+1); /* @_ could have been extended. */
@@ -2951,7 +2955,7 @@ PP(pp_goto)
 	    }
 	}
 	else {
-	    label       = SvPV_const(sv, label_len);
+	    label       = SvPV_nomg_const(sv, label_len);
             label_flags = SvUTF8(sv);
 	}
     }
@@ -3445,6 +3449,7 @@ S_doeval(pTHX_ int gimme, CV* outside, U32 seq, HV *hh)
 	PERL_CONTEXT *cx;
 	I32 optype;			/* Used by POPEVAL. */
 	SV *namesv;
+        SV *errsv = NULL;
 
 	cx = NULL;
 	namesv = NULL;
@@ -3467,6 +3472,7 @@ S_doeval(pTHX_ int gimme, CV* outside, U32 seq, HV *hh)
 	    LEAVE_with_name("eval"); /* pp_entereval knows about this LEAVE.  */
 	}
 
+	errsv = ERRSV;
 	if (in_require) {
 	    if (!cx) {
 		/* If cx is still NULL, it means that we didn't go in the
@@ -3480,13 +3486,13 @@ S_doeval(pTHX_ int gimme, CV* outside, U32 seq, HV *hh)
                            SvUTF8(namesv) ? -(I32)SvCUR(namesv) : (I32)SvCUR(namesv),
 			   &PL_sv_undef, 0);
 	    Perl_croak(aTHX_ "%"SVf"Compilation failed in require",
-		       SVfARG(ERRSV
-                                ? ERRSV
+		       SVfARG(errsv
+                                ? errsv
                                 : newSVpvs_flags("Unknown error\n", SVs_TEMP)));
 	}
 	else {
-	    if (!*(SvPVx_nolen_const(ERRSV))) {
-	        sv_setpvs(ERRSV, "Compilation error");
+	    if (!*(SvPV_nolen_const(errsv))) {
+	        sv_setpvs(errsv, "Compilation error");
 	    }
 	}
 	if (gimme != G_ARRAY) PUSHs(&PL_sv_undef);
@@ -5367,8 +5373,10 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	    if (SvOK(out)) {
 		status = SvIV(out);
 	    }
-            else if (SvTRUE(ERRSV)) {
-                err = newSVsv(ERRSV);
+            else {
+                SV * const errsv = ERRSV;
+                if (SvTRUE_NN(errsv))
+                    err = newSVsv(errsv);
             }
 	}
 

@@ -291,7 +291,9 @@ The C variable which corresponds to Perl's $^W warning variable.
 */
 
 PERLVAR(I, dowarn,	U8)
+#ifdef PERL_SAWAMPERSAND
 PERLVAR(I, sawampersand, U8)		/* must save all match strings */
+#endif
 PERLVAR(I, unsafe,	bool)
 PERLVAR(I, exit_flags,	U8)		/* was exit() unexpected, etc. */
 
@@ -611,21 +613,18 @@ PERLVAR(I, NonL1NonFinalFold,   SV *)
 PERLVAR(I, HasMultiCharFold,   SV *)
 
 /* utf8 character class swashes */
-PERLVAR(I, utf8_alnum,	SV *)
+PERLVAR(I, utf8_alnum,	SV *)   /* Should really be named "utf8_wordchar" */
+PERLVAR(I, utf8_alnumc,	SV *)
 PERLVAR(I, utf8_alpha,	SV *)
-PERLVAR(I, utf8_blank,	SV *)
-PERLVAR(I, utf8_space,	SV *)
 PERLVAR(I, utf8_graph,	SV *)
 PERLVAR(I, utf8_digit,	SV *)
 PERLVAR(I, utf8_upper,	SV *)
 PERLVAR(I, utf8_lower,	SV *)
 PERLVAR(I, utf8_print,	SV *)
 PERLVAR(I, utf8_punct,	SV *)
-PERLVAR(I, utf8_xdigit,	SV *)
 PERLVAR(I, utf8_mark,	SV *)
 PERLVAR(I, utf8_X_regular_begin, SV *)
 PERLVAR(I, utf8_X_extend, SV *)
-PERLVAR(I, utf8_X_LVT,	SV *)
 PERLVAR(I, utf8_toupper, SV *)
 PERLVAR(I, utf8_totitle, SV *)
 PERLVAR(I, utf8_tolower, SV *)
@@ -635,7 +634,7 @@ PERLVAR(I, utf8_charname_continue, SV *)
 PERLVAR(I, last_swash_hv, HV *)
 PERLVAR(I, last_swash_tmps, U8 *)
 PERLVAR(I, last_swash_slen, STRLEN)
-PERLVARA(I, last_swash_key,12, U8)
+PERLVARA(I, last_swash_key,UTF8_MAXBYTES-1, U8)
 PERLVAR(I, last_swash_klen, U8)		/* Only needs to store 0-12  */
 
 #ifdef FCRYPT
@@ -763,8 +762,6 @@ PERLVAR(I, custom_ops,	HV *)		/* custom op registrations */
 
 /* Hook for File::Glob */
 PERLVARI(I, globhook,	globhook_t, NULL)
-
-PERLVARI(I, glob_index,	int,	0)
 
 PERLVAR(I, reentrant_retint, int)	/* Integer return value from reentrant functions */
 

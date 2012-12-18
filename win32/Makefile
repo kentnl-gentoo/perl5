@@ -37,7 +37,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.17.6
+#INST_VER	= \5.17.7
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -1124,7 +1124,6 @@ utils: $(PERLEXE) $(X2P)
 	cd ..\pod
 	copy ..\README.aix      ..\pod\perlaix.pod
 	copy ..\README.amiga    ..\pod\perlamiga.pod
-	copy ..\README.beos     ..\pod\perlbeos.pod
 	copy ..\README.bs2000   ..\pod\perlbs2000.pod
 	copy ..\README.ce       ..\pod\perlce.pod
 	copy ..\README.cn       ..\pod\perlcn.pod
@@ -1155,7 +1154,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5176delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5177delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(PERLEXE) $(ICWD) ..\autodoc.pl ..
@@ -1248,11 +1247,11 @@ distclean: realclean
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5176delta.pod perlaix.pod perlamiga.pod perlapi.pod \
-	    perlbeos.pod perlbs2000.pod perlce.pod perlcn.pod \
-	    perlcygwin.pod perldgux.pod perldos.pod perlfreebsd.pod \
-	    perlhaiku.pod perlhpux.pod perlhurd.pod perlintern.pod \
-	    perlirix.pod perljp.pod perlko.pod perllinux.pod perlmacos.pod \
+	    perl5177delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
+	    perldgux.pod perldos.pod perlfreebsd.pod perlhaiku.pod \
+	    perlhpux.pod perlhurd.pod perlintern.pod perlirix.pod \
+	    perljp.pod perlko.pod perllinux.pod perlmacos.pod \
 	    perlmacosx.pod perlmodlib.pod perlnetware.pod perlopenbsd.pod \
 	    perlos2.pod perlos390.pod perlos400.pod perlplan9.pod \
 	    perlqnx.pod perlriscos.pod perlsolaris.pod perlsymbian.pod \
@@ -1307,7 +1306,7 @@ minitest : $(MINIPERL) $(GLOBEXE) $(CONFIGPM) utils $(UNIDATAFILES)
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
 	attrib -r ..\t\*.*
 	cd ..\t && \
-	$(MINIPERL) -I..\lib harness base/*.t comp/*.t cmd/*.t io/*.t op/*.t pragma/*.t
+	$(MINIPERL) -I..\lib harness base/*.t comp/*.t cmd/*.t io/*.t opbasic/*.t op/*.t pragma/*.t
 
 test-prep : all utils ../pod/perltoc.pod
 	$(XCOPY) $(PERLEXE) ..\t\$(NULL)

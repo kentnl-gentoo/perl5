@@ -359,23 +359,24 @@ PP(pp_glob)
     dVAR;
     OP *result;
     dSP;
+    GV * const gv = (PL_op->op_flags & OPf_SPECIAL) ? NULL : (GV *)POPs;
+
+    PUTBACK;
+
     /* make a copy of the pattern if it is gmagical, to ensure that magic
      * is called once and only once */
-    if (SvGMAGICAL(TOPm1s)) TOPm1s = sv_2mortal(newSVsv(TOPm1s));
+    if (SvGMAGICAL(TOPs)) TOPs = sv_2mortal(newSVsv(TOPs));
 
-    tryAMAGICunTARGETlist(iter_amg, -1, (PL_op->op_flags & OPf_SPECIAL));
+    tryAMAGICunTARGETlist(iter_amg, (PL_op->op_flags & OPf_SPECIAL));
 
     if (PL_op->op_flags & OPf_SPECIAL) {
 	/* call Perl-level glob function instead. Stack args are:
-	 * MARK, wildcard, csh_glob context index
+	 * MARK, wildcard
 	 * and following OPs should be: gv(CORE::GLOBAL::glob), entersub
 	 * */
 	return NORMAL;
     }
-    /* stack args are: wildcard, gv(_GEN_n) */
-
     if (PL_globhook) {
-	SETs(GvSV(TOPs));
 	PL_globhook(aTHX);
 	return NORMAL;
     }
@@ -398,7 +399,7 @@ PP(pp_glob)
 #endif /* !VMS */
 
     SAVESPTR(PL_last_in_gv);	/* We don't want this to be permanent. */
-    PL_last_in_gv = MUTABLE_GV(*PL_stack_sp--);
+    PL_last_in_gv = gv;
 
     SAVESPTR(PL_rs);		/* This is not permanent, either. */
     PL_rs = newSVpvs_flags("\000", SVs_TEMP);
@@ -445,17 +446,18 @@ PP(pp_warn)
 	/* well-formed exception supplied */
     }
     else {
-      SvGETMAGIC(ERRSV);
-      if (SvROK(ERRSV)) {
-	if (SvGMAGICAL(ERRSV)) {
+      SV * const errsv = ERRSV;
+      SvGETMAGIC(errsv);
+      if (SvROK(errsv)) {
+	if (SvGMAGICAL(errsv)) {
 	    exsv = sv_newmortal();
-	    sv_setsv_nomg(exsv, ERRSV);
+	    sv_setsv_nomg(exsv, errsv);
 	}
-	else exsv = ERRSV;
+	else exsv = errsv;
       }
-      else if (SvPOKp(ERRSV) ? SvCUR(ERRSV) : SvNIOKp(ERRSV)) {
+      else if (SvPOKp(errsv) ? SvCUR(errsv) : SvNIOKp(errsv)) {
 	exsv = sv_newmortal();
-	sv_setsv_nomg(exsv, ERRSV);
+	sv_setsv_nomg(exsv, errsv);
 	sv_catpvs(exsv, "\t...caught");
       }
       else {
@@ -489,32 +491,35 @@ PP(pp_die)
     if (SvROK(exsv) || (SvPV_const(exsv, len), len)) {
 	/* well-formed exception supplied */
     }
-    else if (SvROK(ERRSV)) {
-	exsv = ERRSV;
-	if (sv_isobject(exsv)) {
-	    HV * const stash = SvSTASH(SvRV(exsv));
-	    GV * const gv = gv_fetchmethod(stash, "PROPAGATE");
-	    if (gv) {
-		SV * const file = sv_2mortal(newSVpv(CopFILE(PL_curcop),0));
-		SV * const line = sv_2mortal(newSVuv(CopLINE(PL_curcop)));
-		EXTEND(SP, 3);
-		PUSHMARK(SP);
-		PUSHs(exsv);
-		PUSHs(file);
-		PUSHs(line);
-		PUTBACK;
-		call_sv(MUTABLE_SV(GvCV(gv)),
-			G_SCALAR|G_EVAL|G_KEEPERR);
-		exsv = sv_mortalcopy(*PL_stack_sp--);
+    else {
+	SV * const errsv = ERRSV;
+	if (SvROK(errsv)) {
+	    exsv = errsv;
+	    if (sv_isobject(exsv)) {
+		HV * const stash = SvSTASH(SvRV(exsv));
+		GV * const gv = gv_fetchmethod(stash, "PROPAGATE");
+		if (gv) {
+		    SV * const file = sv_2mortal(newSVpv(CopFILE(PL_curcop),0));
+		    SV * const line = sv_2mortal(newSVuv(CopLINE(PL_curcop)));
+		    EXTEND(SP, 3);
+		    PUSHMARK(SP);
+		    PUSHs(exsv);
+		    PUSHs(file);
+		    PUSHs(line);
+		    PUTBACK;
+		    call_sv(MUTABLE_SV(GvCV(gv)),
+			    G_SCALAR|G_EVAL|G_KEEPERR);
+		    exsv = sv_mortalcopy(*PL_stack_sp--);
+		}
 	    }
 	}
-    }
-    else if (SvPV_const(ERRSV, len), len) {
-	exsv = sv_mortalcopy(ERRSV);
-	sv_catpvs(exsv, "\t...propagated");
-    }
-    else {
-	exsv = newSVpvs_flags("Died", SVs_TEMP);
+	else if (SvPV_const(errsv, len), len) {
+	    exsv = sv_mortalcopy(errsv);
+	    sv_catpvs(exsv, "\t...propagated");
+	}
+	else {
+	    exsv = newSVpvs_flags("Died", SVs_TEMP);
+	}
     }
     return die_sv(exsv);
 }

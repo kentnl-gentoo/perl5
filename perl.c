@@ -58,10 +58,6 @@ union control_un {
 
 #endif
 
-#ifdef __BEOS__
-#  define HZ 1000000
-#endif
-
 #ifndef HZ
 #  ifdef CLK_TCK
 #    define HZ CLK_TCK
@@ -325,10 +321,9 @@ perl_construct(pTHXx)
 
     /* Use sysconf(_SC_CLK_TCK) if available, if not
      * available or if the sysconf() fails, use the HZ.
-     * BeOS has those, but returns the wrong value.
      * The HZ if not originally defined has been by now
      * been defined as CLK_TCK, if available. */
-#if defined(HAS_SYSCONF) && defined(_SC_CLK_TCK) && !defined(__BEOS__)
+#if defined(HAS_SYSCONF) && defined(_SC_CLK_TCK)
     PL_clocktick = sysconf(_SC_CLK_TCK);
     if (PL_clocktick <= 0)
 #endif
@@ -845,7 +840,6 @@ perl_destruct(pTHXx)
 	    ary[i] = &PL_sv_undef;
 	}
     }
-    Safefree(PL_stashpad);
 #endif
 
 
@@ -873,7 +867,9 @@ perl_destruct(pTHXx)
     PL_minus_F      = FALSE;
     PL_doswitches   = FALSE;
     PL_dowarn       = G_WARN_OFF;
+#ifdef PERL_SAWAMPERSAND
     PL_sawampersand = 0;	/* must save all match strings */
+#endif
     PL_unsafe       = FALSE;
 
     Safefree(PL_inplace);
@@ -987,15 +983,12 @@ perl_destruct(pTHXx)
     /* clear utf8 character classes */
     SvREFCNT_dec(PL_utf8_alnum);
     SvREFCNT_dec(PL_utf8_alpha);
-    SvREFCNT_dec(PL_utf8_blank);
-    SvREFCNT_dec(PL_utf8_space);
     SvREFCNT_dec(PL_utf8_graph);
     SvREFCNT_dec(PL_utf8_digit);
     SvREFCNT_dec(PL_utf8_upper);
     SvREFCNT_dec(PL_utf8_lower);
     SvREFCNT_dec(PL_utf8_print);
     SvREFCNT_dec(PL_utf8_punct);
-    SvREFCNT_dec(PL_utf8_xdigit);
     SvREFCNT_dec(PL_utf8_mark);
     SvREFCNT_dec(PL_utf8_toupper);
     SvREFCNT_dec(PL_utf8_totitle);
@@ -1006,15 +999,12 @@ perl_destruct(pTHXx)
     SvREFCNT_dec(PL_utf8_foldclosures);
     PL_utf8_alnum	= NULL;
     PL_utf8_alpha	= NULL;
-    PL_utf8_blank	= NULL;
-    PL_utf8_space	= NULL;
     PL_utf8_graph	= NULL;
     PL_utf8_digit	= NULL;
     PL_utf8_upper	= NULL;
     PL_utf8_lower	= NULL;
     PL_utf8_print	= NULL;
     PL_utf8_punct	= NULL;
-    PL_utf8_xdigit	= NULL;
     PL_utf8_mark	= NULL;
     PL_utf8_toupper	= NULL;
     PL_utf8_totitle	= NULL;
@@ -1082,6 +1072,10 @@ perl_destruct(pTHXx)
     /* the 2 is for PL_fdpid and PL_strtab */
     while (sv_clean_all() > 2)
 	;
+
+#ifdef USE_ITHREADS
+    Safefree(PL_stashpad); /* must come after sv_clean_all */
+#endif
 
     AvREAL_off(PL_fdpid);		/* no surviving entries */
     SvREFCNT_dec(PL_fdpid);		/* needed in io_close() */
@@ -2580,7 +2574,7 @@ Approximate Perl equivalent: C<&{"$sub_name"}(@$argv)>.
 */
 
 I32
-Perl_call_argv(pTHX_ const char *sub_name, I32 flags, register char **argv)
+Perl_call_argv(pTHX_ const char *sub_name, I32 flags, char **argv)
 
           		/* See G_* flags in cop.h */
                      	/* null terminated arg list */
@@ -2892,7 +2886,6 @@ SV*
 Perl_eval_pv(pTHX_ const char *p, I32 croak_on_error)
 {
     dVAR;
-    dSP;
     SV* sv = newSVpv(p, 0);
 
     PERL_ARGS_ASSERT_EVAL_PV;
@@ -2900,12 +2893,18 @@ Perl_eval_pv(pTHX_ const char *p, I32 croak_on_error)
     eval_sv(sv, G_SCALAR);
     SvREFCNT_dec(sv);
 
-    SPAGAIN;
-    sv = POPs;
-    PUTBACK;
+    {
+        dSP;
+        sv = POPs;
+        PUTBACK;
+    }
 
-    if (croak_on_error && SvTRUE(ERRSV)) {
-	Perl_croak(aTHX_ "%s", SvPVx_nolen_const(ERRSV));
+    /* just check empty string or undef? */
+    if (croak_on_error) {
+	SV * const errsv = ERRSV;
+	if(SvTRUE_NN(errsv))
+	    /* replace with croak_sv? */
+	    Perl_croak_nocontext("%s", SvPV_nolen_const(errsv));
     }
 
     return sv;
@@ -3488,10 +3487,6 @@ S_minus_v(pTHX)
 	PerlIO_printf(PIO_stdout,
 		      "\n\nOS/2 port Copyright (c) 1990, 1991, Raymond Chen, Kai Uwe Rommel\n"
 		      "Version 5 port Copyright (c) 1994-2002, Andreas Kaiser, Ilya Zakharevich\n");
-#endif
-#ifdef __BEOS__
-	PerlIO_printf(PIO_stdout,
-		      "BeOS port Copyright Tom Spindler, 1997-1999\n");
 #endif
 #ifdef OEMVS
 	PerlIO_printf(PIO_stdout,
@@ -4132,7 +4127,7 @@ S_init_predump_symbols(pTHX)
 }
 
 void
-Perl_init_argv_symbols(pTHX_ register int argc, register char **argv)
+Perl_init_argv_symbols(pTHX_ int argc, char **argv)
 {
     dVAR;
 
@@ -4180,7 +4175,7 @@ Perl_init_argv_symbols(pTHX_ register int argc, register char **argv)
 }
 
 STATIC void
-S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register char **env)
+S_init_postdump_symbols(pTHX_ int argc, char **argv, char **env)
 {
     dVAR;
     GV* tmpgv;

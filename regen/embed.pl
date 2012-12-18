@@ -274,7 +274,7 @@ sub embed_h {
 	unless ($flags =~ /[om]/) {
 	    my $args = scalar @args;
 	    if ($flags =~ /n/) {
-		if ($flags =~ /s/) {
+		if ($flags =~ /[si]/) {
 		    $ret = hide($func,"S_$func");
 		}
 		elsif ($flags =~ /p/) {
@@ -441,7 +441,13 @@ END
 my $sym;
 
 for $sym (@intrp) {
+    if ($sym eq 'sawampersand') {
+	print $em "#ifndef PL_sawampersand\n";
+    }
     print $em multon($sym,'I','vTHX->');
+    if ($sym eq 'sawampersand') {
+	print $em "#endif\n";
+    }
 }
 
 print $em <<'END';

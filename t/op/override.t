@@ -63,6 +63,11 @@ is( $r, join($dirsep, "Foo", "Bar.pm") );
 }
 
 {
+    BEGIN {
+        # Can’t do ‘no warnings’ with CORE::GLOBAL::require overridden. :-)
+        CORE::require warnings;
+        unimport warnings 'deprecated';
+    }
     my $_ = 'bar.pm';
     require;
     is( $r, 'bar.pm' );

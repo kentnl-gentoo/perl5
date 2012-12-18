@@ -176,7 +176,7 @@ XS_unpack_anotherstructPtrPtr(SV *in)
         if (SvROK(tmp) && SvTYPE(SvRV(tmp)) == SVt_PVHV)
             inhash = (HV*)SvRV(tmp);
         else
-            Perl_croak(aTHX_ "Array element %u is not a HASH reference", i);
+            Perl_croak(aTHX_ "Array element %"UVuf" is not a HASH reference", i);
 
         elem = hv_fetchs(inhash, "a", 0);
         if (elem == NULL)
@@ -435,6 +435,13 @@ T_BOOL( in )
   RETVAL = in;
  OUTPUT:
   RETVAL
+
+bool
+T_BOOL_2( in )
+  bool in
+ CODE:
+ OUTPUT:
+   in
 
 
 ## T_U_INT
