@@ -244,7 +244,7 @@ struct p5rx {
 Returns the value of the object's reference count.
 
 =for apidoc Am|SV*|SvREFCNT_inc|SV* sv
-Increments the reference count of the given SV.
+Increments the reference count of the given SV, returning the SV.
 
 All of the following SvREFCNT_inc* macros are optimized versions of
 SvREFCNT_inc, and can be replaced with SvREFCNT_inc.
@@ -284,7 +284,7 @@ to return a meaningful value, or check for NULLness, so it's smaller
 and faster.
 
 =for apidoc Am|void|SvREFCNT_dec|SV* sv
-Decrements the reference count of the given SV.
+Decrements the reference count of the given SV. I<sv> may be NULL.
 
 =for apidoc Am|void|SvREFCNT_dec_NN|SV* sv
 Same as SvREFCNT_dec, but can only be used if you know I<sv>
@@ -652,13 +652,15 @@ Unsets the IV status of an SV.
 Tells an SV that it is an integer and disables all other OK bits.
 
 =for apidoc Am|void|SvIOK_only_UV|SV* sv
-Tells and SV that it is an unsigned integer and disables all other OK bits.
+Tells an SV that it is an unsigned integer and disables all other OK bits.
 
 =for apidoc Am|bool|SvIOK_UV|SV* sv
-Returns a boolean indicating whether the SV contains an unsigned integer.
+Returns a boolean indicating whether the SV contains an unsigned integer
+that is too large to store as an IV.
 
 =for apidoc Am|bool|SvUOK|SV* sv
-Returns a boolean indicating whether the SV contains an unsigned integer.
+Returns a boolean indicating whether the SV contains an unsigned integer
+that is too large to store as an IV.
 
 =for apidoc Am|bool|SvIOK_notUV|SV* sv
 Returns a boolean indicating whether the SV contains a signed integer.
@@ -1535,7 +1537,7 @@ Like C<SvUV> but doesn't process magic.
 
 =for apidoc Am|UV|SvUVx|SV* sv
 Coerces the given SV to an unsigned integer and
-returns it.  Guarantees to C<sv> only once.  Only
+returns it.  Guarantees to evaluate C<sv> only once.  Only
 use this if C<sv> is an expression with side effects,
 otherwise use the more efficient C<SvUV>.
 
@@ -2059,7 +2061,14 @@ alternative is to call C<sv_grow> if you are not sure of the type of SV.
 #define SvPEEK(sv) ""
 #endif
 
-#define SvIMMORTAL(sv) ((sv)==&PL_sv_undef || (sv)==&PL_sv_yes || (sv)==&PL_sv_no || (sv)==&PL_sv_placeholder)
+#define SvIMMORTAL(sv) (SvREADONLY(sv) && ((sv)==&PL_sv_undef || (sv)==&PL_sv_yes || (sv)==&PL_sv_no || (sv)==&PL_sv_placeholder))
+
+#ifdef DEBUGGING
+   /* exercise the immortal resurrection code in sv_free2() */
+#  define SvREFCNT_IMMORTAL 1000
+#else
+#  define SvREFCNT_IMMORTAL ((~(U32)0)/2)
+#endif
 
 /*
 =for apidoc Am|SV *|boolSV|bool b

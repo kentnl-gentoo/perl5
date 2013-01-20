@@ -11,9 +11,10 @@ BEGIN {
 
 BEGIN { require "./test.pl"; }
 
-plan(tests => 114);
+plan(tests => 115);
 
 use Config;
+use Errno qw(EACCES EISDIR);
 
 # due to a bug in VMS's piping which makes it impossible for runperl()
 # to emulate echo -n (ie. stdin always winds up with a newline), these 
@@ -105,6 +106,24 @@ SWTEST
 	&& $r !~ /\bblock 5\b/,
 	'-c'
     );
+}
+
+{
+    my $tempdir = tempfile;
+    mkdir $tempdir, 0700 or die "Can't mkdir '$tempdir': $!";
+
+    local $ENV{'LC_ALL'} = 'C'; # Keep the test simple: expect English
+    local $ENV{LANGUAGE} = 'C';
+
+    # Win32 won't let us open the directory, so we never get to die with
+    # EISDIR, which happens after open.
+    my $error  = do { local $! = $^O eq 'MSWin32' ? EACCES : EISDIR; "$!" };
+    like(
+        runperl( switches => [ '-c' ], args  => [ $tempdir ], stderr => 1),
+        qr/Can't open perl script.*$tempdir.*\Q$error/s,
+        "RT \#61362: Cannot syntax-check a directory"
+    );
+    rmdir $tempdir or die "Can't rmdir '$tempdir': $!";
 }
 
 # Tests for -l

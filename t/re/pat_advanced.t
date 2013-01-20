@@ -1014,6 +1014,37 @@ sub run_tests {
         ok "\N{LONG-STR}" =~ /^\N{LONG-STR}$/, 'Verify that long string works';
         ok "\N{LONG-STR}" =~ /^\N{LONG-STR}$/i, 'Verify under folding that long string works';
 
+        eval '/(?[[\N{EMPTY-STR}]])/';
+        ok $@ && $@ =~ /Zero length \\N\{}/;
+
+        undef $w;
+        eval q [is("\N{TOO  MANY SPACES}", "TOO  MANY SPACES", "Multiple spaces in character name works")];
+        like ($w, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... but returns a deprecation warning");
+        eval q [use utf8; is("\N{TOO  MANY SPACES}", "TOO  MANY SPACES", "Same under 'use utf8': they work")];
+        like ($w, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... but return a deprecation warning");
+        {
+            no warnings 'deprecated';
+            undef $w;
+            eval q ["\N{TOO  MANY SPACES}"];
+            ok (! defined $w, "... and no warning if warnings are off");
+            eval q [use utf8; "\N{TOO  MANY SPACES}"];
+            ok (! defined $w, "... same under 'use utf8'");
+        }
+
+        undef $w;
+        eval q [is("\N{TRAILING SPACE }", "TRAILING SPACE ", "Trailing space in character name works")];
+        like ($w, qr/Trailing white-space in a charnames alias definition is deprecated/, "... but returns a deprecation warning");
+        eval q [use utf8; is("\N{TRAILING SPACE }", "TRAILING SPACE ", "Same under 'use utf8': they work")];
+        like ($w, qr/Trailing white-space in a charnames alias definition is deprecated/, "... but returns a deprecation warning");
+        {
+            no warnings 'deprecated';
+            undef $w;
+            eval q ["\N{TRAILING SPACE }"];
+            ok (! defined $w, "... and no warning if warnings are off");
+            eval q [use utf8; "\N{TRAILING SPACE }"];
+            ok (! defined $w, "... same under 'use utf8'");
+        }
+
         # If remove the limitation in regcomp code these should work
         # differently
         undef $w;
@@ -1163,7 +1194,6 @@ sub run_tests {
 
     {
         # \, breaks {3,4}
-        no warnings qw{deprecated regexp};
         ok "xaaay"    !~ /xa{3\,4}y/, '\, in a pattern';
         ok "xa{3,4}y" =~ /xa{3\,4}y/, '\, in a pattern';
 
@@ -2141,6 +2171,13 @@ EOP
         ok(! $failed, "Matched multi-char fold across EXACTFish node boundaries; if failed, was at count $failed");
     }
 
+    {
+        fresh_perl_is('print eval "\"\x{101}\" =~ /[[:lower:]]/", "\n"; print eval "\"\x{100}\" =~ /[[:lower:]]/i", "\n";',
+                      "1\n1",   # Both re's should match
+                      "",
+                      "get [:lower:] swash in first eval; test under /i in second");
+    }
+
     #
     # Keep the following tests last -- they may crash perl
     #
@@ -2206,6 +2243,8 @@ EOP
             my $p = qr/^[\x{FFFF_FFFF}]$/;
             ok(chr(0xFFFF_FFFF) =~ $p,
                     "chr(0xFFFF_FFFF) can match itself in a [class]");
+            ok(chr(0xFFFF_FFFF) =~ $p, # Tests any caching
+                    "chr(0xFFFF_FFFF) can match itself in a [class] subsequently");
         }
         else {
             no warnings 'overflow';
@@ -2217,6 +2256,8 @@ EOP
             my $p = qr/^[\x{FFFF_FFFF_FFFF_FFFF}]$/;
             ok(chr(0xFFFF_FFFF_FFFF_FFFF) =~ $p,
                     "chr(0xFFFF_FFFF_FFFF_FFFF) can match itself in a [class]");
+            ok(chr(0xFFFF_FFFF_FFFF_FFFF) =~ $p, # Tests any caching
+                    "chr(0xFFFF_FFFF_FFFF_FFFF) can match itself in a [class] subsequently");
 
             # This test is because something was declared as 32 bits, but
             # should have been cast to 64; only a problem where

@@ -6409,9 +6409,9 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 		continue;
 	    }
 #endif
-	    if (SvREADONLY(sv) && SvIMMORTAL(sv)) {
+	    if (SvIMMORTAL(sv)) {
 		/* make sure SvREFCNT(sv)==0 happens very seldom */
-		SvREFCNT(sv) = (~(U32)0)/2;
+		SvREFCNT(sv) = SvREFCNT_IMMORTAL;
 		continue;
 	    }
 	    break;
@@ -6575,9 +6575,9 @@ Perl_sv_free2(pTHX_ SV *const sv, const U32 rc)
             return;
         }
 #endif
-        if (SvREADONLY(sv) && SvIMMORTAL(sv)) {
+        if (SvIMMORTAL(sv)) {
             /* make sure SvREFCNT(sv)==0 happens very seldom */
-            SvREFCNT(sv) = (~(U32)0)/2;
+            SvREFCNT(sv) = SvREFCNT_IMMORTAL;
             return;
         }
         sv_clear(sv);
@@ -6596,9 +6596,9 @@ Perl_sv_free2(pTHX_ SV *const sv, const U32 rc)
         return;
     if (PL_in_clean_all) /* All is fair */
         return;
-    if (SvREADONLY(sv) && SvIMMORTAL(sv)) {
+    if (SvIMMORTAL(sv)) {
         /* make sure SvREFCNT(sv)==0 happens very seldom */
-        SvREFCNT(sv) = (~(U32)0)/2;
+        SvREFCNT(sv) = SvREFCNT_IMMORTAL;
         return;
     }
     if (ckWARN_d(WARN_INTERNAL)) {
@@ -8572,7 +8572,7 @@ Perl_sv_2mortal(pTHX_ SV *const sv)
     dVAR;
     if (!sv)
 	return NULL;
-    if (SvREADONLY(sv) && SvIMMORTAL(sv))
+    if (SvIMMORTAL(sv))
 	return sv;
     PUSH_EXTEND_MORTAL__SV_C(sv);
     SvTEMP_on(sv);
@@ -9503,10 +9503,10 @@ Perl_sv_isa(pTHX_ SV *sv, const char *const name)
 /*
 =for apidoc newSVrv
 
-Creates a new SV for the RV, C<rv>, to point to.  If C<rv> is not an RV then
-it will be upgraded to one.  If C<classname> is non-null then the new SV will
-be blessed in the specified package.  The new SV is returned and its
-reference count is 1.
+Creates a new SV for the existing RV, C<rv>, to point to.  If C<rv> is not an
+RV then it will be upgraded to one.  If C<classname> is non-null then the new
+SV will be blessed in the specified package.  The new SV is returned and its
+reference count is 1. The reference count 1 is owned by C<rv>.
 
 =cut
 */
@@ -13588,64 +13588,18 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_ASCII		= sv_dup_inc(proto_perl->IASCII, param);
     PL_Latin1		= sv_dup_inc(proto_perl->ILatin1, param);
 
-    PL_PerlSpace	= sv_dup_inc(proto_perl->IPerlSpace, param);
-    PL_XPerlSpace	= sv_dup_inc(proto_perl->IXPerlSpace, param);
-
-    PL_L1PosixAlnum	= sv_dup_inc(proto_perl->IL1PosixAlnum, param);
-    PL_PosixAlnum	= sv_dup_inc(proto_perl->IPosixAlnum, param);
-
-    PL_L1PosixAlpha	= sv_dup_inc(proto_perl->IL1PosixAlpha, param);
-    PL_PosixAlpha	= sv_dup_inc(proto_perl->IPosixAlpha, param);
-
-    PL_PosixBlank	= sv_dup_inc(proto_perl->IPosixBlank, param);
-    PL_XPosixBlank	= sv_dup_inc(proto_perl->IXPosixBlank, param);
-
-    PL_L1Cased		= sv_dup_inc(proto_perl->IL1Cased, param);
-
-    PL_PosixCntrl	= sv_dup_inc(proto_perl->IPosixCntrl, param);
-    PL_XPosixCntrl	= sv_dup_inc(proto_perl->IXPosixCntrl, param);
-
-    PL_PosixDigit	= sv_dup_inc(proto_perl->IPosixDigit, param);
-
-    PL_L1PosixGraph	= sv_dup_inc(proto_perl->IL1PosixGraph, param);
-    PL_PosixGraph	= sv_dup_inc(proto_perl->IPosixGraph, param);
-
-    PL_L1PosixLower	= sv_dup_inc(proto_perl->IL1PosixLower, param);
-    PL_PosixLower	= sv_dup_inc(proto_perl->IPosixLower, param);
-
-    PL_L1PosixPrint	= sv_dup_inc(proto_perl->IL1PosixPrint, param);
-    PL_PosixPrint	= sv_dup_inc(proto_perl->IPosixPrint, param);
-
-    PL_L1PosixPunct	= sv_dup_inc(proto_perl->IL1PosixPunct, param);
-    PL_PosixPunct	= sv_dup_inc(proto_perl->IPosixPunct, param);
-
-    PL_PosixSpace	= sv_dup_inc(proto_perl->IPosixSpace, param);
-    PL_XPosixSpace	= sv_dup_inc(proto_perl->IXPosixSpace, param);
-
-    PL_L1PosixUpper	= sv_dup_inc(proto_perl->IL1PosixUpper, param);
-    PL_PosixUpper	= sv_dup_inc(proto_perl->IPosixUpper, param);
-
-    PL_L1PosixWord	= sv_dup_inc(proto_perl->IL1PosixWord, param);
-    PL_PosixWord	= sv_dup_inc(proto_perl->IPosixWord, param);
-
-    PL_PosixXDigit	= sv_dup_inc(proto_perl->IPosixXDigit, param);
-    PL_XPosixXDigit	= sv_dup_inc(proto_perl->IXPosixXDigit, param);
-
-    PL_VertSpace	= sv_dup_inc(proto_perl->IVertSpace, param);
-
     PL_NonL1NonFinalFold = sv_dup_inc(proto_perl->INonL1NonFinalFold, param);
     PL_HasMultiCharFold= sv_dup_inc(proto_perl->IHasMultiCharFold, param);
 
     /* utf8 character class swashes */
-    PL_utf8_alnum	= sv_dup_inc(proto_perl->Iutf8_alnum, param);
-    PL_utf8_alnumc	= sv_dup_inc(proto_perl->Iutf8_alnumc, param);
-    PL_utf8_alpha	= sv_dup_inc(proto_perl->Iutf8_alpha, param);
-    PL_utf8_graph	= sv_dup_inc(proto_perl->Iutf8_graph, param);
-    PL_utf8_digit	= sv_dup_inc(proto_perl->Iutf8_digit, param);
-    PL_utf8_upper	= sv_dup_inc(proto_perl->Iutf8_upper, param);
-    PL_utf8_lower	= sv_dup_inc(proto_perl->Iutf8_lower, param);
-    PL_utf8_print	= sv_dup_inc(proto_perl->Iutf8_print, param);
-    PL_utf8_punct	= sv_dup_inc(proto_perl->Iutf8_punct, param);
+    for (i = 0; i < POSIX_SWASH_COUNT; i++) {
+        PL_utf8_swash_ptrs[i] = sv_dup_inc(proto_perl->Iutf8_swash_ptrs[i], param);
+    }
+    for (i = 0; i < POSIX_CC_COUNT; i++) {
+        PL_Posix_ptrs[i] = sv_dup_inc(proto_perl->IPosix_ptrs[i], param);
+        PL_L1Posix_ptrs[i] = sv_dup_inc(proto_perl->IL1Posix_ptrs[i], param);
+        PL_XPosix_ptrs[i] = sv_dup_inc(proto_perl->IXPosix_ptrs[i], param);
+    }
     PL_utf8_mark	= sv_dup_inc(proto_perl->Iutf8_mark, param);
     PL_utf8_X_regular_begin	= sv_dup_inc(proto_perl->Iutf8_X_regular_begin, param);
     PL_utf8_X_extend	= sv_dup_inc(proto_perl->Iutf8_X_extend, param);
@@ -13656,6 +13610,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_utf8_idstart	= sv_dup_inc(proto_perl->Iutf8_idstart, param);
     PL_utf8_xidstart	= sv_dup_inc(proto_perl->Iutf8_xidstart, param);
     PL_utf8_perl_idstart = sv_dup_inc(proto_perl->Iutf8_perl_idstart, param);
+    PL_utf8_perl_idcont = sv_dup_inc(proto_perl->Iutf8_perl_idcont, param);
     PL_utf8_idcont	= sv_dup_inc(proto_perl->Iutf8_idcont, param);
     PL_utf8_xidcont	= sv_dup_inc(proto_perl->Iutf8_xidcont, param);
     PL_utf8_foldable	= sv_dup_inc(proto_perl->Iutf8_foldable, param);
@@ -13913,18 +13868,18 @@ Perl_clone_params_new(PerlInterpreter *const from, PerlInterpreter *const to)
 void
 Perl_init_constants(pTHX)
 {
-    SvREFCNT(&PL_sv_undef)	= (~(U32)0)/2;
+    SvREFCNT(&PL_sv_undef)	= SvREFCNT_IMMORTAL;
     SvFLAGS(&PL_sv_undef)	= SVf_READONLY|SVt_NULL;
     SvANY(&PL_sv_undef)		= NULL;
 
     SvANY(&PL_sv_no)		= new_XPVNV();
-    SvREFCNT(&PL_sv_no)		= (~(U32)0)/2;
+    SvREFCNT(&PL_sv_no)		= SvREFCNT_IMMORTAL;
     SvFLAGS(&PL_sv_no)		= SVt_PVNV|SVf_READONLY
 				  |SVp_IOK|SVf_IOK|SVp_NOK|SVf_NOK
 				  |SVp_POK|SVf_POK;
 
     SvANY(&PL_sv_yes)		= new_XPVNV();
-    SvREFCNT(&PL_sv_yes)	= (~(U32)0)/2;
+    SvREFCNT(&PL_sv_yes)	= SvREFCNT_IMMORTAL;
     SvFLAGS(&PL_sv_yes)		= SVt_PVNV|SVf_READONLY
 				  |SVp_IOK|SVf_IOK|SVp_NOK|SVf_NOK
 				  |SVp_POK|SVf_POK;

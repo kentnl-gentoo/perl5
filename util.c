@@ -428,33 +428,13 @@ Perl_delimcpy(char *to, const char *toend, const char *from, const char *fromend
 char *
 Perl_instr(const char *big, const char *little)
 {
-    I32 first;
 
     PERL_ARGS_ASSERT_INSTR;
 
+    /* libc prior to 4.6.27 did not work properly on a NULL 'little' */
     if (!little)
 	return (char*)big;
-    first = *little++;
-    if (!first)
-	return (char*)big;
-    while (*big) {
-	const char *s, *x;
-	if (*big++ != first)
-	    continue;
-	for (x=big,s=little; *s; /**/ ) {
-	    if (!*x)
-		return NULL;
-	    if (*s != *x)
-		break;
-	    else {
-		s++;
-		x++;
-	    }
-	}
-	if (!*s)
-	    return (char*)(big-1);
-    }
-    return NULL;
+    return strstr((char*)big, (char*)little);
 }
 
 /* same as instr but allow embedded nulls.  The end pointers point to 1 beyond
@@ -1631,6 +1611,15 @@ Perl_croak_no_mem()
     /* Can't use PerlIO to write as it allocates memory */
     PerlLIO_write(PerlIO_fileno(Perl_error_log),
 		  PL_no_mem, sizeof(PL_no_mem)-1);
+    my_exit(1);
+}
+
+/* does not return, used only in POPSTACK */
+void
+Perl_croak_popstack(void)
+{
+    dTHX;
+    PerlIO_printf(Perl_error_log, "panic: POPSTACK\n");
     my_exit(1);
 }
 

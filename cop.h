@@ -605,7 +605,7 @@ struct block_format {
 	   (PL_op->op_flags & OPf_WANT)					\
 	       ? OPpENTERSUB_LVAL_MASK					\
 	       : !(PL_op->op_private & OPpENTERSUB_LVAL_MASK)		\
-	           ? 0 : Perl_was_lvalue_sub(aTHX);			\
+	           ? 0 : (U8)Perl_was_lvalue_sub(aTHX);			\
 	PUSHSUB_BASE(cx)						\
 	cx->blk_u16 = PL_op->op_private &				\
 	                  (phlags|OPpDEREF);				\
@@ -670,8 +670,7 @@ struct block_format {
 
 #define LEAVESUB(sv)							\
     STMT_START {							\
-	if (sv)								\
-	    SvREFCNT_dec(sv);						\
+	SvREFCNT_dec(sv);						\
     } STMT_END
 
 #define POPFORMAT(cx)							\
@@ -1134,8 +1133,7 @@ typedef struct stackinfo PERL_SI;
 	    Perl_deb(aTHX_ "pop  STACKINFO %d at %s:%d\n",		\
 		         i, __FILE__, __LINE__);})			\
 	if (!prev) {							\
-	    PerlIO_printf(Perl_error_log, "panic: POPSTACK\n");		\
-	    my_exit(1);							\
+	    Perl_croak_popstack();					\
 	}								\
 	SWITCHSTACK(PL_curstack,prev->si_stack);			\
 	/* don't free prev here, free them all at the END{} */		\

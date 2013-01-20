@@ -241,7 +241,7 @@ perl_construct(pTHXx)
     init_constants();
 
     SvREADONLY_on(&PL_sv_placeholder);
-    SvREFCNT(&PL_sv_placeholder) = (~(U32)0)/2;
+    SvREFCNT(&PL_sv_placeholder) = SvREFCNT_IMMORTAL;
 
     PL_sighandlerp = (Sighandler_t) Perl_sighandler;
 #ifdef PERL_USES_PL_PIDSTATUS
@@ -518,6 +518,7 @@ perl_destruct(pTHXx)
 #ifdef DEBUG_LEAKING_SCALARS_FORK_DUMP
     pid_t child;
 #endif
+    int i;
 
     PERL_ARGS_ASSERT_PERL_DESTRUCT;
 #ifndef MULTIPLICITY
@@ -980,15 +981,11 @@ perl_destruct(pTHXx)
     PL_numeric_radix_sv = NULL;
 #endif
 
-    /* clear utf8 character classes */
-    SvREFCNT_dec(PL_utf8_alnum);
-    SvREFCNT_dec(PL_utf8_alpha);
-    SvREFCNT_dec(PL_utf8_graph);
-    SvREFCNT_dec(PL_utf8_digit);
-    SvREFCNT_dec(PL_utf8_upper);
-    SvREFCNT_dec(PL_utf8_lower);
-    SvREFCNT_dec(PL_utf8_print);
-    SvREFCNT_dec(PL_utf8_punct);
+    /* clear character classes  */
+    for (i = 0; i < POSIX_SWASH_COUNT; i++) {
+        SvREFCNT_dec(PL_utf8_swash_ptrs[i]);
+        PL_utf8_swash_ptrs[i] = NULL;
+    }
     SvREFCNT_dec(PL_utf8_mark);
     SvREFCNT_dec(PL_utf8_toupper);
     SvREFCNT_dec(PL_utf8_totitle);
@@ -997,14 +994,6 @@ perl_destruct(pTHXx)
     SvREFCNT_dec(PL_utf8_idstart);
     SvREFCNT_dec(PL_utf8_idcont);
     SvREFCNT_dec(PL_utf8_foldclosures);
-    PL_utf8_alnum	= NULL;
-    PL_utf8_alpha	= NULL;
-    PL_utf8_graph	= NULL;
-    PL_utf8_digit	= NULL;
-    PL_utf8_upper	= NULL;
-    PL_utf8_lower	= NULL;
-    PL_utf8_print	= NULL;
-    PL_utf8_punct	= NULL;
     PL_utf8_mark	= NULL;
     PL_utf8_toupper	= NULL;
     PL_utf8_totitle	= NULL;
@@ -1013,6 +1002,16 @@ perl_destruct(pTHXx)
     PL_utf8_idstart	= NULL;
     PL_utf8_idcont	= NULL;
     PL_utf8_foldclosures = NULL;
+    for (i = 0; i < POSIX_CC_COUNT; i++) {
+        SvREFCNT_dec(PL_Posix_ptrs[i]);
+        PL_Posix_ptrs[i] = NULL;
+
+        SvREFCNT_dec(PL_L1Posix_ptrs[i]);
+        PL_L1Posix_ptrs[i] = NULL;
+
+        SvREFCNT_dec(PL_XPosix_ptrs[i]);
+        PL_XPosix_ptrs[i] = NULL;
+    }
 
     if (!specialWARN(PL_compiling.cop_warnings))
 	PerlMemShared_free(PL_compiling.cop_warnings);
@@ -2253,8 +2252,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 #endif
 
     lex_start(linestr_sv, rsfp, lex_start_flags);
-    if(linestr_sv)
-	SvREFCNT_dec(linestr_sv);
+    SvREFCNT_dec(linestr_sv);
 
     PL_subname = newSVpvs("main");
 
@@ -3036,7 +3034,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
 	/* if adding extra options, remember to update DEBUG_MASK */
 	static const char debopts[] = "psltocPmfrxuUHXDSTRJvCAqMB";
 
-	for (; isALNUM(**s); (*s)++) {
+	for (; isWORDCHAR(**s); (*s)++) {
 	    const char * const d = strchr(debopts,**s);
 	    if (d)
 		i |= 1 << (d - debopts);
@@ -3047,7 +3045,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
     }
     else if (isDIGIT(**s)) {
 	i = atoi(*s);
-	for (; isALNUM(**s); (*s)++) ;
+	for (; isWORDCHAR(**s); (*s)++) ;
     }
     else if (givehelp) {
       const char *const *p = usage_msgd;
@@ -3141,7 +3139,7 @@ Perl_moreswitches(pTHX_ const char *s)
 	s++;
 
         /* -dt indicates to the debugger that threads will be used */
-	if (*s == 't' && !isALNUM(s[1])) {
+	if (*s == 't' && !isWORDCHAR(s[1])) {
 	    ++s;
 	    my_setenv("PERL5DB_THREADED", "1");
 	}
@@ -3164,7 +3162,7 @@ Perl_moreswitches(pTHX_ const char *s)
 	    end = s + strlen(s);
 
 	    /* We now allow -d:Module=Foo,Bar and -d:-Module */
-	    while(isALNUM(*s) || *s==':') ++s;
+	    while(isWORDCHAR(*s) || *s==':') ++s;
 	    if (*s != '=')
 		sv_catpvn(sv, start, end - start);
 	    else {
@@ -3192,7 +3190,7 @@ Perl_moreswitches(pTHX_ const char *s)
 	if (ckWARN_d(WARN_DEBUGGING))
 	    Perl_warner(aTHX_ packWARN(WARN_DEBUGGING),
 	           "Recompile perl with -DDEBUGGING to use -D switch (did you mean -d ?)\n");
-	for (s++; isALNUM(*s); s++) ;
+	for (s++; isWORDCHAR(*s); s++) ;
 #endif
 	return s;
     }	
@@ -3285,7 +3283,7 @@ Perl_moreswitches(pTHX_ const char *s)
 	    sv = newSVpvn(use,4);
 	    start = s;
 	    /* We allow -M'Module qw(Foo Bar)'	*/
-	    while(isALNUM(*s) || *s==':') {
+	    while(isWORDCHAR(*s) || *s==':') {
 		if( *s++ == ':' ) {
 		    if( *s == ':' ) 
 			s++;
@@ -3651,6 +3649,7 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
     int fdscript = -1;
     PerlIO *rsfp = NULL;
     dVAR;
+    Stat_t tmpstatbuf;
 
     PERL_ARGS_ASSERT_OPEN_SCRIPT;
 
@@ -3760,6 +3759,13 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
     /* ensure close-on-exec */
     fcntl(PerlIO_fileno(rsfp), F_SETFD, 1);
 #endif
+
+    if (PerlLIO_fstat(PerlIO_fileno(rsfp), &tmpstatbuf) >= 0
+        && S_ISDIR(tmpstatbuf.st_mode))
+        Perl_croak(aTHX_ "Can't open perl script \"%s\": %s\n",
+            CopFILE(PL_curcop),
+            strerror(EISDIR));
+
     return rsfp;
 }
 
@@ -4485,16 +4491,12 @@ S_mayberelocate(pTHX_ const char *const dir, STRLEN len, U32 flags)
     PERL_ARGS_ASSERT_MAYBERELOCATE;
     assert(len > 0);
 
-	if (len) {
-	    /* I am not convinced that this is valid when PERLLIB_MANGLE is
-	       defined to so something (in os2/os2.c), but the code has been
-	       this way, ignoring any possible changed of length, since
-	       760ac839baf413929cd31cc32ffd6dba6b781a81 (5.003_02) so I'll leave
-	       it be.  */
-	    libdir = newSVpvn(PERLLIB_MANGLE(dir, len), len);
-	} else {
-	    libdir = newSVpv(PERLLIB_MANGLE(dir, 0), 0);
-	}
+    /* I am not convinced that this is valid when PERLLIB_MANGLE is
+       defined to so something (in os2/os2.c), but the code has been
+       this way, ignoring any possible changed of length, since
+       760ac839baf413929cd31cc32ffd6dba6b781a81 (5.003_02) so I'll leave
+       it be.  */
+    libdir = newSVpvn(PERLLIB_MANGLE(dir, len), len);
 
 #ifdef VMS
     {

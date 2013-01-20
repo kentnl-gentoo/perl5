@@ -51,6 +51,7 @@ while (<$func_fh>) {
 
 close $func_fh;
 
+my $regcomp_re = "(?<routine>(?:ckWARN(?:\\d+)?reg\\w*|vWARN\\d+))";
 my $function_re = join '|', @functions;
 my $regcomp_fail_re = '\b(?:(?:Simple_)?v)?FAIL[2-4]?\b';
 my $source_msg_re =
@@ -62,6 +63,7 @@ my $source_msg_call_re = qr/$source_msg_re(?:_nocontext)? \s*
     $text_re /x;
 my $bad_version_re = qr{BADVERSION\([^"]*$text_re};
    $regcomp_fail_re = qr/$regcomp_fail_re\([^"]*$text_re/;
+my $regcomp_call_re = qr/$regcomp_re.*?$text_re/;
 
 my %entries;
 
@@ -84,7 +86,19 @@ my $severity_re = qr/ . (?: \| . )* /x; # A severity is a single char, but can
 my @same_descr;
 while (<$diagfh>) {
   if (m/^=item (.*)/) {
-    $cur_entry = $1 =~ s/\s+\z//r;
+    $cur_entry = $1;
+
+    # Allow multi-line headers
+    while (<$diagfh>) {
+      if (/^\s*$/) {
+        last;
+      }
+
+      $cur_entry .= $_;
+    }
+
+    $cur_entry =~ s/\n/ /gs; # Fix multi-line headers if they have \n's
+    $cur_entry =~ s/\s+\z//;
 
     if (exists $entries{$cur_entry} && $entries{$cur_entry}{todo}) {
         TODO: {
@@ -96,7 +110,6 @@ while (<$diagfh>) {
     # overwrites one in DATA.
     $entries{$cur_entry}{todo} = 0;
     $entries{$cur_entry}{line_number} = $.;
-    next;
   }
 
   next if ! defined $cur_entry;
@@ -238,7 +251,7 @@ sub check_file {
 
     my $multiline = 0;
     # Loop to accumulate the message text all on one line.
-    if (m/$source_msg_re(?:_nocontext)?\s*\(/) {
+    if (m/(?:$source_msg_re(?:_nocontext)?|$regcomp_re)\s*\(/) {
       while (not m/\);$/) {
         my $nextline = <$codefh>;
         # Means we fell off the end of the file.  Not terribly surprising;
@@ -269,9 +282,9 @@ sub check_file {
     # The %"foo" thing needs to happen *before* this regex.
     # diag($_);
     # DIE is just return Perl_die
-    my ($name, $category);
+    my ($name, $category, $routine);
     if (/$source_msg_call_re/) {
-      ($name, $category) = ($+{'text'}, $+{'category'});
+      ($name, $category, $routine) = ($+{'text'}, $+{'category'}, $+{'routine'});
       # Sometimes the regexp will pick up too much for the category
       # e.g., WARN_UNINITIALIZED), PL_warn_uninit_sv ... up to the next )
       $category && $category =~ s/\).*//s;
@@ -286,14 +299,25 @@ sub check_file {
       $name .=
         " in regex" . ("; marked by <-- HERE in" x /vFAIL/) . " m/%s/";
     }
+    elsif (/$regcomp_call_re/) {
+      # vWARN/ckWARNreg("foo") -> "foo in regex; marked by <-- HERE in m/%s/
+      ($name, $category, $routine) = ($+{'text'}, undef, $+{'routine'});
+      $name .= " in regex; marked by <-- HERE in m/%s/";
+      $category = 'WARN_REGEXP';
+      if ($routine =~ /dep/) {
+        $category .= ',WARN_DEPRECATED';
+      }
+    }
     else {
       next;
     }
 
-    my $severity = !$+{routine}                 ? '[PFX]'
-                 :  $+{routine} =~ /warn.*_d\z/ ? '[DS]'
-                 :  $+{routine} =~ /warn/       ? '[WDS]'
-                 :                                '[PFX]';
+    my $severity = !$routine                   ? '[PFX]'
+                 :  $routine =~ /warn.*_d\z/   ? '[DS]'
+                 :  $routine =~ /warn/         ? '[WDS]'
+                 :  $routine =~ /ckWARN\d*reg/ ? '[WDS]'
+                 :  $routine =~ /vWARN\d/      ? '[WDS]'
+                 :                             '[PFX]';
     my $categories;
     if (defined $category) {
       $category =~ s/__/::/g;
@@ -339,6 +363,18 @@ sub check_message {
     my $key = $name =~ y/\n/ /r;
     my $ret;
 
+    # Try to reduce printf() formats to simplest forms
+    # Really this should be matching %s, etc like diagnostics.pm does
+
+    # Kill flags
+    $key =~ s/%[#0\-+]/%/g;
+
+    # Kill width
+    $key =~ s/\%(\d+|\*)/%/g;
+
+    # Kill precision
+    $key =~ s/\%\.(\d+|\*)/%/g;
+
     if (exists $entries{$key}) {
       $ret = 1;
       if ( $entries{$key}{seen}++ ) {
@@ -369,7 +405,8 @@ sub check_message {
           if $entries{$key}{cattodo};
 
         like $entries{$key}{severity}, $qr,
-           "severity is one of $severity for $key";
+          "severity is one of $severity for $key";
+
         is $entries{$key}{category}, $categories,
            ($categories ? "categories are [$categories]" : "no category")
              . " for $key";
@@ -483,7 +520,6 @@ Illegal pattern in regex; marked by <-- HERE in m/%s/
 Infinite recursion in regex
 internal %<num>p might conflict with future printf extensions
 Invalid argument to sv_cat_decode
-Invalid [::] class in regex; marked by <-- HERE in m/%s/
 Invalid [] range "%*.*s" in regex; marked by <-- HERE in m/%s/
 Invalid range "%c-%c" in transliteration operator
 Invalid separator character %c%c%c in PerlIO layer specification %s
@@ -551,7 +587,6 @@ switching effective uid is not implemented
 System V IPC is not implemented on this machine
 -T and -B not implemented on filehandles
 Terminating on signal SIG%s(%d)
-The crypt() function is unimplemented due to excessive paranoia.
 The crypt() function is not implemented on NetWare
 The flock() function is not implemented on NetWare
 The rewinddir() function is not implemented on NetWare
@@ -591,6 +626,26 @@ Within []-length '%c' not allowed in %s
 Wrong syntax (suid) fd script name "%s"
 'X' outside of string in %s
 'X' outside of string in unpack
+Useless (%s%c) - %suse /%c modifier in regex; marked by <-- HERE in m/%s/
+Useless (%sc) - %suse /gc modifier in regex; marked by <-- HERE in m/%s/
+Useless use of (?-p) in regex; marked by <-- HERE in m/%s/
+Unmatched '%c' in POSIX class in regex; marked by <-- HERE in m/%s/
+Unmatched '[' in POSIX class in regex; marked by <-- HERE in m/%s/
+(?[...]) not valid in locale in regex; marked by <-- HERE in m/%s/
+The regex_sets feature is experimental
+Syntax error in (?[...]) in regex m/%s/
+Unexpected character in regex; marked by <-- HERE in m/%s/
+Unexpected binary operator '%c' with no preceding operand in regex; marked by <-- HERE in m/%s/
+Unexpected '(' with no preceding operator in regex; marked by <-- HERE in m/%s/
+Unexpected ')' in regex; marked by <-- HERE in m/%s/
+Operand with no preceding operator in regex; marked by <-- HERE in m/%s/
+Property '%s' is unknown in regex; marked by <-- HERE in m/%s/
+Need exactly 3 octal digits in regex; marked by <-- HERE in m/%s/
+Unrecognized escape \%c in character class in regex; marked by <-- HERE in m/%s/
+Incomplete expression within '(?[ ])' in regex; marked by <-- HERE in m/%s/
+Non-octal character in regex; marked by <-- HERE in m/%s/
+Non-hex character in regex; marked by <-- HERE in m/%s/
+Use \\x{...} for more than two hex characters in regex; marked by <-- HERE in m/%s/
 
 __CATEGORIES__
 Code point 0x%X is not Unicode, all \p{} matches fail; all \P{} matches succeed
@@ -602,3 +657,6 @@ Operation "%s" returns its argument for non-Unicode code point 0x%X
 Operation "%s" returns its argument for UTF-16 surrogate U+%X
 Unicode surrogate U+%X is illegal in UTF-8
 UTF-16 surrogate U+%X
+False [] range "%s" in regex; marked by <-- HERE in m/%s/
+\N{} in character class restricted to one character in regex; marked by <-- HERE in m/%s/
+Zero length \N{} in regex; marked by <-- HERE in m/%s/

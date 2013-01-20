@@ -7,7 +7,7 @@ package _charnames;
 use strict;
 use warnings;
 use File::Spec;
-our $VERSION = '1.34';
+our $VERSION = '1.35';
 use unicore::Name;    # mktables-generated algorithmically-defined names
 
 use bytes ();          # for $bytes::hint_bits
@@ -160,7 +160,7 @@ sub alias (@) # Set up a single alias
       $value = CORE::hex $1;
     }
     if ($value =~ $decimal_qr) {
-        no warnings qw(non_unicode surrogate nonchar); # Allow any non-malformed
+        no warnings qw(non_unicode surrogate nonchar); # Allow any of these
         $^H{charnames_ord_aliases}{$name} = pack("U", $value);
 
         # Use a canonical form.
@@ -173,10 +173,23 @@ sub alias (@) # Set up a single alias
                        \p{_Perl_Charname_Begin}
                        \p{_Perl_Charname_Continue}*
                        $ /x) {
+
           push @errors, $name;
         }
         else {
           $^H{charnames_name_aliases}{$name} = $value;
+
+          if (warnings::enabled('deprecated')) {
+            if ($name =~ / ( .* \s ) ( \s* ) $ /x) {
+              carp "Trailing white-space in a charnames alias definition is deprecated; marked by <-- HERE in '$1 <-- HERE " . $2 . "'";
+            }
+
+            # Use '+' instead of '*' in this regex, because any trailing
+            # blanks have already been warned about.
+            if ($name =~ / ( .*? \s{2} ) ( .+ ) /x) {
+              carp "A sequence of multiple spaces in a charnames alias definition is deprecated; marked by <-- HERE in '$1 <-- HERE " . $2 . "'";
+            }
+          }
         }
     }
   }
@@ -214,11 +227,11 @@ sub alias_file ($)  # Reads a file containing alias definitions
   if (-f $arg && File::Spec->file_name_is_absolute ($arg)) {
     $file = $arg;
   }
-  elsif ($arg =~ m/^\w+$/) {
+  elsif ($arg =~ m/ ^ \p{_Perl_IDStart} \p{_Perl_IDCont}* $/x) {
     $file = "unicore/${arg}_alias.pl";
   }
   else {
-    croak "Charnames alias files can only have identifier characters";
+    croak "Charnames alias file names can only have identifier characters";
   }
   if (my @alias = do $file) {
     @alias == 1 && !defined $alias[0] and
@@ -612,6 +625,7 @@ sub import
         ref $alias eq "HASH" or
           croak "Only HASH reference supported as argument to :alias";
         alias ($alias);
+        $promote = 1;
         next;
       }
       if ($alias =~ m{:(\w+)$}) {
@@ -620,7 +634,7 @@ sub import
         alias_file ($1) and $promote = 1;
         next;
       }
-      alias_file ($alias);
+      alias_file ($alias) and $promote = 1;
       next;
     }
     if (substr($arg, 0, 1) eq ':'

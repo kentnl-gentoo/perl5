@@ -1190,8 +1190,10 @@ first_symbol(const char *pat, const char *patend) {
 =for apidoc unpackstring
 
 The engine implementing unpack() Perl function. C<unpackstring> puts the
-extracted list items on the stack and returns the number of elements.
+extracted list items on the @_ stack and returns the number of elements.
 Issue C<PUTBACK> before and C<SPAGAIN> after the call to this function.
+Unlike L</call_pv>, do not do a C<PUSHMARK>. This function takes no parameters
+on the @_ stack.
 
 =cut */
 
@@ -3115,7 +3117,7 @@ extern const float _float_constants[];
 		else afloat = (float) anv;
 }
 #else /* __VOS__ */
-# if defined(VMS) && !defined(__IEEE_FP)
+# if defined(VMS) && !defined(_IEEE_FP)
 		/* IEEE fp overflow shenanigans are unavailable on VAX and optional
 		 * on Alpha; fake it if we don't have them.
 		 */
@@ -3154,7 +3156,7 @@ extern const double _double_constants[];
 		else adouble = (double) anv;
 }
 #else /* __VOS__ */
-# if defined(VMS) && !defined(__IEEE_FP)
+# if defined(VMS) && !defined(_IEEE_FP)
 		/* IEEE fp overflow shenanigans are unavailable on VAX and optional
 		 * on Alpha; fake it if we don't have them.
 		 */

@@ -901,11 +901,12 @@ C<*retlen> will be set to the length, in bytes, of that character.
 
 If C<s> does not point to a well-formed UTF-8 character and UTF8 warnings are
 enabled, zero is returned and C<*retlen> is set (if C<retlen> isn't
-NULL) to -1.  If those warnings are off, the computed value if well-defined (or
-the Unicode REPLACEMENT CHARACTER, if not) is silently returned, and C<*retlen>
-is set (if C<retlen> isn't NULL) so that (S<C<s> + C<*retlen>>) is the
-next possible position in C<s> that could begin a non-malformed character.
-See L</utf8n_to_uvuni> for details on when the REPLACEMENT CHARACTER is returned.
+NULL) to -1.  If those warnings are off, the computed value, if well-defined
+(or the Unicode REPLACEMENT CHARACTER if not), is silently returned, and
+C<*retlen> is set (if C<retlen> isn't NULL) so that (S<C<s> + C<*retlen>>) is
+the next possible position in C<s> that could begin a non-malformed character.
+See L</utf8n_to_uvuni> for details on when the REPLACEMENT CHARACTER is
+returned.
 
 =cut
 */
@@ -1478,6 +1479,14 @@ Perl_utf16_to_utf8_reversed(pTHX_ U8* p, U8* d, I32 bytelen, I32 *newlen)
     return utf16_to_utf8(p, d, bytelen, newlen);
 }
 
+bool
+Perl__is_uni_FOO(pTHX_ const U8 classnum, const UV c)
+{
+    U8 tmpbuf[UTF8_MAXBYTES+1];
+    uvchr_to_utf8(tmpbuf, c);
+    return _is_utf8_FOO(classnum, tmpbuf);
+}
+
 /* for now these are all defined (inefficiently) in terms of the utf8 versions.
  * Note that the macros in handy.h that call these short-circuit calling them
  * for Latin-1 range inputs */
@@ -1487,7 +1496,7 @@ Perl_is_uni_alnum(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_alnum(tmpbuf);
+    return _is_utf8_FOO(_CC_WORDCHAR, tmpbuf);
 }
 
 bool
@@ -1495,7 +1504,7 @@ Perl_is_uni_alnumc(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_alnumc(tmpbuf);
+    return _is_utf8_FOO(_CC_ALPHANUMERIC, tmpbuf);
 }
 
 bool    /* Internal function so we can deprecate the external one, and call
@@ -1519,6 +1528,14 @@ Perl_is_uni_idfirst(pTHX_ UV c)
 }
 
 bool
+Perl__is_uni_perl_idcont(pTHX_ UV c)
+{
+    U8 tmpbuf[UTF8_MAXBYTES+1];
+    uvchr_to_utf8(tmpbuf, c);
+    return _is_utf8_perl_idcont(tmpbuf);
+}
+
+bool
 Perl__is_uni_perl_idstart(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
@@ -1531,7 +1548,7 @@ Perl_is_uni_alpha(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_alpha(tmpbuf);
+    return _is_utf8_FOO(_CC_ALPHA, tmpbuf);
 }
 
 bool
@@ -1557,7 +1574,7 @@ Perl_is_uni_digit(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_digit(tmpbuf);
+    return _is_utf8_FOO(_CC_DIGIT, tmpbuf);
 }
 
 bool
@@ -1565,7 +1582,7 @@ Perl_is_uni_upper(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_upper(tmpbuf);
+    return _is_utf8_FOO(_CC_UPPER, tmpbuf);
 }
 
 bool
@@ -1573,7 +1590,7 @@ Perl_is_uni_lower(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_lower(tmpbuf);
+    return _is_utf8_FOO(_CC_LOWER, tmpbuf);
 }
 
 bool
@@ -1587,7 +1604,7 @@ Perl_is_uni_graph(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_graph(tmpbuf);
+    return _is_utf8_FOO(_CC_GRAPH, tmpbuf);
 }
 
 bool
@@ -1595,7 +1612,7 @@ Perl_is_uni_print(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_print(tmpbuf);
+    return _is_utf8_FOO(_CC_PRINT, tmpbuf);
 }
 
 bool
@@ -1603,7 +1620,7 @@ Perl_is_uni_punct(pTHX_ UV c)
 {
     U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
-    return is_utf8_punct(tmpbuf);
+    return _is_utf8_FOO(_CC_PUNCT, tmpbuf);
 }
 
 bool
@@ -1840,16 +1857,16 @@ Perl_is_uni_alnum_lc(pTHX_ UV c)
     if (c < 256) {
         return isALNUM_LC(UNI_TO_NATIVE(c));
     }
-    return is_uni_alnum(c);
+    return _is_uni_FOO(_CC_WORDCHAR, c);
 }
 
 bool
 Perl_is_uni_alnumc_lc(pTHX_ UV c)
 {
     if (c < 256) {
-        return isALNUMC_LC(UNI_TO_NATIVE(c));
+        return isALPHANUMERIC_LC(UNI_TO_NATIVE(c));
     }
-    return is_uni_alnumc(c);
+    return _is_uni_FOO(_CC_ALPHANUMERIC, c);
 }
 
 bool
@@ -1867,7 +1884,7 @@ Perl_is_uni_alpha_lc(pTHX_ UV c)
     if (c < 256) {
         return isALPHA_LC(UNI_TO_NATIVE(c));
     }
-    return is_uni_alpha(c);
+    return _is_uni_FOO(_CC_ALPHA, c);
 }
 
 bool
@@ -1903,7 +1920,7 @@ Perl_is_uni_digit_lc(pTHX_ UV c)
     if (c < 256) {
         return isDIGIT_LC(UNI_TO_NATIVE(c));
     }
-    return is_uni_digit(c);
+    return _is_uni_FOO(_CC_DIGIT, c);
 }
 
 bool
@@ -1912,7 +1929,7 @@ Perl_is_uni_upper_lc(pTHX_ UV c)
     if (c < 256) {
         return isUPPER_LC(UNI_TO_NATIVE(c));
     }
-    return is_uni_upper(c);
+    return _is_uni_FOO(_CC_UPPER, c);
 }
 
 bool
@@ -1921,7 +1938,7 @@ Perl_is_uni_lower_lc(pTHX_ UV c)
     if (c < 256) {
         return isLOWER_LC(UNI_TO_NATIVE(c));
     }
-    return is_uni_lower(c);
+    return _is_uni_FOO(_CC_LOWER, c);
 }
 
 bool
@@ -1939,7 +1956,7 @@ Perl_is_uni_graph_lc(pTHX_ UV c)
     if (c < 256) {
         return isGRAPH_LC(UNI_TO_NATIVE(c));
     }
-    return is_uni_graph(c);
+    return _is_uni_FOO(_CC_GRAPH, c);
 }
 
 bool
@@ -1948,7 +1965,7 @@ Perl_is_uni_print_lc(pTHX_ UV c)
     if (c < 256) {
         return isPRINT_LC(UNI_TO_NATIVE(c));
     }
-    return is_uni_print(c);
+    return _is_uni_FOO(_CC_PRINT, c);
 }
 
 bool
@@ -1957,7 +1974,7 @@ Perl_is_uni_punct_lc(pTHX_ UV c)
     if (c < 256) {
         return isPUNCT_LC(UNI_TO_NATIVE(c));
     }
-    return is_uni_punct(c);
+    return _is_uni_FOO(_CC_PUNCT, c);
 }
 
 bool
@@ -2019,17 +2036,39 @@ S_is_utf8_common(pTHX_ const U8 *const p, SV **swash,
     PERL_ARGS_ASSERT_IS_UTF8_COMMON;
 
     /* The API should have included a length for the UTF-8 character in <p>,
-     * but it doesn't.  We therefor assume that p has been validated at least
+     * but it doesn't.  We therefore assume that p has been validated at least
      * as far as there being enough bytes available in it to accommodate the
      * character without reading beyond the end, and pass that number on to the
      * validating routine */
-    if (!is_utf8_char_buf(p, p + UTF8SKIP(p)))
-	return FALSE;
+    if (! is_utf8_char_buf(p, p + UTF8SKIP(p))) {
+        if (ckWARN_d(WARN_UTF8)) {
+            Perl_warner(aTHX_ packWARN2(WARN_DEPRECATED,WARN_UTF8),
+		    "Passing malformed UTF-8 to \"%s\" is deprecated", swashname);
+            if (ckWARN(WARN_UTF8)) {    /* This will output details as to the
+                                           what the malformation is */
+                utf8_to_uvchr_buf(p, p + UTF8SKIP(p), NULL);
+            }
+        }
+        return FALSE;
+    }
     if (!*swash) {
         U8 flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;
         *swash = _core_swash_init("utf8", swashname, &PL_sv_undef, 1, 0, NULL, &flags);
     }
+
     return swash_fetch(*swash, p, TRUE) != 0;
+}
+
+bool
+Perl__is_utf8_FOO(pTHX_ const U8 classnum, const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT__IS_UTF8_FOO;
+
+    assert(classnum < _FIRST_NON_SWASH_CC);
+
+    return is_utf8_common(p, &PL_utf8_swash_ptrs[classnum], swash_property_names[classnum]);
 }
 
 bool
@@ -2042,7 +2081,7 @@ Perl_is_utf8_alnum(pTHX_ const U8 *p)
     /* NOTE: "IsWord", not "IsAlnum", since Alnum is a true
      * descendant of isalnum(3), in other words, it doesn't
      * contain the '_'. --jhi */
-    return is_utf8_common(p, &PL_utf8_alnum, "IsWord");
+    return is_utf8_common(p, &PL_utf8_swash_ptrs[_CC_WORDCHAR], "IsWord");
 }
 
 bool
@@ -2052,7 +2091,7 @@ Perl_is_utf8_alnumc(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_ALNUMC;
 
-    return is_utf8_common(p, &PL_utf8_alnumc, "IsAlnum");
+    return is_utf8_common(p, &PL_utf8_swash_ptrs[_CC_ALPHANUMERIC], "IsAlnum");
 }
 
 bool
@@ -2089,6 +2128,17 @@ Perl__is_utf8_perl_idstart(pTHX_ const U8 *p)
 }
 
 bool
+Perl__is_utf8_perl_idcont(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT__IS_UTF8_PERL_IDCONT;
+
+    return is_utf8_common(p, &PL_utf8_perl_idcont, "_Perl_IDCont");
+}
+
+
+bool
 Perl_is_utf8_idcont(pTHX_ const U8 *p)
 {
     dVAR;
@@ -2115,7 +2165,7 @@ Perl_is_utf8_alpha(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_ALPHA;
 
-    return is_utf8_common(p, &PL_utf8_alpha, "IsAlpha");
+    return is_utf8_common(p, &PL_utf8_swash_ptrs[_CC_ALPHA], "IsAlpha");
 }
 
 bool
@@ -2181,7 +2231,7 @@ Perl_is_utf8_digit(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_DIGIT;
 
-    return is_utf8_common(p, &PL_utf8_digit, "IsDigit");
+    return is_utf8_common(p, &PL_utf8_swash_ptrs[_CC_DIGIT], "IsDigit");
 }
 
 bool
@@ -2203,7 +2253,7 @@ Perl_is_utf8_upper(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_UPPER;
 
-    return is_utf8_common(p, &PL_utf8_upper, "IsUppercase");
+    return is_utf8_common(p, &PL_utf8_swash_ptrs[_CC_UPPER], "IsUppercase");
 }
 
 bool
@@ -2213,7 +2263,7 @@ Perl_is_utf8_lower(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_LOWER;
 
-    return is_utf8_common(p, &PL_utf8_lower, "IsLowercase");
+    return is_utf8_common(p, &PL_utf8_swash_ptrs[_CC_LOWER], "IsLowercase");
 }
 
 bool
@@ -2233,7 +2283,7 @@ Perl_is_utf8_graph(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_GRAPH;
 
-    return is_utf8_common(p, &PL_utf8_graph, "IsGraph");
+    return is_utf8_common(p, &PL_utf8_swash_ptrs[_CC_GRAPH], "IsGraph");
 }
 
 bool
@@ -2243,7 +2293,7 @@ Perl_is_utf8_print(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_PRINT;
 
-    return is_utf8_common(p, &PL_utf8_print, "IsPrint");
+    return is_utf8_common(p, &PL_utf8_swash_ptrs[_CC_PRINT], "IsPrint");
 }
 
 bool
@@ -2253,7 +2303,7 @@ Perl_is_utf8_punct(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_PUNCT;
 
-    return is_utf8_common(p, &PL_utf8_punct, "IsPunct");
+    return is_utf8_common(p, &PL_utf8_swash_ptrs[_CC_PUNCT], "IsPunct");
 }
 
 bool
@@ -2267,33 +2317,24 @@ Perl_is_utf8_xdigit(pTHX_ const U8 *p)
 }
 
 bool
+Perl__is_utf8_mark(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT__IS_UTF8_MARK;
+
+    return is_utf8_common(p, &PL_utf8_mark, "IsM");
+}
+
+
+bool
 Perl_is_utf8_mark(pTHX_ const U8 *p)
 {
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_MARK;
 
-    return is_utf8_common(p, &PL_utf8_mark, "IsM");
-}
-
-bool
-Perl_is_utf8_X_regular_begin(pTHX_ const U8 *p)
-{
-    dVAR;
-
-    PERL_ARGS_ASSERT_IS_UTF8_X_REGULAR_BEGIN;
-
-    return is_utf8_common(p, &PL_utf8_X_regular_begin, "_X_Regular_Begin");
-}
-
-bool
-Perl_is_utf8_X_extend(pTHX_ const U8 *p)
-{
-    dVAR;
-
-    PERL_ARGS_ASSERT_IS_UTF8_X_EXTEND;
-
-    return is_utf8_common(p, &PL_utf8_X_extend, "_X_Extend");
+    return _is_utf8_mark(p);
 }
 
 /*
@@ -3976,7 +4017,8 @@ SV*
 Perl__swash_to_invlist(pTHX_ SV* const swash)
 {
 
-   /* Subject to change or removal.  For use only in one place in regcomp.c */
+   /* Subject to change or removal.  For use only in one place in regcomp.c.
+    * Ownership is given to one reference count in the returned SV* */
 
     U8 *l, *lend;
     char *loc;
@@ -4002,7 +4044,7 @@ Perl__swash_to_invlist(pTHX_ SV* const swash)
 
     /* If not a hash, it must be the swash's inversion list instead */
     if (SvTYPE(hv) != SVt_PVHV) {
-        return (SV*) hv;
+        return SvREFCNT_inc_simple_NN((SV*) hv);
     }
 
     /* The string containing the main body of the table */

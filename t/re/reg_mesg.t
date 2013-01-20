@@ -89,13 +89,17 @@ my @death =
 
  'my $m = "\\\"; $m =~ $m', => 'Trailing \ in regex m/\/',
 
- '/\x{1/' => 'Missing right brace on \x{} in regex; marked by {#} in m/\x{{#}1/',
+ '/\x{1/' => 'Missing right brace on \x{} in regex; marked by {#} in m/\x{1{#}/',
+ '/\x{X/' => 'Missing right brace on \x{} in regex; marked by {#} in m/\x{{#}X/',
 
  '/[\x{X]/' => 'Missing right brace on \x{} in regex; marked by {#} in m/[\x{{#}X]/',
+ '/[\x{A]/' => 'Missing right brace on \x{} in regex; marked by {#} in m/[\x{A{#}]/',
 
- '/\o{1/' => 'Missing right brace on \o{ in regex; marked by {#} in m/\o{{#}1/',
+ '/\o{1/' => 'Missing right brace on \o{ in regex; marked by {#} in m/\o{1{#}/',
+ '/\o{X/' => 'Missing right brace on \o{ in regex; marked by {#} in m/\o{{#}X/',
 
  '/[\o{X]/' => 'Missing right brace on \o{ in regex; marked by {#} in m/[\o{{#}X]/',
+ '/[\o{7]/' => 'Missing right brace on \o{ in regex; marked by {#} in m/[\o{7{#}]/',
 
  '/[[:barf:]]/' => 'POSIX class [:barf:] unknown in regex; marked by {#} in m/[[:barf:]{#}]/',
 
@@ -108,7 +112,44 @@ my @death =
  '/\p/' => 'Empty \p{} in regex; marked by {#} in m/\p{#}/',
 
  '/\P{}/' => 'Empty \P{} in regex; marked by {#} in m/\P{{#}}/',
+ '/(?[[[:word]]])/' => "Unmatched ':' in POSIX class in regex; marked by {#} in m/(?[[[:word{#}]]])/",
+ '/(?[[:word]])/' => "Unmatched ':' in POSIX class in regex; marked by {#} in m/(?[[:word{#}]])/",
+ '/(?[[[:digit: ])/' => "Unmatched '[' in POSIX class in regex; marked by {#} in m/(?[[[:digit:{#} ])/",
+ '/(?[[:digit: ])/' => "Unmatched '[' in POSIX class in regex; marked by {#} in m/(?[[:digit:{#} ])/",
+ '/(?[[[::]]])/' => "POSIX class [::] unknown in regex; marked by {#} in m/(?[[[::]{#}]])/",
+ '/(?[[[:w:]]])/' => "POSIX class [:w:] unknown in regex; marked by {#} in m/(?[[[:w:]{#}]])/",
+ '/(?[[:w:]])/' => "POSIX class [:w:] unknown in regex; marked by {#} in m/(?[[:w:]{#}])/",
+ '/(?[a])/' =>  'Unexpected character in regex; marked by {#} in m/(?[a{#}])/',
+ '/(?[\t])/l' => '(?[...]) not valid in locale in regex; marked by {#} in m/(?[{#}\t])/',
+ '/(?[ + \t ])/' => 'Unexpected binary operator \'+\' with no preceding operand in regex; marked by {#} in m/(?[ +{#} \t ])/',
+ '/(?[ \cK - ( + \t ) ])/' => 'Unexpected binary operator \'+\' with no preceding operand in regex; marked by {#} in m/(?[ \cK - ( +{#} \t ) ])/',
+ '/(?[ \cK ( \t ) ])/' => 'Unexpected \'(\' with no preceding operator in regex; marked by {#} in m/(?[ \cK ({#} \t ) ])/',
+ '/(?[ \cK \t ])/' => 'Operand with no preceding operator in regex; marked by {#} in m/(?[ \cK \t{#} ])/',
+ '/(?[ \0004 ])/' => 'Need exactly 3 octal digits in regex; marked by {#} in m/(?[ \0004 {#}])/',
+ '/(?[ \05 ])/' => 'Need exactly 3 octal digits in regex; marked by {#} in m/(?[ \05 {#}])/',
+ '/(?[ \o{1038} ])/' => 'Non-octal character in regex; marked by {#} in m/(?[ \o{1038{#}} ])/',
+ '/(?[ \o{} ])/' => 'Number with no digits in regex; marked by {#} in m/(?[ \o{}{#} ])/',
+ '/(?[ \x{defg} ])/' => 'Non-hex character in regex; marked by {#} in m/(?[ \x{defg{#}} ])/',
+ '/(?[ \xabcdef ])/' => 'Use \\x{...} for more than two hex characters in regex; marked by {#} in m/(?[ \xabc{#}def ])/',
+ '/(?[ \x{} ])/' => 'Number with no digits in regex; marked by {#} in m/(?[ \x{}{#} ])/',
+ '/(?[ \cK + ) ])/' => 'Unexpected \')\' in regex; marked by {#} in m/(?[ \cK + ){#} ])/',
+ '/(?[ \cK + ])/' => 'Incomplete expression within \'(?[ ])\' in regex; marked by {#} in m/(?[ \cK + {#}])/',
+ '/(?[ \p{foo} ])/' => 'Property \'foo\' is unknown in regex; marked by {#} in m/(?[ \p{foo}{#} ])/',
+ '/(?[ \p{ foo = bar } ])/' => 'Property \'foo = bar\' is unknown in regex; marked by {#} in m/(?[ \p{ foo = bar }{#} ])/',
+ '/(?[ \8 ])/' => 'Unrecognized escape \8 in character class in regex; marked by {#} in m/(?[ \8{#} ])/',
+ '/(?[ \t ]/' => 'Syntax error in (?[...]) in regex m/(?[ \t ]/',
+ '/(?[ [ \t ]/' => 'Syntax error in (?[...]) in regex m/(?[ [ \t ]/',
+ '/(?[ \t ] ]/' => 'Syntax error in (?[...]) in regex m/(?[ \t ] ]/',
+ '/(?[ [ ] ]/' => 'Syntax error in (?[...]) in regex m/(?[ [ ] ]/',
+ '/(?[ \t + \e # This was supposed to be a comment ])/' => 'Syntax error in (?[...]) in regex m/(?[ \t + \e # This was supposed to be a comment ])/',
+ '/(?[ ])/' => 'Incomplete expression within \'(?[ ])\' in regex; marked by {#} in m/(?[ {#}])/',
+ 'm/(?[[a-\d]])/' => 'False [] range "a-\d" in regex; marked by {#} in m/(?[[a-\d{#}]])/',
+ 'm/(?[[\w-x]])/' => 'False [] range "\w-" in regex; marked by {#} in m/(?[[\w-{#}x]])/',
+ 'm/(?[[a-\pM]])/' => 'False [] range "a-\pM" in regex; marked by {#} in m/(?[[a-\pM{#}]])/',
+ 'm/(?[[\pM-x]])/' => 'False [] range "\pM-" in regex; marked by {#} in m/(?[[\pM-{#}x]])/',
+ 'm/(?[[\N{LATIN CAPITAL LETTER A WITH MACRON AND GRAVE}]])/' => '\N{} in character class restricted to one character in regex; marked by {#} in m/(?[[\N{U+100.300{#}}]])/',
 );
+# Tests involving a user-defined charnames translator are in pat_advanced.t
 
 ##
 ## Key-value pairs of code/error of code that should have non-fatal warnings.
@@ -126,18 +167,24 @@ my @warning = (
     'm/[\pM-x]/' => 'False [] range "\pM-" in regex; marked by {#} in m/[\pM-{#}x]/',
     "m'\\y'"     => 'Unrecognized escape \y passed through in regex; marked by {#} in m/\y{#}/',
     '/x{3,1}/'   => 'Quantifier {n,m} with n > m can\'t match in regex; marked by {#} in m/x{3,1}{#}/',
+    '/\08/' => '\'\08\' resolved to \'\o{0}8\' in regex; marked by {#} in m/\08{#}/',
+    '/\018/' => '\'\018\' resolved to \'\o{1}8\' in regex; marked by {#} in m/\018{#}/',
+    '/[\08]/' => '\'\08\' resolved to \'\o{0}8\' in regex; marked by {#} in m/[\08{#}]/',
+    '/[\018]/' => '\'\018\' resolved to \'\o{1}8\' in regex; marked by {#} in m/[\018{#}]/',
+    '/(?[ \t ])/' => 'The regex_sets feature is experimental in regex; marked by {#} in m/(?[{#} \t ])/',
 );
 
 while (my ($regex, $expect) = splice @death, 0, 2) {
     my $expect = fixup_expect($expect);
+    no warnings 'experimental::regex_sets';
     # skip the utf8 test on EBCDIC since they do not die
     next if $::IS_EBCDIC && $regex =~ /utf8/;
 
     warning_is(sub {
 		   $_ = "x";
 		   eval $regex;
-		   like($@, qr/\Q$expect/);
-	       }, undef, "$regex died without any other warnings");
+		   like($@, qr/\Q$expect/, $regex);
+	       }, undef, "... and died without any other warnings");
 }
 
 while (my ($regex, $expect) = splice @warning, 0, 2) {
@@ -146,7 +193,7 @@ while (my ($regex, $expect) = splice @warning, 0, 2) {
 		     $_ = "x";
 		     eval $regex;
 		     is($@, '', "$regex did not die");
-		 }, qr/\Q$expect/);
+		 }, qr/\Q$expect/, "... and gave expected warning");
 }
 
 done_testing();

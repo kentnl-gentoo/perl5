@@ -1169,6 +1169,7 @@ cpan/HTTP-Tiny/lib/HTTP/Tiny.pm
 cpan/HTTP-Tiny/t/000_load.t
 cpan/HTTP-Tiny/t/001_api.t
 cpan/HTTP-Tiny/t/002_croakage.t
+cpan/HTTP-Tiny/t/003_agent.t
 cpan/HTTP-Tiny/t/00-compile.t
 cpan/HTTP-Tiny/t/010_url.t
 cpan/HTTP-Tiny/t/020_headers.t
@@ -2256,9 +2257,12 @@ cpan/Sys-Syslog/win32/Win32.pm		Sys::Syslog extension Win32 related file
 cpan/Term-ANSIColor/ANSIColor.pm	Perl module supporting termcap usage
 cpan/Term-ANSIColor/ChangeLog		Term::ANSIColor
 cpan/Term-ANSIColor/README		Term::ANSIColor
+cpan/Term-ANSIColor/t/aliases-func.t
+cpan/Term-ANSIColor/t/basic256.t
 cpan/Term-ANSIColor/t/basic.t		Tests for Term::ANSIColor
 cpan/Term-ANSIColor/t/eval.t
 cpan/Term-ANSIColor/t/stringify.t		Tests for Term::ANSIColor
+cpan/Term-ANSIColor/t/taint.t
 cpan/Term-Cap/Cap.pm			Perl module supporting termcap usage
 cpan/Term-Cap/test.pl			See if Term::Cap works
 cpan/Term-UI/lib/Term/UI/History.pm	Term::UI
@@ -2919,6 +2923,7 @@ cpan/Unicode-Collate/t/loc_zh.t			Unicode::Collate
 cpan/Unicode-Collate/t/loc_zhzy.t
 cpan/Unicode-Collate/t/nonchar.t			Unicode::Collate
 cpan/Unicode-Collate/t/normal.t			Unicode::Collate
+cpan/Unicode-Collate/t/notable.t
 cpan/Unicode-Collate/t/overcjk0.t		Unicode::Collate
 cpan/Unicode-Collate/t/overcjk1.t		Unicode::Collate
 cpan/Unicode-Collate/t/override.t		Unicode::Collate
@@ -4174,7 +4179,6 @@ hints/posix-bc.sh		Hints for named architecture
 hints/powerux.sh		Hints for named architecture
 hints/qnx.sh			Hints for named architecture
 hints/README.hints		Notes about hints
-hints/rhapsody.sh		Hints for named architecture
 hints/riscos.sh			Hints for named architecture
 hints/sco_2_3_0.sh		Hints for named architecture
 hints/sco_2_3_1.sh		Hints for named architecture
@@ -4687,6 +4691,7 @@ pod/perl5173delta.pod		Perl changes in version 5.17.3
 pod/perl5174delta.pod		Perl changes in version 5.17.4
 pod/perl5175delta.pod		Perl changes in version 5.17.5
 pod/perl5176delta.pod		Perl changes in version 5.17.6
+pod/perl5177delta.pod		Perl changes in version 5.17.7
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5486,6 +5491,8 @@ t/re/regexp.t			See if regular expressions work
 t/re/regexp_trielist.t		See if regular expressions work with trie optimisation
 t/re/regexp_unicode_prop.t	See if unicode properties work in regular expressions as expected
 t/re/regexp_unicode_prop_thr.t	See if unicode properties work in regular expressions as expected under threads
+t/re/regex_sets_compat.t	Test (?[ ]) is compatible with old [ ]
+t/re/regex_sets.t		Test (?[ ])
 t/re/reg_fold.t			See if case folding works properly
 t/re/reg_mesg.t			See if one can get regular expression errors
 t/re/reg_namedcapture.t		Make sure glob assignment doesn't break named capture

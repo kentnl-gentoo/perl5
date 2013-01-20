@@ -5642,7 +5642,7 @@ $ THEN
 $   d_nv_preserves_uv = "define"
 $   echo "Your NVs can preserve all ''nv_preserves_uv_bits' bits of your UVs."
 $ ELSE
-$   d_nv_preserves_uv = "undef""
+$   d_nv_preserves_uv = "undef"
 $   echo "Your NVs can preserve only ''nv_preserves_uv_bits' bits of your UVs."	
 $ ENDIF
 $!
@@ -6914,6 +6914,9 @@ $ IF d_alwdeftype THEN WC "#define ALWAYS_DEFTYPES"
 $ IF use64bitint .OR. use64bitint .EQS. "define"
 $ THEN
 $   WC "#define USE_64_BIT_INT"
+$ ENDIF
+$ IF uselongdouble .OR. uselongdouble .EQS. "define"
+$ THEN
 $   WC "#define USE_LONG_DOUBLE"
 $ ENDIF
 $ IF use64bitall .OR. use64bitall .EQS. "define" THEN -

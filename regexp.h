@@ -438,16 +438,22 @@ get_regex_charset_name(const U32 flags, STRLEN* const lenp)
 #if NO_TAINT_SUPPORT
 #   define RX_ISTAINTED(prog)    0
 #   define RX_TAINT_on(prog)     NOOP
+#   define RXp_MATCH_TAINTED(prog) 0
+#   define RX_MATCH_TAINTED(prog)  0
+#   define RXp_MATCH_TAINTED_on(prog) NOOP
+#   define RX_MATCH_TAINTED_on(prog)  NOOP
+#   define RX_MATCH_TAINTED_off(prog) NOOP
 #else
 #   define RX_ISTAINTED(prog)    (RX_EXTFLAGS(prog) & RXf_TAINTED)
 #   define RX_TAINT_on(prog)     (RX_EXTFLAGS(prog) |= RXf_TAINTED)
+#   define RXp_MATCH_TAINTED(prog)    (RXp_EXTFLAGS(prog) & RXf_TAINTED_SEEN)
+#   define RX_MATCH_TAINTED(prog)     (RX_EXTFLAGS(prog)  & RXf_TAINTED_SEEN)
+#   define RXp_MATCH_TAINTED_on(prog) (RXp_EXTFLAGS(prog) |= RXf_TAINTED_SEEN)
+#   define RX_MATCH_TAINTED_on(prog)  (RX_EXTFLAGS(prog)  |= RXf_TAINTED_SEEN)
+#   define RX_MATCH_TAINTED_off(prog) (RX_EXTFLAGS(prog)  &= ~RXf_TAINTED_SEEN)
 #endif
 
 #define RX_HAS_CUTGROUP(prog) ((prog)->intflags & PREGf_CUTGROUP_SEEN)
-#define RXp_MATCH_TAINTED(prog)	(RXp_EXTFLAGS(prog) & RXf_TAINTED_SEEN)
-#define RX_MATCH_TAINTED(prog)	(RX_EXTFLAGS(prog) & RXf_TAINTED_SEEN)
-#define RX_MATCH_TAINTED_on(prog) (RX_EXTFLAGS(prog) |= RXf_TAINTED_SEEN)
-#define RX_MATCH_TAINTED_off(prog) (RX_EXTFLAGS(prog) &= ~RXf_TAINTED_SEEN)
 #define RX_MATCH_TAINTED_set(prog, t) ((t) \
 				       ? RX_MATCH_TAINTED_on(prog) \
 				       : RX_MATCH_TAINTED_off(prog))
@@ -575,6 +581,8 @@ typedef struct {
     SV *sv;
     char *ganch;
     char *cutpoint;
+    bool is_utf8_pat;
+    bool warned; /* we have issued a recursion warning; no need for more */
 } regmatch_info;
  
 
@@ -646,9 +654,7 @@ typedef struct regmatch_state {
 	    struct regmatch_state *prev_eval;
 	    struct regmatch_state *prev_curlyx;
 	    REGEXP	*prev_rex;
-	    U32		toggle_reg_flags; /* what bits in PL_reg_flags to
-					    flip when transitioning between
-					    inner and outer rexen */
+	    bool	saved_utf8_pat; /* saved copy of is_utf8_pat */
 	    CHECKPOINT	cp;	/* remember current savestack indexes */
 	    CHECKPOINT	lastcp;
 	    U32        close_paren; /* which close bracket is our end */
@@ -749,7 +755,6 @@ typedef struct regmatch_slab {
     struct regmatch_slab *prev, *next;
 } regmatch_slab;
 
-#define PL_reg_flags		PL_reg_state.re_state_reg_flags
 #define PL_bostr		PL_reg_state.re_state_bostr
 #define PL_regeol		PL_reg_state.re_state_regeol
 #define PL_reg_match_utf8	PL_reg_state.re_state_reg_match_utf8
@@ -769,7 +774,6 @@ typedef struct regmatch_slab {
 #define PL_nrs			PL_reg_state.re_state_nrs
 
 struct re_save_state {
-    U32 re_state_reg_flags;		/* from regexec.c */
     bool re_state_eval_setup_done;	/* from regexec.c */
     bool re_state_reg_match_utf8;	/* from regexec.c */
     bool re_reparsing;			/* runtime (?{}) fed back into parser */

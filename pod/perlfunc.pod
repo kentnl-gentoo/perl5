@@ -3361,7 +3361,7 @@ X<length> X<size>
 
 =item length
 
-=for Pod::Functions return the number of bytes in a string
+=for Pod::Functions return the number of characters in a string
 
 Returns the length in I<characters> of the value of EXPR.  If EXPR is
 omitted, returns the length of C<$_>.  If EXPR is undefined, returns
@@ -8457,7 +8457,7 @@ package.  It is exactly equivalent to
     BEGIN { require Module; Module->import( LIST ); }
 
 except that Module I<must> be a bareword.
-The importation can be made conditional; see L<if>.
+The importation can be made conditional by using the L<if> module.
 
 In the peculiar C<use VERSION> form, VERSION may be either a positive
 decimal fraction such as 5.006, which will be compared to C<$]>, or a v-string

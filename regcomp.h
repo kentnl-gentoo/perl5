@@ -306,21 +306,16 @@ struct regnode_charclass_class {
  * ANYOF_NONBITMAP_NON_UTF8 bit is also set. */
 #define ANYOF_NONBITMAP(node)	(ARG(node) != ANYOF_NONBITMAP_EMPTY)
 
-/* Flags for node->flags of ANYOF.  These are in short supply, so some games
- * are done to share them, as described below.  Already, the ANYOF_LOCALE and
- * ANYOF_CLASS bits are shared, making a space penalty for all locale nodes.
- * An option would be to push them into new nodes.  E.g. there could be an
- * ANYOF_LOCALE node that would be in place of the flag of the same name.  But
- * there are better options.  The UNICODE_ALL bit could be freed up by
- * resorting to creating a swash containing everything above 255.  This
- * introduces a performance penalty.  Better would be to split it off into a
- * separate node, which actually would improve performance by allowing adding a
- * case statement to regexec.c use the bit map for code points under 256, and
- * to match everything above.  If flags need to be added that are applicable to
- * the synthetic start class only, with some work, they could be put in the
- * next-node field, or in an unused bit of the classflags field.  This could be
- * done with the current EOS flag, and a new node type created that is just for
- * the scc, freeing up that bit */
+/* Flags for node->flags of ANYOF.  These are in short supply, but there is one
+ * currently available.  If more than this are needed, the ANYOF_LOCALE and
+ * ANYOF_CLASS bits could be shared, making a space penalty for all locale nodes.
+ * Also, the UNICODE_ALL bit could be freed up by resorting to creating a swash
+ * containing everything above 255.  This introduces a performance penalty.
+ * Better would be to split it off into a separate node, which actually would
+ * improve performance a bit by allowing regexec.c to test for a UTF-8
+ * character being above 255 without having to call a function nor calculate
+ * its code point value.  However, this solution might need to have a second
+ * node type, ANYOF_SYNTHETIC_ABOVE_LATIN1_ALL */
 
 #define ANYOF_LOCALE		 0x01	    /* /l modifier */
 
@@ -328,34 +323,19 @@ struct regnode_charclass_class {
  * time.  However under locale, the actual folding varies depending on
  * what the locale is at the time of execution, so it has to be deferred until
  * then */
-#define ANYOF_LOC_FOLD 0x02
+#define ANYOF_LOC_FOLD           0x02
 
 #define ANYOF_INVERT		 0x04
 
 /* Set if this is a struct regnode_charclass_class vs a regnode_charclass.  This
  * is used for runtime \d, \w, [:posix:], ..., which are used only in locale
  * and the optimizer's synthetic start class.  Non-locale \d, etc are resolved
- * at compile-time.  Now shared with ANYOF_LOCALE, forcing all locale nodes to
- * be large */
-#define ANYOF_CLASS	 ANYOF_LOCALE
-#define ANYOF_LARGE      ANYOF_CLASS    /* Same; name retained for back compat */
+ * at compile-time.  Could be shared with ANYOF_LOCALE, forcing all locale
+ * nodes to be large */
+#define ANYOF_CLASS	         0x08
+#define ANYOF_LARGE       ANYOF_CLASS   /* Same; name retained for back compat */
 
-/* Should this character class warn if matched against a character above
- * Unicode */
-#define ANYOF_WARN_SUPER        0x08
-
-/* EOS, meaning that it can match an empty string too, is used for the
- * synthetic start class only. */
-#define ANYOF_EOS		0x10
-
-/* ? Is this node the synthetic start class (ssc).  This bit is shared with
- * ANYOF_EOS, as the latter is used only for the ssc, and then not used by
- * regexec.c.  And, the code is structured so that if it is set, the ssc is
- * not used, so it is guaranteed to be 0 for the ssc by the time regexec.c
- * gets executed, and 0 for a non-ssc ANYOF node, as it only ever gets set for
- * a potential ssc candidate.  Thus setting it to 1 after it has been
- * determined that the ssc will be used is not ambiguous */
-#define ANYOF_IS_SYNTHETIC	ANYOF_EOS
+/* Unused: 0x10.  When using, be sure to change ANYOF_FLAGS_ALL below */
 
 /* Can match something outside the bitmap that isn't in utf8 */
 #define ANYOF_NONBITMAP_NON_UTF8 0x20
@@ -367,7 +347,7 @@ struct regnode_charclass_class {
  * in utf8. */
 #define ANYOF_NON_UTF8_LATIN1_ALL 0x80
 
-#define ANYOF_FLAGS_ALL		0xff
+#define ANYOF_FLAGS_ALL		(0xff & ~0x10)
 
 /* These are the flags that ANYOF_INVERT being set or not doesn't affect
  * whether they are operative or not.  e.g., the node still has LOCALE
@@ -376,43 +356,45 @@ struct regnode_charclass_class {
 #define INVERSION_UNAFFECTED_FLAGS (ANYOF_LOCALE                        \
 	                           |ANYOF_LOC_FOLD                      \
 	                           |ANYOF_CLASS                         \
-	                           |ANYOF_EOS                           \
 	                           |ANYOF_NONBITMAP_NON_UTF8)
 
 /* Character classes for node->classflags of ANYOF */
 /* Should be synchronized with a table in regprop() */
 /* 2n should be the normal one, paired with its complement at 2n+1 */
 
-#define ANYOF_WORDCHAR ((_CC_WORDCHAR) * 2)  /* \w, PL_utf8_alnum, utf8::IsWord, ALNUM */
-#define ANYOF_NWORDCHAR   ((ANYOF_WORDCHAR) + 1)
-#define ANYOF_SPACE    ((_CC_SPACE) * 2)     /* \s */
-#define ANYOF_NSPACE   ((ANYOF_SPACE) + 1)
-#define ANYOF_DIGIT    ((_CC_DIGIT) * 2)     /* \d */
-#define ANYOF_NDIGIT   ((ANYOF_DIGIT) + 1)
-#define ANYOF_ALNUMC   ((_CC_ALNUMC) * 2)    /* [[:alnum:]] isalnum(3), utf8::IsAlnum, ALNUMC */
-#define ANYOF_NALNUMC  ((ANYOF_ALNUMC) + 1)
 #define ANYOF_ALPHA    ((_CC_ALPHA) * 2)
 #define ANYOF_NALPHA   ((ANYOF_ALPHA) + 1)
+#define ANYOF_ALPHANUMERIC   ((_CC_ALPHANUMERIC) * 2)    /* [[:alnum:]] isalnum(3), utf8::IsAlnum */
+#define ANYOF_NALPHANUMERIC  ((ANYOF_ALPHANUMERIC) + 1)
 #define ANYOF_ASCII    ((_CC_ASCII) * 2)
 #define ANYOF_NASCII   ((ANYOF_ASCII) + 1)
+#define ANYOF_BLANK    ((_CC_BLANK) * 2)     /* GNU extension: space and tab: non-vertical space */
+#define ANYOF_NBLANK   ((ANYOF_BLANK) + 1)
+#define ANYOF_CASED    ((_CC_CASED) * 2)    /* Pseudo class for [:lower:] or
+                                               [:upper:] under /i */
+#define ANYOF_NCASED   ((ANYOF_CASED) + 1)
 #define ANYOF_CNTRL    ((_CC_CNTRL) * 2)
 #define ANYOF_NCNTRL   ((ANYOF_CNTRL) + 1)
+#define ANYOF_DIGIT    ((_CC_DIGIT) * 2)     /* \d */
+#define ANYOF_NDIGIT   ((ANYOF_DIGIT) + 1)
 #define ANYOF_GRAPH    ((_CC_GRAPH) * 2)
 #define ANYOF_NGRAPH   ((ANYOF_GRAPH) + 1)
 #define ANYOF_LOWER    ((_CC_LOWER) * 2)
 #define ANYOF_NLOWER   ((ANYOF_LOWER) + 1)
 #define ANYOF_PRINT    ((_CC_PRINT) * 2)
 #define ANYOF_NPRINT   ((ANYOF_PRINT) + 1)
-#define ANYOF_PUNCT    ((_CC_PUNCT) * 2)
-#define ANYOF_NPUNCT   ((ANYOF_PUNCT) + 1)
-#define ANYOF_UPPER    ((_CC_UPPER) * 2)
-#define ANYOF_NUPPER   ((ANYOF_UPPER) + 1)
-#define ANYOF_XDIGIT   ((_CC_XDIGIT) * 2)
-#define ANYOF_NXDIGIT  ((ANYOF_XDIGIT) + 1)
 #define ANYOF_PSXSPC   ((_CC_PSXSPC) * 2)    /* POSIX space: \s plus the vertical tab */
 #define ANYOF_NPSXSPC  ((ANYOF_PSXSPC) + 1)
-#define ANYOF_BLANK    ((_CC_BLANK) * 2)     /* GNU extension: space and tab: non-vertical space */
-#define ANYOF_NBLANK   ((ANYOF_BLANK) + 1)
+#define ANYOF_PUNCT    ((_CC_PUNCT) * 2)
+#define ANYOF_NPUNCT   ((ANYOF_PUNCT) + 1)
+#define ANYOF_SPACE    ((_CC_SPACE) * 2)     /* \s */
+#define ANYOF_NSPACE   ((ANYOF_SPACE) + 1)
+#define ANYOF_UPPER    ((_CC_UPPER) * 2)
+#define ANYOF_NUPPER   ((ANYOF_UPPER) + 1)
+#define ANYOF_WORDCHAR ((_CC_WORDCHAR) * 2)  /* \w, PL_utf8_alnum, utf8::IsWord, ALNUM */
+#define ANYOF_NWORDCHAR   ((ANYOF_WORDCHAR) + 1)
+#define ANYOF_XDIGIT   ((_CC_XDIGIT) * 2)
+#define ANYOF_NXDIGIT  ((ANYOF_XDIGIT) + 1)
 
 /* pseudo classes below this, not stored in the class bitmap, but used as flags
    during compilation of char classes */
@@ -488,7 +470,7 @@ struct regnode_charclass_class {
 #define ANYOF_CLASS_SKIP	((ANYOF_CLASS_SIZE - 1)/sizeof(regnode))
 
 #define ANYOF_CLASS_TEST_ANY_SET(p)                               \
-        ((ANYOF_FLAGS(p) & (ANYOF_CLASS|ANYOF_IS_SYNTHETIC))         \
+        ((ANYOF_FLAGS(p) & ANYOF_CLASS)                           \
 	 && (((struct regnode_charclass_class*)(p))->classflags))
 /*#define ANYOF_CLASS_ADD_SKIP	(ANYOF_CLASS_SKIP - ANYOF_SKIP)
  * */

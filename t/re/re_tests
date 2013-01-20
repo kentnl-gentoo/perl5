@@ -108,7 +108,7 @@ a[b-d]e	ace	y	$&	ace
 a[b-d]	aac	y	$&	ac
 a[-b]	a-	y	$&	a-
 a[b-]	a-	y	$&	a-
-a[b-a]	-	c	-	Invalid [] range \"b-a\"
+a[b-a]	-	c	-	Invalid [] range
 a[]b	-	c	-	Unmatched [
 a[	-	c	-	Unmatched [
 a]	a]	y	$&	a]
@@ -352,7 +352,7 @@ a[-]?c	ac	y	$&	ac
 'a[b-d]'i	AAC	y	$&	AC
 'a[-b]'i	A-	y	$&	A-
 'a[b-]'i	A-	y	$&	A-
-'a[b-a]'i	-	c	-	Invalid [] range \"b-a\"
+'a[b-a]'i	-	c	-	Invalid [] range
 'a[]b'i	-	c	-	Unmatched [
 'a['i	-	c	-	Unmatched [
 'a]'i	A]	y	$&	A]
@@ -582,8 +582,8 @@ x(~~)*(?:(?:F)?)?	x~~	y	-	-
 ^(\(+)?blah(?(1)(\)))$	blah	y	($2)	()
 ^(\(+)?blah(?(1)(\)))$	blah)	n	-	-
 ^(\(+)?blah(?(1)(\)))$	(blah	n	-	-
-(?(1?)a|b)	a	c	-	Switch condition not recognized
-(?(1)a|b|c)	a	c	-	Switch (?(condition)... contains too many branches
+(?(1?)a|b)	-	c	-	Switch condition not recognized
+(?(1)a|b|c)	-	c	-	Switch (?(condition)... contains too many branches
 (?(?{0})a|b)	a	n	-	-
 (?(?{0})b|a)	a	y	$&	a
 (?(?{1})b|a)	a	n	-	-
@@ -617,8 +617,7 @@ $(?<=^(a))	a	y	$1	a
 [a[:xyz:	-	c	-	Unmatched [
 [a[:xyz:]	-	c	-	POSIX class [:xyz:] unknown
 [a[:]b[:c]	abc	y	$&	abc
-([a[:xyz:]b]+)	pbaq	c	-	POSIX class [:xyz:] unknown
-[a[:]b[:c]	abc	y	$&	abc
+([a[:xyz:]b]+)	-	c	-	POSIX class [:xyz:] unknown
 ([[:alpha:]]+)	ABcd01Xy__--  ${nulnul}${ffff}	y	$1	ABcd
 ([[:alnum:]]+)	ABcd01Xy__--  ${nulnul}${ffff}	y	$1	ABcd01Xy
 ([[:ascii:]]+)	ABcd01Xy__--  ${nulnul}${ffff}	y	$1	ABcd01Xy__--  ${nulnul}
@@ -877,12 +876,18 @@ foo.bart	foo.bart	y	-	-
 .[X](.+)+[X][X]	bbbbXXXaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	n	-	-
 .[X][X](.+)+[X]	bbbbXXXaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	n	-	-
 tt+$	xxxtt	y	-	-
-([a-\d]+)	za-9z	y	$1	a-9
-([\d-z]+)	a0-za	y	$1	0-z
-([\d-\s]+)	a0- z	y	$1	0- 
-([a-[:digit:]]+)	za-9z	y	$1	a-9
-([[:digit:]-z]+)	=0-z=	y	$1	0-z
-([[:digit:]-[:alpha:]]+)	=0-z=	y	$1	0-z
+([a-\d]+)	za-9z	Sy	$1	a-9
+([a-\d]+)	-	sc	-	False [] range
+([\d-z]+)	a0-za	Sy	$1	0-z
+([\d-z]+)	-	sc	$1	False [] range
+([\d-\s]+)	a0- z	Sy	$1	0- 
+([\d-\s]+)	-	sc	$1	False [] range
+([a-[:digit:]]+)	za-9z	Sy	$1	a-9
+([a-[:digit:]]+)	-	sc	-	False [] range
+([[:digit:]-z]+)	=0-z=	Sy	$1	0-z
+([[:digit:]-z]+)	-	sc	c	False [] range
+([[:digit:]-[:alpha:]]+)	=0-z=	Sy	$1	0-z
+([[:digit:]-[:alpha:]]+)	-	sc	-	False [] range
 \GX.*X	aaaXbX	n	-	-
 (\d+\.\d+)	3.1415926	y	$1	3.1415926
 (\ba.{0,10}br)	have a web browser	y	$1	a web br
@@ -997,8 +1002,8 @@ a(b)??	abc	y	<$1>	<>	# undef [perl #16773]
 ^.{2,3}?((?:b|a|r)+?)\1\z	foobarbar	y	$1	bar
 ^(?:f|o|b){2,3}?((?:b|a|r)+?)\1\z	foobarbar	y	$1	bar
 .*a(?!(b|cd)*e).*f	......abef	n	-	-	# [perl #23030]
-x(?#	x	c	-	Sequence (?#... not terminated
-:x(?#:	x	c	-	Sequence (?#... not terminated
+x(?#	-	c	-	Sequence (?#... not terminated
+:x(?#:	-	c	-	Sequence (?#... not terminated
 (WORDS|WORD)S	WORDS	y	$1	WORD
 (X.|WORDS|X.|WORD)S	WORDS	y	$1	WORD
 (WORDS|WORLD|WORD)S	WORDS	y	$1	WORD
@@ -1083,9 +1088,9 @@ X(?<=foo.)[YZ]	..XfooXY..	y	pos	8
 (?P<n>foo|bar|baz)(?P<m>[ew]+)	snofooewa	yM	$+{m}	ew	miniperl cannot load Tie::Hash::NamedCapture
 (?P<n>foo)|(?P<n>bar)|(?P<n>baz)	snofooewa	yM	$+{n}	foo	miniperl cannot load Tie::Hash::NamedCapture
 (?P<n>foo)(??{ $+{n} })	snofooefoofoowaa	yM	$+{n}	foo	miniperl cannot load Tie::Hash::NamedCapture
-(?P<=n>foo|bar|baz)	snofooewa	c	-	Group name must start with a non-digit word character
-(?P<!n>foo|bar|baz)	snofooewa	c	-	Group name must start with a non-digit word character
-(?PX<n>foo|bar|baz)	snofooewa	c	-	Sequence (?PX<...) not recognized
+(?P<=n>foo|bar|baz)	-	c	-	Group name must start with a non-digit word character
+(?P<!n>foo|bar|baz)	-	c	-	Group name must start with a non-digit word character
+(?PX<n>foo|bar|baz)	-	c	-	Sequence (?PX<...) not recognized
 /(?'n'foo|bar|baz)/	snofooewa	y	$1	foo
 /(?'n'foo|bar|baz)/	snofooewa	yM	$+{n}	foo	miniperl cannot load Tie::Hash::NamedCapture
 /(?'n'foo|bar|baz)(?'m'[ew]+)/	snofooewa	yM	$+{n}	foo	miniperl cannot load Tie::Hash::NamedCapture
@@ -1263,30 +1268,30 @@ a*(*F)	aaaab	n	-	-
 /(?<_>foo) \k<_>/	..foo foo..	yM	$+{_}	foo	miniperl cannot load Tie::Hash::NamedCapture
 /(?'_0_'foo) \k'_0_'/	..foo foo..	yM	$+{_0_}	foo	miniperl cannot load Tie::Hash::NamedCapture
 /(?<_0_>foo) \k<_0_>/	..foo foo..	yM	$+{_0_}	foo	miniperl cannot load Tie::Hash::NamedCapture
-/(?'0'foo) bar/	..foo bar..	c	-	Group name must start with a non-digit word character
-/(?<0>foo) bar/	..foo bar..	c	-	Group name must start with a non-digit word character
-/(?'12'foo) bar/	..foo bar..	c	-	Group name must start with a non-digit word character
-/(?<12>foo) bar/	..foo bar..	c	-	Group name must start with a non-digit word character
-/(?'1a'foo) bar/	..foo bar..	c	-	Group name must start with a non-digit word character
-/(?<1a>foo) bar/	..foo bar..	c	-	Group name must start with a non-digit word character
-/(?''foo) bar/	..foo bar..	c	-	Group name must start with a non-digit word character
-/(?<>foo) bar/	..foo bar..	c	-	Group name must start with a non-digit word character
-/foo \k'n'/	foo foo	c	-	Reference to nonexistent named group
-/foo \k<n>/	foo foo	c	-	Reference to nonexistent named group
-/foo \k'a1'/	foo foo	c	-	Reference to nonexistent named group
-/foo \k<a1>/	foo foo	c	-	Reference to nonexistent named group
-/foo \k'_'/	foo foo	c	-	Reference to nonexistent named group
-/foo \k<_>/	foo foo	c	-	Reference to nonexistent named group
-/foo \k'_0_'/	foo foo	c	-	Reference to nonexistent named group
-/foo \k<_0_>/	foo foo	c	-	Reference to nonexistent named group
-/foo \k'0'/	foo foo	c	-	Group name must start with a non-digit word character
-/foo \k<0>/	foo foo	c	-	Group name must start with a non-digit word character
-/foo \k'12'/	foo foo	c	-	Group name must start with a non-digit word character
-/foo \k<12>/	foo foo	c	-	Group name must start with a non-digit word character
-/foo \k'1a'/	foo foo	c	-	Group name must start with a non-digit word character
-/foo \k<1a>/	foo foo	c	-	Group name must start with a non-digit word character
-/foo \k''/	foo foo	c	-	Group name must start with a non-digit word character
-/foo \k<>/	foo foo	c	-	Group name must start with a non-digit word character
+/(?'0'foo) bar/	-	c	-	Group name must start with a non-digit word character
+/(?<0>foo) bar/	-	c	-	Group name must start with a non-digit word character
+/(?'12'foo) bar/	-	c	-	Group name must start with a non-digit word character
+/(?<12>foo) bar/	-	c	-	Group name must start with a non-digit word character
+/(?'1a'foo) bar/	-	c	-	Group name must start with a non-digit word character
+/(?<1a>foo) bar/	-	c	-	Group name must start with a non-digit word character
+/(?''foo) bar/	-	c	-	Group name must start with a non-digit word character
+/(?<>foo) bar/	-	c	-	Group name must start with a non-digit word character
+/foo \k'n'/	-	c	-	Reference to nonexistent named group
+/foo \k<n>/	-	c	-	Reference to nonexistent named group
+/foo \k'a1'/	-	c	-	Reference to nonexistent named group
+/foo \k<a1>/	-	c	-	Reference to nonexistent named group
+/foo \k'_'/	-	c	-	Reference to nonexistent named group
+/foo \k<_>/	-	c	-	Reference to nonexistent named group
+/foo \k'_0_'/	-	c	-	Reference to nonexistent named group
+/foo \k<_0_>/	-	c	-	Reference to nonexistent named group
+/foo \k'0'/	-	c	-	Group name must start with a non-digit word character
+/foo \k<0>/	-	c	-	Group name must start with a non-digit word character
+/foo \k'12'/	-	c	-	Group name must start with a non-digit word character
+/foo \k<12>/	-	c	-	Group name must start with a non-digit word character
+/foo \k'1a'/	-	c	-	Group name must start with a non-digit word character
+/foo \k<1a>/	-	c	-	Group name must start with a non-digit word character
+/foo \k''/	-	c	-	Group name must start with a non-digit word character
+/foo \k<>/	-	c	-	Group name must start with a non-digit word character
 /(?<as>as) (\w+) \k<as> (\w+)/	as easy as pie	y	$1-$2-$3	as-easy-pie
 
 # \g{...} with a name as the argument 
@@ -1435,7 +1440,8 @@ abc\N	abc\n	n
 # and bypasses the lexer.
 /\N{U+}/	-	c	-	Invalid hexadecimal number
 # Below currently gives a misleading message
-/[\N{U+}]/	-	c	-	Unmatched
+/[\N{U+}]/	-	Sc	-	Unmatched
+/[\N{U+}]/	-	sc	-	Syntax error in (?[...])
 /abc\N{def/	-	c	-	Missing right brace
 /\N{U+4AG3}/	-	c	-	Illegal hexadecimal digit
 /[\N{U+4AG3}]/	-	c	-	Illegal hexadecimal digit
@@ -1483,14 +1489,18 @@ a\97	a97	y	$&	a97
 
 
 # The below was inserting a NULL into the character class.
-[\8\9]	\000	n	-	-
-[\8\9]	8	y	$&	8
-[\8\9]	9	y	$&	9
+[\8\9]	\000	Sn	-	-
+[\8\9]	-	sc	$&	Unrecognized escape \\8 in character class
+[\8\9]	8	Sy	$&	8
+[\8\9]	9	Sy	$&	9
 
 # Verify that reads 1-3 octal digits, and that \_ works in char class
-[\0]	\000	y	$&	\000
-[\07]	\007	y	$&	\007
-[\07]	7\000	n	-	-
+[\0]	\000	Sy	$&	\000
+[\0]	-	sc	-	Need exactly 3 octal digits
+[\07]	\007	Sy	$&	\007
+[\07]	-	sc	-	Need exactly 3 octal digits
+[\07]	7\000	Sn	-	-
+[\07]	-	sc	-	Need exactly 3 octal digits
 [\006]	\006	y	$&	\006
 [\006]	6\000	n	-	-
 [\0005]	\0005	y	$&	\000
@@ -1532,7 +1542,7 @@ a\97	a97	y	$&	a97
 # Normally 1E9E generates a multi-char fold, but not in inverted class;
 # See [perl #89750].  This makes sure that the simple fold gets generated
 # in that case, to DF.
-/[^\x{1E9E}]/i	\x{DF}	n	-	-
+/[^\x{1E9E}]/i	\x{DF}	Sn	-	-
 
 # RT #96354
 /^.*\d\H/	X1	n	-	-
@@ -1544,7 +1554,7 @@ a\97	a97	y	$&	a97
 /^\p{L}/	\x{3400}	y	$&	\x{3400}
 
 # RT #89774
-/[s\xDF]a/ui	ssa	y	$&	ssa
+/[s\xDF]a/ui	ssa	Sy	$&	ssa
 /[s\xDF]a/ui	sa	y	$&	sa
 
 # RT #99928
@@ -1717,6 +1727,9 @@ ab[c\\\](??{"x"})]{3}d	ab\\](d	y	-	-
 /^\W{11}/a	\x{10FFFF}\x{10FFFF}\x{10FFFF}\x{10FFFF}\x{10FFFF}\x{10FFFF}\x{10FFFF}\x{10FFFF}\x{10FFFF}\x{10FFFF}	n	-	-
 
 # [ perl #114272]
-\Vn	\xFFn/	yT	$&	\xFFn
+\Vn	\xFFn/	y	$&	\xFFn
+
+/(?l:a?\w)/	b	y	$&	b
+m?^xy\?$?	xy?	y	$&	xy?
 
 # vim: softtabstop=0 noexpandtab
