@@ -579,9 +579,9 @@ Perl_allocmy(pTHX_ const char *const name, const STRLEN len, const U32 flags)
 	}
     }
     else if (len == 2 && name[1] == '_' && !is_our)
-	/* diag_listed_as: Use of my $_ is deprecated */
-	Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
-			      "Use of %s $_ is deprecated",
+	/* diag_listed_as: Use of my $_ is experimental */
+	Perl_ck_warner_d(aTHX_ packWARN(WARN_EXPERIMENTAL__LEXICAL_TOPIC),
+			      "Use of %s $_ is experimental",
 			       PL_parser->in_my == KEY_state
 				 ? "state"
 				 : "my");
@@ -4556,16 +4556,16 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, bool isreg, I32 floor)
 	    scalar(o);
 	    LINKLIST(o);
 	    if (cLISTOPo->op_first->op_type == OP_LEAVE) {
-		LISTOP *leave = cLISTOPx(cLISTOPo->op_first);
+		LISTOP *leaveop = cLISTOPx(cLISTOPo->op_first);
 		/* skip ENTER */
-		assert(leave->op_first->op_type == OP_ENTER);
-		assert(leave->op_first->op_sibling);
-		o->op_next = leave->op_first->op_sibling;
-		/* skip LEAVE */
-		assert(leave->op_flags & OPf_KIDS);
-		assert(leave->op_last->op_next = (OP*)leave);
-		leave->op_next = NULL; /* stop on last op */
-		op_null((OP*)leave);
+		assert(leaveop->op_first->op_type == OP_ENTER);
+		assert(leaveop->op_first->op_sibling);
+		o->op_next = leaveop->op_first->op_sibling;
+		/* skip leave */
+		assert(leaveop->op_flags & OPf_KIDS);
+		assert(leaveop->op_last->op_next == (OP*)leaveop);
+		leaveop->op_next = NULL; /* stop on last op */
+		op_null((OP*)leaveop);
 	    }
 	    else {
 		/* skip SCOPE */

@@ -5,7 +5,7 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require './test.pl';
-    plan (tests => 178);
+    plan (tests => 179);
 }
 
 # Test that defined() returns true for magic variables created on the fly,
@@ -72,7 +72,7 @@ sub env_is {
 	require Win32;
 	my $cp = Win32::GetConsoleOutputCP();
 	Win32::SetConsoleOutputCP(Win32::GetACP());
-        (my $set = `set $key`) =~ s/\r\n$/\n/;
+        (my $set = `set $key 2>nul`) =~ s/\r\n$/\n/;
 	Win32::SetConsoleOutputCP($cp);
         like $set, qr/^(?:\Q$key\E=)?\Q$val\E$/, $desc;
     } elsif ($Is_VMS) {
@@ -649,6 +649,10 @@ SKIP: {
 	$ENV{__NoNeSuCh} = 'foo';
 	$0 = 'bar';
 	env_is(__NoNeSuCh => 'foo', 'setting $0 does not break %ENV');
+
+	$ENV{__NoNeSuCh2} = 'foo';
+	$ENV{__NoNeSuCh2} = undef;
+	env_is(__NoNeSuCh2 => '', 'setting a key as undef does not delete it');
 
 	# stringify a glob
 	$ENV{foo} = *TODO;

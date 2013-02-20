@@ -1645,7 +1645,7 @@ sub run_tests {
     {
         # Test for keys in %+ and %-
         my $message = 'Test keys in %+ and %-';
-        no warnings 'uninitialized', 'deprecated';
+        no warnings 'uninitialized', 'deprecated', 'experimental::lexical_topic';
         my $_ = "abcdef";
         /(?<foo>a)|(?<foo>b)/;
         is((join ",", sort keys %+), "foo", $message);
@@ -1666,7 +1666,7 @@ sub run_tests {
 
     {
         # length() on captures, the numbered ones end up in Perl_magic_len
-        no warnings 'deprecated';
+        no warnings 'deprecated', 'experimental::lexical_topic';
         my $_ = "aoeu \xe6var ook";
         /^ \w+ \s (?<eek>\S+)/x;
 
@@ -1804,6 +1804,7 @@ EOP
 	   'IsPunct disagrees with [:punct:] outside ASCII');
 
         my @isPunctLatin1 = eval q {
+            no warnings 'deprecated';
             use encoding 'latin1';
             grep {/[[:punct:]]/ != /\p{IsPunct}/} map {chr} 0x80 .. 0xff;
         };

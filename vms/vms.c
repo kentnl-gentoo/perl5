@@ -267,7 +267,6 @@ static int vms_posix_exit = 0;
 
 /* bug workarounds if needed */
 int decc_bug_devnull = 1;
-int decc_dir_barename = 0;
 int vms_bug_stat_filename = 0;
 
 static int vms_debug_on_exception = 0;
@@ -6851,7 +6850,7 @@ static char *int_tounixspec(const char *spec, char *rslt, int * utf8_fl)
   const char *cp2;
   int dirlen;
   unsigned short int trnlnm_iter_count;
-  int cmp_rslt;
+  int cmp_rslt, outchars_added;
   if (utf8_fl != NULL)
     *utf8_fl = 0;
 
@@ -6942,22 +6941,34 @@ static char *int_tounixspec(const char *spec, char *rslt, int * utf8_fl)
       }
     }
   }
-  /* This is already UNIX or at least nothing VMS understands */
+
+  cp1 = rslt;
+  cp2 = spec;
+
+  /* This is already UNIX or at least nothing VMS understands,
+   * so all we can reasonably do is unescape extended chars.
+   */
   if (cmp_rslt) {
-    my_strlcpy(rslt, spec, VMS_MAXRSS);
+    while (*cp2) {
+        cp2 += copy_expand_vms_filename_escape(cp1, cp2, &outchars_added);
+        cp1 += outchars_added;
+    }
+    *cp1 = '\0';    
     if (vms_debug_fileify) {
         fprintf(stderr, "int_tounixspec: rslt = %s\n", rslt);
     }
     return rslt;
   }
 
-  cp1 = rslt;
-  cp2 = spec;
   dirend = strrchr(spec,']');
   if (dirend == NULL) dirend = strrchr(spec,'>');
   if (dirend == NULL) dirend = strchr(spec,':');
   if (dirend == NULL) {
-    strcpy(rslt,spec);
+    while (*cp2) {
+        cp2 += copy_expand_vms_filename_escape(cp1, cp2, &outchars_added);
+        cp1 += outchars_added;
+    }
+    *cp1 = '\0';    
     if (vms_debug_fileify) {
         fprintf(stderr, "int_tounixspec: rslt = %s\n", rslt);
     }
@@ -7051,9 +7062,8 @@ static char *int_tounixspec(const char *spec, char *rslt, int * utf8_fl)
       *(cp1++) = '/';
     }
     if ((*cp2 == '^')) {
-	/* EFS file escape, pass the next character as is */
-	/* Fix me: HEX encoding for Unicode not implemented */
-	cp2++;
+        cp2 += copy_expand_vms_filename_escape(cp1, cp2, &outchars_added);
+        cp1 += outchars_added;
     }
     else if ( *cp2 == '.') {
       if (*(cp2+1) == '.' && *(cp2+2) == '.') {
@@ -7113,8 +7123,7 @@ static char *int_tounixspec(const char *spec, char *rslt, int * utf8_fl)
   }
   /* Translate the rest of the filename. */
   while (*cp2) {
-      int dot_seen;
-      dot_seen = 0;
+      int dot_seen = 0;
       switch(*cp2) {
       /* Fixme - for compatibility with the CRTL we should be removing */
       /* spaces from the file specifications, but this may show that */
@@ -7124,16 +7133,8 @@ static char *int_tounixspec(const char *spec, char *rslt, int * utf8_fl)
           *(cp1++) = '?';
           break;
       case '^':
-          /* Fix me hex expansions not implemented */
-          cp2++;  /* '^.' --> '.' and other. */
-          if (*cp2) {
-              if (*cp2 == '_') {
-                  cp2++;
-                  *(cp1++) = ' ';
-              } else {
-                  *(cp1++) = *(cp2++);
-              }
-          }
+          cp2 += copy_expand_vms_filename_escape(cp1, cp2, &outchars_added);
+          cp1 += outchars_added;
           break;
       case ';':
           if (decc_filename_unix_no_version) {
@@ -8382,17 +8383,20 @@ static char *int_tovmsspec
   dirend = strrchr(path,'/');
 
   if (dirend == NULL) {
-     /* If we get here with no UNIX directory delimiters, then this is
-      * not a complete file specification, such as a Unix glob
-      * specification, shell macro, make macro, or even a valid VMS
-      * filespec but with unescaped extended characters.  The safest
-      * thing in all these cases is to pass it through as-is.
+     /* If we get here with no Unix directory delimiters, then this is an
+      * ambiguous file specification, such as a Unix glob specification, a
+      * shell or make macro, or a filespec that would be valid except for
+      * unescaped extended characters.  The safest thing if it's a macro
+      * is to pass it through as-is.
       */
-      my_strlcpy(rslt, path, VMS_MAXRSS);
-      if (vms_debug_fileify) {
-          fprintf(stderr, "int_tovmsspec: rslt = %s\n", rslt);
+      if (strstr(path, "$(")) {
+          my_strlcpy(rslt, path, VMS_MAXRSS);
+          if (vms_debug_fileify) {
+              fprintf(stderr, "int_tovmsspec: rslt = %s\n", rslt);
+          }
+          return rslt;
       }
-      return rslt;
+      hasdir = 0;
   }
   else if (*(dirend+1) == '.') {  /* do we have trailing "/." or "/.." or "/..."? */
     if (!*(dirend+2)) dirend +=2;
@@ -8493,7 +8497,7 @@ static char *int_tovmsspec
     }
     PerlMem_free(trndev);
   }
-  else {
+  else if (hasdir) {
     *(cp1++) = '[';
     if (*cp2 == '.') {
       if (*(cp2+1) == '/' || *(cp2+1) == '\0') {
@@ -8518,18 +8522,21 @@ static char *int_tovmsspec
     }
     else *(cp1++) = '.';
   }
+  else {
+    *(cp1++) = *cp2;
+  }
   for (; cp2 < dirend; cp2++) {
     if (*cp2 == '/') {
       if (*(cp2-1) == '/') continue;
-      if (*(cp1-1) != '.') *(cp1++) = '.';
+      if (cp1 > rslt && *(cp1-1) != '.') *(cp1++) = '.';
       infront = 0;
     }
     else if (!infront && *cp2 == '.') {
       if (cp2+1 == dirend || *(cp2+1) == '\0') { cp2++; break; }
       else if (*(cp2+1) == '/') cp2++;   /* skip over "./" - it's redundant */
       else if (*(cp2+1) == '.' && (*(cp2+2) == '/' || *(cp2+2) == '\0')) {
-        if (*(cp1-1) == '-' || *(cp1-1) == '[') *(cp1++) = '-'; /* handle "../" */
-        else if (*(cp1-2) == '[') *(cp1-1) = '-';
+        if (cp1 > rslt && (*(cp1-1) == '-' || *(cp1-1) == '[')) *(cp1++) = '-'; /* handle "../" */
+        else if (cp1 > rslt + 1 && *(cp1-2) == '[') *(cp1-1) = '-';
         else {
           *(cp1++) = '-';
         }
@@ -8538,7 +8545,7 @@ static char *int_tovmsspec
       }
       else if ( *(cp2+1) == '.' && *(cp2+2) == '.' &&
                 (*(cp2+3) == '/' || *(cp2+3) == '\0') ) {
-        if (*(cp1-1) != '.') *(cp1++) = '.'; /* May already have 1 from '/' */
+        if (cp1 > rslt && *(cp1-1) != '.') *(cp1++) = '.'; /* May already have 1 from '/' */
         *(cp1++) = '.'; *(cp1++) = '.'; /* ".../" --> "..." */
         if (!*(cp2+3)) { 
           *(cp1++) = '.';  /* Simulate trailing '/' */
@@ -8548,7 +8555,7 @@ static char *int_tovmsspec
       }
       else {
         if (decc_efs_charset == 0) {
-	  if (*(cp1-1) == '^')
+	  if (cp1 > rslt && *(cp1-1) == '^')
 	    cp1--;         /* remove the escape, if any */
 	  *(cp1++) = '_';  /* fix up syntax - '.' in name not allowed */
 	}
@@ -8558,10 +8565,10 @@ static char *int_tovmsspec
       }
     }
     else {
-      if (!infront && *(cp1-1) == '-')  *(cp1++) = '.';
+      if (!infront && cp1 > rslt && *(cp1-1) == '-')  *(cp1++) = '.';
       if (*cp2 == '.') {
         if (decc_efs_charset == 0) {
-	  if (*(cp1-1) == '^')
+	  if (cp1 > rslt && *(cp1-1) == '^')
 	    cp1--;         /* remove the escape, if any */
 	  *(cp1++) = '_';
 	}
@@ -8573,7 +8580,7 @@ static char *int_tovmsspec
       infront = 1;
     }
   }
-  if (*(cp1-1) == '.') cp1--; /* Unix spec ending in '/' ==> trailing '.' */
+  if (cp1 > rslt && *(cp1-1) == '.') cp1--; /* Unix spec ending in '/' ==> trailing '.' */
   if (hasdir) *(cp1++) = ']';
   if (*cp2) cp2++;  /* check in case we ended with trailing '..' */
   /* fixme for ODS5 */
@@ -9979,12 +9986,12 @@ Perl_opendir(pTHX_ const char *name)
     dd->context = 0;
     dd->count = 0;
     dd->flags = 0;
-    /* By saying we always want the result of readdir() in unix format, we 
-     * are really saying we want all the escapes removed.  Otherwise the caller,
-     * having no way to know whether it's already in VMS format, might send it
-     * through tovmsspec again, thus double escaping.
+    /* By saying we want the result of readdir() in unix format, we are really
+     * saying we want all the escapes removed, translating characters that
+     * must be escaped in a VMS-format name to their unescaped form, which is
+     * presumably allowed in a Unix-format name.
      */
-    dd->flags = PERL_VMSDIR_M_UNIXSPECS;
+    dd->flags = decc_filename_unix_report ? PERL_VMSDIR_M_UNIXSPECS : 0;
     dd->pat.dsc$a_pointer = dd->pattern;
     dd->pat.dsc$w_length = strlen(dd->pattern);
     dd->pat.dsc$b_dtype = DSC$K_DTYPE_T;
@@ -13891,6 +13898,19 @@ set_feature_default(const char *name, int value)
 {
     int status;
     int index;
+    char val_str[10];
+
+    /* If the feature has been explicitly disabled in the environment,
+     * then don't enable it here.
+     */
+    if (value > 0) {
+        status = simple_trnlnm(name, val_str, sizeof(val_str));
+        if ($VMS_STATUS_SUCCESS(status)) {
+            val_str[0] = _toupper(val_str[0]);
+            if (val_str[0] == 'D' || val_str[0] == '0' || val_str[0] == 'F')
+	        return 0;
+        }
+    }
 
     index = decc$feature_get_index(name);
 
@@ -14007,7 +14027,6 @@ vmsperl_set_features(void)
     status = simple_trnlnm("GNV$UNIX_SHELL", val_str, sizeof(val_str));
     if ($VMS_STATUS_SUCCESS(status)) {
 	 gnv_unix_shell = 1;
-	 set_feature_default("DECC$EFS_CHARSET", 1);
 	 set_feature_default("DECC$FILENAME_UNIX_NO_VERSION", 1);
 	 set_feature_default("DECC$FILENAME_UNIX_REPORT", 1);
 	 set_feature_default("DECC$READDIR_DROPDOTNOTYPE", 1);
@@ -14018,6 +14037,7 @@ vmsperl_set_features(void)
     /* Some reasonable defaults that are not CRTL defaults */
     set_feature_default("DECC$EFS_CASE_PRESERVE", 1);
     set_feature_default("DECC$ARGV_PARSE_STYLE", 1);     /* Requires extended parse. */
+    set_feature_default("DECC$EFS_CHARSET", 1);
 #endif
 
     /* hacks to see if known bugs are still present for testing */
@@ -14031,17 +14051,6 @@ vmsperl_set_features(void)
           decc_bug_devnull = 1;
        else
 	  decc_bug_devnull = 0;
-    }
-
-    /* UNIX directory names with no paths are broken in a lot of places */
-    decc_dir_barename = 1;
-    status = simple_trnlnm("DECC_DIR_BARENAME", val_str, sizeof(val_str));
-    if ($VMS_STATUS_SUCCESS(status)) {
-      val_str[0] = _toupper(val_str[0]);
-      if ((val_str[0] == 'E') || (val_str[0] == '1') || (val_str[0] == 'T'))
-	decc_dir_barename = 1;
-      else
-	decc_dir_barename = 0;
     }
 
 #if __CRTL_VER >= 70300000 && !defined(__VAX)

@@ -28,7 +28,7 @@
 # See Porting/pumpkin.pod for more information on metaconfig.
 #
 
-# Generated on Mon Dec 24 10:05:48 CET 2012 [metaconfig 3.5 PL0]
+# Generated on Fri Feb 15 14:51:06 CET 2013 [metaconfig 3.5 PL0]
 # (with additional metaconfig patches by perlbug@perl.org)
 
 cat >c1$$ <<EOF
@@ -332,6 +332,7 @@ d_archlib=''
 installarchlib=''
 archname=''
 myarchname=''
+useversionedarchname=''
 d_atolf=''
 d_atoll=''
 baserev=''
@@ -3100,9 +3101,13 @@ case "$config_sh" in
 '')
 myuname=`$uname -a 2>/dev/null`
 $test -z "$myuname" && myuname=`hostname 2>/dev/null`
+# Downcase everything to avoid ambiguity.
+# Remove slashes and single quotes so we can use parts of this in 
+# directory and file names.
+# Remove newlines so myuname is sane to use elsewhere.
 # tr '[A-Z]' '[a-z]' would not work in EBCDIC
 # because the A-Z/a-z are not consecutive.
-myuname=`echo $myuname | $sed -e 's/^[^=]*=//' -e "s,['/],,g" | \
+myuname=`echo $myuname | $sed -e "s,['/],,g" | \
 	./tr '[A-Z]' '[a-z]' | $tr $trnl ' '`
 newmyuname="$myuname"
 dflt=n
@@ -6017,6 +6022,32 @@ esac
 rp='What is your architecture name'
 . ./myread
 archname="$ans"
+
+: optionally add api version to the architecture for versioned archlibs
+case "$useversionedarchname" in
+$define|true|[yY]*) dflt='y';;
+*)                  dflt='n';;
+esac
+rp='Add the Perl API version to your archname?'
+. ./myread
+case "$ans" in
+y|Y)	useversionedarchname="$define" ;;
+*)      useversionedarchname="$undef" ;;
+esac
+case "$useversionedarchname" in
+$define)
+        case "$archname" in
+        *-$api_versionstring)
+                echo "...and architecture name already has -$api_versionstring" >&4
+                ;;
+        *)
+                archname="$archname-$api_versionstring"
+                echo "...setting architecture name to $archname." >&4
+                ;;
+        esac
+        ;;
+esac
+
 case "$usethreads" in
 $define)
 	echo "Threads selected." >&4
@@ -8835,9 +8866,13 @@ your organization...
 EOM
 cont=x
 while test "$cont"; do
+	case "$MAILDOMAIN" in
+	'') maildomain="$myhostname$mydomain";;
+	*)  maildomain="$MAILDOMAIN";;
+	esac
 	case "$cf_email" in
-	'') dflt="$cf_by@$myhostname$mydomain";;
-	*) dflt="$cf_email";;
+	'') dflt="$cf_by@$maildomain";;
+	*)  dflt="$cf_email";;
 	esac
 	rp='What is your e-mail address?'
 	. ./myread
@@ -23855,6 +23890,7 @@ usesitecustomize='$usesitecustomize'
 usesocks='$usesocks'
 usethreads='$usethreads'
 usevendorprefix='$usevendorprefix'
+useversionedarchname='$useversionedarchname'
 usevfork='$usevfork'
 usrinc='$usrinc'
 uuname='$uuname'

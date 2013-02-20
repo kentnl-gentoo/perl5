@@ -219,7 +219,8 @@ Apd	|void	|av_push	|NN AV *av|NN SV *val
 EXp	|void	|av_reify	|NN AV *av
 ApdR	|SV*	|av_shift	|NN AV *av
 Apd	|SV**	|av_store	|NN AV *av|I32 key|NULLOK SV *val
-ApdR	|I32	|av_top		|NN AV *av
+AidR	|I32	|av_top_index	|NN AV *av
+AmpdR	|I32	|av_tindex	|NN AV *av
 Apd	|void	|av_undef	|NN AV *av
 ApdoxM	|SV**	|av_create_and_unshift_one|NN AV **const avp|NN SV *const val
 Apd	|void	|av_unshift	|NN AV *av|I32 num
@@ -529,7 +530,7 @@ Ap	|void*	|hv_common_key_len|NULLOK HV *hv|NN const char *key \
 				|I32 klen_i32|const int action|NULLOK SV *val \
 				|const U32 hash
 Apod	|STRLEN	|hv_fill	|NN HV const *const hv
-Ap	|void	|hv_free_ent	|NN HV *hv|NULLOK HE *entryK
+Ap	|void	|hv_free_ent	|NN HV *hv|NULLOK HE *entry
 Apd	|I32	|hv_iterinit	|NN HV *hv
 ApdR	|char*	|hv_iterkey	|NN HE* entry|NN I32* retlen
 ApdR	|SV*	|hv_iterkeysv	|NN HE* entry
@@ -625,8 +626,8 @@ ADMpPR	|bool	|is_uni_punct	|UV c
 ADMpPR	|bool	|is_uni_xdigit	|UV c
 AMp	|UV	|to_uni_upper	|UV c|NN U8 *p|NN STRLEN *lenp
 AMp	|UV	|to_uni_title	|UV c|NN U8 *p|NN STRLEN *lenp
-iDMpPR	|bool	|isIDFIRST_lazy	|NN const char* p
-iDMpPR	|bool	|isALNUM_lazy	|NN const char* p
+iDMPR	|bool	|isIDFIRST_lazy	|NN const char* p
+iDMPR	|bool	|isALNUM_lazy	|NN const char* p
 #ifdef PERL_IN_UTF8_C
 sR	|U8	|to_lower_latin1|const U8 c|NULLOK U8 *p|NULLOK STRLEN *lenp
 #endif
@@ -1770,7 +1771,7 @@ po	|SV*	|hfree_next_entry	|NN HV *hv|NN STRLEN *indexp
 #if defined(PERL_IN_HV_C)
 s	|void	|hsplit		|NN HV *hv
 s	|void	|hfreeentries	|NN HV *hv
-s	|SV*	|hv_free_ent_ret|NN HV *hv|NULLOK HE *entryK
+s	|SV*	|hv_free_ent_ret|NN HV *hv|NN HE *entry
 sa	|HE*	|new_he
 sanR	|HEK*	|save_hek_flags	|NN const char *str|I32 len|U32 hash|int flags
 sn	|void	|hv_magic_check	|NN HV *hv|NN bool *needs_copy|NN bool *needs_store
@@ -1977,10 +1978,12 @@ Es	|regnode*|regclass	|NN struct RExC_state_t *pRExC_state \
 				|bool allow_multi_fold                        \
 				|const bool silence_non_portable	      \
 				|NULLOK SV** ret_invlist
-Es	|bool|could_it_be_POSIX	|NN struct RExC_state_t *pRExC_state
-Es	|regnode*|handle_sets	|NN struct RExC_state_t *pRExC_state \
-				|NN I32 *flagp|U32 depth \
+Es	|bool|could_it_be_a_POSIX_class|NN struct RExC_state_t *pRExC_state
+Es	|regnode*|handle_regex_sets|NN struct RExC_state_t *pRExC_state \
+				|NULLOK SV ** return_invlist            \
+				|NN I32 *flagp|U32 depth                \
 				|NN char * const oregcomp_parse
+Es	|void|parse_lparen_question_flags|NN struct RExC_state_t *pRExC_state
 Es	|regnode*|reg_node	|NN struct RExC_state_t *pRExC_state|U8 op
 Es	|UV	|reg_recode	|const char value|NN SV **encp
 Es	|regnode*|regpiece	|NN struct RExC_state_t *pRExC_state \

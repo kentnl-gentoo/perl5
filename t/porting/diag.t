@@ -191,19 +191,17 @@ my $specialformats =
  join '|', sort { length $b cmp length $a } keys %specialformats;
 my $specialformats_re = qr/%$format_modifiers"\s*($specialformats)(\s*")?/;
 
-# Recursively descend looking for source files.
-my @todo = sort <*>;
-while (@todo) {
-  my $todo = shift @todo;
-  next if $todo ~~ ['t', 'lib', 'ext', 'dist', 'cpan'];
-  # opmini.c is just a copy of op.c, so there's no need to check again.
-  next if $todo eq 'opmini.c';
-  if (-d $todo) {
-    unshift @todo, sort glob "$todo/*";
-  } elsif ($todo =~ m/\.[ch]$/) {
-    check_file($todo);
-  }
+open my $fh, '<', 'MANIFEST' or die "Can't open MANIFEST: $!";
+while (my $file = <$fh>) {
+    chomp $file;
+    $file =~ s/\s+.*//;
+    next unless $file =~ /\.(?:c|cpp|h|xs|y)\z/ or $file =~ /^perly\./;
+    # OS/2 extensions have never been migrated to ext/, hence the special case:
+    next if $file =~ m!\A(?:ext|dist|cpan|lib|t|os2/OS2)/!
+            && $file !~ m!\Aext/DynaLoader/!;
+    check_file($file);
 }
+close $fh or die $!;
 
 # Standardize messages with variants into the form that appears
 # in perldiag.pod -- useful for things without a diag_listed_as annotation
@@ -312,10 +310,17 @@ sub check_file {
       next;
     }
 
+    # Try to guess what the severity should be.  In the case of
+    # Perl_ck_warner and other _ck_ functions, we can tell whether it is
+    # a severe/default warning or no by the _d suffix.  In the case of
+    # other warn functions we cannot tell, because Perl_warner may be pre-
+    # ceded by if(ckWARN) or if(ckWARN_d).
     my $severity = !$routine                   ? '[PFX]'
                  :  $routine =~ /warn.*_d\z/   ? '[DS]'
+                 :  $routine =~ /ck_warn/      ?  'W'
                  :  $routine =~ /warn/         ? '[WDS]'
-                 :  $routine =~ /ckWARN\d*reg/ ? '[WDS]'
+                 :  $routine =~ /ckWARN.*dep/  ?  'D'
+                 :  $routine =~ /ckWARN\d*reg/ ?  'W'
                  :  $routine =~ /vWARN\d/      ? '[WDS]'
                  :                             '[PFX]';
     my $categories;
@@ -405,7 +410,9 @@ sub check_message {
           if $entries{$key}{cattodo};
 
         like $entries{$key}{severity}, $qr,
-          "severity is one of $severity for $key";
+          $severity =~ /\[/
+            ? "severity is one of $severity for $key"
+            : "severity is $severity for $key";
 
         is $entries{$key}{category}, $categories,
            ($categories ? "categories are [$categories]" : "no category")
@@ -550,6 +557,7 @@ Not an XSUB reference
 Operator or semicolon missing before %c%s
 Pattern subroutine nesting without pos change exceeded limit in regex
 Perl %s required--this is only %s, stopped
+PerlApp::TextQuery: no arguments, please
 POSIX syntax [%c %c] is reserved for future extensions in regex; marked by <-- HERE in m/%s/
 ptr wrong %p != %p fl=%x nl=%p e=%p for %d
 Recompile perl with -DDEBUGGING to use -D switch (did you mean -d ?)
@@ -660,3 +668,4 @@ UTF-16 surrogate U+%X
 False [] range "%s" in regex; marked by <-- HERE in m/%s/
 \N{} in character class restricted to one character in regex; marked by <-- HERE in m/%s/
 Zero length \N{} in regex; marked by <-- HERE in m/%s/
+Expecting '(?flags:(?[...' in regex; marked by <-- HERE in m/%s/

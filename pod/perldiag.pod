@@ -20,7 +20,7 @@ The majority of messages from the first three classifications above
 
 If a message can be controlled by the C<warnings> pragma, its warning
 category is included with the classification letter in the description
-below.
+below.  E.g. C<(W closed)> means a warning in the C<closed> category.
 
 Optional warnings are enabled by using the C<warnings> pragma or the B<-w>
 and B<-W> switches.  Warnings may be captured by setting C<$SIG{__WARN__}>
@@ -536,13 +536,15 @@ check the return value of your socket() call?  See L<perlfunc/bind>.
 (W unopened) You tried binmode() on a filehandle that was never opened.
 Check your control flow and number of arguments.
 
-=item "\b{" is deprecated; use "\b\{" instead in regex; marked by <-- HERE in m/%s/
+=item "\b{" is deprecated; use "\b\{" or "\b[{]" instead in regex; marked by <-- HERE in m/%s/
 
-=item "\B{" is deprecated; use "\B\{" instead in regex; marked by <-- HERE in m/%s/
+=item "\B{" is deprecated; use "\B\{" or "\B[{]" instead in regex; marked by <-- HERE in m/%s/
 
-(W deprecated, regexp) Use of an unescaped "{" immediately following a
+(W deprecated) Use of an unescaped "{" immediately following a
 C<\b> or C<\B> is now deprecated so as to reserve its use for Perl
-itself in a future release.
+itself in a future release.  You can either precede the brace with a
+backslash, or enclose it in square brackets; the latter is the way to go
+if the pattern delimiters are C<{}>.
 
 =item Bit vector size > 32 non-portable
 
@@ -671,7 +673,7 @@ Something like this will reproduce the error:
 
 =item Can't chdir to %s
 
-(F) You called C<perl -x/foo/bar>, but C</foo/bar> is not a directory
+(F) You called C<perl -x/foo/bar>, but F</foo/bar> is not a directory
 that you can chdir to, possibly because it doesn't exist.
 
 =item Can't check filesystem of script "%s" for nosuid
@@ -995,6 +997,15 @@ e.g. open(FH, ">:nosuchlayer", "somefile").
 
 (F) List assignment to %ENV is not supported on some systems, notably
 VMS.
+
+=item Can't make loaded symbols global on this platform while loading %s
+
+(W) A module passed the flag 0x01 to DynaLoader::dl_load_file() to request
+that symbols from the stated file are made available globally within the
+process, but that functionality is not available on this platform.  Whilst
+the module likely will still work, this may prevent the perl interpreter
+from loading other XS-based extensions which need to link directly to
+functions defined in the C or XS code in the stated file.
 
 =item Can't modify %s in %s
 
@@ -1796,6 +1807,23 @@ specifications in either VMS or Unix syntax, it converts them to a
 single form when it must operate on them directly.  Either you've passed
 an invalid file specification to Perl, or you've found a case the
 conversion routines don't handle.  Drat.
+
+=item Escape literal pattern white space under /x
+
+(D deprecated) You compiled a regular expression pattern with C</x> to
+ignore white space, and you used, as a literal, one of the characters
+that Perl plans to eventually treat as white space.  The character must
+be escaped somehow, or it will work differently on a future Perl that
+does treat it as white space.  The easiest way is to insert a backslash
+immediately before it, or to enclose it with square brackets.  This
+change is to bring Perl into conformance with Unicode recommendations.
+Here are the five characters that generate this warning:
+U+0085 NEXT LINE,
+U+200E LEFT-TO-RIGHT MARK,
+U+200F RIGHT-TO-LEFT MARK,
+U+2028 LINE SEPARATOR,
+and
+U+2029 PARAGRAPH SEPARATOR.
 
 =item Eval-group in insecure regular expression
 
@@ -3393,6 +3421,12 @@ call, or call a constructor from the FileHandle package.
 (W unopened) You tried to invoke a file test operator on a filehandle
 that isn't open.  Check your control flow.  See also L<perlfunc/-X>.
 
+=item Strings with code points over 0xFF may not be mapped into in-memory file handles
+
+(W utf8) You tried to open a reference to a scalar for read or append
+where the scalar contained code points over 0xFF.  In-memory files
+model on-disk files and can only contain bytes.
+
 =item oops: oopsAV
 
 (S internal) An internal warning that the grammar is screwed up.
@@ -3837,7 +3871,7 @@ that a method requires a package that has not been loaded.
 =item Perl folding rules are not up-to-date for 0x%X; please use the perlbug 
 utility to report; in regex; marked by <-- HERE in m/%s/
 
-(W regexp, deprecated) You used a regular expression with
+(D regexp, deprecated) You used a regular expression with
 case-insensitive matching, and there is a bug in Perl in which the
 built-in regular expression folding rules are not accurate.  This may
 lead to incorrect results.  Please report this as a bug using the
@@ -5668,11 +5702,11 @@ old way has bad side effects.
 it already went past any symlink you are presumably trying to look for.
 The operation returned C<undef>.  Use a filename instead.
 
-=item Use of my $_ is deprecated
+=item Use of my $_ is experimental
 
-(D deprecated) Lexical $_ is deprecated because of
-its confusing side-effects.  Consider using C<local $_>
-instead.  See the explanation under L<perlvar/$_>.
+(S experimental::lexical_topic) Lexical $_ is an experimental feature and
+its behavior may change or even be removed in any future release of perl.
+See the explanation under L<perlvar/$_>.
 
 =item Use of %s on a handle without * is deprecated
 
@@ -5705,11 +5739,11 @@ C<$array[0+$ref]>.  This warning is not given for overloaded objects,
 however, because you can overload the numification and stringification
 operators and then you presumably know what you are doing.
 
-=item Use of state $_ is deprecated
+=item Use of state $_ is experimental
 
-(D deprecated) Lexical $_ is deprecated because of
-its confusing side-effects.  Consider using C<local $_>
-instead.  See the explanation under L<perlvar/$_>.
+(S experimental::lexical_topic) Lexical $_ is an experimental feature and
+its behavior may change or even be removed in any future release of perl.
+See the explanation under L<perlvar/$_>.
 
 =item Use of tainted arguments in %s is deprecated
 

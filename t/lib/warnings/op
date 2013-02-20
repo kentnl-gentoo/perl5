@@ -1,6 +1,6 @@
   op.c		AOK
 
-     Use of my $_ is deprecated
+     Use of my $_ is experimental
 	my $_ ;
 
      Found = in conditional, should be ==
@@ -107,15 +107,15 @@
     
 __END__
 # op.c
-use warnings 'deprecated' ;
+use warnings 'experimental::lexical_topic' ;
 my $_;
 CORE::state $_;
-no warnings 'deprecated' ;
+no warnings 'experimental::lexical_topic' ;
 my $_;
 CORE::state $_;
 EXPECT
-Use of my $_ is deprecated at - line 3.
-Use of state $_ is deprecated at - line 4.
+Use of my $_ is experimental at - line 3.
+Use of state $_ is experimental at - line 4.
 ########
 # op.c
 use warnings 'syntax' ;

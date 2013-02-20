@@ -1,4 +1,5 @@
 package CPANPLUS::Internals::Utils;
+use deprecate;
 
 use strict;
 
@@ -11,6 +12,9 @@ use Params::Check               qw[check];
 use Module::Load::Conditional   qw[can_load];
 use Locale::Maketext::Simple    Class => 'CPANPLUS', Style => 'gettext';
 use version;
+
+use vars qw[$VERSION];
+$VERSION = "0.9135";
 
 local $Params::Check::VERBOSE = 1;
 

@@ -1,4 +1,5 @@
 package CPANPLUS::Internals;
+use deprecate;
 
 ### we /need/ perl5.6.1 or higher -- we use coderefs in @INC,
 ### and 5.6.0 is just too buggy
@@ -6,7 +7,6 @@ use 5.006001;
 
 use strict;
 use Config;
-
 
 use CPANPLUS::Error;
 
@@ -19,7 +19,6 @@ use CPANPLUS::Internals::Constants;
 use CPANPLUS::Internals::Search;
 use CPANPLUS::Internals::Report;
 
-
 require base;
 use Cwd                         qw[cwd];
 use Module::Load                qw[load];
@@ -28,7 +27,6 @@ use Locale::Maketext::Simple    Class => 'CPANPLUS', Style => 'gettext';
 use Module::Load::Conditional   qw[can_load];
 
 use Object::Accessor;
-
 
 local $Params::Check::VERBOSE = 1;
 
@@ -42,7 +40,7 @@ use vars qw[@ISA $VERSION];
             CPANPLUS::Internals::Report
         ];
 
-$VERSION = "0.9133";
+$VERSION = "0.9135";
 
 =pod
 

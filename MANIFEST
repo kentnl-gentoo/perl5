@@ -139,6 +139,10 @@ cpan/AutoLoader/t/01AutoLoader.t	See if AutoLoader works
 cpan/AutoLoader/t/02AutoSplit.t		See if AutoSplit works
 cpan/B-Debug/Debug.pm	Compiler Debug backend
 cpan/B-Debug/t/debug.t	See if B::Debug works
+cpan/B-Lint/lib/B/Lint/Debug.pm			Adds debugging stringification to B::
+cpan/B-Lint/lib/B/Lint.pm			Compiler Lint backend
+cpan/B-Lint/t/lint.t				See if B::Lint works
+cpan/B-Lint/t/pluglib/B/Lint/Plugin/Test.pm	See if B::Lint works
 cpan/CGI/Changes			Changelog for CGI.pm
 cpan/CGI/examples/caution.xbm		CGI example
 cpan/CGI/examples/clickable_image.cgi	CGI example
@@ -275,6 +279,11 @@ cpan/Compress-Raw-Zlib/zlib-src/zlib.h		Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/zlib-src/zutil.c		Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/zlib-src/zutil.h		Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/Zlib.xs			Compress::Raw::Zlib
+cpan/Config-Perl-V/t/00_pod.t			Config::Perl::V
+cpan/Config-Perl-V/t/01_pod.t			Config::Perl::V
+cpan/Config-Perl-V/t/10_base.t			Config::Perl::V
+cpan/Config-Perl-V/t/20_plv.t			Config::Perl::V
+cpan/Config-Perl-V/V.pm				Config::Perl::V
 cpan/CPAN/Changes				CPAN.pm Changes file
 cpan/CPAN/lib/App/Cpan.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/API/HOWTO.pod		recipe book for programming with CPAN.pm
@@ -801,6 +810,7 @@ cpan/Digest-SHA/t/sha224.t		See if Digest::SHA works
 cpan/Digest-SHA/t/sha256.t		See if Digest::SHA works
 cpan/Digest-SHA/t/sha384.t		See if Digest::SHA works
 cpan/Digest-SHA/t/sha512.t		See if Digest::SHA works
+cpan/Digest-SHA/t/unicode.t
 cpan/Digest-SHA/t/woodbury.t		See if Digest::SHA works
 cpan/Digest-SHA/typemap			Typemap for Digest::SHA
 cpan/Digest/t/base.t		See if Digest extensions work
@@ -1137,19 +1147,22 @@ cpan/ExtUtils-MakeMaker/t/VERSION_FROM.t			See if MakeMaker's VERSION_FROM works
 cpan/ExtUtils-MakeMaker/t/WriteEmptyMakefile.t			See if WriteEmptyMakefile works
 cpan/ExtUtils-MakeMaker/t/writemakefile_args.t			See if WriteMakefile works
 cpan/ExtUtils-MakeMaker/t/xs.t					Part of MakeMaker's test suite
+cpan/File-CheckTree/lib/File/CheckTree.pm	Perl module supporting wholesale file mode validation
+cpan/File-CheckTree/t/CheckTree.t		See if File::CheckTree works
 cpan/File-Fetch/lib/File/Fetch.pm	File::Fetch
 cpan/File-Fetch/t/01_File-Fetch.t	File::Fetch tests
 cpan/File-Fetch/t/null_subclass.t
 cpan/File-Path/lib/File/Path.pm		Do things like 'mkdir -p' and 'rm -r'
 cpan/File-Path/t/Path.t			See if File::Path works
 cpan/File-Path/t/taint.t		See if File::Path works with -T
+cpan/File-Temp/lib/File/Temp.pm	create safe temporary files and file handles
 cpan/File-Temp/t/cmp.t		See if File::Temp works
-cpan/File-Temp/Temp.pm		create safe temporary files and file handles
 cpan/File-Temp/t/fork.t		See if File::Temp works
 cpan/File-Temp/t/lock.t		See if File::Temp works
 cpan/File-Temp/t/mktemp.t	See if File::Temp works
 cpan/File-Temp/t/object.t	See if File::Temp works
 cpan/File-Temp/t/posix.t	See if File::Temp works
+cpan/File-Temp/t/rmtree.t	See if File::Temp works
 cpan/File-Temp/t/security.t	See if File::Temp works
 cpan/File-Temp/t/seekable.t	See if File::Temp works
 cpan/File-Temp/t/tempfile.t	See if File::Temp works
@@ -1917,6 +1930,17 @@ cpan/PerlIO-via-QuotedPrint/t/QuotedPrint.t			PerlIO::via::QuotedPrint
 cpan/Perl-OSType/lib/Perl/OSType.pm			Perl::OSType
 cpan/Perl-OSType/t/00-compile.t			Perl::OSType
 cpan/Perl-OSType/t/OSType.t			Perl::OSType
+cpan/Pod-Checker/lib/Pod/Checker.pm
+cpan/Pod-Checker/scripts/podchecker.PL
+cpan/Pod-Checker/t/pod/contains_bad_pod.xr
+cpan/Pod-Checker/t/pod/empty.xr
+cpan/Pod-Checker/t/pod/podchkenc.t
+cpan/Pod-Checker/t/pod/podchkenc.xr
+cpan/Pod-Checker/t/pod/poderrs.t
+cpan/Pod-Checker/t/pod/poderrs.xr
+cpan/Pod-Checker/t/pod/selfcheck.t
+cpan/Pod-Checker/t/pod/testcmp.pl
+cpan/Pod-Checker/t/pod/testpchk.pl
 cpan/Pod-Escapes/ChangeLog		ChangeLog for Pod::Escapes
 cpan/Pod-Escapes/lib/Pod/Escapes.pm	Pod::Escapes
 cpan/Pod-Escapes/README			README for Pod::Escapes
@@ -1962,16 +1986,12 @@ cpan/podlators/t/text-perlio.t			podlators test
 cpan/podlators/t/text.t				podlators test
 cpan/podlators/t/text-utf8.t			podlators test
 cpan/podlators/VERSION				podlators distribution version
-cpan/Pod-Parser/lib/Pod/Checker.pm		Pod-Parser - check POD documents for syntax errors
 cpan/Pod-Parser/lib/Pod/Find.pm			find POD documents in directory trees
 cpan/Pod-Parser/lib/Pod/InputObjects.pm		Pod-Parser - define objects for input streams
 cpan/Pod-Parser/lib/Pod/Parser.pm		Pod-Parser - define base class for parsing POD
 cpan/Pod-Parser/lib/Pod/ParseUtils.pm		Pod-Parser - pod utility functions
 cpan/Pod-Parser/lib/Pod/PlainText.pm		Convert POD data to formatted ASCII text
 cpan/Pod-Parser/lib/Pod/Select.pm		Pod-Parser - select portions of POD docs
-cpan/Pod-Parser/lib/Pod/Usage.pm		Pod-Parser - print usage messages
-cpan/Pod-Parser/scripts/pod2usage.PL	Pod-Parser - print usage messages from POD docs
-cpan/Pod-Parser/scripts/podchecker.PL	Pod-Parser - Pod::Checker::podchecker() CLI
 cpan/Pod-Parser/scripts/podselect.PL	Pod-Parser - Pod::Select::podselect() CLI
 cpan/Pod-Parser/t/pod/contains_bad_pod.xr	Pod-Parser test file
 cpan/Pod-Parser/t/pod/contains_pod.t		Pod-Parser test
@@ -1998,14 +2018,6 @@ cpan/Pod-Parser/t/pod/nested_seqs.t		Test nested interior sequences
 cpan/Pod-Parser/t/pod/nested_seqs.xr		Expected results for nested_seqs.t
 cpan/Pod-Parser/t/pod/oneline_cmds.t		Test single paragraph ==cmds
 cpan/Pod-Parser/t/pod/oneline_cmds.xr		Expected results for oneline_cmds.t
-cpan/Pod-Parser/t/pod/p2u_data.pl		Test Pod::Usage
-cpan/Pod-Parser/t/pod/pod2usage2.t		Test Pod::Usage
-cpan/Pod-Parser/t/pod/pod2usage.t		Test Pod::Usage
-cpan/Pod-Parser/t/pod/pod2usage.xr		Expected results for pod2usage.t
-cpan/Pod-Parser/t/pod/podchkenc.t		Validate =encoding support
-cpan/Pod-Parser/t/pod/podchkenc.xr		Expected results for the above
-cpan/Pod-Parser/t/pod/poderrs.t			Test POD errors
-cpan/Pod-Parser/t/pod/poderrs.xr		Expected results for poderrs.t
 cpan/Pod-Parser/t/pod/podselect.t		Test Pod::Select
 cpan/Pod-Parser/t/pod/podselect.xr		Expected results for podselect.t
 cpan/Pod-Parser/t/pod/selfcheck.t
@@ -2016,8 +2028,6 @@ cpan/Pod-Parser/t/pod/testp2pt.pl		Module to test Pod::PlainText for a given fil
 cpan/Pod-Parser/t/pod/testpchk.pl		Module to test Pod::Checker for a given file
 cpan/Pod-Parser/t/pod/testpods/lib/Pod/Stuff.pm	Sample data for t/pod/find.t
 cpan/Pod-Parser/t/pod/twice.t			Test Pod::Parser
-cpan/Pod-Parser/t/pod/usage2.pod		Test POD for pod2usage tests
-cpan/Pod-Parser/t/pod/usage.pod			Test POD for pod2usage tests
 cpan/Pod-Perldoc/corpus/no-head.pod		test file for Pod-Perldoc
 cpan/Pod-Perldoc/corpus/perlfunc.pod		test file for Pod-Perldoc
 cpan/Pod-Perldoc/corpus/utf8.pod		test file for Pod-Perldoc
@@ -2225,6 +2235,16 @@ cpan/Pod-Simple/t/xhtml10.t				Pod::Simple test file
 cpan/Pod-Simple/t/xhtml15.t				Pod::Simple test file
 cpan/Pod-Simple/t/xhtml20.t				Pod::Simple test file
 cpan/Pod-Simple/t/x_nixer.t				Pod::Simple test file
+cpan/Pod-Usage/lib/Pod/Usage.pm
+cpan/Pod-Usage/scripts/pod2usage.PL
+cpan/Pod-Usage/t/pod/p2u_data.pl
+cpan/Pod-Usage/t/pod/pod2usage2.t
+cpan/Pod-Usage/t/pod/pod2usage.t
+cpan/Pod-Usage/t/pod/pod2usage.xr
+cpan/Pod-Usage/t/pod/testcmp.pl
+cpan/Pod-Usage/t/pod/testp2pt.pl
+cpan/Pod-Usage/t/pod/usage2.pod
+cpan/Pod-Usage/t/pod/usage.pod
 cpan/Socket/Makefile.PL			Socket extension makefile writer
 cpan/Socket/Socket.pm			Socket extension Perl module
 cpan/Socket/Socket.xs			Socket extension external subroutines
@@ -3072,10 +3092,6 @@ dist/bignum/t/ratopt_a.t		See if bigrat a => X works
 dist/bignum/t/scope_f.t			See if no bignum works
 dist/bignum/t/scope_i.t			See if no bigint works
 dist/bignum/t/scope_r.t			See if no bigrat works
-dist/B-Lint/lib/B/Lint/Debug.pm			Adds debugging stringification to B::
-dist/B-Lint/lib/B/Lint.pm			Compiler Lint backend
-dist/B-Lint/t/lint.t				See if B::Lint works
-dist/B-Lint/t/pluglib/B/Lint/Plugin/Test.pm	See if B::Lint works
 dist/Carp/lib/Carp/Heavy.pm	Error message retired workhorse
 dist/Carp/lib/Carp.pm		Error message extension
 dist/Carp/Makefile.PL		makefile writer for Carp
@@ -3113,15 +3129,29 @@ dist/Data-Dumper/Changes	Data pretty printer, changelog
 dist/Data-Dumper/Dumper.pm	Data pretty printer, module
 dist/Data-Dumper/Dumper.xs	Data pretty printer, externals
 dist/Data-Dumper/t/bless.t	See if Data::Dumper works
+dist/Data-Dumper/t/bless_var_method.t	See if Data::Dumper::Bless works
 dist/Data-Dumper/t/bugs.t	See if Data::Dumper works
+dist/Data-Dumper/t/deparse.t	See if Data::Dumper::Deparse works
 dist/Data-Dumper/t/dumper.t	See if Data::Dumper works
-dist/Data-Dumper/t/freezer.t	See if $Data::Dumper::Freezer works
+dist/Data-Dumper/t/dumpperl.t	See if Data::Dumper::Dumpperl works
+dist/Data-Dumper/t/freezer.t	See if Data::Dumper::Freezer works
+dist/Data-Dumper/t/indent.t	See if Data::Dumper::Indent works
+dist/Data-Dumper/t/lib/Testing.pm	Functions used in testing Data-Dumper
+dist/Data-Dumper/t/misc.t	Miscellaneous tests for Data-Dumper
+dist/Data-Dumper/t/names.t	See if Data::Dumper::Names works
 dist/Data-Dumper/Todo		Data pretty printer, futures
 dist/Data-Dumper/t/overload.t	See if Data::Dumper works for overloaded data
 dist/Data-Dumper/t/pair.t	See if Data::Dumper pair separator works
 dist/Data-Dumper/t/perl-74170.t	Regression test for stack reallocation
+dist/Data-Dumper/t/purity_deepcopy_maxdepth.t	See if three Data::Dumper functions work
 dist/Data-Dumper/t/qr.t		See if Data::Dumper works with qr|/|
+dist/Data-Dumper/t/quotekeys.t	See if Data::Dumper::Quotekeys works
+dist/Data-Dumper/t/seen.t	See if Data::Dumper::Seen works
+dist/Data-Dumper/t/sortkeys.t	See if Data::Dumper::Sortkeys works
+dist/Data-Dumper/t/sparseseen.t	See if Data::Dumper::Sparseseen works
 dist/Data-Dumper/t/terse.t	See if Data::Dumper terse option works
+dist/Data-Dumper/t/toaster.t	See if Data::Dumper::Toaster works
+dist/Data-Dumper/t/values.t	See if Data::Dumper::Values works
 dist/Devel-SelfStubber/lib/Devel/SelfStubber.pm	Generate stubs for SelfLoader.pm
 dist/Devel-SelfStubber/t/Devel-SelfStubber.t	See if Devel::SelfStubber works
 dist/Dumpvalue/lib/Dumpvalue.pm	Screen dump of perl values
@@ -3235,8 +3265,6 @@ dist/ExtUtils-ParseXS/t/XSTest.xs				Test file for ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/XSUsage.pm				ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/XSUsage.xs				ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/XSWarn.xs				ExtUtils::ParseXS tests
-dist/File-CheckTree/lib/File/CheckTree.pm	Perl module supporting wholesale file mode validation
-dist/File-CheckTree/t/CheckTree.t		See if File::CheckTree works
 dist/Filter-Simple/lib/Filter/Simple.pm				Simple frontend to Filter::Util::Call
 dist/Filter-Simple/t/code_no_comments.t				See if Filter::Simple works
 dist/Filter-Simple/t/data.t					See if Filter::Simple works
@@ -3537,6 +3565,7 @@ dist/Thread-Queue/t/06_insert.t		Thread::Queue tests
 dist/Thread-Queue/t/07_lock.t		Thread::Queue tests
 dist/Thread-Queue/t/08_nothreads.t	Thread::Queue tests
 dist/Thread-Queue/t/09_ended.t		Thread::Queue tests
+dist/Thread-Queue/t/10_timed.t	Thread::Queue tests
 dist/Thread-Semaphore/lib/Thread/Semaphore.pm	Thread-safe semaphores
 dist/Thread-Semaphore/t/01_basic.t		Thread::Semaphore tests
 dist/Thread-Semaphore/t/02_errs.t		Thread::Semaphore tests
@@ -4492,6 +4521,7 @@ MANIFEST			This list of files
 mathoms.c			A home for binary-compatible code artifacts
 metaconfig.h			Control file for the metaconfig process
 metaconfig.SH			Control file for the metaconfig process
+META.json			Distribution meta-data in JSON
 META.yml			Distribution meta-data in YAML
 mg.c				Magic code
 mg.h				Magic header
@@ -4692,6 +4722,7 @@ pod/perl5174delta.pod		Perl changes in version 5.17.4
 pod/perl5175delta.pod		Perl changes in version 5.17.5
 pod/perl5176delta.pod		Perl changes in version 5.17.6
 pod/perl5177delta.pod		Perl changes in version 5.17.7
+pod/perl5178delta.pod		Perl changes in version 5.17.8
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5510,6 +5541,7 @@ t/run/cloexec.t			Test close-on-exec.
 t/run/dtrace.pl			For dtrace.t
 t/run/dtrace.t			Test for DTrace probes
 t/run/exit.t			Test perl's exit status.
+t/run/flib/broken.pm		Bad .pm file for switchM.t
 t/run/fresh_perl.t		Tests that require a fresh perl.
 t/run/locale.t		Tests related to locale handling
 t/run/mad.t			Test vs MAD environment
@@ -5525,6 +5557,7 @@ t/run/switches.t		Tests for the other switches (-0, -l, -c, -s, -M, -m, -V, -v, 
 t/run/switchF1.t		Pathological tests for the -F switch
 t/run/switchF.t			Test the -F switch
 t/run/switchI.t			Test the -I switch
+t/run/switchM.t			Test the -M switch
 t/run/switchn.t			Test the -n switch
 t/run/switchp.t			Test the -p switch
 t/run/switcht.t			Test the -t switch

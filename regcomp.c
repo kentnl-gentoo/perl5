@@ -548,6 +548,19 @@ static const scan_data_t zero_scan_data =
 	    (int)offset, RExC_precomp, RExC_precomp + offset);		\
 } STMT_END
 
+#define	vWARN_dep(loc, m) STMT_START {				        \
+    const IV offset = loc - RExC_precomp;				\
+    Perl_warner(aTHX_ packWARN(WARN_DEPRECATED), m REPORT_LOCATION,	\
+	    (int)offset, RExC_precomp, RExC_precomp + offset);	        \
+} STMT_END
+
+#define	ckWARNdep(loc,m) STMT_START {				        \
+    const IV offset = loc - RExC_precomp;				\
+    Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),	                \
+	    m REPORT_LOCATION,						\
+	    (int)offset, RExC_precomp, RExC_precomp + offset);		\
+} STMT_END
+
 #define	ckWARNregdep(loc,m) STMT_START {				\
     const IV offset = loc - RExC_precomp;				\
     Perl_ck_warner_d(aTHX_ packWARN2(WARN_DEPRECATED, WARN_REGEXP),	\
@@ -6946,8 +6959,8 @@ S_reg_scan_name(pTHX_ RExC_state_t *pRExC_state, U32 flags)
  * should eventually be made public */
 
 /* The header definitions are in F<inline_invlist.c> */
-#define TO_INTERNAL_SIZE(x) ((x + HEADER_LENGTH) * sizeof(UV))
-#define FROM_INTERNAL_SIZE(x) ((x / sizeof(UV)) - HEADER_LENGTH)
+#define TO_INTERNAL_SIZE(x) (((x) + HEADER_LENGTH) * sizeof(UV))
+#define FROM_INTERNAL_SIZE(x) (((x)/ sizeof(UV)) - HEADER_LENGTH)
 
 #define INVLIST_INITIAL_LEN 10
 
@@ -7111,7 +7124,7 @@ Perl__new_invlist(pTHX_ IV initial_size)
     *get_invlist_previous_index_addr(new_list) = 0;
     *get_invlist_version_id_addr(new_list) = INVLIST_VERSION_ID;
 #if HEADER_LENGTH != 5
-#   error Need to regenerate VERSION_ID by running perl -E 'say int(rand 2**31-1)', and then changing the #if to the new length
+#   error Need to regenerate INVLIST_VERSION_ID by running perl -E 'say int(rand 2**31-1)', and then changing the #if to the new length
 #endif
 
     return new_list;
@@ -7580,7 +7593,7 @@ Perl__invlist_union_maybe_complement_2nd(pTHX_ SV* const a, SV* const b, bool co
 	}
 	else {
 	    cp_in_set = ELEMENT_RANGE_MATCHES_INVLIST(i_b);
-	    cp= array_b[i_b++];
+	    cp = array_b[i_b++];
 	}
 
 	/* Here, have chosen which of the two inputs to look at.  Only output
@@ -8305,6 +8318,199 @@ S__invlistEQ(pTHX_ SV* const a, SV* const b, bool complement_b)
 
 /* End of inversion list object */
 
+STATIC void
+S_parse_lparen_question_flags(pTHX_ struct RExC_state_t *pRExC_state)
+{
+    /* This parses the flags that are in either the '(?foo)' or '(?foo:bar)'
+     * constructs, and updates RExC_flags with them.  On input, RExC_parse
+     * should point to the first flag; it is updated on output to point to the
+     * final ')' or ':'.  There needs to be at least one flag, or this will
+     * abort */
+
+    /* for (?g), (?gc), and (?o) warnings; warning
+       about (?c) will warn about (?g) -- japhy    */
+
+#define WASTED_O  0x01
+#define WASTED_G  0x02
+#define WASTED_C  0x04
+#define WASTED_GC (0x02|0x04)
+    I32 wastedflags = 0x00;
+    U32 posflags = 0, negflags = 0;
+    U32 *flagsp = &posflags;
+    char has_charset_modifier = '\0';
+    regex_charset cs;
+    bool has_use_defaults = FALSE;
+    const char* const seqstart = RExC_parse - 1; /* Point to the '?' */
+
+    PERL_ARGS_ASSERT_PARSE_LPAREN_QUESTION_FLAGS;
+
+    /* '^' as an initial flag sets certain defaults */
+    if (UCHARAT(RExC_parse) == '^') {
+        RExC_parse++;
+        has_use_defaults = TRUE;
+        STD_PMMOD_FLAGS_CLEAR(&RExC_flags);
+        set_regex_charset(&RExC_flags, (RExC_utf8 || RExC_uni_semantics)
+                                        ? REGEX_UNICODE_CHARSET
+                                        : REGEX_DEPENDS_CHARSET);
+    }
+
+    cs = get_regex_charset(RExC_flags);
+    if (cs == REGEX_DEPENDS_CHARSET
+        && (RExC_utf8 || RExC_uni_semantics))
+    {
+        cs = REGEX_UNICODE_CHARSET;
+    }
+
+    while (*RExC_parse) {
+        /* && strchr("iogcmsx", *RExC_parse) */
+        /* (?g), (?gc) and (?o) are useless here
+           and must be globally applied -- japhy */
+        switch (*RExC_parse) {
+
+            /* Code for the imsx flags */
+            CASE_STD_PMMOD_FLAGS_PARSE_SET(flagsp);
+
+            case LOCALE_PAT_MOD:
+                if (has_charset_modifier) {
+                    goto excess_modifier;
+                }
+                else if (flagsp == &negflags) {
+                    goto neg_modifier;
+                }
+                cs = REGEX_LOCALE_CHARSET;
+                has_charset_modifier = LOCALE_PAT_MOD;
+                RExC_contains_locale = 1;
+                break;
+            case UNICODE_PAT_MOD:
+                if (has_charset_modifier) {
+                    goto excess_modifier;
+                }
+                else if (flagsp == &negflags) {
+                    goto neg_modifier;
+                }
+                cs = REGEX_UNICODE_CHARSET;
+                has_charset_modifier = UNICODE_PAT_MOD;
+                break;
+            case ASCII_RESTRICT_PAT_MOD:
+                if (flagsp == &negflags) {
+                    goto neg_modifier;
+                }
+                if (has_charset_modifier) {
+                    if (cs != REGEX_ASCII_RESTRICTED_CHARSET) {
+                        goto excess_modifier;
+                    }
+                    /* Doubled modifier implies more restricted */
+                    cs = REGEX_ASCII_MORE_RESTRICTED_CHARSET;
+                }
+                else {
+                    cs = REGEX_ASCII_RESTRICTED_CHARSET;
+                }
+                has_charset_modifier = ASCII_RESTRICT_PAT_MOD;
+                break;
+            case DEPENDS_PAT_MOD:
+                if (has_use_defaults) {
+                    goto fail_modifiers;
+                }
+                else if (flagsp == &negflags) {
+                    goto neg_modifier;
+                }
+                else if (has_charset_modifier) {
+                    goto excess_modifier;
+                }
+
+                /* The dual charset means unicode semantics if the
+                 * pattern (or target, not known until runtime) are
+                 * utf8, or something in the pattern indicates unicode
+                 * semantics */
+                cs = (RExC_utf8 || RExC_uni_semantics)
+                     ? REGEX_UNICODE_CHARSET
+                     : REGEX_DEPENDS_CHARSET;
+                has_charset_modifier = DEPENDS_PAT_MOD;
+                break;
+            excess_modifier:
+                RExC_parse++;
+                if (has_charset_modifier == ASCII_RESTRICT_PAT_MOD) {
+                    vFAIL2("Regexp modifier \"%c\" may appear a maximum of twice", ASCII_RESTRICT_PAT_MOD);
+                }
+                else if (has_charset_modifier == *(RExC_parse - 1)) {
+                    vFAIL2("Regexp modifier \"%c\" may not appear twice", *(RExC_parse - 1));
+                }
+                else {
+                    vFAIL3("Regexp modifiers \"%c\" and \"%c\" are mutually exclusive", has_charset_modifier, *(RExC_parse - 1));
+                }
+                /*NOTREACHED*/
+            neg_modifier:
+                RExC_parse++;
+                vFAIL2("Regexp modifier \"%c\" may not appear after the \"-\"", *(RExC_parse - 1));
+                /*NOTREACHED*/
+            case ONCE_PAT_MOD: /* 'o' */
+            case GLOBAL_PAT_MOD: /* 'g' */
+                if (SIZE_ONLY && ckWARN(WARN_REGEXP)) {
+                    const I32 wflagbit = *RExC_parse == 'o' ? WASTED_O : WASTED_G;
+                    if (! (wastedflags & wflagbit) ) {
+                        wastedflags |= wflagbit;
+                        vWARN5(
+                            RExC_parse + 1,
+                            "Useless (%s%c) - %suse /%c modifier",
+                            flagsp == &negflags ? "?-" : "?",
+                            *RExC_parse,
+                            flagsp == &negflags ? "don't " : "",
+                            *RExC_parse
+                        );
+                    }
+                }
+                break;
+
+            case CONTINUE_PAT_MOD: /* 'c' */
+                if (SIZE_ONLY && ckWARN(WARN_REGEXP)) {
+                    if (! (wastedflags & WASTED_C) ) {
+                        wastedflags |= WASTED_GC;
+                        vWARN3(
+                            RExC_parse + 1,
+                            "Useless (%sc) - %suse /gc modifier",
+                            flagsp == &negflags ? "?-" : "?",
+                            flagsp == &negflags ? "don't " : ""
+                        );
+                    }
+                }
+                break;
+            case KEEPCOPY_PAT_MOD: /* 'p' */
+                if (flagsp == &negflags) {
+                    if (SIZE_ONLY)
+                        ckWARNreg(RExC_parse + 1,"Useless use of (?-p)");
+                } else {
+                    *flagsp |= RXf_PMf_KEEPCOPY;
+                }
+                break;
+            case '-':
+                /* A flag is a default iff it is following a minus, so
+                 * if there is a minus, it means will be trying to
+                 * re-specify a default which is an error */
+                if (has_use_defaults || flagsp == &negflags) {
+                    goto fail_modifiers;
+                }
+                flagsp = &negflags;
+                wastedflags = 0;  /* reset so (?g-c) warns twice */
+                break;
+            case ':':
+            case ')':
+                RExC_flags |= posflags;
+                RExC_flags &= ~negflags;
+                set_regex_charset(&RExC_flags, cs);
+                return;
+                /*NOTREACHED*/
+            default:
+            fail_modifiers:
+                RExC_parse++;
+                vFAIL3("Sequence (%.*s...) not recognized",
+                       RExC_parse-seqstart, seqstart);
+                /*NOTREACHED*/
+        }
+
+        ++RExC_parse;
+    }
+}
+
 /*
  - reg - regular expression, i.e. main body or parenthesized thing
  *
@@ -8337,15 +8543,6 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
     bool is_open = 0;
     I32 freeze_paren = 0;
     I32 after_freeze = 0;
-
-    /* for (?g), (?gc), and (?o) warnings; warning
-       about (?c) will warn about (?g) -- japhy    */
-
-#define WASTED_O  0x01
-#define WASTED_G  0x02
-#define WASTED_C  0x04
-#define WASTED_GC (0x02|0x04)
-    I32 wastedflags = 0x00;
 
     char * parse_start = RExC_parse; /* MJD */
     char * const oregcomp_parse = RExC_parse;
@@ -8468,7 +8665,6 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 	if (*RExC_parse == '?') { /* (?...) */
 	    bool is_logical = 0;
 	    const char * const seqstart = RExC_parse;
-            bool has_use_defaults = FALSE;
 
 	    RExC_parse++;
 	    paren = *RExC_parse++;
@@ -8914,193 +9110,26 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 		}
 	    }
 	    case '[':           /* (?[ ... ]) */
-                return handle_sets(pRExC_state, flagp, depth, oregcomp_parse);
+                return handle_regex_sets(pRExC_state, NULL, flagp, depth,
+                                         oregcomp_parse);
             case 0:
 		RExC_parse--; /* for vFAIL to print correctly */
                 vFAIL("Sequence (? incomplete");
                 break;
-            case DEFAULT_PAT_MOD:   /* Use default flags with the exceptions
-				       that follow */
-                has_use_defaults = TRUE;
-                STD_PMMOD_FLAGS_CLEAR(&RExC_flags);
-		set_regex_charset(&RExC_flags, (RExC_utf8 || RExC_uni_semantics)
-						? REGEX_UNICODE_CHARSET
-						: REGEX_DEPENDS_CHARSET);
-                goto parse_flags;
-	    default:
+	    default: /* e.g., (?i) */
 	        --RExC_parse;
-	        parse_flags:      /* (?i) */  
-	    {
-                U32 posflags = 0, negflags = 0;
-	        U32 *flagsp = &posflags;
-                char has_charset_modifier = '\0';
-		regex_charset cs = get_regex_charset(RExC_flags);
-		if (cs == REGEX_DEPENDS_CHARSET
-		    && (RExC_utf8 || RExC_uni_semantics))
-		{
-		    cs = REGEX_UNICODE_CHARSET;
-		}
-
-		while (*RExC_parse) {
-		    /* && strchr("iogcmsx", *RExC_parse) */
-		    /* (?g), (?gc) and (?o) are useless here
-		       and must be globally applied -- japhy */
-                    switch (*RExC_parse) {
-	            CASE_STD_PMMOD_FLAGS_PARSE_SET(flagsp);
-                    case LOCALE_PAT_MOD:
-                        if (has_charset_modifier) {
-			    goto excess_modifier;
-			}
-			else if (flagsp == &negflags) {
-                            goto neg_modifier;
-                        }
-			cs = REGEX_LOCALE_CHARSET;
-                        has_charset_modifier = LOCALE_PAT_MOD;
-			RExC_contains_locale = 1;
-                        break;
-                    case UNICODE_PAT_MOD:
-                        if (has_charset_modifier) {
-			    goto excess_modifier;
-			}
-			else if (flagsp == &negflags) {
-                            goto neg_modifier;
-                        }
-			cs = REGEX_UNICODE_CHARSET;
-                        has_charset_modifier = UNICODE_PAT_MOD;
-                        break;
-                    case ASCII_RESTRICT_PAT_MOD:
-                        if (flagsp == &negflags) {
-                            goto neg_modifier;
-                        }
-                        if (has_charset_modifier) {
-                            if (cs != REGEX_ASCII_RESTRICTED_CHARSET) {
-                                goto excess_modifier;
-                            }
-			    /* Doubled modifier implies more restricted */
-                            cs = REGEX_ASCII_MORE_RESTRICTED_CHARSET;
-                        }
-			else {
-			    cs = REGEX_ASCII_RESTRICTED_CHARSET;
-			}
-                        has_charset_modifier = ASCII_RESTRICT_PAT_MOD;
-                        break;
-                    case DEPENDS_PAT_MOD:
-                        if (has_use_defaults) {
-                            goto fail_modifiers;
-			}
-			else if (flagsp == &negflags) {
-                            goto neg_modifier;
-			}
-			else if (has_charset_modifier) {
-			    goto excess_modifier;
-                        }
-
-			/* The dual charset means unicode semantics if the
-			 * pattern (or target, not known until runtime) are
-			 * utf8, or something in the pattern indicates unicode
-			 * semantics */
-			cs = (RExC_utf8 || RExC_uni_semantics)
-			     ? REGEX_UNICODE_CHARSET
-			     : REGEX_DEPENDS_CHARSET;
-                        has_charset_modifier = DEPENDS_PAT_MOD;
-                        break;
-		    excess_modifier:
-			RExC_parse++;
-			if (has_charset_modifier == ASCII_RESTRICT_PAT_MOD) {
-			    vFAIL2("Regexp modifier \"%c\" may appear a maximum of twice", ASCII_RESTRICT_PAT_MOD);
-			}
-			else if (has_charset_modifier == *(RExC_parse - 1)) {
-			    vFAIL2("Regexp modifier \"%c\" may not appear twice", *(RExC_parse - 1));
-			}
-			else {
-			    vFAIL3("Regexp modifiers \"%c\" and \"%c\" are mutually exclusive", has_charset_modifier, *(RExC_parse - 1));
-			}
-			/*NOTREACHED*/
-		    neg_modifier:
-			RExC_parse++;
-			vFAIL2("Regexp modifier \"%c\" may not appear after the \"-\"", *(RExC_parse - 1));
-			/*NOTREACHED*/
-                    case ONCE_PAT_MOD: /* 'o' */
-                    case GLOBAL_PAT_MOD: /* 'g' */
-			if (SIZE_ONLY && ckWARN(WARN_REGEXP)) {
-			    const I32 wflagbit = *RExC_parse == 'o' ? WASTED_O : WASTED_G;
-			    if (! (wastedflags & wflagbit) ) {
-				wastedflags |= wflagbit;
-				vWARN5(
-				    RExC_parse + 1,
-				    "Useless (%s%c) - %suse /%c modifier",
-				    flagsp == &negflags ? "?-" : "?",
-				    *RExC_parse,
-				    flagsp == &negflags ? "don't " : "",
-				    *RExC_parse
-				);
-			    }
-			}
-			break;
-		        
-		    case CONTINUE_PAT_MOD: /* 'c' */
-			if (SIZE_ONLY && ckWARN(WARN_REGEXP)) {
-			    if (! (wastedflags & WASTED_C) ) {
-				wastedflags |= WASTED_GC;
-				vWARN3(
-				    RExC_parse + 1,
-				    "Useless (%sc) - %suse /gc modifier",
-				    flagsp == &negflags ? "?-" : "?",
-				    flagsp == &negflags ? "don't " : ""
-				);
-			    }
-			}
-			break;
-	            case KEEPCOPY_PAT_MOD: /* 'p' */
-                        if (flagsp == &negflags) {
-                            if (SIZE_ONLY)
-                                ckWARNreg(RExC_parse + 1,"Useless use of (?-p)");
-                        } else {
-                            *flagsp |= RXf_PMf_KEEPCOPY;
-                        }
-	                break;
-                    case '-':
-                        /* A flag is a default iff it is following a minus, so
-                         * if there is a minus, it means will be trying to
-                         * re-specify a default which is an error */
-                        if (has_use_defaults || flagsp == &negflags) {
-            fail_modifiers:
-                            RExC_parse++;
-		            vFAIL3("Sequence (%.*s...) not recognized", RExC_parse-seqstart, seqstart);
-		            /*NOTREACHED*/
-		        }
-			flagsp = &negflags;
-		        wastedflags = 0;  /* reset so (?g-c) warns twice */
-		        break;
-                    case ':':
-		        paren = ':';
-		        /*FALLTHROUGH*/
-                    case ')':
-                        RExC_flags |= posflags;
-                        RExC_flags &= ~negflags;
-			set_regex_charset(&RExC_flags, cs);
-                        if (paren != ':') {
-                            oregflags |= posflags;
-                            oregflags &= ~negflags;
-			    set_regex_charset(&oregflags, cs);
-                        }
-                        nextchar(pRExC_state);
-		        if (paren != ':') {
-		            *flagp = TRYAGAIN;
-		            return NULL;
-		        } else {
-                            ret = NULL;
-		            goto parse_rest;
-		        }
-		        /*NOTREACHED*/
-                    default:
-		        RExC_parse++;
-		        vFAIL3("Sequence (%.*s...) not recognized", RExC_parse-seqstart, seqstart);
-		        /*NOTREACHED*/
-                    }                           
-		    ++RExC_parse;
-		}
-	    }} /* one for the default block, one for the switch */
+              parse_flags:
+		parse_lparen_question_flags(pRExC_state);
+                if (UCHARAT(RExC_parse) != ':') {
+                    nextchar(pRExC_state);
+                    *flagp = TRYAGAIN;
+                    return NULL;
+                }
+                paren = ':';
+                nextchar(pRExC_state);
+                ret = NULL;
+                goto parse_rest;
+            } /* end switch */
 	}
 	else {                  /* (...) */
 	  capturing_parens:
@@ -10251,7 +10280,7 @@ tryagain:
 	    FLAGS(ret) = get_regex_charset(RExC_flags);
 	    *flagp |= SIMPLE;
 	    if (! SIZE_ONLY && (U8) *(RExC_parse + 1) == '{') {
-		ckWARNregdep(RExC_parse, "\"\\b{\" is deprecated; use \"\\b\\{\" instead");
+		ckWARNdep(RExC_parse, "\"\\b{\" is deprecated; use \"\\b\\{\" or \"\\b[{]\" instead");
 	    }
 	    goto finish_meta_pat;
 	case 'B':
@@ -10265,7 +10294,7 @@ tryagain:
 	    FLAGS(ret) = get_regex_charset(RExC_flags);
 	    *flagp |= SIMPLE;
 	    if (! SIZE_ONLY && (U8) *(RExC_parse + 1) == '{') {
-		ckWARNregdep(RExC_parse, "\"\\B{\" is deprecated; use \"\\B\\{\" instead");
+		ckWARNdep(RExC_parse, "\"\\B{\" is deprecated; use \"\\B\\{\" or \"\\B[{]\" instead");
 	    }
 	    goto finish_meta_pat;
 
@@ -10774,9 +10803,19 @@ tryagain:
 			    ckWARN3reg(p + len, "Unrecognized escape \\%.*s passed through", len, p);
 			}
 			goto normal_default;
-		    }
+		    } /* End of switch on '\' */
 		    break;
-		default:
+		default:    /* A literal character */
+
+                    if (! SIZE_ONLY
+                        && RExC_flags & RXf_PMf_EXTENDED
+                        && ckWARN(WARN_DEPRECATED)
+                        && is_PATWS_non_low(p, UTF))
+                    {
+                        vWARN_dep(p + ((UTF) ? UTF8SKIP(p) : 1),
+                                "Escape literal pattern white space under /x");
+                    }
+
 		  normal_default:
 		    if (UTF8_IS_START(*p) && UTF) {
 			STRLEN numlen;
@@ -11325,7 +11364,7 @@ S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value, SV *free_me,
 }
 
 STATIC bool
-S_could_it_be_POSIX(pTHX_ RExC_state_t *pRExC_state)
+S_could_it_be_a_POSIX_class(pTHX_ RExC_state_t *pRExC_state)
 {
     /* This applies some heuristics at the current parse position (which should
      * be at a '[') to see if what follows might be intended to be a [:posix:]
@@ -11339,7 +11378,7 @@ S_could_it_be_POSIX(pTHX_ RExC_state_t *pRExC_state)
      *                         ')' indicating the end of the (?[
      *      [:any garbage including %^&$ punctuation:]
      *
-     * This is designed to be called only from S_handle_sets; it could be
+     * This is designed to be called only from S_handle_regex_sets; it could be
      * easily adapted to be called from the spot at the beginning of regclass()
      * that checks to see in a normal bracketed class if the surrounding []
      * have been omitted ([:word:] instead of [[:word:]]).  But doing so would
@@ -11347,7 +11386,7 @@ S_could_it_be_POSIX(pTHX_ RExC_state_t *pRExC_state)
     char* p = RExC_parse + 1;
     char first_char = *p;
 
-    PERL_ARGS_ASSERT_COULD_IT_BE_POSIX;
+    PERL_ARGS_ASSERT_COULD_IT_BE_A_POSIX_CLASS;
 
     assert(*(p - 1) == '[');
 
@@ -11378,7 +11417,7 @@ S_could_it_be_POSIX(pTHX_ RExC_state_t *pRExC_state)
 }
 
 STATIC regnode *
-S_handle_sets(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
+S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist, I32 *flagp, U32 depth,
                    char * const oregcomp_parse)
 {
     /* Handle the (?[...]) construct to do set operations */
@@ -11395,7 +11434,7 @@ S_handle_sets(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 
     GET_RE_DEBUG_FLAGS_DECL;
 
-    PERL_ARGS_ASSERT_HANDLE_SETS;
+    PERL_ARGS_ASSERT_HANDLE_REGEX_SETS;
 
     if (LOC) {
         vFAIL("(?[...]) not valid in locale");
@@ -11424,19 +11463,23 @@ S_handle_sets(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                 default:
                     break;
                 case '\\':
-                    /* Skip the next byte.  This would have to change to skip
-                     * the next character if we were to recognize and handle
-                     * specific non-ASCIIs */
+                    /* Skip the next byte (which could cause us to end up in
+                     * the middle of a UTF-8 character, but since none of those
+                     * are confusable with anything we currently handle in this
+                     * switch (invariants all), it's safe.  We'll just hit the
+                     * default: case next time and keep on incrementing until
+                     * we find one of the invariants we do handle. */
                     RExC_parse++;
                     break;
                 case '[':
                 {
                     /* If this looks like it is a [:posix:] class, leave the
                      * parse pointer at the '[' to fool regclass() into
-                     * thinking it is part of a '[[:posix]]'.  That function
+                     * thinking it is part of a '[[:posix:]]'.  That function
                      * will use strict checking to force a syntax error if it
                      * doesn't work out to a legitimate class */
-                    bool is_posix_class = could_it_be_POSIX(pRExC_state);
+                    bool is_posix_class
+                                    = could_it_be_a_POSIX_class(pRExC_state);
                     if (! is_posix_class) {
                         RExC_parse++;
                     }
@@ -11508,29 +11551,96 @@ S_handle_sets(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
      * above.
      *
      * A '(' is simply pushed on the stack; it is valid only if the stack is
-     * empty, or the top element of the stack is an operator (for which the
-     * parenthesized expression will become an operand).  By the time the
-     * corresponding ')' is parsed everything in between should have been
-     * parsed and evaluated to a single operand (or else is a syntax error),
-     * and is handled as a regular operand */
+     * empty, or the top element of the stack is an operator or another '('
+     * (for which the parenthesized expression will become an operand).  By the
+     * time the corresponding ')' is parsed everything in between should have
+     * been parsed and evaluated to a single operand (or else is a syntax
+     * error), and is handled as a regular operand */
 
     stack = newAV();
 
     while (RExC_parse < RExC_end) {
-        I32 top_index = av_top(stack);
+        I32 top_index = av_tindex(stack);
         SV** top_ptr;
         SV* current = NULL;
 
         /* Skip white space */
         RExC_parse = regpatws(pRExC_state, RExC_parse,
                                 TRUE); /* means recognize comments */
-        if (RExC_parse >= RExC_end
-            || (curchar = UCHARAT(RExC_parse)) == ']')
-        {   /* Exit loop at the end */
+        if (RExC_parse >= RExC_end) {
+            Perl_croak(aTHX_ "panic: Read past end of '(?[ ])'");
+        }
+        if ((curchar = UCHARAT(RExC_parse)) == ']') {
             break;
         }
 
         switch (curchar) {
+
+            case '?':
+                if (av_tindex(stack) >= 0   /* This makes sure that we can
+                                               safely subtract 1 from
+                                               RExC_parse in the next clause.
+                                               If we have something on the
+                                               stack, we have parsed something
+                                             */
+                    && UCHARAT(RExC_parse - 1) == '('
+                    && RExC_parse < RExC_end)
+                {
+                    /* If is a '(?', could be an embedded '(?flags:(?[...])'.
+                     * This happens when we have some thing like
+                     *
+                     *   my $thai_or_lao = qr/(?[ \p{Thai} + \p{Lao} ])/;
+                     *   ...
+                     *   qr/(?[ \p{Digit} & $thai_or_lao ])/;
+                     *
+                     * Here we would be handling the interpolated
+                     * '$thai_or_lao'.  We handle this by a recursive call to
+                     * ourselves which returns the inversion list the
+                     * interpolated expression evaluates to.  We use the flags
+                     * from the interpolated pattern. */
+                    U32 save_flags = RExC_flags;
+                    const char * const save_parse = ++RExC_parse;
+
+                    parse_lparen_question_flags(pRExC_state);
+
+                    if (RExC_parse == save_parse  /* Makes sure there was at
+                                                     least one flag (or this
+                                                     embedding wasn't compiled)
+                                                   */
+                        || RExC_parse >= RExC_end - 4
+                        || UCHARAT(RExC_parse) != ':'
+                        || UCHARAT(++RExC_parse) != '('
+                        || UCHARAT(++RExC_parse) != '?'
+                        || UCHARAT(++RExC_parse) != '[')
+                    {
+
+                        /* In combination with the above, this moves the
+                         * pointer to the point just after the first erroneous
+                         * character (or if there are no flags, to where they
+                         * should have been) */
+                        if (RExC_parse >= RExC_end - 4) {
+                            RExC_parse = RExC_end;
+                        }
+                        else if (RExC_parse != save_parse) {
+                            RExC_parse += (UTF) ? UTF8SKIP(RExC_parse) : 1;
+                        }
+                        vFAIL("Expecting '(?flags:(?[...'");
+                    }
+                    RExC_parse++;
+                    (void) handle_regex_sets(pRExC_state, &current, flagp,
+                                                    depth+1, oregcomp_parse);
+
+                    /* Here, 'current' contains the embedded expression's
+                     * inversion list, and RExC_parse points to the trailing
+                     * ']'; the next character should be the ')' which will be
+                     * paired with the '(' that has been put on the stack, so
+                     * the whole embedded expression reduces to '(operand)' */
+                    RExC_parse++;
+
+                    RExC_flags = save_flags;
+                    goto handle_operand;
+                }
+                /* FALL THROUGH */
 
             default:
                 RExC_parse += (UTF) ? UTF8SKIP(RExC_parse) : 1;
@@ -11550,7 +11660,7 @@ S_handle_sets(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 
             case '[':   /* Is a bracketed character class */
             {
-                bool is_posix_class = could_it_be_POSIX(pRExC_state);
+                bool is_posix_class = could_it_be_a_POSIX_class(pRExC_state);
 
                 if (! is_posix_class) {
                     RExC_parse++;
@@ -11704,19 +11814,24 @@ S_handle_sets(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
         RExC_parse += (UTF) ? UTF8SKIP(RExC_parse) : 1;
     }
 
-    if (av_top(stack) < 0   /* Was empty */
+    if (av_tindex(stack) < 0   /* Was empty */
         || ((final = av_pop(stack)) == NULL)
         || ! IS_OPERAND(final)
-        || av_top(stack) >= 0)  /* More left on stack */
+        || av_tindex(stack) >= 0)  /* More left on stack */
     {
         vFAIL("Incomplete expression within '(?[ ])'");
     }
 
-    invlist_iterinit(final);
+    /* Here, 'final' is the resultant inversion list from evaluating the
+     * expression.  Return it if so requested */
+    if (return_invlist) {
+        *return_invlist = final;
+        return END;
+    }
 
-    /* Here, 'final' is the resultant inversion list of evaluating the
-     * expression.  Feed it to regclass() to generate the real resultant node.
-     * regclass() is expecting a string of ranges and individual code points */
+    /* Otherwise generate a resultant node, based on 'final'.  regclass() is
+     * expecting a string of ranges and individual code points */
+    invlist_iterinit(final);
     result_string = newSVpvs("");
     while (invlist_iternext(final, &start, &end)) {
         if (start == end) {
@@ -14871,10 +14986,6 @@ Perl_re_dup_guts(pTHX_ const REGEXP *sstr, REGEXP *dstr, CLONE_PARAMS *param)
     npar = r->nparens+1;
     Newx(ret->offs, npar, regexp_paren_pair);
     Copy(r->offs, ret->offs, npar, regexp_paren_pair);
-    if(ret->swap) {
-        /* no need to copy these */
-        Newx(ret->swap, npar, regexp_paren_pair);
-    }
 
     if (ret->substrs) {
 	/* Do it this way to avoid reading from *r after the StructCopy().

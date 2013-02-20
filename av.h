@@ -47,7 +47,10 @@ Null AV pointer.
 =head1 Array Manipulation Functions
 
 =for apidoc Am|int|AvFILL|AV* av
-Same as C<av_top()>.  Deprecated, use C<av_top()> instead.
+Same as C<av_top_index()>.  Deprecated, use C<av_top_index()> instead.
+
+=for apidoc Am|int|av_tindex|AV* av
+Same as C<av_top_index()>.
 
 =cut
 */
@@ -75,6 +78,7 @@ Same as C<av_top()>.  Deprecated, use C<av_top()> instead.
                                           
 #define AvFILL(av)	((SvRMAGICAL((const SV *) (av))) \
 			 ? mg_size(MUTABLE_SV(av)) : AvFILLp(av))
+#define av_tindex(av)   av_top_index(av)
 
 #define NEGATIVE_INDICES_VAR "NEGATIVE_INDICES"
 

@@ -227,10 +227,14 @@ PERL_CALLCONV SV**	Perl_av_store(pTHX_ AV *av, I32 key, SV *val)
 #define PERL_ARGS_ASSERT_AV_STORE	\
 	assert(av)
 
-PERL_CALLCONV I32	Perl_av_top(pTHX_ AV *av)
+/* PERL_CALLCONV I32	Perl_av_tindex(pTHX_ AV *av)
+			__attribute__warn_unused_result__
+			__attribute__nonnull__(pTHX_1); */
+
+PERL_STATIC_INLINE I32	S_av_top_index(pTHX_ AV *av)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1);
-#define PERL_ARGS_ASSERT_AV_TOP	\
+#define PERL_ARGS_ASSERT_AV_TOP_INDEX	\
 	assert(av)
 
 PERL_CALLCONV void	Perl_av_undef(pTHX_ AV *av)
@@ -1549,7 +1553,7 @@ PERL_CALLCONV STRLEN	Perl_hv_fill(pTHX_ HV const *const hv)
 #define PERL_ARGS_ASSERT_HV_FILL	\
 	assert(hv)
 
-PERL_CALLCONV void	Perl_hv_free_ent(pTHX_ HV *hv, HE *entryK)
+PERL_CALLCONV void	Perl_hv_free_ent(pTHX_ HV *hv, HE *entry)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_HV_FREE_ENT	\
 	assert(hv)
@@ -5708,10 +5712,11 @@ STATIC struct xpvhv_aux*	S_hv_auxinit(HV *hv)
 	assert(hv)
 
 STATIC SV*	S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen, int k_flags, I32 d_flags, U32 hash);
-STATIC SV*	S_hv_free_ent_ret(pTHX_ HV *hv, HE *entryK)
-			__attribute__nonnull__(pTHX_1);
+STATIC SV*	S_hv_free_ent_ret(pTHX_ HV *hv, HE *entry)
+			__attribute__nonnull__(pTHX_1)
+			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_HV_FREE_ENT_RET	\
-	assert(hv)
+	assert(hv); assert(entry)
 
 STATIC void	S_hv_magic_check(HV *hv, bool *needs_copy, bool *needs_store)
 			__attribute__nonnull__(1)
@@ -6480,9 +6485,9 @@ PERL_STATIC_INLINE U8	S_compute_EXACTish(pTHX_ struct RExC_state_t *pRExC_state)
 #define PERL_ARGS_ASSERT_COMPUTE_EXACTISH	\
 	assert(pRExC_state)
 
-STATIC bool	S_could_it_be_POSIX(pTHX_ struct RExC_state_t *pRExC_state)
+STATIC bool	S_could_it_be_a_POSIX_class(pTHX_ struct RExC_state_t *pRExC_state)
 			__attribute__nonnull__(pTHX_1);
-#define PERL_ARGS_ASSERT_COULD_IT_BE_POSIX	\
+#define PERL_ARGS_ASSERT_COULD_IT_BE_A_POSIX_CLASS	\
 	assert(pRExC_state)
 
 PERL_STATIC_INLINE UV*	S_get_invlist_iter_addr(pTHX_ SV* invlist)
@@ -6515,11 +6520,11 @@ STATIC bool	S_grok_bslash_N(pTHX_ struct RExC_state_t *pRExC_state, regnode** no
 #define PERL_ARGS_ASSERT_GROK_BSLASH_N	\
 	assert(pRExC_state); assert(flagp)
 
-STATIC regnode*	S_handle_sets(pTHX_ struct RExC_state_t *pRExC_state, I32 *flagp, U32 depth, char * const oregcomp_parse)
+STATIC regnode*	S_handle_regex_sets(pTHX_ struct RExC_state_t *pRExC_state, SV ** return_invlist, I32 *flagp, U32 depth, char * const oregcomp_parse)
 			__attribute__nonnull__(pTHX_1)
-			__attribute__nonnull__(pTHX_2)
-			__attribute__nonnull__(pTHX_4);
-#define PERL_ARGS_ASSERT_HANDLE_SETS	\
+			__attribute__nonnull__(pTHX_3)
+			__attribute__nonnull__(pTHX_5);
+#define PERL_ARGS_ASSERT_HANDLE_REGEX_SETS	\
 	assert(pRExC_state); assert(flagp); assert(oregcomp_parse)
 
 PERL_STATIC_INLINE UV*	S_invlist_array(pTHX_ SV* const invlist)
@@ -6623,6 +6628,11 @@ STATIC void	S_make_trie_failtable(pTHX_ struct RExC_state_t *pRExC_state, regnod
 STATIC char *	S_nextchar(pTHX_ struct RExC_state_t *pRExC_state)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_NEXTCHAR	\
+	assert(pRExC_state)
+
+STATIC void	S_parse_lparen_question_flags(pTHX_ struct RExC_state_t *pRExC_state)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_PARSE_LPAREN_QUESTION_FLAGS	\
 	assert(pRExC_state)
 
 PERL_STATIC_NO_RET void	S_re_croak2(pTHX_ const char* pat1, const char* pat2, ...)

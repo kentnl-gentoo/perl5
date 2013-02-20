@@ -4688,7 +4688,7 @@ an explicit repeat count for pack, the packed string is adjusted to that
 length.  For example:
 
  This code:                             gives this result:
- 
+
  unpack("W/a", "\004Gurusamy")          ("Guru")
  unpack("a3/A A*", "007 Bond  J ")      (" Bond", "J")
  unpack("a3 x2 /A A*", "007: Bond, J.") ("Bond, J", ".")
@@ -6616,32 +6616,32 @@ Examples:
 
     # sort lexically
     @articles = sort @files;
-    
+
     # same thing, but with explicit sort routine
     @articles = sort {$a cmp $b} @files;
-    
+
     # now case-insensitively
     @articles = sort {fc($a) cmp fc($b)} @files;
-    
+
     # same thing in reversed order
     @articles = sort {$b cmp $a} @files;
-    
+
     # sort numerically ascending
     @articles = sort {$a <=> $b} @files;
-    
+
     # sort numerically descending
     @articles = sort {$b <=> $a} @files;
-    
+
     # this sorts the %age hash by value instead of key
     # using an in-line function
     @eldest = sort { $age{$b} <=> $age{$a} } keys %age;
-    
+
     # sort using explicit subroutine name
     sub byage {
         $age{$a} <=> $age{$b};  # presuming numeric
     }
     @sortedclass = sort byage @class;
-    
+
     sub backwards { $b cmp $a }
     @harry  = qw(dog cat x Cain Abel);
     @george = qw(gone chased yz Punished Axed);
@@ -6692,11 +6692,11 @@ Examples:
                                              # not set here    
     package main;
     @new = sort other::backwards @old;
-    
+
     # guarantee stability, regardless of algorithm
     use sort 'stable';
     @new = sort { substr($a, 3, 5) cmp substr($b, 3, 5) } @old;
-    
+
     # force use of mergesort (not portable outside Perl 5.8)
     use sort '_mergesort';  # note discouraging _
     @new = sort { substr($a, 3, 5) cmp substr($b, 3, 5) } @old;
@@ -7112,7 +7112,7 @@ or from a specified argument (e.g., with C<*2$>):
  printf "<%s>", "a";       # prints "<a>"
  printf "<%6s>", "a";      # prints "<     a>"
  printf "<%*s>", 6, "a";   # prints "<     a>"
- printf "<%*2$s>", "a", 6; # prints "<     a>"
+ printf '<%*2$s>', "a", 6; # prints "<     a>"
  printf "<%2s>", "long";   # prints "<long>" (does not truncate)
 
 If a field width obtained through C<*> is negative, it has the same
@@ -7192,7 +7192,7 @@ You cannot currently get the precision from a specified number,
 but it is intended that this will be possible in the future, for
 example using C<.*2$>:
 
-  printf "<%.*2$x>", 1, 6;   # INVALID, but in future will print
+  printf '<%.*2$x>', 1, 6;   # INVALID, but in future will print
                              # "<000001>"
 
 =item size
@@ -7205,10 +7205,10 @@ bits), but you can override this to use instead one of the standard C types,
 as supported by the compiler used to build Perl:
 
    hh          interpret integer as C type "char" or "unsigned
-	       char" on Perl 5.14 or later
+               char" on Perl 5.14 or later
    h           interpret integer as C type "short" or
                "unsigned short"
-   j	       interpret integer as C type "intmax_t" on Perl
+   j           interpret integer as C type "intmax_t" on Perl
                5.14 or later, and only with a C99 compiler
                (unportable)
    l           interpret integer as C type "long" or
@@ -7216,9 +7216,9 @@ as supported by the compiler used to build Perl:
    q, L, or ll interpret integer as C type "long long",
                "unsigned long long", or "quad" (typically
                64-bit integers)
-   t	       interpret integer as C type "ptrdiff_t" on Perl
+   t           interpret integer as C type "ptrdiff_t" on Perl
                5.14 or later
-   z	       interpret integer as C type "size_t" on Perl 5.14
+   z           interpret integer as C type "size_t" on Perl 5.14
                or later
 
 As of 5.14, none of these raises an exception if they are not supported on
@@ -7255,7 +7255,7 @@ floating-point size to use on your platform via L<Config>:
 
     use Config;
     if ($Config{uselongdouble} eq "define") {
-	print "long doubles by default\n";
+        print "long doubles by default\n";
     }
 
 It can also be that long doubles and doubles are the same thing:
@@ -7286,7 +7286,7 @@ So:
 uses C<$a> for the width, C<$b> for the precision, and C<$c>
 as the value to format; while:
 
-  printf "<%*1$.*s>", $a, $b;
+  printf '<%*1$.*s>', $a, $b;
 
 would use C<$a> for the width and precision, and C<$b> as the
 value to format.

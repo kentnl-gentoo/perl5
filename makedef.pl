@@ -452,7 +452,7 @@ unless ($define{PERL_MAD}) {
 unless ($define{'MULTIPLICITY'}) {
     ++$skip{$_} foreach qw(
 		    PL_interp_size
-		    PL_interp_size_5_16_0
+		    PL_interp_size_5_18_0
 			 );
 }
 
@@ -530,7 +530,8 @@ if ($define{'PERL_GLOBAL_STRUCT'}) {
     # is mentioned in perlvar.h and globvar.sym, and always exported.
     delete $skip{PL_sh_path};
     ++$export{Perl_GetVars};
-    try_symbols(qw(PL_Vars PL_VarsPtr)) unless $ARGS{CCTYPE} eq 'GCC';
+    try_symbols(qw(PL_Vars PL_VarsPtr))
+      unless $ARGS{CCTYPE} eq 'GCC' || $define{PERL_GLOBAL_STRUCT_PRIVATE};
 } else {
     ++$skip{$_} foreach qw(Perl_init_global_struct Perl_free_global_struct);
 }
@@ -742,7 +743,7 @@ if ($define{'USE_PERLIO'}) {
     foreach (@$embed) {
 	my ($flags, $retval, $func, @args) = @$_;
 	next unless $func;
-	if ($flags =~ /[AX]/ && $flags !~ /[xm]/ || $flags =~ /b/) {
+	if ($flags =~ /[AX]/ && $flags !~ /[xmi]/ || $flags =~ /b/) {
 	    # public API, so export
 
 	    # If a function is defined twice, for example before and after

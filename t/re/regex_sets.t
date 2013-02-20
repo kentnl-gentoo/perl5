@@ -51,7 +51,39 @@ like("c", qr/(?[ [ab] ^ [bc] ])/, 'basic symmetric difference works');
 like("2", qr/(?[ ( ( \pN & ( [a] + [2] ) ) ) ])/, 'Nesting parens and grouping');
 unlike("a", qr/(?[ ( ( \pN & ( [a] + [2] ) ) ) ])/, 'Nesting parens and grouping');
 
+unlike("\x{17f}", qr/(?[ [k] + \p{Blk=ASCII} ])/i, '/i doesn\'t affect \p{}');
+like("\N{KELVIN SIGN}", qr/(?[ [k] + \p{Blk=ASCII} ])/i, '/i does affect literals');
 
+my $thai_or_lao = qr/(?[ \p{Thai} + \p{Lao} ])/;
+my $thai_or_lao_digit = qr/(?[ \p{Digit} & $thai_or_lao ])/;
+like("\N{THAI DIGIT ZERO}", $thai_or_lao_digit, 'embedded qr/(?[ ])/ works');
+unlike(chr(ord("\N{THAI DIGIT ZERO}") - 1), $thai_or_lao_digit, 'embedded qr/(?[ ])/ works');
+like("\N{THAI DIGIT NINE}", $thai_or_lao_digit, 'embedded qr/(?[ ])/ works');
+unlike(chr(ord("\N{THAI DIGIT NINE}") + 1), $thai_or_lao_digit, 'embedded qr/(?[ ])/ works');
+like("\N{LAO DIGIT ZERO}", $thai_or_lao_digit, 'embedded qr/(?[ ])/ works');
+unlike(chr(ord("\N{LAO DIGIT ZERO}") - 1), $thai_or_lao_digit, 'embedded qr/(?[ ])/ works');
+like("\N{LAO DIGIT NINE}", $thai_or_lao_digit, 'embedded qr/(?[ ])/ works');
+unlike(chr(ord("\N{LAO DIGIT NINE}") + 1), $thai_or_lao_digit, 'embedded qr/(?[ ])/ works');
+
+my $ascii_word = qr/(?[ \w ])/a;
+my $ascii_digits_plus_all_of_arabic = qr/(?[ \p{Digit} & $ascii_word + \p{Arabic} ])/;
+like("9", $ascii_digits_plus_all_of_arabic, "/a, then interpolating and intersection works for ASCII in the set");
+unlike("A", $ascii_digits_plus_all_of_arabic, "/a, then interpolating and intersection works for ASCII not in the set");
+unlike("\N{BENGALI DIGIT ZERO}", $ascii_digits_plus_all_of_arabic, "/a, then interpolating and intersection works for non-ASCII not in either set");
+unlike("\N{BENGALI LETTER A}", $ascii_digits_plus_all_of_arabic, "/a, then interpolating and intersection works for non-ASCII in one set");
+like("\N{ARABIC LETTER HAMZA}", $ascii_digits_plus_all_of_arabic, "interpolation and intersection is left-associative");
+like("\N{EXTENDED ARABIC-INDIC DIGIT ZERO}", $ascii_digits_plus_all_of_arabic, "interpolation and intersection is left-associative");
+
+my $kelvin = qr/(?[ \N{KELVIN SIGN} ])/;
+my $fold = qr/(?[ $kelvin ])/i;
+like("\N{KELVIN SIGN}", $kelvin, '"\N{KELVIN SIGN}" matches compiled qr/(?[ \N{KELVIN SIGN} ])/');
+unlike("K", $fold, "/i on outer (?[ ]) doesn't leak to interpolated one");
+unlike("k", $fold, "/i on outer (?[ ]) doesn't leak to interpolated one");
+
+my $kelvin_fold = qr/(?[ \N{KELVIN SIGN} ])/i;
+my $still_fold = qr/(?[ $kelvin_fold ])/;
+like("K", $still_fold, "/i on interpolated (?[ ]) is retained in outer without /i");
+like("k", $still_fold, "/i on interpolated (?[ ]) is retained in outer without /i");
 
 done_testing();
 
