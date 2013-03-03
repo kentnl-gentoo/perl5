@@ -3088,6 +3088,7 @@ Perl_sv_compile_2op_is_broken(pTHX_ SV *sv, OP **startop, const char *code,
     CV* runcv = NULL;	/* initialise to avoid compiler warnings */
     STRLEN len;
     bool need_catch;
+    OP* ret;
 
     PERL_ARGS_ASSERT_SV_COMPILE_2OP_IS_BROKEN;
 
@@ -3182,7 +3183,9 @@ Perl_sv_compile_2op_is_broken(pTHX_ SV *sv, OP **startop, const char *code,
     PERL_UNUSED_VAR(newsp);
     PERL_UNUSED_VAR(optype);
 
-    return PL_eval_start;
+    ret = PL_eval_start;
+    PL_eval_start = NULL;
+    return ret;
 }
 
 
@@ -3903,8 +3906,10 @@ PP(pp_require)
     encoding = PL_encoding;
     PL_encoding = NULL;
 
-    if (doeval(gimme, NULL, NULL, PL_curcop->cop_seq))
+    if (doeval(gimme, NULL, NULL, PL_curcop->cop_seq)) {
 	op = DOCATCH(PL_eval_start);
+	PL_eval_start = NULL;
+    }
     else
 	op = PL_op->op_next;
 
@@ -4029,6 +4034,7 @@ PP(pp_entereval)
     PUTBACK;
 
     if (doeval(gimme, NULL, runcv, seq)) {
+	OP *ret;
 	if (was != PL_breakable_sub_gen /* Some subs defined here. */
 	    ? (PERLDB_LINE || PERLDB_SAVESRC)
 	    :  PERLDB_SAVESRC_NOSUBS) {
@@ -4037,7 +4043,9 @@ PP(pp_entereval)
 	    char *const safestr = savepvn(tmpbuf, len);
 	    SAVEDELETE(PL_defstash, safestr, len);
 	}
-	return DOCATCH(PL_eval_start);
+	ret = DOCATCH(PL_eval_start);
+	PL_eval_start = NULL;
+	return ret;
     } else {
 	/* We have already left the scope set up earlier thanks to the LEAVE
 	   in doeval().  */
@@ -4339,14 +4347,14 @@ S_destroy_matcher(pTHX_ PMOP *matcher)
 PP(pp_smartmatch)
 {
     DEBUG_M(Perl_deb(aTHX_ "Starting smart match resolution\n"));
-    return do_smartmatch(NULL, NULL);
+    return do_smartmatch(NULL, NULL, 0);
 }
 
 /* This version of do_smartmatch() implements the
  * table of smart matches that is found in perlsyn.
  */
 STATIC OP *
-S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
+S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 {
     dVAR;
     dSP;
@@ -4358,7 +4366,7 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
     /* Take care only to invoke mg_get() once for each argument.
      * Currently we do this by copying the SV if it's magical. */
     if (d) {
-	if (SvGMAGICAL(d))
+	if (!copied && SvGMAGICAL(d))
 	    d = sv_mortalcopy(d);
     }
     else
@@ -4669,7 +4677,7 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
 			
 			PUTBACK;
 			DEBUG_M(Perl_deb(aTHX_ "        recursively comparing array element...\n"));
-			(void) do_smartmatch(seen_this, seen_other);
+			(void) do_smartmatch(seen_this, seen_other, 0);
 			SPAGAIN;
 			DEBUG_M(Perl_deb(aTHX_ "        recursion finished\n"));
 			
@@ -4731,7 +4739,7 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
 		    PUTBACK;
 		    /* infinite recursion isn't supposed to happen here */
 		    DEBUG_M(Perl_deb(aTHX_ "        recursively testing array element...\n"));
-		    (void) do_smartmatch(NULL, NULL);
+		    (void) do_smartmatch(NULL, NULL, 1);
 		    SPAGAIN;
 		    DEBUG_M(Perl_deb(aTHX_ "        recursion finished\n"));
 		    if (SvTRUEx(POPs))
