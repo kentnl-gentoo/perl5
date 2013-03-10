@@ -2,7 +2,7 @@ package Module::CoreList;
 use strict;
 use vars qw/$VERSION %released %version %families %upstream
 	    %bug_tracker %deprecated/;
-$VERSION = '2.49_06';
+$VERSION = '2.49_07';
 
 =head1 NAME
 
@@ -351,7 +351,7 @@ sub removed_raw {
     5.014001 => '2011-06-16',
     5.014002 => '2011-09-26',
     5.014003 => '2012-10-12',
-    5.014004 => '????-??-??',
+    5.014004 => '2013-03-10',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
