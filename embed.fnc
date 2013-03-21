@@ -1106,7 +1106,7 @@ Ap	|REGEXP*|pregcomp	|NN SV * const pattern|const U32 flags
 p	|REGEXP*|re_op_compile	|NULLOK SV ** const patternp \
 				|int pat_count|NULLOK OP *expr \
 				|NN const regexp_engine* eng \
-				|NULLOK REGEXP *VOL old_re \
+				|NULLOK REGEXP *old_re \
 				|NULLOK bool *is_bare_re \
 				|U32 rx_flags|U32 pm_flags
 Ap	|REGEXP*|re_compile	|NN SV * const pattern|U32 orig_rx_flags
@@ -1769,7 +1769,7 @@ po	|SV*	|hfree_next_entry	|NN HV *hv|NN STRLEN *indexp
 #endif
 
 #if defined(PERL_IN_HV_C)
-s	|void	|hsplit		|NN HV *hv
+s	|void	|hsplit		|NN HV *hv|STRLEN const oldsize|STRLEN newsize
 s	|void	|hfreeentries	|NN HV *hv
 s	|SV*	|hv_free_ent_ret|NN HV *hv|NN HE *entry
 sa	|HE*	|new_he
@@ -1778,7 +1778,8 @@ sn	|void	|hv_magic_check	|NN HV *hv|NN bool *needs_copy|NN bool *needs_store
 s	|void	|unshare_hek_or_pvn|NULLOK const HEK* hek|NULLOK const char* str|I32 len|U32 hash
 sR	|HEK*	|share_hek_flags|NN const char *str|I32 len|U32 hash|int flags
 rs	|void	|hv_notallowed	|int flags|NN const char *key|I32 klen|NN const char *msg
-sn	|struct xpvhv_aux*|hv_auxinit|NN HV *hv
+sn      |U32|ptr_hash|PTRV u
+s	|struct xpvhv_aux*|hv_auxinit|NN HV *hv
 sM	|SV*	|hv_delete_common|NULLOK HV *hv|NULLOK SV *keysv \
 		|NULLOK const char *key|STRLEN klen|int k_flags|I32 d_flags \
 		|U32 hash
@@ -2036,7 +2037,7 @@ EsRn	|U32	|add_data	|NN struct RExC_state_t *pRExC_state|U32 n \
 				|NN const char *s
 rs	|void	|re_croak2	|NN const char* pat1|NN const char* pat2|...
 Ei	|I32	|regpposixcc	|NN struct RExC_state_t *pRExC_state \
-				|I32 value|NULLOK SV *free_me|const bool strict
+				|I32 value|const bool strict
 Es	|I32	|make_trie	|NN struct RExC_state_t *pRExC_state \
 				|NN regnode *startbranch|NN regnode *first \
 				|NN regnode *last|NN regnode *tail \
@@ -2239,6 +2240,9 @@ so	|SV*	|new_constant	|NULLOK const char *s|STRLEN len \
 				|STRLEN typelen
 s	|int	|deprecate_commaless_var_list
 s	|int	|ao		|int toketype
+s  |void|parse_ident|NN char **s|NN char **d \
+                     |NN char * const e|int allow_package \
+                     |bool is_utf8
 #  if defined(PERL_CR_FILTER)
 s	|I32	|cr_textfilter	|int idx|NULLOK SV *sv|int maxlen
 s	|void	|strip_return	|NN SV *sv

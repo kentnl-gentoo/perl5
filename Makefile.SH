@@ -305,7 +305,7 @@ RUN = $run
 
 # These variables may need to be manually set for non-Unix systems.
 AR = $full_ar
-HOST_EXE_EXT = 
+HOST_EXE_EXT = $_exe
 EXE_EXT = $_exe
 LIB_EXT = $_a
 OBJ_EXT = $_o
@@ -465,7 +465,7 @@ unidatafiles = lib/unicore/Decomposition.pl lib/unicore/TestProp.pl \
 unidatadirs = lib/unicore/To lib/unicore/lib
 
 h1 = EXTERN.h INTERN.h XSUB.h av.h $(CONFIGH) cop.h cv.h dosish.h
-h2 = embed.h form.h gv.h handy.h hv.h keywords.h mg.h op.h opcode.h
+h2 = embed.h form.h gv.h handy.h hv.h hv_func.h keywords.h mg.h op.h opcode.h
 h3 = pad.h patchlevel.h perl.h perlapi.h perly.h pp.h proto.h regcomp.h
 h4 = regexp.h scope.h sv.h unixish.h util.h iperlsys.h thread.h
 h5 = utf8.h warnings.h mydtrace.h op_reg_common.h l1_char_class_tab.h
@@ -491,7 +491,7 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5179delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl51710delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -1067,9 +1067,9 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) $(Icwd) pod/perlmodlib.PL -q
 
-pod/perl5179delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl5179delta.pod
-	$(LNS) perldelta.pod pod/perl5179delta.pod
+pod/perl51710delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl51710delta.pod
+	$(LNS) perldelta.pod pod/perl51710delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`

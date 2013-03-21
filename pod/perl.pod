@@ -179,6 +179,7 @@ aux a2p c2ph h2ph h2xs perlbug pl2pm pod2html pod2man s2p splain xsubpp
 
     perlhist		Perl history records
     perldelta		Perl changes since previous version
+    perl5179delta	Perl changes in version 5.17.9
     perl5178delta	Perl changes in version 5.17.8
     perl5177delta	Perl changes in version 5.17.7
     perl5176delta	Perl changes in version 5.17.6
@@ -190,7 +191,9 @@ aux a2p c2ph h2ph h2xs perlbug pl2pm pod2html pod2man s2p splain xsubpp
     perl5170delta	Perl changes in version 5.17.0
     perl5161delta	Perl changes in version 5.16.1
     perl5162delta	Perl changes in version 5.16.2
+    perl5163delta	Perl changes in version 5.16.3
     perl5160delta	Perl changes in version 5.16.0
+    perl5144delta	Perl changes in version 5.14.4
     perl5143delta	Perl changes in version 5.14.3
     perl5142delta	Perl changes in version 5.14.2
     perl5141delta	Perl changes in version 5.14.1
@@ -278,6 +281,12 @@ aux a2p c2ph h2ph h2xs perlbug pl2pm pod2html pod2man s2p splain xsubpp
 
 On a Unix-like system, these documentation files will usually also be
 available as manpages for use with the F<man> program.
+
+Some documentation is not available as man pages, so if a
+cross-reference is not found by man, try it with L<perldoc>.  Perldoc can
+also take you directly to documentation for functions (with the B<-f>
+switch). See C<perldoc --help> (or C<perldoc perldoc> or C<man perldoc>)
+for other helpful options L<perldoc> has to offer.
 
 In general, if something strange has gone wrong with your program and you're
 not sure where you should look for help, try making your code comply with

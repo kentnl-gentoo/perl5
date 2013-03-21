@@ -758,15 +758,12 @@ perl_destruct(pTHXx)
 
     PerlIO_destruct(aTHX);
 
-    if (PL_sv_objcount) {
-	/*
-	 * Try to destruct global references.  We do this first so that the
-	 * destructors and destructees still exist.  Some sv's might remain.
-	 * Non-referenced objects are on their own.
-	 */
-	sv_clean_objs();
-	PL_sv_objcount = 0;
-    }
+    /*
+     * Try to destruct global references.  We do this first so that the
+     * destructors and destructees still exist.  Some sv's might remain.
+     * Non-referenced objects are on their own.
+     */
+    sv_clean_objs();
 
     /* unhook hooks which will soon be, or use, destroyed data */
     SvREFCNT_dec(PL_warnhook);
@@ -3492,7 +3489,7 @@ S_minus_v(pTHX)
 #endif
 #ifdef __VOS__
 	PerlIO_printf(PIO_stdout,
-		      "Stratus VOS port by Paul.Green@stratus.com, 1997-2002\n");
+		      "Stratus OpenVOS port by Paul.Green@stratus.com, 1997-2013\n");
 #endif
 #ifdef POSIX_BC
 	PerlIO_printf(PIO_stdout,

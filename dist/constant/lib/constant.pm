@@ -4,7 +4,7 @@ use strict;
 use warnings::register;
 
 use vars qw($VERSION %declared);
-$VERSION = '1.25';
+$VERSION = '1.27';
 
 #=======================================================================
 
@@ -29,17 +29,8 @@ BEGIN {
     my $const = $] > 5.009002;
     *_CAN_PCS = sub () {$const};
 
-    # Before this makes its way into a dev perl release, we have to do
-    # browser-sniffing, as it were....
-    *{chr 256} = \3;
-    if (exists ${__PACKAGE__."::"}{"\xc4\x80"}) {
-	delete ${__PACKAGE__."::"}{"\xc4\x80"};
-	*_DOWNGRADE = sub () {1};
-    }
-    else {
-	delete ${__PACKAGE__."::"}{chr 256};
-	*_DOWNGRADE = sub () {0};
-    }
+    my $downgrade = $] < 5.015004; # && $] >= 5.008
+    *_DOWNGRADE = sub () { $downgrade };
 }
 
 #=======================================================================
@@ -370,9 +361,6 @@ C<< CONSTANT => 'value' >>.
 =head1 SEE ALSO
 
 L<Readonly> - Facility for creating read-only scalars, arrays, hashes.
-
-L<Const> - Facility for creating read-only variables. Similar to C<Readonly>,
-but uses C<SvREADONLY> instead of C<tie>.
 
 L<Attribute::Constant> - Make read-only variables via attribute
 

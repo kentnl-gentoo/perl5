@@ -783,14 +783,10 @@ cpan/Digest-SHA/Makefile.PL		Digest::SHA Makefile.PL
 cpan/Digest-SHA/README			Digest::SHA README
 cpan/Digest-SHA/shasum			shasum script
 cpan/Digest-SHA/SHA.xs			Digest::SHA extension
-cpan/Digest-SHA/src/hmac.c		Digest::SHA extension
-cpan/Digest-SHA/src/hmac.h		Digest::SHA extension
-cpan/Digest-SHA/src/hmacxtra.c		Digest::SHA extension
 cpan/Digest-SHA/src/sha64bit.c		Digest::SHA extension
 cpan/Digest-SHA/src/sha64bit.h		Digest::SHA extension
 cpan/Digest-SHA/src/sha.c		Digest::SHA extension
 cpan/Digest-SHA/src/sha.h		Digest::SHA extension
-cpan/Digest-SHA/src/shaxtra.c		Digest::SHA extension
 cpan/Digest-SHA/t/allfcns.t		See if Digest::SHA works
 cpan/Digest-SHA/t/base64.t		See if Digest::SHA works
 cpan/Digest-SHA/t/bitbuf.t		See if Digest::SHA works
@@ -1089,6 +1085,7 @@ cpan/ExtUtils-MakeMaker/t/installed_file.t			Test for ExtUtils::MakeMaker
 cpan/ExtUtils-MakeMaker/t/INST_PREFIX.t				See if MakeMaker can apply PREFIXs
 cpan/ExtUtils-MakeMaker/t/INST.t				Check MakeMaker INST_* macros
 cpan/ExtUtils-MakeMaker/t/is_of_type.t				Test for ExtUtils::MakeMaker
+cpan/ExtUtils-MakeMaker/t/Liblist_Kid.t				See if ExtUtils::Liblist works
 cpan/ExtUtils-MakeMaker/t/Liblist.t				See if ExtUtils::Liblist works
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/NoXS.pm		MakeMaker test utilities
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/BFD.pm	MakeMaker test utilities
@@ -1928,7 +1925,6 @@ cpan/perlfaq/lib/perlglossary.pod	Perl Glossary
 cpan/PerlIO-via-QuotedPrint/lib/PerlIO/via/QuotedPrint.pm	PerlIO::via::QuotedPrint
 cpan/PerlIO-via-QuotedPrint/t/QuotedPrint.t			PerlIO::via::QuotedPrint
 cpan/Perl-OSType/lib/Perl/OSType.pm			Perl::OSType
-cpan/Perl-OSType/t/00-compile.t			Perl::OSType
 cpan/Perl-OSType/t/OSType.t			Perl::OSType
 cpan/Pod-Checker/lib/Pod/Checker.pm
 cpan/Pod-Checker/scripts/podchecker.PL
@@ -2116,6 +2112,10 @@ cpan/Pod-Simple/t/corpus/encwarn01.txt			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/encwarn01.xml			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/encwarn02.txt			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/encwarn02.xml			Pod::Simple test file
+cpan/Pod-Simple/t/corpus/encwarn03.txt
+cpan/Pod-Simple/t/corpus/encwarn03.xml
+cpan/Pod-Simple/t/corpus/encwarn04.txt
+cpan/Pod-Simple/t/corpus/encwarn04.xml
 cpan/Pod-Simple/t/corpus/fet_cont.txt			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/fet_cont.xml			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/fet_dup.txt			Pod::Simple test file
@@ -2154,9 +2154,11 @@ cpan/Pod-Simple/t/corpus.t				Pod::Simple test file
 cpan/Pod-Simple/t/corpus/thai_iso11.txt			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/thai_iso11.xml			Pod::Simple test file
 cpan/Pod-Simple/t/emptylists.t				Pod::Simple test file
+cpan/Pod-Simple/t/enc-chars.t
 cpan/Pod-Simple/t/encod01.t				Pod::Simple test file
 cpan/Pod-Simple/t/encod02.t				Pod::Simple test file
 cpan/Pod-Simple/t/encod03.t				Pod::Simple test file
+cpan/Pod-Simple/t/encod04.t
 cpan/Pod-Simple/t/end_over.t				Pod::Simple test file
 cpan/Pod-Simple/t/eol2.t				Pod::Simple test file
 cpan/Pod-Simple/t/eol.t					Pod::Simple test file
@@ -2234,6 +2236,7 @@ cpan/Pod-Simple/t/xhtml05.t				Pod::Simple test file
 cpan/Pod-Simple/t/xhtml10.t				Pod::Simple test file
 cpan/Pod-Simple/t/xhtml15.t				Pod::Simple test file
 cpan/Pod-Simple/t/xhtml20.t				Pod::Simple test file
+cpan/Pod-Simple/t/xhtml-bkb.t
 cpan/Pod-Simple/t/x_nixer.t				Pod::Simple test file
 cpan/Pod-Usage/lib/Pod/Usage.pm
 cpan/Pod-Usage/scripts/pod2usage.PL
@@ -3135,6 +3138,7 @@ dist/Data-Dumper/t/deparse.t	See if Data::Dumper::Deparse works
 dist/Data-Dumper/t/dumper.t	See if Data::Dumper works
 dist/Data-Dumper/t/dumpperl.t	See if Data::Dumper::Dumpperl works
 dist/Data-Dumper/t/freezer.t	See if Data::Dumper::Freezer works
+dist/Data-Dumper/t/freezer_useperl.t	See if Data::Dumper works
 dist/Data-Dumper/t/indent.t	See if Data::Dumper::Indent works
 dist/Data-Dumper/t/lib/Testing.pm	Functions used in testing Data-Dumper
 dist/Data-Dumper/t/misc.t	Miscellaneous tests for Data-Dumper
@@ -3469,6 +3473,7 @@ dist/Net-Ping/t/410_syn_host.t		Ping Net::Ping
 dist/Net-Ping/t/450_service.t		Ping Net::Ping
 dist/Net-Ping/t/500_ping_icmp.t		Ping Net::Ping
 dist/Net-Ping/t/510_ping_udp.t		Ping Net::Ping
+dist/Net-Ping/t/520_icmp_ttl.t		Ping Net::Ping
 dist/Safe/Changes		Changes for Safe.pm
 dist/Safe/Makefile.PL		Makefile.PL for Safe.pm
 dist/Safe/MANIFEST		MANIFEST for Safe.pm
@@ -4234,6 +4239,7 @@ hints/utekv.sh			Hints for named architecture
 hints/uwin.sh			Hints for named architecture
 hints/vos.sh			Hints for named architecture
 hv.c				Hash value code
+hv_func.h			Hash value static inline function header
 hv.h				Hash value header
 inline.h			Static inline functions
 inline_invlist.c		Inline functions for handling inversion lists
@@ -4711,9 +4717,11 @@ pod/perl5140delta.pod		Perl changes in version 5.14.0
 pod/perl5141delta.pod		Perl changes in version 5.14.1
 pod/perl5142delta.pod		Perl changes in version 5.14.2
 pod/perl5143delta.pod		Perl changes in version 5.14.3
+pod/perl5144delta.pod		Perl changes in version 5.14.4
 pod/perl5160delta.pod		Perl changes in version 5.16.0
 pod/perl5161delta.pod		Perl changes in version 5.16.1
 pod/perl5162delta.pod		Perl changes in version 5.16.2
+pod/perl5163delta.pod		Perl changes in version 5.16.3
 pod/perl5170delta.pod		Perl changes in version 5.17.0
 pod/perl5171delta.pod		Perl changes in version 5.17.1
 pod/perl5172delta.pod		Perl changes in version 5.17.2
@@ -4723,6 +4731,7 @@ pod/perl5175delta.pod		Perl changes in version 5.17.5
 pod/perl5176delta.pod		Perl changes in version 5.17.6
 pod/perl5177delta.pod		Perl changes in version 5.17.7
 pod/perl5178delta.pod		Perl changes in version 5.17.8
+pod/perl5179delta.pod		Perl changes in version 5.17.9
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4884,6 +4893,7 @@ Porting/pod_lib.pl		Code for handling generated pods
 Porting/pod_rules.pl		generate lists of pod files for Makefiles
 Porting/podtidy			Reformat pod using Pod::Tidy
 Porting/pumpkin.pod		Guidelines and hints for Perl maintainers
+Porting/README.pod			Outline of contents of Porting directory
 Porting/README.y2038		Perl notes for the 2038 fix
 Porting/release_announcement_template.txt
 Porting/release_managers_guide.pod	Release Manager's Guide
@@ -5043,11 +5053,9 @@ t/bigmem/read.t			Check read() handles large offsets
 t/bigmem/vec.t			Check vec() handles large offsets
 t/cmd/elsif.t			See if else-if works
 t/cmd/for.t			See if for loops work
-t/cmd/lexsub.t			See if lexical subroutines work
 t/cmd/mod.t			See if statement modifiers work
 t/cmd/subval.t			See if subroutine values work
 t/cmd/switch.t			See if switch optimizations work
-t/cmd/while.t			See if while loops work
 t/comp/bproto.t			See if builtins conform to their prototypes
 t/comp/cmdopt.t			See if command optimization works
 t/comp/colon.t			See if colons are parsed correctly
@@ -5329,6 +5337,7 @@ t/op/filetest.t			See if file tests work
 t/op/filetest_t.t		See if -t file test works
 t/op/flip.t			See if range operator works
 t/op/fork.t			See if fork works
+t/op/for.t			See if for loops work
 t/op/fresh_perl_utf8.t		UTF8 tests for pads and gvs
 t/op/getpid.t			See if $$ and getppid work with threads
 t/op/getppid.t			See if getppid works
@@ -5358,6 +5367,7 @@ t/op/lc.t			See if lc, uc, lcfirst, ucfirst, quotemeta work
 t/op/leaky-magic.t		See whether vars' magic leaks into packages
 t/op/length.t			See if length works
 t/op/lex_assign.t		See if ops involving lexicals or pad temps work
+t/op/lexsub.t			See if lexical subroutines work
 t/op/lex.t			Tests too complex for t/base/lex.t
 t/op/lfs.t			See if large files work for perlio
 t/op/list.t			See if array lists work
@@ -5458,6 +5468,7 @@ t/op/vec.t			See if vectors work
 t/op/ver.t			See if v-strings and the %v format flag work
 t/op/wantarray.t		See if wantarray works
 t/op/warn.t			See if warn works
+t/op/while.t			See if while loops work
 t/op/write.t			See if write works (formats work)
 t/op/yadayada.t			See if ... works
 t/perl.supp			Perl valgrind suppressions
@@ -5605,6 +5616,7 @@ t/uni/tr_sjis.t			See if Unicode tr/// in sjis works
 t/uni/tr_utf8.t			See if Unicode tr/// in utf8 works
 t/uni/universal.t		See if Unicode in calls to UNIVERSAL works
 t/uni/upper.t			See if Unicode casing works
+t/uni/variables.t		See that the rules for variable names work
 t/uni/write.t			See if Unicode formats work
 t/win32/fs.t			Test Win32 link for compatibility
 t/win32/runenv.t		Test if Win* perl honors its env variables

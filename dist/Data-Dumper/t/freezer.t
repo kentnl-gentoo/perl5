@@ -7,13 +7,13 @@ BEGIN {
     require Config; import Config;
     no warnings 'once';
     if ($Config{'extensions'} !~ /\bData\/Dumper\b/) {
-	print "1..0 # Skip: Data::Dumper was not built\n";
-	exit 0;
+        print "1..0 # Skip: Data::Dumper was not built\n";
+        exit 0;
     }
 }
 
 use strict;
-use Test::More tests => 15;
+use Test::More tests =>  8;
 use Data::Dumper;
 use lib qw( ./t/lib );
 use Testing qw( _dumptostr );
@@ -33,18 +33,6 @@ use Testing qw( _dumptostr );
              "Dumped list doesn't begin with Freezer's return value with useperl");
     }
 
-    # run the same tests with useperl.  this always worked
-    {
-        local $Data::Dumper::Useperl = 1;
-        my $foo = Test1->new("foo");
-        my $dumped_foo = Dumper($foo);
-        ok($dumped_foo,
-           "Use of freezer sub which returns non-ref worked with useperl");
-        like($dumped_foo, qr/frozed/,
-             "Dumped string has the key added by Freezer with useperl.");
-        like(join(" ", Dumper($foo)), qr/\A\$VAR1 = /,
-             "Dumped list doesn't begin with Freezer's return value with useperl");
-    }
 
     # test for warning when an object does not have a freeze()
     {
@@ -55,15 +43,6 @@ use Testing qw( _dumptostr );
         is($warned, 0, "A missing freeze() shouldn't warn.");
     }
 
-    # run the same test with useperl, which always worked
-    {
-        local $Data::Dumper::Useperl = 1;
-        my $warned = 0;
-        local $SIG{__WARN__} = sub { $warned++ };
-        my $bar = Test2->new("bar");
-        my $dumped_bar = Dumper($bar);
-        is($warned, 0, "A missing freeze() shouldn't warn with useperl");
-    }
 
     # a freeze() which die()s should still trigger the warning
     {
@@ -74,15 +53,6 @@ use Testing qw( _dumptostr );
         is($warned, 1, "A freeze() which die()s should warn.");
     }
 
-    # the same should work in useperl
-    {
-        local $Data::Dumper::Useperl = 1;
-        my $warned = 0;
-        local $SIG{__WARN__} = sub { $warned++; };
-        my $bar = Test3->new("bar");
-        my $dumped_bar = Dumper($bar);
-        is($warned, 1, "A freeze() which die()s should warn with useperl.");
-    }
 }
 
 {
@@ -100,42 +70,6 @@ use Testing qw( _dumptostr );
 
     is($dumps{'ddftrue'}, $dumps{'objset'},
         "\$Data::Dumper::Freezer and Freezer() are equivalent");
-}
-
-{
-    my ($obj, %dumps);
-    my $foo = Test1->new("foo");
-
-    local $Data::Dumper::Freezer = 'freeze';
-
-    local $Data::Dumper::Useperl = 1;
-    $obj = Data::Dumper->new( [ $foo ] );
-    $dumps{'ddftrueuseperl'} = _dumptostr($obj);
-
-    local $Data::Dumper::Useperl = 0;
-    $obj = Data::Dumper->new( [ $foo ] );
-    $dumps{'ddftruexs'} = _dumptostr($obj);
-
-    is( $dumps{'ddftruexs'}, $dumps{'ddftrueuseperl'},
-        "\$Data::Dumper::Freezer() gives same results under XS and Useperl");
-}
-
-{
-    my ($obj, %dumps);
-    my $foo = Test1->new("foo");
-
-    local $Data::Dumper::Useperl = 1;
-    $obj = Data::Dumper->new( [ $foo ] );
-    $obj->Freezer('freeze');
-    $dumps{'objsetuseperl'} = _dumptostr($obj);
-
-    local $Data::Dumper::Useperl = 0;
-    $obj = Data::Dumper->new( [ $foo ] );
-    $obj->Freezer('freeze');
-    $dumps{'objsetxs'} = _dumptostr($obj);
-
-    is($dumps{'objsetxs'}, $dumps{'objsetuseperl'},
-        "Freezer() gives same results under XS and Useperl");
 }
 
 {

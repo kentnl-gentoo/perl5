@@ -11,7 +11,7 @@ my %opts;
 getopts('tx', \%opts);	# -t is no longer used, but allow it anyway
 
 my @defines;
-push(@defines, '-DSHA_PERL_MODULE') if $] >= 5.004;
+push(@defines, '-DSHA_PerlIO') if $] >= 5.004;
 push(@defines, '-DNO_SHA_384_512')  if $opts{'x'};
 my $define = join(' ', @defines);
 

@@ -10,7 +10,7 @@
 package Data::Dumper;
 
 BEGIN {
-    $VERSION = '2.142'; # Don't forget to set version and release
+    $VERSION = '2.145'; # Don't forget to set version and release
 }               # date in POD below!
 
 #$| = 1;
@@ -836,7 +836,8 @@ variable is output in a single Perl statement.  Handles self-referential
 structures correctly.
 
 The return value can be C<eval>ed to get back an identical copy of the
-original reference structure.
+original reference structure.  (Please do consider the security implications
+of eval'ing code from untrusted sources!)
 
 Any references that are the same as one of those passed in will be named
 C<$VAR>I<n> (where I<n> is a numeric suffix), and other duplicate references
@@ -1400,7 +1401,7 @@ modify it under the same terms as Perl itself.
 
 =head1 VERSION
 
-Version 2.142  (January 13 2013)
+Version 2.145  (March 15 2013))
 
 =head1 SEE ALSO
 

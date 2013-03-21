@@ -786,8 +786,23 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
     else                                       /* gotta do the real thing */
 	HeKEY_hek(entry) = save_hek_flags(key, klen, hash, flags);
     HeVAL(entry) = val;
-    HeNEXT(entry) = *oentry;
-    *oentry = entry;
+
+    /* This logic semi-randomizes the insert order in a bucket.
+     * Either we insert into the top, or the slot below the top,
+     * making it harder to see if there is a collision. We also
+     * reset the iterator randomizer if there is one.
+     */
+    if (SvOOK(hv))
+        HvAUX(hv)->xhv_rand= (U32)PL_hash_rand_bits;
+    PL_hash_rand_bits += (PTRV)entry ^ hash; /* we don't bother to use ptr_hash here */
+    PL_hash_rand_bits= ROTL_UV(PL_hash_rand_bits,1);
+    if ( !*oentry || (PL_hash_rand_bits & 1) ) {
+        HeNEXT(entry) = *oentry;
+        *oentry = entry;
+    } else {
+        HeNEXT(entry) = HeNEXT(*oentry);
+        HeNEXT(*oentry) = entry;
+    }
 
     if (val == &PL_sv_placeholder)
 	HvPLACEHOLDERS(hv)++;
@@ -796,7 +811,26 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 
     xhv->xhv_keys++; /* HvTOTALKEYS(hv)++ */
     if ( DO_HSPLIT(xhv) ) {
-        hsplit(hv);
+        const STRLEN oldsize = xhv->xhv_max + 1;
+        const U32 items = (U32)HvPLACEHOLDERS_get(hv);
+
+        if (items /* hash has placeholders  */
+            && !SvREADONLY(hv) /* but is not a restricted hash */) {
+            /* If this hash previously was a "restricted hash" and had
+               placeholders, but the "restricted" flag has been turned off,
+               then the placeholders no longer serve any useful purpose.
+               However, they have the downsides of taking up RAM, and adding
+               extra steps when finding used values. It's safe to clear them
+               at this point, even though Storable rebuilds restricted hashes by
+               putting in all the placeholders (first) before turning on the
+               readonly flag, because Storable always pre-splits the hash.
+               If we're lucky, then we may clear sufficient placeholders to
+               avoid needing to split the hash at all.  */
+            clear_placeholders(hv, items);
+            if (DO_HSPLIT(xhv))
+                hsplit(hv, oldsize, oldsize * 2);
+        } else
+            hsplit(hv, oldsize, oldsize * 2);
     }
 
     if (return_svp) {
@@ -1085,13 +1119,10 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 }
 
 STATIC void
-S_hsplit(pTHX_ HV *hv)
+S_hsplit(pTHX_ HV *hv, STRLEN const oldsize, STRLEN newsize)
 {
     dVAR;
-    XPVHV* const xhv = (XPVHV*)SvANY(hv);
-    const I32 oldsize = (I32) xhv->xhv_max+1; /* HvMAX(hv)+1 (sick) */
-    I32 newsize = oldsize * 2;
-    I32 i;
+    STRLEN i = 0;
     char *a = (char*) HvARRAY(hv);
     HE **aep;
 
@@ -1100,68 +1131,67 @@ S_hsplit(pTHX_ HV *hv)
     /*PerlIO_printf(PerlIO_stderr(), "hsplit called for %p which had %d\n",
       (void*)hv, (int) oldsize);*/
 
-    if (HvPLACEHOLDERS_get(hv) && !SvREADONLY(hv)) {
-      /* Can make this clear any placeholders first for non-restricted hashes,
-	 even though Storable rebuilds restricted hashes by putting in all the
-	 placeholders (first) before turning on the readonly flag, because
-	 Storable always pre-splits the hash.  */
-      hv_clear_placeholders(hv);
-    }
-	       
     PL_nomemok = TRUE;
-#if defined(STRANGE_MALLOC) || defined(MYMALLOC)
     Renew(a, PERL_HV_ARRAY_ALLOC_BYTES(newsize)
 	  + (SvOOK(hv) ? sizeof(struct xpvhv_aux) : 0), char);
     if (!a) {
       PL_nomemok = FALSE;
       return;
     }
+    /* the idea of this is that we create a "random" value by hashing the address of
+     * the array, we then use the low bit to decide if we insert at the top, or insert
+     * second from top. After each such insert we rotate the hashed value. So we can
+     * use the same hashed value over and over, and in normal build environments use
+     * very few ops to do so. ROTL32() should produce a single machine operation. */
+    PL_hash_rand_bits += ptr_hash((PTRV)a);
+    PL_hash_rand_bits = ROTL_UV(PL_hash_rand_bits,1);
+
     if (SvOOK(hv)) {
-	Move(&a[oldsize * sizeof(HE*)], &a[newsize * sizeof(HE*)], 1, struct xpvhv_aux);
+        struct xpvhv_aux *const dest
+            = (struct xpvhv_aux*) &a[newsize * sizeof(HE*)];
+        Move(&a[oldsize * sizeof(HE*)], dest, 1, struct xpvhv_aux);
+        /* we reset the iterator's xhv_rand as well, so they get a totally new ordering */
+        dest->xhv_rand = (U32)PL_hash_rand_bits;
     }
-#else
-    Newx(a, PERL_HV_ARRAY_ALLOC_BYTES(newsize)
-	+ (SvOOK(hv) ? sizeof(struct xpvhv_aux) : 0), char);
-    if (!a) {
-      PL_nomemok = FALSE;
-      return;
-    }
-    Copy(HvARRAY(hv), a, oldsize * sizeof(HE*), char);
-    if (SvOOK(hv)) {
-	Copy(HvAUX(hv), &a[newsize * sizeof(HE*)], 1, struct xpvhv_aux);
-    }
-    Safefree(HvARRAY(hv));
-#endif
 
     PL_nomemok = FALSE;
     Zero(&a[oldsize * sizeof(HE*)], (newsize-oldsize) * sizeof(HE*), char);	/* zero 2nd half*/
-    xhv->xhv_max = --newsize;	/* HvMAX(hv) = --newsize */
+    HvMAX(hv) = --newsize;
     HvARRAY(hv) = (HE**) a;
-    aep = (HE**)a;
 
-    for (i=0; i<oldsize; i++,aep++) {
-	HE **oentry = aep;
-	HE *entry = *aep;
-	HE **bep;
+    if (!HvTOTALKEYS(hv))       /* skip rest if no entries */
+        return;
+
+    aep = (HE**)a;
+    do {
+	HE **oentry = aep + i;
+	HE *entry = aep[i];
 
 	if (!entry)				/* non-existent */
 	    continue;
-	bep = aep+oldsize;
 	do {
-	    if ((HeHASH(entry) & newsize) != (U32)i) {
+            U32 j = (HeHASH(entry) & newsize);
+	    if (j != (U32)i) {
 		*oentry = HeNEXT(entry);
-		HeNEXT(entry) = *bep;
-		*bep = entry;
+                /* if the target cell is empty insert to top, otherwise
+                 * rotate the bucket rand 1 bit, and use the new low bit
+                 * to decide if we insert at top, or next from top.
+                 * IOW, we rotate only if we are dealing with colliding
+                 * elements. */
+                if (!aep[j] || ((PL_hash_rand_bits= ROTL_UV(PL_hash_rand_bits,1)) & 1)) {
+                    HeNEXT(entry) = aep[j];
+                    aep[j] = entry;
+                } else {
+                    HeNEXT(entry)= HeNEXT(aep[j]);
+                    HeNEXT(aep[j])= entry;
+                }
 	    }
 	    else {
 		oentry = &HeNEXT(entry);
 	    }
 	    entry = *oentry;
 	} while (entry);
-	/* I think we don't actually need to keep track of the longest length,
-	   merely flag if anything is too long. But for the moment while
-	   developing this code I'll track it.  */
-    }
+    } while (i++ < oldsize);
 }
 
 void
@@ -1171,9 +1201,7 @@ Perl_hv_ksplit(pTHX_ HV *hv, IV newmax)
     XPVHV* xhv = (XPVHV*)SvANY(hv);
     const I32 oldsize = (I32) xhv->xhv_max+1; /* HvMAX(hv)+1 (sick) */
     I32 newsize;
-    I32 i;
     char *a;
-    HE **aep;
 
     PERL_ARGS_ASSERT_HV_KSPLIT;
 
@@ -1190,61 +1218,11 @@ Perl_hv_ksplit(pTHX_ HV *hv, IV newmax)
 
     a = (char *) HvARRAY(hv);
     if (a) {
-	PL_nomemok = TRUE;
-#if defined(STRANGE_MALLOC) || defined(MYMALLOC)
-	Renew(a, PERL_HV_ARRAY_ALLOC_BYTES(newsize)
-	      + (SvOOK(hv) ? sizeof(struct xpvhv_aux) : 0), char);
-	if (!a) {
-	  PL_nomemok = FALSE;
-	  return;
-	}
-	if (SvOOK(hv)) {
-	    Copy(&a[oldsize * sizeof(HE*)], &a[newsize * sizeof(HE*)], 1, struct xpvhv_aux);
-	}
-#else
-	Newx(a, PERL_HV_ARRAY_ALLOC_BYTES(newsize)
-	    + (SvOOK(hv) ? sizeof(struct xpvhv_aux) : 0), char);
-	if (!a) {
-	  PL_nomemok = FALSE;
-	  return;
-	}
-	Copy(HvARRAY(hv), a, oldsize * sizeof(HE*), char);
-	if (SvOOK(hv)) {
-	    Copy(HvAUX(hv), &a[newsize * sizeof(HE*)], 1, struct xpvhv_aux);
-	}
-	Safefree(HvARRAY(hv));
-#endif
-	PL_nomemok = FALSE;
-	Zero(&a[oldsize * sizeof(HE*)], (newsize-oldsize) * sizeof(HE*), char); /* zero 2nd half*/
-    }
-    else {
-	Newxz(a, PERL_HV_ARRAY_ALLOC_BYTES(newsize), char);
-    }
-    xhv->xhv_max = --newsize; 	/* HvMAX(hv) = --newsize */
-    HvARRAY(hv) = (HE **) a;
-    if (!xhv->xhv_keys /* !HvTOTALKEYS(hv) */)	/* skip rest if no entries */
-	return;
-
-    aep = (HE**)a;
-    for (i=0; i<oldsize; i++,aep++) {
-	HE **oentry = aep;
-	HE *entry = *aep;
-
-	if (!entry)				/* non-existent */
-	    continue;
-	do {
-	    I32 j = (HeHASH(entry) & newsize);
-
-	    if (j != i) {
-		j -= i;
-		*oentry = HeNEXT(entry);
-		HeNEXT(entry) = aep[j];
-		aep[j] = entry;
-	    }
-	    else
-		oentry = &HeNEXT(entry);
-	    entry = *oentry;
-	} while (entry);
+        hsplit(hv, oldsize, newsize);
+    } else {
+        Newxz(a, PERL_HV_ARRAY_ALLOC_BYTES(newsize), char);
+        xhv->xhv_max = --newsize;
+        HvARRAY(hv) = (HE **) a;
     }
 }
 
@@ -1633,6 +1611,7 @@ Perl_hfree_next_entry(pTHX_ HV *hv, STRLEN *indexp)
 	}
 	iter->xhv_riter = -1; 	/* HvRITER(hv) = -1 */
 	iter->xhv_eiter = NULL;	/* HvEITER(hv) = NULL */
+        iter->xhv_last_rand = iter->xhv_rand;
     }
 
     if (!((XPVHV*)SvANY(hv))->xhv_keys)
@@ -1816,27 +1795,69 @@ Perl_hv_fill(pTHX_ HV const *const hv)
     return count;
 }
 
+/* hash a pointer to a U32 - Used in the hash traversal randomization
+ * and bucket order randomization code
+ *
+ * this code was derived from Sereal, which was derived from autobox.
+ */
+
+PERL_STATIC_INLINE U32 S_ptr_hash(PTRV u) {
+#if PTRSIZE == 8
+    /*
+     * This is one of Thomas Wang's hash functions for 64-bit integers from:
+     * http://www.concentric.net/~Ttwang/tech/inthash.htm
+     */
+    u = (~u) + (u << 18);
+    u = u ^ (u >> 31);
+    u = u * 21;
+    u = u ^ (u >> 11);
+    u = u + (u << 6);
+    u = u ^ (u >> 22);
+#else
+    /*
+     * This is one of Bob Jenkins' hash functions for 32-bit integers
+     * from: http://burtleburtle.net/bob/hash/integer.html
+     */
+    u = (u + 0x7ed55d16) + (u << 12);
+    u = (u ^ 0xc761c23c) ^ (u >> 19);
+    u = (u + 0x165667b1) + (u << 5);
+    u = (u + 0xd3a2646c) ^ (u << 9);
+    u = (u + 0xfd7046c5) + (u << 3);
+    u = (u ^ 0xb55a4f09) ^ (u >> 16);
+#endif
+    return (U32)u;
+}
+
+
 static struct xpvhv_aux*
-S_hv_auxinit(HV *hv) {
+S_hv_auxinit(pTHX_ HV *hv) {
     struct xpvhv_aux *iter;
     char *array;
 
     PERL_ARGS_ASSERT_HV_AUXINIT;
 
-    if (!HvARRAY(hv)) {
-	Newxz(array, PERL_HV_ARRAY_ALLOC_BYTES(HvMAX(hv) + 1)
-	    + sizeof(struct xpvhv_aux), char);
+    if (!SvOOK(hv)) {
+        if (!HvARRAY(hv)) {
+            Newxz(array, PERL_HV_ARRAY_ALLOC_BYTES(HvMAX(hv) + 1)
+                + sizeof(struct xpvhv_aux), char);
+        } else {
+            array = (char *) HvARRAY(hv);
+            Renew(array, PERL_HV_ARRAY_ALLOC_BYTES(HvMAX(hv) + 1)
+                  + sizeof(struct xpvhv_aux), char);
+        }
+        HvARRAY(hv) = (HE**)array;
+        SvOOK_on(hv);
+        PL_hash_rand_bits += ptr_hash((PTRV)array);
+        PL_hash_rand_bits = ROTL_UV(PL_hash_rand_bits,1);
+        iter = HvAUX(hv);
+        iter->xhv_rand = (U32)PL_hash_rand_bits;
     } else {
-	array = (char *) HvARRAY(hv);
-	Renew(array, PERL_HV_ARRAY_ALLOC_BYTES(HvMAX(hv) + 1)
-	      + sizeof(struct xpvhv_aux), char);
+        iter = HvAUX(hv);
     }
-    HvARRAY(hv) = (HE**) array;
-    SvOOK_on(hv);
-    iter = HvAUX(hv);
 
     iter->xhv_riter = -1; 	/* HvRITER(hv) = -1 */
     iter->xhv_eiter = NULL;	/* HvEITER(hv) = NULL */
+    iter->xhv_last_rand = iter->xhv_rand;
     iter->xhv_name_u.xhvnameu_name = 0;
     iter->xhv_name_count = 0;
     iter->xhv_backreferences = 0;
@@ -1879,6 +1900,7 @@ Perl_hv_iterinit(pTHX_ HV *hv)
 	}
 	iter->xhv_riter = -1; 	/* HvRITER(hv) = -1 */
 	iter->xhv_eiter = NULL; /* HvEITER(hv) = NULL */
+        iter->xhv_last_rand = iter->xhv_rand;
     } else {
 	hv_auxinit(hv);
     }
@@ -2338,6 +2360,15 @@ Perl_hv_iternext_flags(pTHX_ HV *hv, I32 flags)
             }
 	}
     }
+    if (iter->xhv_last_rand != iter->xhv_rand) {
+        if (iter->xhv_riter != -1) {
+            Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL),
+                             "Use of each() on hash after insertion without resetting hash iterator results in undefined behavior"
+                             pTHX__FORMAT
+                             pTHX__VALUE);
+        }
+        iter->xhv_last_rand = iter->xhv_rand;
+    }
 
     /* Skip the entire loop if the hash is empty.   */
     if ((flags & HV_ITERNEXT_WANTPLACEHOLDERS)
@@ -2349,9 +2380,10 @@ Perl_hv_iternext_flags(pTHX_ HV *hv, I32 flags)
 	    if (iter->xhv_riter > (I32)xhv->xhv_max /* HvRITER(hv) > HvMAX(hv) */) {
 		/* There is no next one.  End of the hash.  */
 		iter->xhv_riter = -1; /* HvRITER(hv) = -1 */
+                iter->xhv_last_rand = iter->xhv_rand;
 		break;
 	    }
-	    entry = (HvARRAY(hv))[iter->xhv_riter];
+            entry = (HvARRAY(hv))[(iter->xhv_riter ^ iter->xhv_rand) & xhv->xhv_max];
 
 	    if (!(flags & HV_ITERNEXT_WANTPLACEHOLDERS)) {
 		/* If we have an entry, but it's a placeholder, don't count it.
@@ -2364,7 +2396,10 @@ Perl_hv_iternext_flags(pTHX_ HV *hv, I32 flags)
 	       or if we run through it and find only placeholders.  */
 	}
     }
-    else iter->xhv_riter = -1;
+    else {
+        iter->xhv_riter = -1;
+        iter->xhv_last_rand = iter->xhv_rand;
+    }
 
     if (oldentry && HvLAZYDEL(hv)) {		/* was deleted earlier? */
 	HvLAZYDEL_off(hv);
@@ -2696,7 +2731,8 @@ S_share_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags)
 	xhv->xhv_keys++; /* HvTOTALKEYS(hv)++ */
 	if (!next) {			/* initial entry? */
 	} else if ( DO_HSPLIT(xhv) ) {
-            hsplit(PL_strtab);
+            const STRLEN oldsize = xhv->xhv_max + 1;
+            hsplit(PL_strtab, oldsize, oldsize * 2);
 	}
     }
 

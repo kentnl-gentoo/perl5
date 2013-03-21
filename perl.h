@@ -568,9 +568,9 @@ struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 #else
 #   define TAINT		(PL_tainted = TRUE)
 #   define TAINT_NOT	(PL_tainted = FALSE)
-#   define TAINT_IF(c)	if (c) { PL_tainted = TRUE; }
-#   define TAINT_ENV()	if (PL_tainting) { taint_env(); }
-#   define TAINT_PROPER(s)	if (PL_tainting) { taint_proper(NULL, s); }
+#   define TAINT_IF(c)	if (UNLIKELY(c)) { PL_tainted = TRUE; }
+#   define TAINT_ENV()	if (UNLIKELY(PL_tainting)) { taint_env(); }
+#   define TAINT_PROPER(s)	if (UNLIKELY(PL_tainting)) { taint_proper(NULL, s); }
 #   define TAINT_set(s)		(PL_tainted = (s))
 #   define TAINT_get		(PL_tainted)
 #   define TAINTING_get		(PL_tainting)
@@ -2494,9 +2494,11 @@ typedef AV PAD;
 typedef AV PADNAMELIST;
 typedef SV PADNAME;
 
-#if !defined(PERL_OLD_COPY_ON_WRITE) && !defined(PERL_NEW_COPY_ON_WRITE) && !defined(PERL_NO_COW)
-# define PERL_NEW_COPY_ON_WRITE
-#endif
+/* XXX for 5.18, disable the COW by default
+ * #if !defined(PERL_OLD_COPY_ON_WRITE) && !defined(PERL_NEW_COPY_ON_WRITE) && !defined(PERL_NO_COW)
+ * # define PERL_NEW_COPY_ON_WRITE
+ * #endif
+ */
 
 #if defined(PERL_OLD_COPY_ON_WRITE) || defined(PERL_NEW_COPY_ON_WRITE)
 # if defined(PERL_OLD_COPY_ON_WRITE) && defined(PERL_NEW_COPY_ON_WRITE)
@@ -2504,6 +2506,8 @@ typedef SV PADNAME;
 # else
 #  define PERL_ANY_COW
 # endif
+#else
+# define PERL_SAWAMPERSAND
 #endif
 
 #include "handy.h"
@@ -4510,8 +4514,10 @@ EXTCONST  unsigned char PL_mod_latin1_uc[] = {
 	248-32,	249-32,	250-32,	251-32,	252-32,	253-32,	254-32,	255
 };
 #else	/* ! DOINIT */
+#ifndef EBCDIC
 EXTCONST unsigned char PL_fold[];
 EXTCONST unsigned char PL_fold_latin1[];
+#endif
 EXTCONST unsigned char PL_mod_latin1_uc[];
 EXTCONST unsigned char PL_latin1_lc[];
 #endif

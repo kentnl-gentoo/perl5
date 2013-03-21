@@ -3263,7 +3263,7 @@ PERL_CALLCONV SV*	Perl_re_intuit_string(pTHX_ REGEXP  *const r)
 #define PERL_ARGS_ASSERT_RE_INTUIT_STRING	\
 	assert(r)
 
-PERL_CALLCONV REGEXP*	Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count, OP *expr, const regexp_engine* eng, REGEXP *VOL old_re, bool *is_bare_re, U32 rx_flags, U32 pm_flags)
+PERL_CALLCONV REGEXP*	Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count, OP *expr, const regexp_engine* eng, REGEXP *old_re, bool *is_bare_re, U32 rx_flags, U32 pm_flags)
 			__attribute__nonnull__(pTHX_4);
 #define PERL_ARGS_ASSERT_RE_OP_COMPILE	\
 	assert(eng)
@@ -5701,13 +5701,13 @@ STATIC void	S_hfreeentries(pTHX_ HV *hv)
 #define PERL_ARGS_ASSERT_HFREEENTRIES	\
 	assert(hv)
 
-STATIC void	S_hsplit(pTHX_ HV *hv)
+STATIC void	S_hsplit(pTHX_ HV *hv, STRLEN const oldsize, STRLEN newsize)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_HSPLIT	\
 	assert(hv)
 
-STATIC struct xpvhv_aux*	S_hv_auxinit(HV *hv)
-			__attribute__nonnull__(1);
+STATIC struct xpvhv_aux*	S_hv_auxinit(pTHX_ HV *hv)
+			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_HV_AUXINIT	\
 	assert(hv)
 
@@ -5736,6 +5736,7 @@ STATIC HE*	S_new_he(pTHX)
 			__attribute__malloc__
 			__attribute__warn_unused_result__;
 
+STATIC U32	S_ptr_hash(PTRV u);
 STATIC SV *	S_refcounted_he_value(pTHX_ const struct refcounted_he *he)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_REFCOUNTED_HE_VALUE	\
@@ -6710,7 +6711,7 @@ STATIC regnode*	S_regpiece(pTHX_ struct RExC_state_t *pRExC_state, I32 *flagp, U
 #define PERL_ARGS_ASSERT_REGPIECE	\
 	assert(pRExC_state); assert(flagp)
 
-PERL_STATIC_INLINE I32	S_regpposixcc(pTHX_ struct RExC_state_t *pRExC_state, I32 value, SV *free_me, const bool strict)
+PERL_STATIC_INLINE I32	S_regpposixcc(pTHX_ struct RExC_state_t *pRExC_state, I32 value, const bool strict)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_REGPPOSIXCC	\
 	assert(pRExC_state)
@@ -7271,6 +7272,13 @@ STATIC void	S_no_op(pTHX_ const char *const what, char *s)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_NO_OP	\
 	assert(what)
+
+STATIC void	S_parse_ident(pTHX_ char **s, char **d, char * const e, int allow_package, bool is_utf8)
+			__attribute__nonnull__(pTHX_1)
+			__attribute__nonnull__(pTHX_2)
+			__attribute__nonnull__(pTHX_3);
+#define PERL_ARGS_ASSERT_PARSE_IDENT	\
+	assert(s); assert(d); assert(e)
 
 STATIC int	S_pending_ident(pTHX);
 STATIC void	S_readpipe_override(pTHX);

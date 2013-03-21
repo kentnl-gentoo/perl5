@@ -1246,12 +1246,12 @@ Perl_sv_upgrade(pTHX_ SV *const sv, svtype new_type)
 	assert(!SvPAD_TYPED(sv));
 	break;
     default:
-	if (old_type_details->cant_upgrade)
+	if (UNLIKELY(old_type_details->cant_upgrade))
 	    Perl_croak(aTHX_ "Can't upgrade %s (%" UVuf ") to %" UVuf,
 		       sv_reftype(sv, 0), (UV) old_type, (UV) new_type);
     }
 
-    if (old_type > new_type)
+    if (UNLIKELY(old_type > new_type))
 	Perl_croak(aTHX_ "sv_upgrade from type %d down to type %d",
 		(int)old_type, (int)new_type);
 
@@ -1386,7 +1386,7 @@ Perl_sv_upgrade(pTHX_ SV *const sv, svtype new_type)
 	    SvNV_set(sv, 0);
 #endif
 
-	if (new_type == SVt_PVIO) {
+	if (UNLIKELY(new_type == SVt_PVIO)) {
 	    IO * const io = MUTABLE_IO(sv);
 	    GV *iogv = gv_fetchpvs("IO::File::", GV_ADD, SVt_PVHV);
 
@@ -1399,7 +1399,7 @@ Perl_sv_upgrade(pTHX_ SV *const sv, svtype new_type)
 	    SvSTASH_set(io, MUTABLE_HV(SvREFCNT_inc(GvHV(iogv))));
 	    IoPAGE_LEN(sv) = 60;
 	}
-	if (new_type == SVt_REGEXP)
+	if (UNLIKELY(new_type == SVt_REGEXP))
 	    sv->sv_u.svu_rx = (regexp *)new_body;
 	else if (old_type < SVt_PV) {
 	    /* referant will be NULL unless the old type was SVt_IV emulating
@@ -6257,6 +6257,8 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 		PL_last_in_gv = NULL;
 	    else if ((const GV *)sv == PL_statgv)
 		PL_statgv = NULL;
+            else if ((const GV *)sv == PL_stderrgv)
+                PL_stderrgv = NULL;
 	case SVt_PVMG:
 	case SVt_PVNV:
 	case SVt_PVIV:
@@ -6511,8 +6513,6 @@ S_curse(pTHX_ SV * const sv, const bool check_refcnt) {
 	SvOBJECT_off(sv);	/* Curse the object. */
 	SvSTASH_set(sv,0);	/* SvREFCNT_dec may try to read this */
 	SvREFCNT_dec(stash); /* possibly of changed persuasion */
-	if (SvTYPE(sv) != SVt_PVIO)
-	    --PL_sv_objcount;/* XXX Might want something more general */
     }
     return TRUE;
 }
@@ -9692,14 +9692,10 @@ Perl_sv_bless(pTHX_ SV *const sv, HV *const stash)
 	if (SvREADONLY(tmpRef) && !SvIsCOW(tmpRef))
 	    Perl_croak_no_modify();
 	if (SvOBJECT(tmpRef)) {
-	    if (SvTYPE(tmpRef) != SVt_PVIO)
-		--PL_sv_objcount;
 	    SvREFCNT_dec(SvSTASH(tmpRef));
 	}
     }
     SvOBJECT_on(tmpRef);
-    if (SvTYPE(tmpRef) != SVt_PVIO)
-	++PL_sv_objcount;
     SvUPGRADE(tmpRef, SVt_PVMG);
     SvSTASH_set(tmpRef, MUTABLE_HV(SvREFCNT_inc_simple(stash)));
 
@@ -12435,9 +12431,6 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 	}
     }
 
-    if (SvOBJECT(dstr) && SvTYPE(dstr) != SVt_PVIO)
-	++PL_sv_objcount;
-
     return dstr;
  }
 
@@ -13134,7 +13127,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     Zero(&PL_body_roots, 1, PL_body_roots);
     
     PL_sv_count		= 0;
-    PL_sv_objcount	= 0;
     PL_sv_root		= NULL;
     PL_sv_arenaroot	= NULL;
 

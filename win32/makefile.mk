@@ -38,7 +38,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.17.9
+#INST_VER	*= \5.17.10
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -492,7 +492,8 @@ LIBC	= msvcrt.lib
 OPTIMIZE	= -Od -MD -Zi -DDEBUGGING
 LINK_DBG	= -debug
 .ELSE
-OPTIMIZE	= -MD -Zi -DNDEBUG
+# -O1 yields smaller code, which turns out to be faster than -O2 on x86 and x64
+OPTIMIZE	= -O1 -MD -Zi -DNDEBUG
 # we enable debug symbols in release builds also
 LINK_DBG	= -debug -opt:ref,icf
 # you may want to enable this if you want COFF symbols in the executables
@@ -503,12 +504,8 @@ LINK_DBG	= -debug -opt:ref,icf
 #LINK_DBG	= $(LINK_DBG) -debugtype:both
 .IF "$(WIN64)" == "define"
 # enable Whole Program Optimizations (WPO) and Link Time Code Generation (LTCG)
-OPTIMIZE	+= -Ox -GL
+OPTIMIZE	+= -GL
 LINK_DBG	+= -ltcg
-.ELSE
-# -O1 yields smaller code, which turns out to be faster than -O2 on x86
-OPTIMIZE	+= -O1
-#OPTIMIZE	+= -O2
 .ENDIF
 .ENDIF
 
@@ -1337,7 +1334,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5179delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl51710delta.pod
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(PERLEXE) $(ICWD) ..\autodoc.pl ..
 	$(PERLEXE) $(ICWD) ..\pod\perlmodlib.pl -q
@@ -1429,7 +1426,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5179delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perl51710delta.pod perlaix.pod perlamiga.pod perlapi.pod \
 	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldgux.pod perldos.pod perlfreebsd.pod perlhaiku.pod \
 	    perlhpux.pod perlhurd.pod perlintern.pod perlirix.pod \

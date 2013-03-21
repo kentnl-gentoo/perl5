@@ -372,7 +372,7 @@ __DATA__
 # List of mappings. First entry the "correct" email address, as appears
 # in the AUTHORS file. Second is any "alias" mapped to it.
 #
-# If the "correct" email address is a '+', the entry above is reused;
+# If the "correct" email address is a '+', the entry above it is reused;
 # this for addresses with more than one alias.
 #
 # Note that all entries are in lowercase. Further, no '@' signs should
@@ -830,7 +830,7 @@ roberto\100keltia.freenix.fr            roberto\100eurocontrol.fr
 robin\100cpan.org                       robin\100kitsite.com
 roderick\100argon.org                   roderick\100gate.net
 +                                       roderick\100ibcinc.com
-root\100ub32.org                        argrath\100ub32.org
+argrath\100ub32.org                     root\100ub32.org
 rootbeer\100teleport.com                rootbeer\100redcat.com
 +                                       tomphoenix\100unknown
 rurban\100x-ray.at                      rurban\100cpan.org
@@ -862,6 +862,8 @@ simon\100simon-cozens.org               simon\100pembro4.pmb.ox.ac.uk
 +                                       simon\100othersideofthe.earth.li
 +                                       simon\100cozens.net
 +                                       simon\100netthink.co.uk
+lannings\100who.int                     lannings\100gmail.com
++                                       slanning\100cpan.org
 slaven\100rezic.de                      slaven.rezic\100berlin.de
 +                                       srezic\100iconmobile.com
 +                                       srezic\100cpan.org

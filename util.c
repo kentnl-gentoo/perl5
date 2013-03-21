@@ -2798,6 +2798,9 @@ Perl_atfork_lock(void)
    dVAR;
 #if defined(USE_ITHREADS)
     /* locks must be held in locking order (if any) */
+#  ifdef USE_PERLIO
+    MUTEX_LOCK(&PL_perlio_mutex);
+#  endif
 #  ifdef MYMALLOC
     MUTEX_LOCK(&PL_malloc_mutex);
 #  endif
@@ -2812,6 +2815,9 @@ Perl_atfork_unlock(void)
     dVAR;
 #if defined(USE_ITHREADS)
     /* locks must be released in same order as in atfork_lock() */
+#  ifdef USE_PERLIO
+    MUTEX_UNLOCK(&PL_perlio_mutex);
+#  endif
 #  ifdef MYMALLOC
     MUTEX_UNLOCK(&PL_malloc_mutex);
 #  endif
@@ -4500,7 +4506,7 @@ it doesn't.
 const char *
 Perl_scan_version(pTHX_ const char *s, SV *rv, bool qv)
 {
-    const char *start;
+    const char *start = s;
     const char *pos;
     const char *last;
     const char *errstr = NULL;
@@ -4508,16 +4514,10 @@ Perl_scan_version(pTHX_ const char *s, SV *rv, bool qv)
     int width = 3;
     bool alpha = FALSE;
     bool vinf = FALSE;
-    AV * const av = newAV();
-    SV * const hv = newSVrv(rv, "version"); /* create an SV and upgrade the RV */
+    AV * av;
+    SV * hv;
 
     PERL_ARGS_ASSERT_SCAN_VERSION;
-
-    (void)sv_upgrade(hv, SVt_PVHV); /* needs to be an HV type */
-
-#ifndef NODEFAULT_SHAREKEYS
-    HvSHAREKEYS_on(hv);         /* key-sharing on by default */
-#endif
 
     while (isSPACE(*s)) /* leading whitespace is OK */
 	s++;
@@ -4526,6 +4526,7 @@ Perl_scan_version(pTHX_ const char *s, SV *rv, bool qv)
     if (errstr) {
 	/* "undef" is a special case and not an error */
 	if ( ! ( *s == 'u' && strEQ(s,"undef")) ) {
+	    Safefree(start);
 	    Perl_croak(aTHX_ "%s", errstr);
 	}
     }
@@ -4535,13 +4536,22 @@ Perl_scan_version(pTHX_ const char *s, SV *rv, bool qv)
 	s++;
     pos = s;
 
+    /* Now that we are through the prescan, start creating the object */
+    av = newAV();
+    hv = newSVrv(rv, "version"); /* create an SV and upgrade the RV */
+    (void)sv_upgrade(hv, SVt_PVHV); /* needs to be an HV type */
+
+#ifndef NODEFAULT_SHAREKEYS
+    HvSHAREKEYS_on(hv);         /* key-sharing on by default */
+#endif
+
     if ( qv )
 	(void)hv_stores(MUTABLE_HV(hv), "qv", newSViv(qv));
     if ( alpha )
 	(void)hv_stores(MUTABLE_HV(hv), "alpha", newSViv(alpha));
     if ( !qv && width < 3 )
 	(void)hv_stores(MUTABLE_HV(hv), "width", newSViv(width));
-    
+
     while (isDIGIT(*pos))
 	pos++;
     if (!isALPHA(*pos)) {
@@ -4712,7 +4722,7 @@ Perl_new_version(pTHX_ SV *ver)
 
 	if ( hv_exists(MUTABLE_HV(ver), "alpha", 5) )
 	    (void)hv_stores(MUTABLE_HV(hv), "alpha", newSViv(1));
-	
+
 	if ( hv_exists(MUTABLE_HV(ver), "width", 5 ) )
 	{
 	    const I32 width = SvIV(*hv_fetchs(MUTABLE_HV(ver), "width", FALSE));
@@ -4846,7 +4856,7 @@ Perl_upg_version(pTHX_ SV *ver, bool qv)
 		    }
 
 		    /* is definitely a v-string */
-		    if ( saw_decimal >= 2 ) {	
+		    if ( saw_decimal >= 2 ) {
 			Safefree(version);
 			version = nver;
 		    }
@@ -5677,12 +5687,23 @@ Perl_get_hash_seed(pTHX_ unsigned char *seed_buffer)
     else
 #endif
     {
+        unsigned char *ptr= seed_buffer;
         (void)seedDrand01((Rand_seed_t)seed());
 
-        while (seed_buffer < end) {
-            *seed_buffer++ = (unsigned char)(Drand01() * (U8_MAX+1));
+        while (ptr < end) {
+            *ptr++ = (unsigned char)(Drand01() * (U8_MAX+1));
         }
-     }
+    }
+    {   /* initialize PL_hash_rand_bits from the hash seed.
+         * This value is highly volatile, it is updated every
+         * hash insert, and is used as part of hash bucket chain
+         * randomization and hash iterator randomization. */
+        unsigned long i;
+        PL_hash_rand_bits= 0;
+        for( i = 0; i < sizeof(UV) ; i++ ) {
+            PL_hash_rand_bits = (PL_hash_rand_bits << 8) | seed_buffer[i % PERL_HASH_SEED_BYTES];
+        }
+    }
 }
 
 #ifdef PERL_GLOBAL_STRUCT

@@ -211,11 +211,11 @@ like($a, qr/-e syntax OK/,
     "Deparse does not hang when traversing stash circularities");
 
 # [perl #93990]
-@* = ();
-is($deparse->coderef2text(sub{ print "@{*}" }),
+@] = ();
+is($deparse->coderef2text(sub{ print "@{]}" }),
 q<{
-    print "@{*}";
-}>, 'curly around to interpolate "@{*}"');
+    print "@{]}";
+}>, 'curly around to interpolate "@{]}"');
 is($deparse->coderef2text(sub{ print "@{-}" }),
 q<{
     print "@-";
@@ -1053,13 +1053,19 @@ print $_;
 ####
 # $#- $#+ $#{%} etc.
 my @x;
-@x = ($#{`}, $#{~}, $#{!}, $#{@}, $#{$}, $#{%}, $#{^}, $#{&}, $#{*});
+@x = ($#{`}, $#{~}, $#{!}, $#{@}, $#{$}, $#{%}, $#{^}, $#{&});
 @x = ($#{(}, $#{)}, $#{[}, $#{{}, $#{]}, $#{}}, $#{'}, $#{"}, $#{,});
 @x = ($#{<}, $#{.}, $#{>}, $#{/}, $#{?}, $#{=}, $#+, $#{\}, $#{|}, $#-);
 @x = ($#{;}, $#{:});
 ####
-# ${#} interpolated (the first line magically disables the warning)
-() = *#;
+# $#{*}
+# It's a known TODO that warnings are deparsed as bits, not textually.
+no warnings;
+() = $#{*};
+####
+# ${#} interpolated
+# It's a known TODO that warnings are deparsed as bits, not textually.
+no warnings;
 () = "${#}a";
 ####
 # [perl #86060] $( $| $) in regexps need braces
@@ -1372,6 +1378,16 @@ my($a, $b, $c) = @_;
 # SKIP ?$] < 5.017004 && "lexical subs not implemented on this Perl version"
 # TODO unimplemented in B::Deparse; RT #116553
 # lexical subroutine
+
+# XXX remove this __WARN__ once the ops are correctly implemented
+BEGIN {
+    $SIG{__WARN__} = sub {
+	return if $_[0] =~ /unexpected OP_(CLONE|INTRO|PAD)CV/;
+	print STDERR @_;
+    }
+}
+
 use feature 'lexical_subs';
+no warnings "experimental::lexical_subs";
 my sub f {}
 print f();

@@ -28,12 +28,14 @@ print $out_fh <<END;
 END
 
 # The data are at the end of this file.  A blank line is output as-is.
-# Otherwise, each line represents one #define, and begins with either a
-# Unicode character name with the blanks in it squeezed out or replaced by
-# underscores; or it may be a hexadecimal Unicode code point.  In the latter
+# Comments (lines whose first non-blank is a '#') are converted to C-style,
+# though empty comments are converted to blank lines.  Otherwise, each line
+# represents one #define, and begins with either a Unicode character name with
+# the blanks and dashes in it squeezed out or replaced by underscores; or it
+# may be a hexadecimal Unicode code point of the form U+xxxx.  In the latter
 # case, the name will be looked-up to use as the name of the macro.  In either
-# case, the macro name will have suffixes as listed above, and all blanks will
-# be replaced by underscores.
+# case, the macro name will have suffixes as listed above, and all blanks and
+# dashes will be replaced by underscores.
 #
 # Each line may optionally have one of the following flags on it, separated by
 # white space from the initial token.
@@ -55,12 +57,21 @@ END
 # having to figure things out.
 
 while ( <DATA> ) {
-    if ($_ !~ /\S/) {
-        print $out_fh "\n";
+    chomp;
+
+    # Convert any '#' comments to /* ... */; empty lines and comments are
+    # output as blank lines
+    if ($_ =~ m/ ^ \s* (?: \# ( .* ) )? $ /x) {
+        my $comment_body = $1 // "";
+        if ($comment_body ne "") {
+            print $out_fh "/* $comment_body */\n";
+        }
+        else {
+            print $out_fh "\n";
+        }
         next;
     }
 
-    chomp;
     unless ($_ =~ m/ ^ ( [^\ ]* )           # Name or code point token
                        (?: [\ ]+ ( [^ ]* ) )?  # optional flag
                        (?: [\ ]+ ( .* ) )?  # name if unnamed; flag is required
@@ -75,31 +86,30 @@ while ( <DATA> ) {
 
     my $name;
     my $cp;
+    my $U_cp;   # code point in Unicode (not-native) terms
     my $undef_ok = $desired_name || $flag =~ /skip_if_undef/;
 
-    if ($name_or_cp =~ /[^[:xdigit:]]/) {
-
-        # Anything that isn't a hex value must be a name.
-        $name = $name_or_cp;
-        $cp = charnames::vianame($name =~ s/_/ /gr);
-        die "Unknown name '$name' at line $.: $_\n" unless defined $name;
-    }
-    else {
-        $cp = $name_or_cp;
-        $name = charnames::viacode("0$cp"); # viacode requires a leading zero
-                                            # to be sure that the argument is
-                                            # hex
+    if ($name_or_cp =~ /^U\+(.*)/) {
+        $U_cp = hex $1;
+        $name = charnames::viacode($name_or_cp);
         if (! defined $name) {
-            die "Unknown code point '$cp' at line $.: $_\n" unless $undef_ok;
+            die "Unknown code point '$name_or_cp' at line $.: $_\n" unless $undef_ok;
             $name = "";
         }
+        $cp = utf8::unicode_to_native($U_cp);
+    }
+    else {
+        $name = $name_or_cp;
+        $cp = charnames::vianame($name =~ s/_/ /gr);
+        $U_cp = utf8::native_to_unicode($cp);
+        die "Unknown name '$name' at line $.: $_\n" unless defined $name;
     }
 
     $name = $desired_name if $name eq "" && $desired_name;
-    $name =~ s/ /_/g;   # The macro name can have no blanks in it
+    $name =~ s/[- ]/_/g;   # The macro name can have no blanks nor dashes
 
     my $str = join "", map { sprintf "\\x%02X", $_ }
-                       unpack("U0C*", pack("U", hex $cp));
+                       unpack("U0C*", pack("U", $cp));
 
     my $suffix = '_UTF8';
     if (! defined $flag  || $flag =~ /^ string (_skip_if_undef)? $/x) {
@@ -115,15 +125,14 @@ while ( <DATA> ) {
         $str = "0x$str";        # Is a numeric constant
     }
     elsif ($flag eq 'native') {
-        die "Are you sure you want to run this on an above-Latin1 code point?" if hex $cp > 0xff;
+        die "Are you sure you want to run this on an above-Latin1 code point?" if $cp > 0xff;
         $suffix = '_NATIVE';
-        $str = utf8::unicode_to_native(hex $cp);
-        $str = "0x$cp";        # Is a numeric constant
+        $str = sprintf "0x%02X", $cp;        # Is a numeric constant
     }
     else {
         die "Unknown flag at line $.: $_\n";
     }
-    print $out_fh "#define ${name}$suffix $str    /* U+$cp */\n";
+    printf $out_fh "#define %s%s  %s    /* U+%04X */\n", $name, $suffix, $str, $U_cp;
 }
 
 print $out_fh "\n#endif /* H_UNICODE_CONSTANTS */\n";
@@ -131,21 +140,21 @@ print $out_fh "\n#endif /* H_UNICODE_CONSTANTS */\n";
 read_only_bottom_close_and_rename($out_fh);
 
 __DATA__
-0300 string
-0301 string
-0308 string
 
-03B9 string
+U+0300 string
+U+0301 string
+U+0308 string
 
-03C5 string
+U+03B9 string
 
-2010 string
-D800 first FIRST_SURROGATE
+U+03C5 string
 
-007F native
-00DF native
-00E5 native
-00C5 native
-00FF native
-00B5 native
-0085 native
+U+2010 string
+U+D800 first FIRST_SURROGATE
+
+DEL native
+U+00DF native
+U+00E5 native
+U+00C5 native
+U+00FF native
+U+00B5 native

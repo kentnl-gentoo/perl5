@@ -943,7 +943,7 @@
 #define reginsert(a,b,c,d)	S_reginsert(aTHX_ a,b,c,d)
 #define regpatws		S_regpatws
 #define regpiece(a,b,c)		S_regpiece(aTHX_ a,b,c)
-#define regpposixcc(a,b,c,d)	S_regpposixcc(aTHX_ a,b,c,d)
+#define regpposixcc(a,b,c)	S_regpposixcc(aTHX_ a,b,c)
 #define regtail(a,b,c,d)	S_regtail(aTHX_ a,b,c,d)
 #define reguni(a,b,c)		S_reguni(aTHX_ a,b,c)
 #define regwhite		S_regwhite
@@ -1375,13 +1375,14 @@
 #  if defined(PERL_IN_HV_C)
 #define clear_placeholders(a,b)	S_clear_placeholders(aTHX_ a,b)
 #define hfreeentries(a)		S_hfreeentries(aTHX_ a)
-#define hsplit(a)		S_hsplit(aTHX_ a)
-#define hv_auxinit		S_hv_auxinit
+#define hsplit(a,b,c)		S_hsplit(aTHX_ a,b,c)
+#define hv_auxinit(a)		S_hv_auxinit(aTHX_ a)
 #define hv_delete_common(a,b,c,d,e,f,g)	S_hv_delete_common(aTHX_ a,b,c,d,e,f,g)
 #define hv_free_ent_ret(a,b)	S_hv_free_ent_ret(aTHX_ a,b)
 #define hv_magic_check		S_hv_magic_check
 #define hv_notallowed(a,b,c,d)	S_hv_notallowed(aTHX_ a,b,c,d)
 #define new_he()		S_new_he(aTHX)
+#define ptr_hash		S_ptr_hash
 #define refcounted_he_value(a)	S_refcounted_he_value(aTHX_ a)
 #define save_hek_flags		S_save_hek_flags
 #define share_hek_flags(a,b,c,d)	S_share_hek_flags(aTHX_ a,b,c,d)
@@ -1609,6 +1610,7 @@
 #define lop(a,b,c)		S_lop(aTHX_ a,b,c)
 #define missingterm(a)		S_missingterm(aTHX_ a)
 #define no_op(a,b)		S_no_op(aTHX_ a,b)
+#define parse_ident(a,b,c,d,e)	S_parse_ident(aTHX_ a,b,c,d,e)
 #define pending_ident()		S_pending_ident(aTHX)
 #define readpipe_override()	S_readpipe_override(aTHX)
 #define scan_const(a)		S_scan_const(aTHX_ a)
