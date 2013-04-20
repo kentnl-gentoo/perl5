@@ -2,13 +2,10 @@
  *
  *    VMS-specific routines for perl5
  *
- *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
- *    2002, 2003, 2004, 2005, 2006, 2007 by Charles Bailey and others.
+ *    Copyright (C) 1993-2013 by Charles Bailey and others.
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
- *
- *    Please see Changes*.* or the Perl Repository Browser for revision history.
  */
 
 /*
@@ -12068,6 +12065,7 @@ Perl_cando_by_name(pTHX_ I32 bit, bool effective, const char *fname)
 int
 Perl_flex_fstat(pTHX_ int fd, Stat_t *statbufp)
 {
+  dSAVE_ERRNO; /* fstat may set this even on success */
   if (!fstat(fd, &statbufp->crtl_stat)) {
     char *cptr;
     char *vms_filename;
@@ -12103,6 +12101,7 @@ Perl_flex_fstat(pTHX_ int fd, Stat_t *statbufp)
       statbufp->st_ctime = _toloc(statbufp->st_ctime);
     }
 #   endif
+    RESTORE_ERRNO;
     return 0;
   }
   return -1;

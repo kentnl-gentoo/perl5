@@ -672,6 +672,8 @@ S_pm_description(pTHX_ const PMOP *pm)
             if (RX_EXTFLAGS(regex) & RXf_CHECK_ALL)
                 sv_catpv(desc, ",ALL");
         }
+        if (RX_EXTFLAGS(regex) & RXf_SKIPWHITE)
+            sv_catpv(desc, ",SKIPWHITE");
     }
 
     append_flags(desc, pmflags, pmflags_flags_names);
@@ -1449,7 +1451,7 @@ const struct flag_to_name regexp_flags_names[] = {
     {RXf_ANCH_GPOS,       "ANCH_GPOS,"},
     {RXf_GPOS_SEEN,       "GPOS_SEEN,"},
     {RXf_GPOS_FLOAT,      "GPOS_FLOAT,"},
-    {RXf_LOOKBEHIND_SEEN, "LOOKBEHIND_SEEN,"},
+    {RXf_NO_INPLACE_SUBST, "NO_INPLACE_SUBST,"},
     {RXf_EVAL_SEEN,       "EVAL_SEEN,"},
     {RXf_CANY_SEEN,       "CANY_SEEN,"},
     {RXf_NOSCAN,          "NOSCAN,"},
@@ -1458,10 +1460,12 @@ const struct flag_to_name regexp_flags_names[] = {
     {RXf_USE_INTUIT_NOML, "USE_INTUIT_NOML,"},
     {RXf_USE_INTUIT_ML,   "USE_INTUIT_ML,"},
     {RXf_INTUIT_TAIL,     "INTUIT_TAIL,"},
+    {RXf_SPLIT,           "SPLIT,"},
     {RXf_COPY_DONE,       "COPY_DONE,"},
     {RXf_TAINTED_SEEN,    "TAINTED_SEEN,"},
     {RXf_TAINTED,         "TAINTED,"},
     {RXf_START_ONLY,      "START_ONLY,"},
+    {RXf_SKIPWHITE,       "SKIPWHITE,"},
     {RXf_WHITE,           "WHITE,"},
     {RXf_NULL,            "NULL,"},
 };
@@ -1801,8 +1805,16 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	Perl_dump_indent(aTHX_ level, file, "  KEYS = %"IVdf"\n", (IV)HvUSEDKEYS(sv));
 	Perl_dump_indent(aTHX_ level, file, "  FILL = %"IVdf"\n", (IV)HvFILL(sv));
 	Perl_dump_indent(aTHX_ level, file, "  MAX = %"IVdf"\n", (IV)HvMAX(sv));
-	Perl_dump_indent(aTHX_ level, file, "  RITER = %"IVdf"\n", (IV)HvRITER_get(sv));
-	Perl_dump_indent(aTHX_ level, file, "  EITER = 0x%"UVxf"\n", PTR2UV(HvEITER_get(sv)));
+        if (SvOOK(sv)) {
+	    Perl_dump_indent(aTHX_ level, file, "  RITER = %"IVdf"\n", (IV)HvRITER_get(sv));
+	    Perl_dump_indent(aTHX_ level, file, "  EITER = 0x%"UVxf"\n", PTR2UV(HvEITER_get(sv)));
+	    Perl_dump_indent(aTHX_ level, file, "  RAND = 0x%"UVxf, (UV)HvRAND_get(sv));
+            if (HvRAND_get(sv) != HvLASTRAND_get(sv) && HvRITER_get(sv) != -1 ) {
+		PerlIO_printf(file, " (LAST = 0x%"UVxf")\n", (UV)HvLASTRAND_get(sv));
+            } else {
+	        PerlIO_putc(file, '\n');
+            }
+        }
 	{
 	    MAGIC * const mg = mg_find(sv, PERL_MAGIC_symtab);
 	    if (mg && mg->mg_obj) {
@@ -2083,15 +2095,23 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
       dumpregexp:
 	{
 	    struct regexp * const r = ReANY((REGEXP*)sv);
-	    flags = RX_EXTFLAGS((REGEXP*)sv);
-	    sv_setpv(d,"");
-	    append_flags(d, flags, regexp_flags_names);
-	    if (*(SvEND(d) - 1) == ',') {
-		SvCUR_set(d, SvCUR(d) - 1);
-		SvPVX(d)[SvCUR(d)] = '\0';
-	    }
+#define SV_SET_STRINGIFY_REGEXP_FLAGS(d,flags) STMT_START { \
+            sv_setpv(d,"");                                 \
+            append_flags(d, flags, regexp_flags_names);     \
+            if (SvCUR(d) > 0 && *(SvEND(d) - 1) == ',') {       \
+                SvCUR_set(d, SvCUR(d) - 1);                 \
+                SvPVX(d)[SvCUR(d)] = '\0';                  \
+            }                                               \
+} STMT_END
+            SV_SET_STRINGIFY_REGEXP_FLAGS(d,r->compflags);
+            Perl_dump_indent(aTHX_ level, file, "  COMPFLAGS = 0x%"UVxf" (%s)\n",
+                                (UV)(r->compflags), SvPVX_const(d));
+
+            SV_SET_STRINGIFY_REGEXP_FLAGS(d,r->extflags);
 	    Perl_dump_indent(aTHX_ level, file, "  EXTFLAGS = 0x%"UVxf" (%s)\n",
-				(UV)flags, SvPVX_const(d));
+                                (UV)(r->extflags), SvPVX_const(d));
+#undef SV_SET_STRINGIFY_REGEXP_FLAGS
+
 	    Perl_dump_indent(aTHX_ level, file, "  INTFLAGS = 0x%"UVxf"\n",
 				(UV)(r->intflags));
 	    Perl_dump_indent(aTHX_ level, file, "  NPARENS = %"UVuf"\n",

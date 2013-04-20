@@ -20,7 +20,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
          CVf_METHOD CVf_LVALUE
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED);
-$VERSION = '1.19';
+$VERSION = '1.20';
 use strict;
 use vars qw/$AUTOLOAD/;
 use warnings ();
@@ -1323,7 +1323,8 @@ sub scopeop {
 	push @kids, $kid;
     }
     if ($cx > 0) { # inside an expression, (a do {} while for lineseq)
-	return "do {\n\t" . $self->lineseq($op, 0, @kids) . "\n\b}";
+	my $body = $self->lineseq($op, 0, @kids);
+	return is_lexical_subs(@kids) ? $body : "do {\n\t$body\n\b}";
     } else {
 	my $lineseq = $self->lineseq($op, $cx, @kids);
 	return (length ($lineseq) ? "$lineseq;" : "");
@@ -3426,7 +3427,7 @@ sub is_subscriptable {
 	$kid = $kid->sibling until null $kid->sibling;
 	return 0 if is_scope($kid);
 	$kid = $kid->first;
-	return 0 if $kid->name eq "gv";
+	return 0 if $kid->name eq "gv" || $kid->name eq "padcv";
 	return 0 if is_scalar($kid);
 	return is_subscriptable($kid);	
     } else {
@@ -3790,7 +3791,7 @@ sub pp_entersub {
 	$kid = $self->deparse($kid, 24);
     } else {
 	$prefix = "";
-	my $arrow = is_subscriptable($kid->first) ? "" : "->";
+	my $arrow = is_subscriptable($kid->first) || $kid->first->name eq "padcv" ? "" : "->";
 	$kid = $self->deparse($kid, 24) . $arrow;
     }
 
@@ -4803,13 +4804,16 @@ sub pp_split {
 
     # handle special case of split(), and split(' ') that compiles to /\s+/
     # Under 5.10, the reflags may be undef if the split regexp isn't a constant
-    # Under 5.17.5+, the special flag is on split itself.
+    # Under 5.17.5-5.17.9, the special flag is on split itself.
     $kid = $op->first;
     if ( $op->flags & OPf_SPECIAL
-	or
-	 $kid->flags & OPf_SPECIAL
-	 and ( $] < 5.009 ? $kid->pmflags & PMf_SKIPWHITE()
-	      : ($kid->reflags || 0) & RXf_SKIPWHITE() ) ) {
+         or (
+            $kid->flags & OPf_SPECIAL
+            and ( $] < 5.009 ? $kid->pmflags & PMf_SKIPWHITE()
+                             : ($kid->reflags || 0) & RXf_SKIPWHITE()
+            )
+         )
+    ) {
 	$exprs[0] = "' '";
     }
 
@@ -4884,6 +4888,36 @@ sub pp_subst {
     } else {
 	return "s". double_delim($re, $repl) . $flags;	
     }
+}
+
+sub is_lexical_subs {
+    my (@ops) = shift;
+    for my $op (@ops) {
+        return 0 if $op->name !~ /\A(?:introcv|clonecv)\z/;
+    }
+    return 1;
+}
+
+sub pp_introcv {
+    my $self = shift;
+    my($op, $cx) = @_;
+    # For now, deparsing doesn't worry about the distinction between introcv
+    # and clonecv, so pretend this op doesn't exist:
+    return '';
+}
+
+sub pp_clonecv {
+    my $self = shift;
+    my($op, $cx) = @_;
+    my $sv = $self->padname_sv($op->targ);
+    my $name = substr $sv->PVX, 1; # skip &/$/@/%, like $self->padany
+    return "my sub $name";
+}
+
+sub pp_padcv {
+    my $self = shift;
+    my($op, $cx) = @_;
+    return $self->padany($op);
 }
 
 1;
@@ -5376,6 +5410,23 @@ defined within a different scope, although L<PadWalker> is a good start.
 =item *
 
 There are probably many more bugs on non-ASCII platforms (EBCDIC).
+
+=item *
+
+Lexical C<my> subroutines are not deparsed properly at the moment.  They are
+emitted as pure declarations, without their body; and the declaration may
+appear in the wrong place (before any lexicals the body closes over, or
+before the C<use feature> declaration that permits use of this feature).
+
+We expect to resolve this before the lexical-subroutine feature is no longer
+considered experimental.
+
+=item *
+
+Lexical C<state> subroutines are not deparsed at all at the moment.
+
+We expect to resolve this before the lexical-subroutine feature is no longer
+considered experimental.
 
 =back
 

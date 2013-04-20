@@ -322,7 +322,7 @@ PP(pp_concat)
  * I suspect that the mg_get is no longer needed, but while padav
  * differs, it can't share this function */
 
-void
+STATIC void
 S_pushav(pTHX_ AV* const av)
 {
     dSP;
@@ -2308,7 +2308,7 @@ PP(pp_subst)
 #endif
         && (I32)clen <= RX_MINLENRET(rx)
         && (once || !(r_flags & REXEC_COPY_STR))
-	&& !(RX_EXTFLAGS(rx) & (RXf_LOOKBEHIND_SEEN|RXf_MODIFIES_VARS))
+        && !(RX_EXTFLAGS(rx) & RXf_NO_INPLACE_SUBST)
 	&& (!doutf8 || SvUTF8(TARG))
 	&& !(rpm->op_pmflags & PMf_NONDESTRUCT))
     {

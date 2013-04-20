@@ -680,6 +680,25 @@ See the L<top of this section|/Character classes> for an explanation of variants
 C<isXDIGIT_uni>, C<isXDIGIT_utf8>, C<isXDIGIT_LC>, C<isXDIGIT_LC_uvchr>, and
 C<isXDIGIT_LC_utf8>.
 
+=for apidoc Am|bool|isIDFIRST|char ch
+Returns a boolean indicating whether the specified character can be the first
+character of an identifier.  This is very close to, but not quite the same as
+the official Unicode property C<XID_Start>.  The difference is that this
+returns true only if the input character also matches L</isWORDCHAR>.
+See the L<top of this section|/Character classes> for an explanation of variants
+C<isIDFIRST_A>, C<isIDFIRST_L1>, C<isIDFIRST_uni>, C<isIDFIRST_utf8>,
+C<isIDFIRST_LC>, C<isIDFIRST_LC_uvchr>, and C<isIDFIRST_LC_utf8>.
+
+=for apidoc Am|bool|isIDCONT|char ch
+Returns a boolean indicating whether the specified character can be the
+second or succeeding character of an identifier.  This is very close to, but
+not quite the same as the official Unicode property C<XID_Continue>.  The
+difference is that this returns true only if the input character also matches
+L</isWORDCHAR>.  See the L<top of this section|/Character classes> for an
+explanation of variants C<isIDCONT_A>, C<isIDCONT_L1>, C<isIDCONT_uni>,
+C<isIDCONT_utf8>, C<isIDCONT_LC>, C<isIDCONT_LC_uvchr>, and
+C<isIDCONT_LC_utf8>.
+
 =head1 Miscellaneous Functions
 
 =for apidoc Am|U8|READ_XDIGIT|char str*
@@ -698,8 +717,7 @@ character set, if possible; otherwise returns the input character itself.
 
 =cut
 
-XXX Still undocumented are VERTSPACE, and IDFIRST IDCONT, and the
-other toUPPER etc functions
+XXX Still undocumented the other toUPPER etc functions
 
 Note that these macros are repeated in Devel::PPPort, so should also be
 patched there.  The file as of this writing is cpan/Devel-PPPort/parts/inc/misc
@@ -1473,12 +1491,12 @@ PoisonWith(0xEF) for catching access to freed memory.
  * (U16)n > (size_t)~0/sizeof(U16) always being false. */
 #ifdef PERL_MALLOC_WRAP
 #define MEM_WRAP_CHECK(n,t) \
-	(void)(sizeof(t) > 1 && ((MEM_SIZE)(n)+0.0) > MEM_SIZE_MAX/sizeof(t) && (croak_memory_wrap(),0))
+	(void)(sizeof(t) > 1 && ((MEM_SIZE)(n)+0.0) > MEM_SIZE_MAX/sizeof(t) && (Perl_croak_memory_wrap(),0))
 #define MEM_WRAP_CHECK_1(n,t,a) \
 	(void)(sizeof(t) > 1 && ((MEM_SIZE)(n)+0.0) > MEM_SIZE_MAX/sizeof(t) && (Perl_croak_nocontext("%s",(a)),0))
 #define MEM_WRAP_CHECK_(n,t) MEM_WRAP_CHECK(n,t),
 
-#define PERL_STRLEN_ROUNDUP(n) ((void)(((n) > MEM_SIZE_MAX - 2 * PERL_STRLEN_ROUNDUP_QUANTUM) ? (croak_memory_wrap(),0):0),((n-1+PERL_STRLEN_ROUNDUP_QUANTUM)&~((MEM_SIZE)PERL_STRLEN_ROUNDUP_QUANTUM-1)))
+#define PERL_STRLEN_ROUNDUP(n) ((void)(((n) > MEM_SIZE_MAX - 2 * PERL_STRLEN_ROUNDUP_QUANTUM) ?  (Perl_croak_memory_wrap(),0):0),((n-1+PERL_STRLEN_ROUNDUP_QUANTUM)&~((MEM_SIZE)PERL_STRLEN_ROUNDUP_QUANTUM-1)))
 #else
 
 #define MEM_WRAP_CHECK(n,t)

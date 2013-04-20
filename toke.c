@@ -2525,6 +2525,7 @@ S_sublex_push(pTHX)
     SAVEGENERICPV(PL_lex_brackstack);
     SAVEGENERICPV(PL_lex_casestack);
     SAVEGENERICPV(PL_parser->lex_shared);
+    SAVEBOOL(PL_parser->lex_re_reparsing);
 
     /* The here-doc parser needs to be able to peek into outer lexing
        scopes to find the body of the here-doc.  So we put PL_linestr and
@@ -2567,6 +2568,9 @@ S_sublex_push(pTHX)
 	PL_lex_inpat = PL_sublex_info.sub_op;
     else
 	PL_lex_inpat = NULL;
+
+    PL_parser->lex_re_reparsing = cBOOL(PL_in_eval & EVAL_RE_REPARSING);
+    PL_in_eval &= ~EVAL_RE_REPARSING;
 
     return '(';
 }
@@ -3751,7 +3755,9 @@ S_scan_const(pTHX_ char *start)
     /* return the substring (via pl_yylval) only if we parsed anything */
     if (s > PL_bufptr) {
 	SvREFCNT_inc_simple_void_NN(sv);
-	if ( PL_hints & ( PL_lex_inpat ? HINT_NEW_RE : HINT_NEW_STRING ) ) {
+	if (   (PL_hints & ( PL_lex_inpat ? HINT_NEW_RE : HINT_NEW_STRING ))
+            && ! PL_parser->lex_re_reparsing)
+        {
 	    const char *const key = PL_lex_inpat ? "qr" : "q";
 	    const STRLEN keylen = PL_lex_inpat ? 2 : 1;
 	    const char *type;
@@ -5711,6 +5717,9 @@ Perl_yylex(pTHX)
 	    if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_COMPARE)
 		TOKEN(0);
 	    s += 2;
+            Perl_ck_warner_d(aTHX_
+                packWARN(WARN_EXPERIMENTAL__SMARTMATCH),
+                "Smartmatch is experimental");
 	    Eop(OP_SMARTMATCH);
 	}
 	s++;
@@ -7935,6 +7944,9 @@ Perl_yylex(pTHX)
 
 	case KEY_given:
 	    pl_yylval.ival = CopLINE(PL_curcop);
+            Perl_ck_warner_d(aTHX_
+                packWARN(WARN_EXPERIMENTAL__SMARTMATCH),
+                "given is experimental");
 	    OPERATOR(GIVEN);
 
 	case KEY_glob:
@@ -8791,6 +8803,9 @@ Perl_yylex(pTHX)
 	    if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_NONEXPR)
 		return REPORT(0);
 	    pl_yylval.ival = CopLINE(PL_curcop);
+            Perl_ck_warner_d(aTHX_
+                packWARN(WARN_EXPERIMENTAL__SMARTMATCH),
+                "when is experimental");
 	    OPERATOR(WHEN);
 
 	case KEY_while:
@@ -9038,7 +9053,9 @@ S_checkcomma(pTHX_ const char *s, const char *name, const char *what)
     }
 }
 
-/* Either returns sv, or mortalizes/frees sv and returns a new SV*.
+/* S_new_constant(): do any overload::constant lookup.
+
+   Either returns sv, or mortalizes/frees sv and returns a new SV*.
    Best used as sv=new_constant(..., sv, ...).
    If s, pv are NULL, calls subroutine with one argument,
    and <type> is used with error messages only.
@@ -9493,8 +9510,7 @@ S_scan_pat(pTHX_ char *start, I32 type)
 {
     dVAR;
     PMOP *pm;
-    char *s = scan_str(start,!!PL_madskills,FALSE, PL_reg_state.re_reparsing,
-                       TRUE /* look for escaped bracketed metas */ );
+    char *s;
     const char * const valid_flags =
 	(const char *)((type == OP_QR) ? QR_PAT_MODS : M_PAT_MODS);
     char charset = '\0';    /* character set modifier */
@@ -9504,9 +9520,9 @@ S_scan_pat(pTHX_ char *start, I32 type)
 
     PERL_ARGS_ASSERT_SCAN_PAT;
 
-    /* this was only needed for the initial scan_str; set it to false
-     * so that any (?{}) code blocks etc are parsed normally */
-    PL_reg_state.re_reparsing = FALSE;
+    s = scan_str(start,!!PL_madskills,FALSE, (PL_in_eval & EVAL_RE_REPARSING),
+                       TRUE /* look for escaped bracketed metas */ );
+
     if (!s) {
 	const char * const delimiter = skipspace(start);
 	Perl_croak(aTHX_
@@ -9959,12 +9975,12 @@ S_scan_heredoc(pTHX_ char *s)
 	linestr = shared->ls_linestr;
 	bufend = SvEND(linestr);
 	d = s;
-	while (s < bufend &&
-	  (*s != '\n' || memNE(s,PL_tokenbuf,len)) ) {
+	while (s < bufend - len + 1 &&
+          memNE(s,PL_tokenbuf,len) ) {
 	    if (*s++ == '\n')
 		++shared->herelines;
 	}
-	if (s >= bufend) {
+	if (s >= bufend - len + 1) {
 	    goto interminable;
 	}
 	sv_setpvn(tmpstr,d+1,s-d);

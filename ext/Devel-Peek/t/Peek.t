@@ -250,8 +250,6 @@ do_test('reference to hash',
     KEYS = 1
     FILL = 1
     MAX = 7
-    RITER = -1
-    EITER = 0x0
     Elt "123" HASH = $ADDR' . $c_pattern,
 	'',
 	$] > 5.009 && $] < 5.015
@@ -341,6 +339,7 @@ do_test('reference to regexp',
     STASH = $ADDR\\t"Regexp"'
 . ($] < 5.013 ? '' :
 '
+    COMPFLAGS = 0x0 \(\)
     EXTFLAGS = 0x680000 \(CHECK_ALL,USE_INTUIT_NOML,USE_INTUIT_ML\)
     INTFLAGS = 0x0
     NPARENS = 0
@@ -400,9 +399,7 @@ do_test('reference to blessed hash',
     ARRAY = 0x0
     KEYS = 0
     FILL = 0
-    MAX = 7
-    RITER = -1
-    EITER = 0x0', '',
+    MAX = 7', '',
 	$] > 5.009
 	? $] >= 5.015
 	     ? 0
@@ -477,8 +474,6 @@ do_test('reference to hash containing Unicode',
     KEYS = 1
     FILL = 1
     MAX = 7
-    RITER = -1
-    EITER = $ADDR
     Elt "\\\214\\\101" \[UTF8 "\\\x\{100\}"\] HASH = $ADDR
     SV = PV\\($ADDR\\) at $ADDR
       REFCNT = 1
@@ -508,8 +503,6 @@ do_test('reference to hash containing Unicode',
     KEYS = 1
     FILL = 1
     MAX = 7
-    RITER = -1
-    EITER = $ADDR
     Elt "\\\304\\\200" \[UTF8 "\\\x\{100\}"\] HASH = $ADDR
     SV = PV\\($ADDR\\) at $ADDR
       REFCNT = 1
@@ -723,9 +716,7 @@ do_test('blessing to a class with embedded NUL characters',
     ARRAY = $ADDR
     KEYS = 0
     FILL = 0
-    MAX = 7
-    RITER = -1
-    EITER = 0x0', '',
+    MAX = 7', '',
 	$] > 5.009
 	? $] >= 5.015
 	    ?  0
@@ -749,6 +740,7 @@ do_test('ENAME on a stash',
     MAX = 7
     RITER = -1
     EITER = 0x0
+    RAND = $ADDR
     NAME = "RWOM"
     ENAME = "RWOM"				# $] > 5.012
 ');
@@ -772,6 +764,7 @@ do_test('ENAMEs on a stash',
     MAX = 7
     RITER = -1
     EITER = 0x0
+    RAND = $ADDR
     NAME = "RWOM"
     NAMECOUNT = 2				# $] > 5.012
     ENAME = "RWOM", "KLANK"			# $] > 5.012
@@ -797,6 +790,7 @@ do_test('ENAMEs on a stash with no NAME',
     MAX = 7
     RITER = -1
     EITER = 0x0
+    RAND = $ADDR
     NAMECOUNT = -3				# $] > 5.012
     ENAME = "RWOM", "KLANK"			# $] > 5.012
 ');
@@ -950,6 +944,7 @@ do_test('UTF-8 in a regular expression',
     PV = $ADDR "\(\?\^u:\\\\\\\\x\{100\}\)" \[UTF8 "\(\?\^u:\\\\\\\\x\{100\}\)"\]
     CUR = 13
     STASH = $ADDR	"Regexp"
+    COMPFLAGS = 0x0 \(\)
     EXTFLAGS = 0x680040 \(CHECK_ALL,USE_INTUIT_NOML,USE_INTUIT_ML\)
     INTFLAGS = 0x0
     NPARENS = 0
@@ -969,7 +964,8 @@ do_test('UTF-8 in a regular expression',
     SUBSTRS = $ADDR
     PPRIVATE = $ADDR
     OFFS = $ADDR
-    QR_ANONCV = 0x0
+    QR_ANONCV = 0x0(?:
+    SAVED_COPY = 0x0)?
 ');
 
 done_testing();

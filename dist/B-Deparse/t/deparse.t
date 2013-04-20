@@ -594,7 +594,7 @@ my $c = [];
 my $d = \[];
 ####
 # SKIP ?$] < 5.010 && "smartmatch and given/when not implemented on this Perl version"
-# CONTEXT use feature ':5.10';
+# CONTEXT use feature ':5.10'; no warnings 'experimental::smartmatch';
 # implicit smartmatch in given/when
 given ('foo') {
     when ('bar') { continue; }
@@ -954,6 +954,7 @@ my @a;
 $a[0] = 1;
 ####
 # feature features without feature
+# CONTEXT no warnings 'experimental::smartmatch';
 CORE::state $x;
 CORE::say $x;
 CORE::given ($x) {
@@ -969,6 +970,7 @@ CORE::evalbytes '';
 () = CORE::fc $x;
 ####
 # feature features when feature has been disabled by use VERSION
+# CONTEXT no warnings 'experimental::smartmatch';
 use feature (sprintf(":%vd", $^V));
 use 1;
 CORE::state $x;
@@ -998,7 +1000,7 @@ CORE::evalbytes '';
 () = CORE::__SUB__;
 ####
 # (the above test with CONTEXT, and the output is equivalent but different)
-# CONTEXT use feature ':5.10';
+# CONTEXT use feature ':5.10'; no warnings 'experimental::smartmatch';
 # feature features when feature has been disabled by use VERSION
 use feature (sprintf(":%vd", $^V));
 use 1;
@@ -1378,16 +1380,15 @@ my($a, $b, $c) = @_;
 # SKIP ?$] < 5.017004 && "lexical subs not implemented on this Perl version"
 # TODO unimplemented in B::Deparse; RT #116553
 # lexical subroutine
-
-# XXX remove this __WARN__ once the ops are correctly implemented
-BEGIN {
-    $SIG{__WARN__} = sub {
-	return if $_[0] =~ /unexpected OP_(CLONE|INTRO|PAD)CV/;
-	print STDERR @_;
-    }
-}
-
 use feature 'lexical_subs';
 no warnings "experimental::lexical_subs";
 my sub f {}
+print f();
+####
+# SKIP ?$] < 5.017004 && "lexical subs not implemented on this Perl version"
+# TODO unimplemented in B::Deparse; RT #116553
+# lexical "state" subroutine
+use feature 'state', 'lexical_subs';
+no warnings 'experimental::lexical_subs';
+state sub f {}
 print f();

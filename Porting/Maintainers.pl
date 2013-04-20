@@ -397,7 +397,7 @@ use File::Glob qw(:case);
 
     'constant' => {
         'MAINTAINER'   => 'saper',
-        'DISTRIBUTION' => 'SAPER/constant-1.25.tar.gz',
+        'DISTRIBUTION' => 'SAPER/constant-1.27.tar.gz',
         'FILES'        => q[dist/constant],
         'EXCLUDED'     => [
             qw( t/00-load.t
@@ -412,7 +412,7 @@ use File::Glob qw(:case);
 
     'CPAN' => {
         'MAINTAINER'   => 'andk',
-        'DISTRIBUTION' => 'ANDK/CPAN-2.00-TRIAL.tar.gz',
+        'DISTRIBUTION' => 'ANDK/CPAN-2.00.tar.gz',
         'FILES'        => q[cpan/CPAN],
         'EXCLUDED'     => [
             qr{^distroprefs/},
@@ -680,7 +680,7 @@ use File::Glob qw(:case);
 
     'Exporter' => {
         'MAINTAINER'   => 'ferreira',
-        'DISTRIBUTION' => 'TODDR/Exporter-5.67.tar.gz',
+        'DISTRIBUTION' => 'TODDR/Exporter-5.68.tar.gz',
         'FILES'        => q[lib/Exporter.pm
                             lib/Exporter.t
                             lib/Exporter/Heavy.pm
@@ -747,13 +747,14 @@ use File::Glob qw(:case);
 
     'ExtUtils::MakeMaker' => {
         'MAINTAINER'   => 'mschwern',
-        'DISTRIBUTION' => 'MSCHWERN/ExtUtils-MakeMaker-6.64.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.66.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
             qr{^(bundled|my)/},
             qr{^t/Liblist_Kid.t},
             qr{^t/liblist/},
+            qr{^\.perlcriticrc},
         ],
         'UPSTREAM' => 'first-come',
     },
@@ -1271,7 +1272,7 @@ use File::Glob qw(:case);
 
     'Module::CoreList' => {
         'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.84.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.85.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
         'UPSTREAM'     => 'blead',
     },

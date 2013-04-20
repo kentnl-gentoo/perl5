@@ -115,7 +115,7 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  On OP_ENTERSUB || OP_NULL, saw a "do". */
 				/*  On OP_EXISTS, treat av as av, not avhv.  */
 				/*  On OP_(ENTER|LEAVE)EVAL, don't clear $@ */
-				/*  On OP_SPLIT, special split " " */
+                                /*  On pushre, rx is used as part of split, e.g. split " " */
 				/*  On regcomp, "use re 'eval'" was in scope */
 				/*  On OP_READLINE, was <$filehandle> */
 				/*  On RV2[ACGHS]V, don't create GV--in
@@ -308,6 +308,7 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpEVAL_UNICODE		4
 #define OPpEVAL_BYTES		8
 #define OPpEVAL_COPHH		16	/* Construct %^H from cop hints */
+#define OPpEVAL_RE_REPARSING	32	/* eval_sv(..., G_RE_REPARSING) */
     
 /* Private for OP_CALLER, OP_WANTARRAY and OP_RUNCV */
 #define OPpOFFBYONE		128	/* Treat caller(1) as caller(2) */

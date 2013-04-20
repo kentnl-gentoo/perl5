@@ -1085,7 +1085,6 @@ cpan/ExtUtils-MakeMaker/t/installed_file.t			Test for ExtUtils::MakeMaker
 cpan/ExtUtils-MakeMaker/t/INST_PREFIX.t				See if MakeMaker can apply PREFIXs
 cpan/ExtUtils-MakeMaker/t/INST.t				Check MakeMaker INST_* macros
 cpan/ExtUtils-MakeMaker/t/is_of_type.t				Test for ExtUtils::MakeMaker
-cpan/ExtUtils-MakeMaker/t/Liblist_Kid.t				See if ExtUtils::Liblist works
 cpan/ExtUtils-MakeMaker/t/Liblist.t				See if ExtUtils::Liblist works
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/NoXS.pm		MakeMaker test utilities
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/BFD.pm	MakeMaker test utilities
@@ -4723,6 +4722,7 @@ pod/perl5161delta.pod		Perl changes in version 5.16.1
 pod/perl5162delta.pod		Perl changes in version 5.16.2
 pod/perl5163delta.pod		Perl changes in version 5.16.3
 pod/perl5170delta.pod		Perl changes in version 5.17.0
+pod/perl51710delta.pod		Perl changes in version 5.17.10
 pod/perl5171delta.pod		Perl changes in version 5.17.1
 pod/perl5172delta.pod		Perl changes in version 5.17.2
 pod/perl5173delta.pod		Perl changes in version 5.17.3
@@ -4860,7 +4860,6 @@ Porting/corecpan.pl		Reports outdated dual-lived modules
 Porting/corelist-diff		Tool to produce corelist diffs
 Porting/corelist-perldelta.pl	Generates data perldelta from Module::CoreList
 Porting/corelist.pl		Generates data for Module::CoreList
-Porting/curliff.pl		Curliff or liff your curliffable files.
 Porting/epigraphs.pod		the release epigraphs used over the years
 Porting/exec-bit.txt		List of files that get +x in release tarball
 Porting/exercise_makedef.pl	Brute force testing for makedef.pl
