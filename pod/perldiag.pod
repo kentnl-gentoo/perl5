@@ -2308,6 +2308,26 @@ would otherwise result in the same message being repeated.
 Failure of user callbacks dispatched using the C<G_KEEPERR> flag could
 also result in this warning.  See L<perlcall/G_KEEPERR>.
 
+=item In '(*VERB...)', splitting the initial '(*' is deprecated in regex; marked by <-- HERE in m/%s/
+
+(D regexp, deprecated)
+The two-character sequence C<"(*"> in this context in a regular
+expression pattern should be an indivisible token, with nothing
+intervening between the C<"("> and the C<"*">, but you separated them.
+Due to an accident of implementation, this prohibition was not enforced,
+but we do plan to forbid it in a future Perl version.  This message
+serves as giving you fair warning of this pending change.
+
+=item In '(?...)', splitting the initial '(?' is deprecated in regex; marked by <-- HERE in m/%s/
+
+(D regexp, deprecated)
+The two-character sequence C<"(?"> in this context in a regular
+expression pattern should be an indivisible token, with nothing
+intervening between the C<"("> and the C<"?">, but you separated them.
+Due to an accident of implementation, this prohibition was not enforced,
+but we do plan to forbid it in a future Perl version.  This message
+serves as giving you fair warning of this pending change.
+
 =item Incomplete expression within '(?[ ])' in regex; marked by <-- HERE in m/%s/
 
 (F)
@@ -2610,28 +2630,17 @@ with 'useperlio'.
 (F) Your machine doesn't implement the sockatmark() functionality,
 neither as a system call nor an ioctl call (SIOCATMARK).
 
-=item $* is no longer supported, and will become a syntax error
+=item $* is no longer supported
 
-(D deprecated, syntax) The special variable C<$*>, which has had no
-effect since v5.10.0, will be removed soon.  Currently code which mentions
-this variable compiles with this warning, but the variable is no longer
-magical, hence reads and writes have no side effects.  In future such code
-will fail to compile with a syntax error.
-
-Prior to v5.10.0 the use of C<$*> enabled or disabled multi-line matching
-within a string.
+(D deprecated, syntax) The special variable C<$*>, deprecated in older
+perls, has been removed as of 5.9.0 and is no longer supported.  In
+previous versions of perl the use of C<$*> enabled or disabled multi-line
+matching within a string.
 
 Instead of using C<$*> you should use the C</m> (and maybe C</s>) regexp
 modifiers.  You can enable C</m> for a lexical scope (even a whole file)
 with C<use re '/m'>.  (In older versions: when C<$*> was set to a true value
 then all regular expressions behaved as if they were written using C</m>.)
-
-=item %c* is deprecated, and will become a syntax error
-
-(D deprecated, syntax) The punctuation variables C<@*>, C<&*>, C<**> and
-C<%*> will be removed soon.  In future such code will fail to compile with a
-syntax error.  Removing these variables along with C<$*> will permit future
-syntax additions.
 
 =item $# is no longer supported
 
@@ -4038,6 +4047,7 @@ on the version of Perl you are using because it is too new.
 Maybe the code needs to be updated, or maybe it is simply
 wrong and the version check should just be removed.
 
+
 =item perl: warning: Setting locale failed.
 
 (S) The whole warning message will look something like:
@@ -4060,12 +4070,26 @@ fix the problem, however, you will get the same error message each
 time you run Perl.  How to really fix the problem can be found in
 L<perllocale> section B<LOCALE PROBLEMS>.
 
-=item perl: warning: Non hex character in '$ENV{PERL_HASH_SEED}', seed only 
-partially set
+=item perl: warning: Non hex character in '$ENV{PERL_HASH_SEED}', seed only partially set
 
 (W) PERL_HASH_SEED should match /^\s*(?:0x)?[0-9a-fA-F]+\s*\z/ but it
-contained a non hex character. This could mean your hash randomization
-is not being set correctly.
+contained a non hex character. This could mean you are not using the hash
+seed you think you are.
+
+=item perl: warning: strange setting in '$ENV{PERL_PERTURB_KEYS}': '%s'
+
+(W) Perl was run with the environment variable PERL_PERTURB_KEYS defined
+but containing an unexpected value. The legal values of this setting
+are as follows.
+
+  Numeric | String        | Result
+  --------+---------------+-----------------------------------------
+  0       | NO            | Disables key traversal randomization
+  1       | RANDOM        | Enables full key traversal randomization
+  2       | DETERMINISTIC | Enables repeatable key traversal randomization
+
+Both numeric and string values are accepted, but note that string values are
+case sensitive. The default for this setting is "RANDOM" or 1.
 
 =item pid %x not a child
 
@@ -4291,6 +4315,11 @@ incorrect results.  An example is C<\p{Changes_When_Uppercased}> which
 is true for "LATIN SMALL LETTER Y WITH DIAERESIS", but since the upper
 case of that character is not in Latin1, in that locale it doesn't
 change when upper cased.
+
+=item Quantifier {n,m} with n > m can't match in regex
+
+(W regexp) Minima should be less than or equal to maxima.  If you really
+want your regexp to match something 0 times, just put {0}.
 
 =item Quantifier follows nothing in regex; marked by <-- HERE in m/%s/
 
@@ -5053,6 +5082,17 @@ warning:
 
     no warnings "experimental::regex_sets";
 
+=item The %s feature is experimental
+
+(S experimental) This warning is emitted if you enable an experimental
+feature via C<use feature>.  Simply suppress the warning if you want
+to use the feature, but know that in doing so you are taking the risk
+of using an experimental feature which may change or be removed in a
+future Perl version:
+
+    no warnings "experimental::lexical_subs";
+    use feature "lexical_subs";
+
 =item The %s function is unimplemented
 
 (F) The function indicated isn't implemented on this architecture, according
@@ -5080,6 +5120,14 @@ need to rebuild Perl with a CRTL that does, or redefine
 F<PERL_ENV_TABLES> (see L<perlvms>) so that the environ array isn't the
 target of the change to
 %ENV which produced the warning.
+
+=item This Perl has not been built with support for randomized hash key traversal but something called Perl_hv_rand_set().
+
+(F) Something has attempted to use an internal API call which
+depends on Perl being compiled with the default support for randomized hash
+key traversal, but this Perl has been compiled without it. You should
+report this warning to the relevant upstream party, or recompile perl
+with default options.
 
 =item thread failed to start: %s
 

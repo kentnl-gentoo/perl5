@@ -934,8 +934,8 @@
  *	This symbol contains the ~name expanded version of ARCHLIB, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-/*#define ARCHLIB "/usr/local/lib/perl5/5.17/unknown"		/ **/
-/*#define ARCHLIB_EXP "/usr/local/lib/perl5/5.17/unknown"		/ **/
+/*#define ARCHLIB "/usr/local/lib/perl5/5.18/unknown"		/ **/
+/*#define ARCHLIB_EXP "/usr/local/lib/perl5/5.18/unknown"		/ **/
 
 /* ARCHNAME:
  *	This symbol holds a string representing the architecture name.
@@ -981,7 +981,7 @@
  *	This symbol holds the hexadecimal constant defined in byteorder,
  *	in a UV, i.e. 0x1234 or 0x4321 or 0x12345678, etc...
  *	If the compiler supports cross-compiling or multiple-architecture
- *	binaries (eg. on NeXT systems), use compiler-defined macros to
+ *	binaries (e.g. on NeXT systems), use compiler-defined macros to
  *	determine the byte order.
  *	On NeXT 3.2 (and greater), you can build "Fat" Multiple Architecture
  *	Binaries (MAB) on either big endian or little endian machines.
@@ -2673,12 +2673,14 @@
 #define DOUBLESIZE 8		/**/
 
 /* EBCDIC:
- *     This symbol, if defined, indicates that this system uses
+ *	This symbol, if defined, indicates that this system uses
  *	EBCDIC encoding.
  */
 /* BOOTSTRAP_CHARSET:
- *     This symbol, if defined, indicates that this system uses
- *	BOOTSTRAP_CHARSET
+ *	This symbol, if defined, indicates that this system needs
+ *	converting various files to the native character set before
+ *	bringing up perl on a system that has a non-ASCII character
+ *	set and no working perl.
  */
 /*#define	EBCDIC 		/ **/
 /*#define	BOOTSTRAP_CHARSET	/ **/
@@ -2696,7 +2698,7 @@
 #define	Gid_t_f		"lu"		/**/
 
 /* Gid_t_sign:
- *	This symbol holds the signedess of a Gid_t.
+ *	This symbol holds the signedness of a Gid_t.
  *	1 for unsigned, -1 for signed.
  */
 #define Gid_t_sign	1		/* GID sign */
@@ -3043,8 +3045,8 @@
  *	This symbol contains the ~name expanded version of PRIVLIB, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-#define PRIVLIB "/usr/local/lib/perl5/5.17"		/**/
-#define PRIVLIB_EXP "/usr/local/lib/perl5/5.17"		/**/
+#define PRIVLIB "/usr/local/lib/perl5/5.18"		/**/
+#define PRIVLIB_EXP "/usr/local/lib/perl5/5.18"		/**/
 
 /* CAN_PROTOTYPE:
  *	If defined, this macro indicates that the C compiler can handle
@@ -3187,8 +3189,8 @@
  *	This symbol contains the ~name expanded version of SITEARCH, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-/*#define SITEARCH "/usr/local/lib/perl5/5.17/unknown"		/ **/
-/*#define SITEARCH_EXP "/usr/local/lib/perl5/5.17/unknown"		/ **/
+/*#define SITEARCH "/usr/local/lib/perl5/5.18/unknown"		/ **/
+/*#define SITEARCH_EXP "/usr/local/lib/perl5/5.18/unknown"		/ **/
 
 /* SITELIB:
  *	This symbol contains the name of the private library for this package.
@@ -3210,8 +3212,8 @@
  *	removed.  The elements in inc_version_list (inc_version_list.U) can
  *	be tacked onto this variable to generate a list of directories to search.
  */
-#define SITELIB "/usr/local/lib/perl5/5.17"		/**/
-#define SITELIB_EXP "/usr/local/lib/perl5/5.17"		/**/
+#define SITELIB "/usr/local/lib/perl5/5.18"		/**/
+#define SITELIB_EXP "/usr/local/lib/perl5/5.18"		/**/
 #define SITELIB_STEM "/usr/local/lib/perl5"		/**/
 
 /* Size_t_size:
@@ -3255,7 +3257,7 @@
 #define	Uid_t_f		"lu"		/**/
 
 /* Uid_t_sign:
- *	This symbol holds the signedess of a Uid_t.
+ *	This symbol holds the signedness of a Uid_t.
  *	1 for unsigned, -1 for signed.
  */
 #define Uid_t_sign	1		/* UID sign */
@@ -3718,7 +3720,7 @@
 /*#define     HAS_INT64_T               / **/
 
 /* HAS_ISBLANK:
- *	This manifest constant lets the C program know that isblank 
+ *	This manifest constant lets the C program know that isblank
  *	is available.
  */
 /*#define HAS_ISBLANK		/ **/
@@ -4598,7 +4600,7 @@
  *	This variable contains the size of struct stat's st_ino in bytes.
  */
 /* ST_INO_SIGN:
- *	This symbol holds the signedess of struct stat's st_ino.
+ *	This symbol holds the signedness of struct stat's st_ino.
  *	1 for unsigned, -1 for signed.
  */
 #define ST_INO_SIGN 1	/* st_ino sign */
@@ -4751,6 +4753,6 @@
 #endif
 
 /* Generated from:
- * b1b92e181a028e2513e7dbdbd34635c03c0fe82f5e8bbd12e21ed36fc88f91b3 config_h.SH
- * 6075986ce77cfbce5db9b3b166eff3cbbcdd86773430ccf51391da95b06f51af uconfig.sh
+ * 2c9dc3f21d37b1665f6a59dfc6d79e6cb08bdf36a9c3e427d11d6b9ddffe2439 config_h.SH
+ * 26ab9b4aa382d32761cb91084ba59e7e4b190799502a43366ccb3d2f584783ca uconfig.sh
  * ex: set ro: */

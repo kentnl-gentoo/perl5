@@ -259,6 +259,8 @@ my @deprecated = (
     '/a\b{cde/' => '"\b{" is deprecated; use "\b\{" or "\b[{]" instead {#} m/a\{#}b{cde/',
     '/a\B{cde/' => '"\B{" is deprecated; use "\B\{" or "\B[{]" instead {#} m/a\{#}B{cde/',
     'use utf8; /(?x)\\/' => 'Escape literal pattern white space under /x {#} m/(?x)\{#}\/',
+    '/((?# This is a comment in the middle of a token)?:foo)/' => 'In \'(?...)\', splitting the initial \'(?\' is deprecated {#} m/((?# This is a comment in the middle of a token)?{#}:foo)/',
+    '/((?# This is a comment in the middle of a token)*FAIL)/' => 'In \'(*VERB...)\', splitting the initial \'(*\' is deprecated {#} m/((?# This is a comment in the middle of a token)*{#}FAIL)/',
 );
 
 while (my ($regex, $expect) = splice @death, 0, 2) {
@@ -278,7 +280,7 @@ foreach my $ref (\@warning, \@experimental_regex_sets, \@deprecated) {
     my $warning_type = ($ref == \@warning)
                        ? 'regexp'
                        : ($ref == \@deprecated)
-                         ? 'deprecated'
+                         ? 'regexp, deprecated'
                          : 'experimental::regex_sets';
     while (my ($regex, $expect) = splice @$ref, 0, 2) {
         my @expect = fixup_expect($expect);

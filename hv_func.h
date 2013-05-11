@@ -11,9 +11,9 @@
 
 #ifndef PERL_SEEN_HV_FUNC_H /* compile once */
 #define PERL_SEEN_HV_FUNC_H
-#define PERL_HASH_FUNC_ONE_AT_A_TIME_HARD
 
 #if !( 0 \
+        || defined(PERL_HASH_FUNC_SIPHASH) \
         || defined(PERL_HASH_FUNC_SDBM) \
         || defined(PERL_HASH_FUNC_DJB2) \
         || defined(PERL_HASH_FUNC_SUPERFAST) \
@@ -22,11 +22,7 @@
         || defined(PERL_HASH_FUNC_ONE_AT_A_TIME_HARD) \
         || defined(PERL_HASH_FUNC_ONE_AT_A_TIME_OLD) \
     )
-#ifdef HAS_QUAD
-#define PERL_HASH_FUNC_SIPHASH
-#else
 #define PERL_HASH_FUNC_ONE_AT_A_TIME_HARD
-#endif
 #endif
 
 #if defined(PERL_HASH_FUNC_SIPHASH)
@@ -392,8 +388,8 @@ S_perl_hash_murmur3(const unsigned char * const seed, const unsigned char *ptr, 
     /* This CPU does not handle unaligned word access */
 
     /* Consume enough so that the next data byte is word aligned */
-    int i = -(long)ptr & 3;
-    if(i && (STRLEN)i <= len) {
+    STRLEN i = -PTR2IV(ptr) & 3;
+    if(i && i <= len) {
       MURMUR_DOBYTES(i, h1, carry, bytes_in_carry, ptr, len);
     }
 

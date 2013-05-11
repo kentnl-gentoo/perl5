@@ -4845,7 +4845,10 @@ Perl_yylex(pTHX)
 	DEBUG_T({ if(*PL_bufptr != '(') PerlIO_printf(Perl_debug_log,
               "### Interpolated variable\n"); });
 	PL_expect = XTERM;
-	PL_lex_dojoin = (*PL_bufptr == '@');
+        /* for /@a/, we leave the joining for the regex engine to do
+         * (unless we're within \Q etc) */
+	PL_lex_dojoin = (*PL_bufptr == '@'
+                            && (!PL_lex_inpat || PL_lex_casemods));
 	PL_lex_state = LEX_INTERPNORMAL;
 	if (PL_lex_dojoin) {
 	    start_force(PL_curforce);
@@ -8560,6 +8563,7 @@ Perl_yylex(pTHX)
 #ifdef PERL_MAD
 		    PL_thistoken = subtoken;
 		    s = d;
+                    PERL_UNUSED_VAR(tboffset);
 #else
 		    if (have_name)
 			(void) force_word(PL_oldbufptr + tboffset, WORD,
@@ -8682,6 +8686,7 @@ Perl_yylex(pTHX)
 		force_next(0);
 
 		PL_thistoken = subtoken;
+                PERL_UNUSED_VAR(have_proto);
 #else
 		if (have_proto) {
 		    NEXTVAL_NEXTTOKE.opval =

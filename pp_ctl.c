@@ -153,6 +153,9 @@ PP(pp_regcomp)
 	       modified by get-magic), to avoid incorrectly setting the
 	       RXf_TAINTED flag with RX_TAINT_on further down. */
 	    TAINT_set(was_tainted);
+#if NO_TAINT_SUPPORT
+            PERL_UNUSED_VAR(was_tainted);
+#endif
 	}
 	tmp = reg_temp_copy(NULL, new_re);
 	ReREFCNT_dec(new_re);
@@ -297,6 +300,7 @@ PP(pp_substcont)
 	    TAINT_NOT;
 	    LEAVE_SCOPE(cx->sb_oldsave);
 	    POPSUBST(cx);
+	    PERL_ASYNC_CHECK();
 	    RETURNOP(pm->op_next);
 	    assert(0); /* NOTREACHED */
 	}
@@ -1438,8 +1442,14 @@ S_dopoptosub_at(pTHX_ const PERL_CONTEXT *cxstk, I32 startingblock)
 	switch (CxTYPE(cx)) {
 	default:
 	    continue;
-	case CXt_EVAL:
 	case CXt_SUB:
+            /* in sub foo { /(?{...})/ }, foo ends up on the CX stack
+             * twice; the first for the normal foo() call, and the second
+             * for a faked up re-entry into the sub to execute the
+             * code block. Hide this faked entry from the world. */
+            if (cx->cx_type & CXp_SUB_RE_FAKE)
+                continue;
+	case CXt_EVAL:
 	case CXt_FORMAT:
 	    DEBUG_l( Perl_deb(aTHX_ "(dopoptosub_at(): found sub at cx=%ld)\n", (long)i));
 	    return i;
@@ -1653,6 +1663,11 @@ Perl_die_unwind(pTHX_ SV *msv)
 	    sv_setsv(ERRSV, exceptsv);
 	}
 
+	if (in_eval & EVAL_KEEPERR) {
+	    Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "\t(in cleanup) %"SVf,
+			   SVfARG(exceptsv));
+	}
+
 	while ((cxix = dopoptoeval(cxstack_ix)) < 0
 	       && PL_curstackinfo->si_prev)
 	{
@@ -1711,13 +1726,8 @@ Perl_die_unwind(pTHX_ SV *msv)
 			   SVfARG(exceptsv ? exceptsv : newSVpvs_flags("Unknown error\n",
                                                                     SVs_TEMP)));
 	    }
-	    if (in_eval & EVAL_KEEPERR) {
-		Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "\t(in cleanup) %"SVf,
-			       SVfARG(exceptsv));
-	    }
-	    else {
+	    if (!(in_eval & EVAL_KEEPERR))
 		sv_setsv(ERRSV, exceptsv);
-	    }
 	    PL_restartjmpenv = restartjmpenv;
 	    PL_restartop = restartop;
 	    JMPENV_JUMP(3);
@@ -2676,6 +2686,7 @@ PP(pp_next)
     if (PL_scopestack_ix < inner)
 	leave_scope(PL_scopestack[PL_scopestack_ix]);
     PL_curcop = cx->blk_oldcop;
+    PERL_ASYNC_CHECK();
     return (cx)->blk_loop.my_op->op_nextop;
 }
 
@@ -2699,6 +2710,7 @@ PP(pp_redo)
     LEAVE_SCOPE(oldsave);
     FREETMPS;
     PL_curcop = cx->blk_oldcop;
+    PERL_ASYNC_CHECK();
     return redo_op;
 }
 
@@ -2712,7 +2724,7 @@ S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstac
     PERL_ARGS_ASSERT_DOFINDLABEL;
 
     if (ops >= oplimit)
-	Perl_croak(aTHX_ too_deep);
+	Perl_croak(aTHX_ "%s", too_deep);
     if (o->op_type == OP_LEAVE ||
 	o->op_type == OP_SCOPE ||
 	o->op_type == OP_LEAVELOOP ||
@@ -2721,7 +2733,7 @@ S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstac
     {
 	*ops++ = cUNOPo->op_first;
 	if (ops >= oplimit)
-	    Perl_croak(aTHX_ too_deep);
+	    Perl_croak(aTHX_ "%s", too_deep);
     }
     *ops = 0;
     if (o->op_flags & OPf_KIDS) {
@@ -2915,6 +2927,7 @@ PP(pp_goto)
 		PUTBACK;
 		(void)(*CvXSUB(cv))(aTHX_ cv);
 		LEAVE;
+		PERL_ASYNC_CHECK();
 		return retop;
 	    }
 	    else {
@@ -2966,6 +2979,7 @@ PP(pp_goto)
 			}
 		    }
 		}
+		PERL_ASYNC_CHECK();
 		RETURNOP(CvSTART(cv));
 	    }
 	}
@@ -2979,7 +2993,7 @@ PP(pp_goto)
         label_flags = (cPVOP->op_private & OPpPV_IS_UTF8) ? SVf_UTF8 : 0;
         label_len   = strlen(label);
     }
-    if (!(do_dump || label_len)) DIE(aTHX_ must_have_label);
+    if (!(do_dump || label_len)) DIE(aTHX_ "%s", must_have_label);
 
     PERL_ASYNC_CHECK();
 
@@ -3121,6 +3135,7 @@ PP(pp_goto)
 	PL_do_undump = FALSE;
     }
 
+    PERL_ASYNC_CHECK();
     RETURNOP(retop);
 }
 
@@ -3279,6 +3294,8 @@ Perl_find_runcv_where(pTHX_ U8 cond, IV arg, U32 *db_seqp)
 		    *db_seqp = cx->blk_oldcop->cop_seq;
 		    continue;
 		}
+                if (cx->cx_type & CXp_SUB_RE)
+                    continue;
 	    }
 	    else if (CxTYPE(cx) == CXt_EVAL && !CxTRYBLOCK(cx))
 		cv = cx->blk_eval.cv;
@@ -4966,10 +4983,13 @@ PP(pp_leavewhen)
 	    leave_scope(PL_scopestack[PL_scopestack_ix]);
 	PL_curcop = cx->blk_oldcop;
 
+	PERL_ASYNC_CHECK();
 	return cx->blk_loop.my_op->op_nextop;
     }
-    else
+    else {
+	PERL_ASYNC_CHECK();
 	RETURNOP(cx->blk_givwhen.leave_op);
+    }
 }
 
 PP(pp_continue)

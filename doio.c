@@ -1336,10 +1336,11 @@ Perl_my_lstat_flags(pTHX_ const U32 flags)
     static const char* const no_prev_lstat = "The stat preceding -l _ wasn't an lstat";
     dSP;
     const char *file;
+    SV* const sv = TOPs;
     if (PL_op->op_flags & OPf_REF) {
 	if (cGVOP_gv == PL_defgv) {
 	    if (PL_laststype != OP_LSTAT)
-		Perl_croak(aTHX_ no_prev_lstat);
+		Perl_croak(aTHX_ "%s", no_prev_lstat);
 	    return PL_laststatval;
 	}
 	PL_laststatval = -1;
@@ -1353,13 +1354,17 @@ Perl_my_lstat_flags(pTHX_ const U32 flags)
     if ((PL_op->op_private & (OPpFT_STACKED|OPpFT_AFTER_t))
 	     == OPpFT_STACKED) {
       if (PL_laststype != OP_LSTAT)
-	Perl_croak(aTHX_ no_prev_lstat);
+	Perl_croak(aTHX_ "%s", no_prev_lstat);
       return PL_laststatval;
-    } 
+    }
 
     PL_laststype = OP_LSTAT;
     PL_statgv = NULL;
-    file = SvPV_flags_const_nolen(TOPs, flags);
+    if (SvROK(sv) && isGV_with_GP(SvRV(sv)) && ckWARN(WARN_IO)) {
+        Perl_warner(aTHX_ packWARN(WARN_IO), "Use of -l on filehandle %s",
+           GvENAME((const GV *)SvRV(sv)));
+    }
+    file = SvPV_flags_const_nolen(sv, flags);
     sv_setpv(PL_statname,file);
     PL_laststatval = PerlLIO_lstat(file,&PL_statcache);
     if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(file, '\n'))
@@ -1583,6 +1588,8 @@ Perl_apply(pTHX_ I32 type, SV **mark, SV **sp)
     bool killgp = FALSE;
 
     PERL_ARGS_ASSERT_APPLY;
+
+    PERL_UNUSED_VAR(what); /* may not be used depending on compile options */
 
     /* Doing this ahead of the switch statement preserves the old behaviour,
        where attempting to use kill as a taint test test would fail on

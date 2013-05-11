@@ -1957,7 +1957,8 @@ Perl_my_setenv(pTHX_ const char *nam, const char *val)
 #   else
 #       if defined(HAS_UNSETENV)
         if (val == NULL) {
-            (void)unsetenv(nam);
+            if (environ) /* old glibc can crash with null environ */
+                (void)unsetenv(nam);
         } else {
 	    const int nlen = strlen(nam);
 	    const int vlen = strlen(val);
@@ -5660,58 +5661,84 @@ Perl_seed(pTHX)
 }
 
 void
-Perl_get_hash_seed(pTHX_ unsigned char *seed_buffer)
+Perl_get_hash_seed(pTHX_ unsigned char * const seed_buffer)
 {
     dVAR;
-    const char *s;
-    const unsigned char * const end= seed_buffer + PERL_HASH_SEED_BYTES;
+    const char *env_pv;
+    unsigned long i;
 
     PERL_ARGS_ASSERT_GET_HASH_SEED;
 
-    s= PerlEnv_getenv("PERL_HASH_SEED");
+    env_pv= PerlEnv_getenv("PERL_HASH_SEED");
 
-    if ( s )
+    if ( env_pv )
 #ifndef USE_HASH_SEED_EXPLICIT
     {
-        while (isSPACE(*s))
-	    s++;
-        if (s[0] == '0' && s[1] == 'x')
-            s += 2;
-
-        while (isXDIGIT(*s) && seed_buffer < end) {
-            *seed_buffer = READ_XDIGIT(s) << 4;
-            if (isXDIGIT(*s)) {
-                *seed_buffer |= READ_XDIGIT(s);
-            }
-            seed_buffer++;
+        /* ignore leading spaces */
+        while (isSPACE(*env_pv))
+            env_pv++;
+#ifdef USE_PERL_PERTURB_KEYS
+        /* if they set it to "0" we disable key traversal randomization completely */
+        if (strEQ(env_pv,"0")) {
+            PL_hash_rand_bits_enabled= 0;
+        } else {
+            /* otherwise switch to deterministic mode */
+            PL_hash_rand_bits_enabled= 2;
         }
-        while (isSPACE(*s))
-	    s++;
-        if (*s && !isXDIGIT(*s)) {
+#endif
+        /* ignore a leading 0x... if it is there */
+        if (env_pv[0] == '0' && env_pv[1] == 'x')
+            env_pv += 2;
+
+        for( i = 0; isXDIGIT(*env_pv) && i < PERL_HASH_SEED_BYTES; i++ ) {
+            seed_buffer[i] = READ_XDIGIT(env_pv) << 4;
+            if ( isXDIGIT(*env_pv)) {
+                seed_buffer[i] |= READ_XDIGIT(env_pv);
+            }
+        }
+        while (isSPACE(*env_pv))
+            env_pv++;
+
+        if (*env_pv && !isXDIGIT(*env_pv)) {
             Perl_warn(aTHX_ "perl: warning: Non hex character in '$ENV{PERL_HASH_SEED}', seed only partially set\n");
         }
         /* should we check for unparsed crap? */
+        /* should we warn about unused hex? */
+        /* should we warn about insufficient hex? */
     }
     else
 #endif
     {
-        unsigned char *ptr= seed_buffer;
         (void)seedDrand01((Rand_seed_t)seed());
 
-        while (ptr < end) {
-            *ptr++ = (unsigned char)(Drand01() * (U8_MAX+1));
+        for( i = 0; i < PERL_HASH_SEED_BYTES; i++ ) {
+            seed_buffer[i] = (unsigned char)(Drand01() * (U8_MAX+1));
         }
     }
+#ifdef USE_PERL_PERTURB_KEYS
     {   /* initialize PL_hash_rand_bits from the hash seed.
          * This value is highly volatile, it is updated every
          * hash insert, and is used as part of hash bucket chain
          * randomization and hash iterator randomization. */
-        unsigned long i;
-        PL_hash_rand_bits= 0;
+        PL_hash_rand_bits= 0xbe49d17f; /* I just picked a number */
         for( i = 0; i < sizeof(UV) ; i++ ) {
-            PL_hash_rand_bits = (PL_hash_rand_bits << 8) | seed_buffer[i % PERL_HASH_SEED_BYTES];
+            PL_hash_rand_bits += seed_buffer[i % PERL_HASH_SEED_BYTES];
+            PL_hash_rand_bits = ROTL_UV(PL_hash_rand_bits,8);
         }
     }
+    env_pv= PerlEnv_getenv("PERL_PERTURB_KEYS");
+    if (env_pv) {
+        if (strEQ(env_pv,"0") || strEQ(env_pv,"NO")) {
+            PL_hash_rand_bits_enabled= 0;
+        } else if (strEQ(env_pv,"1") || strEQ(env_pv,"RANDOM")) {
+            PL_hash_rand_bits_enabled= 1;
+        } else if (strEQ(env_pv,"2") || strEQ(env_pv,"DETERMINISTIC")) {
+            PL_hash_rand_bits_enabled= 2;
+        } else {
+            Perl_warn(aTHX_ "perl: warning: strange setting in '$ENV{PERL_PERTURB_KEYS}': '%s'\n", env_pv);
+        }
+    }
+#endif
 }
 
 #ifdef PERL_GLOBAL_STRUCT
@@ -6124,6 +6151,7 @@ Perl_my_clearenv(pTHX)
       if (bsiz < l + 1) {
         (void)safesysfree(buf);
         bsiz = l + 1; /* + 1 for the \0. */
+        bufsiz = bsiz * sizeof(char); /* keep bsiz and bufsiz in sync */
         buf = (char*)safesysmalloc(bufsiz);
       } 
       memcpy(buf, *environ, l);
@@ -6395,7 +6423,7 @@ Perl_get_db_sub(pTHX_ SV **svp, CV *cv)
 {
     dVAR;
     SV * const dbsv = GvSVn(PL_DBsub);
-    const bool save_taint = TAINT_get; /* Accepted unused var warning under NO_TAINT_SUPPORT */
+    const bool save_taint = TAINT_get;
 
     /* When we are called from pp_goto (svp is null),
      * we do not care about using dbsv to call CV;
@@ -6446,6 +6474,9 @@ Perl_get_db_sub(pTHX_ SV **svp, CV *cv)
 	SvIV_set(dbsv, PTR2IV(cv));	/* Do it the quickest way  */
     }
     TAINT_IF(save_taint);
+#ifdef NO_TAINT_SUPPORT
+    PERL_UNUSED_VAR(save_taint);
+#endif
 }
 
 int

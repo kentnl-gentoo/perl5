@@ -1808,12 +1808,13 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
         if (SvOOK(sv)) {
 	    Perl_dump_indent(aTHX_ level, file, "  RITER = %"IVdf"\n", (IV)HvRITER_get(sv));
 	    Perl_dump_indent(aTHX_ level, file, "  EITER = 0x%"UVxf"\n", PTR2UV(HvEITER_get(sv)));
+#ifdef PERL_HASH_RANDOMIZE_KEYS
 	    Perl_dump_indent(aTHX_ level, file, "  RAND = 0x%"UVxf, (UV)HvRAND_get(sv));
             if (HvRAND_get(sv) != HvLASTRAND_get(sv) && HvRITER_get(sv) != -1 ) {
-		PerlIO_printf(file, " (LAST = 0x%"UVxf")\n", (UV)HvLASTRAND_get(sv));
-            } else {
-	        PerlIO_putc(file, '\n');
+                PerlIO_printf(file, " (LAST = 0x%"UVxf")", (UV)HvLASTRAND_get(sv));
             }
+#endif
+            PerlIO_putc(file, '\n');
         }
 	{
 	    MAGIC * const mg = mg_find(sv, PERL_MAGIC_symtab);
@@ -2211,6 +2212,7 @@ Perl_runops_debug(pTHX)
         OP_ENTRY_PROBE(OP_NAME(PL_op));
     } while ((PL_op = PL_op->op_ppaddr(aTHX)));
     DEBUG_l(Perl_deb(aTHX_ "leaving RUNOPS level\n"));
+    PERL_ASYNC_CHECK();
 
     TAINT_NOT;
     return 0;
@@ -2659,7 +2661,7 @@ Perl_sv_xmlpeek(pTHX_ SV *sv)
 	sv_catpv(t, "VOID=\"\"");
 	goto finish;
     }
-    else if (sv == (const SV *)0x55555555 || SvTYPE(sv) == 'U') {
+    else if (sv == (const SV *)0x55555555 || ((char)SvTYPE(sv)) == 'U') {
 	sv_catpv(t, "WILD=\"\"");
 	goto finish;
     }
