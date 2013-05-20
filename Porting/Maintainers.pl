@@ -199,15 +199,6 @@ use File::Glob qw(:case);
         'UPSTREAM'    => 'blead',
     },
 
-    'Archive::Extract' => {
-        'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/Archive-Extract-0.68.tar.gz',
-        'FILES'        => q[cpan/Archive-Extract],
-        'UPSTREAM'     => 'cpan',
-        'BUGS'         => 'bug-archive-extract@rt.cpan.org',
-        'DEPRECATED'   => '5.017009',
-    },
-
     'Archive::Tar' => {
         'MAINTAINER'   => 'kane',
         'DISTRIBUTION' => 'BINGOS/Archive-Tar-1.90.tar.gz',
@@ -300,15 +291,6 @@ use File::Glob qw(:case);
         'MAINTAINER' => 'smccam',
         'FILES'      => q[dist/B-Deparse],
         'UPSTREAM'   => 'blead',
-    },
-
-    'B::Lint' => {
-        'MAINTAINER'   => 'jjore',
-        'DISTRIBUTION' => 'RJBS/B-Lint-1.17.tar.gz',
-        'FILES'        => q[cpan/B-Lint],
-        'EXCLUDED'     => ['t/test.pl'],
-        'UPSTREAM'     => 'cpan',
-        'DEPRECATED'   => '5.017009',
     },
 
     'base' => {
@@ -459,43 +441,6 @@ use File::Glob qw(:case);
                 ),
         ],
         'UPSTREAM' => 'cpan',
-    },
-
-    'CPANPLUS' => {
-        'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/CPANPLUS-0.9134.tar.gz',
-        'FILES'        => q[cpan/CPANPLUS],
-        'EXCLUDED'     => [
-            qr{^inc/},
-            qr{^t/dummy-.*\.hidden$},
-            qr{^t/dummy-(cpanplus|perl|localmirror)/},
-            'bin/cpanp-boxed',
-
-            # SQLite tests would be skipped in core, and
-            # the filenames are too long for VMS!
-            qw( t/031_CPANPLUS-Internals-Source-SQLite.t
-                t/032_CPANPLUS-Internals-Source-via-sqlite.t
-                ),
-            'Makefile.PL',
-        ],
-        'CUSTOMIZED' => ['Makefile.PL'],
-        'UPSTREAM'   => 'cpan',
-        'BUGS'       => 'bug-cpanplus@rt.cpan.org',
-        'DEPRECATED' => '5.017009',
-    },
-
-    'CPANPLUS::Dist::Build' => {
-        'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/CPANPLUS-Dist-Build-0.70.tar.gz',
-        'FILES'        => q[cpan/CPANPLUS-Dist-Build],
-        'EXCLUDED'     => [
-            qr{^inc/},
-            qw( t/99_pod.t
-                t/99_pod_coverage.t
-                ),
-        ],
-        'UPSTREAM' => 'cpan',
-        'DEPRECATED' => '5.017009',
     },
 
     'CPAN::Meta' => {
@@ -807,14 +752,6 @@ use File::Glob qw(:case);
         'MAINTAINER' => 'p5p',
         'FILES'      => q[lib/File/Copy.{pm,t}],
         'UPSTREAM'   => 'blead',
-    },
-
-    'File::CheckTree' => {
-        'MAINTAINER'   => 'p5p',
-        'DISTRIBUTION' => 'RJBS/File-CheckTree-4.42.tar.gz',
-        'FILES'        => q[cpan/File-CheckTree],
-        'EXCLUDED'     => [qr{^t/release-.*\.t}],
-        'UPSTREAM'     => 'cpan',
     },
 
     'File::DosGlob' => {
@@ -1150,22 +1087,6 @@ use File::Glob qw(:case);
         'UPSTREAM'     => 'cpan',
     },
 
-    'Log::Message' => {
-        'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/Log-Message-0.06.tar.gz',
-        'FILES'        => q[cpan/Log-Message],
-        'UPSTREAM'     => 'cpan',
-        'DEPRECATED'   => '5.017009',
-    },
-
-    'Log::Message::Simple' => {
-        'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/Log-Message-Simple-0.10.tar.gz',
-        'FILES'        => q[cpan/Log-Message-Simple],
-        'UPSTREAM'     => 'cpan',
-        'DEPRECATED'   => '5.017009',
-    },
-
     'mad' => {
         'MAINTAINER' => 'lwall',
         'FILES'      => q[mad],
@@ -1315,15 +1236,6 @@ use File::Glob qw(:case);
         'UPSTREAM' => 'cpan',
     },
 
-    'Module::Pluggable' => {
-        'MAINTAINER'   => 'simonw',
-        'DISTRIBUTION' => 'SIMONW/Module-Pluggable-4.7.tar.gz',
-        'FILES'        => q[cpan/Module-Pluggable],
-        'UPSTREAM'     => 'cpan',
-        'CUSTOMIZED'   => ['Makefile.PL'],
-        'DEPRECATED'   => '5.017009',
-    },
-
     'mro' => {
         'MAINTAINER' => 'p5p',
         'FILES'      => q[ext/mro],
@@ -1353,14 +1265,6 @@ use File::Glob qw(:case);
         'FILES'        => q[cpan/NEXT],
         'EXCLUDED'     => [qr{^demo/}],
         'UPSTREAM'     => 'cpan',
-    },
-
-    'Object::Accessor' => {
-        'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/Object-Accessor-0.46.tar.gz',
-        'FILES'        => q[cpan/Object-Accessor],
-        'UPSTREAM'     => 'cpan',
-        'DEPRECATED'   => '5.017009',
     },
 
     'ODBM_File' => {
@@ -1541,15 +1445,6 @@ use File::Glob qw(:case);
         'MAINTAINER' => 'p5p',
         'FILES'      => q[ext/Pod-Html],
         'UPSTREAM'   => 'blead',
-    },
-
-    'Pod::LaTeX' => {
-        'MAINTAINER'   => 'tjenness',
-        'DISTRIBUTION' => 'TJENNESS/Pod-LaTeX-0.61.tar.gz',
-        'FILES'        => q[cpan/Pod-LaTeX],
-        'EXCLUDED'     => ['t/require.t'],
-        'UPSTREAM'     => undef,
-        'DEPRECATED'   => '5.017008',
     },
 
     'Pod::Parser' => {
@@ -1755,14 +1650,6 @@ use File::Glob qw(:case);
         'UPSTREAM'     => 'blead',
     },
 
-    'Term::UI' => {
-        'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/Term-UI-0.34.tar.gz',
-        'FILES'        => q[cpan/Term-UI],
-        'UPSTREAM'     => 'cpan',
-        'DEPRECATED'   => '5.017009',
-    },
-
     'Test' => {
         'MAINTAINER'   => 'jesse',
         'DISTRIBUTION' => 'JESSE/Test-1.26.tar.gz',
@@ -1850,21 +1737,6 @@ use File::Glob qw(:case);
         'MAP' => {
             'ParseWords.pm' => 'cpan/Text-ParseWords/lib/Text/ParseWords.pm',
             ''              => 'cpan/Text-ParseWords/',
-        },
-        'UPSTREAM' => undef,
-    },
-
-    'Text::Soundex' => {
-        'MAINTAINER'   => 'markm',
-        'DISTRIBUTION' => 'RJBS/Text-Soundex-3.04.tar.gz',
-        'FILES'        => q[cpan/Text-Soundex],
-        'MAP'          => {
-            '' => 'cpan/Text-Soundex/',
-
-            # XXX these two files are clearly related,
-            # but they appear to have diverged
-            # considerably over the years
-            'test.pl' => 'cpan/Text-Soundex/t/Soundex.t',
         },
         'UPSTREAM' => undef,
     },

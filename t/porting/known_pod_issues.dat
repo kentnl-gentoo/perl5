@@ -15,8 +15,11 @@ _control87(3)
 Algorithm::C3
 AnyEvent
 Apache::MP3
+Archive::Extract
 Array::Base
 Attribute::Constant
+B::Lint
+B::Lint::Debug
 basename(1)
 Benchmark::Perl::Formance
 ByteLoader
@@ -31,6 +34,9 @@ Class::ISA
 Class::PseudoHash
 Classic::Perl
 Clone
+cpan2dist(1)
+cpanp(1)
+CPANPLUS
 Crypt::Random
 curl(1)
 Data::Entropy
@@ -43,6 +49,7 @@ DBIx::Profile
 Devel::Callsite
 Devel::DProf
 Devel::DTrace::Provider
+Devel::InnerPackage
 Devel::NYTProf
 Devel::PPPort
 Devel::SawAmpersand
@@ -59,6 +66,7 @@ File::ShareDir
 flock(3)
 fsync(3c)
 gcc(1)
+Getopt::Std
 getpriority(2)
 HTTP::Lite
 inetd(8)
@@ -68,6 +76,11 @@ kill(3)
 langinfo(3)
 Lingua::KO::Hangul::Util
 local::lib
+Log::Message
+Log::Message::Config
+Log::Message::Handlers
+Log::Message::Item
+Log::Message::Simple
 Mail::Send
 man(5)
 man(7)
@@ -82,12 +95,15 @@ md5sum(1)
 Module::CPANTS::Analyse
 Module::Find
 Module::Info
+Module::Pluggable
+Module::Pluggable::Object
 Module::Starter
 Moo
 Moose
 MRO::Compat
 nl_langinfo(3)
 Number::Format
+Object::Accessor
 Object::InsideOut
 Object::Tiny
 open(2)
@@ -110,8 +126,10 @@ pod/perlrun.pod        Verbatim line length including indents exceeds 79 by     
 POD2::FR
 POD2::IT
 pod2ipf(1)
+pod2latex(1)
 pod2man(1)
 Pod::HTML2Pod
+Pod::LaTeX
 Pod::Plainer
 Pod::PXML
 poll(2)
@@ -143,6 +161,8 @@ String::Base
 String::Scanf
 Switch
 tar(1)
+Term::UI
+Term::UI::History
 Test::Harness::TAP
 Test::Inline
 Test::MockObject
@@ -219,7 +239,7 @@ pod/perlbook.pod	Verbatim line length including indents exceeds 79 by	1
 pod/perlcall.pod	Verbatim line length including indents exceeds 79 by	2
 pod/perlce.pod	Verbatim line length including indents exceeds 79 by	2
 pod/perlclib.pod	Verbatim line length including indents exceeds 79 by	3
-pod/perlcygwin.pod	Verbatim line length including indents exceeds 79 by	25
+pod/perlcygwin.pod	Verbatim line length including indents exceeds 79 by	24
 pod/perldbmfilter.pod	Verbatim line length including indents exceeds 79 by	1
 pod/perldebguts.pod	Verbatim line length including indents exceeds 79 by	34
 pod/perldebtut.pod	Verbatim line length including indents exceeds 79 by	22

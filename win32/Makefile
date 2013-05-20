@@ -5,7 +5,7 @@
 #	Windows SDK 64-bit compiler and tools
 #
 # This is set up to build a perl.exe that runs off a shared library
-# (perl518.dll).  Also makes individual DLLs for the XS extensions.
+# (perl519.dll).  Also makes individual DLLs for the XS extensions.
 #
 
 ##
@@ -37,7 +37,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.18.0
+#INST_VER	= \5.19.0
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -162,7 +162,7 @@ CCTYPE		= MSVC60
 # set this to additionally provide a statically linked perl-static.exe.
 # Note that dynamic loading will not work with this perl, so you must
 # include required modules statically using the STATIC_EXT or ALL_STATIC
-# variables below. A static library perl518s.lib will also be created.
+# variables below. A static library perl519s.lib will also be created.
 # Ordinary perl.exe is not affected by this option.
 #
 #BUILD_STATIC	= define
@@ -539,9 +539,9 @@ $(o).dll:
 
 # makedef.pl must be updated if this changes, and this should normally
 # only change when there is an incompatible revision of the public API.
-PERLIMPLIB	= ..\perl518.lib
-PERLSTATICLIB	= ..\perl518s.lib
-PERLDLL		= ..\perl518.dll
+PERLIMPLIB	= ..\perl519.lib
+PERLSTATICLIB	= ..\perl519s.lib
+PERLDLL		= ..\perl519.dll
 
 MINIPERL	= ..\miniperl.exe
 MINIDIR		= .\mini
@@ -607,9 +607,6 @@ UTILS		=			\
 		..\utils\ptardiff	\
 		..\utils\ptargrep	\
 		..\utils\zipdetails	\
-		..\utils\cpanp-run-perl	\
-		..\utils\cpanp	\
-		..\utils\cpan2dist	\
 		..\utils\shasum		\
 		..\utils\instmodsh	\
 		..\utils\json_pp	\
@@ -1158,7 +1155,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5180delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5190delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(PERLEXE) $(ICWD) ..\autodoc.pl ..
@@ -1201,7 +1198,6 @@ distclean: realclean
 	-if exist $(LIBDIR)\B rmdir /s /q $(LIBDIR)\B
 	-if exist $(LIBDIR)\CGI rmdir /s /q $(LIBDIR)\CGI
 	-if exist $(LIBDIR)\CPAN rmdir /s /q $(LIBDIR)\CPAN
-	-if exist $(LIBDIR)\CPANPLUS rmdir /s /q $(LIBDIR)\CPANPLUS
 	-if exist $(LIBDIR)\Compress rmdir /s /q $(LIBDIR)\Compress
 	-if exist $(LIBDIR)\Data rmdir /s /q $(LIBDIR)\Data
 	-if exist $(LIBDIR)\Devel rmdir /s /q $(LIBDIR)\Devel
@@ -1251,7 +1247,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5180delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perl5190delta.pod perlaix.pod perlamiga.pod perlapi.pod \
 	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldgux.pod perldos.pod perlfreebsd.pod perlhaiku.pod \
 	    perlhpux.pod perlhurd.pod perlintern.pod perlirix.pod \
@@ -1263,7 +1259,7 @@ distclean: realclean
 	    perlvos.pod perlwin32.pod
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph pstruct h2xs \
 	    perldoc perlivp libnetcfg enc2xs piconv cpan *.bat \
-	    xsubpp pod2html instmodsh json_pp prove ptar ptardiff ptargrep cpanp-run-perl cpanp cpan2dist shasum corelist config_data zipdetails
+	    xsubpp pod2html instmodsh json_pp prove ptar ptardiff ptargrep shasum corelist config_data zipdetails
 	-cd ..\x2p && del /f find2perl s2p psed *.bat
 	-del /f ..\config.sh perlmain.c dlutils.c config.h.new \
 	        perlmainst.c

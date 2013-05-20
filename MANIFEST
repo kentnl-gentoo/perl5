@@ -13,36 +13,6 @@ configure.com		Configure-equivalent for VMS
 configure.gnu		Crude emulation of GNU configure
 cop.h			Control operator header
 Copying			The GNU General Public License
-cpan/Archive-Extract/lib/Archive/Extract.pm	Archive::Extract
-cpan/Archive-Extract/t/01_Archive-Extract.t	Archive::Extract tests
-cpan/Archive-Extract/t/src/double_dir.zip	Archive::Extract tests
-cpan/Archive-Extract/t/src/x.bz2		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.ear		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.gz			Archive::Extract tests
-cpan/Archive-Extract/t/src/x.jar		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.lzma		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.par		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.tar		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.tar.gz		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.tar.xz		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.tgz		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.txz		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.war		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.xz		Archive::Extract tests
-cpan/Archive-Extract/t/src/x.Z			Archive::Extract tests
-cpan/Archive-Extract/t/src/x.zip		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.ear		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.jar		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.par		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.tar		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.tar.bz2		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.tar.gz		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.tar.xz		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.tbz		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.tgz		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.txz		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.war		Archive::Extract tests
-cpan/Archive-Extract/t/src/y.zip		Archive::Extract tests
 cpan/Archive-Tar/bin/ptar				the ptar utility
 cpan/Archive-Tar/bin/ptardiff				the ptardiff utility
 cpan/Archive-Tar/bin/ptargrep				the ptardiff utility
@@ -139,10 +109,6 @@ cpan/AutoLoader/t/01AutoLoader.t	See if AutoLoader works
 cpan/AutoLoader/t/02AutoSplit.t		See if AutoSplit works
 cpan/B-Debug/Debug.pm	Compiler Debug backend
 cpan/B-Debug/t/debug.t	See if B::Debug works
-cpan/B-Lint/lib/B/Lint/Debug.pm			Adds debugging stringification to B::
-cpan/B-Lint/lib/B/Lint.pm			Compiler Lint backend
-cpan/B-Lint/t/lint.t				See if B::Lint works
-cpan/B-Lint/t/pluglib/B/Lint/Plugin/Test.pm	See if B::Lint works
 cpan/CGI/Changes			Changelog for CGI.pm
 cpan/CGI/examples/caution.xbm		CGI example
 cpan/CGI/examples/clickable_image.cgi	CGI example
@@ -425,101 +391,6 @@ cpan/CPAN/PAUSE2005.pub		CPAN public key
 cpan/CPAN/PAUSE2007.pub		CPAN public key
 cpan/CPAN/PAUSE2009.pub		CPAN public key
 cpan/CPAN/PAUSE2011.pub
-cpan/CPANPLUS/bin/cpan2dist			the cpan2dist utility
-cpan/CPANPLUS/bin/cpanp				the cpanp utility
-cpan/CPANPLUS/bin/cpanp-run-perl		the cpanp-run-perl utility
-cpan/CPANPLUS-Dist-Build/lib/CPANPLUS/Dist/Build/Constants.pm	CPANPLUS::Dist::Build
-cpan/CPANPLUS-Dist-Build/lib/CPANPLUS/Dist/Build.pm		CPANPLUS::Dist::Build
-cpan/CPANPLUS-Dist-Build/t/01_CPANPLUS-Dist-Build-Constants.t	CPANPLUS::Dist::Build tests
-cpan/CPANPLUS-Dist-Build/t/02_CPANPLUS-Dist-Build.t		CPANPLUS::Dist::Build tests
-cpan/CPANPLUS-Dist-Build/t/dummy-CPAN/authors/01mailrc.txt.gz
-cpan/CPANPLUS-Dist-Build/t/dummy-CPAN/modules/02packages.details.txt.gz
-cpan/CPANPLUS-Dist-Build/t/dummy-CPAN/modules/03modlist.data.gz
-cpan/CPANPLUS-Dist-Build/t/dummy-perl/.hidden			CPANPLUS::Dist::Build tests
-cpan/CPANPLUS-Dist-Build/t/inc/conf.pl				CPANPLUS::Dist::Build tests
-cpan/CPANPLUS-Dist-Build/t/src/noxs/Foo-Bar-0.01.tar.gz		CPANPLUS::Dist::Build tests
-cpan/CPANPLUS-Dist-Build/t/src/xs/Foo-Bar-0.01.tar.gz		CPANPLUS::Dist::Build tests
-cpan/CPANPLUS/lib/CPANPLUS/Backend.pm				CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Backend/RV.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Config/HomeEnv.pm
-cpan/CPANPLUS/lib/CPANPLUS/Config.pm				CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Configure.pm				CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Configure/Setup.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Dist/Autobundle.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Dist/Base.pm				CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Dist/MM.pm				CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Dist.pm				CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Dist/Sample.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Error.pm				CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/FAQ.pod				CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Hacking.pod				CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Constants.pm		CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Constants/Report.pm	CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Extract.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Fetch.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals.pm				CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Report.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Search.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Source/Memory.pm		CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Source.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Source/SQLite.pm		CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Source/SQLite/Tie.pm	CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Utils/Autoflush.pm		CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Internals/Utils.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Module/Author/Fake.pm		CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Module/Author.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Module/Checksums.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Module/Fake.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Module.pm				CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Module/Signature.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS.pm					CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Selfupdate.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Shell/Classic.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Shell/Default/Plugins/CustomSource.pm	CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Shell/Default/Plugins/HOWTO.pod	CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Shell/Default/Plugins/Remote.pm	CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Shell/Default/Plugins/Source.pm	CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Shell/Default.pm			CPANPLUS
-cpan/CPANPLUS/lib/CPANPLUS/Shell.pm				CPANPLUS
-cpan/CPANPLUS/Makefile.PL
-cpan/CPANPLUS/t/00_CPANPLUS-Internals-Utils.t		CPANPLUS tests
-cpan/CPANPLUS/t/01_CPANPLUS-Configure.t			CPANPLUS tests
-cpan/CPANPLUS/t/02_CPANPLUS-Internals.t			CPANPLUS tests
-cpan/CPANPLUS/t/03_CPANPLUS-Internals-Source.t		CPANPLUS tests
-cpan/CPANPLUS/t/04_CPANPLUS-Module.t			CPANPLUS tests
-cpan/CPANPLUS/t/05_CPANPLUS-Internals-Fetch.t		CPANPLUS tests
-cpan/CPANPLUS/t/06_CPANPLUS-Internals-Constants.t	CPANPLUS tests
-cpan/CPANPLUS/t/07_CPANPLUS-Internals-Extract.t		CPANPLUS tests
-cpan/CPANPLUS/t/08_CPANPLUS-Backend.t			CPANPLUS tests
-cpan/CPANPLUS/t/09_CPANPLUS-Internals-Search.t		CPANPLUS tests
-cpan/CPANPLUS/t/10_CPANPLUS-Error.t			CPANPLUS tests
-cpan/CPANPLUS/t/15_CPANPLUS-Shell.t			CPANPLUS tests
-cpan/CPANPLUS/t/19_CPANPLUS-Dist.t			CPANPLUS tests
-cpan/CPANPLUS/t/20_CPANPLUS-Dist-MM.t			CPANPLUS tests
-cpan/CPANPLUS/t/21_CPANPLUS-Dist-No-Build.t		CPANPLUS tests
-cpan/CPANPLUS/t/25_CPANPLUS.t				CPANPLUS tests
-cpan/CPANPLUS/t/30_CPANPLUS-Internals-Selfupdate.t	CPANPLUS tests
-cpan/CPANPLUS/t/40_CPANPLUS-Internals-Report.t		CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/01mailrc.txt.gz	CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/EUNOXS/Bundle-Foo-Bar-0.01.tar.gz	CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/EUNOXS/CHECKSUMS			CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/EUNOXS/Foo-Bar-0.01.meta		CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/EUNOXS/Foo-Bar-0.01.readme	CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/EUNOXS/Foo-Bar-0.01.tar.gz	CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/EUNOXS/perl5.005_03.tar.gz	CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/EUXS/CHECKSUMS			CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/EUXS/Foo-Bar-0.01.readme		CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/EUXS/Foo-Bar-0.01.tar.gz		CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/MBNOXS/CHECKSUMS			CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/MBNOXS/Foo-Bar-0.01.readme	CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/MBNOXS/Foo-Bar-0.01.tar.gz	CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/MBXS/CHECKSUMS		CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/MBXS/Foo-Bar-0.01.readme	CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/authors/id/MBXS/Foo-Bar-0.01.tar.gz	CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/autobundle/Snapshot.pm		CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/modules/02packages.details.txt.gz	CPANPLUS tests
-cpan/CPANPLUS/t/dummy-CPAN/modules/03modlist.data.gz		CPANPLUS tests
-cpan/CPANPLUS/t/inc/conf.pl					CPANPLUS tests
 cpan/CPAN/scripts/cpan		easily interact with CPAN from the command line
 cpan/CPAN/t/01loadme.t		See if CPAN the module works
 cpan/CPAN/t/02nox.t		See if CPAN::Nox works
@@ -1143,8 +1014,6 @@ cpan/ExtUtils-MakeMaker/t/VERSION_FROM.t			See if MakeMaker's VERSION_FROM works
 cpan/ExtUtils-MakeMaker/t/WriteEmptyMakefile.t			See if WriteEmptyMakefile works
 cpan/ExtUtils-MakeMaker/t/writemakefile_args.t			See if WriteMakefile works
 cpan/ExtUtils-MakeMaker/t/xs.t					Part of MakeMaker's test suite
-cpan/File-CheckTree/lib/File/CheckTree.pm	Perl module supporting wholesale file mode validation
-cpan/File-CheckTree/t/CheckTree.t		See if File::CheckTree works
 cpan/File-Fetch/lib/File/Fetch.pm	File::Fetch
 cpan/File-Fetch/t/01_File-Fetch.t	File::Fetch tests
 cpan/File-Fetch/t/null_subclass.t
@@ -1615,18 +1484,6 @@ cpan/Locale-Maketext-Simple/t/po_with_i_default/fr.po		Locale::Simple tests
 cpan/Locale-Maketext-Simple/t/po_with_i_default/i_default.po	Locale::Simple tests
 cpan/Locale-Maketext-Simple/t/po_without_i_default/en.po	Locale::Simple tests
 cpan/Locale-Maketext-Simple/t/po_without_i_default/fr.po	Locale::Simple tests
-cpan/Log-Message/lib/Log/Message/Config.pm	Log::Message
-cpan/Log-Message/lib/Log/Message/Handlers.pm	Log::Message
-cpan/Log-Message/lib/Log/Message/Item.pm	Log::Message
-cpan/Log-Message/lib/Log/Message.pm		Log::Message
-cpan/Log-Message-Simple/lib/Log/Message/Simple.pm	Log::Simple
-cpan/Log-Message-Simple/t/01_use.t			Log::Simple tests
-cpan/Log-Message-Simple/t/02_imports.t			Log::Simple tests
-cpan/Log-Message-Simple/t/03_functions.t		Log::Simple tests
-cpan/Log-Message/t/01_Log-Message-Config.t	Log::Message tests
-cpan/Log-Message/t/02_Log-Message.t		Log::Message tests
-cpan/Log-Message/t/conf/config_file		Log::Message tests
-cpan/Log-Message/t/conf/LoadMe.pl		Log::Message tests
 cpan/Math-Complex/ChangeLog		Math-Complex change log
 cpan/Math-Complex/lib/Math/Complex.pm	A Complex package
 cpan/Math-Complex/lib/Math/Trig.pm	A simple interface to complex trigonometry
@@ -1793,80 +1650,6 @@ cpan/Module-Metadata/t/lib/MBTest.pm
 cpan/Module-Metadata/t/lib/Tie/CPHash.pm
 cpan/Module-Metadata/t/metadata.t
 cpan/Module-Metadata/t/version.t
-cpan/Module-Pluggable/lib/Devel/InnerPackage.pm		Find inner packages
-cpan/Module-Pluggable/lib/Module/Pluggable/Object.pm	Module::Pluggable
-cpan/Module-Pluggable/lib/Module/Pluggable.pm		Module::Pluggable
-cpan/Module-Pluggable/Makefile.PL			Module::Pluggable
-cpan/Module-Pluggable/t/01use.t				Module::Pluggable tests
-cpan/Module-Pluggable/t/02alsoworks.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/02works.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/02works_taint.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/03diffname.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/04acmedir_single.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/04acmedir.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/04acmepath_single.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/04acmepath.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/05postpath.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/06multipath.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/07instantiate.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/08nothing.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/09require.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/10innerpack_inner.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/10innerpack_noinner.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/10innerpack_onefile.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/10innerpack_override.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/10innerpack_super.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/10innerpack.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/11usetwice.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/12onlyarray.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/12onlyregex.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/12onlyrequire.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/12only.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/13exceptarray.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/13exceptregex.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/13except.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/14package.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/15topicsafe.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/16different_extension.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/17devel_inner_package.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/18skipped_package.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/19can_ok_clobber.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/20dodgy_files.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/21editor_junk.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/22trigger.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/23depth.t			Module::Pluggable tests
-cpan/Module-Pluggable/t/24local_inc_object.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/24local_inc_package.t		Module::Pluggable tests
-cpan/Module-Pluggable/t/acme/Acme/MyTest/Plugin/Foo.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/Acme/Foo-Bar.pm		Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/Acme/MyTest/Plugin/Foo.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/EditorJunk/Plugin/Bar.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/EditorJunk/Plugin/Bar.pm~	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/EditorJunk/Plugin/Bar.pm.swo	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/EditorJunk/Plugin/Bar.pm.swp	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/EditorJunk/Plugin/Foo.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/ExtTest/Plugin/Bar.plugin	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/ExtTest/Plugin/Foo.plugin	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/ExtTest/Plugin/Quux/Foo.plugin	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/InnerTest/Plugin/Foo.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/MyOtherTest/Plugin/Bar.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/MyOtherTest/Plugin/Foo.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/MyOtherTest/Plugin/Quux/Foo.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/MyOtherTest/Plugin/Quux.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/MyTest/Extend/Plugin/Bar.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/MyTest/Plugin/Bar.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/MyTest/Plugin/Foo.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/MyTest/Plugin/Quux/Foo.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/No/Middle.pm		Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/OddTest/Plugin/Foo.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/TA/C/A/I.pm			Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/Text/Abbrev.pm		Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/TriggerTest/Plugin/After.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/TriggerTest/Plugin/CallbackAllow.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/TriggerTest/Plugin/CallbackDeny.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/TriggerTest/Plugin/Deny.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/TriggerTest/Plugin/Error.pm	Module::Pluggable tests
-cpan/Module-Pluggable/t/lib/Zot/.Zork.pm		Module::Pluggable tests
 cpan/NEXT/lib/NEXT.pm		Pseudo-class NEXT for method redispatch
 cpan/NEXT/t/actual.t		NEXT
 cpan/NEXT/t/actuns.t		NEXT
@@ -1874,14 +1657,6 @@ cpan/NEXT/t/dynamically_scoped_regex_vars.t	NEXT
 cpan/NEXT/t/next.t		NEXT
 cpan/NEXT/t/stringify.t		NEXT
 cpan/NEXT/t/unseen.t		NEXT
-cpan/Object-Accessor/lib/Object/Accessor.pm		Object::Accessor
-cpan/Object-Accessor/t/00_Object-Accessor.t		Object::Accessor tests
-cpan/Object-Accessor/t/01_Object-Accessor-Subclassed.t	Object::Accessor tests
-cpan/Object-Accessor/t/02_Object-Accessor-allow.t	Object::Accessor tests
-cpan/Object-Accessor/t/03_Object-Accessor-local.t	Object::Accessor tests
-cpan/Object-Accessor/t/04_Object-Accessor-lvalue.t	Object::Accessor tests
-cpan/Object-Accessor/t/05_Object-Accessor-callback.t	Object::Accessor tests
-cpan/Object-Accessor/t/06_Object-Accessor-alias.t	Object::Accessor tests
 cpan/Package-Constants/lib/Package/Constants.pm	Package::Constants
 cpan/Package-Constants/t/01_list.t		Package::Constants tests
 cpan/Params-Check/lib/Params/Check.pm	Params::Check
@@ -1942,10 +1717,6 @@ cpan/Pod-Escapes/README			README for Pod::Escapes
 cpan/Pod-Escapes/t/01_about_verbose.t	test Pod::Escapes
 cpan/Pod-Escapes/t/10_main.t		test Pod::Escapes
 cpan/Pod-Escapes/t/15_name2charnum.t	test Pod::Escapes
-cpan/Pod-LaTeX/lib/Pod/LaTeX.pm		Convert POD data to LaTeX
-cpan/Pod-LaTeX/pod2latex.PL	Precursor for translator to turn pod into LaTeX
-cpan/Pod-LaTeX/t/pod2latex.t	See if Pod::LaTeX works
-cpan/Pod-LaTeX/t/user.t		See if Pod::LaTeX works
 cpan/podlators/lib/Pod/Man.pm			Convert POD data to *roff
 cpan/podlators/lib/Pod/ParseLink.pm		Perl an L<> formatting code in POD text
 cpan/podlators/lib/Pod/Text/Color.pm		Convert POD data to color ASCII text
@@ -2288,11 +2059,6 @@ cpan/Term-ANSIColor/t/stringify.t		Tests for Term::ANSIColor
 cpan/Term-ANSIColor/t/taint.t
 cpan/Term-Cap/Cap.pm			Perl module supporting termcap usage
 cpan/Term-Cap/test.pl			See if Term::Cap works
-cpan/Term-UI/lib/Term/UI/History.pm	Term::UI
-cpan/Term-UI/lib/Term/UI.pm		Term::UI
-cpan/Term-UI/t/00_load.t		Term::UI tests
-cpan/Term-UI/t/01_history.t		Term::UI tests
-cpan/Term-UI/t/02_ui.t			Term::UI tests
 cpan/Test-Harness/bin/prove				The prove harness utility
 cpan/Test-Harness/Changes				Test::Harness change log
 cpan/Test-Harness/lib/App/Prove.pm			Gubbins for the prove utility
@@ -2662,11 +2428,6 @@ cpan/Text-Balanced/t/09_gentag.t	See if Text::Balanced works
 cpan/Text-ParseWords/lib/Text/ParseWords.pm	Perl module to split words on arbitrary delimiter
 cpan/Text-ParseWords/t/ParseWords.t		See if Text::ParseWords works
 cpan/Text-ParseWords/t/taint.t			See if Text::ParseWords works with tainting
-cpan/Text-Soundex/Changes	Changelog for Text::Soundex
-cpan/Text-Soundex/README	README for Text::Soundex
-cpan/Text-Soundex/Soundex.pm	Text::Soundex extension Perl module
-cpan/Text-Soundex/Soundex.xs	Text::Soundex extension external subroutines
-cpan/Text-Soundex/t/Soundex.t	test for Text::Soundex
 cpan/Text-Tabs/CHANGELOG		ChangeLog for Tabs+Wrap
 cpan/Text-Tabs/lib/Text/Tabs.pm		Do expand and unexpand
 cpan/Text-Tabs/lib/Text/Wrap.pm		Paragraph formatter
@@ -4722,6 +4483,7 @@ pod/perl5160delta.pod		Perl changes in version 5.16.0
 pod/perl5161delta.pod		Perl changes in version 5.16.1
 pod/perl5162delta.pod		Perl changes in version 5.16.2
 pod/perl5163delta.pod		Perl changes in version 5.16.3
+pod/perl5180delta.pod		Perl changes in version 5.18.0
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5626,10 +5388,7 @@ util.h				Dummy header
 utils/c2ph.PL			program to translate dbx stabs to perl
 utils/config_data.PL		Module::Build tool
 utils/corelist.PL		Module::CoreList
-utils/cpan2dist.PL		the cpan2dist utility
 utils/cpan.PL			easily interact with CPAN from the command line
-utils/cpanp.PL			the cpanp utility
-utils/cpanp-run-perl.PL		the cpanp-run-perl utility
 utils/enc2xs.PL			Encode module generator
 utils/h2ph.PL			A thing to turn C .h files into perl .ph files
 utils/h2xs.PL			Program to make .xs files from C header files
