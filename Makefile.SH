@@ -443,16 +443,27 @@ xconfig.h: config_h.SH Cross/config-\$(CROSS_NAME).sh
 	;;
 esac
 
-## In the following dollars and backticks do not need the extra backslash.
-$spitshell >>$Makefile <<'!NO!SUBS!'
+SH_to_target() {
+    echo $@ | sed -e s/\\\.SH//g -e s/_/./g
+}
 
-private = preplibrary $(CONFIGPM) $(CONFIGPOD) lib/ExtUtils/Miniperl.pm git_version.h lib/buildcustomize.pl
+SH='Makefile.SH cflags.SH config_h.SH makedepend.SH myconfig.SH runtests.SH pod/Makefile.SH x2p/Makefile.SH'
+shextract=`SH_to_target $SH`
+
+## In the following dollars and backticks do not need the extra backslash.
+$spitshell >>$Makefile <<!GROK!THIS!
+
+private = preplibrary \$(CONFIGPM) \$(CONFIGPOD) lib/ExtUtils/Miniperl.pm git_version.h lib/buildcustomize.pl
 
 # Files to be built with variable substitution before miniperl
 # is available.
-sh = Makefile.SH cflags.SH config_h.SH makedepend.SH myconfig.SH pod/Makefile.SH
+sh = $SH
 
-shextract = Makefile cflags config.h makedepend makedir myconfig pod/Makefile
+shextract = $shextract
+!GROK!THIS!
+
+## In the following dollars and backticks do not need the extra backslash.
+$spitshell >>$Makefile <<'!NO!SUBS!'
 
 addedbyconf = UU $(shextract) pstruct
 
@@ -492,11 +503,9 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5190delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5191delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
-
-Icwd = -Idist/Cwd -Idist/Cwd/lib -Idist/Carp/lib
 
 lintflags = \
     -b \
@@ -589,18 +598,21 @@ perl$(OBJ_EXT): git_version.h
 case "$usedl$static_cwd" in
 defineundef)
     util_deps='$(MINIPERL_EXE) $(CONFIGPM) lib/auto/Cwd/Cwd$(DLSUFFIX) FORCE'
-     x2p_deps='$(MINIPERL_EXE) $(CONFIGPM) $(dynamic_ext) FORCE'
+     x2p_deps="\$(MINIPERL_EXE) \$(CONFIGPM) \$(dynamic_ext) x2p/$firstmakefile FORCE"
     ;;
 definedefine)
     util_deps='$(PERL_EXE) $(CONFIGPM) FORCE'
-     x2p_deps='$(PERL_EXE) $(CONFIGPM) $(dynamic_ext) FORCE'
+     x2p_deps="\$(PERL_EXE) \$(CONFIGPM) \$(dynamic_ext) x2p/$firstmakefile FORCE"
     ;;
 *)  util_deps='$(PERL_EXE) $(CONFIGPM) FORCE'
-     x2p_deps='$(PERL_EXE) $(CONFIGPM) FORCE'
+     x2p_deps="\$(PERL_EXE) \$(CONFIGPM) x2p/$firstmakefile FORCE"
     ;;
 esac
 
 $spitshell >>$Makefile <<!GROK!THIS!
+x2p/$firstmakefile:	makedepend
+	cd x2p; \$(MAKE) depend
+
 translators:	$x2p_deps
 	@echo " "; echo "	Making x2p stuff"; cd x2p; \$(LDLIBPTH) \$(MAKE) all
 
@@ -837,21 +849,32 @@ $(LIBPERL): $& $(obj) $(DYNALOADER) $(LIBPERLEXPORT)
 # build problems but that's not obvious to the novice.
 # The Module used here must not depend on Config or any extensions.
 
+# The seemingly cranky ordering of having $(MINIPERL_EXE) depend on
+# lib/buildcustomize.pl despite the reality that lib/buildcustomize.pl needs
+# miniperl to exist first permits us to
+# a) have one rule generate both miniperl and lib/buildcustomize.pl
+#    (so that lib/buildcustomise.pl is always available. This simplifies things)
+# b) have the rest of the Makefile depend on the more obvious $(MINIPERL_EXE)
+
+$(MINIPERL_EXE): lib/buildcustomize.pl
+
 !NO!SUBS!
 
 	case "${osname}${osvers}" in
 	aix*)
 		$spitshell >>$Makefile <<'!NO!SUBS!'
-$(MINIPERL_EXE): $& $(mini_obj)
+lib/buildcustomize.pl: $& $(mini_obj)
 	$(CC) -o $(MINIPERL_EXE) $(CLDFLAGS) $(mini_obj) $(libs)
-	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
+	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -MExporter -e '<?>' || sh -c 'echo >&2 Failed to build miniperl.  Please run make minitest; exit 1'
+	$(MINIPERL) -f write_buildcustomize.pl
 !NO!SUBS!
 		;;
 	next4*)
 		$spitshell >>$Makefile <<'!NO!SUBS!'
-$(MINIPERL_EXE): $& $(mini_obj)
-	$(CC) -o $(MINIPERL_EXE) $(mini_obj) $(libs)
-	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
+lib/buildcustomize.pl: $& $(mini_obj) write    ldcustomize.pl
+	$(CC) -o $(MINIPERL_EXE) $(mini_obj    libs)
+	$(LDLIBPTH) $(RUN) ./miniperl$(HOST    _EXT) -w -Ilib -MExporter -e '<?>' || sh -c 'echo >&2 Failed to build miniperl.  Please run make minitest; exit 1'
+	$(MINIPERL) -f write_buildcustomize.pl    
 !NO!SUBS!
 		;;
 	darwin*)
@@ -868,27 +891,29 @@ NAMESPACEFLAGS = -force_flat_namespace
 		    ;;
 		esac
 		$spitshell >>$Makefile <<'!NO!SUBS!'
-$(MINIPERL_EXE): $& $(mini_obj)
+lib/buildcustomize.pl: $& $(mini_obj) write_buildcustomize.pl
 	-@rm -f miniperl.xok
 	$(CC) $(CLDFLAGS) $(NAMESPACEFLAGS) -o $(MINIPERL_EXE) \
 	    $(mini_obj) $(libs)
-	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
+	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -MExporter -e '<?>' || sh -c 'echo >&2 Failed to build miniperl.  Please run make minitest; exit 1'
+	$(MINIPERL) -f write_buildcustomize.pl
 !NO!SUBS!
 		;;
 	*)
 		$spitshell >>$Makefile <<'!NO!SUBS!'
-$(MINIPERL_EXE): $& $(mini_obj)
+lib/buildcustomize.pl: $& $(mini_obj) write_buildcustomize.pl
 	-@rm -f miniperl.xok
 	$(LDLIBPTH) $(CC) $(CLDFLAGS) -o $(MINIPERL_EXE) \
 	    $(mini_obj) $(libs)
-	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
+	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -MExporter -e '<?>' || sh -c 'echo >&2 Failed to build miniperl.  Please run make minitest; exit 1'
+	$(MINIPERL) -f write_buildcustomize.pl
 !NO!SUBS!
 		;;
 	esac
 
 	$spitshell >>$Makefile <<'!NO!SUBS!'
 
-$(PERL_EXE): $& perlmain$(OBJ_EXT) $(LIBPERL) $(static_ext) ext.libs $(PERLEXPORT)
+$(PERL_EXE): $& perlmain$(OBJ_EXT) $(LIBPERL) $(static_ext) ext.libs $(PERLEXPORT) write_buildcustomize.pl
 	-@rm -f miniperl.xok
 	$(SHRPENV) $(LDLIBPTH) $(CC) -o perl$(PERL_SUFFIX) $(PERL_PROFILE_LDFLAGS) $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
@@ -1024,7 +1049,7 @@ makeppport: \$(MINIPERL_EXE) \$(CONFIGPM)
 $spitshell >>$Makefile <<'!NO!SUBS!'
 .PHONY: makeppport
 makeppport: $(MINIPERL_EXE) $(CONFIGPM) $(nonxs_ext)
-	$(MINIPERL) $(Icwd) mkppport
+	$(MINIPERL) mkppport
 
 !NO!SUBS!
 ;;
@@ -1043,13 +1068,10 @@ $(CONFIGPOD): config.sh $(MINIPERL_EXE) configpm Porting/Glossary lib/Config_git
 lib/ExtUtils/Miniperl.pm: miniperlmain.c $(MINIPERL_EXE) minimod.pl $(CONFIGPM)
 	$(MINIPERL) minimod.pl > lib/ExtUtils/Miniperl.pm
 
-lib/buildcustomize.pl: $(MINIPERL_EXE) write_buildcustomize.pl
-	$(MINIPERL) write_buildcustomize.pl >lib/buildcustomize.pl
-
 unidatafiles $(unidatafiles) pod/perluniprops.pod: uni.data
 
 uni.data: $(MINIPERL_EXE) $(CONFIGPM) lib/unicore/mktables $(nonxs_ext)
-	$(MINIPERL) $(Icwd) lib/unicore/mktables -C lib/unicore -P pod -maketest -makelist -p
+	$(MINIPERL) lib/unicore/mktables -C lib/unicore -P pod -maketest -makelist -p
 #	Commented out so always runs, mktables looks at far more files than we
 #	can in this makefile to decide if needs to run or not
 #	touch uni.data
@@ -1062,15 +1084,16 @@ pod/perltoc.pod: $(perltoc_pod_prereqs)  $(PERL_EXE) $(ext) pod/buildtoc
 
 pod/perlapi.pod: pod/perlintern.pod
 
-pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
+# Depending on $(nonxs_ext) gets us Text::Wrap built
+pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc $(nonxs_ext)
 	$(MINIPERL) autodoc.pl
 
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
-	$(MINIPERL) $(Icwd) pod/perlmodlib.PL -q
+	$(MINIPERL) pod/perlmodlib.PL -q
 
-pod/perl5190delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl5190delta.pod
-	$(LNS) perldelta.pod pod/perl5190delta.pod
+pod/perl5191delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl5191delta.pod
+	$(LNS) perldelta.pod pod/perl5191delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1271,13 +1294,12 @@ _mopup:
 	-@test -f vms/README_vms.pod && rm -f vms/README_vms.pod
 	-rm -f perl.exp ext.libs $(generated_pods) uni.data opmini.o perlmini.o pod/roffitall
 	-rm -f perl.export perl.dll perl.libexp perl.map perl.def
-	-rm -f perl.loadmap miniperl.loadmap perl.prelmap miniperl.prelmap
 	-rm -f perl.third lib*.so.perl.third perl.3log t/perl.third t/perl.3log
 	-rm -f perl.pixie lib*.so.perl.pixie lib*.so.Addrs
 	-rm -f perl.Addrs perl.Counts t/perl.Addrs t/perl.Counts *perl.xok
 	-rm -f cygwin.c libperl*.def libperl*.dll cygperl*.dll *.exe.stackdump
 	-rm -f $(PERL_EXE) $(MINIPERL_EXE) $(LIBPERL) libperl.* microperl
-	-rm -f config.arch config.over $(DTRACE_H) runtests
+	-rm -f config.arch config.over $(DTRACE_H)
 
 # Do not 'make _tidy' directly.
 _tidy:
@@ -1302,7 +1324,7 @@ _cleaner1:
 	sh $(CLEAN).sh ; \
 	fi
 	rm -f realclean.sh veryclean.sh
-	-for file in `find cpan dist ext -name ppport.h` ; do rm -f $$file; done
+	-rm -f `grep -v ^# mkppport.lst | grep . | sed -e 's/$$/\/ppport.h/'`
 
 # Dear POSIX, thanks for making the default to xargs to be
 # run once if nothhing is passed in. It is such a great help.
@@ -1389,21 +1411,22 @@ MAKEDEPEND = Makefile makedepend
 
 $(FIRSTMAKEFILE):	README $(MAKEDEPEND)
 	$(MAKE) depend MAKEDEPEND=
+!NO!SUBS!
 
-config.h: config_h.SH config.sh
-	$(SHELL) config_h.SH
+for f in $SH; do
+    file=`SH_to_target $f`
+    $spitshell >>$Makefile <<!GROK!THIS!
+
+$file: $f config.sh
+	\$(SHELL) $f
+!GROK!THIS!
+done
+
+$spitshell >>$Makefile <<'!NO!SUBS!'
 
 .PHONY: depend
 depend: makedepend
-	sh ./makedepend MAKE=$(MAKE)
-	cd x2p; $(MAKE) depend
-
-# Cannot postpone this until $firstmakefile is ready ;-)
-makedepend: makedepend.SH config.sh
-	sh ./makedepend.SH
-
-runtests: runtests.SH config.sh
-	sh ./runtests.SH
+	sh ./makedepend MAKE=$(MAKE) cflags
 
 .PHONY: test check test_prep test_prep_nodll test_prep_pre \
 	test_prep_reonly test_tty test-tty test_notty test-notty \
@@ -1576,19 +1599,13 @@ noknack:	utilities
 nokfilenack:	utilities
 	$(RUN_PERL) -Ilib utils/perlbug -nok -s '(UNINSTALLED)' -F perl.nok -A
 
-.PHONY: clist hlist shlist
+.PHONY: clist hlist
 
 clist:	$(c)
 	echo $(c) | tr ' ' $(TRNL) >.clist
 
 hlist:  $(h)
 	echo $(h) | tr ' ' $(TRNL) >.hlist
-
-shlist: $(sh)
-	echo $(sh) | tr ' ' $(TRNL) >.shlist
-
-Makefile: Makefile.SH ./config.sh
-	$(SHELL) Makefile.SH
 
 .PHONY: distcheck
 distcheck: FORCE
@@ -1604,12 +1621,6 @@ ctags:
 !NO!SUBS!
 
 $eunicefix Makefile
-case `pwd` in
-*SH)
-    $rm -f ../Makefile
-    $ln Makefile ../Makefile
-    ;;
-esac
 $rm -f $firstmakefile
 
 # Now do any special processing required before building.

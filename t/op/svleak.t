@@ -15,7 +15,7 @@ BEGIN {
 
 use Config;
 
-plan tests => 114;
+plan tests => 125;
 
 # run some code N times. If the number of SVs at the end of loop N is
 # greater than (N-1)*delta at the end of loop 1, we've got a leak
@@ -68,6 +68,14 @@ my @a;
 leak(5, 0, sub {},                 "basic check 1 of leak test infrastructure");
 leak(5, 0, sub {push @a,1;pop @a}, "basic check 2 of leak test infrastructure");
 leak(5, 1, sub {push @a,1;},       "basic check 3 of leak test infrastructure");
+
+# delete
+{
+    my $key = "foo";
+    $key++ while exists $ENV{$key};
+    leak(2, 0, sub { delete local $ENV{$key} },
+	'delete local on nonexistent env var');
+}
 
 # Fatal warnings
 my $f = "use warnings FATAL =>";
@@ -240,6 +248,16 @@ eleak(2,0,'/[pp]/');
 eleak(2,0,'/[[:ascii:]]/');
 eleak(2,0,'/[[.zog.]]/');
 eleak(2,0,'/[.zog.]/');
+eleak(2,0,'no warnings; /(?[])/');
+eleak(2,0,'no warnings; /(?[[a]+[b]])/');
+eleak(2,0,'no warnings; /(?[[a]-[b]])/');
+eleak(2,0,'no warnings; /(?[[a]&[b]])/');
+eleak(2,0,'no warnings; /(?[[a]|[b]])/');
+eleak(2,0,'no warnings; /(?[[a]^[b]])/');
+eleak(2,0,'no warnings; /(?[![a]])/');
+eleak(2,0,'no warnings; /(?[\p{Word}])/');
+eleak(2,0,'no warnings; /(?[[a]+)])/');
+eleak(2,0,'no warnings; /(?[\d\d)])/');
 
 # These can generate one ref count, but just  once.
 eleak(4,1,'chr(0x100) =~ /[[:punct:]]/');

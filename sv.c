@@ -1308,7 +1308,8 @@ Perl_sv_upgrade(pTHX_ SV *const sv, svtype new_type)
 #ifndef NODEFAULT_SHAREKEYS
 	    HvSHAREKEYS_on(sv);         /* key-sharing on by default */
 #endif
-	    HvMAX(sv) = 7; /* (start with 8 buckets) */
+            /* start with PERL_HASH_DEFAULT_HvMAX+1 buckets: */
+	    HvMAX(sv) = PERL_HASH_DEFAULT_HvMAX;
 	}
 
 	/* SVt_NULL isn't the only thing upgraded to AV or HV.
@@ -1474,10 +1475,6 @@ Perl_sv_grow(pTHX_ SV *const sv, STRLEN newlen)
 
     PERL_ARGS_ASSERT_SV_GROW;
 
-    if (PL_madskills && newlen >= 0x100000) {
-	PerlIO_printf(Perl_debug_log,
-		      "Allocation too large: %"UVxf"\n", (UV)newlen);
-    }
 #ifdef HAS_64K_LIMIT
     if (newlen >= 0x10000) {
 	PerlIO_printf(Perl_debug_log,
@@ -1506,6 +1503,18 @@ Perl_sv_grow(pTHX_ SV *const sv, STRLEN newlen)
 	if (SvIsCOW(sv)) sv_force_normal(sv);
 	s = SvPVX_mutable(sv);
     }
+
+#ifdef PERL_NEW_COPY_ON_WRITE
+    /* the new COW scheme uses SvPVX(sv)[SvLEN(sv)-1] (if spare)
+     * to store the COW count. So in general, allocate one more byte than
+     * asked for, to make it likely this byte is always spare: and thus
+     * make more strings COW-able.
+     * If the new size is a big power of two, don't bother: we assume the
+     * caller wanted a nice 2^N sized block and will be annoyed at getting
+     * 2^N+1 */
+    if (newlen & 0xff)
+        newlen++;
+#endif
 
     if (newlen > SvLEN(sv)) {		/* need more room? */
 	STRLEN minlen = SvCUR(sv);
@@ -2894,6 +2903,7 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 	Move(ptr, s, len, char);
 	s += len;
 	*s = '\0';
+        SvPOK_on(sv);
     }
     else if (SvNOK(sv)) {
 	if (SvTYPE(sv) < SVt_PVNV)
@@ -2907,7 +2917,33 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 	    /* The +20 is pure guesswork.  Configure test needed. --jhi */
 	    s = SvGROW_mutable(sv, NV_DIG + 20);
 	    /* some Xenix systems wipe out errno here */
-	    Gconvert(SvNVX(sv), NV_DIG, 0, s);
+
+#ifndef USE_LOCALE_NUMERIC
+            Gconvert(SvNVX(sv), NV_DIG, 0, s);
+            SvPOK_on(sv);
+#else
+            /* Gconvert always uses the current locale.  That's the right thing
+             * to do if we're supposed to be using locales.  But otherwise, we
+             * want the result to be based on the C locale, so we need to
+             * change to the C locale during the Gconvert and then change back.
+             * But if we're already in the C locale (PL_numeric_standard is
+             * TRUE in that case), no need to do any changing */
+            if (PL_numeric_standard || IN_LOCALE_RUNTIME) {
+                Gconvert(SvNVX(sv), NV_DIG, 0, s);
+            }
+            else {
+                char *loc = savepv(setlocale(LC_NUMERIC, NULL));
+                setlocale(LC_NUMERIC, "C");
+                Gconvert(SvNVX(sv), NV_DIG, 0, s);
+                setlocale(LC_NUMERIC, loc);
+                Safefree(loc);
+            }
+
+            /* We don't call SvPOK_on(), because it may come to pass that the
+             * locale changes so that the stringification we just did is no
+             * longer correct.  We will have to re-stringify every time it is
+             * needed */
+#endif
 	    RESTORE_ERRNO;
 	    while (*s) s++;
 	}
@@ -2952,7 +2988,6 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 	    *lp = len;
 	SvCUR_set(sv, len);
     }
-    SvPOK_on(sv);
     DEBUG_c(PerlIO_printf(Perl_debug_log, "0x%"UVxf" 2pv(%s)\n",
 			  PTR2UV(sv),SvPVX_const(sv)));
     if (flags & SV_CONST_RETURN)
@@ -3734,6 +3769,15 @@ S_glob_assign_glob(pTHX_ SV *const dstr, SV *const sstr, const int dtype)
 	    );
     }
     else if(mro_changes) mro_method_changed_in(GvSTASH(dstr));
+    if (GvIO(dstr) && dtype == SVt_PVGV) {
+	DEBUG_o(Perl_deb(aTHX_
+			"glob_assign_glob clearing PL_stashcache\n"));
+	/* It's a cache. It will rebuild itself quite happily.
+	   It's a lot of effort to work out exactly which key (or keys)
+	   might be invalidated by the creation of the this file handle.
+	 */
+	hv_clear(PL_stashcache);
+    }
     return;
 }
 
@@ -6563,7 +6607,7 @@ Perl_sv_free2(pTHX_ SV *const sv, const U32 rc)
 
     PERL_ARGS_ASSERT_SV_FREE2;
 
-    if (rc == 1) {
+    if (LIKELY( rc == 1 )) {
         /* normal case */
         SvREFCNT(sv) = 0;
 
@@ -8982,7 +9026,7 @@ Perl_sv_resetpvn(pTHX_ const char *s, STRLEN len, HV * const stash)
     char todo[PERL_UCHAR_MAX+1];
     const char *send;
 
-    if (!stash)
+    if (!stash || SvTYPE(stash) != SVt_PVHV)
 	return;
 
     if (!s) {		/* reset ?? searches */
@@ -10433,7 +10477,8 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		%-<num>p	include an SV with precision <num>	
 		%2p		include a HEK
 		%3p		include a HEK with precision of 256
-		%<num>p		(where num != 2 or 3) reserved for future
+		%4p		char* preceded by utf8 flag and length
+		%<num>p		(where num is 1 or > 4) reserved for future
 				extensions
 
 	Robin Barker 2005-07-14 (but modified since)
@@ -10445,6 +10490,13 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	    STRLEN n = 0;
 	    if (*q == '-')
 		sv = *q++;
+	    else if (strnEQ(q, UTF8f, sizeof(UTF8f)-1)) { /* UTF8f */
+		is_utf8 = cBOOL(va_arg(*args, UV));
+		elen = va_arg(*args, STRLEN);
+		eptr = va_arg(*args, char *);
+		q += sizeof(UTF8f)-1;
+		goto string;
+	    }
 	    n = expect_number(&q);
 	    if (*q++ == 'p') {
 		if (sv) {			/* SVf */
@@ -12349,6 +12401,7 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 			}
 			daux->xhv_name_count = saux->xhv_name_count;
 
+			daux->xhv_fill_lazy = saux->xhv_fill_lazy;
 			daux->xhv_riter = saux->xhv_riter;
 			daux->xhv_eiter = saux->xhv_eiter
 			    ? he_dup(saux->xhv_eiter,
@@ -12888,43 +12941,6 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl, CLONE_PARAMS* param)
 	    sv = (const SV *)POPPTR(ss,ix);
 	    TOPPTR(nss,ix) = sv_dup(sv, param);
 	    break;
-	case SAVEt_RE_STATE:
-	    {
-		const struct re_save_state *const old_state
-		    = (struct re_save_state *)
-		    (ss + ix - SAVESTACK_ALLOC_FOR_RE_SAVE_STATE);
-		struct re_save_state *const new_state
-		    = (struct re_save_state *)
-		    (nss + ix - SAVESTACK_ALLOC_FOR_RE_SAVE_STATE);
-
-		Copy(old_state, new_state, 1, struct re_save_state);
-		ix -= SAVESTACK_ALLOC_FOR_RE_SAVE_STATE;
-
-		new_state->re_state_bostr
-		    = pv_dup(old_state->re_state_bostr);
-		new_state->re_state_regeol
-		    = pv_dup(old_state->re_state_regeol);
-#ifdef PERL_ANY_COW
-		new_state->re_state_nrs
-		    = sv_dup(old_state->re_state_nrs, param);
-#endif
-		new_state->re_state_reg_magic
-		    = (MAGIC*) any_dup(old_state->re_state_reg_magic, 
-			       proto_perl);
-		new_state->re_state_reg_oldcurpm
-		    = (PMOP*) any_dup(old_state->re_state_reg_oldcurpm, 
-			      proto_perl);
-		new_state->re_state_reg_curpm
-		    = (PMOP*)  any_dup(old_state->re_state_reg_curpm, 
-			       proto_perl);
-		new_state->re_state_reg_oldsaved
-		    = pv_dup(old_state->re_state_reg_oldsaved);
-		new_state->re_state_reg_poscache
-		    = pv_dup(old_state->re_state_reg_poscache);
-		new_state->re_state_reg_starttry
-		    = pv_dup(old_state->re_state_reg_starttry);
-		break;
-	    }
 	case SAVEt_COMPILE_WARNINGS:
 	    ptr = POPPTR(ss,ix);
 	    TOPPTR(nss,ix) = DUP_WARNINGS((STRLEN*)ptr);
@@ -13182,8 +13198,8 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 #endif
 
     /* RE engine related */
-    Zero(&PL_reg_state, 1, struct re_save_state);
     PL_regmatch_slab	= NULL;
+    PL_reg_curpm	= NULL;
 
     PL_sub_generation	= proto_perl->Isub_generation;
 
@@ -13348,7 +13364,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     /* regex stuff */
 
-    PL_regdummy		= proto_perl->Iregdummy;
     PL_colorset		= 0;		/* reinits PL_colors[] */
     /*PL_colors[6]	= {0,0,0,0,0,0};*/
 
@@ -13690,7 +13705,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_errors		= sv_dup_inc(proto_perl->Ierrors, param);
 
     PL_sortcop		= (OP*)any_dup(proto_perl->Isortcop, proto_perl);
-    PL_sortstash	= hv_dup(proto_perl->Isortstash, param);
     PL_firstgv		= gv_dup(proto_perl->Ifirstgv, param);
     PL_secondgv		= gv_dup(proto_perl->Isecondgv, param);
 

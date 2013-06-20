@@ -13,11 +13,12 @@ use warnings;
 use strict;
 use Test::More;
 
-my $tests = 18; # not counting those in the __DATA__ section
+my $tests = 19; # not counting those in the __DATA__ section
 
 use B::Deparse;
 my $deparse = B::Deparse->new();
 isa_ok($deparse, 'B::Deparse', 'instantiate a B::Deparse object');
+my %deparse;
 
 $/ = "\n####\n";
 while (<DATA>) {
@@ -26,7 +27,7 @@ while (<DATA>) {
     # This code is pinched from the t/lib/common.pl for TODO.
     # It's not clear how to avoid duplication
     my %meta = (context => '');
-    foreach my $what (qw(skip todo context)) {
+    foreach my $what (qw(skip todo context options)) {
 	s/^#\s*\U$what\E\s*(.*)\n//m and $meta{$what} = $1;
 	# If the SKIP reason starts ? then it's taken as a code snippet to
 	# evaluate. This provides the flexibility to have conditional SKIPs
@@ -56,6 +57,12 @@ while (<DATA>) {
     else {
 	($input, $expected) = ($_, $_);
     }
+
+    # parse options if necessary
+    my $deparse = $meta{options}
+	? $deparse{$meta{options}} ||=
+	    new B::Deparse split /,/, $meta{options}
+	: $deparse;
 
     my $coderef = eval "$meta{context};\n" . <<'EOC' . "sub {$input}";
 # Tell B::Deparse about our ambient pragmas
@@ -177,6 +184,16 @@ sub :::::: {
     
 }
 EOCODG
+
+# [perl #117311]
+$a = `$^X $path "-MO=Deparse,-l" -e "map{ eval(0) }()" 2>&1`;
+$a =~ s/-e syntax OK\n//g;
+is($a, <<'EOCODH', "[perl #117311] [PATCH] -l option ('#line ...') does not emit ^Ls in the output");
+#line 1 "-e"
+map {
+#line 1 "-e"
+eval 0;} ();
+EOCODH
 
 # [perl #33752]
 {
@@ -360,6 +377,12 @@ while ($i) { my $z = 1; } continue { $i = 99; }
 # foreach with my
 foreach my $i (1, 2) {
     my $z = 1;
+}
+####
+# OPTIONS -p
+# foreach with my under -p
+foreach my $i (1) {
+    die;
 }
 ####
 # foreach
@@ -1387,3 +1410,6 @@ use feature 'state', 'lexical_subs';
 no warnings 'experimental::lexical_subs';
 state sub f {}
 print f();
+####
+# Elements of %# should not be confused with $#{ array }
+() = ${#}{'foo'};

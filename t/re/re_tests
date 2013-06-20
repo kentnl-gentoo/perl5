@@ -1736,4 +1736,22 @@ ab[c\\\](??{"x"})]{3}d	ab\\](d	y	-	-
 /(?l:a?\w)/	b	y	$&	b
 m?^xy\?$?	xy?	y	$&	xy?
 
+# check we have the right utf8ness as we switch back and forth between
+# patterns
+^(\x{100}|a)(??{ qr/.?\xF7/d})	a_\xF7	y	-	-
+
+# [perl #118375]
+/(a|(bc)){0,0}?xyz/	xyz	y	$&	xyz
+/( a | ( bc ) ) {0,0} ? xyz/x	xyz	y	$&	xyz
+
+/(a|(bc)){0,0}+xyz/	xyz	y	$&	xyz
+/( a | ( bc ) ) {0,0} + xyz/x	xyz	y	$&	xyz
+
+(A(*PRUNE)B|A(*PRUNE)C)	AC	n	-	-
+(A(*PRUNE)B|A(*PRUNE)D|A(*PRUNE)C)	AC	n	-	-
+(A(*PRUNE)B|A(*PRUNE)C|A(*PRUNE)D)	AC	n	-	-
+((A(*PRUNE)B|A(*PRUNE)C))	AC	n	-	-
+((A(*PRUNE)B|A(*PRUNE)D|A(*PRUNE)C))	AC	n	-	-
+((A(*PRUNE)B|A(*PRUNE)C|A(*PRUNE)D))	AC	n	-	-
+
 # vim: softtabstop=0 noexpandtab

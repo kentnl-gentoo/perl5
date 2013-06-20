@@ -42,8 +42,10 @@ cpan/autodie/lib/autodie/exception.pm		Exception class for autodie
 cpan/autodie/lib/autodie/exception/system.pm	Exception class for autodying system()
 cpan/autodie/lib/autodie/hints.pm	Hinting interface for autodie
 cpan/autodie/lib/autodie.pm		Functions succeed or die with lexical scope
+cpan/autodie/lib/autodie/skip.pm
 cpan/autodie/lib/Fatal.pm		Make errors in functions/builtins fatal
 cpan/autodie/t/00-load.t		autodie - basic load
+cpan/autodie/t/autodie_skippy.pm
 cpan/autodie/t/autodie.t		autodie - Basic functionality
 cpan/autodie/t/autodie_test_module.pm	autodie - test helper
 cpan/autodie/t/backcompat.t		autodie - More Fatal backcompat
@@ -51,8 +53,11 @@ cpan/autodie/t/basic_exceptions.t	autodie - Basic exception tests
 cpan/autodie/t/binmode.t		autodie - Binmode testing
 cpan/autodie/t/blog_hints.t		autodie - Tests fro PJF's blog
 cpan/autodie/t/caller.t			autodie - Caller diagnostics
+cpan/autodie/t/chmod.t
+cpan/autodie/t/chown.t
 cpan/autodie/t/context_lexical.t	autodie - Context clobbering lexically
 cpan/autodie/t/context.t		autodie - Context clobbering tests
+cpan/autodie/t/core-trampoline-slurp.t
 cpan/autodie/t/crickey.t		autodie - Like an Australian
 cpan/autodie/t/dbmopen.t		autodie - dbm tests
 cpan/autodie/t/eval_error.t
@@ -72,6 +77,7 @@ cpan/autodie/t/hints_provider_isa.t	autodie - Test hints/inheritance
 cpan/autodie/t/hints.t			autodie - Test hints interface
 cpan/autodie/t/internal-backcompat.t	autodie - Back-compatibility tests
 cpan/autodie/t/internal.t		autodie - internal interface tests
+cpan/autodie/t/kill.t
 cpan/autodie/t/lethal.t			autodie - lethal is the one true name
 cpan/autodie/t/lib/autodie/test/au/exception.pm	autodie - Australian helper
 cpan/autodie/t/lib/autodie/test/au.pm		autodie - Australian helper
@@ -90,17 +96,23 @@ cpan/autodie/t/lib/pujHa/ghach/Dotlh.pm	autodie - With Klingon honour
 cpan/autodie/t/lib/pujHa/ghach.pm	autodie - Like a Klingon
 cpan/autodie/t/lib/Some/Module.pm	autodie - blog_hints.t helper
 cpan/autodie/t/mkdir.t			autodie - filesystem tests
+cpan/autodie/t/no_carp.t
 cpan/autodie/t/open.t			autodie - Testing open
 cpan/autodie/t/recv.t			autodie - send/recv tests
 cpan/autodie/t/repeat.t			autodie - repeat autodie leak tests
 cpan/autodie/t/scope_leak.t		autodie - file scope leak tests
+cpan/autodie/t/skip.t
 cpan/autodie/t/string-eval-basic.t	autodie - Basic string eval test
 cpan/autodie/t/string-eval-leak.t	autodie - String eval leak test
 cpan/autodie/t/sysopen.t		autodie - sysopen tests
+cpan/autodie/t/touch_me
+cpan/autodie/t/truncate_me
 cpan/autodie/t/truncate.t		autodie - File truncation tests
 cpan/autodie/t/unlink.t			autodie - Unlink system tests.
 cpan/autodie/t/user-context.t		autodie - Context changes for usersubs
 cpan/autodie/t/usersub.t		autodie - user subroutine tests
+cpan/autodie/t/utf8_open.t
+cpan/autodie/t/utime.t
 cpan/autodie/t/version.t		autodie - versioning tests
 cpan/autodie/t/version_tag.t
 cpan/AutoLoader/lib/AutoLoader.pm	Autoloader base class
@@ -248,7 +260,8 @@ cpan/Compress-Raw-Zlib/Zlib.xs			Compress::Raw::Zlib
 cpan/Config-Perl-V/t/00_pod.t			Config::Perl::V
 cpan/Config-Perl-V/t/01_pod.t			Config::Perl::V
 cpan/Config-Perl-V/t/10_base.t			Config::Perl::V
-cpan/Config-Perl-V/t/20_plv.t			Config::Perl::V
+cpan/Config-Perl-V/t/20_plv510.t		Config::Perl::V
+cpan/Config-Perl-V/t/21_plv518.t		Config::Perl::V
 cpan/Config-Perl-V/V.pm				Config::Perl::V
 cpan/CPAN/Changes				CPAN.pm Changes file
 cpan/CPAN/lib/App/Cpan.pm		helper package for CPAN.pm
@@ -341,6 +354,7 @@ cpan/CPAN-Meta/t/data/META-1_2.yml
 cpan/CPAN-Meta/t/data/META-1_3.yml
 cpan/CPAN-Meta/t/data/META-1_4.yml
 cpan/CPAN-Meta/t/data/META-2.json
+cpan/CPAN-Meta/t/data/provides-version-missing.json
 cpan/CPAN-Meta/t/data/resources.yml
 cpan/CPAN-Meta/t/data/restricted-2.json
 cpan/CPAN-Meta/t/data/restrictive-1_4.yml
@@ -778,6 +792,7 @@ cpan/Encode/t/Mod_EUCJP.pm		module that t/enc_module.enc uses
 cpan/Encode/t/perlio.t			test script
 cpan/Encode/t/piconv.t			Test for piconv.t
 cpan/Encode/t/rt.pl			test script
+cpan/Encode/t/taint.t
 cpan/Encode/t/unibench.pl		benchmark script
 cpan/Encode/t/Unicode.t			test script
 cpan/Encode/t/utf8ref.t			test script
@@ -1055,6 +1070,7 @@ cpan/HTTP-Tiny/t/030_response.t
 cpan/HTTP-Tiny/t/040_content.t
 cpan/HTTP-Tiny/t/050_chunked_body.t
 cpan/HTTP-Tiny/t/060_http_date.t
+cpan/HTTP-Tiny/t/070_cookie_jar.t
 cpan/HTTP-Tiny/t/100_get.t
 cpan/HTTP-Tiny/t/101_head.t
 cpan/HTTP-Tiny/t/102_put.t
@@ -1064,6 +1080,15 @@ cpan/HTTP-Tiny/t/110_mirror.t
 cpan/HTTP-Tiny/t/130_redirect.t
 cpan/HTTP-Tiny/t/140_proxy.t
 cpan/HTTP-Tiny/t/150_post_form.t
+cpan/HTTP-Tiny/t/160_cookies.t
+cpan/HTTP-Tiny/t/BrokenCookieJar.pm
+cpan/HTTP-Tiny/t/cases/cookies-01.txt
+cpan/HTTP-Tiny/t/cases/cookies-02.txt
+cpan/HTTP-Tiny/t/cases/cookies-03.txt
+cpan/HTTP-Tiny/t/cases/cookies-04.txt
+cpan/HTTP-Tiny/t/cases/cookies-05.txt
+cpan/HTTP-Tiny/t/cases/cookies-06.txt
+cpan/HTTP-Tiny/t/cases/cookies-07.txt
 cpan/HTTP-Tiny/t/cases/delete-01.txt
 cpan/HTTP-Tiny/t/cases/form-01.txt
 cpan/HTTP-Tiny/t/cases/form-02.txt
@@ -1111,6 +1136,7 @@ cpan/HTTP-Tiny/t/cases/redirect-06.txt
 cpan/HTTP-Tiny/t/cases/redirect-07.txt
 cpan/HTTP-Tiny/t/cases/redirect-08.txt
 cpan/HTTP-Tiny/t/cases/redirect-09.txt
+cpan/HTTP-Tiny/t/SimpleCookieJar.pm
 cpan/HTTP-Tiny/t/Util.pm
 cpan/IO-Compress/bin/zipdetails				IO::Compress
 cpan/IO-Compress/Changes				IO::Compress
@@ -1639,13 +1665,16 @@ cpan/Module-Load/t/to_load/Must/Be/Loaded.pm	Module::Load tests
 cpan/Module-Load/t/to_load/TestModule.pm	Module::Load tests
 cpan/Module-Load/t/to_load/ToBeLoaded		Module::Load tests
 cpan/Module-Metadata/lib/Module/Metadata.pm
+cpan/Module-Metadata/t/contains_pod.t
 cpan/Module-Metadata/t/encoding.t
+cpan/Module-Metadata/t/endpod.t
 cpan/Module-Metadata/t/lib/0_1/Foo.pm
 cpan/Module-Metadata/t/lib/0_2/Foo.pm
 cpan/Module-Metadata/t/lib/BOMTest/UTF16BE.pm
 cpan/Module-Metadata/t/lib/BOMTest/UTF16LE.pm
 cpan/Module-Metadata/t/lib/BOMTest/UTF8.pm
 cpan/Module-Metadata/t/lib/DistGen.pm
+cpan/Module-Metadata/t/lib/ENDPOD.pm
 cpan/Module-Metadata/t/lib/MBTest.pm
 cpan/Module-Metadata/t/lib/Tie/CPHash.pm
 cpan/Module-Metadata/t/metadata.t
@@ -1797,7 +1826,6 @@ cpan/Pod-Parser/t/pod/twice.t			Test Pod::Parser
 cpan/Pod-Perldoc/corpus/no-head.pod		test file for Pod-Perldoc
 cpan/Pod-Perldoc/corpus/perlfunc.pod		test file for Pod-Perldoc
 cpan/Pod-Perldoc/corpus/utf8.pod		test file for Pod-Perldoc
-cpan/Pod-Perldoc/lib/perldoc.pod		Look up Perl documentation in Pod format
 cpan/Pod-Perldoc/lib/Pod/Perldoc/BaseTo.pm	utility module for perldoc
 cpan/Pod-Perldoc/lib/Pod/Perldoc/GetOptsOO.pm	options parsing for perldoc
 cpan/Pod-Perldoc/lib/Pod/Perldoc.pm		guts of the 'perldoc' utility
@@ -1811,6 +1839,7 @@ cpan/Pod-Perldoc/lib/Pod/Perldoc/ToTerm.pm	convert POD to terminal output
 cpan/Pod-Perldoc/lib/Pod/Perldoc/ToText.pm	convert POD to plain text
 cpan/Pod-Perldoc/lib/Pod/Perldoc/ToTk.pm	convert POD via Tk::Pod
 cpan/Pod-Perldoc/lib/Pod/Perldoc/ToXml.pm	convert POD to XML
+cpan/Pod-Perldoc/perldoc.pod
 cpan/Pod-Perldoc/t/load.t			test file for Pod-Perldoc
 cpan/Pod-Perldoc/t/man/_get_columns.t		test file for Pod-Perldoc
 cpan/Pod-Perldoc/t/pod.t			test file for Pod-Perldoc
@@ -2162,7 +2191,6 @@ cpan/Test-Harness/t/multiplexer.t			Test::Harness test
 cpan/Test-Harness/t/nested.t				Test::Harness test
 cpan/Test-Harness/t/nofork-mux.t			Test::Harness test
 cpan/Test-Harness/t/nofork.t				Test::Harness test
-cpan/Test-Harness/t/nowarn.t
 cpan/Test-Harness/t/object.t				Test::Harness test
 cpan/Test-Harness/t/parser-config.t			Test::Harness test
 cpan/Test-Harness/t/parser-subclass.t			Test::Harness test
@@ -2433,6 +2461,7 @@ cpan/Text-Tabs/lib/Text/Tabs.pm		Do expand and unexpand
 cpan/Text-Tabs/lib/Text/Wrap.pm		Paragraph formatter
 cpan/Text-Tabs/t/37000.t		See if Text::Tabs is working
 cpan/Text-Tabs/t/39548.t		See if Text::Tabs is working
+cpan/Text-Tabs/t/79766.t		See if Text::Tabs is working
 cpan/Text-Tabs/t/belg4mit.t		See if Text::Tabs is working
 cpan/Text-Tabs/t/dandv.t		See if Text::Tabs is working
 cpan/Text-Tabs/t/fill.t			See if Text::Wrap::fill works
@@ -3210,6 +3239,7 @@ dist/Module-CoreList/identify-dependencies	A usage example for Module::CoreList
 dist/Module-CoreList/lib/Module/CoreList.pm	Module::CoreList
 dist/Module-CoreList/lib/Module/CoreList.pod	Module::CoreList
 dist/Module-CoreList/lib/Module/CoreList/TieHashDelta.pm	Module::CoreList guts
+dist/Module-CoreList/lib/Module/CoreList/Utils.pm	Module::CoreList guts
 dist/Module-CoreList/Makefile.PL		Module::CoreList
 dist/Module-CoreList/MANIFEST			Module::CoreList
 dist/Module-CoreList/README			Module::CoreList
@@ -3217,6 +3247,7 @@ dist/Module-CoreList/t/corelist.t		Module::CoreList tests
 dist/Module-CoreList/t/deprecated.t		Module::CoreList tests
 dist/Module-CoreList/t/find_modules.t		Module::CoreList tests
 dist/Module-CoreList/t/pod.t			Module::CoreList tests
+dist/Module-CoreList/t/utils.t			Module::CoreList tests
 dist/Net-Ping/Changes			Net::Ping
 dist/Net-Ping/lib/Net/Ping.pm		Hello, anybody home?
 dist/Net-Ping/t/100_load.t		Ping Net::Ping
@@ -3883,11 +3914,9 @@ ext/XS-Typemap/t/Typemap.t	test that typemaps work
 ext/XS-Typemap/Typemap.pm	XS::Typemap extension
 ext/XS-Typemap/Typemap.xs	XS::Typemap extension
 fakesdio.h			stdio in terms of PerlIO
-fakethr.h			Fake threads header
 feature.h			Feature header
 form.h				Public declarations for formats
 generate_uudmap.c		Generate uudmap.h, the uuencode decoding map
-genpacksizetables.pl		Generate the size tables for pack/unpack
 globals.c			File to declare global symbols (for shared library)
 globvar.sym			Global variables that need hiding when embedded
 gv.c				Glob value code
@@ -3927,7 +3956,6 @@ hints/cygwin.sh			Hints for named architecture
 hints/darwin.sh			Hints for named architecture
 hints/dcosx.sh			Hints for named architecture
 hints/dec_osf.sh		Hints for named architecture
-hints/dgux.sh			Hints for named architecture
 hints/dos_djgpp.sh		Hints for named architecture
 hints/dragonfly.sh		Hints for named architecture
 hints/dynixptx.sh		Hints for named architecture
@@ -4142,6 +4170,7 @@ lib/perl5db/t/test-frame-option-1	Tests for the Perl debugger
 lib/perl5db/t/test-l-statement-1	Tests for the Perl debugger
 lib/perl5db/t/test-l-statement-2	Tests for the Perl debugger
 lib/perl5db/t/test-m-statement-1	Tests for the Perl debugger
+lib/perl5db/t/test-passing-at-underscore-to-x-etc	Tests for the Perl debugger
 lib/perl5db/t/test-PrintRet-option-1	Tests for the Perl debugger
 lib/perl5db/t/test-r-statement	Tests for the Perl debugger
 lib/perl5db/t/test-warnLevel-option-1	Tests for the Perl debugger
@@ -4425,6 +4454,7 @@ os2/perlrexx.c			Support perl interpreter embedded in REXX
 os2/perlrexx.cmd		Test perl interpreter embedded in REXX
 overload.c			generated overload enum (public)
 overload.h			generated overload name table (implementation)
+packsizetables.c		The generated packprops array used in pp_pack.c
 pad.c				Scratchpad functions
 pad.h				Scratchpad headers
 parser.h			parser object header
@@ -4440,7 +4470,6 @@ perliol.h			PerlIO Layer definition
 perlio.sym			Symbols for PerlIO abstraction
 perlsdio.h			Fake stdio using perlio
 perlsfio.h			Prototype sfio mapping for PerlIO
-perlsh				A poor man's perl shell
 perlvars.h			Global variables
 perly.act			parser actions; derived from perly.y
 perly.c				parser code (NOT derived from perly.y)
@@ -4484,6 +4513,7 @@ pod/perl5161delta.pod		Perl changes in version 5.16.1
 pod/perl5162delta.pod		Perl changes in version 5.16.2
 pod/perl5163delta.pod		Perl changes in version 5.16.3
 pod/perl5180delta.pod		Perl changes in version 5.18.0
+pod/perl5190delta.pod		Perl changes in version 5.19.0
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4676,7 +4706,6 @@ README.bs2000			Perl notes for POSIX-BC BS2000
 README.ce			Perl notes for WinCE
 README.cn			Perl for Simplified Chinese (in EUC-CN)
 README.cygwin			Perl notes for Cygwin
-README.dgux			Perl notes for DG/UX
 README.dos			Perl notes for DOS
 README.freebsd			Perl notes for FreeBSD
 README.haiku			Perl notes for Haiku
@@ -4713,6 +4742,7 @@ regcomp.sym			Data for regnodes.h
 regen/embed_lib.pl		Reads embed.fnc and regen/opcodes
 regen/embed.pl			Produces {embed,embedvar,proto}.h
 regen/feature.pl		Generates feature.pm
+regen/genpacksizetables.pl	Generate the size tables for pack/unpack
 regen/keywords.pl		Program to write keywords.h
 regen/mg_vtable.pl		generate mg_vtable.h
 regen/mk_invlists.pl		Generates charclass_invlists.h
@@ -5493,7 +5523,6 @@ x2p/a2p.h			Global declarations
 x2p/a2p.pod			Pod for awk to perl translator
 x2p/a2p.y			A yacc grammar for awk
 x2p/a2py.c			Awk compiler, sort of
-x2p/cflags.SH			A script that emits C compilation flags per file
 x2p/EXTERN.h			Same as above
 x2p/find2perl.PL		A find to perl translator
 x2p/hash.c			Hashes again

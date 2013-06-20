@@ -1173,10 +1173,10 @@ PP(pp_aassign)
     }
     if (PL_delaymagic & ~DM_DELAY) {
 	/* Will be used to set PL_tainting below */
-	UV tmp_uid  = PerlProc_getuid();
-	UV tmp_euid = PerlProc_geteuid();
-	UV tmp_gid  = PerlProc_getgid();
-	UV tmp_egid = PerlProc_getegid();
+	Uid_t tmp_uid  = PerlProc_getuid();
+	Uid_t tmp_euid = PerlProc_geteuid();
+	Gid_t tmp_gid  = PerlProc_getgid();
+	Gid_t tmp_egid = PerlProc_getegid();
 
 	if (PL_delaymagic & DM_UID) {
 #ifdef HAS_SETRESUID
@@ -1358,8 +1358,6 @@ PP(pp_match)
 		 (TAINT_get && (pm->op_pmflags & PMf_RETAINT)));
     TAINT_NOT;
 
-    RX_MATCH_UTF8_set(rx, DO_UTF8(TARG));
-
     /* We need to know this in case we fail out early - pos() must be reset */
     global = dynpm->op_pmflags & PMf_GLOBAL;
 
@@ -1438,9 +1436,8 @@ PP(pp_match)
     }
     if (RX_EXTFLAGS(rx) & RXf_USE_INTUIT &&
 	DO_UTF8(TARG) == (RX_UTF8(rx) != 0)) {
-	/* FIXME - can PL_bostr be made const char *?  */
-	PL_bostr = (char *)truebase;
-	s = CALLREG_INTUIT_START(rx, TARG, (char *)s, (char *)strend, r_flags, NULL);
+	s = CALLREG_INTUIT_START(rx, TARG, truebase,
+                        (char *)s, (char *)strend, r_flags, NULL);
 
 	if (!s)
 	    goto nope;
@@ -2225,14 +2222,12 @@ PP(pp_subst)
 	TAINT_NOT;
     }
 
-    RX_MATCH_UTF8_set(rx, DO_UTF8(TARG));
-
   force_it:
     if (!pm || !s)
 	DIE(aTHX_ "panic: pp_subst, pm=%p, s=%p", pm, s);
 
     strend = s + len;
-    slen = RX_MATCH_UTF8(rx) ? utf8_length((U8*)s, (U8*)strend) : len;
+    slen = DO_UTF8(TARG) ? utf8_length((U8*)s, (U8*)strend) : len;
     maxiters = 2 * slen + 10;	/* We can match twice at each
 				   position, once with zero-length,
 				   second time with non-zero. */
@@ -2256,8 +2251,7 @@ PP(pp_subst)
 
     orig = m = s;
     if (RX_EXTFLAGS(rx) & RXf_USE_INTUIT) {
-	PL_bostr = orig;
-	s = CALLREG_INTUIT_START(rx, TARG, s, strend, r_flags, NULL);
+	s = CALLREG_INTUIT_START(rx, TARG, orig, s, strend, r_flags, NULL);
 
 	if (!s)
 	    goto ret_no;
@@ -2847,6 +2841,12 @@ try_autoload:
 
 	PUTBACK;
 
+	if (((PL_op->op_private
+	       & PUSHSUB_GET_LVALUE_MASK(Perl_is_lvalue_sub)
+             ) & OPpENTERSUB_LVAL_MASK) == OPpLVAL_INTRO &&
+	    !CvLVALUE(cv))
+	    DIE(aTHX_ "Can't modify non-lvalue subroutine call");
+
 	if (!hasargs) {
 	    /* Need to copy @_ to stack. Alternative may be to
 	     * switch stack to @_, and copy return values
@@ -2895,8 +2895,15 @@ Perl_sub_crush_depth(pTHX_ CV *cv)
     if (CvANON(cv))
 	Perl_warner(aTHX_ packWARN(WARN_RECURSION), "Deep recursion on anonymous subroutine");
     else {
-	SV* const tmpstr = sv_newmortal();
-	gv_efullname3(tmpstr, CvGV(cv), NULL);
+        HEK *const hek = CvNAME_HEK(cv);
+        SV *tmpstr;
+        if (hek) {
+            tmpstr = sv_2mortal(newSVhek(hek));
+        }
+        else {
+            tmpstr = sv_newmortal();
+            gv_efullname3(tmpstr, CvGV(cv), NULL);
+        }
 	Perl_warner(aTHX_ packWARN(WARN_RECURSION), "Deep recursion on subroutine \"%"SVf"\"",
 		    SVfARG(tmpstr));
     }
@@ -3116,7 +3123,7 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	*(PL_stack_base + TOPMARK + 1) = sv_2mortal(newRV(MUTABLE_SV(iogv)));
     }
 
-    /* if we got here, ob should be a reference or a glob */
+    /* if we got here, ob should be an object or a glob */
     if (!ob || !(SvOBJECT(ob)
 		 || (SvTYPE(ob) == SVt_PVGV 
 		     && isGV_with_GP(ob)

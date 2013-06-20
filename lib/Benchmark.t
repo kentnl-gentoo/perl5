@@ -8,11 +8,11 @@ BEGIN {
 use warnings;
 use strict;
 use vars qw($foo $bar $baz $ballast);
-use Test::More tests => 196;
+use Test::More tests => 197;
 
 use Benchmark qw(:all);
 
-my $delta = 0.4;
+my $DELTA = 0.4;
 
 # Some timing ballast
 sub fib {
@@ -31,6 +31,15 @@ my $Nop_Pattern =
 # Please don't trust the matching parentheses to be useful in this :-)
 my $Default_Pattern = qr/$All_Pattern|$Noc_Pattern/;
 
+# see if the ratio of two integer values is within (1+$delta)
+
+sub cmp_delta {
+    my ($min, $max, $delta) = @_;
+    ($min, $max) = ($max, $min) if $max < $min;
+    return 0 if $min < 1; # avoid / 0
+    return $max/$min <= (1+$delta);
+}
+
 my $t0 = new Benchmark;
 isa_ok ($t0, 'Benchmark', "Ensure we can create a benchmark object");
 
@@ -47,9 +56,68 @@ timeit( 1, sub { $foo = @_ });
 is ($foo, 0, "benchmarked code called without arguments");
 
 
-print "# Burning CPU to benchmark things will take time...\n";
+print "# Burning CPU to see if clock is consistent...\n";
+
+# Run some code for approx 3 secs, then for 1 sec. If the first doesn't
+# take appoex 3 times longer than the second, then skip any tests which
+# require a consistent clock
+
+my $INCONSISTENT_CLOCK = 0;
+my $calibration;
+
+{
+    my ($t0, $t1, $tdelta);
+
+    $t0 = times; 1 while times == $t0; # wait for OS clock to tick
+
+    # guess approx n for code to run for 1 sec
+    my $n = 1;
+    while ($n < 1_000_000_000) { # eventually stop in worst case
+	$t0 = times;
+	fib($ballast) for 1..$n;
+	$t1 = times;
+	$tdelta = ($t1 - $t0);
+	last if ($tdelta) >= 1.0;
+	$n *= 2;
+    }
+    print "# did $n iterations in $tdelta sec\n";
+
+    # adjust n for exactly one second
+    $n /= $tdelta;
+
+    # now run enough loops for approx 3 secs
+
+    $t0 = times; 1 while times == $t0; # wait for OS clock to tick
+    $t0 = times;
+    fib($ballast) for 1..($n*3);
+    $t1 = times;
+    my $td3 = ($t1 - $t0);
+    print "# approx 3 sec delta is $td3 secs\n";
+
+    # now run enough loops for approx 1 sec
+
+    $t0 = times; 1 while times == $t0; # wait for OS clock to tick
+    $t0 = times;
+    fib($ballast) for 1..$n;
+    $t1 = times;
+    my $td1 = ($t1 - $t0);
+    print "# approx 1 sec delta is $td1 secs\n";
+
+    # we use 0.7 of $DELTA so that we err on the side of assuming
+    # a bad clock and skip tests; otherwise we might be just within the
+    # delta here, and just outside the delta on tests, and so get random
+    # failures
+    unless (cmp_delta(3*$td1, $td3, 0.7*$DELTA)) {
+	print "# INCONSISTENT CLOCK! - will skip timing-related tests\n";
+	$INCONSISTENT_CLOCK = 1;
+    }
+    $calibration = $td3/(3*$td1); # for diag output
+
+}
+ok(!$INCONSISTENT_CLOCK, "temporary calibration test");
 
 
+print "# Burning CPU to benchmark things; will take time...\n";
 
 # We need to do something fairly slow in the coderef.
 # Same coderef. Same place in memory.
@@ -86,10 +154,11 @@ my $in_onesec_adj = $in_onesec;
 $in_onesec_adj *= (1/$cpu1); # adjust because may not have run for exactly 1s
 print "# in_onesec_adj=$in_onesec_adj adjusted iterations\n";
 
-{
-  my $difference = $in_onesec_adj - $estimate;
-  my $actual = abs ($difference / $in_onesec_adj);
-  cmp_ok($actual, '<=', $delta, "is $in_onesec_adj within $delta of estimate ($estimate)")
+SKIP: {
+    skip(1, "INCONSISTENT CLOCK") if $INCONSISTENT_CLOCK;
+
+    ok(cmp_delta($in_onesec_adj, $estimate, $DELTA),
+		"is $in_onesec_adj within $DELTA of estimate ($estimate)?")
     or do {
 	diag("  in_threesecs     = $in_threesecs");
 	diag("  in_threesecs_adj = $in_threesecs_adj");
@@ -100,6 +169,7 @@ print "# in_onesec_adj=$in_onesec_adj adjusted iterations\n";
 	diag("  in_onesec_adj    = $in_onesec_adj");
 	diag("  cpu1             = $cpu1");
 	diag("  sys1             = $sys1");
+	diag("  calibration      = $calibration");
     };
 }
 

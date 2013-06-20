@@ -1,5 +1,38 @@
 Revision history for CPAN-Meta
 
+2.131560  2013-06-05 15:26:36 America/New_York
+
+  [DOCUMENTATION]
+
+  - Replaced CPAN::Meta SYNOPSIS with code that actually works
+
+2.131490  2013-05-29 14:15:16 America/New_York
+
+  [BUGFIX]
+
+  - Downconversion of custom resources was not dropping the leading "x_".
+    Now "x_MailingList" will downconvert correctly to "MailingList".
+
+  [SPEC]
+
+  - Per the Lancaster Consensus, the 'file' subkey of a package listed in
+    'provides' must refer to an actual file in the distribution, either the
+    .pm file that provides the package or another file (*.PL) that
+    generates it
+
+2.130880  2013-03-29 09:51:00 America/New_York
+
+  [BUGFIX]
+
+  - Fix provides 'version' bug introduced in the 2.130870 fix
+
+2.130870  2013-03-28 11:08:50 America/New_York
+
+  [BUGFIX]
+
+  - Don't add 'version' to 'provides' during conversion if one didn't
+    exist in the original [Reported by Miyagawa; fixed by David Golden]
+
 2.120921  2012-04-01 15:20:24 Europe/Paris
 
   [REMOVED]

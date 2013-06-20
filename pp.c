@@ -47,6 +47,9 @@ extern Pid_t getpid (void);
     _LIB_VERSION_TYPE _LIB_VERSION = _IEEE_;
 #endif
 
+static const STRLEN small_mu_len = sizeof(GREEK_SMALL_LETTER_MU_UTF8) - 1;
+static const STRLEN capital_iota_len = sizeof(GREEK_CAPITAL_LETTER_IOTA_UTF8) - 1;
+
 /* variations on pp_null */
 
 PP(pp_stub)
@@ -234,8 +237,10 @@ S_rv2gv(pTHX_ SV *sv, const bool vivify_sv, const bool strict,
 			Perl_croak_no_modify();
 		    if (cUNOP->op_targ) {
 			SV * const namesv = PAD_SV(cUNOP->op_targ);
+			HV *stash = CopSTASH(PL_curcop);
+			if (SvTYPE(stash) != SVt_PVHV) stash = NULL;
 			gv = MUTABLE_GV(newSV(0));
-			gv_init_sv(gv, CopSTASH(PL_curcop), namesv, 0);
+			gv_init_sv(gv, stash, namesv, 0);
 		    }
 		    else {
 			const char * const name = CopSTASHPV(PL_curcop);
@@ -585,10 +590,8 @@ PP(pp_ref)
     dVAR; dSP; dTARGET;
     SV * const sv = POPs;
 
-    if (sv)
-	SvGETMAGIC(sv);
-
-    if (!sv || !SvROK(sv))
+    SvGETMAGIC(sv);
+    if (!SvROK(sv))
 	RETPUSHNO;
 
     (void)sv_ref(TARG,SvRV(sv),TRUE);
@@ -602,8 +605,12 @@ PP(pp_bless)
     HV *stash;
 
     if (MAXARG == 1)
+    {
       curstash:
 	stash = CopSTASH(PL_curcop);
+	if (SvTYPE(stash) != SVt_PVHV)
+	    Perl_croak(aTHX_ "Attempt to bless into a freed package");
+    }
     else {
 	SV * const ssv = POPs;
 	STRLEN len;
@@ -3430,15 +3437,6 @@ PP(pp_crypt)
 /* Generally UTF-8 and UTF-EBCDIC are indistinguishable at this level.  So 
  * most comments below say UTF-8, when in fact they mean UTF-EBCDIC as well */
 
-/* Generates code to store a unicode codepoint c that is known to occupy
- * exactly two UTF-8 and UTF-EBCDIC bytes; it is stored into p and p+1,
- * and p is advanced to point to the next available byte after the two bytes */
-#define CAT_UNI_TO_UTF8_TWO_BYTE(p, c)					    \
-    STMT_START {							    \
-	*(p)++ = UTF8_TWO_BYTE_HI(c);					    \
-	*((p)++) = UTF8_TWO_BYTE_LO(c);					    \
-    } STMT_END
-
 PP(pp_ucfirst)
 {
     /* Actually is both lcfirst() and ucfirst().  Only the first character
@@ -3740,7 +3738,7 @@ PP(pp_uc)
 
     if (DO_UTF8(source)) {
 	const U8 *const send = s + len;
-	U8 tmpbuf[UTF8_MAXBYTES+1];
+	U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
 	bool tainted = FALSE;
 
 	/* All occurrences of these are to be moved to follow any other marks.
@@ -3762,10 +3760,8 @@ PP(pp_uc)
 	    if (in_iota_subscript && ! _is_utf8_mark(s)) {
 
 		/* A non-mark.  Time to output the iota subscript */
-#define GREEK_CAPITAL_LETTER_IOTA 0x0399
-#define COMBINING_GREEK_YPOGEGRAMMENI 0x0345
-
-		CAT_UNI_TO_UTF8_TWO_BYTE(d, GREEK_CAPITAL_LETTER_IOTA);
+		Copy(GREEK_CAPITAL_LETTER_IOTA_UTF8, d, capital_iota_len, U8);
+                d += capital_iota_len;
 		in_iota_subscript = FALSE;
             }
 
@@ -3775,6 +3771,8 @@ PP(pp_uc)
             u = UTF8SKIP(s);
             uv = _to_utf8_upper_flags(s, tmpbuf, &ulen,
 				      cBOOL(IN_LOCALE_RUNTIME), &tainted);
+#define GREEK_CAPITAL_LETTER_IOTA 0x0399
+#define COMBINING_GREEK_YPOGEGRAMMENI 0x0345
             if (uv == GREEK_CAPITAL_LETTER_IOTA
                 && utf8_to_uvchr_buf(s, send, 0) == COMBINING_GREEK_YPOGEGRAMMENI)
             {
@@ -3800,7 +3798,8 @@ PP(pp_uc)
             s += u;
 	}
 	if (in_iota_subscript) {
-	    CAT_UNI_TO_UTF8_TWO_BYTE(d, GREEK_CAPITAL_LETTER_IOTA);
+            Copy(GREEK_CAPITAL_LETTER_IOTA_UTF8, d, capital_iota_len, U8);
+            d += capital_iota_len;
 	}
 	SvUTF8_on(dest);
 	*d = '\0';
@@ -4142,7 +4141,7 @@ PP(pp_fc)
     const U8 *s;
     const U8 *send;
     U8 *d;
-    U8 tmpbuf[UTF8_MAXBYTES * UTF8_MAX_FOLD_CHAR_EXPAND + 1];
+    U8 tmpbuf[UTF8_MAXBYTES_CASE + 1];
     const bool full_folding = TRUE;
     const U8 flags = ( full_folding      ? FOLD_FLAGS_FULL   : 0 )
                    | ( IN_LOCALE_RUNTIME ? FOLD_FLAGS_LOCALE : 0 );
@@ -4198,23 +4197,20 @@ PP(pp_fc)
 	}
     } /* Unflagged string */
     else if (len) {
-        /* For locale, bytes, and nothing, the behavior is supposed to be the
-         * same as lc().
-         */
         if ( IN_LOCALE_RUNTIME ) { /* Under locale */
             TAINT;
             SvTAINTED_on(dest);
             for (; s < send; d++, s++)
-                *d = toLOWER_LC(*s);
+                *d = toFOLD_LC(*s);
         }
         else if ( !IN_UNI_8_BIT ) { /* Under nothing, or bytes */
             for (; s < send; d++, s++)
-                *d = toLOWER(*s);
+                *d = toFOLD(*s);
         }
         else {
             /* For ASCII and the Latin-1 range, there's only two troublesome
              * folds, \x{DF} (\N{LATIN SMALL LETTER SHARP S}), which under full
-             * casefolding becomes 'ss', and \x{B5} (\N{MICRO SIGN}), which
+             * casefolding becomes 'ss'; and \x{B5} (\N{MICRO SIGN}), which
              * under any fold becomes \x{3BC} (\N{GREEK SMALL LETTER MU}) --
              * For the rest, the casefold is their lowercase.  */
             for (; s < send; d++, s++) {
@@ -4234,7 +4230,8 @@ PP(pp_fc)
                                                 (send -s) * 2 + 1);
                     d = (U8*)SvPVX(dest) + len;
 
-                    CAT_UNI_TO_UTF8_TWO_BYTE(d, GREEK_SMALL_LETTER_MU);
+                    Copy(GREEK_SMALL_LETTER_MU_UTF8, d, small_mu_len, U8);
+                    d += small_mu_len;
                     s++;
                     for (; s < send; s++) {
                         STRLEN ulen;
@@ -4518,7 +4515,8 @@ S_do_delete_local(pTHX)
 		}
 		else {
 		    sv = hv_delete_ent(hv, keysv, 0, 0);
-		    SvREFCNT_inc_simple_void(sv); /* De-mortalize */
+		    if (preeminent)
+			SvREFCNT_inc_simple_void(sv); /* De-mortalize */
 		}
 		if (preeminent) {
 		    if (!sv) DIE(aTHX_ PL_no_helem_sv, SVfARG(keysv));
@@ -4553,7 +4551,8 @@ S_do_delete_local(pTHX)
 		    }
 		    else {
 			sv = av_delete(av, idx, 0);
-		        SvREFCNT_inc_simple_void(sv); /* De-mortalize */
+			if (preeminent)
+			   SvREFCNT_inc_simple_void(sv); /* De-mortalize */
 		    }
 		    if (preeminent) {
 		        save_aelem_flags(av, idx, &sv, SAVEf_KEEPOLDELEM);
@@ -4816,10 +4815,10 @@ PP(pp_lslice)
 
 PP(pp_anonlist)
 {
-    dVAR; dSP; dMARK; dORIGMARK;
+    dVAR; dSP; dMARK;
     const I32 items = SP - MARK;
     SV * const av = MUTABLE_SV(av_make(items, MARK+1));
-    SP = ORIGMARK;		/* av_make() might realloc stack_sp */
+    SP = MARK;
     mXPUSHs((PL_op->op_flags & OPf_SPECIAL)
 	    ? newRV_noinc(av) : av);
     RETURN;
@@ -5346,8 +5345,6 @@ PP(pp_split)
 
     TAINT_IF(get_regex_charset(RX_EXTFLAGS(rx)) == REGEX_LOCALE_CHARSET &&
              (RX_EXTFLAGS(rx) & (RXf_WHITE | RXf_SKIPWHITE)));
-
-    RX_MATCH_UTF8_set(rx, do_utf8);
 
 #ifdef USE_ITHREADS
     if (pm->op_pmreplrootu.op_pmtargetoff) {

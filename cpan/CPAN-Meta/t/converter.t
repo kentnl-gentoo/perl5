@@ -166,6 +166,22 @@ for my $f ( reverse sort @files ) {
   );
 }
 
+# specific test for round-tripping resources
+{
+  my $path = File::Spec->catfile('t','data','resources.yml');
+  my $original = Parse::CPAN::Meta->load_file( $path  );
+  ok( $original, "loaded resources.yml" );
+  my $cmc1 = CPAN::Meta::Converter->new( $original );
+  my $converted = $cmc1->convert( version => 2 );
+  my $cmc2 = CPAN::Meta::Converter->new( $converted );
+  my $roundtrip = $cmc2->convert( version => 1.4 );
+  is_deeply(
+    $roundtrip->{resources},
+    $original->{resources},
+    "round-trip of resources (1.4->2->1.4)"
+  );
+}
+
 # specific test for object conversion
 {
   my $path = File::Spec->catfile('t','data','resources.yml');
@@ -223,6 +239,24 @@ for my $f ( reverse sort @files ) {
   my $converted = $cmc->convert( version => 2 );
   is( $converted->{prereqs}{runtime}{requires}{'File::Find'}, "v0.1.0", "normalize v0.1");
   is( $converted->{prereqs}{runtime}{requires}{'File::Path'}, "v1.0.0", "normalize v1.0.0");
+}
+
+# specific test for missing provides version
+{
+  my $path = File::Spec->catfile('t','data','provides-version-missing.json');
+  my $original = Parse::CPAN::Meta->load_file( $path  );
+  ok( $original, "loaded " . basename $path );
+  my $cmc = CPAN::Meta::Converter->new( $original );
+  my $converted = $cmc->convert( version => 2 );
+  is_deeply( $converted->{provides}{"Foo::Bar"}, { file => "lib/Foo/Bar.pm", version => "0.27_02" },
+    "Foo::Bar provides correct"
+  );
+  is_deeply( $converted->{provides}{"Foo::Bar::Blah"}, { file => "lib/Foo/Bar/Blah.pm" },
+    "Foo::Bar::Blah provides correct"
+  );
+  is_deeply( $converted->{provides}{"Foo::Bar::Baz"}, { file => "lib/Foo/Bar/Baz.pm", version => "0.3" },
+    "Foo::Bar provides correct"
+  );
 }
 
 # CMR standardizes stuff in a way that makes it hard to test original vs final

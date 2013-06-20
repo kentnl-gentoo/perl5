@@ -82,7 +82,6 @@ my @header_files = qw(EXTERN.h INTERN.h XSUB.h av.h config.h cop.h cv.h
 		      regcomp.h regexp.h regnodes.h scope.h sv.h thread.h utf8.h
 		      util.h);
 
-# No point in adding fakethr.h, as it no longer works
 push @header_files,
     $^O eq 'VMS' ? 'vmsish.h' : qw(dosish.h perliol.h time64.h unixish.h);
 
@@ -385,7 +384,7 @@ $fetch_string .= <<'EOT';
 EOT
 
 } else {
-    # We only have ' delimted.
+    # We only have ' delimited.
 
 $fetch_string .= <<'EOT';
     return undef unless $Config_SH_expanded =~ /\n$key=\'(.*?)\'\n/s;
@@ -1020,7 +1019,7 @@ EOF
   s{([\'\"])([^\'\"\s]+)\1}(C<$2>)g; # "date" command
   s{\'([A-Za-z_\- *=/]+)\'}(C<$1>)g; # 'ln -s'
   s{
-     (?<! [\w./<\'\"] )		# Only standalone file names
+     (?<! [\w./<\'\"\$] )		# Only standalone file names
      (?! e \. g \. )		# Not e.g.
      (?! \. \. \. )		# Not ...
      (?! \d )			# Not 5.004

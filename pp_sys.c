@@ -1470,8 +1470,7 @@ PP(pp_leavewrite)
 	PL_formtarget = PL_toptarget;
 	IoFLAGS(io) |= IOf_DIDTOP;
 	fgv = IoTOP_GV(io);
-	if (!fgv)
-	    DIE(aTHX_ "bad top format reference");
+	assert(fgv); /* IoTOP_GV(io) should have been set above */
 	cv = GvFORM(fgv);
 	if (!cv) {
 	    SV * const sv = sv_newmortal();
@@ -2843,24 +2842,10 @@ PP(pp_stat)
 #endif
 	mPUSHu(PL_statcache.st_mode);
 	mPUSHu(PL_statcache.st_nlink);
-#if Uid_t_size > IVSIZE
-	mPUSHn(PL_statcache.st_uid);
-#else
-#   if Uid_t_sign <= 0
-	mPUSHi(PL_statcache.st_uid);
-#   else
-	mPUSHu(PL_statcache.st_uid);
-#   endif
-#endif
-#if Gid_t_size > IVSIZE
-	mPUSHn(PL_statcache.st_gid);
-#else
-#   if Gid_t_sign <= 0
-	mPUSHi(PL_statcache.st_gid);
-#   else
-	mPUSHu(PL_statcache.st_gid);
-#   endif
-#endif
+	
+        sv_setuid(PUSHmortal, PL_statcache.st_uid);
+        sv_setgid(PUSHmortal, PL_statcache.st_gid);
+
 #ifdef USE_STAT_RDEV
 	mPUSHi(PL_statcache.st_rdev);
 #else
@@ -4942,9 +4927,7 @@ PP(pp_gservent)
 #ifdef HAS_GETSERVBYPORT
 	const char * const proto = POPpbytex;
 	unsigned short port = (unsigned short)POPu;
-#ifdef HAS_HTONS
 	port = PerlSock_htons(port);
-#endif
 	sent = PerlSock_getservbyport(port, (proto && !*proto) ? NULL : proto);
 #else
 	DIE(aTHX_ PL_no_sock_func, "getservbyport");
@@ -4962,11 +4945,7 @@ PP(pp_gservent)
 	PUSHs(sv = sv_newmortal());
 	if (sent) {
 	    if (which == OP_GSBYNAME) {
-#ifdef HAS_NTOHS
 		sv_setiv(sv, (IV)PerlSock_ntohs(sent->s_port));
-#else
-		sv_setiv(sv, (IV)(sent->s_port));
-#endif
 	    }
 	    else
 		sv_setpv(sv, sent->s_name);
@@ -4977,11 +4956,7 @@ PP(pp_gservent)
     if (sent) {
 	mPUSHs(newSVpv(sent->s_name, 0));
 	PUSHs(space_join_names_mortal(sent->s_aliases));
-#ifdef HAS_NTOHS
 	mPUSHi(PerlSock_ntohs(sent->s_port));
-#else
-	mPUSHi(sent->s_port);
-#endif
 	mPUSHs(newSVpv(sent->s_proto, 0));
     }
 
@@ -5196,11 +5171,7 @@ PP(pp_gpwent)
 	PUSHs(sv = sv_newmortal());
 	if (pwent) {
 	    if (which == OP_GPWNAM)
-#   if Uid_t_sign <= 0
-		sv_setiv(sv, (IV)pwent->pw_uid);
-#   else
-		sv_setuv(sv, (UV)pwent->pw_uid);
-#   endif
+	        sv_setuid(sv, pwent->pw_uid);
 	    else
 		sv_setpv(sv, pwent->pw_name);
 	}
@@ -5254,17 +5225,9 @@ PP(pp_gpwent)
 	SvTAINTED_on(sv);
 #   endif
 
-#   if Uid_t_sign <= 0
-	mPUSHi(pwent->pw_uid);
-#   else
-	mPUSHu(pwent->pw_uid);
-#   endif
+        sv_setuid(PUSHmortal, pwent->pw_uid);
+        sv_setgid(PUSHmortal, pwent->pw_gid);
 
-#   if Uid_t_sign <= 0
-	mPUSHi(pwent->pw_gid);
-#   else
-	mPUSHu(pwent->pw_gid);
-#   endif
 	/* pw_change, pw_quota, and pw_age are mutually exclusive--
 	 * because of the poor interface of the Perl getpw*(),
 	 * not because there's some standard/convention saying so.
@@ -5355,11 +5318,7 @@ PP(pp_ggrent)
 	PUSHs(sv);
 	if (grent) {
 	    if (which == OP_GGRNAM)
-#if Gid_t_sign <= 0
-		sv_setiv(sv, (IV)grent->gr_gid);
-#else
-		sv_setuv(sv, (UV)grent->gr_gid);
-#endif
+		sv_setgid(sv, grent->gr_gid);
 	    else
 		sv_setpv(sv, grent->gr_name);
 	}
@@ -5375,11 +5334,7 @@ PP(pp_ggrent)
 	PUSHs(sv_mortalcopy(&PL_sv_no));
 #endif
 
-#if Gid_t_sign <= 0
-	mPUSHi(grent->gr_gid);
-#else
-	mPUSHu(grent->gr_gid);
-#endif
+        sv_setgid(PUSHmortal, grent->gr_gid);
 
 #if !(defined(_CRAYMPP) && defined(USE_REENTRANT_API))
 	/* In UNICOS/mk (_CRAYMPP) the multithreading

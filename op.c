@@ -165,11 +165,36 @@ Perl_Slab_Alloc(pTHX_ size_t sz)
     OP *o;
     size_t opsz, space;
 
+    /* We only allocate ops from the slab during subroutine compilation.
+       We find the slab via PL_compcv, hence that must be non-NULL. It could
+       also be pointing to a subroutine which is now fully set up (CvROOT()
+       pointing to the top of the optree for that sub), or a subroutine
+       which isn't using the slab allocator. If our sanity checks aren't met,
+       don't use a slab, but allocate the OP directly from the heap.  */
     if (!PL_compcv || CvROOT(PL_compcv)
      || (CvSTART(PL_compcv) && !CvSLABBED(PL_compcv)))
 	return PerlMemShared_calloc(1, sz);
 
-    if (!CvSTART(PL_compcv)) { /* sneak it in here */
+#if defined(USE_ITHREADS) && IVSIZE > U32SIZE
+    /* Work around a goof with alignment on our part. For sparc32 (and
+       possibly other architectures), if built with -Duse64bitint, the IV
+       op_pmoffset in struct pmop should be 8 byte aligned, but the slab
+       allocator is only providing 4 byte alignment. The real fix is to change
+       the IV to a type the same size as a pointer, such as size_t, but we
+       can't do that without breaking the ABI, which is a no-no in a maint
+       release. So instead, simply allocate struct pmop directly, which will be
+       suitably aligned:  */
+    if (sz == sizeof(struct pmop))
+	return PerlMemShared_calloc(1, sz);
+#endif
+
+    /* While the subroutine is under construction, the slabs are accessed via
+       CvSTART(), to avoid needing to expand PVCV by one pointer for something
+       unneeded at runtime. Once a subroutine is constructed, the slabs are
+       accessed via CvROOT(). So if CvSTART() is NULL, no slab has been
+       allocated yet.  See the commit message for 8be227ab5eaa23f2 for more
+       details.  */
+    if (!CvSTART(PL_compcv)) {
 	CvSTART(PL_compcv) =
 	    (OP *)(slab = S_new_slab(aTHX_ PERL_SLAB_SIZE));
 	CvSLABBED_on(PL_compcv);
@@ -180,6 +205,9 @@ Perl_Slab_Alloc(pTHX_ size_t sz)
     opsz = SIZE_TO_PSIZE(sz);
     sz = opsz + OPSLOT_HEADER_P;
 
+    /* The slabs maintain a free list of OPs. In particular, constant folding
+       will free up OPs, so it makes sense to re-use them where possible. A
+       freed up slot is used in preference to a new allocation.  */
     if (slab->opslab_freed) {
 	OP **too = &slab->opslab_freed;
 	o = *too;
@@ -1707,7 +1735,7 @@ S_finalize_op(pTHX_ OP* o)
     case OP_EXEC:
 	if ( o->op_sibling
 	    && (o->op_sibling->op_type == OP_NEXTSTATE || o->op_sibling->op_type == OP_DBSTATE)
-	    && ckWARN(WARN_SYNTAX))
+	    && ckWARN(WARN_EXEC))
 	    {
 		if (o->op_sibling->op_sibling) {
 		    const OPCODE type = o->op_sibling->op_sibling->op_type;
@@ -2141,9 +2169,6 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
       lvalue_func:
 	if (type == OP_LEAVESUBLV)
 	    o->op_private |= OPpMAYBE_LVSUB;
-	pad_free(o->op_targ);
-	o->op_targ = pad_alloc(o->op_type, SVs_PADMY);
-	assert(SvTYPE(PAD_SV(o->op_targ)) == SVt_NULL);
 	if (o->op_flags & OPf_KIDS)
 	    op_lvalue(cBINOPo->op_first->op_sibling, type);
 	break;
@@ -3229,6 +3254,7 @@ S_fold_constants(pTHX_ OP *o)
     case OP_LCFIRST:
     case OP_UC:
     case OP_LC:
+    case OP_FC:
     case OP_SLT:
     case OP_SGT:
     case OP_SLE:
@@ -4371,7 +4397,7 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 
     if(del && rlen == tlen) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "Useless use of /d modifier in transliteration operator"); 
-    } else if(rlen > tlen) {
+    } else if(rlen > tlen && !complement) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "Replacement list is longer than search list");
     }
 
@@ -4953,7 +4979,7 @@ Perl_newGVOP(pTHX_ I32 type, I32 flags, GV *gv)
 Constructs, checks, and returns an op of any type that involves an
 embedded C-level pointer (PV).  I<type> is the opcode.  I<flags> gives
 the eight bits of C<op_flags>.  I<pv> supplies the C-level pointer, which
-must have been allocated using L</PerlMemShared_malloc>; the memory will
+must have been allocated using C<PerlMemShared_malloc>; the memory will
 be freed when the op is destroyed.
 
 =cut
@@ -5648,7 +5674,7 @@ Perl_newASSIGNOP(pTHX_ I32 flags, OP *left, I32 optype, OP *right)
 
 Constructs a state op (COP).  The state op is normally a C<nextstate> op,
 but will be a C<dbstate> op if debugging is enabled for currently-compiled
-code.  The state op is populated from L</PL_curcop> (or L</PL_compiling>).
+code.  The state op is populated from C<PL_curcop> (or C<PL_compiling>).
 If I<label> is non-null, it supplies the name of a label to attach to
 the state op; this function takes ownership of the memory pointed at by
 I<label>, and will free it.  I<flags> gives the eight bits of C<op_flags>
@@ -7138,7 +7164,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	op_free(block);
 	SvREFCNT_dec(compcv);
 	PL_compcv = NULL;
-	goto clone;
+	goto setname;
     }
     /* Checking whether outcv is CvOUTSIDE(compcv) is not sufficient to
        determine whether this sub definition is in the same scope as its
@@ -7201,6 +7227,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	cv = compcv;
 	*spot = cv;
     }
+   setname:
     if (!CvNAME_HEK(cv)) {
 	CvNAME_HEK_set(cv,
 	 hek
@@ -7210,6 +7237,8 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 		      0)
 	);
     }
+    if (const_sv) goto clone;
+
     CvFILE_set_from_cop(cv, PL_curcop);
     CvSTASH_set(cv, PL_curstash);
 
@@ -8157,7 +8186,6 @@ Perl_newCVREF(pTHX_ I32 flags, OP *o)
 	dVAR;
 	o->op_type = OP_PADCV;
 	o->op_ppaddr = PL_ppaddr[OP_PADCV];
-	return o;
     }
     return newUNOP(OP_RV2CV, flags, scalar(o));
 }
@@ -8594,6 +8622,7 @@ Perl_ck_rvconst(pTHX_ OP *o)
 	    SvREFCNT_dec(kid->op_sv);
 #ifdef USE_ITHREADS
 	    /* XXX hack: dependence on sizeof(PADOP) <= sizeof(SVOP) */
+	    assert (sizeof(PADOP) <= sizeof(SVOP));
 	    kPADOP->op_padix = pad_alloc(OP_GV, SVs_PADTMP);
 	    SvREFCNT_dec(PAD_SVl(kPADOP->op_padix));
 	    GvIN_PAD_on(gv);
@@ -9878,6 +9907,28 @@ subroutine.
 =cut
 */
 
+/* shared by toke.c:yylex */
+CV *
+Perl_find_lexical_cv(pTHX_ PADOFFSET off)
+{
+    PADNAME *name = PAD_COMPNAME(off);
+    CV *compcv = PL_compcv;
+    while (PadnameOUTER(name)) {
+	assert(PARENT_PAD_INDEX(name));
+	compcv = CvOUTSIDE(PL_compcv);
+	name = PadlistNAMESARRAY(CvPADLIST(compcv))
+		[off = PARENT_PAD_INDEX(name)];
+    }
+    assert(!PadnameIsOUR(name));
+    if (!PadnameIsSTATE(name) && SvMAGICAL(name)) {
+	MAGIC * mg = mg_find(name, PERL_MAGIC_proto);
+	assert(mg);
+	assert(mg->mg_obj);
+	return (CV *)mg->mg_obj;
+    }
+    return (CV *)AvARRAY(PadlistARRAY(CvPADLIST(compcv))[1])[off];
+}
+
 CV *
 Perl_rv2cv_op_cv(pTHX_ OP *cvop, U32 flags)
 {
@@ -9912,24 +9963,7 @@ Perl_rv2cv_op_cv(pTHX_ OP *cvop, U32 flags)
 	    gv = NULL;
 	} break;
 	case OP_PADCV: {
-	    PADNAME *name = PAD_COMPNAME(rvop->op_targ);
-	    CV *compcv = PL_compcv;
-	    PADOFFSET off = rvop->op_targ;
-	    while (PadnameOUTER(name)) {
-		assert(PARENT_PAD_INDEX(name));
-		compcv = CvOUTSIDE(PL_compcv);
-		name = PadlistNAMESARRAY(CvPADLIST(compcv))
-			[off = PARENT_PAD_INDEX(name)];
-	    }
-	    assert(!PadnameIsOUR(name));
-	    if (!PadnameIsSTATE(name)) {
-		MAGIC * mg = mg_find(name, PERL_MAGIC_proto);
-		assert(mg);
-		assert(mg->mg_obj);
-		cv = (CV *)mg->mg_obj;
-	    }
-	    else cv =
-		    (CV *)AvARRAY(PadlistARRAY(CvPADLIST(compcv))[1])[off];
+	    cv = find_lexical_cv(rvop->op_targ);
 	    gv = NULL;
 	} break;
 	default: {
@@ -10526,7 +10560,9 @@ Perl_ck_subr(pTHX_ OP *o)
 		   really need is a new call checker API that accepts a
 		   GV or string (or GV or CV). */
 	    HEK * const hek = CvNAME_HEK(cv);
-	    assert(hek);
+	    /* After a syntax error in a lexical sub, the cv that
+	       rv2cv_op_cv returns may be a nameless stub. */
+	    if (!hek) return ck_entersub_args_list(o);;
 	    namegv = (GV *)sv_newmortal();
 	    gv_init_pvn(namegv, PL_curstash, HEK_KEY(hek), HEK_LEN(hek),
 			SVf_UTF8 * !!HEK_UTF8(hek));

@@ -28,7 +28,7 @@ BEGIN {
     }
 }
 
-plan(113);
+plan(116);
 
 my $rc_filename = '.perldb';
 
@@ -809,6 +809,50 @@ sub _calc_trace_wrapper
         # qr/^0\s+HASH\([^\)]+\)\n\s+500 => 600\n/,
         qr/^0\s+HASH\([^\)]+\)\n\s+500 => 600\n/ms,
         "x command test."
+    );
+}
+
+# Tests for x with @_
+{
+    my $wrapper = DebugWrap->new(
+        {
+            cmds =>
+            [
+                'b 10',
+                'c',
+                'x @_',
+                'q',
+            ],
+            prog => '../lib/perl5db/t/test-passing-at-underscore-to-x-etc',
+        }
+    );
+
+    $wrapper->contents_like(
+        # qr/^0\s+HASH\([^\)]+\)\n\s+500 => 600\n/,
+        qr/Arg1.*?Capsula.*GreekHumor.*Socrates/ms,
+        q/x command test with '@_'./,
+    );
+}
+
+# Tests for mutating @_
+{
+    my $wrapper = DebugWrap->new(
+        {
+            cmds =>
+            [
+                'b 10',
+                'c',
+                'shift(@_)',
+                'print "\n\n\n(((" . join(",", @_) . ")))\n\n\n"',
+                'q',
+            ],
+            prog => '../lib/perl5db/t/test-passing-at-underscore-to-x-etc',
+        }
+    );
+
+    $wrapper->output_like(
+        qr/^\(\(\(Capsula,GreekHumor,Socrates\)\)\)$/ms,
+        q/Mutating '@_'./,
     );
 }
 
@@ -2632,6 +2676,32 @@ sub _calc_trace_wrapper
 \s+new\ value:\s+'2'\n
         /msx,
         "Test w for lexical values.",
+    );
+}
+
+# Test the perldoc command
+# We don't actually run the program, but we need to provide one to the wrapper.
+SKIP:
+{
+    $^O eq "linux"
+        or skip "man errors aren't especially portable", 1;
+    local $ENV{LANG} = "C";
+    local $ENV{LC_MESSAGE} = "C";
+    local $ENV{LC_ALL} = "C";
+    my $wrapper = DebugWrap->new(
+        {
+            cmds =>
+            [
+                'perldoc perlrules',
+                'q',
+            ],
+            prog => '../lib/perl5db/t/fact',
+        }
+    );
+
+    $wrapper->output_like(
+        qr/No manual entry for perlrules/,
+        'perldoc command works fine',
     );
 }
 

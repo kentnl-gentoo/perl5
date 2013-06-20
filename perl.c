@@ -1219,7 +1219,6 @@ perl_destruct(pTHXx)
     Safefree(PL_origfilename);
     PL_origfilename = NULL;
     Safefree(PL_reg_curpm);
-    Safefree(PL_reg_poscache);
     free_tied_hv_pool();
     Safefree(PL_op_mask);
     Safefree(PL_psig_name);
@@ -1686,6 +1685,9 @@ S_Internals_V(pTHX_ CV *cv)
 #  ifdef NO_HASH_SEED
 			     " NO_HASH_SEED"
 #  endif
+#  ifdef NO_TAINT_SUPPORT
+			     " NO_TAINT_SUPPORT"
+#  endif
 #  ifdef PERL_DISABLE_PMC
 			     " PERL_DISABLE_PMC"
 #  endif
@@ -2088,9 +2090,11 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	SV **const inc0 = inc ? av_fetch(inc, 0, FALSE) : NULL;
 
 	if (inc0) {
+            /* if lib/buildcustomize.pl exists, it should not fail. If it does,
+               it should be reported immediately as a build failure.  */
 	    (void)Perl_av_create_and_unshift_one(aTHX_ &PL_preambleav,
 						 Perl_newSVpvf(aTHX_
-							       "BEGIN { do {local $!; -f q%c%"SVf"/buildcustomize.pl%c} && do q%c%"SVf"/buildcustomize.pl%c }",
+        "BEGIN { do {local $!; -f q%c%"SVf"/buildcustomize.pl%c} and do q%c%"SVf"/buildcustomize.pl%c || die $@ }",
 							       0, *inc0, 0,
 							       0, *inc0, 0));
 	}
@@ -3461,7 +3465,6 @@ S_minus_v(pTHX)
 	PerlIO * PIO_stdout;
 	if (!sv_derived_from(PL_patchlevel, "version"))
 	    upg_version(PL_patchlevel, TRUE);
-#if !defined(DGUX)
 	{
 	    SV* level= vstringify(PL_patchlevel);
 #ifdef PERL_PATCHNUM
@@ -3493,19 +3496,6 @@ S_minus_v(pTHX)
 		);
 	    SvREFCNT_dec(level);
 	}
-#else /* DGUX */
-	PIO_stdout =  PerlIO_stdout();
-/* Adjust verbose output as in the perl that ships with the DG/UX OS from EMC */
-	PerlIO_printf(PIO_stdout,
-		Perl_form(aTHX_ "\nThis is perl, %"SVf"\n",
-		    SVfARG(vstringify(PL_patchlevel))));
-	PerlIO_printf(PIO_stdout,
-			Perl_form(aTHX_ "        built under %s at %s %s\n",
-					OSNAME, __DATE__, __TIME__));
-	PerlIO_printf(PIO_stdout,
-			Perl_form(aTHX_ "        OS Specific Release: %s\n",
-					OSVERS));
-#endif /* !DGUX */
 #if defined(LOCAL_PATCH_COUNT)
 	if (LOCAL_PATCH_COUNT > 0)
 	    PerlIO_printf(PIO_stdout,
@@ -3634,10 +3624,6 @@ S_init_interp(pTHX)
 #  undef PERLVARIC
 #endif
 
-    /* As these are inside a structure, PERLVARI isn't capable of initialising
-       them  */
-    PL_reg_oldcurpm = PL_reg_curpm = NULL;
-    PL_reg_poscache = PL_reg_starttry = NULL;
 }
 
 STATIC void
@@ -3828,10 +3814,10 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
 STATIC void
 S_validate_suid(pTHX_ PerlIO *rsfp)
 {
-    const UV  my_uid = PerlProc_getuid();
-    const UV my_euid = PerlProc_geteuid();
-    const UV  my_gid = PerlProc_getgid();
-    const UV my_egid = PerlProc_getegid();
+    const Uid_t  my_uid = PerlProc_getuid();
+    const Uid_t my_euid = PerlProc_geteuid();
+    const Gid_t  my_gid = PerlProc_getgid();
+    const Gid_t my_egid = PerlProc_getegid();
 
     PERL_ARGS_ASSERT_VALIDATE_SUID;
 
@@ -3888,10 +3874,10 @@ S_init_ids(pTHX)
      * do tainting. */
 #if !NO_TAINT_SUPPORT
     dVAR;
-    const UV my_uid = PerlProc_getuid();
-    const UV my_euid = PerlProc_geteuid();
-    const UV my_gid = PerlProc_getgid();
-    const UV my_egid = PerlProc_getegid();
+    const Uid_t my_uid = PerlProc_getuid();
+    const Uid_t my_euid = PerlProc_geteuid();
+    const Gid_t my_gid = PerlProc_getgid();
+    const Gid_t my_egid = PerlProc_getegid();
 
     /* Should not happen: */
     CHECK_MALLOC_TAINT(my_uid && (my_euid != my_uid || my_egid != my_gid));
@@ -3923,10 +3909,10 @@ Perl_doing_taint(int argc, char *argv[], char *envp[])
      * have to add your own checks somewhere in here.  The two most
      * known samples of 'implicitness' are Win32 and NetWare, neither
      * of which has much of concept of 'uids'. */
-    int uid  = PerlProc_getuid();
-    int euid = PerlProc_geteuid();
-    int gid  = PerlProc_getgid();
-    int egid = PerlProc_getegid();
+    Uid_t uid  = PerlProc_getuid();
+    Uid_t euid = PerlProc_geteuid();
+    Gid_t gid  = PerlProc_getgid();
+    Gid_t egid = PerlProc_getegid();
     (void)envp;
 
 #ifdef VMS

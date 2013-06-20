@@ -56,11 +56,11 @@ $Is_Dos      = $^O eq 'dos';
 $Is_os2      = $^O eq 'os2';
 $Is_Cygwin   = $^O eq 'cygwin';
 
-$PERL = $ENV{PERL}
-    || ($Is_NetWare           ? 'perl'   :
-       $Is_VMS                ? $^X      :
-       $Is_MSWin32            ? '.\perl' :
-       './perl');
+$PERL = $ENV{PERL} ||
+   ($Is_NetWare ? 'perl'   :
+    $Is_VMS     ? $^X      :
+    $Is_MSWin32 ? '.\perl' :
+                  './perl');
 
 sub env_is {
     my ($key, $val, $desc) = @_;
@@ -82,7 +82,8 @@ sub env_is {
         $eqv = "\n" if length($eqv) == 2 and $eqv eq "\000\n";
         is $eqv, "$val\n", $desc;
     } else {
-        is `echo \$\Q$key\E`, "$val\n", $desc;
+        chomp (my @env = grep { s/^$key=// } `env`);
+        is "@env", $val, $desc;
     }
 }
 
@@ -342,7 +343,11 @@ EOF
     if ($Is_MSWin32 || $Is_os2) {
 	is uc $_, uc $s1;
     } else {
-	is $_, $s1;
+  SKIP:
+     {
+	  skip "# TODO: Hit bug posix-2058; exec does not setup argv[0] correctly." if ($^O eq "vos");
+	  is $_, $s1;
+     }
     }
     $_ = `$perl $script`;
     s/\.exe//i if $Is_Dos or $Is_os2 or $Is_Cygwin;
@@ -461,11 +466,13 @@ SKIP:  {
 }
 
 # Check that we don't auto-load packages
-SKIP: {
-    skip "staticly linked; may be preloaded", 4 unless $Config{usedl};
-    foreach (['powie::!', 'Errno'],
-	     ['powie::+', 'Tie::Hash::NamedCapture']) {
-	my ($symbol, $package) = @$_;
+foreach (['powie::!', 'Errno'],
+	 ['powie::+', 'Tie::Hash::NamedCapture']) {
+    my ($symbol, $package) = @$_;
+    SKIP: {
+	(my $extension = $package) =~ s|::|/|g;
+	skip "$package is statically linked", 2
+	    if $Config{static_ext} =~ m|\b\Q$extension\E\b|;
 	foreach my $scalar_first ('', '$$symbol;') {
 	    my $desc = qq{Referencing %{"$symbol"}};
 	    $desc .= qq{ after mentioning \${"$symbol"}} if $scalar_first;
@@ -621,10 +628,10 @@ is ${^LAST_FH}, undef, '${^LAST_FH} is undef when PL_last_in_gv is NULL';
 
 
 # $|
-fresh_perl_is 'print $| = ~$|', "1\n", {switches => ['-l']}, 
+fresh_perl_is 'print $| = ~$|', "1\n", {switches => ['-l']},
  '[perl #4760] print $| = ~$|';
 fresh_perl_is
- 'select f; undef *f; ${q/|/}; print STDOUT qq|ok\n|', "ok\n", {}, 
+ 'select f; undef *f; ${q/|/}; print STDOUT qq|ok\n|', "ok\n", {},
  '[perl #115206] no crash when vivifying $| while *{+select}{IO} is undef';
 
 

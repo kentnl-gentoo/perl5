@@ -127,6 +127,7 @@ use 5.010;
 use strict;
 use warnings;
 use Getopt::Long;
+use Archive::Tar;
 
 $| = 1;
 
@@ -229,8 +230,8 @@ say "Cleaning out old directory";
 system git => 'clean', '-dfxq', $pkg_dir;
 
 say "Unpacking $new_file";
+Archive::Tar->extract_archive( $new_file );
 
-system tar => 'xfz', $new_file;
 (my $new_dir = $new_file) =~ s/\.tar\.gz//;
 # ensure 'make' will update all files
 system('find', $new_dir, '-exec', 'touch', '{}', ';');
@@ -401,7 +402,7 @@ print "done\n";
 
 #
 # Must clean up, or else t/porting/FindExt.t will fail.
-# Note that we can always retrieve the orginal directory with a git checkout.
+# Note that we can always retrieve the original directory with a git checkout.
 #
 print "About to clean up; hit return or abort (^C) "; <STDIN>;
 

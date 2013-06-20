@@ -8,7 +8,7 @@ BEGIN {
     *bar::like = *like;
 }
 no warnings 'deprecated';
-plan 128;
+plan 135;
 
 # -------------------- Errors with feature disabled -------------------- #
 
@@ -299,6 +299,9 @@ sub make_anon_with_state_sub{
     is ref $_[0], 'ARRAY', 'state sub with proto';
   }
   p(my @a);
+  p my @b;
+  state sub q () { 45 }
+  is q(), 45, 'state constant called with parens';
 }
 {
   state sub x;
@@ -318,6 +321,13 @@ sub make_anon_with_state_sub{
   }
   r(1);
 }
+like runperl(
+      switches => [ '-Mfeature=:all' ],
+      prog     => 'state sub a { foo ref } a()',
+      stderr   => 1
+     ),
+     qr/syntax error/,
+    'referencing a state sub after a syntax error does not crash';
 
 # -------------------- my -------------------- #
 
@@ -587,6 +597,9 @@ not_lexical11();
     is ref $_[0], 'ARRAY', 'my sub with proto';
   }
   p(my @a);
+  p @a;
+  my sub q () { 46 }
+  is q(), 46, 'my constant called with parens';
 }
 {
   my sub x;
@@ -607,6 +620,13 @@ not_lexical11();
   eval q{ my sub george () { 2 } };
   is $w, undef, 'no double free from constant my subs';
 }
+like runperl(
+      switches => [ '-Mfeature=:all' ],
+      prog     => 'my sub a { foo ref } a()',
+      stderr   => 1
+     ),
+     qr/syntax error/,
+    'referencing a my sub after a syntax error does not crash';
 
 # -------------------- Interactions (and misc tests) -------------------- #
 
@@ -675,3 +695,11 @@ eval 'sub not_lexical7 { my @x }';
     }
   }
 }
+
+like runperl(
+      switches => [ '-Mfeature=:all', '-Mwarnings=FATAL,all', '-M-warnings=experimental::lexical_subs' ],
+      prog     => 'my sub foo; sub foo { foo } foo',
+      stderr   => 1
+     ),
+     qr/Deep recursion on subroutine "foo"/,
+    'deep recursion warnings for lexical subs do not crash';

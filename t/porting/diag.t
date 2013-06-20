@@ -1,15 +1,15 @@
 #!/usr/bin/perl
+
+BEGIN {
+  @INC = '..' if -f '../TestInit.pm';
+}
+use TestInit qw(T); # T is chdir to the top level
+
 use warnings;
 use strict;
 
-BEGIN {
-  chdir 't';
-  require './test.pl';
-}
-
+require 't/test.pl';
 plan('no_plan');
-
-$|=1;
 
 # --make-exceptions-list outputs the list of strings that don't have
 # perldiag.pod entries to STDERR without TAP formatting, so they can
@@ -19,37 +19,19 @@ $|=1;
 # Just add the documentation instead.
 my $make_exceptions_list = ($ARGV[0]||'') eq '--make-exceptions-list';
 
-chdir '..' or die "Can't chdir ..: $!";
-BEGIN { defined $ENV{PERL_UNICODE} and push @INC, "lib"; }
+require 'regen/embed_lib.pl';
 
+# Look for functions that look like they could be diagnostic ones.
 my @functions;
-
-open my $func_fh, "<", "embed.fnc" or die "Can't open embed.fnc: $!";
-
-# Look for functions in embed.fnc that look like they could be diagnostic ones.
-while (<$func_fh>) {
-  chomp;
-  s/^\s+//;
-  while (s/\s*\\$//) {      # Grab up all continuation lines, these end in \
-    my $next = <$func_fh>;
-    $next =~ s/^\s+//;
-    chomp $next;
-    $_ .= $next;
-  }
-  next if /^:/;     # Lines beginning with colon are comments.
-  next unless /\|/; # Lines without a vertical bar are something we can't deal
-                    # with
-  my @fields = split /\s*\|\s*/;
-  next unless $fields[2] =~ /warn|err|(\b|_)die|croak/i;
-  push @functions, $fields[2];
-
+foreach (@{(setup_embed())[0]}) {
+  next if @$_ < 2;
+  next unless $_->[2]  =~ /warn|err|(\b|_)die|croak/i;
   # The flag p means that this function may have a 'Perl_' prefix
   # The flag s means that this function may have a 'S_' prefix
-  push @functions, "Perl_$fields[2]", if $fields[0] =~ /p/;
-  push @functions, "S_$fields[2]", if $fields[0] =~ /s/;
-}
-
-close $func_fh;
+  push @functions, $_->[2];
+  push @functions, 'Perl_' . $_->[2] if $_->[0] =~ /p/;
+  push @functions, 'S_' . $_->[2] if $_->[0] =~ /s/;
+};
 
 my $regcomp_re = "(?<routine>(?:ckWARN(?:\\d+)?reg\\w*|vWARN\\d+))";
 my $function_re = join '|', @functions;
@@ -71,7 +53,8 @@ my %entries;
 my $reading_categorical_exceptions;
 while (<DATA>) {
   chomp;
-  $entries{$_}{$reading_categorical_exceptions ? 'cattodo' : 'todo'}=1;
+  $entries{$_}{todo} = 1;
+  $reading_categorical_exceptions and $entries{$_}{cattodo}=1;
   /__CATEGORIES__/ and ++$reading_categorical_exceptions;
 }
 
@@ -100,7 +83,8 @@ while (<$diagfh>) {
     $cur_entry =~ s/\n/ /gs; # Fix multi-line headers if they have \n's
     $cur_entry =~ s/\s+\z//;
 
-    if (exists $entries{$cur_entry} && $entries{$cur_entry}{todo}) {
+    if (exists $entries{$cur_entry} &&  $entries{$cur_entry}{todo}
+                                    && !$entries{$cur_entry}{cattodo}) {
         TODO: {
             local $::TODO = "Remove the TODO entry \"$cur_entry\" from DATA as it is already in $pod near line $.";
             ok($cur_entry);
@@ -178,6 +162,7 @@ my %specialformats = (IVdf => 'd',
 		      NVgf => 'f',
 		      HEKf256=>'s',
 		      HEKf => 's',
+		      UTF8f=> 's',
 		      SVf256=>'s',
 		      SVf32=> 's',
 		      SVf  => 's');
@@ -318,7 +303,8 @@ sub check_file {
     my $severity = !$routine                   ? '[PFX]'
                  :  $routine =~ /warn.*_d\z/   ? '[DS]'
                  :  $routine =~ /ck_warn/      ?  'W'
-                 :  $routine =~ /warn/         ? '[WDS]'
+                 :  $routine =~ /warner/       ? '[WDS]'
+                 :  $routine =~ /warn/         ?  'S'
                  :  $routine =~ /ckWARN.*dep/  ?  'D'
                  :  $routine =~ /ckWARN\d*reg/ ?  'W'
                  :  $routine =~ /vWARN\d/      ? '[WDS]'
@@ -382,7 +368,10 @@ sub check_message {
     # Kill precision
     $key =~ s/\%\.(\d+|\*)/%/g;
 
-    if (exists $entries{$key}) {
+    if (exists $entries{$key} and
+          # todo + cattodo means it is not found and it is not in the
+          # regular todo list, either
+          !$entries{$key}{todo} || !$entries{$key}{cattodo}) {
       $ret = 1;
       if ( $entries{$key}{seen}++ ) {
         # no need to repeat entries we've tested
@@ -401,26 +390,25 @@ sub check_message {
         # We found an actual valid entry in perldiag.pod for this error.
         pass($key);
 
-        # Now check the category and severity
-
-        # Cache our severity qr thingies
-        use 5.01;
-        state %qrs;
-        my $qr = $qrs{$severity} ||= qr/$severity/;
-
         return $ret
           if $entries{$key}{cattodo};
 
-        like $entries{$key}{severity}, $qr,
+        # Now check the category and severity
+
+        # Cache our severity qr thingies
+        use feature 'state';
+        state %qrs;
+        my $qr = $qrs{$severity} ||= qr/$severity/;
+
+        like($entries{$key}{severity}, $qr,
           $severity =~ /\[/
             ? "severity is one of $severity for $key"
-            : "severity is $severity for $key";
+            : "severity is $severity for $key");
 
-        is $entries{$key}{category}, $categories,
+        is($entries{$key}{category}, $categories,
            ($categories ? "categories are [$categories]" : "no category")
-             . " for $key";
+             . " for $key");
       }
-      # Later, should start checking that the severity is correct, too.
     } elsif ($partial) {
       # noop
     } else {
@@ -457,7 +445,10 @@ sub check_message {
 # don't have to go from "meh" to perfect all at once.
 # 
 # PLEASE DO NOT ADD TO THIS LIST.  Instead, write an entry in
-# pod/perldiag.pod for your new (warning|error).
+# pod/perldiag.pod for your new (warning|error).  Nevertheless,
+# listing exceptions here when this script is not smart enough
+# to recognize the messages is not so bad, as long as there are
+# entries in perldiag.
 
 # Entries after __CATEGORIES__ are those that are in perldiag but fail the
 # severity/category test.
@@ -467,11 +458,7 @@ sub check_message {
 __DATA__
 Malformed UTF-8 character (unexpected non-continuation byte 0x%x, immediately after start byte 0x%x)
 
-'%c' allowed only after types %s in %s
-bad top format reference
 Cannot apply "%s" in non-PerlIO perl
-Can't %s big-endian %ss on this
-Can't call mro_isa_changed_in() on anonymous symbol table
 Can't call mro_method_changed_in() on anonymous symbol table
 Can't coerce readonly %s to string
 Can't coerce readonly %s to string in %s
@@ -495,7 +482,6 @@ Code missing after '/' in unpack
 '%c' outside of string in pack
 Debug leaking scalars child failed%s with errno %d: %s
 '/' does not take a repeat count in %s
-Don't know how to get file name
 Don't know how to handle magic of type \%o
 -Dp not implemented on this platform
 Error reading "%s": %s
@@ -506,11 +492,8 @@ Filehandle %s opened only for %sput
 Filehandle STD%s reopened as %s only for input
 filter_del can only delete in reverse order (currently)
 YOU HAVEN'T DISABLED SET-ID SCRIPTS IN THE KERNEL YET! FIX YOUR KERNEL, PUT A C WRAPPER AROUND THIS SCRIPT, OR USE -u AND UNDUMP!
-fork() not implemented!
 free %s
-Free to wrong pool %p not %p
 get %s %p %p %p
-gethostent not implemented!
 getpwnam returned invalid UIC %o for user "%s"
 glob failed (can't start child: %s)
 glob failed (child exited with status %d%s)
@@ -533,8 +516,6 @@ Invalid type '%c' in %s
 Invalid type '%c' in unpack
 Invalid type ',' in %s
 ioctlsocket not implemented!
-'j' not supported on this platform
-'J' not supported on this platform
 killpg not implemented!
 length() used on %s (did you mean "scalar(%s)"?)
 length() used on %hash (did you mean "scalar(keys %hash)"?)
@@ -547,6 +528,7 @@ More than one argument to open
 More than one argument to open(,':%s')
 mprotect for %p %u failed with %d
 mprotect RW for %p %u failed with %d
+\N{} in character class restricted to one character in regex; marked by <-- HERE in m/%s/
 No %s allowed while running setgid
 No %s allowed with (suid) fdscript
 No such class field "%s"
@@ -605,9 +587,6 @@ Unknown Unicode option value %d
 Unrecognized character %s; marked by <-- HERE after %s<-- HERE near column %d
 Unstable directory path, current directory changed unexpectedly
 Unterminated compressed integer in unpack
-Unterminated \g... pattern in regex; marked by <-- HERE in m/%s/
-Usage: CODE(0x%x)(%s)
-Usage: %s(%s)
 Usage: %s::%s(%s)
 Usage: File::Copy::rmscopy(from,to[,date_flag])
 Usage: VMS::Filespec::candelete(spec)
@@ -631,6 +610,7 @@ Within []-length '%c' not allowed in %s
 Wrong syntax (suid) fd script name "%s"
 'X' outside of string in %s
 'X' outside of string in unpack
+Zero length \N{} in regex; marked by <-- HERE in m/%s/
 
 __CATEGORIES__
 Code point 0x%X is not Unicode, all \p{} matches fail; all \P{} matches succeed
@@ -643,6 +623,3 @@ Operation "%s" returns its argument for UTF-16 surrogate U+%X
 Unicode surrogate U+%X is illegal in UTF-8
 UTF-16 surrogate U+%X
 False [] range "%s" in regex; marked by <-- HERE in m/%s/
-\N{} in character class restricted to one character in regex; marked by <-- HERE in m/%s/
-Zero length \N{} in regex; marked by <-- HERE in m/%s/
-Expecting '(?flags:(?[...' in regex; marked by <-- HERE in m/%s/

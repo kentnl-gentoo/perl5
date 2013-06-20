@@ -13,6 +13,8 @@ sub apply_config {
     my ($config) = @_;
     my @no;
 
+    push @no, 'Sys-Syslog' if $^O eq 'MSWin32';
+
     # duplicates logic from Configure (mostly)
     push @no, "DB_File" unless $config->{i_db};
     push @no, "GDBM_File" unless $config->{i_gdbm};
@@ -45,6 +47,22 @@ sub set_static_extensions {
     for (@list) {
         $static{$_} = 1;
         $ext{$_} = 'static' if $ext{$_} && $ext{$_} eq 'dynamic';
+    }
+
+    # Encode is a special case.  If we are building Encode as a static
+    # extension, we need to explicitly list its subextensions as well.
+    # For other nested extensions, this is handled automatically by
+    # the appropriate Makefile.PL.
+    if ($ext{Encode} && $ext{Encode} eq 'static') {
+        require File::Find;
+        File::Find::find({
+                          no_chdir => 1,
+                          wanted => sub {
+                              return unless m!\b(Encode/.+)/Makefile\.PL!;
+                              $static{$1} = 1;
+                              $ext{$1} = 'static';
+                          },
+                         }, "../cpan/Encode");
     }
 }
 

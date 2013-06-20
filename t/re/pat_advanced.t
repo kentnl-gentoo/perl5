@@ -1020,8 +1020,19 @@ sub run_tests {
         undef $w;
         eval q [is("\N{TOO  MANY SPACES}", "TOO  MANY SPACES", "Multiple spaces in character name works")];
         like ($w, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... but returns a deprecation warning");
+        undef $w;
         eval q [use utf8; is("\N{TOO  MANY SPACES}", "TOO  MANY SPACES", "Same under 'use utf8': they work")];
         like ($w, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... but return a deprecation warning");
+        {
+            # disable lexical warnings
+            BEGIN { ${^WARNING_BITS} = undef; $^W = 0 }
+            undef $w;
+            () = eval q ["\N{TOO  MANY SPACES}"];
+            like ($w, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... and returns a deprecation warning outside of lexical warnings");
+            undef $w;
+            eval q [use utf8; () = "\N{TOO  MANY SPACES}"];
+            like ($w, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... same under utf8");
+        }
         {
             no warnings 'deprecated';
             undef $w;
@@ -1030,12 +1041,30 @@ sub run_tests {
             eval q [use utf8; "\N{TOO  MANY SPACES}"];
             ok (! defined $w, "... same under 'use utf8'");
         }
+        {
+            use warnings FATAL=> 'deprecated';
+            () = eval q ["\N{TOO  MANY SPACES}"];
+            like ($@, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... the deprecation warning can be fatal");
+            eval q [use utf8; () = "\N{TOO  MANY SPACES}"];
+            like ($@, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... same under utf8");
+        }
 
         undef $w;
         eval q [is("\N{TRAILING SPACE }", "TRAILING SPACE ", "Trailing space in character name works")];
         like ($w, qr/Trailing white-space in a charnames alias definition is deprecated/, "... but returns a deprecation warning");
+        undef $w;
         eval q [use utf8; is("\N{TRAILING SPACE }", "TRAILING SPACE ", "Same under 'use utf8': they work")];
         like ($w, qr/Trailing white-space in a charnames alias definition is deprecated/, "... but returns a deprecation warning");
+        {
+            # disable lexical warnings
+            BEGIN { ${^WARNING_BITS} = undef; $^W = 0 }
+            undef $w;
+            () = eval q ["\N{TRAILING SPACE }"];
+            like ($w, qr/Trailing white-space in a charnames alias definition is deprecated/, "... and returns a deprecation warning outside of lexical warnings");
+            undef $w;
+            eval q [use utf8; () = "\N{TRAILING SPACE }"];
+            like ($w, qr/Trailing white-space in a charnames alias definition is deprecated/, "... same under utf8");
+        }
         {
             no warnings 'deprecated';
             undef $w;
@@ -1043,6 +1072,13 @@ sub run_tests {
             ok (! defined $w, "... and no warning if warnings are off");
             eval q [use utf8; "\N{TRAILING SPACE }"];
             ok (! defined $w, "... same under 'use utf8'");
+        }
+        {
+            use warnings FATAL=>'deprecated';
+            () = eval q ["\N{TRAILING SPACE }"];
+            like ($@, qr/Trailing white-space in a charnames alias definition is deprecated/, "... the warning can be fatal");
+            eval q [use utf8; () = "\N{TRAILING SPACE }"];
+            like ($@, qr/Trailing white-space in a charnames alias definition is deprecated/, "... same under utf8");
         }
 
         # If remove the limitation in regcomp code these should work
