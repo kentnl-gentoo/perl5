@@ -1332,3 +1332,39 @@ Can't call method "FETCHSIZE" on an undefined value at - line 5.
 Can't call method "FETCHSIZE" on an undefined value at - line 6.
 Can't call method "FETCHSIZE" on an undefined value at - line 7.
 Can't call method "FETCHSIZE" on an undefined value at - line 8.
+########
+
+# Assigning vstrings to tied scalars
+sub TIESCALAR{bless[]};
+sub STORE { print ref \$_[1], "\n" }
+tie $x, ""; $x = v3;
+EXPECT
+VSTRING
+########
+
+# [perl #27010] Tying deferred elements
+$\="\n";
+sub TIESCALAR{bless[]};
+sub {
+    tie $_[0], "";
+    print ref tied $h{k};
+    tie $h{l}, "";
+    print ref tied $_[1];
+    untie $h{k};
+    print tied $_[0] // 'undef';
+    untie $_[1];
+    print tied $h{l} // 'undef';
+    # check that tied and untie do not autovivify
+    # XXX should they autovivify?
+    tied $_[2];
+    print exists $h{m} ? "yes" : "no";
+    untie $_[2];
+    print exists $h{m} ? "yes" : "no";
+}->($h{k}, $h{l}, $h{m});
+EXPECT
+main
+main
+undef
+undef
+no
+no

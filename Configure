@@ -28,7 +28,7 @@
 # See Porting/pumpkin.pod for more information on metaconfig.
 #
 
-# Generated on Mon May 27 09:27:16 CEST 2013 [metaconfig 3.5 PL0]
+# Generated on Mon Jul 15 15:52:13 CEST 2013 [metaconfig 3.5 PL0]
 # (with additional metaconfig patches by perlbug@perl.org)
 
 cat >c1$$ <<EOF
@@ -4155,13 +4155,11 @@ $define|true|[yY]*)     dflt='y';;
 esac
 cat <<EOM
 
-Perl can be built to take advantage of threads on some systems.
+Perl can be built to offer a form of threading support on some systems
 To do so, Configure can be run with -Dusethreads.
 
 Note that Perl built with threading support runs slightly slower
-and uses more memory than plain Perl. The current implementation
-is believed to be stable, but it is fairly new, and so should be
-treated with caution.
+and uses slightly more memory than plain Perl.
 
 If this doesn't make any sense to you, just accept the default '$dflt'.
 EOM
@@ -4177,22 +4175,14 @@ eval $setvar
 if $test $patchlevel -lt 9; then
     case "$usethreads" in
     $define)
-	$cat <<EOM
-
-Since release 5.6, Perl has had two different threading implementations,
-the newer interpreter-based version (ithreads) with one interpreter per
-thread, and the older 5.005 version (5005threads).
-The 5005threads version is effectively unmaintained and will probably be
-removed in Perl 5.10, so there should be no need to build a Perl using it
-unless needed for backwards compatibility with some existing 5.005threads
-code.
-
-EOM
 	: Default to ithreads unless overridden on command line or with
 	: old config.sh
 	dflt='y'
 	case "$use5005threads" in
-		$define|true|[yY]*) dflt='n';;
+		$define|true|[yY]*)
+			echo "5.005 threads are no longer supported"
+			exit 1
+		;;
 	esac
 	case "$useithreads" in
 		$undef|false|[nN]*) dflt='n';;
@@ -22353,10 +22343,10 @@ esac
 : Check extensions
 echo " "
 echo "Looking for extensions..." >&4
-: If we are using the old config.sh, known_extensions may contain
-: old or inaccurate or duplicate values.
-known_extensions=''
+: If we are using the old config.sh, nonxs_extensions and xs_extensions may
+: contain old or inaccurate or duplicate values.
 nonxs_extensions=''
+xs_extensions=''
 : We do not use find because it might not be available.
 : We do not just use MANIFEST because the user may have dropped
 : some additional extensions into the source tree and expect them
@@ -22372,51 +22362,34 @@ find_extensions='
 	    DynaLoader|dynaload) ;;
 	    *)
 	    this_ext=`echo $xxx | $sed -e s/-/\\\//g`;
-	    leaf=`echo $xxx | $sed -e s/.*-//`;
-	    if $test -d File; then
-		if $test -f $xxx/$leaf.xs -o -f $xxx/$leaf.c; then
-		    known_extensions="$known_extensions $1$this_ext";
-		elif $test -f $xxx/Makefile.PL; then
-		    nonxs_extensions="$nonxs_extensions $1$this_ext";
-		else
-		    if $test -d $xxx -a $# -lt 10; then
-			set $1$xxx/ $*;
-			cd "$xxx";
-			eval $find_extensions;
-			cd ..;
-			shift;
-		    fi;
-		fi;
-	    else
-		echo " $known_extensions $nonxs_extensions" > $$.tmp;
-		if $contains " $this_ext " $$.tmp; then
-		    echo >&4;
-		    echo "Duplicate directories detected for extension $xxx" >&4;
-		    echo "Configure cannot correctly recover from this - shall I abort?" >&4;
-		    case "$knowitall" in
-		    "") dflt=y;;
-		    *) dflt=n;;
-		    esac;
-		    . ../UU/myread;
-		    case "$ans" in
-		    n*|N*) ;;
-		    *) echo >&4;
-		       echo "Ok.  Stopping Configure." >&4;
-		       echo "Please remove the duplicate directory (e.g. using git clean) and then re-run Configure" >&4;
-			exit 1;;
-		    esac;
-		    echo "Ok.  You will need to correct config.sh before running make." >&4;
-		fi;
-		$ls -1 $xxx > $$.tmp;
-		if   $contains "\.xs$" $$.tmp > /dev/null 2>&1; then
-		    known_extensions="$known_extensions $this_ext";
-		elif $contains "\.c$"  $$.tmp > /dev/null 2>&1; then
-		    known_extensions="$known_extensions $this_ext";
-		elif $test -d $xxx; then
-		    nonxs_extensions="$nonxs_extensions $this_ext";
-		fi;
-		$rm -f $$.tmp;
-	    fi
+	    echo " $xs_extensions $nonxs_extensions" > $$.tmp;
+	    if $contains " $this_ext " $$.tmp; then
+		echo >&4;
+		echo "Duplicate directories detected for extension $xxx" >&4;
+		echo "Configure cannot correctly recover from this - shall I abort?" >&4;
+		case "$knowitall" in
+		"") dflt=y;;
+		*) dflt=n;;
+		esac;
+		. ../UU/myread;
+		case "$ans" in
+		n*|N*) ;;
+		*) echo >&4;
+		    echo "Ok.  Stopping Configure." >&4;
+		    echo "Please remove the duplicate directory (e.g. using git clean) and then re-run Configure" >&4;
+		    exit 1;;
+		esac;
+		echo "Ok.  You will need to correct config.sh before running make." >&4;
+	    fi;
+	    $ls -1 $xxx > $$.tmp;
+	    if   $contains "\.xs$" $$.tmp > /dev/null 2>&1; then
+		xs_extensions="$xs_extensions $this_ext";
+	    elif $contains "\.c$"  $$.tmp > /dev/null 2>&1; then
+		xs_extensions="$xs_extensions $this_ext";
+	    elif $test -d $xxx; then
+		nonxs_extensions="$nonxs_extensions $this_ext";
+	    fi;
+	    $rm -f $$.tmp;
 	    ;;
 	esac;
     done'
@@ -22433,27 +22406,18 @@ cd "$rsrc/ext"
 set X
 shift
 eval $find_extensions
-if $test -d File-Glob; then
-    : All ext/ flattened
-else
-    # Special case:  Add in modules that nest beyond the first level.
-    # Currently threads/shared and Hash/Util/FieldHash, since they are
-    # not picked up by the recursive find above (and adding in general
-    # recursive finding breaks SDBM_File/sdbm).
-    # A.D. 20011025 (SDBM), ajgough 20071008 (FieldHash)
-    known_extensions="$known_extensions threads/shared Hash/Util/FieldHash"
-fi
-set X $known_extensions
+set X $xs_extensions
 shift
-known_extensions=`echo "$*" | tr ' ' $trnl | $sort | tr $trnl ' '`
+xs_extensions=`echo "$*" | tr ' ' $trnl | $sort | tr $trnl ' '`
 set X $nonxs_extensions
 shift
 nonxs_extensions=`echo "$*" | tr ' ' $trnl | $sort | tr $trnl ' '`
 cd "$tdir"
+known_extensions=`echo $nonxs_extensions $xs_extensions  | tr ' ' $trnl | $sort | tr $trnl ' '`
 
 : Now see which are supported on this system.
 avail_ext=''
-for xxx in $known_extensions ; do
+for xxx in $xs_extensions ; do
 	case "$xxx" in
 	DB_File|db_file)
 		case "$i_db" in
@@ -22618,6 +22582,8 @@ esac
 nonxs_ext=''
 for xxx in $nonxs_extensions ; do
 	case "$xxx" in
+	VMS*)
+		;;
 	*)	nonxs_ext="$nonxs_ext $xxx"
 		;;
 	esac
@@ -22756,6 +22722,7 @@ case " $static_ext " in
 	cd "$rsrc/cpan"
 	for xxx in `ls Encode/*/Makefile.PL|awk -F/ '{print $2}'`; do
 		static_ext="$static_ext Encode/$xxx"
+		known_extensions="$known_extensions Encode/$xxx"
 	done
 	cd "$tdir"
 	;;

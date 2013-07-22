@@ -613,6 +613,8 @@ $(?<=^(a))	a	y	$1	a
 ^[^bcd]*(c+)	aexycd	y	$1	c
 (?{$a=2})a*aa(?{local$a=$a+1})k*c(?{$b=$a})	yaaxxaaaacd	y	$b	3
 (?{$a=2})(a(?{local$a=$a+1}))*aak*c(?{$b=$a})	yaaxxaaaacd	y	$b	4
+# [perl #117917]
+^(a(?{ "x" =~ m{x}})b)(??{ $1 })	abab	y	$&	abab
 (>a+)ab	aaab	n	-	-
 (?>a+)b	aaab	y	-	-
 ([[:]+)	a:[b]:	y	$1	:[
@@ -1487,10 +1489,9 @@ abc\N{def	-	c	-	\\N{NAME} must be resolved by the lexer
 [a\o{1000}]	\x{200}	y	$&	\x{200}
 
 # The below were inserting a NULL
-\87	87	y	$&	87
-a\87	a87	y	$&	a87
-a\97	a97	y	$&	a97
-
+\87	87	c	-	Reference to nonexistent group in regex
+a\87	a87	c	-	Reference to nonexistent group in regex
+a\97	a97	c	-	Reference to nonexistent group in regex
 
 # The below was inserting a NULL into the character class.
 [\8\9]	\000	Sn	-	-
@@ -1754,4 +1755,12 @@ m?^xy\?$?	xy?	y	$&	xy?
 ((A(*PRUNE)B|A(*PRUNE)D|A(*PRUNE)C))	AC	n	-	-
 ((A(*PRUNE)B|A(*PRUNE)C|A(*PRUNE)D))	AC	n	-	-
 
+A+?(*THEN)BC	AAABC	y	$&	ABC
+A+?(*PRUNE)BC	AAABC	y	$&	ABC
+A+(*THEN)BC	AAABC	y	$&	AAABC
+A+(*PRUNE)BC	AAABC	y	$&	AAABC
+A+?(*THEN)BC(?{})	AAABC	y	$&	ABC
+A+?(*PRUNE)BC(?{})	AAABC	y	$&	ABC
+A+(*THEN)BC(?{})	AAABC	y	$&	AAABC
+A+(*PRUNE)BC(?{})	AAABC	y	$&	AAABC
 # vim: softtabstop=0 noexpandtab

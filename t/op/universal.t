@@ -10,7 +10,7 @@ BEGIN {
     require "./test.pl";
 }
 
-plan tests => 139;
+plan tests => 142;
 
 $a = {};
 bless $a, "Bob";
@@ -111,6 +111,10 @@ ok UNIVERSAL::can(23, "can");
 ++${"23::foo"};
 ok UNIVERSAL::can("23", "can"), '"23" can can when the pack exists';
 ok UNIVERSAL::can(23, "can"), '23 can can when the pack exists';
+sub IO::Handle::turn {}
+ok UNIVERSAL::can(*STDOUT, 'turn'), 'globs with IOs can';
+ok UNIVERSAL::can(\*STDOUT, 'turn'), 'globrefs with IOs can';
+ok UNIVERSAL::can("STDOUT", 'turn'), 'IO barewords can';
 
 ok $a->can("VERSION");
 

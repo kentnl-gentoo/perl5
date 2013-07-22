@@ -2005,28 +2005,22 @@ $! Ask about threads, if appropriate
 $ IF ccname .EQS. "DEC" .OR. ccname .EQS. "CXX"
 $ THEN
 $   echo ""
-$   echo "Perl can be built to take advantage of threads on some systems."
+$   echo "Perl can be built to offer a form of threading support on some systems."
 $   echo "To do so, configure.com can be run with -""Dusethreads""."
 $   echo ""
 $   echo "Note that Perl built with threading support runs slightly slower"
-$   echo "and uses more memory than plain Perl. The current implementation"
-$   echo "is believed to be stable, but it is fairly new, and so should be"
-$   echo "treated with caution."
+$   echo "and uses slightly more memory than plain Perl."
 $   echo ""
 $   bool_dflt = "n"
 $   if f$type(usethreads) .nes. "" 
 $   then 
 $       if usethreads .or. usethreads .eqs. "define" then bool_dflt="y"
 $   endif
-$!  Catch cases where user specified ithreads or 5005threads but
+$!  Catch cases where user specified ithreads but
 $!  forgot -Dusethreads 
 $   if f$type(useithreads) .nes. ""
 $   then
 $         if useithreads .or. useithreads .eqs. "define" then bool_dflt="y"
-$   endif
-$   if f$type(use5005threads) .nes. ""
-$   then
-$         if use5005threads .or. use5005threads .eqs. "define" then bool_dflt="y"
 $   endif
 $   echo "If this doesn't make any sense to you, just accept the default '" + bool_dflt + "'."
 $   rp = "Build a threading Perl? [''bool_dflt'] "
@@ -2035,15 +2029,6 @@ $   if ans
 $   THEN
 $     usethreads = "define"
 $     use_threads="T"
-$     ! Shall we do the 5.005-type threads, or IThreads?
-$     echo "Since release 5.6, Perl has had two different threading implementations,"
-$     echo "the newer interpreter-based version (ithreads) with one interpreter per"
-$     echo "thread, and the older 5.005 version (5005threads)."
-$     echo "The 5005threads version is effectively unmaintained and will probably be"
-$     echo "removed in Perl 5.10, so there should be no need to build a Perl using it"
-$     echo "unless needed for backwards compatibility with some existing 5.005threads"
-$     echo "code."
-$     echo ""
 $     bool_dflt = "y"
 $     if f$type(useithreads) .nes. ""
 $     then
@@ -2051,17 +2036,16 @@ $         if useithreads .eqs. "undef" then bool_dflt="n"
 $     endif
 $     if f$type(use5005threads) .nes. ""
 $     then
-$         if use5005threads .or. use5005threads .eqs. "define" then bool_dflt="n"
+$         if use5005threads .or. use5005threads .eqs. "define"
+$         then
+$             echo "5.005 threads are no longer supported"
+$             exit 44
+$         endif
 $     endif
 $     rp = "Use the newer interpreter-based ithreads? [''bool_dflt'] "
 $     GOSUB myread
 $     use_ithreads=ans
-$     if use_ithreads 
-$     THEN
-$       use_5005_threads="N"
-$     ELSE
-$       use_5005_threads="Y"
-$     ENDIF
+$     use_5005_threads="N"
 $     ! Are they on VMS 7.1 or greater?
 $     IF "''f$extract(1,3, f$getsyi(""version""))'" .GES. "7.1"
 $     THEN
@@ -2800,7 +2784,7 @@ $   if ans.eqs."TWO_POT" then use_two_pot_malloc = "Y"
 $   if ans.eqs."PACK_MALLOC" then use_pack_malloc = "Y"
 $ ENDIF
 $!
-$ known_extensions = ""
+$ xs_extensions = ""
 $ xxx = ""
 $ OPEN/READ CONFIG 'manifestfound'
 $ext_loop:
@@ -2844,7 +2828,7 @@ $   goto replace_dash_with_slash
 $
 $ end_replace_dash_with_slash:
 $   
-$ xxx = known_extensions
+$ xxx = xs_extensions
 $ gosub may_already_have_extension
 $ IF $STATUS .EQ. 1
 $ THEN
@@ -2882,7 +2866,10 @@ $	xxx = F$EXTRACT(F$LENGTH(extspec) + 1, extlen, xxx)
 $   ENDIF
 $!
 $ found_new_extension:
-$   IF F$SEARCH("[-.ext.''extension_dir_name']*.xs") .EQS. "" .AND. F$SEARCH("[-.dist.''extension_dir_name']*.xs") .EQS. "" .AND. F$SEARCH("[-.cpan.''extension_dir_name']*.xs") .EQS. ""
+$   IF F$SEARCH("[-.ext.''extension_dir_name']*.xs") .EQS. "" -
+        .AND. F$SEARCH("[-.dist.''extension_dir_name']*.xs") .EQS. "" -
+        .AND. F$SEARCH("[-.cpan.''extension_dir_name']*.xs") .EQS. "" -
+        .AND. extension_dir_name .NES. "VMS-Filespec"
 $   THEN
 $!  Bit if a hack to get around the 1K buffer on older systems.
 $       IF F$LENGTH(nonxs_ext) .GT. 950
@@ -2892,7 +2879,7 @@ $       ELSE
 $           nonxs_ext = nonxs_ext + " ''extspec'"
 $       ENDIF
 $   ELSE
-$       known_extensions = known_extensions + " ''extspec'"
+$       xs_extensions = xs_extensions + " ''extspec'"
 $   ENDIF
 $   goto ext_loop
 $end_ext:
@@ -2902,8 +2889,8 @@ $ DELETE/SYMBOL idx
 $ DELETE/SYMBOL extspec
 $ DELETE/SYMBOL extlen
 $ DELETE/SYMBOL extension_dir_name
-$ known_extensions = F$EDIT(known_extensions,"TRIM,COMPRESS")
-$ dflt = known_extensions
+$ xs_extensions = F$EDIT(xs_extensions,"TRIM,COMPRESS")
+$ dflt = xs_extensions
 $ IF ccname .NES. "DEC" .AND. ccname .NES. "CXX"
 $ THEN
 $   dflt = dflt - "POSIX"             ! not with VAX C or GCC
@@ -3403,24 +3390,13 @@ $ ENDIF
 $!
 $! Now some that we build up
 $!
+$ use5005threads = "undef"
+$ d_old_pthread_create_joinable = "undef"
+$ old_pthread_create_joinable = " "
 $ IF use_threads
 $ THEN
-$   IF use_5005_threads
-$   THEN
-$     d_old_pthread_create_joinable = "undef"
-$     old_pthread_create_joinable = " "
-$     use5005threads = "define"
-$     useithreads = "undef"
-$   ELSE
-$     d_old_pthread_create_joinable = "undef"
-$     old_pthread_create_joinable = " "
-$     use5005threads = "undef"
-$     useithreads = "define"
-$   ENDIF
+$    useithreads = "define"
 $ ELSE
-$   d_old_pthread_create_joinable = "undef"
-$   old_pthread_create_joinable = " "
-$   use5005threads = "undef"
 $   useithreads = "undef"
 $ ENDIF
 $!
@@ -6511,11 +6487,9 @@ $ WC "ivdformat='" + ivdformat + "'"
 $ WC "ivsize='" + ivsize + "'"
 $ WC "ivtype='" + ivtype + "'"
 $!
-$! The known_extensions symbol may be quite long
+$! The xs_extensions symbol may be quite long
 $!
-$ tmp = "known_extensions='" + known_extensions + "'"
-$ WC/symbol tmp
-$ DELETE/SYMBOL tmp
+$ WC/symbol "known_extensions='", xs_extensions, " ", nonxs_ext, " ", nonxs_ext2, "'"
 $ WC "ld='" + ld + "'"
 $ WC "lddlflags='/Share'"
 $ WC "ldflags='" + ldflags + "'"

@@ -1079,9 +1079,14 @@ cpan/HTTP-Tiny/t/104_post.t
 cpan/HTTP-Tiny/t/110_mirror.t
 cpan/HTTP-Tiny/t/130_redirect.t
 cpan/HTTP-Tiny/t/140_proxy.t
+cpan/HTTP-Tiny/t/141_no_proxy.t
 cpan/HTTP-Tiny/t/150_post_form.t
 cpan/HTTP-Tiny/t/160_cookies.t
+cpan/HTTP-Tiny/t/161_basic_auth.t
 cpan/HTTP-Tiny/t/BrokenCookieJar.pm
+cpan/HTTP-Tiny/t/cases/auth-01.txt
+cpan/HTTP-Tiny/t/cases/auth-02.txt
+cpan/HTTP-Tiny/t/cases/auth-03.txt
 cpan/HTTP-Tiny/t/cases/cookies-01.txt
 cpan/HTTP-Tiny/t/cases/cookies-02.txt
 cpan/HTTP-Tiny/t/cases/cookies-03.txt
@@ -1705,13 +1710,12 @@ cpan/parent/t/parent-returns-false.t		tests for parent.pm
 cpan/parent/t/parent.t				tests for parent.pm
 cpan/Parse-CPAN-Meta/Changes
 cpan/Parse-CPAN-Meta/lib/Parse/CPAN/Meta.pm
-cpan/Parse-CPAN-Meta/t/01_compile.t
 cpan/Parse-CPAN-Meta/t/02_api.t
 cpan/Parse-CPAN-Meta/t/03_functions.t
 cpan/Parse-CPAN-Meta/t/04_export.t
 cpan/Parse-CPAN-Meta/t/05_errors.t
-cpan/Parse-CPAN-Meta/t/data/VR-META.json
-cpan/Parse-CPAN-Meta/t/data/VR-META.yml
+cpan/Parse-CPAN-Meta/t/data/META-VR.json
+cpan/Parse-CPAN-Meta/t/data/META-VR.yml
 cpan/Parse-CPAN-Meta/t/lib/Parse/CPAN/Meta/Test.pm
 cpan/perlfaq/lib/perlfaq1.pod		General Questions About Perl
 cpan/perlfaq/lib/perlfaq2.pod	Obtaining and Learning about Perl
@@ -2765,6 +2769,17 @@ cpan/Unicode-Normalize/t/proto.t	Unicode::Normalize
 cpan/Unicode-Normalize/t/split.t	Unicode::Normalize
 cpan/Unicode-Normalize/t/test.t		Unicode::Normalize
 cpan/Unicode-Normalize/t/tie.t		Unicode::Normalize
+cpan/version/lib/version/Internals.pod	Description of the internals of version objects
+cpan/version/lib/version.pm		Support for version objects
+cpan/version/lib/version.pod		Documentation of the version module
+cpan/version/t/01base.t			Tests for version objects`
+cpan/version/t/02derived.t		Tests for version objects
+cpan/version/t/03require.t		Tests for version objects
+cpan/version/t/04strict_lax.t		Tests for version objects
+cpan/version/t/05sigdie.t		Tests for version objects
+cpan/version/t/06noop.t			Tests for version objects
+cpan/version/t/07locale.t		Tests for version objects
+cpan/version/t/coretests.pm		Tests for version objects
 cpan/Win32API-File/buffers.h	Win32API::File extension
 cpan/Win32API-File/cFile.h	Win32API::File extension
 cpan/Win32API-File/cFile.pc	Win32API::File extension
@@ -2953,6 +2968,9 @@ dist/Dumpvalue/t/Dumpvalue.t	See if Dumpvalue works
 dist/Env/lib/Env.pm		Map environment into ordinary variables
 dist/Env/t/array.t		See if Env works for arrays
 dist/Env/t/env.t		See if Env works
+dist/Exporter/lib/Exporter/Heavy.pm	Complicated routines for Exporter
+dist/Exporter/lib/Exporter.pm		Exporter base class
+dist/Exporter/t/Exporter.t		See if Exporter works
 dist/ExtUtils-CBuilder/Changes		EU-CB change log
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Base.pm		Base class for ExtUtils::CBuilder methods
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/aix.pm	CBuilder methods for AIX
@@ -2999,6 +3017,7 @@ dist/ExtUtils-Manifest/t/Manifest.t				See if ExtUtils::Manifest works
 dist/ExtUtils-ParseXS/Changes					ExtUtils::ParseXS change log
 dist/ExtUtils-ParseXS/lib/ExtUtils/ParseXS/Constants.pm		ExtUtils::ParseXS guts
 dist/ExtUtils-ParseXS/lib/ExtUtils/ParseXS/CountLines.pm	ExtUtils::ParseXS guts
+dist/ExtUtils-ParseXS/lib/ExtUtils/ParseXS/Eval.pm		ExtUtils::ParseXS guts
 dist/ExtUtils-ParseXS/lib/ExtUtils/ParseXS.pm			converts Perl XS code into C code
 dist/ExtUtils-ParseXS/lib/ExtUtils/ParseXS.pod			ExtUtils::ParseXS documentation
 dist/ExtUtils-ParseXS/lib/ExtUtils/ParseXS/Utilities.pm		ExtUtils::ParseXS guts
@@ -3021,7 +3040,6 @@ dist/ExtUtils-ParseXS/t/103-tidy_type.t				ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/104-map_type.t				ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/105-valid_proto_string.t		ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/106-process_typemaps.t			ExtUtils::ParseXS tests
-dist/ExtUtils-ParseXS/t/107-make_targetable.t			ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/108-map_type.t				ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/109-standard_XS_defs.t			ExtUtils::ParseXS tests
 dist/ExtUtils-ParseXS/t/110-assign_func_args.t			ExtUtils::ParseXS tests
@@ -3037,6 +3055,8 @@ dist/ExtUtils-ParseXS/t/512-t-file.t				ExtUtils::Typemaps tests
 dist/ExtUtils-ParseXS/t/513-t-merge.t				ExtUtils::Typemaps tests
 dist/ExtUtils-ParseXS/t/514-t-embed.t				ExtUtils::Typemaps tests
 dist/ExtUtils-ParseXS/t/515-t-cmd.t				ExtUtils::Typemaps tests
+dist/ExtUtils-ParseXS/t/516-t-clone.t				ExtUtils::Typemaps tests
+dist/ExtUtils-ParseXS/t/517-t-targetable.t			ExtUtils::Typemaps tests
 dist/ExtUtils-ParseXS/t/600-t-compat.t				ExtUtils::Typemaps tests
 dist/ExtUtils-ParseXS/t/data/b.typemap				ExtUtils::Typemaps test data
 dist/ExtUtils-ParseXS/t/data/combined.typemap			ExtUtils::Typemaps test data
@@ -3312,6 +3332,7 @@ dist/Storable/t/compat01.t		See if Storable works
 dist/Storable/t/compat06.t		See if Storable works
 dist/Storable/t/croak.t			See if Storable works
 dist/Storable/t/dclone.t		See if Storable works
+dist/Storable/t/destroy.t		Test Storable in global destructon
 dist/Storable/t/downgrade.t		See if Storable works
 dist/Storable/t/file_magic.t		See if file_magic function works
 dist/Storable/t/forgive.t		See if Storable works
@@ -3322,6 +3343,7 @@ dist/Storable/t/HAS_OVERLOAD.pm		For auto-requiring of mdoules for overload
 dist/Storable/t/integer.t		See if Storable works
 dist/Storable/t/interwork56.t		Test compatibility kludge for 64bit data under 5.6.x
 dist/Storable/t/just_plain_nasty.t	See if Storable works
+dist/Storable/t/leaks.t			See if Storable leaks (skips in core)
 dist/Storable/t/lock.t			See if Storable works
 dist/Storable/t/make_56_interwork.pl	Make test data for interwork56.t
 dist/Storable/t/make_downgrade.pl	Make test data for downgrade.t
@@ -3557,6 +3579,7 @@ ext/Errno/ChangeLog	Errno changes
 ext/Errno/Errno_pm.PL	Errno perl module create script
 ext/Errno/Makefile.PL	Errno extension makefile writer
 ext/Errno/t/Errno.t	See if Errno works
+ext/ExtUtils-Miniperl/lib/ExtUtils/Miniperl.pm	Writes {mini,}perlmain.c
 ext/Fcntl/Fcntl.pm	Fcntl extension Perl module
 ext/Fcntl/Fcntl.xs	Fcntl extension external subroutines
 ext/Fcntl/Makefile.PL	Fcntl extension makefile writer
@@ -3575,6 +3598,9 @@ ext/FileCache/t/07noimport.t	See if FileCache works without importing
 ext/File-DosGlob/DosGlob.xs		Win32 DOS-globbing module
 ext/File-DosGlob/lib/File/DosGlob.pm	Win32 DOS-globbing module
 ext/File-DosGlob/t/DosGlob.t		See if File::DosGlob works
+ext/File-Find/lib/File/Find.pm	Routines to do a find
+ext/File-Find/t/find.t		See if File::Find works
+ext/File-Find/t/taint.t		See if File::Find works with taint
 ext/File-Glob/bsd_glob.c	File::Glob extension run time code
 ext/File-Glob/bsd_glob.h	File::Glob extension header file
 ext/File-Glob/Changes		File::Glob extension changelog
@@ -3628,6 +3654,7 @@ ext/NDBM_File/hints/gnukfreebsd.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/gnuknetbsd.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/gnu.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/linux.pl	Hint for NDBM_File for named architecture
+ext/NDBM_File/hints/MSWin32.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/sco.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/solaris.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/svr4.pl	Hint for NDBM_File for named architecture
@@ -3642,7 +3669,8 @@ ext/ODBM_File/hints/gnukfreebsd.pl	Hint for NDBM_File for named architecture
 ext/ODBM_File/hints/gnuknetbsd.pl	Hint for NDBM_File for named architecture
 ext/ODBM_File/hints/gnu.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/hpux.pl	Hint for ODBM_File for named architecture
-ext/ODBM_File/hints/linux.pl	Hint for NDBM_File for named architecture
+ext/ODBM_File/hints/linux.pl	Hint for ODBM_File for named architecture
+ext/ODBM_File/hints/MSWin32.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/sco.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/solaris.pl	Hint for ODBM_File for named architecture
 ext/ODBM_File/hints/svr4.pl	Hint for ODBM_File for named architecture
@@ -3678,6 +3706,7 @@ ext/Pod-Functions/Makefile.PL		Makefile writer
 ext/Pod-Functions/t/Functions.t		See if Pod::Functions works
 ext/Pod-Html/bin/pod2html	Translator to turn pod into HTML
 ext/Pod-Html/lib/Pod/Html.pm	Convert POD data to HTML
+ext/Pod-Html/t/anchorify.t
 ext/Pod-Html/t/cache.pod
 ext/Pod-Html/t/cache.t
 ext/Pod-Html/t/crossref2.t
@@ -3798,6 +3827,8 @@ ext/VMS-DCLsym/DCLsym.pm	Perl access to CLI symbols
 ext/VMS-DCLsym/DCLsym.xs	Perl access to CLI symbols
 ext/VMS-DCLsym/Makefile.PL	MakeMaker driver for VMS::DCLsym
 ext/VMS-DCLsym/t/vms_dclsym.t	regression tests for VMS::DCLsym
+ext/VMS-Filespec/lib/VMS/Filespec.pm	VMS-Unix file syntax interconversion
+ext/VMS-Filespec/t/filespec.t		See if VMS::Filespec functions work
 ext/VMS-Stdio/0README.txt	ReadMe file for VMS::Stdio
 ext/VMS-Stdio/Makefile.PL	MakeMaker driver for VMS::Stdio
 ext/VMS-Stdio/Stdio.pm		VMS options to stdio routines
@@ -4087,9 +4118,6 @@ lib/dumpvar.pl			A variable dumper
 lib/dumpvar.t			A variable dumper tester
 lib/English.pm			Readable aliases for short variables
 lib/English.t			See if English works
-lib/Exporter/Heavy.pm		Complicated routines for Exporter
-lib/Exporter.pm			Exporter base class
-lib/Exporter.t			See if Exporter works
 lib/ExtUtils/Embed.pm		Utilities for embedding Perl in C programs
 lib/ExtUtils/t/Embed.t		See if ExtUtils::Embed and embedding works
 lib/ExtUtils/typemap		Extension interface types
@@ -4103,9 +4131,6 @@ lib/File/Compare.pm		Emulation of cmp command
 lib/File/Compare.t		See if File::Compare works
 lib/File/Copy.pm		Emulation of cp command
 lib/File/Copy.t			See if File::Copy works
-lib/File/Find.pm		Routines to do a find
-lib/File/Find/t/find.t		See if File::Find works
-lib/File/Find/t/taint.t		See if File::Find works with taint
 lib/FileHandle.pm		Backward-compatible front end to IO extension
 lib/FileHandle.t		See if FileHandle works
 lib/File/stat-7896.t		A test for ID 20011110.104
@@ -4154,6 +4179,7 @@ lib/perl5db/t/eval-line-bug	Tests for the Perl debugger
 lib/perl5db/t/fact		Tests for the Perl debugger
 lib/perl5db/t/filename-line-breakpoint		Tests for the Perl debugger
 lib/perl5db/t/load-modules	Tests for the Perl debugger
+lib/perl5db/t/lsub-n		Test script used by perl5db.t
 lib/perl5db/t/lvalue-bug	Tests for the Perl debugger
 lib/perl5db/t/MyModule.pm	Tests for the Perl debugger
 lib/perl5db/t/proxy-constants	Tests for the Perl debugger
@@ -4281,17 +4307,6 @@ lib/utf8.t			See if utf8 operations work
 lib/vars_carp.t			See if "use vars" doesn't load Carp.pm per default
 lib/vars.pm			Declare pseudo-imported global variables
 lib/vars.t			See if "use vars" works
-lib/version/Internals.pod	Description of the internals of version objects
-lib/version.pm			Support for version objects
-lib/version.pod			Documentation of the version module
-lib/version/t/01base.t		Tests for version objects`
-lib/version/t/02derived.t	Tests for version objects
-lib/version/t/03require.t	Tests for version objects
-lib/version/t/04strict_lax.t	Tests for version objects
-lib/version/t/05sigdie.t	Tests for version objects
-lib/version/t/06noop.t		Tests for version objects
-lib/version/t/07locale.t	Tests for version objects
-lib/version/t/coretests.pm	Tests for version objects
 lib/vmsish.pm			Control VMS-specific behavior of Perl core
 lib/vmsish.t			Tests for vmsish.pm
 lib/warnings.pm			For "use warnings"
@@ -4324,7 +4339,6 @@ mg.h				Magic header
 mg_names.c			Generated magic names used by dump.c
 mg_raw.h			Generated magic data used by generate_uudmap.c
 mg_vtable.h			Generated magic vtable data
-minimod.pl			Writes lib/ExtUtils/Miniperl.pm
 miniperlmain.c			Basic perl w/o dynamic loading or extensions
 mkppport			A script that distributes ppport.h
 mkppport.lst			List of extensions that need a ppport.h
@@ -4514,6 +4528,7 @@ pod/perl5162delta.pod		Perl changes in version 5.16.2
 pod/perl5163delta.pod		Perl changes in version 5.16.3
 pod/perl5180delta.pod		Perl changes in version 5.18.0
 pod/perl5190delta.pod		Perl changes in version 5.19.0
+pod/perl5191delta.pod		Perl changes in version 5.19.1
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4681,8 +4696,6 @@ Porting/release_schedule.pod	Schedule for future releases
 Porting/rt_list_patches		A tool to help you apply patches from RT
 Porting/sort_perldiag.pl	Keep our diagnostics orderly
 Porting/sync-with-cpan		Sync with CPAN
-Porting/testall.atom		Cumulative profile with Third Degree
-Porting/thirdclean		Cleanup Third Degree reports
 Porting/timecheck2.c		Test program for the 2038 fix
 Porting/timecheck.c		Test program for the 2038 fix
 Porting/todo.pod		Perl things to do
@@ -4745,6 +4758,7 @@ regen/feature.pl		Generates feature.pm
 regen/genpacksizetables.pl	Generate the size tables for pack/unpack
 regen/keywords.pl		Program to write keywords.h
 regen/mg_vtable.pl		generate mg_vtable.h
+regen/miniperlmain.pl		generate miniperlmain.c
 regen/mk_invlists.pl		Generates charclass_invlists.h
 regen/mk_PL_charclass.pl	Populate the PL_charclass table
 regen/opcode.pl			Opcode header generator
@@ -5274,6 +5288,7 @@ t/porting/pending-author.t	Check if any pending commit would break tests
 t/porting/perlfunc.t		Test that Functions_pm.PL can parse perlfunc.pod
 t/porting/podcheck.t		Test the POD of shipped modules is well formed
 t/porting/pod_rules.t		Check that various pod lists are consistent
+t/porting/readme.t		Check that all files in Porting/ are mentioned in Porting/README.pod
 t/porting/regen.t		Check that regen.pl doesn't need running
 t/porting/test_bootstrap.t	Test that the instructions for test bootstrapping aren't accidentally overlooked.
 t/porting/utils.t		Check that utility scripts still compile
@@ -5426,8 +5441,7 @@ utils/instmodsh.PL		Give information about installed extensions
 utils/json_pp.PL		JSON::PP command line utility
 utils/libnetcfg.PL		libnet
 utils.lst			Lists utilities bundled with Perl
-utils/Makefile			Pregenerated from utils/Makefile.SH
-utils/Makefile.SH		Extract the utility scripts
+utils/Makefile.PL		Extract the utility scripts
 utils/perlbug.PL		A simple tool to submit a bug report
 utils/perldoc.PL		A simple tool to find & display perl's documentation
 utils/perlivp.PL		installation verification procedure
@@ -5443,8 +5457,6 @@ utils/splain.PL			Stand-alone version of diagnostics.pm
 utils/xsubpp.PL			External subroutine preprocessor
 utils/zipdetails.PL			display the internal structure of zip files
 vms/descrip_mms.template	Template MM[SK] description file for build
-vms/ext/Filespec.pm		VMS-Unix file syntax interconversion
-vms/ext/filespec.t		See if VMS::Filespec functions work
 vms/genopt.com			hack to write options files in case of broken makes
 vms/gen_shrfls.pl		generate options files and glue for shareable image
 vms/make_command.com		record MM[SK] command used to build Perl

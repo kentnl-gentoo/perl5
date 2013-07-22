@@ -783,7 +783,7 @@ PP(pp_print)
 	    Move(MARK, MARK + 1, (SP - MARK) + 1, SV*);
 	    ++SP;
 	}
-	return Perl_tied_method(aTHX_ "PRINT", mark - 1, MUTABLE_SV(io),
+	return Perl_tied_method(aTHX_ SV_CONST(PRINT), mark - 1, MUTABLE_SV(io),
 				mg,
 				(G_SCALAR | TIED_METHOD_ARGUMENTS_ON_STACK
 				 | (PL_op->op_type == OP_SAY
@@ -1390,10 +1390,9 @@ PP(pp_match)
 
     /* XXXX What part of this is needed with true \G-support? */
     if (global) {
+	MAGIC * const mg = mg_find_mglob(TARG);
 	RX_OFFS(rx)[0].start = -1;
-	if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG)) {
-	    MAGIC* const mg = mg_find(TARG, PERL_MAGIC_regex_global);
-	    if (mg && mg->mg_len >= 0) {
+	if (mg && mg->mg_len >= 0) {
 		if (!(RX_EXTFLAGS(rx) & RXf_GPOS_SEEN))
 		    RX_OFFS(rx)[0].end = RX_OFFS(rx)[0].start = mg->mg_len;
 		else if (RX_EXTFLAGS(rx) & RXf_ANCH_GPOS) {
@@ -1405,7 +1404,6 @@ PP(pp_match)
 		    RX_OFFS(rx)[0].end = RX_OFFS(rx)[0].start = mg->mg_len;
 		minmatch = (mg->mg_flags & MGf_MINMATCH) ? RX_GOFS(rx) + 1 : 0;
 		update_minmatch = 0;
-	    }
 	}
     }
 #ifdef PERL_SAWAMPERSAND
@@ -1491,16 +1489,9 @@ PP(pp_match)
 	}
 	if (global) {
 	    if (dynpm->op_pmflags & PMf_CONTINUE) {
-		MAGIC* mg = NULL;
-		if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG))
-		    mg = mg_find(TARG, PERL_MAGIC_regex_global);
+		MAGIC *mg = mg_find_mglob(TARG);
 		if (!mg) {
-#ifdef PERL_OLD_COPY_ON_WRITE
-		    if (SvIsCOW(TARG))
-			sv_force_normal_flags(TARG, 0);
-#endif
-		    mg = sv_magicext(TARG, NULL, PERL_MAGIC_regex_global,
-				     &PL_vtbl_mglob, NULL, 0);
+		    mg = sv_magicext_mglob(TARG);
 		}
 		if (RX_OFFS(rx)[0].start != -1) {
 		    mg->mg_len = RX_OFFS(rx)[0].end;
@@ -1524,18 +1515,9 @@ PP(pp_match)
     }
     else {
 	if (global) {
-	    MAGIC* mg;
-	    if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG))
-		mg = mg_find(TARG, PERL_MAGIC_regex_global);
-	    else
-		mg = NULL;
+	    MAGIC *mg = mg_find_mglob(TARG);
 	    if (!mg) {
-#ifdef PERL_OLD_COPY_ON_WRITE
-		if (SvIsCOW(TARG))
-		    sv_force_normal_flags(TARG, 0);
-#endif
-		mg = sv_magicext(TARG, NULL, PERL_MAGIC_regex_global,
-				 &PL_vtbl_mglob, NULL, 0);
+		mg = sv_magicext_mglob(TARG);
 	    }
 	    if (RX_OFFS(rx)[0].start != -1) {
 		mg->mg_len = RX_OFFS(rx)[0].end;
@@ -1631,11 +1613,9 @@ yup:					/* Confirmed by INTUIT */
 nope:
 ret_no:
     if (global && !(dynpm->op_pmflags & PMf_CONTINUE)) {
-	if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG)) {
-	    MAGIC* const mg = mg_find(TARG, PERL_MAGIC_regex_global);
+	    MAGIC* const mg = mg_find_mglob(TARG);
 	    if (mg)
 		mg->mg_len = -1;
-	}
     }
     LEAVE_SCOPE(oldsave);
     if (gimme == G_ARRAY)
@@ -1658,7 +1638,7 @@ Perl_do_readline(pTHX)
     if (io) {
 	const MAGIC *const mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar);
 	if (mg) {
-	    Perl_tied_method(aTHX_ "READLINE", SP, MUTABLE_SV(io), mg, gimme, 0);
+	    Perl_tied_method(aTHX_ SV_CONST(READLINE), SP, MUTABLE_SV(io), mg, gimme, 0);
 	    if (gimme == G_SCALAR) {
 		SPAGAIN;
 		SvSetSV_nosteal(TARG, TOPs);
@@ -3075,6 +3055,19 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
     if (SvROK(sv))
 	ob = MUTABLE_SV(SvRV(sv));
     else if (!SvOK(sv)) goto undefined;
+    else if (isGV_with_GP(sv)) {
+	if (!GvIO(sv))
+	    Perl_croak(aTHX_ "Can't call method \"%"SVf"\" "
+			     "without a package or object reference",
+			      SVfARG(meth));
+	ob = sv;
+	if (SvTYPE(ob) == SVt_PVLV && LvTYPE(ob) == 'y') {
+	    assert(!LvTARGLEN(ob));
+	    ob = LvTARG(ob);
+	    assert(ob);
+	}
+	*(PL_stack_base + TOPMARK + 1) = sv_2mortal(newRV(ob));
+    }
     else {
 	/* this isn't a reference */
 	GV* iogv;
@@ -3125,8 +3118,7 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 
     /* if we got here, ob should be an object or a glob */
     if (!ob || !(SvOBJECT(ob)
-		 || (SvTYPE(ob) == SVt_PVGV 
-		     && isGV_with_GP(ob)
+		 || (isGV_with_GP(ob)
 		     && (ob = MUTABLE_SV(GvIO((const GV *)ob)))
 		     && SvOBJECT(ob))))
     {

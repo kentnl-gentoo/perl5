@@ -325,14 +325,8 @@ PP(pp_substcont)
 	SV * const sv
 	    = (pm->op_pmflags & PMf_NONDESTRUCT) ? cx->sb_dstr : cx->sb_targ;
 	MAGIC *mg;
-	SvUPGRADE(sv, SVt_PVMG);
-	if (!(mg = mg_find(sv, PERL_MAGIC_regex_global))) {
-#ifdef PERL_OLD_COPY_ON_WRITE
-	    if (SvIsCOW(sv))
-		sv_force_normal_flags(sv, 0);
-#endif
-	    mg = sv_magicext(sv, NULL, PERL_MAGIC_regex_global, &PL_vtbl_mglob,
-			     NULL, 0);
+	if (!(mg = mg_find_mglob(sv))) {
+	    mg = sv_magicext_mglob(sv);
 	}
 	mg->mg_len = m - orig;
     }
@@ -3070,9 +3064,8 @@ PP(pp_goto)
 	    PL_lastgotoprobe = gotoprobe;
 	}
 	if (!retop)
-	    DIE(aTHX_ "Can't find label %"SVf,
-                            SVfARG(newSVpvn_flags(label, label_len,
-                                        SVs_TEMP | label_flags)));
+	    DIE(aTHX_ "Can't find label %"UTF8f, 
+		       UTF8fARG(label_flags, label_len, label));
 
 	/* if we're leaving an eval, check before we pop any frames
            that we're not going to punt, otherwise the error
@@ -3842,7 +3835,6 @@ PP(pp_require)
 			if (SvROK(arg) && (SvTYPE(SvRV(arg)) <= SVt_PVLV)
 			    && !isGV_with_GP(SvRV(arg))) {
 			    filter_cache = SvRV(arg);
-			    SvREFCNT_inc_simple_void_NN(filter_cache);
 
 			    if (i < count) {
 				arg = SP[i++];
@@ -3905,10 +3897,7 @@ PP(pp_require)
 		    }
 
 		    filter_has_file = 0;
-		    if (filter_cache) {
-			SvREFCNT_dec(filter_cache);
-			filter_cache = NULL;
-		    }
+		    filter_cache = NULL;
 		    if (filter_state) {
 			SvREFCNT_dec(filter_state);
 			filter_state = NULL;
@@ -4074,7 +4063,10 @@ PP(pp_require)
 	   than hanging another SV from it. In turn, filter_add() optionally
 	   takes the SV to use as the filter (or creates a new SV if passed
 	   NULL), so simply pass in whatever value filter_cache has.  */
-	SV * const datasv = filter_add(S_run_user_filter, filter_cache);
+	SV * const fc = filter_cache ? newSV(0) : NULL;
+	SV *datasv;
+	if (fc) sv_copypv(fc, filter_cache);
+	datasv = filter_add(S_run_user_filter, fc);
 	IoLINES(datasv) = filter_has_file;
 	IoTOP_GV(datasv) = MUTABLE_GV(filter_state);
 	IoBOTTOM_GV(datasv) = MUTABLE_GV(filter_sub);

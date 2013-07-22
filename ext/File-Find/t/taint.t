@@ -16,11 +16,10 @@ my ($cwd, $cwd_untainted);
 
 BEGIN {
     require File::Spec;
-    chdir 't' if -d 't';
-    # May be doing dynamic loading while @INC is all relative
-    my $lib = File::Spec->rel2abs('../lib');
-    $lib = $1 if $lib =~ m/(.*)/;
-    unshift @INC => $lib;
+    if ($ENV{PERL_CORE}) {
+        # May be doing dynamic loading while @INC is all relative
+        @INC = map { $_ = File::Spec->rel2abs($_); /(.*)/; $1 } @INC;
+    }
 }
 
 use Config;
@@ -61,16 +60,16 @@ my $orig_dir = cwd();
 cleanup();
 
 my $found;
-find({wanted => sub { $found = 1 if ($_ eq 'commonsense.t') },
+find({wanted => sub { ++$found if $_ eq 'taint.t' },
 		untaint => 1, untaint_pattern => qr|^(.+)$|}, File::Spec->curdir);
 
-ok($found, 'commonsense.t found');
+is($found, 1, 'taint.t found once');
 $found = 0;
 
-finddepth({wanted => sub { $found = 1 if $_ eq 'commonsense.t'; },
+finddepth({wanted => sub { ++$found if $_ eq 'taint.t'; },
            untaint => 1, untaint_pattern => qr|^(.+)$|}, File::Spec->curdir);
 
-ok($found, 'commonsense.t found again');
+is($found, 1, 'taint.t found once again');
 
 my $case = 2;
 my $FastFileTests_OK = 0;

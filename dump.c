@@ -27,13 +27,12 @@
 #include "perl.h"
 #include "regcomp.h"
 
-
 static const char* const svtypenames[SVt_LAST] = {
     "NULL",
-    "DUMMY",
     "IV",
     "NV",
     "PV",
+    "INVLIST",
     "PVIV",
     "PVNV",
     "PVMG",
@@ -50,10 +49,10 @@ static const char* const svtypenames[SVt_LAST] = {
 
 static const char* const svshorttypenames[SVt_LAST] = {
     "UNDEF",
-    "DUMMY",
     "IV",
     "NV",
     "PV",
+    "INVLST",
     "PVIV",
     "PVNV",
     "PVMG",
@@ -791,6 +790,7 @@ OP_PRIVATE_ONCE(op_list, OPpLIST_GUESSED, ",GUESSED");
 OP_PRIVATE_ONCE(op_delete, OPpSLICE, ",SLICE");
 OP_PRIVATE_ONCE(op_exists, OPpEXISTS_SUB, ",EXISTS_SUB");
 OP_PRIVATE_ONCE(op_die, OPpHUSH_VMSISH, ",HUSH_VMSISH");
+OP_PRIVATE_ONCE(op_split, OPpSPLIT_IMPLIM, ",IMPLIM");
 
 struct op_private_by_op {
     U16 op_type;
@@ -818,6 +818,7 @@ const struct op_private_by_op op_private_names[] = {
     {OP_CONST, C_ARRAY_LENGTH(op_const_names), op_const_names },
     {OP_SORT, C_ARRAY_LENGTH(op_sort_names), op_sort_names },
     {OP_OPEN, C_ARRAY_LENGTH(op_open_names), op_open_names },
+    {OP_SPLIT, C_ARRAY_LENGTH(op_split_names), op_split_names },
     {OP_BACKTICK, C_ARRAY_LENGTH(op_open_names), op_open_names }
 };
 
@@ -860,6 +861,7 @@ S_op_private_to_names(pTHX_ SV *tmpsv, U32 optype, U32 op_private) {
         if (o->op_slabbed)  sv_catpvs(tmpsv, ",SLABBED");               \
         if (o->op_savefree) sv_catpvs(tmpsv, ",SAVEFREE");              \
         if (o->op_static)   sv_catpvs(tmpsv, ",STATIC");                \
+        if (o->op_folded)   sv_catpvs(tmpsv, ",FOLDED");                \
         if (!xml)                                                        \
             Perl_dump_indent(aTHX_ level, file, "FLAGS = (%s)\n",       \
                             SvCUR(tmpsv) ? SvPVX_const(tmpsv) + 1 : "");\
@@ -1658,7 +1660,8 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	return;
     }
 
-    if (type <= SVt_PVLV && !isGV_with_GP(sv)) {
+    if ((type <= SVt_PVLV && !isGV_with_GP(sv))
+     || (type == SVt_PVIO && IoFLAGS(sv) & IOf_FAKE_DIRP)) {
 	const bool re = isREGEXP(sv);
 	const char * const ptr =
 	    re ? RX_WRAPPED((REGEXP*)sv) : SvPVX_const(sv);
@@ -1710,8 +1713,6 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	    do_hv_dump(level, file, "  STASH", SvSTASH(sv));
 
 	if ((type == SVt_PVMG || type == SVt_PVLV) && SvVALID(sv)) {
-	    Perl_dump_indent(aTHX_ level, file, "  RARE = %u\n", (U8)BmRARE(sv));
-	    Perl_dump_indent(aTHX_ level, file, "  PREVIOUS = %"UVuf"\n", (UV)BmPREVIOUS(sv));
 	    Perl_dump_indent(aTHX_ level, file, "  USEFUL = %"IVdf"\n", (IV)BmUSEFUL(sv));
 	}
     }
@@ -2212,6 +2213,9 @@ Perl_runops_debug(pTHX)
 
     DEBUG_l(Perl_deb(aTHX_ "Entering new RUNOPS level\n"));
     do {
+#ifdef PERL_TRACE_OPS
+        ++PL_op_exec_cnt[PL_op->op_type];
+#endif
 	if (PL_debug) {
 	    if (PL_watchaddr && (*PL_watchaddr != PL_watchok))
 		PerlIO_printf(Perl_debug_log,
@@ -2794,7 +2798,7 @@ Perl_sv_xmlpeek(pTHX_ SV *sv)
     case SVt_PVGV:
 	sv_catpv(t, " GV=\"");
 	break;
-    case SVt_DUMMY:
+    case SVt_INVLIST:
 	sv_catpv(t, " DUMMY=\"");
 	break;
     case SVt_REGEXP:

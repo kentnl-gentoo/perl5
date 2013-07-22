@@ -33,7 +33,8 @@ podcheck.t - Look for possible problems in the Perl pods
 
  cd t
  ./perl -I../lib porting/podcheck.t [--show_all] [--cpan] [--deltas]
-                                                  [--counts] [ FILE ...]
+                                    [--counts] [--pedantic] [FILE ...]
+
  ./perl -I../lib porting/podcheck.t --add_link MODULE ...
 
  ./perl -I../lib porting/podcheck.t --regen
@@ -49,7 +50,7 @@ fail a pod only if the number of such problems differs from that given in the
 database.  It also suppresses the C<(section) deprecated> message from
 Pod::Checker, since specifying the man page section number is quite proper to do.
 
-The additional checks it makes are:
+The additional checks it always makes are:
 
 =over
 
@@ -66,7 +67,7 @@ The way that the C<LE<lt>E<gt>> pod command works (for links outside the pod)
 is to actually create a link to C<search.cpan.org> with an embedded query for
 the desired pod or man page.  That means that links outside the distribution
 are valid.  podcheck.t doesn't verify the validity of such links, but instead
-keeps a data base of those known to be valid.  This means that if a link to a
+keeps a database of those known to be valid.  This means that if a link to a
 target not on the list is created, the target needs to be added to the data
 base.  This is accomplished via the L<--add_link|/--add_link MODULE ...>
 option to podcheck.t, described below.
@@ -76,6 +77,24 @@ option to podcheck.t, described below.
 If a link is broken, but there is an existing internal target of the same
 name, it is likely that the internal target was meant, and the C<"/"> is
 missing from the C<LE<lt>E<gt>> pod command.
+
+=item Missing or duplicate NAME or missing NAME short description
+
+A pod can't be linked to unless it has a unique name.
+And a NAME should have a dash and short description after it.
+
+=item =encoding statement issues
+
+This indicates if an C<=encoding> statement should be present, or moved to the
+front of the pod.
+
+=back
+
+If the C<PERL_POD_PEDANTIC> environment variable is set or the C<--pedantic>
+command line argument is provided then a few more checks are made.
+The pedantic checks are:
+
+=over
 
 =item Verbatim paragraphs that wrap in an 80 (including 1 spare) column window
 
@@ -88,16 +107,6 @@ order to fit.
 
 Often, the easiest thing to do to gain space for these is to lower the indent
 to just one space.
-
-=item Missing or duplicate NAME or missing NAME short description
-
-A pod can't be linked to unless it has a unique name.
-And a NAME should have a dash and short description after it.
-
-=item =encoding statement issues
-
-This indicates if an C<=encoding> statement should be present, or moved to the
-front of the pod.
 
 =item Items that perhaps should be links
 
@@ -140,7 +149,7 @@ cause the corresponding error to always be suppressed no matter how many there
 actually are.
 
 Another problem is that there is currently no check that modules listed as
-valid in the data base
+valid in the database
 actually are.  Thus any errors introduced there will remain there.
 
 =head2 Specially handled pods
@@ -189,24 +198,24 @@ exist, and to silence any messages that links to them are broken.
 
 podcheck.t checks that links within the Perl core distribution are valid, but
 it doesn't check links to man pages or external modules.  When it finds
-a broken link, it checks its data base of external modules and man pages,
+a broken link, it checks its database of external modules and man pages,
 and only if not found there does it raise a message.  This option just adds
 the list of modules and man page references that follow it on the command line
-to that data base.
+to that database.
 
 For example,
 
     cd t
     ./perl -I../lib porting/podcheck.t --add_link Unicode::Casing
 
-causes the external module "Unicode::Casing" to be added to the data base, so
+causes the external module "Unicode::Casing" to be added to the database, so
 C<LE<lt>Unicode::CasingE<gt>> will be considered valid.
 
 =item --regen
 
-Regenerate the data base used by podcheck.t to include all the existing
+Regenerate the database used by podcheck.t to include all the existing
 potential problems.  Future runs of the program will not then flag any of
-these.
+these.  Setting this option also sets C<--pedantic>.
 
 =item --cpan
 
@@ -233,7 +242,14 @@ any particular FILES to operate on automatically selects this option.
 =item --counts
 
 Instead of testing, this just dumps the counts of the occurrences of the
-various types of potential problems in the data base.
+various types of potential problems in the database.
+
+=item --pedantic
+
+There are three potential problems that are not checked for by default.
+This options enables them. The environment variable C<PERL_POD_PEDANTIC>
+can be set to 1 to enable this option also.
+This option is set when C<--regen> is used.
 
 =back
 
@@ -329,12 +345,11 @@ my $known_issues = File::Spec->catfile($data_dir, 'known_pod_issues.dat');
 my $MANIFEST = File::Spec->catfile(File::Spec->updir($original_dir), 'MANIFEST');
 my $copy_fh;
 
-my $MAX_LINE_LENGTH = 100;   # 79 columns
+my $MAX_LINE_LENGTH = 79;   # 79 columns
 my $INDENT = 7;             # default nroff indent
 
 # Our warning messages.  Better not have [('"] in them, as those are used as
 # delimiters for variable parts of the messages by poderror.
-my $line_length = "Verbatim line length including indents exceeds $MAX_LINE_LENGTH by";
 my $broken_link = "Apparent broken link";
 my $broken_internal_link = "Apparent internal link is missing its forward slash";
 my $multiple_targets = "There is more than one target";
@@ -343,6 +358,10 @@ my $need_encoding = "Should have =encoding statement because have non-ASCII";
 my $encoding_first = "=encoding must be first command (if present)";
 my $no_name = "There is no NAME";
 my $missing_name_description = "The NAME should have a dash and short description after it";
+# the pedantic warnings messages
+my $line_length = "Verbatim line length including indents exceeds $MAX_LINE_LENGTH by";
+my $C_not_linked = "? Should you be using L<...> instead of";
+my $C_with_slash = "? Should you be using F<...> or maybe L<...> instead of";
 
 # objects, tests, etc can't be pods, so don't look for them. Also skip
 # files output by the patch program.  Could also ignore most of .gitignore
@@ -515,6 +534,7 @@ my $show_counts = 0;
 my $regen = 0;
 my $add_link = 0;
 my $show_all = 0;
+my $pedantic = 0;
 
 my $do_upstream_cpan = 0; # Assume that are to skip anything in /cpan
 my $do_deltas = 0;        # And stable perldeltas
@@ -525,6 +545,7 @@ while (@ARGV && substr($ARGV[0], 0, 1) eq '-') {
     $arg =~ s/^--/-/; # Treat '--' the same as a single '-'
     if ($arg eq '-regen') {
         $regen = 1;
+        $pedantic = 1;
     }
     elsif ($arg eq '-add_link') {
         $add_link = 1;
@@ -541,22 +562,27 @@ while (@ARGV && substr($ARGV[0], 0, 1) eq '-') {
     elsif ($arg eq '-counts') {
         $show_counts = 1;
     }
+    elsif ($arg eq '-pedantic') {
+        $pedantic = 1;
+    }
     else {
         die <<EOF;
 Unknown option '$arg'
 
 Usage: $0 [ --regen | --cpan | --show_all | FILE ... | --add_link MODULE ... ]\n"
-    --add_link -> Add the MODULE and man page references to the data base
+    --add_link -> Add the MODULE and man page references to the database
     --regen    -> Regenerate the data file for $0
     --cpan     -> Include files in the cpan subdirectory.
     --deltas   -> Include stable perldeltas
     --show_all -> Show all known potential problems
     --counts   -> Don't test, but give summary counts of the currently
                   existing database
+    --pedantic -> Check for overly long lines in verbatim blocks
 EOF
     }
 }
 
+$pedantic = 1 if exists $ENV{PERL_POD_PEDANTIC} and $ENV{PERL_POD_PEDANTIC};
 my @files = @ARGV;
 
 my $cpan_or_deltas = $do_upstream_cpan || $do_deltas;
@@ -566,17 +592,19 @@ if (($regen + $show_all + $show_counts + $add_link + $cpan_or_deltas ) > 1) {
 
 my $has_input_files = @files;
 
-if ($has_input_files) {
+
+if ($add_link) {
+    if (! $has_input_files) {
+        croak "--add_link requires at least one module or man page reference";
+    }
+}
+elsif ($has_input_files) {
     if ($regen || $show_counts || $do_upstream_cpan || $do_deltas) {
         croak "--regen, --counts, --deltas, and --cpan can't be used since using specific files";
     }
     foreach my $file (@files) {
         croak "Can't read file '$file'" if ! -r $file;
     }
-}
-
-if ($add_link && ! $has_input_files) {
-    croak "--add_link requires at least one module or man page reference";
 }
 
 our %problems;  # potential problems found in this run
@@ -780,14 +808,18 @@ package My::Pod::Checker {      # Extend Pod::Checker
             }
             $lines[$i] =~ s/\s+$//;
             my $indent = $self->get_current_indent;
-            my $exceeds = length(Text::Tabs::expand($lines[$i]))
-                          + $indent - $MAX_LINE_LENGTH;
-            next unless $exceeds > 0;
-            my ($file, $line) = $pod_para->file_line;
-            $self->poderror({ -line => $line + $i, -file => $file,
-                -msg => $line_length,
-                parameter => "+$exceeds (including " . ($indent - $INDENT) . " from =over's)",
-            });
+
+            if ($pedantic) { # TODO: this check should be moved higher
+                                 # to avoid more unnecessary work
+                my $exceeds = length(Text::Tabs::expand($lines[$i]))
+                    + $indent - $MAX_LINE_LENGTH;
+                next unless $exceeds > 0;
+                my ($file, $line) = $pod_para->file_line;
+                $self->poderror({ -line => $line + $i, -file => $file,
+                    -msg => $line_length,
+                    parameter => "+$exceeds (including " . ($indent - $INDENT) . " from =over's)",
+                });
+            }
         }
     }
 
@@ -810,7 +842,97 @@ package My::Pod::Checker {      # Extend Pod::Checker
                 }
             }
         }
+        $paragraph = join " ", split /^/, $paragraph;
 
+        # Matches something that looks like a file name, but is enclosed in
+        # C<...>
+        my $C_path_re = qr{ \b ( C<
+                                # exclude various things that have slashes
+                                # in them but aren't paths
+                                (?!
+                                    (?: (?: s | qr | m) / ) # regexes
+                                    | \d+/\d+>       # probable fractions
+                                    | OS/2>
+                                    | Perl/Tk>
+                                    | origin/blead>
+                                    | origin/maint
+                                    | -    # File names don't begin with "-"
+                                 )
+                                 [-\w]+ (?: / [-\w]+ )+ (?: \. \w+ )? > )
+                          }x;
+
+        # If looks like a reference to other documentation by containing the
+        # word 'See' and then a likely pod directive, warn.
+        while ($paragraph =~ m{
+                                ( (?: \w+ \s+ )* )  # The phrase before, if any
+                                \b [Ss]ee \s+
+                                ( ( [^L] )
+                                  <
+                                  ( [^<]*? )  # The not < excludes nested C<L<...
+                                  >
+                                )
+                                ( \s+ (?: under | in ) \s+ L< )?
+                            }xg) {
+            my $prefix = $1 // "";
+            my $construct = $2;     # The whole thing, like C<...>
+            my $type = $3;
+            my $interior = $4;
+            my $trailing = $5;      # After the whole thing ending in "L<"
+
+            # If the full phrase is something like, "you might see C<", or
+            # similar, it really isn't a reference to a link.  The ones I saw
+            # all had the word "you" in them; and the "you" wasn't the
+            # beginning of a sentence.
+            if ($prefix !~ / \b you \b /x) {
+
+                # Now, find what the module or man page name within the
+                # construct would be if it actually has L<> syntax.  If it
+                # doesn't have that syntax, will set the module to the entire
+                # interior.
+                $interior =~ m/ ^
+                                (?: [^|]+ \| )? # Optional arbitrary text ending
+                                                # in "|"
+                                ( .+? )         # module, etc. name
+                                (?: \/ .+ )?    # target within module
+                                $
+                            /xs;
+                my $module = $1;
+                if (! defined $trailing # not referring to something in another
+                                        # section
+                    && $interior !~ /$non_pods/
+
+                    # C<> that look like files have their own message below, so
+                    # exclude them
+                    && $construct !~ /$C_path_re/g
+
+                    # There can't be spaces (I think) in module names or man
+                    # pages
+                    && $module !~ / \s /x
+
+                    # F<> that end in eg \.pl are almost certainly ok, as are
+                    # those that look like a path with multiple "/" chars
+                    && ($type ne "F"
+                        || (! -e $interior
+                            && $interior !~ /\.\w+$/
+                            && $interior !~ /\/.+\//)
+                    )
+                ) {
+                    # TODO: move the checking of $pedantic higher up
+                    $self->poderror({ -line => $line, -file => $file,
+                        -msg => $C_not_linked,
+                        parameter => $construct
+                    }) if $pedantic;
+                }
+            }
+        }
+        while ($paragraph =~ m/$C_path_re/g) {
+            my $construct = $1;
+            # TODO: move the checking of $pedantic higher up
+            $self->poderror({ -line => $line, -file => $file,
+                -msg => $C_with_slash,
+                parameter => $construct
+            }) if $pedantic;
+        }
         return;
     }
 
@@ -1030,7 +1152,7 @@ END
 my @existing_issues;
 
 
-while (<$data_fh>) {    # Read the data base
+while (<$data_fh>) {    # Read the database
     chomp;
     next if /^\s*(?:#|$)/;  # Skip comment and empty lines
     if (/\t/) {
@@ -1749,6 +1871,10 @@ foreach my $filename (@files) {
             next if $problems{$filename}{$message};
             next if ! $known_problems{$canonical}{$message};
             next if $known_problems{$canonical}{$message} < 0; # Preserve negs
+
+            next if !$pedantic and $message =~ 
+                /^(?:\Q$line_length\E|\Q$C_not_linked\E|\Q$C_with_slash\E)/;
+
             my $diagnostic = output_thanks($filename, $known_problems{$canonical}{$message}, 0, $message);
             push @diagnostics, $diagnostic if $diagnostic;
             $thankful_diagnostics++ if $diagnostic;
@@ -1773,7 +1899,7 @@ foreach my $filename (@files) {
 }
 
 if (! $regen
-    && ! ok (keys %known_problems == 0, "The known problems data base includes no references to non-existent files"))
+    && ! ok (keys %known_problems == 0, "The known problems database includes no references to non-existent files"))
 {
     note("The following files were not found: "
          . join ", ", keys %known_problems);

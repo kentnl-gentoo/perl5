@@ -223,7 +223,7 @@ use File::Glob qw(:case);
 
     'autodie' => {
         'MAINTAINER'   => 'pjf',
-        'DISTRIBUTION' => 'PJF/autodie-2.19.tar.gz',
+        'DISTRIBUTION' => 'PJF/autodie-2.20.tar.gz',
         'FILES'        => q[cpan/autodie],
         'EXCLUDED'     => [
             qr{^inc/Module/},
@@ -492,7 +492,7 @@ use File::Glob qw(:case);
 
     'DB_File' => {
         'MAINTAINER'   => 'pmqs',
-        'DISTRIBUTION' => 'PMQS/DB_File-1.828.tar.gz',
+        'DISTRIBUTION' => 'PMQS/DB_File-1.829.tar.gz',
         'FILES'        => q[cpan/DB_File],
         'EXCLUDED'     => [
             qr{^patches/},
@@ -548,7 +548,7 @@ use File::Glob qw(:case);
 
     'Digest::MD5' => {
         'MAINTAINER'   => 'gaas',
-        'DISTRIBUTION' => 'GAAS/Digest-MD5-2.52.tar.gz',
+        'DISTRIBUTION' => 'GAAS/Digest-MD5-2.53.tar.gz',
         'FILES'        => q[cpan/Digest-MD5],
         'EXCLUDED'     => ['rfc1321.txt'],
         'UPSTREAM'     => "cpan",
@@ -556,7 +556,7 @@ use File::Glob qw(:case);
 
     'Digest::SHA' => {
         'MAINTAINER'   => 'mshelor',
-        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.84.tar.gz',
+        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.85.tar.gz',
         'FILES'        => q[cpan/Digest-SHA],
         'EXCLUDED'     => [
             qw( t/pod.t
@@ -634,19 +634,12 @@ use File::Glob qw(:case);
     'Exporter' => {
         'MAINTAINER'   => 'ferreira',
         'DISTRIBUTION' => 'TODDR/Exporter-5.68.tar.gz',
-        'FILES'        => q[lib/Exporter.pm
-                            lib/Exporter.t
-                            lib/Exporter/Heavy.pm
-                           ],
+        'FILES'        => q[dist/Exporter],
         'EXCLUDED' => [
             qw( t/pod.t
                 t/use.t
                 ),
         ],
-        'MAP' => {
-            't/'   => 'lib/',
-            'lib/' => 'lib/',
-        },
         'UPSTREAM' => 'blead',
     },
 
@@ -773,7 +766,7 @@ use File::Glob qw(:case);
 
     'File::Find' => {
         'MAINTAINER' => 'p5p',
-        'FILES'      => q[lib/File/Find.pm lib/File/Find],
+        'FILES'      => q[ext/File-Find],
         'UPSTREAM'   => 'blead',
     },
 
@@ -897,7 +890,7 @@ use File::Glob qw(:case);
 
     'Getopt::Long' => {
         'MAINTAINER'   => 'jv',
-        'DISTRIBUTION' => 'JV/Getopt-Long-2.40.tar.gz',
+        'DISTRIBUTION' => 'JV/Getopt-Long-2.41.tar.gz',
         'FILES'        => q[cpan/Getopt-Long],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -929,7 +922,7 @@ use File::Glob qw(:case);
 
     'HTTP::Tiny' => {
         'MAINTAINER'   => 'dagolden',
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.031.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.034.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/00-report-prereqs.t',
@@ -998,7 +991,7 @@ use File::Glob qw(:case);
 
     'IPC::Cmd' => {
         'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.80.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.82.tar.gz',
         'FILES'        => q[cpan/IPC-Cmd],
         'UPSTREAM'     => 'cpan',
     },
@@ -1178,7 +1171,7 @@ use File::Glob qw(:case);
 
     'MIME::Base64' => {
         'MAINTAINER'   => 'gaas',
-        'DISTRIBUTION' => 'GAAS/MIME-Base64-3.13.tar.gz',
+        'DISTRIBUTION' => 'GAAS/MIME-Base64-3.14.tar.gz',
         'FILES'        => q[cpan/MIME-Base64],
         'EXCLUDED'     => ['t/bad-sv.t'],
         'UPSTREAM'     => 'cpan',
@@ -1206,7 +1199,7 @@ use File::Glob qw(:case);
 
     'Module::CoreList' => {
         'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.91.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.92.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
         'UPSTREAM'     => 'blead',
     },
@@ -1301,7 +1294,7 @@ use File::Glob qw(:case);
 
     'Params::Check' => {
         'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/Params-Check-0.36.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Params-Check-0.38.tar.gz',
         'EXCLUDED'     => ['Params-Check-0.26.tar.gz'],
         'FILES'        => q[cpan/Params-Check],
         'UPSTREAM'     => 'cpan',
@@ -1316,8 +1309,13 @@ use File::Glob qw(:case);
 
     'Parse::CPAN::Meta' => {
         'MAINTAINER'   => 'dagolden',
-        'DISTRIBUTION' => 'DAGOLDEN/Parse-CPAN-Meta-1.4404.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/Parse-CPAN-Meta-1.4405.tar.gz',
         'FILES'        => q[cpan/Parse-CPAN-Meta],
+        'EXCLUDED'     => [
+            qw(t/00-compile.t),
+            qw[t/00-report-prereqs.t],
+            qr{^xt},
+        ],
         'UPSTREAM'     => 'cpan',
     },
 
@@ -1576,14 +1574,14 @@ use File::Glob qw(:case);
 
     'Socket' => {
         'MAINTAINER'   => 'pevans',
-        'DISTRIBUTION' => 'PEVANS/Socket-2.009.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Socket-2.010.tar.gz',
         'FILES'        => q[cpan/Socket],
         'UPSTREAM'     => 'cpan',
     },
 
     'Storable' => {
         'MAINTAINER'   => 'ams',
-        'DISTRIBUTION' => 'AMS/Storable-2.39.tar.gz',
+        'DISTRIBUTION' => 'AMS/Storable-2.45.tar.gz',
         'FILES'        => q[dist/Storable],
         'EXCLUDED'     => [qr{^t/Test/}],
         'UPSTREAM'     => 'blead',
@@ -1739,7 +1737,7 @@ use File::Glob qw(:case);
 
     'Text::ParseWords' => {
         'MAINTAINER'   => 'chorny',
-        'DISTRIBUTION' => 'CHORNY/Text-ParseWords-3.28.tar.gz',
+        'DISTRIBUTION' => 'CHORNY/Text-ParseWords-3.29.tar.gz',
         'FILES'        => q[cpan/Text-ParseWords],
         'EXCLUDED'     => ['t/pod.t'],
 
@@ -1880,7 +1878,7 @@ use File::Glob qw(:case);
 
     'Time::Piece' => {
         'MAINTAINER'   => 'msergeant',
-        'DISTRIBUTION' => 'MSERGEANT/Time-Piece-1.20.tar.gz',
+        'DISTRIBUTION' => 'RJBS/Time-Piece-1.21.tar.gz',
         'FILES'        => q[cpan/Time-Piece],
         'UPSTREAM'     => undef,
     },
@@ -1924,7 +1922,7 @@ use File::Glob qw(:case);
     'version' => {
         'MAINTAINER'   => 'jpeacock',
         'DISTRIBUTION' => 'JPEACOCK/version-0.9902.tar.gz',
-        'FILES'        => q[lib/version.pm lib/version.pod lib/version],
+        'FILES'        => q[cpan/version],
         'EXCLUDED' => [
             qr{^t/.*\.t$},
             qr{^vutil/},
@@ -1932,10 +1930,6 @@ use File::Glob qw(:case);
             't/survey_locales',
             'vperl/vpp.pm',
         ],
-        'MAP' => {
-            'lib/'           => 'lib/',
-            't/'             => 'lib/version/t/'
-        },
         'UPSTREAM' => undef,
     },
 
@@ -1948,6 +1942,12 @@ use File::Glob qw(:case);
     'VMS::DCLsym' => {
         'MAINTAINER' => 'craig',
         'FILES'      => q[ext/VMS-DCLsym],
+        'UPSTREAM'   => undef,
+    },
+
+    'VMS::Filespec' => {
+        'MAINTAINER' => 'p5p',
+        'FILES'      => q[ext/VMS-Filespec],
         'UPSTREAM'   => undef,
     },
 
@@ -2031,6 +2031,7 @@ use File::Glob qw(:case);
         'MAINTAINER' => 'p5p',
         'FILES'      => q[
                 ext/arybase/
+                ext/ExtUtils-Miniperl/
                 ext/XS-APItest/
                 lib/CORE.pod
                 lib/Config.t

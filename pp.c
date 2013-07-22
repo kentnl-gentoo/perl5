@@ -68,8 +68,8 @@ PP(pp_padav)
     dVAR; dSP; dTARGET;
     I32 gimme;
     assert(SvTYPE(TARG) == SVt_PVAV);
-    if (PL_op->op_private & OPpLVAL_INTRO)
-	if (!(PL_op->op_private & OPpPAD_STATE))
+    if (UNLIKELY( PL_op->op_private & OPpLVAL_INTRO ))
+	if (LIKELY( !(PL_op->op_private & OPpPAD_STATE) ))
 	    SAVECLEARSV(PAD_SVl(PL_op->op_targ));
     EXTEND(SP, 1);
     if (PL_op->op_flags & OPf_REF) {
@@ -118,8 +118,8 @@ PP(pp_padhv)
 
     assert(SvTYPE(TARG) == SVt_PVHV);
     XPUSHs(TARG);
-    if (PL_op->op_private & OPpLVAL_INTRO)
-	if (!(PL_op->op_private & OPpPAD_STATE))
+    if (UNLIKELY( PL_op->op_private & OPpLVAL_INTRO ))
+	if (LIKELY( !(PL_op->op_private & OPpPAD_STATE) ))
 	    SAVECLEARSV(PAD_SVl(PL_op->op_targ));
     if (PL_op->op_flags & OPf_REF)
 	RETURN;
@@ -438,8 +438,7 @@ PP(pp_pos)
 	RETURN;
     }
     else {
-	if (SvTYPE(sv) >= SVt_PVMG && SvMAGIC(sv)) {
-	    const MAGIC * const mg = mg_find(sv, PERL_MAGIC_regex_global);
+	    const MAGIC * const mg = mg_find_mglob(sv);
 	    if (mg && mg->mg_len >= 0) {
 		dTARGET;
 		I32 i = mg->mg_len;
@@ -448,8 +447,7 @@ PP(pp_pos)
 		PUSHi(i);
 		RETURN;
 	    }
-	}
-	RETPUSHUNDEF;
+	    RETPUSHUNDEF;
     }
 }
 
@@ -492,11 +490,8 @@ PP(pp_prototype)
 	if (strnEQ(s, "CORE::", 6)) {
 	    const int code = keyword(s + 6, SvCUR(TOPs) - 6, 1);
 	    if (!code || code == -KEY_CORE)
-		DIE(aTHX_ "Can't find an opnumber for \"%"SVf"\"",
-		    SVfARG(newSVpvn_flags(
-			s+6, SvCUR(TOPs)-6,
-			(SvFLAGS(TOPs) & SVf_UTF8)|SVs_TEMP
-		    )));
+		DIE(aTHX_ "Can't find an opnumber for \"%"UTF8f"\"",
+		   UTF8fARG(SvFLAGS(TOPs) & SVf_UTF8, SvCUR(TOPs)-6, s+6));
 	    {
 		SV * const sv = core_prototype(NULL, s + 6, code, NULL);
 		if (sv) ret = sv;
@@ -976,7 +971,12 @@ PP(pp_undef)
                           "Constant subroutine %"SVf" undefined",
 			   SVfARG(CvANON((const CV *)sv)
                              ? newSVpvs_flags("(anonymous)", SVs_TEMP)
-                             : sv_2mortal(newSVhek(GvENAME_HEK(CvGV((const CV *)sv))))));
+                             : sv_2mortal(newSVhek(
+                                CvNAMED(sv)
+                                 ? CvNAME_HEK((CV *)sv)
+                                 : GvENAME_HEK(CvGV((const CV *)sv))
+                               ))
+                           ));
 	/* FALLTHROUGH */
     case SVt_PVFM:
 	{
@@ -4664,7 +4664,7 @@ PP(pp_exists)
     SV *tmpsv;
     HV *hv;
 
-    if (PL_op->op_private & OPpEXISTS_SUB) {
+    if (UNLIKELY( PL_op->op_private & OPpEXISTS_SUB )) {
 	GV *gv;
 	SV * const sv = POPs;
 	CV * const cv = sv_2cv(sv, &hv, &gv, 0);
@@ -4676,7 +4676,7 @@ PP(pp_exists)
     }
     tmpsv = POPs;
     hv = MUTABLE_HV(POPs);
-    if (SvTYPE(hv) == SVt_PVHV) {
+    if (LIKELY( SvTYPE(hv) == SVt_PVHV )) {
 	if (hv_exists_ent(hv, tmpsv, 0))
 	    RETPUSHYES;
     }
@@ -4827,7 +4827,10 @@ PP(pp_anonlist)
 PP(pp_anonhash)
 {
     dVAR; dSP; dMARK; dORIGMARK;
-    HV* const hv = (HV *)sv_2mortal((SV *)newHV());
+    HV* const hv = newHV();
+    SV* const retval = sv_2mortal( PL_op->op_flags & OPf_SPECIAL
+                                    ? newRV_noinc(MUTABLE_SV(hv))
+                                    : MUTABLE_SV(hv) );
 
     while (MARK < SP) {
 	SV * const key =
@@ -4848,9 +4851,7 @@ PP(pp_anonhash)
 	(void)hv_store_ent(hv,key,val,0);
     }
     SP = ORIGMARK;
-    if (PL_op->op_flags & OPf_SPECIAL)
-	mXPUSHs(newRV_inc(MUTABLE_SV(hv)));
-    else XPUSHs(MUTABLE_SV(hv));
+    XPUSHs(retval);
     RETURN;
 }
 
@@ -4900,7 +4901,7 @@ PP(pp_splice)
     const MAGIC * const mg = SvTIED_mg((const SV *)ary, PERL_MAGIC_tied);
 
     if (mg) {
-	return Perl_tied_method(aTHX_ "SPLICE", mark - 1, MUTABLE_SV(ary), mg,
+	return Perl_tied_method(aTHX_ SV_CONST(SPLICE), mark - 1, MUTABLE_SV(ary), mg,
 				    GIMME_V | TIED_METHOD_ARGUMENTS_ON_STACK,
 				    sp - mark);
     }
@@ -5098,7 +5099,7 @@ PP(pp_push)
 	PUSHMARK(MARK);
 	PUTBACK;
 	ENTER_with_name("call_PUSH");
-	call_method("PUSH",G_SCALAR|G_DISCARD);
+	call_sv(SV_CONST(PUSH),G_SCALAR|G_DISCARD|G_METHOD_NAMED);
 	LEAVE_with_name("call_PUSH");
 	SPAGAIN;
     }
@@ -5151,7 +5152,7 @@ PP(pp_unshift)
 	PUSHMARK(MARK);
 	PUTBACK;
 	ENTER_with_name("call_UNSHIFT");
-	call_method("UNSHIFT",G_SCALAR|G_DISCARD);
+	call_sv(SV_CONST(UNSHIFT),G_SCALAR|G_DISCARD|G_METHOD_NAMED);
 	LEAVE_with_name("call_UNSHIFT");
 	SPAGAIN;
     }
@@ -5709,7 +5710,7 @@ PP(pp_split)
 	else {
 	    PUTBACK;
 	    ENTER_with_name("call_PUSH");
-	    call_method("PUSH",G_SCALAR|G_DISCARD);
+	    call_sv(SV_CONST(PUSH),G_SCALAR|G_DISCARD|G_METHOD_NAMED);
 	    LEAVE_with_name("call_PUSH");
 	    SPAGAIN;
 	    if (gimme == G_ARRAY) {

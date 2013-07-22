@@ -8,7 +8,7 @@ BEGIN {
     *bar::like = *like;
 }
 no warnings 'deprecated';
-plan 135;
+plan 138;
 
 # -------------------- Errors with feature disabled -------------------- #
 
@@ -428,6 +428,11 @@ package main;
   my sub me ($);
   is prototype eval{\&me}, '$', 'my sub with proto';
   is prototype "me", undef, 'prototype "..." ignores my subs';
+
+  my $coderef = eval "my sub foo (\$\x{30cd}) {1}; \\&foo";
+  my $proto = prototype $coderef;
+  ok(utf8::is_utf8($proto), "my sub with UTF8 proto maintains the UTF8ness");
+  is($proto, "\$\x{30cd}", "check the prototypes actually match");
 }
 {
   my sub if() { 44 }
@@ -703,3 +708,11 @@ like runperl(
      ),
      qr/Deep recursion on subroutine "foo"/,
     'deep recursion warnings for lexical subs do not crash';
+
+like runperl(
+      switches => [ '-Mfeature=:all', '-Mwarnings=FATAL,all', '-M-warnings=experimental::lexical_subs' ],
+      prog     => 'my sub foo() { 42 } undef &foo',
+      stderr   => 1
+     ),
+     qr/Constant subroutine foo undefined at /,
+    'constant undefinition warnings for lexical subs do not crash';

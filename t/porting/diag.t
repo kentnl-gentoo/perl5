@@ -246,8 +246,8 @@ sub check_file {
         $nextline =~ s/^\s+//;
         $_ =~ s/\\$//;
         # Note that we only want to do this where *both* are true.
-        if ($_ =~ m/"$/ and $nextline =~ m/^"/) {
-          $_ =~ s/"$//;
+        if ($_ =~ m/"\s*$/ and $nextline =~ m/^"/) {
+          $_ =~ s/"\s*$//;
           $nextline =~ s/^"//;
         }
         $_ .= $nextline;
@@ -306,6 +306,7 @@ sub check_file {
                  :  $routine =~ /warner/       ? '[WDS]'
                  :  $routine =~ /warn/         ?  'S'
                  :  $routine =~ /ckWARN.*dep/  ?  'D'
+                 :  $routine =~ /ckWARN\d*reg_d/? 'S'
                  :  $routine =~ /ckWARN\d*reg/ ?  'W'
                  :  $routine =~ /vWARN\d/      ? '[WDS]'
                  :                             '[PFX]';
@@ -459,9 +460,6 @@ __DATA__
 Malformed UTF-8 character (unexpected non-continuation byte 0x%x, immediately after start byte 0x%x)
 
 Cannot apply "%s" in non-PerlIO perl
-Can't call mro_method_changed_in() on anonymous symbol table
-Can't coerce readonly %s to string
-Can't coerce readonly %s to string in %s
 Can't find string terminator %c%s%c anywhere before EOF
 Can't fix broken locale name "%s"
 Can't get short module name from a handle
@@ -482,7 +480,6 @@ Code missing after '/' in unpack
 '%c' outside of string in pack
 Debug leaking scalars child failed%s with errno %d: %s
 '/' does not take a repeat count in %s
-Don't know how to handle magic of type \%o
 -Dp not implemented on this platform
 Error reading "%s": %s
 execl not implemented!
@@ -505,8 +502,6 @@ Illegal binary digit '%c' ignored
 Illegal character %sin prototype for %s : %s
 Illegal hexadecimal digit '%c' ignored
 Illegal octal digit '%c' ignored
-Infinite recursion in regex
-internal %<num>p might conflict with future printf extensions
 Invalid argument to sv_cat_decode
 Invalid range "%c-%c" in transliteration operator
 Invalid separator character %c%c%c in PerlIO layer specification %s
@@ -517,25 +512,17 @@ Invalid type '%c' in unpack
 Invalid type ',' in %s
 ioctlsocket not implemented!
 killpg not implemented!
-length() used on %s (did you mean "scalar(%s)"?)
-length() used on %hash (did you mean "scalar(keys %hash)"?)
-length() used on @array (did you mean "scalar(@array)"?)
 List form of pipe open not implemented
 Malformed integer in [] in %s
 Malformed UTF-8 character (fatal)
 Missing (suid) fd script name
 More than one argument to open
 More than one argument to open(,':%s')
-mprotect for %p %u failed with %d
-mprotect RW for %p %u failed with %d
 \N{} in character class restricted to one character in regex; marked by <-- HERE in m/%s/
 No %s allowed while running setgid
 No %s allowed with (suid) fdscript
-No such class field "%s"
 Not an XSUB reference
 Operator or semicolon missing before %c%s
-Pattern subroutine nesting without pos change exceeded limit in regex
-Perl %s required--this is only %s, stopped
 PerlApp::TextQuery: no arguments, please
 POSIX syntax [%c %c] is reserved for future extensions in regex; marked by <-- HERE in m/%s/
 ptr wrong %p != %p fl=%x nl=%p e=%p for %d
@@ -544,7 +531,6 @@ Regexp modifier "%c" may appear a maximum of twice in regex; marked by <-- HERE 
 Regexp modifier "%c" may not appear twice in regex; marked by <-- HERE in m/%s/
 Regexp modifiers "%c" and "%c" are mutually exclusive in regex; marked by <-- HERE in m/%s/
 Regexp *+ operand could be empty in regex; marked by <-- HERE in m/%s/
-Repeated format line will never terminate (~~ and @#)
 Reversed %c= operator
 %s(%f) failed
 %sCompilation failed in require
@@ -568,7 +554,6 @@ socketpair not implemented!
 Starting Full Screen process with flag=%d, mytype=%d
 Starting PM process with flag=%d, mytype=%d
 sv_2iv assumed (U_V(fabs((double)SvNVX(sv))) < (UV)IV_MAX) but SvNVX(sv)=%f U_V is 0x%x, IV_MAX is 0x%x
-SWASHNEW didn't return an HV ref
 switching effective gid is not implemented
 switching effective uid is not implemented
 System V IPC is not implemented on this machine
@@ -583,7 +568,6 @@ Too deeply nested ()-groups in %s
 Too many args on %s line of "%s"
 U0 mode on a byte string
 unable to find VMSPIPE.COM for i/o piping
-Unknown Unicode option value %d
 Unrecognized character %s; marked by <-- HERE after %s<-- HERE near column %d
 Unstable directory path, current directory changed unexpectedly
 Unterminated compressed integer in unpack

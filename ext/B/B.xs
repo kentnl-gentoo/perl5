@@ -21,13 +21,13 @@ typedef FILE * InputStream;
 
 static const char* const svclassnames[] = {
     "B::NULL",
-    "B::BIND",
     "B::IV",
     "B::NV",
 #if PERL_VERSION <= 10
     "B::RV",
 #endif
     "B::PV",
+    "B::INVLIST",
     "B::PVIV",
     "B::PVNV",
     "B::PVMG",
@@ -718,6 +718,14 @@ struct OP_methods {
     STR_WITH_LEN("warnings"),0,       -1,                                /*44*/
     STR_WITH_LEN("io"),      0,       -1,                                /*45*/
     STR_WITH_LEN("hints_hash"),0,     -1,                                /*46*/
+#if PERL_VERSION >= 17
+    STR_WITH_LEN("slabbed"), 0,       -1,                                /*47*/
+    STR_WITH_LEN("savefree"),0,       -1,                                /*48*/
+    STR_WITH_LEN("static"),  0,       -1,                                /*49*/
+#if PERL_VERSION >= 19
+    STR_WITH_LEN("folded"),  0,       -1,                                /*50*/
+#endif
+#endif
 };
 
 #include "const-c.inc"
@@ -989,6 +997,10 @@ next(o)
 	B::COP::warnings     = 44
 	B::COP::io           = 45
 	B::COP::hints_hash   = 46
+	B::OP::slabbed       = 47
+	B::OP::savefree      = 48
+	B::OP::static        = 49
+	B::OP::folded        = 50
     PREINIT:
 	char *ptr;
 	SV *ret;
@@ -1064,10 +1076,22 @@ next(o)
 	    case 30: /* type  */
 	    case 31: /* opt   */
 	    case 32: /* spare */
-	    /* These 3 are all bitfields, so we can't take their addresses */
+#if PERL_VERSION >= 17
+	    case 47: /* slabbed  */
+	    case 48: /* savefree */
+	    case 49: /* static   */
+#if PERL_VERSION >= 19
+	    case 50: /* folded   */
+#endif
+#endif
+	    /* These are all bitfields, so we can't take their addresses */
 		ret = sv_2mortal(newSVuv((UV)(
 				      ix == 30 ? o->op_type
 		                    : ix == 31 ? o->op_opt
+		                    : ix == 47 ? o->op_slabbed
+		                    : ix == 48 ? o->op_savefree
+		                    : ix == 49 ? o->op_static
+		                    : ix == 50 ? o->op_folded
 		                    :            o->op_spare)));
 		break;
 	    case 33: /* children */
@@ -1288,15 +1312,13 @@ MODULE = B	PACKAGE = B::IV
 
 #define PVMG_stash_ix	sv_SVp | offsetof(struct xpvmg, xmg_stash)
 
-#if PERL_VERSION > 14
+#if PERL_VERSION > 18
+#    define PVBM_useful_ix	sv_I32p | offsetof(struct xpvgv, xnv_u.xbm_useful)
+#elif PERL_VERSION > 14
 #    define PVBM_useful_ix	sv_I32p | offsetof(struct xpvgv, xnv_u.xbm_s.xbm_useful)
-#    define PVBM_previous_ix	sv_UVp | offsetof(struct xpvuv, xuv_uv)
 #else
 #define PVBM_useful_ix	sv_I32p | offsetof(struct xpvgv, xiv_u.xivu_i32)
-#define PVBM_previous_ix    sv_U32p | offsetof(struct xpvgv, xnv_u.xbm_s.xbm_previous)
 #endif
-
-#define PVBM_rare_ix	sv_U8p | offsetof(struct xpvgv, xnv_u.xbm_s.xbm_rare)
 
 #define PVLV_targoff_ix	sv_U32p | offsetof(struct xpvlv, xlv_targoff)
 #define PVLV_targlen_ix	sv_U32p | offsetof(struct xpvlv, xlv_targlen)
@@ -1330,7 +1352,7 @@ MODULE = B	PACKAGE = B::IV
 #define PVCV_file_ix	sv_char_pp | offsetof(struct xpvcv, xcv_file)
 #define PVCV_outside_ix	sv_SVp | offsetof(struct xpvcv, xcv_outside)
 #define PVCV_outside_seq_ix sv_U32p | offsetof(struct xpvcv, xcv_outside_seq)
-#define PVCV_flags_ix	sv_U16p | offsetof(struct xpvcv, xcv_flags)
+#define PVCV_flags_ix	sv_U32p | offsetof(struct xpvcv, xcv_flags)
 
 #define PVHV_max_ix	sv_STRLENp | offsetof(struct xpvhv, xhv_max)
 
@@ -1364,8 +1386,6 @@ IVX(sv)
 	B::GV::STASH = PVGV_stash_ix
 	B::GV::GvFLAGS = PVGV_flags_ix
 	B::BM::USEFUL = PVBM_useful_ix
-	B::BM::PREVIOUS = PVBM_previous_ix
-	B::BM::RARE = PVBM_rare_ix
 	B::IO::LINES =  PVIO_lines_ix
 	B::IO::PAGE = PVIO_page_ix
 	B::IO::PAGE_LEN = PVIO_page_len_ix
@@ -1665,6 +1685,16 @@ MOREMAGIC(mg)
 	    }
 	    break;
 	}
+
+MODULE = B	PACKAGE = B::BM		PREFIX = Bm
+
+U32
+BmPREVIOUS(sv)
+	B::BM	sv
+
+U8
+BmRARE(sv)
+	B::BM	sv
 
 MODULE = B	PACKAGE = B::GV		PREFIX = Gv
 

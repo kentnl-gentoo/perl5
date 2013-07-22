@@ -238,6 +238,10 @@ perl_construct(pTHXx)
 #endif
     PL_curcop = &PL_compiling;	/* needed by ckWARN, right away */
 
+#ifdef PERL_TRACE_OPS
+    Zero(PL_op_exec_cnt, OP_max+2, UV);
+#endif
+
     init_constants();
 
     SvREADONLY_on(&PL_sv_placeholder);
@@ -307,6 +311,8 @@ perl_construct(pTHXx)
 
     HvSHAREKEYS_off(PL_strtab);			/* mandatory */
     hv_ksplit(PL_strtab, 512);
+
+    Zero(PL_sv_consts, SV_CONSTS_COUNT, SV*);
 
 #if defined(__DYNAMIC__) && (defined(NeXT) || defined(__NeXT__))
     _dyld_lookup_and_bind
@@ -496,7 +502,7 @@ Perl_dump_sv_child(pTHX_ SV *sv)
     if (returned_errno || *buffer) {
 	Perl_warn(aTHX_ "Debug leaking scalars child failed%s%.*s with errno"
 		  " %d: %s", (*buffer ? " at " : ""), (int) *buffer, buffer + 1,
-		  returned_errno, strerror(returned_errno));
+		  returned_errno, Strerror(returned_errno));
     }
 }
 #endif
@@ -565,6 +571,20 @@ perl_destruct(pTHXx)
 
     /* Need to flush since END blocks can produce output */
     my_fflush_all();
+
+#ifdef PERL_TRACE_OPS
+    /* If we traced all Perl OP usage, report and clean up */
+    PerlIO_printf(Perl_debug_log, "Trace of all OPs executed:\n");
+    for (i = 0; i <= OP_max; ++i) {
+        PerlIO_printf(Perl_debug_log, "  %s: %"UVuf"\n", PL_op_name[i], PL_op_exec_cnt[i]);
+        PL_op_exec_cnt[i] = 0;
+    }
+    /* Utility slot for easily doing little tracing experiments in the runloop: */
+    if (PL_op_exec_cnt[OP_max+1] != 0)
+        PerlIO_printf(Perl_debug_log, "  SPECIAL: %"UVuf"\n", PL_op_exec_cnt[OP_max+1]);
+    PerlIO_printf(Perl_debug_log, "\n");
+#endif
+
 
     if (PL_threadhook(aTHX)) {
         /* Threads hook has vetoed further cleanup */
@@ -1081,6 +1101,12 @@ perl_destruct(pTHXx)
     sys_intern_clear();
 #endif
 
+    /* constant strings */
+    for (i = 0; i < SV_CONSTS_COUNT; i++) {
+        SvREFCNT_dec(PL_sv_consts[i]);
+        PL_sv_consts[i] = NULL;
+    }
+
     /* Destruct the global string table. */
     {
 	/* Yell and reset the HeVAL() slots that are still holding refcounts,
@@ -1321,13 +1347,11 @@ perl_free(pTHXx)
     {
 #    ifdef NETWARE
 	void *host = nw_internal_host;
-#    else
-	void *host = w32_internal_host;
-#    endif
 	PerlMem_free(aTHXx);
-#    ifdef NETWARE
 	nw_delete_internal_host(host);
 #    else
+	void *host = w32_internal_host;
+	PerlMem_free(aTHXx);
 	win32_delete_internal_host(host);
 #    endif
     }
@@ -1356,7 +1380,11 @@ __attribute__((destructor))
 perl_fini(void)
 {
     dVAR;
-    if (PL_curinterp  && !PL_veto_cleanup)
+    if (
+#ifdef PERL_GLOBAL_STRUCT_PRIVATE
+        my_vars &&
+#endif
+        PL_curinterp && !PL_veto_cleanup)
 	FREE_THREAD_KEY;
 }
 
@@ -2674,12 +2702,15 @@ Perl_call_method(pTHX_ const char *methname, I32 flags)
           		/* See G_* flags in cop.h */
 {
     STRLEN len;
+    SV* sv;
     PERL_ARGS_ASSERT_CALL_METHOD;
 
     len = strlen(methname);
+    sv = flags & G_METHOD_NAMED
+        ? sv_2mortal(newSVpvn_share(methname, len,0))
+        : newSVpvn_flags(methname, len, SVs_TEMP);
 
-    /* XXX: sv_2mortal(newSVpvn_share(methname, len)) can be faster */
-    return call_sv(newSVpvn_flags(methname, len, SVs_TEMP), flags | G_METHOD);
+    return call_sv(sv, flags | G_METHOD);
 }
 
 /* May be called with any of a CV, a GV, or an SV containing the name. */
@@ -2698,7 +2729,8 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
 {
     dVAR; dSP;
     LOGOP myop;		/* fake syntax tree node */
-    UNOP method_op;
+    UNOP method_unop;
+    SVOP method_svop;
     I32 oldmark;
     VOL I32 retval = 0;
     I32 oldscope;
@@ -2727,7 +2759,8 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
     PL_op = (OP*)&myop;
 
     EXTEND(PL_stack_sp, 1);
-    *++PL_stack_sp = sv;
+    if (!(flags & G_METHOD_NAMED))
+        *++PL_stack_sp = sv;
     oldmark = TOPMARK;
     oldscope = PL_scopestack_ix;
 
@@ -2740,14 +2773,24 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
 	  && !(flags & G_NODEBUG))
 	myop.op_private |= OPpENTERSUB_DB;
 
-    if (flags & G_METHOD) {
-	Zero(&method_op, 1, UNOP);
-	method_op.op_next = (OP*)&myop;
-	method_op.op_ppaddr = PL_ppaddr[OP_METHOD];
-	method_op.op_type = OP_METHOD;
-	myop.op_ppaddr = PL_ppaddr[OP_ENTERSUB];
-	myop.op_type = OP_ENTERSUB;
-	PL_op = (OP*)&method_op;
+    if (flags & (G_METHOD|G_METHOD_NAMED)) {
+        if ( flags & G_METHOD_NAMED ) {
+            Zero(&method_svop, 1, SVOP);
+            method_svop.op_next = (OP*)&myop;
+            method_svop.op_ppaddr = PL_ppaddr[OP_METHOD_NAMED];
+            method_svop.op_type = OP_METHOD_NAMED;
+            method_svop.op_sv = sv;
+            PL_op = (OP*)&method_svop;
+        } else {
+            Zero(&method_unop, 1, UNOP);
+            method_unop.op_next = (OP*)&myop;
+            method_unop.op_ppaddr = PL_ppaddr[OP_METHOD];
+            method_unop.op_type = OP_METHOD;
+            PL_op = (OP*)&method_unop;
+        }
+        myop.op_ppaddr = PL_ppaddr[OP_ENTERSUB];
+        myop.op_type = OP_ENTERSUB;
+
     }
 
     if (!(flags & G_EVAL)) {
@@ -3795,7 +3838,7 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
         && S_ISDIR(tmpstatbuf.st_mode))
         Perl_croak(aTHX_ "Can't open perl script \"%s\": %s\n",
             CopFILE(PL_curcop),
-            strerror(EISDIR));
+            Strerror(EISDIR));
 
     return rsfp;
 }

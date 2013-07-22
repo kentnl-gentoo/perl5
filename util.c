@@ -521,13 +521,13 @@ Perl_fbm_compile(pTHX_ SV *sv, U32 flags)
     const U8 *s;
     STRLEN i;
     STRLEN len;
-    STRLEN rarest = 0;
     U32 frequency = 256;
     MAGIC *mg;
+    PERL_DEB( STRLEN rarest = 0 );
 
     PERL_ARGS_ASSERT_FBM_COMPILE;
 
-    if (isGV_with_GP(sv))
+    if (isGV_with_GP(sv) || SvROK(sv))
 	return;
 
     if (SvVALID(sv))
@@ -539,7 +539,9 @@ Perl_fbm_compile(pTHX_ SV *sv, U32 flags)
 	if (mg && mg->mg_len >= 0)
 	    mg->mg_len++;
     }
-    s = (U8*)SvPV_force_mutable(sv, len);
+    if (!SvPOK(sv) || SvNIOKp(sv) || SvIsCOW(sv))
+	s = (U8*)SvPV_force_mutable(sv, len);
+    else s = (U8 *)SvPV_mutable(sv, len);
     if (len == 0)		/* TAIL might be on a zero-length string. */
 	return;
     SvUPGRADE(sv, SVt_PVMG);
@@ -589,17 +591,15 @@ Perl_fbm_compile(pTHX_ SV *sv, U32 flags)
     s = (const unsigned char*)(SvPVX_const(sv));	/* deeper magic */
     for (i = 0; i < len; i++) {
 	if (PL_freq[s[i]] < frequency) {
-	    rarest = i;
+	    PERL_DEB( rarest = i );
 	    frequency = PL_freq[s[i]];
 	}
     }
-    BmRARE(sv) = s[rarest];
-    BmPREVIOUS(sv) = rarest;
     BmUSEFUL(sv) = 100;			/* Initial value */
     if (flags & FBMcf_TAIL)
 	SvTAIL_on(sv);
     DEBUG_r(PerlIO_printf(Perl_debug_log, "rarest char %c at %"UVuf"\n",
-			  BmRARE(sv), BmPREVIOUS(sv)));
+			  s[rarest], (UV)rarest));
 }
 
 /* If SvTAIL(littlestr), it has a fake '\n' at end. */
@@ -1340,7 +1340,7 @@ Perl_write_to_stderr(pTHX_ SV* msv)
     if (PL_stderrgv && SvREFCNT(PL_stderrgv) 
 	&& (io = GvIO(PL_stderrgv))
 	&& (mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar))) 
-	Perl_magic_methcall(aTHX_ MUTABLE_SV(io), mg, "PRINT",
+	Perl_magic_methcall(aTHX_ MUTABLE_SV(io), mg, SV_CONST(PRINT),
 			    G_SCALAR | G_DISCARD | G_WRITING_TO_STDERR, 1, msv);
     else {
 #ifdef USE_SFIO
@@ -4469,8 +4469,11 @@ Perl_upg_version(pTHX_ SV *ver, bool qv)
 	SV *sv = SvNVX(ver) > 10e50 ? newSV(64) : 0;
 	char *buf;
 #ifdef USE_LOCALE_NUMERIC
-	char *loc = savepv(setlocale(LC_NUMERIC, NULL));
-	setlocale(LC_NUMERIC, "C");
+	char *loc = NULL;
+        if (! PL_numeric_standard) {
+            loc = savepv(setlocale(LC_NUMERIC, NULL));
+            setlocale(LC_NUMERIC, "C");
+        }
 #endif
 	if (sv) {
 	    Perl_sv_setpvf(aTHX_ sv, "%.9"NVff, SvNVX(ver));
@@ -4481,8 +4484,10 @@ Perl_upg_version(pTHX_ SV *ver, bool qv)
 	    buf = tbuf;
 	}
 #ifdef USE_LOCALE_NUMERIC
-	setlocale(LC_NUMERIC, loc);
-	Safefree(loc);
+        if (loc) {
+            setlocale(LC_NUMERIC, loc);
+            Safefree(loc);
+        }
 #endif
 	while (buf[len-1] == '0' && len > 0) len--;
 	if ( buf[len-1] == '.' ) len--; /* eat the trailing decimal */
@@ -5450,6 +5455,10 @@ Perl_init_global_struct(pTHX)
 #  endif
 #  ifdef PERL_SET_VARS
     PERL_SET_VARS(plvarsp);
+#  endif
+#  ifdef PERL_GLOBAL_STRUCT_PRIVATE
+    plvarsp->Gsv_placeholder.sv_flags = 0;
+    memset(plvarsp->Ghash_seed, 0, sizeof(plvarsp->Ghash_seed));
 #  endif
 # undef PERL_GLOBAL_STRUCT_INIT
 # endif

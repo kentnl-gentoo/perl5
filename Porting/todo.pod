@@ -128,8 +128,9 @@ L<Benchmark::Perl::Formance>
 
 =head2 fix tainting bugs
 
-Fix the bugs revealed by running the test suite with the C<-t> switch (via
-C<make test.taintwarn>).
+Fix the bugs revealed by running the test suite with the C<-t> switch.
+Setting the TEST_ARGS environment variable to C<-taintwarn> will accomplish
+this.
 
 =head2 Dual life everything
 
@@ -466,7 +467,7 @@ Natively 64-bit systems need neither -Duse64bitint nor -Duse64bitall.
 On these systems, it might be the default compilation mode, and there
 is currently no guarantee that passing no use64bitall option to the
 Configure process will build a 32bit perl. Implementing -Duse32bit*
-options would be nice for perl 5.19.1.
+options would be nice for perl 5.19.2.
 
 =head2 Profile Perl - am I hot or not?
 
@@ -1175,7 +1176,7 @@ L<http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/2013-01/msg00339.html>
 =head1 Big projects
 
 Tasks that will get your name mentioned in the description of the "Highlights
-of 5.19.1"
+of 5.19.2"
 
 =head2 make ithreads more robust
 
@@ -1188,13 +1189,6 @@ One bit would be to determine how to clone directory handles on systems
 without a C<fchdir> function (in sv.c:Perl_dirp_dup).
 
 Fix Perl_sv_dup, et al so that threads can return objects.
-
-=head2 Add class set operations to regexp engine
-
-Apparently these are quite useful. Anyway, Jeffery Friedl wants them.
-
-demerphq has this on his todo list, but right at the bottom.  
-
 
 =head1 Tasks for microperl
 

@@ -6,7 +6,7 @@ BEGIN {
     require 'test.pl';
 }
 use warnings;
-plan( tests => 177 );
+plan( tests => 180 );
 
 # these shouldn't hang
 {
@@ -287,6 +287,8 @@ cmp_ok($x,'eq','123',q(optimized-away comparison block doesn't take any other ar
     cxt_two();
     sub cxt_three { sort &test_if_list() }
     cxt_three();
+    sub cxt_three_anna_half { sort 0, test_if_list() }
+    cxt_three_anna_half();
 
     sub test_if_scalar {
         my $gimme = wantarray;
@@ -770,6 +772,8 @@ cmp_ok($answer,'eq','good','sort subr called from other package');
 
     $fail_msg = q(Modification of a read-only value attempted);
     cmp_ok(substr($@,0,length($fail_msg)),'eq',$fail_msg,'bug 7567');
+    eval { @a=1..3 };
+    is $@, "", 'abrupt scope exit turns off readonliness';
 }
 
 {
@@ -999,3 +1003,7 @@ sub yarn($$) { "no thinking aloud" }
 eval { eval { use warnings FATAL => 'all'; () = sort yarn 1,2 } };
 is $@, "",
   'no panic/crash with fatal warnings when sort sub($$) returns string';
+
+$#a = -1;
+() = [sort { $a = 10; $b = 10; 0 } $#a, $#a];
+is $#a, 10, 'sort block modifying $a and $b';

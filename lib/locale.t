@@ -1014,6 +1014,9 @@ foreach $Locale (@Locale) {
     my $ok11;
     my $ok12;
     my $ok13;
+    my $ok14;
+    my $ok15;
+    my $ok16;
 
     my $c;
     my $d;
@@ -1069,6 +1072,7 @@ foreach $Locale (@Locale) {
             $ok11 = $f == $c;
             $ok12 = abs(($f + $g) - 3.57) < 0.01;
             $ok13 = $w == 0;
+            $ok14 = $ok15 = $ok16 = 1;  # Skip for non-utf8 locales
         }
     }
     else {
@@ -1112,6 +1116,41 @@ foreach $Locale (@Locale) {
             $ok11 = $f == $c;
             $ok12 = abs(($f + $g) - 3.57) < 0.01;
             $ok13 = $w == 0;
+
+            # Look for non-ASCII error messages, and verify that the first
+            # such is in UTF-8 (the others almost certainly will be like the
+            # first).
+            $ok14 = 1;
+            foreach my $err (keys %!) {
+                use Errno;
+                $! = eval "&Errno::$err";   # Convert to strerror() output
+                my $strerror = "$!";
+                if ("$strerror" =~ /\P{ASCII}/) {
+                    my $utf8_strerror = $strerror;
+                    utf8::upgrade($utf8_strerror);
+
+                    # If $! was already in UTF-8, the upgrade was a no-op;
+                    # otherwise they will be different byte strings.
+                    use bytes;
+                    $ok14 = $utf8_strerror eq $strerror;
+                    last;
+                }
+            }
+
+            # Similarly, we verify that a non-ASCII radix is in UTF-8.  This
+            # also catches if there is a disparity between sprintf and
+            # stringification.
+
+            my $string_g = "$g";
+
+            my $utf8_string_g = "$g";
+            utf8::upgrade($utf8_string_g);
+
+            my $utf8_sprintf_g = sprintf("%g", $g);
+            utf8::upgrade($utf8_sprintf_g);
+            use bytes;
+            $ok15 = $utf8_string_g eq $string_g;
+            $ok16 = $utf8_sprintf_g eq $string_g;
         }
     }
 
@@ -1164,6 +1203,15 @@ foreach $Locale (@Locale) {
 
     tryneoalpha($Locale, ++$locales_test_number, $ok13);
     $test_names{$locales_test_number} = 'Verify that don\'t get warning under "==" even if radix is not a dot';
+
+    tryneoalpha($Locale, ++$locales_test_number, $ok14);
+    $test_names{$locales_test_number} = 'Verify that non-ASCII UTF-8 error messages are in UTF-8';
+
+    tryneoalpha($Locale, ++$locales_test_number, $ok15);
+    $test_names{$locales_test_number} = 'Verify that a number with a UTF-8 radix has a UTF-8 stringification';
+
+    tryneoalpha($Locale, ++$locales_test_number, $ok16);
+    $test_names{$locales_test_number} = 'Verify that a sprintf of a number with a UTF-8 radix yields UTF-8';
 
     debug "# $first_f_test..$locales_test_number: \$f = $f, \$g = $g, back to locale = $Locale\n";
 
@@ -1470,6 +1518,16 @@ if ($didwarn) {
 }
 
 $test_num = $final_locales_test_number;
+
+{   # perl #115808
+    use warnings;
+    my $warned = 0;
+    local $SIG{__WARN__} = sub {
+        $warned = $_[0] =~ /uninitialized/;
+    };
+    my $z = "y" . setlocale(&POSIX::LC_ALL, "xyzzy");
+    ok($warned, "variable set to setlocale(BAD LOCALE) is considered uninitialized");
+}
 
 # Test that tainting and case changing works on utf8 strings.  These tests are
 # placed last to avoid disturbing the hard-coded test numbers that existed at

@@ -348,6 +348,7 @@ XS(XS_UNIVERSAL_can)
     SV   *sv;
     SV   *rv;
     HV   *pkg = NULL;
+    GV   *iogv;
 
     if (items != 2)
 	croak_xs_usage(cv, "object-ref, method");
@@ -356,8 +357,10 @@ XS(XS_UNIVERSAL_can)
 
     SvGETMAGIC(sv);
 
-    if (!SvOK(sv) || !(SvROK(sv) || SvNIOK(sv) || (SvPOK(sv) && SvCUR(sv))
-       ))
+    /* Reject undef and empty string.  Note that the string form takes
+       precedence here over the numeric form, as (!1)->foo treats the
+       invocant as the empty string, though it is a dualvar. */
+    if (!SvOK(sv) || (SvPOK(sv) && !SvCUR(sv)))
 	XSRETURN_UNDEF;
 
     rv = &PL_sv_undef;
@@ -366,7 +369,13 @@ XS(XS_UNIVERSAL_can)
         sv = MUTABLE_SV(SvRV(sv));
         if (SvOBJECT(sv))
             pkg = SvSTASH(sv);
+        else if (isGV_with_GP(sv) && GvIO(sv))
+	    pkg = SvSTASH(GvIO(sv));
     }
+    else if (isGV_with_GP(sv) && GvIO(sv))
+        pkg = SvSTASH(GvIO(sv));
+    else if ((iogv = gv_fetchsv_nomg(sv, 0, SVt_PVIO)) && GvIO(iogv))
+        pkg = SvSTASH(GvIO(iogv));
     else {
         pkg = gv_stashsv(sv, 0);
         if (!pkg)

@@ -881,11 +881,6 @@ static const struct body_details bodies_by_type[] = {
     /* HEs use this offset for their arena.  */
     { 0, 0, 0, SVt_NULL, FALSE, NONV, NOARENA, 0 },
 
-    /* The bind placeholder pretends to be an RV for now.
-       Also it's marked as "can't upgrade" to stop anyone using it before it's
-       implemented.  */
-    { 0, 0, 0, SVt_DUMMY, TRUE, NONV, NOARENA, 0 },
-
     /* IVs are in the head, so the allocation size is 0.  */
     { 0,
       sizeof(IV), /* This is used to copy out the IV body.  */
@@ -902,6 +897,12 @@ static const struct body_details bodies_by_type[] = {
       + STRUCT_OFFSET(XPV, xpv_cur),
       SVt_PV, FALSE, NONV, HASARENA,
       FIT_ARENA(0, sizeof(XPV) - STRUCT_OFFSET(XPV, xpv_cur)) },
+
+    { sizeof(XINVLIST) - STRUCT_OFFSET(XPV, xpv_cur),
+      copy_length(XINVLIST, is_offset) - STRUCT_OFFSET(XPV, xpv_cur),
+      + STRUCT_OFFSET(XPV, xpv_cur),
+      SVt_INVLIST, TRUE, NONV, HASARENA,
+      FIT_ARENA(0, sizeof(XINVLIST) - STRUCT_OFFSET(XPV, xpv_cur)) },
 
     { sizeof(XPVIV) - STRUCT_OFFSET(XPV, xpv_cur),
       copy_length(XPVIV, xiv_u) - STRUCT_OFFSET(XPV, xpv_cur),
@@ -921,7 +922,7 @@ static const struct body_details bodies_by_type[] = {
     { sizeof(regexp),
       sizeof(regexp),
       0,
-      SVt_REGEXP, FALSE, NONV, HASARENA,
+      SVt_REGEXP, TRUE, NONV, HASARENA,
       FIT_ARENA(0, sizeof(regexp))
     },
 
@@ -1340,6 +1341,7 @@ Perl_sv_upgrade(pTHX_ SV *const sv, svtype new_type)
     case SVt_PVGV:
     case SVt_PVCV:
     case SVt_PVLV:
+    case SVt_INVLIST:
     case SVt_REGEXP:
     case SVt_PVMG:
     case SVt_PVNV:
@@ -2271,6 +2273,9 @@ Perl_sv_2iv_flags(pTHX_ SV *const sv, const I32 flags)
     if (!sv)
 	return 0;
 
+    assert (SvTYPE(sv) != SVt_PVAV && SvTYPE(sv) != SVt_PVHV
+	 && SvTYPE(sv) != SVt_PVFM);
+
     if (SvGMAGICAL(sv) && (flags & SV_GMAGIC))
 	mg_get(sv);
 
@@ -2445,6 +2450,8 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
     dVAR;
     if (!sv)
 	return 0.0;
+    assert (SvTYPE(sv) != SVt_PVAV && SvTYPE(sv) != SVt_PVHV
+	 && SvTYPE(sv) != SVt_PVFM);
     if (SvGMAGICAL(sv) || SvVALID(sv) || isREGEXP(sv)) {
 	/* FBMs use the space for SvIVX and SvNVX for other purposes, and use
 	   the same flag bit as SVf_IVisUV, so must not let them cache NVs.
@@ -2750,6 +2757,8 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 	    *lp = 0;
 	return (char *)"";
     }
+    assert (SvTYPE(sv) != SVt_PVAV && SvTYPE(sv) != SVt_PVHV
+	 && SvTYPE(sv) != SVt_PVFM);
     if (SvGMAGICAL(sv) && (flags & SV_GMAGIC))
 	mg_get(sv);
     if (SvROK(sv)) {
@@ -2928,8 +2937,17 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
              * change to the C locale during the Gconvert and then change back.
              * But if we're already in the C locale (PL_numeric_standard is
              * TRUE in that case), no need to do any changing */
-            if (PL_numeric_standard || IN_LOCALE_RUNTIME) {
+            if (PL_numeric_standard || IN_SOME_LOCALE_FORM_RUNTIME) {
                 Gconvert(SvNVX(sv), NV_DIG, 0, s);
+
+                /* If the radix character is UTF-8, and actually is in the
+                 * output, turn on the UTF-8 flag for the scalar */
+                if (! PL_numeric_standard
+                    && PL_numeric_radix_sv && SvUTF8(PL_numeric_radix_sv)
+                    && instr(s, SvPVX_const(PL_numeric_radix_sv)))
+                {
+                    SvUTF8_on(sv);
+                }
             }
             else {
                 char *loc = savepv(setlocale(LC_NUMERIC, NULL));
@@ -2937,6 +2955,7 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
                 Gconvert(SvNVX(sv), NV_DIG, 0, s);
                 setlocale(LC_NUMERIC, loc);
                 Safefree(loc);
+
             }
 
             /* We don't call SvPOK_on(), because it may come to pass that the
@@ -4117,7 +4136,7 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, SV* sstr, const I32 flags)
 	}
 	break;
 
-	/* case SVt_DUMMY: */
+	case SVt_INVLIST:
     case SVt_PVLV:
     case SVt_PVGV:
     case SVt_PVMG:
@@ -4861,7 +4880,6 @@ Perl_sv_force_normal_flags(pTHX_ SV *const sv, const U32 flags)
 
 #ifdef PERL_ANY_COW
     if (SvREADONLY(sv)) {
-	if (IN_PERL_RUNTIME)
 	    Perl_croak_no_modify();
     }
     else if (SvIsCOW(sv)) {
@@ -4920,7 +4938,6 @@ Perl_sv_force_normal_flags(pTHX_ SV *const sv, const U32 flags)
     }
 #else
     if (SvREADONLY(sv)) {
-	if (IN_PERL_RUNTIME)
 	    Perl_croak_no_modify();
     }
     else
@@ -5075,8 +5092,14 @@ Perl_sv_chop(pTHX_ SV *const sv, const char *const ptr)
     evacp = p - evacn;
 #endif
 
+    /* This sets 'delta' to the accumulated value of all deltas so far */
     delta += old_delta;
     assert(delta);
+
+    /* If 'delta' fits in a byte, store it just prior to the new beginning of
+     * the string; otherwise store a 0 byte there and store 'delta' just prior
+     * to that, using as many bytes as a STRLEN occupies.  Thus it overwrites a
+     * portion of the chopped part of the string */
     if (delta < 0x100) {
 	*--p = (U8) delta;
     } else {
@@ -5396,6 +5419,24 @@ Perl_sv_magicext(pTHX_ SV *const sv, SV *const obj, const int how,
     return mg;
 }
 
+MAGIC *
+Perl_sv_magicext_mglob(pTHX_ SV *sv)
+{
+    PERL_ARGS_ASSERT_SV_MAGICEXT_MGLOB;
+    if (SvTYPE(sv) == SVt_PVLV && LvTYPE(sv) == 'y') {
+	/* This sv is only a delegate.  //g magic must be attached to
+	   its target. */
+	vivify_defelem(sv);
+	sv = LvTARG(sv);
+    }
+#ifdef PERL_OLD_COPY_ON_WRITE
+    if (SvIsCOW(sv))
+	sv_force_normal_flags(sv, 0);
+#endif
+    return sv_magicext(sv, NULL, PERL_MAGIC_regex_global,
+		       &PL_vtbl_mglob, 0, 0);
+}
+
 /*
 =for apidoc sv_magic
 
@@ -5438,7 +5479,7 @@ Perl_sv_magic(pTHX_ SV *const sv, SV *const obj, const int how,
     vtable = (vtable_index == magic_vtable_max)
 	? NULL : PL_magic_vtables + vtable_index;
 
-#ifdef PERL_ANY_COW
+#ifdef PERL_OLD_COPY_ON_WRITE
     if (SvIsCOW(sv))
         sv_force_normal_flags(sv, 0);
 #endif
@@ -6180,7 +6221,7 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 		SvREFCNT_dec(SvSTASH(sv));
 	}
 	switch (type) {
-	    /* case SVt_DUMMY: */
+	    /* case SVt_INVLIST: */
 	case SVt_PVIO:
 	    if (IoIFP(sv) &&
 		IoIFP(sv) != PerlIO_stdin() &&
@@ -6306,6 +6347,7 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 	case SVt_PVMG:
 	case SVt_PVNV:
 	case SVt_PVIV:
+	case SVt_INVLIST:
 	case SVt_PV:
 	  freescalar:
 	    /* Don't bother with SvOOK_off(sv); as we're only going to
@@ -9316,7 +9358,7 @@ Perl_sv_pvn_force_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
     PERL_ARGS_ASSERT_SV_PVN_FORCE_FLAGS;
 
     if (flags & SV_GMAGIC) SvGETMAGIC(sv);
-    if (SvTHINKFIRST(sv) && !SvROK(sv))
+    if (SvTHINKFIRST(sv) && (!SvROK(sv) || SvREADONLY(sv)))
         sv_force_normal_flags(sv, 0);
 
     if (SvPOK(sv)) {
@@ -9327,14 +9369,6 @@ Perl_sv_pvn_force_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 	char *s;
 	STRLEN len;
  
-	if (SvREADONLY(sv) && !(flags & SV_MUTABLE_RETURN)) {
-	    const char * const ref = sv_reftype(sv,0);
-	    if (PL_op)
-		Perl_croak(aTHX_ "Can't coerce readonly %s to string in %s",
-			   ref, OP_DESC(PL_op));
-	    else
-		Perl_croak(aTHX_ "Can't coerce readonly %s to string", ref);
-	}
 	if (SvTYPE(sv) > SVt_PVLV
 	    || isGV_with_GP(sv))
 	    /* diag_listed_as: Can't coerce %s to %s in %s */
@@ -9450,7 +9484,7 @@ Perl_sv_reftype(pTHX_ const SV *const sv, const int ob)
 				    ? "GLOB" : "SCALAR");
 	case SVt_PVFM:		return "FORMAT";
 	case SVt_PVIO:		return "IO";
-	case SVt_DUMMY:		return "DUMMY";
+	case SVt_INVLIST:	return "INVLIST";
 	case SVt_REGEXP:	return "REGEXP";
 	default:		return "UNKNOWN";
 	}
@@ -10491,8 +10525,10 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	    if (*q == '-')
 		sv = *q++;
 	    else if (strnEQ(q, UTF8f, sizeof(UTF8f)-1)) { /* UTF8f */
-		is_utf8 = cBOOL(va_arg(*args, UV));
-		elen = va_arg(*args, STRLEN);
+		/* The argument has already gone through cBOOL, so the cast
+		   is safe. */
+		is_utf8 = (bool)va_arg(*args, int);
+		elen = va_arg(*args, UV);
 		eptr = va_arg(*args, char *);
 		q += sizeof(UTF8f)-1;
 		goto string;
@@ -11277,6 +11313,12 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	    }
 	float_converted:
 	    eptr = PL_efloatbuf;
+            if (PL_numeric_radix_sv && SvUTF8(PL_numeric_radix_sv)
+                && instr(eptr, SvPVX_const(PL_numeric_radix_sv)))
+            {
+                is_utf8 = TRUE;
+            }
+
 	    break;
 
 	    /* SPECIAL */
@@ -12185,7 +12227,6 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 	SvANY(dstr)	= new_XNV();
 	SvNV_set(dstr, SvNVX(sstr));
 	break;
-	/* case SVt_DUMMY: */
     default:
 	{
 	    /* These are all the types that need complex bodies allocating.  */
@@ -12210,6 +12251,7 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 	    case SVt_PVMG:
 	    case SVt_PVNV:
 	    case SVt_PVIV:
+            case SVt_INVLIST:
 	    case SVt_PV:
 		assert(sv_type_details->body_size);
 		if (sv_type_details->arena) {
@@ -13396,6 +13438,8 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     hv_ksplit(PL_strtab, HvTOTALKEYS(proto_perl->Istrtab));
     ptr_table_store(PL_ptr_table, proto_perl->Istrtab, PL_strtab);
 
+    Zero(PL_sv_consts, SV_CONSTS_COUNT, SV*);
+
     /* This PV will be free'd special way so must set it same way op.c does */
     PL_compiling.cop_file    = savesharedpv(PL_compiling.cop_file);
     ptr_table_store(PL_ptr_table, proto_perl->Icompiling.cop_file, PL_compiling.cop_file);
@@ -14376,8 +14420,10 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 			break;
 		}
 		else {
+		    SV * const  opsv = cSVOPx_sv(kid);
+		    const IV  opsviv = SvIV(opsv);
 		    SV * const * const svp = av_fetch(MUTABLE_AV(sv),
-			negate ? - SvIV(cSVOPx_sv(kid)) : SvIV(cSVOPx_sv(kid)),
+			negate ? - opsviv : opsviv,
 			FALSE);
 		    if (!svp || *svp != uninit_sv)
 			break;

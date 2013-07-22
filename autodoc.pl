@@ -13,8 +13,7 @@
 # Has an optional arg, which is the directory to chdir to before reading
 # MANIFEST and *.[ch].
 #
-# This script is normally invoked as part of 'make all', but is also
-# called from regen.pl.
+# This script is invoked as part of 'make all'
 #
 # '=head1' are the only headings looked for.  If the next line after the
 # heading begins with a word character, it is considered to be the first line
@@ -254,7 +253,7 @@ sub output {
     my ($podname, $header, $dochash, $missing, $footer) = @_;
     my $fh = open_new("pod/$podname.pod", undef,
 		      {by => "$0 extracting documentation",
-		       from => 'the C source files'});
+                       from => 'the C source files'}, 1);
 
     print $fh $header;
 
