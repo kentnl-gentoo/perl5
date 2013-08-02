@@ -2847,6 +2847,12 @@ try_autoload:
 
 	PUTBACK;
 
+	if (((PL_op->op_private
+	       & PUSHSUB_GET_LVALUE_MASK(Perl_is_lvalue_sub)
+             ) & OPpENTERSUB_LVAL_MASK) == OPpLVAL_INTRO &&
+	    !CvLVALUE(cv))
+	    DIE(aTHX_ "Can't modify non-lvalue subroutine call");
+
 	if (!hasargs) {
 	    /* Need to copy @_ to stack. Alternative may be to
 	     * switch stack to @_, and copy return values
@@ -2895,8 +2901,15 @@ Perl_sub_crush_depth(pTHX_ CV *cv)
     if (CvANON(cv))
 	Perl_warner(aTHX_ packWARN(WARN_RECURSION), "Deep recursion on anonymous subroutine");
     else {
-	SV* const tmpstr = sv_newmortal();
-	gv_efullname3(tmpstr, CvGV(cv), NULL);
+        HEK *const hek = CvNAME_HEK(cv);
+        SV *tmpstr;
+        if (hek) {
+            tmpstr = sv_2mortal(newSVhek(hek));
+        }
+        else {
+            tmpstr = sv_newmortal();
+            gv_efullname3(tmpstr, CvGV(cv), NULL);
+        }
 	Perl_warner(aTHX_ packWARN(WARN_RECURSION), "Deep recursion on subroutine \"%"SVf"\"",
 		    SVfARG(tmpstr));
     }

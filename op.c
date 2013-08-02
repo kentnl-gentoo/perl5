@@ -169,6 +169,19 @@ Perl_Slab_Alloc(pTHX_ size_t sz)
      || (CvSTART(PL_compcv) && !CvSLABBED(PL_compcv)))
 	return PerlMemShared_calloc(1, sz);
 
+#if defined(USE_ITHREADS) && IVSIZE > U32SIZE && IVSIZE > PTRSIZE
+    /* Work around a goof with alignment on our part. For sparc32 (and
+       possibly other architectures), if built with -Duse64bitint, the IV
+       op_pmoffset in struct pmop should be 8 byte aligned, but the slab
+       allocator is only providing 4 byte alignment. The real fix is to change
+       the IV to a type the same size as a pointer, such as size_t, but we
+       can't do that without breaking the ABI, which is a no-no in a maint
+       release. So instead, simply allocate struct pmop directly, which will be
+       suitably aligned:  */
+    if (sz == sizeof(struct pmop))
+	return PerlMemShared_calloc(1, sz);
+#endif
+
     if (!CvSTART(PL_compcv)) { /* sneak it in here */
 	CvSTART(PL_compcv) =
 	    (OP *)(slab = S_new_slab(aTHX_ PERL_SLAB_SIZE));
@@ -7138,7 +7151,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	op_free(block);
 	SvREFCNT_dec(compcv);
 	PL_compcv = NULL;
-	goto clone;
+	goto setname;
     }
     /* Checking whether outcv is CvOUTSIDE(compcv) is not sufficient to
        determine whether this sub definition is in the same scope as its
@@ -7201,6 +7214,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	cv = compcv;
 	*spot = cv;
     }
+   setname:
     if (!CvNAME_HEK(cv)) {
 	CvNAME_HEK_set(cv,
 	 hek
@@ -7210,6 +7224,8 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 		      0)
 	);
     }
+    if (const_sv) goto clone;
+
     CvFILE_set_from_cop(cv, PL_curcop);
     CvSTASH_set(cv, PL_curstash);
 
@@ -8157,7 +8173,6 @@ Perl_newCVREF(pTHX_ I32 flags, OP *o)
 	dVAR;
 	o->op_type = OP_PADCV;
 	o->op_ppaddr = PL_ppaddr[OP_PADCV];
-	return o;
     }
     return newUNOP(OP_RV2CV, flags, scalar(o));
 }
@@ -9878,6 +9893,28 @@ subroutine.
 =cut
 */
 
+/* shared by toke.c:yylex */
+CV *
+Perl_find_lexical_cv(pTHX_ PADOFFSET off)
+{
+    PADNAME *name = PAD_COMPNAME(off);
+    CV *compcv = PL_compcv;
+    while (PadnameOUTER(name)) {
+	assert(PARENT_PAD_INDEX(name));
+	compcv = CvOUTSIDE(PL_compcv);
+	name = PadlistNAMESARRAY(CvPADLIST(compcv))
+		[off = PARENT_PAD_INDEX(name)];
+    }
+    assert(!PadnameIsOUR(name));
+    if (!PadnameIsSTATE(name) && SvMAGICAL(name)) {
+	MAGIC * mg = mg_find(name, PERL_MAGIC_proto);
+	assert(mg);
+	assert(mg->mg_obj);
+	return (CV *)mg->mg_obj;
+    }
+    return (CV *)AvARRAY(PadlistARRAY(CvPADLIST(compcv))[1])[off];
+}
+
 CV *
 Perl_rv2cv_op_cv(pTHX_ OP *cvop, U32 flags)
 {
@@ -9912,24 +9949,7 @@ Perl_rv2cv_op_cv(pTHX_ OP *cvop, U32 flags)
 	    gv = NULL;
 	} break;
 	case OP_PADCV: {
-	    PADNAME *name = PAD_COMPNAME(rvop->op_targ);
-	    CV *compcv = PL_compcv;
-	    PADOFFSET off = rvop->op_targ;
-	    while (PadnameOUTER(name)) {
-		assert(PARENT_PAD_INDEX(name));
-		compcv = CvOUTSIDE(PL_compcv);
-		name = PadlistNAMESARRAY(CvPADLIST(compcv))
-			[off = PARENT_PAD_INDEX(name)];
-	    }
-	    assert(!PadnameIsOUR(name));
-	    if (!PadnameIsSTATE(name)) {
-		MAGIC * mg = mg_find(name, PERL_MAGIC_proto);
-		assert(mg);
-		assert(mg->mg_obj);
-		cv = (CV *)mg->mg_obj;
-	    }
-	    else cv =
-		    (CV *)AvARRAY(PadlistARRAY(CvPADLIST(compcv))[1])[off];
+	    cv = find_lexical_cv(rvop->op_targ);
 	    gv = NULL;
 	} break;
 	default: {
@@ -10526,7 +10546,9 @@ Perl_ck_subr(pTHX_ OP *o)
 		   really need is a new call checker API that accepts a
 		   GV or string (or GV or CV). */
 	    HEK * const hek = CvNAME_HEK(cv);
-	    assert(hek);
+	    /* After a syntax error in a lexical sub, the cv that
+	       rv2cv_op_cv returns may be a nameless stub. */
+	    if (!hek) return ck_entersub_args_list(o);;
 	    namegv = (GV *)sv_newmortal();
 	    gv_init_pvn(namegv, PL_curstash, HEK_KEY(hek), HEK_LEN(hek),
 			SVf_UTF8 * !!HEK_UTF8(hek));
