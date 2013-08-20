@@ -119,6 +119,42 @@ TOP:
     return 0;
 }
 
+/* Check that the SV can be represented as a simple decimal integer.
+ *
+ * The perl code does this by matching against /^(?:0|-?[1-9]\d{0,8})\z/
+*/
+static bool
+safe_decimal_number(pTHX_ SV *val) {
+    STRLEN len;
+    const char *p = SvPV(val, len);
+
+    if (len == 1 && *p == '0')
+        return TRUE;
+
+    if (len && *p == '-') {
+        ++p;
+        --len;
+    }
+
+    if (len == 0 || *p < '1' || *p > '9')
+        return FALSE;
+
+    ++p;
+    --len;
+
+    if (len > 8)
+        return FALSE;
+
+    while (len > 0) {
+         /* the perl code checks /\d/ but we don't want unicode digits here */
+         if (*p < '0' || *p > '9')
+             return FALSE;
+         ++p;
+         --len;
+    }
+    return TRUE;
+}
+
 /* count the number of "'"s and "\"s in string */
 static I32
 num_q(const char *s, STRLEN slen)
@@ -206,7 +242,7 @@ esc_q_utf8(pTHX_ SV* sv, const char *src, STRLEN slen, I32 do_utf8, I32 useqq)
 #ifndef EBCDIC
 	} else if (useqq &&
 	    /* we can't use the short form like '\0' if followed by a digit */
-                   ((k >= 7 && k <= 10 || k == 12 || k == 13 || k == 27)
+                   (((k >= 7 && k <= 10) || k == 12 || k == 13 || k == 27)
                  || (k < 8 && (next < '0' || next > '9')))) {
 	    grow += 2;
 	} else if (useqq && k <= 31 && (next < '0' || next > '9')) {
@@ -1115,6 +1151,15 @@ DD_dump(pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval, HV *seenhv,
 	    sv_catpvn(retval, (const char *)mg->mg_ptr, mg->mg_len);
 	}
 #endif
+
+	/* the pure perl and XS non-qq outputs have historically been
+	 * different in this case, but for useqq, let's try to match
+	 * the pure perl code.
+	 * see [perl #74798]
+	 */
+	else if (useqq && safe_decimal_number(aTHX_ val)) {
+	    sv_catsv(retval, val);
+	}
 	else {
         integer_came_from_string:
 	    c = SvPV(val, i);

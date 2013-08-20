@@ -1753,37 +1753,16 @@ S_incline(pTHX_ const char *s)
 
     if (t - s > 0) {
 	const STRLEN len = t - s;
-	SV *const temp_sv = CopFILESV(PL_curcop);
-	const char *cf;
-	STRLEN tmplen;
-
-	if (temp_sv) {
-	    cf = SvPVX(temp_sv);
-	    tmplen = SvCUR(temp_sv);
-	} else {
-	    cf = NULL;
-	    tmplen = 0;
-	}
 
 	if (!PL_rsfp && !PL_parser->filtered) {
 	    /* must copy *{"::_<(eval N)[oldfilename:L]"}
 	     * to *{"::_<newfilename"} */
 	    /* However, the long form of evals is only turned on by the
 	       debugger - usually they're "(eval %lu)" */
-	    char smallbuf[128];
-	    char *tmpbuf;
-	    GV **gvp;
-	    STRLEN tmplen2 = len;
-	    if (tmplen + 2 <= sizeof smallbuf)
-		tmpbuf = smallbuf;
-	    else
-		Newx(tmpbuf, tmplen + 2, char);
-	    tmpbuf[0] = '_';
-	    tmpbuf[1] = '<';
-	    memcpy(tmpbuf + 2, cf, tmplen);
-	    tmplen += 2;
-	    gvp = (GV**)hv_fetch(PL_defstash, tmpbuf, tmplen, FALSE);
-	    if (gvp) {
+	    GV * const cfgv = CopFILEGV(PL_curcop);
+	    if (cfgv) {
+		char smallbuf[128];
+		STRLEN tmplen2 = len;
 		char *tmpbuf2;
 		GV *gv2;
 
@@ -1792,12 +1771,8 @@ S_incline(pTHX_ const char *s)
 		else
 		    Newx(tmpbuf2, tmplen2 + 2, char);
 
-		if (tmpbuf2 != smallbuf || tmpbuf != smallbuf) {
-		    /* Either they malloc'd it, or we malloc'd it,
-		       so no prefix is present in ours.  */
-		    tmpbuf2[0] = '_';
-		    tmpbuf2[1] = '<';
-		}
+		tmpbuf2[0] = '_';
+		tmpbuf2[1] = '<';
 
 		memcpy(tmpbuf2 + 2, s, tmplen2);
 		tmplen2 += 2;
@@ -1811,11 +1786,11 @@ S_incline(pTHX_ const char *s)
 		       alias the saved lines that are in the array.
 		       Otherwise alias the whole array. */
 		    if (CopLINE(PL_curcop) == line_num) {
-			GvHV(gv2) = MUTABLE_HV(SvREFCNT_inc(GvHV(*gvp)));
-			GvAV(gv2) = MUTABLE_AV(SvREFCNT_inc(GvAV(*gvp)));
+			GvHV(gv2) = MUTABLE_HV(SvREFCNT_inc(GvHV(cfgv)));
+			GvAV(gv2) = MUTABLE_AV(SvREFCNT_inc(GvAV(cfgv)));
 		    }
-		    else if (GvAV(*gvp)) {
-			AV * const av = GvAV(*gvp);
+		    else if (GvAV(cfgv)) {
+			AV * const av = GvAV(cfgv);
 			const I32 start = CopLINE(PL_curcop)+1;
 			I32 items = AvFILLp(av) - start;
 			if (items > 0) {
@@ -1830,7 +1805,6 @@ S_incline(pTHX_ const char *s)
 
 		if (tmpbuf2 != smallbuf) Safefree(tmpbuf2);
 	    }
-	    if (tmpbuf != smallbuf) Safefree(tmpbuf);
 	}
 	CopFILE_free(PL_curcop);
 	CopFILE_setn(PL_curcop, s, len);
@@ -2576,7 +2550,7 @@ S_sublex_start(pTHX)
 	return THING;
     }
     else if (op_type == OP_BACKTICK && PL_lex_op) {
-	/* readpipe() vas overriden */
+	/* readpipe() was overridden */
 	cSVOPx(cLISTOPx(cUNOPx(PL_lex_op)->op_first)->op_first->op_sibling)->op_sv = tokeq(PL_lex_stuff);
 	pl_yylval.opval = PL_lex_op;
 	PL_lex_op = NULL;
@@ -3285,12 +3259,12 @@ S_scan_const(pTHX_ char *start)
 	 * char, which will be done separately.
 	 * Stop on (?{..}) and friends */
 
-	else if (*s == '(' && PL_lex_inpat && s[1] == '?') {
+	else if (*s == '(' && PL_lex_inpat && s[1] == '?' && !in_charclass) {
 	    if (s[2] == '#') {
 		while (s+1 < send && *s != ')')
 		    *d++ = NATIVE_TO_NEED(has_utf8,*s++);
 	    }
-	    else if (!PL_lex_casemods && !in_charclass &&
+	    else if (!PL_lex_casemods &&
 		     (    s[2] == '{' /* This should match regcomp.c */
 		      || (s[2] == '?' && s[3] == '{')))
 	    {
@@ -3299,7 +3273,7 @@ S_scan_const(pTHX_ char *start)
 	}
 
 	/* likewise skip #-initiated comments in //x patterns */
-	else if (*s == '#' && PL_lex_inpat &&
+	else if (*s == '#' && PL_lex_inpat && !in_charclass &&
 	  ((PMOP*)PL_lex_inpat)->op_pmflags & RXf_PMf_EXTENDED) {
 	    while (s+1 < send && *s != '\n')
 		*d++ = NATIVE_TO_NEED(has_utf8,*s++);
@@ -7323,7 +7297,7 @@ Perl_yylex(pTHX)
 			d = s + 1;
 			while (SPACE_OR_TAB(*d))
 			    d++;
-			if (*d == ')' && (sv = cv_const_sv(cv))) {
+			if (*d == ')' && (sv = cv_const_sv_or_av(cv))) {
 			    s = d + 1;
 			    goto its_constant;
 			}
@@ -7387,14 +7361,19 @@ Perl_yylex(pTHX)
 			     UTF8fARG(UTF, l, PL_tokenbuf));
                     }
 		    /* Check for a constant sub */
-		    if ((sv = cv_const_sv(cv))) {
+		    if ((sv = cv_const_sv_or_av(cv))) {
 		  its_constant:
 			op_free(rv2cv_op);
 			SvREFCNT_dec(((SVOP*)pl_yylval.opval)->op_sv);
 			((SVOP*)pl_yylval.opval)->op_sv = SvREFCNT_inc_simple(sv);
-			pl_yylval.opval->op_private = OPpCONST_FOLDED;
-			pl_yylval.opval->op_folded = 1;
-			pl_yylval.opval->op_flags |= OPf_SPECIAL;
+			if (SvTYPE(sv) == SVt_PVAV)
+			    pl_yylval.opval = newUNOP(OP_RV2AV, OPf_PARENS,
+						      pl_yylval.opval);
+			else {
+			    pl_yylval.opval->op_private = OPpCONST_FOLDED;
+			    pl_yylval.opval->op_folded = 1;
+			    pl_yylval.opval->op_flags |= OPf_SPECIAL;
+			}
 			TOKEN(WORD);
 		    }
 
@@ -10068,7 +10047,7 @@ S_scan_heredoc(pTHX_ char *s)
 	    /* shared is only null if we have gone beyond the outermost
 	       lexing scope.  In a file, we will have broken out of the
 	       loop in the previous iteration.  In an eval, the string buf-
-	       fer ends with "\n;", so the while condition below will have
+	       fer ends with "\n;", so the while condition above will have
 	       evaluated to false.  So shared can never be null. */
 	    assert(shared);
 	    /* A LEXSHARED struct with a null ls_prev pointer is the outer-
@@ -10172,8 +10151,11 @@ S_scan_heredoc(pTHX_ char *s)
 	}
 	CopLINE_set(PL_curcop, (line_t)PL_multi_start - 1);
 	if (!SvCUR(PL_linestr) || PL_bufend[-1] != '\n') {
-	    lex_grow_linestr(SvCUR(PL_linestr) + 2);
+            s = lex_grow_linestr(SvLEN(PL_linestr) + 3);
+            /* ^That should be enough to avoid this needing to grow:  */
 	    sv_catpvs(PL_linestr, "\n\0");
+            assert(s == SvPVX(PL_linestr));
+            PL_bufend = SvEND(PL_linestr);
 	}
 	s = PL_bufptr;
 #ifdef PERL_MAD
@@ -10702,25 +10684,38 @@ S_scan_str(pTHX_ char *start, int keep_quoted, int keep_delims, int re_reparse,
                          * context where the delimiter is also a metacharacter,
                          * the backslash is useless, and deprecated.  () and []
                          * are meta in any context. {} are meta only when
-                         * appearing in a quantifier or in things like '\p{'.
-                         * They also aren't meta unless there is a matching
-                         * closed, escaped char later on within the string.
-                         * If 's' points to an open, set a flag; if to a close,
-                         * test that flag, and raise a warning if it was set */
+                         * appearing in a quantifier or in things like '\p{'
+                         * (but '\\p{' isn't meta).  They also aren't meta
+                         * unless there is a matching closed, escaped char
+                         * later on within the string.  If 's' points to an
+                         * open, set a flag; if to a close, test that flag, and
+                         * raise a warning if it was set */
 
 			if (deprecate_escaped_meta) {
                             if (*s == PL_multi_open) {
                                 if (*s != '{') {
                                     escaped_open = s;
                                 }
-                                else if (regcurly(s,
-                                                  TRUE /* Look for a closing
-                                                          '\}' */)
-                                         || (s - start > 2  /* Look for e.g.
-                                                               '\x{' */
-                                             && _generic_isCC(*(s-2), _CC_BACKSLASH_FOO_LBRACE_IS_META)))
-                                {
+                                     /* Look for a closing '\}' */
+                                else if (regcurly(s, TRUE)) {
                                     escaped_open = s;
+                                }
+                                     /* Look for e.g.  '\x{' */
+                                else if (s - start > 2
+                                         && _generic_isCC(*(s-2),
+                                             _CC_BACKSLASH_FOO_LBRACE_IS_META))
+                                { /* Exclude '\\x', '\\\\x', etc. */
+                                    char *lookbehind = s - 4;
+                                    bool is_meta = TRUE;
+                                    while (lookbehind >= start
+                                           && *lookbehind == '\\')
+                                    {
+                                        is_meta = ! is_meta;
+                                        lookbehind--;
+                                    }
+                                    if (is_meta) {
+                                        escaped_open = s;
+                                    }
                                 }
                             }
                             else if (escaped_open) {

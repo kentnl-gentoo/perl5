@@ -503,7 +503,7 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5192delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5193delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -900,7 +900,7 @@ lib/buildcustomize.pl: $& $(mini_obj) write_buildcustomize.pl
 		$spitshell >>$Makefile <<'!NO!SUBS!'
 lib/buildcustomize.pl: $& $(mini_obj) write_buildcustomize.pl
 	-@rm -f miniperl.xok
-	$(LDLIBPTH) $(CC) $(CLDFLAGS) -o $(MINIPERL_EXE) \
+	$(CC) $(CLDFLAGS) -o $(MINIPERL_EXE) \
 	    $(mini_obj) $(libs)
 	$(LDLIBPTH) $(RUN) ./miniperl$(HOST_EXE_EXT) -w -Ilib -Idist/Exporter/lib -MExporter -e '<?>' || sh -c 'echo >&2 Failed to build miniperl.  Please run make minitest; exit 1'
 	$(MINIPERL) -f write_buildcustomize.pl
@@ -912,7 +912,7 @@ lib/buildcustomize.pl: $& $(mini_obj) write_buildcustomize.pl
 
 $(PERL_EXE): $& perlmain$(OBJ_EXT) $(LIBPERL) $(static_ext) ext.libs $(PERLEXPORT) write_buildcustomize.pl
 	-@rm -f miniperl.xok
-	$(SHRPENV) $(LDLIBPTH) $(CC) -o perl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+	$(SHRPENV) $(CC) -o perl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 # Microperl.  This is just a convenience thing if one happens to
 # build also the full Perl and therefore the real big Makefile:
@@ -981,9 +981,9 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) pod/perlmodlib.PL -q
 
-pod/perl5192delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl5192delta.pod
-	$(LNS) perldelta.pod pod/perl5192delta.pod
+pod/perl5193delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl5193delta.pod
+	$(LNS) perldelta.pod pod/perl5193delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1227,7 +1227,6 @@ _cleaner2:
 	rm -f core *perl.core t/core t/*perl.core core.* t/core.*
 	rm -f t/$(PERL_EXE) t/rantests
 	rm -rf t/tmp*
-	rm -f so_locations $(LIBPERL_NONSHR) $(MINIPERL_NONSHR)
 	rm -rf $(addedbyconf)
 	rm -f $(FIRSTMAKEFILE) $(FIRSTMAKEFILE).old makefile.old utils/Makefile
 	rm -f $(private)
@@ -1237,45 +1236,46 @@ _cleaner2:
 	rm -f h2ph.man pstruct
 	rm -rf .config
 	rm -f preload
-	rm -rf lib/Encode lib/Compress lib/Hash lib/re
-	rm -rf lib/TAP lib/Module/Pluggable lib/App
-	rm -rf lib/mro
-	rm -rf lib/IO/Compress lib/IO/Uncompress
-	rm -f lib/ExtUtils/ParseXS/t/XSTest.c
-	rm -f lib/ExtUtils/ParseXS/t/XSTest$(OBJ_EXT)
-	rm -f lib/ExtUtils/ParseXS/t/XSTest$(DLSUFFIX)
-	rm -fr lib/B
-	rm -fr lib/CPAN
-	rm -fr lib/ExtUtils/CBuilder
 	rm -f pod2htmd.tmp
 	rm -rf pod/perlfunc pod/perlipc
 	-rmdir ext/B/lib
-	-rmdir lib/Archive/Tar lib/Archive lib/Attribute
-	-rmdir lib/CGI lib/Carp
-	-rmdir lib/Data lib/Devel lib/Digest
-	-rmdir lib/ExtUtils/Command lib/ExtUtils/Constant lib/ExtUtils/Liblist lib/ExtUtils/MakeMaker
-	-rmdir lib/File/Spec lib/Filter/Util lib/Filter
-	-rmdir lib/I18N/LangTags lib/IO/Socket lib/IO lib/IPC
-	-rmdir lib/List/Util lib/List
-	-rmdir lib/Locale/Maketext lib/Locale
-	-rmdir lib/Log/Message lib/Log
-	-rmdir lib/Math/Big* lib/Math
-	-rmdir lib/Memoize lib/MIME
-	-rmdir lib/Module/Build/Platform lib/Module/Build lib/Module/Load lib/Module
-	-rmdir lib/Net/FTP lib/Object
-	-rmdir lib/Parse/CPAN lib/Parse
-	-rmdir lib/PerlIO/via lib/PerlIO
-	-rmdir lib/Package lib/Params
-	-rmdir lib/Pod/Perldoc lib/Pod/Simple lib/Pod/Text
-	-rmdir lib/Sys lib/Scalar/Util lib/Scalar
-	-rmdir lib/Term/UI lib/Thread lib/Tie/Hash
-	-rmdir lib/Test/Builder/Tester lib/Test/Builder lib/Test
-	-rmdir lib/Unicode/Collate lib/version
-	-rmdir lib/XS/APItest lib/XS
-	-rmdir lib/inc/latest lib/inc
-	-rmdir lib/autodie/exception lib/autodie lib/encoding lib/threads
-	-rm -f lib/ExtUtils/CBuilder/t/libcompilet.dll.a
-	-rm -f lib/ExtUtils/ParseXS/t/libXSTest.dll.a
+	rm -f so_locations $(LIBPERL_NONSHR) $(MINIPERL_NONSHR)
+	-rmdir lib/version lib/threads lib/inc/latest lib/inc lib/encoding
+	-rmdir lib/autodie/exception lib/autodie lib/XS lib/Win32API lib/VMS
+	-rmdir lib/Unicode/Collate/Locale lib/Unicode/Collate/CJK
+	-rmdir lib/Unicode/Collate lib/Tie/Hash lib/Thread lib/Text
+	-rmdir lib/Test/Builder/Tester lib/Test/Builder lib/Test lib/Term
+	-rmdir lib/TAP/Parser/YAMLish lib/TAP/Parser/SourceHandler
+	-rmdir lib/TAP/Parser/Scheduler lib/TAP/Parser/Result
+	-rmdir lib/TAP/Parser/Iterator lib/TAP/Parser lib/TAP/Harness
+	-rmdir lib/TAP/Formatter/File lib/TAP/Formatter/Console
+	-rmdir lib/TAP/Formatter lib/TAP lib/Sys/Syslog lib/Sys lib/Search
+	-rmdir lib/Scalar lib/Pod/Text lib/Pod/Simple lib/Pod/Perldoc
+	-rmdir lib/PerlIO/via lib/PerlIO lib/Perl lib/Parse/CPAN lib/Parse
+	-rmdir lib/Params lib/Package lib/Net/FTP lib/Module/Load
+	-rmdir lib/Module/CoreList lib/Module/Build/Platform lib/Module/Build
+	-rmdir lib/Module lib/Memoize lib/Math/BigInt lib/Math/BigFloat
+	-rmdir lib/Math lib/MIME lib/Locale/Maketext lib/Locale/Codes
+	-rmdir lib/Locale lib/List/Util lib/List lib/JSON/PP lib/JSON lib/IPC
+	-rmdir lib/IO/Uncompress/Adapter lib/IO/Uncompress lib/IO/Socket
+	-rmdir lib/IO/Compress/Zlib lib/IO/Compress/Zip lib/IO/Compress/Gzip
+	-rmdir lib/IO/Compress/Base lib/IO/Compress/Adapter lib/IO/Compress
+	-rmdir lib/IO lib/I18N/LangTags lib/I18N lib/Hash/Util lib/Hash
+	-rmdir lib/HTTP lib/Filter/Util lib/Filter lib/File/Spec
+	-rmdir lib/ExtUtils/Typemaps lib/ExtUtils/ParseXS
+	-rmdir lib/ExtUtils/MakeMaker lib/ExtUtils/Liblist
+	-rmdir lib/ExtUtils/Constant lib/ExtUtils/Command
+	-rmdir lib/ExtUtils/CBuilder/Platform/Windows
+	-rmdir lib/ExtUtils/CBuilder/Platform lib/ExtUtils/CBuilder
+	-rmdir lib/Exporter lib/Encode/Unicode lib/Encode/MIME/Header
+	-rmdir lib/Encode/MIME lib/Encode/KR lib/Encode/JP lib/Encode/CN
+	-rmdir lib/Encode lib/Digest lib/Devel lib/Data lib/Config/Perl
+	-rmdir lib/Compress/Raw lib/Compress lib/Carp lib/CPAN/Meta
+	-rmdir lib/CPAN/LWP lib/CPAN/Kwalify lib/CPAN/HTTP lib/CPAN/FTP
+	-rmdir lib/CPAN/Exception lib/CPAN/API lib/CPAN lib/CGI lib/B
+	-rmdir lib/Attribute lib/Archive/Tar lib/Archive
+	-rmdir lib/App/Prove/State/Result lib/App/Prove/State lib/App/Prove
+	-rmdir lib/App
 
 _realcleaner:
 	@$(LDLIBPTH) $(MAKE) _cleaner1 CLEAN=distclean

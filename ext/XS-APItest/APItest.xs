@@ -3295,7 +3295,7 @@ CV* cv
   for ( i = PadnamelistMAX(pad_namelist); i >= 0; i-- ) {
     PADNAME* name = PadnamelistARRAY(pad_namelist)[i];
 
-    if (SvPOKp(name)) {
+    if (PadnameLEN(name)) {
         av_push(retav, newSVpadname(name));
     }
   }
@@ -3458,6 +3458,9 @@ sv_mortalcopy(SV *sv)
 	RETVAL = SvREFCNT_inc(sv_mortalcopy(sv));
     OUTPUT:
 	RETVAL
+
+SV *
+newRV(SV *sv)
 
 MODULE = XS::APItest PACKAGE = XS::APItest::AUTOLOADtest
 

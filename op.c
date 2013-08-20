@@ -925,6 +925,8 @@ S_cop_free(pTHX_ COP* cop)
     if (! specialWARN(cop->cop_warnings))
 	PerlMemShared_free(cop->cop_warnings);
     cophh_free(CopHINTHASH_get(cop));
+    if (PL_curcop == cop)
+       PL_curcop = NULL;
 }
 
 STATIC void
@@ -1751,17 +1753,8 @@ S_finalize_op(pTHX_ OP* o)
 	 * Despite being a "constant", the SV is written to,
 	 * for reference counts, sv_upgrade() etc. */
 	if (cSVOPo->op_sv) {
-	    const PADOFFSET ix = pad_alloc(OP_CONST, SVs_PADTMP);
-	    if (o->op_type != OP_METHOD_NAMED &&
-		(SvPADTMP(cSVOPo->op_sv) || SvPADMY(cSVOPo->op_sv)))
-	    {
-		/* If op_sv is already a PADTMP/MY then it is being used by
-		 * some pad, so make a copy. */
-		sv_setsv(PAD_SVl(ix),cSVOPo->op_sv);
-		if (!SvIsCOW(PAD_SVl(ix))) SvREADONLY_on(PAD_SVl(ix));
-		SvREFCNT_dec(cSVOPo->op_sv);
-	    }
-	    else if (o->op_type != OP_METHOD_NAMED
+	    const PADOFFSET ix = pad_alloc(OP_CONST, SVf_READONLY);
+	    if (o->op_type != OP_METHOD_NAMED
 		&& cSVOPo->op_sv == &PL_sv_undef) {
 		/* PL_sv_undef is hack - it's unsafe to store it in the
 		   AV that is the pad, because av_fetch treats values of
@@ -1775,7 +1768,6 @@ S_finalize_op(pTHX_ OP* o)
 	    }
 	    else {
 		SvREFCNT_dec(PAD_SVl(ix));
-		SvPADTMP_on(cSVOPo->op_sv);
 		PAD_SETSV(ix, cSVOPo->op_sv);
 		/* XXX I don't know how this isn't readonly already. */
 		if (!SvIsCOW(PAD_SVl(ix))) SvREADONLY_on(PAD_SVl(ix));
@@ -1799,8 +1791,8 @@ S_finalize_op(pTHX_ OP* o)
 
 	/* Make the CONST have a shared SV */
 	svp = cSVOPx_svp(((BINOP*)o)->op_last);
-	if ((!SvIsCOW(sv = *svp))
-	    && SvTYPE(sv) < SVt_PVMG && !SvROK(sv)) {
+	if ((!SvIsCOW_shared_hash(sv = *svp))
+	    && SvTYPE(sv) < SVt_PVMG && SvOK(sv) && !SvROK(sv)) {
 	    key = SvPV_const(sv, keylen);
 	    lexname = newSVpvn_share(key,
 		SvUTF8(sv) ? -(I32)keylen : (I32)keylen,
@@ -2892,7 +2884,6 @@ Perl_block_end(pTHX_ I32 floor, OP *seq)
     CALL_BLOCK_HOOKS(bhk_pre_end, &retval);
 
     LEAVE_SCOPE(floor);
-    CopHINTS_set(&PL_compiling, PL_hints);
     if (needblockscope)
 	PL_hints |= HINT_BLOCK_SCOPE; /* propagate out */
     o = pad_leavemy();
@@ -3311,6 +3302,7 @@ S_fold_constants(pTHX_ OP *o)
 	    SvREFCNT_inc_simple_void(sv);
 	    SvTEMP_off(sv);
 	}
+	else { assert(SvIMMORTAL(sv)); }
 	break;
     case 3:
 	/* Something tried to die.  Abandon constant folding.  */
@@ -3342,6 +3334,8 @@ S_fold_constants(pTHX_ OP *o)
     op_free(o);
 #endif
     assert(sv);
+    if (type == OP_STRINGIFY) SvPADTMP_off(sv);
+    else if (!SvIMMORTAL(sv)) SvPADTMP_on(sv);
     if (type == OP_RV2GV)
 	newop = newGVOP(OP_GV, 0, MUTABLE_GV(sv));
     else
@@ -3362,6 +3356,8 @@ S_gen_constant_list(pTHX_ OP *o)
     dVAR;
     OP *curop;
     const I32 oldtmps_floor = PL_tmps_floor;
+    SV **svp;
+    AV *av;
 
     list(o);
     if (PL_parser && PL_parser->error_count)
@@ -3384,7 +3380,11 @@ S_gen_constant_list(pTHX_ OP *o)
     o->op_flags |= OPf_PARENS;	/* and flatten \(1..2,3) */
     o->op_opt = 0;		/* needs to be revisited in rpeep() */
     curop = ((UNOP*)o)->op_first;
-    ((UNOP*)o)->op_first = newSVOP(OP_CONST, 0, SvREFCNT_inc_NN(*PL_stack_sp--));
+    av = (AV *)SvREFCNT_inc_NN(*PL_stack_sp--);
+    ((UNOP*)o)->op_first = newSVOP(OP_CONST, 0, (SV *)av);
+    if (AvFILLp(av) != -1)
+	for (svp = AvARRAY(av) + AvFILLp(av); svp >= AvARRAY(av); --svp)
+	    SvPADTMP_on(*svp);
 #ifdef PERL_MAD
     op_getmad(curop,o,'O');
 #else
@@ -4921,7 +4921,7 @@ Perl_newPADOP(pTHX_ I32 type, I32 flags, SV *sv)
     return CHECKOP(type, padop);
 }
 
-#endif /* !USE_ITHREADS */
+#endif /* USE_ITHREADS */
 
 /*
 =for apidoc Am|OP *|newGVOP|I32 type|I32 flags|GV *gv
@@ -5420,24 +5420,20 @@ S_aassign_common_vars(pTHX_ OP* o)
 		    return TRUE;
 	    }
 	    else if (curop->op_type == OP_PUSHRE) {
+		GV *const gv =
 #ifdef USE_ITHREADS
-		if (((PMOP*)curop)->op_pmreplrootu.op_pmtargetoff) {
-		    GV *const gv = MUTABLE_GV(PAD_SVl(((PMOP*)curop)->op_pmreplrootu.op_pmtargetoff));
-		    if (gv == PL_defgv
-			|| (int)GvASSIGN_GENERATION(gv) == PL_generation)
-			return TRUE;
-		    GvASSIGN_GENERATION_set(gv, PL_generation);
-		}
+		    ((PMOP*)curop)->op_pmreplrootu.op_pmtargetoff
+			? MUTABLE_GV(PAD_SVl(((PMOP*)curop)->op_pmreplrootu.op_pmtargetoff))
+			: NULL;
 #else
-		GV *const gv
-		    = ((PMOP*)curop)->op_pmreplrootu.op_pmtargetgv;
+		    ((PMOP*)curop)->op_pmreplrootu.op_pmtargetgv;
+#endif
 		if (gv) {
 		    if (gv == PL_defgv
 			|| (int)GvASSIGN_GENERATION(gv) == PL_generation)
 			return TRUE;
 		    GvASSIGN_GENERATION_set(gv, PL_generation);
 		}
-#endif
 	    }
 	    else
 		return TRUE;
@@ -5701,7 +5697,6 @@ Perl_newSTATEOP(pTHX_ I32 flags, char *label, OP *o)
 #ifdef NATIVE_HINTS
     cop->op_private |= NATIVE_HINTS;
 #endif
-    CopHINTS_set(&PL_compiling, CopHINTS_get(cop));
     cop->op_next = (OP*)cop;
 
     cop->cop_seq = seq;
@@ -6847,6 +6842,7 @@ Perl_cv_ckproto_len_flags(pTHX_ const CV *cv, const GV *gv, const char *p,
 }
 
 static void const_sv_xsub(pTHX_ CV* cv);
+static void const_av_xsub(pTHX_ CV* cv);
 
 /*
 
@@ -6865,37 +6861,32 @@ L<perlsub/"Constant Functions">.
 SV *
 Perl_cv_const_sv(pTHX_ const CV *const cv)
 {
+    SV *sv;
     PERL_UNUSED_CONTEXT;
     if (!cv)
 	return NULL;
     if (!(SvTYPE(cv) == SVt_PVCV || SvTYPE(cv) == SVt_PVFM))
 	return NULL;
+    sv = CvCONST(cv) ? MUTABLE_SV(CvXSUBANY(cv).any_ptr) : NULL;
+    if (sv && SvTYPE(sv) == SVt_PVAV) return NULL;
+    return sv;
+}
+
+SV *
+Perl_cv_const_sv_or_av(pTHX_ const CV * const cv)
+{
+    PERL_UNUSED_CONTEXT;
+    if (!cv)
+	return NULL;
+    assert (SvTYPE(cv) == SVt_PVCV || SvTYPE(cv) == SVt_PVFM);
     return CvCONST(cv) ? MUTABLE_SV(CvXSUBANY(cv).any_ptr) : NULL;
 }
 
 /* op_const_sv:  examine an optree to determine whether it's in-lineable.
- * Can be called in 3 ways:
- *
- * !cv
- * 	look for a single OP_CONST with attached value: return the value
- *
- * cv && CvCLONE(cv) && !CvCONST(cv)
- *
- * 	examine the clone prototype, and if contains only a single
- * 	OP_CONST referencing a pad const, or a single PADSV referencing
- * 	an outer lexical, return a non-zero value to indicate the CV is
- * 	a candidate for "constizing" at clone time
- *
- * cv && CvCONST(cv)
- *
- *	We have just cloned an anon prototype that was marked as a const
- *	candidate. Try to grab the current value, and in the case of
- *	PADSV, ignore it if it has multiple references. In this case we
- *	return a newly created *copy* of the value.
  */
 
 SV *
-Perl_op_const_sv(pTHX_ const OP *o, CV *cv)
+Perl_op_const_sv(pTHX_ const OP *o)
 {
     dVAR;
     SV *sv = NULL;
@@ -6928,27 +6919,6 @@ Perl_op_const_sv(pTHX_ const OP *o, CV *cv)
 	    return NULL;
 	if (type == OP_CONST && cSVOPo->op_sv)
 	    sv = cSVOPo->op_sv;
-	else if (cv && type == OP_CONST) {
-	    sv = PAD_BASE_SV(CvPADLIST(cv), o->op_targ);
-	    if (!sv)
-		return NULL;
-	}
-	else if (cv && type == OP_PADSV) {
-	    if (CvCONST(cv)) { /* newly cloned anon */
-		sv = PAD_BASE_SV(CvPADLIST(cv), o->op_targ);
-		/* the candidate should have 1 ref from this pad and 1 ref
-		 * from the parent */
-		if (!sv || SvREFCNT(sv) != 2)
-		    return NULL;
-		sv = newSVsv(sv);
-		SvREADONLY_on(sv);
-		return sv;
-	    }
-	    else {
-		if (PAD_COMPNAME_FLAGS(o->op_targ) & SVf_FAKE)
-		    sv = &PL_sv_undef; /* an arbitrary non-null value */
-	    }
-	}
 	else {
 	    return NULL;
 	}
@@ -7117,7 +7087,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	)
 	const_sv = NULL;
     else
-	const_sv = op_const_sv(block, NULL);
+	const_sv = op_const_sv(block);
 
     if (cv) {
         const bool exists = CvROOT(cv) || CvXSUB(cv);
@@ -7146,6 +7116,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     }
     if (const_sv) {
 	SvREFCNT_inc_simple_void_NN(const_sv);
+	SvFLAGS(const_sv) = (SvFLAGS(const_sv) & ~SVs_PADMY) | SVs_PADTMP;
 	if (cv) {
 	    assert(!CvROOT(cv) && !CvCONST(cv));
 	    cv_forget_slab(cv);
@@ -7287,12 +7258,6 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     /* now that optimizer has done its work, adjust pad values */
 
     pad_tidy(CvCLONE(cv) ? padtidy_SUBCLONE : padtidy_SUB);
-
-    if (CvCLONE(cv)) {
-	assert(!CvCONST(cv));
-	if (ps && !*ps && op_const_sv(block, cv))
-	    CvCONST_on(cv);
-    }
 
   attrs:
     if (attrs) {
@@ -7491,7 +7456,7 @@ Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 	)
 	const_sv = NULL;
     else
-	const_sv = op_const_sv(block, NULL);
+	const_sv = op_const_sv(block);
 
     if (cv) {
         const bool exists = CvROOT(cv) || CvXSUB(cv);
@@ -7516,6 +7481,7 @@ Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
     }
     if (const_sv) {
 	SvREFCNT_inc_simple_void_NN(const_sv);
+	SvFLAGS(const_sv) = (SvFLAGS(const_sv) & ~SVs_PADMY) | SVs_PADTMP;
 	if (cv) {
 	    assert(!CvROOT(cv) && !CvCONST(cv));
 	    cv_forget_slab(cv);
@@ -7651,12 +7617,6 @@ Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 
     pad_tidy(CvCLONE(cv) ? padtidy_SUBCLONE : padtidy_SUB);
 
-    if (CvCLONE(cv)) {
-	assert(!CvCONST(cv));
-	if (ps && !*ps && op_const_sv(block, cv))
-	    CvCONST_on(cv);
-    }
-
   attrs:
     if (attrs) {
 	/* Need to do a C<use attributes $stash_of_cv,\&cv,@attrs>. */
@@ -7731,7 +7691,6 @@ S_process_special_blocks(pTHX_ I32 floor, const char *const fullname,
 	    GvCV_set(gv,0);		/* cv has been hijacked */
 	    call_list(oldscope, PL_beginav);
 
-	    CopHINTS_set(&PL_compiling, PL_hints);
 	    LEAVE;
 	}
 	else
@@ -7816,12 +7775,7 @@ Perl_newCONSTSUB_flags(pTHX_ HV *stash, const char *name, STRLEN len,
 {
     dVAR;
     CV* cv;
-#ifdef USE_ITHREADS
     const char *const file = CopFILE(PL_curcop);
-#else
-    SV *const temp_sv = CopFILESV(PL_curcop);
-    const char *const file = temp_sv ? SvPV_nolen_const(temp_sv) : NULL;
-#endif
 
     ENTER;
 
@@ -7852,7 +7806,11 @@ Perl_newCONSTSUB_flags(pTHX_ HV *stash, const char *name, STRLEN len,
        and so doesn't get free()d.  (It's expected to be from the C pre-
        processor __FILE__ directive). But we need a dynamically allocated one,
        and we need it to get freed.  */
-    cv = newXS_len_flags(name, len, const_sv_xsub, file ? file : "", "",
+    cv = newXS_len_flags(name, len,
+			 sv && SvTYPE(sv) == SVt_PVAV
+			     ? const_av_xsub
+			     : const_sv_xsub,
+			 file ? file : "", "",
 			 &sv, XS_DYNAMIC_FILENAME | flags);
     CvXSUBANY(cv).any_ptr = SvREFCNT_inc_simple(sv);
     CvCONST_on(cv);
@@ -7951,13 +7909,19 @@ CV *
 Perl_newSTUB(pTHX_ GV *gv, bool fake)
 {
     CV *cv = MUTABLE_CV(newSV_type(SVt_PVCV));
+    GV *cvgv;
     PERL_ARGS_ASSERT_NEWSTUB;
     assert(!GvCVu(gv));
     GvCV_set(gv, cv);
     GvCVGEN(gv) = 0;
     if (!fake && HvENAME_HEK(GvSTASH(gv)))
 	gv_method_changed(gv);
-    CvGV_set(cv, gv);
+    if (SvFAKE(gv)) {
+	cvgv = gv_fetchsv((SV *)gv, GV_ADDMULTI, SVt_PVCV);
+	SvFAKE_off(cvgv);
+    }
+    else cvgv = gv;
+    CvGV_set(cv, cvgv);
     CvFILE_set_from_cop(cv, PL_curcop);
     CvSTASH_set(cv, PL_curstash);
     GvMULTI_on(gv);
@@ -8407,12 +8371,9 @@ Perl_ck_eval(pTHX_ OP *o)
     PL_hints |= HINT_BLOCK_SCOPE;
     if (o->op_flags & OPf_KIDS) {
 	SVOP * const kid = (SVOP*)cUNOPo->op_first;
+	assert(kid);
 
-	if (!kid) {
-	    o->op_flags &= ~OPf_KIDS;
-	    op_null(o);
-	}
-	else if (kid->op_type == OP_LINESEQ || kid->op_type == OP_STUB) {
+	if (kid->op_type == OP_LINESEQ || kid->op_type == OP_STUB) {
 	    LOGOP *enter;
 #ifdef PERL_MAD
 	    OP* const oldo = o;
@@ -8576,6 +8537,7 @@ Perl_ck_rvconst(pTHX_ OP *o)
 		Perl_croak(aTHX_ "Constant is not %s reference", badtype);
 	    return o;
 	}
+	if (SvTYPE(kidsv) == SVt_PVAV) return o;
 	if ((o->op_private & HINT_STRICT_REFS) && (kid->op_private & OPpCONST_BARE)) {
 	    const char *badthing;
 	    switch (o->op_type) {
@@ -9389,7 +9351,7 @@ Perl_ck_method(pTHX_ OP *o)
 	const char * const method = SvPVX_const(sv);
 	if (!(strchr(method, ':') || strchr(method, '\''))) {
 	    OP *cmop;
-	    if (!SvIsCOW(sv)) {
+	    if (!SvIsCOW_shared_hash(sv)) {
 		sv = newSVpvn_share(method, SvUTF8(sv) ? -(I32)SvCUR(sv) : (I32)SvCUR(sv), 0);
 	    }
 	    else {
@@ -10592,9 +10554,23 @@ Perl_ck_subr(pTHX_ OP *o)
 OP *
 Perl_ck_svconst(pTHX_ OP *o)
 {
+    SV * const sv = cSVOPo->op_sv;
     PERL_ARGS_ASSERT_CK_SVCONST;
     PERL_UNUSED_CONTEXT;
-    if (!SvIsCOW(cSVOPo->op_sv)) SvREADONLY_on(cSVOPo->op_sv);
+#ifdef PERL_OLD_COPY_ON_WRITE
+    if (SvIsCOW(sv)) sv_force_normal(sv);
+#elif defined(PERL_NEW_COPY_ON_WRITE)
+    /* Since the read-only flag may be used to protect a string buffer, we
+       cannot do copy-on-write with existing read-only scalars that are not
+       already copy-on-write scalars.  To allow $_ = "hello" to do COW with
+       that constant, mark the constant as COWable here, if it is not
+       already read-only. */
+    if (!SvREADONLY(sv) && !SvIsCOW(sv) && SvCANCOW(sv)) {
+	SvIsCOW_on(sv);
+	CowREFCNT(sv) = 0;
+    }
+#endif
+    SvREADONLY_on(sv);
     return o;
 }
 
@@ -11966,6 +11942,31 @@ const_sv_xsub(pTHX_ CV* cv)
     EXTEND(sp, 1);
     ST(0) = sv;
     XSRETURN(1);
+}
+
+static void
+const_av_xsub(pTHX_ CV* cv)
+{
+    dVAR;
+    dXSARGS;
+    AV * const av = MUTABLE_AV(XSANY.any_ptr);
+    SP -= items;
+    assert(av);
+#ifndef DEBUGGING
+    if (!av) {
+	XSRETURN(0);
+    }
+#endif
+    if (SvRMAGICAL(av))
+	Perl_croak(aTHX_ "Magical list constants are not supported");
+    if (GIMME_V != G_ARRAY) {
+	EXTEND(SP, 1);
+	ST(0) = newSViv((IV)AvFILLp(av)+1);
+	XSRETURN(1);
+    }
+    EXTEND(SP, AvFILLp(av)+1);
+    Copy(AvARRAY(av), &ST(0), AvFILLp(av)+1, SV *);
+    XSRETURN(AvFILLp(av)+1);
 }
 
 /*

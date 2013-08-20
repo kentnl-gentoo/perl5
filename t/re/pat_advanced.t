@@ -1,6 +1,6 @@
 #!./perl
 #
-# This is a home for regular expression tests that don't fit into
+# This is a home for regular expression tests that do not fit into
 # the format supported by re/regexp.t.  If you want to add a test
 # that does fit that format, add it to re/re_tests, not here.
 
@@ -1333,6 +1333,8 @@ sub run_tests {
         1 while /(a+b?)(*COMMIT)(?{$count++; push @res,$1})(*FAIL)/g;
         is($count, 1, "Expect 1 with (*COMMIT)");
         is("@res", "aaab", "Adjacent (*COMMIT) works as expected");
+
+	ok("1\n2a\n" !~ /^\d+(*COMMIT)\w+/m, "COMMIT and anchors");
     }
 
     {
@@ -2214,6 +2216,23 @@ EOP
             }
         }
         ok(! $failed, "Matched multi-char fold across EXACTFish node boundaries; if failed, was at count $failed");
+
+        # This tests that under /d matching that an 'ss' split across two
+        # parts of a node doesn't end up turning into something that matches
+        # \xDF unless it is in utf8.
+        $failed = 0;
+        $single = 'a';  # Is non-terminal multi-char fold char
+        for my $repeat (1 .. 300) {
+            my $string = $single x $repeat;
+            my $lhs = "$string\N{LATIN SMALL LETTER SHARP S}";
+            utf8::downgrade($lhs);
+            $string .= "s";
+            if ($lhs =~ m/${string}s/di) {
+                $failed = $repeat;
+                last;
+            }
+        }
+        ok(! $failed, "Matched multi-char fold 'ss' across EXACTF node boundaries; if failed, was at count $failed");
     }
 
     {
@@ -2221,6 +2240,15 @@ EOP
                       "1\n1",   # Both re's should match
                       "",
                       "get [:lower:] swash in first eval; test under /i in second");
+    }
+
+    {
+        #' RT #119075
+        local $@;
+        eval { /a{0}?/; };
+        ok(! $@,
+            "PCRE regression test: No 'Quantifier follows nothing in regex' warning");
+
     }
 
     #

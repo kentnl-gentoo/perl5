@@ -81,6 +81,12 @@
 #  define HvTOTALKEYS(hv)	HvKEYS(hv)
 #endif
 
+#ifdef SVf_IsCOW
+#  define SvTRULYREADONLY(sv)	SvREADONLY(sv)
+#else
+#  define SvTRULYREADONLY(sv)	(SvREADONLY(sv) && !SvIsCOW(sv))
+#endif
+
 #ifdef DEBUGME
 
 #ifndef DASSERT
@@ -885,6 +891,7 @@ static const char byteorderstr_56[] = {BYTEORDER_BYTES_56, 0};
 #ifdef HAS_HTONL
 #define WLEN(x)						\
   STMT_START {						\
+	ASSERT(sizeof(x) == sizeof(int), ("WLEN writing an int"));	\
 	if (cxt->netorder) {			\
 		int y = (int) htonl(x);		\
 		if (!cxt->fio)				\
@@ -1024,7 +1031,7 @@ static const char byteorderstr_56[] = {BYTEORDER_BYTES_56, 0};
  *
  * i should be true iff sv is immortal (ie PL_sv_yes, PL_sv_no or PL_sv_undef)
  */
-#define SEEN(y,c,i) 							\
+#define SEEN(y,stash,i)						\
   STMT_START {								\
 	if (!y)									\
 		return (SV *) 0;					\
@@ -1032,8 +1039,8 @@ static const char byteorderstr_56[] = {BYTEORDER_BYTES_56, 0};
 		return (SV *) 0;					\
 	TRACEME(("aseen(#%d) = 0x%"UVxf" (refcnt=%d)", cxt->tagnum-1, \
 		 PTR2UV(y), SvREFCNT(y)-1));		\
-	if (c)									\
-		BLESS((SV *) (y), c);				\
+	if (stash)								\
+		BLESS((SV *) (y), (HV *)(stash));			\
   } STMT_END
 
 /*
@@ -1041,12 +1048,10 @@ static const char byteorderstr_56[] = {BYTEORDER_BYTES_56, 0};
  * "A" magic is added before the sv_bless for overloaded classes, this avoids
  * an expensive call to S_reset_amagic in sv_bless.
  */
-#define BLESS(s,p) 							\
+#define BLESS(s,stash) 						\
   STMT_START {								\
 	SV *ref;								\
-	HV *stash;								\
-	TRACEME(("blessing 0x%"UVxf" in %s", PTR2UV(s), (p))); \
-	stash = gv_stashpv((p), GV_ADD);			\
+	TRACEME(("blessing 0x%"UVxf" in %s", PTR2UV(s), (HvNAME_get(stash)))); \
 	ref = newRV_noinc(s);					\
 	if (cxt->in_retrieve_overloaded && Gv_AMG(stash)) \
 	{ \
@@ -2193,9 +2198,13 @@ static int store_scalar(pTHX_ stcxt_t *cxt, SV *sv)
           string:
 
 #ifdef SvVOK
-            if (SvMAGICAL(sv) && (mg = mg_find(sv, 'V')))
+            if (SvMAGICAL(sv) && (mg = mg_find(sv, 'V'))) {
+                /* The macro passes this by address, not value, and a lot of
+                   called code assumes that it's 32 bits without checking.  */
+                const int len = mg->mg_len;
                 STORE_PV_LEN((const char *)mg->mg_ptr,
-                             mg->mg_len, SX_VSTRING, SX_LVSTRING);
+                             len, SX_VSTRING, SX_LVSTRING);
+            }
 #endif
 
             wlen = (I32) len; /* WLEN via STORE_SCALAR expects I32 */
@@ -2449,7 +2458,7 @@ static int store_hash(pTHX_ stcxt_t *cxt, HV *hv)
                         /* Implementation of restricted hashes isn't nicely
                            abstracted:  */
 			if ((hash_flags & SHV_RESTRICTED)
-			 && SvREADONLY(val) && !SvIsCOW(val)) {
+			 && SvTRULYREADONLY(val)) {
 				flags |= SHV_K_LOCKED;
 			}
 
@@ -2541,7 +2550,7 @@ static int store_hash(pTHX_ stcxt_t *cxt, HV *hv)
                            abstracted:  */
                         flags
                             = (((hash_flags & SHV_RESTRICTED)
-                                && SvREADONLY(val) && !SvIsCOW(val))
+                                && SvTRULYREADONLY(val))
                                              ? SHV_K_LOCKED : 0);
 
                         if (val == &PL_sv_placeholder) {
@@ -4049,6 +4058,7 @@ static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 	SV *sv;
 	SV *rv;
 	GV *attach;
+	HV *stash;
 	int obj_type;
 	int clone = cxt->optype & ST_CLONE;
 	char mtype = '\0';
@@ -4271,14 +4281,13 @@ static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 	}
 
 	/*
-	 * Bless the object and look up the STORABLE_thaw hook.
+	 * Look up the STORABLE_attach hook
 	 */
-
-	BLESS(sv, classname);
+	stash = gv_stashpv(classname, GV_ADD);
 
 	/* Handle attach case; again can't use pkg_can because it only
 	 * caches one method */
-	attach = gv_fetchmethod_autoload(SvSTASH(sv), "STORABLE_attach", FALSE);
+	attach = gv_fetchmethod_autoload(stash, "STORABLE_attach", FALSE);
 	if (attach && isGV(attach)) {
 	    SV* attached;
 	    SV* attach_hook = newRV((SV*) GvCV(attach));
@@ -4317,7 +4326,13 @@ static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 	    CROAK(("STORABLE_attach did not return a %s object", classname));
 	}
 
-	hook = pkg_can(aTHX_ cxt->hook, SvSTASH(sv), "STORABLE_thaw");
+	/*
+	 * Bless the object and look up the STORABLE_thaw hook.
+	 */
+
+	BLESS(sv, stash);
+
+	hook = pkg_can(aTHX_ cxt->hook, stash, "STORABLE_thaw");
 	if (!hook) {
 		/*
 		 * Hook not found.  Maybe they did not require the module where this
@@ -4458,6 +4473,7 @@ static SV *retrieve_ref(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *rv;
 	SV *sv;
+	HV *stash;
 
 	TRACEME(("retrieve_ref (#%d)", cxt->tagnum));
 
@@ -4471,7 +4487,11 @@ static SV *retrieve_ref(pTHX_ stcxt_t *cxt, const char *cname)
 	 */
 
 	rv = NEWSV(10002, 0);
-	SEEN(rv, cname, 0);		/* Will return if rv is null */
+	if (cname)
+		stash = gv_stashpv(cname, GV_ADD);
+	else
+		stash = 0;
+	SEEN(rv, stash, 0);				/* Will return if rv is null */
 	sv = retrieve(aTHX_ cxt, 0);	/* Retrieve <object> */
 	if (!sv)
 		return (SV *) 0;	/* Failed */
@@ -4550,7 +4570,8 @@ static SV *retrieve_overloaded(pTHX_ stcxt_t *cxt, const char *cname)
 	 */
 
 	rv = NEWSV(10002, 0);
-	SEEN(rv, cname, 0);		/* Will return if rv is null */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(rv, stash, 0);		/* Will return if rv is null */
 	cxt->in_retrieve_overloaded = 1; /* so sv_bless doesn't call S_reset_amagic */
 	sv = retrieve(aTHX_ cxt, 0);	/* Retrieve <object> */
 	cxt->in_retrieve_overloaded = 0;
@@ -4630,10 +4651,12 @@ static SV *retrieve_tied_array(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *tv;
 	SV *sv;
+	HV *stash;
 
 	TRACEME(("retrieve_tied_array (#%d)", cxt->tagnum));
 
 	tv = NEWSV(10002, 0);
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
 	SEEN(tv, cname, 0);			/* Will return if tv is null */
 	sv = retrieve(aTHX_ cxt, 0);		/* Retrieve <object> */
 	if (!sv)
@@ -4659,11 +4682,13 @@ static SV *retrieve_tied_hash(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *tv;
 	SV *sv;
+	HV *stash;
 
 	TRACEME(("retrieve_tied_hash (#%d)", cxt->tagnum));
 
 	tv = NEWSV(10002, 0);
-	SEEN(tv, cname, 0);			/* Will return if tv is null */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(tv, stash, 0);			/* Will return if tv is null */
 	sv = retrieve(aTHX_ cxt, 0);		/* Retrieve <object> */
 	if (!sv)
 		return (SV *) 0;		/* Failed */
@@ -4687,11 +4712,13 @@ static SV *retrieve_tied_scalar(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *tv;
 	SV *sv, *obj = NULL;
+	HV *stash;
 
 	TRACEME(("retrieve_tied_scalar (#%d)", cxt->tagnum));
 
 	tv = NEWSV(10002, 0);
-	SEEN(tv, cname, 0);			/* Will return if rv is null */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(tv, stash, 0);			/* Will return if rv is null */
 	sv = retrieve(aTHX_ cxt, 0);		/* Retrieve <object> */
 	if (!sv) {
 		return (SV *) 0;		/* Failed */
@@ -4724,11 +4751,13 @@ static SV *retrieve_tied_key(pTHX_ stcxt_t *cxt, const char *cname)
 	SV *tv;
 	SV *sv;
 	SV *key;
+	HV *stash;
 
 	TRACEME(("retrieve_tied_key (#%d)", cxt->tagnum));
 
 	tv = NEWSV(10002, 0);
-	SEEN(tv, cname, 0);			/* Will return if tv is null */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(tv, stash, 0);			/* Will return if tv is null */
 	sv = retrieve(aTHX_ cxt, 0);		/* Retrieve <object> */
 	if (!sv)
 		return (SV *) 0;		/* Failed */
@@ -4755,12 +4784,14 @@ static SV *retrieve_tied_idx(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *tv;
 	SV *sv;
+	HV *stash;
 	I32 idx;
 
 	TRACEME(("retrieve_tied_idx (#%d)", cxt->tagnum));
 
 	tv = NEWSV(10002, 0);
-	SEEN(tv, cname, 0);			/* Will return if tv is null */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(tv, stash, 0);			/* Will return if tv is null */
 	sv = retrieve(aTHX_ cxt, 0);		/* Retrieve <object> */
 	if (!sv)
 		return (SV *) 0;		/* Failed */
@@ -4788,6 +4819,7 @@ static SV *retrieve_lscalar(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	I32 len;
 	SV *sv;
+	HV *stash;
 
 	RLEN(len);
 	TRACEME(("retrieve_lscalar (#%d), len = %"IVdf, cxt->tagnum, (IV) len));
@@ -4797,7 +4829,8 @@ static SV *retrieve_lscalar(pTHX_ stcxt_t *cxt, const char *cname)
 	 */
 
 	sv = NEWSV(10002, len);
-	SEEN(sv, cname, 0);	/* Associate this new scalar with tag "tagnum" */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(sv, stash, 0);	/* Associate this new scalar with tag "tagnum" */
 
 	if (len ==  0) {
 	    sv_setpvn(sv, "", 0);
@@ -4839,6 +4872,7 @@ static SV *retrieve_scalar(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	int len;
 	SV *sv;
+	HV *stash;
 
 	GETMARK(len);
 	TRACEME(("retrieve_scalar (#%d), len = %d", cxt->tagnum, len));
@@ -4848,7 +4882,8 @@ static SV *retrieve_scalar(pTHX_ stcxt_t *cxt, const char *cname)
 	 */
 
 	sv = NEWSV(10002, len);
-	SEEN(sv, cname, 0);	/* Associate this new scalar with tag "tagnum" */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(sv, stash, 0);	/* Associate this new scalar with tag "tagnum" */
 
 	/*
 	 * WARNING: duplicates parts of sv_setpv and breaks SV data encapsulation.
@@ -5027,13 +5062,15 @@ static SV *retrieve_lvstring(pTHX_ stcxt_t *cxt, const char *cname)
 static SV *retrieve_integer(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *sv;
+	HV *stash;
 	IV iv;
 
 	TRACEME(("retrieve_integer (#%d)", cxt->tagnum));
 
 	READ(&iv, sizeof(iv));
 	sv = newSViv(iv);
-	SEEN(sv, cname, 0);	/* Associate this new scalar with tag "tagnum" */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(sv, stash, 0);	/* Associate this new scalar with tag "tagnum" */
 
 	TRACEME(("integer %"IVdf, iv));
 	TRACEME(("ok (retrieve_integer at 0x%"UVxf")", PTR2UV(sv)));
@@ -5050,6 +5087,7 @@ static SV *retrieve_integer(pTHX_ stcxt_t *cxt, const char *cname)
 static SV *retrieve_netint(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *sv;
+	HV *stash;
 	I32 iv;
 
 	TRACEME(("retrieve_netint (#%d)", cxt->tagnum));
@@ -5062,7 +5100,8 @@ static SV *retrieve_netint(pTHX_ stcxt_t *cxt, const char *cname)
 	sv = newSViv(iv);
 	TRACEME(("network integer (as-is) %d", iv));
 #endif
-	SEEN(sv, cname, 0);	/* Associate this new scalar with tag "tagnum" */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(sv, stash, 0);	/* Associate this new scalar with tag "tagnum" */
 
 	TRACEME(("ok (retrieve_netint at 0x%"UVxf")", PTR2UV(sv)));
 
@@ -5078,13 +5117,15 @@ static SV *retrieve_netint(pTHX_ stcxt_t *cxt, const char *cname)
 static SV *retrieve_double(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *sv;
+	HV *stash;
 	NV nv;
 
 	TRACEME(("retrieve_double (#%d)", cxt->tagnum));
 
 	READ(&nv, sizeof(nv));
 	sv = newSVnv(nv);
-	SEEN(sv, cname, 0);	/* Associate this new scalar with tag "tagnum" */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(sv, stash, 0);	/* Associate this new scalar with tag "tagnum" */
 
 	TRACEME(("double %"NVff, nv));
 	TRACEME(("ok (retrieve_double at 0x%"UVxf")", PTR2UV(sv)));
@@ -5101,6 +5142,7 @@ static SV *retrieve_double(pTHX_ stcxt_t *cxt, const char *cname)
 static SV *retrieve_byte(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *sv;
+	HV *stash;
 	int siv;
 	signed char tmp;	/* Workaround for AIX cc bug --H.Merijn Brand */
 
@@ -5110,7 +5152,8 @@ static SV *retrieve_byte(pTHX_ stcxt_t *cxt, const char *cname)
 	TRACEME(("small integer read as %d", (unsigned char) siv));
 	tmp = (unsigned char) siv - 128;
 	sv = newSViv(tmp);
-	SEEN(sv, cname, 0);	/* Associate this new scalar with tag "tagnum" */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(sv, stash, 0);	/* Associate this new scalar with tag "tagnum" */
 
 	TRACEME(("byte %d", tmp));
 	TRACEME(("ok (retrieve_byte at 0x%"UVxf")", PTR2UV(sv)));
@@ -5125,12 +5168,14 @@ static SV *retrieve_byte(pTHX_ stcxt_t *cxt, const char *cname)
  */
 static SV *retrieve_undef(pTHX_ stcxt_t *cxt, const char *cname)
 {
-	SV* sv;
+	SV *sv;
+	HV *stash;
 
 	TRACEME(("retrieve_undef"));
 
 	sv = newSV(0);
-	SEEN(sv, cname, 0);
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(sv, stash, 0);
 
 	return sv;
 }
@@ -5143,6 +5188,7 @@ static SV *retrieve_undef(pTHX_ stcxt_t *cxt, const char *cname)
 static SV *retrieve_sv_undef(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *sv = &PL_sv_undef;
+	HV *stash;
 
 	TRACEME(("retrieve_sv_undef"));
 
@@ -5152,7 +5198,8 @@ static SV *retrieve_sv_undef(pTHX_ stcxt_t *cxt, const char *cname)
 	if (cxt->where_is_undef == -1) {
 		cxt->where_is_undef = cxt->tagnum;
 	}
-	SEEN(sv, cname, 1);
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(sv, stash, 1);
 	return sv;
 }
 
@@ -5164,10 +5211,12 @@ static SV *retrieve_sv_undef(pTHX_ stcxt_t *cxt, const char *cname)
 static SV *retrieve_sv_yes(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *sv = &PL_sv_yes;
+	HV *stash;
 
 	TRACEME(("retrieve_sv_yes"));
 
-	SEEN(sv, cname, 1);
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(sv, stash, 1);
 	return sv;
 }
 
@@ -5179,10 +5228,12 @@ static SV *retrieve_sv_yes(pTHX_ stcxt_t *cxt, const char *cname)
 static SV *retrieve_sv_no(pTHX_ stcxt_t *cxt, const char *cname)
 {
 	SV *sv = &PL_sv_no;
+	HV *stash;
 
 	TRACEME(("retrieve_sv_no"));
 
-	SEEN(sv, cname, 1);
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(sv, stash, 1);
 	return sv;
 }
 
@@ -5201,6 +5252,7 @@ static SV *retrieve_array(pTHX_ stcxt_t *cxt, const char *cname)
 	I32 i;
 	AV *av;
 	SV *sv;
+	HV *stash;
 
 	TRACEME(("retrieve_array (#%d)", cxt->tagnum));
 
@@ -5211,7 +5263,8 @@ static SV *retrieve_array(pTHX_ stcxt_t *cxt, const char *cname)
 	RLEN(len);
 	TRACEME(("size = %d", len));
 	av = newAV();
-	SEEN(av, cname, 0);			/* Will return if array not allocated nicely */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(av, stash, 0);			/* Will return if array not allocated nicely */
 	if (len)
 		av_extend(av, len);
 	else
@@ -5253,6 +5306,7 @@ static SV *retrieve_hash(pTHX_ stcxt_t *cxt, const char *cname)
 	I32 i;
 	HV *hv;
 	SV *sv;
+	HV *stash;
 
 	TRACEME(("retrieve_hash (#%d)", cxt->tagnum));
 
@@ -5263,7 +5317,8 @@ static SV *retrieve_hash(pTHX_ stcxt_t *cxt, const char *cname)
 	RLEN(len);
 	TRACEME(("size = %d", len));
 	hv = newHV();
-	SEEN(hv, cname, 0);		/* Will return if table not allocated properly */
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(hv, stash, 0);		/* Will return if table not allocated properly */
 	if (len == 0)
 		return (SV *) hv;	/* No data follow if table empty */
 	hv_ksplit(hv, len + 1);		/* pre-extend hash to save multiple splits */
@@ -5328,6 +5383,7 @@ static SV *retrieve_flag_hash(pTHX_ stcxt_t *cxt, const char *cname)
     I32 i;
     HV *hv;
     SV *sv;
+    HV *stash;
     int hash_flags;
 
     GETMARK(hash_flags);
@@ -5350,7 +5406,8 @@ static SV *retrieve_flag_hash(pTHX_ stcxt_t *cxt, const char *cname)
     RLEN(len);
     TRACEME(("size = %d, flags = %d", len, hash_flags));
     hv = newHV();
-    SEEN(hv, cname, 0);		/* Will return if table not allocated properly */
+    stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+    SEEN(hv, stash, 0);		/* Will return if table not allocated properly */
     if (len == 0)
         return (SV *) hv;	/* No data follow if table empty */
     hv_ksplit(hv, len + 1);		/* pre-extend hash to save multiple splits */
@@ -5466,6 +5523,7 @@ static SV *retrieve_code(pTHX_ stcxt_t *cxt, const char *cname)
 	int type, count, tagnum;
 	SV *cv;
 	SV *sv, *text, *sub, *errsv;
+	HV *stash;
 
 	TRACEME(("retrieve_code (#%d)", cxt->tagnum));
 
@@ -5478,7 +5536,8 @@ static SV *retrieve_code(pTHX_ stcxt_t *cxt, const char *cname)
 	 */
 	tagnum = cxt->tagnum;
 	sv = newSViv(0);
-	SEEN(sv, cname, 0);
+	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
+	SEEN(sv, stash, 0);
 
 	/*
 	 * Retrieve the source of the code reference
@@ -6062,6 +6121,7 @@ first_time:		/* Will disappear when support for old format is dropped */
 	if (cxt->ver_major < 2) {
 		while ((type = GETCHAR()) != SX_STORED) {
 			I32 len;
+			HV* stash;
 			switch (type) {
 			case SX_CLASS:
 				GETMARK(len);			/* Length coded on a single char */
@@ -6077,7 +6137,8 @@ first_time:		/* Will disappear when support for old format is dropped */
 			if (len)
 				READ(kbuf, len);
 			kbuf[len] = '\0';			/* Mark string end */
-			BLESS(sv, kbuf);
+			stash = gv_stashpvn(kbuf, len, GV_ADD);
+			BLESS(sv, stash);
 		}
 	}
 

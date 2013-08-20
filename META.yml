@@ -4,7 +4,7 @@ author:
   - perl5-porters@perl.org
 build_requires: {}
 dynamic_config: 1
-generated_by: 'CPAN::Meta version 2.131560, CPAN::Meta::Converter version 2.131560'
+generated_by: 'CPAN::Meta version 2.132140, CPAN::Meta::Converter version 2.132140'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -32,7 +32,6 @@ no_index:
     - dist/ExtUtils-ParseXS
     - dist/Filter-Simple
     - dist/I18N-Collate
-    - dist/I18N-LangTags
     - dist/if
     - dist/IO/
     - dist/lib/
@@ -113,4 +112,4 @@ resources:
   homepage: http://www.perl.org/
   license: http://dev.perl.org/licenses/
   repository: http://perl5.git.perl.org/
-version: 5.019002
+version: 5.019003

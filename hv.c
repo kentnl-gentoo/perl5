@@ -1062,8 +1062,7 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 		Safefree(key);
 	    return NULL;
 	}
-	if (SvREADONLY(hv) && HeVAL(entry) && SvREADONLY(HeVAL(entry))
-	 && !SvIsCOW(HeVAL(entry))) {
+	if (SvREADONLY(hv) && HeVAL(entry) && SvREADONLY(HeVAL(entry))) {
 	    hv_notallowed(k_flags, key, klen,
 			    "Attempt to delete readonly key '%"SVf"' from"
 			    " a restricted hash");
@@ -1537,7 +1536,7 @@ Perl_hv_clear(pTHX_ HV *hv)
 		/* not already placeholder */
 		if (HeVAL(entry) != &PL_sv_placeholder) {
 		    if (HeVAL(entry)) {
-			if (SvREADONLY(HeVAL(entry)) && !SvIsCOW(HeVAL(entry))) {
+			if (SvREADONLY(HeVAL(entry))) {
 			    SV* const keysv = hv_iterkeysv(entry);
 			    Perl_croak_nocontext(
 				"Attempt to delete readonly key '%"SVf"' from a restricted hash",
@@ -2895,7 +2894,7 @@ S_share_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags)
     return HeKEY_hek(entry);
 }
 
-I32 *
+SSize_t *
 Perl_hv_placeholders_p(pTHX_ HV *hv)
 {
     dVAR;

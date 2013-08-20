@@ -367,6 +367,24 @@ typedef struct scan_data_t {
     struct regnode_charclass_class *start_class;
 } scan_data_t;
 
+/* The below is perhaps overboard, but this allows us to save a test at the
+ * expense of a mask.  This is because on both EBCDIC and ASCII machines, 'A'
+ * and 'a' differ by a single bit; the same with the upper and lower case of
+ * all other ASCII-range alphabetics.  On ASCII platforms, they are 32 apart;
+ * on EBCDIC, they are 64.  This uses an exclusive 'or' to find that bit and
+ * then inverts it to form a mask, with just a single 0, in the bit position
+ * where the upper- and lowercase differ.  XXX There are about 40 other
+ * instances in the Perl core where this micro-optimization could be used.
+ * Should decide if maintenance cost is worse, before changing those
+ *
+ * Returns a boolean as to whether or not 'v' is either a lowercase or
+ * uppercase instance of 'c', where 'c' is in [A-Za-z].  If 'c' is a
+ * compile-time constant, the generated code is better than some optimizing
+ * compilers figure out, amounting to a mask and test.  The results are
+ * meaningless if 'c' is not one of [A-Za-z] */
+#define isARG2_lower_or_UPPER_ARG1(c, v) \
+                              (((v) & ~('A' ^ 'a')) ==  ((c) & ~('A' ^ 'a')))
+
 /*
  * Forward declarations for pregcomp()'s friends.
  */
@@ -848,7 +866,7 @@ S_cl_init(const RExC_state_t *pRExC_state, struct regnode_charclass_class *cl)
 }
 
 /* These two functions currently do the exact same thing */
-#define cl_init_zero		S_cl_init
+#define cl_init_zero		cl_init
 
 /* 'AND' a given class with another one.  Can create false positives.  'cl'
  * should not be inverted.  'and_with->flags & ANYOF_CLASS' should be 0 if
@@ -2938,16 +2956,6 @@ S_join_exact(pTHX_ RExC_state_t *pRExC_state, regnode *scan, UV *min_subtract, b
              * have to find at least two characters for a multi-fold */
 	    const U8* upper = (OP(scan) == EXACTF) ? s_end : s_end -1;
 
-            /* The below is perhaps overboard, but this allows us to save a
-             * test each time through the loop at the expense of a mask.  This
-             * is because on both EBCDIC and ASCII machines, 'S' and 's' differ
-             * by a single bit.  On ASCII they are 32 apart; on EBCDIC, they
-             * are 64.  This uses an exclusive 'or' to find that bit and then
-             * inverts it to form a mask, with just a single 0, in the bit
-             * position where 'S' and 's' differ. */
-            const U8 S_or_s_mask = (U8) ~ ('S' ^ 's');
-            const U8 s_masked = 's' & S_or_s_mask;
-
 	    while (s < upper) {
                 int len = is_MULTI_CHAR_FOLD_latin1_safe(s, s_end);
                 if (! len) {    /* Not a multi-char fold. */
@@ -2960,8 +2968,8 @@ S_join_exact(pTHX_ RExC_state_t *pRExC_state, regnode *scan, UV *min_subtract, b
                 }
 
                 if (len == 2
-                    && ((*s & S_or_s_mask) == s_masked)
-                    && ((*(s+1) & S_or_s_mask) == s_masked))
+                    && isARG2_lower_or_UPPER_ARG1('s', *s)
+                    && isARG2_lower_or_UPPER_ARG1('s', *(s+1)))
                 {
 
                     /* EXACTF nodes need to know that the minimum length
@@ -6242,7 +6250,7 @@ reStudy:
 	     && data.last_start_min == 0 && data.last_end > 0
 	     && !RExC_seen_zerolen
 	     && !(RExC_seen & REG_SEEN_VERBARG)
-	     && (!(RExC_seen & REG_SEEN_GPOS) || (r->extflags & RXf_ANCH_GPOS)))
+	     && !((RExC_seen & REG_SEEN_GPOS) || (r->extflags & RXf_ANCH_GPOS)))
 	    r->extflags |= RXf_CHECK_ALL;
 	scan_commit(pRExC_state, &data,&minlen,0);
 
@@ -6339,9 +6347,7 @@ reStudy:
 	    r->check_offset_min = r->float_min_offset;
 	    r->check_offset_max = r->float_max_offset;
 	}
-	/* XXXX Currently intuiting is not compatible with ANCH_GPOS.
-	   This should be changed ASAP!  */
-	if ((r->check_substr || r->check_utf8) && !(r->extflags & RXf_ANCH_GPOS)) {
+	if ((r->check_substr || r->check_utf8) ) {
 	    r->extflags |= RXf_USE_INTUIT;
 	    if (SvTAIL(r->check_substr ? r->check_substr : r->check_utf8))
 		r->extflags |= RXf_INTUIT_TAIL;
@@ -6728,13 +6734,23 @@ Perl_reg_numbered_buff_fetch(pTHX_ REGEXP * const r, const I32 paren,
 
     PERL_ARGS_ASSERT_REG_NUMBERED_BUFF_FETCH;
         
-    if ( (    n == RX_BUFF_IDX_CARET_PREMATCH
+    if (      n == RX_BUFF_IDX_CARET_PREMATCH
            || n == RX_BUFF_IDX_CARET_FULLMATCH
            || n == RX_BUFF_IDX_CARET_POSTMATCH
-         )
-         && !(rx->extflags & RXf_PMf_KEEPCOPY)
-    )
-        goto ret_undef;
+       )
+    {
+        bool keepcopy = cBOOL(rx->extflags & RXf_PMf_KEEPCOPY);
+        if (!keepcopy) {
+            /* on something like
+             *    $r = qr/.../;
+             *    /$qr/p;
+             * the KEEPCOPY is set on the PMOP rather than the regex */
+            if (PL_curpm && r == PM_GETRE(PL_curpm))
+                 keepcopy = cBOOL(PL_curpm->op_pmflags & PMf_KEEPCOPY);
+        }
+        if (!keepcopy)
+            goto ret_undef;
+    }
 
     if (!rx->subbeg)
         goto ret_undef;
@@ -6840,13 +6856,27 @@ Perl_reg_numbered_buff_length(pTHX_ REGEXP * const r, const SV * const sv,
 
     PERL_ARGS_ASSERT_REG_NUMBERED_BUFF_LENGTH;
 
+    if (   paren == RX_BUFF_IDX_CARET_PREMATCH
+        || paren == RX_BUFF_IDX_CARET_FULLMATCH
+        || paren == RX_BUFF_IDX_CARET_POSTMATCH
+    )
+    {
+        bool keepcopy = cBOOL(rx->extflags & RXf_PMf_KEEPCOPY);
+        if (!keepcopy) {
+            /* on something like
+             *    $r = qr/.../;
+             *    /$qr/p;
+             * the KEEPCOPY is set on the PMOP rather than the regex */
+            if (PL_curpm && r == PM_GETRE(PL_curpm))
+                 keepcopy = cBOOL(PL_curpm->op_pmflags & PMf_KEEPCOPY);
+        }
+        if (!keepcopy)
+            goto warn_undef;
+    }
+
     /* Some of this code was originally in C<Perl_magic_len> in F<mg.c> */
     switch (paren) {
       case RX_BUFF_IDX_CARET_PREMATCH: /* ${^PREMATCH} */
-         if (!(rx->extflags & RXf_PMf_KEEPCOPY))
-            goto warn_undef;
-        /*FALLTHROUGH*/
-
       case RX_BUFF_IDX_PREMATCH:       /* $` */
         if (rx->offs[0].start != -1) {
 			i = rx->offs[0].start;
@@ -6859,8 +6889,6 @@ Perl_reg_numbered_buff_length(pTHX_ REGEXP * const r, const SV * const sv,
         return 0;
 
       case RX_BUFF_IDX_CARET_POSTMATCH: /* ${^POSTMATCH} */
-         if (!(rx->extflags & RXf_PMf_KEEPCOPY))
-            goto warn_undef;
       case RX_BUFF_IDX_POSTMATCH:       /* $' */
 	    if (rx->offs[0].end != -1) {
 			i = rx->sublen - rx->offs[0].end;
@@ -6872,13 +6900,7 @@ Perl_reg_numbered_buff_length(pTHX_ REGEXP * const r, const SV * const sv,
 	    }
         return 0;
 
-      case RX_BUFF_IDX_CARET_FULLMATCH: /* ${^MATCH} */
-         if (!(rx->extflags & RXf_PMf_KEEPCOPY))
-            goto warn_undef;
-        /*FALLTHROUGH*/
-
-      /* $& / ${^MATCH}, $1, $2, ... */
-      default:
+      default: /* $& / ${^MATCH}, $1, $2, ... */
 	    if (paren <= (I32)rx->nparens &&
             (s1 = rx->offs[paren].start) != -1 &&
             (t1 = rx->offs[paren].end) != -1)
@@ -7122,6 +7144,8 @@ S_invlist_set_len(pTHX_ SV* const invlist, const UV len, const bool offset)
 
     PERL_ARGS_ASSERT_INVLIST_SET_LEN;
 
+    assert(SvTYPE(invlist) == SVt_INVLIST);
+
     SvCUR_set(invlist,
               (len == 0)
                ? 0
@@ -7136,6 +7160,8 @@ S_get_invlist_previous_index_addr(pTHX_ SV* invlist)
      * */
 
     PERL_ARGS_ASSERT_GET_INVLIST_PREVIOUS_INDEX_ADDR;
+
+    assert(SvTYPE(invlist) == SVt_INVLIST);
 
     return &(((XINVLIST*) SvANY(invlist))->prev_index);
 }
@@ -7169,6 +7195,8 @@ S_invlist_max(pTHX_ SV* const invlist)
      * array, without having to realloc() */
 
     PERL_ARGS_ASSERT_INVLIST_MAX;
+
+    assert(SvTYPE(invlist) == SVt_INVLIST);
 
     /* Assumes worst case, in which the 0 element is not counted in the
      * inversion list, so subtracts 1 for that */
@@ -7270,6 +7298,8 @@ S_invlist_extend(pTHX_ SV* const invlist, const UV new_max)
 
     PERL_ARGS_ASSERT_INVLIST_EXTEND;
 
+    assert(SvTYPE(invlist) == SVt_INVLIST);
+
     /* Add one to account for the zero element at the beginning which may not
      * be counted by the calling parameters */
     SvGROW((SV *)invlist, TO_INTERNAL_SIZE(new_max + 1));
@@ -7279,6 +7309,8 @@ PERL_STATIC_INLINE void
 S_invlist_trim(pTHX_ SV* const invlist)
 {
     PERL_ARGS_ASSERT_INVLIST_TRIM;
+
+    assert(SvTYPE(invlist) == SVt_INVLIST);
 
     /* Change the length of the inversion list to how many entries it currently
      * has */
@@ -7826,7 +7858,7 @@ Perl__invlist_intersection_maybe_complement_2nd(pTHX_ SV* const a, SV* const b, 
     assert(a != b);
 
     /* Special case if either one is empty */
-    len_a = _invlist_len(a);
+    len_a = (a == NULL) ? 0 : _invlist_len(a);
     if ((len_a == 0) || ((len_b = _invlist_len(b)) == 0)) {
 
         if (len_a != 0 && complement_b) {
@@ -7836,11 +7868,11 @@ Perl__invlist_intersection_maybe_complement_2nd(pTHX_ SV* const a, SV* const b, 
              * must be every possible code point.  Thus the intersection is
              * simply 'a'. */
             if (*i != a) {
-                *i = invlist_clone(a);
-
                 if (*i == b) {
                     SvREFCNT_dec_NN(b);
                 }
+
+                *i = invlist_clone(a);
             }
             /* else *i is already 'a' */
             return;
@@ -8134,6 +8166,8 @@ S_get_invlist_iter_addr(pTHX_ SV* invlist)
 
     PERL_ARGS_ASSERT_GET_INVLIST_ITER_ADDR;
 
+    assert(SvTYPE(invlist) == SVt_INVLIST);
+
     return &(((XINVLIST*) SvANY(invlist))->iterator);
 }
 
@@ -8267,42 +8301,58 @@ Perl__invlist_contents(pTHX_ SV* const invlist)
 }
 #endif
 
-#ifdef PERL_ARGS_ASSERT__INVLIST_DUMP
+#ifndef PERL_IN_XSUB_RE
 void
-Perl__invlist_dump(pTHX_ SV* const invlist, const char * const header)
+Perl__invlist_dump(pTHX_ PerlIO *file, I32 level, const char * const indent, SV* const invlist)
 {
-    /* Dumps out the ranges in an inversion list.  The string 'header'
-     * if present is output on a line before the first range */
+    /* Designed to be called only by do_sv_dump().  Dumps out the ranges of the
+     * inversion list 'invlist' to 'file' at 'level'  Each line is prefixed by
+     * the string 'indent'.  The output looks like this:
+         [0] 0x000A .. 0x000D
+         [2] 0x0085
+         [4] 0x2028 .. 0x2029
+         [6] 0x3104 .. INFINITY
+     * This means that the first range of code points matched by the list are
+     * 0xA through 0xD; the second range contains only the single code point
+     * 0x85, etc.  An inversion list is an array of UVs.  Two array elements
+     * are used to define each range (except if the final range extends to
+     * infinity, only a single element is needed).  The array index of the
+     * first element for the corresponding range is given in brackets. */
 
     UV start, end;
+    STRLEN count = 0;
 
     PERL_ARGS_ASSERT__INVLIST_DUMP;
 
-    if (header && strlen(header)) {
-	PerlIO_printf(Perl_debug_log, "%s\n", header);
-    }
     if (invlist_is_iterating(invlist)) {
-        PerlIO_printf(Perl_debug_log, "Can't dump because is in middle of iterating\n");
+        Perl_dump_indent(aTHX_ level, file,
+             "%sCan't dump inversion list because is in middle of iterating\n",
+             indent);
         return;
     }
 
     invlist_iterinit(invlist);
     while (invlist_iternext(invlist, &start, &end)) {
 	if (end == UV_MAX) {
-	    PerlIO_printf(Perl_debug_log, "0x%04"UVXf" .. INFINITY\n", start);
+	    Perl_dump_indent(aTHX_ level, file,
+                                       "%s[%"UVuf"] 0x%04"UVXf" .. INFINITY\n",
+                                   indent, (UV)count, start);
 	}
 	else if (end != start) {
-	    PerlIO_printf(Perl_debug_log, "0x%04"UVXf" .. 0x%04"UVXf"\n",
-		                                 start,         end);
+	    Perl_dump_indent(aTHX_ level, file,
+                                    "%s[%"UVuf"] 0x%04"UVXf" .. 0x%04"UVXf"\n",
+		                indent, (UV)count, start,         end);
 	}
 	else {
-	    PerlIO_printf(Perl_debug_log, "0x%04"UVXf"\n", start);
+	    Perl_dump_indent(aTHX_ level, file, "%s[%"UVuf"] 0x%04"UVXf"\n",
+                                            indent, (UV)count, start);
 	}
+        count += 2;
     }
 }
 #endif
 
-#if 0
+#ifdef PERL_ARGS_ASSERT__INVLISTEQ
 bool
 S__invlistEQ(pTHX_ SV* const a, SV* const b, const bool complement_b)
 {
@@ -8344,7 +8394,6 @@ S__invlistEQ(pTHX_ SV* const a, SV* const b, const bool complement_b)
              * at the 0 that is always stored immediately before the array. */
             array_b--;
             len_b++;
-            array_b[0] = 0;
         }
     }
 
@@ -10703,7 +10752,7 @@ tryagain:
 
 	defchar: {
 	    STRLEN len = 0;
-	    UV ender;
+	    UV ender = 0;
 	    char *p;
 	    char *s;
 #define MAX_NODE_STRING_SIZE 127
@@ -10711,17 +10760,22 @@ tryagain:
 	    char *s0;
 	    U8 upper_parse = MAX_NODE_STRING_SIZE;
 	    STRLEN foldlen;
-            U8 node_type;
+            U8 node_type = compute_EXACTish(pRExC_state);
             bool next_is_quantifier;
             char * oldp = NULL;
+
+            /* We can convert EXACTF nodes to EXACTFU if they contain only
+             * characters that match identically regardless of the target
+             * string's UTF8ness.  The reason to do this is that EXACTF is not
+             * trie-able, EXACTFU is.  (We don't need to figure this out until
+             * pass 2) */
+            bool maybe_exactfu = node_type == EXACTF && PASS2;
 
             /* If a folding node contains only code points that don't
              * participate in folds, it can be changed into an EXACT node,
              * which allows the optimizer more things to look for */
             bool maybe_exact;
 
-	    ender = 0;
-            node_type = compute_EXACTish(pRExC_state);
 	    ret = reg_node(pRExC_state, node_type);
 
             /* In pass1, folded, we use a temporary buffer instead of the
@@ -10734,8 +10788,8 @@ tryagain:
 
             /* We do the EXACTFish to EXACT node only if folding, and not if in
              * locale, as whether a character folds or not isn't known until
-             * runtime */
-            maybe_exact = FOLD && ! LOC;
+             * runtime.  (And we don't need to figure this out until pass 2) */
+            maybe_exact = FOLD && ! LOC && PASS2;
 
 	    /* XXX The node can hold up to 255 bytes, yet this only goes to
              * 127.  I (khw) do not know why.  Keeping it somewhat less than
@@ -11049,8 +11103,23 @@ tryagain:
                         || (node_type == EXACTFU
                             && ender == LATIN_SMALL_LETTER_SHARP_S)))
                 {
+                    if (IS_IN_SOME_FOLD_L1(ender)) {
+                        maybe_exact = FALSE;
+
+                        /* See if the character's fold differs between /d and
+                         * /u.  This includes the multi-char fold SHARP S to
+                         * 'ss' */
+                        if (maybe_exactfu
+                            && (PL_fold[ender] != PL_fold_latin1[ender]
+                                || ender == LATIN_SMALL_LETTER_SHARP_S
+                                || (len > 0
+                                   && isARG2_lower_or_UPPER_ARG1('s', ender)
+                                   && isARG2_lower_or_UPPER_ARG1('s', *(s-1)))))
+                        {
+                            maybe_exactfu = FALSE;
+                        }
+                    }
                     *(s++) = (char) ender;
-                    maybe_exact &= ! IS_IN_SOME_FOLD_L1(ender);
                 }
                 else {  /* UTF */
 
@@ -11239,6 +11308,15 @@ tryagain:
                  * do any better */
                 if (len == 0) {
                     len = full_len;
+
+                    /* If the node ends in an 's' we make sure it stays EXACTF,
+                     * as if it turns into an EXACTFU, it could later get
+                     * joined with another 's' that would then wrongly match
+                     * the sharp s */
+                    if (maybe_exactfu && isARG2_lower_or_UPPER_ARG1('s', ender))
+                    {
+                        maybe_exactfu = FALSE;
+                    }
                 } else {
 
                     /* Here, the node does contain some characters that aren't
@@ -11297,12 +11375,19 @@ tryagain:
             if (len == 0) {
                 OP(ret) = NOTHING;
             }
-            else{
-
-                /* If 'maybe_exact' is still set here, means there are no
-                 * code points in the node that participate in folds */
-                if (FOLD && maybe_exact) {
-                    OP(ret) = EXACT;
+            else {
+                if (FOLD) {
+                    /* If 'maybe_exact' is still set here, means there are no
+                     * code points in the node that participate in folds;
+                     * similarly for 'maybe_exactfu' and code points that match
+                     * differently depending on UTF8ness of the target string
+                     * */
+                    if (maybe_exact) {
+                        OP(ret) = EXACT;
+                    }
+                    else if (maybe_exactfu) {
+                        OP(ret) = EXACTFU;
+                    }
                 }
                 alloc_maybe_populate_EXACT(pRExC_state, ret, flagp, len, ender);
             }
@@ -13874,8 +13959,6 @@ parseit:
 	    for (i = start; i <= (int) high; i++) {
 		if (! ANYOF_BITMAP_TEST(ret, i)) {
 		    ANYOF_BITMAP_SET(ret, i);
-		    prevvalue = value;
-		    value = i;
 		}
 	    }
 	}
@@ -14678,26 +14761,10 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
             )
         );
         if ( IS_ANYOF_TRIE(op) || trie->bitmap ) {
-            int i;
-            int rangestart = -1;
-            U8* bitmap = IS_ANYOF_TRIE(op) ? (U8*)ANYOF_BITMAP(o) : (U8*)TRIE_BITMAP(trie);
             sv_catpvs(sv, "[");
-            for (i = 0; i <= 256; i++) {
-                if (i < 256 && BITMAP_TEST(bitmap,i)) {
-                    if (rangestart == -1)
-                        rangestart = i;
-                } else if (rangestart != -1) {
-                    if (i <= rangestart + 3)
-                        for (; rangestart < i; rangestart++)
-                            put_byte(sv, rangestart);
-                    else {
-                        put_byte(sv, rangestart);
-                        sv_catpvs(sv, "-");
-                        put_byte(sv, i - 1);
-                    }
-                    rangestart = -1;
-                }
-            }
+            (void) put_latin1_charclass_innards(sv, IS_ANYOF_TRIE(op)
+                                                   ? ANYOF_BITMAP(o)
+                                                   : TRIE_BITMAP(trie));
             sv_catpvs(sv, "]");
         } 
 	 
@@ -14741,7 +14808,6 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
     } else if (k == LOGICAL)
 	Perl_sv_catpvf(aTHX_ sv, "[%d]", o->flags);	/* 2: embedded, otherwise 1 */
     else if (k == ANYOF) {
-	int i, rangestart = -1;
 	const U8 flags = ANYOF_FLAGS(o);
 	int do_sep = 0;
 
@@ -14755,32 +14821,19 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
 	    sv_catpvs(sv, "^");
 
 	/* output what the standard cp 0-255 bitmap matches */
-	for (i = 0; i <= 256; i++) {
-	    if (i < 256 && ANYOF_BITMAP_TEST(o,i)) {
-		if (rangestart == -1)
-		    rangestart = i;
-	    } else if (rangestart != -1) {
-		if (i <= rangestart + 3)
-		    for (; rangestart < i; rangestart++)
-			put_byte(sv, rangestart);
-		else {
-		    put_byte(sv, rangestart);
-		    sv_catpvs(sv, "-");
-		    put_byte(sv, i - 1);
-		}
-		do_sep = 1;
-		rangestart = -1;
-	    }
-	}
+        do_sep = put_latin1_charclass_innards(sv, ANYOF_BITMAP(o));
         
         EMIT_ANYOF_TEST_SEPARATOR(do_sep,sv,flags);
         /* output any special charclass tests (used entirely under use locale) */
-	if (ANYOF_CLASS_TEST_ANY_SET(o))
-	    for (i = 0; i < (int)(sizeof(anyofs)/sizeof(char*)); i++)
+	if (ANYOF_CLASS_TEST_ANY_SET(o)) {
+            int i;
+	    for (i = 0; i < (int)(sizeof(anyofs)/sizeof(char*)); i++) {
 		if (ANYOF_CLASS_TEST(o,i)) {
 		    sv_catpv(sv, anyofs[i]);
 		    do_sep = 1;
 		}
+            }
+        }
         
         EMIT_ANYOF_TEST_SEPARATOR(do_sep,sv,flags);
         
@@ -14791,91 +14844,62 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
         /* output information about the unicode matching */
 	if (flags & ANYOF_UNICODE_ALL)
 	    sv_catpvs(sv, "{unicode_all}");
-	else if (ANYOF_NONBITMAP(o))
-	    sv_catpvs(sv, "{unicode}");
-	if (flags & ANYOF_NONBITMAP_NON_UTF8)
-	    sv_catpvs(sv, "{outside bitmap}");
-
-	if (ANYOF_NONBITMAP(o)) {
-	    SV *lv; /* Set if there is something outside the bit map */
-	    SV * const sw = regclass_swash(prog, o, FALSE, &lv, NULL);
+	else if (ANYOF_NONBITMAP(o)) {
+            SV *lv; /* Set if there is something outside the bit map. */
+            SV * sw;
             bool byte_output = FALSE;   /* If something in the bitmap has been
                                            output */
 
+            if (flags & ANYOF_NONBITMAP_NON_UTF8) {
+                sv_catpvs(sv, "{outside bitmap}");
+            }
+            else {
+                sv_catpvs(sv, "{utf8}");
+            }
+
+            /* Get the stuff that wasn't in the bitmap */
+	    sw = regclass_swash(prog, o, FALSE, &lv, NULL);
 	    if (lv && lv != &PL_sv_undef) {
-		if (sw) {
-		    U8 s[UTF8_MAXBYTES_CASE+1];
+                char *s = savesvpv(lv);
+                char * const origs = s;
 
-		    for (i = 0; i <= 256; i++) { /* Look at chars in bitmap */
-			uvchr_to_utf8(s, i);
+                while (*s && *s != '\n')
+                    s++;
 
-			if (i < 256
-                            && ! ANYOF_BITMAP_TEST(o, i)    /* Don't duplicate
-                                                               things already
-                                                               output as part
-                                                               of the bitmap */
-                            && swash_fetch(sw, s, TRUE))
-                        {
-			    if (rangestart == -1)
-				rangestart = i;
-			} else if (rangestart != -1) {
-                            byte_output = TRUE;
-			    if (i <= rangestart + 3)
-				for (; rangestart < i; rangestart++) {
-				    put_byte(sv, rangestart);
-				}
-			    else {
-				put_byte(sv, rangestart);
-				sv_catpvs(sv, "-");
-				put_byte(sv, i-1);
-			    }
-			    rangestart = -1;
-			}
-		    }
-		}
+                if (*s == '\n') {
+                    const char * const t = ++s;
 
-		{
-		    char *s = savesvpv(lv);
-		    char * const origs = s;
+                    if (byte_output) {
+                        sv_catpvs(sv, " ");
+                    }
 
-		    while (*s && *s != '\n')
-			s++;
+                    while (*s) {
+                        if (*s == '\n') {
 
-		    if (*s == '\n') {
-			const char * const t = ++s;
-
-                        if (byte_output) {
-                            sv_catpvs(sv, " ");
+                            /* Truncate very long output */
+                            if (s - origs > 256) {
+                                Perl_sv_catpvf(aTHX_ sv,
+                                               "%.*s...",
+                                               (int) (s - origs - 1),
+                                               t);
+                                goto out_dump;
+                            }
+                            *s = ' ';
                         }
+                        else if (*s == '\t') {
+                            *s = '-';
+                        }
+                        s++;
+                    }
+                    if (s[-1] == ' ')
+                        s[-1] = 0;
 
-			while (*s) {
-			    if (*s == '\n') {
+                    sv_catpv(sv, t);
+                }
 
-                                /* Truncate very long output */
-				if (s - origs > 256) {
-				    Perl_sv_catpvf(aTHX_ sv,
-						   "%.*s...",
-					           (int) (s - origs - 1),
-						   t);
-				    goto out_dump;
-				}
-				*s = ' ';
-			    }
-			    else if (*s == '\t') {
-				*s = '-';
-			    }
-			    s++;
-			}
-			if (s[-1] == ' ')
-			    s[-1] = 0;
+            out_dump:
 
-			sv_catpv(sv, t);
-		    }
-
-		out_dump:
-
-		    Safefree(origs);
-		}
+                Safefree(origs);
 		SvREFCNT_dec_NN(lv);
 	    }
 	}
@@ -15272,7 +15296,6 @@ Perl_re_dup_guts(pTHX_ const REGEXP *sstr, REGEXP *dstr, CLONE_PARAMS *param)
 	       so we need to copy it locally.  */
     RX_WRAPPED(dstr) = SAVEPVN(RX_WRAPPED(sstr), SvCUR(sstr)+1);
     ret->mother_re   = NULL;
-    ret->gofs = 0;
 }
 #endif /* PERL_IN_XSUB_RE */
 
@@ -15505,12 +15528,17 @@ S_put_byte(pTHX_ SV *sv, int c)
 
        So the old condition can be simplified to !isPRINT(c)  */
     if (!isPRINT(c)) {
-	if (c < 256) {
-	    Perl_sv_catpvf(aTHX_ sv, "\\x%02x", c);
-	}
-	else {
-	    Perl_sv_catpvf(aTHX_ sv, "\\x{%x}", c);
-	}
+        switch (c) {
+            case '\r': Perl_sv_catpvf(aTHX_ sv, "\\r"); break;
+            case '\n': Perl_sv_catpvf(aTHX_ sv, "\\n"); break;
+            case '\t': Perl_sv_catpvf(aTHX_ sv, "\\t"); break;
+            case '\f': Perl_sv_catpvf(aTHX_ sv, "\\f"); break;
+            case '\a': Perl_sv_catpvf(aTHX_ sv, "\\a"); break;
+
+            default:
+                Perl_sv_catpvf(aTHX_ sv, "\\x{%x}", c);
+                break;
+        }
     }
     else {
 	const char string = c;
@@ -15520,6 +15548,63 @@ S_put_byte(pTHX_ SV *sv, int c)
     }
 }
 
+STATIC bool
+S_put_latin1_charclass_innards(pTHX_ SV *sv, char *bitmap)
+{
+    /* Appends to 'sv' a displayable version of the innards of the bracketed
+     * character class whose bitmap is 'bitmap';  Returns 'TRUE' if it actually
+     * output anything */
+
+    int i;
+    int rangestart = -1;
+    bool has_output_anything = FALSE;
+
+    PERL_ARGS_ASSERT_PUT_LATIN1_CHARCLASS_INNARDS;
+
+    for (i = 0; i <= 256; i++) {
+        if (i < 256 && BITMAP_TEST((U8 *) bitmap,i)) {
+            if (rangestart == -1)
+                rangestart = i;
+        } else if (rangestart != -1) {
+            int j = i - 1;
+            if (i <= rangestart + 3) {  /* Individual chars in short ranges */
+                for (; rangestart < i; rangestart++)
+                    put_byte(sv, rangestart);
+            }
+            else if (   j > 255
+                     || ! isALPHANUMERIC(rangestart)
+                     || ! isALPHANUMERIC(j)
+                     || isDIGIT(rangestart) != isDIGIT(j)
+                     || isUPPER(rangestart) != isUPPER(j)
+                     || isLOWER(rangestart) != isLOWER(j)
+
+                        /* This final test should get optimized out except
+                         * on EBCDIC platforms, where it causes ranges that
+                         * cross discontinuities like i/j to be shown as hex
+                         * instead of the misleading, e.g. H-K (since that
+                         * range includes more than H, I, J, K). */
+                     || (j - rangestart)
+                         != NATIVE_TO_ASCII(j) - NATIVE_TO_ASCII(rangestart))
+            {
+                Perl_sv_catpvf(aTHX_ sv, "\\x{%02x}-\\x{%02x}",
+                               rangestart,
+                               (j < 256) ? j : 255);
+            }
+            else { /* Here, the ends of the range are both digits, or both
+                      uppercase, or both lowercase; and there's no
+                      discontinuity in the range (which could happen on EBCDIC
+                      platforms) */
+                put_byte(sv, rangestart);
+                sv_catpvs(sv, "-");
+                put_byte(sv, j);
+            }
+            rangestart = -1;
+            has_output_anything = TRUE;
+        }
+    }
+
+    return has_output_anything;
+}
 
 #define CLEAR_OPTSTART \
     if (optstart) STMT_START { \

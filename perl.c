@@ -758,6 +758,7 @@ perl_destruct(pTHXx)
 	/* ensure comppad/curpad to refer to main's pad */
 	if (CvPADLIST(PL_main_cv)) {
 	    PAD_SET_CUR_NOSAVE(CvPADLIST(PL_main_cv), 1);
+	    PL_comppad_name = PadlistNAMES(CvPADLIST(PL_main_cv));
 	}
 	op_free(PL_main_root);
 	PL_main_root = NULL;
@@ -3213,13 +3214,16 @@ Perl_moreswitches(pTHX_ const char *s)
 	    PL_utf8cache = -1;
 	return s;
     case 'F':
+	PL_minus_a = TRUE;
 	PL_minus_F = TRUE;
+        PL_minus_n = TRUE;
 	PL_splitstr = ++s;
 	while (*s && !isSPACE(*s)) ++s;
 	PL_splitstr = savepvn(PL_splitstr, s - PL_splitstr);
 	return s;
     case 'a':
 	PL_minus_a = TRUE;
+        PL_minus_n = TRUE;
 	s++;
 	return s;
     case 'c':
@@ -4946,6 +4950,14 @@ void
 Perl_my_exit(pTHX_ U32 status)
 {
     dVAR;
+    if (PL_exit_flags & PERL_EXIT_ABORT) {
+	abort();
+    }
+    if (PL_exit_flags & PERL_EXIT_WARN) {
+	PL_exit_flags |= PERL_EXIT_ABORT; /* Protect against reentrant calls */
+	Perl_warn(aTHX_ "Unexpected exit %u", status);
+	PL_exit_flags &= ~PERL_EXIT_ABORT;
+    }
     switch (status) {
     case 0:
 	STATUS_ALL_SUCCESS;
@@ -5043,6 +5055,14 @@ Perl_my_failure_exit(pTHX)
 	    STATUS_UNIX_SET(255);
     }
 #endif
+    if (PL_exit_flags & PERL_EXIT_ABORT) {
+	abort();
+    }
+    if (PL_exit_flags & PERL_EXIT_WARN) {
+	PL_exit_flags |= PERL_EXIT_ABORT; /* Protect against reentrant calls */
+	Perl_warn(aTHX_ "Unexpected exit failure %u", PL_statusvalue);
+	PL_exit_flags &= ~PERL_EXIT_ABORT;
+    }
     my_exit_jump();
 }
 

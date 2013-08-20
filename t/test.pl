@@ -554,7 +554,7 @@ USE_OK
 #   prog     => one-liner (avoid quotes)
 #   progs    => [ multi-liner (avoid quotes) ]
 #   progfile => perl script
-#   stdin    => string to feed the stdin
+#   stdin    => string to feed the stdin (or undef to redirect from /dev/null)
 #   stderr   => redirect stderr to stdout
 #   args     => [ command-line arguments to the perl program ]
 #   verbose  => print the command line
@@ -637,6 +637,28 @@ sub _create_runperl { # Create the string to qx in runperl().
 	    $runperl = qq{$Perl -e 'print qq(} .
 		$args{stdin} . q{)' | } . $runperl;
 	}
+    } elsif (exists $args{stdin}) {
+        # Using the pipe construction above can cause fun on systems which use
+        # ksh as /bin/sh, as ksh does pipes differently (with one less process)
+        # With sh, for the command line 'perl -e 'print qq()' | perl -e ...'
+        # the sh process forks two children, which use exec to start the two
+        # perl processes. The parent shell process persists for the duration of
+        # the pipeline, and the second perl process starts with no children.
+        # With ksh (and zsh), the shell saves a process by forking a child for
+        # just the first perl process, and execing itself to start the second.
+        # This means that the second perl process starts with one child which
+        # it didn't create. This causes "fun" when if the tests assume that
+        # wait (or waitpid) will only return information about processes
+        # started within the test.
+        # They also cause fun on VMS, where the pipe implementation returns
+        # the exit code of the process at the front of the pipeline, not the
+        # end. This messes up any test using OPTION FATAL.
+        # Hence it's useful to have a way to make STDIN be at eof without
+        # needing a pipeline, so that the fork tests have a sane environment
+        # without these surprises.
+
+        # /dev/null appears to be surprisingly portable.
+        $runperl = $runperl . ($is_mswin ? ' <nul' : ' </dev/null');
     }
     if (defined $args{args}) {
 	$runperl = _quote_args($runperl, $args{args});
@@ -827,7 +849,7 @@ sub tempfile {
 	    return $try;
 	}
     }
-    die "Can't find temporary file name starting 'tmp$$'";
+    die "Can't find temporary file name starting \"tmp$$\"";
 }
 
 # This is the temporary file for _fresh_perl
@@ -848,16 +870,6 @@ sub _fresh_perl {
     $runperl_args->{stderr}     = 1 unless exists $runperl_args->{stderr};
 
     open TEST, ">$tmpfile" or die "Cannot open $tmpfile: $!";
-
-    # VMS adjustments
-    if( $is_vms ) {
-        $prog =~ s#/dev/null#NL:#;
-
-        # VMS file locking
-        $prog =~ s{if \(-e _ and -f _ and -r _\)}
-                  {if (-e _ and -f _)}
-    }
-
     print TEST $prog;
     close TEST or die "Cannot close $tmpfile: $!";
 
@@ -969,6 +981,68 @@ sub fresh_perl_like {
 # If the global variable $FATAL is true then OPTION fatal is the
 # default.
 
+sub _setup_one_file {
+    my $fh = shift;
+    # Store the filename as a program that started at line 0.
+    # Real files count lines starting at line 1.
+    my @these = (0, shift);
+    my ($lineno, $current);
+    while (<$fh>) {
+        if ($_ eq "########\n") {
+            if (defined $current) {
+                push @these, $lineno, $current;
+            }
+            undef $current;
+        } else {
+            if (!defined $current) {
+                $lineno = $.;
+            }
+            $current .= $_;
+        }
+    }
+    if (defined $current) {
+        push @these, $lineno, $current;
+    }
+    ((scalar @these) / 2 - 1, @these);
+}
+
+sub setup_multiple_progs {
+    my ($tests, @prgs);
+    foreach my $file (@_) {
+        next if $file =~ /(?:~|\.orig|,v)$/;
+        next if $file =~ /perlio$/ && !PerlIO::Layer->find('perlio');
+        next if -d $file;
+
+        open my $fh, '<', $file or die "Cannot open $file: $!\n" ;
+        my $found;
+        while (<$fh>) {
+            if (/^__END__/) {
+                ++$found;
+                last;
+            }
+        }
+        # This is an internal error, and should never happen. All bar one of
+        # the files had an __END__ marker to signal the end of their preamble,
+        # although for some it wasn't technically necessary as they have no
+        # tests. It might be possible to process files without an __END__ by
+        # seeking back to the start and treating the whole file as tests, but
+        # it's simpler and more reliable just to make the rule that all files
+        # must have __END__ in. This should never fail - a file without an
+        # __END__ should not have been checked in, because the regression tests
+        # would not have passed.
+        die "Could not find '__END__' in $file"
+            unless $found;
+
+        my ($t, @p) = _setup_one_file($fh, $file);
+        $tests += $t;
+        push @prgs, @p;
+
+        close $fh
+            or die "Cannot close $file: $!\n";
+    }
+    return ($tests, @prgs);
+}
+
 sub run_multiple_progs {
     my $up = shift;
     my @prgs;
@@ -977,18 +1051,31 @@ sub run_multiple_progs {
 	# pass in a list of "programs" to run
 	@prgs = @_;
     } else {
-	# The tests below t run in t and pass in a file handle.
-	my $fh = shift;
-	local $/;
-	@prgs = split "\n########\n", <$fh>;
+        # The tests below t run in t and pass in a file handle. In theory we
+        # can pass (caller)[1] as the second argument to report errors with
+        # the filename of our caller, as the handle is always DATA. However,
+        # line numbers in DATA count from the __END__ token, so will be wrong.
+        # Which is more confusing than not providing line numbers. So, for now,
+        # don't provide line numbers. No obvious clean solution - one hack
+        # would be to seek DATA back to the start and read to the __END__ token,
+        # but that feels almost like we should just open $0 instead.
+
+        # Not going to rely on undef in list assignment.
+        my $dummy;
+        ($dummy, @prgs) = _setup_one_file(shift);
     }
 
     my $tmpfile = tempfile();
 
+    my ($file, $line);
   PROGRAM:
-    for (@prgs){
-	unless (/\n/) {
-	    print "# From $_\n";
+    while (defined ($line = shift @prgs)) {
+        $_ = shift @prgs;
+        unless ($line) {
+            $file = $_;
+            if (defined $file) {
+                print "# From $file\n";
+            }
 	    next;
 	}
 	my $switch = "";
@@ -1059,7 +1146,8 @@ sub run_multiple_progs {
 	print $fh "\n#line 1\n";  # So the line numbers don't get messed up.
 	print $fh $prog,"\n";
 	close $fh or die "Cannot close $tmpfile: $!";
-	my $results = runperl( stderr => 1, progfile => $tmpfile, $up
+	my $results = runperl( stderr => 1, progfile => $tmpfile,
+			       stdin => undef, $up
 			       ? (switches => ["-I$up/lib", $switch], nolib => 1)
 			       : (switches => [$switch])
 			        );
@@ -1148,7 +1236,14 @@ sub run_multiple_progs {
 	    }
 	}
 
-	ok($ok, $name);
+        if (defined $file) {
+            _ok($ok, "at $file line $line", $name);
+        } else {
+            # We don't have file and line number data for the test, so report
+            # errors as coming from our caller.
+            local $Level = $Level + 1;
+            ok($ok, $name);
+        }
 
 	foreach (@temps) {
 	    unlink $_ if $_;

@@ -439,12 +439,12 @@ PP(pp_pos)
     }
     else {
 	    const MAGIC * const mg = mg_find_mglob(sv);
-	    if (mg && mg->mg_len >= 0) {
+	    if (mg && mg->mg_len != -1) {
 		dTARGET;
-		I32 i = mg->mg_len;
+		STRLEN i = mg->mg_len;
 		if (DO_UTF8(sv))
-		    sv_pos_b2u(sv, &i);
-		PUSHi(i);
+		    i = sv_pos_b2u_flags(sv, i, SV_GMAGIC|SV_CONST_RETURN);
+		PUSHu(i);
 		RETURN;
 	    }
 	    RETPUSHUNDEF;
@@ -1657,6 +1657,7 @@ PP(pp_repeat)
 	static const char* const oom_list_extend = "Out of memory during list extend";
 	const I32 items = SP - MARK;
 	const I32 max = items * count;
+	const U8 mod = PL_op->op_flags & OPf_MOD;
 
 	MEM_WRAP_CHECK_1(max, SV*, oom_list_extend);
 	/* Did the max computation overflow? */
@@ -1690,7 +1691,11 @@ PP(pp_repeat)
 		}
 #else
                if (*SP)
+                {
+                   if (mod && SvPADTMP(*SP) && !IS_PADGV(*SP))
+                       *SP = sv_mortalcopy(*SP);
 		   SvTEMP_off((*SP));
+		}
 #endif
 		SP--;
 	    }
@@ -3659,7 +3664,7 @@ PP(pp_ucfirst)
 
 	/* In a "use bytes" we don't treat the source as UTF-8, but, still want
 	 * the destination to retain that flag */
-	if (SvUTF8(source))
+	if (SvUTF8(source) && ! IN_BYTES)
 	    SvUTF8_on(dest);
 
 	if (!inplace) {	/* Finish the rest of the string, unchanged */
@@ -4773,6 +4778,7 @@ PP(pp_lslice)
     SV ** const firstlelem = PL_stack_base + POPMARK + 1;
     SV ** const firstrelem = lastlelem + 1;
     I32 is_something_there = FALSE;
+    const U8 mod = PL_op->op_flags & OPf_MOD;
 
     const I32 max = lastrelem - lastlelem;
     SV **lelem;
@@ -4804,6 +4810,8 @@ PP(pp_lslice)
 	    is_something_there = TRUE;
 	    if (!(*lelem = firstrelem[ix]))
 		*lelem = &PL_sv_undef;
+	    else if (mod && SvPADTMP(*lelem) && !IS_PADGV(*lelem))
+		*lelem = firstrelem[ix] = sv_mortalcopy(*lelem);
 	}
     }
     if (is_something_there)

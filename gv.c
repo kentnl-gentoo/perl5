@@ -154,7 +154,7 @@ Perl_gv_const_sv(pTHX_ GV *gv)
 
     if (SvTYPE(gv) == SVt_PVGV)
 	return cv_const_sv(GvCVu(gv));
-    return SvROK(gv) ? SvRV(gv) : NULL;
+    return SvROK(gv) && SvTYPE(SvRV(gv)) != SVt_PVAV ? SvRV(gv) : NULL;
 }
 
 GP *
@@ -165,7 +165,7 @@ Perl_newGP(pTHX_ GV *const gv)
     const char *file;
     STRLEN len;
 #ifndef USE_ITHREADS
-    SV * temp_sv;
+    GV *filegv;
 #endif
     dVAR;
 
@@ -176,13 +176,23 @@ Perl_newGP(pTHX_ GV *const gv)
     gp->gp_sv = newSV(0);
 #endif
 
-#ifdef USE_ITHREADS
+    /* PL_curcop should never be null here. */
+    assert(PL_curcop);
+    /* But for non-debugging builds play it safe */
     if (PL_curcop) {
 	gp->gp_line = CopLINE(PL_curcop); /* 0 otherwise Newxz */
+#ifdef USE_ITHREADS
 	if (CopFILE(PL_curcop)) {
 	    file = CopFILE(PL_curcop);
 	    len = strlen(file);
 	}
+#else
+	filegv = CopFILEGV(PL_curcop);
+	if (filegv) {
+	    file = GvNAME(filegv)+2;
+	    len = GvNAMELEN(filegv)-2;
+	}
+#endif
 	else goto no_file;
     }
     else {
@@ -190,18 +200,6 @@ Perl_newGP(pTHX_ GV *const gv)
 	file = "";
 	len = 0;
     }
-#else
-    if(PL_curcop)
-	gp->gp_line = CopLINE(PL_curcop); /* 0 otherwise Newxz */
-    temp_sv = CopFILESV(PL_curcop);
-    if (temp_sv) {
-	file = SvPVX(temp_sv);
-	len = SvCUR(temp_sv);
-    } else {
-	file = "";
-	len = 0;
-    }
-#endif
 
     PERL_HASH(hash, file, len);
     gp->gp_file_hek = share_hek(file, len, hash);
@@ -346,7 +344,6 @@ Perl_gv_init_pvn(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, U32 flag
     if (has_constant) {
 	/* The constant has to be a simple scalar type.  */
 	switch (SvTYPE(has_constant)) {
-	case SVt_PVAV:
 	case SVt_PVHV:
 	case SVt_PVCV:
 	case SVt_PVFM:
@@ -2075,7 +2072,7 @@ Perl_gv_efullname4(pTHX_ SV *sv, const GV *gv, const char *prefix, bool keepmain
 }
 
 void
-Perl_gv_check(pTHX_ const HV *stash)
+Perl_gv_check(pTHX_ HV *stash)
 {
     dVAR;
     I32 i;
@@ -2086,13 +2083,16 @@ Perl_gv_check(pTHX_ const HV *stash)
 	return;
     for (i = 0; i <= (I32) HvMAX(stash); i++) {
         const HE *entry;
+	/* SvIsCOW is unused on HVs, so we can use it to mark stashes we
+	   are currently searching through recursively.  */
+	SvIsCOW_on(stash);
 	for (entry = HvARRAY(stash)[i]; entry; entry = HeNEXT(entry)) {
             GV *gv;
             HV *hv;
 	    if (HeKEY(entry)[HeKLEN(entry)-1] == ':' &&
 		(gv = MUTABLE_GV(HeVAL(entry))) && isGV(gv) && (hv = GvHV(gv)))
 	    {
-		if (hv != PL_defstash && hv != stash)
+		if (hv != PL_defstash && hv != stash && !SvIsCOW(hv))
 		     gv_check(hv);              /* nested package */
 	    }
             else if ( *HeKEY(entry) != '_'
@@ -2116,6 +2116,7 @@ Perl_gv_check(pTHX_ const HV *stash)
                             HEKfARG(GvNAME_HEK(gv)));
 	    }
 	}
+	SvIsCOW_off(stash);
     }
 }
 

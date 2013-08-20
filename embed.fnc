@@ -185,6 +185,9 @@ Anop	|Free_t	|mfree		|Malloc_t where
 npR	|MEM_SIZE|malloced_size	|NN void *p
 npR	|MEM_SIZE|malloc_good_size	|size_t nbytes
 #endif
+#if defined(PERL_IN_MALLOC_C)
+sn	|int	|adjust_size_and_find_bucket	|NN size_t *nbytes_p
+#endif
 
 AnpR	|void*	|get_context
 Anp	|void	|set_context	|NN void *t
@@ -266,7 +269,6 @@ Anprd	|void	|croak_no_modify
 Anprd	|void	|croak_xs_usage	|NN const CV *const cv \
 				|NN const char *const params
 npr	|void	|croak_no_mem
-nroX	|void	|Perl_croak_memory_wrap
 nprX	|void	|croak_popstack
 #if defined(WIN32)
 norx	|void	|win32_croak_not_implemented|NN const char * fname
@@ -301,8 +303,9 @@ p	|void	|cv_ckproto_len_flags	|NN const CV* cv|NULLOK const GV* gv\
 : Used in pp.c and pp_sys.c
 ApdR	|SV*	|gv_const_sv	|NN GV* gv
 ApdR	|SV*	|cv_const_sv	|NULLOK const CV *const cv
+pR	|SV*	|cv_const_sv_or_av|NULLOK const CV *const cv
 : Used in pad.c
-pR	|SV*	|op_const_sv	|NULLOK const OP* o|NULLOK CV* cv
+pR	|SV*	|op_const_sv	|NULLOK const OP* o
 Apd	|void	|cv_undef	|NN CV* cv
 p	|void	|cv_forget_slab	|NN CV *cv
 Ap	|void	|cx_dump	|NN PERL_CONTEXT* cx
@@ -465,7 +468,7 @@ ApR	|GV*	|gv_autoload_pv	|NULLOK HV* stash|NN const char* namepv \
                                 |U32 flags
 ApR	|GV*	|gv_autoload_pvn	|NULLOK HV* stash|NN const char* name \
                                         |STRLEN len|U32 flags
-Ap	|void	|gv_check	|NN const HV* stash
+Ap	|void	|gv_check	|NN HV* stash
 Ap	|void	|gv_efullname	|NN SV* sv|NN const GV* gv
 Apmb	|void	|gv_efullname3	|NN SV* sv|NN const GV* gv|NULLOK const char* prefix
 Ap	|void	|gv_efullname4	|NN SV* sv|NN const GV* gv|NULLOK const char* prefix|bool keepmain
@@ -1127,7 +1130,6 @@ Ap	|I32	|regexec_flags	|NN REGEXP *const rx|NN char *stringarg \
 				|NN char *strend|NN char *strbeg|I32 minend \
 				|NN SV *sv|NULLOK void *data|U32 flags
 ApR	|regnode*|regnext	|NULLOK regnode* p
-
 EXp |SV*|reg_named_buff          |NN REGEXP * const rx|NULLOK SV * const key \
                                  |NULLOK SV * const value|const U32 flags
 EXp |SV*|reg_named_buff_iter     |NN REGEXP * const rx|NULLOK const SV * const lastkey \
@@ -1375,6 +1377,8 @@ Apd	|void	|sv_pos_u2b	|NULLOK SV *const sv|NN I32 *const offsetp|NULLOK I32 *con
 Apd	|STRLEN	|sv_pos_u2b_flags|NN SV *const sv|STRLEN uoffset \
 				|NULLOK STRLEN *const lenp|U32 flags
 Apd	|void	|sv_pos_b2u	|NULLOK SV *const sv|NN I32 *const offsetp
+Apd	|STRLEN	|sv_pos_b2u_flags|NN SV *const sv|STRLEN const offset \
+				 |U32 flags
 Amdb	|char*	|sv_pvn_force	|NN SV* sv|NULLOK STRLEN* lp
 Apd	|char*	|sv_pvutf8n_force|NN SV *const sv|NULLOK STRLEN *const lp
 Apd	|char*	|sv_pvbyten_force|NN SV *const sv|NULLOK STRLEN *const lp
@@ -1478,7 +1482,11 @@ EMiR	|bool	|_invlist_contains_cp|NN SV* const invlist|const UV cp
 EXpMR	|IV	|_invlist_search	|NN SV* const invlist|const UV cp
 EXMpR	|SV*	|_get_swash_invlist|NN SV* const swash
 EXMpR	|HV*	|_swash_inversion_hash	|NN SV* const swash
-: Not used currently: EXMp	|void	|_invlist_dump	|NN SV* const invlist|NN const char * const header
+#endif
+#if defined(PERL_IN_REGCOMP_C) || defined (PERL_IN_DUMP_C)
+EXMp	|void	|_invlist_dump	|NN PerlIO *file|I32 level   \
+				|NN const char* const indent \
+				|NN SV* const invlist
 #endif
 Ap	|void	|taint_env
 Ap	|void	|taint_proper	|NULLOK const char* f|NN const char *const s
@@ -1617,6 +1625,7 @@ Anpa	|Malloc_t|safesysmalloc	|MEM_SIZE nbytes
 Anpa	|Malloc_t|safesyscalloc	|MEM_SIZE elements|MEM_SIZE size
 Anpa	|Malloc_t|safesysrealloc|Malloc_t where|MEM_SIZE nbytes
 Anp	|Free_t	|safesysfree	|Malloc_t where
+Asrnx	|void	|croak_memory_wrap
 #if defined(PERL_GLOBAL_STRUCT)
 Ap	|struct perl_vars *|GetVars
 Ap	|struct perl_vars*|init_global_struct
@@ -2061,6 +2070,7 @@ Es	|const regnode*|dumpuntil|NN const regexp *r|NN const regnode *start \
 				|NULLOK const regnode *plast \
 				|NN SV* sv|I32 indent|U32 depth
 Es	|void	|put_byte	|NN SV* sv|int c
+Es	|bool	|put_latin1_charclass_innards|NN SV* sv|NN char* bitmap
 Es	|void	|dump_trie	|NN const struct _reg_trie_data *trie\
 				|NULLOK HV* widecharmap|NN AV *revcharmap\
 				|U32 depth
@@ -2147,7 +2157,9 @@ pX	|void	|sv_del_backref	|NN SV *const tsv|NN SV *const sv
 #if defined(PERL_IN_SV_C)
 nsR	|char *	|uiv_2buf	|NN char *const buf|const IV iv|UV uv|const int is_uv|NN char **const peob
 i	|void	|sv_unglob	|NN SV *const sv|U32 flags
+s	|const char *|sv_display	|NN SV *const sv|NN char *tmpbuf|STRLEN tmpbuf_size
 s	|void	|not_a_number	|NN SV *const sv
+s	|void	|not_incrementable	|NN SV *const sv
 s	|I32	|visit		|NN SVFUNC_t f|const U32 flags|const U32 mask
 #  ifdef DEBUGGING
 s	|void	|del_sv	|NN SV *p
@@ -2458,7 +2470,7 @@ poM	|AV**	|hv_backreferences_p	|NN HV *hv
 poM	|void	|hv_kill_backrefs	|NN HV *hv
 #endif
 Apd	|void	|hv_clear_placeholders	|NN HV *hv
-ApoR	|I32*	|hv_placeholders_p	|NN HV *hv
+XpoR	|SSize_t*|hv_placeholders_p	|NN HV *hv
 ApoR	|I32	|hv_placeholders_get	|NN const HV *hv
 Apo	|void	|hv_placeholders_set	|NN HV *hv|I32 ph
 

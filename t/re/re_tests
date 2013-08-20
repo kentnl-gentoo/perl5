@@ -1591,6 +1591,8 @@ ab[c\\\](??{"x"})]{3}d	ab\\](d	y	-	-
 
 /st/i	\x{DF}\x{FB05}	y	$&	\x{FB05}
 /ssst/i	\x{DF}\x{FB05}	y	$&	\x{DF}\x{FB05}
+/[s]s/i	\x{DF}	n	-	-
+/s[s]/i	\x{DF}	n	-	-
 
 # [perl #101970]
 /[[:lower:]]/i	\x{100}	y	$&	\x{100}
@@ -1763,4 +1765,25 @@ A+?(*THEN)BC(?{})	AAABC	y	$&	ABC
 A+?(*PRUNE)BC(?{})	AAABC	y	$&	ABC
 A+(*THEN)BC(?{})	AAABC	y	$&	AAABC
 A+(*PRUNE)BC(?{})	AAABC	y	$&	AAABC
+/[#]/	a#b	y	$&	#
+/[#]b/	a#b	y	$&	#b
+/[#]/x	a#b	y	$&	#
+/[#]b/x	a#b	y	$&	#b
+/[#](?{})/x	a#b	y	$&	#
+/[#](??{'b'})/x	a#b	y	$&	#b
+/(?#)(?{})b/	a#b	y	$&	b
+/(?#)(??{'b'})/	a#b	y	$&	b
+/[(?#](?{})b/	a#b	y	$&	#b
+/[(?#](??{'b'})/	a#b	y	$&	#b
+/(?#)(?{})b/x	a#b	y	$&	b
+/(?#)(??{'b'})/x	a#b	y	$&	b
+
+# RT #119069: PCRE regression test: no segfault
+^(?=(a)){0}b(?1)	back	y	$&	ba
+# RT #119071: PCRE regression test: No warning of infinite regression
+(?:(a(*SKIP)b)){0}(?:(?1)|ac)	x	n	-	-
+# RT #119073: PCRE regression test: {0} => NOTHING optimization
+(?1)(?:(b)){0}	b	y	$&	b
+
+# Keep these lines at the end of the file
 # vim: softtabstop=0 noexpandtab

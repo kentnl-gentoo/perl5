@@ -17,6 +17,21 @@ Consult your favorite dictionary for details.
 
 =head1 EPIGRAPHS
 
+=head2 v5.19.2 - Fred Brooks, "The Mythical Man-Month"
+
+L<Announced on 2013-07-22 by Aristotle Pagaltzis|http://www.nntp.perl.org/group/perl.perl5.porters/2013/07/msg204905.html>
+
+=over
+
+The magic of myth and legend has come true in our time. One types the
+correct incantation on a keyboard, and a display screen comes to life,
+showing things that never were nor could be. [...] Not all is delight,
+however [...] One must perform perfectly. The computer resembles the
+magic of legend in this respect, too. If one character, one pause, of
+the incantation is not strictly in proper form, the magic doesn't work.
+
+=back
+
 =head2 v5.19.1 - William Shakespeare, "A Midsummer Night's Dream"
 
 L<Announced on 2013-06-21 by David Golden|http://www.nntp.perl.org/group/perl.perl5.porters/2013/06/msg203449.html>
@@ -46,6 +61,34 @@ L<Announced on 2013-05-20 by Ricardo Signes|http://www.nntp.perl.org/group/perl.
   …that there was nothing wrong with you…
   …that I can't fix…
   …with my hands…
+
+=head2 v5.18.1 - Chuck Moore
+
+L<Announced on 2013-08-12 by Ricardo Signes|http://www.nntp.perl.org/group/perl.perl5.porters/2013/08/msg205897.html>
+
+The operating system is another concept that is curious. Operating
+systems are dauntingly complex and totally unnecessary. It’s a brilliant
+thing that Bill Gates has done in selling the world on the notion of
+operating systems. It’s probably the greatest con game the world has
+ever seen.
+
+An operating system does absolutely nothing for you. As long as you had
+something — a subroutine called disk driver, a subroutine called some
+kind of communication support, in the modern world, it doesn’t do
+anything else. In fact, Windows spends a lot of time with overlays and
+disk management all stuff like that which are irrelevant. You’ve got
+gigabyte disks; you’ve got megabyte RAMs. The world has changed in a way
+that renders the operating system unnecessary.
+
+=head2 v5.18.1-RC1 - Chuck Moore
+
+L<Announced on 2013-08-02 by Ricardo Signes|http://www.nntp.perl.org/group/perl.perl5.porters/2013/08/msg205445.html>
+
+Compilers are probably the worst code ever written. They are written by
+someone who has never written a compiler before and will never do so
+again.  The more elaborate the language, the more complex, bug-ridden,
+and unusable is the compiler. But a simple compiler for a simple
+language is an essential tool—if only for documentation.
 
 =head2 v5.18.0 - Yevgeny Zamyatin
 
@@ -182,7 +225,7 @@ fully my equal even if he fell away when he became the practising physician.
 I think ridiculous of certain professors of anatomy, who find it beneath
 them to pick up the knife themselves, but merely comment while hired hands
 do the cutting. Sylvius would never have dreamt of sitting on a dais reading
-from an authority while others cut E<0x2014> when he taught, the knife was
+from an authority while others cut — when he taught, the knife was
 in his hand and the blood spattered his coat. Boyle also did not scruple to
 perform his own experiments and, on one occasion in my presence, even showed
 himself willing to anatomise a rat with his very own hands. Nor was he less
@@ -833,7 +876,7 @@ reading a history of Australian politics in the twentieth century,
 wherein I encountered the startling fact that in 1967 the prime minister,
 Harold Holt, was strolling along a beach in Victoria when he plunged into
 the surf and vanished. No trace of the poor man was ever seen again.
-This seemed doubly astounding to meE<0x2014>first that Australia could
+This seemed doubly astounding to me—first that Australia could
 just I<lose> a prime minister (I mean, come on) and second that news of
 this had never reached me.
 
@@ -848,7 +891,8 @@ L<Announced on 2011-02-20 by Florian Ragwitz|http://www.xray.mpe.mpg.de/mailing-
       Nay he is mine alone;
   --Then the full-grown poet stood between the two, and took each
       by the hand;
-  And to-day and ever so stands, as blender, uniter, tightly holding hands,
+  And to-day and ever so stands, as blender, uniter, tightly
+      holding hands,
   Which he will never release until he reconciles the two,
   And wholly and joyously blends them.
 

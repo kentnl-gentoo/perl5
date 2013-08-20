@@ -31,11 +31,24 @@ sub do_test {
     my $todo = $_[3];
     my $repeat_todo = $_[4];
     my $pattern = $_[2];
+    my $do_eval = $_[5];
     if (open(OUT,">peek$$")) {
 	open(STDERR, ">&OUT") or die "Can't dup OUT: $!";
-	Dump($_[1]);
-        print STDERR "*****\n";
-        Dump($_[1]); # second dump to compare with the first to make sure nothing changed.
+        if ($do_eval) {
+            my $sub = eval "sub { Dump $_[1] }";
+            $sub->();
+            print STDERR "*****\n";
+            # second dump to compare with the first to make sure nothing
+            # changed.
+            $sub->();
+        }
+        else {
+            Dump($_[1]);
+            print STDERR "*****\n";
+            # second dump to compare with the first to make sure nothing
+            # changed.
+            Dump($_[1]);
+        }
 	open(STDERR, ">&SAVERR") or die "Can't restore STDERR: $!";
 	close(OUT);
 	if (open(IN, "peek$$")) {
@@ -73,6 +86,9 @@ sub do_test {
 	    $pattern =~ s/\$RV/
 		($] < 5.011) ? 'RV' : 'IV';
 	    /mge;
+	    $pattern =~ s/^\h+COW_REFCNT = \d+\h*\n//mg
+		if $Config{ccflags} =~
+			/-DPERL_(?:OLD_COPY_ON_WRITE|NO_COW)/;
 
 	    print $pattern, "\n" if $DEBUG;
 	    my ($dump, $dump2) = split m/\*\*\*\*\*\n/, scalar <IN>;
@@ -108,20 +124,23 @@ do_test('assignment of immediate constant (string)',
 	$a = "foo",
 'SV = PV\\($ADDR\\) at $ADDR
   REFCNT = 1
-  FLAGS = \\(POK,pPOK\\)
+  FLAGS = \\(POK,(?:IsCOW,)?pPOK\\)
   PV = $ADDR "foo"\\\0
   CUR = 3
-  LEN = \\d+'
-       );
+  LEN = \\d+
+  COW_REFCNT = 1				# $] >=5.019003
+');
 
 do_test('immediate constant (string)',
         "bar",
 'SV = PV\\($ADDR\\) at $ADDR
   REFCNT = 1
-  FLAGS = \\(.*POK,READONLY,pPOK\\)
+  FLAGS = \\(.*POK,READONLY,(?:IsCOW,)?pPOK\\)
   PV = $ADDR "bar"\\\0
   CUR = 3
-  LEN = \\d+');
+  LEN = \\d+
+  COW_REFCNT = 0				# $] >=5.019003
+');
 
 do_test('assignment of immediate constant (integer)',
         $b = 123,
@@ -153,13 +172,17 @@ my $type = do_test('result of addition',
         $c + $d,
 'SV = ([NI])V\\($ADDR\\) at $ADDR
   REFCNT = 1
-  FLAGS = \\(PADTMP,\1OK,p\1OK\\)
+  FLAGS = \\(PADTMP,\1OK,p\1OK\\)		# $] < 5.019003
+  FLAGS = \\(\1OK,p\1OK\\)			# $] >=5.019003
   \1V = 456');
 
 ($d = "789") += 0.1;
 
 do_test('floating point value',
        $d,
+       $] < 5.019003
+        || $Config{ccflags} =~ /-DPERL_(?:NO_COW|OLD_COPY_ON_WRITE)/
+       ?
 'SV = PVNV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(NOK,pNOK\\)
@@ -167,7 +190,14 @@ do_test('floating point value',
   NV = 789\\.(?:1(?:000+\d+)?|0999+\d+)
   PV = $ADDR "789"\\\0
   CUR = 3
-  LEN = \\d+');
+  LEN = \\d+'
+       :
+'SV = PVNV\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\(NOK,pNOK\\)
+  IV = \d+
+  NV = 789\\.(?:1(?:000+\d+)?|0999+\d+)
+  PV = 0');
 
 do_test('integer constant',
         0xabcd,
@@ -179,8 +209,8 @@ do_test('integer constant',
 do_test('undef',
         undef,
 'SV = NULL\\(0x0\\) at $ADDR
-  REFCNT = 1
-  FLAGS = \\(\\)');
+  REFCNT = \d+
+  FLAGS = \\(READONLY\\)');
 
 do_test('reference to scalar',
         \$a,
@@ -190,10 +220,12 @@ do_test('reference to scalar',
   RV = $ADDR
   SV = PV\\($ADDR\\) at $ADDR
     REFCNT = 2
-    FLAGS = \\(POK,pPOK\\)
+    FLAGS = \\(POK,(?:IsCOW,)?pPOK\\)
     PV = $ADDR "foo"\\\0
     CUR = 3
-    LEN = \\d+');
+    LEN = \\d+
+    COW_REFCNT = 1				# $] >=5.019003
+');
 
 my $c_pattern;
 if ($type eq 'N') {
@@ -316,6 +348,8 @@ do_test('reference to named subroutine without prototype',
        \\d+\\. $ADDR<\\d+> \\(\\d+,\\d+\\) "\\$todo"
        \\d+\\. $ADDR<\\d+> \\(\\d+,\\d+\\) "\\$repeat_todo"
        \\d+\\. $ADDR<\\d+> \\(\\d+,\\d+\\) "\\$pattern"
+       \\d+\\. $ADDR<\\d+> \\(\\d+,\\d+\\) "\\$do_eval"
+      \\d+\\. $ADDR<\\d+> \\(\\d+,\\d+\\) "\\$sub"
       \\d+\\. $ADDR<\\d+> FAKE "\\$DEBUG"			# $] < 5.009
       \\d+\\. $ADDR<\\d+> FAKE "\\$DEBUG" flags=0x0 index=0	# $] >= 5.009
       \\d+\\. $ADDR<\\d+> \\(\\d+,\\d+\\) "\\$dump"
@@ -354,7 +388,35 @@ do_test('reference to regexp',
     SUBCOFFSET = 0
     SUBBEG = 0x0
     ENGINE = $ADDR
-    MOTHER_RE = $ADDR
+    MOTHER_RE = $ADDR'
+. ($] < 5.019003 ? '' : '
+    SV = REGEXP\($ADDR\) at $ADDR
+      REFCNT = 2
+      FLAGS = \(\)
+      PV = $ADDR "\(\?\^:tic\)"
+      CUR = 8
+      COMPFLAGS = 0x0 \(\)
+      EXTFLAGS = 0x680000 \(CHECK_ALL,USE_INTUIT_NOML,USE_INTUIT_ML\)
+      INTFLAGS = 0x0
+      NPARENS = 0
+      LASTPAREN = 0
+      LASTCLOSEPAREN = 0
+      MINLEN = 3
+      MINLENRET = 3
+      GOFS = 0
+      PRE_PREFIX = 4
+      SUBLEN = 0
+      SUBOFFSET = 0
+      SUBCOFFSET = 0
+      SUBBEG = 0x0
+      ENGINE = $ADDR
+      MOTHER_RE = 0x0
+      PAREN_NAMES = 0x0
+      SUBSTRS = $ADDR
+      PPRIVATE = $ADDR
+      OFFS = $ADDR
+      QR_ANONCV = 0x0(?:
+      SAVED_COPY = 0x0)?') . '
     PAREN_NAMES = 0x0
     SUBSTRS = $ADDR
     PPRIVATE = $ADDR
@@ -442,19 +504,25 @@ do_test('string with Unicode',
 	chr(256).chr(0).chr(512),
 'SV = PV\\($ADDR\\) at $ADDR
   REFCNT = 1
-  FLAGS = \\((?:$PADTMP,)?POK,READONLY,pPOK,UTF8\\)
+  FLAGS = \\((?:$PADTMP,)?POK,READONLY,pPOK,UTF8\\)	# $] < 5.019003
+  FLAGS = \\((?:$PADTMP,)?POK,(?:IsCOW,)?pPOK,UTF8\\)	# $] >=5.019003
   PV = $ADDR "\\\214\\\101\\\0\\\235\\\101"\\\0 \[UTF8 "\\\x\{100\}\\\x\{0\}\\\x\{200\}"\]
   CUR = 5
-  LEN = \\d+');
+  LEN = \\d+
+  COW_REFCNT = 1					# $] >=5.019003
+');
 } else {
 do_test('string with Unicode',
 	chr(256).chr(0).chr(512),
 'SV = PV\\($ADDR\\) at $ADDR
   REFCNT = 1
-  FLAGS = \\((?:$PADTMP,)?POK,READONLY,pPOK,UTF8\\)
+  FLAGS = \\((?:$PADTMP,)?POK,READONLY,pPOK,UTF8\\)	# $] < 5.019003
+  FLAGS = \\((?:$PADTMP,)?POK,(?:IsCOW,)?pPOK,UTF8\\)	# $] >=5.019003
   PV = $ADDR "\\\304\\\200\\\0\\\310\\\200"\\\0 \[UTF8 "\\\x\{100\}\\\x\{0\}\\\x\{200\}"\]
   CUR = 5
-  LEN = \\d+');
+  LEN = \\d+
+  COW_REFCNT = 1					# $] >=5.019003
+');
 }
 
 if (ord('A') == 193) {
@@ -477,10 +545,12 @@ do_test('reference to hash containing Unicode',
     Elt "\\\214\\\101" \[UTF8 "\\\x\{100\}"\] HASH = $ADDR
     SV = PV\\($ADDR\\) at $ADDR
       REFCNT = 1
-      FLAGS = \\(POK,pPOK,UTF8\\)
+      FLAGS = \\(POK,(?:IsCOW,)?pPOK,UTF8\\)
       PV = $ADDR "\\\235\\\101"\\\0 \[UTF8 "\\\x\{200\}"\]
       CUR = 2
-      LEN = \\d+',
+      LEN = \\d+
+      COW_REFCNT = 1				# $] < 5.009
+',      '',
 	$] > 5.009
 	? $] >= 5.015
 	    ?  0
@@ -506,10 +576,12 @@ do_test('reference to hash containing Unicode',
     Elt "\\\304\\\200" \[UTF8 "\\\x\{100\}"\] HASH = $ADDR
     SV = PV\\($ADDR\\) at $ADDR
       REFCNT = 1
-      FLAGS = \\(POK,pPOK,UTF8\\)
+      FLAGS = \\(POK,(?:IsCOW,)?pPOK,UTF8\\)
       PV = $ADDR "\\\310\\\200"\\\0 \[UTF8 "\\\x\{200\}"\]
       CUR = 2
-      LEN = \\d+', '',
+      LEN = \\d+
+      COW_REFCNT = 1				# $] >= 5.019003
+',      '',
 	$] > 5.009
 	? $] >= 5.015
 	    ?  0
@@ -528,8 +600,8 @@ do_test('scalar with pos magic',
   NV = 0
   PV = $ADDR ""\\\0
   CUR = 0
-  LEN = \d+(?:
-  COW_REFCNT = 1)?
+  LEN = \d+
+  COW_REFCNT = [12]
   MAGIC = $ADDR
     MG_VIRTUAL = &PL_vtbl_mglob
     MG_TYPE = PERL_MAGIC_regex_global\\(g\\)
@@ -618,10 +690,11 @@ do_test('constant subroutine',
     XSUBANY = $ADDR \\(CONST SV\\)
     SV = PV\\($ADDR\\) at $ADDR
       REFCNT = 1
-      FLAGS = \\(.*POK,READONLY,pPOK\\)
+      FLAGS = \\(.*POK,READONLY,(?:IsCOW,)?pPOK\\)
       PV = $ADDR "Perl rules"\\\0
       CUR = 10
       LEN = \\d+
+      COW_REFCNT = 0				# $] >=5.019003
     GVGV::GV = $ADDR\\t"main" :: "const"
     FILE = ".*\\b(?i:peek\\.t)"
     DEPTH = 0(?:
@@ -816,10 +889,11 @@ do_test('small hash',
 (?:    Elt "(?:Perl|Beer)" HASH = $ADDR
     SV = PV\\($ADDR\\) at $ADDR
       REFCNT = 1
-      FLAGS = \\(POK,pPOK\\)
+      FLAGS = \\(POK,(?:IsCOW,)?pPOK\\)
       PV = $ADDR "(?:Rules|Foamy)"\\\0
       CUR = \d+
       LEN = \d+
+      COW_REFCNT = 1				# $] >=5.019003
 ){2}');
 
 $b = keys %small;
@@ -846,10 +920,11 @@ do_test('small hash after keys',
 (?:    Elt "(?:Perl|Beer)" HASH = $ADDR
     SV = PV\\($ADDR\\) at $ADDR
       REFCNT = 1
-      FLAGS = \\(POK,pPOK\\)
+      FLAGS = \\(POK,(?:IsCOW,)?pPOK\\)
       PV = $ADDR "(?:Rules|Foamy)"\\\0
       CUR = \d+
       LEN = \d+
+      COW_REFCNT = 1				# $] >=5.019003
 ){2}');
 
 $b = %small;
@@ -876,10 +951,11 @@ do_test('small hash after keys and scalar',
 (?:    Elt "(?:Perl|Beer)" HASH = $ADDR
     SV = PV\\($ADDR\\) at $ADDR
       REFCNT = 1
-      FLAGS = \\(POK,pPOK\\)
+      FLAGS = \\(POK,(?:IsCOW,)?pPOK\\)
       PV = $ADDR "(?:Rules|Foamy)"\\\0
       CUR = \d+
       LEN = \d+
+      COW_REFCNT = 1				# $] >=5.019003
 ){2}');
 
 # This should immediately start with the FILL cached correctly.
@@ -907,12 +983,67 @@ do_test('large hash',
     Elt .*
 ');
 
+# Dump with arrays, hashes, and operator return values
+@array = 1..3;
+do_test('Dump @array', '@array', <<'ARRAY', '', '', 1);
+SV = PVAV\($ADDR\) at $ADDR
+  REFCNT = 1
+  FLAGS = \(\)
+  ARRAY = $ADDR
+  FILL = 2
+  MAX = 3
+  ARYLEN = 0x0
+  FLAGS = \(REAL\)
+  Elt No. 0
+  SV = IV\($ADDR\) at $ADDR
+    REFCNT = 1
+    FLAGS = \(IOK,pIOK\)
+    IV = 1
+  Elt No. 1
+  SV = IV\($ADDR\) at $ADDR
+    REFCNT = 1
+    FLAGS = \(IOK,pIOK\)
+    IV = 2
+  Elt No. 2
+  SV = IV\($ADDR\) at $ADDR
+    REFCNT = 1
+    FLAGS = \(IOK,pIOK\)
+    IV = 3
+ARRAY
+%hash = 1..2;
+do_test('Dump %hash', '%hash', <<'HASH', '', '', 1);
+SV = PVHV\($ADDR\) at $ADDR
+  REFCNT = 1
+  FLAGS = \(SHAREKEYS\)
+  ARRAY = $ADDR  \(0:7, 1:1\)
+  hash quality = 100.0%
+  KEYS = 1
+  FILL = 1
+  MAX = 7
+  Elt "1" HASH = $ADDR
+  SV = IV\($ADDR\) at $ADDR
+    REFCNT = 1
+    FLAGS = \(IOK,pIOK\)
+    IV = 2
+HASH
+$_ = "hello";
+do_test('rvalue substr', 'substr $_, 1, 2', <<'SUBSTR', '', '', 1);
+SV = PV\($ADDR\) at $ADDR
+  REFCNT = 1
+  FLAGS = \(PADTMP,POK,pPOK\)
+  PV = $ADDR "el"\\0
+  CUR = 2
+  LEN = \d+
+SUBSTR
+
 SKIP: {
-    skip "Not built with usemymalloc", 1
+    skip "Not built with usemymalloc", 2
       unless $Config{usemymalloc} eq 'y';
     my $x = __PACKAGE__;
     ok eval { fill_mstats($x); 1 }, 'fill_mstats on COW scalar'
      or diag $@;
+    my $y;
+    ok eval { fill_mstats($y); 1 }, 'fill_mstats on undef scalar';
 }
 
 # This is more a test of fbm_compile/pp_study (non) interaction than dumping
@@ -931,10 +1062,11 @@ unless ($Config{useithreads}) {
     do_test('regular string constant', perl,
 'SV = PV\\($ADDR\\) at $ADDR
   REFCNT = 5
-  FLAGS = \\(PADMY,POK,READONLY,pPOK\\)
+  FLAGS = \\(PADMY,POK,READONLY,(?:IsCOW,)?pPOK\\)
   PV = $ADDR "rules"\\\0
   CUR = 5
   LEN = \d+
+  COW_REFCNT = 0				# $] >=5.019003
 ');
 
     eval 'index "", perl';
@@ -946,10 +1078,11 @@ unless ($Config{useithreads}) {
     do_test('string constant now an FBM', perl,
 'SV = PVMG\\($ADDR\\) at $ADDR
   REFCNT = 5
-  FLAGS = \\(PADMY,SMG,POK,READONLY,pPOK,VALID,EVALED\\)
+  FLAGS = \\(PADMY,SMG,POK,READONLY,(?:IsCOW,)?pPOK,VALID,EVALED\\)
   PV = $ADDR "rules"\\\0
   CUR = 5
   LEN = \d+
+  COW_REFCNT = 0				# $] >=5.019003
   MAGIC = $ADDR
     MG_VIRTUAL = &PL_vtbl_regexp
     MG_TYPE = PERL_MAGIC_bm\\(B\\)
@@ -965,10 +1098,11 @@ unless ($Config{useithreads}) {
     do_test('string constant still an FBM', perl,
 'SV = PVMG\\($ADDR\\) at $ADDR
   REFCNT = 5
-  FLAGS = \\(PADMY,SMG,POK,READONLY,pPOK,VALID,EVALED\\)
+  FLAGS = \\(PADMY,SMG,POK,READONLY,(?:IsCOW,)?pPOK,VALID,EVALED\\)
   PV = $ADDR "rules"\\\0
   CUR = 5
   LEN = \d+
+  COW_REFCNT = 0				# $] >=5.019003
   MAGIC = $ADDR
     MG_VIRTUAL = &PL_vtbl_regexp
     MG_TYPE = PERL_MAGIC_bm\\(B\\)
@@ -982,28 +1116,31 @@ unless ($Config{useithreads}) {
     do_test('regular string constant', beer,
 'SV = PV\\($ADDR\\) at $ADDR
   REFCNT = 6
-  FLAGS = \\(PADMY,POK,READONLY,pPOK\\)
+  FLAGS = \\(PADMY,POK,READONLY,(?:IsCOW,)?pPOK\\)
   PV = $ADDR "foamy"\\\0
   CUR = 5
   LEN = \d+
+  COW_REFCNT = 0				# $] >=5.019003
 ');
 
     is(study beer, 1, "Our studies were successful");
 
     do_test('string constant quite unaffected', beer, 'SV = PV\\($ADDR\\) at $ADDR
   REFCNT = 6
-  FLAGS = \\(PADMY,POK,READONLY,pPOK\\)
+  FLAGS = \\(PADMY,POK,READONLY,(?:IsCOW,)?pPOK\\)
   PV = $ADDR "foamy"\\\0
   CUR = 5
   LEN = \d+
+  COW_REFCNT = 0				# $] >=5.019003
 ');
 
     my $want = 'SV = PVMG\\($ADDR\\) at $ADDR
   REFCNT = 6
-  FLAGS = \\(PADMY,SMG,POK,READONLY,pPOK,VALID,EVALED\\)
+  FLAGS = \\(PADMY,SMG,POK,READONLY,(?:IsCOW,)?pPOK,VALID,EVALED\\)
   PV = $ADDR "foamy"\\\0
   CUR = 5
   LEN = \d+
+  COW_REFCNT = 0				# $] >=5.019003
   MAGIC = $ADDR
     MG_VIRTUAL = &PL_vtbl_regexp
     MG_TYPE = PERL_MAGIC_bm\\(B\\)
@@ -1026,10 +1163,11 @@ unless ($Config{useithreads}) {
 
     do_test('second string also unaffected', $pie, 'SV = PV\\($ADDR\\) at $ADDR
   REFCNT = 1
-  FLAGS = \\(PADMY,POK,pPOK\\)
+  FLAGS = \\(PADMY,POK,(?:IsCOW,)?pPOK\\)
   PV = $ADDR "good"\\\0
   CUR = 4
-  LEN = \d+
+  LEN = \d+(?:
+  COW_REFCNT = 1)?
 ');
 }
 
@@ -1071,7 +1209,35 @@ do_test('UTF-8 in a regular expression',
     SUBCOFFSET = 0
     SUBBEG = 0x0
     ENGINE = $ADDR
-    MOTHER_RE = $ADDR
+    MOTHER_RE = $ADDR'
+. ($] < 5.019003 ? '' : '
+    SV = REGEXP\($ADDR\) at $ADDR
+      REFCNT = 2
+      FLAGS = \(UTF8\)
+      PV = $ADDR "\(\?\^u:\\\\\\\\x\{100\}\)" \[UTF8 "\(\?\^u:\\\\\\\\x\{100\}\)"\]
+      CUR = 13
+      COMPFLAGS = 0x0 \(\)
+      EXTFLAGS = 0x680040 \(CHECK_ALL,USE_INTUIT_NOML,USE_INTUIT_ML\)
+      INTFLAGS = 0x0
+      NPARENS = 0
+      LASTPAREN = 0
+      LASTCLOSEPAREN = 0
+      MINLEN = 1
+      MINLENRET = 1
+      GOFS = 0
+      PRE_PREFIX = 5
+      SUBLEN = 0
+      SUBOFFSET = 0
+      SUBCOFFSET = 0
+      SUBBEG = 0x0
+      ENGINE = $ADDR
+      MOTHER_RE = 0x0
+      PAREN_NAMES = 0x0
+      SUBSTRS = $ADDR
+      PPRIVATE = $ADDR
+      OFFS = $ADDR
+      QR_ANONCV = 0x0(?:
+      SAVED_COPY = 0x0)?') . '
     PAREN_NAMES = 0x0
     SUBSTRS = $ADDR
     PPRIVATE = $ADDR
@@ -1079,5 +1245,12 @@ do_test('UTF-8 in a regular expression',
     QR_ANONCV = 0x0(?:
     SAVED_COPY = 0x0)?
 ');
+
+{ # perl #117793: Extend SvREFCNT* to work on any perl variable type
+  my %hash;
+  my $base_count = Devel::Peek::SvREFCNT(%hash);
+  my $ref = \%hash;
+  is(Devel::Peek::SvREFCNT(%hash), $base_count + 1, "SvREFCNT on non-scalar");
+}
 
 done_testing();

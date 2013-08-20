@@ -155,7 +155,10 @@ use File::Glob qw(:case);
 # If the file in blead matches the file in the tarball from CPAN,
 # Porting/core-cpan-diff will warn about it, as it indicates an expected
 # customization might have been lost when updating from upstream.  The
-# path should be relative to the distribution directory.
+# path should be relative to the distribution directory.  If the upstream
+# distribution should be modified to incorporate the change then be sure
+# to raise a ticket for it on rt.cpan.org and add a comment alongside the
+# list of CUSTOMIZED files noting the ticket number.
 
 # DEPRECATED contains the *first* version of Perl in which the module
 # was considered deprecated.  It should only be present if the module is
@@ -203,7 +206,6 @@ use File::Glob qw(:case);
         'MAINTAINER'   => 'kane',
         'DISTRIBUTION' => 'BINGOS/Archive-Tar-1.92.tar.gz',
         'FILES'        => q[cpan/Archive-Tar],
-        'EXCLUDED'     => ['Makefile.PL'],
         'UPSTREAM'     => 'cpan',
         'BUGS'         => 'bug-archive-tar@rt.cpan.org',
     },
@@ -351,7 +353,7 @@ use File::Glob qw(:case);
 
     'Compress::Raw::Bzip2' => {
         'MAINTAINER'   => 'pmqs',
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.061.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.062.tar.gz',
         'FILES'        => q[cpan/Compress-Raw-Bzip2],
         'EXCLUDED'     => [
             qr{^t/Test/},
@@ -362,7 +364,7 @@ use File::Glob qw(:case);
 
     'Compress::Raw::Zlib' => {
         'MAINTAINER'   => 'pmqs',
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.061.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.062.tar.gz',
 
         'FILES'    => q[cpan/Compress-Raw-Zlib],
         'EXCLUDED' => [
@@ -376,7 +378,7 @@ use File::Glob qw(:case);
 
     'Config::Perl::V' => {
         'MAINTAINER'   => 'hmbrand',
-        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.18.tgz',
+        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.19.tgz',
         'FILES'        => q[cpan/Config-Perl-V],
         'EXCLUDED'     => ['examples/show-v.pl'],
         'UPSTREAM'     => 'cpan',
@@ -406,7 +408,6 @@ use File::Glob qw(:case);
             qr{^inc/Test/},
             qr{^t/CPAN/authors/},
             qw( lib/CPAN/Admin.pm
-                Makefile.PL
                 scripts/cpan-mirrors
                 SlayMakefile
                 t/00signature.t
@@ -446,9 +447,11 @@ use File::Glob qw(:case);
         'UPSTREAM' => 'cpan',
     },
 
+    # Note: When updating CPAN-Meta the META.* files will need to be regenerated
+    # perl -Icpan/CPAN-Meta/lib Porting/makemeta
     'CPAN::Meta' => {
         'MAINTAINER'   => 'dagolden',
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.131560.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.132140.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta],
         'EXCLUDED'     => [
             qw(t/00-compile.t),
@@ -526,10 +529,10 @@ use File::Glob qw(:case);
 
     'Devel::PPPort' => {
         'MAINTAINER'   => 'mhx',
-        'DISTRIBUTION' => 'MHX/Devel-PPPort-3.20.tar.gz',
+        'DISTRIBUTION' => 'MHX/Devel-PPPort-3.21.tar.gz',
         'FILES'        => q[cpan/Devel-PPPort],
-        'EXCLUDED' => ['PPPort.pm'],    # we use PPPort_pm.PL instead
-        'UPSTREAM' => 'undef', # rjbs has asked mhx to have blead be upstream
+        'EXCLUDED'     => ['PPPort.pm'],    # we use PPPort_pm.PL instead
+        'UPSTREAM'     => undef, # rjbs has asked mhx to have blead be upstream
     },
 
     'diagnostics' => {
@@ -589,7 +592,7 @@ use File::Glob qw(:case);
 
     'Encode' => {
         'MAINTAINER'   => 'dankogai',
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.51.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.52.tar.gz',
         'FILES'        => q[cpan/Encode],
         'UPSTREAM'     => 'cpan',
     },
@@ -600,13 +603,7 @@ use File::Glob qw(:case);
         'FILES'        => q[cpan/encoding-warnings],
         'EXCLUDED'     => [
             qr{^inc/Module/},
-            qw( t/0-signature.t
-                Makefile.PL
-                MANIFEST
-                META.yml
-                README
-                SIGNATURE
-                ),
+            qw(t/0-signature.t),
         ],
         'UPSTREAM' => undef,
     },
@@ -693,7 +690,7 @@ use File::Glob qw(:case);
 
     'ExtUtils::MakeMaker' => {
         'MAINTAINER'   => 'mschwern',
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.68.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.72.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -715,7 +712,7 @@ use File::Glob qw(:case);
 
     'ExtUtils::ParseXS' => {
         'MAINTAINER'   => 'smueller',
-        'DISTRIBUTION' => 'SMUELLER/ExtUtils-ParseXS-3.18.tar.gz',
+        'DISTRIBUTION' => 'SMUELLER/ExtUtils-ParseXS-3.21.tar.gz',
         'FILES'        => q[dist/ExtUtils-ParseXS],
         'UPSTREAM'     => 'blead',
     },
@@ -830,7 +827,6 @@ use File::Glob qw(:case);
         'DISTRIBUTION' => 'SMUELLER/Filter-Simple-0.88.tar.gz',
         'FILES'        => q[dist/Filter-Simple],
         'EXCLUDED'     => [
-            'Makefile.PL',
             qr{^demo/}
         ],
         'UPSTREAM' => 'blead',
@@ -859,6 +855,11 @@ use File::Glob qw(:case);
                 t/pod.t
                 t/sh.t
                 t/tee.t
+                t/z_kwalitee.t
+                t/z_meta.t
+                t/z_perl_minimum_version.t
+                t/z_pod-coverage.t
+                t/z_pod.t
                 ),
         ],
         'MAP' => {
@@ -949,12 +950,8 @@ use File::Glob qw(:case);
         'UPSTREAM'   => 'blead',
     },
 
-    # Sean has donated it to us.
-    # Nothing has changed since his last CPAN release.
-    # (not strictly true: there have been some trivial typo fixes; DAPM 6/2009)
     'I18N::LangTags' => {
         'MAINTAINER'   => 'p5p',
-        'DISTRIBUTION' => 'SBURKE/I18N-LangTags-0.35.tar.gz',
         'FILES'        => q[dist/I18N-LangTags],
         'UPSTREAM'     => 'blead',
     },
@@ -976,7 +973,7 @@ use File::Glob qw(:case);
 
     'IO-Compress' => {
         'MAINTAINER'   => 'pmqs',
-        'DISTRIBUTION' => 'PMQS/IO-Compress-2.061.tar.gz',
+        'DISTRIBUTION' => 'PMQS/IO-Compress-2.062.tar.gz',
         'FILES'        => q[cpan/IO-Compress],
         'EXCLUDED'     => [qr{t/Test/}],
         'UPSTREAM'     => 'cpan',
@@ -991,7 +988,7 @@ use File::Glob qw(:case);
 
     'IPC::Cmd' => {
         'MAINTAINER'   => 'kane',
-        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.82.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.84.tar.gz',
         'FILES'        => q[cpan/IPC-Cmd],
         'UPSTREAM'     => 'cpan',
     },
@@ -1004,7 +1001,7 @@ use File::Glob qw(:case);
 
     'IPC::SysV' => {
         'MAINTAINER'   => 'mhx',
-        'DISTRIBUTION' => 'MHX/IPC-SysV-2.03.tar.gz',
+        'DISTRIBUTION' => 'MHX/IPC-SysV-2.04.tar.gz',
         'FILES'        => q[cpan/IPC-SysV],
         'EXCLUDED'     => [
             qw( const-c.inc
@@ -1038,16 +1035,17 @@ use File::Glob qw(:case);
 
     'libnet' => {
         'MAINTAINER'   => 'gbarr',
-        'DISTRIBUTION' => 'GBARR/libnet-1.22.tar.gz',
+        'DISTRIBUTION' => 'SHAY/libnet-1.23.tar.gz',
         'FILES'        => q[cpan/libnet],
         'EXCLUDED'     => [
             qw( Configure
                 install-nomake
-                Makefile.PL
                 ),
         ],
+        # Customized for perl since we cannot use either an auto-generated
+        # script or the version in the CPAN distro.
         'CUSTOMIZED' => ['Makefile.PL'],
-        'UPSTREAM'   => undef,
+        'UPSTREAM'   => 'cpan',
     },
 
     'Locale-Codes' => {
@@ -1184,7 +1182,7 @@ use File::Glob qw(:case);
 
     'Module::Build' => {
         'MAINTAINER'   => 'kwilliams',
-        'DISTRIBUTION' => 'LEONT/Module-Build-0.4005.tar.gz',
+        'DISTRIBUTION' => 'LEONT/Module-Build-0.4007.tar.gz',
         'FILES'        => q[cpan/Module-Build],
         'EXCLUDED'     => [
             qw( t/par.t
@@ -1193,13 +1191,14 @@ use File::Glob qw(:case);
             qr{^contrib/},
             qr{^inc},
         ],
+        # Generated file, not part of the CPAN distro:
         'CUSTOMIZED' => ['lib/Module/Build/ConfigData.pm'],
         'UPSTREAM'   => 'cpan',
     },
 
     'Module::CoreList' => {
         'MAINTAINER'   => 'bingos',
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.92.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.96.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
         'UPSTREAM'     => 'blead',
     },
@@ -1302,7 +1301,7 @@ use File::Glob qw(:case);
 
     'parent' => {
         'MAINTAINER'   => 'corion',
-        'DISTRIBUTION' => 'CORION/parent-0.225.tar.gz',
+        'DISTRIBUTION' => 'CORION/parent-0.226.tar.gz',
         'FILES'        => q[cpan/parent],
         'UPSTREAM'     => undef,
     },
@@ -1378,6 +1377,13 @@ use File::Glob qw(:case);
         'MAINTAINER'   => 'elizabeth',
         'DISTRIBUTION' => 'ELIZABETH/PerlIO-via-QuotedPrint-0.07.tar.gz',
         'FILES'        => q[cpan/PerlIO-via-QuotedPrint],
+
+        # Waiting to be merged upstream: see CPAN RT#54047
+        'CUSTOMIZED'   => [
+            qw( t/QuotedPrint.t
+                ),
+        ],
+
         'UPSTREAM'     => undef,
     },
 
@@ -1499,6 +1505,10 @@ use File::Glob qw(:case);
             qw( scripts/pod2man.PL
                 scripts/pod2text.PL
                 ),
+
+            # Waiting to be merged upstream: see CPAN RT#87440
+            qw( pod/perlpodstyle.pod
+                ),
         ],
         'MAP' => {
             ''                 => 'cpan/podlators/',
@@ -1532,9 +1542,7 @@ use File::Glob qw(:case);
 
     'Scalar-List-Utils' => {
         'MAINTAINER'   => 'gbarr',
-        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.27.tar.gz',
-
-        # Note that perl uses its own version of Makefile.PL
+        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.31.tar.gz',
         'FILES'    => q[cpan/List-Util],
         'EXCLUDED' => [
             qr{^inc/Module/},
@@ -1574,7 +1582,7 @@ use File::Glob qw(:case);
 
     'Socket' => {
         'MAINTAINER'   => 'pevans',
-        'DISTRIBUTION' => 'PEVANS/Socket-2.010.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Socket-2.011.tar.gz',
         'FILES'        => q[cpan/Socket],
         'UPSTREAM'     => 'cpan',
     },
@@ -1636,6 +1644,14 @@ use File::Glob qw(:case);
         'MAINTAINER'   => 'jstowe',
         'DISTRIBUTION' => 'JSTOWE/Term-Cap-1.12.tar.gz',
         'FILES'        => q[cpan/Term-Cap],
+
+        # Waiting to be merged upstream: see CPAN RT#73447
+        'CUSTOMIZED'   => [
+            qw( Cap.pm
+                test.pl
+                ),
+        ],
+
         'UPSTREAM'     => undef,
     },
 
@@ -1678,7 +1694,10 @@ use File::Glob qw(:case);
                 t/lib/if.pm
                 ),
         ],
+
+        # Waiting to be merged upstream: see CPAN RT#64353
         'CUSTOMIZED' => [ 't/source.t' ],
+
         'UPSTREAM'   => 'cpan',
     },
 
@@ -1696,9 +1715,10 @@ use File::Glob qw(:case);
                 lib/Test/Builder/IO/Scalar.pm
                 ),
         ],
-        'CUSTOMIZED' =>  [
-            't/fail-more.t', # awaiting upstream fix
-        ],
+
+        # Waiting to be merged upstream: see CPAN RT#79762
+        'CUSTOMIZED' =>  [ 't/fail-more.t' ],
+
         'UPSTREAM' => 'cpan',
     },
 
@@ -1720,6 +1740,8 @@ use File::Glob qw(:case);
                 t/99_pmv.t
                 ),
         ],
+
+        # Waiting to be merged upstream: see CPAN RT#87788
         'CUSTOMIZED'   => [
             qw( t/01_compile.t
                 t/02_extbrk.t
@@ -1732,6 +1754,7 @@ use File::Glob qw(:case);
                 t/09_gentag.t
                 ),
         ],
+
         'UPSTREAM' => 'cpan',
     },
 
@@ -1740,6 +1763,13 @@ use File::Glob qw(:case);
         'DISTRIBUTION' => 'CHORNY/Text-ParseWords-3.29.tar.gz',
         'FILES'        => q[cpan/Text-ParseWords],
         'EXCLUDED'     => ['t/pod.t'],
+
+        # Waiting to be merged upstream: see CPAN RT#50929
+        'CUSTOMIZED'   => [
+            qw( t/ParseWords.t
+                t/taint.t
+                ),
+        ],
 
         # For the benefit of make_ext.pl, we have to have this accessible:
         'MAP' => {
@@ -1855,11 +1885,8 @@ use File::Glob qw(:case);
 
     'Time::HiRes' => {
         'MAINTAINER'   => 'zefram',
-        'DISTRIBUTION' => 'ZEFRAM/Time-HiRes-1.9725.tar.gz',
+        'DISTRIBUTION' => 'ZEFRAM/Time-HiRes-1.9726.tar.gz',
         'FILES'        => q[cpan/Time-HiRes],
-        'CUSTOMIZED'   => [
-            'Makefile.PL', # awaiting patches applied upstream (see c7627e6d)
-        ],
         'UPSTREAM'     => 'cpan',
     },
 
@@ -1878,7 +1905,7 @@ use File::Glob qw(:case);
 
     'Time::Piece' => {
         'MAINTAINER'   => 'msergeant',
-        'DISTRIBUTION' => 'RJBS/Time-Piece-1.21.tar.gz',
+        'DISTRIBUTION' => 'RJBS/Time-Piece-1.22.tar.gz',
         'FILES'        => q[cpan/Time-Piece],
         'UPSTREAM'     => undef,
     },
@@ -1921,15 +1948,27 @@ use File::Glob qw(:case);
 
     'version' => {
         'MAINTAINER'   => 'jpeacock',
-        'DISTRIBUTION' => 'JPEACOCK/version-0.9902.tar.gz',
+        'DISTRIBUTION' => 'JPEACOCK/version-0.9903.tar.gz',
         'FILES'        => q[cpan/version],
         'EXCLUDED' => [
-            qr{^t/.*\.t$},
             qr{^vutil/},
             'lib/version/typemap',
             't/survey_locales',
             'vperl/vpp.pm',
         ],
+
+        # Waiting to be merged upstream: see CPAN RT#87513
+        'CUSTOMIZED'   => [
+            qw( lib/version.pm
+                t/01base.t
+                t/02derived.t
+                t/03require.t
+                t/04strict_lax.t
+                t/07locale.t
+                t/coretests.pm
+                ),
+        ],
+
         'UPSTREAM' => undef,
     },
 
@@ -2003,7 +2042,10 @@ use File::Glob qw(:case);
         'FILES'        => q[dist/XSLoader],
         'EXCLUDED'     => [
             qr{^eg/},
-            qw( t/pod.t
+            qw( t/00-load.t
+                t/01-api.t
+                t/distchk.t
+                t/pod.t
                 t/podcover.t
                 t/portfs.t
                 ),

@@ -35,6 +35,7 @@ Class::PseudoHash
 Classic::Perl
 Clone
 cpan2dist(1)
+CPAN::Changes::Spec
 cpanp(1)
 CPANPLUS
 Crypt::Random
@@ -229,6 +230,7 @@ pod/perldsc.pod	Verbatim line length including indents exceeds 79 by	4
 pod/perldtrace.pod	Verbatim line length including indents exceeds 79 by	26
 pod/perlebcdic.pod	Verbatim line length including indents exceeds 79 by	13
 pod/perlembed.pod	Verbatim line length including indents exceeds 79 by	27
+pod/perlfunc.pod	? Should you be using F<...> or maybe L<...> instead of	1
 pod/perlgit.pod	Verbatim line length including indents exceeds 79 by	12
 pod/perlgpl.pod	Verbatim line length including indents exceeds 79 by	50
 pod/perlguts.pod	? Should you be using F<...> or maybe L<...> instead of	2
@@ -265,7 +267,7 @@ pod/perltru64.pod	? Should you be using F<...> or maybe L<...> instead of	1
 pod/perltru64.pod	Verbatim line length including indents exceeds 79 by	5
 pod/perlvms.pod	? Should you be using F<...> or maybe L<...> instead of	1
 pod/perlwin32.pod	Verbatim line length including indents exceeds 79 by	12
-porting/epigraphs.pod	Verbatim line length including indents exceeds 79 by	3
+porting/epigraphs.pod	Verbatim line length including indents exceeds 79 by	2
 porting/expand-macro.pl	Verbatim line length including indents exceeds 79 by	2
 porting/release_managers_guide.pod	Verbatim line length including indents exceeds 79 by	7
 porting/todo.pod	Verbatim line length including indents exceeds 79 by	7

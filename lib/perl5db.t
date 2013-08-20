@@ -29,7 +29,7 @@ BEGIN {
     $ENV{PERL_RL} = 'Perl'; # Suppress system Term::ReadLine::Gnu
 }
 
-plan(117);
+plan(119);
 
 my $rc_filename = '.perldb';
 
@@ -108,20 +108,13 @@ EOF
     is( $?, 0, '[perl #116771] autotrace does not crash debugger, exit == 0' );
     like( $output, 'success' , '[perl #116771] code is run' );
 }
-
+# [ perl #41461] Frame=2 noTTY
 {
-    rc(<<'EOF');
-&parse_options("NonStop=0 TTY=db.out LineInfo=db.out");
-
-sub afterinit {
-    push (@DB::typeahead,
-    't 2',
-    'c',
-    'q',
-    );
-
-}
-EOF
+    local $ENV{PERLDB_OPTS} = "frame=2 noTTY nonstop";
+    rc('');
+    my $output = runperl( switches => [ '-d' ], prog => 'print q{success}' );
+    is( $?, 0, '[perl #41461] frame=2 noTTY does not crash debugger, exit == 0' );
+    like( $output, 'success' , '[perl #41461] code is run' );
 }
 
 package DebugWrap;

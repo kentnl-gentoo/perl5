@@ -226,14 +226,10 @@ PP(pp_substcont)
 	if (SvTAINTED(TOPs))
 	    cx->sb_rxtainted |= SUBST_TAINT_REPL;
 	sv_catsv_nomg(dstr, POPs);
-	/* XXX: adjust for positive offsets of \G for instance s/(.)\G//g with positive pos() */
-	s -= RX_GOFS(rx);
-
-	/* Are we done */
 	if (CxONCE(cx) || s < orig ||
-		!CALLREGEXEC(rx, s, cx->sb_strend, orig,
-			     (s == m) + RX_GOFS(rx), cx->sb_targ, NULL,
-                                (REXEC_IGNOREPOS|REXEC_NOT_FIRST)))
+                !CALLREGEXEC(rx, s, cx->sb_strend, orig,
+			     (s == m), cx->sb_targ, NULL,
+                    (REXEC_IGNOREPOS|REXEC_NOT_FIRST|REXEC_FAIL_ON_UNDERFLOW)))
 	{
 	    SV *targ = cx->sb_targ;
 
@@ -254,12 +250,9 @@ PP(pp_substcont)
 		targ = dstr;
 	    }
 	    else {
-		if (SvIsCOW(targ)) {
-		    sv_force_normal_flags(targ, SV_COW_DROP_PV);
-		} else
-		{
-		    SvPV_free(targ);
-		}
+		SV_CHECK_THINKFIRST_COW_DROP(targ);
+		if (isGV(targ)) Perl_croak_no_modify();
+		SvPV_free(targ);
 		SvPV_set(targ, SvPVX(dstr));
 		SvCUR_set(targ, SvCUR(dstr));
 		SvLEN_set(targ, SvLEN(dstr));
@@ -993,6 +986,10 @@ PP(pp_grepstart)
     SAVEVPTR(PL_curpm);
 
     src = PL_stack_base[*PL_markstack_ptr];
+    if (SvPADTMP(src) && !IS_PADGV(src)) {
+	src = PL_stack_base[*PL_markstack_ptr] = sv_mortalcopy(src);
+	PL_tmps_floor++;
+    }
     SvTEMP_off(src);
     if (PL_op->op_private & OPpGREP_LEX)
 	PAD_SVl(PL_op->op_targ) = src;
@@ -1141,6 +1138,7 @@ PP(pp_mapwhile)
 
 	/* set $_ to the new source item */
 	src = PL_stack_base[PL_markstack_ptr[-1]];
+	if (SvPADTMP(src) && !IS_PADGV(src)) src = sv_mortalcopy(src);
 	SvTEMP_off(src);
 	if (PL_op->op_private & OPpGREP_LEX)
 	    PAD_SVl(PL_op->op_targ) = src;
@@ -3273,7 +3271,11 @@ Perl_find_runcv_where(pTHX_ U8 cond, IV arg, U32 *db_seqp)
     int		 level = 0;
 
     if (db_seqp)
-	*db_seqp = PL_curcop->cop_seq;
+	*db_seqp =
+            PL_curcop == &PL_compiling
+                ? PL_cop_seqmax
+                : PL_curcop->cop_seq;
+
     for (si = PL_curstackinfo; si; si = si->si_prev) {
         I32 ix;
 	for (ix = si->si_cxix; ix >= 0; ix--) {
@@ -5441,6 +5443,7 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 
 	if (count > 0) {
 	    SV *out = POPs;
+	    SvGETMAGIC(out);
 	    if (SvOK(out)) {
 		status = SvIV(out);
 	    }
@@ -5456,9 +5459,13 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	LEAVE_with_name("call_filter_sub");
     }
 
+    if (SvGMAGICAL(upstream)) {
+	mg_get(upstream);
+	if (upstream == buf_sv) mg_free(buf_sv);
+    }
     if (SvIsCOW(upstream)) sv_force_normal(upstream);
     if(!err && SvOK(upstream)) {
-	got_p = SvPV(upstream, got_len);
+	got_p = SvPV_nomg(upstream, got_len);
 	if (umaxlen) {
 	    if (got_len > umaxlen) {
 		prune_from = got_p + umaxlen;
@@ -5489,7 +5496,12 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	if (SvUTF8(upstream)) {
 	    SvUTF8_on(cache);
 	}
-	SvCUR_set(upstream, got_len - cached_len);
+	if (SvPOK(upstream)) SvCUR_set(upstream, got_len - cached_len);
+	else
+	    /* Cannot just use sv_setpvn, as that could free the buffer
+	       before we have a chance to assign it. */
+	    sv_usepvn(upstream, savepvn(got_p, got_len - cached_len),
+		      got_len - cached_len);
 	*prune_from = 0;
 	/* Can't yet be EOF  */
 	if (status == 0)
@@ -5501,9 +5513,10 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
        concatenate it then we get a warning about use of uninitialised value.
     */
     if (!err && upstream != buf_sv &&
-        (SvOK(upstream) || SvGMAGICAL(upstream))) {
-	sv_catsv(buf_sv, upstream);
+        SvOK(upstream)) {
+	sv_catsv_nomg(buf_sv, upstream);
     }
+    else if (SvOK(upstream)) (void)SvPV_force_nolen(buf_sv);
 
     if (status <= 0) {
 	IoLINES(datasv) = 0;

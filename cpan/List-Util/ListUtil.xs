@@ -342,6 +342,359 @@ CODE:
 #endif
 
 void
+pairfirst(block,...)
+    SV * block
+PROTOTYPE: &@
+PPCODE:
+{
+    GV *agv,*bgv,*gv;
+    HV *stash;
+    CV *cv    = sv_2cv(block, &stash, &gv, 0);
+    I32 ret_gimme = GIMME_V;
+    int argi = 1; // "shift" the block
+
+    if(!(items % 2) && ckWARN(WARN_MISC))
+	warn("Odd number of elements in pairfirst");
+
+    agv = gv_fetchpv("a", GV_ADD, SVt_PV);
+    bgv = gv_fetchpv("b", GV_ADD, SVt_PV);
+    SAVESPTR(GvSV(agv));
+    SAVESPTR(GvSV(bgv));
+#ifdef dMULTICALL
+    if(!CvISXSUB(cv)) {
+	// Since MULTICALL is about to move it
+	SV **stack = PL_stack_base + ax;
+
+	dMULTICALL;
+	I32 gimme = G_SCALAR;
+
+	PUSH_MULTICALL(cv);
+	for(; argi < items; argi += 2) {
+	    SV *a = GvSV(agv) = stack[argi];
+	    SV *b = GvSV(bgv) = argi < items-1 ? stack[argi+1] : &PL_sv_undef;
+
+	    MULTICALL;
+
+            if(!SvTRUEx(*PL_stack_sp))
+		continue;
+
+	    POP_MULTICALL;
+	    if(ret_gimme == G_ARRAY) {
+		ST(0) = sv_mortalcopy(a);
+		ST(1) = sv_mortalcopy(b);
+		XSRETURN(2);
+	    }
+	    else
+		XSRETURN_YES;
+	}
+	POP_MULTICALL;
+	XSRETURN(0);
+    }
+    else
+#endif
+    {
+	for(; argi < items; argi += 2) {
+	    dSP;
+	    SV *a = GvSV(agv) = ST(argi);
+	    SV *b = GvSV(bgv) = argi < items-1 ? ST(argi+1) : &PL_sv_undef;
+
+	    PUSHMARK(SP);
+	    call_sv((SV*)cv, G_SCALAR);
+
+	    SPAGAIN;
+
+            if(!SvTRUEx(*PL_stack_sp))
+		continue;
+
+	    if(ret_gimme == G_ARRAY) {
+		ST(0) = sv_mortalcopy(a);
+		ST(1) = sv_mortalcopy(b);
+		XSRETURN(2);
+	    }
+	    else
+		XSRETURN_YES;
+	}
+    }
+
+    XSRETURN(0);
+}
+
+void
+pairgrep(block,...)
+    SV * block
+PROTOTYPE: &@
+PPCODE:
+{
+    GV *agv,*bgv,*gv;
+    HV *stash;
+    CV *cv    = sv_2cv(block, &stash, &gv, 0);
+    I32 ret_gimme = GIMME_V;
+
+    /* This function never returns more than it consumed in arguments. So we
+     * can build the results "live", behind the arguments
+     */
+    int argi = 1; // "shift" the block
+    int reti = 0;
+
+    if(!(items % 2) && ckWARN(WARN_MISC))
+	warn("Odd number of elements in pairgrep");
+
+    agv = gv_fetchpv("a", GV_ADD, SVt_PV);
+    bgv = gv_fetchpv("b", GV_ADD, SVt_PV);
+    SAVESPTR(GvSV(agv));
+    SAVESPTR(GvSV(bgv));
+#ifdef dMULTICALL
+    if(!CvISXSUB(cv)) {
+	// Since MULTICALL is about to move it
+	SV **stack = PL_stack_base + ax;
+	int i;
+
+	dMULTICALL;
+	I32 gimme = G_SCALAR;
+
+	PUSH_MULTICALL(cv);
+	for(; argi < items; argi += 2) {
+	    SV *a = GvSV(agv) = stack[argi];
+	    SV *b = GvSV(bgv) = argi < items-1 ? stack[argi+1] : &PL_sv_undef;
+
+	    MULTICALL;
+
+            if(SvTRUEx(*PL_stack_sp)) {
+		if(ret_gimme == G_ARRAY) {
+		    // We can't mortalise yet or they'd be mortal too early
+		    stack[reti++] = newSVsv(a);
+		    stack[reti++] = newSVsv(b);
+		}
+		else if(ret_gimme == G_SCALAR)
+		    reti++;
+	    }
+	}
+	POP_MULTICALL;
+
+	if(ret_gimme == G_ARRAY)
+	    for(i = 0; i < reti; i++)
+		sv_2mortal(stack[i]);
+    }
+    else
+#endif
+    {
+	for(; argi < items; argi += 2) {
+	    dSP;
+	    SV *a = GvSV(agv) = ST(argi);
+	    SV *b = GvSV(bgv) = argi < items-1 ? ST(argi+1) : &PL_sv_undef;
+
+	    PUSHMARK(SP);
+	    call_sv((SV*)cv, G_SCALAR);
+
+	    SPAGAIN;
+
+            if(SvTRUEx(*PL_stack_sp)) {
+		if(ret_gimme == G_ARRAY) {
+		    ST(reti++) = sv_mortalcopy(a);
+		    ST(reti++) = sv_mortalcopy(b);
+		}
+		else if(ret_gimme == G_SCALAR)
+		    reti++;
+	    }
+	}
+    }
+
+    if(ret_gimme == G_ARRAY)
+	XSRETURN(reti);
+    else if(ret_gimme == G_SCALAR) {
+	ST(0) = newSViv(reti);
+	XSRETURN(1);
+    }
+}
+
+void
+pairmap(block,...)
+    SV * block
+PROTOTYPE: &@
+PPCODE:
+{
+    GV *agv,*bgv,*gv;
+    HV *stash;
+    CV *cv    = sv_2cv(block, &stash, &gv, 0);
+    SV **args_copy = NULL;
+    I32 ret_gimme = GIMME_V;
+
+    int argi = 1; // "shift" the block
+    int reti = 0;
+
+    if(!(items % 2) && ckWARN(WARN_MISC))
+	warn("Odd number of elements in pairmap");
+
+    agv = gv_fetchpv("a", GV_ADD, SVt_PV);
+    bgv = gv_fetchpv("b", GV_ADD, SVt_PV);
+    SAVESPTR(GvSV(agv));
+    SAVESPTR(GvSV(bgv));
+#ifdef dMULTICALL
+    if(!CvISXSUB(cv)) {
+	// Since MULTICALL is about to move it
+	SV **stack = PL_stack_base + ax;
+	I32 ret_gimme = GIMME_V;
+	int i;
+
+	dMULTICALL;
+	I32 gimme = G_ARRAY;
+
+	PUSH_MULTICALL(cv);
+	for(; argi < items; argi += 2) {
+	    SV *a = GvSV(agv) = args_copy ? args_copy[argi] : stack[argi];
+	    SV *b = GvSV(bgv) = argi < items-1 ? 
+		(args_copy ? args_copy[argi+1] : stack[argi+1]) :
+		&PL_sv_undef;
+	    int count;
+
+	    MULTICALL;
+	    count = PL_stack_sp - PL_stack_base;
+
+	    if(count > 2 && !args_copy) {
+		/* We can't return more than 2 results for a given input pair
+		 * without trashing the remaining argmuents on the stack still
+		 * to be processed. So, we'll copy them out to a temporary
+		 * buffer and work from there instead.
+		 * We didn't do this initially because in the common case, most
+		 * code blocks will return only 1 or 2 items so it won't be
+		 * necessary
+		 */
+		int n_args = items - argi;
+		Newx(args_copy, n_args, SV *);
+		SAVEFREEPV(args_copy);
+
+		Copy(stack + argi, args_copy, n_args, SV *);
+
+		argi = 0;
+		items = n_args;
+	    }
+
+	    for(i = 0; i < count; i++)
+		stack[reti++] = newSVsv(PL_stack_sp[i - count + 1]);
+	}
+	POP_MULTICALL;
+
+	if(ret_gimme == G_ARRAY)
+	    for(i = 0; i < reti; i++)
+		sv_2mortal(stack[i]);
+    }
+    else
+#endif
+    {
+	for(; argi < items; argi += 2) {
+	    dSP;
+	    SV *a = GvSV(agv) = args_copy ? args_copy[argi] : ST(argi);
+	    SV *b = GvSV(bgv) = argi < items-1 ? 
+		(args_copy ? args_copy[argi+1] : ST(argi+1)) :
+		&PL_sv_undef;
+	    int count;
+	    int i;
+
+	    PUSHMARK(SP);
+	    count = call_sv((SV*)cv, G_ARRAY);
+
+	    SPAGAIN;
+
+	    if(count > 2 && !args_copy && ret_gimme == G_ARRAY) {
+		int n_args = items - argi;
+		Newx(args_copy, n_args, SV *);
+		SAVEFREEPV(args_copy);
+
+		Copy(&ST(argi), args_copy, n_args, SV *);
+
+		argi = 0;
+		items = n_args;
+	    }
+
+	    if(ret_gimme == G_ARRAY)
+		for(i = 0; i < count; i++)
+		    ST(reti++) = sv_mortalcopy(SP[i - count + 1]);
+	    else
+		reti += count;
+
+	    PUTBACK;
+	}
+    }
+
+    if(ret_gimme == G_ARRAY)
+	XSRETURN(reti);
+
+    ST(0) = sv_2mortal(newSViv(reti));
+    XSRETURN(1);
+}
+
+void
+pairs(...)
+PROTOTYPE: @
+PPCODE:
+{
+    int argi = 0;
+    int reti = 0;
+
+    if(items % 2 && ckWARN(WARN_MISC))
+	warn("Odd number of elements in pairs");
+
+    {
+	for(; argi < items; argi += 2) {
+	    SV *a = ST(argi);
+	    SV *b = argi < items-1 ? ST(argi+1) : &PL_sv_undef;
+
+	    AV *av = newAV();
+	    av_push(av, newSVsv(a));
+	    av_push(av, newSVsv(b));
+
+	    ST(reti++) = sv_2mortal(newRV_noinc((SV *)av));
+	}
+    }
+
+    XSRETURN(reti);
+}
+
+void
+pairkeys(...)
+PROTOTYPE: @
+PPCODE:
+{
+    int argi = 0;
+    int reti = 0;
+
+    if(items % 2 && ckWARN(WARN_MISC))
+	warn("Odd number of elements in pairkeys");
+
+    {
+	for(; argi < items; argi += 2) {
+	    SV *a = ST(argi);
+
+	    ST(reti++) = sv_2mortal(newSVsv(a));
+	}
+    }
+
+    XSRETURN(reti);
+}
+
+void
+pairvalues(...)
+PROTOTYPE: @
+PPCODE:
+{
+    int argi = 0;
+    int reti = 0;
+
+    if(items % 2 && ckWARN(WARN_MISC))
+	warn("Odd number of elements in pairvalues");
+
+    {
+	for(; argi < items; argi += 2) {
+	    SV *b = argi < items-1 ? ST(argi+1) : &PL_sv_undef;
+
+	    ST(reti++) = sv_2mortal(newSVsv(b));
+	}
+    }
+
+    XSRETURN(reti);
+}
+
+void
 shuffle(...)
 PROTOTYPE: @
 CODE:

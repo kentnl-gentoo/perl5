@@ -8,7 +8,7 @@ BEGIN {
     chdir 't';
 }
 
-print "1..156\n";
+print "1..158\n";
 
 sub failed {
     my ($got, $expected, $name) = @_;
@@ -476,6 +476,16 @@ $test
     local $~ = "two";
     write();
 }
+
+for(__PACKAGE__) {
+    eval '$_=42';
+    is $_, 'main', '__PACKAGE__ is read-only';
+}
+
+$file = __FILE__;
+BEGIN{ ${"_<".__FILE__} = \1 }
+is __FILE__, $file,
+    'no __FILE__ corruption when setting CopFILESV to a ref';
 
 # Add new tests HERE (above this line)
 

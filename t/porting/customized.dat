@@ -1,4 +1,7 @@
-Module::Build cpan/Module-Build/lib/Module/Build/ConfigData.pm 2f3f07fd889077ebd51791ad6e195d9164b4baf3
+Module::Build cpan/Module-Build/lib/Module/Build/ConfigData.pm 409075121c3a50488052df00e5cdeeeb5594409a
+PerlIO::via::QuotedPrint cpan/PerlIO-via-QuotedPrint/t/QuotedPrint.t ca39f0146e89de02c746e199c45dcb3e5edad691
+Term::Cap cpan/Term-Cap/Cap.pm f7645219662eafe5c263d9199c30f40bcf0ac806
+Term::Cap cpan/Term-Cap/test.pl 1685137e2770c6d496169299627cf4cbcee869e9
 Test::Harness cpan/Test-Harness/t/source.t 884890970fb850874213159df263ba483bac62e9
 Test::Simple cpan/Test-Simple/t/fail-more.t 851583390f26786131535e2837dae1113d72c41a
 Text::Balanced cpan/Text-Balanced/t/01_compile.t 1598cf491a48fa546260a2ec41142abe84da533d
@@ -10,7 +13,16 @@ Text::Balanced cpan/Text-Balanced/t/06_extqlk.t 81a5804d392013393a338325b197cea5
 Text::Balanced cpan/Text-Balanced/t/07_exttag.t 5a209ed156387d4614d3003292e5fc412b8541e5
 Text::Balanced cpan/Text-Balanced/t/08_extvar.t 0776ef2cbdad5b1fbefb300541d079212cc24d92
 Text::Balanced cpan/Text-Balanced/t/09_gentag.t 42361b5dfb3bb728bce20f4fb0d92ccfb27c2ba7
-Time::HiRes cpan/Time-HiRes/Makefile.PL 178c13f9fef25520cc752581b86e5e4c05a5eade
-libnet cpan/libnet/Makefile.PL 5554b71464b45f5cc002e55f2464f7ff4abd05b6
+Text::ParseWords cpan/Text-ParseWords/t/ParseWords.t 9bae51c9b944cd5c0bbabe9d397e573976a2be8e
+Text::ParseWords cpan/Text-ParseWords/t/taint.t 3cff0dae812801f7aa1738d6070508f2c5bcc2e5
+libnet cpan/libnet/Makefile.PL 6b10ac98e672bfebb8f49b9720a93442645208b3
 podlators cpan/podlators/scripts/pod2man.PL f81acf53f3ff46cdcc5ebdd661c5d13eb35d20d6
 podlators cpan/podlators/scripts/pod2text.PL b4693fcfe4a0a1b38a215cfb8985a65d5d025d69
+podlators pod/perlpodstyle.pod dcf4b8f67d963e215f0e2e1cd214246705163a79
+version cpan/version/lib/version.pm b85a5137501de9be734c475d3b0bcaba95f92b1f
+version cpan/version/t/01base.t 10b3cee80d3028797fc5bd4fdbfaf582b791e8dc
+version cpan/version/t/02derived.t 304eca7c9ba2bcf4a2adc4a4713a80deda2d1a3f
+version cpan/version/t/03require.t 39c905bbb6ef69902655bf8c4cfab756cef17c27
+version cpan/version/t/04strict_lax.t 4bc2722e914d98a7cbd948704288d4be977a0e29
+version cpan/version/t/07locale.t 53a04fd4985e1f6f157523c9f470dceaa23400bd
+version cpan/version/t/coretests.pm 71efdf84f5011c045596fcc569a12850778e2317
