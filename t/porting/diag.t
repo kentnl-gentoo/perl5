@@ -35,7 +35,7 @@ foreach (@{(setup_embed())[0]}) {
 
 my $regcomp_re = "(?<routine>(?:ckWARN(?:\\d+)?reg\\w*|vWARN\\d+))";
 my $function_re = join '|', @functions;
-my $regcomp_fail_re = '\b(?:(?:Simple_)?v)?FAIL[2-4]?\b';
+my $regcomp_fail_re = '\b(?:(?:Simple_)?v)?FAIL[2-4]?(?:utf8f)?\b';
 my $source_msg_re =
    "(?<routine>\\bDIE\\b|$function_re|$regcomp_fail_re)";
 my $text_re = '"(?<text>(?:\\\\"|[^"]|"\s*[A-Z_]+\s*")*)"';
@@ -463,6 +463,7 @@ Cannot apply "%s" in non-PerlIO perl
 Can't find string terminator %c%s%c anywhere before EOF
 Can't fix broken locale name "%s"
 Can't get short module name from a handle
+Can't locate %s:   %s
 Can't locate object method "%s" via package "%s" (perhaps you forgot to load "%s"?)
 Can't pipe "%s": %s
 Can't spawn: %s
@@ -523,6 +524,7 @@ No %s allowed while running setgid
 No %s allowed with (suid) fdscript
 Not an XSUB reference
 Operator or semicolon missing before %c%s
+Out of memory during list extend
 PerlApp::TextQuery: no arguments, please
 POSIX syntax [%c %c] is reserved for future extensions in regex; marked by <-- HERE in m/%s/
 ptr wrong %p != %p fl=%x nl=%p e=%p for %d

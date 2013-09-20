@@ -112,7 +112,7 @@ SKIP: {
     # (not at least by that name) that the dl_findfile()
     # could find.
     skip "dl_findfile test not appropriate on $^O", 1
-	if $^O =~ /(win32|vms|openbsd|cygwin|vos)/i;
+	if $^O =~ /(win32|vms|openbsd|bitrig|cygwin|vos)/i;
     # Play safe and only try this test if this system
     # looks pretty much Unix-like.
     skip "dl_findfile test not appropriate on $^O", 1
@@ -141,13 +141,17 @@ is( scalar @DynaLoader::dl_modules, scalar keys %modules, "checking number of it
 
 my @loaded_modules = @DynaLoader::dl_modules;
 for my $libref (reverse @DynaLoader::dl_librefs) {
-  SKIP: {
-    skip "unloading unsupported on $^O", 2 if ($old_darwin || $^O eq 'VMS');
-    my $module = pop @loaded_modules;
-    skip "File::Glob sets PL_opfreehook", 2 if $module eq 'File::Glob';
-    my $r = eval { DynaLoader::dl_unload_file($libref) };
-    is( $@, '', "calling dl_unload_file() for $module" );
-    is( $r,  1, " - unload was successful" );
-  }
+ TODO: {
+        todo_skip "Can't safely unload with -DPERL_GLOBAL_STRUCT_PRIVATE (RT #119409)", 2
+            if $Config{ccflags} =~ /(?:^|\s)-DPERL_GLOBAL_STRUCT_PRIVATE\b/;
+    SKIP: {
+            skip "unloading unsupported on $^O", 2
+                if ($old_darwin || $^O eq 'VMS');
+            my $module = pop @loaded_modules;
+            skip "File::Glob sets PL_opfreehook", 2 if $module eq 'File::Glob';
+            my $r = eval { DynaLoader::dl_unload_file($libref) };
+            is( $@, '', "calling dl_unload_file() for $module" );
+            is( $r,  1, " - unload was successful" );
+        }
+    }
 }
-

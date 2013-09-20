@@ -118,11 +118,9 @@ $!: Private path used by Configure to find libraries.  Its value !sfn
 $!: is prepended to libpth. This variable takes care of special !sfn
 $!: machines, like the mips.  Usually, it should be empty. !sfn
 $!plibpth=''                                           !sfn
-$!: full support for void wanted by default            !sfn
-$!defvoidused=15                                       !sfn
 $!: List of libraries we want.                         !sfn
 $!libswanted='net socket inet nsl nm ndbm gdbm dbm db malloc dl' !sfn
-$!libswanted="$libswanted dld ld sun m c cposix posix ndir dir crypt" !sfn
+$!libswanted="$libswanted ld sun m c cposix posix ndir dir crypt" !sfn
 $!libswanted="$libswanted ucb bsd BSD PW x"            !sfn
 $!: We probably want to search /usr/shlib before most other libraries. !sfn
 $!: This is only used by the lib/ExtUtils/MakeMaker.pm routine extliblist. !sfn
@@ -5277,58 +5275,15 @@ $  endif
 $!
 $! Check rand48 and its ilk
 $!
-$ echo4 "Looking for a random number function..."
-$ OS
-$ WS "#if defined(__DECC) || defined(__DECCXX)"
-$ WS "#include <stdlib.h>"
-$ WS "#endif"
-$ WS "#include <stdio.h>"
-$ WS "int main()"
-$ WS "{"
-$ WS "srand48(12L);"
-$ WS "exit(0);"
-$ WS "}"
-$ CS
-$ GOSUB link_ok
-$ IF compile_status .EQ. good_compile .AND. link_status .EQ. good_link
-$ THEN
-$   drand01 = "drand48()"
-$   randbits = "48"
-$   randfunc = "drand48"
-$   randseedtype = "long int"
-$   seedfunc = "srand48"
-$   echo4 "Good, found drand48()."
-$   d_drand48proto = "define"
-$ ELSE
-$   d_drand48proto = "undef"
-$   drand01="random()"
-$   randbits = "31"
-$   randfunc = "random"
-$   randseedtype = "unsigned"
-$   seedfunc = "srandom"
-$   OS
-$   WS "#if defined(__DECC) || defined(__DECCXX)"
-$   WS "#include <stdlib.h>"
-$   WS "#endif"
-$   WS "#include <stdio.h>"
-$   WS "int main()"
-$   WS "{"
-$   WS "srandom(12);"
-$   WS "exit(0);"
-$   WS "}"
-$   CS
-$   GOSUB link_ok
-$   IF compile_status .EQ. good_compile .AND. link_status .EQ. good_link
-$   THEN
-$     echo4 "OK, found random()."
-$   ELSE
-$     drand01="(((float)rand())*MY_INV_RAND_MAX)"
-$     randfunc = "rand"
-$     randseedtype = "unsigned"
-$     seedfunc = "srand"
-$     echo4 "Yick, looks like I have to use rand()."
-$   ENDIF
-$ ENDIF
+$ echo4 "Using our internal random number implementation..."
+$!
+$ randfunc = "Perl_drand48"
+$ drand01 = "Perl_drand48()"
+$ seedfunc = "Perl_drand48_init"
+$ randbits = "48"
+$ randseedtype = "U32"
+$ d_drand48proto = "define"
+$!
 $! Done with compiler checks. Clean up.
 $ IF F$SEARCH("try.c")  .NES."" THEN DELETE/NOLOG/NOCONFIRM try.c;*
 $ IF F$SEARCH("try.obj").NES."" THEN DELETE/NOLOG/NOCONFIRM try.obj;*
@@ -5777,7 +5732,8 @@ $     d_signbit = "undef"
 $     echo4 "Nope."
 $ ENDIF
 $!
-$ echo4 "Checking if kill() uses SYS$FORCEX or can't be called from a signal handler..."
+$ echo4 "Checking if kill() uses SYS$FORCEX, can't be called from a signal handler,"
+$ echo4 "or fails to handle a signal value of zero..."
 $ kill_by_sigprc = "undef"
 $ OS
 $ WS "#include <stdio.h>"
@@ -5791,12 +5747,13 @@ $ WS "    signal(1,handler1);"
 $ WS "    signal(2,handler2);"
 $ WS "    kill(getpid(),1);"
 $ WS "    sleep(1);"
-$ WS "    printf(""\n"");"
+$ WS "    kill(getpid(),0);"
+$ WS "    printf(""3\n"");"
 $ WS "}"
 $ CS
 $ ON ERROR THEN CONTINUE
 $ GOSUB compile
-$ IF tmp .NES. "012"
+$ IF tmp .NES. "0123"
 $ THEN 
 $   echo4 "Yes, it has at least one of those limitations."
 $   echo4 "Checking whether we can use SYS$SIGPRC instead..."
@@ -6403,7 +6360,6 @@ $ WC "db_version_major='" + "'"
 $ WC "db_version_minor='" + "'"
 $ WC "db_version_patch='" + "'"
 $ WC "dbgprefix='" + dbgprefix + "'"
-$ WC "defvoidused='15'"
 $ WC "devtype='" + devtype + "'"
 $ WC "direntrytype='struct dirent'"
 $ WC "dlext='" + dlext + "'"
@@ -6459,7 +6415,6 @@ $ WC "i_crypt='undef'"
 $ WC "i_db='undef'"
 $ WC "i_dbm='undef'"
 $ WC "i_dirent='undef'"	! we roll our own
-$ WC "i_dld='undef'"
 $ WC "i_dlfcn='undef'"
 $ WC "i_fcntl='" + i_fcntl + "'"
 $ WC "i_float='define'"
@@ -6802,7 +6757,6 @@ $ WC "version_patchlevel_string='" + version_patchlevel_string + "'"
 $ WC "vms_cc_type='" + vms_cc_type + "'" ! VMS specific
 $ WC "vms_prefix='" + vms_prefix + "'" ! VMS specific
 $ WC "vms_ver='" + vms_ver + "'" ! VMS specific
-$ WC "voidflags='15'"
 $!
 $! ## The UNIXy POSIXy reentrantey thingys ##
 $! See "Appendix B, Version-Dependency Tables" in the C RTL

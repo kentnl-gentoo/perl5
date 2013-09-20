@@ -186,6 +186,8 @@ Perl_mro_meta_dup(pTHX_ struct mro_meta* smeta, CLONE_PARAMS* param)
 	newmeta->isa
 	    = MUTABLE_HV(sv_dup_inc((const SV *)newmeta->isa, param));
 
+    newmeta->super = NULL;
+
     return newmeta;
 }
 
@@ -267,10 +269,11 @@ S_mro_get_linear_isa_dfs(pTHX_ HV *stash, U32 level)
 
         /* foreach(@ISA) */
         while (items--) {
-            SV* const sv = *svp++;
+            SV* const sv = *svp ? *svp : &PL_sv_undef;
             HV* const basestash = gv_stashsv(sv, 0);
 	    SV *const *subrv_p;
 	    I32 subrv_items;
+	    svp++;
 
             if (!basestash) {
                 /* if no stash exists for this @ISA member,

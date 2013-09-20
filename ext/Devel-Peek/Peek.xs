@@ -81,6 +81,7 @@ DeadCode(pTHX)
 			}
 		    }
 		    for (j = 1; j < AvFILL((AV*)svp[1]); j++) {	/* Vars. */
+			if (!pad[j]) continue;
 			if (SvROK(pad[j])) {
 			    levelref++;
 			    do_sv_dump(0, Perl_debug_log, pad[j], 0, 4, 0, 0);
@@ -388,6 +389,13 @@ S_ck_dump(pTHX_ OP *entersubop, GV *namegv, SV *cv)
 	prev = aop;
 	aop = aop->op_sibling;
     }
+    if (!aop) {
+	/* It doesn’t really matter what we return here, as this only
+	   occurs after yyerror.  */
+	op_free(first);
+	return entersubop;
+    }
+
     /* aop now points to the second arg if there is one, the cvop otherwise
      */
     if (aop->op_sibling) {

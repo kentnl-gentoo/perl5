@@ -27,7 +27,7 @@
 #include "perl.h"
 
 SV**
-Perl_stack_grow(pTHX_ SV **sp, SV **p, int n)
+Perl_stack_grow(pTHX_ SV **sp, SV **p, SSize_t n)
 {
     dVAR;
 
@@ -141,7 +141,7 @@ Perl_savestack_grow_cnt(pTHX_ I32 need)
 #undef GROW
 
 void
-Perl_tmps_grow(pTHX_ I32 n)
+Perl_tmps_grow(pTHX_ SSize_t n)
 {
     dVAR;
 #ifndef STRESS_REALLOC
@@ -158,7 +158,7 @@ Perl_free_tmps(pTHX)
 {
     dVAR;
     /* XXX should tmps_floor live in cxstack? */
-    const I32 myfloor = PL_tmps_floor;
+    const SSize_t myfloor = PL_tmps_floor;
     while (PL_tmps_ix > myfloor) {      /* clean up after last statement */
 	SV* const sv = PL_tmps_stack[PL_tmps_ix--];
 #ifdef PERL_POISON
@@ -457,6 +457,20 @@ Perl_save_I32(pTHX_ I32 *intp)
     SS_ADD_END(size);
 }
 
+void
+Perl_save_strlen(pTHX_ STRLEN *ptr)
+{
+    dVAR;
+    dSS_ADD;
+
+    PERL_ARGS_ASSERT_SAVE_STRLEN;
+
+    SS_ADD_IV(*ptr);
+    SS_ADD_PTR(ptr);
+    SS_ADD_UV(SAVEt_STRLEN);
+    SS_ADD_END(3);
+}
+
 /* Cannot use save_sptr() to store a char* since the SV** cast will
  * force word-alignment and we'll miss the pointer.
  */
@@ -583,14 +597,18 @@ Perl_save_hdelete(pTHX_ HV *hv, SV *keysv)
 }
 
 void
-Perl_save_adelete(pTHX_ AV *av, I32 key)
+Perl_save_adelete(pTHX_ AV *av, SSize_t key)
 {
     dVAR;
+    dSS_ADD;
 
     PERL_ARGS_ASSERT_SAVE_ADELETE;
 
     SvREFCNT_inc_void(av);
-    save_pushi32ptr(key, av, SAVEt_ADELETE);
+    SS_ADD_UV(key);
+    SS_ADD_PTR(av);
+    SS_ADD_IV(SAVEt_ADELETE);
+    SS_ADD_END(3);
 }
 
 void
@@ -647,16 +665,20 @@ S_save_pushptri32ptr(pTHX_ void *const ptr1, const I32 i, void *const ptr2,
 }
 
 void
-Perl_save_aelem_flags(pTHX_ AV *av, I32 idx, SV **sptr, const U32 flags)
+Perl_save_aelem_flags(pTHX_ AV *av, SSize_t idx, SV **sptr,
+			    const U32 flags)
 {
-    dVAR;
+    dVAR; dSS_ADD;
     SV *sv;
 
     PERL_ARGS_ASSERT_SAVE_AELEM_FLAGS;
 
     SvGETMAGIC(*sptr);
-    save_pushptri32ptr(SvREFCNT_inc_simple(av), idx, SvREFCNT_inc(*sptr),
-		       SAVEt_AELEM);
+    SS_ADD_PTR(SvREFCNT_inc_simple(av));
+    SS_ADD_IV(idx);
+    SS_ADD_PTR(SvREFCNT_inc(*sptr));
+    SS_ADD_UV(SAVEt_AELEM);
+    SS_ADD_END(4);
     /* The array needs to hold a reference count on its new element, so it
        must be AvREAL. */
     if (!AvREAL(av) && AvREIFY(av))
@@ -914,6 +936,9 @@ Perl_leave_scope(pTHX_ I32 base)
 	case SAVEt_INT:				/* int reference */
 	    *(int*)ARG0_PTR = (int)ARG1_I32;
 	    break;
+	case SAVEt_STRLEN:			/* STRLEN/size_t ref */
+	    *(STRLEN*)ARG0_PTR = (STRLEN)arg1.any_iv;
+	    break;
 	case SAVEt_BOOL:			/* bool reference */
 	    *(bool*)ARG0_PTR = cBOOL(uv >> 8);
 #ifdef NO_TAINT_SUPPORT
@@ -1021,9 +1046,6 @@ Perl_leave_scope(pTHX_ I32 base)
                     if (SvPADMY(sv) && !SvFAKE(sv))
                         SvREADONLY_off(sv);
 
-                    if (SvTHINKFIRST(sv))
-                        sv_force_normal_flags(sv, SV_IMMEDIATE_UNREF
-                                                 |SV_COW_DROP_PV);
                     if (SvTYPE(sv) == SVt_PVHV)
                         Perl_hv_kill_backrefs(aTHX_ MUTABLE_HV(sv));
                     if (SvMAGICAL(sv))
@@ -1032,6 +1054,9 @@ Perl_leave_scope(pTHX_ I32 base)
                       if (SvTYPE(sv) != SVt_PVCV)
                         mg_free(sv);
                     }
+                    if (SvTHINKFIRST(sv))
+                        sv_force_normal_flags(sv, SV_IMMEDIATE_UNREF
+                                                 |SV_COW_DROP_PV);
 
                     switch (SvTYPE(sv)) {
                     case SVt_NULL:
@@ -1090,7 +1115,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	    Safefree(arg2.any_ptr);
 	    break;
 	case SAVEt_ADELETE:
-	    (void)av_delete(ARG0_AV, ARG1_I32, G_DISCARD);
+	    (void)av_delete(ARG0_AV, arg1.any_iv, G_DISCARD);
 	    SvREFCNT_dec(ARG0_AV);
 	    break;
 	case SAVEt_DESTRUCTOR_X:
@@ -1105,7 +1130,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	    PL_stack_sp = PL_stack_base + arg0.any_i32;
 	    break;
 	case SAVEt_AELEM:		/* array element */
-	    svp = av_fetch(ARG2_AV, ARG1_I32, 1);
+	    svp = av_fetch(ARG2_AV, arg1.any_iv, 1);
 	    if (!AvREAL(ARG2_AV) && AvREIFY(ARG2_AV)) /* undo reify guard */
 		SvREFCNT_dec(ARG0_SV);
 	    if (svp) {

@@ -323,23 +323,23 @@ C<nmake> instead.
 
 Ensure dual-life CPAN modules are stable, which comes down to:
 
-    for each module that fails its regression tests on $current
-        did it fail identically on $previous?
-        if yes, "SEP" (Somebody Else's Problem)
-        else work out why it failed (a bisect is useful for this)
+ for each module that fails its regression tests on $current
+     did it fail identically on $previous?
+     if yes, "SEP" (Somebody Else's Problem)
+     else work out why it failed (a bisect is useful for this)
 
-    attempt to group failure causes
+ attempt to group failure causes
 
-    for each failure cause
-        is that a regression?
-        if yes, figure out how to fix it
-            (more code? revert the code that broke it)
-        else
-            (presumably) it's relying on something un-or-under-documented
-            should the existing behaviour stay?
-                yes - goto "regression"
-                no - note it in perldelta as a significant bugfix
-                (also, try to inform the module's author)
+ for each failure cause
+     is that a regression?
+     if yes, figure out how to fix it
+         (more code? revert the code that broke it)
+     else
+         (presumably) it's relying on something un-or-under-documented
+         should the existing behaviour stay?
+             yes - goto "regression"
+             no - note it in perldelta as a significant bugfix
+             (also, try to inform the module's author)
 
 =head3 monitor smoke tests for failures
 
@@ -395,36 +395,35 @@ correct choice of earlier version to declare incompatibility with.
 
 When doing a BLEAD-POINT or BLEAD-FINAL release, also make sure the
 C<PERL_API_*> constants in F<patchlevel.h> are in sync with the version
-you're releasing, unless you're
-absolutely sure the release you're about to make is 100% binary compatible
-to an earlier release. When releasing a MAINT perl version, the C<PERL_API_*>
-constants C<MUST NOT> be changed as we aim to guarantee binary compatibility
-in maint branches.
+you're releasing, unless you're absolutely sure the release you're about to
+make is 100% binary compatible to an earlier release. When releasing a MAINT
+perl version, the C<PERL_API_*> constants C<MUST NOT> be changed as we aim
+to guarantee binary compatibility in maint branches.
 
 After editing, regenerate uconfig.h (this must be run on a system with a
 /bin/sh available):
 
-    $ perl regen/uconfig_h.pl
+ $ perl regen/uconfig_h.pl
 
 This might not cause any new changes.
 
 Test your changes:
 
-    $ git clean -xdf   # careful if you don't have local files to keep!
-    $ ./Configure -des -Dusedevel
-    $ make
-    $ make test
+ $ git clean -xdf   # careful if you don't have local files to keep!
+ $ ./Configure -des -Dusedevel
+ $ make
+ $ make test
 
 Commit your changes:
 
-    $ git status
-    $ git diff
-    B<review the delta carefully>
+ $ git status
+ $ git diff
+ B<review the delta carefully>
 
-    $ git commit -a -m 'Bump the perl version in various places for 5.x.y'
+ $ git commit -a -m 'Bump the perl version in various places for 5.x.y'
 
 At this point you may want to compare the commit with a previous bump to
-see if they look similar.  See commit 0e79a3d1bc for an example of a
+see if they look similar.  See commit f7cf42bb69 for an example of a
 previous version bump.
 
 When the version number is bumped, you should also update Module::CoreList
@@ -446,6 +445,16 @@ release, this would be 5.13.11).
 
 For BLEAD-POINT releases, it needs to refer to the previous BLEAD-POINT
 release (so for 5.15.3 this would be 5.15.2).
+
+=head3 Check copyright years
+
+Check that the copyright years are up to date by running:
+
+ $ ./perl t/porting/copyright.t --now
+
+Remedy any test failures by editing README or perl.c accordingly (search for
+the "Copyright"). If updating perl.c, check if the file's own copyright date in
+the C comment at the top needs updating, as well as the one printed by C<-v>.
 
 =head3 Check more build configurations
 
@@ -518,7 +527,21 @@ then configure and build perl so that you have a Makefile and porting tools:
 
 =head3 update Module::CoreList
 
-Update C<Module::CoreList> with module version data for the new release.
+=head4 Bump Module::CoreList* $VERSIONs
+
+If necessary, bump C<$Module::CoreList::VERSION> (there's no need to do this for
+every RC; in RC1, bump the version to a new clean number that will
+appear in the final release, and leave as-is for the later RCs and final).
+It may also happen that C<Module::CoreList> has been modified in blead, and
+hence has a new version number already.  (But make sure it is not the same
+number as a CPAN release.)
+
+C<$Module::CoreList::TieHashDelta::VERSION> and
+C<$Module::CoreList::Utils::VERSION> should always be equal to
+C<$Module::CoreList::VERSION>. If necessary, bump those two versions to match
+before proceeding.
+
+=head4 Update C<Module::CoreList> with module version data for the new release.
 
 Note that if this is a MAINT release, you should run the following actions
 from the maint branch, but commit the C<CoreList.pm> changes in
@@ -539,7 +562,6 @@ update the RMG accordingly!
 
 DAPM May 2013 ]
 
-
 F<corelist.pl> uses ftp.funet.fi to verify information about dual-lived
 modules on CPAN. It can use a full, local CPAN mirror and/or fall back
 on HTTP::Tiny to fetch package metadata remotely.
@@ -550,14 +572,6 @@ http://www.cpan.org/misc/cpan-faq.html#How_mirror_CPAN)
 Then change to your perl checkout, and if necessary,
 
     $ make
-
-Before updating Module::CoreList, first edit
-F<dist/Module-CoreList/lib/Module/CoreList.pm> and delete any existing
-entries for this version from the C<%released> and C<%version> hashes:
-they will have a key like C<5.010001> for 5.10.1.
-
-XXX the edit-in-place functionality of Porting/corelist.pl should
-be fixed to handle this automatically.
 
 Then, If you have a local CPAN mirror, run:
 
@@ -570,51 +584,19 @@ Otherwise, run:
 This will chug for a while, possibly reporting various warnings about
 badly-indexed CPAN modules unrelated to the modules actually in core.
 Assuming all goes well, it will update
-F<dist/Module-CoreList/lib/Module/CoreList.pm>.
+F<dist/Module-CoreList/lib/Module/CoreList.pm> and possibly
+F<dist/Module-CoreList/lib/Module/CoreList.pod> and/or
+F<dist/Module-CoreList/lib/Module/CoreList/Utils.pm>.
 
-Check that file over carefully:
+Check those files over carefully:
 
     $ git diff dist/Module-CoreList/lib/Module/CoreList.pm
-
-XXX I'm not sure if this updates Module::CoreList::Utils, so double
-check that file carefully.
-
-=head4 Bump C<$Module::CoreList::VERSION>
-
-If necessary, bump C<$Module::CoreList::VERSION> (there's no need to do this for
-every RC; in RC1, bump the version to a new clean number that will
-appear in the final release, and leave as-is for the later RCs and final).
-It may also happen that C<Module::CoreList> has been modified in blead, and
-hence has a new version number already.  (But make sure it is not the same
-number as a CPAN release.)
-
-Edit the version number in the new C<< 'Module::CoreList' => 'X.YZ' >>
-entry, as that is likely to reflect the previous version number.
-
-=head4 Bump C<$Module::CoreList::TieHashDelta::VERSION>
-
-C<$Module::CoreList::TieHashDelta::VERSION> should always be equal to
-C<$Module::CoreList::VERSION>. Make sure the two versions match before
-proceeding.
-
-Edit the version number in the new
-C<< 'Module::CoreList::TieHashDelta' => 'X.YZ' >> entry, as that is likely to
-reflect the previous version number.
-
-=head4 Bump C<$Module::CoreList::Utils::VERSION>
-
-C<$Module::CoreList::Utils::VERSION> should always be equal to
-C<$Module::CoreList::VERSION>. Make sure the two versions match before
-proceeding.
-
-Edit the version number in the new
-C<< 'Module::CoreList::Utils' => 'X.YZ' >> entry, as that is likely to
-reflect the previous version number.
+    $ git diff dist/Module-CoreList/lib/Module/CoreList.pod
+    $ git diff dist/Module-CoreList/lib/Module/CoreList/Utils.pm
 
 =head4 Bump version in Module::CoreList F<Changes>
 
-Also edit Module::CoreList's new version number in its F<Changes>
-file.
+Also edit Module::CoreList's new version number in its F<Changes> file.
 
 =head4 Add Module::CoreList version bump to perldelta
 
@@ -646,7 +628,7 @@ Finally, commit the new version of Module::CoreList:
 (unless this is for MAINT; in which case commit it to blead first, then
 cherry-pick it back).
 
-    $ git commit -m 'Update Module::CoreList for 5.x.y' dist/Module-CoreList/lib/Module/CoreList.pm dist/Module-CoreList/lib/Module/CoreList.pod
+    $ git commit -m 'Update Module::CoreList for 5.x.y' dist/Module-CoreList/Changes dist/Module-CoreList/lib/Module/CoreList.pm dist/Module-CoreList/lib/Module/CoreList.pod dist/Module-CoreList/lib/Module/CoreList/Utils.pm
 
 =head4 Rebuild and test
 
@@ -858,18 +840,18 @@ up.
 Create a tarball. Use the C<-s> option to specify a suitable suffix for
 the tarball and directory name:
 
-    $ cd root/of/perl/tree
-    $ make distclean
-    $ git clean -xdf		# make sure perl and git agree on files
-    $ git status		# and there's nothing lying around
+ $ cd root/of/perl/tree
+ $ make distclean
+ $ git clean -xdf       # make sure perl and git agree on files
+ $ git status           # and there's nothing lying around
 
-    $ perl Porting/makerel -b -s RC1            # for a release candidate
-    $ perl Porting/makerel -b                   # for a final release
+ $ perl Porting/makerel -b -s RC1            # for a release candidate
+ $ perl Porting/makerel -b                   # for a final release
 
 This creates the  directory F<../perl-x.y.z-RC1> or similar, copies all
-the MANIFEST files into it, sets the correct permissions on them,
-adds DOS line endings to some, then tars it up as
-F<../perl-x.y.z-RC1.tar.gz>. With C<-b>, it also creates a C<tar.bz2> file.
+the MANIFEST files into it, sets the correct permissions on them, then
+tars it up as F<../perl-x.y.z-RC1.tar.gz>. With C<-b>, it also creates a
+C<tar.bz2> file.
 
 If you're getting your tarball suffixed with -uncommitted and you're sure
 your changes were all committed, you can override the suffix with:
@@ -1149,7 +1131,7 @@ When C<make test_porting> passes, commit the new perldelta.
 =back
 
 At this point you may want to compare the commit with a previous bump to
-see if they look similar.  See commit 4eabcf701b for an example of a
+see if they look similar.  See commit ba03bc34a4 for an example of a
 previous version bump.
 
 =for checklist skip MAINT RC
@@ -1255,9 +1237,9 @@ I<You MUST SKIP this step for RC, BLEAD-POINT>
 
 Copy the perldelta.pod for this release into blead; for example:
 
-    $ cd ..../blead
-    $ cp -i ../5.10.x/pod/perldelta.pod pod/perl5101delta.pod    # for example
-    $ git add pod/perl5101delta.pod
+ $ cd ..../blead
+ $ cp -i ../5.10.x/pod/perldelta.pod pod/perl5101delta.pod  # for example
+ $ git add pod/perl5101delta.pod
 
 Edit F<pod/perl.pod> to add an entry for the file, e.g.:
 
@@ -1288,6 +1270,8 @@ fields C<Perl Version> and C<Fixed In>. The easiest way to determine this is to
 open up any ticket for modification and check the drop downs next to the
 C<Perl Version> and C<Fixed In> labels.
 
+Here, try this link: L<https://rt.perl.org/rt3/Ticket/Modify.html?id=10000>
+
 If the new version is not listed there, send an email to C<perlbug-admin at
 perl.org> requesting this.
 
@@ -1305,15 +1289,73 @@ Thanks for releasing perl!
 Add, to your quote to F<Porting/epigraphs.pod>, a link to the release
 announcement in the web-visible mailing list archive.  Commit it.
 
-=head3 Update Module::CoreList
+=for checklist skip BLEAD-FINAL, MAINT, RC
 
-XXX -- experimental in response to [perl #118195]
+=head3 update Module::CoreList
 
 I<After a BLEAD-POINT release only>
 
 After Module::CoreList has shipped to CPAN by the maintainer, update
 Module::CoreList in the source so that it reflects the new blead
-version number.
+version number:
+
+=over 4
+
+=item *
+
+Update F<Porting/Maintainers.pl> to list the new DISTRIBUTION on CPAN,
+which should be identical to what is currently in blead.
+
+=item *
+
+Bump the $VERSION in F<dist/Module-CoreList/lib/Module/CoreList.pm>,
+F<dist/Module-CoreList/lib/Module/CoreList/TieHashDelta.pm> and
+F<dist/Module-CoreList/lib/Module/CoreList/Utils.pm>.
+
+=item *
+
+If you have a local CPAN mirror, run:
+
+    $ ./perl -Ilib Porting/corelist.pl ~/my-cpan-mirror
+
+Otherwise, run:
+
+    $ ./perl -Ilib Porting/corelist.pl cpan
+
+This will update F<dist/Module-CoreList/lib/Module/CoreList.pm>,
+F<dist/Module-CoreList/lib/Module/CoreList.pod> and
+F<dist/Module-CoreList/lib/Module/CoreList/Utils.pm> as it did before,
+but this time adding new sections for the next BLEAD-POINT release.
+
+=item *
+
+Add the new $Module::CoreList::VERSION to
+F<dist/Module-CoreList/Changes>.
+
+=item *
+
+Update F<pod/perldelta.pod> to mention the upgrade to Module::CoreList.
+
+=item *
+
+Remake perl to get your changed .pm files propagated into F<lib/> and
+then run at least the F<dist/Module-CoreList/t/*.t> tests and the
+test_porting makefile target to check that they're ok.
+
+=item *
+
+Run
+
+    $ ./perl -Ilib -MModule::CoreList -le 'print Module::CoreList->find_version($]) ? "ok" : "not ok"'
+
+and check that it outputs "ok" to prove that Module::CoreList now knows
+about blead's current version.
+
+=item *
+
+Commit and push your changes.
+
+=back
 
 =head3 check tarball availability
 
@@ -1330,10 +1372,10 @@ to ensure that the tarballs are available on the website.
 =item *
 
 Check C</src> on CPAN (on a fast mirror) to ensure that links to
-the new tarballs have appeared.  There should be links in C</src/5.0>
-(which is accumulating all new versions), and an appropriate mention in
-C</src/README.html> (which describes the latest versions in each branch,
-with links). BLEAD-POINT releases will not be mentioned.
+the new tarballs have appeared: There should be links in C</src/5.0>
+(which is accumulating all new versions), and (for BLEAD-FINAL and
+MAINT only) an appropriate mention in C</src/README.html> (which describes
+the latest versions in each stable branch, with links).
 
 The C</src/5.0> links should appear automatically, some hours after upload.
 If they don't, or the C</src> description is inadequate,

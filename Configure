@@ -28,7 +28,7 @@
 # See Porting/pumpkin.pod for more information on metaconfig.
 #
 
-# Generated on Fri Aug 16 14:21:14 CEST 2013 [metaconfig 3.5 PL0]
+# Generated on Tue Sep 17 10:34:33 CEST 2013 [metaconfig 3.5 PL0]
 # (with additional metaconfig patches by perlbug@perl.org)
 
 cat >c1$$ <<EOF
@@ -887,7 +887,6 @@ i_rpcsvcdbm=''
 d_dirnamlen=''
 direntrytype=''
 i_dirent=''
-i_dld=''
 i_dlfcn=''
 i_fcntl=''
 i_float=''
@@ -1284,8 +1283,6 @@ installvendorscript=''
 vendorscript=''
 vendorscriptexp=''
 versiononly=''
-defvoidused=''
-voidflags=''
 yacc=''
 yaccflags=''
 CONFIG=''
@@ -1315,6 +1312,9 @@ elif test -f "/system/gnu_library/bin/ar.pm"; then
 elif test -n "$DJGPP"; then
 : DOS DJGPP
     _exe=".exe"
+elif test -f /kern/cookiejar; then
+: MiNT
+    _exe=""
 elif test -d c:/. -o -n "$is_os2" ; then
 : OS/2 or cygwin
     _exe=".exe"
@@ -1363,9 +1363,6 @@ libswanted=''
 ignore_versioned_solibs=''
 : set usethreads on the Configure command line to enable threads.
 usereentrant='undef'
-: full support for void wanted by default
-defvoidused=15
-
 ccname=''
 ccversion=''
 perllibs=''
@@ -1381,7 +1378,7 @@ libswanted_uselargefiles=''
 : set usesocks on the Configure command line to enable socks.
 : List of libraries we want.
 : If anyone needs extra -lxxx, put those in a hint file.
-libswanted="sfio socket bind inet nsl nm ndbm gdbm dbm db malloc dl dld ld sun"
+libswanted="sfio socket bind inet nsl nm ndbm gdbm dbm db malloc dl ld sun"
 libswanted="$libswanted m crypt sec util c cposix posix ucb bsd BSD"
 : We probably want to search /usr/shlib before most other libraries.
 : This is only used by the lib/ExtUtils/MakeMaker.pm routine extliblist.
@@ -3254,6 +3251,9 @@ EOM
 			'=3250'|'>3250') osvers=3.2.5 ;;
 			*) osvers=$tmp;;
 			esac
+			;;
+		bitrig) osname=bitrig
+			osvers="$3"
 			;;
 		bsd386) osname=bsd386
 			osvers=`$uname -r`
@@ -5856,6 +5856,59 @@ if $test -f use64bitint.cbu; then
 fi
 case "$use64bitint" in
 "$define"|true|[yY]*)
+	: This test was common to all the OpenBSD forks, and seems harmless for
+	: other platforms:
+	echo " "
+	echo "Checking if your C library has broken 64-bit functions..." >&4
+	cat >try.c <<EOCP
+#include <stdio.h>
+typedef $uquadtype myULL;
+int main (void)
+{
+    struct {
+	double d;
+	myULL  u;
+    } *p, test[] = {
+	{4294967303.15, 4294967303ULL},
+	{4294967294.2,  4294967294ULL},
+	{4294967295.7,  4294967295ULL},
+	{0.0, 0ULL}
+    };
+    for (p = test; p->u; p++) {
+	myULL x = (myULL)p->d;
+	if (x != p->u) {
+	    printf("buggy\n");
+	    return 0;
+	}
+    }
+    printf("ok\n");
+    return 0;
+}
+EOCP
+	set try
+	if eval $compile_ok; then
+	    libcquad=`./try`
+	    echo "Your C library's 64-bit functions are $libcquad."
+	else
+	    echo "(I can't seem to compile the test program.)"
+	    echo "Assuming that your C library's 64-bit functions are ok."
+	    libcquad="ok"
+	fi
+	$rm_try
+
+	case "$libcquad" in
+	    buggy*)
+		cat >&4 <<EOM
+
+*** You have a C library with broken 64-bit functions.
+*** 64-bit support does not work reliably in this configuration.
+*** Please rerun Configure without -Duse64bitint and/or -Dusemorebits.
+*** Cannot continue, aborting.
+
+EOM
+		exit 1
+		;;
+	esac
 	case "$longsize" in
 	4) case "$archname64" in
 	   '') archname64=64int ;;
@@ -6612,112 +6665,11 @@ $rm_try
 set i_malloc
 eval $setvar
 
-: check for void type
-echo " "
-echo "Checking to see how well your C compiler groks the void type..." >&4
-case "$voidflags" in
-'')
-	$cat >try.c <<EOCP
-#$i_stdlib I_STDLIB
-#ifdef I_STDLIB
-#include <stdlib.h>
-#endif
-#if TRY & 1
-void sub() {
-#else
-sub() {
-#endif
-	extern void moo();	/* function returning void */
-	void (*goo)();		/* ptr to func returning void */
-#if TRY & 8
-	void *hue;		/* generic ptr */
-#endif
-#if TRY & 2
-	void (*foo[10])();
-#endif
-
-#if TRY & 4
-	if(goo == moo) {
-		exit(0);
-	}
-#endif
-	exit(0);
-}
-int main() { sub(); }
-EOCP
-	if $cc $ccflags -c -DTRY=$defvoidused try.c >.out 2>&1 ; then
-		voidflags=$defvoidused
-	echo "Good.  It appears to support void to the level $package wants.">&4
-		if $contains warning .out >/dev/null 2>&1; then
-			echo "However, you might get some warnings that look like this:"
-			$cat .out
-		fi
-	else
-echo "Hmm, your compiler has some difficulty with void. Checking further..." >&4
-		if $cc $ccflags -c -DTRY=1 try.c >/dev/null 2>&1; then
-			echo "It supports 1..."
-			if $cc $ccflags -c -DTRY=3 try.c >/dev/null 2>&1; then
-				echo "It also supports 2..."
-				if $cc $ccflags -c -DTRY=7 try.c >/dev/null 2>&1; then
-					voidflags=7
-					echo "And it supports 4 but not 8 definitely."
-				else
-					echo "It doesn't support 4..."
-					if $cc $ccflags -c -DTRY=11 try.c >/dev/null 2>&1; then
-						voidflags=11
-						echo "But it supports 8."
-					else
-						voidflags=3
-						echo "Neither does it support 8."
-					fi
-				fi
-			else
-				echo "It does not support 2..."
-				if $cc $ccflags -c -DTRY=13 try.c >/dev/null 2>&1; then
-					voidflags=13
-					echo "But it supports 4 and 8."
-				else
-					if $cc $ccflags -c -DTRY=5 try.c >/dev/null 2>&1; then
-						voidflags=5
-						echo "And it supports 4 but has not heard about 8."
-					else
-						echo "However it supports 8 but not 4."
-					fi
-				fi
-			fi
-		else
-			echo "There is no support at all for void."
-			voidflags=0
-		fi
-	fi
-esac
-case "$voidflags" in
-"$defvoidused") ;;
-*)	$cat >&4 <<'EOM'
-  Support flag bits are:
-    1: basic void declarations.
-    2: arrays of pointers to functions returning void.
-    4: operations between pointers to and addresses of void functions.
-    8: generic void pointers.
-EOM
-	dflt="$voidflags";
-	rp="Your void support flags add up to what?"
-	. ./myread
-	voidflags="$ans"
-	;;
-esac
-$rm_try
-
 : check for length of pointer
 echo " "
 case "$ptrsize" in
 '')
 	echo "Checking to see how big your pointers are..." >&4
-	if test "$voidflags" -gt 7; then
-		echo '#define VOID_PTR char *' > try.c
-	else
-		echo '#define VOID_PTR void *' > try.c
-	fi
 	$cat >>try.c <<EOCP
 #include <stdio.h>
 #$i_stdlib I_STDLIB
@@ -6726,7 +6678,7 @@ case "$ptrsize" in
 #endif
 int main()
 {
-    printf("%d\n", (int)sizeof(VOID_PTR));
+    printf("%d\n", (int)sizeof(void *));
     exit(0);
 }
 EOCP
@@ -7754,10 +7706,6 @@ esac
 esac
 $rm -f libnames libpath
 
-: see if dld is available
-set dld.h i_dld
-eval $inhdr
-
 : Check if we are using C++
 echo " "
 echo "Checking for C++..." >&4
@@ -7892,9 +7840,6 @@ $undef|n|false)
 	case "$d_dlopen" in
 	    $define) dflt='y' ;;
 	esac
-	case "$i_dld" in
-	    $define) dflt='y' ;;
-	esac
 	: Does a dl_xxx.xs file exist for this operating system
 	$test -f $rsrc/$dldir/dl_${osname}.xs && dflt='y'
 	;;
@@ -7911,8 +7856,6 @@ y*) usedl="$define"
 			dflt="$dldir/dl_${osname}.xs"
 		elif $test "$d_dlopen" = "$define" ; then
 			dflt="$dldir/dl_dlopen.xs"
-		elif $test "$i_dld" = "$define" ; then
-			dflt="$dldir/dl_dld.xs"
 		else
 			dflt=''
 		fi
@@ -8328,7 +8271,7 @@ if "$useshrplib"; then
 	solaris)
 		xxx="-R $shrpdir"
 		;;
-	freebsd|mirbsd|netbsd|openbsd|interix|dragonfly)
+	freebsd|mirbsd|netbsd|openbsd|interix|dragonfly|bitrig)
 		xxx="-Wl,-R$shrpdir"
 		;;
 	bsdos|linux|irix*|dec_osf|gnu*)
@@ -19443,26 +19386,7 @@ esac
 
 : How can we generate normalized random numbers ?
 echo " "
-echo "Looking for a random number function..." >&4
-case "$randfunc" in
-'')
-	if set drand48 val -f; eval $csym; $val; then
-		dflt="drand48"
-		echo "Good, found drand48()." >&4
-	elif set random val -f; eval $csym; $val; then
-		dflt="random"
-		echo "OK, found random()." >&4
-	else
-		dflt="rand"
-		echo "Yuck, looks like I have to use rand()." >&4
-	fi
-	echo " "
-	;;
-*)
-	dflt="$randfunc"
-	;;
-esac
-cont=true
+echo "Using our internal random number implementation..." >&4
 
 case "$ccflags" in
 *-Dmy_rand=*|*-Dmy_srand=*)
@@ -19473,103 +19397,11 @@ case "$ccflags" in
 	;;
 esac
 
-while $test "$cont"; do
-	rp="Use which function to generate random numbers?"
-	. ./myread
-	if $test "$ans" = "$dflt"; then
-		: null
-	else
-		randbits=''
-	fi
-	randfunc="$ans"
-	if set $ans val -f; eval $csym; $val; then
-		cont=''
-	else
-		dflt=y
-		rp="I cannot find function $ans. Use that name anyway?"
-		. ./myread
-		dflt=rand
-		case "$ans" in
-			[yY]*) cont='';;
-		esac
-	fi
-	case "$cont" in
-	'')
-		case "$randfunc" in
-		drand48)
-			drand01="drand48()"
-			seedfunc="srand48"
-			randbits=48
-			randseedtype=long
-			;;
-		rand|random)
-			case "$randbits" in
-			'')
-echo "Checking to see how many bits your $randfunc() function produces..." >&4
-				$cat >try.c <<EOCP
-#$i_unistd I_UNISTD
-#$i_stdlib I_STDLIB
-#include <stdio.h>
-#ifdef I_UNISTD
-#  include <unistd.h>
-#endif
-#ifdef I_STDLIB
-#  include <stdlib.h>
-#endif
-int main()
-{
-	int i;
-	unsigned long tmp;
-	unsigned long max = 0L;
-
-	for (i = 1000; i; i--) {
-		tmp = (unsigned long) $randfunc();
-		if (tmp > max) max = tmp;
-	}
-	for (i = 0; max; i++)
-		max /= 2;
-	printf("%d\n",i);
-}
-EOCP
-				set try
-				if eval $compile_ok; then
-					dflt=`try`
-				else
-					dflt='?'
-					echo "(I can't seem to compile the test program...)"
-				fi
-				;;
-			*)
-				dflt="$randbits"
-				;;
-			esac
-			rp="How many bits does your $randfunc() function produce?"
-			. ./myread
-			randbits="$ans"
-			$rm_try
-			drand01="($randfunc() / (double) ((unsigned long)1 << $randbits))"
-			seedfunc="s$randfunc"
-			randseedtype=unsigned
-			;;
-		*)
-			dflt="31"
-			rp="How many bits does your $randfunc() function produce?"
-			. ./myread
-			randbits="$ans"
-			seedfunc="s$randfunc"
-			drand01="($randfunc() / (double) ((unsigned long)1 << $randbits))"
-			if set $seedfunc val -f; eval $csym; $val; then
-				echo "(Using $seedfunc() to seed random generator)"
-			else
-				echo "(Warning: no $seedfunc() to seed random generator)"
-				seedfunc=rand
-			fi
-			randseedtype=unsigned
-			;;
-		esac
-		;;
-	esac
-done
+randfunc=Perl_drand48
+drand01="Perl_drand48()"
+seedfunc="Perl_drand48_init"
+randbits=48
+randseedtype=U32
 
 : Check how to flush
 echo " "
@@ -23388,7 +23220,6 @@ db_prefixtype='$db_prefixtype'
 db_version_major='$db_version_major'
 db_version_minor='$db_version_minor'
 db_version_patch='$db_version_patch'
-defvoidused='$defvoidused'
 direntrytype='$direntrytype'
 dlext='$dlext'
 dlsrc='$dlsrc'
@@ -23484,7 +23315,6 @@ i_crypt='$i_crypt'
 i_db='$i_db'
 i_dbm='$i_dbm'
 i_dirent='$i_dirent'
-i_dld='$i_dld'
 i_dlfcn='$i_dlfcn'
 i_fcntl='$i_fcntl'
 i_float='$i_float'
@@ -23929,7 +23759,6 @@ version='$version'
 version_patchlevel_string='$version_patchlevel_string'
 versiononly='$versiononly'
 vi='$vi'
-voidflags='$voidflags'
 xlibpth='$xlibpth'
 yacc='$yacc'
 yaccflags='$yaccflags'

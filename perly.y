@@ -1201,6 +1201,21 @@ term	:	termbinop
 				    newLISTOP(OP_ASLICE, 0,
 					list($3),
 					ref($1, OP_ASLICE)));
+			  if ($$ && $1)
+			      $$->op_private |=
+				  $1->op_private & OPpSLICEWARNING;
+			  TOKEN_GETMAD($2,$$,'[');
+			  TOKEN_GETMAD($4,$$,']');
+			}
+	|	hsh '[' expr ']'                     /* array key/value slice */
+			{ $$ = op_prepend_elem(OP_KVASLICE,
+				newOP(OP_PUSHMARK, 0),
+				    newLISTOP(OP_KVASLICE, 0,
+					list($3),
+					ref(oopsAV($1), OP_KVASLICE)));
+			  if ($$ && $1)
+			      $$->op_private |=
+				  $1->op_private & OPpSLICEWARNING;
 			  TOKEN_GETMAD($2,$$,'[');
 			  TOKEN_GETMAD($4,$$,']');
 			}
@@ -1210,6 +1225,23 @@ term	:	termbinop
 				    newLISTOP(OP_HSLICE, 0,
 					list($3),
 					ref(oopsHV($1), OP_HSLICE)));
+			  if ($$ && $1)
+			      $$->op_private |=
+				  $1->op_private & OPpSLICEWARNING;
+			    PL_parser->expect = XOPERATOR;
+			  TOKEN_GETMAD($2,$$,'{');
+			  TOKEN_GETMAD($4,$$,';');
+			  TOKEN_GETMAD($5,$$,'}');
+			}
+	|	hsh '{' expr ';' '}'                 /* %hash{@keys} */
+			{ $$ = op_prepend_elem(OP_KVHSLICE,
+				newOP(OP_PUSHMARK, 0),
+				    newLISTOP(OP_KVHSLICE, 0,
+					list($3),
+					ref($1, OP_KVHSLICE)));
+			  if ($$ && $1)
+			      $$->op_private |=
+				  $1->op_private & OPpSLICEWARNING;
 			    PL_parser->expect = XOPERATOR;
 			  TOKEN_GETMAD($2,$$,'{');
 			  TOKEN_GETMAD($4,$$,';');
@@ -1409,12 +1441,14 @@ scalar	:	'$' indirob
 
 ary	:	'@' indirob
 			{ $$ = newAVREF($2);
+			  if ($$) $$->op_private |= IVAL($1);
 			  TOKEN_GETMAD($1,$$,'@');
 			}
 	;
 
 hsh	:	'%' indirob
 			{ $$ = newHVREF($2);
+			  if ($$) $$->op_private |= IVAL($1);
 			  TOKEN_GETMAD($1,$$,'%');
 			}
 	;

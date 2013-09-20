@@ -704,14 +704,6 @@ Perl_init_i18nl14n(pTHX_ int printwarn)
     return init_i18nl10n(printwarn);
 }
 
-U8 *
-Perl_uvuni_to_utf8(pTHX_ U8 *d, UV uv)
-{
-    PERL_ARGS_ASSERT_UVUNI_TO_UTF8;
-
-    return Perl_uvuni_to_utf8_flags(aTHX_ d, uv, 0);
-}
-
 bool
 Perl_is_utf8_string_loc(pTHX_ const U8 *s, STRLEN len, const U8 **ep)
 {
@@ -1211,6 +1203,20 @@ SV *
 Perl_sv_mortalcopy(pTHX_ SV *const oldstr)
 {
     return Perl_sv_mortalcopy_flags(aTHX_ oldstr, SV_GMAGIC);
+}
+
+UV      /* Made into a function, so can be deprecated */
+NATIVE_TO_NEED(const UV enc, const UV ch)
+{
+    PERL_UNUSED_ARG(enc);
+    return ch;
+}
+
+UV      /* Made into a function, so can be deprecated */
+ASCII_TO_NEED(const UV enc, const UV ch)
+{
+    PERL_UNUSED_ARG(enc);
+    return ch;
 }
 
 END_EXTERN_C

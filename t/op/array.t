@@ -6,7 +6,7 @@ BEGIN {
     require 'test.pl';
 }
 
-plan (127);
+plan (137);
 
 #
 # @foo, @bar, and @ary are also used from tie-stdarray after tie-ing them
@@ -466,5 +466,40 @@ package peen {
 	'arylen_p magic does not stop isa magic from being copied';
 }
 
+# Test that &PL_sv_undef is not special in arrays
+sub {
+    ok exists $_[0],
+      'exists returns true for &PL_sv_undef elem [perl #7508]';
+    is \$_[0], \undef, 'undef preserves identity in array [perl #109726]';
+}->(undef);
+# and that padav also knows how to handle the resulting NULLs
+@_ = sub { my @a; $a[1]=1; @a }->();
+is join (" ", map $_//"undef", @_), "undef 1",
+  'returning my @a with nonexistent elements'; 
+
+# [perl #118691]
+@plink=@plunk=();
+$plink[3] = 1;
+sub {
+    $_[0] = 2;
+    is $plink[0], 2, '@_ alias to nonexistent elem within array';
+    $_[1] = 3;
+    is $plink[1], 3, '@_ alias to nonexistent neg index within array';
+    is $_[2], undef, 'reading alias to negative index past beginning';
+    eval { $_[2] = 42 };
+    like $@, qr/Modification of non-creatable array value attempted, (?x:
+               )subscript -5/,
+         'error when setting alias to negative index past beginning';
+    is $_[3], undef, 'reading alias to -1 elem of empty array';
+    eval { $_[3] = 42 };
+    like $@, qr/Modification of non-creatable array value attempted, (?x:
+               )subscript -1/,
+         'error when setting alias to -1 elem of empty array';
+}->($plink[0], $plink[-2], $plink[-5], $plunk[-1]);
+
+$_ = \$#{[]};
+$$_ = \1;
+"$$_";
+pass "no assertion failure after assigning ref to arylen when ary is gone";
 
 "We're included by lib/Tie/Array/std.t so we need to return something true";

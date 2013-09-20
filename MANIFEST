@@ -837,6 +837,8 @@ cpan/Encode/t/big5-eten.utf		test data
 cpan/Encode/t/big5-hkscs.enc		test data
 cpan/Encode/t/big5-hkscs.utf		test data
 cpan/Encode/t/CJKT.t			test script
+cpan/Encode/t/cow.t
+cpan/Encode/t/decode.t
 cpan/Encode/t/enc_data.t		test script for utf8 DATA
 cpan/Encode/t/enc_eucjp.t		test script
 cpan/Encode/t/enc_module.enc		test data for t/enc_module.t
@@ -1140,7 +1142,6 @@ cpan/HTTP-Tiny/t/000_load.t
 cpan/HTTP-Tiny/t/001_api.t
 cpan/HTTP-Tiny/t/002_croakage.t
 cpan/HTTP-Tiny/t/003_agent.t
-cpan/HTTP-Tiny/t/00-compile.t
 cpan/HTTP-Tiny/t/010_url.t
 cpan/HTTP-Tiny/t/020_headers.t
 cpan/HTTP-Tiny/t/030_response.t
@@ -1176,6 +1177,7 @@ cpan/HTTP-Tiny/t/cases/form-01.txt
 cpan/HTTP-Tiny/t/cases/form-02.txt
 cpan/HTTP-Tiny/t/cases/form-03.txt
 cpan/HTTP-Tiny/t/cases/form-04.txt
+cpan/HTTP-Tiny/t/cases/form-05.txt
 cpan/HTTP-Tiny/t/cases/get-01.txt
 cpan/HTTP-Tiny/t/cases/get-02.txt
 cpan/HTTP-Tiny/t/cases/get-03.txt
@@ -1762,6 +1764,7 @@ cpan/Module-Metadata/t/lib/ENDPOD.pm
 cpan/Module-Metadata/t/lib/MBTest.pm
 cpan/Module-Metadata/t/lib/Tie/CPHash.pm
 cpan/Module-Metadata/t/metadata.t
+cpan/Module-Metadata/t/taint.t
 cpan/Module-Metadata/t/version.t
 cpan/NEXT/lib/NEXT.pm		Pseudo-class NEXT for method redispatch
 cpan/NEXT/t/actual.t		NEXT
@@ -2858,6 +2861,7 @@ cpan/version/t/04strict_lax.t		Tests for version objects
 cpan/version/t/05sigdie.t		Tests for version objects
 cpan/version/t/06noop.t			Tests for version objects
 cpan/version/t/07locale.t		Tests for version objects
+cpan/version/t/08_corelist.t		Tests for version objects
 cpan/version/t/coretests.pm		Tests for version objects
 cpan/Win32API-File/buffers.h	Win32API::File extension
 cpan/Win32API-File/cFile.h	Win32API::File extension
@@ -2982,8 +2986,14 @@ dist/bignum/t/scope_r.t			See if no bigrat works
 dist/Carp/lib/Carp/Heavy.pm	Error message retired workhorse
 dist/Carp/lib/Carp.pm		Error message extension
 dist/Carp/Makefile.PL		makefile writer for Carp
+dist/Carp/t/arg_regexp.t		See if Carp formats regexp args OK in stack traces
+dist/Carp/t/arg_string.t		See if Carp formats string args OK in stack traces
+dist/Carp/t/baduni.t		See if Carp handles non-char Unicode
+dist/Carp/t/baduni_warnings.t		See if Carp handles non-char Unicode when loaded via warnings.pm
 dist/Carp/t/Carp_overload.t		See if Carp handles overloads
 dist/Carp/t/Carp.t		See if Carp works
+dist/Carp/t/errno.t		See if Carp preserves $! and $^E
+dist/Carp/t/heavy_mismatch.t		See if Carp::Heavy catches version mismatch
 dist/Carp/t/heavy.t		See if Carp::Heavy works
 dist/Carp/t/stash_deletion.t		See if Carp handles stash deletion
 dist/Carp/t/swash.t		See if Carp avoids breaking swash loading
@@ -3347,6 +3357,7 @@ dist/Module-CoreList/README			Module::CoreList
 dist/Module-CoreList/t/corelist.t		Module::CoreList tests
 dist/Module-CoreList/t/deprecated.t		Module::CoreList tests
 dist/Module-CoreList/t/find_modules.t		Module::CoreList tests
+dist/Module-CoreList/t/is_core.t		Module::CoreList tests
 dist/Module-CoreList/t/pod.t			Module::CoreList tests
 dist/Module-CoreList/t/utils.t			Module::CoreList tests
 dist/Net-Ping/Changes			Net::Ping
@@ -3635,7 +3646,6 @@ ext/Devel-Peek/Peek.pm		Data debugging tool, module and pod
 ext/Devel-Peek/Peek.xs		Data debugging tool, externals
 ext/Devel-Peek/t/Peek.t		See if Devel::Peek works
 ext/DynaLoader/dl_aix.xs	AIX implementation
-ext/DynaLoader/dl_dld.xs	GNU dld style implementation
 ext/DynaLoader/dl_dllload.xs	S/390 dllload() style implementation
 ext/DynaLoader/dl_dlopen.xs	BSD/SunOS4&5 dlopen() style implementation
 ext/DynaLoader/dl_dyld.xs	NeXT/Apple dyld implementation
@@ -4052,8 +4062,6 @@ haiku/Haiku/Haiku.xs		Haiku extension external subroutines
 haiku/haikuish.h		Header for the Haiku port
 haiku/Haiku/Makefile.PL		Haiku extension makefile writer
 handy.h				Handy definitions
-hints/3b1cc			Hints for named architecture
-hints/3b1.sh			Hints for named architecture
 hints/aix_3.sh			Hints for named architecture
 hints/aix_4.sh			Hints for named architecture
 hints/aix.sh			Hints for named architecture
@@ -4061,6 +4069,7 @@ hints/altos486.sh		Hints for named architecture
 hints/amigaos.sh		Hints for named architecture
 hints/atheos.sh			Hints for named architecture
 hints/aux_3.sh			Hints for named architecture
+hints/bitrig.sh			Hints for named architecture
 hints/broken-db.msg		Warning message for systems with broken DB library
 hints/bsdos.sh			Hints for named architecture
 hints/catamount.sh		Hints for named architecture
@@ -4132,7 +4141,6 @@ hints/svr4.sh			Hints for named architecture
 hints/svr5.sh			Hints for named architecture
 hints/t001.c			Test case for gcc bug
 hints/ti1500.sh			Hints for named architecture
-hints/titanos.sh		Hints for named architecture
 hints/ultrix_4.sh		Hints for named architecture
 hints/umips.sh			Hints for named architecture
 hints/unicosmk.sh		Hints for named architecture
@@ -4610,9 +4618,11 @@ pod/perl5161delta.pod		Perl changes in version 5.16.1
 pod/perl5162delta.pod		Perl changes in version 5.16.2
 pod/perl5163delta.pod		Perl changes in version 5.16.3
 pod/perl5180delta.pod		Perl changes in version 5.18.0
+pod/perl5181delta.pod		Perl changes in version 5.18.1
 pod/perl5190delta.pod		Perl changes in version 5.19.0
 pod/perl5191delta.pod		Perl changes in version 5.19.1
 pod/perl5192delta.pod		Perl changes in version 5.19.2
+pod/perl5193delta.pod		Perl changes in version 5.19.3
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4691,6 +4701,7 @@ pod/perlref.pod			Perl references, the rest of the story
 pod/perlreftut.pod		Perl references short introduction
 pod/perlreguts.pod		Perl regular expression engine internals
 pod/perlre.pod			Perl regular expressions, the rest of the story
+pod/perlrepository.pod		
 pod/perlrequick.pod		Perl regular expressions quick start
 pod/perlreref.pod		Perl regular expressions quick reference
 pod/perlretut.pod		Perl regular expressions tutorial
@@ -4766,6 +4777,7 @@ Porting/manicheck		Check against MANIFEST
 Porting/manisort		Sort the MANIFEST
 Porting/new-perldelta.pl	Generate a new perldelta
 Porting/newtests-perldelta.pl	Generate Perldelta stub for newly added tests
+Porting/perl5200delta.pod	Unfinished perldelta for 5.20.0
 Porting/perldelta_template.pod	Template for creating new perldelta.pod files
 Porting/perlhist_calculate.pl		Perform calculations to update perlhist
 Porting/pod_lib.pl		Code for handling generated pods
@@ -4930,6 +4942,7 @@ t/base/while.t			See if while work
 t/benchmark/rt26188-speed-up-keys-on-empty-hash.t	Benchmark if keys on empty hashes is fast enough
 t/bigmem/pos.t			Check that pos() handles large offsets
 t/bigmem/read.t			Check read() handles large offsets
+t/bigmem/regexp.t		Test regular expressions with large strings
 t/bigmem/vec.t			Check vec() handles large offsets
 t/cmd/elsif.t			See if else-if works
 t/cmd/for.t			See if for loops work
@@ -4975,6 +4988,7 @@ t/io/crlf_through.t		See if pipe passes data intact with :crlf
 t/io/data.t			See if DATA works
 t/io/defout.t			See if PL_defoutgv works
 t/io/dup.t			See if >& works right
+t/io/eintr_print.t		Test that print is not returning EINTR
 t/io/eintr.t			See if code called during EINTR is safe
 t/io/errnosig.t			Test case for restoration $! when leaving signal handlers
 t/io/errno.t			See if $! is correctly set
@@ -5021,6 +5035,7 @@ t/lib/deprecate/Optionally.pm	Optionally deprecated module to test deprecate.pm
 t/lib/deprecate.t		Test deprecate.pm
 t/lib/Devel/nodb.pm		Module for t/run/switchd.t
 t/lib/Devel/switchd_empty.pm	Module for t/run/switchd.t
+t/lib/Devel/switchd_goto.pm	Module for t/run/switchd.t
 t/lib/Devel/switchd.pm		Module for t/run/switchd.t
 t/lib/feature/bundle		Tests for feature bundles
 t/lib/feature/implicit		Tests for implicit loading of feature.pm
@@ -5243,6 +5258,8 @@ t/op/index_thr.t		See if index works in another thread
 t/op/int.t			See if int works
 t/op/join.t			See if join works
 t/op/kill0.t			See if kill(0, $pid) works
+t/op/kvaslice.t			See if index/value array slices work
+t/op/kvhslice.t			See if key/value hash slices work
 t/op/lc.t			See if lc, uc, lcfirst, ucfirst, quotemeta work
 t/op/leaky-magic.t		See whether vars' magic leaks into packages
 t/op/length.t			See if length works
@@ -5293,6 +5310,7 @@ t/op/require_37033.t		See if require always closes rsfp
 t/op/require_errors.t		See if errors from require are reported correctly
 t/op/reset.t			See if reset operator works
 t/op/reverse.t			See if reverse operator works
+t/op/rt119311.t			Test bug #119311 (die/DESTROY/recursion)
 t/op/runlevel.t			See if die() works from perl_call_*()
 t/op/select.t			See if 0- and 1-argument select works
 t/op/setpgrpstack.t		See if setpgrp works
@@ -5346,6 +5364,7 @@ t/op/utfhash.t			See if utf8 keys in hashes behave
 t/op/utftaint.t			See if utf8 and taint work together
 t/op/vec.t			See if vectors work
 t/op/ver.t			See if v-strings and the %v format flag work
+t/op/waitpid.t			See if waitpid works
 t/op/wantarray.t		See if wantarray works
 t/op/warn.t			See if warn works
 t/op/while.t			See if while loops work
@@ -5358,6 +5377,7 @@ t/porting/bincompat.t		Check that {non_,}bincompat_options are ordered
 t/porting/checkcase.t		Check whether we are case-insensitive-fs-friendly
 t/porting/checkcfgvar.t		Check that all config.sh-like files are good
 t/porting/cmp_version.t		Test whether all changed module files have their VERSION bumped
+t/porting/copyright.t		Check that copyright years match
 t/porting/customized.dat		Data file for porting/customized.t
 t/porting/customized.t		Check all CUSTOMIZED files are as they should be
 t/porting/diag.t		Test completeness of perldiag.pod
@@ -5504,8 +5524,10 @@ t/uni/variables.t		See that the rules for variable names work
 t/uni/write.t			See if Unicode formats work
 t/win32/fs.t			Test Win32 link for compatibility
 t/win32/runenv.t		Test if Win* perl honors its env variables
+t/win32/signal.t		Test Win32 signal emulation
 t/win32/system.t		See if system works in Win*
 t/win32/system_tests		Test runner for system.t
+t/x2p/find2perl.t		Test find2perl
 t/x2p/s2p.t			See if s2p/psed work
 uconfig64.sh			Configuration script for microperl for LP64
 uconfig.h			Configuration header for microperl
@@ -5573,6 +5595,7 @@ win32/ce-helpers/compile.bat	WinCE port
 win32/ce-helpers/comp.pl	WinCE port
 win32/ce-helpers/makedist.pl	WinCE port
 win32/ce-helpers/registry.bat	WinCE port
+win32/ce-helpers/sdsdkenv.bat	WinCE port
 win32/config.ce			WinCE port
 win32/config.gc			Win32 base line config.sh (MinGW build)
 win32/config_H.ce		WinCE port
@@ -5588,6 +5611,7 @@ win32/FindExt.pm		Scan for extensions
 win32/include/arpa/inet.h	Win32 port
 win32/include/dirent.h		Win32 port
 win32/include/netdb.h		Win32 port
+win32/include/sys/errno2.h	Win32 port
 win32/include/sys/socket.h	Win32 port
 win32/list_static_libs.pl	prints libraries for static linking
 win32/Makefile			Win32 makefile for NMAKE (Visual C++ build)

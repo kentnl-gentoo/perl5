@@ -5,7 +5,7 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require './test.pl';
-    plan( tests => 92 );
+    plan( tests => 94 );
 }
 
 my @c;
@@ -111,8 +111,8 @@ sub testwarn {
 
     # The repetition number must be set to the value of $BYTES in
     # lib/warnings.pm
-    BEGIN { check_bits( ${^WARNING_BITS}, "\0" x 14, 'all bits off via "no warnings"' ) }
-    testwarn("\0" x 14, 'no bits');
+    BEGIN { check_bits( ${^WARNING_BITS}, "\0" x 15, 'all bits off via "no warnings"' ) }
+    testwarn("\0" x 15, 'no bits');
 
     use warnings;
     BEGIN { check_bits( ${^WARNING_BITS}, $default,
@@ -268,6 +268,19 @@ END
 
 is eval "(caller 0)[6]", "(caller 0)[6]",
   'eval text returned by caller does not include \n;';
+
+if (1) {
+    is (sub { (caller)[2] }->(), __LINE__,
+      '[perl #115768] caller gets line numbers from nulled cops');
+}
+# Test it at the end of the program, too.
+fresh_perl_is(<<'115768', 2, {},
+  if (1) {
+    foo();
+  }
+  sub foo { print +(caller)[2] }
+115768
+    '[perl #115768] caller gets line numbers from nulled cops (2)');
 
 # PL_linestr should not be modifiable
 eval '"${;BEGIN{  ${\(caller 2)[6]} = *foo  }}"';

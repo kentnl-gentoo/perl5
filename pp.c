@@ -88,23 +88,27 @@ PP(pp_padav)
     gimme = GIMME_V;
     if (gimme == G_ARRAY) {
         /* XXX see also S_pushav in pp_hot.c */
-	const I32 maxarg = AvFILL(MUTABLE_AV(TARG)) + 1;
+	const Size_t maxarg = AvFILL(MUTABLE_AV(TARG)) + 1;
 	EXTEND(SP, maxarg);
 	if (SvMAGICAL(TARG)) {
-	    U32 i;
-	    for (i=0; i < (U32)maxarg; i++) {
+	    Size_t i;
+	    for (i=0; i < maxarg; i++) {
 		SV * const * const svp = av_fetch(MUTABLE_AV(TARG), i, FALSE);
 		SP[i+1] = (svp) ? *svp : &PL_sv_undef;
 	    }
 	}
 	else {
-	    Copy(AvARRAY((const AV *)TARG), SP+1, maxarg, SV*);
+	    PADOFFSET i;
+	    for (i=0; i < (PADOFFSET)maxarg; i++) {
+		SV * const sv = AvARRAY((const AV *)TARG)[i];
+		SP[i+1] = sv ? sv : &PL_sv_undef;
+	    }
 	}
 	SP += maxarg;
     }
     else if (gimme == G_SCALAR) {
 	SV* const sv = sv_newmortal();
-	const I32 maxarg = AvFILL(MUTABLE_AV(TARG)) + 1;
+	const SSize_t maxarg = AvFILL(MUTABLE_AV(TARG)) + 1;
 	sv_setiv(sv, maxarg);
 	PUSHs(sv);
     }
@@ -442,7 +446,7 @@ PP(pp_pos)
 	    if (mg && mg->mg_len != -1) {
 		dTARGET;
 		STRLEN i = mg->mg_len;
-		if (DO_UTF8(sv))
+		if (mg->mg_flags & MGf_BYTES && DO_UTF8(sv))
 		    i = sv_pos_b2u_flags(sv, i, SV_GMAGIC|SV_CONST_RETURN);
 		PUSHu(i);
 		RETURN;
@@ -2315,9 +2319,8 @@ PP(pp_complement)
 	I32 anum;
 	STRLEN len;
 
-	(void)SvPV_nomg_const(sv,len); /* force check for uninit var */
-	sv_setsv_nomg(TARG, sv);
-	tmps = (U8*)SvPV_force_nomg(TARG, len);
+	sv_copypv_nomg(TARG, sv);
+	tmps = (U8*)SvPV_nomg(TARG, len);
 	anum = len;
 	if (SvUTF8(TARG)) {
 	  /* Calculate exact length, let's not estimate. */
@@ -2708,10 +2711,6 @@ PP(pp_sin)
    in addition to rand().  So the overrides should not be needed any more.
    --Jarkko Hietaniemi	27 September 1998
  */
-
-#ifndef HAS_DRAND48_PROTO
-extern double drand48 (void);
-#endif
 
 PP(pp_rand)
 {
@@ -3316,9 +3315,9 @@ PP(pp_ord)
         argsv = tmpsv;
     }
 
-    XPUSHu(DO_UTF8(argsv) ?
-	   utf8n_to_uvchr(s, UTF8_MAXBYTES, 0, UTF8_ALLOW_ANYUV) :
-	   (UV)(*s & 0xff));
+    XPUSHu(DO_UTF8(argsv)
+           ? utf8n_to_uvchr(s, UTF8_MAXBYTES, 0, UTF8_ALLOW_ANYUV)
+           : (UV)(*s & 0xff));
 
     RETURN;
 }
@@ -4088,7 +4087,7 @@ PP(pp_quotemeta)
 		    /* In locale, we quote all non-ASCII Latin1 chars.
 		     * Otherwise use the quoting rules */
 		    if (IN_LOCALE_RUNTIME
-			|| _isQUOTEMETA(TWO_BYTE_UTF8_TO_UNI(*s, *(s + 1))))
+			|| _isQUOTEMETA(TWO_BYTE_UTF8_TO_NATIVE(*s, *(s + 1))))
 		    {
 			to_quote = TRUE;
 		    }
@@ -4241,7 +4240,7 @@ PP(pp_fc)
                     for (; s < send; s++) {
                         STRLEN ulen;
                         UV fc = _to_uni_fold_flags(*s, tmpbuf, &ulen, flags);
-                        if UNI_IS_INVARIANT(fc) {
+                        if UVCHR_IS_INVARIANT(fc) {
                             if (full_folding
                                 && *s == LATIN_SMALL_LETTER_SHARP_S)
                             {
@@ -4306,9 +4305,9 @@ PP(pp_aslice)
 
 	if (lval && localizing) {
 	    SV **svp;
-	    I32 max = -1;
+	    SSize_t max = -1;
 	    for (svp = MARK + 1; svp <= SP; svp++) {
-		const I32 elem = SvIV(*svp);
+		const SSize_t elem = SvIV(*svp);
 		if (elem > max)
 		    max = elem;
 	    }
@@ -4318,7 +4317,7 @@ PP(pp_aslice)
 
 	while (++MARK <= SP) {
 	    SV **svp;
-	    I32 elem = SvIV(*MARK);
+	    SSize_t elem = SvIV(*MARK);
 	    bool preeminent = TRUE;
 
 	    if (localizing && can_preserve) {
@@ -4331,7 +4330,7 @@ PP(pp_aslice)
 
 	    svp = av_fetch(av, elem, lval);
 	    if (lval) {
-		if (!svp || *svp == &PL_sv_undef)
+		if (!svp || !*svp)
 		    DIE(aTHX_ PL_no_aelem, elem);
 		if (localizing) {
 		    if (preeminent)
@@ -4346,6 +4345,51 @@ PP(pp_aslice)
     if (GIMME != G_ARRAY) {
 	MARK = ORIGMARK;
 	*++MARK = SP > ORIGMARK ? *SP : &PL_sv_undef;
+	SP = MARK;
+    }
+    RETURN;
+}
+
+PP(pp_kvaslice)
+{
+    dVAR; dSP; dMARK;
+    AV *const av = MUTABLE_AV(POPs);
+    I32 lval = (PL_op->op_flags & OPf_MOD);
+    SSize_t items = SP - MARK;
+
+    if (PL_op->op_private & OPpMAYBE_LVSUB) {
+       const I32 flags = is_lvalue_sub();
+       if (flags) {
+           if (!(flags & OPpENTERSUB_INARGS))
+               /* diag_listed_as: Can't modify %s in %s */
+	       Perl_croak(aTHX_ "Can't modify index/value array slice in list assignment");
+	   lval = flags;
+       }
+    }
+
+    MEXTEND(SP,items);
+    while (items > 1) {
+	*(MARK+items*2-1) = *(MARK+items);
+	items--;
+    }
+    items = SP-MARK;
+    SP += items;
+
+    while (++MARK <= SP) {
+        SV **svp;
+
+	svp = av_fetch(av, SvIV(*MARK), lval);
+        if (lval) {
+            if (!svp || !*svp || *svp == &PL_sv_undef) {
+                DIE(aTHX_ PL_no_aelem, SvIV(*MARK));
+            }
+	    *MARK = sv_mortalcopy(*MARK);
+        }
+	*++MARK = svp ? *svp : &PL_sv_undef;
+    }
+    if (GIMME != G_ARRAY) {
+	MARK = SP - items*2;
+	*++MARK = items > 0 ? *SP : &PL_sv_undef;
 	SP = MARK;
     }
     RETURN;
@@ -4542,7 +4586,7 @@ S_do_delete_local(pTHX)
 	    if (PL_op->op_flags & OPf_SPECIAL) {
 		AV * const av = MUTABLE_AV(osv);
 		while (++MARK <= end) {
-		    I32 idx = SvIV(*MARK);
+		    SSize_t idx = SvIV(*MARK);
 		    SV *sv = NULL;
 		    bool preeminent = TRUE;
 		    if (can_preserve)
@@ -4754,6 +4798,55 @@ PP(pp_hslice)
     RETURN;
 }
 
+PP(pp_kvhslice)
+{
+    dVAR; dSP; dMARK;
+    HV * const hv = MUTABLE_HV(POPs);
+    I32 lval = (PL_op->op_flags & OPf_MOD);
+    SSize_t items = SP - MARK;
+
+    if (PL_op->op_private & OPpMAYBE_LVSUB) {
+       const I32 flags = is_lvalue_sub();
+       if (flags) {
+           if (!(flags & OPpENTERSUB_INARGS))
+               /* diag_listed_as: Can't modify %s in %s */
+	       Perl_croak(aTHX_ "Can't modify key/value hash slice in list assignment");
+	   lval = flags;
+       }
+    }
+
+    MEXTEND(SP,items);
+    while (items > 1) {
+	*(MARK+items*2-1) = *(MARK+items);
+	items--;
+    }
+    items = SP-MARK;
+    SP += items;
+
+    while (++MARK <= SP) {
+        SV * const keysv = *MARK;
+        SV **svp;
+        HE *he;
+
+        he = hv_fetch_ent(hv, keysv, lval, 0);
+        svp = he ? &HeVAL(he) : NULL;
+
+        if (lval) {
+            if (!svp || !*svp || *svp == &PL_sv_undef) {
+                DIE(aTHX_ PL_no_helem_sv, SVfARG(keysv));
+            }
+	    *MARK = sv_mortalcopy(*MARK);
+        }
+        *++MARK = svp && *svp ? *svp : &PL_sv_undef;
+    }
+    if (GIMME != G_ARRAY) {
+	MARK = SP - items*2;
+	*++MARK = items > 0 ? *SP : &PL_sv_undef;
+	SP = MARK;
+    }
+    RETURN;
+}
+
 /* List operators. */
 
 PP(pp_list)
@@ -4900,12 +4993,12 @@ PP(pp_splice)
     AV *ary = DEREF_PLAIN_ARRAY(MUTABLE_AV(*++MARK));
     SV **src;
     SV **dst;
-    I32 i;
-    I32 offset;
-    I32 length;
-    I32 newlen;
-    I32 after;
-    I32 diff;
+    SSize_t i;
+    SSize_t offset;
+    SSize_t length;
+    SSize_t newlen;
+    SSize_t after;
+    SSize_t diff;
     const MAGIC * const mg = SvTIED_mg((const SV *)ary, PERL_MAGIC_tied);
 
     if (mg) {
@@ -4972,14 +5065,18 @@ PP(pp_splice)
 
 	MARK = ORIGMARK + 1;
 	if (GIMME == G_ARRAY) {			/* copy return vals to stack */
+	    const bool real = cBOOL(AvREAL(ary));
 	    MEXTEND(MARK, length);
-	    Copy(AvARRAY(ary)+offset, MARK, length, SV*);
-	    if (AvREAL(ary)) {
+	    if (real)
 		EXTEND_MORTAL(length);
-		for (i = length, dst = MARK; i; i--) {
+	    for (i = 0, dst = MARK; i < length; i++) {
+		if ((*dst = AvARRAY(ary)[i+offset])) {
+		  if (real)
 		    sv_2mortal(*dst);	/* free them eventually */
-		    dst++;
 		}
+		else
+		    *dst = &PL_sv_undef;
+		dst++;
 	    }
 	    MARK += length - 1;
 	}
@@ -5017,7 +5114,7 @@ PP(pp_splice)
 	}
 	i = -diff;
 	while (i)
-	    dst[--i] = &PL_sv_undef;
+	    dst[--i] = NULL;
 	
 	if (newlen) {
  	    Copy( tmparyval, AvARRAY(ary) + offset, newlen, SV* );
@@ -5065,13 +5162,16 @@ PP(pp_splice)
 	MARK = ORIGMARK + 1;
 	if (GIMME == G_ARRAY) {			/* copy return vals to stack */
 	    if (length) {
-		Copy(tmparyval, MARK, length, SV*);
-		if (AvREAL(ary)) {
+		const bool real = cBOOL(AvREAL(ary));
+		if (real)
 		    EXTEND_MORTAL(length);
-		    for (i = length, dst = MARK; i; i--) {
+		for (i = 0, dst = MARK; i < length; i++) {
+		    if ((*dst = tmparyval[i])) {
+		      if (real)
 			sv_2mortal(*dst);	/* free them eventually */
-			dst++;
 		    }
+		    else *dst = &PL_sv_undef;
+		    dst++;
 		}
 	    }
 	    MARK += length - 1;
@@ -5165,7 +5265,7 @@ PP(pp_unshift)
 	SPAGAIN;
     }
     else {
-	I32 i = 0;
+	SSize_t i = 0;
 	av_unshift(ary, SP - MARK);
 	while (MARK < SP) {
 	    SV * const sv = newSVsv(*++MARK);
@@ -5196,7 +5296,7 @@ PP(pp_reverse)
 	    SP = MARK;
 
 	    if (SvMAGICAL(av)) {
-		I32 i, j;
+		SSize_t i, j;
 		SV *tmp = sv_newmortal();
 		/* For SvCANEXISTDELETE */
 		HV *stash;
@@ -5268,8 +5368,6 @@ PP(pp_reverse)
 	    do_join(TARG, &PL_sv_no, MARK, SP);
 	else {
 	    sv_setsv(TARG, SP > MARK ? *SP : find_rundefsv());
-	    if (! SvOK(TARG) && ckWARN(WARN_UNINITIALIZED))
-		report_uninit(TARG);
 	}
 
 	up = SvPV_force(TARG, len);
@@ -5326,11 +5424,11 @@ PP(pp_split)
     REGEXP *rx;
     SV *dstr;
     const char *m;
-    I32 iters = 0;
+    SSize_t iters = 0;
     const STRLEN slen = do_utf8
                         ? utf8_length((U8*)s, (U8*)strend)
                         : (STRLEN)(strend - s);
-    I32 maxiters = slen + 10;
+    SSize_t maxiters = slen + 10;
     I32 trailing_empty = 0;
     const char *orig;
     const I32 origlimit = limit;
@@ -5722,7 +5820,7 @@ PP(pp_split)
 	    LEAVE_with_name("call_PUSH");
 	    SPAGAIN;
 	    if (gimme == G_ARRAY) {
-		I32 i;
+		SSize_t i;
 		/* EXTEND should not be needed - we just popped them */
 		EXTEND(SP, iters);
 		for (i=0; i < iters; i++) {

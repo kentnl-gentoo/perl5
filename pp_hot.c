@@ -326,11 +326,11 @@ STATIC void
 S_pushav(pTHX_ AV* const av)
 {
     dSP;
-    const I32 maxarg = AvFILL(av) + 1;
+    const SSize_t maxarg = AvFILL(av) + 1;
     EXTEND(SP, maxarg);
     if (SvRMAGICAL(av)) {
-        U32 i;
-        for (i=0; i < (U32)maxarg; i++) {
+        PADOFFSET i;
+        for (i=0; i < (PADOFFSET)maxarg; i++) {
             SV ** const svp = av_fetch(av, i, FALSE);
             /* See note in pp_helem, and bug id #27839 */
             SP[i+1] = svp
@@ -339,7 +339,11 @@ S_pushav(pTHX_ AV* const av)
         }
     }
     else {
-        Copy(AvARRAY(av), SP+1, maxarg, SV*);
+        PADOFFSET i;
+        for (i=0; i < (PADOFFSET)maxarg; i++) {
+            SV * const sv = AvARRAY(av)[i];
+            SP[i+1] = sv ? sv : &PL_sv_undef;
+        }
     }
     SP += maxarg;
     PUTBACK;
@@ -920,7 +924,7 @@ PP(pp_rv2av)
 	}
 	else if (gimme == G_SCALAR) {
 	    dTARGET;
-	    const I32 maxarg = AvFILL(av) + 1;
+	    const SSize_t maxarg = AvFILL(av) + 1;
 	    SETi(maxarg);
 	}
     } else {
@@ -990,7 +994,7 @@ PP(pp_aassign)
 
     I32 gimme;
     HV *hash;
-    I32 i;
+    SSize_t i;
     int magic;
     U32 lval = 0;
 
@@ -1055,8 +1059,8 @@ PP(pp_aassign)
 	    i = 0;
 	    while (relem <= lastrelem) {	/* gobble up all the rest */
 		SV **didstore;
-		assert(*relem);
-		SvGETMAGIC(*relem); /* before newSV, in case it dies */
+		if (*relem)
+		    SvGETMAGIC(*relem); /* before newSV, in case it dies */
 		sv = newSV(0);
 		sv_setsv_nomg(sv, *relem);
 		*(relem++) = sv;
@@ -1322,7 +1326,7 @@ PP(pp_match)
     PMOP *dynpm = pm;
     const char *s;
     const char *strend;
-    I32 curpos = 0; /* initial pos() or current $+[0] */
+    SSize_t curpos = 0; /* initial pos() or current $+[0] */
     I32 global;
     U8 r_flags = 0;
     const char *truebase;			/* Start of string  */
@@ -1379,8 +1383,10 @@ PP(pp_match)
 	rx = PM_GETRE(pm);
     }
 
-    if (RX_MINLEN(rx) > (I32)len) {
-        DEBUG_r(PerlIO_printf(Perl_debug_log, "String shorter than min possible regex match\n"));
+    if (RX_MINLEN(rx) >= 0 && (STRLEN)RX_MINLEN(rx) > len) {
+        DEBUG_r(PerlIO_printf(Perl_debug_log, "String shorter than min possible regex match (%"
+                                              UVuf" < %"IVdf")\n",
+                                              (UV)len, (IV)RX_MINLEN(rx)));
 	goto nope;
     }
 
@@ -1388,7 +1394,7 @@ PP(pp_match)
     if (global) {
         mg = mg_find_mglob(TARG);
         if (mg && mg->mg_len >= 0) {
-            curpos = mg->mg_len;
+            curpos = MgBYTEPOS(mg, TARG, truebase, len);
             /* last time pos() was set, it was zero-length match */
             if (mg->mg_flags & MGf_MINMATCH)
                 had_zerolen = 1;
@@ -1444,7 +1450,7 @@ PP(pp_match)
     if (global && (gimme != G_ARRAY || (dynpm->op_pmflags & PMf_CONTINUE))) {
         if (!mg)
             mg = sv_magicext_mglob(TARG);
-        mg->mg_len = RX_OFFS(rx)[0].end;
+        MgBYTEPOS_set(mg, TARG, truebase, RX_OFFS(rx)[0].end);
         if (RX_ZERO_LEN(rx))
             mg->mg_flags |= MGf_MINMATCH;
         else
@@ -1563,14 +1569,10 @@ Perl_do_readline(pTHX)
     }
     if (!fp) {
 	if ((!io || !(IoFLAGS(io) & IOf_START))
-	    && ckWARN2(WARN_GLOB, WARN_CLOSED))
+	    && ckWARN(WARN_CLOSED)
+            && type != OP_GLOB)
 	{
-	    if (type == OP_GLOB)
-		Perl_ck_warner_d(aTHX_ packWARN(WARN_GLOB),
-			    "glob failed (can't start child: %s)",
-			    Strerror(errno));
-	    else
-		report_evil_fh(PL_last_in_gv);
+	    report_evil_fh(PL_last_in_gv);
 	}
 	if (gimme == G_SCALAR) {
 	    /* undef TARG, and push that undefined value */
@@ -1912,18 +1914,11 @@ PP(pp_iter)
                 SvREFCNT_inc_simple_void_NN(sv);
             }
         }
+        else if (!av_is_stack) {
+            sv = newSVavdefelem(av, ix, 0);
+        }
         else
             sv = &PL_sv_undef;
-
-        if (!av_is_stack && sv == &PL_sv_undef) {
-            SV *lv = newSV_type(SVt_PVLV);
-            LvTYPE(lv) = 'y';
-            sv_magic(lv, NULL, PERL_MAGIC_defelem, NULL, 0);
-            LvTARG(lv) = SvREFCNT_inc_simple(av);
-            LvTARGOFF(lv) = ix;
-            LvTARGLEN(lv) = (STRLEN)UV_MAX;
-            sv = lv;
-        }
 
         oldsv = *itersvp;
         *itersvp = sv;
@@ -2155,7 +2150,10 @@ PP(pp_subst)
 	&& !is_cow
 #endif
         && (I32)clen <= RX_MINLENRET(rx)
-        && (once || !(r_flags & REXEC_COPY_STR))
+        && (  once
+           || !(r_flags & REXEC_COPY_STR)
+           || (!SvGMAGICAL(dstr) && !(RX_EXTFLAGS(rx) & RXf_EVAL_SEEN))
+           )
         && !(RX_EXTFLAGS(rx) & RXf_NO_INPLACE_SUBST)
 	&& (!doutf8 || SvUTF8(TARG))
 	&& !(rpm->op_pmflags & PMf_NONDESTRUCT))
@@ -2229,9 +2227,9 @@ PP(pp_subst)
 		    d += clen;
 		}
 		s = RX_OFFS(rx)[0].end + orig;
-	    } while (CALLREGEXEC(rx, s, strend, orig, s == m,
+	    } while (CALLREGEXEC(rx, s, strend, orig,
+				 s == m, /* don't match same null twice */
 				 TARG, NULL,
-				 /* don't match same null twice */
                      REXEC_NOT_FIRST|REXEC_IGNOREPOS|REXEC_FAIL_ON_UNDERFLOW));
 	    if (s != d) {
                 I32 i = strend - s;
@@ -2501,8 +2499,8 @@ PP(pp_leavesub)
     PUTBACK;
 
     LEAVE;
-    cxstack_ix--;
     POPSUB(cx,sv);	/* Stack values are safe: release CV and @_ ... */
+    cxstack_ix--;
     PL_curpm = newpm;	/* ... and pop $1 et al */
 
     LEAVESUB(sv);
@@ -2638,7 +2636,7 @@ try_autoload:
     if (!(CvISXSUB(cv))) {
 	/* This path taken at least 75% of the time   */
 	dMARK;
-	I32 items = SP - MARK;
+	SSize_t items = SP - MARK;
 	PADLIST * const padlist = CvPADLIST(cv);
 	PUSHBLOCK(cx, CXt_SUB, MARK);
 	PUSHSUB(cx);
@@ -2701,7 +2699,7 @@ try_autoload:
 	RETURNOP(CvSTART(cv));
     }
     else {
-	I32 markix = TOPMARK;
+	SSize_t markix = TOPMARK;
 
 	SAVETMPS;
 	PUTBACK;
@@ -2712,24 +2710,38 @@ try_autoload:
 	    !CvLVALUE(cv))
 	    DIE(aTHX_ "Can't modify non-lvalue subroutine call");
 
-	if (!hasargs) {
+	if (!hasargs && GvAV(PL_defgv)) {
 	    /* Need to copy @_ to stack. Alternative may be to
 	     * switch stack to @_, and copy return values
 	     * back. This would allow popping @_ in XSUB, e.g.. XXXX */
 	    AV * const av = GvAV(PL_defgv);
-	    const I32 items = AvFILLp(av) + 1;   /* @_ is not tieable */
+	    const SSize_t items = AvFILL(av) + 1;
 
 	    if (items) {
+		SSize_t i = 0;
+		const bool m = cBOOL(SvRMAGICAL(av));
 		/* Mark is at the end of the stack. */
 		EXTEND(SP, items);
-		Copy(AvARRAY(av), SP + 1, items, SV*);
+		for (; i < items; ++i)
+		{
+		    SV *sv;
+		    if (m) {
+			SV ** const svp = av_fetch(av, i, 0);
+			sv = svp ? *svp : NULL;
+		    }
+		    else sv = AvARRAY(av)[i];
+		    if (sv) SP[i+1] = sv;
+		    else {
+			SP[i+1] = newSVavdefelem(av, i, 1);
+		    }
+		}
 		SP += items;
 		PUTBACK ;		
 	    }
 	}
 	else {
 	    SV **mark = PL_stack_base + markix;
-	    I32 items = SP - mark;
+	    SSize_t items = SP - mark;
 	    while (items--) {
 		mark++;
 		if (*mark && SvPADTMP(*mark) && !IS_PADGV(*mark))
@@ -2791,7 +2803,7 @@ PP(pp_aelem)
     IV elem = SvIV(elemsv);
     AV *const av = MUTABLE_AV(POPs);
     const U32 lval = PL_op->op_flags & OPf_MOD || LVRET;
-    const U32 defer = (PL_op->op_private & OPpLVAL_DEFER) && (elem > av_len(av));
+    const U32 defer = PL_op->op_private & OPpLVAL_DEFER;
     const bool localizing = PL_op->op_private & OPpLVAL_INTRO;
     bool preeminent = TRUE;
     SV *sv;
@@ -2830,18 +2842,17 @@ PP(pp_aelem)
 	      MEM_WRAP_CHECK_1(elem,SV*,oom_array_extend);
 	 }
 #endif
-	if (!svp || *svp == &PL_sv_undef) {
-	    SV* lv;
+	if (!svp || !*svp) {
+	    IV len;
 	    if (!defer)
 		DIE(aTHX_ PL_no_aelem, elem);
-	    lv = sv_newmortal();
-	    sv_upgrade(lv, SVt_PVLV);
-	    LvTYPE(lv) = 'y';
-	    sv_magic(lv, NULL, PERL_MAGIC_defelem, NULL, 0);
-	    LvTARG(lv) = SvREFCNT_inc_simple(av);
-	    LvTARGOFF(lv) = elem;
-	    LvTARGLEN(lv) = 1;
-	    PUSHs(lv);
+	    len = av_len(av);
+	    mPUSHs(newSVavdefelem(av,
+	    /* Resolve a negative index now, unless it points before the
+	       beginning of the array, in which case record it for error
+	       reporting in magic_setdefelem. */
+		elem < 0 && len + elem >= 0 ? len + elem : elem,
+		1));
 	    RETURN;
 	}
 	if (localizing) {

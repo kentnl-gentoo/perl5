@@ -285,6 +285,7 @@ Perl_pad_new(pTHX_ int flags)
 	av_store(pad, 0, NULL);
 	padname = newAV();
 	AvPAD_NAMELIST_on(padname);
+	av_store(padname, 0, &PL_sv_undef);
     }
 
     /* Most subroutines never recurse, hence only need 2 entries in the padlist
@@ -1651,11 +1652,13 @@ Perl_pad_swipe(pTHX_ PADOFFSET po, bool refadjust)
     PL_curpad[po] = newSV(0);
     SvPADTMP_on(PL_curpad[po]);
 #else
-    PL_curpad[po] = &PL_sv_undef;
+    PL_curpad[po] = NULL;
 #endif
     if (PadnamelistMAX(PL_comppad_name) != -1
      && (PADOFFSET)PadnamelistMAX(PL_comppad_name) >= po) {
-	assert(!PadnameLEN(PadnamelistARRAY(PL_comppad_name)[po]));
+	if (PadnamelistARRAY(PL_comppad_name)[po]) {
+	    assert(!PadnameLEN(PadnamelistARRAY(PL_comppad_name)[po]));
+	}
 	PadnamelistARRAY(PL_comppad_name)[po] = &PL_sv_undef;
     }
     if ((I32)po < PL_padix)
@@ -1767,22 +1770,24 @@ Perl_pad_tidy(pTHX_ padtidy_type type)
 	av_store(PL_comppad_name, AvFILLp(PL_comppad), NULL);
 
     if (type == padtidy_SUBCLONE) {
-	SV * const * const namep = AvARRAY(PL_comppad_name);
+	SV ** const namep = AvARRAY(PL_comppad_name);
 	PADOFFSET ix;
 
 	for (ix = AvFILLp(PL_comppad); ix > 0; ix--) {
 	    SV *namesv;
+	    if (!namep[ix]) namep[ix] = &PL_sv_undef;
 
-	    if (SvIMMORTAL(PL_curpad[ix]) || IS_PADGV(PL_curpad[ix]) || IS_PADCONST(PL_curpad[ix]))
-		continue;
 	    /*
 	     * The only things that a clonable function needs in its
-	     * pad are anonymous subs.
+	     * pad are anonymous subs, constants and GVs.
 	     * The rest are created anew during cloning.
 	     */
-	    if (!((namesv = namep[ix]) != NULL &&
-		  namesv != &PL_sv_undef &&
-		   *SvPVX_const(namesv) == '&'))
+	    if (!PL_curpad[ix] || SvIMMORTAL(PL_curpad[ix])
+		 || IS_PADGV(PL_curpad[ix]))
+		continue;
+	    namesv = namep[ix];
+	    if (!(PadnamePV(namesv) &&
+		   (!PadnameLEN(namesv) || *SvPVX_const(namesv) == '&')))
 	    {
 		SvREFCNT_dec(PL_curpad[ix]);
 		PL_curpad[ix] = NULL;
@@ -1797,10 +1802,12 @@ Perl_pad_tidy(pTHX_ padtidy_type type)
     }
 
     if (type == padtidy_SUB || type == padtidy_FORMAT) {
-	SV * const * const namep = AvARRAY(PL_comppad_name);
+	SV ** const namep = AvARRAY(PL_comppad_name);
 	PADOFFSET ix;
 	for (ix = AvFILLp(PL_comppad); ix > 0; ix--) {
-	    if (SvIMMORTAL(PL_curpad[ix]) || IS_PADGV(PL_curpad[ix]) || IS_PADCONST(PL_curpad[ix]))
+	    if (!namep[ix]) namep[ix] = &PL_sv_undef;
+	    if (!PL_curpad[ix] || SvIMMORTAL(PL_curpad[ix])
+		 || IS_PADGV(PL_curpad[ix]) || IS_PADCONST(PL_curpad[ix]))
 		continue;
 	    if (!SvPADMY(PL_curpad[ix])) {
 		SvPADTMP_on(PL_curpad[ix]);
@@ -2066,6 +2073,10 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, bool newcv)
 	SV* const namesv = (ix <= fname) ? pname[ix] : NULL;
 	SV *sv = NULL;
 	if (namesv && PadnameLEN(namesv)) { /* lexical */
+	  if (PadnameIsOUR(namesv)) { /* or maybe not so lexical */
+		NOOP;
+	  }
+	  else {
 	    if (SvFAKE(namesv)) {   /* lexical from outside? */
 		/* formats may have an inactive, or even undefined, parent;
 		   but state vars are always available. */
@@ -2119,8 +2130,9 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, bool newcv)
 		if (sigil != '&' && SvPAD_STATE(namesv))
 		    SvPADSTALE_on(sv);
 	    }
+	  }
 	}
-	else if (IS_PADGV(ppad[ix]) || IS_PADCONST(ppad[ix])) {
+	else if (IS_PADGV(ppad[ix]) || (namesv && PadnamePV(namesv))) {
 	    sv = SvREFCNT_inc_NN(ppad[ix]);
 	}
 	else {
@@ -2417,7 +2429,8 @@ Perl_padlist_dup(pTHX_ PADLIST *srcpad, CLONE_PARAMS *param)
 	    for ( ;ix > 0; ix--) {
 		if (!oldpad[ix]) {
 		    pad1a[ix] = NULL;
-		} else if (names_fill >= ix && PadnameLEN(names[ix])) {
+		} else if (names_fill >= ix && names[ix] &&
+			   PadnameLEN(names[ix])) {
 		    const char sigil = SvPVX_const(names[ix])[0];
 		    if ((SvFLAGS(names[ix]) & SVf_FAKE)
 			|| (SvFLAGS(names[ix]) & SVpad_STATE)
@@ -2446,7 +2459,9 @@ Perl_padlist_dup(pTHX_ PADLIST *srcpad, CLONE_PARAMS *param)
 			}
 		    }
 		}
-		else if (IS_PADGV(oldpad[ix]) || PadnamePV(names[ix])) {
+		else if (IS_PADGV(oldpad[ix])
+		      || (  names_fill >= ix && names[ix]
+			 && PadnamePV(names[ix])  )) {
 		    pad1a[ix] = sv_dup_inc(oldpad[ix], param);
 		}
 		else {

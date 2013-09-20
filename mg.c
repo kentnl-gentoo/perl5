@@ -661,21 +661,21 @@ Perl_magic_regdatum_get(pTHX_ SV *sv, MAGIC *mg)
 	const REGEXP * const rx = PM_GETRE(PL_curpm);
 	if (rx) {
 	    const I32 paren = mg->mg_len;
-	    I32 s;
-	    I32 t;
+	    SSize_t s;
+	    SSize_t t;
 	    if (paren < 0)
 		return 0;
 	    if (paren <= (I32)RX_NPARENS(rx) &&
 		(s = RX_OFFS(rx)[paren].start) != -1 &&
 		(t = RX_OFFS(rx)[paren].end) != -1)
 		{
-		    I32 i;
+		    SSize_t i;
 		    if (mg->mg_obj)		/* @+ */
 			i = t;
 		    else			/* @- */
 			i = s;
 
-		    if (i > 0 && RX_MATCH_UTF8(rx)) {
+		    if (RX_MATCH_UTF8(rx)) {
 			const char * const b = RX_SUBBEG(rx);
 			if (b)
 			    i = RX_SUBCOFFSET(rx) +
@@ -683,10 +683,12 @@ Perl_magic_regdatum_get(pTHX_ SV *sv, MAGIC *mg)
                                         (U8*)(b-RX_SUBOFFSET(rx)+i));
 		    }
 
-		    sv_setiv(sv, i);
+		    sv_setuv(sv, i);
+		    return 0;
 		}
 	}
     }
+    sv_setsv(sv, NULL);
     return 0;
 }
 
@@ -750,10 +752,22 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
     const char *s = NULL;
     REGEXP *rx;
     const char * const remaining = mg->mg_ptr + 1;
-    const char nextchar = *remaining;
+    char nextchar;
 
     PERL_ARGS_ASSERT_MAGIC_GET;
 
+    if (!mg->mg_ptr) {
+        paren = mg->mg_len;
+        if (PL_curpm && (rx = PM_GETRE(PL_curpm))) {
+          do_numbuf_fetch:
+            CALLREG_NUMBUF_FETCH(rx,paren,sv);
+        } else {
+            sv_setsv(sv,&PL_sv_undef);
+        }
+        return 0;
+    }
+
+    nextchar = *remaining;
     switch (*mg->mg_ptr) {
     case '\001':		/* ^A */
 	if (SvOK(PL_bodytarget)) sv_copypv(sv, PL_bodytarget);
@@ -862,19 +876,10 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	}
 	break;
     case '\020':
-	if (nextchar == '\0') {       /* ^P */
-	    sv_setiv(sv, (IV)PL_perldb);
-	} else if (strEQ(remaining, "REMATCH")) { /* $^PREMATCH */
-
-            paren = RX_BUFF_IDX_CARET_PREMATCH;
-	    goto do_numbuf_fetch;
-	} else if (strEQ(remaining, "OSTMATCH")) { /* $^POSTMATCH */
-            paren = RX_BUFF_IDX_CARET_POSTMATCH;
-	    goto do_numbuf_fetch;
-	}
+        sv_setiv(sv, (IV)PL_perldb);
 	break;
     case '\023':		/* ^S */
-	if (nextchar == '\0') {
+        {
 	    if (PL_parser && PL_parser->lex_state != LEX_NOTPARSING)
 		SvOK_off(sv);
 	    else if (PL_in_eval)
@@ -931,26 +936,6 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	    }
 	}
 	break;
-    case '\015': /* $^MATCH */
-	if (strEQ(remaining, "ATCH")) {
-            paren = RX_BUFF_IDX_CARET_FULLMATCH;
-	    goto do_numbuf_fetch;
-        }
-
-    case '1': case '2': case '3': case '4':
-    case '5': case '6': case '7': case '8': case '9': case '&':
-        /*
-         * Pre-threads, this was paren = atoi(GvENAME((const GV *)mg->mg_obj));
-         * XXX Does the new way break anything?
-         */
-        paren = atoi(mg->mg_ptr); /* $& is in [0] */
-      do_numbuf_fetch:
-        if (PL_curpm && (rx = PM_GETRE(PL_curpm))) {
-            CALLREG_NUMBUF_FETCH(rx,paren,sv);
-            break;
-        }
-        sv_setsv(sv,&PL_sv_undef);
-	break;
     case '+':
 	if (PL_curpm && (rx = PM_GETRE(PL_curpm))) {
 	    paren = RX_LASTPAREN(rx);
@@ -967,12 +952,6 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	}
 	sv_setsv(sv,&PL_sv_undef);
 	break;
-    case '`':
-        paren = RX_BUFF_IDX_PREMATCH;
-        goto do_numbuf_fetch;
-    case '\'':
-        paren = RX_BUFF_IDX_POSTMATCH;
-        goto do_numbuf_fetch;
     case '.':
 	if (GvIO(PL_last_in_gv)) {
 	    sv_setiv(sv, (IV)IoLINES(GvIOp(PL_last_in_gv)));
@@ -1983,12 +1962,19 @@ int
 Perl_magic_setdbline(pTHX_ SV *sv, MAGIC *mg)
 {
     dVAR;
-    GV * const gv = PL_DBline;
-    const I32 i = SvTRUE(sv);
-    SV ** const svp = av_fetch(GvAV(gv),
-		     atoi(MgPV_nolen_const(mg)), FALSE);
+    SV **svp;
 
     PERL_ARGS_ASSERT_MAGIC_SETDBLINE;
+
+    /* The magic ptr/len for the debugger's hash should always be an SV.  */
+    if (UNLIKELY(mg->mg_len != HEf_SVKEY)) {
+        Perl_croak(aTHX_ "panic: magic_setdbline len=%"IVdf", ptr='%s'",
+                   mg->mg_len, mg->mg_ptr);
+    }
+
+    /* Use sv_2iv instead of SvIV() as the former generates smaller code, and
+       setting/clearing debugger breakpoints is not a hot path.  */
+    svp = av_fetch(GvAV(PL_DBline), sv_2iv(MUTABLE_SV((mg)->mg_ptr)), FALSE);
 
     if (svp && SvIOKp(*svp)) {
 	OP * const o = INT2PTR(OP*,SvIVX(*svp));
@@ -1997,7 +1983,7 @@ Perl_magic_setdbline(pTHX_ SV *sv, MAGIC *mg)
 	    Slab_to_rw(OpSLAB(o));
 #endif
 	    /* set or clear breakpoint in the relevant control op */
-	    if (i)
+	    if (SvTRUE(sv))
 		o->op_flags |= OPf_SPECIAL;
 	    else
 		o->op_flags &= ~OPf_SPECIAL;
@@ -2020,7 +2006,7 @@ Perl_magic_getarylen(pTHX_ SV *sv, const MAGIC *mg)
     if (obj) {
 	sv_setiv(sv, AvFILL(obj));
     } else {
-	SvOK_off(sv);
+	sv_setsv(sv, NULL);
     }
     return 0;
 }
@@ -2098,12 +2084,12 @@ Perl_magic_getpos(pTHX_ SV *sv, MAGIC *mg)
 
     if (found && found->mg_len != -1) {
 	    STRLEN i = found->mg_len;
-	    if (DO_UTF8(lsv))
+	    if (found->mg_flags & MGf_BYTES && DO_UTF8(lsv))
 		i = sv_pos_b2u_flags(lsv, i, SV_GMAGIC|SV_CONST_RETURN);
 	    sv_setuv(sv, i);
 	    return 0;
     }
-    SvOK_off(sv);
+    sv_setsv(sv,NULL);
     return 0;
 }
 
@@ -2149,12 +2135,8 @@ Perl_magic_setpos(pTHX_ SV *sv, MAGIC *mg)
     else if (pos > (SSize_t)len)
 	pos = len;
 
-    if (ulen) {
-	pos = sv_or_pv_pos_u2b(lsv, s, pos, 0);
-    }
-
     found->mg_len = pos;
-    found->mg_flags &= ~MGf_MINMATCH;
+    found->mg_flags &= ~(MGf_MINMATCH|MGf_BYTES);
 
     return 0;
 }
@@ -2284,10 +2266,7 @@ Perl_magic_getvec(pTHX_ SV *sv, MAGIC *mg)
     PERL_ARGS_ASSERT_MAGIC_GETVEC;
     PERL_UNUSED_ARG(mg);
 
-    if (lsv)
-	sv_setuv(sv, do_vecget(lsv, LvTARGOFF(sv), LvTARGLEN(sv)));
-    else
-	SvOK_off(sv);
+    sv_setuv(sv, do_vecget(lsv, LvTARGOFF(sv), LvTARGLEN(sv)));
 
     return 0;
 }
@@ -2316,10 +2295,10 @@ Perl_defelem_target(pTHX_ SV *sv, MAGIC *mg)
             if (he)
                 targ = HeVAL(he);
 	}
-	else {
+	else if (LvSTARGOFF(sv) >= 0) {
 	    AV *const av = MUTABLE_AV(LvTARG(sv));
-	    if ((I32)LvTARGOFF(sv) <= AvFILL(av))
-		targ = AvARRAY(av)[LvTARGOFF(sv)];
+	    if (LvSTARGOFF(sv) <= AvFILL(av))
+		targ = AvARRAY(av)[LvSTARGOFF(sv)];
 	}
 	if (targ && (targ != &PL_sv_undef)) {
 	    /* somebody else defined it for us */
@@ -2378,14 +2357,16 @@ Perl_vivify_defelem(pTHX_ SV *sv)
 	if (!value || value == &PL_sv_undef)
 	    Perl_croak(aTHX_ PL_no_helem_sv, SVfARG(mg->mg_obj));
     }
+    else if (LvSTARGOFF(sv) < 0)
+	Perl_croak(aTHX_ PL_no_aelem, LvSTARGOFF(sv));
     else {
 	AV *const av = MUTABLE_AV(LvTARG(sv));
-	if ((I32)LvTARGLEN(sv) < 0 && (I32)LvTARGOFF(sv) > AvFILL(av))
+	if ((I32)LvTARGLEN(sv) < 0 && LvSTARGOFF(sv) > AvFILL(av))
 	    LvTARG(sv) = NULL;	/* array can't be extended */
 	else {
-	    SV* const * const svp = av_fetch(av, LvTARGOFF(sv), TRUE);
-	    if (!svp || (value = *svp) == &PL_sv_undef)
-		Perl_croak(aTHX_ PL_no_aelem, (I32)LvTARGOFF(sv));
+	    SV* const * const svp = av_fetch(av, LvSTARGOFF(sv), TRUE);
+	    if (!svp || !(value = *svp))
+		Perl_croak(aTHX_ PL_no_aelem, LvSTARGOFF(sv));
 	}
     }
     SvREFCNT_inc_simple_void(value);
@@ -2485,46 +2466,30 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
     const char *s;
     I32 paren;
     const REGEXP * rx;
-    const char * const remaining = mg->mg_ptr + 1;
     I32 i;
     STRLEN len;
     MAGIC *tmg;
 
     PERL_ARGS_ASSERT_MAGIC_SET;
 
-    switch (*mg->mg_ptr) {
-    case '\015': /* $^MATCH */
-      if (strEQ(remaining, "ATCH"))
-          goto do_match;
-    case '`': /* ${^PREMATCH} caught below */
-      do_prematch:
-      paren = RX_BUFF_IDX_PREMATCH;
-      goto setparen;
-    case '\'': /* ${^POSTMATCH} caught below */
-      do_postmatch:
-      paren = RX_BUFF_IDX_POSTMATCH;
-      goto setparen;
-    case '&':
-      do_match:
-      paren = RX_BUFF_IDX_FULLMATCH;
-      goto setparen;
-    case '1': case '2': case '3': case '4':
-    case '5': case '6': case '7': case '8': case '9':
-      paren = atoi(mg->mg_ptr);
-      setparen:
+    if (!mg->mg_ptr) {
+        paren = mg->mg_len;
 	if (PL_curpm && (rx = PM_GETRE(PL_curpm))) {
-      setparen_got_rx:
+          setparen_got_rx:
             CALLREG_NUMBUF_STORE((REGEXP * const)rx,paren,sv);
 	} else {
             /* Croak with a READONLY error when a numbered match var is
              * set without a previous pattern match. Unless it's C<local $1>
              */
-      croakparen:
+          croakparen:
             if (!PL_localizing) {
                 Perl_croak_no_modify();
             }
         }
-        break;
+        return 0;
+    }
+
+    switch (*mg->mg_ptr) {
     case '\001':	/* ^A */
 	if (SvOK(sv)) sv_copypv(PL_bodytarget, sv);
 	else SvOK_off(PL_bodytarget);
@@ -2633,16 +2598,9 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	}
 	break;
     case '\020':	/* ^P */
-      if (*remaining == '\0') { /* ^P */
           PL_perldb = SvIV(sv);
           if (PL_perldb && !PL_DBsingle)
               init_debugger();
-          break;
-      } else if (strEQ(remaining, "REMATCH")) { /* $^PREMATCH */
-          goto do_prematch;
-      } else if (strEQ(remaining, "OSTMATCH")) { /* $^POSTMATCH */
-          goto do_postmatch;
-      }
       break;
     case '\024':	/* ^T */
 #ifdef BIG_TIME
@@ -2797,8 +2755,13 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 #else
 #   define PERL_VMS_BANG 0
 #endif
+#ifdef WIN32
+	SETERRNO(win32_get_errno(SvIOK(sv) ? SvIVX(sv) : SvOK(sv) ? sv_2iv(sv) : 0),
+		 (SvIV(sv) == EVMSERR) ? 4 : PERL_VMS_BANG);
+#else
 	SETERRNO(SvIOK(sv) ? SvIVX(sv) : SvOK(sv) ? sv_2iv(sv) : 0,
 		 (SvIV(sv) == EVMSERR) ? 4 : PERL_VMS_BANG);
+#endif
 	}
 	break;
     case '<':

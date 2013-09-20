@@ -21,13 +21,18 @@ typedef FILE * InputStream;
 
 static const char* const svclassnames[] = {
     "B::NULL",
+#if PERL_VERSION < 19
+    "B::BIND",
+#endif
     "B::IV",
     "B::NV",
 #if PERL_VERSION <= 10
     "B::RV",
 #endif
     "B::PV",
+#if PERL_VERSION >= 19
     "B::INVLIST",
+#endif
     "B::PVIV",
     "B::PVNV",
     "B::PVMG",
@@ -1006,7 +1011,7 @@ next(o)
     PREINIT:
 	SV *ret;
     PPCODE:
-	if (ix < 0 || ix > 46)
+	if (ix < 0 || ix >= C_ARRAY_LENGTH(op_methods))
 	    croak("Illegal alias %d for B::*OP::next", (int)ix);
 	ret = get_overlay_object(aTHX_ o,
 			    op_methods[ix].name, op_methods[ix].namelen);
@@ -1304,7 +1309,7 @@ MODULE = B	PACKAGE = B::IV
 #define PVMG_stash_ix	sv_SVp | offsetof(struct xpvmg, xmg_stash)
 
 #if PERL_VERSION > 18
-#    define PVBM_useful_ix	sv_I32p | offsetof(struct xpvgv, xnv_u.xbm_useful)
+#    define PVBM_useful_ix	sv_IVp | offsetof(struct xpviv, xiv_u.xivu_iv)
 #elif PERL_VERSION > 14
 #    define PVBM_useful_ix	sv_I32p | offsetof(struct xpvgv, xnv_u.xbm_s.xbm_useful)
 #else
@@ -1896,11 +1901,8 @@ const_sv(cv)
 void
 GV(cv)
 	B::CV cv
-    PREINIT:
-        GV *gv;
     CODE:
-	gv = CvGV(cv);
-	ST(0) = gv ? make_sv_object(aTHX_ (SV*)gv) : &PL_sv_undef;
+	ST(0) = make_sv_object(aTHX_ (SV*)CvGV(cv));
 
 #if PERL_VERSION > 17
 

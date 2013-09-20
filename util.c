@@ -37,6 +37,9 @@
 #endif
 #endif
 
+#include <math.h>
+#include <stdlib.h>
+
 #ifdef __Lynx__
 /* Missing protos on LynxOS */
 int putenv(char *);
@@ -1178,15 +1181,20 @@ Perl_mess(pTHX_ const char *pat, ...)
     return retval;
 }
 
-STATIC const COP*
-S_closest_cop(pTHX_ const COP *cop, const OP *o)
+const COP*
+Perl_closest_cop(pTHX_ const COP *cop, const OP *o, const OP *curop,
+		       bool opnext)
 {
     dVAR;
-    /* Look for PL_op starting from o.  cop is the last COP we've seen. */
+    /* Look for curop starting from o.  cop is the last COP we've seen. */
+    /* opnext means that curop is actually the ->op_next of the op we are
+       seeking. */
 
     PERL_ARGS_ASSERT_CLOSEST_COP;
 
-    if (!o || o == PL_op)
+    if (!o || !curop || (
+	opnext ? o->op_next == curop && o->op_type != OP_SCOPE : o == curop
+    ))
 	return cop;
 
     if (o->op_flags & OPf_KIDS) {
@@ -1202,7 +1210,7 @@ S_closest_cop(pTHX_ const COP *cop, const OP *o)
 
 	    /* Keep searching, and return when we've found something. */
 
-	    new_cop = closest_cop(cop, kid);
+	    new_cop = closest_cop(cop, kid, curop, opnext);
 	    if (new_cop)
 		return new_cop;
 	}
@@ -1272,7 +1280,8 @@ Perl_mess_sv(pTHX_ SV *basemsg, bool consume)
 	 * from the sibling of PL_curcop.
 	 */
 
-	const COP *cop = closest_cop(PL_curcop, PL_curcop->op_sibling);
+	const COP *cop =
+	    closest_cop(PL_curcop, PL_curcop->op_sibling, PL_op, FALSE);
 	if (!cop)
 	    cop = PL_curcop;
 
@@ -2749,7 +2758,7 @@ Perl_my_pclose(pTHX_ PerlIO *ptr)
     svp = av_fetch(PL_fdpid,fd,TRUE);
     pid = (SvTYPE(*svp) == SVt_IV) ? SvIVX(*svp) : -1;
     SvREFCNT_dec(*svp);
-    *svp = &PL_sv_undef;
+    *svp = NULL;
 #ifdef OS2
     if (pid == -1) {			/* Opened by popen. */
 	return my_syspclose(ptr);
@@ -2787,9 +2796,16 @@ Perl_wait4pid(pTHX_ Pid_t pid, int *statusp, int flags)
     dVAR;
     I32 result = 0;
     PERL_ARGS_ASSERT_WAIT4PID;
-    if (!pid)
-	return -1;
 #ifdef PERL_USES_PL_PIDSTATUS
+    if (!pid) {
+        /* PERL_USES_PL_PIDSTATUS is only defined when neither
+           waitpid() nor wait4() is available, or on OS/2, which
+           doesn't appear to support waiting for a progress group
+           member, so we can only treat a 0 pid as an unknown child.
+        */
+        errno = ECHILD;
+        return -1;
+    }
     {
 	if (pid > 0) {
 	    /* The keys in PL_pidstatus are now the raw 4 (or 8) bytes of the
@@ -2836,7 +2852,7 @@ Perl_wait4pid(pTHX_ Pid_t pid, int *statusp, int flags)
     goto finish;
 #endif
 #if !defined(HAS_WAITPID) && defined(HAS_WAIT4)
-    result = wait4((pid==-1)?0:pid,statusp,flags,NULL);
+    result = wait4(pid,statusp,flags,NULL);
     goto finish;
 #endif
 #ifdef PERL_USES_PL_PIDSTATUS
@@ -4299,7 +4315,7 @@ Perl_scan_version(pTHX_ const char *s, SV *rv, bool qv)
 	}
     }
     if ( qv ) { /* quoted versions always get at least three terms*/
-	I32 len = av_len(av);
+	SSize_t len = av_len(av);
 	/* This for loop appears to trigger a compiler bug on OS X, as it
 	   loops infinitely. Yes, len is negative. No, it makes no sense.
 	   Compiler in question is:
@@ -4364,7 +4380,7 @@ Perl_new_version(pTHX_ SV *ver)
     if ( sv_isobject(ver) && sv_derived_from(ver, "version") )
 	 /* can just copy directly */
     {
-	I32 key;
+	SSize_t key;
 	AV * const av = newAV();
 	AV *sav;
 	/* This will get reblessed later if a derived class*/
@@ -4462,10 +4478,10 @@ Perl_upg_version(pTHX_ SV *ver, bool qv)
 	char *buf;
 #ifdef USE_LOCALE_NUMERIC
 	char *loc = NULL;
-        if (! PL_numeric_standard) {
-            loc = savepv(setlocale(LC_NUMERIC, NULL));
-            setlocale(LC_NUMERIC, "C");
-        }
+	if (! PL_numeric_standard) {
+	    loc = savepv(setlocale(LC_NUMERIC, NULL));
+	    setlocale(LC_NUMERIC, "C");
+	}
 #endif
 	if (sv) {
 	    Perl_sv_setpvf(aTHX_ sv, "%.9"NVff, SvNVX(ver));
@@ -4476,10 +4492,10 @@ Perl_upg_version(pTHX_ SV *ver, bool qv)
 	    buf = tbuf;
 	}
 #ifdef USE_LOCALE_NUMERIC
-        if (loc) {
-            setlocale(LC_NUMERIC, loc);
-            Safefree(loc);
-        }
+	if (loc) {
+	    setlocale(LC_NUMERIC, loc);
+	    Safefree(loc);
+	}
 #endif
 	while (buf[len-1] == '0' && len > 0) len--;
 	if ( buf[len-1] == '.' ) len--; /* eat the trailing decimal */
@@ -4608,7 +4624,8 @@ The SV returned has a refcount of 1.
 SV *
 Perl_vnumify(pTHX_ SV *vs)
 {
-    I32 i, len, digit;
+    SSize_t i, len;
+    I32 digit;
     int width;
     bool alpha = FALSE;
     SV *sv;
@@ -4785,7 +4802,8 @@ converted into version objects.
 int
 Perl_vcmp(pTHX_ SV *lhv, SV *rhv)
 {
-    I32 i,l,m,r,retval;
+    SSize_t i,l,m,r;
+    I32 retval;
     bool lalpha = FALSE;
     bool ralpha = FALSE;
     I32 left = 0;
@@ -6025,6 +6043,26 @@ Perl_xs_apiversion_bootcheck(pTHX_ SV *module, const char *api_p,
 	Perl_croak_sv(aTHX_ xpt);
 }
 
+/*
+=for apidoc my_strlcat
+
+The C library C<strlcat> if available, or a Perl implementation of it.
+This operates on C NUL-terminated strings.
+
+C<my_strlcat()> appends string C<src> to the end of C<dst>.  It will append at
+most S<C<size - strlen(dst) - 1>> characters.  It will then NUL-terminate,
+unless C<size> is 0 or the original C<dst> string was longer than C<size> (in
+practice this should not happen as it means that either C<size> is incorrect or
+that C<dst> is not a proper NUL-terminated string).
+
+Note that C<size> is the full size of the destination buffer and
+the result is guaranteed to be NUL-terminated if there is room.  Note that room
+for the NUL should be included in C<size>.
+
+=cut
+
+Description stolen from http://www.openbsd.org/cgi-bin/man.cgi?query=strlcat
+*/
 #ifndef HAS_STRLCAT
 Size_t
 Perl_my_strlcat(char *dst, const char *src, Size_t size)
@@ -6042,6 +6080,20 @@ Perl_my_strlcat(char *dst, const char *src, Size_t size)
 }
 #endif
 
+
+/*
+=for apidoc my_strlcpy
+
+The C library C<strlcpy> if available, or a Perl implementation of it.
+This operates on C NUL-terminated strings.
+
+C<my_strlcpy()> copies up to S<C<size - 1>> characters from the string C<src>
+to C<dst>, NUL-terminating the result if C<size> is not 0.
+
+=cut
+
+Description stolen from http://www.openbsd.org/cgi-bin/man.cgi?query=strlcpy
+*/
 #ifndef HAS_STRLCPY
 Size_t
 Perl_my_strlcpy(char *dst, const char *src, Size_t size)
@@ -6169,6 +6221,105 @@ Perl_get_re_arg(pTHX_ SV *sv) {
  
     return NULL;
 }
+
+/*
+ * This code is derived from drand48() implementation from FreeBSD,
+ * found in lib/libc/gen/_rand48.c.
+ *
+ * The U64 implementation is original, based on the POSIX
+ * specification for drand48().
+ */
+
+/*
+* Copyright (c) 1993 Martin Birgmeier
+* All rights reserved.
+*
+* You may redistribute unmodified or modified versions of this source
+* code provided that the above copyright notice and this and the
+* following conditions are retained.
+*
+* This software is provided ``as is'', and comes with no warranties
+* of any kind. I shall in no event be liable for anything that happens
+* to anyone/anything when using this software.
+*/
+
+#define FREEBSD_DRAND48_SEED_0   (0x330e)
+
+#ifdef PERL_DRAND48_QUAD
+
+#define DRAND48_MULT U64_CONST(0x5deece66d)
+#define DRAND48_ADD  0xb
+#define DRAND48_MASK U64_CONST(0xffffffffffff)
+
+#else
+
+#define FREEBSD_DRAND48_SEED_1   (0xabcd)
+#define FREEBSD_DRAND48_SEED_2   (0x1234)
+#define FREEBSD_DRAND48_MULT_0   (0xe66d)
+#define FREEBSD_DRAND48_MULT_1   (0xdeec)
+#define FREEBSD_DRAND48_MULT_2   (0x0005)
+#define FREEBSD_DRAND48_ADD      (0x000b)
+
+const unsigned short _rand48_mult[3] = {
+                FREEBSD_DRAND48_MULT_0,
+                FREEBSD_DRAND48_MULT_1,
+                FREEBSD_DRAND48_MULT_2
+};
+const unsigned short _rand48_add = FREEBSD_DRAND48_ADD;
+
+#endif
+
+void
+Perl_drand48_init_r(perl_drand48_t *random_state, U32 seed)
+{
+    PERL_ARGS_ASSERT_DRAND48_INIT_R;
+
+#ifdef PERL_DRAND48_QUAD
+    *random_state = FREEBSD_DRAND48_SEED_0 + ((U64TYPE)seed << 16);
+#else
+    random_state->seed[0] = FREEBSD_DRAND48_SEED_0;
+    random_state->seed[1] = (U16) seed;
+    random_state->seed[2] = (U16) (seed >> 16);
+#endif
+}
+
+double
+Perl_drand48_r(perl_drand48_t *random_state)
+{
+    PERL_ARGS_ASSERT_DRAND48_R;
+
+#ifdef PERL_DRAND48_QUAD
+    *random_state = (*random_state * DRAND48_MULT + DRAND48_ADD)
+        & DRAND48_MASK;
+
+    return ldexp(*random_state, -48);
+#else
+    {
+    U32 accu;
+    U16 temp[2];
+
+    accu = (U32) _rand48_mult[0] * (U32) random_state->seed[0]
+         + (U32) _rand48_add;
+    temp[0] = (U16) accu;        /* lower 16 bits */
+    accu >>= sizeof(U16) * 8;
+    accu += (U32) _rand48_mult[0] * (U32) random_state->seed[1]
+          + (U32) _rand48_mult[1] * (U32) random_state->seed[0];
+    temp[1] = (U16) accu;        /* middle 16 bits */
+    accu >>= sizeof(U16) * 8;
+    accu += _rand48_mult[0] * random_state->seed[2]
+          + _rand48_mult[1] * random_state->seed[1]
+          + _rand48_mult[2] * random_state->seed[0];
+    random_state->seed[0] = temp[0];
+    random_state->seed[1] = temp[1];
+    random_state->seed[2] = (U16) accu;
+
+    return ldexp((double) random_state->seed[0], -48) +
+           ldexp((double) random_state->seed[1], -32) +
+           ldexp((double) random_state->seed[2], -16);
+    }
+#endif
+}
+ 
 
 /*
  * Local variables:

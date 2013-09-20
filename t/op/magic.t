@@ -5,7 +5,7 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require './test.pl';
-    plan (tests => 180);
+    plan (tests => 184);
 }
 
 # Test that defined() returns true for magic variables created on the fly,
@@ -646,6 +646,14 @@ eval '
 1' or die $@;
 is $stuff[0], $stuff[1], '$^H modifies ${^OPEN} consistently';
 
+# Tests for some non-magic names:
+is ${^MPE}, undef, '${^MPE} starts undefined';
+is ++${^MPE}, 1, '${^MPE} can be incremented';
+
+# This one used to behave as ${^MATCH} due to a missing break:
+is ${^MPEN}, undef, '${^MPEN} starts undefined';
+# This one used to croak due to that missing break:
+is ++${^MPEN}, 1, '${^MPEN} can be incremented';
 
 # ^^^^^^^^^ New tests go here ^^^^^^^^^
 

@@ -230,7 +230,7 @@ using C<is_utf8_string()> to determine if it is Unicode.
 
 If PERL_PV_ESCAPE_ALL is set then all input chars will be output
 using C<\x01F1> style escapes, otherwise if PERL_PV_ESCAPE_NONASCII is set, only
-chars above 127 will be escaped using this style; otherwise, only chars above
+non-ASCII chars will be escaped using this style; otherwise, only chars above
 255 will be so escaped; other non printable chars will use octal or
 common escaped patterns like C<\n>. Otherwise, if PERL_PV_ESCAPE_NOBACKSLASH
 then all chars below 255 will be treated as printable and
@@ -284,7 +284,7 @@ Perl_pv_escape( pTHX_ SV *dsv, char const * const str,
         
         if ( ( u > 255 )
 	  || (flags & PERL_PV_ESCAPE_ALL)
-	  || (( u > 127 ) && (flags & PERL_PV_ESCAPE_NONASCII)))
+	  || (( ! isASCII(u) ) && (flags & PERL_PV_ESCAPE_NONASCII)))
 	{
             if (flags & PERL_PV_ESCAPE_FIRSTCHAR) 
                 chsize = my_snprintf( octbuf, PV_ESCAPE_OCTBUFSIZE, 
@@ -335,12 +335,12 @@ Perl_pv_escape( pTHX_ SV *dsv, char const * const str,
             sv_catpvn(dsv, octbuf, chsize);
             wrote += chsize;
 	} else {
-	    /* If PERL_PV_ESCAPE_NOBACKSLASH is set then bytes in the range
-	       128-255 can be appended raw to the dsv. If dsv happens to be
+	    /* If PERL_PV_ESCAPE_NOBACKSLASH is set then non-ASCII bytes
+	       can be appended raw to the dsv. If dsv happens to be
 	       UTF-8 then we need catpvf to upgrade them for us.
 	       Or add a new API call sv_catpvc(). Think about that name, and
 	       how to keep it clear that it's unlike the s of catpvs, which is
-	       really an array octets, not a string.  */
+	       really an array of octets, not a string.  */
             Perl_sv_catpvf( aTHX_ dsv, "%c", c);
 	    wrote++;
 	}
@@ -504,7 +504,7 @@ Perl_sv_peek(pTHX_ SV *sv)
     }
     else if (DEBUG_R_TEST_) {
 	int is_tmp = 0;
-	I32 ix;
+	SSize_t ix;
 	/* is this SV on the tmps stack? */
 	for (ix=PL_tmps_ix; ix>=0; ix--) {
 	    if (PL_tmps_stack[ix] == sv) {
@@ -744,7 +744,6 @@ const struct flag_to_name op_const_names[] = {
     {OPpCONST_SHORTCIRCUIT, ",SHORTCIRCUIT"},
     {OPpCONST_STRICT, ",STRICT"},
     {OPpCONST_ENTERED, ",ENTERED"},
-    {OPpCONST_FOLDED, ",FOLDED"},
     {OPpCONST_BARE, ",BARE"}
 };
 
@@ -954,6 +953,12 @@ S_op_private_to_names(pTHX_ SV *tmpsv, U32 optype, U32 op_private) {
 	if (o->op_type == OP_PADRANGE)                                  \
 	    Perl_sv_catpvf(aTHX_ tmpsv, ",COUNT=%"UVuf,                 \
                            (UV)(oppriv & OPpPADRANGE_COUNTMASK));       \
+        if (  (o->op_type == OP_RV2HV || o->op_type == OP_RV2AV ||      \
+               o->op_type == OP_PADAV || o->op_type == OP_PADHV ||      \
+               o->op_type == OP_ASLICE || o->op_type == OP_HSLICE ||    \
+               o->op_type == OP_KVHSLICE || o->op_type == OP_KVASLICE)  \
+           && oppriv & OPpSLICEWARNING  )                               \
+            sv_catpvs(tmpsv, ",SLICEWARNING");                          \
 	if (SvCUR(tmpsv)) {                                             \
             if (xml)                                                    \
                 xmldump_attr1(level+1, file, "private=\"%s\"", SvPVX(tmpsv)+1); \
@@ -1262,6 +1267,9 @@ Perl_do_magic_dump(pTHX_ I32 level, PerlIO *file, const MAGIC *mg, I32 nest, I32
 	        Perl_dump_indent(aTHX_ level, file, "      DUP\n");
 	    if (mg->mg_flags & MGf_LOCAL)
 	        Perl_dump_indent(aTHX_ level, file, "      LOCAL\n");
+	    if (mg->mg_type == PERL_MAGIC_regex_global &&
+		mg->mg_flags & MGf_BYTES)
+	        Perl_dump_indent(aTHX_ level, file, "      BYTES\n");
         }
 	if (mg->mg_obj) {
 	    Perl_dump_indent(aTHX_ level, file, "    MG_OBJ = 0x%"UVxf"\n",
@@ -1755,7 +1763,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	Perl_dump_indent(aTHX_ level, file, "  FLAGS = (%s)\n",
 			 SvCUR(d) ? SvPVX_const(d) + 1 : "");
 	if (nest < maxnest && av_len(MUTABLE_AV(sv)) >= 0) {
-	    int count;
+	    SSize_t count;
 	    for (count = 0; count <=  av_len(MUTABLE_AV(sv)) && count < maxnest; count++) {
 		SV** const elt = av_fetch(MUTABLE_AV(sv),count,0);
 
@@ -2594,64 +2602,15 @@ Perl_sv_catxmlpvn(pTHX_ SV *dsv, const char *pv, STRLEN len, int utf8)
 	else
 	    c = (*pv & 255);
 
-	switch (c) {
-	case 0x00:
-	case 0x01:
-	case 0x02:
-	case 0x03:
-	case 0x04:
-	case 0x05:
-	case 0x06:
-	case 0x07:
-	case 0x08:
-	case 0x0b:
-	case 0x0c:
-	case 0x0e:
-	case 0x0f:
-	case 0x10:
-	case 0x11:
-	case 0x12:
-	case 0x13:
-	case 0x14:
-	case 0x15:
-	case 0x16:
-	case 0x17:
-	case 0x18:
-	case 0x19:
-	case 0x1a:
-	case 0x1b:
-	case 0x1c:
-	case 0x1d:
-	case 0x1e:
-	case 0x1f:
-	case 0x7f:
-	case 0x80:
-	case 0x81:
-	case 0x82:
-	case 0x83:
-	case 0x84:
-	case 0x86:
-	case 0x87:
-	case 0x88:
-	case 0x89:
-	case 0x90:
-	case 0x91:
-	case 0x92:
-	case 0x93:
-	case 0x94:
-	case 0x95:
-	case 0x96:
-	case 0x97:
-	case 0x98:
-	case 0x99:
-	case 0x9a:
-	case 0x9b:
-	case 0x9c:
-	case 0x9d:
-	case 0x9e:
-	case 0x9f:
+        if (isCNTRL_L1(c)
+            && c != '\t'
+            && c != '\n'
+            && c != '\r'
+            && c != LATIN1_TO_NATIVE(0x85))
+        {
 	    Perl_sv_catpvf(aTHX_ dsv, "STUPIDXML(#x%X)", c);
-	    break;
+        }
+        else switch (c) {
 	case '<':
 	    sv_catpvs(dsv, "&lt;");
 	    break;
@@ -2666,7 +2625,7 @@ Perl_sv_catxmlpvn(pTHX_ SV *dsv, const char *pv, STRLEN len, int utf8)
 	    break;
 	default:
 	    if (c < 0xD800) {
-		if (c < 32 || c > 127) {
+		if (! isPRINT(c)) {
 		    Perl_sv_catpvf(aTHX_ dsv, "&#x%X;", c);
 		}
 		else {
@@ -2757,7 +2716,7 @@ Perl_sv_xmlpeek(pTHX_ SV *sv)
     }
     else if (DEBUG_R_TEST_) {
 	int is_tmp = 0;
-	I32 ix;
+	SSize_t ix;
 	/* is this SV on the tmps stack? */
 	for (ix=PL_tmps_ix; ix>=0; ix--) {
 	    if (PL_tmps_stack[ix] == sv) {

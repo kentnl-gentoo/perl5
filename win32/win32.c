@@ -2513,7 +2513,7 @@ win32_flock(int fd, int oper)
     }
     if (i == -1) {
         if (GetLastError() == ERROR_LOCK_VIOLATION)
-            errno = WSAEWOULDBLOCK;
+            errno = EWOULDBLOCK;
         else
             errno = EINVAL;
     }
@@ -2521,6 +2521,21 @@ win32_flock(int fd, int oper)
 }
 
 #undef LK_LEN
+
+extern int convert_wsa_error_to_errno(int wsaerr); /* in win32sck.c */
+
+/* Get the errno value corresponding to the given err. This function is not
+ * intended to handle conversion of general GetLastError() codes. It only exists
+ * to translate Windows sockets error codes from WSAGetLastError(). Such codes
+ * used to be assigned to errno/$! in earlier versions of perl; this function is
+ * used to catch any old Perl code which is still trying to assign such values
+ * to $! and convert them to errno values instead.
+ */
+int
+win32_get_errno(int err)
+{
+    return convert_wsa_error_to_errno(err);
+}
 
 /*
  *  redirected io subsystem for all XS modules
@@ -2571,10 +2586,16 @@ win32_feof(FILE *fp)
     return (feof(fp));
 }
 
+#ifdef ERRNO_HAS_POSIX_SUPPLEMENT
+extern int convert_errno_to_wsa_error(int err); /* in win32sck.c */
+#endif
+
 /*
  * Since the errors returned by the socket error function
  * WSAGetLastError() are not known by the library routine strerror
- * we have to roll our own.
+ * we have to roll our own to cover the case of socket errors
+ * that could not be converted to regular errno values by
+ * get_last_socket_error() in win32/win32sck.c.
  */
 
 DllExport char *
@@ -2588,6 +2609,18 @@ win32_strerror(int e)
         dTHXa(NULL);
 	if (e < 0)
 	    e = GetLastError();
+#ifdef ERRNO_HAS_POSIX_SUPPLEMENT
+	/* VC10+ define a "POSIX supplement" of errno values ranging from
+	 * EADDRINUSE (100) to EWOULDBLOCK (140), but sys_nerr is still 43 and
+	 * strerror() returns "Unknown error" for them. We must therefore still
+	 * roll our own messages for these codes, and additionally map them to
+	 * corresponding Windows (sockets) error codes first to avoid getting
+	 * the wrong system message.
+	 */
+	else if (e >= EADDRINUSE && e <= EWOULDBLOCK) {
+	    e = convert_errno_to_wsa_error(e);
+	}
+#endif
 
 	aTHXa(PERL_GET_THX);
 	if (FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM
@@ -3105,6 +3138,12 @@ win32_link(const char *oldname, const char *newname)
     case ERROR_NOT_SAME_DEVICE:
       errno = EXDEV;
       break;
+    case ERROR_DISK_FULL:
+      errno = ENOSPC;
+      break;
+    case ERROR_NOT_ENOUGH_QUOTA:
+      errno = EDQUOT;
+      break;
     default:
       /* ERROR_INVALID_FUNCTION - eg. on a FAT volume */
       errno = EINVAL;
@@ -3138,6 +3177,12 @@ win32_rename(const char *oname, const char *newname)
         case ERROR_NO_MORE_FILES:
         case ERROR_PATH_NOT_FOUND:
             errno = ENOENT;
+            break;
+        case ERROR_DISK_FULL:
+            errno = ENOSPC;
+            break;
+        case ERROR_NOT_ENOUGH_QUOTA:
+            errno = EDQUOT;
             break;
         default:
             errno = EACCES;

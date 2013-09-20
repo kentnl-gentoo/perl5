@@ -321,7 +321,8 @@ PP(pp_substcont)
 	if (!(mg = mg_find_mglob(sv))) {
 	    mg = sv_magicext_mglob(sv);
 	}
-	mg->mg_len = m - orig;
+	assert(SvPOK(dstr));
+	MgBYTEPOS_set(mg, sv, SvPVX(dstr), m - orig);
     }
     if (old != rx)
 	(void)ReREFCNT_inc(rx);
@@ -586,7 +587,7 @@ PP(pp_formline)
 			    itembytes = len;
 			send = chophere = s + itembytes;
 			while (s < send) {
-			    if (*s & ~31)
+			    if (! isCNTRL(*s))
 				gotsome = TRUE;
 			    else if (*s == '\n')
 				break;
@@ -603,7 +604,7 @@ PP(pp_formline)
 		    itemsize = fieldsize;
 		send = chophere = s + itemsize;
 		while (s < send) {
-		    if (*s & ~31)
+		    if (! isCNTRL(*s))
 			gotsome = TRUE;
 		    else if (*s == '\n')
 			break;
@@ -629,8 +630,9 @@ PP(pp_formline)
 				    chophere = s;
 				    break;
 				}
-				if (*s++ & ~31)
+				if (! isCNTRL(*s))
 				    gotsome = TRUE;
+                                s++;
 			    }
 			}
 			else {
@@ -647,7 +649,7 @@ PP(pp_formline)
 					break;
 				}
 				else {
-				    if (*s & ~31)
+				    if (! isCNTRL(*s))
 					gotsome = TRUE;
 				    if (strchr(PL_chopset, *s))
 					chophere = s + 1;
@@ -670,8 +672,9 @@ PP(pp_formline)
 			    chophere = s;
 			    break;
 			}
-			if (*s++ & ~31)
+			if (! isCNTRL(*s))
 			    gotsome = TRUE;
+                        s++;
 		    }
 		}
 		else {
@@ -686,7 +689,7 @@ PP(pp_formline)
 				break;
 			}
 			else {
-			    if (*s & ~31)
+			    if (! isCNTRL(*s))
 				gotsome = TRUE;
 			    if (strchr(PL_chopset, *s))
 				chophere = s + 1;
@@ -828,13 +831,7 @@ PP(pp_formline)
 		    U8 *send = s + to_copy;
 		    while (s < send) {
 			const int ch = *s;
-			if (trans == '~' ? (ch == '~') :
-#ifdef EBCDIC
-			       iscntrl(ch)
-#else
-			       (!(ch & ~31))
-#endif
-			)
+			if (trans == '~' ? (ch == '~') : isCNTRL(ch))
 			    *s = ' ';
 			s++;
 		    }
@@ -1230,13 +1227,17 @@ PP(pp_flop)
 	if (RANGE_IS_NUMERIC(left,right)) {
 	    IV i, j;
 	    IV max;
-	    if ((SvOK(left) && SvNV_nomg(left) < IV_MIN) ||
-		(SvOK(right) && SvNV_nomg(right) > IV_MAX))
+	    if ((SvOK(left) && !SvIOK(left) && SvNV_nomg(left) < IV_MIN) ||
+		(SvOK(right) && (SvIOK(right)
+				 ? SvIsUV(right) && SvUV(right) > IV_MAX
+				 : SvNV_nomg(right) > IV_MAX)))
 		DIE(aTHX_ "Range iterator outside integer range");
 	    i = SvIV_nomg(left);
 	    max = SvIV_nomg(right);
 	    if (max >= i) {
 		j = max - i + 1;
+		if (j > SSize_t_MAX)
+		    Perl_croak(aTHX_ "Out of memory during list extend");
 		EXTEND_MORTAL(j);
 		EXTEND(SP, j);
 	    }
@@ -1810,6 +1811,7 @@ PP(pp_caller)
     const HEK *stash_hek;
     I32 count = 0;
     bool has_arg = MAXARG && TOPs;
+    const COP *lcop;
 
     if (MAXARG) {
       if (has_arg)
@@ -1853,7 +1855,11 @@ PP(pp_caller)
 	PUSHTARG;
     }
     mPUSHs(newSVpv(OutCopFILE(cx->blk_oldcop), 0));
-    mPUSHi((I32)CopLINE(cx->blk_oldcop));
+    lcop = closest_cop(cx->blk_oldcop, cx->blk_oldcop->op_sibling,
+		       cx->blk_sub.retop, TRUE);
+    if (!lcop)
+	lcop = cx->blk_oldcop;
+    mPUSHi((I32)CopLINE(lcop));
     if (!has_arg)
 	RETURN;
     if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
@@ -1906,7 +1912,7 @@ PP(pp_caller)
 	&& CopSTASH_eq(PL_curcop, PL_debstash))
     {
 	AV * const ary = cx->blk_sub.argarray;
-	const int off = AvARRAY(ary) - AvALLOC(ary);
+	const SSize_t off = AvARRAY(ary) - AvALLOC(ary);
 
 	Perl_init_dbargs(aTHX);
 
@@ -2455,8 +2461,8 @@ PP(pp_return)
 	}
 	break;
     case CXt_FORMAT:
-	POPFORMAT(cx);
 	retop = cx->blk_sub.retop;
+	POPFORMAT(cx);
 	break;
     default:
 	DIE(aTHX_ "panic: return, type=%u", (unsigned) CxTYPE(cx));
@@ -2545,8 +2551,8 @@ PP(pp_leavesublv)
     S_return_lvalues(aTHX_ newsp, SP, newsp, gimme, cx, newpm);
 
     LEAVE;
-    cxstack_ix--;
     POPSUB(cx,sv);	/* Stack values are safe: release CV and @_ ... */
+    cxstack_ix--;
     PL_curpm = newpm;	/* ... and pop $1 et al */
 
     LEAVESUB(sv);
@@ -2770,7 +2776,7 @@ S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstac
     return 0;
 }
 
-PP(pp_goto)
+PP(pp_goto) /* also pp_dump */
 {
     dVAR; dSP;
     OP *retop = NULL;
@@ -2785,6 +2791,8 @@ PP(pp_goto)
     static const char* const must_have_label = "goto must have label";
 
     if (PL_op->op_flags & OPf_STACKED) {
+        /* goto EXPR  or  goto &foo */
+
 	SV * const sv = POPs;
 	SvGETMAGIC(sv);
 
@@ -2887,22 +2895,35 @@ PP(pp_goto)
 		OP* const retop = cx->blk_sub.retop;
 		SV **newsp;
 		I32 gimme;
-		const SSize_t items = AvFILLp(arg) + 1;
+		const SSize_t items = arg ? AvFILL(arg) + 1 : 0;
+		const bool m = arg ? cBOOL(SvRMAGICAL(arg)) : 0;
 		SV** mark;
 
                 PERL_UNUSED_VAR(newsp);
                 PERL_UNUSED_VAR(gimme);
 
 		/* put GvAV(defgv) back onto stack */
-		EXTEND(SP, items+1); /* @_ could have been extended. */
-		Copy(AvARRAY(arg), SP + 1, items, SV*);
-		mark = SP;
-		SP += items;
-		if (AvREAL(arg)) {
-		    I32 index;
-		    for (index=0; index<items; index++)
-			SvREFCNT_inc_void(sv_2mortal(SP[-index]));
+		if (items) {
+		    EXTEND(SP, items+1); /* @_ could have been extended. */
 		}
+		mark = SP;
+		if (items) {
+		    SSize_t index;
+		    bool r = cBOOL(AvREAL(arg));
+		    for (index=0; index<items; index++)
+		    {
+			SV *sv;
+			if (m) {
+			    SV ** const svp = av_fetch(arg, index, 0);
+			    sv = svp ? *svp : NULL;
+			}
+			else sv = AvARRAY(arg)[index];
+			SP[index+1] = sv
+			    ? r ? SvREFCNT_inc_NN(sv_2mortal(sv)) : sv
+			    : sv_2mortal(newSVavdefelem(arg, index, 1));
+		    }
+		}
+		SP += items;
 		SvREFCNT_dec(arg);
 		if (CxTYPE(cx) == CXt_SUB && CxHASARGS(cx)) {
 		    /* Restore old @_ */
@@ -2975,11 +2996,13 @@ PP(pp_goto)
 	    }
 	}
 	else {
+            /* goto EXPR */
 	    label       = SvPV_nomg_const(sv, label_len);
             label_flags = SvUTF8(sv);
 	}
     }
     else if (!(PL_op->op_flags & OPf_SPECIAL)) {
+        /* goto LABEL  or  dump LABEL */
  	label       = cPVOP->op_pv;
         label_flags = (cPVOP->op_private & OPpPV_IS_UTF8) ? SVf_UTF8 : 0;
         label_len   = strlen(label);
@@ -3580,10 +3603,22 @@ STATIC PerlIO *
 S_check_type_and_open(pTHX_ SV *name)
 {
     Stat_t st;
-    const char *p = SvPV_nolen_const(name);
-    const int st_rc = PerlLIO_stat(p, &st);
+    STRLEN len;
+    const char *p = SvPV_const(name, len);
+    int st_rc;
 
     PERL_ARGS_ASSERT_CHECK_TYPE_AND_OPEN;
+
+    /* checking here captures a reasonable error message when
+     * PERL_DISABLE_PMC is true, but when PMC checks are enabled, the
+     * user gets a confusing message about looking for the .pmc file
+     * rather than for the .pm file.
+     * This check prevents a \0 in @INC causing problems.
+     */
+    if (!IS_SAFE_PATHNAME(p, len, "require"))
+        return NULL;
+
+    st_rc = PerlLIO_stat(p, &st);
 
     if (st_rc < 0 || S_ISDIR(st.st_mode) || S_ISBLK(st.st_mode)) {
 	return NULL;
@@ -3604,6 +3639,13 @@ S_doopen_pm(pTHX_ SV *name)
     const char *p = SvPV_const(name, namelen);
 
     PERL_ARGS_ASSERT_DOOPEN_PM;
+
+    /* check the name before trying for the .pmc name to avoid the
+     * warning referring to the .pmc which the user probably doesn't
+     * know or care about
+     */
+    if (!IS_SAFE_PATHNAME(p, namelen, "require"))
+        return NULL;
 
     if (namelen > 3 && memEQs(p + namelen - 3, 3, ".pm")) {
 	SV *const pmcsv = sv_newmortal();
@@ -3737,6 +3779,12 @@ PP(pp_require)
     name = SvPV_const(sv, len);
     if (!(name && len > 0 && *name))
 	DIE(aTHX_ "Null filename used");
+    if (!IS_SAFE_PATHNAME(name, len, "require")) {
+        DIE(aTHX_ "Can't locate %s:   %s",
+            pv_escape(newSVpvs_flags("",SVs_TEMP),SvPVX(sv),SvCUR(sv),
+                      SvCUR(sv)*2,NULL, SvUTF8(sv)?PERL_PV_ESCAPE_UNI:0),
+            Strerror(ENOENT));
+    }
     TAINT_PROPER("require");
 
     path_searchable = path_is_searchable(name);
@@ -3786,7 +3834,7 @@ PP(pp_require)
     }
     if (!tryrsfp && !(errno == EACCES && !path_searchable)) {
 	AV * const ar = GvAVn(PL_incgv);
-	I32 i;
+	SSize_t i;
 #ifdef VMS
 	if (vms_unixname)
 #endif
@@ -3883,9 +3931,15 @@ PP(pp_require)
 			SP--;
 		    }
 
+		    /* FREETMPS may free our filter_cache */
+		    SvREFCNT_inc_simple_void(filter_cache);
+
 		    PUTBACK;
 		    FREETMPS;
 		    LEAVE_with_name("call_INC");
+
+		    /* Now re-mortalize it. */
+		    sv_2mortal(filter_cache);
 
 		    /* Adjust file name if the hook has set an %INC entry.
 		       This needs to happen after the FREETMPS above.  */
@@ -3921,6 +3975,8 @@ PP(pp_require)
 			dirlen = 0;
 		    }
 
+		    if (!IS_SAFE_SYSCALL(dir, dirlen, "@INC entry", "require"))
+			continue;
 #ifdef VMS
 		    if (((unixdirbuf = SvPVX(sv_2mortal(newSVpv("", VMS_MAXRSS-1)))) == NULL)
 			|| ((unixdir = tounixpath(dir, unixdirbuf)) == NULL))
@@ -3999,7 +4055,7 @@ PP(pp_require)
 	    } else {
 	        if (namesv) {			/* did we lookup @INC? */
 		    AV * const ar = GvAVn(PL_incgv);
-		    I32 i;
+		    SSize_t i;
 		    SV *const msg = newSVpvs_flags("", SVs_TEMP);
 		    SV *const inc = newSVpvs_flags("", SVs_TEMP);
 		    for (i = 0; i <= AvFILL(ar); i++) {
@@ -4566,7 +4622,7 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 	}
 	else if (SvROK(d) && SvTYPE(SvRV(d)) == SVt_PVAV) {
 	    /* Test sub truth for each element */
-	    I32 i;
+	    SSize_t i;
 	    bool andedresults = TRUE;
 	    AV *av = (AV*) SvRV(d);
 	    const I32 len = av_len(av);
@@ -4681,8 +4737,8 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 	}
 	else if (SvROK(d) && SvTYPE(SvRV(d)) == SVt_PVAV) {
 	    AV * const other_av = MUTABLE_AV(SvRV(d));
-	    const I32 other_len = av_len(other_av) + 1;
-	    I32 i;
+	    const SSize_t other_len = av_len(other_av) + 1;
+	    SSize_t i;
 	    HV *hv = MUTABLE_HV(SvRV(e));
 
 	    DEBUG_M(Perl_deb(aTHX_ "    applying rule Array-Hash\n"));
@@ -4733,8 +4789,8 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 	}
 	else if (SvROK(d) && SvTYPE(SvRV(d)) == SVt_PVHV) {
 	    AV * const other_av = MUTABLE_AV(SvRV(e));
-	    const I32 other_len = av_len(other_av) + 1;
-	    I32 i;
+	    const SSize_t other_len = av_len(other_av) + 1;
+	    SSize_t i;
 
 	    DEBUG_M(Perl_deb(aTHX_ "    applying rule Hash-Array\n"));
 	    for (i = 0; i < other_len; ++i) {
@@ -4754,8 +4810,8 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 	    if (av_len(MUTABLE_AV(SvRV(e))) != av_len(other_av))
 		RETPUSHNO;
 	    else {
-	    	I32 i;
-	    	const I32 other_len = av_len(other_av);
+	    	SSize_t i;
+	    	const SSize_t other_len = av_len(other_av);
 
 		if (NULL == seen_this) {
 		    seen_this = newHV();
@@ -4810,8 +4866,8 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 	  sm_regex_array:
 	    {
 		PMOP * const matcher = make_matcher((REGEXP*) SvRV(d));
-		const I32 this_len = av_len(MUTABLE_AV(SvRV(e)));
-		I32 i;
+		const SSize_t this_len = av_len(MUTABLE_AV(SvRV(e)));
+		SSize_t i;
 
 		for(i = 0; i <= this_len; ++i) {
 		    SV * const * const svp = av_fetch(MUTABLE_AV(SvRV(e)), i, FALSE);
@@ -4827,8 +4883,8 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 	}
 	else if (!SvOK(d)) {
 	    /* undef ~~ array */
-	    const I32 this_len = av_len(MUTABLE_AV(SvRV(e)));
-	    I32 i;
+	    const SSize_t this_len = av_len(MUTABLE_AV(SvRV(e)));
+	    SSize_t i;
 
 	    DEBUG_M(Perl_deb(aTHX_ "    applying rule Undef-Array\n"));
 	    for (i = 0; i <= this_len; ++i) {
@@ -4842,8 +4898,8 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 	else {
 	  sm_any_array:
 	    {
-		I32 i;
-		const I32 this_len = av_len(MUTABLE_AV(SvRV(e)));
+		SSize_t i;
+		const SSize_t this_len = av_len(MUTABLE_AV(SvRV(e)));
 
 		DEBUG_M(Perl_deb(aTHX_ "    applying rule Any-Array\n"));
 		for (i = 0; i <= this_len; ++i) {

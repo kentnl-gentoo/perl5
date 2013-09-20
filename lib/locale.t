@@ -525,20 +525,7 @@ if (in_utf8) {
 
 my @Locale;
 my $Locale;
-my @Word_;
-my @Digit_;
-my @Space_;
-my @Alpha_;
-my @Alnum_;
-my @Ascii_;
-my @Blank_;
-my @Cntrl_;
-my @Graph_;
-my @Lower_;
-my @Print_;
-my @Upper_;
-my @Xdigit_;
-my @Cased_;
+my %posixes;
 
 sub trylocale {
     my $locale = shift;
@@ -621,7 +608,7 @@ if (-x "/usr/bin/locale" && open(LOCALES, "/usr/bin/locale -a 2>/dev/null|")) {
         trylocale($_);
     }
     close(LOCALES);
-} elsif ($^O eq 'openbsd' && -e '/usr/share/locale') {
+} elsif (($^O eq 'openbsd' || $^O eq 'bitrig' ) && -e '/usr/share/locale') {
 
    # OpenBSD doesn't have a locale executable, so reading /usr/share/locale
    # is much easier and faster than the last resort method.
@@ -708,7 +695,6 @@ sub display_characters {
     no locale;
     my @chars = sort { ord $a <=> ord $b } @_;
     my $output = "";
-    my $hex = "";
     my $range_start;
     my $start_class;
     push @chars, chr(258);  # This sentinel simplifies the loop termination
@@ -731,16 +717,17 @@ sub display_characters {
         elsif ($char =~ /[0-9]/) {
             $class = 4;
         }
-        elsif ($char =~ /[[\]!"#\$\%&\'()*+,.\/:\\;<=>?\@\^_`{|}~-]/) {
-            $class = -1;    # Punct never appears in a range
-        }
+        # Uncomment to get literal punctuation displayed instead of hex
+        #elsif ($char =~ /[[\]!"#\$\%&\'()*+,.\/:\\;<=>?\@\^_`{|}~-]/) {
+        #    $class = -1;    # Punct never appears in a range
+        #}
         else {
             $class = 0;     # Output in hex
         }
 
         if (! defined $range_start) {
             if ($class < 0) {
-                $output .= $char;
+                $output .= " " . $char;
             }
             else {
                 $range_start = ord $char;
@@ -760,8 +747,8 @@ sub display_characters {
                 $output .= "-" . chr($range_end) if $range_length > 1;
             }
             else {
-                $hex .= sprintf(" %02X", $range_start);
-                $hex .= sprintf("-%02X", $range_end) if $range_length > 1;
+                $output .= sprintf(" %02X", $range_start);
+                $output .= sprintf("-%02X", $range_end) if $range_length > 1;
             }
 
             # Handle the new current character, as potentially beginning a new
@@ -772,8 +759,7 @@ sub display_characters {
     }
 
     $output =~ s/^ //;
-    $hex =~ s/^ // if ! length $output;
-    return "$output$hex";
+    return $output;
 }
 
 sub report_result {
@@ -810,6 +796,7 @@ my %setlocale_failed;   # List of locales that setlocale() didn't work on
 
 foreach $Locale (@Locale) {
     $locales_test_number = $first_locales_test_number - 1;
+    debug "#\n";
     debug "# Locale = $Locale\n";
 
     unless (setlocale(&POSIX::LC_ALL, $Locale)) {
@@ -831,24 +818,25 @@ foreach $Locale (@Locale) {
 
     if (! $is_utf8_locale) {
         use locale;
-        @Word_ = grep /\w/, map { chr } 0..255;
-        @Digit_ = grep /\d/, map { chr } 0..255;
-        @Space_ = grep /\s/, map { chr } 0..255;
-        @Alpha_ = grep /[[:alpha:]]/, map {chr } 0..255;
-        @Alnum_ = grep /[[:alnum:]]/, map {chr } 0..255;
-        @Ascii_ = grep /[[:ascii:]]/, map {chr } 0..255;
-        @Blank_ = grep /[[:blank:]]/, map {chr } 0..255;
-        @Cntrl_ = grep /[[:cntrl:]]/, map {chr } 0..255;
-        @Graph_ = grep /[[:graph:]]/, map {chr } 0..255;
-        @Lower_ = grep /[[:lower:]]/, map {chr } 0..255;
-        @Print_ = grep /[[:print:]]/, map {chr } 0..255;
-        @Upper_ = grep /[[:upper:]]/, map {chr } 0..255;
-        @Xdigit_ = grep /[[:xdigit:]]/, map {chr } 0..255;
-        @Cased_ = grep /[[:upper:]]/i, map {chr } 0..255;
+        @{$posixes{'word'}} = grep /\w/, map { chr } 0..255;
+        @{$posixes{'digit'}} = grep /\d/, map { chr } 0..255;
+        @{$posixes{'space'}} = grep /\s/, map { chr } 0..255;
+        @{$posixes{'alpha'}} = grep /[[:alpha:]]/, map {chr } 0..255;
+        @{$posixes{'alnum'}} = grep /[[:alnum:]]/, map {chr } 0..255;
+        @{$posixes{'ascii'}} = grep /[[:ascii:]]/, map {chr } 0..255;
+        @{$posixes{'blank'}} = grep /[[:blank:]]/, map {chr } 0..255;
+        @{$posixes{'cntrl'}} = grep /[[:cntrl:]]/, map {chr } 0..255;
+        @{$posixes{'graph'}} = grep /[[:graph:]]/, map {chr } 0..255;
+        @{$posixes{'lower'}} = grep /[[:lower:]]/, map {chr } 0..255;
+        @{$posixes{'print'}} = grep /[[:print:]]/, map {chr } 0..255;
+        @{$posixes{'punct'}} = grep /[[:punct:]]/, map {chr } 0..255;
+        @{$posixes{'upper'}} = grep /[[:upper:]]/, map {chr } 0..255;
+        @{$posixes{'xdigit'}} = grep /[[:xdigit:]]/, map {chr } 0..255;
+        @{$posixes{'cased'}} = grep /[[:upper:]]/i, map {chr } 0..255;
 
         # Sieve the uppercase and the lowercase.
 
-        for (@Word_) {
+        for (@{$posixes{'word'}}) {
             if (/[^\d_]/) { # skip digits and the _
                 if (uc($_) eq $_) {
                     $UPPER{$_} = $_;
@@ -861,21 +849,22 @@ foreach $Locale (@Locale) {
     }
     else {
         use locale ':not_characters';
-        @Word_ = grep /\w/, map { chr } 0..255;
-        @Digit_ = grep /\d/, map { chr } 0..255;
-        @Space_ = grep /\s/, map { chr } 0..255;
-        @Alpha_ = grep /[[:alpha:]]/, map {chr } 0..255;
-        @Alnum_ = grep /[[:alnum:]]/, map {chr } 0..255;
-        @Ascii_ = grep /[[:ascii:]]/, map {chr } 0..255;
-        @Blank_ = grep /[[:blank:]]/, map {chr } 0..255;
-        @Cntrl_ = grep /[[:cntrl:]]/, map {chr } 0..255;
-        @Graph_ = grep /[[:graph:]]/, map {chr } 0..255;
-        @Lower_ = grep /[[:lower:]]/, map {chr } 0..255;
-        @Print_ = grep /[[:print:]]/, map {chr } 0..255;
-        @Upper_ = grep /[[:upper:]]/, map {chr } 0..255;
-        @Xdigit_ = grep /[[:xdigit:]]/, map {chr } 0..255;
-        @Cased_ = grep /[[:upper:]]/i, map {chr } 0..255;
-        for (@Word_) {
+        @{$posixes{'word'}} = grep /\w/, map { chr } 0..255;
+        @{$posixes{'digit'}} = grep /\d/, map { chr } 0..255;
+        @{$posixes{'space'}} = grep /\s/, map { chr } 0..255;
+        @{$posixes{'alpha'}} = grep /[[:alpha:]]/, map {chr } 0..255;
+        @{$posixes{'alnum'}} = grep /[[:alnum:]]/, map {chr } 0..255;
+        @{$posixes{'ascii'}} = grep /[[:ascii:]]/, map {chr } 0..255;
+        @{$posixes{'blank'}} = grep /[[:blank:]]/, map {chr } 0..255;
+        @{$posixes{'cntrl'}} = grep /[[:cntrl:]]/, map {chr } 0..255;
+        @{$posixes{'graph'}} = grep /[[:graph:]]/, map {chr } 0..255;
+        @{$posixes{'lower'}} = grep /[[:lower:]]/, map {chr } 0..255;
+        @{$posixes{'print'}} = grep /[[:print:]]/, map {chr } 0..255;
+        @{$posixes{'punct'}} = grep /[[:punct:]]/, map {chr } 0..255;
+        @{$posixes{'upper'}} = grep /[[:upper:]]/, map {chr } 0..255;
+        @{$posixes{'xdigit'}} = grep /[[:xdigit:]]/, map {chr } 0..255;
+        @{$posixes{'cased'}} = grep /[[:upper:]]/i, map {chr } 0..255;
+        for (@{$posixes{'word'}}) {
             if (/[^\d_]/) { # skip digits and the _
                 if (uc($_) eq $_) {
                     $UPPER{$_} = $_;
@@ -887,20 +876,23 @@ foreach $Locale (@Locale) {
         }
     }
 
-    debug "# :upper:  = ", display_characters(@Upper_), "\n";
-    debug "# :lower:  = ", display_characters(@Lower_), "\n";
-    debug "# :cased:  = ", display_characters(@Cased_), "\n";
-    debug "# :alpha:  = ", display_characters(@Alpha_), "\n";
-    debug "# :alnum:  = ", display_characters(@Alnum_), "\n";
-    debug "#  w       = ", display_characters(@Word_), "\n";
-    debug "# :graph:  = ", display_characters(@Graph_), "\n";
-    debug "# :print:  = ", display_characters(@Print_), "\n";
-    debug "#  d       = ", display_characters(@Digit_), "\n";
-    debug "# :xdigit: = ", display_characters(@Xdigit_), "\n";
-    debug "# :blank:  = ", display_characters(@Blank_), "\n";
-    debug "#  s       = ", display_characters(@Space_), "\n";
-    debug "# :cntrl:  = ", display_characters(@Cntrl_), "\n";
-    debug "# :ascii:  = ", display_characters(@Ascii_), "\n";
+    # Ordered, where possible,  in groups of "this is a subset of the next
+    # one"
+    debug "# :upper:  = ", display_characters(@{$posixes{'upper'}}), "\n";
+    debug "# :lower:  = ", display_characters(@{$posixes{'lower'}}), "\n";
+    debug "# :cased:  = ", display_characters(@{$posixes{'cased'}}), "\n";
+    debug "# :alpha:  = ", display_characters(@{$posixes{'alpha'}}), "\n";
+    debug "# :alnum:  = ", display_characters(@{$posixes{'alnum'}}), "\n";
+    debug "#  w       = ", display_characters(@{$posixes{'word'}}), "\n";
+    debug "# :graph:  = ", display_characters(@{$posixes{'graph'}}), "\n";
+    debug "# :print:  = ", display_characters(@{$posixes{'print'}}), "\n";
+    debug "#  d       = ", display_characters(@{$posixes{'digit'}}), "\n";
+    debug "# :xdigit: = ", display_characters(@{$posixes{'xdigit'}}), "\n";
+    debug "# :blank:  = ", display_characters(@{$posixes{'blank'}}), "\n";
+    debug "#  s       = ", display_characters(@{$posixes{'space'}}), "\n";
+    debug "# :punct:  = ", display_characters(@{$posixes{'punct'}}), "\n";
+    debug "# :cntrl:  = ", display_characters(@{$posixes{'cntrl'}}), "\n";
+    debug "# :ascii:  = ", display_characters(@{$posixes{'ascii'}}), "\n";
 
     foreach (keys %UPPER) {
 
@@ -914,9 +906,20 @@ foreach $Locale (@Locale) {
 	delete $lower{$_};
     }
 
+    my %Unassigned;
+    foreach my $ord ( 0 .. 255 ) {
+        $Unassigned{chr $ord} = 1;
+    }
+    foreach my $class (keys %posixes) {
+        foreach my $char (@{$posixes{$class}}) {
+            delete $Unassigned{$char};
+        }
+    }
+
     debug "# UPPER    = ", display_characters(keys %UPPER), "\n";
     debug "# lower    = ", display_characters(keys %lower), "\n";
     debug "# BoThCaSe = ", display_characters(keys %BoThCaSe), "\n";
+    debug "# Unassigned = ", display_characters(sort { ord $a <=> ord $b } keys %Unassigned), "\n";
 
     my @failures;
     my @fold_failures;
@@ -1078,6 +1081,21 @@ foreach $Locale (@Locale) {
     # The rules for the relationships are given in:
     # http://www.opengroup.org/onlinepubs/009695399/basedefs/xbd_chap07.html
 
+
+    ++$locales_test_number;
+    undef @f;
+    $test_names{$locales_test_number} = 'Verify that [:lower:] contains at least a-z';
+    for ('a' .. 'z') {
+        if ($is_utf8_locale) {
+            use locale ':not_characters';
+            push @f, $_  unless /[[:lower:]]/;
+        }
+        else {
+            push @f, $_  unless /[[:lower:]]/;
+        }
+    }
+    report_multi_result($Locale, $locales_test_number, \@f);
+
     ++$locales_test_number;
     undef @f;
     $test_names{$locales_test_number} = 'Verify that [:lower:] is a subset of [:alpha:]';
@@ -1088,6 +1106,20 @@ foreach $Locale (@Locale) {
         }
         else {
             push @f, $_  if /[[:lower:]]/ and ! /[[:alpha:]]/;
+        }
+    }
+    report_multi_result($Locale, $locales_test_number, \@f);
+
+    ++$locales_test_number;
+    undef @f;
+    $test_names{$locales_test_number} = 'Verify that [:upper:] contains at least A-Z';
+    for ('A' .. 'Z') {
+        if ($is_utf8_locale) {
+            use locale ':not_characters';
+            push @f, $_  unless /[[:upper:]]/;
+        }
+        else {
+            push @f, $_  unless /[[:upper:]]/;
         }
     }
     report_multi_result($Locale, $locales_test_number, \@f);
@@ -1136,6 +1168,20 @@ foreach $Locale (@Locale) {
 
     ++$locales_test_number;
     undef @f;
+    $test_names{$locales_test_number} = 'Verify that [:digit:] contains at least 0-9';
+    for ('0' .. '9') {
+        if ($is_utf8_locale) {
+            use locale ':not_characters';
+            push @f, $_  unless /[[:digit:]]/;
+        }
+        else {
+            push @f, $_  unless /[[:digit:]]/;
+        }
+    }
+    report_multi_result($Locale, $locales_test_number, \@f);
+
+    ++$locales_test_number;
+    undef @f;
     $test_names{$locales_test_number} = 'Verify that [:digit:] is a subset of [:alnum:]';
     for (map { chr } 0..255) {
         if ($is_utf8_locale) {
@@ -1151,39 +1197,85 @@ foreach $Locale (@Locale) {
     ++$locales_test_number;
     undef @f;
     $test_names{$locales_test_number} = 'Verify that [:digit:] matches either 10 or 20 code points';
-    report_result($Locale, $locales_test_number, @Digit_ == 10 || @Digit_ ==20);
+    report_result($Locale, $locales_test_number, @{$posixes{'digit'}} == 10 || @{$posixes{'digit'}} == 20);
 
     ++$locales_test_number;
     undef @f;
-    $test_names{$locales_test_number} = 'Verify that [:digit:] (if is 10 code points) is a subset of [:xdigit:]';
-    if (@Digit_ == 10) {
+    $test_names{$locales_test_number} = 'Verify that if there is a second set of digits in [:digit:], they are consecutive';
+    if (@{$posixes{'digit'}} == 20) {
+        my $previous_ord;
         for (map { chr } 0..255) {
-            if ($is_utf8_locale) {
-                use locale ':not_characters';
-                push @f, $_ if /[[:digit:]]/  and ! /[[:xdigit:]]/;
+            next unless /[[:digit:]]/;
+            next if /[0-9]/;
+            if (defined $previous_ord) {
+                if ($is_utf8_locale) {
+                    use locale ':not_characters';
+                    push @f, $_ if ord $_ != $previous_ord + 1;
+                }
+                else {
+                    push @f, $_ if ord $_ != $previous_ord + 1;
+                }
             }
-            else {
-                push @f, $_ if /[[:digit:]]/  and ! /[[:xdigit:]]/;
-            }
+            $previous_ord = ord $_;
         }
     }
     report_multi_result($Locale, $locales_test_number, \@f);
 
     ++$locales_test_number;
     undef @f;
-    $test_names{$locales_test_number} = 'Verify that [:alnum:] is a subset of [:graph:]';
+    $test_names{$locales_test_number} = 'Verify that [:digit:] is a subset of [:xdigit:]';
     for (map { chr } 0..255) {
         if ($is_utf8_locale) {
             use locale ':not_characters';
-            push @f, $_ if /[[:alnum:]]/  and ! /[[:graph:]]/;
+            push @f, $_ if /[[:digit:]]/  and ! /[[:xdigit:]]/;
         }
         else {
-            push @f, $_ if /[[:alnum:]]/  and ! /[[:graph:]]/;
+            push @f, $_ if /[[:digit:]]/  and ! /[[:xdigit:]]/;
         }
     }
     report_multi_result($Locale, $locales_test_number, \@f);
 
-    # Note that xdigit doesn't have to be a subset of alnum
+    ++$locales_test_number;
+    undef @f;
+    $test_names{$locales_test_number} = 'Verify that [:xdigit:] contains at least A-F, a-f';
+    for ('A' .. 'F', 'a' .. 'f') {
+        if ($is_utf8_locale) {
+            use locale ':not_characters';
+            push @f, $_  unless /[[:xdigit:]]/;
+        }
+        else {
+            push @f, $_  unless /[[:xdigit:]]/;
+        }
+    }
+    report_multi_result($Locale, $locales_test_number, \@f);
+
+    ++$locales_test_number;
+    undef @f;
+    $test_names{$locales_test_number} = 'Verify that any additional members of [:xdigit:], are in groups of 6 consecutive code points';
+    my $previous_ord;
+    my $count = 0;
+    for (map { chr } 0..255) {
+        next unless /[[:xdigit:]]/;
+        next if /[[:digit:]]/;
+        next if /[A-Fa-f]/;
+        if (defined $previous_ord) {
+            if ($is_utf8_locale) {
+                use locale ':not_characters';
+                push @f, $_ if ord $_ != $previous_ord + 1;
+            }
+            else {
+                push @f, $_ if ord $_ != $previous_ord + 1;
+            }
+        }
+        $count++;
+        if ($count == 6) {
+            undef $previous_ord;
+        }
+        else {
+            $previous_ord = ord $_;
+        }
+    }
+    report_multi_result($Locale, $locales_test_number, \@f);
 
     ++$locales_test_number;
     undef @f;
@@ -1199,6 +1291,8 @@ foreach $Locale (@Locale) {
     }
     report_multi_result($Locale, $locales_test_number, \@f);
 
+    # Note that xdigit doesn't have to be a subset of alnum
+
     ++$locales_test_number;
     undef @f;
     $test_names{$locales_test_number} = 'Verify that [:punct:] is a subset of [:graph:]';
@@ -1209,6 +1303,46 @@ foreach $Locale (@Locale) {
         }
         else {
             push @f, $_ if /[[:punct:]]/  and ! /[[:graph:]]/;
+        }
+    }
+    report_multi_result($Locale, $locales_test_number, \@f);
+
+    ++$locales_test_number;
+    undef @f;
+    $test_names{$locales_test_number} = 'Verify that the space character is not in [:graph:]';
+    if ($is_utf8_locale) {
+        use locale ':not_characters';
+        push @f, " " if " " =~ /[[:graph:]]/;
+    }
+    else {
+        push @f, " " if " " =~ /[[:graph:]]/;
+    }
+    report_multi_result($Locale, $locales_test_number, \@f);
+
+    ++$locales_test_number;
+    undef @f;
+    $test_names{$locales_test_number} = 'Verify that [:space:] contains at least [\f\n\r\t\cK ]';
+    for (' ', "\f", "\n", "\r", "\t", "\cK") {
+        if ($is_utf8_locale) {
+            use locale ':not_characters';
+            push @f, $_  unless /[[:space:]]/;
+        }
+        else {
+            push @f, $_  unless /[[:space:]]/;
+        }
+    }
+    report_multi_result($Locale, $locales_test_number, \@f);
+
+    ++$locales_test_number;
+    undef @f;
+    $test_names{$locales_test_number} = 'Verify that [:blank:] contains at least [\t ]';
+    for (' ', "\t") {
+        if ($is_utf8_locale) {
+            use locale ':not_characters';
+            push @f, $_  unless /[[:blank:]]/;
+        }
+        else {
+            push @f, $_  unless /[[:blank:]]/;
         }
     }
     report_multi_result($Locale, $locales_test_number, \@f);
@@ -1243,6 +1377,18 @@ foreach $Locale (@Locale) {
 
     ++$locales_test_number;
     undef @f;
+    $test_names{$locales_test_number} = 'Verify that the space character is in [:print:]';
+    if ($is_utf8_locale) {
+        use locale ':not_characters';
+        push @f, " " if " " !~ /[[:print:]]/;
+    }
+    else {
+        push @f, " " if " " !~ /[[:print:]]/;
+    }
+    report_multi_result($Locale, $locales_test_number, \@f);
+
+    ++$locales_test_number;
+    undef @f;
     $test_names{$locales_test_number} = 'Verify that isn\'t both [:cntrl:] and [:print:]';
     for (map { chr } 0..255) {
         if ($is_utf8_locale) {
@@ -1251,6 +1397,20 @@ foreach $Locale (@Locale) {
         }
         else {
             push @f, $_ if (/[[:print:]]/ and /[[:cntrl:]]/);
+        }
+    }
+    report_multi_result($Locale, $locales_test_number, \@f);
+
+    ++$locales_test_number;
+    undef @f;
+    $test_names{$locales_test_number} = 'Verify that isn\'t both [:alpha:] and [:digit:]';
+    for (map { chr } 0..255) {
+        if ($is_utf8_locale) {
+            use locale ':not_characters';
+            push @f, $_ if /[[:alpha:]]/ and /[[:digit:]]/;
+        }
+        else {
+            push @f, $_ if /[[:alpha:]]/ and /[[:digit:]]/;
         }
     }
     report_multi_result($Locale, $locales_test_number, \@f);
@@ -1326,14 +1486,14 @@ foreach $Locale (@Locale) {
         $not_necessarily_a_problem_test_number = $locales_test_number;
         for (0..9) {
             # Select a slice.
-            $from = int(($_*@Word_)/10);
-            $to = $from + int(@Word_/10);
-            $to = $#Word_ if ($to > $#Word_);
-            $lesser  = join('', @Word_[$from..$to]);
+            $from = int(($_*@{$posixes{'word'}})/10);
+            $to = $from + int(@{$posixes{'word'}}/10);
+            $to = $#{$posixes{'word'}} if ($to > $#{$posixes{'word'}});
+            $lesser  = join('', @{$posixes{'word'}}[$from..$to]);
             # Select a slice one character on.
             $from++; $to++;
-            $to = $#Word_ if ($to > $#Word_);
-            $greater = join('', @Word_[$from..$to]);
+            $to = $#{$posixes{'word'}} if ($to > $#{$posixes{'word'}});
+            $greater = join('', @{$posixes{'word'}}[$from..$to]);
             if ($is_utf8_locale) {
                 use locale ':not_characters';
                 ($yes, $no, $sign) = ($lesser lt $greater
@@ -1414,12 +1574,17 @@ foreach $Locale (@Locale) {
     my $ok14;
     my $ok15;
     my $ok16;
+    my $ok17;
+    my $ok18;
 
     my $c;
     my $d;
     my $e;
     my $f;
     my $g;
+    my $h;
+    my $i;
+    my $j;
 
     if (! $is_utf8_locale) {
         use locale;
@@ -1463,6 +1628,9 @@ foreach $Locale (@Locale) {
 
             $f = "1.23";
             $g = 2.34;
+            $h = 1.5;
+            $i = 1.25;
+            $j = "$h:$i";
 
             $ok9 = $f == 1.23;
             $ok10 = $f == $x;
@@ -1471,6 +1639,11 @@ foreach $Locale (@Locale) {
             $ok13 = $w == 0;
             $ok14 = $ok15 = $ok16 = 1;  # Skip for non-utf8 locales
         }
+        {
+            no locale;
+            $ok17 = "1.5:1.25" eq sprintf("%g:%g", $h, $i);
+        }
+        $ok18 = $j eq sprintf("%g:%g", $h, $i);
     }
     else {
         use locale ':not_characters';
@@ -1507,6 +1680,9 @@ foreach $Locale (@Locale) {
 
             $f = "1.23";
             $g = 2.34;
+            $h = 1.5;
+            $i = 1.25;
+            $j = "$h:$i";
 
             $ok9 = $f == 1.23;
             $ok10 = $f == $x;
@@ -1523,13 +1699,7 @@ foreach $Locale (@Locale) {
                 $! = eval "&Errno::$err";   # Convert to strerror() output
                 my $strerror = "$!";
                 if ("$strerror" =~ /\P{ASCII}/) {
-                    my $utf8_strerror = $strerror;
-                    utf8::upgrade($utf8_strerror);
-
-                    # If $! was already in UTF-8, the upgrade was a no-op;
-                    # otherwise they will be different byte strings.
-                    use bytes;
-                    $ok14 = $utf8_strerror eq $strerror;
+                    $ok14 = utf8::is_utf8($strerror);
                     last;
                 }
             }
@@ -1539,16 +1709,16 @@ foreach $Locale (@Locale) {
             # stringification.
 
             my $string_g = "$g";
+            my $sprintf_g = sprintf("%g", $g);
 
-            my $utf8_string_g = "$g";
-            utf8::upgrade($utf8_string_g);
-
-            my $utf8_sprintf_g = sprintf("%g", $g);
-            utf8::upgrade($utf8_sprintf_g);
-            use bytes;
-            $ok15 = $utf8_string_g eq $string_g;
-            $ok16 = $utf8_sprintf_g eq $string_g;
+            $ok15 = $string_g =~ / ^ \p{ASCII}+ $ /x || utf8::is_utf8($string_g);
+            $ok16 = $sprintf_g eq $string_g;
         }
+        {
+            no locale;
+            $ok17 = "1.5:1.25" eq sprintf("%g:%g", $h, $i);
+        }
+        $ok18 = $j eq sprintf("%g:%g", $h, $i);
     }
 
     report_result($Locale, ++$locales_test_number, $ok1);
@@ -1609,6 +1779,12 @@ foreach $Locale (@Locale) {
 
     report_result($Locale, ++$locales_test_number, $ok16);
     $test_names{$locales_test_number} = 'Verify that a sprintf of a number with a UTF-8 radix yields UTF-8';
+
+    report_result($Locale, ++$locales_test_number, $ok17);
+    $test_names{$locales_test_number} = 'Verify that a sprintf of a number outside locale scope uses a dot radix';
+
+    report_result($Locale, ++$locales_test_number, $ok18);
+    $test_names{$locales_test_number} = 'Verify that a sprintf of a number back within locale scope uses locale radix';
 
     debug "# $first_f_test..$locales_test_number: \$f = $f, \$g = $g, back to locale = $Locale\n";
 

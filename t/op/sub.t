@@ -6,7 +6,7 @@ BEGIN {
     require './test.pl';
 }
 
-plan( tests => 27 );
+plan( tests => 30 );
 
 sub empty_sub {}
 
@@ -165,3 +165,20 @@ is eval {
     is $w, undef,
       '*keyword = sub():method{$y} does not cause ambiguity warnings';
 }
+
+# &xsub when @_ has nonexistent elements
+{
+    no warnings "uninitialized";
+    local @_ = ();
+    $#_++;
+    &utf8::encode;
+    is @_, 1, 'num of elems in @_ after &xsub with nonexistent $_[0]';
+    is $_[0], "", 'content of nonexistent $_[0] is modified by &xsub';
+}
+
+# &xsub when @_ itself does not exist
+undef *_;
+eval { &utf8::encode };
+# The main thing we are testing is that it did not crash.  But make sure 
+# *_{ARRAY} was untouched, too.
+is *_{ARRAY}, undef, 'goto &xsub when @_ does not exist';

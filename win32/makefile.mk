@@ -43,7 +43,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.19.3
+#INST_VER	*= \5.19.4
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -102,6 +102,7 @@ USE_LARGE_FILES	*= define
 # Uncomment this if you're building a 32-bit perl and want 64-bit integers.
 # (If you're building a 64-bit perl then you will have 64-bit integers whether
 # or not this is uncommented.)
+# Note: This option is not supported in 32-bit MSVC60 builds.
 #USE_64_BIT_INT	*= define
 
 #
@@ -333,6 +334,12 @@ USE_64_BIT_INT	= define
 # not against a compiler specific versioned runtime.
 .IF "$(WIN64)" == "define" && "$(CCTYPE)" == "MSVC60"
 CCTYPE		= SDK2003SP1
+.ENDIF
+
+# Disable the 64-bit-int option for (32-bit) MSVC60 builds since that compiler
+# does not support it.
+.IF "$(CCTYPE)" == "MSVC60"
+USE_64_BIT_INT	!= undef
 .ENDIF
 
 ARCHITECTURE = $(PROCESSOR_ARCHITECTURE)
@@ -844,6 +851,7 @@ CORE_NOCFG_H	=		\
 		..\intrpvar.h	\
 		.\include\dirent.h	\
 		.\include\netdb.h	\
+		.\include\sys\errno2.h	\
 		.\include\sys\socket.h	\
 		.\win32.h
 
@@ -1330,7 +1338,7 @@ utils: $(PERLEXE) $(X2P) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5193delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5194delta.pod
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1428,7 +1436,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5193delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perl5194delta.pod perlaix.pod perlamiga.pod perlapi.pod \
 	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod perldos.pod \
 	    perlfreebsd.pod perlhaiku.pod perlhpux.pod perlhurd.pod \
 	    perlintern.pod perlirix.pod perljp.pod perlko.pod perllinux.pod \

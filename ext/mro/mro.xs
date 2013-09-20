@@ -77,11 +77,12 @@ S_mro_get_linear_isa_c3(pTHX_ HV* stash, U32 level)
            The members of @seqs are the MROs of
            the members of @ISA, followed by @ISA itself.
         */
-        I32 items = AvFILLp(isa) + 1;
+        SSize_t items = AvFILLp(isa) + 1;
         SV** isa_ptr = AvARRAY(isa);
         while(items--) {
-            SV* const isa_item = *isa_ptr++;
+            SV* const isa_item = *isa_ptr ? *isa_ptr : &PL_sv_undef;
             HV* const isa_item_stash = gv_stashsv(isa_item, 0);
+            isa_ptr++;
             if(!isa_item_stash) {
                 /* if no stash, make a temporary fake MRO
                    containing just itself */
