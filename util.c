@@ -76,13 +76,6 @@ Perl_safesysmalloc(MEM_SIZE size)
     dTHX;
 #endif
     Malloc_t ptr;
-#ifdef HAS_64K_LIMIT
-	if (size > 0xffff) {
-	    PerlIO_printf(Perl_error_log,
-			  "Allocation too large: %lx\n", size) FLUSH;
-	    my_exit(1);
-	}
-#endif /* HAS_64K_LIMIT */
 #ifdef PERL_TRACK_MEMPOOL
     size += sTHX;
 #endif
@@ -143,13 +136,6 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
     Malloc_t PerlMem_realloc();
 #endif /* !defined(STANDARD_C) && !defined(HAS_REALLOC_PROTOTYPE) */
 
-#ifdef HAS_64K_LIMIT
-    if (size > 0xffff) {
-	PerlIO_printf(Perl_error_log,
-		      "Reallocation too large: %lx\n", size) FLUSH;
-	my_exit(1);
-    }
-#endif /* HAS_64K_LIMIT */
     if (!size) {
 	safesysfree(where);
 	return NULL;
@@ -289,13 +275,13 @@ Perl_safesyscalloc(MEM_SIZE count, MEM_SIZE size)
     dTHX;
 #endif
     Malloc_t ptr;
-#if defined(PERL_TRACK_MEMPOOL) || defined(HAS_64K_LIMIT) || defined(DEBUGGING)
+#if defined(PERL_TRACK_MEMPOOL) || defined(DEBUGGING)
     MEM_SIZE total_size = 0;
 #endif
 
     /* Even though calloc() for zero bytes is strange, be robust. */
     if (size && (count <= MEM_SIZE_MAX / size)) {
-#if defined(PERL_TRACK_MEMPOOL) || defined(HAS_64K_LIMIT) || defined(DEBUGGING)
+#if defined(PERL_TRACK_MEMPOOL) || defined(DEBUGGING)
 	total_size = size * count;
 #endif
     }
@@ -307,13 +293,6 @@ Perl_safesyscalloc(MEM_SIZE count, MEM_SIZE size)
     else
 	croak_memory_wrap();
 #endif
-#ifdef HAS_64K_LIMIT
-    if (total_size > 0xffff) {
-	PerlIO_printf(Perl_error_log,
-		      "Allocation too large: %lx\n", total_size) FLUSH;
-	my_exit(1);
-    }
-#endif /* HAS_64K_LIMIT */
 #ifdef DEBUGGING
     if ((SSize_t)size < 0 || (SSize_t)count < 0)
 	Perl_croak_nocontext("panic: calloc, size=%"UVuf", count=%"UVuf,
@@ -2528,25 +2507,6 @@ Perl_my_fork(void)
 #endif /* HAS_FORK */
 }
 
-#ifdef DUMP_FDS
-void
-Perl_dump_fds(pTHX_ const char *const s)
-{
-    int fd;
-    Stat_t tmpstatbuf;
-
-    PERL_ARGS_ASSERT_DUMP_FDS;
-
-    PerlIO_printf(Perl_debug_log,"%s", s);
-    for (fd = 0; fd < 32; fd++) {
-	if (PerlLIO_fstat(fd,&tmpstatbuf) >= 0)
-	    PerlIO_printf(Perl_debug_log," %d",fd);
-    }
-    PerlIO_printf(Perl_debug_log,"\n");
-    return;
-}
-#endif	/* DUMP_FDS */
-
 #ifndef HAS_DUP2
 int
 dup2(int oldfd, int newfd)
@@ -2746,19 +2706,21 @@ Perl_my_pclose(pTHX_ PerlIO *ptr)
     bool close_failed;
     dSAVEDERRNO;
     const int fd = PerlIO_fileno(ptr);
-
-#ifdef USE_PERLIO
-    /* Find out whether the refcount is low enough for us to wait for the
-       child proc without blocking. */
-    const bool should_wait = PerlIOUnix_refcnt(fd) == 1;
-#else
-    const bool should_wait = 1;
-#endif
+    bool should_wait;
 
     svp = av_fetch(PL_fdpid,fd,TRUE);
     pid = (SvTYPE(*svp) == SVt_IV) ? SvIVX(*svp) : -1;
     SvREFCNT_dec(*svp);
     *svp = NULL;
+
+#ifdef USE_PERLIO
+    /* Find out whether the refcount is low enough for us to wait for the
+       child proc without blocking. */
+    should_wait = PerlIOUnix_refcnt(fd) == 1 && pid > 0;
+#else
+    should_wait = pid > 0;
+#endif
+
 #ifdef OS2
     if (pid == -1) {			/* Opened by popen. */
 	return my_syspclose(ptr);
@@ -3464,7 +3426,7 @@ Perl_report_evil_fh(pTHX_ const GV *gv)
  *
  */
 
-#ifdef HAS_GNULIBC
+#ifdef __GLIBC__
 # ifndef STRUCT_TM_HASZONE
 #    define STRUCT_TM_HASZONE
 # endif
@@ -3797,9 +3759,7 @@ Perl_getcwd_sv(pTHX_ SV *sv)
 {
 #ifndef PERL_MICRO
     dVAR;
-#ifndef INCOMPLETE_TAINTS
     SvTAINTED_on(sv);
-#endif
 
     PERL_ARGS_ASSERT_GETCWD_SV;
 

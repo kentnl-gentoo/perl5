@@ -343,7 +343,7 @@ is($bt->{AL}, 'Right-to-Left Arabic', 'AL is Right-to-Left Arabic');
 
 # If this fails, then maybe one should look at the Unicode changes to see
 # what else might need to be updated.
-is(Unicode::UCD::UnicodeVersion, '6.2.0', 'UnicodeVersion');
+is(Unicode::UCD::UnicodeVersion, '6.3.0', 'UnicodeVersion');
 
 use Unicode::UCD qw(compexcl);
 
@@ -628,7 +628,7 @@ while (<$props>) {
 # official properties.  We have no way of knowing if mktables omitted a Perl
 # extension or not, but we do the best we can from its generated lists
 
-foreach my $alias (keys %utf8::loose_to_file_of) {
+foreach my $alias (sort keys %utf8::loose_to_file_of) {
     next if $alias =~ /=/;
     my $lc_name = lc $alias;
     my $loose = &utf8::_loose_name($lc_name);
@@ -818,7 +818,7 @@ while (<$propvalues>) {
 
 # And test as best we can, the non-official pva's that mktables generates.
 foreach my $hash (\%utf8::loose_to_file_of, \%utf8::stricter_to_file_of) {
-    foreach my $test (keys %$hash) {
+    foreach my $test (sort keys %$hash) {
         next if exists $pva_tested{$test};  # Skip if already tested
 
         my ($prop, $value) = split "=", $test;
@@ -992,7 +992,7 @@ my %tested_invlist;
 # strict
 foreach my $set_of_tables (\%utf8::stricter_to_file_of, \%utf8::loose_to_file_of)
 {
-    foreach my $table (keys %$set_of_tables) {
+    foreach my $table (sort keys %$set_of_tables) {
 
         my $mod_table;
         my ($prop_only, $value) = split "=", $table;
@@ -1202,7 +1202,7 @@ my %tested_invmaps;
 # lists returned by prop_invlist(), which has already been tested.
 
 PROPERTY:
-foreach my $prop (keys %props) {
+foreach my $prop (sort keys %props) {
     my $loose_prop = &utf8::_loose_name(lc $prop);
     my $suppressed = grep { $_ eq $loose_prop }
                           @Unicode::UCD::suppressed_properties;
@@ -1465,7 +1465,7 @@ foreach my $prop (keys %props) {
                 my ($start, $end, $value) = / ^ (.+?) \t (.*?) \t (.+?)
                                                 \s* ( \# .* )? $ /x;
                 $end = $start if $end eq "";
-                push @list, [ hex $start, hex $end, $value ];
+                push @list, [ hex $start, hex $end, hex $value ];
             }
 
             # For these mappings, the file contains all the simple mappings,
@@ -1523,10 +1523,10 @@ foreach my $prop (keys %props) {
             for my $element (@list) {
                 $official .= "\n" if $official;
                 if ($element->[1] == $element->[0]) {
-                    $official .= sprintf "%04X\t\t%s", $element->[0], $element->[2];
+                    $official .= sprintf "%04X\t\t%X", $element->[0], $element->[2];
                 }
                 else {
-                    $official .= sprintf "%04X\t%04X\t%s", $element->[0], $element->[1], $element->[2];
+                    $official .= sprintf "%04X\t%04X\t%X", $element->[0], $element->[1], $element->[2];
                 }
             }
         }
@@ -1645,6 +1645,11 @@ foreach my $prop (keys %props) {
                     diag("Can't handle format '$format'");
                     next PROPERTY;
                 }
+            }
+            elsif ($full_name =~    # These maps are in hex
+                    /(Simple_)?(Case_Folding|(Lower|Title|Upper)case_Mapping)/)
+            {
+                $invmap_ref->[$i] = sprintf("%X", $invmap_ref->[$i]);
             }
             elsif ($format eq 'ad' || $format eq 'ale') {
 
@@ -1993,7 +1998,7 @@ foreach my $prop (keys %props) {
         # through each and verify that matches what prop_invlist() returns.
         # We could use is_deeply() for the comparison, but would get multiple
         # messages for each $prop.
-        foreach my $map (keys %maps) {
+        foreach my $map (sort keys %maps) {
             my @off_invlist = prop_invlist("$prop = $map");
             my $min = (@off_invlist >= @{$maps{$map}})
                        ? @off_invlist

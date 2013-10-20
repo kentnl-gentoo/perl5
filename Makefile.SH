@@ -503,7 +503,7 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5194delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5195delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -981,9 +981,9 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) pod/perlmodlib.PL -q
 
-pod/perl5194delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl5194delta.pod
-	$(LNS) perldelta.pod pod/perl5194delta.pod
+pod/perl5195delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl5195delta.pod
+	$(LNS) perldelta.pod pod/perl5195delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1272,10 +1272,9 @@ _cleaner2:
 	-rmdir lib/Encode lib/Digest lib/Devel lib/Data lib/Config/Perl
 	-rmdir lib/Compress/Raw lib/Compress lib/Carp lib/CPAN/Meta
 	-rmdir lib/CPAN/LWP lib/CPAN/Kwalify lib/CPAN/HTTP lib/CPAN/FTP
-	-rmdir lib/CPAN/Exception lib/CPAN/API lib/CPAN lib/CGI lib/B
-	-rmdir lib/Attribute lib/Archive/Tar lib/Archive
-	-rmdir lib/App/Prove/State/Result lib/App/Prove/State lib/App/Prove
-	-rmdir lib/App
+	-rmdir lib/CPAN/Exception lib/CPAN/API lib/CPAN lib/CGI lib/Attribute
+	-rmdir lib/Archive/Tar lib/Archive lib/App/Prove/State/Result
+	-rmdir lib/App/Prove/State lib/App/Prove lib/App
 
 _realcleaner:
 	@$(LDLIBPTH) $(MAKE) _cleaner1 CLEAN=distclean

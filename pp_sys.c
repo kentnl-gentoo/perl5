@@ -1159,8 +1159,9 @@ PP(pp_sselect)
 #  endif
 
     sv = SP[4];
+    SvGETMAGIC(sv);
     if (SvOK(sv)) {
-	value = SvNV(sv);
+	value = SvNV_nomg(sv);
 	if (value < 0.0)
 	    value = 0.0;
 	timebuf.tv_sec = (long)value;
@@ -1769,20 +1770,6 @@ PP(pp_sysread)
 	}
     }
     else
-#ifdef HAS_SOCKET__bad_code_maybe
-    if (IoTYPE(io) == IoTYPE_SOCKET) {
-	Sock_size_t bufsize;
-	char namebuf[MAXPATHLEN];
-#if defined(VMS_DO_SOCKETS) && defined(DECCRTL_SOCKETS)
-	bufsize = sizeof (struct sockaddr_in);
-#else
-	bufsize = sizeof namebuf;
-#endif
-	count = PerlSock_recvfrom(PerlIO_fileno(IoIFP(io)), buffer, length, 0,
-			  (struct sockaddr *)namebuf, &bufsize);
-    }
-    else
-#endif
     {
 	count = PerlIO_read(IoIFP(io), buffer, length);
 	/* PerlIO_read() - like fread() returns 0 on both error and EOF */
@@ -3624,9 +3611,7 @@ PP(pp_readlink)
     char buf[MAXPATHLEN];
     int len;
 
-#ifndef INCOMPLETE_TAINTS
     TAINT;
-#endif
     tmps = POPpconstx;
     len = readlink(tmps, buf, sizeof(buf) - 1);
     if (len < 0)
@@ -3855,10 +3840,8 @@ PP(pp_readdir)
 #else
         sv = newSVpv(dp->d_name, 0);
 #endif
-#ifndef INCOMPLETE_TAINTS
         if (!(IoFLAGS(io) & IOf_UNTAINT))
             SvTAINTED_on(sv);
-#endif
         mXPUSHs(sv);
     } while (gimme == G_ARRAY);
 
@@ -5224,11 +5207,9 @@ PP(pp_gpwent)
 	    sv_setpv(sv, pwent->pw_passwd);
 #   endif
 
-#   ifndef INCOMPLETE_TAINTS
 	/* passwd is tainted because user himself can diddle with it.
 	 * admittedly not much and in a very limited way, but nevertheless. */
 	SvTAINTED_on(sv);
-#   endif
 
         sv_setuid(PUSHmortal, pwent->pw_uid);
         sv_setgid(PUSHmortal, pwent->pw_gid);
@@ -5271,18 +5252,14 @@ PP(pp_gpwent)
 #   else
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
 #   endif
-#   ifndef INCOMPLETE_TAINTS
 	/* pw_gecos is tainted because user himself can diddle with it. */
 	SvTAINTED_on(sv);
-#   endif
 
 	mPUSHs(newSVpv(pwent->pw_dir, 0));
 
 	PUSHs(sv = sv_2mortal(newSVpv(pwent->pw_shell, 0)));
-#   ifndef INCOMPLETE_TAINTS
 	/* pw_shell is tainted because user himself can diddle with it. */
 	SvTAINTED_on(sv);
-#   endif
 
 #   ifdef PWEXPIRE
 	mPUSHi(pwent->pw_expire);

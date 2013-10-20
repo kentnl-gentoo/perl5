@@ -365,10 +365,6 @@ modules that have been fixed.
 
 =item *
 
-L<Data::Alias> version 1.17
-
-=item *
-
 L<Data::Structure::Util> version 0.15
 
 =item *
@@ -412,7 +408,7 @@ here.
 
 XXX Generate this with:
 
-  perl Porting/acknowledgements.pl v5.19.4..HEAD
+  perl Porting/acknowledgements.pl v5.19.5..HEAD
 
 =head1 Reporting Bugs
 

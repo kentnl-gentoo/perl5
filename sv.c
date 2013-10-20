@@ -41,8 +41,6 @@
 # include <stdint.h>
 #endif
 
-#define FCALL *f
-
 #ifdef __Lynx__
 /* Missing proto on LynxOS */
   char *gconvert(double, int, int,  char *);
@@ -419,7 +417,7 @@ S_visit(pTHX_ SVFUNC_t f, const U32 flags, const U32 mask)
 		    && (sv->sv_flags & mask) == flags
 		    && SvREFCNT(sv))
 	    {
-		(FCALL)(aTHX_ sv);
+		(*f)(aTHX_ sv);
 		++visited;
 	    }
 	}
@@ -1479,13 +1477,6 @@ Perl_sv_grow(pTHX_ SV *const sv, STRLEN newlen)
 
     PERL_ARGS_ASSERT_SV_GROW;
 
-#ifdef HAS_64K_LIMIT
-    if (newlen >= 0x10000) {
-	PerlIO_printf(Perl_debug_log,
-		      "Allocation too large: %"UVxf"\n", (UV)newlen);
-	my_exit(1);
-    }
-#endif /* HAS_64K_LIMIT */
     if (SvROK(sv))
 	sv_unref(sv);
     if (SvTYPE(sv) < SVt_PV) {
@@ -1497,10 +1488,6 @@ Perl_sv_grow(pTHX_ SV *const sv, STRLEN newlen)
 	s = SvPVX_mutable(sv);
 	if (newlen > SvLEN(sv))
 	    newlen += 10 * (newlen - SvCUR(sv)); /* avoid copy each time */
-#ifdef HAS_64K_LIMIT
-	if (newlen >= 0x10000)
-	    newlen = 0xFFFF;
-#endif
     }
     else
     {
@@ -2998,10 +2985,6 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 	    RESTORE_ERRNO;
 	    while (*s) s++;
 	}
-#ifdef hcx
-	if (s[-1] == '.')
-	    *--s = '\0';
-#endif
     }
     else if (isGV_with_GP(sv)) {
 	GV *const gv = MUTABLE_GV(sv);
@@ -13727,8 +13710,8 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 #endif /* !USE_LOCALE_NUMERIC */
 
     /* Unicode inversion lists */
-    PL_ASCII		= sv_dup_inc(proto_perl->IASCII, param);
     PL_Latin1		= sv_dup_inc(proto_perl->ILatin1, param);
+    PL_UpperLatin1	= sv_dup_inc(proto_perl->IUpperLatin1, param);
     PL_AboveLatin1	= sv_dup_inc(proto_perl->IAboveLatin1, param);
 
     PL_NonL1NonFinalFold = sv_dup_inc(proto_perl->INonL1NonFinalFold, param);

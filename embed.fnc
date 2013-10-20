@@ -300,7 +300,7 @@ p	|SV *	|core_prototype	|NULLOK SV *sv|NN const char *name \
 p	|OP *	|coresub_op	|NN SV *const coreargssv|const int code \
 				|const int opnum
 : Used in sv.c
-p	|void	|cv_ckproto_len_flags	|NN const CV* cv|NULLOK const GV* gv\
+EMXp	|void	|cv_ckproto_len_flags	|NN const CV* cv|NULLOK const GV* gv\
 				|NULLOK const char* p|const STRLEN len \
                                 |const U32 flags
 : Used in pp.c and pp_sys.c
@@ -421,9 +421,6 @@ ApR	|I32	|dowantarray
 Ap	|void	|dump_all
 p	|void	|dump_all_perl	|bool justperl
 Ap	|void	|dump_eval
-#if defined(DUMP_FDS)
-Ap	|void	|dump_fds	|NN char* s
-#endif
 Ap	|void	|dump_form	|NN const GV* gv
 Ap	|void	|gv_dump	|NN GV* gv
 Ap	|void	|op_dump	|NN const OP *o
@@ -865,6 +862,7 @@ poX	|OP*	|op_lvalue_flags|NULLOK OP* o|I32 type|U32 flags
 p	|void	|finalize_optree		|NN OP* o
 #if defined(PERL_IN_OP_C)
 s	|void	|finalize_op	|NN OP* o
+s	|void	|move_proto_attr|NN OP **proto|NN OP **attrs|NN const GV *name
 #endif
 : Used in op.c and pp_sys.c
 p	|int	|mode_from_discipline|NULLOK const char* s|STRLEN len
@@ -1997,85 +1995,110 @@ p	|OP *	|tied_method|NN SV *methname|NN SV **sp \
 				|const U32 flags|U32 argc|...
 
 #if defined(PERL_IN_REGCOMP_C)
-Es	|regnode*|reg		|NN struct RExC_state_t *pRExC_state \
+Es	|regnode*|reg		|NN RExC_state_t *pRExC_state \
 				|I32 paren|NN I32 *flagp|U32 depth
-Es	|regnode*|reganode	|NN struct RExC_state_t *pRExC_state|U8 op \
+Es	|regnode*|reganode	|NN RExC_state_t *pRExC_state|U8 op \
 				|U32 arg
-Es	|regnode*|regatom	|NN struct RExC_state_t *pRExC_state \
+Es	|regnode*|regatom	|NN RExC_state_t *pRExC_state \
 				|NN I32 *flagp|U32 depth
-Es	|regnode*|regbranch	|NN struct RExC_state_t *pRExC_state \
+Es	|regnode*|regbranch	|NN RExC_state_t *pRExC_state \
 				|NN I32 *flagp|I32 first|U32 depth
-Es	|STRLEN	|reguni		|NN const struct RExC_state_t *pRExC_state \
+Es	|STRLEN	|reguni		|NN const RExC_state_t *pRExC_state \
 				|UV uv|NN char *s
-Es	|regnode*|regclass	|NN struct RExC_state_t *pRExC_state \
+Es	|void	 |set_ANYOF_arg	|NN RExC_state_t* const pRExC_state \
+				|NN regnode* const node                    \
+				|NULLOK SV* const cp_list                  \
+				|NULLOK SV* const runtime_defns            \
+				|NULLOK SV* const swash                    \
+				|const bool has_user_defined_property
+Es	|regnode*|regclass	|NN RExC_state_t *pRExC_state \
 				|NN I32 *flagp|U32 depth|const bool stop_at_1 \
 				|bool allow_multi_fold                        \
 				|const bool silence_non_portable	      \
 				|NULLOK SV** ret_invlist
-Es	|bool|could_it_be_a_POSIX_class|NN struct RExC_state_t *pRExC_state
-Es	|regnode*|handle_regex_sets|NN struct RExC_state_t *pRExC_state \
+Es	|bool|could_it_be_a_POSIX_class|NN RExC_state_t *pRExC_state
+Es	|regnode*|handle_regex_sets|NN RExC_state_t *pRExC_state \
 				|NULLOK SV ** return_invlist            \
 				|NN I32 *flagp|U32 depth                \
 				|NN char * const oregcomp_parse
-Es	|void|parse_lparen_question_flags|NN struct RExC_state_t *pRExC_state
-Es	|regnode*|reg_node	|NN struct RExC_state_t *pRExC_state|U8 op
+Es	|void|parse_lparen_question_flags|NN RExC_state_t *pRExC_state
+Es	|regnode*|reg_node	|NN RExC_state_t *pRExC_state|U8 op
 Es	|UV	|reg_recode	|const char value|NN SV **encp
-Es	|regnode*|regpiece	|NN struct RExC_state_t *pRExC_state \
+Es	|regnode*|regpiece	|NN RExC_state_t *pRExC_state \
 				|NN I32 *flagp|U32 depth
-Es	|bool	|grok_bslash_N	|NN struct RExC_state_t *pRExC_state        \
+Es	|bool	|grok_bslash_N	|NN RExC_state_t *pRExC_state        \
 				|NULLOK regnode** nodep|NULLOK UV *valuep   \
 				|NN I32 *flagp|U32 depth|bool in_char_class \
 				|const bool strict
-Es	|void	|reginsert	|NN struct RExC_state_t *pRExC_state \
+Es	|void	|reginsert	|NN RExC_state_t *pRExC_state \
 				|U8 op|NN regnode *opnd|U32 depth
-Es	|void	|regtail	|NN struct RExC_state_t *pRExC_state \
+Es	|void	|regtail	|NN RExC_state_t *pRExC_state \
 				|NN regnode *p|NN const regnode *val|U32 depth
-Es	|SV *	|reg_scan_name	|NN struct RExC_state_t *pRExC_state \
+Es	|SV *	|reg_scan_name	|NN RExC_state_t *pRExC_state \
 				|U32 flags
-Es	|U32	|join_exact	|NN struct RExC_state_t *pRExC_state \
+Es	|U32	|join_exact	|NN RExC_state_t *pRExC_state \
 				|NN regnode *scan|NN UV *min_subtract  \
 				|NN bool *has_exactf_sharp_s  \
 				|U32 flags|NULLOK regnode *val|U32 depth
-EsRn	|char *	|regwhite	|NN struct RExC_state_t *pRExC_state \
+EsRn	|char *	|regwhite	|NN RExC_state_t *pRExC_state \
 				|NN char *p
-EsRn	|char *	|regpatws	|NN struct RExC_state_t *pRExC_state \
+EsRn	|char *	|regpatws	|NN RExC_state_t *pRExC_state \
 				|NN char *p|const bool recognize_comment
-Ei	|void   |alloc_maybe_populate_EXACT|NN struct RExC_state_t *pRExC_state \
+Ei	|void   |alloc_maybe_populate_EXACT|NN RExC_state_t *pRExC_state \
 				|NN regnode *node|NN I32 *flagp|STRLEN len \
 				|UV code_point
-Ei	|U8   |compute_EXACTish|NN struct RExC_state_t *pRExC_state
-Es	|char *	|nextchar	|NN struct RExC_state_t *pRExC_state
-Es	|bool	|reg_skipcomment|NN struct RExC_state_t *pRExC_state
-Es	|void	|scan_commit	|NN const struct RExC_state_t *pRExC_state \
-				|NN struct scan_data_t *data \
-				|NN SSize_t *minlenp|int is_inf
-Esn	|void	|cl_anything	|NN const struct RExC_state_t *pRExC_state \
-				|NN struct regnode_charclass_class *cl
-EsRn	|int	|cl_is_anything	|NN const struct regnode_charclass_class *cl
-Esn	|void	|cl_init	|NN const struct RExC_state_t *pRExC_state \
-				|NN struct regnode_charclass_class *cl
-Esn	|void	|cl_and		|NN struct regnode_charclass_class *cl \
-				|NN const struct regnode_charclass_class *and_with
-Esn	|void	|cl_or		|NN const struct RExC_state_t *pRExC_state \
-				|NN struct regnode_charclass_class *cl \
-				|NN const struct regnode_charclass_class *or_with
-Es	|SSize_t|study_chunk	|NN struct RExC_state_t *pRExC_state \
+Ei	|U8   |compute_EXACTish|NN RExC_state_t *pRExC_state
+Es	|char *	|nextchar	|NN RExC_state_t *pRExC_state
+Es	|bool	|reg_skipcomment|NN RExC_state_t *pRExC_state
+Es	|void	|scan_commit	|NN const RExC_state_t *pRExC_state \
+				|NN struct scan_data_t *data        \
+				|NN SSize_t *minlenp		    \
+				|int is_inf
+Es	|void	|populate_ANYOF_from_invlist|NN regnode *node|NN SV** invlist_ptr
+Es	|void	|ssc_anything	|NN regnode_ssc *ssc
+EsR	|int	|ssc_is_anything|NN const regnode_ssc *ssc
+Es	|void	|ssc_init	|NN const RExC_state_t *pRExC_state \
+				|NN regnode_ssc *ssc
+EsR	|int	|ssc_is_cp_posixl_init|NN const RExC_state_t *pRExC_state \
+				|NN const regnode_ssc *ssc
+Es	|void	|ssc_and	|NN const RExC_state_t *pRExC_state \
+				|NN regnode_ssc *ssc                \
+				|NN const regnode_ssc *and_with
+Esn	|void	|ssc_flags_and	|NN regnode_ssc *ssc|const U8 and_with
+Es	|void	|ssc_or		|NN const RExC_state_t *pRExC_state \
+				|NN regnode_ssc *ssc \
+				|NN const regnode_ssc *or_with
+Es	|SV*	|get_ANYOF_cp_list_for_ssc                                 \
+				|NN const RExC_state_t *pRExC_state \
+				|NN const regnode_charclass_posixl* const node
+Ei	|void	|ssc_intersection|NN regnode_ssc *ssc \
+				|NN SV* const invlist|const bool invert_2nd
+Ei	|void	|ssc_union	|NN regnode_ssc *ssc \
+				|NN SV* const invlist|const bool invert_2nd
+Ei	|void	|ssc_add_range	|NN regnode_ssc *ssc \
+				|UV const start|UV const end
+Ei	|void	|ssc_cp_and	|NN regnode_ssc *ssc \
+				|UV const cp
+Ei	|void	|ssc_clear_locale|NN regnode_ssc *ssc
+Es	|void	|ssc_finalize	|NN RExC_state_t *pRExC_state \
+				|NN regnode_ssc *ssc
+Es	|SSize_t|study_chunk	|NN RExC_state_t *pRExC_state \
 				|NN regnode **scanp|NN SSize_t *minlenp \
 				|NN SSize_t *deltap|NN regnode *last \
 				|NULLOK struct scan_data_t *data \
 				|I32 stopparen|NULLOK U8* recursed \
-				|NULLOK struct regnode_charclass_class *and_withp \
+				|NULLOK regnode_ssc *and_withp \
 				|U32 flags|U32 depth
-EsRn	|U32	|add_data	|NN struct RExC_state_t *pRExC_state|U32 n \
-				|NN const char *s
+EsRn	|U32	|add_data	|NN RExC_state_t* const pRExC_state \
+				|NN const char* const s|const U32 n
 rs	|void	|re_croak2	|bool utf8|NN const char* pat1|NN const char* pat2|...
-Ei	|I32	|regpposixcc	|NN struct RExC_state_t *pRExC_state \
+Ei	|I32	|regpposixcc	|NN RExC_state_t *pRExC_state \
 				|I32 value|const bool strict
-Es	|I32	|make_trie	|NN struct RExC_state_t *pRExC_state \
+Es	|I32	|make_trie	|NN RExC_state_t *pRExC_state \
 				|NN regnode *startbranch|NN regnode *first \
 				|NN regnode *last|NN regnode *tail \
 				|U32 word_count|U32 flags|U32 depth
-Es	|void	|make_trie_failtable	|NN struct RExC_state_t *pRExC_state \
+Es	|void	|make_trie_failtable	|NN RExC_state_t *pRExC_state \
                                 |NN regnode *source|NN regnode *stclass \
 				|U32 depth
 #  ifdef DEBUGGING
@@ -2097,7 +2120,7 @@ Es	|void	|dump_trie_interim_list|NN const struct _reg_trie_data *trie\
 Es	|void	|dump_trie_interim_table|NN const struct _reg_trie_data *trie\
 				|NULLOK HV* widecharmap|NN AV *revcharmap\
 				|U32 next_alloc|U32 depth
-Es	|U8	|regtail_study	|NN struct RExC_state_t *pRExC_state \
+Es	|U8	|regtail_study	|NN RExC_state_t *pRExC_state \
 				|NN regnode *p|NN const regnode *val|U32 depth
 #  endif
 #endif

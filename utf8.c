@@ -366,10 +366,8 @@ Perl_is_utf8_char_buf(const U8 *buf, const U8* buf_end)
 	len = UTF8SKIP(buf);
     }
 
-#ifdef IS_UTF8_CHAR
     if (IS_UTF8_CHAR_FAST(len))
         return IS_UTF8_CHAR(buf, len) ? len : 0;
-#endif /* #ifdef IS_UTF8_CHAR */
     return is_utf8_char_slow(buf, len);
 }
 
@@ -2611,8 +2609,8 @@ Perl__to_utf8_upper_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, const bool
 	*lenp = 1;
     }
     else {
-	*ustrp = UTF8_EIGHT_BIT_HI(result);
-	*(ustrp + 1) = UTF8_EIGHT_BIT_LO(result);
+	*ustrp = UTF8_EIGHT_BIT_HI((U8) result);
+	*(ustrp + 1) = UTF8_EIGHT_BIT_LO((U8) result);
 	*lenp = 2;
     }
 
@@ -2677,8 +2675,8 @@ Perl__to_utf8_title_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, const bool
 	*lenp = 1;
     }
     else {
-	*ustrp = UTF8_EIGHT_BIT_HI(result);
-	*(ustrp + 1) = UTF8_EIGHT_BIT_LO(result);
+	*ustrp = UTF8_EIGHT_BIT_HI((U8) result);
+	*(ustrp + 1) = UTF8_EIGHT_BIT_LO((U8) result);
 	*lenp = 2;
     }
 
@@ -2742,8 +2740,8 @@ Perl__to_utf8_lower_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, const bool
 	*lenp = 1;
     }
     else {
-	*ustrp = UTF8_EIGHT_BIT_HI(result);
-	*(ustrp + 1) = UTF8_EIGHT_BIT_LO(result);
+	*ustrp = UTF8_EIGHT_BIT_HI((U8) result);
+	*(ustrp + 1) = UTF8_EIGHT_BIT_LO((U8) result);
 	*lenp = 2;
     }
 
@@ -2872,8 +2870,8 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags, b
 	*lenp = 1;
     }
     else {
-	*ustrp = UTF8_EIGHT_BIT_HI(result);
-	*(ustrp + 1) = UTF8_EIGHT_BIT_LO(result);
+	*ustrp = UTF8_EIGHT_BIT_HI((U8) result);
+	*(ustrp + 1) = UTF8_EIGHT_BIT_LO((U8) result);
 	*lenp = 2;
     }
 
@@ -3426,30 +3424,19 @@ S_swash_scan_list_line(pTHX_ U8* l, U8* const lend, UV* min, UV* max, UV* val,
 	    *max = *min;
 
 	/* Non-binary tables have a third entry: what the first element of the
-	 * range maps to */
+	 * range maps to.  The map for those currently read here is in hex */
 	if (wants_value) {
 	    if (isBLANK(*l)) {
 		++l;
-
-		/* The ToLc, etc table mappings are not in hex, and must be
-		 * corrected by adding the code point to them */
-		if (typeto) {
-		    char *after_strtol = (char *) lend;
-		    *val = Strtol((char *)l, &after_strtol, 10);
-		    l = (U8 *) after_strtol;
-		}
-		else { /* Other tables are in hex, and are the correct result
-			  without tweaking */
-		    flags = PERL_SCAN_SILENT_ILLDIGIT
-			| PERL_SCAN_DISALLOW_PREFIX
-			| PERL_SCAN_SILENT_NON_PORTABLE;
-		    numlen = lend - l;
-		    *val = grok_hex((char *)l, &numlen, &flags, NULL);
-		    if (numlen)
-			l += numlen;
-		    else
-			*val = 0;
-		}
+                flags = PERL_SCAN_SILENT_ILLDIGIT
+                    | PERL_SCAN_DISALLOW_PREFIX
+                    | PERL_SCAN_SILENT_NON_PORTABLE;
+                numlen = lend - l;
+                *val = grok_hex((char *)l, &numlen, &flags, NULL);
+                if (numlen)
+                    l += numlen;
+                else
+                    *val = 0;
 	    }
 	    else {
 		*val = 0;

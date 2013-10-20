@@ -43,6 +43,19 @@ if ( !-f 'MANIFEST' ) {
 
 open( my $corelist_fh, '<', $corelist_file );
 my $corelist = join( '', <$corelist_fh> );
+close $corelist_fh;
+
+unless (
+    $corelist =~ /^%released \s* = \s* \(
+        .*?
+        $perl_vnum \s* => \s* .*?
+        \);/ismx
+    )
+{
+    warn "Adding $perl_vnum to the list of released perl versions. Please consider adding a release date.\n";
+    $corelist =~ s/^(%released \s* = \s* .*?) ( \) )
+                /$1  $perl_vnum => '????-??-??',\n  $2/ismx;
+}
 
 if ($cpan) {
     my $modlistfile = File::Spec->catfile( $cpan, 'modules', '02packages.details.txt' );
@@ -152,8 +165,8 @@ for my $key (sort keys($delta_data->{removed} || {})) {
 $versions_in_release .= "        }\n";
 $versions_in_release .= "    },\n";
 
-$corelist =~ s/^(my %delta\s*=\s*.*?)^\s*$perl_vnum\s*=>\s*{.*?},\s*(^\);)$/$1$2/ism;
-$corelist =~ s/^(my %delta\s*=\s*.*?)(^\);)$/$1$versions_in_release$2/ism;
+$corelist =~ s/^(%delta\s*=\s*.*?)^\s*$perl_vnum\s*=>\s*{.*?},\s*(^\);)$/$1$2/ism;
+$corelist =~ s/^(%delta\s*=\s*.*?)(^\);)$/$1$versions_in_release$2/ism;
 
 exit unless %modlist;
 
@@ -180,7 +193,7 @@ my %module_to_deprecated;
 while ( my ( $module, $file ) = each %module_to_file ) {
     my $M = $file_to_M->{$file};
     next unless $M;
-    next if $Modules{$M}{MAINTAINER} && $Modules{$M}{MAINTAINER} eq 'p5p';
+    next if $Modules{$M}{MAINTAINER} && $Modules{$M}{MAINTAINER} eq 'P5P';
     $module_to_upstream{$module} = $Modules{$M}{UPSTREAM};
     $module_to_deprecated{$module} = 1 if $Modules{$M}{DEPRECATED};
     next
@@ -282,18 +295,6 @@ foreach my $module ( sort keys %module_to_upstream ) {
 $tracker .= ");";
 
 $corelist =~ s/^%bug_tracker .*? ;/$tracker/eismx;
-
-unless (
-    $corelist =~ /^%released \s* = \s* \(
-        .*?
-        $perl_vnum \s* => \s* .*?
-        \);/ismx
-    )
-{
-    warn "Adding $perl_vnum to the list of released perl versions. Please consider adding a release date.\n";
-    $corelist =~ s/^(%released \s* = \s* .*?) ( \) )
-                /$1  $perl_vnum => '????-??-??',\n  $2/ismx;
-}
 
 write_corelist($corelist,$corelist_file);
 

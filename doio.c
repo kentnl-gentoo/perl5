@@ -1052,10 +1052,6 @@ Perl_do_tell(pTHX_ GV *gv)
     PERL_ARGS_ASSERT_DO_TELL;
 
     if (io && (fp = IoIFP(io))) {
-#ifdef ULTRIX_STDIO_BOTCH
-	if (PerlIO_eof(fp))
-	    (void)PerlIO_seek(fp, 0L, 2);	/* ultrix 1.2 workaround */
-#endif
 	return PerlIO_tell(fp);
     }
     report_evil_fh(gv);
@@ -1071,10 +1067,6 @@ Perl_do_seek(pTHX_ GV *gv, Off_t pos, int whence)
     PerlIO *fp;
 
     if (io && (fp = IoIFP(io))) {
-#ifdef ULTRIX_STDIO_BOTCH
-	if (PerlIO_eof(fp))
-	    (void)PerlIO_seek(fp, 0L, 2);	/* ultrix 1.2 workaround */
-#endif
 	return PerlIO_seek(fp, pos, whence) >= 0;
     }
     report_evil_fh(gv);
@@ -2227,10 +2219,8 @@ Perl_do_msgrcv(pTHX_ SV **mark, SV **sp)
     if (ret >= 0) {
 	SvCUR_set(mstr, sizeof(long)+ret);
 	*SvEND(mstr) = '\0';
-#ifndef INCOMPLETE_TAINTS
 	/* who knows who has been playing with this message? */
 	SvTAINTED_on(mstr);
-#endif
     }
     return ret;
 #else
@@ -2337,10 +2327,8 @@ Perl_do_shmio(pTHX_ I32 optype, SV **mark, SV **sp)
 	SvCUR_set(mstr, msize);
 	*SvEND(mstr) = '\0';
 	SvSETMAGIC(mstr);
-#ifndef INCOMPLETE_TAINTS
 	/* who knows who has been playing with this shared memory? */
 	SvTAINTED_on(mstr);
-#endif
     }
     else {
 	STRLEN len;
