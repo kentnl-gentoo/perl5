@@ -2,64 +2,48 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.19.5
+perldelta - what is new for perl v5.19.6
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.19.4 release and the 5.19.5
+This document describes differences between the 5.19.5 release and the 5.19.6
 release.
 
-If you are upgrading from an earlier release such as 5.19.3, first read
-L<perl5194delta>, which describes differences between 5.19.3 and 5.19.4.
+If you are upgrading from an earlier release such as 5.19.4, first read
+L<perl5195delta>, which describes differences between 5.19.4 and 5.19.5.
 
 =head1 Core Enhancements
 
-=head2 Unicode 6.3 now supported
+=head2 $a and $b warnings exemption
 
-Perl now supports and is shipped with Unicode 6.3 (though Perl may be
-recompiled with any previous Unicode release as well).  A detailed list of
-Unicode 6.3 changes is at L<http://www.unicode.org/versions/Unicode6.3.0/>.
+The special variables $a and $b, used in C<sort>, are now exempt from "used
+once" warnings, even where C<sort> is not used.  This makes it easier for
+CPAN modules to provide functions using $a and $b for similar purposes.
+[perl #120462]
 
-=head2 Experimental Postfix Dereferencing
+=head1 Deprecations
 
-When the C<postderef> feature is in effect, the following syntactical
-equivalencies are set up:
+=head2 Module removals
 
-  $sref->$*;  # same as ${ $sref }  # interpolates
-  $aref->@*;  # same as @{ $aref }  # interpolates
-  $href->%*;  # same as %{ $href }
-  $cref->&*;  # same as &{ $cref }
-  $gref->**;  # same as *{ $gref }
+The following modules will be removed from the core distribution in a
+future release, and will at that time need to be installed from CPAN.
+Distributions on CPAN which require these modules will need to list them as
+prerequisites.
 
-  $gref->*{ $slot }; # same as *{ $gref }{ $slot }
+The core versions of these modules will now issue C<"deprecated">-category
+warnings to alert you to this fact.  To silence these deprecation warnings,
+install the modules in question from CPAN.
 
-  $aref->@[ ... ];  # same as @$aref[ ... ]  # interpolates
-  $href->@{ ... };  # same as @$href{ ... }  # interpolates
-  $aref->%[ ... ];  # same as %$aref[ ... ]
-  $href->%{ ... };  # same as %$href{ ... }
+Note that these are (with rare exceptions) fine modules that you are encouraged
+to continue to use.  Their disinclusion from core primarily hinges on their
+necessity to bootstrapping a fully functional, CPAN-capable Perl installation,
+not usually on concerns over their design.
 
-Those marked as interpolating only interpolate if the associated
-C<postderef_qq> feature is also enabled.  This feature is B<experimental> and
-will trigger C<experimental::postderef>-category warnings when used, unless
-they are suppressed.
+=over
 
-For more information, consult L<the Postfix Dereference Syntax section of
-perlref|perlref/Postfix Dereference Syntax>.
+=item L<Package::Constants>
 
-=head2 C<sub>s now take a C<prototype> attribute
-
-When declaring or defining a C<sub>, the prototype can now be specified inside
-of a C<prototype> attribute instead of in parens following the name.
-
-For example, C<sub foo($$){}> could be rewritten as
-C<sub foo : prototype($$){}>.
-
-=head1 Incompatible Changes
-
-=head2 Functions C<PerlIO_vsprintf> and C<PerlIO_sprintf> have been removed
-
-These two functions, undocumented, unused in CPAN, and problematic, have been
-removed.
+=back
 
 =head1 Performance Enhancements
 
@@ -67,9 +51,16 @@ removed.
 
 =item *
 
-Perl has an optimizer for regular expression patterns.  It analyzes the pattern
-to find things such as the minimum length a string has to be to match, etc.  It
-now better handles code points that are above the Latin1 range.
+Constant hash key lookups (C<$hash{key}> as opposed to C<$hash{$key}>) have
+long had the internal hash value computed at compile time, to speed up
+lookup.  This optimisation has only now been applied to hash slices as
+well.
+
+=item *
+
+Combined C<and> and C<or> operators in void context, like those
+generated for C<< unless ($a && $b) >> and C<< if ($a || b) >> now
+short circuit directly to the end of the statement. [perl #120128]
 
 =back
 
@@ -81,203 +72,158 @@ now better handles code points that are above the Latin1 range.
 
 =item *
 
-L<attributes> has been upgraded from version 0.21 to 0.22.
-
-Support has been added for the C<prototype> attribute.
+L<Archive::Tar> has been upgraded from version 1.92 to 1.96.
 
 =item *
 
-L<autodie> has been upgraded from version 2.21 to 2.22.
-
-No changes have been made to the installed code other than the version bump to
-keep in sync with the latest CPAN release.
+L<AutoLoader> has been upgraded from version 5.73 to 5.74.
 
 =item *
 
-L<CPAN::Meta> has been upgraded from version 2.132620 to 2.132830.
+L<B> has been upgraded from version 1.46 to 1.47.
 
-L<CPAN::Meta::Prereqs> now has a C<merged_requirements> method for combining
-requirements across multiple phases and types, and an invalid 'meta-spec' is no
-longer a fatal error.
+C<< B::PMOP->precomp >> now preserves the internal UTF8 flag correctly, so
+chr 256 remains chr 256, instead of turning into "\xc4\x80".  This allows
+L<B::Deparse> to deparse Unicode regular expression correctly.
+[perl #120182]
 
-=item *
-
-L<CPAN::Meta::Requirements> has been upgraded from version 2.123 to 2.125.
-
-No changes have been made to the installed code other than the version bump to
-keep in sync with the latest CPAN release.
+C<< B::HV->ARRAY >> now preserves the UTF8 flag on returned hash keys.
+[perl #120535]
 
 =item *
 
-L<CPAN::Meta::YAML> has been upgraded from version 0.008 to 0.010.
+L<B::Concise> has been upgraded from version 0.99 to 0.991.
 
-No material changes have been made to the installed code other than the version
-bump to keep in sync with the latest CPAN release.
-
-=item *
-
-L<Cwd> has been upgraded from version 3.44 to 3.45.
-
-An obsolete #define has been removed from the XS code.
+B<-debug> output now includes C<op_other> pointers.
 
 =item *
 
-L<ExtUtils::Install> has been upgraded from version 1.60 to 1.61.
+L<B::Deparse> has been upgraded from version 1.23 to 1.24.
 
-Some POD formatting errors in the documentation have been corrected.
+C<s//\(3)/e> is now deparsed in a way that does not issue warnings when
+parsed again.  [perl #119807]
 
-=item *
+C<glob(my $x)> is now deparsed correctly, rather than as C<< <my $x> >> or
+similar.
 
-L<ExtUtils::MakeMaker> has been upgraded from version 6.76 to 6.80.
-
-Numerous updates and bug fixes are incorporated.  See the F<Changes> file in
-the CPAN distribution for full details.
-
-=item *
-
-L<feature> has been upgraded from version 1.33 to 1.34.
-
-The new features C<postderef> and C<postderef_qq> have been added.
+C<CORE::glob> is now deparsed correctly with the CORE:: prefix when there
+is a subroutine named "glob".
 
 =item *
 
-L<File::Fetch> has been upgraded from version 0.42 to 0.44.
-
-No changes have been made to the installed code other than the version bump to
-keep in sync with the latest CPAN release.
+L<B::Debug> has been upgraded from version 1.18 to 1.19.
 
 =item *
 
-L<File::Glob> has been upgraded from version 1.21 to 1.22.
-
-Since Perl 5.16, code that used C<glob> inside a thread had been
-unintentionally sharing state between threads.  This has now been fixed.  [perl
-#119897/#117823]
+L<bignum> has been upgraded from version 0.36 to 0.37.
 
 =item *
 
-L<File::Temp> has been upgraded from version 0.2301 to 0.2304.
-
-Required versions of other modules used are now listed more explicitly, L<base>
-is now used instead of L<parent>, and L<Exporter> is no longer inherited from.
+L<Compress::Raw::Bzip2> has been upgraded from version 2.062 to 2.063.
 
 =item *
 
-L<Getopt::Long> has been upgraded from version 2.41 to 2.42.
-
-The floating point specifier C<name=f> no longer erroneously accepts values
-like 1.2.3.  [cpan #88707]
+L<Compress::Raw::Zlib> has been upgraded from version 2.062 to 2.063.
 
 =item *
 
-L<HTTP::Tiny> has been upgraded from version 0.035 to 0.036.
-
-No changes have been made to the installed code other than the version bump to
-keep in sync with the latest CPAN release.
+L<constant> has been upgraded from version 1.28 to 1.29.
 
 =item *
 
-L<IPC::Cmd> has been upgraded from version 0.84 to 0.84_01.
-
-No changes have been made to the installed code, but a test script has been
-fixed for Solaris (and potentially other SVR* variants).
+L<DB_File> has been upgraded from version 1.829 to 1.831.
 
 =item *
 
-L<JSON::PP> has been upgraded from version 2.27202_01 to 2.27203.
-
-A return/or precedence issue in C<_incr_parse> has been fixed.
+L<ExtUtils::MakeMaker> has been upgraded from version 6.80 to 6.82.
 
 =item *
 
-L<List::Util> has been upgraded from version 1.32 to 1.35.
-
-The list functions C<any>, C<all>, C<none>, C<notall> and C<product> have been
-added, and C<reduce> and C<first> are now implemented even in the absence of
-MULTICALL.
+L<HTTP::Tiny> has been upgraded from version 0.036 to 0.038.
 
 =item *
 
-L<Module::CoreList> has been upgraded from version 2.99 to 3.00.
-
-The list of Perl versions covered has been updated, %delta is now exported, and
-a bug in C<is_core> whereby it wrongly assumed a linear list of releases has
-been fixed.
+L<IO> has been upgraded from version 1.29 to 1.30.
 
 =item *
 
-L<Module::Metadata> has been upgraded from version 1.000018 to 1.000019.
+L<IO::Select> has been upgraded from version 1.21 to 1.22.
 
-Warnings are now disabled during version evaluation.
-
-=item *
-
-L<Parse::CPAN::Meta> has been upgraded from version 1.4407 to 1.4409.
-
-No changes have been made to the installed code other than the version bump to
-keep in sync with the latest CPAN release.
+Removing a closed file handle from an IO::Select object now correctly
+updates its internal state and returns the correct value.  [perl #75156]
 
 =item *
 
-L<Perl::OSType> has been upgraded from version 1.005 to 1.006.
+L<Locale::Maketext> has been upgraded from version 1.24 to 1.25.
 
-No changes have been made to the installed code other than the version bump to
-keep in sync with the latest CPAN release.
-
-=item *
-
-L<PerlIO::scalar> has been upgraded from version 0.16 to 0.17.
-
-An infinite loop when reading from a filehandle opened from a reference has
-been fixed by first stringifying the reference.  [perl #119529]
+An issue with escaped backslashes if the literal is compiled as
+function argument has been resolved.
 
 =item *
 
-The podlators modules have been upgraded from version 2.5.1 to 2.5.3.
-
-Numerous updates and bug fixes are incorporated.  See the F<Changes> file in
-the CPAN distribution for full details.
+L<IPC::Cmd> has been upgraded from version 0.84_01 to 0.90.
 
 =item *
 
-L<Test::Harness> has been upgraded from version 3.28 to 3.29.
+L<Module::Build> has been upgraded from version 0.4007 to 0.4202.
 
-All modules now use C<our> rather than C<use vars>, have C<use warnings>
-enabled and C<use parent> instead of @ISA.
-
-=item *
-
-L<Test::Simple> has been upgraded from version 0.98_06 to 0.99.
-
-Numerous updates and bug fixes are incorporated.  See the F<Changes> file in
-the CPAN distribution for full details.
+NOTE: L<Module::Build> is deprecated and may be removed from a future version of Perl.
 
 =item *
 
-L<threads> has been upgraded from version 1.87 to 1.89.
+L<Module::CoreList> has been upgraded from version 3.00 to 3.01.
 
-The documentation of C<alarm> and C<_handle> has been updated.
-
-=item *
-
-L<Unicode::Normalize> has been upgraded from version 1.16 to 1.17.
-
-The module now C<die>s if it cannot get Unicode code points using C<unpack>.
-(There is already a similar C<die> if Unicode code points cannot be stringified
-using C<pack>.)
+The list of Perl versions covered has been updated.
 
 =item *
 
-L<Unicode::UCD> has been upgraded from version 0.54 to 0.55.
+L<Package::Constants> has been upgraded from version 0.02 to 0.04.
 
-An internals-only change has been made to handle changes in format within some
-character database tables.
+NOTE: L<Package::Constants> is deprecated and may be removed from a future version of Perl.
 
 =item *
 
-L<warnings> has been upgraded from version 1.19 to 1.20.
+L<PerlIO::scalar> has been upgraded from version 0.17 to 0.18.
 
-The new warnings category C<experimental::postderef> has been added.
+A bug fix in 0.17 caused references to be stringified as soon as a handle
+to it was opened, even if it was opened only for reading.  It also croaked
+on read-only references.  This has been fixed.  [perl #119529]
+
+=item *
+
+L<Socket> has been upgraded from version 2.012 to 2.013.
+
+=item *
+
+L<Term::Cap> has been upgraded from version 1.13 to 1.15.
+
+=item *
+
+L<Test::Harness> has been upgraded from version 3.29 to 3.30.
+
+=item *
+
+L<Test::Simple> has been upgraded from version 0.99 to 1.001002.
+
+=item *
+
+L<Tie::StdHandle> has been upgraded from version 4.3 to 4.4.
+
+It no longer prints C<$\> twice.  [perl #120202]
+
+It no longer ignores the offset passed to C<syswrite>.
+
+=item *
+
+L<threads> has been upgraded from version 1.89 to 1.90.
+
+=item *
+
+L<threads::shared> has been upgraded from version 1.44 to 1.45.
+
+=item *
+
+L<Unicode::Collate> has been upgraded from version 0.99 to 1.02.
 
 =back
 
@@ -285,95 +231,50 @@ The new warnings category C<experimental::postderef> has been added.
 
 =head2 Changes to Existing Documentation
 
-=head3 L<perlref>
-
 =over 4
 
 =item *
 
-Documentation of the new postfix dereference syntax has been added.
-
-=back
-
-=head3 L<perlreguts>
-
-=over 4
+L<perlhacktips> has been updated to include some more examples of C<gdb> usage.
 
 =item *
 
-The documentation has been updated in the light of recent changes to
-F<regcomp.c>.
+L<perlfunc>:
 
-=back
+C<each>, clarify hash "modify while iterating".
 
-=head3 L<perlvar>
-
-=over 4
+C<pack>, the documentation for verbatim tables has been clarified.
 
 =item *
 
-Three L<English> variable names which have long been documented but do not
-actually exist have been removed from the documentation.
+L<perlre>, the documentation for C</x> and C<(?# comment)> has been expanded and clarified.
+
+=item *
+
+L<perllexwarn>, a note has been added to users of C<FATAL> warnings of the risk of upgrades.
 
 =back
 
 =head1 Diagnostics
 
-The following additions or changes have been made to diagnostic output,
-including warnings and fatal error messages.  For the complete list of
-diagnostic messages, see L<perldiag>.
-
-=head2 New Diagnostics
-
-=head3 New Warnings
+=head2 Changes to Existing Diagnostics
 
 =over 4
 
 =item *
 
-L<Attribute prototype(%s) discards earlier prototype attribute in same sub|perldiag/"Attribute prototype(%s) discards earlier prototype attribute in same sub">
+L<%%s[%s] in scalar context better written as $%s[%s]|perldiag/"%%s[%s] in scalar context better written as $%s[%s]">:
 
-(W misc) A sub was declared as sub foo : prototype(A) : prototype(B) {}, for
-example.  Since each sub can only have one prototype, the earlier
-declaration(s) are discarded while the last one is applied.
-
-=item *
-
-L<Postfix dereference is experimental|perldiag/"Postfix dereference is experimental">
-
-(S experimental::postderef) This warning is emitted if you use the experimental
-postfix dereference syntax.  Simply suppress the warning if you want to use the
-feature, but know that in doing so you are taking the risk of using an
-experimental feature which may change or be removed in a future Perl version:
-
-    no warnings "experimental::postderef";
-    use feature "postderef", "postderef_qq";
-    $ref->$*;
-    $aref->@*;
-    $aref->@[@indices];
-    ... etc ...
+This warning now occurs for any C<%array[$index]> or C<%hash{key}> known to
+be in scalar context at compile time.  Previously it was worded "Scalar
+value %%s[%s] better written as $%s[%s]".
 
 =item *
 
-L<Prototype '%s' overridden by attribute 'prototype(%s)' in %s|perldiag/"Prototype '%s' overridden by attribute 'prototype(%s)' in %s">
+L<Switch condition not recognized in regex; marked by <-- HERE in mE<sol>%sE<sol>|perldiag/"Switch condition not recognized in regex; marked by <-- HERE in m/%s/">:
 
-(W prototype) A prototype was declared in both the parentheses after the sub
-name and via the prototype attribute.  The prototype in parentheses is useless,
-since it will be replaced by the prototype from the attribute before it's ever
-used.
-
-=back
-
-=head1 Utility Changes
-
-=head3 L<a2p>
-
-=over 4
-
-=item *
-
-A possible crash from an off-by-one error when trying to access before the
-beginning of a buffer has been fixed.  [perl #120244]
+The description for this diagnostic has been extended to cover all cases where the warning may occur.
+Issues with the positioning of the arrow indicator have also been resolved.
 
 =back
 
@@ -383,23 +284,26 @@ beginning of a buffer has been fixed.  [perl #120244]
 
 =item *
 
-The new prototype attribute syntax is tested by a new test script,
-F<t/op/attrproto.t>.
-
-=item *
-
-The new test script F<t/io/closepid.t> tests that C<close> on the original of a
-popen handle dupped to a standard handle no longer blocks internally on
-C<waitpid(0, ...)>.
-
-=item *
-
-The new postfix dereference syntax is tested by a new test script,
-F<t/op/postfixderef.t>.
+F<ext/File-Find/t/find.t> has been converted from manual C<print>
+statements to Test::More functions.  Each test now has a description.
+[perl #120503]
 
 =back
 
 =head1 Platform Support
+
+=head2 New Platforms
+
+=over 4
+
+=item Synology
+
+Synology ships its NAS boxes with a lean Linux distribution (DSM) on relative
+cheap CPU's (like the Marvell Kirkwood mv6282 - ARMv5tel or Freescale QorIQ
+P1022 ppc - e500v2) not meant for workstations or development. These boxes
+should build now. The basic problems are the non-standard location for tools.
+
+=back
 
 =head2 Platform-Specific Notes
 
@@ -407,9 +311,33 @@ F<t/op/postfixderef.t>.
 
 =item Windows
 
-The Windows MinGW/gcc build was broken in Perl 5.19.4 for some recent versions
-of gcc-4.8, including those from http://mingw-w64.sourceforge.net/ .  This has
-now been fixed.  [perl #120236]
+Support for building with Visual C++ 2013 has been added.  There are currently
+two possible test failures (see L<perlwin32/"Testing Perl on Windows">) which
+will hopefully be resolved soon.
+
+Experimental support for building with Intel C++ Compiler has been added. Only
+the nmake makefile (win32/Makefile) can be used. A "nmake test" will not pass
+at this time due to "cpan/CGI/t/url.t".
+
+=item WinCE
+
+Perl can now be built in one shot with no user intervention on WinCE by running
+C<nmake -f Makefile.ce all>.
+
+Support for building with EVC (Embedded Visual C++) 4 has been restored.  Perl
+can also be built using Smart Devices for Visual C++ 2005 or 2008.
+
+=back
+
+=head1 Internal Changes
+
+=over 4
+
+=item *
+
+Compiling with C<-Accflags=-PERL_BOOL_AS_CHAR> now allows C99 and C++
+compilers to emulate the aliasing of C<bool> to C<char> that perl does for
+C89 compilers.  [perl #120314]
 
 =back
 
@@ -419,63 +347,221 @@ now been fixed.  [perl #120236]
 
 =item *
 
-C<last> no longer returns values that the same statement has accumulated so
-far, fixing amongst other things the long-standing bug that C<push @a, last>
-would try to return the @a, copying it like a scalar in the process and
-resulting in the error, "Bizarre copy of ARRAY in last."  [perl #3112]
+Perl 5.18.0 accidentally disallowed C<-bareword> under C<use strict> and
+C<use integer>.  This has been fixed.  [perl #120288]
 
 =item *
 
-An optimization in Perl 5.18 made incorrect assumptions causing a bad
-interaction with the L<Devel::CallParser> CPAN module.  This was partially
-fixed in Perl 5.19.4, but the fix was not sufficient and another fault has now
-been corrected.
+C<-a> at the start of a line (or a hyphen with any single letter that is
+not a filetest operator) no longer produces an erroneous 'Use of "-a"
+without parentheses is ambiguous' warning.  [perl #120288]
 
 =item *
 
-In some cases, closing file handles opened to pipe to or from a process, which
-had been duplicated into a standard handle, would call perl's internal waitpid
-wrapper with a pid of zero.  With the fix for [perl #85228] this zero pid was
-passed to C<waitpid>, possibly blocking the process.  This wait for process
-zero no longer occurs.  [perl #119893]
+Lvalue context is now properly propagated into bare blocks and C<if> and
+C<else> blocks in lvalue subroutines.  Previously, arrays and hashes would
+sometimes incorrectly be flattened when returned in lvalue list context, or
+"Bizarre copy" errors could occur.  [perl #119797]
 
 =item *
 
-The code that parses regex backrefs (or ambiguous backref/octals) such as \123
-did a simple atoi(), which could wrap round to negative values on long digit
-strings and cause segmentation faults.  This has now been fixed.  [perl
-#119505]
+Lvalue context is now propagated to the branches of C<||> and C<&&> (and
+their alphabetic equivalents, C<or> and C<and>).  This means
+C<foreach (pos $x || pos $y) {...}> now allows C<pos> to be modified
+through $_.
 
 =item *
 
-C<select> used to ignore magic on the fourth (timeout) argument, leading to
-effects such as C<select> blocking indefinitely rather than the expected sleep
-time.  This has now been fixed.  [perl #120102]
+C<*DB::DB = sub {} if 0> no longer stops Perl's debugging mode from finding
+C<DB::DB> subs declared thereafter.
 
 =item *
 
-The class name in C<for my class $foo> is now parsed correctly.  In the case of
-the second character of the class name being followed by a digit (e.g. 'a1b')
-this used to give the error "Missing $ on loop variable".  [perl #120112]
+C<stat> and C<readline> remember the last handle used; the former
+for the special C<_> filehandle, the latter for C<${^LAST_FH}>.
+C<eval "*foo if 0"> where *foo was the last handle passed to C<stat>
+or C<readline> could cause that handle to be forgotten if the
+handle were not opened yet.  This has been fixed.
+
+=item *
+
+Various cases of C<delete $::{a}>, C<delete $::{ENV}> etc. causing a crash
+have been fixed.  [perl #54044]
+
+=item *
+
+Assigning another typeglob to C<*^R> no longer makes the regular expression
+engine crash.
+
+=item *
+
+C<%{'_<...'}> hashes now set breakpoints on the corresponding C<@{'_<...'}>
+rather than whichever array C<@DB::dbline> is aliased to.  [perl #119799]
+
+=item *
+
+Setting C<$!> to EACCESS before calling C<require> could affect
+C<require>'s behaviour.  This has been fixed.
+
+=item *
+
+The "Can't use \1 to mean $1 in expression" warning message now only occurs
+on the right-hand (replacement) part of a substitution.  Formerly it could
+happen in code embedded in the left-hand side, or in any other quote-like
+operator.
+
+=item *
+
+The C<\N> regular expression escape, when used without the curly braces (to
+mean C<[^\n]>), was ignoring a following C<*> if followed by whitespace
+under /x.  It had been this way since C<\N> to mean C<[^\n]> was introduced
+in 5.12.0.
+
+=item *
+
+Blessing into a reference (C<bless $thisref, $thatref>) has long been
+disallowed, but magical scalars for the second like C<$/> and those tied
+were exempt.  They no longer are.  [perl #119809]
+
+=item *
+
+Blessing into a reference was accidentally allowed in 5.18 if the class
+argument were a blessed reference with stale method caches (i.e., whose
+class had had subs defined since the last method call).  They are
+disallowed once more, as in 5.16.
+
+=item *
+
+An undefined lexical sub used as an inherited method no longer crashes.
+
+=item *
+
+C<< $x->{key} >> where $x was declared as C<my Class $x> no longer crashes
+if a Class::FIELDS subroutine stub has been declared.
+
+=item *
+
+C<@$obj{'key'}> and C<${$obj}{key}> used to be exempt from compile-time
+field checking ("No such class field"; see L<fields>) but no longer are.
+
+=item *
+
+That compile-time field checking also applies now to the C<%$obj{'key'}>
+syntax, added recently in Perl 5.19.4.
+
+=item *
+
+A nonexistent array element with a large index passed to a subroutine that
+ties the array and then tries to access the element no longer results in a
+crash.
+
+=item *
+
+Declaring a subroutine stub named NEGATIVE_INDICES no longer makes negative
+array indices crash when the current package is a tied array class.
+
+=item *
+
+Declaring a C<require>, C<glob>, or C<do> subroutine stub in the
+CORE::GLOBAL:: package no longer makes compilation of calls to the
+corresponding functions crash.
+
+=item *
+
+Aliasing CORE::GLOBAL:: functions to constants stopped working in Perl 5.10
+but has now been fixed.
+
+=item *
+
+When C<`...`> or C<qx/.../> calls a C<readpipe> override, double-quotish
+interpolation now happens, as is the case when there is no override.
+Previously, the presence of an override would make these quote-like
+operators act like C<q{}>, suppressing interpolation.  [perl #115330]
+
+=item *
+
+C<<<`...`> here-docs (with backticks as the delimiters) now call
+C<readpipe> overrides.  [perl #119827]
+
+=item *
+
+The presence of a lexical sub named "CORE" no longer stops the CORE::
+prefix from working.
+
+=item *
+
+C<&CORE::exit()> and C<&CORE::die()> now respect L<vmsish> hints.
+
+=item *
+
+Undefining a glob that triggers a DESTROY method that undefines the same
+glob is now safe.  It used to produce "Attempt to free unreferenced glob
+pointer" warnings and leak memory.
+
+=item *
+
+If subroutine redefinition (C<eval 'sub foo{}'> or C<newXS> for XS code)
+triggers a DESTROY method on the sub that is being redefined, and that
+method assigns a subroutine to the same slot (C<*foo = sub {}>), C<$_[0]>
+is no longer left pointing to a freed scalar.  Now DESTROY is delayed until
+the new subroutine has been installed.
+
+=item *
+
+C<s///>, C<tr///> and C<y///> now work when a wide character is used as the
+delimiter.  [perl #120463]
+
+=item *
+
+On Windows, perl no longer calls CloseHandle() on a socket handle.  This makes
+debugging easier on Windows by removing certain irrelevant bad handle
+exceptions.  It also fixes a race condition that made socket functions randomly
+fail in a Perl process with multiple OS threads, and possible test failures in
+F<dist/IO/t/cachepropagate-tcp.t>.  [perl #120091/118059]
+
+=item *
+
+Some cases of unterminated (?...) sequences in regular expressions (e.g.,
+C</(?</>) have been fixed to produce the proper error message instead of
+"panic: memory wrap".  Other cases (e.g., C</(?(/>) have yet to be fixed.
+
+=item *
+
+Strange vars like ties, overloads, or stringified refs (and in recent
+perls, pure NOK vars) would generally do the wrong thing in formats
+when the var is treated as a string and repeatedly chopped, as in
+^<<<~~ and similar. This has now been resolved.
+
+=back
+
+=head1 Known Problems
+
+=over 4
+
+=item *
+
+C<do CORE()> used to call a sub named "CORE" and treat its return value as
+a file name to execute.  A bug fix inadvertently caused it to be
+interpreted as the deprecated "do-SUB" construct.  (Yes, C<do
+I<bareword>()> is inconsistent.)  This will likely be changed back.
 
 =back
 
 =head1 Acknowledgements
 
-Perl 5.19.5 represents approximately 4 weeks of development since Perl 5.19.4
-and contains approximately 76,000 lines of changes across 710 files from 27
+Perl 5.19.6 represents approximately 4 weeks of development since Perl 5.19.5
+and contains approximately 88,000 lines of changes across 630 files from 24
 authors.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.19.5:
+improvements that became Perl 5.19.6:
 
-Andy Dougherty, Brian Fraser, Chris 'BinGOs' Williams, Craig A. Berry, Dagfinn
-Ilmari Mannsåker, Daniel Dragan, David Golden, David Mitchell, David Nicol,
-Dominic Hargreaves, Eric Brine, Father Chrysostomos, Gideon Israel Dsouza, Hio,
-James E Keenan, Jerry D. Hedden, Jesse Luehrs, Karl Williamson, Matthew
-Horsfall, Max Maischein, Neil Bowers, Nicholas Clark, Peter Martini, Philip
-Guenther, Ricardo Signes, Steve Hay, Tony Cook.
+Anno Siegel, Chris 'BinGOs' Williams, Craig A. Berry, Daniel Dragan, David
+Mitchell, Father Chrysostomos, François Perrad, H.Merijn Brand, James E
+Keenan, Jerry D. Hedden, Karen Etheridge, Karl Williamson, Kevin Falcone, Lukas
+Mai, Marc Simpson, Matthew Horsfall, Peter Martini, Petr Písař, Reini Urban,
+Steve Hay, Tom Hukins, Tony Cook, Victor Efimov, Yves Orton.
 
 The list above is almost certainly incomplete as it is automatically generated
 from version control history. In particular, it does not include the names of

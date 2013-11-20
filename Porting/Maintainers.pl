@@ -22,7 +22,7 @@ use File::Glob qw(:case);
     cpanfile CREDITS dist.ini GOALS HISTORY INSTALL INSTALL.SKIP LICENSE
     Makefile.PL MANIFEST MANIFEST.SKIP META.json META.yml MYMETA.json
     MYMETA.yml NEW NOTES perlcritic.rc ppport.h README README.PATCHING
-    SIGNATURE THANKS TODO Todo VERSION WHATSNEW
+    SIGNATURE THANKS TODO Todo VERSION WHATSNEW .perlcriticrc.perltidyrc
 );
 
 # Each entry in the  %Modules hash roughly represents a distribution,
@@ -48,7 +48,7 @@ use File::Glob qw(:case);
 # of the module is, but this is no longer stated explicitly. It is now
 # understood to be either the Perl 5 Porters if UPSTREAM is 'blead', or else
 # the CPAN author whose PAUSE user ID forms the first part of the DISTRIBUTION
-# value, e.g. 'BINGOS' in the case of 'BINGOS/Archive-Tar-1.92.tar.gz'.
+# value, e.g. 'BINGOS' in the case of 'BINGOS/Archive-Tar-1.96.tar.gz'.
 # (PAUSE's View Permissions page may be consulted to find other authors who
 # have owner or co-maint permissions for the module in question.)
 
@@ -119,7 +119,7 @@ use File::Glob qw(:case);
 %Modules = (
 
     'Archive::Tar' => {
-        'DISTRIBUTION' => 'BINGOS/Archive-Tar-1.92.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Archive-Tar-1.96.tar.gz',
         'FILES'        => q[cpan/Archive-Tar],
         'BUGS'         => 'bug-archive-tar@rt.cpan.org',
     },
@@ -159,7 +159,7 @@ use File::Glob qw(:case);
     },
 
     'AutoLoader' => {
-        'DISTRIBUTION' => 'SMUELLER/AutoLoader-5.73.tar.gz',
+        'DISTRIBUTION' => 'SMUELLER/AutoLoader-5.74.tar.gz',
         'FILES'        => q[cpan/AutoLoader],
         'EXCLUDED'     => ['t/00pod.t'],
     },
@@ -171,7 +171,7 @@ use File::Glob qw(:case);
     },
 
     'B::Debug' => {
-        'DISTRIBUTION' => 'RURBAN/B-Debug-1.18.tar.gz',
+        'DISTRIBUTION' => 'RURBAN/B-Debug-1.19.tar.gz',
         'FILES'        => q[cpan/B-Debug],
         'EXCLUDED'     => ['t/pod.t'],
     },
@@ -210,7 +210,7 @@ use File::Glob qw(:case);
     },
 
     'Compress::Raw::Bzip2' => {
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.062.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.063.tar.gz',
         'FILES'        => q[cpan/Compress-Raw-Bzip2],
         'EXCLUDED'     => [
             qr{^t/Test/},
@@ -219,7 +219,7 @@ use File::Glob qw(:case);
     },
 
     'Compress::Raw::Zlib' => {
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.062.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.063.tar.gz',
 
         'FILES'    => q[cpan/Compress-Raw-Zlib],
         'EXCLUDED' => [
@@ -319,7 +319,6 @@ use File::Glob qw(:case);
             qw(t/00-compile.t),
             qw(t/00-report-prereqs.t),
             qr{^xt},
-            qr{^history},
         ],
     },
 
@@ -339,7 +338,7 @@ use File::Glob qw(:case);
     },
 
     'DB_File' => {
-        'DISTRIBUTION' => 'PMQS/DB_File-1.829.tar.gz',
+        'DISTRIBUTION' => 'PMQS/DB_File-1.831.tar.gz',
         'FILES'        => q[cpan/DB_File],
         'EXCLUDED'     => [
             qr{^patches/},
@@ -473,7 +472,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::MakeMaker' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.80.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.82.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -555,7 +554,6 @@ use File::Glob qw(:case);
                 t/decrypt.t
                 t/exec.t
                 t/order.t
-                t/pod.t
                 t/sh.t
                 t/tee.t
                 t/z_kwalitee.t
@@ -586,7 +584,7 @@ use File::Glob qw(:case);
     },
 
     'HTTP::Tiny' => {
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.036.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.038.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/00-compile.t',
@@ -621,7 +619,7 @@ use File::Glob qw(:case);
     },
 
     'IO-Compress' => {
-        'DISTRIBUTION' => 'PMQS/IO-Compress-2.062.tar.gz',
+        'DISTRIBUTION' => 'PMQS/IO-Compress-2.063.tar.gz',
         'FILES'        => q[cpan/IO-Compress],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -638,13 +636,8 @@ use File::Glob qw(:case);
     },
 
     'IPC::Cmd' => {
-        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.84.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.90.tar.gz',
         'FILES'        => q[cpan/IPC-Cmd],
-        # Waiting to be merged upstream: no ticket, but customized by maintainer
-        'CUSTOMIZED'   => [
-            'lib/IPC/Cmd.pm',
-            't/03_run-forked.t',
-        ],
     },
 
     'IPC::SysV' => {
@@ -660,9 +653,6 @@ use File::Glob qw(:case);
     'JSON::PP' => {
         'DISTRIBUTION' => 'MAKAMAKA/JSON-PP-2.27203.tar.gz',
         'FILES'        => q[cpan/JSON-PP],
-        'EXCLUDED'     => [
-            't/900_pod.t',    # Pod testing
-        ],
     },
 
     'lib' => {
@@ -718,7 +708,6 @@ use File::Glob qw(:case);
     'Locale::Maketext::Simple' => {
         'DISTRIBUTION' => 'JESSE/Locale-Maketext-Simple-0.21.tar.gz',
         'FILES'        => q[cpan/Locale-Maketext-Simple],
-        'EXCLUDED'     => [qr{^inc/}],
     },
 
     'Math::BigInt' => {
@@ -799,7 +788,7 @@ use File::Glob qw(:case);
     #
 
     'Module::Build' => {
-        'DISTRIBUTION' => 'LEONT/Module-Build-0.4007.tar.gz',
+        'DISTRIBUTION' => 'LEONT/Module-Build-0.4202.tar.gz',
         'FILES'        => q[cpan/Module-Build],
         'EXCLUDED'     => [
             qw( t/par.t
@@ -814,7 +803,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-2.99.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-3.00.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -858,13 +847,13 @@ use File::Glob qw(:case);
     },
 
     'Package::Constants' => {
-        'DISTRIBUTION' => 'KANE/Package-Constants-0.02.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Package-Constants-0.04.tar.gz',
         'FILES'        => q[cpan/Package-Constants],
+        'DEPRECATED'   => '5.019006',
     },
 
     'Params::Check' => {
         'DISTRIBUTION' => 'BINGOS/Params-Check-0.38.tar.gz',
-        'EXCLUDED'     => ['Params-Check-0.26.tar.gz'],
         'FILES'        => q[cpan/Params-Check],
     },
 
@@ -995,7 +984,6 @@ use File::Glob qw(:case);
     'Search::Dict' => {
         'DISTRIBUTION' => 'DAGOLDEN/Search-Dict-1.07.tar.gz',
         'FILES'        => q[dist/Search-Dict],
-        'EXCLUDED'     => [qr{^t/release-.*\.t},qr{^README\..*}],
     },
 
     'SelfLoader' => {
@@ -1005,14 +993,13 @@ use File::Glob qw(:case);
     },
 
     'Socket' => {
-        'DISTRIBUTION' => 'PEVANS/Socket-2.012.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Socket-2.013.tar.gz',
         'FILES'        => q[cpan/Socket],
     },
 
     'Storable' => {
         'DISTRIBUTION' => 'AMS/Storable-2.45.tar.gz',
         'FILES'        => q[dist/Storable],
-        'EXCLUDED'     => [qr{^t/Test/}],
     },
 
     'Sys::Syslog' => {
@@ -1036,7 +1023,6 @@ use File::Glob qw(:case);
         'DISTRIBUTION' => 'RRA/Term-ANSIColor-4.02.tar.gz',
         'FILES'        => q[cpan/Term-ANSIColor],
         'EXCLUDED'     => [
-            qr{^tests/},
             qr{^examples/},
             qr{^t/data/},
             qw( t/aliases-env.t
@@ -1052,16 +1038,8 @@ use File::Glob qw(:case);
     },
 
     'Term::Cap' => {
-        'DISTRIBUTION' => 'JSTOWE/Term-Cap-1.12.tar.gz',
+        'DISTRIBUTION' => 'JSTOWE/Term-Cap-1.15.tar.gz',
         'FILES'        => q[cpan/Term-Cap],
-
-        # Waiting to be merged upstream: see CPAN RT#73447
-        'CUSTOMIZED'   => [
-            qw( Cap.pm
-                test.pl
-                ),
-        ],
-
     },
 
     'Term::Complete' => {
@@ -1082,7 +1060,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Harness' => {
-        'DISTRIBUTION' => 'OVID/Test-Harness-3.29.tar.gz',
+        'DISTRIBUTION' => 'LEONT/Test-Harness-3.30.tar.gz',
         'FILES'        => q[cpan/Test-Harness],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1101,9 +1079,10 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'RJBS/Test-Simple-0.99.tar.gz',
+        'DISTRIBUTION' => 'RJBS/Test-Simple-1.001002.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
+            qr{^t/xt},
             qw( .perlcriticrc
                 .perltidyrc
                 examples/indent.pl
@@ -1152,7 +1131,6 @@ use File::Glob qw(:case);
     'Text::ParseWords' => {
         'DISTRIBUTION' => 'CHORNY/Text-ParseWords-3.29.tar.gz',
         'FILES'        => q[cpan/Text-ParseWords],
-        'EXCLUDED'     => ['t/pod.t'],
 
         # Waiting to be merged upstream: see CPAN RT#50929
         'CUSTOMIZED'   => [
@@ -1219,7 +1197,7 @@ use File::Glob qw(:case);
     },
 
     'threads::shared' => {
-        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.43.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.45.tar.gz',
         'FILES'        => q[dist/threads-shared],
         'EXCLUDED'     => [
             qw( examples/class.pl
@@ -1249,9 +1227,6 @@ use File::Glob qw(:case);
         'DISTRIBUTION' => 'DROLSKY/Time-Local-1.2300.tar.gz',
         'FILES'        => q[cpan/Time-Local],
         'EXCLUDED'     => [
-            qw( t/pod-coverage.t
-                t/pod.t
-                ),
             qr{^t/release-.*\.t},
         ],
     },
@@ -1262,7 +1237,7 @@ use File::Glob qw(:case);
     },
 
     'Unicode::Collate' => {
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-0.99.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.02.tar.gz',
         'FILES'        => q[cpan/Unicode-Collate],
         'EXCLUDED'     => [
             qr{N$},

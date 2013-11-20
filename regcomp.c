@@ -81,7 +81,7 @@
 #define REG_COMP_C
 #ifdef PERL_IN_XSUB_RE
 #  include "re_comp.h"
-extern const struct regexp_engine my_reg_engine;
+EXTERN_C const struct regexp_engine my_reg_engine;
 #else
 #  include "regcomp.h"
 #endif
@@ -4545,8 +4545,9 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVdf" RHS=%"UVdf"\n",
                     classnum = FLAGS(scan);
                     namedclass = classnum_to_namedclass(classnum) + invert;
                     if (flags & SCF_DO_STCLASS_AND) {
-                        bool was_there = ANYOF_POSIXL_TEST(data->start_class,
-                                                           namedclass);
+                        bool was_there = cBOOL(
+                                          ANYOF_POSIXL_TEST(data->start_class,
+                                                                 namedclass));
                         ANYOF_POSIXL_ZERO(data->start_class);
                         if (was_there) {    /* Do an AND */
                             ANYOF_POSIXL_SET(data->start_class, namedclass);
@@ -7264,7 +7265,9 @@ S_reg_scan_name(pTHX_ RExC_state_t *pRExC_state, U32 flags)
 
     PERL_ARGS_ASSERT_REG_SCAN_NAME;
 
-    if (isIDFIRST_lazy_if(RExC_parse, UTF)) {
+    assert (RExC_parse <= RExC_end);
+    if (RExC_parse == RExC_end) NOOP;
+    else if (isIDFIRST_lazy_if(RExC_parse, UTF)) {
 	 /* skip IDFIRST by using do...while */
 	if (UTF)
 	    do {
@@ -7945,7 +7948,7 @@ Perl__invlist_union_maybe_complement_2nd(pTHX_ SV* const a, SV* const b, const b
 
 	if (*output == a) {
             if (a != NULL) {
-                if (! (make_temp = SvTEMP(a))) {
+                if (! (make_temp = cBOOL(SvTEMP(a)))) {
                     SvREFCNT_dec_NN(a);
                 }
             }
@@ -7965,7 +7968,7 @@ Perl__invlist_union_maybe_complement_2nd(pTHX_ SV* const a, SV* const b, const b
     else if ((len_b = _invlist_len(b)) == 0) {
         bool make_temp = FALSE;
 	if (*output == b) {
-            if (! (make_temp = SvTEMP(b))) {
+            if (! (make_temp = cBOOL(SvTEMP(b)))) {
                 SvREFCNT_dec_NN(b);
             }
 	}
@@ -7974,7 +7977,7 @@ Perl__invlist_union_maybe_complement_2nd(pTHX_ SV* const a, SV* const b, const b
          * so the union with <a> includes everything too */
         if (complement_b) {
             if (a == *output) {
-                if (! (make_temp = SvTEMP(a))) {
+                if (! (make_temp = cBOOL(SvTEMP(a)))) {
                     SvREFCNT_dec_NN(a);
                 }
             }
@@ -8204,7 +8207,7 @@ Perl__invlist_intersection_maybe_complement_2nd(pTHX_ SV* const a, SV* const b, 
              * simply 'a'. */
             if (*i != a) {
                 if (*i == b) {
-                    if (! (make_temp = SvTEMP(b))) {
+                    if (! (make_temp = cBOOL(SvTEMP(b)))) {
                         SvREFCNT_dec_NN(b);
                     }
                 }
@@ -8222,12 +8225,12 @@ Perl__invlist_intersection_maybe_complement_2nd(pTHX_ SV* const a, SV* const b, 
         /* Here, 'a' or 'b' is empty and not using the complement of 'b'.  The
          * intersection must be empty */
 	if (*i == a) {
-            if (! (make_temp = SvTEMP(a))) {
+            if (! (make_temp = cBOOL(SvTEMP(a)))) {
                 SvREFCNT_dec_NN(a);
             }
 	}
 	else if (*i == b) {
-            if (! (make_temp = SvTEMP(b))) {
+            if (! (make_temp = cBOOL(SvTEMP(b)))) {
                 SvREFCNT_dec_NN(b);
             }
 	}
@@ -8967,6 +8970,7 @@ S_parse_lparen_question_flags(pTHX_ RExC_state_t *pRExC_state)
             default:
             fail_modifiers:
                 RExC_parse += UTF ? UTF8SKIP(RExC_parse) : 1;
+		/* diag_listed_as: Sequence (?%s...) not recognized in regex; marked by <-- HERE in m/%s/ */
                 vFAIL2utf8f("Sequence (%"UTF8f"...) not recognized",
                       UTF8fARG(UTF, RExC_parse-seqstart, seqstart));
                 /*NOTREACHED*/
@@ -9174,6 +9178,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                     SV *sv_dat = reg_scan_name(pRExC_state,
                         SIZE_ONLY ? REG_RSN_RETURN_NULL : REG_RSN_RETURN_DATA);
                     if (RExC_parse == name_start || *RExC_parse != ')')
+                        /* diag_listed_as: Sequence ?P=... not terminated in regex; marked by <-- HERE in m/%s/ */
                         vFAIL2("Sequence %.3s... not terminated",parse_start);
 
                     if (!SIZE_ONLY) {
@@ -9202,6 +9207,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                     return ret;
                 }
                 RExC_parse++;
+                /* diag_listed_as: Sequence (?%s...) not recognized in regex; marked by <-- HERE in m/%s/ */
 		vFAIL3("Sequence (%.*s...) not recognized", RExC_parse-seqstart, seqstart);
 		/*NOTREACHED*/
             case '<':           /* (?<...) */
@@ -9219,12 +9225,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
     		        SIZE_ONLY ?  /* reverse test from the others */
     		        REG_RSN_RETURN_NAME : 
     		        REG_RSN_RETURN_NULL);
-		    if (RExC_parse == name_start) {
-		        RExC_parse++;
-		        vFAIL3("Sequence (%.*s...) not recognized", RExC_parse-seqstart, seqstart);
-		        /*NOTREACHED*/
-                    }
-		    if (*RExC_parse != paren)
+		    if (RExC_parse == name_start || *RExC_parse != paren)
 		        vFAIL2("Sequence (?%c... not terminated",
 		            paren=='>' ? '<' : paren);
 		    if (SIZE_ONLY) {
@@ -9345,6 +9346,8 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
     		        SIZE_ONLY ? REG_RSN_RETURN_NULL : REG_RSN_RETURN_DATA);
     		     num = sv_dat ? *((I32 *)SvPVX(sv_dat)) : 0;
                 }
+                if (RExC_parse == RExC_end || *RExC_parse != ')')
+                    vFAIL("Sequence (?&... not terminated");
                 goto gen_recurse_regop;
                 assert(0); /* NOT REACHED */
             case '+':
@@ -9422,6 +9425,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 		is_logical = 1;
 		if (*RExC_parse != '{') {
 		    RExC_parse++;
+                    /* diag_listed_as: Sequence (?%s...) not recognized in regex; marked by <-- HERE in m/%s/ */
                     vFAIL2utf8f(
                         "Sequence (%"UTF8f"...) not recognized",
                         UTF8fARG(UTF, RExC_parse-seqstart, seqstart));
@@ -9569,14 +9573,11 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 
                  insert_if_check_paren:
 		    if (*(tmp = nextchar(pRExC_state)) != ')') {
-                        if ( UTF ) {
-                        /* Like the name implies, nextchar deals in chars,
-                         * not characters, so if under UTF, undo its work
+                        /* nextchar also skips comments, so undo its work
                          * and skip over the the next character.
                          */
-		            RExC_parse = tmp;
-		            RExC_parse += UTF8SKIP(RExC_parse);
-		        }
+                        RExC_parse = tmp;
+                        RExC_parse += UTF ? UTF8SKIP(RExC_parse) : 1;
 			vFAIL("Switch condition not recognized");
 		    }
 		  insert_if:
@@ -10266,7 +10267,8 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p, UV *valuep, I
     assert(cBOOL(node_p) ^ cBOOL(valuep));  /* Exactly one should be set */
 
     /* The [^\n] meaning of \N ignores spaces and comments under the /x
-     * modifier.  The other meaning does not */
+     * modifier.  The other meaning does not, so use a temporary until we find
+     * out which we are being called with */
     p = (RExC_flags & RXf_PMf_EXTENDED)
 	? regwhite( pRExC_state, RExC_parse )
 	: RExC_parse;
@@ -10276,17 +10278,18 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p, UV *valuep, I
     if (*p != '{' || regcurly(p, FALSE)) {
 	RExC_parse = p;
 	if (! node_p) {
-	    /* no bare \N in a charclass */
+	    /* no bare \N allowed in a charclass */
             if (in_char_class) {
                 vFAIL("\\N in a character class must be a named character: \\N{...}");
             }
             return FALSE;
         }
+        RExC_parse--;   /* Need to back off so nextchar() doesn't skip the
+                           current char */
 	nextchar(pRExC_state);
 	*node_p = reg_node(pRExC_state, REG_ANY);
 	*flagp |= HASWIDTH|SIMPLE;
 	RExC_naughty++;
-	RExC_parse--;
         Set_Node_Length(*node_p, 1); /* MJD */
 	return TRUE;
     }
@@ -10998,6 +11001,7 @@ tryagain:
             char ch= RExC_parse[1];	    
 	    if (ch != '<' && ch != '\'' && ch != '{') {
 	        RExC_parse++;
+		/* diag_listed_as: Sequence \%s... not terminated in regex; marked by <-- HERE in m/%s/ */
 	        vFAIL2("Sequence %.2s... not terminated",parse_start);
 	    } else {
 	        /* this pretty much dupes the code for (?P=...) in reg(), if
@@ -11008,6 +11012,7 @@ tryagain:
                     SIZE_ONLY ? REG_RSN_RETURN_NULL : REG_RSN_RETURN_DATA);
                 ch= (ch == '<') ? '>' : (ch == '{') ? '}' : '\'';
                 if (RExC_parse == name_start || *RExC_parse != ch)
+                    /* diag_listed_as: Sequence \%s... not terminated in regex; marked by <-- HERE in m/%s/ */
                     vFAIL2("Sequence %.3s... not terminated",parse_start);
 
                 if (!SIZE_ONLY) {

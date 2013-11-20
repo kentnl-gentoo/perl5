@@ -514,6 +514,8 @@ Ap	|void	|gv_init_pv	|NN GV* gv|NULLOK HV* stash|NN const char* name \
 Ap	|void	|gv_init_pvn	|NN GV* gv|NULLOK HV* stash|NN const char* name \
                                 |STRLEN len|U32 flags
 Ap	|void	|gv_name_set	|NN GV* gv|NN const char *name|U32 len|U32 flags
+px	|GV *	|gv_override	|NN const char * const name \
+				|const STRLEN len
 XMpd	|void	|gv_try_downgrade|NN GV* gv
 Apd	|HV*	|gv_stashpv	|NN const char* name|I32 flags
 Apd	|HV*	|gv_stashpvn	|NN const char* name|U32 namelen|I32 flags
@@ -1261,6 +1263,8 @@ Apd	|NV	|scan_oct	|NN const char* start|STRLEN len|NN STRLEN* retlen
 AMpd	|OP*	|op_scope	|NULLOK OP* o
 Ap	|char*	|screaminstr	|NN SV *bigstr|NN SV *littlestr|I32 start_shift \
 				|I32 end_shift|NN I32 *old_posp|I32 last
+: Only used by perl.c/miniperl.c, but defined in caretx.c
+px	|void	|set_caret_X
 Apd	|void	|setdefout	|NN GV* gv
 Ap	|HEK*	|share_hek	|NN const char* str|I32 len|U32 hash
 #if defined(HAS_SIGACTION) && defined(SA_SIGINFO)
@@ -1276,7 +1280,7 @@ Ap	|I32	|start_subparse	|I32 is_format|U32 flags
 : Used in pp_ctl.c
 p	|void	|sub_crush_depth|NN CV* cv
 Amd	|bool	|sv_2bool	|NN SV *const sv
-Apd	|bool	|sv_2bool_flags	|NN SV *const sv|const I32 flags
+Apd	|bool	|sv_2bool_flags	|NN SV *sv|I32 flags
 Apd	|CV*	|sv_2cv		|NULLOK SV* sv|NN HV **const st|NN GV **const gvp \
 				|const I32 lref
 Apd	|IO*	|sv_2io		|NN SV *const sv
@@ -1748,9 +1752,10 @@ Ap	|void	|sys_intern_dup	|NN struct interp_intern* src|NN struct interp_intern* 
 #  endif
 #endif
 
-AopP	|const XOP *	|custom_op_xop	|NN const OP *o
+AmopP	|const XOP *	|custom_op_xop	|NN const OP *o
 ApR	|const char *	|custom_op_name	|NN const OP *o
 ApR	|const char *	|custom_op_desc	|NN const OP *o
+pRX	|XOPRETANY	|custom_op_get_field	|NN const OP *o|const xop_flags_enum field
 Aop	|void	|custom_op_register	|NN Perl_ppaddr_t ppaddr \
 			|NN const XOP *xop
 
@@ -1955,7 +1960,8 @@ sR	|PerlIO *|check_type_and_open|NN SV *name
 #ifndef PERL_DISABLE_PMC
 sR	|PerlIO *|doopen_pm	|NN SV *name
 #endif
-s	|SV **	|adjust_stack_on_leave|NN SV **newsp|NN SV **sp|NN SV **mark|I32 gimme|U32 flags
+s	|SV **	|adjust_stack_on_leave|NN SV **newsp|NN SV **sp|NN SV **mark|I32 gimme \
+				      |U32 flags|bool lvalue
 iRn	|bool	|path_is_searchable|NN const char *name
 sR	|I32	|run_user_filter|int idx|NN SV *buf_sv|int maxlen
 sR	|PMOP*	|make_matcher	|NN REGEXP* re
@@ -2253,7 +2259,6 @@ s	|char*	|force_strict_version	|NN char *s
 s	|char*	|force_word	|NN char *start|int token|int check_keyword \
 				|int allow_pack
 s	|SV*	|tokeq		|NN SV *sv
-s	|void	|readpipe_override|
 sR	|char*	|scan_const	|NN char *start
 iR	|SV*	|get_and_check_backslash_N_name|NN const char* s \
 				|NN const char* const e
@@ -2265,7 +2270,8 @@ sR	|char*	|scan_inputsymbol|NN char *start
 sR	|char*	|scan_pat	|NN char *start|I32 type
 sR	|char*	|scan_str	|NN char *start|int keep_quoted \
 				|int keep_delims|int re_reparse \
-				|bool deprecate_escaped_matching
+				|bool deprecate_escaped_matching \
+				|NULLOK char **delimp
 sR	|char*	|scan_subst	|NN char *start
 sR	|char*	|scan_trans	|NN char *start
 s	|char*	|scan_word	|NN char *s|NN char *dest|STRLEN destlen \
@@ -2663,7 +2669,8 @@ sd	|AV*	|mro_get_linear_isa_dfs|NN HV* stash|U32 level
 s	|void	|mro_clean_isarev|NN HV * const isa   \
 				 |NN const char * const name \
 				 |const STRLEN len \
-				 |NULLOK HV * const exceptions|U32 flags
+				 |NULLOK HV * const exceptions \
+				 |U32 hash|U32 flags
 s	|void	|mro_gather_and_rename|NN HV * const stashes \
 				      |NN HV * const seen_stashes \
 				      |NULLOK HV *stash \

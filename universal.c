@@ -312,15 +312,18 @@ Perl_croak_xs_usage(const CV *const cv, const char *const params)
 	const HV *const stash = GvSTASH(gv);
 
 	if (HvNAME_get(stash))
+	    /* diag_listed_as: SKIPME */
 	    Perl_croak_nocontext("Usage: %"HEKf"::%"HEKf"(%s)",
                                 HEKfARG(HvNAME_HEK(stash)),
                                 HEKfARG(GvNAME_HEK(gv)),
                                 params);
 	else
+	    /* diag_listed_as: SKIPME */
 	    Perl_croak_nocontext("Usage: %"HEKf"(%s)",
                                 HEKfARG(GvNAME_HEK(gv)), params);
     } else {
 	/* Pants. I don't think that it should be possible to get here. */
+	/* diag_listed_as: SKIPME */
 	Perl_croak_nocontext("Usage: CODE(0x%"UVxf")(%s)", PTR2UV(cv), params);
     }
 }
@@ -1353,7 +1356,7 @@ struct xsub_details {
     const char *proto;
 };
 
-const struct xsub_details details[] = {
+static const struct xsub_details details[] = {
     {"UNIVERSAL::isa", XS_UNIVERSAL_isa, NULL},
     {"UNIVERSAL::can", XS_UNIVERSAL_can, NULL},
     {"UNIVERSAL::DOES", XS_UNIVERSAL_DOES, NULL},

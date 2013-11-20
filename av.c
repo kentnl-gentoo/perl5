@@ -112,11 +112,6 @@ Perl_av_extend_guts(pTHX_ AV *av, SSize_t key, SSize_t *maxp, SV ***allocp,
 	    }
 	}
 	else {
-#ifdef PERL_MALLOC_WRAP
-	    static const char oom_array_extend[] =
-	      "Out of memory during array extend"; /* Duplicated in pp_hot.c */
-#endif
-
 	    if (*allocp) {
 
 #ifdef Perl_safesysmalloc_size
@@ -141,7 +136,13 @@ Perl_av_extend_guts(pTHX_ AV *av, SSize_t key, SSize_t *maxp, SV ***allocp,
 #endif 
 		newmax = key + *maxp / 5;
 	      resize:
-		MEM_WRAP_CHECK_1(newmax+1, SV*, oom_array_extend);
+		{
+#ifdef PERL_MALLOC_WRAP /* Duplicated in pp_hot.c */
+		    static const char oom_array_extend[] =
+			"Out of memory during array extend";
+#endif
+		    MEM_WRAP_CHECK_1(newmax+1, SV*, oom_array_extend);
+		}
 		Renew(*allocp,newmax+1, SV*);
 #ifdef Perl_safesysmalloc_size
 	      resized:
@@ -156,7 +157,13 @@ Perl_av_extend_guts(pTHX_ AV *av, SSize_t key, SSize_t *maxp, SV ***allocp,
 	    }
 	    else {
 		newmax = key < 3 ? 3 : key;
-		MEM_WRAP_CHECK_1(newmax+1, SV*, oom_array_extend);
+		{
+#ifdef PERL_MALLOC_WRAP /* Duplicated in pp_hot.c */
+		    static const char oom_array_extend[] =
+			"Out of memory during array extend";
+#endif
+		    MEM_WRAP_CHECK_1(newmax+1, SV*, oom_array_extend);
+		}
 		Newx(*allocp, newmax+1, SV*);
 		ary = *allocp + 1;
 		tmp = newmax;
@@ -201,7 +208,8 @@ S_adjust_index(pTHX_ AV *av, const MAGIC *mg, SSize_t *keyp)
 	    SV * const * const negative_indices_glob =
 		hv_fetchs(SvSTASH(SvRV(ref)), NEGATIVE_INDICES_VAR, 0);
 
-	    if (negative_indices_glob && SvTRUE(GvSV(*negative_indices_glob)))
+	    if (negative_indices_glob && isGV(*negative_indices_glob)
+	     && SvTRUE(GvSV(*negative_indices_glob)))
 		adjust_index = 0;
 	}
     }

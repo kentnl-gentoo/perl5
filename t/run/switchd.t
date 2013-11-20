@@ -9,7 +9,7 @@ BEGIN { require "./test.pl"; }
 
 # This test depends on t/lib/Devel/switchd*.pm.
 
-plan(tests => 14);
+plan(tests => 17);
 
 my $r;
 
@@ -147,6 +147,16 @@ like(
   qr/^No DB::DB routine defined/,
   "No crash when &DB::DB exists but isn't actually defined",
 );
+# or seen and defined later
+is(
+  runperl(
+    switches => [ '-Ilib', '-d:nodb' ], # nodb.pm contains *DB::DB...if 0
+    prog     => 'warn; sub DB::DB { print qq-ok\n-; exit }',
+    stderr   => 1,
+  ),
+  "ok\n",
+  "DB::DB works after '*DB::DB if 0'",
+);
 
 # [perl #115742] Recursive DB::DB clobbering its own pad
 like(
@@ -210,4 +220,36 @@ is(
   ),
   "goto<main::baz>;hello;\n",
   "DB::goto"
+);
+
+# Test that %DB::lsub is not vivified
+is(
+  runperl(
+   switches => [ '-Ilib', '-d:switchd_empty' ],
+   progs => ['sub DB::sub {} sub foo : lvalue {} foo();',
+             'print qq-ok\n- unless defined *DB::lsub{HASH}'],
+  ),
+  "ok\n",
+  "%DB::lsub is not vivified"
+);
+
+# Test setting of breakpoints without *DB::dbline aliased
+is(
+  runperl(
+   switches => [ '-Ilib', '-d:nodb' ],
+   progs => [ split "\n",
+    'sub DB::DB {
+      $DB::single = 0, return if $DB::single; print qq[ok\n]; exit
+     }
+     ${q(_<).__FILE__}{6} = 1; # set a breakpoint
+     sub foo {
+         die; # line 6
+     }
+     foo();
+    '
+   ],
+   stderr => 1
+  ),
+  "ok\n",
+  "setting breakpoints without *DB::dbline aliased"
 );

@@ -466,7 +466,8 @@ PP(pp_formline)
     I32 arg;
     SV *sv = NULL; /* current item */
     const char *item = NULL;/* string value of current item */
-    I32 itemsize  = 0;	    /* length of current item, possibly truncated */
+    I32 itemsize  = 0;	    /* length (chars) of item, possibly truncated */
+    I32 itembytes = 0;	    /* as itemsize, but length in bytes */
     I32 fieldsize = 0;	    /* width of current field */
     I32 lines = 0;	    /* number of lines that have been output */
     bool chopspace = (strchr(PL_chopset, ' ') != NULL); /* does $: have space */
@@ -474,7 +475,7 @@ PP(pp_formline)
     STRLEN linemark = 0;    /* pos of start of line in output */
     NV value;
     bool gotsome = FALSE;   /* seen at least one non-blank item on this line */
-    STRLEN len;
+    STRLEN len;             /* length of current sv */
     STRLEN linemax;	    /* estimate of output size in bytes */
     bool item_is_utf8 = FALSE;
     bool targ_is_utf8 = FALSE;
@@ -534,13 +535,13 @@ PP(pp_formline)
 		PerlIO_printf(Perl_debug_log, "%-16s\n", name);
 	} );
 	switch (*fpc++) {
-	case FF_LINEMARK:
+	case FF_LINEMARK: /* start (or end) of a line */
 	    linemark = t - SvPVX(PL_formtarget);
 	    lines++;
 	    gotsome = FALSE;
 	    break;
 
-	case FF_LITERAL:
+	case FF_LITERAL: /* append <arg> literal chars */
 	    to_copy = *fpc++;
 	    source = (U8 *)f;
 	    f += to_copy;
@@ -548,11 +549,11 @@ PP(pp_formline)
 	    item_is_utf8 = targ_is_utf8 ? !!DO_UTF8(formsv) : !!SvUTF8(formsv);
 	    goto append;
 
-	case FF_SKIP:
+	case FF_SKIP: /* skip <arg> chars in format */
 	    f += *fpc++;
 	    break;
 
-	case FF_FETCH:
+	case FF_FETCH: /* get next item and set field size to <arg> */
 	    arg = *fpc++;
 	    f += arg;
 	    fieldsize = arg;
@@ -567,139 +568,91 @@ PP(pp_formline)
 		SvTAINTED_on(PL_formtarget);
 	    break;
 
-	case FF_CHECKNL:
+	case FF_CHECKNL: /* find max len of item (up to \n) that fits field */
 	    {
-		const char *send;
 		const char *s = item = SvPV_const(sv, len);
-		itemsize = len;
-		if (DO_UTF8(sv)) {
-		    itemsize = sv_len_utf8(sv);
-		    if (itemsize != (I32)len) {
-			I32 itembytes;
-			if (itemsize > fieldsize) {
-			    itemsize = fieldsize;
-			    itembytes = itemsize;
-			    sv_pos_u2b(sv, &itembytes, 0);
-			}
-			else
-			    itembytes = len;
-			send = chophere = s + itembytes;
-			while (s < send) {
-			    if (! isCNTRL(*s))
-				gotsome = TRUE;
-			    else if (*s == '\n')
-				break;
-			    s++;
-			}
-			item_is_utf8 = TRUE;
-			itemsize = s - item;
-			sv_pos_b2u(sv, &itemsize);
-			break;
-		    }
-		}
-		item_is_utf8 = FALSE;
-		if (itemsize > fieldsize)
-		    itemsize = fieldsize;
-		send = chophere = s + itemsize;
-		while (s < send) {
-		    if (! isCNTRL(*s))
-			gotsome = TRUE;
-		    else if (*s == '\n')
-			break;
-		    s++;
-		}
-		itemsize = s - item;
-		break;
-	    }
+		const char *send = s + len;
 
-	case FF_CHECKCHOP:
-	    {
-		const char *s = item = SvPV_const(sv, len);
-		itemsize = len;
-		if (DO_UTF8(sv)) {
-		    itemsize = sv_len_utf8(sv);
-		    if (itemsize != (I32)len) {
-			I32 itembytes;
-			if (itemsize <= fieldsize) {
-			    const char *send = chophere = s + itemsize;
-			    while (s < send) {
-				if (*s == '\r') {
-				    itemsize = s - item;
-				    chophere = s;
-				    break;
-				}
-				if (! isCNTRL(*s))
-				    gotsome = TRUE;
-                                s++;
-			    }
-			}
-			else {
-			    const char *send;
-			    itemsize = fieldsize;
-			    itembytes = itemsize;
-			    sv_pos_u2b(sv, &itembytes, 0);
-			    send = chophere = s + itembytes;
-			    while (s < send || (s == send && isSPACE(*s))) {
-				if (isSPACE(*s)) {
-				    if (chopspace)
-					chophere = s;
-				    if (*s == '\r')
-					break;
-				}
-				else {
-				    if (! isCNTRL(*s))
-					gotsome = TRUE;
-				    if (strchr(PL_chopset, *s))
-					chophere = s + 1;
-				}
-				s++;
-			    }
-			    itemsize = chophere - item;
-			    sv_pos_b2u(sv, &itemsize);
-			}
-			item_is_utf8 = TRUE;
-			break;
-		    }
-		}
-		item_is_utf8 = FALSE;
-		if (itemsize <= fieldsize) {
-		    const char *const send = chophere = s + itemsize;
-		    while (s < send) {
-			if (*s == '\r') {
-			    itemsize = s - item;
-			    chophere = s;
-			    break;
-			}
-			if (! isCNTRL(*s))
-			    gotsome = TRUE;
+                itemsize = 0;
+		item_is_utf8 = DO_UTF8(sv);
+                while (s < send) {
+                    if (!isCNTRL(*s))
+                        gotsome = TRUE;
+                    else if (*s == '\n')
+                        break;
+
+                    if (item_is_utf8)
+                        s += UTF8SKIP(s);
+                    else
                         s++;
-		    }
-		}
-		else {
-		    const char *send;
-		    itemsize = fieldsize;
-		    send = chophere = s + itemsize;
-		    while (s < send || (s == send && isSPACE(*s))) {
-			if (isSPACE(*s)) {
-			    if (chopspace)
-				chophere = s;
-			    if (*s == '\r')
-				break;
-			}
-			else {
-			    if (! isCNTRL(*s))
-				gotsome = TRUE;
-			    if (strchr(PL_chopset, *s))
-				chophere = s + 1;
-			}
-			s++;
-		    }
-		    itemsize = chophere - item;
-		}
+                    itemsize++;
+                    if (itemsize == fieldsize)
+                        break;
+                }
+                itembytes = s - item;
 		break;
 	    }
 
-	case FF_SPACE:
+	case FF_CHECKCHOP: /* like CHECKNL, but up to highest split point */
+	    {
+		const char *s = item = SvPV_const(sv, len);
+		const char *send = s + len;
+                I32 size = 0;
+
+                chophere = NULL;
+		item_is_utf8 = DO_UTF8(sv);
+                while (s < send) {
+                    /* look for a legal split position */
+                    if (isSPACE(*s)) {
+                        if (*s == '\r') {
+                            chophere = s;
+                            itemsize = size;
+                            break;
+                        }
+                        if (chopspace) {
+                            /* provisional split point */
+                            chophere = s;
+                            itemsize = size;
+                        }
+                        /* we delay testing fieldsize until after we've
+                         * processed the possible split char directly
+                         * following the last field char; so if fieldsize=3
+                         * and item="a b cdef", we consume "a b", not "a".
+                         * Ditto further down.
+                         */
+                        if (size == fieldsize)
+                            break;
+                    }
+                    else {
+                        if (strchr(PL_chopset, *s)) {
+                            /* provisional split point */
+                            /* for a non-space split char, we include
+                             * the split char; hence the '+1' */
+                            chophere = s + 1;
+                            itemsize = size;
+                        }
+                        if (size == fieldsize)
+                            break;
+                        if (!isCNTRL(*s))
+                            gotsome = TRUE;
+                    }
+
+                    if (item_is_utf8)
+                        s += UTF8SKIP(s);
+                    else
+                        s++;
+                    size++;
+                }
+                if (!chophere || s == send) {
+                    chophere = s;
+                    itemsize = size;
+                }
+                itembytes = chophere - item;
+
+		break;
+	    }
+
+	case FF_SPACE: /* append padding space (diff of field, item size) */
 	    arg = fieldsize - itemsize;
 	    if (arg) {
 		fieldsize -= arg;
@@ -708,7 +661,7 @@ PP(pp_formline)
 	    }
 	    break;
 
-	case FF_HALFSPACE:
+	case FF_HALFSPACE: /* like FF_SPACE, but only append half as many */
 	    arg = fieldsize - itemsize;
 	    if (arg) {
 		arg /= 2;
@@ -718,34 +671,33 @@ PP(pp_formline)
 	    }
 	    break;
 
-	case FF_ITEM:
-	    to_copy = itemsize;
+	case FF_ITEM: /* append a text item, while blanking ctrl chars */
+	    to_copy = itembytes;
 	    source = (U8 *)item;
 	    trans = 1;
-	    if (item_is_utf8) {
-		/* convert to_copy from chars to bytes */
-		U8 *s = source;
-		while (to_copy--)
-		   s += UTF8SKIP(s);
-		to_copy = s - source;
-	    }
 	    goto append;
 
-	case FF_CHOP:
+	case FF_CHOP: /* (for ^*) chop the current item */
 	    {
 		const char *s = chophere;
 		if (chopspace) {
 		    while (isSPACE(*s))
 			s++;
 		}
-		sv_chop(sv,s);
+                if (SvPOKp(sv))
+                    sv_chop(sv,s);
+                else
+                    /* tied, overloaded or similar strangeness.
+                     * Do it the hard way */
+                    sv_setpvn(sv, s, len - (s-item));
 		SvSETMAGIC(sv);
 		break;
 	    }
 
-	case FF_LINESNGL:
+	case FF_LINESNGL: /* process ^*  */
 	    chopspace = 0;
-	case FF_LINEGLOB:
+
+	case FF_LINEGLOB: /* process @*  */
 	    {
 		const bool oneline = fpc[-1] == FF_LINESNGL;
 		const char *s = item = SvPV_const(sv, len);
@@ -762,7 +714,7 @@ PP(pp_formline)
 		while (s < send) {
 		    if (*s++ == '\n') {
 			if (oneline) {
-			    to_copy = s - SvPVX_const(sv) - 1;
+			    to_copy = s - item - 1;
 			    chophere = s;
 			    break;
 			} else {
@@ -842,7 +794,7 @@ PP(pp_formline)
 		break;
 	    }
 
-	case FF_0DECIMAL:
+	case FF_0DECIMAL: /* like FF_DECIMAL but for 0### */
 	    arg = *fpc++;
 #if defined(USE_LONG_DOUBLE)
 	    fmt = (const char *)
@@ -854,7 +806,8 @@ PP(pp_formline)
 		 "%#0*.*f"              : "%0*.*f");
 #endif
 	    goto ff_dec;
-	case FF_DECIMAL:
+
+	case FF_DECIMAL: /* do @##, ^##, where <arg>=(precision|flags) */
 	    arg = *fpc++;
 #if defined(USE_LONG_DOUBLE)
  	    fmt = (const char *)
@@ -891,14 +844,14 @@ PP(pp_formline)
 	    t += fieldsize;
 	    break;
 
-	case FF_NEWLINE:
+	case FF_NEWLINE: /* delete trailing spaces, then append \n */
 	    f++;
 	    while (t-- > (SvPVX(PL_formtarget) + linemark) && *t == ' ') ;
 	    t++;
 	    *t++ = '\n';
 	    break;
 
-	case FF_BLANK:
+	case FF_BLANK: /* for arg==0: do '~'; for arg>0 : do '~~' */
 	    arg = *fpc++;
 	    if (gotsome) {
 		if (arg) {		/* repeat until fields exhausted? */
@@ -912,7 +865,7 @@ PP(pp_formline)
 	    }
 	    break;
 
-	case FF_MORE:
+	case FF_MORE: /* replace long end of string with '...' */
 	    {
 		const char *s = chophere;
 		const char *send = item + len;
@@ -939,7 +892,8 @@ PP(pp_formline)
 		}
 		break;
 	    }
-	case FF_END:
+
+	case FF_END: /* tidy up, then return */
 	end:
 	    assert(t < SvPVX_const(PL_formtarget) + SvLEN(PL_formtarget));
 	    *t = '\0';
@@ -2033,8 +1987,13 @@ PP(pp_dbstate)
 	return NORMAL;
 }
 
+/* SVs on the stack that have any of the flags passed in are left as is.
+   Other SVs are protected via the mortals stack if lvalue is true, and
+   copied otherwise. */
+
 STATIC SV **
-S_adjust_stack_on_leave(pTHX_ SV **newsp, SV **sp, SV **mark, I32 gimme, U32 flags)
+S_adjust_stack_on_leave(pTHX_ SV **newsp, SV **sp, SV **mark, I32 gimme,
+			      U32 flags, bool lvalue)
 {
     bool padtmp = 0;
     PERL_ARGS_ASSERT_ADJUST_STACK_ON_LEAVE;
@@ -2046,7 +2005,10 @@ S_adjust_stack_on_leave(pTHX_ SV **newsp, SV **sp, SV **mark, I32 gimme, U32 fla
     if (gimme == G_SCALAR) {
 	if (MARK < SP)
 	    *++newsp = ((SvFLAGS(*SP) & flags) || (padtmp && SvPADTMP(*SP)))
-			    ? *SP : sv_mortalcopy(*SP);
+			    ? *SP
+			    : lvalue
+				? sv_2mortal(SvREFCNT_inc_simple_NN(*SP))
+				: sv_mortalcopy(*SP);
 	else {
 	    /* MEXTEND() only updates MARK, so reuse it instead of newsp. */
 	    MARK = newsp;
@@ -2061,7 +2023,9 @@ S_adjust_stack_on_leave(pTHX_ SV **newsp, SV **sp, SV **mark, I32 gimme, U32 fla
 	    if ((SvFLAGS(*MARK) & flags) || (padtmp && SvPADTMP(*MARK)))
 		*++newsp = *MARK;
 	    else {
-		*++newsp = sv_mortalcopy(*MARK);
+		*++newsp = lvalue
+			    ? sv_2mortal(SvREFCNT_inc_simple_NN(*MARK))
+			    : sv_mortalcopy(*MARK);
 		TAINT_NOT;	/* Each item is independent */
 	    }
 	}
@@ -2104,7 +2068,8 @@ PP(pp_leave)
     gimme = OP_GIMME(PL_op, (cxstack_ix >= 0) ? gimme : G_SCALAR);
 
     TAINT_NOT;
-    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme, SVs_PADTMP|SVs_TEMP);
+    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme, SVs_PADTMP|SVs_TEMP,
+			       PL_op->op_private & OPpLVALUE);
     PL_curpm = newpm;	/* Don't pop $1 et al till now */
 
     LEAVE_with_name("block");
@@ -2266,7 +2231,8 @@ PP(pp_leaveloop)
     newsp = PL_stack_base + cx->blk_loop.resetsp;
 
     TAINT_NOT;
-    SP = adjust_stack_on_leave(newsp, SP, MARK, gimme, 0);
+    SP = adjust_stack_on_leave(newsp, SP, MARK, gimme, 0,
+			       PL_op->op_private & OPpLVALUE);
     PUTBACK;
 
     POPLOOP(cx);	/* Stack values are safe: release loop vars ... */
@@ -3161,9 +3127,11 @@ PP(pp_exit)
     else {
 	anum = SvIVx(POPs);
 #ifdef VMS
-        if (anum == 1 && (PL_op->op_private & OPpEXIT_VMSISH))
+	if (anum == 1
+	 && SvTRUE(cop_hints_fetch_pvs(PL_curcop, "vmsish_exit", 0)))
 	    anum = 0;
-        VMSISH_HUSHED  = VMSISH_HUSHED || (PL_op->op_private & OPpHUSH_VMSISH);
+        VMSISH_HUSHED  =
+            VMSISH_HUSHED || (PL_curcop->op_private & OPpHUSH_VMSISH);
 #endif
     }
     PL_exit_flags |= PERL_EXIT_EXPECTED;
@@ -3612,6 +3580,11 @@ S_check_type_and_open(pTHX_ SV *name)
      */
     if (!IS_SAFE_PATHNAME(p, len, "require"))
         return NULL;
+
+    /* we use the value of errno later to see how stat() or open() failed.
+     * We don't want it set if the stat succeeded but we still failed,
+     * such as if the name exists, but is a directory */
+    errno = 0;
 
     st_rc = PerlLIO_stat(p, &st);
 
@@ -4315,7 +4288,7 @@ PP(pp_leaveeval)
 
     TAINT_NOT;
     SP = adjust_stack_on_leave((gimme == G_VOID) ? SP : newsp, SP, newsp,
-				gimme, SVs_TEMP);
+				gimme, SVs_TEMP, FALSE);
     PL_curpm = newpm;	/* Don't pop $1 et al till now */
 
 #ifdef DEBUGGING
@@ -4413,7 +4386,8 @@ PP(pp_leavetry)
     PERL_UNUSED_VAR(optype);
 
     TAINT_NOT;
-    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme, SVs_PADTMP|SVs_TEMP);
+    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme,
+			       SVs_PADTMP|SVs_TEMP, FALSE);
     PL_curpm = newpm;	/* Don't pop $1 et al till now */
 
     LEAVE_with_name("eval_scope");
@@ -4459,7 +4433,8 @@ PP(pp_leavegiven)
     assert(CxTYPE(cx) == CXt_GIVEN);
 
     TAINT_NOT;
-    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme, SVs_PADTMP|SVs_TEMP);
+    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme,
+			       SVs_PADTMP|SVs_TEMP, FALSE);
     PL_curpm = newpm;	/* Don't pop $1 et al till now */
 
     LEAVE_with_name("given");
@@ -5037,7 +5012,8 @@ PP(pp_leavewhen)
     assert(CxTYPE(cx) == CXt_WHEN);
 
     TAINT_NOT;
-    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme, SVs_PADTMP|SVs_TEMP);
+    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme,
+			       SVs_PADTMP|SVs_TEMP, FALSE);
     PL_curpm = newpm;   /* pop $1 et al */
 
     LEAVE_with_name("when");

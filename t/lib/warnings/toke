@@ -304,6 +304,9 @@ You need to quote "ふれど" at - line 5.
 use warnings 'syntax' ;
 $_ = "ab" ; 
 s/(ab)/\1/e;
+s//\(2)/e; # should be exempt
+s/${\2}//; # same here
+()="${\2}"; # metoo
 no warnings 'syntax' ;
 $_ = "ab" ; 
 s/(ab)/\1/e;
@@ -1492,3 +1495,10 @@ eval "\${ \cX } = 24";
 EXPECT
 Use of literal control characters in variable names is deprecated at (eval 1) line 1.
 Use of literal control characters in variable names is deprecated at (eval 2) line 1.
+########
+# toke.c
+# [perl #120288] -X at start of line gave spurious warning, where X is not
+# a filetest operator
+-a;
+;-a;
+EXPECT

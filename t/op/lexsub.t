@@ -8,7 +8,7 @@ BEGIN {
     *bar::like = *like;
 }
 no warnings 'deprecated';
-plan 138;
+plan 140;
 
 # -------------------- Errors with feature disabled -------------------- #
 
@@ -284,6 +284,9 @@ sub make_anon_with_state_sub{
   state sub END { shift }
   is eval{END('jkqeudth')}, jkqeudth,
     'state sub END {shift} implies @_, not @ARGV';
+  state sub CORE { scalar reverse shift }
+  is CORE::uc("hello"), "HELLO",
+    'lexical CORE does not interfere with CORE::...';
 }
 {
   state sub redef {}
@@ -716,3 +719,14 @@ like runperl(
      ),
      qr/Constant subroutine foo undefined at /,
     'constant undefinition warnings for lexical subs do not crash';
+
+{
+  my sub foo;
+  *AutoloadTestSuper::blah = \&foo;
+  sub AutoloadTestSuper::AUTOLOAD {
+    is $AutoloadTestSuper::AUTOLOAD, "AutoloadTestSuper::blah",
+      "Autoloading via inherited lex stub";
+  }
+  @AutoloadTest::ISA = AutoloadTestSuper::;
+  AutoloadTest->blah;
+}

@@ -43,7 +43,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.19.5
+#INST_VER	*= \5.19.6
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -132,6 +132,10 @@ USE_LARGE_FILES	*= define
 #CCTYPE		= MSVC110
 # Visual C++ 2012 Express Edition (aka Visual C++ 11.x) (free version)
 #CCTYPE		= MSVC110FREE
+# Visual C++ 2013 (aka Visual C++ 12.x) (full version)
+#CCTYPE		= MSVC120
+# Visual C++ 2013 Express Edition (aka Visual C++ 12.x) (free version)
+#CCTYPE		= MSVC120FREE
 # MinGW or mingw-w64 with gcc-3.2 or later
 CCTYPE		*= GCC
 
@@ -515,10 +519,11 @@ LINK_DBG	= -debug -opt:ref,icf
 # installed to get better stack traces from just the PDB symbols, so we
 # avoid the bloat of COFF symbols by default.
 #LINK_DBG	= $(LINK_DBG) -debugtype:both
-.IF "$(WIN64)" == "define"
+.IF "$(CCTYPE)" != "MSVC60"
 # enable Whole Program Optimizations (WPO) and Link Time Code Generation (LTCG)
 OPTIMIZE	+= -GL
 LINK_DBG	+= -ltcg
+LIB_FLAGS	= -ltcg
 .ENDIF
 .ENDIF
 
@@ -569,7 +574,7 @@ CFLAGS		= $(EXTRACFLAGS) $(INCLUDES) $(DEFINES) $(LOCDEFS) \
 LINK_FLAGS	= -nologo -nodefaultlib $(LINK_DBG) \
 		-libpath:"$(INST_COREDIR)" \
 		-machine:$(PROCESSOR_ARCHITECTURE)
-LIB_FLAGS	= -nologo
+LIB_FLAGS	= $(LIB_FLAGS) -nologo
 OBJOUT_FLAG	= -Fo
 EXEOUT_FLAG	= -Fe
 LIBOUT_FLAG	= /out:
@@ -750,6 +755,7 @@ NOOP		= @rem
 
 MICROCORE_SRC	=		\
 		..\av.c		\
+		..\caretx.c	\
 		..\deb.c	\
 		..\doio.c	\
 		..\doop.c	\
@@ -1334,11 +1340,12 @@ utils: $(PERLEXE) $(X2P) ..\utils\Makefile
 	copy ..\README.riscos   ..\pod\perlriscos.pod
 	copy ..\README.solaris  ..\pod\perlsolaris.pod
 	copy ..\README.symbian  ..\pod\perlsymbian.pod
+	copy ..\README.synology ..\pod\perlsynology.pod
 	copy ..\README.tru64    ..\pod\perltru64.pod
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5195delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5196delta.pod
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1435,15 +1442,15 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5195delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perl5196delta.pod perlaix.pod perlamiga.pod perlapi.pod \
 	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod perldos.pod \
 	    perlfreebsd.pod perlhaiku.pod perlhpux.pod perlhurd.pod \
 	    perlintern.pod perlirix.pod perljp.pod perlko.pod perllinux.pod \
 	    perlmacos.pod perlmacosx.pod perlmodlib.pod perlnetware.pod \
 	    perlopenbsd.pod perlos2.pod perlos390.pod perlos400.pod \
 	    perlplan9.pod perlqnx.pod perlriscos.pod perlsolaris.pod \
-	    perlsymbian.pod perltoc.pod perltru64.pod perltw.pod \
-	    perluniprops.pod perlvos.pod perlwin32.pod
+	    perlsymbian.pod perlsynology.pod perltoc.pod perltru64.pod \
+	    perltw.pod perluniprops.pod perlvos.pod perlwin32.pod
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph pstruct h2xs \
 	    perldoc perlivp libnetcfg enc2xs piconv cpan *.bat \
 	    xsubpp pod2html instmodsh json_pp prove ptar ptardiff ptargrep shasum corelist config_data zipdetails

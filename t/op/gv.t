@@ -12,7 +12,7 @@ BEGIN {
 
 use warnings;
 
-plan( tests => 254 );
+plan( tests => 259 );
 
 # type coercion on assignment
 $foo = 'foo';
@@ -947,6 +947,21 @@ ok eval {
   'no error when gp_free calls a destructor that assigns to the gv';
 }
 
+# This is a similar test, for destructors seeing a GV without a reference
+# count on its gp.
+sub undefine_me_if_you_dare {}
+bless \&undefine_me_if_you_dare, "Undefiner";
+sub Undefiner::DESTROY {
+    undef *undefine_me_if_you_dare;
+}
+{
+    my $w;
+    local $SIG{__WARN__} = sub { $w .= shift };
+    undef *undefine_me_if_you_dare;
+    is $w, undef,
+      'undeffing a gv in DESTROY triggered by undeffing the same gv'
+}
+
 # *{undef}
 eval { *{my $undef} = 3 };
 like $@, qr/^Can't use an undefined value as a symbol reference at /,
@@ -976,6 +991,32 @@ package lrcg {
   ::ok !exists $lrcg::{yz},
     'constants w/nulls in their names point 2 the right GVs when promoted';
 }
+
+{
+  no warnings 'io';
+  stat *{"try_downgrade"};
+  -T _;
+  $bang = $!;
+  eval "*try_downgrade if 0";
+  -T _;
+  is "$!",$bang,
+     'try_downgrade does not touch PL_statgv (last stat handle)';
+  readline *{"try_downgrade2"};
+  my $lastfh = "${^LAST_FH}";
+  eval "*try_downgrade2 if 0";
+  is ${^LAST_FH}, $lastfh, 'try_downgrade does not touch PL_last_in_gv';
+}
+
+is runperl(prog => '$s = STDERR; close $s; undef *$s;'
+                  .'eval q-*STDERR if 0-; *$s = *STDOUT{IO}; warn'),
+  "Warning: something's wrong at -e line 1.\n",
+  "try_downgrade does not touch PL_stderrgv";
+
+is runperl(prog =>
+             'use constant foo=>1; BEGIN { $x = \&foo } undef &$x; $x->()',
+           stderr=>1),
+  "Undefined subroutine &main::foo called at -e line 1.\n",
+  "gv_try_downgrade does not anonymise CVs referenced elsewhere";
 
 # Look away, please.
 # This violates perl's internal structures by fiddling with stashes in a

@@ -20,7 +20,7 @@ BEGIN {
     require './test.pl';
 }
 
-plan tests => 699;  # Update this when adding/deleting tests.
+plan tests => 702;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1478,6 +1478,34 @@ EOP
 	/@a/;
 	pass('no crash with /@a/ when array has nonexistent elems');
     }
+
+    {
+	is runperl(prog => 'delete $::{qq-\cR-}; //; print qq-ok\n-'),
+	   "ok\n",
+	   'deleting *^R does not result in crashes';
+	no warnings 'once';
+	*^R = *caretRglobwithnoscalar;
+	"" =~ /(?{42})/;
+	is $^R, 42, 'assigning to *^R does not result in a crash';
+    }
+
+    {
+        # [perl #120446]
+        # this code should be virtually instantaneous. If it takes 10s of
+        # seconds, there a bug in intuit_start.
+        # (this test doesn't actually test for slowness - that involves
+        # too much danger of false positives on loaded machines - but by
+        # putting it here, hopefully someone might notice if it suddenly
+        # runs slowly)
+        my $s = ('a' x 1_000_000) . 'b';
+        my $i = 0;
+        for (1..10_000) {
+            pos($s) = $_;
+            $i++ if $s =~/\Gb/g;
+        }
+        is($i, 0, "RT 120446: mustn't run slowly");
+    }
+
 
 } # End of sub run_tests
 

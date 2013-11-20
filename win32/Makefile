@@ -37,7 +37,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.19.5
+#INST_VER	= \5.19.6
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -126,6 +126,15 @@ CCTYPE		= MSVC60
 #CCTYPE		= MSVC110
 # Visual C++ 2012 Express Edition (aka Visual C++ 11.x) (free version)
 #CCTYPE		= MSVC110FREE
+# Visual C++ 2013 (aka Visual C++ 12.x) (full version)
+#CCTYPE		= MSVC120
+# Visual C++ 2013 Express Edition (aka Visual C++ 12.x) (free version)
+#CCTYPE		= MSVC120FREE
+
+#
+# If you are using Intel C++ Compiler uncomment this
+#
+#__ICC		= define
 
 #
 # uncomment next line if you want debug version of perl (big,slow)
@@ -413,8 +422,13 @@ INST_HTML	= $(INST_TOP)$(INST_VER)\html
 # Programs to compile, build .lib files and link
 #
 
+!IF "$(__ICC)" != "define"
 CC		= cl
 LINK32		= link
+!ELSE
+CC		= icl
+LINK32		= xilink
+!ENDIF
 LIB32		= $(LINK32) -lib
 RSC		= rc
 
@@ -445,10 +459,11 @@ LINK_DBG	= -debug -opt:ref,icf
 # installed to get better stack traces from just the PDB symbols, so we
 # avoid the bloat of COFF symbols by default.
 #LINK_DBG	= $(LINK_DBG) -debugtype:both
-!  IF "$(WIN64)" == "define"
+!  IF "$(CCTYPE)" != "MSVC60"
 # enable Whole Program Optimizations (WPO) and Link Time Code Generation (LTCG)
 OPTIMIZE	= $(OPTIMIZE) -GL
 LINK_DBG	= $(LINK_DBG) -ltcg
+LIB_FLAGS	= -ltcg
 !  ENDIF
 !ENDIF
 
@@ -483,6 +498,14 @@ LIBBASEFILES	= \
 		netapi32.lib uuid.lib ws2_32.lib mpr.lib winmm.lib \
 		version.lib odbc32.lib odbccp32.lib comctl32.lib
 
+# Avoid __intel_new_proc_init link error for libircmt.
+# libmmd is /MD equivelent, other variants exist.
+# libmmd is Intel C's math addon funcs to MS CRT, contains long doubles, C99,
+# and optimized C89 funcs
+!IF "$(__ICC)" == "define"
+LIBBASEFILES	= $(LIBBASEFILES) libircmt.lib libmmd.lib
+!ENDIF
+
 # The 64 bit Windows Server 2003 SP1 SDK compilers link against MSVCRT.dll, which
 # doesn't include the buffer overrun verification code used by the /GS switch.
 # Since the code links against libraries that are compiled with /GS, this
@@ -500,7 +523,7 @@ CFLAGS		= $(EXTRACFLAGS) $(INCLUDES) $(DEFINES) $(LOCDEFS) \
 LINK_FLAGS	= -nologo -nodefaultlib $(LINK_DBG) \
 		-libpath:"$(INST_COREDIR)" \
 		-machine:$(PROCESSOR_ARCHITECTURE)
-LIB_FLAGS	= -nologo
+LIB_FLAGS	= $(LIB_FLAGS) -nologo
 OBJOUT_FLAG	= -Fo
 EXEOUT_FLAG	= -Fe
 
@@ -641,6 +664,7 @@ DEL		= del
 
 MICROCORE_SRC	=		\
 		..\av.c		\
+		..\caretx.c	\
 		..\deb.c	\
 		..\doio.c	\
 		..\doop.c	\
@@ -1152,11 +1176,12 @@ utils: $(PERLEXE) $(X2P) ..\utils\Makefile
 	copy ..\README.riscos   ..\pod\perlriscos.pod
 	copy ..\README.solaris  ..\pod\perlsolaris.pod
 	copy ..\README.symbian  ..\pod\perlsymbian.pod
+	copy ..\README.synology ..\pod\perlsynology.pod
 	copy ..\README.tru64    ..\pod\perltru64.pod
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5195delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5196delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1254,15 +1279,15 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5195delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perl5196delta.pod perlaix.pod perlamiga.pod perlapi.pod \
 	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod perldos.pod \
 	    perlfreebsd.pod perlhaiku.pod perlhpux.pod perlhurd.pod \
 	    perlintern.pod perlirix.pod perljp.pod perlko.pod perllinux.pod \
 	    perlmacos.pod perlmacosx.pod perlmodlib.pod perlnetware.pod \
 	    perlopenbsd.pod perlos2.pod perlos390.pod perlos400.pod \
 	    perlplan9.pod perlqnx.pod perlriscos.pod perlsolaris.pod \
-	    perlsymbian.pod perltoc.pod perltru64.pod perltw.pod \
-	    perluniprops.pod perlvos.pod perlwin32.pod
+	    perlsymbian.pod perlsynology.pod perltoc.pod perltru64.pod \
+	    perltw.pod perluniprops.pod perlvos.pod perlwin32.pod
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph pstruct h2xs \
 	    perldoc perlivp libnetcfg enc2xs piconv cpan *.bat \
 	    xsubpp pod2html instmodsh json_pp prove ptar ptardiff ptargrep shasum corelist config_data zipdetails

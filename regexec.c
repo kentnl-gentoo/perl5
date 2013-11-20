@@ -37,16 +37,6 @@
 #include "re_top.h"
 #endif
 
-/* At least one required character in the target string is expressible only in
- * UTF-8. */
-static const char* const non_utf8_target_but_utf8_required
-                = "Can't match, because target string needs to be in UTF-8\n";
-
-#define NON_UTF8_TARGET_BUT_UTF8_REQUIRED(target) STMT_START { \
-    DEBUG_EXECUTE_r(PerlIO_printf(Perl_debug_log, "%s", non_utf8_target_but_utf8_required));\
-    goto target; \
-} STMT_END
-
 /*
  * pregcomp and pregexec -- regsub and regerror are not used in perl
  *
@@ -92,6 +82,18 @@ static const char* const non_utf8_target_but_utf8_required
 
 #include "inline_invlist.c"
 #include "unicode_constants.h"
+
+#ifdef DEBUGGING
+/* At least one required character in the target string is expressible only in
+ * UTF-8. */
+static const char* const non_utf8_target_but_utf8_required
+                = "Can't match, because target string needs to be in UTF-8\n";
+#endif
+
+#define NON_UTF8_TARGET_BUT_UTF8_REQUIRED(target) STMT_START { \
+    DEBUG_EXECUTE_r(PerlIO_printf(Perl_debug_log, "%s", non_utf8_target_but_utf8_required));\
+    goto target; \
+} STMT_END
 
 #define HAS_NONLATIN1_FOLD_CLOSURE(i) _HAS_NONLATIN1_FOLD_CLOSURE_ONLY_FOR_USE_BY_REGCOMP_DOT_C_AND_REGEXEC_DOT_C(i)
 
@@ -667,16 +669,24 @@ Perl_re_intuit_start(pTHX_
         }
 	check = prog->check_substr;
     }
-    if ((prog->extflags & RXf_ANCH)	/* Match at beg-of-str or after \n */
-	 && !(prog->extflags & RXf_ANCH_GPOS)) /* \G isn't a BOS or \n */
-    {
-        ml_anch = !( (prog->extflags & RXf_ANCH_SINGLE)
+    if (prog->extflags & RXf_ANCH) { /* Match at \G, beg-of-str or after \n */
+	ml_anch = !( (prog->extflags & RXf_ANCH_SINGLE)
 		     || ( (prog->extflags & RXf_ANCH_BOL)
 			  && !multiline ) );	/* Check after \n? */
 
 	if (!ml_anch) {
-	  if (    !(prog->intflags & PREGf_IMPLICIT) /* not a real BOL */
-	       && (strpos != strbeg)) {
+          /* we are only allowed to match at BOS or \G */
+
+	  if (prog->extflags & RXf_ANCH_GPOS) {
+            /* in this case, we hope(!) that the caller has already
+             * set strpos to pos()-gofs, and will already have checked
+             * that this anchor position is legal
+             */
+            ;
+          }
+          else if (!(prog->intflags & PREGf_IMPLICIT) /* not a real BOL */
+		&& (strpos != strbeg))
+          {
 	      DEBUG_EXECUTE_r(PerlIO_printf(Perl_debug_log, "Not at start...\n"));
 	      goto fail;
 	  }
@@ -2273,11 +2283,11 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
             : strbeg; /* pos() not defined; use start of string */
 
         DEBUG_GPOS_r(PerlIO_printf(Perl_debug_log,
-            "GPOS ganch set to strbeg[%"IVdf"]\n", reginfo->ganch - strbeg));
+            "GPOS ganch set to strbeg[%"IVdf"]\n", (IV)(reginfo->ganch - strbeg)));
 
         /* in the presence of \G, we may need to start looking earlier in
          * the string than the suggested start point of stringarg:
-         * if gofs->prog is set, then that's a known, fixed minimum
+         * if prog->gofs is set, then that's a known, fixed minimum
          * offset, such as
          * /..\G/:   gofs = 2
          * /ab|c\G/: gofs = 1
@@ -3650,7 +3660,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                                during a successful match */
     U32 lastopen = 0;       /* last open we saw */
     bool has_cutgroup = RX_HAS_CUTGROUP(rex) ? 1 : 0;   
-    SV* const oreplsv = GvSV(PL_replgv);
+    SV* const oreplsv = GvSVn(PL_replgv);
     /* these three flags are set by various ops to signal information to
      * the very next op. They have a useful lifetime of exactly one loop
      * iteration, and are not preserved or restored by state pushes/pops

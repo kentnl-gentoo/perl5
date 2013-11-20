@@ -770,19 +770,19 @@ is "not there", because you'll be overwriting the last members of the
 preceding structure in memory.)
 
 We calculate the correction using the STRUCT_OFFSET macro on the first
-member present. If the allocated structure is smaller (no initial NV
+member present.  If the allocated structure is smaller (no initial NV
 actually allocated) then the net effect is to subtract the size of the NV
 from the pointer, to return a new pointer as if an initial NV were actually
-allocated. (We were using structures named *_allocated for this, but
+allocated.  (We were using structures named *_allocated for this, but
 this turned out to be a subtle bug, because a structure without an NV
 could have a lower alignment constraint, but the compiler is allowed to
 optimised accesses based on the alignment constraint of the actual pointer
 to the full structure, for example, using a single 64 bit load instruction
 because it "knows" that two adjacent 32 bit members will be 8-byte aligned.)
 
-This is the same trick as was used for NV and IV bodies. Ironically it
+This is the same trick as was used for NV and IV bodies.  Ironically it
 doesn't need to be used for NV bodies any more, because NV is now at
-the start of the structure. IV bodies don't need it either, because
+the start of the structure.  IV bodies don't need it either, because
 they are no longer allocated.
 
 In turn, the new_body_* allocators call S_new_body(), which invokes
@@ -3152,12 +3152,13 @@ contain SV_GMAGIC, then it does an mg_get() first.
 */
 
 bool
-Perl_sv_2bool_flags(pTHX_ SV *const sv, const I32 flags)
+Perl_sv_2bool_flags(pTHX_ SV *sv, I32 flags)
 {
     dVAR;
 
     PERL_ARGS_ASSERT_SV_2BOOL_FLAGS;
 
+    restart:
     if(flags & SV_GMAGIC) SvGETMAGIC(sv);
 
     if (!SvOK(sv))
@@ -3165,8 +3166,30 @@ Perl_sv_2bool_flags(pTHX_ SV *const sv, const I32 flags)
     if (SvROK(sv)) {
 	if (SvAMAGIC(sv)) {
 	    SV * const tmpsv = AMG_CALLunary(sv, bool__amg);
-	    if (tmpsv && (!SvROK(tmpsv) || (SvRV(tmpsv) != SvRV(sv))))
-		return cBOOL(SvTRUE(tmpsv));
+	    if (tmpsv && (!SvROK(tmpsv) || (SvRV(tmpsv) != SvRV(sv)))) {
+                bool svb;
+                sv = tmpsv;
+                if(SvGMAGICAL(sv)) {
+                    flags = SV_GMAGIC;
+                    goto restart; /* call sv_2bool */
+                }
+                /* expanded SvTRUE_common(sv, (flags = 0, goto restart)) */
+                else if(!SvOK(sv)) {
+                    svb = 0;
+                }
+                else if(SvPOK(sv)) {
+                    svb = SvPVXtrue(sv);
+                }
+                else if((SvFLAGS(sv) & (SVf_IOK|SVf_NOK))) {
+                    svb = (SvIOK(sv) && SvIVX(sv) != 0)
+                        || (SvNOK(sv) && SvNVX(sv) != 0.0);
+                }
+                else {
+                    flags = 0;
+                    goto restart; /* call sv_2bool_nomg */
+                }
+                return cBOOL(svb);
+            }
 	}
 	return SvRV(sv) != 0;
     }
@@ -3639,9 +3662,10 @@ Perl_sv_utf8_decode(pTHX_ SV *const sv)
 
 Copies the contents of the source SV C<ssv> into the destination SV
 C<dsv>.  The source SV may be destroyed if it is mortal, so don't use this
-function if the source SV needs to be reused.  Does not handle 'set' magic.
-Loosely speaking, it performs a copy-by-value, obliterating any previous
-content of the destination.
+function if the source SV needs to be reused.  Does not handle 'set' magic on
+destination SV.  Calls 'get' magic on source SV.  Loosely speaking, it
+performs a copy-by-value, obliterating any previous content of the
+destination.
 
 You probably want to use one of the assortment of wrappers, such as
 C<SvSetSV>, C<SvSetSV_nosteal>, C<SvSetMagicSV> and
@@ -3656,7 +3680,7 @@ Loosely speaking, it performs a copy-by-value, obliterating any previous
 content of the destination.
 If the C<flags> parameter has the C<SV_GMAGIC> bit set, will C<mg_get> on
 C<ssv> if appropriate, else not.  If the C<flags>
-parameter has the C<NOSTEAL> bit set then the
+parameter has the C<SV_NOSTEAL> bit set then the
 buffers of temps will not be stolen.  <sv_setsv>
 and C<sv_setsv_nomg> are implemented in terms of this function.
 
@@ -5679,12 +5703,10 @@ Perl_sv_add_backref(pTHX_ SV *const tsv, SV *const sv)
     if (SvTYPE(tsv) == SVt_PVHV) {
 	svp = (SV**)Perl_hv_backreferences_p(aTHX_ MUTABLE_HV(tsv));
     } else {
-	if (! ((mg =
-	    (SvMAGICAL(tsv) ? mg_find(tsv, PERL_MAGIC_backref) : NULL))))
-	{
-	    sv_magic(tsv, NULL, PERL_MAGIC_backref, NULL, 0);
-	    mg = mg_find(tsv, PERL_MAGIC_backref);
-	}
+        if (SvMAGICAL(tsv))
+            mg = mg_find(tsv, PERL_MAGIC_backref);
+	if (!mg)
+            mg = sv_magicext(tsv, NULL, PERL_MAGIC_backref, &PL_vtbl_backref, NULL, 0);
 	svp = &(mg->mg_obj);
     }
 
@@ -5694,32 +5716,32 @@ Perl_sv_add_backref(pTHX_ SV *const tsv, SV *const sv)
 	|| (*svp && SvTYPE(*svp) != SVt_PVAV)
     ) {
 	/* create array */
+	if (mg)
+	    mg->mg_flags |= MGf_REFCOUNTED;
 	av = newAV();
 	AvREAL_off(av);
-	SvREFCNT_inc_simple_void(av);
+	SvREFCNT_inc_simple_void_NN(av);
 	/* av now has a refcnt of 2; see discussion above */
+	av_extend(av, *svp ? 2 : 1);
 	if (*svp) {
 	    /* move single existing backref to the array */
-	    av_extend(av, 1);
 	    AvARRAY(av)[++AvFILLp(av)] = *svp; /* av_push() */
 	}
 	*svp = (SV*)av;
-	if (mg)
-	    mg->mg_flags |= MGf_REFCOUNTED;
     }
-    else
+    else {
 	av = MUTABLE_AV(*svp);
-
-    if (!av) {
-	/* optimisation: store single backref directly in HvAUX or mg_obj */
-	*svp = sv;
-	return;
+        if (!av) {
+            /* optimisation: store single backref directly in HvAUX or mg_obj */
+            *svp = sv;
+            return;
+        }
+        assert(SvTYPE(av) == SVt_PVAV);
+        if (AvFILLp(av) >= AvMAX(av)) {
+            av_extend(av, AvFILLp(av)+1);
+        }
     }
     /* push new backref */
-    assert(SvTYPE(av) == SVt_PVAV);
-    if (AvFILLp(av) >= AvMAX(av)) {
-        av_extend(av, AvFILLp(av)+1);
-    }
     AvARRAY(av)[++AvFILLp(av)] = sv; /* av_push() */
 }
 
@@ -6280,8 +6302,8 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 		    if (PL_stashcache) {
                     DEBUG_o(Perl_deb(aTHX_ "sv_clear clearing PL_stashcache for '%"SVf"'\n",
                                      sv));
-			(void)hv_delete(PL_stashcache, name,
-			    HvNAMEUTF8((HV*)sv) ? -HvNAMELEN_get((HV*)sv) : HvNAMELEN_get((HV*)sv), G_DISCARD);
+			(void)hv_deletehek(PL_stashcache,
+					   HvNAME_HEK((HV*)sv), G_DISCARD);
                     }
 		    hv_name_set((HV*)sv, NULL, 0, 0);
 		}
@@ -7911,8 +7933,8 @@ S_sv_gets_read_record(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 =for apidoc sv_gets
 
 Get a line from the filehandle and store it into the SV, optionally
-appending to the currently-stored string. If C<append> is not 0, the
-line is appended to the SV instead of overwriting it. C<append> should
+appending to the currently-stored string.  If C<append> is not 0, the
+line is appended to the SV instead of overwriting it.  C<append> should
 be set to the byte offset that the appended string should start at
 in the SV (typically, C<SvCUR(sv)> is a suitable choice).
 
@@ -9605,7 +9627,7 @@ Perl_sv_isa(pTHX_ SV *sv, const char *const name)
 Creates a new SV for the existing RV, C<rv>, to point to.  If C<rv> is not an
 RV then it will be upgraded to one.  If C<classname> is non-null then the new
 SV will be blessed in the specified package.  The new SV is returned and its
-reference count is 1. The reference count 1 is owned by C<rv>.
+reference count is 1.  The reference count 1 is owned by C<rv>.
 
 =cut
 */
@@ -13544,9 +13566,9 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PerlIO_clone(aTHX_ proto_perl, param);
 #endif
 
-    PL_envgv		= gv_dup(proto_perl->Ienvgv, param);
-    PL_incgv		= gv_dup(proto_perl->Iincgv, param);
-    PL_hintgv		= gv_dup(proto_perl->Ihintgv, param);
+    PL_envgv		= gv_dup_inc(proto_perl->Ienvgv, param);
+    PL_incgv		= gv_dup_inc(proto_perl->Iincgv, param);
+    PL_hintgv		= gv_dup_inc(proto_perl->Ihintgv, param);
     PL_origfilename	= SAVEPV(proto_perl->Iorigfilename);
     PL_diehook		= sv_dup_inc(proto_perl->Idiehook, param);
     PL_warnhook		= sv_dup_inc(proto_perl->Iwarnhook, param);
@@ -13588,20 +13610,20 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_stdingv		= gv_dup(proto_perl->Istdingv, param);
     PL_stderrgv		= gv_dup(proto_perl->Istderrgv, param);
     PL_defgv		= gv_dup(proto_perl->Idefgv, param);
-    PL_argvgv		= gv_dup(proto_perl->Iargvgv, param);
+    PL_argvgv		= gv_dup_inc(proto_perl->Iargvgv, param);
     PL_argvoutgv	= gv_dup(proto_perl->Iargvoutgv, param);
     PL_argvout_stack	= av_dup_inc(proto_perl->Iargvout_stack, param);
 
     /* shortcuts to regexp stuff */
-    PL_replgv		= gv_dup(proto_perl->Ireplgv, param);
+    PL_replgv		= gv_dup_inc(proto_perl->Ireplgv, param);
 
     /* shortcuts to misc objects */
     PL_errgv		= gv_dup(proto_perl->Ierrgv, param);
 
     /* shortcuts to debugging objects */
-    PL_DBgv		= gv_dup(proto_perl->IDBgv, param);
-    PL_DBline		= gv_dup(proto_perl->IDBline, param);
-    PL_DBsub		= gv_dup(proto_perl->IDBsub, param);
+    PL_DBgv		= gv_dup_inc(proto_perl->IDBgv, param);
+    PL_DBline		= gv_dup_inc(proto_perl->IDBline, param);
+    PL_DBsub		= gv_dup_inc(proto_perl->IDBsub, param);
     PL_DBsingle		= sv_dup(proto_perl->IDBsingle, param);
     PL_DBtrace		= sv_dup(proto_perl->IDBtrace, param);
     PL_DBsignal		= sv_dup(proto_perl->IDBsignal, param);
@@ -13824,8 +13846,8 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_errors		= sv_dup_inc(proto_perl->Ierrors, param);
 
     PL_sortcop		= (OP*)any_dup(proto_perl->Isortcop, proto_perl);
-    PL_firstgv		= gv_dup(proto_perl->Ifirstgv, param);
-    PL_secondgv		= gv_dup(proto_perl->Isecondgv, param);
+    PL_firstgv		= gv_dup_inc(proto_perl->Ifirstgv, param);
+    PL_secondgv		= gv_dup_inc(proto_perl->Isecondgv, param);
 
     PL_stashcache       = newHV();
 

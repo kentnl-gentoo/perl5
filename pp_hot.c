@@ -939,9 +939,8 @@ PP(pp_rv2av)
 	      && (!SvRMAGICAL(sv) || !mg_find(sv, PERL_MAGIC_tied)))
 	    SETs(HvUSEDKEYS(sv) ? &PL_sv_yes : sv_2mortal(newSViv(0)));
 	else if (gimme == G_SCALAR) {
-	    dTARGET;
+	    dTARG;
 	    TARG = Perl_hv_scalar(aTHX_ MUTABLE_HV(sv));
-	    SPAGAIN;
 	    SETTARG;
 	}
     }
@@ -2622,7 +2621,7 @@ try_autoload:
 	     PL_curcopdb = PL_curcop;
          if (CvLVALUE(cv)) {
              /* check for lsub that handles lvalue subroutines */
-	     cv = GvCV(gv_HVadd(gv_fetchpvs("DB::lsub", GV_ADDMULTI, SVt_PVHV)));
+	     cv = GvCV(gv_fetchpvs("DB::lsub", GV_ADDMULTI, SVt_PVCV));
              /* if lsub not found then fall back to DB::sub */
 	     if (!cv) cv = GvCV(PL_DBsub);
          } else {

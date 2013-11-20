@@ -1597,7 +1597,7 @@ Perl_croak_no_mem()
     dTHX;
 
     /* Can't use PerlIO to write as it allocates memory */
-    PerlLIO_write(PerlIO_fileno(Perl_error_log),
+    (void)PerlLIO_write(PerlIO_fileno(Perl_error_log),
 		  PL_no_mem, sizeof(PL_no_mem)-1);
     my_exit(1);
 }
@@ -6252,7 +6252,7 @@ Perl_drand48_r(perl_drand48_t *random_state)
     *random_state = (*random_state * DRAND48_MULT + DRAND48_ADD)
         & DRAND48_MASK;
 
-    return ldexp(*random_state, -48);
+    return ldexp((double)*random_state, -48);
 #else
     {
     U32 accu;

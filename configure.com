@@ -4569,6 +4569,29 @@ $ ELSE
 $   i_niin="undef"
 $ ENDIF
 $!
+$! Check for <arpa/inet.h>
+$!
+$ IF Has_Dec_C_Sockets
+$ THEN
+$   tmp = "arpa/inet.h"
+$   GOSUB inhdr
+$   i_arpainet = tmp
+$ ELSE
+$   i_arpainet="undef"
+$ ENDIF
+$!
+$! Check for <sys/un.h>
+$!
+$ IF Has_Dec_C_Sockets
+$ THEN
+$   tmp = "sys/un.h"
+$   GOSUB inhdr
+$   i_sysun = tmp
+$ ELSE
+$   i_sysun="undef"
+$ ENDIF
+$!
+$!
 $! Check for <netinet/tcp.h>
 $!
 $ IF Has_Dec_C_Sockets
@@ -6030,7 +6053,12 @@ $ WC "d_ftime='define'"
 $ WC "d_futimes='undef'"
 $ WC "d_gdbmndbm_h_uses_prototypes='undef'"
 $ WC "d_gdbm_ndbm_h_uses_prototypes='undef'"
-$ WC "d_getaddrinfo='undef'"
+$ IF vms_ver .GES. "7.3"
+$ THEN
+$   WC "d_getaddrinfo='define'"
+$ ELSE
+$   WC "d_getaddrinfo='undef'"
+$ ENDIF
 $ WC "d_getcwd='define'"
 $ WC "d_getespwnam='undef'"
 $ WC "d_getfsstat='undef'"
@@ -6045,7 +6073,12 @@ $ WC "d_getitimer='" + d_getitimer + "'"
 $ WC "d_getlogin='define'"
 $ WC "d_getmnt='undef'"
 $ WC "d_getmntent='undef'"
-$ WC "d_getnameinfo='undef'"
+$ IF vms_ver .GES. "7.3"
+$ THEN
+$   WC "d_getnameinfo='define'"
+$ ELSE
+$   WC "d_getnameinfo='undef'"
+$ ENDIF
 $ WC "d_getnbyaddr='" + d_getnbyaddr + "'"
 $ WC "d_getnbyname='" + d_getnbyname + "'"
 $ WC "d_getnent='" + d_getnent + "'"
@@ -6076,9 +6109,9 @@ $ WC "d_htonl='" + d_htonl + "'"
 $ WC "d_ilogbl='undef'"
 $ WC "d_inc_version_list='undef'"
 $ WC "d_index='" + d_index + "'"
-$ WC "d_inetaton='undef'"
-$ WC "d_inetntop='undef'"
-$ WC "d_inetpton='undef'"
+$ WC "d_inetaton='define'"
+$ WC "d_inetntop='define'"
+$ WC "d_inetpton='define'"
 $ WC "d_int64_t='" + d_int64_t + "'"
 $ WC "d_ip_mreq='define'"
 $ WC "d_ip_mreq_source='undef'"
@@ -6408,7 +6441,7 @@ $ WC "i64size='" + i64size + "'"
 $ WC "i64type='" + i64type + "'"
 $ WC "i8size='" + i8size + "'"
 $ WC "i8type='" + i8type + "'"
-$ WC "i_arpainet='undef'"
+$ WC "i_arpainet='" + i_arpainet + "'"
 $ WC "i_assert='define'"
 $ WC "i_bsdioctl='undef'"
 $ WC "i_crypt='undef'"
@@ -6487,7 +6520,7 @@ $ WC "i_systimek='undef'"
 $ WC "i_systimes='undef'"
 $ WC "i_systypes='define'"
 $ WC "i_sysuio='" + i_sysuio + "'"
-$ WC "i_sysun='undef'"
+$ WC "i_sysun='" + i_sysun + "'"
 $ WC "i_sysutsname='" + i_sysutsname + "'"
 $ WC "i_sysvfs='undef'"
 $ WC "i_syswait='undef'"

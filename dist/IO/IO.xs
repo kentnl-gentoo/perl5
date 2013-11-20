@@ -350,7 +350,7 @@ ungetc(handle, c)
                  * above-Unicodes */
                 end = uvchr_to_utf8_flags(buf, v, 0);
                 len = end - buf;
-                if (PerlIO_unread(handle, &buf, len) == len)
+                if ((Size_t)PerlIO_unread(handle, &buf, len) == len)
                     XSRETURN_UV(v);
                 else
                     RETVAL = EOF;
@@ -540,7 +540,7 @@ sockatmark (sock)
        int flag = 0;
 #   ifdef SIOCATMARK
 #     if defined(NETWARE) || defined(WIN32)
-       if (ioctl(fd, SIOCATMARK, (void*)&flag) != 0)
+       if (ioctl(fd, SIOCATMARK, (char*)&flag) != 0)
 #     else
        if (ioctl(fd, SIOCATMARK, &flag) != 0)
 #     endif

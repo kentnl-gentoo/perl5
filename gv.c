@@ -82,10 +82,12 @@ Perl_gv_add_by_type(pTHX_ GV *gv, svtype type)
     }
 
     if (!*where)
+    {
 	*where = newSV_type(type);
-    if (type == SVt_PVAV && GvNAMELEN(gv) == 3
-     && strnEQ(GvNAME(gv), "ISA", 3))
-	sv_magic(*where, (SV *)gv, PERL_MAGIC_isa, NULL, 0);
+	    if (type == SVt_PVAV && GvNAMELEN(gv) == 3
+	     && strnEQ(GvNAME(gv), "ISA", 3))
+	    sv_magic(*where, (SV *)gv, PERL_MAGIC_isa, NULL, 0);
+    }
     return gv;
 }
 
@@ -130,7 +132,7 @@ Perl_gv_fetchfile_flags(pTHX_ const char *const name, const STRLEN namelen,
 #endif
     }
     if ((PERLDB_LINE || PERLDB_SAVESRC) && !GvAV(gv))
-	    hv_magic(GvHVn(gv_AVadd(gv)), NULL, PERL_MAGIC_dbfile);
+	    hv_magic(GvHVn(gv), GvAVn(gv), PERL_MAGIC_dbfile);
     if (tmpbuf != smallbuf)
 	Safefree(tmpbuf);
     return gv;
@@ -461,7 +463,7 @@ S_maybe_add_coresub(pTHX_ HV * const stash, GV *gv,
      /* no support for \&CORE::infix;
         no support for funcs that do not parse like funcs */
     case KEY___DATA__: case KEY___END__: case KEY_and: case KEY_AUTOLOAD:
-    case KEY_BEGIN   : case KEY_CHECK  : case KEY_cmp: case KEY_CORE    :
+    case KEY_BEGIN   : case KEY_CHECK  : case KEY_cmp:
     case KEY_default : case KEY_DESTROY:
     case KEY_do      : case KEY_dump   : case KEY_else  : case KEY_elsif  :
     case KEY_END     : case KEY_eq     : case KEY_eval  :
@@ -517,7 +519,6 @@ S_maybe_add_coresub(pTHX_ HV * const stash, GV *gv,
 	cv = MUTABLE_CV(newSV_type(SVt_PVCV));
 	GvCV_set(gv,cv);
 	GvCVGEN(gv) = 0;
-	mro_method_changed_in(GvSTASH(gv));
 	CvISXSUB_on(cv);
 	CvXSUB(cv) = core_xsub;
     }
@@ -900,16 +901,16 @@ means yes, look for AUTOLOAD; zero means no, don't look for AUTOLOAD.
 Calling C<gv_fetchmethod> is equivalent to calling C<gv_fetchmethod_autoload>
 with a non-zero C<autoload> parameter.
 
-These functions grant C<"SUPER"> token as a prefix of the method name. Note
+These functions grant C<"SUPER"> token
+as a prefix of the method name.  Note
 that if you want to keep the returned glob for a long time, you need to
 check for it being "AUTOLOAD", since at the later time the call may load a
-different subroutine due to $AUTOLOAD changing its value. Use the glob
-created via a side effect to do this.
+different subroutine due to $AUTOLOAD changing its value.  Use the glob
+created as a side effect to do this.
 
-These functions have the same side-effects and as C<gv_fetchmeth> with
-C<level==0>.  C<name> should be writable if contains C<':'> or C<'
-''>. The warning against passing the GV returned by C<gv_fetchmeth> to
-C<call_sv> apply equally to these functions.
+These functions have the same side-effects as C<gv_fetchmeth> with
+C<level==0>.  The warning against passing the GV returned by
+C<gv_fetchmeth> to C<call_sv> applies equally to these functions.
 
 =cut
 */
@@ -1055,7 +1056,7 @@ Perl_gv_fetchmethod_pvn_flags(pTHX_ HV *stash, const char *name, const STRLEN le
 	    GV* stubgv;
 	    GV* autogv;
 
-	    if (CvANON(cv))
+	    if (CvANON(cv) || !CvGV(cv))
 		stubgv = gv;
 	    else {
 		stubgv = CvGV(cv);
@@ -1668,10 +1669,10 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
     PERL_ARGS_ASSERT_GV_MAGICALIZE;
     
     if (stash != PL_defstash) { /* not the main stash */
-	/* We only have to check for three names here: EXPORT, ISA
+	/* We only have to check for a few names here: a, b, EXPORT, ISA
 	   and VERSION. All the others apply only to the main stash or to
 	   CORE (which is checked right after this). */
-	if (len > 2) {
+	if (len) {
 	    const char * const name2 = name + 1;
 	    switch (*name) {
 	    case 'E':
@@ -1686,6 +1687,11 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 		if (strEQ(name2, "ERSION"))
 		    GvMULTI_on(gv);
 		break;
+	    case 'a':
+	    case 'b':
+		if (len == 1 && sv_type == SVt_PV)
+		    GvMULTI_on(gv);
+		/* FALL THROUGH */
 	    default:
 		goto try_core;
 	    }
@@ -2014,6 +2020,10 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 	    SvREFCNT_dec(sv);
 	}
 	break;
+	case 'a':
+	case 'b':
+	    if (sv_type == SVt_PV)
+		GvMULTI_on(gv);
 	}
     }
 
@@ -2340,9 +2350,11 @@ Perl_gp_free(pTHX_ GV *gv)
 			 pTHX__FORMAT pTHX__VALUE);
         return;
     }
-    if (--gp->gp_refcnt > 0) {
+    if (gp->gp_refcnt > 1) {
+       borrowed:
 	if (gp->gp_egv == gv)
 	    gp->gp_egv = 0;
+	gp->gp_refcnt--;
 	GvGP_set(gv, NULL);
         return;
     }
@@ -2377,14 +2389,15 @@ Perl_gp_free(pTHX_ GV *gv)
         const HEK *hvname_hek = HvNAME_HEK(hv);
         DEBUG_o(Perl_deb(aTHX_ "gp_free clearing PL_stashcache for '%"HEKf"'\n", hvname_hek));
         if (PL_stashcache && hvname_hek)
-           (void)hv_delete(PL_stashcache, HEK_KEY(hvname_hek),
-                      (HEK_UTF8(hvname_hek) ? -HEK_LEN(hvname_hek) : HEK_LEN(hvname_hek)),
-                      G_DISCARD);
+           (void)hv_deletehek(PL_stashcache, hvname_hek, G_DISCARD);
 	SvREFCNT_dec(hv);
       }
       SvREFCNT_dec(io);
       SvREFCNT_dec(cv);
       SvREFCNT_dec(form);
+
+      /* Possibly reallocated by a destructor */
+      gp = GvGP(gv);
 
       if (!gp->gp_file_hek
        && !gp->gp_sv
@@ -2402,6 +2415,8 @@ Perl_gp_free(pTHX_ GV *gv)
       }
     }
 
+    /* Possibly incremented by a destructor doing glob assignment */
+    if (gp->gp_refcnt > 1) goto borrowed;
     Safefree(gp);
     GvGP_set(gv, NULL);
 }
@@ -3320,6 +3335,8 @@ Perl_gv_try_downgrade(pTHX_ GV *gv)
 	    !GvSV(gv) && !GvAV(gv) && !GvHV(gv) && !GvIOp(gv) && !GvFORM(gv) &&
 	    GvEGVx(gv) == gv && (stash = GvSTASH(gv))))
 	return;
+    if (gv == PL_statgv || gv == PL_last_in_gv || gv == PL_stderrgv)
+	return;
     if (SvMAGICAL(gv)) {
         MAGIC *mg;
 	/* only backref magic is allowed */
@@ -3333,16 +3350,14 @@ Perl_gv_try_downgrade(pTHX_ GV *gv)
     cv = GvCV(gv);
     if (!cv) {
 	HEK *gvnhek = GvNAME_HEK(gv);
-	(void)hv_delete(stash, HEK_KEY(gvnhek),
-	    HEK_UTF8(gvnhek) ? -HEK_LEN(gvnhek) : HEK_LEN(gvnhek), G_DISCARD);
-    } else if (GvMULTI(gv) && cv &&
+	(void)hv_deletehek(stash, gvnhek, G_DISCARD);
+    } else if (GvMULTI(gv) && cv && SvREFCNT(cv) == 1 &&
 	    !SvOBJECT(cv) && !SvMAGICAL(cv) && !SvREADONLY(cv) &&
 	    CvSTASH(cv) == stash && CvGV(cv) == gv &&
 	    CvCONST(cv) && !CvMETHOD(cv) && !CvLVALUE(cv) && !CvUNIQUE(cv) &&
 	    !CvNODEBUG(cv) && !CvCLONE(cv) && !CvCLONED(cv) && !CvANON(cv) &&
 	    (namehek = GvNAME_HEK(gv)) &&
-	    (gvp = hv_fetch(stash, HEK_KEY(namehek),
-			HEK_LEN(namehek)*(HEK_UTF8(namehek) ? -1 : 1), 0)) &&
+	    (gvp = hv_fetchhek(stash, namehek, 0)) &&
 	    *gvp == (SV*)gv) {
 	SV *value = SvREFCNT_inc(CvXSUBANY(cv).any_ptr);
 	const bool imported = !!GvIMPORTED_CV(gv);
@@ -3354,6 +3369,23 @@ Perl_gv_try_downgrade(pTHX_ GV *gv)
 				STRUCT_OFFSET(XPVIV, xiv_iv));
 	SvRV_set(gv, value);
     }
+}
+
+GV *
+Perl_gv_override(pTHX_ const char * const name, const STRLEN len)
+{
+    GV *gv = gv_fetchpvn(name, len, GV_NOTQUAL, SVt_PVCV);
+    GV * const *gvp;
+    PERL_ARGS_ASSERT_GV_OVERRIDE;
+    if (gv && GvCVu(gv) && GvIMPORTED_CV(gv)) return gv;
+    gvp = (GV**)hv_fetch(PL_globalstash, name, len, FALSE);
+    gv = gvp ? *gvp : NULL;
+    if (gv && !isGV(gv)) {
+	if (!SvPCS_IMPORTED(gv)) return NULL;
+	gv_init(gv, PL_globalstash, name, len, 0);
+	return gv;
+    }
+    return gv && GvCVu(gv) && GvIMPORTED_CV(gv) ? gv : NULL;
 }
 
 #include "XSUB.h"

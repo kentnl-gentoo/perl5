@@ -1969,12 +1969,13 @@ Perl_magic_setdbline(pTHX_ SV *sv, MAGIC *mg)
     /* The magic ptr/len for the debugger's hash should always be an SV.  */
     if (UNLIKELY(mg->mg_len != HEf_SVKEY)) {
         Perl_croak(aTHX_ "panic: magic_setdbline len=%"IVdf", ptr='%s'",
-                   mg->mg_len, mg->mg_ptr);
+                   (IV)mg->mg_len, mg->mg_ptr);
     }
 
     /* Use sv_2iv instead of SvIV() as the former generates smaller code, and
        setting/clearing debugger breakpoints is not a hot path.  */
-    svp = av_fetch(GvAV(PL_DBline), sv_2iv(MUTABLE_SV((mg)->mg_ptr)), FALSE);
+    svp = av_fetch(MUTABLE_AV(mg->mg_obj),
+		   sv_2iv(MUTABLE_SV((mg)->mg_ptr)), FALSE);
 
     if (svp && SvIOKp(*svp)) {
 	OP * const o = INT2PTR(OP*,SvIVX(*svp));
@@ -2298,7 +2299,14 @@ Perl_defelem_target(pTHX_ SV *sv, MAGIC *mg)
 	else if (LvSTARGOFF(sv) >= 0) {
 	    AV *const av = MUTABLE_AV(LvTARG(sv));
 	    if (LvSTARGOFF(sv) <= AvFILL(av))
+	    {
+	      if (SvRMAGICAL(av)) {
+		SV * const * const svp = av_fetch(av, LvSTARGOFF(sv), 0);
+		targ = svp ? *svp : NULL;
+	      }
+	      else
 		targ = AvARRAY(av)[LvSTARGOFF(sv)];
+	    }
 	}
 	if (targ && (targ != &PL_sv_undef)) {
 	    /* somebody else defined it for us */
@@ -2755,7 +2763,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 #else
 #   define PERL_VMS_BANG 0
 #endif
-#ifdef WIN32
+#if defined(WIN32) && ! defined(UNDER_CE)
 	SETERRNO(win32_get_errno(SvIOK(sv) ? SvIVX(sv) : SvOK(sv) ? sv_2iv(sv) : 0),
 		 (SvIV(sv) == EVMSERR) ? 4 : PERL_VMS_BANG);
 #else

@@ -493,7 +493,7 @@ PP(pp_prototype)
 	const char * s = SvPVX_const(TOPs);
 	if (strnEQ(s, "CORE::", 6)) {
 	    const int code = keyword(s + 6, SvCUR(TOPs) - 6, 1);
-	    if (!code || code == -KEY_CORE)
+	    if (!code)
 		DIE(aTHX_ "Can't find an opnumber for \"%"UTF8f"\"",
 		   UTF8fARG(SvFLAGS(TOPs) & SVf_UTF8, SvCUR(TOPs)-6, s+6));
 	    {
@@ -616,9 +616,19 @@ PP(pp_bless)
 	const char *ptr;
 
 	if (!ssv) goto curstash;
-	if (!SvGMAGICAL(ssv) && !SvAMAGIC(ssv) && SvROK(ssv))
+	SvGETMAGIC(ssv);
+	if (SvROK(ssv)) {
+	  if (!SvAMAGIC(ssv)) {
+	   frog:
 	    Perl_croak(aTHX_ "Attempt to bless into a reference");
-	ptr = SvPV_const(ssv,len);
+	  }
+	  /* SvAMAGIC is on here, but it only means potentially overloaded,
+	     so after stringification: */
+	  ptr = SvPV_nomg_const(ssv,len);
+	  /* We need to check the flag again: */
+	  if (!SvAMAGIC(ssv)) goto frog;
+	}
+	else ptr = SvPV_nomg_const(ssv,len);
 	if (len == 0)
 	    Perl_ck_warner(aTHX_ packWARN(WARN_MISC),
 			   "Explicit blessing to '' (assuming package main)");
@@ -1017,7 +1027,9 @@ PP(pp_undef)
 	    gp_free(MUTABLE_GV(sv));
 	    Newxz(gp, 1, GP);
 	    GvGP_set(sv, gp_ref(gp));
+#ifndef PERL_DONT_CREATE_GVSV
 	    GvSV(sv) = newSV(0);
+#endif
 	    GvLINE(sv) = CopLINE(PL_curcop);
 	    GvEGV(sv) = MUTABLE_GV(sv);
 	    GvMULTI_on(sv);
@@ -5982,7 +5994,7 @@ PP(pp_coreargs)
 		const bool constr = PL_op->op_private & whicharg;
 		PUSHs(S_rv2gv(aTHX_
 		    svp && *svp ? *svp : &PL_sv_undef,
-		    constr, CopHINTS_get(PL_curcop) & HINT_STRICT_REFS,
+		    constr, cBOOL(CopHINTS_get(PL_curcop) & HINT_STRICT_REFS),
 		    !constr
 		));
 	    }

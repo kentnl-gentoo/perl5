@@ -38,14 +38,6 @@
 #include "nwutil.h"	
 #endif
 
-#ifdef USE_KERN_PROC_PATHNAME
-#  include <sys/sysctl.h>
-#endif
-
-#ifdef USE_NSGETEXECUTABLEPATH
-#  include <mach-o/dyld.h>
-#endif
-
 #ifdef DEBUG_LEAKING_SCALARS_FORK_DUMP
 #  ifdef I_SYSUIO
 #    include <sys/uio.h>
@@ -541,13 +533,13 @@ perl_destruct(pTHXx)
     {
 	const char * const s = PerlEnv_getenv("PERL_DESTRUCT_LEVEL");
 	if (s) {
-        const int i = atoi(s);
+            const int i = atoi(s);
 #ifdef DEBUGGING
 	    if (destruct_level < i) destruct_level = i;
 #endif
 #ifdef PERL_TRACK_MEMPOOL
-        /* RT #114496, for perl_free */
-        PL_perl_destruct_level = i;
+            /* RT #114496, for perl_free */
+            PL_perl_destruct_level = i;
 #endif
 	}
     }
@@ -949,25 +941,33 @@ perl_destruct(pTHXx)
     PL_initav = NULL;
 
     /* shortcuts just get cleared */
-    PL_envgv = NULL;
-    PL_incgv = NULL;
     PL_hintgv = NULL;
     PL_errgv = NULL;
-    PL_argvgv = NULL;
     PL_argvoutgv = NULL;
     PL_stdingv = NULL;
     PL_stderrgv = NULL;
     PL_last_in_gv = NULL;
-    PL_replgv = NULL;
-    PL_DBgv = NULL;
-    PL_DBline = NULL;
-    PL_DBsub = NULL;
     PL_DBsingle = NULL;
     PL_DBtrace = NULL;
     PL_DBsignal = NULL;
     PL_DBcv = NULL;
     PL_dbargs = NULL;
     PL_debstash = NULL;
+
+    SvREFCNT_dec(PL_envgv);
+    SvREFCNT_dec(PL_incgv);
+    SvREFCNT_dec(PL_argvgv);
+    SvREFCNT_dec(PL_replgv);
+    SvREFCNT_dec(PL_DBgv);
+    SvREFCNT_dec(PL_DBline);
+    SvREFCNT_dec(PL_DBsub);
+    PL_envgv = NULL;
+    PL_incgv = NULL;
+    PL_argvgv = NULL;
+    PL_replgv = NULL;
+    PL_DBgv = NULL;
+    PL_DBline = NULL;
+    PL_DBsub = NULL;
 
     SvREFCNT_dec(PL_argvout_stack);
     PL_argvout_stack = NULL;
@@ -1414,85 +1414,6 @@ Perl_call_atexit(pTHX_ ATEXIT_t fn, void *ptr)
     ++PL_exitlistlen;
 }
 
-STATIC void
-S_set_caret_X(pTHX) {
-    dVAR;
-    GV* tmpgv = gv_fetchpvs("\030", GV_ADD|GV_NOTQUAL, SVt_PV); /* $^X */
-    if (tmpgv) {
-	SV *const caret_x = GvSV(tmpgv);
-#if defined(OS2)
-	sv_setpv(caret_x, os2_execname(aTHX));
-#else
-#  ifdef USE_KERN_PROC_PATHNAME
-	size_t size = 0;
-	int mib[4];
-	mib[0] = CTL_KERN;
-	mib[1] = KERN_PROC;
-	mib[2] = KERN_PROC_PATHNAME;
-	mib[3] = -1;
-
-	if (sysctl(mib, 4, NULL, &size, NULL, 0) == 0
-	    && size > 0 && size < MAXPATHLEN * MAXPATHLEN) {
-	    sv_grow(caret_x, size);
-
-	    if (sysctl(mib, 4, SvPVX(caret_x), &size, NULL, 0) == 0
-		&& size > 2) {
-		SvPOK_only(caret_x);
-		SvCUR_set(caret_x, size - 1);
-		SvTAINT(caret_x);
-		return;
-	    }
-	}
-#  elif defined(USE_NSGETEXECUTABLEPATH)
-	char buf[1];
-	uint32_t size = sizeof(buf);
-
-	_NSGetExecutablePath(buf, &size);
-	if (size < MAXPATHLEN * MAXPATHLEN) {
-	    sv_grow(caret_x, size);
-	    if (_NSGetExecutablePath(SvPVX(caret_x), &size) == 0) {
-		char *const tidied = realpath(SvPVX(caret_x), NULL);
-		if (tidied) {
-		    sv_setpv(caret_x, tidied);
-		    free(tidied);
-		} else {
-		    SvPOK_only(caret_x);
-		    SvCUR_set(caret_x, size);
-		}
-		return;
-	    }
-	}
-#  elif defined(HAS_PROCSELFEXE)
-	char buf[MAXPATHLEN];
-	int len = readlink(PROCSELFEXE_PATH, buf, sizeof(buf) - 1);
-
-	/* On Playstation2 Linux V1.0 (kernel 2.2.1) readlink(/proc/self/exe)
-	   includes a spurious NUL which will cause $^X to fail in system
-	   or backticks (this will prevent extensions from being built and
-	   many tests from working). readlink is not meant to add a NUL.
-	   Normal readlink works fine.
-	*/
-	if (len > 0 && buf[len-1] == '\0') {
-	    len--;
-	}
-
-	/* FreeBSD's implementation is acknowledged to be imperfect, sometimes
-	   returning the text "unknown" from the readlink rather than the path
-	   to the executable (or returning an error from the readlink). Any
-	   valid path has a '/' in it somewhere, so use that to validate the
-	   result. See http://www.freebsd.org/cgi/query-pr.cgi?pr=35703
-	*/
-	if (len > 0 && memchr(buf, '/', len)) {
-	    sv_setpvn(caret_x, buf, len);
-	    return;
-	}
-#  endif
-	/* Fallback to this:  */
-	sv_setpv(caret_x, PL_origargv[0]);
-#endif
-    }
-}
-
 /*
 =for apidoc perl_parse
 
@@ -1642,7 +1563,7 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
 	init_ids();
 	assert (!TAINT_get);
 	TAINT;
-	S_set_caret_X(aTHX);
+	set_caret_X();
 	TAINT_NOT;
 	init_postdump_symbols(argc,argv,env);
 	return 0;
@@ -2117,7 +2038,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
     /* and for SITELIB_EXP in USE_SITECUSTOMIZE                            */
     assert (!TAINT_get);
     TAINT;
-    S_set_caret_X(aTHX);
+    set_caret_X();
     TAINT_NOT;
 
 #if defined(USE_SITECUSTOMIZE)
@@ -3522,30 +3443,35 @@ STATIC void
 S_minus_v(pTHX)
 {
 	PerlIO * PIO_stdout;
-	if (!sv_derived_from(PL_patchlevel, "version"))
-	    upg_version(PL_patchlevel, TRUE);
 	{
-	    SV* level= vstringify(PL_patchlevel);
+	    const char * const level_str = "v" PERL_VERSION_STRING;
+	    const STRLEN level_len = sizeof("v" PERL_VERSION_STRING)-1;
 #ifdef PERL_PATCHNUM
+	    SV* level;
 #  ifdef PERL_GIT_UNCOMMITTED_CHANGES
-	    SV *num = newSVpvs(PERL_PATCHNUM "*");
+	    static const char num [] = PERL_PATCHNUM "*";
 #  else
-	    SV *num = newSVpvs(PERL_PATCHNUM);
+	    static const char num [] = PERL_PATCHNUM;
 #  endif
 	    {
-		STRLEN level_len, num_len;
-		char * level_str, * num_str;
-		num_str = SvPV(num, num_len);
-		level_str = SvPV(level, level_len);
-		if (num_len>=level_len && strnEQ(num_str,level_str,level_len)) {
-		    SvREFCNT_dec(level);
-		    level= num;
+		const STRLEN num_len = sizeof(num)-1;
+		/* A very advanced compiler would fold away the strnEQ
+		   and this whole conditional, but most (all?) won't do it.
+		   SV level could also be replaced by with preprocessor
+		   catenation.
+		*/
+		if (num_len >= level_len && strnEQ(num,level_str,level_len)) {
+		    /* per 46807d8e80, PERL_PATCHNUM is outside of the control
+		       of the interp so it might contain format characters
+		    */
+		    level = newSVpvn(num, num_len);
 		} else {
-		    Perl_sv_catpvf(aTHX_ level, " (%"SVf")", num);
-		    SvREFCNT_dec(num);
+		    level = Perl_newSVpvf_nocontext("%s (%s)", level_str, num);
 		}
 	    }
- #endif
+#else
+	SV* level = newSVpvn(level_str, level_len);
+#endif /* #ifdef PERL_PATCHNUM */
 	PIO_stdout =  PerlIO_stdout();
 	    PerlIO_printf(PIO_stdout,
 		"\nThis is perl "	STRINGIFY(PERL_REVISION)
@@ -3553,7 +3479,7 @@ S_minus_v(pTHX)
 		", subversion "		STRINGIFY(PERL_SUBVERSION)
 		" (%"SVf") built for "	ARCHNAME, level
 		);
-	    SvREFCNT_dec(level);
+	    SvREFCNT_dec_NN(level);
 	}
 #if defined(LOCAL_PATCH_COUNT)
 	if (LOCAL_PATCH_COUNT > 0)
@@ -3710,13 +3636,15 @@ S_init_main_stash(pTHX)
     SvREFCNT_inc_simple_void(PL_incgv); /* Don't allow it to be freed */
     GvMULTI_on(PL_incgv);
     PL_hintgv = gv_fetchpvs("\010", GV_ADD|GV_NOTQUAL, SVt_PV); /* ^H */
+    SvREFCNT_inc_simple_void(PL_hintgv);
     GvMULTI_on(PL_hintgv);
     PL_defgv = gv_fetchpvs("_", GV_ADD|GV_NOTQUAL, SVt_PVAV);
     SvREFCNT_inc_simple_void(PL_defgv);
-    PL_errgv = gv_HVadd(gv_fetchpvs("@", GV_ADD|GV_NOTQUAL, SVt_PV));
+    PL_errgv = gv_fetchpvs("@", GV_ADD|GV_NOTQUAL, SVt_PV);
     SvREFCNT_inc_simple_void(PL_errgv);
     GvMULTI_on(PL_errgv);
     PL_replgv = gv_fetchpvs("\022", GV_ADD|GV_NOTQUAL, SVt_PV); /* ^R */
+    SvREFCNT_inc_simple_void(PL_replgv);
     GvMULTI_on(PL_replgv);
     (void)Perl_form(aTHX_ "%240s","");	/* Preallocate temp - for immediate signals. */
 #ifdef PERL_DONT_CREATE_GVSV
@@ -4043,9 +3971,15 @@ Perl_init_debugger(pTHX)
     PL_curstash = (HV *)SvREFCNT_inc_simple(PL_debstash);
 
     Perl_init_dbargs(aTHX);
-    PL_DBgv = gv_fetchpvs("DB::DB", GV_ADDMULTI, SVt_PVGV);
-    PL_DBline = gv_fetchpvs("DB::dbline", GV_ADDMULTI, SVt_PVAV);
-    PL_DBsub = gv_HVadd(gv_fetchpvs("DB::sub", GV_ADDMULTI, SVt_PVHV));
+    PL_DBgv = MUTABLE_GV(
+	SvREFCNT_inc(gv_fetchpvs("DB::DB", GV_ADDMULTI, SVt_PVGV))
+    );
+    PL_DBline = MUTABLE_GV(
+	SvREFCNT_inc(gv_fetchpvs("DB::dbline", GV_ADDMULTI, SVt_PVAV))
+    );
+    PL_DBsub = MUTABLE_GV(SvREFCNT_inc(
+	gv_HVadd(gv_fetchpvs("DB::sub", GV_ADDMULTI, SVt_PVHV))
+    ));
     PL_DBsingle = GvSV((gv_fetchpvs("DB::single", GV_ADDMULTI, SVt_PV)));
     if (!SvIOK(PL_DBsingle))
 	sv_setiv(PL_DBsingle, 0);
@@ -4249,12 +4183,12 @@ Perl_init_argv_symbols(pTHX_ int argc, char **argv)
 	}
     }
     if ((PL_argvgv = gv_fetchpvs("ARGV", GV_ADD|GV_NOTQUAL, SVt_PVAV))) {
+	SvREFCNT_inc_simple_void_NN(PL_argvgv);
 	GvMULTI_on(PL_argvgv);
-	(void)gv_AVadd(PL_argvgv);
 	av_clear(GvAVn(PL_argvgv));
 	for (; argc > 0; argc--,argv++) {
 	    SV * const sv = newSVpv(argv[0],0);
-	    av_push(GvAVn(PL_argvgv),sv);
+	    av_push(GvAV(PL_argvgv),sv);
 	    if (!(PL_unicode & PERL_UNICODE_LOCALE_FLAG) || PL_utf8locale) {
 		 if (PL_unicode & PERL_UNICODE_ARGV_FLAG)
 		      SvUTF8_on(sv);
@@ -4294,6 +4228,7 @@ S_init_postdump_symbols(pTHX_ int argc, char **argv, char **env)
     if ((PL_envgv = gv_fetchpvs("ENV", GV_ADD|GV_NOTQUAL, SVt_PVHV))) {
 	HV *hv;
 	bool env_is_not_environ;
+	SvREFCNT_inc_simple_void_NN(PL_envgv);
 	GvMULTI_on(PL_envgv);
 	hv = GvHVn(PL_envgv);
 	hv_magic(hv, NULL, PERL_MAGIC_env);
@@ -4967,7 +4902,7 @@ Perl_my_exit(pTHX_ U32 status)
     }
     if (PL_exit_flags & PERL_EXIT_WARN) {
 	PL_exit_flags |= PERL_EXIT_ABORT; /* Protect against reentrant calls */
-	Perl_warn(aTHX_ "Unexpected exit %u", status);
+	Perl_warn(aTHX_ "Unexpected exit %lu", (unsigned long)status);
 	PL_exit_flags &= ~PERL_EXIT_ABORT;
     }
     switch (status) {
@@ -5072,7 +5007,7 @@ Perl_my_failure_exit(pTHX)
     }
     if (PL_exit_flags & PERL_EXIT_WARN) {
 	PL_exit_flags |= PERL_EXIT_ABORT; /* Protect against reentrant calls */
-	Perl_warn(aTHX_ "Unexpected exit failure %u", PL_statusvalue);
+	Perl_warn(aTHX_ "Unexpected exit failure %ld", (long)PL_statusvalue);
 	PL_exit_flags &= ~PERL_EXIT_ABORT;
     }
     my_exit_jump();

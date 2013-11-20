@@ -764,14 +764,14 @@ const struct flag_to_name op_open_names[] = {
     {OPpOPEN_OUT_CRLF, ",OUT_CRLF"}
 };
 
-const struct flag_to_name op_exit_names[] = {
-    {OPpEXIT_VMSISH, ",EXIT_VMSISH"},
-    {OPpHUSH_VMSISH, ",HUSH_VMSISH"}
-};
-
 const struct flag_to_name op_sassign_names[] = {
     {OPpASSIGN_BACKWARDS, ",BACKWARDS"},
     {OPpASSIGN_CV_TO_GV,  ",CV2GV"}
+};
+
+const struct flag_to_name op_leave_names[] = {
+    {OPpREFCOUNTED, ",REFCOUNTED"},
+    {OPpLVALUE,	    ",LVALUE"}
 };
 
 #define OP_PRIVATE_ONCE(op, flag, name) \
@@ -790,6 +790,7 @@ OP_PRIVATE_ONCE(op_delete, OPpSLICE, ",SLICE");
 OP_PRIVATE_ONCE(op_exists, OPpEXISTS_SUB, ",EXISTS_SUB");
 OP_PRIVATE_ONCE(op_die, OPpHUSH_VMSISH, ",HUSH_VMSISH");
 OP_PRIVATE_ONCE(op_split, OPpSPLIT_IMPLIM, ",IMPLIM");
+OP_PRIVATE_ONCE(op_dbstate, OPpHUSH_VMSISH, ",HUSH_VMSISH");
 
 struct op_private_by_op {
     U16 op_type;
@@ -799,13 +800,12 @@ struct op_private_by_op {
 
 const struct op_private_by_op op_private_names[] = {
     {OP_LEAVESUB, C_ARRAY_LENGTH(op_leavesub_names), op_leavesub_names },
-    {OP_LEAVE, C_ARRAY_LENGTH(op_leavesub_names), op_leavesub_names },
+    {OP_LEAVE, C_ARRAY_LENGTH(op_leave_names), op_leave_names },
     {OP_LEAVESUBLV, C_ARRAY_LENGTH(op_leavesub_names), op_leavesub_names },
     {OP_LEAVEWRITE, C_ARRAY_LENGTH(op_leavesub_names), op_leavesub_names },
     {OP_DIE, C_ARRAY_LENGTH(op_die_names), op_die_names },
     {OP_DELETE, C_ARRAY_LENGTH(op_delete_names), op_delete_names },
     {OP_EXISTS, C_ARRAY_LENGTH(op_exists_names), op_exists_names },
-    {OP_EXIT, C_ARRAY_LENGTH(op_exit_names), op_exit_names },
     {OP_FLIP, C_ARRAY_LENGTH(op_flip_names), op_flip_names },
     {OP_FLOP, C_ARRAY_LENGTH(op_flip_names), op_flip_names },
     {OP_GV, C_ARRAY_LENGTH(op_gv_names), op_gv_names },
@@ -818,6 +818,8 @@ const struct op_private_by_op op_private_names[] = {
     {OP_SORT, C_ARRAY_LENGTH(op_sort_names), op_sort_names },
     {OP_OPEN, C_ARRAY_LENGTH(op_open_names), op_open_names },
     {OP_SPLIT, C_ARRAY_LENGTH(op_split_names), op_split_names },
+    {OP_DBSTATE, C_ARRAY_LENGTH(op_dbstate_names), op_dbstate_names },
+    {OP_NEXTSTATE, C_ARRAY_LENGTH(op_dbstate_names), op_dbstate_names },
     {OP_BACKTICK, C_ARRAY_LENGTH(op_open_names), op_open_names }
 };
 
@@ -955,8 +957,7 @@ S_op_private_to_names(pTHX_ SV *tmpsv, U32 optype, U32 op_private) {
                            (UV)(oppriv & OPpPADRANGE_COUNTMASK));       \
         if (  (o->op_type == OP_RV2HV || o->op_type == OP_RV2AV ||      \
                o->op_type == OP_PADAV || o->op_type == OP_PADHV ||      \
-               o->op_type == OP_ASLICE || o->op_type == OP_HSLICE ||    \
-               o->op_type == OP_KVHSLICE || o->op_type == OP_KVASLICE)  \
+               o->op_type == OP_ASLICE || o->op_type == OP_HSLICE)      \
            && oppriv & OPpSLICEWARNING  )                               \
             sv_catpvs(tmpsv, ",SLICEWARNING");                          \
 	if (SvCUR(tmpsv)) {                                             \

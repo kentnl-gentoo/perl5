@@ -13,7 +13,7 @@ use warnings;
 use strict;
 use Test::More;
 
-my $tests = 19; # not counting those in the __DATA__ section
+my $tests = 20; # not counting those in the __DATA__ section
 
 use B::Deparse;
 my $deparse = B::Deparse->new();
@@ -269,6 +269,13 @@ format STDOUT =
 x(); z()
 .
 EOCODH
+
+# literal big chars under 'use utf8'
+is($deparse->coderef2text(sub{ use utf8; /€/; }),
+'{
+    /\x{20ac}/;
+}',
+"qr/euro/");
 
 
 done_testing($tests);
@@ -946,6 +953,9 @@ print /a/u, s/b/c/u;
     use feature ':5.12';
     print /a/d, s/b/c/d;
 }
+####
+# [perl #119807] s//\(3)/ge should not warn when deparsed (\3 warns)
+s/foo/\(3);/eg;
 ####
 # Test @threadsv_names under 5005threads
 foreach $' (1, 2) {

@@ -108,8 +108,8 @@ no_index:
     - Porting/perldelta_template.pod
     - TestInit.pm
 resources:
-  bugtracker: http://rt.perl.org/perlbug/
+  bugtracker: https://rt.perl.org/
   homepage: http://www.perl.org/
   license: http://dev.perl.org/licenses/
   repository: http://perl5.git.perl.org/
-version: 5.019005
+version: 5.019006
