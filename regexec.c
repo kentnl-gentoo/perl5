@@ -2409,7 +2409,7 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
            Not newSVsv, either, as it does not COW.
         */
         reginfo->sv = newSV(0);
-        sv_setsv(reginfo->sv, sv);
+        SvSetSV_nosteal(reginfo->sv, sv);
         SAVEFREESV(reginfo->sv);
     }
 
@@ -5103,20 +5103,22 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 		else {                   /*  /(??{})  */
 		    /*  if its overloaded, let the regex compiler handle
 		     *  it; otherwise extract regex, or stringify  */
+		    if (SvGMAGICAL(ret))
+			ret = sv_mortalcopy(ret);
 		    if (!SvAMAGIC(ret)) {
 			SV *sv = ret;
 			if (SvROK(sv))
 			    sv = SvRV(sv);
 			if (SvTYPE(sv) == SVt_REGEXP)
 			    re_sv = (REGEXP*) sv;
-			else if (SvSMAGICAL(sv)) {
-			    MAGIC *mg = mg_find(sv, PERL_MAGIC_qr);
+			else if (SvSMAGICAL(ret)) {
+			    MAGIC *mg = mg_find(ret, PERL_MAGIC_qr);
 			    if (mg)
 				re_sv = (REGEXP *) mg->mg_obj;
 			}
 
-			/* force any magic, undef warnings here */
-			if (!re_sv) {
+			/* force any undef warnings here */
+			if (!re_sv && !SvPOK(ret) && !SvNIOK(ret)) {
 			    ret = sv_mortalcopy(ret);
 			    (void) SvPV_force_nolen(ret);
 			}
@@ -5170,17 +5172,13 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                                     pm_flags);
 
 			if (!(SvFLAGS(ret)
-			      & (SVs_TEMP | SVs_PADTMP | SVf_READONLY
-				 | SVs_GMG))) {
+			      & (SVs_TEMP | SVs_GMG | SVf_ROK))
+			 && (!SvPADTMP(ret) || SvREADONLY(ret))) {
 			    /* This isn't a first class regexp. Instead, it's
 			       caching a regexp onto an existing, Perl visible
 			       scalar.  */
 			    sv_magic(ret, MUTABLE_SV(re_sv), PERL_MAGIC_qr, 0, 0);
 			}
-			/* safe to do now that any $1 etc has been
-			 * interpolated into the new pattern string and
-			 * compiled */
-			S_regcp_restore(aTHX_ rex, runops_cp, &maxopenparen);
 		    }
 		    SAVEFREESV(re_sv);
 		    re = ReANY(re_sv);
@@ -7450,13 +7448,12 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
 	    match = TRUE;
 	}
 	else if (flags & ANYOF_LOCALE) {
-	    RXp_MATCH_TAINTED_on(prog);
-
-	    if ((flags & ANYOF_LOC_FOLD)
-		 && ANYOF_BITMAP_TEST(n, PL_fold_locale[c]))
-	    {
-		match = TRUE;
-	    }
+	    if (flags & ANYOF_LOC_FOLD) {
+                RXp_MATCH_TAINTED_on(prog);
+		 if (ANYOF_BITMAP_TEST(n, PL_fold_locale[c])) {
+                    match = TRUE;
+                }
+            }
 	    else if (ANYOF_POSIXL_TEST_ANY_SET(n)) {
 
                 /* The data structure is arranged so bits 0, 2, 4, ... are set
@@ -7491,6 +7488,8 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
 
                 int count = 0;
                 int to_complement = 0;
+
+                RXp_MATCH_TAINTED_on(prog);
                 while (count < ANYOF_MAX) {
                     if (ANYOF_POSIXL_TEST(n, count)
                         && to_complement ^ cBOOL(isFOO_lc(count/2, (U8) c)))

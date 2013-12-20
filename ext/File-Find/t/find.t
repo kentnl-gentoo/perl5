@@ -24,13 +24,21 @@ BEGIN {
 }
 
 my $symlink_exists = eval { symlink("",""); 1 };
-my $test_count = 98;
+my $test_count = 102;
 $test_count += 127 if $symlink_exists;
 $test_count += 26 if $^O eq 'MSWin32';
 $test_count += 2 if $^O eq 'MSWin32' and $symlink_exists;
 
 use Test::More;
 plan tests => $test_count;
+use lib qw( ./t/lib );
+use Testing qw(
+    create_file_ok
+    mkdir_ok
+    symlink_ok
+    dir_path
+    file_path
+);
 
 my %Expect_File = (); # what we expect for $_
 my %Expect_Name = (); # what we expect for $File::Find::name/fullname
@@ -130,32 +138,8 @@ END {
     cleanup();
 }
 
-# Wrappers around Test::More::ok() for creation of files, directories and
-# symlinks used in testing
-
-sub create_file_ok($;$) {
-    my $file = $_[0];
-    my $msg = $_[2] || "able to create file: $file";
-    ok( open(my $T,'>',$file), $msg )
-        or die("Unable to create file: $file");
-}
-
-sub mkdir_ok($$;$) {
-    my ($dir, $mask) = @_[0..1];
-    my $msg = $_[2] || "able to mkdir: $dir";
-    ok( mkdir($dir, $mask), $msg )
-        or die("Unable to mkdir: $dir");
-}
-
-sub symlink_ok($$;$) {
-    my ($oldfile, $newfile) = @_[0..1];
-    my $msg = $_[2] || "able to symlink from $oldfile to $newfile";
-    ok( symlink( $oldfile, $newfile ), $msg)
-      or die("Unable to symlink from $oldfile to $newfile");
-}
-
 sub wanted_File_Dir {
-    printf "# \$File::Find::dir => '$File::Find::dir'\t\$_ => '$_'\n";
+    print "# \$File::Find::dir => '$File::Find::dir'\t\$_ => '$_'\n";
     s#\.$## if ($^O eq 'VMS' && $_ ne '.'); #
     s/(.dir)?$//i if ($^O eq 'VMS' && -d _);
     ok( $Expect_File{$_}, "found $_ for \$_, as expected" );
@@ -229,65 +213,10 @@ sub my_postprocess {
     delete $Expect_Dir{ $File::Find::dir};
 }
 
-# Use dir_path() to specify a directory path that is expected for
-# $File::Find::dir (%Expect_Dir). Also use it in file operations like
-# chdir, rmdir etc.
-#
-# dir_path() concatenates directory names to form a *relative*
-# directory path, independent from the platform it is run on, although
-# there are limitations. Do not try to create an absolute path,
-# because that may fail on operating systems that have the concept of
-# volume names (e.g. Mac OS). As a special case, you can pass it a "."
-# as first argument, to create a directory path like "./fa/dir". If there is
-# no second argument, this function will return "./"
-
-sub dir_path {
-    my $first_arg = shift @_;
-
-    if ($first_arg eq '.') {
-        return './' unless @_;
-        my $path = File::Spec->catdir(@_);
-        # add leading "./"
-        $path = "./$path";
-        return $path;
-    }
-    else { # $first_arg ne '.'
-        return $first_arg unless @_; # return plain filename
-        return File::Spec->catdir($first_arg, @_); # relative path
-    }
-}
-
 # Use topdir() to specify a directory path that you want to pass to
 # find/finddepth. Historically topdir() differed on Mac OS classic.
 
 *topdir = \&dir_path;
-
-# Use file_path() to specify a file path that is expected for $_
-# (%Expect_File). Also suitable for file operations like unlink etc.
-#
-# file_path() concatenates directory names (if any) and a filename to
-# form a *relative* file path (the last argument is assumed to be a
-# file). It is independent from the platform it is run on, although
-# there are limitations. As a special case, you can pass it a "." as
-# first argument, to create a file path like "./fa/file" on operating
-# systems. If there is no second argument, this function will return the
-# string "./"
-
-sub file_path {
-    my $first_arg = shift @_;
-
-    if ($first_arg eq '.') {
-        return './' unless @_;
-        my $path = File::Spec->catfile(@_);
-        # add leading "./"
-        $path = "./$path";
-        return $path;
-    }
-    else { # $first_arg ne '.'
-        return $first_arg unless @_; # return plain filename
-        return File::Spec->catfile($first_arg, @_); # relative path
-    }
-}
 
 # Use file_path_name() to specify a file path that is expected for
 # $File::Find::Name (%Expect_Name). Note: When the no_chdir => 1
@@ -1078,4 +1007,33 @@ if ($^O eq 'MSWin32') {
         unlink("/$expected_first_file")
             or warn "can't unlink /$expected_first_file: $!\n";
     }
+}
+
+{
+    local $@;
+    eval { File::Find::find( 'foobar' ); };
+    like($@, qr/no &wanted subroutine given/,
+        "find() correctly died for lack of &wanted via either coderef or hashref");
+}
+
+{
+    local $@;
+    eval { File::Find::find( { follow => 1 } ); };
+    like($@, qr/no &wanted subroutine given/,
+        "find() correctly died for lack of &wanted via hashref");
+}
+
+{
+    local $@;
+    eval { File::Find::find( { wanted => 1 } ); };
+    like($@, qr/no &wanted subroutine given/,
+        "find() correctly died: lack of coderef as value of 'wanted' element");
+}
+
+{
+    local $@;
+    my $wanted = sub { print "hello world\n"; };
+    eval { File::Find::find( $wanted, ( undef ) ); };
+    like($@, qr/invalid top directory/,
+        "find() correctly died due to undefined top directory");
 }

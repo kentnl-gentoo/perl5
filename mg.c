@@ -739,6 +739,41 @@ Perl_emulate_cop_io(pTHX_ const COP *const c, SV *const sv)
     }
 }
 
+STATIC void
+S_fixup_errno_string(pTHX_ SV* sv)
+{
+    /* Do what is necessary to fixup the non-empty string in 'sv' for return to
+     * Perl space. */
+
+    PERL_ARGS_ASSERT_FIXUP_ERRNO_STRING;
+
+    assert(SvOK(sv));
+
+    if(strEQ(SvPVX(sv), "")) {
+	sv_catpv(sv, UNKNOWN_ERRNO_MSG);
+    }
+    else {
+
+        /* In some locales the error string may come back as UTF-8, in which
+         * case we should turn on that flag.  This didn't use to happen, and to
+         * avoid any possible backward compatibility issues, we don't turn on
+         * the flag unless we have to.  So the flag stays off for an entirely
+         * ASCII string.  We assume that if the string looks like UTF-8, it
+         * really is UTF-8:  "text in any other encoding that uses bytes with
+         * the high bit set is extremely unlikely to pass a UTF-8 validity
+         * test" (http://en.wikipedia.org/wiki/Charset_detection).  There is a
+         * potential that we will get it wrong however, especially on short
+         * error message text.  (If it turns out to be necessary, we could also
+         * keep track if the current LC_MESSAGES locale is UTF-8) */
+        if (! IN_BYTES  /* respect 'use bytes' */
+            && ! is_ascii_string((U8*) SvPVX_const(sv), SvCUR(sv))
+            && is_utf8_string((U8*) SvPVX_const(sv), SvCUR(sv)))
+        {
+            SvUTF8_on(sv);
+        }
+    }
+}
+
 #ifdef VMS
 #include <descrip.h>
 #include <starlet.h>
@@ -788,55 +823,93 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	sv_setiv(sv, (IV)(PL_debug & DEBUG_MASK));
 	break;
     case '\005':  /* ^E */
-	 if (nextchar == '\0') {
-#if defined(VMS)
-	     {
-		  char msg[255];
-		  $DESCRIPTOR(msgdsc,msg);
-		  sv_setnv(sv,(NV) vaxc$errno);
-		  if (sys$getmsg(vaxc$errno,&msgdsc.dsc$w_length,&msgdsc,0,0) & 1)
-		       sv_setpvn(sv,msgdsc.dsc$a_pointer,msgdsc.dsc$w_length);
-		  else
-		       sv_setpvs(sv,"");
-	     }
+	 if (nextchar != '\0') {
+            if (strEQ(remaining, "NCODING"))
+                sv_setsv(sv, PL_encoding);
+            break;
+        }
+
+#if defined(VMS) || defined(OS2) || defined(WIN32)
+#   if defined(VMS)
+        {
+            char msg[255];
+            $DESCRIPTOR(msgdsc,msg);
+            sv_setnv(sv,(NV) vaxc$errno);
+            if (sys$getmsg(vaxc$errno,&msgdsc.dsc$w_length,&msgdsc,0,0) & 1)
+                sv_setpvn(sv,msgdsc.dsc$a_pointer,msgdsc.dsc$w_length);
+            else
+                sv_setpvs(sv,"");
+        }
 #elif defined(OS2)
-	     if (!(_emx_env & 0x200)) {	/* Under DOS */
-		  sv_setnv(sv, (NV)errno);
-		  sv_setpv(sv, errno ? Strerror(errno) : "");
-	     } else {
-		  if (errno != errno_isOS2) {
-		       const int tmp = _syserrno();
-		       if (tmp)	/* 2nd call to _syserrno() makes it 0 */
-			    Perl_rc = tmp;
-		  }
-		  sv_setnv(sv, (NV)Perl_rc);
-		  sv_setpv(sv, os2error(Perl_rc));
-	     }
-#elif defined(WIN32)
-	     {
-		  const DWORD dwErr = GetLastError();
-		  sv_setnv(sv, (NV)dwErr);
-		  if (dwErr) {
-		       PerlProc_GetOSError(sv, dwErr);
-		  }
-		  else
-		       sv_setpvs(sv, "");
-		  SetLastError(dwErr);
-	     }
+        if (!(_emx_env & 0x200)) {	/* Under DOS */
+            sv_setnv(sv, (NV)errno);
+            sv_setpv(sv, errno ? Strerror(errno) : "");
+        } else {
+            if (errno != errno_isOS2) {
+                const int tmp = _syserrno();
+                if (tmp)	/* 2nd call to _syserrno() makes it 0 */
+                    Perl_rc = tmp;
+            }
+            sv_setnv(sv, (NV)Perl_rc);
+            sv_setpv(sv, os2error(Perl_rc));
+        }
+        if (SvOK(sv) && strNE(SvPVX(sv), "")) {
+            fixup_errno_string(sv);
+        }
+#   elif defined(WIN32)
+        {
+            const DWORD dwErr = GetLastError();
+            sv_setnv(sv, (NV)dwErr);
+            if (dwErr) {
+                PerlProc_GetOSError(sv, dwErr);
+                fixup_errno_string(sv);
+            }
+            else
+                sv_setpvs(sv, "");
+            SetLastError(dwErr);
+        }
+#   else
+#   error Missing code for platform
+#   endif
+        SvRTRIM(sv);
+        SvNOK_on(sv);	/* what a wonderful hack! */
+	break;
+#endif  /* End of platforms with special handling for $^E; others just fall
+           through to $! */
+
+    case '!':
+	{
+            dSAVE_ERRNO;
+#ifdef VMS
+            sv_setnv(sv, (NV)((errno == EVMSERR) ? vaxc$errno : errno));
 #else
-	     {
-		 dSAVE_ERRNO;
-		 sv_setnv(sv, (NV)errno);
-		 sv_setpv(sv, errno ? Strerror(errno) : "");
-		 RESTORE_ERRNO;
-	     }
+            sv_setnv(sv, (NV)errno);
 #endif
-	     SvRTRIM(sv);
-	     SvNOK_on(sv);	/* what a wonderful hack! */
-	 }
-	 else if (strEQ(remaining, "NCODING"))
-	      sv_setsv(sv, PL_encoding);
-	 break;
+#ifdef OS2
+            if (errno == errno_isOS2 || errno == errno_isOS2_set)
+                sv_setpv(sv, os2error(Perl_rc));
+            else
+#endif
+            if (! errno) {
+                sv_setpvs(sv, "");
+            }
+            else {
+
+                /* Strerror can return NULL on some platforms, which will
+                 * result in 'sv' not being considered SvOK.  The SvNOK_on()
+                 * below will cause just the number part to be valid */
+                sv_setpv(sv, Strerror(errno));
+                if (SvOK(sv)) {
+                    fixup_errno_string(sv);
+                }
+            }
+            RESTORE_ERRNO;
+	}
+
+	SvRTRIM(sv);
+	SvNOK_on(sv);	/* what a wonderful hack! */
+	break;
+
     case '\006':		/* ^F */
 	sv_setiv(sv, (IV)PL_maxsysfd);
 	break;
@@ -1024,55 +1097,6 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	    }
 	    /* else a value has been assigned manually, so do nothing */
 	}
-	break;
-
-    case '!':
-	{
-	dSAVE_ERRNO;
-#ifdef VMS
-	sv_setnv(sv, (NV)((errno == EVMSERR) ? vaxc$errno : errno));
-#else
-	sv_setnv(sv, (NV)errno);
-#endif
-#ifdef OS2
-	if (errno == errno_isOS2 || errno == errno_isOS2_set)
-	    sv_setpv(sv, os2error(Perl_rc));
-	else
-#endif
-	if (! errno) {
-            sv_setpvs(sv, "");
-        }
-        else {
-
-            /* Strerror can return NULL on some platforms, which will result in
-             * 'sv' not being considered SvOK.  The SvNOK_on() below will cause
-             * just the number part to be valid */
-            sv_setpv(sv, Strerror(errno));
-
-            /* In some locales the error string may come back as UTF-8, in
-             * which case we should turn on that flag.  This didn't use to
-             * happen, and to avoid any possible backward compatibility issues,
-             * we don't turn on the flag unless we have to.  So the flag stays
-             * off for an entirely ASCII string.  We assume that if the string
-             * looks like UTF-8, it really is UTF-8:  "text in any other
-             * encoding that uses bytes with the high bit set is extremely
-             * unlikely to pass a UTF-8 validity test"
-             * (http://en.wikipedia.org/wiki/Charset_detection).  There is a
-             * potential that we will get it wrong however, especially on short
-             * error message text.  (If it turns out to be necessary, we could
-             * also keep track if the current LC_MESSAGES locale is UTF-8) */
-            if (SvOK(sv)    /* It could be that Strerror returned invalid */
-                && ! is_ascii_string((U8*) SvPVX_const(sv), SvCUR(sv))
-                && is_utf8_string((U8*) SvPVX_const(sv), SvCUR(sv)))
-            {
-                SvUTF8_on(sv);
-            }
-        }
-	RESTORE_ERRNO;
-	}
-
-	SvRTRIM(sv);
-	SvNOK_on(sv);	/* what a wonderful hack! */
 	break;
     case '<':
         sv_setuid(sv, PerlProc_getuid());
@@ -2774,6 +2798,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	break;
     case '<':
 	{
+        int rc = 0;
 	const Uid_t new_uid = SvUID(sv);
 	PL_delaymagic_uid = new_uid;
 	if (PL_delaymagic) {
@@ -2781,31 +2806,34 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    break;				/* don't do magic till later */
 	}
 #ifdef HAS_SETRUID
-	(void)setruid(new_uid);
+	rc = setruid(new_uid);
 #else
 #ifdef HAS_SETREUID
-	(void)setreuid(new_uid, (Uid_t)-1);
+	 rc = setreuid(new_uid, (Uid_t)-1);
 #else
 #ifdef HAS_SETRESUID
-      (void)setresuid(new_uid, (Uid_t)-1, (Uid_t)-1);
+       rc = setresuid(new_uid, (Uid_t)-1, (Uid_t)-1);
 #else
 	if (new_uid == PerlProc_geteuid()) {		/* special case $< = $> */
 #ifdef PERL_DARWIN
 	    /* workaround for Darwin's setuid peculiarity, cf [perl #24122] */
 	    if (new_uid != 0 && PerlProc_getuid() == 0)
-		(void)PerlProc_setuid(0);
+		 rc = PerlProc_setuid(0);
 #endif
-	    (void)PerlProc_setuid(new_uid);
+	     rc = PerlProc_setuid(new_uid);
 	} else {
 	    Perl_croak(aTHX_ "setruid() not implemented");
 	}
 #endif
 #endif
 #endif
+        /* XXX $< currently silently ignores failures */
+        PERL_UNUSED_VAR(rc);
 	break;
 	}
     case '>':
 	{
+        int rc = 0;
 	const Uid_t new_euid = SvUID(sv);
 	PL_delaymagic_euid = new_euid;
 	if (PL_delaymagic) {
@@ -2813,26 +2841,29 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    break;				/* don't do magic till later */
 	}
 #ifdef HAS_SETEUID
-	(void)seteuid(new_euid);
+	rc = seteuid(new_euid);
 #else
 #ifdef HAS_SETREUID
-	(void)setreuid((Uid_t)-1, new_euid);
+	rc = setreuid((Uid_t)-1, new_euid);
 #else
 #ifdef HAS_SETRESUID
-	(void)setresuid((Uid_t)-1, new_euid, (Uid_t)-1);
+	rc = setresuid((Uid_t)-1, new_euid, (Uid_t)-1);
 #else
 	if (new_euid == PerlProc_getuid())		/* special case $> = $< */
-	    PerlProc_setuid(new_euid);
+	    rc = PerlProc_setuid(new_euid);
 	else {
 	    Perl_croak(aTHX_ "seteuid() not implemented");
 	}
 #endif
 #endif
 #endif
+        /* XXX $> currently silently ignores failures */
+        PERL_UNUSED_VAR(rc);
 	break;
 	}
     case '(':
 	{
+        int rc = 0;
 	const Gid_t new_gid = SvGID(sv);
 	PL_delaymagic_gid = new_gid;
 	if (PL_delaymagic) {
@@ -2840,26 +2871,29 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    break;				/* don't do magic till later */
 	}
 #ifdef HAS_SETRGID
-	(void)setrgid(new_gid);
+	rc = setrgid(new_gid);
 #else
 #ifdef HAS_SETREGID
-	(void)setregid(new_gid, (Gid_t)-1);
+	rc = setregid(new_gid, (Gid_t)-1);
 #else
 #ifdef HAS_SETRESGID
-      (void)setresgid(new_gid, (Gid_t)-1, (Gid_t) -1);
+        rc = setresgid(new_gid, (Gid_t)-1, (Gid_t) -1);
 #else
 	if (new_gid == PerlProc_getegid())			/* special case $( = $) */
-	    (void)PerlProc_setgid(new_gid);
+	    rc = PerlProc_setgid(new_gid);
 	else {
 	    Perl_croak(aTHX_ "setrgid() not implemented");
 	}
 #endif
 #endif
 #endif
+        /* XXX $( currently silently ignores failures */
+        PERL_UNUSED_VAR(rc);
 	break;
 	}
     case ')':
 	{
+        int rc = 0;
 	Gid_t new_egid;
 #ifdef HAS_SETGROUPS
 	{
@@ -2891,7 +2925,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
                 gary[i] = (Groups_t)Atol(p);
             }
             if (i)
-                (void)setgroups(i, gary);
+                rc = setgroups(i, gary);
 	    Safefree(gary);
 	}
 #else  /* HAS_SETGROUPS */
@@ -2903,22 +2937,24 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    break;				/* don't do magic till later */
 	}
 #ifdef HAS_SETEGID
-	(void)setegid(new_egid);
+	rc = setegid(new_egid);
 #else
 #ifdef HAS_SETREGID
-	(void)setregid((Gid_t)-1, new_egid);
+	rc = setregid((Gid_t)-1, new_egid);
 #else
 #ifdef HAS_SETRESGID
-	(void)setresgid((Gid_t)-1, new_egid, (Gid_t)-1);
+	rc = setresgid((Gid_t)-1, new_egid, (Gid_t)-1);
 #else
 	if (new_egid == PerlProc_getgid())			/* special case $) = $( */
-	    (void)PerlProc_setgid(new_egid);
+	    rc = PerlProc_setgid(new_egid);
 	else {
 	    Perl_croak(aTHX_ "setegid() not implemented");
 	}
 #endif
 #endif
 #endif
+        /* XXX $) currently silently ignores failures */
+        PERL_UNUSED_VAR(rc);
 	break;
 	}
     case ':':

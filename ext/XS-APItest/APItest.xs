@@ -1049,7 +1049,6 @@ peep_xop(pTHX_ OP *o, OP *oldop)
 static I32
 filter_call(pTHX_ int idx, SV *buf_sv, int maxlen)
 {
-    SV   *my_sv = FILTER_DATA(idx);
     char *p;
     char *end;
     int n = FILTER_READ(idx + 1, buf_sv, maxlen);
@@ -1637,6 +1636,7 @@ SV *
 AUTOLOADp(...)
     PROTOTYPE: *$
     CODE:
+        PERL_UNUSED_ARG(items);
 	RETVAL = newSVpvn_flags(SvPVX(cv), SvCUR(cv), SvUTF8(cv));
     OUTPUT:
 	RETVAL
@@ -2003,7 +2003,7 @@ newCONSTSUB(stash, name, flags, sv)
     ALIAS:
 	newCONSTSUB_flags = 1
     PREINIT:
-	CV* mycv;
+	CV* mycv = NULL;
 	STRLEN len;
 	const char *pv = SvPV(name, len);
     PPCODE:
@@ -2061,7 +2061,7 @@ gv_fetchmeth_type(stash, methname, type, level, flags)
     PREINIT:
         STRLEN len;
         const char * const name = SvPV_const(methname, len);
-	GV* gv;
+	GV* gv = NULL;
     PPCODE:
         switch (type) {
            case 0:
@@ -2089,7 +2089,7 @@ gv_fetchmeth_autoload_type(stash, methname, type, level, flags)
     PREINIT:
         STRLEN len;
         const char * const name = SvPV_const(methname, len);
-	GV* gv;
+	GV* gv = NULL;
     PPCODE:
         switch (type) {
            case 0:
@@ -2114,7 +2114,7 @@ gv_fetchmethod_flags_type(stash, methname, type, flags)
     int type
     I32 flags
     PREINIT:
-	GV* gv;
+	GV* gv = NULL;
     PPCODE:
         switch (type) {
            case 0:
@@ -2144,7 +2144,7 @@ gv_autoload_type(stash, methname, type, method)
     PREINIT:
         STRLEN len;
         const char * const name = SvPV_const(methname, len);
-	GV* gv;
+	GV* gv = NULL;
 	I32 flags = method ? GV_AUTOLOAD_ISMETHOD : 0;
     PPCODE:
         switch (type) {
@@ -2170,7 +2170,7 @@ whichsig_type(namesv, type)
     PREINIT:
         STRLEN len;
         const char * const name = SvPV_const(namesv, len);
-        I32 i;
+        I32 i = 0;
     PPCODE:
         switch (type) {
            case 0:
@@ -2545,13 +2545,12 @@ void
 test_rv2cv_op_cv()
     PROTOTYPE:
     PREINIT:
-	GV *troc_gv, *wibble_gv;
+	GV *troc_gv;
 	CV *troc_cv;
 	OP *o;
     CODE:
 	troc_gv = gv_fetchpv("XS::APItest::test_rv2cv_op_cv", 0, SVt_PVGV);
 	troc_cv = get_cv("XS::APItest::test_rv2cv_op_cv", 0);
-	wibble_gv = gv_fetchpv("XS::APItest::wibble", 0, SVt_PVGV);
 	o = newCVREF(0, newGVOP(OP_GV, 0, troc_gv));
 	if (rv2cv_op_cv(o, 0) != troc_cv) croak_fail();
 	if (rv2cv_op_cv(o, RV2CVOPCV_RETURN_NAME_GV) != (CV*)troc_gv)
@@ -3113,6 +3112,7 @@ CODE:
 	MULTICALL;
     }
     POP_MULTICALL;
+    PERL_UNUSED_VAR(newsp);
     XSRETURN_UNDEF;
 }
 
@@ -3357,10 +3357,8 @@ OUTPUT:
 
 void
 stringify(SV *sv)
-PREINIT:
-    const char *pv;
 CODE:
-    pv = SvPV_nolen(sv);
+    (void)SvPV_nolen(sv);
 
 SV *
 HvENAME(HV *hv)
@@ -3388,6 +3386,8 @@ OUTPUT:
 SV *
 xs_cmp_undef(SV *a, SV *b)
 CODE:
+    PERL_UNUSED_ARG(a);
+    PERL_UNUSED_ARG(b);
     RETVAL = &PL_sv_undef;
 OUTPUT:
     RETVAL
@@ -3432,7 +3432,6 @@ test_newFOROP_without_slab()
 CODE:
     {
 	const I32 floor = start_subparse(0,0);
-	CV * const cv = PL_compcv;
 	/* The slab allocator does not like CvROOT being set. */
 	CvROOT(PL_compcv) = (OP *)1;
 	op_free(newFOROP(0, 0, newOP(OP_PUSHMARK, 0), 0, 0));
@@ -3513,6 +3512,7 @@ AUTOLOAD(...)
     SV* comms;
     SV* class_and_method;
   CODE:
+    PERL_UNUSED_ARG(items);
     class_and_method = GvSV(CvGV(cv));
     comms = get_sv("main::the_method", 1);
     if (class_and_method == NULL) {

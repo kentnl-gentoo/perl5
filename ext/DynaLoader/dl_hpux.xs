@@ -119,10 +119,11 @@ void
 dl_find_symbol(libhandle, symbolname)
     void *	libhandle
     char *	symbolname
-    CODE:
+    PREINIT:
     shl_t obj = (shl_t) libhandle;
     void *symaddr = NULL;
     int status;
+    CODE:
 #ifdef __hp9000s300
     symbolname = Perl_form_nocontext("_%s", symbolname);
 #endif

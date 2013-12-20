@@ -2957,10 +2957,8 @@ Perl_require_pv(pTHX_ const char *pv)
     PERL_ARGS_ASSERT_REQUIRE_PV;
 
     PUSHSTACKi(PERLSI_REQUIRE);
-    PUTBACK;
     sv = Perl_newSVpvf(aTHX_ "require q%c%s%c", 0, pv, 0);
     eval_sv(sv_2mortal(sv), G_DISCARD);
-    SPAGAIN;
     POPSTACK;
 }
 
@@ -3995,8 +3993,10 @@ Perl_init_debugger(pTHX)
 
 #ifndef STRESS_REALLOC
 #define REASONABLE(size) (size)
+#define REASONABLE_but_at_least(size,min) (size)
 #else
 #define REASONABLE(size) (1) /* unreasonable */
+#define REASONABLE_but_at_least(size,min) (min)
 #endif
 
 void
@@ -4032,9 +4032,9 @@ Perl_init_stacks(pTHX)
     PL_scopestack_ix = 0;
     PL_scopestack_max = REASONABLE(32);
 
-    Newx(PL_savestack,REASONABLE(128),ANY);
+    Newx(PL_savestack,REASONABLE_but_at_least(128,SS_MAXPUSH),ANY);
     PL_savestack_ix = 0;
-    PL_savestack_max = REASONABLE(128);
+    PL_savestack_max = REASONABLE_but_at_least(128,SS_MAXPUSH);
 }
 
 #undef REASONABLE
@@ -4529,7 +4529,7 @@ S_mayberelocate(pTHX_ const char *const dir, STRLEN len, U32 flags)
 
 	if ((unix = tounixspec_ts(SvPV(libdir,len),NULL)) != NULL) {
 	    len = strlen(unix);
-	    while (unix[len-1] == '/') len--;  /* Cosmetic */
+	    while (len > 1 && unix[len-1] == '/') len--;  /* Cosmetic */
 	    sv_usepvn(libdir,unix,len);
 	}
 	else

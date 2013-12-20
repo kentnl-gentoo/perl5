@@ -25,6 +25,7 @@ BEGIN {
 use strict;
 use feature 'fc';
 
+# =1 adds debugging output; =2 increases the verbosity somewhat
 my $debug = $ENV{PERL_DEBUG_FULL_TEST} // 0;
 
 # Certain tests have been shown to be problematical for a few locales.  Don't
@@ -34,6 +35,10 @@ my $debug = $ENV{PERL_DEBUG_FULL_TEST} // 0;
 # http://markmail.org/message/5jwam4xsx4amsdnv
 # (There aren't 1000 locales currently in existence, so 99.9 works)
 my $acceptable_fold_failure_percentage = $^O eq 'MSWin32' ? 99.9 : 5;
+
+# The list of test numbers of the problematic tests.
+my @problematical_tests;
+
 
 use Dumpvalue;
 
@@ -47,6 +52,11 @@ sub debug {
   my($mess) = join "", @_;
   chop $mess;
   print $dumper->stringify($mess,1), "\n";
+}
+
+sub debug_more {
+  return unless $debug > 1;
+  return debug(@_);
 }
 
 sub debugf {
@@ -272,6 +282,13 @@ check_taint_not  $2;
 
 check_taint_not  $a;
 
+"a" =~ /([a-z])/;
+check_taint_not $1, '"a" =~ /([a-z])/';
+"foo.bar_baz" =~ /^(.*)[._](.*?)$/;  # Bug 120675
+check_taint_not $1, '"foo.bar_baz" =~ /^(.*)[._](.*?)$/';
+
+# BE SURE TO COPY ANYTHING YOU ADD to the block below
+
 {   # This is just the previous tests copied here with a different
     # compile-time pragma.
 
@@ -434,6 +451,11 @@ check_taint_not  $a;
     # After all this tainting $a should be cool.
 
     check_taint_not  $a;
+
+    "a" =~ /([a-z])/;
+    check_taint_not $1, '"a" =~ /([a-z])/';
+    "foo.bar_baz" =~ /^(.*)[._](.*?)$/;  # Bug 120675
+    check_taint_not $1, '"foo.bar_baz" =~ /^(.*)[._](.*?)$/';
 }
 
 # Here are in scope of 'use locale'
@@ -683,7 +705,7 @@ my %Testing;
 my @Added_alpha;   # Alphas that aren't in the C locale.
 my %test_names;
 
-sub display_characters {
+sub disp_chars {
     # This returns a display string denoting the input parameter @_, each
     # entry of which is a single character in the range 0-255.  The first part
     # of the output is a string of the characters in @_ that are ASCII
@@ -782,7 +804,7 @@ sub report_multi_result {
 
     my $message = "";
     if (@$results_ref) {
-        $message = join " ", "for", display_characters(@$results_ref);
+        $message = join " ", "for", disp_chars(@$results_ref);
     }
     report_result($Locale, $i, @$results_ref == 0, $message);
 }
@@ -791,7 +813,6 @@ my $first_locales_test_number = $final_without_setlocale + 1;
 my $locales_test_number;
 my $not_necessarily_a_problem_test_number;
 my $first_casing_test_number;
-my $final_casing_test_number;
 my %setlocale_failed;   # List of locales that setlocale() didn't work on
 
 foreach $Locale (@Locale) {
@@ -878,21 +899,21 @@ foreach $Locale (@Locale) {
 
     # Ordered, where possible,  in groups of "this is a subset of the next
     # one"
-    debug "# :upper:  = ", display_characters(@{$posixes{'upper'}}), "\n";
-    debug "# :lower:  = ", display_characters(@{$posixes{'lower'}}), "\n";
-    debug "# :cased:  = ", display_characters(@{$posixes{'cased'}}), "\n";
-    debug "# :alpha:  = ", display_characters(@{$posixes{'alpha'}}), "\n";
-    debug "# :alnum:  = ", display_characters(@{$posixes{'alnum'}}), "\n";
-    debug "#  w       = ", display_characters(@{$posixes{'word'}}), "\n";
-    debug "# :graph:  = ", display_characters(@{$posixes{'graph'}}), "\n";
-    debug "# :print:  = ", display_characters(@{$posixes{'print'}}), "\n";
-    debug "#  d       = ", display_characters(@{$posixes{'digit'}}), "\n";
-    debug "# :xdigit: = ", display_characters(@{$posixes{'xdigit'}}), "\n";
-    debug "# :blank:  = ", display_characters(@{$posixes{'blank'}}), "\n";
-    debug "#  s       = ", display_characters(@{$posixes{'space'}}), "\n";
-    debug "# :punct:  = ", display_characters(@{$posixes{'punct'}}), "\n";
-    debug "# :cntrl:  = ", display_characters(@{$posixes{'cntrl'}}), "\n";
-    debug "# :ascii:  = ", display_characters(@{$posixes{'ascii'}}), "\n";
+    debug "# :upper:  = ", disp_chars(@{$posixes{'upper'}}), "\n";
+    debug "# :lower:  = ", disp_chars(@{$posixes{'lower'}}), "\n";
+    debug "# :cased:  = ", disp_chars(@{$posixes{'cased'}}), "\n";
+    debug "# :alpha:  = ", disp_chars(@{$posixes{'alpha'}}), "\n";
+    debug "# :alnum:  = ", disp_chars(@{$posixes{'alnum'}}), "\n";
+    debug "#  w       = ", disp_chars(@{$posixes{'word'}}), "\n";
+    debug "# :graph:  = ", disp_chars(@{$posixes{'graph'}}), "\n";
+    debug "# :print:  = ", disp_chars(@{$posixes{'print'}}), "\n";
+    debug "#  d       = ", disp_chars(@{$posixes{'digit'}}), "\n";
+    debug "# :xdigit: = ", disp_chars(@{$posixes{'xdigit'}}), "\n";
+    debug "# :blank:  = ", disp_chars(@{$posixes{'blank'}}), "\n";
+    debug "#  s       = ", disp_chars(@{$posixes{'space'}}), "\n";
+    debug "# :punct:  = ", disp_chars(@{$posixes{'punct'}}), "\n";
+    debug "# :cntrl:  = ", disp_chars(@{$posixes{'cntrl'}}), "\n";
+    debug "# :ascii:  = ", disp_chars(@{$posixes{'ascii'}}), "\n";
 
     foreach (keys %UPPER) {
 
@@ -916,10 +937,10 @@ foreach $Locale (@Locale) {
         }
     }
 
-    debug "# UPPER    = ", display_characters(keys %UPPER), "\n";
-    debug "# lower    = ", display_characters(keys %lower), "\n";
-    debug "# BoThCaSe = ", display_characters(keys %BoThCaSe), "\n";
-    debug "# Unassigned = ", display_characters(sort { ord $a <=> ord $b } keys %Unassigned), "\n";
+    debug "# UPPER    = ", disp_chars(keys %UPPER), "\n";
+    debug "# lower    = ", disp_chars(keys %lower), "\n";
+    debug "# BoThCaSe = ", disp_chars(keys %BoThCaSe), "\n";
+    debug "# Unassigned = ", disp_chars(sort { ord $a <=> ord $b } keys %Unassigned), "\n";
 
     my @failures;
     my @fold_failures;
@@ -990,7 +1011,7 @@ foreach $Locale (@Locale) {
 
     @Added_alpha = sort @Added_alpha;
 
-    debug "# Added_alpha = ", display_characters(@Added_alpha), "\n";
+    debug "# Added_alpha = ", disp_chars(@Added_alpha), "\n";
 
     # Cross-check the whole 8-bit character set.
 
@@ -1457,7 +1478,10 @@ foreach $Locale (@Locale) {
     }
     report_multi_result($Locale, $locales_test_number, \@f);
 
-    $final_casing_test_number = $locales_test_number;
+    foreach ($first_casing_test_number..$locales_test_number) {
+        push @problematical_tests, $_;
+    }
+
 
     # Test for read-only scalars' locale vs non-locale comparisons.
 
@@ -1850,9 +1874,15 @@ foreach $Locale (@Locale) {
             if (! $is_utf8_locale) {
                 my $y = lc $x;
                 next unless uc $y eq $x;
-                print "# UPPER $x lc $y ",
-                        $x =~ /$y/i ? 1 : 0, " ",
-                        $y =~ /$x/i ? 1 : 0, "\n" if 0;
+                debug_more( "# UPPER=", disp_chars(($x)),
+                            "; lc=", disp_chars(($y)), "; ",
+                            "; fc=", disp_chars((fc $x)), "; ",
+                            disp_chars(($x)), "=~/", disp_chars(($y)), "/i=",
+                            $x =~ /$y/i ? 1 : 0,
+                            "; ",
+                            disp_chars(($y)), "=~/", disp_chars(($x)), "/i=",
+                            $y =~ /$x/i ? 1 : 0,
+                            "\n");
                 #
                 # If $x and $y contain regular expression characters
                 # AND THEY lowercase (/i) to regular expression characters,
@@ -1881,9 +1911,7 @@ foreach $Locale (@Locale) {
                     print "# Regex characters in '$x' or '$y', skipping test $locales_test_number for locale '$Locale'\n";
                     next;
                 }
-                # With utf8 both will fail since the locale concept
-                # of upper/lower does not work well in Unicode.
-                push @f, $x unless $x =~ /$y/i == $y =~ /$x/i;
+                push @f, $x unless $x =~ /$y/i && $y =~ /$x/i;
 
                 # fc is not a locale concept, so Perl uses lc for it.
                 push @f, $x unless lc $x eq fc $x;
@@ -1892,12 +1920,16 @@ foreach $Locale (@Locale) {
                 use locale ':not_characters';
                 my $y = lc $x;
                 next unless uc $y eq $x;
-                print "# UPPER $x lc $y ",
-                        $x =~ /$y/i ? 1 : 0, " ",
-                        $y =~ /$x/i ? 1 : 0, "\n" if 0;
+                debug_more( "# UPPER=", disp_chars(($x)),
+                            "; lc=", disp_chars(($y)), "; ",
+                            "; fc=", disp_chars((fc $x)), "; ",
+                            disp_chars(($x)), "=~/", disp_chars(($y)), "/i=",
+                            $x =~ /$y/i ? 1 : 0,
+                            "; ",
+                            disp_chars(($y)), "=~/", disp_chars(($x)), "/i=",
+                            $y =~ /$x/i ? 1 : 0,
+                            "\n");
 
-                # Here, we can fully test things, unlike plain 'use locale',
-                # because this form does work well with Unicode
                 push @f, $x unless $x =~ /$y/i && $y =~ /$x/i;
 
                 # The places where Unicode's lc is different from fc are
@@ -1910,16 +1942,20 @@ foreach $Locale (@Locale) {
             if (! $is_utf8_locale) {
                 my $y = uc $x;
                 next unless lc $y eq $x;
-                print "# lower $x uc $y ",
-                    $x =~ /$y/i ? 1 : 0, " ",
-                    $y =~ /$x/i ? 1 : 0, "\n" if 0;
+                debug_more( "# lower=", disp_chars(($x)),
+                            "; uc=", disp_chars(($y)), "; ",
+                            "; fc=", disp_chars((fc $x)), "; ",
+                            disp_chars(($x)), "=~/", disp_chars(($y)), "/i=",
+                            $x =~ /$y/i ? 1 : 0,
+                            "; ",
+                            disp_chars(($y)), "=~/", disp_chars(($x)), "/i=",
+                            $y =~ /$x/i ? 1 : 0,
+                            "\n");
                 if ($x =~ $re || $y =~ $re) { # See above.
                     print "# Regex characters in '$x' or '$y', skipping test $locales_test_number for locale '$Locale'\n";
                     next;
                 }
-                # With utf8 both will fail since the locale concept
-                # of upper/lower does not work well in Unicode.
-                push @f, $x unless $x =~ /$y/i == $y =~ /$x/i;
+                push @f, $x unless $x =~ /$y/i && $y =~ /$x/i;
 
                 push @f, $x unless lc $x eq fc $x;
             }
@@ -1927,15 +1963,22 @@ foreach $Locale (@Locale) {
                 use locale ':not_characters';
                 my $y = uc $x;
                 next unless lc $y eq $x;
-                print "# lower $x uc $y ",
-                        $x =~ /$y/i ? 1 : 0, " ",
-                        $y =~ /$x/i ? 1 : 0, "\n" if 0;
+                debug_more( "# lower=", disp_chars(($x)),
+                            "; uc=", disp_chars(($y)), "; ",
+                            "; fc=", disp_chars((fc $x)), "; ",
+                            disp_chars(($x)), "=~/", disp_chars(($y)), "/i=",
+                            $x =~ /$y/i ? 1 : 0,
+                            "; ",
+                            disp_chars(($y)), "=~/", disp_chars(($x)), "/i=",
+                            $y =~ /$x/i ? 1 : 0,
+                            "\n");
                 push @f, $x unless $x =~ /$y/i && $y =~ /$x/i;
 
                 push @f, $x unless lc $x eq fc $x;
             }
 	}
 	report_multi_result($Locale, $locales_test_number, \@f);
+        push @problematical_tests, $locales_test_number;
     }
 
     # [perl #109318]
@@ -1976,28 +2019,26 @@ my $final_locales_test_number = $locales_test_number;
 
 # Recount the errors.
 
-foreach ($first_locales_test_number..$final_locales_test_number) {
+foreach $test_num ($first_locales_test_number..$final_locales_test_number) {
     if (%setlocale_failed) {
         print "not ";
     }
-    elsif ($Problem{$_} || !defined $Okay{$_} || !@{$Okay{$_}}) {
+    elsif ($Problem{$test_num} || !defined $Okay{$test_num} || !@{$Okay{$test_num}}) {
 	if (defined $not_necessarily_a_problem_test_number
-            && $_ == $not_necessarily_a_problem_test_number)
+            && $test_num == $not_necessarily_a_problem_test_number)
         {
 	    print "# The failure of test $not_necessarily_a_problem_test_number is not necessarily fatal.\n";
 	    print "# It usually indicates a problem in the environment,\n";
 	    print "# not in Perl itself.\n";
 	}
-        if ($Okay{$_} && ($_ >= $first_casing_test_number
-                          && $_ <= $final_casing_test_number))
-        {
+        if ($Okay{$test_num} && grep { $_ == $test_num } @problematical_tests) {
             # Round to nearest .1%
-            my $percent_fail = (int(.5 + (1000 * scalar(keys $Problem{$_})
+            my $percent_fail = (int(.5 + (1000 * scalar(keys $Problem{$test_num})
                                           / scalar(@Locale))))
                                / 10;
             if (! $debug && $percent_fail < $acceptable_fold_failure_percentage)
             {
-                $test_names{$_} .= 'TODO';
+                $test_names{$test_num} .= 'TODO';
                 print "# ", 100 - $percent_fail, "% of locales pass the following test, so it is likely that the failures\n";
                 print "# are errors in the locale definitions.  The test is marked TODO, as the\n";
                 print "# problem is not likely to be Perl's\n";
@@ -2006,19 +2047,19 @@ foreach ($first_locales_test_number..$final_locales_test_number) {
         print "#\n";
         if ($debug) {
             print "# The code points that had this failure are given above.  Look for lines\n";
-            print "# that match 'failed $_'\n";
+            print "# that match 'failed $test_num'\n";
         }
         else {
             print "# For more details, rerun, with environment variable PERL_DEBUG_FULL_TEST=1.\n";
-            print "# Then look at that output for lines that match 'failed $_'\n";
+            print "# Then look at that output for lines that match 'failed $test_num'\n";
         }
 	print "not ";
     }
-    print "ok $_";
-    if (defined $test_names{$_}) {
+    print "ok $test_num";
+    if (defined $test_names{$test_num}) {
         # If TODO is in the test name, make it thus
-        my $todo = $test_names{$_} =~ s/TODO\s*//;
-        print " $test_names{$_}";
+        my $todo = $test_names{$test_num} =~ s/TODO\s*//;
+        print " $test_names{$test_num}";
         print " # TODO" if $todo;
     }
     print "\n";
@@ -2221,11 +2262,19 @@ if ($didwarn) {
         my $F = join(" ", @F);
         $F =~ s/(.{50,60}) /$1\n#\t/g;
 
+        my $details = "";
+        unless ($debug) {
+            $details = "# For more details, rerun, with environment variable PERL_DEBUG_FULL_TEST=1.\n";
+        }
+        elsif ($debug == 1) {
+            $details = "# For even more details, rerun, with environment variable PERL_DEBUG_FULL_TEST=2.\n";
+        }
+
         warn
           "# The following locales\n#\n",
           "#\t", $F, "\n#\n",
           "# had problems.\n#\n",
-          "# For more details, rerun, with environment variable PERL_DEBUG_FULL_TEST=1.\n";
+          $details;
     } else {
         warn "# None of your locales were broken.\n";
     }

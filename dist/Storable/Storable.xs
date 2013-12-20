@@ -1018,7 +1018,7 @@ static const char byteorderstr_56[] = {BYTEORDER_BYTES_56, 0};
   } STMT_END
 
 /*
- * This macro is used at retrieve time, to remember where object 'y', bearing a
+ * SEEN() is used at retrieve time, to remember where object 'y', bearing a
  * given tag 'tagnum', has been retrieved. Next time we see an SX_OBJECT marker,
  * we'll therefore know where it has been retrieved and will be able to
  * share the same reference, as in the original stored memory image.
@@ -1036,18 +1036,25 @@ static const char byteorderstr_56[] = {BYTEORDER_BYTES_56, 0};
  * will bless the object.
  *
  * i should be true iff sv is immortal (ie PL_sv_yes, PL_sv_no or PL_sv_undef)
+ *
+ * SEEN0() is a short-cut where stash is always NULL.
  */
-#define SEEN(y,stash,i)						\
-  STMT_START {								\
-	if (!y)									\
+#define SEEN0(y,i)						        \
+    STMT_START {							\
+	if (!y)								\
 		return (SV *) 0;					\
 	if (av_store(cxt->aseen, cxt->tagnum++, i ? (SV*)(y) : SvREFCNT_inc(y)) == 0) \
 		return (SV *) 0;					\
-	TRACEME(("aseen(#%d) = 0x%"UVxf" (refcnt=%d)", cxt->tagnum-1, \
-		 PTR2UV(y), SvREFCNT(y)-1));		\
-	if (stash)								\
+	TRACEME(("aseen(#%d) = 0x%"UVxf" (refcnt=%d)", cxt->tagnum-1,   \
+		 PTR2UV(y), SvREFCNT(y)-1));		                \
+    } STMT_END
+
+#define SEEN(y,stash,i)						        \
+    STMT_START {							\
+        SEEN0(y,i);						        \
+	if (stash)							\
 		BLESS((SV *) (y), (HV *)(stash));			\
-  } STMT_END
+    } STMT_END
 
 /*
  * Bless 's' in 'p', via a temporary reference, required by sv_bless().
@@ -1172,9 +1179,9 @@ static const sv_retrieve_t sv_old_retrieve[] = {
 	(sv_retrieve_t)retrieve_byte,		/* SX_BYTE */
 	(sv_retrieve_t)retrieve_netint,		/* SX_NETINT */
 	(sv_retrieve_t)retrieve_scalar,		/* SX_SCALAR */
-	(sv_retrieve_t)retrieve_tied_array,	/* SX_ARRAY */
-	(sv_retrieve_t)retrieve_tied_hash,	/* SX_HASH */
-	(sv_retrieve_t)retrieve_tied_scalar,	/* SX_SCALAR */
+	(sv_retrieve_t)retrieve_tied_array,	/* SX_TIED_ARRAY */
+	(sv_retrieve_t)retrieve_tied_hash,	/* SX_TIED_HASH */
+	(sv_retrieve_t)retrieve_tied_scalar,	/* SX_TIED_SCALAR */
 	(sv_retrieve_t)retrieve_other,	/* SX_SV_UNDEF not supported */
 	(sv_retrieve_t)retrieve_other,	/* SX_SV_YES not supported */
 	(sv_retrieve_t)retrieve_other,	/* SX_SV_NO not supported */
@@ -1227,9 +1234,9 @@ static const sv_retrieve_t sv_retrieve[] = {
 	(sv_retrieve_t)retrieve_byte,		/* SX_BYTE */
 	(sv_retrieve_t)retrieve_netint,		/* SX_NETINT */
 	(sv_retrieve_t)retrieve_scalar,		/* SX_SCALAR */
-	(sv_retrieve_t)retrieve_tied_array,	/* SX_ARRAY */
-	(sv_retrieve_t)retrieve_tied_hash,	/* SX_HASH */
-	(sv_retrieve_t)retrieve_tied_scalar,	/* SX_SCALAR */
+	(sv_retrieve_t)retrieve_tied_array,	/* SX_TIED_ARRAY */
+	(sv_retrieve_t)retrieve_tied_hash,	/* SX_TIED_HASH */
+	(sv_retrieve_t)retrieve_tied_scalar,	/* SX_TIED_SCALAR */
 	(sv_retrieve_t)retrieve_sv_undef,	/* SX_SV_UNDEF */
 	(sv_retrieve_t)retrieve_sv_yes,		/* SX_SV_YES */
 	(sv_retrieve_t)retrieve_sv_no,		/* SX_SV_NO */
@@ -1656,6 +1663,8 @@ static void free_context(pTHX_ stcxt_t *cxt)
  *** Predicates.
  ***/
 
+/* these two functions are currently only used within asserts */
+#ifdef DASSERT
 /*
  * is_storing
  *
@@ -1679,6 +1688,7 @@ static int is_retrieving(pTHX)
 
 	return cxt->entry && (cxt->optype & ST_RETRIEVE);
 }
+#endif
 
 /*
  * last_op_in_netorder
@@ -4141,7 +4151,7 @@ static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 	default:
 		return retrieve_other(aTHX_ cxt, 0);		/* Let it croak */
 	}
-	SEEN(sv, 0, 0);							/* Don't bless yet */
+	SEEN0(sv, 0);							/* Don't bless yet */
 
 	/*
 	 * Whilst flags tell us to recurse, do so.
@@ -4338,7 +4348,7 @@ static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 		SvREFCNT_dec(sv);
 		/* we need to free RV but preserve value that RV point to */
 		sv = SvRV(attached);
-		SEEN(sv, 0, 0);
+		SEEN0(sv, 0);
 		SvRV_set(attached, NULL);
 		SvREFCNT_dec(attached);
 		if (!(flags & SHF_IDX_CLASSNAME) && classname != buf)
@@ -4679,7 +4689,7 @@ static SV *retrieve_tied_array(pTHX_ stcxt_t *cxt, const char *cname)
 
 	tv = NEWSV(10002, 0);
 	stash = cname ? gv_stashpv(cname, GV_ADD) : 0;
-	SEEN(tv, cname, 0);			/* Will return if tv is null */
+	SEEN(tv, stash, 0);			/* Will return if tv is null */
 	sv = retrieve(aTHX_ cxt, 0);		/* Retrieve <object> */
 	if (!sv)
 		return (SV *) 0;		/* Failed */
@@ -5015,7 +5025,6 @@ static SV *retrieve_lutf8str(pTHX_ stcxt_t *cxt, const char *cname)
 static SV *retrieve_vstring(pTHX_ stcxt_t *cxt, const char *cname)
 {
 #ifdef SvVOK
-	MAGIC *mg;
 	char s[256];
 	int len;
 	SV *sv;
@@ -5047,7 +5056,6 @@ static SV *retrieve_vstring(pTHX_ stcxt_t *cxt, const char *cname)
 static SV *retrieve_lvstring(pTHX_ stcxt_t *cxt, const char *cname)
 {
 #ifdef SvVOK
-	MAGIC *mg;
 	char *s;
 	I32 len;
 	SV *sv;
@@ -5713,7 +5721,7 @@ static SV *old_retrieve_array(pTHX_ stcxt_t *cxt, const char *cname)
 	RLEN(len);
 	TRACEME(("size = %d", len));
 	av = newAV();
-	SEEN(av, 0, 0);				/* Will return if array not allocated nicely */
+	SEEN0(av, 0);				/* Will return if array not allocated nicely */
 	if (len)
 		av_extend(av, len);
 	else
@@ -5776,7 +5784,7 @@ static SV *old_retrieve_hash(pTHX_ stcxt_t *cxt, const char *cname)
 	RLEN(len);
 	TRACEME(("size = %d", len));
 	hv = newHV();
-	SEEN(hv, 0, 0);			/* Will return if table not allocated properly */
+	SEEN0(hv, 0);			/* Will return if table not allocated properly */
 	if (len == 0)
 		return (SV *) hv;	/* No data follow if table empty */
 	hv_ksplit(hv, len + 1);		/* pre-extend hash to save multiple splits */
@@ -6559,6 +6567,8 @@ static SV *dclone(pTHX_ SV *sv)
 static int
 storable_free(pTHX_ SV *sv, MAGIC* mg) {
 	stcxt_t *cxt = (stcxt_t *)SvPVX(sv);
+
+	PERL_UNUSED_ARG(mg);
 	if (kbuf)
 		Safefree(kbuf);
 	if (!cxt->membuf_ro && mbase)

@@ -279,9 +279,9 @@ the function will raise a warning, provided UTF8 warnings are enabled.  If inste
 UNICODE_DISALLOW_SURROGATE is set, the function will fail and return NULL.
 If both flags are set, the function will both warn and return NULL.
 
-The UNICODE_WARN_NONCHAR and UNICODE_DISALLOW_NONCHAR flags correspondingly
+The UNICODE_WARN_NONCHAR and UNICODE_DISALLOW_NONCHAR flags
 affect how the function handles a Unicode non-character.  And likewise, the
-UNICODE_WARN_SUPER and UNICODE_DISALLOW_SUPER flags, affect the handling of
+UNICODE_WARN_SUPER and UNICODE_DISALLOW_SUPER flags affect the handling of
 code points that are
 above the Unicode maximum of 0x10FFFF.  Code points above 0x7FFF_FFFF (which are
 even less portable) can be warned and/or disallowed even if other above-Unicode
@@ -1735,14 +1735,14 @@ Perl__to_upper_title_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp, const char S_
  * LENP will be set to the length in bytes of the string of changed characters
  *
  * The functions return the ordinal of the first character in the string of OUTP */
-#define CALL_UPPER_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_toupper, "ToUc", "utf8::ToSpecUc")
-#define CALL_TITLE_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_totitle, "ToTc", "utf8::ToSpecTc")
-#define CALL_LOWER_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_tolower, "ToLc", "utf8::ToSpecLc")
+#define CALL_UPPER_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_toupper, "ToUc", "")
+#define CALL_TITLE_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_totitle, "ToTc", "")
+#define CALL_LOWER_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_tolower, "ToLc", "")
 
 /* This additionally has the input parameter SPECIALS, which if non-zero will
  * cause this to use the SPECIALS hash for folding (meaning get full case
  * folding); otherwise, when zero, this implies a simple case fold */
-#define CALL_FOLD_CASE(INP, OUTP, LENP, SPECIALS) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_tofold, "ToCf", (SPECIALS) ? "utf8::ToSpecCf" : NULL)
+#define CALL_FOLD_CASE(INP, OUTP, LENP, SPECIALS) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_tofold, "ToCf", (SPECIALS) ? "" : NULL)
 
 UV
 Perl_to_uni_upper(pTHX_ UV c, U8* p, STRLEN *lenp)
@@ -2400,25 +2400,26 @@ Perl_is_utf8_mark(pTHX_ const U8 *p)
 /*
 =for apidoc to_utf8_case
 
-The C<p> contains the pointer to the UTF-8 string encoding
+C<p> contains the pointer to the UTF-8 string encoding
 the character that is being converted.  This routine assumes that the character
 at C<p> is well-formed.
 
-The C<ustrp> is a pointer to the character buffer to put the
-conversion result to.  The C<lenp> is a pointer to the length
+C<ustrp> is a pointer to the character buffer to put the
+conversion result to.  C<lenp> is a pointer to the length
 of the result.
 
-The C<swashp> is a pointer to the swash to use.
+C<swashp> is a pointer to the swash to use.
 
 Both the special and normal mappings are stored in F<lib/unicore/To/Foo.pl>,
-and loaded by SWASHNEW, using F<lib/utf8_heavy.pl>.  The C<special> (usually,
+and loaded by SWASHNEW, using F<lib/utf8_heavy.pl>.  C<special> (usually,
 but not always, a multicharacter mapping), is tried first.
 
-The C<special> is a string like "utf8::ToSpecLower", which means the
-hash %utf8::ToSpecLower.  The access to the hash is through
-Perl_to_utf8_case().
+C<special> is a string, normally C<NULL> or C<"">.  C<NULL> means to not use
+any special mappings; C<""> means to use the special mappings.  Values other
+than these two are treated as the name of the hash containing the special
+mappings, like C<"utf8::ToSpecLower">.
 
-The C<normal> is a string like "ToLower" which means the swash
+C<normal> is a string like "ToLower" which means the swash
 %utf8::ToLower.
 
 =cut */
@@ -2461,12 +2462,25 @@ Perl_to_utf8_case(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp,
     if (special) {
          /* It might be "special" (sometimes, but not always,
 	  * a multicharacter mapping) */
-	 HV * const hv = get_hv(special, 0);
+         HV *hv = NULL;
 	 SV **svp;
 
-	 if (hv &&
-	     (svp = hv_fetch(hv, (const char*)p, UNISKIP(uv1), FALSE)) &&
-	     (*svp)) {
+	 /* If passed in the specials name, use that; otherwise use any
+	  * given in the swash */
+         if (*special != '\0') {
+            hv = get_hv(special, 0);
+        }
+        else {
+            svp = hv_fetchs(MUTABLE_HV(SvRV(*swashp)), "SPECIALS", 0);
+            if (svp) {
+                hv = MUTABLE_HV(SvRV(*svp));
+            }
+        }
+
+	 if (hv
+             && (svp = hv_fetch(hv, (const char*)p, UNISKIP(uv1), FALSE))
+             && (*svp))
+         {
 	     const char *s;
 
 	      s = SvPV_const(*svp, len);
@@ -2587,7 +2601,8 @@ Perl__to_utf8_upper_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, const bool
     }
     else if UTF8_IS_DOWNGRADEABLE_START(*p) {
 	if (flags) {
-	    result = toUPPER_LC(TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1)));
+            U8 c = TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1));
+	    result = toUPPER_LC(c);
 	}
 	else {
 	    return _to_upper_title_latin1(TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1)),
@@ -2653,7 +2668,8 @@ Perl__to_utf8_title_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, const bool
     }
     else if UTF8_IS_DOWNGRADEABLE_START(*p) {
 	if (flags) {
-	    result = toUPPER_LC(TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1)));
+            U8 c = TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1));
+	    result = toUPPER_LC(c);
 	}
 	else {
 	    return _to_upper_title_latin1(TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1)),
@@ -2717,7 +2733,8 @@ Perl__to_utf8_lower_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, const bool
     }
     else if UTF8_IS_DOWNGRADEABLE_START(*p) {
 	if (flags) {
-	    result = toLOWER_LC(TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1)));
+            U8 c = TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1));
+	    result = toLOWER_LC(c);
 	}
 	else {
 	    return to_lower_latin1(TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1)),
@@ -2795,7 +2812,8 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags, b
     }
     else if UTF8_IS_DOWNGRADEABLE_START(*p) {
 	if (flags & FOLD_FLAGS_LOCALE) {
-	    result = toFOLD_LC(TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1)));
+            U8 c = TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1));
+	    result = toFOLD_LC(c);
 	}
 	else {
 	    return _to_fold_latin1(TWO_BYTE_UTF8_TO_NATIVE(*p, *(p+1)),

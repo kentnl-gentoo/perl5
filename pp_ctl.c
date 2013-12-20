@@ -838,7 +838,10 @@ PP(pp_formline)
 	    {
 		STORE_NUMERIC_STANDARD_SET_LOCAL();
 		arg &= ~(FORM_NUM_POINT|FORM_NUM_BLANK);
+                /* we generate fmt ourselves so it is safe */
+                GCC_DIAG_IGNORE(-Wformat-nonliteral);
 		my_snprintf(t, SvLEN(PL_formtarget) - (t - SvPVX(PL_formtarget)), fmt, (int) fieldsize, (int) arg, value);
+                GCC_DIAG_RESTORE;
 		RESTORE_NUMERIC_STANDARD();
 	    }
 	    t += fieldsize;
@@ -3807,6 +3810,7 @@ PP(pp_require)
 	if (vms_unixname)
 #endif
 	{
+	    SV *nsv = sv;
 	    namesv = newSV_type(SVt_PV);
 	    for (i = 0; i <= AvFILL(ar); i++) {
 		SV * const dirsv = *av_fetch(ar, i, TRUE);
@@ -3831,11 +3835,15 @@ PP(pp_require)
 
 		    ENTER_with_name("call_INC");
 		    SAVETMPS;
+		    if (SvPADTMP(nsv)) {
+			nsv = sv_newmortal();
+			SvSetSV_nosteal(nsv,sv);
+		    }
 		    EXTEND(SP, 2);
 
 		    PUSHMARK(SP);
 		    PUSHs(dirsv);
-		    PUSHs(sv);
+		    PUSHs(nsv);
 		    PUTBACK;
 		    if (sv_isobject(loader))
 			count = call_method("INC", G_ARRAY);

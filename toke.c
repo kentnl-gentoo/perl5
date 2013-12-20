@@ -482,7 +482,9 @@ S_printbuf(pTHX_ const char *const fmt, const char *const s)
 
     PERL_ARGS_ASSERT_PRINTBUF;
 
+    GCC_DIAG_IGNORE(-Wformat-nonliteral); /* fmt checked by caller */
     PerlIO_printf(Perl_debug_log, fmt, pv_display(tmp, s, strlen(s), 0, 60));
+    GCC_DIAG_RESTORE;
     SvREFCNT_dec(tmp);
 }
 
@@ -2171,15 +2173,15 @@ S_force_next(pTHX_ I32 type)
  */
 
 static int
-S_postderef(pTHX_ char const funny, char const next)
+S_postderef(pTHX_ int const funny, char const next)
 {
     dVAR;
-    assert(strchr("$@%&*", funny));
+    assert(funny == DOLSHARP || strchr("$@%&*", funny));
     assert(strchr("*[{", next));
     if (next == '*') {
 	PL_expect = XOPERATOR;
 	if (PL_lex_state == LEX_INTERPNORMAL && !PL_lex_brackets) {
-	    assert('@' == funny || '$' == funny);
+	    assert('@' == funny || '$' == funny || DOLSHARP == funny);
 	    PL_lex_state = LEX_INTERPEND;
 	    start_force(PL_curforce);
 	    force_next(POSTJOIN);
@@ -3941,7 +3943,7 @@ S_scan_const(pTHX_ char *start)
  * It deals with "$foo[3]" and /$foo[3]/ and /$foo[0123456789$]+/
  *
  * ->[ and ->{ return TRUE
- * ->$* ->@* ->@[ and ->@{ return TRUE if postfix_interpolate is enabled
+ * ->$* ->$#* ->@* ->@[ ->@{ return TRUE if postderef_qq is enabled
  * { and [ outside a pattern are always subscripts, so return TRUE
  * if we're outside a pattern and it's not { or [, then return FALSE
  * if we're in a pattern and the first char is a {
@@ -3969,7 +3971,7 @@ S_intuit_more(pTHX_ char *s)
 	return TRUE;
     if (*s == '-' && s[1] == '>'
      && FEATURE_POSTDEREF_QQ_IS_ENABLED
-     && ( (s[2] == '$' && s[3] == '*')
+     && ( (s[2] == '$' && (s[3] == '*' || (s[3] == '#' && s[4] == '*')))
 	||(s[2] == '@' && strchr("*[{",s[3])) ))
 	return TRUE;
     if (*s != '{' && *s != '[')
@@ -5745,6 +5747,7 @@ Perl_yylex(pTHX)
 		s = SKIPSPACE1(s);
 		if (FEATURE_POSTDEREF_IS_ENABLED && (
 		    ((*s == '$' || *s == '&') && s[1] == '*')
+		  ||(*s == '$' && s[1] == '#' && s[2] == '*')
 		  ||((*s == '@' || *s == '%') && strchr("*[{", s[1]))
 		  ||(*s == '*' && (s[1] == '*' || s[1] == '{'))
 		 ))
@@ -6579,7 +6582,13 @@ Perl_yylex(pTHX)
 		return deprecate_commaless_var_list();
 	    }
 	}
-	else if (PL_expect == XPOSTDEREF) POSTDEREF('$');
+	else if (PL_expect == XPOSTDEREF) {
+	    if (s[1] == '#') {
+		s++;
+		POSTDEREF(DOLSHARP);
+	    }
+	    POSTDEREF('$');
+	}
 
 	if (s[1] == '#' && (isIDFIRST_lazy_if(s+2,UTF) || strchr("{$:+-@", s[2]))) {
 	    PL_tokenbuf[0] = '@';
@@ -7103,7 +7112,8 @@ Perl_yylex(pTHX)
 	    if (PL_expect != XOPERATOR && (*s != ':' || s[1] != ':')) {
 		CV *cv;
 		if ((gv = gv_fetchpvn_flags(PL_tokenbuf, len,
-                                            UTF ? SVf_UTF8 : 0, SVt_PVCV)) &&
+					    (UTF ? SVf_UTF8 : 0)|GV_NOTQUAL,
+					    SVt_PVCV)) &&
 		    (cv = GvCVu(gv)))
 		{
 		    if (GvIMPORTED_CV(gv))
@@ -7599,8 +7609,13 @@ Perl_yylex(pTHX)
 			    while (isLOWER(*d))
 				d++;
 			    if (!*d && !gv_stashpv(PL_tokenbuf, UTF ? SVf_UTF8 : 0))
+                            {
+                                /* PL_warn_reserved is constant */
+                                GCC_DIAG_IGNORE(-Wformat-nonliteral);
 				Perl_warner(aTHX_ packWARN(WARN_RESERVED), PL_warn_reserved,
 				       PL_tokenbuf);
+                                GCC_DIAG_RESTORE;
+                            }
 			}
 		    }
 		}
@@ -9033,10 +9048,14 @@ S_pending_ident(pTHX)
             tmp = allocmy(PL_tokenbuf, tokenbuf_len, UTF ? SVf_UTF8 : 0);
         }
         else {
-            if (has_colon)
+            if (has_colon) {
+                /* PL_no_myglob is constant */
+                GCC_DIAG_IGNORE(-Wformat-nonliteral);
                 yyerror_pv(Perl_form(aTHX_ PL_no_myglob,
 			    PL_in_my == KEY_my ? "my" : "state", PL_tokenbuf),
                             UTF ? SVf_UTF8 : 0);
+                GCC_DIAG_RESTORE;
+            }
 
             pl_yylval.opval = newOP(OP_PADANY, 0);
             pl_yylval.opval->op_targ = allocmy(PL_tokenbuf, tokenbuf_len,
@@ -9228,7 +9247,7 @@ S_new_constant(pTHX_ const char *s, STRLEN len, const char *key, STRLEN keylen,
 			    newSVpvs(":full"),
 			    newSVpvs(":short"),
 			    NULL);
-	    SPAGAIN;
+            assert(sp == PL_stack_sp);
 	    table = GvHV(PL_hintgv);
 	    if (table
 		&& (PL_hints & HINT_LOCALIZE_HH)

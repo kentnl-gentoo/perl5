@@ -83,11 +83,11 @@ sub SKIP_TEST {
 $Data::Dumper::Useperl = 1;
 if (defined &Data::Dumper::Dumpxs) {
   print "### XS extension loaded, will run XS tests\n";
-  $TMAX = 426; $XS = 1;
+  $TMAX = 432; $XS = 1;
 }
 else {
   print "### XS extensions not loaded, will NOT run XS tests\n";
-  $TMAX = 213; $XS = 0;
+  $TMAX = 216; $XS = 0;
 }
 
 print "1..$TMAX\n";
@@ -899,11 +899,8 @@ TEST q(Data::Dumper->new([$a])->Dumpxs;)
 #};
 EOT
 
-# perl code does keys and values as numbers if possible
-TEST q(Data::Dumper->new([$c])->Dump;);
-# XS code always does them as strings
-$WANT =~ s/ (\d+)/ '$1'/gs;
-TEST q(Data::Dumper->new([$c])->Dumpxs;)
+TEST q(Data::Dumper->new([$c])->Dump;), "sortkeys sub";
+TEST q(Data::Dumper->new([$c])->Dumpxs;), "sort keys sub (XS)"
 	if $XS;
 }
 
@@ -949,9 +946,10 @@ TEST q(Data::Dumper->new([$c])->Dumpxs;)
 #];
 EOT
 
-TEST q(Data::Dumper->new([[$c, $d]])->Dump;);
-$WANT =~ s/ (\d+)/ '$1'/gs;
-TEST q(Data::Dumper->new([[$c, $d]])->Dumpxs;)
+TEST q(Data::Dumper->new([[$c, $d]])->Dump;), "more sortkeys sub";
+# the XS code does number values as strings
+$WANT =~ s/ (\d+)(,?)$/ '$1'$2/gm;
+TEST q(Data::Dumper->new([[$c, $d]])->Dumpxs;), "more sortkeys sub (XS)"
 	if $XS;
 }
 
@@ -1573,3 +1571,20 @@ EOW
     "numbers and number-like scalars"
     if $XS;
 }
+############# 426
+{
+  # [perl #82948]
+  # re::regexp_pattern was moved to universal.c in v5.10.0-252-g192c1e2
+  # and apparently backported to maint-5.10
+  $WANT = $] > 5.010 ? <<'NEW' : <<'OLD';
+#$VAR1 = qr/abc/;
+#$VAR2 = qr/abc/i;
+NEW
+#$VAR1 = qr/(?-xism:abc)/;
+#$VAR2 = qr/(?i-xsm:abc)/;
+OLD
+  TEST q(Data::Dumper->Dump([ qr/abc/, qr/abc/i ])), "qr//";
+  TEST q(Data::Dumper->Dumpxs([ qr/abc/, qr/abc/i ])), "qr// xs"
+    if $XS;
+}
+############# 432

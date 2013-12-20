@@ -545,7 +545,11 @@ Perl_do_openn(pTHX_ GV *gv, const char *oname, I32 len, int as_raw,
 	    && strchr(oname, '\n')
 	    
 	)
+        {
+            GCC_DIAG_IGNORE(-Wformat-nonliteral); /* PL_warn_nl is constant */
 	    Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "open");
+            GCC_DIAG_RESTORE;
+        }
 	goto say_false;
     }
 
@@ -879,13 +883,16 @@ Perl_nextargv(pTHX_ GV *gv)
 		(void)PerlLIO_chmod(PL_oldname,PL_filemode);
 #endif
 		if (fileuid != PL_statbuf.st_uid || filegid != PL_statbuf.st_gid) {
+                    int rc = 0;
 #ifdef HAS_FCHOWN
-		    (void)fchown(PL_lastfd,fileuid,filegid);
+		    rc = fchown(PL_lastfd,fileuid,filegid);
 #else
 #ifdef HAS_CHOWN
-		    (void)PerlLIO_chown(PL_oldname,fileuid,filegid);
+		    rc = PerlLIO_chown(PL_oldname,fileuid,filegid);
 #endif
 #endif
+                    /* XXX silently ignore failures */
+                    PERL_UNUSED_VAR(rc);
 		}
 	    }
 	    return IoIFP(GvIOp(gv));
@@ -1321,8 +1328,11 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
 	s = SvPVX_const(PL_statname);		/* s now NUL-terminated */
 	PL_laststype = OP_STAT;
 	PL_laststatval = PerlLIO_stat(s, &PL_statcache);
-	if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(s, '\n'))
+	if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(s, '\n')) {
+            GCC_DIAG_IGNORE(-Wformat-nonliteral); /* PL_warn_nl is constant */
 	    Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "stat");
+            GCC_DIAG_RESTORE;
+        }
 	return PL_laststatval;
     }
 }
@@ -1381,8 +1391,11 @@ Perl_my_lstat_flags(pTHX_ const U32 flags)
     file = SvPV_flags_const_nolen(sv, flags);
     sv_setpv(PL_statname,file);
     PL_laststatval = PerlLIO_lstat(file,&PL_statcache);
-    if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(file, '\n'))
-	Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "lstat");
+    if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(file, '\n')) {
+        GCC_DIAG_IGNORE(-Wformat-nonliteral); /* PL_warn_nl is constant */
+        Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "lstat");
+        GCC_DIAG_RESTORE;
+    }
     return PL_laststatval;
 }
 
@@ -1395,7 +1408,9 @@ S_exec_failed(pTHX_ const char *cmd, int fd, int do_report)
 	Perl_warner(aTHX_ packWARN(WARN_EXEC), "Can't exec \"%s\": %s",
 		    cmd, Strerror(e));
     if (do_report) {
-	(void)PerlLIO_write(fd, (void*)&e, sizeof(int));
+        int rc = PerlLIO_write(fd, (void*)&e, sizeof(int));
+        /* silently ignore failures */
+        PERL_UNUSED_VAR(rc);
 	PerlLIO_close(fd);
     }
 }
@@ -1801,13 +1816,17 @@ nothing in the core.
 	    if (!IS_SAFE_PATHNAME(s, len, "unlink")) {
                 tot--;
             }
-	    else if (PerlProc_geteuid() || PL_unsafe) {
+	    else if (PL_unsafe) {
 		if (UNLINK(s))
 		    tot--;
 	    }
 	    else {	/* don't let root wipe out directories without -U */
-		if (PerlLIO_lstat(s,&PL_statbuf) < 0 || S_ISDIR(PL_statbuf.st_mode))
+		if (PerlLIO_lstat(s,&PL_statbuf) < 0)
 		    tot--;
+		else if (S_ISDIR(PL_statbuf.st_mode)) {
+		    tot--;
+		    SETERRNO(EISDIR, SS$_NOPRIV);
+		}
 		else {
 		    if (UNLINK(s))
 			tot--;
@@ -2136,11 +2155,16 @@ Perl_do_ipcctl(pTHX_ I32 optype, SV **mark, SV **sp)
 #ifdef Semctl
             union semun unsemds;
 
+            if(cmd == SETVAL) {
+                unsemds.val = PTR2nat(a);
+            }
+            else {
 #ifdef EXTRA_F_IN_SEMUN_BUF
-            unsemds.buff = (struct semid_ds *)a;
+                unsemds.buff = (struct semid_ds *)a;
 #else
-            unsemds.buf = (struct semid_ds *)a;
+                unsemds.buf = (struct semid_ds *)a;
 #endif
+            }
 	    ret = Semctl(id, n, cmd, unsemds);
 #else
 	    /* diag_listed_as: sem%s not implemented */
@@ -2413,11 +2437,7 @@ Perl_vms_start_glob
 #else
     sv_setpv(tmpcmd, "echo ");
     sv_catsv(tmpcmd, tmpglob);
-#if 'z' - 'a' == 25
-    sv_catpv(tmpcmd, "|tr -s ' \t\f\r' '\\012\\012\\012\\012'|");
-#else
     sv_catpv(tmpcmd, "|tr -s ' \t\f\r' '\\n\\n\\n\\n'|");
-#endif
 #endif /* !CSH */
 #endif /* !DOSISH */
     {

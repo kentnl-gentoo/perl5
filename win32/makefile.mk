@@ -43,7 +43,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.19.6
+#INST_VER	*= \5.19.7
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -138,6 +138,11 @@ USE_LARGE_FILES	*= define
 #CCTYPE		= MSVC120FREE
 # MinGW or mingw-w64 with gcc-3.2 or later
 CCTYPE		*= GCC
+
+#
+# If you are using Intel C++ Compiler uncomment this
+#
+#__ICC		*= define
 
 #
 # uncomment next line if you want debug version of perl (big,slow)
@@ -487,8 +492,13 @@ PREMSVC80	= define
 PREMSVC80	= undef
 .ENDIF
 
+.IF "$(__ICC)" != "define"
 CC		= cl
 LINK32		= link
+.ELSE
+CC		= icl
+LINK32		= xilink
+.ENDIF
 LIB32		= $(LINK32) -lib
 RSC		= rc
 
@@ -557,6 +567,14 @@ LIBBASEFILES	= \
 		comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib \
 		netapi32.lib uuid.lib ws2_32.lib mpr.lib winmm.lib \
 		version.lib odbc32.lib odbccp32.lib comctl32.lib
+
+# Avoid __intel_new_proc_init link error for libircmt.
+# libmmd is /MD equivelent, other variants exist.
+# libmmd is Intel C's math addon funcs to MS CRT, contains long doubles, C99,
+# and optimized C89 funcs
+.IF "$(__ICC)" == "define"
+LIBBASEFILES	+= libircmt.lib libmmd.lib
+.ENDIF
 
 # The 64 bit Windows Server 2003 SP1 SDK compilers link against MSVCRT.dll, which
 # doesn't include the buffer overrun verification code used by the /GS switch.
@@ -1345,7 +1363,7 @@ utils: $(PERLEXE) $(X2P) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5196delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5197delta.pod
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1442,7 +1460,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5196delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perl5197delta.pod perlaix.pod perlamiga.pod perlapi.pod \
 	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod perldos.pod \
 	    perlfreebsd.pod perlhaiku.pod perlhpux.pod perlhurd.pod \
 	    perlintern.pod perlirix.pod perljp.pod perlko.pod perllinux.pod \

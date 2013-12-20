@@ -8,6 +8,14 @@ BEGIN {
         : (skip_all => "A perl without taint support") 
     );
 }
+use lib qw( ./t/lib );
+use Testing qw(
+    create_file_ok
+    mkdir_ok
+    symlink_ok
+    dir_path
+    file_path
+);
 
 my %Expect_File = (); # what we expect for $_
 my %Expect_Name = (); # what we expect for $File::Find::name/fullname
@@ -108,24 +116,16 @@ END {
     cleanup();
 }
 
-sub touch {
-    ok( open(my $T,'>',$_[0]), "Opened $_[0] successfully" );
-}
-
-sub MkDir($$) {
-    ok( mkdir($_[0],$_[1]), "Created directory $_[0] successfully" );
-}
-
 sub wanted_File_Dir {
-    print "# \$File::Find::dir => '$File::Find::dir'\n";
-    print "# \$_ => '$_'\n";
-    s#\.$## if ($^O eq 'VMS' && $_ ne '.');
+    print "# \$File::Find::dir => '$File::Find::dir'\t\$_ => '$_'\n";
+    s#\.$## if ($^O eq 'VMS' && $_ ne '.'); #
     s/(.dir)?$//i if ($^O eq 'VMS' && -d _);
-	ok( $Expect_File{$_}, "Expected and found $File::Find::name" );
+    ok( $Expect_File{$_}, "found $_ for \$_, as expected" );
     if ( $FastFileTests_OK ) {
-        delete $Expect_File{ $_}
+        delete $Expect_File{$_}
           unless ( $Expect_Dir{$_} && ! -d _ );
-    } else {
+    }
+    else {
         delete $Expect_File{$_}
           unless ( $Expect_Dir{$_} && ! -d $_ );
     }
@@ -141,70 +141,10 @@ sub simple_wanted {
     print "# \$_ => '$_'\n";
 }
 
-
-# Use dir_path() to specify a directory path that's expected for
-# $File::Find::dir (%Expect_Dir). Also use it in file operations like
-# chdir, rmdir etc.
-#
-# dir_path() concatenates directory names to form a *relative*
-# directory path, independent from the platform it's run on, although
-# there are limitations. Don't try to create an absolute path,
-# because that may fail on operating systems that have the concept of
-# volume names (e.g. Mac OS). As a special case, you can pass it a "."
-# as first argument, to create a directory path like "./fa/dir". If there's
-# no second argument this function will return the string "./"
-
-sub dir_path {
-    my $first_arg = shift @_;
-
-    if ($first_arg eq '.') {
-	return './' unless @_;
-	my $path = File::Spec->catdir(@_);
-	# add leading "./"
-	$path = "./$path";
-	return $path;
-    } else { # $first_arg ne '.'
-        return $first_arg unless @_; # return plain filename
-	my $fname = File::Spec->catdir($first_arg, @_); # relative path
-	$fname = VMS::Filespec::unixpath($fname) if $^O eq 'VMS';
-        return $fname;
-    }
-}
-
-
 # Use topdir() to specify a directory path that you want to pass to
 # find/finddepth. Historically topdir() differed on Mac OS classic.
 
 *topdir = \&dir_path;
-
-
-# Use file_path() to specify a file path that's expected for $_
-# (%Expect_File). Also suitable for file operations like unlink etc.
-#
-# file_path() concatenates directory names (if any) and a filename to
-# form a *relative* file path (the last argument is assumed to be a
-# file). It's independent from the platform it's run on, although
-# there are limitations. As a special case, you can pass it a "." as
-# first argument, to create a file path like "./fa/file". If there's no
-# second argument, this function will return the string "./" otherwise.
-
-sub file_path {
-    my $first_arg = shift @_;
-
-    if ($first_arg eq '.') {
-	return './' unless @_;
-	my $path = File::Spec->catfile(@_);
-	# add leading "./"
-	$path = "./$path";
-	return $path;
-    } else { # $first_arg ne '.'
-        return $first_arg unless @_; # return plain filename
-	my $fname = File::Spec->catfile($first_arg, @_); # relative path
-	$fname = VMS::Filespec::unixify($fname) if $^O eq 'VMS';
-        return $fname;
-    }
-}
-
 
 # Use file_path_name() to specify a file path that's expected for
 # $File::Find::Name (%Expect_Name). Note: When the no_chdir => 1
@@ -217,29 +157,29 @@ sub file_path {
 *file_path_name = \&file_path;
 
 
-MkDir( dir_path('for_find'), 0770 );
+mkdir_ok( dir_path('for_find'), 0770 );
 ok( chdir( dir_path('for_find')), 'successful chdir() to for_find' );
 
 $cwd = cwd(); # save cwd
 ( $cwd_untainted ) = $cwd =~ m|^(.+)$|; # untaint it
 
-MkDir( dir_path('fa'), 0770 );
-MkDir( dir_path('fb'), 0770  );
-touch( file_path('fb', 'fb_ord') );
-MkDir( dir_path('fb', 'fba'), 0770  );
-touch( file_path('fb', 'fba', 'fba_ord') );
+mkdir_ok( dir_path('fa'), 0770 );
+mkdir_ok( dir_path('fb'), 0770  );
+create_file_ok( file_path('fb', 'fb_ord') );
+mkdir_ok( dir_path('fb', 'fba'), 0770  );
+create_file_ok( file_path('fb', 'fba', 'fba_ord') );
 SKIP: {
 	skip "Creating symlink", 1, unless $symlink_exists;
 	ok( symlink('../fb','fa/fsl'), 'Created symbolic link' );
 }
-touch( file_path('fa', 'fa_ord') );
+create_file_ok( file_path('fa', 'fa_ord') );
 
-MkDir( dir_path('fa', 'faa'), 0770  );
-touch( file_path('fa', 'faa', 'faa_ord') );
-MkDir( dir_path('fa', 'fab'), 0770  );
-touch( file_path('fa', 'fab', 'fab_ord') );
-MkDir( dir_path('fa', 'fab', 'faba'), 0770  );
-touch( file_path('fa', 'fab', 'faba', 'faba_ord') );
+mkdir_ok( dir_path('fa', 'faa'), 0770  );
+create_file_ok( file_path('fa', 'faa', 'faa_ord') );
+mkdir_ok( dir_path('fa', 'fab'), 0770  );
+create_file_ok( file_path('fa', 'fab', 'fab_ord') );
+mkdir_ok( dir_path('fa', 'fab', 'faba'), 0770  );
+create_file_ok( file_path('fa', 'fab', 'faba', 'faba_ord') );
 
 print "# check untainting (no follow)\n";
 
@@ -262,7 +202,6 @@ File::Find::find( {wanted => \&wanted_File_Dir_prune, untaint => 1,
 		   untaint_pattern => qr|^(.+)$|}, topdir('fa') );
 
 is(scalar keys %Expect_File, 0, 'Found all expected files');
-
 
 # don't untaint at all, should die
 %Expect_File = ();

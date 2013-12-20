@@ -2588,7 +2588,6 @@ S_apply_attrs(pTHX_ HV *stash, SV *target, OP *attrs)
     PERL_ARGS_ASSERT_APPLY_ATTRS;
 
     /* fake up C<use attributes $pkg,$rv,@attrs> */
-    ENTER;		/* need to protect against side-effects of 'use' */
 
 #define ATTRSMODULE "attributes"
 #define ATTRSMODULE_PM "attributes.pm"
@@ -2602,7 +2601,6 @@ S_apply_attrs(pTHX_ HV *stash, SV *target, OP *attrs)
 						   newSVOP(OP_CONST, 0,
 							   newRV(target)),
 						   dup_attrlist(attrs))));
-    LEAVE;
 }
 
 STATIC void
@@ -2622,7 +2620,6 @@ S_apply_attrs_my(pTHX_ HV *stash, OP *target, OP *attrs, OP **imopsp)
 	   target->op_type == OP_PADAV);
 
     /* Ensure that attributes.pm is loaded. */
-    ENTER;		/* need to protect against side-effects of 'use' */
     /* Don't force the C<use> if we don't need it. */
     svp = hv_fetchs(GvHVn(PL_incgv), ATTRSMODULE_PM, FALSE);
     if (svp && *svp != &PL_sv_undef)
@@ -2630,7 +2627,6 @@ S_apply_attrs_my(pTHX_ HV *stash, OP *target, OP *attrs, OP **imopsp)
     else
 	Perl_load_module(aTHX_ PERL_LOADMOD_NOIMPORT,
 			       newSVpvs(ATTRSMODULE), NULL);
-    LEAVE;
 
     /* Need package name for method call. */
     pack = newSVOP(OP_CONST, 0, newSVpvs(ATTRSMODULE));
@@ -2800,6 +2796,22 @@ S_move_proto_attr(pTHX_ OP **proto, OP **attrs, const GV * name)
     }
 }
 
+static void
+S_cant_declare(pTHX_ OP *o)
+{
+    if (o->op_type == OP_NULL
+     && (o->op_flags & (OPf_SPECIAL|OPf_KIDS)) == OPf_KIDS)
+        o = cUNOPo->op_first;
+    yyerror(Perl_form(aTHX_ "Can't declare %s in \"%s\"",
+                             o->op_type == OP_NULL
+                               && o->op_flags & OPf_SPECIAL
+                                 ? "do block"
+                                 : OP_DESC(o),
+                             PL_parser->in_my == KEY_our   ? "our"   :
+                             PL_parser->in_my == KEY_state ? "state" :
+                                                             "my"));
+}
+
 STATIC OP *
 S_my_kid(pTHX_ OP *o, OP *attrs, OP **imopsp)
 {
@@ -2829,11 +2841,7 @@ S_my_kid(pTHX_ OP *o, OP *attrs, OP **imopsp)
 	       type == OP_RV2AV ||
 	       type == OP_RV2HV) { /* XXX does this let anything illegal in? */
 	if (cUNOPo->op_first->op_type != OP_GV) { /* MJD 20011224 */
-	    yyerror(Perl_form(aTHX_ "Can't declare %s in \"%s\"",
-			OP_DESC(o),
-			PL_parser->in_my == KEY_our
-			    ? "our"
-			    : PL_parser->in_my == KEY_state ? "state" : "my"));
+	    S_cant_declare(aTHX_ o);
 	} else if (attrs) {
 	    GV * const gv = cGVOPx_gv(cUNOPo->op_first);
 	    PL_parser->in_my = FALSE;
@@ -2852,11 +2860,7 @@ S_my_kid(pTHX_ OP *o, OP *attrs, OP **imopsp)
 	     type != OP_PADHV &&
 	     type != OP_PUSHMARK)
     {
-	yyerror(Perl_form(aTHX_ "Can't declare %s in \"%s\"",
-			  OP_DESC(o),
-			  PL_parser->in_my == KEY_our
-			    ? "our"
-			    : PL_parser->in_my == KEY_state ? "state" : "my"));
+	S_cant_declare(aTHX_ o);
 	return o;
     }
     else if (attrs && type != OP_PUSHMARK) {
@@ -3567,7 +3571,10 @@ S_fold_constants(pTHX_ OP *o)
 #endif
     assert(sv);
     if (type == OP_STRINGIFY) SvPADTMP_off(sv);
-    else if (!SvIMMORTAL(sv)) SvPADTMP_on(sv);
+    else if (!SvIMMORTAL(sv)) {
+	SvPADTMP_on(sv);
+	SvREADONLY_on(sv);
+    }
     if (type == OP_RV2GV)
 	newop = newGVOP(OP_GV, 0, MUTABLE_GV(sv));
     else
@@ -3616,7 +3623,10 @@ S_gen_constant_list(pTHX_ OP *o)
     ((UNOP*)o)->op_first = newSVOP(OP_CONST, 0, (SV *)av);
     if (AvFILLp(av) != -1)
 	for (svp = AvARRAY(av) + AvFILLp(av); svp >= AvARRAY(av); --svp)
+	{
 	    SvPADTMP_on(*svp);
+	    SvREADONLY_on(*svp);
+	}
 #ifdef PERL_MAD
     op_getmad(curop,o,'O');
 #else
@@ -5500,7 +5510,8 @@ Perl_vload_module(pTHX_ U32 flags, SV *name, SV *ver, va_list *args)
      * that it has a PL_parser to play with while doing that, and also
      * that it doesn't mess with any existing parser, by creating a tmp
      * new parser with lex_start(). This won't actually be used for much,
-     * since pp_require() will create another parser for the real work. */
+     * since pp_require() will create another parser for the real work.
+     * The ENTER/LEAVE pair protect callers from any side effects of use.  */
 
     ENTER;
     SAVEVPTR(PL_curcop);
@@ -6436,7 +6447,15 @@ Perl_newLOOPOP(pTHX_ I32 flags, I32 debuggable, OP *expr, OP *block)
     PERL_UNUSED_ARG(debuggable);
 
     if (expr) {
-	if (once && expr->op_type == OP_CONST && !SvTRUE(((SVOP*)expr)->op_sv))
+	if (once && (
+	      (expr->op_type == OP_CONST && !SvTRUE(((SVOP*)expr)->op_sv))
+	   || (  expr->op_type == OP_NOT
+	      && cUNOPx(expr)->op_first->op_type == OP_CONST
+	      && SvTRUE(cSVOPx_sv(cUNOPx(expr)->op_first))
+	      )
+	   ))
+	    /* Return the block now, so that S_new_logop does not try to
+	       fold it away. */
 	    return block;	/* do {} while 0 does once */
 	if (expr->op_type == OP_READLINE
 	    || expr->op_type == OP_READDIR
@@ -6475,11 +6494,19 @@ Perl_newLOOPOP(pTHX_ I32 flags, I32 debuggable, OP *expr, OP *block)
     listop = op_append_elem(OP_LINESEQ, block, newOP(OP_UNSTACK, 0));
     o = new_logop(OP_AND, 0, &expr, &listop);
 
+    if (once) {
+	ASSUME(listop);
+    }
+
     if (listop)
 	((LISTOP*)listop)->op_last->op_next = LINKLIST(o);
 
     if (once && o != listop)
+    {
+	assert(cUNOPo->op_first->op_type == OP_AND
+	    || cUNOPo->op_first->op_type == OP_OR);
 	o->op_next = ((LOGOP*)cUNOPo->op_first)->op_other;
+    }
 
     if (o == listop)
 	o = newUNOP(OP_NULL, 0, o);	/* or do {} while 1 loses outer block */
@@ -7957,8 +7984,10 @@ S_process_special_blocks(pTHX_ I32 floor, const char *const fullname,
     if (*name == 'B') {
 	if (strEQ(name, "BEGIN")) {
 	    const I32 oldscope = PL_scopestack_ix;
+            dSP;
 	    if (floor) LEAVE_SCOPE(floor);
 	    ENTER;
+            PUSHSTACKi(PERLSI_REQUIRE);
 	    SAVECOPFILE(&PL_compiling);
 	    SAVECOPLINE(&PL_compiling);
 	    SAVEVPTR(PL_curcop);
@@ -7968,6 +7997,7 @@ S_process_special_blocks(pTHX_ I32 floor, const char *const fullname,
 	    GvCV_set(gv,0);		/* cv has been hijacked */
 	    call_list(oldscope, PL_beginav);
 
+            POPSTACK;
 	    LEAVE;
 	}
 	else
@@ -11103,6 +11133,45 @@ Perl_rpeep(pTHX_ OP *o)
 	case OP_NEXTSTATE:
 	    PL_curcop = ((COP*)o);		/* for warnings */
 
+	    /* Optimise a "return ..." at the end of a sub to just be "...".
+	     * This saves 2 ops. Before:
+	     * 1  <;> nextstate(main 1 -e:1) v ->2
+	     * 4  <@> return K ->5
+	     * 2    <0> pushmark s ->3
+	     * -    <1> ex-rv2sv sK/1 ->4
+	     * 3      <#> gvsv[*cat] s ->4
+	     *
+	     * After:
+	     * -  <@> return K ->-
+	     * -    <0> pushmark s ->2
+	     * -    <1> ex-rv2sv sK/1 ->-
+	     * 2      <$> gvsv(*cat) s ->3
+	     */
+	    {
+		OP *next = o->op_next;
+		OP *sibling = o->op_sibling;
+		if (   OP_TYPE_IS(next, OP_PUSHMARK)
+		    && OP_TYPE_IS(sibling, OP_RETURN)
+		    && OP_TYPE_IS(sibling->op_next, OP_LINESEQ)
+		    && OP_TYPE_IS(sibling->op_next->op_next, OP_LEAVESUB)
+		    && cUNOPx(sibling)->op_first == next
+		    && next->op_sibling && next->op_sibling->op_next
+		    && next->op_next
+		) {
+		    /* Look through the PUSHMARK's siblings for one that
+		     * points to the RETURN */
+		    OP *top = next->op_sibling;
+		    while (top && top->op_next) {
+			if (top->op_next == sibling) {
+			    top->op_next = sibling->op_next;
+			    o->op_next = next->op_next;
+			    break;
+			}
+			top = top->op_sibling;
+		    }
+		}
+	    }
+
 	    /* Two NEXTSTATEs in a row serve no purpose. Except if they happen
 	       to carry two labels. For now, take the easier option, and skip
 	       this optimisation if the first NEXTSTATE has a label.  */
@@ -11833,7 +11902,7 @@ Perl_peep(pTHX_ OP *o)
 =for apidoc Ao||custom_op_xop
 Return the XOP structure for a given custom op. This macro should be
 considered internal to OP_NAME and the other access macros: use them instead.
-This macro does call a function. Prior to 5.19.6, this was implemented as a
+This macro does call a function. Prior to 5.19.7, this was implemented as a
 function.
 
 =cut

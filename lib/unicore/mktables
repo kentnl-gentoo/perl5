@@ -918,7 +918,7 @@ my %why_stabilized;  # Documentation only
 my %why_obsolete;    # Documentation only
 
 {   # Closure
-    my $simple = 'Perl uses the more complete version of this property';
+    my $simple = 'Perl uses the more complete version';
     my $unihan = 'Unihan properties are by default not enabled in the Perl core.  Instead use CPAN: Unicode::Unihan';
 
     my $other_properties = 'other properties';
@@ -6502,7 +6502,7 @@ END
         my $comment = "";
 
         my $status = $self->status;
-        if ($status && $status ne $PLACEHOLDER) {
+        if ($status ne $NORMAL) {
             my $warn = uc $status_past_participles{$status};
             $comment .= <<END;
 
@@ -8091,8 +8091,12 @@ sub trace { return main::trace(@_) if main::DEBUG && $to_trace }
                                 _Alias_Hash => $table_ref{$addr},
                                 _Property => $self,
 
-                                # gets property's fate and status by default
-                                Fate => $self->fate,
+                                # gets property's fate and status by default,
+                                # except if the name begind with an
+                                # underscore, default it to internal
+                                Fate => ($name =~ /^_/)
+                                         ? $INTERNAL_ONLY
+                                         : $self->fate,
                                 Status => $self->status,
                                 _Status_Info => $self->status_info,
                                 %args);
@@ -12636,6 +12640,19 @@ END
                             Case_Folding
                         } )
     {
+        my $comment = <<END;
+
+Note that although the Perl core uses this file, it has the standard values
+for code points from U+0000 to U+00FF compiled in, so changing this table will
+not change the core's behavior with respect to these code points.  Use
+Unicode::Casing to override this table.
+END
+        if ($map eq 'Case_Folding') {
+            $comment .= <<END;
+(/i regex matching is not overridable except by using a custom regex engine)
+END
+        }
+        property_ref($map)->add_comment(join_lines($comment));
         my $simple = property_ref("Simple_$map");
         next if ! $simple->is_empty;
         if ($simple->to_output_map) {
@@ -15512,7 +15529,7 @@ B<Compound forms> consist of two components, separated by an equals sign or a
 colon.  The first component is the property name, and the second component is
 the particular value of the property to match against, for example,
 C<\\p{Script: Greek}> and C<\\p{Script=Greek}> both mean to match characters
-whose Script property is Greek.
+whose Script property value is Greek.
 
 B<Single forms>, like C<\\p{Greek}>, are mostly Perl-defined shortcuts for
 their equivalent compound forms.  The table shows these equivalences.  (In our
@@ -15530,8 +15547,10 @@ for improved legibility.
 Also, white space, hyphens, and underscores are normally ignored
 everywhere between the {braces}, and hence can be freely added or removed
 even if the C</x> modifier hasn't been specified on the regular expression.
-But $a_bold_stricter at the beginning of an entry in the table below
+But in the table below $a_bold_stricter at the beginning of an entry
 means that tighter (stricter) rules are used for that entry:
+
+=over 4
 
 =over 4
 
@@ -15562,8 +15581,12 @@ adjacent to (but within) the braces and the colon or equal sign.
 
 =back
 
+=back
+
 Some properties are considered obsolete by Unicode, but still available.
 There are several varieties of obsolescence:
+
+=over 4
 
 =over 4
 
@@ -15610,16 +15633,18 @@ some of these extensions to be removed without warning, replaced by another
 property with the same name that means something different.  Use the
 equivalent shown instead.
 
+=back
+
 @block_warning
 
 The table below has two columns.  The left column contains the C<\\p{}>
 constructs to look up, possibly preceded by the flags mentioned above; and
 the right column contains information about them, like a description, or
-synonyms.  It shows both the single and compound forms for each property that
-has them.  If the left column is a short name for a property, the right column
-will give its longer, more descriptive name; and if the left column is the
-longest name, the right column will show any equivalent shortest name, in both
-single and compound forms if applicable.
+synonyms.  The table shows both the single and compound forms for each
+property that has them.  If the left column is a short name for a property,
+the right column will give its longer, more descriptive name; and if the left
+column is the longest name, the right column will show any equivalent shortest
+name, in both single and compound forms if applicable.
 
 The right column will also caution you if a property means something different
 than what might normally be expected.
@@ -15627,18 +15652,15 @@ than what might normally be expected.
 All single forms are Perl extensions; a few compound forms are as well, and
 are noted as such.
 
-Numbers in (parentheses) indicate the total number of code points matched by
-the property.  For emphasis, those properties that match no code points at all
-are listed as well in a separate section following the table.
+Numbers in (parentheses) indicate the total number of Unicode code points
+matched by the property.  For emphasis, those properties that match no code
+points at all are listed as well in a separate section following the table.
 
 Most properties match the same code points regardless of whether C<"/i">
 case-insensitive matching is specified or not.  But a few properties are
-affected.  These are shown with the notation
-
- (/i= other_property)
-
+affected.  These are shown with the notation S<C<(/i= I<other_property>)>>
 in the second column.  Under case-insensitive matching they match the
-same code pode points as the property "other_property".
+same code pode points as the property I<other_property>.
 
 There is no description given for most non-Perl defined properties (See
 L<$unicode_reference_url> for that).
@@ -15681,8 +15703,8 @@ B<*> is a wild-card
 
 =item *
 
-B<(\\d+)> in the info column gives the number of code points matched by
-this property.
+B<(\\d+)> in the info column gives the number of Unicode code points matched
+by this property.
 
 =item *
 
@@ -16619,7 +16641,7 @@ sub write_all_tables() {
             }
             elsif ($count == $MAX_UNICODE_CODEPOINTS
                    && ($table == $property || $table->leader == $table)
-                   && $table->property->status ne $PLACEHOLDER)
+                   && $table->property->status ne $NORMAL)
             {
                     Carp::my_carp("$table unexpectedly matches all Unicode code points.  Proceeding anyway.");
             }

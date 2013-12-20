@@ -198,7 +198,7 @@ use File::Glob qw(:case);
     },
 
     'CGI' => {
-        'DISTRIBUTION' => 'MARKSTOS/CGI.pm-3.63.tar.gz',
+        'DISTRIBUTION' => 'MARKSTOS/CGI.pm-3.64.tar.gz',
         'FILES'        => q[cpan/CGI],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -207,6 +207,7 @@ use File::Glob qw(:case);
                 t/fast.t
                 ),
         ],
+        'DEPRECATED' => '5.019007',
     },
 
     'Compress::Raw::Bzip2' => {
@@ -301,7 +302,7 @@ use File::Glob qw(:case);
     # Note: When updating CPAN-Meta the META.* files will need to be regenerated
     # perl -Icpan/CPAN-Meta/lib Porting/makemeta
     'CPAN::Meta' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.132830.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.133380.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta],
         'EXCLUDED'     => [
             qw(t/00-compile.t),
@@ -472,7 +473,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::MakeMaker' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.82.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.84.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -497,7 +498,7 @@ use File::Glob qw(:case);
     },
 
     'File::Fetch' => {
-        'DISTRIBUTION' => 'BINGOS/File-Fetch-0.44.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/File-Fetch-0.46.tar.gz',
         'FILES'        => q[cpan/File-Fetch],
     },
 
@@ -584,7 +585,7 @@ use File::Glob qw(:case);
     },
 
     'HTTP::Tiny' => {
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.038.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.039.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/00-compile.t',
@@ -680,7 +681,7 @@ use File::Glob qw(:case);
     },
 
     'Locale-Codes' => {
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.27.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.28.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( README.first
@@ -788,7 +789,7 @@ use File::Glob qw(:case);
     #
 
     'Module::Build' => {
-        'DISTRIBUTION' => 'LEONT/Module-Build-0.4202.tar.gz',
+        'DISTRIBUTION' => 'LEONT/Module-Build-0.4203.tar.gz',
         'FILES'        => q[cpan/Module-Build],
         'EXCLUDED'     => [
             qw( t/par.t
@@ -803,7 +804,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-3.00.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-3.01.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -874,13 +875,8 @@ use File::Glob qw(:case);
 
     'PathTools' => {
         'DISTRIBUTION' => 'SMUELLER/PathTools-3.40.tar.gz',
-        'FILES'        => q[dist/Cwd],
+        'FILES'        => q[dist/PathTools],
         'EXCLUDED'     => [qr{^t/lib/Test/}],
-
-        # NOTE: PathTools is in dist/Cwd/ instead of dist/PathTools because it
-        # contains Cwd.xs and something, possibly Makefile.SH, makes an assumption
-        # that the leafname of some file corresponds with the pathname of the
-        # directory.
     },
 
     'Perl::OSType' => {
@@ -978,7 +974,7 @@ use File::Glob qw(:case);
 
     'Scalar-List-Utils' => {
         'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.35.tar.gz',
-        'FILES'    => q[cpan/List-Util],
+        'FILES'    => q[cpan/Scalar-List-Utils],
     },
 
     'Search::Dict' => {
@@ -1232,12 +1228,12 @@ use File::Glob qw(:case);
     },
 
     'Time::Piece' => {
-        'DISTRIBUTION' => 'RJBS/Time-Piece-1.23.tar.gz',
+        'DISTRIBUTION' => 'RJBS/Time-Piece-1.24.tar.gz',
         'FILES'        => q[cpan/Time-Piece],
     },
 
     'Unicode::Collate' => {
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.02.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.04.tar.gz',
         'FILES'        => q[cpan/Unicode-Collate],
         'EXCLUDED'     => [
             qr{N$},
@@ -1294,7 +1290,7 @@ use File::Glob qw(:case);
     },
 
     'Win32' => {
-        'DISTRIBUTION' => "JDB/Win32-0.47.tar.gz",
+        'DISTRIBUTION' => "JDB/Win32-0.48.tar.gz",
         'FILES'        => q[cpan/Win32],
     },
 

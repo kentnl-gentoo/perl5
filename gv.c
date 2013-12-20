@@ -1122,7 +1122,8 @@ Perl_gv_autoload_pvn(pTHX_ HV *stash, const char *name, STRLEN len, U32 flags)
 	    packname = sv_2mortal(newSVhek(HvNAME_HEK(stash)));
 	if (flags & GV_SUPER) sv_catpvs(packname, "::SUPER");
     }
-    if (!(gv = gv_fetchmeth_pvn(stash, S_autoload, S_autolen, FALSE, is_utf8)))
+    if (!(gv = gv_fetchmeth_pvn(stash, S_autoload, S_autolen, FALSE,
+				is_utf8 | (flags & GV_SUPER))))
 	return NULL;
     cv = GvCV(gv);
 
@@ -1255,14 +1256,15 @@ S_require_tie_mod(pTHX_ GV *gv, const char *varpv, SV* namesv, const char *methp
 				  so save it. For the moment it's always
 				  a single char. */
 	const char type = varname == '[' ? '$' : '%';
+#ifdef DEBUGGING
 	dSP;
+#endif
 	ENTER;
 	SAVEFREESV(namesv);
 	if ( flags & 1 )
 	    save_scalar(gv);
-	PUSHSTACKi(PERLSI_MAGIC);
 	Perl_load_module(aTHX_ PERL_LOADMOD_NOIMPORT, module, NULL);
-	POPSTACK;
+	assert(sp == PL_stack_sp);
 	stash = gv_stashsv(namesv, 0);
 	if (!stash)
 	    Perl_croak(aTHX_ "panic: Can't use %c%c because %"SVf" is not available",
@@ -3187,7 +3189,6 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
     PL_op = (OP *) &myop;
     if (PERLDB_SUB && PL_curstash != PL_debstash)
 	PL_op->op_private |= OPpENTERSUB_DB;
-    PUTBACK;
     Perl_pp_pushmark(aTHX);
 
     EXTEND(SP, notfound + 5);

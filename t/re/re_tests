@@ -5,7 +5,7 @@
 # could not go in this file, and were farmed out to other .t's, where they
 # remain
 #
-# pat	string	y/n/etc	expr	expected-expr	skip-reason
+# pat	string	y/n/etc	expr	expected-expr	skip-reason	comment
 __END__
 abc	abc	y	$&	abc
 abc	abc	y	$-[0]	0
@@ -640,6 +640,7 @@ $(?<=^(a))	a	y	$1	a
 ([[:^alpha:]]+)	ABcd01Xy__--  ${nulnul}${ffff}	y	$1	01
 ((?a)[[:^alnum:]]+)	ABcd01Xy__--  ${nulnul}${ffff}	y	$1	__--  ${nulnul}${ffff}
 ([[:^ascii:]]+)	ABcd01Xy__--  ${nulnul}${ffff}	y	$1	${ffff}
+([:[:^ascii:]]+)	ABcd01Xy__--  ${nulnul}${ffff}	y	$1	${ffff}	RT #120799
 ([[:^cntrl:]]+)	ABcd01Xy__--  ${nulnul}${ffff}	y	$1	ABcd01Xy__--  
 ([[:^digit:]]+)	ABcd01Xy__--  ${nulnul}${ffff}	y	$1	ABcd
 ([[:^lower:]]+)	ABcd01Xy__--  ${nulnul}${ffff}	y	$1	AB
@@ -1840,5 +1841,7 @@ A+(*PRUNE)BC(?{})	AAABC	y	$&	AAABC
 /\N* /x	ab	y	$&	ab	         # Under /x was ignoring the '*'
 /\N (?#comment) * /x	ab	y	$&	ab	# likewise
 
+# RT #120600: Variable length lookbehind is not variable
+(?<W>a)(?<BB>(?=(?&W))(?<=(?&W)))(?&BB)	aa	y	$&	a	# test repeated recursive patterns
 # Keep these lines at the end of the file
 # vim: softtabstop=0 noexpandtab

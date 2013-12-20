@@ -37,7 +37,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.19.6
+#INST_VER	= \5.19.7
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -951,9 +951,7 @@ config.w32 : $(CFGSH_TMPL)
 	@echo #endif>>$@
 
 ..\git_version.h : $(MINIPERL) ..\make_patchnum.pl
-	cd ..
-	miniperl -Ilib make_patchnum.pl
-	cd win32
+	cd .. && miniperl -Ilib make_patchnum.pl && cd win32
 
 # make sure that we recompile perl.c if the git version changes
 ..\perl$(o) : ..\git_version.h
@@ -1181,7 +1179,7 @@ utils: $(PERLEXE) $(X2P) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5196delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5197delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1279,7 +1277,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5196delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perl5197delta.pod perlaix.pod perlamiga.pod perlapi.pod \
 	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod perldos.pod \
 	    perlfreebsd.pod perlhaiku.pod perlhpux.pod perlhurd.pod \
 	    perlintern.pod perlirix.pod perljp.pod perlko.pod perllinux.pod \

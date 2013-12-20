@@ -52,8 +52,10 @@
 :	  1) must be static to its containing file ("i" or "s" flag); or
 :         2) be combined with the "X" flag.
 :
-:   f  Function takes printf style format string, varargs (hence any entry that
-:      would otherwise go in embed.h is suppressed):
+:   f  Function takes a format string. If the function name /strftime/
+:      then its assumed to take a strftime-style format string as 1st arg;
+:      otherwise it's assumed to be a printf style format string, varargs
+:      (hence any entry that would otherwise go in embed.h is suppressed):
 :
 :         proto.h: add __attribute__format__ (or ...null_ok__)
 :
@@ -898,7 +900,7 @@ Ap	|PerlIO*|my_popen_list	|NN const char* mode|int n|NN SV ** args
 Ap	|void	|my_setenv	|NULLOK const char* nam|NULLOK const char* val
 Apmb	|I32	|my_stat
 pX	|I32	|my_stat_flags	|NULLOK const U32 flags
-Ap	|char *	|my_strftime	|NN const char *fmt|int sec|int min|int hour|int mday|int mon|int year|int wday|int yday|int isdst
+Afp	|char *	|my_strftime	|NN const char *fmt|int sec|int min|int hour|int mday|int mon|int year|int wday|int yday|int isdst
 : Used in pp_ctl.c
 p	|void	|my_unexec
 ADMnoPR	|UV	|NATIVE_TO_NEED	|const UV enc|const UV ch
@@ -1287,19 +1289,19 @@ Apd	|IO*	|sv_2io		|NN SV *const sv
 #if defined(PERL_IN_SV_C)
 s	|bool	|glob_2number	|NN GV* const gv
 #endif
-Amb	|IV	|sv_2iv		|NULLOK SV *sv
-Apd	|IV	|sv_2iv_flags	|NULLOK SV *const sv|const I32 flags
+Amb	|IV	|sv_2iv		|NN SV *sv
+Apd	|IV	|sv_2iv_flags	|NN SV *const sv|const I32 flags
 Apd	|SV*	|sv_2mortal	|NULLOK SV *const sv
-Apd	|NV	|sv_2nv_flags	|NULLOK SV *const sv|const I32 flags
+Apd	|NV	|sv_2nv_flags	|NN SV *const sv|const I32 flags
 : Used in pp.c, pp_hot.c, sv.c
 pMd	|SV*	|sv_2num	|NN SV *const sv
-Amb	|char*	|sv_2pv		|NULLOK SV *sv|NULLOK STRLEN *lp
-Apd	|char*	|sv_2pv_flags	|NULLOK SV *const sv|NULLOK STRLEN *const lp|const I32 flags
+Amb	|char*	|sv_2pv		|NN SV *sv|NULLOK STRLEN *lp
+Apd	|char*	|sv_2pv_flags	|NN SV *const sv|NULLOK STRLEN *const lp|const I32 flags
 Apd	|char*	|sv_2pvutf8	|NN SV *sv|NULLOK STRLEN *const lp
 Apd	|char*	|sv_2pvbyte	|NN SV *sv|NULLOK STRLEN *const lp
 Ap	|char*	|sv_pvn_nomg	|NN SV* sv|NULLOK STRLEN* lp
-Amb	|UV	|sv_2uv		|NULLOK SV *sv
-Apd	|UV	|sv_2uv_flags	|NULLOK SV *const sv|const I32 flags
+Amb	|UV	|sv_2uv		|NN SV *sv
+Apd	|UV	|sv_2uv_flags	|NN SV *const sv|const I32 flags
 Apd	|IV	|sv_iv		|NN SV* sv
 Apd	|UV	|sv_uv		|NN SV* sv
 Apd	|NV	|sv_nv		|NN SV* sv
@@ -1829,6 +1831,7 @@ s	|SV*	|magic_methcall1|NN SV *sv|NN const MAGIC *mg \
 				|int n|NULLOK SV *val
 s	|void	|restore_magic	|NULLOK const void *p
 s	|void	|unwind_handler_stack|NULLOK const void *p
+s	|void	|fixup_errno_string|NN SV* sv
 
 #endif
 
@@ -2092,7 +2095,7 @@ Es	|SSize_t|study_chunk	|NN RExC_state_t *pRExC_state \
 				|NN regnode **scanp|NN SSize_t *minlenp \
 				|NN SSize_t *deltap|NN regnode *last \
 				|NULLOK struct scan_data_t *data \
-				|I32 stopparen|NULLOK U8* recursed \
+                                |I32 stopparen|U32 recursed_depth \
 				|NULLOK regnode_ssc *and_withp \
 				|U32 flags|U32 depth
 EsRn	|U32	|add_data	|NN RExC_state_t* const pRExC_state \
@@ -2316,7 +2319,7 @@ s	|void	|strip_return	|NN SV *sv
 #  endif
 #  if defined(DEBUGGING)
 s	|int	|tokereport	|I32 rv|NN const YYSTYPE* lvalp
-s	|void	|printbuf	|NN const char *const fmt|NN const char *const s
+sf	|void	|printbuf	|NN const char *const fmt|NN const char *const s
 #  endif
 #endif
 EXMp	|bool	|validate_proto	|NN SV *name|NULLOK SV *proto|bool warn

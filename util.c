@@ -896,6 +896,10 @@ string which is a duplicate of C<pv>. The size of the string is
 determined by C<strlen()>. The memory allocated for the new string can
 be freed with the C<Safefree()> function.
 
+On some platforms, Windows for example, all allocated memory owned by a thread
+is deallocated when that thread ends.  So if you need that not to happen, you
+need to use the shared memory functions, such as C<L</savesharedpv>>.
+
 =cut
 */
 
@@ -922,6 +926,10 @@ Perl's version of what C<strndup()> would be if it existed. Returns a
 pointer to a newly allocated string which is a duplicate of the first
 C<len> bytes from C<pv>, plus a trailing NUL byte. The memory allocated for
 the new string can be freed with the C<Safefree()> function.
+
+On some platforms, Windows for example, all allocated memory owned by a thread
+is deallocated when that thread ends.  So if you need that not to happen, you
+need to use the shared memory functions, such as C<L</savesharedpvn>>.
 
 =cut
 */
@@ -998,6 +1006,10 @@ Perl_savesharedpvn(pTHX_ const char *const pv, const STRLEN len)
 
 A version of C<savepv()>/C<savepvn()> which gets the string to duplicate from
 the passed in SV using C<SvPV()>
+
+On some platforms, Windows for example, all allocated memory owned by a thread
+is deallocated when that thread ends.  So if you need that not to happen, you
+need to use the shared memory functions, such as C<L</savesharedsvpv>>.
 
 =cut
 */
@@ -1595,10 +1607,13 @@ void
 Perl_croak_no_mem()
 {
     dTHX;
+    int rc;
 
     /* Can't use PerlIO to write as it allocates memory */
-    (void)PerlLIO_write(PerlIO_fileno(Perl_error_log),
+    rc = PerlLIO_write(PerlIO_fileno(Perl_error_log),
 		  PL_no_mem, sizeof(PL_no_mem)-1);
+    /* silently ignore failures */
+    PERL_UNUSED_VAR(rc);
     my_exit(1);
 }
 
@@ -3683,7 +3698,11 @@ Perl_my_strftime(pTHX_ const char *fmt, int sec, int min, int hour, int mday, in
 #endif
   buflen = 64;
   Newx(buf, buflen, char);
+
+  GCC_DIAG_IGNORE(-Wformat-nonliteral); /* fmt checked by caller */
   len = strftime(buf, buflen, fmt, &mytm);
+  GCC_DIAG_RESTORE;
+
   /*
   ** The following is needed to handle to the situation where
   ** tmpbuf overflows.  Basically we want to allocate a buffer
@@ -3707,7 +3726,11 @@ Perl_my_strftime(pTHX_ const char *fmt, int sec, int min, int hour, int mday, in
 
     Renew(buf, bufsize, char);
     while (buf) {
+
+      GCC_DIAG_IGNORE(-Wformat-nonliteral); /* fmt checked by caller */
       buflen = strftime(buf, bufsize, fmt, &mytm);
+      GCC_DIAG_RESTORE;
+
       if (buflen > 0 && buflen < bufsize)
 	break;
       /* heuristic to prevent out-of-memory errors */

@@ -19,11 +19,10 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = ('../lib','.');
     require './test.pl';
-    skip_all_if_miniperl("no dynamic loading on miniperl, no re");
 }
 
 
-plan tests => 520;  # Update this when adding/deleting tests.
+plan tests => 525;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1181,6 +1180,47 @@ sub run_tests {
 	ok("a=" =~ qr//, 'qr completely empty pattern');
     }
 
+    {
+	{ package o; use overload '""'=>sub { "abc" } }
+	my $x = bless [],"o";
+	my $y = \$x;
+	(my $y_addr = "$y") =~ y/()//d; # REF(0x7fcb9c02) -> REF0x7fcb9c02
+	# $y_addr =~ $y should be true, as should $y_addr =~ /(??{$y})/
+	"abc$y_addr" =~ /(??{$x})(??{$y})/;
+	is "$&", "abc$y_addr",
+	   '(??{$x}) does not leak cached qr to (??{\$x}) (match)';
+	is scalar "abcabc" =~ /(??{$x})(??{$y})/, "",
+	   '(??{$x}) does not leak cached qr to (??{\$x}) (no match)';
+    }
+
+    {
+	sub ReEvalTieTest::TIESCALAR {bless[], "ReEvalTieTest"}
+	sub ReEvalTieTest::STORE{}
+	sub ReEvalTieTest::FETCH { "$1" }
+	tie my $t, "ReEvalTieTest";
+	$t = bless [], "o";
+	"aab" =~ /(a)((??{"b" =~ m|(.)|; $t}))/;
+	is "[$1 $2]", "[a b]",
+	   '(??{$tied_former_overload}) sees the right $1 in FETCH';
+    }
+
+    {
+	my @matchsticks;
+	my $ref = bless \my $o, "o";
+	my $foo = sub { push @matchsticks, scalar "abc" =~ /(??{$ref})/ };
+	&$foo;
+	bless \$o;
+	() = "$ref"; # flush AMAGIC flag on main
+	&$foo;
+	is "@matchsticks", "1 ", 'qr magic is not cached on refs';
+    }
+
+    {
+	my ($foo, $bar) = ("foo"x1000, "bar"x1000);
+	"$foo$bar" =~ /(??{".*"})/;
+	is "$&", "foo"x1000 . "bar"x1000,
+	    'padtmp swiping does not affect "$a$b" =~ /(??{})/'
+    }
 
 } # End of sub run_tests
 

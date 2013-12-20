@@ -4,7 +4,7 @@ author:
   - perl5-porters@perl.org
 build_requires: {}
 dynamic_config: 1
-generated_by: 'CPAN::Meta version 2.132830, CPAN::Meta::Converter version 2.132830'
+generated_by: 'CPAN::Meta version 2.133380, CPAN::Meta::Converter version 2.133380'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -19,7 +19,6 @@ no_index:
     - dist/bignum
     - dist/Carp
     - dist/constant
-    - dist/Cwd
     - dist/Data-Dumper
     - dist/Devel-SelfStubber
     - dist/Dumpvalue
@@ -41,6 +40,7 @@ no_index:
     - dist/Math-BigRat
     - dist/Module-CoreList
     - dist/Net-Ping
+    - dist/PathTools
     - dist/Safe
     - dist/Search-Dict
     - dist/SelfLoader
@@ -112,4 +112,4 @@ resources:
   homepage: http://www.perl.org/
   license: http://dev.perl.org/licenses/
   repository: http://perl5.git.perl.org/
-version: 5.019006
+version: 5.019007
