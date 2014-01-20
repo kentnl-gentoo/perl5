@@ -109,7 +109,10 @@
          "pod/perlpodstyle.pod",
          "Porting/Maintainers.pm",
          "Porting/perldelta_template.pod",
-         "TestInit.pm"
+         "TestInit.pm",
+         "vutil.c",
+         "vutil.h",
+         "vxs.inc"
       ]
    },
    "release_status" : "unstable",
@@ -125,5 +128,5 @@
          "url" : "http://perl5.git.perl.org/"
       }
    },
-   "version" : "5.019007"
+   "version" : "5.019008"
 }

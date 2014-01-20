@@ -644,7 +644,9 @@ Unexpected program mode %d when morphing back from PM
 Unrecognized character %s; marked by <-- HERE after %s<-- HERE near column %d
 Unstable directory path, current directory changed unexpectedly
 Unterminated compressed integer in unpack
+Usage: %s(%s)
 Usage: %s::%s(%s)
+Usage: CODE(0x%x)(%s)
 Usage: File::Copy::rmscopy(from,to[,date_flag])
 Usage: VMS::Filespec::candelete(spec)
 Usage: VMS::Filespec::fileify(spec)
@@ -672,13 +674,12 @@ Wrong syntax (suid) fd script name "%s"
 'X' outside of string in unpack
 
 __CATEGORIES__
-Code point 0x%X is not Unicode, all \p{} matches fail; all \P{} matches succeed
-Code point 0x%X is not Unicode, may not be portable
+
+# This is a warning, but is currently followed immediately by a croak (toke.c)
 Illegal character \%o (carriage return)
+
+# Because uses WARN_MISSING as a synonym for WARN_UNINITIALIZED (sv.c)
 Missing argument in %s
-Unicode non-character U+%X is illegal for open interchange
-Operation "%s" returns its argument for non-Unicode code point 0x%X
-Operation "%s" returns its argument for UTF-16 surrogate U+%X
-Unicode surrogate U+%X is illegal in UTF-8
-UTF-16 surrogate U+%X
+
+# This message can be both fatal and non-
 False [] range "%s" in regex; marked by <-- HERE in m/%s/

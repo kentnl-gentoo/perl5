@@ -107,9 +107,12 @@ no_index:
     - Porting/Maintainers.pm
     - Porting/perldelta_template.pod
     - TestInit.pm
+    - vutil.c
+    - vutil.h
+    - vxs.inc
 resources:
   bugtracker: https://rt.perl.org/
   homepage: http://www.perl.org/
   license: http://dev.perl.org/licenses/
   repository: http://perl5.git.perl.org/
-version: 5.019007
+version: 5.019008

@@ -1050,7 +1050,7 @@ Perl_op_contextualize(pTHX_ OP *o, I32 context)
 =head1 Optree Manipulation Functions
 
 =for apidoc Am|OP*|op_linklist|OP *o
-This function is the implementation of the L</LINKLIST> macro. It should
+This function is the implementation of the L</LINKLIST> macro.  It should
 not be called directly.
 
 =cut
@@ -1812,8 +1812,8 @@ S_modkids(pTHX_ OP *o, I32 type)
 /*
 =for apidoc finalize_optree
 
-This function finalizes the optree. Should be called directly after
-the complete optree is built. It does some additional
+This function finalizes the optree.  Should be called directly after
+the complete optree is built.  It does some additional
 checking which can't be done in the normal ck_xxx functions and makes
 the tree thread-safe.
 
@@ -2030,7 +2030,7 @@ because it has no op type of its own (it is signalled by a flag on
 the lvalue op).
 
 This function detects things that can't be modified, such as C<$x+1>, and
-generates errors for them. For example, C<$x+1 = 2> would cause it to be
+generates errors for them.  For example, C<$x+1 = 2> would cause it to be
 called with an op of type OP_ADD and a C<type> argument of OP_SASSIGN.
 
 It also flags things that need to behave specially in an lvalue context,
@@ -3189,7 +3189,7 @@ Perl_block_end(pTHX_ I32 floor, OP *seq)
 =for apidoc Aox||blockhook_register
 
 Register a set of hooks to be called when the Perl lexical scope changes
-at compile time. See L<perlguts/"Compile-time scope hooks">.
+at compile time.  See L<perlguts/"Compile-time scope hooks">.
 
 =cut
 */
@@ -4242,7 +4242,7 @@ Perl_newBINOP(pTHX_ I32 type, I32 flags, OP *first, OP *last)
     dVAR;
     BINOP *binop;
 
-    assert((PL_opargs[type] & OA_CLASS_MASK) == OA_BINOP
+    ASSUME((PL_opargs[type] & OA_CLASS_MASK) == OA_BINOP
 	|| type == OP_SASSIGN || type == OP_NULL );
 
     NewOp(1101, binop, 1, BINOP);
@@ -5437,7 +5437,8 @@ Loads the module whose name is pointed to by the string part of name.
 Note that the actual module name, not its filename, should be given.
 Eg, "Foo::Bar" instead of "Foo/Bar.pm".  flags can be any of
 PERL_LOADMOD_DENY, PERL_LOADMOD_NOIMPORT, or PERL_LOADMOD_IMPORT_OPS
-(or 0 for no flags). ver, if specified and not NULL, provides version semantics
+(or 0 for no flags).  ver, if specified
+and not NULL, provides version semantics
 similar to C<use Foo::Bar VERSION>.  The optional trailing SV*
 arguments can be used to specify arguments to the module's import()
 method, similar to C<use Foo::Bar VERSION LIST>.  They must be
@@ -6442,7 +6443,7 @@ Perl_newLOOPOP(pTHX_ I32 flags, I32 debuggable, OP *expr, OP *block)
     OP* listop;
     OP* o;
     const bool once = block && block->op_flags & OPf_SPECIAL &&
-      (block->op_type == OP_ENTERSUB || block->op_type == OP_NULL);
+		      block->op_type == OP_NULL;
 
     PERL_UNUSED_ARG(debuggable);
 
@@ -7148,7 +7149,7 @@ static void const_av_xsub(pTHX_ CV* cv);
 
 =for apidoc cv_const_sv
 
-If C<cv> is a constant sub eligible for inlining. returns the constant
+If C<cv> is a constant sub eligible for inlining, returns the constant
 value returned by the sub.  Otherwise, returns NULL.
 
 Constant subs can be created with C<newCONSTSUB> or as described in
@@ -7629,15 +7630,10 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     return cv;
 }
 
+/* _x = extended */
 CV *
-Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
-{
-    return newATTRSUB_flags(floor, o, proto, attrs, block, 0);
-}
-
-CV *
-Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
-			    OP *block, U32 flags)
+Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
+			    OP *block, bool o_is_gv)
 {
     dVAR;
     GV *gv;
@@ -7658,7 +7654,6 @@ Perl_newATTRSUB_flags(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 	   || PL_madskills)
 	? GV_ADDMULTI : GV_ADDMULTI | GV_NOINIT;
     STRLEN namlen = 0;
-    const bool o_is_gv = flags & 1;
     const char * const name =
 	 o ? SvPV_const(o_is_gv ? (SV *)o : cSVOPo->op_sv, namlen) : NULL;
     bool has_name;
@@ -9110,7 +9105,14 @@ Perl_ck_fun(pTHX_ OP *o)
 		/* Defer checks to run-time if we have a scalar arg */
 		if (kid->op_type == OP_RV2AV || kid->op_type == OP_PADAV)
 		    op_lvalue(kid, type);
-		else scalar(kid);
+		else {
+		    scalar(kid);
+		    /* diag_listed_as: push on reference is experimental */
+		    Perl_ck_warner_d(aTHX_
+				     packWARN(WARN_EXPERIMENTAL__AUTODEREF),
+				    "%s on reference is experimental",
+				     PL_op_desc[type]);
+		}
 		break;
 	    case OA_HVREF:
 		if (kid->op_type == OP_CONST &&
@@ -10625,7 +10627,7 @@ Perl_ck_entersub_args_core(pTHX_ OP *entersubop, GV *namegv, SV *protosv)
 	                           )
 	                        );
 	}
-	assert(0);
+	NOT_REACHED;
     }
     else {
 	OP *prev, *cvop;
@@ -10855,6 +10857,9 @@ Perl_ck_svconst(pTHX_ OP *o)
     if (!SvREADONLY(sv) && !SvIsCOW(sv) && SvCANCOW(sv)) {
 	SvIsCOW_on(sv);
 	CowREFCNT(sv) = 0;
+# ifdef PERL_DEBUG_READONLY_COW
+	sv_buf_to_ro(sv);
+# endif
     }
 #endif
     SvREADONLY_on(sv);
@@ -10949,7 +10954,13 @@ Perl_ck_each(pTHX_ OP *o)
 	}
     }
     /* if treating as a reference, defer additional checks to runtime */
-    return o->op_type == ref_type ? o : ck_fun(o);
+    if (o->op_type == ref_type) {
+	/* diag_listed_as: keys on reference is experimental */
+	Perl_ck_warner_d(aTHX_ packWARN(WARN_EXPERIMENTAL__AUTODEREF),
+			      "%s is experimental", PL_op_desc[ref_type]);
+	return o;
+    }
+    return ck_fun(o);
 }
 
 OP *
@@ -11351,7 +11362,7 @@ Perl_rpeep(pTHX_ OP *o)
                 )
                     break;
 
-                /* let $a[N] potentially be optimised into ALEMFAST_LEX
+                /* let $a[N] potentially be optimised into AELEMFAST_LEX
                  * instead */
                 if (   p->op_type == OP_PADAV
                     && p->op_next
@@ -11900,9 +11911,10 @@ Perl_peep(pTHX_ OP *o)
 =head1 Custom Operators
 
 =for apidoc Ao||custom_op_xop
-Return the XOP structure for a given custom op. This macro should be
+Return the XOP structure for a given custom op.  This macro should be
 considered internal to OP_NAME and the other access macros: use them instead.
-This macro does call a function. Prior to 5.19.7, this was implemented as a
+This macro does call a function.  Prior
+to 5.19.8, this was implemented as a
 function.
 
 =cut
@@ -12006,7 +12018,7 @@ Perl_custom_op_get_field(pTHX_ const OP *o, const xop_flags_enum field)
 
 /*
 =for apidoc Ao||custom_op_register
-Register a custom op. See L<perlguts/"Custom Operators">.
+Register a custom op.  See L<perlguts/"Custom Operators">.
 
 =cut
 */

@@ -703,12 +703,6 @@
  */
 /*#define I_NETINET_IN	/ **/
 
-/* I_SFIO:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <sfio.h>.
- */
-/*#define	I_SFIO		/ **/
-
 /* I_STDDEF:
  *	This symbol, if defined, indicates that <stddef.h> exists and should
  *	be included.
@@ -993,7 +987,7 @@
  *	so the default case (for NeXT) is big endian to catch them.
  *	This might matter for NeXT 3.0.
  */
-#if defined(USE_CROSS_COMPILE) || defined(MULTIARCH)
+#if defined(MULTIARCH)
 #  ifdef __LITTLE_ENDIAN__
 #    if LONGSIZE == 4
 #      define BYTEORDER 0x1234
@@ -3891,12 +3885,6 @@
  *	available to set process title.
  */
 /*#define HAS_SETPROCTITLE		/ **/
-
-/* USE_SFIO:
- *	This symbol, if defined, indicates that sfio should
- *	be used.
- */
-/*#define	USE_SFIO		/ **/
 
 /* HAS_SIGNBIT:
  *	This symbol, if defined, indicates that the signbit routine is

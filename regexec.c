@@ -101,10 +101,10 @@ static const char* const non_utf8_target_but_utf8_required
 #define	STATIC	static
 #endif
 
-/* Valid for non-utf8 strings: avoids the reginclass
+/* Valid only for non-utf8 strings: avoids the reginclass
  * call if there are no complications: i.e., if everything matchable is
  * straight forward in the bitmap */
-#define REGINCLASS(prog,p,c)  (ANYOF_FLAGS(p) ? reginclass(prog,p,c,0)   \
+#define REGINCLASS(prog,p,c)  (ANYOF_FLAGS(p) ? reginclass(prog,p,c,c+1,0)   \
 					      : ANYOF_BITMAP_TEST(p,*(c)))
 
 /*
@@ -141,11 +141,11 @@ static const char* const non_utf8_target_but_utf8_required
     SET_nextchr
 
 
-#define LOAD_UTF8_CHARCLASS(swash_ptr, property_name) STMT_START {            \
+#define LOAD_UTF8_CHARCLASS(swash_ptr, property_name, invlist) STMT_START {   \
         if (!swash_ptr) {                                                     \
             U8 flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;                       \
             swash_ptr = _core_swash_init("utf8", property_name, &PL_sv_undef, \
-                                         1, 0, NULL, &flags);                 \
+                                         1, 0, invlist, &flags);              \
             assert(swash_ptr);                                                \
         }                                                                     \
     } STMT_END
@@ -154,28 +154,33 @@ static const char* const non_utf8_target_but_utf8_required
 #ifdef DEBUGGING
 #   define LOAD_UTF8_CHARCLASS_DEBUG_TEST(swash_ptr,                          \
                                           property_name,                      \
+                                          invlist,                            \
                                           utf8_char_in_property)              \
-        LOAD_UTF8_CHARCLASS(swash_ptr, property_name);                        \
+        LOAD_UTF8_CHARCLASS(swash_ptr, property_name, invlist);               \
         assert(swash_fetch(swash_ptr, (U8 *) utf8_char_in_property, TRUE));
 #else
 #   define LOAD_UTF8_CHARCLASS_DEBUG_TEST(swash_ptr,                          \
                                           property_name,                      \
+                                          invlist,                            \
                                           utf8_char_in_property)              \
-        LOAD_UTF8_CHARCLASS(swash_ptr, property_name)
+        LOAD_UTF8_CHARCLASS(swash_ptr, property_name, invlist)
 #endif
 
 #define LOAD_UTF8_CHARCLASS_ALNUM() LOAD_UTF8_CHARCLASS_DEBUG_TEST(           \
                                         PL_utf8_swash_ptrs[_CC_WORDCHAR],     \
-                                        swash_property_names[_CC_WORDCHAR],   \
+                                        "",                                   \
+                                        PL_XPosix_ptrs[_CC_WORDCHAR],         \
                                         LATIN_CAPITAL_LETTER_SHARP_S_UTF8);
 
 #define LOAD_UTF8_CHARCLASS_GCB()  /* Grapheme cluster boundaries */          \
     STMT_START {                                                              \
 	LOAD_UTF8_CHARCLASS_DEBUG_TEST(PL_utf8_X_regular_begin,               \
                                        "_X_regular_begin",                    \
+                                       NULL,                                  \
                                        LATIN_CAPITAL_LETTER_SHARP_S_UTF8);    \
 	LOAD_UTF8_CHARCLASS_DEBUG_TEST(PL_utf8_X_extend,                      \
                                        "_X_extend",                           \
+                                       NULL,                                  \
                                        COMBINING_GRAVE_ACCENT_UTF8);          \
     } STMT_END
 
@@ -494,8 +499,11 @@ S_isFOO_utf8_lc(pTHX_ const U8 classnum, const U8* character)
         /* Initialize the swash unless done already */
         if (! PL_utf8_swash_ptrs[classnum]) {
             U8 flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;
-            PL_utf8_swash_ptrs[classnum] = _core_swash_init("utf8",
-                swash_property_names[classnum], &PL_sv_undef, 1, 0, NULL, &flags);
+            PL_utf8_swash_ptrs[classnum] =
+                    _core_swash_init("utf8",
+                                     "",
+                                     &PL_sv_undef, 1, 0,
+                                     PL_XPosix_ptrs[classnum], &flags);
         }
 
         return cBOOL(swash_fetch(PL_utf8_swash_ptrs[classnum], (U8 *)
@@ -1377,7 +1385,7 @@ if ((reginfo->intuit || regtry(reginfo, &s))) \
 	tmp = (s != reginfo->strbeg) ? UCHARAT(s - 1) : '\n';                  \
 	tmp = TEST_NON_UTF8(tmp);                                              \
 	REXEC_FBC_UTF8_SCAN(                                                   \
-	    if (tmp == ! TEST_NON_UTF8((U8) *s)) { \
+	    if (tmp == ! TEST_NON_UTF8((U8) *s)) {                             \
 		tmp = !tmp;                                                    \
 		IF_SUCCESS;                                                    \
 	    }                                                                  \
@@ -1392,12 +1400,13 @@ if ((reginfo->intuit || regtry(reginfo, &s))) \
 	}                                                                      \
 	else {                                                                 \
 	    U8 * const r = reghop3((U8*)s, -1, (U8*)reginfo->strbeg);          \
-	    tmp = utf8n_to_uvchr(r, UTF8SKIP(r), 0, UTF8_ALLOW_DEFAULT);       \
+	    tmp = utf8n_to_uvchr(r, (U8*) reginfo->strend - r,                 \
+                                                       0, UTF8_ALLOW_DEFAULT); \
 	}                                                                      \
 	tmp = TeSt1_UtF8;                                                      \
-	LOAD_UTF8_CHARCLASS_ALNUM();                                                                \
+	LOAD_UTF8_CHARCLASS_ALNUM();                                           \
 	REXEC_FBC_UTF8_SCAN(                                                   \
-	    if (tmp == ! (TeSt2_UtF8)) { \
+	    if (tmp == ! (TeSt2_UtF8)) {                                       \
 		tmp = !tmp;                                                    \
 		IF_SUCCESS;                                                    \
 	    }                                                                  \
@@ -1489,10 +1498,9 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
     switch (OP(c)) {
     case ANYOF:
     case ANYOF_SYNTHETIC:
-    case ANYOF_WARN_SUPER:
         if (utf8_target) {
             REXEC_FBC_UTF8_CLASS_SCAN(
-                      reginclass(prog, c, (U8*)s, utf8_target));
+                      reginclass(prog, c, (U8*)s, (U8*) strend, utf8_target));
         }
         else {
             REXEC_FBC_CLASS_SCAN(REGINCLASS(prog, c, (U8*)s));
@@ -1826,8 +1834,10 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
         if (! PL_utf8_swash_ptrs[classnum]) {
             U8 flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;
             PL_utf8_swash_ptrs[classnum] =
-                    _core_swash_init("utf8", swash_property_names[classnum],
-                                     &PL_sv_undef, 1, 0, NULL, &flags);
+                    _core_swash_init("utf8",
+                                     "",
+                                     &PL_sv_undef, 1, 0,
+                                     PL_XPosix_ptrs[classnum], &flags);
         }
 
         /* This is a copy of the loop above for swash classes, though using the
@@ -4324,7 +4334,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 		    const U8 * const r =
                             reghop3((U8*)locinput, -1, (U8*)(reginfo->strbeg));
 
-		    ln = utf8n_to_uvchr(r, UTF8SKIP(r), 0, uniflags);
+		    ln = utf8n_to_uvchr(r, (U8*) reginfo->strend - r,
+                                                                   0, uniflags);
 		}
 		if (FLAGS(scan) != REGEX_LOCALE_CHARSET) {
 		    ln = isWORDCHAR_uni(ln);
@@ -4386,11 +4397,11 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	    break;
 
 	case ANYOF:  /*  /[abc]/       */
-	case ANYOF_WARN_SUPER:
             if (NEXTCHR_IS_EOS)
                 sayNO;
 	    if (utf8_target) {
-	        if (!reginclass(rex, scan, (U8*)locinput, utf8_target))
+	        if (!reginclass(rex, scan, (U8*)locinput, (U8*)reginfo->strend,
+                                                                   utf8_target))
 		    sayNO;
 		locinput += UTF8SKIP(locinput);
 	    }
@@ -4525,8 +4536,9 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                         U8 flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;
                         PL_utf8_swash_ptrs[classnum]
                                 = _core_swash_init("utf8",
-                                        swash_property_names[classnum],
-                                        &PL_sv_undef, 1, 0, NULL, &flags);
+                                        "",
+                                        &PL_sv_undef, 1, 0,
+                                        PL_XPosix_ptrs[classnum], &flags);
                     }
                     if (! (to_complement
                            ^ cBOOL(swash_fetch(PL_utf8_swash_ptrs[classnum],
@@ -7001,11 +7013,10 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
 	break;
     }
     case ANYOF:
-    case ANYOF_WARN_SUPER:
 	if (utf8_target) {
 	    while (hardcount < max
                    && scan < loceol
-		   && reginclass(prog, p, (U8*)scan, utf8_target))
+		   && reginclass(prog, p, (U8*)scan, (U8*) loceol, utf8_target))
 	    {
 		scan += UTF8SKIP(scan);
 		hardcount++;
@@ -7206,8 +7217,10 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
         if (! PL_utf8_swash_ptrs[classnum]) {
             U8 flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;
             PL_utf8_swash_ptrs[classnum] = _core_swash_init(
-                                        "utf8", swash_property_names[classnum],
-                                        &PL_sv_undef, 1, 0, NULL, &flags);
+                                        "utf8",
+                                        "",
+                                        &PL_sv_undef, 1, 0,
+                                        PL_XPosix_ptrs[classnum], &flags);
         }
 
         while (hardcount < max && scan < loceol
@@ -7404,6 +7417,7 @@ S_core_regclass_swash(pTHX_ const regexp *prog, const regnode* node, bool doinit
  
   n is the ANYOF regnode
   p is the target string
+  p_end points to one byte beyond the end of the target string
   utf8_target tells whether p is in UTF-8.
 
   Returns true if matched; false otherwise.
@@ -7415,7 +7429,7 @@ S_core_regclass_swash(pTHX_ const regexp *prog, const regnode* node, bool doinit
  */
 
 STATIC bool
-S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const p, const bool utf8_target)
+S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const p, const U8* const p_end, const bool utf8_target)
 {
     dVAR;
     const char flags = ANYOF_FLAGS(n);
@@ -7428,7 +7442,7 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
      * UTF8_IS_INVARIANT() works even if not in UTF-8 */
     if (! UTF8_IS_INVARIANT(c) && utf8_target) {
         STRLEN c_len = 0;
-	c = utf8n_to_uvchr(p, UTF8_MAXBYTES, &c_len,
+	c = utf8n_to_uvchr(p, p_end - p, &c_len,
 		(UTF8_ALLOW_DEFAULT & UTF8_ALLOW_ANYUV)
 		| UTF8_ALLOW_FFFF | UTF8_CHECK_ONLY);
 		/* see [perl #37836] for UTF8_ALLOW_ANYUV; [perl #38293] for
@@ -7454,7 +7468,7 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
                     match = TRUE;
                 }
             }
-	    else if (ANYOF_POSIXL_TEST_ANY_SET(n)) {
+	    if (! match && ANYOF_POSIXL_TEST_ANY_SET(n)) {
 
                 /* The data structure is arranged so bits 0, 2, 4, ... are set
                  * if the class includes the Posix character class given by
@@ -7514,7 +7528,7 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
      * positive that will be resolved when the match is done again as not part
      * of the synthetic start class */
     if (!match) {
-	if (utf8_target && (flags & ANYOF_ABOVE_LATIN1_ALL) && c >= 256) {
+	if (c >= 256 && (flags & ANYOF_ABOVE_LATIN1_ALL)) {
 	    match = TRUE;	/* Everything above 255 matches */
 	}
 	else if (ANYOF_NONBITMAP(n)
@@ -7544,16 +7558,22 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
 	}
 
         if (UNICODE_IS_SUPER(c)
-            && OP(n) == ANYOF_WARN_SUPER
+            && (flags & ANYOF_WARN_SUPER)
             && ckWARN_d(WARN_NON_UNICODE))
         {
             Perl_warner(aTHX_ packWARN(WARN_NON_UNICODE),
-                "Code point 0x%04"UVXf" is not Unicode, all \\p{} matches fail; all \\P{} matches succeed", c);
+                "Matched non-Unicode code point 0x%04"UVXf" against Unicode property; may not be portable", c);
         }
     }
 
+#if ANYOF_INVERT != 1
+    /* Depending on compiler optimization cBOOL takes time, so if don't have to
+     * use it, don't */
+#   error ANYOF_INVERT needs to be set to 1, or guarded with cBOOL below,
+#endif
+
     /* The xor complements the return if to invert: 1^1 = 0, 1^0 = 1 */
-    return cBOOL(flags & ANYOF_INVERT) ^ match;
+    return (flags & ANYOF_INVERT) ^ match;
 }
 
 STATIC U8 *

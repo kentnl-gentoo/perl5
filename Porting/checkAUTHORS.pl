@@ -493,6 +493,7 @@ timb                                    Tim.Bunce\100pobox.com
 +                                       tim.bunce\100ig.co.uk
 tonyc                                   tony\100develop-help.com
 +                                       tony\100openbsd32.tony.develop-help.com
++                                       tony\100saturn.(none)
 
 #
 # Mere mortals.
@@ -799,7 +800,8 @@ pne\100cpan.org                         philip.newton\100gmx.net
 +                                       philip.newton\100datenrevision.de
 +                                       pnewton\100gmx.de
 pprymmer\100factset.com                 pvhp\100forte.com
-public\100khwilliamson.com              khw\100karl.(none)
+khw\100cpan.org                         khw\100karl.(none)
++                                       public\100khwilliamson.com
 +                                       khw\100khw-desktop.(none)
 
 radu\100netsoft.ro                      rgreab\100fx.ro

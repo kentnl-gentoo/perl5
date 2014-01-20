@@ -35,6 +35,7 @@
 ~LARGEFILE~
 ~ARCHNAME~
 ~USEVMSDEBUG~
+~PREFIX~
 
 #: >>>>> Architecture-specific options <<<<<
 .ifdef IXE
@@ -318,7 +319,7 @@ x2p : [.x2p]$(DBG)a2p$(E) [.x2p]s2p.com [.x2p]find2perl.com
 extra.pods : miniperl
 	@ @extra_pods.com
 
-PERLDELTA_CURRENT = [.pod]perl5197delta.pod
+PERLDELTA_CURRENT = [.pod]perl5198delta.pod
 
 $(PERLDELTA_CURRENT) : [.pod]perldelta.pod
 	Copy/NoConfirm/Log $(MMS$SOURCE) $(PERLDELTA_CURRENT)
@@ -564,7 +565,7 @@ makeppport : $(MINIPERL_EXE) $(ARCHDIR)Config.pm nonxsext
 	$(MINIPERL) mkppport
 
 install.html : [.pod]perltoc.pod
-	@ @perl_setup.com
+	@ @perl_setup.com "$(PREFIX)"
 	@ If F$Search("perl_root:[lib]html.dir").eqs."" Then Create/Directory perl_root:[lib.html]
 	$(MINIPERL) installhtml. "--podroot=. --recurse --htmldir=/perl_root/lib/html --htmlroot=.. --verbose"
 
@@ -615,7 +616,7 @@ minitest : $(MINITEST_EXE) unidatafiles.ts
 # install ought not need a source, but it doesn't work if one's not
 # there. Go figure...
 install : $(PERL_EXE)
-	@ @perl_setup.com
+	@ @perl_setup.com "$(PREFIX)"
 	If F$TrnLnm("Sys") .nes. "" Then Deass SYS
 	@ define/user_mode $(DBG)PERLSHR SYS$DISK:[]$(DBG)perlshr$(E)
 	$(PERL) installperl

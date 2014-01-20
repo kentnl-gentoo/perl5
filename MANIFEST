@@ -1300,6 +1300,39 @@ cpan/IO-Compress/t/cz-06gzsetp.t			IO::Compress
 cpan/IO-Compress/t/cz-08encoding.t			IO::Compress
 cpan/IO-Compress/t/cz-14gzopen.t			IO::Compress
 cpan/IO-Compress/t/globmapper.t				IO::Compress
+cpan/IO-Socket-IP/Build.PL				IO::Socket::IP
+cpan/IO-Socket-IP/Changes				IO::Socket::IP
+cpan/IO-Socket-IP/examples/connect.pl			IO::Socket::IP
+cpan/IO-Socket-IP/examples/nonblocking_libasyncns.pl	IO::Socket::IP
+cpan/IO-Socket-IP/lib/IO/Socket/IP.pm			IO::Socket::IP
+cpan/IO-Socket-IP/LICENSE				IO::Socket::IP
+cpan/IO-Socket-IP/Makefile.PL				IO::Socket::IP
+cpan/IO-Socket-IP/MANIFEST				IO::Socket::IP
+cpan/IO-Socket-IP/META.json				IO::Socket::IP
+cpan/IO-Socket-IP/META.yml				IO::Socket::IP
+cpan/IO-Socket-IP/README				IO::Socket::IP
+cpan/IO-Socket-IP/t/00use.t				IO::Socket::IP tests
+cpan/IO-Socket-IP/t/01local-client-v4.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/02local-server-v4.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/03local-cross-v4.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/04local-client-v6.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/05local-server-v6.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/06local-cross-v6.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/10args.t				IO::Socket::IP tests
+cpan/IO-Socket-IP/t/11sockopts.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/12port-fallback.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/13addrinfo.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/14fileno.t				IO::Socket::IP tests
+cpan/IO-Socket-IP/t/15io-socket.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/16v6only.t				IO::Socket::IP tests
+cpan/IO-Socket-IP/t/17gai-flags.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/18fdopen.t				IO::Socket::IP tests
+cpan/IO-Socket-IP/t/19no-addrs.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/20subclass.t			IO::Socket::IP tests
+cpan/IO-Socket-IP/t/21as-inet.t				IO::Socket::IP tests
+cpan/IO-Socket-IP/t/30nonblocking-connect.t		IO::Socket::IP tests
+cpan/IO-Socket-IP/t/31nonblocking-connect-internet.t	IO::Socket::IP tests
+cpan/IO-Socket-IP/t/99pod.t				IO::Socket::IP tests
 cpan/IO-Zlib/t/basic.t		Tests for IO::Zlib
 cpan/IO-Zlib/t/external.t	Tests for IO::Zlib
 cpan/IO-Zlib/t/getc.t		Tests for IO::Zlib
@@ -1608,11 +1641,13 @@ cpan/Module-Load-Conditional/lib/Module/Load/Conditional.pm	Module::Conditional
 cpan/Module-Load-Conditional/t/01_Module_Load_Conditional.t	Module::Conditional tests
 cpan/Module-Load-Conditional/t/test_lib/a/X.pm			Module::Conditional tests
 cpan/Module-Load-Conditional/t/test_lib/b/X.pm			Module::Conditional tests
+cpan/Module-Load-Conditional/t/to_load/AutoLoad.pm		Module::Conditional tests
 cpan/Module-Load-Conditional/t/to_load/Commented.pm		Module::Conditional tests
 cpan/Module-Load-Conditional/t/to_load/InPod.pm			Module::Load::Conditional tests
 cpan/Module-Load-Conditional/t/to_load/LoadIt.pm		Module::Conditional tests
 cpan/Module-Load-Conditional/t/to_load/LoadMe.pl		Module::Conditional tests
 cpan/Module-Load-Conditional/t/to_load/MustBe/Loaded.pm		Module::Load::Conditional tests
+cpan/Module-Load-Conditional/t/to_load/NotAutoLoad.pm		Module::Conditional tests
 cpan/Module-Load-Conditional/t/to_load/NotMain.pm		Module::Conditional tests
 cpan/Module-Load-Conditional/t/to_load/NotX.pm			Module::Conditional tests
 cpan/Module-Load-Conditional/t/to_load/ToBeLoaded		Module::Conditional tests
@@ -1620,6 +1655,7 @@ cpan/Module-Loaded/lib/Module/Loaded.pm	Module::Loaded
 cpan/Module-Loaded/t/01_Module-Loaded.t	Module::Loaded tests
 cpan/Module-Load/lib/Module/Load.pm		Module::Load
 cpan/Module-Load/t/01_Module-Load.t		Module::Load tests
+cpan/Module-Load/t/02_Module-Load.t		Module::Load tests
 cpan/Module-Load/t/to_load/config_file		Module::Load tests
 cpan/Module-Load/t/to_load/LoadIt.pm		Module::Load tests
 cpan/Module-Load/t/to_load/LoadMe.pl		Module::Load tests
@@ -1800,6 +1836,7 @@ cpan/Pod-Perldoc/lib/Pod/Perldoc/ToTerm.pm	convert POD to terminal output
 cpan/Pod-Perldoc/lib/Pod/Perldoc/ToText.pm	convert POD to plain text
 cpan/Pod-Perldoc/lib/Pod/Perldoc/ToTk.pm	convert POD via Tk::Pod
 cpan/Pod-Perldoc/lib/Pod/Perldoc/ToXml.pm	convert POD to XML
+cpan/Pod-Perldoc/Makefile.PL
 cpan/Pod-Perldoc/perldoc.pod
 cpan/Pod-Perldoc/t/load.t			test file for Pod-Perldoc
 cpan/Pod-Perldoc/t/man/_get_columns.t		test file for Pod-Perldoc
@@ -2741,7 +2778,10 @@ cpan/Unicode-Normalize/t/tie.t		Unicode::Normalize
 cpan/version/lib/version/Internals.pod	Description of the internals of version objects
 cpan/version/lib/version.pm		Support for version objects
 cpan/version/lib/version.pod		Documentation of the version module
-cpan/version/t/01base.t			Tests for version objects`
+cpan/version/lib/version/regex.pm	Regex for matching version objects
+cpan/version/lib/version/vpp.pm		Pure Perl implementation of XS code
+cpan/version/t/00impl-pp.t		Tests for version objects
+cpan/version/t/01base.t			Tests for version objects
 cpan/version/t/02derived.t		Tests for version objects
 cpan/version/t/03require.t		Tests for version objects
 cpan/version/t/04strict_lax.t		Tests for version objects
@@ -2749,6 +2789,7 @@ cpan/version/t/05sigdie.t		Tests for version objects
 cpan/version/t/06noop.t			Tests for version objects
 cpan/version/t/07locale.t		Tests for version objects
 cpan/version/t/08_corelist.t		Tests for version objects
+cpan/version/t/09_list_util.t		Tests for version objects
 cpan/version/t/coretests.pm		Tests for version objects
 cpan/Win32API-File/buffers.h	Win32API::File extension
 cpan/Win32API-File/cFile.h	Win32API::File extension
@@ -2825,6 +2866,8 @@ dist/base/lib/base.pm		Establish IS-A relationship at compile time
 dist/base/lib/fields.pm		Set up object field names for pseudo-hash-using classes
 dist/base/MANIFEST		base.pm manifest
 dist/base/META.yml		base.pm META.yml file
+dist/base/t/base-open-chunk.t	See if base works
+dist/base/t/base-open-line.t	See if base works
 dist/base/t/base.t		See if base works
 dist/base/t/compile-time.t	See if base works
 dist/base/t/fields-5_6_0.t	See if fields work
@@ -3531,6 +3574,7 @@ ext/DynaLoader/dl_aix.xs	AIX implementation
 ext/DynaLoader/dl_dllload.xs	S/390 dllload() style implementation
 ext/DynaLoader/dl_dlopen.xs	BSD/SunOS4&5 dlopen() style implementation
 ext/DynaLoader/dl_dyld.xs	NeXT/Apple dyld implementation
+ext/DynaLoader/dl_freemint.xs	GNU dld style implementation for FreeMINT
 ext/DynaLoader/dl_hpux.xs	HP-UX implementation
 ext/DynaLoader/dl_next.xs	NeXT implementation
 ext/DynaLoader/dl_none.xs	Stub implementation
@@ -3970,6 +4014,7 @@ hints/epix.sh			Hints for named architecture
 hints/esix4.sh			Hints for named architecture
 hints/fps.sh			Hints for named architecture
 hints/freebsd.sh		Hints for named architecture
+hints/freemint.sh		Hints for named architecture
 hints/genix.sh			Hints for named architecture
 hints/gnukfreebsd.sh		Hints for named architecture
 hints/gnuknetbsd.sh		Hints for named architecture
@@ -4460,7 +4505,6 @@ perlio.h			PerlIO abstraction
 perliol.h			PerlIO Layer definition
 perlio.sym			Symbols for PerlIO abstraction
 perlsdio.h			Fake stdio using perlio
-perlsfio.h			Prototype sfio mapping for PerlIO
 perlvars.h			Global variables
 perly.act			parser actions; derived from perly.y
 perly.c				parser code (NOT derived from perly.y)
@@ -4512,6 +4556,7 @@ pod/perl5193delta.pod		Perl changes in version 5.19.3
 pod/perl5194delta.pod		Perl changes in version 5.19.4
 pod/perl5195delta.pod		Perl changes in version 5.19.5
 pod/perl5196delta.pod		Perl changes in version 5.19.6
+pod/perl5197delta.pod		Perl changes in version 5.19.7
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4903,6 +4948,7 @@ t/io/read.t			See if read works
 t/io/say.t			See if say works
 t/io/sem.t			See if SysV semaphores work
 t/io/shm.t			See if SysV shared memory works
+t/io/socket.t			See if socket functions work
 t/io/tell.t			See if file seeking works
 t/io/through.t			See if pipe passes data intact
 t/io/utf8.t			See if file seeking works
@@ -4975,7 +5021,6 @@ t/lib/warnings/op		Tests for op.c for warnings.t
 t/lib/warnings/pad		Tests for pad.c for warnings.t
 t/lib/warnings/perl		Tests for perl.c for warnings.t
 t/lib/warnings/perlio		Tests for perlio.c for warnings.t
-t/lib/warnings/perly		Tests for perly.y for warnings.t
 t/lib/warnings/pp		Tests for pp.c for warnings.t
 t/lib/warnings/pp_ctl		Tests for pp_ctl.c for warnings.t
 t/lib/warnings/pp_hot		Tests for pp_hot.c for warnings.t
@@ -5478,6 +5523,9 @@ vos/configure_full_perl.sh	VOS shell script to configure "full" perl before buil
 vos/make_full_perl.sh		VOS shell script to build and test "full" perl
 vos/vos.c			VOS emulations for missing POSIX functions
 vos/vosish.h			VOS-specific header file
+vutil.c				Version object C functions
+vutil.h				Version object headers
+vxs.inc				Version object XS methods
 warnings.h			The warning numbers
 win32/bin/exetype.pl		Set executable type to CONSOLE or WINDOWS
 win32/bin/perlglob.pl		Win32 globbing

@@ -33,6 +33,7 @@
 #include "perl.h"
 #include "patchlevel.h"			/* for local_patches */
 #include "XSUB.h"
+#include "charclass_invlists.h"
 
 #ifdef NETWARE
 #include "nwutil.h"	
@@ -254,7 +255,6 @@ perl_construct(pTHXx)
     STATUS_ALL_SUCCESS;
 
     init_i18nl10n(1);
-    SET_NUMERIC_STANDARD();
 
 #if defined(LOCAL_PATCH_COUNT)
     PL_localpatches = local_patches;	/* For possible -v */
@@ -379,6 +379,24 @@ perl_construct(pTHXx)
     PL_registered_mros = newHV();
     /* Start with 1 bucket, for DFS.  It's unlikely we'll need more.  */
     HvMAX(PL_registered_mros) = 0;
+
+    PL_XPosix_ptrs[_CC_ASCII] = _new_invlist_C_array(ASCII_invlist);
+    PL_XPosix_ptrs[_CC_ALPHANUMERIC] = _new_invlist_C_array(XPosixAlnum_invlist);
+    PL_XPosix_ptrs[_CC_ALPHA] = _new_invlist_C_array(XPosixAlpha_invlist);
+    PL_XPosix_ptrs[_CC_BLANK] = _new_invlist_C_array(XPosixBlank_invlist);
+    PL_XPosix_ptrs[_CC_CASED] =  _new_invlist_C_array(Cased_invlist);
+    PL_XPosix_ptrs[_CC_CNTRL] = _new_invlist_C_array(XPosixCntrl_invlist);
+    PL_XPosix_ptrs[_CC_DIGIT] = _new_invlist_C_array(XPosixDigit_invlist);
+    PL_XPosix_ptrs[_CC_GRAPH] = _new_invlist_C_array(XPosixGraph_invlist);
+    PL_XPosix_ptrs[_CC_LOWER] = _new_invlist_C_array(XPosixLower_invlist);
+    PL_XPosix_ptrs[_CC_PRINT] = _new_invlist_C_array(XPosixPrint_invlist);
+    PL_XPosix_ptrs[_CC_PUNCT] = _new_invlist_C_array(XPosixPunct_invlist);
+    PL_XPosix_ptrs[_CC_SPACE] = _new_invlist_C_array(XPerlSpace_invlist);
+    PL_XPosix_ptrs[_CC_PSXSPC] = _new_invlist_C_array(XPosixSpace_invlist);
+    PL_XPosix_ptrs[_CC_UPPER] = _new_invlist_C_array(XPosixUpper_invlist);
+    PL_XPosix_ptrs[_CC_VERTSPACE] = _new_invlist_C_array(VertSpace_invlist);
+    PL_XPosix_ptrs[_CC_WORDCHAR] = _new_invlist_C_array(XPosixWord_invlist);
+    PL_XPosix_ptrs[_CC_XDIGIT] = _new_invlist_C_array(XPosixXDigit_invlist);
 
     ENTER;
 }
@@ -1033,12 +1051,6 @@ perl_destruct(pTHXx)
     PL_NonL1NonFinalFold = NULL;
     PL_UpperLatin1       = NULL;
     for (i = 0; i < POSIX_CC_COUNT; i++) {
-        SvREFCNT_dec(PL_Posix_ptrs[i]);
-        PL_Posix_ptrs[i] = NULL;
-
-        SvREFCNT_dec(PL_L1Posix_ptrs[i]);
-        PL_L1Posix_ptrs[i] = NULL;
-
         SvREFCNT_dec(PL_XPosix_ptrs[i]);
         PL_XPosix_ptrs[i] = NULL;
     }
@@ -2442,7 +2454,7 @@ S_run_body(pTHX_ I32 oldscope)
 =for apidoc p||get_sv
 
 Returns the SV of the specified Perl scalar.  C<flags> are passed to
-C<gv_fetchpv>. If C<GV_ADD> is set and the
+C<gv_fetchpv>.  If C<GV_ADD> is set and the
 Perl variable does not exist then it will be created.  If C<flags> is zero
 and the variable does not exist then NULL is returned.
 
@@ -2469,7 +2481,7 @@ Perl_get_sv(pTHX_ const char *name, I32 flags)
 
 Returns the AV of the specified Perl global or package array with the given
 name (so it won't work on lexical variables).  C<flags> are passed 
-to C<gv_fetchpv>. If C<GV_ADD> is set and the
+to C<gv_fetchpv>.  If C<GV_ADD> is set and the
 Perl variable does not exist then it will be created.  If C<flags> is zero
 and the variable does not exist then NULL is returned.
 
@@ -2498,7 +2510,7 @@ Perl_get_av(pTHX_ const char *name, I32 flags)
 =for apidoc p||get_hv
 
 Returns the HV of the specified Perl hash.  C<flags> are passed to
-C<gv_fetchpv>. If C<GV_ADD> is set and the
+C<gv_fetchpv>.  If C<GV_ADD> is set and the
 Perl variable does not exist then it will be created.  If C<flags> is zero
 and the variable does not exist then NULL is returned.
 
@@ -2525,7 +2537,7 @@ Perl_get_hv(pTHX_ const char *name, I32 flags)
 =for apidoc p||get_cvn_flags
 
 Returns the CV of the specified Perl subroutine.  C<flags> are passed to
-C<gv_fetchpvn_flags>. If C<GV_ADD> is set and the Perl subroutine does not
+C<gv_fetchpvn_flags>.  If C<GV_ADD> is set and the Perl subroutine does not
 exist then it will be declared (which has the same effect as saying
 C<sub name;>).  If C<GV_ADD> is not set and the subroutine does not exist
 then NULL is returned.
@@ -2574,7 +2586,8 @@ Perl_get_cv(pTHX_ const char *name, I32 flags)
 =for apidoc p||call_argv
 
 Performs a callback to the specified named and package-scoped Perl subroutine 
-with C<argv> (a NULL-terminated array of strings) as arguments. See L<perlcall>.
+with C<argv> (a NULL-terminated array of strings) as arguments.  See
+L<perlcall>.
 
 Approximate Perl equivalent: C<&{"$sub_name"}(@$argv)>.
 
@@ -2797,8 +2810,8 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
 /*
 =for apidoc p||eval_sv
 
-Tells Perl to C<eval> the string in the SV. It supports the same flags
-as C<call_sv>, with the obvious exception of G_EVAL. See L<perlcall>.
+Tells Perl to C<eval> the string in the SV.  It supports the same flags
+as C<call_sv>, with the obvious exception of G_EVAL.  See L<perlcall>.
 
 =cut
 */
@@ -3489,7 +3502,7 @@ S_minus_v(pTHX)
 #endif
 
 	PerlIO_printf(PIO_stdout,
-		      "\n\nCopyright 1987-2013, Larry Wall\n");
+		      "\n\nCopyright 1987-2014, Larry Wall\n");
 #ifdef MSDOS
 	PerlIO_printf(PIO_stdout,
 		      "\nMS-DOS port Copyright (c) 1989, 1990, Diomidis Spinellis\n");

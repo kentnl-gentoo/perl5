@@ -99,6 +99,8 @@ my $tree = {
                                     [ 5.017, DEFAULT_ON ],
                                 'experimental::postderef' =>
                                     [ 5.019, DEFAULT_ON ],
+                                'experimental::autoderef' =>
+                                    [ 5.019, DEFAULT_ON ],
                         }],
 
        	 #'default'	=> [ 5.008, DEFAULT_ON ],
@@ -354,6 +356,10 @@ print $warn <<'EOM';
 		     			     char))
 
 #define ckWARN(w)		Perl_ckwarn(aTHX_ packWARN(w))
+
+/* The w1, w2 ... should be independent warnings categories; one shouldn't be
+ * a subcategory of any other */
+
 #define ckWARN2(w1,w2)		Perl_ckwarn(aTHX_ packWARN2(w1,w2))
 #define ckWARN3(w1,w2,w3)	Perl_ckwarn(aTHX_ packWARN3(w1,w2,w3))
 #define ckWARN4(w1,w2,w3,w4)	Perl_ckwarn(aTHX_ packWARN4(w1,w2,w3,w4))
@@ -366,6 +372,10 @@ print $warn <<'EOM';
 #define WARNshift		8
 
 #define packWARN(a)		(a                                      )
+
+/* The a, b, ... should be independent warnings categories; one shouldn't be
+ * a subcategory of any other */
+
 #define packWARN2(a,b)		((a) | ((b)<<8)                         )
 #define packWARN3(a,b,c)	((a) | ((b)<<8) | ((c)<<16)             )
 #define packWARN4(a,b,c,d)	((a) | ((b)<<8) | ((c)<<16) | ((d) <<24))
@@ -468,7 +478,7 @@ close_and_rename($lexwarn);
 __END__
 package warnings;
 
-our $VERSION = '1.20';
+our $VERSION = '1.21';
 
 # Verify that we're called correctly so that warnings will work.
 # see also strict.pm.

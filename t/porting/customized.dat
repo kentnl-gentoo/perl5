@@ -1,5 +1,5 @@
 Digest::MD5 cpan/Digest-MD5/t/files.t bdbe05b705d9da305fedce7a9f4b6ba63250c7cf
-Module::Build cpan/Module-Build/lib/Module/Build/ConfigData.pm 3d829dfdd1c69fc44452ba0a08e4344e2e624882
+Module::Build cpan/Module-Build/lib/Module/Build/ConfigData.pm c12eec359dba0cf6118f958fb98ddebdaa3787b9
 PerlIO::via::QuotedPrint cpan/PerlIO-via-QuotedPrint/t/QuotedPrint.t ca39f0146e89de02c746e199c45dcb3e5edad691
 Text::Balanced cpan/Text-Balanced/t/01_compile.t 1598cf491a48fa546260a2ec41142abe84da533d
 Text::Balanced cpan/Text-Balanced/t/02_extbrk.t 6ba1b64a4604e822dc2260b8ffcea6b406339ee8
@@ -13,9 +13,7 @@ Text::Balanced cpan/Text-Balanced/t/09_gentag.t 42361b5dfb3bb728bce20f4fb0d92ccf
 Text::ParseWords cpan/Text-ParseWords/t/ParseWords.t 9bae51c9b944cd5c0bbabe9d397e573976a2be8e
 Text::ParseWords cpan/Text-ParseWords/t/taint.t 3cff0dae812801f7aa1738d6070508f2c5bcc2e5
 autodie cpan/autodie/t/utf8_open.t 5295851351c49f939008c5aca6a798742b1e503d
-libnet cpan/libnet/Makefile.PL 6b10ac98e672bfebb8f49b9720a93442645208b3
+libnet cpan/libnet/Makefile.PL 8cc723f0e1d2177af46ef4e41fc1f362085520df
 podlators cpan/podlators/scripts/pod2man.PL f81acf53f3ff46cdcc5ebdd661c5d13eb35d20d6
 podlators cpan/podlators/scripts/pod2text.PL b4693fcfe4a0a1b38a215cfb8985a65d5d025d69
-version cpan/version/lib/version.pm e9d5df9a053ac6882c6e73f7e29db74e01b15841
-version cpan/version/t/07locale.t c7e86c2706622d5055b617a4b0119ea874be8a7b
-version cpan/version/t/08_corelist.t bd1c900f8be98e87dbf88896b8337f0694e4b4d3
+version cpan/version/lib/version.pm f7952056c0697efcc986aabf851f999b52a775ab

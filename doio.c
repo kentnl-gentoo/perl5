@@ -359,13 +359,6 @@ Perl_do_openn(pTHX_ GV *gv, const char *oname, I32 len, int as_raw,
 			     * be optimized away on most platforms;
 			     * only Solaris and Linux seem to flush
 			     * on that. --jhi */
-#ifdef USE_SFIO
-			    /* sfio fails to clear error on next
-			       sfwrite, contrary to documentation.
-			       -- Nicholas Clark */
-			    if (PerlIO_seek(that_fp, 0, SEEK_CUR) == -1)
-				PerlIO_clearerr(that_fp);
-#endif
 			    /* On the other hand, do all platforms
 			     * take gracefully to flushing a read-only
 			     * filehandle?  Perhaps we should do
@@ -2293,15 +2286,6 @@ Perl_do_semop(pTHX_ SV **mark, SV **sp)
             t++;
         }
         result = semop(id, temps, nsops);
-        t = temps;
-        o = ops;
-        i = nsops;
-        while (i--) {
-            *o++ = t->sem_num;
-            *o++ = t->sem_op;
-            *o++ = t->sem_flg;
-            t++;
-        }
         Safefree(temps);
         return result;
     }
@@ -2379,7 +2363,7 @@ Perl_do_shmio(pTHX_ I32 optype, SV **mark, SV **sp)
 =for apidoc start_glob
 
 Function called by C<do_readline> to spawn a glob (or do the glob inside
-perl on VMS). This code used to be inline, but now perl uses C<File::Glob>
+perl on VMS).  This code used to be inline, but now perl uses C<File::Glob>
 this glob starter is only used by miniperl during the build process.
 Moving it away shrinks pp_hot.c; shrinking pp_hot.c helps speed perl up.
 

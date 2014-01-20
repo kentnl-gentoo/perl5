@@ -683,16 +683,13 @@ PP(pp_pipe_op)
     GV * const wgv = MUTABLE_GV(POPs);
     GV * const rgv = MUTABLE_GV(POPs);
 
-    if (!rgv || !wgv)
-	goto badexit;
-
-    if (!isGV_with_GP(rgv) || !isGV_with_GP(wgv))
-	DIE(aTHX_ PL_no_usym, "filehandle");
+    assert (isGV_with_GP(rgv));
+    assert (isGV_with_GP(wgv));
     rstio = GvIOn(rgv);
-    wstio = GvIOn(wgv);
-
     if (IoIFP(rstio))
 	do_close(rgv, FALSE);
+
+    wstio = GvIOn(wgv);
     if (IoIFP(wstio))
 	do_close(wgv, FALSE);
 
@@ -1249,7 +1246,7 @@ PP(pp_sselect)
 =for apidoc setdefout
 
 Sets PL_defoutgv, the default file handle for output, to the passed in
-typeglob. As PL_defoutgv "owns" a reference on its typeglob, the reference
+typeglob.  As PL_defoutgv "owns" a reference on its typeglob, the reference
 count of the passed in typeglob is increased by one, and the reference count
 of the typeglob that PL_defoutgv points to is decreased by one.
 
@@ -1338,6 +1335,7 @@ PP(pp_getc)
 	}
 	SvUTF8_on(TARG);
     }
+    else SvUTF8_off(TARG);
     PUSHTARG;
     RETURN;
 }
@@ -1351,7 +1349,7 @@ S_doform(pTHX_ CV *cv, GV *gv, OP *retop)
 
     PERL_ARGS_ASSERT_DOFORM;
 
-    if (cv && CvCLONE(cv))
+    if (CvCLONE(cv))
 	cv = MUTABLE_CV(sv_2mortal(MUTABLE_SV(cv_clone(cv))));
 
     ENTER;
@@ -1381,8 +1379,8 @@ PP(pp_enterwrite)
     SV *tmpsv = NULL;
 
     if (MAXARG == 0) {
-	gv = PL_defoutgv;
 	EXTEND(SP, 1);
+	gv = PL_defoutgv;
     }
     else {
 	gv = MUTABLE_GV(POPs);
@@ -1713,6 +1711,14 @@ PP(pp_sysread)
 	if (!(IoFLAGS(io) & IOf_UNTAINT))
 	    SvTAINTED_on(bufsv);
 	SP = ORIGMARK;
+#if defined(__CYGWIN__)
+        /* recvfrom() on cygwin doesn't set bufsize at all for
+           connected sockets, leaving us with trash in the returned
+           name, so use the same test as the Win32 code to check if it
+           wasn't set, and set it [perl #118843] */
+        if (bufsize == sizeof namebuf)
+            bufsize = 0;
+#endif
 	sv_setpvn(TARG, namebuf, bufsize);
 	PUSHs(TARG);
 	RETURN;
@@ -2267,13 +2273,13 @@ PP(pp_ioctl)
     dVAR; dSP; dTARGET;
     SV * const argsv = POPs;
     const unsigned int func = POPu;
-    const int optype = PL_op->op_type;
+    int optype;
     GV * const gv = MUTABLE_GV(POPs);
-    IO * const io = gv ? GvIOn(gv) : NULL;
+    IO * const io = GvIOn(gv);
     char *s;
     IV retval;
 
-    if (!io || !argsv || !IoIFP(io)) {
+    if (!IoIFP(io)) {
 	report_evil_fh(gv);
 	SETERRNO(EBADF,RMS_IFI);	/* well, sort of... */
 	RETPUSHUNDEF;
@@ -2296,6 +2302,7 @@ PP(pp_ioctl)
 	s = INT2PTR(char*,retval);		/* ouch */
     }
 
+    optype = PL_op->op_type;
     TAINT_PROPER(PL_op_desc[optype]);
 
     if (optype == OP_IOCTL)
@@ -2374,16 +2381,8 @@ PP(pp_socket)
     const int type = POPi;
     const int domain = POPi;
     GV * const gv = MUTABLE_GV(POPs);
-    IO * const io = gv ? GvIOn(gv) : NULL;
+    IO * const io = GvIOn(gv);
     int fd;
-
-    if (!io) {
-	report_evil_fh(gv);
-	if (io && IoIFP(io))
-	    do_close(gv, FALSE);
-	SETERRNO(EBADF,LIB_INVARG);
-	RETPUSHUNDEF;
-    }
 
     if (IoIFP(io))
 	do_close(gv, FALSE);
@@ -2413,27 +2412,20 @@ PP(pp_sockpair)
 {
 #if defined (HAS_SOCKETPAIR) || (defined (HAS_SOCKET) && defined(SOCK_DGRAM) && defined(AF_INET) && defined(PF_INET))
     dVAR; dSP;
+    int fd[2];
     const int protocol = POPi;
     const int type = POPi;
     const int domain = POPi;
+
     GV * const gv2 = MUTABLE_GV(POPs);
+    IO * const io2 = GvIOn(gv2);
     GV * const gv1 = MUTABLE_GV(POPs);
-    IO * const io1 = gv1 ? GvIOn(gv1) : NULL;
-    IO * const io2 = gv2 ? GvIOn(gv2) : NULL;
-    int fd[2];
+    IO * const io1 = GvIOn(gv1);
 
-    if (!io1)
-	report_evil_fh(gv1);
-    if (!io2)
-	report_evil_fh(gv2);
-
-    if (io1 && IoIFP(io1))
+    if (IoIFP(io1))
 	do_close(gv1, FALSE);
-    if (io2 && IoIFP(io2))
+    if (IoIFP(io2))
 	do_close(gv2, FALSE);
-
-    if (!io1 || !io2)
-	RETPUSHUNDEF;
 
     TAINT_PROPER("socketpair");
     if (PerlSock_socketpair(domain, type, protocol, fd) < 0)
@@ -2475,12 +2467,13 @@ PP(pp_bind)
     GV * const gv = MUTABLE_GV(POPs);
     IO * const io = GvIOn(gv);
     STRLEN len;
-    const int op_type = PL_op->op_type;
+    int op_type;
 
-    if (!io || !IoIFP(io))
+    if (!IoIFP(io))
 	goto nuts;
 
     addr = SvPV_const(addrsv, len);
+    op_type = PL_op->op_type;
     TAINT_PROPER(PL_op_desc[op_type]);
     if ((op_type == OP_BIND
 	 ? PerlSock_bind(PerlIO_fileno(IoIFP(io)), (struct sockaddr *)addr, len)
@@ -2501,9 +2494,9 @@ PP(pp_listen)
     dVAR; dSP;
     const int backlog = POPi;
     GV * const gv = MUTABLE_GV(POPs);
-    IO * const io = gv ? GvIOn(gv) : NULL;
+    IO * const io = GvIOn(gv);
 
-    if (!io || !IoIFP(io))
+    if (!IoIFP(io))
 	goto nuts;
 
     if (PerlSock_listen(PerlIO_fileno(IoIFP(io)), backlog) >= 0)
@@ -2521,7 +2514,6 @@ PP(pp_accept)
 {
     dVAR; dSP; dTARGET;
     IO *nstio;
-    IO *gstio;
     char namebuf[MAXPATHLEN];
 #if (defined(VMS_DO_SOCKETS) && defined(DECCRTL_SOCKETS)) || defined(__QNXNTO__)
     Sock_size_t len = sizeof (struct sockaddr_in);
@@ -2532,12 +2524,7 @@ PP(pp_accept)
     GV * const ngv = MUTABLE_GV(POPs);
     int fd;
 
-    if (!ngv)
-	goto badexit;
-    if (!ggv)
-	goto nuts;
-
-    gstio = GvIO(ggv);
+    IO * const gstio = GvIO(ggv);
     if (!gstio || !IoIFP(gstio))
 	goto nuts;
 
@@ -2594,7 +2581,7 @@ PP(pp_shutdown)
     GV * const gv = MUTABLE_GV(POPs);
     IO * const io = GvIOn(gv);
 
-    if (!io || !IoIFP(io))
+    if (!IoIFP(io))
 	goto nuts;
 
     PUSHi( PerlSock_shutdown(PerlIO_fileno(IoIFP(io)), how) >= 0 );
@@ -2618,7 +2605,7 @@ PP(pp_ssockopt)
     int fd;
     Sock_size_t len;
 
-    if (!io || !IoIFP(io))
+    if (!IoIFP(io))
 	goto nuts;
 
     fd = PerlIO_fileno(IoIFP(io));
@@ -2688,7 +2675,7 @@ PP(pp_getpeername)
     SV *sv;
     int fd;
 
-    if (!io || !IoIFP(io))
+    if (!IoIFP(io))
 	goto nuts;
 
     sv = sv_2mortal(newSV(257));
@@ -3797,9 +3784,6 @@ PP(pp_open_dir)
     GV * const gv = MUTABLE_GV(POPs);
     IO * const io = GvIOn(gv);
 
-    if (!io)
-	goto nope;
-
     if ((IoIFP(io) || IoOFP(io)))
 	Perl_ck_warner_d(aTHX_ packWARN2(WARN_IO, WARN_DEPRECATED),
 			 "Opening filehandle %"HEKf" also as a directory",
@@ -3836,7 +3820,7 @@ PP(pp_readdir)
     const Direntry_t *dp;
     IO * const io = GvIOn(gv);
 
-    if (!io || !IoDIRP(io)) {
+    if (!IoDIRP(io)) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_IO),
 		       "readdir() attempted on invalid dirhandle %"HEKf,
                             HEKfARG(GvENAME_HEK(gv)));
@@ -3886,7 +3870,7 @@ PP(pp_telldir)
     GV * const gv = MUTABLE_GV(POPs);
     IO * const io = GvIOn(gv);
 
-    if (!io || !IoDIRP(io)) {
+    if (!IoDIRP(io)) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_IO),
 		       "telldir() attempted on invalid dirhandle %"HEKf,
                             HEKfARG(GvENAME_HEK(gv)));
@@ -3912,7 +3896,7 @@ PP(pp_seekdir)
     GV * const gv = MUTABLE_GV(POPs);
     IO * const io = GvIOn(gv);
 
-    if (!io || !IoDIRP(io)) {
+    if (!IoDIRP(io)) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_IO),
 		       "seekdir() attempted on invalid dirhandle %"HEKf,
                                 HEKfARG(GvENAME_HEK(gv)));
@@ -3937,7 +3921,7 @@ PP(pp_rewinddir)
     GV * const gv = MUTABLE_GV(POPs);
     IO * const io = GvIOn(gv);
 
-    if (!io || !IoDIRP(io)) {
+    if (!IoDIRP(io)) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_IO),
 		       "rewinddir() attempted on invalid dirhandle %"HEKf,
                                 HEKfARG(GvENAME_HEK(gv)));
@@ -3961,7 +3945,7 @@ PP(pp_closedir)
     GV * const gv = MUTABLE_GV(POPs);
     IO * const io = GvIOn(gv);
 
-    if (!io || !IoDIRP(io)) {
+    if (!IoDIRP(io)) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_IO),
 		       "closedir() attempted on invalid dirhandle %"HEKf,
                                 HEKfARG(GvENAME_HEK(gv)));

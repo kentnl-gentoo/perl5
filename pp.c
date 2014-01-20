@@ -3324,12 +3324,13 @@ PP(pp_ord)
     if (PL_encoding && SvPOK(argsv) && !DO_UTF8(argsv)) {
         SV * const tmpsv = sv_2mortal(newSVsv(argsv));
         s = (U8*)sv_recode_to_utf8(tmpsv, PL_encoding);
+        len = UTF8SKIP(s);  /* Should be well-formed; so this is its length */
         argsv = tmpsv;
     }
 
     XPUSHu(DO_UTF8(argsv)
-           ? utf8n_to_uvchr(s, UTF8_MAXBYTES, 0, UTF8_ALLOW_ANYUV)
-           : (UV)(*s & 0xff));
+           ? utf8n_to_uvchr(s, len, 0, UTF8_ALLOW_ANYUV)
+           : (UV)(*s));
 
     RETURN;
 }
@@ -3480,20 +3481,15 @@ PP(pp_ucfirst)
 		     * UTF-8 or not, but in either case is the number of bytes */
     bool tainted = FALSE;
 
-    SvGETMAGIC(source);
-    if (SvOK(source)) {
-	s = (const U8*)SvPV_nomg_const(source, slen);
-    } else {
-	if (ckWARN(WARN_UNINITIALIZED))
-	    report_uninit(source);
-	s = (const U8*)"";
-	slen = 0;
-    }
+    s = (const U8*)SvPV_const(source, slen);
 
     /* We may be able to get away with changing only the first character, in
      * place, but not if read-only, etc.  Later we may discover more reasons to
      * not convert in-place. */
-    inplace = SvPADTMP(source) && !SvREADONLY(source) && SvTEMP(source);
+    inplace = !SvREADONLY(source)
+	   && (  SvPADTMP(source)
+	      || (  SvTEMP(source) && !SvSMAGICAL(source)
+		 && SvREFCNT(source) == 1));
 
     /* First calculate what the changed first character should be.  This affects
      * whether we can just swap it out, leaving the rest of the string unchanged,
@@ -3706,8 +3702,11 @@ PP(pp_uc)
 
     SvGETMAGIC(source);
 
-    if (SvPADTMP(source) && !SvREADONLY(source) && !SvAMAGIC(source)
-	&& SvTEMP(source) && !DO_UTF8(source)
+    if ((SvPADTMP(source)
+	 ||
+	(SvTEMP(source) && !SvSMAGICAL(source) && SvREFCNT(source) == 1))
+	&& !SvREADONLY(source) && SvPOK(source)
+	&& !DO_UTF8(source)
 	&& (IN_LOCALE_RUNTIME || ! IN_UNI_8_BIT)) {
 
 	/* We can convert in place.  The reason we can't if in UNI_8_BIT is to
@@ -3725,21 +3724,7 @@ PP(pp_uc)
 
 	dest = TARG;
 
-	/* The old implementation would copy source into TARG at this point.
-	   This had the side effect that if source was undef, TARG was now
-	   an undefined SV with PADTMP set, and they don't warn inside
-	   sv_2pv_flags(). However, we're now getting the PV direct from
-	   source, which doesn't have PADTMP set, so it would warn. Hence the
-	   little games.  */
-
-	if (SvOK(source)) {
-	    s = (const U8*)SvPV_nomg_const(source, len);
-	} else {
-	    if (ckWARN(WARN_UNINITIALIZED))
-		report_uninit(source);
-	    s = (const U8*)"";
-	    len = 0;
-	}
+	s = (const U8*)SvPV_nomg_const(source, len);
 	min = len + 1;
 
 	SvUPGRADE(dest, SVt_PV);
@@ -3952,8 +3937,12 @@ PP(pp_lc)
 
     SvGETMAGIC(source);
 
-    if (SvPADTMP(source) && !SvREADONLY(source) && !SvAMAGIC(source)
-	&& SvTEMP(source) && !DO_UTF8(source)) {
+    if (   (  SvPADTMP(source)
+	   || (  SvTEMP(source) && !SvSMAGICAL(source)
+	      && SvREFCNT(source) == 1  )
+	   )
+	&& !SvREADONLY(source) && SvPOK(source)
+	&& !DO_UTF8(source)) {
 
 	/* We can convert in place, as lowercasing anything in the latin1 range
 	 * (or else DO_UTF8 would have been on) doesn't lengthen it */
@@ -3965,21 +3954,7 @@ PP(pp_lc)
 
 	dest = TARG;
 
-	/* The old implementation would copy source into TARG at this point.
-	   This had the side effect that if source was undef, TARG was now
-	   an undefined SV with PADTMP set, and they don't warn inside
-	   sv_2pv_flags(). However, we're now getting the PV direct from
-	   source, which doesn't have PADTMP set, so it would warn. Hence the
-	   little games.  */
-
-	if (SvOK(source)) {
-	    s = (const U8*)SvPV_nomg_const(source, len);
-	} else {
-	    if (ckWARN(WARN_UNINITIALIZED))
-		report_uninit(source);
-	    s = (const U8*)"";
-	    len = 0;
-	}
+	s = (const U8*)SvPV_nomg_const(source, len);
 	min = len + 1;
 
 	SvUPGRADE(dest, SVt_PV);
@@ -4005,7 +3980,7 @@ PP(pp_lc)
 				 cBOOL(IN_LOCALE_RUNTIME), &tainted);
 
 	    /* Here is where we would do context-sensitive actions.  See the
-	     * commit message for this comment for why there isn't any */
+	     * commit message for 86510fb15 for why there isn't any */
 
 	    if (ulen > u && (SvLEN(dest) < (min += ulen - u))) {
 
@@ -6016,7 +5991,6 @@ PP(pp_coreargs)
 	        )
 	       )
 		DIE(aTHX_
-		/* diag_listed_as: Type of arg %d to &CORE::%s must be %s*/
 		 "Type of arg %d to &CORE::%s must be %s",
 		  whicharg, PL_op_name[opnum],
 		  wantscalar

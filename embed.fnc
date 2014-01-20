@@ -1068,11 +1068,11 @@ ApdO	|AV*	|get_av		|NN const char *name|I32 flags
 ApdO	|HV*	|get_hv		|NN const char *name|I32 flags
 ApdO	|CV*	|get_cv		|NN const char* name|I32 flags
 Apd	|CV*	|get_cvn_flags	|NN const char* name|STRLEN len|I32 flags
-ApO	|int	|init_i18nl10n	|int printwarn
-ApO	|int	|init_i18nl14n	|int printwarn
-ApO	|void	|new_collate	|NULLOK const char* newcoll
-ApO	|void	|new_ctype	|NN const char* newctype
-ApO	|void	|new_numeric	|NULLOK const char* newcoll
+ApOM	|int	|init_i18nl10n	|int printwarn
+ApOM	|int	|init_i18nl14n	|int printwarn
+ApOM	|void	|new_collate	|NULLOK const char* newcoll
+ApOM	|void	|new_ctype	|NN const char* newctype
+ApOM	|void	|new_numeric	|NULLOK const char* newcoll
 Ap	|void	|set_numeric_local
 Ap	|void	|set_numeric_radix
 Ap	|void	|set_numeric_standard
@@ -1098,8 +1098,8 @@ Ap	|void	|regdump	|NN const regexp* r
 Ap	|SV*	|regclass_swash	|NULLOK const regexp *prog \
 				|NN const struct regnode *node|bool doinit \
 				|NULLOK SV **listsvp|NULLOK SV **altsvp
-#ifdef PERL_IN_REGCOMP_C
-EMsR	|SV*	|_new_invlist_C_array|NN const UV* const list
+#if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_PERL_C) || defined(PERL_IN_UTF8_C)
+AMpR	|SV*	|_new_invlist_C_array|NN const UV* const list
 : Not used currently: EXMs	|bool	|_invlistEQ	|NN SV* const a|NN SV* const b|const bool complement_b
 #endif
 Ap	|I32	|pregexec	|NN REGEXP * const prog|NN char* stringarg \
@@ -1315,6 +1315,12 @@ sd	|void	|sv_add_arena	|NN char *const ptr|const U32 size \
 #endif
 Apd	|int	|sv_backoff	|NN SV *const sv
 Apd	|SV*	|sv_bless	|NN SV *const sv|NN HV *const stash
+#if defined(PERL_DEBUG_READONLY_COW)
+p	|void	|sv_buf_to_ro	|NN SV *sv
+# if defined(PERL_IN_SV_C)
+s	|void	|sv_buf_to_rw	|NN SV *sv
+# endif
+#endif
 Afpd	|void	|sv_catpvf	|NN SV *const sv|NN const char *const pat|...
 Apd	|void	|sv_vcatpvf	|NN SV *const sv|NN const char *const pat \
 				|NULLOK va_list *const args
@@ -1476,10 +1482,10 @@ EXpM	|void	|_invlist_union_maybe_complement_2nd        \
 		|const bool complement_b|NN SV** output
 EXmM	|void	|_invlist_subtract|NN SV* const a|NN SV* const b|NN SV** result
 EXpM	|void	|_invlist_invert|NN SV* const invlist
-EXpM	|void	|_invlist_invert_prop|NN SV* const invlist
 EXMpR	|SV*	|_new_invlist	|IV initial_size
 EXMpR	|SV*	|_swash_to_invlist	|NN SV* const swash
 EXMpR	|SV*	|_add_range_to_invlist	|NULLOK SV* invlist|const UV start|const UV end
+EXMpR	|SV*	|_setup_canned_invlist|const STRLEN size|const UV element0|NN UV** other_elements_ptr
 EXMp	|void	|_invlist_populate_swatch   |NN SV* const invlist|const UV start|const UV end|NN U8* swatch
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C) || defined(PERL_IN_UTF8_C) || defined(PERL_IN_TOKE_C)
@@ -1705,10 +1711,10 @@ Apd	|SV*	|sv_rvweaken	|NN SV *const sv
 : This is indirectly referenced by globals.c. This is somewhat annoying.
 p	|int	|magic_killbackrefs|NN SV *sv|NN MAGIC *mg
 Ap	|OP*	|newANONATTRSUB	|I32 floor|NULLOK OP *proto|NULLOK OP *attrs|NULLOK OP *block
-Ap	|CV*	|newATTRSUB	|I32 floor|NULLOK OP *o|NULLOK OP *proto|NULLOK OP *attrs|NULLOK OP *block
-p	|CV*	|newATTRSUB_flags|I32 floor|NULLOK OP *o|NULLOK OP *proto \
+Am	|CV*	|newATTRSUB	|I32 floor|NULLOK OP *o|NULLOK OP *proto|NULLOK OP *attrs|NULLOK OP *block
+pX	|CV*	|newATTRSUB_x	|I32 floor|NULLOK OP *o|NULLOK OP *proto \
 				 |NULLOK OP *attrs|NULLOK OP *block \
-				 |U32 flags
+				 |bool o_is_gv
 Ap	|CV *	|newMYSUB	|I32 floor|NN OP *o|NULLOK OP *proto \
 				|NULLOK OP *attrs|NULLOK OP *block
 p	|CV*	|newSTUB	|NN GV *gv|bool fake
@@ -2144,7 +2150,10 @@ ERs	|I32	|regrepeat	|NN regexp *prog|NN char **startposp \
 				|I32 max \
 				|int depth
 ERs	|I32	|regtry		|NN regmatch_info *reginfo|NN char **startposp
-ERs	|bool	|reginclass	|NULLOK regexp * const prog|NN const regnode * const n|NN const U8 * const p\
+ERs	|bool	|reginclass	|NULLOK regexp * const prog  \
+				|NN const regnode * const n  \
+				|NN const U8 * const p       \
+				|NN const U8 * const p_end   \
 				|bool const utf8_target
 Es	|CHECKPOINT|regcppush	|NN const regexp *rex|I32 parenfloor\
 				|U32 maxopenparen
@@ -2354,7 +2363,7 @@ sn	|NV|mulexp10	|NV value|I32 exponent
 #if defined(PERL_IN_UTF8_C)
 iRn	|STRLEN	|is_utf8_char_slow|NN const U8 *s|const STRLEN len
 sRM	|UV	|check_locale_boundary_crossing|NN const U8* const p|const UV result|NN U8* const ustrp|NN STRLEN *lenp
-iR	|bool	|is_utf8_common	|NN const U8 *const p|NN SV **swash|NN const char * const swashname
+iR	|bool	|is_utf8_common	|NN const U8 *const p|NN SV **swash|NN const char * const swashname|NULLOK SV* const invlist
 sR	|SV*	|swatch_get	|NN SV* swash|UV start|UV span
 #endif
 
@@ -2382,7 +2391,7 @@ pMXE	|SV*	|sv_setsv_cow	|NULLOK SV* dstr|NN SV* sstr
 
 Aop	|const char *|PerlIO_context_layers|NULLOK const char *mode
 
-#if defined(USE_PERLIO) && !defined(USE_SFIO)
+#if defined(USE_PERLIO)
 Ap	|int	|PerlIO_close		|NULLOK PerlIO *f
 Ap	|int	|PerlIO_fill		|NULLOK PerlIO *f
 Ap	|int	|PerlIO_fileno		|NULLOK PerlIO *f

@@ -20,7 +20,7 @@ BEGIN {
     require './test.pl';
 }
 
-plan tests => 702;  # Update this when adding/deleting tests.
+plan tests => 710;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1217,12 +1217,10 @@ sub run_tests {
         local $SIG{__WARN__} = sub {};
         my $str = "\x{110000}";
 
-        # No non-unicode code points match any Unicode property, even inverse
-        # ones
-        unlike($str, qr/\p{ASCII_Hex_Digit=True}/, "Non-Unicode doesn't match \\p{}");
-        unlike($str, qr/\p{ASCII_Hex_Digit=False}/, "Non-Unicode doesn't match \\p{}");
-        like($str, qr/\P{ASCII_Hex_Digit=True}/, "Non-Unicode matches \\P{}");
-        like($str, qr/\P{ASCII_Hex_Digit=False}/, "Non-Unicode matches \\P{}");
+        unlike($str, qr/\p{ASCII_Hex_Digit=True}/, "Non-Unicode doesn't match \\p{AHEX=True}");
+        like($str, qr/\p{ASCII_Hex_Digit=False}/, "Non-Unicode matches \\p{AHEX=False}");
+        like($str, qr/\P{ASCII_Hex_Digit=True}/, "Non-Unicode matches \\P{AHEX=True}");
+        unlike($str, qr/\P{ASCII_Hex_Digit=False}/, "Non-Unicode matches \\P{AHEX=FALSE}");
     }
 
     {
@@ -1248,7 +1246,7 @@ use utf8;;
 "abc" =~ qr/(?<$char>abc)/;
 EOP
             utf8::encode($prog);
-            fresh_perl_like($prog, qr!Group name must start with a non-digit word character!, "",
+            fresh_perl_like($prog, qr!Group name must start with a non-digit word character!, {},
                         sprintf("'U+%04X not legal IDFirst'", ord($char)));
         }
     }
@@ -1504,6 +1502,27 @@ EOP
             $i++ if $s =~/\Gb/g;
         }
         is($i, 0, "RT 120446: mustn't run slowly");
+    }
+
+    # These are based on looking at the code in regcomp.c
+    # We don't look for specific code, just the existence of an SSC
+    foreach my $re (qw(     qr/a?c/
+                            qr/a?c/i
+                            qr/[ab]?c/
+                            qr/\R?c/
+                            qr/\d?c/d
+                            qr/\w?c/l
+                            qr/\s?c/a
+                            qr/[[:alpha:]]?c/u
+    )) {
+      SKIP: {
+        skip "no re-debug under miniperl" if is_miniperl;
+        my $prog = <<"EOP";
+use re qw(Debug COMPILE);
+$re;
+EOP
+        fresh_perl_like($prog, qr/synthetic stclass/, { stderr=>1 }, "$re generates a synthetic start class");
+      }
     }
 
 

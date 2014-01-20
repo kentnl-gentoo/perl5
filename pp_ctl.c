@@ -836,13 +836,13 @@ PP(pp_formline)
 	    }
 	    /* Formats aren't yet marked for locales, so assume "yes". */
 	    {
-		STORE_NUMERIC_STANDARD_SET_LOCAL();
+                DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED();
 		arg &= ~(FORM_NUM_POINT|FORM_NUM_BLANK);
                 /* we generate fmt ourselves so it is safe */
                 GCC_DIAG_IGNORE(-Wformat-nonliteral);
 		my_snprintf(t, SvLEN(PL_formtarget) - (t - SvPVX(PL_formtarget)), fmt, (int) fieldsize, (int) arg, value);
                 GCC_DIAG_RESTORE;
-		RESTORE_NUMERIC_STANDARD();
+                RESTORE_LC_NUMERIC();
 	    }
 	    t += fieldsize;
 	    break;
@@ -1699,17 +1699,17 @@ PP(pp_xor)
 /*
 =for apidoc caller_cx
 
-The XSUB-writer's equivalent of L<caller()|perlfunc/caller>. The
+The XSUB-writer's equivalent of L<caller()|perlfunc/caller>.  The
 returned C<PERL_CONTEXT> structure can be interrogated to find all the
-information returned to Perl by C<caller>. Note that XSUBs don't get a
+information returned to Perl by C<caller>.  Note that XSUBs don't get a
 stack frame, so C<caller_cx(0, NULL)> will return information for the
 immediately-surrounding Perl code.
 
 This function skips over the automatic calls to C<&DB::sub> made on the
-behalf of the debugger. If the stack frame requested was a sub called by
+behalf of the debugger.  If the stack frame requested was a sub called by
 C<DB::sub>, the return value will be the frame for the call to
 C<DB::sub>, since that has the correct line number/etc. for the call
-site. If I<dbcxp> is non-C<NULL>, it will be set to a pointer to the
+site.  If I<dbcxp> is non-C<NULL>, it will be set to a pointer to the
 frame for the sub call itself.
 
 =cut
@@ -2932,8 +2932,10 @@ PP(pp_goto) /* also pp_dump */
 		       to freed memory as the result of undef *_.  So put
 		       it in the callee’s pad, donating our refer-
 		       ence count. */
-		    SvREFCNT_dec(PAD_SVl(0));
-		    PAD_SVl(0) = (SV *)(cx->blk_sub.argarray = arg);
+		    if (arg) {
+			SvREFCNT_dec(PAD_SVl(0));
+			PAD_SVl(0) = (SV *)(cx->blk_sub.argarray = arg);
+		    }
 
 		    /* GvAV(PL_defgv) might have been modified on scope
 		       exit, so restore it. */
@@ -3239,8 +3241,8 @@ S_docatch(pTHX_ OP *o)
 Locate the CV corresponding to the currently executing sub or eval.
 If db_seqp is non_null, skip CVs that are in the DB package and populate
 *db_seqp with the cop sequence number at the point that the DB:: code was
-entered. (allows debuggers to eval in the scope of the breakpoint rather
-than in the scope of the debugger itself).
+entered.  (This allows debuggers to eval in the scope of the breakpoint
+rather than in the scope of the debugger itself.)
 
 =cut
 */
@@ -3595,7 +3597,7 @@ S_check_type_and_open(pTHX_ SV *name)
 	return NULL;
     }
 
-#if !defined(PERLIO_IS_STDIO) && !defined(USE_SFIO)
+#if !defined(PERLIO_IS_STDIO)
     return PerlIO_openn(aTHX_ ":", PERL_SCRIPT_MODE, -1, 0, 0, NULL, 1, &name);
 #else
     return PerlIO_open(p, PERL_SCRIPT_MODE);
@@ -3671,9 +3673,7 @@ PP(pp_require)
     STRLEN unixlen;
 #ifdef VMS
     int vms_unixname = 0;
-    char *unixnamebuf;
     char *unixdir;
-    char *unixdirbuf;
 #endif
     const char *tryname = NULL;
     SV *namesv = NULL;
@@ -3768,8 +3768,9 @@ PP(pp_require)
      * name can be translated to UNIX.
      */
     
-    if ((unixnamebuf = SvPVX(sv_2mortal(newSVpv("", VMS_MAXRSS-1))))
-        && (unixname = tounixspec(name, unixnamebuf)) != NULL) {
+    if ((unixname =
+	  tounixspec(name, SvPVX(sv_2mortal(newSVpv("", VMS_MAXRSS-1)))))
+	 != NULL) {
 	unixlen = strlen(unixname);
 	vms_unixname = 1;
     }
@@ -3815,17 +3816,17 @@ PP(pp_require)
 	    for (i = 0; i <= AvFILL(ar); i++) {
 		SV * const dirsv = *av_fetch(ar, i, TRUE);
 
-		if (SvTIED_mg((const SV *)ar, PERL_MAGIC_tied))
-		    mg_get(dirsv);
+		SvGETMAGIC(dirsv);
 		if (SvROK(dirsv)) {
 		    int count;
 		    SV **svp;
 		    SV *loader = dirsv;
 
 		    if (SvTYPE(SvRV(loader)) == SVt_PVAV
-			&& !sv_isobject(loader))
+			&& !SvOBJECT(SvRV(loader)))
 		    {
 			loader = *av_fetch(MUTABLE_AV(SvRV(loader)), 0, TRUE);
+			SvGETMAGIC(loader);
 		    }
 
 		    Perl_sv_setpvf(aTHX_ namesv, "/loader/0x%"UVxf"/%s",
@@ -3833,18 +3834,24 @@ PP(pp_require)
 		    tryname = SvPVX_const(namesv);
 		    tryrsfp = NULL;
 
-		    ENTER_with_name("call_INC");
-		    SAVETMPS;
 		    if (SvPADTMP(nsv)) {
 			nsv = sv_newmortal();
 			SvSetSV_nosteal(nsv,sv);
 		    }
+
+		    ENTER_with_name("call_INC");
+		    SAVETMPS;
 		    EXTEND(SP, 2);
 
 		    PUSHMARK(SP);
 		    PUSHs(dirsv);
 		    PUSHs(nsv);
 		    PUTBACK;
+		    if (SvGMAGICAL(loader)) {
+			SV *l = sv_newmortal();
+			sv_setsv_nomg(l, loader);
+			loader = l;
+		    }
 		    if (sv_isobject(loader))
 			count = call_method("INC", G_ARRAY);
 		    else
@@ -3945,7 +3952,7 @@ PP(pp_require)
 		    STRLEN dirlen;
 
 		    if (SvOK(dirsv)) {
-			dir = SvPV_const(dirsv, dirlen);
+			dir = SvPV_nomg_const(dirsv, dirlen);
 		    } else {
 			dir = "";
 			dirlen = 0;
@@ -3954,8 +3961,9 @@ PP(pp_require)
 		    if (!IS_SAFE_SYSCALL(dir, dirlen, "@INC entry", "require"))
 			continue;
 #ifdef VMS
-		    if (((unixdirbuf = SvPVX(sv_2mortal(newSVpv("", VMS_MAXRSS-1)))) == NULL)
-			|| ((unixdir = tounixpath(dir, unixdirbuf)) == NULL))
+		    if ((unixdir =
+			  tounixpath(dir, SvPVX(sv_2mortal(newSVpv("", VMS_MAXRSS-1)))))
+			 == NULL)
 			continue;
 		    sv_setpv(namesv, unixdir);
 		    sv_catpv(namesv, unixname);

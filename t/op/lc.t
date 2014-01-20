@@ -10,7 +10,7 @@ BEGIN {
 
 use feature qw( fc );
 
-plan tests => 129;
+plan tests => 134;
 
 is(lc(undef),	   "", "lc(undef) is ''");
 is(lcfirst(undef), "", "lcfirst(undef) is ''");
@@ -256,17 +256,26 @@ for (1, 4, 9, 16, 25) {
 }
 
 # bug #43207
-my $temp = "Hello";
+my $temp = "HellO";
 for ("$temp") {
     lc $_;
-    is($_, "Hello");
+    is($_, "HellO", '[perl #43207] lc($_) modifying $_');
 }
-
-# bug #43207
-my $temp = "Hello";
 for ("$temp") {
     fc $_;
-    is($_, "Hello");
+    is($_, "HellO", '[perl #43207] fc($_) modifying $_');
+}
+for ("$temp") {
+    uc $_;
+    is($_, "HellO", '[perl #43207] uc($_) modifying $_');
+}
+for ("$temp") {
+    ucfirst $_;
+    is($_, "HellO", '[perl #43207] ucfirst($_) modifying $_');
+}
+for ("$temp") {
+    lcfirst $_;
+    is($_, "HellO", '[perl #43207] lcfirst($_) modifying $_');
 }
 
 # new in Unicode 5.1.0
@@ -293,3 +302,14 @@ fresh_perl_like(<<'constantfolding', qr/^(\d+),\1\z/, {},
     }
 constantfolding
     'folded uc() in string eval uses the right hints');
+
+# In-place lc/uc should not corrupt string buffers when given a non-utf8-
+# flagged thingy that stringifies to utf8
+$h{k} = bless[], "\x{3b0}\x{3b0}\x{3b0}bcde"; # U+03B0 grows with uc()
+   # using delete marks it as TEMP, so uc-in-place is permitted
+like uc delete $h{k}, qr "^(?:\x{3a5}\x{308}\x{301}){3}BCDE=ARRAY\(.*\)",
+    'uc(TEMP ref) does not produce a corrupt string';
+$h{k} = bless[], "\x{130}bcde"; # U+0130 grows with lc()
+   # using delete marks it as TEMP, so uc-in-place is permitted
+like lc delete $h{k}, qr "^i\x{307}bcde=array\(.*\)",
+    'lc(TEMP ref) does not produce a corrupt string';

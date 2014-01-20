@@ -2407,15 +2407,7 @@ S_force_version(pTHX_ char *s, int guessing)
 #endif
         if (*d == ';' || isSPACE(*d) || *d == '{' || *d == '}' || !*d) {
 	    SV *ver;
-#ifdef USE_LOCALE_NUMERIC
-	    char *loc = savepv(setlocale(LC_NUMERIC, NULL));
-	    setlocale(LC_NUMERIC, "C");
-#endif
             s = scan_num(s, &pl_yylval);
-#ifdef USE_LOCALE_NUMERIC
-	    setlocale(LC_NUMERIC, loc);
-	    Safefree(loc);
-#endif
             version = pl_yylval.opval;
 	    ver = cSVOPx(version)->op_sv;
 	    if (SvPOK(ver) && !SvNIOK(ver)) {
@@ -2746,7 +2738,8 @@ S_sublex_done(pTHX)
 
     /* Is there a right-hand side to take care of? (s//RHS/ or tr//RHS/) */
     assert(PL_lex_inwhat != OP_TRANSR);
-    if (PL_lex_repl && (PL_lex_inwhat == OP_SUBST || PL_lex_inwhat == OP_TRANS)) {
+    if (PL_lex_repl) {
+	assert (PL_lex_inwhat == OP_SUBST || PL_lex_inwhat == OP_TRANS);
 	PL_linestr = PL_lex_repl;
 	PL_lex_inpat = 0;
 	PL_bufend = PL_bufptr = PL_oldbufptr = PL_oldoldbufptr = PL_linestart = SvPVX(PL_linestr);
@@ -7891,7 +7884,8 @@ Perl_yylex(pTHX)
 		*PL_tokenbuf = '&';
 		d = scan_word(s, PL_tokenbuf + 1, sizeof PL_tokenbuf - 1,
 			      1, &len);
-		if (len && !keyword(PL_tokenbuf + 1, len, 0)) {
+		if (len && (len != 4 || strNE(PL_tokenbuf+1, "CORE"))
+		 && !keyword(PL_tokenbuf + 1, len, 0)) {
 		    d = SKIPSPACE1(d);
 		    if (*d == '(') {
 			force_ident_maybe_lex('&');
@@ -11328,9 +11322,11 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
               floatit = TRUE;
         }
 	if (floatit) {
+            STORE_NUMERIC_LOCAL_SET_STANDARD();
 	    /* terminate the string */
 	    *d = '\0';
 	    nv = Atof(PL_tokenbuf);
+            RESTORE_NUMERIC_LOCAL();
 	    sv = newSVnv(nv);
 	}
 
@@ -11458,6 +11454,16 @@ S_scan_formline(pTHX_ char *s)
     if (SvCUR(stuff)) {
 	PL_expect = XSTATE;
 	if (needargs) {
+	    const char *s2 = s;
+	    while (*s2 == '\r' || *s2 == ' ' || *s2 == '\t' || *s2 == '\f'
+		|| *s2 == 013)
+		s2++;
+	    if (*s2 == '{') {
+		start_force(PL_curforce);
+		PL_expect = XTERMBLOCK;
+		NEXTVAL_NEXTTOKE.ival = 0;
+		force_next(DO);
+	    }
 	    start_force(PL_curforce);
 	    NEXTVAL_NEXTTOKE.ival = 0;
 	    force_next(FORMLBRACK);

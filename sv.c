@@ -2957,31 +2957,19 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
             V_Gconvert(SvNVX(sv), NV_DIG, 0, s);
             SvPOK_on(sv);
 #else
-            /* Gconvert always uses the current locale.  That's the right thing
-             * to do if we're supposed to be using locales.  But otherwise, we
-             * want the result to be based on the C locale, so we need to
-             * change to the C locale during the Gconvert and then change back.
-             * But if we're already in the C locale (PL_numeric_standard is
-             * TRUE in that case), no need to do any changing */
-            if (PL_numeric_standard || IN_SOME_LOCALE_FORM_RUNTIME) {
+            {
+                DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED();
                 V_Gconvert(SvNVX(sv), NV_DIG, 0, s);
 
                 /* If the radix character is UTF-8, and actually is in the
                  * output, turn on the UTF-8 flag for the scalar */
-                if (! PL_numeric_standard
+                if (PL_numeric_local
                     && PL_numeric_radix_sv && SvUTF8(PL_numeric_radix_sv)
                     && instr(s, SvPVX_const(PL_numeric_radix_sv)))
                 {
                     SvUTF8_on(sv);
                 }
-            }
-            else {
-                char *loc = savepv(setlocale(LC_NUMERIC, NULL));
-                setlocale(LC_NUMERIC, "C");
-                V_Gconvert(SvNVX(sv), NV_DIG, 0, s);
-                setlocale(LC_NUMERIC, loc);
-                Safefree(loc);
-
+                RESTORE_LC_NUMERIC();
             }
 
             /* We don't call SvPOK_on(), because it may come to pass that the
@@ -4045,6 +4033,48 @@ S_glob_assign_ref(pTHX_ SV *const dstr, SV *const sstr)
 # define GE_COWBUF_THRESHOLD(len)	1
 #endif
 
+#ifdef PERL_DEBUG_READONLY_COW
+# include <sys/mman.h>
+
+# ifndef sTHX
+#  define sTHX 0
+# endif
+
+void
+Perl_sv_buf_to_ro(pTHX_ SV *sv)
+{
+    struct perl_memory_debug_header * const header =
+	(struct perl_memory_debug_header *)(SvPVX(sv)-sTHX);
+    const MEM_SIZE len = header->size;
+    PERL_ARGS_ASSERT_SV_BUF_TO_RO;
+# ifdef PERL_TRACK_MEMPOOL
+    if (!header->readonly) header->readonly = 1;
+# endif
+    if (mprotect(header, len, PROT_READ))
+	Perl_warn(aTHX_ "mprotect RW for COW string %p %lu failed with %d",
+			 header, len, errno);
+}
+
+static void
+S_sv_buf_to_rw(pTHX_ SV *sv)
+{
+    struct perl_memory_debug_header * const header =
+	(struct perl_memory_debug_header *)(SvPVX(sv)-sTHX);
+    const MEM_SIZE len = header->size;
+    PERL_ARGS_ASSERT_SV_BUF_TO_RW;
+    if (mprotect(header, len, PROT_READ|PROT_WRITE))
+	Perl_warn(aTHX_ "mprotect for COW string %p %lu failed with %d",
+			 header, len, errno);
+# ifdef PERL_TRACK_MEMPOOL
+    header->readonly = 0;
+# endif
+}
+
+#else
+# define sv_buf_to_ro(sv)	NOOP
+# define sv_buf_to_rw(sv)	NOOP
+#endif
+
 void
 Perl_sv_setsv_flags(pTHX_ SV *dstr, SV* sstr, const I32 flags)
 {
@@ -4447,9 +4477,13 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, SV* sstr, const I32 flags)
                     SV_COW_NEXT_SV_SET(dstr, SV_COW_NEXT_SV(sstr));
                     SV_COW_NEXT_SV_SET(sstr, dstr);
 # else
+		    if (sflags & SVf_IsCOW) {
+			sv_buf_to_rw(sstr);
+		    }
 		    CowREFCNT(sstr)++;
 # endif
                     SvPV_set(dstr, SvPVX_mutable(sstr));
+                    sv_buf_to_ro(sstr);
             } else
 #endif
             {
@@ -4543,6 +4577,9 @@ Perl_sv_setsv_cow(pTHX_ SV *dstr, SV *sstr)
     STRLEN cur = SvCUR(sstr);
     STRLEN len = SvLEN(sstr);
     char *new_pv;
+#if defined(PERL_DEBUG_READONLY_COW) && defined(PERL_NEW_COPY_ON_WRITE)
+    const bool already = cBOOL(SvIsCOW(sstr));
+#endif
 
     PERL_ARGS_ASSERT_SV_SETSV_COW;
 
@@ -4603,9 +4640,13 @@ Perl_sv_setsv_cow(pTHX_ SV *dstr, SV *sstr)
 # ifdef PERL_OLD_COPY_ON_WRITE
     SV_COW_NEXT_SV_SET(sstr, dstr);
 # else
+#  ifdef PERL_DEBUG_READONLY_COW
+    if (already) sv_buf_to_rw(sstr);
+#  endif
     CowREFCNT(sstr)++;	
 # endif
     new_pv = SvPVX_mutable(sstr);
+    sv_buf_to_ro(sstr);
 
   common_exit:
     SvPV_set(dstr, new_pv);
@@ -4880,6 +4921,7 @@ S_sv_release_COW(pTHX_ SV *sv, const char *pvx, SV *after)
                in the loop.)
                Hence other SV is no longer copy on write either.  */
             SvIsCOW_off(after);
+            sv_buf_to_rw(after);
         } else {
             /* We need to follow the pointers around the loop.  */
             SV *next;
@@ -4913,6 +4955,10 @@ the C<flags> parameter gets passed to C<sv_unref_flags()>
 when unreffing.  C<sv_force_normal> calls this function
 with flags set to 0.
 
+This function is expected to be used to signal to perl that this SV is
+about to be written to, and any extra book-keeping needs to be taken care
+of.  Hence, it croaks on read-only values.
+
 =cut
 */
 
@@ -4944,7 +4990,7 @@ S_sv_uncow(pTHX_ SV * const sv, const U32 flags)
 # ifdef PERL_NEW_COPY_ON_WRITE
 	if (len && CowREFCNT(sv) == 0)
 	    /* We own the buffer ourselves. */
-	    NOOP;
+	    sv_buf_to_rw(sv);
 	else
 # endif
 	{
@@ -4952,7 +4998,11 @@ S_sv_uncow(pTHX_ SV * const sv, const U32 flags)
             /* This SV doesn't own the buffer, so need to Newx() a new one:  */
 # ifdef PERL_NEW_COPY_ON_WRITE
 	    /* Must do this first, since the macro uses SvPVX. */
-	    if (len) CowREFCNT(sv)--;
+	    if (len) {
+		sv_buf_to_rw(sv);
+		CowREFCNT(sv)--;
+		sv_buf_to_ro(sv);
+	    }
 # endif
             SvPV_set(sv, NULL);
             SvLEN_set(sv, 0);
@@ -6433,7 +6483,9 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 			sv_release_COW(sv, SvPVX_const(sv), SV_COW_NEXT_SV(sv));
 # else
 			if (CowREFCNT(sv)) {
+			    sv_buf_to_rw(sv);
 			    CowREFCNT(sv)--;
+			    sv_buf_to_ro(sv);
 			    SvLEN_set(sv, 0);
 			}
 # endif
@@ -10171,7 +10223,7 @@ Perl_sv_catpvf_nocontext(SV *const sv, const char *const pat, ...)
     PERL_ARGS_ASSERT_SV_CATPVF_NOCONTEXT;
 
     va_start(args, pat);
-    sv_vcatpvf(sv, pat, &args);
+    sv_vcatpvfn_flags(sv, pat, strlen(pat), &args, NULL, 0, NULL, SV_GMAGIC|SV_SMAGIC);
     va_end(args);
 }
 
@@ -10189,7 +10241,8 @@ Perl_sv_catpvf_mg_nocontext(SV *const sv, const char *const pat, ...)
     PERL_ARGS_ASSERT_SV_CATPVF_MG_NOCONTEXT;
 
     va_start(args, pat);
-    sv_vcatpvf_mg(sv, pat, &args);
+    sv_vcatpvfn_flags(sv, pat, strlen(pat), &args, NULL, 0, NULL, SV_GMAGIC|SV_SMAGIC);
+    SvSETMAGIC(sv);
     va_end(args);
 }
 #endif
@@ -10215,7 +10268,7 @@ Perl_sv_catpvf(pTHX_ SV *const sv, const char *const pat, ...)
     PERL_ARGS_ASSERT_SV_CATPVF;
 
     va_start(args, pat);
-    sv_vcatpvf(sv, pat, &args);
+    sv_vcatpvfn_flags(sv, pat, strlen(pat), &args, NULL, 0, NULL, SV_GMAGIC|SV_SMAGIC);
     va_end(args);
 }
 
@@ -10235,7 +10288,7 @@ Perl_sv_vcatpvf(pTHX_ SV *const sv, const char *const pat, va_list *const args)
 {
     PERL_ARGS_ASSERT_SV_VCATPVF;
 
-    sv_vcatpvfn(sv, pat, strlen(pat), args, NULL, 0, NULL);
+    sv_vcatpvfn_flags(sv, pat, strlen(pat), args, NULL, 0, NULL, SV_GMAGIC|SV_SMAGIC);
 }
 
 /*
@@ -10254,7 +10307,8 @@ Perl_sv_catpvf_mg(pTHX_ SV *const sv, const char *const pat, ...)
     PERL_ARGS_ASSERT_SV_CATPVF_MG;
 
     va_start(args, pat);
-    sv_vcatpvf_mg(sv, pat, &args);
+    sv_vcatpvfn_flags(sv, pat, strlen(pat), &args, NULL, 0, NULL, SV_GMAGIC|SV_SMAGIC);
+    SvSETMAGIC(sv);
     va_end(args);
 }
 
@@ -10421,9 +10475,8 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
     char ebuf[IV_DIG * 4 + NV_DIG + 32];
     /* large enough for "%#.#f" --chip */
     /* what about long double NVs? --jhi */
-#ifdef USE_LOCALE_NUMERIC
-    SV* oldlocale = NULL;
-#endif
+
+    DECLARATION_FOR_STORE_LC_NUMERIC_SET_TO_NEEDED;
 
     PERL_ARGS_ASSERT_SV_VCATPVFN_FLAGS;
     PERL_UNUSED_ARG(maybe_tainted);
@@ -10476,6 +10529,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		   a Configure test for this.  */
 		if (digits && digits < sizeof(ebuf) - NV_DIG - 10) {
 		     /* 0, point, slack */
+                    STORE_LC_NUMERIC_SET_TO_NEEDED();
 		    V_Gconvert(nv, (int)digits, 0, ebuf);
 		    sv_catpv_nomg(sv, ebuf);
 		    if (*ebuf)	/* May return an empty string for digits==0 */
@@ -11336,6 +11390,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		/* See earlier comment about buggy Gconvert when digits,
 		   aka precis is 0  */
 		if ( c == 'g' && precis) {
+                    STORE_LC_NUMERIC_SET_TO_NEEDED();
 		    V_Gconvert((NV)nv, (int)precis, 0, PL_efloatbuf);
 		    /* May return an empty string for digits==0 */
 		    if (*PL_efloatbuf) {
@@ -11385,19 +11440,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		 * where printf() taints but print($float) doesn't.
 		 * --jhi */
 
-#ifdef USE_LOCALE_NUMERIC
-                if (! PL_numeric_standard && ! IN_SOME_LOCALE_FORM) {
-
-                    /* We use a mortal SV, so that any failures (such as if
-                     * warnings are made fatal) won't leak */
-                    char *oldlocale_string = setlocale(LC_NUMERIC, NULL);
-                    oldlocale = newSVpvn_flags(oldlocale_string,
-                                               strlen(oldlocale_string),
-                                               SVs_TEMP);
-                    PL_numeric_standard = TRUE;
-                    setlocale(LC_NUMERIC, "C");
-                }
-#endif
+                STORE_LC_NUMERIC_SET_TO_NEEDED();
 
                 /* hopefully the above makes ptr a very constrained format
                  * that is safe to use, even though it's not literal */
@@ -11579,13 +11622,8 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
     }
     SvTAINT(sv);
 
-#ifdef USE_LOCALE_NUMERIC   /* Done outside loop, so don't have to save/restore
+    RESTORE_LC_NUMERIC();   /* Done outside loop, so don't have to save/restore
                                each iteration. */
-    if (oldlocale) {
-        setlocale(LC_NUMERIC, SvPVX(oldlocale));
-        PL_numeric_standard = FALSE;
-    }
-#endif
 }
 
 /* =========================================================================
@@ -13767,8 +13805,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
         PL_utf8_swash_ptrs[i] = sv_dup_inc(proto_perl->Iutf8_swash_ptrs[i], param);
     }
     for (i = 0; i < POSIX_CC_COUNT; i++) {
-        PL_Posix_ptrs[i] = sv_dup_inc(proto_perl->IPosix_ptrs[i], param);
-        PL_L1Posix_ptrs[i] = sv_dup_inc(proto_perl->IL1Posix_ptrs[i], param);
         PL_XPosix_ptrs[i] = sv_dup_inc(proto_perl->IXPosix_ptrs[i], param);
     }
     PL_utf8_mark	= sv_dup_inc(proto_perl->Iutf8_mark, param);

@@ -17,6 +17,30 @@ Consult your favorite dictionary for details.
 
 =head1 EPIGRAPHS
 
+=head2 v5.19.7 - Kurt Vonnegut, "Slaughterhouse-Five"
+
+L<Announced on 2013-12-20 by Abigail|http://www.nntp.perl.org/group/perl.perl5.porters/2013/12/msg210882.html>
+
+=over
+
+  And somewhere in there was springtime. The corpse mines were closed
+  down. The soldiers all left to fight the Russians. In the suburbs,
+  the women and children dug rifle pits. Billy and the rest of his group
+  were locked up in the stable in the suburbs. And then, one morning,
+  they got up to discover that the door was unlocked. World War Two in
+  Europe was over.
+
+  Billy and the rest wandered out onto the shady street. The trees were
+  leafing out. There was nothing going on out there, no traffic of any
+  kind. There was only one vehicle, an abandoned wagon drawn by two
+  horses. The wagon was green and coffin-shaped.
+
+  Birds were talking.
+
+  One bird said to Billy Pilgrim, "Pee-tee-weet?"
+
+=back
+
 =head2 v5.19.6 - Monty Python's Flying Circus, "Spam"
 
 L<Announced on 2013-11-20 by Chris 'BinGOs' Williams|http://www.nntp.perl.org/group/perl.perl5.porters/2013/11/msg210043.html>
@@ -206,7 +230,7 @@ L<Announced on 2013-06-21 by David Golden|http://www.nntp.perl.org/group/perl.pe
   Farewell, thou lob of spirits, I'll be gone;
   My queen and all her elves come here anon!
 
-=head2 v5.19.0 -- Batman, of the Joker, in "The Dark Knight Returns"
+=head2 v5.19.0 - Batman, of the Joker, in "The Dark Knight Returns"
 
 L<Announced on 2013-05-20 by Ricardo Signes|http://www.nntp.perl.org/group/perl.perl5.porters/2013/05/msg201980.html>
 
@@ -214,6 +238,19 @@ L<Announced on 2013-05-20 by Ricardo Signes|http://www.nntp.perl.org/group/perl.
   …that there was nothing wrong with you…
   …that I can't fix…
   …with my hands…
+
+=head2 v5.18.2 - Miss Manners
+
+L<Announced on 2014-01-06 by Ricardo Signes|http://www.nntp.perl.org/group/perl.perl5.porters/2014/01/msg211224.html>
+
+One of the major mistakes people make is that they think manners are
+only the expression of happy ideas. There's a whole range of behavior
+that can be expressed in a mannerly way. That's what civilization is all
+about – doing it in a mannerly and not an antagonistic way. One of the
+places we went wrong was the naturalistic Rousseauean movement of the
+Sixties in which people said, "Why can't you just say what's on your
+mind?" In civilization there have to be some restraints. If we followed
+every impulse, we'd be killing one another.
 
 =head2 v5.18.1 - Chuck Moore
 
