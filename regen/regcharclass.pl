@@ -5,7 +5,6 @@ use 5.008;
 use warnings;
 use warnings FATAL => 'all';
 no warnings 'experimental::autoderef';
-use Text::Wrap qw(wrap);
 use Data::Dumper;
 $Data::Dumper::Useqq= 1;
 our $hex_fmt= "0x%02X";
@@ -1091,10 +1090,18 @@ sub _combine {
     return if !@cond;
     my $item= shift @cond;
     my ( $cstr, $gtv );
-    if ( ref $item ) {
-        $cstr=
+    if ( ref $item ) {  # @item should be a 2-element array giving range start
+                        # and end
+        if ($item->[0] == 0) {  # UV's are never negative, so skip "0 <= "
+                                # test which could generate a compiler warning
+                                # that test is always true
+            $cstr= sprintf( "$test <= $self->{val_fmt}", $item->[1] );
+        }
+        else {
+            $cstr=
           sprintf( "( $self->{val_fmt} <= $test && $test <= $self->{val_fmt} )",
-            @$item );
+                   @$item );
+        }
         $gtv= sprintf "$self->{val_fmt}", $item->[1];
     } else {
         $cstr= sprintf( "$self->{val_fmt} == $test", $item );
@@ -1501,17 +1508,29 @@ QUOTEMETA: Meta-characters that \Q should quote
 \p{_Perl_Quotemeta}
 
 MULTI_CHAR_FOLD: multi-char strings that are folded to by a single character
-=> UTF8 :safe
+=> UTF8 :fast
 do regen/regcharclass_multi_char_folds.pl
 
 # 1 => All folds
 &regcharclass_multi_char_folds::multi_char_folds(1)
 
 MULTI_CHAR_FOLD: multi-char strings that are folded to by a single character
-=> LATIN1 :safe
+=> LATIN1 :fast
 
 &regcharclass_multi_char_folds::multi_char_folds(0)
 # 0 => Latin1-only
+
+FOLDS_TO_MULTI: characters that fold to multi-char strings
+=> UTF8 :fast
+\p{_Perl_Folds_To_Multi_Char}
+
+PROBLEMATIC_LOCALE_FOLD : characters whose fold is problematic under locale
+=> UTF8 cp :fast
+\p{_Perl_Problematic_Locale_Folds}
+
+PROBLEMATIC_LOCALE_FOLDEDS_START : The first folded character of folds which are problematic under locale
+=> UTF8 cp :fast
+\p{_Perl_Problematic_Locale_Foldeds_Start}
 
 PATWS: pattern white space
 => generic generic_non_low cp : fast safe

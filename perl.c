@@ -137,7 +137,7 @@ Perl_sys_init3(int* argc, char*** argv, char*** env)
 }
 
 void
-Perl_sys_term()
+Perl_sys_term(void)
 {
     dVAR;
     if (!PL_veto_cleanup) {
@@ -1031,6 +1031,7 @@ perl_destruct(pTHXx)
     SvREFCNT_dec(PL_utf8_tofold);
     SvREFCNT_dec(PL_utf8_idstart);
     SvREFCNT_dec(PL_utf8_idcont);
+    SvREFCNT_dec(PL_utf8_foldable);
     SvREFCNT_dec(PL_utf8_foldclosures);
     SvREFCNT_dec(PL_AboveLatin1);
     SvREFCNT_dec(PL_UpperLatin1);
@@ -1361,7 +1362,7 @@ perl_free(pTHXx)
 		PL_debug &= ~ DEBUG_m_FLAG;
 	    }
 	    while(aTHXx->Imemory_debug_header.next != &(aTHXx->Imemory_debug_header))
-		safesysfree(sTHX + (char *)(aTHXx->Imemory_debug_header.next));
+		safesysfree(PERL_MEMORY_DEBUG_HEADER_SIZE + (char *)(aTHXx->Imemory_debug_header.next));
 	    PL_debug = old_debug;
 	}
     }
@@ -1662,6 +1663,9 @@ S_Internals_V(pTHX_ CV *cv)
 #  ifdef NO_TAINT_SUPPORT
 			     " NO_TAINT_SUPPORT"
 #  endif
+#  ifdef PERL_BOOL_AS_CHAR
+			     " PERL_BOOL_AS_CHAR"
+#  endif
 #  ifdef PERL_DISABLE_PMC
 			     " PERL_DISABLE_PMC"
 #  endif
@@ -1856,9 +1860,9 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	    break;
 
 	case 't':
-#if SILENT_NO_TAINT_SUPPORT
+#if defined(SILENT_NO_TAINT_SUPPORT)
             /* silently ignore */
-#elif NO_TAINT_SUPPORT
+#elif defined(NO_TAINT_SUPPORT)
             Perl_croak_nocontext("This perl was compiled without taint support. "
                        "Cowardly refusing to run with -t or -T flags");
 #else
@@ -1871,9 +1875,9 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	    s++;
 	    goto reswitch;
 	case 'T':
-#if SILENT_NO_TAINT_SUPPORT
+#if defined(SILENT_NO_TAINT_SUPPORT)
             /* silently ignore */
-#elif NO_TAINT_SUPPORT
+#elif defined(NO_TAINT_SUPPORT)
             Perl_croak_nocontext("This perl was compiled without taint support. "
                        "Cowardly refusing to run with -t or -T flags");
 #else
@@ -1988,9 +1992,9 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	while (isSPACE(*s))
 	    s++;
 	if (*s == '-' && *(s+1) == 'T') {
-#if SILENT_NO_TAINT_SUPPORT
+#if defined(SILENT_NO_TAINT_SUPPORT)
             /* silently ignore */
-#elif NO_TAINT_SUPPORT
+#elif defined(NO_TAINT_SUPPORT)
             Perl_croak_nocontext("This perl was compiled without taint support. "
                        "Cowardly refusing to run with -t or -T flags");
 #else
@@ -2027,9 +2031,9 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 		    }
 		}
 		if (*d == 't') {
-#if SILENT_NO_TAINT_SUPPORT
+#if defined(SILENT_NO_TAINT_SUPPORT)
             /* silently ignore */
-#elif NO_TAINT_SUPPORT
+#elif defined(NO_TAINT_SUPPORT)
                     Perl_croak_nocontext("This perl was compiled without taint support. "
                                "Cowardly refusing to run with -t or -T flags");
 #else
@@ -3061,6 +3065,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
       "  q  quiet - currently only suppresses the 'EXECUTING' message\n"
       "  M  trace smart match resolution\n"
       "  B  dump suBroutine definitions, including special Blocks like BEGIN\n",
+      "  L  trace some locale setting information--for Perl core development\n",
       NULL
     };
     int i = 0;
@@ -3069,7 +3074,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
 
     if (isALPHA(**s)) {
 	/* if adding extra options, remember to update DEBUG_MASK */
-	static const char debopts[] = "psltocPmfrxuUHXDSTRJvCAqMB";
+	static const char debopts[] = "psltocPmfrxuUHXDSTRJvCAqMBL";
 
 	for (; isWORDCHAR(**s); (*s)++) {
 	    const char * const d = strchr(debopts,**s);
@@ -3375,9 +3380,9 @@ Perl_moreswitches(pTHX_ const char *s)
 	return s;
     case 't':
     case 'T':
-#if SILENT_NO_TAINT_SUPPORT
+#if defined(SILENT_NO_TAINT_SUPPORT)
             /* silently ignore */
-#elif NO_TAINT_SUPPORT
+#elif defined(NO_TAINT_SUPPORT)
         Perl_croak_nocontext("This perl was compiled without taint support. "
                    "Cowardly refusing to run with -t or -T flags");
 #else
@@ -3870,7 +3875,7 @@ S_init_ids(pTHX)
 {
     /* no need to do anything here any more if we don't
      * do tainting. */
-#if !NO_TAINT_SUPPORT
+#ifndef NO_TAINT_SUPPORT
     dVAR;
     const Uid_t my_uid = PerlProc_getuid();
     const Uid_t my_euid = PerlProc_geteuid();

@@ -33,11 +33,11 @@
 #include "regcomp.h"
 
 #ifndef HAS_C99
-# if __STDC_VERSION__ >= 199901L && !defined(VMS)
+# if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L && !defined(VMS)
 #  define HAS_C99 1
 # endif
 #endif
-#if HAS_C99
+#ifdef HAS_C99
 # include <stdint.h>
 #endif
 
@@ -3713,8 +3713,6 @@ S_glob_assign_glob(pTHX_ SV *const dstr, SV *const sstr, const int dtype)
 	    }
 	    SvUPGRADE(dstr, SVt_PVGV);
 	    (void)SvOK_off(dstr);
-	    /* We have to turn this on here, even though we turn it off
-	       below, as GvSTASH will fail an assertion otherwise. */
 	    isGV_with_GP_on(dstr);
 	}
 	GvSTASH(dstr) = GvSTASH(sstr);
@@ -3775,12 +3773,11 @@ S_glob_assign_glob(pTHX_ SV *const dstr, SV *const sstr, const int dtype)
                     );
             }
         }
+
+        SvREFCNT_inc_simple_void_NN(sv_2mortal(dstr));
     }
 
     gp_free(MUTABLE_GV(dstr));
-    isGV_with_GP_off(dstr); /* SvOK_off does not like globs. */
-    (void)SvOK_off(dstr);
-    isGV_with_GP_on(dstr);
     GvINTRO_off(dstr);		/* one-shot flag */
     GvGP_set(dstr, gp_ref(GvGP(sstr)));
     if (SvTAINTED(sstr))
@@ -4036,15 +4033,15 @@ S_glob_assign_ref(pTHX_ SV *const dstr, SV *const sstr)
 #ifdef PERL_DEBUG_READONLY_COW
 # include <sys/mman.h>
 
-# ifndef sTHX
-#  define sTHX 0
+# ifndef PERL_MEMORY_DEBUG_HEADER_SIZE
+#  define PERL_MEMORY_DEBUG_HEADER_SIZE 0
 # endif
 
 void
 Perl_sv_buf_to_ro(pTHX_ SV *sv)
 {
     struct perl_memory_debug_header * const header =
-	(struct perl_memory_debug_header *)(SvPVX(sv)-sTHX);
+	(struct perl_memory_debug_header *)(SvPVX(sv)-PERL_MEMORY_DEBUG_HEADER_SIZE);
     const MEM_SIZE len = header->size;
     PERL_ARGS_ASSERT_SV_BUF_TO_RO;
 # ifdef PERL_TRACK_MEMPOOL
@@ -4059,7 +4056,7 @@ static void
 S_sv_buf_to_rw(pTHX_ SV *sv)
 {
     struct perl_memory_debug_header * const header =
-	(struct perl_memory_debug_header *)(SvPVX(sv)-sTHX);
+	(struct perl_memory_debug_header *)(SvPVX(sv)-PERL_MEMORY_DEBUG_HEADER_SIZE);
     const MEM_SIZE len = header->size;
     PERL_ARGS_ASSERT_SV_BUF_TO_RW;
     if (mprotect(header, len, PROT_READ|PROT_WRITE))
@@ -4317,8 +4314,10 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, SV* sstr, const I32 flags)
 		    reset_isa = TRUE;
 		}
 
-		if (GvGP(dstr))
+		if (GvGP(dstr)) {
+		    SvREFCNT_inc_simple_void_NN(sv_2mortal(dstr));
 		    gp_free(MUTABLE_GV(dstr));
+		}
 		GvGP_set(dstr, gp_ref(GvGP(gv)));
 
 		if (reset_isa) {
@@ -7790,6 +7789,8 @@ Perl_sv_cmp_locale_flags(pTHX_ SV *const sv1, SV *const sv2,
   raw_compare:
     /*FALLTHROUGH*/
 
+#else
+    PERL_UNUSED_ARG(flags);
 #endif /* USE_LOCALE_COLLATE */
 
     return sv_cmp(sv1, sv2);
@@ -9571,6 +9572,14 @@ Perl_sv_reftype(pTHX_ const SV *const sv, const int ob)
 	return SvPV_nolen_const(sv_ref(NULL, sv, ob));
     }
     else {
+        /* WARNING - There is code, for instance in mg.c, that assumes that
+         * the only reason that sv_reftype(sv,0) would return a string starting
+         * with 'L' or 'S' is that it is a LVALUE or a SCALAR.
+         * Yes this a dodgy way to do type checking, but it saves practically reimplementing
+         * this routine inside other subs, and it saves time.
+         * Do not change this assumption without searching for "dodgy type check" in
+         * the code.
+         * - Yves */
 	switch (SvTYPE(sv)) {
 	case SVt_NULL:
 	case SVt_IV:
@@ -9935,6 +9944,7 @@ S_sv_unglob(pTHX_ SV *const sv, U32 flags)
     if (!(flags & SV_COW_DROP_PV))
 	gv_efullname3(temp, MUTABLE_GV(sv), "*");
 
+    SvREFCNT_inc_simple_void_NN(sv_2mortal(sv));
     if (GvGP(sv)) {
         if(GvCVu((const GV *)sv) && (stash = GvSTASH(MUTABLE_GV(sv)))
 	   && HvNAME_get(stash))
@@ -10915,7 +10925,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	case 'V':
 	case 'z':
 	case 't':
-#if HAS_C99
+#ifdef HAS_C99
         case 'j':
 #endif
 	    intsize = *q++;
@@ -11023,9 +11033,6 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	    /*FALLTHROUGH*/
 	case 'd':
 	case 'i':
-#if vdNUMBER
-	format_vd:
-#endif
 	    if (vectorize) {
 		STRLEN ulen;
 		if (!veclen)
@@ -11051,7 +11058,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		case 'z':	iv = va_arg(*args, SSize_t); break;
 		case 't':	iv = va_arg(*args, ptrdiff_t); break;
 		default:	iv = va_arg(*args, int); break;
-#if HAS_C99
+#ifdef HAS_C99
 		case 'j':	iv = va_arg(*args, intmax_t); break;
 #endif
 		case 'q':
@@ -11148,7 +11155,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		case 'V':  uv = va_arg(*args, UV); break;
 		case 'z':  uv = va_arg(*args, Size_t); break;
 	        case 't':  uv = va_arg(*args, ptrdiff_t); break; /* will sign extend, but there is no uptrdiff_t, so oh well */
-#if HAS_C99
+#ifdef HAS_C99
 		case 'j':  uv = va_arg(*args, uintmax_t); break;
 #endif
 		default:   uv = va_arg(*args, unsigned); break;
@@ -11458,6 +11465,8 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	    eptr = PL_efloatbuf;
 
 #ifdef USE_LOCALE_NUMERIC
+            /* If the decimal point character in the string is UTF-8, make the
+             * output utf8 */
             if (PL_numeric_radix_sv && SvUTF8(PL_numeric_radix_sv)
                 && instr(eptr, SvPVX_const(PL_numeric_radix_sv)))
             {
@@ -11482,7 +11491,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		case 'V':	*(va_arg(*args, IV*)) = i; break;
 		case 'z':	*(va_arg(*args, SSize_t*)) = i; break;
 		case 't':	*(va_arg(*args, ptrdiff_t*)) = i; break;
-#if HAS_C99
+#ifdef HAS_C99
 		case 'j':	*(va_arg(*args, intmax_t*)) = i; break;
 #endif
 		case 'q':
@@ -11819,7 +11828,7 @@ Perl_dirp_dup(pTHX_ DIR *const dp, CLONE_PARAMS *const param)
 {
     DIR *ret;
 
-#ifdef HAS_FCHDIR
+#if defined(HAS_FCHDIR) && defined(HAS_TELLDIR) && defined(HAS_SEEKDIR)
     int rc = 0;
     DIR *pwd;
     const Direntry_t *dirent;
@@ -11840,7 +11849,7 @@ Perl_dirp_dup(pTHX_ DIR *const dp, CLONE_PARAMS *const param)
     if (ret)
 	return ret;
 
-#ifdef HAS_FCHDIR
+#if defined(HAS_FCHDIR) && defined(HAS_TELLDIR) && defined(HAS_SEEKDIR)
 
     PERL_UNUSED_ARG(param);
 
@@ -12085,7 +12094,9 @@ Perl_ptr_table_fetch(pTHX_ PTR_TBL_t *const tbl, const void *const sv)
     return tblent ? tblent->newval : NULL;
 }
 
-/* add a new entry to a pointer-mapping table */
+/* add a new entry to a pointer-mapping table 'tbl'.  In hash terms, 'oldsv' is
+ * the key; 'newsv' is the value.  The names "old" and "new" are specific to
+ * the core's typical use of ptr_tables in thread cloning. */
 
 void
 Perl_ptr_table_store(pTHX_ PTR_TBL_t *const tbl, const void *const oldsv, void *const newsv)
@@ -13360,7 +13371,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_origargc		= proto_perl->Iorigargc;
     PL_origargv		= proto_perl->Iorigargv;
 
-#if !NO_TAINT_SUPPORT
+#ifndef NO_TAINT_SUPPORT
     /* Set tainting stuff before PerlIO_debug can possibly get called */
     PL_tainting		= proto_perl->Itainting;
     PL_taint_warn	= proto_perl->Itaint_warn;
@@ -13468,6 +13479,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     /* Did the locale setup indicate UTF-8? */
     PL_utf8locale	= proto_perl->Iutf8locale;
+    PL_in_utf8_CTYPE_locale = proto_perl->Iin_utf8_CTYPE_locale;
     /* Unicode features (see perlrun/-C) */
     PL_unicode		= proto_perl->Iunicode;
 
@@ -13540,7 +13552,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_timesbuf		= proto_perl->Itimesbuf;
 #endif
 
-#if !NO_TAINT_SUPPORT
+#ifndef NO_TAINT_SUPPORT
     PL_tainted		= proto_perl->Itainted;
 #else
     PL_tainted          = FALSE;
@@ -13798,7 +13810,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_AboveLatin1	= sv_dup_inc(proto_perl->IAboveLatin1, param);
 
     PL_NonL1NonFinalFold = sv_dup_inc(proto_perl->INonL1NonFinalFold, param);
-    PL_HasMultiCharFold= sv_dup_inc(proto_perl->IHasMultiCharFold, param);
+    PL_HasMultiCharFold = sv_dup_inc(proto_perl->IHasMultiCharFold, param);
 
     /* utf8 character class swashes */
     for (i = 0; i < POSIX_SWASH_COUNT; i++) {

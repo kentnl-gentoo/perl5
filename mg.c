@@ -2749,8 +2749,34 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	}
 	break;
     case '/':
-	SvREFCNT_dec(PL_rs);
-	PL_rs = newSVsv(sv);
+        {
+            SV *tmpsv= sv;
+            if (SvROK(sv)) {
+                SV *referent= SvRV(sv);
+                const char *reftype= sv_reftype(referent, 0);
+                /* XXX: dodgy type check: This leaves me feeling dirty, but the alternative
+                 * is to copy pretty much the entire sv_reftype() into this routine, or to do
+                 * a full string comparison on the return of sv_reftype() both of which
+                 * make me feel worse! NOTE, do not modify this comment without reviewing the
+                 * corresponding comment in sv_reftype(). - Yves */
+                if (reftype[0] == 'S' || reftype[0] == 'L') {
+                    IV val= SvIV(referent);
+                    if (val <= 0) {
+                        tmpsv= &PL_sv_undef;
+                        Perl_ck_warner(aTHX_ packWARN(WARN_DEPRECATED),
+                            "Setting $/ to a reference to %s as a form of slurp is deprecated, treating as undef",
+                            SvIV(SvRV(sv)) < 0 ? "a negative integer" : "zero"
+                        );
+                    }
+                } else {
+              /* diag_listed_as: Setting $/ to a %s reference is forbidden */
+                    Perl_croak(aTHX_ "Setting $/ to a%s %s reference is forbidden",
+                                      *reftype == 'A' ? "n" : "", reftype);
+                }
+            }
+            SvREFCNT_dec(PL_rs);
+            PL_rs = newSVsv(tmpsv);
+        }
 	break;
     case '\\':
 	SvREFCNT_dec(PL_ors_sv);

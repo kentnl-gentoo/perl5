@@ -130,7 +130,7 @@ use File::Glob qw(:case);
     },
 
     'autodie' => {
-        'DISTRIBUTION' => 'PJF/autodie-2.22.tar.gz',
+        'DISTRIBUTION' => 'PJF/autodie-2.23.tar.gz',
         'FILES'        => q[cpan/autodie],
         'EXCLUDED'     => [
             qr{benchmarks},
@@ -198,7 +198,7 @@ use File::Glob qw(:case);
     },
 
     'CGI' => {
-        'DISTRIBUTION' => 'MARKSTOS/CGI.pm-3.64.tar.gz',
+        'DISTRIBUTION' => 'MARKSTOS/CGI.pm-3.65.tar.gz',
         'FILES'        => q[cpan/CGI],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -211,7 +211,7 @@ use File::Glob qw(:case);
     },
 
     'Compress::Raw::Bzip2' => {
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.063.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.064.tar.gz',
         'FILES'        => q[cpan/Compress-Raw-Bzip2],
         'EXCLUDED'     => [
             qr{^t/Test/},
@@ -220,7 +220,7 @@ use File::Glob qw(:case);
     },
 
     'Compress::Raw::Zlib' => {
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.063.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.065.tar.gz',
 
         'FILES'    => q[cpan/Compress-Raw-Zlib],
         'EXCLUDED' => [
@@ -233,9 +233,11 @@ use File::Glob qw(:case);
     },
 
     'Config::Perl::V' => {
-        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.19.tgz',
+        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.20.tgz',
         'FILES'        => q[cpan/Config-Perl-V],
         'EXCLUDED'     => ['examples/show-v.pl'],
+        # Waiting to be merged upstream: see CPAN RT#92534
+        'CUSTOMIZED'   => ['t/20_plv510.t', 't/21_plv518.t'],
     },
 
     'constant' => {
@@ -324,10 +326,11 @@ use File::Glob qw(:case);
     },
 
     'CPAN::Meta::YAML' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-YAML-0.010.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-YAML-0.011.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta-YAML],
         'EXCLUDED'     => [
             't/00-compile.t',
+            't/00-report-prereqs.t',
             't/04_scalar.t',    # requires YAML.pm
             qr{^xt},
         ],
@@ -382,7 +385,7 @@ use File::Glob qw(:case);
     },
 
     'Digest::SHA' => {
-        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.85.tar.gz',
+        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.87.tar.gz',
         'FILES'        => q[cpan/Digest-SHA],
         'EXCLUDED'     => [
             qw( t/pod.t
@@ -473,7 +476,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::MakeMaker' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.86.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.88.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -498,7 +501,7 @@ use File::Glob qw(:case);
     },
 
     'File::Fetch' => {
-        'DISTRIBUTION' => 'BINGOS/File-Fetch-0.46.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/File-Fetch-0.48.tar.gz',
         'FILES'        => q[cpan/File-Fetch],
     },
 
@@ -585,7 +588,7 @@ use File::Glob qw(:case);
     },
 
     'HTTP::Tiny' => {
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.039.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.042.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/00-compile.t',
@@ -620,7 +623,7 @@ use File::Glob qw(:case);
     },
 
     'IO-Compress' => {
-        'DISTRIBUTION' => 'PMQS/IO-Compress-2.063.tar.gz',
+        'DISTRIBUTION' => 'PMQS/IO-Compress-2.064.tar.gz',
         'FILES'        => q[cpan/IO-Compress],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -631,13 +634,21 @@ use File::Glob qw(:case);
         ],
     },
 
+    'IO::Socket::IP' => {
+        'DISTRIBUTION' => 'PEVANS/IO-Socket-IP-0.28.tar.gz',
+        'FILES'        => q[cpan/IO-Socket-IP],
+        'EXCLUDED'     => [
+            qr{^examples/},
+        ],
+    },
+
     'IO::Zlib' => {
         'DISTRIBUTION' => 'TOMHUGHES/IO-Zlib-1.10.tar.gz',
         'FILES'        => q[cpan/IO-Zlib],
     },
 
     'IPC::Cmd' => {
-        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.90.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.92.tar.gz',
         'FILES'        => q[cpan/IPC-Cmd],
     },
 
@@ -667,7 +678,7 @@ use File::Glob qw(:case);
     },
 
     'libnet' => {
-        'DISTRIBUTION' => 'SHAY/libnet-1.24.tar.gz',
+        'DISTRIBUTION' => 'SHAY/libnet-1.25.tar.gz',
         'FILES'        => q[cpan/libnet],
         'EXCLUDED'     => [
             qw( Configure
@@ -681,10 +692,11 @@ use File::Glob qw(:case);
     },
 
     'Locale-Codes' => {
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.28.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.29.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( README.first
+                t/pod_coverage.ign
                 t/pod_coverage.t
                 t/pod.t),
             qr{^t/runtests},
@@ -789,7 +801,7 @@ use File::Glob qw(:case);
     #
 
     'Module::Build' => {
-        'DISTRIBUTION' => 'LEONT/Module-Build-0.4204.tar.gz',
+        'DISTRIBUTION' => 'LEONT/Module-Build-0.4205.tar.gz',
         'FILES'        => q[cpan/Module-Build],
         'EXCLUDED'     => [
             qw( t/par.t
@@ -804,17 +816,17 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-3.03.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-3.04.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
     'Module::Load' => {
-        'DISTRIBUTION' => 'BINGOS/Module-Load-0.28.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-Load-0.30.tar.gz',
         'FILES'        => q[cpan/Module-Load],
     },
 
     'Module::Load::Conditional' => {
-        'DISTRIBUTION' => 'BINGOS/Module-Load-Conditional-0.60.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-Load-Conditional-0.62.tar.gz',
         'FILES'        => q[cpan/Module-Load-Conditional],
     },
 
@@ -864,10 +876,9 @@ use File::Glob qw(:case);
     },
 
     'Parse::CPAN::Meta' => {
-        'DISTRIBUTION' => 'DAGOLDEN/Parse-CPAN-Meta-1.4409.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/Parse-CPAN-Meta-1.4413.tar.gz',
         'FILES'        => q[cpan/Parse-CPAN-Meta],
         'EXCLUDED'     => [
-            qw(t/00-compile.t),
             qw[t/00-report-prereqs.t],
             qr{^xt},
         ],
@@ -914,12 +925,12 @@ use File::Glob qw(:case);
     },
 
     'Pod::Escapes' => {
-        'DISTRIBUTION' => 'SBURKE/Pod-Escapes-1.04.tar.gz',
+        'DISTRIBUTION' => 'NEILB/Pod-Escapes-1.06.tar.gz',
         'FILES'        => q[cpan/Pod-Escapes],
     },
 
     'Pod::Parser' => {
-        'DISTRIBUTION' => 'MAREKR/Pod-Parser-1.61.tar.gz',
+        'DISTRIBUTION' => 'MAREKR/Pod-Parser-1.62.tar.gz',
         'FILES'        => q[cpan/Pod-Parser],
     },
 
@@ -976,7 +987,7 @@ use File::Glob qw(:case);
     },
 
     'Scalar-List-Utils' => {
-        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.36.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.38.tar.gz',
         'FILES'    => q[cpan/Scalar-List-Utils],
     },
 
@@ -1184,7 +1195,7 @@ use File::Glob qw(:case);
     },
 
     'threads' => {
-        'DISTRIBUTION' => 'JDHEDDEN/threads-1.89.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-1.92.tar.gz',
         'FILES'        => q[dist/threads],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1196,7 +1207,7 @@ use File::Glob qw(:case);
     },
 
     'threads::shared' => {
-        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.45.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.46.tar.gz',
         'FILES'        => q[dist/threads-shared],
         'EXCLUDED'     => [
             qw( examples/class.pl
@@ -1262,11 +1273,11 @@ use File::Glob qw(:case);
     },
 
     'version' => {
-        'DISTRIBUTION' => 'JPEACOCK/version-0.9906.tar.gz',
-        'FILES'        => q[cpan/version],
+        'DISTRIBUTION' => 'JPEACOCK/version-0.9908.tar.gz',
         'FILES'        => q[cpan/version vutil.c vutil.h vxs.inc],
         'EXCLUDED' => [
             qr{^vutil/lib/},
+            'vutil/Makefile.PL',
             'vutil/ppport.h',
             'vutil/vxs.xs',
             't/survey_locales',
@@ -1277,6 +1288,11 @@ use File::Glob qw(:case);
         # only necessary with the CPAN release.
         'CUSTOMIZED'   => [
             qw( lib/version.pm
+                ),
+
+            # Merged upstream, waiting for new CPAN release: see CPAN RT#92721
+            qw( vutil.c
+                vxs.inc
                 ),
         ],
 

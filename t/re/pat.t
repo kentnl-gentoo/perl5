@@ -20,7 +20,7 @@ BEGIN {
     require './test.pl';
 }
 
-plan tests => 710;  # Update this when adding/deleting tests.
+plan tests => 717;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1485,6 +1485,15 @@ EOP
 	*^R = *caretRglobwithnoscalar;
 	"" =~ /(?{42})/;
 	is $^R, 42, 'assigning to *^R does not result in a crash';
+	is runperl(
+	     stderr => 1,
+	     prog => 'eval q|'
+	            .' q-..- =~ /(??{undef *^R;q--})(?{42})/; '
+                    .' print qq-$^R\n-'
+	            .'|'
+	   ),
+	   "42\n",
+	   'undefining *^R within (??{}) does not result in a crash';
     }
 
     {
@@ -1502,6 +1511,33 @@ EOP
             $i++ if $s =~/\Gb/g;
         }
         is($i, 0, "RT 120446: mustn't run slowly");
+    }
+
+    {
+        # [perl #120692]
+        # these tests should be virtually instantaneous. If they take 10s of
+        # seconds, there's a bug in intuit_start.
+
+        my $s = 'ab' x 1_000_000;
+        utf8::upgrade($s);
+        1 while $s =~ m/\Ga+ba+b/g;
+        pass("RT#120692 \\G mustn't run slowly");
+
+        $s=~ /^a{1,2}x/ for  1..10_000;
+        pass("RT#120692 a{1,2} mustn't run slowly");
+
+        $s=~ /ab.{1,2}x/;
+        pass("RT#120692 ab.{1,2} mustn't run slowly");
+
+        $s = "-a-bc" x 250_000;
+        $s .= "1a1bc";
+        utf8::upgrade($s);
+        ok($s =~ /\da\d{0,30000}bc/, "\\d{30000}");
+
+        $s = "-ab\n" x 250_000;
+        $s .= "abx";
+        ok($s =~ /^ab.*x/m, "distant float with /m");
+
     }
 
     # These are based on looking at the code in regcomp.c
@@ -1524,6 +1560,11 @@ EOP
         fresh_perl_like($prog, qr/synthetic stclass/, { stderr=>1 }, "$re generates a synthetic start class");
       }
     }
+
+    {
+        like "\x{AA}", qr/a?[\W_]/d, "\\W with /d synthetic start class works";
+    }
+
 
 
 } # End of sub run_tests

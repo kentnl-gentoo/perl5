@@ -114,7 +114,7 @@ Perl_safesysmalloc(MEM_SIZE size)
     dTHX;
 #endif
     Malloc_t ptr;
-    size += sTHX;
+    size += PERL_MEMORY_DEBUG_HEADER_SIZE;
 #ifdef DEBUGGING
     if ((SSize_t)size < 0)
 	Perl_croak_nocontext("panic: malloc, size=%"UVuf, (UV) size);
@@ -156,7 +156,7 @@ Perl_safesysmalloc(MEM_SIZE size)
 #ifdef MDH_HAS_SIZE
 	header->size = size;
 #endif
-        ptr = (Malloc_t)((char*)ptr+sTHX);
+        ptr = (Malloc_t)((char*)ptr+PERL_MEMORY_DEBUG_HEADER_SIZE);
 	DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%"UVxf": (%05ld) malloc %ld bytes\n",PTR2UV(ptr),(long)PL_an++,(long)size));
 	return ptr;
 }
@@ -184,7 +184,7 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
     Malloc_t ptr;
 #ifdef PERL_DEBUG_READONLY_COW
     const MEM_SIZE oldsize = where
-	? ((struct perl_memory_debug_header *)((char *)where - sTHX))->size
+	? ((struct perl_memory_debug_header *)((char *)where - PERL_MEMORY_DEBUG_HEADER_SIZE))->size
 	: 0;
 #endif
 #if !defined(STANDARD_C) && !defined(HAS_REALLOC_PROTOTYPE) && !defined(PERL_MICRO)
@@ -199,8 +199,8 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
     if (!where)
 	return safesysmalloc(size);
 #ifdef USE_MDH
-    where = (Malloc_t)((char*)where-sTHX);
-    size += sTHX;
+    where = (Malloc_t)((char*)where-PERL_MEMORY_DEBUG_HEADER_SIZE);
+    size += PERL_MEMORY_DEBUG_HEADER_SIZE;
     {
 	struct perl_memory_debug_header *const header
 	    = (struct perl_memory_debug_header *)where;
@@ -268,7 +268,7 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
 	header->prev->next = header;
 	maybe_protect_ro(header->prev);
 #endif
-        ptr = (Malloc_t)((char*)ptr+sTHX);
+        ptr = (Malloc_t)((char*)ptr+PERL_MEMORY_DEBUG_HEADER_SIZE);
     }
 
     /* In particular, must do that fixup above before logging anything via
@@ -307,7 +307,7 @@ Perl_safesysfree(Malloc_t where)
     DEBUG_m( PerlIO_printf(Perl_debug_log, "0x%"UVxf": (%05ld) free\n",PTR2UV(where),(long)PL_an++));
     if (where) {
 #ifdef USE_MDH
-        where = (Malloc_t)((char*)where-sTHX);
+        where = (Malloc_t)((char*)where-PERL_MEMORY_DEBUG_HEADER_SIZE);
 	{
 	    struct perl_memory_debug_header *const header
 		= (struct perl_memory_debug_header *)where;
@@ -381,8 +381,8 @@ Perl_safesyscalloc(MEM_SIZE count, MEM_SIZE size)
     else
 	croak_memory_wrap();
 #ifdef USE_MDH
-    if (sTHX <= MEM_SIZE_MAX - (MEM_SIZE)total_size)
-	total_size += sTHX;
+    if (PERL_MEMORY_DEBUG_HEADER_SIZE <= MEM_SIZE_MAX - (MEM_SIZE)total_size)
+	total_size += PERL_MEMORY_DEBUG_HEADER_SIZE;
     else
 	croak_memory_wrap();
 #endif
@@ -437,7 +437,7 @@ Perl_safesyscalloc(MEM_SIZE count, MEM_SIZE size)
 #  ifdef MDH_HAS_SIZE
 	    header->size = total_size;
 #  endif
-	    ptr = (Malloc_t)((char*)ptr+sTHX);
+	    ptr = (Malloc_t)((char*)ptr+PERL_MEMORY_DEBUG_HEADER_SIZE);
 	}
 #endif
 	return ptr;
@@ -521,7 +521,8 @@ Perl_instr(const char *big, const char *little)
 
     PERL_ARGS_ASSERT_INSTR;
 
-    /* libc prior to 4.6.27 did not work properly on a NULL 'little' */
+    /* libc prior to 4.6.27 (late 1994) did not work properly on a NULL
+     * 'little' */
     if (!little)
 	return (char*)big;
     return strstr((char*)big, (char*)little);
@@ -1697,7 +1698,7 @@ paths reduces CPU cache pressure.
 */
 
 void
-Perl_croak_no_modify()
+Perl_croak_no_modify(void)
 {
     Perl_croak_nocontext( "%s", PL_no_modify);
 }
@@ -1706,7 +1707,7 @@ Perl_croak_no_modify()
    This is typically called when malloc returns NULL.
 */
 void
-Perl_croak_no_mem()
+Perl_croak_no_mem(void)
 {
     dTHX;
     int rc;
@@ -5271,9 +5272,8 @@ S_gv_has_usable_name(pTHX_ GV *gv)
     GV **gvp;
     return GvSTASH(gv)
 	&& HvENAME(GvSTASH(gv))
-	&& (gvp = (GV **)hv_fetch(
-			GvSTASH(gv), GvNAME(gv),
-			GvNAMEUTF8(gv) ? -GvNAMELEN(gv) : GvNAMELEN(gv), 0
+	&& (gvp = (GV **)hv_fetchhek(
+			GvSTASH(gv), GvNAME_HEK(gv), 0
 	   ))
 	&& *gvp == gv;
 }
@@ -5333,6 +5333,7 @@ Perl_get_db_sub(pTHX_ SV **svp, CV *cv)
 	(void)SvIOK_on(dbsv);
 	SvIV_set(dbsv, PTR2IV(cv));	/* Do it the quickest way  */
     }
+    SvSETMAGIC(dbsv);
     TAINT_IF(save_taint);
 #ifdef NO_TAINT_SUPPORT
     PERL_UNUSED_VAR(save_taint);

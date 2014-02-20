@@ -3,6 +3,7 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require './test.pl';    # for fresh_perl_is() etc
+    require './loc_tools.pl'; # to find locales
 }
 
 use strict;
@@ -19,21 +20,8 @@ BEGIN {
     }
 }
 use Config;
-my $have_setlocale = $Config{d_setlocale} eq 'define';
 my $have_strtod = $Config{d_strtod} eq 'define';
-$have_setlocale = 0 if $@;
-# Visual C's CRT goes silly on strings of the form "en_US.ISO8859-1"
-# and mingw32 uses said silly CRT
-$have_setlocale = 0 if (($^O eq 'MSWin32' || $^O eq 'NetWare') && $Config{cc} =~ /^(cl|gcc)/i);
-skip_all("no setlocale available") unless $have_setlocale;
-my @locales;
-if (-x "/usr/bin/locale" && open(LOCALES, "/usr/bin/locale -a 2>/dev/null|")) {
-    while(<LOCALES>) {
-        chomp;
-        push(@locales, $_);
-    }
-    close(LOCALES);
-}
+my @locales = eval { find_locales( [ &LC_ALL, &LC_CTYPE, &LC_NUMERIC ] ) };
 skip_all("no locales available") unless @locales;
 
 plan tests => &last;
@@ -49,8 +37,9 @@ EOF
     "", {}, "no locales where LC_NUMERIC breaks");
 
 {
-    local $ENV{LC_NUMERIC};
+    local $ENV{LC_NUMERIC}; # So not taken as a default
     local $ENV{LC_ALL}; # so it never overrides LC_NUMERIC
+    local $ENV{LANG};   # So not taken as a default
     fresh_perl_is("for (qw(@locales)) {\n" . <<'EOF',
         use POSIX qw(locale_h);
         use locale;
@@ -88,8 +77,8 @@ for ("C", @locales) { # prefer C for the base if available
 setlocale(LC_NUMERIC, $original_locale);
 
 SKIP: {
-    skip("no locale available where LC_NUMERIC makes a difference", &last - 2)
-	if !$different;
+    skip("no locale available where LC_NUMERIC makes a difference", &last - 4 )
+	if !$different;     # -4 is 2 tests before this block; 2 after
     note("using the '$different' locale for LC_NUMERIC tests");
     for ($different) {
 	local $ENV{LC_NUMERIC} = $_;
@@ -188,13 +177,66 @@ EOF
 	local $ENV{LC_NUMERIC} = $_;
 	local $ENV{LC_ALL}; # so it never overrides LC_NUMERIC
 	fresh_perl_is(<<'EOF', "$difference "x4, {},
-        use locale;
+            use locale;
 	    use POSIX qw(locale_h);
 	    setlocale(LC_NUMERIC, "");
 	    my $in = 4.2;
 	    printf("%g %g %s %s ", $in, 4.2, sprintf("%g", $in), sprintf("%g", 4.2));
 EOF
 	"sprintf() and printf() look at LC_NUMERIC regardless of constant folding");
+    }
+
+    for ($different) {
+	local $ENV{LC_NUMERIC} = $_;
+	local $ENV{LC_ALL}; # so it never overrides LC_NUMERIC
+	local $ENV{LANG};   # so on Windows gets sys default locale
+	fresh_perl_is(<<'EOF', "$difference "x4, {},
+            use locale;
+	    use POSIX qw(locale_h);
+	    setlocale(LC_NUMERIC, "");
+	    my $in = 4.2;
+	    printf("%g %g %s %s ", $in, 4.2, sprintf("%g", $in), sprintf("%g", 4.2));
+EOF
+	"Uses the above test to verify that on Windows the system default locale has lower priority than LC_NUMERIC");
+    }
+
+    for ($different) {
+        local $ENV{LC_ALL} = "invalid";
+	local $ENV{LC_NUMERIC} = "invalid";
+        local $ENV{LANG} = $_;
+
+        # Can't turn off the warnings, so send them to /dev/null
+        fresh_perl_is(<<'EOF', "$difference", { stderr => "devnull" },
+        use locale;
+            use POSIX qw(locale_h);
+            setlocale(LC_NUMERIC, "");
+            my $in = 4.2;
+            printf("%g", $in);
+EOF
+        "LANG is used if LC_ALL, LC_NUMERIC are invalid");
+    }
+
+    SKIP: {
+        if ($^O eq 'MSWin32') {
+            skip("Win32 uses system default locale in preference to \"C\"", 1);
+        }
+        else {
+            for ($different) {
+                local $ENV{LC_ALL} = "invalid";
+                local $ENV{LC_NUMERIC} = "invalid";
+                local $ENV{LANG} = "invalid";
+
+                # Can't turn off the warnings, so send them to /dev/null
+                fresh_perl_is(<<'EOF', 4.2, { stderr => "devnull" },
+                use locale;
+                    use POSIX qw(locale_h);
+                    setlocale(LC_NUMERIC, "");
+                    my $in = 4.2;
+                    printf("%g", $in);
+EOF
+                'C locale is used if LC_ALL, LC_NUMERIC, LANG are invalid');
+            }
+        }
     }
 
     for ($different) {
@@ -212,20 +254,8 @@ EOF
          "No compile error on v-strings when setting the locale to non-dot radix at compile time when default environment has non-dot radix");
     }
 
-    for ($different) {
-	local $ENV{LC_NUMERIC} = $_;
-	local $ENV{LC_ALL}; # so it never overrides LC_NUMERIC
-	fresh_perl_is(<<"EOF",
-	    use POSIX qw(locale_h);
-
-            BEGIN { print setlocale(LC_NUMERIC), "\n"; };
-EOF
-	 $_, { },
-         "Passed in LC_NUMERIC is valid at compilation time");
-    }
-
     unless ($comma) {
-        skip("no locale available where LC_NUMERIC is a comma", 2);
+        skip("no locale available where LC_NUMERIC is a comma", 3);
     }
     else {
 
@@ -267,6 +297,7 @@ EOF
             "1.5", {}, "POSIX::strtod() uses underlying locale");
         }
     }
+} # SKIP
 
     {
         fresh_perl_is(<<"EOF",
@@ -279,7 +310,16 @@ EOF
             1, {}, "/il matching of [bracketed] doesn't skip POSIX class if fails individ char");
     }
 
+    {
+        fresh_perl_is(<<"EOF",
+                use locale;
+                use POSIX;
+                POSIX::setlocale(POSIX::LC_CTYPE(),"C");
+                print "0" =~ /[\\d[:punct:]]/l || 0;
+                print "\\n";
+EOF
+            1, {}, "/l matching of [bracketed] doesn't skip non-first POSIX class");
 
-} # SKIP
+    }
 
-sub last { 16 }
+sub last { 19 }

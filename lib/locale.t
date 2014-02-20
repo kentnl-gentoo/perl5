@@ -19,6 +19,7 @@ BEGIN {
 	print "1..0\n";
 	exit;
     }
+    require './loc_tools.pl';
     $| = 1;
 }
 
@@ -66,25 +67,6 @@ sub debugf {
     printf @_ if $debug;
 }
 
-my $have_setlocale = 0;
-eval {
-    require POSIX;
-    import POSIX ':locale_h';
-    $have_setlocale++;
-};
-
-# Visual C's CRT goes silly on strings of the form "en_US.ISO8859-1"
-# and mingw32 uses said silly CRT
-# This doesn't seem to be an issue any more, at least on Windows XP,
-# so re-enable the tests for Windows XP onwards.
-my $winxp = ($^O eq 'MSWin32' && defined &Win32::GetOSVersion &&
-		join('.', (Win32::GetOSVersion())[1..2]) >= 5.1);
-$have_setlocale = 0 if ((($^O eq 'MSWin32' && !$winxp) || $^O eq 'NetWare') &&
-		$Config{cc} =~ /^(cl|gcc)/i);
-
-# UWIN seems to loop after taint tests, just skip for now
-$have_setlocale = 0 if ($^O =~ /^uwin/);
-
 $a = 'abc %';
 
 my $test_num = 0;
@@ -128,7 +110,7 @@ check_taint_not   $&, "not tainted outside 'use locale'";
 
 use locale;	# engage locale and therefore locale taint.
 
-check_taint_not   $a;
+check_taint_not   $a, "\t\$a";
 
 check_taint       uc($a);
 check_taint       "\U$a";
@@ -151,139 +133,218 @@ $_ = $a;	# untaint $_
 
 $_ = uc($a);	# taint $_
 
-check_taint      $_;
+check_taint      $_, "\t\$_";
 
 /(\w)/;	# taint $&, $`, $', $+, $1.
-check_taint      $&;
-check_taint      $`;
-check_taint      $';
-check_taint      $+;
-check_taint      $1;
-check_taint_not  $2;
+check_taint      $&, "\t/(\\w)/ \$&";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
 
 /(.)/;	# untaint $&, $`, $', $+, $1.
-check_taint_not  $&;
-check_taint_not  $`;
-check_taint_not  $';
-check_taint_not  $+;
-check_taint_not  $1;
-check_taint_not  $2;
+check_taint_not  $&, "\t/(.)/ \$&";
+check_taint_not  $`, "\t\$`";
+check_taint_not  $', "\t\$'";
+check_taint_not  $+, "\t\$+";
+check_taint_not  $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
 
 /(\W)/;	# taint $&, $`, $', $+, $1.
-check_taint      $&;
-check_taint      $`;
-check_taint      $';
-check_taint      $+;
-check_taint      $1;
-check_taint_not  $2;
+check_taint      $&, "\t/(\\W)/ \$&";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\t/(.)/ \$&";
+check_taint_not  $`, "\t\$`";
+check_taint_not  $', "\t\$'";
+check_taint_not  $+, "\t\$+";
+check_taint_not  $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
 
 /(\s)/;	# taint $&, $`, $', $+, $1.
-check_taint      $&;
-check_taint      $`;
-check_taint      $';
-check_taint      $+;
-check_taint      $1;
-check_taint_not  $2;
+check_taint      $&, "\t/(\\s)/ \$&";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\t/(.)/ \$&";
 
 /(\S)/;	# taint $&, $`, $', $+, $1.
-check_taint      $&;
-check_taint      $`;
-check_taint      $';
-check_taint      $+;
-check_taint      $1;
-check_taint_not  $2;
+check_taint      $&, "\t/(\\S)/ \$&";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\t/(.)/ \$&";
+
+"a" =~ /(a)|(\w)/;	# taint $&, $`, $', $+, $1.
+check_taint      $&, "\t/(a)|(\\w)/ \$&";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+ok($1 eq 'a', ("\t" x 4) . "\$1 is 'a'");
+ok(! defined $2, ("\t" x 4) . "\$2 is undefined");
+check_taint_not  $2, "\t\$2";
+check_taint_not  $3, "\t\$3";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\t/(.)/ \$&";
+
+"\N{CYRILLIC SMALL LETTER A}" =~ /(\N{CYRILLIC CAPITAL LETTER A})/i;	# no tainting because no locale dependence
+check_taint_not      $&, "\t/(\\N{CYRILLIC CAPITAL LETTER A})/i \$&";
+check_taint_not      $`, "\t\$`";
+check_taint_not      $', "\t\$'";
+check_taint_not      $+, "\t\$+";
+check_taint_not      $1, "\t\$1";
+ok($1 eq "\N{CYRILLIC SMALL LETTER A}", ("\t" x 4) . "\$1 is 'small cyrillic a'");
+check_taint_not      $2, "\t\$2";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\t/./ \$&";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\t/(.)/ \$&";
+
+"a:" =~ /(.)\b(.)/;	# taint $&, $`, $', $+, $1.
+check_taint      $&, "\t/(.)\\b(.)/ \$&";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint      $2, "\t\$2";
+check_taint_not  $3, "\t\$3";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\t/./ \$&";
+
+"aa" =~ /(.)\B(.)/;	# taint $&, $`, $', $+, $1.
+check_taint      $&, "\t/(.)\\B(.)/ \$&";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint      $2, "\t\$2";
+check_taint_not  $3, "\t\$3";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\t/./ \$&";
+
+"aaa" =~ /(.).(\1)/i;	# notaint because not locale dependent
+check_taint_not      $&, "\t/(.).(\\1)/ \$&";
+check_taint_not      $`, "\t\$`";
+check_taint_not      $', "\t\$'";
+check_taint_not      $+, "\t\$+";
+check_taint_not      $1, "\t\$1";
+check_taint_not      $2, "\t\$2";
+check_taint_not  $3, "\t\$3";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\t/./ \$&";
 
 $_ = $a;	# untaint $_
 
-check_taint_not  $_;
+check_taint_not  $_, "\t\$_";
 
 /(b)/;		# this must not taint
-check_taint_not  $&;
-check_taint_not  $`;
-check_taint_not  $';
-check_taint_not  $+;
-check_taint_not  $1;
-check_taint_not  $2;
+check_taint_not  $&, "\t/(b)/ \$&";
+check_taint_not  $`, "\t\$`";
+check_taint_not  $', "\t\$'";
+check_taint_not  $+, "\t\$+";
+check_taint_not  $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
 
 $_ = $a;	# untaint $_
 
-check_taint_not  $_;
+check_taint_not  $_, "\t\$_";
 
 $b = uc($a);	# taint $b
 s/(.+)/$b/;	# this must taint only the $_
 
-check_taint      $_;
-check_taint_not  $&;
-check_taint_not  $`;
-check_taint_not  $';
-check_taint_not  $+;
-check_taint_not  $1;
-check_taint_not  $2;
+check_taint      $_, "\t\$_";
+check_taint_not  $&, "\t\$&";
+check_taint_not  $`, "\t\$`";
+check_taint_not  $', "\t\$'";
+check_taint_not  $+, "\t\$+";
+check_taint_not  $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
 
 $_ = $a;	# untaint $_
 
 s/(.+)/b/;	# this must not taint
-check_taint_not  $_;
-check_taint_not  $&;
-check_taint_not  $`;
-check_taint_not  $';
-check_taint_not  $+;
-check_taint_not  $1;
-check_taint_not  $2;
+check_taint_not  $_, "\t\$_";
+check_taint_not  $&, "\t\$&";
+check_taint_not  $`, "\t\$`";
+check_taint_not  $', "\t\$'";
+check_taint_not  $+, "\t\$+";
+check_taint_not  $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
 
 $b = $a;	# untaint $b
 
 ($b = $a) =~ s/\w/$&/;
-check_taint      $b;	# $b should be tainted.
-check_taint_not  $a;	# $a should be not.
+check_taint      $b, "\t\$b";	# $b should be tainted.
+check_taint_not  $a, "\t\$a";	# $a should be not.
 
 $_ = $a;	# untaint $_
 
 s/(\w)/\l$1/;	# this must taint
-check_taint      $_;
-check_taint      $&;
-check_taint      $`;
-check_taint      $';
-check_taint      $+;
-check_taint      $1;
-check_taint_not  $2;
+check_taint      $_, "\t\$_";
+check_taint      $&, "\t\$&";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
 
 $_ = $a;	# untaint $_
 
 s/(\w)/\L$1/;	# this must taint
-check_taint      $_;
-check_taint      $&;
-check_taint      $`;
-check_taint      $';
-check_taint      $+;
-check_taint      $1;
-check_taint_not  $2;
+check_taint      $_, "\t\$_";
+check_taint      $&, "\t\$&";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
 
 $_ = $a;	# untaint $_
 
 s/(\w)/\u$1/;	# this must taint
-check_taint      $_;
-check_taint      $&;
-check_taint      $`;
-check_taint      $';
-check_taint      $+;
-check_taint      $1;
-check_taint_not  $2;
+check_taint      $_, "\t\$_";
+check_taint      $&, "\t\$&";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
 
 $_ = $a;	# untaint $_
 
 s/(\w)/\U$1/;	# this must taint
-check_taint      $_;
-check_taint      $&;
-check_taint      $`;
-check_taint      $';
-check_taint      $+;
-check_taint      $1;
-check_taint_not  $2;
+check_taint      $_, "\t\$_";
+check_taint      $&, "\t\$&";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
 
 # After all this tainting $a should be cool.
 
-check_taint_not  $a;
+check_taint_not  $a, "\t\$a";
 
 "a" =~ /([a-z])/;
 check_taint_not $1, '"a" =~ /([a-z])/';
@@ -467,11 +528,6 @@ check_taint_not $1, '"foo.bar_baz" =~ /^(.*)[._](.*?)$/';
 # Let us do some *real* locale work now,
 # unless setlocale() is missing (i.e. minitest).
 
-unless ($have_setlocale) {
-    print "1..$test_num\n";
-    exit;
-}
-
 # The test number before our first setlocale()
 my $final_without_setlocale = $test_num;
 
@@ -479,228 +535,24 @@ my $final_without_setlocale = $test_num;
 
 debug "# Scanning for locales...\n";
 
-# Note that it's okay that some languages have their native names
-# capitalized here even though that's not "right".  They are lowercased
-# anyway later during the scanning process (and besides, some clueless
-# vendor might have them capitalized erroneously anyway).
+require POSIX; import POSIX ':locale_h';
 
-my $locales = <<EOF;
-Afrikaans:af:za:1 15
-Arabic:ar:dz eg sa:6 arabic8
-Brezhoneg Breton:br:fr:1 15
-Bulgarski Bulgarian:bg:bg:5
-Chinese:zh:cn tw:cn.EUC eucCN eucTW euc.CN euc.TW Big5 GB2312 tw.EUC
-Hrvatski Croatian:hr:hr:2
-Cymraeg Welsh:cy:cy:1 14 15
-Czech:cs:cz:2
-Dansk Danish:da:dk:1 15
-Nederlands Dutch:nl:be nl:1 15
-English American British:en:au ca gb ie nz us uk zw:1 15 cp850
-Esperanto:eo:eo:3
-Eesti Estonian:et:ee:4 6 13
-Suomi Finnish:fi:fi:1 15
-Flamish::fl:1 15
-Deutsch German:de:at be ch de lu:1 15
-Euskaraz Basque:eu:es fr:1 15
-Galego Galician:gl:es:1 15
-Ellada Greek:el:gr:7 g8
-Frysk:fy:nl:1 15
-Greenlandic:kl:gl:4 6
-Hebrew:iw:il:8 hebrew8
-Hungarian:hu:hu:2
-Indonesian:id:id:1 15
-Gaeilge Irish:ga:IE:1 14 15
-Italiano Italian:it:ch it:1 15
-Nihongo Japanese:ja:jp:euc eucJP jp.EUC sjis
-Korean:ko:kr:
-Latine Latin:la:va:1 15
-Latvian:lv:lv:4 6 13
-Lithuanian:lt:lt:4 6 13
-Macedonian:mk:mk:1 15
-Maltese:mt:mt:3
-Moldovan:mo:mo:2
-Norsk Norwegian:no no\@nynorsk nb nn:no:1 15
-Occitan:oc:es:1 15
-Polski Polish:pl:pl:2
-Rumanian:ro:ro:2
-Russki Russian:ru:ru su ua:5 koi8 koi8r KOI8-R koi8u cp1251 cp866
-Serbski Serbian:sr:yu:5
-Slovak:sk:sk:2
-Slovene Slovenian:sl:si:2
-Sqhip Albanian:sq:sq:1 15
-Svenska Swedish:sv:fi se:1 15
-Thai:th:th:11 tis620
-Turkish:tr:tr:9 turkish8
-Yiddish:yi::1 15
-EOF
-
-if ($^O eq 'os390') {
-    # These cause heartburn.  Broken locales?
-    $locales =~ s/Svenska Swedish:sv:fi se:1 15\n//;
-    $locales =~ s/Thai:th:th:11 tis620\n//;
-}
-
-sub in_utf8 () { $^H & 0x08 || (${^OPEN} || "") =~ /:utf8/ }
-
-if (in_utf8) {
-    require "lib/locale/utf8";
-} else {
-    require "lib/locale/latin1";
-}
-
-my @Locale;
-my $Locale;
-my %posixes;
-
-sub trylocale {
-    my $locale = shift;
-    return if grep { $locale eq $_ } @Locale;
-    return unless setlocale(&POSIX::LC_ALL, $locale);
-    my $badutf8;
-    {
-        local $SIG{__WARN__} = sub {
-            $badutf8 = $_[0] =~ /Malformed UTF-8/;
-        };
-        $Locale =~ /UTF-?8/i;
-    }
-
-    if ($badutf8) {
-        ok(0, "Locale name contains malformed utf8");
-        return;
-    }
-    push @Locale, $locale;
-}
-
-sub decode_encodings {
-    my @enc;
-
-    foreach (split(/ /, shift)) {
-	if (/^(\d+)$/) {
-	    push @enc, "ISO8859-$1";
-	    push @enc, "iso8859$1";	# HP
-	    if ($1 eq '1') {
-		 push @enc, "roman8";	# HP
-	    }
-	} else {
-	    push @enc, $_;
-   	    push @enc, "$_.UTF-8";
-	}
-    }
-    if ($^O eq 'os390') {
-	push @enc, qw(IBM-037 IBM-819 IBM-1047);
-    }
-
-    return @enc;
-}
-
-trylocale("C");
-trylocale("POSIX");
-foreach (0..15) {
-    trylocale("ISO8859-$_");
-    trylocale("iso8859$_");
-    trylocale("iso8859-$_");
-    trylocale("iso_8859_$_");
-    trylocale("isolatin$_");
-    trylocale("isolatin-$_");
-    trylocale("iso_latin_$_");
-}
-
-# Sanitize the environment so that we can run the external 'locale'
-# program without the taint mode getting grumpy.
-
-# $ENV{PATH} is special in VMS.
-delete $ENV{PATH} if $^O ne 'VMS' or $Config{d_setenv};
-
-# Other subversive stuff.
-delete @ENV{qw(IFS CDPATH ENV BASH_ENV)};
-
-if (-x "/usr/bin/locale" && open(LOCALES, "/usr/bin/locale -a 2>/dev/null|")) {
-    while (<LOCALES>) {
-	# It seems that /usr/bin/locale steadfastly outputs 8 bit data, which
-	# ain't great when we're running this testPERL_UNICODE= so that utf8
-	# locales will cause all IO hadles to default to (assume) utf8
-	next unless utf8::valid($_);
-        chomp;
-	trylocale($_);
-    }
-    close(LOCALES);
-} elsif ($^O eq 'VMS' && defined($ENV{'SYS$I18N_LOCALE'}) && -d 'SYS$I18N_LOCALE') {
-# The SYS$I18N_LOCALE logical name search list was not present on
-# VAX VMS V5.5-12, but was on AXP && VAX VMS V6.2 as well as later versions.
-    opendir(LOCALES, "SYS\$I18N_LOCALE:");
-    while ($_ = readdir(LOCALES)) {
-        chomp;
-        trylocale($_);
-    }
-    close(LOCALES);
-} elsif (($^O eq 'openbsd' || $^O eq 'bitrig' ) && -e '/usr/share/locale') {
-
-   # OpenBSD doesn't have a locale executable, so reading /usr/share/locale
-   # is much easier and faster than the last resort method.
-
-    opendir(LOCALES, '/usr/share/locale');
-    while ($_ = readdir(LOCALES)) {
-        chomp;
-        trylocale($_);
-    }
-    close(LOCALES);
-} else {
-
-    # This is going to be slow.
-
-    foreach my $locale (split(/\n/, $locales)) {
-	my ($locale_name, $language_codes, $country_codes, $encodings) =
-	    split(/:/, $locale);
-	my @enc = decode_encodings($encodings);
-	foreach my $loc (split(/ /, $locale_name)) {
-	    trylocale($loc);
-	    foreach my $enc (@enc) {
-		trylocale("$loc.$enc");
-	    }
-	    $loc = lc $loc;
-	    foreach my $enc (@enc) {
-		trylocale("$loc.$enc");
-	    }
-	}
-	foreach my $lang (split(/ /, $language_codes)) {
-	    trylocale($lang);
-	    foreach my $country (split(/ /, $country_codes)) {
-		my $lc = "${lang}_${country}";
-		trylocale($lc);
-		foreach my $enc (@enc) {
-		    trylocale("$lc.$enc");
-		}
-		my $lC = "${lang}_\U${country}";
-		trylocale($lC);
-		foreach my $enc (@enc) {
-		    trylocale("$lC.$enc");
-		}
-	    }
-	}
-    }
-}
-
-setlocale(&POSIX::LC_ALL, "C");
-
-if ($^O eq 'darwin') {
-    # Darwin 8/Mac OS X 10.4 and 10.5 have bad Basque locales: perl bug #35895,
-    # Apple bug ID# 4139653. It also has a problem in Byelorussian.
-    (my $v) = $Config{osvers} =~ /^(\d+)/;
-    if ($v >= 8 and $v < 10) {
-	debug "# Skipping eu_ES, be_BY locales -- buggy in Darwin\n";
-	@Locale = grep ! m/^(eu_ES(?:\..*)?|be_BY\.CP1131)$/, @Locale;
-    } elsif ($v < 12) {
-	debug "# Skipping be_BY locales -- buggy in Darwin\n";
-	@Locale = grep ! m/^be_BY\.CP1131$/, @Locale;
-    }
-}
-
-@Locale = sort @Locale;
+my @Locale = find_locales([ &POSIX::LC_CTYPE, &POSIX::LC_ALL ]);
 
 debug "# Locales =\n";
 for ( @Locale ) {
     debug "# $_\n";
 }
+
+unless (@Locale) {
+    print "1..$test_num\n";
+    exit;
+}
+
+
+setlocale(&POSIX::LC_ALL, "C");
+
+my %posixes;
 
 my %Problem;
 my %Okay;
@@ -818,7 +670,7 @@ my $not_necessarily_a_problem_test_number;
 my $first_casing_test_number;
 my %setlocale_failed;   # List of locales that setlocale() didn't work on
 
-foreach $Locale (@Locale) {
+foreach my $Locale (@Locale) {
     $locales_test_number = $first_locales_test_number - 1;
     debug "#\n";
     debug "# Locale = $Locale\n";
@@ -828,17 +680,25 @@ foreach $Locale (@Locale) {
 	next;
     }
 
-    # We test UTF-8 locales only under ':not_characters'; otherwise they have
-    # documented deficiencies.  Non- UTF-8 locales are tested only under plain
-    # 'use locale', as otherwise we would have to convert everything in them
-    # to Unicode.
-    # The locale name doesn't necessarily have to have "utf8" in it to be a
-    # UTF-8 locale, but it works mostly.
-    my $is_utf8_locale = $Locale =~ /UTF-?8/i;
+    # We test UTF-8 locales only under ':not_characters';  It is easier to
+    # test them in other test files than here.  Non- UTF-8 locales are tested
+    # only under plain 'use locale', as otherwise we would have to convert
+    # everything in them to Unicode.
 
     my %UPPER = ();     # All alpha X for which uc(X) == X and lc(X) != X
     my %lower = ();     # All alpha X for which lc(X) == X and uc(X) != X
     my %BoThCaSe = ();  # All alpha X for which uc(X) == lc(X) == X
+
+    my $is_utf8_locale = is_locale_utf8($Locale);
+
+    debug "# is utf8 locale? = $is_utf8_locale\n";
+
+    my $radix = localeconv()->{decimal_point};
+    if ($radix !~ / ^ [[:ascii:]] + $/x) {
+        use bytes;
+        $radix = disp_chars(split "", $radix);
+    }
+    debug "# radix = $radix\n";
 
     if (! $is_utf8_locale) {
         use locale;
@@ -940,14 +800,14 @@ foreach $Locale (@Locale) {
         }
     }
 
-    debug "# UPPER    = ", disp_chars(keys %UPPER), "\n";
-    debug "# lower    = ", disp_chars(keys %lower), "\n";
-    debug "# BoThCaSe = ", disp_chars(keys %BoThCaSe), "\n";
+    debug "# UPPER    = ", disp_chars(sort { ord $a <=> ord $b } keys %UPPER), "\n";
+    debug "# lower    = ", disp_chars(sort { ord $a <=> ord $b } keys %lower), "\n";
+    debug "# BoThCaSe = ", disp_chars(sort { ord $a <=> ord $b } keys %BoThCaSe), "\n";
     debug "# Unassigned = ", disp_chars(sort { ord $a <=> ord $b } keys %Unassigned), "\n";
 
     my @failures;
     my @fold_failures;
-    foreach my $x (sort keys %UPPER) {
+    foreach my $x (sort { ord $a <=> ord $b } keys %UPPER) {
         my $ok;
         my $fold_ok;
         if ($is_utf8_locale) {
@@ -976,7 +836,7 @@ foreach $Locale (@Locale) {
     undef @failures;
     undef @fold_failures;
 
-    foreach my $x (sort keys %lower) {
+    foreach my $x (sort { ord $a <=> ord $b } keys %lower) {
         my $ok;
         my $fold_ok;
         if ($is_utf8_locale) {
@@ -1012,7 +872,7 @@ foreach $Locale (@Locale) {
 	}
     }
 
-    @Added_alpha = sort @Added_alpha;
+    @Added_alpha = sort { ord $a <=> ord $b } @Added_alpha;
 
     debug "# Added_alpha = ", disp_chars(@Added_alpha), "\n";
 
@@ -1873,7 +1733,7 @@ foreach $Locale (@Locale) {
         my @f = ();
         ++$locales_test_number;
         $test_names{$locales_test_number} = 'Verify case insensitive matching works';
-        foreach my $x (sort keys %UPPER) {
+        foreach my $x (sort { ord $a <=> ord $b } keys %UPPER) {
             if (! $is_utf8_locale) {
                 my $y = lc $x;
                 next unless uc $y eq $x;
@@ -1941,7 +1801,7 @@ foreach $Locale (@Locale) {
             }
         }
 
-	foreach my $x (sort keys %lower) {
+	foreach my $x (sort { ord $a <=> ord $b } keys %lower) {
             if (! $is_utf8_locale) {
                 my $y = uc $x;
                 next unless lc $y eq $x;
@@ -2071,7 +1931,7 @@ foreach $test_num ($first_locales_test_number..$final_locales_test_number) {
 
 $test_num = $final_locales_test_number;
 
-unless ( $^O eq 'dragonfly' ) {
+unless ( $^O =~ m!^(dragonfly|openbsd|bitrig|mirbsd)$! ) {
     # perl #115808
     use warnings;
     my $warned = 0;
@@ -2101,17 +1961,19 @@ setlocale(&POSIX::LC_ALL, "C");
         my $above_latin1_case_change_delta; # Same for the specific ords > 255
                                             # that we use
 
-        # We test an ASCII character, which should change case and be tainted;
+        # We test an ASCII character, which should change case;
         # a Latin1 character, which shouldn't change case under this C locale,
-        #   and is tainted.
         # an above-Latin1 character that when the case is changed would cross
-        #   the 255/256 boundary, so doesn't change case and isn't tainted
-        # (the \x{149} is one of these, but changes into 2 characters, the
+        #   the 255/256 boundary, so doesn't change case
+        #   (the \x{149} is one of these, but changes into 2 characters, the
         #   first one of which doesn't cross the boundary.
         # the final one in each list is an above-Latin1 character whose case
-        #   does change, and shouldn't be tainted.  The code below uses its
-        #   position in its list as a marker to indicate that it, unlike the
-        #   other code points above ASCII, has a successful case change
+        #   does change.  The code below uses its position in its list as a
+        #   marker to indicate that it, unlike the other code points above
+        #   ASCII, has a successful case change
+        #
+        # All casing operations under locale (but not :not_characters) should
+        # taint
         if ($function =~ /^u/) {
             @list = ("", "a", "\xe0", "\xff", "\x{fb00}", "\x{149}", "\x{101}");
             $ascii_case_change_delta = -32;
@@ -2185,9 +2047,9 @@ setlocale(&POSIX::LC_ALL, "C");
                             : "; not encoded in utf8)")
                         . " should be \"$should_be\", got \"$changed\"");
 
-                    # Tainting shouldn't happen for utf8 locales, empty
-                    # strings, or those characters above 255.
-                    (! $is_utf8_locale && length($char) > 0 && ord($char) < 256)
+                    # Tainting shouldn't happen for use locale :not_character
+                    # (a utf8 locale)
+                    (! $is_utf8_locale)
                     ? check_taint($changed)
                     : check_taint_not($changed);
 

@@ -104,7 +104,7 @@ my %exportperlmalloc =
 
 my $exportperlmalloc = $ARGS{PLATFORM} eq 'os2';
 
-my $config_h = $ARGS{PLATFORM} eq 'wince' ? 'xconfig.h' : 'config.h';
+my $config_h = 'config.h';
 open(CFG, '<', $config_h) || die "Cannot open $config_h: $!\n";
 while (<CFG>) {
     $define{$1} = 1 if /^\s*\#\s*define\s+(MYMALLOC|MULTIPLICITY
@@ -233,6 +233,12 @@ if ($ARGS{PLATFORM} ne 'vms') {
 			    Perl_do_aspawn
 			     );
     }
+}
+
+if ($ARGS{PLATFORM} ne 'win32') {
+    ++$skip{$_} foreach qw(
+		    Perl_my_setlocale
+			 );
 }
 
 unless ($define{UNLINK_ALL_VERSIONS}) {

@@ -278,16 +278,18 @@ PP(pp_concat)
 	else
 	    SvUTF8_off(TARG);
     }
-    else { /* $l .= $r */
-	if (!SvOK(TARG)) {
+    else { /* $l .= $r   and   left == TARG */
+	if (!SvOK(left)) {
 	    if (left == right && ckWARN(WARN_UNINITIALIZED)) /* $l .= $l */
 		report_uninit(right);
 	    sv_setpvs(left, "");
 	}
-	SvPV_force_nomg_nolen(left);
+        else {
+            SvPV_force_nomg_nolen(left);
+        }
 	lbyte = !DO_UTF8(left);
 	if (IN_BYTES)
-	    SvUTF8_off(TARG);
+	    SvUTF8_off(left);
     }
 
     if (!rcopied) {
@@ -1689,8 +1691,7 @@ Perl_do_readline(pTHX)
 		}
 	    }
 	    for (t1 = SvPVX_const(sv); *t1; t1++)
-		if (!isALPHANUMERIC(*t1) &&
-		    strchr("$&*(){}[]'\";\\|?<>~`", *t1))
+		if (strchr("$&*(){}[]'\";\\|?<>~`", *t1))
 			break;
 	    if (*t1 && PerlLIO_lstat(SvPVX_const(sv), &PL_statbuf) < 0) {
 		(void)POPs;		/* Unmatched wildcard?  Chuck it... */
@@ -1950,16 +1951,13 @@ While the pattern is being assembled/concatenated and then compiled,
 PL_tainted will get set (via TAINT_set) if any component of the pattern
 is tainted, e.g. /.*$tainted/.  At the end of pattern compilation,
 the RXf_TAINTED flag is set on the pattern if PL_tainted is set (via
-TAINT_get).
+TAINT_get).  Also, if any component of the pattern matches based on
+locale-dependent behavior, the RXf_TAINTED_SEEN flag is set.
 
 When the pattern is copied, e.g. $r = qr/..../, the SV holding the ref to
 the pattern is marked as tainted. This means that subsequent usage, such
 as /x$r/, will set PL_tainted using TAINT_set, and thus RXf_TAINTED,
 on the new pattern too.
-
-At the start of execution of a pattern, the RXf_TAINTED_SEEN flag on the
-regex is cleared; during execution, locale-variant ops such as POSIXL may
-set RXf_TAINTED_SEEN.
 
 RXf_TAINTED_SEEN is used post-execution by the get magic code
 of $1 et al to indicate whether the returned value should be tainted.

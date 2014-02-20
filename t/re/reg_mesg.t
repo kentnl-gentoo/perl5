@@ -119,6 +119,8 @@ my @death =
 '/(?lil:foo)/' => 'Regexp modifier "l" may not appear twice {#} m/(?lil{#}:foo)/',
 '/(?aaia:foo)/' => 'Regexp modifier "a" may appear a maximum of twice {#} m/(?aaia{#}:foo)/',
 '/(?i-l:foo)/' => 'Regexp modifier "l" may not appear after the "-" {#} m/(?i-l{#}:foo)/',
+'/a\b{cde/' => 'Use "\b\{" instead of "\b{" {#} m/a\{#}b{cde/',
+'/a\B{cde/' => 'Use "\B\{" instead of "\B{" {#} m/a\{#}B{cde/',
 
  '/((x)/' => 'Unmatched ( {#} m/({#}(x)/',
 
@@ -223,6 +225,7 @@ my @death =
  "m/(?('/" => "Sequence (?('... not terminated {#} m/(?('{#}/",
  'm/\g{/'  => 'Sequence \g{... not terminated {#} m/\g{{#}/',
  'm/\k</'  => 'Sequence \k<... not terminated {#} m/\k<{#}/',
+ 'm/\cß/' => "Character following \"\\c\" must be printable ASCII",
 );
 
 my @death_utf8 = mark_as_utf8(
@@ -302,7 +305,8 @@ my @death_utf8 = mark_as_utf8(
  '/(?[ \p{ ネ = bar } ])/' => 'Property \'ネ = bar\' is unknown {#} m/(?[ \p{ ネ = bar }{#} ])/',
  '/ネ(?[ \t ]/' => 'Syntax error in (?[...]) in regex m/ネ(?[ \t ]/',
  '/(?[ \t + \e # ネ This was supposed to be a comment ])/' => 'Syntax error in (?[...]) in regex m/(?[ \t + \e # ネ This was supposed to be a comment ])/',
- 'm/(*ネ)ネ/' => q<Unknown verb pattern 'ネ' {#} m/(*ネ){#}ネ/>
+ 'm/(*ネ)ネ/' => q<Unknown verb pattern 'ネ' {#} m/(*ネ){#}ネ/>,
+ '/\cネ/' => "Character following \"\\c\" must be printable ASCII",
 );
 push @death, @death_utf8;
 
@@ -410,8 +414,6 @@ my @experimental_regex_sets = (
 );
 
 my @deprecated = (
-    '/a\b{cde/' => '"\b{" is deprecated; use "\b\{" or "\b[{]" instead {#} m/a\{#}b{cde/',
-    '/a\B{cde/' => '"\B{" is deprecated; use "\B\{" or "\B[{]" instead {#} m/a\{#}B{cde/',
     "/(?x)latin1\\\x{85}\x{85}\\\x{85}/" => 'Escape literal pattern white space under /x {#} ' . "m/(?x)latin1\\\x{85}\x{85}{#}\\\x{85}/",
     'use utf8; /(?x)utf8\\/' => 'Escape literal pattern white space under /x {#} ' . "m/(?x)utf8\\\N{NEXT LINE}\N{NEXT LINE}{#}\\\N{NEXT LINE}/",
     '/((?# This is a comment in the middle of a token)?:foo)/' => 'In \'(?...)\', splitting the initial \'(?\' is deprecated {#} m/((?# This is a comment in the middle of a token)?{#}:foo)/',

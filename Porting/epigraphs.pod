@@ -17,6 +17,27 @@ Consult your favorite dictionary for details.
 
 =head1 EPIGRAPHS
 
+=head2 v5.19.8 - Joseph Heller, Catch-22
+
+L<Announced on 2014-01-20 by Ricardo Signes|http://www.nntp.perl.org/group/perl.perl5.porters/2014/01/msg211729.html>
+
+“I used to get a big kick out of saving people’s lives. Now I wonder what the
+hell’s the point, since they all have to die anyway.”
+
+“Oh, there’s a point, all right,” Dunbar assured him.
+
+“Is there? What is the point?”
+
+“The point is to keep them from dying for as long as you can.”
+
+“Yeah, but what’s the point, since they all have to die anyway?”
+
+“The trick is not to think about that.”
+
+“Never mind the trick. What the hell’s the point?”
+
+Dunbar pondered in silence for a few moments. “Who the hell knows?”
+
 =head2 v5.19.7 - Kurt Vonnegut, "Slaughterhouse-Five"
 
 L<Announced on 2013-12-20 by Abigail|http://www.nntp.perl.org/group/perl.perl5.porters/2013/12/msg210882.html>
@@ -1602,7 +1623,7 @@ everybody owned. Milo met the challenge by writing the words "A Share"
 on the nearest scrap of paper and handing it away with a virtuous disdain
 that won the envy and admiration of almost everyone who knew him. His
 glory was at a peak, and Colonel Cathcart, who knew and admired his
-war record, was astonished by the deferential humility with which Mil
+war record, was astonished by the deferential humility with which Milo
 presented himself at Group Headquarters and made his fantastic appeal
 for more hazardous assignment.
 

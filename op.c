@@ -672,6 +672,15 @@ S_op_destroy(pTHX_ OP *o)
 
 /* Destructor */
 
+/*
+=for apidoc Am|void|op_free|OP *o
+
+Free an op.  Only use this when an op is no longer linked to from any
+optree.
+
+=cut
+*/
+
 void
 Perl_op_free(pTHX_ OP *o)
 {
@@ -985,6 +994,15 @@ S_find_and_forget_pmops(pTHX_ OP *o)
 	}
     }
 }
+
+/*
+=for apidoc Am|void|op_null|OP *o
+
+Neutralizes an op when it is no longer needed, but is still linked to from
+other ops.
+
+=cut
+*/
 
 void
 Perl_op_null(pTHX_ OP *o)
@@ -2039,6 +2057,21 @@ such as C<$$x = 5> which might have to vivify a reference in C<$x>.
 =cut
 */
 
+static bool
+S_vivifies(const OPCODE type)
+{
+    switch(type) {
+    case OP_RV2AV:     case   OP_ASLICE:
+    case OP_RV2HV:     case OP_KVASLICE:
+    case OP_RV2SV:     case   OP_HSLICE:
+    case OP_AELEMFAST: case OP_KVHSLICE:
+    case OP_HELEM:
+    case OP_AELEM:
+	return 1;
+    }
+    return 0;
+}
+
 OP *
 Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 {
@@ -2325,8 +2358,12 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 
     case OP_AND:
     case OP_OR:
-	op_lvalue(cLOGOPo->op_first,		 type);
-	op_lvalue(cLOGOPo->op_first->op_sibling, type);
+	if (type == OP_LEAVESUBLV
+	 || !S_vivifies(cLOGOPo->op_first->op_type))
+	    op_lvalue(cLOGOPo->op_first, type);
+	if (type == OP_LEAVESUBLV
+	 || !S_vivifies(cLOGOPo->op_first->op_sibling->op_type))
+	    op_lvalue(cLOGOPo->op_first->op_sibling, type);
 	goto nomod;
     }
 
@@ -10737,8 +10774,11 @@ subroutine call, not marked with C<&>, where the callee can be identified
 at compile time as I<cv>.
 
 The C-level function pointer is supplied in I<ckfun>, and an SV argument
-for it is supplied in I<ckobj>.  The function is intended to be called
-in this manner:
+for it is supplied in I<ckobj>.  The function should be defined like this:
+
+    STATIC OP * ckfun(pTHX_ OP *op, GV *namegv, SV *ckobj)
+
+It is intended to be called in this manner:
 
     entersubop = ckfun(aTHX_ entersubop, namegv, ckobj);
 
@@ -11183,6 +11223,71 @@ Perl_rpeep(pTHX_ OP *o)
 		}
 	    }
 
+	    /* Optimise 'my $x; my $y;' into 'my ($x, $y);'
+             *
+	     * This latter form is then suitable for conversion into padrange
+	     * later on. Convert:
+	     *
+	     *   nextstate1 -> padop1 -> nextstate2 -> padop2 -> nextstate3
+	     *
+	     * into:
+	     *
+	     *   nextstate1 ->     listop     -> nextstate3
+	     *                 /            \
+	     *         pushmark -> padop1 -> padop2
+	     */
+	    if (o->op_next && (
+		    o->op_next->op_type == OP_PADSV
+		 || o->op_next->op_type == OP_PADAV
+		 || o->op_next->op_type == OP_PADHV
+		)
+		&& !(o->op_next->op_private & ~OPpLVAL_INTRO)
+		&& o->op_next->op_next && o->op_next->op_next->op_type == OP_NEXTSTATE
+		&& o->op_next->op_next->op_next && (
+		    o->op_next->op_next->op_next->op_type == OP_PADSV
+		 || o->op_next->op_next->op_next->op_type == OP_PADAV
+		 || o->op_next->op_next->op_next->op_type == OP_PADHV
+		)
+		&& !(o->op_next->op_next->op_next->op_private & ~OPpLVAL_INTRO)
+		&& o->op_next->op_next->op_next->op_next && o->op_next->op_next->op_next->op_next->op_type == OP_NEXTSTATE
+		&& (!CopLABEL((COP*)o)) /* Don't mess with labels */
+		&& (!CopLABEL((COP*)o->op_next->op_next)) /* ... */
+	    ) {
+		OP *first;
+		OP *last;
+		OP *newop;
+
+		first = o->op_next;
+		last = o->op_next->op_next->op_next;
+
+		newop = newLISTOP(OP_LIST, 0, first, last);
+		newop->op_flags |= OPf_PARENS;
+		newop->op_flags = (newop->op_flags & ~OPf_WANT) | OPf_WANT_VOID;
+
+		/* Kill nextstate2 between padop1/padop2 */
+		op_free(first->op_next);
+
+		first->op_next = last;                /* padop2 */
+		first->op_sibling = last;             /* ... */
+		o->op_next = cUNOPx(newop)->op_first; /* pushmark */
+		o->op_next->op_next = first;          /* padop1 */
+		o->op_next->op_sibling = first;       /* ... */
+		newop->op_next = last->op_next;       /* nextstate3 */
+		newop->op_sibling = last->op_sibling;
+		last->op_next = newop;                /* listop */
+		last->op_sibling = NULL;
+		o->op_sibling = newop;                /* ... */
+
+		newop->op_flags = (newop->op_flags & ~OPf_WANT) | OPf_WANT_VOID;
+
+		/* Ensure pushmark has this flag if padops do */
+		if (first->op_flags & OPf_MOD && last->op_flags & OPf_MOD) {
+		    o->op_next->op_flags |= OPf_MOD;
+		}
+
+		break;
+	    }
+
 	    /* Two NEXTSTATEs in a row serve no purpose. Except if they happen
 	       to carry two labels. For now, take the easier option, and skip
 	       this optimisation if the first NEXTSTATE has a label.  */
@@ -11485,6 +11590,7 @@ Perl_rpeep(pTHX_ OP *o)
                                || p->op_type == OP_PADHV)
                             && (p->op_flags & OPf_WANT) == OPf_WANT_VOID
                             && (p->op_private & OPpLVAL_INTRO) == intro
+                            && !(p->op_private & ~OPpLVAL_INTRO)
                             && p->op_next
                             && (   p->op_next->op_type == OP_NEXTSTATE
                                 || p->op_next->op_type == OP_DBSTATE)
@@ -11914,7 +12020,7 @@ Perl_peep(pTHX_ OP *o)
 Return the XOP structure for a given custom op.  This macro should be
 considered internal to OP_NAME and the other access macros: use them instead.
 This macro does call a function.  Prior
-to 5.19.8, this was implemented as a
+to 5.19.9, this was implemented as a
 function.
 
 =cut
@@ -12280,6 +12386,18 @@ check chain, and I<old_checker_p> points to the storage location where a
 pointer to the next function in the chain will be stored.  The value of
 I<new_pointer> is written into the L</PL_check> array, while the value
 previously stored there is written to I<*old_checker_p>.
+
+The function should be defined like this:
+
+    static OP *new_checker(pTHX_ OP *op) { ... }
+
+It is intended to be called in this manner:
+
+    new_checker(aTHX_ op)
+
+I<old_checker_p> should be defined like this:
+
+    static Perl_check_t old_checker_p;
 
 L</PL_check> is global to an entire process, and a module wishing to
 hook op checking may find itself invoked more than once per process,

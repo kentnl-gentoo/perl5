@@ -46,6 +46,7 @@ cpan/autodie/lib/autodie.pm		Functions succeed or die with lexical scope
 cpan/autodie/lib/autodie/skip.pm
 cpan/autodie/lib/Fatal.pm		Make errors in functions/builtins fatal
 cpan/autodie/t/00-load.t		autodie - basic load
+cpan/autodie/t/args.t
 cpan/autodie/t/autodie_skippy.pm
 cpan/autodie/t/autodie.t		autodie - Basic functionality
 cpan/autodie/t/autodie_test_module.pm	autodie - test helper
@@ -101,6 +102,7 @@ cpan/autodie/t/no_carp.t
 cpan/autodie/t/open.t			autodie - Testing open
 cpan/autodie/t/recv.t			autodie - send/recv tests
 cpan/autodie/t/repeat.t			autodie - repeat autodie leak tests
+cpan/autodie/t/rt-74246.t
 cpan/autodie/t/scope_leak.t		autodie - file scope leak tests
 cpan/autodie/t/skip.t
 cpan/autodie/t/string-eval-basic.t	autodie - Basic string eval test
@@ -192,6 +194,7 @@ cpan/Compress-Raw-Bzip2/private/MakeUtil.pm
 cpan/Compress-Raw-Bzip2/t/000prereq.t
 cpan/Compress-Raw-Bzip2/t/01bzip2.t
 cpan/Compress-Raw-Bzip2/t/09limitoutput.t
+cpan/Compress-Raw-Bzip2/t/19nonpv.t
 cpan/Compress-Raw-Bzip2/t/99pod.t
 cpan/Compress-Raw-Bzip2/t/compress/CompTestUtils.pm
 cpan/Compress-Raw-Bzip2/typemap
@@ -206,6 +209,7 @@ cpan/Compress-Raw-Zlib/t/02zlib.t		Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/t/07bufsize.t		Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/t/09limitoutput.t	Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/t/18lvalue.t		Compress::Raw::Zlib
+cpan/Compress-Raw-Zlib/t/19nonpv.t
 cpan/Compress-Raw-Zlib/t/compress/CompTestUtils.pm
 cpan/Compress-Raw-Zlib/typemap			Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/zlib-src/adler32.c	Compress::Raw::Zlib
@@ -348,33 +352,53 @@ cpan/CPAN-Meta/t/save-load.t
 cpan/CPAN-Meta/t/strings.t
 cpan/CPAN-Meta/t/validator.t
 cpan/CPAN-Meta-YAML/lib/CPAN/Meta/YAML.pm		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/01_api.t
 cpan/CPAN-Meta-YAML/t/01_compile.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/02_basic.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/03_regression.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/05_export.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/11_meta_yml.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/12_plagger.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/13_perl_smith.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/14_yaml_org.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/15_multibyte.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/16_nullrefs.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/17_toolbar.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/18_tap.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/19_errors.t		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/10_read.t
+cpan/CPAN-Meta-YAML/t/11_read_string.t
+cpan/CPAN-Meta-YAML/t/12_write.t
+cpan/CPAN-Meta-YAML/t/13_write_string.t
 cpan/CPAN-Meta-YAML/t/20_subclass.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/21_bom.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/22_comments.t		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/data/HTML-WebDAO.yml		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/21_yamlpm_compat.t
+cpan/CPAN-Meta-YAML/t/30_yaml_spec_tml.t
+cpan/CPAN-Meta-YAML/t/31_local_tml.t
+cpan/CPAN-Meta-YAML/t/32_world_tml.t
+cpan/CPAN-Meta-YAML/t/data/ascii.yml
+cpan/CPAN-Meta-YAML/t/data/latin1.yml
 cpan/CPAN-Meta-YAML/t/data/multibyte.yml		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/data/one.yml		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/data/sample.yml		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/data/Spreadsheet-Read.yml		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/data/Template-Provider-Unicode-Japanese.yml		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/data/toolbar.yml		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/data/two.yml		CPAN-Meta-YAML files
 cpan/CPAN-Meta-YAML/t/data/utf_16_le_bom.yml		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/data/vanilla.yml		CPAN-Meta-YAML files
-cpan/CPAN-Meta-YAML/t/lib/Test.pm		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/data/utf_8_bom.yml
+cpan/CPAN-Meta-YAML/t/lib/TestBridge.pm
+cpan/CPAN-Meta-YAML/t/lib/TestML/Tiny.pm
+cpan/CPAN-Meta-YAML/t/lib/TestUtils.pm
+cpan/CPAN-Meta-YAML/t/README.md
+cpan/CPAN-Meta-YAML/t/tml
+cpan/CPAN-Meta-YAML/t/tml-local/dump-error/circular.tml
+cpan/CPAN-Meta-YAML/t/tml-local/load-error/document.tml
+cpan/CPAN-Meta-YAML/t/tml-local/load-error/scalar.tml
+cpan/CPAN-Meta-YAML/t/tml-local/load-error/tag.tml
+cpan/CPAN-Meta-YAML/t/tml-local/perl-to-yaml/quoting.tml
+cpan/CPAN-Meta-YAML/t/tml-local/yaml-roundtrip/collection.tml
+cpan/CPAN-Meta-YAML/t/tml-local/yaml-roundtrip/comment.tml
+cpan/CPAN-Meta-YAML/t/tml-local/yaml-roundtrip/document.tml
+cpan/CPAN-Meta-YAML/t/tml-local/yaml-roundtrip/mapping.tml
+cpan/CPAN-Meta-YAML/t/tml-local/yaml-roundtrip/quoting.tml
+cpan/CPAN-Meta-YAML/t/tml-local/yaml-roundtrip/scalar.tml
+cpan/CPAN-Meta-YAML/t/tml-local/yaml-roundtrip/sequence.tml
+cpan/CPAN-Meta-YAML/t/tml-spec/basic-data.tml
+cpan/CPAN-Meta-YAML/t/tml-spec/unicode.tml
+cpan/CPAN-Meta-YAML/t/tml-world/Acme-Time-Baby.tml
+cpan/CPAN-Meta-YAML/t/tml-world/Data-Swap.tml
+cpan/CPAN-Meta-YAML/t/tml-world/Games-Nintendo-Wii-Mii.tml
+cpan/CPAN-Meta-YAML/t/tml-world/HTML-WebDAO.tml
+cpan/CPAN-Meta-YAML/t/tml-world/ITS-SIN-FIDS-Content-XML.tml
+cpan/CPAN-Meta-YAML/t/tml-world/Plagger.tml
+cpan/CPAN-Meta-YAML/t/tml-world/Spreadsheet-Read.tml
+cpan/CPAN-Meta-YAML/t/tml-world/Template-Provider-Unicode-Japanese.tml
+cpan/CPAN-Meta-YAML/t/tml-world/toolbar.tml
+cpan/CPAN-Meta-YAML/t/tml-world/Vanilla-Perl.tml
+cpan/CPAN-Meta-YAML/t/tml-world/yaml_org.tml
+cpan/CPAN-Meta-YAML/t/tml-world/YAML-Tiny-META.tml
 cpan/CPAN/PAUSE2003.pub		CPAN public key
 cpan/CPAN/PAUSE2005.pub		CPAN public key
 cpan/CPAN/PAUSE2007.pub		CPAN public key
@@ -716,7 +740,6 @@ cpan/Digest-SHA/src/sha.h		Digest::SHA extension
 cpan/Digest-SHA/t/allfcns.t		See if Digest::SHA works
 cpan/Digest-SHA/t/base64.t		See if Digest::SHA works
 cpan/Digest-SHA/t/bitbuf.t		See if Digest::SHA works
-cpan/Digest-SHA/t/dumpload.t		See if Digest::SHA works
 cpan/Digest-SHA/t/fips180-4.t		See if Digest::SHA works
 cpan/Digest-SHA/t/fips198.t		See if Digest::SHA works
 cpan/Digest-SHA/t/gglong.t		See if Digest::SHA works
@@ -732,6 +755,7 @@ cpan/Digest-SHA/t/sha224.t		See if Digest::SHA works
 cpan/Digest-SHA/t/sha256.t		See if Digest::SHA works
 cpan/Digest-SHA/t/sha384.t		See if Digest::SHA works
 cpan/Digest-SHA/t/sha512.t		See if Digest::SHA works
+cpan/Digest-SHA/t/state.t		See if Digest::SHA works
 cpan/Digest-SHA/t/unicode.t
 cpan/Digest-SHA/t/woodbury.t		See if Digest::SHA works
 cpan/Digest-SHA/typemap			Typemap for Digest::SHA
@@ -1109,6 +1133,8 @@ cpan/HTTP-Tiny/t/141_no_proxy.t
 cpan/HTTP-Tiny/t/150_post_form.t
 cpan/HTTP-Tiny/t/160_cookies.t
 cpan/HTTP-Tiny/t/161_basic_auth.t
+cpan/HTTP-Tiny/t/162_proxy_auth.t
+cpan/HTTP-Tiny/t/170_keepalive.t
 cpan/HTTP-Tiny/t/BrokenCookieJar.pm
 cpan/HTTP-Tiny/t/cases/auth-01.txt
 cpan/HTTP-Tiny/t/cases/auth-02.txt
@@ -1150,12 +1176,18 @@ cpan/HTTP-Tiny/t/cases/get-19.txt
 cpan/HTTP-Tiny/t/cases/get-20.txt
 cpan/HTTP-Tiny/t/cases/get-21.txt
 cpan/HTTP-Tiny/t/cases/head-01.txt
+cpan/HTTP-Tiny/t/cases/keepalive-01.txt
+cpan/HTTP-Tiny/t/cases/keepalive-02.txt
+cpan/HTTP-Tiny/t/cases/keepalive-03.txt
+cpan/HTTP-Tiny/t/cases/keepalive-04.txt
+cpan/HTTP-Tiny/t/cases/keepalive-05.txt
 cpan/HTTP-Tiny/t/cases/mirror-01.txt
 cpan/HTTP-Tiny/t/cases/mirror-02.txt
 cpan/HTTP-Tiny/t/cases/mirror-03.txt
 cpan/HTTP-Tiny/t/cases/mirror-04.txt
 cpan/HTTP-Tiny/t/cases/mirror-05.txt
 cpan/HTTP-Tiny/t/cases/post-01.txt
+cpan/HTTP-Tiny/t/cases/proxy-auth-01.txt
 cpan/HTTP-Tiny/t/cases/put-01.txt
 cpan/HTTP-Tiny/t/cases/put-02.txt
 cpan/HTTP-Tiny/t/cases/put-03.txt
@@ -1707,6 +1739,7 @@ cpan/Parse-CPAN-Meta/t/02_api.t
 cpan/Parse-CPAN-Meta/t/03_functions.t
 cpan/Parse-CPAN-Meta/t/04_export.t
 cpan/Parse-CPAN-Meta/t/05_errors.t
+cpan/Parse-CPAN-Meta/t/data/BadMETA.yml
 cpan/Parse-CPAN-Meta/t/data/META-VR.json
 cpan/Parse-CPAN-Meta/t/data/META-VR.yml
 cpan/Parse-CPAN-Meta/t/lib/Parse/CPAN/Meta/Test.pm
@@ -2970,6 +3003,7 @@ dist/Exporter/t/warn.t			See if Exporter respects warning handlers
 dist/ExtUtils-CBuilder/Changes		EU-CB change log
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Base.pm		Base class for ExtUtils::CBuilder methods
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/aix.pm	CBuilder methods for AIX
+dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/android.pm	CBuilder methods for Android
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/cygwin.pm	CBuilder methods for cygwin
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/darwin.pm	CBuilder methods for darwin
 dist/ExtUtils-CBuilder/lib/ExtUtils/CBuilder/Platform/dec_osf.pm	CBuilder methods for OSF
@@ -3584,6 +3618,7 @@ ext/DynaLoader/dl_vms.xs	VMS implementation
 ext/DynaLoader/dl_win32.xs	Win32 implementation
 ext/DynaLoader/DynaLoader_pm.PL	Dynamic Loader perl module
 ext/DynaLoader/hints/aix.pl	Hint for DynaLoader for named architecture
+ext/DynaLoader/hints/android.pl	Hint for DynaLoader for named architecture
 ext/DynaLoader/hints/gnukfreebsd.pl	Hint for DynaLoader for named architecture
 ext/DynaLoader/hints/gnuknetbsd.pl	Hint for DynaLoader for named architecture
 ext/DynaLoader/hints/linux.pl	Hint for DynaLoader for named architecture
@@ -4031,6 +4066,7 @@ hints/irix_6_1.sh		Hints for named architecture
 hints/irix_6.sh			Hints for named architecture
 hints/isc_2.sh			Hints for named architecture
 hints/isc.sh			Hints for named architecture
+hints/linux-android.sh		Hints for named architecture
 hints/linux.sh			Hints for named architecture
 hints/lynxos.sh			Hints for named architecture
 hints/midnightbsd.sh		Hints for named architecture
@@ -4557,6 +4593,7 @@ pod/perl5194delta.pod		Perl changes in version 5.19.4
 pod/perl5195delta.pod		Perl changes in version 5.19.5
 pod/perl5196delta.pod		Perl changes in version 5.19.6
 pod/perl5197delta.pod		Perl changes in version 5.19.7
+pod/perl5198delta.pod		Perl changes in version 5.19.8
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4745,6 +4782,7 @@ qnx/qnx.c			QNX silent matherr callback
 README				The Instructions
 README.aix			Perl notes for AIX
 README.amiga			Perl notes for AmigaOS
+README.android			Perl notes for Android
 README.bs2000			Perl notes for POSIX-BC BS2000
 README.ce			Perl notes for WinCE
 README.cn			Perl for Simplified Chinese (in EUC-CN)
@@ -5015,6 +5053,7 @@ t/lib/warnings/doio		Tests for doio.c for warnings.t
 t/lib/warnings/doop		Tests for doop.c for warnings.t
 t/lib/warnings/gv		Tests for gv.c for warnings.t
 t/lib/warnings/hv		Tests for hv.c for warnings.t
+t/lib/warnings/irs		Tests for $/ for warnings.t
 t/lib/warnings/malloc		Tests for malloc.c for warnings.t
 t/lib/warnings/mg		Tests for mg.c for warnings.t
 t/lib/warnings/op		Tests for op.c for warnings.t
@@ -5035,6 +5074,7 @@ t/lib/warnings/toke		Tests for toke.c for warnings.t
 t/lib/warnings/universal	Tests for universal.c for warnings.t
 t/lib/warnings/utf8		Tests for utf8.c for warnings.t
 t/lib/warnings/util		Tests for util.c for warnings.t
+t/loc_tools.pl			Common functions for finding platform's locales
 t/mro/basic_01_c3.t		mro tests
 t/mro/basic_01_c3_utf8.t	utf8 mro tests
 t/mro/basic_01_dfs.t		mro tests
@@ -5255,6 +5295,7 @@ t/op/runlevel.t			See if die() works from perl_call_*()
 t/op/select.t			See if 0- and 1-argument select works
 t/op/setpgrpstack.t		See if setpgrp works
 t/op/sigdispatch.t		See if signals are always dispatched
+t/op/signatures.t		See if sub signatures work
 t/op/sigsystem.t		See if system and SIGCHLD handlers play together nicely
 t/op/sleep.t			See if sleep works
 t/op/smartkve.t			See if smart deref for keys/values/each works
@@ -5318,6 +5359,7 @@ t/porting/checkcase.t		Check whether we are case-insensitive-fs-friendly
 t/porting/checkcfgvar.t		Check that all config.sh-like files are good
 t/porting/cmp_version.t		Test whether all changed module files have their VERSION bumped
 t/porting/copyright.t		Check that copyright years match
+t/porting/corelist.t		Check that Module-CoreList has perl versions for the current perl
 t/porting/customized.dat		Data file for porting/customized.t
 t/porting/customized.t		Check all CUSTOMIZED files are as they should be
 t/porting/diag.t		Test completeness of perldiag.pod
@@ -5463,6 +5505,7 @@ t/uni/upper.t			See if Unicode casing works
 t/uni/variables.t		See that the rules for variable names work
 t/uni/write.t			See if Unicode formats work
 t/win32/fs.t			Test Win32 link for compatibility
+t/win32/popen.t			Test for stdout races in backticks, etc
 t/win32/runenv.t		Test if Win* perl honors its env variables
 t/win32/signal.t		Test Win32 signal emulation
 t/win32/system.t		See if system works in Win*
