@@ -999,7 +999,7 @@ S_ssc_is_cp_posixl_init(pTHX_ const RExC_state_t *pRExC_state,
 
 STATIC SV*
 S_get_ANYOF_cp_list_for_ssc(pTHX_ const RExC_state_t *pRExC_state,
-                               const regnode_charclass_posixl* const node)
+                               const regnode_charclass* const node)
 {
     /* Returns a mortal inversion list defining which code points are matched
      * by 'node', which is of type ANYOF.  Handles complementing the result if
@@ -1153,8 +1153,7 @@ S_ssc_and(pTHX_ const RExC_state_t *pRExC_state, regnode_ssc *ssc,
         }
     }
     else {
-        anded_cp_list = get_ANYOF_cp_list_for_ssc(pRExC_state,
-                                     (regnode_charclass_posixl*) and_with);
+        anded_cp_list = get_ANYOF_cp_list_for_ssc(pRExC_state, and_with);
         anded_flags = ANYOF_FLAGS(and_with) & ANYOF_COMMON_FLAGS;
     }
 
@@ -1271,7 +1270,9 @@ S_ssc_and(pTHX_ const RExC_state_t *pRExC_state, regnode_ssc *ssc,
                  || (ANYOF_FLAGS(and_with) & ANYOF_POSIXL))
         {
             /* One or the other of P1, P2 is non-empty. */
-            ANYOF_POSIXL_AND((regnode_charclass_posixl*) and_with, ssc);
+            if (ANYOF_FLAGS(and_with) & ANYOF_POSIXL) {
+                ANYOF_POSIXL_AND((regnode_charclass_posixl*) and_with, ssc);
+            }
             ssc_union(ssc, anded_cp_list, FALSE);
         }
         else { /* P1 = P2 = empty */
@@ -1302,8 +1303,7 @@ S_ssc_or(pTHX_ const RExC_state_t *pRExC_state, regnode_ssc *ssc,
         ored_flags = ANYOF_FLAGS(or_with);
     }
     else {
-        ored_cp_list = get_ANYOF_cp_list_for_ssc(pRExC_state,
-                                     (regnode_charclass_posixl*) or_with);
+        ored_cp_list = get_ANYOF_cp_list_for_ssc(pRExC_state, or_with);
         ored_flags = ANYOF_FLAGS(or_with) & ANYOF_COMMON_FLAGS;
     }
 
@@ -1331,8 +1331,8 @@ S_ssc_or(pTHX_ const RExC_state_t *pRExC_state, regnode_ssc *ssc,
         && ! is_ANYOF_SYNTHETIC(or_with))
     {
         /* We ignore P2, leaving P1 going forward */
-    }
-    else {  /* Not inverted */
+    }   /* else  Not inverted */
+    else if (ANYOF_FLAGS(or_with) & ANYOF_POSIXL) {
         ANYOF_POSIXL_OR((regnode_charclass_posixl*)or_with, ssc);
         if (ANYOF_POSIXL_SSC_TEST_ANY_SET(ssc)) {
             unsigned int i;
@@ -1444,6 +1444,9 @@ S_ssc_finalize(pTHX_ RExC_state_t *pRExC_state, regnode_ssc *ssc)
 
     set_ANYOF_arg(pRExC_state, (regnode *) ssc, invlist,
                                 NULL, NULL, NULL, FALSE);
+
+    /* Make sure is clone-safe */
+    ssc->invlist = NULL;
 
     if (ANYOF_POSIXL_SSC_TEST_ANY_SET(ssc)) {
         ANYOF_FLAGS(ssc) |= ANYOF_POSIXL;
@@ -2109,7 +2112,7 @@ S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch,
                         foldlen -= UTF8SKIP(uc);
                     }
                     else {
-                        foldlen = is_MULTI_CHAR_FOLD_utf8(uc);
+                        foldlen = is_MULTI_CHAR_FOLD_utf8_safe(uc, e);
                         minbytes++;
                     }
                 }
@@ -2126,7 +2129,7 @@ S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch,
                         foldlen--;
                     }
                     else {
-                        foldlen = is_MULTI_CHAR_FOLD_latin1(uc);
+                        foldlen = is_MULTI_CHAR_FOLD_latin1_safe(uc, e);
                         minbytes++;
                     }
                 }
@@ -3070,7 +3073,7 @@ S_make_trie_failtable(pTHX_ RExC_state_t *pRExC_state, regnode *source,  regnode
     DEBUG_OPTIMISE_r({if (scan){ \
        SV * const mysv=sv_newmortal(); \
        regnode *Next = regnext(scan); \
-       regprop(RExC_rx, mysv, scan); \
+       regprop(RExC_rx, mysv, scan, NULL); \
        PerlIO_printf(Perl_debug_log, "%*s" str ">%3d: %s (%d)\n", \
        (int)depth*2, "", REG_NODE_NUM(scan), SvPV_nolen_const(mysv),\
        Next ? (REG_NODE_NUM(Next)) : 0 ); \
@@ -3365,7 +3368,7 @@ S_join_exact(pTHX_ RExC_state_t *pRExC_state, regnode *scan,
                                      length sequence we are looking for is 2 */
 	    {
                 int count = 0;  /* How many characters in a multi-char fold */
-                int len = is_MULTI_CHAR_FOLD_utf8(s);
+                int len = is_MULTI_CHAR_FOLD_utf8_safe(s, s_end);
                 if (! len) {    /* Not a multi-char fold: get next char */
                     s += UTF8SKIP(s);
                     continue;
@@ -3458,7 +3461,7 @@ S_join_exact(pTHX_ RExC_state_t *pRExC_state, regnode *scan,
                               : s_end -1;
 
 	    while (s < upper) {
-                int len = is_MULTI_CHAR_FOLD_latin1(s);
+                int len = is_MULTI_CHAR_FOLD_latin1_safe(s, s_end);
                 if (! len) {    /* Not a multi-char fold. */
                     if (*s == LATIN_SMALL_LETTER_SHARP_S
                         && (OP(scan) == EXACTF || OP(scan) == EXACTFL))
@@ -3608,9 +3611,10 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
         DEBUG_PEEP("Peep", scan, depth);
 
 
-        /* Its not clear to khw or hv why this is done here, and not in the
-         * clauses that deal with EXACT nodes.  khw's guess is that it's
-         * because of a previous design */
+        /* The reason we do this here we need to deal with things like /(?:f)(?:o)(?:o)/
+         * which cant be dealt with by the normal EXACT parsing code, as each (?:..) is handled
+         * by a different invocation of reg() -- Yves
+         */
         JOIN_EXACT(scan,&min_subtract, &unfolded_multi_char, 0);
 
 	/* Follow the next-chain of the current node and optimize
@@ -3759,8 +3763,8 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		    }
 		}
 
-                if (PERL_ENABLE_TRIE_OPTIMISATION && OP( startbranch )
-                                                                   == BRANCH )
+                if (PERL_ENABLE_TRIE_OPTIMISATION &&
+                        OP( startbranch ) == BRANCH )
                 {
 		/* demq.
 
@@ -3837,7 +3841,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 
 
                         DEBUG_TRIE_COMPILE_r({
-                            regprop(RExC_rx, mysv, tail );
+                            regprop(RExC_rx, mysv, tail, NULL);
                             PerlIO_printf( Perl_debug_log, "%*s%s%s\n",
                               (int)depth * 2 + 2, "",
                               "Looking for TRIE'able sequences. Tail node is: ",
@@ -3918,16 +3922,16 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 #endif
 
                             DEBUG_TRIE_COMPILE_r({
-                                regprop(RExC_rx, mysv, cur);
+                                regprop(RExC_rx, mysv, cur, NULL);
                                 PerlIO_printf( Perl_debug_log, "%*s- %s (%d)",
                                    (int)depth * 2 + 2,"", SvPV_nolen_const( mysv ), REG_NODE_NUM(cur) );
 
-                                regprop(RExC_rx, mysv, noper);
+                                regprop(RExC_rx, mysv, noper, NULL);
                                 PerlIO_printf( Perl_debug_log, " -> %s",
                                     SvPV_nolen_const(mysv));
 
                                 if ( noper_next ) {
-                                  regprop(RExC_rx, mysv, noper_next );
+                                  regprop(RExC_rx, mysv, noper_next, NULL);
                                   PerlIO_printf( Perl_debug_log,"\t=> %s\t",
                                     SvPV_nolen_const(mysv));
                                 }
@@ -4026,7 +4030,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
                             } /* end handle unmergable node */
                         } /* loop over branches */
                         DEBUG_TRIE_COMPILE_r({
-                            regprop(RExC_rx, mysv, cur);
+                            regprop(RExC_rx, mysv, cur, NULL);
                             PerlIO_printf( Perl_debug_log,
                               "%*s- %s (%d) <SCAN FINISHED>\n",
                               (int)depth * 2 + 2,
@@ -4066,7 +4070,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
                                      * something like this: (?:|) So we can
                                      * turn it into a plain NOTHING op. */
                                     DEBUG_TRIE_COMPILE_r({
-                                        regprop(RExC_rx, mysv, cur);
+                                        regprop(RExC_rx, mysv, cur, NULL);
                                         PerlIO_printf( Perl_debug_log,
                                           "%*s- %s (%d) <NOTHING BRANCH SEQUENCE>\n", (int)depth * 2 + 2,
                                           "", SvPV_nolen_const( mysv ),REG_NODE_NUM(cur));
@@ -4940,7 +4944,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVdf" RHS=%"UVdf"\n",
                     DEBUG_STUDYDATA("OPFAIL",data,depth);
 
                     /*DEBUG_PARSE_MSG("opfail");*/
-                    regprop(RExC_rx, mysv_val, upto);
+                    regprop(RExC_rx, mysv_val, upto, NULL);
                     PerlIO_printf(Perl_debug_log,
                         "~ replace with OPFAIL pointed at %s (%"IVdf") offset %"IVdf"\n",
                         SvPV_nolen_const(mysv_val),
@@ -6913,7 +6917,7 @@ reStudy:
 	    ri->regstclass = (regnode*)RExC_rxi->data->data[n];
 	    r->intflags &= ~PREGf_SKIP;	/* Used in find_byclass(). */
 	    DEBUG_COMPILE_r({ SV *sv = sv_newmortal();
-	              regprop(r, sv, (regnode*)data.start_class);
+	              regprop(r, sv, (regnode*)data.start_class, NULL);
 		      PerlIO_printf(Perl_debug_log,
 				    "synthetic stclass \"%s\".\n",
 				    SvPVX_const(sv));});
@@ -6993,7 +6997,7 @@ reStudy:
 	    ri->regstclass = (regnode*)RExC_rxi->data->data[n];
 	    r->intflags &= ~PREGf_SKIP;	/* Used in find_byclass(). */
 	    DEBUG_COMPILE_r({ SV* sv = sv_newmortal();
-	              regprop(r, sv, (regnode*)data.start_class);
+	              regprop(r, sv, (regnode*)data.start_class, NULL);
 		      PerlIO_printf(Perl_debug_log,
 				    "synthetic stclass \"%s\".\n",
 				    SvPVX_const(sv));});
@@ -7047,7 +7051,15 @@ reStudy:
     if (r->intflags & PREGf_ANCH)
         r->extflags |= RXf_IS_ANCHORED;
 
+
     {
+        /* this is used to identify "special" patterns that might result
+         * in Perl NOT calling the regex engine and instead doing the match "itself",
+         * particularly special cases in split//. By having the regex compiler
+         * do this pattern matching at a regop level (instead of by inspecting the pattern)
+         * we avoid weird issues with equivalent patterns resulting in different behavior,
+         * AND we allow non Perl engines to get the same optimizations by the setting the
+         * flags appropriately - Yves */
         regnode *first = ri->program + 1;
         U8 fop = OP(first);
         regnode *next = NEXTOPER(first);
@@ -7301,7 +7313,7 @@ Perl_reg_named_buff_scalar(pTHX_ REGEXP * const r, const U32 flags)
         } else if (flags & RXapif_ONE) {
             ret = CALLREG_NAMED_BUFF_ALL(r, (flags | RXapif_REGNAMES));
             av = MUTABLE_AV(SvRV(ret));
-            length = av_len(av);
+            length = av_tindex(av);
 	    SvREFCNT_dec_NN(ret);
             return newSViv(length + 1);
         } else {
@@ -10127,8 +10139,8 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
             SV * const mysv_val1=sv_newmortal();
             SV * const mysv_val2=sv_newmortal();
             DEBUG_PARSE_MSG("lsbr");
-            regprop(RExC_rx, mysv_val1, lastbr);
-            regprop(RExC_rx, mysv_val2, ender);
+            regprop(RExC_rx, mysv_val1, lastbr, NULL);
+            regprop(RExC_rx, mysv_val2, ender, NULL);
             PerlIO_printf(Perl_debug_log, "~ tying lastbr %s (%"IVdf") to ender %s (%"IVdf") offset %"IVdf"\n",
                           SvPV_nolen_const(mysv_val1),
                           (IV)REG_NODE_NUM(lastbr),
@@ -10168,8 +10180,8 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                     SV * const mysv_val1=sv_newmortal();
                     SV * const mysv_val2=sv_newmortal();
                     DEBUG_PARSE_MSG("NADA");
-                    regprop(RExC_rx, mysv_val1, ret);
-                    regprop(RExC_rx, mysv_val2, ender);
+                    regprop(RExC_rx, mysv_val1, ret, NULL);
+                    regprop(RExC_rx, mysv_val2, ender, NULL);
                     PerlIO_printf(Perl_debug_log, "~ converting ret %s (%"IVdf") to ender %s (%"IVdf") offset %"IVdf"\n",
                                   SvPV_nolen_const(mysv_val1),
                                   (IV)REG_NODE_NUM(ret),
@@ -10882,7 +10894,7 @@ S_compute_EXACTish(pTHX_ RExC_state_t *pRExC_state)
 PERL_STATIC_INLINE void
 S_alloc_maybe_populate_EXACT(pTHX_ RExC_state_t *pRExC_state,
                          regnode *node, I32* flagp, STRLEN len, UV code_point,
-                         const bool downgradable)
+                         bool downgradable)
 {
     /* This knows the details about sizing an EXACTish node, setting flags for
      * it (by setting <*flagp>, and potentially populating it with a single
@@ -10915,6 +10927,12 @@ S_alloc_maybe_populate_EXACT(pTHX_ RExC_state_t *pRExC_state,
     U8 character[UTF8_MAXBYTES_CASE+1];
 
     PERL_ARGS_ASSERT_ALLOC_MAYBE_POPULATE_EXACT;
+
+    /* Don't bother to check for downgrading in PASS1, as it doesn't make any
+     * sizing difference, and is extra work that is thrown away */
+    if (downgradable && ! PASS2) {
+        downgradable = FALSE;
+    }
 
     if (! len_passed_in) {
         if (UTF) {
@@ -11020,7 +11038,8 @@ S_alloc_maybe_populate_EXACT(pTHX_ RExC_state_t *pRExC_state,
         *flagp |= SIMPLE;
     }
 
-    if (OP(node) == EXACTFL) {
+    /* The OP may not be well defined in PASS1 */
+    if (PASS2 && OP(node) == EXACTFL) {
         RExC_contains_locale = 1;
     }
 }
@@ -11526,11 +11545,15 @@ tryagain:
                 }
                 else {
                     num = S_backref_value(RExC_parse);
-                    /* bare \NNN might be backref or octal */
+                    /* bare \NNN might be backref or octal - if it is larger than or equal
+                     * RExC_npar then it is assumed to be and octal escape.
+                     * Note RExC_npar is +1 from the actual number of parens*/
                     if (num == I32_MAX || (num > 9 && num >= RExC_npar
                             && *RExC_parse != '8' && *RExC_parse != '9'))
+                    {
                         /* Probably a character specified in octal, e.g. \35 */
                         goto defchar;
+                    }
                 }
 
                 /* at this point RExC_parse definitely points to a backref
@@ -11836,7 +11859,11 @@ tryagain:
                          * 118 OR as "\11" . "8" depending on whether there
                          * were 118 capture buffers defined already in the
                          * pattern.  */
-                        if ( !isDIGIT(p[1]) || S_backref_value(p) <= RExC_npar)
+
+                        /* NOTE, RExC_npar is 1 more than the actual number of
+                         * parens we have seen so far, hence the < RExC_npar below. */
+
+                        if ( !isDIGIT(p[1]) || S_backref_value(p) < RExC_npar)
                         {  /* Not to be treated as an octal constant, go
                                    find backref */
                             --p;
@@ -11893,7 +11920,7 @@ tryagain:
                     if (! SIZE_ONLY
                         && RExC_flags & RXf_PMf_EXTENDED
                         && ckWARN_d(WARN_DEPRECATED)
-                        && is_PATWS_non_low(p, UTF))
+                        && is_PATWS_non_low_safe(p, RExC_end, UTF))
                     {
                         vWARN_dep(p + ((UTF) ? UTF8SKIP(p) : 1),
                                 "Escape literal pattern white space under /x");
@@ -14014,7 +14041,7 @@ parseit:
 #endif
 
         /* Look at the longest folds first */
-        for (cp_count = av_len(multi_char_matches); cp_count > 0; cp_count--) {
+        for (cp_count = av_tindex(multi_char_matches); cp_count > 0; cp_count--) {
 
             if (av_exists(multi_char_matches, cp_count)) {
                 AV** this_array_ptr;
@@ -14423,7 +14450,7 @@ parseit:
                     {
                         AV* list = (AV*) *listp;
                         IV k;
-                        for (k = 0; k <= av_len(list); k++) {
+                        for (k = 0; k <= av_tindex(list); k++) {
                             SV** c_p = av_fetch(list, k, FALSE);
                             UV c;
                             if (c_p == NULL) {
@@ -15205,7 +15232,7 @@ S_regtail(pTHX_ RExC_state_t *pRExC_state, regnode *p,
         DEBUG_PARSE_r({
             SV * const mysv=sv_newmortal();
             DEBUG_PARSE_MSG((scan==p ? "tail" : ""));
-            regprop(RExC_rx, mysv, scan);
+            regprop(RExC_rx, mysv, scan, NULL);
             PerlIO_printf(Perl_debug_log, "~ %s (%d) %s %s\n",
                 SvPV_nolen_const(mysv), REG_NODE_NUM(scan),
                     (temp == NULL ? "->" : ""),
@@ -15295,7 +15322,7 @@ S_regtail_study(pTHX_ RExC_state_t *pRExC_state, regnode *p,
         DEBUG_PARSE_r({
             SV * const mysv=sv_newmortal();
             DEBUG_PARSE_MSG((scan==p ? "tsdy" : ""));
-            regprop(RExC_rx, mysv, scan);
+            regprop(RExC_rx, mysv, scan, NULL);
             PerlIO_printf(Perl_debug_log, "~ %s (%d) -> %s\n",
                 SvPV_nolen_const(mysv),
                 REG_NODE_NUM(scan),
@@ -15308,7 +15335,7 @@ S_regtail_study(pTHX_ RExC_state_t *pRExC_state, regnode *p,
     DEBUG_PARSE_r({
         SV * const mysv_val=sv_newmortal();
         DEBUG_PARSE_MSG("");
-        regprop(RExC_rx, mysv_val, val);
+        regprop(RExC_rx, mysv_val, val, NULL);
         PerlIO_printf(Perl_debug_log,
                       "~ attach to %s (%"IVdf") offset to %"IVdf"\n",
 		      SvPV_nolen_const(mysv_val),
@@ -15460,7 +15487,7 @@ Perl_regdump(pTHX_ const regexp *r)
 	PerlIO_printf(Perl_debug_log, ") ");
 
     if (ri->regstclass) {
-	regprop(r, sv, ri->regstclass);
+	regprop(r, sv, ri->regstclass, NULL);
 	PerlIO_printf(Perl_debug_log, "stclass %s ", SvPVX_const(sv));
     }
     if (r->intflags & PREGf_ANCH) {
@@ -15497,11 +15524,11 @@ Perl_regdump(pTHX_ const regexp *r)
 }
 
 /*
-- regprop - printable representation of opcode
+- regprop - printable representation of opcode, with run time support
 */
 
 void
-Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
+Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_info *reginfo)
 {
 #ifdef DEBUGGING
     dVAR;
@@ -15603,7 +15630,7 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
             (UV)trie->maxlen,
             (UV)TRIE_CHARCOUNT(trie),
             (UV)trie->uniquecharcount
-          )
+          );
         );
         if ( IS_ANYOF_TRIE(op) || trie->bitmap ) {
             sv_catpvs(sv, "[");
@@ -15644,6 +15671,20 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
                     }
                     Perl_sv_catpvf(aTHX_ sv, " '%"SVf"'", SVfARG(*name));
                 }
+            }
+        }
+        if ( k == REF && reginfo) {
+            U32 n = ARG(o);  /* which paren pair */
+            I32 ln = prog->offs[n].start;
+            if (prog->lastparen < n || ln == -1)
+                Perl_sv_catpvf(aTHX_ sv, ": FAIL");
+            else if (ln == prog->offs[n].end)
+                Perl_sv_catpvf(aTHX_ sv, ": ACCEPT - EMPTY STRING");
+            else {
+                const char *s = reginfo->strbeg + ln;
+                Perl_sv_catpvf(aTHX_ sv, ": ");
+                Perl_pv_pretty( aTHX_ sv, s, prog->offs[n].end - prog->offs[n].start, 32, 0, 0,
+                    PERL_PV_ESCAPE_UNI_DETECT|PERL_PV_PRETTY_NOCLEAR|PERL_PV_PRETTY_ELLIPSES|PERL_PV_PRETTY_QUOTE );
             }
         }
     } else if (k == GOSUB)
@@ -15810,8 +15851,11 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
     PERL_UNUSED_ARG(sv);
     PERL_UNUSED_ARG(o);
     PERL_UNUSED_ARG(prog);
+    PERL_UNUSED_ARG(reginfo);
 #endif	/* DEBUGGING */
 }
+
+
 
 SV *
 Perl_re_intuit_string(pTHX_ REGEXP * const r)
@@ -16550,7 +16594,7 @@ S_dumpuntil(pTHX_ const regexp *r, const regnode *start, const regnode *node,
 	} else
 	    CLEAR_OPTSTART;
 
-	regprop(r, sv, node);
+	regprop(r, sv, node, NULL);
 	PerlIO_printf(Perl_debug_log, "%4"IVdf":%*s%s", (IV)(node - start),
 		      (int)(2*indent + 1), "", SvPVX_const(sv));
 

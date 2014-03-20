@@ -394,10 +394,25 @@ Apmb	|bool	|do_open	|NN GV* gv|NN const char* name|I32 len|int as_raw \
 Ap	|bool	|do_open9	|NN GV *gv|NN const char *name|I32 len|int as_raw \
 				|int rawmode|int rawperm|NULLOK PerlIO *supplied_fp \
 				|NN SV *svs|I32 num
+#if defined(PERL_IN_DOIO_C)
+s	|IO *	|openn_setup    |NN GV *gv|NN char *mode|NN PerlIO **saveifp \
+				|NN PerlIO **saveofp|NN int *savefd \
+                                |NN char *savetype
+s	|bool	|openn_cleanup	|NN GV *gv|NN IO *io|NULLOK PerlIO *fp \
+				|NN char *mode|NN const char *oname \
+                                |NULLOK PerlIO *saveifp|NULLOK PerlIO *saveofp \
+                                |int savefd|char savetype|int writing \
+                                |bool was_fdopen|NULLOK const char *type
+#endif
 Ap	|bool	|do_openn	|NN GV *gv|NN const char *oname|I32 len \
 				|int as_raw|int rawmode|int rawperm \
 				|NULLOK PerlIO *supplied_fp|NULLOK SV **svp \
 				|I32 num
+Mp	|bool	|do_open_raw	|NN GV *gv|NN const char *oname|STRLEN len \
+				|int rawmode|int rawperm
+Mp	|bool	|do_open6	|NN GV *gv|NN const char *oname|STRLEN len \
+				|NULLOK PerlIO *supplied_fp|NULLOK SV **svp \
+				|U32 num
 : Used in pp_hot.c and pp_sys.c
 p	|bool	|do_print	|NULLOK SV* sv|NN PerlIO* fp
 : Used in pp_sys.c
@@ -1167,7 +1182,7 @@ EXp	|I32|reg_numbered_buff_length|NN REGEXP * const rx|NN const SV * const sv|co
 EXp	|SV*|reg_qr_package|NN REGEXP * const rx
 
 : FIXME - why the E?
-Ep	|void	|regprop	|NULLOK const regexp *prog|NN SV* sv|NN const regnode* o
+Ep	|void	|regprop	|NULLOK const regexp *prog|NN SV* sv|NN const regnode* o|NULLOK const regmatch_info *reginfo
 Anp	|void	|repeatcpy	|NN char* to|NN const char* from|I32 len|IV count
 AnpP	|char*	|rninstr	|NN const char* big|NN const char* bigend \
 				|NN const char* little|NN const char* lend
@@ -1840,6 +1855,7 @@ sR	|HEK*	|share_hek_flags|NN const char *str|I32 len|U32 hash|int flags
 rs	|void	|hv_notallowed	|int flags|NN const char *key|I32 klen|NN const char *msg
 in	|U32|ptr_hash|PTRV u
 s	|struct xpvhv_aux*|hv_auxinit|NN HV *hv
+sn	|struct xpvhv_aux*|hv_auxinit_internal|NN struct xpvhv_aux *iter
 sM	|SV*	|hv_delete_common|NULLOK HV *hv|NULLOK SV *keysv \
 		|NULLOK const char *key|STRLEN klen|int k_flags|I32 d_flags \
 		|U32 hash
@@ -1870,6 +1886,7 @@ sR	|OP*	|newDEFSVOP
 sR	|OP*	|search_const	|NN OP *o
 sR	|OP*	|new_logop	|I32 type|I32 flags|NN OP **firstp|NN OP **otherp
 s	|void	|simplify_sort	|NN OP *o
+s	|void	|null_listop_in_list_context |NN OP* o
 s	|SV*	|gv_ename	|NN GV *gv
 sRn	|bool	|scalar_mod_type|NULLOK const OP *o|I32 type
 s	|OP *	|my_kid		|NULLOK OP *o|NULLOK OP *attrs|NN OP **imopsp
@@ -2016,7 +2033,7 @@ s	|void	|qsortsvu	|NULLOK SV** array|size_t num_elts|NN SVCOMPARE_t compare
 #endif
 
 #if defined(PERL_IN_PP_SYS_C)
-s	|OP*	|doform		|NN CV *cv|NN GV *gv|NN OP *retop
+s	|OP*	|doform		|NN CV *cv|NN GV *gv|NULLOK OP *retop
 #  if !defined(HAS_MKDIR) || !defined(HAS_RMDIR)
 sR	|int	|dooneliner	|NN const char *cmd|NN const char *filename
 #  endif
@@ -2079,7 +2096,7 @@ EsRn	|char *	|regpatws	|NN RExC_state_t *pRExC_state \
 				|NN char *p|const bool recognize_comment
 Ei	|void   |alloc_maybe_populate_EXACT|NN RExC_state_t *pRExC_state \
 				|NN regnode *node|NN I32 *flagp|STRLEN len \
-				|UV code_point|const bool downgradable
+				|UV code_point|bool downgradable
 Ei	|U8   |compute_EXACTish|NN RExC_state_t *pRExC_state
 Es	|char *	|nextchar	|NN RExC_state_t *pRExC_state
 Es	|bool	|reg_skipcomment|NN RExC_state_t *pRExC_state
@@ -2102,7 +2119,7 @@ Es	|void	|ssc_or		|NN const RExC_state_t *pRExC_state \
 				|NN const regnode_charclass *or_with
 Es	|SV*	|get_ANYOF_cp_list_for_ssc                                 \
 				|NN const RExC_state_t *pRExC_state \
-				|NN const regnode_charclass_posixl* const node
+				|NN const regnode_charclass* const node
 Ei	|void	|ssc_intersection|NN regnode_ssc *ssc \
 				|NN SV* const invlist|const bool invert_2nd
 Ei	|void	|ssc_union	|NN regnode_ssc *ssc \

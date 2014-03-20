@@ -1512,10 +1512,9 @@ PP(pp_sort)
     SAVEVPTR(PL_sortcop);
     if (flags & OPf_STACKED) {
 	if (flags & OPf_SPECIAL) {
-	    OP *kid = cLISTOP->op_first->op_sibling;	/* pass pushmark */
-	    kid = kUNOP->op_first;			/* pass rv2gv */
-	    kid = kUNOP->op_first;			/* pass leave */
-	    PL_sortcop = kid->op_next;
+	    OP *nullop = cLISTOP->op_first->op_sibling;	/* pass pushmark */
+            assert(nullop->op_type == OP_NULL);
+	    PL_sortcop = nullop->op_next;
 	}
 	else {
 	    GV *autogv = NULL;
@@ -1609,8 +1608,10 @@ PP(pp_sort)
     copytmps = !sorting_av && PL_sortcop;
     for (i=max; i > 0 ; i--) {
 	if ((*p1 = *p2++)) {			/* Weed out nulls. */
-	    if (copytmps && SvPADTMP(*p1) && !IS_PADGV(*p1))
+	    if (copytmps && SvPADTMP(*p1)) {
+                assert(!IS_PADGV(*p1));
 		*p1 = sv_mortalcopy(*p1);
+            }
 	    SvTEMP_off(*p1);
 	    if (!PL_sortcop) {
 		if (priv & OPpSORT_NUMERIC) {

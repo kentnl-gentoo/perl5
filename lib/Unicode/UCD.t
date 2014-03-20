@@ -1051,9 +1051,20 @@ foreach my $set_of_tables (\%utf8::stricter_to_file_of, \%utf8::loose_to_file_of
         }
         $tested_invlist{$file} = dclone \@tested;
 
-        # A leading '!' in the file name means that it is to be inverted.
-        my $invert = $file =~ s/^!//;
-        my $official = do "unicore/lib/$file.pl";
+        # A '!' in the file name means that it is to be inverted.
+        my $invert = $file =~ s/!//;
+        my $official;
+
+        # If the file's directory is '#', it is a special case where the
+        # contents are in-lined with semi-colons meaning new-lines, instead of
+        # it being an actual file to read.  The file is an index in to the
+        # array of the definitions
+        if ($file =~ s!^#/!!) {
+            $official = $utf8::inline_definitions[$file];
+        }
+        else {
+            $official = do "unicore/lib/$file.pl";
+        }
 
         # Get rid of any trailing space and comments in the file.
         $official =~ s/\s*(#.*)?$//mg;
@@ -1475,13 +1486,19 @@ foreach my $prop (sort(keys %props), sort keys %legacy_props) {
             # property comes along without these characteristics
             if (!defined $base_file) {
                 $base_file = $utf8::loose_to_file_of{$proxy_prop};
-                $is_binary = ($base_file =~ s/^!//) ? -1 : 1;
-                $base_file = "lib/$base_file";
+                $is_binary = ($base_file =~ s/!//) ? -1 : 1;
+                $base_file = "lib/$base_file" unless $base_file =~ m!^#/!;
             }
 
-            # Read in the file
-            $file = "unicore/$base_file.pl";
-            $official = do $file;
+            # Read in the file.  If the file's directory is '#', it is a
+            # special case where the contents are in-lined with semi-colons
+            # meaning new-lines, instead of it being an actual file to read.
+            if ($base_file =~ s!^#/!!) {
+                $official = $utf8::inline_definitions[$base_file];
+            }
+            else {
+                $official = do "unicore/$base_file.pl";
+            }
 
             # Get rid of any trailing space and comments in the file.
             $official =~ s/\s*(#.*)?$//mg;
@@ -1761,12 +1778,8 @@ foreach my $prop (sort(keys %props), sort keys %legacy_props) {
                     next PROPERTY;
                 }
             } # Otherwise, the map is to a simple scalar
-            elsif ($full_name =~    # These maps are in hex
-                    / ^ ( Simple_ )? ( Case_Folding
-                                       | ( Lower
-                                           | Title
-                                           | Upper ) case_Mapping ) $ /x)
-            {
+            elsif (defined $file_format && $file_format eq 'ax') {
+                # These maps are in hex
                 $invmap_ref->[$i] = sprintf("%X", $invmap_ref->[$i]);
             }
             elsif ($format eq 'ad' || $format eq 'ale') {

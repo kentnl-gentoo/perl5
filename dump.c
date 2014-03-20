@@ -1871,9 +1871,9 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	if (AvREIFY(sv))	sv_catpv(d, ",REIFY");
 	Perl_dump_indent(aTHX_ level, file, "  FLAGS = (%s)\n",
 			 SvCUR(d) ? SvPVX_const(d) + 1 : "");
-	if (nest < maxnest && av_len(MUTABLE_AV(sv)) >= 0) {
+	if (nest < maxnest && av_tindex(MUTABLE_AV(sv)) >= 0) {
 	    SSize_t count;
-	    for (count = 0; count <=  av_len(MUTABLE_AV(sv)) && count < maxnest; count++) {
+	    for (count = 0; count <=  av_tindex(MUTABLE_AV(sv)) && count < maxnest; count++) {
 		SV** const elt = av_fetch(MUTABLE_AV(sv),count,0);
 
 		Perl_dump_indent(aTHX_ level + 1, file, "Elt No. %"IVdf"\n", (IV)count);
@@ -1882,15 +1882,22 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	    }
 	}
 	break;
-    case SVt_PVHV:
+    case SVt_PVHV: {
+	U32 usedkeys;
+        if (SvOOK(sv)) {
+            struct xpvhv_aux *const aux = HvAUX(sv);
+            Perl_dump_indent(aTHX_ level, file, "  AUX_FLAGS = %"UVuf"\n",
+                             (UV)aux->xhv_aux_flags);
+        }
 	Perl_dump_indent(aTHX_ level, file, "  ARRAY = 0x%"UVxf, PTR2UV(HvARRAY(sv)));
-	if (HvARRAY(sv) && HvUSEDKEYS(sv)) {
+	usedkeys = HvUSEDKEYS(sv);
+	if (HvARRAY(sv) && usedkeys) {
 	    /* Show distribution of HEs in the ARRAY */
 	    int freq[200];
 #define FREQ_MAX ((int)(sizeof freq / sizeof freq[0] - 1))
 	    int i;
 	    int max = 0;
-	    U32 pow2 = 2, keys = HvUSEDKEYS(sv);
+	    U32 pow2 = 2, keys = usedkeys;
 	    NV theoret, sum = 0;
 
 	    PerlIO_printf(file, "  (");
@@ -1932,13 +1939,13 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
             }
 	    while ((keys = keys >> 1))
 		pow2 = pow2 << 1;
-	    theoret = HvUSEDKEYS(sv);
+	    theoret = usedkeys;
 	    theoret += theoret * (theoret-1)/pow2;
 	    PerlIO_putc(file, '\n');
 	    Perl_dump_indent(aTHX_ level, file, "  hash quality = %.1"NVff"%%", theoret/sum*100);
 	}
 	PerlIO_putc(file, '\n');
-	Perl_dump_indent(aTHX_ level, file, "  KEYS = %"IVdf"\n", (IV)HvUSEDKEYS(sv));
+	Perl_dump_indent(aTHX_ level, file, "  KEYS = %"IVdf"\n", (IV)usedkeys);
         {
             STRLEN count = 0;
             HE **ents = HvARRAY(sv);
@@ -2111,6 +2118,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	    }
 	}
 	break;
+    } /* case SVt_PVHV */
 
     case SVt_PVCV:
 	if (CvAUTOLOAD(sv)) {

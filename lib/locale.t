@@ -36,12 +36,12 @@ my $debug = $ENV{PERL_DEBUG_FULL_TEST} // 0;
 # http://markmail.org/message/5jwam4xsx4amsdnv.  Also on AIX machines, many
 # locales call a no-break space a graphic.
 # (There aren't 1000 locales currently in existence, so 99.9 works)
-my $acceptable_fold_failure_percentage = ($^O =~ / ^ ( MSWin32 | AIX ) $ /ix)
-                                         ? 99.9
-                                         : 5;
+my $acceptable_failure_percentage = ($^O =~ / ^ ( MSWin32 | AIX ) $ /ix)
+                                     ? 99.9
+                                     : 5;
 
 # The list of test numbers of the problematic tests.
-my @problematical_tests;
+my %problematical_tests;
 
 
 use Dumpvalue;
@@ -1107,16 +1107,46 @@ foreach my $Locale (@Locale) {
 
     ++$locales_test_number;
     undef @f;
-    $test_names{$locales_test_number} = 'Verify that [:digit:] is a subset of [:xdigit:]';
+    my @xdigit_digits;  # :digit: & :xdigit:
+    $test_names{$locales_test_number} = 'Verify that [:xdigit:] contains one or two blocks of 10 consecutive [:digit:] chars';
     for (map { chr } 0..255) {
         if ($is_utf8_locale) {
             use locale ':not_characters';
-            push @f, $_ if /[[:digit:]]/  and ! /[[:xdigit:]]/;
+            # For utf8 locales, we actually use a stricter test: that :digit:
+            # is a subset of :xdigit:, as we know that only 0-9 should match
+            push @f, $_ if /[[:digit:]]/ and ! /[[:xdigit:]]/;
         }
         else {
-            push @f, $_ if /[[:digit:]]/  and ! /[[:xdigit:]]/;
+            push @xdigit_digits, $_ if /[[:digit:]]/ and /[[:xdigit:]]/;
         }
     }
+    if (! $is_utf8_locale) {
+
+        # For non-utf8 locales, @xdigit_digits is a list of the characters
+        # that are both :xdigit: and :digit:.  Because :digit: is stored in
+        # increasing code point order (unless the tests above failed),
+        # @xdigit_digits is as well.  There should be exactly 10 or
+        # 20 of these.
+        if (@xdigit_digits != 10 && @xdigit_digits != 20) {
+            @f = @xdigit_digits;
+        }
+        else {
+
+            # Look for contiguity in the series, adding any wrong ones to @f
+            my @temp = @xdigit_digits;
+            while (@temp > 1) {
+                push @f, $temp[1] if ($temp[0] != $temp[1] - 1)
+
+                                     # Skip this test for the 0th character of
+                                     # the second block of 10, as it won't be
+                                     # contiguous with the previous block
+                                     && (! defined $xdigit_digits[10]
+                                         || $temp[1] != $xdigit_digits[10]);
+                shift @temp;
+            }
+        }
+    }
+
     report_multi_result($Locale, $locales_test_number, \@f);
 
     ++$locales_test_number;
@@ -1138,17 +1168,22 @@ foreach my $Locale (@Locale) {
     $test_names{$locales_test_number} = 'Verify that any additional members of [:xdigit:], are in groups of 6 consecutive code points';
     my $previous_ord;
     my $count = 0;
-    for (map { chr } 0..255) {
-        next unless /[[:xdigit:]]/;
-        next if /[[:digit:]]/;
-        next if /[A-Fa-f]/;
+    for my $chr (map { chr } 0..255) {
+        next unless $chr =~ /[[:xdigit:]]/;
+        if ($is_utf8_locale) {
+            next if $chr =~ /[[:digit:]]/;
+        }
+        else {
+            next if grep { $chr eq $_ } @xdigit_digits;
+        }
+        next if $chr =~ /[A-Fa-f]/;
         if (defined $previous_ord) {
             if ($is_utf8_locale) {
                 use locale ':not_characters';
-                push @f, $_ if ord $_ != $previous_ord + 1;
+                push @f, $chr if ord $chr != $previous_ord + 1;
             }
             else {
-                push @f, $_ if ord $_ != $previous_ord + 1;
+                push @f, $chr if ord $chr != $previous_ord + 1;
             }
         }
         $count++;
@@ -1156,7 +1191,7 @@ foreach my $Locale (@Locale) {
             undef $previous_ord;
         }
         else {
-            $previous_ord = ord $_;
+            $previous_ord = ord $chr;
         }
     }
     report_multi_result($Locale, $locales_test_number, \@f);
@@ -1342,7 +1377,7 @@ foreach my $Locale (@Locale) {
     report_multi_result($Locale, $locales_test_number, \@f);
 
     foreach ($first_casing_test_number..$locales_test_number) {
-        push @problematical_tests, $_;
+        $problematical_tests{$_} = 1;
     }
 
 
@@ -1621,12 +1656,15 @@ foreach my $Locale (@Locale) {
 
     report_result($Locale, ++$locales_test_number, $ok3);
     $test_names{$locales_test_number} = 'Verify that a different locale radix works when doing "==" with a constant';
+    $problematical_tests{$locales_test_number} = 1;
 
     report_result($Locale, ++$locales_test_number, $ok4);
     $test_names{$locales_test_number} = 'Verify that a different locale radix works when doing "==" with a scalar';
+    $problematical_tests{$locales_test_number} = 1;
 
     report_result($Locale, ++$locales_test_number, $ok5);
     $test_names{$locales_test_number} = 'Verify that a different locale radix works when doing "==" with a scalar and an intervening sprintf';
+    $problematical_tests{$locales_test_number} = 1;
 
     debug "# $first_c_test..$locales_test_number: \$c = $c, \$d = $d, Locale = $Locale\n";
 
@@ -1639,24 +1677,30 @@ foreach my $Locale (@Locale) {
 
     report_result($Locale, ++$locales_test_number, $ok8);
     $test_names{$locales_test_number} = 'Verify that "==" with a scalar and an intervening sprintf still works in inner no locale';
+    $problematical_tests{$locales_test_number} = 1;
 
     debug "# $first_e_test..$locales_test_number: \$e = $e, no locale\n";
 
     report_result($Locale, ++$locales_test_number, $ok9);
     $test_names{$locales_test_number} = 'Verify that after a no-locale block, a different locale radix still works when doing "==" with a constant';
+    $problematical_tests{$locales_test_number} = 1;
     my $first_f_test = $locales_test_number;
 
     report_result($Locale, ++$locales_test_number, $ok10);
     $test_names{$locales_test_number} = 'Verify that after a no-locale block, a different locale radix still works when doing "==" with a scalar';
+    $problematical_tests{$locales_test_number} = 1;
 
     report_result($Locale, ++$locales_test_number, $ok11);
     $test_names{$locales_test_number} = 'Verify that after a no-locale block, a different locale radix still works when doing "==" with a scalar and an intervening sprintf';
+    $problematical_tests{$locales_test_number} = 1;
 
     report_result($Locale, ++$locales_test_number, $ok12);
     $test_names{$locales_test_number} = 'Verify that after a no-locale block, a different locale radix can participate in an addition and function call as numeric';
+    $problematical_tests{$locales_test_number} = 1;
 
     report_result($Locale, ++$locales_test_number, $ok13);
     $test_names{$locales_test_number} = 'Verify that don\'t get warning under "==" even if radix is not a dot';
+    $problematical_tests{$locales_test_number} = 1;
 
     report_result($Locale, ++$locales_test_number, $ok14);
     $test_names{$locales_test_number} = 'Verify that non-ASCII UTF-8 error messages are in UTF-8';
@@ -1841,7 +1885,7 @@ foreach my $Locale (@Locale) {
             }
 	}
 	report_multi_result($Locale, $locales_test_number, \@f);
-        push @problematical_tests, $locales_test_number;
+        $problematical_tests{$locales_test_number} = 1;
     }
 
     # [perl #109318]
@@ -1849,6 +1893,7 @@ foreach my $Locale (@Locale) {
         my @f = ();
         ++$locales_test_number;
         $test_names{$locales_test_number} = 'Verify atof with locale radix and negative exponent';
+        $problematical_tests{$locales_test_number} = 1;
 
         my $radix = POSIX::localeconv()->{decimal_point};
         my @nums = (
@@ -1894,13 +1939,13 @@ foreach $test_num ($first_locales_test_number..$final_locales_test_number) {
 	    print "# It usually indicates a problem in the environment,\n";
 	    print "# not in Perl itself.\n";
 	}
-        if ($Okay{$test_num} && grep { $_ == $test_num } @problematical_tests) {
+        if ($Okay{$test_num} && grep { $_ == $test_num } keys %problematical_tests) {
             no warnings 'experimental::autoderef';
             # Round to nearest .1%
             my $percent_fail = (int(.5 + (1000 * scalar(keys $Problem{$test_num})
                                           / scalar(@Locale))))
                                / 10;
-            if (! $debug && $percent_fail < $acceptable_fold_failure_percentage)
+            if (! $debug && $percent_fail < $acceptable_failure_percentage)
             {
                 $test_names{$test_num} .= 'TODO';
                 print "# ", 100 - $percent_fail, "% of locales pass the following test, so it is likely that the failures\n";
@@ -2116,12 +2161,12 @@ if ($didwarn) {
         my $s = join(" ", @s);
         $s =~ s/(.{50,60}) /$1\n#\t/g;
 
-        warn
+        print
             "# The following locales\n#\n",
             "#\t", $s, "\n#\n",
 	    "# tested okay.\n#\n",
     } else {
-        warn "# None of your locales were fully okay.\n";
+        print "# None of your locales were fully okay.\n";
     }
 
     if (@F) {
@@ -2136,13 +2181,13 @@ if ($didwarn) {
             $details = "# For even more details, rerun, with environment variable PERL_DEBUG_FULL_TEST=2.\n";
         }
 
-        warn
+        print
           "# The following locales\n#\n",
           "#\t", $F, "\n#\n",
           "# had problems.\n#\n",
           $details;
     } else {
-        warn "# None of your locales were broken.\n";
+        print "# None of your locales were broken.\n";
     }
 }
 

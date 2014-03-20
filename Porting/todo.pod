@@ -467,7 +467,7 @@ Natively 64-bit systems need neither -Duse64bitint nor -Duse64bitall.
 On these systems, it might be the default compilation mode, and there
 is currently no guarantee that passing no use64bitall option to the
 Configure process will build a 32bit perl. Implementing -Duse32bit*
-options would be nice for perl 5.19.9.
+options would be nice for perl 5.19.10.
 
 =head2 Profile Perl - am I hot or not?
 
@@ -856,7 +856,7 @@ if available-- but B<only> if available, all platforms will B<not>
 have catgets().
 
 For the really pure at heart, consider extending this item to cover
-also the warning messages (see L<perllexwarn>, C<warnings.pl>).
+also the warning messages (see L<warnings>, F<regen/warnings.pl>).
 
 =head1 Tasks that need a knowledge of the interpreter
 
@@ -1176,7 +1176,7 @@ L<http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/2013-01/msg00339.html>
 =head1 Big projects
 
 Tasks that will get your name mentioned in the description of the "Highlights
-of 5.19.9"
+of 5.19.10"
 
 =head2 make ithreads more robust
 

@@ -6130,9 +6130,11 @@ int_fileify_dirspec(const char *dir, char *buf, int *utf8_fl)
       /* We've picked up everything up to the directory file name.
          Now just add the type and version, and we're set. */
       if ((!decc_efs_case_preserve) && vms_process_case_tolerant)
-          strcat(buf,".dir;1");
+          strcat(buf,".dir");
       else
-          strcat(buf,".DIR;1");
+          strcat(buf,".DIR");
+      if (!decc_filename_unix_no_version)
+          strcat(buf,";1");
       PerlMem_free(trndir);
       PerlMem_free(vmsdir);
       return buf;
@@ -8703,15 +8705,17 @@ static char *int_tovmsspec
 	*(cp1++) = *(cp2++);
 	break;
     case ';':
-	/* FIXME: This needs fixing as Perl is putting ".dir;" on UNIX filespecs
-	 * which is wrong.  UNIX notation should be ".dir." unless
-	 * the DECC$FILENAME_UNIX_NO_VERSION is enabled.
-	 * changing this behavior could break more things at this time.
-	 * efs character set effectively does not allow "." to be a version
-	 * delimiter as a further complication about changing this.
-	 */
-	if (decc_filename_unix_report != 0) {
+        /* If it doesn't look like the beginning of a version number,
+         * or we've been promised there are no version numbers, then
+         * escape it.
+         */
+	if (decc_filename_unix_no_version) {
 	  *(cp1++) = '^';
+	}
+	else {
+	  size_t all_nums = strspn(cp2+1, "0123456789");
+	  if (all_nums > 5 || *(cp2 + all_nums + 1) != '\0')
+	    *(cp1++) = '^';
 	}
 	*(cp1++) = *(cp2++);
 	break;
@@ -12965,7 +12969,7 @@ mod2fname(pTHX_ CV *cv)
   int max_name_len = 39;
   AV *in_array = (AV *)SvRV(ST(0));
 
-  num_entries = av_len(in_array);
+  num_entries = av_tindex(in_array);
 
   /* All the names start with PL_. */
   strcpy(ultimate_name, "PL_");

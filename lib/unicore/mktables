@@ -1365,12 +1365,18 @@ my $EXTRACTED_DIR = (-d 'extracted') ? 'extracted' : "";
 my $EXTRACTED = ($EXTRACTED_DIR) ? "$EXTRACTED_DIR/" : "";
 my $AUXILIARY = 'auxiliary';
 
-# Hashes that will eventually go into Heavy.pl for the use of utf8_heavy.pl
-# and into UCD.pl for the use of UCD.pm
+# Hashes and arrays that will eventually go into Heavy.pl for the use of
+# utf8_heavy.pl and into UCD.pl for the use of UCD.pm
 my %loose_to_file_of;       # loosely maps table names to their respective
                             # files
 my %stricter_to_file_of;    # same; but for stricter mapping.
 my %loose_property_to_file_of; # Maps a loose property name to its map file
+my @inline_definitions = "V0"; # Each element gives a definition of a unique
+                            # inversion list.  When a definition is inlined,
+                            # its value in the hash it's in (one of the two
+                            # defined just above) will include an index into
+                            # this array.  The 0th element is initialized to
+                            # the definition for a zero length invwersion list
 my %file_to_swash_name;     # Maps the file name to its corresponding key name
                             # in the hash %utf8::SwashInfo
 my %nv_floating_to_rational; # maps numeric values floating point numbers to
@@ -1851,7 +1857,8 @@ package main;
 { # Closure
 
     # This program uses the inside-out method for objects, as recommended in
-    # "Perl Best Practices".  This closure aids in generating those.  There
+    # "Perl Best Practices".  (This is the best solution still, since this has
+    # to run under miniperl.)  This closure aids in generating those.  There
     # are two routines.  setup_package() is called once per package to set
     # things up, and then set_access() is called for each hash representing a
     # field in the object.  These routines arrange for the object to be
@@ -2502,7 +2509,12 @@ END
             }
             $handle{$addr} = $file_handle; # Cache the open file handle
 
-            if ($v_version ge v3.2.0 && lc($file) ne 'unicodedata.txt') {
+            if ($v_version ge v3.2.0
+                && lc($file) ne 'unicodedata.txt'
+
+                    # Unihan files used another format until v7
+                && ($v_version ge v7.0.0 || $file !~ /^Unihan/i))
+            {
                 $_ = <$file_handle>;
                 if ($_ !~ / - $string_version \. /x) {
                     chomp;
@@ -14818,8 +14830,9 @@ sub register_file_for_name($$$) {
     # Join all the file path components together, using slashes.
     my $full_filename = join('/', @$directory_ref, $file);
 
-    # All go in the same subdirectory of unicore
-    if ($directory_ref->[0] ne $matches_directory) {
+    # All go in the same subdirectory of unicore, or the special
+    # pseudo-directory '#'
+    if ($directory_ref->[0] !~ / ^ $matches_directory | \# $ /x) {
         Carp::my_carp("Unexpected directory in "
                 .  join('/', @{$directory_ref}, $file));
     }
@@ -15208,6 +15221,8 @@ sub make_re_pod_entries($) {
             # property always use the single form.
             if ($table_property == $perl) {
                 $entry = "\\p{$name}";
+                $entry .= " \\p$name" if length $name == 1; # Show non-braced
+                                                            # form too
                 $entry_ref = "\\p{$name}";
             }
             else {    # Compound form.
@@ -16074,6 +16089,9 @@ the right column will give its longer, more descriptive name; and if the left
 column is the longest name, the right column will show any equivalent shortest
 name, in both single and compound forms if applicable.
 
+If braces are not needed to specify a property (e.g., C<\\pL>), the left
+column contains both forms, with and without braces.
+
 The right column will also caution you if a property means something different
 than what might normally be expected.
 
@@ -16295,6 +16313,9 @@ sub make_Heavy () {
     my $stricter_to_file_of = simple_dumper(\%stricter_to_file_of, ' ' x 4);
     chomp $stricter_to_file_of;
 
+    my $inline_definitions = simple_dumper(\@inline_definitions, " " x 4);
+    chomp $inline_definitions;
+
     my $loose_to_file_of = simple_dumper(\%loose_to_file_of, ' ' x 4);
     chomp $loose_to_file_of;
 
@@ -16310,7 +16331,13 @@ sub make_Heavy () {
     # for the alternate table figured out at that time.
     foreach my $cased (keys %caseless_equivalent_to) {
         my @path = $caseless_equivalent_to{$cased}->file_path;
-        my $path = join '/', @path[1, -1];
+        my $path;
+        if ($path[0] eq "#") {  # Pseudo-directory '#'
+            $path = join '/', @path;
+        }
+        else {  # Gets rid of lib/
+            $path = join '/', @path[1, -1];
+        }
         $caseless_equivalent_to{$cased} = $path;
     }
     my $caseless_equivalent_to
@@ -16336,12 +16363,22 @@ $INTERNAL_ONLY_HEADER
 $loose_property_name_of
 );
 
-# Maps property, table to file for those using stricter matching
+# Gives the definitions (in the form of inversion lists) for those properties
+# whose definitions aren't kept in files
+\@utf8::inline_definitions = (
+$inline_definitions
+);
+
+# Maps property, table to file for those using stricter matching.  For paths
+# whose directory is '#', the file is in the form of a numeric index into
+# \@inline_definitions
 \%utf8::stricter_to_file_of = (
 $stricter_to_file_of
 );
 
-# Maps property, table to file for those using loose matching
+# Maps property, table to file for those using loose matching.  For paths
+# whose directory is '#', the file is in the form of a numeric index into
+# \@inline_definitions
 \%utf8::loose_to_file_of = (
 $loose_to_file_of
 );
@@ -16891,17 +16928,15 @@ sub write_all_tables() {
     # (sort so that if there is an immutable file name, it has precedence, so
     # some other property can't come in and take over its file name.  (We
     # don't care if both defined, as they had better be different anyway.)
-    # The property named 'Perl' needs to be first (it doesn't have any
-    # immutable file name) because empty properties are defined in terms of
-    # it's table named 'All'.)   We also sort by the property's name.  This is
-    # just for repeatability of the outputs between runs of this program, but
-    # does not affect correctness.
+    # We also sort by the property's name.  This is just for repeatability of
+    # the outputs between runs of this program, but does not affect
+    # correctness.
     PROPERTY:
-    foreach my $property ($perl,
-                          sort { return -1 if defined $a->file;
+    foreach my $property (sort { return -1 if defined $a->file;
                                  return 1 if defined $b->file;
                                  return $a->name cmp $b->name;
-                                } grep { $_ != $perl } property_ref('*'))
+                                }
+                                  property_ref('*'))
     {
         my $type = $property->type;
 
@@ -17011,8 +17046,12 @@ sub write_all_tables() {
                     push @unhandled_properties, "$table";
                 }
 
-                # An empty table is just the complement of everything.
-                $table->set_complement($All) if $table != $property;
+                # The old way of expressing an empty match list was to
+                # complement the list that matches everything.  The new way is
+                # to create an empty inversion list, but this doesn't work for
+                # annotating, so use the old way then.
+                $table->set_complement($All) if $annotate
+                                                && $table != $property;
             }
             elsif ($expected_empty) {
                 my $because = "";
@@ -17300,8 +17339,56 @@ sub write_all_tables() {
         my $filename;
         my $property = $table->property;
         my $is_property = ($table == $property);
-        if (! $is_property) {
 
+        # For very short tables, instead of writing them out to actual files,
+        # we in-line their inversion list definitions into Heavy.pl.  The
+        # definition replaces the file name, and the special pseudo-directory
+        # '#' is used to signal this.  This significantly cuts down the number
+        # of files written at little extra cost to the hashes in Heavy.pl.
+        # And it means, no run-time files to read to get the definitions.
+        if (! $is_property
+            && ! $annotate  # For annotation, we want to explicitly show
+                            # everything, so keep in files
+            && $table->ranges <= 3)
+        {
+            my @ranges = $table->ranges;
+            my $count = @ranges;
+            if ($count == 0) {  # 0th index reserved for 0-length lists
+                $filename = 0;
+            }
+            elsif ($table->leader != $table) {
+
+                # Here, is a table that is equivalent to another; code
+                # in register_file_for_name() causes its leader's definition
+                # to be used
+
+                next;
+            }
+            else {  # No equivalent table so far.
+
+                # Build up its definition range-by-range.
+                my $definition = "";
+                while (defined (my $range = shift @ranges)) {
+                    my $end = $range->end;
+                    if ($end < $MAX_WORKING_CODEPOINT) {
+                        $count++;
+                        $end = "\n" . ($end + 1);
+                    }
+                    else {  # Extends to infinity, hence no 'end'
+                        $end = "";
+                    }
+                    $definition .= "\n" . $range->start . $end;
+                }
+                $definition = "V$count" . $definition;
+                $filename = @inline_definitions;
+                push @inline_definitions, $definition;
+            }
+            @directory = "#";
+            register_file_for_name($table, \@directory, $filename);
+            next;
+        }
+
+        if (! $is_property) {
             # Match tables for the property go in lib/$subdirectory, which is
             # the property's name.  Don't use the standard file name for this,
             # as may get an unfamiliar alias

@@ -8066,7 +8066,13 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 	if (!PerlLIO_fstat(PerlIO_fileno(fp), &st) && S_ISREG(st.st_mode))  {
 	    const Off_t offset = PerlIO_tell(fp);
 	    if (offset != (Off_t) -1 && st.st_size + append > offset) {
-	     	(void) SvGROW(sv, (STRLEN)((st.st_size - offset) + append + 1));
+#ifdef PERL_NEW_COPY_ON_WRITE
+                /* Add an extra byte for the sake of copy-on-write's
+                 * buffer reference count. */
+		(void) SvGROW(sv, (STRLEN)((st.st_size - offset) + append + 2));
+#else
+		(void) SvGROW(sv, (STRLEN)((st.st_size - offset) + append + 1));
+#endif
 	    }
 	}
 	rsptr = NULL;
@@ -12609,6 +12615,11 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 			daux->xhv_name_count = saux->xhv_name_count;
 
 			daux->xhv_fill_lazy = saux->xhv_fill_lazy;
+			daux->xhv_aux_flags = saux->xhv_aux_flags;
+#ifdef PERL_HASH_RANDOMIZE_KEYS
+			daux->xhv_rand = saux->xhv_rand;
+			daux->xhv_last_rand = saux->xhv_last_rand;
+#endif
 			daux->xhv_riter = saux->xhv_riter;
 			daux->xhv_eiter = saux->xhv_eiter
 			    ? he_dup(saux->xhv_eiter,
@@ -13548,10 +13559,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_statbuf		= proto_perl->Istatbuf;
     PL_statcache	= proto_perl->Istatcache;
 
-#ifdef HAS_TIMES
-    PL_timesbuf		= proto_perl->Itimesbuf;
-#endif
-
 #ifndef NO_TAINT_SUPPORT
     PL_tainted		= proto_perl->Itainted;
 #else
@@ -13939,7 +13946,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     /* Call the ->CLONE method, if it exists, for each of the stashes
        identified by sv_dup() above.
     */
-    while(av_len(param->stashes) != -1) {
+    while(av_tindex(param->stashes) != -1) {
 	HV* const stash = MUTABLE_HV(av_shift(param->stashes));
 	GV* const cloner = gv_fetchmethod_autoload(stash, "CLONE", 0);
 	if (cloner && GvCV(cloner)) {
@@ -14510,12 +14517,12 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 	    AV *av = MUTABLE_AV(PAD_SV(obase->op_targ));
 	    if (!av || SvRMAGICAL(av))
 		break;
-	    svp = av_fetch(av, (I32)obase->op_private, FALSE);
+	    svp = av_fetch(av, (I8)obase->op_private, FALSE);
 	    if (!svp || *svp != uninit_sv)
 		break;
 	}
 	return varname(NULL, '$', obase->op_targ,
-		       NULL, (I32)obase->op_private, FUV_SUBSCRIPT_ARRAY);
+		       NULL, (I8)obase->op_private, FUV_SUBSCRIPT_ARRAY);
     case OP_AELEMFAST:
 	{
 	    gv = cGVOPx_gv(obase);
@@ -14526,12 +14533,12 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 		AV *const av = GvAV(gv);
 		if (!av || SvRMAGICAL(av))
 		    break;
-		svp = av_fetch(av, (I32)obase->op_private, FALSE);
+		svp = av_fetch(av, (I8)obase->op_private, FALSE);
 		if (!svp || *svp != uninit_sv)
 		    break;
 	    }
 	    return varname(gv, '$', 0,
-		    NULL, (I32)obase->op_private, FUV_SUBSCRIPT_ARRAY);
+		    NULL, (I8)obase->op_private, FUV_SUBSCRIPT_ARRAY);
 	}
 	break;
 

@@ -326,6 +326,7 @@ cpan/CPAN-Meta/t/data-test/META-1_2.yml
 cpan/CPAN-Meta/t/data-test/META-1_3.yml
 cpan/CPAN-Meta/t/data-test/META-1_4.yml
 cpan/CPAN-Meta/t/data-test/META-2.json
+cpan/CPAN-Meta/t/data-test/META-2.meta
 cpan/CPAN-Meta/t/data-test/provides-version-missing.json
 cpan/CPAN-Meta/t/data-test/resources.yml
 cpan/CPAN-Meta/t/data-test/restricted-2.json
@@ -1334,8 +1335,6 @@ cpan/IO-Compress/t/cz-14gzopen.t			IO::Compress
 cpan/IO-Compress/t/globmapper.t				IO::Compress
 cpan/IO-Socket-IP/Build.PL				IO::Socket::IP
 cpan/IO-Socket-IP/Changes				IO::Socket::IP
-cpan/IO-Socket-IP/examples/connect.pl			IO::Socket::IP
-cpan/IO-Socket-IP/examples/nonblocking_libasyncns.pl	IO::Socket::IP
 cpan/IO-Socket-IP/lib/IO/Socket/IP.pm			IO::Socket::IP
 cpan/IO-Socket-IP/LICENSE				IO::Socket::IP
 cpan/IO-Socket-IP/Makefile.PL				IO::Socket::IP
@@ -1740,8 +1739,11 @@ cpan/Parse-CPAN-Meta/t/03_functions.t
 cpan/Parse-CPAN-Meta/t/04_export.t
 cpan/Parse-CPAN-Meta/t/05_errors.t
 cpan/Parse-CPAN-Meta/t/data/BadMETA.yml
+cpan/Parse-CPAN-Meta/t/data/bareyaml.meta
+cpan/Parse-CPAN-Meta/t/data/json.meta
 cpan/Parse-CPAN-Meta/t/data/META-VR.json
 cpan/Parse-CPAN-Meta/t/data/META-VR.yml
+cpan/Parse-CPAN-Meta/t/data/yaml.meta
 cpan/Parse-CPAN-Meta/t/lib/Parse/CPAN/Meta/Test.pm
 cpan/perlfaq/lib/perlfaq1.pod		General Questions About Perl
 cpan/perlfaq/lib/perlfaq2.pod	Obtaining and Learning about Perl
@@ -2903,6 +2905,7 @@ dist/base/t/base-open-chunk.t	See if base works
 dist/base/t/base-open-line.t	See if base works
 dist/base/t/base.t		See if base works
 dist/base/t/compile-time.t	See if base works
+dist/base/t/core-global.t	See if base works around CORE::GLOBAL::require
 dist/base/t/fields-5_6_0.t	See if fields work
 dist/base/t/fields-5_8_0.t	See if fields work
 dist/base/t/fields-base.t	See if fields work
@@ -4594,6 +4597,7 @@ pod/perl5195delta.pod		Perl changes in version 5.19.5
 pod/perl5196delta.pod		Perl changes in version 5.19.6
 pod/perl5197delta.pod		Perl changes in version 5.19.7
 pod/perl5198delta.pod		Perl changes in version 5.19.8
+pod/perl5199delta.pod		Perl changes in version 5.19.9
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5236,7 +5240,8 @@ t/op/index.t			See if index works
 t/op/index_thr.t		See if index works in another thread
 t/op/int.t			See if int works
 t/op/join.t			See if join works
-t/op/kill0.t			See if kill(0, $pid) works
+t/op/kill0_child		Process tree script that is kill()ed
+t/op/kill0.t			See if kill works
 t/op/kvaslice.t			See if index/value array slices work
 t/op/kvhslice.t			See if key/value hash slices work
 t/op/lc.t			See if lc, uc, lcfirst, ucfirst, quotemeta work

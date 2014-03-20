@@ -1452,7 +1452,7 @@ S_parse_gv_stash_name(pTHX_ HV **stash, GV **gv, const char **name,
                     tmpbuf[(*len)++] = ':';
                     key = tmpbuf;
                 }
-                gvp = (GV**)hv_fetch(*stash, key, is_utf8 ? -(*len) : *len, add);
+                gvp = (GV**)hv_fetch(*stash, key, is_utf8 ? -((I32)*len) : (I32)*len, add);
                 *gv = gvp ? *gvp : NULL;
                 if (*gv && *gv != (const GV *)&PL_sv_undef) {
                     if (SvTYPE(*gv) != SVt_PVGV)
@@ -1583,7 +1583,7 @@ S_find_default_stash(pTHX_ HV **stash, const char *name, STRLEN len,
                 !(len == 1 && sv_type == SVt_PV &&
                 (*name == 'a' || *name == 'b')) )
             {
-                GV**gvp = (GV**)hv_fetch(*stash,name,is_utf8 ? -len : len,0);
+                GV**gvp = (GV**)hv_fetch(*stash,name,is_utf8 ? -(I32)len : (I32)len,0);
                 if (!gvp || *gvp == (const GV *)&PL_sv_undef ||
                     SvTYPE(*gvp) != SVt_PVGV)
                 {
@@ -2119,7 +2119,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
     }
     
     /* By this point we should have a stash and a name */
-    gvp = (GV**)hv_fetch(stash,name,is_utf8 ? -len : len,add);
+    gvp = (GV**)hv_fetch(stash,name,is_utf8 ? -(I32)len : (I32)len,add);
     if (!gvp || *gvp == (const GV *)&PL_sv_undef) {
 	if (addmg) gv = (GV *)newSV(0);
 	else return NULL;
@@ -2253,6 +2253,11 @@ Perl_gv_efullname4(pTHX_ SV *sv, const GV *gv, const char *prefix, bool keepmain
     gv_fullname4(sv, egv ? egv : gv, prefix, keepmain);
 }
 
+
+/* recursively scan a stash and any nested stashes looking for entries
+ * that need the "only used once" warning raised
+ */
+
 void
 Perl_gv_check(pTHX_ HV *stash)
 {
@@ -2263,18 +2268,23 @@ Perl_gv_check(pTHX_ HV *stash)
 
     if (!HvARRAY(stash))
 	return;
+
+    assert(SvOOK(stash));
+
     for (i = 0; i <= (I32) HvMAX(stash); i++) {
         const HE *entry;
-	/* SvIsCOW is unused on HVs, so we can use it to mark stashes we
-	   are currently searching through recursively.  */
-	SvIsCOW_on(stash);
+        /* mark stash is being scanned, to avoid recursing */
+        HvAUX(stash)->xhv_aux_flags |= HvAUXf_SCAN_STASH;
 	for (entry = HvARRAY(stash)[i]; entry; entry = HeNEXT(entry)) {
             GV *gv;
             HV *hv;
 	    if (HeKEY(entry)[HeKLEN(entry)-1] == ':' &&
 		(gv = MUTABLE_GV(HeVAL(entry))) && isGV(gv) && (hv = GvHV(gv)))
 	    {
-		if (hv != PL_defstash && hv != stash && !SvIsCOW(hv))
+		if (hv != PL_defstash && hv != stash
+                    && !(SvOOK(hv)
+                        && (HvAUX(hv)->xhv_aux_flags & HvAUXf_SCAN_STASH))
+                )
 		     gv_check(hv);              /* nested package */
 	    }
             else if ( *HeKEY(entry) != '_'
@@ -2298,7 +2308,7 @@ Perl_gv_check(pTHX_ HV *stash)
                             HEKfARG(GvNAME_HEK(gv)));
 	    }
 	}
-	SvIsCOW_off(stash);
+        HvAUX(stash)->xhv_aux_flags &= ~HvAUXf_SCAN_STASH;
     }
 }
 
@@ -2481,6 +2491,8 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
   {
     int filled = 0;
     int i;
+    bool deref_seen = 0;
+
 
     /* Work with "fallback" key, which we assume to be first in PL_AMG_names */
 
@@ -2510,6 +2522,10 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
     else {
         filled = 1;
     }
+
+    assert(SvOOK(stash));
+    /* initially assume the worst */
+    HvAUX(stash)->xhv_aux_flags &= ~HvAUXf_NO_DEREF;
 
     for (i = 1; i < NofAMmeth; i++) {
 	const char * const cooky = PL_AMG_names[i];
@@ -2577,7 +2593,26 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
 	    filled = 1;
 	}
 	amt.table[i]=MUTABLE_CV(SvREFCNT_inc_simple(cv));
+
+        if (gv) {
+            switch (i) {
+            case to_sv_amg:
+            case to_av_amg:
+            case to_hv_amg:
+            case to_gv_amg:
+            case to_cv_amg:
+            case nomethod_amg:
+                deref_seen = 1;
+                break;
+            }
+        }
     }
+    if (!deref_seen)
+        /* none of @{} etc overloaded; we can do $obj->[N] quicker.
+         * NB - aux var invalid here, HvARRAY() could have been
+         * reallocated since it was assigned to */
+        HvAUX(stash)->xhv_aux_flags |= HvAUXf_NO_DEREF;
+
     if (filled) {
       AMT_AMAGIC_on(&amt);
       sv_magic(MUTABLE_SV(stash), 0, PERL_MAGIC_overload_table,
@@ -2747,11 +2782,19 @@ Perl_try_amagic_bin(pTHX_ int method, int flags) {
 SV *
 Perl_amagic_deref_call(pTHX_ SV *ref, int method) {
     SV *tmpsv = NULL;
+    HV *stash;
 
     PERL_ARGS_ASSERT_AMAGIC_DEREF_CALL;
 
-    while (SvAMAGIC(ref) && 
-	   (tmpsv = amagic_call(ref, &PL_sv_undef, method,
+    if (!SvAMAGIC(ref))
+        return ref;
+    /* return quickly if none of the deref ops are overloaded */
+    stash = SvSTASH(SvRV(ref));
+    assert(SvOOK(stash));
+    if (HvAUX(stash)->xhv_aux_flags & HvAUXf_NO_DEREF)
+        return ref;
+
+    while ((tmpsv = amagic_call(ref, &PL_sv_undef, method,
 				AMGf_noright | AMGf_unary))) { 
 	if (!SvROK(tmpsv))
 	    Perl_croak(aTHX_ "Overloaded dereference did not return a reference");
@@ -2760,6 +2803,8 @@ Perl_amagic_deref_call(pTHX_ SV *ref, int method) {
 	    return tmpsv;
 	}
 	ref = tmpsv;
+        if (!SvAMAGIC(ref))
+            break;
     }
     return tmpsv ? tmpsv : ref;
 }

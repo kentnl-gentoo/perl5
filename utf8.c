@@ -3519,12 +3519,12 @@ Perl__swash_inversion_hash(pTHX_ SV* const swash)
 	while ((from_list = (AV *) hv_iternextsv(specials_inverse,
 						 &char_to, &to_len)))
 	{
-	    if (av_len(from_list) > 0) {
+	    if (av_tindex(from_list) > 0) {
 		SSize_t i;
 
 		/* We iterate over all combinations of i,j to place each code
 		 * point on each list */
-		for (i = 0; i <= av_len(from_list); i++) {
+		for (i = 0; i <= av_tindex(from_list); i++) {
 		    SSize_t j;
 		    AV* i_list = newAV();
 		    SV** entryp = av_fetch(from_list, i, FALSE);
@@ -3541,7 +3541,7 @@ Perl__swash_inversion_hash(pTHX_ SV* const swash)
 		    }
 
 		    /* For DEBUG_U: UV u = valid_utf8_to_uvchr((U8*) SvPVX(*entryp), 0);*/
-		    for (j = 0; j <= av_len(from_list); j++) {
+		    for (j = 0; j <= av_tindex(from_list); j++) {
 			entryp = av_fetch(from_list, j, FALSE);
 			if (entryp == NULL) {
 			    Perl_croak(aTHX_ "panic: av_fetch() unexpectedly failed");
@@ -3600,7 +3600,7 @@ Perl__swash_inversion_hash(pTHX_ SV* const swash)
 
 	    /* Look through list to see if this inverse mapping already is
 	     * listed, or if there is a mapping to itself already */
-	    for (i = 0; i <= av_len(list); i++) {
+	    for (i = 0; i <= av_tindex(list); i++) {
 		SV** entryp = av_fetch(list, i, FALSE);
 		SV* entry;
 		if (entryp == NULL) {
@@ -3719,21 +3719,26 @@ Perl__swash_to_invlist(pTHX_ SV* const swash)
         /* The first number is a count of the rest */
         l++;
         elements = Strtoul((char *)l, &after_strtol, 10);
-        l = (U8 *) after_strtol;
-
-        /* Get the 0th element, which is needed to setup the inversion list */
-        element0 = (UV) Strtoul((char *)l, &after_strtol, 10);
-        l = (U8 *) after_strtol;
-        invlist = _setup_canned_invlist(elements, element0, &other_elements_ptr);
-        elements--;
-
-        /* Then just populate the rest of the input */
-        while (elements-- > 0) {
-            if (l > lend) {
-                Perl_croak(aTHX_ "panic: Expecting %"UVuf" more elements than available", elements);
-            }
-            *other_elements_ptr++ = (UV) Strtoul((char *)l, &after_strtol, 10);
+        if (elements == 0) {
+            invlist = _new_invlist(0);
+        }
+        else {
             l = (U8 *) after_strtol;
+
+            /* Get the 0th element, which is needed to setup the inversion list */
+            element0 = (UV) Strtoul((char *)l, &after_strtol, 10);
+            l = (U8 *) after_strtol;
+            invlist = _setup_canned_invlist(elements, element0, &other_elements_ptr);
+            elements--;
+
+            /* Then just populate the rest of the input */
+            while (elements-- > 0) {
+                if (l > lend) {
+                    Perl_croak(aTHX_ "panic: Expecting %"UVuf" more elements than available", elements);
+                }
+                *other_elements_ptr++ = (UV) Strtoul((char *)l, &after_strtol, 10);
+                l = (U8 *) after_strtol;
+            }
         }
     }
     else {

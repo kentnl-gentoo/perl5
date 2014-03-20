@@ -1423,7 +1423,7 @@ foo(\h)bar	foo\tbar	y	$1	\t
 /[a\N{U+0100}]/	\x{100}	y	$&	\x{100}
 /[a\N{U+0100}]/	a	y	$&	a
 
-# Verify that \N{U+...} forces Unicode semantics
+# Verify that \N{U+...} forces Unicode rules
 /\N{U+41}\x{c1}/i	a\x{e1}	y	$&	a\x{e1}
 /[\N{U+41}\x{c1}]/i	\x{e1}	y	$&	\x{e1}
 
@@ -1857,8 +1857,32 @@ A+(*PRUNE)BC(?{})	AAABC	y	$&	AAABC
 '(?-m:^abc)'m	x\nabcde	n	-	-
 
 # RT #121248 - segfault
-
 /^[+]([^(]+)$/mi	li	n	-	-
+
+# RT #121299 - Inconsistent behavior with backreferences nested inside subpattern references
+/(.)((o)\1)(?2)/	fofof	y	$2	of
+/(.)(?2)((\1)(?4)(\1))/	fffffff	y	$1	f
+/(.)(?2)((.)(?4)(\1))/	foffoff	y	$2	off
+/^(.\2?)(.)(?1)$/	abcb	y	$2	b
+/^(.\1?)(?1)$/	aba	y	$1	a
+/^ (\3(?2)\3)? ((.)) (?1) $/x	aaba	y	$2	a
+/^ (a|\3(?1)\2|(?2)) ((b|c)(?4)?) (?1) (d(?1)) $/x	abbcdcabbda	y	$2	b
+
+# RT #121321 - perl 5.19.10 infinite loops on backrefs > number of capture buffers (npar) where npar>9
+/(a)\2/	a\2	c	-	Reference to nonexistent group in regex
+/(a)(b)\3/	ab\3	c	-	Reference to nonexistent group in regex
+/(a)(b)(c)\4/	abc\4	c	-	Reference to nonexistent group in regex
+/(a)(b)(c)(d)\5/	abcd\5	c	-	Reference to nonexistent group in regex
+/(a)(b)(c)(d)(e)\6/	abcde\6	c	-	Reference to nonexistent group in regex
+/(a)(b)(c)(d)(e)(f)\7/	abcdef\7	c	-	Reference to nonexistent group in regex
+/(a)(b)(c)(d)(e)(f)(g)(h)(i)\10/	abcdefghi\10	y	$&	abcdefghi\10
+/(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)\11/	abcdefghij\11	y	$&	abcdefghij\11
+/(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)\12/	abcdefghijk\12	y	$&	abcdefghijk\12
+/(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)(k)\12\13\14/	abcdefghijk\12\13\14	y	$&	abcdefghijk\12\13\14
+
+\d<(.*?)>	a<>	n	-	-
+[bcd].{2,3}aaaa	XbXaaaaa	y	-	-
+[bcd].{2,3}aaaa	Xb\x{100}aaaaa	y	-	-
 
 # Keep these lines at the end of the file
 # vim: softtabstop=0 noexpandtab
