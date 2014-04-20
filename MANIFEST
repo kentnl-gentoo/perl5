@@ -972,6 +972,8 @@ cpan/encoding-warnings/t/1-warning.t	tests for encoding::warnings
 cpan/encoding-warnings/t/2-fatal.t	tests for encoding::warnings
 cpan/encoding-warnings/t/3-normal.t	tests for encoding::warnings
 cpan/encoding-warnings/t/4-lexical.t	tests for encoding::warnings
+cpan/experimental/lib/experimental.pm
+cpan/experimental/t/basic.t
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant/Base.pm		generate XS code to import C header constants
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant.pm			generate XS code to import C header constants
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant/ProxySubs.pm	generate XS code for proxy constants
@@ -3417,6 +3419,7 @@ dist/Storable/t/testlib.pl		more helper routines for tests
 dist/Storable/t/threads.t		Does Storable work with threads?
 dist/Storable/t/tied_hook.t		See if Storable works
 dist/Storable/t/tied_items.t		See if Storable works
+dist/Storable/t/tied_store.t		See if Storable works
 dist/Storable/t/tied.t			See if Storable works
 dist/Storable/t/utf8hash.t		See if Storable works
 dist/Storable/t/utf8.t			See if Storable works
@@ -4588,7 +4591,9 @@ pod/perl5162delta.pod		Perl changes in version 5.16.2
 pod/perl5163delta.pod		Perl changes in version 5.16.3
 pod/perl5180delta.pod		Perl changes in version 5.18.0
 pod/perl5181delta.pod		Perl changes in version 5.18.1
+pod/perl5182delta.pod		Perl changes in version 5.18.2
 pod/perl5190delta.pod		Perl changes in version 5.19.0
+pod/perl51910delta.pod		Perl changes in version 5.19.10
 pod/perl5191delta.pod		Perl changes in version 5.19.1
 pod/perl5192delta.pod		Perl changes in version 5.19.2
 pod/perl5193delta.pod		Perl changes in version 5.19.3
@@ -5443,6 +5448,8 @@ t/run/dtrace.pl			For dtrace.t
 t/run/dtrace.t			Test for DTrace probes
 t/run/exit.t			Test perl's exit status.
 t/run/flib/broken.pm		Bad .pm file for switchM.t
+t/run/flib/t2.pm		Test for .pmcs with -I/dir/
+t/run/flib/t2.pmc		Test for .pmcs with -I/dir/
 t/run/fresh_perl.t		Tests that require a fresh perl.
 t/run/locale.t		Tests related to locale handling
 t/run/mad.t			Test vs MAD environment

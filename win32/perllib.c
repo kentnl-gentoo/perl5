@@ -211,7 +211,6 @@ RunPerl(int argc, char **argv, char **env)
 {
     int exitstatus;
     PerlInterpreter *my_perl, *new_perl = NULL;
-    char szModuleName[MAX_PATH];
     char *arg0 = argv[0];
     char *ansi = NULL;
     bool use_environ = (env == environ);
@@ -291,7 +290,7 @@ EndSockets(void);
 EXTERN_C		/* GCC in C++ mode mangles the name, otherwise */
 #endif
 BOOL APIENTRY
-DllMain(HANDLE hModule,		/* DLL module handle */
+DllMain(HINSTANCE hModule,	/* DLL module handle */
 	DWORD fdwReason,	/* reason called */
 	LPVOID lpvReserved)	/* reserved */
 { 

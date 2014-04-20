@@ -37,7 +37,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.19.10
+#INST_VER	= \5.19.11
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -59,22 +59,23 @@ INST_TOP	= $(INST_DRV)\perl
 #USE_SITECUST	= define
 
 #
-# uncomment to enable multiple interpreters.  This is need for fork()
-# emulation and for thread support.
+# uncomment to enable multiple interpreters.  This is needed for fork()
+# emulation and for thread support, and is auto-enabled by USE_IMP_SYS
+# and USE_ITHREADS below.
 #
 USE_MULTI	= define
 
 #
-# Beginnings of interpreter cloning/threads; now reasonably complete.
-# This should be enabled to get the fork() emulation.  This needs
-# USE_MULTI as well.
+# Interpreter cloning/threads; now reasonably complete.
+# This should be enabled to get the fork() emulation.  This needs (and
+# will auto-enable) USE_MULTI above.
 #
 USE_ITHREADS	= define
 
 #
 # uncomment to enable the implicit "host" layer for all system calls
-# made by perl.  This needs USE_MULTI above.  This is also needed to
-# get fork().
+# made by perl.  This is also needed to get fork().  This needs (and
+# will auto-enable) USE_MULTI above.
 #
 USE_IMP_SYS	= define
 
@@ -887,6 +888,9 @@ config.w32 : $(CFGSH_TMPL)
 	@echo.>>$@
 	@echo #ifndef _config_h_footer_>>$@
 	@echo #define _config_h_footer_>>$@
+	@echo #undef Off_t>>$@
+	@echo #undef LSEEKSIZE>>$@
+	@echo #undef Off_t_size>>$@
 	@echo #undef PTRSIZE>>$@
 	@echo #undef SSize_t>>$@
 	@echo #undef HAS_ATOLL>>$@
@@ -905,6 +909,15 @@ config.w32 : $(CFGSH_TMPL)
 	@echo #undef UVXf>>$@
 	@echo #undef USE_64_BIT_INT>>$@
 	@echo #undef Size_t_size>>$@
+!IF "$(USE_LARGE_FILES)"=="define"
+	@echo #define Off_t __int64>>$@
+	@echo #define LSEEKSIZE ^8>>$@
+	@echo #define Off_t_size ^8>>$@
+!ELSE
+	@echo #define Off_t long>>$@
+	@echo #define LSEEKSIZE ^4>>$@
+	@echo #define Off_t_size ^4>>$@
+!ENDIF
 !IF "$(WIN64)"=="define"
 	@echo #define PTRSIZE ^8>>$@
 	@echo #define SSize_t __int64>>$@
@@ -1179,7 +1192,7 @@ utils: $(PERLEXE) $(X2P) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl51910delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl51911delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1277,7 +1290,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl51910delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl51911delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \

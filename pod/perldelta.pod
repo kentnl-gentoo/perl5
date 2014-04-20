@@ -1,104 +1,32 @@
+
 =encoding utf8
 
 =head1 NAME
 
-perldelta - what is new for perl v5.19.10
+perldelta - what is new for perl v5.19.11
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.19.9 release and the 5.19.10
+This document describes differences between the 5.19.10 release and the 5.19.11
 release.
 
-If you are upgrading from an earlier release such as 5.19.8, first read
-L<perl5199delta>, which describes differences between 5.19.8 and 5.19.9.
-
-=head1 Deprecations
-
-=head2 Discouraged features
-
-=over 4
-
-=item *
-
-The "interpreter-based threads" provided by Perl are not the fast, lightweight
-system for multitasking that one might expect or hope for.  Threads are
-implemented in a way that make them easy to misuse.  Few people know how to
-use them correctly or will be able to provide help.
-
-The use of interpreter-based threads in perl is officially
-L<discouraged|perlpolicy/discouraged>.
-
-=back
-
-=head1 Performance Enhancements
-
-=over 4
-
-=item *
-
-When doing a global regex match on a string that came from the C<readline>
-or C<E<lt>E<gt>> operator, the data is no longer copied unnecessarily.
-[perl #121259]
-
-=item *
-
-Executing a regex that contains the C<^> anchor (or its variant under the
-C</m> flag) has been made much faster in several situations.
-
-=item *
-
-It is now faster to create certain sorts of lists, including array and hash
-slices.
-
-=item *
-
-The optimisation for arrays indexed with a small constant integer is now
-applied for integers in the range -128..127, rather than 0..255. This should
-speed up Perl code using expressions like C<$x[-1]>, at the expense of
-(presumably much rarer) code using expressions like C<$x[200]>.
-
-=item *
-
-Dereferencing (as in C<$obj-E<gt>[0]> or C<$obj-E<gt>{k}>) is now faster
-when C<$obj> is an instance of a class that has overloaded methods, but
-doesn't overload any of the dereferencing methods C<@{}>, C<%{}>, and so on.
-
-=item *
-
-The first iteration over a large hash (using C<keys> or C<each>) is now
-faster. This is achieved by preallocating the hash's internal iterator
-state, rather than lazily creating it when the hash is first iterated. (For
-small hashes, the iterator is still created only when first needed. The
-assumption is that small hashes are more likely to be used as objects, and
-therefore never allocated. For large hashes, that's less likely to be true,
-and the cost of allocating the iterator is swamped by the cost of allocating
-space for the hash itself.)
-
-=item *
-
-Perl's optimiser no longer skips optimising code that follows certain
-C<eval {}> expressions (including those with an apparent infinite loop).
-
-=item *
-
-The implementation now does a better job of avoiding meaningless work at
-runtime. Internal effect-free "null" operations (created as a side-effect of
-parsing Perl programs) are normally deleted during compilation. That
-deletion is now applied in some situations that weren't previously handled.
-
-=item *
-
-A few micro-optimisations have been applied to performance-sensitive parts
-of the implementation, including subroutine invocation and scope exit.
-
-=item *
-
-Perl now does less disk I/O when dealing with Unicode properties that cover
-up to three ranges of consecutive code points.
-
-=back
+If you are upgrading from an earlier release such as 5.19.9, first read
+L<perl51910delta>, which describes differences between 5.19.9 and 5.19.10.
 
 =head1 Modules and Pragmata
+
+=head2 New Modules and Pragmata
+
+=over 4
+
+=item *
+
+L<experimental> version 0.007 has been added.
+
+This pragma provides an easy and convenient way to enable or disable
+experimental features.
+
+=back
 
 =head2 Updated Modules and Pragmata
 
@@ -106,182 +34,75 @@ up to three ranges of consecutive code points.
 
 =item *
 
-L<Attribute::Handlers> has been upgraded from version 0.95 to 0.96.
+L<Carp> has been upgraded from version 1.33 to 1.3301.
+
+No changes have been made to the installed code other than the version bump to
+keep in sync with the latest CPAN release.
 
 =item *
 
-L<autouse> has been upgraded from version 1.07 to 1.08.
+L<CPAN> has been upgraded from version 2.04-TRIAL to 2.05.
+
+This fixes L<local::lib> shell variable string output and prevents an endless
+loop when running "notest test Module" for some Module having dependencies.
 
 =item *
 
-L<B::Deparse> has been upgraded from version 1.25 to 1.26.
+L<DB> has been upgraded from version 1.43 to 1.44.
+
+The debugger now correctly restores its input and output filehandles after
+using the pager command.
+[L<perl #121456|https://rt.perl.org/Public/Bug/Display.html?id=121456>]
 
 =item *
 
-L<base> has been upgraded from version 2.21 to 2.22.
+L<ExtUtils::Install> has been upgraded from version 1.63 to 1.67.
 
-Co-exist more gracefully with C<CORE::GLOBAL::require>
-overrides. [perl #121196]
+When upgrading an already-installed file, L<ExtUtils::Install> could mess up
+the permissions of files if the old versions of files were hard or symbolic
+links.  This has now been fixed.
+[L<perl #72028|https://rt.perl.org/Public/Bug/Display.html?id=72028>]
 
-=item *
-
-L<Carp> has been upgraded from version 1.32 to 1.33.
-
-=item *
-
-L<charnames> has been upgraded from version 1.39 to 1.40.
+The MM_TEST_ROOT feature has been removed from the tests.
 
 =item *
 
-L<CPAN> has been upgraded from version 2.03 to 2.04.
+L<ExtUtils::MakeMaker> has been upgraded from version 6.92 to 6.94.
 
-Fixes a bug preventing "force install" from working. [cpan #91706]
-
-Fixes an infinite-loop bug when using the C<make> command in the CPAN
-shell. [cpan #86915]
+A regression in MM_Unix.pm has been resolved.
+[L<Issue #96|https://github.com/Perl-Toolchain-Gang/ExtUtils-MakeMaker/issues/96>]
 
 =item *
 
-L<CPAN::Meta> has been upgraded from version 2.133380 to 2.140640.
+L<Module::CoreList> has been upgraded from version 3.09 to 3.10.
 
-Added a C<load_string()> method that guesses whether the string is YAML or JSON.
-
-=item *
-
-L<CPAN::Meta::YAML> has been upgraded from version 0.011 to 0.012.
+The list of Perl versions covered has been updated.
 
 =item *
 
-L<Data::Dumper> has been upgraded from version 2.150 to 2.151.
+L<PerlIO> has been upgraded from version 1.08 to 1.09.
+
+The warning about the use of the C<:utf8> layer has been made more prominent.
 
 =item *
 
-L<Devel::PPPort> has been upgraded from version 3.21 to 3.22.
+L<Storable> has been upgraded from version 2.48 to 2.49.
+
+Recognition of tied SVs has been tightened up.
 
 =item *
 
-L<Digest::SHA> has been upgraded from version 5.87 to 5.88.
+L<Win32> has been upgraded from version 0.48 to 0.49.
 
-=item *
-
-L<ExtUtils::Install> has been upgraded from version 1.62 to 1.63.
-
-=item *
-
-L<ExtUtils::MakeMaker> has been upgraded from version 6.88 to 6.92.
-
-=item *
-
-L<ExtUtils::ParseXS> has been upgraded from version 3.23 to 3.24.
-
-=item *
-
-L<ExtUtils::Typemaps> has been upgraded from version 3.23 to 3.24.
-
-=item *
-
-L<feature> has been upgraded from version 1.35 to 1.36.
-
-=item *
-
-L<File::Find> has been upgraded from version 1.26 to 1.27.
-
-=item *
-
-L<Filter::Simple> has been upgraded from version 0.90 to 0.91.
-
-=item *
-
-L<Hash::Util::FieldHash> has been upgraded from version 1.14 to 1.15.
-
-=item *
-
-L<HTTP::Tiny> has been upgraded from version 0.042 to 0.043.
-
-No longer sends absolute request URI when tunneling SSL via proxy and fixes
-regression in setting host name to verify SSL.
-
-=item *
-
-L<IO> has been upgraded from version 1.30 to 1.31.
-
-=item *
-
-L<IO::Socket::IP> has been upgraded from version 0.28 to 0.29.
-
-=item *
-
-L<Locale::Codes> has been upgraded from version 3.29 to 3.30.
-
-Fixed a problem that was preventing rename_* functions to work.  [cpan #92680]
-
-=item *
-
-L<Module::CoreList> has been upgraded from version 3.06 to 3.09.
-
-=item *
-
-L<Module::Load> has been upgraded from version 0.30 to 0.32.
-
-Fix tests to support statically built perls.
-
-=item *
-
-L<mro> has been upgraded from version 1.15 to 1.16.
-
-=item *
-
-L<Parse::CPAN::Meta> has been upgraded from version 1.4413 to 1.4414.
-
-Added C<load_string>, which uses heuristics to guess YAML/JSON content.
-C<load_file> will now attempt to detect YAML/JSON content if the suffix is not
-.json, .yml or .yaml.
-
-=item *
-
-L<Pod::Perldoc> has been upgraded from version 3.21 to 3.23.
-
-=item *
-
-L<POSIX> has been upgraded from version 1.38_02 to 1.38_03.
-
-=item *
-
-L<Thread::Queue> has been upgraded from version 3.02 to 3.05.
-
-=item *
-
-L<threads> has been upgraded from version 1.92 to 1.93.
-
-=item *
-
-L<warnings> has been upgraded from version 1.22 to 1.23.
-
-=item *
-
-L<XS::Typemap> has been upgraded from version 0.12 to 0.13.
-
-=back
-
-=head1 Documentation
-
-=head2 Changes to Existing Documentation
-
-=over 4
-
-=item *
-
-The L<perllexwarn> documentation used to describe the hierarchy of warning
-categories understood by the L<warnings> pragma. That description has now
-been moved to the L<warnings> documentation itself, leaving L<perllexwarn>
-as a stub that points to it. This change consolidates all documentation for
-lexical warnings in a single place.
+This fixes a problem when building with B<gcc> version 4.8.1 from
+L<http://www.mingw.org>.
+[L<cpan #94730|https://rt.cpan.org/Public/Bug/Display.html?id=94730>]
 
 =back
 
 =head1 Diagnostics
 
-The following changes have been made to diagnostic output,
+The following additions or changes have been made to diagnostic output,
 including warnings and fatal error messages.  For the complete list of
 diagnostic messages, see L<perldiag>.
 
@@ -291,8 +112,29 @@ diagnostic messages, see L<perldiag>.
 
 =item *
 
-When C<use re "debug"> executes a regex containing a backreference, the
-debugging output now shows what string is being matched.
+The now fatal error message C<Character following "\c" must be ASCII> has been
+reworded as C<Character following "\c" must be printable ASCII> to emphasize
+that in C<\cI<X>>, I<X> must be a I<printable (non-control)> ASCII character.
+
+=back
+
+=head1 Utility Changes
+
+=head2 L<perlbug>
+
+=over 4
+
+=item *
+
+L<perlbug> has been modified to supply the report template with CRLF line
+endings on Windows.
+[L<perl #121277|https://rt.perl.org/Public/Bug/Display.html?id=121277>]
+
+=item *
+
+L<perlbug> now makes as few assumptions as possible about the encoding of the
+report.  This will likely change in the future to assume UTF-8 by default but
+allow a user override.
 
 =back
 
@@ -302,36 +144,14 @@ debugging output now shows what string is being matched.
 
 =item *
 
-Where possible, the build now avoids recursive invocations of F<make> when
-building pure-Perl extensions, without removing any parallelism from the
-build. Currently around 80 extensions can be processed directly by the
-F<make_ext.pl> tool, meaning that 80 invocations of F<make> and 160
-invocations of F<miniperl> are no longer made.
-
-=item *
-
-The build system now works correctly when compiling under GCC or Clang with
-link-time optimization enabled (the C<-flto> option). [perl #113022]
-
-=back
-
-=head1 Testing
-
-=over 4
-
-=item *
-
-The test suite no longer fails when the user's interactive shell maintains a
-C<$PWD> environment variable, but the F</bin/sh> used for running tests
-doesn't.
-
-=item *
-
-The C<test.valgrind> make target now allows tests to be run in parallel.
-This target allows Perl's test suite to be run under Valgrind, which detects
-certain sorts of C programming errors, though at significant cost in running
-time. On suitable hardware, allowing parallel execution claws back a lot of
-that additional cost. [perl #121431]
+By default, B<gcc> 4.9 does some optimizations that break perl.  The B<-fwrapv>
+option disables those optimizations (and probably others), so for B<gcc> 4.9
+(and later, since the optimizations probably won't go away), F<Configure> now
+adds B<-fwrapv> unless the user requests B<-fno-wrapv>, which disables
+B<-fwrapv>, or B<-fsanitize=undefined>, which turns the overflows B<-fwrapv>
+ignores into runtime errors.  (This is not done prior to B<gcc> 4.3, since
+B<-fwrapv> was broken then.)
+[L<perl #121505|https://rt.perl.org/Public/Bug/Display.html?id=121505>]
 
 =back
 
@@ -341,23 +161,53 @@ that additional cost. [perl #121431]
 
 =over 4
 
-=item Linux
+=item VMS
 
-The hints file now looks for C<libgdbm_compat> only if C<libgdbm> itself is
-also wanted. The former is never useful without the latter, and in some
-circumstances, including it could actually prevent building.
-
-=item Mac OS
-
-The build system now honours an C<ld> setting supplied by the user running
-F<Configure>.
+On VMS only, a check for glob metacharacters in a path returned by the
+L<C<glob()>|perlfunc/glob> operator has been replaced with a check for VMS
+wildcard characters.  This saves a significant number of unnecessary
+L<C<lstat()>|perlfunc/lstat> calls such that some simple glob operations become
+60-80% faster.
 
 =item Win32
 
-Killing a process tree with L<perlfunc/kill> and a negative signal, was broken
-starting in 5.18.0. In this bug, C<kill> always returned 0 for a negative
-signal even for valid PIDs, and no processes were terminated. This has been
-fixed [perl #121230].
+The time taken to build perl on Windows has been reduced quite significantly
+(time savings in the region of 30-40% are typically seen) by reducing the
+number of, usually failing, I/O calls for each L<C<require()>|perlfunc/require>
+(for B<miniperl.exe> only).
+[L<perl #121119|https://rt.perl.org/Public/Bug/Display.html?id=121119>]
+
+About 15 minutes of idle sleeping was removed from running C<make test> due to
+a bug in which the timeout monitor used for tests could not be cancelled once
+the test completes, and the full timeout period elapsed before running the next
+test file.
+[L<perl #121395|https://rt.perl.org/Public/Bug/Display.html?id=121395>]
+
+On a perl built without pseudo-fork (pseudo-fork builds were not affected by
+this bug), killing a process tree with L<C<kill()>|perlfunc/kill> and a negative
+signal resulted in C<kill()> inverting the returned value.  For example, if
+C<kill()> killed 1 process tree PID then it returned 0 instead of 1, and if
+C<kill()> was passed 2 invalid PIDs then it returned 2 instead of 0.  This has
+probably been the case since the process tree kill feature was implemented on
+Win32.  It has now been corrected to follow the documented behaviour.
+[L<perl #121230|https://rt.perl.org/Public/Bug/Display.html?id=121230>]
+
+When building a 64-bit perl, an uninitialized memory read in B<miniperl.exe>,
+used during the build process, could lead to a 4GB B<wperl.exe> being created.
+This has now been fixed.  (Note that B<perl.exe> itself was unaffected, but
+obviously B<wperl.exe> would have been completely broken.)
+[L<perl #121471|https://rt.perl.org/Public/Bug/Display.html?id=121471>]
+
+Perl can now be built with B<gcc> version 4.8.1 from L<http://www.mingw.org>.
+This was previously broken due to an incorrect definition of DllMain() in one
+of perl's source files.  Earlier B<gcc> versions were also affected when using
+version 4 of the w32api package.  Versions of B<gcc> available from
+L<http://mingw-w64.sourceforge.net/> were not affected.
+[L<perl #121643|https://rt.perl.org/Public/Bug/Display.html?id=121643>]
+
+The test harness now has no failures when perl is built on a FAT drive with the
+Windows OS on an NTFS drive.
+[L<perl #21442|https://rt.perl.org/Public/Bug/Display.html?id=21442>]
 
 =back
 
@@ -367,16 +217,12 @@ fixed [perl #121230].
 
 =item *
 
-The Perl core now consistently uses C<av_tindex()> ("the top index of an
-array") as a more clearly-named synonym for C<av_len()>.
-
-=item *
-
-The obscure interpreter variable C<PL_timesbuf> is expected to be removed
-early in the 5.21.x development series, so that Perl 5.22.0 will not provide
-it to XS authors.  While the variable still exists in 5.19.10 (and will
-continue to exist in 5.20.0), we hope that this advance warning of the
-deprecation will help anyone who is using that variable.
+C<LC_NUMERIC> is now initialized to the C locale.  This affects only XS
+modules, as the Perl core usages always make sure this locale category is
+correctly set for their purposes.  XS code remains vulnerable to other code
+changing this category's locale.  Further fixes are planned in Perl 5.22 to
+reduce these long-standing vulnerabilities.
+[L<perl #121317|https://rt.perl.org/Public/Bug/Display.html?id=121317>]
 
 =back
 
@@ -386,43 +232,86 @@ deprecation will help anyone who is using that variable.
 
 =item *
 
-Static builds, as configured with C<-Uusedl> now build
-correctly. [perl #121291]
+A regression involving the string value of L<C<$!>|perlvar/$!> introduced in
+Perl 5.19.2 has been reverted for Perl 5.20.
+[L<perl #119499|https://rt.perl.org/Public/Bug/Display.html?id=119499>]
+
+This re-breaks the bugs it fixed,
+L<perl #112208|https://rt.perl.org/Public/Bug/Display.html?id=112208>, so an
+alternative fix is planned for Perl 5.22
 
 =item *
 
-Regexes with backreferences nested inside subpattern references now behave
-more consistently: match variables are dynamically scoped during the
-execution of the subpattern call. [perl #121299]
+A regression was introduced in Perl 5.19.10 that under some circumstances
+caused C<//m> matches to falsely fail.  Now fixed.
+[L<perl #121484|https://rt.perl.org/Public/Bug/Display.html?id=121484>]
+
+=item *
+
+A regression was introduced in the fix for
+L<perl #116192|https://rt.perl.org/Public/Bug/Display.html?id=116192> that
+prevented C<perl -I /somedir/> (with a trailing slash) from finding .pmc files.
+This has been fixed.
+[L<perl #121512|https://rt.perl.org/Public/Bug/Display.html?id=121512>].
+
+=item *
+
+Fixed a bug detected by valgrind where sv_pvn_force_flags() would check SvPVX()
+even when the SV hadn't been upgraded to a SVt_PV.  SvPVX() is only initialized
+when the SV is upgraded to a SVt_PV or higher.
+[L<perl #121366|https://rt.perl.org/Public/Bug/Display.html?id=121366>]
+
+=item *
+
+Fixed a bug in L<C<caller()>|perlfunc/caller> introduced in Perl 5.18.0.  In
+some circumstances when C<caller()> was called on an C<eval STRING> stack frame
+it would attempt to allocate the limit of the address space minus one, which
+would croak with an out of memory error, which would be caught by the eval.  A
+change in Perl 5.19.1 which increased allocation sizes to allow COW to operate
+more often rounded that allocation size up and wrapped to a zero allocation
+size, resulting in a crash when the source string was copied over.
+[L<perl #120998|https://rt.perl.org/Public/Bug/Display.html?id=120998>].
+
+=back
+
+=head1 Known Problems
+
+=over 4
+
+=item *
+
+One test in F<ext/POSIX/t/time.t> is known to fail on Windows when building
+with certain versions of B<gcc> from L<http://www.mingw.org> due to a known bug
+in the MinGW build, which is logged here:
+L<http://sourceforge.net/p/mingw/bugs/2152/>.
 
 =back
 
 =head1 Acknowledgements
 
-Perl 5.19.10 represents approximately 4 weeks of development since Perl 5.19.9
-and contains approximately 13,000 lines of changes across 330 files from 20
+Perl 5.19.11 represents approximately 4 weeks of development since Perl 5.19.10
+and contains approximately 3,600 lines of changes across 140 files from 18
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 8,800 lines of changes to 220 .pm, .t, .c and .h files.
+approximately 850 lines of changes to 72 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
-of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.19.10:
+of users and developers.  The following people are known to have contributed
+the improvements that became Perl 5.19.11:
 
-Aaron Crane, Andy Dougherty, Aristotle Pagaltzis, Chris 'BinGOs' Williams,
-Craig A. Berry, Daniel Dragan, David Mitchell, Father Chrysostomos, H.Merijn
-Brand, Jerry D. Hedden, Karl Williamson, Matthew Horsfall, Nicholas Clark, Paul
-Johnson, Peter Rabbitson, Ricardo Signes, Steffen Müller, Steve Hay, Tony
-Cook, Yves Orton.
+Aaron Crane, Chris 'BinGOs' Williams, Craig A. Berry, Daniel Dragan, David
+Golden, David Mitchell, H.Merijn Brand, Hiroo Hayashi, Karl Williamson, Matthew
+Horsfall, Ricardo Signes, Shirakata Kentaro, Smylers, Steve Hay, Thomas Sibley,
+Tony Cook, Zefram, Ævar Arnfjörð Bjarmason.
 
 The list above is almost certainly incomplete as it is automatically generated
-from version control history. In particular, it does not include the names of
+from version control history.  In particular, it does not include the names of
 the (very much appreciated) contributors who reported issues to the Perl bug
 tracker.
 
 Many of the changes included in this version originated in the CPAN modules
-included in Perl's core. We're grateful to the entire CPAN community for
+included in Perl's core.  We're grateful to the entire CPAN community for
 helping Perl to flourish.
 
 For a more complete list of all of Perl's historical contributors, please see
@@ -432,8 +321,8 @@ the F<AUTHORS> file in the Perl source distribution.
 
 If you find what you think is a bug, you might check the articles recently
 posted to the comp.lang.perl.misc newsgroup and the perl bug database at
-https://rt.perl.org/ .  There may also be information at
-http://www.perl.org/ , the Perl Home Page.
+https://rt.perl.org/ .  There may also be information at http://www.perl.org/ ,
+the Perl Home Page.
 
 If you believe you have an unreported bug, please run the L<perlbug> program
 included with your release.  Be sure to trim your bug down to a tiny but

@@ -193,7 +193,7 @@ use File::Glob qw(:case);
     },
 
     'Carp' => {
-        'DISTRIBUTION' => 'ZEFRAM/Carp-1.32.tar.gz',
+        'DISTRIBUTION' => 'ZEFRAM/Carp-1.3301.tar.gz',
         'FILES'        => q[dist/Carp],
     },
 
@@ -252,12 +252,13 @@ use File::Glob qw(:case);
     },
 
     'CPAN' => {
-        'DISTRIBUTION' => 'ANDK/CPAN-2.04-TRIAL.tar.gz',
+        'DISTRIBUTION' => 'ANDK/CPAN-2.05.tar.gz',
         'FILES'        => q[cpan/CPAN],
         'EXCLUDED'     => [
             qr{^distroprefs/},
             qr{^inc/Test/},
-            qr{^t/CPAN/authors/},
+            qr{^t/CPAN/},
+            qr{^t/data/},
             qw( lib/CPAN/Admin.pm
                 scripts/cpan-mirrors
                 PAUSE2015.pub
@@ -272,26 +273,14 @@ use File::Glob qw(:case);
                 t/31sessions.t
                 t/41distribution.t
                 t/42distroprefs.t
-                t/44cpanmeta.t
                 t/43distroprefspref.t
+                t/44cpanmeta.t
                 t/50pod.t
                 t/51pod.t
                 t/52podcover.t
                 t/60credentials.t
                 t/70_critic.t
                 t/71_minimumversion.t
-                t/CPAN/CpanTestDummies-1.55.pm
-                t/CPAN/TestConfig.pm
-                t/CPAN/TestMirroredBy
-                t/CPAN/TestPatch.txt
-                t/CPAN/modules/02packages.details.txt
-                t/CPAN/modules/03modlist.data
-                t/data/META-dynamic.json
-                t/data/META-dynamic.yml
-                t/data/META-static.json
-                t/data/META-static.yml
-                t/data/MYMETA.json
-                t/data/MYMETA.yml
                 t/local_utils.pm
                 t/perlcriticrc
                 t/yaml_code.yml
@@ -418,6 +407,15 @@ use File::Glob qw(:case);
         'EXCLUDED'     => [qr{^t/release-.*\.t}],
     },
 
+    'experimental' => {
+        'DISTRIBUTION' => 'LEONT/experimental-0.007.tar.gz',
+        'FILES'        => q[cpan/experimental],
+        'EXCLUDED'     => [
+          qr{^t/release-.*\.t},
+          't/00-compile.t',
+        ],
+    },
+
     'Exporter' => {
         'DISTRIBUTION' => 'TODDR/Exporter-5.68.tar.gz',
         'FILES'        => q[dist/Exporter],
@@ -459,7 +457,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::Install' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-Install-1.63.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-Install-1.67.tar.gz',
         'FILES'        => q[dist/ExtUtils-Install],
         'EXCLUDED'     => [
             qw( t/lib/Test/Builder.pm
@@ -473,7 +471,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::MakeMaker' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.92.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.94.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -812,7 +810,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-3.07.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-3.09.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -1313,7 +1311,7 @@ use File::Glob qw(:case);
     },
 
     'Win32' => {
-        'DISTRIBUTION' => "JDB/Win32-0.48.tar.gz",
+        'DISTRIBUTION' => "JDB/Win32-0.49.tar.gz",
         'FILES'        => q[cpan/Win32],
     },
 
