@@ -340,7 +340,7 @@ use File::Glob qw(:case);
     },
 
     'Devel::PPPort' => {
-        'DISTRIBUTION' => 'WOLFSAGE/Devel-PPPort-3.22.tar.gz',
+        'DISTRIBUTION' => 'MHX/Devel-PPPort-3.21.tar.gz',
         # RJBS has asked MHX to have UPSTREAM be 'blead'
         # (i.e. move this from cpan/ to dist/)
         'FILES'        => q[cpan/Devel-PPPort],
@@ -388,8 +388,26 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.57.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.60.tar.gz',
         'FILES'        => q[cpan/Encode],
+        'CUSTOMIZED'   => [
+            # Waiting to be merged upstream: see CPAN RT#95130 and
+            # Message-Id: <201405062058.s46KwdCZ013775@m-l.org>
+            qw(
+                Byte/Makefile.PL
+                CN/Makefile.PL
+                EBCDIC/Makefile.PL
+                Encode.pm
+                Encode.xs
+                Encode/Makefile_PL.e2x
+                JP/Makefile.PL
+                KR/Makefile.PL
+                Symbol/Makefile.PL
+                TW/Makefile.PL
+                bin/enc2xs
+            ),
+        ],
+
     },
 
     'encoding::warnings' => {
@@ -471,7 +489,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::MakeMaker' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.94.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.98.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -810,7 +828,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-3.09.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-3.10.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 

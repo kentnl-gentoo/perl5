@@ -57,7 +57,9 @@ or not the string is encoded in UTF-8 (or UTF-EBCDIC on EBCDIC machines).  That
 is, if they are invariant.  On ASCII-ish machines, only ASCII characters
 fit this definition, hence the function's name.
 
-If C<len> is 0, it will be calculated using C<strlen(s)>.  
+If C<len> is 0, it will be calculated using C<strlen(s)>, (which means if you
+use this option, that C<s> can't have embedded C<NUL> characters and has to
+have a terminating C<NUL> byte).
 
 See also L</is_utf8_string>(), L</is_utf8_string_loclen>(), and L</is_utf8_string_loc>().
 
@@ -228,9 +230,9 @@ Perl_uvoffuni_to_utf8_flags(pTHX_ U8 *d, UV uv, UV flags)
 =for apidoc uvchr_to_utf8
 
 Adds the UTF-8 representation of the native code point C<uv> to the end
-of the string C<d>; C<d> should have at least C<UTF8_MAXBYTES+1> free
-bytes available.  The return value is the pointer to the byte after the
-end of the new character.  In other words,
+of the string C<d>; C<d> should have at least C<UNISKIP(uv)+1> (up to
+C<UTF8_MAXBYTES+1>) free bytes available.  The return value is the pointer to
+the byte after the end of the new character.  In other words,
 
     d = uvchr_to_utf8(d, uv);
 
@@ -257,9 +259,9 @@ Perl_uvchr_to_utf8(pTHX_ U8 *d, UV uv)
 =for apidoc uvchr_to_utf8_flags
 
 Adds the UTF-8 representation of the native code point C<uv> to the end
-of the string C<d>; C<d> should have at least C<UTF8_MAXBYTES+1> free
-bytes available.  The return value is the pointer to the byte after the
-end of the new character.  In other words,
+of the string C<d>; C<d> should have at least C<UNISKIP(uv)+1> (up to
+C<UTF8_MAXBYTES+1>) free bytes available.  The return value is the pointer to
+the byte after the end of the new character.  In other words,
 
     d = uvchr_to_utf8_flags(d, uv, flags);
 
@@ -401,9 +403,9 @@ Perl_is_utf8_char(const U8 *s)
 
 Returns true if the first C<len> bytes of string C<s> form a valid
 UTF-8 string, false otherwise.  If C<len> is 0, it will be calculated
-using C<strlen(s)> (which means if you use this option, that C<s> has to have a
-terminating NUL byte).  Note that all characters being ASCII constitute 'a
-valid UTF-8 string'.
+using C<strlen(s)> (which means if you use this option, that C<s> can't have
+embedded C<NUL> characters and has to have a terminating C<NUL> byte).  Note
+that all characters being ASCII constitute 'a valid UTF-8 string'.
 
 See also L</is_ascii_string>(), L</is_utf8_string_loclen>(), and L</is_utf8_string_loc>().
 
@@ -548,11 +550,11 @@ flags) malformation is found.  If this flag is set, the routine assumes that
 the caller will raise a warning, and this function will silently just set
 C<retlen> to C<-1> (cast to C<STRLEN>) and return zero.
 
-Note that this API requires disambiguation between successful decoding a NUL
+Note that this API requires disambiguation between successful decoding a C<NUL>
 character, and an error return (unless the UTF8_CHECK_ONLY flag is set), as
 in both cases, 0 is returned.  To disambiguate, upon a zero return, see if the
-first byte of C<s> is 0 as well.  If so, the input was a NUL; if not, the input
-had an error.
+first byte of C<s> is 0 as well.  If so, the input was a C<NUL>; if not, the
+input had an error.
 
 Certain code points are considered problematic.  These are Unicode surrogates,
 Unicode non-characters, and code points above the Unicode maximum of 0x10FFFF.
@@ -1400,7 +1402,7 @@ UTF-8.
 Returns a pointer to the newly-created string, and sets C<len> to
 reflect the new length in bytes.
 
-A NUL character will be written after the end of the string.
+A C<NUL> character will be written after the end of the string.
 
 If you want to convert to UTF-8 from encodings other than
 the native (Latin1 or EBCDIC),

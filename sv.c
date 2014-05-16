@@ -46,6 +46,69 @@
   char *gconvert(double, int, int,  char *);
 #endif
 
+#ifdef PERL_NEW_COPY_ON_WRITE
+#   ifndef SV_COW_THRESHOLD
+#    define SV_COW_THRESHOLD                    0   /* COW iff len > K */
+#   endif
+#   ifndef SV_COWBUF_THRESHOLD
+#    define SV_COWBUF_THRESHOLD                 1250 /* COW iff len > K */
+#   endif
+#   ifndef SV_COW_MAX_WASTE_THRESHOLD
+#    define SV_COW_MAX_WASTE_THRESHOLD          80   /* COW iff (len - cur) < K */
+#   endif
+#   ifndef SV_COWBUF_WASTE_THRESHOLD
+#    define SV_COWBUF_WASTE_THRESHOLD           80   /* COW iff (len - cur) < K */
+#   endif
+#   ifndef SV_COW_MAX_WASTE_FACTOR_THRESHOLD
+#    define SV_COW_MAX_WASTE_FACTOR_THRESHOLD   2    /* COW iff len < (cur * K) */
+#   endif
+#   ifndef SV_COWBUF_WASTE_FACTOR_THRESHOLD
+#    define SV_COWBUF_WASTE_FACTOR_THRESHOLD    2    /* COW iff len < (cur * K) */
+#   endif
+#endif
+/* Work around compiler warnings about unsigned >= THRESHOLD when thres-
+   hold is 0. */
+#if SV_COW_THRESHOLD
+# define GE_COW_THRESHOLD(cur) ((cur) >= SV_COW_THRESHOLD)
+#else
+# define GE_COW_THRESHOLD(cur) 1
+#endif
+#if SV_COWBUF_THRESHOLD
+# define GE_COWBUF_THRESHOLD(cur) ((cur) >= SV_COWBUF_THRESHOLD)
+#else
+# define GE_COWBUF_THRESHOLD(cur) 1
+#endif
+#if SV_COW_MAX_WASTE_THRESHOLD
+# define GE_COW_MAX_WASTE_THRESHOLD(cur,len) (((len)-(cur)) < SV_COW_MAX_WASTE_THRESHOLD)
+#else
+# define GE_COW_MAX_WASTE_THRESHOLD(cur,len) 1
+#endif
+#if SV_COWBUF_WASTE_THRESHOLD
+# define GE_COWBUF_WASTE_THRESHOLD(cur,len) (((len)-(cur)) < SV_COWBUF_WASTE_THRESHOLD)
+#else
+# define GE_COWBUF_WASTE_THRESHOLD(cur,len) 1
+#endif
+#if SV_COW_MAX_WASTE_FACTOR_THRESHOLD
+# define GE_COW_MAX_WASTE_FACTOR_THRESHOLD(cur,len) ((len) < SV_COW_MAX_WASTE_FACTOR_THRESHOLD * (cur))
+#else
+# define GE_COW_MAX_WASTE_FACTOR_THRESHOLD(cur,len) 1
+#endif
+#if SV_COWBUF_WASTE_FACTOR_THRESHOLD
+# define GE_COWBUF_WASTE_FACTOR_THRESHOLD(cur,len) ((len) < SV_COWBUF_WASTE_FACTOR_THRESHOLD * (cur))
+#else
+# define GE_COWBUF_WASTE_FACTOR_THRESHOLD(cur,len) 1
+#endif
+
+#define CHECK_COW_THRESHOLD(cur,len) (\
+    GE_COW_THRESHOLD((cur)) && \
+    GE_COW_MAX_WASTE_THRESHOLD((cur),(len)) && \
+    GE_COW_MAX_WASTE_FACTOR_THRESHOLD((cur),(len)) \
+)
+#define CHECK_COWBUF_THRESHOLD(cur,len) (\
+    GE_COWBUF_THRESHOLD((cur)) && \
+    GE_COWBUF_WASTE_THRESHOLD((cur),(len)) && \
+    GE_COWBUF_WASTE_FACTOR_THRESHOLD((cur),(len)) \
+)
 /* void Gconvert: on Linux at least, gcvt (which Gconvert gets deffed to),
  * has a mandatory return value, even though that value is just the same
  * as the buf arg */
@@ -1524,7 +1587,8 @@ Perl_sv_grow(pTHX_ SV *const sv, STRLEN newlen)
 	if (newlen < minlen)
 	    newlen = minlen;
 #ifndef Perl_safesysmalloc_size
-	newlen = PERL_STRLEN_ROUNDUP(newlen);
+        if (SvLEN(sv))
+            newlen = PERL_STRLEN_ROUNDUP(newlen);
 #endif
 	if (SvLEN(sv) && s) {
 	    s = (char*)saferealloc(s, newlen);
@@ -1722,24 +1786,26 @@ Perl_sv_setnv_mg(pTHX_ SV *const sv, const NV num)
     SvSETMAGIC(sv);
 }
 
-/* Return a cleaned-up, printable version of sv, for non-numeric, or
- * not incrementable warning display.
- * Originally part of S_not_a_number().
- * The return value may be != tmpbuf.
+/* Print an "isn't numeric" warning, using a cleaned-up,
+ * printable version of the offending string
  */
 
-STATIC const char *
-S_sv_display(pTHX_ SV *const sv, char *tmpbuf, STRLEN tmpbuf_size) {
-    const char *pv;
+STATIC void
+S_not_a_number(pTHX_ SV *const sv)
+{
+     dVAR;
+     SV *dsv;
+     char tmpbuf[64];
+     const char *pv;
 
-     PERL_ARGS_ASSERT_SV_DISPLAY;
+     PERL_ARGS_ASSERT_NOT_A_NUMBER;
 
      if (DO_UTF8(sv)) {
-          SV *dsv = newSVpvs_flags("", SVs_TEMP);
+          dsv = newSVpvs_flags("", SVs_TEMP);
           pv = sv_uni_display(dsv, sv, 10, UNI_DISPLAY_ISPRINT);
      } else {
 	  char *d = tmpbuf;
-	  const char * const limit = tmpbuf + tmpbuf_size - 8;
+	  const char * const limit = tmpbuf + sizeof(tmpbuf) - 8;
 	  /* each *s can expand to 4 chars + "...\0",
 	     i.e. need room for 8 chars */
 	
@@ -1790,24 +1856,6 @@ S_sv_display(pTHX_ SV *const sv, char *tmpbuf, STRLEN tmpbuf_size) {
 	  pv = tmpbuf;
     }
 
-    return pv;
-}
-
-/* Print an "isn't numeric" warning, using a cleaned-up,
- * printable version of the offending string
- */
-
-STATIC void
-S_not_a_number(pTHX_ SV *const sv)
-{
-     dVAR;
-     char tmpbuf[64];
-     const char *pv;
-
-     PERL_ARGS_ASSERT_NOT_A_NUMBER;
-
-     pv = sv_display(sv, tmpbuf, sizeof(tmpbuf));
-
     if (PL_op)
 	Perl_warner(aTHX_ packWARN(WARN_NUMERIC),
 		    /* diag_listed_as: Argument "%s" isn't numeric%s */
@@ -1817,20 +1865,6 @@ S_not_a_number(pTHX_ SV *const sv)
 	Perl_warner(aTHX_ packWARN(WARN_NUMERIC),
 		    /* diag_listed_as: Argument "%s" isn't numeric%s */
 		    "Argument \"%s\" isn't numeric", pv);
-}
-
-STATIC void
-S_not_incrementable(pTHX_ SV *const sv) {
-     dVAR;
-     char tmpbuf[64];
-     const char *pv;
-
-     PERL_ARGS_ASSERT_NOT_INCREMENTABLE;
-
-     pv = sv_display(sv, tmpbuf, sizeof(tmpbuf));
-
-     Perl_warner(aTHX_ packWARN(WARN_NUMERIC),
-                 "Argument \"%s\" treated as 0 in increment (++)", pv);
 }
 
 /*
@@ -4017,18 +4051,8 @@ S_glob_assign_ref(pTHX_ SV *const dstr, SV *const sstr)
     return;
 }
 
-/* Work around compiler warnings about unsigned >= THRESHOLD when thres-
-   hold is 0. */
-#if SV_COW_THRESHOLD
-# define GE_COW_THRESHOLD(len)		((len) >= SV_COW_THRESHOLD)
-#else
-# define GE_COW_THRESHOLD(len)		1
-#endif
-#if SV_COWBUF_THRESHOLD
-# define GE_COWBUF_THRESHOLD(len)	((len) >= SV_COWBUF_THRESHOLD)
-#else
-# define GE_COWBUF_THRESHOLD(len)	1
-#endif
+
+
 
 #ifdef PERL_DEBUG_READONLY_COW
 # include <sys/mman.h>
@@ -4396,7 +4420,7 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, SV* sstr, const I32 flags)
                  || ((sflags & (SVs_PADTMP|SVf_READONLY|SVf_IsCOW))
                        == SVs_PADTMP
                                 /* whose buffer is worth stealing */
-                     && GE_COWBUF_THRESHOLD(cur)
+                     && CHECK_COWBUF_THRESHOLD(cur,len)
                     )
                  ) &&
                  !(sflags & SVf_OOK) &&   /* and not involved in OOK hack? */
@@ -4430,14 +4454,14 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, SV* sstr, const I32 flags)
 #elif defined(PERL_NEW_COPY_ON_WRITE)
 		 (sflags & SVf_IsCOW
 		   ? (!len ||
-		       (  (GE_COWBUF_THRESHOLD(cur) || SvLEN(dstr) < cur+1)
+                       (  (CHECK_COWBUF_THRESHOLD(cur,len) || SvLEN(dstr) < cur+1)
 			  /* If this is a regular (non-hek) COW, only so
 			     many COW "copies" are possible. */
 		       && CowREFCNT(sstr) != SV_COW_REFCNT_MAX  ))
 		   : (  (sflags & CAN_COW_MASK) == CAN_COW_FLAGS
 		     && !(SvFLAGS(dstr) & SVf_BREAK)
-		     && GE_COW_THRESHOLD(cur) && cur+1 < len
-		     && (GE_COWBUF_THRESHOLD(cur) || SvLEN(dstr) < cur+1)
+                     && CHECK_COW_THRESHOLD(cur,len) && cur+1 < len
+                     && (CHECK_COWBUF_THRESHOLD(cur,len) || SvLEN(dstr) < cur+1)
 		    ))
 #else
 		 sflags & SVf_IsCOW
@@ -8034,6 +8058,7 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
     SvUPGRADE(sv, SVt_PV);
 
     if (append) {
+        /* line is going to be appended to the existing buffer in the sv */
 	if (PerlIO_isutf8(fp)) {
 	    if (!SvUTF8(sv)) {
 		sv_utf8_upgrade_nomg(sv);
@@ -8046,6 +8071,8 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 
     SvPOK_only(sv);
     if (!append) {
+        /* not appending - "clear" the string by setting SvCUR to 0,
+         * the pv is still avaiable. */
         SvCUR_set(sv,0);
     }
     if (PerlIO_isutf8(fp))
@@ -8097,10 +8124,14 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 		    Perl_croak(aTHX_ "Wide character in $/");
 		}
 	    }
+            /* extract the raw pointer to the record separator */
 	    rsptr = SvPV_const(PL_rs, rslen);
 	}
     }
 
+    /* rslast is the last character in the record separator
+     * note we don't use rslast except when rslen is true, so the
+     * null assign is a placeholder. */
     rslast = rslen ? rsptr[rslen - 1] : '\0';
 
     if (rspara) {		/* have to do this both before and after */
@@ -8126,14 +8157,28 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
      */
 
     if (PerlIO_fast_gets(fp)) {
+    /*
+     * We can do buffer based IO operations on this filehandle.
+     *
+     * This means we can bypass a lot of subcalls and process
+     * the buffer directly, it also means we know the upper bound
+     * on the amount of data we might read of the current buffer
+     * into our sv. Knowing this allows us to preallocate the pv
+     * to be able to hold that maximum, which allows us to simplify
+     * a lot of logic. */
 
     /*
      * We're going to steal some values from the stdio struct
      * and put EVERYTHING in the innermost loop into registers.
      */
-    STDCHAR *ptr;
-    STRLEN bpx;
-    I32 shortbuffered;
+    STDCHAR *ptr;       /* pointer into fp's read-ahead buffer */
+    STRLEN bpx;         /* length of the data in the target sv
+                           used to fix pointers after a SvGROW */
+    I32 shortbuffered;  /* If the pv buffer is shorter than the amount
+                           of data left in the read-ahead buffer.
+                           If 0 then the pv buffer can hold the full
+                           amount left, otherwise this is the amount it
+                           can hold. */
 
 #if defined(VMS) && defined(PERLIO_IS_STDIO)
     /* An ungetc()d char is handled separately from the regular
@@ -8147,7 +8192,64 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 
     /* Here is some breathtakingly efficient cheating */
 
-    cnt = PerlIO_get_cnt(fp);			/* get count into register */
+    /* When you read the following logic resist the urge to think
+     * of record separators that are 1 byte long. They are an
+     * uninteresting special (simple) case.
+     *
+     * Instead think of record separators which are at least 2 bytes
+     * long, and keep in mind that we need to deal with such
+     * separators when they cross a read-ahead buffer boundary.
+     *
+     * Also consider that we need to gracefully deal with separators
+     * that may be longer than a single read ahead buffer.
+     *
+     * Lastly do not forget we want to copy the delimiter as well. We
+     * are copying all data in the file _up_to_and_including_ the separator
+     * itself.
+     *
+     * Now that you have all that in mind here is what is happening below:
+     *
+     * 1. When we first enter the loop we do some memory book keeping to see
+     * how much free space there is in the target SV. (This sub assumes that
+     * it is operating on the same SV most of the time via $_ and that it is
+     * going to be able to reuse the same pv buffer each call.) If there is
+     * "enough" room then we set "shortbuffered" to how much space there is
+     * and start reading forward.
+     *
+     * 2. When we scan forward we copy from the read-ahead buffer to the target
+     * SV's pv buffer. While we go we watch for the end of the read-ahead buffer,
+     * and the end of the of pv, as well as for the "rslast", which is the last
+     * char of the separator.
+     *
+     * 3. When scanning forward if we see rslast then we jump backwards in *pv*
+     * (which has a "complete" record up to the point we saw rslast) and check
+     * it to see if it matches the separator. If it does we are done. If it doesn't
+     * we continue on with the scan/copy.
+     *
+     * 4. If we run out of read-ahead buffer (cnt goes to 0) then we have to get
+     * the IO system to read the next buffer. We do this by doing a getc(), which
+     * returns a single char read (or EOF), and prefills the buffer, and also
+     * allows us to find out how full the buffer is.  We use this information to
+     * SvGROW() the sv to the size remaining in the buffer, after which we copy
+     * the returned single char into the target sv, and then go back into scan
+     * forward mode.
+     *
+     * 5. If we run out of write-buffer then we SvGROW() it by the size of the
+     * remaining space in the read-buffer.
+     *
+     * Note that this code despite its twisty-turny nature is pretty darn slick.
+     * It manages single byte separators, multi-byte cross boundary separators,
+     * and cross-read-buffer separators cleanly and efficiently at the cost
+     * of potentially greatly overallocating the target SV.
+     *
+     * Yves
+     */
+
+
+    /* get the number of bytes remaining in the read-ahead buffer
+     * on first call on a given fp this will return 0.*/
+    cnt = PerlIO_get_cnt(fp);
+
     /* make sure we have the room */
     if ((I32)(SvLEN(sv) - append) <= cnt + 1) {
     	/* Not room for all of it
@@ -8159,15 +8261,24 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 	    cnt -= shortbuffered;
 	}
 	else {
+            /* ensure that the target sv has enough room to hold
+             * the rest of the read-ahead buffer */
 	    shortbuffered = 0;
 	    /* remember that cnt can be negative */
 	    SvGROW(sv, (STRLEN)(append + (cnt <= 0 ? 2 : (cnt + 1))));
 	}
     }
-    else
+    else {
+        /* we have enough room to hold the full buffer, lets scream */
 	shortbuffered = 0;
+    }
+
+    /* extract the pointer to sv's string buffer, offset by append as necessary */
     bp = (STDCHAR*)SvPVX_const(sv) + append;  /* move these two too to registers */
+    /* extract the point to the read-ahead buffer */
     ptr = (STDCHAR*)PerlIO_get_ptr(fp);
+
+    /* some trace debug output */
     DEBUG_P(PerlIO_printf(Perl_debug_log,
 	"Screamer: entering, ptr=%"UVuf", cnt=%ld\n",PTR2UV(ptr),(long)cnt));
     DEBUG_P(PerlIO_printf(Perl_debug_log,
@@ -8175,17 +8286,23 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 	 UVuf"\n",
 	       PTR2UV(PerlIO_get_ptr(fp)), PerlIO_get_cnt(fp),
 	       PTR2UV(PerlIO_has_base(fp) ? PerlIO_get_base(fp) : 0)));
+
     for (;;) {
       screamer:
+        /* if there is stuff left in the read-ahead buffer */
 	if (cnt > 0) {
+            /* if there is a separator */
 	    if (rslen) {
+                /* loop until we hit the end of the read-ahead buffer */
 		while (cnt > 0) {		     /* this     |  eat */
+                    /* scan forward copying and searching for rslast as we go */
 		    cnt--;
 		    if ((*bp++ = *ptr++) == rslast)  /* really   |  dust */
 			goto thats_all_folks;	     /* screams  |  sed :-) */
 		}
 	    }
 	    else {
+                /* no separator, slurp the full buffer */
 	        Copy(ptr, bp, cnt, char);	     /* this     |  eat */
 		bp += cnt;			     /* screams  |  dust */
 		ptr += cnt;			     /* louder   |  sed :-) */
@@ -8196,16 +8313,21 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 	}
 	
 	if (shortbuffered) {		/* oh well, must extend */
+            /* we didnt have enough room to fit the line into the target buffer
+             * so we must extend the target buffer and keep going */
 	    cnt = shortbuffered;
 	    shortbuffered = 0;
 	    bpx = bp - (STDCHAR*)SvPVX_const(sv); /* box up before relocation */
 	    SvCUR_set(sv, bpx);
+            /* extned the target sv's buffer so it can hold the full read-ahead buffer */
 	    SvGROW(sv, SvLEN(sv) + append + cnt + 2);
 	    bp = (STDCHAR*)SvPVX_const(sv) + bpx; /* unbox after relocation */
 	    continue;
 	}
 
     cannot_be_shortbuffered:
+        /* we need to refill the read-ahead buffer if possible */
+
 	DEBUG_P(PerlIO_printf(Perl_debug_log,
 			     "Screamer: going to getc, ptr=%"UVuf", cnt=%zd\n",
 			      PTR2UV(ptr),cnt));
@@ -8216,9 +8338,15 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 	    PTR2UV(PerlIO_get_ptr(fp)), PerlIO_get_cnt(fp),
 	    PTR2UV(PerlIO_has_base (fp) ? PerlIO_get_base(fp) : 0)));
 
-	/* This used to call 'filbuf' in stdio form, but as that behaves like
-	   getc when cnt <= 0 we use PerlIO_getc here to avoid introducing
-	   another abstraction.  */
+        /*
+            call PerlIO_getc() to let it prefill the lookahead buffer
+
+            This used to call 'filbuf' in stdio form, but as that behaves like
+            getc when cnt <= 0 we use PerlIO_getc here to avoid introducing
+            another abstraction.
+
+            Note we have to deal with the char in 'i' if we are not at EOF
+        */
 	i   = PerlIO_getc(fp);		/* get more characters */
 
 	DEBUG_Pv(PerlIO_printf(Perl_debug_log,
@@ -8226,6 +8354,7 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 	    PTR2UV(PerlIO_get_ptr(fp)), PerlIO_get_cnt(fp),
 	    PTR2UV(PerlIO_has_base (fp) ? PerlIO_get_base(fp) : 0)));
 
+        /* find out how much is left in the read-ahead buffer, and rextract its pointer */
 	cnt = PerlIO_get_cnt(fp);
 	ptr = (STDCHAR*)PerlIO_get_ptr(fp);	/* reregisterize cnt and ptr */
 	DEBUG_P(PerlIO_printf(Perl_debug_log,
@@ -8235,18 +8364,23 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 	if (i == EOF)			/* all done for ever? */
 	    goto thats_really_all_folks;
 
+        /* make sure we have enough space in the target sv */
 	bpx = bp - (STDCHAR*)SvPVX_const(sv);	/* box up before relocation */
 	SvCUR_set(sv, bpx);
 	SvGROW(sv, bpx + cnt + 2);
 	bp = (STDCHAR*)SvPVX_const(sv) + bpx;	/* unbox after relocation */
 
+        /* copy of the char we got from getc() */
 	*bp++ = (STDCHAR)i;		/* store character from PerlIO_getc */
 
+        /* make sure we deal with the i being the last character of a separator */
 	if (rslen && (STDCHAR)i == rslast)  /* all done for now? */
 	    goto thats_all_folks;
     }
 
 thats_all_folks:
+    /* check if we have actually found the separator - only really applies
+     * when rslen > 1 */
     if ((rslen > 1 && (STRLEN)(bp - (STDCHAR*)SvPVX_const(sv)) < rslen) ||
 	  memNE((char*)bp - rslen, rsptr, rslen))
 	goto screamer;				/* go back to the fray */
@@ -8446,11 +8580,11 @@ Perl_sv_inc_nomg(pTHX_ SV *const sv)
     while (isALPHA(*d)) d++;
     while (isDIGIT(*d)) d++;
     if (d < SvEND(sv)) {
-	const int numtype = grok_number(SvPVX_const(sv), SvCUR(sv), NULL);
 #ifdef PERL_PRESERVE_IVUV
 	/* Got to punt this as an integer if needs be, but we don't issue
 	   warnings. Probably ought to make the sv_iv_please() that does
 	   the conversion if possible, and silently.  */
+	const int numtype = grok_number(SvPVX_const(sv), SvCUR(sv), NULL);
 	if (numtype && !(numtype & IS_NUMBER_INFINITY)) {
 	    /* Need to try really hard to see if it's an integer.
 	       9.22337203685478e+18 is an integer.
@@ -8481,8 +8615,6 @@ Perl_sv_inc_nomg(pTHX_ SV *const sv)
 #endif
 	}
 #endif /* PERL_PRESERVE_IVUV */
-        if (!numtype && ckWARN(WARN_NUMERIC))
-            not_incrementable(sv);
 	sv_setnv(sv,Atof(SvPVX_const(sv)) + 1.0);
 	return;
     }
@@ -12778,8 +12910,10 @@ Perl_cx_dup(pTHX_ PERL_CONTEXT *cxs, I32 ix, I32 max, CLONE_PARAMS* param)
 					   ? av_dup_inc(ncx->blk_sub.argarray,
 							param)
 					   : NULL);
-		ncx->blk_sub.savearray	= av_dup_inc(ncx->blk_sub.savearray,
-						     param);
+		ncx->blk_sub.savearray	=  (CxHASARGS(ncx)
+                                            ? av_dup_inc(ncx->blk_sub.savearray,
+						     param)
+					   : NULL);
 		ncx->blk_sub.oldcomppad = (PAD*)ptr_table_fetch(PL_ptr_table,
 					   ncx->blk_sub.oldcomppad);
 		break;

@@ -310,7 +310,7 @@ ApdR	|SV*	|gv_const_sv	|NN GV* gv
 ApdR	|SV*	|cv_const_sv	|NULLOK const CV *const cv
 pR	|SV*	|cv_const_sv_or_av|NULLOK const CV *const cv
 : Used in pad.c
-pR	|SV*	|op_const_sv	|NULLOK const OP* o
+pR	|SV*	|op_const_sv	|NULLOK const OP* o|NULLOK CV* cv
 Apd	|void	|cv_undef	|NN CV* cv
 p	|void	|cv_forget_slab	|NN CV *cv
 Ap	|void	|cx_dump	|NN PERL_CONTEXT* cx
@@ -2245,9 +2245,7 @@ pX	|void	|sv_del_backref	|NN SV *const tsv|NN SV *const sv
 #if defined(PERL_IN_SV_C)
 nsR	|char *	|uiv_2buf	|NN char *const buf|const IV iv|UV uv|const int is_uv|NN char **const peob
 i	|void	|sv_unglob	|NN SV *const sv|U32 flags
-s	|const char *|sv_display	|NN SV *const sv|NN char *tmpbuf|STRLEN tmpbuf_size
 s	|void	|not_a_number	|NN SV *const sv
-s	|void	|not_incrementable	|NN SV *const sv
 s	|I32	|visit		|NN SVFUNC_t f|const U32 flags|const U32 mask
 #  ifdef DEBUGGING
 s	|void	|del_sv	|NN SV *p

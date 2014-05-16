@@ -491,7 +491,7 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl51911delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5200delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -1016,9 +1016,9 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) pod/perlmodlib.PL -q
 
-pod/perl51911delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl51911delta.pod
-	$(LNS) perldelta.pod pod/perl51911delta.pod
+pod/perl5200delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl5200delta.pod
+	$(LNS) perldelta.pod pod/perl5200delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1052,19 +1052,20 @@ install: install-all
 
 for name in all notify silent strip verbose; do
     flags="--$name";
+    flags=`echo $flags | sed -e 's/--all//'`
     if test "X$hostperl" != X; then
         $spitshell >>$Makefile <<EOT
 
 install_$name install-$name: \$(INSTALL_DEPENDENCE) installperl all installman
-	\$(HOST_PERL) installperl --destdir=\$(DESTDIR) ${flags%--all} \$(INSTALLFLAGS) \$(STRIPFLAGS)
-	\$(HOST_PERL) installman --destdir=\$(DESTDIR) ${flags%--all}
+	\$(HOST_PERL) installperl --destdir=\$(DESTDIR) $flags \$(INSTALLFLAGS) \$(STRIPFLAGS)
+	\$(HOST_PERL) installman --destdir=\$(DESTDIR) $flags
 EOT
     else
         $spitshell >>$Makefile <<EOT
 
 install_$name install-$name: \$(INSTALL_DEPENDENCE) installperl all installman
-	\$(RUN_PERL) installperl --destdir=\$(DESTDIR) ${flags%--all} \$(INSTALLFLAGS) \$(STRIPFLAGS)
-	\$(RUN_PERL) installman --destdir=\$(DESTDIR) ${flags%--all}
+	\$(RUN_PERL) installperl --destdir=\$(DESTDIR) $flags \$(INSTALLFLAGS) \$(STRIPFLAGS)
+	\$(RUN_PERL) installman --destdir=\$(DESTDIR) $flags
 EOT
     fi
 

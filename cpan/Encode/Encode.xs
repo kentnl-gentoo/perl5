@@ -1,12 +1,11 @@
 /*
- $Id: Encode.xs,v 2.24 2013/08/29 16:47:39 dankogai Exp $
+ $Id: Encode.xs,v 2.27 2014/04/29 16:25:06 dankogai Exp dankogai $
  */
 
 #define PERL_NO_GET_CONTEXT
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-#define U8 U8
 #include "encode.h"
 
 # define PERLIO_MODNAME  "PerlIO::encoding"
@@ -45,8 +44,14 @@ Encode_XSEncoding(pTHX_ encode_t * enc)
 {
     dSP;
     HV *stash = gv_stashpv("Encode::XS", TRUE);
-    SV *sv = sv_bless(newRV_noinc(newSViv(PTR2IV(enc))), stash);
+    SV *iv    = newSViv(PTR2IV(enc));
+    SV *sv    = sv_bless(newRV_noinc(iv),stash);
     int i = 0;
+    /* with the SvLEN() == 0 hack, PVX won't be freed. We cast away name's
+    constness, in the hope that perl won't mess with it. */
+    assert(SvTYPE(iv) >= SVt_PV); assert(SvLEN(iv) == 0);
+    SvFLAGS(iv) |= SVp_POK;
+    SvPVX(iv) = (char*) enc->name[0];
     PUSHMARK(sp);
     XPUSHs(sv);
     while (enc->name[i]) {
