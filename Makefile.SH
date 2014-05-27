@@ -491,7 +491,7 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5200delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5210delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -1016,9 +1016,9 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) pod/perlmodlib.PL -q
 
-pod/perl5200delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl5200delta.pod
-	$(LNS) perldelta.pod pod/perl5200delta.pod
+pod/perl5210delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl5210delta.pod
+	$(LNS) perldelta.pod pod/perl5210delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1312,8 +1312,8 @@ _cleaner2:
 	rm -rf pod/perlfunc pod/perlipc
 	-rmdir ext/B/lib
 	rm -f so_locations $(LIBPERL_NONSHR) $(MINIPERL_NONSHR)
-	-rmdir lib/version lib/threads lib/inc/latest lib/inc lib/encoding
-	-rmdir lib/autodie/exception lib/autodie lib/XS lib/Win32API lib/VMS
+	-rmdir lib/version lib/threads lib/encoding lib/autodie/exception
+	-rmdir lib/autodie lib/XS lib/Win32API lib/VMS
 	-rmdir lib/Unicode/Collate/Locale lib/Unicode/Collate/CJK
 	-rmdir lib/Unicode/Collate lib/Tie/Hash lib/Thread lib/Text
 	-rmdir lib/Test/Builder/Tester lib/Test/Builder lib/Test lib/Term
@@ -1324,8 +1324,7 @@ _cleaner2:
 	-rmdir lib/TAP/Formatter lib/TAP lib/Sys/Syslog lib/Sys lib/Search
 	-rmdir lib/Scalar lib/Pod/Text lib/Pod/Simple lib/Pod/Perldoc
 	-rmdir lib/PerlIO/via lib/PerlIO lib/Perl lib/Parse/CPAN lib/Parse
-	-rmdir lib/Params lib/Package lib/Net/FTP lib/Module/Load
-	-rmdir lib/Module/CoreList lib/Module/Build/Platform lib/Module/Build
+	-rmdir lib/Params lib/Net/FTP lib/Module/Load lib/Module/CoreList
 	-rmdir lib/Module lib/Memoize lib/Math/BigInt lib/Math/BigFloat
 	-rmdir lib/Math lib/MIME lib/Locale/Maketext lib/Locale/Codes
 	-rmdir lib/Locale lib/List/Util lib/List lib/JSON/PP lib/JSON lib/IPC
@@ -1344,7 +1343,7 @@ _cleaner2:
 	-rmdir lib/Encode lib/Digest lib/Devel lib/Data lib/Config/Perl
 	-rmdir lib/Compress/Raw lib/Compress lib/Carp lib/CPAN/Meta
 	-rmdir lib/CPAN/LWP lib/CPAN/Kwalify lib/CPAN/HTTP lib/CPAN/FTP
-	-rmdir lib/CPAN/Exception lib/CPAN/API lib/CPAN lib/CGI lib/Attribute
+	-rmdir lib/CPAN/Exception lib/CPAN/API lib/CPAN lib/Attribute
 	-rmdir lib/Archive/Tar lib/Archive lib/App/Prove/State/Result
 	-rmdir lib/App/Prove/State lib/App/Prove lib/App
 

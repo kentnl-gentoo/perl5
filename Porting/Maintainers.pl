@@ -197,19 +197,6 @@ use File::Glob qw(:case);
         'FILES'        => q[dist/Carp],
     },
 
-    'CGI' => {
-        'DISTRIBUTION' => 'MARKSTOS/CGI.pm-3.65.tar.gz',
-        'FILES'        => q[cpan/CGI],
-        'EXCLUDED'     => [
-            qr{^examples/},
-            qw( cgi_docs.html
-                t/gen-tests/gen-start-end-tags.pl
-                t/fast.t
-                ),
-        ],
-        'DEPRECATED' => '5.019007',
-    },
-
     'Compress::Raw::Bzip2' => {
         'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.064.tar.gz',
         'FILES'        => q[cpan/Compress-Raw-Bzip2],
@@ -807,26 +794,6 @@ use File::Glob qw(:case);
         'EXCLUDED'     => ['t/bad-sv.t'],
     },
 
-    #
-    # To update Module-Build in blead see
-    # https://github.com/Perl-Toolchain-Gang/Module-Build/blob/master/devtools/patching_blead.pod
-    #
-
-    'Module::Build' => {
-        'DISTRIBUTION' => 'LEONT/Module-Build-0.4205.tar.gz',
-        'FILES'        => q[cpan/Module-Build],
-        'EXCLUDED'     => [
-            qw( t/par.t
-                t/signature.t
-                ),
-            qr{^contrib/},
-            qr{^inc},
-        ],
-        # Generated file, not part of the CPAN distro:
-        'CUSTOMIZED' => ['lib/Module/Build/ConfigData.pm'],
-        'DEPRECATED' => '5.019000',
-    },
-
     'Module::CoreList' => {
         'DISTRIBUTION' => 'BINGOS/Module-CoreList-3.10.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
@@ -869,12 +836,6 @@ use File::Glob qw(:case);
         'DISTRIBUTION' => 'FLORA/NEXT-0.65.tar.gz',
         'FILES'        => q[cpan/NEXT],
         'EXCLUDED'     => [qr{^demo/}],
-    },
-
-    'Package::Constants' => {
-        'DISTRIBUTION' => 'BINGOS/Package-Constants-0.04.tar.gz',
-        'FILES'        => q[cpan/Package-Constants],
-        'DEPRECATED'   => '5.019006',
     },
 
     'Params::Check' => {
