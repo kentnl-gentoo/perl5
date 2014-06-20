@@ -20,7 +20,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
          CVf_METHOD CVf_LVALUE
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED);
-$VERSION = '1.26';
+$VERSION = '1.27';
 use strict;
 use vars qw/$AUTOLOAD/;
 use warnings ();
@@ -4789,7 +4789,7 @@ sub matchop {
     $flags = $matchwords{$flags} if $matchwords{$flags};
     if ($pmflags & PMf_ONCE) { # only one kind of delimiter works here
 	$re =~ s/\?/\\?/g;
-	$re = "?$re?";
+	$re = "m?$re?";        # explicit 'm' is required
     } elsif ($quote) {
 	$re = single_delim($name, $delim, $re);
     }

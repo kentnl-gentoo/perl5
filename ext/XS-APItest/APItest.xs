@@ -83,7 +83,6 @@ typedef void (freeent_function)(pTHX_ HV *, HE *);
 
 void
 test_freeent(freeent_function *f) {
-    dTHX;
     dSP;
     HV *test_hash = newHV();
     HE *victim;
@@ -1457,13 +1456,17 @@ common(params)
 	if ((svp = hv_fetchs(params, "hash", 0)))
 	    hash = SvUV(*svp);
 
-	if ((svp = hv_fetchs(params, "hash_pv", 0))) {
+	if (hv_fetchs(params, "hash_pv", 0)) {
+            assert(key);
 	    PERL_HASH(hash, key, klen);
 	}
-	if ((svp = hv_fetchs(params, "hash_sv", 0))) {
-	    STRLEN len;
-	    const char *const p = SvPV(keysv, len);
-	    PERL_HASH(hash, p, len);
+	if (hv_fetchs(params, "hash_sv", 0)) {
+            assert(keysv);
+            {
+              STRLEN len;
+              const char *const p = SvPV(keysv, len);
+              PERL_HASH(hash, p, len);
+            }
 	}
 
 	result = (HE *)hv_common(hv, keysv, key, klen, flags, action, val, hash);
@@ -2096,6 +2099,7 @@ newCONSTSUB(stash, name, flags, sv)
                break;
         }
         EXTEND(SP, 2);
+        assert(mycv);
         PUSHs( CvCONST(mycv) ? &PL_sv_yes : &PL_sv_no );
         PUSHs((SV*)CvGV(mycv));
 
@@ -2429,7 +2433,7 @@ my_caller(level)
         ST(4) = cop_hints_fetch_pvs(cx->blk_oldcop, "foo", 0);
         ST(5) = cop_hints_fetch_pvn(cx->blk_oldcop, "foo", 3, 0, 0);
         ST(6) = cop_hints_fetch_sv(cx->blk_oldcop, 
-                sv_2mortal(newSVpvn("foo", 3)), 0, 0);
+                sv_2mortal(newSVpvs("foo")), 0, 0);
 
         hv = cop_hints_2hv(cx->blk_oldcop, 0);
         ST(7) = hv ? sv_2mortal(newRV_noinc((SV *)hv)) : &PL_sv_undef;
@@ -4790,5 +4794,20 @@ test_toTITLE_utf8(SV * p)
 
         av_push(av, newSVuv(len));
         RETVAL = av;
+    OUTPUT:
+        RETVAL
+
+SV *
+test_Gconvert(SV * number, SV * num_digits)
+    PREINIT:
+        char buffer[100];
+        int len;
+    CODE:
+        len = (int) SvIV(num_digits);
+        if (len > 99) croak("Too long a number for test_Gconvert");
+        PERL_UNUSED_RESULT(Gconvert(SvNV(number), len,
+                 0,    /* No trailing zeroes */
+                 buffer));
+        RETVAL = newSVpv(buffer, 0);
     OUTPUT:
         RETVAL

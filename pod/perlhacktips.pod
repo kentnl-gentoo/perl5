@@ -1073,7 +1073,23 @@ heap memory accesses.  As of version 3.3.0, Valgrind only supports Linux
 on x86, x86-64 and PowerPC and Darwin (OS X) on x86 and x86-64).  The
 special "test.valgrind" target can be used to run the tests under
 valgrind.  Found errors and memory leaks are logged in files named
-F<testfile.valgrind>.
+F<testfile.valgrind> and by default output is displayed inline.
+
+Example usage:
+
+    make test.valgrind
+
+Since valgrind adds significant overhead, tests will take much longer to
+run.  The valgrind tests support being run in parallel to help with this:
+
+    TEST_JOBS=9 make test.valgrind
+
+Note that the above two invocations will be very verbose as reachable
+memory and leak-checking is enabled by default.  If you want to just see
+pure errors, try:
+    
+    VG_OPTS='-q --leak-check=no --show-reachable=no' TEST_JOBS=9 \
+        make test.valgrind
 
 Valgrind also provides a cachegrind tool, invoked on perl as:
 
@@ -1380,6 +1396,87 @@ Alternatively edit the init file interactively via: 3rd mouse button ->
 New Display -> Edit Menu
 
 Note: you can define up to 20 conversion shortcuts in the gdb section.
+
+=head2 C backtrace
+
+On some platforms Perl supports retrieving the C level backtrace
+(similar to what symbolic debuggers like gdb do).
+
+The backtrace returns the stack trace of the C call frames,
+with the symbol names (function names), the object names (like "perl"),
+and if it can, also the source code locations (file:line).
+
+The supported platforms are Linux, and OS X (some *BSD might
+work at least partly, but they have not yet been tested).
+
+This feature hasn't been tested with multiple threads, but it will
+only show the backtrace of the thread doing the backtracing.
+
+The feature needs to be enabled with C<Configure -Dusecbacktrace>.
+
+The C<-Dusecbacktrace> also enables keeping the debug information when
+compiling/linking (often: C<-g>).  Many compilers/linkers do support
+having both optimization and keeping the debug information.  The debug
+information is needed for the symbol names and the source locations.
+
+Static functions might not be visible for the backtrace.
+
+Source code locations, even if available, can often be missing or
+misleading if the compiler has e.g. inlined code.  Optimizer can
+make matching the source code and the object code quite challenging.
+
+=over 4
+
+=item Linux
+
+You B<must> have the BFD (-lbfd) library installed, otherwise C<perl> will
+fail to link.  The BFD is usually distributed as part of the GNU binutils.
+
+Summary: C<Configure ... -Dusecbacktrace>
+and you need C<-lbfd>.
+
+=item OS X
+
+The source code locations are supported B<only> if you have
+the Developer Tools installed.  (BFD is B<not> needed.)
+
+Summary: C<Configure ... -Dusecbacktrace>
+and installing the Developer Tools would be good.
+
+=back
+
+Optionally, for trying out the feature, you may want to enable
+automatic dumping of the backtrace just before a warning or croak (die)
+message is emitted, by adding C<-Accflags=-DUSE_C_BACKTRACE_ON_ERROR>
+for Configure.
+
+Unless the above additional feature is enabled, nothing about the
+backtrace functionality is visible, except for the Perl/XS level.
+
+Furthermore, even if you have enabled this feature to be compiled,
+you need to enable it in runtime with an environment variable:
+C<PERL_C_BACKTRACE_ON_ERROR=10>.  It must be an integer higher
+than zero, telling the desired frame count.
+
+Retrieving the backtrace from Perl level (using for example an XS
+extension) would be much less exciting than one would hope: normally
+you would see C<runops>, C<entersub>, and not much else.  This API is
+intended to be called B<from within> the Perl implementation, not from
+Perl level execution.
+
+The C API for the backtrace is as follows:
+
+=over 4
+
+=item get_c_backtrace
+
+=item free_c_backtrace
+
+=item get_c_backtrace_dump
+
+=item dump_c_backtrace
+
+=back
 
 =head2 Poison
 

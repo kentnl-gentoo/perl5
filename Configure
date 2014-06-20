@@ -28,7 +28,7 @@
 # See Porting/pumpkin.pod for more information on metaconfig.
 #
 
-# Generated on Wed Apr  9 12:24:24 CEST 2014 [metaconfig 3.5 PL0]
+# Generated using [metaconfig 3.5 PL0]
 # (with additional metaconfig patches by perlbug@perl.org)
 
 cat >c1$$ <<EOF
@@ -91,7 +91,7 @@ esac
 : Proper separator for the PATH environment variable
 p_=:
 : On OS/2 this directory should exist if this is not floppy only system ":-]"
-if test -d c:/. || ( uname -a | grep -i 'os\(/\|\)2' ) 2>&1 >/dev/null ; then
+if test -d c:/. || ( uname -a | grep -i 'os\(/\|\)2' 2>&1 ) 2>&1 >/dev/null ; then
 	if test -n "$OS2_SHELL"; then
 		p_=\;
 		PATH=`cmd /c "echo %PATH%" | tr '\\\\' / `
@@ -385,6 +385,7 @@ d_attribute_pure=''
 d_attribute_unused=''
 d_attribute_warn_unused_result=''
 d_printf_format_null=''
+d_backtrace=''
 d_bcmp=''
 d_bcopy=''
 d_builtin_choose_expr=''
@@ -422,6 +423,7 @@ d_dbminitproto=''
 d_difftime=''
 d_dir_dd_fd=''
 d_dirfd=''
+d_dladdr=''
 d_dlerror=''
 d_dlopen=''
 d_dlsymun=''
@@ -845,7 +847,9 @@ d_charvspr=''
 d_vprintf=''
 d_wait4=''
 d_waitpid=''
+d_wcscmp=''
 d_wcstombs=''
+d_wcsxfrm=''
 d_wctomb=''
 d_writev=''
 dlext=''
@@ -858,7 +862,6 @@ ld_can_script=''
 lddlflags=''
 usedl=''
 doublesize=''
-bootstrap_charset=''
 ebcdic=''
 fflushNULL=''
 fflushall=''
@@ -882,6 +885,7 @@ html3direxp=''
 installhtml3dir=''
 i_arpainet=''
 i_assert=''
+i_bfd=''
 i_crypt=''
 db_hashtype=''
 db_prefixtype=''
@@ -895,6 +899,7 @@ d_dirnamlen=''
 direntrytype=''
 i_dirent=''
 i_dlfcn=''
+i_execinfo=''
 i_fcntl=''
 i_float=''
 i_fp=''
@@ -929,6 +934,7 @@ i_sysin=''
 i_poll=''
 i_prot=''
 i_pthread=''
+d_ptrdiff_t=''
 d_pwage=''
 d_pwchange=''
 d_pwclass=''
@@ -1036,10 +1042,6 @@ sPRIgldbl=''
 sSCNfldbl=''
 lseeksize=''
 lseektype=''
-mad=''
-madlyh=''
-madlyobj=''
-madlysrc=''
 make_set_make=''
 d_mymalloc=''
 freetype=''
@@ -1232,6 +1234,7 @@ uidtype=''
 archname64=''
 use64bitall=''
 use64bitint=''
+usecbacktrace=''
 dtrace=''
 usedtrace=''
 usefaststdio=''
@@ -3273,8 +3276,6 @@ EOM
 	$test -f /unicosmk && osname=unicosmk && osvers=`$uname -r`
 	$test -f /unicosmk.ar && osname=unicosmk && osvers=`$uname -r`
 	$test -f /bin/mips && /bin/mips && osname=mips
-	$test -d /NextApps && set X `hostinfo | grep 'NeXT Mach.*:' | \
-		$sed -e 's/://' -e 's/\./_/'` && osname=next && osvers=$4
 	$test -d /usr/apollo/bin && osname=apollo
 	$test -f /etc/saf/_sactab && osname=svr4
 	$test -d /usr/include/minix && osname=minix
@@ -3311,7 +3312,6 @@ EOM
 			*) osname=mips ;;
 			esac;;
 		[23]100) osname=mips ;;
-		next*) osname=next ;;
 		i386*)
 			tmp=`/bin/uname -X 2>/dev/null|awk '/3\.2v[45]/{ print $(NF) }'`
 			if $test "$tmp" != "" -a "$3" = "3.2" -a -f '/etc/systemid'; then
@@ -3409,7 +3409,6 @@ EOM
 			*) osname=newsos ;;
 			esac
 			;;
-		next*) osname=next ;;
 		nonstop-ux) osname=nonstopux ;;
 		openbsd) osname=openbsd
                 	osvers="$3"
@@ -5150,6 +5149,9 @@ case "$libswanted" in
 esac
 case "$usesocks" in
 "$define") libswanted="$libswanted socks5 socks5_sh" ;;
+esac
+case "$usecbacktrace" in
+"$define") libswanted="$libswanted bfd" ;;
 esac
 libsfound=''
 libsfiles=''
@@ -8122,7 +8124,6 @@ EOM
 	    '') case "$gccversion" in
 		'') case "$osname" in
 			hpux)	dflt='+z' ;;
-			next)	dflt='none' ;;
 			irix*)	dflt='-KPIC' ;;
 			svr4*|esix*|solaris|nonstopux) dflt='-KPIC' ;;
 			sunos)	dflt='-pic' ;;
@@ -8239,7 +8240,6 @@ EOM
 			  esac
 			  ;;
 		    *linux*|irix*|gnu*)  dflt="-shared $optimize" ;;
-		    next)  dflt='none' ;;
 		    solaris) # See [perl #66604].
 			    # On Solaris 11, gcc -m64 on amd64
 			    # appears not to understand -G.  gcc versions at
@@ -8318,7 +8318,7 @@ EOM
 	case "$ccdlflags" in
 	    '') case "$osname" in
 		    *linux*|hpux|gnu*) dflt='-Wl,-E' ;;
-		    next|sunos)      dflt='none'   ;;
+		    sunos)      dflt='none'   ;;
 		    *)               dflt='none'   ;;
 		esac ;;
 	    ' ') dflt='none' ;;
@@ -8381,15 +8381,6 @@ $undef)
 			dflt=y
 			also='Building a shared libperl is required for dynamic loading to work on your system.'
 			;;
-		next*)
-			case "$osvers" in
-			4*)	dflt=y
-				also='Building a shared libperl is needed for MAB support.'
-				;;
-			*)	dflt=n
-				;;
-			esac
-			;;
 		*)	dflt=n
 			;;
 		esac
@@ -8447,10 +8438,6 @@ true)
 		# I'd prefer to keep the os-specific stuff here to a minimum, and
 		# rely on figuring it out from the naming of libc.
 		case "${osname}${osvers}" in
-		next4*)
-			dflt=libperl.5.$so
-			# XXX How handle the --version stuff for MAB?
-			;;
 		*linux*|gnu*)  # ld won't link with a bare -lperl otherwise.
 			dflt=libperl.$so
 			;;
@@ -8544,9 +8531,6 @@ if "$useshrplib"; then
 		;;
 	bsdos|linux|irix*|dec_osf|gnu*)
 		xxx="-Wl,-rpath,$shrpdir"
-		;;
-	next)
-		# next doesn't like the default...
 		;;
 	haiku)
 		# Haiku doesn't like the default, either.
@@ -8814,26 +8798,6 @@ esac
 
 : see if we have to deal with yellow pages, now NIS.
 if $test -d /usr/etc/yp || $test -d /etc/yp || $test -d /usr/lib/yp; then
-	if $test -f /usr/etc/nibindd; then
-		echo " "
-		echo "I'm fairly confident you're on a NeXT."
-		echo " "
-		rp='Do you get the hosts file via NetInfo?'
-		dflt=y
-		case "$hostcat" in
-		nidump*) ;;
-		'') ;;
-		*) dflt=n;;
-		esac
-		. ./myread
-		case "$ans" in
-		y*) hostcat='nidump hosts .';;
-		*)	case "$hostcat" in
-			nidump*) hostcat='';;
-			esac
-			;;
-		esac
-	fi
 	case "$hostcat" in
 	nidump*) ;;
 	*)
@@ -9354,6 +9318,29 @@ rp='Pathname where add-on public executable scripts should be installed?'
 . ./getfile
 prefixvar=sitescript
 . ./setprefixvar
+
+: see if backtrace exists
+set backtrace d_backtrace
+eval $inlibc
+
+: add flags if using c backtrace
+case "$usecbacktrace" in
+  "") usecbacktrace=$undef ;;
+  [yY]*|true|$define)
+    case "$d_backtrace" in
+      [yY]*|true|$define)
+        case " $ccflags " in
+	  *" -DUSE_C_BACKTRACE "*) ;; # Already there.
+	  *) ccflags="$ccflags -DUSE_C_BACKTRACE -g" ;;
+	  esac
+        ;;
+      *)
+        echo "This system does not support backtrace" >&4
+        usecbacktrace=$undef
+        ;;
+      esac
+    ;;
+  esac
 
 : Check if faststdio is requested and available
 case "$usefaststdio" in
@@ -12171,9 +12158,6 @@ $cat >dirfd.c <<EOM
 #endif
 #if defined(I_DIRENT)
 #include <dirent.h>
-#if defined(NeXT) && defined(I_SYS_DIR) /* NeXT needs dirent + sys/dir.h */
-#include <sys/dir.h>
-#endif
 #else
 #ifdef I_SYS_NDIR
 #include <sys/ndir.h>
@@ -12207,6 +12191,10 @@ esac
 set d_dirfd
 eval $setvar
 $rm -f dirfd*
+
+: see if dladdr exists
+set dladdr d_dladdr
+eval $inlibc
 
 : see if dlerror exists
 xxx_runnm="$runnm"
@@ -16367,6 +16355,25 @@ $rm_try
 set d_off64_t
 eval $setvar
 
+: check for ptrdiff_t
+echo " "
+echo "Checking to see if you have ptrdiff_t..." >&4
+$cat >try.c <<EOCP
+#include <stddef.h>
+int main() { ptrdiff_t x = 7; }
+EOCP
+set try
+if eval $compile; then
+	val="$define"
+	echo "You have ptrdiff_t."
+else
+	val="$undef"
+	echo "You do not have ptrdiff_t."
+fi
+$rm_try
+set d_ptrdiff_t
+eval $setvar
+
 : how to create joinable pthreads
 if test "X$usethreads" = "X$define" -a "X$i_pthread" = "X$define"; then
 	echo " "
@@ -17748,13 +17755,13 @@ freebsd)
         h_shm=false
 	val="$undef"
 	set shmctl d_shmctl
-	evat $setvar
+	eval $setvar
 	set shmget d_shmget
-	evat $setvar
+	eval $setvar
 	set shmat d_shmat
-	evat $setvar
+	eval $setvar
 	set shmdt d_shmdt
-	evat $setvar
+	eval $setvar
 	;;
     esac
     ;;
@@ -18910,7 +18917,7 @@ eval $setvar
 
 : Check if is a multiplatform env
 case "$osname" in
-next|darwin) multiarch="$define" ;;
+darwin) multiarch="$define" ;;
 esac
 case "$multiarch" in
 ''|[nN]*) multiarch="$undef" ;;
@@ -19151,9 +19158,6 @@ case "$d_closedir" in
 #endif
 #if defined(I_DIRENT)
 #include <dirent.h>
-#if defined(NeXT) && defined(I_SYS_DIR) /* NeXT needs dirent + sys/dir.h */
-#include <sys/dir.h>
-#endif
 #else
 #ifdef I_SYS_NDIR
 #include <sys/ndir.h>
@@ -19199,9 +19203,66 @@ eval $inlibc
 set waitpid d_waitpid
 eval $inlibc
 
+: look for wcscmp
+echo " "
+$cat >try.c <<'EOCP'
+#include <stdio.h>
+#include <wchar.h>
+int main ()
+{
+    wchar_t *s = L" ";
+    return (wcscmp (s, s) ? 1 : 0);
+    }
+EOCP
+set try
+val="$undef"
+if eval $compile; then
+    `$run ./try`
+    case "$?" in
+	0)  echo "A working wcscmp() found." >&4
+	    val="$define" ;;
+	*)  echo "wcscmp() found, but it doesn't work" >&4
+	    ;;
+	esac
+else
+    echo "wcscmp() NOT found." >&4
+    fi
+set d_wcscmp
+eval $setvar
+$rm_try
+
 : see if wcstombs exists
 set wcstombs d_wcstombs
 eval $inlibc
+
+: look for wcsxfrm
+echo " "
+$cat >try.c <<'EOCP'
+#include <errno.h>
+#include <wchar.h>
+int main ()
+{
+    wchar_t dst[4], *src = L" ";
+    errno = 0;
+    return (wcsxfrm (dst, src, 1) ? errno ? errno : 0 : 1);
+    }
+EOCP
+set try
+val="$undef"
+if eval $compile; then
+    `$run ./try`
+    case "$?" in
+	0)  echo "A working wcsxfrm() found." >&4
+	    val="$define" ;;
+	*)  echo "wcsxfrm() found, but it doesn't work" >&4
+	    ;;
+	esac
+else
+    echo "wcsxfrm() NOT found." >&4
+    fi
+set d_wcsxfrm
+eval $setvar
+$rm_try
 
 : see if wctomb exists
 set wctomb d_wctomb
@@ -19210,13 +19271,6 @@ eval $inlibc
 : see if writev exists
 set writev d_writev
 eval $inlibc
-
-: preserve RCS keywords in files with variable substitution, grrr
-Date='$Date'
-Id='$Id'
-Log='$Log'
-RCSfile='$RCSfile'
-Revision='$Revision'
 
 : check for alignment requirements
 echo " "
@@ -19272,39 +19326,6 @@ $rm_try
 
 : set the base revision
 baserev=5.0
-
-: Determine if this is an EBCDIC system
-echo " "
-echo "Determining whether or not we are on an EBCDIC system..." >&4
-$cat >try.c <<'EOM'
-int main()
-{
-  if ('M'==0xd4) return 0;
-  return 1;
-}
-EOM
-
-case "$BOOTSTRAP_CHARSET" in
-    Y|y|define) bootstrap_charset=$define	;;
-    *)		bootstrap_charset=$undef	;;
-esac
-
-val=$undef
-set try
-if eval $compile_ok; then
-	if $run ./try; then
-		echo "You seem to speak EBCDIC." >&4
-		val="$define"
-	else
-		echo "Nope, no EBCDIC, probably ASCII or some ISO Latin. Or UTF-8." >&4
-	fi
-else
-	echo "I'm unable to compile the test program." >&4
-	echo "I'll assume ASCII or some ISO Latin. Or UTF8." >&4
-fi
-$rm_try
-set ebcdic
-eval $setvar
 
 : length of character in bytes. Is always 1, otherwise it is not C
 : This used to be a test using sizeof
@@ -19591,6 +19612,34 @@ drand01="Perl_drand48()"
 seedfunc="Perl_drand48_init"
 randbits=48
 randseedtype=U32
+
+: Determine if this is an EBCDIC system
+echo " "
+echo "Determining whether or not we are on an EBCDIC system..." >&4
+$cat >try.c <<'EOM'
+int main()
+{
+  if ('M'==0xd4) return 0;
+  return 1;
+}
+EOM
+
+val=$undef
+set try
+if eval $compile_ok; then
+	if $run ./try; then
+		echo "You seem to speak EBCDIC." >&4
+		val="$define"
+	else
+		echo "Nope, no EBCDIC, probably ASCII or some ISO Latin. Or UTF-8." >&4
+	fi
+else
+	echo "I'm unable to compile the test program." >&4
+	echo "I'll assume ASCII or some ISO Latin. Or UTF8." >&4
+fi
+$rm_try
+set ebcdic
+eval $setvar
 
 : Check how to flush
 echo " "
@@ -20284,40 +20333,6 @@ EOM
 	;;
 *)  groupstype="$gidtype";;
 esac
-
-: MAD = Misc Attribute Definition
-
-if $test $patchlevel -lt 9; then
-: MAD is not available in 5.8.x or earlier.
-    ans=n;
-else
-    case "$mad" in
-    $define|true|[yY]*)	dflt='y' ;;
-    *)			dflt='n' ;;
-    esac
-    cat <<EOM
-
-Would you like to build with Misc Attribute Decoration? This is development
-work leading to a Perl 5 to Perl 6 convertor, which imposes a space and speed
-overhead on the interpreter.
-
-If this doesn't make any sense to you, just accept the default '$dflt'.
-EOM
-    rp='Build Perl with MAD?'
-    . ./myread
-fi
-case "$ans" in
-y|Y)	val="$define"
-	madlyh='madly.h madly.act madly.tab'
-	madlysrc='madly.c'
-	madlyobj="madly$_o" ;;
-*)	val="$undef"
-	madlyh=''
-	madlysrc=''
-	madlyobj='' ;;
-esac
-set mad
-eval $setvar
 
 : check whether make sets MAKE
 echo " "
@@ -21871,6 +21886,14 @@ esac
 set assert.h i_assert
 eval $inhdr
 
+: see if this is a bfd.h system
+set bfd.h i_bfd
+eval $inhdr
+
+: see if this is an execinfo.h system
+set execinfo.h i_execinfo
+eval $inhdr
+
 : see if this is a fp.h system
 set fp.h i_fp
 eval $inhdr
@@ -22400,8 +22423,8 @@ find_extensions='
 		Scalar/List/Utils) this_ext="List/Util"	;;
 		PathTools)         this_ext="Cwd"	;;
 	    esac;
-	    echo " $xs_extensions $nonxs_extensions" > $$.tmp;
-	    if $contains " $this_ext " $$.tmp; then
+	    echo " $xs_extensions $nonxs_extensions" > $tdir/$$.tmp;
+	    if $contains " $this_ext " $tdir/$$.tmp; then
 		echo >&4;
 		echo "Duplicate directories detected for extension $xxx" >&4;
 		echo "Configure cannot correctly recover from this - shall I abort?" >&4;
@@ -22419,15 +22442,15 @@ find_extensions='
 		esac;
 		echo "Ok.  You will need to correct config.sh before running make." >&4;
 	    fi;
-	    $ls -1 $xxx > $$.tmp;
-	    if   $contains "\.xs$" $$.tmp > /dev/null 2>&1; then
+	    $ls -1 $xxx > $tdir/$$.tmp;
+	    if   $contains "\.xs$" $tdir/$$.tmp > /dev/null 2>&1; then
 		xs_extensions="$xs_extensions $this_ext";
-	    elif $contains "\.c$"  $$.tmp > /dev/null 2>&1; then
+	    elif $contains "\.c$"  $tdir/$$.tmp > /dev/null 2>&1; then
 		xs_extensions="$xs_extensions $this_ext";
 	    elif $test -d $xxx; then
 		nonxs_extensions="$nonxs_extensions $this_ext";
 	    fi;
-	    $rm -f $$.tmp;
+	    $rm -f $tdir/$$.tmp;
 	    ;;
 	esac;
     done'
@@ -22921,7 +22944,6 @@ bin='$bin'
 bin_ELF='$bin_ELF'
 binexp='$binexp'
 bison='$bison'
-bootstrap_charset='$bootstrap_charset'
 byacc='$byacc'
 byteorder='$byteorder'
 c='$c'
@@ -22995,6 +23017,7 @@ d_attribute_noreturn='$d_attribute_noreturn'
 d_attribute_pure='$d_attribute_pure'
 d_attribute_unused='$d_attribute_unused'
 d_attribute_warn_unused_result='$d_attribute_warn_unused_result'
+d_backtrace='$d_backtrace'
 d_bcmp='$d_bcmp'
 d_bcopy='$d_bcopy'
 d_bsd='$d_bsd'
@@ -23032,6 +23055,7 @@ d_difftime='$d_difftime'
 d_dir_dd_fd='$d_dir_dd_fd'
 d_dirfd='$d_dirfd'
 d_dirnamlen='$d_dirnamlen'
+d_dladdr='$d_dladdr'
 d_dlerror='$d_dlerror'
 d_dlopen='$d_dlopen'
 d_dlsymun='$d_dlsymun'
@@ -23247,6 +23271,7 @@ d_pseudofork='$d_pseudofork'
 d_pthread_atfork='$d_pthread_atfork'
 d_pthread_attr_setscope='$d_pthread_attr_setscope'
 d_pthread_yield='$d_pthread_yield'
+d_ptrdiff_t='$d_ptrdiff_t'
 d_pwage='$d_pwage'
 d_pwchange='$d_pwchange'
 d_pwclass='$d_pwclass'
@@ -23416,7 +23441,9 @@ d_vprintf='$d_vprintf'
 d_vsnprintf='$d_vsnprintf'
 d_wait4='$d_wait4'
 d_waitpid='$d_waitpid'
+d_wcscmp='$d_wcscmp'
 d_wcstombs='$d_wcstombs'
+d_wcsxfrm='$d_wcsxfrm'
 d_wctomb='$d_wctomb'
 d_writev='$d_writev'
 d_xenix='$d_xenix'
@@ -23519,12 +23546,14 @@ i8size='$i8size'
 i8type='$i8type'
 i_arpainet='$i_arpainet'
 i_assert='$i_assert'
+i_bfd='$i_bfd'
 i_bsdioctl='$i_bsdioctl'
 i_crypt='$i_crypt'
 i_db='$i_db'
 i_dbm='$i_dbm'
 i_dirent='$i_dirent'
 i_dlfcn='$i_dlfcn'
+i_execinfo='$i_execinfo'
 i_fcntl='$i_fcntl'
 i_float='$i_float'
 i_fp='$i_fp'
@@ -23679,10 +23708,6 @@ lpr='$lpr'
 ls='$ls'
 lseeksize='$lseeksize'
 lseektype='$lseektype'
-mad='$mad'
-madlyh='$madlyh'
-madlyobj='$madlyobj'
-madlysrc='$madlysrc'
 mail='$mail'
 mailx='$mailx'
 make='$make'
@@ -23915,6 +23940,7 @@ uquadtype='$uquadtype'
 use5005threads='$use5005threads'
 use64bitall='$use64bitall'
 use64bitint='$use64bitint'
+usecbacktrace='$usecbacktrace'
 usecrosscompile='$usecrosscompile'
 usedevel='$usedevel'
 usedl='$usedl'
@@ -24011,6 +24037,9 @@ EOM
 		;;
 	esac
 fi
+
+: preserve RCS keywords in files with variable substitution, grrr
+Id='$Id'
 
 : Finish up by extracting the .SH files
 case "$alldone" in

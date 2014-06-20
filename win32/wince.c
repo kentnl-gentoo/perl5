@@ -146,7 +146,7 @@ get_regstr_from(HKEY hkey, const char *valuename, SV **svp)
 	if (retval == ERROR_SUCCESS && type == REG_SZ) {
 	    dTHX;
 	    if (!*svp)
-		*svp = sv_2mortal(newSVpvn("",0));
+		*svp = sv_2mortal(newSVpvs(""));
 	    SvGROW(*svp, datalen);
 	    retval = XCERegQueryValueExA(handle, valuename, 0, NULL,
 				     (PBYTE)SvPVX(*svp), &datalen);
@@ -226,8 +226,8 @@ get_emd_part(SV **prev_pathp, STRLEN *const len, char *trailing_path, ...)
 	/* directory exists */
 	dTHX;
 	if (!*prev_pathp)
-	    *prev_pathp = sv_2mortal(newSVpvn("",0));
-	sv_catpvn(*prev_pathp, ";", 1);
+	    *prev_pathp = sv_2mortal(newSVpvs(""));
+	sv_catpvs(*prev_pathp, ";");
 	sv_catpv(*prev_pathp, mod_name);
 	if(len)
 	    *len = SvCUR(*prev_pathp);
@@ -286,7 +286,7 @@ win32_get_xlib(const char *pl, const char *xlib, const char *libname,
     if (!sv1) {
 	sv1 = sv2;
     } else if (sv2) {
-	sv_catpvn(sv1, ";", 1);
+	sv_catpvs(sv1, ";");
 	sv_catsv(sv1, sv2);
     }
 

@@ -180,7 +180,6 @@
 #define PL_localizing		(vTHX->Ilocalizing)
 #define PL_localpatches		(vTHX->Ilocalpatches)
 #define PL_lockhook		(vTHX->Ilockhook)
-#define PL_madskills		(vTHX->Imadskills)
 #define PL_main_cv		(vTHX->Imain_cv)
 #define PL_main_root		(vTHX->Imain_root)
 #define PL_main_start		(vTHX->Imain_start)
@@ -304,7 +303,6 @@
 #define PL_sv_consts		(vTHX->Isv_consts)
 #define PL_sv_count		(vTHX->Isv_count)
 #define PL_sv_no		(vTHX->Isv_no)
-#define PL_sv_objcount		(vTHX->Isv_objcount)
 #define PL_sv_root		(vTHX->Isv_root)
 #define PL_sv_serial		(vTHX->Isv_serial)
 #define PL_sv_undef		(vTHX->Isv_undef)
@@ -349,7 +347,6 @@
 #define PL_warnhook		(vTHX->Iwarnhook)
 #define PL_watchaddr		(vTHX->Iwatchaddr)
 #define PL_watchok		(vTHX->Iwatchok)
-#define PL_xmlfp		(vTHX->Ixmlfp)
 
 #endif	/* MULTIPLICITY */
 

@@ -760,11 +760,16 @@ The Perl equivalent for this is C<$#myarray>.
 
 (A slightly shorter form is C<av_tindex>.)
 
+=for apidoc av_tindex
+
+Same as L</av_top_index>.
+
 =for apidoc av_len
 
-Same as L</av_top_index>.  Returns the highest index in the array.  Note that the
-return value is +1 what its name implies it returns; and hence differs in
-meaning from what the similarly named L</sv_len> returns.
+Same as L</av_top_index>.  Note that, unlike what the name implies, it returns
+the highest index in the array, so to get the size of the array you need to use
+S<C<av_len(av) + 1>>.  This is unlike L</sv_len>, which returns what you would
+expect.
 
 =cut
 */
@@ -889,23 +894,23 @@ Perl_av_delete(pTHX_ AV *av, SSize_t key, I32 flags)
 	if (!AvREAL(av) && AvREIFY(av))
 	    av_reify(av);
 	sv = AvARRAY(av)[key];
+	AvARRAY(av)[key] = NULL;
 	if (key == AvFILLp(av)) {
-	    AvARRAY(av)[key] = NULL;
 	    do {
 		AvFILLp(av)--;
 	    } while (--key >= 0 && !AvARRAY(av)[key]);
 	}
-	else
-	    AvARRAY(av)[key] = NULL;
 	if (SvSMAGICAL(av))
 	    mg_set(MUTABLE_SV(av));
     }
-    if (flags & G_DISCARD) {
-	SvREFCNT_dec(sv);
-	sv = NULL;
+    if(sv != NULL) {
+	if (flags & G_DISCARD) {
+	    SvREFCNT_dec_NN(sv);
+	    return NULL;
+	}
+	else if (AvREAL(av))
+	    sv_2mortal(sv);
     }
-    else if (AvREAL(av))
-	sv = sv_2mortal(sv);
     return sv;
 }
 

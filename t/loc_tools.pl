@@ -67,7 +67,8 @@ sub _decode_encodings {
 sub find_locales ($) {  # Returns an array of all the locales we found on the
                         # system.  The parameter is either a single locale
                         # category or a reference to a list of categories to
-                        # find valid locales for it or them
+                        # find valid locales for it (or in the case of
+                        # multiple) for all of them
     my $categories = shift;
 
     use Config;;
@@ -89,7 +90,10 @@ sub find_locales ($) {  # Returns an array of all the locales we found on the
 
     # Done this way in case this is 'required' in the caller before seeing if
     # this is miniperl.
-    require POSIX; import POSIX 'locale_h';
+    eval { require POSIX; import POSIX 'locale_h'; };
+    unless (defined &POSIX::LC_CTYPE) {
+      return;
+    }
 
     _trylocale("C", $categories, \@Locale);
     _trylocale("POSIX", $categories, \@Locale);

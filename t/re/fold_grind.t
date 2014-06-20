@@ -5,7 +5,7 @@ binmode STDOUT, ":utf8";
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
-    require './test.pl';
+    require './test.pl'; require './charset_tools.pl';
     require Config; import Config;
     skip_all_if_miniperl("no dynamic loading on miniperl, no Encode nor POSIX");
     require './loc_tools.pl';
@@ -423,7 +423,7 @@ my @charsets = qw(d u a aa);
 if($Config{d_setlocale}) {
     my $current_locale = POSIX::setlocale( &POSIX::LC_CTYPE, "C") // "";
     if ($current_locale eq 'C') {
-        require locale; import locale;
+        use locale;
 
         # Some implementations don't have the 128-255 range characters all
         # mean nothing under the C locale (an example being VMS).  This is
@@ -541,7 +541,7 @@ foreach my $test (sort { numerically } keys %tests) {
           if (! $target_has_ascii) {
             foreach my $cp (@target) {
               if (exists $folds{$cp}
-                  && grep { ord_native_to_latin1($_) < 128 } @{$folds{$cp}} )
+                  && grep { utf8::native_to_unicode($_) < 128 } @{$folds{$cp}} )
               {
                   $target_has_ascii = 1;
                   last;
@@ -551,7 +551,7 @@ foreach my $test (sort { numerically } keys %tests) {
           if (! $pattern_has_ascii) {
             foreach my $cp (@pattern) {
               if (exists $folds{$cp}
-                  && grep { ord_native_to_latin1($_) < 128 } @{$folds{$cp}} )
+                  && grep { utf8::native_to_unicode($_) < 128 } @{$folds{$cp}} )
               {
                   $pattern_has_ascii = 1;
                   last;

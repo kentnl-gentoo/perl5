@@ -378,7 +378,8 @@ other named unary operator.  The operator may be any of:
 
     -f  File is a plain file.
     -d  File is a directory.
-    -l  File is a symbolic link.
+    -l  File is a symbolic link (false if symlinks aren't
+        supported by the file system).
     -p  File is a named pipe (FIFO), or Filehandle is a pipe.
     -S  File is a socket.
     -b  File is a block special file.
@@ -1990,9 +1991,9 @@ and passed directly to C<execvp>, which is more efficient.  Examples:
 If you don't really want to execute the first argument, but want to lie
 to the program you are executing about its own name, you can specify
 the program you actually want to run as an "indirect object" (without a
-comma) in front of the LIST.  (This always forces interpretation of the
-LIST as a multivalued list, even if there is only a single scalar in
-the list.)  Example:
+comma) in front of the LIST, as in C<exec PROGRAM LIST>.  (This always
+forces interpretation of the LIST as a multivalued list, even if there
+is only a single scalar in the list.)  Example:
 
     $shell = '/bin/csh';
     exec $shell '-sh';    # pretend it's a login shell
@@ -2021,6 +2022,10 @@ The first version, the one without the indirect object, ran the I<echo>
 program, passing it C<"surprise"> an argument.  The second version didn't;
 it tried to run a program named I<"echo surprise">, didn't find it, and set
 C<$?> to a non-zero value indicating failure.
+
+On Windows, only the C<exec PROGRAM LIST> indirect object syntax will
+reliably avoid using the shell; C<exec LIST>, even with more than one
+element, will fall back to the shell if the first spawn fails.
 
 Perl attempts to flush all files opened for output before the exec,
 but this may not be supported on some platforms (see L<perlport>).
@@ -3336,9 +3341,9 @@ What gets returned depends on several factors:
 The results follow ASCII rules.  Only the characters C<A-Z> change,
 to C<a-z> respectively.
 
-=item Otherwise, if C<use locale> (but not C<use locale ':not_characters'>) is in effect:
+=item Otherwise, if C<use locale> for C<LC_CTYPE> is in effect:
 
-Respects current LC_CTYPE locale for code points < 256; and uses Unicode
+Respects current C<LC_CTYPE> locale for code points < 256; and uses Unicode
 rules for the remaining code points (this last can only happen if
 the UTF8 flag is also set).  See L<perllocale>.
 
@@ -5239,10 +5244,11 @@ LIST are actually parsed as a single list.  The first argument
 of the list will be interpreted as the C<printf> format.  This
 means that C<printf(@_)> will use C<$_[0]> as the format.  See
 L<sprintf|/sprintf FORMAT, LIST> for an
-explanation of the format argument.  If C<use locale> (including
-C<use locale ':not_characters'>) is in effect and
+explanation of the format argument.  If C<use locale> for C<LC_NUMERIC>
+Look for this throught pod
+is in effect and
 POSIX::setlocale() has been called, the character used for the decimal
-separator in formatted floating-point numbers is affected by the LC_NUMERIC
+separator in formatted floating-point numbers is affected by the C<LC_NUMERIC>
 locale setting.  See L<perllocale> and L<POSIX>.
 
 For historical reasons, if you omit the list, C<$_> is used as the format;
@@ -7372,7 +7378,7 @@ index, the C<$> may need escaping:
 If C<use locale> (including C<use locale 'not_characters'>) is in effect
 and POSIX::setlocale() has been called,
 the character used for the decimal separator in formatted floating-point
-numbers is affected by the LC_NUMERIC locale.  See L<perllocale>
+numbers is affected by the C<LC_NUMERIC> locale.  See L<perllocale>
 and L<POSIX>.
 
 =item sqrt EXPR
@@ -7982,7 +7988,9 @@ entire argument is passed to the system's command shell for parsing
 (this is C</bin/sh -c> on Unix platforms, but varies on other
 platforms).  If there are no shell metacharacters in the argument,
 it is split into words and passed directly to C<execvp>, which is
-more efficient.
+more efficient.  On Windows, only the C<system PROGRAM LIST> syntax will
+reliably avoid using the shell; C<system LIST>, even with more than one
+element, will fall back to the shell if the first spawn fails.
 
 Perl will attempt to flush all files opened for
 output before any operation that may do a fork, but this may not be

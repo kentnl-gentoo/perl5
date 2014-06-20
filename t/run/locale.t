@@ -55,13 +55,10 @@ EOF
 # try to find out a locale where LC_NUMERIC makes a difference
 my $original_locale = setlocale(LC_NUMERIC);
 
-my ($base, $different, $comma, $difference);
+my ($base, $different, $comma, $difference, $utf8_radix);
+my $radix_encoded_as_utf8;
 for ("C", @locales) { # prefer C for the base if available
-    BEGIN {
-        if($Config{d_setlocale}) {
-            require locale; import locale;
-        }
-    }
+    use locale;
     setlocale(LC_NUMERIC, $_) or next;
     my $in = 4.2; # avoid any constant folding bugs
     if ((my $s = sprintf("%g", $in)) eq "4.2")  {
@@ -69,19 +66,39 @@ for ("C", @locales) { # prefer C for the base if available
     } else {
 	$different ||= $_;
 	$difference ||= $s;
-        $comma ||= $_ if localeconv()->{decimal_point} eq ',';
+        my $radix = localeconv()->{decimal_point};
+
+        # For utf8 locales with a non-ascii radix, it should be encoded as
+        # UTF-8 with the internal flag so set.
+        if (! defined $utf8_radix
+            && $radix =~ /[[:^ascii:]]/
+            && is_locale_utf8($_))
+        {
+            $utf8_radix = $_;
+            $radix_encoded_as_utf8 = utf8::is_utf8($radix);
+        }
+        else {
+            $comma ||= $_ if $radix eq ',';
+        }
     }
 
-    last if $base && $different && $comma;
+    last if $base && $different && $comma && $utf8_radix;
 }
 setlocale(LC_NUMERIC, $original_locale);
 
 SKIP: {
-    skip("no locale available where LC_NUMERIC makes a difference", &last - 4 )
-	if !$different;     # -4 is 2 tests before this block; 2 after
+    skip("no UTF-8 locale available where LC_NUMERIC radix isn't ASCII", 1 )
+        unless $utf8_radix;
+    ok($radix_encoded_as_utf8 == 1, "UTF-8 locale '$utf8_radix' with non-ASCII"
+                                    . " radix is marked UTF-8");
+}
+
+SKIP: {
+    skip("no locale available where LC_NUMERIC makes a difference", &last - 5 )
+	if !$different;     # -5 is 3 tests before this block; 2 after
     note("using the '$different' locale for LC_NUMERIC tests");
-    for ($different) {
-	local $ENV{LC_NUMERIC} = $_;
+    {
+	local $ENV{LC_NUMERIC} = $different;
 	local $ENV{LC_ALL}; # so it never overrides LC_NUMERIC
 
 	fresh_perl_is(<<'EOF', "4.2", {},
@@ -92,6 +109,42 @@ format STDOUT =
 write;
 EOF
 	    "format() does not look at LC_NUMERIC without 'use locale'");
+
+        {
+	    fresh_perl_is(<<'EOF', "$difference\n", {},
+use POSIX;
+use locale;
+format STDOUT =
+@.#
+4.179
+.
+write;
+EOF
+	    "format() looks at LC_NUMERIC with 'use locale'");
+        }
+
+        {
+	    fresh_perl_is(<<'EOF', ",,", {},
+print localeconv()->{decimal_point};
+use POSIX;
+use locale;
+print localeconv()->{decimal_point};
+EOF
+	    "localeconv() looks at LC_NUMERIC with and without 'use locale'");
+        }
+
+        {
+            my $categories = ":collate :characters :collate :ctype :monetary :time";
+            fresh_perl_is(<<"EOF", "4.2", {},
+use locale qw($categories);
+format STDOUT =
+@.#
+4.179
+.
+write;
+EOF
+	    "format() does not look at LC_NUMERIC with 'use locale qw($categories)'");
+        }
 
         {
 	    fresh_perl_is(<<'EOF', $difference, {},
@@ -105,16 +158,31 @@ EOF
 	    "format() looks at LC_NUMERIC with 'use locale'");
         }
 
-        {
-	    fresh_perl_is(<<'EOF', $difference, {},
-use locale ":not_characters";
+        for my $category (qw(collate characters collate ctype monetary time)) {
+            for my $negation ("!", "not_") {
+                fresh_perl_is(<<"EOF", $difference, {},
+use locale ":$negation$category";
 format STDOUT =
 @.#
 4.179
 .
 write;
 EOF
-	    "format() looks at LC_NUMERIC with 'use locale \":not_characters\"'");
+                "format() looks at LC_NUMERIC with 'use locale \":"
+                . "$negation$category\"'");
+            }
+        }
+
+        {
+	    fresh_perl_is(<<'EOF', $difference, {},
+use locale ":numeric";
+format STDOUT =
+@.#
+4.179
+.
+write;
+EOF
+	    "format() looks at LC_NUMERIC with 'use locale \":numeric\"'");
         }
 
         {
@@ -123,7 +191,7 @@ format STDOUT =
 @.#
 4.179
 .
-{ require locale; import locale; write; }
+{ use locale; write; }
 EOF
 	    "too late to look at the locale at write() time");
         }
@@ -145,11 +213,7 @@ EOF
         # do not let "use 5.000" affect the locale!
         # this test is to prevent regression of [rt.perl.org #105784]
         fresh_perl_is(<<"EOF",
-            BEGIN {
-                if("$Config{d_setlocale}") {
-                    require locale; import locale;
-                }
-            }
+            use locale;
             use POSIX;
             my \$i = 0.123;
             POSIX::setlocale(POSIX::LC_NUMERIC(),"$different");
@@ -173,27 +237,25 @@ EOF
             "", {}, "version does not clobber version (via eval)");
     }
 
-    for ($different) {
-	local $ENV{LC_NUMERIC} = $_;
+    {
+	local $ENV{LC_NUMERIC} = $different;
 	local $ENV{LC_ALL}; # so it never overrides LC_NUMERIC
 	fresh_perl_is(<<'EOF', "$difference "x4, {},
             use locale;
 	    use POSIX qw(locale_h);
-	    setlocale(LC_NUMERIC, "");
 	    my $in = 4.2;
 	    printf("%g %g %s %s ", $in, 4.2, sprintf("%g", $in), sprintf("%g", 4.2));
 EOF
 	"sprintf() and printf() look at LC_NUMERIC regardless of constant folding");
     }
 
-    for ($different) {
-	local $ENV{LC_NUMERIC} = $_;
+    {
+	local $ENV{LC_NUMERIC} = $different;
 	local $ENV{LC_ALL}; # so it never overrides LC_NUMERIC
 	local $ENV{LANG};   # so on Windows gets sys default locale
 	fresh_perl_is(<<'EOF', "$difference "x4, {},
             use locale;
 	    use POSIX qw(locale_h);
-	    setlocale(LC_NUMERIC, "");
 	    my $in = 4.2;
 	    printf("%g %g %s %s ", $in, 4.2, sprintf("%g", $in), sprintf("%g", 4.2));
 EOF
@@ -209,20 +271,27 @@ EOF
         open my $saved_stderr, ">&STDERR" or die "Can't dup STDERR: $!";
         close STDERR;
 
-        for ($different) {
+        {
             local $ENV{LC_ALL} = "invalid";
             local $ENV{LC_NUMERIC} = "invalid";
-            local $ENV{LANG} = $_;
+            local $ENV{LANG} = $different;
 
             # Can't turn off the warnings, so send them to /dev/null
-            fresh_perl_is(<<'EOF', "$difference", { stderr => "devnull" },
+            if (! fresh_perl_is(<<"EOF", "$difference", { stderr => "devnull" },
+                if (\$ENV{LC_ALL} ne "invalid") {
+                    # Make the test pass if the sh didn't accept the ENV set
+                    print "$difference\n";
+                    exit 0;
+                }
                 use locale;
                 use POSIX qw(locale_h);
-                setlocale(LC_NUMERIC, "");
-                my $in = 4.2;
-                printf("%g", $in);
+                my \$in = 4.2;
+                printf("%g", \$in);
 EOF
-            "LANG is used if LC_ALL, LC_NUMERIC are invalid");
+            "LANG is used if LC_ALL, LC_NUMERIC are invalid"))
+           {
+              note "To see details change this .t to not close STDERR";
+           }
         }
 
         SKIP: {
@@ -231,20 +300,24 @@ EOF
                         1);
             }
             else {
-                for ($different) {
-                    local $ENV{LC_ALL} = "invalid";
-                    local $ENV{LC_NUMERIC} = "invalid";
-                    local $ENV{LANG} = "invalid";
+                local $ENV{LC_ALL} = "invalid";
+                local $ENV{LC_NUMERIC} = "invalid";
+                local $ENV{LANG} = "invalid";
 
-                    # Can't turn off the warnings, so send them to /dev/null
-                    fresh_perl_is(<<'EOF', 4.2, { stderr => "devnull" },
-                        use locale;
-                        use POSIX qw(locale_h);
-                        setlocale(LC_NUMERIC, "");
-                        my $in = 4.2;
-                        printf("%g", $in);
+                # Can't turn off the warnings, so send them to /dev/null
+                if (! fresh_perl_is(<<"EOF", 4.2, { stderr => "devnull" },
+                    if (\$ENV{LC_ALL} ne "invalid") {
+                        print "$difference\n";
+                        exit 0;
+                    }
+                    use locale;
+                    use POSIX qw(locale_h);
+                    my \$in = 4.2;
+                    printf("%g", \$in);
 EOF
-                    'C locale is used if LC_ALL, LC_NUMERIC, LANG are invalid');
+                'C locale is used if LC_ALL, LC_NUMERIC, LANG are invalid'))
+                {
+                    note "To see details change this .t to not close STDERR";
                 }
             }
         }
@@ -252,13 +325,13 @@ EOF
     open STDERR, ">&", $saved_stderr or die "Can't dup \$saved_stderr: $!";
     }
 
-    for ($different) {
-	local $ENV{LC_NUMERIC} = $_;
+    {
+	local $ENV{LC_NUMERIC} = $different;
 	local $ENV{LC_ALL}; # so it never overrides LC_NUMERIC
 	fresh_perl_is(<<"EOF",
 	    use POSIX qw(locale_h);
 
-            BEGIN { setlocale(LC_NUMERIC, \"$_\"); };
+            BEGIN { setlocale(LC_NUMERIC, \"$different\"); };
             setlocale(LC_ALL, "C");
             use 5.008;
             print setlocale(LC_NUMERIC);
@@ -335,4 +408,4 @@ EOF
 
     }
 
-sub last { 19 }
+sub last { 35 }

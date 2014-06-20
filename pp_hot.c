@@ -1182,81 +1182,80 @@ PP(pp_aassign)
 	}
     }
     if (UNLIKELY(PL_delaymagic & ~DM_DELAY)) {
-        int rc = 0;
 	/* Will be used to set PL_tainting below */
 	Uid_t tmp_uid  = PerlProc_getuid();
 	Uid_t tmp_euid = PerlProc_geteuid();
 	Gid_t tmp_gid  = PerlProc_getgid();
 	Gid_t tmp_egid = PerlProc_getegid();
 
+        /* XXX $> et al currently silently ignore failures */
 	if (PL_delaymagic & DM_UID) {
 #ifdef HAS_SETRESUID
-	    rc = setresuid((PL_delaymagic & DM_RUID) ? PL_delaymagic_uid  : (Uid_t)-1,
-			    (PL_delaymagic & DM_EUID) ? PL_delaymagic_euid : (Uid_t)-1,
-			    (Uid_t)-1);
+	    PERL_UNUSED_RESULT(
+               setresuid((PL_delaymagic & DM_RUID) ? PL_delaymagic_uid  : (Uid_t)-1,
+                         (PL_delaymagic & DM_EUID) ? PL_delaymagic_euid : (Uid_t)-1,
+                         (Uid_t)-1));
 #else
 #  ifdef HAS_SETREUID
-	    rc = setreuid((PL_delaymagic & DM_RUID) ? PL_delaymagic_uid  : (Uid_t)-1,
-			   (PL_delaymagic & DM_EUID) ? PL_delaymagic_euid : (Uid_t)-1);
+            PERL_UNUSED_RESULT(
+                setreuid((PL_delaymagic & DM_RUID) ? PL_delaymagic_uid  : (Uid_t)-1,
+                         (PL_delaymagic & DM_EUID) ? PL_delaymagic_euid : (Uid_t)-1));
 #  else
 #    ifdef HAS_SETRUID
 	    if ((PL_delaymagic & DM_UID) == DM_RUID) {
-		rc = setruid(PL_delaymagic_uid);
+		PERL_UNUSED_RESULT(setruid(PL_delaymagic_uid));
 		PL_delaymagic &= ~DM_RUID;
 	    }
 #    endif /* HAS_SETRUID */
 #    ifdef HAS_SETEUID
 	    if ((PL_delaymagic & DM_UID) == DM_EUID) {
-		rc = seteuid(PL_delaymagic_euid);
+		PERL_UNUSED_RESULT(seteuid(PL_delaymagic_euid));
 		PL_delaymagic &= ~DM_EUID;
 	    }
 #    endif /* HAS_SETEUID */
 	    if (PL_delaymagic & DM_UID) {
 		if (PL_delaymagic_uid != PL_delaymagic_euid)
 		    DIE(aTHX_ "No setreuid available");
-		rc = PerlProc_setuid(PL_delaymagic_uid);
+		PERL_UNUSED_RESULT(PerlProc_setuid(PL_delaymagic_uid));
 	    }
 #  endif /* HAS_SETREUID */
 #endif /* HAS_SETRESUID */
 
-            /* XXX $> et al currently silently ignore failures */
-            PERL_UNUSED_VAR(rc);
-
 	    tmp_uid  = PerlProc_getuid();
 	    tmp_euid = PerlProc_geteuid();
 	}
+        /* XXX $> et al currently silently ignore failures */
 	if (PL_delaymagic & DM_GID) {
 #ifdef HAS_SETRESGID
-	    rc = setresgid((PL_delaymagic & DM_RGID) ? PL_delaymagic_gid  : (Gid_t)-1,
-			    (PL_delaymagic & DM_EGID) ? PL_delaymagic_egid : (Gid_t)-1,
-			    (Gid_t)-1);
+	    PERL_UNUSED_RESULT(
+                setresgid((PL_delaymagic & DM_RGID) ? PL_delaymagic_gid  : (Gid_t)-1,
+                          (PL_delaymagic & DM_EGID) ? PL_delaymagic_egid : (Gid_t)-1,
+                          (Gid_t)-1));
 #else
 #  ifdef HAS_SETREGID
-	    rc = setregid((PL_delaymagic & DM_RGID) ? PL_delaymagic_gid  : (Gid_t)-1,
-			   (PL_delaymagic & DM_EGID) ? PL_delaymagic_egid : (Gid_t)-1);
+	    PERL_UNUSED_RESULT(
+                setregid((PL_delaymagic & DM_RGID) ? PL_delaymagic_gid  : (Gid_t)-1,
+                         (PL_delaymagic & DM_EGID) ? PL_delaymagic_egid : (Gid_t)-1));
 #  else
 #    ifdef HAS_SETRGID
 	    if ((PL_delaymagic & DM_GID) == DM_RGID) {
-		rc = setrgid(PL_delaymagic_gid);
+		PERL_UNUSED_RESULT(setrgid(PL_delaymagic_gid));
 		PL_delaymagic &= ~DM_RGID;
 	    }
 #    endif /* HAS_SETRGID */
 #    ifdef HAS_SETEGID
 	    if ((PL_delaymagic & DM_GID) == DM_EGID) {
-		rc = setegid(PL_delaymagic_egid);
+		PERL_UNUSED_RESULT(setegid(PL_delaymagic_egid));
 		PL_delaymagic &= ~DM_EGID;
 	    }
 #    endif /* HAS_SETEGID */
 	    if (PL_delaymagic & DM_GID) {
 		if (PL_delaymagic_gid != PL_delaymagic_egid)
 		    DIE(aTHX_ "No setregid available");
-		rc = PerlProc_setgid(PL_delaymagic_gid);
+		PERL_UNUSED_RESULT(PerlProc_setgid(PL_delaymagic_gid));
 	    }
 #  endif /* HAS_SETREGID */
 #endif /* HAS_SETRESGID */
-
-            /* XXX $> et al currently silently ignore failures */
-            PERL_UNUSED_VAR(rc);
 
 	    tmp_gid  = PerlProc_getgid();
 	    tmp_egid = PerlProc_getegid();
@@ -2555,7 +2554,7 @@ PP(pp_entersub)
             break;
         case SVt_PVLV:
             if(isGV_with_GP(sv)) goto we_have_a_glob;
-            /*FALLTHROUGH*/
+            /* FALLTHROUGH */
         default:
             if (sv == &PL_sv_yes) {		/* unfound import, ignore */
                 if (hasargs)
@@ -2585,7 +2584,7 @@ PP(pp_entersub)
             cv = MUTABLE_CV(SvRV(sv));
             if (SvTYPE(cv) == SVt_PVCV)
                 break;
-            /* FALL THROUGH */
+            /* FALLTHROUGH */
         case SVt_PVHV:
         case SVt_PVAV:
             DIE(aTHX_ "Not a CODE reference");
@@ -3022,7 +3021,7 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
         if (he) { 
             stash = INT2PTR(HV*,SvIV(HeVAL(he)));
             DEBUG_o(Perl_deb(aTHX_ "PL_stashcache hit %p for '%"SVf"'\n",
-                             stash, sv));
+                             (void*)stash, SVfARG(sv)));
             goto fetch;
         }
 
@@ -3047,7 +3046,7 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	        (void)hv_store(PL_stashcache, packname,
                                 packname_is_utf8 ? -(I32)packlen : (I32)packlen, ref, 0);
                 DEBUG_o(Perl_deb(aTHX_ "PL_stashcache caching %p for '%"SVf"'\n",
-                                 stash, sv));
+                                 (void*)stash, SVfARG(sv)));
 	    }
 	    goto fetch;
 	}
@@ -3078,6 +3077,7 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	const HE* const he = hv_fetch_ent(stash, meth, 0, *hashp);
 	if (he) {
 	    gv = MUTABLE_GV(HeVAL(he));
+	    assert(stash);
 	    if (isGV(gv) && GvCV(gv) &&
 		(!GvCVGEN(gv) || GvCVGEN(gv)
                   == (PL_sub_generation + HvMROMETA(stash)->cache_gen)))
@@ -3085,9 +3085,9 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	}
     }
 
+    assert(stash || packsv);
     gv = gv_fetchmethod_sv_flags(stash ? stash : MUTABLE_HV(packsv),
-			             meth, GV_AUTOLOAD | GV_CROAK);
-
+                                 meth, GV_AUTOLOAD | GV_CROAK);
     assert(gv);
 
     return isGV(gv) ? MUTABLE_SV(GvCV(gv)) : MUTABLE_SV(gv);

@@ -327,6 +327,52 @@
 #  define PERL_UNUSED_CONTEXT
 #endif
 
+/* gcc (-ansi) -pedantic doesn't allow gcc statement expressions,
+ * g++ allows them but seems to have problems with them
+ * (insane errors ensue).
+ * g++ does not give insane errors now (RMB 2008-01-30, gcc 4.2.2).
+ */
+#if defined(PERL_GCC_PEDANTIC) || \
+    (defined(__GNUC__) && defined(__cplusplus) && \
+	((__GNUC__ < 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ < 2))))
+#  ifndef PERL_GCC_BRACE_GROUPS_FORBIDDEN
+#    define PERL_GCC_BRACE_GROUPS_FORBIDDEN
+#  endif
+#endif
+
+/* Use PERL_UNUSED_RESULT() to suppress the warnings about unused results
+ * of function calls, e.g. PERL_UNUSED_RESULT(foo(a, b)).
+ *
+ * The main reason for this is that the combination of gcc -Wunused-result
+ * (part of -Wall) and the __attribute__((warn_unused_result)) cannot
+ * be silenced with casting to void.  This causes trouble when the system
+ * header files use the attribute.
+ *
+ * Use PERL_UNUSED_RESULT sparingly, though, since usually the warning
+ * is there for a good reason: you might lose success/failure information,
+ * or leak resources, or changes in resources.
+ *
+ * But sometimes you just want to ignore the return value, e.g. on
+ * codepaths soon ending up in abort, or in "best effort" attempts,
+ * or in situations where there is no good way to handle failures.
+ *
+ * Sometimes PERL_UNUSED_RESULT might not be the most natural way:
+ * another possibility is that you can capture the return value
+ * and use PERL_UNUSED_VAR on that.
+ *
+ * The __typeof__() is used instead of typeof() since typeof() is not
+ * available under strict C89, and because of compilers masquerading
+ * as gcc (clang and icc), we want exactly the gcc extension
+ * __typeof__ and nothing else.
+ */
+#ifndef PERL_UNUSED_RESULT
+#  if defined(__GNUC__) && defined(HASATTRIBUTE_WARN_UNUSED_RESULT)
+#    define PERL_UNUSED_RESULT(v) STMT_START { __typeof__(v) z = (v); (void)sizeof(z); } STMT_END
+#  else
+#    define PERL_UNUSED_RESULT(v) ((void)(v))
+#  endif
+#endif
+
 /* on gcc (and clang), specify that a warning should be temporarily
  * ignored; e.g.
  *
@@ -338,20 +384,35 @@
  *
  * Note that "pragma GCC diagnostic push/pop" was added in GCC 4.6, Mar 2011;
  * clang only pretends to be GCC 4.2, but still supports push/pop.
+ *
+ * Note on usage: on non-gcc (or lookalike, like clang) compilers
+ * one cannot use these at file (global) level without warnings
+ * since they are defined as empty, which leads into the terminating
+ * semicolon being left alone on a line:
+ * ;
+ * which makes compilers mildly cranky.  Therefore at file level one
+ * should use the #ifdef GCC_DIAG_PRAGMA guard around the GCC_DIAG_IGNORE
+ * and GCC_DIAG_RESTORE.
+ *
+ * (An alternative solution would be not to use the semicolon, and then
+ * the empty definition would be just empty, but that would make the code
+ * look odd, and might mess up e.g. smart editors indenting the code.)
+ *
+ * (A dead-on-arrival solution would be to try to define the macros as
+ * NOOP or dNOOP, those don't work both inside functions and outside.)
  */
 
-#if defined(__clang) || \
+#if defined(__clang__) || defined(__clang) || \
        (defined( __GNUC__) && ((__GNUC__ * 100) + __GNUC_MINOR__) >= 406)
-#  define GCC_DIAG_DO_PRAGMA_(x) _Pragma (#x)
-
+#  define GCC_DIAG_PRAGMA(x) _Pragma (#x)
+/* clang has "clang diagnostic" pragmas, but also understands gcc. */
 #  define GCC_DIAG_IGNORE(x) _Pragma("GCC diagnostic push") \
-                             GCC_DIAG_DO_PRAGMA_(GCC diagnostic ignored #x)
+                             GCC_DIAG_PRAGMA(GCC diagnostic ignored #x)
 #  define GCC_DIAG_RESTORE   _Pragma("GCC diagnostic pop")
 #else
 #  define GCC_DIAG_IGNORE(w)
 #  define GCC_DIAG_RESTORE
 #endif
-
 
 #define NOOP /*EMPTY*/(void)0
 /* cea2e8a9dd23747f accidentally lost the comment originally from the first
@@ -444,19 +505,6 @@
 #    define PERL_XS_EXPORT_C extern "C"
 #  else
 #    define PERL_XS_EXPORT_C
-#  endif
-#endif
-
-/* gcc (-ansi) -pedantic doesn't allow gcc statement expressions,
- * g++ allows them but seems to have problems with them
- * (insane errors ensue).
- * g++ does not give insane errors now (RMB 2008-01-30, gcc 4.2.2).
- */
-#if defined(PERL_GCC_PEDANTIC) || \
-    (defined(__GNUC__) && defined(__cplusplus) && \
-	((__GNUC__ < 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ < 2))))
-#  ifndef PERL_GCC_BRACE_GROUPS_FORBIDDEN
-#    define PERL_GCC_BRACE_GROUPS_FORBIDDEN
 #  endif
 #endif
 
@@ -656,21 +704,7 @@
 #  endif
 #endif
 
-#ifdef USE_NEXT_CTYPE
-
-#if NX_CURRENT_COMPILER_RELEASE >= 500
-#  include <bsd/ctypes.h>
-#else
-#  if NX_CURRENT_COMPILER_RELEASE >= 400
-#    include <objc/NXCType.h>
-#  else /*  NX_CURRENT_COMPILER_RELEASE < 400 */
-#    include <appkit/NXCType.h>
-#  endif /*  NX_CURRENT_COMPILER_RELEASE >= 400 */
-#endif /*  NX_CURRENT_COMPILER_RELEASE >= 500 */
-
-#else /* !USE_NEXT_CTYPE */
 #include <ctype.h>
-#endif /* USE_NEXT_CTYPE */
 
 #ifdef METHOD 	/* Defined by OSF/1 v3.0 by ctype.h */
 #undef METHOD
@@ -853,11 +887,16 @@ EXTERN_C int usleep(unsigned int);
 #  define PERL_STRLEN_EXPAND_SHIFT 2
 #endif
 
-#if defined(STANDARD_C) && defined(I_STDDEF)
+#if defined(STANDARD_C) && defined(I_STDDEF) && !defined(PERL_GCC_PEDANTIC)
 #   include <stddef.h>
 #   define STRUCT_OFFSET(s,m)  offsetof(s,m)
 #else
 #   define STRUCT_OFFSET(s,m)  (Size_t)(&(((s *)0)->m))
+#endif
+
+/* ptrdiff_t is C11, so undef it under pedantic builds */
+#ifdef PERL_GCC_PEDANTIC
+#   undef HAS_PTRDIFF_T
 #endif
 
 #ifndef __SYMBIAN32__
@@ -897,7 +936,7 @@ EXTERN_C int usleep(unsigned int);
 #  define CHECK_MALLOC_TAINT(newval)				\
 	CHECK_MALLOC_TOO_LATE_FOR_(				\
 		if (newval) {					\
-		  panic_write2("panic: tainting with $ENV{PERL_MALLOC_OPT}\n");\
+		  PERL_UNUSED_RESULT(panic_write2("panic: tainting with $ENV{PERL_MALLOC_OPT}\n"));\
 		  exit(1); })
 #  define MALLOC_CHECK_TAINT(argc,argv,env)	STMT_START {	\
 	if (doing_taint(argc,argv,env)) {			\
@@ -1166,6 +1205,7 @@ EXTERN_C char *crypt(const char *, const char *);
 #   define SS_DEVOFFLINE	SS$_DEVOFFLINE
 #   define SS_IVCHAN  		SS$_IVCHAN
 #   define SS_NORMAL  		SS$_NORMAL
+#   define SS_NOPRIV  		SS$_NOPRIV
 #else
 #   define LIB_INVARG 		0
 #   define RMS_DIR    		0
@@ -1179,6 +1219,7 @@ EXTERN_C char *crypt(const char *, const char *);
 #   define SS_DEVOFFLINE	0
 #   define SS_IVCHAN  		0
 #   define SS_NORMAL  		0
+#   define SS_NOPRIV  		0
 #endif
 
 #ifdef WIN32
@@ -1306,10 +1347,6 @@ EXTERN_C char *crypt(const char *, const char *);
 /* Configure already sets Direntry_t */
 #if defined(I_DIRENT)
 #   include <dirent.h>
-    /* NeXT needs dirent + sys/dir.h */
-#   if  defined(I_SYS_DIR) && (defined(NeXT) || defined(__NeXT__))
-#	include <sys/dir.h>
-#   endif
 #else
 #   ifdef I_SYS_NDIR
 #	include <sys/ndir.h>
@@ -2234,11 +2271,6 @@ int isnan(double d);
 
 typedef MEM_SIZE STRLEN;
 
-#ifdef PERL_MAD
-typedef struct token TOKEN;
-typedef struct madprop MADPROP;
-typedef struct nexttoken NEXTTOKE;
-#endif
 typedef struct op OP;
 typedef struct cop COP;
 typedef struct unop UNOP;
@@ -2547,6 +2579,8 @@ typedef SV PADNAME;
 #endif
 
 /*
+=head1 Miscellaneous Functions
+
 =for apidoc Am|void|PERL_SYS_INIT|int *argc|char*** argv
 Provides system-specific tune up of the C runtime environment necessary to
 run Perl interpreters.  This should be called only once, before creating
@@ -2661,9 +2695,6 @@ freeing any remaining Perl interpreters.
 #      else
 #        ifdef I_MACH_CTHREADS
 #          include <mach/cthreads.h>
-#          if (defined(NeXT) || defined(__NeXT__)) && defined(PERL_POLLUTE_MALLOC)
-#            define MUTEX_INIT_CALLS_MALLOC
-#          endif
 typedef cthread_t	perl_os_thread;
 typedef mutex_t		perl_mutex;
 typedef condition_t	perl_cond;
@@ -3094,6 +3125,10 @@ typedef pthread_key_t	perl_key;
 #  define __attribute__warn_unused_result__
 #endif
 
+#if defined(DEBUGGING) && defined(I_ASSERT)
+#  include <assert.h>
+#endif
+
 /* For functions that are marked as __attribute__noreturn__, it's not
    appropriate to call return.  In either case, include the lint directive.
  */
@@ -3269,13 +3304,6 @@ typedef        struct crypt_data {     /* straight from /usr/include/crypt.h */
 #endif
 #include "perly.h"
 
-#ifdef PERL_MAD
-struct nexttoken {
-    YYSTYPE next_val;	/* value of next token, if any */
-    I32 next_type;	/* type of next token */
-    MADPROP *next_mad;	/* everything else about that token */
-};
-#endif
 
 /* macros to define bit-fields in structs. */
 #ifndef PERL_BITFIELD8
@@ -3759,10 +3787,6 @@ Gid_t getegid (void);
 		    where, (long)PL_scopestack_ix, (long)PL_savestack_ix, \
 		    __FILE__, __LINE__));
 
-#if defined(DEBUGGING) && defined(I_ASSERT)
-#  include <assert.h>
-#endif
-
 /* Keep the old croak based assert for those who want it, and as a fallback if
    the platform is so heretically non-ANSI that it can't assert.  */
 
@@ -3772,6 +3796,8 @@ Gid_t getegid (void);
 			"\", line %d", STRINGIFY(what), __LINE__),	\
 	    (void) 0)))
 
+/* assert() gets defined if DEBUGGING (and I_ASSERT).
+ * If no DEBUGGING, the <assert.h> has not been included. */
 #ifndef assert
 #  define assert(what)	Perl_assert(what)
 #endif
@@ -3899,15 +3925,11 @@ END_EXTERN_C
 #endif
 
 #ifndef __cplusplus
-#  if defined(NeXT) || defined(__NeXT__) /* or whatever catches all NeXTs */
-char *crypt ();       /* Maybe more hosts will need the unprototyped version */
-#  else
-#    if !defined(WIN32) && !defined(VMS)
+#  if !defined(WIN32) && !defined(VMS)
 #ifndef crypt
 char *crypt (const char*, const char*);
 #endif
-#    endif /* !WIN32 */
-#  endif /* !NeXT && !__NeXT__ */
+#  endif /* !WIN32 */
 #  ifndef DONT_DECLARE_STD
 #    ifndef getenv
 char *getenv (const char*);
@@ -4109,19 +4131,9 @@ typedef OP* (*PPADDR_t[]) (pTHX);
 typedef bool (*destroyable_proc_t) (pTHX_ SV *sv);
 typedef void (*despatch_signals_proc_t) (pTHX);
 
-/* NeXT has problems with crt0.o globals */
-#if defined(__DYNAMIC__) && \
-    (defined(NeXT) || defined(__NeXT__) || defined(PERL_DARWIN))
-#  if defined(NeXT) || defined(__NeXT)
-#    include <mach-o/dyld.h>
-#    define environ (*environ_pointer)
-EXT char *** environ_pointer;
-#  else
-#    if defined(PERL_DARWIN) && defined(PERL_CORE)
-#      include <crt_externs.h>	/* for the env array */
-#      define environ (*_NSGetEnviron())
-#    endif
-#  endif
+#if defined(__DYNAMIC__) && defined(PERL_DARWIN) && defined(PERL_CORE)
+#  include <crt_externs.h>	/* for the env array */
+#  define environ (*_NSGetEnviron())
 #else
    /* VMS and some other platforms don't use the environ array */
 #  ifdef USE_ENVIRON_ARRAY
@@ -4604,9 +4616,6 @@ EXTCONST char PL_bincompat_options[] =
 #  ifdef PERL_IMPLICIT_SYS
 			     " PERL_IMPLICIT_SYS"
 #  endif
-#  ifdef PERL_MAD
-			     " PERL_MAD"
-#  endif
 #  ifdef PERL_MICRO
 			     " PERL_MICRO"
 #  endif
@@ -4759,12 +4768,18 @@ typedef enum {
    However, bitops store HINT_INTEGER in their op_private.
 
     NOTE: The typical module using these has the bit value hard-coded, so don't
-    blindly change the values of these */
+    blindly change the values of these.
+
+   If we run out of bits, the 2 locale ones could be combined.  The PARTIAL one
+   is for "use locale 'FOO'" which excludes some categories.  It requires going
+   to %^H to find out which are in and which are out.  This could be extended
+   for the normal case of a plain HINT_LOCALE, so that %^H would be used for
+   any locale form. */
 #define HINT_INTEGER		0x00000001 /* integer pragma */
 #define HINT_STRICT_REFS	0x00000002 /* strict pragma */
 #define HINT_LOCALE		0x00000004 /* locale pragma */
 #define HINT_BYTES		0x00000008 /* bytes pragma */
-#define HINT_LOCALE_NOT_CHARS	0x00000010 /* locale ':not_characters' pragma */
+#define HINT_LOCALE_PARTIAL	0x00000010 /* locale, but a subset of categories */
 
 #define HINT_EXPLICIT_STRICT_REFS	0x00000020 /* strict.pm */
 #define HINT_EXPLICIT_STRICT_SUBS	0x00000040 /* strict.pm */
@@ -5019,12 +5034,6 @@ struct tempsym; /* defined in pp_pack.c */
 #if !defined(PERL_FOR_X2P)
 #  include "embedvar.h"
 #endif
-#ifndef PERL_MAD
-#  undef PL_madskills
-#  undef PL_xmlfp
-#  define PL_madskills 0
-#  define PL_xmlfp 0
-#endif
 
 /* Now include all the 'global' variables
  * If we don't have threads or multiple interpreters
@@ -5051,10 +5060,6 @@ END_EXTERN_C
    In particular, need the relevant *ish file included already, as it may
    define HAVE_INTERP_INTERN  */
 #include "embed.h"
-#ifndef PERL_MAD
-#  undef op_getmad
-#  define op_getmad(arg,pegop,slot) NOOP
-#endif
 
 #ifndef PERL_GLOBAL_STRUCT
 START_EXTERN_C
@@ -5135,6 +5140,25 @@ EXTCONST bool PL_valid_types_IV_set[];
 EXTCONST bool PL_valid_types_NV_set[];
 
 #endif
+
+
+/* if these never got defined, they need defaults */
+#ifndef PERL_SET_CONTEXT
+#  define PERL_SET_CONTEXT(i)		PERL_SET_INTERP(i)
+#endif
+
+#ifndef PERL_GET_CONTEXT
+#  define PERL_GET_CONTEXT		PERL_GET_INTERP
+#endif
+
+#ifndef PERL_GET_THX
+#  define PERL_GET_THX			((void*)NULL)
+#endif
+
+#ifndef PERL_SET_THX
+#  define PERL_SET_THX(t)		NOOP
+#endif
+
 
 #ifndef PERL_NO_INLINE_FUNCTIONS
 /* Static inline funcs that depend on includes and declarations above.
@@ -5249,25 +5273,59 @@ typedef struct am_table_short AMTS;
 #define PERLDB_SAVESRC_NOSUBS	(PL_perldb && (PL_perldb & PERLDBf_SAVESRC_NOSUBS))
 #define PERLDB_SAVESRC_INVALID	(PL_perldb && (PL_perldb & PERLDBf_SAVESRC_INVALID))
 
-#ifdef USE_LOCALE_NUMERIC
-
+#ifdef USE_LOCALE
+/* These locale things are all subject to change */
 /* Returns TRUE if the plain locale pragma without a parameter is in effect
  */
-#define IN_LOCALE_RUNTIME	cBOOL(CopHINTS_get(PL_curcop) & HINT_LOCALE)
+#   define IN_LOCALE_RUNTIME	cBOOL(CopHINTS_get(PL_curcop) & HINT_LOCALE)
 
 /* Returns TRUE if either form of the locale pragma is in effect */
-#define IN_SOME_LOCALE_FORM_RUNTIME   \
-           cBOOL(CopHINTS_get(PL_curcop) & (HINT_LOCALE|HINT_LOCALE_NOT_CHARS))
+#   define IN_SOME_LOCALE_FORM_RUNTIME   \
+           cBOOL(CopHINTS_get(PL_curcop) & (HINT_LOCALE|HINT_LOCALE_PARTIAL))
 
-#define IN_LOCALE_COMPILETIME	cBOOL(PL_hints & HINT_LOCALE)
-#define IN_SOME_LOCALE_FORM_COMPILETIME \
-                          cBOOL(PL_hints & (HINT_LOCALE|HINT_LOCALE_NOT_CHARS))
+#   define IN_LOCALE_COMPILETIME	cBOOL(PL_hints & HINT_LOCALE)
+#   define IN_SOME_LOCALE_FORM_COMPILETIME \
+                          cBOOL(PL_hints & (HINT_LOCALE|HINT_LOCALE_PARTIAL))
 
-#define IN_LOCALE \
+#   define IN_LOCALE \
 	(IN_PERL_COMPILETIME ? IN_LOCALE_COMPILETIME : IN_LOCALE_RUNTIME)
-#define IN_SOME_LOCALE_FORM \
+#   define IN_SOME_LOCALE_FORM \
 	(IN_PERL_COMPILETIME ? IN_SOME_LOCALE_FORM_COMPILETIME \
 	                     : IN_SOME_LOCALE_FORM_RUNTIME)
+
+#   define IN_LC_ALL_COMPILETIME   IN_LOCALE_COMPILETIME
+#   define IN_LC_ALL_RUNTIME       IN_LOCALE_RUNTIME
+
+#   define IN_LC_PARTIAL_COMPILETIME   cBOOL(PL_hints & HINT_LOCALE_PARTIAL)
+#   define IN_LC_PARTIAL_RUNTIME  \
+                        cBOOL(CopHINTS_get(PL_curcop) & HINT_LOCALE_PARTIAL)
+
+#   define IN_LC_COMPILETIME(category)                                       \
+       (IN_LC_ALL_COMPILETIME || (IN_LC_PARTIAL_COMPILETIME                  \
+                                  && _is_in_locale_category(TRUE, (category))))
+#   define IN_LC_RUNTIME(category)                                           \
+       (IN_LC_ALL_RUNTIME || (IN_LC_PARTIAL_RUNTIME                          \
+                              && _is_in_locale_category(FALSE, (category))))
+#   define IN_LC(category)  \
+                    (IN_LC_COMPILETIME(category) || IN_LC_RUNTIME(category))
+
+#else   /* No locale usage */
+#   define IN_LOCALE_RUNTIME                0
+#   define IN_SOME_LOCALE_FORM_RUNTIME      0
+#   define IN_LOCALE_COMPILETIME            0
+#   define IN_SOME_LOCALE_FORM_COMPILETIME  0
+#   define IN_LOCALE                        0
+#   define IN_SOME_LOCALE_FORM              0
+#   define IN_LC_ALL_COMPILETIME            0
+#   define IN_LC_ALL_RUNTIME                0
+#   define IN_LC_PARTIAL_COMPILETIME        0
+#   define IN_LC_PARTIAL_RUNTIME            0
+#   define IN_LC_COMPILETIME(category)      0
+#   define IN_LC_RUNTIME(category)          0
+#   define IN_LC(category)                  0
+#endif
+
+#ifdef USE_LOCALE_NUMERIC
 
 /* These macros are for toggling between the underlying locale (LOCAL) and the
  * C locale. */
@@ -5281,18 +5339,24 @@ typedef struct am_table_short AMTS;
  * RESTORE_LC_NUMERIC() in all cases restores the locale to what it was before
  * these were called */
 
+#define _NOT_IN_NUMERIC_STANDARD (! PL_numeric_standard)
+
+/* We can lock the category to stay in the C locale, making requests to the
+ * contrary noops, in the dynamic scope by setting PL_numeric_standard to 2 */
+#define _NOT_IN_NUMERIC_LOCAL    (! PL_numeric_local && PL_numeric_standard < 2)
+
 #define DECLARATION_FOR_STORE_LC_NUMERIC_SET_TO_NEEDED                       \
     void (*_restore_LC_NUMERIC_function)(pTHX) = NULL;
 
 #define STORE_LC_NUMERIC_SET_TO_NEEDED()                                     \
-    if (IN_SOME_LOCALE_FORM) {                                               \
-        if (! PL_numeric_local) {                                            \
-            SET_NUMERIC_LOCAL();                                             \
+    if (IN_LC(LC_NUMERIC)) {                                                 \
+        if (_NOT_IN_NUMERIC_LOCAL) {                                         \
+            set_numeric_local();                                             \
             _restore_LC_NUMERIC_function = &Perl_set_numeric_standard;       \
         }                                                                    \
     }                                                                        \
     else {                                                                   \
-        if (! PL_numeric_standard) {                                         \
+        if (_NOT_IN_NUMERIC_STANDARD) {                                      \
             SET_NUMERIC_STANDARD();                                          \
             _restore_LC_NUMERIC_function = &Perl_set_numeric_local;          \
         }                                                                    \
@@ -5309,35 +5373,47 @@ typedef struct am_table_short AMTS;
 
 /* The next two macros set unconditionally.  These should be rarely used, and
  * only after being sure that this is what is needed */
-#define SET_NUMERIC_STANDARD() \
-	set_numeric_standard();
+#define SET_NUMERIC_STANDARD()                                              \
+	STMT_START { if (_NOT_IN_NUMERIC_STANDARD) set_numeric_standard();  \
+                                                                 } STMT_END
 
-#define SET_NUMERIC_LOCAL() \
-	set_numeric_local();
+#define SET_NUMERIC_LOCAL()                                                 \
+	STMT_START { if (_NOT_IN_NUMERIC_LOCAL)                             \
+                                            set_numeric_local(); } STMT_END
 
 /* The rest of these LC_NUMERIC macros toggle to one or the other state, with
  * the RESTORE_foo ones called to switch back, but only if need be */
-#define STORE_NUMERIC_LOCAL_SET_STANDARD() \
-	bool was_local = PL_numeric_local; \
-	if (was_local) SET_NUMERIC_STANDARD();
+#define STORE_NUMERIC_LOCAL_SET_STANDARD()          \
+	bool _was_local = _NOT_IN_NUMERIC_STANDARD; \
+	if (_was_local) set_numeric_standard();
 
 /* Doesn't change to underlying locale unless within the scope of some form of
  * 'use locale'.  This is the usual desired behavior. */
-#define STORE_NUMERIC_STANDARD_SET_LOCAL() \
-	bool was_standard = PL_numeric_standard && IN_SOME_LOCALE_FORM; \
-	if (was_standard) SET_NUMERIC_LOCAL();
+#define STORE_NUMERIC_STANDARD_SET_LOCAL()              \
+	bool _was_standard = _NOT_IN_NUMERIC_LOCAL      \
+                            && IN_LC(LC_NUMERIC);       \
+	if (_was_standard) set_numeric_local();
 
 /* Rarely, we want to change to the underlying locale even outside of 'use
  * locale'.  This is principally in the POSIX:: functions */
-#define STORE_NUMERIC_STANDARD_FORCE_LOCAL() \
-	bool was_standard = PL_numeric_standard; \
-	if (was_standard) SET_NUMERIC_LOCAL();
+#define STORE_NUMERIC_STANDARD_FORCE_LOCAL()            \
+	bool _was_standard = _NOT_IN_NUMERIC_LOCAL;     \
+	if (_was_standard) set_numeric_local();
+
+/* Lock to the C locale until unlock is called */
+#define LOCK_NUMERIC_STANDARD()                         \
+        (__ASSERT_(PL_numeric_standard)                 \
+        PL_numeric_standard = 2)
+
+#define UNLOCK_NUMERIC_STANDARD()                       \
+        (__ASSERT_(PL_numeric_standard == 2)            \
+        PL_numeric_standard = 1)
 
 #define RESTORE_NUMERIC_LOCAL() \
-	if (was_local) SET_NUMERIC_LOCAL();
+	if (_was_local) set_numeric_local();
 
 #define RESTORE_NUMERIC_STANDARD() \
-	if (was_standard) SET_NUMERIC_STANDARD();
+	if (_was_standard) SET_NUMERIC_STANDARD();
 
 #define Atof				my_atof
 
@@ -5355,10 +5431,10 @@ typedef struct am_table_short AMTS;
 #define STORE_LC_NUMERIC_SET_TO_NEEDED()
 #define DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED()
 #define RESTORE_LC_NUMERIC()
+#define LOCK_NUMERIC_STANDARD()
+#define UNLOCK_NUMERIC_STANDARD()
 
 #define Atof				my_atof
-#define IN_LOCALE_RUNTIME		0
-#define IN_LOCALE_COMPILETIME		0
 
 #endif /* !USE_LOCALE_NUMERIC */
 
@@ -5420,24 +5496,6 @@ typedef struct am_table_short AMTS;
 #endif
 #ifndef Atoul
 #   define Atoul(s)	Strtoul(s, NULL, 10)
-#endif
-
-
-/* if these never got defined, they need defaults */
-#ifndef PERL_SET_CONTEXT
-#  define PERL_SET_CONTEXT(i)		PERL_SET_INTERP(i)
-#endif
-
-#ifndef PERL_GET_CONTEXT
-#  define PERL_GET_CONTEXT		PERL_GET_INTERP
-#endif
-
-#ifndef PERL_GET_THX
-#  define PERL_GET_THX			((void*)NULL)
-#endif
-
-#ifndef PERL_SET_THX
-#  define PERL_SET_THX(t)		NOOP
 #endif
 
 #ifndef PERL_SCRIPT_MODE
@@ -5639,7 +5697,7 @@ int flock(int fd, int op);
 #endif
 
 #if O_TEXT != O_BINARY
-    /* If you have different O_TEXT and O_BINARY and you are a CLRF shop,
+    /* If you have different O_TEXT and O_BINARY and you are a CRLF shop,
      * that is, you are somehow DOSish. */
 #   if defined(__HAIKU__) || defined(__VOS__) || defined(__CYGWIN__)
     /* Haiku has O_TEXT != O_BINARY but O_TEXT and O_BINARY have no effect;

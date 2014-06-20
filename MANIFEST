@@ -26,6 +26,7 @@ cpan/Archive-Tar/t/03_file.t				Archive::Tar tests
 cpan/Archive-Tar/t/04_resolved_issues.t			Archive::Tar tests
 cpan/Archive-Tar/t/05_iter.t				Archive::Tar tests
 cpan/Archive-Tar/t/06_error.t				Archive::Tar tests
+cpan/Archive-Tar/t/08_ptargrep.t
 cpan/Archive-Tar/t/90_symlink.t				Archive::Tar tests
 cpan/Archive-Tar/t/99_pod.t				Archive::Tar tests
 cpan/Archive-Tar/t/src/header/signed.tar		Archive::Tar tests
@@ -43,6 +44,9 @@ cpan/autodie/lib/autodie/exception.pm		Exception class for autodie
 cpan/autodie/lib/autodie/exception/system.pm	Exception class for autodying system()
 cpan/autodie/lib/autodie/hints.pm	Hinting interface for autodie
 cpan/autodie/lib/autodie.pm		Functions succeed or die with lexical scope
+cpan/autodie/lib/autodie/Scope/Guard.pm
+cpan/autodie/lib/autodie/Scope/GuardStack.pm
+cpan/autodie/lib/autodie/ScopeUtil.pm
 cpan/autodie/lib/autodie/skip.pm
 cpan/autodie/lib/Fatal.pm		Make errors in functions/builtins fatal
 cpan/autodie/t/00-load.t		autodie - basic load
@@ -109,7 +113,6 @@ cpan/autodie/t/string-eval-basic.t	autodie - Basic string eval test
 cpan/autodie/t/string-eval-leak.t	autodie - String eval leak test
 cpan/autodie/t/sysopen.t		autodie - sysopen tests
 cpan/autodie/t/touch_me
-cpan/autodie/t/truncate_me
 cpan/autodie/t/truncate.t		autodie - File truncation tests
 cpan/autodie/t/unlink.t			autodie - Unlink system tests.
 cpan/autodie/t/user-context.t		autodie - Context changes for usersubs
@@ -242,6 +245,7 @@ cpan/CPAN-Meta-Requirements/t/from-hash.t
 cpan/CPAN-Meta-Requirements/t/merge.t
 cpan/CPAN-Meta/t/converter-bad.t
 cpan/CPAN-Meta/t/converter-fail.t
+cpan/CPAN-Meta/t/converter-fragments.t
 cpan/CPAN-Meta/t/converter.t
 cpan/CPAN-Meta/t/data-fail/META-1_0.yml
 cpan/CPAN-Meta/t/data-fail/META-1_1.yml
@@ -679,6 +683,7 @@ cpan/Digest-MD5/t/md5-aaa.t		See if Digest::MD5 extension works
 cpan/Digest-MD5/t/threads.t		See if Digest::MD5 extension works
 cpan/Digest-MD5/t/utf8.t		See if Digest::MD5 extension works
 cpan/Digest-MD5/typemap			Digest::MD5 extension
+cpan/Digest-SHA/hints/hpux.pl		Hint for HP-UX for named architecture
 cpan/Digest-SHA/lib/Digest/SHA.pm	Digest::SHA extension
 cpan/Digest-SHA/Makefile.PL		Digest::SHA Makefile.PL
 cpan/Digest-SHA/shasum			shasum script
@@ -695,6 +700,7 @@ cpan/Digest-SHA/t/fips198.t		See if Digest::SHA works
 cpan/Digest-SHA/t/gglong.t		See if Digest::SHA works
 cpan/Digest-SHA/t/gg.t			See if Digest::SHA works
 cpan/Digest-SHA/t/hmacsha.t		See if Digest::SHA works
+cpan/Digest-SHA/t/inheritance.t
 cpan/Digest-SHA/t/ireland.t		See if Digest::SHA works
 cpan/Digest-SHA/t/methods.t		See if Digest::SHA works
 cpan/Digest-SHA/t/nistbit.t		See if Digest::SHA works
@@ -1557,19 +1563,16 @@ cpan/Module-Load/t/to_load/LoadMe.pl		Module::Load tests
 cpan/Module-Load/t/to_load/Must/Be/Loaded.pm	Module::Load tests
 cpan/Module-Load/t/to_load/TestModule.pm	Module::Load tests
 cpan/Module-Load/t/to_load/ToBeLoaded		Module::Load tests
+cpan/Module-Metadata/corpus/BOMTest/UTF16BE.pm
+cpan/Module-Metadata/corpus/BOMTest/UTF16LE.pm
+cpan/Module-Metadata/corpus/BOMTest/UTF8.pm
 cpan/Module-Metadata/lib/Module/Metadata.pm
 cpan/Module-Metadata/t/contains_pod.t
 cpan/Module-Metadata/t/encoding.t
 cpan/Module-Metadata/t/endpod.t
 cpan/Module-Metadata/t/lib/0_1/Foo.pm
 cpan/Module-Metadata/t/lib/0_2/Foo.pm
-cpan/Module-Metadata/t/lib/BOMTest/UTF16BE.pm
-cpan/Module-Metadata/t/lib/BOMTest/UTF16LE.pm
-cpan/Module-Metadata/t/lib/BOMTest/UTF8.pm
-cpan/Module-Metadata/t/lib/DistGen.pm
 cpan/Module-Metadata/t/lib/ENDPOD.pm
-cpan/Module-Metadata/t/lib/MBTest.pm
-cpan/Module-Metadata/t/lib/Tie/CPHash.pm
 cpan/Module-Metadata/t/metadata.t
 cpan/Module-Metadata/t/taint.t
 cpan/Module-Metadata/t/version.t
@@ -1959,7 +1962,6 @@ cpan/Scalar-List-Utils/t/maxstr.t		List::Util
 cpan/Scalar-List-Utils/t/max.t			List::Util
 cpan/Scalar-List-Utils/t/minstr.t		List::Util
 cpan/Scalar-List-Utils/t/min.t			List::Util
-cpan/Scalar-List-Utils/t/multicall-refcount.t
 cpan/Scalar-List-Utils/t/openhan.t		Scalar::Util
 cpan/Scalar-List-Utils/t/pair.t
 cpan/Scalar-List-Utils/t/product.t		List::Util
@@ -2000,13 +2002,15 @@ cpan/Sys-Syslog/win32/PerlLog_dll.uu	Sys::Syslog extension Win32 related file
 cpan/Sys-Syslog/win32/PerlLog.mc	Sys::Syslog extension Win32 related file
 cpan/Sys-Syslog/win32/PerlLog_RES.uu	Sys::Syslog extension Win32 related file
 cpan/Sys-Syslog/win32/Win32.pm		Sys::Syslog extension Win32 related file
-cpan/Term-ANSIColor/ANSIColor.pm	Perl module supporting termcap usage
-cpan/Term-ANSIColor/t/aliases-func.t
-cpan/Term-ANSIColor/t/basic256.t
-cpan/Term-ANSIColor/t/basic.t		Tests for Term::ANSIColor
-cpan/Term-ANSIColor/t/eval.t
-cpan/Term-ANSIColor/t/stringify.t		Tests for Term::ANSIColor
-cpan/Term-ANSIColor/t/taint.t
+cpan/Term-ANSIColor/lib/Term/ANSIColor.pm
+cpan/Term-ANSIColor/t/lib/Test/RRA/Config.pm
+cpan/Term-ANSIColor/t/lib/Test/RRA.pm
+cpan/Term-ANSIColor/t/module/aliases-func.t
+cpan/Term-ANSIColor/t/module/basic256.t
+cpan/Term-ANSIColor/t/module/basic.t
+cpan/Term-ANSIColor/t/module/eval.t
+cpan/Term-ANSIColor/t/module/stringify.t
+cpan/Term-ANSIColor/t/taint/basic.t
 cpan/Term-Cap/Cap.pm			Perl module supporting termcap usage
 cpan/Term-Cap/test.pl			See if Term::Cap works
 cpan/Test-Harness/bin/prove				The prove harness utility
@@ -2115,7 +2119,6 @@ cpan/Test-Harness/t/parse.t				Test::Harness test
 cpan/Test-Harness/t/perl5lib.t				Test::Harness test
 cpan/Test-Harness/t/premature-bailout.t			Test::Harness test
 cpan/Test-Harness/t/process.t				Test::Harness test
-cpan/Test-Harness/t/proveenv.t				Test::Harness test
 cpan/Test-Harness/t/proverc/emptyexec			Test data for Test::Harness
 cpan/Test-Harness/t/proverc.t				Test::Harness test
 cpan/Test-Harness/t/proverun.t				Test::Harness test
@@ -2657,9 +2660,7 @@ cpan/Unicode-Collate/t/variable.t		Unicode::Collate
 cpan/Unicode-Collate/t/version.t		Unicode::Collate
 cpan/Unicode-Collate/t/view.t			Unicode::Collate
 cpan/Unicode-Normalize/Makefile.PL	Unicode::Normalize
-cpan/Unicode-Normalize/mkheader		Unicode::Normalize
 cpan/Unicode-Normalize/Normalize.pm	Unicode::Normalize
-cpan/Unicode-Normalize/Normalize.xs	Unicode::Normalize
 cpan/Unicode-Normalize/t/fcdc.t		Unicode::Normalize
 cpan/Unicode-Normalize/t/form.t		Unicode::Normalize
 cpan/Unicode-Normalize/t/func.t		Unicode::Normalize
@@ -3159,6 +3160,7 @@ dist/Module-CoreList/Makefile.PL		Module::CoreList
 dist/Module-CoreList/MANIFEST			Module::CoreList
 dist/Module-CoreList/README			Module::CoreList
 dist/Module-CoreList/t/corelist.t		Module::CoreList tests
+dist/Module-CoreList/t/corevers.t		Module::CoreList tests
 dist/Module-CoreList/t/deprecated.t		Module::CoreList tests
 dist/Module-CoreList/t/find_modules.t		Module::CoreList tests
 dist/Module-CoreList/t/is_core.t		Module::CoreList tests
@@ -3412,6 +3414,7 @@ doop.c			Support code for various operations
 dosish.h		Some defines for MS/DOSish machines
 dquote_static.c		Static functions for double quotish contexts
 dump.c			Debugging output
+ebcdic_tables.h		Generated tables included in utfebcdic.h
 embed.fnc		Database used by embed.pl
 embed.h			Maps symbols to safer names
 embedvar.h		C namespace management
@@ -3476,7 +3479,6 @@ ext/DynaLoader/dl_dlopen.xs	BSD/SunOS4&5 dlopen() style implementation
 ext/DynaLoader/dl_dyld.xs	NeXT/Apple dyld implementation
 ext/DynaLoader/dl_freemint.xs	GNU dld style implementation for FreeMINT
 ext/DynaLoader/dl_hpux.xs	HP-UX implementation
-ext/DynaLoader/dl_next.xs	NeXT implementation
 ext/DynaLoader/dl_none.xs	Stub implementation
 ext/DynaLoader/dl_symbian.xs	Symbian implementation
 ext/DynaLoader/dlutils.c	Dynamic loader utilities for dl_*.xs files
@@ -3669,7 +3671,6 @@ ext/POSIX/hints/gnuknetbsd.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/linux.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/mint.pl		Hint for POSIX for named architecture
 ext/POSIX/hints/netbsd.pl	Hint for POSIX for named architecture
-ext/POSIX/hints/next_3.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/openbsd.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/sunos_4.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/svr4.pl		Hint for POSIX for named architecture
@@ -3806,6 +3807,7 @@ ext/XS-APItest/t/labelconst.aux	auxiliary file for label test
 ext/XS-APItest/t/labelconst.t	test recursive descent label parsing
 ext/XS-APItest/t/labelconst_utf8.aux	auxiliary file for label test in UTF-8
 ext/XS-APItest/t/lexsub.t	Test XS registration of lexical subs
+ext/XS-APItest/t/locale.t	test locale-related things
 ext/XS-APItest/t/loopblock.t	test recursive descent block parsing
 ext/XS-APItest/t/looprest.t	test recursive descent statement-sequence parsing
 ext/XS-APItest/t/lvalue.t	Test XS lvalue functions
@@ -3942,9 +3944,6 @@ hints/mpc.sh			Hints for named architecture
 hints/ncr_tower.sh		Hints for named architecture
 hints/netbsd.sh			Hints for named architecture
 hints/newsos4.sh		Hints for named architecture
-hints/next_3_0.sh		Hints for named architecture
-hints/next_3.sh			Hints for named architecture
-hints/next_4.sh			Hints for named architecture
 hints/nonstopux.sh		Hints for named architecture
 hints/openbsd.sh		Hints for named architecture
 hints/opus.sh			Hints for named architecture
@@ -4107,6 +4106,7 @@ lib/perl5db/t/lvalue-bug	Tests for the Perl debugger
 lib/perl5db/t/MyModule.pm	Tests for the Perl debugger
 lib/perl5db/t/proxy-constants	Tests for the Perl debugger
 lib/perl5db/t/rt-104168		Tests for the Perl debugger
+lib/perl5db/t/rt-121509-restart-after-chdir		Tests for the Perl debugger
 lib/perl5db/t/rt-61222		Tests for the Perl debugger
 lib/perl5db/t/rt-66110		Tests for the Perl debugger
 lib/perl5db/t/source-cmd-test-no-q.perldb		Tests for the Perl debugger
@@ -4237,13 +4237,6 @@ lib/warnings.pm			For "use warnings"
 lib/warnings/register.pm	For "use warnings::register"
 lib/warnings.t			See if warning controls work
 locale.c			locale-specific utility functions
-madly.c				parser code for MAD build
-mad/Nomad.pm			Converts MAD XML dump to Perl 5
-mad/p55				Perl 5 to Perl 5 translator - driver for nomad
-mad/P5AST.pm			Used by nomad
-mad/P5re.pm			Used by nomad
-mad/PLXML.pm			Used by nomad
-mad/t/p55.t			Test for the Perl 5 to Perl 5 translator
 makedef.pl			Create symbol export lists for linking
 makedepend.SH			Precursor to makedepend
 make_ext.pl			Used by Makefile to execute extension Makefiles
@@ -4453,6 +4446,7 @@ pod/perl5180delta.pod		Perl changes in version 5.18.0
 pod/perl5181delta.pod		Perl changes in version 5.18.1
 pod/perl5182delta.pod		Perl changes in version 5.18.2
 pod/perl5200delta.pod		Perl changes in version 5.20.0
+pod/perl5210delta.pod		Perl changes in version 5.21.0
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4582,6 +4576,7 @@ Porting/corecpan.pl		Reports outdated dual-lived modules
 Porting/corelist-diff		Tool to produce corelist diffs
 Porting/corelist-perldelta.pl	Generates data perldelta from Module::CoreList
 Porting/corelist.pl		Generates data for Module::CoreList
+Porting/deparse-skips.txt	List of test files to ignore/skip for deparse tests.
 Porting/epigraphs.pod		the release epigraphs used over the years
 Porting/exec-bit.txt		List of files that get +x in release tarball
 Porting/exercise_makedef.pl	Brute force testing for makedef.pl
@@ -4679,6 +4674,8 @@ regcharclass.h			Generated by regen/regcharclass.pl
 regcomp.c			Regular expression compiler
 regcomp.h			Private declarations for above
 regcomp.sym			Data for regnodes.h
+regen/charset_translations.pl	Character set utilities
+regen/ebcdic.pl			Generates ebcdic_tables.h
 regen/embed_lib.pl		Reads embed.fnc and regen/opcodes
 regen/embed.pl			Produces {embed,embedvar,proto}.h
 regen/feature.pl		Generates feature.pm
@@ -4771,10 +4768,12 @@ t/base/rs.t			See if record-read works
 t/base/term.t			See if various terms work
 t/base/while.t			See if while work
 t/benchmark/rt26188-speed-up-keys-on-empty-hash.t	Benchmark if keys on empty hashes is fast enough
+t/bigmem/index.t		Check that index() handles large offsets
 t/bigmem/pos.t			Check that pos() handles large offsets
 t/bigmem/read.t			Check read() handles large offsets
 t/bigmem/regexp.t		Test regular expressions with large strings
 t/bigmem/vec.t			Check vec() handles large offsets
+t/charset_tools.pl		To aid in portable testing across platforms with different character sets
 t/cmd/elsif.t			See if else-if works
 t/cmd/for.t			See if for loops work
 t/cmd/mod.t			See if statement modifiers work
@@ -5301,7 +5300,6 @@ t/run/flib/t2.pm		Test for .pmcs with -I/dir/
 t/run/flib/t2.pmc		Test for .pmcs with -I/dir/
 t/run/fresh_perl.t		Tests that require a fresh perl.
 t/run/locale.t		Tests related to locale handling
-t/run/mad.t			Test vs MAD environment
 t/run/noswitch.t		Test aliasing ARGV for other switch tests
 t/run/runenv.t			Test if perl honors its environment variables.
 t/run/script.t			See if script invocation works
@@ -5371,8 +5369,6 @@ t/win32/runenv.t		Test if Win* perl honors its env variables
 t/win32/signal.t		Test Win32 signal emulation
 t/win32/system.t		See if system works in Win*
 t/win32/system_tests		Test runner for system.t
-t/x2p/find2perl.t		Test find2perl
-t/x2p/s2p.t			See if s2p/psed work
 uconfig64.sh			Configuration script for microperl for LP64
 uconfig.h			Configuration header for microperl
 uconfig.sh			Configuration script for microperl
@@ -5488,21 +5484,4 @@ win32/wince.c			WinCE port
 win32/wince.h			WinCE port
 win32/wincesck.c		WinCE port
 write_buildcustomize.pl		Generate lib/buildcustomize.pl
-x2p/a2p.c			Output of a2p.y run through byacc
-x2p/a2p.h			Global declarations
-x2p/a2p.pod			Pod for awk to perl translator
-x2p/a2p.y			A yacc grammar for awk
-x2p/a2py.c			Awk compiler, sort of
-x2p/EXTERN.h			Same as above
-x2p/find2perl.PL		A find to perl translator
-x2p/hash.c			Hashes again
-x2p/hash.h			Public declarations for the above
-x2p/INTERN.h			Same as above
-x2p/Makefile.SH			Precursor to Makefile
-x2p/s2p.PL			Sed to perl translator
-x2p/str.c			String handling package
-x2p/str.h			Public declarations for the above
-x2p/util.c			Utility routines
-x2p/util.h			Public declarations for the above
-x2p/walk.c			Parse tree walker
 XSUB.h				Include file for extension subroutines

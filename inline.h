@@ -188,64 +188,16 @@ S_sv_or_pv_pos_u2b(pTHX_ SV *sv, const char *pv, STRLEN pos, STRLEN *lenp)
 /* ------------------------------- handy.h ------------------------------- */
 
 /* saves machine code for a common noreturn idiom typically used in Newx*() */
-#ifdef __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-function"
+#ifdef GCC_DIAG_PRAGMA
+GCC_DIAG_IGNORE(-Wunused-function);
 #endif
 static void
 S_croak_memory_wrap(void)
 {
     Perl_croak_nocontext("%s",PL_memory_wrap);
 }
-#ifdef __clang__
-#pragma clang diagnostic pop
-#endif
-
-#ifdef BOOTSTRAP_CHARSET
-static bool
-S_bootstrap_ctype(U8 character, UV classnum, bool full_Latin1)
-{
-    /* See comments in handy.h.  This is placed in this file primarily to avoid
-     * having to have an entry for it in embed.fnc */
-
-    dTHX;
-
-    if (! full_Latin1 && ! isASCII(character)) {
-        return FALSE;
-    }
-
-    switch (classnum) {
-        case _CC_ALPHANUMERIC: return isALPHANUMERIC_L1(character);
-        case _CC_ALPHA:     return isALPHA_L1(character);
-        case _CC_ASCII:     return isASCII_L1(character);
-        case _CC_BLANK:     return isBLANK_L1(character);
-        case _CC_CASED:     return isLOWER_L1(character)
-                                   || isUPPER_L1(character);
-        case _CC_CNTRL:     return isCNTRL_L1(character);
-        case _CC_DIGIT:     return isDIGIT_L1(character);
-        case _CC_GRAPH:     return isGRAPH_L1(character);
-        case _CC_LOWER:     return isLOWER_L1(character);
-        case _CC_PRINT:     return isPRINT_L1(character);
-        case _CC_PSXSPC:    return isPSXSPC_L1(character);
-        case _CC_PUNCT:     return isPUNCT_L1(character);
-        case _CC_SPACE:     return isSPACE_L1(character);
-        case _CC_UPPER:     return isUPPER_L1(character);
-        case _CC_WORDCHAR:  return isWORDCHAR_L1(character);
-        case _CC_XDIGIT:    return isXDIGIT_L1(character);
-        case _CC_VERTSPACE: return isSPACE_L1(character) && ! isBLANK_L1(character);
-        case _CC_IDFIRST:   return isIDFIRST_L1(character);
-        case _CC_QUOTEMETA: return _isQUOTEMETA(character);
-        case _CC_CHARNAME_CONT: return isCHARNAME_CONT(character);
-        case _CC_NONLATIN1_FOLD: return _HAS_NONLATIN1_FOLD_CLOSURE_ONLY_FOR_USE_BY_REGCOMP_DOT_C_AND_REGEXEC_DOT_C(character);
-        case _CC_NON_FINAL_FOLD: return _IS_NON_FINAL_FOLD_ONLY_FOR_USE_BY_REGCOMP_DOT_C(character);
-        case _CC_IS_IN_SOME_FOLD: return _IS_IN_SOME_FOLD_ONLY_FOR_USE_BY_REGCOMP_DOT_C(character);
-        case _CC_BACKSLASH_FOO_LBRACE_IS_META: return 0;
-
-
-        default: break;
-    }
-    Perl_croak(aTHX_ "panic: bootstrap_ctype() has an unexpected character class '%" UVxf "'", classnum);
-}
+#ifdef GCC_DIAG_PRAGMA
+GCC_DIAG_RESTORE;
 #endif
 
 /* ------------------------------- utf8.h ------------------------------- */
@@ -266,31 +218,44 @@ S_append_utf8_from_native_byte(const U8 byte, U8** dest)
     }
 }
 
-/* These two exist only to replace the macros they formerly were so that their
- * use can be deprecated */
+/*
 
-PERL_STATIC_INLINE bool
-S_isIDFIRST_lazy(pTHX_ const char* p)
+A helper function for the macro isUTF8_CHAR(), which should be used instead of
+this function.  The macro will handle smaller code points directly saving time,
+using this function as a fall-back for higher code points.
+
+Tests if the first bytes of string C<s> form a valid UTF-8 character.  0 is
+returned if the bytes starting at C<s> up to but not including C<e> do not form a
+complete well-formed UTF-8 character; otherwise the number of bytes in the
+character is returned.
+
+Note that an INVARIANT (i.e. ASCII on non-EBCDIC) character is a valid UTF-8
+character.
+
+=cut */
+PERL_STATIC_INLINE STRLEN
+S__is_utf8_char_slow(const U8 *s, const U8 *e)
 {
-    PERL_ARGS_ASSERT_ISIDFIRST_LAZY;
+    dTHX;   /* The function called below requires thread context */
 
-    return isIDFIRST_lazy_if(p,1);
-}
+    STRLEN actual_len;
 
-PERL_STATIC_INLINE bool
-S_isALNUM_lazy(pTHX_ const char* p)
-{
-    PERL_ARGS_ASSERT_ISALNUM_LAZY;
+    PERL_ARGS_ASSERT__IS_UTF8_CHAR_SLOW;
 
-    return isALNUM_lazy_if(p,1);
+    assert(e >= s);
+    utf8n_to_uvchr(s, e - s, &actual_len, UTF8_CHECK_ONLY);
+
+    return (actual_len == (STRLEN) -1) ? 0 : actual_len;
 }
 
 /* ------------------------------- perl.h ----------------------------- */
 
 /*
+=head1 Miscellaneous Functions
+
 =for apidoc AiR|bool|is_safe_syscall|const char *pv|STRLEN len|const char *what|const char *op_name
 
-Test that the given C<pv> doesn't contain any internal NUL characters.
+Test that the given C<pv> doesn't contain any internal C<NUL> characters.
 If it does, set C<errno> to ENOENT, optionally warn, and return FALSE.
 
 Return TRUE if the name is safe.
@@ -320,6 +285,65 @@ S_is_safe_syscall(pTHX_ const char *pv, STRLEN len, const char *what, const char
     }
 
     return TRUE;
+}
+
+/*
+
+Return true if the supplied filename has a newline character
+immediately before the final NUL.
+
+My original look at this incorrectly used the len from SvPV(), but
+that's incorrect, since we allow for a NUL in pv[len-1].
+
+So instead, strlen() and work from there.
+
+This allow for the user reading a filename, forgetting to chomp it,
+then calling:
+
+  open my $foo, "$file\0";
+
+*/
+
+#ifdef PERL_CORE
+
+PERL_STATIC_INLINE bool
+S_should_warn_nl(const char *pv) {
+    STRLEN len;
+
+    PERL_ARGS_ASSERT_SHOULD_WARN_NL;
+
+    len = strlen(pv);
+
+    return len > 0 && pv[len-1] == '\n';
+}
+
+#endif
+
+/* ------------------ pp.c, regcomp.c, toke.c, universal.c ------------ */
+
+#define MAX_CHARSET_NAME_LENGTH 2
+
+PERL_STATIC_INLINE const char *
+get_regex_charset_name(const U32 flags, STRLEN* const lenp)
+{
+    /* Returns a string that corresponds to the name of the regex character set
+     * given by 'flags', and *lenp is set the length of that string, which
+     * cannot exceed MAX_CHARSET_NAME_LENGTH characters */
+
+    *lenp = 1;
+    switch (get_regex_charset(flags)) {
+        case REGEX_DEPENDS_CHARSET: return DEPENDS_PAT_MODS;
+        case REGEX_LOCALE_CHARSET:  return LOCALE_PAT_MODS;
+        case REGEX_UNICODE_CHARSET: return UNICODE_PAT_MODS;
+	case REGEX_ASCII_RESTRICTED_CHARSET: return ASCII_RESTRICT_PAT_MODS;
+	case REGEX_ASCII_MORE_RESTRICTED_CHARSET:
+	    *lenp = 2;
+	    return ASCII_MORE_RESTRICT_PAT_MODS;
+    }
+    /* The NOT_REACHED; hides an assert() which has a rather complex
+     * definition in perl.h. */
+    NOT_REACHED; /* NOTREACHED */
+    return "?";	    /* Unknown */
 }
 
 /*

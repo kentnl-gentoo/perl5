@@ -31,12 +31,9 @@ my $debug = $ENV{PERL_DEBUG_FULL_TEST} // 0;
 
 # Certain tests have been shown to be problematical for a few locales.  Don't
 # fail them unless at least this percentage of the tested locales fail.
-# Some Windows machines are defective in every locale but the C, calling \t
-# printable; superscripts to be digits, etc.  See
-# http://markmail.org/message/5jwam4xsx4amsdnv.  Also on AIX machines, many
-# locales call a no-break space a graphic.
+# On AIX machines, many locales call a no-break space a graphic.
 # (There aren't 1000 locales currently in existence, so 99.9 works)
-my $acceptable_failure_percentage = ($^O =~ / ^ ( MSWin32 | AIX ) $ /ix)
+my $acceptable_failure_percentage = ($^O =~ / ^ ( AIX ) $ /ix)
                                      ? 99.9
                                      : 5;
 
@@ -53,7 +50,7 @@ my $dumper = Dumpvalue->new(
                            );
 sub debug {
   return unless $debug;
-  my($mess) = join "", @_;
+  my($mess) = join "", '# ', @_;
   chop $mess;
   print $dumper->stringify($mess,1), "\n";
 }
@@ -67,7 +64,7 @@ sub debugf {
     printf @_ if $debug;
 }
 
-$a = 'abc %';
+$a = 'abc %9';
 
 my $test_num = 0;
 
@@ -94,13 +91,15 @@ sub is_tainted { # hello, camel two.
 
 sub check_taint ($;$) {
     my $message_tail = $_[1] // "";
-    $message_tail = ": $message_tail" if $message_tail;
+
+    # Extra blanks are so aligns with taint_not output
+    $message_tail = ":     $message_tail" if $message_tail;
     ok is_tainted($_[0]), "verify that is tainted$message_tail";
 }
 
 sub check_taint_not ($;$) {
     my $message_tail = $_[1] // "";
-    $message_tail = ": $message_tail" if $message_tail;
+    $message_tail = ":  $message_tail" if $message_tail;
     ok((not is_tainted($_[0])), "verify that isn't tainted$message_tail");
 }
 
@@ -110,33 +109,36 @@ check_taint_not   $&, "not tainted outside 'use locale'";
 
 use locale;	# engage locale and therefore locale taint.
 
-check_taint_not   $a, "\t\$a";
+# BE SURE TO COPY ANYTHING YOU ADD to these tests to the block below for
+# ":notcharacters"
 
-check_taint       uc($a);
-check_taint       "\U$a";
-check_taint       ucfirst($a);
-check_taint       "\u$a";
-check_taint       lc($a);
-check_taint       fc($a);
-check_taint       "\L$a";
-check_taint       "\F$a";
-check_taint       lcfirst($a);
-check_taint       "\l$a";
+check_taint_not   $a, '$a';
 
-check_taint_not  sprintf('%e', 123.456);
-check_taint_not  sprintf('%f', 123.456);
-check_taint_not  sprintf('%g', 123.456);
-check_taint_not  sprintf('%d', 123.456);
-check_taint_not  sprintf('%x', 123.456);
+check_taint       uc($a), 'uc($a)';
+check_taint       "\U$a", '"\U$a"';
+check_taint       ucfirst($a), 'ucfirst($a)';
+check_taint       "\u$a", '"\u$a"';
+check_taint       lc($a), 'lc($a)';
+check_taint       fc($a), 'fc($a)';
+check_taint       "\L$a", '"\L$a"';
+check_taint       "\F$a", '"\F$a"';
+check_taint       lcfirst($a), 'lcfirst($a)';
+check_taint       "\l$a", '"\l$a"';
+
+check_taint_not  sprintf('%e', 123.456), "sprintf('%e', 123.456)";
+check_taint_not  sprintf('%f', 123.456), "sprintf('%f', 123.456)";
+check_taint_not  sprintf('%g', 123.456), "sprintf('%g', 123.456)";
+check_taint_not  sprintf('%d', 123.456), "sprintf('%d', 123.456)";
+check_taint_not  sprintf('%x', 123.456), "sprintf('%x', 123.456)";
 
 $_ = $a;	# untaint $_
 
 $_ = uc($a);	# taint $_
 
-check_taint      $_, "\t\$_";
+check_taint      $_, '$_ = uc($a)';
 
 /(\w)/;	# taint $&, $`, $', $+, $1.
-check_taint      $&, "\t/(\\w)/ \$&";
+check_taint      $&, "\$& from /(\\w)/";
 check_taint      $`, "\t\$`";
 check_taint      $', "\t\$'";
 check_taint      $+, "\t\$+";
@@ -144,7 +146,7 @@ check_taint      $1, "\t\$1";
 check_taint_not  $2, "\t\$2";
 
 /(.)/;	# untaint $&, $`, $', $+, $1.
-check_taint_not  $&, "\t/(.)/ \$&";
+check_taint_not  $&, "\$& from /(.)/";
 check_taint_not  $`, "\t\$`";
 check_taint_not  $', "\t\$'";
 check_taint_not  $+, "\t\$+";
@@ -152,7 +154,7 @@ check_taint_not  $1, "\t\$1";
 check_taint_not  $2, "\t\$2";
 
 /(\W)/;	# taint $&, $`, $', $+, $1.
-check_taint      $&, "\t/(\\W)/ \$&";
+check_taint      $&, "\$& from /(\\W)/";
 check_taint      $`, "\t\$`";
 check_taint      $', "\t\$'";
 check_taint      $+, "\t\$+";
@@ -160,7 +162,7 @@ check_taint      $1, "\t\$1";
 check_taint_not  $2, "\t\$2";
 
 /(.)/;	# untaint $&, $`, $', $+, $1.
-check_taint_not  $&, "\t/(.)/ \$&";
+check_taint_not  $&, "\$& from /(.)/";
 check_taint_not  $`, "\t\$`";
 check_taint_not  $', "\t\$'";
 check_taint_not  $+, "\t\$+";
@@ -168,7 +170,7 @@ check_taint_not  $1, "\t\$1";
 check_taint_not  $2, "\t\$2";
 
 /(\s)/;	# taint $&, $`, $', $+, $1.
-check_taint      $&, "\t/(\\s)/ \$&";
+check_taint      $&, "\$& from /(\\s)/";
 check_taint      $`, "\t\$`";
 check_taint      $', "\t\$'";
 check_taint      $+, "\t\$+";
@@ -176,10 +178,10 @@ check_taint      $1, "\t\$1";
 check_taint_not  $2, "\t\$2";
 
 /(.)/;	# untaint $&, $`, $', $+, $1.
-check_taint_not  $&, "\t/(.)/ \$&";
+check_taint_not  $&, "\$& from /(.)/";
 
 /(\S)/;	# taint $&, $`, $', $+, $1.
-check_taint      $&, "\t/(\\S)/ \$&";
+check_taint      $&, "\$& from /(\\S)/";
 check_taint      $`, "\t\$`";
 check_taint      $', "\t\$'";
 check_taint      $+, "\t\$+";
@@ -187,39 +189,88 @@ check_taint      $1, "\t\$1";
 check_taint_not  $2, "\t\$2";
 
 /(.)/;	# untaint $&, $`, $', $+, $1.
-check_taint_not  $&, "\t/(.)/ \$&";
+check_taint_not  $&, "\$& from /(.)/";
+
+"0" =~ /(\d)/;	# taint $&, $`, $', $+, $1.
+check_taint      $&, "\$& from /(\\d)/";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\$& from /(.)/";
+
+/(\D)/;	# taint $&, $`, $', $+, $1.
+check_taint      $&, "\$& from /(\\D)/";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\$& from /(.)/";
+
+/([[:alnum:]])/;	# taint $&, $`, $', $+, $1.
+check_taint      $&, "\$& from /([[:alnum:]])/";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
+
+/(.)/;	# untaint $&, $`, $', $+, $1.
+check_taint_not  $&, "\$& from /(.)/";
+
+/([[:^alnum:]])/;	# taint $&, $`, $', $+, $1.
+check_taint      $&, "\$& from /([[:^alnum:]])/";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not  $2, "\t\$2";
 
 "a" =~ /(a)|(\w)/;	# taint $&, $`, $', $+, $1.
-check_taint      $&, "\t/(a)|(\\w)/ \$&";
+check_taint      $&, "\$& from /(a)|(\\w)/";
 check_taint      $`, "\t\$`";
 check_taint      $', "\t\$'";
 check_taint      $+, "\t\$+";
 check_taint      $1, "\t\$1";
-ok($1 eq 'a', ("\t" x 4) . "\$1 is 'a'");
-ok(! defined $2, ("\t" x 4) . "\$2 is undefined");
+ok($1 eq 'a', ("\t" x 5) . "\$1 is 'a'");
+ok(! defined $2, ("\t" x 5) . "\$2 is undefined");
 check_taint_not  $2, "\t\$2";
 check_taint_not  $3, "\t\$3";
 
 /(.)/;	# untaint $&, $`, $', $+, $1.
-check_taint_not  $&, "\t/(.)/ \$&";
+check_taint_not  $&, "\$& from /(.)/";
 
 "\N{CYRILLIC SMALL LETTER A}" =~ /(\N{CYRILLIC CAPITAL LETTER A})/i;	# no tainting because no locale dependence
-check_taint_not      $&, "\t/(\\N{CYRILLIC CAPITAL LETTER A})/i \$&";
+check_taint_not      $&, "\$& from /(\\N{CYRILLIC CAPITAL LETTER A})/i";
 check_taint_not      $`, "\t\$`";
 check_taint_not      $', "\t\$'";
 check_taint_not      $+, "\t\$+";
 check_taint_not      $1, "\t\$1";
-ok($1 eq "\N{CYRILLIC SMALL LETTER A}", ("\t" x 4) . "\$1 is 'small cyrillic a'");
+ok($1 eq "\N{CYRILLIC SMALL LETTER A}", ("\t" x 4) . "\t\$1 is 'small cyrillic a'");
 check_taint_not      $2, "\t\$2";
 
 /(.)/;	# untaint $&, $`, $', $+, $1.
-check_taint_not  $&, "\t/./ \$&";
+check_taint_not  $&, "\$& from /./";
+
+"(\N{KELVIN SIGN})" =~ /(\N{KELVIN SIGN})/i;	# taints because depends on locale
+check_taint      $&, "\$& from /(\\N{KELVIN SIGN})/i";
+check_taint      $`, "\t\$`";
+check_taint      $', "\t\$'";
+check_taint      $+, "\t\$+";
+check_taint      $1, "\t\$1";
+check_taint_not      $2, "\t\$2";
 
 /(.)/;	# untaint $&, $`, $', $+, $1.
-check_taint_not  $&, "\t/(.)/ \$&";
+check_taint_not  $&, "\$& from /(.)/";
 
 "a:" =~ /(.)\b(.)/;	# taint $&, $`, $', $+, $1.
-check_taint      $&, "\t/(.)\\b(.)/ \$&";
+check_taint      $&, "\$& from /(.)\\b(.)/";
 check_taint      $`, "\t\$`";
 check_taint      $', "\t\$'";
 check_taint      $+, "\t\$+";
@@ -228,10 +279,10 @@ check_taint      $2, "\t\$2";
 check_taint_not  $3, "\t\$3";
 
 /(.)/;	# untaint $&, $`, $', $+, $1.
-check_taint_not  $&, "\t/./ \$&";
+check_taint_not  $&, "\$& from /./";
 
 "aa" =~ /(.)\B(.)/;	# taint $&, $`, $', $+, $1.
-check_taint      $&, "\t/(.)\\B(.)/ \$&";
+check_taint      $&, "\$& from /(.)\\B(.)/";
 check_taint      $`, "\t\$`";
 check_taint      $', "\t\$'";
 check_taint      $+, "\t\$+";
@@ -240,26 +291,26 @@ check_taint      $2, "\t\$2";
 check_taint_not  $3, "\t\$3";
 
 /(.)/;	# untaint $&, $`, $', $+, $1.
-check_taint_not  $&, "\t/./ \$&";
+check_taint_not  $&, "\$& from /./";
 
 "aaa" =~ /(.).(\1)/i;	# notaint because not locale dependent
-check_taint_not      $&, "\t/(.).(\\1)/ \$&";
+check_taint_not      $&, "\$ & from /(.).(\\1)/";
 check_taint_not      $`, "\t\$`";
 check_taint_not      $', "\t\$'";
 check_taint_not      $+, "\t\$+";
 check_taint_not      $1, "\t\$1";
 check_taint_not      $2, "\t\$2";
-check_taint_not  $3, "\t\$3";
+check_taint_not      $3, "\t\$3";
 
 /(.)/;	# untaint $&, $`, $', $+, $1.
-check_taint_not  $&, "\t/./ \$&";
+check_taint_not  $&, "\$ & from /./";
 
 $_ = $a;	# untaint $_
 
-check_taint_not  $_, "\t\$_";
+check_taint_not  $_, 'untainting $_ works';
 
 /(b)/;		# this must not taint
-check_taint_not  $&, "\t/(b)/ \$&";
+check_taint_not  $&, "\$ & from /(b)/";
 check_taint_not  $`, "\t\$`";
 check_taint_not  $', "\t\$'";
 check_taint_not  $+, "\t\$+";
@@ -268,12 +319,12 @@ check_taint_not  $2, "\t\$2";
 
 $_ = $a;	# untaint $_
 
-check_taint_not  $_, "\t\$_";
+check_taint_not  $_, 'untainting $_ works';
 
 $b = uc($a);	# taint $b
 s/(.+)/$b/;	# this must taint only the $_
 
-check_taint      $_, "\t\$_";
+check_taint      $_, '$_ (wasn\'t tainted) from s/(.+)/$b/ where $b is tainted';
 check_taint_not  $&, "\t\$&";
 check_taint_not  $`, "\t\$`";
 check_taint_not  $', "\t\$'";
@@ -284,7 +335,7 @@ check_taint_not  $2, "\t\$2";
 $_ = $a;	# untaint $_
 
 s/(.+)/b/;	# this must not taint
-check_taint_not  $_, "\t\$_";
+check_taint_not  $_, '$_ (wasn\'t tainted) from s/(.+)/b/';
 check_taint_not  $&, "\t\$&";
 check_taint_not  $`, "\t\$`";
 check_taint_not  $', "\t\$'";
@@ -295,13 +346,13 @@ check_taint_not  $2, "\t\$2";
 $b = $a;	# untaint $b
 
 ($b = $a) =~ s/\w/$&/;
-check_taint      $b, "\t\$b";	# $b should be tainted.
-check_taint_not  $a, "\t\$a";	# $a should be not.
+check_taint      $b, '$b from ($b = $a) =~ s/\w/$&/';	# $b should be tainted.
+check_taint_not  $a, '$a from ($b = $a) =~ s/\w/$&/';	# $a should be not.
 
 $_ = $a;	# untaint $_
 
 s/(\w)/\l$1/;	# this must taint
-check_taint      $_, "\t\$_";
+check_taint      $_, '$_ (wasn\'t tainted) from s/(\w)/\l$1/,';	# this must taint
 check_taint      $&, "\t\$&";
 check_taint      $`, "\t\$`";
 check_taint      $', "\t\$'";
@@ -312,7 +363,7 @@ check_taint_not  $2, "\t\$2";
 $_ = $a;	# untaint $_
 
 s/(\w)/\L$1/;	# this must taint
-check_taint      $_, "\t\$_";
+check_taint      $_, '$_ (wasn\'t tainted) from s/(\w)/\L$1/,';
 check_taint      $&, "\t\$&";
 check_taint      $`, "\t\$`";
 check_taint      $', "\t\$'";
@@ -323,7 +374,7 @@ check_taint_not  $2, "\t\$2";
 $_ = $a;	# untaint $_
 
 s/(\w)/\u$1/;	# this must taint
-check_taint      $_, "\t\$_";
+check_taint      $_, '$_ (wasn\'t tainted) from s/(\w)/\u$1/';
 check_taint      $&, "\t\$&";
 check_taint      $`, "\t\$`";
 check_taint      $', "\t\$'";
@@ -334,7 +385,7 @@ check_taint_not  $2, "\t\$2";
 $_ = $a;	# untaint $_
 
 s/(\w)/\U$1/;	# this must taint
-check_taint      $_, "\t\$_";
+check_taint      $_, '$_ (wasn\'t tainted) from s/(\w)/\U$1/';
 check_taint      $&, "\t\$&";
 check_taint      $`, "\t\$`";
 check_taint      $', "\t\$'";
@@ -344,7 +395,7 @@ check_taint_not  $2, "\t\$2";
 
 # After all this tainting $a should be cool.
 
-check_taint_not  $a, "\t\$a";
+check_taint_not  $a, '$a still not tainted';
 
 "a" =~ /([a-z])/;
 check_taint_not $1, '"a" =~ /([a-z])/';
@@ -358,168 +409,283 @@ check_taint_not $1, '"foo.bar_baz" =~ /^(.*)[._](.*?)$/';
 
     use locale ':not_characters'; # engage restricted locale with different
                                   # tainting rules
+    check_taint_not   $a, '$a';
 
-    check_taint_not   $a;
+    check_taint_not   uc($a), 'uc($a)';
+    check_taint_not   "\U$a", '"\U$a"';
+    check_taint_not   ucfirst($a), 'ucfirst($a)';
+    check_taint_not   "\u$a", '"\u$a"';
+    check_taint_not   lc($a), 'lc($a)';
+    check_taint_not   fc($a), 'fc($a)';
+    check_taint_not   "\L$a", '"\L$a"';
+    check_taint_not   "\F$a", '"\F$a"';
+    check_taint_not   lcfirst($a), 'lcfirst($a)';
+    check_taint_not   "\l$a", '"\l$a"';
 
-    check_taint_not	uc($a);
-    check_taint_not	"\U$a";
-    check_taint_not	ucfirst($a);
-    check_taint_not	"\u$a";
-    check_taint_not	lc($a);
-    check_taint_not	fc($a);
-    check_taint_not	"\L$a";
-    check_taint_not	"\F$a";
-    check_taint_not	lcfirst($a);
-    check_taint_not	"\l$a";
-
-    check_taint_not  sprintf('%e', 123.456);
-    check_taint_not  sprintf('%f', 123.456);
-    check_taint_not  sprintf('%g', 123.456);
-    check_taint_not  sprintf('%d', 123.456);
-    check_taint_not  sprintf('%x', 123.456);
+    check_taint_not  sprintf('%e', 123.456), "sprintf('%e', 123.456)";
+    check_taint_not  sprintf('%f', 123.456), "sprintf('%f', 123.456)";
+    check_taint_not  sprintf('%g', 123.456), "sprintf('%g', 123.456)";
+    check_taint_not  sprintf('%d', 123.456), "sprintf('%d', 123.456)";
+    check_taint_not  sprintf('%x', 123.456), "sprintf('%x', 123.456)";
 
     $_ = $a;	# untaint $_
 
-    $_ = uc($a);	# taint $_
+    $_ = uc($a);
 
-    check_taint_not	$_;
+    check_taint_not  $_, '$_ = uc($a)';
 
-    /(\w)/;	# taint $&, $`, $', $+, $1.
-    check_taint_not	$&;
-    check_taint_not	$`;
-    check_taint_not	$';
-    check_taint_not	$+;
-    check_taint_not	$1;
-    check_taint_not  $2;
+    /(\w)/;
+    check_taint_not  $&, "\$& from /(\\w)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
 
     /(.)/;	# untaint $&, $`, $', $+, $1.
-    check_taint_not  $&;
-    check_taint_not  $`;
-    check_taint_not  $';
-    check_taint_not  $+;
-    check_taint_not  $1;
-    check_taint_not  $2;
+    check_taint_not  $&, "\$& from /(.)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
 
-    /(\W)/;	# taint $&, $`, $', $+, $1.
-    check_taint_not	$&;
-    check_taint_not	$`;
-    check_taint_not	$';
-    check_taint_not	$+;
-    check_taint_not	$1;
-    check_taint_not  $2;
+    /(\W)/;
+    check_taint_not  $&, "\$& from /(\\W)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
 
-    /(\s)/;	# taint $&, $`, $', $+, $1.
-    check_taint_not	$&;
-    check_taint_not	$`;
-    check_taint_not	$';
-    check_taint_not	$+;
-    check_taint_not	$1;
-    check_taint_not  $2;
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$& from /(.)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
 
-    /(\S)/;	# taint $&, $`, $', $+, $1.
-    check_taint_not	$&;
-    check_taint_not	$`;
-    check_taint_not	$';
-    check_taint_not	$+;
-    check_taint_not	$1;
-    check_taint_not  $2;
+    /(\s)/;
+    check_taint_not  $&, "\$& from /(\\s)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
+
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$& from /(.)/";
+
+    /(\S)/;
+    check_taint_not  $&, "\$& from /(\\S)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
+
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$& from /(.)/";
+
+    "0" =~ /(\d)/;
+    check_taint_not  $&, "\$& from /(\\d)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
+
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$& from /(.)/";
+
+    /(\D)/;
+    check_taint_not  $&, "\$& from /(\\D)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
+
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$& from /(.)/";
+
+    /([[:alnum:]])/;
+    check_taint_not  $&, "\$& from /([[:alnum:]])/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
+
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$& from /(.)/";
+
+    /([[:^alnum:]])/;
+    check_taint_not  $&, "\$& from /([[:^alnum:]])/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
+
+    "a" =~ /(a)|(\w)/;
+    check_taint_not  $&, "\$& from /(a)|(\\w)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    ok($1 eq 'a', ("\t" x 5) . "\$1 is 'a'");
+    ok(! defined $2, ("\t" x 5) . "\$2 is undefined");
+    check_taint_not  $2, "\t\$2";
+    check_taint_not  $3, "\t\$3";
+
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$& from /(.)/";
+
+    "\N{CYRILLIC SMALL LETTER A}" =~ /(\N{CYRILLIC CAPITAL LETTER A})/i;
+    check_taint_not      $&, "\$& from /(\\N{CYRILLIC CAPITAL LETTER A})/i";
+    check_taint_not      $`, "\t\$`";
+    check_taint_not      $', "\t\$'";
+    check_taint_not      $+, "\t\$+";
+    check_taint_not      $1, "\t\$1";
+    ok($1 eq "\N{CYRILLIC SMALL LETTER A}", ("\t" x 4) . "\t\$1 is 'small cyrillic a'");
+    check_taint_not      $2, "\t\$2";
+
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$& from /./";
+
+    "(\N{KELVIN SIGN})" =~ /(\N{KELVIN SIGN})/i;
+    check_taint_not  $&, "\$& from /(\\N{KELVIN SIGN})/i";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not      $2, "\t\$2";
+
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$& from /(.)/";
+
+    "a:" =~ /(.)\b(.)/;
+    check_taint_not  $&, "\$& from /(.)\\b(.)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
+    check_taint_not  $3, "\t\$3";
+
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$& from /./";
+
+    "aa" =~ /(.)\B(.)/;
+    check_taint_not  $&, "\$& from /(.)\\B(.)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
+    check_taint_not  $3, "\t\$3";
+
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$& from /./";
+
+    "aaa" =~ /(.).(\1)/i;	# notaint because not locale dependent
+    check_taint_not      $&, "\$ & from /(.).(\\1)/";
+    check_taint_not      $`, "\t\$`";
+    check_taint_not      $', "\t\$'";
+    check_taint_not      $+, "\t\$+";
+    check_taint_not      $1, "\t\$1";
+    check_taint_not      $2, "\t\$2";
+    check_taint_not      $3, "\t\$3";
+
+    /(.)/;	# untaint $&, $`, $', $+, $1.
+    check_taint_not  $&, "\$ & from /./";
 
     $_ = $a;	# untaint $_
 
-    check_taint_not  $_;
+    check_taint_not  $_, 'untainting $_ works';
 
-    /(b)/;		# this must not taint
-    check_taint_not  $&;
-    check_taint_not  $`;
-    check_taint_not  $';
-    check_taint_not  $+;
-    check_taint_not  $1;
-    check_taint_not  $2;
-
-    $_ = $a;	# untaint $_
-
-    check_taint_not  $_;
-
-    $b = uc($a);	# taint $b
-    s/(.+)/$b/;	# this must taint only the $_
-
-    check_taint_not	$_;
-    check_taint_not  $&;
-    check_taint_not  $`;
-    check_taint_not  $';
-    check_taint_not  $+;
-    check_taint_not  $1;
-    check_taint_not  $2;
+    /(b)/;
+    check_taint_not  $&, "\$ & from /(b)/";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
 
     $_ = $a;	# untaint $_
 
-    s/(.+)/b/;	# this must not taint
-    check_taint_not  $_;
-    check_taint_not  $&;
-    check_taint_not  $`;
-    check_taint_not  $';
-    check_taint_not  $+;
-    check_taint_not  $1;
-    check_taint_not  $2;
+    check_taint_not  $_, 'untainting $_ works';
+
+    s/(.+)/b/;
+    check_taint_not  $_, '$_ (wasn\'t tainted) from s/(.+)/b/';
+    check_taint_not  $&, "\t\$&";
+    check_taint_not  $`, "\t\$`";
+    check_taint_not  $', "\t\$'";
+    check_taint_not  $+, "\t\$+";
+    check_taint_not  $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
 
     $b = $a;	# untaint $b
 
     ($b = $a) =~ s/\w/$&/;
-    check_taint_not	$b;	# $b should be tainted.
-    check_taint_not  $a;	# $a should be not.
+    check_taint_not     $b, '$b from ($b = $a) =~ s/\w/$&/';
+    check_taint_not  $a, '$a from ($b = $a) =~ s/\w/$&/';
 
     $_ = $a;	# untaint $_
 
-    s/(\w)/\l$1/;	# this must taint
-    check_taint_not	$_;
-    check_taint_not	$&;
-    check_taint_not	$`;
-    check_taint_not	$';
-    check_taint_not	$+;
-    check_taint_not	$1;
-    check_taint_not  $2;
+    s/(\w)/\l$1/;
+    check_taint_not     $_, '$_ (wasn\'t tainted) from s/(\w)/\l$1/,';	# this must taint
+    check_taint_not     $&, "\t\$&";
+    check_taint_not     $`, "\t\$`";
+    check_taint_not     $', "\t\$'";
+    check_taint_not     $+, "\t\$+";
+    check_taint_not     $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
 
     $_ = $a;	# untaint $_
 
-    s/(\w)/\L$1/;	# this must taint
-    check_taint_not	$_;
-    check_taint_not	$&;
-    check_taint_not	$`;
-    check_taint_not	$';
-    check_taint_not	$+;
-    check_taint_not	$1;
-    check_taint_not  $2;
+    s/(\w)/\L$1/;
+    check_taint_not     $_, '$_ (wasn\'t tainted) from s/(\w)/\L$1/,';
+    check_taint_not     $&, "\t\$&";
+    check_taint_not     $`, "\t\$`";
+    check_taint_not     $', "\t\$'";
+    check_taint_not     $+, "\t\$+";
+    check_taint_not     $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
 
     $_ = $a;	# untaint $_
 
-    s/(\w)/\u$1/;	# this must taint
-    check_taint_not	$_;
-    check_taint_not	$&;
-    check_taint_not	$`;
-    check_taint_not	$';
-    check_taint_not	$+;
-    check_taint_not	$1;
-    check_taint_not  $2;
+    s/(\w)/\u$1/;
+    check_taint_not     $_, '$_ (wasn\'t tainted) from s/(\w)/\u$1/';
+    check_taint_not     $&, "\t\$&";
+    check_taint_not     $`, "\t\$`";
+    check_taint_not     $', "\t\$'";
+    check_taint_not     $+, "\t\$+";
+    check_taint_not     $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
 
     $_ = $a;	# untaint $_
 
-    s/(\w)/\U$1/;	# this must taint
-    check_taint_not	$_;
-    check_taint_not	$&;
-    check_taint_not	$`;
-    check_taint_not	$';
-    check_taint_not	$+;
-    check_taint_not	$1;
-    check_taint_not  $2;
+    s/(\w)/\U$1/;
+    check_taint_not     $_, '$_ (wasn\'t tainted) from s/(\w)/\U$1/';
+    check_taint_not     $&, "\t\$&";
+    check_taint_not     $`, "\t\$`";
+    check_taint_not     $', "\t\$'";
+    check_taint_not     $+, "\t\$+";
+    check_taint_not     $1, "\t\$1";
+    check_taint_not  $2, "\t\$2";
 
     # After all this tainting $a should be cool.
 
-    check_taint_not  $a;
+    check_taint_not  $a, '$a still not tainted';
 
     "a" =~ /([a-z])/;
     check_taint_not $1, '"a" =~ /([a-z])/';
     "foo.bar_baz" =~ /^(.*)[._](.*?)$/;  # Bug 120675
     check_taint_not $1, '"foo.bar_baz" =~ /^(.*)[._](.*?)$/';
+
 }
 
 # Here are in scope of 'use locale'
@@ -533,15 +699,15 @@ my $final_without_setlocale = $test_num;
 
 # Find locales.
 
-debug "# Scanning for locales...\n";
+debug "Scanning for locales...\n";
 
 require POSIX; import POSIX ':locale_h';
 
-my @Locale = find_locales([ &POSIX::LC_CTYPE, &POSIX::LC_ALL ]);
+my @Locale = find_locales([ &POSIX::LC_CTYPE, &POSIX::LC_NUMERIC, &POSIX::LC_ALL ]);
 
-debug "# Locales =\n";
+debug "Locales =\n";
 for ( @Locale ) {
-    debug "# $_\n";
+    debug "$_\n";
 }
 
 unless (@Locale) {
@@ -639,13 +805,71 @@ sub disp_chars {
     return $output;
 }
 
+sub disp_str ($) {
+    my $string = shift;
+
+    # Displays the string unambiguously.  ASCII printables are always output
+    # as-is, though perhaps separated by blanks from other characters.  If
+    # entirely printable ASCII, just returns the string.  Otherwise if valid
+    # UTF-8 it uses the character names for non-printable-ASCII.  Otherwise it
+    # outputs hex for each non-ASCII-printable byte.
+
+    return $string if $string =~ / ^ [[:print:]]* $/xa;
+
+    my $result = "";
+    my $prev_was_punct = 1; # Beginning is considered punct
+    if (utf8::valid($string) && utf8::is_utf8($string)) {
+        use charnames ();
+        foreach my $char (split "", $string) {
+
+            # Keep punctuation adjacent to other characters; otherwise
+            # separate them with a blank
+            if ($char =~ /[[:punct:]]/a) {
+                $result .= $char;
+                $prev_was_punct = 1;
+            }
+            elsif ($char =~ /[[:print:]]/a) {
+                $result .= "  " unless $prev_was_punct;
+                $result .= $char;
+                $prev_was_punct = 0;
+            }
+            else {
+                $result .= "  " unless $prev_was_punct;
+                $result .= charnames::viacode(ord $char);
+                $prev_was_punct = 0;
+            }
+        }
+    }
+    else {
+        use bytes;
+        foreach my $char (split "", $string) {
+            if ($char =~ /[[:punct:]]/a) {
+                $result .= $char;
+                $prev_was_punct = 1;
+            }
+            elsif ($char =~ /[[:print:]]/a) {
+                $result .= " " unless $prev_was_punct;
+                $result .= $char;
+                $prev_was_punct = 0;
+            }
+            else {
+                $result .= " " unless $prev_was_punct;
+                $result .= sprintf("%02X", ord $char);
+                $prev_was_punct = 0;
+            }
+        }
+    }
+
+    return $result;
+}
+
 sub report_result {
     my ($Locale, $i, $pass_fail, $message) = @_;
     $message //= "";
     $message = "  ($message)" if $message;
     unless ($pass_fail) {
 	$Problem{$i}{$Locale} = 1;
-	debug "# failed $i ($test_names{$i}) with locale '$Locale'$message\n";
+	debug "failed $i ($test_names{$i}) with locale '$Locale'$message\n";
     } else {
 	push @{$Okay{$i}}, $Locale;
     }
@@ -672,8 +896,8 @@ my %setlocale_failed;   # List of locales that setlocale() didn't work on
 
 foreach my $Locale (@Locale) {
     $locales_test_number = $first_locales_test_number - 1;
-    debug "#\n";
-    debug "# Locale = $Locale\n";
+    debug "\n";
+    debug "Locale = $Locale\n";
 
     unless (setlocale(&POSIX::LC_ALL, $Locale)) {
         $setlocale_failed{$Locale} = $Locale;
@@ -691,14 +915,14 @@ foreach my $Locale (@Locale) {
 
     my $is_utf8_locale = is_locale_utf8($Locale);
 
-    debug "# is utf8 locale? = $is_utf8_locale\n";
+    debug "is utf8 locale? = $is_utf8_locale\n";
 
     my $radix = localeconv()->{decimal_point};
     if ($radix !~ / ^ [[:ascii:]] + $/x) {
         use bytes;
         $radix = disp_chars(split "", $radix);
     }
-    debug "# radix = $radix\n";
+    debug "radix = $radix\n";
 
     if (! $is_utf8_locale) {
         use locale;
@@ -762,21 +986,21 @@ foreach my $Locale (@Locale) {
 
     # Ordered, where possible,  in groups of "this is a subset of the next
     # one"
-    debug "# :upper:  = ", disp_chars(@{$posixes{'upper'}}), "\n";
-    debug "# :lower:  = ", disp_chars(@{$posixes{'lower'}}), "\n";
-    debug "# :cased:  = ", disp_chars(@{$posixes{'cased'}}), "\n";
-    debug "# :alpha:  = ", disp_chars(@{$posixes{'alpha'}}), "\n";
-    debug "# :alnum:  = ", disp_chars(@{$posixes{'alnum'}}), "\n";
-    debug "#  w       = ", disp_chars(@{$posixes{'word'}}), "\n";
-    debug "# :graph:  = ", disp_chars(@{$posixes{'graph'}}), "\n";
-    debug "# :print:  = ", disp_chars(@{$posixes{'print'}}), "\n";
-    debug "#  d       = ", disp_chars(@{$posixes{'digit'}}), "\n";
-    debug "# :xdigit: = ", disp_chars(@{$posixes{'xdigit'}}), "\n";
-    debug "# :blank:  = ", disp_chars(@{$posixes{'blank'}}), "\n";
-    debug "#  s       = ", disp_chars(@{$posixes{'space'}}), "\n";
-    debug "# :punct:  = ", disp_chars(@{$posixes{'punct'}}), "\n";
-    debug "# :cntrl:  = ", disp_chars(@{$posixes{'cntrl'}}), "\n";
-    debug "# :ascii:  = ", disp_chars(@{$posixes{'ascii'}}), "\n";
+    debug ":upper:  = ", disp_chars(@{$posixes{'upper'}}), "\n";
+    debug ":lower:  = ", disp_chars(@{$posixes{'lower'}}), "\n";
+    debug ":cased:  = ", disp_chars(@{$posixes{'cased'}}), "\n";
+    debug ":alpha:  = ", disp_chars(@{$posixes{'alpha'}}), "\n";
+    debug ":alnum:  = ", disp_chars(@{$posixes{'alnum'}}), "\n";
+    debug " w       = ", disp_chars(@{$posixes{'word'}}), "\n";
+    debug ":graph:  = ", disp_chars(@{$posixes{'graph'}}), "\n";
+    debug ":print:  = ", disp_chars(@{$posixes{'print'}}), "\n";
+    debug " d       = ", disp_chars(@{$posixes{'digit'}}), "\n";
+    debug ":xdigit: = ", disp_chars(@{$posixes{'xdigit'}}), "\n";
+    debug ":blank:  = ", disp_chars(@{$posixes{'blank'}}), "\n";
+    debug " s       = ", disp_chars(@{$posixes{'space'}}), "\n";
+    debug ":punct:  = ", disp_chars(@{$posixes{'punct'}}), "\n";
+    debug ":cntrl:  = ", disp_chars(@{$posixes{'cntrl'}}), "\n";
+    debug ":ascii:  = ", disp_chars(@{$posixes{'ascii'}}), "\n";
 
     foreach (keys %UPPER) {
 
@@ -800,10 +1024,10 @@ foreach my $Locale (@Locale) {
         }
     }
 
-    debug "# UPPER    = ", disp_chars(sort { ord $a <=> ord $b } keys %UPPER), "\n";
-    debug "# lower    = ", disp_chars(sort { ord $a <=> ord $b } keys %lower), "\n";
-    debug "# BoThCaSe = ", disp_chars(sort { ord $a <=> ord $b } keys %BoThCaSe), "\n";
-    debug "# Unassigned = ", disp_chars(sort { ord $a <=> ord $b } keys %Unassigned), "\n";
+    debug "UPPER    = ", disp_chars(sort { ord $a <=> ord $b } keys %UPPER), "\n";
+    debug "lower    = ", disp_chars(sort { ord $a <=> ord $b } keys %lower), "\n";
+    debug "BoThCaSe = ", disp_chars(sort { ord $a <=> ord $b } keys %BoThCaSe), "\n";
+    debug "Unassigned = ", disp_chars(sort { ord $a <=> ord $b } keys %Unassigned), "\n";
 
     my @failures;
     my @fold_failures;
@@ -874,7 +1098,7 @@ foreach my $Locale (@Locale) {
 
     @Added_alpha = sort { ord $a <=> ord $b } @Added_alpha;
 
-    debug "# Added_alpha = ", disp_chars(@Added_alpha), "\n";
+    debug "Added_alpha = ", disp_chars(@Added_alpha), "\n";
 
     # Cross-check the whole 8-bit character set.
 
@@ -1459,20 +1683,20 @@ foreach my $Locale (@Locale) {
             }
             report_result($Locale, $locales_test_number, $test == 0);
             if ($test) {
-                debug "# lesser  = '$lesser'\n";
-                debug "# greater = '$greater'\n";
-                debug "# lesser cmp greater = ",
+                debug "lesser  = '$lesser'\n";
+                debug "greater = '$greater'\n";
+                debug "lesser cmp greater = ",
                         $lesser cmp $greater, "\n";
-                debug "# greater cmp lesser = ",
+                debug "greater cmp lesser = ",
                         $greater cmp $lesser, "\n";
-                debug "# (greater) from = $from, to = $to\n";
+                debug "(greater) from = $from, to = $to\n";
                 for my $ti (@test) {
                     debugf("# %-40s %-4s", $ti,
                             $test{$ti} ? 'FAIL' : 'ok');
                     if ($ti =~ /\(\.*(\$.+ +cmp +\$[^\)]+)\.*\)/) {
                         debugf("(%s == %4d)", $1, eval $1);
                     }
-                    debug "\n#";
+                    debugf("\n#");
                 }
 
                 last;
@@ -1494,10 +1718,14 @@ foreach my $Locale (@Locale) {
     my $ok12;
     my $ok13;
     my $ok14;
+    my $ok14_5;
     my $ok15;
     my $ok16;
     my $ok17;
     my $ok18;
+    my $ok19;
+    my $ok20;
+    my $ok21;
 
     my $c;
     my $d;
@@ -1559,7 +1787,7 @@ foreach my $Locale (@Locale) {
             $ok11 = $f == $c;
             $ok12 = abs(($f + $g) - 3.57) < 0.01;
             $ok13 = $w == 0;
-            $ok14 = $ok15 = $ok16 = 1;  # Skip for non-utf8 locales
+            $ok14 = $ok14_5 = $ok15 = $ok16 = 1;  # Skip for non-utf8 locales
         }
         {
             no locale;
@@ -1613,16 +1841,21 @@ foreach my $Locale (@Locale) {
             $ok13 = $w == 0;
 
             # Look for non-ASCII error messages, and verify that the first
-            # such is NOT in UTF-8 (the others almost certainly will be like
-            # the first)  See [perl #119499].
+            # such is in UTF-8 (the others almost certainly will be like the
+            # first).  This is only done if the current locale has LC_MESSAGES
             $ok14 = 1;
-            foreach my $err (keys %!) {
-                use Errno;
-                $! = eval "&Errno::$err";   # Convert to strerror() output
-                my $strerror = "$!";
-                if ("$strerror" =~ /\P{ASCII}/) {
-                    $ok14 = ! utf8::is_utf8($strerror);
-                    last;
+            $ok14_5 = 1;
+            if (setlocale(&POSIX::LC_MESSAGES, $Locale)) {
+                foreach my $err (keys %!) {
+                    use Errno;
+                    $! = eval "&Errno::$err";   # Convert to strerror() output
+                    my $strerror = "$!";
+                    if ("$strerror" =~ /\P{ASCII}/) {
+                        $ok14 = utf8::is_utf8($strerror);
+                        no locale;
+                        $ok14_5 = "$!" !~ /\P{ASCII}/;
+                        last;
+                    }
                 }
             }
 
@@ -1643,11 +1876,39 @@ foreach my $Locale (@Locale) {
         $ok18 = $j eq sprintf("%g:%g", $h, $i);
     }
 
+    $ok19 = $ok20 = 1;
+    if (setlocale(&POSIX::LC_TIME, $Locale)) { # These tests aren't affected by
+                                               # :not_characters
+        my @times = CORE::localtime();
+
+        use locale;
+        $ok19 = POSIX::strftime("%p", @times) ne "%p"; # [perl #119425]
+        my $date = POSIX::strftime("'%A'  '%B'  '%Z'  '%p'", @times);
+        debug("'Day' 'Month' 'TZ' 'am/pm' = ", disp_str($date));
+
+        # If there is any non-ascii, it better be UTF-8 in a UTF-8 locale, and
+        # not UTF-8 if the locale isn't UTF-8.
+        $ok20 = $date =~ / ^ \p{ASCII}+ $ /x
+                || $is_utf8_locale == utf8::is_utf8($date);
+    }
+
+    $ok21 = 1;
+    foreach my $err (keys %!) {
+        no locale;
+        use Errno;
+        $! = eval "&Errno::$err";   # Convert to strerror() output
+        my $strerror = "$!";
+        if ("$strerror" =~ /\P{ASCII}/) {
+            $ok21 = 0;
+            last;
+        }
+    }
+
     report_result($Locale, ++$locales_test_number, $ok1);
     $test_names{$locales_test_number} = 'Verify that an intervening printf doesn\'t change assignment results';
     my $first_a_test = $locales_test_number;
 
-    debug "# $first_a_test..$locales_test_number: \$a = $a, \$b = $b, Locale = $Locale\n";
+    debug "$first_a_test..$locales_test_number: \$a = $a, \$b = $b, Locale = $Locale\n";
 
     report_result($Locale, ++$locales_test_number, $ok2);
     $test_names{$locales_test_number} = 'Verify that an intervening sprintf doesn\'t change assignment results';
@@ -1666,7 +1927,7 @@ foreach my $Locale (@Locale) {
     $test_names{$locales_test_number} = 'Verify that a different locale radix works when doing "==" with a scalar and an intervening sprintf';
     $problematical_tests{$locales_test_number} = 1;
 
-    debug "# $first_c_test..$locales_test_number: \$c = $c, \$d = $d, Locale = $Locale\n";
+    debug "$first_c_test..$locales_test_number: \$c = $c, \$d = $d, Locale = $Locale\n";
 
     report_result($Locale, ++$locales_test_number, $ok6);
     $test_names{$locales_test_number} = 'Verify that can assign stringified under inner no-locale block';
@@ -1679,7 +1940,7 @@ foreach my $Locale (@Locale) {
     $test_names{$locales_test_number} = 'Verify that "==" with a scalar and an intervening sprintf still works in inner no locale';
     $problematical_tests{$locales_test_number} = 1;
 
-    debug "# $first_e_test..$locales_test_number: \$e = $e, no locale\n";
+    debug "$first_e_test..$locales_test_number: \$e = $e, no locale\n";
 
     report_result($Locale, ++$locales_test_number, $ok9);
     $test_names{$locales_test_number} = 'Verify that after a no-locale block, a different locale radix still works when doing "==" with a constant';
@@ -1703,7 +1964,10 @@ foreach my $Locale (@Locale) {
     $problematical_tests{$locales_test_number} = 1;
 
     report_result($Locale, ++$locales_test_number, $ok14);
-    $test_names{$locales_test_number} = 'Verify that non-ASCII UTF-8 error messages are NOT in UTF-8';
+    $test_names{$locales_test_number} = 'Verify that non-ASCII UTF-8 error messages are in UTF-8';
+
+    report_result($Locale, ++$locales_test_number, $ok14_5);
+    $test_names{$locales_test_number} = '... and are ASCII outside "use locale"';
 
     report_result($Locale, ++$locales_test_number, $ok15);
     $test_names{$locales_test_number} = 'Verify that a number with a UTF-8 radix has a UTF-8 stringification';
@@ -1717,7 +1981,18 @@ foreach my $Locale (@Locale) {
     report_result($Locale, ++$locales_test_number, $ok18);
     $test_names{$locales_test_number} = 'Verify that a sprintf of a number back within locale scope uses locale radix';
 
-    debug "# $first_f_test..$locales_test_number: \$f = $f, \$g = $g, back to locale = $Locale\n";
+    report_result($Locale, ++$locales_test_number, $ok19);
+    $test_names{$locales_test_number} = 'Verify that strftime doesn\'t return "%p" in locales where %p is empty';
+
+    report_result($Locale, ++$locales_test_number, $ok20);
+    $test_names{$locales_test_number} = 'Verify that strftime returns date with UTF-8 flag appropriately set';
+    $problematical_tests{$locales_test_number} = 1;   # This is broken in
+                                                      # OS X 10.9.3
+
+    report_result($Locale, ++$locales_test_number, $ok21);
+    $test_names{$locales_test_number} = '"$!" is ASCII only outside of locale scope';
+
+    debug "$first_f_test..$locales_test_number: \$f = $f, \$g = $g, back to locale = $Locale\n";
 
     # Does taking lc separately differ from taking
     # the lc "in-line"?  (This was the bug 19990704.002, change #3568.)
@@ -1781,7 +2056,7 @@ foreach my $Locale (@Locale) {
             if (! $is_utf8_locale) {
                 my $y = lc $x;
                 next unless uc $y eq $x;
-                debug_more( "# UPPER=", disp_chars(($x)),
+                debug_more( "UPPER=", disp_chars(($x)),
                             "; lc=", disp_chars(($y)), "; ",
                             "; fc=", disp_chars((fc $x)), "; ",
                             disp_chars(($x)), "=~/", disp_chars(($y)), "/i=",
@@ -1827,7 +2102,7 @@ foreach my $Locale (@Locale) {
                 use locale ':not_characters';
                 my $y = lc $x;
                 next unless uc $y eq $x;
-                debug_more( "# UPPER=", disp_chars(($x)),
+                debug_more( "UPPER=", disp_chars(($x)),
                             "; lc=", disp_chars(($y)), "; ",
                             "; fc=", disp_chars((fc $x)), "; ",
                             disp_chars(($x)), "=~/", disp_chars(($y)), "/i=",
@@ -1849,7 +2124,7 @@ foreach my $Locale (@Locale) {
             if (! $is_utf8_locale) {
                 my $y = uc $x;
                 next unless lc $y eq $x;
-                debug_more( "# lower=", disp_chars(($x)),
+                debug_more( "lower=", disp_chars(($x)),
                             "; uc=", disp_chars(($y)), "; ",
                             "; fc=", disp_chars((fc $x)), "; ",
                             disp_chars(($x)), "=~/", disp_chars(($y)), "/i=",
@@ -1870,7 +2145,7 @@ foreach my $Locale (@Locale) {
                 use locale ':not_characters';
                 my $y = uc $x;
                 next unless lc $y eq $x;
-                debug_more( "# lower=", disp_chars(($x)),
+                debug_more( "lower=", disp_chars(($x)),
                             "; uc=", disp_chars(($y)), "; ",
                             "; fc=", disp_chars((fc $x)), "; ",
                             disp_chars(($x)), "=~/", disp_chars(($y)), "/i=",
@@ -1945,12 +2220,20 @@ foreach $test_num ($first_locales_test_number..$final_locales_test_number) {
             my $percent_fail = (int(.5 + (1000 * scalar(keys $Problem{$test_num})
                                           / scalar(@Locale))))
                                / 10;
-            if (! $debug && $percent_fail < $acceptable_failure_percentage)
-            {
-                $test_names{$test_num} .= 'TODO';
-                print "# ", 100 - $percent_fail, "% of locales pass the following test, so it is likely that the failures\n";
-                print "# are errors in the locale definitions.  The test is marked TODO, as the\n";
-                print "# problem is not likely to be Perl's\n";
+            if ($percent_fail < $acceptable_failure_percentage) {
+                if (! $debug) {
+                    $test_names{$test_num} .= 'TODO';
+                    print "# ", 100 - $percent_fail, "% of locales pass the following test, so it is likely that the failures\n";
+                    print "# are errors in the locale definitions.  The test is marked TODO, as the\n";
+                    print "# problem is not likely to be Perl's\n";
+                }
+            }
+            elsif ($debug) {
+                print "# $percent_fail% of locales (",
+                      scalar(keys $Problem{$test_num}),
+                      " of ",
+                      scalar(@Locale),
+                      ") fail the following test\n";
             }
         }
         print "#\n";

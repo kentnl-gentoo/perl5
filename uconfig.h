@@ -246,13 +246,13 @@
 
 /* HAS_MBSTOWCS:
  *	This symbol, if defined, indicates that the mbstowcs routine is
- *	available to covert a multibyte string into a wide character string.
+ *	available to convert a multibyte string into a wide character string.
  */
 /*#define	HAS_MBSTOWCS		/ **/
 
 /* HAS_MBTOWC:
  *	This symbol, if defined, indicates that the mbtowc routine is available
- *	to covert a multibyte to a wide character.
+ *	to convert a multibyte to a wide character.
  */
 /*#define HAS_MBTOWC		/ **/
 
@@ -614,7 +614,7 @@
 
 /* HAS_WCTOMB:
  *	This symbol, if defined, indicates that the wctomb routine is available
- *	to covert a wide character to a multibyte.
+ *	to convert a wide character to a multibyte.
  */
 /*#define HAS_WCTOMB		/ **/
 
@@ -943,17 +943,8 @@
  *	This symbol holds the hexadecimal constant defined in byteorder,
  *	in a UV, i.e. 0x1234 or 0x4321 or 0x12345678, etc...
  *	If the compiler supports cross-compiling or multiple-architecture
- *	binaries (e.g. on NeXT systems), use compiler-defined macros to
+ *	binaries, use compiler-defined macros to
  *	determine the byte order.
- *	On NeXT 3.2 (and greater), you can build "Fat" Multiple Architecture
- *	Binaries (MAB) on either big endian or little endian machines.
- *	The endian-ness is available at compile-time.  This only matters
- *	for perl, where the config.h can be generated and installed on
- *	one system, and used by a different architecture to build an
- *	extension.  Older versions of NeXT that might not have
- *	defined either *_ENDIAN__ were all on Motorola 680x0 series,
- *	so the default case (for NeXT) is big endian to catch them.
- *	This might matter for NeXT 3.0.
  */
 #if defined(MULTIARCH)
 #  ifdef __LITTLE_ENDIAN__
@@ -975,12 +966,9 @@
 #      endif
 #    endif
 #  endif
-#  if !defined(BYTEORDER) && (defined(NeXT) || defined(__NeXT__))
-#    define BYTEORDER 0x4321
-#  endif
 #else
 #define BYTEORDER 0x1234	/* large digits for MSB */
-#endif /* NeXT */
+#endif
 
 /* CHARBITS:
  *	This symbol contains the size of a char, so that the C preprocessor
@@ -2638,14 +2626,7 @@
  *	This symbol, if defined, indicates that this system uses
  *	EBCDIC encoding.
  */
-/* BOOTSTRAP_CHARSET:
- *	This symbol, if defined, indicates that this system needs
- *	converting various files to the native character set before
- *	bringing up perl on a system that has a non-ASCII character
- *	set and no working perl.
- */
 /*#define	EBCDIC 		/ **/
-/*#define	BOOTSTRAP_CHARSET	/ **/
 
 /* Fpos_t:
  *	This symbol holds the type used to declare file positions in libc.
@@ -3292,6 +3273,26 @@
 /*#define PERL_VENDORLIB_EXP ""		/ **/
 /*#define PERL_VENDORLIB_STEM ""		/ **/
 
+/* HAS_BACKTRACE:
+ *	This symbol, if defined, indicates that the backtrace() routine is
+ *	available to get a stack trace.  The <execinfo.h> header must be
+ *	included to use this routine.
+ */
+/*#define HAS_BACKTRACE	/ **/
+
+/* HAS_DLADDR:
+ *	This symbol, if defined, indicates that the dladdr() routine is
+ *	available to get a stack trace.  The <execinfo.h> header must be
+ *	included to use this routine.
+ */
+/*#define HAS_DLADDR	/ **/
+
+/* I_EXECINFO:
+ *	This symbol, if defined, indicates to the C program that it should
+ *	include <execinfo.h> for backtrace() support.
+ */
+/*#define I_EXECINFO		/ **/
+
 /* I_TERMIO:
  *	This symbol, if defined, indicates that the program should include
  *	<termio.h> rather than <sgtty.h>.  There are also differences in
@@ -3808,6 +3809,11 @@
  */
 /*#define	HAS_OFF64_T    		/ **/
 
+/* HAS_PTRDIFF_T:
+ *	This symbol will be defined if the C compiler supports ptrdiff_t.
+ */
+#define	HAS_PTRDIFF_T    		/**/
+
 /* HAS_PRCTL:
  *	This symbol, if defined, indicates that the prctl routine is
  *	available to set process title.
@@ -4138,6 +4144,18 @@
  */
 /*#define HAS_USTAT		/ **/
 
+/* HAS_WCSCMP:
+ *	This symbol, if defined, indicates that the wcscmp routine is
+ *	available to compare two wide character strings.
+ */
+/*#define HAS_WCSCMP	/ **/
+
+/* HAS_WCSXFRM:
+ *	This symbol, if defined, indicates that the wcsxfrm routine is
+ *	available to tranform a wide character string for wcscmp().
+ */
+/*#define HAS_WCSXFRM	/ **/
+
 /* HAS_WRITEV:
  *	This symbol, if defined, indicates that the writev routine is
  *	available to do scatter writes.
@@ -4171,6 +4189,12 @@
  *	could be included by the C program to get the assert() macro.
  */
 #define	I_ASSERT		/**/
+
+/* I_BFD:
+ *	This symbol, if defined, indicates that <bfd.h> exists and
+ *	can be included.
+ */
+/*#define	I_BFD		/ **/
 
 /* I_CRYPT:
  *	This symbol, if defined, indicates that <crypt.h> exists and
@@ -4365,12 +4389,6 @@
 /*#define PERL_PRIgldbl	"llg"	/ **/
 /*#define PERL_PRIeldbl	"lle"	/ **/
 /*#define PERL_SCNfldbl	"llf"	/ **/
-
-/* PERL_MAD:
- *	This symbol, if defined, indicates that the Misc Attribution
- *	Declaration code should be conditionally compiled.
- */
-/*#define	PERL_MAD		/ **/
 
 /* NEED_VA_COPY:
  *	This symbol, if defined, indicates that the system stores
@@ -4637,6 +4655,12 @@
 /*#define	USE_64_BIT_ALL		/ **/
 #endif
 
+/* USE_CBACKTRACE:
+ *	This symbol, if defined, indicates that Perl should
+ *	be built with support for backtrace.
+ */
+/*#define USE_CBACKTRACE		/ **/
+
 /* USE_DTRACE:
  *	This symbol, if defined, indicates that Perl should
  *	be built with support for DTrace.
@@ -4718,6 +4742,6 @@
 #endif
 
 /* Generated from:
- * 986d2349e078df67f02d5b9747b7fe65abb0d2875fb52a836138919aafe08545 config_h.SH
- * a61a38253be27e9d2b4ff63b9f34ef9c6870a03037609f2c89840ad890a7aef8 uconfig.sh
+ * a37f46da5285428077feb313bcbe68661740bac16d76fa658d723d9fcc91c2c4 config_h.SH
+ * 4b709c0b049c660c04c0932eaa8481f9ca6fdc697ec4ffaa86b7bef21ee886a8 uconfig.sh
  * ex: set ro: */

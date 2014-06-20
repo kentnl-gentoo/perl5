@@ -17,7 +17,6 @@
 
 /*
 =head1 Magical Functions
-
 "Magic" is special data attached to SV structures in order to give them
 "magical" properties.  When any Perl code tries to read from, or assign to,
 an SV marked as magical, it calls the 'get' or 'set' function associated
@@ -34,6 +33,8 @@ of functions that implement the get(), set(), length() etc functions,
 plus space for some flags and pointers.  For example, a tied variable has
 a MAGIC structure that contains a pointer to the object associated with the
 tie.
+
+=cut
 
 */
 
@@ -347,9 +348,9 @@ Perl_mg_size(pTHX_ SV *sv)
 	    /* FIXME */
 	default:
 	    Perl_croak(aTHX_ "Size magic not implemented");
-	    break;
+
     }
-    return 0;
+    NOT_REACHED; /* NOTREACHED */
 }
 
 /*
@@ -699,6 +700,7 @@ int
 Perl_magic_regdatum_set(pTHX_ SV *sv, MAGIC *mg)
 {
     PERL_ARGS_ASSERT_MAGIC_REGDATUM_SET;
+    PERL_UNUSED_CONTEXT;
     PERL_UNUSED_ARG(sv);
     PERL_UNUSED_ARG(mg);
     Perl_croak_no_modify();
@@ -753,24 +755,19 @@ S_fixup_errno_string(pTHX_ SV* sv)
     if(strEQ(SvPVX(sv), "")) {
 	sv_catpv(sv, UNKNOWN_ERRNO_MSG);
     }
-#if 0
-    /* This is disabled to get v5.20 out the door.  It means that $! behaves as
-     * if in the scope of both 'use locale' and 'use bytes'.  This can cause
-     * mixed encodings and double utf8 upgrading,  See towards the end of the
-     * thread for [perl #119499] */
     else {
 
         /* In some locales the error string may come back as UTF-8, in which
          * case we should turn on that flag.  This didn't use to happen, and to
-         * avoid any possible backward compatibility issues, we don't turn on
-         * the flag unless we have to.  So the flag stays off for an entirely
-         * ASCII string.  We assume that if the string looks like UTF-8, it
-         * really is UTF-8:  "text in any other encoding that uses bytes with
-         * the high bit set is extremely unlikely to pass a UTF-8 validity
-         * test" (http://en.wikipedia.org/wiki/Charset_detection).  There is a
-         * potential that we will get it wrong however, especially on short
-         * error message text.  (If it turns out to be necessary, we could also
-         * keep track if the current LC_MESSAGES locale is UTF-8) */
+         * avoid as many possible backward compatibility issues as possible, we
+         * don't turn on the flag unless we have to.  So the flag stays off for
+         * an entirely ASCII string.  We assume that if the string looks like
+         * UTF-8, it really is UTF-8:  "text in any other encoding that uses
+         * bytes with the high bit set is extremely unlikely to pass a UTF-8
+         * validity test" (http://en.wikipedia.org/wiki/Charset_detection).
+         * There is a potential that we will get it wrong however, especially
+         * on short error message text.  (If it turns out to be necessary, we
+         * could also keep track if the current LC_MESSAGES locale is UTF-8) */
         if (! IN_BYTES  /* respect 'use bytes' */
             && ! is_ascii_string((U8*) SvPVX_const(sv), SvCUR(sv))
             && is_utf8_string((U8*) SvPVX_const(sv), SvCUR(sv)))
@@ -778,7 +775,6 @@ S_fixup_errno_string(pTHX_ SV* sv)
             SvUTF8_on(sv);
         }
     }
-#endif
 }
 
 #ifdef VMS
@@ -850,7 +846,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 #elif defined(OS2)
         if (!(_emx_env & 0x200)) {	/* Under DOS */
             sv_setnv(sv, (NV)errno);
-            sv_setpv(sv, errno ? Strerror(errno) : "");
+            sv_setpv(sv, errno ? my_strerror(errno) : "");
         } else {
             if (errno != errno_isOS2) {
                 const int tmp = _syserrno();
@@ -905,7 +901,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
                 /* Strerror can return NULL on some platforms, which will
                  * result in 'sv' not being considered SvOK.  The SvNOK_on()
                  * below will cause just the number part to be valid */
-                sv_setpv(sv, Strerror(errno));
+                sv_setpv(sv, my_strerror(errno));
                 if (SvOK(sv)) {
                     fixup_errno_string(sv);
                 }
@@ -1120,12 +1116,15 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 #ifdef HAS_GETGROUPS
 	{
 	    Groups_t *gary = NULL;
-	    I32 i, num_groups = getgroups(0, gary);
-            Newx(gary, num_groups, Groups_t);
-            num_groups = getgroups(num_groups, gary);
-	    for (i = 0; i < num_groups; i++)
-		Perl_sv_catpvf(aTHX_ sv, " %"IVdf, (IV)gary[i]);
-            Safefree(gary);
+	    I32 i;
+            I32 num_groups = getgroups(0, gary);
+            if (num_groups > 0) {
+                Newx(gary, num_groups, Groups_t);
+                num_groups = getgroups(num_groups, gary);
+                for (i = 0; i < num_groups; i++)
+                    Perl_sv_catpvf(aTHX_ sv, " %"IVdf, (IV)gary[i]);
+                Safefree(gary);
+            }
 	}
 	(void)SvIOK_on(sv);	/* what a wonderful hack! */
 #endif
@@ -1364,6 +1363,12 @@ Perl_csighandler(int sig)
 #else
     dTHX;
 #endif
+#if defined(__cplusplus) && defined(__GNUC__)
+    /* g++ doesn't support PERL_UNUSED_DECL, so the sip and uap
+     * parameters would be warned about. */
+    PERL_UNUSED_ARG(sip);
+    PERL_UNUSED_ARG(uap);
+#endif
 #ifdef FAKE_PERSISTENT_SIGNAL_HANDLERS
     (void) rsignal(sig, PL_csighandlerp);
     if (PL_sig_ignoring[sig]) return;
@@ -1435,6 +1440,7 @@ Perl_csighandler_init(void)
 static void
 unblock_sigmask(pTHX_ void* newset)
 {
+    PERL_UNUSED_CONTEXT;
     sigprocmask(SIG_UNBLOCK, (sigset_t*)newset, NULL);
 }
 #endif
@@ -1675,6 +1681,7 @@ Perl_magic_clearisa(pTHX_ SV *sv, MAGIC *mg)
 	   same function. */
 	mg = mg_find(mg->mg_obj, PERL_MAGIC_isa);
 
+    assert(mg);
     if (SvTYPE(mg->mg_obj) == SVt_PVAV) { /* multiple stashes */
 	SV **svp = AvARRAY((AV *)mg->mg_obj);
 	I32 items = AvFILLp((AV *)mg->mg_obj) + 1;
@@ -2067,6 +2074,7 @@ Perl_magic_cleararylen_p(pTHX_ SV *sv, MAGIC *mg)
 
     PERL_ARGS_ASSERT_MAGIC_CLEARARYLEN_P;
     PERL_UNUSED_ARG(sv);
+    PERL_UNUSED_CONTEXT;
 
     /* Reset the iterator when the array is cleared */
 #if IVSIZE == I32SIZE
@@ -2831,7 +2839,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	break;
     case '<':
 	{
-        int rc = 0;
+        /* XXX $< currently silently ignores failures */
 	const Uid_t new_uid = SvUID(sv);
 	PL_delaymagic_uid = new_uid;
 	if (PL_delaymagic) {
@@ -2839,34 +2847,32 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    break;				/* don't do magic till later */
 	}
 #ifdef HAS_SETRUID
-	rc = setruid(new_uid);
+	PERL_UNUSED_RESULT(setruid(new_uid));
 #else
 #ifdef HAS_SETREUID
-	 rc = setreuid(new_uid, (Uid_t)-1);
+        PERL_UNUSED_RESULT(setreuid(new_uid, (Uid_t)-1));
 #else
 #ifdef HAS_SETRESUID
-       rc = setresuid(new_uid, (Uid_t)-1, (Uid_t)-1);
+        PERL_UNUSED_RESULT(setresuid(new_uid, (Uid_t)-1, (Uid_t)-1));
 #else
 	if (new_uid == PerlProc_geteuid()) {		/* special case $< = $> */
 #ifdef PERL_DARWIN
 	    /* workaround for Darwin's setuid peculiarity, cf [perl #24122] */
 	    if (new_uid != 0 && PerlProc_getuid() == 0)
-		 rc = PerlProc_setuid(0);
+                PERL_UNUSED_RESULT(PerlProc_setuid(0));
 #endif
-	     rc = PerlProc_setuid(new_uid);
+            PERL_UNUSED_RESULT(PerlProc_setuid(new_uid));
 	} else {
 	    Perl_croak(aTHX_ "setruid() not implemented");
 	}
 #endif
 #endif
 #endif
-        /* XXX $< currently silently ignores failures */
-        PERL_UNUSED_VAR(rc);
 	break;
 	}
     case '>':
 	{
-        int rc = 0;
+        /* XXX $> currently silently ignores failures */
 	const Uid_t new_euid = SvUID(sv);
 	PL_delaymagic_euid = new_euid;
 	if (PL_delaymagic) {
@@ -2874,29 +2880,27 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    break;				/* don't do magic till later */
 	}
 #ifdef HAS_SETEUID
-	rc = seteuid(new_euid);
+	PERL_UNUSED_RESULT(seteuid(new_euid));
 #else
 #ifdef HAS_SETREUID
-	rc = setreuid((Uid_t)-1, new_euid);
+	PERL_UNUSED_RESULT(setreuid((Uid_t)-1, new_euid));
 #else
 #ifdef HAS_SETRESUID
-	rc = setresuid((Uid_t)-1, new_euid, (Uid_t)-1);
+	PERL_UNUSED_RESULT(setresuid((Uid_t)-1, new_euid, (Uid_t)-1));
 #else
 	if (new_euid == PerlProc_getuid())		/* special case $> = $< */
-	    rc = PerlProc_setuid(new_euid);
+	    PERL_UNUSED_RESULT(PerlProc_setuid(new_euid));
 	else {
 	    Perl_croak(aTHX_ "seteuid() not implemented");
 	}
 #endif
 #endif
 #endif
-        /* XXX $> currently silently ignores failures */
-        PERL_UNUSED_VAR(rc);
 	break;
 	}
     case '(':
 	{
-        int rc = 0;
+        /* XXX $( currently silently ignores failures */
 	const Gid_t new_gid = SvGID(sv);
 	PL_delaymagic_gid = new_gid;
 	if (PL_delaymagic) {
@@ -2904,29 +2908,27 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    break;				/* don't do magic till later */
 	}
 #ifdef HAS_SETRGID
-	rc = setrgid(new_gid);
+	PERL_UNUSED_RESULT(setrgid(new_gid));
 #else
 #ifdef HAS_SETREGID
-	rc = setregid(new_gid, (Gid_t)-1);
+	PERL_UNUSED_RESULT(setregid(new_gid, (Gid_t)-1));
 #else
 #ifdef HAS_SETRESGID
-        rc = setresgid(new_gid, (Gid_t)-1, (Gid_t) -1);
+        PERL_UNUSED_RESULT(setresgid(new_gid, (Gid_t)-1, (Gid_t) -1));
 #else
 	if (new_gid == PerlProc_getegid())			/* special case $( = $) */
-	    rc = PerlProc_setgid(new_gid);
+	    PERL_UNUSED_RESULT(PerlProc_setgid(new_gid));
 	else {
 	    Perl_croak(aTHX_ "setrgid() not implemented");
 	}
 #endif
 #endif
 #endif
-        /* XXX $( currently silently ignores failures */
-        PERL_UNUSED_VAR(rc);
 	break;
 	}
     case ')':
 	{
-        int rc = 0;
+        /* XXX $) currently silently ignores failures */
 	Gid_t new_egid;
 #ifdef HAS_SETGROUPS
 	{
@@ -2958,7 +2960,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
                 gary[i] = (Groups_t)Atol(p);
             }
             if (i)
-                rc = setgroups(i, gary);
+                PERL_UNUSED_RESULT(setgroups(i, gary));
 	    Safefree(gary);
 	}
 #else  /* HAS_SETGROUPS */
@@ -2970,24 +2972,22 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    break;				/* don't do magic till later */
 	}
 #ifdef HAS_SETEGID
-	rc = setegid(new_egid);
+	PERL_UNUSED_RESULT(setegid(new_egid));
 #else
 #ifdef HAS_SETREGID
-	rc = setregid((Gid_t)-1, new_egid);
+	PERL_UNUSED_RESULT(setregid((Gid_t)-1, new_egid));
 #else
 #ifdef HAS_SETRESGID
-	rc = setresgid((Gid_t)-1, new_egid, (Gid_t)-1);
+	PERL_UNUSED_RESULT(setresgid((Gid_t)-1, new_egid, (Gid_t)-1));
 #else
 	if (new_egid == PerlProc_getgid())			/* special case $) = $( */
-	    rc = PerlProc_setgid(new_egid);
+	    PERL_UNUSED_RESULT(PerlProc_setgid(new_egid));
 	else {
 	    Perl_croak(aTHX_ "setegid() not implemented");
 	}
 #endif
 #endif
 #endif
-        /* XXX $) currently silently ignores failures */
-        PERL_UNUSED_VAR(rc);
 	break;
 	}
     case ':':
@@ -3437,6 +3437,7 @@ Perl_magic_copycallchecker(pTHX_ SV *sv, MAGIC *mg, SV *nsv,
 
     sv_magic(nsv, &PL_sv_undef, mg->mg_type, NULL, 0);
     nmg = mg_find(nsv, mg->mg_type);
+    assert(nmg);
     if (nmg->mg_flags & MGf_REFCOUNTED) SvREFCNT_dec(nmg->mg_obj);
     nmg->mg_ptr = mg->mg_ptr;
     nmg->mg_obj = SvREFCNT_inc_simple(mg->mg_obj);

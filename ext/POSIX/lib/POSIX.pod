@@ -819,7 +819,7 @@ for creating hard links into files, see L<perlfunc/link>.
 =item C<localeconv>
 
 Get numeric formatting information.  Returns a reference to a hash
-containing the current locale formatting values.  Users of this function
+containing the current underlying locale's formatting values.  Users of this function
 should also read L<perllocale>, which provides a comprehensive
 discussion of Perl locale handling, including
 L<a section devoted to this function|perllocale/The localeconv function>.
@@ -1186,7 +1186,7 @@ L<a section devoted to this function|perllocale/The setlocale function>.
 The discussion here is merely a summary reference for C<setlocale()>.
 Note that Perl itself is almost entirely unaffected by the locale
 except within the scope of S<C<"use locale">>.  (Exceptions are listed
-in L<perllocale/Not within the scope of any "use locale" variant>.)
+in L<perllocale/Not within the scope of "use locale">.)
 
 The following examples assume
 

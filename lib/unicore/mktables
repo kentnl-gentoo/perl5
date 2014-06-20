@@ -528,6 +528,9 @@ my $unicode_reference_url = 'http://www.unicode.org/reports/tr44/';
 #   0275;LATIN SMALL LETTER BARRED O;Ll;0;L;;;;;N;;;019F;;019F
 # Without this change, there are casing problems for this character.
 #
+# Search for $string_compare_versions to see how to compare changes to
+# properties between Unicode versions
+#
 ##############################################################################
 
 my $UNDEF = ':UNDEF:';  # String to print out for undefined values in tracing
@@ -16928,15 +16931,17 @@ sub write_all_tables() {
     # (sort so that if there is an immutable file name, it has precedence, so
     # some other property can't come in and take over its file name.  (We
     # don't care if both defined, as they had better be different anyway.)
-    # We also sort by the property's name.  This is just for repeatability of
-    # the outputs between runs of this program, but does not affect
-    # correctness.
+    # The property named 'Perl' needs to be first (it doesn't have any
+    # immutable file name) because empty properties are defined in terms of
+    # its table named 'All' under the -annotate option.)   We also sort by
+    # the property's name.  This is just for repeatability of the outputs
+    # between runs of this program, but does not affect correctness.
     PROPERTY:
-    foreach my $property (sort { return -1 if defined $a->file;
+    foreach my $property ($perl,
+                          sort { return -1 if defined $a->file;
                                  return 1 if defined $b->file;
                                  return $a->name cmp $b->name;
-                                }
-                                  property_ref('*'))
+                                } grep { $_ != $perl } property_ref('*'))
     {
         my $type = $property->type;
 
@@ -17879,10 +17884,12 @@ sub make_property_test_script() {
 
     &write($t_path,
            0,           # Not utf8;
-           [<DATA>,
+           [$HEADER,
+            <DATA>,
             @output,
             (map {"Test_X('$_');\n"} @backslash_X_tests),
-            "Finished();\n"]);
+            "Finished();\n"
+           ]);
     return;
 }
 
@@ -18598,8 +18605,8 @@ use warnings;
 
 # If run outside the normal test suite on an ASCII platform, you can
 # just create a latin1_to_native() function that just returns its
-# inputs, because that's the only function used from test.pl
-require "test.pl";
+# inputs, because that's the only function used from charset_tools.pl
+require "charset_tools.pl";
 
 # Test qr/\X/ and the \p{} regular expression constructs.  This file is
 # constructed by mktables from the tables it generates, so if mktables is

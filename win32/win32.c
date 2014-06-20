@@ -279,7 +279,7 @@ get_regstr_from(HKEY hkey, const char *valuename, SV **svp)
 	{
 	    dTHX;
 	    if (!*svp)
-		*svp = sv_2mortal(newSVpvn("",0));
+		*svp = sv_2mortal(newSVpvs(""));
 	    SvGROW(*svp, datalen);
 	    retval = RegQueryValueEx(handle, valuename, 0, NULL,
 				     (PBYTE)SvPVX(*svp), &datalen);
@@ -358,9 +358,9 @@ get_emd_part(SV **prev_pathp, STRLEN *const len, char *trailing_path, ...)
 	/* directory exists */
 	dTHX;
 	if (!*prev_pathp)
-	    *prev_pathp = sv_2mortal(newSVpvn("",0));
+	    *prev_pathp = sv_2mortal(newSVpvs(""));
 	else if (SvPVX(*prev_pathp))
-	    sv_catpvn(*prev_pathp, ";", 1);
+	    sv_catpvs(*prev_pathp, ";");
 	sv_catpv(*prev_pathp, mod_name);
 	if(len)
 	    *len = SvCUR(*prev_pathp);
@@ -418,7 +418,7 @@ win32_get_xlib(const char *pl, const char *xlib, const char *libname,
 	sv1 = sv2;
     } else if (sv2) {
         dTHX;
-	sv_catpvn(sv1, ";", 1);
+	sv_catpv(sv1, ";");
 	sv_catsv(sv1, sv2);
     }
 
@@ -1785,7 +1785,7 @@ win32_getenv(const char *name)
 
     needlen = GetEnvironmentVariableA(name,NULL,0);
     if (needlen != 0) {
-	curitem = sv_2mortal(newSVpvn("", 0));
+	curitem = sv_2mortal(newSVpvs(""));
         do {
             SvGROW(curitem, needlen+1);
             needlen = GetEnvironmentVariableA(name,SvPVX(curitem),
@@ -4356,13 +4356,7 @@ ansify_path(void)
          * will not call mg_set() if it initializes %ENV from `environ`.
          */
         SetEnvironmentVariableA("PATH", ansi_path+5);
-        /* We are intentionally leaking the ansi_path string here because
-         * the some runtime libraries puts it directly into the environ
-         * array.  The Microsoft runtime library seems to make a copy,
-         * but will leak the copy should it be replaced again later.
-         * Since this code is only called once during PERL_SYS_INIT this
-         * shouldn't really matter.
-         */
+        win32_free(ansi_path);
     }
     win32_free(wide_path);
 }

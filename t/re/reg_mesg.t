@@ -226,6 +226,8 @@ my @death =
  'm/\g{/'  => 'Sequence \g{... not terminated {#} m/\g{{#}/',
  'm/\k</'  => 'Sequence \k<... not terminated {#} m/\k<{#}/',
  'm/\cß/' => "Character following \"\\c\" must be printable ASCII",
+ '/((?# This is a comment in the middle of a token)?:foo)/' => 'In \'(?...)\', the \'(\' and \'?\' must be adjacent {#} m/((?# This is a comment in the middle of a token)?{#}:foo)/',
+ '/((?# This is a comment in the middle of a token)*FAIL)/' => 'In \'(*VERB...)\', the \'(\' and \'*\' must be adjacent {#} m/((?# This is a comment in the middle of a token)*{#}FAIL)/',
 );
 
 my @death_utf8 = mark_as_utf8(
@@ -337,7 +339,6 @@ my @warning = (
     '/(?=a)*/' => '(?=a)* matches null string many times {#} m/(?=a)*{#}/',
     'my $x = \'\m\'; qr/a$x/' => 'Unrecognized escape \m passed through {#} m/a\m{#}/',
     '/\q/' => 'Unrecognized escape \q passed through {#} m/\q{#}/',
-    '/\q{/' => 'Unrecognized escape \q{ passed through {#} m/\q{{#}/',
     '/(?=a){1,3}/' => 'Quantifier unexpected on zero-length expression {#} m/(?=a){1,3}{#}/',
     '/(a|b)(?=a){3}/' => 'Quantifier unexpected on zero-length expression {#} m/(a|b)(?=a){3}{#}/',
     '/\_/' => "",
@@ -414,10 +415,12 @@ my @experimental_regex_sets = (
 );
 
 my @deprecated = (
-    "/(?x)latin1\\\x{85}\x{85}\\\x{85}/" => 'Escape literal pattern white space under /x {#} ' . "m/(?x)latin1\\\x{85}\x{85}{#}\\\x{85}/",
-    'use utf8; /(?x)utf8\\/' => 'Escape literal pattern white space under /x {#} ' . "m/(?x)utf8\\\N{NEXT LINE}\N{NEXT LINE}{#}\\\N{NEXT LINE}/",
-    '/((?# This is a comment in the middle of a token)?:foo)/' => 'In \'(?...)\', splitting the initial \'(?\' is deprecated {#} m/((?# This is a comment in the middle of a token)?{#}:foo)/',
-    '/((?# This is a comment in the middle of a token)*FAIL)/' => 'In \'(*VERB...)\', splitting the initial \'(*\' is deprecated {#} m/((?# This is a comment in the middle of a token)*{#}FAIL)/',
+    '/\w{/' => 'Unescaped left brace in regex is deprecated, passed through {#} m/\w{{#}/',
+    '/\q{/' => [
+                 'Unrecognized escape \q{ passed through {#} m/\q{{#}/',
+                 'Unescaped left brace in regex is deprecated, passed through {#} m/\q{{#}/'
+               ],
+    '/:{4,a}/' => 'Unescaped left brace in regex is deprecated, passed through {#} m/:{{#}4,a}/',
 );
 
 while (my ($regex, $expect) = splice @death, 0, 2) {

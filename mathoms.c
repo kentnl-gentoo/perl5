@@ -28,7 +28,15 @@
  *
  * The compilation of this file can be suppressed; see INSTALL
  *
+=head1 Obsolete backwards compatibility functions
+Some of these are also deprecated.  You can exclude these from
+your compiled Perl by adding this option to Configure:
+C<-Accflags='-DNO_MATHOMS'>
+
+=cut
+
  */
+
 
 #include "EXTERN.h"
 #define PERL_IN_MATHOMS_C
@@ -544,6 +552,7 @@ int
 Perl_fprintf_nocontext(PerlIO *stream, const char *format, ...)
 {
     dTHXs;
+    int ret = 0;
     va_list(arglist);
 
     /* Easier to special case this here than in embed.pl. (Look at what it
@@ -553,7 +562,9 @@ Perl_fprintf_nocontext(PerlIO *stream, const char *format, ...)
 #endif
 
     va_start(arglist, format);
-    return PerlIO_vprintf(stream, format, arglist);
+    ret = PerlIO_vprintf(stream, format, arglist);
+    va_end(arglist);
+    return ret;
 }
 
 int
@@ -561,13 +572,16 @@ Perl_printf_nocontext(const char *format, ...)
 {
     dTHX;
     va_list(arglist);
+    int ret = 0;
 
 #ifdef PERL_IMPLICIT_CONTEXT
     PERL_ARGS_ASSERT_PRINTF_NOCONTEXT;
 #endif
 
     va_start(arglist, format);
-    return PerlIO_vprintf(PerlIO_stdout(), format, arglist);
+    ret = PerlIO_vprintf(PerlIO_stdout(), format, arglist);
+    va_end(arglist);
+    return ret;
 }
 
 #if defined(HUGE_VAL) || (defined(USE_LONG_DOUBLE) && defined(HUGE_VALL))
@@ -714,6 +728,7 @@ bool
 Perl_is_utf8_string_loc(pTHX_ const U8 *s, STRLEN len, const U8 **ep)
 {
     PERL_ARGS_ASSERT_IS_UTF8_STRING_LOC;
+    PERL_UNUSED_CONTEXT;
 
     return is_utf8_string_loclen(s, len, ep, 0);
 }
@@ -1227,6 +1242,22 @@ ASCII_TO_NEED(const UV enc, const UV ch)
     return ch;
 }
 
+bool      /* Made into a function, so can be deprecated */
+Perl_isIDFIRST_lazy(pTHX_ const char* p)
+{
+    PERL_ARGS_ASSERT_ISIDFIRST_LAZY;
+
+    return isIDFIRST_lazy_if(p,1);
+}
+
+bool      /* Made into a function, so can be deprecated */
+Perl_isALNUM_lazy(pTHX_ const char* p)
+{
+    PERL_ARGS_ASSERT_ISALNUM_LAZY;
+
+    return isALNUM_lazy_if(p,1);
+}
+
 bool
 Perl_is_uni_alnum(pTHX_ UV c)
 {
@@ -1248,84 +1279,98 @@ Perl_is_uni_alpha(pTHX_ UV c)
 bool
 Perl_is_uni_ascii(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isASCII_uni(c);
 }
 
 bool
 Perl_is_uni_blank(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isBLANK_uni(c);
 }
 
 bool
 Perl_is_uni_space(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isSPACE_uni(c);
 }
 
 bool
 Perl_is_uni_digit(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isDIGIT_uni(c);
 }
 
 bool
 Perl_is_uni_upper(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isUPPER_uni(c);
 }
 
 bool
 Perl_is_uni_lower(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isLOWER_uni(c);
 }
 
 bool
 Perl_is_uni_cntrl(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isCNTRL_L1(c);
 }
 
 bool
 Perl_is_uni_graph(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isGRAPH_uni(c);
 }
 
 bool
 Perl_is_uni_print(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isPRINT_uni(c);
 }
 
 bool
 Perl_is_uni_punct(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isPUNCT_uni(c);
 }
 
 bool
 Perl_is_uni_xdigit(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isXDIGIT_uni(c);
 }
 
 bool
 Perl_is_uni_alnum_lc(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isWORDCHAR_LC_uvchr(c);
 }
 
 bool
 Perl_is_uni_alnumc_lc(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isALPHANUMERIC_LC_uvchr(c);
 }
 
 bool
 Perl_is_uni_idfirst_lc(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     /* XXX Should probably be something that resolves to the old IDFIRST, but
      * this function is deprecated, so not bothering */
     return isIDFIRST_LC_uvchr(c);
@@ -1334,24 +1379,28 @@ Perl_is_uni_idfirst_lc(pTHX_ UV c)
 bool
 Perl_is_uni_alpha_lc(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isALPHA_LC_uvchr(c);
 }
 
 bool
 Perl_is_uni_ascii_lc(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isASCII_LC_uvchr(c);
 }
 
 bool
 Perl_is_uni_blank_lc(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isBLANK_LC_uvchr(c);
 }
 
 bool
 Perl_is_uni_space_lc(pTHX_ UV c)
 {
+    PERL_UNUSED_CONTEXT;
     return isSPACE_LC_uvchr(c);
 }
 
@@ -1359,6 +1408,54 @@ bool
 Perl_is_uni_digit_lc(pTHX_ UV c)
 {
     return isDIGIT_LC_uvchr(c);
+}
+
+bool
+Perl_is_uni_idfirst(pTHX_ UV c)
+{
+    U8 tmpbuf[UTF8_MAXBYTES+1];
+    uvchr_to_utf8(tmpbuf, c);
+    return _is_utf8_idstart(tmpbuf);
+}
+
+bool
+Perl_is_utf8_idfirst(pTHX_ const U8 *p) /* The naming is historical. */
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT_IS_UTF8_IDFIRST;
+
+    return _is_utf8_idstart(p);
+}
+
+bool
+Perl_is_utf8_xidfirst(pTHX_ const U8 *p) /* The naming is historical. */
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT_IS_UTF8_XIDFIRST;
+
+    return _is_utf8_xidstart(p);
+}
+
+bool
+Perl_is_utf8_idcont(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT_IS_UTF8_IDCONT;
+
+    return _is_utf8_idcont(p);
+}
+
+bool
+Perl_is_utf8_xidcont(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT_IS_UTF8_XIDCONT;
+
+    return _is_utf8_xidcont(p);
 }
 
 bool
@@ -1472,6 +1569,7 @@ Perl_is_utf8_ascii(pTHX_ const U8 *p)
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_ASCII;
+    PERL_UNUSED_CONTEXT;
 
     return isASCII_utf8(p);
 }
@@ -1482,6 +1580,7 @@ Perl_is_utf8_blank(pTHX_ const U8 *p)
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_BLANK;
+    PERL_UNUSED_CONTEXT;
 
     return isBLANK_utf8(p);
 }
@@ -1492,6 +1591,7 @@ Perl_is_utf8_space(pTHX_ const U8 *p)
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_SPACE;
+    PERL_UNUSED_CONTEXT;
 
     return isSPACE_utf8(p);
 }
@@ -1502,6 +1602,7 @@ Perl_is_utf8_perl_space(pTHX_ const U8 *p)
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_PERL_SPACE;
+    PERL_UNUSED_CONTEXT;
 
     /* Only true if is an ASCII space-like character, and ASCII is invariant
      * under utf8, so can just use the macro */
@@ -1514,6 +1615,7 @@ Perl_is_utf8_perl_word(pTHX_ const U8 *p)
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_PERL_WORD;
+    PERL_UNUSED_CONTEXT;
 
     /* Only true if is an ASCII word character, and ASCII is invariant
      * under utf8, so can just use the macro */
@@ -1536,6 +1638,7 @@ Perl_is_utf8_posix_digit(pTHX_ const U8 *p)
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_POSIX_DIGIT;
+    PERL_UNUSED_CONTEXT;
 
     /* Only true if is an ASCII digit character, and ASCII is invariant
      * under utf8, so can just use the macro */
@@ -1568,6 +1671,7 @@ Perl_is_utf8_cntrl(pTHX_ const U8 *p)
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_CNTRL;
+    PERL_UNUSED_CONTEXT;
 
     return isCNTRL_utf8(p);
 }
@@ -1608,6 +1712,7 @@ Perl_is_utf8_xdigit(pTHX_ const U8 *p)
     dVAR;
 
     PERL_ARGS_ASSERT_IS_UTF8_XDIGIT;
+    PERL_UNUSED_CONTEXT;
 
     return isXDIGIT_utf8(p);
 }
@@ -1620,6 +1725,104 @@ Perl_is_utf8_mark(pTHX_ const U8 *p)
     PERL_ARGS_ASSERT_IS_UTF8_MARK;
 
     return _is_utf8_mark(p);
+}
+
+/*
+=for apidoc is_utf8_char
+
+Tests if some arbitrary number of bytes begins in a valid UTF-8
+character.  Note that an INVARIANT (i.e. ASCII on non-EBCDIC machines)
+character is a valid UTF-8 character.  The actual number of bytes in the UTF-8
+character will be returned if it is valid, otherwise 0.
+
+This function is deprecated due to the possibility that malformed input could
+cause reading beyond the end of the input buffer.  Use L</isUTF8_CHAR>
+instead.
+
+=cut */
+
+STRLEN
+Perl_is_utf8_char(const U8 *s)
+{
+    PERL_ARGS_ASSERT_IS_UTF8_CHAR;
+
+    /* Assumes we have enough space, which is why this is deprecated */
+    return isUTF8_CHAR(s, s + UTF8SKIP(s));
+}
+
+/* DEPRECATED!
+ * Like L</utf8_to_uvuni_buf>(), but should only be called when it is known that
+ * there are no malformations in the input UTF-8 string C<s>.  Surrogates,
+ * non-character code points, and non-Unicode code points are allowed */
+
+UV
+Perl_valid_utf8_to_uvuni(pTHX_ const U8 *s, STRLEN *retlen)
+{
+    PERL_ARGS_ASSERT_VALID_UTF8_TO_UVUNI;
+
+    return NATIVE_TO_UNI(valid_utf8_to_uvchr(s, retlen));
+}
+
+/*
+=for apidoc utf8_to_uvchr
+
+Returns the native code point of the first character in the string C<s>
+which is assumed to be in UTF-8 encoding; C<retlen> will be set to the
+length, in bytes, of that character.
+
+Some, but not all, UTF-8 malformations are detected, and in fact, some
+malformed input could cause reading beyond the end of the input buffer, which
+is why this function is deprecated.  Use L</utf8_to_uvchr_buf> instead.
+
+If C<s> points to one of the detected malformations, and UTF8 warnings are
+enabled, zero is returned and C<*retlen> is set (if C<retlen> isn't
+NULL) to -1.  If those warnings are off, the computed value if well-defined (or
+the Unicode REPLACEMENT CHARACTER, if not) is silently returned, and C<*retlen>
+is set (if C<retlen> isn't NULL) so that (S<C<s> + C<*retlen>>) is the
+next possible position in C<s> that could begin a non-malformed character.
+See L</utf8n_to_uvchr> for details on when the REPLACEMENT CHARACTER is returned.
+
+=cut
+*/
+
+UV
+Perl_utf8_to_uvchr(pTHX_ const U8 *s, STRLEN *retlen)
+{
+    PERL_ARGS_ASSERT_UTF8_TO_UVCHR;
+
+    return utf8_to_uvchr_buf(s, s + UTF8_MAXBYTES, retlen);
+}
+
+/*
+=for apidoc utf8_to_uvuni
+
+Returns the Unicode code point of the first character in the string C<s>
+which is assumed to be in UTF-8 encoding; C<retlen> will be set to the
+length, in bytes, of that character.
+
+Some, but not all, UTF-8 malformations are detected, and in fact, some
+malformed input could cause reading beyond the end of the input buffer, which
+is one reason why this function is deprecated.  The other is that only in
+extremely limited circumstances should the Unicode versus native code point be
+of any interest to you.  See L</utf8_to_uvuni_buf> for alternatives.
+
+If C<s> points to one of the detected malformations, and UTF8 warnings are
+enabled, zero is returned and C<*retlen> is set (if C<retlen> doesn't point to
+NULL) to -1.  If those warnings are off, the computed value if well-defined (or
+the Unicode REPLACEMENT CHARACTER, if not) is silently returned, and C<*retlen>
+is set (if C<retlen> isn't NULL) so that (S<C<s> + C<*retlen>>) is the
+next possible position in C<s> that could begin a non-malformed character.
+See L</utf8n_to_uvchr> for details on when the REPLACEMENT CHARACTER is returned.
+
+=cut
+*/
+
+UV
+Perl_utf8_to_uvuni(pTHX_ const U8 *s, STRLEN *retlen)
+{
+    PERL_ARGS_ASSERT_UTF8_TO_UVUNI;
+
+    return NATIVE_TO_UNI(valid_utf8_to_uvchr(s, retlen));
 }
 
 END_EXTERN_C

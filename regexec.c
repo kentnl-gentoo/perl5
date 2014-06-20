@@ -300,8 +300,9 @@ S_regcppush(pTHX_ const regexp *rex, I32 parenfloor, U32 maxopenparen)
     PERL_ARGS_ASSERT_REGCPPUSH;
 
     if (paren_elems_to_push < 0)
-        Perl_croak(aTHX_ "panic: paren_elems_to_push, %i < 0, maxopenparen: %i parenfloor: %i REGCP_PAREN_ELEMS: %i",
-                   paren_elems_to_push, maxopenparen, parenfloor, REGCP_PAREN_ELEMS);
+        Perl_croak(aTHX_ "panic: paren_elems_to_push, %i < 0, maxopenparen: %i parenfloor: %i REGCP_PAREN_ELEMS: %u",
+                   (int)paren_elems_to_push, (int)maxopenparen,
+                   (int)parenfloor, (unsigned)REGCP_PAREN_ELEMS);
 
     if ((elems_shifted >> SAVE_TIGHT_SHIFT) != total_elems)
 	Perl_croak(aTHX_ "panic: paren_elems_to_push offset %"UVuf
@@ -1451,7 +1452,7 @@ STMT_START {                                                                    
     switch (trie_type) {                                                            \
     case trie_utf8_exactfa_fold:                                                    \
         flags |= FOLD_FLAGS_NOMIX_ASCII;                                            \
-        /* FALL THROUGH */                                                          \
+        /* FALLTHROUGH */                                                          \
     case trie_utf8_fold:                                                            \
         if ( foldlen>0 ) {                                                          \
             uvc = utf8n_to_uvchr( (const U8*) uscan, UTF8_MAXLEN, &len, uniflags ); \
@@ -1468,7 +1469,7 @@ STMT_START {                                                                    
         break;                                                                      \
     case trie_latin_utf8_exactfa_fold:                                              \
         flags |= FOLD_FLAGS_NOMIX_ASCII;                                            \
-        /* FALL THROUGH */                                                          \
+        /* FALLTHROUGH */                                                          \
     case trie_latin_utf8_fold:                                                      \
         if ( foldlen>0 ) {                                                          \
             uvc = utf8n_to_uvchr( (const U8*) uscan, UTF8_MAXLEN, &len, uniflags ); \
@@ -1707,7 +1708,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 
     case EXACTFA_NO_TRIE:   /* This node only generated for non-utf8 patterns */
         assert(! is_utf8_pat);
-	/* FALL THROUGH */
+	/* FALLTHROUGH */
     case EXACTFA:
         if (is_utf8_pat || utf8_target) {
             utf8_fold_flags = FOLDEQ_UTF8_NOMIX_ASCII;
@@ -1754,7 +1755,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
         fold_array = PL_fold_latin1;
         folder = foldEQ_latin1;
 
-        /* FALL THROUGH */
+        /* FALLTHROUGH */
 
     do_exactf_non_utf8: /* Neither pattern nor string are UTF8, and there
                            are no glitches with fold-length differences
@@ -1916,9 +1917,8 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
     case NPOSIXA:
         if (utf8_target) {
             /* The complement of something that matches only ASCII matches all
-             * UTF-8 variant code points, plus everything in ASCII that isn't
-             * in the class */
-            REXEC_FBC_UTF8_CLASS_SCAN(! UTF8_IS_INVARIANT(*s)
+             * non-ASCII, plus everything in ASCII that isn't in the class. */
+            REXEC_FBC_UTF8_CLASS_SCAN(! isASCII_utf8(s)
                                       || ! _generic_isCC_A(*s, FLAGS(c)));
             break;
         }
@@ -1982,7 +1982,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                                            macros */
                 case _CC_ENUM_SPACE: /* XXX would require separate code if we
                                         revert the change of \v matching this */
-                    /* FALL THROUGH */
+                    /* FALLTHROUGH */
 
                 case _CC_ENUM_PSXSPC:
                     REXEC_FBC_UTF8_CLASS_SCAN(
@@ -2259,7 +2259,6 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
         break;
     default:
         Perl_croak(aTHX_ "panic: unknown regstclass %d", (int)OP(c));
-        break;
     }
     return 0;
   got_it:
@@ -2456,7 +2455,6 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
     /* Be paranoid... */
     if (prog == NULL || stringarg == NULL) {
 	Perl_croak(aTHX_ "NULL regexp parameter");
-	return 0;
     }
 
     DEBUG_EXECUTE_r(
@@ -3527,7 +3525,7 @@ S_dump_exec_pos(pTHX_ const char *locinput,
  * or 0 if non of the buffers matched.
  */
 STATIC I32
-S_reg_check_named_buff_matched(pTHX_ const regexp *rex, const regnode *scan)
+S_reg_check_named_buff_matched(const regexp *rex, const regnode *scan)
 {
     I32 n;
     RXi_GET_DECL(rex,rexi);
@@ -3695,18 +3693,11 @@ S_setup_EXACTISH_ST_c1_c2(pTHX_ const regnode * const text_node, int *c1p,
         }
         else { /* an EXACTFish node which doesn't begin with a multi-char fold */
             c1 = is_utf8_pat ? valid_utf8_to_uvchr(pat, NULL) : *pat;
-            if (c1 > 256) {
+            if (c1 > 255) {
                 /* Load the folds hash, if not already done */
                 SV** listp;
                 if (! PL_utf8_foldclosures) {
-                    if (! PL_utf8_tofold) {
-                        U8 dummy[UTF8_MAXBYTES_CASE+1];
-
-                        /* Force loading this by folding an above-Latin1 char */
-                        to_utf8_fold((U8*) HYPHEN_UTF8, dummy, NULL);
-                        assert(PL_utf8_tofold); /* Verify that worked */
-                    }
-                    PL_utf8_foldclosures = _swash_inversion_hash(PL_utf8_tofold);
+                    _load_PL_utf8_foldclosures();
                 }
 
                 /* The fold closures data structure is a hash with the keys
@@ -3748,10 +3739,10 @@ S_setup_EXACTISH_ST_c1_c2(pTHX_ const regnode * const text_node, int *c1p,
                         /* Folds that cross the 255/256 boundary are forbidden
                          * if EXACTFL (and isnt a UTF8 locale), or EXACTFA and
                          * one is ASCIII.  Since the pattern character is above
-                         * 256, and its only other match is below 256, the only
+                         * 255, and its only other match is below 256, the only
                          * legal match will be to itself.  We have thrown away
                          * the original, so have to compute which is the one
-                         * above 255 */
+                         * above 255. */
                         if ((c1 < 256) != (c2 < 256)) {
                             if ((OP(text_node) == EXACTFL
                                  && ! IN_UTF8_CTYPE_LOCALE)
@@ -3770,7 +3761,7 @@ S_setup_EXACTISH_ST_c1_c2(pTHX_ const regnode * const text_node, int *c1p,
                     }
                 }
             }
-            else /* Here, c1 is < 255 */
+            else /* Here, c1 is <= 255 */
                 if (utf8_target
                     && HAS_NONLATIN1_FOLD_CLOSURE(c1)
                     && ( ! (OP(text_node) == EXACTFL && ! IN_UTF8_CTYPE_LOCALE))
@@ -3811,7 +3802,7 @@ S_setup_EXACTISH_ST_c1_c2(pTHX_ const regnode * const text_node, int *c1p,
                     case EXACTFA_NO_TRIE:   /* This node only generated for
                                             non-utf8 patterns */
                         assert(! is_utf8_pat);
-                        /* FALL THROUGH */
+                        /* FALLTHROUGH */
                     case EXACTFA:
                     case EXACTFU_SS:
                     case EXACTFU:
@@ -4026,7 +4017,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	    break;
 
 	case EOL: /* /..$/  */
-            /* FALL THROUGH */
+            /* FALLTHROUGH */
 	case SEOL: /* /..$/s  */
 	    if (!NEXTCHR_IS_EOS && nextchr != '\n')
 		sayNO;
@@ -4071,7 +4062,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                 sayNO_SILENT;
                 assert(0); /* NOTREACHED */
             }
-            /* FALL THROUGH */
+            /* FALLTHROUGH */
 	case TRIE:  /* (ab|cd)  */
 	    /* the basic plan of execution of the trie is:
 	     * At the beginning, run though all the states, and
@@ -4499,7 +4490,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
         case EXACTFA_NO_TRIE:   /* This node only generated for non-utf8
                                    patterns */
             assert(! is_utf8_pat);
-            /* FALL THROUGH */
+            /* FALLTHROUGH */
 	case EXACTFA:            /*  /abc/iaa     */
 	    folder = foldEQ_latin1;
 	    fold_array = PL_fold_latin1;
@@ -4626,7 +4617,6 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 			break;
 		    default:
 			Perl_croak(aTHX_ "panic: Unexpected FLAGS %u in op %u", FLAGS(scan), OP(scan));
-			break;
 		}
 	    }
 	    /* Note requires that all BOUNDs be lower than all NBOUNDs in
@@ -5934,7 +5924,7 @@ NULL
 	    assert(0); /* NOTREACHED */
 
 	case WHILEM_A_min_fail: /* just failed to match A in a minimal match */
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 	case WHILEM_A_pre_fail: /* just failed to match even minimal A */
 	    REGCP_UNWIND(ST.lastcp);
 	    regcppop(rex, &maxopenparen);
@@ -6011,7 +6001,7 @@ NULL
 	    if (next == scan)
 		next = NULL;
 	    scan = NEXTOPER(scan);
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 
 	case BRANCH:	    /*  /(...|A|...)/ */
 	    scan = NEXTOPER(scan); /* scan now points to inner node */
@@ -6566,7 +6556,7 @@ NULL
 		    assert(0); /* NOTREACHED */
 		}
 	    }
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 
 	case CURLY_B_max_fail:
 	    /* failed to find B in a greedy match */
@@ -6687,7 +6677,7 @@ NULL
 
 	case IFMATCH_A_fail: /* body of (?...A) failed */
 	    ST.wanted = !ST.wanted;
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 
 	case IFMATCH_A: /* body of (?...A) succeeded */
 	    if (ST.logical) {
@@ -6851,7 +6841,7 @@ NULL
 	/* push a state that backtracks on success */
 	st->u.yes.prev_yes_state = yes_state;
 	yes_state = st;
-	/* FALL THROUGH */
+	/* FALLTHROUGH */
       push_state:
 	/* push a new regex state, then continue at scan  */
 	{
@@ -7010,6 +7000,8 @@ no_silent:
                 sv_commit = &PL_sv_yes;
             sv_yes_mark = &PL_sv_no;
         }
+        assert(sv_err);
+        assert(sv_mrk);
         sv_setsv(sv_err, sv_commit);
         sv_setsv(sv_mrk, sv_yes_mark);
     }
@@ -7186,7 +7178,7 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
 
     case EXACTFA_NO_TRIE:   /* This node only generated for non-utf8 patterns */
         assert(! reginfo->is_utf8_pat);
-        /* FALL THROUGH */
+        /* FALLTHROUGH */
     case EXACTFA:
         utf8_flags = FOLDEQ_UTF8_NOMIX_ASCII;
 	goto do_exactf;
@@ -7326,7 +7318,7 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
             to_complement = 1;
             goto utf8_posix;
         }
-        /* FALL THROUGH */
+        /* FALLTHROUGH */
 
     case NPOSIXA:
         if (! utf8_target) {
@@ -7337,10 +7329,9 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
         else {
 
             /* The complement of something that matches only ASCII matches all
-             * UTF-8 variant code points, plus everything in ASCII that isn't
-             * in the class. */
+             * non-ASCII, plus everything in ASCII that isn't in the class. */
 	    while (hardcount < max && scan < loceol
-                   && (! UTF8_IS_INVARIANT(*scan)
+                   && (! isASCII_utf8(scan)
                        || ! _generic_isCC_A((U8) *scan, FLAGS(p))))
             {
                 scan += UTF8SKIP(scan);
@@ -7408,7 +7399,7 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
                     case _CC_ENUM_SPACE:    /* XXX would require separate code
                                                if we revert the change of \v
                                                matching this */
-                        /* FALL THROUGH */
+                        /* FALLTHROUGH */
                     case _CC_ENUM_PSXSPC:
                         while (hardcount < max
                                && scan < loceol
@@ -7620,6 +7611,7 @@ Perl__get_regclass_nonbitmap_data(pTHX_ const regexp *prog,
                     *only_utf8_locale_ptr = ary[2];
                 }
                 else {
+                    assert(only_utf8_locale_ptr);
                     *only_utf8_locale_ptr = NULL;
                 }
 
@@ -7641,7 +7633,7 @@ Perl__get_regclass_nonbitmap_data(pTHX_ const regexp *prog,
 	    }
 	    else if (doinit && ((si && si != &PL_sv_undef)
                                  || (invlist && invlist != &PL_sv_undef))) {
-
+		assert(si);
 		sw = _core_swash_init("utf8", /* the utf8 package */
 				      "", /* nameless */
 				      si,
@@ -7656,7 +7648,7 @@ Perl__get_regclass_nonbitmap_data(pTHX_ const regexp *prog,
 	
     /* If requested, return a printable version of what this swash matches */
     if (listsvp) {
-	SV* matches_string = newSVpvn("", 0);
+	SV* matches_string = newSVpvs("");
 
         /* The swash should be used, if possible, to get the data, as it
          * contains the resolved data.  But this function can be called at
@@ -7802,20 +7794,19 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
 	    SV * const sw = _get_regclass_nonbitmap_data(prog, n, TRUE, 0,
                                                             &only_utf8_locale);
 	    if (sw) {
+                U8 utf8_buffer[2];
 		U8 * utf8_p;
 		if (utf8_target) {
 		    utf8_p = (U8 *) p;
 		} else { /* Convert to utf8 */
-		    STRLEN len = 1;
-		    utf8_p = bytes_to_utf8(p, &len);
+		    utf8_p = utf8_buffer;
+                    append_utf8_from_native_byte(*p, &utf8_p);
+		    utf8_p = utf8_buffer;
 		}
 
 		if (swash_fetch(sw, utf8_p, TRUE)) {
 		    match = TRUE;
                 }
-
-		/* If we allocated a string above, free it */
-		if (! utf8_target) Safefree(utf8_p);
 	    }
             if (! match && only_utf8_locale && IN_UTF8_CTYPE_LOCALE) {
                 match = _invlist_contains_cp(only_utf8_locale, c);

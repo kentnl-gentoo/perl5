@@ -18,7 +18,6 @@
 
 /* 
 =head1 Hash Manipulation Functions
-
 A HV structure represents a Perl hash.  It consists mainly of an array
 of pointers, each of which points to a linked list of HE structures.  The
 array is indexed by the hash function of the key, so each linked list
@@ -1259,7 +1258,7 @@ S_hsplit(pTHX_ HV *hv, STRLEN const oldsize, STRLEN newsize)
                  * and use the new low bit to decide if we insert at top,
                  * or next from top. IOW, we only rotate on a collision.*/
                 if (aep[j] && PL_HASH_RAND_BITS_ENABLED) {
-                    PL_hash_rand_bits+= ROTL_UV(HeHASH(entry), 17);
+                    PL_hash_rand_bits+= ROTL32(HeHASH(entry), 17);
                     PL_hash_rand_bits= ROTL_UV(PL_hash_rand_bits,1);
                     if (PL_hash_rand_bits & 1) {
                         HeNEXT(entry)= HeNEXT(aep[j]);
@@ -1802,7 +1801,7 @@ Perl_hv_undef_flags(pTHX_ HV *hv, U32 flags)
     if (PL_phase != PERL_PHASE_DESTRUCT && HvNAME(hv)) {
         if (PL_stashcache) {
             DEBUG_o(Perl_deb(aTHX_ "hv_undef_flags clearing PL_stashcache for '%"
-                             HEKf"'\n", HvNAME_HEK(hv)));
+                             HEKf"'\n", HEKfARG(HvNAME_HEK(hv))));
 	    (void)hv_deletehek(PL_stashcache, HvNAME_HEK(hv), G_DISCARD);
         }
 	hv_name_set(hv, NULL, 0, 0);
@@ -1821,7 +1820,7 @@ Perl_hv_undef_flags(pTHX_ HV *hv, U32 flags)
 	    mro_isa_changed_in(hv);
         if (PL_stashcache) {
             DEBUG_o(Perl_deb(aTHX_ "hv_undef_flags clearing PL_stashcache for effective name '%"
-                             HEKf"'\n", HvENAME_HEK(hv)));
+                             HEKf"'\n", HEKfARG(HvENAME_HEK(hv))));
 	    (void)hv_deletehek(PL_stashcache, HvENAME_HEK(hv), G_DISCARD);
         }
       }
@@ -1832,7 +1831,7 @@ Perl_hv_undef_flags(pTHX_ HV *hv, U32 flags)
       if (flags & HV_NAME_SETALL ? !!HvAUX(hv)->xhv_name_u.xhvnameu_name : !!name) {
         if (name && PL_stashcache) {
             DEBUG_o(Perl_deb(aTHX_ "hv_undef_flags clearing PL_stashcache for name '%"
-                             HEKf"'\n", HvNAME_HEK(hv)));
+                             HEKf"'\n", HEKfARG(HvNAME_HEK(hv))));
 	    (void)hv_deletehek(PL_stashcache, HvNAME_HEK(hv), G_DISCARD);
         }
 	hv_name_set(hv, NULL, 0, flags);
@@ -3501,6 +3500,7 @@ struct refcounted_he *
 Perl_refcounted_he_inc(pTHX_ struct refcounted_he *he)
 {
     dVAR;
+    PERL_UNUSED_CONTEXT;
     if (he) {
 	HINTS_REFCNT_LOCK;
 	he->refcounted_he_refcnt++;
@@ -3525,6 +3525,7 @@ Perl_cop_fetch_label(pTHX_ COP *const cop, STRLEN *len, U32 *flags) {
     struct refcounted_he *const chain = cop->cop_hints_hash;
 
     PERL_ARGS_ASSERT_COP_FETCH_LABEL;
+    PERL_UNUSED_CONTEXT;
 
     if (!chain)
 	return NULL;

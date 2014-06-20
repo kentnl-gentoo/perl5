@@ -4,7 +4,7 @@ author:
   - perl5-porters@perl.org
 build_requires: {}
 dynamic_config: 1
-generated_by: 'CPAN::Meta version 2.140640, CPAN::Meta::Converter version 2.140640'
+generated_by: 'CPAN::Meta version 2.141520, CPAN::Meta::Converter version 2.141520'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -54,7 +54,6 @@ no_index:
     - dist/threads-shared
     - dist/Tie-File
     - dist/XSLoader
-    - mad
     - win32
   file:
     - autodoc.pl
@@ -115,4 +114,4 @@ resources:
   homepage: http://www.perl.org/
   license: http://dev.perl.org/licenses/
   repository: http://perl5.git.perl.org/
-version: '5.021000'
+version: '5.021001'

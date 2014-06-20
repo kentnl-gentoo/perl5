@@ -153,28 +153,6 @@ Points directly to the body of the L</PL_comppad> array.
   STMT_START { ((XPVNV*)SvANY(sv))->xnv_u.xpad_cop_seq.xhigh = (val); } STMT_END
 
 /*
-=for apidoc mx|void|pad_peg|const char *s
-
-When PERL_MAD is enabled, this is a small no-op function that gets called
-at the start of each pad-related function.  It can be breakpointed to
-track all pad operations.  The parameter is a string indicating the type
-of pad operation being performed.
-
-=cut
-*/
-
-#ifdef PERL_MAD
-void pad_peg(const char* s) {
-    static int pegcnt; /* XXX not threadsafe */
-    PERL_UNUSED_ARG(s);
-
-    PERL_ARGS_ASSERT_PAD_PEG;
-
-    pegcnt++;
-}
-#endif
-
-/*
 This is basically sv_eq_flags() in sv.c, but we avoid the magic
 and bytes checking.
 */
@@ -382,7 +360,7 @@ Perl_cv_undef(pTHX_ CV *cv)
 	LEAVE;
     }
 #ifdef DEBUGGING
-    else if (slabbed) Perl_warn(aTHX_ "Slab leaked from cv %p", cv);
+    else if (slabbed) Perl_warn(aTHX_ "Slab leaked from cv %p", (void*)cv);
 #endif
     SvPOK_off(MUTABLE_SV(cv));		/* forget prototype */
     sv_unmagic((SV *)cv, PERL_MAGIC_checkcall);
@@ -522,7 +500,7 @@ Perl_cv_forget_slab(pTHX_ CV *cv)
     if      (CvROOT(cv))  slab = OpSLAB(CvROOT(cv));
     else if (CvSTART(cv)) slab = (OPSLAB *)CvSTART(cv);
 #ifdef DEBUGGING
-    else if (slabbed)     Perl_warn(aTHX_ "Slab leaked from cv %p", cv);
+    else if (slabbed)     Perl_warn(aTHX_ "Slab leaked from cv %p", (void*)cv);
 #endif
 
     if (slab) {
@@ -904,7 +882,7 @@ S_pad_check_dup(pTHX_ SV *name, U32 flags, const HV *ourstash)
 		"\"%s\" %s %"SVf" masks earlier declaration in same %s",
 		(is_our ? "our" : PL_parser->in_my == KEY_my ? "my" : "state"),
 		*SvPVX(sv) == '&' ? "subroutine" : "variable",
-		sv,
+		SVfARG(sv),
 		(COP_SEQ_RANGE_HIGH(sv) == PERL_PADSEQ_INTRO
 		    ? "scope" : "statement"));
 	    --off;
@@ -924,7 +902,7 @@ S_pad_check_dup(pTHX_ SV *name, U32 flags, const HV *ourstash)
 		&& sv_eq(name, sv))
 	    {
 		Perl_warner(aTHX_ packWARN(WARN_MISC),
-		    "\"our\" variable %"SVf" redeclared", sv);
+		    "\"our\" variable %"SVf" redeclared", SVfARG(sv));
 		if ((I32)off <= PL_comppad_name_floor)
 		    Perl_warner(aTHX_ packWARN(WARN_MISC),
 			"\t(Did you mean \"local\" instead of \"our\"?)\n");
@@ -1147,7 +1125,7 @@ S_unavailable(pTHX_ SV *namesv)
 			 *SvPVX_const(namesv) == '&'
 					 ? "Subroutin"
 					 : "Variabl",
-			 namesv);
+			 SVfARG(namesv));
 }
 
 STATIC PADOFFSET
@@ -1287,9 +1265,9 @@ S_pad_findlex(pTHX_ const char *namepv, STRLEN namelen, U32 flags, const CV* cv,
 			newwarn = 0;
 			Perl_warner(aTHX_ packWARN(WARN_CLOSURE),
 			    "Variable \"%"SVf"\" will not stay shared",
-                            newSVpvn_flags(namepv, namelen,
+                            SVfARG(newSVpvn_flags(namepv, namelen,
                                 SVs_TEMP |
-                                (flags & padadd_UTF8_NAME ? SVf_UTF8 : 0)));
+                                (flags & padadd_UTF8_NAME ? SVf_UTF8 : 0))));
 		    }
 
 		    if (fake_offset && CvANON(cv)

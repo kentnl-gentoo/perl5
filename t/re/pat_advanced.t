@@ -17,7 +17,7 @@ $| = 1;
 BEGIN {
     chdir 't' if -d 't';
     @INC = ('../lib','.');
-    require './test.pl';
+    require './test.pl'; require './charset_tools.pl';
     skip_all_if_miniperl("miniperl can't load Tie::Hash::NamedCapture, need for %+ and %-");
 }
 
@@ -1020,67 +1020,77 @@ sub run_tests {
         ok $@ && $@ =~ /Zero length \\N\{}/;
 
         undef $w;
-        eval q [is("\N{TOO  MANY SPACES}", "TOO  MANY SPACES", "Multiple spaces in character name works")];
-        like ($w, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... but returns a deprecation warning");
-        undef $w;
-        eval q [use utf8; is("\N{TOO  MANY SPACES}", "TOO  MANY SPACES", "Same under 'use utf8': they work")];
-        like ($w, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... but return a deprecation warning");
         {
-            # disable lexical warnings
-            BEGIN { ${^WARNING_BITS} = undef; $^W = 0 }
-            undef $w;
             () = eval q ["\N{TOO  MANY SPACES}"];
-            like ($w, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... and returns a deprecation warning outside of lexical warnings");
-            undef $w;
+            like ($@, qr/charnames alias definitions may not contain a sequence of multiple spaces/, "Multiple spaces in a row in a charnames alias is fatal");
             eval q [use utf8; () = "\N{TOO  MANY SPACES}"];
-            like ($w, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... same under utf8");
-        }
-        {
-            no warnings 'deprecated';
-            undef $w;
-            eval q ["\N{TOO  MANY SPACES}"];
-            ok (! defined $w, "... and no warning if warnings are off");
-            eval q [use utf8; "\N{TOO  MANY SPACES}"];
-            ok (! defined $w, "... same under 'use utf8'");
-        }
-        {
-            use warnings FATAL=> 'deprecated';
-            () = eval q ["\N{TOO  MANY SPACES}"];
-            like ($@, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... the deprecation warning can be fatal");
-            eval q [use utf8; () = "\N{TOO  MANY SPACES}"];
-            like ($@, qr/A sequence of multiple spaces in a charnames alias definition is deprecated/, "... same under utf8");
+            like ($@, qr/charnames alias definitions may not contain a sequence of multiple spaces/,  "... same under utf8");
         }
 
         undef $w;
-        eval q [is("\N{TRAILING SPACE }", "TRAILING SPACE ", "Trailing space in character name works")];
-        like ($w, qr/Trailing white-space in a charnames alias definition is deprecated/, "... but returns a deprecation warning");
+        {
+            () = eval q ["\N{TRAILING SPACE }"];
+            like ($@, qr/charnames alias definitions may not contain trailing white-space/, "Trailing white-space in a charnames alias is fatal");
+            eval q [use utf8; () = "\N{TRAILING SPACE }"];
+            like ($@, qr/charnames alias definitions may not contain trailing white-space/, "... same under utf8");
+        }
+
         undef $w;
-        eval q [use utf8; is("\N{TRAILING SPACE }", "TRAILING SPACE ", "Same under 'use utf8': they work")];
-        like ($w, qr/Trailing white-space in a charnames alias definition is deprecated/, "... but returns a deprecation warning");
+        my $Cedilla_Latin1 = "GAR"
+                           . latin1_to_native("\xC7")
+                           . "ON";
+        my $Cedilla_utf8 = $Cedilla_Latin1;
+        utf8::upgrade($Cedilla_utf8);
+        eval qq[is("\\N{$Cedilla_Latin1}", "$Cedilla_Latin1", "A cedilla in character name works")];
+        undef $w;
+            {
+            use feature 'unicode_eval';
+            eval qq[use utf8; is("\\N{$Cedilla_utf8}", "$Cedilla_utf8", "... same under 'use utf8': they work")];
+        }
+
+        undef $w;
+        my $NBSP_Latin1 = "NBSP"
+                        . latin1_to_native("\xA0")
+                        . "SEPARATED"
+                        . latin1_to_native("\xA0")
+                        . "SPACE";
+        my $NBSP_utf8 = $NBSP_Latin1;
+        utf8::upgrade($NBSP_utf8);
+        eval qq[is("\\N{$NBSP_Latin1}", "$NBSP_Latin1", "An NBSP in character name works")];
+        like ($w, qr/NO-BREAK SPACE in a charnames alias definition is deprecated/, "... but returns a deprecation warning");
+        undef $w;
+            {
+            use feature 'unicode_eval';
+            eval qq[use utf8; is("\\N{$NBSP_utf8}", "$NBSP_utf8", "Same under 'use utf8': they work")];
+            like ($w, qr/NO-BREAK SPACE in a charnames alias definition is deprecated/, "... but return a deprecation warning");
+        }
         {
             # disable lexical warnings
             BEGIN { ${^WARNING_BITS} = undef; $^W = 0 }
             undef $w;
-            () = eval q ["\N{TRAILING SPACE }"];
-            like ($w, qr/Trailing white-space in a charnames alias definition is deprecated/, "... and returns a deprecation warning outside of lexical warnings");
+            () = eval qq["\\N{$NBSP_Latin1}"];
+            like ($w, qr/NO-BREAK SPACE in a charnames alias definition is deprecated/, "And returns a deprecation warning outside of lexical warnings");
             undef $w;
-            eval q [use utf8; () = "\N{TRAILING SPACE }"];
-            like ($w, qr/Trailing white-space in a charnames alias definition is deprecated/, "... same under utf8");
+            use feature 'unicode_eval';
+            eval qq[use utf8; () = "\\N{$NBSP_utf8}"];
+            like ($w, qr/NO-BREAK SPACE in a charnames alias definition is deprecated/, "... same under utf8");
         }
         {
             no warnings 'deprecated';
             undef $w;
-            eval q ["\N{TRAILING SPACE }"];
+            eval qq["\\N{$NBSP_Latin1}"];
             ok (! defined $w, "... and no warning if warnings are off");
-            eval q [use utf8; "\N{TRAILING SPACE }"];
+            use feature 'unicode_eval';
+            eval qq[use utf8; "\\N{$NBSP_utf8}"];
             ok (! defined $w, "... same under 'use utf8'");
         }
         {
             use warnings FATAL=>'deprecated';
-            () = eval q ["\N{TRAILING SPACE }"];
-            like ($@, qr/Trailing white-space in a charnames alias definition is deprecated/, "... the warning can be fatal");
-            eval q [use utf8; () = "\N{TRAILING SPACE }"];
-            like ($@, qr/Trailing white-space in a charnames alias definition is deprecated/, "... same under utf8");
+            () = eval qq["\\N{$NBSP_Latin1}"];
+            like ($@, qr/NO-BREAK SPACE in a charnames alias definition is deprecated/, "... the warning can be fatal");
+            use feature 'unicode_eval';
+            eval qq[use utf8; () = "\\N{$NBSP_utf8}"];
+            like ($@, qr/NO-BREAK SPACE in a charnames alias definition is deprecated/, "... same under utf8");
         }
 
         {
@@ -1089,7 +1099,7 @@ sub run_tests {
             BEGIN { $^H{charnames} = \&CnameTest::translator }
             undef $w;
             () = eval q ["\N{TOO  MANY SPACES}"];
-            like ($w, qr/A sequence of multiple spaces/,
+            like ($@, qr/charnames alias definitions may not contain a sequence of multiple spaces/,
                  'translators in _charnames\0* packages get validated');
         }
 
@@ -1250,6 +1260,7 @@ sub run_tests {
 
     {
         # \, breaks {3,4}
+        no warnings qw{deprecated regexp};
         ok "xaaay"    !~ /xa{3\,4}y/, '\, in a pattern';
         ok "xa{3,4}y" =~ /xa{3\,4}y/, '\, in a pattern';
 
@@ -1862,9 +1873,7 @@ EOP
 	   'IsPunct disagrees with [:punct:] outside ASCII');
 
         my @isPunctLatin1 = eval q {
-            no warnings 'deprecated';
-            use encoding 'latin1';
-            grep {/[[:punct:]]/ != /\p{IsPunct}/} map {chr} 0x80 .. 0xff;
+            grep {/[[:punct:]]/u != /\p{IsPunct}/} map {chr} 0x80 .. 0xff;
         };
         skip "Eval failed ($@)", 1 if $@;
         skip "PERL_LEGACY_UNICODE_CHARCLASS_MAPPINGS set to 0", 1
@@ -2287,6 +2296,30 @@ EOP
 
     sub IsntMyRuntimeProperty {
         return "!B6\n";
+    }
+
+    {   # [perl 121777]
+        my $regex;
+        { package Some;
+            # define a Unicode propertyIs_q
+            sub Is_q
+            {
+                sprintf '%x', ord 'q'
+            }
+            $regex = qr/\p{Is_q}/;
+
+            # If we uncomment the following line, prior to the patch that
+            # fixed this, everything would work because we would have expanded
+            # the property by the time the regex in the 'like' below got
+            # compiled.
+            #'q' =~ $regex;
+        }
+
+        like('q', $regex, 'User-defined property matches outside package');
+
+        package Some {
+            main::like('abcq', qr/abc$regex/, 'Run-time compiled in-package user-defined property matches');
+        }
     }
 
     {   # From Lingua::Stem::UniNE; no ticket filed but related to #121778

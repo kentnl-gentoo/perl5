@@ -453,13 +453,6 @@ unless ($define{'PERL_TRACK_MEMPOOL'}) {
     ++$skip{PL_memory_debug_header};
 }
 
-unless ($define{PERL_MAD}) {
-    ++$skip{$_} foreach qw(
-		    PL_madskills
-		    PL_xmlfp
-			 );
-}
-
 unless ($define{'MULTIPLICITY'}) {
     ++$skip{$_} foreach qw(
 		    PL_interp_size
@@ -520,6 +513,11 @@ unless ($define{USE_LOCALE_NUMERIC}) {
 		    PL_numeric_radix_sv
 		    PL_numeric_standard
 			 );
+}
+
+unless ($define{'USE_C_BACKTRACE'}) {
+    ++$skip{Perl_get_c_backtrace_dump};
+    ++$skip{Perl_dump_c_backtrace};
 }
 
 unless ($define{HAVE_INTERP_INTERN}) {

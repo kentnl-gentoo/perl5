@@ -377,6 +377,8 @@ EOM
 regexec_cflags=''
 doop_cflags=''
 op_cflags=''
+opmini_cflags=''
+perlmain_cflags=''
     fi
 
 case "$ccisgcc" in
@@ -427,6 +429,21 @@ case "$ccisgcc" in
 		    ;;
 	    esac
 	case "$archname" in
+	    PA-RISC2.0)
+		case "$ccversion" in
+		    B.11.11.*)
+			# opmini.c and op.c with +O2 makes the compiler die
+			# of internal error, for perlmain.c only +O0 (no opt)
+                        # works.
+			case "$optimize" in
+			*O2*)	opt=`echo "$optimize" | sed -e 's/O2/O1/'`
+				opmini_cflags="optimize=\"$opt\""
+				op_cflags="optimize=\"$opt\""
+				perlmain_cflags="optimize=\"\""
+				;;
+			esac
+		    esac
+		;;
 	    IA64*)
 		case "$ccversion" in
 		    B3910B*A.06.0[12345])
@@ -744,3 +761,7 @@ case "$d_oldpthreads" in
 	d_strerror_r_proto='undef'
 	;;
     esac
+
+# H.Merijn says it's not 1998 anymore: ODBM is not needed,
+# and it seems to be buggy in HP-UX anyway.
+i_dbm=undef

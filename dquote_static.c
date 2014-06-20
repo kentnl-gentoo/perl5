@@ -15,12 +15,9 @@
     Pulled from regcomp.c.
  */
 PERL_STATIC_INLINE I32
-S_regcurly(pTHX_ const char *s,
-           const bool rbrace_must_be_escaped /* Should the terminating '} be
-                                                preceded by a backslash?  This
-                                                is an abnormal case */
-    )
+S_regcurly(pTHX_ const char *s)
 {
+    PERL_UNUSED_CONTEXT;
     PERL_ARGS_ASSERT_REGCURLY;
 
     if (*s++ != '{')
@@ -35,9 +32,7 @@ S_regcurly(pTHX_ const char *s,
 	    s++;
     }
 
-    return (rbrace_must_be_escaped)
-           ? *s == '\\' && *(s+1) == '}'
-           : *s == '}';
+    return *s == '}';
 }
 
 /* XXX Add documentation after final interface and behavior is decided */
@@ -52,14 +47,8 @@ S_grok_bslash_c(pTHX_ const char source, const bool output_warning)
     U8 result;
 
     if (! isPRINT_A(source)) {
-        const char msg[] = "Character following \"\\c\" must be printable ASCII";
-        if (! isASCII(source)) {
-            Perl_croak(aTHX_ "%s", msg);
-        }
-        else if (output_warning) {  /* Unprintables can be removed in v5.22 */
-            Perl_ck_warner_d(aTHX_ packWARN2(WARN_DEPRECATED, WARN_SYNTAX), "%s",
-                                                                            msg);
-	}
+        Perl_croak(aTHX_ "%s",
+                        "Character following \"\\c\" must be printable ASCII");
     }
     else if (source == '{') {
         assert(isPRINT_A(toCTRL('{')));
@@ -69,9 +58,7 @@ S_grok_bslash_c(pTHX_ const char source, const bool output_warning)
     }
 
     result = toCTRL(source);
-    if (output_warning && ! isCNTRL_L1(result)) {
-        /* We use isCNTRL_L1 above and not simply isCNTRL, because on EBCDIC
-         * machines, things like \cT map into a C1 control. */
+    if (output_warning && isPRINT_A(result)) {
         U8 clearer[3];
         U8 i = 0;
         if (! isWORDCHAR(result)) {

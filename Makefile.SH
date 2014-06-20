@@ -248,8 +248,6 @@ CLDFLAGS = $ldflags
 
 mallocsrc = $mallocsrc
 mallocobj = $mallocobj
-madlysrc = $madlysrc
-madlyobj = $madlyobj
 LNS = $lns
 # NOTE: some systems don't grok "cp -f". XXX Configure test needed?
 CPS = $cp
@@ -345,7 +343,7 @@ DYNALOADER = DynaLoader\$(OBJ_EXT)
 
 libs = $perllibs $cryptlib
 
-public = \$(PERL_EXE) utilities translators
+public = \$(PERL_EXE) utilities
 
 shellflags = $shellflags
 
@@ -435,7 +433,7 @@ SH_to_target() {
     echo $@ | sed -e s/\\\.SH//g -e s/_/./g
 }
 
-SH='Makefile.SH cflags.SH config_h.SH makedepend.SH myconfig.SH runtests.SH pod/Makefile.SH x2p/Makefile.SH'
+SH='Makefile.SH cflags.SH config_h.SH makedepend.SH myconfig.SH runtests.SH pod/Makefile.SH'
 shextract=`SH_to_target $SH`
 
 ## In the following dollars and backticks do not need the extra backslash.
@@ -476,13 +474,13 @@ c1 = av.c scope.c op.c doop.c doio.c dump.c gv.c hv.c mg.c reentr.c mro.c perl.c
 c2 = perly.c pp.c pp_hot.c pp_ctl.c pp_sys.c regcomp.c regexec.c utf8.c sv.c
 c3 = taint.c toke.c util.c deb.c run.c universal.c pad.c globals.c keywords.c
 c4 = perlio.c perlapi.c numeric.c mathoms.c locale.c pp_pack.c pp_sort.c caretx.c
-c5 = $(madlysrc) $(mallocsrc)
+c5 = $(mallocsrc)
 
 c = $(c1) $(c2) $(c3) $(c4) $(c5) miniperlmain.c opmini.c perlmini.c
 
 obj0 = op$(OBJ_EXT) perl$(OBJ_EXT)
 obj0mini = perlmini$(OBJ_EXT) opmini$(OBJ_EXT) miniperlmain$(OBJ_EXT)
-obj1 = $(madlyobj) $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) pad$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT) mro$(OBJ_EXT) keywords$(OBJ_EXT)
+obj1 = $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) pad$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT) mro$(OBJ_EXT) keywords$(OBJ_EXT)
 obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
 obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT) perlapi$(OBJ_EXT) numeric$(OBJ_EXT) mathoms$(OBJ_EXT) locale$(OBJ_EXT) pp_pack$(OBJ_EXT) pp_sort$(OBJ_EXT) caretx$(OBJ_EXT)
 
@@ -491,7 +489,7 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5210delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5211delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -569,7 +567,7 @@ all: $(FIRSTMAKEFILE) $(MINIPERL_EXE) $(generated_pods) $(private) $(unidatafile
 	@echo " ";
 	@echo "	Everything is up to date. Type '$(MAKE) test' to run test suite."
 
-.PHONY: all translators utilities
+.PHONY: all utilities
 
 # Both git_version.h and lib/Config_git.pl are built
 # by make_patchnum.pl.
@@ -583,36 +581,21 @@ perl$(OBJ_EXT): git_version.h
 
 !NO!SUBS!
 
-# Making utilities and translators require Cwd.  If we have dynamic
+# Making utilities requires Cwd.  If we have dynamic
 # loading, we only need miniperl and Cwd.$dlext.  If we have static
 # loading, we need to build perl first.
 case "$usedl$static_cwd" in
 defineundef)
     util_deps='$(MINIPERL_EXE) $(CONFIGPM) lib/auto/Cwd/Cwd$(DLSUFFIX) FORCE'
-     x2p_deps="\$(MINIPERL_EXE) \$(CONFIGPM) \$(dynamic_ext) x2p/$firstmakefile FORCE"
     ;;
 definedefine)
     util_deps='$(PERL_EXE) $(CONFIGPM) FORCE'
-     x2p_deps="\$(PERL_EXE) \$(CONFIGPM) \$(dynamic_ext) x2p/$firstmakefile FORCE"
     ;;
 *)  util_deps='$(PERL_EXE) $(CONFIGPM) FORCE'
-     x2p_deps="\$(PERL_EXE) \$(CONFIGPM) x2p/$firstmakefile FORCE"
     ;;
 esac
 
 $spitshell >>$Makefile <<!GROK!THIS!
-x2p/$firstmakefile:	makedepend
-	cd x2p; \$(MAKE) depend
-
-translators:	$x2p_deps
-	@echo " "; echo "	Making x2p stuff"; cd x2p; \$(LDLIBPTH) \$(MAKE) all
-
-x2p/s2p: $x2p_deps
-	cd x2p; \$(LDLIBPTH) \$(MAKE) s2p
-
-x2p/find2perl: $x2p_deps
-	cd x2p; \$(LDLIBPTH) \$(MAKE) find2perl
-
 utils/Makefile: \$(MINIPERL_EXE) \$(CONFIGPM) utils/Makefile.PL
 	\$(MINIPERL) -Ilib utils/Makefile.PL
 
@@ -874,7 +857,7 @@ $(LIBPERL): $& $(obj) $(DYNALOADER) $(LIBPERLEXPORT)
 # lib/buildcustomize.pl despite the reality that lib/buildcustomize.pl needs
 # miniperl to exist first permits us to
 # a) have one rule generate both miniperl and lib/buildcustomize.pl
-#    (so that lib/buildcustomise.pl is always available. This simplifies things)
+#    (so that lib/buildcustomize.pl is always available. This simplifies things)
 # b) have the rest of the Makefile depend on the more obvious $(MINIPERL_EXE)
 
 $(MINIPERL_EXE): lib/buildcustomize.pl
@@ -1016,9 +999,9 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) pod/perlmodlib.PL -q
 
-pod/perl5210delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl5210delta.pod
-	$(LNS) perldelta.pod pod/perl5210delta.pod
+pod/perl5211delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl5211delta.pod
+	$(LNS) perldelta.pod pod/perl5211delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1269,7 +1252,6 @@ _mopup:
 _tidy:
 	-cd pod; $(LDLIBPTH) $(MAKE) clean
 	-cd utils; $(LDLIBPTH) $(MAKE) clean
-	-cd x2p; $(LDLIBPTH) $(MAKE) clean
 	-rm -f lib/Config_git.pl git_version.h
 	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) $(nonxs_ext) ; do \
 	$(MINIPERL) make_ext.pl --target=clean $$x MAKE=$(MAKE) ; \
@@ -1279,7 +1261,6 @@ _cleaner1:
 	-cd os2; rm -f Makefile
 	-cd pod; $(LDLIBPTH) $(MAKE) $(CLEAN)
 	-cd utils; $(LDLIBPTH) $(MAKE) $(CLEAN)
-	-cd x2p; $(LDLIBPTH) $(MAKE) $(CLEAN)
 	-@if test -f $(MINIPERL_EXE) ; then \
 	for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) $(nonxs_ext) ; do \
 	$(MINIPERL) make_ext.pl --target=$(CLEAN) $$x MAKE=$(MAKE) ; \
@@ -1313,7 +1294,7 @@ _cleaner2:
 	-rmdir ext/B/lib
 	rm -f so_locations $(LIBPERL_NONSHR) $(MINIPERL_NONSHR)
 	-rmdir lib/version lib/threads lib/encoding lib/autodie/exception
-	-rmdir lib/autodie lib/XS lib/Win32API lib/VMS
+	-rmdir lib/autodie/Scope lib/autodie lib/XS lib/Win32API lib/VMS
 	-rmdir lib/Unicode/Collate/Locale lib/Unicode/Collate/CJK
 	-rmdir lib/Unicode/Collate lib/Tie/Hash lib/Thread lib/Text
 	-rmdir lib/Test/Builder/Tester lib/Test/Builder lib/Test lib/Term
@@ -1409,15 +1390,14 @@ test_prep_pre: preplibrary utilities $(nonxs_ext)
 case "$targethost" in
 '') $spitshell >>$Makefile <<'!NO!SUBS!'
 test_prep test-prep: test_prep_pre $(MINIPERL_EXE) $(unidatafiles) $(PERL_EXE) \
-	$(dynamic_ext) $(TEST_PERL_DLL) runtests x2p/s2p x2p/find2perl \
-	$(generated_pods)
+	$(dynamic_ext) $(TEST_PERL_DLL) runtests $(generated_pods)
 	cd t && (rm -f $(PERL_EXE); $(LNS) ../$(PERL_EXE) $(PERL_EXE))
 
 !NO!SUBS!
 ;;
 *) $spitshell >>$Makefile <<!GROK!THIS!
 test_prep test-prep: test_prep_pre \$(MINIPERL_EXE) \$(unidatafiles) \$(PERL_EXE) \
-	\$(dynamic_ext) \$(TEST_PERL_DLL) runtests x2p/s2p x2p/find2perl \
+	\$(dynamic_ext) \$(TEST_PERL_DLL) runtests \
 	\$(generated_pods)
 	$to libperl.*
 	$to t/*
@@ -1451,11 +1431,7 @@ test_prep test-prep: test_prep_pre \$(MINIPERL_EXE) \$(unidatafiles) \$(PERL_EXE
 	$to config_h.SH
 	$to perl.h
 	$to cflags
-# --- For Module::Build
-	$to cpan/Module-Build/lib/*
 	$to *.h
-# --- For t/x2p/s2p.t
-	$to x2p
 # --- For t/TEST
 	$to config.sh
 # --- For lib/diagnostics.t with -Duseshrplib
@@ -1510,7 +1486,7 @@ test.valgrind check.valgrind:	test_prep
 	@grep "^usemymalloc='n'" config.sh >/dev/null || exit 1
 	@echo "And of course you have to have valgrind..."
 	$(VALGRIND) $(VG_TEST) || exit 1
-	PERL_VALGRIND=1 VALGRIND='$(VALGRIND)' $(RUN_TESTS) choose
+	PERL_VALGRIND=1 VALGRIND='$(VALGRIND)' TESTFILE=harness $(RUN_TESTS) choose
 !NO!SUBS!
 	;;
 esac
@@ -1608,44 +1584,6 @@ define)
     echo "This is an EBCDIC system, checking if any parser files need regenerating." >&2
 case "$osname" in
 os390|posix-bc)
-    if cd x2p
-    then
-        rm -f y.tab.c y.tab.h
-        case "$osname" in
-        posix-bc)
-           # we are using two different yaccs in BS2000 Posix!
-           byacc a2p.y >/dev/null 2>&1
-           ;;
-        *) # e.g. os390
-           yacc  a2p.y >/dev/null 2>&1
-           ;;
-        esac
-        if cmp -s y.tab.c a2p.c
-        then
-            rm -f y.tab.c
-        else
-            echo "a2p.y -> a2p.c" >&2
-            mv -f y.tab.c a2p.c
-            chmod u+w a2p.c
-            sed -e 's/fprintf *( *stderr *,/PerlIO_printf(Perl_debug_log,/g' \
-		-e 's|^static void __YY_YACC_MAIN.*BS2000.*|/*static main deleted*/|' \
-                -e 's/y\.tab/a2p/g' a2p.c >a2p.tmp && mv a2p.tmp a2p.c
-            xxx="$xxx a2p.c"
-        fi
-        # In case somebody yacc -d:ed the a2p.y.
-        if test -f y.tab.h
-        then
-            if cmp -s y.tab.h a2p.h
-            then
-                rm -f y.tab.h
-            else
-                echo "a2p.h -> a2p.h" >&2
-                mv -f y.tab.h a2p.h
-                xxx="$xxx a2p.h"
-            fi
-        fi
-        cd ..
-    fi
     ;;
 *)
     echo "'$osname' is an EBCDIC system I don't know that well." >&4

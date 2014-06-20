@@ -164,10 +164,6 @@ bison (Loc.U):
 	full pathname (if any) of the bison program.  After Configure runs,
 	the value is reset to a plain "bison" and is not useful.
 
-bootstrap_charset (ebcdic.U):
-	This variable conditionally defines BOOTSTRAP_CHARSET if
-	this system uses non-ASCII encoding.
-
 byacc (Loc.U):
 	This variable is used internally by Configure to determine the
 	full pathname (if any) of the byacc program.  After Configure runs,
@@ -482,6 +478,11 @@ d_attribute_warn_unused_result (d_attribut.U):
 	compiler can know that certain functions have a return values
 	that must not be ignored, such as malloc() or open().
 
+d_backtrace (d_backtrace.U):
+	This variable conditionally defines the HAS_BACKTRACE symbol, which
+	indicates to the C program that the backtrace() routine is available
+	to get a stack trace.
+
 d_bcmp (d_bcmp.U):
 	This variable conditionally defines the HAS_BCMP symbol if
 	the bcmp() routine is available to compare strings.
@@ -653,6 +654,11 @@ d_dirnamlen (i_dirent.U):
 	This variable conditionally defines DIRNAMLEN, which indicates
 	to the C program that the length of directory entry names is
 	provided by a d_namelen field.
+
+d_dladdr (d_dladdr.U):
+	This variable conditionally defines the HAS_DLADDR symbol, which
+	indicates to the C program that the dladdr() routine is available
+	to get a stack trace.
 
 d_dlerror (d_dlerror.U):
 	This variable conditionally defines the HAS_DLERROR symbol, which
@@ -2507,10 +2513,20 @@ d_waitpid (d_waitpid.U):
 	This variable conditionally defines HAS_WAITPID if waitpid() is
 	available to wait for child process.
 
+d_wcscmp (d_wcscmp.U):
+	This variable conditionally defines the HAS_WCSCMP symbol if the
+	wcscmp() routine is available and can be used to compare wide
+	character strings.
+
 d_wcstombs (d_wcstombs.U):
 	This variable conditionally defines the HAS_WCSTOMBS symbol, which
 	indicates to the C program that the wcstombs() routine is available
 	to convert wide character strings to multibyte strings.
+
+d_wcsxfrm (d_wcsxfrm.U):
+	This variable conditionally defines the HAS_WCSXFRM symbol if the
+	wcsxfrm() routine is available and can be used to compare wide
+	character strings.
 
 d_wctomb (d_wctomb.U):
 	This variable conditionally defines the HAS_WCTOMB symbol, which
@@ -2945,11 +2961,12 @@ hint (Oldconfig.U):
 	Gives the type of hints used for previous answers. May be one of
 	"default", "recommended" or "previous".
 
-hostperl (Cross.U):
-	This variable contains the path to a miniperl binary that can be
-	run on the host OS when cross-compiling.  Useful and available only
-	during Perl build.
-	Empty string '' if not cross-compiling.
+hostcat (nis.U):
+	This variable contains a command that produces the text of the
+	/etc/hosts file.  This is normally "cat /etc/hosts", but can be
+	"ypcat hosts" when NIS is used.
+	On some systems, such as os390, there may be no equivalent
+	command, in which case this variable is unset.
 
 hostgenerate (Cross.U):
 	This variable contains the path to a generate_uudmap binary that
@@ -2963,12 +2980,11 @@ hostosname (Cross.U):
 	when running build code in the host.
 	Empty string '' if not cross-compiling.
 
-hostcat (nis.U):
-	This variable contains a command that produces the text of the
-	/etc/hosts file.  This is normally "cat /etc/hosts", but can be
-	"ypcat hosts" when NIS is used.
-	On some systems, such as os390, there may be no equivalent
-	command, in which case this variable is unset.
+hostperl (Cross.U):
+	This variable contains the path to a miniperl binary that can be
+	run on the host OS when cross-compiling.  Useful and available only
+	during Perl build.
+	Empty string '' if not cross-compiling.
 
 html1dir (html1dir.U):
 	This variable contains the name of the directory in which html
@@ -3024,6 +3040,10 @@ i_assert (i_assert.U):
 	indicates to the C program that <assert.h> exists and could be
 	included.
 
+i_bfd (i_bfd.U):
+	This variable conditionally defines the I_BFD symbol, and
+	indicates whether a C program can include <bfd.h>.
+
 i_bsdioctl (i_sysioctl.U):
 	This variable conditionally defines the I_SYS_BSDIOCTL symbol, which
 	indicates to the C program that <sys/bsdioctl.h> exists and should
@@ -3050,6 +3070,10 @@ i_dlfcn (i_dlfcn.U):
 	This variable conditionally defines the I_DLFCN symbol, which
 	indicates to the C program that <dlfcn.h> exists and should
 	be included.
+
+i_execinfo (i_execinfo.U):
+	This variable conditionally defines the I_EXECINFO symbol, and indicates
+	whether a C program may include <execinfo.h>, for backtrace() support.
 
 i_fcntl (i_fcntl.U):
 	This variable controls the value of I_FCNTL (which tells
@@ -3805,22 +3829,6 @@ lseektype (lseektype.U):
 	This variable defines lseektype to be something like off_t, long,
 	or whatever type is used to declare lseek offset's type in the
 	kernel (which also appears to be lseek's return type).
-
-mad (mad.U):
-	This variable indicates that the Misc Attribute Definition code is to
-	be compiled.
-
-madlyh (mad.U):
-	If the Misc Attribute Decoration is to be compiled, this variable is
-	set to the name of the extra header files to be used, else it is ''
-
-madlyobj (mad.U):
-	If the Misc Attribute Decoration is to be compiled, this variable is
-	set to the name of the extra object files to be used, else it is ''
-
-madlysrc (mad.U):
-	If the Misc Attribute Decoration is to be compiled, this variable is
-	set to the name of the extra C source files to be used, else it is ''
 
 mail (Loc.U):
 	This variable is defined but not used by Configure.
@@ -4938,7 +4946,7 @@ targetport (Cross.U):
 	This variable contains the number of a network port to be used to
 	connect to the host in targethost, if unset defaults to 22 for ssh.
 
-targetsh (Cross.U):
+targetsh (sh.U):
 	If cross-compiling, this variable contains the location of sh on the
 	target system.
 	If not, this will be the same as $sh.
@@ -5077,6 +5085,10 @@ use64bitint (use64bits.U):
 	is employed, just enough to get 64-bit integers into Perl.
 	This may mean using for example "long longs", while your memory
 	may still be limited to 2 gigabytes.
+
+usecbacktrace (usebacktrace.U):
+	This variable indicates whether we are compiling with backtrace
+	support.
 
 usecrosscompile (Cross.U):
 	This variable conditionally defines the USE_CROSS_COMPILE symbol,

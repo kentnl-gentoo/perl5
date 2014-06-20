@@ -256,13 +256,6 @@ perl_construct(pTHXx)
 
     init_i18nl10n(1);
 
-    /* Keep LC_NUMERIC in the C locale for backwards compatibility for XS
-     * modules.  (Core operations that need the underlying locale change to it
-     * temporarily).  An explicit call to POSIX::setlocale() still will cause
-     * XS module failures, but this is how it has been for a long time [perl
-     * #121317] */
-    SET_NUMERIC_STANDARD();
-
 #if defined(LOCAL_PATCH_COUNT)
     PL_localpatches = local_patches;	/* For possible -v */
 #endif
@@ -312,11 +305,6 @@ perl_construct(pTHXx)
     hv_ksplit(PL_strtab, 512);
 
     Zero(PL_sv_consts, SV_CONSTS_COUNT, SV*);
-
-#if defined(__DYNAMIC__) && (defined(NeXT) || defined(__NeXT__))
-    _dyld_lookup_and_bind
-	("__environ", (unsigned long *) &environ_pointer, NULL);
-#endif /* environ */
 
 #ifndef PERL_MICRO
 #   ifdef  USE_ENVIRON_ARRAY
@@ -677,7 +665,7 @@ perl_destruct(pTHXx)
 		msg.msg_name = NULL;
 		msg.msg_namelen = 0;
 		msg.msg_iov = vec;
-		msg.msg_iovlen = sizeof(vec)/sizeof(vec[0]);
+		msg.msg_iovlen = C_ARRAY_LENGTH(vec);
 
 		vec[0].iov_base = (void*)&target;
 		vec[0].iov_len = sizeof(target);
@@ -1496,8 +1484,7 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
 	 * --jhi */
 	 const char *s = NULL;
 	 int i;
-	 const UV mask =
-	   ~(UV)(PTRSIZE == 4 ? 3 : PTRSIZE == 8 ? 7 : PTRSIZE == 16 ? 15 : 0);
+	 const UV mask = ~(UV)(PTRSIZE-1);
          /* Do the mask check only if the args seem like aligned. */
 	 const UV aligned =
 	   (mask < ~(UV)0) && ((PTR2UV(argv[0]) & mask) == PTR2UV(argv[0]));
@@ -1616,7 +1603,7 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
 	break;
     case 1:
 	STATUS_ALL_FAILURE;
-	/* FALL THROUGH */
+	/* FALLTHROUGH */
     case 2:
 	/* my_exit() was called */
 	while (PL_scopestack_ix > oldscope)
@@ -1897,7 +1884,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 
 	case 'E':
 	    PL_minus_E = TRUE;
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 	case 'e':
 	    forbid_setid('e', FALSE);
 	    if (!PL_e_script) {
@@ -1978,7 +1965,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	    if (strEQ(s, "help"))
 		usage();
 	    s--;
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 	default:
 	    Perl_croak(aTHX_ "Unrecognized switch: -%s  (-h will show valid options)",s);
 	}
@@ -2080,8 +2067,8 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	    (void)Perl_av_create_and_unshift_one(aTHX_ &PL_preambleav,
 						 Perl_newSVpvf(aTHX_
         "BEGIN { do {local $!; -f q%c%"SVf"/buildcustomize.pl%c} and do q%c%"SVf"/buildcustomize.pl%c || die $@ }",
-							       0, *inc0, 0,
-							       0, *inc0, 0));
+							       0, SVfARG(*inc0), 0,
+							       0, SVfARG(*inc0), 0));
 	}
 #  else
 	/* SITELIB_EXP is a function call on Win32.  */
@@ -2094,8 +2081,8 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	    (void)Perl_av_create_and_unshift_one(aTHX_ &PL_preambleav,
 						 Perl_newSVpvf(aTHX_
 							       "BEGIN { do {local $!; -f q%c%s/sitecustomize.pl%c} && do q%c%s/sitecustomize.pl%c }",
-							       0, sitelib, 0,
-							       0, sitelib, 0));
+							       0, SVfARG(sitelib), 0,
+							       0, SVfARG(sitelib), 0));
 	    assert (SvREFCNT(sitelib_sv) == 1);
 	    SvREFCNT_dec(sitelib_sv);
 	}
@@ -2257,32 +2244,6 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
     }
     }
 
-#ifdef PERL_MAD
-    {
-	const char *s;
-    if (!TAINTING_get &&
-        (s = PerlEnv_getenv("PERL_XMLDUMP"))) {
-	PL_madskills = 1;
-	PL_minus_c = 1;
-	if (!s || !s[0])
-	    PL_xmlfp = PerlIO_stdout();
-	else {
-	    PL_xmlfp = PerlIO_open(s, "w");
-	    if (!PL_xmlfp)
-		Perl_croak(aTHX_ "Can't open %s", s);
-	}
-	my_setenv("PERL_XMLDUMP", NULL);	/* hide from subprocs */
-    }
-    }
-
-    {
-	const char *s;
-    if ((s = PerlEnv_getenv("PERL_MADSKILLS"))) {
-	PL_madskills = atoi(s);
-	my_setenv("PERL_MADSKILLS", NULL);	/* hide from subprocs */
-    }
-    }
-#endif
 
     lex_start(linestr_sv, rsfp, lex_start_flags);
     SvREFCNT_dec(linestr_sv);
@@ -2370,7 +2331,7 @@ perl_run(pTHXx)
     case 0:				/* normal completion */
  redo_body:
 	run_body(oldscope);
-	/* FALL THROUGH */
+	/* FALLTHROUGH */
     case 2:				/* my_exit() */
 	while (PL_scopestack_ix > oldscope)
 	    LEAVE;
@@ -2411,12 +2372,6 @@ S_run_body(pTHX_ I32 oldscope)
                     (unsigned int)(PL_sawampersand)));
 
     if (!PL_restartop) {
-#ifdef PERL_MAD
-	if (PL_xmlfp) {
-	    xmldump_all();
-	    exit(0);	/* less likely to core dump than my_exit(0) */
-	}
-#endif
 #ifdef DEBUGGING
 	if (DEBUG_x_TEST || DEBUG_B_TEST)
 	    dump_all_perl(!DEBUG_B_TEST);
@@ -2776,7 +2731,7 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
 	    break;
 	case 1:
 	    STATUS_ALL_FAILURE;
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 	case 2:
 	    /* my_exit() was called */
 	    SET_CURSTASH(PL_defstash);
@@ -2885,7 +2840,7 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
 	break;
     case 1:
 	STATUS_ALL_FAILURE;
-	/* FALL THROUGH */
+	/* FALLTHROUGH */
     case 2:
 	/* my_exit() was called */
 	SET_CURSTASH(PL_defstash);
@@ -3319,7 +3274,7 @@ Perl_moreswitches(pTHX_ const char *s)
 	return s;
     case 'M':
 	forbid_setid('M', FALSE);	/* XXX ? */
-	/* FALL THROUGH */
+	/* FALLTHROUGH */
     case 'm':
 	forbid_setid('m', FALSE);	/* XXX ? */
 	if (*++s) {
@@ -3500,7 +3455,7 @@ S_minus_v(pTHX)
 		"\nThis is perl "	STRINGIFY(PERL_REVISION)
 		", version "		STRINGIFY(PERL_VERSION)
 		", subversion "		STRINGIFY(PERL_SUBVERSION)
-		" (%"SVf") built for "	ARCHNAME, level
+		" (%"SVf") built for "	ARCHNAME, SVfARG(level)
 		);
 	    SvREFCNT_dec_NN(level);
 	}
@@ -3691,6 +3646,7 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
     PerlIO *rsfp = NULL;
     dVAR;
     Stat_t tmpstatbuf;
+    int fd;
 
     PERL_ARGS_ASSERT_OPEN_SCRIPT;
 
@@ -3763,7 +3719,9 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
 	const char * const err = "Failed to create a fake bit bucket";
 	if (strEQ(scriptname, BIT_BUCKET)) {
 #ifdef HAS_MKSTEMP /* Hopefully mkstemp() is safe here. */
+            int old_umask = umask(0600);
 	    int tmpfd = mkstemp(tmpname);
+            umask(old_umask);
 	    if (tmpfd > -1) {
 		scriptname = tmpname;
 		close(tmpfd);
@@ -3796,13 +3754,20 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
 	    Perl_croak(aTHX_ "Can't open perl script \"%s\": %s\n",
 		    CopFILE(PL_curcop), Strerror(errno));
     }
+    fd = PerlIO_fileno(rsfp);
 #if defined(HAS_FCNTL) && defined(F_SETFD)
-    /* ensure close-on-exec */
-    fcntl(PerlIO_fileno(rsfp), F_SETFD, 1);
+    if (fd >= 0) {
+        /* ensure close-on-exec */
+        if (fcntl(fd, F_SETFD, 1) < 0) {
+            Perl_croak(aTHX_ "Can't open perl script \"%s\": %s\n",
+                       CopFILE(PL_curcop), Strerror(errno));
+        }
+    }
 #endif
 
-    if (PerlLIO_fstat(PerlIO_fileno(rsfp), &tmpstatbuf) >= 0
-        && S_ISDIR(tmpstatbuf.st_mode))
+    if (fd < 0 ||
+        (PerlLIO_fstat(fd, &tmpstatbuf) >= 0
+         && S_ISDIR(tmpstatbuf.st_mode)))
         Perl_croak(aTHX_ "Can't open perl script \"%s\": %s\n",
             CopFILE(PL_curcop),
             Strerror(EISDIR));
@@ -3833,12 +3798,18 @@ S_validate_suid(pTHX_ PerlIO *rsfp)
 
     if (my_euid != my_uid || my_egid != my_gid) {	/* (suidperl doesn't exist, in fact) */
 	dVAR;
-
-	PerlLIO_fstat(PerlIO_fileno(rsfp),&PL_statbuf);	/* may be either wrapped or real suid */
-	if ((my_euid != my_uid && my_euid == PL_statbuf.st_uid && PL_statbuf.st_mode & S_ISUID)
-	    ||
-	    (my_egid != my_gid && my_egid == PL_statbuf.st_gid && PL_statbuf.st_mode & S_ISGID)
-	   )
+        int fd = PerlIO_fileno(rsfp);
+        if (fd < 0) {
+            Perl_croak(aTHX_ "Illegal suidscript");
+        } else {
+            if (PerlLIO_fstat(fd, &PL_statbuf) < 0) {	/* may be either wrapped or real suid */
+                Perl_croak(aTHX_ "Illegal suidscript");
+            }
+        }
+        if ((my_euid != my_uid && my_euid == PL_statbuf.st_uid && PL_statbuf.st_mode & S_ISUID)
+            ||
+            (my_egid != my_gid && my_egid == PL_statbuf.st_gid && PL_statbuf.st_mode & S_ISGID)
+            )
 	    if (!PL_do_undump)
 		Perl_croak(aTHX_ "YOU HAVEN'T DISABLED SET-ID SCRIPTS IN THE KERNEL YET!\n\
 FIX YOUR KERNEL, PUT A C WRAPPER AROUND THIS SCRIPT, OR USE -u AND UNDUMP!\n");
@@ -4855,21 +4826,12 @@ Perl_call_list(pTHX_ I32 oldscope, AV *paramList)
 		Perl_av_create_and_push(aTHX_ &PL_unitcheckav_save, MUTABLE_SV(cv));
 	    }
 	} else {
-	    if (!PL_madskills)
-		SAVEFREESV(cv);
+            SAVEFREESV(cv);
 	}
 	JMPENV_PUSH(ret);
 	switch (ret) {
 	case 0:
-#ifdef PERL_MAD
-	    if (PL_madskills)
-		PL_madskills |= 16384;
-#endif
 	    CALL_LIST_BODY(cv);
-#ifdef PERL_MAD
-	    if (PL_madskills)
-		PL_madskills &= ~16384;
-#endif
 	    atsv = ERRSV;
 	    (void)SvPV_const(atsv, len);
 	    if (len) {
@@ -4892,7 +4854,7 @@ Perl_call_list(pTHX_ I32 oldscope, AV *paramList)
 	    break;
 	case 1:
 	    STATUS_ALL_FAILURE;
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 	case 2:
 	    /* my_exit() was called */
 	    while (PL_scopestack_ix > oldscope)

@@ -28,38 +28,38 @@
 #if defined(PERL_HASH_FUNC_SIPHASH)
 #   define PERL_HASH_FUNC "SIPHASH_2_4"
 #   define PERL_HASH_SEED_BYTES 16
-#   define PERL_HASH(hash,str,len) (hash)= S_perl_hash_siphash_2_4(PERL_HASH_SEED,(U8*)(str),(len))
+#   define PERL_HASH_WITH_SEED(seed,hash,str,len) (hash)= S_perl_hash_siphash_2_4((seed),(U8*)(str),(len))
 #elif defined(PERL_HASH_FUNC_SUPERFAST)
 #   define PERL_HASH_FUNC "SUPERFAST"
 #   define PERL_HASH_SEED_BYTES 4
-#   define PERL_HASH(hash,str,len) (hash)= S_perl_hash_superfast(PERL_HASH_SEED,(U8*)(str),(len))
+#   define PERL_HASH_WITH_SEED(seed,hash,str,len) (hash)= S_perl_hash_superfast((seed),(U8*)(str),(len))
 #elif defined(PERL_HASH_FUNC_MURMUR3)
 #   define PERL_HASH_FUNC "MURMUR3"
 #   define PERL_HASH_SEED_BYTES 4
-#   define PERL_HASH(hash,str,len) (hash)= S_perl_hash_murmur3(PERL_HASH_SEED,(U8*)(str),(len))
+#   define PERL_HASH_WITH_SEED(seed,hash,str,len) (hash)= S_perl_hash_murmur3((seed),(U8*)(str),(len))
 #elif defined(PERL_HASH_FUNC_DJB2)
 #   define PERL_HASH_FUNC "DJB2"
 #   define PERL_HASH_SEED_BYTES 4
-#   define PERL_HASH(hash,str,len) (hash)= S_perl_hash_djb2(PERL_HASH_SEED,(U8*)(str),(len))
+#   define PERL_HASH_WITH_SEED(seed,hash,str,len) (hash)= S_perl_hash_djb2((seed),(U8*)(str),(len))
 #elif defined(PERL_HASH_FUNC_SDBM)
 #   define PERL_HASH_FUNC "SDBM"
 #   define PERL_HASH_SEED_BYTES 4
-#   define PERL_HASH(hash,str,len) (hash)= S_perl_hash_sdbm(PERL_HASH_SEED,(U8*)(str),(len))
+#   define PERL_HASH_WITH_SEED(seed,hash,str,len) (hash)= S_perl_hash_sdbm((seed),(U8*)(str),(len))
 #elif defined(PERL_HASH_FUNC_ONE_AT_A_TIME_HARD)
 #   define PERL_HASH_FUNC "ONE_AT_A_TIME_HARD"
 #   define PERL_HASH_SEED_BYTES 8
-#   define PERL_HASH(hash,str,len) (hash)= S_perl_hash_one_at_a_time_hard(PERL_HASH_SEED,(U8*)(str),(len))
+#   define PERL_HASH_WITH_SEED(seed,hash,str,len) (hash)= S_perl_hash_one_at_a_time_hard((seed),(U8*)(str),(len))
 #elif defined(PERL_HASH_FUNC_ONE_AT_A_TIME)
 #   define PERL_HASH_FUNC "ONE_AT_A_TIME"
 #   define PERL_HASH_SEED_BYTES 4
-#   define PERL_HASH(hash,str,len) (hash)= S_perl_hash_one_at_a_time(PERL_HASH_SEED,(U8*)(str),(len))
+#   define PERL_HASH_WITH_SEED(seed,hash,str,len) (hash)= S_perl_hash_one_at_a_time((seed),(U8*)(str),(len))
 #elif defined(PERL_HASH_FUNC_ONE_AT_A_TIME_OLD)
 #   define PERL_HASH_FUNC "ONE_AT_A_TIME_OLD"
 #   define PERL_HASH_SEED_BYTES 4
-#   define PERL_HASH(hash,str,len) (hash)= S_perl_hash_old_one_at_a_time(PERL_HASH_SEED,(U8*)(str),(len))
+#   define PERL_HASH_WITH_SEED(seed,hash,str,len) (hash)= S_perl_hash_old_one_at_a_time((seed),(U8*)(str),(len))
 #endif
 
-#ifndef PERL_HASH
+#ifndef PERL_HASH_WITH_SEED
 #error "No hash function defined!"
 #endif
 #ifndef PERL_HASH_SEED_BYTES
@@ -80,6 +80,8 @@
 #       error "No PERL_HASH_SEED definition for " PERL_HASH_FUNC
 #   endif
 #endif
+
+#define PERL_HASH(hash,str,len) PERL_HASH_WITH_SEED(PERL_HASH_SEED,hash,str,len)
 
 /*-----------------------------------------------------------------------------
  * Endianess, misalignment capabilities and util macros
@@ -192,10 +194,10 @@
 PERL_STATIC_INLINE U32
 S_perl_hash_siphash_2_4(const unsigned char * const seed, const unsigned char *in, const STRLEN inlen) {
   /* "somepseudorandomlygeneratedbytes" */
-  U64TYPE v0 = 0x736f6d6570736575ULL;
-  U64TYPE v1 = 0x646f72616e646f6dULL;
-  U64TYPE v2 = 0x6c7967656e657261ULL;
-  U64TYPE v3 = 0x7465646279746573ULL;
+  U64TYPE v0 = UINT64_C(0x736f6d6570736575);
+  U64TYPE v1 = UINT64_C(0x646f72616e646f6d);
+  U64TYPE v2 = UINT64_C(0x6c7967656e657261);
+  U64TYPE v3 = UINT64_C(0x7465646279746573);
 
   U64TYPE b;
   U64TYPE k0 = ((U64TYPE*)seed)[0];
@@ -455,7 +457,7 @@ S_perl_hash_murmur3(const unsigned char * const seed, const unsigned char *ptr, 
 PERL_STATIC_INLINE U32
 S_perl_hash_djb2(const unsigned char * const seed, const unsigned char *str, const STRLEN len) {
     const unsigned char * const end = (const unsigned char *)str + len;
-    U32 hash = *((U32*)seed + len);
+    U32 hash = *((U32*)seed) + len;
     while (str < end) {
         hash = ((hash << 5) + hash) + *str++;
     }
@@ -465,7 +467,7 @@ S_perl_hash_djb2(const unsigned char * const seed, const unsigned char *str, con
 PERL_STATIC_INLINE U32
 S_perl_hash_sdbm(const unsigned char * const seed, const unsigned char *str, const STRLEN len) {
     const unsigned char * const end = (const unsigned char *)str + len;
-    U32 hash = *((U32*)seed + len);
+    U32 hash = *((U32*)seed) + len;
     while (str < end) {
         hash = (hash << 6) + (hash << 16) - hash + *str++;
     }

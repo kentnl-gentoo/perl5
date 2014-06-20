@@ -21,7 +21,6 @@
 
 /*
 =head1 GV Functions
-
 A GV is a structure which corresponds to to a Perl typeglob, ie *foo.
 It is a structure that holds a pointer to a scalar, an array, a hash etc,
 corresponding to $foo, @foo, %foo.
@@ -353,6 +352,7 @@ Perl_gv_init_pvn(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, U32 flag
 	case SVt_PVIO:
             Perl_croak(aTHX_ "Cannot convert a reference to %s to typeglob",
 		       sv_reftype(has_constant, 0));
+
 	default: NOOP;
 	}
 	SvRV_set(gv, NULL);
@@ -1693,7 +1693,7 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 	    case 'b':
 		if (len == 1 && sv_type == SVt_PV)
 		    GvMULTI_on(gv);
-		/* FALL THROUGH */
+		/* FALLTHROUGH */
 	    default:
 		goto try_core;
 	    }
@@ -1968,7 +1968,7 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 	case '\023':	/* $^S */
 	ro_magicalize:
 	    SvREADONLY_on(GvSVn(gv));
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 	case '0':		/* $0 */
 	case '^':		/* $^ */
 	case '~':		/* $~ */
@@ -2399,7 +2399,7 @@ Perl_gp_free(pTHX_ GV *gv)
          Somehow gp->gp_hv can end up pointing at freed garbage.  */
       if (hv && SvTYPE(hv) == SVt_PVHV) {
         const HEK *hvname_hek = HvNAME_HEK(hv);
-        DEBUG_o(Perl_deb(aTHX_ "gp_free clearing PL_stashcache for '%"HEKf"'\n", hvname_hek));
+        DEBUG_o(Perl_deb(aTHX_ "gp_free clearing PL_stashcache for '%"HEKf"'\n", HEKfARG(hvname_hek)));
         if (PL_stashcache && hvname_hek)
            (void)hv_deletehek(PL_stashcache, hvname_hek, G_DISCARD);
 	SvREFCNT_dec(hv);
@@ -2969,7 +2969,7 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
 	 case regexp_amg:
 	     /* FAIL safe */
 	     return NULL;	/* Delegate operation to standard mechanisms. */
-	     break;
+
 	 case to_sv_amg:
 	 case to_av_amg:
 	 case to_hv_amg:
@@ -2977,7 +2977,7 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
 	 case to_cv_amg:
 	     /* FAIL safe */
 	     return left;	/* Delegate operation to standard mechanisms. */
-	     break;
+
 	 default:
 	   goto not_found;
 	 }
@@ -3044,7 +3044,6 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
 	 case to_cv_amg:
 	     /* FAIL safe */
 	     return left;	/* Delegate operation to standard mechanisms. */
-	     break;
       }
       if (ocvp && (cv=ocvp[nomethod_amg])) { /* Call report method */
 	notfound = 1; lr = -1;

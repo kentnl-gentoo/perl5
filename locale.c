@@ -109,7 +109,7 @@ Perl_set_numeric_radix(pTHX)
 		PL_numeric_radix_sv = newSVpv(lc->decimal_point, 0);
             if (! is_ascii_string((U8 *) lc->decimal_point, 0)
                 && is_utf8_string((U8 *) lc->decimal_point, 0)
-                && is_cur_LC_category_utf8(LC_NUMERIC))
+                && _is_cur_LC_category_utf8(LC_NUMERIC))
             {
 		SvUTF8_on(PL_numeric_radix_sv);
             }
@@ -148,9 +148,12 @@ Perl_new_numeric(pTHX_ const char *newnum)
      * This sets several interpreter-level variables:
      * PL_numeric_name  The default locale's name: a copy of 'newnum'
      * PL_numeric_local A boolean indicating if the toggled state is such
-     *                  that the current locale is the default locale
-     * PL_numeric_standard A boolean indicating if the toggled state is such
-     *                  that the current locale is the C locale
+     *                  that the current locale is the program's underlying
+     *                  locale
+     * PL_numeric_standard An int indicating if the toggled state is such
+     *                  that the current locale is the C locale.  If non-zero,
+     *                  it is in C; if > 1, it means it may not be toggled away
+     *                  from C.
      * Note that both of the last two variables can be true at the same time,
      * if the underlying locale is C.  (Toggling is a no-op under these
      * circumstances.)
@@ -180,6 +183,12 @@ Perl_new_numeric(pTHX_ const char *newnum)
     PL_numeric_standard = ((*save_newnum == 'C' && save_newnum[1] == '\0')
                             || strEQ(save_newnum, "POSIX"));
     PL_numeric_local = TRUE;
+
+    /* Keep LC_NUMERIC in the C locale.  This is for XS modules, so they don't
+     * have to worry about the radix being a non-dot.  (Core operations that
+     * need the underlying locale change to it temporarily). */
+    set_numeric_standard();
+
     set_numeric_radix();
 
 #endif /* USE_LOCALE_NUMERIC */
@@ -195,7 +204,7 @@ Perl_set_numeric_standard(pTHX)
      * should use the macros like SET_NUMERIC_STANDARD() in perl.h instead of
      * calling this directly. */
 
-    if (! PL_numeric_standard) {
+    if (_NOT_IN_NUMERIC_STANDARD) {
 	setlocale(LC_NUMERIC, "C");
 	PL_numeric_standard = TRUE;
 	PL_numeric_local = FALSE;
@@ -217,7 +226,7 @@ Perl_set_numeric_local(pTHX)
      * already there.  Probably should use the macros like SET_NUMERIC_LOCAL()
      * in perl.h instead of calling this directly. */
 
-    if (! PL_numeric_local) {
+    if (_NOT_IN_NUMERIC_LOCAL) {
 	setlocale(LC_NUMERIC, PL_numeric_name);
 	PL_numeric_standard = FALSE;
 	PL_numeric_local = TRUE;
@@ -254,7 +263,7 @@ Perl_new_ctype(pTHX_ const char *newctype)
 
     PERL_ARGS_ASSERT_NEW_CTYPE;
 
-    PL_in_utf8_CTYPE_locale = is_cur_LC_category_utf8(LC_CTYPE);
+    PL_in_utf8_CTYPE_locale = _is_cur_LC_category_utf8(LC_CTYPE);
 
     /* A UTF-8 locale gets standard rules.  But note that code still has to
      * handle this specially because of the three problematic code points */
@@ -514,8 +523,14 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
                     (printwarn &&
                      (!(p = PerlEnv_getenv("PERL_BADLANG")) || atoi(p))));
     bool done = FALSE;
+#ifdef WIN32
+    /* In some systems you can find out the system default locale
+     * and use that as the fallback locale. */
+#   define SYSTEM_DEFAULT_LOCALE
+#endif
+#ifdef SYSTEM_DEFAULT_LOCALE
     const char *system_default_locale = NULL;
-
+#endif
 
 #ifndef LOCALE_ENVIRON_REQUIRED
     PERL_UNUSED_VAR(done);
@@ -600,8 +615,8 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
              * sense */
             setlocale_failure = FALSE;
 
-#ifdef WIN32
-
+#ifdef SYSTEM_DEFAULT_LOCALE
+#  ifdef WIN32
             /* On Windows machines, an entry of "" after the 0th means to use
              * the system default locale, which we now proceed to get. */
             if (strEQ(trial_locale, "")) {
@@ -624,7 +639,8 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
 
                 trial_locale = system_default_locale;
             }
-#endif
+#  endif /* WIN32 */
+#endif /* SYSTEM_DEFAULT_LOCALE */
         }
 
 #ifdef LC_ALL
@@ -846,12 +862,14 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
                 description = "the standard locale";
                 name = "C";
             }
+#ifdef SYSTEM_DEFAULT_LOCALE
             else if (strEQ(trial_locales[i], "")) {
                 description = "the system default locale";
                 if (system_default_locale) {
                     name = system_default_locale;
                 }
             }
+#endif /* SYSTEM_DEFAULT_LOCALE */
             else {
                 description = "a fallback locale";
                 name = trial_locales[i];
@@ -885,7 +903,7 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
      * $ENV{PERL_UNICODE}) are true, perl.c:S_parse_body() will turn on the
      * PerlIO :utf8 layer on STDIN, STDOUT, STDERR, _and_ the default open
      * discipline.  */
-    PL_utf8locale = is_cur_LC_category_utf8(LC_CTYPE);
+    PL_utf8locale = _is_cur_LC_category_utf8(LC_CTYPE);
 
     /* Set PL_unicode to $ENV{PERL_UNICODE} if using PerlIO.
        This is an alternative to using the -C command line switch
@@ -979,8 +997,8 @@ Perl_mem_collxfrm(pTHX_ const char *s, STRLEN len, STRLEN *xlen)
 
 #ifdef USE_LOCALE
 
-STATIC bool
-S_is_cur_LC_category_utf8(pTHX_ int category)
+bool
+Perl__is_cur_LC_category_utf8(pTHX_ int category)
 {
     /* Returns TRUE if the current locale for 'category' is UTF-8; FALSE
      * otherwise. 'category' may not be LC_ALL.  If the platform doesn't have
@@ -1077,6 +1095,7 @@ S_is_cur_LC_category_utf8(pTHX_ int category)
                 Safefree(save_input_locale);
                 return is_utf8;
             }
+            Safefree(codeset);
         }
 
 #   endif
@@ -1109,7 +1128,7 @@ S_is_cur_LC_category_utf8(pTHX_ int category)
             (void) mbtowc(&wc, NULL, 0);    /* Reset any shift state */
             GCC_DIAG_RESTORE;
             errno = 0;
-            if (mbtowc(&wc, HYPHEN_UTF8, strlen(HYPHEN_UTF8))
+            if ((size_t)mbtowc(&wc, HYPHEN_UTF8, strlen(HYPHEN_UTF8))
                                                         != strlen(HYPHEN_UTF8)
                 || wc != (wchar_t) 0x2010)
             {
@@ -1365,6 +1384,61 @@ S_is_cur_LC_category_utf8(pTHX_ int category)
 }
 
 #endif
+
+
+bool
+Perl__is_in_locale_category(pTHX_ const bool compiling, const int category)
+{
+    dVAR;
+    /* Internal function which returns if we are in the scope of a pragma that
+     * enables the locale category 'category'.  'compiling' should indicate if
+     * this is during the compilation phase (TRUE) or not (FALSE). */
+
+    const COP * const cop = (compiling) ? &PL_compiling : PL_curcop;
+
+    SV *categories = cop_hints_fetch_pvs(cop, "locale", 0);
+    if (! categories || categories == &PL_sv_placeholder) {
+        return FALSE;
+    }
+
+    /* The pseudo-category 'not_characters' is -1, so just add 1 to each to get
+     * a valid unsigned */
+    assert(category >= -1);
+    return cBOOL(SvUV(categories) & (1U << (category + 1)));
+}
+
+char *
+Perl_my_strerror(pTHX_ const int errnum) {
+
+    /* Uses C locale for the error text unless within scope of 'use locale' for
+     * LC_MESSAGES */
+
+#ifdef USE_LOCALE_MESSAGES
+    if (! IN_LC(LC_MESSAGES)) {
+        char * save_locale = setlocale(LC_MESSAGES, NULL);
+        if (! ((*save_locale == 'C' && save_locale[1] == '\0')
+                || strEQ(save_locale, "POSIX")))
+        {
+            char *errstr;
+
+            /* The next setlocale likely will zap this, so create a copy */
+            save_locale = savepv(save_locale);
+
+            setlocale(LC_MESSAGES, "C");
+
+            /* This points to the static space in Strerror, with all its
+             * limitations */
+            errstr = Strerror(errnum);
+
+            setlocale(LC_MESSAGES, save_locale);
+            Safefree(save_locale);
+            return errstr;
+        }
+    }
+#endif
+
+    return Strerror(errnum);
+}
 
 /*
  * Local variables:

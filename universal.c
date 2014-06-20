@@ -67,7 +67,7 @@ S_isa_lookup(pTHX_ HV *stash, const char * const name, STRLEN len, U32 flags)
     if (our_stash) {
 	HEK *canon_name = HvENAME_HEK(our_stash);
 	if (!canon_name) canon_name = HvNAME_HEK(our_stash);
-
+	assert(canon_name);
 	if (hv_common(isa, NULL, HEK_KEY(canon_name), HEK_LEN(canon_name),
 		      HEK_FLAGS(canon_name),
 		      HV_FETCH_ISEXISTS, NULL, HEK_HASH(canon_name))) {
@@ -513,7 +513,7 @@ XS(XS_utf8_downgrade)
 	croak_xs_usage(cv, "sv, failok=0");
     else {
 	SV * const sv = ST(0);
-        const bool failok = (items < 2) ? 0 : (int)SvIV(ST(1));
+        const bool failok = (items < 2) ? 0 : SvTRUE(ST(1)) ? 1 : 0;
         const bool RETVAL = sv_utf8_downgrade(sv, failok);
 
 	ST(0) = boolSV(RETVAL);
@@ -1059,8 +1059,7 @@ Perl_boot_core_UNIVERSAL(pTHX)
     dVAR;
     static const char file[] = __FILE__;
     const struct xsub_details *xsub = details;
-    const struct xsub_details *end
-	= details + sizeof(details) / sizeof(details[0]);
+    const struct xsub_details *end = C_ARRAY_END(details);
 
     do {
 	newXS_flags(xsub->name, xsub->xsub, file, xsub->proto, 0);

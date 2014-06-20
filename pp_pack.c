@@ -448,7 +448,7 @@ S_measure_struct(pTHX_ tempsym_t* symptr)
 	  case e_star:
    	    Perl_croak(aTHX_ "Within []-length '*' not allowed in %s",
                         _action( symptr ) );
-            break;
+
 	  default:
 	    /* e_no_len and e_number */
 	    len = symptr->length;
@@ -497,7 +497,7 @@ S_measure_struct(pTHX_ tempsym_t* symptr)
 		if (!len)		/* Avoid division by 0 */
 		    len = 1;
 		len = total % len;	/* Assumed: the start is aligned. */
-		/* FALL THROUGH */
+		/* FALLTHROUGH */
 	    case 'X':
 		size = -1;
 		if (total < len)
@@ -511,7 +511,7 @@ S_measure_struct(pTHX_ tempsym_t* symptr)
 		    len = len - star;
 		else
 		    len = 0;
-		/* FALL THROUGH */
+		/* FALLTHROUGH */
 	    case 'x':
 	    case 'A':
 	    case 'Z':
@@ -567,7 +567,7 @@ S_group_end(pTHX_ const char *patptr, const char *patend, char ender)
     }
     Perl_croak(aTHX_ "No group ending character '%c' found in template",
                ender);
-    return 0;
+    NOT_REACHED; /* NOTREACHED */
 }
 
 
@@ -810,6 +810,9 @@ first_symbol(const char *pat, const char *patend) {
 }
 
 /*
+
+=head1 Pack and Unpack
+
 =for apidoc unpackstring
 
 The engine implementing the unpack() Perl function.
@@ -931,7 +934,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 	    cuv = 0;
 	    cdouble = 0;
 	    continue;
-	    break;
+
 	case '(':
 	{
             tempsym_t savsym = *symptr;
@@ -1013,7 +1016,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		break;
 	    }
 	    len = (s - strbeg) % len;
- 	    /* FALL THROUGH */
+ 	    /* FALLTHROUGH */
 	case 'X':
 	    if (utf8) {
 		while (len > 0) {
@@ -1040,7 +1043,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 	    if (ai32 == 0) break;
 	    len -= ai32;
             }
- 	    /* FALL THROUGH */
+ 	    /* FALLTHROUGH */
 	case 'x':
 	    if (utf8) {
 		while (len>0) {
@@ -1057,7 +1060,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 	    break;
 	case '/':
 	    Perl_croak(aTHX_ "'/' must follow a numeric type in unpack");
-            break;
+
 	case 'A':
 	case 'Z':
 	case 'a':
@@ -1232,7 +1235,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		    utf8 = (symptr->flags & FLAG_DO_UTF8) ? 1 : 0;
 		break;
 	    }
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 	case 'c':
 	    while (len-- > 0 && s < strend) {
 		int aint;
@@ -1346,7 +1349,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 	    }
 	    break;
 #else
-	    /* Fallthrough! */
+	    /* FALLTHROUGH */
 #endif
 	case 's':
 	    while (len-- > 0) {
@@ -1383,7 +1386,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 	    }
 	    break;
 #else
-            /* Fallthrough! */
+            /* FALLTHROUGH */
 #endif
 	case 'v':
 	case 'n':
@@ -1492,7 +1495,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 	    }
 	    break;
 #else
-	    /* Fallthrough! */
+	    /* FALLTHROUGH */
 #endif
 	case 'l':
 	    while (len-- > 0) {
@@ -1526,7 +1529,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 	    }
 	    break;
 #else
-            /* Fall through! */
+            /* FALLTHROUGH */
 #endif
 	case 'V':
 	case 'N':
@@ -1632,14 +1635,13 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		PUSHs(newSVpvn_flags(aptr, len, SVs_TEMP));
 	    }
 	    break;
-#if IVSIZE >= 8
+#if defined(HAS_QUAD) && IVSIZE >= 8
 	case 'q':
 	    while (len-- > 0) {
 		Quad_t aquad;
                 SHIFT_VAR(utf8, s, strend, aquad, datumtype, needs_swap);
 		if (!checksum)
-                    mPUSHs(aquad >= IV_MIN && aquad <= IV_MAX ?
-			   newSViv((IV)aquad) : newSVnv((NV)aquad));
+                    mPUSHs(newSViv((IV)aquad));
 		else if (checksum > bits_in_uv)
 		    cdouble += (NV)aquad;
 		else
@@ -1651,8 +1653,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		Uquad_t auquad;
                 SHIFT_VAR(utf8, s, strend, auquad, datumtype, needs_swap);
 		if (!checksum)
-		    mPUSHs(auquad <= UV_MAX ?
-			   newSVuv((UV)auquad) : newSVnv((NV)auquad));
+		    mPUSHs(newSVuv((UV)auquad));
 		else if (checksum > bits_in_uv)
 		    cdouble += (NV)auquad;
 		else
@@ -2082,6 +2083,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
     bool found = next_symbol(symptr);
     bool utf8 = (symptr->flags & FLAG_PARSE_UTF8) ? 1 : 0;
     bool warn_utf8 = ckWARN(WARN_UTF8);
+    char* from;
 
     PERL_ARGS_ASSERT_PACK_REC;
 
@@ -2162,8 +2164,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 		       (int) TYPE_NO_MODIFIERS(datumtype));
 	case '%':
 	    Perl_croak(aTHX_ "'%%' may not be used in pack");
-	{
-	    char *from;
+
 	case '.' | TYPE_IS_SHRIEKING:
 	case '.':
 	    if (howlen == e_star) from = start;
@@ -2212,7 +2213,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 		goto shrink;
 	    }
 	    break;
-	}
+
 	case '(': {
             tempsym_t savsym = *symptr;
 	    U32 group_modifiers = TYPE_MODIFIERS(datumtype & ~symptr->flags);
@@ -2258,7 +2259,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 		break;
 	    }
 	    len = (cur-start) % len;
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 	case 'X':
 	    if (utf8) {
 		if (len < 1) goto no_change;
@@ -2300,7 +2301,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    if (ai32 == 0) goto no_change;
 	    len -= ai32;
 	}
-	/* FALL THROUGH */
+	/* FALLTHROUGH */
 	case 'x':
 	    goto grow;
 	case 'A':
@@ -2771,7 +2772,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    }
             break;
 #else
-            /* Fall through! */
+            /* FALLTHROUGH */
 #endif
 	case 'S':
 	    while (len-- > 0) {
@@ -2791,7 +2792,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    }
             break;
 #else
-            /* Fall through! */
+            /* FALLTHROUGH */
 #endif
 	case 's':
 	    while (len-- > 0) {
@@ -2982,7 +2983,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
                 PUSH32(utf8, cur, &ai32, needs_swap);
 	    }
 	    break;
-#if IVSIZE >= 8
+#if defined(HAS_QUAD) && IVSIZE >= 8
 	case 'Q':
 	    while (len-- > 0) {
 		Uquad_t auquad;
@@ -3003,7 +3004,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	case 'P':
 	    len = 1;		/* assume SV is correct length */
 	    GROWING(utf8, cat, start, cur, sizeof(char *));
-	    /* Fall through! */
+	    /* FALLTHROUGH */
 	case 'p':
 	    while (len-- > 0) {
 		const char *aptr;

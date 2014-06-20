@@ -20,7 +20,7 @@ BEGIN {
     require './test.pl';
 }
 
-plan tests => 721;  # Update this when adding/deleting tests.
+plan tests => 737;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -522,11 +522,7 @@ sub run_tests {
       SKIP: {
             skip 'No locale testing without d_setlocale', 1 if(!$Config{d_setlocale});
 
-            BEGIN {
-                if($Config{d_setlocale}) {
-                    require locale; import locale;
-                }
-            }
+            use locale;
             $locale = qr/\b\v$/;
             is($locale,    '(?^l:\b\v$)', 'Verify has l modifier when compiled under use locale');
             no locale;
@@ -555,11 +551,7 @@ sub run_tests {
       SKIP: {
             skip 'No locale testing without d_setlocale', 2 if(!$Config{d_setlocale});
 
-             BEGIN {
-                if($Config{d_setlocale}) {
-                    require locale; import locale;
-                }
-            }
+             use locale;
             is(qr/abc$dual/,    '(?^l:abc(?^:\b\v$))', 'Verify retains d meaning when interpolated under locale');
             is(qr/abc$unicode/,    '(?^l:abc(?^u:\b\v$))', 'Verify retains u when interpolated under locale');
         }
@@ -1403,13 +1395,6 @@ EOP
 	ok("Perl" =~ /P.*$/i, '#116148');
     }
 
-    { # 117327: Sequence (?#...) not recognized in regex
-      # The space between the '(' and '?' is now deprecated; this test should
-      # be removed when the deprecation is made fatal.
-        no warnings;
-        like("ab", qr/a( ?#foo)b/x);
-    }
-
     { # 118297: Mixing up- and down-graded strings in regex
         utf8::upgrade(my $u = "\x{e5}");
         utf8::downgrade(my $d = "\x{e5}");
@@ -1580,7 +1565,46 @@ EOP
         like "\x{AA}", qr/a?[\W_]/d, "\\W with /d synthetic start class works";
     }
 
+    {
+        # Verify that the very last Latin-1 U+00FF
+        # (LATIN SMALL LETTER Y WITH DIAERESIS)
+        # and its UPPER counterpart (U+0178 which is pure Unicode),
+        # and likewise for the very first pure Unicode
+        # (LATIN CAPITAL LETTER A WITH MACRON) fold-match properly,
+        # and there are no off-by-one logic errors in the transition zone.
 
+        ok("\xFF" =~ /\xFF/i, "Y WITH DIAERESIS l =~ l");
+        ok("\xFF" =~ /\x{178}/i, "Y WITH DIAERESIS l =~ u");
+        ok("\x{178}" =~ /\xFF/i, "Y WITH DIAERESIS u =~ l");
+        ok("\x{178}" =~ /\x{178}/i, "Y WITH DIAERESIS u =~ u");
+
+        # U+00FF with U+05D0 (non-casing Hebrew letter).
+        ok("\xFF\x{5D0}" =~ /\xFF\x{5D0}/i, "Y WITH DIAERESIS l =~ l");
+        ok("\xFF\x{5D0}" =~ /\x{178}\x{5D0}/i, "Y WITH DIAERESIS l =~ u");
+        ok("\x{178}\x{5D0}" =~ /\xFF\x{5D0}/i, "Y WITH DIAERESIS u =~ l");
+        ok("\x{178}\x{5D0}" =~ /\x{178}\x{5D0}/i, "Y WITH DIAERESIS u =~ u");
+
+        # U+0100.
+        ok("\x{100}" =~ /\x{100}/i, "A WITH MACRON u =~ u");
+        ok("\x{100}" =~ /\x{101}/i, "A WITH MACRON u =~ l");
+        ok("\x{101}" =~ /\x{100}/i, "A WITH MACRON l =~ u");
+        ok("\x{101}" =~ /\x{101}/i, "A WITH MACRON l =~ l");
+    }
+
+    {
+        use utf8;
+        ok("abc" =~ /abc/x, "NEL is white-space under /x");
+    }
+
+    {
+        ok('a(b)c' =~ qr(a\(b\)c), "'\\(' is a literal in qr(...)");
+        ok('a[b]c' =~ qr[a\[b\]c], "'\\[' is a literal in qr[...]");
+        ok('a{3}c' =~ qr{a\{3\}c},  # Only failed when { could be a meta
+              "'\\{' is a literal in qr{...}, where it could be a quantifier");
+
+        # This one is for completeness
+        ok('a<b>c' =~ qr<a\<b\>c>, "'\\<' is a literal in qr<...>)");
+    }
 
 } # End of sub run_tests
 

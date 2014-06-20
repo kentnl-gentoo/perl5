@@ -39,8 +39,7 @@ static const char unees[] =
 
 /*
 =head1 Unicode Support
-
-This file contains various utility functions for manipulating UTF8-encoded
+These are various utility functions for manipulating UTF8-encoded
 strings.  For the uninitiated, this is a method of representing arbitrary
 Unicode characters as a variable number of bytes, in such a way that
 characters in the ASCII range are unmodified, and a zero byte never appears
@@ -308,47 +307,9 @@ Perl_uvchr_to_utf8_flags(pTHX_ U8 *d, UV uv, UV flags)
 }
 
 /*
-
-Tests if the first C<len> bytes of string C<s> form a valid UTF-8
-character.  Note that an INVARIANT (i.e. ASCII on non-EBCDIC) character is a
-valid UTF-8 character.  The number of bytes in the UTF-8 character
-will be returned if it is valid, otherwise 0.
-
-This is the "slow" version as opposed to the "fast" version which is
-the "unrolled" IS_UTF8_CHAR().  E.g. for t/uni/class.t the speed
-difference is a factor of 2 to 3.  For lengths (UTF8SKIP(s)) of four
-or less you should use the IS_UTF8_CHAR(), for lengths of five or more
-you should use the _slow().  In practice this means that the _slow()
-will be used very rarely, since the maximum Unicode code point (as of
-Unicode 4.1) is U+10FFFF, which encodes in UTF-8 to four bytes.  Only
-the "Perl extended UTF-8" (e.g, the infamous 'v-strings') will encode into
-five bytes or more.
-
-=cut */
-PERL_STATIC_INLINE STRLEN
-S_is_utf8_char_slow(const U8 *s, const STRLEN len)
-{
-    dTHX;   /* The function called below requires thread context */
-
-    STRLEN actual_len;
-
-    PERL_ARGS_ASSERT_IS_UTF8_CHAR_SLOW;
-
-    utf8n_to_uvchr(s, len, &actual_len, UTF8_CHECK_ONLY);
-
-    return (actual_len == (STRLEN) -1) ? 0 : actual_len;
-}
-
-/*
 =for apidoc is_utf8_char_buf
 
-Returns the number of bytes that comprise the first UTF-8 encoded character in
-buffer C<buf>.  C<buf_end> should point to one position beyond the end of the
-buffer.  0 is returned if C<buf> does not point to a complete, valid UTF-8
-encoded character.
-
-Note that an INVARIANT character (i.e. ASCII on non-EBCDIC
-machines) is a valid UTF-8 character.
+This is identical to the macro L</isUTF8_CHAR>.
 
 =cut */
 
@@ -356,47 +317,10 @@ STRLEN
 Perl_is_utf8_char_buf(const U8 *buf, const U8* buf_end)
 {
 
-    STRLEN len;
-
     PERL_ARGS_ASSERT_IS_UTF8_CHAR_BUF;
 
-    if (buf_end <= buf) {
-	return 0;
-    }
-
-    len = buf_end - buf;
-    if (len > UTF8SKIP(buf)) {
-	len = UTF8SKIP(buf);
-    }
-
-    if (IS_UTF8_CHAR_FAST(len))
-        return IS_UTF8_CHAR(buf, len) ? len : 0;
-    return is_utf8_char_slow(buf, len);
+    return isUTF8_CHAR(buf, buf_end);
 }
-
-/*
-=for apidoc is_utf8_char
-
-Tests if some arbitrary number of bytes begins in a valid UTF-8
-character.  Note that an INVARIANT (i.e. ASCII on non-EBCDIC machines)
-character is a valid UTF-8 character.  The actual number of bytes in the UTF-8
-character will be returned if it is valid, otherwise 0.
-
-This function is deprecated due to the possibility that malformed input could
-cause reading beyond the end of the input buffer.  Use L</is_utf8_char_buf>
-instead.
-
-=cut */
-
-STRLEN
-Perl_is_utf8_char(const U8 *s)
-{
-    PERL_ARGS_ASSERT_IS_UTF8_CHAR;
-
-    /* Assumes we have enough space, which is why this is deprecated */
-    return is_utf8_char_buf(s, s + UTF8SKIP(s));
-}
-
 
 /*
 =for apidoc is_utf8_string
@@ -421,28 +345,11 @@ Perl_is_utf8_string(const U8 *s, STRLEN len)
     PERL_ARGS_ASSERT_IS_UTF8_STRING;
 
     while (x < send) {
-	 /* Inline the easy bits of is_utf8_char() here for speed... */
-	 if (UTF8_IS_INVARIANT(*x)) {
-	    x++;
-	 }
-	 else {
-	      /* ... and call is_utf8_char() only if really needed. */
-	     const STRLEN c = UTF8SKIP(x);
-	     const U8* const next_char_ptr = x + c;
-
-	     if (next_char_ptr > send) {
-		 return FALSE;
-	     }
-
-	     if (IS_UTF8_CHAR_FAST(c)) {
-	         if (!IS_UTF8_CHAR(x, c))
-		     return FALSE;
-	     }
-	     else if (! is_utf8_char_slow(x, c)) {
-		 return FALSE;
-	     }
-	     x = next_char_ptr;
-	 }
+        STRLEN len = isUTF8_CHAR(x, send);
+        if (UNLIKELY(! len)) {
+            return FALSE;
+        }
+        x += len;
     }
 
     return TRUE;
@@ -476,34 +383,17 @@ Perl_is_utf8_string_loclen(const U8 *s, STRLEN len, const U8 **ep, STRLEN *el)
 {
     const U8* const send = s + (len ? len : strlen((const char *)s));
     const U8* x = s;
-    STRLEN c;
     STRLEN outlen = 0;
 
     PERL_ARGS_ASSERT_IS_UTF8_STRING_LOCLEN;
 
     while (x < send) {
-	 const U8* next_char_ptr;
-
-	 /* Inline the easy bits of is_utf8_char() here for speed... */
-	 if (UTF8_IS_INVARIANT(*x))
-	     next_char_ptr = x + 1;
-	 else {
-	     /* ... and call is_utf8_char() only if really needed. */
-	     c = UTF8SKIP(x);
-	     next_char_ptr = c + x;
-	     if (next_char_ptr > send) {
-		 goto out;
-	     }
-	     if (IS_UTF8_CHAR_FAST(c)) {
-	         if (!IS_UTF8_CHAR(x, c))
-		     c = 0;
-	     } else
-	         c = is_utf8_char_slow(x, c);
-	     if (!c)
-	         goto out;
-	 }
-         x = next_char_ptr;
-	 outlen++;
+        STRLEN len = isUTF8_CHAR(x, send);
+        if (UNLIKELY(! len)) {
+            goto out;
+        }
+        x += len;
+        outlen++;
     }
 
  out:
@@ -979,6 +869,7 @@ Perl_valid_utf8_to_uvchr(pTHX_ const U8 *s, STRLEN *retlen)
     UV uv = *s;
 
     PERL_ARGS_ASSERT_VALID_UTF8_TO_UVCHR;
+    PERL_UNUSED_CONTEXT;
 
     if (retlen) {
         *retlen = expectlen;
@@ -1006,36 +897,6 @@ Perl_valid_utf8_to_uvchr(pTHX_ const U8 *s, STRLEN *retlen)
 
     return UNI_TO_NATIVE(uv);
 
-}
-
-/*
-=for apidoc utf8_to_uvchr
-
-Returns the native code point of the first character in the string C<s>
-which is assumed to be in UTF-8 encoding; C<retlen> will be set to the
-length, in bytes, of that character.
-
-Some, but not all, UTF-8 malformations are detected, and in fact, some
-malformed input could cause reading beyond the end of the input buffer, which
-is why this function is deprecated.  Use L</utf8_to_uvchr_buf> instead.
-
-If C<s> points to one of the detected malformations, and UTF8 warnings are
-enabled, zero is returned and C<*retlen> is set (if C<retlen> isn't
-NULL) to -1.  If those warnings are off, the computed value if well-defined (or
-the Unicode REPLACEMENT CHARACTER, if not) is silently returned, and C<*retlen>
-is set (if C<retlen> isn't NULL) so that (S<C<s> + C<*retlen>>) is the
-next possible position in C<s> that could begin a non-malformed character.
-See L</utf8n_to_uvchr> for details on when the REPLACEMENT CHARACTER is returned.
-
-=cut
-*/
-
-UV
-Perl_utf8_to_uvchr(pTHX_ const U8 *s, STRLEN *retlen)
-{
-    PERL_ARGS_ASSERT_UTF8_TO_UVCHR;
-
-    return utf8_to_uvchr_buf(s, s + UTF8_MAXBYTES, retlen);
 }
 
 /*
@@ -1071,51 +932,6 @@ Perl_utf8_to_uvuni_buf(pTHX_ const U8 *s, const U8 *send, STRLEN *retlen)
     /* Call the low level routine asking for checks */
     return NATIVE_TO_UNI(Perl_utf8n_to_uvchr(aTHX_ s, send -s, retlen,
 			       ckWARN_d(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY));
-}
-
-/* DEPRECATED!
- * Like L</utf8_to_uvuni_buf>(), but should only be called when it is known that
- * there are no malformations in the input UTF-8 string C<s>.  Surrogates,
- * non-character code points, and non-Unicode code points are allowed */
-
-UV
-Perl_valid_utf8_to_uvuni(pTHX_ const U8 *s, STRLEN *retlen)
-{
-    PERL_ARGS_ASSERT_VALID_UTF8_TO_UVUNI;
-
-    return NATIVE_TO_UNI(valid_utf8_to_uvchr(s, retlen));
-}
-
-/*
-=for apidoc utf8_to_uvuni
-
-Returns the Unicode code point of the first character in the string C<s>
-which is assumed to be in UTF-8 encoding; C<retlen> will be set to the
-length, in bytes, of that character.
-
-Some, but not all, UTF-8 malformations are detected, and in fact, some
-malformed input could cause reading beyond the end of the input buffer, which
-is one reason why this function is deprecated.  The other is that only in
-extremely limited circumstances should the Unicode versus native code point be
-of any interest to you.  See L</utf8_to_uvuni_buf> for alternatives.
-
-If C<s> points to one of the detected malformations, and UTF8 warnings are
-enabled, zero is returned and C<*retlen> is set (if C<retlen> doesn't point to
-NULL) to -1.  If those warnings are off, the computed value if well-defined (or
-the Unicode REPLACEMENT CHARACTER, if not) is silently returned, and C<*retlen>
-is set (if C<retlen> isn't NULL) so that (S<C<s> + C<*retlen>>) is the
-next possible position in C<s> that could begin a non-malformed character.
-See L</utf8n_to_uvchr> for details on when the REPLACEMENT CHARACTER is returned.
-
-=cut
-*/
-
-UV
-Perl_utf8_to_uvuni(pTHX_ const U8 *s, STRLEN *retlen)
-{
-    PERL_ARGS_ASSERT_UTF8_TO_UVUNI;
-
-    return NATIVE_TO_UNI(valid_utf8_to_uvchr(s, retlen));
 }
 
 /*
@@ -1241,7 +1057,6 @@ Perl_bytes_cmp_utf8(pTHX_ const U8 *b, STRLEN blen, const U8 *u, STRLEN ulen)
     const U8 *const uend = u + ulen;
 
     PERL_ARGS_ASSERT_BYTES_CMP_UTF8;
-
     PERL_UNUSED_CONTEXT;
 
     while (b < bend && u < uend) {
@@ -1308,6 +1123,7 @@ Perl_utf8_to_bytes(pTHX_ U8 *s, STRLEN *len)
     U8 *d;
 
     PERL_ARGS_ASSERT_UTF8_TO_BYTES;
+    PERL_UNUSED_CONTEXT;
 
     /* ensure valid UTF-8 and chars < 256 before updating string */
     while (s < send) {
@@ -1359,7 +1175,6 @@ Perl_bytes_from_utf8(pTHX_ const U8 *s, STRLEN *len, bool *is_utf8)
     I32 count = 0;
 
     PERL_ARGS_ASSERT_BYTES_FROM_UTF8;
-
     PERL_UNUSED_CONTEXT;
     if (!*is_utf8)
         return (U8 *)start;
@@ -1541,23 +1356,15 @@ Perl__is_uni_FOO(pTHX_ const U8 classnum, const UV c)
 /* Internal function so we can deprecate the external one, and call
    this one from other deprecated functions in this file */
 
-PERL_STATIC_INLINE bool
-S_is_utf8_idfirst(pTHX_ const U8 *p)
+bool
+Perl__is_utf8_idstart(pTHX_ const U8 *p)
 {
     dVAR;
+    PERL_ARGS_ASSERT__IS_UTF8_IDSTART;
 
     if (*p == '_')
 	return TRUE;
-    /* is_utf8_idstart would be more logical. */
     return is_utf8_common(p, &PL_utf8_idstart, "IdStart", NULL);
-}
-
-bool
-Perl_is_uni_idfirst(pTHX_ UV c)
-{
-    U8 tmpbuf[UTF8_MAXBYTES+1];
-    uvchr_to_utf8(tmpbuf, c);
-    return S_is_utf8_idfirst(aTHX_ tmpbuf);
 }
 
 bool
@@ -1683,7 +1490,7 @@ Perl_to_uni_title(pTHX_ UV c, U8* p, STRLEN *lenp)
 }
 
 STATIC U8
-S_to_lower_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp)
+S_to_lower_latin1(const U8 c, U8* p, STRLEN *lenp)
 {
     /* We have the latin1-range values compiled into the core, so just use
      * those, converting the result to utf8.  Since the result is always just
@@ -1733,6 +1540,7 @@ Perl__to_fold_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp, const unsigned int f
     UV converted;
 
     PERL_ARGS_ASSERT__TO_FOLD_LATIN1;
+    PERL_UNUSED_CONTEXT;
 
     assert (! (flags & FOLD_FLAGS_LOCALE));
 
@@ -1843,7 +1651,7 @@ S_is_utf8_common(pTHX_ const U8 *const p, SV **swash,
      * as far as there being enough bytes available in it to accommodate the
      * character without reading beyond the end, and pass that number on to the
      * validating routine */
-    if (! is_utf8_char_buf(p, p + UTF8SKIP(p))) {
+    if (! isUTF8_CHAR(p, p + UTF8SKIP(p))) {
         if (ckWARN_d(WARN_UTF8)) {
             Perl_warner(aTHX_ packWARN2(WARN_DEPRECATED,WARN_UTF8),
 		    "Passing malformed UTF-8 to \"%s\" is deprecated", swashname);
@@ -1884,29 +1692,6 @@ Perl__is_utf8_FOO(pTHX_ const U8 classnum, const U8 *p)
 }
 
 bool
-Perl_is_utf8_idfirst(pTHX_ const U8 *p) /* The naming is historical. */
-{
-    dVAR;
-
-    PERL_ARGS_ASSERT_IS_UTF8_IDFIRST;
-
-    return S_is_utf8_idfirst(aTHX_ p);
-}
-
-bool
-Perl_is_utf8_xidfirst(pTHX_ const U8 *p) /* The naming is historical. */
-{
-    dVAR;
-
-    PERL_ARGS_ASSERT_IS_UTF8_XIDFIRST;
-
-    if (*p == '_')
-	return TRUE;
-    /* is_utf8_idstart would be more logical. */
-    return is_utf8_common(p, &PL_utf8_xidstart, "XIdStart", NULL);
-}
-
-bool
 Perl__is_utf8_perl_idstart(pTHX_ const U8 *p)
 {
     dVAR;
@@ -1918,6 +1703,18 @@ Perl__is_utf8_perl_idstart(pTHX_ const U8 *p)
         invlist = _new_invlist_C_array(_Perl_IDStart_invlist);
     }
     return is_utf8_common(p, &PL_utf8_perl_idstart, "", invlist);
+}
+
+bool
+Perl__is_utf8_xidstart(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT__IS_UTF8_XIDSTART;
+
+    if (*p == '_')
+	return TRUE;
+    return is_utf8_common(p, &PL_utf8_xidstart, "XIdStart", NULL);
 }
 
 bool
@@ -1934,23 +1731,22 @@ Perl__is_utf8_perl_idcont(pTHX_ const U8 *p)
     return is_utf8_common(p, &PL_utf8_perl_idcont, "", invlist);
 }
 
-
 bool
-Perl_is_utf8_idcont(pTHX_ const U8 *p)
+Perl__is_utf8_idcont(pTHX_ const U8 *p)
 {
     dVAR;
 
-    PERL_ARGS_ASSERT_IS_UTF8_IDCONT;
+    PERL_ARGS_ASSERT__IS_UTF8_IDCONT;
 
     return is_utf8_common(p, &PL_utf8_idcont, "IdContinue", NULL);
 }
 
 bool
-Perl_is_utf8_xidcont(pTHX_ const U8 *p)
+Perl__is_utf8_xidcont(pTHX_ const U8 *p)
 {
     dVAR;
 
-    PERL_ARGS_ASSERT_IS_UTF8_XIDCONT;
+    PERL_ARGS_ASSERT__IS_UTF8_XIDCONT;
 
     return is_utf8_common(p, &PL_utf8_idcont, "XIdContinue", NULL);
 }
@@ -2658,7 +2454,7 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
 		Perl_croak(aTHX_
 			   "Can't find Unicode property definition \"%"SVf"\"",
 			   SVfARG(retval));
-	    Perl_croak(aTHX_ "SWASHNEW didn't return an HV ref");
+                NOT_REACHED; /* NOTREACHED */
 	}
     } /* End of calling the module to find the swash */
 
@@ -2808,10 +2604,9 @@ Perl_swash_fetch(pTHX_ SV *swash, const U8 *ptr, bool do_utf8)
     HV *const hv = MUTABLE_HV(SvRV(swash));
     U32 klen;
     U32 off;
-    STRLEN slen;
+    STRLEN slen = 0;
     STRLEN needents;
     const U8 *tmps = NULL;
-    U32 bit;
     SV *swatch;
     const U8 c = *ptr;
 
@@ -2941,17 +2736,21 @@ Perl_swash_fetch(pTHX_ SV *swash, const U8 *ptr, bool do_utf8)
 
     switch ((int)((slen << 3) / needents)) {
     case 1:
-	bit = 1 << (off & 7);
-	off >>= 3;
-	return (tmps[off] & bit) != 0;
+	return ((UV) tmps[off >> 3] & (1 << (off & 7))) != 0;
     case 8:
-	return tmps[off];
+	return ((UV) tmps[off]);
     case 16:
 	off <<= 1;
-	return (tmps[off] << 8) + tmps[off + 1] ;
+	return
+            ((UV) tmps[off    ] << 8) +
+            ((UV) tmps[off + 1]);
     case 32:
 	off <<= 2;
-	return (tmps[off] << 24) + (tmps[off+1] << 16) + (tmps[off+2] << 8) + tmps[off + 3] ;
+	return
+            ((UV) tmps[off    ] << 24) +
+            ((UV) tmps[off + 1] << 16) +
+            ((UV) tmps[off + 2] <<  8) +
+            ((UV) tmps[off + 3]);
     }
     Perl_croak(aTHX_ "panic: swash_fetch got swatch of unexpected bit width, "
 	       "slen=%"UVuf", needents=%"UVuf, (UV)slen, (UV)needents);
@@ -2989,9 +2788,12 @@ S_swash_scan_list_line(pTHX_ U8* l, U8* const lend, UV* min, UV* max, UV* val,
     /* nl points to the next \n in the scan */
     U8* const nl = (U8*)memchr(l, '\n', lend - l);
 
+    PERL_ARGS_ASSERT_SWASH_SCAN_LIST_LINE;
+
     /* Get the first number on the line: the range minimum */
     numlen = lend - l;
     *min = grok_hex((char *)l, &numlen, &flags, NULL);
+    *max = *min;    /* So can never return without setting max */
     if (numlen)	    /* If found a hex number, position past it */
 	l += numlen;
     else if (nl) {	    /* Else, go handle next line, if any */
@@ -3043,7 +2845,6 @@ S_swash_scan_list_line(pTHX_ U8* l, U8* const lend, UV* min, UV* max, UV* val,
     }
     else { /* Nothing following range min, should be single element with no
 	      mapping expected */
-	*max = *min;
 	if (wants_value) {
 	    *val = 0;
 	    if (typeto) {
@@ -3158,8 +2959,8 @@ S_swatch_get(pTHX_ SV* swash, UV start, UV span)
     lend = l + lcur;
     while (l < lend) {
 	UV min, max, val, upper;
-	l = S_swash_scan_list_line(aTHX_ l, lend, &min, &max, &val,
-					 cBOOL(octets), typestr);
+	l = swash_scan_list_line(l, lend, &min, &max, &val,
+                                                        cBOOL(octets), typestr);
 	if (l > lend) {
 	    break;
 	}
@@ -3570,8 +3371,8 @@ Perl__swash_inversion_hash(pTHX_ SV* const swash)
     while (l < lend) {
 	UV min, max, val;
 	UV inverse;
-	l = S_swash_scan_list_line(aTHX_ l, lend, &min, &max, &val,
-					 cBOOL(octets), typestr);
+	l = swash_scan_list_line(l, lend, &min, &max, &val,
+                                                     cBOOL(octets), typestr);
 	if (l > lend) {
 	    break;
 	}
@@ -3605,15 +3406,17 @@ Perl__swash_inversion_hash(pTHX_ SV* const swash)
 	    for (i = 0; i <= av_tindex(list); i++) {
 		SV** entryp = av_fetch(list, i, FALSE);
 		SV* entry;
+		UV uv;
 		if (entryp == NULL) {
 		    Perl_croak(aTHX_ "panic: av_fetch() unexpectedly failed");
 		}
 		entry = *entryp;
-		/*DEBUG_U(PerlIO_printf(Perl_debug_log, "list for %"UVXf" contains %"UVXf"\n", val, SvUV(entry)));*/
-		if (SvUV(entry) == val) {
+		uv = SvUV(entry);
+		/*DEBUG_U(PerlIO_printf(Perl_debug_log, "list for %"UVXf" contains %"UVXf"\n", val, uv));*/
+		if (uv == val) {
 		    found_key = TRUE;
 		}
-		if (SvUV(entry) == inverse) {
+		if (uv == inverse) {
 		    found_inverse = TRUE;
 		}
 
@@ -3769,8 +3572,8 @@ Perl__swash_to_invlist(pTHX_ SV* const swash)
             UV start, end;
             UV val;		/* Not used by this function */
 
-            l = S_swash_scan_list_line(aTHX_ l, lend, &start, &end, &val,
-                                            cBOOL(octets), typestr);
+            l = swash_scan_list_line(l, lend, &start, &end, &val,
+                                                        cBOOL(octets), typestr);
 
             if (l > lend) {
                 break;
@@ -4330,7 +4133,7 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, UV l1, bool u1, const c
     return 1;
 }
 
-/* XXX The next four functions should likely be moved to mathoms.c once all
+/* XXX The next two functions should likely be moved to mathoms.c once all
  * occurrences of them are removed from the core; some cpan-upstream modules
  * still use them */
 
@@ -4341,6 +4144,22 @@ Perl_uvuni_to_utf8(pTHX_ U8 *d, UV uv)
 
     return Perl_uvoffuni_to_utf8_flags(aTHX_ d, uv, 0);
 }
+
+/*
+=for apidoc utf8n_to_uvuni
+
+Instead use L</utf8_to_uvchr_buf>, or rarely, L</utf8n_to_uvchr>.
+
+This function was useful for code that wanted to handle both EBCDIC and
+ASCII platforms with Unicode properties, but starting in Perl v5.20, the
+distinctions between the platforms have mostly been made invisible to most
+code, so this function is quite unlikely to be what you want.  If you do need
+this precise functionality, use instead
+C<L<NATIVE_TO_UNI(utf8_to_uvchr_buf(...))|/utf8_to_uvchr_buf>>
+or C<L<NATIVE_TO_UNI(utf8n_to_uvchr(...))|/utf8n_to_uvchr>>.
+
+=cut
+*/
 
 UV
 Perl_utf8n_to_uvuni(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
@@ -4373,22 +4192,6 @@ Perl_uvuni_to_utf8_flags(pTHX_ U8 *d, UV uv, UV flags)
 
     return uvoffuni_to_utf8_flags(d, uv, flags);
 }
-
-/*
-=for apidoc utf8n_to_uvuni
-
-Instead use L</utf8_to_uvchr_buf>, or rarely, L</utf8n_to_uvchr>.
-
-This function was useful for code that wanted to handle both EBCDIC and
-ASCII platforms with Unicode properties, but starting in Perl v5.20, the
-distinctions between the platforms have mostly been made invisible to most
-code, so this function is quite unlikely to be what you want.  If you do need
-this precise functionality, use instead
-C<L<NATIVE_TO_UNI(utf8_to_uvchr_buf(...))|/utf8_to_uvchr_buf>>
-or C<L<NATIVE_TO_UNI(utf8n_to_uvchr(...))|/utf8n_to_uvchr>>.
-
-=cut
-*/
 
 /*
  * Local variables:

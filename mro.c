@@ -17,7 +17,6 @@
 
 /*
 =head1 MRO Functions
-
 These functions are related to the method resolution order of perl classes
 
 =cut
@@ -143,6 +142,7 @@ Perl_mro_meta_init(pTHX_ HV* stash)
     struct mro_meta* newmeta;
 
     PERL_ARGS_ASSERT_MRO_META_INIT;
+    PERL_UNUSED_CONTEXT;
     assert(HvAUX(stash));
     assert(!(HvAUX(stash)->xhv_mro_meta));
     Newxz(newmeta, 1, struct mro_meta);
@@ -638,12 +638,14 @@ Perl_mro_isa_changed_in(pTHX_ HV* stash)
                       hv_storehek(mroisarev, namehek, &PL_sv_yes);
                 }
 
-                if((SV *)isa != &PL_sv_undef)
+                if ((SV *)isa != &PL_sv_undef) {
+                    assert(namehek);
                     mro_clean_isarev(
                      isa, HEK_KEY(namehek), HEK_LEN(namehek),
                      HvMROMETA(revstash)->isa, HEK_HASH(namehek),
                      HEK_UTF8(namehek)
                     );
+                }
             }
         }
     }
@@ -959,7 +961,7 @@ S_mro_gather_and_rename(pTHX_ HV * const stashes, HV * const seen_stashes,
 		const char *name = SvPVx_const(*svp, len);
 		if(PL_stashcache) {
                     DEBUG_o(Perl_deb(aTHX_ "mro_gather_and_rename clearing PL_stashcache for '%"SVf"'\n",
-                                     *svp));
+                                     SVfARG(*svp)));
 		   (void)hv_delete(PL_stashcache, name, name_utf8 ? -(I32)len : (I32)len, G_DISCARD);
                 }
                 ++svp;

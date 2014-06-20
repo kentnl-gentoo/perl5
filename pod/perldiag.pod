@@ -186,17 +186,20 @@ point and did not attempt to push this layer.  If your program
 didn't explicitly request the failing operation, it may be the
 result of the value of the environment variable PERLIO.
 
-=item Array @%s missing the @ in argument %d of %s()
+=item charnames alias definitions may not contain a sequence of multiple spaces
 
-(D deprecated) Really old Perl let you omit the @ on array names in some
-spots.  This is now heavily deprecated.
-
-=item A sequence of multiple spaces in a charnames alias definition is deprecated
-
-(D deprecated) You defined a character name which had multiple space
+(F) You defined a character name which had multiple space
 characters in a row.  Change them to single spaces.  Usually these
 names are defined in the C<:alias> import argument to C<use charnames>, but
 they could be defined by a translator installed into C<$^H{charnames}>.
+See L<charnames/CUSTOM ALIASES>.
+
+=item charnames alias definitions may not contain trailing white-space
+
+(F) You defined a character name which ended in a space
+character.  Remove the trailing space(s).  Usually these names are
+defined in the C<:alias> import argument to C<use charnames>, but they
+could be defined by a translator installed into C<$^H{charnames}>.
 See L<charnames/CUSTOM ALIASES>.
 
 =item assertion botched: %s
@@ -505,18 +508,6 @@ check the return value of your socket() call?  See L<perlfunc/bind>.
 
 (W unopened) You tried binmode() on a filehandle that was never opened.
 Check your control flow and number of arguments.
-
-=item "\b{" is deprecated; use "\b\{" or "\b[{]" instead in regex; marked
-by S<<-- HERE> in m/%s/
-
-=item "\B{" is deprecated; use "\B\{" or "\B[{]" instead in regex; marked
-by S<<-- HERE> in m/%s/
-
-(D deprecated) Use of an unescaped "{" immediately following
-a C<\b> or C<\B> is now deprecated so as to reserve its use for Perl
-itself in a future release.  You can either precede the brace
-with a backslash, or enclose it in square brackets; the latter
-is the way to go if the pattern delimiters are C<{}>.
 
 =item Bit vector size > 32 non-portable
 
@@ -1023,12 +1014,6 @@ grep().  You can usually double the curlies to get the same effect
 though, because the inner curlies will be considered a block that loops
 once.  See L<perlfunc/next>.
 
-=item Can't open %s
-
-(F) You tried to run a perl built with MAD support with
-the PERL_XMLDUMP environment variable set, but the file
-named by that variable could not be opened.
-
 =item Can't open %s: %s
 
 (S inplace) The implicit opening of a file through use of the C<< <> >>
@@ -1190,6 +1175,18 @@ indicates that such a conversion was attempted.
 (F) You tried to call perl with the B<-m> switch, but you put something
 other than "=" after the module name.
 
+=item Can't use a hash as a reference
+
+(F) You tried to use a hash as a reference, as in
+C<< %foo->{"bar"} >> or C<< %$ref->{"hello"} >>.  Versions of perl <= 5.6.1
+used to allow this syntax, but shouldn't have.
+
+=item Can't use an array as a reference
+
+(F) You tried to use an array as a reference, as in
+C<< @foo->[23] >> or C<< @$ref->[99] >>.  Versions of perl <= 5.6.1 used to
+allow this syntax, but shouldn't have.
+
 =item Can't use anonymous symbol table for method lookup
 
 (F) The internal routine that does method lookup was handed a symbol
@@ -1217,6 +1214,34 @@ provide symbolic names for C<$!> errno values.
 (F) A type cannot be forced to have both big-endian and little-endian
 byte-order at the same time, so this combination of modifiers is not
 allowed.  See L<perlfunc/pack>.
+
+=item Can't use 'defined(@array)' (Maybe you should just omit the defined()?)
+
+(F) defined() is not useful on arrays because it
+checks for an undefined I<scalar> value.  If you want to see if the
+array is empty, just use C<if (@array) { # not empty }> for example.
+
+=item Can't use 'defined(%hash)' (Maybe you should just omit the defined()?)
+
+(F) C<defined()> is not usually right on hashes.
+
+Although C<defined %hash> is false on a plain not-yet-used hash, it
+becomes true in several non-obvious circumstances, including iterators,
+weak references, stash names, even remaining true after C<undef %hash>.
+These things make C<defined %hash> fairly useless in practice, so it now
+generates a fatal error.
+
+If a check for non-empty is what you wanted then just put it in boolean
+context (see L<perldata/Scalar values>):
+
+    if (%hash) {
+       # not empty
+    }
+
+If you had C<defined %Foo::Bar::QUUX> to check whether such a package
+variable exists then that's never really been reliable, and isn't
+a good way to enquire about the features of a package, or whether
+it's loaded, etc.
 
 =item Can't use %s for loop variable
 
@@ -1299,15 +1324,10 @@ Perhaps you need to copy the value to a temporary, and repeat that.
 
 =item Character following "\c" must be printable ASCII
 
-(F)(D deprecated, syntax) In C<\cI<X>>, I<X> must be a printable
-(non-control) ASCII character.  This is fatal starting in v5.20 for
-non-ASCII characters, and it is planned to make this fatal in all
-instances in Perl v5.22.  In
-the cases where it isn't fatal, the character this evaluates to is
-derived by exclusive or'ing the code point of this character with 0x40.
+(F) In C<\cI<X>>, I<X> must be a printable (non-control) ASCII character.
 
 Note that ASCII characters that don't map to control characters are
-discouraged here as well, and will generate the warning (when enabled)
+discouraged, and will generate the warning (when enabled)
 L</""\c%c" is more clearly written simply as "%s"">.
 
 =item Character in 'C' format wrapped in pack
@@ -1563,35 +1583,6 @@ which case it indicates something else.
 This threshold can be changed from 100, by recompiling the F<perl> binary,
 setting the C pre-processor macro C<PERL_SUB_DEPTH_WARN> to the desired value.
 
-=item defined(@array) is deprecated
-
-(D deprecated) defined() is not usually useful on arrays because it
-checks for an undefined I<scalar> value.  If you want to see if the
-array is empty, just use C<if (@array) { # not empty }> for example.
-
-=item defined(%hash) is deprecated
-
-(D deprecated) C<defined()> is not usually right on hashes and has been
-discouraged since 5.004.
-
-Although C<defined %hash> is false on a plain not-yet-used hash, it
-becomes true in several non-obvious circumstances, including iterators,
-weak references, stash names, even remaining true after C<undef %hash>.
-These things make C<defined %hash> fairly useless in practice.
-
-If a check for non-empty is what you wanted then just put it in boolean
-context (see L<perldata/Scalar values>):
-
-    if (%hash) {
-       # not empty
-    }
-
-If you had C<defined %Foo::Bar::QUUX> to check whether such a package
-variable exists then that's never really been reliable, and isn't
-a good way to enquire about the features of a package, or whether
-it's loaded, etc.
-
-
 =item (?(DEFINE)....) does not allow branches in regex; marked by
 S<<-- HERE> in m/%s/
 
@@ -1793,23 +1784,6 @@ specifications in either VMS or Unix syntax, it converts them to a
 single form when it must operate on them directly.  Either you've passed
 an invalid file specification to Perl, or you've found a case the
 conversion routines don't handle.  Drat.
-
-=item Escape literal pattern white space under /x
-
-(D deprecated) You compiled a regular expression pattern with C</x> to
-ignore white space, and you used, as a literal, one of the characters
-that Perl plans to eventually treat as white space.  The character must
-be escaped somehow, or it will work differently on a future Perl that
-does treat it as white space.  The easiest way is to insert a backslash
-immediately before it, or to enclose it with square brackets.  This
-change is to bring Perl into conformance with Unicode recommendations.
-Here are the five characters that generate this warning:
-U+0085 NEXT LINE,
-U+200E LEFT-TO-RIGHT MARK,
-U+200F RIGHT-TO-LEFT MARK,
-U+2028 LINE SEPARATOR,
-and
-U+2029 PARAGRAPH SEPARATOR.
 
 =item Eval-group in insecure regular expression
 
@@ -2121,6 +2095,11 @@ a term, so it's looking for the corresponding right angle bracket, and
 not finding it.  Chances are you left some needed parentheses out
 earlier in the line, and you really meant a "less than".
 
+=item gmtime(%f) failed
+
+(W overflow) You called C<gmtime> with a number that it could not handle:
+too large, too small, or NaN.  The returned value is C<undef>.
+
 =item gmtime(%f) too large
 
 (W overflow) You called C<gmtime> with a number that was larger than
@@ -2170,11 +2149,6 @@ something: a template character or a ()-group.  See L<perlfunc/pack>.
 (S internal) A routine asked for a symbol from a symbol table that ought
 to have existed already, but for some reason it didn't, and had to be
 created on an emergency basis to prevent a core dump.
-
-=item Hash %%s missing the % in argument %d of %s()
-
-(D deprecated) Really old Perl let you omit the % on hash names in some
-spots.  This is now heavily deprecated.
 
 =item %s has too many errors
 
@@ -2284,6 +2258,10 @@ Interpretation of the octal number stopped before the 8 or 9.
 The C<"+"> is valid only when followed by digits, indicating a
 capturing group.  See
 L<C<(?I<PARNO>)>|perlre/(?PARNO) (?-PARNO) (?+PARNO) (?R) (?0)>.
+
+=item Illegal suidscript
+
+(F) The script run under suidperl was somehow illegal.
 
 =item Illegal switch in PERL5OPT: -%c
 
@@ -2403,16 +2381,13 @@ expression that contains a call to a user-defined character property
 function, i.e. C<\p{IsFoo}> or C<\p{InFoo}>.
 See L<perlunicode/User-Defined Character Properties> and L<perlsec>.
 
-=item In '(?...)', splitting the initial '(?' is deprecated in regex;
+=item In '(?...)', the '(' and '?' must be adjacent in regex;
 marked by S<<-- HERE> in m/%s/
 
-(D regexp, deprecated) The two-character sequence C<"(?"> in
+(F) The two-character sequence C<"(?"> in
 this context in a regular expression pattern should be an
 indivisible token, with nothing intervening between the C<"(">
-and the C<"?">, but you separated them.  Due to an accident of
-implementation, this prohibition was not enforced, but we do
-plan to forbid it in a future Perl version.  This message
-serves as giving you fair warning of this pending change.
+and the C<"?">, but you separated them.
 
 =item Integer overflow in format string for %s
 
@@ -2630,16 +2605,13 @@ for more details on allowed version formats.
 Perhaps the internals were modified directly in some way or
 an arbitrary reference was blessed into the "version" class.
 
-=item In '(*VERB...)', splitting the initial '(*' is deprecated in regex;
+=item In '(*VERB...)', the '(' and '*' must be adjacent in regex;
 marked by S<<-- HERE> in m/%s/
 
-(D regexp, deprecated) The two-character sequence C<"(*"> in
+(F) The two-character sequence C<"(*"> in
 this context in a regular expression pattern should be an
 indivisible token, with nothing intervening between the C<"(">
-and the C<"*">, but you separated them.  Due to an accident of
-implementation, this prohibition was not enforced, but we do
-plan to forbid it in a future Perl version.  This message
-serves as giving you fair warning of this pending change.
+and the C<"*">, but you separated them.
 
 =item ioctl is not implemented
 
@@ -2779,6 +2751,11 @@ L<perlfunc/listen>.
 (F) On some platforms, notably Windows, the three-or-more-arguments
 form of C<open> does not support pipes, such as C<open($pipe, '|-', @args)>.
 Use the two-argument C<open($pipe, '|prog arg1 arg2...')> form instead.
+
+=item localtime(%f) failed
+
+(W overflow) You called C<localtime> with a number that it could not handle:
+too large, too small, or NaN.  The returned value is C<undef>.
 
 =item localtime(%f) too large
 
@@ -3264,6 +3241,12 @@ length that is less than 0.  This is difficult to imagine.
 (F) When C<vec> is called in an lvalue context, the second argument must be
 greater than or equal to zero.
 
+=item Negative repeat count does nothing
+
+(W numeric) You tried to execute the
+L<C<x>|perlop/Multiplicative Operators> repetition operator fewer than 0
+times, which doesn't make sense.
+
 =item Nested quantifiers in regex; marked by S<<-- HERE> in m/%s/
 
 (F) You can't quantify a quantifier without intervening parentheses.
@@ -3340,6 +3323,14 @@ C<\N> is separated by spaces from the C<{>, in which case, remove the spaces.
 setgid script to even be allowed to attempt.  Generally speaking there
 will be another way to do what you want that is, if not secure, at least
 securable.  See L<perlsec>.
+
+=item NO-BREAK SPACE in a charnames alias definition is deprecated
+
+(D deprecated) You defined a character name which contained a no-break
+space character.  Change it to a regular space.  Usually these names are
+defined in the C<:alias> import argument to C<use charnames>, but they
+could be defined by a translator installed into C<$^H{charnames}>.  See
+L<charnames/CUSTOM ALIASES>.
 
 =item No code specified for -%c
 
@@ -4145,7 +4136,7 @@ redirected it with select().)
 "Can't locate object method \"%s\" via package \"%s\"".  It often means
 that a method requires a package that has not been loaded.
 
-=item Perl folding rules are not up-to-date for 0x%X; please use the perlbug 
+=item Perl folding rules are not up-to-date for 0x%X; please use the perlbug
 utility to report; in regex; marked by S<<-- HERE> in m/%s/
 
 (S regexp) You used a regular expression with case-insensitive matching,
@@ -4234,6 +4225,14 @@ are as follows.
 
 Both numeric and string values are accepted, but note that string values are
 case sensitive.  The default for this setting is "RANDOM" or 1.
+
+=item PerlIO layer ':win32' is experimental
+
+(S experimental::win32_perlio) The C<:win32> PerlIO layer is
+experimental.  If you want to take the risk of using this layer,
+simply disable this warning:
+
+    no warnings "experimental::win32_perlio";
 
 =item pid %x not a child
 
@@ -4793,16 +4792,6 @@ construct, not just the empty search pattern.  Therefore code written
 in Perl 5.10.0 or later that uses the // as the I<defined-or> can be
 misparsed by pre-5.10.0 Perls as a non-terminated search pattern.
 
-=item Search pattern not terminated or ternary operator parsed as search pattern
-
-(F) The lexer couldn't find the final delimiter of a C<?PATTERN?>
-construct.
-
-The question mark is also used as part of the ternary operator (as in
-C<foo ? 0 : 1>) leading to some ambiguous constructions being wrongly
-parsed.  One way to disambiguate the parsing is to put parentheses around
-the conditional expression, i.e. C<(foo) ? 0 : 1>.
-
 =item seekdir() attempted on invalid dirhandle %s
 
 (W io) The dirhandle you are doing a seekdir() on is either closed or not
@@ -5017,7 +5006,7 @@ take the risk of using this feature, simply disable this warning:
 interpreted as the != (numeric not equal) and ~ (1's complement)
 operators: probably not what you intended.
 
-=item <> should be quotes
+=item <> at require-statement should be quotes
 
 (F) You wrote C<< require <file> >> when you should have written
 C<require 'file'>.
@@ -5545,14 +5534,6 @@ Check the #! line, or manually feed your script into Perl yourself.
 (F) The regular expression ends with an unbackslashed backslash.
 Backslash it.   See L<perlre>.
 
-=item Trailing white-space in a charnames alias definition is deprecated
-
-(D deprecated) You defined a character name which ended in a space
-character.  Remove the trailing space(s).  Usually these names are
-defined in the C<:alias> import argument to C<use charnames>, but they
-could be defined by a translator installed into C<$^H{charnames}>.
-See L<charnames/CUSTOM ALIASES>.
-
 =item Transliteration pattern not terminated
 
 (F) The lexer couldn't find the interior delimiter of a tr/// or tr[][]
@@ -5664,6 +5645,18 @@ C<undef *foo>.
 
 (A) You've accidentally run your script through B<csh> instead of Perl.
 Check the #! line, or manually feed your script into Perl yourself.
+
+=item Unescaped left brace in regex is deprecated, passed through in regex;
+marked by <-- HERE in m/%s/
+
+(D deprecated, regexp) You used a literal C<"{"> character in a regular
+expression pattern. You should change to use C<"\{"> instead, because a future
+version of Perl (tentatively v5.26) will consider this to be a syntax error.  If
+the pattern delimiters are also braces, any matching right brace
+(C<"}">) should also be escaped to avoid confusing the parser, for
+example,
+
+    qr{abc\{def\}ghi}
 
 =item unexec of %s into %s failed!
 
@@ -6136,31 +6129,6 @@ discovered.  See L<perlre>.
 same length as the replacelist.  See L<perlop> for more information
 about the /d modifier.
 
-=item Useless use of '\'; doesn't escape metacharacter '%c'
-
-(D deprecated) You wrote a regular expression pattern something like
-one of these:
-
- m{ \x\{FF\} }x
- m{foo\{1,3\}}
- qr(foo\(bar\))
- s[foo\[a-z\]bar][baz]
-
-The interior braces, square brackets, and parentheses are treated as
-metacharacters even though they are backslashed; instead write:
-
- m{ \x{FF} }x
- m{foo{1,3}}
- qr(foo(bar))
- s[foo[a-z]bar][baz]
-
-The backslashes have no effect when a regular expression pattern is
-delimited by C<{}>, C<[]>, or C<()>, which ordinarily are
-metacharacters, and the delimiters are also used, paired, within the
-interior of the pattern.  It is planned that a future Perl release will
-change the meaning of constructs like these so that the backslashes
-will have an effect, so remove them from your code.
-
 =item Useless use of \E
 
 (W misc) You have a \E in a double-quotish string without a C<\U>,
@@ -6395,15 +6363,6 @@ no way to tie the scalar itself when it held a typeglob, and no way to
 untie a scalar that had had a typeglob assigned to it.  If you see this
 message, you must be using an older version.
 
-=item Use of ?PATTERN? without explicit operator is deprecated
-
-(D deprecated) You have written something like C<?\w?>, for a regular
-expression that matches only once.  Starting this term directly with
-the question mark delimiter is now deprecated, so that the question mark
-will be available for use in new operators in the future.  Write C<m?\w?>
-instead, explicitly using the C<m> operator: the question mark delimiter
-still invokes match-once behaviour.
-
 =item Use of reference "%s" as array index
 
 (W misc) You tried to use a reference as an array index; this probably
@@ -6460,20 +6419,6 @@ or if you meant this
  (?[ [ \x{BE} E F ] ])
 
 You need to add either braces or blanks to disambiguate.
-
-=item Using a hash as a reference is deprecated
-
-(D deprecated) You tried to use a hash as a reference, as in
-C<< %foo->{"bar"} >> or C<< %$ref->{"hello"} >>.  Versions of perl <= 5.6.1
-used to allow this syntax, but shouldn't have.  It is now
-deprecated, and will be removed in a future version.
-
-=item Using an array as a reference is deprecated
-
-(D deprecated) You tried to use an array as a reference, as in
-C<< @foo->[23] >> or C<< @$ref->[99] >>.  Versions of perl <= 5.6.1 used to
-allow this syntax, but shouldn't have.  It is now deprecated,
-and will be removed in a future version.
 
 =item Using just the first character returned by \N{} in character class in 
 regex; marked by S<<-- HERE> in m/%s/
@@ -6566,7 +6511,20 @@ front of your variable.
 =item Variable length lookbehind not implemented in regex m/%s/
 
 (F) Lookbehind is allowed only for subexpressions whose length is fixed and
-known at compile time.  See L<perlre>.
+known at compile time.  For positive lookbehind, you can use the C<\K>
+regex construct as a way to get the equivalent functionality.  See
+L<perlre/(?<=pattern) \K>.
+
+There are non-obvious Unicode rules under C</i> that can match variably,
+but which you might not think could.  For example, the substring C<"ss">
+can match the single character LATIN SMALL LETTER SHARP S.  There are
+other sequences of ASCII characters that can match single ligature
+characters, such as LATIN SMALL LIGATURE FFI matching C<qr/ffi/i>.
+Starting in Perl v5.16, if you only care about ASCII matches, adding the
+C</aa> modifier to the regex will exclude all these non-obvious matches,
+thus getting rid of this message.  You can also say C<S<use re qw(/aa)>>
+to apply C</aa> to all regular expressions compiled within its scope.
+See L<re>.
 
 =item "%s" variable %s masks earlier declaration in same %s
 

@@ -57,9 +57,10 @@ Refetch the stack pointer.  Used after a callback.  See L<perlcall>.
 
 #define PUSHMARK(p)	\
 	STMT_START {					\
-	    if (UNLIKELY(++PL_markstack_ptr == PL_markstack_max))	\
-	    markstack_grow();				\
-	    *PL_markstack_ptr = (I32)((p) - PL_stack_base);\
+	    I32 * mark_stack_entry;			\
+	    if (UNLIKELY((mark_stack_entry = ++PL_markstack_ptr) == PL_markstack_max))	\
+	    mark_stack_entry = markstack_grow();					\
+	    *mark_stack_entry  = (I32)((p) - PL_stack_base);				\
 	} STMT_END
 
 #define TOPMARK		(*PL_markstack_ptr)
@@ -271,23 +272,31 @@ Does not use C<TARG>.  See also C<XPUSHu>, C<mPUSHu> and C<PUSHu>.
 */
 
 #ifdef STRESS_REALLOC
-# define EXTEND(p,n)	(void)(sp = stack_grow(sp,p, (SSize_t)(n)))
+# define EXTEND(p,n)   STMT_START {                                     \
+                           sp = stack_grow(sp,p,(SSize_t) (n));         \
+                           PERL_UNUSED_VAR(sp);                         \
+                       } STMT_END
 /* Same thing, but update mark register too. */
-# define MEXTEND(p,n)	STMT_START {					\
-			    const int markoff = mark - PL_stack_base;	\
-			    sp = stack_grow(sp,p,(SSize_t) (n));	\
-			    mark = PL_stack_base + markoff;		\
-			} STMT_END
+# define MEXTEND(p,n)   STMT_START {                                    \
+                            const int markoff = mark - PL_stack_base;   \
+                            sp = stack_grow(sp,p,(SSize_t) (n));        \
+                            mark = PL_stack_base + markoff;             \
+                            PERL_UNUSED_VAR(sp);                        \
+                        } STMT_END
 #else
-# define EXTEND(p,n)   (void)(UNLIKELY(PL_stack_max - p < (SSize_t)(n)) &&     \
-			    (sp = stack_grow(sp,p, (SSize_t) (n))))
-
+# define EXTEND(p,n)   STMT_START {                                     \
+                         if (UNLIKELY(PL_stack_max - p < (int)(n))) {   \
+                           sp = stack_grow(sp,p,(SSize_t) (n));         \
+                           PERL_UNUSED_VAR(sp);                         \
+                         } } STMT_END
 /* Same thing, but update mark register too. */
-# define MEXTEND(p,n)  STMT_START {if (UNLIKELY(PL_stack_max - p < (int)(n))) {\
-                           const int markoff = mark - PL_stack_base;           \
-                           sp = stack_grow(sp,p,(SSize_t) (n));                \
-                           mark = PL_stack_base + markoff;                     \
-                       } } STMT_END
+# define MEXTEND(p,n)  STMT_START {                                     \
+                         if (UNLIKELY(PL_stack_max - p < (int)(n))) {   \
+                           const int markoff = mark - PL_stack_base;    \
+                           sp = stack_grow(sp,p,(SSize_t) (n));         \
+                           mark = PL_stack_base + markoff;              \
+                           PERL_UNUSED_VAR(sp);                         \
+                         } } STMT_END
 #endif
 
 #define PUSHs(s)	(*++sp = (s))
@@ -297,7 +306,7 @@ Does not use C<TARG>.  See also C<XPUSHu>, C<mPUSHu> and C<PUSHu>.
 #define PUSHi(i)	STMT_START { sv_setiv(TARG, (IV)(i)); PUSHTARG; } STMT_END
 #define PUSHu(u)	STMT_START { sv_setuv(TARG, (UV)(u)); PUSHTARG; } STMT_END
 
-#define XPUSHs(s)	(EXTEND(sp,1), *++sp = (s))
+#define XPUSHs(s)	STMT_START { EXTEND(sp,1); *++sp = (s); } STMT_END
 #define XPUSHTARG	STMT_START { SvSETMAGIC(TARG); XPUSHs(TARG); } STMT_END
 #define XPUSHp(p,l)	STMT_START { sv_setpvn(TARG, (p), (l)); XPUSHTARG; } STMT_END
 #define XPUSHn(n)	STMT_START { sv_setnv(TARG, (NV)(n)); XPUSHTARG; } STMT_END

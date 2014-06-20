@@ -4,7 +4,7 @@
       "perl5-porters@perl.org"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "CPAN::Meta version 2.140640",
+   "generated_by" : "CPAN::Meta version 2.141520",
    "license" : [
       "perl_5"
    ],
@@ -56,7 +56,6 @@
          "dist/threads-shared",
          "dist/Tie-File",
          "dist/XSLoader",
-         "mad",
          "win32"
       ],
       "file" : [
@@ -128,5 +127,5 @@
          "url" : "http://perl5.git.perl.org/"
       }
    },
-   "version" : "5.021000"
+   "version" : "5.021001"
 }

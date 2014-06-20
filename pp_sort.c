@@ -1727,11 +1727,15 @@ PP(pp_sort)
 		        ? ( ( ( priv & OPpSORT_INTEGER) || all_SIVs)
 			    ? ( overloading ? S_amagic_i_ncmp : S_sv_i_ncmp)
 			    : ( overloading ? S_amagic_ncmp : S_sv_ncmp ) )
-			: ( IN_LOCALE_RUNTIME
+			: (
+#ifdef USE_LOCALE_COLLATE
+                           IN_LC_RUNTIME(LC_COLLATE)
 			    ? ( overloading
 				? (SVCOMPARE_t)S_amagic_cmp_locale
 				: (SVCOMPARE_t)sv_cmp_locale_static)
-			    : ( overloading ? (SVCOMPARE_t)S_amagic_cmp : (SVCOMPARE_t)sv_cmp_static)),
+                            :
+#endif
+			      ( overloading ? (SVCOMPARE_t)S_amagic_cmp : (SVCOMPARE_t)sv_cmp_static)),
 		    sort_flags);
 	}
 	if ((priv & OPpSORT_REVERSE) != 0) {
@@ -1997,6 +2001,8 @@ S_amagic_cmp(pTHX_ SV *const str1, SV *const str2)
     return sv_cmp(str1, str2);
 }
 
+#ifdef USE_LOCALE_COLLATE
+
 static I32
 S_amagic_cmp_locale(pTHX_ SV *const str1, SV *const str2)
 {
@@ -2017,6 +2023,8 @@ S_amagic_cmp_locale(pTHX_ SV *const str1, SV *const str2)
     }
     return sv_cmp_locale(str1, str2);
 }
+
+#endif
 
 /*
  * Local variables:

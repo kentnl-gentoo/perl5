@@ -93,6 +93,8 @@ EXTERN_C const struct regexp_engine my_reg_engine;
 
 #define HAS_NONLATIN1_FOLD_CLOSURE(i) \
  _HAS_NONLATIN1_FOLD_CLOSURE_ONLY_FOR_USE_BY_REGCOMP_DOT_C_AND_REGEXEC_DOT_C(i)
+#define HAS_NONLATIN1_SIMPLE_FOLD_CLOSURE(i) \
+ _HAS_NONLATIN1_SIMPLE_FOLD_CLOSURE_ONLY_FOR_USE_BY_REGCOMP_DOT_C_AND_REGEXEC_DOT_C(i)
 #define IS_NON_FINAL_FOLD(c) _IS_NON_FINAL_FOLD_ONLY_FOR_USE_BY_REGCOMP_DOT_C(c)
 #define IS_IN_SOME_FOLD_L1(c) _IS_IN_SOME_FOLD_ONLY_FOR_USE_BY_REGCOMP_DOT_C(c)
 
@@ -223,7 +225,7 @@ struct RExC_state_t {
 
 #define	ISMULT1(c)	((c) == '*' || (c) == '+' || (c) == '?')
 #define	ISMULT2(s)	((*s) == '*' || (*s) == '+' || (*s) == '?' || \
-	((*s) == '{' && regcurly(s, FALSE)))
+	((*s) == '{' && regcurly(s)))
 
 /*
  * Flags to be passed up and down.
@@ -893,7 +895,7 @@ S_ssc_anything(pTHX_ regnode_ssc *ssc)
 }
 
 STATIC int
-S_ssc_is_anything(pTHX_ const regnode_ssc *ssc)
+S_ssc_is_anything(const regnode_ssc *ssc)
 {
     /* Returns TRUE if the SSC 'ssc' can match the empty string and any code
      * point; FALSE otherwise.  Thus, this is used to see if using 'ssc' buys
@@ -965,8 +967,8 @@ S_ssc_init(pTHX_ const RExC_state_t *pRExC_state, regnode_ssc *ssc)
 }
 
 STATIC int
-S_ssc_is_cp_posixl_init(pTHX_ const RExC_state_t *pRExC_state,
-                              const regnode_ssc *ssc)
+S_ssc_is_cp_posixl_init(const RExC_state_t *pRExC_state,
+                        const regnode_ssc *ssc)
 {
     /* Returns TRUE if the SSC 'ssc' is in its initial state with regard only
      * to the list of code points matched, and locale posix classes; hence does
@@ -1410,10 +1412,9 @@ S_ssc_cp_and(pTHX_ regnode_ssc *ssc, const UV cp)
 }
 
 PERL_STATIC_INLINE void
-S_ssc_clear_locale(pTHX_ regnode_ssc *ssc)
+S_ssc_clear_locale(regnode_ssc *ssc)
 {
     /* Set the SSC 'ssc' to not match any locale things */
-
     PERL_ARGS_ASSERT_SSC_CLEAR_LOCALE;
 
     assert(is_ANYOF_SYNTHETIC(ssc));
@@ -1718,7 +1719,7 @@ S_dump_trie_interim_table(pTHX_ const struct _reg_trie_data *trie,
 	       May be the same as tail.
   tail       : item following the branch sequence
   count      : words in the sequence
-  flags      : currently the OP() type we will be building one of /EXACT(|F|Fl)/
+  flags      : currently the OP() type we will be building one of /EXACT(|F|FA|FU|FU_SS)/
   depth      : indent depth
 
 Inplace optimizes a sequence of 2 or more Branch-Exact nodes into a TRIE node.
@@ -2007,6 +2008,7 @@ S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch,
     });
 
     re_trie_maxbuff = get_sv(RE_TRIE_MAXBUF_NAME, 1);
+    assert(re_trie_maxbuff);
     if (!SvIOK(re_trie_maxbuff)) {
         sv_setiv(re_trie_maxbuff, RE_TRIE_MAXBUF_INIT);
     }
@@ -2981,8 +2983,8 @@ S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch,
              : MADE_TRIE;
 }
 
-STATIC void
-S_make_trie_failtable(pTHX_ RExC_state_t *pRExC_state, regnode *source,  regnode *stclass, U32 depth)
+STATIC regnode *
+S_construct_ahocorasick_from_trie(pTHX_ RExC_state_t *pRExC_state, regnode *source, U32 depth)
 {
 /* The Trie is constructed and compressed now so we can build a fail array if
  * it's needed
@@ -3020,13 +3022,27 @@ S_make_trie_failtable(pTHX_ RExC_state_t *pRExC_state, regnode *source,  regnode
     U32 *fail;
     reg_ac_data *aho;
     const U32 data_slot = add_data( pRExC_state, STR_WITH_LEN("T"));
+    regnode *stclass;
     GET_RE_DEBUG_FLAGS_DECL;
 
-    PERL_ARGS_ASSERT_MAKE_TRIE_FAILTABLE;
+    PERL_ARGS_ASSERT_CONSTRUCT_AHOCORASICK_FROM_TRIE;
+    PERL_UNUSED_CONTEXT;
 #ifndef DEBUGGING
     PERL_UNUSED_ARG(depth);
 #endif
 
+    if ( OP(source) == TRIE ) {
+        struct regnode_1 *op = (struct regnode_1 *)
+            PerlMemShared_calloc(1, sizeof(struct regnode_1));
+        StructCopy(source,op,struct regnode_1);
+        stclass = (regnode *)op;
+    } else {
+        struct regnode_charclass *op = (struct regnode_charclass *)
+            PerlMemShared_calloc(1, sizeof(struct regnode_charclass));
+        StructCopy(source,op,struct regnode_charclass);
+        stclass = (regnode *)op;
+    }
+    OP(stclass)+=2; /* covert the TRIE type to its AHO-CORASICK equivalent */
 
     ARG_SET( stclass, data_slot );
     aho = (reg_ac_data *) PerlMemShared_calloc( 1, sizeof(reg_ac_data) );
@@ -3093,6 +3109,7 @@ S_make_trie_failtable(pTHX_ RExC_state_t *pRExC_state, regnode *source,  regnode
     });
     Safefree(q);
     /*RExC_seen |= REG_TRIEDFA_SEEN;*/
+    return stclass;
 }
 
 
@@ -3416,9 +3433,9 @@ S_join_exact(pTHX_ RExC_state_t *pRExC_state, regnode *scan,
                 else { /* Here is a generic multi-char fold. */
                     U8* multi_end  = s + len;
 
-                    /* Count how many characters in it.  In the case of /aa, no
-                     * folds which contain ASCII code points are allowed, so
-                     * check for those, and skip if found. */
+                    /* Count how many characters are in it.  In the case of
+                     * /aa, no folds which contain ASCII code points are
+                     * allowed, so check for those, and skip if found. */
                     if (OP(scan) != EXACTFA && OP(scan) != EXACTFA_NO_TRIE) {
                         count = utf8_length(s, multi_end);
                         s = multi_end;
@@ -4248,11 +4265,13 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 	    }
 	    flags &= ~SCF_DO_STCLASS;
 	}
-	else if (PL_regkind[OP(scan)] == EXACT) { /* But OP != EXACT! */
+        else if (PL_regkind[OP(scan)] == EXACT) { /* But OP != EXACT!, so is
+                                                     EXACTFish */
 	    SSize_t l = STR_LEN(scan);
 	    UV uc = *((U8*)STRING(scan));
             SV* EXACTF_invlist = _new_invlist(4); /* Start out big enough for 2
                                                      separate code points */
+            const U8 * s = (U8*)STRING(scan);
 
 	    /* Search for fixed substrings supports EXACT only. */
 	    if (flags & SCF_DO_SUBSTR) {
@@ -4260,7 +4279,6 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
                 scan_commit(pRExC_state, data, minlenp, is_inf);
 	    }
 	    if (UTF) {
-		const U8 * const s = (U8 *)STRING(scan);
 		uc = utf8_to_uvchr_buf(s, s + l, NULL);
 		l = utf8_length(s, s + l);
 	    }
@@ -4280,71 +4298,140 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		    data->longest = &(data->longest_float);
 		}
 	    }
-            if (OP(scan) == EXACTFL) {
 
-                /* We don't know what the folds are; it could be anything. XXX
-                 * Actually, we only support UTF-8 encoding for code points
-                 * above Latin1, so we could know what those folds are. */
-                EXACTF_invlist = _add_range_to_invlist(EXACTF_invlist,
-                                                       0,
-                                                       UV_MAX);
+            if (OP(scan) != EXACTFL && flags & SCF_DO_STCLASS_AND) {
+                ssc_clear_locale(data->start_class);
             }
-            else {  /* Non-locale EXACTFish */
-                EXACTF_invlist = add_cp_to_invlist(EXACTF_invlist, uc);
-                if (flags & SCF_DO_STCLASS_AND) {
-                    ssc_clear_locale(data->start_class);
-                }
-                if (uc < 256) { /* We know what the Latin1 folds are ... */
-                    if (IS_IN_SOME_FOLD_L1(uc)) {   /* For instance, we
-                                                       know if anything folds
-                                                       with this */
-                        EXACTF_invlist = add_cp_to_invlist(EXACTF_invlist,
-                                                           PL_fold_latin1[uc]);
-                        if (OP(scan) != EXACTFA) { /* The folds below aren't
-                                                      legal under /iaa */
-                            if (isARG2_lower_or_UPPER_ARG1('s', uc)) {
-                                EXACTF_invlist
-                                    = add_cp_to_invlist(EXACTF_invlist,
-                                                LATIN_SMALL_LETTER_SHARP_S);
-                            }
-                            else if (uc == LATIN_SMALL_LETTER_SHARP_S) {
-                                EXACTF_invlist
-                                    = add_cp_to_invlist(EXACTF_invlist, 's');
-                                EXACTF_invlist
-                                    = add_cp_to_invlist(EXACTF_invlist, 'S');
-                            }
-                        }
 
-                        /* We also know if there are above-Latin1 code points
-                         * that fold to this (none legal for ASCII and /iaa) */
-                        if ((! isASCII(uc) || OP(scan) != EXACTFA)
-                            && HAS_NONLATIN1_FOLD_CLOSURE(uc))
-                        {
-                            /* XXX We could know exactly what does fold to this
-                             * if the reverse folds are loaded, as currently in
-                             * S_regclass() */
-                            _invlist_union(EXACTF_invlist,
-                                           PL_AboveLatin1,
-                                           &EXACTF_invlist);
-                        }
-                    }
-                }
-                else {  /* Non-locale, above Latin1.  XXX We don't currently
-                           know what participates in folds with this, so have
-                           to assume anything could */
+            if (! UTF) {
 
-                    /* XXX We could know exactly what does fold to this if the
-                     * reverse folds are loaded, as currently in S_regclass().
-                     * But we do know that under /iaa nothing in the ASCII
-                     * range can participate */
-                    if (OP(scan) == EXACTFA) {
-                        _invlist_union_complement_2nd(EXACTF_invlist,
-                                                      PL_XPosix_ptrs[_CC_ASCII],
-                                                      &EXACTF_invlist);
+                /* We punt and assume can match anything if the node begins
+                 * with a multi-character fold.  Things are complicated.  For
+                 * example, /ffi/i could match any of:
+                 *  "\N{LATIN SMALL LIGATURE FFI}"
+                 *  "\N{LATIN SMALL LIGATURE FF}I"
+                 *  "F\N{LATIN SMALL LIGATURE FI}"
+                 *  plus several other things; and making sure we have all the
+                 *  possibilities is hard. */
+                if (is_MULTI_CHAR_FOLD_latin1_safe(s, s + STR_LEN(scan))) {
+                    EXACTF_invlist =
+                             _add_range_to_invlist(EXACTF_invlist, 0, UV_MAX);
+                }
+                else {
+
+                    /* Any Latin1 range character can potentially match any
+                     * other depending on the locale */
+                    if (OP(scan) == EXACTFL) {
+                        _invlist_union(EXACTF_invlist, PL_Latin1,
+                                                              &EXACTF_invlist);
                     }
                     else {
-                        EXACTF_invlist = _add_range_to_invlist(EXACTF_invlist,
-                                                               0, UV_MAX);
+                        /* But otherwise, it matches at least itself.  We can
+                         * quickly tell if it has a distinct fold, and if so,
+                         * it matches that as well */
+                        EXACTF_invlist = add_cp_to_invlist(EXACTF_invlist, uc);
+                        if (IS_IN_SOME_FOLD_L1(uc)) {
+                            EXACTF_invlist = add_cp_to_invlist(EXACTF_invlist,
+                                                           PL_fold_latin1[uc]);
+                        }
+                    }
+
+                    /* Some characters match above-Latin1 ones under /i.  This
+                     * is true of EXACTFL ones when the locale is UTF-8 */
+                    if (HAS_NONLATIN1_SIMPLE_FOLD_CLOSURE(uc)
+                        && (! isASCII(uc) || (OP(scan) != EXACTFA
+                                            && OP(scan) != EXACTFA_NO_TRIE)))
+                    {
+                        add_above_Latin1_folds(pRExC_state,
+                                               (U8) uc,
+                                               &EXACTF_invlist);
+                    }
+                }
+            }
+            else {  /* Pattern is UTF-8 */
+                U8 folded[UTF8_MAX_FOLD_CHAR_EXPAND * UTF8_MAXBYTES_CASE + 1] = { '\0' };
+                STRLEN foldlen = UTF8SKIP(s);
+                const U8* e = s + STR_LEN(scan);
+                SV** listp;
+
+                /* The only code points that aren't folded in a UTF EXACTFish
+                 * node are are the problematic ones in EXACTFL nodes */
+                if (OP(scan) == EXACTFL
+                    && is_PROBLEMATIC_LOCALE_FOLDEDS_START_cp(uc))
+                {
+                    /* We need to check for the possibility that this EXACTFL
+                     * node begins with a multi-char fold.  Therefore we fold
+                     * the first few characters of it so that we can make that
+                     * check */
+                    U8 *d = folded;
+                    int i;
+
+                    for (i = 0; i < UTF8_MAX_FOLD_CHAR_EXPAND && s < e; i++) {
+                        if (isASCII(*s)) {
+                            *(d++) = (U8) toFOLD(*s);
+                            s++;
+                        }
+                        else {
+                            STRLEN len;
+                            to_utf8_fold(s, d, &len);
+                            d += len;
+                            s += UTF8SKIP(s);
+                        }
+                    }
+
+                    /* And set up so the code below that looks in this folded
+                     * buffer instead of the node's string */
+                    e = d;
+                    foldlen = UTF8SKIP(folded);
+                    s = folded;
+                }
+
+                /* When we reach here 's' points to the fold of the first
+                 * character(s) of the node; and 'e' points to far enough along
+                 * the folded string to be just past any possible multi-char
+                 * fold. 'foldlen' is the length in bytes of the first
+                 * character in 's'
+                 *
+                 * Unlike the non-UTF-8 case, the macro for determining if a
+                 * string is a multi-char fold requires all the characters to
+                 * already be folded.  This is because of all the complications
+                 * if not.  Note that they are folded anyway, except in EXACTFL
+                 * nodes.  Like the non-UTF case above, we punt if the node
+                 * begins with a multi-char fold  */
+
+                if (is_MULTI_CHAR_FOLD_utf8_safe(s, e)) {
+                    EXACTF_invlist =
+                             _add_range_to_invlist(EXACTF_invlist, 0, UV_MAX);
+                }
+                else {  /* Single char fold */
+
+                    /* It matches all the things that fold to it, which are
+                     * found in PL_utf8_foldclosures (including itself) */
+                    EXACTF_invlist = add_cp_to_invlist(EXACTF_invlist, uc);
+                    if (! PL_utf8_foldclosures) {
+                        _load_PL_utf8_foldclosures();
+                    }
+                    if ((listp = hv_fetch(PL_utf8_foldclosures,
+                                        (char *) s, foldlen, FALSE)))
+                    {
+                        AV* list = (AV*) *listp;
+                        IV k;
+                        for (k = 0; k <= av_tindex(list); k++) {
+                            SV** c_p = av_fetch(list, k, FALSE);
+                            UV c;
+                            assert(c_p);
+
+                            c = SvUV(*c_p);
+
+                            /* /aa doesn't allow folds between ASCII and non- */
+                            if ((OP(scan) == EXACTFA || OP(scan) == EXACTFA_NO_TRIE)
+                                && isASCII(c) != isASCII(uc))
+                            {
+                                continue;
+                            }
+
+                            EXACTF_invlist = add_cp_to_invlist(EXACTF_invlist, c);
+                        }
                     }
                 }
             }
@@ -4389,7 +4476,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		if (flags & SCF_DO_SUBSTR)
 		    data->pos_min++;
 		min++;
-		/* Fall through. */
+		/* FALLTHROUGH */
 	    case STAR:
 		if (flags & SCF_DO_STCLASS) {
 		    mincount = 0;
@@ -4692,13 +4779,13 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		    /* It is counted once already... */
 		    data->pos_min += minnext * (mincount - counted);
 #if 0
-PerlIO_printf(Perl_debug_log, "counted=%"UVdf" deltanext=%"UVdf
-                              " SSize_t_MAX=%"UVdf" minnext=%"UVdf
-                              " maxcount=%"UVdf" mincount=%"UVdf"\n",
+PerlIO_printf(Perl_debug_log, "counted=%"UVuf" deltanext=%"UVuf
+                              " SSize_t_MAX=%"UVuf" minnext=%"UVuf
+                              " maxcount=%"UVuf" mincount=%"UVuf"\n",
     (UV)counted, (UV)deltanext, (UV)SSize_t_MAX, (UV)minnext, (UV)maxcount,
     (UV)mincount);
 if (deltanext != SSize_t_MAX)
-PerlIO_printf(Perl_debug_log, "LHS=%"UVdf" RHS=%"UVdf"\n",
+PerlIO_printf(Perl_debug_log, "LHS=%"UVuf" RHS=%"UVuf"\n",
     (UV)(-counted * deltanext + (minnext + deltanext) * maxcount
           - minnext * mincount), (UV)(SSize_t_MAX - data->pos_delta));
 #endif
@@ -4861,7 +4948,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVdf" RHS=%"UVdf"\n",
 
 		case NPOSIXL:
                     invert = 1;
-                    /* FALL THROUGH */
+                    /* FALLTHROUGH */
 
 		case POSIXL:
                     namedclass = classnum_to_namedclass(FLAGS(scan)) + invert;
@@ -4902,7 +4989,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVdf" RHS=%"UVdf"\n",
                 case NPOSIXA:   /* For these, we always know the exact set of
                                    what's matched */
                     invert = 1;
-                    /* FALL THROUGH */
+                    /* FALLTHROUGH */
 		case POSIXA:
                     if (FLAGS(scan) == _CC_ASCII) {
                         my_invlist = PL_XPosix_ptrs[_CC_ASCII];
@@ -4917,7 +5004,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVdf" RHS=%"UVdf"\n",
 		case NPOSIXD:
 		case NPOSIXU:
                     invert = 1;
-                    /* FALL THROUGH */
+                    /* FALLTHROUGH */
 		case POSIXD:
 		case POSIXU:
                     my_invlist = invlist_clone(PL_XPosix_ptrs[FLAGS(scan)]);
@@ -5429,7 +5516,8 @@ S_add_data(RExC_state_t* const pRExC_state, const char* const s, const U32 n)
     return count;
 }
 
-/*XXX: todo make this not included in a non debugging perl */
+/*XXX: todo make this not included in a non debugging perl, but appears to be
+ * used anyway there, in 'use re' */
 #ifndef PERL_IN_XSUB_RE
 void
 Perl_reginitcolors(pTHX)
@@ -5632,7 +5720,7 @@ S_concat_pat(pTHX_ RExC_state_t * const pRExC_state,
     /* if we know we have at least two args, create an empty string,
      * then concatenate args to that. For no args, return an empty string */
     if (!pat && pat_count != 1) {
-        pat = newSVpvn("", 0);
+        pat = newSVpvs("");
         SAVEFREESV(pat);
         alloced = TRUE;
     }
@@ -5838,6 +5926,8 @@ S_has_runtime_code(pTHX_ RExC_state_t * const pRExC_state,
 {
     int n = 0;
     STRLEN s;
+    
+    PERL_UNUSED_CONTEXT;
 
     for (s = 0; s < plen; s++) {
 	if (n < pRExC_state->num_code_blocks
@@ -6750,22 +6840,8 @@ reStudy:
 	else if (PL_regkind[OP(first)] == TRIE &&
 	        ((reg_trie_data *)ri->data->data[ ARG(first) ])->minlen>0)
 	{
-	    regnode *trie_op;
-	    /* this can happen only on restudy */
-	    if ( OP(first) == TRIE ) {
-                struct regnode_1 *trieop = (struct regnode_1 *)
-		    PerlMemShared_calloc(1, sizeof(struct regnode_1));
-                StructCopy(first,trieop,struct regnode_1);
-                trie_op=(regnode *)trieop;
-            } else {
-                struct regnode_charclass *trieop = (struct regnode_charclass *)
-		    PerlMemShared_calloc(1, sizeof(struct regnode_charclass));
-                StructCopy(first,trieop,struct regnode_charclass);
-                trie_op=(regnode *)trieop;
-            }
-            OP(trie_op)+=2;
-            make_trie_failtable(pRExC_state, (regnode *)first, trie_op, 0);
-	    ri->regstclass = trie_op;
+            /* this can happen only on restudy */
+            ri->regstclass = construct_ahocorasick_from_trie(pRExC_state, (regnode *)first, 0);
 	}
 #endif
 	else if (REGNODE_SIMPLE(OP(first)))
@@ -7758,7 +7834,7 @@ S_reg_scan_name(pTHX_ RExC_state_t *pRExC_state, U32 flags)
 /* The header definitions are in F<inline_invlist.c> */
 
 PERL_STATIC_INLINE UV*
-S__invlist_array_init(pTHX_ SV* const invlist, const bool will_have_0)
+S__invlist_array_init(SV* const invlist, const bool will_have_0)
 {
     /* Returns a pointer to the first element in the inversion list's array.
      * This is called upon initialization of an inversion list.  Where the
@@ -7784,7 +7860,7 @@ S__invlist_array_init(pTHX_ SV* const invlist, const bool will_have_0)
 }
 
 PERL_STATIC_INLINE UV*
-S_invlist_array(pTHX_ SV* const invlist)
+S_invlist_array(SV* const invlist)
 {
     /* Returns the pointer to the inversion list's array.  Every time the
      * length changes, this needs to be called in case malloc or realloc moved
@@ -7809,7 +7885,7 @@ S_invlist_set_len(pTHX_ SV* const invlist, const UV len, const bool offset)
 {
     /* Sets the current number of elements stored in the inversion list.
      * Updates SvCUR correspondingly */
-
+    PERL_UNUSED_CONTEXT;
     PERL_ARGS_ASSERT_INVLIST_SET_LEN;
 
     assert(SvTYPE(invlist) == SVt_INVLIST);
@@ -7822,11 +7898,10 @@ S_invlist_set_len(pTHX_ SV* const invlist, const UV len, const bool offset)
 }
 
 PERL_STATIC_INLINE IV*
-S_get_invlist_previous_index_addr(pTHX_ SV* invlist)
+S_get_invlist_previous_index_addr(SV* invlist)
 {
     /* Return the address of the IV that is reserved to hold the cached index
      * */
-
     PERL_ARGS_ASSERT_GET_INVLIST_PREVIOUS_INDEX_ADDR;
 
     assert(SvTYPE(invlist) == SVt_INVLIST);
@@ -7835,7 +7910,7 @@ S_get_invlist_previous_index_addr(pTHX_ SV* invlist)
 }
 
 PERL_STATIC_INLINE IV
-S_invlist_previous_index(pTHX_ SV* const invlist)
+S_invlist_previous_index(SV* const invlist)
 {
     /* Returns cached index of previous search */
 
@@ -7845,7 +7920,7 @@ S_invlist_previous_index(pTHX_ SV* const invlist)
 }
 
 PERL_STATIC_INLINE void
-S_invlist_set_previous_index(pTHX_ SV* const invlist, const IV index)
+S_invlist_set_previous_index(SV* const invlist, const IV index)
 {
     /* Caches <index> for later retrieval */
 
@@ -7857,7 +7932,7 @@ S_invlist_set_previous_index(pTHX_ SV* const invlist, const IV index)
 }
 
 PERL_STATIC_INLINE UV
-S_invlist_max(pTHX_ SV* const invlist)
+S_invlist_max(SV* const invlist)
 {
     /* Returns the maximum number of elements storable in the inversion list's
      * array, without having to realloc() */
@@ -7976,7 +8051,7 @@ S_invlist_extend(pTHX_ SV* const invlist, const UV new_max)
 }
 
 PERL_STATIC_INLINE void
-S_invlist_trim(pTHX_ SV* const invlist)
+S_invlist_trim(SV* const invlist)
 {
     PERL_ARGS_ASSERT_INVLIST_TRIM;
 
@@ -8075,7 +8150,7 @@ S__append_range_to_invlist(pTHX_ SV* const invlist,
 #ifndef PERL_IN_XSUB_RE
 
 IV
-Perl__invlist_search(pTHX_ SV* const invlist, const UV cp)
+Perl__invlist_search(SV* const invlist, const UV cp)
 {
     /* Searches the inversion list for the entry that contains the input code
      * point <cp>.  If <cp> is not in the list, -1 is returned.  Otherwise, the
@@ -8163,8 +8238,8 @@ Perl__invlist_search(pTHX_ SV* const invlist, const UV cp)
 }
 
 void
-Perl__invlist_populate_swatch(pTHX_ SV* const invlist,
-                                    const UV start, const UV end, U8* swatch)
+Perl__invlist_populate_swatch(SV* const invlist,
+                              const UV start, const UV end, U8* swatch)
 {
     /* populates a swatch of a swash the same way swatch_get() does in utf8.c,
      * but is used when the swash has an inversion list.  This makes this much
@@ -8876,7 +8951,7 @@ S_invlist_clone(pTHX_ SV* const invlist)
 }
 
 PERL_STATIC_INLINE STRLEN*
-S_get_invlist_iter_addr(pTHX_ SV* invlist)
+S_get_invlist_iter_addr(SV* invlist)
 {
     /* Return the address of the UV that contains the current iteration
      * position */
@@ -8889,7 +8964,7 @@ S_get_invlist_iter_addr(pTHX_ SV* invlist)
 }
 
 PERL_STATIC_INLINE void
-S_invlist_iterinit(pTHX_ SV* invlist)	/* Initialize iterator for invlist */
+S_invlist_iterinit(SV* invlist)	/* Initialize iterator for invlist */
 {
     PERL_ARGS_ASSERT_INVLIST_ITERINIT;
 
@@ -8897,7 +8972,7 @@ S_invlist_iterinit(pTHX_ SV* invlist)	/* Initialize iterator for invlist */
 }
 
 PERL_STATIC_INLINE void
-S_invlist_iterfinish(pTHX_ SV* invlist)
+S_invlist_iterfinish(SV* invlist)
 {
     /* Terminate iterator for invlist.  This is to catch development errors.
      * Any iteration that is interrupted before completed should call this
@@ -8913,7 +8988,7 @@ S_invlist_iterfinish(pTHX_ SV* invlist)
 }
 
 STATIC bool
-S_invlist_iternext(pTHX_ SV* invlist, UV* start, UV* end)
+S_invlist_iternext(SV* invlist, UV* start, UV* end)
 {
     /* An C<invlist_iterinit> call on <invlist> must be used to set this up.
      * This call sets in <*start> and <*end>, the next range in <invlist>.
@@ -8948,7 +9023,7 @@ S_invlist_iternext(pTHX_ SV* invlist, UV* start, UV* end)
 }
 
 PERL_STATIC_INLINE bool
-S_invlist_is_iterating(pTHX_ SV* const invlist)
+S_invlist_is_iterating(SV* const invlist)
 {
     PERL_ARGS_ASSERT_INVLIST_IS_ITERATING;
 
@@ -8956,7 +9031,7 @@ S_invlist_is_iterating(pTHX_ SV* const invlist)
 }
 
 PERL_STATIC_INLINE UV
-S_invlist_highest(pTHX_ SV* const invlist)
+S_invlist_highest(SV* const invlist)
 {
     /* Returns the highest code point that matches an inversion list.  This API
      * has an ambiguity, as it returns 0 under either the highest is actually
@@ -9067,6 +9142,23 @@ Perl__invlist_dump(pTHX_ PerlIO *file, I32 level,
 	}
         count += 2;
     }
+}
+
+void
+Perl__load_PL_utf8_foldclosures (pTHX)
+{
+    assert(! PL_utf8_foldclosures);
+
+    /* If the folds haven't been read in, call a fold function
+     * to force that */
+    if (! PL_utf8_tofold) {
+        U8 dummy[UTF8_MAXBYTES_CASE+1];
+
+        /* This string is just a short named one above \xff */
+        to_utf8_fold((U8*) HYPHEN_UTF8, dummy, NULL);
+        assert(PL_utf8_tofold); /* Verify that worked */
+    }
+    PL_utf8_foldclosures = _swash_inversion_hash(PL_utf8_tofold);
 }
 #endif
 
@@ -9381,6 +9473,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
     bool is_open = 0;
     I32 freeze_paren = 0;
     I32 after_freeze = 0;
+    I32 num; /* numeric backreferences */
 
     char * parse_start = RExC_parse; /* MJD */
     char * const oregcomp_parse = RExC_parse;
@@ -9411,8 +9504,9 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
             int internal_argval = 0; /* internal_argval is only useful if
                                         !argok */
 
-            if (has_intervening_patws && SIZE_ONLY) {
-                ckWARNregdep(RExC_parse + 1, "In '(*VERB...)', splitting the initial '(*' is deprecated");
+            if (has_intervening_patws) {
+                RExC_parse++;
+                vFAIL("In '(*VERB...)', the '(' and '*' must be adjacent");
             }
 	    while ( *RExC_parse && *RExC_parse != ')' ) {
 	        if ( *RExC_parse == ':' ) {
@@ -9518,8 +9612,9 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
         else if (*RExC_parse == '?') { /* (?...) */
 	    bool is_logical = 0;
 	    const char * const seqstart = RExC_parse;
-            if (has_intervening_patws && SIZE_ONLY) {
-                ckWARNregdep(RExC_parse + 1, "In '(?...)', splitting the initial '(?' is deprecated");
+            if (has_intervening_patws) {
+                RExC_parse++;
+                vFAIL("In '(?...)', the '(' and '?' must be adjacent");
             }
 
 	    RExC_parse++;
@@ -9661,6 +9756,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                 RExC_seen |= REG_LOOKBEHIND_SEEN;
 		RExC_in_lookbehind++;
 		RExC_parse++;
+                /* FALLTHROUGH */
 	    case '=':           /* (?=...) */
 		RExC_seen_zerolen++;
                 break;
@@ -9685,18 +9781,6 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 	    case '@':           /* (?@...) */
 		vFAIL2("Sequence (?%c...) not implemented", (int)paren);
 		break;
-            case '#':           /* (?#...) */
-                /* XXX As soon as we disallow separating the '?' and '*' (by
-                 * spaces or (?#...) comment), it is believed that this case
-                 * will be unreachable and can be removed.  See
-                 * [perl #117327] */
-                while (*RExC_parse && *RExC_parse != ')')
-		    RExC_parse++;
-		if (*RExC_parse != ')')
-		    FAIL("Sequence (?#... not terminated");
-		nextchar(pRExC_state);
-		*flagp = TRYAGAIN;
-		return NULL;
 	    case '0' :           /* (?0) */
 	    case 'R' :           /* (?R) */
 		if (*RExC_parse != ')')
@@ -9707,8 +9791,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 		nextchar(pRExC_state);
 		return ret;
 		/*notreached*/
-            { /* named and numeric backreferences */
-                I32 num;
+            /* named and numeric backreferences */
             case '&':            /* (?&NAME) */
                 parse_start = RExC_parse - 1;
               named_recursion:
@@ -9733,7 +9816,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                     RExC_parse--; /* rewind to let it be handled later */
                     goto parse_flags;
                 }
-                /*FALLTHROUGH */
+                /* FALLTHROUGH */
             case '1': case '2': case '3': case '4': /* (?1) */
 	    case '5': case '6': case '7': case '8': case '9':
 	        RExC_parse--;
@@ -9790,7 +9873,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                 *flagp |= POSTPONED;
                 nextchar(pRExC_state);
                 return ret;
-            } /* named and numeric backreferences */
+
             assert(0); /* NOT REACHED */
 
 	    case '?':           /* (??...) */
@@ -9805,7 +9888,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 		}
 		*flagp |= POSTPONED;
 		paren = *RExC_parse++;
-		/* FALL THROUGH */
+		/* FALLTHROUGH */
 	    case '{':           /* (?{...}) */
 	    {
 		U32 n = 0;
@@ -10150,7 +10233,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 	case '=':
 	case '!':
 	    *flagp &= ~HASWIDTH;
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 	case '>':
 	    ender = reg_node(pRExC_state, SUCCEED);
 	    break;
@@ -10402,7 +10485,7 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 
     op = *RExC_parse;
 
-    if (op == '{' && regcurly(RExC_parse, FALSE)) {
+    if (op == '{' && regcurly(RExC_parse)) {
 	maxpos = NULL;
 #ifdef RE_TRACK_PATTERN_OFFSETS
         parse_start = RExC_parse; /* MJD */
@@ -10672,12 +10755,13 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
      * modifier.  The other meaning does not, so use a temporary until we find
      * out which we are being called with */
     p = (RExC_flags & RXf_PMf_EXTENDED)
-	? regwhite( pRExC_state, RExC_parse )
+	? regpatws(pRExC_state, RExC_parse,
+                                TRUE) /* means recognize comments */
 	: RExC_parse;
 
     /* Disambiguate between \N meaning a named character versus \N meaning
      * [^\n].  The former is assumed when it can't be the latter. */
-    if (*p != '{' || regcurly(p, FALSE)) {
+    if (*p != '{' || regcurly(p)) {
 	RExC_parse = p;
 	if (! node_p) {
 	    /* no bare \N allowed in a charclass */
@@ -10899,7 +10983,7 @@ S_reg_recode(pTHX_ const char value, SV **encp)
 }
 
 PERL_STATIC_INLINE U8
-S_compute_EXACTish(pTHX_ RExC_state_t *pRExC_state)
+S_compute_EXACTish(RExC_state_t *pRExC_state)
 {
     U8 op;
 
@@ -11080,7 +11164,7 @@ S_backref_value(char *p)
 {
     char *q = p;
 
-    for (;isDIGIT(*q); q++); /* calculate length of num */
+    for (;isDIGIT(*q); q++) {} /* calculate length of num */
     if (q - p == 0 || q - p > 9)
         return I32_MAX;
     return atoi(p);
@@ -11162,6 +11246,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
     char *parse_start = RExC_parse;
     U8 op;
     int invert = 0;
+    U8 arg;
 
     GET_RE_DEBUG_FLAGS_DECL;
 
@@ -11258,12 +11343,6 @@ tryagain:
 	vFAIL("Internal urp");
 				/* Supposed to be caught earlier. */
 	break;
-    case '{':
-	if (!regcurly(RExC_parse, FALSE)) {
-	    RExC_parse++;
-	    goto defchar;
-	}
-	/* FALL THROUGH */
     case '?':
     case '+':
     case '*':
@@ -11284,7 +11363,6 @@ tryagain:
 	   literal text handling code.
 	*/
 	switch ((U8)*++RExC_parse) {
-            U8 arg;
 	/* Special Escapes */
 	case 'A':
 	    RExC_seen_zerolen++;
@@ -11426,7 +11504,7 @@ tryagain:
             }
 
 	    *flagp |= HASWIDTH|SIMPLE;
-            /* FALL THROUGH */
+            /* FALLTHROUGH */
 
          finish_meta_pat:
 	    nextchar(pRExC_state);
@@ -11625,7 +11703,7 @@ tryagain:
 	case '\0':
 	    if (RExC_parse >= RExC_end)
 		FAIL("Trailing \\");
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 	default:
 	    /* Do not generate "unrecognized" warnings here, we fall
 	       back into the quick-grab loop below */
@@ -11636,10 +11714,11 @@ tryagain:
 
     case '#':
 	if (RExC_flags & RXf_PMf_EXTENDED) {
-	    if ( reg_skipcomment( pRExC_state ) )
+	    RExC_parse = reg_skipcomment( pRExC_state, RExC_parse );
+	    if (RExC_parse < RExC_end)
 		goto tryagain;
 	}
-	/* FALL THROUGH */
+	/* FALLTHROUGH */
 
     default:
 
@@ -11717,7 +11796,8 @@ tryagain:
 		oldp = p;
 
 		if (RExC_flags & RXf_PMf_EXTENDED)
-		    p = regwhite( pRExC_state, p );
+                    p = regpatws(pRExC_state, p,
+                                          TRUE); /* means recognize comments */
 		switch ((U8)*p) {
 		case '^':
 		case '$':
@@ -11896,6 +11976,7 @@ tryagain:
                             --p;
                             goto loopdone;
                         }
+                        /* FALLTHROUGH */
                     case '0':
 			{
 			    I32 flags = PERL_SCAN_SILENT_ILLDIGIT;
@@ -11930,7 +12011,7 @@ tryagain:
 		    case '\0':
 			if (p >= RExC_end)
 			    FAIL("Trailing \\");
-			/* FALL THROUGH */
+			/* FALLTHROUGH */
 		    default:
 			if (!SIZE_ONLY&& isALPHANUMERIC(*p)) {
 			    /* Include any { following the alpha to emphasize
@@ -11942,17 +12023,18 @@ tryagain:
 			goto normal_default;
 		    } /* End of switch on '\' */
 		    break;
+		case '{':
+		    /* Currently we don't warn when the lbrace is at the start
+		     * of a construct.  This catches it in the middle of a
+		     * literal string, or when its the first thing after
+		     * something like "\b" */
+		    if (! SIZE_ONLY
+			&& (len || (p > RExC_start && isALPHA_A(*(p -1)))))
+		    {
+			ckWARNregdep(p + 1, "Unescaped left brace in regex is deprecated, passed through");
+		    }
+		    /*FALLTHROUGH*/
 		default:    /* A literal character */
-
-                    if (! SIZE_ONLY
-                        && RExC_flags & RXf_PMf_EXTENDED
-                        && ckWARN_d(WARN_DEPRECATED)
-                        && is_PATWS_non_low_safe(p, RExC_end, UTF))
-                    {
-                        vWARN_dep(p + ((UTF) ? UTF8SKIP(p) : 1),
-                                "Escape literal pattern white space under /x");
-                    }
-
 		  normal_default:
 		    if (UTF8_IS_START(*p) && UTF) {
 			STRLEN numlen;
@@ -11970,7 +12052,8 @@ tryagain:
 		 */
 
 		if ( RExC_flags & RXf_PMf_EXTENDED)
-		    p = regwhite( pRExC_state, p );
+                    p = regpatws(pRExC_state, p,
+                                          TRUE); /* means recognize comments */
 
                 /* If the next thing is a quantifier, it applies to this
                  * character only, which means that this character has to be in
@@ -12325,39 +12408,11 @@ tryagain:
 }
 
 STATIC char *
-S_regwhite( RExC_state_t *pRExC_state, char *p )
-{
-    const char *e = RExC_end;
-
-    PERL_ARGS_ASSERT_REGWHITE;
-
-    while (p < e) {
-	if (isSPACE(*p))
-	    ++p;
-	else if (*p == '#') {
-            bool ended = 0;
-	    do {
-		if (*p++ == '\n') {
-		    ended = 1;
-		    break;
-		}
-	    } while (p < e);
-	    if (!ended)
-                RExC_seen |= REG_RUN_ON_COMMENT_SEEN;
-	}
-	else
-	    break;
-    }
-    return p;
-}
-
-STATIC char *
-S_regpatws( RExC_state_t *pRExC_state, char *p , const bool recognize_comment )
+S_regpatws(RExC_state_t *pRExC_state, char *p , const bool recognize_comment )
 {
     /* Returns the next non-pattern-white space, non-comment character (the
      * latter only if 'recognize_comment is true) in the string p, which is
-     * ended by RExC_end.  If there is no line break ending a comment,
-     * RExC_seen has added the REG_RUN_ON_COMMENT_SEEN flag; */
+     * ended by RExC_end.  See also reg_skipcomment */
     const char *e = RExC_end;
 
     PERL_ARGS_ASSERT_REGPATWS;
@@ -12368,16 +12423,7 @@ S_regpatws( RExC_state_t *pRExC_state, char *p , const bool recognize_comment )
 	    p += len;
         }
 	else if (recognize_comment && *p == '#') {
-            bool ended = 0;
-	    do {
-                p++;
-                if (is_LNBREAK_safe(p, e, UTF)) {
-		    ended = 1;
-		    break;
-		}
-	    } while (p < e);
-	    if (!ended)
-                RExC_seen |= REG_RUN_ON_COMMENT_SEEN;
+            p = reg_skipcomment(pRExC_state, p);
 	}
 	else
 	    break;
@@ -12606,7 +12652,7 @@ S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value, const bool strict)
 }
 
 STATIC bool
-S_could_it_be_a_POSIX_class(pTHX_ RExC_state_t *pRExC_state)
+S_could_it_be_a_POSIX_class(RExC_state_t *pRExC_state)
 {
     /* This applies some heuristics at the current parse position (which should
      * be at a '[') to see if what follows might be intended to be a [:posix:]
@@ -12705,11 +12751,11 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
         while (RExC_parse < RExC_end) {
             SV* current = NULL;
             RExC_parse = regpatws(pRExC_state, RExC_parse,
-                                TRUE); /* means recognize comments */
+                                          TRUE); /* means recognize comments */
             switch (*RExC_parse) {
                 case '?':
                     if (RExC_parse[1] == '[') depth++, RExC_parse++;
-                    /* FALL THROUGH */
+                    /* FALLTHROUGH */
                 default:
                     break;
                 case '\\':
@@ -12822,7 +12868,7 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
 
         /* Skip white space */
         RExC_parse = regpatws(pRExC_state, RExC_parse,
-                                TRUE); /* means recognize comments */
+                                         TRUE /* means recognize comments */ );
         if (RExC_parse >= RExC_end) {
             Perl_croak(aTHX_ "panic: Read past end of '(?[ ])'");
         }
@@ -12896,7 +12942,7 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                     RExC_flags = save_flags;
                     goto handle_operand;
                 }
-                /* FALL THROUGH */
+                /* FALLTHROUGH */
 
             default:
                 RExC_parse += (UTF) ? UTF8SKIP(RExC_parse) : 1;
@@ -12992,7 +13038,7 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                 top_index -= 2;
                 SvREFCNT_dec_NN(lparen);
 
-                /* FALL THROUGH */
+                /* FALLTHROUGH */
             }
 
               handle_operand:
@@ -13151,6 +13197,74 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
 }
 #undef IS_OPERAND
 
+STATIC void
+S_add_above_Latin1_folds(pTHX_ RExC_state_t *pRExC_state, const U8 cp, SV** invlist)
+{
+    /* This hard-codes the Latin1/above-Latin1 folding rules, so that an
+     * innocent-looking character class, like /[ks]/i won't have to go out to
+     * disk to find the possible matches.
+     *
+     * This should be called only for a Latin1-range code points, cp, which is
+     * known to be involved in a fold with other code points above Latin1.  It
+     * would give false results if /aa has been specified.  Multi-char folds
+     * are outside the scope of this, and must be handled specially.
+     *
+     * XXX It would be better to generate these via regen, in case a new
+     * version of the Unicode standard adds new mappings, though that is not
+     * really likely, and may be caught by the default: case of the switch
+     * below. */
+
+    PERL_ARGS_ASSERT_ADD_ABOVE_LATIN1_FOLDS;
+
+    switch (cp) {
+        case 'k':
+        case 'K':
+          *invlist =
+             add_cp_to_invlist(*invlist, KELVIN_SIGN);
+            break;
+        case 's':
+        case 'S':
+          *invlist = add_cp_to_invlist(*invlist, LATIN_SMALL_LETTER_LONG_S);
+            break;
+        case MICRO_SIGN:
+          *invlist = add_cp_to_invlist(*invlist, GREEK_CAPITAL_LETTER_MU);
+          *invlist = add_cp_to_invlist(*invlist, GREEK_SMALL_LETTER_MU);
+            break;
+        case LATIN_CAPITAL_LETTER_A_WITH_RING_ABOVE:
+        case LATIN_SMALL_LETTER_A_WITH_RING_ABOVE:
+          *invlist = add_cp_to_invlist(*invlist, ANGSTROM_SIGN);
+            break;
+        case LATIN_SMALL_LETTER_Y_WITH_DIAERESIS:
+          *invlist = add_cp_to_invlist(*invlist,
+                                        LATIN_CAPITAL_LETTER_Y_WITH_DIAERESIS);
+            break;
+        case LATIN_SMALL_LETTER_SHARP_S:
+          *invlist = add_cp_to_invlist(*invlist, LATIN_CAPITAL_LETTER_SHARP_S);
+            break;
+        case 'F': case 'f':
+        case 'I': case 'i':
+        case 'L': case 'l':
+        case 'T': case 't':
+        case 'A': case 'a':
+        case 'H': case 'h':
+        case 'J': case 'j':
+        case 'N': case 'n':
+        case 'W': case 'w':
+        case 'Y': case 'y':
+            /* These all are targets of multi-character folds from code points
+             * that require UTF8 to express, so they can't match unless the
+             * target string is in UTF-8, so no action here is necessary, as
+             * regexec.c properly handles the general case for UTF-8 matching
+             * and multi-char folds */
+            break;
+        default:
+            /* Use deprecated warning to increase the chances of this being
+             * output */
+            ckWARN2reg_d(RExC_parse, "Perl folding rules are not up-to-date for 0x%02X; please use the perlbug utility to report;", cp);
+            break;
+    }
+}
+
 /* The names of properties whose definitions are not known at compile time are
  * stored in this SV, after a constant heading.  So if the length has been
  * changed since initialization, then there is a run-time definition. */
@@ -13294,7 +13408,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 
     if (skip_white) {
         RExC_parse = regpatws(pRExC_state, RExC_parse,
-                              FALSE /* means don't recognize comments */);
+                              FALSE /* means don't recognize comments */ );
     }
 
     if (UCHARAT(RExC_parse) == '^') {	/* Complement of range. */
@@ -13304,7 +13418,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
         RExC_naughty++;
         if (skip_white) {
             RExC_parse = regpatws(pRExC_state, RExC_parse,
-                                  FALSE /* means don't recognize comments */);
+                                  FALSE /* means don't recognize comments */ );
         }
     }
 
@@ -13342,7 +13456,7 @@ parseit:
 
         if (skip_white) {
             RExC_parse = regpatws(pRExC_state, RExC_parse,
-                                  FALSE /* means don't recognize comments */);
+                                  FALSE /* means don't recognize comments */ );
         }
 
         if  (UCHARAT(RExC_parse) == ']') {
@@ -13443,12 +13557,12 @@ parseit:
 		    e = strchr(RExC_parse++, '}');
                     if (!e)
                         vFAIL2("Missing right brace on \\%c{}", c);
-		    while (isSPACE(UCHARAT(RExC_parse)))
+		    while (isSPACE(*RExC_parse))
 		        RExC_parse++;
                     if (e == RExC_parse)
                         vFAIL2("Empty \\%c{}", c);
 		    n = e - RExC_parse;
-		    while (isSPACE(UCHARAT(RExC_parse + n - 1)))
+		    while (isSPACE(*(RExC_parse + n - 1)))
 		        n--;
 		}
 		else {
@@ -13457,7 +13571,6 @@ parseit:
 		}
 		if (!SIZE_ONLY) {
                     SV* invlist;
-                    char* formatted;
                     char* name;
 
 		    if (UCHARAT(RExC_parse) == '^') {
@@ -13468,7 +13581,7 @@ parseit:
                           * that bit) */
                          value ^= 'P' ^ 'p';
 
-			 while (isSPACE(UCHARAT(RExC_parse))) {
+			 while (isSPACE(*RExC_parse)) {
 			      RExC_parse++;
 			      n--;
 			 }
@@ -13478,14 +13591,13 @@ parseit:
                      * will have its name be <__NAME_i>.  The design is
                      * discussed in commit
                      * 2f833f5208e26b208886e51e09e2c072b5eabb46 */
-                    formatted = Perl_form(aTHX_
+                    name = savepv(Perl_form(aTHX_
                                           "%s%.*s%s\n",
                                           (FOLD) ? "__" : "",
                                           (int)n,
                                           RExC_parse,
                                           (FOLD) ? "_i" : ""
-                                );
-                    name = savepvn(formatted, strlen(formatted));
+                                ));
 
                     /* Look up the property name, and get its swash and
                      * inversion list, if the property is found  */
@@ -13499,6 +13611,9 @@ parseit:
                                              &swash_init_flags
                                             );
                     if (! swash || ! (invlist = _get_swash_invlist(swash))) {
+                        HV* curpkg = (IN_PERL_COMPILETIME)
+                                      ? PL_curstash
+                                      : CopSTASH(PL_curcop);
                         if (swash) {
                             SvREFCNT_dec_NN(swash);
                             swash = NULL;
@@ -13513,6 +13628,22 @@ parseit:
                             vFAIL2utf8f(
                                 "Property '%"UTF8f"' is unknown",
                                 UTF8fARG(UTF, n, name));
+                        }
+
+                        /* If the property name doesn't already have a package
+                         * name, add the current one to it so that it can be
+                         * referred to outside it. [perl #121777] */
+                        if (curpkg && ! instr(name, "::")) {
+                            char* pkgname = HvNAME(curpkg);
+                            if (strNE(pkgname, "main")) {
+                                char* full_name = Perl_form(aTHX_
+                                                            "%s::%s",
+                                                            pkgname,
+                                                            name);
+                                n = strlen(full_name);
+                                Safefree(name);
+                                name = savepvn(full_name, n);
+                            }
                         }
                         Perl_sv_catpvf(aTHX_ listsv, "%cutf8::%"UTF8f"\n",
                                         (value == 'p' ? '+' : '!'),
@@ -13753,6 +13884,11 @@ parseit:
                     ANYOF_POSIXL_ZERO(ret);
                 }
 
+                /* Coverity thinks it is possible for this to be negative; both
+                 * jhi and khw think it's not, but be safer */
+                assert(! (ANYOF_FLAGS(ret) & ANYOF_POSIXL)
+                       || (namedclass + ((namedclass % 2) ? -1 : 1)) >= 0);
+
                 /* See if it already matches the complement of this POSIX
                  * class */
                 if ((ANYOF_FLAGS(ret) & ANYOF_POSIXL)
@@ -13853,7 +13989,7 @@ parseit:
 
         if (skip_white) {
             RExC_parse = regpatws(pRExC_state, RExC_parse,
-                                FALSE /* means don't recognize comments */);
+                                FALSE /* means don't recognize comments */ );
         }
 
 	if (range) {
@@ -13963,7 +14099,7 @@ parseit:
                         AV* this_array;
                         STRLEN cp_count = utf8_length(foldbuf,
                                                       foldbuf + foldlen);
-                        SV* multi_fold = sv_2mortal(newSVpvn("", 0));
+                        SV* multi_fold = sv_2mortal(newSVpvs(""));
 
                         Perl_sv_catpvf(aTHX_ multi_fold, "\\x{%"UVXf"}", value);
 
@@ -14030,7 +14166,7 @@ parseit:
                 && ((prevvalue >= 'a' && value <= 'z')
                     || (prevvalue >= 'A' && value <= 'Z')))
             {
-                _invlist_intersection(this_range, PL_ASCII,
+                _invlist_intersection(this_range, PL_XPosix_ptrs[_CC_ASCII],
                                       &this_range);
 
                 /* Since this above only contains ascii, the intersection of it
@@ -14238,6 +14374,26 @@ parseit:
                     op = POSIXA;
                 }
             }
+            else if (prevvalue == 'A') {
+                if (value == 'Z'
+#ifdef EBCDIC
+                    && literal_endpoint == 2
+#endif
+                ) {
+                    arg = (FOLD) ? _CC_ALPHA : _CC_UPPER;
+                    op = POSIXA;
+                }
+            }
+            else if (prevvalue == 'a') {
+                if (value == 'z'
+#ifdef EBCDIC
+                    && literal_endpoint == 2
+#endif
+                ) {
+                    arg = (FOLD) ? _CC_ALPHA : _CC_LOWER;
+                    op = POSIXA;
+                }
+            }
         }
 
         /* Here, we have changed <op> away from its initial value iff we found
@@ -14333,18 +14489,7 @@ parseit:
                 /* This is a hash that for a particular fold gives all
                  * characters that are involved in it */
                 if (! PL_utf8_foldclosures) {
-
-                    /* If the folds haven't been read in, call a fold function
-                     * to force that */
-                    if (! PL_utf8_tofold) {
-                        U8 dummy[UTF8_MAXBYTES_CASE+1];
-
-                        /* This string is just a short named one above \xff */
-                        to_utf8_fold((U8*) HYPHEN_UTF8, dummy, NULL);
-                        assert(PL_utf8_tofold); /* Verify that worked */
-                    }
-                    PL_utf8_foldclosures
-                                      = _swash_inversion_hash(PL_utf8_tofold);
+                    _load_PL_utf8_foldclosures();
                 }
             }
 
@@ -14360,15 +14505,6 @@ parseit:
                     SV** listp;
 
                     if (j < 256) {
-
-                        /* We have the latin1 folding rules hard-coded here so
-                         * that an innocent-looking character class, like
-                         * /[ks]/i won't have to go out to disk to find the
-                         * possible matches.  XXX It would be better to
-                         * generate these via regen, in case a new version of
-                         * the Unicode standard adds new mappings, though that
-                         * is not really likely, and may be caught by the
-                         * default: case of the switch below. */
 
                         if (IS_IN_SOME_FOLD_L1(j)) {
 
@@ -14386,72 +14522,12 @@ parseit:
                             }
                         }
 
-                        if (HAS_NONLATIN1_FOLD_CLOSURE(j)
+                        if (HAS_NONLATIN1_SIMPLE_FOLD_CLOSURE(j)
                             && (! isASCII(j) || ! ASCII_FOLD_RESTRICTED))
                         {
-                            /* Certain Latin1 characters have matches outside
-                            * Latin1.  To get here, <j> is one of those
-                            * characters.   None of these matches is valid for
-                            * ASCII characters under /aa, which is why the 'if'
-                            * just above excludes those.  These matches only
-                            * happen when the target string is utf8.  The code
-                            * below adds the single fold closures for <j> to the
-                            * inversion list. */
-
-                            switch (j) {
-                                case 'k':
-                                case 'K':
-                                  *use_list =
-                                     add_cp_to_invlist(*use_list, KELVIN_SIGN);
-                                    break;
-                                case 's':
-                                case 'S':
-                                  *use_list = add_cp_to_invlist(*use_list,
-                                                    LATIN_SMALL_LETTER_LONG_S);
-                                    break;
-                                case MICRO_SIGN:
-                                  *use_list = add_cp_to_invlist(*use_list,
-                                                      GREEK_CAPITAL_LETTER_MU);
-                                  *use_list = add_cp_to_invlist(*use_list,
-                                                        GREEK_SMALL_LETTER_MU);
-                                    break;
-                                case LATIN_CAPITAL_LETTER_A_WITH_RING_ABOVE:
-                                case LATIN_SMALL_LETTER_A_WITH_RING_ABOVE:
-                                  *use_list =
-                                   add_cp_to_invlist(*use_list, ANGSTROM_SIGN);
-                                    break;
-                                case LATIN_SMALL_LETTER_Y_WITH_DIAERESIS:
-                                  *use_list = add_cp_to_invlist(*use_list,
-                                        LATIN_CAPITAL_LETTER_Y_WITH_DIAERESIS);
-                                    break;
-                                case LATIN_SMALL_LETTER_SHARP_S:
-                                  *use_list = add_cp_to_invlist(*use_list,
-                                                 LATIN_CAPITAL_LETTER_SHARP_S);
-                                    break;
-                                case 'F': case 'f':
-                                case 'I': case 'i':
-                                case 'L': case 'l':
-                                case 'T': case 't':
-                                case 'A': case 'a':
-                                case 'H': case 'h':
-                                case 'J': case 'j':
-                                case 'N': case 'n':
-                                case 'W': case 'w':
-                                case 'Y': case 'y':
-                                    /* These all are targets of multi-character
-                                     * folds from code points that require UTF8
-                                     * to express, so they can't match unless
-                                     * the target string is in UTF-8, so no
-                                     * action here is necessary, as regexec.c
-                                     * properly handles the general case for
-                                     * UTF-8 matching and multi-char folds */
-                                    break;
-                                default:
-                                    /* Use deprecated warning to increase the
-                                    * chances of this being output */
-                                    ckWARN2reg_d(RExC_parse, "Perl folding rules are not up-to-date for 0x%"UVXf"; please use the perlbug utility to report;", j);
-                                    break;
-                            }
+                            add_above_Latin1_folds(pRExC_state,
+                                                   (U8) j,
+                                                   use_list);
                         }
                         continue;
                     }
@@ -14480,9 +14556,8 @@ parseit:
                         for (k = 0; k <= av_tindex(list); k++) {
                             SV** c_p = av_fetch(list, k, FALSE);
                             UV c;
-                            if (c_p == NULL) {
-                                Perl_croak(aTHX_ "panic: invalid PL_utf8_foldclosures structure");
-                            }
+                            assert(c_p);
+
                             c = SvUV(*c_p);
 
                             /* /aa doesn't allow folds between ASCII and non- */
@@ -14662,7 +14737,8 @@ parseit:
      * at compile time.  Besides not inverting folded locale now, we can't
      * invert if there are things such as \w, which aren't known until runtime
      * */
-    if (invert
+    if (cp_list
+        && invert
         && ! (ANYOF_FLAGS(ret) & (ANYOF_LOCALE_FLAGS))
 	&& ! depends_list
 	&& ! HAS_NONLOCALE_RUNTIME_PROPERTY_DEFINITION)
@@ -14717,7 +14793,7 @@ parseit:
            /* We don't optimize if we are supposed to make sure all non-Unicode
             * code points raise a warning, as only ANYOF nodes have this check.
             * */
-        && ! ((ANYOF_FLAGS(ret) | ANYOF_WARN_SUPER) && ALWAYS_WARN_SUPER))
+        && ! ((ANYOF_FLAGS(ret) & ANYOF_WARN_SUPER) && ALWAYS_WARN_SUPER))
     {
         UV start, end;
         U8 op = END;  /* The optimzation node-type */
@@ -14920,6 +14996,7 @@ S_set_ANYOF_arg(pTHX_ RExC_state_t* const pRExC_state,
 	av_store(av, 0, (runtime_defns)
 			? SvREFCNT_inc(runtime_defns) : &PL_sv_undef);
 	if (swash) {
+	    assert(cp_list);
 	    av_store(av, 1, swash);
 	    SvREFCNT_dec_NN(cp_list);
 	}
@@ -14948,35 +15025,34 @@ S_set_ANYOF_arg(pTHX_ RExC_state_t* const pRExC_state,
 
 /* reg_skipcomment()
 
-   Absorbs an /x style # comments from the input stream.
-   Returns true if there is more text remaining in the stream.
-   Will set the REG_RUN_ON_COMMENT_SEEN flag if the comment
-   terminates the pattern without including a newline.
+   Absorbs an /x style # comment from the input stream,
+   returning a pointer to the first character beyond the comment, or if the
+   comment terminates the pattern without anything following it, this returns
+   one past the final character of the pattern (in other words, RExC_end) and
+   sets the REG_RUN_ON_COMMENT_SEEN flag.
 
-   Note its the callers responsibility to ensure that we are
+   Note it's the callers responsibility to ensure that we are
    actually in /x mode
 
 */
 
-STATIC bool
-S_reg_skipcomment(pTHX_ RExC_state_t *pRExC_state)
+PERL_STATIC_INLINE char*
+S_reg_skipcomment(RExC_state_t *pRExC_state, char* p)
 {
-    bool ended = 0;
-
     PERL_ARGS_ASSERT_REG_SKIPCOMMENT;
 
-    while (RExC_parse < RExC_end)
-        if (*RExC_parse++ == '\n') {
-            ended = 1;
-            break;
+    assert(*p = '#');
+
+    while (p < RExC_end) {
+        if (*(++p) == '\n') {
+            return p+1;
         }
-    if (!ended) {
-        /* we ran off the end of the pattern without ending
-           the comment, so we have to add an \n when wrapping */
-        RExC_seen |= REG_RUN_ON_COMMENT_SEEN;
-        return 0;
-    } else
-        return 1;
+    }
+
+    /* we ran off the end of the pattern without ending the comment, so we have
+     * to add an \n when wrapping */
+    RExC_seen |= REG_RUN_ON_COMMENT_SEEN;
+    return p;
 }
 
 /* nextchar()
@@ -15014,16 +15090,14 @@ S_nextchar(pTHX_ RExC_state_t *pRExC_state)
 	    continue;
 	}
 	if (RExC_flags & RXf_PMf_EXTENDED) {
-	    if (isSPACE(*RExC_parse)) {
-		RExC_parse++;
-		continue;
-	    }
-	    else if (*RExC_parse == '#') {
-	        if ( reg_skipcomment( pRExC_state ) )
-	            continue;
-	    }
+            char * p = regpatws(pRExC_state, RExC_parse,
+                                          TRUE); /* means recognize comments */
+            if (p != RExC_parse) {
+                RExC_parse = p;
+                continue;
+            }
 	}
-	return retval;
+        return retval;
     }
 }
 
@@ -15047,7 +15121,7 @@ S_reg_node(pTHX_ RExC_state_t *pRExC_state, U8 op)
     }
     if (RExC_emit >= RExC_emit_bound)
         Perl_croak(aTHX_ "panic: reg_node overrun trying to emit %d, %p>=%p",
-		   op, RExC_emit, RExC_emit_bound);
+		   op, (void*)RExC_emit, (void*)RExC_emit_bound);
 
     NODE_ALIGN_FILL(ret);
     ptr = ret;
@@ -15104,7 +15178,7 @@ S_reganode(pTHX_ RExC_state_t *pRExC_state, U8 op, U32 arg)
     }
     if (RExC_emit >= RExC_emit_bound)
         Perl_croak(aTHX_ "panic: reg_node overrun trying to emit %d, %p>=%p",
-		   op, RExC_emit, RExC_emit_bound);
+		   op, (void*)RExC_emit, (void*)RExC_emit_bound);
 
     NODE_ALIGN_FILL(ret);
     ptr = ret;
@@ -15158,6 +15232,7 @@ S_reginsert(pTHX_ RExC_state_t *pRExC_state, U8 op, regnode *opnd, U32 depth)
     GET_RE_DEBUG_FLAGS_DECL;
 
     PERL_ARGS_ASSERT_REGINSERT;
+    PERL_UNUSED_CONTEXT;
     PERL_UNUSED_ARG(depth);
 /* (PL_regkind[(U8)op] == CURLY ? EXTRA_STEP_2ARGS : 0); */
     DEBUG_PARSE_FMT("inst"," - %s",PL_reg_name[op]);
@@ -16129,7 +16204,16 @@ Perl_regfree_internal(pTHX_ REGEXP * const rx)
                         PerlMemShared_free(aho->fail);
 			 /* do this last!!!! */
                         PerlMemShared_free(ri->data->data[n]);
-                        PerlMemShared_free(ri->regstclass);
+                        /* we should only ever get called once, so
+                         * assert as much, and also guard the free
+                         * which /might/ happen twice. At the least
+                         * it will make code anlyzers happy and it
+                         * doesn't cost much. - Yves */
+                        assert(ri->regstclass);
+                        if (ri->regstclass) {
+                            PerlMemShared_free(ri->regstclass);
+                            ri->regstclass = 0;
+                        }
                     }
                 }
                 break;
@@ -16343,12 +16427,12 @@ Perl_regdupe_internal(pTHX_ REGEXP * const rx, CLONE_PARAMS *param)
 		 * when the corresponding reg_ac_data struct is freed.
 		 */
 		reti->regstclass= ri->regstclass;
-		/* Fall through */
+		/* FALLTHROUGH */
 	    case 't':
 		OP_REFCNT_LOCK;
 		((reg_trie_data*)ri->data->data[i])->refcount++;
 		OP_REFCNT_UNLOCK;
-		/* Fall through */
+		/* FALLTHROUGH */
 	    case 'l':
 	    case 'L':
 		d->data[i] = ri->data->data[i];
@@ -16609,6 +16693,7 @@ S_dumpuntil(pTHX_ const regexp *r, const regnode *start, const regnode *node,
         last= plast;
 
     while (PL_regkind[op] != END && (!last || node < last)) {
+        assert(node);
 	/* While that wasn't END last time... */
 	NODE_ALIGN(node);
 	op = OP(node);

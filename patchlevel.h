@@ -15,7 +15,7 @@
 
 #define PERL_REVISION	5		/* age */
 #define PERL_VERSION	21		/* epoch */
-#define PERL_SUBVERSION	0		/* generation */
+#define PERL_SUBVERSION	1		/* generation */
 
 /* The following numbers describe the earliest compatible version of
    Perl ("compatibility" here being defined as sufficient binary/API
@@ -36,7 +36,7 @@
 */
 #define PERL_API_REVISION	5
 #define PERL_API_VERSION	21
-#define PERL_API_SUBVERSION	0
+#define PERL_API_SUBVERSION	1
 /*
    XXX Note:  The selection of non-default Configure options, such
    as -Duselonglong may invalidate these settings.  Currently, Configure
@@ -144,7 +144,7 @@ static const char * const local_patches[] = {
 
 /* Initial space prevents this variable from being inserted in config.sh  */
 #  define	LOCAL_PATCH_COUNT	\
-	((int)(sizeof(local_patches)/sizeof(local_patches[0])-2))
+	((int)(C_ARRAY_LENGTH(local_patches)-2))
 
 /* the old terms of reference, add them only when explicitly included */
 #define PATCHLEVEL		PERL_VERSION

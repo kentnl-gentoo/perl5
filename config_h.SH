@@ -281,13 +281,13 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 
 /* HAS_MBSTOWCS:
  *	This symbol, if defined, indicates that the mbstowcs routine is
- *	available to covert a multibyte string into a wide character string.
+ *	available to convert a multibyte string into a wide character string.
  */
 #$d_mbstowcs	HAS_MBSTOWCS		/**/
 
 /* HAS_MBTOWC:
  *	This symbol, if defined, indicates that the mbtowc routine is available
- *	to covert a multibyte to a wide character.
+ *	to convert a multibyte to a wide character.
  */
 #$d_mbtowc HAS_MBTOWC		/**/
 
@@ -649,7 +649,7 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 
 /* HAS_WCTOMB:
  *	This symbol, if defined, indicates that the wctomb routine is available
- *	to covert a wide character to a multibyte.
+ *	to convert a wide character to a multibyte.
  */
 #$d_wctomb HAS_WCTOMB		/**/
 
@@ -978,17 +978,8 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	This symbol holds the hexadecimal constant defined in byteorder,
  *	in a UV, i.e. 0x1234 or 0x4321 or 0x12345678, etc...
  *	If the compiler supports cross-compiling or multiple-architecture
- *	binaries (e.g. on NeXT systems), use compiler-defined macros to
+ *	binaries, use compiler-defined macros to
  *	determine the byte order.
- *	On NeXT 3.2 (and greater), you can build "Fat" Multiple Architecture
- *	Binaries (MAB) on either big endian or little endian machines.
- *	The endian-ness is available at compile-time.  This only matters
- *	for perl, where the config.h can be generated and installed on
- *	one system, and used by a different architecture to build an
- *	extension.  Older versions of NeXT that might not have
- *	defined either *_ENDIAN__ were all on Motorola 680x0 series,
- *	so the default case (for NeXT) is big endian to catch them.
- *	This might matter for NeXT 3.0.
  */
 #if defined(MULTIARCH)
 #  ifdef __LITTLE_ENDIAN__
@@ -1010,12 +1001,9 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #      endif
 #    endif
 #  endif
-#  if !defined(BYTEORDER) && (defined(NeXT) || defined(__NeXT__))
-#    define BYTEORDER 0x4321
-#  endif
 #else
 #define BYTEORDER 0x$byteorder	/* large digits for MSB */
-#endif /* NeXT */
+#endif
 
 /* CHARBITS:
  *	This symbol contains the size of a char, so that the C preprocessor
@@ -2673,14 +2661,7 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	This symbol, if defined, indicates that this system uses
  *	EBCDIC encoding.
  */
-/* BOOTSTRAP_CHARSET:
- *	This symbol, if defined, indicates that this system needs
- *	converting various files to the native character set before
- *	bringing up perl on a system that has a non-ASCII character
- *	set and no working perl.
- */
 #$ebcdic	EBCDIC 		/**/
-#$bootstrap_charset	BOOTSTRAP_CHARSET	/**/
 
 /* Fpos_t:
  *	This symbol holds the type used to declare file positions in libc.
@@ -3129,7 +3110,7 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	/bin/pdksh, /bin/ash, /bin/bash, or even something such as
  *	D:/bin/sh.exe.
  */
-#define SH_PATH "$sh"  /**/
+#define SH_PATH "$targetsh"  /**/
 
 /* SIG_NAME:
  *	This symbol contains a list of signal names in order of
@@ -3326,6 +3307,26 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_vendorlib PERL_VENDORLIB_EXP "$vendorlibexp"		/**/
 #$d_vendorlib PERL_VENDORLIB_STEM "$vendorlib_stem"		/**/
+
+/* HAS_BACKTRACE:
+ *	This symbol, if defined, indicates that the backtrace() routine is
+ *	available to get a stack trace.  The <execinfo.h> header must be
+ *	included to use this routine.
+ */
+#$d_backtrace HAS_BACKTRACE	/**/
+
+/* HAS_DLADDR:
+ *	This symbol, if defined, indicates that the dladdr() routine is
+ *	available to get a stack trace.  The <execinfo.h> header must be
+ *	included to use this routine.
+ */
+#$d_dladdr HAS_DLADDR	/**/
+
+/* I_EXECINFO:
+ *	This symbol, if defined, indicates to the C program that it should
+ *	include <execinfo.h> for backtrace() support.
+ */
+#$i_execinfo I_EXECINFO		/**/
 
 /* I_TERMIO:
  *	This symbol, if defined, indicates that the program should include
@@ -3843,6 +3844,11 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_off64_t	HAS_OFF64_T    		/**/
 
+/* HAS_PTRDIFF_T:
+ *	This symbol will be defined if the C compiler supports ptrdiff_t.
+ */
+#$d_ptrdiff_t	HAS_PTRDIFF_T    		/**/
+
 /* HAS_PRCTL:
  *	This symbol, if defined, indicates that the prctl routine is
  *	available to set process title.
@@ -4173,6 +4179,18 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_ustat HAS_USTAT		/**/
 
+/* HAS_WCSCMP:
+ *	This symbol, if defined, indicates that the wcscmp routine is
+ *	available to compare two wide character strings.
+ */
+#$d_wcscmp HAS_WCSCMP	/**/
+
+/* HAS_WCSXFRM:
+ *	This symbol, if defined, indicates that the wcsxfrm routine is
+ *	available to tranform a wide character string for wcscmp().
+ */
+#$d_wcsxfrm HAS_WCSXFRM	/**/
+
 /* HAS_WRITEV:
  *	This symbol, if defined, indicates that the writev routine is
  *	available to do scatter writes.
@@ -4206,6 +4224,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	could be included by the C program to get the assert() macro.
  */
 #$i_assert	I_ASSERT		/**/
+
+/* I_BFD:
+ *	This symbol, if defined, indicates that <bfd.h> exists and
+ *	can be included.
+ */
+#$i_bfd	I_BFD		/**/
 
 /* I_CRYPT:
  *	This symbol, if defined, indicates that <crypt.h> exists and
@@ -4400,12 +4424,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #$d_PRIgldbl PERL_PRIgldbl	$sPRIgldbl	/**/
 #$d_PRIeldbl PERL_PRIeldbl	$sPRIeldbl	/**/
 #$d_SCNfldbl PERL_SCNfldbl	$sSCNfldbl	/**/
-
-/* PERL_MAD:
- *	This symbol, if defined, indicates that the Misc Attribution
- *	Declaration code should be conditionally compiled.
- */
-#$mad	PERL_MAD		/**/
 
 /* NEED_VA_COPY:
  *	This symbol, if defined, indicates that the system stores
@@ -4671,6 +4689,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #ifndef USE_64_BIT_ALL
 #$use64bitall	USE_64_BIT_ALL		/**/
 #endif
+
+/* USE_CBACKTRACE:
+ *	This symbol, if defined, indicates that Perl should
+ *	be built with support for backtrace.
+ */
+#$usecbacktrace USE_CBACKTRACE		/**/
 
 /* USE_DTRACE:
  *	This symbol, if defined, indicates that Perl should

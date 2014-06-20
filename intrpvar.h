@@ -109,9 +109,6 @@ PERLVAR(I, mainstack,	AV *)		/* the stack when nothing funny is
 
 /* memory management */
 PERLVAR(I, sv_count,	IV)		/* how many SV* are currently allocated */
-PERLVAR(I, sv_objcount,	IV)		/* DEPRECATED AND UNMAINTAINED.
-                                         * Will be removed in Perl 5.22.
-                                         * Used to be: how many objects are currently allocated. */
 
 PERLVAR(I, sv_root,	SV *)		/* storage for SVs belonging to interp */
 PERLVAR(I, sv_arenaroot, SV *)		/* list of areas for garbage collection */
@@ -174,7 +171,7 @@ PERLVAR(I, statgv,	GV *)
 PERLVARI(I, statname,	SV *,	NULL)
 
 #ifdef HAS_TIMES
-/* Will be removed soon after v5.21.0. See RT #121351 */
+/* Will be removed soon after v5.21.1. See RT #121351 */
 PERLVAR(I, timesbuf,	struct tms)
 #endif
 
@@ -568,7 +565,7 @@ PERLVARI(I, perl_destruct_level, signed char,	0)
 
 #ifdef USE_LOCALE_NUMERIC
 
-PERLVARI(I, numeric_standard, bool, TRUE)
+PERLVARI(I, numeric_standard, int, TRUE)
 					/* Assume simple numerics */
 PERLVARI(I, numeric_local, bool, TRUE)
 					/* Assume local numerics */
@@ -736,7 +733,7 @@ PERLVAR(I, debug_pad,	struct perl_debug_pad)	/* always needed because of the re 
 /* Hook for File::Glob */
 PERLVARI(I, globhook,	globhook_t, NULL)
 
-/* The last unconditional member of the interpreter structure when 5.21.0 was
+/* The last unconditional member of the interpreter structure when 5.21.1 was
    released. The offset of the end of this is baked into a global variable in 
    any shared perl library which will allow a sanity test in future perl
    releases.  */
@@ -760,11 +757,6 @@ PERLVAR(I, memory_debug_header, struct perl_memory_debug_header)
 PERLVARI(I, dumper_fd,	int,	-1)
 #endif
 
-#ifdef PERL_MAD
-PERLVARI(I, madskills,	bool,	FALSE)	/* preserve all syntactic info */
-					/* (MAD = Misc Attribute Decoration) */
-PERLVARI(I, xmlfp,	PerlIO *, NULL)
-#endif
 
 #ifdef DEBUG_LEAKING_SCALARS
 PERLVARI(I, sv_serial,	U32,	0)	/* SV serial number, used in sv.c */

@@ -696,6 +696,7 @@ PP(pp_formline)
 
 	case FF_LINESNGL: /* process ^*  */
 	    chopspace = 0;
+            /* FALLTHROUGH */
 
 	case FF_LINEGLOB: /* process @*  */
 	    {
@@ -1184,25 +1185,33 @@ PP(pp_flop)
 	SvGETMAGIC(right);
 
 	if (RANGE_IS_NUMERIC(left,right)) {
-	    IV i, j;
-	    IV max;
+	    IV i, j, n;
 	    if ((SvOK(left) && !SvIOK(left) && SvNV_nomg(left) < IV_MIN) ||
 		(SvOK(right) && (SvIOK(right)
 				 ? SvIsUV(right) && SvUV(right) > IV_MAX
 				 : SvNV_nomg(right) > IV_MAX)))
 		DIE(aTHX_ "Range iterator outside integer range");
 	    i = SvIV_nomg(left);
-	    max = SvIV_nomg(right);
-	    if (max >= i) {
-		j = max - i + 1;
-		if (j > SSize_t_MAX)
-		    Perl_croak(aTHX_ "Out of memory during list extend");
-		EXTEND_MORTAL(j);
-		EXTEND(SP, j);
+	    j = SvIV_nomg(right);
+	    if (j >= i) {
+                /* Dance carefully around signed max. */
+                bool overflow = (i <= 0 && j > SSize_t_MAX + i - 1);
+                if (!overflow) {
+                    n = j - i + 1;
+                    /* The wraparound of signed integers is undefined
+                     * behavior, but here we aim for count >=1, and
+                     * negative count is just wrong. */
+                    if (n < 1)
+                        overflow = TRUE;
+                }
+                if (overflow)
+                    Perl_croak(aTHX_ "Out of memory during list extend");
+		EXTEND_MORTAL(n);
+		EXTEND(SP, n);
 	    }
 	    else
-		j = 0;
-	    while (j--) {
+		n = 0;
+	    while (n--) {
 		SV * const sv = sv_2mortal(newSViv(i++));
 		PUSHs(sv);
 	    }
@@ -1348,9 +1357,8 @@ Perl_block_gimme(pTHX)
 	return G_ARRAY;
     default:
 	Perl_croak(aTHX_ "panic: bad gimme: %d\n", cxstack[cxix].blk_gimme);
-	assert(0); /* NOTREACHED */
-	return 0;
     }
+    NOT_REACHED; /* NOTREACHED */
 }
 
 I32
@@ -1387,6 +1395,9 @@ S_dopoptosub_at(pTHX_ const PERL_CONTEXT *cxstk, I32 startingblock)
     I32 i;
 
     PERL_ARGS_ASSERT_DOPOPTOSUB_AT;
+#ifndef DEBUGGING
+    PERL_UNUSED_CONTEXT;
+#endif
 
     for (i = startingblock; i >= 0; i--) {
 	const PERL_CONTEXT * const cx = &cxstk[i];
@@ -1400,6 +1411,7 @@ S_dopoptosub_at(pTHX_ const PERL_CONTEXT *cxstk, I32 startingblock)
              * code block. Hide this faked entry from the world. */
             if (cx->cx_type & CXp_SUB_RE_FAKE)
                 continue;
+            /* FALLTHROUGH */
 	case CXt_EVAL:
 	case CXt_FORMAT:
 	    DEBUG_l( Perl_deb(aTHX_ "(dopoptosub_at(): found sub at cx=%ld)\n", (long)i));
@@ -1701,6 +1713,9 @@ PP(pp_xor)
 }
 
 /*
+
+=head1 CV Manipulation Functions
+
 =for apidoc caller_cx
 
 The XSUB-writer's equivalent of L<caller()|perlfunc/caller>.  The
@@ -3033,7 +3048,7 @@ PP(pp_goto) /* also pp_dump */
 		    gotoprobe = CvROOT(cx->blk_sub.cv);
 		    break;
 		}
-		/* FALL THROUGH */
+		/* FALLTHROUGH */
 	    case CXt_FORMAT:
 	    case CXt_NULL:
 		DIE(aTHX_ "Can't \"goto\" out of a pseudo block");
@@ -3088,7 +3103,7 @@ PP(pp_goto) /* also pp_dump */
 	    I32 oldsave;
 
 	    if (ix < 0)
-		ix = 0;
+		DIE(aTHX_ "panic: docatch: illegal ix=%ld", (long)ix);
 	    dounwind(ix);
 	    TOPBLOCK(cx);
 	    oldsave = PL_scopestack[PL_scopestack_ix];
@@ -3151,13 +3166,7 @@ PP(pp_exit)
 #endif
     }
     PL_exit_flags |= PERL_EXIT_EXPECTED;
-#ifdef PERL_MAD
-    /* KLUDGE: disable exit 0 in BEGIN blocks when we're just compiling */
-    if (anum || !(PL_minus_c && PL_madskills))
-	my_exit(anum);
-#else
     my_exit(anum);
-#endif
     PUSHs(&PL_sv_undef);
     RETURN;
 }
@@ -3233,7 +3242,7 @@ S_docatch(pTHX_ OP *o)
 	    PL_restartop = 0;
 	    goto redo_body;
 	}
-	/* FALL THROUGH */
+	/* FALLTHROUGH */
     default:
 	JMPENV_POP;
 	PL_op = oldop;
@@ -3392,8 +3401,7 @@ S_doeval(pTHX_ int gimme, CV* outside, U32 seq, HV *hh)
     PL_op = NULL; /* avoid PL_op and PL_curpad referring to different CVs */
 
 
-    if (!PL_madskills)
-	SAVEMORTALIZESV(evalcv);	/* must remain until end of current statement */
+    SAVEMORTALIZESV(evalcv);	/* must remain until end of current statement */
 
     /* make sure we compile in the right package */
 
@@ -3411,10 +3419,6 @@ S_doeval(pTHX_ int gimme, CV* outside, U32 seq, HV *hh)
     PL_unitcheckav = newAV();
     SAVEFREESV(PL_unitcheckav);
 
-#ifdef PERL_MAD
-    SAVEBOOL(PL_madskills);
-    PL_madskills = 0;
-#endif
 
     ENTER_with_name("evalcomp");
     SAVESPTR(PL_compcv);
@@ -3636,7 +3640,7 @@ S_doopen_pm(pTHX_ SV *name)
 	Stat_t pmcstat;
 
 	SvSetSV_nosteal(pmcsv,name);
-	sv_catpvn(pmcsv, "c", 1);
+	sv_catpvs(pmcsv, "c");
 
 	if (PerlLIO_stat(SvPV_nolen_const(pmcsv), &pmcstat) >= 0)
 	    return check_type_and_open(pmcsv);
@@ -3949,11 +3953,11 @@ PP(pp_require)
 		    filter_has_file = 0;
 		    filter_cache = NULL;
 		    if (filter_state) {
-			SvREFCNT_dec(filter_state);
+			SvREFCNT_dec_NN(filter_state);
 			filter_state = NULL;
 		    }
 		    if (filter_sub) {
-			SvREFCNT_dec(filter_sub);
+			SvREFCNT_dec_NN(filter_sub);
 			filter_sub = NULL;
 		    }
 		}
@@ -4065,7 +4069,7 @@ PP(pp_require)
 			sv_catpv(msg, " (you may need to install the ");
 			for (c = name; c < e; c++) {
 			    if (*c == '/') {
-				sv_catpvn(msg, "::", 2);
+				sv_catpvs(msg, "::");
 			    }
 			    else {
 				sv_catpvn(msg, c, 1);
@@ -4334,8 +4338,8 @@ PP(pp_leaveeval)
 			SvPVX_const(namesv),
                         SvUTF8(namesv) ? -(I32)SvCUR(namesv) : (I32)SvCUR(namesv),
 			G_DISCARD);
-	retop = Perl_die(aTHX_ "%"SVf" did not return a true value",
-			       SVfARG(namesv));
+	Perl_die(aTHX_ "%"SVf" did not return a true value", SVfARG(namesv));
+        NOT_REACHED; /* NOTREACHED */
 	/* die_unwind() did LEAVE, or we won't be here */
     }
     else {
@@ -5213,7 +5217,7 @@ S_doparseform(pTHX_ SV *sv)
 		s++;
 	    }
 	    noblank = TRUE;
-	    /* FALL THROUGH */
+	    /* FALLTHROUGH */
 	case ' ': case '\t':
 	    skipspaces++;
 	    continue;

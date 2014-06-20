@@ -282,47 +282,68 @@ END_EXTERN_C
 #endif
 #endif
 
-#ifdef HAS_LOCALECONV
+#ifndef HAS_LOCALECONV
+#   define localeconv() not_here("localeconv")
+#else
 struct lconv_offset {
     const char *name;
     size_t offset;
 };
 
 const struct lconv_offset lconv_strings[] = {
-    {"decimal_point",     offsetof(struct lconv, decimal_point)},
-    {"thousands_sep",     offsetof(struct lconv, thousands_sep)},
-#ifndef NO_LOCALECONV_GROUPING
-    {"grouping",          offsetof(struct lconv, grouping)},
+#ifdef USE_LOCALE_NUMERIC
+    {"decimal_point",     STRUCT_OFFSET(struct lconv, decimal_point)},
+    {"thousands_sep",     STRUCT_OFFSET(struct lconv, thousands_sep)},
+#  ifndef NO_LOCALECONV_GROUPING
+    {"grouping",          STRUCT_OFFSET(struct lconv, grouping)},
+#  endif
 #endif
-    {"int_curr_symbol",   offsetof(struct lconv, int_curr_symbol)},
-    {"currency_symbol",   offsetof(struct lconv, currency_symbol)},
-    {"mon_decimal_point", offsetof(struct lconv, mon_decimal_point)},
-#ifndef NO_LOCALECONV_MON_THOUSANDS_SEP
-    {"mon_thousands_sep", offsetof(struct lconv, mon_thousands_sep)},
+#ifdef USE_LOCALE_MONETARY
+    {"int_curr_symbol",   STRUCT_OFFSET(struct lconv, int_curr_symbol)},
+    {"currency_symbol",   STRUCT_OFFSET(struct lconv, currency_symbol)},
+    {"mon_decimal_point", STRUCT_OFFSET(struct lconv, mon_decimal_point)},
+#  ifndef NO_LOCALECONV_MON_THOUSANDS_SEP
+    {"mon_thousands_sep", STRUCT_OFFSET(struct lconv, mon_thousands_sep)},
+#  endif
+#  ifndef NO_LOCALECONV_MON_GROUPING
+    {"mon_grouping",      STRUCT_OFFSET(struct lconv, mon_grouping)},
+#  endif
+    {"positive_sign",     STRUCT_OFFSET(struct lconv, positive_sign)},
+    {"negative_sign",     STRUCT_OFFSET(struct lconv, negative_sign)},
 #endif
-#ifndef NO_LOCALECONV_MON_GROUPING
-    {"mon_grouping",      offsetof(struct lconv, mon_grouping)},
-#endif
-    {"positive_sign",     offsetof(struct lconv, positive_sign)},
-    {"negative_sign",     offsetof(struct lconv, negative_sign)},
     {NULL, 0}
 };
+
+#ifdef USE_LOCALE_NUMERIC
+
+/* The Linux man pages say these are the field names for the structure
+ * components that are LC_NUMERIC; the rest being LC_MONETARY */
+#   define isLC_NUMERIC_STRING(name) (strcmp(name, "decimal_point")     \
+                                      || strcmp(name, "thousands_sep")  \
+                                                                        \
+                                      /* There should be no harm done   \
+                                       * checking for this, even if     \
+                                       * NO_LOCALECONV_GROUPING */      \
+                                      || strcmp(name, "grouping"))
+#else
+#   define isLC_NUMERIC_STRING(name) (0)
+#endif
 
 const struct lconv_offset lconv_integers[] = {
-    {"int_frac_digits",   offsetof(struct lconv, int_frac_digits)},
-    {"frac_digits",       offsetof(struct lconv, frac_digits)},
-    {"p_cs_precedes",     offsetof(struct lconv, p_cs_precedes)},
-    {"p_sep_by_space",    offsetof(struct lconv, p_sep_by_space)},
-    {"n_cs_precedes",     offsetof(struct lconv, n_cs_precedes)},
-    {"n_sep_by_space",    offsetof(struct lconv, n_sep_by_space)},
-    {"p_sign_posn",       offsetof(struct lconv, p_sign_posn)},
-    {"n_sign_posn",       offsetof(struct lconv, n_sign_posn)},
+#ifdef USE_LOCALE_MONETARY
+    {"int_frac_digits",   STRUCT_OFFSET(struct lconv, int_frac_digits)},
+    {"frac_digits",       STRUCT_OFFSET(struct lconv, frac_digits)},
+    {"p_cs_precedes",     STRUCT_OFFSET(struct lconv, p_cs_precedes)},
+    {"p_sep_by_space",    STRUCT_OFFSET(struct lconv, p_sep_by_space)},
+    {"n_cs_precedes",     STRUCT_OFFSET(struct lconv, n_cs_precedes)},
+    {"n_sep_by_space",    STRUCT_OFFSET(struct lconv, n_sep_by_space)},
+    {"p_sign_posn",       STRUCT_OFFSET(struct lconv, p_sign_posn)},
+    {"n_sign_posn",       STRUCT_OFFSET(struct lconv, n_sign_posn)},
+#endif
     {NULL, 0}
 };
 
-#else
-#define localeconv() not_here("localeconv")
-#endif
+#endif /* HAS_LOCALECONV */
 
 #ifdef HAS_LONG_DOUBLE
 #  if LONG_DOUBLESIZE > NVSIZE
@@ -899,8 +920,15 @@ open(filename, flags = O_RDONLY, mode = 0666)
 HV *
 localeconv()
     CODE:
-#ifdef HAS_LOCALECONV
+#ifndef HAS_LOCALECONV
+	localeconv(); /* A stub to call not_here(). */
+#else
 	struct lconv *lcbuf;
+
+        /* localeconv() deals with both LC_NUMERIC and LC_MONETARY, but
+         * LC_MONETARY is already in the correct locale */
+        STORE_NUMERIC_STANDARD_FORCE_LOCAL();
+
 	RETVAL = newHV();
 	sv_2mortal((SV*)RETVAL);
 	if ((lcbuf = localeconv())) {
@@ -909,11 +937,37 @@ localeconv()
 	    const char *ptr = (const char *) lcbuf;
 
 	    do {
+                /* This string may be controlled by either LC_NUMERIC, or
+                 * LC_MONETARY */
+                bool is_utf8_locale
+#if defined(USE_LOCALE_NUMERIC) && defined(USE_LOCALE_MONETARY)
+                 = _is_cur_LC_category_utf8((isLC_NUMERIC_STRING(strings->name))
+                                             ? LC_NUMERIC
+                                             : LC_MONETARY);
+#elif defined(USE_LOCALE_NUMERIC)
+                 = _is_cur_LC_category_utf8(LC_NUMERIC);
+#elif defined(USE_LOCALE_MONETARY)
+                 = _is_cur_LC_category_utf8(LC_MONETARY);
+#else
+                 = FALSE;
+#endif
+
 		const char *value = *((const char **)(ptr + strings->offset));
 
-		if (value && *value)
-		    (void) hv_store(RETVAL, strings->name, strlen(strings->name),
-				    newSVpv(value, 0), 0);
+		if (value && *value) {
+		    (void) hv_store(RETVAL,
+                        strings->name,
+                        strlen(strings->name),
+                        newSVpvn_utf8(value,
+                                      strlen(value),
+
+                                      /* We mark it as UTF-8 if a utf8 locale
+                                       * and is valid, non-ascii UTF-8 */
+                                      is_utf8_locale
+                                        && ! is_ascii_string((U8 *) value, 0)
+                                        && is_utf8_string((U8 *) value, 0)),
+                        0);
+                  }
 	    } while ((++strings)->name);
 
 	    do {
@@ -924,16 +978,15 @@ localeconv()
 				    strlen(integers->name), newSViv(value), 0);
 	    } while ((++integers)->name);
 	}
-#else
-	localeconv(); /* A stub to call not_here(). */
-#endif
+        RESTORE_NUMERIC_STANDARD();
+#endif  /* HAS_LOCALECONV */
     OUTPUT:
 	RETVAL
 
 char *
 setlocale(category, locale = 0)
 	int		category
-	char *		locale
+	const char *		locale
     PREINIT:
 	char *		retval;
     CODE:
@@ -1422,8 +1475,14 @@ tmpnam()
 	STRLEN i;
 	int len;
     CODE:
-	RETVAL = newSVpvn("", 0);
+	RETVAL = newSVpvs("");
 	SvGROW(RETVAL, L_tmpnam);
+	/* Yes, we know tmpnam() is bad.  So bad that some compilers
+	 * and linkers warn against using it.  But it is here for
+	 * completeness.  POSIX.pod warns against using it.
+	 *
+	 * Then again, maybe this should be removed at some point.
+	 * No point in enabling dangerous interfaces. */
 	len = strlen(tmpnam(SvPV(RETVAL, i)));
 	SvCUR_set(RETVAL, len);
     OUTPUT:
@@ -1537,11 +1596,13 @@ strxfrm(src)
 	{
           STRLEN srclen;
           STRLEN dstlen;
+          STRLEN buflen;
           char *p = SvPV(src,srclen);
           srclen++;
-          ST(0) = sv_2mortal(newSV(srclen*4+1));
-          dstlen = strxfrm(SvPVX(ST(0)), p, (size_t)srclen);
-          if (dstlen > srclen) {
+          buflen = srclen * 4 + 1;
+          ST(0) = sv_2mortal(newSV(buflen));
+          dstlen = strxfrm(SvPVX(ST(0)), p, (size_t)buflen);
+          if (dstlen >= buflen) {
               dstlen++;
               SvGROW(ST(0), dstlen);
               strxfrm(SvPVX(ST(0)), p, (size_t)dstlen);
@@ -1678,6 +1739,7 @@ strftime(fmt, sec, min, hour, mday, mon, year, wday = -1, yday = -1, isdst = -1)
     CODE:
 	{
 	    char *buf;
+            SV *sv;
 
             /* allowing user-supplied (rather than literal) formats
              * is normally frowned upon as a potential security risk;
@@ -1685,14 +1747,30 @@ strftime(fmt, sec, min, hour, mday, mon, year, wday = -1, yday = -1, isdst = -1)
             GCC_DIAG_IGNORE(-Wformat-nonliteral);
 	    buf = my_strftime(SvPV_nolen(fmt), sec, min, hour, mday, mon, year, wday, yday, isdst);
             GCC_DIAG_RESTORE;
+            sv = sv_newmortal();
 	    if (buf) {
-		SV *const sv = sv_newmortal();
-		sv_usepvn_flags(sv, buf, strlen(buf), SV_HAS_TRAILING_NUL);
-		if (SvUTF8(fmt)) {
+                STRLEN len = strlen(buf);
+		sv_usepvn_flags(sv, buf, len, SV_HAS_TRAILING_NUL);
+		if (SvUTF8(fmt)
+                    || (! is_ascii_string((U8*) buf, len)
+                        && is_utf8_string((U8*) buf, len)
+#ifdef USE_LOCALE_TIME
+                        && _is_cur_LC_category_utf8(LC_TIME)
+#endif
+                )) {
 		    SvUTF8_on(sv);
 		}
-		ST(0) = sv;
-	    }
+            }
+            else {  /* We can't distinguish between errors and just an empty
+                     * return; in all cases just return an empty string */
+                SvUPGRADE(sv, SVt_PV);
+                SvPV_set(sv, (char *) "");
+                SvPOK_on(sv);
+                SvCUR_set(sv, 0);
+                SvLEN_set(sv, 0);   /* Won't attempt to free the string when sv
+                                       gets destroyed */
+            }
+            ST(0) = sv;
 	}
 
 void

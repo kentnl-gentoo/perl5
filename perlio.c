@@ -199,8 +199,12 @@ PerlIO_intmode2str(int rawmode, char *mode, int *writing)
 	    mode[ix++] = '+';
 	}
     }
+#if O_BINARY != 0
+    /* Unless O_BINARY is different from zero, bit-and:ing
+     * with it won't do much good. */
     if (rawmode & O_BINARY)
 	mode[ix++] = 'b';
+# endif
     mode[ix] = '\0';
     return ptype;
 }
@@ -387,14 +391,13 @@ PerlIO_debug(const char *fmt, ...)
 	}
     }
     if (PL_perlio_debug_fd > 0) {
-        int rc = 0;
 #ifdef USE_ITHREADS
 	const char * const s = CopFILE(PL_curcop);
 	/* Use fixed buffer as sv_catpvf etc. needs SVs */
 	char buffer[1024];
 	const STRLEN len1 = my_snprintf(buffer, sizeof(buffer), "%.40s:%" IVdf " ", s ? s : "(none)", (IV) CopLINE(PL_curcop));
 	const STRLEN len2 = my_vsnprintf(buffer + len1, sizeof(buffer) - len1, fmt, ap);
-	rc = PerlLIO_write(PL_perlio_debug_fd, buffer, len1 + len2);
+	PERL_UNUSED_RESULT(PerlLIO_write(PL_perlio_debug_fd, buffer, len1 + len2));
 #else
 	const char *s = CopFILE(PL_curcop);
 	STRLEN len;
@@ -403,11 +406,9 @@ PerlIO_debug(const char *fmt, ...)
 	Perl_sv_vcatpvf(aTHX_ sv, fmt, &ap);
 
 	s = SvPV_const(sv, len);
-	rc = PerlLIO_write(PL_perlio_debug_fd, s, len);
+	PERL_UNUSED_RESULT(PerlLIO_write(PL_perlio_debug_fd, s, len));
 	SvREFCNT_dec(sv);
 #endif
-        /* silently ignore failures */
-        PERL_UNUSED_VAR(rc);
     }
     va_end(ap);
 }
@@ -427,6 +428,9 @@ PerlIO_verify_head(pTHX_ PerlIO *f)
 {
     PerlIOl *head, *p;
     int seen = 0;
+#ifndef PERL_IMPLICIT_SYS
+    PERL_UNUSED_CONTEXT;
+#endif
     if (!PerlIOValid(f))
 	return;
     p = head = PerlIOBase(f)->head;
@@ -2225,6 +2229,7 @@ PerlIOBase_dup(pTHX_ PerlIO *f, PerlIO *o, CLONE_PARAMS *param, int flags)
 	PerlIO_funcs * const self = PerlIOBase(o)->tab;
 	SV *arg = NULL;
 	char buf[8];
+	assert(self);
 	PerlIO_debug("PerlIOBase_dup %s f=%p o=%p param=%p\n",
 		     self ? self->name : "(Null)",
 		     (void*)f, (void*)o, (void*)param);
@@ -2247,6 +2252,10 @@ S_more_refcounted_fds(pTHX_ const int new_fd) {
     const int old_max = PL_perlio_fd_refcnt_size;
     const int new_max = 16 + (new_fd & ~15);
     int *new_array;
+
+#ifndef PERL_IMPLICIT_SYS
+    PERL_UNUSED_CONTEXT;
+#endif
 
     PerlIO_debug("More fds - old=%d, need %d, new=%d\n",
 		 old_max, new_fd, new_max);
@@ -2462,6 +2471,9 @@ typedef struct {
 static void
 S_lockcnt_dec(pTHX_ const void* f)
 {
+#ifndef PERL_IMPLICIT_SYS
+    PERL_UNUSED_CONTEXT;
+#endif
     PerlIO_lockcnt((PerlIO*)f)--;
 }
 
@@ -2529,24 +2541,41 @@ PerlIOUnix_oflags(const char *mode)
 	    oflags |= O_WRONLY;
 	break;
     }
-    if (*mode == 'b') {
-	oflags |= O_BINARY;
+
+    /* XXX TODO: PerlIO_open() test that exercises 'rb' and 'rt'. */
+
+    /* Unless O_BINARY is different from O_TEXT, first bit-or:ing one
+     * of them in, and then bit-and-masking the other them away, won't
+     * have much of an effect. */
+    switch (*mode) {
+    case 'b':
+#if O_TEXT != O_BINARY
+        oflags |= O_BINARY;
 	oflags &= ~O_TEXT;
-	mode++;
-    }
-    else if (*mode == 't') {
+#endif
+        mode++;
+        break;
+    case 't':
+#if O_TEXT != O_BINARY
 	oflags |= O_TEXT;
 	oflags &= ~O_BINARY;
-	mode++;
-    }
-    else {
-#ifdef PERLIO_USING_CRLF
+#endif
+        mode++;
+        break;
+    default:
+#  if O_BINARY != 0
+        /* bit-or:ing with zero O_BINARY would be useless. */
 	/*
 	 * If neither "t" nor "b" was specified, open the file
 	 * in O_BINARY mode.
+         *
+         * Note that if something else than the zero byte was seen
+         * here (e.g. bogus mode "rx"), just few lines later we will
+         * set the errno and invalidate the flags.
 	 */
 	oflags |= O_BINARY;
-#endif
+#  endif
+        break;
     }
     if (*mode || oflags == -1) {
 	SETERRNO(EINVAL, LIB_INVARG);
@@ -2661,6 +2690,7 @@ PerlIOUnix_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
 	}
 	if (!PerlIOValid(f)) {
 	    if (!(f = PerlIO_push(aTHX_ f, self, mode, PerlIOArg))) {
+		PerlLIO_close(fd);
 		return NULL;
 	    }
 	}
@@ -2696,6 +2726,7 @@ PerlIOUnix_dup(pTHX_ PerlIO *f, PerlIO *o, CLONE_PARAMS *param, int flags)
 	    PerlIOUnix_setfd(aTHX_ f, fd, os->oflags);
 	    return f;
 	}
+        PerlLIO_close(fd);
     }
     return NULL;
 }
@@ -2923,6 +2954,10 @@ PerlIO_importFILE(FILE *stdio, const char *mode)
     PerlIO *f = NULL;
     if (stdio) {
 	PerlIOStdio *s;
+        int fd0 = fileno(stdio);
+        if (fd0 < 0) {
+            return NULL;
+        }
 	if (!mode || !*mode) {
 	    /* We need to probe to see how we can open the stream
 	       so start with read/write and then try write and read
@@ -2931,8 +2966,12 @@ PerlIO_importFILE(FILE *stdio, const char *mode)
 	       Note that the errno value set by a failing fdopen
 	       varies between stdio implementations.
 	     */
-	    const int fd = PerlLIO_dup(fileno(stdio));
-	    FILE *f2 = PerlSIO_fdopen(fd, (mode = "r+"));
+            const int fd = PerlLIO_dup(fd0);
+	    FILE *f2;
+            if (fd < 0) {
+                return f;
+            }
+	    f2 = PerlSIO_fdopen(fd, (mode = "r+"));
 	    if (!f2) {
 		f2 = PerlSIO_fdopen(fd, (mode = "w"));
 	    }
@@ -2946,7 +2985,7 @@ PerlIO_importFILE(FILE *stdio, const char *mode)
 	    }
 	    fclose(f2);
 	}
-	if ((f = PerlIO_push(aTHX_(f = PerlIO_allocate(aTHX)), PERLIO_FUNCS_CAST(&PerlIO_stdio), mode, NULL))) {
+	if ((f = PerlIO_push(aTHX_(PerlIO_allocate(aTHX)), PERLIO_FUNCS_CAST(&PerlIO_stdio), mode, NULL))) {
 	    s = PerlIOSelf(f, PerlIOStdio);
 	    s->stdio = stdio;
 	    PerlIOUnix_refcnt_inc(fileno(stdio));
@@ -2969,8 +3008,8 @@ PerlIOStdio_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
 	if (!IS_SAFE_PATHNAME(path, len, "open"))
             return NULL;
 	PerlIOUnix_refcnt_dec(fileno(s->stdio));
-	stdio = PerlSIO_freopen(path, (mode = PerlIOStdio_mode(mode, tmode)),
-			    s->stdio);
+	stdio = PerlSIO_freopen(path, PerlIOStdio_mode(mode, tmode),
+                                s->stdio);
 	if (!s->stdio)
 	    return NULL;
 	s->stdio = stdio;
@@ -3050,6 +3089,7 @@ PerlIOStdio_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
 		}
 		return f;
 	    }
+            PerlLIO_close(fd);
 	}
     }
     return NULL;
@@ -3351,8 +3391,8 @@ PerlIOStdio_unread(pTHX_ PerlIO *f, const void *vbuf, Size_t count)
 	    }
 	    if ((STDCHAR*)PerlSIO_get_ptr(s) != --eptr || ((*eptr & 0xFF) != ch)) {
 		/* Did not change pointer as expected */
-		fgetc(s);  /* get char back again */
-		break;
+		if (fgetc(s) != EOF)  /* get char back again */
+                    break;
 	    }
 	    /* It worked ! */
 	    count--;
@@ -3505,7 +3545,20 @@ PerlIOStdio_set_ptrcnt(pTHX_ PerlIO *f, STDCHAR * ptr, SSize_t cnt)
     FILE * const stdio = PerlIOSelf(f, PerlIOStdio)->stdio;
     if (ptr != NULL) {
 #ifdef STDIO_PTR_LVALUE
+        /* This is a long-standing infamous mess.  The root of the
+         * problem is that one cannot know the signedness of char, and
+         * more precisely the signedness of FILE._ptr.  The following
+         * things have been tried, and they have all failed (across
+         * different compilers (remember that core needs to to build
+         * also with c++) and compiler options:
+         *
+         * - casting the RHS to (void*) -- works in *some* places
+         * - casting the LHS to (void*) -- totally unportable
+         *
+         * So let's try silencing the warning at least for gcc. */
+        GCC_DIAG_IGNORE(-Wpointer-sign);
 	PerlSIO_set_ptr(stdio, ptr); /* LHS STDCHAR* cast non-portable */
+        GCC_DIAG_RESTORE;
 #ifdef STDIO_PTR_LVAL_SETS_CNT
 	assert(PerlSIO_get_cnt(stdio) == (cnt));
 #endif
@@ -3594,20 +3647,12 @@ PerlIOStdio_fill(pTHX_ PerlIO *f)
     }
 #endif
 
-#if defined(VMS)
-    /* An ungetc()d char is handled separately from the regular
-     * buffer, so we stuff it in the buffer ourselves.
-     * Should never get called as should hit code above
-     */
-    *(--((*stdio)->_ptr)) = (unsigned char) c;
-    (*stdio)->_cnt++;
-#else
     /* If buffer snoop scheme above fails fall back to
        using ungetc().
      */
     if (PerlSIO_ungetc(c, stdio) != c)
 	return EOF;
-#endif
+
     return 0;
 }
 
@@ -3668,6 +3713,10 @@ PerlIO_exportFILE(PerlIO * f, const char *mode)
     FILE *stdio = NULL;
     if (PerlIOValid(f)) {
 	char buf[8];
+        int fd = PerlIO_fileno(f);
+        if (fd < 0) {
+            return NULL;
+        }
 	PerlIO_flush(f);
 	if (!mode || !*mode) {
 	    mode = PerlIO_modestr(f, buf);
@@ -4910,6 +4959,7 @@ PerlIO_vprintf(PerlIO *f, const char *fmt, va_list ap)
     va_list apc;
     Perl_va_copy(ap, apc);
     sv = vnewSVpvf(fmt, &apc);
+    va_end(apc);
 #else
     sv = vnewSVpvf(fmt, &ap);
 #endif
@@ -4962,6 +5012,7 @@ PerlIO_tmpfile(void)
      char tempname[] = "/tmp/PerlIO_XXXXXX";
      const char * const tmpdir = TAINTING_get ? NULL : PerlEnv_getenv("TMPDIR");
      SV * sv = NULL;
+     int old_umask = umask(0600);
      /*
       * I have no idea how portable mkstemp() is ... NI-S
       */
@@ -4983,6 +5034,7 @@ PerlIO_tmpfile(void)
          sv_catpv(sv, tempname + 4);
          fd = mkstemp(SvPVX(sv));
      }
+     umask(old_umask);
      if (fd >= 0) {
 	  f = PerlIO_fdopen(fd, "w+");
 	  if (f)
