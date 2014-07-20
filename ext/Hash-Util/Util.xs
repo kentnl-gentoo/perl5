@@ -85,7 +85,7 @@ hash_value(string,...)
         U8 *seedbuf= (U8 *)SvPV(ST(1),seedlen);
         if ( seedlen < PERL_HASH_SEED_BYTES ) {
             sv_dump(ST(1));
-            Perl_croak(aTHX_ "seed len must be at least %d long only got %d bytes", PERL_HASH_SEED_BYTES, seedlen);
+            Perl_croak(aTHX_ "seed len must be at least %d long only got %"UVuf" bytes", PERL_HASH_SEED_BYTES, (UV)seedlen);
         }
 
         PERL_HASH_WITH_SEED(seedbuf, uv, pv, len);
@@ -139,7 +139,7 @@ bucket_info(rhv)
     nothing (the empty list).
 
     */
-    const HV * hv;
+    const HV * hv = NULL;
     if (SvROK(rhv) && SvTYPE(SvRV(rhv))==SVt_PVHV && !SvMAGICAL(SvRV(rhv))) {
         hv = (const HV *) SvRV(rhv);
     } else if (!SvOK(rhv)) {
@@ -199,7 +199,7 @@ bucket_array(rhv)
      * of the hash store, combined with regular remappings means that relative
      * order of keys changes each remap.
      */
-    const HV * hv;
+    const HV * hv = NULL;
     if (SvROK(rhv) && SvTYPE(SvRV(rhv))==SVt_PVHV && !SvMAGICAL(SvRV(rhv))) {
         hv = (const HV *) SvRV(rhv);
     } else if (!SvOK(rhv)) {

@@ -25,6 +25,22 @@ my @locales = eval { find_locales( [ &LC_ALL, &LC_CTYPE, &LC_NUMERIC ] ) };
 skip_all("no locales available") unless @locales;
 
 plan tests => &last;
+
+my $non_C_locale;
+foreach my $locale (@locales) {
+    next if $locale eq "C" || $locale eq 'POSIX';
+    $non_C_locale = $locale;
+    last;
+}
+
+SKIP: {
+    skip("no non-C locale available", 2 ) unless $non_C_locale;
+    setlocale(LC_NUMERIC, $non_C_locale);
+    isnt(setlocale(LC_NUMERIC), "C", "retrieving current non-C LC_NUMERIC doesn't give 'C'");
+    setlocale(LC_ALL, $non_C_locale);
+    isnt(setlocale(LC_ALL), "C", "retrieving current non-C LC_ALL doesn't give 'C'");
+}
+
 fresh_perl_is("for (qw(@locales)) {\n" . <<'EOF',
     use POSIX qw(locale_h);
     use locale;
@@ -94,8 +110,8 @@ SKIP: {
 }
 
 SKIP: {
-    skip("no locale available where LC_NUMERIC makes a difference", &last - 5 )
-	if !$different;     # -5 is 3 tests before this block; 2 after
+    skip("no locale available where LC_NUMERIC makes a difference", &last - 7 )
+	if !$different;     # -7 is 5 tests before this block; 2 after
     note("using the '$different' locale for LC_NUMERIC tests");
     {
 	local $ENV{LC_NUMERIC} = $different;
@@ -408,4 +424,7 @@ EOF
 
     }
 
-sub last { 35 }
+# IMPORTANT: When adding tests before the following line, be sure to update
+# its skip count:
+#       skip("no locale available where LC_NUMERIC makes a difference", ...)
+sub last { 37 }

@@ -50,7 +50,6 @@ static const char S_strtab_error[]
 STATIC HE*
 S_new_he(pTHX)
 {
-    dVAR;
     HE* he;
     void ** const root = &PL_body_roots[HE_SVSLOT];
 
@@ -101,7 +100,6 @@ S_save_hek_flags(const char *str, I32 len, U32 hash, int flags)
 void
 Perl_free_tied_hv_pool(pTHX)
 {
-    dVAR;
     HE *he = PL_hv_fetch_ent_mh;
     while (he) {
 	HE * const ohe = he;
@@ -347,6 +345,7 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
     bool is_utf8;
     int masked_flags;
     const int return_svp = action & HV_FETCH_JUST_SV;
+    HEK *keysv_hek = NULL;
 
     if (!hv)
 	return NULL;
@@ -616,12 +615,13 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 	}
     }
 
-    if (!hash) {
-        if (keysv && (SvIsCOW_shared_hash(keysv)))
-            hash = SvSHARED_HASH(keysv);
-        else
-            PERL_HASH(hash, key, klen);
+    if (keysv && (SvIsCOW_shared_hash(keysv))) {
+        if (HvSHAREKEYS(hv))
+            keysv_hek  = SvSHARED_HEK_FROM_PV(SvPVX_const(keysv));
+        hash = SvSHARED_HASH(keysv);
     }
+    else if (!hash)
+        PERL_HASH(hash, key, klen);
 
     masked_flags = (flags & HVhek_MASK);
 
@@ -632,16 +632,48 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
     {
 	entry = (HvARRAY(hv))[hash & (I32) HvMAX(hv)];
     }
+
+    if (!entry)
+        goto not_found;
+
+    if (keysv_hek) {
+        /* keysv is actually a HEK in disguise, so we can match just by
+         * comparing the HEK pointers in the HE chain. There is a slight
+         * caveat: on something like "\x80", which has both plain and utf8
+         * representations, perl's hashes do encoding-insensitive lookups,
+         * but preserve the encoding of the stored key. Thus a particular
+         * key could map to two different HEKs in PL_strtab. We only
+         * conclude 'not found' if all the flags are the same; otherwise
+         * we fall back to a full search (this should only happen in rare
+         * cases).
+         */
+        int keysv_flags = HEK_FLAGS(keysv_hek);
+        HE  *orig_entry = entry;
+
+        for (; entry; entry = HeNEXT(entry)) {
+            HEK *hek = HeKEY_hek(entry);
+            if (hek == keysv_hek)
+                goto found;
+            if (HEK_FLAGS(hek) != keysv_flags)
+                break; /* need to do full match */
+        }
+        if (!entry)
+            goto not_found;
+        /* failed on shortcut - do full search loop */
+        entry = orig_entry;
+    }
+
     for (; entry; entry = HeNEXT(entry)) {
 	if (HeHASH(entry) != hash)		/* strings can't be equal */
 	    continue;
 	if (HeKLEN(entry) != (I32)klen)
 	    continue;
-	if (HeKEY(entry) != key && memNE(HeKEY(entry),key,klen))	/* is this it? */
+	if (memNE(HeKEY(entry),key,klen))	/* is this it? */
 	    continue;
 	if ((HeKFLAGS(entry) ^ masked_flags) & HVhek_UTF8)
 	    continue;
 
+      found:
         if (action & (HV_FETCH_LVALUE|HV_FETCH_ISSTORE)) {
 	    if (HeKFLAGS(entry) != masked_flags) {
 		/* We match if HVhek_UTF8 bit in our flags and hash key's
@@ -710,6 +742,8 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 	}
 	return entry;
     }
+
+  not_found:
 #ifdef DYNAMIC_ENV_FETCH  /* %ENV lookup?  If so, try to fetch the value now */
     if (!(action & HV_FETCH_ISSTORE) 
 	&& SvRMAGICAL((const SV *)hv)
@@ -957,9 +991,14 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
     XPVHV* xhv;
     HE *entry;
     HE **oentry;
-    HE *const *first_entry;
+    HE **first_entry;
     bool is_utf8 = (k_flags & HVhek_UTF8) ? TRUE : FALSE;
     int masked_flags;
+    HEK *keysv_hek = NULL;
+    U8 mro_changes = 0; /* 1 = isa; 2 = package moved */
+    SV *sv;
+    GV *gv = NULL;
+    HV *stash = NULL;
 
     if (SvRMAGICAL(hv)) {
 	bool needs_copy;
@@ -1024,32 +1063,60 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
         HvHASKFLAGS_on(MUTABLE_SV(hv));
     }
 
-    if (!hash) {
-        if (keysv && (SvIsCOW_shared_hash(keysv)))
-            hash = SvSHARED_HASH(keysv);
-        else
-            PERL_HASH(hash, key, klen);
+    if (keysv && (SvIsCOW_shared_hash(keysv))) {
+        if (HvSHAREKEYS(hv))
+            keysv_hek  = SvSHARED_HEK_FROM_PV(SvPVX_const(keysv));
+        hash = SvSHARED_HASH(keysv);
     }
+    else if (!hash)
+        PERL_HASH(hash, key, klen);
 
     masked_flags = (k_flags & HVhek_MASK);
 
     first_entry = oentry = &(HvARRAY(hv))[hash & (I32) HvMAX(hv)];
     entry = *oentry;
-    for (; entry; oentry = &HeNEXT(entry), entry = *oentry) {
-	SV *sv;
-	U8 mro_changes = 0; /* 1 = isa; 2 = package moved */
-	GV *gv = NULL;
-	HV *stash = NULL;
 
+    if (!entry)
+        goto not_found;
+
+    if (keysv_hek) {
+        /* keysv is actually a HEK in disguise, so we can match just by
+         * comparing the HEK pointers in the HE chain. There is a slight
+         * caveat: on something like "\x80", which has both plain and utf8
+         * representations, perl's hashes do encoding-insensitive lookups,
+         * but preserve the encoding of the stored key. Thus a particular
+         * key could map to two different HEKs in PL_strtab. We only
+         * conclude 'not found' if all the flags are the same; otherwise
+         * we fall back to a full search (this should only happen in rare
+         * cases).
+         */
+        int keysv_flags = HEK_FLAGS(keysv_hek);
+
+        for (; entry; oentry = &HeNEXT(entry), entry = *oentry) {
+            HEK *hek = HeKEY_hek(entry);
+            if (hek == keysv_hek)
+                goto found;
+            if (HEK_FLAGS(hek) != keysv_flags)
+                break; /* need to do full match */
+        }
+        if (!entry)
+            goto not_found;
+        /* failed on shortcut - do full search loop */
+        oentry = first_entry;
+        entry = *oentry;
+    }
+
+    for (; entry; oentry = &HeNEXT(entry), entry = *oentry) {
 	if (HeHASH(entry) != hash)		/* strings can't be equal */
 	    continue;
 	if (HeKLEN(entry) != (I32)klen)
 	    continue;
-	if (HeKEY(entry) != key && memNE(HeKEY(entry),key,klen))	/* is this it? */
+	if (memNE(HeKEY(entry),key,klen))	/* is this it? */
 	    continue;
 	if ((HeKFLAGS(entry) ^ masked_flags) & HVhek_UTF8)
 	    continue;
 
+      found:
 	if (hv == PL_strtab) {
 	    if (k_flags & HVhek_FREEKEY)
 		Safefree(key);
@@ -1150,6 +1217,8 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 
 	return sv;
     }
+
+  not_found:
     if (SvREADONLY(hv)) {
 	hv_notallowed(k_flags, key, klen,
 			"Attempt to delete disallowed key '%"SVf"' from"
@@ -1165,7 +1234,6 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 STATIC void
 S_hsplit(pTHX_ HV *hv, STRLEN const oldsize, STRLEN newsize)
 {
-    dVAR;
     STRLEN i = 0;
     char *a = (char*) HvARRAY(hv);
     HE **aep;
@@ -1289,7 +1357,6 @@ S_hsplit(pTHX_ HV *hv, STRLEN const oldsize, STRLEN newsize)
 void
 Perl_hv_ksplit(pTHX_ HV *hv, IV newmax)
 {
-    dVAR;
     XPVHV* xhv = (XPVHV*)SvANY(hv);
     const I32 oldsize = (I32) xhv->xhv_max+1; /* HvMAX(hv)+1 (sick) */
     I32 newsize;
@@ -1475,7 +1542,6 @@ Perl_hv_copy_hints_hv(pTHX_ HV *const ohv)
 STATIC SV*
 S_hv_free_ent_ret(pTHX_ HV *hv, HE *entry)
 {
-    dVAR;
     SV *val;
 
     PERL_ARGS_ASSERT_HV_FREE_ENT_RET;
@@ -1497,7 +1563,6 @@ S_hv_free_ent_ret(pTHX_ HV *hv, HE *entry)
 void
 Perl_hv_free_ent(pTHX_ HV *hv, HE *entry)
 {
-    dVAR;
     SV *val;
 
     PERL_ARGS_ASSERT_HV_FREE_ENT;
@@ -1512,8 +1577,6 @@ Perl_hv_free_ent(pTHX_ HV *hv, HE *entry)
 void
 Perl_hv_delayfree_ent(pTHX_ HV *hv, HE *entry)
 {
-    dVAR;
-
     PERL_ARGS_ASSERT_HV_DELAYFREE_ENT;
 
     if (!entry)
@@ -1609,7 +1672,6 @@ See Hash::Util::lock_keys() for an example of its use.
 void
 Perl_hv_clear_placeholders(pTHX_ HV *hv)
 {
-    dVAR;
     const U32 items = (U32)HvPLACEHOLDERS_get(hv);
 
     PERL_ARGS_ASSERT_HV_CLEAR_PLACEHOLDERS;
@@ -1778,7 +1840,6 @@ See also L</hv_clear>.
 void
 Perl_hv_undef_flags(pTHX_ HV *hv, U32 flags)
 {
-    dVAR;
     XPVHV* xhv;
     bool save;
 
@@ -2322,7 +2383,6 @@ This is called when a stash is deleted from the symbol table.
 void
 Perl_hv_ename_delete(pTHX_ HV *hv, const char *name, U32 len, U32 flags)
 {
-    dVAR;
     struct xpvhv_aux *aux;
 
     PERL_ARGS_ASSERT_HV_ENAME_DELETE;
@@ -2390,7 +2450,6 @@ Perl_hv_backreferences_p(pTHX_ HV *hv) {
     struct xpvhv_aux * const iter = SvOOK(hv) ? HvAUX(hv) : hv_auxinit(hv);
 
     PERL_ARGS_ASSERT_HV_BACKREFERENCES_P;
-    PERL_UNUSED_CONTEXT;
 
     return &(iter->xhv_backreferences);
 }
@@ -2725,7 +2784,6 @@ Perl_unshare_hek(pTHX_ HEK *hek)
 STATIC void
 S_unshare_hek_or_pvn(pTHX_ const HEK *hek, const char *str, I32 len, U32 hash)
 {
-    dVAR;
     XPVHV* xhv;
     HE *entry;
     HE **oentry;
@@ -2848,7 +2906,6 @@ Perl_share_hek(pTHX_ const char *str, I32 len, U32 hash)
 STATIC HEK *
 S_share_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags)
 {
-    dVAR;
     HE *entry;
     const int flags_masked = flags & HVhek_MASK;
     const U32 hindex = hash & (I32) HvMAX(PL_strtab);
@@ -2933,7 +2990,6 @@ S_share_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags)
 SSize_t *
 Perl_hv_placeholders_p(pTHX_ HV *hv)
 {
-    dVAR;
     MAGIC *mg = mg_find((const SV *)hv, PERL_MAGIC_rhash);
 
     PERL_ARGS_ASSERT_HV_PLACEHOLDERS_P;
@@ -2952,10 +3008,10 @@ Perl_hv_placeholders_p(pTHX_ HV *hv)
 I32
 Perl_hv_placeholders_get(pTHX_ const HV *hv)
 {
-    dVAR;
     MAGIC * const mg = mg_find((const SV *)hv, PERL_MAGIC_rhash);
 
     PERL_ARGS_ASSERT_HV_PLACEHOLDERS_GET;
+    PERL_UNUSED_CONTEXT;
 
     return mg ? mg->mg_len : 0;
 }
@@ -2963,7 +3019,6 @@ Perl_hv_placeholders_get(pTHX_ const HV *hv)
 void
 Perl_hv_placeholders_set(pTHX_ HV *hv, I32 ph)
 {
-    dVAR;
     MAGIC * const mg = mg_find((const SV *)hv, PERL_MAGIC_rhash);
 
     PERL_ARGS_ASSERT_HV_PLACEHOLDERS_SET;
@@ -3462,7 +3517,9 @@ no action occurs in this case.
 
 void
 Perl_refcounted_he_free(pTHX_ struct refcounted_he *he) {
+#ifdef USE_ITHREADS
     dVAR;
+#endif
     PERL_UNUSED_CONTEXT;
 
     while (he) {
@@ -3499,7 +3556,9 @@ to this function: no action occurs and a null pointer is returned.
 struct refcounted_he *
 Perl_refcounted_he_inc(pTHX_ struct refcounted_he *he)
 {
+#ifdef USE_ITHREADS
     dVAR;
+#endif
     PERL_UNUSED_CONTEXT;
     if (he) {
 	HINTS_REFCNT_LOCK;

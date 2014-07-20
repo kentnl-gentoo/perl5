@@ -401,7 +401,7 @@ use File::Glob qw(:case);
     },
 
     'experimental' => {
-        'DISTRIBUTION' => 'LEONT/experimental-0.007.tar.gz',
+        'DISTRIBUTION' => 'LEONT/experimental-0.008.tar.gz',
         'FILES'        => q[cpan/experimental],
         'EXCLUDED'     => [
           qr{^t/release-.*\.t},
@@ -478,9 +478,9 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::Manifest' => {
-        'DISTRIBUTION' => 'FLORA/ExtUtils-Manifest-1.63.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-Manifest-1.64.tar.gz',
         'FILES'        => q[dist/ExtUtils-Manifest],
-        'EXCLUDED'     => [qr(t/release-.*\.t)],
+        'EXCLUDED'     => [qr(^xt/)],
     },
 
     'ExtUtils::ParseXS' => {
@@ -622,7 +622,7 @@ use File::Glob qw(:case);
     },
 
     'IO::Socket::IP' => {
-        'DISTRIBUTION' => 'PEVANS/IO-Socket-IP-0.29.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/IO-Socket-IP-0.31.tar.gz',
         'FILES'        => q[cpan/IO-Socket-IP],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -780,7 +780,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-3.11.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.021001.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -913,7 +913,7 @@ use File::Glob qw(:case);
     },
 
     'Pod::Usage' => {
-        'DISTRIBUTION' => 'MAREKR/Pod-Usage-1.63.tar.gz',
+        'DISTRIBUTION' => 'MAREKR/Pod-Usage-1.64.tar.gz',
         'FILES'        => q[cpan/Pod-Usage],
     },
 
@@ -967,7 +967,7 @@ use File::Glob qw(:case);
     },
 
     'Storable' => {
-        'DISTRIBUTION' => 'AMS/Storable-2.45.tar.gz',
+        'DISTRIBUTION' => 'AMS/Storable-2.51.tar.gz',
         'FILES'        => q[dist/Storable],
     },
 

@@ -53,6 +53,7 @@ sub plan {
 	}
     } else {
 	my %plan = @_;
+	$plan{skip_all} and skip_all($plan{skip_all});
 	$n = $plan{tests};
     }
     _print "1..$n\n" unless $noplan;
@@ -420,6 +421,14 @@ sub unlike ($$@) { like_yn (1,@_) }; # 1 for un-
 
 sub like_yn ($$$@) {
     my ($flip, undef, $expected, $name, @mess) = @_;
+
+    # We just accept like(..., qr/.../), not like(..., '...'), and
+    # definitely not like(..., '/.../') like
+    # Test::Builder::maybe_regex() does.
+    unless (re::is_regexp($expected)) {
+	die "PANIC: The value '$expected' isn't a regexp. The like() function needs a qr// pattern, not a string";
+    }
+
     my $pass;
     $pass = $_[1] =~ /$expected/ if !$flip;
     $pass = $_[1] !~ /$expected/ if $flip;

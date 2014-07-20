@@ -4,7 +4,7 @@ use vars qw/$VERSION %released %version %families %upstream
 	    %bug_tracker %deprecated %delta/;
 use Module::CoreList::TieHashDelta;
 use version;
-$VERSION = '5.021001_01';
+$VERSION = '5.021002';
 
 my $dumpinc = 0;
 sub import {
@@ -250,7 +250,8 @@ sub changes_between {
     5.019011 => '2014-04-20',
     5.020000 => '2014-05-27',
     5.021000 => '2014-05-27',
-    5.021001 => '????-??-??',
+    5.021001 => '2014-06-20',
+    5.021002 => '2014-07-20',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -10040,6 +10041,47 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         removed => {
         }
     },
+    5.021002 => {
+        delta_from => 5.021001,
+        changed => {
+            'B'                     => '1.50',
+            'Config'                => '5.021002',
+            'Cwd'                   => '3.49',
+            'Devel::Peek'           => '1.18',
+            'ExtUtils::Manifest'    => '1.64',
+            'File::Copy'            => '2.30',
+            'File::Spec'            => '3.49',
+            'File::Spec::Cygwin'    => '3.49',
+            'File::Spec::Epoc'      => '3.49',
+            'File::Spec::Functions' => '3.49',
+            'File::Spec::Mac'       => '3.49',
+            'File::Spec::OS2'       => '3.49',
+            'File::Spec::Unix'      => '3.49',
+            'File::Spec::VMS'       => '3.49',
+            'File::Spec::Win32'     => '3.49',
+            'Filter::Simple'        => '0.92',
+            'Hash::Util'            => '0.18',
+            'IO'                    => '1.33',
+            'IO::Socket::IP'        => '0.31',
+            'IPC::Open3'            => '1.17',
+            'Math::BigFloat'        => '1.9996',
+            'Math::BigInt'          => '1.9996',
+            'Math::BigInt::Calc'    => '1.9996',
+            'Math::BigInt::CalcEmu' => '1.9996',
+            'Module::CoreList'      => '5.021002',
+            'Module::CoreList::TieHashDelta'=> '5.021002',
+            'Module::CoreList::Utils'=> '5.021002',
+            'POSIX'                 => '1.41',
+            'Pod::Usage'            => '1.64',
+            'XS::APItest'           => '0.62',
+            'arybase'               => '0.08',
+            'experimental'          => '0.008',
+            'threads'               => '1.95',
+            'warnings'              => '1.26',
+        },
+        removed => {
+        }
+    },
 );
 
 sub is_core
@@ -10450,6 +10492,13 @@ for my $version (sort { $a <=> $b } keys %delta) {
     },
     5.021001 => {
         delta_from => 5.017007,
+        changed => {
+        },
+        removed => {
+        }
+    },
+    5.021002 => {
+        delta_from => 5.021001,
         changed => {
         },
         removed => {

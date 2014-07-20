@@ -1290,15 +1290,7 @@ cpan/IO-Compress/t/cz-06gzsetp.t			IO::Compress
 cpan/IO-Compress/t/cz-08encoding.t			IO::Compress
 cpan/IO-Compress/t/cz-14gzopen.t			IO::Compress
 cpan/IO-Compress/t/globmapper.t				IO::Compress
-cpan/IO-Socket-IP/Build.PL				IO::Socket::IP
-cpan/IO-Socket-IP/Changes				IO::Socket::IP
 cpan/IO-Socket-IP/lib/IO/Socket/IP.pm			IO::Socket::IP
-cpan/IO-Socket-IP/LICENSE				IO::Socket::IP
-cpan/IO-Socket-IP/Makefile.PL				IO::Socket::IP
-cpan/IO-Socket-IP/MANIFEST				IO::Socket::IP
-cpan/IO-Socket-IP/META.json				IO::Socket::IP
-cpan/IO-Socket-IP/META.yml				IO::Socket::IP
-cpan/IO-Socket-IP/README				IO::Socket::IP
 cpan/IO-Socket-IP/t/00use.t				IO::Socket::IP tests
 cpan/IO-Socket-IP/t/01local-client-v4.t			IO::Socket::IP tests
 cpan/IO-Socket-IP/t/02local-server-v4.t			IO::Socket::IP tests
@@ -4447,6 +4439,7 @@ pod/perl5181delta.pod		Perl changes in version 5.18.1
 pod/perl5182delta.pod		Perl changes in version 5.18.2
 pod/perl5200delta.pod		Perl changes in version 5.20.0
 pod/perl5210delta.pod		Perl changes in version 5.21.0
+pod/perl5211delta.pod		Perl changes in version 5.21.1
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5228,6 +5221,7 @@ t/porting/filenames.t		Check the MANIFEST for filename portability.
 t/porting/FindExt.t		Test win32/FindExt.pm
 t/porting/globvar.t		Check that globvar.sym is sane
 t/porting/known_pod_issues.dat	Data file for porting/podcheck.t
+t/porting/libperl.t		Check libperl.a sanity
 t/porting/maintainers.t		Test that Porting/Maintainers.pl is up to date
 t/porting/manifest.t		Test that this MANIFEST file is well formed
 t/porting/pending-author.t	Check if any pending commit would break tests
@@ -5325,6 +5319,7 @@ t/TEST				The regression tester
 t/test.pl			Simple testing library
 t/test_pl/can_isa_ok.t		Tests for the simple testing library
 t/test_pl/_num_to_alpha.t	Tests for the simple testing library 
+t/test_pl/plan_skip_all.t	Tests for the simple testing library
 t/test_pl/tempfile.t		Tests for the simple testing library
 t/thread_it.pl			Run regression tests in a new thread
 t/uni/attrs.t			See if Unicode attributes work

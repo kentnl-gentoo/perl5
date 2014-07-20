@@ -30,9 +30,8 @@ values, including such things as replacements for the OS's atof() function
 #include "perl.h"
 
 U32
-Perl_cast_ulong(pTHX_ NV f)
+Perl_cast_ulong(NV f)
 {
-    PERL_UNUSED_CONTEXT;
   if (f < 0.0)
     return f < I32_MIN ? (U32) I32_MIN : (U32)(I32) f;
   if (f < U32_MAX_P1) {
@@ -49,9 +48,8 @@ Perl_cast_ulong(pTHX_ NV f)
 }
 
 I32
-Perl_cast_i32(pTHX_ NV f)
+Perl_cast_i32(NV f)
 {
-    PERL_UNUSED_CONTEXT;
   if (f < I32_MAX_P1)
     return f < I32_MIN ? I32_MIN : (I32) f;
   if (f < U32_MAX_P1) {
@@ -68,9 +66,8 @@ Perl_cast_i32(pTHX_ NV f)
 }
 
 IV
-Perl_cast_iv(pTHX_ NV f)
+Perl_cast_iv(NV f)
 {
-    PERL_UNUSED_CONTEXT;
   if (f < IV_MAX_P1)
     return f < IV_MIN ? IV_MIN : (IV) f;
   if (f < UV_MAX_P1) {
@@ -88,9 +85,8 @@ Perl_cast_iv(pTHX_ NV f)
 }
 
 UV
-Perl_cast_uv(pTHX_ NV f)
+Perl_cast_uv(NV f)
 {
-    PERL_UNUSED_CONTEXT;
   if (f < 0.0)
     return f < IV_MIN ? (UV) IV_MIN : (UV)(IV) f;
   if (f < UV_MAX_P1) {
@@ -263,7 +259,6 @@ on this platform.
 UV
 Perl_grok_hex(pTHX_ const char *start, STRLEN *len_p, I32 *flags, NV *result)
 {
-    dVAR;
     const char *s = start;
     STRLEN len = *len_p;
     UV value = 0;
@@ -524,8 +519,6 @@ bool
 Perl_grok_numeric_radix(pTHX_ const char **sp, const char *send)
 {
 #ifdef USE_LOCALE_NUMERIC
-    dVAR;
-
     PERL_ARGS_ASSERT_GROK_NUMERIC_RADIX;
 
     if (IN_LC(LC_NUMERIC)) {
@@ -555,7 +548,7 @@ Perl_grok_numeric_radix(pTHX_ const char **sp, const char *send)
 }
 
 /*
-=for apidoc grok_number
+=for apidoc grok_number_flags
 
 Recognise (or not) a number.  The type of the number is returned
 (0 if unrecognised), otherwise it is a bit-ORed combination of
@@ -575,10 +568,26 @@ IS_NUMBER_NEG if the number is negative (in which case *valuep holds the
 absolute value).  IS_NUMBER_IN_UV is not set if e notation was used or the
 number is larger than a UV.
 
+C<flags> allows only C<PERL_SCAN_TRAILING>, which allows for trailing
+non-numeric text on an otherwise successful I<grok>, setting
+C<IS_NUMBER_TRAILING> on the result.
+
+=for apidoc grok_number
+
+Identical to grok_number_flags() with flags set to zero.
+
 =cut
  */
 int
 Perl_grok_number(pTHX_ const char *pv, STRLEN len, UV *valuep)
+{
+    PERL_ARGS_ASSERT_GROK_NUMBER;
+
+    return grok_number_flags(pv, len, valuep, 0);
+}
+
+int
+Perl_grok_number_flags(pTHX_ const char *pv, STRLEN len, UV *valuep, U32 flags)
 {
   const char *s = pv;
   const char * const send = pv + len;
@@ -588,7 +597,7 @@ Perl_grok_number(pTHX_ const char *pv, STRLEN len, UV *valuep)
   int sawinf = 0;
   int sawnan = 0;
 
-  PERL_ARGS_ASSERT_GROK_NUMBER;
+  PERL_ARGS_ASSERT_GROK_NUMBER_FLAGS;
 
   while (s < send && isSPACE(*s))
     s++;
@@ -743,9 +752,6 @@ Perl_grok_number(pTHX_ const char *pv, STRLEN len, UV *valuep)
   } else if (s < send) {
     /* we can have an optional exponent part */
     if (*s == 'e' || *s == 'E') {
-      /* The only flag we keep is sign.  Blow away any "it's UV"  */
-      numtype &= IS_NUMBER_NEG;
-      numtype |= IS_NUMBER_NOT_INT;
       s++;
       if (s < send && (*s == '-' || *s == '+'))
         s++;
@@ -754,8 +760,14 @@ Perl_grok_number(pTHX_ const char *pv, STRLEN len, UV *valuep)
           s++;
         } while (s < send && isDIGIT(*s));
       }
+      else if (flags & PERL_SCAN_TRAILING)
+        return numtype | IS_NUMBER_TRAILING;
       else
-      return 0;
+        return 0;
+
+      /* The only flag we keep is sign.  Blow away any "it's UV"  */
+      numtype &= IS_NUMBER_NEG;
+      numtype |= IS_NUMBER_NOT_INT;
     }
   }
   while (s < send && isSPACE(*s))
@@ -767,6 +779,10 @@ Perl_grok_number(pTHX_ const char *pv, STRLEN len, UV *valuep)
       *valuep = 0;
     return IS_NUMBER_IN_UV;
   }
+  else if (flags & PERL_SCAN_TRAILING) {
+    return numtype | IS_NUMBER_TRAILING;
+  }
+
   return 0;
 }
 
@@ -854,8 +870,6 @@ Perl_my_atof(pTHX_ const char* s)
 {
     NV x = 0.0;
 #ifdef USE_LOCALE_NUMERIC
-    dVAR;
-
     PERL_ARGS_ASSERT_MY_ATOF;
 
     {

@@ -288,7 +288,6 @@ static regmatch_state * S_push_slab(pTHX);
 STATIC CHECKPOINT
 S_regcppush(pTHX_ const regexp *rex, I32 parenfloor, U32 maxopenparen)
 {
-    dVAR;
     const int retval = PL_savestack_ix;
     const int paren_elems_to_push =
                 (maxopenparen - parenfloor) * REGCP_PAREN_ELEMS;
@@ -369,7 +368,6 @@ S_regcppush(pTHX_ const regexp *rex, I32 parenfloor, U32 maxopenparen)
 STATIC void
 S_regcppop(pTHX_ regexp *rex, U32 *maxopenparen_p)
 {
-    dVAR;
     UV i;
     U32 paren;
     GET_RE_DEBUG_FLAGS_DECL;
@@ -649,7 +647,6 @@ Perl_re_intuit_start(pTHX_
                     const U32 flags,
                     re_scream_pos_data *data)
 {
-    dVAR;
     struct regexp *const prog = ReANY(rx);
     SSize_t start_shift = prog->check_offset_min;
     /* Should be nonnegative! */
@@ -1505,10 +1502,14 @@ STMT_START {                                                                    
     }                                                                               \
 } STMT_END
 
-#define REXEC_FBC_EXACTISH_SCAN(CoNd)                     \
+#define DUMP_EXEC_POS(li,s,doutf8)                          \
+    dump_exec_pos(li,s,(reginfo->strend),(reginfo->strbeg), \
+                startpos, doutf8)
+
+#define REXEC_FBC_EXACTISH_SCAN(COND)                     \
 STMT_START {                                              \
     while (s <= e) {                                      \
-	if ( (CoNd)                                       \
+	if ( (COND)                                       \
 	     && (ln == 1 || folder(s, pat_string, ln))    \
 	     && (reginfo->intuit || regtry(reginfo, &s)) )\
 	    goto got_it;                                  \
@@ -1516,148 +1517,199 @@ STMT_START {                                              \
     }                                                     \
 } STMT_END
 
-#define REXEC_FBC_UTF8_SCAN(CoDe)                     \
+#define REXEC_FBC_UTF8_SCAN(CODE)                     \
 STMT_START {                                          \
     while (s < strend) {                              \
-	CoDe                                          \
+	CODE                                          \
 	s += UTF8SKIP(s);                             \
     }                                                 \
 } STMT_END
 
-#define REXEC_FBC_SCAN(CoDe)                          \
+#define REXEC_FBC_SCAN(CODE)                          \
 STMT_START {                                          \
     while (s < strend) {                              \
-	CoDe                                          \
+	CODE                                          \
 	s++;                                          \
     }                                                 \
 } STMT_END
 
-#define REXEC_FBC_UTF8_CLASS_SCAN(CoNd)               \
-REXEC_FBC_UTF8_SCAN(                                  \
-    if (CoNd) {                                       \
-	if (tmp && (reginfo->intuit || regtry(reginfo, &s))) \
-	    goto got_it;                              \
-	else                                          \
-	    tmp = doevery;                            \
-    }                                                 \
-    else                                              \
-	tmp = 1;                                      \
+#define REXEC_FBC_UTF8_CLASS_SCAN(COND)                        \
+REXEC_FBC_UTF8_SCAN( /* Loops while (s < strend) */            \
+    if (COND) {                                                \
+	if (tmp && (reginfo->intuit || regtry(reginfo, &s)))   \
+	    goto got_it;                                       \
+	else                                                   \
+	    tmp = doevery;                                     \
+    }                                                          \
+    else                                                       \
+	tmp = 1;                                               \
 )
 
-#define REXEC_FBC_CLASS_SCAN(CoNd)                    \
-REXEC_FBC_SCAN(                                       \
-    if (CoNd) {                                       \
-	if (tmp && (reginfo->intuit || regtry(reginfo, &s)))  \
-	    goto got_it;                              \
-	else                                          \
-	    tmp = doevery;                            \
-    }                                                 \
-    else                                              \
-	tmp = 1;                                      \
+#define REXEC_FBC_CLASS_SCAN(COND)                             \
+REXEC_FBC_SCAN( /* Loops while (s < strend) */                 \
+    if (COND) {                                                \
+	if (tmp && (reginfo->intuit || regtry(reginfo, &s)))   \
+	    goto got_it;                                       \
+	else                                                   \
+	    tmp = doevery;                                     \
+    }                                                          \
+    else                                                       \
+	tmp = 1;                                               \
 )
 
-#define REXEC_FBC_TRYIT                       \
-if ((reginfo->intuit || regtry(reginfo, &s))) \
-    goto got_it
-
-#define REXEC_FBC_CSCAN(CoNdUtF8,CoNd)                         \
+#define REXEC_FBC_CSCAN(CONDUTF8,COND)                         \
     if (utf8_target) {                                         \
-	REXEC_FBC_UTF8_CLASS_SCAN(CoNdUtF8);                   \
+	REXEC_FBC_UTF8_CLASS_SCAN(CONDUTF8);                   \
     }                                                          \
     else {                                                     \
-	REXEC_FBC_CLASS_SCAN(CoNd);                            \
+	REXEC_FBC_CLASS_SCAN(COND);                            \
     }
-    
-#define DUMP_EXEC_POS(li,s,doutf8)                          \
-    dump_exec_pos(li,s,(reginfo->strend),(reginfo->strbeg), \
-                startpos, doutf8)
 
+/* The three macros below are slightly different versions of the same logic.
+ *
+ * The first is for /a and /aa when the target string is UTF-8.  This can only
+ * match ascii, but it must advance based on UTF-8.   The other two handle the
+ * non-UTF-8 and the more generic UTF-8 cases.   In all three, we are looking
+ * for the boundary (or non-boundary) between a word and non-word character.
+ * The utf8 and non-utf8 cases have the same logic, but the details must be
+ * different.  Find the "wordness" of the character just prior to this one, and
+ * compare it with the wordness of this one.  If they differ, we have a
+ * boundary.  At the beginning of the string, pretend that the previous
+ * character was a new-line.
+ *
+ * All these macros uncleanly have side-effects with each other and outside
+ * variables.  So far it's been too much trouble to clean-up
+ *
+ * TEST_NON_UTF8 is the macro or function to call to test if its byte input is
+ *               a word character or not.
+ * IF_SUCCESS    is code to do if it finds that we are at a boundary between
+ *               word/non-word
+ * IF_FAIL       is code to do if we aren't at a boundary between word/non-word
+ *
+ * Exactly one of the two IF_FOO parameters is a no-op, depending on whether we
+ * are looking for a boundary or for a non-boundary.  If we are looking for a
+ * boundary, we want IF_FAIL to be the no-op, and for IF_SUCCESS to go out and
+ * see if this tentative match actually works, and if so, to quit the loop
+ * here.  And vice-versa if we are looking for a non-boundary.
+ *
+ * 'tmp' below in the next three macros in the REXEC_FBC_SCAN and
+ * REXEC_FBC_UTF8_SCAN loops is a loop invariant, a bool giving the return of
+ * TEST_NON_UTF8(s-1).  To see this, note that that's what it is defined to be
+ * at entry to the loop, and to get to the IF_FAIL branch, tmp must equal
+ * TEST_NON_UTF8(s), and in the opposite branch, IF_SUCCESS, tmp is that
+ * complement.  But in that branch we complement tmp, meaning that at the
+ * bottom of the loop tmp is always going to be equal to TEST_NON_UTF8(s),
+ * which means at the top of the loop in the next iteration, it is
+ * TEST_NON_UTF8(s-1) */
+#define FBC_UTF8_A(TEST_NON_UTF8, IF_SUCCESS, IF_FAIL)                         \
+    tmp = (s != reginfo->strbeg) ? UCHARAT(s - 1) : '\n';                      \
+    tmp = TEST_NON_UTF8(tmp);                                                  \
+    REXEC_FBC_UTF8_SCAN( /* advances s while s < strend */                     \
+        if (tmp == ! TEST_NON_UTF8((U8) *s)) {                                 \
+            tmp = !tmp;                                                        \
+            IF_SUCCESS; /* Is a boundary if values for s-1 and s differ */     \
+        }                                                                      \
+        else {                                                                 \
+            IF_FAIL;                                                           \
+        }                                                                      \
+    );                                                                         \
 
-#define UTF8_NOLOAD(TEST_NON_UTF8, IF_SUCCESS, IF_FAIL)                        \
-	tmp = (s != reginfo->strbeg) ? UCHARAT(s - 1) : '\n';                  \
-	tmp = TEST_NON_UTF8(tmp);                                              \
-	REXEC_FBC_UTF8_SCAN(                                                   \
-	    if (tmp == ! TEST_NON_UTF8((U8) *s)) {                             \
-		tmp = !tmp;                                                    \
-		IF_SUCCESS;                                                    \
-	    }                                                                  \
-	    else {                                                             \
-		IF_FAIL;                                                       \
-	    }                                                                  \
-	);                                                                     \
-
-#define UTF8_LOAD(TeSt1_UtF8, TeSt2_UtF8, IF_SUCCESS, IF_FAIL)                 \
-	if (s == reginfo->strbeg) {                                            \
-	    tmp = '\n';                                                        \
-	}                                                                      \
-	else {                                                                 \
-	    U8 * const r = reghop3((U8*)s, -1, (U8*)reginfo->strbeg);          \
-	    tmp = utf8n_to_uvchr(r, (U8*) reginfo->strend - r,                 \
+/* Like FBC_UTF8_A, but TEST_UV is a macro which takes a UV as its input, and
+ * TEST_UTF8 is a macro that for the same input code points returns identically
+ * to TEST_UV, but takes a pointer to a UTF-8 encoded string instead */
+#define FBC_UTF8(TEST_UV, TEST_UTF8, IF_SUCCESS, IF_FAIL)                      \
+    if (s == reginfo->strbeg) {                                                \
+        tmp = '\n';                                                            \
+    }                                                                          \
+    else { /* Back-up to the start of the previous character */                \
+        U8 * const r = reghop3((U8*)s, -1, (U8*)reginfo->strbeg);              \
+        tmp = utf8n_to_uvchr(r, (U8*) reginfo->strend - r,                     \
                                                        0, UTF8_ALLOW_DEFAULT); \
-	}                                                                      \
-	tmp = TeSt1_UtF8;                                                      \
-	LOAD_UTF8_CHARCLASS_ALNUM();                                           \
-	REXEC_FBC_UTF8_SCAN(                                                   \
-	    if (tmp == ! (TeSt2_UtF8)) {                                       \
-		tmp = !tmp;                                                    \
-		IF_SUCCESS;                                                    \
-	    }                                                                  \
-	    else {                                                             \
-		IF_FAIL;                                                       \
-	    }                                                                  \
-	);                                                                     \
+    }                                                                          \
+    tmp = TEST_UV(tmp);                                                        \
+    LOAD_UTF8_CHARCLASS_ALNUM();                                               \
+    REXEC_FBC_UTF8_SCAN( /* advances s while s < strend */                     \
+        if (tmp == ! (TEST_UTF8((U8 *) s))) {                                  \
+            tmp = !tmp;                                                        \
+            IF_SUCCESS;                                                        \
+        }                                                                      \
+        else {                                                                 \
+            IF_FAIL;                                                           \
+        }                                                                      \
+    );
 
-/* The only difference between the BOUND and NBOUND cases is that
- * REXEC_FBC_TRYIT is called when matched in BOUND, and when non-matched in
- * NBOUND.  This is accomplished by passing it in either the if or else clause,
- * with the other one being empty */
-#define FBC_BOUND(TEST_NON_UTF8, TEST1_UTF8, TEST2_UTF8) \
-    FBC_BOUND_COMMON(UTF8_LOAD(TEST1_UTF8, TEST2_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER), TEST_NON_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER)
-
-#define FBC_BOUND_NOLOAD(TEST_NON_UTF8, TEST1_UTF8, TEST2_UTF8) \
-    FBC_BOUND_COMMON(UTF8_NOLOAD(TEST_NON_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER), TEST_NON_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER)
-
-#define FBC_NBOUND(TEST_NON_UTF8, TEST1_UTF8, TEST2_UTF8) \
-    FBC_BOUND_COMMON(UTF8_LOAD(TEST1_UTF8, TEST2_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT), TEST_NON_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT)
-
-#define FBC_NBOUND_NOLOAD(TEST_NON_UTF8, TEST1_UTF8, TEST2_UTF8) \
-    FBC_BOUND_COMMON(UTF8_NOLOAD(TEST_NON_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT), TEST_NON_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT)
-
-
-/* Common to the BOUND and NBOUND cases.  Unfortunately the UTF8 tests need to
- * be passed in completely with the variable name being tested, which isn't
- * such a clean interface, but this is easier to read than it was before.  We
- * are looking for the boundary (or non-boundary between a word and non-word
- * character.  The utf8 and non-utf8 cases have the same logic, but the details
- * must be different.  Find the "wordness" of the character just prior to this
- * one, and compare it with the wordness of this one.  If they differ, we have
- * a boundary.  At the beginning of the string, pretend that the previous
- * character was a new-line */
+/* Like the above two macros.  UTF8_CODE is the complete code for handling
+ * UTF-8.  Common to the BOUND and NBOUND cases, set-up by the FBC_BOUND, etc
+ * macros below */
 #define FBC_BOUND_COMMON(UTF8_CODE, TEST_NON_UTF8, IF_SUCCESS, IF_FAIL)        \
     if (utf8_target) {                                                         \
-		UTF8_CODE                                                      \
+        UTF8_CODE                                                              \
     }                                                                          \
     else {  /* Not utf8 */                                                     \
 	tmp = (s != reginfo->strbeg) ? UCHARAT(s - 1) : '\n';                  \
 	tmp = TEST_NON_UTF8(tmp);                                              \
-	REXEC_FBC_SCAN(                                                        \
+	REXEC_FBC_SCAN( /* advances s while s < strend */                      \
 	    if (tmp == ! TEST_NON_UTF8((U8) *s)) {                             \
-		tmp = !tmp;                                                    \
 		IF_SUCCESS;                                                    \
+		tmp = !tmp;                                                    \
 	    }                                                                  \
 	    else {                                                             \
 		IF_FAIL;                                                       \
 	    }                                                                  \
 	);                                                                     \
     }                                                                          \
-    if ((!prog->minlen && tmp) && (reginfo->intuit || regtry(reginfo, &s)))    \
-	goto got_it;
+    /* Here, things have been set up by the previous code so that tmp is the   \
+     * return of TEST_NON_UTF(s-1) or TEST_UTF8(s-1) (depending on the         \
+     * utf8ness of the target).  We also have to check if this matches against \
+     * the EOS, which we treat as a \n (which is the same value in both UTF-8  \
+     * or non-UTF8, so can use the non-utf8 test condition even for a UTF-8    \
+     * string */                                                               \
+    if (tmp == ! TEST_NON_UTF8('\n')) {                                        \
+        IF_SUCCESS;                                                            \
+    }                                                                          \
+    else {                                                                     \
+        IF_FAIL;                                                               \
+    }
+
+/* This is the macro to use when we want to see if something that looks like it
+ * could match, actually does, and if so exits the loop */
+#define REXEC_FBC_TRYIT                            \
+    if ((reginfo->intuit || regtry(reginfo, &s)))  \
+        goto got_it
+
+/* The only difference between the BOUND and NBOUND cases is that
+ * REXEC_FBC_TRYIT is called when matched in BOUND, and when non-matched in
+ * NBOUND.  This is accomplished by passing it as either the if or else clause,
+ * with the other one being empty (PLACEHOLDER is defined as empty).
+ *
+ * The TEST_FOO parameters are for operating on different forms of input, but
+ * all should be ones that return identically for the same underlying code
+ * points */
+#define FBC_BOUND(TEST_NON_UTF8, TEST_UV, TEST_UTF8)                           \
+    FBC_BOUND_COMMON(                                                          \
+          FBC_UTF8(TEST_UV, TEST_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER),          \
+          TEST_NON_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER)
+
+#define FBC_BOUND_A(TEST_NON_UTF8, TEST_UV, TEST_UTF8)                         \
+    FBC_BOUND_COMMON(                                                          \
+            FBC_UTF8_A(TEST_NON_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER),           \
+            TEST_NON_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER)
+
+#define FBC_NBOUND(TEST_NON_UTF8, TEST_UV, TEST_UTF8)                          \
+    FBC_BOUND_COMMON(                                                          \
+          FBC_UTF8(TEST_UV, TEST_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT),          \
+          TEST_NON_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT)
+
+#define FBC_NBOUND_A(TEST_NON_UTF8, TEST_UV, TEST_UTF8)                        \
+    FBC_BOUND_COMMON(                                                          \
+            FBC_UTF8_A(TEST_NON_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT),           \
+            TEST_NON_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT)
+
 
 /* We know what class REx starts with.  Try to find this position... */
 /* if reginfo->intuit, its a dryrun */
 /* annoyingly all the vars in this routine have different names from their counterparts
    in regmatch. /grrr */
-
 STATIC char *
 S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s, 
     const char *strend, regmatch_info *reginfo)
@@ -1846,45 +1898,30 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
         }
         break;
     }
+
     case BOUNDL:
-        FBC_BOUND(isWORDCHAR_LC,
-                  isWORDCHAR_LC_uvchr(tmp),
-                  isWORDCHAR_LC_utf8((U8*)s));
+        FBC_BOUND(isWORDCHAR_LC, isWORDCHAR_LC_uvchr, isWORDCHAR_LC_utf8);
         break;
     case NBOUNDL:
-        FBC_NBOUND(isWORDCHAR_LC,
-                   isWORDCHAR_LC_uvchr(tmp),
-                   isWORDCHAR_LC_utf8((U8*)s));
+        FBC_NBOUND(isWORDCHAR_LC, isWORDCHAR_LC_uvchr, isWORDCHAR_LC_utf8);
         break;
     case BOUND:
-        FBC_BOUND(isWORDCHAR,
-                  isWORDCHAR_uni(tmp),
-                  cBOOL(swash_fetch(PL_utf8_swash_ptrs[_CC_WORDCHAR], (U8*)s, utf8_target)));
+        FBC_BOUND(isWORDCHAR, isWORDCHAR_uni, isWORDCHAR_utf8);
         break;
     case BOUNDA:
-        FBC_BOUND_NOLOAD(isWORDCHAR_A,
-                         isWORDCHAR_A(tmp),
-                         isWORDCHAR_A((U8*)s));
+        FBC_BOUND_A(isWORDCHAR_A, isWORDCHAR_A, isWORDCHAR_A);
         break;
     case NBOUND:
-        FBC_NBOUND(isWORDCHAR,
-                   isWORDCHAR_uni(tmp),
-                   cBOOL(swash_fetch(PL_utf8_swash_ptrs[_CC_WORDCHAR], (U8*)s, utf8_target)));
+        FBC_NBOUND(isWORDCHAR, isWORDCHAR_uni, isWORDCHAR_utf8);
         break;
     case NBOUNDA:
-        FBC_NBOUND_NOLOAD(isWORDCHAR_A,
-                          isWORDCHAR_A(tmp),
-                          isWORDCHAR_A((U8*)s));
+        FBC_NBOUND_A(isWORDCHAR_A, isWORDCHAR_A, isWORDCHAR_A);
         break;
     case BOUNDU:
-        FBC_BOUND(isWORDCHAR_L1,
-                  isWORDCHAR_uni(tmp),
-                  cBOOL(swash_fetch(PL_utf8_swash_ptrs[_CC_WORDCHAR], (U8*)s, utf8_target)));
+        FBC_BOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
         break;
     case NBOUNDU:
-        FBC_NBOUND(isWORDCHAR_L1,
-                   isWORDCHAR_uni(tmp),
-                   cBOOL(swash_fetch(PL_utf8_swash_ptrs[_CC_WORDCHAR], (U8*)s, utf8_target)));
+        FBC_NBOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
         break;
     case LNBREAK:
         REXEC_FBC_CSCAN(is_LNBREAK_utf8_safe(s, strend),
@@ -2433,7 +2470,6 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
 /* flags:     For optimizations. See REXEC_* in regexp.h */
 
 {
-    dVAR;
     struct regexp *const prog = ReANY(rx);
     char *s;
     regnode *c;
@@ -3154,7 +3190,6 @@ phooey:
 STATIC I32			/* 0 failure, 1 success */
 S_regtry(pTHX_ regmatch_info *reginfo, char **startposp)
 {
-    dVAR;
     CHECKPOINT lastcp;
     REGEXP *const rx = reginfo->prog;
     regexp *const prog = ReANY(rx);
@@ -5283,7 +5318,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 			assert(o->op_targ == OP_LEAVE);
 			o = cUNOPo->op_first;
 			assert(o->op_type == OP_ENTER);
-			o = o->op_sibling;
+			o = OP_SIBLING(o);
 		    }
 
 		    if (o->op_type != OP_STUB) {
@@ -5756,11 +5791,14 @@ NULL
 	{
 	    /* see the discussion above about CURLYX/WHILEM */
 	    I32 n;
-	    int min = ARG1(cur_curlyx->u.curlyx.me);
-	    int max = ARG2(cur_curlyx->u.curlyx.me);
-	    regnode *A = NEXTOPER(cur_curlyx->u.curlyx.me) + EXTRA_STEP_2ARGS;
+	    int min, max;
+	    regnode *A;
 
 	    assert(cur_curlyx); /* keep Coverity happy */
+
+	    min = ARG1(cur_curlyx->u.curlyx.me);
+	    max = ARG2(cur_curlyx->u.curlyx.me);
+	    A = NEXTOPER(cur_curlyx->u.curlyx.me) + EXTRA_STEP_2ARGS;
 	    n = ++cur_curlyx->u.curlyx.count; /* how many A's matched */
 	    ST.save_lastloc = cur_curlyx->u.curlyx.lastloc;
 	    ST.cache_offset = 0;
@@ -6150,6 +6188,7 @@ NULL
 		/* calculate c1 and c2 for possible match of 1st char
 		 * following curly */
 		ST.c1 = ST.c2 = CHRTEST_VOID;
+                assert(ST.B);
 		if (HAS_TEXT(ST.B) || JUMPABLE(ST.B)) {
 		    regnode *text_node = ST.B;
 		    if (! HAS_TEXT(text_node))
@@ -7035,7 +7074,6 @@ STATIC I32
 S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
             regmatch_info *const reginfo, I32 max, int depth)
 {
-    dVAR;
     char *scan;     /* Pointer to current position in target string */
     I32 c;
     char *loceol = reginfo->strend;   /* local version */
@@ -7576,7 +7614,6 @@ Perl__get_regclass_nonbitmap_data(pTHX_ const regexp *prog,
      *    swash are returned  (in a printable form).
      * Tied intimately to how regcomp.c sets up the data structure */
 
-    dVAR;
     SV *sw  = NULL;
     SV *si  = NULL;         /* Input swash initialization string */
     SV*  invlist = NULL;
@@ -7839,8 +7876,6 @@ S_reghop3(U8 *s, SSize_t off, const U8* lim)
      * 'off' >= 0, backwards if negative.  But don't go outside of position
      * 'lim', which better be < s  if off < 0 */
 
-    dVAR;
-
     PERL_ARGS_ASSERT_REGHOP3;
 
     if (off >= 0) {
@@ -7865,8 +7900,6 @@ S_reghop3(U8 *s, SSize_t off, const U8* lim)
 STATIC U8 *
 S_reghop4(U8 *s, SSize_t off, const U8* llim, const U8* rlim)
 {
-    dVAR;
-
     PERL_ARGS_ASSERT_REGHOP4;
 
     if (off >= 0) {
@@ -7894,8 +7927,6 @@ S_reghop4(U8 *s, SSize_t off, const U8* llim, const U8* rlim)
 STATIC U8 *
 S_reghopmaybe3(U8* s, SSize_t off, const U8* lim)
 {
-    dVAR;
-
     PERL_ARGS_ASSERT_REGHOPMAYBE3;
 
     if (off >= 0) {
@@ -8012,7 +8043,6 @@ S_setup_eval_state(pTHX_ regmatch_info *const reginfo)
 static void
 S_cleanup_regmatch_info_aux(pTHX_ void *arg)
 {
-    dVAR;
     regmatch_info_aux *aux = (regmatch_info_aux *) arg;
     regmatch_info_aux_eval *eval_state =  aux->info_aux_eval;
     regmatch_slab *s;
@@ -8104,7 +8134,6 @@ S_to_byte_substr(pTHX_ regexp *prog)
     /* Converts substr fields in prog from UTF-8 to bytes, calling fbm_compile
      * on the converted value; returns FALSE if can't be converted. */
 
-    dVAR;
     int i = 1;
 
     PERL_ARGS_ASSERT_TO_BYTE_SUBSTR;

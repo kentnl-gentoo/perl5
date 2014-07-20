@@ -495,7 +495,6 @@ Perl_dump_indent(pTHX_ I32 level, PerlIO *file, const char* pat, ...)
 void
 Perl_dump_vindent(pTHX_ I32 level, PerlIO *file, const char* pat, va_list *args)
 {
-    dVAR;
     PERL_ARGS_ASSERT_DUMP_VINDENT;
     PerlIO_printf(file, "%*s", (int)(level*PL_dumpindent), "");
     PerlIO_vprintf(file, pat, *args);
@@ -520,8 +519,6 @@ Perl_dump_all(pTHX)
 void
 Perl_dump_all_perl(pTHX_ bool justperl)
 {
-
-    dVAR;
     PerlIO_setlinebuf(Perl_debug_log);
     if (PL_main_root)
 	op_dump(PL_main_root);
@@ -546,7 +543,6 @@ Perl_dump_packsubs(pTHX_ const HV *stash)
 void
 Perl_dump_packsubs_perl(pTHX_ const HV *stash, bool justperl)
 {
-    dVAR;
     I32	i;
 
     PERL_ARGS_ASSERT_DUMP_PACKSUBS_PERL;
@@ -625,7 +621,6 @@ Perl_dump_form(pTHX_ const GV *gv)
 void
 Perl_dump_eval(pTHX)
 {
-    dVAR;
     op_dump(PL_eval_root);
 }
 
@@ -906,6 +901,7 @@ S_op_private_to_names(pTHX_ SV *tmpsv, U32 optype, U32 op_private) {
         if (o->op_savefree) sv_catpvs(tmpsv, ",SAVEFREE");              \
         if (o->op_static)   sv_catpvs(tmpsv, ",STATIC");                \
         if (o->op_folded)   sv_catpvs(tmpsv, ",FOLDED");                \
+        if (o->op_lastsib)  sv_catpvs(tmpsv, ",LASTSIB");               \
         Perl_dump_indent(aTHX_ level, file, "FLAGS = (%s)\n",           \
                          SvCUR(tmpsv) ? SvPVX_const(tmpsv) + 1 : "");   \
     }
@@ -1002,7 +998,6 @@ S_op_private_to_names(pTHX_ SV *tmpsv, U32 optype, U32 op_private) {
 void
 Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
 {
-    dVAR;
     UV      seq;
     const OPCODE optype = o->op_type;
 
@@ -1169,7 +1164,7 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
     }
     if (o->op_flags & OPf_KIDS) {
 	OP *kid;
-	for (kid = cUNOPo->op_first; kid; kid = kid->op_sibling)
+	for (kid = cUNOPo->op_first; kid; kid = OP_SIBLING(kid))
 	    do_op_dump(level, file, kid);
     }
     Perl_dump_indent(aTHX_ level-1, file, "}\n");
@@ -1534,7 +1529,6 @@ const struct flag_to_name regexp_core_intflags_names[] = {
 void
 Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops, STRLEN pvlim)
 {
-    dVAR;
     SV *d;
     const char *s;
     U32 flags;
@@ -2322,8 +2316,6 @@ For an example of its output, see L<Devel::Peek>.
 void
 Perl_sv_dump(pTHX_ SV *sv)
 {
-    dVAR;
-
     PERL_ARGS_ASSERT_SV_DUMP;
 
     if (SvROK(sv))
@@ -2335,7 +2327,6 @@ Perl_sv_dump(pTHX_ SV *sv)
 int
 Perl_runops_debug(pTHX)
 {
-    dVAR;
     if (!PL_op) {
 	Perl_ck_warner_d(aTHX_ packWARN(WARN_DEBUGGING), "NULL OP IN RUN");
 	return 0;
@@ -2378,7 +2369,6 @@ Perl_runops_debug(pTHX)
 I32
 Perl_debop(pTHX_ const OP *o)
 {
-    dVAR;
     int count;
 
     PERL_ARGS_ASSERT_DEBOP;
@@ -2455,7 +2445,6 @@ Perl_debop(pTHX_ const OP *o)
 STATIC CV*
 S_deb_curcv(pTHX_ const I32 ix)
 {
-    dVAR;
     const PERL_CONTEXT * const cx = &cxstack[ix];
     if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT)
         return cx->blk_sub.cv;
@@ -2472,8 +2461,6 @@ S_deb_curcv(pTHX_ const I32 ix)
 void
 Perl_watch(pTHX_ char **addr)
 {
-    dVAR;
-
     PERL_ARGS_ASSERT_WATCH;
 
     PL_watchaddr = addr;
@@ -2485,8 +2472,6 @@ Perl_watch(pTHX_ char **addr)
 STATIC void
 S_debprof(pTHX_ const OP *o)
 {
-    dVAR;
-
     PERL_ARGS_ASSERT_DEBPROF;
 
     if (!DEBUG_J_TEST_ && CopSTASH_eq(PL_curcop, PL_debstash))
@@ -2499,7 +2484,6 @@ S_debprof(pTHX_ const OP *o)
 void
 Perl_debprofdump(pTHX)
 {
-    dVAR;
     unsigned i;
     if (!PL_profiledata)
 	return;

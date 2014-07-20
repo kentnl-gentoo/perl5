@@ -134,6 +134,7 @@ a[^]b]c	adc	y	$&	adc
 \By\b	xy	y	-	-
 \by\B	yz	y	-	-
 \By\B	xyz	y	-	-
+\B		y	-	-
 \w	a	y	-	-
 \w	-	n	-	-
 \W	a	n	-	-
@@ -1057,6 +1058,7 @@ X(?:ABCF[cC]x*|ABCD|ABCF):(?:DIT|DID|DIM)	XABCFCxxxxxxxxxx:DIM	y	$&	XABCFCxxxxxx
 (?=foo)	foo	y	pos	0
 (?=foo)	XfooY	y	pos	1
 .*(?=foo)	XfooY	y	pos	1
+(?=.*P)P	aP	y	pos	2
 (?<=foo)	foo	y	pos	3
 (?<=foo)	XfooY	y	pos	4
 .*(?<=foo)	foo	y	pos	3

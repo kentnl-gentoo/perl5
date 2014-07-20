@@ -321,7 +321,7 @@
 #  define PERL_UNUSED_VAR(x) ((void)x)
 #endif
 
-#ifdef USE_ITHREADS
+#if defined(USE_ITHREADS) || defined(PERL_GLOBAL_STRUCT)
 #  define PERL_UNUSED_CONTEXT PERL_UNUSED_ARG(my_perl)
 #else
 #  define PERL_UNUSED_CONTEXT
@@ -391,12 +391,8 @@
  * semicolon being left alone on a line:
  * ;
  * which makes compilers mildly cranky.  Therefore at file level one
- * should use the #ifdef GCC_DIAG_PRAGMA guard around the GCC_DIAG_IGNORE
- * and GCC_DIAG_RESTORE.
- *
- * (An alternative solution would be not to use the semicolon, and then
- * the empty definition would be just empty, but that would make the code
- * look odd, and might mess up e.g. smart editors indenting the code.)
+ * should use the GCC_DIAG_IGNORE and GCC_DIAG_RESTORE_FILE *without*
+ * the semicolons.
  *
  * (A dead-on-arrival solution would be to try to define the macros as
  * NOOP or dNOOP, those don't work both inside functions and outside.)
@@ -737,6 +733,9 @@
 #   endif
 #   if !defined(NO_LOCALE_MONETARY) && defined(LC_MONETARY)
 #	define USE_LOCALE_MONETARY
+#   endif
+#   if !defined(NO_LOCALE_TIME) && defined(LC_TIME)
+#	define USE_LOCALE_TIME
 #   endif
 #   ifndef WIN32    /* No wrapper except on Windows */
 #       define my_setlocale(a,b) setlocale(a,b)
@@ -1545,12 +1544,14 @@ EXTERN_C char *crypt(const char *, const char *);
  * that should be true only if the snprintf()/vsnprintf() are true
  * to the standard. */
 
+#define PERL_SNPRINTF_CHECK(len, max, api) STMT_START { if ((max) > 0 && (Size_t)len >= (max)) Perl_croak_nocontext("panic: %s buffer overflow", STRINGIFY(api)); } STMT_END
+
 #if defined(HAS_SNPRINTF) && defined(HAS_C99_VARIADIC_MACROS) && !(defined(DEBUGGING) && !defined(PERL_USE_GCC_BRACE_GROUPS)) && !defined(PERL_GCC_PEDANTIC)
 #  ifdef PERL_USE_GCC_BRACE_GROUPS
-#      define my_snprintf(buffer, len, ...) ({ int __len__ = snprintf(buffer, len, __VA_ARGS__); if ((len) > 0 && (Size_t)__len__ >= (len)) Perl_croak_nocontext("panic: snprintf buffer overflow"); __len__; })
+#      define my_snprintf(buffer, max, ...) ({ int len = snprintf(buffer, max, __VA_ARGS__); PERL_SNPRINTF_CHECK(len, max, snprintf); len; })
 #      define PERL_MY_SNPRINTF_GUARDED
 #  else
-#    define my_snprintf(buffer, len, ...) snprintf(buffer, len, __VA_ARGS__)
+#    define my_snprintf(buffer, max, ...) snprintf(buffer, max, __VA_ARGS__)
 #  endif
 #else
 #  define my_snprintf  Perl_my_snprintf
@@ -1559,14 +1560,45 @@ EXTERN_C char *crypt(const char *, const char *);
 
 #if defined(HAS_VSNPRINTF) && defined(HAS_C99_VARIADIC_MACROS) && !(defined(DEBUGGING) && !defined(PERL_USE_GCC_BRACE_GROUPS)) && !defined(PERL_GCC_PEDANTIC)
 #  ifdef PERL_USE_GCC_BRACE_GROUPS
-#      define my_vsnprintf(buffer, len, ...) ({ int __len__ = vsnprintf(buffer, len, __VA_ARGS__); if ((len) > 0 && (Size_t)__len__ >= (Size_t)(len)) Perl_croak_nocontext("panic: vsnprintf buffer overflow"); __len__; })
+#      define my_vsnprintf(buffer, max, ...) ({ int len = vsnprintf(buffer, max, __VA_ARGS__); PERL_SNPRINTF_CHECK(len, max, vsnprintf); len; })
 #      define PERL_MY_VSNPRINTF_GUARDED
 #  else
-#    define my_vsnprintf(buffer, len, ...) vsnprintf(buffer, len, __VA_ARGS__)
+#    define my_vsnprintf(buffer, max, ...) vsnprintf(buffer, max, __VA_ARGS__)
 #  endif
 #else
 #  define my_vsnprintf Perl_my_vsnprintf
 #  define PERL_MY_VSNPRINTF_GUARDED
+#endif
+
+/* You will definitely need to use the PERL_MY_SNPRINTF_POST_GUARD()
+ * or PERL_MY_VSNPRINTF_POST_GUARD() if you otherwise decide to ignore
+ * the result of my_snprintf() or my_vsnprintf().  (No, you should not
+ * completely ignore it: otherwise you cannot know whether your output
+ * was too long.)
+ *
+ * int len = my_sprintf(buf, max, ...);
+ * PERL_MY_SNPRINTF_POST_GUARD(len, max);
+ *
+ * The trick is that in certain platforms [a] the my_sprintf() already
+ * contains the sanity check, while in certain platforms [b] it needs
+ * to be done as a separate step.  The POST_GUARD is that step-- in [a]
+ * platforms the POST_GUARD actually does nothing since the check has
+ * already been done.  Watch out for the max being the same in both calls.
+ *
+ * If you actually use the snprintf/vsnprintf return value already,
+ * you assumedly are checking its validity somehow.  But you can
+ * insert the POST_GUARD() also in that case. */
+
+#ifndef PERL_MY_SNPRINTF_GUARDED
+#  define PERL_MY_SNPRINTF_POST_GUARD(len, max) PERL_SNPRINTF_CHECK(len, max, snprintf)
+#else
+#  define PERL_MY_SNPRINTF_POST_GUARD(len, max) PERL_UNUSED_VAR(len)
+#endif
+
+#ifndef  PERL_MY_VSNPRINTF_GUARDED
+#  define PERL_MY_VSNPRINTF_POST_GUARD(len, max) PERL_SNPRINTF_CHECK(len, max, vsnprintf)
+#else
+#  define PERL_MY_VSNPRINTF_POST_GUARD(len, max) PERL_UNUSED_VAR(len)
 #endif
 
 #ifdef HAS_STRLCAT
@@ -4661,6 +4693,9 @@ EXTCONST char PL_bincompat_options[] =
 #  ifdef USE_LOCALE_NUMERIC
 			     " USE_LOCALE_NUMERIC"
 #  endif
+#  ifdef USE_LOCALE_TIME
+			     " USE_LOCALE_TIME"
+#  endif
 #  ifdef USE_LONG_DOUBLE
 			     " USE_LONG_DOUBLE"
 #  endif
@@ -5729,6 +5764,7 @@ int flock(int fd, int op);
 #define IS_NUMBER_NEG		      0x08 /* leading minus sign */
 #define IS_NUMBER_INFINITY	      0x10 /* this is big */
 #define IS_NUMBER_NAN                 0x20 /* this is not */
+#define IS_NUMBER_TRAILING            0x40 /* number has trailing trash */
 
 #define GROK_NUMERIC_RADIX(sp, send) grok_numeric_radix(sp, send)
 
@@ -5738,6 +5774,9 @@ int flock(int fd, int op);
 #define PERL_SCAN_SILENT_ILLDIGIT     0x04 /* grok_??? not warn about illegal digits */
 #define PERL_SCAN_SILENT_NON_PORTABLE 0x08 /* grok_??? not warn about very large
 					      numbers which are <= UV_MAX */
+#define PERL_SCAN_TRAILING            0x10 /* grok_number_flags() allow trailing
+                                              and set IS_NUMBER_TRAILING */
+
 /* Output flags: */
 #define PERL_SCAN_GREATER_THAN_UV_MAX 0x02 /* should this merge with above? */
 

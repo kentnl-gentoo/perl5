@@ -396,6 +396,10 @@ some of which need to be left unchanged.
 The line in F<INSTALL> about "is binary incompatible with" requires a
 correct choice of earlier version to declare incompatibility with.
 
+For the first RC release leading up to a BLEAD-FINAL release, update the
+description of which releases are now "officially" supported in
+F<pod/perlpolicy.pod>.
+
 When doing a BLEAD-POINT or BLEAD-FINAL release, also make sure the
 C<PERL_API_*> constants in F<patchlevel.h> are in sync with the version
 you're releasing, unless you're absolutely sure the release you're about to
@@ -609,7 +613,7 @@ Add a perldelta entry for the new Module::CoreList version.
 
 =head4 Update C<%Module::CoreList::released> and C<CAVEATS>
 
-In addition, if this is a final release (rather than a release candidate):
+For any release except an RC:
 
 =over 4
 
@@ -754,10 +758,9 @@ Add an entry to F<pod/perlhist.pod> with the release date, e.g.:
 
     David    5.10.1       2009-Aug-06
 
-Make sure that the correct pumpking is listed in the left-hand column, and
-if this is the first release under the stewardship of a new pumpking, make
-sure that his or her name is listed in the section entitled
-C<THE KEEPERS OF THE PUMPKIN>.
+List yourself in the left-hand column, and if this is the first release
+that you've ever done, make sure that your name is listed in the section
+entitled C<THE KEEPERS OF THE PUMPKIN>.
 
 I<If you're making a BLEAD-FINAL release>, also update the "SELECTED
 RELEASE SIZES" section with the output of
@@ -849,8 +852,9 @@ Create a tarball. Use the C<-s> option to specify a suitable suffix for
 the tarball and directory name:
 
  $ cd root/of/perl/tree
- $ make distclean
+ $ make distclean       # make sure distclean works
  $ git clean -xdf       # make sure perl and git agree on files
+                        # git clean should not output anything!
  $ git status           # and there's nothing lying around
 
  $ perl Porting/makerel -b -s RC1            # for a release candidate
@@ -894,6 +898,9 @@ to find willing victims.
 Check that basic configuration and tests work on each test machine:
 
     $ ./Configure -des && make all test
+
+    # Or for a development release:
+    $ ./Configure -Dusedevel -des && make all test
 
 =head4 Run the test harness and install
 
@@ -939,6 +946,9 @@ previous is 5.10.0:
 Bootstrap the CPAN client on the clean install:
 
     $ bin/cpan
+
+    # Or, perhaps:
+    $ bin/cpan5.xx.x
 
 =head4 Install the Inline module with CPAN and test it
 

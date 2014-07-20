@@ -1948,7 +1948,6 @@ S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch,
                   regnode *first, regnode *last, regnode *tail,
                   U32 word_count, U32 flags, U32 depth)
 {
-    dVAR;
     /* first pass, loop through and scan words */
     reg_trie_data *trie;
     HV *widecharmap = NULL;
@@ -3594,7 +3593,6 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 			/* recursed: which subroutines have we recursed into */
 			/* and_withp: Valid if flags & SCF_DO_STCLASS_OR */
 {
-    dVAR;
     /* There must be at least this number of characters to match */
     SSize_t min = 0;
     I32 pars = 0, code;
@@ -5522,7 +5520,6 @@ S_add_data(RExC_state_t* const pRExC_state, const char* const s, const U32 n)
 void
 Perl_reginitcolors(pTHX)
 {
-    dVAR;
     const char * const s = PerlEnv_getenv("PERL_RE_COLORS");
     if (s) {
 	char *t = savepv(s);
@@ -5576,8 +5573,6 @@ Perl_reginitcolors(pTHX)
 regexp_engine const *
 Perl_current_re_engine(pTHX)
 {
-    dVAR;
-
     if (IN_PERL_COMPILETIME) {
 	HV * const table = GvHV(PL_hintgv);
 	SV **ptr;
@@ -5604,7 +5599,6 @@ Perl_current_re_engine(pTHX)
 REGEXP *
 Perl_pregcomp(pTHX_ SV * const pattern, const U32 flags)
 {
-    dVAR;
     regexp_engine const *eng = current_re_engine();
     GET_RE_DEBUG_FLAGS_DECL;
 
@@ -5756,7 +5750,7 @@ S_concat_pat(pTHX_ RExC_state_t * const pRExC_state,
             if (oplist) {
                 assert(oplist->op_type == OP_PADAV
                     || oplist->op_type == OP_RV2AV);
-                oplist = oplist->op_sibling;;
+                oplist = OP_SIBLING(oplist);
             }
 
             if (SvRMAGICAL(av)) {
@@ -5803,10 +5797,10 @@ S_concat_pat(pTHX_ RExC_state_t * const pRExC_state,
                 pRExC_state->code_blocks[n].src_regex = NULL;
                 n++;
                 code = 1;
-                oplist = oplist->op_sibling; /* skip CONST */
+                oplist = OP_SIBLING(oplist); /* skip CONST */
                 assert(oplist);
             }
-            oplist = oplist->op_sibling;;
+            oplist = OP_SIBLING(oplist);;
         }
 
 	/* apply magic and QR overloading to arg */
@@ -6243,7 +6237,6 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 		    OP *expr, const regexp_engine* eng, REGEXP *old_re,
 		     bool *is_bare_re, U32 orig_rx_flags, U32 pm_flags)
 {
-    dVAR;
     REGEXP *rx;
     struct regexp *r;
     regexp_internal *ri;
@@ -6305,7 +6298,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 	OP *o;
 	int ncode = 0;
 
-	for (o = cLISTOPx(expr)->op_first; o; o = o->op_sibling)
+	for (o = cLISTOPx(expr)->op_first; o; o = OP_SIBLING(o))
 	    if (o->op_type == OP_NULL && (o->op_flags & OPf_SPECIAL))
 		ncode++; /* count of DO blocks */
 	if (ncode) {
@@ -6326,7 +6319,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
         if (expr->op_type == OP_CONST)
             n = 1;
         else
-            for (o = cLISTOPx(expr)->op_first; o; o = o->op_sibling) {
+            for (o = cLISTOPx(expr)->op_first; o; o = OP_SIBLING(o)) {
                 if (o->op_type == OP_CONST)
                     n++;
             }
@@ -6342,7 +6335,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
         if (expr->op_type == OP_CONST)
             new_patternp[n] = cSVOPx_sv(expr);
         else
-            for (o = cLISTOPx(expr)->op_first; o; o = o->op_sibling) {
+            for (o = cLISTOPx(expr)->op_first; o; o = OP_SIBLING(o)) {
                 if (o->op_type == OP_CONST)
                     new_patternp[n++] = cSVOPo_sv;
             }
@@ -6362,7 +6355,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
             assert(   expr->op_type == OP_PUSHMARK
                    || (expr->op_type == OP_NULL && expr->op_targ == OP_PUSHMARK)
                    || expr->op_type == OP_PADRANGE);
-            expr = expr->op_sibling;
+            expr = OP_SIBLING(expr);
     }
 
     pat = S_concat_pat(aTHX_ pRExC_state, NULL, new_patternp, pat_count,
@@ -6864,6 +6857,7 @@ reStudy:
 	    goto again;
 	}
 	else if ((!sawopen || !RExC_sawback) &&
+            !sawlookahead &&
 	    (OP(first) == STAR &&
 	    PL_regkind[OP(NEXTOPER(first))] == REG_ANY) &&
             !(r->intflags & PREGf_ANCH) && !pRExC_state->num_code_blocks)
@@ -9461,7 +9455,6 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
      * RExC_parse beyond the '('.  Things like '(?' are indivisible tokens, and
      * this flag alerts us to the need to check for that */
 {
-    dVAR;
     regnode *ret;		/* Will be the head of the group. */
     regnode *br;
     regnode *lastbr;
@@ -10370,7 +10363,6 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 STATIC regnode *
 S_regbranch(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, I32 first, U32 depth)
 {
-    dVAR;
     regnode *ret;
     regnode *chain = NULL;
     regnode *latest;
@@ -10452,7 +10444,6 @@ S_regbranch(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, I32 first, U32 depth)
 STATIC regnode *
 S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 {
-    dVAR;
     regnode *ret;
     char op;
     char *next;
@@ -11240,7 +11231,6 @@ S_backref_value(char *p)
 STATIC regnode *
 S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 {
-    dVAR;
     regnode *ret = NULL;
     I32 flags = 0;
     char *parse_start = RExC_parse;
@@ -11398,6 +11388,9 @@ tryagain:
 	    ret = reg_node(pRExC_state, CANY);
             RExC_seen |= REG_CANY_SEEN;
 	    *flagp |= HASWIDTH|SIMPLE;
+            if (SIZE_ONLY) {
+                ckWARNdep(RExC_parse+1, "\\C is deprecated");
+            }
 	    goto finish_meta_pat;
 	case 'X':
 	    ret = reg_node(pRExC_state, CLUMP);
@@ -12510,7 +12503,6 @@ S_populate_ANYOF_from_invlist(pTHX_ regnode *node, SV** invlist_ptr)
 PERL_STATIC_INLINE I32
 S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value, const bool strict)
 {
-    dVAR;
     I32 namedclass = OOB_NAMEDCLASS;
 
     PERL_ARGS_ASSERT_REGPPOSIXCC;
@@ -13205,9 +13197,10 @@ S_add_above_Latin1_folds(pTHX_ RExC_state_t *pRExC_state, const U8 cp, SV** invl
      * disk to find the possible matches.
      *
      * This should be called only for a Latin1-range code points, cp, which is
-     * known to be involved in a fold with other code points above Latin1.  It
-     * would give false results if /aa has been specified.  Multi-char folds
-     * are outside the scope of this, and must be handled specially.
+     * known to be involved in a simple fold with other code points above
+     * Latin1.  It would give false results if /aa has been specified.
+     * Multi-char folds are outside the scope of this, and must be handled
+     * specially.
      *
      * XXX It would be better to generate these via regen, in case a new
      * version of the Unicode standard adds new mappings, though that is not
@@ -13215,6 +13208,8 @@ S_add_above_Latin1_folds(pTHX_ RExC_state_t *pRExC_state, const U8 cp, SV** invl
      * below. */
 
     PERL_ARGS_ASSERT_ADD_ABOVE_LATIN1_FOLDS;
+
+    assert(HAS_NONLATIN1_SIMPLE_FOLD_CLOSURE(cp));
 
     switch (cp) {
         case 'k':
@@ -13240,22 +13235,6 @@ S_add_above_Latin1_folds(pTHX_ RExC_state_t *pRExC_state, const U8 cp, SV** invl
             break;
         case LATIN_SMALL_LETTER_SHARP_S:
           *invlist = add_cp_to_invlist(*invlist, LATIN_CAPITAL_LETTER_SHARP_S);
-            break;
-        case 'F': case 'f':
-        case 'I': case 'i':
-        case 'L': case 'l':
-        case 'T': case 't':
-        case 'A': case 'a':
-        case 'H': case 'h':
-        case 'J': case 'j':
-        case 'N': case 'n':
-        case 'W': case 'w':
-        case 'Y': case 'y':
-            /* These all are targets of multi-character folds from code points
-             * that require UTF8 to express, so they can't match unless the
-             * target string is in UTF-8, so no action here is necessary, as
-             * regexec.c properly handles the general case for UTF-8 matching
-             * and multi-char folds */
             break;
         default:
             /* Use deprecated warning to increase the chances of this being
@@ -13306,7 +13285,6 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
      * to be restarted.  This can only happen if ret_invlist is non-NULL.
      */
 
-    dVAR;
     UV prevvalue = OOB_UNICODE, save_prevvalue = OOB_UNICODE;
     IV range = 0;
     UV value = OOB_UNICODE, save_value = OOB_UNICODE;
@@ -15041,7 +15019,7 @@ S_reg_skipcomment(RExC_state_t *pRExC_state, char* p)
 {
     PERL_ARGS_ASSERT_REG_SKIPCOMMENT;
 
-    assert(*p = '#');
+    assert(*p == '#');
 
     while (p < RExC_end) {
         if (*(++p) == '\n') {
@@ -15107,7 +15085,6 @@ S_nextchar(pTHX_ RExC_state_t *pRExC_state)
 STATIC regnode *			/* Location. */
 S_reg_node(pTHX_ RExC_state_t *pRExC_state, U8 op)
 {
-    dVAR;
     regnode *ptr;
     regnode * const ret = RExC_emit;
     GET_RE_DEBUG_FLAGS_DECL;
@@ -15150,7 +15127,6 @@ S_reg_node(pTHX_ RExC_state_t *pRExC_state, U8 op)
 STATIC regnode *			/* Location. */
 S_reganode(pTHX_ RExC_state_t *pRExC_state, U8 op, U32 arg)
 {
-    dVAR;
     regnode *ptr;
     regnode * const ret = RExC_emit;
     GET_RE_DEBUG_FLAGS_DECL;
@@ -15208,8 +15184,6 @@ S_reganode(pTHX_ RExC_state_t *pRExC_state, U8 op, U32 arg)
 PERL_STATIC_INLINE STRLEN
 S_reguni(pTHX_ const RExC_state_t *pRExC_state, UV uv, char* s)
 {
-    dVAR;
-
     PERL_ARGS_ASSERT_REGUNI;
 
     return SIZE_ONLY ? UNISKIP(uv) : (uvchr_to_utf8((U8*)s, uv) - (U8*)s);
@@ -15223,7 +15197,6 @@ S_reguni(pTHX_ const RExC_state_t *pRExC_state, UV uv, char* s)
 STATIC void
 S_reginsert(pTHX_ RExC_state_t *pRExC_state, U8 op, regnode *opnd, U32 depth)
 {
-    dVAR;
     regnode *src;
     regnode *dst;
     regnode *place;
@@ -15315,7 +15288,6 @@ STATIC void
 S_regtail(pTHX_ RExC_state_t *pRExC_state, regnode *p,
                 const regnode *val,U32 depth)
 {
-    dVAR;
     regnode *scan;
     GET_RE_DEBUG_FLAGS_DECL;
 
@@ -15966,7 +15938,6 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_
 SV *
 Perl_re_intuit_string(pTHX_ REGEXP * const r)
 {				/* Assume that RE_INTUIT is set */
-    dVAR;
     struct regexp *const prog = ReANY(r);
     GET_RE_DEBUG_FLAGS_DECL;
 
@@ -16014,7 +15985,6 @@ Perl_pregfree(pTHX_ REGEXP *r)
 void
 Perl_pregfree2(pTHX_ REGEXP *rx)
 {
-    dVAR;
     struct regexp *const r = ReANY(rx);
     GET_RE_DEBUG_FLAGS_DECL;
 
@@ -16143,7 +16113,6 @@ Perl_reg_temp_copy (pTHX_ REGEXP *ret_x, REGEXP *rx)
 void
 Perl_regfree_internal(pTHX_ REGEXP * const rx)
 {
-    dVAR;
     struct regexp *const r = ReANY(rx);
     RXi_GET_DECL(r,ri);
     GET_RE_DEBUG_FLAGS_DECL;
@@ -16196,6 +16165,9 @@ Perl_regfree_internal(pTHX_ REGEXP * const rx)
                      Used in stclass optimization only */
                     U32 refcount;
                     reg_ac_data *aho=(reg_ac_data*)ri->data->data[n];
+#ifdef USE_ITHREADS
+                    dVAR;
+#endif
                     OP_REFCNT_LOCK;
                     refcount = --aho->refcount;
                     OP_REFCNT_UNLOCK;
@@ -16222,6 +16194,9 @@ Perl_regfree_internal(pTHX_ REGEXP * const rx)
 	            /* trie structure. */
 	            U32 refcount;
 	            reg_trie_data *trie=(reg_trie_data*)ri->data->data[n];
+#ifdef USE_ITHREADS
+                    dVAR;
+#endif
                     OP_REFCNT_LOCK;
                     refcount = --trie->refcount;
                     OP_REFCNT_UNLOCK;
@@ -16472,7 +16447,6 @@ Perl_regdupe_internal(pTHX_ REGEXP * const rx, CLONE_PARAMS *param)
 regnode *
 Perl_regnext(pTHX_ regnode *p)
 {
-    dVAR;
     I32 offset;
 
     if (!p)
@@ -16528,8 +16502,6 @@ S_re_croak2(pTHX_ bool utf8, const char* pat1,const char* pat2,...)
 void
 Perl_save_re_context(pTHX)
 {
-    dVAR;
-
     /* Save $1..$n (#18107: UTF-8 s/(\w+)/uc($1)/e); AMS 20021106. */
     if (PL_curpm) {
 	const REGEXP * const rx = PM_GETRE(PL_curpm);
@@ -16586,40 +16558,104 @@ S_put_range(pTHX_ SV *sv, UV start, UV end)
 {
 
     /* Appends to 'sv' a displayable version of the range of code points from
-     * 'start' to 'end' */
+     * 'start' to 'end'.  It assumes that only ASCII printables are displayable
+     * as-is (though some of these will be escaped by put_byte()).  For the
+     * time being, this subroutine only works for latin1 (< 256) code points */
 
     assert(start <= end);
 
     PERL_ARGS_ASSERT_PUT_RANGE;
 
-    if (end - start < 3) {  /* Individual chars in short ranges */
-        for (; start <= end; start++)
-            put_byte(sv, start);
-    }
-    else if (   end > 255
-             || ! isALPHANUMERIC(start)
-             || ! isALPHANUMERIC(end)
-             || isDIGIT(start) != isDIGIT(end)
-             || isUPPER(start) != isUPPER(end)
-             || isLOWER(start) != isLOWER(end)
+    while (start <= end) {
+        if (end - start < 3) {  /* Individual chars in short ranges */
+            for (; start <= end; start++) {
+                put_byte(sv, start);
+            }
+            break;
+        }
 
-                /* This final test should get optimized out except on EBCDIC
-                 * platforms, where it causes ranges that cross discontinuities
-                 * like i/j to be shown as hex instead of the misleading,
-                 * e.g. H-K (since that range includes more than H, I, J, K).
-                 * */
-             || (end - start) != NATIVE_TO_ASCII(end) - NATIVE_TO_ASCII(start))
-    {
+        /* For small ranges that include printable ASCII characters, it's more
+         * legible to print those characters rather than hex values.  For
+         * larger ranges that include more than printables, it's probably
+         * clearer to just give the start and end points of the range in hex,
+         * and that's all we can do if there aren't any printables within the
+         * range
+         *
+         * On ASCII platforms the range of printables is contiguous.  If the
+         * entire range is printable, we print each character as such.  If the
+         * range is partially printable and partially not, it's less likely
+         * that the individual printables are meaningful, especially if all or
+         * almost all of them are in the range.  But we err on the side of the
+         * individual printables being meaningful by using the hex only if the
+         * range contains all but 2 of the printables.
+         *
+         * On EBCDIC platforms, the printables are scattered around so that the
+         * maximum range length containing only them is about 10.  Anything
+         * longer we treat as hex; otherwise we examine the range character by
+         * character to see */
+#ifdef EBCDIC
+        if (start < 256 && (((end < 255) ? end : 255) - start <= 10))
+#else
+        if ((isPRINT_A(start) && isPRINT_A(end))
+            || (end >= 0x7F && (isPRINT_A(start) && start > 0x21))
+            || ((end < 0x7D && isPRINT_A(end)) && start < 0x20))
+#endif
+        {
+            /* If the range beginning isn't an ASCII printable, we find the
+             * last such in the range, then split the output, so all the
+             * non-printables are in one subrange; then process the remaining
+             * portion as usual.  If the entire range isn't printables, we
+             * don't split, but drop down to print as hex */
+            if (! isPRINT_A(start)) {
+                UV temp_end = start + 1;
+                while (temp_end <= end && ! isPRINT_A(temp_end)) {
+                    temp_end++;
+                }
+                if (temp_end <= end) {
+                    put_range(sv, start, temp_end - 1);
+                    start = temp_end;
+                    continue;
+                }
+            }
+
+            /* If the range beginning is a digit, output a subrange of just the
+             * digits, then process the remaining portion as usual */
+            if (isDIGIT_A(start)) {
+                put_byte(sv, start);
+                sv_catpvs(sv, "-");
+                while (start <= end && isDIGIT_A(start)) start++;
+                put_byte(sv, start - 1);
+                continue;
+            }
+
+            /* Similarly for alphabetics.  Because in both ASCII and EBCDIC,
+             * the code points for upper and lower A-Z and a-z aren't
+             * intermixed, the resulting subrange will consist solely of either
+             * upper- or lower- alphabetics */
+            if (isALPHA_A(start)) {
+                put_byte(sv, start);
+                sv_catpvs(sv, "-");
+                while (start <= end && isALPHA_A(start)) start++;
+                put_byte(sv, start - 1);
+                continue;
+            }
+
+            /* We output any remaining printables as individual characters */
+            if (isPUNCT_A(start) || isSPACE_A(start)) {
+                while (start <= end && (isPUNCT_A(start) || isSPACE_A(start))) {
+                    put_byte(sv, start);
+                    start++;
+                }
+                continue;
+            }
+        }
+
+        /* Here is a control or non-ascii.  Output the range or subrange as
+         * hex. */
         Perl_sv_catpvf(aTHX_ sv, "\\x{%02" UVXf "}-\\x{%02" UVXf "}",
                        start,
                        (end < 256) ? end : 255);
-    }
-    else { /* Here, the ends of the range are both digits, or both uppercase,
-              or both lowercase; and there's no discontinuity in the range
-              (which could happen on EBCDIC platforms) */
-        put_byte(sv, start);
-        sv_catpvs(sv, "-");
-        put_byte(sv, end);
+        break;
     }
 }
 

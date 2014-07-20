@@ -92,29 +92,29 @@ EOF
 {
     local $ENV{PERLDB_OPTS} = "ReadLine=0 NonStop=1";
     my $output = runperl(switches => [ '-d' ], stderr => 1, progfile => '../lib/perl5db/t/rt-66110');
-    like($output, "All tests successful.", "[perl #66110]");
+    like($output, qr/\bAll tests successful\.$/, "[perl #66110]");
 }
 # [ perl #116769] Frame=2
 {
     local $ENV{PERLDB_OPTS} = "frame=2 nonstop";
-    my $output = runperl( switches => [ '-d' ], prog => 'print q{success}' );
+    my $output = runperl( switches => [ '-d' ], prog => 'print qq{success\n}' );
     is( $?, 0, '[perl #116769] frame=2 does not crash debugger, exit == 0' );
-    like( $output, 'success' , '[perl #116769] code is run' );
+    is( $output, "success\n" , '[perl #116769] code is run' );
 }
 # [ perl #116771] autotrace
 {
     local $ENV{PERLDB_OPTS} = "autotrace nonstop";
-    my $output = runperl( switches => [ '-d' ], prog => 'print q{success}' );
+    my $output = runperl( switches => [ '-d' ], prog => 'print qq{success\n}' );
     is( $?, 0, '[perl #116771] autotrace does not crash debugger, exit == 0' );
-    like( $output, 'success' , '[perl #116771] code is run' );
+    is( $output, "success\n" , '[perl #116771] code is run' );
 }
 # [ perl #41461] Frame=2 noTTY
 {
     local $ENV{PERLDB_OPTS} = "frame=2 noTTY nonstop";
     rc('');
-    my $output = runperl( switches => [ '-d' ], prog => 'print q{success}' );
+    my $output = runperl( switches => [ '-d' ], prog => 'print qq{success\n}' );
     is( $?, 0, '[perl #41461] frame=2 noTTY does not crash debugger, exit == 0' );
-    like( $output, 'success' , '[perl #41461] code is run' );
+    is( $output, "success\n" , '[perl #41461] code is run' );
 }
 
 package DebugWrap;
