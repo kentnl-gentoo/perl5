@@ -1118,7 +1118,6 @@ For example:
 OP *
 Perl_op_sibling_splice(OP *parent, OP *start, int del_count, OP* insert)
 {
-    dVAR;
     OP *first = start ? OP_SIBLING(start) : cLISTOPx(parent)->op_first;
     OP *rest;
     OP *last_del = NULL;
@@ -7670,7 +7669,6 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 	gv = gv_fetchpvs("__ANON__::__ANON__", gv_fetch_flags, SVt_PVCV);
 	has_name = FALSE;
     }
-
     if (!ec)
         move_proto_attr(&proto, &attrs, gv);
 
@@ -7930,8 +7928,12 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 	    }
 	}
 
-	if (name && ! (PL_parser && PL_parser->error_count))
-	    process_special_blocks(floor, name, gv, cv);
+        if (name) {
+            if (PL_parser && PL_parser->error_count)
+                clear_special_blocks(name, gv, cv);
+            else
+                process_special_blocks(floor, name, gv, cv);
+        }
     }
 
   done:
@@ -7943,6 +7945,27 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
     if (slab && gv && isGV(gv) && GvCV(gv)) Slab_to_ro(slab);
 #endif
     return cv;
+}
+
+STATIC void
+S_clear_special_blocks(pTHX_ const char *const fullname,
+                       GV *const gv, CV *const cv) {
+    const char *colon;
+    const char *name;
+
+    PERL_ARGS_ASSERT_CLEAR_SPECIAL_BLOCKS;
+
+    colon = strrchr(fullname,':');
+    name = colon ? colon + 1 : fullname;
+
+    if ((*name == 'B' && strEQ(name, "BEGIN"))
+        || (*name == 'E' && strEQ(name, "END"))
+        || (*name == 'U' && strEQ(name, "UNITCHECK"))
+        || (*name == 'C' && strEQ(name, "CHECK"))
+        || (*name == 'I' && strEQ(name, "INIT"))) {
+        GvCV_set(gv, NULL);
+        SvREFCNT_dec_NN(MUTABLE_SV(cv));
+    }
 }
 
 STATIC void
@@ -9358,7 +9381,6 @@ Perl_ck_defined(pTHX_ OP *o)		/* 19990527 MJD */
 	switch (cUNOPo->op_first->op_type) {
 	case OP_RV2AV:
 	case OP_PADAV:
-	case OP_AASSIGN:		/* Is this a good idea? */
 	    Perl_croak(aTHX_ "Can't use 'defined(@array)'"
 			     " (Maybe you should just omit the defined()?)");
 	break;
@@ -10486,7 +10508,7 @@ Perl_ck_entersub_args_core(pTHX_ OP *entersubop, GV *namegv, SV *protosv)
     }
     else {
 	OP *prev, *cvop, *first, *parent;
-	U32 flags;
+	U32 flags = 0;
 
         parent = entersubop;
 	if (!OP_HAS_SIBLING(aop)) {
@@ -10501,7 +10523,12 @@ Perl_ck_entersub_args_core(pTHX_ OP *entersubop, GV *namegv, SV *protosv)
 	     OP_HAS_SIBLING(cvop);
 	     prev = cvop, cvop = OP_SIBLING(cvop))
 	    ;
-	flags = OPf_SPECIAL * !(cvop->op_private & OPpENTERSUB_NOPAREN);
+        if (!(cvop->op_private & OPpENTERSUB_NOPAREN)
+            /* Usually, OPf_SPECIAL on a UNOP means that its arg had no
+             * parens, but these have their own meaning for that flag: */
+            && opnum != OP_VALUES && opnum != OP_KEYS && opnum != OP_EACH
+            && opnum != OP_DELETE && opnum != OP_EXISTS)
+                flags |= OPf_SPECIAL;
         /* excise cvop from end of sibling chain */
         op_sibling_splice(parent, prev, 1, NULL);
 	op_free(cvop);

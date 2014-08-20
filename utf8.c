@@ -1495,8 +1495,10 @@ S_to_lower_latin1(const U8 c, U8* p, STRLEN *lenp)
 	    *lenp = 1;
 	}
 	else {
-	    *p = UTF8_TWO_BYTE_HI(converted);
-	    *(p+1) = UTF8_TWO_BYTE_LO(converted);
+            /* Result is known to always be < 256, so can use the EIGHT_BIT
+             * macros */
+	    *p = UTF8_EIGHT_BIT_HI(converted);
+	    *(p+1) = UTF8_EIGHT_BIT_LO(converted);
 	    *lenp = 2;
 	}
     }
@@ -3481,22 +3483,24 @@ Perl__swash_to_invlist(pTHX_ SV* const swash)
     lend = l + lcur;
 
     if (*l == 'V') {    /*  Inversion list format */
-        char *after_strtol = (char *) lend;
+        const char *after_atou = (char *) lend;
         UV element0;
         UV* other_elements_ptr;
 
         /* The first number is a count of the rest */
         l++;
-        elements = Strtoul((char *)l, &after_strtol, 10);
+        elements = grok_atou((const char *)l, &after_atou);
         if (elements == 0) {
             invlist = _new_invlist(0);
         }
         else {
-            l = (U8 *) after_strtol;
+            while (isSPACE(*l)) l++;
+            l = (U8 *) after_atou;
 
             /* Get the 0th element, which is needed to setup the inversion list */
-            element0 = (UV) Strtoul((char *)l, &after_strtol, 10);
-            l = (U8 *) after_strtol;
+            while (isSPACE(*l)) l++;
+            element0 = (UV) grok_atou((const char *)l, &after_atou);
+            l = (U8 *) after_atou;
             invlist = _setup_canned_invlist(elements, element0, &other_elements_ptr);
             elements--;
 
@@ -3505,8 +3509,9 @@ Perl__swash_to_invlist(pTHX_ SV* const swash)
                 if (l > lend) {
                     Perl_croak(aTHX_ "panic: Expecting %"UVuf" more elements than available", elements);
                 }
-                *other_elements_ptr++ = (UV) Strtoul((char *)l, &after_strtol, 10);
-                l = (U8 *) after_strtol;
+                while (isSPACE(*l)) l++;
+                *other_elements_ptr++ = (UV) grok_atou((const char *)l, &after_atou);
+                l = (U8 *) after_atou;
             }
         }
     }

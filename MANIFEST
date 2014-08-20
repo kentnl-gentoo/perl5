@@ -186,11 +186,17 @@ cpan/Compress-Raw-Zlib/zlib-src/zlib.h		Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/zlib-src/zutil.c		Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/zlib-src/zutil.h		Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/Zlib.xs			Compress::Raw::Zlib
-cpan/Config-Perl-V/t/00_pod.t			Config::Perl::V
-cpan/Config-Perl-V/t/01_pod.t			Config::Perl::V
 cpan/Config-Perl-V/t/10_base.t			Config::Perl::V
-cpan/Config-Perl-V/t/20_plv510.t		Config::Perl::V
-cpan/Config-Perl-V/t/21_plv518.t		Config::Perl::V
+cpan/Config-Perl-V/t/20_plv56.t			Config::Perl::V
+cpan/Config-Perl-V/t/21_plv58.t			Config::Perl::V
+cpan/Config-Perl-V/t/22_plv510.t		Config::Perl::V
+cpan/Config-Perl-V/t/23_plv512.t		Config::Perl::V
+cpan/Config-Perl-V/t/24_plv514.t		Config::Perl::V
+cpan/Config-Perl-V/t/25_plv5162.t		Config::Perl::V
+cpan/Config-Perl-V/t/25_plv516.t		Config::Perl::V
+cpan/Config-Perl-V/t/26_plv5182.t		Config::Perl::V
+cpan/Config-Perl-V/t/26_plv518.t		Config::Perl::V
+cpan/Config-Perl-V/t/27_plv5200.t		Config::Perl::V
 cpan/Config-Perl-V/V.pm				Config::Perl::V
 cpan/CPAN/lib/App/Cpan.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/API/HOWTO.pod		recipe book for programming with CPAN.pm
@@ -232,6 +238,7 @@ cpan/CPAN/lib/CPAN/Version.pm		Simple math with different flavors of version str
 cpan/CPAN-Meta/lib/CPAN/Meta/Converter.pm
 cpan/CPAN-Meta/lib/CPAN/Meta/Feature.pm
 cpan/CPAN-Meta/lib/CPAN/Meta/History.pm
+cpan/CPAN-Meta/lib/CPAN/Meta/Merge.pm
 cpan/CPAN-Meta/lib/CPAN/Meta.pm
 cpan/CPAN-Meta/lib/CPAN/Meta/Prereqs.pm
 cpan/CPAN-Meta/lib/CPAN/Meta/Spec.pm
@@ -296,6 +303,7 @@ cpan/CPAN-Meta/t/data-valid/META-1_0.yml
 cpan/CPAN-Meta/t/data-valid/META-1_1.yml
 cpan/CPAN-Meta/t/data-valid/scalar-meta-spec.yml
 cpan/CPAN-Meta/t/load-bad.t
+cpan/CPAN-Meta/t/merge.t
 cpan/CPAN-Meta/t/meta-obj.t
 cpan/CPAN-Meta/t/no-index.t
 cpan/CPAN-Meta/t/prereqs-finalize.t
@@ -929,12 +937,29 @@ cpan/encoding-warnings/t/3-normal.t	tests for encoding::warnings
 cpan/encoding-warnings/t/4-lexical.t	tests for encoding::warnings
 cpan/experimental/lib/experimental.pm
 cpan/experimental/t/basic.t
+cpan/ExtUtils-Command/lib/ExtUtils/Command.pm	Utilities for Make on non-UNIX platforms
+cpan/ExtUtils-Command/t/cp.t			See if ExtUtils::Command works
+cpan/ExtUtils-Command/t/eu_command.t		See if ExtUtils::Command works
+cpan/ExtUtils-Command/t/lib/TieOut.pm		Testing library to capture prints
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant/Base.pm		generate XS code to import C header constants
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant.pm			generate XS code to import C header constants
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant/ProxySubs.pm	generate XS code for proxy constants
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant/Utils.pm		generate XS code to import C header constants
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant/XS.pm		generate XS code to import C header constants
 cpan/ExtUtils-Constant/t/Constant.t				See if ExtUtils::Constant works
+cpan/ExtUtils-Install/Changes				ExtUtils-Install change log
+cpan/ExtUtils-Install/lib/ExtUtils/Installed.pm		Information on installed extensions
+cpan/ExtUtils-Install/lib/ExtUtils/Install.pm		Handles 'make install' on extensions
+cpan/ExtUtils-Install/lib/ExtUtils/Packlist.pm		Manipulates .packlist files
+cpan/ExtUtils-Install/t/can_write_dir.t			Does the _can_write_dir function of ExtUtils::Install work properly?
+cpan/ExtUtils-Install/t/Installapi2.t			See if new api for ExtUtils::Install::install() works
+cpan/ExtUtils-Install/t/Installed.t			See if ExtUtils::Installed works
+cpan/ExtUtils-Install/t/Install.t			See if ExtUtils::Install works
+cpan/ExtUtils-Install/t/InstallWithMM.t			See if ExtUtils::Install works (related to EUMM/t/basic.t)
+cpan/ExtUtils-Install/t/lib/MakeMaker/Test/Setup/BFD.pm	MakeMaker test utilities
+cpan/ExtUtils-Install/t/lib/MakeMaker/Test/Utils.pm	MakeMaker test utilities
+cpan/ExtUtils-Install/t/lib/TieOut.pm			Testing library to capture prints
+cpan/ExtUtils-Install/t/Packlist.t			See if Packlist works
 cpan/ExtUtils-MakeMaker/bin/instmodsh				Give information about installed extensions
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/Command/MM.pm		Calling MM functions from the cmd line
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/Liblist/Kid.pm		Does the real work of the above
@@ -1040,6 +1065,9 @@ cpan/ExtUtils-MakeMaker/t/VERSION_FROM.t			See if MakeMaker's VERSION_FROM works
 cpan/ExtUtils-MakeMaker/t/WriteEmptyMakefile.t			See if WriteEmptyMakefile works
 cpan/ExtUtils-MakeMaker/t/writemakefile_args.t			See if WriteMakefile works
 cpan/ExtUtils-MakeMaker/t/xs.t					Part of MakeMaker's test suite
+cpan/ExtUtils-Manifest/lib/ExtUtils/Manifest.pm			Utilities to write MANIFEST files
+cpan/ExtUtils-Manifest/lib/ExtUtils/MANIFEST.SKIP		The default MANIFEST.SKIP
+cpan/ExtUtils-Manifest/t/Manifest.t				See if ExtUtils::Manifest works
 cpan/File-Fetch/lib/File/Fetch.pm	File::Fetch
 cpan/File-Fetch/t/01_File-Fetch.t	File::Fetch tests
 cpan/File-Fetch/t/null_subclass.t
@@ -2882,26 +2910,6 @@ dist/ExtUtils-CBuilder/t/01-basic.t				tests for ExtUtils::CBuilder
 dist/ExtUtils-CBuilder/t/02-link.t				tests for ExtUtils::CBuilder
 dist/ExtUtils-CBuilder/t/03-cplusplus.t				tests for ExtUtils::CBuilder
 dist/ExtUtils-CBuilder/t/04-base.t				tests for ExtUtils::CBuilder
-dist/ExtUtils-Command/lib/ExtUtils/Command.pm	Utilities for Make on non-UNIX platforms
-dist/ExtUtils-Command/t/cp.t			See if ExtUtils::Command works
-dist/ExtUtils-Command/t/eu_command.t		See if ExtUtils::Command works
-dist/ExtUtils-Command/t/lib/TieOut.pm		Testing library to capture prints
-dist/ExtUtils-Install/Changes				ExtUtils-Install change log
-dist/ExtUtils-Install/lib/ExtUtils/Installed.pm		Information on installed extensions
-dist/ExtUtils-Install/lib/ExtUtils/Install.pm		Handles 'make install' on extensions
-dist/ExtUtils-Install/lib/ExtUtils/Packlist.pm		Manipulates .packlist files
-dist/ExtUtils-Install/t/can_write_dir.t			Does the _can_write_dir function of ExtUtils::Install work properly?
-dist/ExtUtils-Install/t/Installapi2.t			See if new api for ExtUtils::Install::install() works
-dist/ExtUtils-Install/t/Installed.t			See if ExtUtils::Installed works
-dist/ExtUtils-Install/t/Install.t			See if ExtUtils::Install works
-dist/ExtUtils-Install/t/InstallWithMM.t			See if ExtUtils::Install works (related to EUMM/t/basic.t)
-dist/ExtUtils-Install/t/lib/MakeMaker/Test/Setup/BFD.pm	MakeMaker test utilities
-dist/ExtUtils-Install/t/lib/MakeMaker/Test/Utils.pm	MakeMaker test utilities
-dist/ExtUtils-Install/t/lib/TieOut.pm			Testing library to capture prints
-dist/ExtUtils-Install/t/Packlist.t			See if Packlist works
-dist/ExtUtils-Manifest/lib/ExtUtils/Manifest.pm			Utilities to write MANIFEST files
-dist/ExtUtils-Manifest/lib/ExtUtils/MANIFEST.SKIP		The default MANIFEST.SKIP
-dist/ExtUtils-Manifest/t/Manifest.t				See if ExtUtils::Manifest works
 dist/ExtUtils-ParseXS/Changes					ExtUtils::ParseXS change log
 dist/ExtUtils-ParseXS/lib/ExtUtils/ParseXS/Constants.pm		ExtUtils::ParseXS guts
 dist/ExtUtils-ParseXS/lib/ExtUtils/ParseXS/CountLines.pm	ExtUtils::ParseXS guts
@@ -3209,7 +3217,8 @@ dist/Safe/t/safe3.t		See if Safe works
 dist/Safe/t/safeload.t		Tests that some modules can be loaded by Safe
 dist/Safe/t/safenamedcap.t	Tests that Tie::Hash::NamedCapture can be loaded
 dist/Safe/t/safeops.t		Tests that all ops can be trapped by Safe
-dist/Safe/t/saferegexp.t
+dist/Safe/t/saferegexp.t	Tests Safe with regular expressions
+dist/Safe/t/safesecurity.t	Tests misc. security fixes in Safe
 dist/Safe/t/safesort.t		Tests Safe with sort
 dist/Safe/t/safeuniversal.t	Tests Safe with functions from universal.c
 dist/Safe/t/safeutf8.t		Tests Safe with utf8.pm
@@ -3671,6 +3680,7 @@ ext/POSIX/lib/POSIX.pod		POSIX extension documentation
 ext/POSIX/Makefile.PL		POSIX extension makefile writer
 ext/POSIX/POSIX.xs		POSIX extension external subroutines
 ext/POSIX/t/export.t		Test @EXPORT and @EXPORT_OK
+ext/POSIX/t/iscrash		See if POSIX isxxx() crashes with threads on Win32
 ext/POSIX/t/is.t		See if POSIX isxxx() work
 ext/POSIX/t/math.t		Basic math tests for POSIX
 ext/POSIX/t/posix.t		See if POSIX works
@@ -4440,6 +4450,7 @@ pod/perl5182delta.pod		Perl changes in version 5.18.2
 pod/perl5200delta.pod		Perl changes in version 5.20.0
 pod/perl5210delta.pod		Perl changes in version 5.21.0
 pod/perl5211delta.pod		Perl changes in version 5.21.1
+pod/perl5212delta.pod		Perl changes in version 5.21.2
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5078,6 +5089,7 @@ t/op/hash-rt85026.t		See if hash iteration/deletion works
 t/op/hash.t			See if the complexity attackers are repelled
 t/op/hashwarn.t			See if warnings for bad hash assignments work
 t/op/heredoc.t			See if heredoc edge and corner cases work
+t/op/hexfp.t			See if hexadecimal float literals work
 t/op/inccode.t			See if coderefs work in @INC
 t/op/inccode-tie.t		See if tie to @INC works
 t/op/incfilter.t		See if the source filters in coderef-in-@INC work
@@ -5139,6 +5151,7 @@ t/op/ref.t			See if refs and objects work
 t/op/repeat.t			See if x operator works
 t/op/require_37033.t		See if require always closes rsfp
 t/op/require_errors.t		See if errors from require are reported correctly
+t/op/require_override.t		See if require handles no argument properly
 t/op/reset.t			See if reset operator works
 t/op/reverse.t			See if reverse operator works
 t/op/rt119311.t			Test bug #119311 (die/DESTROY/recursion)

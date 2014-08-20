@@ -1677,7 +1677,8 @@ typedef UVTYPE UV;
 #  endif
 #endif
 
-#define SSize_t_MAX (SSize_t)(~(size_t)0 >> 1)
+#define Size_t_MAX (~(Size_t)0)
+#define SSize_t_MAX (SSize_t)(~(Size_t)0 >> 1)
 
 #define IV_DIG (BIT_DIGITS(IVSIZE * 8))
 #define UV_DIG (BIT_DIGITS(UVSIZE * 8))
@@ -1847,6 +1848,12 @@ typedef NVTYPE NV;
 #   ifdef LDBL_MAX
 #       define NV_MAX LDBL_MAX
 #   endif
+#   ifdef LDBL_MIN_EXP
+#       define NV_MIN_EXP LDBL_MIN_EXP
+#   endif
+#   ifdef LDBL_MAX_EXP
+#       define NV_MAX_EXP LDBL_MAX_EXP
+#   endif
 #   ifdef LDBL_MIN_10_EXP
 #       define NV_MIN_10_EXP LDBL_MIN_10_EXP
 #   endif
@@ -1902,6 +1909,13 @@ EXTERN_C long double modfl(long double, long double *);
 #           define Perl_frexp(x,y) Perl_my_frexpl(x,y)
 #       endif
 #   endif
+#   ifdef HAS_LDEXPL
+#       define Perl_ldexp(x, y) ldexpl(x,y)
+#   else
+#       if defined(HAS_SCALBNL) && FLT_RADIX == 2
+#           define Perl_ldexp(x,y) scalbnl(x,y)
+#       endif
+#   endif
 #   ifndef Perl_isnan
 #       ifdef HAS_ISNANL
 #           define Perl_isnan(x) isnanl(x)
@@ -1922,6 +1936,12 @@ EXTERN_C long double modfl(long double, long double *);
 #   endif
 #   ifdef DBL_MAX
 #       define NV_MAX DBL_MAX
+#   endif
+#   ifdef DBL_MIN_EXP
+#       define NV_MIN_EXP DBL_MIN_EXP
+#   endif
+#   ifdef DBL_MAX_EXP
+#       define NV_MAX_EXP DBL_MAX_EXP
 #   endif
 #   ifdef DBL_MIN_10_EXP
 #       define NV_MIN_10_EXP DBL_MIN_10_EXP
@@ -1952,6 +1972,7 @@ EXTERN_C long double modfl(long double, long double *);
 #   define Perl_fmod fmod
 #   define Perl_modf(x,y) modf(x,y)
 #   define Perl_frexp(x,y) frexp(x,y)
+#   define Perl_ldexp(x,y) ldexp(x,y)
 #endif
 
 /* rumor has it that Win32 has _fpclass() */
@@ -4642,6 +4663,9 @@ EXTCONST char PL_bincompat_options[] =
 #  ifdef PERL_GLOBAL_STRUCT
 			     " PERL_GLOBAL_STRUCT"
 #  endif
+#  ifdef PERL_GLOBAL_STRUCT_PRIVATE
+			     " PERL_GLOBAL_STRUCT_PRIVATE"
+#  endif
 #  ifdef PERL_IMPLICIT_CONTEXT
 			     " PERL_IMPLICIT_CONTEXT"
 #  endif
@@ -4793,6 +4817,7 @@ typedef enum {
     XATTRBLOCK,
     XATTRTERM,
     XTERMBLOCK,
+    XBLOCKTERM,
     XPOSTDEREF,
     XTERMORDORDOR /* evil hack */
     /* update exp_name[] in toke.c if adding to this enum */

@@ -4,7 +4,7 @@
       "perl5-porters@perl.org"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "CPAN::Meta version 2.141520",
+   "generated_by" : "CPAN::Meta version 2.142060",
    "license" : [
       "perl_5"
    ],
@@ -27,9 +27,6 @@
          "dist/Env",
          "dist/Exporter",
          "dist/ExtUtils-CBuilder",
-         "dist/ExtUtils-Command",
-         "dist/ExtUtils-Install",
-         "dist/ExtUtils-Manifest",
          "dist/ExtUtils-ParseXS",
          "dist/Filter-Simple",
          "dist/I18N-Collate",
@@ -127,5 +124,5 @@
          "url" : "http://perl5.git.perl.org/"
       }
    },
-   "version" : "5.021002"
+   "version" : "5.021003"
 }

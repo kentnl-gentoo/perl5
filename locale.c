@@ -159,7 +159,7 @@ Perl_new_numeric(pTHX_ const char *newnum)
      * dot.
      *
      * This sets several interpreter-level variables:
-     * PL_numeric_name  The default locale's name: a copy of 'newnum'
+     * PL_numeric_name  The underlying locale's name: a copy of 'newnum'
      * PL_numeric_local A boolean indicating if the toggled state is such
      *                  that the current locale is the program's underlying
      *                  locale
@@ -527,7 +527,8 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
     char *p;
     const bool locwarn = (printwarn > 1 ||
                     (printwarn &&
-                     (!(p = PerlEnv_getenv("PERL_BADLANG")) || atoi(p))));
+                     (!(p = PerlEnv_getenv("PERL_BADLANG")) ||
+                      grok_atou(p, NULL))));
     bool done = FALSE;
 #ifdef WIN32
     /* In some systems you can find out the system default locale
@@ -1132,9 +1133,7 @@ Perl__is_cur_LC_category_utf8(pTHX_ int category)
          * result */
         if (is_utf8) {
             wchar_t wc;
-            GCC_DIAG_IGNORE(-Wunused-result);
-            (void) mbtowc(&wc, NULL, 0);    /* Reset any shift state */
-            GCC_DIAG_RESTORE;
+            PERL_UNUSED_RESULT(mbtowc(&wc, NULL, 0));/* Reset any shift state */
             errno = 0;
             if ((size_t)mbtowc(&wc, HYPHEN_UTF8, strlen(HYPHEN_UTF8))
                                                         != strlen(HYPHEN_UTF8)
@@ -1557,6 +1556,41 @@ Perl_my_strerror(pTHX_ const int errnum) {
 
     return Strerror(errnum);
 }
+
+/*
+
+=head1 Locale-related functions and macros
+
+=for apidoc sync_locale
+
+Changing the program's locale should be avoided by XS code.  Nevertheless,
+certain non-Perl libraries called from XS, such as C<Gtk> do so.  When this
+happens, Perl needs to be told that the locale has changed.  Use this function
+to do so, before returning to Perl.
+
+=cut
+*/
+
+void
+Perl_sync_locale(pTHX)
+{
+
+#ifdef USE_LOCALE_CTYPE
+    new_ctype(setlocale(LC_CTYPE, NULL));
+#endif /* USE_LOCALE_CTYPE */
+
+#ifdef USE_LOCALE_COLLATE
+    new_collate(setlocale(LC_COLLATE, NULL));
+#endif
+
+#ifdef USE_LOCALE_NUMERIC
+    set_numeric_local();    /* Switch from "C" to underlying LC_NUMERIC */
+    new_numeric(setlocale(LC_NUMERIC, NULL));
+#endif /* USE_LOCALE_NUMERIC */
+
+}
+
+
 
 /*
  * Local variables:

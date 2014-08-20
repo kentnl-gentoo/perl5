@@ -53,7 +53,7 @@ while(<$kh>) {
       ok !defined &{"CORE::$word"}, "no CORE::$word";
     }
     else {
-      $tests += 4;
+      $tests += 2;
 
       ok defined &{"CORE::$word"}, "defined &{'CORE::$word'}";
 
@@ -65,23 +65,8 @@ while(<$kh>) {
       my $numargs =
             $word eq 'delete' || $word eq 'exists' ? 1 :
             (() = $proto =~ s/;.*//r =~ /\G$protochar/g);
-      my $code =
-         "#line 1 This-line-makes-__FILE__-easier-to-test.
-          sub { () = (my$word("
-             . ($args_for{$word} || join ",", map "\$$_", 1..$numargs)
-       . "))}";
-      my $core = $bd->coderef2text(eval $code =~ s/my/CORE::/r or die);
-      my $my   = $bd->coderef2text(eval $code or die);
-      is $my, $core, "inlinability of CORE::$word with parens";
 
-      $code =
-         "#line 1 This-line-makes-__FILE__-easier-to-test.
-          sub { () = (my$word "
-             . ($args_for{$word} || join ",", map "\$$_", 1..$numargs)
-       . ")}";
-      $core = $bd->coderef2text(eval $code =~ s/my/CORE::/r or die);
-      $my   = $bd->coderef2text(eval $code or die);
-      is $my, $core, "inlinability of CORE::$word without parens";
+      inlinable_ok($word, $args_for{$word} || join ",", map "\$$_", 1..$numargs);
 
       # High-precedence tests
       my $hpcode;
@@ -130,6 +115,24 @@ while(<$kh>) {
   }
 }
 
+sub inlinable_ok {
+  my ($word, $args, $desc_suffix) = @_;
+  $tests += 2;
+
+  $desc_suffix //= '';
+
+  for ([with => "($args)"], [without => " $args"]) {
+    my ($preposition, $full_args) = @$_;
+    my $core_code =
+       "#line 1 This-line-makes-__FILE__-easier-to-test.
+        sub { () = (CORE::$word$full_args) }";
+    my $my_code = $core_code =~ s/CORE::$word/my$word/r;
+    my $core = $bd->coderef2text(eval $core_code or die);
+    my $my   = $bd->coderef2text(eval   $my_code or die);
+    is $my, $core, "inlinability of CORE::$word $preposition parens $desc_suffix";
+  }
+}
+
 $tests++;
 # This subroutine is outside the warnings scope:
 sub foo { goto &CORE::abs }
@@ -152,6 +155,21 @@ is runperl(prog => '@ISA=CORE; print main->uc, qq-\n-'), "MAIN\n",
 $tests++;
 ok eval { *CORE::exit = \42 },
   '[rt.cpan.org #74289] *CORE::foo is not accidentally made read-only';
+
+for my $word (qw<keys values each>) {
+    # mykeys() etc were aliased to \&CORE::keys etc above
+    my $code = qq{
+        no warnings 'experimental::autoderef';
+        my \$x = [];
+        () = my$word(\$x);
+        'ok'
+    };
+    $tests++;
+    is(eval($code), 'ok', "inlined $word() on autoderef array") or diag $@;
+}
+
+inlinable_ok($_, '$_{k}', 'on hash')
+    for qw<delete exists>;
 
 @UNIVERSAL::ISA = CORE;
 is "just another "->ucfirst . "perl hacker,\n"->ucfirst,

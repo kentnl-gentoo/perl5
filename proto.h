@@ -1289,6 +1289,11 @@ PERL_CALLCONV int	Perl_getcwd_sv(pTHX_ SV* sv)
 
 PERL_CALLCONV void	Perl_gp_free(pTHX_ GV* gv);
 PERL_CALLCONV GP*	Perl_gp_ref(pTHX_ GP* gp);
+PERL_CALLCONV UV	Perl_grok_atou(const char* pv, const char** endptr)
+			__attribute__nonnull__(1);
+#define PERL_ARGS_ASSERT_GROK_ATOU	\
+	assert(pv)
+
 PERL_CALLCONV UV	Perl_grok_bin(pTHX_ const char* start, STRLEN* len_p, I32* flags, NV *result)
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2)
@@ -4685,6 +4690,7 @@ PERL_CALLCONV SV*	Perl_swash_init(pTHX_ const char* pkg, const char* name, SV* l
 #define PERL_ARGS_ASSERT_SWASH_INIT	\
 	assert(pkg); assert(name); assert(listsv)
 
+PERL_CALLCONV void	Perl_sync_locale(pTHX);
 PERL_CALLCONV void	Perl_sys_init(int* argc, char*** argv)
 			__attribute__nonnull__(1)
 			__attribute__nonnull__(2);
@@ -6107,6 +6113,13 @@ STATIC void	S_bad_type_pv(pTHX_ I32 n, const char *t, const char *name, U32 flag
 			__attribute__nonnull__(pTHX_5);
 #define PERL_ARGS_ASSERT_BAD_TYPE_PV	\
 	assert(t); assert(name); assert(kid)
+
+STATIC void	S_clear_special_blocks(pTHX_ const char *const fullname, GV *const gv, CV *const cv)
+			__attribute__nonnull__(pTHX_1)
+			__attribute__nonnull__(pTHX_2)
+			__attribute__nonnull__(pTHX_3);
+#define PERL_ARGS_ASSERT_CLEAR_SPECIAL_BLOCKS	\
+	assert(fullname); assert(gv); assert(cv)
 
 STATIC void	S_cop_free(pTHX_ COP *cop)
 			__attribute__nonnull__(pTHX_1);

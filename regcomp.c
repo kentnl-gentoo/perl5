@@ -5043,7 +5043,8 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVuf" RHS=%"UVuf"\n",
 	else if (  PL_regkind[OP(scan)] == BRANCHJ
 		 /* Lookbehind, or need to calculate parens/evals/stclass: */
 		   && (scan->flags || data || (flags & SCF_DO_STCLASS))
-		   && (OP(scan) == IFMATCH || OP(scan) == UNLESSM)) {
+		   && (OP(scan) == IFMATCH || OP(scan) == UNLESSM))
+        {
             if ( OP(scan) == UNLESSM &&
                  scan->flags == 0 &&
                  OP(NEXTOPER(NEXTOPER(scan))) == NOTHING &&
@@ -5131,8 +5132,11 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVuf" RHS=%"UVuf"\n",
 			 */
 			ssc_init(pRExC_state, data->start_class);
 		    }  else {
-			/* AND before and after: combine and continue */
+                        /* AND before and after: combine and continue.  These
+                         * assertions are zero-length, so can match an EMPTY
+                         * string */
 			ssc_and(pRExC_state, data->start_class, (regnode_charclass *) &intrnl);
+                        ANYOF_FLAGS(data->start_class) |= ANYOF_EMPTY_STRING;
 		    }
                 }
 	    }
@@ -5204,6 +5208,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVuf" RHS=%"UVuf"\n",
 
                 if (f & SCF_DO_STCLASS_AND) {
                     ssc_and(pRExC_state, data->start_class, (regnode_charclass *) &intrnl);
+                    ANYOF_FLAGS(data->start_class) |= ANYOF_EMPTY_STRING;
                 }
                 if (data) {
                     if (data_fake.flags & (SF_HAS_PAR|SF_IN_PAR))
@@ -9605,6 +9610,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
         else if (*RExC_parse == '?') { /* (?...) */
 	    bool is_logical = 0;
 	    const char * const seqstart = RExC_parse;
+            const char * endptr;
             if (has_intervening_patws) {
                 RExC_parse++;
                 vFAIL("In '(?...)', the '(' and '?' must be adjacent");
@@ -9814,12 +9820,21 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 	    case '5': case '6': case '7': case '8': case '9':
 	        RExC_parse--;
               parse_recursion:
-		num = atoi(RExC_parse);
-  	        parse_start = RExC_parse - 1; /* MJD */
-	        if (*RExC_parse == '-')
-	            RExC_parse++;
-		while (isDIGIT(*RExC_parse))
-			RExC_parse++;
+                {
+                    bool is_neg = FALSE;
+                    parse_start = RExC_parse - 1; /* MJD */
+                    if (*RExC_parse == '-') {
+                        RExC_parse++;
+                        is_neg = TRUE;
+                    }
+                    num = grok_atou(RExC_parse, &endptr);
+                    if (endptr)
+			RExC_parse = (char*)endptr;
+                    if (is_neg) {
+                        /* Some limit for num? */
+                        num = -num;
+                    }
+                }
 	        if (*RExC_parse!=')')
 	            vFAIL("Expecting close bracket");
 
@@ -9959,6 +9974,8 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                         REGTAIL(pRExC_state, ret, tail);
 			goto insert_if;
 		    }
+		    /* Fall through to ‘Unknown switch condition’ at the
+		       end of the if/else chain. */
 		}
 		else if ( RExC_parse[0] == '<'     /* (?(<NAME>)...) */
 		         || RExC_parse[0] == '\'' ) /* (?('NAME')...) */
@@ -9996,9 +10013,9 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 		    RExC_parse++;
 		    parno = 0;
 		    if (RExC_parse[0] >= '1' && RExC_parse[0] <= '9' ) {
-		        parno = atoi(RExC_parse++);
-		        while (isDIGIT(*RExC_parse))
-			    RExC_parse++;
+		        parno = grok_atou(RExC_parse, &endptr);
+		        if (endptr)
+                            RExC_parse = (char*)endptr;
 		    } else if (RExC_parse[0] == '&') {
 		        SV *sv_dat;
 		        RExC_parse++;
@@ -10015,10 +10032,9 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                     /* (?(1)...) */
 		    char c;
 		    char *tmp;
-		    parno = atoi(RExC_parse++);
-
-		    while (isDIGIT(*RExC_parse))
-			RExC_parse++;
+		    parno = grok_atou(RExC_parse, &endptr);
+                    if (endptr)
+			RExC_parse = (char*)endptr;
                     ret = reganode(pRExC_state, GROUPP, parno);
 
                  insert_if_check_paren:
@@ -10083,10 +10099,8 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                                     but I can't figure out why. -- dmq*/
 		    return ret;
 		}
-		else {
-                    RExC_parse += UTF ? UTF8SKIP(RExC_parse) : 1;
-                    vFAIL("Unknown switch condition (?(...))");
-		}
+                RExC_parse += UTF ? UTF8SKIP(RExC_parse) : 1;
+                vFAIL("Unknown switch condition (?(...))");
 	    }
 	    case '[':           /* (?[ ... ]) */
                 return handle_regex_sets(pRExC_state, NULL, flagp, depth,
@@ -10492,15 +10506,16 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 	    next++;
 	}
 	if (*next == '}') {		/* got one */
+            const char* endptr;
 	    if (!maxpos)
 		maxpos = next;
 	    RExC_parse++;
-	    min = atoi(RExC_parse);
+	    min = grok_atou(RExC_parse, &endptr);
 	    if (*maxpos == ',')
 		maxpos++;
 	    else
 		maxpos = RExC_parse;
-	    max = atoi(maxpos);
+	    max = grok_atou(maxpos, &endptr);
 	    if (!max && *maxpos != '0')
 		max = REG_INFTY;		/* meaning "infinity" */
 	    else if (max >= REG_INFTY)
@@ -11147,18 +11162,17 @@ S_alloc_maybe_populate_EXACT(pTHX_ RExC_state_t *pRExC_state,
 }
 
 
-/* return atoi(p), unless it's too big to sensibly be a backref,
+/* Parse backref decimal value, unless it's too big to sensibly be a backref,
  * in which case return I32_MAX (rather than possibly 32-bit wrapping) */
 
 static I32
 S_backref_value(char *p)
 {
-    char *q = p;
-
-    for (;isDIGIT(*q); q++) {} /* calculate length of num */
-    if (q - p == 0 || q - p > 9)
+    const char* endptr;
+    UV val = grok_atou(p, &endptr);
+    if (endptr == p || endptr == NULL || val > I32_MAX)
         return I32_MAX;
-    return atoi(p);
+    return (I32)val;
 }
 
 
@@ -15347,7 +15361,6 @@ STATIC U8
 S_regtail_study(pTHX_ RExC_state_t *pRExC_state, regnode *p,
                       const regnode *val,U32 depth)
 {
-    dVAR;
     regnode *scan;
     U8 exact = PSEUDO;
 #ifdef EXPERIMENTAL_INPLACESCAN
@@ -15510,7 +15523,6 @@ void
 Perl_regdump(pTHX_ const regexp *r)
 {
 #ifdef DEBUGGING
-    dVAR;
     SV * const sv = sv_newmortal();
     SV *dsv= sv_newmortal();
     RXi_GET_DECL(r,ri);
@@ -15609,7 +15621,6 @@ void
 Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_info *reginfo)
 {
 #ifdef DEBUGGING
-    dVAR;
     int k;
 
     /* Should be synchronized with * ANYOF_ #xdefines in regcomp.h */
@@ -16672,12 +16683,12 @@ S_put_latin1_charclass_innards(pTHX_ SV *sv, char *bitmap)
     PERL_ARGS_ASSERT_PUT_LATIN1_CHARCLASS_INNARDS;
 
     for (i = 0; i < 256; i++) {
-        if (i < 256 && BITMAP_TEST((U8 *) bitmap,i)) {
+        if (BITMAP_TEST((U8 *) bitmap,i)) {
 
             /* The character at index i should be output.  Find the next
              * character that should NOT be output */
             int j;
-            for (j = i + 1; j <= 256; j++) {
+            for (j = i + 1; j < 256; j++) {
                 if (! BITMAP_TEST((U8 *) bitmap, j)) {
                     break;
                 }
@@ -16710,7 +16721,6 @@ S_dumpuntil(pTHX_ const regexp *r, const regnode *start, const regnode *node,
 	    const regnode *last, const regnode *plast,
 	    SV* sv, I32 indent, U32 depth)
 {
-    dVAR;
     U8 op = PSEUDO;	/* Arbitrary non-END op. */
     const regnode *next;
     const regnode *optstart= NULL;

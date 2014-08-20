@@ -175,7 +175,7 @@ use File::Glob qw(:case);
     },
 
     'B::Debug' => {
-        'DISTRIBUTION' => 'RURBAN/B-Debug-1.19.tar.gz',
+        'DISTRIBUTION' => 'RURBAN/B-Debug-1.21.tar.gz',
         'FILES'        => q[cpan/B-Debug],
         'EXCLUDED'     => ['t/pod.t'],
     },
@@ -224,9 +224,13 @@ use File::Glob qw(:case);
     },
 
     'Config::Perl::V' => {
-        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.20.tgz',
+        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.22.tgz',
         'FILES'        => q[cpan/Config-Perl-V],
-        'EXCLUDED'     => ['examples/show-v.pl'],
+        'EXCLUDED'     => [qw(
+		examples/show-v.pl
+		t/00_pod.t
+		t/01_pod.t
+		)],
     },
 
     'constant' => {
@@ -282,10 +286,11 @@ use File::Glob qw(:case);
     # Note: When updating CPAN-Meta the META.* files will need to be regenerated
     # perl -Icpan/CPAN-Meta/lib Porting/makemeta
     'CPAN::Meta' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.141520.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.142060.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta],
         'EXCLUDED'     => [
             qw[t/00-report-prereqs.t],
+            qw[t/00-report-prereqs.dd],
             qr{t/README-data.txt},
             qr{^xt},
             qr{^history},
@@ -293,11 +298,13 @@ use File::Glob qw(:case);
     },
 
     'CPAN::Meta::Requirements' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-Requirements-2.125.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-Requirements-2.126.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta-Requirements],
         'EXCLUDED'     => [
+            qw(CONTRIBUTING.mkdn),
             qw(t/00-compile.t),
             qw(t/00-report-prereqs.t),
+            qw(t/00-report-prereqs.dd),
             qr{^xt},
         ],
     },
@@ -430,7 +437,7 @@ use File::Glob qw(:case);
 
     'ExtUtils::Command' => {
         'DISTRIBUTION' => 'FLORA/ExtUtils-Command-1.18.tar.gz',
-        'FILES'        => q[dist/ExtUtils-Command],
+        'FILES'        => q[cpan/ExtUtils-Command],
         'EXCLUDED'     => [qr{^t/release-}],
     },
 
@@ -451,7 +458,7 @@ use File::Glob qw(:case);
 
     'ExtUtils::Install' => {
         'DISTRIBUTION' => 'BINGOS/ExtUtils-Install-1.68.tar.gz',
-        'FILES'        => q[dist/ExtUtils-Install],
+        'FILES'        => q[cpan/ExtUtils-Install],
         'EXCLUDED'     => [
             qw( t/lib/Test/Builder.pm
                 t/lib/Test/Builder/Module.pm
@@ -478,8 +485,8 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::Manifest' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-Manifest-1.64.tar.gz',
-        'FILES'        => q[dist/ExtUtils-Manifest],
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-Manifest-1.65.tar.gz',
+        'FILES'        => q[cpan/ExtUtils-Manifest],
         'EXCLUDED'     => [qr(^xt/)],
     },
 
@@ -576,10 +583,11 @@ use File::Glob qw(:case);
     },
 
     'HTTP::Tiny' => {
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.043.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.047.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/00-report-prereqs.t',
+            't/00-report-prereqs.dd',
             't/200_live.t',
             't/200_live_local_ip.t',
             't/210_live_ssl.t',
@@ -780,7 +788,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.021001.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.021002.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -856,7 +864,7 @@ use File::Glob qw(:case);
     },
 
     'perlfaq' => {
-        'DISTRIBUTION' => 'LLAP/perlfaq-5.0150044.tar.gz',
+        'DISTRIBUTION' => 'LLAP/perlfaq-5.0150045.tar.gz',
         'FILES'        => q[cpan/perlfaq],
         'EXCLUDED'     => [
             qw( t/release-pod-syntax.t

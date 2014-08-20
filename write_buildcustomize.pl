@@ -28,10 +28,10 @@ if ( @ARGV ) {
 my @toolchain = qw(cpan/AutoLoader/lib
 		   dist/Carp/lib
 		   dist/PathTools dist/PathTools/lib
-		   dist/ExtUtils-Command/lib
-		   dist/ExtUtils-Install/lib
+		   cpan/ExtUtils-Command/lib
+		   cpan/ExtUtils-Install/lib
 		   cpan/ExtUtils-MakeMaker/lib
-		   dist/ExtUtils-Manifest/lib
+		   cpan/ExtUtils-Manifest/lib
 		   cpan/File-Path/lib
 		   ext/re
 		   dist/Term-ReadLine/lib

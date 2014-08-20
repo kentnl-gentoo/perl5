@@ -3343,6 +3343,7 @@ $   uquadtype = "unsigned long long"
 $   quadkind  = "3"
 $!
 $   d_frexpl = "define"
+$   d_ldexpl = "define"
 $   d_modfl = "define"
 $   d_modflproto = "define"
 $ ELSE
@@ -3364,6 +3365,7 @@ $   uquadtype = "undef"
 $   quadkind  = "undef"
 $!
 $   d_frexpl = "undef"
+$   d_ldexpl = "undef"
 $   d_modfl = "undef"
 $   d_modflproto = "undef"
 $ ENDIF
@@ -3586,6 +3588,7 @@ $ GOSUB link_ok
 $ IF link_status .NE. good_link
 $ THEN
 $   longdblsize="0"
+$   longdblkind="0"
 $   d_longdbl="undef"
 $   echo "You do not have long double."
 $ ELSE
@@ -3593,6 +3596,7 @@ $   echo "You have long double."
 $   echo4 "Checking to see how big your long doubles are..."
 $   GOSUB just_mcr_it
 $   longdblsize = tmp
+$   longdblkind = "1"
 $   d_longdbl = "define"
 $   echo "Your long doubles are ''longdblsize' bytes long."
 $ ENDIF
@@ -5964,8 +5968,14 @@ $ WC "d_fd_set='" + d_fd_set + "'"
 $ WC "d_fd_macros='define'"
 $ WC "d_fds_bits='define'"
 $ WC "d_fgetpos='define'"
-$ WC "d_finite='undef'"
-$ WC "d_finitel='undef'"
+$ IF F$ELEMENT(0, "-", archname) .NES. "VMS_VAX" .AND. use_ieee_math
+$ THEN
+$   WC "d_finite='define'"
+$   WC "d_finitel='define'"
+$ ELSE
+$   WC "d_finite='undef'"
+$   WC "d_finitel='undef'"
+$ ENDIF
 $ WC "d_flexfnam='define'"
 $ WC "d_flock='undef'"
 $ WC "d_flockproto='undef'"
@@ -6054,13 +6064,19 @@ $ WC "d_ipv6_mreq='define'"
 $ WC "d_ipv6_mreq_source='undef'"
 $ WC "d_isascii='define'"
 $ WC "d_isblank='undef'"
-$ WC "d_isfinite='undef'"
+$ IF F$ELEMENT(0, "-", archname) .NES. "VMS_VAX" .AND. use_ieee_math
+$ THEN
+$   WC "d_isfinite='define'"
+$ ELSE
+$   WC "d_isfinite='undef'"
+$ ENDIF
 $ WC "d_isinf='undef'"
 $ WC "d_isnan='" + d_isnan + "'"
 $ WC "d_isnanl='" + d_isnanl + "'"
 $ WC "d_killpg='undef'"
 $ WC "d_lchown='" + d_lchown + "'"
 $ WC "d_ldbl_dig='define'"
+$ WC "d_ldexpl='" + d_ldexpl + "'"
 $ WC "d_libm_lib_version='undef'"
 $ WC "d_link='" + d_link + "'"
 $ WC "d_llseek='undef'"
@@ -6507,6 +6523,7 @@ $ WC "libs='" + libs + "'"
 $ WC "libswanted='" + "'"
 $ WC "libswanted_uselargefiles='" + "'"
 $ WC "longdblsize='" + longdblsize + "'"
+$ WC "longdblkind='" + longdblkind + "'"
 $ WC "longlongsize='" + longlongsize + "'"
 $ WC "longsize='" + longsize + "'"
 $ IF uselargefiles .OR. uselargefiles .EQS. "define"

@@ -6,7 +6,7 @@ BEGIN {
     require './test.pl';
 }
 
-plan( tests => 33 );
+plan( tests => 34 );
 
 sub empty_sub {}
 
@@ -222,3 +222,10 @@ ok !exists $INC{"re.pm"}, 're.pm not loaded yet';
     is $str[1], $str[0],
       'Pure-Perl sub clobbering sub whose DESTROY assigns to the glob';
 }
+
+# [perl #122107] previously this would return
+#  Subroutine BEGIN redefined at (eval 2) line 2.
+fresh_perl_is(<<'EOS', "", { stderr => 1 },
+use strict; use warnings; eval q/use File::{Spec}/; eval q/use File::Spec/;
+EOS
+	       "check special blocks are cleared on error");

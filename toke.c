@@ -378,8 +378,6 @@ static struct debug_tokens {
 STATIC int
 S_tokereport(pTHX_ I32 rv, const YYSTYPE* lvalp)
 {
-    dVAR;
-
     PERL_ARGS_ASSERT_TOKEREPORT;
 
     if (DEBUG_T_TEST) {
@@ -1686,7 +1684,7 @@ S_incline(pTHX_ const char *s)
     if (*e != '\n' && *e != '\0')
 	return;		/* false alarm */
 
-    line_num = atoi(n)-1;
+    line_num = grok_atou(n, &e) - 1;
 
     if (t - s > 0) {
 	const STRLEN len = t - s;
@@ -4156,7 +4154,8 @@ S_tokenize_use(pTHX_ int is_use, char *s) {
 #ifdef DEBUGGING
     static const char* const exp_name[] =
 	{ "OPERATOR", "TERM", "REF", "STATE", "BLOCK", "ATTRBLOCK",
-	  "ATTRTERM", "TERMBLOCK", "POSTDEREF", "TERMORDORDOR"
+	  "ATTRTERM", "TERMBLOCK", "XBLOCKTERM", "POSTDEREF",
+	  "TERMORDORDOR"
 	};
 #endif
 
@@ -5451,6 +5450,11 @@ Perl_yylex(pTHX)
 	    PL_lex_allbrackets++;
 	    PL_expect = XSTATE;
 	    break;
+	case XBLOCKTERM:
+	    PL_lex_brackstack[PL_lex_brackets++] = XTERM;
+	    PL_lex_allbrackets++;
+	    PL_expect = XSTATE;
+	    break;
 	default: {
 		const char *t;
 		if (PL_oldoldbufptr == PL_last_lop)
@@ -6636,7 +6640,9 @@ Perl_yylex(pTHX)
 		    if (!PL_lex_allbrackets &&
 			    PL_lex_fakeeof > LEX_FAKEEOF_LOWLOGIC)
 			PL_lex_fakeeof = LEX_FAKEEOF_LOWLOGIC;
-		    PREBLOCK(METHOD);
+		    PL_expect = XBLOCKTERM;
+		    PL_bufptr = s;
+		    return REPORT(METHOD);
 		}
 
 		/* If followed by a bareword, see if it looks like indir obj. */
@@ -9374,8 +9380,6 @@ intro_sym:
 			    newUNOP(OP_RV2SV, 0,
 				newGVOP(OP_GV, 0, gv)));
 	    }
-	    if (!readline_overriden)
-		PL_lex_op->op_flags |= OPf_SPECIAL;
 	    /* we created the ops in PL_lex_op, so make pl_yylval.ival a null op */
 	    pl_yylval.ival = OP_NULL;
 	}
@@ -9800,6 +9804,27 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
     bool floatit;			/* boolean: int or float? */
     const char *lastub = NULL;		/* position of last underbar */
     static const char* const number_too_long = "Number too long";
+    /* Hexadecimal floating point.
+     *
+     * In many places (where we have quads and NV is IEEE 754 double)
+     * we can fit the mantissa bits of a NV into an unsigned quad.
+     * (Note that UVs might not be quads even when we have quads.)
+     * This will not work everywhere, though (either no quads, or
+     * using long doubles), in which case we have to resort to NV,
+     * which will probably mean horrible loss of precision due to
+     * multiple fp operations. */
+    bool hexfp = FALSE;
+    int total_bits = 0;
+#if NVSIZE == 8 && defined(HAS_QUAD) && defined(Uquad_t)
+#  define HEXFP_UQUAD
+    Uquad_t hexfp_uquad = 0;
+    int hexfp_frac_bits = 0;
+#else
+#  define HEXFP_NV
+    NV hexfp_nv = 0.0;
+#endif
+    NV hexfp_mult = 1.0;
+    UV high_non_zero = 0; /* highest digit */
 
     PERL_ARGS_ASSERT_SCAN_NUM;
 
@@ -9924,6 +9949,8 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 		    if (!overflowed) {
 			x = u << shift;	/* make room for the digit */
 
+                        total_bits += shift;
+
 			if ((x >> shift) != u
 			    && !(PL_hints & HINT_NEW_BINARY)) {
 			    overflowed = TRUE;
@@ -9946,6 +9973,20 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 			 * amount. */
 			n += (NV) b;
 		    }
+
+                    if (high_non_zero == 0 && b > 0)
+                        high_non_zero = b;
+
+                    /* this could be hexfp, but peek ahead
+                     * to avoid matching ".." */
+#define HEXFP_PEEK(s) \
+	(((s[0] == '.') && \
+	  (isXDIGIT(s[1]) || s[1] == 'p' || s[1] == 'P')) \
+	 || s[0] == 'p' || s[0] == 'P')
+                    if (UNLIKELY(HEXFP_PEEK(s))) {
+                        goto out;
+                    }
+
 		    break;
 		}
 	    }
@@ -9959,6 +10000,96 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 	    if (s[-1] == '_') {
 		Perl_ck_warner(aTHX_ packWARN(WARN_SYNTAX), "Misplaced _ in number");
 	    }
+
+            if (UNLIKELY(HEXFP_PEEK(s))) {
+                /* Do sloppy (on the underbars) but quick detection
+                 * (and value construction) for hexfp, the decimal
+                 * detection will shortly be more thorough with the
+                 * underbar checks. */
+                const char* h = s;
+#ifdef HEXFP_UQUAD
+                hexfp_uquad = u;
+#else /* HEXFP_NV */
+                hexfp_nv = u;
+#endif
+                if (*h == '.') {
+#ifdef HEXFP_NV
+                    NV mult = 1 / 16.0;
+#endif
+                    h++;
+                    while (isXDIGIT(*h) || *h == '_') {
+                        if (isXDIGIT(*h)) {
+                            U8 b = XDIGIT_VALUE(*h);
+                            total_bits += shift;
+#ifdef HEXFP_UQUAD
+                            hexfp_uquad <<= shift;
+                            hexfp_uquad |= b;
+                            hexfp_frac_bits += shift;
+#else /* HEXFP_NV */
+                            hexfp_nv += b * mult;
+                            mult /= 16.0;
+#endif
+                        }
+                        h++;
+                    }
+                }
+
+                if (total_bits >= 4) {
+                    if (high_non_zero < 0x8)
+                        total_bits--;
+                    if (high_non_zero < 0x4)
+                        total_bits--;
+                    if (high_non_zero < 0x2)
+                        total_bits--;
+                }
+
+                if (total_bits > 0 && (*h == 'p' || *h == 'P')) {
+                    bool negexp = FALSE;
+                    h++;
+                    if (*h == '+')
+                        h++;
+                    else if (*h == '-') {
+                        negexp = TRUE;
+                        h++;
+                    }
+                    if (isDIGIT(*h)) {
+                        I32 hexfp_exp = 0;
+                        while (isDIGIT(*h) || *h == '_') {
+                            if (isDIGIT(*h)) {
+                                hexfp_exp *= 10;
+                                hexfp_exp += *h - '0';
+#ifdef NV_MIN_EXP
+                                if (negexp &&
+                                    -hexfp_exp < NV_MIN_EXP - 1) {
+                                    Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
+                                                   "Hexadecimal float: exponent underflow");
+#endif
+                                    break;
+                                }
+                                else {
+#ifdef NV_MAX_EXP
+                                    if (!negexp &&
+                                        hexfp_exp > NV_MAX_EXP - 1) {
+                                        Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
+                                                   "Hexadecimal float: exponent overflow");
+                                        break;
+                                    }
+#endif
+                                }
+                            }
+                            h++;
+                        }
+                        if (negexp)
+                            hexfp_exp = -hexfp_exp;
+#ifdef HEXFP_UQUAD
+                        hexfp_exp -= hexfp_frac_bits;
+#endif
+                        hexfp_mult = pow(2.0, hexfp_exp);
+                        hexfp = TRUE;
+                        goto decimal;
+                    }
+                }
+            }
 
 	    if (overflowed) {
 		if (n > 4294967295.0)
@@ -9993,10 +10124,17 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
       decimal:
 	d = PL_tokenbuf;
 	e = PL_tokenbuf + sizeof PL_tokenbuf - 6; /* room for various punctuation */
-	floatit = FALSE;
+        floatit = FALSE;
+        if (hexfp) {
+            floatit = TRUE;
+            *d++ = '0';
+            *d++ = 'x';
+            s = start + 2;
+        }
 
 	/* read next group of digits and _ and copy into d */
-	while (isDIGIT(*s) || *s == '_') {
+	while (isDIGIT(*s) || *s == '_' ||
+               UNLIKELY(hexfp && isXDIGIT(*s))) {
 	    /* skip underscores, checking for misplaced ones
 	       if -w is on
 	    */
@@ -10036,7 +10174,9 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 
 	    /* copy, ignoring underbars, until we run out of digits.
 	    */
-	    for (; isDIGIT(*s) || *s == '_'; s++) {
+	    for (; isDIGIT(*s) || *s == '_' ||
+                     UNLIKELY(hexfp && isXDIGIT(*s));
+                 s++) {
 	        /* fixed length buffer check */
 		if (d >= e)
 		    Perl_croak(aTHX_ "%s", number_too_long);
@@ -10062,12 +10202,23 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 	}
 
 	/* read exponent part, if present */
-	if ((*s == 'e' || *s == 'E') && strchr("+-0123456789_", s[1])) {
-	    floatit = TRUE;
+	if (((*s == 'e' || *s == 'E') ||
+             UNLIKELY(hexfp && (*s == 'p' || *s == 'P'))) &&
+            strchr("+-0123456789_", s[1])) {
+            floatit = TRUE;
+
+	    /* regardless of whether user said 3E5 or 3e5, use lower 'e',
+               ditto for p (hexfloats) */
+            if ((*s == 'e' || *s == 'E')) {
+		/* At least some Mach atof()s don't grok 'E' */
+                *d++ = 'e';
+            }
+            else if (UNLIKELY(hexfp && (*s == 'p' || *s == 'P'))) {
+                *d++ = 'p';
+            }
+
 	    s++;
 
-	    /* regardless of whether user said 3E5 or 3e5, use lower 'e' */
-	    *d++ = 'e';		/* At least some Mach atof()s don't grok 'E' */
 
 	    /* stray preinitial _ */
 	    if (*s == '_') {
@@ -10131,9 +10282,22 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
             STORE_NUMERIC_LOCAL_SET_STANDARD();
 	    /* terminate the string */
 	    *d = '\0';
-	    nv = Atof(PL_tokenbuf);
+            if (UNLIKELY(hexfp)) {
+#  ifdef NV_MANT_DIG
+                if (total_bits > NV_MANT_DIG)
+                    Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
+                                   "Hexadecimal float: mantissa overflow");
+#  endif
+#ifdef HEXFP_UQUAD
+                nv = hexfp_uquad * hexfp_mult;
+#else /* HEXFP_NV */
+                nv = hexfp_nv * hexfp_mult;
+#endif
+            } else {
+                nv = Atof(PL_tokenbuf);
+            }
             RESTORE_NUMERIC_LOCAL();
-	    sv = newSVnv(nv);
+            sv = newSVnv(nv);
 	}
 
 	if ( floatit

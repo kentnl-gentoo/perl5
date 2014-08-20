@@ -472,10 +472,13 @@ like $@, qr/^The stat preceding lstat\(\) wasn't an lstat at /,
 'stat $ioref resets stat type';
 
 {
-    my @statbuf = stat STDOUT;
+    open(FOO, ">$tmpfile") || DIE("Can't open temp test file: $!");
+    my @statbuf = stat FOO;
     stat "test.pl";
-    my @lstatbuf = lstat *STDOUT{IO};
+    my @lstatbuf = lstat *FOO{IO};
     is "@lstatbuf", "@statbuf", 'lstat $ioref reverts to regular fstat';
+    close(FOO);
+    unlink $tmpfile or print "# unlink failed: $!\n";
 }
   
 SKIP: {
