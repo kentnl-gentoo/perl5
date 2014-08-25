@@ -1002,8 +1002,9 @@ Perl_foldEQ_locale(const char *s1, const char *s2, I32 len)
 
 Perl's version of C<strdup()>.  Returns a pointer to a newly allocated
 string which is a duplicate of C<pv>.  The size of the string is
-determined by C<strlen()>.  The memory allocated for the new string can
-be freed with the C<Safefree()> function.
+determined by C<strlen()>, which means it may not contain embedded C<NUL>
+characters and must have a trailing C<NUL>.  The memory allocated for the new
+string can be freed with the C<Safefree()> function.
 
 On some platforms, Windows for example, all allocated memory owned by a thread
 is deallocated when that thread ends.  So if you need that not to happen, you
@@ -1034,7 +1035,7 @@ Perl_savepv(pTHX_ const char *pv)
 Perl's version of what C<strndup()> would be if it existed.  Returns a
 pointer to a newly allocated string which is a duplicate of the first
 C<len> bytes from C<pv>, plus a trailing
-NUL byte.  The memory allocated for
+C<NUL> byte.  The memory allocated for
 the new string can be freed with the C<Safefree()> function.
 
 On some platforms, Windows for example, all allocated memory owned by a thread
@@ -1710,13 +1711,9 @@ void
 Perl_croak_no_mem(void)
 {
     dTHX;
-    int rc;
-
     /* Can't use PerlIO to write as it allocates memory */
-    rc = PerlLIO_write(PerlIO_fileno(Perl_error_log),
-		  PL_no_mem, sizeof(PL_no_mem)-1);
-    /* silently ignore failures */
-    PERL_UNUSED_VAR(rc);
+    PERL_UNUSED_RESULT(PerlLIO_write(PerlIO_fileno(Perl_error_log),
+		  PL_no_mem, sizeof(PL_no_mem)-1));
     my_exit(1);
 }
 
@@ -2042,7 +2039,11 @@ Perl_my_setenv(pTHX_ const char *nam, const char *val)
        my_setenv_format(environ[i], nam, nlen, val, vlen);
     } else {
 # endif
-#   if defined(__CYGWIN__)|| defined(__SYMBIAN32__) || defined(__riscos__)
+    /* This next branch should only be called #if defined(HAS_SETENV), but
+       Configure doesn't test for that yet.  For Solaris, setenv() and unsetenv()
+       were introduced in Solaris 9, so testing for HAS UNSETENV is sufficient.
+    */
+#   if defined(__CYGWIN__)|| defined(__SYMBIAN32__) || defined(__riscos__) || (defined(__sun) && defined(HAS_UNSETENV))
 #       if defined(HAS_UNSETENV)
         if (val == NULL) {
             (void)unsetenv(nam);
@@ -3414,7 +3415,7 @@ Perl_get_vtbl(pTHX_ int vtbl_id)
     PERL_UNUSED_CONTEXT;
 
     return (vtbl_id < 0 || vtbl_id >= magic_vtable_max)
-	? NULL : PL_magic_vtables + vtbl_id;
+	? NULL : (MGVTBL*)PL_magic_vtables + vtbl_id;
 }
 
 I32
@@ -4576,8 +4577,8 @@ Perl_init_global_struct(pTHX)
 {
     struct perl_vars *plvarsp = NULL;
 # ifdef PERL_GLOBAL_STRUCT
-    const IV nppaddr = sizeof(Gppaddr)/sizeof(Perl_ppaddr_t);
-    const IV ncheck  = sizeof(Gcheck) /sizeof(Perl_check_t);
+    const IV nppaddr = C_ARRAY_LENGTH(Gppaddr);
+    const IV ncheck  = C_ARRAY_LENGTH(Gcheck);
 #  ifdef PERL_GLOBAL_STRUCT_PRIVATE
     /* PerlMem_malloc() because can't use even safesysmalloc() this early. */
     plvarsp = (struct perl_vars*)PerlMem_malloc(sizeof(struct perl_vars));
@@ -4928,6 +4929,7 @@ Perl_my_vsnprintf(char *buffer, const Size_t len, const char *format, va_list ap
 # else
     retval = vsprintf(buffer, format, apc);
 # endif
+    va_end(apc);
 #else
 # ifdef HAS_VSNPRINTF
     retval = vsnprintf(buffer, len, format, ap);
@@ -5201,17 +5203,17 @@ Perl_xs_apiversion_bootcheck(pTHX_ SV *module, const char *api_p,
 =for apidoc my_strlcat
 
 The C library C<strlcat> if available, or a Perl implementation of it.
-This operates on C NUL-terminated strings.
+This operates on C C<NUL>-terminated strings.
 
 C<my_strlcat()> appends string C<src> to the end of C<dst>.  It will append at
-most S<C<size - strlen(dst) - 1>> characters.  It will then NUL-terminate,
+most S<C<size - strlen(dst) - 1>> characters.  It will then C<NUL>-terminate,
 unless C<size> is 0 or the original C<dst> string was longer than C<size> (in
 practice this should not happen as it means that either C<size> is incorrect or
-that C<dst> is not a proper NUL-terminated string).
+that C<dst> is not a proper C<NUL>-terminated string).
 
 Note that C<size> is the full size of the destination buffer and
-the result is guaranteed to be NUL-terminated if there is room.  Note that room
-for the NUL should be included in C<size>.
+the result is guaranteed to be C<NUL>-terminated if there is room.  Note that
+room for the C<NUL> should be included in C<size>.
 
 =cut
 
@@ -5239,10 +5241,10 @@ Perl_my_strlcat(char *dst, const char *src, Size_t size)
 =for apidoc my_strlcpy
 
 The C library C<strlcpy> if available, or a Perl implementation of it.
-This operates on C NUL-terminated strings.
+This operates on C C<NUL>-terminated strings.
 
 C<my_strlcpy()> copies up to S<C<size - 1>> characters from the string C<src>
-to C<dst>, NUL-terminating the result if C<size> is not 0.
+to C<dst>, C<NUL>-terminating the result if C<size> is not 0.
 
 =cut
 

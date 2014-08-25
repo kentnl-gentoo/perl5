@@ -5046,8 +5046,11 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVdf" RHS=%"UVdf"\n",
 			 */
 			ssc_init(pRExC_state, data->start_class);
 		    }  else {
-			/* AND before and after: combine and continue */
+                        /* AND before and after: combine and continue.  These
+                         * assertions are zero-length, so can match an EMPTY
+                         * string */
 			ssc_and(pRExC_state, data->start_class, (regnode_charclass *) &intrnl);
+                        ANYOF_FLAGS(data->start_class) |= ANYOF_EMPTY_STRING;
 		    }
                 }
 	    }
@@ -5119,6 +5122,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVdf" RHS=%"UVdf"\n",
 
                 if (f & SCF_DO_STCLASS_AND) {
                     ssc_and(pRExC_state, data->start_class, (regnode_charclass *) &intrnl);
+                    ANYOF_FLAGS(data->start_class) |= ANYOF_EMPTY_STRING;
                 }
                 if (data) {
                     if (data_fake.flags & (SF_HAS_PAR|SF_IN_PAR))
@@ -14662,7 +14666,8 @@ parseit:
      * at compile time.  Besides not inverting folded locale now, we can't
      * invert if there are things such as \w, which aren't known until runtime
      * */
-    if (invert
+    if (cp_list
+        && invert
         && ! (ANYOF_FLAGS(ret) & (ANYOF_LOCALE_FLAGS))
 	&& ! depends_list
 	&& ! HAS_NONLOCALE_RUNTIME_PROPERTY_DEFINITION)
@@ -16552,12 +16557,12 @@ S_put_latin1_charclass_innards(pTHX_ SV *sv, char *bitmap)
     PERL_ARGS_ASSERT_PUT_LATIN1_CHARCLASS_INNARDS;
 
     for (i = 0; i < 256; i++) {
-        if (i < 256 && BITMAP_TEST((U8 *) bitmap,i)) {
+        if (BITMAP_TEST((U8 *) bitmap,i)) {
 
             /* The character at index i should be output.  Find the next
              * character that should NOT be output */
             int j;
-            for (j = i + 1; j <= 256; j++) {
+            for (j = i + 1; j < 256; j++) {
                 if (! BITMAP_TEST((U8 *) bitmap, j)) {
                     break;
                 }

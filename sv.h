@@ -773,7 +773,7 @@ attributable to C<SvOOK>.  See C<SvCUR>.
 =for apidoc Am|char*|SvEND|SV* sv
 Returns a pointer to the spot just after the last character in
 the string which is in the SV, where there is usually a trailing
-null (even though Perl scalars do not strictly require it).
+C<NUL> character (even though Perl scalars do not strictly require it).
 See C<SvCUR>.  Access the character as *(SvEND(sv)).
 
 Warning: If C<SvCUR> is equal to C<SvLEN>, then C<SvEND> points to
@@ -792,7 +792,8 @@ C<SvIV_set> instead of the lvalue assignment to C<SvIVX>.
 Set the value of the NV pointer in sv to val.  See C<SvIV_set>.
 
 =for apidoc Am|void|SvPV_set|SV* sv|char* val
-Set the value of the PV pointer in sv to val.  See also C<SvIV_set>.
+Set the value of the PV pointer in C<sv> to the C<NUL>-terminated string
+C<val>.  See also C<SvIV_set>.
 
 Beware that the existing pointer may be involved in copy-on-write or other
 mischief, so do C<SvOOK_off(sv)> and use C<sv_force_normal> or
@@ -2015,7 +2016,7 @@ argument more than once.
 
 =for apidoc Am|void|SvSetSV|SV* dsv|SV* ssv
 Calls C<sv_setsv> if dsv is not the same as ssv.  May evaluate arguments
-more than once.
+more than once.  Does not handle 'set' magic on the destination SV.
 
 =for apidoc Am|void|SvSetSV_nosteal|SV* dsv|SV* ssv
 Calls a non-destructive version of C<sv_setsv> if dsv is not the same as
@@ -2044,7 +2045,7 @@ has been loaded.
 =for apidoc Am|char *|SvGROW|SV* sv|STRLEN len
 Expands the character buffer in the SV so that it has room for the
 indicated number of bytes (remember to reserve space for an extra trailing
-NUL character).  Calls C<sv_grow> to perform the expansion if necessary.
+C<NUL> character).  Calls C<sv_grow> to perform the expansion if necessary.
 Returns a pointer to the character
 buffer.  SV must be of type >= SVt_PV.  One
 alternative is to call C<sv_grow> if you are not sure of the type of SV.
@@ -2163,7 +2164,8 @@ struct clone_params {
 /*
 =for apidoc Am|SV*|newSVpvn_utf8|NULLOK const char* s|STRLEN len|U32 utf8
 
-Creates a new SV and copies a string into it.  If utf8 is true, calls
+Creates a new SV and copies a string (which may contain C<NUL> (C<\0>)
+characters) into it.  If utf8 is true, calls
 C<SvUTF8_on> on the new SV.  Implemented as a wrapper around C<newSVpvn_flags>.
 
 =cut

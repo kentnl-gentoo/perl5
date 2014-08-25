@@ -28,7 +28,7 @@
 # See Porting/pumpkin.pod for more information on metaconfig.
 #
 
-# Generated on Wed Apr  9 12:24:24 CEST 2014 [metaconfig 3.5 PL0]
+# Generated on Wed Jun  4 08:58:13 CEST 2014 [metaconfig 3.5 PL0]
 # (with additional metaconfig patches by perlbug@perl.org)
 
 cat >c1$$ <<EOF
@@ -91,7 +91,7 @@ esac
 : Proper separator for the PATH environment variable
 p_=:
 : On OS/2 this directory should exist if this is not floppy only system ":-]"
-if test -d c:/. || ( uname -a | grep -i 'os\(/\|\)2' ) 2>&1 >/dev/null ; then
+if test -d c:/. || ( uname -a | grep -i 'os\(/\|\)2' 2>&1 ) 2>&1 >/dev/null ; then
 	if test -n "$OS2_SHELL"; then
 		p_=\;
 		PATH=`cmd /c "echo %PATH%" | tr '\\\\' / `
@@ -2518,7 +2518,7 @@ egrep)
 esac
 case "$less" in
 '')	;;
-*)	if $less -R </dev/null >/dev/null; then
+*)	if $less -R </dev/null >/dev/null 2>&1; then
 	       echo "Substituting less -R for less."
 	       less="$less -R"
 	       _less=$less
@@ -17748,13 +17748,13 @@ freebsd)
         h_shm=false
 	val="$undef"
 	set shmctl d_shmctl
-	evat $setvar
+	eval $setvar
 	set shmget d_shmget
-	evat $setvar
+	eval $setvar
 	set shmat d_shmat
-	evat $setvar
+	eval $setvar
 	set shmdt d_shmdt
-	evat $setvar
+	eval $setvar
 	;;
     esac
     ;;
@@ -22033,7 +22033,7 @@ XPG3 XPG3_EXTENDED XPG4 XPG4_EXTENDED
 z8000
 EOSH
 # Maybe put other stuff here too.
-cat <<EOSH >>Cppsym.know
+./tr '-' '_' <<EOSH >>Cppsym.know
 $osname
 EOSH
 ./tr '[a-z]' '[A-Z]' < Cppsym.know > Cppsym.a
@@ -22400,8 +22400,8 @@ find_extensions='
 		Scalar/List/Utils) this_ext="List/Util"	;;
 		PathTools)         this_ext="Cwd"	;;
 	    esac;
-	    echo " $xs_extensions $nonxs_extensions" > $$.tmp;
-	    if $contains " $this_ext " $$.tmp; then
+	    echo " $xs_extensions $nonxs_extensions" > $tdir/$$.tmp;
+	    if $contains " $this_ext " $tdir/$$.tmp; then
 		echo >&4;
 		echo "Duplicate directories detected for extension $xxx" >&4;
 		echo "Configure cannot correctly recover from this - shall I abort?" >&4;
@@ -22419,15 +22419,15 @@ find_extensions='
 		esac;
 		echo "Ok.  You will need to correct config.sh before running make." >&4;
 	    fi;
-	    $ls -1 $xxx > $$.tmp;
-	    if   $contains "\.xs$" $$.tmp > /dev/null 2>&1; then
+	    $ls -1 $xxx > $tdir/$$.tmp;
+	    if   $contains "\.xs$" $tdir/$$.tmp > /dev/null 2>&1; then
 		xs_extensions="$xs_extensions $this_ext";
-	    elif $contains "\.c$"  $$.tmp > /dev/null 2>&1; then
+	    elif $contains "\.c$"  $tdir/$$.tmp > /dev/null 2>&1; then
 		xs_extensions="$xs_extensions $this_ext";
 	    elif $test -d $xxx; then
 		nonxs_extensions="$nonxs_extensions $this_ext";
 	    fi;
-	    $rm -f $$.tmp;
+	    $rm -f $tdir/$$.tmp;
 	    ;;
 	esac;
     done'

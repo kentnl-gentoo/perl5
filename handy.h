@@ -287,19 +287,20 @@ typedef U64TYPE U64;
 =head1 SV-Body Allocation
 
 =for apidoc Ama|SV*|newSVpvs|const char* s
-Like C<newSVpvn>, but takes a literal string instead of a string/length pair.
+Like C<newSVpvn>, but takes a literal C<NUL>-terminated string instead of a
+string/length pair.
 
 =for apidoc Ama|SV*|newSVpvs_flags|const char* s|U32 flags
-Like C<newSVpvn_flags>, but takes a literal string instead of a string/length
-pair.
+Like C<newSVpvn_flags>, but takes a literal C<NUL>-terminated string instead of
+a string/length pair.
 
 =for apidoc Ama|SV*|newSVpvs_share|const char* s
-Like C<newSVpvn_share>, but takes a literal string instead of a string/length
-pair and omits the hash parameter.
+Like C<newSVpvn_share>, but takes a literal C<NUL>-terminated string instead of
+a string/length pair and omits the hash parameter.
 
 =for apidoc Am|void|sv_catpvs_flags|SV* sv|const char* s|I32 flags
-Like C<sv_catpvn_flags>, but takes a literal string instead of a
-string/length pair.
+Like C<sv_catpvn_flags>, but takes a literal C<NUL>-terminated string instead
+of a string/length pair.
 
 =for apidoc Am|void|sv_catpvs_nomg|SV* sv|const char* s
 Like C<sv_catpvn_nomg>, but takes a literal string instead of a
@@ -326,7 +327,8 @@ string/length pair.
 =head1 Memory Management
 
 =for apidoc Ama|char*|savepvs|const char* s
-Like C<savepvn>, but takes a literal string instead of a string/length pair.
+Like C<savepvn>, but takes a literal C<NUL>-terminated string instead of a
+string/length pair.
 
 =for apidoc Ama|char*|savesharedpvs|const char* s
 A version of C<savepvs()> which allocates the duplicate string in memory
@@ -1936,8 +1938,13 @@ void Perl_mem_log_del_sv(const SV *sv, const char *filename, const int linenumbe
 #define StructCopy(s,d,t) Copy(s,d,1,t)
 #endif
 
+/* C_ARRAY_LENGTH is the number of elements in the C array (so you
+ * want your zero-based indices to be less than but not equal to).
+ *
+ * C_ARRAY_END is one past the last: half-open/half-closed range,
+ * not last-inclusive range. */
 #define C_ARRAY_LENGTH(a)	(sizeof(a)/sizeof((a)[0]))
-#define C_ARRAY_END(a)		(a) + (sizeof(a)/sizeof((a)[0]))
+#define C_ARRAY_END(a)		((a) + C_ARRAY_LENGTH(a))
 
 #ifdef NEED_VA_COPY
 # ifdef va_copy

@@ -233,9 +233,13 @@ use File::Glob qw(:case);
     },
 
     'Config::Perl::V' => {
-        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.20.tgz',
+        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.22.tgz',
         'FILES'        => q[cpan/Config-Perl-V],
-        'EXCLUDED'     => ['examples/show-v.pl'],
+        'EXCLUDED'     => [qw(
+		examples/show-v.pl
+		t/00_pod.t
+		t/01_pod.t
+		)],
     },
 
     'constant' => {
@@ -1289,7 +1293,7 @@ use File::Glob qw(:case);
     },
 
     'version' => {
-        'DISTRIBUTION' => 'JPEACOCK/version-0.9908.tar.gz',
+        'DISTRIBUTION' => 'JPEACOCK/version-0.9909.tar.gz',
         'FILES'        => q[cpan/version vutil.c vutil.h vxs.inc],
         'EXCLUDED' => [
             qr{^vutil/lib/},
@@ -1304,11 +1308,6 @@ use File::Glob qw(:case);
         # only necessary with the CPAN release.
         'CUSTOMIZED'   => [
             qw( lib/version.pm
-                ),
-
-            # Merged upstream, waiting for new CPAN release: see CPAN RT#92721
-            qw( vutil.c
-                vxs.inc
                 ),
         ],
 

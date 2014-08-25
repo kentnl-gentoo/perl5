@@ -327,6 +327,52 @@
 #  define PERL_UNUSED_CONTEXT
 #endif
 
+/* gcc (-ansi) -pedantic doesn't allow gcc statement expressions,
+ * g++ allows them but seems to have problems with them
+ * (insane errors ensue).
+ * g++ does not give insane errors now (RMB 2008-01-30, gcc 4.2.2).
+ */
+#if defined(PERL_GCC_PEDANTIC) || \
+    (defined(__GNUC__) && defined(__cplusplus) && \
+	((__GNUC__ < 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ < 2))))
+#  ifndef PERL_GCC_BRACE_GROUPS_FORBIDDEN
+#    define PERL_GCC_BRACE_GROUPS_FORBIDDEN
+#  endif
+#endif
+
+/* Use PERL_UNUSED_RESULT() to suppress the warnings about unused results
+ * of function calls, e.g. PERL_UNUSED_RESULT(foo(a, b)).
+ *
+ * The main reason for this is that the combination of gcc -Wunused-result
+ * (part of -Wall) and the __attribute__((warn_unused_result)) cannot
+ * be silenced with casting to void.  This causes trouble when the system
+ * header files use the attribute.
+ *
+ * Use PERL_UNUSED_RESULT sparingly, though, since usually the warning
+ * is there for a good reason: you might lose success/failure information,
+ * or leak resources, or changes in resources.
+ *
+ * But sometimes you just want to ignore the return value, e.g. on
+ * codepaths soon ending up in abort, or in "best effort" attempts,
+ * or in situations where there is no good way to handle failures.
+ *
+ * Sometimes PERL_UNUSED_RESULT might not be the most natural way:
+ * another possibility is that you can capture the return value
+ * and use PERL_UNUSED_VAR on that.
+ *
+ * The __typeof__() is used instead of typeof() since typeof() is not
+ * available under strict C89, and because of compilers masquerading
+ * as gcc (clang and icc), we want exactly the gcc extension
+ * __typeof__ and nothing else.
+ */
+#ifndef PERL_UNUSED_RESULT
+#  if defined(__GNUC__) && defined(HASATTRIBUTE_WARN_UNUSED_RESULT)
+#    define PERL_UNUSED_RESULT(v) STMT_START { __typeof__(v) z = (v); (void)sizeof(z); } STMT_END
+#  else
+#    define PERL_UNUSED_RESULT(v) ((void)(v))
+#  endif
+#endif
+
 /* on gcc (and clang), specify that a warning should be temporarily
  * ignored; e.g.
  *
@@ -444,19 +490,6 @@
 #    define PERL_XS_EXPORT_C extern "C"
 #  else
 #    define PERL_XS_EXPORT_C
-#  endif
-#endif
-
-/* gcc (-ansi) -pedantic doesn't allow gcc statement expressions,
- * g++ allows them but seems to have problems with them
- * (insane errors ensue).
- * g++ does not give insane errors now (RMB 2008-01-30, gcc 4.2.2).
- */
-#if defined(PERL_GCC_PEDANTIC) || \
-    (defined(__GNUC__) && defined(__cplusplus) && \
-	((__GNUC__ < 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ < 2))))
-#  ifndef PERL_GCC_BRACE_GROUPS_FORBIDDEN
-#    define PERL_GCC_BRACE_GROUPS_FORBIDDEN
 #  endif
 #endif
 
@@ -4598,6 +4631,9 @@ EXTCONST char PL_bincompat_options[] =
 #  ifdef PERL_GLOBAL_STRUCT
 			     " PERL_GLOBAL_STRUCT"
 #  endif
+#  ifdef PERL_GLOBAL_STRUCT_PRIVATE
+			     " PERL_GLOBAL_STRUCT_PRIVATE"
+#  endif
 #  ifdef PERL_IMPLICIT_CONTEXT
 			     " PERL_IMPLICIT_CONTEXT"
 #  endif
@@ -5248,6 +5284,26 @@ typedef struct am_table_short AMTS;
 #define PERLDB_SAVESRC 	(PL_perldb && (PL_perldb & PERLDBf_SAVESRC))
 #define PERLDB_SAVESRC_NOSUBS	(PL_perldb && (PL_perldb & PERLDBf_SAVESRC_NOSUBS))
 #define PERLDB_SAVESRC_INVALID	(PL_perldb && (PL_perldb & PERLDBf_SAVESRC_INVALID))
+
+/*
+
+=head1 Locale-related functions and macros
+
+=for apidoc sync_locale
+
+Changing the program's locale should be avoided by XS code.  Nevertheless,
+certain non-Perl libraries called from XS, such as C<Gtk> do so.  When this
+happens, Perl needs to be told that the locale has changed.  Use this macro
+to do so, before returning to Perl code.
+
+=cut
+*/
+
+/* Temporary for maint.  Is a function in 5.21 */
+#define sync_locale() (new_ctype(setlocale(LC_CTYPE, NULL)),        \
+                       new_collate(setlocale(LC_COLLATE, NULL)),    \
+                       set_numeric_local(),                         \
+                       new_numeric(setlocale(LC_NUMERIC, NULL)))
 
 #ifdef USE_LOCALE_NUMERIC
 

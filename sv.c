@@ -113,13 +113,6 @@
  * has a mandatory return value, even though that value is just the same
  * as the buf arg */
 
-#define V_Gconvert(x,n,t,b) \
-{ \
-    char *rc = (char *)Gconvert(x,n,t,b); \
-    PERL_UNUSED_VAR(rc); \
-}
-
-
 #ifdef PERL_UTF8_CACHE_ASSERT
 /* if adding more checks watch out for the following tests:
  *   t/op/index.t t/op/length.t t/op/pat.t t/op/substr.t
@@ -1581,14 +1574,19 @@ Perl_sv_grow(pTHX_ SV *const sv, STRLEN newlen)
         newlen++;
 #endif
 
+#if defined(PERL_USE_MALLOC_SIZE) && defined(Perl_safesysmalloc_size)
+#define PERL_UNWARANTED_CHUMMINESS_WITH_MALLOC
+#endif
+
     if (newlen > SvLEN(sv)) {		/* need more room? */
 	STRLEN minlen = SvCUR(sv);
 	minlen += (minlen >> PERL_STRLEN_EXPAND_SHIFT) + 10;
 	if (newlen < minlen)
 	    newlen = minlen;
-#ifndef Perl_safesysmalloc_size
-        if (SvLEN(sv))
+#ifndef PERL_UNWARANTED_CHUMMINESS_WITH_MALLOC
+        if (SvLEN(sv)) {
             newlen = PERL_STRLEN_ROUNDUP(newlen);
+        }
 #endif
 	if (SvLEN(sv) && s) {
 	    s = (char*)saferealloc(s, newlen);
@@ -1600,7 +1598,7 @@ Perl_sv_grow(pTHX_ SV *const sv, STRLEN newlen)
 	    }
 	}
 	SvPV_set(sv, s);
-#ifdef Perl_safesysmalloc_size
+#ifdef PERL_UNWARANTED_CHUMMINESS_WITH_MALLOC
 	/* Do this here, do it once, do it right, and then we will never get
 	   called back into sv_grow() unless there really is some growing
 	   needed.  */
@@ -2988,12 +2986,12 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 	    /* some Xenix systems wipe out errno here */
 
 #ifndef USE_LOCALE_NUMERIC
-            V_Gconvert(SvNVX(sv), NV_DIG, 0, s);
+            PERL_UNUSED_RESULT(Gconvert(SvNVX(sv), NV_DIG, 0, s));
             SvPOK_on(sv);
 #else
             {
                 DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED();
-                V_Gconvert(SvNVX(sv), NV_DIG, 0, s);
+                PERL_UNUSED_RESULT(Gconvert(SvNVX(sv), NV_DIG, 0, s));
 
                 /* If the radix character is UTF-8, and actually is in the
                  * output, turn on the UTF-8 flag for the scalar */
@@ -3287,9 +3285,9 @@ finds something that won't fit into a byte.  Otherwise it tries to not upgrade
 and just use bytes.  But some things that do fit into a byte are variants in
 utf8, and the caller may not have been keeping track of these.)
 
-If the routine itself changes the string, it adds a trailing NUL.  Such a NUL
-isn't guaranteed due to having other routines do the work in some input cases,
-or if the input is already flagged as being in utf8.
+If the routine itself changes the string, it adds a trailing C<NUL>.  Such a
+C<NUL> isn't guaranteed due to having other routines do the work in some input
+cases, or if the input is already flagged as being in utf8.
 
 The speed of this could perhaps be improved for many cases if someone wanted to
 write a fast function that counts the number of variant characters in a string,
@@ -4688,7 +4686,8 @@ Perl_sv_setsv_cow(pTHX_ SV *dstr, SV *sstr)
 /*
 =for apidoc sv_setpvn
 
-Copies a string into an SV.  The C<len> parameter indicates the number of
+Copies a string (possibly containing embedded C<NUL> characters) into an SV.
+The C<len> parameter indicates the number of
 bytes to be copied.  If the C<ptr> argument is NULL the SV will become
 undefined.  Does not handle 'set' magic.  See C<sv_setpvn_mg>.
 
@@ -4746,8 +4745,9 @@ Perl_sv_setpvn_mg(pTHX_ SV *const sv, const char *const ptr, const STRLEN len)
 /*
 =for apidoc sv_setpv
 
-Copies a string into an SV.  The string must be null-terminated.  Does not
-handle 'set' magic.  See C<sv_setpv_mg>.
+Copies a string into an SV.  The string must be terminated with a C<NUL>
+character.
+Does not handle 'set' magic.  See C<sv_setpv_mg>.
 
 =cut
 */
@@ -4844,18 +4844,20 @@ Perl_sv_sethek(pTHX_ SV *const sv, const HEK *const hek)
 =for apidoc sv_usepvn_flags
 
 Tells an SV to use C<ptr> to find its string value.  Normally the
-string is stored inside the SV but sv_usepvn allows the SV to use an
+string is stored inside the SV, but sv_usepvn allows the SV to use an
 outside string.  The C<ptr> should point to memory that was allocated
-by C<malloc>.  It must be the start of a mallocked block
-of memory, and not a pointer to the middle of it.  The
-string length, C<len>, must be supplied.  By default
-this function will realloc (i.e. move) the memory pointed to by C<ptr>,
+by L<Newx|perlclib/Memory Management and String Handling>. It must be
+the start of a Newx-ed block of memory, and not a pointer to the
+middle of it (beware of L<OOK|perlguts/Offsets> and copy-on-write),
+and not be from a non-Newx memory allocator like C<malloc>. The
+string length, C<len>, must be supplied.  By default this function
+will C<Renew> (i.e. realloc, move) the memory pointed to by C<ptr>,
 so that pointer should not be freed or used by the programmer after
 giving it to sv_usepvn, and neither should any pointers from "behind"
 that pointer (e.g. ptr + 1) be used.
 
 If C<flags> & SV_SMAGIC is true, will call SvSETMAGIC.  If C<flags> &
-SV_HAS_TRAILING_NUL is true, then C<ptr[len]> must be NUL, and the realloc
+SV_HAS_TRAILING_NUL is true, then C<ptr[len]> must be C<NUL>, and the realloc
 will be skipped (i.e. the buffer is actually at least 1 byte longer than
 C<len>, and already meets the requirements for storing in C<SvPVX>).
 
@@ -5028,6 +5030,7 @@ S_sv_uncow(pTHX_ SV * const sv, const U32 flags)
 	    }
 # endif
             SvPV_set(sv, NULL);
+            SvCUR_set(sv, 0);
             SvLEN_set(sv, 0);
             if (flags & SV_COW_DROP_PV) {
                 /* OK, so we don't need to copy our buffer.  */
@@ -5348,7 +5351,8 @@ Perl_sv_catsv_flags(pTHX_ SV *const dsv, SV *const ssv, const I32 flags)
 /*
 =for apidoc sv_catpv
 
-Concatenates the string onto the end of the string which is in the SV.
+Concatenates the C<NUL>-terminated string onto the end of the string which is
+in the SV.
 If the SV has the UTF-8 status set, then the bytes appended should be
 valid UTF-8.  Handles 'get' magic, but not 'set' magic.  See C<sv_catpv_mg>.
 
@@ -5380,7 +5384,8 @@ Perl_sv_catpv(pTHX_ SV *const sv, const char *ptr)
 /*
 =for apidoc sv_catpv_flags
 
-Concatenates the string onto the end of the string which is in the SV.
+Concatenates the C<NUL>-terminated string onto the end of the string which is
+in the SV.
 If the SV has the UTF-8 status set, then the bytes appended should
 be valid UTF-8.  If C<flags> has the C<SV_SMAGIC> bit set, will C<mg_set>
 on the modified SV if appropriate.
@@ -5417,7 +5422,7 @@ Perl_sv_catpv_mg(pTHX_ SV *const sv, const char *const ptr)
 
 Creates a new SV.  A non-zero C<len> parameter indicates the number of
 bytes of preallocated string space the SV should have.  An extra byte for a
-trailing NUL is also reserved.  (SvPOK is not set for the SV even if string
+trailing C<NUL> is also reserved.  (SvPOK is not set for the SV even if string
 space is allocated.)  The reference count for the new SV is set to 1.
 
 In 5.9.3, newSV() replaces the older NEWSV() API, and drops the first
@@ -5581,7 +5586,7 @@ Perl_sv_magic(pTHX_ SV *const sv, SV *const obj, const int how,
 
     PERL_ARGS_ASSERT_SV_MAGIC;
 
-    if (how < 0 || (unsigned)how > C_ARRAY_LENGTH(PL_magic_data)
+    if (how < 0 || (unsigned)how >= C_ARRAY_LENGTH(PL_magic_data)
 	|| ((flags = PL_magic_data[how]),
 	    (vtable_index = flags & PERL_MAGIC_VTABLE_MASK)
 	    > magic_vtable_max))
@@ -8864,7 +8869,8 @@ Perl_sv_newmortal(pTHX)
 /*
 =for apidoc newSVpvn_flags
 
-Creates a new SV and copies a string into it.  The reference count for the
+Creates a new SV and copies a string (which may contain C<NUL> (C<\0>)
+characters) into it.  The reference count for the
 SV is set to 1.  Note that if C<len> is zero, Perl will create a zero length
 string.  You are responsible for ensuring that the source string is at least
 C<len> bytes long.  If the C<s> argument is NULL the new SV will be undefined.
@@ -8938,9 +8944,13 @@ Perl_sv_2mortal(pTHX_ SV *const sv)
 /*
 =for apidoc newSVpv
 
-Creates a new SV and copies a string into it.  The reference count for the
+Creates a new SV and copies a string (which may contain C<NUL> (C<\0>)
+characters) into it.  The reference count for the
 SV is set to 1.  If C<len> is zero, Perl will compute the length using
-strlen().  For efficiency, consider using C<newSVpvn> instead.
+strlen(), (which means if you use this option, that C<s> can't have embedded
+C<NUL> characters and has to have a terminating C<NUL> byte).
+
+For efficiency, consider using C<newSVpvn> instead.
 
 =cut
 */
@@ -8959,7 +8969,7 @@ Perl_newSVpv(pTHX_ const char *const s, const STRLEN len)
 /*
 =for apidoc newSVpvn
 
-Creates a new SV and copies a buffer into it, which may contain NUL characters
+Creates a new SV and copies a string into it, which may contain C<NUL> characters
 (C<\0>) and other binary data.  The reference count for the SV is set to 1.
 Note that if C<len> is zero, Perl will create a zero length (Perl) string.  You
 are responsible for ensuring that the source buffer is at least
@@ -9098,7 +9108,7 @@ Perl_newSVpvn_share(pTHX_ const char *src, I32 len, U32 hash)
 /*
 =for apidoc newSVpv_share
 
-Like C<newSVpvn_share>, but takes a nul-terminated string instead of a
+Like C<newSVpvn_share>, but takes a C<NUL>-terminated string instead of a
 string/length pair.
 
 =cut
@@ -10679,7 +10689,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		if (digits && digits < sizeof(ebuf) - NV_DIG - 10) {
 		     /* 0, point, slack */
                     STORE_LC_NUMERIC_SET_TO_NEEDED();
-		    V_Gconvert(nv, (int)digits, 0, ebuf);
+		    PERL_UNUSED_RESULT(Gconvert(nv, (int)digits, 0, ebuf));
 		    sv_catpv_nomg(sv, ebuf);
 		    if (*ebuf)	/* May return an empty string for digits==0 */
 			return;
@@ -11537,7 +11547,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		   aka precis is 0  */
 		if ( c == 'g' && precis) {
                     STORE_LC_NUMERIC_SET_TO_NEEDED();
-		    V_Gconvert((NV)nv, (int)precis, 0, PL_efloatbuf);
+		    PERL_UNUSED_RESULT(Gconvert((NV)nv, (int)precis, 0, PL_efloatbuf));
 		    /* May return an empty string for digits==0 */
 		    if (*PL_efloatbuf) {
 			elen = strlen(PL_efloatbuf);
@@ -11968,7 +11978,6 @@ Perl_dirp_dup(pTHX_ DIR *const dp, CLONE_PARAMS *const param)
     DIR *ret;
 
 #if defined(HAS_FCHDIR) && defined(HAS_TELLDIR) && defined(HAS_SEEKDIR)
-    int rc = 0;
     DIR *pwd;
     const Direntry_t *dirent;
     char smallbuf[256];
@@ -12005,9 +12014,8 @@ Perl_dirp_dup(pTHX_ DIR *const dp, CLONE_PARAMS *const param)
     /* Now we should have two dir handles pointing to the same dir. */
 
     /* Be nice to the calling code and chdir back to where we were. */
-    rc = fchdir(my_dirfd(pwd));
     /* XXX If this fails, then what? */
-    PERL_UNUSED_VAR(rc);
+    PERL_UNUSED_RESULT(fchdir(my_dirfd(pwd)));
 
     /* We have no need of the pwd handle any more. */
     PerlDir_close(pwd);
@@ -12257,8 +12265,7 @@ Perl_ptr_table_store(pTHX_ PTR_TBL_t *const tbl, const void *const oldsv, void *
 	    new_arena->next = tbl->tbl_arena;
 	    tbl->tbl_arena = new_arena;
 	    tbl->tbl_arena_next = new_arena->array;
-	    tbl->tbl_arena_end = new_arena->array
-		+ sizeof(new_arena->array) / sizeof(new_arena->array[0]);
+	    tbl->tbl_arena_end = C_ARRAY_END(new_arena->array);
 	}
 
 	tblent = tbl->tbl_arena_next++;

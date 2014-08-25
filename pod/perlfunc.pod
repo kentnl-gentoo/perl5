@@ -378,7 +378,8 @@ other named unary operator.  The operator may be any of:
 
     -f  File is a plain file.
     -d  File is a directory.
-    -l  File is a symbolic link.
+    -l  File is a symbolic link (false if symlinks aren't
+        supported by the file system).
     -p  File is a named pipe (FIFO), or Filehandle is a pipe.
     -S  File is a socket.
     -b  File is a block special file.
@@ -389,7 +390,7 @@ other named unary operator.  The operator may be any of:
     -g  File has setgid bit set.
     -k  File has sticky bit set.
 
-    -T  File is an ASCII text file (heuristic guess).
+    -T  File is an ASCII or UTF-8 text file (heuristic guess).
     -B  File is a "binary" file (opposite of -T).
 
     -M  Script start time minus file modification time, in days.
@@ -448,12 +449,18 @@ filehandle won't cache the results of the file tests when this pragma is
 in effect.  Read the documentation for the C<filetest> pragma for more
 information.
 
-The C<-T> and C<-B> switches work as follows.  The first block or so of the
-file is examined for odd characters such as strange control codes or
-characters with the high bit set.  If too many strange characters (>30%)
-are found, it's a C<-B> file; otherwise it's a C<-T> file.  Also, any file
-containing a zero byte in the first block is considered a binary file.  If C<-T>
-or C<-B> is used on a filehandle, the current IO buffer is examined
+The C<-T> and C<-B> switches work as follows.  The first block or so of
+the file is examined to see if it is valid UTF-8 that includes non-ASCII
+characters.  If, so it's a C<-T> file.  Otherwise, that same portion of
+the file is examined for odd characters such as strange control codes or
+characters with the high bit set.  If more than a third of the
+characters are strange, it's a C<-B> file; otherwise it's a C<-T> file.
+Also, any file containing a zero byte in the examined portion is
+considered a binary file.  (If executed within the scope of a L<S<use
+locale>|perllocale> which includes C<LC_CTYPE>, odd characters are
+anything that isn't a printable nor space in the current locale.) If
+C<-T> or C<-B> is used on a filehandle, the current IO buffer is
+examined
 rather than the first block.  Both C<-T> and C<-B> return true on an empty
 file, or a file at EOF when testing a filehandle.  Because you have to
 read a file to do the C<-T> test, on most occasions you want to use a C<-f>
@@ -1682,6 +1689,9 @@ returned by C<each()>, so the following code works properly:
           delete $hash{$key};   # This is safe
         }
 
+Tied hashes may have a different ordering behaviour to perl's hash
+implementation.
+
 This prints out your environment like the printenv(1) program,
 but in a different order:
 
@@ -1990,9 +2000,9 @@ and passed directly to C<execvp>, which is more efficient.  Examples:
 If you don't really want to execute the first argument, but want to lie
 to the program you are executing about its own name, you can specify
 the program you actually want to run as an "indirect object" (without a
-comma) in front of the LIST.  (This always forces interpretation of the
-LIST as a multivalued list, even if there is only a single scalar in
-the list.)  Example:
+comma) in front of the LIST, as in C<exec PROGRAM LIST>.  (This always
+forces interpretation of the LIST as a multivalued list, even if there
+is only a single scalar in the list.)  Example:
 
     $shell = '/bin/csh';
     exec $shell '-sh';    # pretend it's a login shell
@@ -2021,6 +2031,10 @@ The first version, the one without the indirect object, ran the I<echo>
 program, passing it C<"surprise"> an argument.  The second version didn't;
 it tried to run a program named I<"echo surprise">, didn't find it, and set
 C<$?> to a non-zero value indicating failure.
+
+On Windows, only the C<exec PROGRAM LIST> indirect object syntax will
+reliably avoid using the shell; C<exec LIST>, even with more than one
+element, will fall back to the shell if the first spawn fails.
 
 Perl attempts to flush all files opened for output before the exec,
 but this may not be supported on some platforms (see L<perlport>).
@@ -3150,7 +3164,9 @@ rely on C<keys>, C<values> and C<each> to repeatedly return the same order
 as each other.  See L<perlsec/"Algorithmic Complexity Attacks"> for
 details on why hash order is randomized.  Aside from the guarantees
 provided here the exact details of Perl's hash algorithm and the hash
-traversal order are subject to change in any release of Perl.
+traversal order are subject to change in any release of Perl.  Tied hashes
+may behave differently to Perl's hashes with respect to changes in order on
+insertion and deletion of items.
 
 As a side effect, calling keys() resets the internal iterator of the HASH or
 ARRAY (see L</each>).  In particular, calling keys() in void context resets
@@ -4336,23 +4352,45 @@ X<our> X<global>
 
 =for Pod::Functions +5.6.0 declare and assign a package variable (lexical scoping)
 
-C<our> makes a lexical alias to a package variable of the same name in the current
-package for use within the current lexical scope.
+C<our> makes a lexical alias to a package (i.e. global) variable of the
+same name in the current package for use within the current lexical scope.
 
-C<our> has the same scoping rules as C<my> or C<state>, but C<our> only
-declares an alias, whereas C<my> or C<state> both declare a variable name and
-allocate storage for that name within the current scope.
+C<our> has the same scoping rules as C<my> or C<state>, meaning that it is
+only valid within a lexical scope.  Unlike C<my> and C<state>, which both
+declare new (lexical) variables, C<our> only creates an alias to an
+existing variable: a package variable of the same name.
 
 This means that when C<use strict 'vars'> is in effect, C<our> lets you use
 a package variable without qualifying it with the package name, but only within
-the lexical scope of the C<our> declaration.  In this way, C<our> differs from
-C<use vars>, which allows use of an unqualified name I<only> within the
-affected package, but across scopes.
+the lexical scope of the C<our> declaration.
+
+    package Foo;
+    use strict;
+
+    $Foo::foo = 23;
+
+    {
+        our $foo;   # alias to $Foo::foo
+        print $foo; # prints 23
+    }
+
+    print $Foo::foo; # prints 23
+
+    print $foo; # ERROR: requires explicit package name
+
+This works even if the package variable has not been used before, as
+package variables spring into existence when first used.
+
+    package Foo;
+    use strict;
+
+    our $foo = 23;   # just like $Foo::foo = 23
+
+    print $Foo::foo; # prints 23
 
 If more than one variable is listed, the list must be placed
 in parentheses.
 
-    our $foo;
     our($bar, $baz);
 
 An C<our> declaration declares an alias for a package variable that will be visible
@@ -4402,6 +4440,9 @@ Note that with a parenthesised list, C<undef> can be used as a dummy
 placeholder, for example to skip assignment of initial values:
 
     our ( undef, $min, $hour ) = localtime;
+
+C<our> differs from C<use vars>, which allows use of an unqualified name
+I<only> within the affected package, but across scopes.
 
 =item pack TEMPLATE,LIST
 X<pack>
@@ -7982,7 +8023,9 @@ entire argument is passed to the system's command shell for parsing
 (this is C</bin/sh -c> on Unix platforms, but varies on other
 platforms).  If there are no shell metacharacters in the argument,
 it is split into words and passed directly to C<execvp>, which is
-more efficient.
+more efficient.  On Windows, only the C<system PROGRAM LIST> syntax will
+reliably avoid using the shell; C<system LIST>, even with more than one
+element, will fall back to the shell if the first spawn fails.
 
 Perl will attempt to flush all files opened for
 output before any operation that may do a fork, but this may not be
@@ -8714,7 +8757,9 @@ rely on C<keys>, C<values> and C<each> to repeatedly return the same order
 as each other.  See L<perlsec/"Algorithmic Complexity Attacks"> for
 details on why hash order is randomized.  Aside from the guarantees
 provided here the exact details of Perl's hash algorithm and the hash
-traversal order are subject to change in any release of Perl.
+traversal order are subject to change in any release of Perl.  Tied hashes
+may behave differently to Perl's hashes with respect to changes in order on
+insertion and deletion of items.
 
 As a side effect, calling values() resets the HASH or ARRAY's internal
 iterator, see L</each>.  (In particular, calling values() in void context
