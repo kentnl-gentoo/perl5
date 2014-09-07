@@ -17,6 +17,154 @@ Consult your favorite dictionary for details.
 
 =head1 EPIGRAPHS
 
+=head2 v5.20.1-RC1 - Lorenzo da Ponte, Così fan tutte
+
+L<Announced on 2014-08-25 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2014/08/msg218975.html>
+
+  DON ALFONSO:
+  I'd like to speak, but I haven't the heart:
+  my lip stammers.
+  My voice cannot emerge,
+  but remains in my throat.
+  What will you do? What shall I do?
+  Oh what a great catastrophe!
+  There can be nothing worse.
+  I feel pity for you and for them.
+
+  FIORDILIGI: Heavens! For mercy's sake, Signor Alfonso, don't make us
+  die.
+  DON ALFONSO: My children, you must arm yourselves with constancy.
+  DORABELLA: Ye Gods! What evil has occurred? What horrible event? Is my
+  love dead, perhaps?
+  FIORDILIGI: Is mine dead?
+  DON ALFONSO: They are not dead, but they are not far from it.
+  DORABELLA: Wounded?
+  DON ALFONSO: No.
+  FIORDILIGI: Ill?
+  DON ALFONSO: Nor that.
+  FIORDILIGI: What, then?
+  DON ALFONSO: A royal command summons them to the field of battle.
+  FIORDILIGI, DORABELLA: Alas, what do I hear? And they will leave?
+  DON ALFONSO: Immediately.
+  DORABELLA: And there is no way of preventing it?
+  DON ALFONSO: There is none.
+  FIORDILIGI: And not even a single farewell...
+  DON ALFONSO: The unhappy men haven't the courage to see you; but if
+  you wish it, they are ready...
+  DORABELLA: Where are they?
+  DON ALFONSO: Come in, friends.
+
+    -- Lorenzo da Ponte, /Così fan tutte/,
+       trans. William Weaver
+
+=head2 v5.21.3 - Robert Service, The Men that Don't Fit In
+
+L<Announced on 2014-08-20 by Peter Martini|http://www.nntp.perl.org/group/perl.perl5.porters/2014/08/msg218826.html>
+
+    If they just went straight they might go far,
+    They are strong and brave and true;
+    But they're always tired of the things that are,
+    And they want the strange and new.
+    They say: "Could I find my proper groove,
+    What a deep mark I would make!"
+    So they chop and change, and each fresh move
+    Is only a fresh mistake.
+
+=head2 v5.21.2 - Neil Armstrong, Buzz Aldrin, Charlie Duke, Final minutes of communication of the first manned moon landing, July 20, 1969.
+
+L<Announced on 2014-07-20 by Abigail|http://www.nntp.perl.org/group/perl.perl5.porters/2014/07/msg217937.html>
+
+    Armstrong: Okay. Here's a...Looks like a good area here.
+    Aldrin:    I got the shadow out there. 
+    Aldrin:    250, down at 2 1/2, 19 forward.
+    Aldrin:    Altitude, velocity lights. 
+    Aldrin:    3 1/2 down, 220 feet, 13 forward.
+    Aldrin:    11 forward. Coming down nicely.
+    Armstrong: Gonna be right over that crater. 
+    Aldrin:    200 feet, 4 1/2 down.
+    Aldrin:    5 1/2 down.
+    Armstrong: I got a good spot [garbled].
+    Aldrin:    160 feet, 6 1/2 down.
+    Aldrin:    5 1/2 down, 9 forward. You're looking good.
+    Aldrin:    120 feet.
+    Aldrin:    100 feet, 3 1/2 down, 9 forward. Five percent. Quantity light. 
+    Aldrin:    Okay. 75 feet. And it's looking good. Down a half, 6 forward.
+    Duke:      60 seconds.
+    Aldrin:    Light's on. 
+    Aldrin:    60 feet, down 2 1/2. 2 forward. 2 forward. That's good. 
+    Aldrin:    40 feet, down 2 1/2. Picking up some dust. 
+    Aldrin:    30 feet, 2 1/2 down. [Garbled] shadow. 
+    Aldrin:    4 forward. 4 forward. Drifting to the right a little. 20 feet,
+               down a half.
+    Duke:      30 seconds.
+    Aldrin:    Drifting forward just a little bit; that's good.
+    Aldrin:    Contact Light. 
+    Armstrong: Shutdown.
+    Aldrin:    Okay. Engine Stop. 
+    Aldrin:    ACA out of Detent.
+    Armstrong: Out of Detent. Auto.
+    Aldrin:    Mode Control, both Auto. Descent Engine Command Override, Off.
+               Engine Arm, Off. 413 is in. 
+    Duke:      We copy you down, Eagle.
+    Armstrong: Engine arm is off.
+    Armstrong: Houston, Tranquility Base here. The Eagle has landed.
+    Duke:      Roger, Twan...[correcting himself] Tranquility. We copy you on
+               the ground. You got a bunch of guys about to turn blue.
+               We're breathing again. Thanks a lot.
+    Aldrin:    Thank you. 
+
+=head2 v5.21.1 - Robert Jordan, The Crossroads of Twilights, Book 10 of the Wheel of Time
+
+L<Announced on 2014-06-20 by Matthew Horsfall|http://www.nntp.perl.org/group/perl.perl5.porters/2014/06/msg217030.html>
+
+  We rode on the winds of the rising storm,
+    We ran to the sounds of the thunder.
+   We danced among the lightning bolts,
+       and tore the world asunder.
+
+    --     Anonymous fragment of a poem believed
+       written near the end of the previous Age,
+                 known by some as the Third Age.
+              Sometimes attributed to the Dragon
+                                         Reborn.
+
+=head2 v5.21.0 - Friedrich von Schiller, The Song of the Bell
+
+L<Announced on 2014-05-27 by Ricardo Signes|http://www.nntp.perl.org/group/perl.perl5.porters/2014/05/msg215826.html>
+
+  Walled in fast within the earth
+  Stands the form burnt out of clay.
+  This must be the bell’s great birth!
+  Fellows, lend a hand to-day.
+    Sweat must trickle now
+    From the burning brow,
+  Till the work its master honour.
+  Blessing comes from Heaven’s Donor.
+
+=head2 v5.20.0 - William Shakespeare, Sonnet 18
+
+L<Announced on 2014-05-27 by Ricardo Signes|http://www.nntp.perl.org/group/perl.perl5.porters/2014/05/msg215815.html>
+
+  But thy eternal summer shall not fade,
+  Nor lose possession of that fair thou ow'st;
+  Nor shall Death brag thou wander'st in his shade,
+  When in eternal lines to time thou grow'st:
+    So long as men can breathe or eyes can see,
+    So long lives this, and this gives life to thee.
+
+  -- William Shakespeare, Sonnet 18
+
+=head2 v5.20.0-RC1 - Lindsey Buckingham, "Second Hand News"
+
+L<Announced on 2014-05-17 by Ricardo Signes|http://www.nntp.perl.org/group/perl.perl5.porters/2014/05/msg215479.html>
+
+  When times go bad
+  when times go rough
+  Won't you lay me down in tall grass
+  And let me do my stuff
+
+  -- Lindsey Buckingham, "Second Hand News"
+
 =head2 v5.19.11 - Lautréamont, Les Chants de Maldoror
 
 L<Announced on 2014-04-20 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2014/04/msg214580.html>
