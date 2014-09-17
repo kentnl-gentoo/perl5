@@ -2,7 +2,7 @@
 # Makefile to build perl on Windows using DMAKE.
 # Supported compilers:
 #	Microsoft Visual C++ 6.0 or later
-#	MinGW with gcc-3.2 or later
+#	MinGW with gcc-3.4.5 or later
 #	Windows SDK 64-bit compiler and tools
 #
 # This is set up to build a perl.exe that runs off a shared library
@@ -38,7 +38,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.18.2
+#INST_VER	*= \5.18.3
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -126,7 +126,7 @@ USE_LARGE_FILES	*= define
 #CCTYPE		= MSVC110
 # Visual C++ 2012 Express Edition (aka Visual C++ 11.x) (free version)
 #CCTYPE		= MSVC110FREE
-# MinGW or mingw-w64 with gcc-3.2 or later
+# MinGW or mingw-w64 with gcc-3.4.5 or later
 CCTYPE		*= GCC
 
 #
@@ -1338,7 +1338,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5182delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5183delta.pod
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(PERLEXE) $(ICWD) ..\autodoc.pl ..
 	$(PERLEXE) $(ICWD) ..\pod\perlmodlib.pl -q
@@ -1430,7 +1430,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5182delta.pod perlaix.pod perlamiga.pod perlapi.pod \
+	    perl5183delta.pod perlaix.pod perlamiga.pod perlapi.pod \
 	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldgux.pod perldos.pod perlfreebsd.pod perlhaiku.pod \
 	    perlhpux.pod perlhurd.pod perlintern.pod perlirix.pod \

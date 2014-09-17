@@ -2,15 +2,15 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.18.2
+perldelta - what is new for perl v5.18.3
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.18.1 release and the 5.18.2
+This document describes differences between the 5.18.2 release and the 5.18.3
 release.
 
-If you are upgrading from an earlier release such as 5.18.0, first read
-L<perl5181delta>, which describes differences between 5.18.0 and 5.18.1.
+If you are upgrading from an earlier release such as 5.18.1, first read
+L<perl5182delta>, which describes differences between 5.18.1 and 5.18.2.
 
 =head1 Modules and Pragmata
 
@@ -20,43 +20,54 @@ L<perl5181delta>, which describes differences between 5.18.0 and 5.18.1.
 
 =item *
 
-L<B> has been upgraded from version 1.42_01 to 1.42_02.
-
-The fix for [perl #118525] introduced a regression in the behaviour of
-C<B::CV::GV>, changing the return value from a C<B::SPECIAL> object on
-a C<NULL> C<CvGV> to C<undef>.  C<B::CV::GV> again returns a
-C<B::SPECIAL> object in this case.  [perl #119413]
+L<Digest::SHA> has been upgraded from 5.84_01 to 5.84_02.
 
 =item *
 
-L<B::Concise> has been upgraded from version 0.95 to 0.95_01.
+L<perl5db.pl> has been upgraded from version 1.39_10 to 1.39_11.
 
-This fixes a bug in dumping unexpected SEPCIALs.
-
-=item *
-
-L<English> has been upgraded from version 1.06 to 1.06_01.  This fixes an
-error about the performance of C<$`>, C<$&>, and c<$'>.
-
-=item *
-
-L<File::Glob> has been upgraded from version 1.20 to 1.20_01.
+This fixes a crash in tab completion, where available. [perl #120827]  Also,
+filehandle information is properly reset after a pager is run. [perl #121456]
 
 =back
 
-=head1 Documentation
+=head1 Platform Support
 
-=head2 Changes to Existing Documentation
+=head2 Platform-Specific Notes
+
+=over 4
+
+=item Win32
 
 =over 4
 
 =item *
 
-L<perlrepository> has been restored with a pointer to more useful pages.
+Introduced by
+L<perl #113536|https://rt.perl.org/Public/Bug/Display.html?id=113536>, a memory
+leak on every call to C<system> and backticks (C< `` >), on most Win32 Perls
+starting from 5.18.0 has been fixed.  The memory leak only occurred if you
+enabled psuedo-fork in your build of Win32 Perl, and were running that build on
+Server 2003 R2 or newer OS.  The leak does not appear on WinXP SP3.
+[L<perl #121676|https://rt.perl.org/Public/Bug/Display.html?id=121676>]
+
+=back
+
+=back
+
+=head1 Internal Changes
+
+XXX Changes which affect the interface available to C<XS> code go here.  Other
+significant internal changes for future core maintainers should be noted as
+well.
+
+[ List each change as a =item entry ]
+
+=over 4
 
 =item *
 
-L<perlhack> has been updated with the latest changes from blead.
+XXX
 
 =back
 
@@ -66,78 +77,60 @@ L<perlhack> has been updated with the latest changes from blead.
 
 =item *
 
-Perl 5.18.1 introduced a regression along with a bugfix for lexical subs.
-Some B::SPECIAL results from B::CV::GV became undefs instead.  This broke
-Devel::Cover among other libraries.  This has been fixed.  [perl #119351]
+The debugger now properly resets filehandles as needed. [perl #121456]
 
 =item *
 
-Perl 5.18.0 introduced a regression whereby C<[:^ascii:]>, if used in the same
-character class as other qualifiers, would fail to match characters in the
-Latin-1 block.  This has been fixed.  [perl #120799]
+A segfault in Digest::SHA has been addressed.  [perl #121421]
 
 =item *
 
-Perl 5.18.0 introduced a regression when using ->SUPER::method with AUTOLOAD
-by looking up AUTOLOAD from the current package, rather than the current
-package’s superclass.  This has been fixed. [perl #120694]
+perl can again be built with USE_64_BIT_INT, with Visual C 2003, 32 bit.
+[perl #120925]
 
 =item *
 
-Perl 5.18.0 introduced a regression whereby C<-bareword> was no longer
-permitted under the C<strict> and C<integer> pragmata when used together.  This
-has been fixed.  [perl #120288]
+A leading { (brace) in formats is properly parsed again. [perl #119973]
 
 =item *
 
-Previously PerlIOBase_dup didn't check if pushing the new layer succeeded
-before (optionally) setting the utf8 flag. This could cause
-segfaults-by-nullpointer.  This has been fixed.
+Copy the values used to perturb hash iteration when cloning an
+interpreter.  This was fairly harmless but caused C<valgrind> to
+complain. [perl #121336]
 
 =item *
 
-A buffer overflow with very long identifiers has been fixed.
-
-=item *
-
-A regression from 5.16 in the handling of padranges led to assertion failures
-if a keyword plugin declined to handle the second ‘my’, but only after creating
-a padop.
-
-This affected, at least, Devel::CallParser under threaded builds.
-
-This has been fixed
-
-=item *
-
-The construct C<< $r=qr/.../; /$r/p >> is now handled properly, an issue which
-had been worsened by changes 5.18.0. [perl #118213]
+In Perl v5.18 C<undef *_; goto &sub> and C<local *_; goto &sub> started
+crashing.  This has been fixed. [perl #119949]
 
 =back
 
+=head1 Known Problems
+
+XXX Descriptions of platform agnostic bugs we know we can't fix go here.  Any
+tests that had to be C<TODO>ed for the release would be noted here.  Unfixed
+platform specific bugs also go here.
+
+[ List each fix as a =item entry ]
+
+=over 4
+
+=item *
+
+XXX
+
+=back
+
+=head1 Obituary
+
+XXX If any significant core contributor has died, we've added a short obituary
+here.
+
 =head1 Acknowledgements
 
-Perl 5.18.2 represents approximately 3 months of development since Perl
-5.18.1 and contains approximately 980 lines of changes across 39 files from 4
-authors.
+XXX Generate this with:
 
-Perl continues to flourish into its third decade thanks to a vibrant
-community of users and developers. The following people are known to have
-contributed the improvements that became Perl 5.18.2:
-
-Craig A. Berry, David Mitchell, Ricardo Signes, Tony Cook.
-
-The list above is almost certainly incomplete as it is automatically
-generated from version control history. In particular, it does not include
-the names of the (very much appreciated) contributors who reported issues to
-the Perl bug tracker.
-
-Many of the changes included in this version originated in the CPAN modules
-included in Perl's core. We're grateful to the entire CPAN community for
-helping Perl to flourish.
-
-For a more complete list of all of Perl's historical contributors, please see
-the F<AUTHORS> file in the Perl source distribution.
+  perl Porting/acknowledgements.pl v5.18.2..HEAD
 
 =head1 Reporting Bugs
 
