@@ -1,6 +1,6 @@
 package overload;
 
-our $VERSION = '1.22';
+our $VERSION = '1.23';
 
 %ops = (
     with_assign         => "+ - * / % ** << >> x .",
@@ -81,7 +81,7 @@ sub ov_method {
   return undef unless $globref;
   my $sub = \&{*$globref};
   no overloading;
-  return $sub if !ref $sub or $sub != \&nil;
+  return $sub if $sub != \&nil;
   return shift->can($ {*$globref});
 }
 

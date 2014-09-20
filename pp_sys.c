@@ -954,6 +954,9 @@ PP(pp_tie)
     RETURN;
 }
 
+
+/* also used for: pp_dbmclose() */
+
 PP(pp_untie)
 {
     dSP;
@@ -1604,6 +1607,9 @@ PP(pp_sysopen)
     RETURN;
 }
 
+
+/* also used for: pp_read() and pp_recv() (where supported) */
+
 PP(pp_sysread)
 {
     dSP; dMARK; dORIGMARK; dTARGET;
@@ -1859,6 +1865,9 @@ PP(pp_sysread)
     SP = ORIGMARK;
     RETPUSHUNDEF;
 }
+
+
+/* also used for: pp_send() where defined */
 
 PP(pp_syswrite)
 {
@@ -2158,6 +2167,9 @@ PP(pp_tell)
     RETURN;
 }
 
+
+/* also used for: pp_seek() */
+
 PP(pp_sysseek)
 {
     dSP;
@@ -2293,6 +2305,9 @@ PP(pp_truncate)
 	RETPUSHUNDEF;
     }
 }
+
+
+/* also used for: pp_fcntl() */
 
 PP(pp_ioctl)
 {
@@ -2489,6 +2504,8 @@ PP(pp_sockpair)
 
 #ifdef HAS_SOCKET
 
+/* also used for: pp_connect() */
+
 PP(pp_bind)
 {
     dSP;
@@ -2629,6 +2646,9 @@ nuts:
     RETPUSHUNDEF;
 }
 
+
+/* also used for: pp_gsockopt() */
+
 PP(pp_ssockopt)
 {
     dSP;
@@ -2703,6 +2723,9 @@ nuts2:
 
 }
 
+
+/* also used for: pp_getsockname() */
+
 PP(pp_getpeername)
 {
     dSP;
@@ -2766,6 +2789,8 @@ nuts2:
 #endif
 
 /* Stat calls. */
+
+/* also used for: pp_lstat() */
 
 PP(pp_stat)
 {
@@ -2990,11 +3015,14 @@ S_try_amagic_ftest(pTHX_ char chr) {
 }
 
 
+/* also used for: pp_fteexec() pp_fteread() pp_ftewrite() pp_ftrexec()
+ *                pp_ftrwrite() */
+
 PP(pp_ftrread)
 {
     I32 result;
     /* Not const, because things tweak this below. Not bool, because there's
-       no guarantee that OPp_FT_ACCESS is <= CHAR_MAX  */
+       no guarantee that OPpFT_ACCESS is <= CHAR_MAX  */
 #if defined(HAS_ACCESS) || defined (PERL_EFF_ACCESS)
     I32 use_access = PL_op->op_private & OPpFT_ACCESS;
     /* Giving some sort of initial value silences compilers.  */
@@ -3107,6 +3135,9 @@ PP(pp_ftrread)
     FT_RETURNNO;
 }
 
+
+/* also used for: pp_ftatime() pp_ftctime() pp_ftmtime() pp_ftsize() */
+
 PP(pp_ftis)
 {
     I32 result;
@@ -3157,6 +3188,11 @@ PP(pp_ftis)
             ? S_ft_return_true(aTHX_ TARG) : S_ft_return_false(aTHX_ TARG);
     }
 }
+
+
+/* also used for: pp_ftblk() pp_ftchr() pp_ftdir() pp_fteowned()
+ *                pp_ftfile() pp_ftpipe() pp_ftsgid() pp_ftsock()
+ *                pp_ftsuid() pp_ftsvtx() pp_ftzero() */
 
 PP(pp_ftrowned)
 {
@@ -3307,6 +3343,9 @@ PP(pp_fttty)
     FT_RETURNNO;
 }
 
+
+/* also used for: pp_ftbinary() */
+
 PP(pp_fttext)
 {
     I32 i;
@@ -3434,7 +3473,6 @@ PP(pp_fttext)
     }
 
     /* now scan s to look for textiness */
-    /*   XXX ASCII dependent code */
 
 #if defined(DOSISH) || defined(USEMYBINMODE)
     /* ignore trailing ^Z on short files */
@@ -3442,43 +3480,53 @@ PP(pp_fttext)
 	--len;
 #endif
 
+    assert(len);
+    if (! is_ascii_string((U8 *) s, len)) {
+        const U8 *ep;
+
+        /* Here contains a non-ASCII.  See if the entire string is UTF-8.  But
+         * the buffer may end in a partial character, so consider it UTF-8 if
+         * the first non-UTF8 char is an ending partial */
+        if (is_utf8_string_loc((U8 *) s, len, &ep)
+            || ep + UTF8SKIP(ep)  > (U8 *) (s + len))
+        {
+            if (PL_op->op_type == OP_FTTEXT) {
+                FT_RETURNYES;
+            }
+            else {
+                FT_RETURNNO;
+            }
+        }
+    }
+
+    /* Here, is not UTF-8 or is entirely ASCII.  Look through the buffer for
+     * things that wouldn't be in ASCII text or rich ASCII text.  Count these
+     * in 'odd' */
     for (i = 0; i < len; i++, s++) {
 	if (!*s) {			/* null never allowed in text */
 	    odd += len;
 	    break;
 	}
-#ifdef EBCDIC
-        else if (!(isPRINT(*s) || isSPACE(*s)))
-            odd++;
-#else
-	else if (*s & 128) {
 #ifdef USE_LOCALE_CTYPE
-	    if (IN_LC_RUNTIME(LC_CTYPE) && isALPHA_LC(*s))
+        if (IN_LC_RUNTIME(LC_CTYPE)) {
+            if ( isPRINT_LC(*s) || isSPACE_LC(*s)) {
 		continue;
+            }
+        }
+        else
 #endif
-	    /* utf8 characters don't count as odd */
-	    if (UTF8_IS_START(*s)) {
-		int ulen = UTF8SKIP(s);
-		if (ulen < len - i) {
-		    int j;
-		    for (j = 1; j < ulen; j++) {
-			if (!UTF8_IS_CONTINUATION(s[j]))
-			    goto not_utf8;
-		    }
-		    --ulen;	/* loop does extra increment */
-		    s += ulen;
-		    i += ulen;
-		    continue;
-		}
-	    }
-	  not_utf8:
-	    odd++;
-	}
-	else if (*s < 32 &&
-	  *s != '\n' && *s != '\r' && *s != '\b' &&
-	  *s != '\t' && *s != '\f' && *s != 27)
-	    odd++;
-#endif
+        if (isPRINT_A(*s)
+                   /* VT occurs so rarely in text, that we consider it odd */
+                || (isSPACE_A(*s) && *s != VT_NATIVE)
+
+                    /* But there is a fair amount of backspaces and escapes in
+                     * some text */
+                || *s == '\b'
+                || *s == ESC_NATIVE)
+        {
+            continue;
+        }
+        odd++;
     }
 
     if ((odd * 3 > len) == (PL_op->op_type == OP_FTTEXT)) /* allow 1/3 odd */
@@ -3567,6 +3615,9 @@ PP(pp_chdir)
     RETURN;
 }
 
+
+/* also used for: pp_chmod() pp_kill() pp_unlink() pp_utime() */
+
 PP(pp_chown)
 {
     dSP; dMARK; dTARGET;
@@ -3615,6 +3666,9 @@ PP(pp_rename)
     RETURN;
 }
 
+
+/* also used for: pp_symlink() */
+
 #if defined(HAS_LINK) || defined(HAS_SYMLINK)
 PP(pp_link)
 {
@@ -3657,6 +3711,9 @@ PP(pp_link)
     RETURN;
 }
 #else
+
+/* also used for: pp_symlink() */
+
 PP(pp_link)
 {
     /* Have neither.  */
@@ -4501,6 +4558,9 @@ PP(pp_tms)
 /* Sun Dec 29 12:00:00  2147483647 */
 #define TIME_UPPER_BOUND  67767976233316800.0
 
+
+/* also used for: pp_localtime() */
+
 PP(pp_gmtime)
 {
     dSP;
@@ -4561,16 +4621,14 @@ PP(pp_gmtime)
 	if (err == NULL)
 	    RETPUSHUNDEF;
        else {
-           mPUSHs(Perl_newSVpvf(aTHX_ "%s %s %2d %02d:%02d:%02d %.0f",
+           mPUSHs(Perl_newSVpvf(aTHX_ "%s %s %2d %02d:%02d:%02d %"IVdf,
                                 dayname[tmbuf.tm_wday],
                                 monname[tmbuf.tm_mon],
                                 tmbuf.tm_mday,
                                 tmbuf.tm_hour,
                                 tmbuf.tm_min,
                                 tmbuf.tm_sec,
-                                /* XXX newSVpvf()'s %lld type is broken,
-                                 * so cheat with a double */
-                                (double)tmbuf.tm_year + 1900));
+                                (IV)tmbuf.tm_year + 1900));
         }
     }
     else {			/* list context */
@@ -4630,6 +4688,8 @@ PP(pp_sleep)
 /* Shared memory. */
 /* Merged with some message passing. */
 
+/* also used for: pp_msgrcv() pp_msgsnd() pp_semop() pp_shmread() */
+
 PP(pp_shmwrite)
 {
 #if defined(HAS_MSG) || defined(HAS_SEM) || defined(HAS_SHM)
@@ -4662,6 +4722,8 @@ PP(pp_shmwrite)
 
 /* Semaphores. */
 
+/* also used for: pp_msgget() pp_shmget() */
+
 PP(pp_semget)
 {
 #if defined(HAS_MSG) || defined(HAS_SEM) || defined(HAS_SHM)
@@ -4676,6 +4738,8 @@ PP(pp_semget)
     DIE(aTHX_ "System V IPC is not implemented on this machine");
 #endif
 }
+
+/* also used for: pp_msgctl() pp_shmctl() */
 
 PP(pp_semctl)
 {
@@ -4721,6 +4785,8 @@ S_space_join_names_mortal(pTHX_ char *const *array)
 }
 
 /* Get system info. */
+
+/* also used for: pp_ghbyaddr() pp_ghbyname() */
 
 PP(pp_ghostent)
 {
@@ -4812,6 +4878,8 @@ PP(pp_ghostent)
 #endif
 }
 
+/* also used for: pp_gnbyaddr() pp_gnbyname() */
+
 PP(pp_gnetent)
 {
 #if defined(HAS_GETNETBYNAME) || defined(HAS_GETNETBYADDR) || defined(HAS_GETNETENT)
@@ -4885,6 +4953,9 @@ PP(pp_gnetent)
 #endif
 }
 
+
+/* also used for: pp_gpbyname() pp_gpbynumber() */
+
 PP(pp_gprotoent)
 {
 #if defined(HAS_GETPROTOBYNAME) || defined(HAS_GETPROTOBYNUMBER) || defined(HAS_GETPROTOENT)
@@ -4944,6 +5015,9 @@ PP(pp_gprotoent)
     DIE(aTHX_ PL_no_sock_func, PL_op_desc[PL_op->op_type]);
 #endif
 }
+
+
+/* also used for: pp_gsbyname() pp_gsbyport() */
 
 PP(pp_gservent)
 {
@@ -5010,6 +5084,9 @@ PP(pp_gservent)
 #endif
 }
 
+
+/* also used for: pp_snetent() pp_sprotoent() pp_sservent() */
+
 PP(pp_shostent)
 {
     dSP;
@@ -5046,6 +5123,10 @@ PP(pp_shostent)
     }
     RETSETYES;
 }
+
+
+/* also used for: pp_egrent() pp_enetent() pp_eprotoent() pp_epwent()
+ *                pp_eservent() pp_sgrent() pp_spwent() */
 
 PP(pp_ehostent)
 {
@@ -5111,6 +5192,9 @@ PP(pp_ehostent)
     EXTEND(SP,1);
     RETPUSHYES;
 }
+
+
+/* also used for: pp_gpwnam() pp_gpwuid() */
 
 PP(pp_gpwent)
 {
@@ -5326,6 +5410,9 @@ PP(pp_gpwent)
     DIE(aTHX_ PL_no_func, PL_op_desc[PL_op->op_type]);
 #endif
 }
+
+
+/* also used for: pp_ggrgid() pp_ggrnam() */
 
 PP(pp_ggrent)
 {

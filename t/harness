@@ -206,6 +206,14 @@ if ($^O eq 'MSWin32') {
 @tests=grep /$re/, @tests 
     if $re;
 
+# Allow eg ./perl t/harness t/op/lc.t
+for (@tests) {
+    if (-f "../$_") {
+        $_ = "../$_";
+        s{^\.\./t/}{};
+    }
+}
+
 my %options;
 
 my $type = 'perl';
@@ -219,6 +227,7 @@ my $h = TAP::Harness->new({
     color       => $color,
     jobs        => $jobs,
     verbosity   => $Verbose,
+    timer       => $ENV{HARNESS_TIMER},
     exec        => sub {
 	my ($harness, $test) = @_;
 

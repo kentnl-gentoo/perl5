@@ -43,7 +43,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.21.3
+#INST_VER	*= \5.21.4
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -761,14 +761,12 @@ CFGH_TMPL	= config_H.gc
 PERLIMPLIB	= ..\libperl521$(a)
 PERLSTATICLIB	= ..\libperl521s$(a)
 INT64		= long long
-INT64f		= ll
 
 .ELSE
 
 CFGSH_TMPL	= config.vc
 CFGH_TMPL	= config_H.vc
 INT64		= __int64
-INT64f		= I64
 
 .ENDIF
 
@@ -1070,11 +1068,11 @@ config.w32 : $(CFGSH_TMPL)
 	@echo #define UVSIZE ^8>>$@
 	@echo #undef NV_PRESERVES_UV>>$@
 	@echo #define NV_PRESERVES_UV_BITS 53>>$@
-	@echo #define IVdf "$(INT64f)d">>$@
-	@echo #define UVuf "$(INT64f)u">>$@
-	@echo #define UVof "$(INT64f)o">>$@
-	@echo #define UVxf "$(INT64f)x">>$@
-	@echo #define UVXf "$(INT64f)X">>$@
+	@echo #define IVdf "I64d">>$@
+	@echo #define UVuf "I64u">>$@
+	@echo #define UVof "I64o">>$@
+	@echo #define UVxf "I64x">>$@
+	@echo #define UVXf "I64X">>$@
 	@echo #define USE_64_BIT_INT>>$@
 .ELSE
 	@echo #define IVTYPE long>>$@
@@ -1349,7 +1347,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5213delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5214delta.pod
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1428,6 +1426,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Pod\Text rmdir /s /q $(LIBDIR)\Pod\Text
 	-if exist $(LIBDIR)\Scalar rmdir /s /q $(LIBDIR)\Scalar
 	-if exist $(LIBDIR)\Search rmdir /s /q $(LIBDIR)\Search
+	-if exist $(LIBDIR)\Sub rmdir /s /q $(LIBDIR)\Sub
 	-if exist $(LIBDIR)\Sys rmdir /s /q $(LIBDIR)\Sys
 	-if exist $(LIBDIR)\TAP rmdir /s /q $(LIBDIR)\TAP
 	-if exist $(LIBDIR)\Term rmdir /s /q $(LIBDIR)\Term
@@ -1443,7 +1442,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5213delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5214delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \

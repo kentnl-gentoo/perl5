@@ -34,6 +34,9 @@
 #ifdef I_FLOAT
 #include <float.h>
 #endif
+#ifdef I_FENV
+#include <fenv.h>
+#endif
 #ifdef I_LIMITS
 #include <limits.h>
 #endif
@@ -52,6 +55,875 @@
 
 #ifdef I_UNISTD
 #include <unistd.h>
+#endif
+
+#if defined(USE_QUADMATH) && defined(I_QUADMATH)
+
+#  undef M_E
+#  undef M_LOG2E
+#  undef M_LOG10E
+#  undef M_LN2
+#  undef M_LN10
+#  undef M_PI
+#  undef M_PI_2
+#  undef M_PI_4
+#  undef M_1_PI
+#  undef M_2_PI
+#  undef M_2_SQRTPI
+#  undef M_SQRT2
+#  undef M_SQRT1_2
+
+#  define M_E        M_Eq
+#  define M_LOG2E    M_LOG2Eq
+#  define M_LOG10E   M_LOG10Eq
+#  define M_LN2      M_LN2q
+#  define M_LN10     M_LN10q
+#  define M_PI       M_PIq
+#  define M_PI_2     M_PI_2q
+#  define M_PI_4     M_PI_4q
+#  define M_1_PI     M_1_PIq
+#  define M_2_PI     M_2_PIq
+#  define M_2_SQRTPI M_2_SQRTPIq
+#  define M_SQRT2    M_SQRT2q
+#  define M_SQRT1_2  M_SQRT1_2q
+
+#else
+
+#  ifndef M_E
+#    define M_E		2.71828182845904523536028747135266250
+#  endif
+#  ifndef M_LOG2E
+#    define M_LOG2E	1.44269504088896340735992468100189214
+#  endif
+#  ifndef M_LOG10E
+#    define M_LOG10E	0.434294481903251827651128918916605082
+#  endif
+#  ifndef M_LN2
+#    define M_LN2	0.693147180559945309417232121458176568
+#  endif
+#  ifndef M_LN10
+#    define M_LN10	2.30258509299404568401799145468436421
+#  endif
+#  ifndef M_PI
+#    define M_PI	3.14159265358979323846264338327950288
+#  endif
+#  ifndef M_PI_2
+#    define M_PI_2	1.57079632679489661923132169163975144
+#  endif
+#  ifndef M_PI_4
+#    define M_PI_4	0.785398163397448309615660845819875721
+#  endif
+#  ifndef M_1_PI
+#    define M_1_PI	0.318309886183790671537767526745028724
+#  endif
+#  ifndef M_2_PI
+#    define M_2_PI	0.636619772367581343075535053490057448
+#  endif
+#  ifndef M_2_SQRTPI
+#    define M_2_SQRTPI	1.12837916709551257389615890312154517
+#  endif
+#  ifndef M_SQRT2
+#    define M_SQRT2	1.41421356237309504880168872420969808
+#  endif
+#  ifndef M_SQRT1_2
+#    define M_SQRT1_2	0.707106781186547524400844362104849039
+#  endif
+
+#endif
+
+#if !defined(INFINITY) && defined(NV_INF)
+#  define INFINITY NV_INF
+#endif
+
+#if !defined(NAN) && defined(NV_NAN)
+#  define NAN NV_NAN
+#endif
+
+#if !defined(Inf) && defined(NV_INF)
+#  define Inf NV_INF
+#endif
+
+#if !defined(NaN) && defined(NV_NAN)
+#  define NaN NV_NAN
+#endif
+
+/* We will have an emulation. */
+#ifndef FP_INFINITE
+#  define FP_INFINITE	0
+#  define FP_NAN	1
+#  define FP_NORMAL	2
+#  define FP_SUBNORMAL	3
+#  define FP_ZERO	4
+#endif
+
+/* We will have an emulation. */
+#ifndef FE_TONEAREST
+#  define FE_TONEAREST	0
+#  define FE_TOWARDZERO	1
+#  define FE_DOWNWARD	2
+#  define FE_UPWARD	3
+#endif
+
+/* C89 math.h:
+
+   acos asin atan atan2 ceil cos cosh exp fabs floor fmod frexp ldexp
+   log log10 modf pow sin sinh sqrt tan tanh
+
+ * Implemented in core:
+
+   atan2 cos exp log pow sin sqrt
+
+ * C99 math.h added:
+
+   acosh asinh atanh cbrt copysign erf erfc exp2 expm1 fdim fma fmax
+   fmin fpclassify hypot ilogb isfinite isgreater isgreaterequal isinf
+   isless islessequal islessgreater isnan isnormal isunordered lgamma
+   log1p log2 logb lrint lround nan nearbyint nextafter nexttoward remainder
+   remquo rint round scalbn signbit tgamma trunc
+
+   See:
+   http://pubs.opengroup.org/onlinepubs/009695399/basedefs/math.h.html
+
+ * Berkeley/SVID extensions:
+
+   j0 j1 jn y0 y1 yn
+
+ * Configure already (5.21.0) scans for:
+
+   fpclassify isfinite isinf isnan ilogb*l* signbit
+
+ * For floating-point round mode (which matters for e.g. lrint and rint)
+
+   fegetround fesetround
+
+*/
+
+/* XXX Constant FP_FAST_FMA (if true, FMA is faster) */
+
+/* XXX Add ldiv(), lldiv()?  It's C99, but from stdlib.h, not math.h  */
+
+/* XXX Beware old gamma() -- one cannot know whether that is the
+ * gamma or the log of gamma, that's why the new tgamma and lgamma.
+ * Though also remember tgamma_r and lgamma_r. */
+
+/* XXX The truthiness of acosh() is the canary for all of the
+ * C99 math.  This is very likely wrong, especially in non-UNIX lands
+ * like Win32 and VMS, but also older UNIXes have issues.  For Win32,
+ * and other non-fully-C99, we later do some undefines for these interfaces.
+ *
+ * But we are very trying very hard to avoid introducing separate Configure
+ * symbols for all the 40-ish new math symbols.  Especially since the set
+ * of missing functions doesn't seem to follow any patterns. */
+
+#ifdef HAS_ACOSH
+
+/* Certain AIX releases have the C99 math, but not in long double.
+ * The <math.h> has them, e.g. __expl128, but no library has them!
+ *
+ * See the comments in hints/aix.sh about long doubles.
+ *
+ * AIX 5 releases before 5.3 unknown, AIX releases 7 unknown */
+#  if defined(_AIX53) || defined(_AIX61)
+#    define NO_C99_LONG_DOUBLE_MATH
+#  endif
+
+#  if defined(USE_QUADMATH) && defined(I_QUADMATH)
+#    define c99_acosh	acoshq
+#    define c99_asinh	asinhq
+#    define c99_atanh	atanhq
+#    define c99_cbrt	cbrtq
+#    define c99_copysign	copysignq
+#    define c99_erf	erfq
+#    define c99_erfc	erfcq
+/* no exp2q */
+#    define c99_expm1	expm1q
+#    define c99_fdim	fdimq
+#    define c99_fma	fmaq
+#    define c99_fmax	fmaxq
+#    define c99_fmin	fminq
+#    define c99_hypot	hypotq
+#    define c99_ilogb	ilogbq
+#    define c99_lgamma	lgammaq
+#    define c99_log1p	log1pq
+#    define c99_log2	log2q
+/* no logbq */
+/* no llrintq */
+/* no llroundq */
+#    define c99_lrint	lrintq
+#    define c99_lround	lroundq
+#    define c99_nan	nanq
+#    define c99_nearbyint	nearbyintq
+#    define c99_nextafter	nextafterq
+/* no nexttowardq */
+#    define c99_remainder	remainderq
+#    define c99_remquo	remquoq
+#    define c99_rint	rintq
+#    define c99_round	roundq
+#    define c99_scalbn	scalbnq
+#    define c99_signbit	signbitq
+#    define c99_tgamma	tgammal
+#    define c99_trunc	truncq
+#    define bessel_j0 j0q
+#    define bessel_j1 j1q
+#    define bessel_jn jnq
+#    define bessel_y0 y0q
+#    define bessel_y1 y1q
+#    define bessel_yn ynq
+#  elif defined(USE_LONG_DOUBLE) && \
+     !defined(NO_C99_LONG_DOUBLE_MATH) && \
+      defined(HAS_ILOGBL)
+/* There's already a symbol for ilogbl, we will use its truthiness
+ * as the canary for all the *l variants being defined. */
+#    define c99_acosh	acoshl
+#    define c99_asinh	asinhl
+#    define c99_atanh	atanhl
+#    define c99_cbrt	cbrtl
+#    define c99_copysign	copysignl
+#    define c99_erf	erfl
+#    define c99_erfc	erfcl
+#    define c99_exp2	exp2l
+#    define c99_expm1	expm1l
+#    define c99_fdim	fdiml
+#    define c99_fma	fmal
+#    define c99_fmax	fmaxl
+#    define c99_fmin	fminl
+#    define c99_hypot	hypotl
+#    define c99_ilogb	ilogbl
+#    define c99_lgamma	lgammal
+#    define c99_log1p	log1pl
+#    define c99_log2	log2l
+#    define c99_logb	logbl
+#    if defined(USE_64_BIT_INT) && QUADKIND == QUAD_IS_LONG_LONG
+#      define c99_lrint	llrintl
+#    else
+#      define c99_lrint	lrintl
+#    endif
+#    if defined(USE_64_BIT_INT) && QUADKIND == QUAD_IS_LONG_LONG
+#      define c99_lround	llroundl
+#    else
+#      define c99_lround	lroundl
+#    endif
+#    define c99_nan	nanl
+#    define c99_nearbyint	nearbyintl
+#    define c99_nextafter	nextafterl
+#    define c99_nexttoward	nexttowardl
+#    define c99_remainder	remainderl
+#    define c99_remquo	remquol
+#    define c99_rint	rintl
+#    define c99_round	roundl
+#    define c99_scalbn	scalbnl
+#    ifdef HAS_SIGNBIT /* possibly bad assumption */
+#      define c99_signbit	signbitl
+#    endif
+#    define c99_tgamma	tgammal
+#    define c99_trunc	truncl
+#  else
+#    define c99_acosh	acosh
+#    define c99_asinh	asinh
+#    define c99_atanh	atanh
+#    define c99_cbrt	cbrt
+#    define c99_copysign	copysign
+#    define c99_erf	erf
+#    define c99_erfc	erfc
+#    define c99_exp2	exp2
+#    define c99_expm1	expm1
+#    define c99_fdim	fdim
+#    define c99_fma	fma
+#    define c99_fmax	fmax
+#    define c99_fmin	fmin
+#    define c99_hypot	hypot
+#    define c99_ilogb	ilogb
+#    define c99_lgamma	lgamma
+#    define c99_log1p	log1p
+#    define c99_log2	log2
+#    define c99_logb	logb
+#    if defined(USE_64_BIT_INT) && QUADKIND == QUAD_IS_LONG_LONG
+#      define c99_lrint	llrint
+#    else
+#      define c99_lrint	lrint
+#    endif
+#    if defined(USE_64_BIT_INT) && QUADKIND == QUAD_IS_LONG_LONG
+#      define c99_lround	llround
+#    else
+#      define c99_lround	lround
+#    endif
+#    define c99_nan	nan
+#    define c99_nearbyint	nearbyint
+#    define c99_nextafter	nextafter
+#    define c99_nexttoward	nexttoward
+#    define c99_remainder	remainder
+#    define c99_remquo	remquo
+#    define c99_rint	rint
+#    define c99_round	round
+#    define c99_scalbn	scalbn
+/* We already define Perl_signbit in perl.h. */
+#    ifdef HAS_SIGNBIT
+#      define c99_signbit	signbit
+#    endif
+#    define c99_tgamma	tgamma
+#    define c99_trunc	trunc
+#  endif
+
+#  ifndef isunordered
+#    ifdef Perl_isnan
+#      define isunordered(x, y) (Perl_isnan(x) || Perl_isnan(y))
+#    elif defined(HAS_UNORDERED)
+#      define isunordered(x, y) unordered(x, y)
+#    endif
+#  endif
+
+#  if !defined(isgreater) && defined(isunordered)
+#    define isgreater(x, y)         (!isunordered((x), (y)) && (x) > (y))
+#    define isgreaterequal(x, y)    (!isunordered((x), (y)) && (x) >= (y))
+#    define isless(x, y)            (!isunordered((x), (y)) && (x) < (y))
+#    define islessequal(x, y)       (!isunordered((x), (y)) && (x) <= (y))
+#    define islessgreater(x, y)     (!isunordered((x), (y)) && \
+                                     ((x) > (y) || (y) > (x)))
+#  endif
+
+/* Check both the Configure symbol and the macro-ness (like C99 promises). */ 
+#  if defined(HAS_FPCLASSIFY) && defined(fpclassify)
+#    define c99_fpclassify	fpclassify
+#  endif
+/* Like isnormal(), the isfinite(), isinf(), and isnan() are also C99
+   and also (sizeof-arg-aware) macros, but they are already well taken
+   care of by Configure et al, and defined in perl.h as
+   Perl_isfinite(), Perl_isinf(), and Perl_isnan(). */
+#  ifdef isnormal
+#    define c99_isnormal	isnormal
+#  endif
+#  ifdef isgreater /* canary for all the C99 is*<cmp>* macros. */
+#    define c99_isgreater	isgreater
+#    define c99_isgreaterequal	isgreaterequal
+#    define c99_isless		isless
+#    define c99_islessequal	islessequal
+#    define c99_islessgreater	islessgreater
+#    define c99_isunordered	isunordered
+#  endif
+#endif
+
+/* If on legacy platforms, and not using gcc, some C99 math interfaces
+ * might be missing, turn them off so that the emulations hopefully
+ * kick in.  This is admittedly nasty, and fragile, but the alternative
+ * is to have Configure scans for all the 40+ interfaces.
+ *
+ * For some platforms, also the gcc implementations are missing
+ * certain interfaces.
+ *
+ * In other words: if you have an incomplete (or broken) C99 math interface,
+ * #undef the c99_foo here, and let the emulations kick in. */
+
+#ifdef __GNUC__
+
+/* using gcc */
+
+#  if defined(__hpux) && (defined(__hppa) || defined(_PA_RISC))
+#      undef c99_nexttoward
+#      undef c99_tgamma
+#  endif
+
+#else
+
+/* not using gcc */
+
+#  if defined(_AIX53) || defined(_AIX61) /* AIX 7 has nexttoward */
+#    undef c99_nexttoward
+#  endif
+
+/* HP-UX on PA-RISC is missing certain C99 math functions,
+ * but on IA64 (Integrity) these do exist, and even on
+ * recent enough HP-UX (cc) releases. */
+#  if defined(__hpux) && (defined(__hppa) || defined(_PA_RISC))
+/* lowest known release, could be lower */
+#    if defined(__HP_cc) && __HP_cc >= 111120
+#      undef c99_fma
+#      undef c99_nexttoward
+#      undef c99_tgamma
+#    else
+#      undef c99_exp2
+#      undef c99_fdim
+#      undef c99_fma
+#      undef c99_fmax
+#      undef c99_fmin
+#      undef c99_fpclassify /* hpux 10.20 has fpclassify but different api */
+#      undef c99_lrint
+#      undef c99_lround
+#      undef c99_nan
+#      undef c99_nearbyint
+#      undef c99_nexttoward
+#      undef c99_remquo
+#      undef c99_round
+#      undef c99_scalbn
+#      undef c99_tgamma
+#      undef c99_trunc
+#    endif
+#  endif
+
+#  if defined(__irix__)
+#    undef c99_ilogb
+#    undef c99_exp2
+#  endif
+
+#  if defined(__osf__) /* Tru64 */
+#    undef c99_fdim
+#    undef c99_fma
+#    undef c99_fmax
+#    undef c99_fmin
+#    undef c99_fpclassify
+#    undef c99_isfinite
+#    undef c99_isinf
+#    undef c99_isunordered
+#    undef c99_lrint
+#    undef c99_lround
+#    undef c99_nearbyint
+#    undef c99_nexttoward
+#    undef c99_remquo
+#    undef c99_round
+#    undef c99_scalbn
+#  endif
+
+#endif
+
+/* XXX Regarding C99 math.h, VMS seems to be missing these:
+
+  lround nan nearbyint round scalbn llrint
+ */
+
+#ifdef __VMS
+#    undef c99_lround
+#    undef c99_nan
+#    undef c99_nearbyint
+#    undef c99_round
+#    undef c99_scalbn
+/* Have lrint but not llrint. */
+#    if defined(USE_64_BIT_INT) && QUADKIND == QUAD_IS_LONG_LONG
+#      undef c99_lrint
+#    endif
+#endif
+
+/* XXX Regarding C99 math.h, Win32 seems to be missing these:
+
+  erf erfc exp2 fdim fma fmax fmin fpclassify ilogb lgamma log1p log2 lrint
+  remquo rint signbit tgamma trunc
+
+  Win32 does seem to have these:
+
+  acosh asinh atanh cbrt copysign cosh expm1 hypot log10 nan
+  nearbyint nextafter nexttoward remainder round scalbn
+
+  And the Bessel functions are defined like _this.
+*/
+
+#ifdef WIN32
+#  undef c99_erf
+#  undef c99_erfc
+#  undef c99_exp2
+#  undef c99_fdim
+#  undef c99_fma
+#  undef c99_fmax
+#  undef c99_fmin
+#  undef c99_ilogb
+#  undef c99_lgamma
+#  undef c99_log1p
+#  undef c99_log2
+#  undef c99_lrint
+#  undef c99_lround
+#  undef c99_remquo
+#  undef c99_rint
+#  undef c99_signbit
+#  undef c99_tgamma
+#  undef c99_trunc
+
+/* Some APIs exist under Win32 with "underbar" names. */
+#  undef c99_hypot
+#  undef c99_logb
+#  undef c99_nextafter
+#  define c99_hypot _hypot
+#  define c99_logb _logb
+#  define c99_nextafter _nextafter
+
+#  define bessel_j0 _j0
+#  define bessel_j1 _j1
+#  define bessel_jn _jn
+#  define bessel_y0 _y0
+#  define bessel_y1 _y1
+#  define bessel_yn _yn
+
+#endif
+
+#ifdef __CYGWIN__
+#  undef c99_nexttoward
+#endif
+
+/* The Bessel functions: BSD, SVID, XPG4, and POSIX.  But not C99. */
+#if defined(HAS_J0) && !defined(bessel_j0)
+#  if defined(USE_LONG_DOUBLE) && defined(HAS_J0L)
+#    define bessel_j0 j0l
+#    define bessel_j1 j1l
+#    define bessel_jn jnl
+#    define bessel_y0 y0l
+#    define bessel_y1 y1l
+#    define bessel_yn ynl
+#  else
+#    define bessel_j0 j0
+#    define bessel_j1 j1
+#    define bessel_jn jn
+#    define bessel_y0 y0
+#    define bessel_y1 y1
+#    define bessel_yn yn
+#  endif
+#endif
+
+/* Emulations for missing math APIs.
+ *
+ * Keep in mind that the point of many of these functions is that
+ * they, if available, are supposed to give more precise/more
+ * numerically stable results.
+ *
+ * See e.g. http://www.johndcook.com/math_h.html
+ */
+
+#ifndef c99_acosh
+static NV my_acosh(NV x)
+{
+  return Perl_log(x + Perl_sqrt(x * x - 1));
+}
+#  define c99_acosh my_acosh
+#endif
+
+#ifndef c99_asinh
+static NV my_asinh(NV x)
+{
+  return Perl_log(x + Perl_sqrt(x * x + 1));
+}
+#  define c99_asinh my_asinh
+#endif
+
+#ifndef c99_atanh
+static NV my_atanh(NV x)
+{
+  return (Perl_log(1 + x) - Perl_log(1 - x)) / 2;
+}
+#  define c99_atanh my_atanh
+#endif
+
+#ifndef c99_cbrt
+static NV my_cbrt(NV x)
+{
+  static const NV one_third = (NV)1.0/3;
+  return x >= 0.0 ? Perl_pow(x, one_third) : -Perl_pow(-x, one_third);
+}
+#  define c99_cbrt my_cbrt
+#endif
+
+#ifndef c99_copysign
+static NV my_copysign(NV x, NV y)
+{
+  return y >= 0 ? (x < 0 ? -x : x) : (x < 0 ? x : -x);
+}
+#  define c99_copysign my_copysign
+#endif
+
+/* XXX cosh (though c89) */
+
+#ifndef c99_erf
+static NV my_erf(NV x)
+{
+  /* http://www.johndcook.com/cpp_erf.html -- public domain */
+  NV a1 =  0.254829592;
+  NV a2 = -0.284496736;
+  NV a3 =  1.421413741;
+  NV a4 = -1.453152027;
+  NV a5 =  1.061405429;
+  NV p  =  0.3275911;
+  NV t, y;
+  int sign = x < 0 ? -1 : 1; /* Save the sign. */
+  x = PERL_ABS(x);
+
+  /* Abramowitz and Stegun formula 7.1.26 */
+  t = 1.0 / (1.0 + p * x);
+  y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1) * t * Perl_exp(-x*x);
+
+  return sign * y;
+}
+#  define c99_erf my_erf
+#endif
+
+#ifndef c99_erfc
+static NV my_erfc(NV x) {
+  /* This is not necessarily numerically stable, but better than nothing. */
+  return 1.0 - c99_erf(x);
+}
+#  define c99_erfc my_erfc
+#endif
+
+#ifndef c99_exp2
+static NV my_exp2(NV x)
+{
+  return Perl_pow((NV)2.0, x);
+}
+#  define c99_exp2 my_exp2
+#endif
+
+#ifndef c99_expm1
+static NV my_expm1(NV x)
+{
+  if (PERL_ABS(x) < 1e-5)
+    /* http://www.johndcook.com/cpp_expm1.html -- public domain.
+     * Taylor series, the first four terms (the last term quartic). */
+    /* Probably not enough for long doubles. */
+    return x * (1.0 + x * (1/2.0 + x * (1/6.0 + x/24.0)));
+  else
+    return Perl_exp(x) - 1;
+}
+#  define c99_expm1 my_expm1
+#endif
+
+#ifndef c99_fdim
+static NV my_fdim(NV x, NV y)
+{
+  return x > y ? x - y : 0;
+}
+#  define c99_fdim my_fdim
+#endif
+
+#ifndef c99_fmax
+static NV my_fmax(NV x, NV y)
+{
+  if (Perl_isnan(x)) {
+    return Perl_isnan(y) ? NV_NAN : y;
+  } else if (Perl_isnan(y)) {
+    return x;
+  }
+  return x > y ? x : y;
+}
+#  define c99_fmax my_fmax
+#endif
+
+#ifndef c99_fmin
+static NV my_fmin(NV x, NV y)
+{
+  if (Perl_isnan(x)) {
+    return Perl_isnan(y) ? NV_NAN : y;
+  } else if (Perl_isnan(y)) {
+    return x;
+  }
+  return x < y ? x : y;
+}
+#  define c99_fmin my_fmin
+#endif
+
+#ifndef c99_fpclassify
+
+static IV my_fpclassify(NV x)
+{
+#ifdef Perl_fp_class_inf
+  if (Perl_fp_class_inf(x))    return FP_INFINITE;
+  if (Perl_fp_class_nan(x))    return FP_NAN;
+  if (Perl_fp_class_norm(x))   return FP_NORMAL;
+  if (Perl_fp_class_denorm(x)) return FP_SUBNORMAL;
+  if (Perl_fp_class_zero(x))   return FP_ZERO;
+#  define c99_fpclassify my_fpclassify
+#endif
+  return -1;
+}
+
+#endif
+
+#ifndef c99_hypot
+static NV my_hypot(NV x, NV y)
+{
+  /* http://en.wikipedia.org/wiki/Hypot */
+  NV t;
+  x = PERL_ABS(x); /* Take absolute values. */
+  if (y == 0)
+    return x;
+  if (Perl_isnan(y))
+    return NV_INF;
+  y = PERL_ABS(y);
+  if (x < y) { /* Swap so that y is less. */
+    t = x;
+    x = y;
+    y = t;
+  }
+  t = y / x;
+  return x * Perl_sqrt(1.0 + t * t);
+}
+#  define c99_hypot my_hypot
+#endif
+
+#ifndef c99_ilogb
+static IV my_ilogb(NV x)
+{
+  return (IV)(Perl_log(x) * M_LOG2E);
+}
+#  define c99_ilogb my_ilogb
+#endif
+
+/* XXX lgamma -- non-trivial */
+
+#ifndef c99_log1p
+static NV my_log1p(NV x)
+{
+  /* http://www.johndcook.com/cpp_log_one_plus_x.html -- public domain.
+   * Taylor series, the first four terms (the last term quartic). */
+  if (x < -1.0)
+    return NV_NAN;
+  if (x == -1.0)
+    return -NV_INF;
+  if (PERL_ABS(x) > 1e-4)
+    return Perl_log(1.0 + x);
+  else
+    /* Probably not enough for long doubles. */
+    return x * (1.0 + x * (-1/2.0 + x * (1/3.0 - x/4.0)));
+}
+#  define c99_log1p my_log1p
+#endif
+
+#ifndef c99_log2
+static NV my_log2(NV x)
+{
+  return Perl_log(x) * M_LOG2E;
+}
+#  define c99_log2 my_log2
+#endif
+
+/* XXX nextafter */
+
+/* XXX nexttoward */
+
+static int my_fegetround()
+{
+#ifdef HAS_FEGETROUND
+  return fegetround();
+#elif defined(FLT_ROUNDS)
+  return FLT_ROUNDS;
+#elif defined(HAS_FPGETROUND)
+  switch (fpgetround()) {
+  default:
+  case FP_RN: return FE_TONEAREST;
+  case FP_RZ: return FE_TOWARDZERO;
+  case FP_RM: return FE_DOWNWARD;
+  case FE_RP: return FE_UPWARD;
+  }
+#else
+  return -1;
+#endif
+}
+
+/* Toward closest integer. */
+#define MY_ROUND_NEAREST(x) ((NV)((IV)((x) >= 0.0 ? (x) + 0.5 : (x) - 0.5)))
+
+/* Toward zero. */
+#define MY_ROUND_TRUNC(x) ((NV)((IV)(x)))
+
+/* Toward minus infinity. */
+#define MY_ROUND_DOWN(x) ((NV)((IV)((x) >= 0.0 ? (x) : (x) - 0.5)))
+
+/* Toward plus infinity. */
+#define MY_ROUND_UP(x) ((NV)((IV)((x) >= 0.0 ? (x) + 0.5 : (x))))
+
+static NV my_rint(NV x)
+{
+#ifdef FE_TONEAREST
+  switch (my_fegetround()) {
+  default:
+  case FE_TONEAREST:  return MY_ROUND_NEAREST(x);
+  case FE_TOWARDZERO: return MY_ROUND_TRUNC(x);
+  case FE_DOWNWARD:   return MY_ROUND_DOWN(x);
+  case FE_UPWARD:     return MY_ROUND_UP(x);
+  }
+#elif defined(HAS_FPGETROUND)
+  switch (fpgetround()) {
+  default:
+  case FP_RN: return MY_ROUND_NEAREST(x);
+  case FP_RZ: return MY_ROUND_TRUNC(x);
+  case FP_RM: return MY_ROUND_DOWN(x);
+  case FE_RP: return MY_ROUND_UP(x);
+  }
+#else
+  return NV_NAN;
+#endif
+}
+
+/* XXX nearbyint() and rint() are not really identical -- but the difference
+ * is messy: nearbyint is defined NOT to raise FE_INEXACT floating point
+ * exceptions, while rint() is defined to MAYBE raise them.  At the moment
+ * Perl is blissfully unaware of such fine detail of floating point. */
+#ifndef c99_nearbyint
+#  ifdef FE_TONEAREST
+#    define c99_nearbyrint my_rint
+#  endif
+#endif
+
+#ifndef c99_lrint
+#  ifdef FE_TONEAREST
+static IV my_lrint(NV x)
+{
+  return (IV)my_rint(x);
+}
+#    define c99_lrint my_lrint
+#  endif
+#endif
+
+#ifndef c99_lround
+static IV my_lround(NV x)
+{
+  return (IV)MY_ROUND_NEAREST(x);
+}
+#  define c99_lround my_lround
+#endif
+
+/* XXX remainder */
+
+/* XXX remquo */
+
+#ifndef c99_rint
+#  ifdef FE_TONEAREST
+#    define c99_rint my_rint
+#  endif
+#endif
+
+#ifndef c99_round
+static NV my_round(NV x)
+{
+  return MY_ROUND_NEAREST(x);
+}
+#  define c99_round my_round
+#endif
+
+#ifndef c99_scalbn
+#   if defined(Perl_ldexp) && FLT_RADIX == 2
+static NV my_scalbn(NV x, int y)
+{
+  return Perl_ldexp(x, y);
+}
+#    define c99_scalbn my_scalbn
+#  endif
+#endif
+
+/* XXX sinh (though c89) */
+
+#ifndef c99_tgamma
+#  ifdef c99_lgamma
+static NV my_tgamma(NV x)
+{
+  double l = c99_lgamma(x);
+  return signgam * Perl_exp(l); /* XXX evil global signgam, need lgamma_r */
+}
+#    define c99_tgamma my_tgamma
+/* XXX tgamma without lgamma -- non-trivial */
+#  endif
+#endif
+
+/* XXX tanh (though c89) */
+
+#ifndef c99_trunc
+static NV my_trunc(NV x)
+{
+  return MY_ROUND_TRUNC(x);
+}
+#  define c99_trunc my_trunc
 #endif
 
 /* XXX This comment is just to make I_TERMIO and I_SGTTY visible to
@@ -133,6 +1005,7 @@ char *tzname[] = { "" , "" };
 #  define setuid(a)		not_here("setuid")
 #  define setgid(a)		not_here("setgid")
 #endif	/* NETWARE */
+#  define strtold(s1,s2)	not_here("strtold")
 #else
 
 #  ifndef HAS_MKFIFO
@@ -189,6 +1062,9 @@ START_EXTERN_C
 double strtod (const char *, char **);
 long strtol (const char *, char **, int);
 unsigned long strtoul (const char *, char **, int);
+#ifdef HAS_STRTOLD
+long double strtold (const char *, char **);
+#endif
 END_EXTERN_C
 #endif
 
@@ -226,6 +1102,9 @@ END_EXTERN_C
 #endif
 #ifndef HAS_STRTOD
 #define strtod(s1,s2) not_here("strtod")
+#endif
+#ifndef HAS_STRTOLD
+#define strtold(s1,s2) not_here("strtold")
 #endif
 #ifndef HAS_STRTOL
 #define strtol(s1,s2,b) not_here("strtol")
@@ -1090,54 +1969,455 @@ NV
 acos(x)
 	NV		x
     ALIAS:
-	asin = 1
-	atan = 2
-	ceil = 3
-	cosh = 4
-	floor = 5
-	log10 = 6
-	sinh = 7
-	tan = 8
-	tanh = 9
+	acosh = 1
+	asin = 2
+	asinh = 3
+	atan = 4
+	atanh = 5
+	cbrt = 6
+	ceil = 7
+	cosh = 8
+	erf = 9
+	erfc = 10
+	exp2 = 11
+	expm1 = 12
+	floor = 13
+	j0 = 14
+	j1 = 15
+	lgamma = 16
+	log10 = 17
+	log1p = 18
+	log2 = 19
+	logb = 20
+	nearbyint = 21
+	rint = 22
+	round = 23
+	sinh = 24
+	tan = 25
+	tanh = 26
+	tgamma = 27
+	trunc = 28
+	y0 = 29
+	y1 = 30
     CODE:
+	RETVAL = NV_NAN;
 	switch (ix) {
 	case 0:
-	    RETVAL = acos(x);
+	    RETVAL = Perl_acos(x); /* C89 math */
 	    break;
 	case 1:
-	    RETVAL = asin(x);
+#ifdef c99_acosh
+	    RETVAL = c99_acosh(x);
+#else
+	    not_here("acosh");
+#endif
 	    break;
 	case 2:
-	    RETVAL = atan(x);
+	    RETVAL = Perl_asin(x); /* C89 math */
 	    break;
 	case 3:
-	    RETVAL = ceil(x);
+#ifdef c99_asinh
+	    RETVAL = c99_asinh(x);
+#else
+	    not_here("asinh");
+#endif
 	    break;
 	case 4:
-	    RETVAL = cosh(x);
+	    RETVAL = Perl_atan(x); /* C89 math */
 	    break;
 	case 5:
-	    RETVAL = floor(x);
+#ifdef c99_atanh
+	    RETVAL = c99_atanh(x);
+#else
+	    not_here("atanh");
+#endif
 	    break;
 	case 6:
-	    RETVAL = log10(x);
+#ifdef c99_cbrt
+	    RETVAL = c99_cbrt(x);
+#else
+	    not_here("cbrt");
+#endif
 	    break;
 	case 7:
-	    RETVAL = sinh(x);
+	    RETVAL = Perl_ceil(x); /* C89 math */
 	    break;
 	case 8:
-	    RETVAL = tan(x);
+	    RETVAL = Perl_cosh(x); /* C89 math */
 	    break;
+	case 9:
+#ifdef c99_erf
+	    RETVAL = c99_erf(x);
+#else
+	    not_here("erf");
+#endif
+	    break;
+	case 10:
+#ifdef c99_erfc
+	    RETVAL = c99_erfc(x);
+#else
+	    not_here("erfc");
+#endif
+	    break;
+	case 11:
+#ifdef c99_exp2
+	    RETVAL = c99_exp2(x);
+#else
+	    not_here("exp2");
+#endif
+	    break;
+	case 12:
+#ifdef c99_expm1
+	    RETVAL = c99_expm1(x);
+#else
+	    not_here("expm1");
+#endif
+	    break;
+	case 13:
+	    RETVAL = Perl_floor(x); /* C89 math */
+	    break;
+	case 14:
+#ifdef bessel_j0
+	    RETVAL = bessel_j0(x);
+#else
+	    not_here("j0");
+#endif
+	    break;
+	case 15:
+#ifdef bessel_j1
+	    RETVAL = bessel_j1(x);
+#else
+	    not_here("j1");
+#endif
+	    break;
+	case 16:
+        /* XXX lgamma_r -- the lgamma accesses a global variable (signgam),
+         * which is evil.  Some platforms have lgamma_r, which has
+         * extra parameter instead of the global variable. */
+#ifdef c99_lgamma
+	    RETVAL = c99_lgamma(x);
+#else
+	    not_here("lgamma");
+#endif
+	    break;
+	case 17:
+	    RETVAL = log10(x); /* C89 math */
+	    break;
+	case 18:
+#ifdef c99_log1p
+	    RETVAL = c99_log1p(x);
+#else
+	    not_here("log1p");
+#endif
+	    break;
+	case 19:
+#ifdef c99_log2
+	    RETVAL = c99_log2(x);
+#else
+	    not_here("log2");
+#endif
+	    break;
+	case 20:
+#ifdef c99_logb
+	    RETVAL = c99_logb(x);
+#else
+	    not_here("logb");
+#endif
+	    break;
+	case 21:
+#ifdef c99_nearbyint
+	    RETVAL = c99_nearbyint(x);
+#else
+	    not_here("nearbyint");
+#endif
+	    break;
+	case 22:
+#ifdef c99_rint
+	    RETVAL = c99_rint(x);
+#else
+	    not_here("rint");
+#endif
+	    break;
+	case 23:
+#ifdef c99_round
+	    RETVAL = c99_round(x);
+#else
+	    not_here("round");
+#endif
+	    break;
+	case 24:
+	    RETVAL = Perl_sinh(x); /* C89 math */
+	    break;
+	case 25:
+	    RETVAL = Perl_tan(x); /* C89 math */
+	    break;
+	case 26:
+	    RETVAL = Perl_tanh(x); /* C89 math */
+	    break;
+	case 27:
+        /* XXX tgamma_r -- the lgamma accesses a global variable (signgam),
+         * which is evil.  Some platforms have tgamma_r, which has
+         * extra parameter instead of the global variable. */
+#ifdef c99_tgamma
+	    RETVAL = c99_tgamma(x);
+#else
+	    not_here("tgamma");
+#endif
+	    break;
+	case 28:
+#ifdef c99_trunc
+	    RETVAL = c99_trunc(x);
+#else
+	    not_here("trunc");
+#endif
+	    break;
+	case 29:
+#ifdef bessel_y0
+	    RETVAL = bessel_y0(x);
+#else
+	    not_here("y0");
+#endif
+	    break;
+        case 30:
 	default:
-	    RETVAL = tanh(x);
+#ifdef bessel_y1
+	    RETVAL = bessel_y1(x);
+#else
+	    not_here("y1");
+#endif
+	}
+    OUTPUT:
+	RETVAL
+
+IV
+fegetround()
+    CODE:
+#ifdef HAS_FEGETROUND
+	RETVAL = my_fegetround();
+#else
+	RETVAL = -1;
+	not_here("fegetround");
+#endif
+    OUTPUT:
+	RETVAL
+
+IV
+fesetround(x)
+	IV	x
+    CODE:
+#ifdef HAS_FEGETROUND /* canary for fesetround */
+	RETVAL = fesetround(x);
+#elif defined(HAS_FPGETROUND) /* canary for fpsetround */
+	switch (x) {
+        default:
+	case FE_TONEAREST:  RETVAL = fpsetround(FP_RN); break;
+	case FE_TOWARDZERO: RETVAL = fpsetround(FP_RZ); break;
+	case FE_DOWNWARD:   RETVAL = fpsetround(FP_RM); break;
+	case FE_UPWARD:     RETVAL = fpsetround(FP_RP); break;
+	}
+#else
+	RETVAL = -1;
+	not_here("fesetround");
+#endif
+    OUTPUT:
+	RETVAL
+
+IV
+fpclassify(x)
+	NV		x
+    ALIAS:
+	ilogb = 1
+	isfinite = 2
+	isinf = 3
+	isnan = 4
+	isnormal = 5
+	lrint = 6
+	lround = 7
+        signbit = 8
+    CODE:
+	RETVAL = -1;
+	switch (ix) {
+	case 0:
+#ifdef c99_fpclassify
+	    RETVAL = c99_fpclassify(x);
+#else
+	    not_here("fpclassify");
+#endif
+	    break;
+	case 1:
+#ifdef c99_ilogb
+	    RETVAL = c99_ilogb(x);
+#else
+	    not_here("ilogb");
+#endif
+	    break;
+	case 2:
+	    RETVAL = Perl_isfinite(x);
+	    break;
+	case 3:
+	    RETVAL = Perl_isinf(x);
+	    break;
+	case 4:
+	    RETVAL = Perl_isnan(x);
+	    break;
+	case 5:
+#ifdef c99_isnormal
+	    RETVAL = c99_isnormal(x);
+#else
+	    not_here("isnormal");
+#endif
+	    break;
+	case 6:
+#ifdef c99_lrint
+	    RETVAL = c99_lrint(x);
+#else
+	    not_here("lrint");
+#endif
+	    break;
+	case 7:
+#ifdef c99_lround
+	    RETVAL = c99_lround(x);
+#else
+	    not_here("lround");
+#endif
+	    break;
+	case 8:
+	default:
+#ifdef Perl_signbit
+	    RETVAL = Perl_signbit(x);
+#endif
+	    break;
 	}
     OUTPUT:
 	RETVAL
 
 NV
-fmod(x,y)
+copysign(x,y)
 	NV		x
 	NV		y
+    ALIAS:
+	fdim = 1
+	fmax = 2
+	fmin = 3
+	fmod = 4
+	hypot = 5
+	isgreater = 6
+	isgreaterequal = 7
+	isless = 8
+	islessequal = 9
+	islessgreater = 10
+	isunordered = 11
+	nextafter = 12
+	nexttoward = 13
+	remainder = 14
+    CODE:
+	RETVAL = NV_NAN;
+	switch (ix) {
+	case 0:
+#ifdef c99_copysign
+	    RETVAL = c99_copysign(x, y);
+#else
+	    not_here("copysign");
+#endif
+	    break;
+	case 1:
+#ifdef c99_fdim
+	    RETVAL = c99_fdim(x, y);
+#else
+	    not_here("fdim");
+#endif
+	    break;
+	case 2:
+#ifdef c99_fmax
+	    RETVAL = c99_fmax(x, y);
+#else
+	    not_here("fmax");
+#endif
+	    break;
+	case 3:
+#ifdef c99_fmin
+	    RETVAL = c99_fmin(x, y);
+#else
+	    not_here("fmin");
+#endif
+	    break;
+	case 4:
+	    RETVAL = Perl_fmod(x, y); /* C89 math */
+	    break;
+	case 5:
+#ifdef c99_hypot
+	    RETVAL = c99_hypot(x, y);
+#else
+	    not_here("hypot");
+#endif
+	    break;
+	case 6:
+#ifdef c99_isgreater
+	    RETVAL = c99_isgreater(x, y);
+#else
+	    not_here("isgreater");
+#endif
+	    break;
+	case 7:
+#ifdef c99_isgreaterequal
+	    RETVAL = c99_isgreaterequal(x, y);
+#else
+	    not_here("isgreaterequal");
+#endif
+	    break;
+	case 8:
+#ifdef c99_isless
+	    RETVAL = c99_isless(x, y);
+#else
+	    not_here("isless");
+#endif
+	    break;
+	case 9:
+#ifdef c99_islessequal
+	    RETVAL = c99_islessequal(x, y);
+#else
+	    not_here("islessequal");
+#endif
+	    break;
+	case 10:
+#ifdef c99_islessgreater
+	    RETVAL = c99_islessgreater(x, y);
+#else
+	    not_here("islessgreater");
+#endif
+	    break;
+	case 11:
+#ifdef c99_isunordered
+	    RETVAL = c99_isunordered(x, y);
+#else
+	    not_here("isunordered");
+#endif
+	    break;
+	case 12:
+#ifdef c99_nextafter
+	    RETVAL = c99_nextafter(x, y);
+#else
+	    not_here("nextafter");
+#endif
+	    break;
+	case 13:
+#ifdef c99_nexttoward
+	    RETVAL = c99_nexttoward(x, y);
+#else
+	    not_here("nexttoward");
+#endif
+	    break;
+	case 14:
+	default:
+#ifdef c99_remainder
+	    RETVAL = c99_remainder(x, y);
+#else
+	    not_here("remainder");
+#endif
+	    break;
+	}
+	OUTPUT:
+	    RETVAL
 
 void
 frexp(x)
@@ -1145,7 +2425,7 @@ frexp(x)
     PPCODE:
 	int expvar;
 	/* (We already know stack is long enough.) */
-	PUSHs(sv_2mortal(newSVnv(frexp(x,&expvar))));
+	PUSHs(sv_2mortal(newSVnv(Perl_frexp(x,&expvar)))); /* C89 math */
 	PUSHs(sv_2mortal(newSViv(expvar)));
 
 NV
@@ -1159,8 +2439,93 @@ modf(x)
     PPCODE:
 	NV intvar;
 	/* (We already know stack is long enough.) */
-	PUSHs(sv_2mortal(newSVnv(Perl_modf(x,&intvar))));
+	PUSHs(sv_2mortal(newSVnv(Perl_modf(x,&intvar)))); /* C89 math */
 	PUSHs(sv_2mortal(newSVnv(intvar)));
+
+void
+remquo(x,y)
+	NV		x
+	NV		y
+    PPCODE:
+#ifdef c99_remquo
+        int intvar;
+        PUSHs(sv_2mortal(newSVnv(c99_remquo(x,y,&intvar))));
+        PUSHs(sv_2mortal(newSVnv(intvar)));
+#else
+	not_here("remquo");
+#endif
+
+NV
+scalbn(x,y)
+	NV		x
+	IV		y
+    CODE:
+#ifdef c99_scalbn
+	RETVAL = c99_scalbn(x, y);
+#else
+	RETVAL = NV_NAN;
+	not_here("scalbn");
+#endif
+    OUTPUT:
+	RETVAL
+
+NV
+fma(x,y,z)
+	NV		x
+	NV		y
+	NV		z
+    CODE:
+#ifdef c99_fma
+	RETVAL = c99_fma(x, y, z);
+#else
+	RETVAL = NV_NAN;
+	not_here("fma");
+#endif
+    OUTPUT:
+	RETVAL
+
+NV
+nan(s = 0)
+	char*	s;
+    CODE:
+#ifdef c99_nan
+	RETVAL = c99_nan(s ? s : "");
+#else
+	RETVAL = NV_NAN;
+#  ifndef NV_NAN
+	not_here("nan");
+#  endif
+#endif
+    OUTPUT:
+	RETVAL
+
+NV
+jn(x,y)
+	IV		x
+	NV		y
+    ALIAS:
+	yn = 1
+    CODE:
+	RETVAL = NV_NAN;
+        switch (ix) {
+	case 0:
+#ifdef bessel_jn
+	    RETVAL = bessel_jn(x, y);
+#else
+	    not_here("jn");
+#endif
+            break;
+	case 1:
+	default:
+#ifdef bessel_yn
+	    RETVAL = bessel_yn(x, y);
+#else
+	    not_here("yn");
+#endif
+            break;
+	}
+    OUTPUT:
+	RETVAL
 
 SysRet
 sigaction(sig, optaction, oldaction = 0)
@@ -1569,6 +2934,29 @@ strtod(str)
 		PUSHs(&PL_sv_undef);
 	}
         RESTORE_NUMERIC_STANDARD();
+
+#ifdef HAS_STRTOLD
+
+void
+strtold(str)
+	char *		str
+    PREINIT:
+	long double num;
+	char *unparsed;
+    PPCODE:
+        STORE_NUMERIC_STANDARD_FORCE_LOCAL();
+	num = strtold(str, &unparsed);
+	PUSHs(sv_2mortal(newSVnv(num)));
+	if (GIMME == G_ARRAY) {
+	    EXTEND(SP, 1);
+	    if (unparsed)
+		PUSHs(sv_2mortal(newSViv(strlen(unparsed))));
+	    else
+		PUSHs(&PL_sv_undef);
+	}
+        RESTORE_NUMERIC_STANDARD();
+
+#endif
 
 void
 strtol(str, base = 0)

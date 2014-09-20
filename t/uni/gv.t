@@ -6,15 +6,16 @@
 
 BEGIN {
     chdir 't' if -d 't';
-    @INC = '../lib';
     require './test.pl';
+    set_up_inc('../lib');
+    skip_all_without_unicode_tables();
 }
 
 use utf8;
 use open qw( :utf8 :std );
 use warnings;
 
-plan( tests => 207 );
+plan( tests => 206 );
 
 # type coersion on assignment
 $ᕘ = 'ᕘ';
@@ -491,7 +492,7 @@ no warnings 'once';
 format =
 .
     
-    foreach my $value ({1=>2}, *STDOUT{IO}, \&ok, *STDOUT{FORMAT}) {
+    foreach my $value ({1=>2}, *STDOUT{IO}, *STDOUT{FORMAT}) {
         # *STDOUT{IO} returns a reference to a PVIO. As it's blessed, ref returns
         # IO::Handle, which isn't what we want.
         my $type = $value;

@@ -5,14 +5,15 @@
 
 BEGIN {
     require './test.pl';
+    skip_all_without_unicode_tables();
 }
 
-plan (tests => 52);
+plan (tests => 51);
 
 use utf8;
 use open qw( :utf8 :std );
 
-ok *tèst, "*main::tèst", "sanity check.";
+is *tèst, "*main::tèst", "sanity check.";
 ok $::{"tèst"}, "gets the right glob in the stash.";
 
 my $glob_by_sub = sub { *ｍａｉｎ::method }->();
@@ -81,8 +82,7 @@ closedir FÒÒ;
 sub участники { 1 }
 
 ok $::{"участники"}, "non-const sub declarations generate the right glob";
-ok *{$::{"участники"}}{CODE};
-is *{$::{"участники"}}{CODE}->(), 1;
+is $::{"участники"}->(), 1;
 
 sub 原 () { 1 }
 

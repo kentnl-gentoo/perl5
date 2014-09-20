@@ -53,6 +53,7 @@
 #define PL_Dir			(vTHX->IDir)
 #define PL_Env			(vTHX->IEnv)
 #define PL_HasMultiCharFold	(vTHX->IHasMultiCharFold)
+#define PL_InBitmap		(vTHX->IInBitmap)
 #define PL_LIO			(vTHX->ILIO)
 #define PL_Latin1		(vTHX->ILatin1)
 #define PL_Mem			(vTHX->IMem)
@@ -97,6 +98,7 @@
 #define PL_comppad_name		(vTHX->Icomppad_name)
 #define PL_comppad_name_fill	(vTHX->Icomppad_name_fill)
 #define PL_comppad_name_floor	(vTHX->Icomppad_name_floor)
+#define PL_constpadix		(vTHX->Iconstpadix)
 #define PL_cop_seqmax		(vTHX->Icop_seqmax)
 #define PL_cryptseen		(vTHX->Icryptseen)
 #define PL_curcop		(vTHX->Icurcop)
@@ -260,6 +262,7 @@
 #define PL_savestack		(vTHX->Isavestack)
 #define PL_savestack_ix		(vTHX->Isavestack_ix)
 #define PL_savestack_max	(vTHX->Isavestack_max)
+#define PL_sawalias		(vTHX->Isawalias)
 #ifndef PL_sawampersand
 #define PL_sawampersand		(vTHX->Isawampersand)
 #endif

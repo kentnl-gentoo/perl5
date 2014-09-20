@@ -39,6 +39,7 @@ foreach (@{(setup_embed())[0]}) {
   push @functions, 'Perl_' . $_->[2] if $_->[0] =~ /p/;
   push @functions, 'S_' . $_->[2] if $_->[0] =~ /s/;
 };
+push @functions, 'Perl_mess';
 
 my $regcomp_fail_re = '\b(?:(?:Simple_)?v)?FAIL[2-4]?(?:utf8f)?\b';
 my $regcomp_re =
@@ -483,7 +484,6 @@ Can't fix broken locale name "%s"
 Can't get short module name from a handle
 Can't load DLL `%s', possible problematic module `%s'
 Can't locate %s:   %s
-Can't locate object method "%s" via package "%s" (perhaps you forgot to load "%s"?)
 Can't pipe "%s": %s
 Can't set type on DOS
 Can't spawn: %s
@@ -597,6 +597,7 @@ Not array reference given to mod2fname
 Operator or semicolon missing before %c%s
 Out of memory during list extend
 panic queryaddr
+Parse error
 PerlApp::TextQuery: no arguments, please
 POSIX syntax [%c %c] is reserved for future extensions in regex; marked by <-- HERE in m/%s/
 ptr wrong %p != %p fl=%x nl=%p e=%p for %d

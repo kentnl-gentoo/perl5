@@ -344,6 +344,24 @@ print $main::x[1];
 my %x;
 $x{warn()};
 ####
+# our (LIST)
+our($foo, $bar, $baz);
+####
+# CONTEXT { package Dog } use feature "state";
+# variables with declared classes
+my Dog $spot;
+our Dog $spotty;
+state Dog $spotted;
+my Dog @spot;
+our Dog @spotty;
+state Dog @spotted;
+my Dog %spot;
+our Dog %spotty;
+state Dog %spotted;
+my Dog ($foo, @bar, %baz);
+our Dog ($phoo, @barr, %bazz);
+state Dog ($fough, @barre, %bazze);
+####
 # <>
 my $foo;
 $_ .= <ARGV> . <$foo>;
@@ -963,11 +981,6 @@ print /a/u, s/b/c/u;
 ####
 # [perl #119807] s//\(3)/ge should not warn when deparsed (\3 warns)
 s/foo/\(3);/eg;
-####
-# Test @threadsv_names under 5005threads
-foreach $' (1, 2) {
-    sleep $';
-}
 ####
 # y///r
 tr/a/b/r;

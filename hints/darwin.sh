@@ -24,6 +24,12 @@ case "$osvers" in
     ;;
 esac
 
+# finite() deprecated in 10.9, use isfinite() instead.
+case "$osvers" in
+[1-8].*) ;;
+*) d_finite='undef' ;;
+esac
+
 # This was previously used in all but causes three cases
 # (no -Ddprefix=, -Dprefix=/usr, -Dprefix=/some/thing/else)
 # but that caused too much grief.
@@ -168,7 +174,14 @@ esac
 
 # Allow the user to override ld, but modify it as necessary below
 case "$ld" in
-    '') ld='cc';;
+    '') case "$cc" in
+        # If the cc is explicitly something else than cc (or empty),
+        # set the ld to be that explicitly something else.  Conversely,
+        # if the cc is 'cc' (or empty), set the ld to be 'cc'.
+        cc|'') ld='cc';;
+        *) ld="$cc" ;;
+        esac
+        ;;
 esac
 
 # Perl bundles do not expect two-level namespace, added in Darwin 1.4.
@@ -321,6 +334,11 @@ i_dbm=undef;
 # Configure doesn't detect ranlib on Tiger properly.
 # NeilW says this should be acceptable on all darwin versions.
 ranlib='ranlib'
+
+# Catch MacPorts gcc/g++ extra libdir
+case "$($cc -v 2>&1)" in
+*"MacPorts gcc"*) loclibpth="$loclibpth /opt/local/lib/libgcc" ;;
+esac
 
 ##
 # Build process

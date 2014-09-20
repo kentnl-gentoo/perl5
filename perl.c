@@ -1034,6 +1034,7 @@ perl_destruct(pTHXx)
     SvREFCNT_dec(PL_utf8_foldable);
     SvREFCNT_dec(PL_utf8_foldclosures);
     SvREFCNT_dec(PL_AboveLatin1);
+    SvREFCNT_dec(PL_InBitmap);
     SvREFCNT_dec(PL_UpperLatin1);
     SvREFCNT_dec(PL_Latin1);
     SvREFCNT_dec(PL_NonL1NonFinalFold);
@@ -1047,6 +1048,7 @@ perl_destruct(pTHXx)
     PL_utf8_idcont	= NULL;
     PL_utf8_foldclosures = NULL;
     PL_AboveLatin1       = NULL;
+    PL_InBitmap          = NULL;
     PL_HasMultiCharFold  = NULL;
     PL_Latin1            = NULL;
     PL_NonL1NonFinalFold = NULL;
@@ -2070,9 +2072,10 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
                it should be reported immediately as a build failure.  */
 	    (void)Perl_av_create_and_unshift_one(aTHX_ &PL_preambleav,
 						 Perl_newSVpvf(aTHX_
-        "BEGIN { do {local $!; -f q%c%"SVf"/buildcustomize.pl%c} and do q%c%"SVf"/buildcustomize.pl%c || die $@ }",
-							       0, SVfARG(*inc0), 0,
-							       0, SVfARG(*inc0), 0));
+		"BEGIN { my $f = q%c%s%"SVf"/buildcustomize.pl%c; "
+			"do {local $!; -f $f }"
+			" and do $f || die $@ || qq '$f: $!' }",
+                                0, (TAINTING_get ? "./" : ""), SVfARG(*inc0), 0));
 	}
 #  else
 	/* SITELIB_EXP is a function call on Win32.  */
@@ -2881,7 +2884,7 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
 /*
 =for apidoc p||eval_pv
 
-Tells Perl to C<eval> the given string and return an SV* result.
+Tells Perl to C<eval> the given string in scalar context and return an SV* result.
 
 =cut
 */
@@ -3906,7 +3909,7 @@ Perl_doing_taint(int argc, char *argv[], char *envp[])
      * if -T are the first chars together; otherwise one gets
      *  "Too late" message. */
     if ( argc > 1 && argv[1][0] == '-'
-         && (argv[1][1] == 't' || argv[1][1] == 'T') )
+         && isALPHA_FOLD_EQ(argv[1][1], 't'))
 	return 1;
     return 0;
 }

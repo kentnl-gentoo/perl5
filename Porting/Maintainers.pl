@@ -16,13 +16,13 @@ use File::Glob qw(:case);
 # complain if it can't find them)
 
 @IGNORABLE = qw(
-    .cvsignore .dualLivedDiffConfig .gitignore
+    .cvsignore .dualLivedDiffConfig .gitignore .perlcriticrc .perltidyrc
     ANNOUNCE Announce Artistic AUTHORS BENCHMARK BUGS Build.PL
     CHANGELOG ChangeLog Changelog CHANGES Changes CONTRIBUTING COPYING Copying
     cpanfile CREDITS dist.ini GOALS HISTORY INSTALL INSTALL.SKIP LICENSE
     Makefile.PL MANIFEST MANIFEST.SKIP META.json META.yml MYMETA.json
-    MYMETA.yml NEW NOTES perlcritic.rc ppport.h README README.PATCHING
-    SIGNATURE THANKS TODO Todo VERSION WHATSNEW .perlcriticrc.perltidyrc
+    MYMETA.yml NEW NEWS NOTES perlcritic.rc ppport.h README README.PATCHING
+    SIGNATURE THANKS TODO Todo VERSION WHATSNEW
 );
 
 # Each entry in the  %Modules hash roughly represents a distribution,
@@ -119,7 +119,7 @@ use File::Glob qw(:case);
 %Modules = (
 
     'Archive::Tar' => {
-        'DISTRIBUTION' => 'BINGOS/Archive-Tar-2.00.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Archive-Tar-2.02.tar.gz',
         'FILES'        => q[cpan/Archive-Tar],
         'BUGS'         => 'bug-archive-tar@rt.cpan.org',
         'EXCLUDED'     => [
@@ -298,13 +298,13 @@ use File::Glob qw(:case);
     },
 
     'CPAN::Meta::Requirements' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-Requirements-2.126.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-Requirements-2.128.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta-Requirements],
         'EXCLUDED'     => [
             qw(CONTRIBUTING.mkdn),
-            qw(t/00-compile.t),
             qw(t/00-report-prereqs.t),
             qw(t/00-report-prereqs.dd),
+            qw(t/version-cleanup.t),
             qr{^xt},
         ],
     },
@@ -321,7 +321,7 @@ use File::Glob qw(:case);
     },
 
     'Data::Dumper' => {
-        'DISTRIBUTION' => 'SMUELLER/Data-Dumper-2.151.tar.gz',
+        'DISTRIBUTION' => 'SMUELLER/Data-Dumper-2.154.tar.gz',
         'FILES'        => q[dist/Data-Dumper],
     },
 
@@ -379,6 +379,9 @@ use File::Glob qw(:case);
                 examples/dups
                 ),
         ],
+        # Was hoping to be merged upstream in CPAN RT#96498,
+        # but that has been rejected...
+        'CUSTOMIZED'   => ['hints/hpux.pl'],
     },
 
     'Dumpvalue' => {
@@ -408,7 +411,7 @@ use File::Glob qw(:case);
     },
 
     'experimental' => {
-        'DISTRIBUTION' => 'LEONT/experimental-0.008.tar.gz',
+        'DISTRIBUTION' => 'LEONT/experimental-0.010.tar.gz',
         'FILES'        => q[cpan/experimental],
         'EXCLUDED'     => [
           qr{^t/release-.*\.t},
@@ -427,7 +430,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::CBuilder' => {
-        'DISTRIBUTION' => 'AMBS/ExtUtils/ExtUtils-CBuilder-0.280216.tar.gz',
+        'DISTRIBUTION' => 'AMBS/ExtUtils-CBuilder-0.280219.tar.gz',
         'FILES'        => q[dist/ExtUtils-CBuilder],
         'EXCLUDED'     => [
             qw(README.mkdn),
@@ -457,7 +460,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::Install' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-Install-1.68.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-Install-2.04.tar.gz',
         'FILES'        => q[cpan/ExtUtils-Install],
         'EXCLUDED'     => [
             qw( t/lib/Test/Builder.pm
@@ -482,10 +485,18 @@ use File::Glob qw(:case);
             'PATCHING',
             'README.packaging',
         ],
+        'CUSTOMIZED'   => [
+            # Already merged upstream in GitHub 0116aaf4e, just awaiting
+            # a new stable CPAN release
+            qw(	t/pm_to_blib.t ),
+            # Already merged upstream in GitHub 46586b12c, just awaiting
+            # a new stable CPAN release
+            qw( lib/ExtUtils/Liblist/Kid.pm ),
+        ],
     },
 
     'ExtUtils::Manifest' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-Manifest-1.65.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-Manifest-1.68.tar.gz',
         'FILES'        => q[cpan/ExtUtils-Manifest],
         'EXCLUDED'     => [qr(^xt/)],
     },
@@ -583,7 +594,7 @@ use File::Glob qw(:case);
     },
 
     'HTTP::Tiny' => {
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.047.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.049.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/00-report-prereqs.t',
@@ -630,7 +641,7 @@ use File::Glob qw(:case);
     },
 
     'IO::Socket::IP' => {
-        'DISTRIBUTION' => 'PEVANS/IO-Socket-IP-0.31.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/IO-Socket-IP-0.32.tar.gz',
         'FILES'        => q[cpan/IO-Socket-IP],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -684,7 +695,7 @@ use File::Glob qw(:case);
     },
 
     'Locale-Codes' => {
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.31.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.32.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( README.first
@@ -788,7 +799,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.021002.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20140914.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -902,7 +913,7 @@ use File::Glob qw(:case);
     },
 
     'Pod::Perldoc' => {
-        'DISTRIBUTION' => 'MALLEN/Pod-Perldoc-3.23.tar.gz',
+        'DISTRIBUTION' => 'MALLEN/Pod-Perldoc-3.24.tar.gz',
         'FILES'        => q[cpan/Pod-Perldoc],
 
         # Note that we use the CPAN-provided Makefile.PL, since it
@@ -954,7 +965,7 @@ use File::Glob qw(:case);
     },
 
     'Scalar-List-Utils' => {
-        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.39.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.41.tar.gz',
         'FILES'    => q[cpan/Scalar-List-Utils],
     },
 
@@ -970,7 +981,7 @@ use File::Glob qw(:case);
     },
 
     'Socket' => {
-        'DISTRIBUTION' => 'PEVANS/Socket-2.014.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Socket-2.015.tar.gz',
         'FILES'        => q[cpan/Socket],
     },
 
@@ -1031,7 +1042,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Harness' => {
-        'DISTRIBUTION' => 'LEONT/Test-Harness-3.32.tar.gz',
+        'DISTRIBUTION' => 'LEONT/Test-Harness-3.33.tar.gz',
         'FILES'        => q[cpan/Test-Harness],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1050,7 +1061,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.001003.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.001006.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^t/xt},
@@ -1160,7 +1171,7 @@ use File::Glob qw(:case);
     },
 
     'threads' => {
-        'DISTRIBUTION' => 'JDHEDDEN/threads-1.92.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-1.96.tar.gz',
         'FILES'        => q[dist/threads],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1207,7 +1218,7 @@ use File::Glob qw(:case);
     },
 
     'Time::Piece' => {
-        'DISTRIBUTION' => 'RJBS/Time-Piece-1.27.tar.gz',
+        'DISTRIBUTION' => 'RJBS/Time-Piece-1.29.tar.gz',
         'FILES'        => q[cpan/Time-Piece],
     },
 
@@ -1231,7 +1242,7 @@ use File::Glob qw(:case);
     },
 
     'version' => {
-        'DISTRIBUTION' => 'JPEACOCK/version-0.9908.tar.gz',
+        'DISTRIBUTION' => 'JPEACOCK/version-0.9909.tar.gz',
         'FILES'        => q[cpan/version vutil.c vutil.h vxs.inc],
         'EXCLUDED' => [
             qr{^vutil/lib/},
@@ -1250,7 +1261,6 @@ use File::Glob qw(:case);
 
             # Merged upstream, waiting for new CPAN release: see CPAN RT#92721
             qw( vutil.c
-                vxs.inc
                 ),
         ],
 
@@ -1352,6 +1362,7 @@ use File::Glob qw(:case);
                 lib/AnyDBM_File.{pm,t}
                 lib/Benchmark.{pm,t}
                 lib/B/Deparse{.pm,.t,-core.t}
+                lib/B/Op_private.pm
                 lib/CORE.pod
                 lib/Class/Struct.{pm,t}
                 lib/Config.t

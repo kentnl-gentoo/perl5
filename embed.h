@@ -100,7 +100,9 @@
 #define cv_clone(a)		Perl_cv_clone(aTHX_ a)
 #define cv_const_sv		Perl_cv_const_sv
 #define cv_get_call_checker(a,b,c)	Perl_cv_get_call_checker(aTHX_ a,b,c)
+#define cv_name(a,b)		Perl_cv_name(aTHX_ a,b)
 #define cv_set_call_checker(a,b,c)	Perl_cv_set_call_checker(aTHX_ a,b,c)
+#define cv_set_call_checker_flags(a,b,c,d)	Perl_cv_set_call_checker_flags(aTHX_ a,b,c,d)
 #define cv_undef(a)		Perl_cv_undef(aTHX_ a)
 #define cx_dump(a)		Perl_cx_dump(aTHX_ a)
 #define cxinc()			Perl_cxinc(aTHX)
@@ -173,6 +175,7 @@
 #define grok_atou		Perl_grok_atou
 #define grok_bin(a,b,c,d)	Perl_grok_bin(aTHX_ a,b,c,d)
 #define grok_hex(a,b,c,d)	Perl_grok_hex(aTHX_ a,b,c,d)
+#define grok_infnan		Perl_grok_infnan
 #define grok_number(a,b,c)	Perl_grok_number(aTHX_ a,b,c)
 #define grok_number_flags(a,b,c,d)	Perl_grok_number_flags(aTHX_ a,b,c,d)
 #define grok_numeric_radix(a,b)	Perl_grok_numeric_radix(aTHX_ a,b)
@@ -293,6 +296,7 @@
 #define is_utf8_xdigit(a)	Perl_is_utf8_xdigit(aTHX_ a)
 #define is_utf8_xidcont(a)	Perl_is_utf8_xidcont(aTHX_ a)
 #define is_utf8_xidfirst(a)	Perl_is_utf8_xidfirst(aTHX_ a)
+#define isinfnan		Perl_isinfnan
 #define leave_scope(a)		Perl_leave_scope(aTHX_ a)
 #define lex_bufutf8()		Perl_lex_bufutf8(aTHX)
 #define lex_discard_to(a)	Perl_lex_discard_to(aTHX_ a)
@@ -815,7 +819,7 @@
 #define _new_invlist_C_array(a)	Perl__new_invlist_C_array(aTHX_ a)
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C)
-#define _get_regclass_nonbitmap_data(a,b,c,d,e)	Perl__get_regclass_nonbitmap_data(aTHX_ a,b,c,d,e)
+#define _get_regclass_nonbitmap_data(a,b,c,d,e,f)	Perl__get_regclass_nonbitmap_data(aTHX_ a,b,c,d,e,f)
 #endif
 #if defined(UNLINK_ALL_VERSIONS)
 #define unlnk(a)		Perl_unlnk(aTHX_ a)
@@ -874,6 +878,10 @@
 #define PerlIO_unread(a,b,c)	Perl_PerlIO_unread(aTHX_ a,b,c)
 #define PerlIO_write(a,b,c)	Perl_PerlIO_write(aTHX_ a,b,c)
 #endif
+#if defined(USE_QUADMATH)
+#define quadmath_format_needed	Perl_quadmath_format_needed
+#define quadmath_format_single	Perl_quadmath_format_single
+#endif
 #if defined(WIN32)
 #define my_setlocale(a,b)	Perl_my_setlocale(aTHX_ a,b)
 #endif
@@ -911,13 +919,14 @@
 #define yylex()			Perl_yylex(aTHX)
 #  if defined(DEBUGGING)
 #    if defined(PERL_IN_REGCOMP_C)
+#define cntrl_to_mnemonic	S_cntrl_to_mnemonic
 #define dump_trie(a,b,c,d)	S_dump_trie(aTHX_ a,b,c,d)
 #define dump_trie_interim_list(a,b,c,d,e)	S_dump_trie_interim_list(aTHX_ a,b,c,d,e)
 #define dump_trie_interim_table(a,b,c,d,e)	S_dump_trie_interim_table(aTHX_ a,b,c,d,e)
 #define dumpuntil(a,b,c,d,e,f,g,h)	S_dumpuntil(aTHX_ a,b,c,d,e,f,g,h)
-#define put_byte(a,b)		S_put_byte(aTHX_ a,b)
-#define put_latin1_charclass_innards(a,b)	S_put_latin1_charclass_innards(aTHX_ a,b)
-#define put_range(a,b,c)	S_put_range(aTHX_ a,b,c)
+#define put_charclass_bitmap_innards(a,b,c)	S_put_charclass_bitmap_innards(aTHX_ a,b,c)
+#define put_code_point(a,b)	S_put_code_point(aTHX_ a,b)
+#define put_range(a,b,c,d)	S_put_range(aTHX_ a,b,c,d)
 #define regdump_extflags(a,b)	S_regdump_extflags(aTHX_ a,b)
 #define regdump_intflags(a,b)	S_regdump_intflags(aTHX_ a,b)
 #define regtail_study(a,b,c,d)	S_regtail_study(aTHX_ a,b,c,d)
@@ -939,6 +948,7 @@
 #define add_above_Latin1_folds(a,b,c)	S_add_above_Latin1_folds(aTHX_ a,b,c)
 #define add_cp_to_invlist(a,b)	S_add_cp_to_invlist(aTHX_ a,b)
 #define add_data		S_add_data
+#define add_multi_match(a,b,c)	S_add_multi_match(aTHX_ a,b,c)
 #define alloc_maybe_populate_EXACT(a,b,c,d,e,f)	S_alloc_maybe_populate_EXACT(aTHX_ a,b,c,d,e,f)
 #define compute_EXACTish	S_compute_EXACTish
 #define construct_ahocorasick_from_trie(a,b,c)	S_construct_ahocorasick_from_trie(aTHX_ a,b,c)
@@ -946,7 +956,7 @@
 #define get_ANYOF_cp_list_for_ssc(a,b)	S_get_ANYOF_cp_list_for_ssc(aTHX_ a,b)
 #define get_invlist_iter_addr	S_get_invlist_iter_addr
 #define get_invlist_previous_index_addr	S_get_invlist_previous_index_addr
-#define grok_bslash_N(a,b,c,d,e,f,g)	S_grok_bslash_N(aTHX_ a,b,c,d,e,f,g)
+#define grok_bslash_N(a,b,c,d,e,f)	S_grok_bslash_N(aTHX_ a,b,c,d,e,f)
 #define handle_regex_sets(a,b,c,d,e)	S_handle_regex_sets(aTHX_ a,b,c,d,e)
 #define invlist_array		S_invlist_array
 #define invlist_clone(a)	S_invlist_clone(aTHX_ a)
@@ -1122,6 +1132,7 @@
 #define cv_clone_into(a,b)	Perl_cv_clone_into(aTHX_ a,b)
 #define cv_const_sv_or_av	Perl_cv_const_sv_or_av
 #define cv_forget_slab(a)	Perl_cv_forget_slab(aTHX_ a)
+#define cv_undef_flags(a,b)	Perl_cv_undef_flags(aTHX_ a,b)
 #define cvgv_set(a,b)		Perl_cvgv_set(aTHX_ a,b)
 #define cvstash_set(a,b)	Perl_cvstash_set(aTHX_ a,b)
 #define deb_stack_all()		Perl_deb_stack_all(aTHX)
@@ -1348,6 +1359,11 @@
 #define utf16_textfilter(a,b,c)	S_utf16_textfilter(aTHX_ a,b,c)
 #    endif
 #  endif
+#  if !defined(USE_QUADMATH)
+#    if defined(PERL_IN_NUMERIC_C)
+#define mulexp10		S_mulexp10
+#    endif
+#  endif
 #  if !defined(WIN32)
 #define do_exec3(a,b,c)		Perl_do_exec3(aTHX_ a,b,c)
 #  endif
@@ -1437,6 +1453,8 @@
 #define gv_is_in_main(a,b,c)	S_gv_is_in_main(aTHX_ a,b,c)
 #define gv_magicalize(a,b,c,d,e,f)	S_gv_magicalize(aTHX_ a,b,c,d,e,f)
 #define gv_magicalize_isa(a)	S_gv_magicalize_isa(aTHX_ a)
+#define gv_stashpvn_internal(a,b,c)	S_gv_stashpvn_internal(aTHX_ a,b,c)
+#define gv_stashsvpvn_cached(a,b,c,d)	S_gv_stashsvpvn_cached(aTHX_ a,b,c,d)
 #define maybe_multimagic_gv(a,b,c)	S_maybe_multimagic_gv(aTHX_ a,b,c)
 #define parse_gv_stash_name(a,b,c,d,e,f,g,h)	S_parse_gv_stash_name(aTHX_ a,b,c,d,e,f,g,h)
 #define require_tie_mod(a,b,c,d,e)	S_require_tie_mod(aTHX_ a,b,c,d,e)
@@ -1477,9 +1495,6 @@
 #define mro_gather_and_rename(a,b,c,d,e)	S_mro_gather_and_rename(aTHX_ a,b,c,d,e)
 #define mro_get_linear_isa_dfs(a,b)	S_mro_get_linear_isa_dfs(aTHX_ a,b)
 #  endif
-#  if defined(PERL_IN_NUMERIC_C)
-#define mulexp10		S_mulexp10
-#  endif
 #  if defined(PERL_IN_OP_C)
 #define aassign_common_vars(a)	S_aassign_common_vars(aTHX_ a)
 #define apply_attrs(a,b,c)	S_apply_attrs(aTHX_ a,b,c)
@@ -1495,7 +1510,6 @@
 #define force_list(a,b)		S_force_list(aTHX_ a,b)
 #define forget_pmop(a)		S_forget_pmop(aTHX_ a)
 #define gen_constant_list(a)	S_gen_constant_list(aTHX_ a)
-#define gv_ename(a)		S_gv_ename(aTHX_ a)
 #define inplace_aassign(a)	S_inplace_aassign(aTHX_ a)
 #define is_handle_constructor	S_is_handle_constructor
 #define is_list_assignment(a)	S_is_list_assignment(aTHX_ a)
@@ -1523,9 +1537,7 @@
 #define search_const(a)		S_search_const(aTHX_ a)
 #define simplify_sort(a)	S_simplify_sort(aTHX_ a)
 #define too_few_arguments_pv(a,b,c)	S_too_few_arguments_pv(aTHX_ a,b,c)
-#define too_few_arguments_sv(a,b,c)	S_too_few_arguments_sv(aTHX_ a,b,c)
 #define too_many_arguments_pv(a,b,c)	S_too_many_arguments_pv(aTHX_ a,b,c)
-#define too_many_arguments_sv(a,b,c)	S_too_many_arguments_sv(aTHX_ a,b,c)
 #  endif
 #  if defined(PERL_IN_OP_C) || defined(PERL_IN_SV_C)
 #define report_redefined_cv(a,b,c)	Perl_report_redefined_cv(aTHX_ a,b,c)
@@ -1562,7 +1574,6 @@
 #define refto(a)		S_refto(aTHX_ a)
 #  endif
 #  if defined(PERL_IN_PP_CTL_C)
-#define adjust_stack_on_leave(a,b,c,d,e,f)	S_adjust_stack_on_leave(aTHX_ a,b,c,d,e,f)
 #define check_type_and_open(a)	S_check_type_and_open(aTHX_ a)
 #define destroy_matcher(a)	S_destroy_matcher(aTHX_ a)
 #define do_smartmatch(a,b,c)	S_do_smartmatch(aTHX_ a,b,c)
@@ -1576,6 +1587,7 @@
 #define dopoptoloop(a)		S_dopoptoloop(aTHX_ a)
 #define dopoptosub_at(a,b)	S_dopoptosub_at(aTHX_ a,b)
 #define dopoptowhen(a)		S_dopoptowhen(aTHX_ a)
+#define leave_common(a,b,c,d,e,f)	S_leave_common(aTHX_ a,b,c,d,e,f)
 #define make_matcher(a)		S_make_matcher(aTHX_ a)
 #define matcher_matches_sv(a,b)	S_matcher_matches_sv(aTHX_ a,b)
 #define num_overflow		S_num_overflow

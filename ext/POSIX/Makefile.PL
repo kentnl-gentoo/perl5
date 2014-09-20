@@ -12,11 +12,17 @@ if ($Config{sig_name} =~ /\bRTMIN\b/ && $Config{sig_name} =~ /\bRTMAX\b/) {
 
 my @libs;
 if ($^O ne 'MSWin32' && $^O ne 'freemint') {
-    @libs = ('LIBS' => ["-lm -lposix -lcposix"]);
+    push @libs, qw(m posix cposix);
+}
+if ($^O eq 'solaris') {
+    push @libs, qw(sunmath);
+}
+if ($^O eq 'aix' && $Config{uselongdouble}) {
+    push @libs, qw(c128);
 }
 WriteMakefile(
     NAME	=> 'POSIX',
-    @libs,
+    @libs ? ( 'LIBS' => [ join(" ", map { "-l$_" } @libs) ] ) : (),
     XSPROTOARG	=> '-noprototypes',	# XXX remove later?
     VERSION_FROM => 'lib/POSIX.pm',
     ABSTRACT_FROM => 'lib/POSIX.pod',
@@ -88,6 +94,12 @@ END
 #endif
                            '});
 
+push @names,
+  {name=>"INFINITY", type=>"NV", value=>"NV_INF", not_constant=>1},
+  {name=>"NAN", type=>"NV", value=>"NV_NAN", not_constant=>1},
+  {name=>"Inf", type=>"NV", value=>"NV_INF", not_constant=>1},
+  {name=>"NaN", type=>"NV", value=>"NV_NAN", not_constant=>1};
+
 push @names, {name=>$_, type=>"UV"}
   foreach (qw(SA_NOCLDSTOP SA_NOCLDWAIT SA_NODEFER SA_ONSTACK SA_RESETHAND
              SA_RESTART SA_SIGINFO UCHAR_MAX UINT_MAX ULONG_MAX USHRT_MAX));
@@ -100,6 +112,14 @@ push @names, {name=>$_, type=>"NV"}
 	      DBL_MIN_EXP FLT_DIG FLT_MANT_DIG FLT_MAX_10_EXP FLT_MAX_EXP
 	      FLT_MIN_10_EXP FLT_MIN_EXP FLT_RADIX LDBL_DIG LDBL_MANT_DIG
 	      LDBL_MAX_10_EXP LDBL_MAX_EXP LDBL_MIN_10_EXP LDBL_MIN_EXP));
+
+push @names, {name=>$_, type=>"NV"}
+  foreach (qw(FP_ILOGB0 FP_ILOGBNAN FP_INFINITE FP_NAN FP_NORMAL
+              FP_SUBNORMAL FP_ZERO M_1_PI M_2_PI M_2_SQRTPI M_E M_LN10 M_LN2
+              M_LOG10E M_LOG2E M_PI M_PI_2 M_PI_4 M_SQRT1_2 M_SQRT2));
+
+push @names, {name=>$_, type=>"IV"}
+  foreach (qw(FE_DOWNWARD FE_TONEAREST FE_TOWARDZERO FE_UPWARD));
 
 push @names, {name=>$_, type=>"IV", default=>["IV", "0"]}
   foreach (qw(_POSIX_ARG_MAX _POSIX_CHILD_MAX _POSIX_CHOWN_RESTRICTED

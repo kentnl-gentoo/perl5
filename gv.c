@@ -216,7 +216,7 @@ Perl_newGP(pTHX_ GV *const gv)
 void
 Perl_cvgv_set(pTHX_ CV* cv, GV* gv)
 {
-    GV * const oldgv = CvGV(cv);
+    GV * const oldgv = CvNAMED(cv) ? NULL : SvANY(cv)->xcv_gv_u.xcv_gv;
     HEK *hek;
     PERL_ARGS_ASSERT_CVGV_SET;
 
@@ -232,7 +232,11 @@ Perl_cvgv_set(pTHX_ CV* cv, GV* gv)
 	    sv_del_backref(MUTABLE_SV(oldgv), MUTABLE_SV(cv));
 	}
     }
-    else if ((hek = CvNAME_HEK(cv))) unshare_hek(hek);
+    else if ((hek = CvNAME_HEK(cv))) {
+	unshare_hek(hek);
+	CvNAMED_off(cv);
+	CvLEXICAL_off(cv);
+    }
 
     SvANY(cv)->xcv_gv_u.xcv_gv = gv;
     assert(!CvCVGV_RC(cv));
@@ -246,6 +250,37 @@ Perl_cvgv_set(pTHX_ CV* cv, GV* gv)
 	CvCVGV_RC_on(cv);
 	SvREFCNT_inc_simple_void_NN(gv);
     }
+}
+
+/* Convert CvSTASH + CvNAME_HEK into a GV.  Conceptually, all subs have a
+   GV, but for efficiency that GV may not in fact exist.  This function,
+   called by CvGV, reifies it. */
+
+GV *
+Perl_cvgv_from_hek(pTHX_ CV *cv)
+{
+    GV *gv;
+    SV **svp;
+    PERL_ARGS_ASSERT_CVGV_FROM_HEK;
+    assert(SvTYPE(cv) == SVt_PVCV);
+    if (!CvSTASH(cv)) return NULL;
+    ASSUME(CvNAME_HEK(cv));
+    svp = hv_fetchhek(CvSTASH(cv), CvNAME_HEK(cv), 0);
+    gv = MUTABLE_GV(svp && *svp ? *svp : newSV(0));
+    if (!isGV(gv))
+	gv_init_pvn(gv, CvSTASH(cv), HEK_KEY(CvNAME_HEK(cv)),
+		HEK_LEN(CvNAME_HEK(cv)),
+		SVf_UTF8 * !!HEK_UTF8(CvNAME_HEK(cv)));
+    if (!CvNAMED(cv)) { /* gv_init took care of it */
+	assert (SvANY(cv)->xcv_gv_u.xcv_gv == gv);
+	return gv;
+    }
+    unshare_hek(CvNAME_HEK(cv));
+    CvNAMED_off(cv);
+    SvANY(cv)->xcv_gv_u.xcv_gv = gv;
+    if (svp && *svp) SvREFCNT_inc_simple_void_NN(gv);
+    CvCVGV_RC_on(cv);
+    return gv;
 }
 
 /* Assign CvSTASH(cv) = st, handling weak references. */
@@ -343,10 +378,9 @@ Perl_gv_init_pvn(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, U32 flag
     assert (!(proto && has_constant));
 
     if (has_constant) {
-	/* The constant has to be a simple scalar type.  */
+	/* The constant has to be a scalar, array or subroutine.  */
 	switch (SvTYPE(has_constant)) {
 	case SVt_PVHV:
-	case SVt_PVCV:
 	case SVt_PVFM:
 	case SVt_PVIO:
             Perl_croak(aTHX_ "Cannot convert a reference to %s to typeglob",
@@ -382,7 +416,21 @@ Perl_gv_init_pvn(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, U32 flag
     gv_name_set(gv, name, len, GV_ADD | ( flags & SVf_UTF8 ? SVf_UTF8 : 0 ));
     if (flags & GV_ADDMULTI || doproto)	/* doproto means it */
 	GvMULTI_on(gv);			/* _was_ mentioned */
-    if (doproto) {
+    if (has_constant && SvTYPE(has_constant) == SVt_PVCV) {
+	/* Not actually a constant.  Just a regular sub.  */
+	CV * const cv = (CV *)has_constant;
+	GvCV_set(gv,cv);
+	if (CvSTASH(cv) == stash && (
+	       CvNAME_HEK(cv) == GvNAME_HEK(gv)
+	    || (  HEK_LEN(CvNAME_HEK(cv)) == HEK_LEN(GvNAME_HEK(gv))
+	       && HEK_FLAGS(CvNAME_HEK(cv)) != HEK_FLAGS(GvNAME_HEK(gv))
+	       && HEK_UTF8(CvNAME_HEK(cv)) == HEK_UTF8(GvNAME_HEK(gv))
+	       && memEQ(HEK_KEY(CvNAME_HEK(cv)), GvNAME(gv), GvNAMELEN(gv))
+	       )
+	   ))
+	    CvGV_set(cv,gv);
+    }
+    else if (doproto) {
 	CV *cv;
 	if (has_constant) {
 	    /* newCONSTSUB takes ownership of the reference from us.  */
@@ -1053,7 +1101,7 @@ Perl_gv_fetchmethod_pvn_flags(pTHX_ HV *stash, const char *name, const STRLEN le
 	    GV* stubgv;
 	    GV* autogv;
 
-	    if (CvANON(cv) || !CvGV(cv))
+	    if (CvANON(cv) || CvLEXICAL(cv))
 		stubgv = gv;
 	    else {
 		stubgv = CvGV(cv);
@@ -1198,7 +1246,7 @@ Perl_gv_autoload_pvn(pTHX_ HV *stash, const char *name, STRLEN len, U32 flags)
      * use that, but for lack of anything better we will use the sub's
      * original package to look up $AUTOLOAD.
      */
-    varstash = GvSTASH(CvGV(cv));
+    varstash = CvNAMED(cv) ? CvSTASH(cv) : GvSTASH(CvGV(cv));
     vargv = *(GV**)hv_fetch(varstash, S_autoload, S_autolen, TRUE);
     ENTER;
 
@@ -1310,11 +1358,22 @@ Flags may be one of:
 
 The most important of which are probably GV_ADD and SVf_UTF8.
 
+Note, use of C<gv_stashsv> instead of C<gv_stashpvn> where possible is strongly
+recommended for performance reasons.
+
 =cut
 */
 
-HV*
-Perl_gv_stashpvn(pTHX_ const char *name, U32 namelen, I32 flags)
+/*
+gv_stashpvn_internal
+
+Perform the internal bits of gv_stashsvpvn_cached. You could think of this
+as being one half of the logic. Not to be called except from gv_stashsvpvn_cached().
+
+*/
+
+PERL_STATIC_INLINE HV*
+S_gv_stashpvn_internal(pTHX_ const char *name, U32 namelen, I32 flags)
 {
     char smallbuf[128];
     char *tmpbuf;
@@ -1322,7 +1381,7 @@ Perl_gv_stashpvn(pTHX_ const char *name, U32 namelen, I32 flags)
     GV *tmpgv;
     U32 tmplen = namelen + 2;
 
-    PERL_ARGS_ASSERT_GV_STASHPVN;
+    PERL_ARGS_ASSERT_GV_STASHPVN_INTERNAL;
 
     if (tmplen <= sizeof smallbuf)
 	tmpbuf = smallbuf;
@@ -1352,9 +1411,72 @@ Perl_gv_stashpvn(pTHX_ const char *name, U32 namelen, I32 flags)
 }
 
 /*
+gv_stashsvpvn_cached
+
+Returns a pointer to the stash for a specified package, possibly
+cached.  Implements both C<gv_stashpvn> and C<gc_stashsv>.
+
+Requires one of either namesv or namepv to be non-null.
+
+See C<gv_stashpvn> for details on "flags".
+
+Note the sv interface is strongly preferred for performance reasons.
+
+*/
+
+#define PERL_ARGS_ASSERT_GV_STASHSVPVN_CACHED \
+    assert(namesv || name)
+
+PERL_STATIC_INLINE HV*
+S_gv_stashsvpvn_cached(pTHX_ SV *namesv, const char *name, U32 namelen, I32 flags)
+{
+    HV* stash;
+    HE* he;
+
+    PERL_ARGS_ASSERT_GV_STASHSVPVN_CACHED;
+
+    he = (HE *)hv_common(
+        PL_stashcache, namesv, name, namelen,
+        (flags & SVf_UTF8) ? HVhek_UTF8 : 0, 0, NULL, 0
+    );
+
+    if (he) return INT2PTR(HV*,SvIVX(HeVAL(he)));
+    else if (flags & GV_CACHE_ONLY) return NULL;
+
+    if (namesv) {
+        if (SvOK(namesv)) { /* prevent double uninit warning */
+            STRLEN len;
+            name = SvPV_const(namesv, len);
+            namelen = len;
+            flags |= SvUTF8(namesv);
+        } else {
+            name = ""; namelen = 0;
+        }
+    }
+    stash = gv_stashpvn_internal(name, namelen, flags);
+
+    if (stash && namelen) {
+        SV* const ref = newSViv(PTR2IV(stash));
+        (void)hv_store(PL_stashcache, name,
+            (flags & SVf_UTF8) ? -(I32)namelen : (I32)namelen, ref, 0);
+    }
+
+    return stash;
+}
+
+HV*
+Perl_gv_stashpvn(pTHX_ const char *name, U32 namelen, I32 flags)
+{
+    PERL_ARGS_ASSERT_GV_STASHPVN;
+    return gv_stashsvpvn_cached(NULL, name, namelen, flags);
+}
+
+/*
 =for apidoc gv_stashsv
 
 Returns a pointer to the stash for a specified package.  See C<gv_stashpvn>.
+
+Note this interface is strongly preferred over C<gv_stashpvn> for performance reasons.
 
 =cut
 */
@@ -1362,12 +1484,8 @@ Returns a pointer to the stash for a specified package.  See C<gv_stashpvn>.
 HV*
 Perl_gv_stashsv(pTHX_ SV *sv, I32 flags)
 {
-    STRLEN len;
-    const char * const ptr = SvPV_const(sv,len);
-
     PERL_ARGS_ASSERT_GV_STASHSV;
-
-    return gv_stashpvn(ptr, len, flags | SvUTF8(sv));
+    return gv_stashsvpvn_cached(sv, NULL, 0, flags);
 }
 
 
@@ -1613,17 +1731,19 @@ S_find_default_stash(pTHX_ HV **stash, const char *name, STRLEN len,
 
     if (!*stash) {
         if (add && !PL_in_clean_all) {
-            SV * const err = Perl_mess(aTHX_
+            GV *gv;
+            qerror(Perl_mess(aTHX_
                  "Global symbol \"%s%"UTF8f
-                 "\" requires explicit package name",
+                 "\" requires explicit package name (did you forget to "
+                 "declare \"my %s%"UTF8f"\"?)",
                  (sv_type == SVt_PV ? "$"
                   : sv_type == SVt_PVAV ? "@"
                   : sv_type == SVt_PVHV ? "%"
-                  : ""), UTF8fARG(is_utf8, len, name));
-            GV *gv;
-            if (is_utf8)
-                SvUTF8_on(err);
-            qerror(err);
+                  : ""), UTF8fARG(is_utf8, len, name),
+                 (sv_type == SVt_PV ? "$"
+                  : sv_type == SVt_PVAV ? "@"
+                  : sv_type == SVt_PVHV ? "%"
+                  : ""), UTF8fARG(is_utf8, len, name)));
             /* To maintain the output of errors after the strict exception
              * above, and to keep compat with older releases, rather than
              * placing the variables in the pad, we place
@@ -2533,11 +2653,14 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
 	   numifying instead of C's "+0". */
 	gv = Perl_gv_fetchmeth_pvn(aTHX_ stash, cooky, l, -1, 0);
         cv = 0;
-        if (gv && (cv = GvCV(gv))) {
-	    if(GvNAMELEN(CvGV(cv)) == 3 && strEQ(GvNAME(CvGV(cv)), "nil")){
-	      const char * const hvname = HvNAME_get(GvSTASH(CvGV(cv)));
-	      if (hvname && HEK_LEN(HvNAME_HEK(GvSTASH(CvGV(cv)))) == 8
-	       && strEQ(hvname, "overload")) {
+        if (gv && (cv = GvCV(gv)) && CvHASGV(cv)) {
+            const HEK * const gvhek =
+                CvNAMED(cv) ? CvNAME_HEK(cv) : GvNAME_HEK(CvGV(cv));
+            const HEK * const stashek =
+                HvNAME_HEK(CvNAMED(cv) ? CvSTASH(cv) : GvSTASH(CvGV(cv)));
+            if (HEK_LEN(gvhek) == 3 && strEQ(HEK_KEY(gvhek), "nil")
+             && stashek && HEK_LEN(stashek) == 8
+             && strEQ(HEK_KEY(stashek), "overload")) {
 		/* This is a hack to support autoloading..., while
 		   knowing *which* methods were declared as overloaded. */
 		/* GvSV contains the name of the method. */
@@ -2571,7 +2694,6 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
 		    }
 		}
 		cv = GvCV(gv = ngv);
-	      }
 	    }
 	    DEBUG_o( Perl_deb(aTHX_ "Overloading \"%s\" in package \"%.256s\" via \"%.256s::%.256s\"\n",
 			 cp, HvNAME_get(stash), HvNAME_get(GvSTASH(CvGV(cv))),
@@ -3384,7 +3506,7 @@ Perl_gv_try_downgrade(pTHX_ GV *gv)
 	(void)hv_deletehek(stash, gvnhek, G_DISCARD);
     } else if (GvMULTI(gv) && cv && SvREFCNT(cv) == 1 &&
 	    !SvOBJECT(cv) && !SvMAGICAL(cv) && !SvREADONLY(cv) &&
-	    CvSTASH(cv) == stash && CvGV(cv) == gv &&
+	    CvSTASH(cv) == stash && !CvNAMED(cv) && CvGV(cv) == gv &&
 	    CvCONST(cv) && !CvMETHOD(cv) && !CvLVALUE(cv) && !CvUNIQUE(cv) &&
 	    !CvNODEBUG(cv) && !CvCLONE(cv) && !CvCLONED(cv) && !CvANON(cv) &&
 	    (namehek = GvNAME_HEK(gv)) &&

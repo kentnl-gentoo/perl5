@@ -1759,7 +1759,6 @@ Perl_magic_methcall(pTHX_ SV *sv, const MAGIC *mg, SV *meth, U32 flags,
     if (flags & G_WRITING_TO_STDERR) {
 	SAVETMPS;
 
-	save_re_context();
 	SAVESPTR(PL_stderrgv);
 	PL_stderrgv = NULL;
     }
@@ -2237,7 +2236,7 @@ Perl_magic_gettaint(pTHX_ SV *sv, MAGIC *mg)
     PERL_UNUSED_ARG(mg);
 #endif
 
-    TAINT_IF((PL_localizing != 1) && (mg->mg_len & 1));
+    TAINT_IF((PL_localizing != 1) && (mg->mg_len & 1) && IN_PERL_RUNTIME);
     return 0;
 }
 
@@ -3125,11 +3124,19 @@ Perl_sighandler(int sig)
     }
 
     if (!cv || !CvROOT(cv)) {
-	Perl_ck_warner(aTHX_ packWARN(WARN_SIGNAL), "SIG%s handler \"%s\" not defined.\n",
-		       PL_sig_name[sig], (gv ? GvENAME(gv)
-					  : ((cv && CvGV(cv))
-					     ? GvENAME(CvGV(cv))
-					     : "__ANON__")));
+	const HEK * const hek = gv
+			? GvENAME_HEK(gv)
+			: cv && CvNAMED(cv)
+			   ? CvNAME_HEK(cv)
+			   : cv && CvGV(cv) ? GvENAME_HEK(CvGV(cv)) : NULL;
+	if (hek)
+	    Perl_ck_warner(aTHX_ packWARN(WARN_SIGNAL),
+				"SIG%s handler \"%"HEKf"\" not defined.\n",
+			         PL_sig_name[sig], hek);
+	     /* diag_listed_as: SIG%s handler "%s" not defined */
+	else Perl_ck_warner(aTHX_ packWARN(WARN_SIGNAL),
+			   "SIG%s handler \"__ANON__\" not defined.\n",
+			    PL_sig_name[sig]);
 	goto cleanup;
     }
 

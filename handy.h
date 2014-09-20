@@ -963,7 +963,8 @@ patched there.  The file as of this writing is cpan/Devel-PPPort/parts/inc/misc
 #  define _CC_QUOTEMETA                21
 #  define _CC_NON_FINAL_FOLD           22
 #  define _CC_IS_IN_SOME_FOLD          23
-/* Unused: 24-31
+#  define _CC_MNEMONIC_CNTRL           24
+/* Unused: 25-31
  * If more bits are needed, one could add a second word for non-64bit
  * QUAD_IS_INT systems, using some #ifdefs to distinguish between having a 2nd
  * word or not.  The IS_IN_SOME_FOLD bit is the most easily expendable, as it
@@ -1056,7 +1057,7 @@ EXTCONST U32 PL_charclass[];
 #   define isALPHANUMERIC_A(c) _generic_isCC_A(c, _CC_ALPHANUMERIC)
 #   define isBLANK_A(c)  _generic_isCC_A(c, _CC_BLANK)
 #   define isCNTRL_A(c)  _generic_isCC_A(c, _CC_CNTRL)
-#   define isDIGIT_A(c)  _generic_isCC(c, _CC_DIGIT)
+#   define isDIGIT_A(c)  _generic_isCC(c, _CC_DIGIT) /* No non-ASCII digits */
 #   define isGRAPH_A(c)  _generic_isCC_A(c, _CC_GRAPH)
 #   define isLOWER_A(c)  _generic_isCC_A(c, _CC_LOWER)
 #   define isPRINT_A(c)  _generic_isCC_A(c, _CC_PRINT)
@@ -1065,7 +1066,7 @@ EXTCONST U32 PL_charclass[];
 #   define isSPACE_A(c)  _generic_isCC_A(c, _CC_SPACE)
 #   define isUPPER_A(c)  _generic_isCC_A(c, _CC_UPPER)
 #   define isWORDCHAR_A(c) _generic_isCC_A(c, _CC_WORDCHAR)
-#   define isXDIGIT_A(c)  _generic_isCC(c, _CC_XDIGIT)
+#   define isXDIGIT_A(c)  _generic_isCC(c, _CC_XDIGIT) /* No non-ASCII xdigits */
 #   define isIDFIRST_A(c) _generic_isCC_A(c, _CC_IDFIRST)
 #   define isALPHA_L1(c)  _generic_isCC(c, _CC_ALPHA)
 #   define isALPHANUMERIC_L1(c) _generic_isCC(c, _CC_ALPHANUMERIC)
@@ -1096,6 +1097,8 @@ EXTCONST U32 PL_charclass[];
                                             _generic_isCC(c, _CC_NON_FINAL_FOLD)
 #   define _IS_IN_SOME_FOLD_ONLY_FOR_USE_BY_REGCOMP_DOT_C(c) \
                                             _generic_isCC(c, _CC_IS_IN_SOME_FOLD)
+#   define _IS_MNEMONIC_CNTRL_ONLY_FOR_USE_BY_REGCOMP_DOT_C(c) \
+                                            _generic_isCC(c, _CC_MNEMONIC_CNTRL)
 #else   /* else we don't have perl.h */
 
     /* If we don't have perl.h, we are compiling a utility program.  Below we
@@ -1705,6 +1708,25 @@ typedef U32 line_t;
  * value.  The input is validated only by an assert() in DEBUGGING builds.  In
  * both ASCII and EBCDIC the last 3 bits of the octal digits range from 0-7. */
 #define OCTAL_VALUE(c) (__ASSERT_(isOCTAL(c)) (7 & (c)))
+
+/* Efficiently returns a boolean as to if two native characters are equivalent
+ * case-insenstively.  At least one of the characters must be one of [A-Za-z];
+ * the ALPHA in the name is to remind you of that.  This is asserted() in
+ * DEBUGGING builds.  Because [A-Za-z] are invariant under UTF-8, this macro
+ * works (on valid input) for both non- and UTF-8-encoded bytes.
+ *
+ * When one of the inputs is a compile-time constant and gets folded by the
+ * compiler, this reduces to an AND and a TEST.  On both EBCDIC and ASCII
+ * machines, 'A' and 'a' differ by a single bit; the same with the upper and
+ * lower case of all other ASCII-range alphabetics.  On ASCII platforms, they
+ * are 32 apart; on EBCDIC, they are 64.  At compile time, this uses an
+ * exclusive 'or' to find that bit and then inverts it to form a mask, with
+ * just a single 0, in the bit position where the upper- and lowercase differ.
+ * */
+#define isALPHA_FOLD_EQ(c1, c2)                                         \
+                      (__ASSERT_(isALPHA_A(c1) || isALPHA_A(c2))        \
+                      ((c1) & ~('A' ^ 'a')) ==  ((c2) & ~('A' ^ 'a')))
+#define isALPHA_FOLD_NE(c1, c2) (! isALPHA_FOLD_EQ((c1), (c2)))
 
 /*
 =head1 Memory Management

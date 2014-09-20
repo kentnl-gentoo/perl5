@@ -132,12 +132,11 @@ if ($Config{nvsize} == 8 &&
     # IEEE 754 128-bit ("quadruple precision"), e.g. IA-64 (Itanium) in VMS
     $Config{nvsize} == 16 &&
     # 9a 99 99 99 99 99 99 99 99 99 99 99 99 99 fb 3f (LE), pack F is the NV
-    # (compare this with "double-double")
     (pack("F", 0.1) =~ /^\x9A\x99{6}/ ||  # LE
-     pack("F", 0.1) =~ /\x99{6}x9A$/)     # BE
+     pack("F", 0.1) =~ /\x99{6}\x9A$/)    # BE
     ) {
     @hexfloat = (
-	[ '%a', '0',       '0x1p-1' ],
+	[ '%a', '0',       '0x0p+0' ],
 	[ '%a', '1',       '0x1p+0' ],
 	[ '%a', '1.0',     '0x1p+0' ],
 	[ '%a', '0.5',     '0x1p-1' ],
@@ -186,31 +185,27 @@ if ($Config{nvsize} == 8 &&
 } elsif (
     # "double-double", two 64-bit doubles end to end
     $Config{nvsize} == 16 &&
-    # bf b9 99 99 99 99 99 9a 3c 59 99 99 99 99 99 9a (BE), pack F is the NV
-    # (compare this with "quadruple precision")
-    (pack("F", 0.1) =~ /^\x9A\x99{5}\x59\x3C/ ||  # LE
-     pack("F", 0.1) =~ /\x3C\x59\x99{5}\x9A$/)    # BE
+    # bf b9 99 99 99 99 99 9a bc 59 99 99 99 99 99 9a (BE), pack F is the NV
+    (pack("F", 0.1) =~ /^\x9A\x99{5}\x59\xBC/ ||  # LE
+     pack("F", 0.1) =~ /\xBC\x59\x99{5}\x9A$/)    # BE
     ) {
-    # XXX these values are probably slightly wrong, even if
-    # the double-double extraction code gets fixed, the exact
-    # truncation/rounding effects are unknown.
     @hexfloat = (
-	[ '%a', '0',       '0x1p-1' ],
+	[ '%a', '0',       '0x0p+0' ],
 	[ '%a', '1',       '0x1p+0' ],
 	[ '%a', '1.0',     '0x1p+0' ],
 	[ '%a', '0.5',     '0x1p-1' ],
 	[ '%a', '0.25',    '0x1p-2' ],
 	[ '%a', '0.75',    '0x1.8p-1' ],
-	[ '%a', '3.14',    '0x1.91eb851eb851eb851eb851eb852p+1' ],
-	[ '%a', '-1',      '-0x1p+0' ],
-	[ '%a', '-3.14',   '-0x1.91eb851eb851eb851eb851eb852p+1' ],
-	[ '%a', '0.1',     '0x1.99999999999999999999999999ap-4' ],
-	[ '%a', '1/7',     '0x1.249249249249249249249249249p-3' ],
-	[ '%a', 'sqrt(2)', '0x1.6a09e667f3bcc908b2fb1366ea9p+0' ],
+	[ '%a', '3.14',    '0x1.91eb851eb851eb851eb851eb85p+1' ],
+	[ '%a', '-1',      '-0x0p+0' ],
+	[ '%a', '-3.14',   '-0x1.91eb851eb851eb851eb851eb85p+1' ],
+	[ '%a', '0.1',     '0x1.999999999999999999999999998p-4' ],
+	[ '%a', '1/7',     '0x1.249249249249249249249249248p-3' ],
+	[ '%a', 'sqrt(2)', '0x1.6a09e667f3bcc908b2fb1366ea8p+0' ],
 	[ '%a', 'exp(1)',  '0x1.5bf0a8b1457695355fb8ac404e8p+1' ],
 	[ '%a', '2**-10',  '0x1p-10' ],
 	[ '%a', '2**10',   '0x1p+10' ],
-	[ '%a', '1e-09',   '0x1.12e0be826d694b2e62d01511f13p-30' ],
+	[ '%a', '1e-09',   '0x1.12e0be826d694b2e62d01511f14p-30' ],
 	[ '%a', '1e9',     '0x1.dcd65p+29' ],
 
 	[ '%#a', '1',      '0x1.p+0' ],
@@ -219,27 +214,27 @@ if ($Config{nvsize} == 8 &&
 	[ '% a', '1',      ' 0x1p+0' ],
 	[ '% a', '-1',     '-0x1p+0' ],
 
-	[ '%8a',      '3.14', '0x1.91eb851eb851eb851eb851eb852p+1' ],
-	[ '%13a',     '3.14', '0x1.91eb851eb851eb851eb851eb852p+1' ],
-	[ '%20a',     '3.14', '0x1.91eb851eb851eb851eb851eb852p+1' ],
+	[ '%8a',      '3.14', '0x1.91eb851eb851eb851eb851eb85p+1' ],
+	[ '%13a',     '3.14', '0x1.91eb851eb851eb851eb851eb85p+1' ],
+	[ '%20a',     '3.14', '0x1.91eb851eb851eb851eb851eb85p+1' ],
 	[ '%.4a',     '3.14', '0x1.91ecp+1' ],
 	[ '%.5a',     '3.14', '0x1.91eb8p+1' ],
 	[ '%.6a',     '3.14', '0x1.91eb85p+1' ],
-	[ '%.20a',    '3.14', '0x1.91eb851eb851eb851eb8p+1' ],
+        [ '%.20a',    '3.14',   '0x1.91eb851eb851eb851eb8p+1' ],
 	[ '%20.10a',  '3.14', '   0x1.91eb851eb8p+1' ],
-	[ '%20.15a',  '3.14', '0x1.91eb851eb851eb8p+1' ],
+        [ '%20.15a',  '3.14',   '0x1.91eb851eb851eb8p+1' ],
 	[ '% 20.10a', '3.14', '   0x1.91eb851eb8p+1' ],
 	[ '%020.10a', '3.14', '0x0001.91eb851eb8p+1' ],
 
-	[ '%30a',     '3.14', '0x1.91eb851eb851eb851eb851eb852p+1' ],
-	[ '%-30a',    '3.14', '0x1.91eb851eb851eb851eb851eb852p+1' ],
-	[ '%030a',    '3.14', '0x1.91eb851eb851eb851eb851eb852p+1' ],
-	[ '%-030a',   '3.14', '0x1.91eb851eb851eb851eb851eb852p+1' ],
+        [ '%30a',  '3.14',   '0x1.91eb851eb851eb851eb851eb85p+1' ],
+        [ '%-30a', '3.14',   '0x1.91eb851eb851eb851eb851eb85p+1' ],
+        [ '%030a',  '3.14',  '0x1.91eb851eb851eb851eb851eb85p+1' ],
+        [ '%-030a', '3.14',  '0x1.91eb851eb851eb851eb851eb85p+1' ],
 
         [ '%.40a',  '3.14',
-          '0x1.91eb851eb851eb851eb851eb8520000000000000p+1' ],
+          '0x1.91eb851eb851eb851eb851eb8500000000000000p+1' ],
 
-	[ '%A',       '3.14', '0X1.91EB851EB851EB851EB851EB852P+1' ],
+	[ '%A',       '3.14', '0X1.91EB851EB851EB851EB851EB85P+1' ],
         );
 } else {
     print "# no hexfloat tests\n";
@@ -574,5 +569,63 @@ for my $t (@hexfloat) {
     my ($format, $arg, $expected) = @$t;
     $arg = eval $arg;
     my $result = sprintf($format, $arg);
-    is($result, $expected, "'$format' '$arg' -> '$result' cf '$expected'");
+    my $ok = $result eq $expected;
+    unless ($ok) {
+        # It seems that there can be difference in the last bits:
+        # [perl #122578]
+        #      got "0x1.5bf0a8b14576ap+1"
+        # expected "0x1.5bf0a8b145769p+1"
+        # (Android on ARM)
+        #
+        # Exact cause unknown but suspecting different fp rounding modes,
+        # (towards zero? towards +inf? towards -inf?) about which Perl
+        # is blissfully unaware.
+        #
+        # Try extracting one (or sometimes two) last mantissa
+        # hexdigits, and see if they differ in value by one.
+        my ($rh, $eh) = ($result, $expected);
+        sub extract_prefix {
+            ($_[0] =~ s/(-?0x[0-9a-fA-F]+\.)//) && return $1;
+        }
+        my $rp = extract_prefix($rh);
+        my $ep = extract_prefix($eh);
+        print "# rp = $rp, ep = $ep (rh $rh, eh $eh)\n";
+        if ($rp eq $ep) { # If prefixes match.
+            sub extract_exponent {
+                ($_[0] =~ s/([pP][+-]?\d+)//) && return $1;
+            }
+            my $re = extract_exponent($rh);
+            my $ee = extract_exponent($eh);
+            print "# re = $re, ee = $ee (rh $rh, eh $eh)\n";
+            if ($re eq $ee) { # If exponents match.
+                # Remove the common prefix of the mantissa bits.
+                my $la = length($rh);
+                my $lb = length($eh);
+                my $i;
+                for ($i = 0; $i < $la && $i < $lb; $i++) {
+                    last if substr($rh, $i, 1) ne substr($eh, $i, 1);
+                }
+                $rh = substr($rh, $i);
+                $eh = substr($eh, $i);
+                print "# (rh $rh, eh $eh)\n";
+                if ($rh ne $eh) {
+                    # If necessary, pad the shorter one on the right
+                    # with one zero (for example "...1f" vs "...2",
+                    # we want to compare "1f" to "20").
+                    if (length $rh < length $eh) {
+                        $rh .= '0';
+                    } elsif (length $eh < length $rh) {
+                        $eh .= '0';
+                    }
+                    print "# (rh $rh, eh $eh)\n";
+                    if (length $eh == length $rh) {
+                        if (abs(hex($eh) - hex($rh)) == 1) {
+                            $ok = 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ok($ok, "'$format' '$arg' -> '$result' cf '$expected'");
 }

@@ -252,7 +252,7 @@ sub nm_parse_darwin {
                 $symbols->{data}{const}{$symbol}{$symbols->{o}}++;
             } elsif (/^\(__TEXT,__text\) (?:non-)?external _(\w+)$/) {
                 $symbols->{text}{$1}{$symbols->{o}}++;
-            } elsif (/^\(__DATA,__(const|data|bss|common)\) (?:non-)?external _(\w+)(\.\w+)?$/) {
+            } elsif (/^\(__DATA,__\w*?(const|data|bss|common)\w*\) (?:non-)?external _(\w+)(\.\w+)?$/) {
                 my ($dtype, $symbol, $suffix) = ($1, $2, $3);
                 # Ignore function-local constants like
                 # _Perl_pp_gmtime.dayname
@@ -418,15 +418,10 @@ ok(keys %{$symbols{undef}}, "has undefined symbols");
 
 # There are certain symbols we expect to see.
 
-# memchr, memcmp, memcpy should be used all over the place.
-#
-# chmod, socket, getenv, sigaction, sqrt, time are system/library
-# calls that should each see at least one use. sqrt can be sqrtl
+# chmod, socket, getenv, sigaction, exp, time are system/library
+# calls that should each see at least one use. exp can be expl
 # if so configured.
 my %expected = (
-    memchr => 'd_memchr',
-    memcmp => 'd_memcmp',
-    memcpy => 'd_memcpy',
     chmod  => undef, # There is no Configure symbol for chmod.
     socket => 'd_socket',
     getenv => undef, # There is no Configure symbol for getenv,
@@ -434,14 +429,18 @@ my %expected = (
     time   => 'd_time',
     );
 
-if ($Config{uselongdouble} && $Config{d_longdbl}) {
-    $expected{sqrtl} = 'd_sqrtl';
+if ($Config{uselongdouble} && $Config{longdblsize} > $Config{doublesize}) {
+    if ($Config{usequadmath}) {
+        $expected{expq} = undef; # There is no Configure symbol for expq.
+    } else {
+        $expected{expl} = undef; # There is no Configure symbol for expl.
+    }
 } else {
-    $expected{sqrt} = undef; # There is no Configure symbol for sqrt.
+    $expected{exp} = undef; # There is no Configure symbol for exp.
 }
 
 # DynaLoader will use dlopen, unless we are building static,
-# and in the platforms we are supporting in this test.
+# and it is used in the platforms we are supporting in this test.
 if ($Config{usedl} ) {
     $expected{dlopen} = 'd_dlopen';
 }
@@ -455,16 +454,7 @@ for my $symbol (sort keys %expected) {
     }
     my @o = exists $symbols{undef}{$symbol} ?
         sort keys %{ $symbols{undef}{$symbol} } : ();
-    # In some FreeBSD versions memcmp disappears (compiler inlining?).
-    if (($^O eq 'freebsd' ||
-         (defined $fake_style && $fake_style eq 'freebsd')) &&
-        $symbol eq 'memcmp' && @o == 0) {
-        SKIP: {
-            skip("freebsd memcmp");
-        }
-    } else {
-        ok(@o, "uses $symbol (@o)");
-    }
+    ok(@o, "uses $symbol (@o)");
 }
 
 # There are certain symbols we expect NOT to see.

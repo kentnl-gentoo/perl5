@@ -1900,6 +1900,11 @@
  *	C preprocessor can make decisions based on it.  It is only
  *	defined if the system supports long doubles.
  */
+/* HAS_LDEXPL:
+ *	This symbol, if defined, indicates that the ldexpl routine is
+ *	available to shift a long double floating-point number
+ *	by an integral power of 2.
+ */
 /* LONG_DOUBLEKIND:
  *	LONG_DOUBLEKIND will be one of
  *	LONG_DOUBLE_IS_DOUBLE
@@ -1912,6 +1917,7 @@
  *	LONG_DOUBLE_IS_UNKNOWN_FORMAT
  *	It is only defined if the system supports long doubles.
  */
+/*#define  HAS_LDEXPL		/ **/
 /*#define HAS_LONG_DOUBLE		/ **/
 #ifdef HAS_LONG_DOUBLE
 #define LONG_DOUBLESIZE 8		/**/
@@ -2841,6 +2847,12 @@
 /*#define PWGECOS	/ **/
 /*#define PWPASSWD	/ **/
 
+/* I_QUADMATH:
+ *	This symbol, if defined, indicates to the C program that it should
+ *	include <quadmath.h>.
+ */
+/*#define   I_QUADMATH                / **/
+
 /* I_SYS_ACCESS:
  *     This symbol, if defined, indicates to the C program that it should
  *     include <sys/access.h>.
@@ -3371,6 +3383,12 @@
  */
 /*#define HAS__FWALK		/ **/
 
+/* HAS_ACOSH:
+ *	This symbol, if defined, indicates that the acosh routine is
+ *	available to do the inverse hyperbolic cosine function.
+ */
+/*#define HAS_ACOSH		/ **/
+
 /* HAS_AINTL:
  *	This symbol, if defined, indicates that the aintl routine is
  *	available.  If copysignl is also present we can emulate modfl.
@@ -3481,6 +3499,13 @@
  */
 /*#define FCNTL_CAN_LOCK		/ **/
 
+/* HAS_FEGETROUND:
+ *	This symbol, if defined, indicates that the fegetround routine is
+ *	available to return the macro corresponding to the current rounding
+ *	mode.
+ */
+/*#define HAS_FEGETROUND	/ **/
+
 /* HAS_FINITE:
  *	This symbol, if defined, indicates that the finite routine is
  *	available to check whether a double is finite (non-infinity non-NaN).
@@ -3520,6 +3545,13 @@
  */
 /*#define HAS_FP_CLASS		/ **/
 
+/* HAS_FP_CLASSL:
+ *	This symbol, if defined, indicates that the fp_classl routine is
+ *	available to classify long doubles.  Available for example in
+ *	Digital UNIX.  See for possible values HAS_FP_CLASS.
+ */
+/*#define HAS_FP_CLASSL		/ **/
+
 /* HAS_FPCLASS:
  *	This symbol, if defined, indicates that the fpclass routine is
  *	available to classify doubles.  Available for example in Solaris/SVR4.
@@ -3550,7 +3582,19 @@
  *           FP_NAN        NaN
  *
  */
-/*#define HAS_FPCLASSIFY		/ **/
+/* HAS_FP_CLASSIFY:
+ *	This symbol, if defined, indicates that the fp_classify routine is
+ *	available to classify doubles. The values are defined in <math.h>
+ *
+ *           FP_NORMAL     Normalized
+ *           FP_ZERO       Zero
+ *           FP_INFINITE   Infinity
+ *           FP_SUBNORMAL  Denormalized
+ *           FP_NAN        NaN
+ *
+ */
+/*#define	HAS_FPCLASSIFY		/ **/
+/*#define	HAS_FP_CLASSIFY		/ **/
 
 /* HAS_FPCLASSL:
  *	This symbol, if defined, indicates that the fpclassl routine is
@@ -3570,6 +3614,12 @@
  */
 /*#define HAS_FPCLASSL		/ **/
 
+/* HAS_FPGETROUND:
+ *	This symbol, if defined, indicates that the fpgetround routine is
+ *	available to get the floating point rounding mode.
+ */
+/*#define HAS_FPGETROUND		/ **/
+
 /* HAS_FPOS64_T:
  *	This symbol will be defined if the C compiler supports fpos64_t.
  */
@@ -3581,13 +3631,6 @@
  *	a normalized fraction and an integral power of 2.
  */
 /*#define HAS_FREXPL		/ **/
-
-/* HAS_LDEXPL:
- *	This symbol, if defined, indicates that the ldexpl routine is
- *	available to shift a long double floating-point number
- *	by an integral power of 2.
- */
-/*#define HAS_LDEXPL		/ **/
 
 /* HAS_STRUCT_FS_DATA:
  *	This symbol, if defined, indicates that the struct fs_data
@@ -3729,11 +3772,24 @@
  */
 /*#define HAS_ISFINITE		/ **/
 
+/* HAS_ISFINITEL:
+ *	This symbol, if defined, indicates that the isfinitel routine is
+ *	available to check whether a long double is finite.
+ *	(non-infinity non-NaN).
+ */
+/*#define HAS_ISFINITEL		/ **/
+
 /* HAS_ISINF:
  *	This symbol, if defined, indicates that the isinf routine is
  *	available to check whether a double is an infinity.
  */
 /*#define HAS_ISINF		/ **/
+
+/* HAS_ISINFL:
+ *	This symbol, if defined, indicates that the isinfl routine is
+ *	available to check whether a long double is an infinity.
+ */
+/*#define HAS_ISINFL		/ **/
 
 /* HAS_ISNAN:
  *	This symbol, if defined, indicates that the isnan routine is
@@ -3746,6 +3802,19 @@
  *	available to check whether a long double is a NaN.
  */
 /*#define HAS_ISNANL		/ **/
+
+/* HAS_J0:
+ *	This symbol, if defined, indicates to the C program that the
+ *	j0() function is available for Bessel functions of the first
+ *	kind of the order zero, for doubles.
+ */
+/* HAS_J0L:
+ *	This symbol, if defined, indicates to the C program that the
+ *	j0l() function is available for Bessel functions of the first
+ *	kind of the order zero, for long doubles.
+ */
+/*#define	HAS_J0		/ **/
+/*#define	HAS_J0L		/ **/
 
 /* HAS_LDBL_DIG:
  *	This symbol, if defined, indicates that this system's <float.h>
@@ -4131,6 +4200,12 @@
  */
 /*#define HAS_TIMEGM		/ **/
 
+/* HAS_TRUNCL:
+ *	This symbol, if defined, indicates that the truncl routine is
+ *	available. If copysignl is also present we can emulate modfl.
+ */
+/*#define HAS_TRUNCL		/ **/
+
 /* U32_ALIGNMENT_REQUIRED:
  *	This symbol, if defined, indicates that you must access
  *	character data through U32-aligned pointers.
@@ -4260,6 +4335,12 @@
 #define DB_VERSION_MINOR_CFG	0  	/**/
 #define DB_VERSION_PATCH_CFG	0  	/**/
 
+/* I_FENV:
+ *	This symbol, if defined, indicates to the C program that it should
+ *	include <fenv.h> to get the floating point environment definitions.
+ */
+/*#define I_FENV		/ **/
+
 /* I_FP:
  *	This symbol, if defined, indicates that <fp.h> exists and
  *	should be included.
@@ -4343,6 +4424,12 @@
  *	can be included.
  */
 /*#define	I_STDBOOL		/ **/
+
+/* I_STDINT:
+ *	This symbol, if defined, indicates that <stdint.h> exists and
+ *	should be included.
+ */
+/*#define I_STDINT		/ **/
 
 /* I_SUNMATH:
  *	This symbol, if defined, indicates that <sunmath.h> exists and
@@ -4727,6 +4814,14 @@
 /*#define	USE_LONG_DOUBLE		/ **/
 #endif
 
+/* USE_QUADMATH:
+ *	This symbol, if defined, indicates that the quadmath library should
+ *	be used when available.
+ */
+#ifndef USE_QUADMATH
+/*#define	USE_QUADMATH		/ **/
+#endif
+
 /* USE_MORE_BITS:
  *	This symbol, if defined, indicates that 64-bit interfaces and
  *	long doubles should be used when available.
@@ -4770,6 +4865,6 @@
 #endif
 
 /* Generated from:
- * 5f68e17a9d9e989b824daf55d2adcad3b7af2becfa8f627c6cb1d0e376f7e1a5 config_h.SH
- * 98397a7d818a024628d6b34e5903a8f408da96601a2a19471c480511f3c8d914 uconfig.sh
+ * d7da79ac72d2191d6814ec98688e342f20eba70c64292c2e0b6b5622cdf3b6e6 config_h.SH
+ * a3cd0b705a952f6915cc1424cc116d4183481f54ba9605415baf93bc57e12122 uconfig.sh
  * ex: set ro: */

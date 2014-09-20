@@ -331,8 +331,8 @@ do_test('reference to named subroutine without prototype',
   RV = $ADDR
   SV = PVCV\\($ADDR\\) at $ADDR
     REFCNT = (3|4)
-    FLAGS = \\((?:HASEVAL)?\\)			# $] < 5.015 || !thr
-    FLAGS = \\(DYNFILE(?:,HASEVAL)?\\)		# $] >= 5.015 && thr
+    FLAGS = \\((?:HASEVAL(?:,NAMED)?)?\\)	# $] < 5.015 || !thr
+    FLAGS = \\(DYNFILE(?:,HASEVAL(?:,NAMED)?)?\\) # $] >= 5.015 && thr
     IV = 0					# $] < 5.009
     NV = 0					# $] < 5.009
     COMP_STASH = $ADDR\\t"main"
@@ -340,13 +340,14 @@ do_test('reference to named subroutine without prototype',
     ROOT = $ADDR
     XSUB = 0x0					# $] < 5.009
     XSUBANY = 0					# $] < 5.009
-    GVGV::GV = $ADDR\\t"main" :: "do_test"
+    NAME = "do_test"				# $] >=5.021004
+    GVGV::GV = $ADDR\\t"main" :: "do_test"	# $] < 5.021004
     FILE = ".*\\b(?i:peek\\.t)"
     DEPTH = 1(?:
     MUTEXP = $ADDR
     OWNER = $ADDR)?
-    FLAGS = 0x(?:400)?0				# $] < 5.015 || !thr
-    FLAGS = 0x[145]000				# $] >= 5.015 && thr
+    FLAGS = 0x(?:[c4]00)?0			# $] < 5.015 || !thr
+    FLAGS = 0x[cd145]000			# $] >= 5.015 && thr
     OUTSIDE_SEQ = \\d+
     PADLIST = $ADDR
     PADNAME = $ADDR\\($ADDR\\) PAD = $ADDR\\($ADDR\\)
@@ -492,6 +493,7 @@ do_test('typeglob',
   NAME = "a"
   NAMELEN = 1
   GvSTASH = $ADDR\\t"main"
+  FLAGS = $ADDR					# $] >=5.021004
   GP = $ADDR
     SV = $ADDR
     REFCNT = 1
@@ -502,9 +504,10 @@ do_test('typeglob',
     CV = 0x0
     CVGEN = 0x0
     GPFLAGS = 0x0				# $] < 5.009
+    GPFLAGS = 0x0 \(\)				# $] >= 5.021004
     LINE = \\d+
     FILE = ".*\\b(?i:peek\\.t)"
-    FLAGS = $ADDR
+    FLAGS = $ADDR				# $] < 5.021004
     EGV = $ADDR\\t"a"');
 
 if (ord('A') == 193) {
@@ -698,7 +701,8 @@ do_test('constant subroutine',
     IV = 0					# $] < 5.009
     NV = 0					# $] < 5.009
     PROTOTYPE = ""
-    COMP_STASH = 0x0
+    COMP_STASH = 0x0				# $] < 5.021004
+    COMP_STASH = $ADDR	"main"			# $] >=5.021004
     ROOT = 0x0					# $] < 5.009
     XSUB = $ADDR
     XSUBANY = $ADDR \\(CONST SV\\)
@@ -1474,6 +1478,7 @@ for my $test (
 
 }
 
+my $runperl_args = { switches => ['-Ilib'] };
 sub test_DumpProg {
     my ($prog, $expected, $name, $test) = @_;
     $test ||= 'like';
@@ -1487,10 +1492,10 @@ sub test_DumpProg {
     utf8::encode($prog);
     
     if ( $test eq 'is' ) {
-        t::fresh_perl_is($prog . $u, $expected, undef, $name)
+        t::fresh_perl_is($prog . $u, $expected, $runperl_args, $name)
     }
     else {
-        t::fresh_perl_like($prog . $u, $expected, undef, $name)
+        t::fresh_perl_like($prog . $u, $expected, $runperl_args, $name)
     }
 
     $builder->current_test(t::curr_test() - 1);
@@ -1528,7 +1533,7 @@ dumpindent is 4 at - line 1.
 1   TYPE = leave  ===> NULL
     TARG = 1
     FLAGS = (VOID,KIDS,PARENS,SLABBED,LASTSIB)
-    PRIVATE = (REFCOUNTED)
+    PRIVATE = (REFC)
     REFCNT = 1
     {
 2       TYPE = enter  ===> 3
@@ -1542,9 +1547,9 @@ dumpindent is 4 at - line 1.
     }
     {
 5       TYPE = entersub  ===> 1
-        TARG = TARGS_REPLACE
+        TARG = 1
         FLAGS = (VOID,KIDS,STACKED,SLABBED,LASTSIB)
-        PRIVATE = (HASTARG)
+        PRIVATE = (TARG)
         {
 6           TYPE = null  ===> (5)
               (was list)
@@ -1557,6 +1562,7 @@ dumpindent is 4 at - line 1.
 8               TYPE = null  ===> (6)
                   (was rv2cv)
                 FLAGS = (SCALAR,KIDS,SLABBED,LASTSIB)
+                PRIVATE = (0x1)
                 {
 7                   TYPE = gv  ===> 5
                     FLAGS = (SCALAR,SLABBED,LASTSIB)
@@ -1568,8 +1574,8 @@ dumpindent is 4 at - line 1.
 }
 EODUMP
 
-$e =~ s/TARGS_REPLACE/$threads ? 3 : 1/e;
 $e =~ s/GV_OR_PADIX/$threads ? "PADIX = 2" : "GV = t::DumpProg"/e;
+$e =~ s/.*PRIVATE = \(0x1\).*\n// if $] < 5.021004;
 
 test_DumpProg("package t;", $e, "DumpProg() has no 'Attempt to free X prematurely' warning", "is" );
 

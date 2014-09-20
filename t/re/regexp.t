@@ -59,8 +59,11 @@ BEGIN {
     }
 
     chdir 't' if -d 't';
-    @INC = '../lib';
-
+    @INC = qw '../lib ../ext/re';
+    if (!defined &DynaLoader::boot_DynaLoader) { # miniperl
+	print("1..0 # Skip Unicode tables not built yet\n"), exit
+	    unless eval 'require "unicore/Heavy.pl"';
+    }
 }
 
 sub _comment {

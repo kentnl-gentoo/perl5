@@ -1,7 +1,7 @@
 package bigrat;
 use 5.006;
 
-$VERSION = '0.36';
+$VERSION = '0.37';
 require Exporter;
 @ISA		= qw( bigint );
 @EXPORT_OK 	= qw( PI e bpi bexp hex oct );
@@ -148,8 +148,7 @@ sub import
     # see if we can find Math::BigInt::Lite
     if (!defined $a && !defined $p)             # rounding won't work to well
       {
-      eval 'require Math::BigInt::Lite;';
-      if ($@ eq '')
+      if (eval { require Math::BigInt::Lite; 1 })
         {
         @import = ( );                          # :constant in Lite, not MBI
         Math::BigInt::Lite->import( ':constant' );

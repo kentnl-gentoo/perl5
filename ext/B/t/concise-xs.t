@@ -138,7 +138,7 @@ my $testpkgs = {
 	perl => [qw(
 		    walksymtable walkoptree_slow walkoptree_exec
 		    timing_info savesym peekop parents objsym debug
-		    compile_stats clearsym class
+		    compile_stats clearsym class safename
 		    )],
 	XS => [qw(
 		  warnhook walkoptree_debug walkoptree threadsv_names
@@ -171,7 +171,7 @@ my $testpkgs = {
 		     PMf_MULTILINE PMf_ONCE PMf_SINGLELINE
 		     POSTFIX SVf_FAKE SVf_IOK SVf_NOK SVf_POK SVf_ROK
 		     SVpad_OUR SVs_RMG SVs_SMG SWAP_CHILDREN OPpPAD_STATE
-		     OPpCONST_ARYBASE RXf_SKIPWHITE/,
+		     OPpCONST_ARYBASE RXf_SKIPWHITE SVpad_TYPED/,
 		     $] >= 5.015 ? qw(
 		     OP_GLOB PMf_SKIPWHITE RXf_PMf_CHARSET RXf_PMf_KEEPCOPY
 		     OPpEVAL_BYTES OPpSUBSTR_REPL_FIRST) : (),
@@ -190,6 +190,21 @@ my $testpkgs = {
 			qw /WEXITSTATUS WIFEXITED WIFSIGNALED WIFSTOPPED
 			    WSTOPSIG WTERMSIG/,
 		       'int_macro_int', # Removed in POSIX 1.16
+
+                       'strtold', # platform varying (C99)
+
+                        qw/fegetround fesetround/,
+
+                        # C99 math
+                        qw/acosh asinh atanh cbrt copysign cosh erf
+                        erfc exp2 expm1 fdim fma fmax fmin fpclassify
+                        hypot ilogb isfinite isgreater isgreaterequal
+                        isinf isless islessequal islessgreater isnan
+                        isnormal isunordered j0 j1 jn lgamma log1p
+                        log2 logb lrint lround nan nearbyint nextafter
+                        nexttoward remainder remquo rint round scalbn
+                        signbit sinh tanh tgamma trunc y0 y1 yn/,
+
 		       ],
 	       perl => [qw/ import croak AUTOLOAD /,
 			$] >= 5.015

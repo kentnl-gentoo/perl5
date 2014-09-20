@@ -1935,6 +1935,11 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	C preprocessor can make decisions based on it.  It is only
  *	defined if the system supports long doubles.
  */
+/* HAS_LDEXPL:
+ *	This symbol, if defined, indicates that the ldexpl routine is
+ *	available to shift a long double floating-point number
+ *	by an integral power of 2.
+ */
 /* LONG_DOUBLEKIND:
  *	LONG_DOUBLEKIND will be one of
  *	LONG_DOUBLE_IS_DOUBLE
@@ -1947,6 +1952,7 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	LONG_DOUBLE_IS_UNKNOWN_FORMAT
  *	It is only defined if the system supports long doubles.
  */
+#$d_ldexpl  HAS_LDEXPL		/**/
 #$d_longdbl HAS_LONG_DOUBLE		/**/
 #ifdef HAS_LONG_DOUBLE
 #define LONG_DOUBLESIZE $longdblsize		/**/
@@ -2876,6 +2882,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #$d_pwgecos PWGECOS	/**/
 #$d_pwpasswd PWPASSWD	/**/
 
+/* I_QUADMATH:
+ *	This symbol, if defined, indicates to the C program that it should
+ *	include <quadmath.h>.
+ */
+#$i_quadmath   I_QUADMATH                /**/
+
 /* I_SYS_ACCESS:
  *     This symbol, if defined, indicates to the C program that it should
  *     include <sys/access.h>.
@@ -3406,6 +3418,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d__fwalk HAS__FWALK		/**/
 
+/* HAS_ACOSH:
+ *	This symbol, if defined, indicates that the acosh routine is
+ *	available to do the inverse hyperbolic cosine function.
+ */
+#$d_acosh HAS_ACOSH		/**/
+
 /* HAS_AINTL:
  *	This symbol, if defined, indicates that the aintl routine is
  *	available.  If copysignl is also present we can emulate modfl.
@@ -3516,6 +3534,13 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_fcntl_can_lock FCNTL_CAN_LOCK		/**/
 
+/* HAS_FEGETROUND:
+ *	This symbol, if defined, indicates that the fegetround routine is
+ *	available to return the macro corresponding to the current rounding
+ *	mode.
+ */
+#$d_fegetround HAS_FEGETROUND	/**/
+
 /* HAS_FINITE:
  *	This symbol, if defined, indicates that the finite routine is
  *	available to check whether a double is finite (non-infinity non-NaN).
@@ -3555,6 +3580,13 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_fp_class HAS_FP_CLASS		/**/
 
+/* HAS_FP_CLASSL:
+ *	This symbol, if defined, indicates that the fp_classl routine is
+ *	available to classify long doubles.  Available for example in
+ *	Digital UNIX.  See for possible values HAS_FP_CLASS.
+ */
+#$d_fp_classl HAS_FP_CLASSL		/**/
+
 /* HAS_FPCLASS:
  *	This symbol, if defined, indicates that the fpclass routine is
  *	available to classify doubles.  Available for example in Solaris/SVR4.
@@ -3585,7 +3617,19 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *           FP_NAN        NaN
  *
  */
-#$d_fpclassify HAS_FPCLASSIFY		/**/
+/* HAS_FP_CLASSIFY:
+ *	This symbol, if defined, indicates that the fp_classify routine is
+ *	available to classify doubles. The values are defined in <math.h>
+ *
+ *           FP_NORMAL     Normalized
+ *           FP_ZERO       Zero
+ *           FP_INFINITE   Infinity
+ *           FP_SUBNORMAL  Denormalized
+ *           FP_NAN        NaN
+ *
+ */
+#$d_fpclassify	HAS_FPCLASSIFY		/**/
+#$d_fp_classify	HAS_FP_CLASSIFY		/**/
 
 /* HAS_FPCLASSL:
  *	This symbol, if defined, indicates that the fpclassl routine is
@@ -3605,6 +3649,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_fpclassl HAS_FPCLASSL		/**/
 
+/* HAS_FPGETROUND:
+ *	This symbol, if defined, indicates that the fpgetround routine is
+ *	available to get the floating point rounding mode.
+ */
+#$d_fpgetround HAS_FPGETROUND		/**/
+
 /* HAS_FPOS64_T:
  *	This symbol will be defined if the C compiler supports fpos64_t.
  */
@@ -3616,13 +3666,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	a normalized fraction and an integral power of 2.
  */
 #$d_frexpl HAS_FREXPL		/**/
-
-/* HAS_LDEXPL:
- *	This symbol, if defined, indicates that the ldexpl routine is
- *	available to shift a long double floating-point number
- *	by an integral power of 2.
- */
-#$d_ldexpl HAS_LDEXPL		/**/
 
 /* HAS_STRUCT_FS_DATA:
  *	This symbol, if defined, indicates that the struct fs_data
@@ -3764,11 +3807,24 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_isfinite HAS_ISFINITE		/**/
 
+/* HAS_ISFINITEL:
+ *	This symbol, if defined, indicates that the isfinitel routine is
+ *	available to check whether a long double is finite.
+ *	(non-infinity non-NaN).
+ */
+#$d_isfinitel HAS_ISFINITEL		/**/
+
 /* HAS_ISINF:
  *	This symbol, if defined, indicates that the isinf routine is
  *	available to check whether a double is an infinity.
  */
 #$d_isinf HAS_ISINF		/**/
+
+/* HAS_ISINFL:
+ *	This symbol, if defined, indicates that the isinfl routine is
+ *	available to check whether a long double is an infinity.
+ */
+#$d_isinfl HAS_ISINFL		/**/
 
 /* HAS_ISNAN:
  *	This symbol, if defined, indicates that the isnan routine is
@@ -3781,6 +3837,19 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	available to check whether a long double is a NaN.
  */
 #$d_isnanl HAS_ISNANL		/**/
+
+/* HAS_J0:
+ *	This symbol, if defined, indicates to the C program that the
+ *	j0() function is available for Bessel functions of the first
+ *	kind of the order zero, for doubles.
+ */
+/* HAS_J0L:
+ *	This symbol, if defined, indicates to the C program that the
+ *	j0l() function is available for Bessel functions of the first
+ *	kind of the order zero, for long doubles.
+ */
+#$d_j0	HAS_J0		/**/
+#$d_j0l	HAS_J0L		/**/
 
 /* HAS_LDBL_DIG:
  *	This symbol, if defined, indicates that this system's <float.h>
@@ -4166,6 +4235,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_timegm HAS_TIMEGM		/**/
 
+/* HAS_TRUNCL:
+ *	This symbol, if defined, indicates that the truncl routine is
+ *	available. If copysignl is also present we can emulate modfl.
+ */
+#$d_truncl HAS_TRUNCL		/**/
+
 /* U32_ALIGNMENT_REQUIRED:
  *	This symbol, if defined, indicates that you must access
  *	character data through U32-aligned pointers.
@@ -4295,6 +4370,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define DB_VERSION_MINOR_CFG	$db_version_minor  	/**/
 #define DB_VERSION_PATCH_CFG	$db_version_patch  	/**/
 
+/* I_FENV:
+ *	This symbol, if defined, indicates to the C program that it should
+ *	include <fenv.h> to get the floating point environment definitions.
+ */
+#$i_fenv I_FENV		/**/
+
 /* I_FP:
  *	This symbol, if defined, indicates that <fp.h> exists and
  *	should be included.
@@ -4378,6 +4459,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	can be included.
  */
 #$i_stdbool	I_STDBOOL		/**/
+
+/* I_STDINT:
+ *	This symbol, if defined, indicates that <stdint.h> exists and
+ *	should be included.
+ */
+#$i_stdint I_STDINT		/**/
 
 /* I_SUNMATH:
  *	This symbol, if defined, indicates that <sunmath.h> exists and
@@ -4760,6 +4847,14 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #ifndef USE_LONG_DOUBLE
 #$uselongdouble	USE_LONG_DOUBLE		/**/
+#endif
+
+/* USE_QUADMATH:
+ *	This symbol, if defined, indicates that the quadmath library should
+ *	be used when available.
+ */
+#ifndef USE_QUADMATH
+#$usequadmath	USE_QUADMATH		/**/
 #endif
 
 /* USE_MORE_BITS:

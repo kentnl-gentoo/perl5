@@ -45,11 +45,14 @@
 #   define DEL_NATIVE  0x7F    /* U+007F */
 #   define CR_NATIVE  0x0D    /* U+000D */
 #   define LF_NATIVE  0x0A    /* U+000A */
+#   define VT_NATIVE  0x0B    /* U+000B */
+#   define ESC_NATIVE  0x1B    /* U+001B */
 #   define LATIN_SMALL_LETTER_SHARP_S_NATIVE  0xDF    /* U+00DF */
 #   define LATIN_SMALL_LETTER_A_WITH_RING_ABOVE_NATIVE  0xE5    /* U+00E5 */
 #   define LATIN_CAPITAL_LETTER_A_WITH_RING_ABOVE_NATIVE  0xC5    /* U+00C5 */
 #   define LATIN_SMALL_LETTER_Y_WITH_DIAERESIS_NATIVE  0xFF    /* U+00FF */
 #   define MICRO_SIGN_NATIVE  0xB5    /* U+00B5 */
+#   define MAX_PRINT_A_FOR_USE_ONLY_BY_REGCOMP_DOT_C   0x7E   /* The max code point that isPRINT_A */
 
 #endif	/* ASCII/Latin1 */
 
@@ -80,11 +83,14 @@
 #   define DEL_NATIVE  0x07    /* U+007F */
 #   define CR_NATIVE  0x0D    /* U+000D */
 #   define LF_NATIVE  0x15    /* U+000A */
+#   define VT_NATIVE  0x0B    /* U+000B */
+#   define ESC_NATIVE  0x27    /* U+001B */
 #   define LATIN_SMALL_LETTER_SHARP_S_NATIVE  0x59    /* U+00DF */
 #   define LATIN_SMALL_LETTER_A_WITH_RING_ABOVE_NATIVE  0x47    /* U+00E5 */
 #   define LATIN_CAPITAL_LETTER_A_WITH_RING_ABOVE_NATIVE  0x67    /* U+00C5 */
 #   define LATIN_SMALL_LETTER_Y_WITH_DIAERESIS_NATIVE  0xDF    /* U+00FF */
 #   define MICRO_SIGN_NATIVE  0xA0    /* U+00B5 */
+#   define MAX_PRINT_A_FOR_USE_ONLY_BY_REGCOMP_DOT_C   0xF9   /* The max code point that isPRINT_A */
 
 #endif	/* EBCDIC 1047 */
 
@@ -115,11 +121,14 @@
 #   define DEL_NATIVE  0x07    /* U+007F */
 #   define CR_NATIVE  0x0D    /* U+000D */
 #   define LF_NATIVE  0x25    /* U+000A */
+#   define VT_NATIVE  0x0B    /* U+000B */
+#   define ESC_NATIVE  0x27    /* U+001B */
 #   define LATIN_SMALL_LETTER_SHARP_S_NATIVE  0x59    /* U+00DF */
 #   define LATIN_SMALL_LETTER_A_WITH_RING_ABOVE_NATIVE  0x47    /* U+00E5 */
 #   define LATIN_CAPITAL_LETTER_A_WITH_RING_ABOVE_NATIVE  0x67    /* U+00C5 */
 #   define LATIN_SMALL_LETTER_Y_WITH_DIAERESIS_NATIVE  0xDF    /* U+00FF */
 #   define MICRO_SIGN_NATIVE  0xA0    /* U+00B5 */
+#   define MAX_PRINT_A_FOR_USE_ONLY_BY_REGCOMP_DOT_C   0xF9   /* The max code point that isPRINT_A */
 
 #endif	/* EBCDIC 037 */
 
@@ -150,11 +159,14 @@
 #   define DEL_NATIVE  0x07    /* U+007F */
 #   define CR_NATIVE  0x0D    /* U+000D */
 #   define LF_NATIVE  0x15    /* U+000A */
+#   define VT_NATIVE  0x0B    /* U+000B */
+#   define ESC_NATIVE  0x27    /* U+001B */
 #   define LATIN_SMALL_LETTER_SHARP_S_NATIVE  0x59    /* U+00DF */
 #   define LATIN_SMALL_LETTER_A_WITH_RING_ABOVE_NATIVE  0x47    /* U+00E5 */
 #   define LATIN_CAPITAL_LETTER_A_WITH_RING_ABOVE_NATIVE  0x67    /* U+00C5 */
 #   define LATIN_SMALL_LETTER_Y_WITH_DIAERESIS_NATIVE  0xDF    /* U+00FF */
 #   define MICRO_SIGN_NATIVE  0xA0    /* U+00B5 */
+#   define MAX_PRINT_A_FOR_USE_ONLY_BY_REGCOMP_DOT_C   0xFF   /* The max code point that isPRINT_A */
 
 #endif	/* EBCDIC POSIX-BC */
 

@@ -15,12 +15,13 @@ $| = 1;
 
 BEGIN {
     chdir 't' if -d 't';
-    @INC = ('../lib','.');
+    @INC = ('../lib','.','../ext/re');
     require Config; import Config;
     require './test.pl';
+    skip_all_without_unicode_tables();
 }
 
-plan tests => 737;  # Update this when adding/deleting tests.
+plan tests => 739;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1606,6 +1607,31 @@ EOP
         ok('a<b>c' =~ qr<a\<b\>c>, "'\\<' is a literal in qr<...>)");
     }
 
+    {   # Was getting optimized into EXACT (non-folding node)
+        my $x = qr/[x]/i;
+        utf8::upgrade($x);
+        like("X", qr/$x/, "UTF-8 of /[x]/i matches upper case");
+    }
+
+    {   # make sure we get an error when \p{} cannot load Unicode tables
+        fresh_perl_like(<<'        prog that cannot load uni tables',
+            BEGIN {
+                @INC = '../lib';
+                require utf8; require 'utf8_heavy.pl';
+                @INC = ();
+            }
+            $name = 'A B';
+            if ($name =~ /(\p{IsUpper}) (\p{IsUpper})/){
+                print "It's good! >$1< >$2<\n";
+            } else {
+                print "It's not good...\n";
+            }
+        prog that cannot load uni tables
+                  qr/^Can't locate unicore\/Heavy\.pl(?x:
+                   )|^Can't find Unicode property definition/,
+                  undef,
+                 '\p{} should not fail silently when uni tables evanesce');
+    }
 } # End of sub run_tests
 
 1;

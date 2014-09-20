@@ -957,6 +957,13 @@ unable to locate this library.  See L<DynaLoader>.
 functioning as a class, but that package doesn't define that particular
 method, nor does any of its base classes.  See L<perlobj>.
 
+=item Can't locate object method "%s" via package "%s" (perhaps you forgot
+to load "%s"?)
+
+(F) You called a method on a class that did not exist, and the method
+could not be found in UNIVERSAL.  This often means that a method
+requires a package that has not been loaded.
+
 =item Can't locate package %s for @%s::ISA
 
 (W syntax) The @ISA array contained the name of another package that
@@ -1328,6 +1335,18 @@ Note that ASCII characters that don't map to control characters are
 discouraged, and will generate the warning (when enabled)
 L</""\c%c" is more clearly written simply as "%s"">.
 
+=item Character in 'C' format overflow in pack
+
+(W pack) You tried converting an infinity or not-a-number to an
+unsigned character, which makes no sense.  Perl behaved as if you
+tried to pack 0xFF.
+
+=item Character in 'c' format overflow in pack
+
+(W pack) You tried converting an infinity or not-a-number to a
+signed character, which makes no sense.  Perl behaved as if you
+tried to pack 0xFF.
+
 =item Character in 'C' format wrapped in pack
 
 (W pack) You said
@@ -1435,9 +1454,10 @@ underlying byte is stored as a character, with utf8::encode().
 =item "\c%c" is more clearly written simply as "%s"
 
 (W syntax) The C<\cI<X>> construct is intended to be a way to specify
-non-printable characters.  You used it for a printable one, which is better
-written as simply itself, perhaps preceded by a backslash for non-word
-characters.
+non-printable characters.  You used it for a printable one, which
+is better written as simply itself, perhaps preceded by a backslash
+for non-word characters.  Doing it the way you did is not portable
+between ASCII and EBCDIC platforms.
 
 =item Cloning substitution context is unimplemented
 
@@ -2091,7 +2111,8 @@ is experimental, so its behavior may change or even be removed
 in any future release of perl.  See the explanation under
 L<perlsyn/Experimental Details on given and when>.
 
-=item Global symbol "%s" requires explicit package name
+=item Global symbol "%s" requires explicit package name (did you forget to
+declare "my %s"?)
 
 (F) You've said "use strict" or "use strict vars", which indicates 
 that all variables must either be lexically scoped (using "my" or "state"), 
@@ -2181,12 +2202,12 @@ Further error messages would likely be uninformative.
 
 =item Hexadecimal float: exponent overflow
 
-(W overflow) The hexadecimal floating point has larger exponent
+(W overflow) The hexadecimal floating point has a larger exponent
 than the floating point supports.
 
 =item Hexadecimal float: exponent underflow
 
-(W overflow) The hexadecimal floating point has smaller exponent
+(W overflow) The hexadecimal floating point has a smaller exponent
 than the floating point supports.
 
 =item Hexadecimal float: internal error
@@ -2209,7 +2230,7 @@ long double formats, or by 64-bit integers not being available
 =item Hexadecimal float: unsupported long double format
 
 (F) You have configured Perl to use long doubles but
-the internals of the long double format are unknown,
+the internals of the long double format are unknown;
 therefore the hexadecimal float output is impossible.
 
 =item Hexadecimal number > 0xffffffff non-portable
@@ -2228,7 +2249,7 @@ of Perl are likely to eliminate these arbitrary limitations.
 =item Ignoring zero length \N{} in character class in regex; marked by
 S<<-- HERE> in m/%s/
 
-(W regexp) Named Unicode character escapes C<(\N{...})> may return a
+(W regexp) Named Unicode character escapes (C<\N{...}>) may return a
 zero-length sequence.  When such an escape is used in a character class
 its behaviour is not well defined.  Check that the correct escape has
 been used, and the correct charname handler is in scope.
@@ -2590,8 +2611,14 @@ a module that is a MRO plugin.  See L<mro> and L<perlmroapi>.
 =item Invalid negative number (%s) in chr
 
 (W utf8) You passed a negative number to C<chr>.  Negative numbers are
-not valid characters numbers, so it return the Unicode replacement
+not valid character numbers, so it returns the Unicode replacement
 character (U+FFFD).
+
+=item Invalid number (%f) in chr
+
+(W utf8) You passed an invalid number (like an infinity or
+not-a-number) to C<chr>.  Those are not valid character numbers,
+so it return the Unicode replacement character (U+FFFD).
 
 =item invalid option -D%c, use -D'' to see choices
 
@@ -3343,15 +3370,23 @@ bracketed character class, for the same reason that C<.> in a character
 class loses its specialness: it matches almost everything, which is
 probably not what you want.
 
-=item \N{} in character class restricted to one character in regex; marked
+=item \N{} in inverted character class or as a range end-point is restricted to one character in regex; marked
 by S<<-- HERE> in m/%s/
 
-(F) Named Unicode character escapes C<(\N{...})> may return a
-multi-character sequence.  Such an escape may not be used in
-a character class, because character classes always match one
-character of input.  Check that the correct escape has been used,
-and the correct charname handler is in scope.  The S<<-- HERE> shows
-whereabouts in the regular expression the problem was discovered.
+(F) Named Unicode character escapes (C<\N{...}>) may return a
+multi-character sequence.  Even though a character class is
+supposed to match just one character of input, perl will match the
+whole thing correctly, except when the class is inverted (C<[^...]>),
+or the escape is the beginning or final end point of a range.  The
+mathematically logical behavior for what matches when inverting
+is very different from what people expect, so we have decided to
+forbid it.  Similarly unclear is what should be generated when the
+C<\N{...}> is used as one of the end points of the range, such as in
+
+ [\x{41}-\N{ARABIC SEQUENCE YEH WITH HAMZA ABOVE WITH AE}]
+
+What is meant here is unclear, as the C<\N{...}> escape is a sequence
+of code points, so this is made an error.
 
 =item \N{NAME} must be resolved by the lexer in regex; marked by
 S<<-- HERE> in m/%s/
@@ -3983,7 +4018,7 @@ data.
 (P) While attempting folding constants an exception other than an C<eval>
 failure was caught.
 
-=item panic: frexp
+=item panic: frexp: %f
 
 (P) The library function frexp() failed, making printf("%f") impossible.
 
@@ -4192,12 +4227,6 @@ the nesting limit is exceeded.
 (F) An error occurred during the implicit output invoked by the C<-p>
 command-line switch.  (This output goes to STDOUT unless you've
 redirected it with select().)
-
-=item (perhaps you forgot to load "%s"?)
-
-(F) This is an educated guess made in conjunction with the message
-"Can't locate object method \"%s\" via package \"%s\"".  It often means
-that a method requires a package that has not been loaded.
 
 =item Perl folding rules are not up-to-date for 0x%X; please use the perlbug
 utility to report; in regex; marked by S<<-- HERE> in m/%s/
@@ -6488,9 +6517,14 @@ You need to add either braces or blanks to disambiguate.
 =item Using just the first character returned by \N{} in character class in 
 regex; marked by S<<-- HERE> in m/%s/
 
-(W regexp) A charnames handler may return a sequence of more than one
-character.  Currently all but the first one are discarded when used in
-a regular expression pattern bracketed character class.
+(W regexp) Named Unicode character escapes C<(\N{...})> may return
+a multi-character sequence.  Even though a character class is
+supposed to match just one character of input, perl will match
+the whole thing correctly, except when the class is inverted
+(C<[^...]>), or the escape is the beginning or final end point of
+a range.  For these, what should happen isn't clear at all.  In
+these circumstances, Perl discards all but the first character
+of the returned sequence, which is not likely what you want.
 
 =item Using !~ with %s doesn't make sense
 
@@ -6754,7 +6788,7 @@ Something Very Wrong.
 
 =item Zero length \N{} in regex; marked by S<<-- HERE> in m/%s/
 
-(F) Named Unicode character escapes C<(\N{...})> may return a zero-length
+(F) Named Unicode character escapes (C<\N{...}>) may return a zero-length
 sequence.  Such an escape was used in an extended character class, i.e.
 C<(?[...])>, which is not permitted.  Check that the correct escape has
 been used, and the correct charnames handler is in scope.  The S<<-- HERE>

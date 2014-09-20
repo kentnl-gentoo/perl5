@@ -95,7 +95,6 @@ my %skip;
 
 my %skip_versions = (
 	   # 'some/sample/file.pm' => [ '1.23', '1.24' ],
-	   'dist/threads/lib/threads.pm' => [ '1.83' ],
 	  );
 
 my $skip_dirs = qr|^t/lib|;
@@ -120,6 +119,7 @@ sub pm_file_from_xs {
 			 # look for a .pm in lib/ based on that:
 			 my ($path) = shift =~ m!^(.*)/!;
 			 my ($last) = $path =~ m!([^/]+)\z!;
+			 $last = 'List-Util' if $last eq 'Scalar-List-Utils';
 			 $last =~ tr !-!/!;
 			 return "$path/lib/$last";
 		     }) {

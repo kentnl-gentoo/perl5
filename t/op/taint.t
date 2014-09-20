@@ -9,15 +9,14 @@
 
 BEGIN {
     chdir 't' if -d 't';
-    @INC = '../lib';
     require './test.pl';
-    skip_all_if_miniperl("no dynamic loading on miniperl, no re");
+    set_up_inc('../lib');
 }
 
 use strict;
 use Config;
 
-plan tests => 800;
+plan tests => 801;
 
 $| = 1;
 
@@ -1513,7 +1512,7 @@ SKIP: {
     }
 
     SKIP: {
-        skip "no Fcntl", 18 unless $has_fcntl;
+        skip "no Fcntl", 36 unless $has_fcntl;
 
 	my $foo = tempfile();
 	my $evil = $foo . $TAINT;
@@ -2322,6 +2321,20 @@ SKIP: {
 $::x = "foo";
 $_ = "$TAINT".reset "x";
 is eval { eval $::x.1 }, 1, 'reset does not taint undef';
+
+# [perl #122669]
+{
+    # See the comment above the first formline test.
+    local $ENV{PATH} = $ENV{PATH};
+    $ENV{PATH} = $old_env_path if $Is_MSWin32;
+    is runperl(
+       switches => [ '-T' ],
+       prog => 'use constant K=>$^X; 0 if K; BEGIN{} use strict; '
+              .'print 122669, qq-\n-',
+       stderr => 1,
+     ), "122669\n",
+        'tainted constant as logop condition should not prevent "use"';
+}
 
 # This may bomb out with the alarm signal so keep it last
 SKIP: {

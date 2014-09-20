@@ -405,6 +405,10 @@ d_accessx (d_accessx.U):
 	This variable conditionally defines the HAS_ACCESSX symbol, which
 	indicates to the C program that the accessx() routine is available.
 
+d_acosh (d_acosh.U):
+	This variable conditionally defines the HAS_ACOSH symbol, which
+	indicates to the C program that the acosh() routine is available.
+
 d_aintl (d_aintl.U):
 	This variable conditionally defines the HAS_AINTL symbol, which
 	indicates to the C program that the aintl() routine is available.
@@ -804,6 +808,10 @@ d_fds_bits (d_fd_set.U):
 	a half-fast job and neglected to provide the macros to manipulate
 	an fd_set, HAS_FDS_BITS will let us know how to fix the gaffe.
 
+d_fegetround (d_fegetround.U):
+	This variable conditionally defines HAS_FEGETROUND if fegetround() is
+	available to get the floating point rounding mode.
+
 d_fgetpos (d_fgetpos.U):
 	This variable conditionally defines HAS_FGETPOS if fgetpos() is
 	available to get the file position indicator.
@@ -838,6 +846,14 @@ d_fp_class (d_fp_class.U):
 	This variable conditionally defines the HAS_FP_CLASS symbol, which
 	indicates to the C program that the fp_class() routine is available.
 
+d_fp_classify (d_fpclassify.U):
+	This variable conditionally defines the HAS_FP_CLASSIFY symbol, which
+	indicates to the C program that the fp_classify() routine is available.
+
+d_fp_classl (d_fp_classl.U):
+	This variable conditionally defines the HAS_FP_CLASSL symbol, which
+	indicates to the C program that the fp_classl() routine is available.
+
 d_fpathconf (d_pathconf.U):
 	This variable conditionally defines the HAS_FPATHCONF symbol, which
 	indicates to the C program that the pathconf() routine is available
@@ -855,6 +871,10 @@ d_fpclassify (d_fpclassify.U):
 d_fpclassl (d_fpclassl.U):
 	This variable conditionally defines the HAS_FPCLASSL symbol, which
 	indicates to the C program that the fpclassl() routine is available.
+
+d_fpgetround (d_fpgetround.U):
+	This variable conditionally defines HAS_FPGETROUND if fpgetround()
+	is available to get the floating point rounding mode.
 
 d_fpos64_t (d_fpos64_t.U):
 	This symbol will be defined if the C compiler supports fpos64_t.
@@ -1309,9 +1329,17 @@ d_isfinite (d_isfinite.U):
 	This variable conditionally defines the HAS_ISFINITE symbol, which
 	indicates to the C program that the isfinite() routine is available.
 
+d_isfinitel (d_isfinitel.U):
+	This variable conditionally defines the HAS_ISFINITEL symbol, which
+	indicates to the C program that the isfinitel() routine is available.
+
 d_isinf (d_isinf.U):
 	This variable conditionally defines the HAS_ISINF symbol, which
 	indicates to the C program that the isinf() routine is available.
+
+d_isinfl (d_isinfl.U):
+	This variable conditionally defines the HAS_ISINFL symbol, which
+	indicates to the C program that the isinfl() routine is available.
 
 d_isnan (d_isnan.U):
 	This variable conditionally defines the HAS_ISNAN symbol, which
@@ -1320,6 +1348,14 @@ d_isnan (d_isnan.U):
 d_isnanl (d_isnanl.U):
 	This variable conditionally defines the HAS_ISNANL symbol, which
 	indicates to the C program that the isnanl() routine is available.
+
+d_j0 (d_j0.U):
+	This variable conditionally defines the HAS_J0 symbol, which
+	indicates to the C program that the j0() routine is available.
+
+d_j0l (d_j0.U):
+	This variable conditionally defines the HAS_J0L symbol, which
+	indicates to the C program that the j0l() routine is available.
 
 d_killpg (d_killpg.U):
 	This variable conditionally defines the HAS_KILLPG symbol, which
@@ -1336,7 +1372,7 @@ d_ldbl_dig (d_ldbl_dig.U):
 	header files provide LDBL_DIG, which is the number of significant
 	digits in a long double precision number.
 
-d_ldexpl (d_ldexpl.U):
+d_ldexpl (d_longdbl.U):
 	This variable conditionally defines the HAS_LDEXPL symbol, which
 	indicates to the C program that the ldexpl() routine is available.
 
@@ -2413,6 +2449,12 @@ d_truncate (d_truncate.U):
 	This variable conditionally defines HAS_TRUNCATE if truncate() is
 	available to truncate files.
 
+d_truncl (d_truncl.U):
+	This variable conditionally defines the HAS_TRUNCL symbol, which
+	indicates to the C program that the truncl() routine is available
+	to round long doubles towards zero. If copysignl is also present,
+	we can emulate modfl.
+
 d_ttyname_r (d_ttyname_r.U):
 	This variable conditionally defines the HAS_TTYNAME_R symbol,
 	which indicates to the C program that the ttyname_r()
@@ -3086,6 +3128,11 @@ i_fcntl (i_fcntl.U):
 	This variable controls the value of I_FCNTL (which tells
 	the C program to include <fcntl.h>).
 
+i_fenv (i_fenv.U):
+	This variable conditionally defines the I_FENV symbol, which
+	indicates to the C program that <fenv.h> exists and should
+	be included.
+
 i_float (i_float.U):
 	This variable conditionally defines the I_FLOAT symbol, and indicates
 	whether a C program may include <float.h> to get symbols like DBL_MAX
@@ -3208,6 +3255,10 @@ i_pwd (i_pwd.U):
 	This variable conditionally defines I_PWD, which indicates
 	to the C program that it should include <pwd.h>.
 
+i_quadmath (i_quadmath.U):
+	This variable conditionally defines I_QUADMATH, which indicates
+	to the C program that it should include <quadmath.h>.
+
 i_rpcsvcdbm (i_dbm.U):
 	This variable conditionally defines the I_RPCSVC_DBM symbol, which
 	indicates to the C program that <rpcsvc/dbm.h> exists and should
@@ -3239,6 +3290,11 @@ i_stdbool (i_stdbool.U):
 i_stddef (i_stddef.U):
 	This variable conditionally defines the I_STDDEF symbol, which
 	indicates to the C program that <stddef.h> exists and should
+	be included.
+
+i_stdint (i_stdint.U):
+	This variable conditionally defines the I_STDINT symbol, which
+	indicates to the C program that <stdint.h> exists and should
 	be included.
 
 i_stdlib (i_stdlib.U):
@@ -3800,7 +3856,7 @@ loclibpth (libpth.U):
 	libraries.  It is prepended to libpth, and is intended to be easily
 	set from the command line.
 
-longdblkind (longdblkind.U):
+longdblkind (d_longdbl.U):
 	This variable, if defined, encodes the type of a long double:
 	0 = double, 1 = IEEE 754 128-bit big little endian,
 	2 = IEEE 754 128-bit big big endian, 3 = x86 80-bit little endian,
@@ -5191,6 +5247,11 @@ useposix (Extensions.U):
 	use for this currently is to allow an easy mechanism
 	for hints files to indicate that POSIX will not compile
 	on a particular system.
+
+usequadmath (usequadmath.U):
+	This variable conditionally defines the USE_QUADMATH symbol,
+	and indicates that the quadmath library __float128 long doubles
+	should be used when available.
 
 usereentrant (usethreads.U):
 	This variable conditionally defines the USE_REENTRANT_API symbol,

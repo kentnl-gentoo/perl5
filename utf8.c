@@ -2273,6 +2273,14 @@ Perl_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 minbits
 SV*
 Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 minbits, I32 none, SV* invlist, U8* const flags_p)
 {
+
+    /*NOTE NOTE NOTE - If you want to use "return" in this routine you MUST
+     * use the following define */
+
+#define CORE_SWASH_INIT_RETURN(x)   \
+    PL_curpm= old_PL_curpm;         \
+    return x
+
     /* Initialize and return a swash, creating it if necessary.  It does this
      * by calling utf8_heavy.pl in the general case.  The returned value may be
      * the swash's inversion list instead if the input parameters allow it.
@@ -2317,6 +2325,8 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
      *
      * <invlist> is only valid for binary properties */
 
+    PMOP *old_PL_curpm= PL_curpm; /* save away the old PL_curpm */
+
     SV* retval = &PL_sv_undef;
     HV* swash_hv = NULL;
     const int invlist_swash_boundary =
@@ -2327,6 +2337,10 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
 
     assert(listsv != &PL_sv_undef || strNE(name, "") || invlist);
     assert(! invlist || minbits == 1);
+
+    PL_curpm= NULL; /* reset PL_curpm so that we dont get confused between the regex
+                       that triggered the swash init and the swash init perl logic itself.
+                       See perl #122747 */
 
     /* If data was passed in to go out to utf8_heavy to find the swash of, do
      * so */
@@ -2343,7 +2357,6 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
 	PUSHSTACKi(PERLSI_MAGIC);
 	ENTER;
 	SAVEHINTS();
-	save_re_context();
 	/* We might get here via a subroutine signature which uses a utf8
 	 * parameter name, at which point PL_subname will have been set
 	 * but not yet used. */
@@ -2355,13 +2368,9 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
 	    ENTER;
 	    if ((errsv_save = GvSV(PL_errgv))) SAVEFREESV(errsv_save);
 	    GvSV(PL_errgv) = NULL;
+#ifndef NO_TAINT_SUPPORT
 	    /* It is assumed that callers of this routine are not passing in
 	     * any user derived data.  */
-	    /* Need to do this after save_re_context() as it will set
-	     * PL_tainted to 1 while saving $1 etc (see the code after getrx:
-	     * in Perl_magic_get).  Even line to create errsv_save can turn on
-	     * PL_tainted.  */
-#ifndef NO_TAINT_SUPPORT
 	    SAVEBOOL(TAINT_get);
 	    TAINT_NOT;
 #endif
@@ -2416,7 +2425,7 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
 
 		/* If caller wants to handle missing properties, let them */
 		if (flags_p && *flags_p & _CORE_SWASH_INIT_RETURN_IF_UNDEF) {
-		    return NULL;
+                    CORE_SWASH_INIT_RETURN(NULL);
 		}
 		Perl_croak(aTHX_
 			   "Can't find Unicode property definition \"%"SVf"\"",
@@ -2518,7 +2527,8 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
         }
     }
 
-    return retval;
+    CORE_SWASH_INIT_RETURN(retval);
+#undef CORE_SWASH_INIT_RETURN
 }
 
 

@@ -300,6 +300,8 @@ foo
     can_ok $f, 'LINES';
 }
 
+is B::safename("\cLAST_FH"), "^LAST_FH", 'basic safename test';
+
 my $sub1 = sub {die};
 { no warnings 'once'; no strict; *Peel:: = *{"Pe\0e\x{142}::"} }
 my $sub2 = eval 'package Peel; sub {die}';
@@ -404,10 +406,10 @@ SKIP:
         my $cv = B::svref_2object(\&bar);
         ok($cv, "make a B::CV from a lexical sub reference");
         isa_ok($cv, "B::CV");
-        my $gv = $cv->GV;
-        isa_ok($gv, "B::SPECIAL", "GV on a lexical sub");
         my $hek = $cv->NAME_HEK;
         is($hek, "bar", "check the NAME_HEK");
+        my $gv = $cv->GV;
+        isa_ok($gv, "B::GV", "GV on a lexical sub");
     }
     1;
 EOS
@@ -438,6 +440,44 @@ SKIP: {
     is($second->lastsib, 1,  'op_parent: second sibling: lastsib');
     is($$lineseq,  ${$first->parent},   'op_parent: first  sibling okay');
     is($$lineseq,  ${$second->parent},  'op_parent: second sibling okay');
+}
+
+
+# make sure ->sv, -gv methods do the right thing on threaded builds
+{
+
+    # for some reason B::walkoptree only likes a sub name, not a code ref
+    my ($gv, $sv);
+    sub gvsv_const {
+        # make the early pad slots something unlike a threaded const or
+        # gvsv
+        my ($dummy1, $dummy2, $dummy3, $dummy4) = qw(foo1 foo2 foo3 foo4);
+        my $self = shift;
+        if ($self->name eq 'gvsv') {
+            $gv = $self->gv;
+        }
+        elsif ($self->name eq 'const') {
+            $sv = $self->sv;
+        }
+    };
+
+    B::walkoptree(B::svref_2object(sub {our $x = 1})->ROOT, "::gvsv_const");
+    ok(defined $gv, "gvsv->gv seen");
+    ok(defined $sv, "const->sv seen");
+    if ($Config::Config{useithreads}) {
+        # should get NULLs
+        is(ref($gv), "B::SPECIAL", "gvsv->gv is special");
+        is(ref($sv), "B::SPECIAL", "const->sv is special");
+        is($$gv, 0, "gvsv->gv special is 0 (NULL)");
+        is($$sv, 0, "const->sv special is 0 (NULL)");
+    }
+    else {
+        is(ref($gv), "B::GV", "gvsv->gv is GV");
+        is(ref($sv), "B::IV", "const->sv is IV");
+        pass();
+        pass();
+    }
+
 }
 
 

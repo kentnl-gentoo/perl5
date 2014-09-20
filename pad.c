@@ -56,7 +56,8 @@ at that depth of recursion into the CV.  The 0th slot of a frame AV is an
 AV which is @_.  Other entries are storage for variables and op targets.
 
 Iterating over the PADNAMELIST iterates over all possible pad
-items.  Pad slots for targets (SVs_PADTMP) and GVs end up having &PL_sv_no
+items.  Pad slots for targets (SVs_PADTMP)
+and GVs end up having &PL_sv_undef
 "names", while slots for constants have &PL_sv_no "names" (see
 pad_alloc()).  That &PL_sv_no is used is an implementation detail subject
 to change.  To test for it, use C<PadnamePV(name) && !PadnameLEN(name)>.
@@ -229,6 +230,7 @@ Perl_pad_new(pTHX_ int flags)
 	if (! (flags & padnew_CLONE)) {
 	    SAVESPTR(PL_comppad_name);
 	    SAVEI32(PL_padix);
+	    SAVEI32(PL_constpadix);
 	    SAVEI32(PL_comppad_name_fill);
 	    SAVEI32(PL_min_intro_pending);
 	    SAVEI32(PL_max_intro_pending);
@@ -285,6 +287,7 @@ Perl_pad_new(pTHX_ int flags)
 	PL_comppad_name_fill = 0;
 	PL_min_intro_pending = 0;
 	PL_padix	     = 0;
+	PL_constpadix	     = 0;
 	PL_cv_has_eval	     = 0;
     }
 
@@ -316,10 +319,17 @@ children can still follow the full lexical scope chain.
 void
 Perl_cv_undef(pTHX_ CV *cv)
 {
+    PERL_ARGS_ASSERT_CV_UNDEF;
+    cv_undef_flags(cv, 0);
+}
+
+void
+Perl_cv_undef_flags(pTHX_ CV *cv, U32 flags)
+{
     const PADLIST *padlist = CvPADLIST(cv);
     bool const slabbed = !!CvSLABBED(cv);
 
-    PERL_ARGS_ASSERT_CV_UNDEF;
+    PERL_ARGS_ASSERT_CV_UNDEF_FLAGS;
 
     DEBUG_X(PerlIO_printf(Perl_debug_log,
 	  "CV undef: cv=0x%"UVxf" comppad=0x%"UVxf"\n",
@@ -362,8 +372,13 @@ Perl_cv_undef(pTHX_ CV *cv)
 #endif
     SvPOK_off(MUTABLE_SV(cv));		/* forget prototype */
     sv_unmagic((SV *)cv, PERL_MAGIC_checkcall);
-    if (CvNAMED(cv)) CvNAME_HEK_set(cv, NULL);
-    else	     CvGV_set(cv, NULL);
+    if (!(flags & CV_UNDEF_KEEP_NAME)) {
+	if (CvNAMED(cv)) {
+	    CvNAME_HEK_set(cv, NULL);
+	    CvNAMED_off(cv);
+	}
+	else CvGV_set(cv, NULL);
+    }
 
     /* This statement and the subsequence if block was pad_undef().  */
     pad_peg("pad_undef");
@@ -466,9 +481,10 @@ Perl_cv_undef(pTHX_ CV *cv)
 	CvXSUB(cv) = NULL;
     }
     /* delete all flags except WEAKOUTSIDE and CVGV_RC, which indicate the
-     * ref status of CvOUTSIDE and CvGV, and ANON, which pp_entersub uses
-     * to choose an error message */
-    CvFLAGS(cv) &= (CVf_WEAKOUTSIDE|CVf_CVGV_RC|CVf_ANON);
+     * ref status of CvOUTSIDE and CvGV, and ANON, NAMED and
+     * LEXICAL, which are used to determine the sub's name.  */
+    CvFLAGS(cv) &= (CVf_WEAKOUTSIDE|CVf_CVGV_RC|CVf_ANON|CVf_LEXICAL
+		   |CVf_NAMED);
 }
 
 /*
@@ -730,30 +746,42 @@ Perl_pad_alloc(pTHX_ I32 optype, U32 tmptype)
     else {
 	/* For a tmp, scan the pad from PL_padix upwards
 	 * for a slot which has no name and no active value.
+	 * For a constant, likewise, but use PL_constpadix.
 	 */
 	SV * const * const names = AvARRAY(PL_comppad_name);
         const SSize_t names_fill = AvFILLp(PL_comppad_name);
+	const bool konst = cBOOL(tmptype & SVf_READONLY);
+	retval = konst ? PL_constpadix : PL_padix;
 	for (;;) {
 	    /*
 	     * Entries that close over unavailable variables
 	     * in outer subs contain values not marked PADMY.
 	     * Thus we must skip, not just pad values that are
 	     * marked as current pad values, but also those with names.
+	     * If pad_reset is enabled, ‘current’ means different
+	     * things depending on whether we are allocating a con-
+	     * stant or a target.  For a target, things marked PADTMP
+	     * can be reused; not so for constants.
 	     */
-	    if (++PL_padix <= names_fill &&
-		   (sv = names[PL_padix]) && sv != &PL_sv_undef)
+	    if (++retval <= names_fill &&
+		   (sv = names[retval]) && sv != &PL_sv_undef)
 		continue;
-	    sv = *av_fetch(PL_comppad, PL_padix, TRUE);
-	    if (!(SvFLAGS(sv) & (SVs_PADTMP | SVs_PADMY)) &&
-		!IS_PADGV(sv))
+	    sv = *av_fetch(PL_comppad, retval, TRUE);
+	    if (!(SvFLAGS(sv) &
+#ifdef USE_PAD_RESET
+		    (SVs_PADMY|(konst ? SVs_PADTMP : 0))
+#else
+		    (SVs_PADMY|SVs_PADTMP)
+#endif
+		 ))
 		break;
 	}
-	if (tmptype & SVf_READONLY) {
-	    av_store(PL_comppad_name, PL_padix, &PL_sv_no);
+	if (konst) {
+	    av_store(PL_comppad_name, retval, &PL_sv_no);
 	    tmptype &= ~SVf_READONLY;
 	    tmptype |= SVs_PADTMP;
 	}
-	retval = PL_padix;
+	*(konst ? &PL_constpadix : &PL_padix) = retval;
     }
     SvFLAGS(sv) |= tmptype;
     PL_curpad = AvARRAY(PL_comppad);
@@ -954,13 +982,17 @@ Perl_pad_findmy_pvn(pTHX_ const char *namepv, STRLEN namelen, U32 flags)
     if ((PADOFFSET)offset != NOT_IN_PAD) 
 	return offset;
 
+    /* Skip the ‘our’ hack for subroutines, as the warning does not apply.
+     */
+    if (*namepv == '&') return NOT_IN_PAD;
+
     /* look for an our that's being introduced; this allows
      *    our $foo = 0 unless defined $foo;
      * to not give a warning. (Yes, this is a hack) */
 
     nameav = PadlistARRAY(CvPADLIST(PL_compcv))[0];
     name_svp = AvARRAY(nameav);
-    for (offset = AvFILLp(nameav); offset > 0; offset--) {
+    for (offset = PadnamelistMAXNAMED(nameav); offset > 0; offset--) {
         const SV * const namesv = name_svp[offset];
 	if (namesv && PadnameLEN(namesv) == namelen
 	    && !SvFAKE(namesv)
@@ -1467,6 +1499,12 @@ Perl_pad_block_start(pTHX_ int full)
     PL_min_intro_pending = 0;
     SAVEI32(PL_comppad_name_fill);
     SAVEI32(PL_padix_floor);
+    /* PL_padix_floor is what PL_padix is reset to at the start of each
+       statement, by pad_reset().  We set it when entering a new scope
+       to keep things like this working:
+	    print "$foo$bar", do { this(); that() . "foo" };
+       We must not let "$foo$bar" and the later concatenation share the
+       same target.  */
     PL_padix_floor = PL_padix;
     PL_pad_reset_pending = FALSE;
 }
@@ -1610,7 +1648,7 @@ Perl_pad_swipe(pTHX_ PADOFFSET po, bool refadjust)
 
     /* if pad tmps aren't shared between ops, then there's no need to
      * create a new tmp when an existing op is freed */
-#ifdef USE_BROKEN_PAD_RESET
+#ifdef USE_PAD_RESET
     PL_curpad[po] = newSV(0);
     SvPADTMP_on(PL_curpad[po]);
 #else
@@ -1623,8 +1661,11 @@ Perl_pad_swipe(pTHX_ PADOFFSET po, bool refadjust)
 	}
 	PadnamelistARRAY(PL_comppad_name)[po] = &PL_sv_undef;
     }
-    if ((I32)po < PL_padix)
-	PL_padix = po - 1;
+    /* Use PL_constpadix here, not PL_padix.  The latter may have been
+       reset by pad_reset.  We don’t want pad_alloc to have to scan the
+       whole pad when allocating a constant. */
+    if ((I32)po < PL_constpadix)
+	PL_constpadix = po - 1;
 }
 
 /*
@@ -1635,16 +1676,15 @@ Mark all the current temporaries for reuse
 =cut
 */
 
-/* XXX pad_reset() is currently disabled because it results in serious bugs.
- * It causes pad temp TARGs to be shared between OPs. Since TARGs are pushed
- * on the stack by OPs that use them, there are several ways to get an alias
- * to  a shared TARG.  Such an alias will change randomly and unpredictably.
- * We avoid doing this until we can think of a Better Way.
- * GSAR 97-10-29 */
+/* pad_reset() causes pad temp TARGs (operator targets) to be shared
+ * between OPs from different statements.  During compilation, at the start
+ * of each statement pad_reset resets PL_padix back to its previous value.
+ * When allocating a target, pad_alloc begins its scan through the pad at
+ * PL_padix+1.  */
 static void
 S_pad_reset(pTHX)
 {
-#ifdef USE_BROKEN_PAD_RESET
+#ifdef USE_PAD_RESET
     if (AvARRAY(PL_comppad) != PL_curpad)
 	Perl_croak(aTHX_ "panic: pad_reset curpad, %p!=%p",
 		   AvARRAY(PL_comppad), PL_curpad);
@@ -1657,11 +1697,6 @@ S_pad_reset(pTHX)
     );
 
     if (!TAINTING_get) {	/* Can't mix tainted and non-tainted temporaries. */
-        I32 po;
-	for (po = AvMAX(PL_comppad); po > PL_padix_floor; po--) {
-	    if (PL_curpad[po] && !SvIMMORTAL(PL_curpad[po]))
-		SvPADTMP_off(PL_curpad[po]);
-	}
 	PL_padix = PL_padix_floor;
     }
 #endif
@@ -1743,8 +1778,7 @@ Perl_pad_tidy(pTHX_ padtidy_type type)
 	     * pad are anonymous subs, constants and GVs.
 	     * The rest are created anew during cloning.
 	     */
-	    if (!PL_curpad[ix] || SvIMMORTAL(PL_curpad[ix])
-		 || IS_PADGV(PL_curpad[ix]))
+	    if (!PL_curpad[ix] || SvIMMORTAL(PL_curpad[ix]))
 		continue;
 	    namesv = namep[ix];
 	    if (!(PadnamePV(namesv) &&
@@ -1767,12 +1801,9 @@ Perl_pad_tidy(pTHX_ padtidy_type type)
 	PADOFFSET ix;
 	for (ix = AvFILLp(PL_comppad); ix > 0; ix--) {
 	    if (!namep[ix]) namep[ix] = &PL_sv_undef;
-	    if (!PL_curpad[ix] || SvIMMORTAL(PL_curpad[ix])
-		 || IS_PADGV(PL_curpad[ix]) || IS_PADCONST(PL_curpad[ix]))
+	    if (!PL_curpad[ix] || SvIMMORTAL(PL_curpad[ix]))
 		continue;
-	    if (!SvPADMY(PL_curpad[ix])) {
-		SvPADTMP_on(PL_curpad[ix]);
-	    } else if (!SvFAKE(namep[ix])) {
+	    if (SvPADMY(PL_curpad[ix]) && !SvFAKE(namep[ix])) {
 		/* This is a work around for how the current implementation of
 		   ?{ } blocks in regexps interacts with lexicals.
 
@@ -1808,7 +1839,9 @@ Free the SV at offset po in the current pad.
 void
 Perl_pad_free(pTHX_ PADOFFSET po)
 {
+#ifndef USE_PAD_RESET
     SV *sv;
+#endif
     ASSERT_CURPAD_LEGAL("pad_free");
     if (!PL_curpad)
 	return;
@@ -1823,13 +1856,14 @@ Perl_pad_free(pTHX_ PADOFFSET po)
 	    PTR2UV(PL_comppad), PTR2UV(PL_curpad), (long)po)
     );
 
-
+#ifndef USE_PAD_RESET
     sv = PL_curpad[po];
     if (sv && sv != &PL_sv_undef && !SvPADMY(sv))
 	SvFLAGS(sv) &= ~SVs_PADTMP;
 
     if ((I32)po < PL_padix)
 	PL_padix = po - 1;
+#endif
 }
 
 /*
@@ -2060,20 +2094,26 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, bool newcv)
 			assert(SvTYPE(ppad[ix]) == SVt_PVCV);
 			subclones = 1;
 			sv = newSV_type(SVt_PVCV);
+			CvLEXICAL_on(sv);
 		    }
 		    else if (PadnameLEN(namesv)>1 && !PadnameIsOUR(namesv))
 		    {
 			/* my sub */
 			/* Just provide a stub, but name it.  It will be
 			   upgrade to the real thing on scope entry. */
+                        dVAR;
+			U32 hash;
+			PERL_HASH(hash, SvPVX_const(namesv)+1,
+				  SvCUR(namesv) - 1);
 			sv = newSV_type(SVt_PVCV);
 			CvNAME_HEK_set(
 			    sv,
 			    share_hek(SvPVX_const(namesv)+1,
 				      SvCUR(namesv) - 1
 					 * (SvUTF8(namesv) ? -1 : 1),
-				      0)
+				      hash)
 			);
+			CvLEXICAL_on(sv);
 		    }
 		    else sv = SvREFCNT_inc(ppad[ix]);
                 else if (sigil == '@')
@@ -2089,7 +2129,7 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, bool newcv)
 	    }
 	  }
 	}
-	else if (IS_PADGV(ppad[ix]) || (namesv && PadnamePV(namesv))) {
+	else if (namesv && PadnamePV(namesv)) {
 	    sv = SvREFCNT_inc_NN(ppad[ix]);
 	}
 	else {
@@ -2196,6 +2236,49 @@ Perl_cv_clone_into(pTHX_ CV *proto, CV *target)
 }
 
 /*
+=for apidoc cv_name
+
+Returns an SV containing the name of the CV, mainly for use in error
+reporting.  The CV may actually be a GV instead, in which case the returned
+SV holds the GV's name.  Anything other than a GV or CV is treated as a
+string already holding the sub name, but this could change in the future.
+
+An SV may be passed as a second argument.  If so, the name will be assigned
+to it and it will be returned.  Otherwise the returned SV will be a new
+mortal.
+
+=cut
+*/
+
+SV *
+Perl_cv_name(pTHX_ CV *cv, SV *sv)
+{
+    PERL_ARGS_ASSERT_CV_NAME;
+    if (!isGV_with_GP(cv) && SvTYPE(cv) != SVt_PVCV) {
+	if (sv) sv_setsv(sv,(SV *)cv);
+	return sv ? (sv) : (SV *)cv;
+    }
+    {
+	SV * const retsv = sv ? (sv) : sv_newmortal();
+    	if (SvTYPE(cv) == SVt_PVCV) {
+	    if (CvNAMED(cv)) {
+		if (CvLEXICAL(cv)) sv_sethek(retsv, CvNAME_HEK(cv));
+		else {
+		    sv_sethek(retsv, HvNAME_HEK(CvSTASH(cv)));
+		    sv_catpvs(retsv, "::");
+		    sv_cathek(retsv, CvNAME_HEK(cv));
+		}
+	    }
+	    else if (CvLEXICAL(cv))
+		sv_sethek(retsv, GvNAME_HEK(GvEGV(CvGV(cv))));
+	    else gv_efullname3(retsv, CvGV(cv), NULL);
+	}
+	else gv_efullname3(retsv,(GV *)cv,NULL);
+	return retsv;
+    }
+}
+
+/*
 =for apidoc m|void|pad_fixup_inner_anons|PADLIST *padlist|CV *old_cv|CV *new_cv
 
 For any anon CVs in the pad, change CvOUTSIDE of that CV from
@@ -2297,7 +2380,7 @@ Perl_pad_push(pTHX_ PADLIST *padlist, int depth)
 		    SvPADMY_on(sv);
 		}
 	    }
-	    else if (IS_PADGV(oldpad[ix]) || PadnamePV(names[ix])) {
+	    else if (PadnamePV(names[ix])) {
 		av_store(newpad, ix, SvREFCNT_inc_NN(oldpad[ix]));
 	    }
 	    else {
@@ -2433,8 +2516,7 @@ Perl_padlist_dup(pTHX_ PADLIST *srcpad, CLONE_PARAMS *param)
 			}
 		    }
 		}
-		else if (IS_PADGV(oldpad[ix])
-		      || (  names_fill >= ix && names[ix]
+		else if ((  names_fill >= ix && names[ix]
 			 && PadnamePV(names[ix])  )) {
 		    pad1a[ix] = sv_dup_inc(oldpad[ix], param);
 		}

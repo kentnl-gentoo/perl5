@@ -60,6 +60,9 @@ PERLVAR(I, markstack,	I32 *)		/* stack_sp locations we're
 PERLVAR(I, markstack_ptr, I32 *)
 PERLVAR(I, markstack_max, I32 *)
 
+PERLVARI(I, sawalias,	bool,	FALSE)	/* must enable common-vars
+					   pessimisation */
+
 #ifdef PERL_HASH_RANDOMIZE_KEYS
 #ifdef USE_PERL_PERTURB_KEYS
 PERLVARI(I, hash_rand_bits_enabled, U8, 1) /* used to randomize hash stuff 0 == no-random, 1 == random, 2 == determinsitic */
@@ -171,7 +174,7 @@ PERLVAR(I, statgv,	GV *)
 PERLVARI(I, statname,	SV *,	NULL)
 
 #ifdef HAS_TIMES
-/* Will be removed soon after v5.21.3. See RT #121351 */
+/* Will be removed soon after v5.21.4. See RT #121351 */
 PERLVAR(I, timesbuf,	struct tms)
 #endif
 
@@ -531,7 +534,9 @@ PERLVAR(I, subline,	I32)		/* line this subroutine began on */
 PERLVAR(I, min_intro_pending, I32)	/* start of vars to introduce */
 
 PERLVAR(I, max_intro_pending, I32)	/* end of vars to introduce */
-PERLVAR(I, padix,	I32)		/* max used index in current "register" pad */
+PERLVAR(I, padix,	I32)		/* lowest unused index - 1
+					   in current "register" pad */
+PERLVAR(I, constpadix,	I32)		/* lowest unused for constants */
 
 PERLVAR(I, padix_floor,	I32)		/* how low may inner block reset padix */
 
@@ -578,6 +583,7 @@ PERLVAR(I, numeric_radix_sv, SV *)	/* The radix separator if not '.' */
 PERLVAR(I, Latin1,	SV *)
 PERLVAR(I, UpperLatin1,	SV *)   /* Code points 128 - 255 */
 PERLVAR(I, AboveLatin1,	SV *)
+PERLVAR(I, InBitmap,	SV *)
 
 PERLVAR(I, NonL1NonFinalFold,   SV *)
 PERLVAR(I, HasMultiCharFold,   SV *)
@@ -733,7 +739,7 @@ PERLVAR(I, debug_pad,	struct perl_debug_pad)	/* always needed because of the re 
 /* Hook for File::Glob */
 PERLVARI(I, globhook,	globhook_t, NULL)
 
-/* The last unconditional member of the interpreter structure when 5.21.3 was
+/* The last unconditional member of the interpreter structure when 5.21.4 was
    released. The offset of the end of this is baked into a global variable in 
    any shared perl library which will allow a sanity test in future perl
    releases.  */

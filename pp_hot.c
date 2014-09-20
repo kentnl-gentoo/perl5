@@ -47,6 +47,7 @@ PP(pp_const)
 PP(pp_nextstate)
 {
     PL_curcop = (COP*)PL_op;
+    PL_sawalias = 0;
     TAINT_NOT;		/* Each statement is presumed innocent */
     PL_stack_sp = PL_stack_base + cxstack[cxstack_ix].blk_oldsp;
     FREETMPS;
@@ -62,8 +63,13 @@ PP(pp_gvsv)
 	PUSHs(save_scalar(cGVOP_gv));
     else
 	PUSHs(GvSVn(cGVOP_gv));
+    if (GvREFCNT(cGVOP_gv) > 1 || GvALIASED_SV(cGVOP_gv))
+	PL_sawalias = TRUE;
     RETURN;
 }
+
+
+/* also used for: pp_lineseq() pp_regcmaybe() pp_scalar() pp_scope() */
 
 PP(pp_null)
 {
@@ -92,8 +98,14 @@ PP(pp_gv)
 {
     dSP;
     XPUSHs(MUTABLE_SV(cGVOP_gv));
+    if (isGV(cGVOP_gv)
+     && (GvREFCNT(cGVOP_gv) > 1 || GvALIASED_SV(cGVOP_gv)))
+	PL_sawalias = TRUE;
     RETURN;
 }
+
+
+/* also used for: pp_andassign() */
 
 PP(pp_and)
 {
@@ -458,6 +470,9 @@ PP(pp_eq)
     RETURN;
 }
 
+
+/* also used for: pp_i_predec() pp_i_preinc() pp_predec() */
+
 PP(pp_preinc)
 {
     dSP;
@@ -478,6 +493,9 @@ PP(pp_preinc)
     return NORMAL;
 }
 
+
+/* also used for: pp_orassign() */
+
 PP(pp_or)
 {
     dSP;
@@ -490,6 +508,9 @@ PP(pp_or)
 	RETURNOP(cLOGOP->op_other);
     }
 }
+
+
+/* also used for: pp_dor() pp_dorassign() */
 
 PP(pp_defined)
 {
@@ -714,6 +735,9 @@ PP(pp_add)
     }
 }
 
+
+/* also used for: pp_aelemfast_lex() */
+
 PP(pp_aelemfast)
 {
     dSP;
@@ -763,6 +787,8 @@ PP(pp_pushre)
 }
 
 /* Oversized hot code. */
+
+/* also used for: pp_say() */
 
 PP(pp_print)
 {
@@ -857,6 +883,9 @@ PP(pp_print)
     XPUSHs(&PL_sv_undef);
     RETURN;
 }
+
+
+/* also used for: pp_rv2hv() */
 
 PP(pp_rv2av)
 {
@@ -1005,7 +1034,7 @@ PP(pp_aassign)
      * Don't bother if LHS is just an empty hash or array.
      */
 
-    if (    (PL_op->op_private & OPpASSIGN_COMMON)
+    if (    (PL_op->op_private & OPpASSIGN_COMMON || PL_sawalias)
 	&&  (
 	       firstlelem != lastlelem
 	    || ! ((sv = *firstlelem))
@@ -1917,7 +1946,6 @@ PP(pp_iter)
                 Perl_croak(aTHX_ "Use of freed value in iteration");
             }
             if (SvPADTMP(sv)) {
-                assert(!IS_PADGV(sv));
                 sv = newSVsv(sv);
             }
             else {
@@ -2435,7 +2463,6 @@ PP(pp_grepwhile)
 
 	src = PL_stack_base[*PL_markstack_ptr];
 	if (SvPADTMP(src)) {
-            assert(!IS_PADGV(src));
 	    src = PL_stack_base[*PL_markstack_ptr] = sv_mortalcopy(src);
 	    PL_tmps_floor++;
 	}
@@ -2595,15 +2622,15 @@ PP(pp_entersub)
 	SV* sub_name;
 
 	/* anonymous or undef'd function leaves us no recourse */
-	if (CvANON(cv) || !(gv = CvGV(cv))) {
-	    if (CvNAMED(cv))
-		DIE(aTHX_ "Undefined subroutine &%"HEKf" called",
-			   HEKfARG(CvNAME_HEK(cv)));
+	if (CvLEXICAL(cv) && CvHASGV(cv))
+	    DIE(aTHX_ "Undefined subroutine &%"SVf" called",
+		       SVfARG(cv_name(cv, NULL)));
+	if (CvANON(cv) || !CvHASGV(cv)) {
 	    DIE(aTHX_ "Undefined subroutine called");
 	}
 
 	/* autoloaded stub? */
-	if (cv != GvCV(gv)) {
+	if (cv != GvCV(gv = CvGV(cv))) {
 	    cv = GvCV(gv);
 	}
 	/* should call AUTOLOAD now? */
@@ -2697,7 +2724,6 @@ try_autoload:
 		if (*MARK)
 		{
 		    if (SvPADTMP(*MARK)) {
-                        assert(!IS_PADGV(*MARK));
 			*MARK = sv_mortalcopy(*MARK);
                     }
 		    SvTEMP_off(*MARK);
@@ -2766,7 +2792,6 @@ try_autoload:
 	    while (items--) {
 		mark++;
 		if (*mark && SvPADTMP(*mark)) {
-                    assert(!IS_PADGV(*mark));
 		    *mark = sv_mortalcopy(*mark);
                 }
 	    }
@@ -2804,17 +2829,8 @@ Perl_sub_crush_depth(pTHX_ CV *cv)
     if (CvANON(cv))
 	Perl_warner(aTHX_ packWARN(WARN_RECURSION), "Deep recursion on anonymous subroutine");
     else {
-        HEK *const hek = CvNAME_HEK(cv);
-        SV *tmpstr;
-        if (hek) {
-            tmpstr = sv_2mortal(newSVhek(hek));
-        }
-        else {
-            tmpstr = sv_newmortal();
-            gv_efullname3(tmpstr, CvGV(cv), NULL);
-        }
 	Perl_warner(aTHX_ packWARN(WARN_RECURSION), "Deep recursion on subroutine \"%"SVf"\"",
-		    SVfARG(tmpstr));
+		    SVfARG(cv_name(cv,NULL)));
     }
 }
 
@@ -3000,22 +3016,12 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	GV* iogv;
         STRLEN packlen;
         const char * const packname = SvPV_nomg_const(sv, packlen);
-        const bool packname_is_utf8 = !!SvUTF8(sv);
-        const HE* const he =
-	    (const HE *)hv_common(
-                PL_stashcache, NULL, packname, packlen,
-                packname_is_utf8 ? HVhek_UTF8 : 0, 0, NULL, 0
-	    );
-	  
-        if (he) { 
-            stash = INT2PTR(HV*,SvIV(HeVAL(he)));
-            DEBUG_o(Perl_deb(aTHX_ "PL_stashcache hit %p for '%"SVf"'\n",
-                             (void*)stash, SVfARG(sv)));
-            goto fetch;
-        }
+        const U32 packname_utf8 = SvUTF8(sv);
+        stash = gv_stashpvn(packname, packlen, packname_utf8 | GV_CACHE_ONLY);
+        if (stash) goto fetch;
 
 	if (!(iogv = gv_fetchpvn_flags(
-	        packname, packlen, SVf_UTF8 * packname_is_utf8, SVt_PVIO
+	        packname, packlen, packname_utf8, SVt_PVIO
 	     )) ||
 	    !(ob=MUTABLE_SV(GvIO(iogv))))
 	{
@@ -3027,16 +3033,8 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 				  SVfARG(meth));
 	    }
 	    /* assume it's a package name */
-	    stash = gv_stashpvn(packname, packlen, packname_is_utf8 ? SVf_UTF8 : 0);
-	    if (!stash)
-		packsv = sv;
-            else {
-	        SV* const ref = newSViv(PTR2IV(stash));
-	        (void)hv_store(PL_stashcache, packname,
-                                packname_is_utf8 ? -(I32)packlen : (I32)packlen, ref, 0);
-                DEBUG_o(Perl_deb(aTHX_ "PL_stashcache caching %p for '%"SVf"'\n",
-                                 (void*)stash, SVfARG(sv)));
-	    }
+	    stash = gv_stashpvn(packname, packlen, packname_utf8);
+	    if (!stash) packsv = sv;
 	    goto fetch;
 	}
 	/* it _is_ a filehandle name -- replace with a reference */

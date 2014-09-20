@@ -793,26 +793,14 @@ PP(pp_formline)
 
 	case FF_0DECIMAL: /* like FF_DECIMAL but for 0### */
 	    arg = *fpc++;
-#if defined(USE_LONG_DOUBLE)
 	    fmt = (const char *)
-		((arg & FORM_NUM_POINT) ?
-		 "%#0*.*" PERL_PRIfldbl : "%0*.*" PERL_PRIfldbl);
-#else
-	    fmt = (const char *)
-		((arg & FORM_NUM_POINT) ?
-		 "%#0*.*f"              : "%0*.*f");
-#endif
+		((arg & FORM_NUM_POINT) ? "%#0*.*" NVff : "%0*.*" NVff);
 	    goto ff_dec;
 
 	case FF_DECIMAL: /* do @##, ^##, where <arg>=(precision|flags) */
 	    arg = *fpc++;
-#if defined(USE_LONG_DOUBLE)
  	    fmt = (const char *)
-		((arg & FORM_NUM_POINT) ? "%#*.*" PERL_PRIfldbl : "%*.*" PERL_PRIfldbl);
-#else
-            fmt = (const char *)
-		((arg & FORM_NUM_POINT) ? "%#*.*f"              : "%*.*f");
-#endif
+		((arg & FORM_NUM_POINT) ? "%#*.*" NVff : "%*.*" NVff);
 	ff_dec:
 	    /* If the field is marked with ^ and the value is undefined,
 	       blank it out. */
@@ -837,11 +825,25 @@ PP(pp_formline)
                 int len;
                 DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED();
                 arg &= ~(FORM_NUM_POINT|FORM_NUM_BLANK);
+#ifdef USE_QUADMATH
+                {
+                    const char* qfmt = quadmath_format_single(fmt);
+                    int len;
+                    if (!qfmt)
+                        Perl_croak_nocontext("panic: quadmath invalid format \"%s\"", fmt);
+                    len = quadmath_snprintf(t, max, qfmt, (int) fieldsize, (int) arg, value);
+                    if (len == -1)
+                        Perl_croak_nocontext("panic: quadmath_snprintf failed, format \"%s\"", qfmt);
+                    if (qfmt != fmt)
+                        Safefree(fmt);
+                }
+#else
                 /* we generate fmt ourselves so it is safe */
                 GCC_DIAG_IGNORE(-Wformat-nonliteral);
                 len = my_snprintf(t, max, fmt, (int) fieldsize, (int) arg, value);
-                PERL_MY_SNPRINTF_POST_GUARD(len, max);
                 GCC_DIAG_RESTORE;
+#endif
+                PERL_MY_SNPRINTF_POST_GUARD(len, max);
                 RESTORE_LC_NUMERIC();
 	    }
 	    t += fieldsize;
@@ -939,7 +941,6 @@ PP(pp_grepstart)
 
     src = PL_stack_base[*PL_markstack_ptr];
     if (SvPADTMP(src)) {
-        assert(!IS_PADGV(src));
 	src = PL_stack_base[*PL_markstack_ptr] = sv_mortalcopy(src);
 	PL_tmps_floor++;
     }
@@ -1092,7 +1093,6 @@ PP(pp_mapwhile)
 	/* set $_ to the new source item */
 	src = PL_stack_base[PL_markstack_ptr[-1]];
 	if (SvPADTMP(src)) {
-            assert(!IS_PADGV(src));
             src = sv_mortalcopy(src);
         }
 	SvTEMP_off(src);
@@ -1626,7 +1626,9 @@ Perl_die_unwind(pTHX_ SV *msv)
 	    SV *namesv;
 	    PERL_CONTEXT *cx;
 	    SV **newsp;
+#ifdef DEBUGGING
 	    COP *oldcop;
+#endif
 	    JMPENV *restartjmpenv;
 	    OP *restartop;
 
@@ -1643,7 +1645,9 @@ Perl_die_unwind(pTHX_ SV *msv)
 	    }
 	    POPEVAL(cx);
 	    namesv = cx->blk_eval.old_namesv;
+#ifdef DEBUGGING
 	    oldcop = cx->blk_oldcop;
+#endif
 	    restartjmpenv = cx->blk_eval.cur_top_env;
 	    restartop = cx->blk_eval.retop;
 
@@ -1653,13 +1657,8 @@ Perl_die_unwind(pTHX_ SV *msv)
 
 	    LEAVE;
 
-	    /* LEAVE could clobber PL_curcop (see save_re_context())
-	     * XXX it might be better to find a way to avoid messing with
-	     * PL_curcop in save_re_context() instead, but this is a more
-	     * minimal fix --GSAR */
-	    PL_curcop = oldcop;
-
 	    if (optype == OP_REQUIRE) {
+                assert (PL_curcop == oldcop);
                 (void)hv_store(GvHVn(PL_incgv),
                                SvPVX_const(namesv),
                                SvUTF8(namesv) ? -(I32)SvCUR(namesv) : (I32)SvCUR(namesv),
@@ -1819,12 +1818,9 @@ PP(pp_caller)
     if (!has_arg)
 	RETURN;
     if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
-	GV * const cvgv = CvGV(dbcx->blk_sub.cv);
 	/* So is ccstack[dbcxix]. */
-	if (cvgv && isGV(cvgv)) {
-	    SV * const sv = newSV(0);
-	    gv_efullname3(sv, cvgv, NULL);
-	    mPUSHs(sv);
+	if (CvHASGV(dbcx->blk_sub.cv)) {
+	    PUSHs(cv_name(dbcx->blk_sub.cv, 0));
 	    PUSHs(boolSV(CxHASARGS(cx)));
 	}
 	else {
@@ -1996,17 +1992,24 @@ PP(pp_dbstate)
 	return NORMAL;
 }
 
+/* S_leave_common: Common code that many functions in this file use on
+		   scope exit.  */
+
 /* SVs on the stack that have any of the flags passed in are left as is.
    Other SVs are protected via the mortals stack if lvalue is true, and
-   copied otherwise. */
+   copied otherwise.
+
+   Also, taintedness is cleared.
+*/
 
 STATIC SV **
-S_adjust_stack_on_leave(pTHX_ SV **newsp, SV **sp, SV **mark, I32 gimme,
+S_leave_common(pTHX_ SV **newsp, SV **sp, SV **mark, I32 gimme,
 			      U32 flags, bool lvalue)
 {
     bool padtmp = 0;
-    PERL_ARGS_ASSERT_ADJUST_STACK_ON_LEAVE;
+    PERL_ARGS_ASSERT_LEAVE_COMMON;
 
+    TAINT_NOT;
     if (flags & SVs_PADTMP) {
 	flags &= ~SVs_PADTMP;
 	padtmp = 1;
@@ -2076,8 +2079,7 @@ PP(pp_leave)
 
     gimme = OP_GIMME(PL_op, (cxstack_ix >= 0) ? gimme : G_SCALAR);
 
-    TAINT_NOT;
-    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme, SVs_PADTMP|SVs_TEMP,
+    SP = leave_common(newsp, SP, newsp, gimme, SVs_PADTMP|SVs_TEMP,
 			       PL_op->op_private & OPpLVALUE);
     PL_curpm = newpm;	/* Don't pop $1 et al till now */
 
@@ -2133,29 +2135,30 @@ PP(pp_enteriter)
 	    SvGETMAGIC(sv);
 	    SvGETMAGIC(right);
 	    if (RANGE_IS_NUMERIC(sv,right)) {
+		NV nv;
 		cx->cx_type &= ~CXTYPEMASK;
 		cx->cx_type |= CXt_LOOP_LAZYIV;
 		/* Make sure that no-one re-orders cop.h and breaks our
 		   assumptions */
 		assert(CxTYPE(cx) == CXt_LOOP_LAZYIV);
 #ifdef NV_PRESERVES_UV
-		if ((SvOK(sv) && ((SvNV_nomg(sv) < (NV)IV_MIN) ||
-				  (SvNV_nomg(sv) > (NV)IV_MAX)))
+		if ((SvOK(sv) && (((nv = SvNV_nomg(sv)) < (NV)IV_MIN) ||
+				  (nv > (NV)IV_MAX)))
 			||
-		    (SvOK(right) && ((SvNV_nomg(right) > (NV)IV_MAX) ||
-				     (SvNV_nomg(right) < (NV)IV_MIN))))
+		    (SvOK(right) && (((nv = SvNV_nomg(right)) > (NV)IV_MAX) ||
+				     (nv < (NV)IV_MIN))))
 #else
-		if ((SvOK(sv) && ((SvNV_nomg(sv) <= (NV)IV_MIN)
+		if ((SvOK(sv) && (((nv = SvNV_nomg(sv)) <= (NV)IV_MIN)
 				  ||
-		                  ((SvNV_nomg(sv) > 0) &&
-					((SvUV_nomg(sv) > (UV)IV_MAX) ||
-					 (SvNV_nomg(sv) > (NV)UV_MAX)))))
+				  ((nv > 0) &&
+					((nv > (NV)UV_MAX) ||
+					 (SvUV_nomg(sv) > (UV)IV_MAX)))))
 			||
-		    (SvOK(right) && ((SvNV_nomg(right) <= (NV)IV_MIN)
+		    (SvOK(right) && (((nv = SvNV_nomg(right)) <= (NV)IV_MIN)
 				     ||
-				     ((SvNV_nomg(right) > 0) &&
-					((SvUV_nomg(right) > (UV)IV_MAX) ||
-					 (SvNV_nomg(right) > (NV)UV_MAX))
+				     ((nv > 0) &&
+					((nv > (NV)UV_MAX) ||
+					 (SvUV_nomg(right) > (UV)IV_MAX))
 				     ))))
 #endif
 		    DIE(aTHX_ "Range iterator outside integer range");
@@ -2239,8 +2242,7 @@ PP(pp_leaveloop)
     mark = newsp;
     newsp = PL_stack_base + cx->blk_loop.resetsp;
 
-    TAINT_NOT;
-    SP = adjust_stack_on_leave(newsp, SP, MARK, gimme, 0,
+    SP = leave_common(newsp, SP, MARK, gimme, 0,
 			       PL_op->op_private & OPpLVALUE);
     PUTBACK;
 
@@ -2741,7 +2743,10 @@ S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstac
     return 0;
 }
 
-PP(pp_goto) /* also pp_dump */
+
+/* also used for: pp_dump() */
+
+PP(pp_goto)
 {
     dVAR; dSP;
     OP *retop = NULL;
@@ -3652,6 +3657,9 @@ S_path_is_searchable(const char *name)
 	return TRUE;
 }
 
+
+/* also used for: pp_dofile() */
+
 PP(pp_require)
 {
     dSP;
@@ -4298,8 +4306,7 @@ PP(pp_leaveeval)
     retop = cx->blk_eval.retop;
     evalcv = cx->blk_eval.cv;
 
-    TAINT_NOT;
-    SP = adjust_stack_on_leave((gimme == G_VOID) ? SP : newsp, SP, newsp,
+    SP = leave_common((gimme == G_VOID) ? SP : newsp, SP, newsp,
 				gimme, SVs_TEMP, FALSE);
     PL_curpm = newpm;	/* Don't pop $1 et al till now */
 
@@ -4396,8 +4403,7 @@ PP(pp_leavetry)
     POPEVAL(cx);
     PERL_UNUSED_VAR(optype);
 
-    TAINT_NOT;
-    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme,
+    SP = leave_common(newsp, SP, newsp, gimme,
 			       SVs_PADTMP|SVs_TEMP, FALSE);
     PL_curpm = newpm;	/* Don't pop $1 et al till now */
 
@@ -4443,8 +4449,7 @@ PP(pp_leavegiven)
     POPBLOCK(cx,newpm);
     assert(CxTYPE(cx) == CXt_GIVEN);
 
-    TAINT_NOT;
-    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme,
+    SP = leave_common(newsp, SP, newsp, gimme,
 			       SVs_PADTMP|SVs_TEMP, FALSE);
     PL_curpm = newpm;	/* Don't pop $1 et al till now */
 
@@ -5017,8 +5022,7 @@ PP(pp_leavewhen)
     POPBLOCK(cx,newpm);
     assert(CxTYPE(cx) == CXt_WHEN);
 
-    TAINT_NOT;
-    SP = adjust_stack_on_leave(newsp, SP, newsp, gimme,
+    SP = leave_common(newsp, SP, newsp, gimme,
 			       SVs_PADTMP|SVs_TEMP, FALSE);
     PL_curpm = newpm;   /* pop $1 et al */
 

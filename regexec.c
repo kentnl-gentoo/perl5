@@ -772,7 +772,7 @@ Perl_re_intuit_start(pTHX_
              * be too fiddly (e.g. REXEC_IGNOREPOS).
              */
             if (   strpos != strbeg
-                && (prog->intflags & (PREGf_ANCH_BOL|PREGf_ANCH_SBOL)))
+                && (prog->intflags & PREGf_ANCH_SBOL))
             {
 	        DEBUG_EXECUTE_r(PerlIO_printf(Perl_debug_log,
                                 "  Not at start...\n"));
@@ -896,7 +896,7 @@ Perl_re_intuit_start(pTHX_
 
 
         /* If the regex is absolutely anchored to either the start of the
-         * string (BOL,SBOL) or to pos() (ANCH_GPOS), then
+         * string (SBOL) or to pos() (ANCH_GPOS), then
          * check_offset_max represents an upper bound on the string where
          * the substr could start. For the ANCH_GPOS case, we assume that
          * the caller of intuit will have already set strpos to
@@ -2637,7 +2637,6 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
            magic belonging to this SV.
            Not newSVsv, either, as it does not COW.
         */
-        assert(!IS_PADGV(sv));
         reginfo->sv = newSV(0);
         SvSetSV_nosteal(reginfo->sv, sv);
         SAVEFREESV(reginfo->sv);
@@ -2715,7 +2714,7 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
     }
 
     /* Simplest case:  anchored match need be tried only once. */
-    /*  [unless only anchor is BOL and multiline is set] */
+    /*  [unless only anchor is MBOL - implying multiline is set] */
     if (prog->intflags & (PREGf_ANCH & ~PREGf_ANCH_GPOS)) {
 	if (s == startpos && regtry(reginfo, &s))
 	    goto got_it;
@@ -4013,8 +4012,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
         assert(nextchr < 256 && (nextchr >= 0 || nextchr == NEXTCHR_EOS));
 
 	switch (state_num) {
-	case BOL:  /*  /^../   */
-	case SBOL: /*  /^../s  */
+	case SBOL: /*  /^../ and /\A../  */
 	    if (locinput == reginfo->strbeg)
 		break;
 	    sayNO;
@@ -4052,9 +4050,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 		sayNO;
 	    break;
 
-	case EOL: /* /..$/  */
-            /* FALLTHROUGH */
-	case SEOL: /* /..$/s  */
+	case SEOL: /* /..$/  */
 	    if (!NEXTCHR_IS_EOS && nextchr != '\n')
 		sayNO;
 	    if (reginfo->strend - locinput > 1)
@@ -7630,121 +7626,9 @@ Perl_regclass_swash(pTHX_ const regexp *prog, const regnode* node, bool doinit, 
         *altsvp = NULL;
     }
 
-    return newSVsv(_get_regclass_nonbitmap_data(prog, node, doinit, listsvp, NULL));
+    return newSVsv(_get_regclass_nonbitmap_data(prog, node, doinit, listsvp, NULL, NULL));
 }
 
-SV *
-Perl__get_regclass_nonbitmap_data(pTHX_ const regexp *prog,
-                                        const regnode* node,
-                                        bool doinit,
-                                        SV** listsvp,
-                                        SV** only_utf8_locale_ptr)
-{
-    /* For internal core use only.
-     * Returns the swash for the input 'node' in the regex 'prog'.
-     * If <doinit> is 'true', will attempt to create the swash if not already
-     *	  done.
-     * If <listsvp> is non-null, will return the printable contents of the
-     *    swash.  This can be used to get debugging information even before the
-     *    swash exists, by calling this function with 'doinit' set to false, in
-     *    which case the components that will be used to eventually create the
-     *    swash are returned  (in a printable form).
-     * Tied intimately to how regcomp.c sets up the data structure */
-
-    SV *sw  = NULL;
-    SV *si  = NULL;         /* Input swash initialization string */
-    SV*  invlist = NULL;
-
-    RXi_GET_DECL(prog,progi);
-    const struct reg_data * const data = prog ? progi->data : NULL;
-
-    PERL_ARGS_ASSERT__GET_REGCLASS_NONBITMAP_DATA;
-
-    assert(ANYOF_FLAGS(node)
-                        & (ANYOF_UTF8|ANYOF_NONBITMAP_NON_UTF8|ANYOF_LOC_FOLD));
-
-    if (data && data->count) {
-	const U32 n = ARG(node);
-
-	if (data->what[n] == 's') {
-	    SV * const rv = MUTABLE_SV(data->data[n]);
-	    AV * const av = MUTABLE_AV(SvRV(rv));
-	    SV **const ary = AvARRAY(av);
-	    U8 swash_init_flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;
-	
-	    si = *ary;	/* ary[0] = the string to initialize the swash with */
-
-	    /* Elements 3 and 4 are either both present or both absent. [3] is
-	     * any inversion list generated at compile time; [4] indicates if
-	     * that inversion list has any user-defined properties in it. */
-            if (av_tindex(av) >= 2) {
-                if (only_utf8_locale_ptr
-                    && ary[2]
-                    && ary[2] != &PL_sv_undef)
-                {
-                    *only_utf8_locale_ptr = ary[2];
-                }
-                else {
-                    assert(only_utf8_locale_ptr);
-                    *only_utf8_locale_ptr = NULL;
-                }
-
-                if (av_tindex(av) >= 3) {
-                    invlist = ary[3];
-                    if (SvUV(ary[4])) {
-                        swash_init_flags |= _CORE_SWASH_INIT_USER_DEFINED_PROPERTY;
-                    }
-                }
-                else {
-                    invlist = NULL;
-                }
-	    }
-
-	    /* Element [1] is reserved for the set-up swash.  If already there,
-	     * return it; if not, create it and store it there */
-	    if (ary[1] && SvROK(ary[1])) {
-		sw = ary[1];
-	    }
-	    else if (doinit && ((si && si != &PL_sv_undef)
-                                 || (invlist && invlist != &PL_sv_undef))) {
-		assert(si);
-		sw = _core_swash_init("utf8", /* the utf8 package */
-				      "", /* nameless */
-				      si,
-				      1, /* binary */
-				      0, /* not from tr/// */
-				      invlist,
-				      &swash_init_flags);
-		(void)av_store(av, 1, sw);
-	    }
-	}
-    }
-	
-    /* If requested, return a printable version of what this swash matches */
-    if (listsvp) {
-	SV* matches_string = newSVpvs("");
-
-        /* The swash should be used, if possible, to get the data, as it
-         * contains the resolved data.  But this function can be called at
-         * compile-time, before everything gets resolved, in which case we
-         * return the currently best available information, which is the string
-         * that will eventually be used to do that resolving, 'si' */
-	if ((! sw || (invlist = _get_swash_invlist(sw)) == NULL)
-            && (si && si != &PL_sv_undef))
-        {
-	    sv_catsv(matches_string, si);
-	}
-
-	/* Add the inversion list to whatever we have.  This may have come from
-	 * the swash, or from an input parameter */
-	if (invlist) {
-	    sv_catsv(matches_string, _invlist_contents(invlist));
-	}
-	*listsvp = matches_string;
-    }
-
-    return sw;
-}
 #endif /* !defined(PERL_IN_XSUB_RE) || defined(PLUGGABLE_RE_EXTENSION) */
 
 /*
@@ -7787,22 +7671,25 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
     }
 
     /* If this character is potentially in the bitmap, check it */
-    if (c < 256) {
+    if (c < NUM_ANYOF_CODE_POINTS) {
 	if (ANYOF_BITMAP_TEST(n, c))
 	    match = TRUE;
-	else if (flags & ANYOF_NON_UTF8_NON_ASCII_ALL
-		&& ! utf8_target
-		&& ! isASCII(c))
+	else if ((flags & ANYOF_MATCHES_ALL_NON_UTF8_NON_ASCII)
+		  && ! utf8_target
+		  && ! isASCII(c))
 	{
 	    match = TRUE;
 	}
 	else if (flags & ANYOF_LOCALE_FLAGS) {
-	    if (flags & ANYOF_LOC_FOLD) {
-		 if (ANYOF_BITMAP_TEST(n, PL_fold_locale[c])) {
-                    match = TRUE;
-                }
+	    if ((flags & ANYOF_LOC_FOLD)
+                && c < 256
+		&& ANYOF_BITMAP_TEST(n, PL_fold_locale[c]))
+            {
+                match = TRUE;
             }
-	    if (! match && ANYOF_POSIXL_TEST_ANY_SET(n)) {
+            else if (ANYOF_POSIXL_TEST_ANY_SET(n)
+                     && c < 256
+            ) {
 
                 /* The data structure is arranged so bits 0, 2, 4, ... are set
                  * if the class includes the Posix character class given by
@@ -7855,18 +7742,20 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
     /* If the bitmap didn't (or couldn't) match, and something outside the
      * bitmap could match, try that. */
     if (!match) {
-	if (c >= 256 && (flags & ANYOF_ABOVE_LATIN1_ALL)) {
-	    match = TRUE;	/* Everything above 255 matches */
+	if (c >= NUM_ANYOF_CODE_POINTS
+            && (flags & ANYOF_MATCHES_ALL_ABOVE_BITMAP))
+        {
+	    match = TRUE;	/* Everything above the bitmap matches */
 	}
-	else if ((flags & ANYOF_NONBITMAP_NON_UTF8)
-		  || (utf8_target && (flags & ANYOF_UTF8))
+	else if ((flags & ANYOF_HAS_NONBITMAP_NON_UTF8_MATCHES)
+		  || (utf8_target && (flags & ANYOF_HAS_UTF8_NONBITMAP_MATCHES))
                   || ((flags & ANYOF_LOC_FOLD)
                        && IN_UTF8_CTYPE_LOCALE
-                       && ARG(n) != ANYOF_NONBITMAP_EMPTY))
+                       && ARG(n) != ANYOF_ONLY_HAS_BITMAP))
         {
             SV* only_utf8_locale = NULL;
 	    SV * const sw = _get_regclass_nonbitmap_data(prog, n, TRUE, 0,
-                                                            &only_utf8_locale);
+                                                       &only_utf8_locale, NULL);
 	    if (sw) {
                 U8 utf8_buffer[2];
 		U8 * utf8_p;

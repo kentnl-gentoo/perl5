@@ -846,7 +846,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	    {
 		if ((char *)svp < (char *)GvGP(ARG2_GV)
 		 || (char *)svp > (char *)GvGP(ARG2_GV) + sizeof(struct gp)
-		 || GvREFCNT(ARG2_GV) > 1)
+		 || GvREFCNT(ARG2_GV) > 2) /* "> 2" to ignore savestack's ref */
 		    PL_sub_generation++;
 		else mro_method_changed_in(hv);
 	    }
@@ -1029,11 +1029,15 @@ Perl_leave_scope(pTHX_ I32 base)
                         break;
                     case SVt_PVCV:
                     {
-                        HEK * const hek = CvNAME_HEK((CV *)sv);
+                        HEK *hek =
+			      CvNAMED(sv)
+				? CvNAME_HEK((CV *)sv)
+				: GvNAME_HEK(CvGV(sv));
                         assert(hek);
-                        share_hek_hek(hek);
+                        (void)share_hek_hek(hek);
                         cv_undef((CV *)sv);
                         CvNAME_HEK_set(sv, hek);
+                        CvLEXICAL_on(sv);
                         break;
                     }
                     default:
@@ -1055,13 +1059,17 @@ Perl_leave_scope(pTHX_ I32 base)
                     case SVt_PVHV:	*svp = MUTABLE_SV(newHV());	break;
                     case SVt_PVCV:
                     {
+                        HEK * const hek = CvNAMED(sv)
+                                             ? CvNAME_HEK((CV *)sv)
+                                             : GvNAME_HEK(CvGV(sv));
+
                         /* Create a stub */
                         *svp = newSV_type(SVt_PVCV);
 
                         /* Share name */
-                        assert(CvNAMED(sv));
                         CvNAME_HEK_set(*svp,
-                            share_hek_hek(CvNAME_HEK((CV *)sv)));
+                                       share_hek_hek(hek));
+                        CvLEXICAL_on(*svp);
                         break;
                     }
                     default:	*svp = newSV(0);		break;
@@ -1218,6 +1226,22 @@ Perl_leave_scope(pTHX_ I32 base)
 	case SAVEt_READONLY_OFF:
 	    SvREADONLY_off(ARG0_SV);
 	    break;
+	case SAVEt_GP_ALIASED_SV: {
+	    /* The GP may have been abandoned, leaving the savestack with
+	       the only remaining reference to it.  */
+	    GP * const gp = (GP *)ARG0_PTR;
+	    if (gp->gp_refcnt == 1) {
+		GV * const gv = (GV *)sv_2mortal(newSV_type(SVt_PVGV));
+		GvGP_set(gv,gp);
+		gp_free(gv);
+	    }
+	    else {
+		gp->gp_refcnt--;
+		if (uv >> 8) gp->gp_flags |=  GPf_ALIASED_SV;
+		else	     gp->gp_flags &= ~GPf_ALIASED_SV;
+	    }
+	    break;
+	}
 	default:
 	    Perl_croak(aTHX_ "panic: leave_scope inconsistency %u", type);
 	}

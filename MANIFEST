@@ -696,6 +696,7 @@ cpan/Digest-SHA/lib/Digest/SHA.pm	Digest::SHA extension
 cpan/Digest-SHA/Makefile.PL		Digest::SHA Makefile.PL
 cpan/Digest-SHA/shasum			shasum script
 cpan/Digest-SHA/SHA.xs			Digest::SHA extension
+cpan/Digest-SHA/src/sdf.c		Digest::SHA extension
 cpan/Digest-SHA/src/sha64bit.c		Digest::SHA extension
 cpan/Digest-SHA/src/sha64bit.h		Digest::SHA extension
 cpan/Digest-SHA/src/sha.c		Digest::SHA extension
@@ -947,7 +948,6 @@ cpan/ExtUtils-Constant/lib/ExtUtils/Constant/ProxySubs.pm	generate XS code for p
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant/Utils.pm		generate XS code to import C header constants
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant/XS.pm		generate XS code to import C header constants
 cpan/ExtUtils-Constant/t/Constant.t				See if ExtUtils::Constant works
-cpan/ExtUtils-Install/Changes				ExtUtils-Install change log
 cpan/ExtUtils-Install/lib/ExtUtils/Installed.pm		Information on installed extensions
 cpan/ExtUtils-Install/lib/ExtUtils/Install.pm		Handles 'make install' on extensions
 cpan/ExtUtils-Install/lib/ExtUtils/Packlist.pm		Manipulates .packlist files
@@ -1338,6 +1338,7 @@ cpan/IO-Socket-IP/t/18fdopen.t				IO::Socket::IP tests
 cpan/IO-Socket-IP/t/19no-addrs.t			IO::Socket::IP tests
 cpan/IO-Socket-IP/t/20subclass.t			IO::Socket::IP tests
 cpan/IO-Socket-IP/t/21as-inet.t				IO::Socket::IP tests
+cpan/IO-Socket-IP/t/22timeout.t
 cpan/IO-Socket-IP/t/30nonblocking-connect.t		IO::Socket::IP tests
 cpan/IO-Socket-IP/t/31nonblocking-connect-internet.t	IO::Socket::IP tests
 cpan/IO-Socket-IP/t/99pod.t				IO::Socket::IP tests
@@ -1967,6 +1968,7 @@ cpan/Pod-Usage/t/pod/usage.pod
 cpan/Scalar-List-Utils/lib/List/Util.pm		List::Util
 cpan/Scalar-List-Utils/lib/List/Util/XS.pm	List::Util
 cpan/Scalar-List-Utils/lib/Scalar/Util.pm	Scalar::Util
+cpan/Scalar-List-Utils/lib/Sub/Util.pm
 cpan/Scalar-List-Utils/ListUtil.xs		Util extension
 cpan/Scalar-List-Utils/Makefile.PL		Util extension
 cpan/Scalar-List-Utils/multicall.h		Util extension
@@ -1985,13 +1987,15 @@ cpan/Scalar-List-Utils/t/min.t			List::Util
 cpan/Scalar-List-Utils/t/openhan.t		Scalar::Util
 cpan/Scalar-List-Utils/t/pair.t
 cpan/Scalar-List-Utils/t/product.t		List::Util
-cpan/Scalar-List-Utils/t/proto.t		Scalar::Util
+cpan/Scalar-List-Utils/t/prototype.t
 cpan/Scalar-List-Utils/t/readonly.t		Scalar::Util
 cpan/Scalar-List-Utils/t/reduce.t		List::Util
 cpan/Scalar-List-Utils/t/refaddr.t		Scalar::Util
 cpan/Scalar-List-Utils/t/reftype.t		Scalar::Util
+cpan/Scalar-List-Utils/t/scalarutil-proto.t
 cpan/Scalar-List-Utils/t/shuffle.t		List::Util
 cpan/Scalar-List-Utils/t/stack-corruption.t	List::Util
+cpan/Scalar-List-Utils/t/subname.t
 cpan/Scalar-List-Utils/t/sum0.t
 cpan/Scalar-List-Utils/t/sum.t			List::Util
 cpan/Scalar-List-Utils/t/tainted.t		Scalar::Util
@@ -2869,6 +2873,7 @@ dist/Data-Dumper/t/perl-74170.t	Regression test for stack reallocation
 dist/Data-Dumper/t/purity_deepcopy_maxdepth.t	See if three Data::Dumper functions work
 dist/Data-Dumper/t/qr.t		See if Data::Dumper works with qr|/|
 dist/Data-Dumper/t/quotekeys.t	See if Data::Dumper::Quotekeys works
+dist/Data-Dumper/t/recurse.t	See if Data::Dumper::Maxrecurse works
 dist/Data-Dumper/t/seen.t	See if Data::Dumper::Seen works
 dist/Data-Dumper/t/sortkeys.t	See if Data::Dumper::Sortkeys works
 dist/Data-Dumper/t/sparseseen.t	See if Data::Dumper::Sparseseen works
@@ -3160,7 +3165,6 @@ dist/Module-CoreList/Makefile.PL		Module::CoreList
 dist/Module-CoreList/MANIFEST			Module::CoreList
 dist/Module-CoreList/README			Module::CoreList
 dist/Module-CoreList/t/corelist.t		Module::CoreList tests
-dist/Module-CoreList/t/corevers.t		Module::CoreList tests
 dist/Module-CoreList/t/deprecated.t		Module::CoreList tests
 dist/Module-CoreList/t/find_modules.t		Module::CoreList tests
 dist/Module-CoreList/t/is_core.t		Module::CoreList tests
@@ -3791,6 +3795,7 @@ ext/XS-APItest/t/coplabel.t	test cop_*_label
 ext/XS-APItest/t/copstash.t	test alloccopstash
 ext/XS-APItest/t/copyhints.t	test hv_copy_hints_hv() API
 ext/XS-APItest/t/customop.t	XS::APItest: tests for custom ops
+ext/XS-APItest/t/cv_name.t	test cv_name
 ext/XS-APItest/t/eval-filter.t	Simple source filter/eval test
 ext/XS-APItest/t/exception.t	XS::APItest extension
 ext/XS-APItest/t/fetch_pad_names.t	Tests for UTF8 names in pad
@@ -4005,6 +4010,7 @@ lib/Benchmark.pm		Measure execution time
 lib/Benchmark.t			See if Benchmark works
 lib/blib.pm			For "use blib"
 lib/blib.t			blib.pm test
+lib/B/Op_private.pm		Definitions of OP op_private flags
 lib/bytes_heavy.pl		Support routines for byte pragma
 lib/bytes.pm			Pragma to enable byte operations
 lib/bytes.t			bytes.pm test
@@ -4448,9 +4454,11 @@ pod/perl5180delta.pod		Perl changes in version 5.18.0
 pod/perl5181delta.pod		Perl changes in version 5.18.1
 pod/perl5182delta.pod		Perl changes in version 5.18.2
 pod/perl5200delta.pod		Perl changes in version 5.20.0
+pod/perl5201delta.pod		Perl changes in version 5.20.1
 pod/perl5210delta.pod		Perl changes in version 5.21.0
 pod/perl5211delta.pod		Perl changes in version 5.21.1
 pod/perl5212delta.pod		Perl changes in version 5.21.2
+pod/perl5213delta.pod		Perl changes in version 5.21.3
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4692,6 +4700,7 @@ regen/mk_invlists.pl		Generates charclass_invlists.h
 regen/mk_PL_charclass.pl	Populate the PL_charclass table
 regen/opcode.pl			Opcode header generator
 regen/opcodes			Opcode data
+regen/op_private		Definitions of bits in an OP's op_private field
 regen/overload.pl		generate overload.h
 regen_perly.pl			generate perly.{act,h,tab} from perly.y
 regen.pl			Run all scripts that (re)generate files
@@ -5096,6 +5105,7 @@ t/op/incfilter.t		See if the source filters in coderef-in-@INC work
 t/op/inc.t			See if inc/dec of integers near 32 bit limit work
 t/op/index.t			See if index works
 t/op/index_thr.t		See if index works in another thread
+t/op/infnan.t			See if inf/nan work
 t/op/int.t			See if int works
 t/op/join.t			See if join works
 t/op/kill0_child		Process tree script that is kill()ed
@@ -5292,6 +5302,7 @@ t/re/reg_nc_tie.t		Test the tied methods of Tie::Hash::NamedCapture
 t/re/reg_pmod.t			See if regexp /p modifier works as expected
 t/re/reg_posixcc.t		See if posix character classes behave consistently
 t/re/re_tests			Regular expressions for regexp.t
+t/re/rt122747.t			Test rt122747 assert faile (requires DEBUGGING)
 t/re/rxcode.t			See if /(?{ code })/ works
 t/re/subst_amp.t		See if $&-related substitution works
 t/re/subst.t			See if substitution works

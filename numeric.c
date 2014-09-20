@@ -153,11 +153,11 @@ Perl_grok_bin(pTHX_ const char *start, STRLEN *len_p, I32 *flags, NV *result)
            for compatibility silently suffer "b" and "0b" as valid binary
            numbers. */
         if (len >= 1) {
-            if (s[0] == 'b' || s[0] == 'B') {
+            if (isALPHA_FOLD_EQ(s[0], 'b')) {
                 s++;
                 len--;
             }
-            else if (len >= 2 && s[0] == '0' && (s[1] == 'b' || s[1] == 'B')) {
+            else if (len >= 2 && s[0] == '0' && (isALPHA_FOLD_EQ(s[1], 'b'))) {
                 s+=2;
                 len-=2;
             }
@@ -252,7 +252,7 @@ number may use '_' characters to separate digits.
 =cut
 
 Not documented yet because experimental is C<PERL_SCAN_SILENT_NON_PORTABLE
-which suppresses any message for non-portable numbers that are still valid
+which suppresses any message for non-portable numbers, but which are valid
 on this platform.
  */
 
@@ -274,11 +274,11 @@ Perl_grok_hex(pTHX_ const char *start, STRLEN *len_p, I32 *flags, NV *result)
            for compatibility silently suffer "x" and "0x" as valid hex numbers.
         */
         if (len >= 1) {
-            if (s[0] == 'x' || s[0] == 'X') {
+            if (isALPHA_FOLD_EQ(s[0], 'x')) {
                 s++;
                 len--;
             }
-            else if (len >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) {
+            else if (len >= 2 && s[0] == '0' && (isALPHA_FOLD_EQ(s[1], 'x'))) {
                 s+=2;
                 len-=2;
             }
@@ -586,6 +586,108 @@ Perl_grok_number(pTHX_ const char *pv, STRLEN len, UV *valuep)
     return grok_number_flags(pv, len, valuep, 0);
 }
 
+/*
+=for apidoc grok_infnan
+
+Helper for grok_number(), accepts various ways of spelling "infinity"
+or "not a number", and returns one of the following flag combinations:
+
+  IS_NUMBER_INFINITE
+  IS_NUMBER_NAN
+  IS_NUMBER_INFINITE | IS_NUMBER_NEG
+  IS_NUMBER_NAN | IS_NUMBER_NEG
+  0
+
+If an infinity or not-a-number is recognized, the *sp will point to
+one past the end of the recognized string.  If the recognition fails,
+zero is returned, and the *sp will not move.
+
+=cut
+*/
+
+int
+Perl_grok_infnan(const char** sp, const char* send)
+{
+    const char* s = *sp;
+    int flags = 0;
+
+    PERL_ARGS_ASSERT_GROK_INFNAN;
+
+    if (*s == '+') {
+        s++; if (s == send) return 0;
+    }
+    else if (*s == '-') {
+        flags |= IS_NUMBER_NEG; /* Yes, -NaN happens. Incorrect but happens. */
+        s++; if (s == send) return 0;
+    }
+
+    if (*s == '1') {
+        /* Visual C: 1.#SNAN, -1.#QNAN, 1#INF, 1#.IND (maybe also 1.#NAN) */
+        s++; if (s == send) return 0;
+        if (*s == '.') {
+            s++; if (s == send) return 0;
+        }
+        if (*s == '#') {
+            s++; if (s == send) return 0;
+        } else
+            return 0;
+    }
+
+    if (isALPHA_FOLD_EQ(*s, 'I')) {
+        /* INF or IND (1.#IND is indeterminate, a certain type of NAN) */
+        s++; if (s == send || isALPHA_FOLD_NE(*s, 'N')) return 0;
+        s++; if (s == send) return 0;
+        if (isALPHA_FOLD_EQ(*s, 'F')) {
+            s++;
+            if (s < send && (isALPHA_FOLD_EQ(*s, 'I'))) {
+                s++; if (s == send || isALPHA_FOLD_NE(*s, 'N')) return 0;
+                s++; if (s == send || isALPHA_FOLD_NE(*s, 'I')) return 0;
+                s++; if (s == send || isALPHA_FOLD_NE(*s, 'T')) return 0;
+                s++; if (s == send ||
+                         /* allow either Infinity or Infinite */
+                         !(isALPHA_FOLD_EQ(*s, 'Y') ||
+                           isALPHA_FOLD_EQ(*s, 'E'))) return 0;
+                s++; if (s < send) return 0;
+            } else if (*s)
+                return 0;
+            flags |= IS_NUMBER_INFINITY | IS_NUMBER_NOT_INT;
+        }
+        else if (isALPHA_FOLD_EQ(*s, 'D')) {
+            s++;
+            flags |= IS_NUMBER_NAN | IS_NUMBER_NOT_INT;
+        } else
+            return 0;
+    }
+    else {
+        /* NAN */
+        if (isALPHA_FOLD_EQ(*s, 'S') || isALPHA_FOLD_EQ(*s, 'Q')) {
+            /* snan, qNaN */
+            /* XXX do something with the snan/qnan difference */
+            s++; if (s == send) return 0;
+        }
+
+        if (isALPHA_FOLD_EQ(*s, 'N')) {
+            s++; if (s == send || isALPHA_FOLD_NE(*s, 'A')) return 0;
+            s++; if (s == send || isALPHA_FOLD_NE(*s, 'N')) return 0;
+            s++;
+
+            flags |= IS_NUMBER_NAN | IS_NUMBER_NOT_INT;
+
+            /* NaN can be followed by various stuff (NaNQ, NaNS), but
+             * there are also multiple different NaN values, and some
+             * implementations output the "payload" values,
+             * e.g. NaN123, NAN(abc), while some implementations just
+             * have weird stuff like NaN%. */
+            s = send;
+        }
+        else
+            return 0;
+    }
+
+    *sp = s;
+    return flags;
+}
+
 static const UV uv_max_div_10 = UV_MAX / 10;
 static const U8 uv_max_mod_10 = UV_MAX % 10;
 
@@ -594,9 +696,8 @@ Perl_grok_number_flags(pTHX_ const char *pv, STRLEN len, UV *valuep, U32 flags)
 {
   const char *s = pv;
   const char * const send = pv + len;
+  const char *d;
   int numtype = 0;
-  int sawinf = 0;
-  int sawnan = 0;
 
   PERL_ARGS_ASSERT_GROK_NUMBER_FLAGS;
 
@@ -614,7 +715,11 @@ Perl_grok_number_flags(pTHX_ const char *pv, STRLEN len, UV *valuep, U32 flags)
   if (s == send)
     return 0;
 
-  /* next must be digit or the radix separator or beginning of infinity */
+  /* The first digit (after optional sign): note that might
+   * also point to "infinity" or "nan", or "1.#INF". */
+  d = s;
+
+  /* next must be digit or the radix separator or beginning of infinity/nan */
   if (isDIGIT(*s)) {
     /* UVs are at least 32 bits, so the first 9 decimal digits cannot
        overflow.  */
@@ -723,36 +828,12 @@ Perl_grok_number_flags(pTHX_ const char *pv, STRLEN len, UV *valuep, U32 flags)
       }
     }
     else
-      return 0;
-  } else if (*s == 'I' || *s == 'i') {
-    s++; if (s == send || (*s != 'N' && *s != 'n')) return 0;
-    s++; if (s == send || (*s != 'F' && *s != 'f')) return 0;
-    s++; if (s < send && (*s == 'I' || *s == 'i')) {
-      s++; if (s == send || (*s != 'N' && *s != 'n')) return 0;
-      s++; if (s == send || (*s != 'I' && *s != 'i')) return 0;
-      s++; if (s == send || (*s != 'T' && *s != 't')) return 0;
-      s++; if (s == send || (*s != 'Y' && *s != 'y')) return 0;
-      s++;
-    }
-    sawinf = 1;
-  } else if (*s == 'N' || *s == 'n') {
-    /* XXX TODO: There are signaling NaNs and quiet NaNs. */
-    s++; if (s == send || (*s != 'A' && *s != 'a')) return 0;
-    s++; if (s == send || (*s != 'N' && *s != 'n')) return 0;
-    s++;
-    sawnan = 1;
-  } else
-    return 0;
+        return 0;
+  }
 
-  if (sawinf) {
-    numtype &= IS_NUMBER_NEG; /* Keep track of sign  */
-    numtype |= IS_NUMBER_INFINITY | IS_NUMBER_NOT_INT;
-  } else if (sawnan) {
-    numtype &= IS_NUMBER_NEG; /* Keep track of sign  */
-    numtype |= IS_NUMBER_NAN | IS_NUMBER_NOT_INT;
-  } else if (s < send) {
+  if (s < send) {
     /* we can have an optional exponent part */
-    if (*s == 'e' || *s == 'E') {
+    if (isALPHA_FOLD_EQ(*s, 'e')) {
       s++;
       if (s < send && (*s == '-' || *s == '+'))
         s++;
@@ -779,6 +860,18 @@ Perl_grok_number_flags(pTHX_ const char *pv, STRLEN len, UV *valuep, U32 flags)
     if (valuep)
       *valuep = 0;
     return IS_NUMBER_IN_UV;
+  }
+  /* We could be e.g. at "Inf" or "NaN", or at the "#" of "1.#INF". */
+  if ((s + 2 < send) && strchr("inqs#", toFOLD(*s))) {
+      /* Really detect inf/nan. Start at d, not s, since the above
+       * code might have already consumed the "1." or "1". */
+      int infnan = Perl_grok_infnan(&d, send);
+      if ((infnan & IS_NUMBER_INFINITY)) {
+          return (numtype | infnan); /* Keep sign for infinity. */
+      }
+      else if ((infnan & IS_NUMBER_NAN)) {
+          return (numtype | infnan) & ~IS_NUMBER_NEG; /* Clear sign for nan. */
+      }
   }
   else if (flags & PERL_SCAN_TRAILING) {
     return numtype | IS_NUMBER_TRAILING;
@@ -872,6 +965,7 @@ Perl_grok_atou(const char *pv, const char** endptr)
     return val;
 }
 
+#ifndef USE_QUADMATH
 STATIC NV
 S_mulexp10(NV value, I32 exponent)
 {
@@ -950,12 +1044,17 @@ S_mulexp10(NV value, I32 exponent)
     }
     return negative ? value / result : value * result;
 }
+#endif /* #ifndef USE_QUADMATH */
 
 NV
 Perl_my_atof(pTHX_ const char* s)
 {
     NV x = 0.0;
-#ifdef USE_LOCALE_NUMERIC
+#ifdef USE_QUADMATH
+    Perl_my_atof2(aTHX_ s, &x);
+    return x;
+#else
+#  ifdef USE_LOCALE_NUMERIC
     PERL_ARGS_ASSERT_MY_ATOF;
 
     {
@@ -988,21 +1087,96 @@ Perl_my_atof(pTHX_ const char* s)
             Perl_atof2(s, x);
         RESTORE_LC_NUMERIC();
     }
-#else
+#  else
     Perl_atof2(s, x);
+#  endif
 #endif
     return x;
+}
+
+static char*
+S_my_atof_infnan(const char* s, bool negative, const char* send, NV* value)
+{
+    const char *p0 = negative ? s - 1 : s;
+    const char *p = p0;
+    int infnan = grok_infnan(&p, send);
+    if (infnan && p != p0) {
+        /* If we can generate inf/nan directly, let's do so. */
+#ifdef NV_INF
+        if ((infnan & IS_NUMBER_INFINITY)) {
+            *value = (infnan & IS_NUMBER_NEG) ? -NV_INF: NV_INF;
+            return (char*)p;
+        }
+#endif
+#ifdef NV_NAN
+        if ((infnan & IS_NUMBER_NAN)) {
+            *value = NV_NAN;
+            return (char*)p;
+        }
+#endif
+#ifdef Perl_strtod
+        /* If still here, we didn't have either NV_INF or NV_NAN,
+         * and can try falling back to native strtod/strtold.
+         *
+         * (Though, are our NV_INF or NV_NAN ever not defined?)
+         *
+         * The native interface might not recognize all the possible
+         * inf/nan strings Perl recognizes.  What we can try
+         * is to try faking the input.  We will try inf/-inf/nan
+         * as the most promising/portable input. */
+        {
+            const char* fake = NULL;
+            char* endp;
+            NV nv;
+            if ((infnan & IS_NUMBER_INFINITY)) {
+                fake = ((infnan & IS_NUMBER_NEG)) ? "-inf" : "inf";
+            }
+            else if ((infnan & IS_NUMBER_NAN)) {
+                fake = "nan";
+            }
+            assert(fake);
+            nv = Perl_strtod(fake, &endp);
+            if (fake != endp) {
+                if ((infnan & IS_NUMBER_INFINITY)) {
+#ifdef Perl_isinf
+                    if (Perl_isinf(nv))
+                        *value = nv;
+#else
+                    /* last resort, may generate SIGFPE */
+                    *value = Perl_exp((NV)1e9);
+                    if ((infnan & IS_NUMBER_NEG))
+                        *value = -*value;
+#endif
+                    return (char*)p; /* p, not endp */
+                }
+                else if ((infnan & IS_NUMBER_NAN)) {
+#ifdef Perl_isnan
+                    if (Perl_isnan(nv))
+                        *value = nv;
+#else
+                    /* last resort, may generate SIGFPE */
+                    *value = Perl_log((NV)-1.0);
+#endif
+                    return (char*)p; /* p, not endp */
+                }
+            }
+        }
+#endif /* #ifdef Perl_strtod */
+    }
+    return NULL;
 }
 
 char*
 Perl_my_atof2(pTHX_ const char* orig, NV* value)
 {
-    NV result[3] = {0.0, 0.0, 0.0};
     const char* s = orig;
-#ifdef USE_PERL_ATOF
-    UV accumulator[2] = {0,0};	/* before/after dp */
+    NV result[3] = {0.0, 0.0, 0.0};
+#if defined(USE_PERL_ATOF) || defined(USE_QUADMATH)
+    const char* send = s + strlen(orig); /* one past the last */
     bool negative = 0;
-    const char* send = s + strlen(orig) - 1;
+#endif
+#if defined(USE_PERL_ATOF) && !defined(USE_QUADMATH)
+    UV accumulator[2] = {0,0};	/* before/after dp */
     bool seen_digit = 0;
     I32 exp_adjust[2] = {0,0};
     I32 exp_acc[2] = {-1, -1};
@@ -1012,8 +1186,38 @@ Perl_my_atof2(pTHX_ const char* orig, NV* value)
     I32 digit = 0;
     I32 old_digit = 0;
     I32 sig_digits = 0; /* noof significant digits seen so far */
+#endif
 
+#if defined(USE_PERL_ATOF) || defined(USE_QUADMATH)
     PERL_ARGS_ASSERT_MY_ATOF2;
+
+    /* leading whitespace */
+    while (isSPACE(*s))
+	++s;
+
+    /* sign */
+    switch (*s) {
+	case '-':
+	    negative = 1;
+	    /* FALLTHROUGH */
+	case '+':
+	    ++s;
+    }
+#endif
+
+#ifdef USE_QUADMATH
+    {
+        char* endp;
+        if ((endp = S_my_atof_infnan(s, negative, send, value)))
+            return endp;
+        result[2] = strtoflt128(s, &endp);
+        if (s != endp) {
+            *value = negative ? -result[2] : result[2];
+            return endp;
+        }
+        return NULL;
+    }
+#elif defined(USE_PERL_ATOF)
 
 /* There is no point in processing more significant digits
  * than the NV can hold. Note that NV_DIG is a lower-bound value,
@@ -1044,33 +1248,11 @@ Perl_my_atof2(pTHX_ const char* orig, NV* value)
 /* the max number we can accumulate in a UV, and still safely do 10*N+9 */
 #define MAX_ACCUMULATE ( (UV) ((UV_MAX - 9)/10))
 
-    /* leading whitespace */
-    while (isSPACE(*s))
-	++s;
-
-    /* sign */
-    switch (*s) {
-	case '-':
-	    negative = 1;
-	    /* FALLTHROUGH */
-	case '+':
-	    ++s;
+    {
+        const char* endp;
+        if ((endp = S_my_atof_infnan(s, negative, send, value)))
+            return (char*)endp;
     }
-
-    /* punt to strtod for NaN/Inf; if no support for it there, tough luck */
-
-#ifdef HAS_STRTOD
-    if (*s == 'n' || *s == 'N' || *s == 'i' || *s == 'I') {
-        const char *p = negative ? s - 1 : s;
-        char *endp;
-        NV rslt;
-        rslt = strtod(p, &endp);
-        if (endp != p) {
-            *value = rslt;
-            return (char *)endp;
-        }
-    }
-#endif
 
     /* we accumulate digits into an integer; when this becomes too
      * large, we add the total to NV and start again */
@@ -1143,7 +1325,7 @@ Perl_my_atof2(pTHX_ const char* orig, NV* value)
 	result[1] = S_mulexp10(result[1], exp_acc[1]) + (NV)accumulator[1];
     }
 
-    if (seen_digit && (*s == 'e' || *s == 'E')) {
+    if (seen_digit && (isALPHA_FOLD_EQ(*s, 'e'))) {
 	bool expnegative = 0;
 
 	++s;
@@ -1179,20 +1361,58 @@ Perl_my_atof2(pTHX_ const char* orig, NV* value)
     return (char *)s;
 }
 
-#if ! defined(HAS_MODFL) && defined(HAS_AINTL) && defined(HAS_COPYSIGNL)
+/*
+=for apidoc isinfnan
+
+Perl_isinfnan() is utility function that returns true if the NV
+argument is either an infinity or a NaN, false otherwise.  To test
+in more detail, use Perl_isinf() and Perl_isnan().
+
+This is also the logical inverse of Perl_isfinite().
+
+=cut
+*/
+bool
+Perl_isinfnan(NV nv)
+{
+#ifdef Perl_isinf
+    if (Perl_isinf(nv))
+        return TRUE;
+#endif
+#ifdef Perl_isnan
+    if (Perl_isnan(nv))
+        return TRUE;
+#endif
+    return FALSE;
+}
+
+#ifndef HAS_MODFL
+/* C99 has truncl, pre-C99 Solaris had aintl.  We can use either with
+ * copysignl to emulate modfl, which is in some platforms missing or
+ * broken. */
+#  if defined(HAS_TRUNCL) && defined(HAS_COPYSIGNL)
 long double
 Perl_my_modfl(long double x, long double *ip)
 {
-	*ip = aintl(x);
-	return (x == *ip ? copysignl(0.0L, x) : x - *ip);
+    *ip = truncl(x);
+    return (x == *ip ? copysignl(0.0L, x) : x - *ip);
 }
+#  elif defined(HAS_AINTL) && defined(HAS_COPYSIGNL)
+long double
+Perl_my_modfl(long double x, long double *ip)
+{
+    *ip = aintl(x);
+    return (x == *ip ? copysignl(0.0L, x) : x - *ip);
+}
+#  endif
 #endif
 
+/* Similarly, with ilobl and scalbnl we can emulate frexpl. */
 #if ! defined(HAS_FREXPL) && defined(HAS_ILOGBL) && defined(HAS_SCALBNL)
 long double
 Perl_my_frexpl(long double x, int *e) {
-	*e = x == 0.0L ? 0 : ilogbl(x) + 1;
-	return (scalbnl(x, -*e));
+    *e = x == 0.0L ? 0 : ilogbl(x) + 1;
+    return (scalbnl(x, -*e));
 }
 #endif
 
@@ -1204,11 +1424,8 @@ it is not.
 
 If Configure detects this system has a signbit() that will work with
 our NVs, then we just use it via the #define in perl.h.  Otherwise,
-fall back on this implementation.  As a first pass, this gets everything
-right except -0.0.  Alas, catching -0.0 is the main use for this function,
-so this is not too helpful yet.  Still, at least we have the scaffolding
-in place to support other systems, should that prove useful.
-
+fall back on this implementation.  The main use of this function
+is catching -0.0.
 
 Configure notes:  This function is called 'Perl_signbit' instead of a
 plain 'signbit' because it is easy to imagine a system having a signbit()
@@ -1224,6 +1441,10 @@ Users should just always call Perl_signbit().
 #if !defined(HAS_SIGNBIT)
 int
 Perl_signbit(NV x) {
+#  ifdef Perl_fp_class_nzero
+    if (x == 0)
+        return Perl_fp_class_nzero(x);
+#  endif
     return (x < 0.0) ? 1 : 0;
 }
 #endif

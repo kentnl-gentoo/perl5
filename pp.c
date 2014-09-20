@@ -249,6 +249,7 @@ S_rv2gv(pTHX_ SV *sv, const bool vivify_sv, const bool strict,
 			const char * const name = CopSTASHPV(PL_curcop);
 			gv = newGVgen_flags(name,
                                 HvNAMEUTF8(CopSTASH(PL_curcop)) ? SVf_UTF8 : 0 );
+			SvREFCNT_inc_simple_void_NN(gv);
 		    }
 		    prepare_SV_for_RV(sv);
 		    SvRV_set(sv, MUTABLE_SV(gv));
@@ -471,7 +472,9 @@ PP(pp_rv2cv)
     CV *cv = sv_2cv(TOPs, &stash_unused, &gv, flags);
     if (cv) NOOP;
     else if ((flags == (GV_ADD|GV_NOEXPAND)) && gv && SvROK(gv)) {
-	cv = MUTABLE_CV(gv);
+	cv = SvTYPE(SvRV(gv)) == SVt_PVCV
+	    ? MUTABLE_CV(SvRV(gv))
+	    : MUTABLE_CV(gv);
     }    
     else
 	cv = MUTABLE_CV(&PL_sv_undef);
@@ -570,7 +573,6 @@ S_refto(pTHX_ SV *sv)
 	SvREFCNT_inc_void_NN(sv);
     }
     else if (SvPADTMP(sv)) {
-        assert(!IS_PADGV(sv));
         sv = newSVsv(sv);
     }
     else {
@@ -738,6 +740,9 @@ PP(pp_study)
        complicates matters elsewhere. */
     RETPUSHYES;
 }
+
+
+/* also used for: pp_transr() */
 
 PP(pp_trans)
 {
@@ -932,6 +937,9 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
     }
 }
 
+
+/* also used for: pp_schomp() */
+
 PP(pp_schop)
 {
     dSP; dTARGET;
@@ -943,6 +951,9 @@ PP(pp_schop)
     SETTARG;
     RETURN;
 }
+
+
+/* also used for: pp_chomp() */
 
 PP(pp_chop)
 {
@@ -972,7 +983,8 @@ PP(pp_undef)
     if (!sv)
 	RETPUSHUNDEF;
 
-    SV_CHECK_THINKFIRST_COW_DROP(sv);
+    if (SvTHINKFIRST(sv))
+	sv_force_normal_flags(sv, SV_COW_DROP_PV|SV_IMMEDIATE_UNREF);
 
     switch (SvTYPE(sv)) {
     case SVt_NULL:
@@ -997,18 +1009,8 @@ PP(pp_undef)
                            ));
 	/* FALLTHROUGH */
     case SVt_PVFM:
-	{
 	    /* let user-undef'd sub keep its identity */
-	    GV* const gv = CvGV((const CV *)sv);
-	    HEK * const hek = CvNAME_HEK((CV *)sv);
-	    if (hek) share_hek_hek(hek);
-	    cv_undef(MUTABLE_CV(sv));
-	    if (gv) CvGV_set(MUTABLE_CV(sv), gv);
-	    else if (hek) {
-		SvANY((CV *)sv)->xcv_gv_u.xcv_hek = hek;
-		CvNAMED_on(sv);
-	    }
-	}
+	cv_undef_flags(MUTABLE_CV(sv), CV_UNDEF_KEEP_NAME);
 	break;
     case SVt_PVGV:
 	assert(isGV_with_GP(sv));
@@ -1066,6 +1068,9 @@ PP(pp_undef)
 
     RETPUSHUNDEF;
 }
+
+
+/* also used for: pp_i_postdec() pp_i_postinc() pp_postdec() */
 
 PP(pp_postinc)
 {
@@ -1715,7 +1720,6 @@ PP(pp_repeat)
 #else
                 if (*SP) {
                    if (mod && SvPADTMP(*SP)) {
-                       assert(!IS_PADGV(*SP));
                        *SP = sv_mortalcopy(*SP);
                    }
 		   SvTEMP_off((*SP));
@@ -2105,6 +2109,9 @@ PP(pp_ncmp)
     RETURN;
 }
 
+
+/* also used for: pp_sge() pp_sgt() pp_slt() */
+
 PP(pp_sle)
 {
     dSP;
@@ -2214,6 +2221,9 @@ PP(pp_bit_and)
       RETURN;
     }
 }
+
+
+/* also used for: pp_bit_xor() */
 
 PP(pp_bit_or)
 {
@@ -2681,48 +2691,47 @@ PP(pp_atan2)
     }
 }
 
+
+/* also used for: pp_cos() pp_exp() pp_log() pp_sqrt() */
+
 PP(pp_sin)
 {
     dSP; dTARGET;
-    int amg_type = sin_amg;
+    int amg_type = fallback_amg;
     const char *neg_report = NULL;
-    NV (*func)(NV) = Perl_sin;
     const int op_type = PL_op->op_type;
 
     switch (op_type) {
-    case OP_COS:
-	amg_type = cos_amg;
-	func = Perl_cos;
-	break;
-    case OP_EXP:
-	amg_type = exp_amg;
-	func = Perl_exp;
-	break;
-    case OP_LOG:
-	amg_type = log_amg;
-	func = Perl_log;
-	neg_report = "log";
-	break;
-    case OP_SQRT:
-	amg_type = sqrt_amg;
-	func = Perl_sqrt;
-	neg_report = "sqrt";
-	break;
+    case OP_SIN:  amg_type = sin_amg; break;
+    case OP_COS:  amg_type = cos_amg; break;
+    case OP_EXP:  amg_type = exp_amg; break;
+    case OP_LOG:  amg_type = log_amg;  neg_report = "log";  break;
+    case OP_SQRT: amg_type = sqrt_amg; neg_report = "sqrt"; break;
     }
 
+    assert(amg_type != fallback_amg);
 
     tryAMAGICun_MG(amg_type, 0);
     {
       SV * const arg = POPs;
       const NV value = SvNV_nomg(arg);
-      if (neg_report) {
+      NV result = NV_NAN;
+      if (neg_report) { /* log or sqrt */
 	  if (op_type == OP_LOG ? (value <= 0.0) : (value < 0.0)) {
 	      SET_NUMERIC_STANDARD();
 	      /* diag_listed_as: Can't take log of %g */
 	      DIE(aTHX_ "Can't take %s of %"NVgf, neg_report, value);
 	  }
       }
-      XPUSHn(func(value));
+      switch (op_type) {
+      default:
+      case OP_SIN:  result = Perl_sin(value);  break;
+      case OP_COS:  result = Perl_cos(value);  break;
+      case OP_EXP:  result = Perl_exp(value);  break;
+      case OP_LOG:  result = Perl_log(value);  break;
+      case OP_SQRT: result = Perl_sqrt(value); break;
+      }
+      XPUSHn(result);
       RETURN;
     }
 }
@@ -2892,6 +2901,9 @@ PP(pp_abs)
     RETURN;
 }
 
+
+/* also used for: pp_hex() */
+
 PP(pp_oct)
 {
     dSP; dTARGET;
@@ -2919,11 +2931,11 @@ PP(pp_oct)
         tmps++, len--;
     if (*tmps == '0')
         tmps++, len--;
-    if (*tmps == 'x' || *tmps == 'X') {
+    if (isALPHA_FOLD_EQ(*tmps, 'x')) {
     hex:
         result_uv = grok_hex (tmps, &len, &flags, &result_nv);
     }
-    else if (*tmps == 'b' || *tmps == 'B')
+    else if (isALPHA_FOLD_EQ(*tmps, 'b'))
         result_uv = grok_bin (tmps, &len, &flags, &result_nv);
     else
         result_uv = grok_oct (tmps, &len, &flags, &result_nv);
@@ -3198,6 +3210,9 @@ PP(pp_vec)
     RETURN;
 }
 
+
+/* also used for: pp_rindex() */
+
 PP(pp_index)
 {
     dSP; dTARGET;
@@ -3356,23 +3371,32 @@ PP(pp_chr)
     SV *top = POPs;
 
     SvGETMAGIC(top);
-    if (!IN_BYTES /* under bytes, chr(-1) eq chr(0xff), etc. */
-     && ((SvIOKp(top) && !SvIsUV(top) && SvIV_nomg(top) < 0)
-	 ||
-	 ((SvNOKp(top) || (SvOK(top) && !SvIsUV(top)))
-	  && SvNV_nomg(top) < 0.0))) {
+    if (SvNOK(top) && Perl_isinfnan(SvNV(top))) {
+        if (ckWARN(WARN_UTF8)) {
+            Perl_warner(aTHX_ packWARN(WARN_UTF8),
+                        "Invalid number (%"NVgf") in chr", SvNV(top));
+        }
+        value = UNICODE_REPLACEMENT;
+    }
+    else {
+        if (!IN_BYTES /* under bytes, chr(-1) eq chr(0xff), etc. */
+            && ((SvIOKp(top) && !SvIsUV(top) && SvIV_nomg(top) < 0)
+                ||
+                ((SvNOKp(top) || (SvOK(top) && !SvIsUV(top)))
+                 && SvNV_nomg(top) < 0.0))) {
 	    if (ckWARN(WARN_UTF8)) {
 		if (SvGMAGICAL(top)) {
 		    SV *top2 = sv_newmortal();
 		    sv_setsv_nomg(top2, top);
 		    top = top2;
 		}
-		Perl_warner(aTHX_ packWARN(WARN_UTF8),
-			   "Invalid negative number (%"SVf") in chr", SVfARG(top));
-	    }
-	    value = UNICODE_REPLACEMENT;
-    } else {
-	value = SvUV_nomg(top);
+                Perl_warner(aTHX_ packWARN(WARN_UTF8),
+                            "Invalid negative number (%"SVf") in chr", SVfARG(top));
+            }
+            value = UNICODE_REPLACEMENT;
+        } else {
+            value = SvUV_nomg(top);
+        }
     }
 
     SvUPGRADE(TARG,SVt_PV);
@@ -3466,6 +3490,9 @@ PP(pp_crypt)
 
 /* Generally UTF-8 and UTF-EBCDIC are indistinguishable at this level.  So 
  * most comments below say UTF-8, when in fact they mean UTF-EBCDIC as well */
+
+
+/* also used for: pp_lcfirst() */
 
 PP(pp_ucfirst)
 {
@@ -4455,7 +4482,11 @@ PP(pp_kvaslice)
     RETURN;
 }
 
+
 /* Smart dereferencing for keys, values and each */
+
+/* also used for: pp_reach() pp_rvalues() */
+
 PP(pp_rkeys)
 {
     dSP;
@@ -4518,6 +4549,7 @@ PP(pp_aeach)
     RETURN;
 }
 
+/* also used for: pp_avalues()*/
 PP(pp_akeys)
 {
     dSP;
@@ -4959,7 +4991,6 @@ PP(pp_lslice)
 	    if (!(*lelem = firstrelem[ix]))
 		*lelem = &PL_sv_undef;
 	    else if (mod && SvPADTMP(*lelem)) {
-                assert(!IS_PADGV(*lelem));
 		*lelem = firstrelem[ix] = sv_mortalcopy(*lelem);
             }
 	}
@@ -5291,6 +5322,7 @@ PP(pp_push)
     RETURN;
 }
 
+/* also used for: pp_pop()*/
 PP(pp_shift)
 {
     dSP;
@@ -5924,6 +5956,9 @@ PP(pp_lock)
     RETURN;
 }
 
+
+/* used for: pp_padany(), pp_mapstart(), pp_custom(); plus any system ops
+ * that aren't implemented on a particular platform */
 
 PP(unimplemented_op)
 {

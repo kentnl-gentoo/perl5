@@ -28,6 +28,17 @@
 #   include "config.h"
 #endif
 
+/* NOTE 1: that with gcc -std=c89 the __STDC_VERSION__ is *not* defined
+ * because the __STDC_VERSION__ became a thing only with C90.  Therefore,
+ * with gcc, HAS_C99 will never become true as long as we use -std=c89.
+
+ * NOTE 2: headers lie.  Do not expect that if HAS_C99 gets to be true,
+ * all the C99 features are there and are correct. */
+#if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) || \
+     defined(_STDC_C99)
+#  define HAS_C99 1
+#endif
+
 /* See L<perlguts/"The Perl API"> for detailed notes on
  * PERL_IMPLICIT_CONTEXT and PERL_IMPLICIT_SYS */
 
@@ -307,18 +318,19 @@
 
 /* gcc -Wall:
  * for silencing unused variables that are actually used most of the time,
- * but we cannot quite get rid of, such as "ax" in PPCODE+noargs xsubs
+ * but we cannot quite get rid of, such as "ax" in PPCODE+noargs xsubs,
+ * or variables/arguments that are used only in certain configurations.
  */
 #ifndef PERL_UNUSED_ARG
 #  if defined(lint) && defined(S_SPLINT_S) /* www.splint.org */
 #    include <note.h>
 #    define PERL_UNUSED_ARG(x) NOTE(ARGUNUSED(x))
 #  else
-#    define PERL_UNUSED_ARG(x) ((void)x)
+#    define PERL_UNUSED_ARG(x) ((void)sizeof(x))
 #  endif
 #endif
 #ifndef PERL_UNUSED_VAR
-#  define PERL_UNUSED_VAR(x) ((void)x)
+#  define PERL_UNUSED_VAR(x) ((void)sizeof(x))
 #endif
 
 #if defined(USE_ITHREADS) || defined(PERL_GLOBAL_STRUCT)
@@ -698,6 +710,10 @@
 #  ifdef I_VARARGS
 #    include <varargs.h>
 #  endif
+#endif
+
+#ifdef I_STDINT
+# include <stdint.h>
 #endif
 
 #include <ctype.h>
@@ -1546,6 +1562,10 @@ EXTERN_C char *crypt(const char *, const char *);
 
 #define PERL_SNPRINTF_CHECK(len, max, api) STMT_START { if ((max) > 0 && (Size_t)len >= (max)) Perl_croak_nocontext("panic: %s buffer overflow", STRINGIFY(api)); } STMT_END
 
+#ifdef USE_QUADMATH
+#  define my_snprintf Perl_my_snprintf
+#  define PERL_MY_SNPRINTF_GUARDED
+#else
 #if defined(HAS_SNPRINTF) && defined(HAS_C99_VARIADIC_MACROS) && !(defined(DEBUGGING) && !defined(PERL_USE_GCC_BRACE_GROUPS)) && !defined(PERL_GCC_PEDANTIC)
 #  ifdef PERL_USE_GCC_BRACE_GROUPS
 #      define my_snprintf(buffer, max, ...) ({ int len = snprintf(buffer, max, __VA_ARGS__); PERL_SNPRINTF_CHECK(len, max, snprintf); len; })
@@ -1557,7 +1577,10 @@ EXTERN_C char *crypt(const char *, const char *);
 #  define my_snprintf  Perl_my_snprintf
 #  define PERL_MY_SNPRINTF_GUARDED
 #endif
+#endif
 
+/* There is no quadmath_vsnprintf, and therefore my_vsnprintf()
+ * dies if called under USE_QUADMATH. */
 #if defined(HAS_VSNPRINTF) && defined(HAS_C99_VARIADIC_MACROS) && !(defined(DEBUGGING) && !defined(PERL_USE_GCC_BRACE_GROUPS)) && !defined(PERL_GCC_PEDANTIC)
 #  ifdef PERL_USE_GCC_BRACE_GROUPS
 #      define my_vsnprintf(buffer, max, ...) ({ int len = vsnprintf(buffer, max, __VA_ARGS__); PERL_SNPRINTF_CHECK(len, max, vsnprintf); len; })
@@ -1838,93 +1861,150 @@ typedef NVTYPE NV;
 #   ifdef I_SUNMATH
 #       include <sunmath.h>
 #   endif
-#   define NV_DIG LDBL_DIG
-#   ifdef LDBL_MANT_DIG
-#       define NV_MANT_DIG LDBL_MANT_DIG
+#   if defined(USE_QUADMATH) && defined(I_QUADMATH)
+#       include <quadmath.h>
 #   endif
-#   ifdef LDBL_MIN
-#       define NV_MIN LDBL_MIN
-#   endif
-#   ifdef LDBL_MAX
-#       define NV_MAX LDBL_MAX
-#   endif
-#   ifdef LDBL_MIN_EXP
-#       define NV_MIN_EXP LDBL_MIN_EXP
-#   endif
-#   ifdef LDBL_MAX_EXP
-#       define NV_MAX_EXP LDBL_MAX_EXP
-#   endif
-#   ifdef LDBL_MIN_10_EXP
-#       define NV_MIN_10_EXP LDBL_MIN_10_EXP
-#   endif
-#   ifdef LDBL_MAX_10_EXP
-#       define NV_MAX_10_EXP LDBL_MAX_10_EXP
-#   endif
-#   ifdef LDBL_EPSILON
-#       define NV_EPSILON LDBL_EPSILON
-#   endif
-#   ifdef LDBL_MAX
-#       define NV_MAX LDBL_MAX
+#   ifdef FLT128_DIG
+#       define NV_DIG FLT128_DIG
+#       define NV_MANT_DIG FLT128_MANT_DIG
+#       define NV_MIN FLT128_MIN
+#       define NV_MAX FLT128_MAX
+#       define NV_MIN_EXP FLT128_MIN_EXP
+#       define NV_MAX_EXP FLT128_MAX_EXP
+#       define NV_EPSILON FLT128_EPSILON
+#       define NV_MIN_10_EXP FLT128_MIN_10_EXP
+#       define NV_MAX_10_EXP FLT128_MAX_10_EXP
+#       define NV_INF HUGE_VALQ
+#       define NV_NAN nanq("0")
+#   elif defined(LDBL_DIG)
+#       define NV_DIG LDBL_DIG
+#       ifdef LDBL_MANT_DIG
+#           define NV_MANT_DIG LDBL_MANT_DIG
+#       endif
+#       ifdef LDBL_MIN
+#           define NV_MIN LDBL_MIN
+#       endif
+#       ifdef LDBL_MAX
+#           define NV_MAX LDBL_MAX
+#       endif
+#       ifdef LDBL_MIN_EXP
+#           define NV_MIN_EXP LDBL_MIN_EXP
+#       endif
+#       ifdef LDBL_MAX_EXP
+#           define NV_MAX_EXP LDBL_MAX_EXP
+#       endif
+#       ifdef LDBL_MIN_10_EXP
+#           define NV_MIN_10_EXP LDBL_MIN_10_EXP
+#       endif
+#       ifdef LDBL_MAX_10_EXP
+#           define NV_MAX_10_EXP LDBL_MAX_10_EXP
+#       endif
+#       ifdef LDBL_EPSILON
+#           define NV_EPSILON LDBL_EPSILON
+#       endif
+#       ifdef LDBL_MAX
+#           define NV_MAX LDBL_MAX
 /* Having LDBL_MAX doesn't necessarily mean that we have LDBL_MIN... -Allen */
-#   else
-#       ifdef HUGE_VALL
-#           define NV_MAX HUGE_VALL
 #       else
-#           ifdef HUGE_VAL
-#               define NV_MAX ((NV)HUGE_VAL)
+#           ifdef HUGE_VALL
+#               define NV_MAX HUGE_VALL
 #           endif
 #       endif
 #   endif
-#   ifdef HAS_SQRTL
-#       define Perl_cos cosl
-#       define Perl_sin sinl
-#       define Perl_sqrt sqrtl
-#       define Perl_exp expl
-#       define Perl_log logl
+#   if defined(USE_QUADMATH) && defined(I_QUADMATH)
+#       define Perl_acos acosq
+#       define Perl_asin asinq
+#       define Perl_atan atanq
+#       define Perl_atan2 atan2q
+#       define Perl_ceil ceilq
+#       define Perl_cos cosq
+#       define Perl_cosh coshq
+#       define Perl_exp expq
+/* no Perl_fabs, but there's PERL_ABS */
+#       define Perl_floor floorq
+#       define Perl_fmod fmodq
+#       define Perl_log logq
+#       define Perl_log10 log10q
+#       define Perl_pow powq
+#       define Perl_sin sinq
+#       define Perl_sinh sinhq
+#       define Perl_sqrt sqrtq
+#       define Perl_tan tanq
+#       define Perl_tanh tanhq
+#       define Perl_modf(x,y) modfq(x,y)
+#       define Perl_frexp(x,y) frexpq(x,y)
+#       define Perl_ldexp(x, y) ldexpq(x,y)
+#       define Perl_isinf(x) isinfq(x)
+#       define Perl_isnan(x) isnanq(x)
+#       define Perl_isfinite(x) !(isnanq(x) || isinfq(x))
+#   elif defined(HAS_SQRTL)
+#       define Perl_acos acosl
+#       define Perl_asin asinl
+#       define Perl_atan atanl
 #       define Perl_atan2 atan2l
-#       define Perl_pow powl
-#       define Perl_floor floorl
 #       define Perl_ceil ceill
+#       define Perl_cos cosl
+#       define Perl_cosh coshl
+#       define Perl_exp expl
+/* no Perl_fabs, but there's PERL_ABS */
+#       define Perl_floor floorl
 #       define Perl_fmod fmodl
+#       define Perl_log logl
+#       define Perl_log10 log10l
+#       define Perl_pow powl
+#       define Perl_sin sinl
+#       define Perl_sinh sinhl
+#       define Perl_sqrt sqrtl
+#       define Perl_tan tanl
+#       define Perl_tanh tanhl
 #   endif
 /* e.g. libsunmath doesn't have modfl and frexpl as of mid-March 2000 */
-#   ifdef HAS_MODFL
-#       define Perl_modf(x,y) modfl(x,y)
+#   ifndef Perl_modf
+#       ifdef HAS_MODFL
+#           define Perl_modf(x,y) modfl(x,y)
 /* eg glibc 2.2 series seems to provide modfl on ppc and arm, but has no
    prototype in <math.h> */
-#       ifndef HAS_MODFL_PROTO
+#           ifndef HAS_MODFL_PROTO
 EXTERN_C long double modfl(long double, long double *);
-#	endif
-#   else
-#       if defined(HAS_AINTL) && defined(HAS_COPYSIGNL)
+#	    endif
+#       elif (defined(HAS_TRUNCL) || defined(HAS_AINTL)) && defined(HAS_COPYSIGNL)
         extern long double Perl_my_modfl(long double x, long double *ip);
 #           define Perl_modf(x,y) Perl_my_modfl(x,y)
 #       endif
 #   endif
-#   ifdef HAS_FREXPL
-#       define Perl_frexp(x,y) frexpl(x,y)
-#   else
-#       if defined(HAS_ILOGBL) && defined(HAS_SCALBNL)
-        extern long double Perl_my_frexpl(long double x, int *e);
-#           define Perl_frexp(x,y) Perl_my_frexpl(x,y)
+#   ifndef Perl_frexp
+#       ifdef HAS_FREXPL
+#           define Perl_frexp(x,y) frexpl(x,y)
+#       else
+#           if defined(HAS_ILOGBL) && defined(HAS_SCALBNL)
+extern long double Perl_my_frexpl(long double x, int *e);
+#               define Perl_frexp(x,y) Perl_my_frexpl(x,y)
+#           endif
 #       endif
 #   endif
-#   ifdef HAS_LDEXPL
-#       define Perl_ldexp(x, y) ldexpl(x,y)
-#   else
-#       if defined(HAS_SCALBNL) && FLT_RADIX == 2
-#           define Perl_ldexp(x,y) scalbnl(x,y)
+#   ifndef Perl_ldexp
+#       ifdef HAS_LDEXPL
+#           define Perl_ldexp(x, y) ldexpl(x,y)
+#       else
+#           if defined(HAS_SCALBNL) && FLT_RADIX == 2
+#               define Perl_ldexp(x,y) scalbnl(x,y)
+#           endif
 #       endif
 #   endif
 #   ifndef Perl_isnan
-#       ifdef HAS_ISNANL
+#       if defined(HAS_ISNANL) && !(defined(isnan) && defined(HAS_C99))
 #           define Perl_isnan(x) isnanl(x)
 #       endif
 #   endif
 #   ifndef Perl_isinf
-#       ifdef HAS_FINITEL
-#           define Perl_isinf(x) !(finitel(x)||Perl_isnan(x))
+#       if defined(HAS_ISINFL) && !(defined(isinf) && defined(HAS_C99))
+#           define Perl_isinf(x) isinfl(x)
+#       elif defined(LDBL_MAX)
+#           define Perl_isinf(x) ((x) > LDBL_MAX || (x) < -LDBL_MAX)
 #       endif
+#   endif
+#   ifndef Perl_isfinite
+#       define Perl_isfinite(x) Perl_isfinitel(x)
 #   endif
 #else
 #   define NV_DIG DBL_DIG
@@ -1960,31 +2040,121 @@ EXTERN_C long double modfl(long double, long double *);
 #           define NV_MAX HUGE_VAL
 #       endif
 #   endif
-#   define Perl_cos cos
-#   define Perl_sin sin
-#   define Perl_sqrt sqrt
-#   define Perl_exp exp
-#   define Perl_log log
+
+/* These math interfaces are C89. */
+#   define Perl_acos acos
+#   define Perl_asin asin
+#   define Perl_atan atan
 #   define Perl_atan2 atan2
-#   define Perl_pow pow
-#   define Perl_floor floor
 #   define Perl_ceil ceil
+#   define Perl_cos cos
+#   define Perl_cosh cosh
+#   define Perl_exp exp
+/* no Perl_fabs, but there's PERL_ABS */
+#   define Perl_floor floor
 #   define Perl_fmod fmod
+#   define Perl_log log
+#   define Perl_log10 log10
+#   define Perl_pow pow
+#   define Perl_sin sin
+#   define Perl_sinh sinh
+#   define Perl_sqrt sqrt
+#   define Perl_tan tan
+#   define Perl_tanh tanh
+
 #   define Perl_modf(x,y) modf(x,y)
 #   define Perl_frexp(x,y) frexp(x,y)
 #   define Perl_ldexp(x,y) ldexp(x,y)
+
+#   ifndef Perl_isnan
+#       ifdef HAS_ISNAN
+#           define Perl_isnan(x) isnan(x)
+#       endif
+#   endif
+#   ifndef Perl_isinf
+#       if defined(HAS_ISINF)
+#           define Perl_isinf(x) isinf(x)
+#       elif defined(DBL_MAX)
+#           define Perl_isinf(x) ((x) > DBL_MAX || (x) < -DBL_MAX)
+#       endif
+#   endif
+#   ifndef Perl_isfinite
+#     ifdef HAS_ISFINITE
+#       define Perl_isfinite(x) isfinite(x)
+#     elif defined(HAS_FINITE)
+#       define Perl_isfinite(x) finite(x)
+#     endif
+#   endif
 #endif
 
-/* rumor has it that Win32 has _fpclass() */
+/* fpclassify(): C99.  It is supposed to be a macro that switches on
+* the sizeof() of its argument, so there's no need for e.g. fpclassifyl().*/
+#if !defined(Perl_fp_class) && defined(HAS_FPCLASSIFY)
+#    include <math.h>
+#    if defined(FP_INFINITE) && defined(FP_NAN)
+#        define Perl_fp_class(x)	fpclassify(x)
+#        define Perl_fp_class_inf(x)	(Perl_fp_class(x)==FP_INFINITE)
+#        define Perl_fp_class_nan(x)	(Perl_fp_class(x)==FP_NAN)
+#        define Perl_fp_class_norm(x)	(Perl_fp_class(x)==FP_NORMAL)
+#        define Perl_fp_class_denorm(x)	(Perl_fp_class(x)==FP_SUBNORMAL)
+#        define Perl_fp_class_zero(x)	(Perl_fp_class(x)==FP_ZERO)
+#    elif defined(FP_PLUS_INF) && defined(FP_QNAN)
+/* Some versions of HP-UX (10.20) have (only) fpclassify() but which is
+ * actually not the C99 fpclassify, with its own set of return defines. */
+#        define Perl_fp_class(x)	fpclassify(x)
+#        define Perl_fp_class_pinf(x)	(Perl_fp_class(x)==FP_PLUS_INF)
+#        define Perl_fp_class_ninf(x)	(Perl_fp_class(x)==FP_MINUS_INF)
+#        define Perl_fp_class_snan(x)	(Perl_fp_class(x)==FP_SNAN)
+#        define Perl_fp_class_qnan(x)	(Perl_fp_class(x)==FP_QNAN)
+#        define Perl_fp_class_pnorm(x)	(Perl_fp_class(x)==FP_PLUS_NORM)
+#        define Perl_fp_class_nnorm(x)	(Perl_fp_class(x)==FP_MINUS_NORM)
+#        define Perl_fp_class_pdenorm(x)	(Perl_fp_class(x)==FP_PLUS_DENORM)
+#        define Perl_fp_class_ndenorm(x)	(Perl_fp_class(x)==FP_MINUS_DENORM)
+#        define Perl_fp_class_pzero(x)	(Perl_fp_class(x)==FP_PLUS_ZERO)
+#        define Perl_fp_class_nzero(x)	(Perl_fp_class(x)==FP_MINUS_ZERO)
+#    else
+#        undef Perl_fp_class /* Unknown set of defines */
+#    endif
+#endif
 
-/* SGI has fpclassl... but not with the same result values,
- * and it's via a typedef (not via #define), so will need to redo Configure
- * to use. Not worth the trouble, IMO, at least until the below is used
- * more places. Also has fp_class_l, BTW, via fp_class.h. Feel free to check
- * with me for the SGI manpages, SGI testing, etcetera, if you want to
- * try getting this to work with IRIX. - Allen <allens@cpan.org> */
+/* fp_classify(): Legacy: VMS, maybe Unicos? The values, however,
+ * are identical to the C99 fpclassify(). */
+#if !defined(Perl_fp_class) && defined(HAS_FP_CLASSIFY)
+#    include <math.h>
+#    ifdef __VMS
+     /* FP_INFINITE and others are here rather than in math.h as C99 stipulates */
+#        include <fp.h>
+     /* oh, and the isnormal macro has a typo in it! */
+#    undef isnormal
+#    define isnormal(x) Perl_fp_class_norm(x)
+#    endif
+#    if defined(FP_INFINITE) && defined(FP_NAN)
+#        define Perl_fp_class(x)	fp_classify(x)
+#        define Perl_fp_class_inf(x)	(Perl_fp_class(x)==FP_INFINITE)
+#        define Perl_fp_class_nan(x)	(Perl_fp_class(x)==FP_NAN)
+#        define Perl_fp_class_norm(x)	(Perl_fp_class(x)==FP_NORMAL)
+#        define Perl_fp_class_denorm(x)	(Perl_fp_class(x)==FP_SUBNORMAL)
+#        define Perl_fp_class_zero(x)	(Perl_fp_class(x)==FP_ZERO)
+#    else
+#        undef Perl_fp_class /* Unknown set of defines */
+#    endif
+#endif
 
+/* Feel free to check with me for the SGI manpages, SGI testing,
+ * etcetera, if you want to try getting this to work with IRIX.
+ *
+ * - Allen <allens@cpan.org> */
+
+/* fpclass(): SysV, at least Solaris and some versions of IRIX. */
 #if !defined(Perl_fp_class) && (defined(HAS_FPCLASS)||defined(HAS_FPCLASSL))
+/* Solaris and IRIX have fpclass/fpclassl, but they are using
+ * an enum typedef, not cpp symbols, and Configure doesn't detect that.
+ * Define some symbols also as cpp symbols so we can detect them. */
+#    if defined(__sun) || defined(__irix__) /* XXX Configure test instead */
+#     define FP_PINF FP_PINF
+#     define FP_QNAN FP_QNAN
+#    endif
+#    include <math.h>
 #    ifdef I_IEEFP
 #        include <ieeefp.h>
 #    endif
@@ -1992,132 +2162,219 @@ EXTERN_C long double modfl(long double, long double *);
 #        include <fp.h>
 #    endif
 #    if defined(USE_LONG_DOUBLE) && defined(HAS_FPCLASSL)
-#        define Perl_fp_class()		fpclassl(x)
+#        define Perl_fp_class(x)	fpclassl(x)
 #    else
-#        define Perl_fp_class()		fpclass(x)
+#        define Perl_fp_class(x)	fpclass(x)
 #    endif
-#    define Perl_fp_class_snan(x)	(Perl_fp_class(x)==FP_CLASS_SNAN)
-#    define Perl_fp_class_qnan(x)	(Perl_fp_class(x)==FP_CLASS_QNAN)
-#    define Perl_fp_class_nan(x)	(Perl_fp_class(x)==FP_CLASS_SNAN||Perl_fp_class(x)==FP_CLASS_QNAN)
-#    define Perl_fp_class_ninf(x)	(Perl_fp_class(x)==FP_CLASS_NINF)
-#    define Perl_fp_class_pinf(x)	(Perl_fp_class(x)==FP_CLASS_PINF)
-#    define Perl_fp_class_inf(x)	(Perl_fp_class(x)==FP_CLASS_NINF||Perl_fp_class(x)==FP_CLASS_PINF)
-#    define Perl_fp_class_nnorm(x)	(Perl_fp_class(x)==FP_CLASS_NNORM)
-#    define Perl_fp_class_pnorm(x)	(Perl_fp_class(x)==FP_CLASS_PNORM)
-#    define Perl_fp_class_norm(x)	(Perl_fp_class(x)==FP_CLASS_NNORM||Perl_fp_class(x)==FP_CLASS_PNORM)
-#    define Perl_fp_class_ndenorm(x)	(Perl_fp_class(x)==FP_CLASS_NDENORM)
-#    define Perl_fp_class_pdenorm(x)	(Perl_fp_class(x)==FP_CLASS_PDENORM)
-#    define Perl_fp_class_denorm(x)	(Perl_fp_class(x)==FP_CLASS_NDENORM||Perl_fp_class(x)==FP_CLASS_PDENORM)
-#    define Perl_fp_class_nzero(x)	(Perl_fp_class(x)==FP_CLASS_NZERO)
-#    define Perl_fp_class_pzero(x)	(Perl_fp_class(x)==FP_CLASS_PZERO)
-#    define Perl_fp_class_zero(x)	(Perl_fp_class(x)==FP_CLASS_NZERO||Perl_fp_class(x)==FP_CLASS_PZERO)
+#    if defined(FP_CLASS_PINF) && defined(FP_CLASS_SNAN)
+#        define Perl_fp_class_snan(x)	(Perl_fp_class(x)==FP_CLASS_SNAN)
+#        define Perl_fp_class_qnan(x)	(Perl_fp_class(x)==FP_CLASS_QNAN)
+#        define Perl_fp_class_ninf(x)	(Perl_fp_class(x)==FP_CLASS_NINF)
+#        define Perl_fp_class_pinf(x)	(Perl_fp_class(x)==FP_CLASS_PINF)
+#        define Perl_fp_class_nnorm(x)	(Perl_fp_class(x)==FP_CLASS_NNORM)
+#        define Perl_fp_class_pnorm(x)	(Perl_fp_class(x)==FP_CLASS_PNORM)
+#        define Perl_fp_class_ndenorm(x)	(Perl_fp_class(x)==FP_CLASS_NDENORM)
+#        define Perl_fp_class_pdenorm(x)	(Perl_fp_class(x)==FP_CLASS_PDENORM)
+#        define Perl_fp_class_nzero(x)	(Perl_fp_class(x)==FP_CLASS_NZERO)
+#        define Perl_fp_class_pzero(x)	(Perl_fp_class(x)==FP_CLASS_PZERO)
+#    elif defined(FP_PINF) && defined(FP_QNAN)
+#        define Perl_fp_class_snan(x)	(Perl_fp_class(x)==FP_SNAN)
+#        define Perl_fp_class_qnan(x)	(Perl_fp_class(x)==FP_QNAN)
+#        define Perl_fp_class_ninf(x)	(Perl_fp_class(x)==FP_NINF)
+#        define Perl_fp_class_pinf(x)	(Perl_fp_class(x)==FP_PINF)
+#        define Perl_fp_class_nnorm(x)	(Perl_fp_class(x)==FP_NNORM)
+#        define Perl_fp_class_pnorm(x)	(Perl_fp_class(x)==FP_PNORM)
+#        define Perl_fp_class_ndenorm(x)	(Perl_fp_class(x)==FP_NDENORM)
+#        define Perl_fp_class_pdenorm(x)	(Perl_fp_class(x)==FP_PDENORM)
+#        define Perl_fp_class_nzero(x)	(Perl_fp_class(x)==FP_NZERO)
+#        define Perl_fp_class_pzero(x)	(Perl_fp_class(x)==FP_PZERO)
+#    else
+#        undef Perl_fp_class /* Unknown set of defines */
+#    endif
 #endif
 
-#if !defined(Perl_fp_class) && defined(HAS_FP_CLASS)
+/* fp_class(): Legacy: at least Tru64, some versions of IRIX. */
+#if !defined(Perl_fp_class) && (defined(HAS_FP_CLASS)||defined(HAS_FP_CLASSL))
 #    include <math.h>
 #    if !defined(FP_SNAN) && defined(I_FP_CLASS)
 #        include <fp_class.h>
 #    endif
-#    define Perl_fp_class(x)		fp_class(x)
-#    define Perl_fp_class_snan(x)	(fp_class(x)==FP_SNAN)
-#    define Perl_fp_class_qnan(x)	(fp_class(x)==FP_QNAN)
-#    define Perl_fp_class_nan(x)	(fp_class(x)==FP_SNAN||fp_class(x)==FP_QNAN)
-#    define Perl_fp_class_ninf(x)	(fp_class(x)==FP_NEG_INF)
-#    define Perl_fp_class_pinf(x)	(fp_class(x)==FP_POS_INF)
-#    define Perl_fp_class_inf(x)	(fp_class(x)==FP_NEG_INF||fp_class(x)==FP_POS_INF)
-#    define Perl_fp_class_nnorm(x)	(fp_class(x)==FP_NEG_NORM)
-#    define Perl_fp_class_pnorm(x)	(fp_class(x)==FP_POS_NORM)
-#    define Perl_fp_class_norm(x)	(fp_class(x)==FP_NEG_NORM||fp_class(x)==FP_POS_NORM)
-#    define Perl_fp_class_ndenorm(x)	(fp_class(x)==FP_NEG_DENORM)
-#    define Perl_fp_class_pdenorm(x)	(fp_class(x)==FP_POS_DENORM)
-#    define Perl_fp_class_denorm(x)	(fp_class(x)==FP_NEG_DENORM||fp_class(x)==FP_POS_DENORM)
-#    define Perl_fp_class_nzero(x)	(fp_class(x)==FP_NEG_ZERO)
-#    define Perl_fp_class_pzero(x)	(fp_class(x)==FP_POS_ZERO)
-#    define Perl_fp_class_zero(x)	(fp_class(x)==FP_NEG_ZERO||fp_class(x)==FP_POS_ZERO)
+#    if defined(FP_POS_INF) && defined(FP_QNAN)
+#        ifdef __irix__ /* XXX Configure test instead */
+#            ifdef USE_LONG_DOUBLE
+#                define Perl_fp_class(x)	fp_class_l(x)
+#            else
+#                define Perl_fp_class(x)	fp_class_d(x)
+#            endif
+#        else
+#            if defined(USE_LONG_DOUBLE) && defined(HAS_FP_CLASSL)
+#                define Perl_fp_class(x)	fp_classl(x)
+#            else
+#                define Perl_fp_class(x)	fp_class(x)
+#            endif
+#        endif
+#        if defined(FP_POS_INF) && defined(FP_QNAN)
+#            define Perl_fp_class_snan(x)	(Perl_fp_class(x)==FP_SNAN)
+#            define Perl_fp_class_qnan(x)	(Perl_fp_class(x)==FP_QNAN)
+#            define Perl_fp_class_ninf(x)	(Perl_fp_class(x)==FP_NEG_INF)
+#            define Perl_fp_class_pinf(x)	(Perl_fp_class(x)==FP_POS_INF)
+#            define Perl_fp_class_nnorm(x)	(Perl_fp_class(x)==FP_NEG_NORM)
+#            define Perl_fp_class_pnorm(x)	(Perl_fp_class(x)==FP_POS_NORM)
+#            define Perl_fp_class_ndenorm(x)	(Perl_fp_class(x)==FP_NEG_DENORM)
+#            define Perl_fp_class_pdenorm(x)	(Perl_fp_class(x)==FP_POS_DENORM)
+#            define Perl_fp_class_nzero(x)	(Perl_fp_class(x)==FP_NEG_ZERO)
+#            define Perl_fp_class_pzero(x)	(Perl_fp_class(x)==FP_POS_ZERO)
+#        else
+#            undef Perl_fp_class /* Unknown set of defines */
+#        endif
+#    endif
 #endif
 
-#if !defined(Perl_fp_class) && defined(HAS_FPCLASSIFY)
-#    include <math.h>
-#    define Perl_fp_class(x)		fpclassify(x)
-#    define Perl_fp_class_nan(x)	(fp_classify(x)==FP_SNAN||fp_classify(x)==FP_QNAN)
-#    define Perl_fp_class_inf(x)	(fp_classify(x)==FP_INFINITE)
-#    define Perl_fp_class_norm(x)	(fp_classify(x)==FP_NORMAL)
-#    define Perl_fp_class_denorm(x)	(fp_classify(x)==FP_SUBNORMAL)
-#    define Perl_fp_class_zero(x)	(fp_classify(x)==FP_ZERO)
-#endif
-
+/* class(), _class(): Legacy: AIX. */
 #if !defined(Perl_fp_class) && defined(HAS_CLASS)
 #    include <math.h>
-#    ifndef _cplusplus
-#        define Perl_fp_class(x)	class(x)
-#    else
-#        define Perl_fp_class(x)	_class(x)
+#    if defined(FP_PLUS_NORM) && defined(FP_PLUS_INF)
+#        ifndef _cplusplus
+#            define Perl_fp_class(x)	class(x)
+#        else
+#            define Perl_fp_class(x)	_class(x)
+#        endif
+#        if defined(FP_PLUS_INF) && defined(FP_NANQ)
+#            define Perl_fp_class_snan(x)	(Perl_fp_class(x)==FP_NANS)
+#            define Perl_fp_class_qnan(x)	(Perl_fp_class(x)==FP_NANQ)
+#            define Perl_fp_class_ninf(x)	(Perl_fp_class(x)==FP_MINUS_INF)
+#            define Perl_fp_class_pinf(x)	(Perl_fp_class(x)==FP_PLUS_INF)
+#            define Perl_fp_class_nnorm(x)	(Perl_fp_class(x)==FP_MINUS_NORM)
+#            define Perl_fp_class_pnorm(x)	(Perl_fp_class(x)==FP_PLUS_NORM)
+#            define Perl_fp_class_ndenorm(x)	(Perl_fp_class(x)==FP_MINUS_DENORM)
+#            define Perl_fp_class_pdenorm(x)	(Perl_fp_class(x)==FP_PLUS_DENORM)
+#            define Perl_fp_class_nzero(x)	(Perl_fp_class(x)==FP_MINUS_ZERO)
+#            define Perl_fp_class_pzero(x)	(Perl_fp_class(x)==FP_PLUS_ZERO)
+#        else
+#            undef Perl_fp_class /* Unknown set of defines */
+#        endif
 #    endif
-#    define Perl_fp_class_snan(x)	(Perl_fp_class(x)==FP_NANS)
-#    define Perl_fp_class_qnan(x)	(Perl_fp_class(x)==FP_NANQ)
-#    define Perl_fp_class_nan(x)	(Perl_fp_class(x)==FP_SNAN||Perl_fp_class(x)==FP_QNAN)
-#    define Perl_fp_class_ninf(x)	(Perl_fp_class(x)==FP_MINUS_INF)
-#    define Perl_fp_class_pinf(x)	(Perl_fp_class(x)==FP_PLUS_INF)
-#    define Perl_fp_class_inf(x)	(Perl_fp_class(x)==FP_MINUS_INF||Perl_fp_class(x)==FP_PLUS_INF)
-#    define Perl_fp_class_nnorm(x)	(Perl_fp_class(x)==FP_MINUS_NORM)
-#    define Perl_fp_class_pnorm(x)	(Perl_fp_class(x)==FP_PLUS_NORM)
-#    define Perl_fp_class_norm(x)	(Perl_fp_class(x)==FP_MINUS_NORM||Perl_fp_class(x)==FP_PLUS_NORM)
-#    define Perl_fp_class_ndenorm(x)	(Perl_fp_class(x)==FP_MINUS_DENORM)
-#    define Perl_fp_class_pdenorm(x)	(Perl_fp_class(x)==FP_PLUS_DENORM)
-#    define Perl_fp_class_denorm(x)	(Perl_fp_class(x)==FP_MINUS_DENORM||Perl_fp_class(x)==FP_PLUS_DENORM)
-#    define Perl_fp_class_nzero(x)	(Perl_fp_class(x)==FP_MINUS_ZERO)
-#    define Perl_fp_class_pzero(x)	(Perl_fp_class(x)==FP_PLUS_ZERO)
-#    define Perl_fp_class_zero(x)	(Perl_fp_class(x)==FP_MINUS_ZERO||Perl_fp_class(x)==FP_PLUS_ZERO)
 #endif
 
-/* rumor has it that Win32 has _isnan() */
+/* Win32: _fpclass(), _isnan(), _finite(). */
+#ifdef WIN32
+#  ifndef Perl_isnan
+#    define Perl_isnan(x) _isnan(x)
+#  endif
+#  ifndef Perl_isfinite
+#    define Perl_isfinite(x) _finite(x)
+#  endif
+#  ifndef Perl_fp_class_snan
+/* No simple way to #define Perl_fp_class because _fpclass()
+ * returns a set of bits. */
+#    define Perl_fp_class_snan(x) (_fpclass(x) & _FPCLASS_SNAN)
+#    define Perl_fp_class_qnan(x) (_fpclass(x) & _FPCLASS_QNAN)
+#    define Perl_fp_class_nan(x) (_fpclass(x) & (_FPCLASS_SNAN|_FPCLASS_QNAN))
+#    define Perl_fp_class_ninf(x) (_fpclass(x) & _FPCLASS_NINF))
+#    define Perl_fp_class_pinf(x) (_fpclass(x) & _FPCLASS_PINF))
+#    define Perl_fp_class_inf(x) (_fpclass(x) & (_FPCLASS_NINF|_FPCLASS_PINF))
+#    define Perl_fp_class_nnorm(x) (_fpclass(x) & _FPCLASS_NN)
+#    define Perl_fp_class_pnorm(x) (_fpclass(x) & _FPCLASS_PN)
+#    define Perl_fp_class_norm(x) (_fpclass(x) & (_FPCLASS_NN|_FPCLASS_PN))
+#    define Perl_fp_class_ndenorm(x) (_fpclass(x) & _FPCLASS_ND)
+#    define Perl_fp_class_pdenorm(x) (_fpclass(x) & _FPCLASS_PD)
+#    define Perl_fp_class_denorm(x) (_fpclass(x) & (_FPCLASS_ND|_FPCLASS_PD))
+#    define Perl_fp_class_nzero(x) (_fpclass(x) & _FPCLASS_NZ)
+#    define Perl_fp_class_pzero(x) (_fpclass(x) & _FPCLASS_PZ)
+#    define Perl_fp_class_zero(x) (_fpclass(x) & (_FPCLASS_NZ|_FPCLASS_PZ))
+#  endif
+#endif
 
-#ifndef Perl_isnan
-#   ifdef HAS_ISNAN
-#       define Perl_isnan(x) isnan((NV)x)
-#   else
-#       ifdef Perl_fp_class_nan
-#           define Perl_isnan(x) Perl_fp_class_nan(x)
-#       else
-#           ifdef HAS_UNORDERED
-#               define Perl_isnan(x) unordered((x), 0.0)
-#           else
-#               define Perl_isnan(x) ((x)!=(x))
-#           endif
-#       endif
-#   endif
+#if !defined(Perl_fp_class_inf) && \
+  defined(Perl_fp_class_pinf) && defined(Perl_fp_class_ninf)
+#  define Perl_fp_class_inf(x) \
+    (Perl_fp_class_pinf(x) || Perl_fp_class_ninf(x))
+#endif
+
+#if !defined(Perl_fp_class_nan) && \
+  defined(Perl_fp_class_snan) && defined(Perl_fp_class_qnan)
+#  define Perl_fp_class_nan(x) \
+    (Perl_fp_class_snan(x) || Perl_fp_class_qnan(x))
+#endif
+
+#if !defined(Perl_fp_class_zero) && \
+  defined(Perl_fp_class_pzero) && defined(Perl_fp_class_nzero)
+#  define Perl_fp_class_zero(x) \
+    (Perl_fp_class_pzero(x) || Perl_fp_class_nzero(x))
+#endif
+
+#if !defined(Perl_fp_class_norm) && \
+  defined(Perl_fp_class_pnorm) && defined(Perl_fp_class_nnorm)
+#  define Perl_fp_class_norm(x) \
+    (Perl_fp_class_pnorm(x) || Perl_fp_class_nnorm(x))
+#endif
+
+#if !defined(Perl_fp_class_denorm) && \
+  defined(Perl_fp_class_pdenorm) && defined(Perl_fp_class_ndenorm)
+#  define Perl_fp_class_denorm(x) \
+    (Perl_fp_class_pdenorm(x) || Perl_fp_class_ndenorm(x))
 #endif
 
 #ifdef UNDER_CE
 int isnan(double d);
 #endif
 
-#ifndef Perl_isinf
-#   ifdef HAS_ISINF
-#       define Perl_isinf(x) isinf((NV)x)
+#ifndef Perl_isnan
+#   ifdef Perl_fp_class_nan
+#       define Perl_isnan(x) Perl_fp_class_nan(x)
 #   else
-#       ifdef Perl_fp_class_inf
-#           define Perl_isinf(x) Perl_fp_class_inf(x)
+#       ifdef HAS_UNORDERED
+#           define Perl_isnan(x) unordered((x), 0.0)
 #       else
-#           define Perl_isinf(x) ((x)==NV_INF)
+#           define Perl_isnan(x) ((x)!=(x))
 #       endif
 #   endif
 #endif
 
-#ifndef Perl_isfinite
-#   ifdef HAS_FINITE
-#       define Perl_isfinite(x) finite((NV)x)
-#   else
-#       ifdef HAS_ISFINITE
-#           define Perl_isfinite(x) isfinite(x)
-#       else
-#           ifdef Perl_fp_class_finite
-#               define Perl_isfinite(x) Perl_fp_class_finite(x)
-#           else
-#               define Perl_isfinite(x) !(Perl_is_inf(x)||Perl_is_nan(x))
-#           endif
-#       endif
+#ifndef Perl_isinf
+#   ifdef Perl_fp_class_inf
+#       define Perl_isinf(x) Perl_fp_class_inf(x)
 #   endif
+#endif
+
+#ifndef Perl_isfinite
+#   if defined(HAS_ISFINITE) && !defined(isfinite)
+#     define Perl_isfinite(x) isfinite((double)(x))
+#   elif defined(HAS_FINITE)
+#       define Perl_isfinite(x) finite((double)(x))
+#   elif defined(Perl_fp_class_finite)
+#     define Perl_isfinite(x) Perl_fp_class_finite(x)
+#   else
+/* For the infinities the multiplication returns nan,
+ * for the nan the multiplication also returns nan,
+ * for everything else (that is, finite) zero should be returned. */
+#     define Perl_isfinite(x) (((x) * 0) == 0)
+#   endif
+#endif
+
+#ifndef Perl_isinf
+#   if defined(Perl_isfinite) && defined(Perl_isnan)
+#       define Perl_isinf(x) !(Perl_isfinite(x)||Perl_isnan(x))
+#   endif
+#endif
+
+/* We need Perl_isfinitel (ends with ell) (if available) even when
+ * not USE_LONG_DOUBLE because the printf code (sv_catpvfn_flags)
+ * needs that. */
+#if defined(HAS_LONG_DOUBLE) && !defined(Perl_isfinitel)
+/* If isfinite() is a macro and looks like we have C99,
+ * we assume it's the type-aware C99 isfinite(). */
+#    if defined(HAS_ISFINITE) && defined(isfinite) && defined(HAS_C99)
+#        define Perl_isfinitel(x) isfinite(x)
+#    elif defined(HAS_ISFINITEL)
+#        define Perl_isfinitel(x) isfinitel(x)
+#    elif defined(HAS_FINITEL)
+#        define Perl_isfinitel(x) finitel(x)
+#    elif defined(HAS_INFL) && defined(HAS_NANL)
+#        define Perl_isfinitel(x) !(isinfl(x)||isnanl(x))
+#    else
+#        define Perl_isfinitel(x) ((x) * 0 == 0)  /* See Perl_isfinite. */
+#    endif
 #endif
 
 /* The default is to use Perl's own atof() implementation (in numeric.c).
@@ -3912,6 +4169,10 @@ char *strcpy(), *strcat();
 
 #ifdef I_MATH
 #    include <math.h>
+#    ifdef __VMS
+     /* isfinite and others are here rather than in math.h as C99 stipulates */
+#        include <fp.h>
+#    endif
 #else
 START_EXTERN_C
 	    double exp (double);
@@ -3928,8 +4189,27 @@ START_EXTERN_C
 END_EXTERN_C
 #endif
 
-#if !defined(NV_INF) && defined(USE_LONG_DOUBLE) && defined(LDBL_INFINITY)
-#  define NV_INF LDBL_INFINITY
+#ifdef WIN32
+#  if !defined(NV_INF) && defined(HUGE_VAL)
+#    define NV_INF HUGE_VAL
+#  endif
+/* For WIN32 the best NV_NAN is the __PL_nan_u trick, see below.
+ * There is no supported way of getting the NAN across all the crts. */
+#endif
+
+/* If you are thinking of using HUGE_VAL for infinity, or using
+ * <math.h> functions to generate NV_INF (e.g. exp(1e9), log(-1.0)),
+ * stop.  Neither will work portably: HUGE_VAL can be just DBL_MAX,
+ * and the math functions might be just generating DBL_MAX, or even
+ * zero.  */
+
+#if !defined(NV_INF) && defined(USE_LONG_DOUBLE)
+#  if !defined(NV_INF) && defined(LDBL_INFINITY)
+#    define NV_INF LDBL_INFINITY
+#  endif
+#  if !defined(NV_INF) && defined(INFINITYL)
+#    define NV_INF INFINITYL
+#  endif
 #endif
 #if !defined(NV_INF) && defined(DBL_INFINITY)
 #  define NV_INF (NV)DBL_INFINITY
@@ -3940,16 +4220,39 @@ END_EXTERN_C
 #if !defined(NV_INF) && defined(INF)
 #  define NV_INF (NV)INF
 #endif
-#if !defined(NV_INF) && defined(USE_LONG_DOUBLE) && defined(HUGE_VALL)
-#  define NV_INF (NV)HUGE_VALL
+#if !defined(NV_INF)
+#  if INTSIZE == 4
+/* At this point we assume the IEEE 754 floating point (and of course,
+ * we also assume a floating point format that can encode an infinity).
+ * We will coerce an int32 (which will encode the infinity) into
+ * a 32-bit float, which will then be cast into NV.
+ *
+ * Note that we intentionally use a float and 32-bit int, instead of
+ * shifting a small integer into a full IV, and from that into a full
+ * NV, because:
+ *
+ * (1) an IV might not be wide enough to cover all the bits of an NV.
+ * (2) the exponent part (including the infinity and nan bits) of a NV
+ *     might be wider than just 16 bits.
+ *
+ * Below the NV_NAN logic has similar __PL_nan_u fallback, the only
+ * difference being the int32 constant being coerced. */
+#    define __PL_inf_float_int32 0x7F800000
+static const union { unsigned int __i; float __f; } __PL_inf_u =
+    { __PL_inf_float_int32 };
+#    define NV_INF ((NV)(__PL_inf_u.__f))
+#  endif
 #endif
-#if !defined(NV_INF) && defined(HUGE_VAL)
-#  define NV_INF (NV)HUGE_VAL
+#if !defined(NV_INF)
+#  define NV_INF ((NV)1.0/0.0) /* Some compilers will warn. */
 #endif
 
 #if !defined(NV_NAN) && defined(USE_LONG_DOUBLE)
 #   if !defined(NV_NAN) && defined(LDBL_NAN)
 #       define NV_NAN LDBL_NAN
+#   endif
+#   if !defined(NV_NAN) && defined(NANL)
+#       define NV_NAN NANL
 #   endif
 #   if !defined(NV_NAN) && defined(LDBL_QNAN)
 #       define NV_NAN LDBL_QNAN
@@ -3967,15 +4270,30 @@ END_EXTERN_C
 #if !defined(NV_NAN) && defined(DBL_SNAN)
 #  define NV_NAN (NV)DBL_SNAN
 #endif
+#if !defined(NV_NAN) && defined(NAN)
+#  define NV_NAN (NV)NAN
+#endif
 #if !defined(NV_NAN) && defined(QNAN)
 #  define NV_NAN (NV)QNAN
 #endif
 #if !defined(NV_NAN) && defined(SNAN)
 #  define NV_NAN (NV)SNAN
 #endif
-#if !defined(NV_NAN) && defined(NAN)
-#  define NV_NAN (NV)NAN
+#if !defined(NV_NAN)
+#  if INTSIZE == 4
+/* See the discussion near __PL_inf_u. */
+#    define __PL_nan_float_int32 0x7FC00000
+static const union { unsigned int __i; float __f; } __PL_nan_u =
+    { __PL_nan_float_int32 };
+#    define NV_NAN ((NV)(__PL_nan_u.__f))
+#  endif
 #endif
+#if !defined(NV_NAN)
+#  define NV_NAN ((NV)0.0/0.0) /* Some compilers will warn. */
+#endif
+/* Do NOT try doing NV_NAN based on NV_INF and trying (NV_INF-NV_INF).
+ * Though IEEE-754-logically correct, some compilers (like Visual C 2003)
+ * falsely misoptimize that to zero (x-x is zero, right?) */
 
 #ifndef __cplusplus
 #  if !defined(WIN32) && !defined(VMS)
@@ -4725,6 +5043,9 @@ EXTCONST char PL_bincompat_options[] =
 #  endif
 #  ifdef USE_PERLIO
 			     " USE_PERLIO"
+#  endif
+#  ifdef USE_QUADMATH
+			     " USE_QUADMATH"
 #  endif
 #  ifdef USE_REENTRANT_API
 			     " USE_REENTRANT_API"
@@ -5497,6 +5818,18 @@ typedef struct am_table_short AMTS;
 #define Atof				my_atof
 
 #endif /* !USE_LOCALE_NUMERIC */
+
+#ifdef USE_QUADMATH
+#  define Perl_strtod(s, e) strtoflt128(s, e)
+#elif defined(HAS_LONG_DOUBLE) && defined(USE_LONG_DOUBLE)
+#  if defined(HAS_STRTOLD)
+#    define Perl_strtod(s, e) strtold(s, e)
+#  elif defined(HAS_STRTOD)
+#    define Perl_strtod(s, e) (NV)strtod(s, e) /* Unavoidable loss. */
+#  endif
+#elif defined(HAS_STRTOD)
+#  define Perl_strtod(s, e) strtod(s, e)
+#endif
 
 #if !defined(Strtol) && defined(USE_64_BIT_INT) && defined(IV_IS_QUAD) && \
 	(QUADKIND == QUAD_IS_LONG_LONG || QUADKIND == QUAD_IS___INT64)

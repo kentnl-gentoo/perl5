@@ -4,7 +4,7 @@ use warnings;
 
 our ($AUTOLOAD, %SIGRT);
 
-our $VERSION = '1.42';
+our $VERSION = '1.43';
 
 require XSLoader;
 
@@ -268,6 +268,9 @@ our %EXPORT_TAGS = (
 		S_ISBLK S_ISCHR S_ISDIR S_ISFIFO S_ISGID S_ISREG S_ISUID
 		S_IWGRP S_IWOTH S_IWUSR)],
 
+    fenv_h =>	[qw(FE_DOWNWARD FE_TONEAREST FE_TOWARDZERO FE_UPWARD
+                    fegetround fesetround)],
+
     float_h =>	[qw(DBL_DIG DBL_EPSILON DBL_MANT_DIG
 		DBL_MAX DBL_MAX_10_EXP DBL_MAX_EXP
 		DBL_MIN DBL_MIN_10_EXP DBL_MIN_EXP
@@ -296,8 +299,19 @@ our %EXPORT_TAGS = (
 		    LC_MONETARY LC_NUMERIC LC_TIME NULL
 		    localeconv setlocale)],
 
-    math_h =>	[qw(HUGE_VAL acos asin atan ceil cosh fabs floor fmod
-		frexp ldexp log10 modf pow sinh tan tanh)],
+    math_h => [qw(FP_ILOGB0 FP_ILOGBNAN FP_INFINITE FP_NAN FP_NORMAL
+                  FP_SUBNORMAL FP_ZERO HUGE_VAL INFINITY Inf M_1_PI
+                  M_2_PI M_2_SQRTPI M_E M_LN10 M_LN2 M_LOG10E M_LOG2E M_PI
+                  M_PI_2 M_PI_4 M_SQRT1_2 M_SQRT2 NAN NaN acos acosh
+                  asin asinh atan atanh cbrt ceil copysign cosh erf
+                  erfc exp2 expm1 fabs fdim floor fma fmax fmin fmod
+                  fpclassify frexp hypot ilogb isfinite isgreater
+                  isgreaterequal isinf isless islessequal
+                  islessgreater isnan isnormal isunordered j0 j1 jn
+                  ldexp lgamma log10 log1p log2 logb lrint modf nan
+                  nearbyint nextafter nexttoward pow remainder remquo
+                  rint round scalbn signbit sinh tan tanh tgamma trunc
+                  y0 y1 yn)],
 
     pwd_h =>	[],
 
@@ -329,7 +343,7 @@ our %EXPORT_TAGS = (
     stdlib_h =>	[qw(EXIT_FAILURE EXIT_SUCCESS MB_CUR_MAX NULL RAND_MAX
 		abort atexit atof atoi atol bsearch calloc div
 		free getenv labs ldiv malloc mblen mbstowcs mbtowc
-		qsort realloc strtod strtol strtoul wcstombs wctomb)],
+		qsort realloc strtod strtol strtold strtoul wcstombs wctomb)],
 
     string_h =>	[qw(NULL memchr memcmp memcpy memmove memset strcat
 		strchr strcmp strcoll strcpy strcspn strerror strlen
