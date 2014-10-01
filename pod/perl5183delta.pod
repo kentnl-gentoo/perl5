@@ -2,13 +2,12 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.18.4
+perl5183delta - what is new for perl v5.18.3
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.18.4 release and the 5.18.2
-release.  B<Please note:>  This document ignores perl 5.18.3, a broken release
-which existed for a few hours only.
+This document describes differences between the 5.18.2 release and the 5.18.3
+release.
 
 If you are upgrading from an earlier release such as 5.18.1, first read
 L<perl5182delta>, which describes differences between 5.18.1 and 5.18.2.
@@ -92,13 +91,13 @@ crashing.  This has been fixed. [perl #119949]
 
 =head1 Acknowledgements
 
-Perl 5.18.4 represents approximately 9 months of development since Perl 5.18.2
+Perl 5.18.3 represents approximately 9 months of development since Perl 5.18.2
 and contains approximately 2,000 lines of changes across 53 files from 13
 authors.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.18.4:
+improvements that became Perl 5.18.3:
 
 Daniel Dragan, David Mitchell, Doug Bell, Father Chrysostomos, Hiroo Hayashi,
 James E Keenan, Karl Williamson, Mark Shelor, Ricardo Signes, Shlomi Fish,
@@ -150,4 +149,3 @@ The F<README> file for general stuff.
 The F<Artistic> and F<Copying> files for copyright information.
 
 =cut
-

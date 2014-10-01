@@ -118,7 +118,7 @@
          "TestInit.pm"
       ]
    },
-   "release_status" : "testing",
+   "release_status" : "stable",
    "resources" : {
       "bugtracker" : {
          "web" : "http://rt.perl.org/perlbug/"
@@ -131,5 +131,5 @@
          "url" : "http://perl5.git.perl.org/"
       }
    },
-   "version" : "5.018003"
+   "version" : "5.018004"
 }
