@@ -84,8 +84,7 @@ void setegid(uid_t id);
 struct magic_state {
     SV* mgs_sv;
     I32 mgs_ss_ix;
-    U32 mgs_magical;
-    bool mgs_readonly;
+    U32 mgs_flags;
     bool mgs_bumped;
 };
 /* MGS is typedef'ed to struct magic_state in perl.h */
@@ -115,8 +114,7 @@ S_save_magic_flags(pTHX_ I32 mgs_ix, SV *sv, U32 flags)
 
     mgs = SSPTR(mgs_ix, MGS*);
     mgs->mgs_sv = sv;
-    mgs->mgs_magical = SvMAGICAL(sv);
-    mgs->mgs_readonly = SvREADONLY(sv) != 0;
+    mgs->mgs_flags = SvMAGICAL(sv) | SvREADONLY(sv);
     mgs->mgs_ss_ix = PL_savestack_ix;   /* points after the saved destructor */
     mgs->mgs_bumped = bumped;
 
@@ -201,13 +199,15 @@ Perl_mg_get(pTHX_ SV *sv)
 	    /* guard against magic having been deleted - eg FETCH calling
 	     * untie */
 	    if (!SvMAGIC(sv)) {
-		(SSPTR(mgs_ix, MGS *))->mgs_magical = 0; /* recalculate flags */
+		/* recalculate flags */
+		(SSPTR(mgs_ix, MGS *))->mgs_flags &= ~(SVs_GMG|SVs_SMG|SVs_RMG);
 		break;
 	    }
 
 	    /* recalculate flags if this entry was deleted. */
 	    if (mg->mg_flags & MGf_GSKIP)
-		(SSPTR(mgs_ix, MGS *))->mgs_magical = 0;
+		(SSPTR(mgs_ix, MGS *))->mgs_flags &=
+		     ~(SVs_GMG|SVs_SMG|SVs_RMG);
 	}
 	else if (vtbl == &PL_vtbl_utf8) {
 	    /* get-magic can reallocate the PV */
@@ -231,7 +231,8 @@ Perl_mg_get(pTHX_ SV *sv)
 	    have_new = 1;
 	    cur = mg;
 	    mg  = newmg;
-	    (SSPTR(mgs_ix, MGS *))->mgs_magical = 0; /* recalculate flags */
+	    /* recalculate flags */
+	    (SSPTR(mgs_ix, MGS *))->mgs_flags &= ~(SVs_GMG|SVs_SMG|SVs_RMG);
 	}
     }
 
@@ -267,7 +268,7 @@ Perl_mg_set(pTHX_ SV *sv)
 	nextmg = mg->mg_moremagic;	/* it may delete itself */
 	if (mg->mg_flags & MGf_GSKIP) {
 	    mg->mg_flags &= ~MGf_GSKIP;	/* setting requires another read */
-	    (SSPTR(mgs_ix, MGS*))->mgs_magical = 0;
+	    (SSPTR(mgs_ix, MGS*))->mgs_flags &= ~(SVs_GMG|SVs_SMG|SVs_RMG);
 	}
 	if (PL_localizing == 2
 	    && PERL_MAGIC_TYPE_IS_VALUE_MAGIC(mg->mg_type))
@@ -2461,6 +2462,63 @@ Perl_magic_setutf8(pTHX_ SV *sv, MAGIC *mg)
 }
 
 int
+Perl_magic_setlvref(pTHX_ SV *sv, MAGIC *mg)
+{
+    const char *bad = NULL;
+    PERL_ARGS_ASSERT_MAGIC_SETLVREF;
+    if (!SvROK(sv)) Perl_croak(aTHX_ "Assigned value is not a reference");
+    switch (mg->mg_private & OPpLVREF_TYPE) {
+    case OPpLVREF_SV:
+	if (SvTYPE(SvRV(sv)) > SVt_PVLV)
+	    bad = " SCALAR";
+	break;
+    case OPpLVREF_AV:
+	if (SvTYPE(SvRV(sv)) != SVt_PVAV)
+	    bad = "n ARRAY";
+	break;
+    case OPpLVREF_HV:
+	if (SvTYPE(SvRV(sv)) != SVt_PVHV)
+	    bad = " HASH";
+	break;
+    case OPpLVREF_CV:
+	if (SvTYPE(SvRV(sv)) != SVt_PVCV)
+	    bad = " CODE";
+    }
+    if (bad)
+	/* diag_listed_as: Assigned value is not %s reference */
+	Perl_croak(aTHX_ "Assigned value is not a%s reference", bad);
+    switch (mg->mg_obj ? SvTYPE(mg->mg_obj) : 0) {
+    case 0:
+    {
+	SV * const old = PAD_SV(mg->mg_len);
+	PAD_SETSV(mg->mg_len, SvREFCNT_inc_NN(SvRV(sv)));
+	SvREFCNT_dec(old);
+	break;
+    }
+    case SVt_PVGV:
+	gv_setref(mg->mg_obj, sv);
+	SvSETMAGIC(mg->mg_obj);
+	break;
+    case SVt_PVAV:
+	av_store((AV *)mg->mg_obj, SvIV((SV *)mg->mg_ptr),
+		 SvREFCNT_inc_simple_NN(SvRV(sv)));
+	break;
+    case SVt_PVHV:
+	hv_store_ent((HV *)mg->mg_obj, (SV *)mg->mg_ptr,
+		     SvREFCNT_inc_simple_NN(SvRV(sv)), 0);
+    }
+    if (mg->mg_flags & MGf_PERSIST)
+	NOOP; /* This sv is in use as an iterator var and will be reused,
+		 so we must leave the magic.  */
+    else
+	/* This sv could be returned by the assignment op, so clear the
+	   magic, as lvrefs are an implementation detail that must not be
+	   leaked to the user.  */
+	sv_unmagic(sv, PERL_MAGIC_lvref);
+    return 0;
+}
+
+int
 Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 {
 #ifdef USE_ITHREADS
@@ -3254,10 +3312,8 @@ S_restore_magic(pTHX_ const void *p)
 	if (SvIsCOW(sv))
 	    sv_force_normal_flags(sv, 0);
 #endif
-	if (mgs->mgs_readonly)
-	    SvREADONLY_on(sv);
-	if (mgs->mgs_magical)
-	    SvFLAGS(sv) |= mgs->mgs_magical;
+	if (mgs->mgs_flags)
+	    SvFLAGS(sv) |= mgs->mgs_flags;
 	else
 	    mg_magical(sv);
     }
@@ -3402,6 +3458,33 @@ Perl_magic_copycallchecker(pTHX_ SV *sv, MAGIC *mg, SV *nsv,
     nmg->mg_obj = SvREFCNT_inc_simple(mg->mg_obj);
     nmg->mg_flags |= MGf_REFCOUNTED;
     return 1;
+}
+
+int
+Perl_magic_setdebugvar(pTHX_ SV *sv, MAGIC *mg) {
+    PERL_ARGS_ASSERT_MAGIC_SETDEBUGVAR;
+
+#if DBVARMG_SINGLE != 0
+    assert(mg->mg_private >= DBVARMG_SINGLE);
+#endif
+    assert(mg->mg_private < DBVARMG_COUNT);
+
+    PL_DBcontrol[mg->mg_private] = SvIV_nomg(sv);
+
+    return 1;
+}
+
+int
+Perl_magic_getdebugvar(pTHX_ SV *sv, MAGIC *mg) {
+    PERL_ARGS_ASSERT_MAGIC_GETDEBUGVAR;
+
+#if DBVARMG_SINGLE != 0
+    assert(mg->mg_private >= DBVARMG_SINGLE);
+#endif
+    assert(mg->mg_private < DBVARMG_COUNT);
+    sv_setiv(sv, PL_DBcontrol[mg->mg_private]);
+
+    return 0;
 }
 
 /*

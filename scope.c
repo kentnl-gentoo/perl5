@@ -132,15 +132,34 @@ Perl_savestack_grow_cnt(pTHX_ I32 need)
 
 #undef GROW
 
-void
-Perl_tmps_grow(pTHX_ SSize_t n)
+/*  The original function was called Perl_tmps_grow and was removed from public
+    API, Perl_tmps_grow_p is the replacement and it used in public macros but
+    isn't public itself.
+
+    Perl_tmps_grow_p takes a proposed ix. A proposed ix is PL_tmps_ix + extend_by,
+    where the result of (PL_tmps_ix + extend_by) is >= PL_tmps_max
+    Upon return, PL_tmps_stack[ix] will be a valid address. For machine code
+    optimization and register usage reasons, the proposed ix passed into
+    tmps_grow is returned to the caller which the caller can then use to write
+    an SV * to PL_tmps_stack[ix]. If the caller was using tmps_grow in
+    pre-extend mode (EXTEND_MORTAL macro), then it ignores the return value of
+    tmps_grow. Note, tmps_grow DOES NOT write ix to PL_tmps_ix, the caller
+    must assign ix or ret val of tmps_grow to PL_temps_ix themselves if that is
+    appropriate. The assignment to PL_temps_ix can happen before or after
+    tmps_grow call since tmps_grow doesn't look at PL_tmps_ix.
+ */
+
+SSize_t
+Perl_tmps_grow_p(pTHX_ SSize_t ix)
 {
+    SSize_t extend_to = ix;
 #ifndef STRESS_REALLOC
-    if (n < 128)
-	n = (PL_tmps_max < 512) ? 128 : 512;
+    if (ix - PL_tmps_max < 128)
+	extend_to += (PL_tmps_max < 512) ? 128 : 512;
 #endif
-    PL_tmps_max = PL_tmps_ix + n + 1;
+    PL_tmps_max = extend_to + 1;
     Renew(PL_tmps_stack, PL_tmps_max, SV*);
+    return ix;
 }
 
 
@@ -701,6 +720,16 @@ Perl_save_alloc(pTHX_ I32 size, I32 pad)
     return start;
 }
 
+void
+Perl_save_aliased_sv(pTHX_ GV *gv)
+{
+    dSS_ADD;
+    PERL_ARGS_ASSERT_SAVE_ALIASED_SV;
+    SS_ADD_PTR(gp_ref(GvGP(gv)));
+    SS_ADD_UV(SAVEt_GP_ALIASED_SV | cBOOL(GvALIASED_SV(gv)) << 8);
+    SS_ADD_END(2);
+}
+
 
 
 #define ARG0_SV  MUTABLE_SV(arg0.any_ptr)
@@ -978,15 +1007,13 @@ Perl_leave_scope(pTHX_ I32 base)
                     (SvREFCNT(sv) <= 1 && !SvOBJECT(sv)) ? "clear" : "abandon"
                 ));
 
-                assert(SvPADMY(sv));
-
                 /* Can clear pad variable in place? */
                 if (SvREFCNT(sv) == 1 && !SvOBJECT(sv)) {
 
                     /* these flags are the union of all the relevant flags
                      * in the individual conditions within */
                     if (UNLIKELY(SvFLAGS(sv) & (
-                            SVf_READONLY /* for SvREADONLY_off() */
+                            SVf_READONLY|SVf_PROTECT /*for SvREADONLY_off*/
                           | (SVs_GMG|SVs_SMG|SVs_RMG) /* SvMAGICAL() */
                           | SVf_OOK
                           | SVf_THINKFIRST)))
@@ -996,7 +1023,7 @@ Perl_leave_scope(pTHX_ I32 base)
                          * readonlyness so that it can go out of scope
                          * quietly
                          */
-                        if (SvREADONLY(sv) && !SvFAKE(sv))
+                        if (SvREADONLY(sv))
                             SvREADONLY_off(sv);
 
                         if (SvOOK(sv)) { /* OOK or HvAUX */
@@ -1052,7 +1079,6 @@ Perl_leave_scope(pTHX_ I32 base)
                     SvPADSTALE_on(sv); /* mark as no longer live */
                 }
                 else {	/* Someone has a claim on this, so abandon it. */
-                    assert(  SvFLAGS(sv) & SVs_PADMY);
                     assert(!(SvFLAGS(sv) & SVs_PADTMP));
                     switch (SvTYPE(sv)) {	/* Console ourselves with a new value */
                     case SVt_PVAV:	*svp = MUTABLE_SV(newAV());	break;
@@ -1077,7 +1103,7 @@ Perl_leave_scope(pTHX_ I32 base)
                     SvREFCNT_dec_NN(sv); /* Cast current value to the winds. */
                     /* preserve pad nature, but also mark as not live
                      * for any closure capturing */
-                    SvFLAGS(*svp) |= (SVs_PADMY|SVs_PADSTALE);
+                    SvFLAGS(*svp) |= SVs_PADSTALE;
                 }
             }
 	    break;
@@ -1232,8 +1258,10 @@ Perl_leave_scope(pTHX_ I32 base)
 	    GP * const gp = (GP *)ARG0_PTR;
 	    if (gp->gp_refcnt == 1) {
 		GV * const gv = (GV *)sv_2mortal(newSV_type(SVt_PVGV));
+		isGV_with_GP_on(gv);
 		GvGP_set(gv,gp);
 		gp_free(gv);
+		isGV_with_GP_off(gv);
 	    }
 	    else {
 		gp->gp_refcnt--;

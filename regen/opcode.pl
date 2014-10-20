@@ -55,7 +55,7 @@ while (<OPS>) {
     $args = '' unless defined $args;
 
     warn qq[Description "$desc" duplicates $seen{$desc}\n]
-     if $seen{$desc} and $key !~ "transr|(?:intro|clone)cv";
+     if $seen{$desc} and $key !~ "transr|(?:intro|clone)cv|lvref";
     die qq[Opcode "$key" duplicates $seen{$key}\n] if $seen{$key};
     die qq[Opcode "freed" is reserved for the slab allocator\n]
 	if $key eq 'freed';
@@ -801,7 +801,7 @@ $PL_op_private_labels
 
 
 /* PL_op_private_bitfields[]: details about each bit field type.
- * Each defintition consists of the following list of words:
+ * Each definition consists of the following list of words:
  *    bitmin
  *    label (index into PL_op_private_labels[]; -1 if no label)
  *    repeat for each enum entry (if any):
@@ -1071,6 +1071,7 @@ my %opclass = (
     '%',  11,		# baseop_or_unop
     '-',  12,		# filestatop
     '}',  13,		# loopexop
+    '.',  14,		# methop
 );
 
 my %opflags = (
@@ -1081,7 +1082,7 @@ my %opflags = (
     'T' =>   8 | 16,	# ... which may be lexical
     'i' =>   0,		# always produces integer (unused since e7311069)
     'I' =>  32,		# has corresponding int op
-    'd' =>  64,		# danger, unknown side effects
+    'd' =>  64,		# danger, make temp copy in list assignment
     'u' => 128,		# defaults to $_
 );
 

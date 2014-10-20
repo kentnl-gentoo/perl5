@@ -185,7 +185,7 @@ typedef struct regexp_engine {
 #endif
     REGEXP* (*op_comp) (pTHX_ SV ** const patternp, int pat_count,
 		    OP *expr, const struct regexp_engine* eng,
-		    REGEXP *VOL old_re,
+		    REGEXP *old_re,
 		    bool *is_bare_re, U32 orig_rx_flags, U32 pm_flags);
 } regexp_engine;
 
@@ -274,11 +274,18 @@ and check for NULL.
 
 #define RXf_PMf_STD_PMMOD	(RXf_PMf_MULTILINE|RXf_PMf_SINGLELINE|RXf_PMf_FOLD|RXf_PMf_EXTENDED)
 
-#define CASE_STD_PMMOD_FLAGS_PARSE_SET(pmfl)                        \
-    case IGNORE_PAT_MOD:    *(pmfl) |= RXf_PMf_FOLD;       break;   \
-    case MULTILINE_PAT_MOD: *(pmfl) |= RXf_PMf_MULTILINE;  break;   \
-    case SINGLE_PAT_MOD:    *(pmfl) |= RXf_PMf_SINGLELINE; break;   \
-    case XTENDED_PAT_MOD:   *(pmfl) |= RXf_PMf_EXTENDED;   break
+#define CASE_STD_PMMOD_FLAGS_PARSE_SET(pmfl, x_count)                       \
+    case IGNORE_PAT_MOD:    *(pmfl) |= RXf_PMf_FOLD;       break;           \
+    case MULTILINE_PAT_MOD: *(pmfl) |= RXf_PMf_MULTILINE;  break;           \
+    case SINGLE_PAT_MOD:    *(pmfl) |= RXf_PMf_SINGLELINE; break;           \
+    case XTENDED_PAT_MOD:   *(pmfl) |= RXf_PMf_EXTENDED; (x_count)++; break;
+
+#define STD_PMMOD_FLAGS_PARSE_X_WARN(x_count)                                   \
+    if (UNLIKELY((x_count) > 1)) {                                              \
+        Perl_ck_warner_d(aTHX_ packWARN2(WARN_DEPRECATED, WARN_REGEXP),         \
+                    "Having more than one /%c regexp modifier is deprecated",   \
+                    XTENDED_PAT_MOD);                                           \
+    }
 
 /* Note, includes charset ones, assumes 0 is the default for them */
 #define STD_PMMOD_FLAGS_CLEAR(pmfl)                        \
@@ -321,7 +328,7 @@ and check for NULL.
 /* This string is expected by regcomp.c to be ordered so that the first
  * character is the flag in bit RXf_PMf_STD_PMMOD_SHIFT of extflags; the next
  * character is bit +1, etc. */
-#define STD_PAT_MODS        "msix"
+#define STD_PAT_MODS        "msixx"
 
 #define CHARSET_PAT_MODS    ASCII_RESTRICT_PAT_MODS DEPENDS_PAT_MODS LOCALE_PAT_MODS UNICODE_PAT_MODS
 
@@ -341,61 +348,89 @@ and check for NULL.
  *
  */
 
-/* Leave some space, so future bit allocations can go either in the shared or
- * unshared area without affecting binary compatibility */
-#define RXf_BASE_SHIFT (_RXf_PMf_SHIFT_NEXT)
-
 /*
   Set in Perl_pmruntime if op_flags & OPf_SPECIAL, i.e. split. Will
   be used by regex engines to check whether they should set
   RXf_SKIPWHITE
 */
-#define RXf_SPLIT                (1<<(RXf_BASE_SHIFT-1))
-#if RXf_SPLIT != RXf_PMf_SPLIT
-#   error "RXf_SPLIT does not match RXf_PMf_SPLIT"
-#endif
+#define RXf_SPLIT   RXf_PMf_SPLIT
 
-/* Do we have some sort of anchor? */
-#define RXf_IS_ANCHORED         (1<<(RXf_BASE_SHIFT+0))
-#define RXf_UNUSED1             (1<<(RXf_BASE_SHIFT+1))
-#define RXf_UNUSED2             (1<<(RXf_BASE_SHIFT+2))
-#define RXf_UNUSED3             (1<<(RXf_BASE_SHIFT+3))
-#define RXf_UNUSED4             (1<<(RXf_BASE_SHIFT+4))
-#define RXf_UNUSED5             (1<<(RXf_BASE_SHIFT+5))
+/* Currently the regex flags occupy a single 32-bit word.  Not all bits are
+ * currently used.  The lower bits are shared with their corresponding PMf flag
+ * bits, up to but not including _RXf_PMf_SHIFT_NEXT.  The unused bits
+ * immediately follow; finally the used RXf-only (unshared) bits, so that the
+ * highest bit in the word is used.  This gathers all the unused bits as a pool
+ * in the middle, like so: 11111111111111110000001111111111
+ * where the '1's represent used bits, and the '0's unused.  This design allows
+ * us to allocate off one end of the pool if we need to add a shared bit, and
+ * off the other end if we need a non-shared bit, without disturbing the other
+ * bits.  This maximizes the likelihood of being able to change things without
+ * breaking binary compatibility.
+ *
+ * To add shared bits, do so in op_reg_common.h.  This should change
+ * _RXf_PMf_SHIFT_NEXT so that things won't compile.  Then come to regexp.h and
+ * op.h and adjust the constant adders in the definitions of RXf_BASE_SHIFT and
+ * Pmf_BASE_SHIFT down by the number of shared bits you added.  That's it.
+ * Things should be binary compatible.  But if either of these gets to having
+ * to subtract rather than add, leave at 0 and instead adjust all the entries
+ * that are in terms of it.  But if the first one of those is already
+ * RXf_BASE_SHIFT+0, there are no bits left, and a redesign is in order.
+ *
+ * To remove unshared bits, just delete its entry.  If you're where breaking
+ * binary compatibility is ok to do, you might want to adjust things to move
+ * the newly opened space so that it gets absorbed into the common pool.
+ *
+ * To add unshared bits, first use up any gaps in the middle.  Otherwise,
+ * allocate off the low end until you get to RXf_BASE_SHIFT+0.  If that isn't
+ * enough, move RXf_BASE_SHIFT down (if possible) and add the new bit at the
+ * other end instead; this preserves binary compatibility.
+ *
+ * For the regexp bits, PL_reg_extflags_name[] in regnodes.h has a comment
+ * giving which bits are used/unused */
+
+#define RXf_BASE_SHIFT (_RXf_PMf_SHIFT_NEXT + 4)
 
 /* What we have seen */
-#define RXf_NO_INPLACE_SUBST    (1<<(RXf_BASE_SHIFT+6))
-#define RXf_EVAL_SEEN   	(1<<(RXf_BASE_SHIFT+7))
-#define RXf_UNUSED8             (1<<(RXf_BASE_SHIFT+8))
+#define RXf_NO_INPLACE_SUBST    (1U<<(RXf_BASE_SHIFT+2))
+#define RXf_EVAL_SEEN   	(1U<<(RXf_BASE_SHIFT+3))
 
 /* Special */
-#define RXf_UNBOUNDED_QUANTIFIER_SEEN   (1<<(RXf_BASE_SHIFT+9))
-#define RXf_CHECK_ALL   	(1<<(RXf_BASE_SHIFT+10))
+#define RXf_UNBOUNDED_QUANTIFIER_SEEN   (1U<<(RXf_BASE_SHIFT+4))
+#define RXf_CHECK_ALL   	(1U<<(RXf_BASE_SHIFT+5))
 
 /* UTF8 related */
-#define RXf_MATCH_UTF8  	(1<<(RXf_BASE_SHIFT+11)) /* $1 etc are utf8 */
+#define RXf_MATCH_UTF8  	(1U<<(RXf_BASE_SHIFT+6)) /* $1 etc are utf8 */
 
 /* Intuit related */
-#define RXf_USE_INTUIT_NOML	(1<<(RXf_BASE_SHIFT+12))
-#define RXf_USE_INTUIT_ML	(1<<(RXf_BASE_SHIFT+13))
-#define RXf_INTUIT_TAIL 	(1<<(RXf_BASE_SHIFT+14))
+#define RXf_USE_INTUIT_NOML	(1U<<(RXf_BASE_SHIFT+7))
+#define RXf_USE_INTUIT_ML	(1U<<(RXf_BASE_SHIFT+8))
+#define RXf_INTUIT_TAIL 	(1U<<(RXf_BASE_SHIFT+9))
 #define RXf_USE_INTUIT		(RXf_USE_INTUIT_NOML|RXf_USE_INTUIT_ML)
 
+/* Do we have some sort of anchor? */
+#define RXf_IS_ANCHORED         (1U<<(RXf_BASE_SHIFT+10))
+
 /* Copy and tainted info */
-#define RXf_COPY_DONE   	(1<<(RXf_BASE_SHIFT+16))
+#define RXf_COPY_DONE   	(1U<<(RXf_BASE_SHIFT+11))
 
 /* post-execution: $1 et al are tainted */
-#define RXf_TAINTED_SEEN	(1<<(RXf_BASE_SHIFT+17))
+#define RXf_TAINTED_SEEN	(1U<<(RXf_BASE_SHIFT+12))
 /* this pattern was tainted during compilation */
-#define RXf_TAINTED		(1<<(RXf_BASE_SHIFT+18))
+#define RXf_TAINTED		(1U<<(RXf_BASE_SHIFT+13))
 
 /* Flags indicating special patterns */
-#define RXf_START_ONLY		(1<<(RXf_BASE_SHIFT+19)) /* Pattern is /^/ */
-#define RXf_SKIPWHITE                (1<<(RXf_BASE_SHIFT+20)) /* Pattern is for a split " " */
-#define RXf_WHITE		(1<<(RXf_BASE_SHIFT+21)) /* Pattern is /\s+/ */
-#define RXf_NULL		(1U<<(RXf_BASE_SHIFT+22)) /* Pattern is // */
-#if RXf_BASE_SHIFT+22 > 31
-#   error Too many RXf_PMf bits used.  See regnodes.h for any spare in middle
+#define RXf_START_ONLY		(1U<<(RXf_BASE_SHIFT+14)) /* Pattern is /^/ */
+#define RXf_SKIPWHITE           (1U<<(RXf_BASE_SHIFT+15)) /* Pattern is for a */
+                                                          /* split " " */
+#define RXf_WHITE		(1U<<(RXf_BASE_SHIFT+16)) /* Pattern is /\s+/ */
+#define RXf_NULL		(1U<<(RXf_BASE_SHIFT+17)) /* Pattern is // */
+
+/* See comments at the beginning of these defines about adding bits.  The
+ * highest bit position should be used, so that if RXf_BASE_SHIFT gets
+ * increased, the #error below will be triggered so that you will be reminded
+ * to adjust things at the other end to keep the bit positions unchanged */
+#if RXf_BASE_SHIFT+17 > 31
+#   error Too many RXf_PMf bits used.  See comments at beginning of these for what to do
 #endif
 
 /*

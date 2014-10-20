@@ -5,9 +5,10 @@
 BEGIN {
     $| = 1;
 
-    chdir 't';
+    chdir 't' if -d 't';
     @INC = '../lib';
     require './test.pl';
+    skip_all('no re module') unless defined &DynaLoader::boot_DynaLoader;
     skip_all_without_unicode_tables();
     skip_all('EBCDIC') if $::IS_EBCDIC;
 }

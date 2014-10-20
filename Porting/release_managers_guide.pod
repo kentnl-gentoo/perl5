@@ -171,14 +171,9 @@ For updating the L<http://dev.perl.org> web pages, either a Github account or
 sweet-talking somebody with a Github account into obedience is needed. This
 is only needed on the day of the release or shortly afterwards.
 
-=for checklist skip RC
-
 =head3 Quotation for release announcement epigraph
 
-I<SKIP this step for RC>
-
-For all except an RC release of perl, you will need a quotation
-to use as an epigraph to your release announcement.
+You will need a quotation to use as an epigraph to your release announcement.
 
 =head2 Building a release - advance actions
 
@@ -548,6 +543,10 @@ C<$Module::CoreList::Utils::VERSION> should always be equal to
 C<$Module::CoreList::VERSION>. If necessary, bump those two versions to match
 before proceeding.
 
+The files to modify are: F<dist/Module-CoreList/lib/Module/CoreList.pm>,
+F<dist/Module-CoreList/lib/Module/CoreList/Utils.pm> and
+F<dist/Module-CoreList/lib/Module/CoreList/TieHashDelta.pm>.
+
 =head4 Update C<Module::CoreList> with module version data for the new release.
 
 Note that if this is a MAINT release, you should run the following actions
@@ -748,11 +747,7 @@ from blead:
     $ cp  ..../blead/pod/perlhist.pod pod/
     $ git commit -m 'sync perlhist from blead' pod/perlhist.pod
 
-=for checklist skip RC
-
 =head3 update perlhist.pod
-
-I<You MUST SKIP this step for a RC release>
 
 Add an entry to F<pod/perlhist.pod> with the release date, e.g.:
 
@@ -1186,6 +1181,18 @@ L<"Bump the version number">.
 After bumping the version, follow the section L<"update INSTALL"> to
 ensure all version number references are correct.
 
+(Note: The version is NOT bumped immediately after a MAINT release in order
+to avoid confusion and wasted time arising from bug reports relating to
+"intermediate versions" such as 5.20.1-and-a-bit: If the report is caused
+by a bug that gets fixed in 5.20.2 and this intermediate version already
+calls itself 5.20.2 then much time can be wasted in figuring out why there
+is a failure from something that "should have been fixed". If the bump is
+late then there is a much smaller window of time for such confusing bug
+reports to arise. (The opposite problem -- trying to figure out why there
+*is* a bug in something calling itself 5.20.1 when in fact the bug was
+introduced later -- shouldn't arise for MAINT releases since they should,
+in theory, only contain bug fixes but never regressions.))
+
 =head3 clean build and test
 
 Run a clean build and test to make sure nothing obvious is broken.
@@ -1310,11 +1317,6 @@ much-needed rest and relaxation>.
 Thanks for releasing perl!
 
 =head2 Building a release - the day after
-
-=head3 link announcement in epigraphs.pod
-
-Add, to your quote to F<Porting/epigraphs.pod>, a link to the release
-announcement in the web-visible mailing list archive.  Commit it.
 
 =for checklist skip BLEAD-FINAL, MAINT, RC
 

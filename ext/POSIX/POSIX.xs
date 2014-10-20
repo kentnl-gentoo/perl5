@@ -158,10 +158,10 @@
 
 /* We will have an emulation. */
 #ifndef FE_TONEAREST
-#  define FE_TONEAREST	0
-#  define FE_TOWARDZERO	1
-#  define FE_DOWNWARD	2
-#  define FE_UPWARD	3
+#  define FE_TOWARDZERO	0
+#  define FE_TONEAREST	1
+#  define FE_UPWARD	2
+#  define FE_DOWNWARD	3
 #endif
 
 /* C89 math.h:
@@ -372,6 +372,11 @@
 #    endif
 #  endif
 
+/* XXX these isgreater/isnormal/isunordered macros definitions should
+ * be moved further in the file to be part of the emulations, so that
+ * platforms can e.g. #undef c99_isunordered and have it work like
+ * it does for the other interfaces. */
+
 #  if !defined(isgreater) && defined(isunordered)
 #    define isgreater(x, y)         (!isunordered((x), (y)) && (x) > (y))
 #    define isgreaterequal(x, y)    (!isunordered((x), (y)) && (x) >= (y))
@@ -472,9 +477,10 @@
 #    undef c99_fpclassify
 #    undef c99_isfinite
 #    undef c99_isinf
-#    undef c99_isunordered
+/* Tru64 is missing isunordered but we have emulation. */
 #    undef c99_lrint
 #    undef c99_lround
+#    undef c99_nan /* in libm, but seems broken (no proto, either) */
 #    undef c99_nearbyint
 #    undef c99_nexttoward
 #    undef c99_remquo
@@ -796,15 +802,29 @@ static int my_fegetround()
 {
 #ifdef HAS_FEGETROUND
   return fegetround();
-#elif defined(FLT_ROUNDS)
-  return FLT_ROUNDS;
 #elif defined(HAS_FPGETROUND)
   switch (fpgetround()) {
-  default:
   case FP_RN: return FE_TONEAREST;
   case FP_RZ: return FE_TOWARDZERO;
   case FP_RM: return FE_DOWNWARD;
-  case FE_RP: return FE_UPWARD;
+  case FP_RP: return FE_UPWARD;
+  default: return -1;
+  }
+#elif defined(FLT_ROUNDS)
+  switch (FLT_ROUNDS) {
+  case 0: return FE_TOWARDZERO;
+  case 1: return FE_TONEAREST;
+  case 2: return FE_UPWARD;
+  case 3: return FE_DOWNWARD;
+  default: return -1;
+  }
+#elif defined(__osf__) /* Tru64 */
+  switch (read_rnd()) {
+  case FP_RND_RN: return FE_TONEAREST;
+  case FP_RND_RZ: return FE_TOWARDZERO;
+  case FP_RND_RM: return FE_DOWNWARD;
+  case FP_RND_RP: return FE_UPWARD;
+  default: return -1;
   }
 #else
   return -1;
@@ -827,19 +847,19 @@ static NV my_rint(NV x)
 {
 #ifdef FE_TONEAREST
   switch (my_fegetround()) {
-  default:
   case FE_TONEAREST:  return MY_ROUND_NEAREST(x);
   case FE_TOWARDZERO: return MY_ROUND_TRUNC(x);
   case FE_DOWNWARD:   return MY_ROUND_DOWN(x);
   case FE_UPWARD:     return MY_ROUND_UP(x);
+  default: return NV_NAN;
   }
 #elif defined(HAS_FPGETROUND)
   switch (fpgetround()) {
-  default:
   case FP_RN: return MY_ROUND_NEAREST(x);
   case FP_RZ: return MY_ROUND_TRUNC(x);
   case FP_RM: return MY_ROUND_DOWN(x);
   case FE_RP: return MY_ROUND_UP(x);
+  default: return NV_NAN;
   }
 #else
   return NV_NAN;
@@ -1218,6 +1238,14 @@ const struct lconv_offset lconv_integers[] = {
     {"n_sep_by_space",    STRUCT_OFFSET(struct lconv, n_sep_by_space)},
     {"p_sign_posn",       STRUCT_OFFSET(struct lconv, p_sign_posn)},
     {"n_sign_posn",       STRUCT_OFFSET(struct lconv, n_sign_posn)},
+#ifdef HAS_LC_MONETARY_2008
+    {"int_p_cs_precedes",  STRUCT_OFFSET(struct lconv, int_p_cs_precedes)},
+    {"int_p_sep_by_space", STRUCT_OFFSET(struct lconv, int_p_sep_by_space)},
+    {"int_n_cs_precedes",  STRUCT_OFFSET(struct lconv, int_n_cs_precedes)},
+    {"int_n_sep_by_space", STRUCT_OFFSET(struct lconv, int_n_sep_by_space)},
+    {"int_p_sign_posn",    STRUCT_OFFSET(struct lconv, int_p_sign_posn)},
+    {"int_n_sign_posn",    STRUCT_OFFSET(struct lconv, int_n_sign_posn)},
+#endif
 #endif
     {NULL, 0}
 };
@@ -2209,11 +2237,19 @@ fesetround(x)
 	RETVAL = fesetround(x);
 #elif defined(HAS_FPGETROUND) /* canary for fpsetround */
 	switch (x) {
-        default:
 	case FE_TONEAREST:  RETVAL = fpsetround(FP_RN); break;
 	case FE_TOWARDZERO: RETVAL = fpsetround(FP_RZ); break;
 	case FE_DOWNWARD:   RETVAL = fpsetround(FP_RM); break;
 	case FE_UPWARD:     RETVAL = fpsetround(FP_RP); break;
+        default: RETVAL = -1; break;
+	}
+#elif defined(__osf__) /* Tru64 */
+	switch (x) {
+	case FE_TONEAREST:  RETVAL = write_rnd(FP_RND_RN); break;
+	case FE_TOWARDZERO: RETVAL = write_rnd(FP_RND_RZ); break;
+	case FE_DOWNWARD:   RETVAL = write_rnd(FP_RND_RM); break;
+	case FE_UPWARD:     RETVAL = write_rnd(FP_RND_RP); break;
+        default: RETVAL = -1; break;
 	}
 #else
 	RETVAL = -1;
@@ -2490,11 +2526,12 @@ nan(s = 0)
     CODE:
 #ifdef c99_nan
 	RETVAL = c99_nan(s ? s : "");
-#else
+#elif defined(NV_NAN)
+	/* XXX if s != NULL, warn about unused argument,
+         * or implement the nan payload setting. */
 	RETVAL = NV_NAN;
-#  ifndef NV_NAN
+#else
 	not_here("nan");
-#  endif
 #endif
     OUTPUT:
 	RETVAL
@@ -2875,6 +2912,13 @@ tmpnam()
 	 *
 	 * Then again, maybe this should be removed at some point.
 	 * No point in enabling dangerous interfaces. */
+        if (ckWARN_d(WARN_DEPRECATED)) {
+	    HV *warned = get_hv("POSIX::_warned", GV_ADD | GV_ADDMULTI);
+            if (! hv_exists(warned, (const char *)&PL_op, sizeof(PL_op))) {
+                Perl_warner(aTHX_ packWARN(WARN_DEPRECATED), "Calling POSIX::tmpnam() is deprecated");
+                hv_store(warned, (const char *)&PL_op, sizeof(PL_op), &PL_sv_yes, 0);
+            }
+        }
 	len = strlen(tmpnam(SvPV(RETVAL, i)));
 	SvCUR_set(RETVAL, len);
     OUTPUT:

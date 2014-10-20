@@ -1,5 +1,5 @@
 package experimental;
-$experimental::VERSION = '0.010';
+$experimental::VERSION = '0.012';
 use strict;
 use warnings;
 use version ();
@@ -25,6 +25,7 @@ my %min_version = (
 	fc              => '5.16.0',
 	lexical_topic   => '5.10.0',
 	lexical_subs    => '5.18.0',
+	lvalue_refs     => '5.21.5',
 	postderef       => '5.20.0',
 	postderef_qq    => '5.20.0',
 	regex_sets      => '5.18.0',
@@ -58,7 +59,13 @@ sub _enable {
 		croak "Can't enable unknown feature $pragma";
 	}
 	elsif ($min_version{$pragma} > $]) {
-		croak "Need perl $min_version{$pragma} or later for feature $pragma";
+		my $stable = $min_version{$pragma};
+		if ($stable->{version}[1] % 2) {
+			$stable = version->new(
+				"5.".($stable->{version}[1]+1).'.0'
+			);
+		}
+		croak "Need perl $stable or later for feature $pragma";
 	}
 }
 
@@ -112,7 +119,7 @@ experimental - Experimental features made easy
 
 =head1 VERSION
 
-version 0.010
+version 0.012
 
 =head1 SYNOPSIS
 
@@ -146,12 +153,33 @@ The supported features, documented further below, are:
 	array_base    - allow the use of $[ to change the starting index of @array
 	autoderef     - allow push, each, keys, and other built-ins on references
 	lexical_topic - allow the use of lexical $_ via "my $_"
+	lvalue_refs   - allow aliasing via \$x = \$y
 	postderef     - allow the use of postfix dereferencing expressions, including
 	                in interpolating strings
 	regex_sets    - allow extended bracketed character classes in regexps
 	signatures    - allow subroutine signatures (for named arguments)
 	smartmatch    - allow the use of ~~
 	switch        - allow the use of ~~, given, and when
+
+=head2 Ordering matters
+
+Using this pragma to 'enable an experimental feature' is another way of saying
+that this pragma will disable the warnings which would result from using that
+feature.  Therefore, the order in which pragmas are applied is important.  In
+particular, you probably want to enable experimental features I<after> you
+enable warnings:
+
+  use warnings;
+  use experimental 'smartmatch';
+
+You also need to take care with modules that enable warnings for you.  A common
+example being Moose.  In this example, warnings for the 'smartmatch' feature are
+first turned on by the warnings pragma, off by the experimental pragma and back
+on again by the Moose module (fix is to switch the last two lines):
+
+  use warnings;
+  use experimental 'smartmatch';
+  use Moose;
 
 =head2 Disclaimer
 

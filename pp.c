@@ -62,6 +62,7 @@ PP(pp_stub)
 
 /* Pushy stuff. */
 
+/* This is also called directly by pp_lvavref.  */
 PP(pp_padav)
 {
     dSP; dTARGET;
@@ -417,12 +418,12 @@ PP(pp_av2arylen)
     AV * const av = MUTABLE_AV(TOPs);
     const I32 lvalue = PL_op->op_flags & OPf_MOD || LVRET;
     if (lvalue) {
-	SV ** const sv = Perl_av_arylen_p(aTHX_ MUTABLE_AV(av));
-	if (!*sv) {
-	    *sv = newSV_type(SVt_PVMG);
-	    sv_magic(*sv, MUTABLE_SV(av), PERL_MAGIC_arylen, NULL, 0);
+	SV ** const svp = Perl_av_arylen_p(aTHX_ MUTABLE_AV(av));
+	if (!*svp) {
+	    *svp = newSV_type(SVt_PVMG);
+	    sv_magic(*svp, MUTABLE_SV(av), PERL_MAGIC_arylen, NULL, 0);
 	}
-	SETs(*sv);
+	SETs(*svp);
     } else {
 	SETs(sv_2mortal(newSViv(AvFILL(MUTABLE_AV(av)))));
     }
@@ -2717,7 +2718,11 @@ PP(pp_sin)
       const NV value = SvNV_nomg(arg);
       NV result = NV_NAN;
       if (neg_report) { /* log or sqrt */
-	  if (op_type == OP_LOG ? (value <= 0.0) : (value < 0.0)) {
+	  if (
+#if defined(NAN_COMPARE_BROKEN) && defined(Perl_isnan)
+	      ! Perl_isnan(value) &&
+#endif
+	      (op_type == OP_LOG ? (value <= 0.0) : (value < 0.0))) {
 	      SET_NUMERIC_STANDARD();
 	      /* diag_listed_as: Can't take log of %g */
 	      DIE(aTHX_ "Can't take %s of %"NVgf, neg_report, value);
@@ -2768,7 +2773,11 @@ PP(pp_rand)
 		value = SvNV(sv);
 	}
     /* 1 of 2 things can be carried through SvNV, SP or TARG, SP was carried */
+#if defined(NAN_COMPARE_BROKEN) && defined(Perl_isnan)
+	if (! Perl_isnan(value) && value == 0.0)
+#else
 	if (value == 0.0)
+#endif
 	    value = 1.0;
 	{
 	    dTARGET;
@@ -2842,7 +2851,9 @@ PP(pp_int)
       }
       else {
 	  const NV value = SvNV_nomg(sv);
-	  if (value >= 0.0) {
+          if (SvNOK(sv) && UNLIKELY(Perl_isinfnan(SvNV(sv))))
+              SETn(SvNV(sv));
+	  else if (value >= 0.0) {
 	      if (value < (NV)UV_MAX + 0.5) {
 		  SETu(U_V(value));
 	      } else {
@@ -2956,24 +2967,45 @@ PP(pp_length)
     dSP; dTARGET;
     SV * const sv = TOPs;
 
-    SvGETMAGIC(sv);
+    U32 in_bytes = IN_BYTES;
+    /* simplest case shortcut */
+    /* turn off SVf_UTF8 in tmp flags if HINT_BYTES on*/
+    U32 svflags = (SvFLAGS(sv) ^ (in_bytes << 26)) & (SVf_POK|SVs_GMG|SVf_UTF8);
+    assert(HINT_BYTES == 0x00000008 && SVf_UTF8 == 0x20000000 && (SVf_UTF8 == HINT_BYTES << 26));
+    SETs(TARG);
+
+    if(LIKELY(svflags == SVf_POK))
+        goto simple_pv;
+    if(svflags & SVs_GMG)
+        mg_get(sv);
     if (SvOK(sv)) {
-	if (!IN_BYTES)
-	    SETi(sv_len_utf8_nomg(sv));
+	if (!IN_BYTES) /* reread to avoid using an C auto/register */
+	    sv_setiv(TARG, (IV)sv_len_utf8_nomg(sv));
 	else
 	{
 	    STRLEN len;
-	    (void)SvPV_nomg_const(sv,len);
-	    SETi(len);
+            /* unrolled SvPV_nomg_const(sv,len) */
+            if(SvPOK_nog(sv)){
+                simple_pv:
+                len = SvCUR(sv);
+            } else  {
+                (void)sv_2pv_flags(sv, &len, 0|SV_CONST_RETURN);
+            }
+	    sv_setiv(TARG, (IV)(len));
 	}
     } else {
 	if (!SvPADTMP(TARG)) {
 	    sv_setsv_nomg(TARG, &PL_sv_undef);
-	    SETTARG;
-	}
-	SETs(&PL_sv_undef);
+	} else { /* TARG is on stack at this point and is overwriten by SETs.
+                   This branch is the odd one out, so put TARG by default on
+                   stack earlier to let local SP go out of liveness sooner */
+            SETs(&PL_sv_undef);
+            goto no_set_magic;
+        }
     }
-    RETURN;
+    SvSETMAGIC(TARG);
+    no_set_magic:
+    return NORMAL; /* no putback, SP didn't move in this opcode */
 }
 
 /* Returns false if substring is completely outside original string.
@@ -3371,13 +3403,8 @@ PP(pp_chr)
     SV *top = POPs;
 
     SvGETMAGIC(top);
-    if (SvNOK(top) && Perl_isinfnan(SvNV(top))) {
-        if (ckWARN(WARN_UTF8)) {
-            Perl_warner(aTHX_ packWARN(WARN_UTF8),
-                        "Invalid number (%"NVgf") in chr", SvNV(top));
-        }
-        value = UNICODE_REPLACEMENT;
-    }
+    if (UNLIKELY(isinfnansv(top)))
+        Perl_croak(aTHX_ "Cannot chr %"NVgf, SvNV(top));
     else {
         if (!IN_BYTES /* under bytes, chr(-1) eq chr(0xff), etc. */
             && ((SvIOKp(top) && !SvIsUV(top) && SvIV_nomg(top) < 0)
@@ -5501,7 +5528,7 @@ PP(pp_reverse)
 PP(pp_split)
 {
     dSP; dTARG;
-    AV *ary;
+    AV *ary = PL_op->op_flags & OPf_STACKED ? (AV *)POPs : NULL;
     IV limit = POPi;			/* note, negative is forever */
     SV * const sv = POPs;
     STRLEN len;
@@ -5534,7 +5561,7 @@ PP(pp_split)
 #else
     pm = (PMOP*)POPs;
 #endif
-    if (!pm || !s)
+    if (!pm)
 	DIE(aTHX_ "panic: pp_split, pm=%p, s=%p", pm, s);
     rx = PM_GETRE(pm);
 
@@ -5550,12 +5577,13 @@ PP(pp_split)
 	ary = GvAVn(pm->op_pmreplrootu.op_pmtargetgv);
     }
 #endif
-    else
-	ary = NULL;
+    else if (pm->op_targ)
+	ary = (AV *)PAD_SVl(pm->op_targ);
     if (ary) {
 	realarray = 1;
 	PUTBACK;
 	av_extend(ary,0);
+	(void)sv_2mortal(SvREFCNT_inc_simple_NN(sv));
 	av_clear(ary);
 	SPAGAIN;
 	if ((mg = SvTIED_mg((const SV *)ary, PERL_MAGIC_tied))) {
@@ -6134,6 +6162,210 @@ PP(pp_runcv)
     RETURN;
 }
 
+static void
+S_localise_aelem_lval(pTHX_ AV * const av, SV * const keysv,
+			    const bool can_preserve)
+{
+    const SSize_t ix = SvIV(keysv);
+    if (can_preserve ? av_exists(av, ix) : TRUE) {
+	SV ** const svp = av_fetch(av, ix, 1);
+	if (!svp || !*svp)
+	    Perl_croak(aTHX_ PL_no_aelem, ix);
+	save_aelem(av, ix, svp);
+    }
+    else
+	SAVEADELETE(av, ix);
+}
+
+static void
+S_localise_helem_lval(pTHX_ HV * const hv, SV * const keysv,
+			    const bool can_preserve)
+{
+    if (can_preserve ? hv_exists_ent(hv, keysv, 0) : TRUE) {
+	HE * const he = hv_fetch_ent(hv, keysv, 1, 0);
+	SV ** const svp = he ? &HeVAL(he) : NULL;
+	if (!svp || !*svp)
+	    Perl_croak(aTHX_ PL_no_helem_sv, SVfARG(keysv));
+	save_helem_flags(hv, keysv, svp, 0);
+    }
+    else
+	SAVEHDELETE(hv, keysv);
+}
+
+static void
+S_localise_gv_slot(pTHX_ GV *gv, U8 type)
+{
+    if (type == OPpLVREF_SV) {
+	save_pushptrptr(gv, SvREFCNT_inc_simple(GvSV(gv)), SAVEt_GVSV);
+	GvSV(gv) = 0;
+    }
+    else if (type == OPpLVREF_AV)
+	/* XXX Inefficient, as it creates a new AV, which we are
+	       about to clobber.  */
+	save_ary(gv);
+    else {
+	assert(type == OPpLVREF_HV);
+	/* XXX Likewise inefficient.  */
+	save_hash(gv);
+    }
+}
+
+
+PP(pp_refassign)
+{
+    dSP;
+    SV * const key = PL_op->op_private & OPpLVREF_ELEM ? POPs : NULL;
+    SV * const left = PL_op->op_flags & OPf_STACKED ? POPs : NULL;
+    dTOPss;
+    const char *bad = NULL;
+    const U8 type = PL_op->op_private & OPpLVREF_TYPE;
+    if (!SvROK(sv)) DIE(aTHX_ "Assigned value is not a reference");
+    switch (type) {
+    case OPpLVREF_SV:
+	if (SvTYPE(SvRV(sv)) > SVt_PVLV)
+	    bad = " SCALAR";
+	break;
+    case OPpLVREF_AV:
+	if (SvTYPE(SvRV(sv)) != SVt_PVAV)
+	    bad = "n ARRAY";
+	break;
+    case OPpLVREF_HV:
+	if (SvTYPE(SvRV(sv)) != SVt_PVHV)
+	    bad = " HASH";
+	break;
+    case OPpLVREF_CV:
+	if (SvTYPE(SvRV(sv)) != SVt_PVCV)
+	    bad = " CODE";
+    }
+    if (bad)
+	/* diag_listed_as: Assigned value is not %s reference */
+	DIE(aTHX_ "Assigned value is not a%s reference", bad);
+    switch (left ? SvTYPE(left) : 0) {
+	MAGIC *mg;
+	HV *stash;
+    case 0:
+    {
+	SV * const old = PAD_SV(ARGTARG);
+	PAD_SETSV(ARGTARG, SvREFCNT_inc_NN(SvRV(sv)));
+	SvREFCNT_dec(old);
+	if ((PL_op->op_private & (OPpLVAL_INTRO|OPpPAD_STATE))
+		== OPpLVAL_INTRO)
+	    SAVECLEARSV(PAD_SVl(ARGTARG));
+	break;
+    }
+    case SVt_PVGV:
+	if (PL_op->op_private & OPpLVAL_INTRO) {
+	    S_localise_gv_slot(aTHX_ (GV *)left, type);
+	}
+	gv_setref(left, sv);
+	SvSETMAGIC(left);
+	break;
+    case SVt_PVAV:
+	if (UNLIKELY(PL_op->op_private & OPpLVAL_INTRO)) {
+	    S_localise_aelem_lval(aTHX_ (AV *)left, key,
+					SvCANEXISTDELETE(left));
+	}
+	av_store((AV *)left, SvIV(key), SvREFCNT_inc_simple_NN(SvRV(sv)));
+	break;
+    case SVt_PVHV:
+	if (UNLIKELY(PL_op->op_private & OPpLVAL_INTRO))
+	    S_localise_helem_lval(aTHX_ (HV *)left, key,
+					SvCANEXISTDELETE(left));
+	hv_store_ent((HV *)left, key, SvREFCNT_inc_simple_NN(SvRV(sv)), 0);
+    }
+    if (PL_op->op_flags & OPf_MOD)
+	SETs(sv_2mortal(newSVsv(sv)));
+    /* XXX else can weak references go stale before they are read, e.g.,
+       in leavesub?  */
+    RETURN;
+}
+
+PP(pp_lvref)
+{
+    dSP;
+    SV * const ret = sv_2mortal(newSV_type(SVt_PVMG));
+    SV * const elem = PL_op->op_private & OPpLVREF_ELEM ? POPs : NULL;
+    SV * const arg = PL_op->op_flags & OPf_STACKED ? POPs : NULL;
+    MAGIC * const mg = sv_magicext(ret, arg, PERL_MAGIC_lvref,
+				   &PL_vtbl_lvref, (char *)elem,
+				   elem ? HEf_SVKEY : (I32)ARGTARG);
+    mg->mg_private = PL_op->op_private;
+    if (PL_op->op_private & OPpLVREF_ITER)
+	mg->mg_flags |= MGf_PERSIST;
+    if (UNLIKELY(PL_op->op_private & OPpLVAL_INTRO)) {
+      if (elem) {
+	MAGIC *mg;
+	HV *stash;
+	const bool can_preserve = SvCANEXISTDELETE(arg);
+	if (SvTYPE(arg) == SVt_PVAV)
+	    S_localise_aelem_lval(aTHX_ (AV *)arg, elem, can_preserve);
+	else
+	    S_localise_helem_lval(aTHX_ (HV *)arg, elem, can_preserve);
+      }
+      else if (arg) {
+	S_localise_gv_slot(aTHX_ (GV *)arg, 
+				 PL_op->op_private & OPpLVREF_TYPE);
+      }
+      else if (!(PL_op->op_private & OPpPAD_STATE))
+	SAVECLEARSV(PAD_SVl(ARGTARG));
+    }
+    XPUSHs(ret);
+    RETURN;
+}
+
+PP(pp_lvrefslice)
+{
+    dSP; dMARK;
+    AV * const av = (AV *)POPs;
+    const bool localizing = PL_op->op_private & OPpLVAL_INTRO;
+    bool can_preserve = FALSE;
+
+    if (UNLIKELY(localizing)) {
+	MAGIC *mg;
+	HV *stash;
+	SV **svp;
+
+	can_preserve = SvCANEXISTDELETE(av);
+
+	if (SvTYPE(av) == SVt_PVAV) {
+	    SSize_t max = -1;
+
+	    for (svp = MARK + 1; svp <= SP; svp++) {
+		const SSize_t elem = SvIV(*svp);
+		if (elem > max)
+		    max = elem;
+	    }
+	    if (max > AvMAX(av))
+		av_extend(av, max);
+	}
+    }
+
+    while (++MARK <= SP) {
+	SV * const elemsv = *MARK;
+	if (SvTYPE(av) == SVt_PVAV)
+	    S_localise_aelem_lval(aTHX_ av, elemsv, can_preserve);
+	else
+	    S_localise_helem_lval(aTHX_ (HV *)av, elemsv, can_preserve);
+	*MARK = sv_2mortal(newSV_type(SVt_PVMG));
+	sv_magic(*MARK,(SV *)av,PERL_MAGIC_lvref,(char *)elemsv,HEf_SVKEY);
+    }
+    RETURN;
+}
+
+PP(pp_lvavref)
+{
+    if (PL_op->op_flags & OPf_STACKED)
+	Perl_pp_rv2av(aTHX);
+    else
+	Perl_pp_padav(aTHX);
+    {
+	dSP;
+	dTOPss;
+	SETs(0); /* special alias marker that aassign recognises */
+	XPUSHs(sv);
+	RETURN;
+    }
+}
 
 /*
  * Local variables:

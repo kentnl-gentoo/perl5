@@ -174,7 +174,7 @@ PERLVAR(I, statgv,	GV *)
 PERLVARI(I, statname,	SV *,	NULL)
 
 #ifdef HAS_TIMES
-/* Will be removed soon after v5.21.4. See RT #121351 */
+/* Will be removed soon after v5.21.5. See RT #121351 */
 PERLVAR(I, timesbuf,	struct tms)
 #endif
 
@@ -392,6 +392,8 @@ PERLVAR(I, DBsingle,	SV *)		/*  $DB::single */
 PERLVAR(I, DBtrace,	SV *)		/*  $DB::trace  */
 PERLVAR(I, DBsignal,	SV *)		/*  $DB::signal */
 PERLVAR(I, dbargs,	AV *)		/* args to call listed by caller function */
+
+PERLVARA(I, DBcontrol,    DBVARMG_COUNT, IV) /* IV versions of $DB::single, trace, signal */
 
 /* symbol tables */
 PERLVAR(I, debstash,	HV *)		/* symbol table for perldb package */
@@ -739,7 +741,7 @@ PERLVAR(I, debug_pad,	struct perl_debug_pad)	/* always needed because of the re 
 /* Hook for File::Glob */
 PERLVARI(I, globhook,	globhook_t, NULL)
 
-/* The last unconditional member of the interpreter structure when 5.21.4 was
+/* The last unconditional member of the interpreter structure when 5.21.5 was
    released. The offset of the end of this is baked into a global variable in 
    any shared perl library which will allow a sanity test in future perl
    releases.  */

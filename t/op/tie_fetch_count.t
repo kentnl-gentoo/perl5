@@ -7,7 +7,7 @@ BEGIN {
     chdir 't' if -d 't';
     require './test.pl';
     set_up_inc('../lib');
-    plan (tests => 312);
+    plan (tests => 340);
 }
 
 use strict;
@@ -260,11 +260,28 @@ for ([chdir=>''],[chmod=>'0,'],[chown=>'0,0,'],[utime=>'0,0,'],
 chop(my $u = "\xff\x{100}");
 tie $var, "main", $u;
 $dummy  = pack "u", $var; check_count 'pack "u", $utf8';
+$var = 0;
+$dummy  = pack "w", $var; check_count 'pack "w", $tied_int';
+$var = "111111111111111111111111111111111111111111111111111111111111111";
+$dummy  = eval { pack "w", $var };
+                          check_count 'pack "w", $tied_huge_int_as_str';
 
 tie $var, "main", "\x{100}";
 pos$var = 0             ; check_count 'lvalue pos $utf8';
 $dummy=sprintf"%1s",$var; check_count 'sprintf "%1s", $utf8';
 $dummy=sprintf"%.1s",$var; check_count 'sprintf "%.1s", $utf8';
+
+tie $var, "main", 23;
+for (qw(B b c D d i O o p u U X x)) {
+    $dummy=sprintf"%$_",$var; check_count "sprintf '%$_'"
+}
+tie $var, "main", "Inf";
+for (qw(B b c D d i O o p u U X x)) {
+    $dummy = eval { sprintf "%$_", $var };
+                              check_count "sprintf '%$_', \$tied_inf"
+}
+
+tie $var, "main", "\x{100}";
 $dummy  = substr$var,0,1; check_count 'substr $utf8';
 my $l   =\substr$var,0,1;
 $dummy  = $$l           ; check_count 'reading lvalue substr($utf8)';

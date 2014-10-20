@@ -738,7 +738,7 @@ Perl_pad_alloc(pTHX_ I32 optype, U32 tmptype)
 		   AvARRAY(PL_comppad), PL_curpad);
     if (PL_pad_reset_pending)
 	pad_reset();
-    if (tmptype & SVs_PADMY) {
+    if (tmptype == SVs_PADMY) { /* Not & because this ‘flag’ is 0.  */
 	/* For a my, simply push a null SV onto the end of PL_comppad. */
 	sv = *av_fetch(PL_comppad, AvFILLp(PL_comppad) + 1, TRUE);
 	retval = AvFILLp(PL_comppad);
@@ -769,9 +769,9 @@ Perl_pad_alloc(pTHX_ I32 optype, U32 tmptype)
 	    sv = *av_fetch(PL_comppad, retval, TRUE);
 	    if (!(SvFLAGS(sv) &
 #ifdef USE_PAD_RESET
-		    (SVs_PADMY|(konst ? SVs_PADTMP : 0))
+		    (konst ? SVs_PADTMP : 0))
 #else
-		    (SVs_PADMY|SVs_PADTMP)
+		    SVs_PADTMP
 #endif
 		 ))
 		break;
@@ -840,7 +840,6 @@ Perl_pad_add_anon(pTHX_ CV* func, I32 optype)
 	assert (SvTYPE(func) == SVt_PVFM);
 	av_store(PL_comppad, ix, rv);
     }
-    SvPADMY_on((SV*)func);
 
     /* to avoid ref loops, we never have parent + child referencing each
      * other simultaneously */
@@ -2122,7 +2121,6 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, bool newcv)
 		    sv = MUTABLE_SV(newHV());
 		else
 		    sv = newSV(0);
-		SvPADMY_on(sv);
 		/* reset the 'assign only once' flag on each state var */
 		if (sigil != '&' && SvPAD_STATE(namesv))
 		    SvPADSTALE_on(sv);
@@ -2247,11 +2245,15 @@ An SV may be passed as a second argument.  If so, the name will be assigned
 to it and it will be returned.  Otherwise the returned SV will be a new
 mortal.
 
+If the I<flags> include CV_NAME_NOTQUAL, then the package name will not be
+included.  If the first argument is neither a CV nor a GV, this flag is
+ignored (subject to change).
+
 =cut
 */
 
 SV *
-Perl_cv_name(pTHX_ CV *cv, SV *sv)
+Perl_cv_name(pTHX_ CV *cv, SV *sv, U32 flags)
 {
     PERL_ARGS_ASSERT_CV_NAME;
     if (!isGV_with_GP(cv) && SvTYPE(cv) != SVt_PVCV) {
@@ -2262,17 +2264,19 @@ Perl_cv_name(pTHX_ CV *cv, SV *sv)
 	SV * const retsv = sv ? (sv) : sv_newmortal();
     	if (SvTYPE(cv) == SVt_PVCV) {
 	    if (CvNAMED(cv)) {
-		if (CvLEXICAL(cv)) sv_sethek(retsv, CvNAME_HEK(cv));
+		if (CvLEXICAL(cv) || flags & CV_NAME_NOTQUAL)
+		    sv_sethek(retsv, CvNAME_HEK(cv));
 		else {
 		    sv_sethek(retsv, HvNAME_HEK(CvSTASH(cv)));
 		    sv_catpvs(retsv, "::");
 		    sv_cathek(retsv, CvNAME_HEK(cv));
 		}
 	    }
-	    else if (CvLEXICAL(cv))
+	    else if (CvLEXICAL(cv) || flags & CV_NAME_NOTQUAL)
 		sv_sethek(retsv, GvNAME_HEK(GvEGV(CvGV(cv))));
 	    else gv_efullname3(retsv, CvGV(cv), NULL);
 	}
+	else if (flags & CV_NAME_NOTQUAL) sv_sethek(retsv, GvNAME_HEK(cv));
 	else gv_efullname3(retsv,(GV *)cv,NULL);
 	return retsv;
     }
@@ -2375,9 +2379,13 @@ Perl_pad_push(pTHX_ PADLIST *padlist, int depth)
 		    else if (sigil == '%')
 			sv = MUTABLE_SV(newHV());
 		    else
+		    {
 			sv = newSV(0);
+			/* For flip-flop targets: */
+			if (oldpad[ix] && SvPADTMP(oldpad[ix]))
+			    SvPADTMP_on(sv);
+		    }
 		    av_store(newpad, ix, sv);
-		    SvPADMY_on(sv);
 		}
 	    }
 	    else if (PadnamePV(names[ix])) {
@@ -2512,7 +2520,6 @@ Perl_padlist_dup(pTHX_ PADLIST *srcpad, CLONE_PARAMS *param)
 			    else
 				sv = newSV(0);
 			    pad1a[ix] = sv;
-			    SvPADMY_on(sv);
 			}
 		    }
 		}
@@ -2528,9 +2535,7 @@ Perl_padlist_dup(pTHX_ PADLIST *srcpad, CLONE_PARAMS *param)
 		    /* SvREFCNT(oldpad[ix]) != 1 for some code in threads.xs
 		       FIXTHAT before merging this branch.
 		       (And I know how to) */
-		    if (SvPADMY(oldpad[ix]))
-			SvPADMY_on(sv);
-		    else
+		    if (SvPADTMP(oldpad[ix]))
 			SvPADTMP_on(sv);
 		}
 	    }

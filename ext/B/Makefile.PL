@@ -30,7 +30,7 @@ my @names = ({ name => 'HEf_SVKEY', macro => 1, type => "IV" },
 # match the pattern below.
 foreach my $tuple (['cop.h'],
                    ['cv.h', 'CVf'],
-                   ['gv.h', 'GVf'],
+                   ['gv.h', 'G[PV]f'],
                    ['op.h'],
                    ['opcode.h', 'OPp'],
                    ['op_reg_common.h','(?:(?:RXf_)?PMf_)'],
@@ -43,10 +43,14 @@ foreach my $tuple (['cop.h'],
     open my $fh, '<', $path or die "Cannot open $path: $!";
     while (<$fh>) {
 	push @names, $1 if (/ \#define \s+ ( $pfx \w+ ) \s+
-			      ( [()|\dx]+             # Parens, '|', digits, 'x'
-			      | \(? \d+ \s* << .*?    # digits left shifted by anything
-			      ) \s* (?: $| \/ \* )    # ending at comment or $
-			    /x);
+            ( [()|\dx]+ [UuLl]{0,2}            # Parens, '|', digits, 'x',
+                                               # followed by optional long,
+                                               # unsigned qualifiers
+            | \(? \d+ [UuLl]{0,2} \s* << .*?   # digits left shifted by anything
+                                               # followed by optional
+                                               # long, unsigned qualifiers
+            ) \s* (?: $| \/ \* )               # ending at comment or $
+        /x);
     }
     close $fh;
 }

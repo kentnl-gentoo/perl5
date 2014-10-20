@@ -91,6 +91,16 @@ C<experimental::regex_sets>.
 
 Introduced in Perl 5.18
 
+=item Subroutine signatures
+
+Introduced in Perl 5.20.0
+
+Using this feature triggers warnings in the category
+C<experimental::signatures>.
+
+The ticket for this feature is
+L<[perl #121481]|https://rt.perl.org/Ticket/Display.html?id=121481>.
+
 =item Postfix dereference syntax
 
 Introduced in Perl 5.20.0
@@ -100,6 +110,18 @@ C<experimental::postderef>.
 
 The ticket for this feature is
 L<[perl #120162]|https://rt.perl.org:443/rt3/Ticket/Display.html?id=120162>.
+
+=item Aliasing via reference
+
+Introduced in Perl 5.22.0
+
+Using this feature triggers warnings in the category
+C<experimental::refaliasing>.
+
+The ticket for this feature is
+L<[perl #122947]|https://rt.perl.org/rt3/Ticket/Display.html?id=122947>.
+
+See also: L<perlref/Assigning to References>
 
 =item The <:win32> IO pseudolayer
 

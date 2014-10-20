@@ -5,8 +5,8 @@ BEGIN {
     @INC = qw(. ../lib);
 }
 
-require "test.pl";
-plan( tests => 65 );
+require "./test.pl";
+plan( tests => 66 );
 
 @foo = (1, 2, 3, 4);
 cmp_ok($foo[0], '==', 1, 'first elem');
@@ -190,3 +190,16 @@ sub {
  )
 }
  ->(("${\''}")[0,0]);
+
+# [perl #122995] Hang when compiling while(1) in a sub-list
+# No ok() or is() necessary.
+sub foo { () = ($a, my $b, ($c, do { while(1) {} })) }
+
+# List assignment and OPpTARGET_MY
+{
+    my ($a,$b);
+    my $foo = "foo";
+    my $bar = "bar";
+    ($a,$b) = ($b = $foo."", $a = $bar . "");
+    is("$a,$b", "foo,bar", 'common vars check accounts for OPpTARGET_MY');
+}

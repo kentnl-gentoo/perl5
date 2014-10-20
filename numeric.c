@@ -831,7 +831,7 @@ Perl_grok_number_flags(pTHX_ const char *pv, STRLEN len, UV *valuep, U32 flags)
         return 0;
   }
 
-  if (s < send) {
+  if (s > d && s < send) {
     /* we can have an optional exponent part */
     if (isALPHA_FOLD_EQ(*s, 'e')) {
       s++;
@@ -1029,12 +1029,25 @@ S_mulexp10(NV value, I32 exponent)
             exponent--;
             value /= 10;
         }
+        if (value == 0.0)
+            return value;
 #endif
     }
+#if defined(__osf__)
+    /* Even with cc -ieee + ieee_set_fp_control(IEEE_TRAP_ENABLE_INV)
+     * Tru64 fp behavior on inf/nan is somewhat broken. Another way
+     * to do this would be ieee_set_fp_control(IEEE_TRAP_ENABLE_OVF)
+     * but that breaks another set of infnan.t tests. */
+#  define FP_OVERFLOWS_TO_ZERO
+#endif
     for (bit = 1; exponent; bit <<= 1) {
 	if (exponent & bit) {
 	    exponent ^= bit;
 	    result *= power;
+#ifdef FP_OVERFLOWS_TO_ZERO
+            if (result == 0)
+                return value < 0 ? -NV_INF : NV_INF;
+#endif
 	    /* Floating point exceptions are supposed to be turned off,
 	     *  but if we're obviously done, don't risk another iteration.  
 	     */
@@ -1384,6 +1397,33 @@ Perl_isinfnan(NV nv)
         return TRUE;
 #endif
     return FALSE;
+}
+
+/*
+=for apidoc
+
+Checks whether the argument would be either an infinity or NaN when used
+as a number, but is careful not to trigger non-numeric or uninitialized
+warnings.  it assumes the caller has done SvGETMAGIC(sv) already.
+
+=cut
+*/
+
+bool
+Perl_isinfnansv(pTHX_ SV *sv)
+{
+    PERL_ARGS_ASSERT_ISINFNANSV;
+    if (!SvOK(sv))
+        return FALSE;
+    if (SvNOKp(sv))
+        return Perl_isinfnan(SvNVX(sv));
+    if (SvIOKp(sv))
+        return FALSE;
+    {
+        STRLEN len;
+        const char *s = SvPV_nomg_const(sv, len);
+        return cBOOL(grok_infnan(&s, s+len));
+    }
 }
 
 #ifndef HAS_MODFL

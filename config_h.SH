@@ -261,6 +261,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_locconv HAS_LOCALECONV	/**/
 
+/* HAS_LC_MONETARY_2008:
+ *	This symbol, if defined, indicates that the localeconv routine is
+ *	available and has the additional members added in POSIX 1003.1-2008.
+ */
+#$d_lc_monetary_2008 HAS_LC_MONETARY_2008	/**/
+
 /* HAS_LOCKF:
  *	This symbol, if defined, indicates that the lockf routine is
  *	available to do file locking.
@@ -3944,6 +3950,8 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 /* HAS_PRCTL:
  *	This symbol, if defined, indicates that the prctl routine is
  *	available to set process title.
+ *	Note that there are at least two prctl variants: Linux and Irix.
+ *	While they are somewhat similar, they are incompatible.
  */
 /* HAS_PRCTL_SET_NAME:
  *	This symbol, if defined, indicates that the prctl routine is

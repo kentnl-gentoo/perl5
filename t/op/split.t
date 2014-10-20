@@ -6,7 +6,7 @@ BEGIN {
     set_up_inc('../lib');
 }
 
-plan tests => 120;
+plan tests => 122;
 
 $FS = ':';
 
@@ -495,3 +495,13 @@ is($cnt, scalar(@ary));
 use constant nought => 0;
 ($a,$b,$c) = split //, $foo, nought;
 is nought, 0, 'split does not mangle 0 constants';
+
+*aaa = *bbb;
+$aaa[1] = "foobarbaz";
+$aaa[1] .= "";
+@aaa = split //, $bbb[1];
+is "@aaa", "f o o b a r b a z",
+   'split-to-array does not free its own argument';
+
+() = @a = split //, "abc";
+is "@a", "a b c", '() = split-to-array';

@@ -10,6 +10,7 @@
 	{ PERL_MAGIC_arylen,         "arylen(#)" },
 	{ PERL_MAGIC_rhash,          "rhash(%)" },
 	{ PERL_MAGIC_proto,          "proto(&)" },
+	{ PERL_MAGIC_debugvar,       "debugvar(*)" },
 	{ PERL_MAGIC_pos,            "pos(.)" },
 	{ PERL_MAGIC_symtab,         "symtab(:)" },
 	{ PERL_MAGIC_backref,        "backref(<)" },
@@ -46,6 +47,7 @@
 	{ PERL_MAGIC_utf8,           "utf8(w)" },
 	{ PERL_MAGIC_substr,         "substr(x)" },
 	{ PERL_MAGIC_defelem,        "defelem(y)" },
+	{ PERL_MAGIC_lvref,          "lvref(\\)" },
 	{ PERL_MAGIC_checkcall,      "checkcall(])" },
 	{ PERL_MAGIC_ext,            "ext(~)" },
 

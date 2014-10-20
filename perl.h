@@ -704,6 +704,15 @@
 #  endif
 #endif
 
+/* EVC 4 SDK headers includes a bad definition of MB_CUR_MAX in stdlib.h
+  which is included from stdarg.h. Bad definition not present in SD 2008
+  SDK headers. wince.h is not yet included, so we cant fix this from there
+  since by then MB_CUR_MAX will be defined from stdlib.h.
+  cewchar.h includes a correct definition of MB_CUR_MAX and it is copied here
+  since cewchar.h can't be included this early */
+#if defined(UNDER_CE) && (_MSC_VER < 1300)
+#  define MB_CUR_MAX 1
+#endif
 #ifdef I_STDARG
 #  include <stdarg.h>
 #else
@@ -1126,14 +1135,6 @@ EXTERN_C int usleep(unsigned int);
 
 #if defined(WIN32) && defined(PERL_IMPLICIT_SYS)
 #  define WIN32SCK_IS_STDSCK		/* don't pull in custom wsock layer */
-#endif
-
-/* In Tru64 use the 4.4BSD struct msghdr, not the 4.3 one.
- * This is important for using IPv6.
- * For OSF/1 3.2, however, defining _SOCKADDR_LEN would be
- * a bad idea since it breaks send() and recv(). */
-#if defined(__osf__) && defined(__alpha) && !defined(_SOCKADDR_LEN) && !defined(DEC_OSF1_3_X)
-#   define _SOCKADDR_LEN
 #endif
 
 #if defined(HAS_SOCKET) && !defined(WIN32) /* WIN32 handles sockets via win32.h */
@@ -1857,6 +1858,16 @@ typedef NVTYPE NV;
 #   include <ieeefp.h>
 #endif
 
+#ifdef USING_MSVC6
+/* VC6 has broken NaN semantics: NaN == NaN returns true instead of false,
+ * and for example NaN < IV_MIN. */
+#  define NAN_COMPARE_BROKEN
+#endif
+#if defined(__DECC) && defined(__osf__)
+/* Also Tru64 cc has broken NaN comparisons. */
+#  define NAN_COMPARE_BROKEN
+#endif
+
 #ifdef USE_LONG_DOUBLE
 #   ifdef I_SUNMATH
 #       include <sunmath.h>
@@ -1999,7 +2010,7 @@ extern long double Perl_my_frexpl(long double x, int *e);
 #   ifndef Perl_isinf
 #       if defined(HAS_ISINFL) && !(defined(isinf) && defined(HAS_C99))
 #           define Perl_isinf(x) isinfl(x)
-#       elif defined(LDBL_MAX)
+#       elif defined(LDBL_MAX) && !defined(NAN_COMPARE_BROKEN)
 #           define Perl_isinf(x) ((x) > LDBL_MAX || (x) < -LDBL_MAX)
 #       endif
 #   endif
@@ -2074,7 +2085,7 @@ extern long double Perl_my_frexpl(long double x, int *e);
 #   ifndef Perl_isinf
 #       if defined(HAS_ISINF)
 #           define Perl_isinf(x) isinf(x)
-#       elif defined(DBL_MAX)
+#       elif defined(DBL_MAX) && !defined(NAN_COMPARE_BROKEN)
 #           define Perl_isinf(x) ((x) > DBL_MAX || (x) < -DBL_MAX)
 #       endif
 #   endif
@@ -2592,6 +2603,7 @@ typedef struct svop SVOP;
 typedef struct padop PADOP;
 typedef struct pvop PVOP;
 typedef struct loop LOOP;
+typedef struct methop METHOP;
 
 #ifdef PERL_CORE
 typedef struct opslab OPSLAB;
@@ -2661,6 +2673,10 @@ typedef SV PADNAME;
 # endif
 #else
 # define PERL_SAWAMPERSAND
+#endif
+
+#if defined(PERL_DEBUG_READONLY_OPS) && !defined(USE_ITHREADS)
+# error PERL_DEBUG_READONLY_OPS only works with ithreads
 #endif
 
 #include "handy.h"
@@ -2882,6 +2898,23 @@ typedef SV PADNAME;
 #ifndef PERL_FPU_PRE_EXEC
 #  define PERL_FPU_PRE_EXEC   {
 #  define PERL_FPU_POST_EXEC  }
+#endif
+
+/* In Tru64 the cc -ieee enables the IEEE math but disables traps.
+ * We need to reenable the "invalid" trap because otherwise generation
+ * of NaN values leaves the IEEE fp flags in bad state, leaving any further
+ * fp ops behaving strangely (Inf + 1 resulting in zero, for example). */
+#ifdef __osf__
+#  include <machine/fpu.h>
+#  define PERL_SYS_FPU_INIT \
+     STMT_START { \
+         ieee_set_fp_control(IEEE_TRAP_ENABLE_INV); \
+         signal(SIGFPE, SIG_IGN); \
+     } STMT_END
+#endif
+
+#ifndef PERL_SYS_FPU_INIT
+#  define PERL_SYS_FPU_INIT NOOP
 #endif
 
 #ifndef PERL_SYS_INIT3_BODY
@@ -4568,7 +4601,7 @@ EXTCONST char PL_no_dir_func[]
 EXTCONST char PL_no_func[]
   INIT("The %s function is unimplemented");
 EXTCONST char PL_no_myglob[]
-  INIT("\"%s\" variable %s can't be in a package");
+  INIT("\"%s\" %se %s can't be in a package");
 EXTCONST char PL_no_localize_ref[]
   INIT("Can't localize through a reference");
 EXTCONST char PL_memory_wrap[]
@@ -5215,6 +5248,16 @@ typedef enum {
 # define PL_sawampersand \
 	(SAWAMPERSAND_LEFT|SAWAMPERSAND_MIDDLE|SAWAMPERSAND_RIGHT)
 #endif
+
+/* Used for debugvar magic */
+#define DBVARMG_SINGLE  0
+#define DBVARMG_TRACE   1
+#define DBVARMG_SIGNAL  2
+#define DBVARMG_COUNT   3
+
+#define PL_DBsingle_iv  (PL_DBcontrol[DBVARMG_SINGLE])
+#define PL_DBtrace_iv   (PL_DBcontrol[DBVARMG_TRACE])
+#define PL_DBsignal_iv  (PL_DBcontrol[DBVARMG_SIGNAL])
 
 /* Various states of the input record separator SV (rs) */
 #define RsSNARF(sv)   (! SvOK(sv))
@@ -6252,26 +6295,26 @@ extern void moncontrol(int);
  * passed straight through to _escape.
  */
 
-#define PERL_PV_ESCAPE_QUOTE        0x0001
+#define PERL_PV_ESCAPE_QUOTE        0x000001
 #define PERL_PV_PRETTY_QUOTE        PERL_PV_ESCAPE_QUOTE
 
-#define PERL_PV_PRETTY_ELLIPSES     0x0002
-#define PERL_PV_PRETTY_LTGT         0x0004
+#define PERL_PV_PRETTY_ELLIPSES     0x000002
+#define PERL_PV_PRETTY_LTGT         0x000004
+#define PERL_PV_PRETTY_EXACTSIZE    0x000008
 
-#define PERL_PV_ESCAPE_FIRSTCHAR    0x0008
+#define PERL_PV_ESCAPE_UNI          0x000100
+#define PERL_PV_ESCAPE_UNI_DETECT   0x000200
+#define PERL_PV_ESCAPE_NONASCII     0x000400
+#define PERL_PV_ESCAPE_FIRSTCHAR    0x000800
 
-#define PERL_PV_ESCAPE_UNI          0x0100
-#define PERL_PV_ESCAPE_UNI_DETECT   0x0200
-#define PERL_PV_ESCAPE_NONASCII     0x0400
-
-#define PERL_PV_ESCAPE_ALL	    0x1000
-#define PERL_PV_ESCAPE_NOBACKSLASH  0x2000
-#define PERL_PV_ESCAPE_NOCLEAR      0x4000
-#define PERL_PV_ESCAPE_RE           0x8000
-
-#define PERL_PV_ESCAPE_DWIM         0x10000
-
+#define PERL_PV_ESCAPE_ALL            0x001000
+#define PERL_PV_ESCAPE_NOBACKSLASH  0x002000
+#define PERL_PV_ESCAPE_NOCLEAR      0x004000
 #define PERL_PV_PRETTY_NOCLEAR      PERL_PV_ESCAPE_NOCLEAR
+#define PERL_PV_ESCAPE_RE           0x008000
+
+#define PERL_PV_ESCAPE_DWIM         0x010000
+
 
 /* used by pv_display in dump.c*/
 #define PERL_PV_PRETTY_DUMP  PERL_PV_PRETTY_ELLIPSES|PERL_PV_PRETTY_QUOTE

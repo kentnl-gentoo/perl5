@@ -4,7 +4,7 @@ package re;
 use strict;
 use warnings;
 
-our $VERSION     = "0.26";
+our $VERSION     = "0.27";
 our @ISA         = qw(Exporter);
 our @EXPORT_OK   = ('regmust',
                     qw(is_regexp regexp_pattern
@@ -23,7 +23,7 @@ my %reflags = (
     s => 1 << ($PMMOD_SHIFT + 1),
     i => 1 << ($PMMOD_SHIFT + 2),
     x => 1 << ($PMMOD_SHIFT + 3),
-    p => 1 << ($PMMOD_SHIFT + 4),
+    p => 1 << ($PMMOD_SHIFT + 5),
 # special cases:
     d => 0,
     l => 1,
@@ -57,6 +57,7 @@ my %flags = (
     TRIEC           => 0x000004,
     DUMP            => 0x000008,
     FLAGS           => 0x000010,
+    TEST            => 0x000020,
 
     EXECUTE         => 0x00FF00,
     INTUIT          => 0x000100,
@@ -108,6 +109,7 @@ sub _load_unload {
 sub bits {
     my $on = shift;
     my $bits = 0;
+    my %seen;   # Has flag already been seen?
    ARG:
     foreach my $idx (0..$#_){
         my $s=$_[$idx];
@@ -186,7 +188,8 @@ sub bits {
 			  && $^H{reflags_charset} == $reflags{$_};
 		    }
 		} elsif (exists $reflags{$_}) {
-		    $on
+                    $seen{$_}++;
+                    $on
 		      ? $reflags |= $reflags{$_}
 		      : ($reflags &= ~$reflags{$_});
 		} else {
@@ -206,6 +209,18 @@ sub bits {
                        join(', ', map {qq('$_')} 'debug', 'debugcolor', sort keys %bitmask),
                        ")");
 	}
+    }
+    if (exists $seen{'x'} && $seen{'x'} > 1
+        && (warnings::enabled("deprecated")
+            || warnings::enabled("regexp")))
+    {
+        my $message = "Having more than one /x regexp modifier is deprecated";
+        if (warnings::enabled("deprecated")) {
+            warnings::warn("deprecated", $message);
+        }
+        else {
+            warnings::warn("regexp", $message);
+        }
     }
     $bits;
 }
@@ -396,6 +411,14 @@ Detailed info about trie compilation.
 
 Dump the final program out after it is compiled and optimised.
 
+=item FLAGS
+
+Dump the flags associated with the program
+
+=item TEST
+
+Print output intended for testing the internals of the compile process
+
 =back
 
 =item Execute related options
@@ -448,6 +471,10 @@ Enable debugging of the recursion stack in the engine. Enabling
 or disabling this option automatically does the same for debugging
 states as well. This output from this can be quite large.
 
+=item GPOS
+
+Enable debugging of the \G modifier.
+
 =item OPTIMISEM
 
 Enable enhanced optimisation debugging and start-point optimisations.
@@ -472,6 +499,7 @@ debug options.
 
 Almost definitely only useful to people hacking
 on the offsets part of the debug engine.
+
 
 =back
 

@@ -50,6 +50,19 @@ letter.
 to check the return value of your socket() call?  See
 L<perlfunc/accept>.
 
+=item Aliasing via reference is experimental
+
+(S experimental::refaliasing) This warning is emitted if you use
+a reference constructor on the left-hand side of an assignment to
+alias one variable to another.  Simply suppress the warning if you
+want to use the feature, but know that in doing so you are taking
+the risk of using an experimental feature which may change or be
+removed in a future Perl version:
+
+    no warnings "experimental::refaliasing";
+    use feature "refaliasing";
+    \$x = \$y;
+
 =item Allocation too large: %x
 
 (X) You can't allocate more than 64K on an MS-DOS machine.
@@ -200,6 +213,23 @@ Auto-decrement> for details.
 =item Assertion %s failed: file "%s", line %d
 
 (X) A general assertion failed.  The file in question must be examined.
+
+=item Assigned value is not a reference
+
+(F) You tried to assign something that was not a reference to an lvalue
+reference (e.g., C<\$x = $y>).  If you meant to make $x an alias to $y, use
+C<\$x = \$y>.
+
+=item Assigned value is not %s reference
+
+(F) You tried to assign a reference to a reference constructor, but the
+two references were not of the same type.  You cannot alias a scalar to
+an array, or an array to a hash; the two types must match.
+
+    \$x = \@y;  # error
+    \@x = \%y;  # error
+     $y = [];
+    \$x = $y;   # error; did you mean \$y?
 
 =item Assigning non-zero to $[ is no longer possible
 
@@ -546,11 +576,20 @@ the warning.  See L<perlsub>.
 (D deprecated) You called a function whose use is deprecated.  See
 the function's name in L<POSIX> for details.
 
+=item Cannot chr %f
+
+(F) You passed an invalid number (like an infinity or not-a-number) to C<chr>.
+
+=item Cannot compress %f in pack
+
+(F) You tried compressing an infinity or not-a-number as an unsigned
+integer with BER, which makes no sense.
+
 =item Cannot compress integer in pack
 
-(F) An argument to pack("w",...) was too large to compress.  The BER
-compressed integer format can only be used with positive integers, and you
-attempted to compress Infinity or a very large number (> 1e308).
+(F) An argument to pack("w",...) was too large to compress.
+The BER compressed integer format can only be used with positive
+integers, and you attempted to compress a very large number (> 1e308).
 See L<perlfunc/pack>.
 
 =item Cannot compress negative numbers in pack
@@ -574,6 +613,16 @@ be directly assigned to.
 
 (S io) You tried to apply an encoding that did not exist to a filehandle,
 either with open() or binmode().
+
+=item Cannot pack %f with '%c'
+
+(F) You tried converting an infinity or not-a-number to an integer,
+which makes no sense.
+
+=item Cannot printf %f with '%c'
+
+(F) You tried printing an infinity or not-a-number as a character (%c),
+which makes no sense.  Maybe you meant '%s', or just stringifying it?
 
 =item Cannot set tied @DB::args
 
@@ -1003,6 +1052,28 @@ a NULL.
 (F) Subroutines meant to be used in lvalue context should be declared as
 such.  See L<perlsub/"Lvalue subroutines">.
 
+=item Can't modify reference to %s in %s assignment
+
+(F) Only a limited number of constructs can be used as the argument to a
+reference constructor on the left-hand side of an assignment, and what
+you used was not one of them.  See L<perlref/Assigning to References>.
+
+=item Can't modify reference to localized parenthesized array in list
+assignment
+
+(F) Assigning to C<\local(@array)> or C<\(local @array)> is not supported, as
+it is not clear exactly what it should do.  If you meant to make @array
+refer to some other array, use C<\@array = \@other_array>.  If you want to
+make the elements of @array aliases of the scalars referenced on the
+right-hand side, use C<\(@array) = @scalar_refs>.
+
+=item Can't modify reference to parenthesized hash in list assignment
+
+(F) Assigning to C<\(%hash)> is not supported.  If you meant to make %hash
+refer to some other hash, use C<\%hash = \%other_hash>.  If you want to
+make the elements of %hash into aliases of the scalars referenced on the
+right-hand side, use a hash slice: C<\@hash{@keys} = @those_scalar_refs>.
+
 =item Can't msgrcv to read-only var
 
 (F) The target of a msgrcv must be modifiable to be used as a receive
@@ -1335,18 +1406,6 @@ Note that ASCII characters that don't map to control characters are
 discouraged, and will generate the warning (when enabled)
 L</""\c%c" is more clearly written simply as "%s"">.
 
-=item Character in 'C' format overflow in pack
-
-(W pack) You tried converting an infinity or not-a-number to an
-unsigned character, which makes no sense.  Perl behaved as if you
-tried to pack 0xFF.
-
-=item Character in 'c' format overflow in pack
-
-(W pack) You tried converting an infinity or not-a-number to a
-signed character, which makes no sense.  Perl behaved as if you
-tried to pack 0xFF.
-
 =item Character in 'C' format wrapped in pack
 
 (W pack) You said
@@ -1445,9 +1504,9 @@ See L<charnames/CUSTOM ALIASES>.
 
 (D deprecated, regexp) The \C character class is deprecated, and will
 become a compile-time error in a future release of perl (tentatively
-v5.24). This construct allows you to match a single byte of what makes up
-a multi-byte single UTF8 character, and breaks encapsulation. It is
-currently also very buggy. If you really need to process the individual
+v5.24).  This construct allows you to match a single byte of what makes
+up a multi-byte single UTF8 character, and breaks encapsulation.  It is
+currently also very buggy.  If you really need to process the individual
 bytes, you probably want to convert your string to one where each
 underlying byte is stored as a character, with utf8::encode().
 
@@ -1937,6 +1996,14 @@ interpolated.  If you see this error message, then you probably
 have some other C<(?...)> construct inside your character class.  See
 L<perlrecharclass/Extended Bracketed Character Classes>.
 
+=item Experimental aliasing via reference not enabled
+
+(F) To do aliasing via references, you must first enable the feature:
+
+    no warnings "experimental::refaliasing";
+    use feature "refaliasing";
+    \$x = \$y;
+
 =item Experimental subroutine signatures not enabled
 
 (F) To use subroutine signatures, you must first enable them:
@@ -2199,6 +2266,13 @@ created on an emergency basis to prevent a core dump.
 
 (F) The parser has given up trying to parse the program after 10 errors.
 Further error messages would likely be uninformative.
+
+=item Having more than one /%c regexp modifier is deprecated
+
+(D deprecated, regexp) You used the indicated regular expression pattern
+modifier at least twice in a string of modifiers.  It is deprecated to
+do this with this particular modifier, to allow future extensions to the
+Perl language.
 
 =item Hexadecimal float: exponent overflow
 
@@ -2613,12 +2687,6 @@ a module that is a MRO plugin.  See L<mro> and L<perlmroapi>.
 (W utf8) You passed a negative number to C<chr>.  Negative numbers are
 not valid character numbers, so it returns the Unicode replacement
 character (U+FFFD).
-
-=item Invalid number (%f) in chr
-
-(W utf8) You passed an invalid number (like an infinity or
-not-a-number) to C<chr>.  Those are not valid character numbers,
-so it return the Unicode replacement character (U+FFFD).
 
 =item invalid option -D%c, use -D'' to see choices
 
@@ -3271,6 +3339,11 @@ See L<perlfunc/pack>.
 
 (F) Lexically scoped subroutines are not yet implemented.  Don't try
 that yet.
+
+=item "my" subroutine %s can't be in a package
+
+(F) Lexically scoped subroutines aren't in a package, so it doesn't make
+sense to try to declare one with a package qualifier on the front.
 
 =item "my %s" used in sort comparison
 
@@ -4087,7 +4160,8 @@ and freeing temporaries and lexicals from.
 
 =item panic: pad_free po
 
-(P) An invalid scratch pad offset was detected internally.
+(P) A zero scratch pad offset was detected internally.  An attempt was
+made to free a target that had not been allocated to begin with.
 
 =item panic: pad_reset curpad, %p!=%p
 
@@ -4096,7 +4170,9 @@ and freeing temporaries and lexicals from.
 
 =item panic: pad_sv po
 
-(P) An invalid scratch pad offset was detected internally.
+(P) A zero scratch pad offset was detected internally.  Most likely
+an operator needed a target but that target had not been allocated
+for whatever reason.
 
 =item panic: pad_swipe curpad, %p!=%p
 
@@ -4699,7 +4775,7 @@ crude check that bails out after 100 levels of C<@ISA> depth.
 =item Redundant argument in %s
 
 (W redundant) You called a function with more arguments than other
-arguments you supplied indicated would be needed. Currently only
+arguments you supplied indicated would be needed.  Currently only
 emitted when a printf-type format required fewer arguments than were
 supplied, but might be used in the future for e.g. L<perlfunc/pack>.
 
@@ -5203,6 +5279,11 @@ unless there was a failure.  You probably wanted to use system()
 instead, which does return.  To suppress this warning, put the exec() in
 a block by itself.
 
+=item "state" subroutine %s can't be in a package
+
+(F) Lexically scoped subroutines aren't in a package, so it doesn't make
+sense to try to declare one with a package qualifier on the front.
+
 =item "state %s" used in sort comparison
 
 (W syntax) The package variables $a and $b are used for sort comparisons.
@@ -5349,6 +5430,13 @@ is not known.  The condition must be one of the following:
 
 The <-- HERE shows whereabouts in the regular expression the problem was
 discovered.  See L<perlre>.
+
+=item Switch (?(condition)... not terminated in regex; marked by
+S<<-- HERE> in m/%s/
+
+(F) You omitted to close a (?(condition)...) block somewhere
+in the pattern.  Add a closing parenthesis in the appropriate
+position.  See L<perlre>.
 
 =item switching effective %s is not implemented
 
@@ -5744,7 +5832,7 @@ Check the #! line, or manually feed your script into Perl yourself.
 marked by <-- HERE in m/%s/
 
 (D deprecated, regexp) You used a literal C<"{"> character in a regular
-expression pattern. You should change to use C<"\{"> instead, because a
+expression pattern.  You should change to use C<"\{"> instead, because a
 future version of Perl (tentatively v5.26) will consider this to be a
 syntax error.  If the pattern delimiters are also braces, any matching
 right brace (C<"}">) should also be escaped to avoid confusing the parser,

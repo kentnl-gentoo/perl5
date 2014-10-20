@@ -1820,7 +1820,7 @@ PP(pp_caller)
     if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
 	/* So is ccstack[dbcxix]. */
 	if (CvHASGV(dbcx->blk_sub.cv)) {
-	    PUSHs(cv_name(dbcx->blk_sub.cv, 0));
+	    PUSHs(cv_name(dbcx->blk_sub.cv, 0, 0));
 	    PUSHs(boolSV(CxHASARGS(cx)));
 	}
 	else {
@@ -1939,7 +1939,7 @@ PP(pp_dbstate)
     PERL_ASYNC_CHECK();
 
     if (PL_op->op_flags & OPf_SPECIAL /* breakpoint */
-	    || SvIV(PL_DBsingle) || SvIV(PL_DBsignal) || SvIV(PL_DBtrace))
+	    || PL_DBsingle_iv || PL_DBsignal_iv || PL_DBtrace_iv)
     {
 	dSP;
 	PERL_CONTEXT *cx;
@@ -2112,12 +2112,21 @@ PP(pp_enteriter)
 	itervar = &PAD_SVl(PL_op->op_targ);
 #endif
     }
-    else {					/* symbol table variable */
+    else if (LIKELY(isGV(TOPs))) {		/* symbol table variable */
 	GV * const gv = MUTABLE_GV(POPs);
 	SV** svp = &GvSV(gv);
 	save_pushptrptr(gv, SvREFCNT_inc(*svp), SAVEt_GVSV);
 	*svp = newSV(0);
 	itervar = (void *)gv;
+	save_aliased_sv(gv);
+    }
+    else {
+	SV * const sv = POPs;
+	assert(SvTYPE(sv) == SVt_PVMG);
+	assert(SvMAGIC(sv));
+	assert(SvMAGIC(sv)->mg_type == PERL_MAGIC_lvref);
+	itervar = (void *)sv;
+	cxtype |= CXp_FOR_LVREF;
     }
 
     if (PL_op->op_private & OPpITER_DEF)
@@ -2132,6 +2141,8 @@ PP(pp_enteriter)
 	if (SvTYPE(maybe_ary) != SVt_PVAV) {
 	    dPOPss;
 	    SV * const right = maybe_ary;
+	    if (UNLIKELY(cxtype & CXp_FOR_LVREF))
+		DIE(aTHX_ "Assigned value is not a reference");
 	    SvGETMAGIC(sv);
 	    SvGETMAGIC(right);
 	    if (RANGE_IS_NUMERIC(sv,right)) {
@@ -2266,10 +2277,7 @@ S_return_lvalues(pTHX_ SV **mark, SV **sp, SV **newsp, I32 gimme,
 	    const char *what = NULL;
 	    if (MARK < SP) {
 		assert(MARK+1 == SP);
-		if ((SvPADTMP(TOPs) ||
-		     (SvFLAGS(TOPs) & (SVf_READONLY | SVf_FAKE))
-		       == SVf_READONLY
-		    ) &&
+		if ((SvPADTMP(TOPs) || SvREADONLY(TOPs)) &&
 		    !SvSMAGICAL(TOPs)) {
 		    what =
 			SvREADONLY(TOPs) ? (TOPs == &PL_sv_undef) ? "undef"
@@ -2337,11 +2345,9 @@ S_return_lvalues(pTHX_ SV **mark, SV **sp, SV **newsp, I32 gimme,
 		           : sv_2mortal(SvREFCNT_inc_simple_NN(*MARK));
 	else while (++MARK <= SP) {
 	    if (*MARK != &PL_sv_undef
-		    && (SvPADTMP(*MARK)
-		       || (SvFLAGS(*MARK) & (SVf_READONLY|SVf_FAKE))
-		             == SVf_READONLY
-		       )
+		    && (SvPADTMP(*MARK) || SvREADONLY(*MARK))
 	    ) {
+		    const bool ro = cBOOL( SvREADONLY(*MARK) );
 		    SV *sv;
 		    /* Might be flattened array after $#array =  */
 		    PUTBACK;
@@ -2353,7 +2359,7 @@ S_return_lvalues(pTHX_ SV **mark, SV **sp, SV **newsp, I32 gimme,
 	       /* diag_listed_as: Can't return %s from lvalue subroutine */
 		    Perl_croak(aTHX_
 			"Can't return a %s from lvalue subroutine",
-			SvREADONLY(TOPs) ? "readonly value" : "temporary");
+			 ro ? "readonly value" : "temporary");
 	    }
 	    else
 		*++newsp =

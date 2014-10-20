@@ -99,9 +99,9 @@ static const char* const ident_too_long = "Identifier too long";
 #define XFAKEBRACK 0x80
 
 #ifdef USE_UTF8_SCRIPTS
-#   define UTF (!IN_BYTES)
+#   define UTF cBOOL(!IN_BYTES)
 #else
-#   define UTF ((PL_linestr && DO_UTF8(PL_linestr)) || ( !(PL_parser->lex_flags & LEX_IGNORE_UTF8_HINTS) && (PL_hints & HINT_UTF8)))
+#   define UTF cBOOL((PL_linestr && DO_UTF8(PL_linestr)) || ( !(PL_parser->lex_flags & LEX_IGNORE_UTF8_HINTS) && (PL_hints & HINT_UTF8)))
 #endif
 
 /* The maximum number of characters preceding the unrecognized one to display */
@@ -3084,6 +3084,7 @@ S_scan_const(pTHX_ char *start)
 	     * symbol meaning, e.g. \x{2E} would be confused with a dot.  But
 	     * in spite of this, we do have to process \N here while the proper
 	     * charnames handler is in scope.  See bugs #56444 and #62056.
+             *
 	     * There is a complication because \N in a pattern may also stand
 	     * for 'match a non-nl', and not mean a charname, in which case its
 	     * processing should be deferred to the regex compiler.  To be a
@@ -3218,31 +3219,44 @@ S_scan_const(pTHX_ char *start)
 		continue;
 
  	    case 'N':
-		/* In a non-pattern \N must be a named character, like \N{LATIN
-		 * SMALL LETTER A} or \N{U+0041}.  For patterns, it also can
-		 * mean to match a non-newline.  For non-patterns, named
-		 * characters are converted to their string equivalents. In
-		 * patterns, named characters are not converted to their
-		 * ultimate forms for the same reasons that other escapes
-		 * aren't.  Instead, they are converted to the \N{U+...} form
-		 * to get the value from the charnames that is in effect right
-		 * now, while preserving the fact that it was a named character
-		 * so that the regex compiler knows this */
-
-		/* The structure of this section of code (besides checking for
+                /* In a non-pattern \N must be like \N{U+0041}, or it can be a
+                 * named character, like \N{LATIN SMALL LETTER A}, or a named
+                 * sequence, like \N{LATIN CAPITAL LETTER A WITH MACRON AND
+                 * GRAVE}.  For convenience all three forms are referred to as
+                 * "named characters" below.
+                 *
+                 * For patterns, \N also can mean to match a non-newline.  Code
+                 * before this 'switch' statement should already have handled
+                 * this situation, and hence this code only has to deal with
+                 * the named character cases.
+                 *
+                 * For non-patterns, the named characters are converted to
+                 * their string equivalents.  In patterns, named characters are
+                 * not converted to their ultimate forms for the same reasons
+                 * that other escapes aren't.  Instead, they are converted to
+                 * the \N{U+...} form to get the value from the charnames that
+                 * is in effect right now, while preserving the fact that it
+                 * was a named character, so that the regex compiler knows
+                 * this.
+                 *
+		 * The structure of this section of code (besides checking for
 		 * errors and upgrading to utf8) is:
-		 *  Further disambiguate between the two meanings of \N, and if
-		 *	not a charname, go process it elsewhere
-		 *  If of form \N{U+...}, pass it through if a pattern;
-		 *	otherwise convert to utf8
-		 *  Otherwise must be \N{NAME}: convert to \N{U+c1.c2...} if a
-		 *  pattern; otherwise convert to utf8 */
+                 *  If the named character is of the form \N{U+...}, pass it
+                 *      through if a pattern; otherwise convert the code point
+                 *      to utf8
+                 *  Otherwise must be some \N{NAME}: convert to \N{U+c1.c2...}
+                 *      if a pattern; otherwise convert to utf8
+                 *
+                 * If the regex compiler should ever need to differentiate
+                 * between the \N{U+...} and \N{name} forms, that could easily
+                 * be done here by stripping any leading zeros from the
+                 * \N{U+...} case, and adding them to the other one. */
 
-		/* Here, s points to the 'N'; the test below is guaranteed to
-		 * succeed if we are being called on a pattern as we already
-		 * know from a test above that the next character is a '{'.
-		 * On a non-pattern \N must mean 'named sequence, which
-		 * requires braces */
+                /* Here, 's' points to the 'N'; the test below is guaranteed to
+		 * succeed if we are being called on a pattern, as we already
+                 * know from a test above that the next character is a '{'.  A
+                 * non-pattern \N must mean 'named character', which requires
+                 * braces */
 		s++;
 		if (*s != '{') {
 		    yyerror("Missing braces on \\N{}"); 
@@ -3267,8 +3281,6 @@ S_scan_const(pTHX_ char *start)
 				| PERL_SCAN_DISALLOW_PREFIX;
 		    STRLEN len;
 
-		    /* For \N{U+...}, the '...' is a unicode value even on
-		     * EBCDIC machines */
 		    s += 2;	    /* Skip to next char after the 'U+' */
 		    len = e - s;
 		    uv = grok_hex(s, &len, &flags, NULL);
@@ -3279,27 +3291,26 @@ S_scan_const(pTHX_ char *start)
 		    }
 
 		    if (PL_lex_inpat) {
-
-			/* On non-EBCDIC platforms, pass through to the regex
-			 * compiler unchanged.  The reason we evaluated the
-			 * number above is to make sure there wasn't a syntax
-			 * error.  But on EBCDIC we convert to native so
-			 * downstream code can continue to assume it's native
-			 */
 			s -= 5;	    /* Include the '\N{U+' */
 #ifdef EBCDIC
-			d += my_snprintf(d, e - s + 1 + 1,  /* includes the }
+                        /* On EBCDIC platforms, in \N{U+...}, the '...' is a
+                         * Unicode value, so convert to native so downstream
+                         * code can continue to assume it's native */
+			d += my_snprintf(d, e - s + 1 + 1,  /* includes the '}'
 							       and the \0 */
-				    "\\N{U+%X}",
-				    (unsigned int) UNI_TO_NATIVE(uv));
+                                         "\\N{U+%X}",
+                                         (unsigned int) UNI_TO_NATIVE(uv));
 #else
-			Copy(s, d, e - s + 1, char);	/* 1 = include the } */
+                        /* On non-EBCDIC platforms, pass it through unchanged.
+                         * The reason we evaluated the number above is to make
+                         * sure there wasn't a syntax error. */
+			Copy(s, d, e - s + 1, char);	/* +1 is for the '}' */
 			d += e - s + 1;
 #endif
 		    }
 		    else {  /* Not a pattern: convert the hex to string */
 
-			 /* If destination is not in utf8, unconditionally
+                         /* If the destination is not in utf8, unconditionally
 			  * recode it to be so.  This is because \N{} implies
 			  * Unicode semantics, and scalars have to be in utf8
 			  * to guarantee those semantics */
@@ -3352,13 +3363,18 @@ S_scan_const(pTHX_ char *start)
                                  * through the string.  Each character takes up
                                  * 2 hex digits plus either a trailing dot or
                                  * the "}" */
+                                const char initial_text[] = "\\N{U+";
+                                const STRLEN initial_len = sizeof(initial_text)
+                                                           - 1;
                                 d = off + SvGROW(sv, off
                                                     + 3 * len
-                                                    + 6 /* For the "\N{U+", and
-                                                           trailing NUL */
+
+                                                    /* +1 for trailing NUL */
+                                                    + initial_len + 1
+
                                                     + (STRLEN)(send - e));
-                                Copy("\\N{U+", d, 5, char);
-                                d += 5;
+                                Copy(initial_text, d, initial_len, char);
+                                d += initial_len;
                                 while (str < str_end) {
                                     char hex_string[4];
                                     int len =
@@ -3370,7 +3386,7 @@ S_scan_const(pTHX_ char *start)
                                     d += 3;
                                     str++;
                                 }
-                                d--;    /* We will overwrite below the final
+                                d--;    /* Below, we will overwrite the final
                                            dot with a right brace */
                             }
                             else {
@@ -5796,7 +5812,7 @@ Perl_yylex(pTHX)
 	if (PL_expect != XOPERATOR) {
 	    if (s[1] != '<' && !strchr(s,'>'))
 		check_uni();
-	    if (s[1] == '<')
+	    if (s[1] == '<' && s[2] != '>')
 		s = scan_heredoc(s);
 	    else
 		s = scan_inputsymbol(s);
@@ -6555,7 +6571,7 @@ Perl_yylex(pTHX)
 			    ? GvCV(gv)
 			    : SvROK(gv) && SvTYPE(SvRV(gv)) == SVt_PVCV
 				? (CV *)SvRV(gv)
-				: (CV *)gv
+				: ((CV *)gv)
 			: rv2cv_op_cv(rv2cv_op, RV2CVOPCV_RETURN_STUB);
 		}
 
@@ -8114,10 +8130,13 @@ S_pending_ident(pTHX)
         }
         else {
             if (has_colon) {
+                /* "my" variable %s can't be in a package */
                 /* PL_no_myglob is constant */
                 GCC_DIAG_IGNORE(-Wformat-nonliteral);
                 yyerror_pv(Perl_form(aTHX_ PL_no_myglob,
-			    PL_in_my == KEY_my ? "my" : "state", PL_tokenbuf),
+                            PL_in_my == KEY_my ? "my" : "state",
+                            *PL_tokenbuf == '&' ? "subroutin" : "variabl",
+                            PL_tokenbuf),
                             UTF ? SVf_UTF8 : 0);
                 GCC_DIAG_RESTORE;
             }
@@ -8668,14 +8687,14 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
 }
 
 static bool
-S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s, char* charset) {
+S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s, char* charset, unsigned int * x_mod_count) {
 
-    /* Adds, subtracts to/from 'pmfl' based on regex modifier flags found in
-     * the parse starting at 's', based on the subset that are valid in this
-     * context input to this routine in 'valid_flags'. Advances s.  Returns
-     * TRUE if the input should be treated as a valid flag, so the next char
-     * may be as well; otherwise FALSE. 'charset' should point to a NUL upon
-     * first call on the current regex.  This routine will set it to any
+    /* Adds, subtracts to/from 'pmfl' based on the next regex modifier flag
+     * found in the parse starting at 's', based on the subset that are valid
+     * in this context input to this routine in 'valid_flags'. Advances s.
+     * Returns TRUE if the input should be treated as a valid flag, so the next
+     * char may be as well; otherwise FALSE. 'charset' should point to a NUL
+     * upon first call on the current regex.  This routine will set it to any
      * charset modifier found.  The caller shouldn't change it.  This way,
      * another charset modifier encountered in the parse can be detected as an
      * error, as we have decided to allow only one */
@@ -8697,7 +8716,7 @@ S_pmflag(pTHX_ const char* const valid_flags, U32 * pmfl, char** s, char* charse
 
     switch (c) {
 
-        CASE_STD_PMMOD_FLAGS_PARSE_SET(pmfl);
+        CASE_STD_PMMOD_FLAGS_PARSE_SET(pmfl, *x_mod_count);
         case GLOBAL_PAT_MOD:      *pmfl |= PMf_GLOBAL; break;
         case CONTINUE_PAT_MOD:    *pmfl |= PMf_CONTINUE; break;
         case ONCE_PAT_MOD:        *pmfl |= PMf_KEEP; break;
@@ -8772,6 +8791,7 @@ S_scan_pat(pTHX_ char *start, I32 type)
     const char * const valid_flags =
 	(const char *)((type == OP_QR) ? QR_PAT_MODS : M_PAT_MODS);
     char charset = '\0';    /* character set modifier */
+    unsigned int x_mod_count = 0;
 
     PERL_ARGS_ASSERT_SCAN_PAT;
 
@@ -8821,13 +8841,17 @@ S_scan_pat(pTHX_ char *start, I32 type)
 	pm->op_pmflags |= PMf_IS_QR;
     }
 
-    while (*s && S_pmflag(aTHX_ valid_flags, &(pm->op_pmflags), &s, &charset)) {};
+    while (*s && S_pmflag(aTHX_ valid_flags, &(pm->op_pmflags),
+                                &s, &charset, &x_mod_count))
+    {};
     /* issue a warning if /c is specified,but /g is not */
     if ((pm->op_pmflags & PMf_CONTINUE) && !(pm->op_pmflags & PMf_GLOBAL))
     {
         Perl_ck_warner(aTHX_ packWARN(WARN_REGEXP), 
 		       "Use of /c modifier is meaningless without /g" );
     }
+
+    STD_PMMOD_FLAGS_PARSE_X_WARN(x_mod_count);
 
     PL_lex_op = (OP*)pm;
     pl_yylval.ival = OP_MATCH;
@@ -8843,6 +8867,7 @@ S_scan_subst(pTHX_ char *start)
     line_t first_line;
     I32 es = 0;
     char charset = '\0';    /* character set modifier */
+    unsigned int x_mod_count = 0;
     char *t;
 
     PERL_ARGS_ASSERT_SCAN_SUBST;
@@ -8876,11 +8901,14 @@ S_scan_subst(pTHX_ char *start)
 	    s++;
 	    es++;
 	}
-	else if (! S_pmflag(aTHX_ S_PAT_MODS, &(pm->op_pmflags), &s, &charset))
+	else if (! S_pmflag(aTHX_ S_PAT_MODS, &(pm->op_pmflags),
+                                  &s, &charset, &x_mod_count))
 	{
 	    break;
 	}
     }
+
+    STD_PMMOD_FLAGS_PARSE_X_WARN(x_mod_count);
 
     if ((pm->op_pmflags & PMf_CONTINUE)) {
         Perl_ck_warner(aTHX_ packWARN(WARN_REGEXP), "Use of /c modifier is meaningless in s///" );
@@ -9270,6 +9298,7 @@ S_scan_heredoc(pTHX_ char *s)
    This code handles:
 
    <>		read from ARGV
+   <<>>		read from ARGV without magic open
    <FH> 	read from filehandle
    <pkg::FH>	read from package qualified filehandle
    <pkg'FH>	read from package qualified filehandle
@@ -9284,6 +9313,7 @@ S_scan_inputsymbol(pTHX_ char *start)
     char *s = start;		/* current position in buffer */
     char *end;
     I32 len;
+    bool nomagicopen = FALSE;
     char *d = PL_tokenbuf;					/* start of temp holding space */
     const char * const e = PL_tokenbuf + sizeof PL_tokenbuf;	/* end of temp holding space */
 
@@ -9292,7 +9322,14 @@ S_scan_inputsymbol(pTHX_ char *start)
     end = strchr(s, '\n');
     if (!end)
 	end = PL_bufend;
-    s = delimcpy(d, e, s + 1, end, '>', &len);	/* extract until > */
+    if (s[1] == '<' && s[2] == '>' && s[3] == '>') {
+        nomagicopen = TRUE;
+        *d = '\0';
+        len = 0;
+        s += 3;
+    }
+    else
+        s = delimcpy(d, e, s + 1, end, '>', &len);	/* extract until > */
 
     /* die if we didn't have space for the contents of the <>,
        or if it didn't end, or if we see a newline
@@ -9402,7 +9439,7 @@ intro_sym:
 			op_append_elem(OP_LIST,
 			    newGVOP(OP_GV, 0, gv),
 			    newCVREF(0, newGVOP(OP_GV, 0, gv_readline))))
-		: (OP*)newUNOP(OP_READLINE, 0, newGVOP(OP_GV, 0, gv));
+		: (OP*)newUNOP(OP_READLINE, nomagicopen ? OPf_SPECIAL : 0, newGVOP(OP_GV, 0, gv));
 	    pl_yylval.ival = OP_NULL;
 	}
     }
@@ -11364,7 +11401,6 @@ S_parse_opt_lexvar(pTHX)
     PL_bufptr = s;
     if (d == PL_tokenbuf+1)
 	return NULL;
-    *d = 0;
     var = newOP(sigil == '$' ? OP_PADSV : sigil == '@' ? OP_PADAV : OP_PADHV,
 		OPf_MOD | (OPpLVAL_INTRO<<8));
     var->op_targ = allocmy(PL_tokenbuf, d - PL_tokenbuf, UTF ? SVf_UTF8 : 0);

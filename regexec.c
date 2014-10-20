@@ -2968,7 +2968,7 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
 	}
 	DEBUG_EXECUTE_r({
 	    SV * const prop = sv_newmortal();
-            regprop(prog, prop, c, reginfo);
+            regprop(prog, prop, c, reginfo, NULL);
 	    {
 		RE_PV_QUOTED_DECL(quoted,utf8_target,PERL_DEBUG_PAD_ZERO(1),
 		    s,strend-s,60);
@@ -3074,7 +3074,8 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
                  * and replaced it with this one. Yves */
 		DEBUG_EXECUTE_r(
 		    PerlIO_printf(Perl_debug_log,
-			"String does not contain required substring, cannot match.\n"
+			"%sString does not contain required substring, cannot match.%s\n",
+                        PL_colors[4], PL_colors[5]
 	            ));
 		goto phooey;
 	    }
@@ -3990,7 +3991,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	    SV * const prop = sv_newmortal();
 	    regnode *rnext=regnext(scan);
 	    DUMP_EXEC_POS( locinput, scan, utf8_target );
-            regprop(rex, prop, scan, reginfo);
+            regprop(rex, prop, scan, reginfo, NULL);
             
 	    PerlIO_printf(Perl_debug_log,
 		    "%3"IVdf":%*s%s(%"IVdf")\n",
@@ -5188,9 +5189,6 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	case TAIL: /* placeholder while compiling (A|B|C) */
 	    break;
 
-	case BACK: /* ??? doesn't appear to be used ??? */
-	    break;
-
 #undef  ST
 #define ST st->u.eval
 	{
@@ -5447,7 +5445,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 			re_sv = rex->engine->op_comp(aTHX_ &ret, 1, NULL,
 				    rex->engine, NULL, NULL,
                                     /* copy /msix etc to inner pattern */
-                                    scan->flags,
+                                    ARG2L(scan),
                                     pm_flags);
 
 			if (!(SvFLAGS(ret)
@@ -7600,7 +7598,7 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
 	GET_RE_DEBUG_FLAGS_DECL;
 	DEBUG_EXECUTE_r({
 	    SV * const prop = sv_newmortal();
-            regprop(prog, prop, p, reginfo);
+            regprop(prog, prop, p, reginfo, NULL);
 	    PerlIO_printf(Perl_debug_log,
 			"%*s  %s can match %"IVdf" times out of %"IVdf"...\n",
 			REPORT_CODE_OFF + depth*2, "", SvPVX_const(prop),(IV)c,(IV)max);

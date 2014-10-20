@@ -176,6 +176,9 @@ typedef enum {
 #if defined(PERL_IN_HV_C) || defined(PERL_IN_XS_APITEST)
 #define HE_SVSLOT	SVt_NULL
 #endif
+#ifdef PERL_IN_SV_C
+#  define SVt_FIRST SVt_NULL	/* the type of SV that new_SV() in sv.c returns */
+#endif
 
 #define PERL_ARENA_ROOTS_SIZE	(SVt_LAST)
 
@@ -191,11 +194,18 @@ typedef struct hek HEK;
     U32		sv_refcnt;	/* how many references to us */	\
     U32		sv_flags	/* what we are */
 
+#if NVSIZE <= IVSIZE
+#  define _NV_BODYLESS_UNION NV svu_nv;
+#else
+#  define _NV_BODYLESS_UNION
+#endif
+
 #define _SV_HEAD_UNION \
     union {				\
 	char*   svu_pv;		/* pointer to malloced string */	\
 	IV      svu_iv;			\
 	UV      svu_uv;			\
+	_NV_BODYLESS_UNION		\
 	SV*     svu_rv;		/* pointer to another SV */		\
 	struct regexp* svu_rx;		\
 	SV**    svu_array;		\
@@ -362,15 +372,13 @@ perform the upgrade if necessary.  See C<svtype>.
 				       GvIMPORTED_CV_on() if it needs to be
 				       expanded to a real GV */
 #define SVpad_NAMELIST	SVp_SCREAM  /* AV is a padnamelist */
-#define SVf_IsCOW	0x00010000  /* copy on write (shared hash key if
-				       SvLEN == 0) */
-#define SVs_PADTMP	0x00020000  /* in use as tmp; only if ! SVs_PADMY */
-#define SVs_PADSTALE	0x00020000  /* lexical has gone out of scope;
-					only valid for SVs_PADMY */
+#define SVf_PROTECT	0x00010000  /* very read-only */
+#define SVs_PADTMP	0x00020000  /* in use as tmp */
 #define SVpad_TYPED	0x00020000  /* pad name is a Typed Lexical */
-#define SVs_PADMY	0x00040000  /* in use a "my" variable */
+#define SVs_PADSTALE	0x00040000  /* lexical has gone out of scope;
+					only used when !PADTMP */
 #define SVpad_OUR	0x00040000  /* pad name is "our" instead of "my" */
-#define SVs_TEMP	0x00080000  /* string is stealable? */
+#define SVs_TEMP	0x00080000  /* mortal (implies string is stealable) */
 #define SVs_OBJECT	0x00100000  /* is "blessed" */
 #define SVs_GMG		0x00200000  /* has magical get method */
 #define SVs_SMG		0x00400000  /* has magical set method */
@@ -383,7 +391,9 @@ perform the upgrade if necessary.  See C<svtype>.
 					  [CvEVAL(cv), CvSPECIAL(cv)]
 				       3: On a pad name SV, that slot in the
 					  frame AV is a REFCNT'ed reference
-					  to a lexical from "outside". */
+					  to a lexical from "outside".
+                                       4: HV: informally reserved by DAPM
+                                          for vtables */
 #define SVf_OOK		0x02000000  /* has valid offset value. For a PVHV this
 				       means that a hv_aux struct is present
 				       after the main array */
@@ -396,17 +406,18 @@ perform the upgrade if necessary.  See C<svtype>.
 
 
 
-#define SVf_THINKFIRST	(SVf_READONLY|SVf_ROK|SVf_FAKE|SVs_RMG|SVf_IsCOW)
+#define SVf_THINKFIRST	(SVf_READONLY|SVf_PROTECT|SVf_ROK|SVf_FAKE \
+			|SVs_RMG|SVf_IsCOW)
 
 #define SVf_OK		(SVf_IOK|SVf_NOK|SVf_POK|SVf_ROK| \
 			 SVp_IOK|SVp_NOK|SVp_POK|SVpgv_GP)
 
 #define PRIVSHIFT 4	/* (SVp_?OK >> PRIVSHIFT) == SVf_?OK */
 
+/* Note that SVf_AMAGIC is now only set on stashes.  */
 #define SVf_AMAGIC	0x10000000  /* has magical overloaded methods */
-
-/* note that SVf_AMAGIC is now only set on stashes, so this bit is free
- * for non-HV SVs */
+#define SVf_IsCOW	0x10000000  /* copy on write (shared hash key if
+				       SvLEN == 0) */
 
 /* Ensure this value does not clash with the GV_ADD* flags in gv.h, or the
    CV_CKPROTO_* flags in op.c, or the padadd_* flags in pad.h: */
@@ -1049,17 +1060,17 @@ sv_force_normal does nothing.
 
 #define SvTHINKFIRST(sv)	(SvFLAGS(sv) & SVf_THINKFIRST)
 
-#define SvPADMY(sv)		(SvFLAGS(sv) & SVs_PADMY)
-#define SvPADMY_on(sv)		(SvFLAGS(sv) |= SVs_PADMY)
+#define SVs_PADMY		0
+#define SvPADMY(sv)		!(SvFLAGS(sv) & SVs_PADTMP)
+#ifndef PERL_CORE
+# define SvPADMY_on(sv)		SvPADTMP_off(sv)
+#endif
 
-/* SVs_PADTMP and SVs_PADSTALE share the same bit, mediated by SVs_PADMY */
+#define SvPADTMP(sv)		(SvFLAGS(sv) & (SVs_PADTMP))
+#define SvPADSTALE(sv)		(SvFLAGS(sv) & (SVs_PADSTALE))
 
-#define SvPADTMP(sv)	((SvFLAGS(sv) & (SVs_PADMY|SVs_PADTMP)) == SVs_PADTMP)
-#define SvPADSTALE(sv)	((SvFLAGS(sv) & (SVs_PADMY|SVs_PADSTALE)) \
-				    == (SVs_PADMY|SVs_PADSTALE))
-
-#define SvPADTMP_on(sv)		S_SvPADTMP_on(MUTABLE_SV(sv))
-#define SvPADTMP_off(sv)	S_SvPADTMP_off(MUTABLE_SV(sv))
+#define SvPADTMP_on(sv)		(SvFLAGS(sv) |= SVs_PADTMP)
+#define SvPADTMP_off(sv)	(SvFLAGS(sv) &= ~SVs_PADTMP)
 #define SvPADSTALE_on(sv)	S_SvPADSTALE_on(MUTABLE_SV(sv))
 #define SvPADSTALE_off(sv)	S_SvPADSTALE_off(MUTABLE_SV(sv))
 
@@ -1071,9 +1082,14 @@ sv_force_normal does nothing.
 #define SvOBJECT_on(sv)		(SvFLAGS(sv) |= SVs_OBJECT)
 #define SvOBJECT_off(sv)	(SvFLAGS(sv) &= ~SVs_OBJECT)
 
-#define SvREADONLY(sv)		(SvFLAGS(sv) & SVf_READONLY)
-#define SvREADONLY_on(sv)	(SvFLAGS(sv) |= SVf_READONLY)
-#define SvREADONLY_off(sv)	(SvFLAGS(sv) &= ~SVf_READONLY)
+#define SvREADONLY(sv)		(SvFLAGS(sv) & (SVf_READONLY|SVf_PROTECT))
+#ifdef PERL_CORE
+# define SvREADONLY_on(sv)	(SvFLAGS(sv) |= (SVf_READONLY|SVf_PROTECT))
+# define SvREADONLY_off(sv)	(SvFLAGS(sv) &=~(SVf_READONLY|SVf_PROTECT))
+#else
+# define SvREADONLY_on(sv)	(SvFLAGS(sv) |= SVf_READONLY)
+# define SvREADONLY_off(sv)	(SvFLAGS(sv) &= ~SVf_READONLY)
+#endif
 
 #define SvSCREAM(sv) ((SvFLAGS(sv) & (SVp_SCREAM|SVp_POK)) == (SVp_SCREAM|SVp_POK))
 #define SvSCREAM_on(sv)		(SvFLAGS(sv) |= SVp_SCREAM)
@@ -1518,7 +1534,7 @@ Returns a pointer to the string in the SV, or a stringified form of
 the SV if the SV does not contain a string.  The SV may cache the
 stringified version becoming C<SvPOK>.  Handles 'get' magic.  The
 C<len> variable will be set to the length of the string (this is a macro, so
-don't use C<&len>). See also C<SvPVx> for a version which guarantees to
+don't use C<&len>).  See also C<SvPVx> for a version which guarantees to
 evaluate sv only once.
 
 Note that there is no guarantee that the return value of C<SvPV()> is
@@ -1855,12 +1871,8 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>.
 /* if (after resolving magic etc), the SV is found to be overloaded,
  * don't call the overload magic, just return as-is */
 #define SV_SKIP_OVERLOAD	8192
-/* It is not yet clear whether we want this as an API, or what the
- * constants should be named. */
-#ifdef PERL_CORE
-# define SV_CATBYTES		16384
-# define SV_CATUTF8		32768
-#endif
+#define SV_CATBYTES		16384
+#define SV_CATUTF8		32768
 
 /* The core is safe for this COW optimisation. XS code on CPAN may not be.
    So only default to doing the COW setup if we're in the core.
@@ -1901,7 +1913,7 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>.
    on-write.  */
 #  define CAN_COW_MASK	(SVs_OBJECT|SVs_GMG|SVs_SMG|SVs_RMG|SVf_IOK|SVf_NOK| \
 			 SVf_POK|SVf_ROK|SVp_IOK|SVp_NOK|SVp_POK|SVf_FAKE| \
-			 SVf_OOK|SVf_BREAK|SVf_READONLY)
+			 SVf_OOK|SVf_BREAK|SVf_READONLY|SVf_PROTECT)
 #else
 #  define SvRELEASE_IVX(sv)   0
 /* This little game brought to you by the need to shut this warning up:
@@ -1919,7 +1931,7 @@ mg.c:1024: warning: left-hand operand of comma expression has no effect
 #   define CowREFCNT(sv)	(*(U8 *)(SvPVX(sv)+SvLEN(sv)-1))
 #   define SV_COW_REFCNT_MAX	((1 << sizeof(U8)*8) - 1)
 #   define CAN_COW_MASK	(SVf_POK|SVf_ROK|SVp_POK|SVf_FAKE| \
-			 SVf_OOK|SVf_BREAK|SVf_READONLY)
+			 SVf_OOK|SVf_BREAK|SVf_READONLY|SVf_PROTECT)
 #  endif
 #endif /* PERL_OLD_COPY_ON_WRITE */
 

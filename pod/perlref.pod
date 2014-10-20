@@ -69,7 +69,7 @@ References can be created in several ways.
 X<\> X<backslash>
 
 By using the backslash operator on a variable, subroutine, or value.
-(This works much like the & (address-of) operator in C.)  
+(This works much like the & (address-of) operator in C.)
 This typically creates I<another> reference to a variable, because
 there's already a reference to the variable in the symbol table.  But
 the symbol table reference might go away, and you'll still have the
@@ -655,13 +655,13 @@ that generated HTML font changes for the various colors:
 
 The red() and green() functions would be similar.  To create these,
 we'll assign a closure to a typeglob of the name of the function we're
-trying to build.  
+trying to build.
 
     @colors = qw(red blue green yellow orange purple violet);
     for my $name (@colors) {
         no strict 'refs';	# allow symbol table manipulation
         *$name = *{uc $name} = sub { "<FONT COLOR='$name'>@_</FONT>" };
-    } 
+    }
 
 Now all those different functions appear to exist independently.  You can
 call red(), RED(), blue(), BLUE(), green(), etc.  This technique saves on
@@ -699,7 +699,7 @@ operator, as they are created on the fly. If you are accustomed to using
 nested subroutines in other programming languages with their own private
 variables, you'll have to work at it a bit in Perl.  The intuitive coding
 of this type of thing incurs mysterious warnings about "will not stay
-shared" due to the reasons explained above. 
+shared" due to the reasons explained above.
 For example, this won't work:
 
     sub outer {
@@ -803,6 +803,117 @@ Slices">, also behaves as expected:
 As with postfix array, postfix value slice dereferencing I<can> be used
 in interpolating strings (double quotes or the C<qq> operator), but only
 if the additional C<postderef_qq> L<feature> is enabled.
+
+=head1 Assigning to References
+
+Beginning in v5.22.0, the referencing operator can be assigned to.  It
+performs an aliasing operation, so that the variable name referenced on the
+left-hand side becomes an alias for the thing referenced on the right-hand
+side:
+
+    \$a = \$b; # $a and $b now point to the same scalar
+    \&foo = \&bar; # foo() now means bar()
+
+This syntax must be enabled with C<use feature 'refaliasing'>.  It is
+experimental, and will warn by default unless C<no warnings
+'experimental::refaliasing'> is in effect.
+
+These forms may be assigned to, and cause the right-hand side to be
+evaluated in scalar context:
+
+    \$scalar
+    \@array
+    \%hash
+    \&sub
+    \my $scalar
+    \my @array
+    \my %hash
+    \state $scalar # or @array, etc.
+    \our $scalar   # etc.
+    \local $scalar # etc.
+    \local our $scalar # etc.
+    \$some_array[$index]
+    \$some_hash{$key}
+    \local $some_array[$index]
+    \local $some_hash{$key}
+    condition ? \$this : \$that[0] # etc.
+
+Slicing operations and parentheses cause
+the right-hand side to be evaluated in
+list context:
+
+    \@array[5..7]
+    (\@array[5..7])
+    \(@array[5..7])
+    \@hash{'foo','bar'}
+    (\@hash{'foo','bar'})
+    \(@hash{'foo','bar'})
+    (\$scalar)
+    \($scalar)
+    \(my $scalar)
+    \my($scalar)
+    (\@array)
+    (\%hash)
+    (\&sub)
+    \(&sub)
+    \($foo, @bar, %baz)
+    (\$foo, \@bar, \%baz)
+
+Each element on the right-hand side must be a reference to a datum of the
+right type.  Parentheses immediately surrounding an array (and possibly
+also C<my>/C<state>/C<our>/C<local>) will make each element of the array an
+alias to the corresponding scalar referenced on the right-hand side:
+
+    \(@a) = \(@b); # @a and @b now have the same elements
+    \my(@a) = \(@b); # likewise
+    \(my @a) = \(@b); # likewise
+    push @a, 3; # but now @a has an extra element that @b lacks
+    \(@a) = (\$a, \$b, \$c); # @a now contains $a, $b, and $c
+
+Combining that form with C<local> and putting parentheses immediately
+around a hash are forbidden (because it is not clear what they should do):
+
+    \local(@array) = foo(); # WRONG
+    \(%hash)       = bar(); # wRONG
+
+Assignment to references and non-references may be combined in lists and
+conditional ternary expressions, as long as the values on the right-hand
+side are the right type for each element on the left, though this may make
+for obfuscated code:
+
+    (my $tom, \my $dick, \my @harry) = (\1, \2, [1..3]);
+    # $tom is now \1
+    # $dick is now 2 (read-only)
+    # @harry is (1,2,3)
+
+    my $type = ref $thingy;
+    ($type ? $type == 'ARRAY' ? \@foo : \$bar : $baz) = $thingy;
+
+The C<foreach> loop can also take a reference constructor for its loop
+variable, though the syntax is limited to one of the following, with an
+optional C<my>, C<state>, or C<our> after the backslash:
+
+    \$s
+    \@a
+    \%h
+    \&c
+
+No parentheses are permitted.  This feature is particularly useful for
+arrays-of-arrays, or arrays-of-hashes:
+
+    foreach \my @a (@array_of_arrays) {
+        frobnicate($a[0], $a[-1]);
+    }
+
+    foreach \my %h (@array_of_hashes) {
+        $h{gelastic}++ if $h{type} == 'funny';
+    }
+
+B<CAVEAT:> Aliasing does not work correctly with closures.  If you try to
+alias lexical variables from an inner subroutine or C<eval>, the aliasing
+will only be visible within that inner sub, and will not affect the outer
+subroutine where the variables are declared.  This bizarre behavior is
+subject to change.
 
 =head1 SEE ALSO
 

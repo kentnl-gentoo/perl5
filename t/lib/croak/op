@@ -1,4 +1,10 @@
 __END__
+# NAME join,
+join,
+EXPECT
+Not enough arguments for join or string at - line 1, near "join,"
+Execution of - aborted due to compilation errors.
+########
 # NAME my $<special>
 my $!;
 EXPECT
@@ -60,6 +66,18 @@ Execution of - aborted due to compilation errors.
 my(do{})
 EXPECT
 Can't declare do block in "my" at - line 1, at EOF
+Execution of - aborted due to compilation errors.
+########
+# NAME ($_, state $x) = ...
+($_, CORE::state $x) = ();
+EXPECT
+Initialization of state variables in list context currently forbidden at - line 1, near ");"
+Execution of - aborted due to compilation errors.
+########
+# NAME my $y; ($y, state $x) = ...
+my $y; ($y, CORE::state $x) = ();
+EXPECT
+Initialization of state variables in list context currently forbidden at - line 1, near ");"
 Execution of - aborted due to compilation errors.
 ########
 # NAME delete BAD

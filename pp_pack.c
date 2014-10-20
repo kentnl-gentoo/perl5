@@ -1698,6 +1698,18 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		ld_bytes aldouble;
                 SHIFT_BYTES(utf8, s, strend, aldouble.bytes,
                             sizeof(aldouble.bytes), datumtype, needs_swap);
+                /* The most common long double format, the x86 80-bit
+                 * extended precision, has either 2 or 6 unused bytes,
+                 * which may contain garbage, which may contain
+                 * unintentional data.  While we do zero the bytes of
+                 * the long double data in pack(), here in unpack() we
+                 * don't, because it's really hard to envision that
+                 * reading the long double off aldouble would be
+                 * affected by the unused bytes.
+                 *
+                 * Note that trying to unpack 'long doubles' of 'long
+                 * doubles' packed in another system is in the general
+                 * case doomed without having more detail. */
 		if (!checksum)
 		    mPUSHn(aldouble.ld);
 		else
@@ -2070,6 +2082,23 @@ S_sv_exp_grow(pTHX_ SV *sv, STRLEN needed) {
     return SvGROW(sv, len+extend+1);
 }
 
+static void
+S_sv_check_infnan(pTHX_ SV *sv, I32 datumtype)
+{
+    SvGETMAGIC(sv);
+    if (UNLIKELY(isinfnansv(sv))) {
+	const I32 c = TYPE_NO_MODIFIERS(datumtype);
+	const NV nv = SvNV_nomg(sv);
+	if (c == 'w')
+	    Perl_croak(aTHX_ "Cannot compress %"NVgf" in pack", nv);
+	else
+	    Perl_croak(aTHX_ "Cannot pack %"NVgf" with '%c'", nv, (int) c);
+    }
+}
+
+#define SvIV_no_inf(sv,d) (S_sv_check_infnan(aTHX_ sv,d), SvIV_nomg(sv))
+#define SvUV_no_inf(sv,d) (S_sv_check_infnan(aTHX_ sv,d), SvUV_nomg(sv))
+
 STATIC
 SV **
 S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
@@ -2102,6 +2131,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
         bool needs_swap;
 
 #define NEXTFROM (lengthcode ? lengthcode : items-- > 0 ? *beglist++ : &PL_sv_no)
+#define PEEKFROM (lengthcode ? lengthcode : items > 0 ? *beglist : &PL_sv_no)
 
         switch (howlen) {
 	  case e_star:
@@ -2154,7 +2184,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	/* Code inside the switch must take care to properly update
 	   cat (CUR length and '\0' termination) if it updated *cur and
 	   doesn't simply leave using break */
-	switch(TYPE_NO_ENDIANNESS(datumtype)) {
+	switch (TYPE_NO_ENDIANNESS(datumtype)) {
 	default:
 	    Perl_croak(aTHX_ "Invalid type '%c' in pack",
 		       (int) TYPE_NO_MODIFIERS(datumtype));
@@ -2172,7 +2202,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 		from = group ? start + group->strbeg : start;
 	    }
 	    fromstr = NEXTFROM;
-	    len = SvIV(fromstr);
+	    len = SvIV_no_inf(fromstr, datumtype);
 	    goto resize;
 	case '@' | TYPE_IS_SHRIEKING:
 	case '@':
@@ -2540,15 +2570,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		IV aiv;
 		fromstr = NEXTFROM;
-                if (SvNOK(fromstr) && Perl_isinfnan(SvNV(fromstr))) {
-                    /* 255 is a pretty arbitrary choice, but with
-                     * inf/-inf/nan and 256 bytes there is not much room. */
-                    aiv = 255;
-		    Perl_ck_warner(aTHX_ packWARN(WARN_PACK),
-				   "Character in 'c' format overflow in pack");
-                }
-                else
-                    aiv = SvIV(fromstr);
+                aiv = SvIV_no_inf(fromstr, datumtype);
 		if ((-128 > aiv || aiv > 127))
 		    Perl_ck_warner(aTHX_ packWARN(WARN_PACK),
 				   "Character in 'c' format wrapped in pack");
@@ -2563,14 +2585,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		IV aiv;
 		fromstr = NEXTFROM;
-                if (SvNOK(fromstr) && Perl_isinfnan(SvNV(fromstr))) {
-                    /* See the 'c' case. */
-                    aiv = 255;
-		    Perl_ck_warner(aTHX_ packWARN(WARN_PACK),
-				   "Character in 'C' format overflow in pack");
-                }
-                else
-                    aiv = SvIV(fromstr);
+                aiv = SvIV_no_inf(fromstr, datumtype);
 		if ((0 > aiv || aiv > 0xff))
 		    Perl_ck_warner(aTHX_ packWARN(WARN_PACK),
 				   "Character in 'C' format wrapped in pack");
@@ -2586,7 +2601,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		UV auv;
 		fromstr = NEXTFROM;
-		auv = SvUV(fromstr);
+		auv = SvUV_no_inf(fromstr, datumtype);
 		if (in_bytes) auv = auv % 0x100;
 		if (utf8) {
 		  W_utf8:
@@ -2648,7 +2663,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		UV auv;
 		fromstr = NEXTFROM;
-		auv = SvUV(fromstr);
+		auv = SvUV_no_inf(fromstr, datumtype);
 		if (utf8) {
 		    U8 buffer[UTF8_MAXLEN], *endb;
 		    endb = uvchr_to_utf8_flags(buffer, auv,
@@ -2758,7 +2773,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		I16 ai16;
 		fromstr = NEXTFROM;
-		ai16 = (I16)SvIV(fromstr);
+		ai16 = (I16)SvIV_no_inf(fromstr, datumtype);
 		ai16 = PerlSock_htons(ai16);
                 PUSH16(utf8, cur, &ai16, FALSE);
 	    }
@@ -2768,7 +2783,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		I16 ai16;
 		fromstr = NEXTFROM;
-		ai16 = (I16)SvIV(fromstr);
+		ai16 = (I16)SvIV_no_inf(fromstr, datumtype);
 		ai16 = htovs(ai16);
                 PUSH16(utf8, cur, &ai16, FALSE);
 	    }
@@ -2778,7 +2793,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		unsigned short aushort;
 		fromstr = NEXTFROM;
-		aushort = SvUV(fromstr);
+		aushort = SvUV_no_inf(fromstr, datumtype);
                 PUSH_VAR(utf8, cur, aushort, needs_swap);
 	    }
             break;
@@ -2789,7 +2804,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		U16 au16;
 		fromstr = NEXTFROM;
-		au16 = (U16)SvUV(fromstr);
+		au16 = (U16)SvUV_no_inf(fromstr, datumtype);
                 PUSH16(utf8, cur, &au16, needs_swap);
 	    }
 	    break;
@@ -2798,7 +2813,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		short ashort;
 		fromstr = NEXTFROM;
-		ashort = SvIV(fromstr);
+		ashort = SvIV_no_inf(fromstr, datumtype);
                 PUSH_VAR(utf8, cur, ashort, needs_swap);
 	    }
             break;
@@ -2809,7 +2824,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		I16 ai16;
 		fromstr = NEXTFROM;
-		ai16 = (I16)SvIV(fromstr);
+		ai16 = (I16)SvIV_no_inf(fromstr, datumtype);
                 PUSH16(utf8, cur, &ai16, needs_swap);
 	    }
 	    break;
@@ -2818,7 +2833,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		unsigned int auint;
 		fromstr = NEXTFROM;
-		auint = SvUV(fromstr);
+		auint = SvUV_no_inf(fromstr, datumtype);
                 PUSH_VAR(utf8, cur, auint, needs_swap);
 	    }
 	    break;
@@ -2826,7 +2841,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		IV aiv;
 		fromstr = NEXTFROM;
-		aiv = SvIV(fromstr);
+		aiv = SvIV_no_inf(fromstr, datumtype);
                 PUSH_VAR(utf8, cur, aiv, needs_swap);
 	    }
 	    break;
@@ -2834,7 +2849,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		UV auv;
 		fromstr = NEXTFROM;
-		auv = SvUV(fromstr);
+		auv = SvUV_no_inf(fromstr, datumtype);
                 PUSH_VAR(utf8, cur, auv, needs_swap);
 	    }
 	    break;
@@ -2842,7 +2857,8 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
             while (len-- > 0) {
 		NV anv;
 		fromstr = NEXTFROM;
-		anv = SvNV(fromstr);
+		S_sv_check_infnan(aTHX_ fromstr, datumtype);
+		anv = SvNV_nomg(fromstr);
 
 		if (anv < 0) {
 		    *cur = '\0';
@@ -2858,7 +2874,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 		if (SvIOK(fromstr) || anv < UV_MAX_P1) {
 		    char   buf[(sizeof(UV)*CHAR_BIT)/7+1];
 		    char  *in = buf + sizeof(buf);
-		    UV     auv = SvUV(fromstr);
+		    UV     auv = SvUV_nomg(fromstr);
 
 		    do {
 			*--in = (char)((auv & 0x7f) | 0x80);
@@ -2909,7 +2925,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 
 		  w_string:
 		    /* Copy string and check for compliance */
-		    from = SvPV_const(fromstr, len);
+		    from = SvPV_nomg_const(fromstr, len);
 		    if ((norm = is_an_int(from, len)) == NULL)
 			Perl_croak(aTHX_ "Can only compress unsigned integers in pack");
 
@@ -2930,7 +2946,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		int aint;
 		fromstr = NEXTFROM;
-		aint = SvIV(fromstr);
+		aint = SvIV_no_inf(fromstr, datumtype);
                 PUSH_VAR(utf8, cur, aint, needs_swap);
 	    }
 	    break;
@@ -2939,7 +2955,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		U32 au32;
 		fromstr = NEXTFROM;
-		au32 = SvUV(fromstr);
+		au32 = SvUV_no_inf(fromstr, datumtype);
 		au32 = PerlSock_htonl(au32);
                 PUSH32(utf8, cur, &au32, FALSE);
 	    }
@@ -2949,7 +2965,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		U32 au32;
 		fromstr = NEXTFROM;
-		au32 = SvUV(fromstr);
+		au32 = SvUV_no_inf(fromstr, datumtype);
 		au32 = htovl(au32);
                 PUSH32(utf8, cur, &au32, FALSE);
 	    }
@@ -2959,7 +2975,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		unsigned long aulong;
 		fromstr = NEXTFROM;
-		aulong = SvUV(fromstr);
+		aulong = SvUV_no_inf(fromstr, datumtype);
                 PUSH_VAR(utf8, cur, aulong, needs_swap);
 	    }
 	    break;
@@ -2970,7 +2986,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		U32 au32;
 		fromstr = NEXTFROM;
-		au32 = SvUV(fromstr);
+		au32 = SvUV_no_inf(fromstr, datumtype);
                 PUSH32(utf8, cur, &au32, needs_swap);
 	    }
 	    break;
@@ -2979,7 +2995,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		long along;
 		fromstr = NEXTFROM;
-		along = SvIV(fromstr);
+		along = SvIV_no_inf(fromstr, datumtype);
                 PUSH_VAR(utf8, cur, along, needs_swap);
 	    }
 	    break;
@@ -2990,7 +3006,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
             while (len-- > 0) {
 		I32 ai32;
 		fromstr = NEXTFROM;
-		ai32 = SvIV(fromstr);
+		ai32 = SvIV_no_inf(fromstr, datumtype);
                 PUSH32(utf8, cur, &ai32, needs_swap);
 	    }
 	    break;
@@ -2999,7 +3015,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		Uquad_t auquad;
 		fromstr = NEXTFROM;
-		auquad = (Uquad_t) SvUV(fromstr);
+		auquad = (Uquad_t) SvUV_no_inf(fromstr, datumtype);
                 PUSH_VAR(utf8, cur, auquad, needs_swap);
 	    }
 	    break;
@@ -3007,7 +3023,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    while (len-- > 0) {
 		Quad_t aquad;
 		fromstr = NEXTFROM;
-		aquad = (Quad_t)SvIV(fromstr);
+		aquad = (Quad_t)SvIV_no_inf(fromstr, datumtype);
                 PUSH_VAR(utf8, cur, aquad, needs_swap);
 	    }
 	    break;

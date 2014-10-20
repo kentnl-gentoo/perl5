@@ -316,7 +316,7 @@ ApdRn	|SV*	|cv_const_sv	|NULLOK const CV *const cv
 pRn	|SV*	|cv_const_sv_or_av|NULLOK const CV *const cv
 : Used in pad.c
 pR	|SV*	|op_const_sv	|NULLOK const OP* o|NULLOK CV* cv
-Ap	|SV *	|cv_name	|NN CV *cv|NULLOK SV *sv
+Apd	|SV *	|cv_name	|NN CV *cv|NULLOK SV *sv|U32 flags
 Apd	|void	|cv_undef	|NN CV* cv
 p	|void	|cv_undef_flags	|NN CV* cv|U32 flags
 p	|void	|cv_forget_slab	|NN CV *cv
@@ -471,6 +471,11 @@ p	|char*	|find_script	|NN const char *scriptname|bool dosearch \
 s	|OP*	|force_list	|NULLOK OP* arg|bool nullit
 i	|OP*	|op_integerize	|NN OP *o
 i	|OP*	|op_std_init	|NN OP *o
+#if defined(USE_ITHREADS)
+i	|void	|op_relocate_sv	|NN SV** svp|NN PADOFFSET* targp
+#endif
+i	|OP*	|newMETHOP_internal	|I32 type|I32 flags|NULLOK OP* dynamic_meth \
+					|NULLOK SV* const_meth
 : FIXME
 s	|OP*	|fold_constants	|NN OP *o
 #endif
@@ -549,6 +554,7 @@ Ap	|void	|gv_name_set	|NN GV* gv|NN const char *name|U32 len|U32 flags
 px	|GV *	|gv_override	|NN const char * const name \
 				|const STRLEN len
 XMpd	|void	|gv_try_downgrade|NN GV* gv
+p	|void	|gv_setref	|NN SV *const dstr|NN SV *const sstr
 Apd	|HV*	|gv_stashpv	|NN const char* name|I32 flags
 Apd	|HV*	|gv_stashpvn	|NN const char* name|U32 namelen|I32 flags
 #if defined(PERL_IN_GV_C)
@@ -831,6 +837,7 @@ p	|int	|magic_freeovrld|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_get	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_getarylen|NN SV* sv|NN const MAGIC* mg
 p	|int	|magic_getdefelem|NN SV* sv|NN MAGIC* mg
+p	|int	|magic_getdebugvar|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_getnkeys	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_getpack	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_getpos	|NN SV* sv|NN MAGIC* mg
@@ -854,10 +861,12 @@ p	|int	|magic_setarylen|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_cleararylen_p|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_freearylen_p|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setdbline|NN SV* sv|NN MAGIC* mg
+p	|int	|magic_setdebugvar|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setdefelem|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setenv	|NN SV* sv|NN MAGIC* mg
 dp	|int	|magic_sethint	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setisa	|NN SV* sv|NN MAGIC* mg
+p	|int	|magic_setlvref	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setmglob	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setnkeys	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setpack	|NN SV* sv|NN MAGIC* mg
@@ -1029,6 +1038,8 @@ Apda	|OP*	|newWHENOP	|NULLOK OP* cond|NN OP* block
 Apda	|OP*	|newWHILEOP	|I32 flags|I32 debuggable|NULLOK LOOP* loop \
 				|NULLOK OP* expr|NULLOK OP* block|NULLOK OP* cont \
 				|I32 has_my
+Apda	|OP*	|newMETHOP	|I32 type|I32 flags|NN OP* dynamic_meth
+Apda	|OP*	|newMETHOP_named|I32 type|I32 flags|NN SV* const_meth
 Apd	|CV*	|rv2cv_op_cv	|NN OP *cvop|U32 flags
 Apd	|OP*	|ck_entersub_args_list|NN OP *entersubop
 Apd	|OP*	|ck_entersub_args_proto|NN OP *entersubop|NN GV *namegv|NN SV *protosv
@@ -1056,7 +1067,7 @@ Apd	|SV*	|vnormal	|NN SV *vs
 Apd	|SV*	|vstringify	|NN SV *vs
 Apd	|int	|vcmp		|NN SV *lhv|NN SV *rhv
 : Used in pp_hot.c and pp_sys.c
-p	|PerlIO*|nextargv	|NN GV* gv
+p	|PerlIO*|nextargv	|NN GV* gv|bool nomagicopen
 AnpP	|char*	|ninstr		|NN const char* big|NN const char* bigend \
 				|NN const char* little|NN const char* lend
 Apd	|void	|op_free	|NULLOK OP* arg
@@ -1208,7 +1219,6 @@ EXp	|I32|reg_numbered_buff_length|NN REGEXP * const rx|NN const SV * const sv|co
 EXp	|SV*|reg_qr_package|NN REGEXP * const rx
 
 : FIXME - why the E?
-Ep	|void	|regprop	|NULLOK const regexp *prog|NN SV* sv|NN const regnode* o|NULLOK const regmatch_info *reginfo
 Anp	|void	|repeatcpy	|NN char* to|NN const char* from|I32 len|IV count
 AnpP	|char*	|rninstr	|NN const char* big|NN const char* bigend \
 				|NN const char* little|NN const char* lend
@@ -1242,6 +1252,7 @@ Ap	|void	|savestack_grow_cnt	|I32 need
 Amp	|void	|save_aelem	|NN AV* av|SSize_t idx|NN SV **sptr
 Ap	|void	|save_aelem_flags|NN AV* av|SSize_t idx|NN SV **sptr \
 				 |const U32 flags
+p	|void	|save_aliased_sv|NN GV* gv
 Ap	|I32	|save_alloc	|I32 size|I32 pad
 Ap	|void	|save_aptr	|NN AV** aptr
 Ap	|AV*	|save_ary	|NN GV* gv
@@ -1738,7 +1749,7 @@ Apdbm	|void	|sv_usepvn_mg	|NN SV *sv|NULLOK char *ptr|STRLEN len
 ApR	|MGVTBL*|get_vtbl	|int vtbl_id
 Apd	|char*	|pv_display	|NN SV *dsv|NN const char *pv|STRLEN cur|STRLEN len \
 				|STRLEN pvlim
-Apd	|char*	|pv_escape	|NN SV *dsv|NN char const * const str\
+Apd	|char*	|pv_escape	|NULLOK SV *dsv|NN char const * const str\
                                 |const STRLEN count|const STRLEN max\
                                 |NULLOK STRLEN * const escaped\
                                 |const U32 flags				
@@ -1777,7 +1788,7 @@ Apd	|void	|sv_utf8_encode |NN SV *const sv
 ApdM	|bool	|sv_utf8_decode |NN SV *const sv
 Apdmb	|void	|sv_force_normal|NN SV *sv
 Apd	|void	|sv_force_normal_flags|NN SV *const sv|const U32 flags
-Ap	|void	|tmps_grow	|SSize_t n
+pX	|SSize_t|tmps_grow_p	|SSize_t ix
 Apd	|SV*	|sv_rvweaken	|NN SV *const sv
 : This is indirectly referenced by globals.c. This is somewhat annoying.
 p	|int	|magic_killbackrefs|NN SV *sv|NN MAGIC *mg
@@ -1867,10 +1878,10 @@ s  |bool|parse_gv_stash_name|NN HV **stash|NN GV **gv \
                      |const U32 is_utf8|const I32 add
 s  |bool|find_default_stash|NN HV **stash|NN const char *name \
                      |STRLEN len|const U32 is_utf8|const I32 add \
-                     |svtype sv_type
+                     |const svtype sv_type
 s  |bool|gv_magicalize|NN GV *gv|NN HV *stash|NN const char *name \
                      |STRLEN len|bool addmg \
-                     |svtype sv_type
+                     |const svtype sv_type
 s  |void|maybe_multimagic_gv|NN GV *gv|NN const char *name|const svtype sv_type
 s  |bool|gv_is_in_main|NN const char *name|STRLEN len \
                       |const U32 is_utf8
@@ -1915,7 +1926,7 @@ s	|void	|fixup_errno_string|NN SV* sv
 
 #if defined(PERL_IN_OP_C)
 sRn	|bool	|is_handle_constructor|NN const OP *o|I32 numargs
-sR	|I32	|is_list_assignment|NULLOK const OP *o
+sR	|I32	|assignment_type|NULLOK const OP *o
 s	|void	|forget_pmop	|NN PMOP *const o
 s	|void	|find_and_forget_pmops	|NN OP *o
 s	|void	|cop_free	|NN COP *cop
@@ -2083,11 +2094,23 @@ p	|OP *	|tied_method|NN SV *methname|NN SV **sp \
 				|NN SV *const sv|NN const MAGIC *const mg \
 				|const U32 flags|U32 argc|...
 
+#if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C)
+Ep	|void	|regprop	|NULLOK const regexp *prog|NN SV* sv|NN const regnode* o|NULLOK const regmatch_info *reginfo \
+				|NULLOK const RExC_state_t *pRExC_state
+#endif
 #if defined(PERL_IN_REGCOMP_C)
 Es	|regnode*|reg		|NN RExC_state_t *pRExC_state \
 				|I32 paren|NN I32 *flagp|U32 depth
+Es	|regnode*|regnode_guts	|NN RExC_state_t *pRExC_state              \
+				|const U8 op				   \
+				|const STRLEN extra_len			   \
+				|NN const char* const name
 Es	|regnode*|reganode	|NN RExC_state_t *pRExC_state|U8 op \
 				|U32 arg
+Es	|regnode*|reg2Lanode	|NN RExC_state_t *pRExC_state		   \
+				|const U8 op				   \
+				|const U32 arg1				   \
+				|const I32 arg2
 Es	|regnode*|regatom	|NN RExC_state_t *pRExC_state \
 				|NN I32 *flagp|U32 depth
 Es	|regnode*|regbranch	|NN RExC_state_t *pRExC_state \
@@ -2172,6 +2195,8 @@ Ei	|void	|ssc_add_range	|NN regnode_ssc *ssc \
 Ei	|void	|ssc_cp_and	|NN regnode_ssc *ssc \
 				|UV const cp
 Ein	|void	|ssc_clear_locale|NN regnode_ssc *ssc
+Ens	|bool	|is_ssc_worth_it|NN const RExC_state_t * pRExC_state \
+				|NN const regnode_ssc * ssc
 Es	|void	|ssc_finalize	|NN RExC_state_t *pRExC_state \
 				|NN regnode_ssc *ssc
 Es	|SSize_t|study_chunk	|NN RExC_state_t *pRExC_state \
@@ -2330,7 +2355,6 @@ s	|SV *	|more_sv
 s	|bool	|sv_2iuv_common	|NN SV *const sv
 s	|void	|glob_assign_glob|NN SV *const dstr|NN SV *const sstr \
 		|const int dtype
-s	|void	|glob_assign_ref|NN SV *const dstr|NN SV *const sstr
 sRn	|PTR_TBL_ENT_t *|ptr_table_find|NN PTR_TBL_t *const tbl|NULLOK const void *const sv
 s	|void	|anonymise_cv_maybe	|NN GV *gv|NN CV *cv
 #endif
@@ -2681,6 +2705,7 @@ Apnod     |Size_t |my_strlcpy     |NULLOK char *dst|NULLOK const char *src|Size_
 #endif
 
 Apdn	|bool	|isinfnan	|NV nv
+p	|bool	|isinfnansv	|NN SV *sv
 
 #if !defined(HAS_SIGNBIT)
 AMdnoP	|int	|Perl_signbit	|NV f

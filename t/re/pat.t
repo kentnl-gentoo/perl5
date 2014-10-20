@@ -18,10 +18,11 @@ BEGIN {
     @INC = ('../lib','.','../ext/re');
     require Config; import Config;
     require './test.pl';
+    skip_all('no re module') unless defined &DynaLoader::boot_DynaLoader;
     skip_all_without_unicode_tables();
 }
 
-plan tests => 739;  # Update this when adding/deleting tests.
+plan tests => 755;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1484,61 +1485,43 @@ EOP
 	   'undefining *^R within (??{}) does not result in a crash';
     }
 
-    {
-        # [perl #120446]
-        # this code should be virtually instantaneous. If it takes 10s of
-        # seconds, there a bug in intuit_start.
-        # (this test doesn't actually test for slowness - that involves
-        # too much danger of false positives on loaded machines - but by
-        # putting it here, hopefully someone might notice if it suddenly
-        # runs slowly)
-        my $s = ('a' x 1_000_000) . 'b';
-        my $i = 0;
-        for (1..10_000) {
-            pos($s) = $_;
-            $i++ if $s =~/\Gb/g;
+    SKIP: {   # Test literal range end point special handling
+        unless ($::IS_EBCDIC) {
+            skip "Valid only for EBCDIC", 24;
         }
-        is($i, 0, "RT 120446: mustn't run slowly");
-    }
 
-    {
-        # [perl #120692]
-        # these tests should be virtually instantaneous. If they take 10s of
-        # seconds, there's a bug in intuit_start.
+        like("\x89", qr/[i-j]/, '"\x89" should match [i-j]');
+        unlike("\x8A", qr/[i-j]/, '"\x8A" shouldnt match [i-j]');
+        unlike("\x90", qr/[i-j]/, '"\x90" shouldnt match [i-j]');
+        like("\x91", qr/[i-j]/, '"\x91" should match [i-j]');
 
-        my $s = 'ab' x 1_000_000;
-        utf8::upgrade($s);
-        1 while $s =~ m/\Ga+ba+b/g;
-        pass("RT#120692 \\G mustn't run slowly");
+        like("\x89", qr/[i-\N{LATIN SMALL LETTER J}]/, '"\x89" should match [i-\N{LATIN SMALL LETTER J}]');
+        unlike("\x8A", qr/[i-\N{LATIN SMALL LETTER J}]/, '"\x8A" shouldnt match [i-\N{LATIN SMALL LETTER J}]');
+        unlike("\x90", qr/[i-\N{LATIN SMALL LETTER J}]/, '"\x90" shouldnt match [i-\N{LATIN SMALL LETTER J}]');
+        like("\x91", qr/[i-\N{LATIN SMALL LETTER J}]/, '"\x91" should match [i-\N{LATIN SMALL LETTER J}]');
 
-        $s=~ /^a{1,2}x/ for  1..10_000;
-        pass("RT#120692 a{1,2} mustn't run slowly");
+        like("\x89", qr/[i-\N{U+6A}]/, '"\x89" should match [i-\N{U+6A}]');
+        unlike("\x8A", qr/[i-\N{U+6A}]/, '"\x8A" shouldnt match [i-\N{U+6A}]');
+        unlike("\x90", qr/[i-\N{U+6A}]/, '"\x90" shouldnt match [i-\N{U+6A}]');
+        like("\x91", qr/[i-\N{U+6A}]/, '"\x91" should match [i-\N{U+6A}]');
 
-        $s=~ /ab.{1,2}x/;
-        pass("RT#120692 ab.{1,2} mustn't run slowly");
+        like("\x89", qr/[\N{U+69}-\N{U+6A}]/, '"\x89" should match [\N{U+69}-\N{U+6A}]');
+        unlike("\x8A", qr/[\N{U+69}-\N{U+6A}]/, '"\x8A" shouldnt match [\N{U+69}-\N{U+6A}]');
+        unlike("\x90", qr/[\N{U+69}-\N{U+6A}]/, '"\x90" shouldnt match [\N{U+69}-\N{U+6A}]');
+        like("\x91", qr/[\N{U+69}-\N{U+6A}]/, '"\x91" should match [\N{U+69}-\N{U+6A}]');
 
-        $s = "-a-bc" x 250_000;
-        $s .= "1a1bc";
-        utf8::upgrade($s);
-        ok($s =~ /\da\d{0,30000}bc/, "\\d{30000}");
+        like("\x89", qr/[i-\x{91}]/, '"\x89" should match [i-\x{91}]');
+        like("\x8A", qr/[i-\x{91}]/, '"\x8A" should match [i-\x{91}]');
+        like("\x90", qr/[i-\x{91}]/, '"\x90" should match [i-\x{91}]');
+        like("\x91", qr/[i-\x{91}]/, '"\x91" should match [i-\x{91}]');
 
-        $s = "-ab\n" x 250_000;
-        $s .= "abx";
-        ok($s =~ /^ab.*x/m, "distant float with /m");
-
-        my $r = qr/^abcd/;
-        $s = "abcd-xyz\n" x 500_000;
-        $s =~ /$r\d{1,2}xyz/m for 1..200;
-        pass("BOL within //m  mustn't run slowly");
-
-        $s = "abcdefg" x 1_000_000;
-        $s =~ /(?-m:^)abcX?fg/m for 1..100;
-        pass("BOL within //m  mustn't skip absolute anchored check");
-
-        $s = "abcdefg" x 1_000_000;
-        $s =~ /^XX\d{1,10}cde/ for 1..100;
-        pass("abs anchored float string should fail quickly");
-
+        # Need to use eval, because tries to compile on ASCII platforms even
+        # though the tests are skipped, and fails because 0x89-j is an illegal
+        # range there.
+        like("\x89", eval "qr/[\x{89}-j]/", '"\x89" should match [\x{89}-j]');
+        like("\x8A", eval "qr/[\x{89}-j]/", '"\x8A" should match [\x{89}-j]');
+        like("\x90", eval "qr/[\x{89}-j]/", '"\x90" should match [\x{89}-j]');
+        like("\x91", eval "qr/[\x{89}-j]/", '"\x91" should match [\x{89}-j]');
     }
 
     # These are based on looking at the code in regcomp.c
@@ -1550,7 +1533,7 @@ EOP
                             qr/\d?c/d
                             qr/\w?c/l
                             qr/\s?c/a
-                            qr/[[:alpha:]]?c/u
+                            qr/[[:lower:]]?c/u
     )) {
       SKIP: {
         skip "no re-debug under miniperl" if is_miniperl;
@@ -1631,6 +1614,11 @@ EOP
                    )|^Can't find Unicode property definition/,
                   undef,
                  '\p{} should not fail silently when uni tables evanesce');
+    }
+
+    {   # Special handling of literal-ended ranges in [...] was breaking this
+        use utf8;
+        like("ÿ", qr/[ÿ-ÿ]/, "\"ÿ\" should match [ÿ-ÿ]");
     }
 } # End of sub run_tests
 

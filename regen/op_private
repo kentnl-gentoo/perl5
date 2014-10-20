@@ -208,6 +208,7 @@ use strict;
                             ops_with_flag('|'), # LOGOP
                             ops_with_flag('-'), # FILESTATOP
                             ops_with_flag('}'), # LOOPEXOP
+                            ops_with_flag('.'), # METHOP
                     );
 
     $args2{$_} = 1 for (
@@ -238,6 +239,7 @@ use strict;
                             ops_with_check('ck_lfun'),
                             ops_with_check('ck_open'),
                             ops_with_check('ck_select'),
+                            ops_with_check('ck_stringify'),
                             ops_with_check('ck_tell'),
                             ops_with_check('ck_trunc'),
                             ;
@@ -293,11 +295,14 @@ for (qw(nextstate dbstate)) {
 }
 
 
+# op is in local context, or pad variable is being introduced, e.g.
+#   local $h{foo}
+#   my $x
 
 addbits($_, 7 => qw(OPpLVAL_INTRO LVINTRO))
-    for qw(pos substr vec gvsv rv2sv rv2hv rv2gv rv2av aelem helem aslice
+    for qw(gvsv rv2sv rv2hv rv2gv rv2av aelem helem aslice
            hslice delete padsv padav padhv enteriter entersub padrange
-           pushmark cond_expr),
+           pushmark cond_expr refassign lvref lvrefslice lvavref),
            'list', # this gets set in my_attrs() for some reason
            ;
 
@@ -425,7 +430,7 @@ addbits($_, 2 => qw(OPpSLICEWARNING SLICEWARN)) # warn about @hash{$scalar}
 # XXX Concise seemed to think that OPpOUR_INTRO is used in rv2gv too,
 # but I can't see it - DAPM
 addbits($_, 4 => qw(OPpOUR_INTRO OURINTR)) # Variable was in an our()
-    for qw(gvsv rv2sv rv2av rv2hv enteriter);
+    for qw(gvsv rv2sv rv2av rv2hv enteriter split);
 
 
 
@@ -468,7 +473,8 @@ addbits($_, 7 => qw(OPpPV_IS_UTF8 UTF)) for qw(last redo next goto dump);
 
 
 
-addbits($_, 4 => qw(OPpPAD_STATE STATE))  for qw(padav padhv padsv pushmark);
+addbits($_, 4 => qw(OPpPAD_STATE STATE))  for qw(padav padhv padsv lvavref
+                                                 lvref refassign pushmark);
 
 
 
@@ -710,6 +716,24 @@ addbits('coreargs',
 
 
 addbits('split', 7 => qw(OPpSPLIT_IMPLIM IMPLIM)); # implicit limit
+
+
+
+# OPpLVREF_TYPE must not conflict with generic magic flags in mg.h.
+addbits($_,
+    2 => qw(OPpLVREF_ELEM ELEM   ),
+    3 => qw(OPpLVREF_ITER ITER   ),
+'5..6'=> {
+           mask_def => 'OPpLVREF_TYPE',
+           enum     => [ qw(
+                             0   OPpLVREF_SV   SV
+                             1   OPpLVREF_AV   AV
+                             2   OPpLVREF_HV   HV
+                             3   OPpLVREF_CV   CV
+                         )],
+         },
+   #7 => qw(OPpLVAL_INTRO LVINTRO),
+) for 'refassign', 'lvref';
 
 1;
 

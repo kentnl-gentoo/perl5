@@ -226,6 +226,12 @@
  */
 /*#define HAS_LOCALECONV	/ **/
 
+/* HAS_LC_MONETARY_2008:
+ *	This symbol, if defined, indicates that the localeconv routine is
+ *	available and has the additional members added in POSIX 1003.1-2008.
+ */
+/*#define HAS_LC_MONETARY_2008	/ **/
+
 /* HAS_LOCKF:
  *	This symbol, if defined, indicates that the lockf routine is
  *	available to do file locking.
@@ -3909,6 +3915,8 @@
 /* HAS_PRCTL:
  *	This symbol, if defined, indicates that the prctl routine is
  *	available to set process title.
+ *	Note that there are at least two prctl variants: Linux and Irix.
+ *	While they are somewhat similar, they are incompatible.
  */
 /* HAS_PRCTL_SET_NAME:
  *	This symbol, if defined, indicates that the prctl routine is
@@ -4865,6 +4873,6 @@
 #endif
 
 /* Generated from:
- * d7da79ac72d2191d6814ec98688e342f20eba70c64292c2e0b6b5622cdf3b6e6 config_h.SH
- * a3cd0b705a952f6915cc1424cc116d4183481f54ba9605415baf93bc57e12122 uconfig.sh
+ * 60aff40735c73cdf11d3fbae8088eadf73c0b45413be5bd8480ec5ec481066da config_h.SH
+ * 35023b2d9244ad2dc3abea4bb5174a7f66398b60266231cb9a2c3bfc8df867cf uconfig.sh
  * ex: set ro: */

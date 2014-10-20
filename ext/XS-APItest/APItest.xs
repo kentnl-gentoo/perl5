@@ -3592,9 +3592,22 @@ alias_av(AV *av, IV ix, SV *sv)
 SV *
 cv_name(SVREF ref, ...)
     CODE:
-	RETVAL = SvREFCNT_inc(cv_name((CV *)ref, items>1 ? ST(1) : NULL));
+	RETVAL = SvREFCNT_inc(cv_name((CV *)ref,
+				      items>1 && ST(1) != &PL_sv_undef
+					? ST(1)
+					: NULL,
+				      items>2 ? SvUV(ST(2)) : 0));
     OUTPUT:
 	RETVAL
+
+void
+sv_catpvn(SV *sv, SV *sv2)
+    CODE:
+    {
+	STRLEN len;
+	const char *s = SvPV(sv2,len);
+	sv_catpvn_flags(sv,s,len, SvUTF8(sv2) ? SV_CATUTF8 : SV_CATBYTES);
+    }
 
 MODULE = XS::APItest PACKAGE = XS::APItest::AUTOLOADtest
 

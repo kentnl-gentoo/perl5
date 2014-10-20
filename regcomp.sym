@@ -57,7 +57,7 @@ NBOUNDA     NBOUND,     no        ; Match "" at any word non-boundary using ASCI
 REG_ANY     REG_ANY,    no 0 S    ; Match any one character (except newline).
 SANY        REG_ANY,    no 0 S    ; Match any one character.
 CANY        REG_ANY,    no 0 S    ; Match any one byte.
-ANYOF       ANYOF,      sv 0 S    ; Match character in (or not in) this class, single char match only
+ANYOF       ANYOF,      sv 1 S    ; Match character in (or not in) this class, single char match only
 
 #* POSIX Character Classes:
 # Order of the below is important.  See ordering comment above.
@@ -86,13 +86,6 @@ CLUMP       CLUMP,      no 0 V    ; Match any extended grapheme cluster sequence
 #*
 BRANCH      BRANCH,     node 0 V  ; Match this alternative, or the next...
 
-#*Back pointer
-
-#* BACK          Normal "next" pointers all implicitly point forward;
-#*               BACK exists to make loop structures possible.
-#* not used
-BACK        BACK,       no 0 V    ; Match "", "next" ptr points backward.
-
 #*Literals
 # NOTE: the relative ordering of these types is important do not change it
 
@@ -113,7 +106,7 @@ TAIL        NOTHING,    no        ; Match empty string. Can jump here from outsi
 #*Loops
 
 #* STAR,PLUS    '?', and complex '*' and '+', are implemented as
-#*               circular BRANCH structures using BACK.  Simple cases
+#*               circular BRANCH structures.  Simple cases
 #*               (one character per match) are implemented with STAR
 #*               and PLUS for speed and to minimize recursive plunges.
 #*
@@ -165,7 +158,7 @@ GROUPP      GROUPP,     num 1     ; Whether the group matched.
 
 #*The heavy worker
 
-EVAL        EVAL,       evl 1     ; Execute some Perl code.
+EVAL        EVAL,       evl/flags 2L ; Execute some Perl code.
 
 #*Modifiers
 

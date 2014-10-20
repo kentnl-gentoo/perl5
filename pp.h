@@ -391,9 +391,10 @@ Does not use C<TARG>.  See also C<XPUSHu>, C<mPUSHu> and C<PUSHu>.
     } STMT_END
 
 #define EXTEND_MORTAL(n) \
-    STMT_START {							\
-	if (UNLIKELY(PL_tmps_ix + (n) >= PL_tmps_max))			\
-	    tmps_grow(n);						\
+    STMT_START {						\
+	SSize_t eMiX = PL_tmps_ix + (n);			\
+	if (UNLIKELY(eMiX >= PL_tmps_max))			\
+	    (void)Perl_tmps_grow_p(aTHX_ eMiX);			\
     } STMT_END
 
 #define AMGf_noright	1
@@ -479,15 +480,6 @@ Does not use C<TARG>.  See also C<XPUSHu>, C<mPUSHu> and C<PUSHu>.
 
 
 #define opASSIGN (PL_op->op_flags & OPf_STACKED)
-#define SETsv(sv)	STMT_START {					\
-		if (opASSIGN || (SvFLAGS(TARG) & SVs_PADMY))		\
-		   { sv_setsv(TARG, (sv)); SETTARG; }			\
-		else SETs(sv); } STMT_END
-
-#define SETsvUN(sv)	STMT_START {					\
-		if (SvFLAGS(TARG) & SVs_PADMY)		\
-		   { sv_setsv(TARG, (sv)); SETTARG; }			\
-		else SETs(sv); } STMT_END
 
 /*
 =for apidoc mU||LVRET

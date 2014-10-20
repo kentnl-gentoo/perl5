@@ -3,7 +3,7 @@
 BEGIN {
     chdir 't' if -d 't';
     @INC = qw(. ../lib);
-    require 'test.pl';
+    require './test.pl';
 }
 
 use strict qw(refs subs);
@@ -319,8 +319,10 @@ is (scalar grep(ref($_), @baa), 3);
 is (scalar (@bzz), 3);
 
 # also, it can't be an lvalue
+# (That’s what *you* think!  --sprout)
 eval '\\($x, $y) = (1, 2);';
-like ($@, qr/Can\'t modify.*ref.*in.*assignment/);
+like ($@, qr/Can\'t modify.*ref.*in.*assignment(?x:
+           )|Experimental aliasing via reference not enabled/);
 
 # test for proper destruction of lexical objects
 $test = curr_test();

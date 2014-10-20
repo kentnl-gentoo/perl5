@@ -43,11 +43,14 @@ sub fixup_expect {
 }
 
 ## Because we don't "use utf8" in this file, we need to do some extra legwork
-## for the utf8 tests: Append 'use utf8' to the pattern, and mark the strings
-## to check against as UTF-8
+## for the utf8 tests: Prepend 'use utf8' to the pattern, and mark the strings
+## to check against as UTF-8, but for this all to work properly, the character
+## 'ネ' (U+30CD) is required in each pattern somewhere as a marker.
 ##
 ## This also creates a second variant of the tests to check if the
-## latin1 error messages are working correctly.
+## latin1 error messages are working correctly.  Because we don't 'use utf8',
+## we can't tell if something is UTF-8 or Latin1, so you need the suffix
+## '; no latin1' to not have the second variant.
 my $l1   = "\x{ef}";
 my $utf8 = "\x{30cd}";
 utf8::encode($utf8);
@@ -58,7 +61,7 @@ sub mark_as_utf8 {
         my $l1_pat = $pat =~ s/$utf8/$l1/gr;
         my $l1_msg;
         $pat = "use utf8; $pat";
-        
+
         if (ref $msg) {
             $l1_msg = [ map { s/$utf8/$l1/gr } @$msg ];
             @$msg   = map { my $c = $_; utf8::decode($c); $c } @$msg;
@@ -68,6 +71,7 @@ sub mark_as_utf8 {
             utf8::decode($msg);
         }
         push @ret, $pat => $msg;
+
         push @ret, $l1_pat => $l1_msg unless $l1_pat =~ /#no latin1/;
     }
     return @ret;
@@ -94,6 +98,9 @@ my @death =
  '/(?(1x))/' => 'Switch condition not recognized {#} m/(?(1x{#}))/',
  '/(?(1x(?#)))/'=> 'Switch condition not recognized {#} m/(?(1x{#}(?#)))/',
 
+ '/(?(1)/'    => 'Switch (?(condition)... not terminated {#} m/(?(1){#}/',
+ '/(?(1)x/'    => 'Switch (?(condition)... not terminated {#} m/(?(1)x{#}/',
+ '/(?(1)x|y/'    => 'Switch (?(condition)... not terminated {#} m/(?(1)x|y{#}/',
  '/(?(1)x|y|z)/' => 'Switch (?(condition)... contains too many branches {#} m/(?(1)x|y|{#}z)/',
 
  '/(?(x)y|x)/' => 'Unknown switch condition (?(...)) {#} m/(?(x{#})y|x)/',
@@ -233,6 +240,7 @@ my @death =
  '/((?# This is a comment in the middle of a token)*FAIL)/' => 'In \'(*VERB...)\', the \'(\' and \'*\' must be adjacent {#} m/((?# This is a comment in the middle of a token)*{#}FAIL)/',
 );
 
+# These need the character 'ネ' as a marker for mark_as_utf8()
 my @death_utf8 = mark_as_utf8(
  '/ネ[[=ネ=]]ネ/' => 'POSIX syntax [= =] is reserved for future extensions {#} m/ネ[[=ネ=]{#}]ネ/',
  '/ネ(?<= .*)/' =>  'Variable length lookbehind not implemented in regex m/ネ(?<= .*)/',
@@ -401,6 +409,7 @@ my @warning = (
     '/b{3}  +\x{100}/x' => 'Useless use of greediness modifier \'+\' {#} m/b{3}  +{#}\x{100}/',
 ); # See comments before this for why '\x{100}' is generally needed
 
+# These need the character 'ネ' as a marker for mark_as_utf8()
 my @warnings_utf8 = mark_as_utf8(
     'm/ネ\b*ネ/' => '\b* matches null string many times {#} m/ネ\b*{#}ネ/',
     '/(?=ネ)*/' => '(?=ネ)* matches null string many times {#} m/(?=ネ)*{#}/',
@@ -412,7 +421,7 @@ my @warnings_utf8 = mark_as_utf8(
     '/ネ[ネ-[:digit:]]ネ/' => 'False [] range "ネ-[:digit:]" {#} m/ネ[ネ-[:digit:]{#}]ネ/',
     '/ネ[\d-\s]ネ/' => 'False [] range "\d-" {#} m/ネ[\d-{#}\s]ネ/',
     '/ネ[a\zb]ネ/' => 'Unrecognized escape \z in character class passed through {#} m/ネ[a\z{#}b]ネ/',
-    '/ネ(?c)ネ/' => 'Useless (?c) - use /gc modifier {#} m/ネ(?c{#})ネ/',    
+    '/ネ(?c)ネ/' => 'Useless (?c) - use /gc modifier {#} m/ネ(?c{#})ネ/',
     '/utf8 ネ (?ogc) ネ/' => [
         'Useless (?o) - use /o modifier {#} m/utf8 ネ (?o{#}gc) ネ/',
         'Useless (?g) - use /g modifier {#} m/utf8 ネ (?og{#}c) ネ/',
@@ -436,6 +445,10 @@ my @deprecated = (
                  'Unescaped left brace in regex is deprecated, passed through {#} m/\q{{#}/'
                ],
     '/:{4,a}/' => 'Unescaped left brace in regex is deprecated, passed through {#} m/:{{#}4,a}/',
+    '/abc/xix' => 'Having more than one /x regexp modifier is deprecated',
+    '/(?xmsixp:abc)/' => 'Having more than one /x regexp modifier is deprecated',
+    '/(?xmsixp)abc/' => 'Having more than one /x regexp modifier is deprecated',
+    '/(?xxxx:abc)/' => 'Having more than one /x regexp modifier is deprecated',
 );
 
 while (my ($regex, $expect) = splice @death, 0, 2) {

@@ -968,6 +968,9 @@ perl_destruct(pTHXx)
     PL_DBsingle = NULL;
     PL_DBtrace = NULL;
     PL_DBsignal = NULL;
+    PL_DBsingle_iv = 0;
+    PL_DBtrace_iv = 0;
+    PL_DBsignal_iv = 0;
     PL_DBcv = NULL;
     PL_dbargs = NULL;
     PL_debstash = NULL;
@@ -2389,7 +2392,7 @@ S_run_body(pTHX_ I32 oldscope)
 	    my_exit(0);
 	}
 	if (PERLDB_SINGLE && PL_DBsingle)
-	    sv_setiv(PL_DBsingle, 1);
+            PL_DBsingle_iv = 1;
 	if (PL_initav) {
 	    PERL_SET_PHASE(PERL_PHASE_INIT);
 	    call_list(oldscope, PL_initav);
@@ -2646,8 +2649,7 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
 {
     dVAR; dSP;
     LOGOP myop;		/* fake syntax tree node */
-    UNOP method_unop;
-    SVOP method_svop;
+    METHOP method_op;
     I32 oldmark;
     VOL I32 retval = 0;
     I32 oldscope;
@@ -2691,23 +2693,19 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
 	myop.op_private |= OPpENTERSUB_DB;
 
     if (flags & (G_METHOD|G_METHOD_NAMED)) {
+        Zero(&method_op, 1, METHOP);
+        method_op.op_next = (OP*)&myop;
+        PL_op = (OP*)&method_op;
         if ( flags & G_METHOD_NAMED ) {
-            Zero(&method_svop, 1, SVOP);
-            method_svop.op_next = (OP*)&myop;
-            method_svop.op_ppaddr = PL_ppaddr[OP_METHOD_NAMED];
-            method_svop.op_type = OP_METHOD_NAMED;
-            method_svop.op_sv = sv;
-            PL_op = (OP*)&method_svop;
+            method_op.op_ppaddr = PL_ppaddr[OP_METHOD_NAMED];
+            method_op.op_type = OP_METHOD_NAMED;
+            method_op.op_u.op_meth_sv = sv;
         } else {
-            Zero(&method_unop, 1, UNOP);
-            method_unop.op_next = (OP*)&myop;
-            method_unop.op_ppaddr = PL_ppaddr[OP_METHOD];
-            method_unop.op_type = OP_METHOD;
-            PL_op = (OP*)&method_unop;
+            method_op.op_ppaddr = PL_ppaddr[OP_METHOD];
+            method_op.op_type = OP_METHOD;
         }
         myop.op_ppaddr = PL_ppaddr[OP_ENTERSUB];
         myop.op_type = OP_ENTERSUB;
-
     }
 
     if (!(flags & G_EVAL)) {
@@ -3962,6 +3960,7 @@ void
 Perl_init_debugger(pTHX)
 {
     HV * const ostash = PL_curstash;
+    MAGIC *mg;
 
     PL_curstash = (HV *)SvREFCNT_inc_simple(PL_debstash);
 
@@ -3978,12 +3977,24 @@ Perl_init_debugger(pTHX)
     PL_DBsingle = GvSV((gv_fetchpvs("DB::single", GV_ADDMULTI, SVt_PV)));
     if (!SvIOK(PL_DBsingle))
 	sv_setiv(PL_DBsingle, 0);
+    mg = sv_magicext(PL_DBsingle, NULL, PERL_MAGIC_debugvar, &PL_vtbl_debugvar, 0, 0);
+    mg->mg_private = DBVARMG_SINGLE;
+    SvSETMAGIC(PL_DBsingle);
+
     PL_DBtrace = GvSV((gv_fetchpvs("DB::trace", GV_ADDMULTI, SVt_PV)));
     if (!SvIOK(PL_DBtrace))
 	sv_setiv(PL_DBtrace, 0);
+    mg = sv_magicext(PL_DBtrace, NULL, PERL_MAGIC_debugvar, &PL_vtbl_debugvar, 0, 0);
+    mg->mg_private = DBVARMG_TRACE;
+    SvSETMAGIC(PL_DBtrace);
+
     PL_DBsignal = GvSV((gv_fetchpvs("DB::signal", GV_ADDMULTI, SVt_PV)));
     if (!SvIOK(PL_DBsignal))
 	sv_setiv(PL_DBsignal, 0);
+    mg = sv_magicext(PL_DBsignal, NULL, PERL_MAGIC_debugvar, &PL_vtbl_debugvar, 0, 0);
+    mg->mg_private = DBVARMG_SIGNAL;
+    SvSETMAGIC(PL_DBsignal);
+
     SvREFCNT_dec(PL_curstash);
     PL_curstash = ostash;
 }

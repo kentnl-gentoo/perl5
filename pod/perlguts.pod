@@ -1166,14 +1166,16 @@ will be lost.
  --------------------------   ------         -------------
  \0 PERL_MAGIC_sv             vtbl_sv        Special scalar variable
  #  PERL_MAGIC_arylen         vtbl_arylen    Array length ($#ary)
- %  PERL_MAGIC_rhash          (none)         extra data for restricted
+ %  PERL_MAGIC_rhash          (none)         Extra data for restricted
                                              hashes
  &  PERL_MAGIC_proto          (none)         my sub prototype CV
+ *  PERL_MAGIC_debugvar       vtbl_debugvar  $DB::single, signal, trace
+                                             vars
  .  PERL_MAGIC_pos            vtbl_pos       pos() lvalue
- :  PERL_MAGIC_symtab         (none)         extra data for symbol
+ :  PERL_MAGIC_symtab         (none)         Extra data for symbol
                                              tables
- <  PERL_MAGIC_backref        vtbl_backref   for weak ref data
- @  PERL_MAGIC_arylen_p       (none)         to move arylen out of XPVAV
+ <  PERL_MAGIC_backref        vtbl_backref   For weak ref data
+ @  PERL_MAGIC_arylen_p       (none)         To move arylen out of XPVAV
  B  PERL_MAGIC_bm             vtbl_regexp    Boyer-Moore 
                                              (fast string search)
  c  PERL_MAGIC_overload_table vtbl_ovrld     Holds overload table 
@@ -1201,7 +1203,7 @@ will be lost.
  P  PERL_MAGIC_tied           vtbl_pack      Tied array or hash
  p  PERL_MAGIC_tiedelem       vtbl_packelem  Tied array or hash element
  q  PERL_MAGIC_tiedscalar     vtbl_packelem  Tied scalar or handle
- r  PERL_MAGIC_qr             vtbl_regexp    precompiled qr// regex
+ r  PERL_MAGIC_qr             vtbl_regexp    Precompiled qr// regex
  S  PERL_MAGIC_sig            (none)         %SIG hash
  s  PERL_MAGIC_sigelem        vtbl_sigelem   %SIG hash element
  t  PERL_MAGIC_taint          vtbl_taint     Taintedness
@@ -1216,7 +1218,9 @@ will be lost.
  y  PERL_MAGIC_defelem        vtbl_defelem   Shadow "foreach" iterator
                                              variable / smart parameter
                                              vivification
- ]  PERL_MAGIC_checkcall      vtbl_checkcall inlining/mutation of call
+ \  PERL_MAGIC_lvref          vtbl_lvref     Lvalue reference
+                                             constructor
+ ]  PERL_MAGIC_checkcall      vtbl_checkcall Inlining/mutation of call
                                              to this CV
  ~  PERL_MAGIC_ext            (none)         Available for use by
                                              extensions
@@ -1766,10 +1770,12 @@ A scratchpad keeps SVs which are lexicals for the current unit and are
 targets for opcodes.  A previous version of this document
 stated that one can deduce that an SV lives on a scratchpad
 by looking on its flags: lexicals have C<SVs_PADMY> set, and
-I<target>s have C<SVs_PADTMP> set.  But this have never been fully true.
+I<target>s have C<SVs_PADTMP> set.  But this has never been fully true.
 C<SVs_PADMY> could be set on a variable that no longer resides in any pad.
 While I<target>s do have C<SVs_PADTMP> set, it can also be set on variables
-that have never resided in a pad, but nonetheless act like I<target>s.
+that have never resided in a pad, but nonetheless act like I<target>s.  As
+of perl 5.21.5, the C<SVs_PADMY> flag is no longer used and is defined as
+0.  C<SvPADMY()> now returns true for anything without C<SVs_PADTMP>.
 
 The correspondence between OPs and I<target>s is not 1-to-1.  Different
 OPs in the compile tree of the unit can use the same target, if this

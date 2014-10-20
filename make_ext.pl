@@ -506,7 +506,10 @@ EOM
 	push @args, @$pass_through;
 	_quote_args(\@args) if $is_VMS;
 	print join(' ', $perl, @args), "\n" if $verbose;
-	my $code = system $perl, @args;
+	my $code = do {
+	   local $ENV{PERL_MM_USE_DEFAULT} = 1;
+	    system $perl, @args;
+	};
 	warn "$code from $ext_dir\'s Makefile.PL" if $code;
 
 	# Right. The reason for this little hack is that we're sitting inside
@@ -719,7 +722,7 @@ sub just_pm_to_blib {
             # (which it has to deal with, as cpan/foo/bar creates
             # lib/auto/foo/bar, but the EU::MM rule will only
             # rmdir lib/auto/foo/bar, leaving lib/auto/foo
-            _unlink("../../$_")
+            _unlink($_)
                 foreach sort values %pm;
         }
     }

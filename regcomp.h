@@ -84,9 +84,7 @@
  * but allows patterns to get big without disasters.
  *
  * [The "next" pointer is always aligned on an even
- * boundary, and reads the offset directly as a short.  Also, there is no
- * special test to reverse the sign of BACK pointers since the offset is
- * stored negative.]
+ * boundary, and reads the offset directly as a short.]
  */
 
 /* This is the stuff that used to live in regexp.h that was truly
@@ -216,7 +214,7 @@ struct regnode_charclass {
     U8	flags;
     U8  type;
     U16 next_off;
-    U32 arg1;
+    U32 arg1;                           /* set by set_ANYOF_arg() */
     char bitmap[ANYOF_BITMAP_SIZE];	/* only compile-time */
 };
 
@@ -361,6 +359,13 @@ struct regnode_ssc {
     (ptr)->type = op;    (ptr)->next_off = 0;   (ptr)++; } STMT_END
 #define FILL_ADVANCE_NODE_ARG(ptr, op, arg) STMT_START { \
     ARG_SET(ptr, arg);  FILL_ADVANCE_NODE(ptr, op); (ptr) += 1; } STMT_END
+#define FILL_ADVANCE_NODE_2L_ARG(ptr, op, arg1, arg2)               \
+                STMT_START {                                        \
+                    ARG_SET(ptr, arg1);                             \
+                    ARG2L_SET(ptr, arg2);                           \
+                    FILL_ADVANCE_NODE(ptr, op);                     \
+                    (ptr) += 2;                                     \
+                } STMT_END
 
 #define REG_MAGIC 0234
 
@@ -513,10 +518,6 @@ struct regnode_ssc {
 
 /* Utility macros for the bitmap and classes of ANYOF */
 
-#define ANYOF_SIZE		(sizeof(struct regnode_charclass))
-#define ANYOF_POSIXL_SIZE	(sizeof(regnode_charclass_posixl))
-#define ANYOF_CLASS_SIZE	ANYOF_POSIXL_SIZE
-
 #define ANYOF_FLAGS(p)		((p)->flags)
 
 #define ANYOF_BIT(c)		(1U << ((c) & 7))
@@ -572,9 +573,8 @@ struct regnode_ssc {
 #define ANYOF_BITMAP_CLEARALL(p)	\
 	Zero (ANYOF_BITMAP(p), ANYOF_BITMAP_SIZE)
 
-#define ANYOF_SKIP		((ANYOF_SIZE - 1)/sizeof(regnode))
-#define ANYOF_POSIXL_SKIP	((ANYOF_POSIXL_SIZE - 1)/sizeof(regnode))
-#define ANYOF_CLASS_SKIP	ANYOF_POSIXL_SKIP
+#define ANYOF_SKIP		EXTRA_SIZE(struct regnode_charclass)
+#define ANYOF_POSIXL_SKIP	EXTRA_SIZE(regnode_charclass_posixl)
 
 /*
  * Utility definitions.
@@ -856,6 +856,7 @@ re.pm, especially to the documentation.
 #define RE_DEBUG_COMPILE_TRIE      0x000004
 #define RE_DEBUG_COMPILE_DUMP      0x000008
 #define RE_DEBUG_COMPILE_FLAGS     0x000010
+#define RE_DEBUG_COMPILE_TEST      0x000020
 
 /* Execute */
 #define RE_DEBUG_EXECUTE_MASK      0x00FF00
@@ -891,6 +892,8 @@ re.pm, especially to the documentation.
     if (re_debug_flags & RE_DEBUG_COMPILE_TRIE) x )
 #define DEBUG_FLAGS_r(x) DEBUG_r( \
     if (re_debug_flags & RE_DEBUG_COMPILE_FLAGS) x )
+#define DEBUG_TEST_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_COMPILE_TEST) x )
 /* Execute */
 #define DEBUG_EXECUTE_r(x) DEBUG_r( \
     if (re_debug_flags & RE_DEBUG_EXECUTE_MASK) x  )

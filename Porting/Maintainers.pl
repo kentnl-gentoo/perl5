@@ -159,6 +159,8 @@ use File::Glob qw(:case);
         'CUSTOMIZED'   => [
             # Waiting to be merged upstream: see CPAN RT#87237
             qw(	t/utf8_open.t ),
+            # Waiting to be merged upstream: see CPAN RT#96609
+            qw(	t/truncate.t ),
         ],
     },
 
@@ -175,7 +177,7 @@ use File::Glob qw(:case);
     },
 
     'B::Debug' => {
-        'DISTRIBUTION' => 'RURBAN/B-Debug-1.21.tar.gz',
+        'DISTRIBUTION' => 'RURBAN/B-Debug-1.22.tar.gz',
         'FILES'        => q[cpan/B-Debug],
         'EXCLUDED'     => ['t/pod.t'],
     },
@@ -202,7 +204,7 @@ use File::Glob qw(:case);
     },
 
     'Compress::Raw::Bzip2' => {
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.064.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.066.tar.gz',
         'FILES'        => q[cpan/Compress-Raw-Bzip2],
         'EXCLUDED'     => [
             qr{^t/Test/},
@@ -211,7 +213,7 @@ use File::Glob qw(:case);
     },
 
     'Compress::Raw::Zlib' => {
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.065.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.066.tar.gz',
 
         'FILES'    => q[cpan/Compress-Raw-Zlib],
         'EXCLUDED' => [
@@ -286,7 +288,7 @@ use File::Glob qw(:case);
     # Note: When updating CPAN-Meta the META.* files will need to be regenerated
     # perl -Icpan/CPAN-Meta/lib Porting/makemeta
     'CPAN::Meta' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.142060.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.142690.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta],
         'EXCLUDED'     => [
             qw[t/00-report-prereqs.t],
@@ -411,7 +413,7 @@ use File::Glob qw(:case);
     },
 
     'experimental' => {
-        'DISTRIBUTION' => 'LEONT/experimental-0.010.tar.gz',
+        'DISTRIBUTION' => 'LEONT/experimental-0.012.tar.gz',
         'FILES'        => q[cpan/experimental],
         'EXCLUDED'     => [
           qr{^t/release-.*\.t},
@@ -430,7 +432,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::CBuilder' => {
-        'DISTRIBUTION' => 'AMBS/ExtUtils-CBuilder-0.280219.tar.gz',
+        'DISTRIBUTION' => 'AMBS/ExtUtils-CBuilder-0.280220.tar.gz',
         'FILES'        => q[dist/ExtUtils-CBuilder],
         'EXCLUDED'     => [
             qw(README.mkdn),
@@ -594,7 +596,7 @@ use File::Glob qw(:case);
     },
 
     'HTTP::Tiny' => {
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.049.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.050.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/00-report-prereqs.t',
@@ -629,7 +631,7 @@ use File::Glob qw(:case);
     },
 
     'IO-Compress' => {
-        'DISTRIBUTION' => 'PMQS/IO-Compress-2.064.tar.gz',
+        'DISTRIBUTION' => 'PMQS/IO-Compress-2.066.tar.gz',
         'FILES'        => q[cpan/IO-Compress],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -645,6 +647,10 @@ use File::Glob qw(:case);
         'FILES'        => q[cpan/IO-Socket-IP],
         'EXCLUDED'     => [
             qr{^examples/},
+        ],
+        'CUSTOMIZED'   => [
+            # Almost always fails on Win32 since introduced: see CPAN RT#98976
+            't/22timeout.t',
         ],
     },
 
@@ -669,7 +675,7 @@ use File::Glob qw(:case);
     },
 
     'JSON::PP' => {
-        'DISTRIBUTION' => 'MAKAMAKA/JSON-PP-2.27203.tar.gz',
+        'DISTRIBUTION' => 'MAKAMAKA/JSON-PP-2.27300.tar.gz',
         'FILES'        => q[cpan/JSON-PP],
     },
 
@@ -684,13 +690,16 @@ use File::Glob qw(:case);
     },
 
     'libnet' => {
-        'DISTRIBUTION' => 'SHAY/libnet-1.27.tar.gz',
+        'DISTRIBUTION' => 'SHAY/libnet-3.02.tar.gz',
         'FILES'        => q[cpan/libnet],
         'EXCLUDED'     => [
             qw( Configure
-                install-nomake
+                t/critic.t
+                t/pod.t
+                t/pod_coverage.t
                 ),
             qr(^demos/),
+            qr(^t/external/),
         ],
     },
 
@@ -799,7 +808,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20140914.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20141002.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -981,8 +990,12 @@ use File::Glob qw(:case);
     },
 
     'Socket' => {
-        'DISTRIBUTION' => 'PEVANS/Socket-2.015.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Socket-2.016.tar.gz',
         'FILES'        => q[cpan/Socket],
+        'CUSTOMIZED'   => [
+            # Waiting to be merged upstream: see CPAN RT#98217
+            qw(	t/getnameinfo.t ),
+        ],
     },
 
     'Storable' => {
@@ -1061,7 +1074,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.001006.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.001008.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^t/xt},
@@ -1361,7 +1374,7 @@ use File::Glob qw(:case);
                 ext/re/
                 lib/AnyDBM_File.{pm,t}
                 lib/Benchmark.{pm,t}
-                lib/B/Deparse{.pm,.t,-core.t}
+                lib/B/Deparse{.pm,.t,-*.t}
                 lib/B/Op_private.pm
                 lib/CORE.pod
                 lib/Class/Struct.{pm,t}

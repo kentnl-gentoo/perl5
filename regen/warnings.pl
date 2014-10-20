@@ -102,6 +102,8 @@ my $tree = {
                                     [ 5.019, DEFAULT_ON ],
                                 'experimental::win32_perlio' =>
                                     [ 5.021, DEFAULT_ON ],
+                                'experimental::refaliasing' =>
+                                    [ 5.021, DEFAULT_ON ],
                         }],
 
        	'missing'	=> [ 5.021, DEFAULT_OFF],
@@ -412,10 +414,6 @@ EOM
 
 while (<DATA>) {
     last if /^KEYWORDS$/ ;
-    if ($_ eq "=for warnings.pl tree-goes-here\n") {
-      print $pm warningsTree($tree, "    ");
-      next;
-    }
     print $pm $_ ;
 }
 
@@ -467,6 +465,10 @@ print $pm '$DEFAULT  = "', mkHex($warn_size, map $_ * 2, @def),
 print $pm '$LAST_BIT = ' . "$index ;\n" ;
 print $pm '$BYTES    = ' . "$warn_size ;\n" ;
 while (<DATA>) {
+    if ($_ eq "=for warnings.pl tree-goes-here\n") {
+      print $pm warningsTree($tree, "    ");
+      next;
+    }
     print $pm $_ ;
 }
 
@@ -475,7 +477,7 @@ read_only_bottom_close_and_rename($pm);
 __END__
 package warnings;
 
-our $VERSION = '1.26';
+our $VERSION = '1.28';
 
 # Verify that we're called correctly so that warnings will work.
 # see also strict.pm.
@@ -484,6 +486,241 @@ unless ( __FILE__ =~ /(^|[\/\\])\Q${\__PACKAGE__}\E\.pmc?$/ ) {
     die("Incorrect use of pragma '${\__PACKAGE__}' at $f line $l.\n");
 }
 
+KEYWORDS
+
+$All = "" ; vec($All, $Offsets{'all'}, 2) = 3 ;
+
+sub Croaker
+{
+    require Carp; # this initializes %CarpInternal
+    local $Carp::CarpInternal{'warnings'};
+    delete $Carp::CarpInternal{'warnings'};
+    Carp::croak(@_);
+}
+
+sub _bits {
+    my $mask = shift ;
+    my $catmask ;
+    my $fatal = 0 ;
+    my $no_fatal = 0 ;
+
+    foreach my $word ( @_ ) {
+	if ($word eq 'FATAL') {
+	    $fatal = 1;
+	    $no_fatal = 0;
+	}
+	elsif ($word eq 'NONFATAL') {
+	    $fatal = 0;
+	    $no_fatal = 1;
+	}
+	elsif ($catmask = $Bits{$word}) {
+	    $mask |= $catmask ;
+	    $mask |= $DeadBits{$word} if $fatal ;
+	    $mask &= ~($DeadBits{$word}|$All) if $no_fatal ;
+	}
+	else
+	  { Croaker("Unknown warnings category '$word'")}
+    }
+
+    return $mask ;
+}
+
+sub bits
+{
+    # called from B::Deparse.pm
+    push @_, 'all' unless @_ ;
+    return _bits(undef, @_) ;
+}
+
+sub import
+{
+    shift;
+
+    my $mask = ${^WARNING_BITS} // ($^W ? $Bits{all} : $DEFAULT) ;
+
+    if (vec($mask, $Offsets{'all'}, 1)) {
+	$mask |= $Bits{'all'} ;
+	$mask |= $DeadBits{'all'} if vec($mask, $Offsets{'all'}+1, 1);
+    }
+
+    # append 'all' when implied (after a lone "FATAL" or "NONFATAL")
+    push @_, 'all' if @_==1 && ( $_[0] eq 'FATAL' || $_[0] eq 'NONFATAL' );
+
+    # Empty @_ is equivalent to @_ = 'all' ;
+    ${^WARNING_BITS} = @_ ? _bits($mask, @_) : $mask | $Bits{all} ;
+}
+
+sub unimport
+{
+    shift;
+
+    my $catmask ;
+    my $mask = ${^WARNING_BITS} // ($^W ? $Bits{all} : $DEFAULT) ;
+
+    if (vec($mask, $Offsets{'all'}, 1)) {
+	$mask |= $Bits{'all'} ;
+	$mask |= $DeadBits{'all'} if vec($mask, $Offsets{'all'}+1, 1);
+    }
+
+    # append 'all' when implied (empty import list or after a lone "FATAL")
+    push @_, 'all' if !@_ || @_==1 && $_[0] eq 'FATAL';
+
+    foreach my $word ( @_ ) {
+	if ($word eq 'FATAL') {
+	    next;
+	}
+	elsif ($catmask = $Bits{$word}) {
+	    $mask &= ~($catmask | $DeadBits{$word} | $All);
+	}
+	else
+	  { Croaker("Unknown warnings category '$word'")}
+    }
+
+    ${^WARNING_BITS} = $mask ;
+}
+
+my %builtin_type; @builtin_type{qw(SCALAR ARRAY HASH CODE REF GLOB LVALUE Regexp)} = ();
+
+sub MESSAGE () { 4 };
+sub FATAL () { 2 };
+sub NORMAL () { 1 };
+
+sub __chk
+{
+    my $category ;
+    my $offset ;
+    my $isobj = 0 ;
+    my $wanted = shift;
+    my $has_message = $wanted & MESSAGE;
+
+    unless (@_ == 1 || @_ == ($has_message ? 2 : 0)) {
+	my $sub = (caller 1)[3];
+	my $syntax = $has_message ? "[category,] 'message'" : '[category]';
+	Croaker("Usage: $sub($syntax)");
+    }
+
+    my $message = pop if $has_message;
+
+    if (@_) {
+	# check the category supplied.
+	$category = shift ;
+	if (my $type = ref $category) {
+	    Croaker("not an object")
+		if exists $builtin_type{$type};
+	    $category = $type;
+	    $isobj = 1 ;
+	}
+	$offset = $Offsets{$category};
+	Croaker("Unknown warnings category '$category'")
+	    unless defined $offset;
+    }
+    else {
+	$category = (caller(1))[0] ;
+	$offset = $Offsets{$category};
+	Croaker("package '$category' not registered for warnings")
+	    unless defined $offset ;
+    }
+
+    my $i;
+
+    if ($isobj) {
+	my $pkg;
+	$i = 2;
+	while (do { { package DB; $pkg = (caller($i++))[0] } } ) {
+	    last unless @DB::args && $DB::args[0] =~ /^$category=/ ;
+	}
+	$i -= 2 ;
+    }
+    else {
+	$i = _error_loc(); # see where Carp will allocate the error
+    }
+
+    # Default to 0 if caller returns nothing.  Default to $DEFAULT if it
+    # explicitly returns undef.
+    my(@callers_bitmask) = (caller($i))[9] ;
+    my $callers_bitmask =
+	 @callers_bitmask ? $callers_bitmask[0] // $DEFAULT : 0 ;
+
+    my @results;
+    foreach my $type (FATAL, NORMAL) {
+	next unless $wanted & $type;
+
+	push @results, (vec($callers_bitmask, $offset + $type - 1, 1) ||
+			vec($callers_bitmask, $Offsets{'all'} + $type - 1, 1));
+    }
+
+    # &enabled and &fatal_enabled
+    return $results[0] unless $has_message;
+
+    # &warnif, and the category is neither enabled as warning nor as fatal
+    return if $wanted == (NORMAL | FATAL | MESSAGE)
+	&& !($results[0] || $results[1]);
+
+    require Carp;
+    Carp::croak($message) if $results[0];
+    # will always get here for &warn. will only get here for &warnif if the
+    # category is enabled
+    Carp::carp($message);
+}
+
+sub _mkMask
+{
+    my ($bit) = @_;
+    my $mask = "";
+
+    vec($mask, $bit, 1) = 1;
+    return $mask;
+}
+
+sub register_categories
+{
+    my @names = @_;
+
+    for my $name (@names) {
+	if (! defined $Bits{$name}) {
+	    $Bits{$name}     = _mkMask($LAST_BIT);
+	    vec($Bits{'all'}, $LAST_BIT, 1) = 1;
+	    $Offsets{$name}  = $LAST_BIT ++;
+	    foreach my $k (keys %Bits) {
+		vec($Bits{$k}, $LAST_BIT, 1) = 0;
+	    }
+	    $DeadBits{$name} = _mkMask($LAST_BIT);
+	    vec($DeadBits{'all'}, $LAST_BIT++, 1) = 1;
+	}
+    }
+}
+
+sub _error_loc {
+    require Carp;
+    goto &Carp::short_error_loc; # don't introduce another stack frame
+}
+
+sub enabled
+{
+    return __chk(NORMAL, @_);
+}
+
+sub fatal_enabled
+{
+    return __chk(FATAL, @_);
+}
+
+sub warn
+{
+    return __chk(FATAL | MESSAGE, @_);
+}
+
+sub warnif
+{
+    return __chk(NORMAL | FATAL | MESSAGE, @_);
+}
+
+# These are not part of any public interface, so we can delete them to save
+# space.
+delete @warnings::{qw(NORMAL FATAL MESSAGE)};
+
+1;
+__END__
 =head1 NAME
 
 warnings - Perl pragma to control optional warnings
@@ -558,7 +795,7 @@ warning, but the assignment to the scalar C<$b> will not.
 =head2 Default Warnings and Optional Warnings
 
 Before the introduction of lexical warnings, Perl had two classes of
-warnings: mandatory and optional. 
+warnings: mandatory and optional.
 
 As its name suggests, if your code tripped a mandatory warning, you
 would get a warning whether you wanted it or not.
@@ -690,7 +927,7 @@ will work unchanged.
 
 The B<-w> flag just sets the global C<$^W> variable as in 5.005.  This
 means that any legacy code that currently relies on manipulating C<$^W>
-to control warning behavior will still work as is. 
+to control warning behavior will still work as is.
 
 =item 3.
 
@@ -731,7 +968,7 @@ Just like the "strict" pragma any of these categories can be combined
     no warnings qw(io syntax untie);
 
 Also like the "strict" pragma, if there is more than one instance of the
-C<warnings> pragma in a given scope the cumulative effect is additive. 
+C<warnings> pragma in a given scope the cumulative effect is additive.
 
     use warnings qw(void); # only "void" warnings enabled
     ...
@@ -775,7 +1012,7 @@ warning.
 When run it produces this output
 
     Useless use of time in void context at fatal line 3.
-    Useless use of length in void context at fatal line 7.  
+    Useless use of length in void context at fatal line 7.
 
 The scope where C<length> is used has escalated the C<void> warnings
 category into a fatal error, so the program terminates immediately when it
@@ -870,7 +1107,7 @@ this snippet of code:
     package MyMod::Abc;
 
     sub open {
-        warnings::warnif("deprecated", 
+        warnings::warnif("deprecated",
                          "open is deprecated, use new instead");
         new(@_);
     }
@@ -952,7 +1189,7 @@ Consider this example:
 
     1;
 
-The code below makes use of both modules, but it only enables warnings from 
+The code below makes use of both modules, but it only enables warnings from
 C<Derived>.
 
     use Original;
@@ -964,7 +1201,7 @@ C<Derived>.
     $a->doit(1);
 
 When this code is run only the C<Derived> object, C<$b>, will generate
-a warning. 
+a warning.
 
     Odd numbers are unsafe at main.pl line 7
 
@@ -1091,238 +1328,3 @@ use by the warnings::register pragma.
 See also L<perlmodlib/Pragmatic Modules> and L<perldiag>.
 
 =cut
-
-KEYWORDS
-
-$All = "" ; vec($All, $Offsets{'all'}, 2) = 3 ;
-
-sub Croaker
-{
-    require Carp; # this initializes %CarpInternal
-    local $Carp::CarpInternal{'warnings'};
-    delete $Carp::CarpInternal{'warnings'};
-    Carp::croak(@_);
-}
-
-sub _bits {
-    my $mask = shift ;
-    my $catmask ;
-    my $fatal = 0 ;
-    my $no_fatal = 0 ;
-
-    foreach my $word ( @_ ) {
-	if ($word eq 'FATAL') {
-	    $fatal = 1;
-	    $no_fatal = 0;
-	}
-	elsif ($word eq 'NONFATAL') {
-	    $fatal = 0;
-	    $no_fatal = 1;
-	}
-	elsif ($catmask = $Bits{$word}) {
-	    $mask |= $catmask ;
-	    $mask |= $DeadBits{$word} if $fatal ;
-	    $mask &= ~($DeadBits{$word}|$All) if $no_fatal ;
-	}
-	else
-          { Croaker("Unknown warnings category '$word'")}
-    }
-
-    return $mask ;
-}
-
-sub bits
-{
-    # called from B::Deparse.pm
-    push @_, 'all' unless @_ ;
-    return _bits(undef, @_) ;
-}
-
-sub import
-{
-    shift;
-
-    my $mask = ${^WARNING_BITS} // ($^W ? $Bits{all} : $DEFAULT) ;
-
-    if (vec($mask, $Offsets{'all'}, 1)) {
-        $mask |= $Bits{'all'} ;
-        $mask |= $DeadBits{'all'} if vec($mask, $Offsets{'all'}+1, 1);
-    }
-
-    # append 'all' when implied (after a lone "FATAL" or "NONFATAL")
-    push @_, 'all' if @_==1 && ( $_[0] eq 'FATAL' || $_[0] eq 'NONFATAL' );
-
-    # Empty @_ is equivalent to @_ = 'all' ;
-    ${^WARNING_BITS} = @_ ? _bits($mask, @_) : $mask | $Bits{all} ;
-}
-
-sub unimport
-{
-    shift;
-
-    my $catmask ;
-    my $mask = ${^WARNING_BITS} // ($^W ? $Bits{all} : $DEFAULT) ;
-
-    if (vec($mask, $Offsets{'all'}, 1)) {
-        $mask |= $Bits{'all'} ;
-        $mask |= $DeadBits{'all'} if vec($mask, $Offsets{'all'}+1, 1);
-    }
-
-    # append 'all' when implied (empty import list or after a lone "FATAL")
-    push @_, 'all' if !@_ || @_==1 && $_[0] eq 'FATAL';
-
-    foreach my $word ( @_ ) {
-	if ($word eq 'FATAL') {
-	    next;
-	}
-	elsif ($catmask = $Bits{$word}) {
-	    $mask &= ~($catmask | $DeadBits{$word} | $All);
-	}
-	else
-          { Croaker("Unknown warnings category '$word'")}
-    }
-
-    ${^WARNING_BITS} = $mask ;
-}
-
-my %builtin_type; @builtin_type{qw(SCALAR ARRAY HASH CODE REF GLOB LVALUE Regexp)} = ();
-
-sub MESSAGE () { 4 };
-sub FATAL () { 2 };
-sub NORMAL () { 1 };
-
-sub __chk
-{
-    my $category ;
-    my $offset ;
-    my $isobj = 0 ;
-    my $wanted = shift;
-    my $has_message = $wanted & MESSAGE;
-
-    unless (@_ == 1 || @_ == ($has_message ? 2 : 0)) {
-	my $sub = (caller 1)[3];
-	my $syntax = $has_message ? "[category,] 'message'" : '[category]';
-	Croaker("Usage: $sub($syntax)");
-    }
-
-    my $message = pop if $has_message;
-
-    if (@_) {
-        # check the category supplied.
-        $category = shift ;
-        if (my $type = ref $category) {
-            Croaker("not an object")
-                if exists $builtin_type{$type};
-	    $category = $type;
-            $isobj = 1 ;
-        }
-        $offset = $Offsets{$category};
-        Croaker("Unknown warnings category '$category'")
-	    unless defined $offset;
-    }
-    else {
-        $category = (caller(1))[0] ;
-        $offset = $Offsets{$category};
-        Croaker("package '$category' not registered for warnings")
-	    unless defined $offset ;
-    }
-
-    my $i;
-
-    if ($isobj) {
-        my $pkg;
-        $i = 2;
-        while (do { { package DB; $pkg = (caller($i++))[0] } } ) {
-            last unless @DB::args && $DB::args[0] =~ /^$category=/ ;
-        }
-	$i -= 2 ;
-    }
-    else {
-        $i = _error_loc(); # see where Carp will allocate the error
-    }
-
-    # Default to 0 if caller returns nothing.  Default to $DEFAULT if it
-    # explicitly returns undef.
-    my(@callers_bitmask) = (caller($i))[9] ;
-    my $callers_bitmask =
-	 @callers_bitmask ? $callers_bitmask[0] // $DEFAULT : 0 ;
-
-    my @results;
-    foreach my $type (FATAL, NORMAL) {
-	next unless $wanted & $type;
-
-	push @results, (vec($callers_bitmask, $offset + $type - 1, 1) ||
-			vec($callers_bitmask, $Offsets{'all'} + $type - 1, 1));
-    }
-
-    # &enabled and &fatal_enabled
-    return $results[0] unless $has_message;
-
-    # &warnif, and the category is neither enabled as warning nor as fatal
-    return if $wanted == (NORMAL | FATAL | MESSAGE)
-	&& !($results[0] || $results[1]);
-
-    require Carp;
-    Carp::croak($message) if $results[0];
-    # will always get here for &warn. will only get here for &warnif if the
-    # category is enabled
-    Carp::carp($message);
-}
-
-sub _mkMask
-{
-    my ($bit) = @_;
-    my $mask = "";
-
-    vec($mask, $bit, 1) = 1;
-    return $mask;
-}
-
-sub register_categories
-{
-    my @names = @_;
-
-    for my $name (@names) {
-	if (! defined $Bits{$name}) {
-	    $Bits{$name}     = _mkMask($LAST_BIT);
-	    vec($Bits{'all'}, $LAST_BIT, 1) = 1;
-	    $Offsets{$name}  = $LAST_BIT ++;
-	    foreach my $k (keys %Bits) {
-		vec($Bits{$k}, $LAST_BIT, 1) = 0;
-	    }
-	    $DeadBits{$name} = _mkMask($LAST_BIT);
-	    vec($DeadBits{'all'}, $LAST_BIT++, 1) = 1;
-	}
-    }
-}
-
-sub _error_loc {
-    require Carp;
-    goto &Carp::short_error_loc; # don't introduce another stack frame
-}
-
-sub enabled
-{
-    return __chk(NORMAL, @_);
-}
-
-sub fatal_enabled
-{
-    return __chk(FATAL, @_);
-}
-
-sub warn
-{
-    return __chk(FATAL | MESSAGE, @_);
-}
-
-sub warnif
-{
-    return __chk(NORMAL | FATAL | MESSAGE, @_);
-}
-
-# These are not part of any public interface, so we can delete them to save
-# space.
-delete @warnings::{qw(NORMAL FATAL MESSAGE)};
-
-1;

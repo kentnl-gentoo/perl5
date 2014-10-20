@@ -4,7 +4,7 @@
 # symbols we expect, and no symbols we should avoid.
 #
 # Fail softly, expect things only on known platforms:
-# - linux
+# - linux, x86 only (ppc linux has odd symbol tables)
 # - darwin (OS X), both x86 and ppc
 # - freebsd
 # and on other platforms, and if things seem odd, just give up (skip_all).
@@ -66,6 +66,7 @@ unless (defined $libperl_a) {
 }
 
 print "# \$^O = $^O\n";
+print "# \$Config{archname} = $Config{archname}\n";
 print "# \$Config{cc} = $Config{cc}\n";
 print "# libperl = $libperl_a\n";
 
@@ -126,6 +127,12 @@ if (defined $nm_style) {
     } else {
         die "$0: Unexpected nm style '$nm_style'\n";
     }
+}
+
+if ($^O eq 'linux' && $Config{archname} !~ /^x86/) {
+    # For example in ppc most (but not all!) code symbols are placed
+    # in 'D' (data), not in ' T '.  We cannot work under such conditions.
+    skip_all "linux but archname $Config{archname} not x86*";
 }
 
 unless (defined $nm) {
@@ -252,7 +259,7 @@ sub nm_parse_darwin {
                 $symbols->{data}{const}{$symbol}{$symbols->{o}}++;
             } elsif (/^\(__TEXT,__text\) (?:non-)?external _(\w+)$/) {
                 $symbols->{text}{$1}{$symbols->{o}}++;
-            } elsif (/^\(__DATA,__\w*?(const|data|bss|common)\w*\) (?:non-)?external _(\w+)(\.\w+)?$/) {
+            } elsif (/^\(__DATA,__\w*?(const|data|bss|common)\w*\) (?:non-)?external _?(\w+)(\.\w+)?$/) {
                 my ($dtype, $symbol, $suffix) = ($1, $2, $3);
                 # Ignore function-local constants like
                 # _Perl_pp_gmtime.dayname
@@ -303,8 +310,12 @@ while (<$nm_fh>) {
 
 # use Data::Dumper; print Dumper(\%symbols);
 
-if (keys %symbols == 0) {
+# Something went awfully wrong.  Wrong nm?  Wrong options?
+unless (keys %symbols) {
     skip_all "no symbols\n";
+}
+unless (exists $symbols{text}) {
+    skip_all "no text symbols\n";
 }
 
 # These should always be true for everyone.
