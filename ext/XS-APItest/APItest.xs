@@ -662,6 +662,9 @@ static SV *hintkey_swaplabel_sv, *hintkey_labelconst_sv;
 static SV *hintkey_arrayfullexpr_sv, *hintkey_arraylistexpr_sv;
 static SV *hintkey_arraytermexpr_sv, *hintkey_arrayarithexpr_sv;
 static SV *hintkey_arrayexprflags_sv;
+static SV *hintkey_DEFSV_sv;
+static SV *hintkey_with_vars_sv;
+static SV *hintkey_join_with_space_sv;
 static int (*next_keyword_plugin)(pTHX_ char *, STRLEN, OP **);
 
 /* low-level parser helpers */
@@ -951,6 +954,106 @@ static OP *THX_parse_keyword_arrayexprflags(pTHX)
     return o ? newANONLIST(o) : newANONHASH(newOP(OP_STUB, 0));
 }
 
+#define parse_keyword_DEFSV() THX_parse_keyword_DEFSV(aTHX)
+static OP *THX_parse_keyword_DEFSV(pTHX)
+{
+    return newDEFSVOP();
+}
+
+#define sv_cat_c(a,b) THX_sv_cat_c(aTHX_ a, b)
+static void THX_sv_cat_c(pTHX_ SV *sv, U32 c) {
+    char ds[UTF8_MAXBYTES + 1], *d;
+    d = (char *)uvchr_to_utf8((U8 *)ds, c);
+    if (d - ds > 1) {
+        sv_utf8_upgrade(sv);
+    }
+    sv_catpvn(sv, ds, d - ds);
+}
+
+#define parse_keyword_with_vars() THX_parse_keyword_with_vars(aTHX)
+static OP *THX_parse_keyword_with_vars(pTHX)
+{
+    I32 c;
+    IV count;
+    int save_ix;
+    OP *vardeclseq, *body;
+
+    save_ix = block_start(TRUE);
+    vardeclseq = NULL;
+
+    count = 0;
+
+    lex_read_space(0);
+    c = lex_peek_unichar(0);
+    while (c != '{') {
+        SV *varname;
+        PADOFFSET padoff;
+
+        if (c == -1) {
+            croak("unexpected EOF; expecting '{'");
+        }
+
+        if (!isIDFIRST_uni(c)) {
+            croak("unexpected '%c'; expecting an identifier", (int)c);
+        }
+
+        varname = newSVpvs("$");
+        if (lex_bufutf8()) {
+            SvUTF8_on(varname);
+        }
+
+        sv_cat_c(varname, c);
+        lex_read_unichar(0);
+
+        while (c = lex_peek_unichar(0), c != -1 && isIDCONT_uni(c)) {
+            sv_cat_c(varname, c);
+            lex_read_unichar(0);
+        }
+
+        padoff = pad_add_name_sv(varname, padadd_NO_DUP_CHECK, NULL, NULL);
+
+        {
+            OP *my_var = newOP(OP_PADSV, OPf_MOD | (OPpLVAL_INTRO << 8));
+            my_var->op_targ = padoff;
+
+            vardeclseq = op_append_list(
+                OP_LINESEQ,
+                vardeclseq,
+                newSTATEOP(
+                    0, NULL,
+                    newASSIGNOP(
+                        OPf_STACKED,
+                        my_var, 0,
+                        newSVOP(
+                            OP_CONST, 0,
+                            newSViv(++count)
+                        )
+                    )
+                )
+            );
+        }
+
+        lex_read_space(0);
+        c = lex_peek_unichar(0);
+    }
+
+    intro_my();
+
+    body = parse_block(0);
+
+    return block_end(save_ix, op_append_list(OP_LINESEQ, vardeclseq, body));
+}
+
+#define parse_join_with_space() THX_parse_join_with_space(aTHX)
+static OP *THX_parse_join_with_space(pTHX)
+{
+    OP *delim, *args;
+
+    args = parse_listexpr(0);
+    delim = newSVOP(OP_CONST, 0, newSVpvs(" "));
+    return op_convert_list(OP_JOIN, 0, op_prepend_elem(OP_LIST, delim, args));
+}
+
 /* plugin glue */
 
 #define keyword_active(hintkey_sv) THX_keyword_active(aTHX_ hintkey_sv)
@@ -1034,6 +1137,18 @@ static int my_keyword_plugin(pTHX_
     } else if(keyword_len == 14 && strnEQ(keyword_ptr, "arrayexprflags", 14) &&
 		    keyword_active(hintkey_arrayexprflags_sv)) {
 	*op_ptr = parse_keyword_arrayexprflags();
+	return KEYWORD_PLUGIN_EXPR;
+    } else if(keyword_len == 5 && strnEQ(keyword_ptr, "DEFSV", 5) &&
+		    keyword_active(hintkey_DEFSV_sv)) {
+	*op_ptr = parse_keyword_DEFSV();
+	return KEYWORD_PLUGIN_EXPR;
+    } else if(keyword_len == 9 && strnEQ(keyword_ptr, "with_vars", 9) &&
+		    keyword_active(hintkey_with_vars_sv)) {
+	*op_ptr = parse_keyword_with_vars();
+	return KEYWORD_PLUGIN_STMT;
+    } else if(keyword_len == 15 && strnEQ(keyword_ptr, "join_with_space", 15) &&
+		    keyword_active(hintkey_join_with_space_sv)) {
+	*op_ptr = parse_join_with_space();
 	return KEYWORD_PLUGIN_EXPR;
     } else {
 	return next_keyword_plugin(aTHX_ keyword_ptr, keyword_len, op_ptr);
@@ -3321,6 +3436,9 @@ BOOT:
     hintkey_arraytermexpr_sv = newSVpvs_share("XS::APItest/arraytermexpr");
     hintkey_arrayarithexpr_sv = newSVpvs_share("XS::APItest/arrayarithexpr");
     hintkey_arrayexprflags_sv = newSVpvs_share("XS::APItest/arrayexprflags");
+    hintkey_DEFSV_sv = newSVpvs_share("XS::APItest/DEFSV");
+    hintkey_with_vars_sv = newSVpvs_share("XS::APItest/with_vars");
+    hintkey_join_with_space_sv = newSVpvs_share("XS::APItest/join_with_space");
     next_keyword_plugin = PL_keyword_plugin;
     PL_keyword_plugin = my_keyword_plugin;
 }
@@ -3660,6 +3778,11 @@ ALIAS:
     sv_unmagic_bar = 1
 CODE:
     sv_unmagicext(SvRV(sv), PERL_MAGIC_ext, ix ? &vtbl_bar : &vtbl_foo);
+
+void
+sv_magic(SV *sv, SV *thingy)
+CODE:
+    sv_magic(SvRV(sv), NULL, PERL_MAGIC_ext, (const char *)thingy, 0);
 
 UV
 test_get_vtbl()

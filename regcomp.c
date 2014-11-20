@@ -3773,7 +3773,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
     {
         PerlIO_printf(Perl_debug_log,
             "%*sstudy_chunk stopparen=%ld recursed_count=%lu depth=%lu recursed_depth=%lu scan=%p last=%p",
-            ((int) depth*2), "", (long)stopparen,
+            (int)(depth*2), "", (long)stopparen,
             (unsigned long)RExC_study_chunk_recursed_count,
             (unsigned long)depth, (unsigned long)recursed_depth,
             scan,
@@ -3792,7 +3792,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
                                    (( j - 1 ) * RExC_study_chunk_recursed_bytes), i)
                         )
                     ) {
-                        PerlIO_printf(Perl_debug_log," %d",i);
+                        PerlIO_printf(Perl_debug_log," %d",(int)i);
                         break;
                     }
                 }
@@ -4833,8 +4833,11 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		{
 		    /* Fatal warnings may leak the regexp without this: */
 		    SAVEFREESV(RExC_rx_sv);
-		    ckWARNreg(RExC_parse,
-			    "Quantifier unexpected on zero-length expression");
+		    Perl_ck_warner(aTHX_ packWARN(WARN_REGEXP),
+			"Quantifier unexpected on zero-length expression "
+			"in regex m/%"UTF8f"/",
+			 UTF8fARG(UTF, RExC_end - RExC_precomp,
+				  RExC_precomp));
 		    (void)ReREFCNT_inc(RExC_rx_sv);
 		}
 
@@ -5141,7 +5144,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVuf" RHS=%"UVuf"\n",
 	    min++;
 	    if (flags & SCF_DO_STCLASS) {
                 bool invert = 0;
-                SV* my_invlist = sv_2mortal(_new_invlist(0));
+                SV* my_invlist = NULL;
                 U8 namedclass;
 
                 /* See commit msg 749e076fceedeb708a624933726e7989f2302f6a */
@@ -5240,7 +5243,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVuf" RHS=%"UVuf"\n",
                     /* FALLTHROUGH */
 		case POSIXA:
                     if (FLAGS(scan) == _CC_ASCII) {
-                        my_invlist = PL_XPosix_ptrs[_CC_ASCII];
+                        my_invlist = invlist_clone(PL_XPosix_ptrs[_CC_ASCII]);
                     }
                     else {
                         _invlist_intersection(PL_XPosix_ptrs[FLAGS(scan)],
@@ -5277,6 +5280,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVuf" RHS=%"UVuf"\n",
                         assert(flags & SCF_DO_STCLASS_OR);
                         ssc_union(data->start_class, my_invlist, invert);
                     }
+                    SvREFCNT_dec(my_invlist);
 		}
 		if (flags & SCF_DO_STCLASS_OR)
 		    ssc_and(pRExC_state, data->start_class, (regnode_charclass *) and_withp);
@@ -9101,7 +9105,7 @@ Perl__add_range_to_invlist(pTHX_ SV* invlist, const UV start, const UV end)
     /* Add the range from 'start' to 'end' inclusive to the inversion list's
      * set.  A pointer to the inversion list is returned.  This may actually be
      * a new list, in which case the passed in one has been destroyed.  The
-     * passed in inversion list can be NULL, in which case a new one is created
+     * passed-in inversion list can be NULL, in which case a new one is created
      * with just the one range in it */
 
     SV* range_invlist;
@@ -10147,7 +10151,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 	            RExC_recurse_count++;
 		    DEBUG_OPTIMISE_MORE_r(PerlIO_printf(Perl_debug_log,
                         "%*s%*s Recurse #%"UVuf" to %"IVdf"\n",
-                              22, "|    |", 1 + depth * 2, "",
+                              22, "|    |", (int)(depth * 2 + 1), "",
                               (UV)ARG(ret), (IV)ARG2L(ret)));
                 }
                 RExC_seen |= REG_RECURSE_SEEN;
@@ -10420,7 +10424,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 	        {
 		    DEBUG_OPTIMISE_MORE_r(PerlIO_printf(Perl_debug_log,
                         "%*s%*s Setting open paren #%"IVdf" to %d\n",
-                        22, "|    |", 1+2 * depth, "",
+                        22, "|    |", (int)(depth * 2 + 1), "",
 			(IV)parno, REG_NODE_NUM(ret)));
 	            RExC_open_parens[parno-1]= ret;
 	        }
@@ -10510,7 +10514,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
             if (!SIZE_ONLY && RExC_seen & REG_RECURSE_SEEN) {
 		DEBUG_OPTIMISE_MORE_r(PerlIO_printf(Perl_debug_log,
                         "%*s%*s Setting close paren #%"IVdf" to %d\n",
-                        22, "|    |", 1+2 * depth, "", (IV)parno, REG_NODE_NUM(ender)));
+                        22, "|    |", (int)(depth * 2 + 1), "", (IV)parno, REG_NODE_NUM(ender)));
 	        RExC_close_parens[parno-1]= ender;
 	        if (RExC_nestroot == parno)
 	            RExC_nestroot = 0;
@@ -11364,7 +11368,7 @@ S_alloc_maybe_populate_EXACT(pTHX_ RExC_state_t *pRExC_state,
 
     if (! len_passed_in) {
         if (UTF) {
-            if (UNI_IS_INVARIANT(code_point)) {
+            if (UVCHR_IS_INVARIANT(code_point)) {
                 if (LOC || ! FOLD) {    /* /l defers folding until runtime */
                     *character = (U8) code_point;
                 }
@@ -12473,7 +12477,7 @@ tryagain:
                      * the simple case just below.) */
 
                     UV folded;
-                    if (isASCII(ender)) {
+                    if (isASCII_uni(ender)) {
                         folded = toFOLD(ender);
                         *(s)++ = (U8) folded;
                     }
@@ -14459,8 +14463,9 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
             continue;
         }
 
-        /* Here, we have a single value, and <prevvalue> is the beginning of
-         * the range, if any; or <value> if not */
+        /* Here, we have a single value this time through the loop, and
+         * <prevvalue> is the beginning of the range, if any; or <value> if
+         * not. */
 
 	/* non-Latin1 code point implies unicode semantics.  Must be set in
 	 * pass1 so is there for the whole of pass 2 */
@@ -16500,6 +16505,7 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_
     PERL_UNUSED_ARG(o);
     PERL_UNUSED_ARG(prog);
     PERL_UNUSED_ARG(reginfo);
+    PERL_UNUSED_ARG(pRExC_state);
 #endif	/* DEBUGGING */
 }
 

@@ -70,7 +70,6 @@
 #define PL_XPosix_ptrs		(vTHX->IXPosix_ptrs)
 #define PL_Xpv			(vTHX->IXpv)
 #define PL_an			(vTHX->Ian)
-#define PL_apiversion		(vTHX->Iapiversion)
 #define PL_argvgv		(vTHX->Iargvgv)
 #define PL_argvout_stack	(vTHX->Iargvout_stack)
 #define PL_argvoutgv		(vTHX->Iargvoutgv)
@@ -351,6 +350,7 @@
 #define PL_warnhook		(vTHX->Iwarnhook)
 #define PL_watchaddr		(vTHX->Iwatchaddr)
 #define PL_watchok		(vTHX->Iwatchok)
+#define PL_xsubfilename		(vTHX->Ixsubfilename)
 
 #endif	/* MULTIPLICITY */
 

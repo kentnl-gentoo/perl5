@@ -239,10 +239,10 @@ s	|MAGIC*	|get_aux_mg	|NN AV *av
 : Used in perly.y
 pR	|OP*	|bind_match	|I32 type|NN OP *left|NN OP *right
 : Used in perly.y
-pR	|OP*	|block_end	|I32 floor|NULLOK OP* seq
+ApdR	|OP*	|block_end	|I32 floor|NULLOK OP* seq
 ApR	|I32	|block_gimme
 : Used in perly.y
-pR	|int	|block_start	|int full
+ApdR	|int	|block_start	|int full
 Aodp	|void	|blockhook_register |NN BHK *hk
 : Used in perl.c
 p	|void	|boot_core_UNIVERSAL
@@ -263,7 +263,7 @@ ApR	|I32	|my_chsize	|int fd|Off_t length
 p	|const COP*|closest_cop	|NN const COP *cop|NULLOK const OP *o \
 				|NULLOK const OP *curop|bool opnext
 : Used in perly.y
-pR	|OP*	|convert	|I32 optype|I32 flags|NULLOK OP* o
+ApdR	|OP*	|op_convert_list	|I32 optype|I32 flags|NULLOK OP* o
 : Used in op.c and perl.c
 pM	|PERL_CONTEXT*	|create_eval_scope|U32 flags
 Aprd	|void	|croak_sv	|NN SV *baseex
@@ -275,17 +275,13 @@ Anprd	|void	|croak_xs_usage	|NN const CV *const cv \
 				|NN const char *const params
 npr	|void	|croak_no_mem
 nprX	|void	|croak_popstack
+fnprx	|void	|noperl_die|NN const char* pat|...
 #if defined(WIN32)
 norx	|void	|win32_croak_not_implemented|NN const char * fname
 #endif
 #if defined(PERL_IMPLICIT_CONTEXT)
 Afnrp	|void	|croak_nocontext|NULLOK const char* pat|...
-:removing noreturn to silence a warning
-#ifdef _MSC_VER
-Afnp   |OP*    |die_nocontext  |NULLOK const char* pat|...
-#else
 Afnrp  |OP*    |die_nocontext  |NULLOK const char* pat|...
-#endif
 Afnp	|void	|deb_nocontext	|NN const char* pat|...
 Afnp	|char*	|form_nocontext	|NN const char* pat|...
 Anp	|void	|load_module_nocontext|U32 flags|NN SV* name|NULLOK SV* ver|...
@@ -314,8 +310,6 @@ EMXp	|void	|cv_ckproto_len_flags	|NN const CV* cv|NULLOK const GV* gv\
 ApdR	|SV*	|gv_const_sv	|NN GV* gv
 ApdRn	|SV*	|cv_const_sv	|NULLOK const CV *const cv
 pRn	|SV*	|cv_const_sv_or_av|NULLOK const CV *const cv
-: Used in pad.c
-pR	|SV*	|op_const_sv	|NULLOK const OP* o|NULLOK CV* cv
 Apd	|SV *	|cv_name	|NN CV *cv|NULLOK SV *sv|U32 flags
 Apd	|void	|cv_undef	|NN CV* cv
 p	|void	|cv_undef_flags	|NN CV* cv|U32 flags
@@ -344,14 +338,8 @@ Anp	|char*	|delimcpy	|NN char* to|NN const char* toend|NN const char* from \
 				|NN const char* fromend|int delim|NN I32* retlen
 : Used in op.c, perl.c
 pM	|void	|delete_eval_scope
-:removing noreturn to silence a warning
-#ifdef _MSC_VER
-Apd    |OP*    |die_sv         |NN SV *baseex
-Afpd   |OP*    |die            |NULLOK const char* pat|...
-#else
 Aprd    |OP*    |die_sv         |NN SV *baseex
 Afrpd   |OP*    |die            |NULLOK const char* pat|...
-#endif
 : Used in util.c
 pr	|void	|die_unwind	|NN SV* msv
 Ap	|void	|dounwind	|I32 cxix
@@ -651,7 +639,8 @@ Ap	|void	|init_tm	|NN struct tm *ptm
 : Used in perly.y
 AnpPR	|char*	|instr		|NN const char* big|NN const char* little
 : Used in sv.c
-p	|bool	|io_close	|NN IO* io|bool not_implicit
+p	|bool	|io_close	|NN IO* io|NULLOK GV *gv \
+				|bool not_implicit|bool warn_on_fail
 : Used in perly.y
 pR	|OP*	|invert		|NULLOK OP* cmd
 ApR	|I32	|is_lvalue_sub
@@ -850,7 +839,8 @@ p	|int	|magic_nextpack	|NN SV *sv|NN MAGIC *mg|NN SV *key
 p	|U32	|magic_regdata_cnt|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_regdatum_get|NN SV* sv|NN MAGIC* mg
 :removing noreturn to silence a warning for this function resulted in no
-:change to the interpreter DLL image under VS 2003 -O1 -GL 32 bits
+:change to the interpreter DLL image under VS 2003 -O1 -GL 32 bits only because
+:this is used in a magic vtable, do not use this on conventionally called funcs
 #ifdef _MSC_VER
 p	|int	|magic_regdatum_set|NN SV* sv|NN MAGIC* mg
 #else
@@ -987,9 +977,10 @@ Abm	|CV*	|newSUB		|I32 floor|NULLOK OP* o|NULLOK OP* proto \
 				|NULLOK OP* block
 p	|CV *	|newXS_len_flags|NULLOK const char *name|STRLEN len \
 				|NN XSUBADDR_t subaddr\
-				|NN const char *const filename \
+				|NULLOK const char *const filename \
 				|NULLOK const char *const proto \
 				|NULLOK SV **const_svp|U32 flags
+pX	|CV *	|newXS_deffile	|NN const char *name|NN XSUBADDR_t subaddr
 ApM	|CV *	|newXS_flags	|NULLOK const char *name|NN XSUBADDR_t subaddr\
 				|NN const char *const filename \
 				|NULLOK const char *const proto|U32 flags
@@ -1018,6 +1009,7 @@ Apda	|SV*	|newRV_noinc	|NN SV *const sv
 Apda	|SV*	|newSV		|const STRLEN len
 Apa	|OP*	|newSVREF	|NN OP* o
 Apda	|OP*	|newSVOP	|I32 type|I32 flags|NN SV* sv
+ApdR	|OP*	|newDEFSVOP
 pa	|SV*	|newSVavdefelem	|NN AV *av|SSize_t ix|bool extendible
 Apda	|SV*	|newSViv	|const IV i
 Apda	|SV*	|newSVuv	|const UV u
@@ -1218,7 +1210,6 @@ EXp	|I32|reg_numbered_buff_length|NN REGEXP * const rx|NN const SV * const sv|co
 : FIXME - is anything in re using this now?
 EXp	|SV*|reg_qr_package|NN REGEXP * const rx
 
-: FIXME - why the E?
 Anp	|void	|repeatcpy	|NN char* to|NN const char* from|I32 len|IV count
 AnpP	|char*	|rninstr	|NN const char* big|NN const char* bigend \
 				|NN const char* little|NN const char* lend
@@ -1321,14 +1312,6 @@ Apd	|NV	|scan_hex	|NN const char* start|STRLEN len|NN STRLEN* retlen
 Ap	|char*	|scan_num	|NN const char* s|NN YYSTYPE *lvalp
 Apd	|NV	|scan_oct	|NN const char* start|STRLEN len|NN STRLEN* retlen
 AMpd	|OP*	|op_scope	|NULLOK OP* o
-:removing noreturn to silence a warning
-#ifdef _MSC_VER
-Ap      |char*  |screaminstr    |NN SV *bigstr|NN SV *littlestr|I32 start_shift \
-                                |I32 end_shift|NN I32 *old_posp|I32 last
-#else
-Apr     |char*  |screaminstr    |NN SV *bigstr|NN SV *littlestr|I32 start_shift \
-                                |I32 end_shift|NN I32 *old_posp|I32 last
-#endif
 : Only used by perl.c/miniperl.c, but defined in caretx.c
 px	|void	|set_caret_X
 Apd	|void	|setdefout	|NN GV* gv
@@ -1932,11 +1915,9 @@ s	|void	|find_and_forget_pmops	|NN OP *o
 s	|void	|cop_free	|NN COP *cop
 s	|OP*	|modkids	|NULLOK OP *o|I32 type
 s	|OP*	|scalarboolean	|NN OP *o
-sR	|OP*	|newDEFSVOP
 sR	|OP*	|search_const	|NN OP *o
 sR	|OP*	|new_logop	|I32 type|I32 flags|NN OP **firstp|NN OP **otherp
 s	|void	|simplify_sort	|NN OP *o
-s	|void	|null_listop_in_list_context |NN OP* o
 sRn	|bool	|scalar_mod_type|NULLOK const OP *o|I32 type
 s	|OP *	|my_kid		|NULLOK OP *o|NULLOK OP *attrs|NN OP **imopsp
 s	|OP *	|dup_attrlist	|NN OP *o
@@ -2004,7 +1985,7 @@ s	|SV *	|incpush_if_exists|NN AV *const av|NN SV *dir|NN SV *const stem
 #endif
 
 #if defined(PERL_IN_PP_C)
-s	|void	|do_chomp	|NN SV *retval|NN SV *sv|bool chomping
+s	|size_t	|do_chomp	|NN SV *retval|NN SV *sv|bool chomping
 s	|OP*	|do_delete_local
 sR	|SV*	|refto		|NN SV* sv
 #endif
@@ -2463,7 +2444,12 @@ sn	|NV|mulexp10	|NV value|I32 exponent
 #endif
 
 #if defined(PERL_IN_UTF8_C)
-sRM	|UV	|check_locale_boundary_crossing|NN const U8* const p|const UV result|NN U8* const ustrp|NN STRLEN *lenp
+sRM	|UV	|check_locale_boundary_crossing				    \
+		|NN const char * const func_name			    \
+		|NN const U8* const p					    \
+		|const UV result					    \
+		|NN U8* const ustrp					    \
+		|NN STRLEN *lenp
 iR	|bool	|is_utf8_common	|NN const U8 *const p|NN SV **swash|NN const char * const swashname|NULLOK SV* const invlist
 sR	|SV*	|swatch_get	|NN SV* swash|UV start|UV span
 sRM	|U8*	|swash_scan_list_line|NN U8* l|NN U8* const lend|NN UV* min \
@@ -2515,6 +2501,8 @@ Ap	|SSize_t|PerlIO_unread		|NULLOK PerlIO *f|NN const void *vbuf \
 					|Size_t count
 Ap	|Off_t	|PerlIO_tell		|NULLOK PerlIO *f
 Ap	|int	|PerlIO_seek		|NULLOK PerlIO *f|Off_t offset|int whence
+Xp	|void	|PerlIO_save_errno	|NULLOK PerlIO *f
+Xp	|void	|PerlIO_restore_errno	|NULLOK PerlIO *f
 
 Ap	|STDCHAR *|PerlIO_get_base	|NULLOK PerlIO *f
 Ap	|STDCHAR *|PerlIO_get_ptr	|NULLOK PerlIO *f
@@ -2535,6 +2523,9 @@ s	|void	|deb_stack_n	|NN SV** stack_base|I32 stack_min \
 
 : pad API
 Apda	|PADLIST*|pad_new	|int flags
+#ifdef DEBUGGING
+pX	|void|set_padlist| NN CV * cv | NULLOK PADLIST * padlist
+#endif
 #if defined(PERL_IN_PAD_C)
 s	|PADOFFSET|pad_alloc_name|NN SV *namesv|U32 flags \
 				|NULLOK HV *typestash|NULLOK HV *ourstash
@@ -2571,7 +2562,7 @@ Apd	|SV*	|pad_sv		|PADOFFSET po
 Apd	|void	|pad_setsv	|PADOFFSET po|NN SV* sv
 #endif
 pd	|void	|pad_block_start|int full
-pd	|U32	|intro_my
+Apd	|U32	|intro_my
 pd	|OP *	|pad_leavemy
 pd	|void	|pad_swipe	|PADOFFSET po|bool refadjust
 #if defined(PERL_IN_PAD_C)
@@ -2591,7 +2582,7 @@ pd	|void	|pad_fixup_inner_anons|NN PADLIST *padlist|NN CV *old_cv|NN CV *new_cv
 pdX	|void	|pad_push	|NN PADLIST *padlist|int depth
 ApdR	|HV*	|pad_compname_type|const PADOFFSET po
 #if defined(USE_ITHREADS)
-pdR	|PADLIST *|padlist_dup	|NULLOK PADLIST *srcpad \
+pdR	|PADLIST *|padlist_dup	|NN PADLIST *srcpad \
 				|NN CLONE_PARAMS *param
 #endif
 p	|PAD **	|padlist_store	|NN PADLIST *padlist|I32 key \
@@ -2691,11 +2682,9 @@ Apo	|void*	|my_cxt_init	|NN int *index|size_t size
 : XS_VERSION_BOOTCHECK
 Xpo	|void	|xs_version_bootcheck|U32 items|U32 ax|NN const char *xs_p \
 				|STRLEN xs_len
-: This function is an implementation detail. The public API for this is
-: XS_APIVERSION_BOOTCHECK
-Xpo	|void	|xs_apiversion_bootcheck|NN SV *module|NN const char *api_p \
-				|STRLEN api_len
-
+Xpon	|I32	|xs_handshake	|const U32 key|NN void * v_my_perl\
+				|NN const char * file| ...
+Xp	|void	|xs_boot_epilog	|const U32 ax
 #ifndef HAS_STRLCAT
 Apnod	|Size_t	|my_strlcat	|NULLOK char *dst|NULLOK const char *src|Size_t size
 #endif

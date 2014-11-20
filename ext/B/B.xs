@@ -1930,6 +1930,10 @@ CvDEPTH(cv)
 B::PADLIST
 CvPADLIST(cv)
 	B::CV	cv
+    CODE:
+	RETVAL = CvISXSUB(cv) ? NULL : CvPADLIST(cv);
+    OUTPUT:
+	RETVAL
 
 #else
 
@@ -1941,6 +1945,14 @@ CvPADLIST(cv)
 
 
 #endif
+
+SV *
+CvHSCXT(cv)
+	B::CV	cv
+    CODE:
+	RETVAL = newSVuv(CvISXSUB(cv) ? PTR2UV(CvHSCXT(cv)) : 0);
+    OUTPUT:
+	RETVAL
 
 void
 CvXSUB(cv)

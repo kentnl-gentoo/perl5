@@ -280,6 +280,18 @@ Perl_new_ctype(pTHX_ const char *newctype)
         Copy(PL_fold_latin1, PL_fold_locale, 256, U8);
     }
     else {
+        /* Assume enough space for every character being bad.  4 spaces each
+         * for the 94 printable characters that are output like "'x' "; and 5
+         * spaces each for "'\\' ", "'\t' ", and "'\n' "; plus a terminating
+         * NUL */
+        char bad_chars_list[ (94 * 4) + (3 * 5) + 1 ];
+
+        bool check_for_problems = ckWARN_d(WARN_LOCALE); /* No warnings means
+                                                            no check */
+        bool multi_byte_locale = FALSE;     /* Assume is a single-byte locale
+                                               to start */
+        unsigned int bad_count = 0;         /* Count of bad characters */
+
         for (i = 0; i < 256; i++) {
             if (isUPPER_LC((U8) i))
                 PL_fold_locale[i] = (U8) toLOWER_LC((U8) i);
@@ -287,6 +299,83 @@ Perl_new_ctype(pTHX_ const char *newctype)
                 PL_fold_locale[i] = (U8) toUPPER_LC((U8) i);
             else
                 PL_fold_locale[i] = (U8) i;
+
+            /* If checking for locale problems, see if the native ASCII-range
+             * printables plus \n and \t are in their expected categories in
+             * the new locale.  If not, this could mean big trouble, upending
+             * Perl's and most programs' assumptions, like having a
+             * metacharacter with special meaning become a \w.  Fortunately,
+             * it's very rare to find locales that aren't supersets of ASCII
+             * nowadays.  It isn't a problem for most controls to be changed
+             * into something else; we check only \n and \t, though perhaps \r
+             * could be an issue as well. */
+            if (check_for_problems
+                && (isGRAPH_A(i) || isBLANK_A(i) || i == '\n'))
+            {
+                if ((isALPHANUMERIC_A(i) && ! isALPHANUMERIC_LC(i))
+                     || (isPUNCT_A(i) && ! isPUNCT_LC(i))
+                     || (isBLANK_A(i) && ! isBLANK_LC(i))
+                     || (i == '\n' && ! isCNTRL_LC(i)))
+                {
+                    if (bad_count) {    /* Separate multiple entries with a
+                                           blank */
+                        bad_chars_list[bad_count++] = ' ';
+                    }
+                    bad_chars_list[bad_count++] = '\'';
+                    if (isPRINT_A(i)) {
+                        bad_chars_list[bad_count++] = (char) i;
+                    }
+                    else {
+                        bad_chars_list[bad_count++] = '\\';
+                        if (i == '\n') {
+                            bad_chars_list[bad_count++] = 'n';
+                        }
+                        else {
+                            assert(i == '\t');
+                            bad_chars_list[bad_count++] = 't';
+                        }
+                    }
+                    bad_chars_list[bad_count++] = '\'';
+                    bad_chars_list[bad_count] = '\0';
+                }
+            }
+        }
+
+#ifdef MB_CUR_MAX
+        /* We only handle single-byte locales (outside of UTF-8 ones; so if
+         * this locale requires than one byte, there are going to be
+         * problems. */
+        if (check_for_problems && MB_CUR_MAX > 1) {
+            multi_byte_locale = TRUE;
+        }
+#endif
+
+        if (bad_count || multi_byte_locale) {
+
+            /* We have to save 'newctype' because the setlocale() just below
+             * may destroy it.  The next setlocale() further down should
+             * restore it properly so that the intermediate change here is
+             * transparent to this function's caller */
+            const char * const badlocale = savepv(newctype);
+
+            setlocale(LC_CTYPE, "C");
+            Perl_warner(aTHX_ packWARN(WARN_LOCALE),
+                             "Locale '%s' may not work well.%s%s%s\n",
+                             badlocale,
+                             (multi_byte_locale)
+                              ? "  Some characters in it are not recognized by"
+                                " Perl."
+                              : "",
+                             (bad_count)
+                              ? "\nThe following characters (and maybe others)"
+                                " may not have the same meaning as the Perl"
+                                " program expects:\n"
+                              : "",
+                             (bad_count)
+                              ? bad_chars_list
+                              : ""
+                            );
+            setlocale(LC_CTYPE, badlocale);
         }
     }
 
@@ -1140,7 +1229,7 @@ Perl__is_cur_LC_category_utf8(pTHX_ int category)
                 || wc != (wchar_t) 0x2010)
             {
                 is_utf8 = FALSE;
-                DEBUG_L(PerlIO_printf(Perl_debug_log, "\thyphen=U+%x\n", wc));
+                DEBUG_L(PerlIO_printf(Perl_debug_log, "\thyphen=U+%x\n", (unsigned int)wc));
                 DEBUG_L(PerlIO_printf(Perl_debug_log,
                         "\treturn from mbtowc=%d; errno=%d; ?UTF8 locale=0\n",
                         mbtowc(&wc, HYPHEN_UTF8, strlen(HYPHEN_UTF8)), errno));
@@ -1425,6 +1514,8 @@ Perl__is_cur_LC_category_utf8(pTHX_ int category)
 
 #endif /* the code that is compiled when no nl_langinfo */
 
+#ifndef EBCDIC  /* On os390, even if the name ends with "UTF-8', it isn't a
+                   UTF-8 locale */
     /* As a last resort, look at the locale name to see if it matches
      * qr/UTF -?  * 8 /ix, or some other common locale names.  This "name", the
      * return of setlocale(), is actually defined to be opaque, so we can't
@@ -1464,6 +1555,7 @@ Perl__is_cur_LC_category_utf8(pTHX_ int category)
                               "Locale %s doesn't end with UTF-8 in name\n",
                                 save_input_locale));
     }
+#endif
 
 #ifdef WIN32
     /* http://msdn.microsoft.com/en-us/library/windows/desktop/dd317756.aspx */

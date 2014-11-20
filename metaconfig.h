@@ -11,6 +11,7 @@
  * in Configure, this is the way to force them into availability.
  *
  * BOOTSTRAP_CHARSET
+ * DOUBLEKIND
  * HAS_ACOSH
  * HAS_ASCTIME64
  * HAS_CTIME64
@@ -31,6 +32,7 @@
  * I64SIZE
  * I8SIZE
  * LOCALTIME_R_NEEDS_TZSET
+ * LONG_DOUBLEKIND
  * U8SIZE
  * USE_CBACKTRACE
  */

@@ -325,7 +325,6 @@ perl_construct(pTHXx)
     PL_stashcache = newHV();
 
     PL_patchlevel = newSVpvs("v" PERL_VERSION_STRING);
-    PL_apiversion = newSVpvs("v" PERL_API_VERSION_STRING);
 
 #ifdef HAS_MMAP
     if (!PL_mmap_page_size) {
@@ -906,7 +905,6 @@ perl_destruct(pTHXx)
     Safefree(PL_inplace);
     PL_inplace = NULL;
     SvREFCNT_dec(PL_patchlevel);
-    SvREFCNT_dec(PL_apiversion);
 
     if (PL_e_script) {
 	SvREFCNT_dec(PL_e_script);
@@ -1366,8 +1364,11 @@ perl_free(pTHXx)
 			    "free this thread's memory\n");
 		PL_debug &= ~ DEBUG_m_FLAG;
 	    }
-	    while(aTHXx->Imemory_debug_header.next != &(aTHXx->Imemory_debug_header))
-		safesysfree(PERL_MEMORY_DEBUG_HEADER_SIZE + (char *)(aTHXx->Imemory_debug_header.next));
+	    while(aTHXx->Imemory_debug_header.next != &(aTHXx->Imemory_debug_header)){
+		char * next = (char *)(aTHXx->Imemory_debug_header.next);
+		Malloc_t ptr = PERL_MEMORY_DEBUG_HEADER_SIZE + next;
+		safesysfree(ptr);
+	    }
 	    PL_debug = old_debug;
 	}
     }
@@ -2162,7 +2163,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
     PL_main_cv = PL_compcv = MUTABLE_CV(newSV_type(SVt_PVCV));
     CvUNIQUE_on(PL_compcv);
 
-    CvPADLIST(PL_compcv) = pad_new(0);
+    CvPADLIST_set(PL_compcv, pad_new(0));
 
     PL_isarev = newHV();
 
@@ -5035,6 +5036,15 @@ read_e_script(pTHX_ int idx, SV *buf_sv, int maxlen)
     sv_catpvn(buf_sv, p, nl-p);
     sv_chop(PL_e_script, nl);
     return 1;
+}
+
+/* removes boilerplate code at the end of each boot_Module xsub */
+void
+Perl_xs_boot_epilog(pTHX_ const U32 ax)
+{
+  if (PL_unitcheckav)
+	call_list(PL_scopestack_ix, PL_unitcheckav);
+    XSRETURN_YES;
 }
 
 /*

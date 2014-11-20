@@ -4449,10 +4449,11 @@ PP(pp_setpgrp)
     Pid_t pgrp;
     Pid_t pid;
     pgrp = MAXARG == 2 && (TOPs||POPs) ? POPi : 0;
-    if (MAXARG > 0) pid = TOPs && TOPi;
+    if (MAXARG > 0) pid = TOPs ? TOPi : 0;
     else {
 	pid = 0;
-	XPUSHi(-1);
+	EXTEND(SP,1);
+	SP++;
     }
 
     TAINT_PROPER("setpgrp");
@@ -4753,7 +4754,7 @@ PP(pp_semctl)
     const int anum = do_ipcctl(PL_op->op_type, MARK, SP);
     SP = MARK;
     if (anum == -1)
-	RETSETUNDEF;
+	RETPUSHUNDEF;
     if (anum != 0) {
 	PUSHi(anum);
     }

@@ -15,7 +15,7 @@ require Exporter;
 # walkoptree comes from B.xs
 
 BEGIN {
-    $B::VERSION = '1.52';
+    $B::VERSION = '1.53';
     @B::EXPORT_OK = ();
 
     # Our BOOT code needs $VERSION set, and will append to @EXPORT_OK.
@@ -736,6 +736,12 @@ unsigned.
 =item NV
 
 =item NVX
+
+=item COP_SEQ_RANGE_LOW
+
+=item COP_SEQ_RANGE_HIGH
+
+These last two are only valid for pad name SVs.
 
 =back
 

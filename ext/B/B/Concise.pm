@@ -14,7 +14,7 @@ use warnings; # uses #3 and #4, since warnings uses Carp
 
 use Exporter (); # use #5
 
-our $VERSION   = "0.994";
+our $VERSION   = "0.995";
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw( set_style set_style_standard add_callback
 		     concise_subref concise_cv concise_main
@@ -1039,8 +1039,7 @@ sub tree {
 # to update the corresponding magic number in the next line.
 # Remember, this needs to stay the last things in the module.
 
-# Why is this different for MacOS?  Does it matter?
-my $cop_seq_mnum = $^O eq 'MacOS' ? 12 : 11;
+my $cop_seq_mnum = 16;
 $cop_seq_base = svref_2object(eval 'sub{0;}')->START->cop_seq + $cop_seq_mnum;
 
 1;

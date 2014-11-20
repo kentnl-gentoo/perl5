@@ -66,7 +66,9 @@
 #define av_top_index(a)		S_av_top_index(aTHX_ a)
 #define av_undef(a)		Perl_av_undef(aTHX_ a)
 #define av_unshift(a,b)		Perl_av_unshift(aTHX_ a,b)
+#define block_end(a,b)		Perl_block_end(aTHX_ a,b)
 #define block_gimme()		Perl_block_gimme(aTHX)
+#define block_start(a)		Perl_block_start(aTHX_ a)
 #define bytes_cmp_utf8(a,b,c,d)	Perl_bytes_cmp_utf8(aTHX_ a,b,c,d)
 #define bytes_from_utf8(a,b,c)	Perl_bytes_from_utf8(aTHX_ a,b,c)
 #define bytes_to_utf8(a,b)	Perl_bytes_to_utf8(aTHX_ a,b)
@@ -115,6 +117,10 @@
 #define debstackptrs()		Perl_debstackptrs(aTHX)
 #define delimcpy		Perl_delimcpy
 #define despatch_signals()	Perl_despatch_signals(aTHX)
+#ifndef PERL_IMPLICIT_CONTEXT
+#define die			Perl_die
+#endif
+#define die_sv(a)		Perl_die_sv(aTHX_ a)
 #define do_binmode(a,b,c)	Perl_do_binmode(aTHX_ a,b,c)
 #define do_close(a,b)		Perl_do_close(aTHX_ a,b)
 #define do_gv_dump(a,b,c,d)	Perl_do_gv_dump(aTHX_ a,b,c,d)
@@ -236,6 +242,7 @@
 #define init_stacks()		Perl_init_stacks(aTHX)
 #define init_tm(a)		Perl_init_tm(aTHX_ a)
 #define instr			Perl_instr
+#define intro_my()		Perl_intro_my(aTHX)
 #define isALNUM_lazy(a)		Perl_isALNUM_lazy(aTHX_ a)
 #define isIDFIRST_lazy(a)	Perl_isIDFIRST_lazy(aTHX_ a)
 #define is_ascii_string		Perl_is_ascii_string
@@ -359,6 +366,7 @@
 #define newCONSTSUB(a,b,c)	Perl_newCONSTSUB(aTHX_ a,b,c)
 #define newCONSTSUB_flags(a,b,c,d,e)	Perl_newCONSTSUB_flags(aTHX_ a,b,c,d,e)
 #define newCVREF(a,b)		Perl_newCVREF(aTHX_ a,b)
+#define newDEFSVOP()		Perl_newDEFSVOP(aTHX)
 #define newFORM(a,b,c)		Perl_newFORM(aTHX_ a,b,c)
 #define newFOROP(a,b,c,d,e)	Perl_newFOROP(aTHX_ a,b,c,d,e)
 #define newGIVENOP(a,b,c)	Perl_newGIVENOP(aTHX_ a,b,c)
@@ -417,6 +425,7 @@
 #define op_append_elem(a,b,c)	Perl_op_append_elem(aTHX_ a,b,c)
 #define op_append_list(a,b,c)	Perl_op_append_list(aTHX_ a,b,c)
 #define op_contextualize(a,b)	Perl_op_contextualize(aTHX_ a,b)
+#define op_convert_list(a,b,c)	Perl_op_convert_list(aTHX_ a,b,c)
 #define op_dump(a)		Perl_op_dump(aTHX_ a)
 #define op_free(a)		Perl_op_free(aTHX_ a)
 #define op_linklist(a)		Perl_op_linklist(aTHX_ a)
@@ -745,16 +754,6 @@
 #if !(defined(NO_MATHOMS))
 #define sv_nounlocking(a)	Perl_sv_nounlocking(aTHX_ a)
 #endif
-#if !(defined(_MSC_VER))
-#ifndef PERL_IMPLICIT_CONTEXT
-#define die			Perl_die
-#endif
-#define die_sv(a)		Perl_die_sv(aTHX_ a)
-#define screaminstr(a,b,c,d,e,f)	Perl_screaminstr(aTHX_ a,b,c,d,e,f)
-#  if defined(PERL_IMPLICIT_CONTEXT)
-#define die_nocontext		Perl_die_nocontext
-#  endif
-#endif
 #if !defined(HAS_BZERO) && !defined(HAS_MEMSET)
 #define my_bzero		Perl_my_bzero
 #endif
@@ -800,6 +799,7 @@
 #if defined(PERL_IMPLICIT_CONTEXT)
 #define croak_nocontext		Perl_croak_nocontext
 #define deb_nocontext		Perl_deb_nocontext
+#define die_nocontext		Perl_die_nocontext
 #define form_nocontext		Perl_form_nocontext
 #define fprintf_nocontext	Perl_fprintf_nocontext
 #define load_module_nocontext	Perl_load_module_nocontext
@@ -812,9 +812,6 @@
 #define sv_setpvf_nocontext	Perl_sv_setpvf_nocontext
 #define warn_nocontext		Perl_warn_nocontext
 #define warner_nocontext	Perl_warner_nocontext
-#  if defined(_MSC_VER)
-#define die_nocontext		Perl_die_nocontext
-#  endif
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_PERL_C) || defined(PERL_IN_UTF8_C)
 #define _new_invlist_C_array(a)	Perl__new_invlist_C_array(aTHX_ a)
@@ -890,13 +887,6 @@
 #define do_aspawn(a,b,c)	Perl_do_aspawn(aTHX_ a,b,c)
 #define do_spawn(a)		Perl_do_spawn(aTHX_ a)
 #define do_spawn_nowait(a)	Perl_do_spawn_nowait(aTHX_ a)
-#endif
-#if defined(_MSC_VER)
-#ifndef PERL_IMPLICIT_CONTEXT
-#define die			Perl_die
-#endif
-#define die_sv(a)		Perl_die_sv(aTHX_ a)
-#define screaminstr(a,b,c,d,e,f)	Perl_screaminstr(aTHX_ a,b,c,d,e,f)
 #endif
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #define av_reify(a)		Perl_av_reify(aTHX_ a)
@@ -1075,8 +1065,6 @@
 #define apply(a,b,c)		Perl_apply(aTHX_ a,b,c)
 #define av_extend_guts(a,b,c,d,e)	Perl_av_extend_guts(aTHX_ a,b,c,d,e)
 #define bind_match(a,b,c)	Perl_bind_match(aTHX_ a,b,c)
-#define block_end(a,b)		Perl_block_end(aTHX_ a,b)
-#define block_start(a)		Perl_block_start(aTHX_ a)
 #define boot_core_PerlIO()	Perl_boot_core_PerlIO(aTHX)
 #define boot_core_UNIVERSAL()	Perl_boot_core_UNIVERSAL(aTHX)
 #define boot_core_mro()		Perl_boot_core_mro(aTHX)
@@ -1128,7 +1116,6 @@
 #define ck_tell(a)		Perl_ck_tell(aTHX_ a)
 #define ck_trunc(a)		Perl_ck_trunc(aTHX_ a)
 #define closest_cop(a,b,c,d)	Perl_closest_cop(aTHX_ a,b,c,d)
-#define convert(a,b,c)		Perl_convert(aTHX_ a,b,c)
 #define core_prototype(a,b,c,d)	Perl_core_prototype(aTHX_ a,b,c,d)
 #define coresub_op(a,b,c)	Perl_coresub_op(aTHX_ a,b,c)
 #define create_eval_scope(a)	Perl_create_eval_scope(aTHX_ a)
@@ -1182,9 +1169,8 @@
 #define init_argv_symbols(a,b)	Perl_init_argv_symbols(aTHX_ a,b)
 #define init_constants()	Perl_init_constants(aTHX)
 #define init_debugger()		Perl_init_debugger(aTHX)
-#define intro_my()		Perl_intro_my(aTHX)
 #define invert(a)		Perl_invert(aTHX_ a)
-#define io_close(a,b)		Perl_io_close(aTHX_ a,b)
+#define io_close(a,b,c,d)	Perl_io_close(aTHX_ a,b,c,d)
 #define isinfnansv(a)		Perl_isinfnansv(aTHX_ a)
 #define jmaybe(a)		Perl_jmaybe(aTHX_ a)
 #define keyword(a,b,c)		Perl_keyword(aTHX_ a,b,c)
@@ -1254,11 +1240,12 @@
 #define newATTRSUB_x(a,b,c,d,e,f)	Perl_newATTRSUB_x(aTHX_ a,b,c,d,e,f)
 #define newSTUB(a,b)		Perl_newSTUB(aTHX_ a,b)
 #define newSVavdefelem(a,b,c)	Perl_newSVavdefelem(aTHX_ a,b,c)
+#define newXS_deffile(a,b)	Perl_newXS_deffile(aTHX_ a,b)
 #define newXS_len_flags(a,b,c,d,e,f,g)	Perl_newXS_len_flags(aTHX_ a,b,c,d,e,f,g)
 #define nextargv(a,b)		Perl_nextargv(aTHX_ a,b)
+#define noperl_die		Perl_noperl_die
 #define oopsAV(a)		Perl_oopsAV(aTHX_ a)
 #define oopsHV(a)		Perl_oopsHV(aTHX_ a)
-#define op_const_sv(a,b)	Perl_op_const_sv(aTHX_ a,b)
 #define op_unscope(a)		Perl_op_unscope(aTHX_ a)
 #define package(a)		Perl_package(aTHX_ a)
 #define package_version(a)	Perl_package_version(aTHX_ a)
@@ -1317,6 +1304,7 @@
 #define wait4pid(a,b,c)		Perl_wait4pid(aTHX_ a,b,c)
 #define watch(a)		Perl_watch(aTHX_ a)
 #define write_to_stderr(a)	Perl_write_to_stderr(aTHX_ a)
+#define xs_boot_epilog(a)	Perl_xs_boot_epilog(aTHX_ a)
 #define yyerror(a)		Perl_yyerror(aTHX_ a)
 #define yyerror_pv(a,b)		Perl_yyerror_pv(aTHX_ a,b)
 #define yyerror_pvn(a,b,c)	Perl_yyerror_pvn(aTHX_ a,b,c)
@@ -1382,6 +1370,7 @@
 #  endif
 #  if defined(DEBUGGING)
 #define get_debug_opts(a,b)	Perl_get_debug_opts(aTHX_ a,b)
+#define set_padlist(a,b)	Perl_set_padlist(aTHX_ a,b)
 #    if defined(PERL_IN_PAD_C)
 #define cv_dump(a,b)		S_cv_dump(aTHX_ a,b)
 #    endif
@@ -1531,13 +1520,11 @@
 #define modkids(a,b)		S_modkids(aTHX_ a,b)
 #define move_proto_attr(a,b,c)	S_move_proto_attr(aTHX_ a,b,c)
 #define my_kid(a,b,c)		S_my_kid(aTHX_ a,b,c)
-#define newDEFSVOP()		S_newDEFSVOP(aTHX)
 #define newGIVWHENOP(a,b,c,d,e)	S_newGIVWHENOP(aTHX_ a,b,c,d,e)
 #define newMETHOP_internal(a,b,c,d)	S_newMETHOP_internal(aTHX_ a,b,c,d)
 #define new_logop(a,b,c,d)	S_new_logop(aTHX_ a,b,c,d)
 #define no_bareword_allowed(a)	S_no_bareword_allowed(aTHX_ a)
 #define no_fh_allowed(a)	S_no_fh_allowed(aTHX_ a)
-#define null_listop_in_list_context(a)	S_null_listop_in_list_context(aTHX_ a)
 #define op_integerize(a)	S_op_integerize(aTHX_ a)
 #define op_std_init(a)		S_op_std_init(aTHX_ a)
 #define pmtrans(a,b,c)		S_pmtrans(aTHX_ a,b,c)
@@ -1740,7 +1727,7 @@
 #define isa_lookup(a,b,c,d)	S_isa_lookup(aTHX_ a,b,c,d)
 #  endif
 #  if defined(PERL_IN_UTF8_C)
-#define check_locale_boundary_crossing(a,b,c,d)	S_check_locale_boundary_crossing(aTHX_ a,b,c,d)
+#define check_locale_boundary_crossing(a,b,c,d,e)	S_check_locale_boundary_crossing(aTHX_ a,b,c,d,e)
 #define is_utf8_common(a,b,c,d)	S_is_utf8_common(aTHX_ a,b,c,d)
 #define swash_scan_list_line(a,b,c,d,e,f,g)	S_swash_scan_list_line(aTHX_ a,b,c,d,e,f,g)
 #define swatch_get(a,b,c)	S_swatch_get(aTHX_ a,b,c)
@@ -1774,6 +1761,10 @@
 #  if defined(USE_LOCALE_COLLATE)
 #define magic_setcollxfrm(a,b)	Perl_magic_setcollxfrm(aTHX_ a,b)
 #define mem_collxfrm(a,b,c)	Perl_mem_collxfrm(aTHX_ a,b,c)
+#  endif
+#  if defined(USE_PERLIO)
+#define PerlIO_restore_errno(a)	Perl_PerlIO_restore_errno(aTHX_ a)
+#define PerlIO_save_errno(a)	Perl_PerlIO_save_errno(aTHX_ a)
 #  endif
 #  if defined(_MSC_VER)
 #define magic_regdatum_set(a,b)	Perl_magic_regdatum_set(aTHX_ a,b)

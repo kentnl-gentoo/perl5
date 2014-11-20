@@ -78,7 +78,7 @@ my %alias;
 # Format is "this function" => "does these op names"
 my @raw_alias = (
 		 Perl_do_kv => [qw( keys values )],
-		 Perl_unimplemented_op => [qw(padany mapstart custom)],
+		 Perl_unimplemented_op => [qw(padany custom)],
 		 # All the ops with a body of { return NORMAL; }
 		 Perl_pp_null => [qw(scalar regcmaybe lineseq scope)],
 
@@ -135,6 +135,7 @@ my @raw_alias = (
 					 spwent epwent sgrent egrent)],
 		 Perl_pp_shostent => [qw(snetent sprotoent sservent)],
 		 Perl_pp_aelemfast => ['aelemfast_lex'],
+		 Perl_pp_grepstart => ['mapstart'],
 		);
 
 while (my ($func, $names) = splice @raw_alias, 0, 2) {
@@ -408,11 +409,12 @@ sub print_B_Op_private {
 @
 @=head1 DESCRIPTION
 @
-@This module provides three global hashes:
+@This module provides four global hashes:
 @
 @    %B::Op_private::bits
 @    %B::Op_private::defines
 @    %B::Op_private::labels
+@    %B::Op_private::ops_using
 @
 @which contain information about the per-op meanings of the bits in the
 @op_private field.
@@ -480,6 +482,13 @@ sub print_B_Op_private {
 @If the label equals '-', then Concise will treat the bit as a raw bit and
 @not try to display it symbolically.
 @
+@=head2 C<%ops_using>
+@
+@For each define, this gives a reference to an array of op names that use
+@the flag.
+@
+@    @ops_using_lvintro = @{ $B::Op_private::ops_using{OPp_LVAL_INTRO} };
+@
 @=cut
 
 package B::Op_private;
@@ -493,6 +502,8 @@ EOF
     my $v = (::perl_version())[3];
     print $fh qq{\nour \$VERSION = "$v";\n\n};
 
+    my %ops_using;
+
     # for each flag/bit combination, find the ops which use it
     my %combos;
     for my $op (sort keys %FLAGS) {
@@ -502,6 +513,7 @@ EOF
             next unless defined $e;
             next if ref $e; # bit field, not flag
             push @{$combos{$e}{$bit}}, $op;
+            push @{$ops_using{$e}}, $op;
         }
     }
 
@@ -605,6 +617,24 @@ EOF
     printf $fh "    %-23s  => '%s',\n", $_ , $LABELS{$_}  for sort keys %LABELS;
     print  $fh ");\n";
 
+    # %ops_using
+    print  $fh "\n\nour %ops_using = (\n";
+    # Save memory by using the same array wherever possible.
+    my %flag_by_op_list;
+    my $pending = '';
+    for my $flag (sort keys %ops_using) {
+        my $op_list = $ops_using{$flag} = "@{$ops_using{$flag}}";
+        if (!exists $flag_by_op_list{$op_list}) {
+            $flag_by_op_list{$op_list} = $flag;
+            printf $fh "    %-23s  => %s,\n", $flag , "[qw($op_list)]"
+        }
+        else {
+            $pending .= "\$ops_using{$flag} = "
+                      . "\$ops_using{$flag_by_op_list{$op_list}};\n";
+        }
+    }
+    print  $fh ");\n\n$pending";
+
 }
 
 
@@ -685,6 +715,8 @@ sub print_PL_op_private_tables {
         my $bitdef_count = 0;
 
         my %not_seen = %FLAGS;
+        my @seen_bitdefs;
+        my %seen_bitdefs;
 
         my $opnum = -1;
         for my $op (sort { $opnum{$a} <=> $opnum{$b} } keys %opnum) {
@@ -724,11 +756,17 @@ sub print_PL_op_private_tables {
             }
             if (@bitdefs) {
                 $bitdefs[-1] |= 1; # stop bit
-                $index = $bitdef_count;
-                $bitdef_count += @bitdefs;
-                $PL_op_private_bitdefs .= sprintf "    /* %-13s */ %s,\n",
-                        $op,
-                        join(', ', map(sprintf("0x%04x", $_), @bitdefs));
+                my $key = join(', ', map(sprintf("0x%04x", $_), @bitdefs));
+                if (!$seen_bitdefs{$key}) {
+                    $index = $bitdef_count;
+                    $bitdef_count += @bitdefs;
+                    push @seen_bitdefs,
+                         $seen_bitdefs{$key} = [$index, $key];
+                }
+                else {
+                    $index = $seen_bitdefs{$key}[0];
+                }
+                push @{$seen_bitdefs{$key}}, $op;
             }
             else {
                 $index = -1;
@@ -737,6 +775,10 @@ sub print_PL_op_private_tables {
         }
         if (%not_seen) {
             die "panic: unprocessed ops: ". join(',', keys %not_seen);
+        }
+        for (@seen_bitdefs) {
+            local $" = ", ";
+            $PL_op_private_bitdefs .= "    $$_[1], /* @$_[2..$#$_] */\n";
         }
     }
 

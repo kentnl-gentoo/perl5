@@ -1076,10 +1076,10 @@ Perl_leave_scope(pTHX_ I32 base)
                         SvFLAGS(sv) &=~ (SVf_OK|SVf_IVisUV|SVf_UTF8);
                         break;
                     }
+                    SvPADTMP_off(sv);
                     SvPADSTALE_on(sv); /* mark as no longer live */
                 }
                 else {	/* Someone has a claim on this, so abandon it. */
-                    assert(!(SvFLAGS(sv) & SVs_PADTMP));
                     switch (SvTYPE(sv)) {	/* Console ourselves with a new value */
                     case SVt_PVAV:	*svp = MUTABLE_SV(newAV());	break;
                     case SVt_PVHV:	*svp = MUTABLE_SV(newHV());	break;

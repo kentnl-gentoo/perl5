@@ -206,7 +206,7 @@ static const char* const lex_state_names[] = {
 
 #define TOKEN(retval) return ( PL_bufptr = s, REPORT(retval))
 #define OPERATOR(retval) return (PL_expect = XTERM, PL_bufptr = s, REPORT(retval))
-#define AOPERATOR(retval) return ao((PL_expect = XTERM, PL_bufptr = s, REPORT(retval)))
+#define AOPERATOR(retval) return ao((PL_expect = XTERM, PL_bufptr = s, retval))
 #define PREBLOCK(retval) return (PL_expect = XBLOCK,PL_bufptr = s, REPORT(retval))
 #define PRETERMBLOCK(retval) return (PL_expect = XTERMBLOCK,PL_bufptr = s, REPORT(retval))
 #define PREREF(retval) return (PL_expect = XREF,PL_bufptr = s, REPORT(retval))
@@ -220,14 +220,14 @@ static const char* const lex_state_names[] = {
 #define FUN0(f)  return (pl_yylval.ival=f, PL_expect=XOPERATOR, PL_bufptr=s, REPORT((int)FUNC0))
 #define FUN0OP(f)  return (pl_yylval.opval=f, CLINE, PL_expect=XOPERATOR, PL_bufptr=s, REPORT((int)FUNC0OP))
 #define FUN1(f)  return (pl_yylval.ival=f, PL_expect=XOPERATOR, PL_bufptr=s, REPORT((int)FUNC1))
-#define BOop(f)  return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, REPORT((int)BITOROP)))
-#define BAop(f)  return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, REPORT((int)BITANDOP)))
-#define SHop(f)  return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, REPORT((int)SHIFTOP)))
-#define PWop(f)  return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, REPORT((int)POWOP)))
+#define BOop(f)  return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, (int)BITOROP))
+#define BAop(f)  return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, (int)BITANDOP))
+#define SHop(f)  return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, (int)SHIFTOP))
+#define PWop(f)  return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, (int)POWOP))
 #define PMop(f)  return(pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, REPORT((int)MATCHOP))
-#define Aop(f)   return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, REPORT((int)ADDOP)))
+#define Aop(f)   return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, (int)ADDOP))
 #define AopNOASSIGN(f) return (pl_yylval.ival=f, PL_bufptr=s, REPORT((int)ADDOP))
-#define Mop(f)   return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, REPORT((int)MULOP)))
+#define Mop(f)   return ao((pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, (int)MULOP))
 #define Eop(f)   return (pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, REPORT((int)EQOP))
 #define Rop(f)   return (pl_yylval.ival=f, PL_expect=XTERM, PL_bufptr=s, REPORT((int)RELOP))
 
@@ -486,7 +486,7 @@ S_ao(pTHX_ int toketype)
 	    pl_yylval.ival = OP_DORASSIGN;
 	toketype = ASSIGNOP;
     }
-    return toketype;
+    return REPORT(toketype);
 }
 
 /*
@@ -5501,9 +5501,10 @@ Perl_yylex(pTHX)
 		    OPERATOR(HASHBRACK);
 		}
 		if (PL_expect == XREF && PL_oldoldbufptr != PL_last_lop) {
-		    /* ${...} or @{...} etc., but not print {...} */
-		    PL_expect = XTERM;
-		    break;
+		    /* ${...} or @{...} etc., but not print {...}
+		     * Skip the disambiguation and treat this as a block.
+		     */
+		    goto block_expectation;
 		}
 		/* This hack serves to disambiguate a pair of curlies
 		 * as being a block or an anon hash.  Normally, expectation
@@ -5587,7 +5588,28 @@ Perl_yylex(pTHX)
 				   || (*t == '=' && t[1] == '>')))
 		    OPERATOR(HASHBRACK);
 		if (PL_expect == XREF)
-		    PL_expect = XTERM;
+		{
+		  block_expectation:
+		    /* If there is an opening brace or 'sub:', treat it
+		       as a term to make ${{...}}{k} and &{sub:attr...}
+		       dwim.  Otherwise, treat it as a statement, so
+		       map {no strict; ...} works.
+		     */
+		    s = skipspace(s);
+		    if (*s == '{') {
+			PL_expect = XTERM;
+			break;
+		    }
+		    if (strnEQ(s, "sub", 3)) {
+			d = s + 3;
+			d = skipspace(d);
+			if (*d == ':') {
+			    PL_expect = XTERM;
+			    break;
+			}
+		    }
+		    PL_expect = XSTATE;
+		}
 		else {
 		    PL_lex_brackstack[PL_lex_brackets-1] = XSTATE;
 		    PL_expect = XSTATE;
@@ -5596,8 +5618,7 @@ Perl_yylex(pTHX)
 	    break;
 	}
 	pl_yylval.ival = CopLINE(PL_curcop);
-	if (isSPACE(*s) || *s == '#')
-	    PL_copline = NOLINE;   /* invalidate current command line number */
+	PL_copline = NOLINE;   /* invalidate current command line number */
 	TOKEN(formbrack ? '=' : '{');
     case '}':
 	if (PL_lex_brackets && PL_lex_brackstack[PL_lex_brackets-1] == XFAKEEOF)
@@ -6925,7 +6946,9 @@ Perl_yylex(pTHX)
 	}
 
 	case KEY___SUB__:
-	    FUN0OP(newPVOP(OP_RUNCV,0,NULL));
+	    FUN0OP(CvCLONE(PL_compcv)
+			? newOP(OP_RUNCV, 0)
+			: newPVOP(OP_RUNCV,0,NULL));
 
 	case KEY_AUTOLOAD:
 	case KEY_DESTROY:
@@ -8550,25 +8573,52 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
 
 /* Is the byte 'd' a legal single character identifier name?  'u' is true
  * iff Unicode semantics are to be used.  The legal ones are any of:
- *  a) ASCII digits
- *  b) ASCII punctuation
+ *  a) all ASCII characters except:
+ *          1) space-type ones, like \t and SPACE;
+            2) NUL;
+ *          3) '{'
+ *     The final case currently doesn't get this far in the program, so we
+ *     don't test for it.  If that were to change, it would be ok to allow it.
  *  c) When not under Unicode rules, any upper Latin1 character
- *  d) \c?, \c\, \c^, \c_, and \cA..\cZ, minus the ones that have traditionally
- *     been matched by \s on ASCII platforms.  That is: \c?, plus 1-32, minus
- *     the \s ones. */
-#define VALID_LEN_ONE_IDENT(d, u) (isPUNCT_A((U8)(d))                       \
-                                   || isDIGIT_A((U8)(d))                    \
-                                   || (!(u) && !isASCII((U8)(d)))           \
-                                   || ((((U8)(d)) < 32)                     \
-                                       && (((((U8)(d)) >= 14)               \
-                                           || (((U8)(d)) <= 8 && (d) != 0) \
-                                           || (((U8)(d)) == 13))))          \
-                                   || (((U8)(d)) == toCTRL('?')))
-    if (s < PL_bufend
-        && (isIDFIRST_lazy_if(s, is_utf8) || VALID_LEN_ONE_IDENT(*s, is_utf8)))
+ *  d) Otherwise, when unicode rules are used, all XIDS characters.
+ *
+ *      Because all ASCII characters have the same representation whether
+ *      encoded in UTF-8 or not, we can use the foo_A macros below and '\0' and
+ *      '{' without knowing if is UTF-8 or not */
+#ifdef EBCDIC
+#   define VALID_LEN_ONE_IDENT(s, is_utf8)                                    \
+    (isGRAPH_A(*(s)) || ((is_utf8)                                            \
+                         ? isIDFIRST_utf8((U8*) (s))                          \
+                         : (isGRAPH_L1(*s)                                    \
+                            && LIKELY((U8) *(s) != LATIN1_TO_NATIVE(0xAD)))))
+#else
+#   define VALID_LEN_ONE_IDENT(s, is_utf8) (! isSPACE_A(*(s))                 \
+                                            && LIKELY(*(s) != '\0')           \
+                                            && (! is_utf8                     \
+                                                || isASCII_utf8((U8*) (s))    \
+                                                || isIDFIRST_utf8((U8*) (s))))
+#endif
+    if ((s <= PL_bufend - (is_utf8)
+                          ? UTF8SKIP(s)
+                          : 1)
+        && VALID_LEN_ONE_IDENT(s, is_utf8))
     {
-        if ( isCNTRL_A((U8)*s) ) {
-            deprecate("literal control characters in variable names");
+        /* Deprecate all non-graphic characters.  Include SHY as a non-graphic,
+         * because often it has no graphic representation.  (We can't get to
+         * here with SHY when 'is_utf8' is true, so no need to include a UTF-8
+         * test for it.) */
+        if ((is_utf8)
+            ? ! isGRAPH_utf8( (U8*) s)
+            : (! isGRAPH_L1( (U8) *s)
+               || UNLIKELY((U8) *(s) == LATIN1_TO_NATIVE(0xAD))))
+        {
+            /* Split messages for back compat */
+            if (isCNTRL_A( (U8) *s)) {
+                deprecate("literal control characters in variable names");
+            }
+            else {
+                deprecate("literal non-graphic characters in variable names");
+            }
         }
         
         if (is_utf8) {
@@ -9227,7 +9277,14 @@ S_scan_heredoc(pTHX_ char *s)
 		    origline + 1 + PL_parser->herelines);
 	if (!lex_next_chunk(LEX_NO_TERM)
 	 && (!SvCUR(tmpstr) || SvEND(tmpstr)[-1] != '\n')) {
-	    SvREFCNT_dec(linestr_save);
+	    /* Simply freeing linestr_save might seem simpler here, as it
+	       does not matter what PL_linestr points to, since we are
+	       about to croak; but in a quote-like op, linestr_save
+	       will have been prospectively freed already, via
+	       SAVEFREESV(PL_linestr) in sublex_push, so it’s easier to
+	       restore PL_linestr. */
+	    SvREFCNT_dec_NN(PL_linestr);
+	    PL_linestr = linestr_save;
 	    goto interminable;
 	}
 	CopLINE_set(PL_curcop, origline);
@@ -10490,7 +10547,7 @@ Perl_start_subparse(pTHX_ I32 is_format, U32 flags)
     CvFLAGS(PL_compcv) |= flags;
 
     PL_subline = CopLINE(PL_curcop);
-    CvPADLIST(PL_compcv) = pad_new(padnew_SAVE|padnew_SAVESUB);
+    CvPADLIST_set(PL_compcv, pad_new(padnew_SAVE|padnew_SAVESUB));
     CvOUTSIDE(PL_compcv) = MUTABLE_CV(SvREFCNT_inc_simple(outsidecv));
     CvOUTSIDE_SEQ(PL_compcv) = PL_cop_seqmax;
     if (outsidecv && CvPADLIST(outsidecv))
@@ -10507,7 +10564,6 @@ S_yywarn(pTHX_ const char *const s, U32 flags)
 
     PL_in_eval |= EVAL_WARNONLY;
     yyerror_pv(s, flags);
-    PL_in_eval &= ~EVAL_WARNONLY;
     return 0;
 }
 
@@ -10611,6 +10667,7 @@ Perl_yyerror_pvn(pTHX_ const char *const s, STRLEN len, U32 flags)
         PL_multi_end = 0;
     }
     if (PL_in_eval & EVAL_WARNONLY) {
+	PL_in_eval &= ~EVAL_WARNONLY;
 	Perl_ck_warner_d(aTHX_ packWARN(WARN_SYNTAX), "%"SVf, SVfARG(msg));
     }
     else
@@ -11481,10 +11538,16 @@ Perl_parse_subsignature(pTHX)
 				scalar(newUNOP(OP_RV2AV, 0,
 				    newGVOP(OP_GV, 0, PL_defgv))),
 				newSVOP(OP_CONST, 0, newSViv(1))),
-			    newLISTOP(OP_DIE, 0, newOP(OP_PUSHMARK, 0),
-				newSVOP(OP_CONST, 0,
-				    newSVpvs("Odd name/value argument "
-					"for subroutine"))));
+		            op_convert_list(OP_DIE, 0,
+		                op_convert_list(OP_SPRINTF, 0,
+		                    op_append_list(OP_LIST,
+		                        newSVOP(OP_CONST, 0,
+		                            newSVpvs("Odd name/value argument for subroutine at %s line %d.\n")),
+		                        newSLICEOP(0,
+		                            op_append_list(OP_LIST,
+		                                newSVOP(OP_CONST, 0, newSViv(1)),
+		                                newSVOP(OP_CONST, 0, newSViv(2))),
+		                            newOP(OP_CALLER, 0))))));
 		    if (pos != min_arity)
 			chkop = newLOGOP(OP_AND, 0,
 				    newBINOP(OP_GT, 0,
@@ -11547,9 +11610,16 @@ Perl_parse_subsignature(pTHX)
 			scalar(newUNOP(OP_RV2AV, 0,
 			    newGVOP(OP_GV, 0, PL_defgv))),
 			newSVOP(OP_CONST, 0, newSViv(min_arity))),
-		    newLISTOP(OP_DIE, 0, newOP(OP_PUSHMARK, 0),
-			newSVOP(OP_CONST, 0,
-			    newSVpvs("Too few arguments for subroutine"))))),
+		    op_convert_list(OP_DIE, 0,
+		        op_convert_list(OP_SPRINTF, 0,
+		            op_append_list(OP_LIST,
+		                newSVOP(OP_CONST, 0,
+		                    newSVpvs("Too few arguments for subroutine at %s line %d.\n")),
+		                newSLICEOP(0,
+		                    op_append_list(OP_LIST,
+		                        newSVOP(OP_CONST, 0, newSViv(1)),
+		                        newSVOP(OP_CONST, 0, newSViv(2))),
+		                    newOP(OP_CALLER, 0))))))),
 	    initops);
     }
     if (max_arity != -1) {
@@ -11560,9 +11630,16 @@ Perl_parse_subsignature(pTHX)
 			scalar(newUNOP(OP_RV2AV, 0,
 			    newGVOP(OP_GV, 0, PL_defgv))),
 			newSVOP(OP_CONST, 0, newSViv(max_arity))),
-		    newLISTOP(OP_DIE, 0, newOP(OP_PUSHMARK, 0),
-			newSVOP(OP_CONST, 0,
-			    newSVpvs("Too many arguments for subroutine"))))),
+		    op_convert_list(OP_DIE, 0,
+		        op_convert_list(OP_SPRINTF, 0,
+		            op_append_list(OP_LIST,
+		                newSVOP(OP_CONST, 0,
+		                    newSVpvs("Too many arguments for subroutine at %s line %d.\n")),
+		                newSLICEOP(0,
+		                    op_append_list(OP_LIST,
+		                        newSVOP(OP_CONST, 0, newSViv(1)),
+		                        newSVOP(OP_CONST, 0, newSViv(2))),
+		                    newOP(OP_CALLER, 0))))))),
 	    initops);
     }
     return initops;

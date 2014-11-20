@@ -415,7 +415,8 @@ $a <=> $b;		# OP_NCMP
 "diatrewq";
 "igatrewq";
 use 5.015;
-__SUB__			# OP_RUNCV
+__SUB__	;		# OP_RUNCV
+[];			# OP_ANONLIST
 EXPECT
 Useless use of a constant ("111") in void context at - line 2.
 Useless use of repeat (x) in void context at - line 3.
@@ -462,6 +463,7 @@ Useless use of a constant ("dsatrewq") in void context at - line 57.
 Useless use of a constant ("diatrewq") in void context at - line 58.
 Useless use of a constant ("igatrewq") in void context at - line 59.
 Useless use of __SUB__ in void context at - line 61.
+Useless use of anonymous array ([]) in void context at - line 62.
 ########
 # op.c
 use warnings 'void' ; close STDIN ;
@@ -780,7 +782,7 @@ Useless use of a constant (undef) in void context at - line 9.
 ########
 # op.c
 #
-use warnings 'misc' ;
+use warnings 'misc' ; use utf8;
 my $a ; my @a = () ; my %a = () ; my $b = \@a ; my $c = \%a ;my $d = 'test';
 @a =~ /abc/ ;
 @a2 =~ s/a/b/ ;
@@ -797,6 +799,8 @@ my $a ; my @a = () ; my %a = () ; my $b = \@a ; my $c = \%a ;my $d = 'test';
 $d =~ tr/a/b/d ;
 $d2 =~ tr/a/bc/;
 $d3 =~ tr//b/c;
+$d =~ tr/α/β/d ;
+$d2 =~ tr/α/βγ/;
 {
 no warnings 'misc' ;
 my $a ; my @a = () ; my %a = () ; my $b = \@a ; my $c = \%a ; my $d = 'test';
@@ -831,8 +835,10 @@ Applying substitution (s///) to %hash will act on scalar(%hash) at - line 15.
 Applying transliteration (tr///) to %hash will act on scalar(%hash) at - line 16.
 Useless use of /d modifier in transliteration operator at - line 17.
 Replacement list is longer than search list at - line 18.
+Useless use of /d modifier in transliteration operator at - line 20.
+Replacement list is longer than search list at - line 21.
 Can't modify array dereference in substitution (s///) at - line 6, near "s/a/b/ ;"
-BEGIN not safe after errors--compilation aborted at - line 21.
+BEGIN not safe after errors--compilation aborted at - line 23.
 ########
 # op.c
 use warnings 'parenthesis' ;

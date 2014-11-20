@@ -11,7 +11,7 @@ use Symbol;
 
 our $VERSION;
 BEGIN {
-  $VERSION = '3.25';
+  $VERSION = '3.26';
 }
 use ExtUtils::ParseXS::Constants $VERSION;
 use ExtUtils::ParseXS::CountLines $VERSION;
@@ -797,12 +797,15 @@ EOF
 #
 EOF
 
-    $self->{newXS} = "newXS";
     $self->{proto} = "";
-
+    unless($self->{ProtoThisXSUB}) {
+      $self->{newXS} = "newXS_deffile";
+      $self->{file} = "";
+    }
+    else {
     # Build the prototype string for the xsub
-    if ($self->{ProtoThisXSUB}) {
       $self->{newXS} = "newXSproto_portable";
+      $self->{file} = ", file";
 
       if ($self->{ProtoThisXSUB} eq 2) {
         # User has specified empty prototype
@@ -831,14 +834,14 @@ EOF
       foreach my $xname (sort keys %{ $self->{XsubAliases} }) {
         my $value = $self->{XsubAliases}{$xname};
         push(@{ $self->{InitFileCode} }, Q(<<"EOF"));
-#        cv = $self->{newXS}(\"$xname\", XS_$self->{Full_func_name}, file$self->{proto});
+#        cv = $self->{newXS}(\"$xname\", XS_$self->{Full_func_name}$self->{file}$self->{proto});
 #        XSANY.any_i32 = $value;
 EOF
       }
     }
     elsif (@{ $self->{Attributes} }) {
       push(@{ $self->{InitFileCode} }, Q(<<"EOF"));
-#        cv = $self->{newXS}(\"$self->{pname}\", XS_$self->{Full_func_name}, file$self->{proto});
+#        cv = $self->{newXS}(\"$self->{pname}\", XS_$self->{Full_func_name}$self->{file}$self->{proto});
 #        apply_attrs_string("$self->{Package}", cv, "@{ $self->{Attributes} }", 0);
 EOF
     }
@@ -847,18 +850,18 @@ EOF
         my $value = $self->{Interfaces}{$yname};
         $yname = "$self->{Package}\::$yname" unless $yname =~ /::/;
         push(@{ $self->{InitFileCode} }, Q(<<"EOF"));
-#        cv = $self->{newXS}(\"$yname\", XS_$self->{Full_func_name}, file$self->{proto});
+#        cv = $self->{newXS}(\"$yname\", XS_$self->{Full_func_name}$self->{file}$self->{proto});
 #        $self->{interface_macro_set}(cv,$value);
 EOF
       }
     }
-    elsif($self->{newXS} eq 'newXS'){ # work around P5NCI's empty newXS macro
+    elsif($self->{newXS} eq 'newXS_deffile'){ # work around P5NCI's empty newXS macro
       push(@{ $self->{InitFileCode} },
-       "        $self->{newXS}(\"$self->{pname}\", XS_$self->{Full_func_name}, file$self->{proto});\n");
+       "        $self->{newXS}(\"$self->{pname}\", XS_$self->{Full_func_name}$self->{file}$self->{proto});\n");
     }
     else {
       push(@{ $self->{InitFileCode} },
-       "        (void)$self->{newXS}(\"$self->{pname}\", XS_$self->{Full_func_name}, file$self->{proto});\n");
+       "        (void)$self->{newXS}(\"$self->{pname}\", XS_$self->{Full_func_name}$self->{file}$self->{proto});\n");
     }
   } # END 'PARAGRAPH' 'while' loop
 
@@ -876,7 +879,7 @@ EOF
     /* Making a sub named "$self->{Package}::()" allows the package */
     /* to be findable via fetchmethod(), and causes */
     /* overload::Overloaded("$self->{Package}") to return true. */
-    (void)$self->{newXS}("$self->{Package}::()", XS_$self->{Packid}_nil, file$self->{proto});
+    (void)$self->{newXS}("$self->{Package}::()", XS_$self->{Packid}_nil$self->{file}$self->{proto});
 MAKE_FETCHMETHOD_WORK
   }
 
@@ -891,11 +894,13 @@ EOF
   print Q(<<"EOF");
 #XS_EXTERNAL(boot_$self->{Module_cname}); /* prototype to pass -Wmissing-prototypes */
 #XS_EXTERNAL(boot_$self->{Module_cname})
-EOF
-
-  print Q(<<"EOF");
 #[[
+##if PERL_VERSION_LE(5, 21, 5)
 #    dVAR; dXSARGS;
+##else
+#    dVAR; ${\($self->{WantVersionChk} ?
+     'dXSBOOTARGSXSAPIVERCHK;' : 'dXSBOOTARGSAPIVERCHK;')}
+##endif
 EOF
 
   #Under 5.8.x and lower, newXS is declared in proto.h as expecting a non-const
@@ -916,15 +921,26 @@ EOF
   print Q(<<"EOF");
 #    PERL_UNUSED_VAR(cv); /* -W */
 #    PERL_UNUSED_VAR(items); /* -W */
-##ifdef XS_APIVERSION_BOOTCHECK
-#    XS_APIVERSION_BOOTCHECK;
-##endif
 EOF
 
-  print Q(<<"EOF") if $self->{WantVersionChk};
+  if( $self->{WantVersionChk}){
+    print Q(<<"EOF") ;
+##if PERL_VERSION_LE(5, 21, 5)
 #    XS_VERSION_BOOTCHECK;
-#
+##  ifdef XS_APIVERSION_BOOTCHECK
+#    XS_APIVERSION_BOOTCHECK;
+##  endif
+##endif
+
 EOF
+  } else {
+    print Q(<<"EOF") ;
+##if PERL_VERSION_LE(5, 21, 5) && defined(XS_APIVERSION_BOOTCHECK)
+#  XS_APIVERSION_BOOTCHECK;
+##endif
+
+EOF
+  }
 
   print Q(<<"EOF") if defined $self->{XsubAliases} or defined $self->{interfaces};
 #    {
@@ -960,14 +976,15 @@ EOF
   }
 
   print Q(<<'EOF');
-##if (PERL_REVISION == 5 && PERL_VERSION >= 9)
-#  if (PL_unitcheckav)
-#       call_list(PL_scopestack_ix, PL_unitcheckav);
-##endif
-EOF
-
-  print Q(<<"EOF");
+##if PERL_VERSION_LE(5, 21, 5)
+##  if PERL_VERSION_GE(5, 9, 0)
+#    if (PL_unitcheckav)
+#        call_list(PL_scopestack_ix, PL_unitcheckav);
+##  endif
 #    XSRETURN_YES;
+##else
+#    Perl_xs_boot_epilog(aTHX_ ax);
+##endif
 #]]
 #
 EOF
@@ -1322,7 +1339,7 @@ sub OVERLOAD_handler {
       $self->{Overload} = 1 unless $self->{Overload};
       my $overload = "$self->{Package}\::(".$1;
       push(@{ $self->{InitFileCode} },
-       "        (void)$self->{newXS}(\"$overload\", XS_$self->{Full_func_name}, file$self->{proto});\n");
+       "        (void)$self->{newXS}(\"$overload\", XS_$self->{Full_func_name}$self->{file}$self->{proto});\n");
     }
   }
 }

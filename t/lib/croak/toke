@@ -1,4 +1,24 @@
 __END__
+# NAME foo found where operator expected
+myfunc 1,2,3
+EXPECT
+Number found where operator expected at - line 1, near "myfunc 1"
+	(Do you need to predeclare myfunc?)
+syntax error at - line 1, near "myfunc 1"
+Execution of - aborted due to compilation errors.
+########
+# NAME foo found where operator expected (after strict error, w/fatal warnings)
+use warnings FATAL => 'all';
+use strict;
+$foo;
+myfunc 1,2,3
+EXPECT
+Global symbol "$foo" requires explicit package name (did you forget to declare "my $foo"?) at - line 3.
+Number found where operator expected at - line 4, near "myfunc 1"
+	(Do you need to predeclare myfunc?)
+syntax error at - line 4, near "myfunc 1"
+Execution of - aborted due to compilation errors.
+########
 # NAME Unterminated here-doc in string eval
 eval "<<foo"; die $@
 EXPECT
@@ -8,6 +28,11 @@ Can't find string terminator "foo" anywhere before EOF at (eval 1) line 1.
 eval "s//<<foo/e"; die $@
 EXPECT
 Can't find string terminator "foo" anywhere before EOF at (eval 1) line 1.
+########
+# NAME Unterminated here-doc in string
+"${<<foo"; # Used to give ‘Attempt to free blah blah blah’
+EXPECT
+Can't find string terminator "foo" anywhere before EOF at - line 1.
 ########
 # NAME Unterminated qw//
 qw/
@@ -29,6 +54,11 @@ Can't find string terminator "'" anywhere before EOF at - line 1.
 EXPECT
 Missing right brace on \N{} or unescaped left brace after \N at - line 1, within pattern
 Execution of - aborted due to compilation errors.
+########
+# NAME map{for our *a...
+map{for our *a (1..10) {$_.=$x}}
+EXPECT
+Missing $ on loop variable at - line 1.
 ########
 # NAME Missing name in "my sub"
 use feature 'lexical_subs'; my sub;

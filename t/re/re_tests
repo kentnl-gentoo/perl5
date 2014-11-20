@@ -1138,6 +1138,8 @@ X(?<=foo.)[YZ]	..XfooXY..	y	pos	8
 /(ab)+((?1))(fox)/	ababfox	y	$1-$2-$3	ab-ab-fox
 /(ab){1,100}((?1))(fox)/	ababfox	y	$1-$2-$3	ab-ab-fox
 /(ab){0,100}((?1))(fox)/	ababfox	y	$1-$2-$3	ab-ab-fox
+foo(?0)?bar	phoofoofoobarbarbarr	y	$&	foofoobarbar
+foo(?R)?bar	phoofoofoobarbarbarr	y	$&	foofoobarbar
 # possessive captures
 a++a	aaaaa	n	-	-
 a*+a	aaaaa	n	-	-
@@ -1890,6 +1892,7 @@ A+(*PRUNE)BC(?{})	AAABC	y	$&	AAABC
 '\Awibble\z'm	wibble	y	-	-
 /(alias|status)es$/i	Statuses	y	$1	Status		# [perl #121778]
 /( (?&solution) | % ) \Z (?(DEFINE) (?<solution>7\%\ solution) )/x	7% solution	y	$1	7% solution		# [perl #122890]
+(.)(?{$~=$^N})	\x{100}	y	$~	\x{100}		# [perl #123135]
 
 # Keep these lines at the end of the file
 # vim: softtabstop=0 noexpandtab

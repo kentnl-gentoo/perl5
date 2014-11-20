@@ -752,7 +752,7 @@ PP(pp_trans)
 
     if (PL_op->op_flags & OPf_STACKED)
 	sv = POPs;
-    else if (PL_op->op_private & OPpTARGET_MY)
+    else if (ARGTARG)
 	sv = GETTARGET;
     else {
 	sv = DEFSV;
@@ -774,16 +774,17 @@ PP(pp_trans)
 
 /* Lvalue operators. */
 
-static void
+static size_t
 S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 {
     STRLEN len;
     char *s;
+    size_t count = 0;
 
     PERL_ARGS_ASSERT_DO_CHOMP;
 
     if (chomping && (RsSNARF(PL_rs) || RsRECORD(PL_rs)))
-	return;
+	return 0;
     if (SvTYPE(sv) == SVt_PVAV) {
 	I32 i;
 	AV *const av = MUTABLE_AV(sv);
@@ -792,23 +793,20 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 	for (i = 0; i <= max; i++) {
 	    sv = MUTABLE_SV(av_fetch(av, i, FALSE));
 	    if (sv && ((sv = *(SV**)sv), sv != &PL_sv_undef))
-		do_chomp(retval, sv, chomping);
+		count += do_chomp(retval, sv, chomping);
 	}
-        return;
+        return count;
     }
     else if (SvTYPE(sv) == SVt_PVHV) {
 	HV* const hv = MUTABLE_HV(sv);
 	HE* entry;
         (void)hv_iterinit(hv);
         while ((entry = hv_iternext(hv)))
-            do_chomp(retval, hv_iterval(hv,entry), chomping);
-	return;
+            count += do_chomp(retval, hv_iterval(hv,entry), chomping);
+	return count;
     }
     else if (SvREADONLY(sv)) {
             Perl_croak_no_modify();
-    }
-    else if (SvIsCOW(sv)) {
-	sv_force_normal_flags(sv, 0);
     }
 
     if (PL_encoding) {
@@ -832,11 +830,11 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 	    if (RsPARA(PL_rs)) {
 		if (*s != '\n')
 		    goto nope;
-		++SvIVX(retval);
+		++count;
 		while (len && s[-1] == '\n') {
 		    --len;
 		    --s;
-		    ++SvIVX(retval);
+		    ++count;
 		}
 	    }
 	    else {
@@ -880,7 +878,7 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 		if (rslen == 1) {
 		    if (*s != *rsptr)
 			goto nope;
-		    ++SvIVX(retval);
+		    ++count;
 		}
 		else {
 		    if (len < rslen - 1)
@@ -889,10 +887,10 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 		    s -= rslen - 1;
 		    if (memNE(s, rsptr, rslen))
 			goto nope;
-		    SvIVX(retval) += rs_charlen;
+		    count += rs_charlen;
 		}
 	    }
-	    s = SvPV_force_nomg_nolen(sv);
+	    SvPV_force_nomg_nolen(sv);
 	    SvCUR_set(sv, len);
 	    *SvEND(sv) = '\0';
 	    SvNIOK_off(sv);
@@ -904,7 +902,7 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 
 	Safefree(temp_buffer);
     } else {
-	if (len && !SvPOK(sv))
+	if (len && (!SvPOK(sv) || SvIsCOW(sv)))
 	    s = SvPV_force_nomg(sv, len);
 	if (DO_UTF8(sv)) {
 	    if (s && len) {
@@ -936,6 +934,7 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 	    sv_setpvs(retval, "");
 	SvSETMAGIC(sv);
     }
+    return count;
 }
 
 
@@ -946,9 +945,9 @@ PP(pp_schop)
     dSP; dTARGET;
     const bool chomping = PL_op->op_type == OP_SCHOMP;
 
+    const size_t count = do_chomp(TARG, TOPs, chomping);
     if (chomping)
-	sv_setiv(TARG, 0);
-    do_chomp(TARG, TOPs, chomping);
+	sv_setiv(TARG, count);
     SETTARG;
     RETURN;
 }
@@ -960,11 +959,12 @@ PP(pp_chop)
 {
     dSP; dMARK; dTARGET; dORIGMARK;
     const bool chomping = PL_op->op_type == OP_CHOMP;
+    size_t count = 0;
 
-    if (chomping)
-	sv_setiv(TARG, 0);
     while (MARK < SP)
-	do_chomp(TARG, *++MARK, chomping);
+	count += do_chomp(TARG, *++MARK, chomping);
+    if (chomping)
+	sv_setiv(TARG, count);
     SP = ORIGMARK;
     XPUSHTARG;
     RETURN;
@@ -1096,7 +1096,7 @@ PP(pp_postinc)
     /* special case for undef: see thread at 2003-03/msg00536.html in archive */
     if (inc && !SvOK(TARG))
 	sv_setiv(TARG, 0);
-    SETs(TARG);
+    SETTARG;
     return NORMAL;
 }
 
@@ -1650,6 +1650,25 @@ PP(pp_repeat)
 	SvGETMAGIC(sv);
     }
     else {
+	if (UNLIKELY(PL_op->op_private & OPpREPEAT_DOLIST)) {
+	    /* The parser saw this as a list repeat, and there
+	       are probably several items on the stack. But we're
+	       in scalar/void context, and there's no pp_list to save us
+	       now. So drop the rest of the items -- robin@kitsite.com
+	     */
+	    dMARK;
+	    if (MARK + 1 < SP) {
+		MARK[1] = TOPm1s;
+		MARK[2] = TOPs;
+	    }
+	    else {
+		dTOPss;
+		ASSUME(MARK + 1 == SP);
+		XPUSHs(sv);
+		MARK[1] = &PL_sv_undef;
+	    }
+	    SP = MARK + 2;
+	}
 	tryAMAGICbin_MG(repeat_amg, AMGf_assign);
 	sv = POPs;
     }
@@ -1695,37 +1714,12 @@ PP(pp_repeat)
 	MEXTEND(MARK, max);
 	if (count > 1) {
 	    while (SP > MARK) {
-#if 0
-	      /* This code was intended to fix 20010809.028:
-
-	         $x = 'abcd';
-		 for (($x =~ /./g) x 2) {
-		     print chop; # "abcdabcd" expected as output.
-		 }
-
-	       * but that change (#11635) broke this code:
-
-	       $x = [("foo")x2]; # only one "foo" ended up in the anonlist.
-
-	       * I can't think of a better fix that doesn't introduce
-	       * an efficiency hit by copying the SVs. The stack isn't
-	       * refcounted, and mortalisation obviously doesn't
-	       * Do The Right Thing when the stack has more than
-	       * one pointer to the same mortal value.
-	       * .robin.
-	       */
-		if (*SP) {
-		    *SP = sv_2mortal(newSVsv(*SP));
-		    SvREADONLY_on(*SP);
-		}
-#else
                 if (*SP) {
                    if (mod && SvPADTMP(*SP)) {
                        *SP = sv_mortalcopy(*SP);
                    }
 		   SvTEMP_off((*SP));
 		}
-#endif
 		SP--;
 	    }
 	    MARK++;
@@ -1766,15 +1760,6 @@ PP(pp_repeat)
 	else
 	    (void)SvPOK_only(TARG);
 
-	if (PL_op->op_private & OPpREPEAT_DOLIST) {
-	    /* The parser saw this as a list repeat, and there
-	       are probably several items on the stack. But we're
-	       in scalar context, and there's no pp_list to save us
-	       now. So drop the rest of the items -- robin@kitsite.com
-	     */
-	    dMARK;
-	    SP = MARK;
-	}
 	PUSHTARG;
     }
     RETURN;
@@ -3201,7 +3186,9 @@ PP(pp_substr)
 	}
     }
     SPAGAIN;
-    if (rvalue) {
+    if (PL_op->op_private & OPpSUBSTR_REPL_FIRST)
+	SP++;
+    else if (rvalue) {
 	SvSETMAGIC(TARG);
 	PUSHs(TARG);
     }
@@ -3238,6 +3225,8 @@ PP(pp_vec)
     }
 
     sv_setuv(ret, do_vecget(src, offset, size));
+    if (!lvalue)
+	SvSETMAGIC(ret);
     PUSHs(ret);
     RETURN;
 }
@@ -3435,7 +3424,7 @@ PP(pp_chr)
 	*tmps = '\0';
 	(void)SvPOK_only(TARG);
 	SvUTF8_on(TARG);
-	XPUSHs(TARG);
+	XPUSHTARG;
 	RETURN;
     }
 
@@ -3462,7 +3451,7 @@ PP(pp_chr)
 	}
     }
 
-    XPUSHs(TARG);
+    XPUSHTARG;
     RETURN;
 }
 
@@ -3478,9 +3467,8 @@ PP(pp_crypt)
          /* If Unicode, try to downgrade.
 	  * If not possible, croak.
 	  * Yes, we made this up.  */
-	 SV* const tsv = sv_2mortal(newSVsv(left));
+	 SV* const tsv = newSVpvn_flags(tmps, len, SVf_UTF8|SVs_TEMP);
 
-	 SvUTF8_on(tsv);
 	 sv_utf8_downgrade(tsv, FALSE);
 	 tmps = SvPV_const(tsv, len);
     }
@@ -3507,6 +3495,7 @@ PP(pp_crypt)
 #   else
     sv_setpv(TARG, PerlProc_crypt(tmps, SvPV_nolen_const(right)));
 #   endif
+    SvUTF8_off(TARG);
     SETTARG;
     RETURN;
 #else

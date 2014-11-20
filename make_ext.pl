@@ -2,11 +2,11 @@
 use strict;
 use warnings;
 use Config;
-use constant IS_CROSS => defined $Config::Config{usecrosscompile} ? 1 : 0;
-
-my $is_Win32 = $^O eq 'MSWin32';
-my $is_VMS = $^O eq 'VMS';
-my $is_Unix = !$is_Win32 && !$is_VMS;
+use constant{IS_CROSS => defined $Config::Config{usecrosscompile} ? 1 : 0,
+             IS_WIN32 => $^O eq 'MSWin32',
+             IS_VMS   => $^O eq 'VMS',
+             IS_UNIX  => $^O ne 'MSWin32' && $^O ne 'VMS',
+};
 
 my @ext_dirs = qw(cpan dist ext);
 my $ext_dirs_re = '(?:' . join('|', @ext_dirs) . ')';
@@ -139,7 +139,7 @@ if (!@extspec and !$static and !$dynamic and !$nonxs and !$dynaloader)  {
 my $perl;
 my %extra_passthrough;
 
-if ($is_Win32) {
+if (IS_WIN32) {
     require Cwd;
     require FindExt;
     my $build = Cwd::getcwd();
@@ -185,10 +185,7 @@ if ($is_Win32) {
 	    next;
 	}
 	push @extspec, $_;
-	if($_ eq 'DynaLoader' and $target !~ /clean$/) {
-	    # No, we don't know why nmake can't work out the dependency chain
-	    push @{$extra_passthrough{$_}}, 'DynaLoader.c';
-	} elsif(FindExt::is_static($_)) {
+	if($_ ne 'DynaLoader' && FindExt::is_static($_)) {
 	    push @{$extra_passthrough{$_}}, 'LINKTYPE=static';
 	}
     }
@@ -196,7 +193,7 @@ if ($is_Win32) {
     chdir '..'
 	or die "Couldn't chdir to build directory: $!"; # now in the Perl build
 }
-elsif ($is_VMS) {
+elsif (IS_VMS) {
     $perl = $^X;
     push @extspec, (split ' ', $Config{static_ext}) if $static;
     push @extspec, (split ' ', $Config{dynamic_ext}) if $dynamic;
@@ -276,8 +273,8 @@ sub build_extension {
     my $lib_dir = "$up/lib";
     $ENV{PERL_CORE} = 1;
 
-    my $makefile;
-    if ($is_VMS) {
+    my ($makefile, $makefile_no_minus_f);
+    if (IS_VMS) {
 	$makefile = 'descrip.mms';
 	if ($target =~ /clean$/
 	    && !-f $makefile
@@ -289,6 +286,7 @@ sub build_extension {
     }
     
     if (-f $makefile) {
+	$makefile_no_minus_f = 0;
 	open my $mfh, $makefile or die "Cannot open $makefile: $!";
 	while (<$mfh>) {
 	    # Plagiarised from CPAN::Distribution
@@ -339,9 +337,11 @@ sub build_extension {
                 _unlink($makefile);
             }
         }
+    } else {
+	$makefile_no_minus_f = 1;
     }
 
-    if (!-f $makefile) {
+    if ($makefile_no_minus_f || !-f $makefile) {
 	NO_MAKEFILE:
 	if (!-f 'Makefile.PL') {
             unless (just_pm_to_blib($target, $ext_dir, $mname, $return_dir)) {
@@ -496,7 +496,7 @@ EOM
 	print "\nRunning Makefile.PL in $ext_dir\n" if $verbose;
 
 	my @args = ("-I$lib_dir", 'Makefile.PL');
-	if ($is_VMS) {
+	if (IS_VMS) {
 	    my $libd = VMS::Filespec::vmspath($lib_dir);
 	    push @args, "INST_LIB=$libd", "INST_ARCHLIB=$libd";
 	} else {
@@ -504,7 +504,7 @@ EOM
 		'INSTALLMAN3DIR=none';
 	}
 	push @args, @$pass_through;
-	_quote_args(\@args) if $is_VMS;
+	_quote_args(\@args) if IS_VMS;
 	print join(' ', $perl, @args), "\n" if $verbose;
 	my $code = do {
 	   local $ENV{PERL_MM_USE_DEFAULT} = 1;
@@ -523,7 +523,7 @@ EOM
 	# some of them rely on a $(PERL) for their own distclean targets.
 	# But this always used to be a problem with the old /bin/sh version of
 	# this.
-	if ($is_Unix) {
+	if (IS_UNIX) {
 	    foreach my $clean_target ('realclean', 'veryclean') {
                 fallback_cleanup($return_dir, $clean_target, <<"EOS");
 cd $ext_dir
@@ -546,7 +546,7 @@ EOS
 	print "Warning: No Makefile!\n";
     }
 
-    if ($is_VMS) {
+    if (IS_VMS) {
 	_quote_args($pass_through);
 	@$pass_through = (
 			  "/DESCRIPTION=$makefile",
@@ -554,16 +554,13 @@ EOS
 			 );
     }
 
-    if (!$target or $target !~ /clean$/) {
-	# Give makefile an opportunity to rewrite itself.
-	# reassure users that life goes on...
-	my @args = ('config', @$pass_through);
-	system(@make, @args) and print "@make @args failed, continuing anyway...\n";
-    }
     my @targ = ($target, @$pass_through);
     print "Making $target in $ext_dir\n@make @targ\n" if $verbose;
     local $ENV{PERL_INSTALL_QUIET} = 1;
     my $code = system(@make, @targ);
+    if($code >> 8 != 0){ # probably cleaned itself, try again once more time
+        $code = system(@make, @targ);
+    }
     die "Unsuccessful make($ext_dir): code=$code" if $code != 0;
 
     chdir $return_dir || die "Cannot cd to $return_dir: $!";
@@ -604,12 +601,12 @@ sub just_pm_to_blib {
     my ($last) = $mname =~ /([^:]+)$/;
     my ($first) = $mname =~ /^([^:]+)/;
 
-    my $pm_to_blib = $is_VMS ? 'pm_to_blib.ts' : 'pm_to_blib';
+    my $pm_to_blib = IS_VMS ? 'pm_to_blib.ts' : 'pm_to_blib';
 
     foreach my $leaf (<*>) {
         if (-d $leaf) {
             $leaf =~ s/\.DIR\z//i
-                if $is_VMS;
+                if IS_VMS;
             next if $leaf =~ /\A(?:\.|\.\.|t|demo)\z/;
             if ($leaf eq 'lib') {
                 ++$has_lib;
@@ -623,7 +620,7 @@ sub just_pm_to_blib {
         return $leaf
             unless -f _;
         $leaf =~ s/\.\z//
-            if $is_VMS;
+            if IS_VMS;
         # Makefile.PL is "safe" to ignore because we will only be called for
         # directories that hold a Makefile.PL if they are in the exception list.
         next
@@ -703,7 +700,7 @@ sub just_pm_to_blib {
         print $fh "$0 has handled pm_to_blib directly\n";
         close $fh
             or die "Can't close '$pm_to_blib': $!";
-	if ($is_Unix) {
+	if (IS_UNIX) {
             # Fake the fallback cleanup
             my $fallback
                 = join '', map {s!^\.\./\.\./!!; "rm -f $_\n"} sort values %pm;

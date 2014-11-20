@@ -319,10 +319,10 @@ Perl_safesysfree(Malloc_t where)
     DEBUG_m( PerlIO_printf(Perl_debug_log, "0x%"UVxf": (%05ld) free\n",PTR2UV(where),(long)PL_an++));
     if (where) {
 #ifdef USE_MDH
-        where = (Malloc_t)((char*)where-PERL_MEMORY_DEBUG_HEADER_SIZE);
+	Malloc_t where_intrn = (Malloc_t)((char*)where-PERL_MEMORY_DEBUG_HEADER_SIZE);
 	{
 	    struct perl_memory_debug_header *const header
-		= (struct perl_memory_debug_header *)where;
+		= (struct perl_memory_debug_header *)where_intrn;
 
 # ifdef MDH_HAS_SIZE
 	    const MEM_SIZE size = header->size;
@@ -352,21 +352,23 @@ Perl_safesysfree(Malloc_t where)
 	    maybe_protect_ro(header->prev);
 	    maybe_protect_rw(header);
 #  ifdef PERL_POISON
-	    PoisonNew(where, size, char);
+	    PoisonNew(where_intrn, size, char);
 #  endif
 	    /* Trigger the duplicate free warning.  */
 	    header->next = NULL;
 # endif
 # ifdef PERL_DEBUG_READONLY_COW
-	    if (munmap(where, size)) {
+	    if (munmap(where_intrn, size)) {
 		perror("munmap failed");
 		abort();
 	    }	
 # endif
 	}
-#endif
+#else
+	Malloc_t where_intrn = where;
+#endif /* USE_MDH */
 #ifndef PERL_DEBUG_READONLY_COW
-	PerlMem_free(where);
+	PerlMem_free(where_intrn);
 #endif
     }
 }
@@ -913,23 +915,6 @@ Perl_fbm_instr(pTHX_ unsigned char *big, unsigned char *bigend, SV *littlestr, U
 	    return (char*)bigend - littlelen;
 	return NULL;
     }
-}
-
-char *
-Perl_screaminstr(pTHX_ SV *bigstr, SV *littlestr, I32 start_shift, I32 end_shift, I32 *old_posp, I32 last)
-{
-    PERL_ARGS_ASSERT_SCREAMINSTR;
-    PERL_UNUSED_ARG(bigstr);
-    PERL_UNUSED_ARG(littlestr);
-    PERL_UNUSED_ARG(start_shift);
-    PERL_UNUSED_ARG(end_shift);
-    PERL_UNUSED_ARG(old_posp);
-    PERL_UNUSED_ARG(last);
-
-    /* This function must only ever be called on a scalar with study magic,
-       but those do not happen any more. */
-    Perl_croak(aTHX_ "panic: screaminstr");
-    NORETURN_FUNCTION_END;
 }
 
 /*
@@ -1563,6 +1548,13 @@ The function never actually returns.
 =cut
 */
 
+#ifdef _MSC_VER
+#  pragma warning( push )
+#  pragma warning( disable : 4646 ) /* warning C4646: function declared with
+    __declspec(noreturn) has non-void return type */
+#  pragma warning( disable : 4645 ) /* warning C4645: function declared with
+__declspec(noreturn) has a return statement */
+#endif
 OP *
 Perl_die_sv(pTHX_ SV *baseex)
 {
@@ -1571,6 +1563,9 @@ Perl_die_sv(pTHX_ SV *baseex)
     assert(0); /* NOTREACHED */
     NORETURN_FUNCTION_END;
 }
+#ifdef _MSC_VER
+#  pragma warning( pop )
+#endif
 
 /*
 =for apidoc Am|OP *|die|const char *pat|...
@@ -1583,6 +1578,13 @@ The function never actually returns.
 */
 
 #if defined(PERL_IMPLICIT_CONTEXT)
+#ifdef _MSC_VER
+#  pragma warning( push )
+#  pragma warning( disable : 4646 ) /* warning C4646: function declared with
+    __declspec(noreturn) has non-void return type */
+#  pragma warning( disable : 4645 ) /* warning C4645: function declared with
+__declspec(noreturn) has a return statement */
+#endif
 OP *
 Perl_die_nocontext(const char* pat, ...)
 {
@@ -1594,8 +1596,18 @@ Perl_die_nocontext(const char* pat, ...)
     va_end(args);
     NORETURN_FUNCTION_END;
 }
+#ifdef _MSC_VER
+#  pragma warning( pop )
+#endif
 #endif /* PERL_IMPLICIT_CONTEXT */
 
+#ifdef _MSC_VER
+#  pragma warning( push )
+#  pragma warning( disable : 4646 ) /* warning C4646: function declared with
+    __declspec(noreturn) has non-void return type */
+#  pragma warning( disable : 4645 ) /* warning C4645: function declared with
+__declspec(noreturn) has a return statement */
+#endif
 OP *
 Perl_die(pTHX_ const char* pat, ...)
 {
@@ -1606,6 +1618,9 @@ Perl_die(pTHX_ const char* pat, ...)
     va_end(args);
     NORETURN_FUNCTION_END;
 }
+#ifdef _MSC_VER
+#  pragma warning( pop )
+#endif
 
 /*
 =for apidoc Am|void|croak_sv|SV *baseex
@@ -2426,8 +2441,10 @@ Perl_my_popen_list(pTHX_ const char *mode, int n, SV **args)
 	 PerlLIO_close(pp[0]);
     return PerlIO_fdopen(p[This], mode);
 #else
-#  ifdef OS2	/* Same, without fork()ing and all extra overhead... */
+#  if defined(OS2)	/* Same, without fork()ing and all extra overhead... */
     return my_syspopen4(aTHX_ NULL, mode, n, args);
+#  elif defined(WIN32)
+    return win32_popenlist(mode, n, args);
 #  else
     Perl_croak(aTHX_ "List form of piped open not implemented");
     return (PerlIO *) NULL;
@@ -5329,6 +5346,122 @@ Perl_my_cxt_init(pTHX_ const char *my_cxt_key, size_t size)
 #endif /* #ifndef PERL_GLOBAL_STRUCT_PRIVATE */
 #endif /* PERL_IMPLICIT_CONTEXT */
 
+
+/* The meaning of the varargs is determined U32 key arg. This is not a format
+   string. The U32 key is assembled with HS_KEY.
+
+   v_my_perl arg is "PerlInterpreter * my_perl" if PERL_IMPLICIT_CONTEXT and
+   otherwise "CV * cv" (boot xsub's CV *). v_my_perl will catch where a threaded
+   future perl526.dll calling IO.dll for example, and IO.dll was linked with
+   threaded perl524.dll, and both perl526.dll and perl524.dll are in %PATH and
+   the Win32 DLL loader sucessfully can load IO.dll into the process but
+   simultaniously it loaded a interp of a different version into the process,
+   and XS code will naturally pass SV*s created by perl524.dll for perl526.dll
+   to use through perl526.dll's my_perl->Istack_base.
+
+   v_my_perl (v=void) can not be the first arg since then key will be out of
+   place in a threaded vs non-threaded mixup and analyzing the key number's
+   bitfields won't reveal the problem since it will be a valid key
+   (unthreaded perl) on interp side, but croak reports the XS mod's key as
+   gibberish (it is really my_perl ptr) (threaded XS mod), or if threaded perl
+   and unthreaded XS module, threaded perl will look at uninit C stack or uninit
+   register to get var key (remember it assumes 1st arg is interp cxt).
+
+Perl_xs_handshake(U32 key, void * v_my_perl, const char * file,
+[U32 items, U32 ax], [char * api_version], [char * xs_version]) */
+I32
+Perl_xs_handshake(const U32 key, void * v_my_perl, const char * file, ...)
+{
+    va_list args;
+    U32 items, ax;
+    void * got;
+    void * need;
+#ifdef PERL_IMPLICIT_CONTEXT
+    dTHX;
+    tTHX xs_interp;
+#else
+    CV* cv;
+    SV *** xs_spp;
+#endif
+    PERL_ARGS_ASSERT_XS_HANDSHAKE;
+    va_start(args, file);
+
+    got = INT2PTR(void*, (UV)(key & HSm_KEY_MATCH));
+    need = (void *)(HS_KEY(FALSE, FALSE, "", "") & HSm_KEY_MATCH);
+    if (UNLIKELY(got != need))
+	goto bad_handshake;
+/* try to catch where a 2nd threaded perl interp DLL is loaded into a process
+   by a XS DLL compiled against the wrong interl DLL b/c of bad @INC, and the
+   2nd threaded perl interp DLL never initialized its TLS/PERL_SYS_INIT3 so
+   dTHX call from 2nd interp DLL can't return the my_perl that pp_entersub
+   passed to the XS DLL */
+#ifdef PERL_IMPLICIT_CONTEXT
+    xs_interp = (tTHX)v_my_perl;
+    got = xs_interp;
+    need = my_perl;
+#else
+/* try to catch where an unthreaded perl interp DLL (for ex. perl522.dll) is
+   loaded into a process by a XS DLL built by an unthreaded perl522.dll perl,
+   but the DynaLoder/Perl that started the process and loaded the XS DLL is
+   unthreaded perl524.dll, since unthreadeds don't pass my_perl (a unique *)
+   through pp_entersub, use a unique value (which is a pointer to PL_stack_sp's
+   location in the unthreaded perl binary) stored in CV * to figure out if this
+   Perl_xs_handshake was called by the same pp_entersub */
+    cv = (CV*)v_my_perl;
+    xs_spp = (SV***)CvHSCXT(cv);
+    got = xs_spp;
+    need = &PL_stack_sp;
+#endif
+    if(UNLIKELY(got != need)) {
+	bad_handshake:/* recycle branch and string from above */
+	if(got != (void *)HSf_NOCHK)
+	    noperl_die("%s: Invalid handshake key got %p"
+		" needed %p, binaries are mismatched",
+		file, got, need);
+    }
+
+    if(key & HSf_SETXSUBFN) {     /* this might be called from a module bootstrap */
+	SAVEPPTR(PL_xsubfilename);/* which was require'd from a XSUB BEGIN */
+	PL_xsubfilename = file;   /* so the old name must be restored for
+				     additional XSUBs to register themselves */
+	(void)gv_fetchfile(file);
+    }
+
+    if(key & HSf_POPMARK) {
+	ax = POPMARK;
+	{   SV **mark = PL_stack_base + ax++;
+	    {   dSP;
+		items = (I32)(SP - MARK);
+	    }
+	}
+    } else {
+	items = va_arg(args, U32);
+	ax = va_arg(args, U32);
+    }
+    {
+	U32 apiverlen;
+	assert(HS_GETAPIVERLEN(key) <= UCHAR_MAX);
+	if((apiverlen = HS_GETAPIVERLEN(key))) {
+	    char * api_p = va_arg(args, char*);
+	    if(apiverlen != sizeof("v" PERL_API_VERSION_STRING)-1
+		|| memNE(api_p, "v" PERL_API_VERSION_STRING,
+			 sizeof("v" PERL_API_VERSION_STRING)-1))
+		Perl_croak_nocontext("Perl API version %s of %"SVf" does not match %s",
+				    api_p, SVfARG(PL_stack_base[ax + 0]),
+				    "v" PERL_API_VERSION_STRING);
+	}
+    }
+    {
+	U32 xsverlen;
+	assert(HS_GETXSVERLEN(key) <= UCHAR_MAX && HS_GETXSVERLEN(key) <= HS_APIVERLEN_MAX);
+	if((xsverlen = HS_GETXSVERLEN(key)))
+	    Perl_xs_version_bootcheck(aTHX_
+		items, ax, va_arg(args, char*), xsverlen);
+    }
+    va_end(args);
+    return ax;
+}
+
 void
 Perl_xs_version_bootcheck(pTHX_ U32 items, U32 ax, const char *xs_p,
 			  STRLEN xs_len)
@@ -5375,37 +5508,6 @@ Perl_xs_version_bootcheck(pTHX_ U32 items, U32 ax, const char *xs_p,
 	    Perl_croak_sv(aTHX_ xpt);
 	}
     }
-}
-
-void
-Perl_xs_apiversion_bootcheck(pTHX_ SV *module, const char *api_p,
-			     STRLEN api_len)
-{
-    SV *xpt = NULL;
-    SV *compver = Perl_newSVpvn_flags(aTHX_ api_p, api_len, SVs_TEMP);
-    SV *runver;
-
-    PERL_ARGS_ASSERT_XS_APIVERSION_BOOTCHECK;
-
-    /* This might croak  */
-    compver = upg_version(compver, 0);
-    /* This should never croak */
-    runver = new_version(PL_apiversion);
-    if (vcmp(compver, runver)) {
-	SV *compver_string = vstringify(compver);
-	SV *runver_string = vstringify(runver);
-	xpt = Perl_newSVpvf(aTHX_ "Perl API version %"SVf
-			    " of %"SVf" does not match %"SVf,
-			    SVfARG(compver_string), SVfARG(module),
-			    SVfARG(runver_string));
-	Perl_sv_2mortal(aTHX_ xpt);
-
-	SvREFCNT_dec(compver_string);
-	SvREFCNT_dec(runver_string);
-    }
-    SvREFCNT_dec(runver);
-    if (xpt)
-	Perl_croak_sv(aTHX_ xpt);
 }
 
 /*

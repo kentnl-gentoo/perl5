@@ -96,7 +96,7 @@ S_append_flags(pTHX_ SV *sv, U32 flags, const struct flag_to_name *start,
 
 Escapes at most the first "count" chars of pv and puts the results into
 dsv such that the size of the escaped string will not exceed "max" chars
-and will not contain any incomplete escape sequences. The number of bytes
+and will not contain any incomplete escape sequences.  The number of bytes
 escaped will be returned in the STRLEN *escaped parameter if it is not null.
 When the dsv parameter is null no escaping actually occurs, but the number
 of bytes that would be escaped were it not null will be calculated.
@@ -812,30 +812,6 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
     if (o->op_targ) {
 	if (optype == OP_NULL) {
 	    Perl_dump_indent(aTHX_ level, file, "  (was %s)\n", PL_op_name[o->op_targ]);
-	    if (o->op_targ == OP_NEXTSTATE) {
-		if (CopLINE(cCOPo))
-		    Perl_dump_indent(aTHX_ level, file, "LINE = %"UVuf"\n",
-				     (UV)CopLINE(cCOPo));
-        if (CopSTASHPV(cCOPo)) {
-            SV* tmpsv = newSVpvs_flags("", SVs_TEMP);
-            HV *stash = CopSTASH(cCOPo);
-            const char * const hvname = HvNAME_get(stash);
-
-		    Perl_dump_indent(aTHX_ level, file, "PACKAGE = \"%s\"\n",
-                           generic_pv_escape( tmpsv, hvname, HvNAMELEN(stash), HvNAMEUTF8(stash)));
-       }
-     if (CopLABEL(cCOPo)) {
-          SV* tmpsv = newSVpvs_flags("", SVs_TEMP);
-          STRLEN label_len;
-          U32 label_flags;
-          const char *label = CopLABEL_len_flags(cCOPo,
-                                                 &label_len,
-                                                 &label_flags);
-		    Perl_dump_indent(aTHX_ level, file, "LABEL = \"%s\"\n",
-                           generic_pv_escape( tmpsv, label, label_len,(label_flags & SVf_UTF8)));
-      }
-
-	    }
 	}
 	else
 	    Perl_dump_indent(aTHX_ level, file, "TARG = %ld\n", (long)o->op_targ);
@@ -985,6 +961,10 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
 	Perl_dump_indent(aTHX_ level, file, "SV = %s\n", SvPEEK(cMETHOPx_meth(o)));
 #endif
 	break;
+    case OP_NULL:
+	if (o->op_targ != OP_NEXTSTATE && o->op_targ != OP_DBSTATE)
+	    break;
+	/* FALLTHROUGH */
     case OP_NEXTSTATE:
     case OP_DBSTATE:
 	if (CopLINE(cCOPo))
@@ -1009,6 +989,8 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
                            generic_pv_escape( tmpsv, label, label_len,
                                       (label_flags & SVf_UTF8)));
    }
+        Perl_dump_indent(aTHX_ level, file, "SEQ = %d\n",
+                                             cCOPo->cop_seq);
 	break;
     case OP_ENTERLOOP:
 	Perl_dump_indent(aTHX_ level, file, "REDO ===> ");
@@ -2001,10 +1983,14 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	Perl_dump_indent(aTHX_ level, file, "  DEPTH = %"IVdf"\n", (IV)CvDEPTH(sv));
 	Perl_dump_indent(aTHX_ level, file, "  FLAGS = 0x%"UVxf"\n", (UV)CvFLAGS(sv));
 	Perl_dump_indent(aTHX_ level, file, "  OUTSIDE_SEQ = %"UVuf"\n", (UV)CvOUTSIDE_SEQ(sv));
-	Perl_dump_indent(aTHX_ level, file, "  PADLIST = 0x%"UVxf"\n", PTR2UV(CvPADLIST(sv)));
-	if (nest < maxnest) {
-	    do_dump_pad(level+1, file, CvPADLIST(sv), 0);
+	if (!CvISXSUB(sv)) {
+	    Perl_dump_indent(aTHX_ level, file, "  PADLIST = 0x%"UVxf"\n", PTR2UV(CvPADLIST(sv)));
+	    if (nest < maxnest) {
+		do_dump_pad(level+1, file, CvPADLIST(sv), 0);
+	    }
 	}
+	else
+	    Perl_dump_indent(aTHX_ level, file, "  HSCXT = 0x%p\n", CvHSCXT(sv));
 	{
 	    const CV * const outside = CvOUTSIDE(sv);
 	    Perl_dump_indent(aTHX_ level, file, "  OUTSIDE = 0x%"UVxf" (%s)\n",

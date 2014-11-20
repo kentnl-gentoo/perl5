@@ -150,6 +150,12 @@ EXPECT
 Use of bare << to mean <<"" is deprecated at - line 2.
 ########
 # toke.c
+BEGIN {
+    if (ord('A') == 193) {
+        print "SKIPPED\n# Literal control characters in variable names forbidden on EBCDIC";
+        exit 0;
+    }
+}
 eval "\$\cT";
 eval "\${\7LOBAL_PHASE}";
 eval "\${\cT}";
@@ -1360,11 +1366,30 @@ EXPECT
 "\c`" is more clearly written simply as "\ " at - line 4.
 ########
 # toke.c
+BEGIN {
+    if (ord('A') == 193) {
+        print "SKIPPED\n# test is ASCII-specific";
+        exit 0;
+    }
+}
 use warnings;
 my $a = "\c{ack}";
 EXPECT
 OPTION fatal
-Use ";" instead of "\c{" at - line 3.
+Use ";" instead of "\c{" at - line 9.
+########
+# toke.c
+BEGIN {
+    if (ord('A') == 65) {
+        print "SKIPPED\n# test is EBCDIC-specific";
+        exit 0;
+    }
+}
+use warnings;
+my $a = "\c{ack}";
+EXPECT
+OPTION fatal
+Sequence "\c{" invalid at - line 9.
 ########
 # toke.c
 my $a = "\câ";
@@ -1472,6 +1497,12 @@ I
 ########
 # toke.c
 #[perl #119123] disallow literal control character variables
+BEGIN {
+    if (ord('A') == 193) {
+        print "SKIPPED\n# Literal control characters in variable names forbidden on EBCDIC";
+        exit 0;
+    }
+}
 eval "\$\cQ = 25";
 eval "\${ \cX } = 24";
 *{

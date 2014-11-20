@@ -142,7 +142,7 @@ PP(pp_regcomp)
 	    const bool was_tainted = TAINT_get;
 	    if (pm->op_flags & OPf_STACKED)
 		lhs = args[-1];
-	    else if (pm->op_private & OPpTARGET_MY)
+	    else if (pm->op_targ)
 		lhs = PAD_SV(pm->op_targ);
 	    else lhs = DEFSV;
 	    SvGETMAGIC(lhs);
@@ -2868,7 +2868,6 @@ PP(pp_goto)
 	    SAVETMPS;
 	    SAVEFREESV(cv); /* later, undo the 'avoid premature free' hack */
 	    if (CvISXSUB(cv)) {
-		OP* const retop = cx->blk_sub.retop;
 		SV **newsp;
 		I32 gimme;
 		const SSize_t items = arg ? AvFILL(arg) + 1 : 0;
@@ -2908,6 +2907,7 @@ PP(pp_goto)
 		    SvREFCNT_dec(arg);
 		}
 
+		retop = cx->blk_sub.retop;
 		/* XS subs don't have a CxSUB, so pop it */
 		POPBLOCK(cx, PL_curpm);
 		/* Push a mark for the start of arglist */
@@ -2915,8 +2915,7 @@ PP(pp_goto)
 		PUTBACK;
 		(void)(*CvXSUB(cv))(aTHX_ cv);
 		LEAVE;
-		PERL_ASYNC_CHECK();
-		return retop;
+		goto _return;
 	    }
 	    else {
 		PADLIST * const padlist = CvPADLIST(cv);
@@ -2969,8 +2968,8 @@ PP(pp_goto)
 			}
 		    }
 		}
-		PERL_ASYNC_CHECK();
-		RETURNOP(CvSTART(cv));
+		retop = CvSTART(cv);
+		goto putback_return;
 	    }
 	}
 	else {
@@ -3116,7 +3115,8 @@ PP(pp_goto)
 	}
     }
 
-    if (do_dump) {
+    else {
+        assert(do_dump);
 #ifdef VMS
 	if (!retop) retop = PL_main_start;
 #endif
@@ -3129,8 +3129,11 @@ PP(pp_goto)
 	PL_do_undump = FALSE;
     }
 
+    putback_return:
+    PL_stack_sp = sp;
+    _return:
     PERL_ASYNC_CHECK();
-    RETURNOP(retop);
+    return retop;
 }
 
 PP(pp_exit)
@@ -3383,7 +3386,7 @@ S_doeval(pTHX_ int gimme, CV* outside, U32 seq, HV *hh)
 
     /* set up a scratch pad */
 
-    CvPADLIST(evalcv) = pad_new(padnew_SAVE);
+    CvPADLIST_set(evalcv, pad_new(padnew_SAVE));
     PL_op = NULL; /* avoid PL_op and PL_curpad referring to different CVs */
 
 

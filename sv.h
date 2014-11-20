@@ -380,6 +380,7 @@ perform the upgrade if necessary.  See C<svtype>.
 #define SVpad_OUR	0x00040000  /* pad name is "our" instead of "my" */
 #define SVs_TEMP	0x00080000  /* mortal (implies string is stealable) */
 #define SVs_OBJECT	0x00100000  /* is "blessed" */
+#define SVpad_LVALUE	0x00100000  /* pad name is used as lvalue */
 #define SVs_GMG		0x00200000  /* has magical get method */
 #define SVs_SMG		0x00400000  /* has magical set method */
 #define SVs_RMG		0x00800000  /* has random magical methods */
@@ -592,7 +593,10 @@ typedef U32 cv_flags_t;
 	HEK *	xcv_hek;						\
     }		xcv_gv_u;						\
     char *	xcv_file;							\
-    PADLIST *	xcv_padlist;							\
+    union {									\
+	PADLIST *	xcv_padlist;						\
+	void *		xcv_hscxt;						\
+    }		xcv_padlist_u;							\
     CV *	xcv_outside;							\
     U32		xcv_outside_seq; /* the COP sequence (at the point of our	\
 				  * compilation) in the lexically enclosing	\
@@ -1140,6 +1144,7 @@ sv_force_normal does nothing.
 #define SvTAIL_on(sv)		(SvFLAGS(sv) |= SVpbm_TAIL)
 #define SvTAIL_off(sv)		(SvFLAGS(sv) &= ~SVpbm_TAIL)
 
+#define SvPAD_NAME(sv) ((SvFLAGS(sv) & SVpad_NAME) == SVpad_NAME)
 
 #define SvPAD_TYPED(sv) \
 	((SvFLAGS(sv) & (SVpad_NAME|SVpad_TYPED)) == (SVpad_NAME|SVpad_TYPED))

@@ -31,7 +31,7 @@ DeadCode(pTHX)
 	for (sv = sva + 1; sv < svend; ++sv) {
 	    if (SvTYPE(sv) == SVt_PVCV) {
 		CV *cv = (CV*)sv;
-		PADLIST* padlist = CvPADLIST(cv);
+		PADLIST* padlist;
                 AV *argav;
 		SV** svp;
 		SV** pad;
@@ -54,6 +54,7 @@ DeadCode(pTHX)
 		    PerlIO_printf(Perl_debug_log, "  busy\n");
 		    continue;
 		}
+		padlist = CvPADLIST(cv);
 		svp = (SV**) PadlistARRAY(padlist);
 		while (++i <= PadlistMAX(padlist)) { /* Depth. */
 		    SV **args;
@@ -439,7 +440,7 @@ BOOT:
     assert(cv);
     cv_set_call_checker(cv, S_ck_dump, (SV *)cv);
 
-    XopENTRY_set(&my_xop, xop_name, "Dump");
+    XopENTRY_set(&my_xop, xop_name, "Devel_Peek_Dump");
     XopENTRY_set(&my_xop, xop_desc, "Dump");
     XopENTRY_set(&my_xop, xop_class, OA_BINOP);
     Perl_custom_op_register(aTHX_ S_pp_dump, &my_xop);

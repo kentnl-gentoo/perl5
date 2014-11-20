@@ -14,14 +14,14 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
 	 OPf_KIDS OPf_REF OPf_STACKED OPf_SPECIAL OPf_MOD OPf_PARENS
 	 OPpLVAL_INTRO OPpOUR_INTRO OPpENTERSUB_AMPER OPpSLICE OPpCONST_BARE
 	 OPpTRANS_SQUASH OPpTRANS_DELETE OPpTRANS_COMPLEMENT OPpTARGET_MY
-	 OPpEXISTS_SUB OPpSORT_NUMERIC OPpSORT_INTEGER
+	 OPpEXISTS_SUB OPpSORT_NUMERIC OPpSORT_INTEGER OPpREPEAT_DOLIST
 	 OPpSORT_REVERSE
 	 SVf_IOK SVf_NOK SVf_ROK SVf_POK SVpad_OUR SVf_FAKE SVs_RMG SVs_SMG
 	 SVpad_TYPED
          CVf_METHOD CVf_LVALUE
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED PMf_EXTENDED_MORE);
-$VERSION = '1.29';
+$VERSION = '1.30';
 use strict;
 use vars qw/$AUTOLOAD/;
 use warnings ();
@@ -323,7 +323,8 @@ BEGIN {
 
 
 
-BEGIN { for (qw[ const stringify rv2sv list glob pushmark null aelem]) {
+BEGIN { for (qw[ const stringify rv2sv list glob pushmark null aelem
+		 custom ]) {
     eval "sub OP_\U$_ () { " . opnumber($_) . "}"
 }}
 
@@ -358,9 +359,6 @@ sub _pessimise_walk {
 		    type => OP_PUSHMARK,
 		    name => 'pushmark',
 		    private => ($op->private & OPpLVAL_INTRO),
-		    next    => ($op->flags & OPf_SPECIAL)
-				    ? $op->sibling->first
-				    : $op->sibling,
 	    };
 	}
 
@@ -641,6 +639,11 @@ sub stash_subs {
 		next unless $AF eq $0 || exists $self->{'files'}{$AF};
 	    }
 	    push @{$self->{'protos_todo'}}, [$pack . $key, undef];
+	} elsif ($class eq "IV") {
+	    # A reference.  Dump this if it is a reference to a CV.
+	    if (class(my $cv = $val->RV) eq "CV") {
+		$self->todo($cv, 0);
+	    }
 	} elsif ($class eq "GV") {
 	    if (class(my $cv = $val->CV) ne "SPECIAL") {
 		next if $self->{'subs_done'}{$$val}++;
@@ -1309,7 +1312,8 @@ sub maybe_my {
 
 sub AUTOLOAD {
     if ($AUTOLOAD =~ s/^.*::pp_//) {
-	warn "unexpected OP_".uc $AUTOLOAD;
+	warn "unexpected OP_".
+	  ($_[1]->type == OP_CUSTOM ? "CUSTOM ($AUTOLOAD)" : uc $AUTOLOAD);
 	return "XXX";
     } else {
 	die "Undefined subroutine $AUTOLOAD called";
@@ -1437,7 +1441,9 @@ sub walk_lineseq {
 		$i += $kids[$i]->sibling->name eq "unstack" ? 2 : 1);
 	    next;
 	}
-	$expr .= $self->deparse($kids[$i], (@kids != 1)/2);
+	my $expr2 = $self->deparse($kids[$i], (@kids != 1)/2);
+	$expr2 =~ s/^sub :/+sub :/; # statement label otherwise
+	$expr .= $expr2;
 	$expr =~ s/;\n?\z//;
 	$callback->($expr, $i);
     }
@@ -1621,11 +1627,13 @@ sub find_scope {
 sub cop_subs {
     my ($self, $op, $out_seq) = @_;
     my $seq = $op->cop_seq;
-    # If we have nephews, then our sequence number indicates
-    # the cop_seq of the end of some sort of scope.
-    if (class($op->sibling) ne "NULL" && $op->sibling->flags & OPf_KIDS
+    if ($] < 5.021006) {
+      # If we have nephews, then our sequence number indicates
+      # the cop_seq of the end of some sort of scope.
+      if (class($op->sibling) ne "NULL" && $op->sibling->flags & OPf_KIDS
 	and my $nseq = $self->find_scope_st($op->sibling) ) {
 	$seq = $nseq;
+      }
     }
     $seq = $out_seq if defined($out_seq) && $out_seq < $seq;
     return $self->seq_subs($seq);
@@ -1637,10 +1645,18 @@ sub seq_subs {
 #push @text, "# ($seq)\n";
 
     return "" if !defined $seq;
+    my @pending;
     while (scalar(@{$self->{'subs_todo'}})
 	   and $seq > $self->{'subs_todo'}[0][0]) {
+	my $cv = $self->{'subs_todo'}[0][1];
+	my $outside = $cv && $cv->OUTSIDE;
+	if ($cv and ${$cv->OUTSIDE || \0} != ${$self->{'curcv'}}) {
+	    push @pending, shift @{$self->{'subs_todo'}};
+	    next;
+	}
 	push @text, $self->next_todo;
     }
+    unshift @{$self->{'subs_todo'}}, @pending;
     return @text;
 }
 
@@ -2540,9 +2556,17 @@ sub binop {
     if ($flags & SWAP_CHILDREN) {
 	($left, $right) = ($right, $left);
     }
+    my $leftop = $left;
     $left = $self->deparse_binop_left($op, $left, $prec);
     $left = "($left)" if $flags & LIST_CONTEXT
-		&& $left !~ /^(my|our|local|)[\@\(]/;
+		     and    $left !~ /^(my|our|local|)[\@\(]/
+			 || do {
+				# Parenthesize if the left argument is a
+				# lone repeat op.
+				my $left = $leftop->first->sibling;
+				$left->name eq 'repeat'
+				    && null($left->sibling);
+			    };
     $right = $self->deparse_binop_right($op, $right, $prec);
     return $self->maybe_parens("$left $opname$eq $right", $cx, $prec);
 }
@@ -2621,8 +2645,10 @@ sub real_concat {
     return $self->maybe_parens("$left .$eq $right", $cx, $prec);
 }
 
+sub pp_repeat { maybe_targmy(@_, \&repeat) }
+
 # 'x' is weird when the left arg is a list
-sub pp_repeat {
+sub repeat {
     my $self = shift;
     my($op, $cx) = @_;
     my $left = $op->first;
@@ -2634,6 +2660,7 @@ sub pp_repeat {
 	$prec = 7;
     }
     if (null($right)) { # list repeat; count is inside left-side ex-list
+			# in 5.21.5 and earlier
 	my $kid = $left->first->sibling; # skip pushmark
 	my @exprs;
 	for (; !null($kid->sibling); $kid = $kid->sibling) {
@@ -2642,7 +2669,11 @@ sub pp_repeat {
 	$right = $kid;
 	$left = "(" . join(", ", @exprs). ")";
     } else {
-	$left = $self->deparse_binop_left($op, $left, $prec);
+	my $dolist = $op->private & OPpREPEAT_DOLIST;
+	$left = $self->deparse_binop_left($op, $left, $dolist ? 1 : $prec);
+	if ($dolist) {
+	    $left = "($left)";
+	}
     }
     $right = $self->deparse_binop_right($op, $right, $prec);
     return $self->maybe_parens("$left x$eq $right", $cx, $prec);
@@ -2809,7 +2840,7 @@ sub pp_substr {
     }
     maybe_local(@_, listop(@_, "substr"))
 }
-sub pp_vec { maybe_local(@_, listop(@_, "vec")) }
+sub pp_vec { maybe_targmy(@_, \&maybe_local, listop(@_, "vec")) }
 sub pp_index { maybe_targmy(@_, \&listop, "index") }
 sub pp_rindex { maybe_targmy(@_, \&listop, "rindex") }
 sub pp_sprintf { maybe_targmy(@_, \&listop, "sprintf") }
@@ -3034,6 +3065,18 @@ sub pp_grepwhile { mapop(@_, "grep") }
 sub pp_mapstart { baseop(@_, "map") }
 sub pp_grepstart { baseop(@_, "grep") }
 
+my %uses_intro;
+BEGIN {
+    @uses_intro{
+	eval { require B::Op_private }
+	  ? @{$B::Op_private::ops_using{OPpLVAL_INTRO}}
+	  : qw(gvsv rv2sv rv2hv rv2gv rv2av aelem helem aslice
+	       hslice delete padsv padav padhv enteriter entersub padrange
+	       pushmark cond_expr refassign list)
+    } = ();
+    delete @uses_intro{qw( lvref lvrefslice lvavref )};
+}
+
 sub pp_list {
     my $self = shift;
     my($op, $cx) = @_;
@@ -3044,27 +3087,10 @@ sub pp_list {
     my $local = "either"; # could be local(...), my(...), state(...) or our(...)
     my $type;
     for ($lop = $kid; !null($lop); $lop = $lop->sibling) {
-	# This assumes that no other private flags equal 128, and that
-	# OPs that store things other than flags in their op_private,
-	# like OP_AELEMFAST, won't be immediate children of a list.
-	#
-	# OP_ENTERSUB and OP_SPLIT can break this logic, so check for them.
-	# I suspect that open and exit can too.
-	# XXX This really needs to be rewritten to accept only those ops
-	#     known to take the OPpLVAL_INTRO flag.
-
 	my $lopname = $lop->name;
 	my $loppriv = $lop->private;
-	if (!($loppriv & (OPpLVAL_INTRO|OPpOUR_INTRO)
-		or $lopname eq "undef")
-	    or $lopname =~ /^(?:entersub|exit|open|split
-			       |lv(?:av)?ref(?:slice)?)\z/x)
-	{
-	    $local = ""; # or not
-	    last;
-	}
 	my $newtype;
-	if ($lopname =~ /^pad[ash]v$/) {
+	if ($lopname =~ /^pad[ash]v$/ && $loppriv & OPpLVAL_INTRO) {
 	    if ($loppriv & OPpPAD_STATE) { # state()
 		($local = "", last) if $local !~ /^(?:either|state)$/;
 		$local = "state";
@@ -3090,10 +3116,15 @@ sub pp_list {
 	       )) {
 		$newtype = $t;
 	    }
-	} elsif ($lopname ne "undef"
-		# specifically avoid the "reverse sort" optimisation,
-		# where "reverse" is nullified
-		&& !($lopname eq 'sort' && ($lop->flags & OPpSORT_REVERSE)))
+	} elsif ($lopname ne 'undef'
+	   and    !($loppriv & OPpLVAL_INTRO)
+	       || !exists $uses_intro{$lopname eq 'null'
+					? substr B::ppname($lop->targ), 3
+					: $lopname})
+	{
+	    $local = ""; # or not
+	    last;
+	} elsif ($lopname ne "undef")
 	{
 	    # local()
 	    ($local = "", last) if $local !~ /^(?:either|local)$/;
@@ -3189,7 +3220,9 @@ sub pp_once {
     my $cond = $op->first;
     my $true = $cond->sibling;
 
-    return $self->deparse($true, $cx);
+    my $ret = $self->deparse($true, $cx);
+    $ret =~ s/^(\(?)\$/$1 . $self->keyword("state") . ' $'/e;
+    $ret;
 }
 
 sub loop_common {
@@ -4727,7 +4760,7 @@ sub tr_decode_utf8 {
 
 sub pp_trans {
     my $self = shift;
-    my($op, $cx) = @_;
+    my($op, $cx, $morflags) = @_;
     my($from, $to);
     my $class = class($op);
     my $priv_flags = $op->private;
@@ -4744,10 +4777,16 @@ sub pp_trans {
     $flags .= "d" if $priv_flags & OPpTRANS_DELETE;
     $to = "" if $from eq $to and $flags eq "";
     $flags .= "s" if $priv_flags & OPpTRANS_SQUASH;
-    return $self->keyword("tr") . double_delim($from, $to) . $flags;
+    $flags .= $morflags if defined $morflags;
+    my $ret = $self->keyword("tr") . double_delim($from, $to) . $flags;
+    if (my $targ = $op->targ) {
+	return $self->maybe_parens($self->padname($targ) . " =~ $ret",
+				   $cx, 20);
+    }
+    return $ret;
 }
 
-sub pp_transr { &pp_trans . 'r' }
+sub pp_transr { push @_, 'r'; goto &pp_trans }
 
 sub re_dq_disambiguate {
     my ($first, $last) = @_;
@@ -4920,6 +4959,10 @@ sub matchop {
 	$var = $self->deparse($kid, 20);
 	$kid = $kid->sibling;
     }
+    elsif ($name eq 'match' and my $targ = $op->targ) {
+	$binop = 1;
+	$var = $self->padname($targ);
+    }
     my $quote = 1;
     my $pmflags = $op->pmflags;
     my $extended = ($pmflags & PMf_EXTENDED);
@@ -4976,6 +5019,9 @@ sub pp_qr { matchop(@_, "qr", "") }
 sub pp_runcv { unop(@_, "__SUB__"); }
 
 sub pp_split {
+    maybe_targmy(@_, \&split);
+}
+sub split {
     my $self = shift;
     my($op, $cx) = @_;
     my($kid, @exprs, $ary, $expr);
@@ -5055,6 +5101,10 @@ sub pp_subst {
 	$binop = 1;
 	$var = $self->deparse($kid, 20);
 	$kid = $kid->sibling;
+    }
+    elsif (my $targ = $op->targ) {
+	$binop = 1;
+	$var = $self->padname($targ);
     }
     my $flags = "";
     my $pmflags = $op->pmflags;
@@ -5144,8 +5194,7 @@ sub pp_refassign {
     my ($self, $op, $cx) = @_;
     my $left;
     if ($op->private & OPpLVREF_ELEM) {
-	$left = $op->first ->sibling   ->first  ->first;
-	           #  rhs  ex-srefgen  ex-list  ex-[ah]elem
+	$left = $op->first->sibling;
 	$left = maybe_local(@_, elem($self, $left, undef,
 				     $left->targ == OP_AELEM
 					? qw([ ] padav)
@@ -5613,7 +5662,8 @@ the main:: package, the code will include a package declaration.
 
 =item *
 
-The only pragmas to be completely supported are: C<use warnings>,
+In Perl 5.20 and earlier, the only pragmas to
+be completely supported are: C<use warnings>,
 C<use strict>, C<use bytes>, C<use integer>
 and C<use feature>.  (C<$[>, which
 behaves like a pragma, is also supported.)
@@ -5634,8 +5684,8 @@ exactly the right place.  So if you use a module which affects compilation
 (such as by over-riding keywords, overloading constants or whatever)
 then the output code might not work as intended.
 
-This is the most serious outstanding problem, and will require some help
-from the Perl core to fix.
+This is the most serious problem in Perl 5.20 and earlier.  Fixing this
+required internal changes in Perl 5.22.
 
 =item *
 
@@ -5656,7 +5706,7 @@ produced is already ordinary Perl which shouldn't be filtered again.
 
 =item *
 
-Optimised away statements are rendered as
+Optimized-away statements are rendered as
 '???'.  This includes statements that
 have a compile-time side-effect, such as the obscure
 
@@ -5674,6 +5724,9 @@ Lexical (my) variables declared in scopes external to a subroutine
 appear in code2ref output text as package variables.  This is a tricky
 problem, as perl has no native facility for referring to a lexical variable
 defined within a different scope, although L<PadWalker> is a good start.
+
+See also L<Data::Dump::Streamer>, which combines B::Deparse and
+L<PadWalker> to serialize closures properly.
 
 =item *
 

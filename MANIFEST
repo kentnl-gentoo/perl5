@@ -311,12 +311,12 @@ cpan/CPAN-Meta/t/load-bad.t
 cpan/CPAN-Meta/t/merge.t
 cpan/CPAN-Meta/t/meta-obj.t
 cpan/CPAN-Meta/t/no-index.t
+cpan/CPAN-Meta/t/optional_feature-merge.t
 cpan/CPAN-Meta/t/prereqs-finalize.t
 cpan/CPAN-Meta/t/prereqs-merge.t
 cpan/CPAN-Meta/t/prereqs.t
 cpan/CPAN-Meta/t/repository.t
 cpan/CPAN-Meta/t/save-load.t
-cpan/CPAN-Meta/t/strings.t
 cpan/CPAN-Meta/t/validator.t
 cpan/CPAN-Meta-YAML/lib/CPAN/Meta/YAML.pm		CPAN-Meta-YAML files
 cpan/CPAN-Meta-YAML/t/01_api.t
@@ -827,6 +827,7 @@ cpan/Encode/t/unibench.pl		benchmark script
 cpan/Encode/t/Unicode.t			test script
 cpan/Encode/t/utf8ref.t			test script
 cpan/Encode/t/utf8strict.t		test script
+cpan/Encode/t/utf8warnings.t
 cpan/Encode/TW/Makefile.PL		Encode extension
 cpan/Encode/TW/TW.pm			Encode extension
 cpan/Encode/ucm/8859-10.ucm		Unicode Character Map
@@ -970,8 +971,12 @@ cpan/ExtUtils-MakeMaker/lib/ExtUtils/Liblist/Kid.pm		Does the real work of the a
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/Liblist.pm			Locates libraries
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/Config.pm	MakeMaker wrapper for Config
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/FAQ.pod		MakeMaker FAQ
+cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/Locale.pm
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker.pm		Write Makefiles for extensions
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/Tutorial.pod	Writing a module with MakeMaker
+cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/version.pm
+cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/version/regex.pm
+cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/version/vpp.pm
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/Mkbootstrap.pm		Writes a bootstrap file (see MakeMaker)
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/Mksymlists.pm		Writes a linker options file for extensions
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_AIX.pm			MakeMaker methods for AIX
@@ -1020,6 +1025,7 @@ cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/PL_FILES.pm	MakeMaker test ut
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/Problem.pm	MakeMaker test utilities
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/Recurs.pm	MakeMaker test utilities
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/SAS.pm	MakeMaker test utilities
+cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/Unicode.pm
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/XS.pm	MakeMaker test utilities
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Utils.pm		MakeMaker test utilities
 cpan/ExtUtils-MakeMaker/t/lib/TieIn.pm				Testing library for dummy input handles
@@ -1065,7 +1071,9 @@ cpan/ExtUtils-MakeMaker/t/test_boilerplate.t			MakeMaker test
 cpan/ExtUtils-MakeMaker/t/testdata/reallylongdirectoryname/arch1/Config.pm	test data for MakeMaker
 cpan/ExtUtils-MakeMaker/t/testdata/reallylongdirectoryname/arch2/Config.pm	test data for MakeMaker
 cpan/ExtUtils-MakeMaker/t/testlib.t				See if ExtUtils::testlib works
+cpan/ExtUtils-MakeMaker/t/unicode.t
 cpan/ExtUtils-MakeMaker/t/VERSION_FROM.t			See if MakeMaker's VERSION_FROM works
+cpan/ExtUtils-MakeMaker/t/vstrings.t
 cpan/ExtUtils-MakeMaker/t/WriteEmptyMakefile.t			See if WriteEmptyMakefile works
 cpan/ExtUtils-MakeMaker/t/writemakefile_args.t			See if WriteMakefile works
 cpan/ExtUtils-MakeMaker/t/xs.t					Part of MakeMaker's test suite
@@ -1099,6 +1107,72 @@ cpan/Getopt-Long/t/gol-linkage.t	See if Getopt::Long works
 cpan/Getopt-Long/t/gol-oo.t		See if Getopt::Long works
 cpan/Getopt-Long/t/gol-xargv.t		See if Getopt::Long works
 cpan/Getopt-Long/t/gol-xstring.t	See if Getopt::Long works
+cpan/HTTP-Tiny/corpus/auth-01.txt
+cpan/HTTP-Tiny/corpus/auth-02.txt
+cpan/HTTP-Tiny/corpus/auth-03.txt
+cpan/HTTP-Tiny/corpus/auth-04.txt
+cpan/HTTP-Tiny/corpus/auth-05.txt
+cpan/HTTP-Tiny/corpus/cookies-01.txt
+cpan/HTTP-Tiny/corpus/cookies-02.txt
+cpan/HTTP-Tiny/corpus/cookies-03.txt
+cpan/HTTP-Tiny/corpus/cookies-04.txt
+cpan/HTTP-Tiny/corpus/cookies-05.txt
+cpan/HTTP-Tiny/corpus/cookies-06.txt
+cpan/HTTP-Tiny/corpus/cookies-07.txt
+cpan/HTTP-Tiny/corpus/delete-01.txt
+cpan/HTTP-Tiny/corpus/form-01.txt
+cpan/HTTP-Tiny/corpus/form-02.txt
+cpan/HTTP-Tiny/corpus/form-03.txt
+cpan/HTTP-Tiny/corpus/form-04.txt
+cpan/HTTP-Tiny/corpus/form-05.txt
+cpan/HTTP-Tiny/corpus/get-01.txt
+cpan/HTTP-Tiny/corpus/get-02.txt
+cpan/HTTP-Tiny/corpus/get-03.txt
+cpan/HTTP-Tiny/corpus/get-04.txt
+cpan/HTTP-Tiny/corpus/get-05.txt
+cpan/HTTP-Tiny/corpus/get-06.txt
+cpan/HTTP-Tiny/corpus/get-07.txt
+cpan/HTTP-Tiny/corpus/get-08.txt
+cpan/HTTP-Tiny/corpus/get-09.txt
+cpan/HTTP-Tiny/corpus/get-10.txt
+cpan/HTTP-Tiny/corpus/get-11.txt
+cpan/HTTP-Tiny/corpus/get-12.txt
+cpan/HTTP-Tiny/corpus/get-13.txt
+cpan/HTTP-Tiny/corpus/get-14.txt
+cpan/HTTP-Tiny/corpus/get-15.txt
+cpan/HTTP-Tiny/corpus/get-16.txt
+cpan/HTTP-Tiny/corpus/get-17.txt
+cpan/HTTP-Tiny/corpus/get-18.txt
+cpan/HTTP-Tiny/corpus/get-19.txt
+cpan/HTTP-Tiny/corpus/get-20.txt
+cpan/HTTP-Tiny/corpus/get-21.txt
+cpan/HTTP-Tiny/corpus/head-01.txt
+cpan/HTTP-Tiny/corpus/keepalive-01.txt
+cpan/HTTP-Tiny/corpus/keepalive-02.txt
+cpan/HTTP-Tiny/corpus/keepalive-03.txt
+cpan/HTTP-Tiny/corpus/keepalive-04.txt
+cpan/HTTP-Tiny/corpus/keepalive-05.txt
+cpan/HTTP-Tiny/corpus/mirror-01.txt
+cpan/HTTP-Tiny/corpus/mirror-02.txt
+cpan/HTTP-Tiny/corpus/mirror-03.txt
+cpan/HTTP-Tiny/corpus/mirror-04.txt
+cpan/HTTP-Tiny/corpus/mirror-05.txt
+cpan/HTTP-Tiny/corpus/post-01.txt
+cpan/HTTP-Tiny/corpus/proxy-auth-01.txt
+cpan/HTTP-Tiny/corpus/put-01.txt
+cpan/HTTP-Tiny/corpus/put-02.txt
+cpan/HTTP-Tiny/corpus/put-03.txt
+cpan/HTTP-Tiny/corpus/put-04.txt
+cpan/HTTP-Tiny/corpus/put-05.txt
+cpan/HTTP-Tiny/corpus/redirect-01.txt
+cpan/HTTP-Tiny/corpus/redirect-02.txt
+cpan/HTTP-Tiny/corpus/redirect-03.txt
+cpan/HTTP-Tiny/corpus/redirect-04.txt
+cpan/HTTP-Tiny/corpus/redirect-05.txt
+cpan/HTTP-Tiny/corpus/redirect-06.txt
+cpan/HTTP-Tiny/corpus/redirect-07.txt
+cpan/HTTP-Tiny/corpus/redirect-08.txt
+cpan/HTTP-Tiny/corpus/redirect-09.txt
 cpan/HTTP-Tiny/lib/HTTP/Tiny.pm
 cpan/HTTP-Tiny/t/000_load.t
 cpan/HTTP-Tiny/t/001_api.t
@@ -1126,72 +1200,6 @@ cpan/HTTP-Tiny/t/161_basic_auth.t
 cpan/HTTP-Tiny/t/162_proxy_auth.t
 cpan/HTTP-Tiny/t/170_keepalive.t
 cpan/HTTP-Tiny/t/BrokenCookieJar.pm
-cpan/HTTP-Tiny/t/cases/auth-01.txt
-cpan/HTTP-Tiny/t/cases/auth-02.txt
-cpan/HTTP-Tiny/t/cases/auth-03.txt
-cpan/HTTP-Tiny/t/cases/auth-04.txt
-cpan/HTTP-Tiny/t/cases/auth-05.txt
-cpan/HTTP-Tiny/t/cases/cookies-01.txt
-cpan/HTTP-Tiny/t/cases/cookies-02.txt
-cpan/HTTP-Tiny/t/cases/cookies-03.txt
-cpan/HTTP-Tiny/t/cases/cookies-04.txt
-cpan/HTTP-Tiny/t/cases/cookies-05.txt
-cpan/HTTP-Tiny/t/cases/cookies-06.txt
-cpan/HTTP-Tiny/t/cases/cookies-07.txt
-cpan/HTTP-Tiny/t/cases/delete-01.txt
-cpan/HTTP-Tiny/t/cases/form-01.txt
-cpan/HTTP-Tiny/t/cases/form-02.txt
-cpan/HTTP-Tiny/t/cases/form-03.txt
-cpan/HTTP-Tiny/t/cases/form-04.txt
-cpan/HTTP-Tiny/t/cases/form-05.txt
-cpan/HTTP-Tiny/t/cases/get-01.txt
-cpan/HTTP-Tiny/t/cases/get-02.txt
-cpan/HTTP-Tiny/t/cases/get-03.txt
-cpan/HTTP-Tiny/t/cases/get-04.txt
-cpan/HTTP-Tiny/t/cases/get-05.txt
-cpan/HTTP-Tiny/t/cases/get-06.txt
-cpan/HTTP-Tiny/t/cases/get-07.txt
-cpan/HTTP-Tiny/t/cases/get-08.txt
-cpan/HTTP-Tiny/t/cases/get-09.txt
-cpan/HTTP-Tiny/t/cases/get-10.txt
-cpan/HTTP-Tiny/t/cases/get-11.txt
-cpan/HTTP-Tiny/t/cases/get-12.txt
-cpan/HTTP-Tiny/t/cases/get-13.txt
-cpan/HTTP-Tiny/t/cases/get-14.txt
-cpan/HTTP-Tiny/t/cases/get-15.txt
-cpan/HTTP-Tiny/t/cases/get-16.txt
-cpan/HTTP-Tiny/t/cases/get-17.txt
-cpan/HTTP-Tiny/t/cases/get-18.txt
-cpan/HTTP-Tiny/t/cases/get-19.txt
-cpan/HTTP-Tiny/t/cases/get-20.txt
-cpan/HTTP-Tiny/t/cases/get-21.txt
-cpan/HTTP-Tiny/t/cases/head-01.txt
-cpan/HTTP-Tiny/t/cases/keepalive-01.txt
-cpan/HTTP-Tiny/t/cases/keepalive-02.txt
-cpan/HTTP-Tiny/t/cases/keepalive-03.txt
-cpan/HTTP-Tiny/t/cases/keepalive-04.txt
-cpan/HTTP-Tiny/t/cases/keepalive-05.txt
-cpan/HTTP-Tiny/t/cases/mirror-01.txt
-cpan/HTTP-Tiny/t/cases/mirror-02.txt
-cpan/HTTP-Tiny/t/cases/mirror-03.txt
-cpan/HTTP-Tiny/t/cases/mirror-04.txt
-cpan/HTTP-Tiny/t/cases/mirror-05.txt
-cpan/HTTP-Tiny/t/cases/post-01.txt
-cpan/HTTP-Tiny/t/cases/proxy-auth-01.txt
-cpan/HTTP-Tiny/t/cases/put-01.txt
-cpan/HTTP-Tiny/t/cases/put-02.txt
-cpan/HTTP-Tiny/t/cases/put-03.txt
-cpan/HTTP-Tiny/t/cases/put-04.txt
-cpan/HTTP-Tiny/t/cases/put-05.txt
-cpan/HTTP-Tiny/t/cases/redirect-01.txt
-cpan/HTTP-Tiny/t/cases/redirect-02.txt
-cpan/HTTP-Tiny/t/cases/redirect-03.txt
-cpan/HTTP-Tiny/t/cases/redirect-04.txt
-cpan/HTTP-Tiny/t/cases/redirect-05.txt
-cpan/HTTP-Tiny/t/cases/redirect-06.txt
-cpan/HTTP-Tiny/t/cases/redirect-07.txt
-cpan/HTTP-Tiny/t/cases/redirect-08.txt
-cpan/HTTP-Tiny/t/cases/redirect-09.txt
 cpan/HTTP-Tiny/t/SimpleCookieJar.pm
 cpan/HTTP-Tiny/t/Util.pm
 cpan/IO-Compress/bin/zipdetails				IO::Compress
@@ -2246,146 +2254,248 @@ cpan/Test-Harness/t/yamlish-output.t			Test::Harness test
 cpan/Test-Harness/t/yamlish.t				Test::Harness test
 cpan/Test-Harness/t/yamlish-writer.t			Test::Harness test
 cpan/Test/lib/Test.pm		A simple framework for writing test scripts
-cpan/Test-Simple/lib/Test/Builder/Module.pm		Base class for test modules
-cpan/Test-Simple/lib/Test/Builder.pm			For writing new test libraries
-cpan/Test-Simple/lib/Test/Builder/Tester/Color.pm	Turn on color in Test::Builder::Tester
-cpan/Test-Simple/lib/Test/Builder/Tester.pm		For testing Test::Builder based classes
-cpan/Test-Simple/lib/Test/More.pm			More utilities for writing tests
-cpan/Test-Simple/lib/Test/Simple.pm			Basic utility for writing tests
-cpan/Test-Simple/lib/Test/Tutorial.pod			A tutorial on writing tests
-cpan/Test-Simple/t/00test_harness_check.t		Test::Simple test
-cpan/Test-Simple/t/bad_plan.t				Test::Builder plan() test
-cpan/Test-Simple/t/bail_out.t				Test::Builder BAIL_OUT test
-cpan/Test-Simple/t/BEGIN_require_ok.t			Test::More require_ok() testing
-cpan/Test-Simple/t/BEGIN_use_ok.t			Test::More use_ok() testing
-cpan/Test-Simple/t/buffer.t				Test::Builder buffering test
-cpan/Test-Simple/t/Builder/Builder.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/carp.t			Test::Builder test
-cpan/Test-Simple/t/Builder/create.t			Test::Builder test
-cpan/Test-Simple/t/Builder/current_test.t		Test::Builder tests
-cpan/Test-Simple/t/Builder/current_test_without_plan.t	Test::Builder tests
-cpan/Test-Simple/t/Builder/details.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/done_testing_double.t		Test::Builder tests
-cpan/Test-Simple/t/Builder/done_testing_plan_mismatch.t	Test::Builder tests
-cpan/Test-Simple/t/Builder/done_testing.t		Test::Builder tests
-cpan/Test-Simple/t/Builder/done_testing_with_no_plan.t	Test::Builder tests
-cpan/Test-Simple/t/Builder/done_testing_with_number.t	Test::Builder tests
-cpan/Test-Simple/t/Builder/done_testing_with_plan.t	Test::Builder tests
-cpan/Test-Simple/t/Builder/fork_with_new_stdout.t	Test::Builder tests
-cpan/Test-Simple/t/Builder/has_plan2.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/has_plan.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/is_fh.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/is_passing.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/maybe_regex.t		Test::Builder tests
-cpan/Test-Simple/t/Builder/no_diag.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/no_ending.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/no_header.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/no_plan_at_all.t		Test::Builder tests
-cpan/Test-Simple/t/Builder/ok_obj.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/output.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/reset.t			Test::Builder tests
-cpan/Test-Simple/t/Builder/try.t			Test::Builder tests
-cpan/Test-Simple/t/c_flag.t				Test::Simple test
-cpan/Test-Simple/t/circular_data.t			Test::Simple test
-cpan/Test-Simple/t/cmp_ok.t				Test::More test
-cpan/Test-Simple/t/dependents.t				Test::More test
-cpan/Test-Simple/t/diag.t				Test::More diag() test
-cpan/Test-Simple/t/died.t				Test::Simple test
-cpan/Test-Simple/t/dont_overwrite_die_handler.t		Test::More tests
-cpan/Test-Simple/t/eq_set.t				Test::Simple test
-cpan/Test-Simple/t/exit.t				Test::Simple test, exit codes
-cpan/Test-Simple/t/explain.t				Test::Simple test
-cpan/Test-Simple/t/extra_one.t				Test::Simple test
-cpan/Test-Simple/t/extra.t				Test::Simple test
-cpan/Test-Simple/t/fail-like.t				Test::More test, like() failures
-cpan/Test-Simple/t/fail-more.t				Test::More test, tests failing
-cpan/Test-Simple/t/fail_one.t				Test::Simple test
-cpan/Test-Simple/t/fail.t				Test::Simple test, test failures
-cpan/Test-Simple/t/filehandles.t			Test::Simple test, STDOUT can be played with
-cpan/Test-Simple/t/fork.t				Test::More fork tests
-cpan/Test-Simple/t/harness_active.t			Test::Simple test
-cpan/Test-Simple/t/import.t				Test::More test, importing functions
-cpan/Test-Simple/t/is_deeply_dne_bug.t			Test::More test
-cpan/Test-Simple/t/is_deeply_fail.t			Test::More test, is_deeply()
-cpan/Test-Simple/t/is_deeply_with_threads.t		Test::More test
-cpan/Test-Simple/t/lib/Dev/Null.pm			Test::More test module
-cpan/Test-Simple/t/lib/Dummy.pm				Test::More test module
-cpan/Test-Simple/t/lib/MyOverload.pm			Test::More test module
-cpan/Test-Simple/t/lib/NoExporter.pm			Test::Simple test module
-cpan/Test-Simple/t/lib/SigDie.pm			Test module for Test::More
-cpan/Test-Simple/t/lib/Test/Builder/NoOutput.pm		Utility module for testing Test::Builder
-cpan/Test-Simple/t/lib/Test/Simple/Catch.pm		Utility module for testing Test::Simple
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/death_in_eval.plx	for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/death.plx		for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/death_with_handler.plx	for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/exit.plx			for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/extras.plx		for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/five_fail.plx		for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/last_minute_death.plx	for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/missing_done_testing.plx	for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/one_fail.plx		for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/one_fail_without_plan.plx	for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/pre_plan_death.plx	for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/require.plx		for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/success.plx		for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/too_few_fail.plx		for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/too_few.plx		for exit.t
-cpan/Test-Simple/t/lib/Test/Simple/sample_tests/two_fail.plx		for exit.t
-cpan/Test-Simple/t/lib/TieOut.pm			Testing library to capture prints
-cpan/Test-Simple/t/missing.t				Test::Simple test, missing tests
-cpan/Test-Simple/t/More.t				Test::More test, basic stuff
-cpan/Test-Simple/t/new_ok.t				Test::More test
-cpan/Test-Simple/t/no_plan.t				Test::Simple test, forgot the plan
-cpan/Test-Simple/t/no_tests.t				Test::More test
-cpan/Test-Simple/t/note.t				Test::More test
-cpan/Test-Simple/t/overload.t				Test::Simple test
-cpan/Test-Simple/t/overload_threads.t			Test::Simple test
-cpan/Test-Simple/t/plan_bad.t				Test::Simple test
-cpan/Test-Simple/t/plan_is_noplan.t			Test::Simple test, no_plan
-cpan/Test-Simple/t/plan_no_plan.t			Test::More test, plan() w/no_plan
-cpan/Test-Simple/t/plan_shouldnt_import.t		Test::Simple test
-cpan/Test-Simple/t/plan_skip_all.t			Test::More test, plan() w/skip_all
-cpan/Test-Simple/t/plan.t				Test::More test, plan()
-cpan/Test-Simple/t/require_ok.t				Test::Simple test
-cpan/Test-Simple/t/Simple/load.t			Test::Builder tests
-cpan/Test-Simple/t/simple.t				Test::Simple test, basic stuff
-cpan/Test-Simple/t/skipall.t				Test::More test, skip all tests
-cpan/Test-Simple/t/skip.t				Test::More test, SKIP tests
-cpan/Test-Simple/t/subtest/args.t			Test::More test
-cpan/Test-Simple/t/subtest/bail_out.t			Test::More test
-cpan/Test-Simple/t/subtest/basic.t			Test::More test
-cpan/Test-Simple/t/subtest/die.t			Test::More test
-cpan/Test-Simple/t/subtest/do.t				Test::More test
-cpan/Test-Simple/t/subtest/exceptions.t			Test::More test
-cpan/Test-Simple/t/subtest/for_do_t.test		Test::More test
-cpan/Test-Simple/t/subtest/fork.t			Test::Builder tests
-cpan/Test-Simple/t/subtest/implicit_done.t			Test::Builder tests
-cpan/Test-Simple/t/subtest/line_numbers.t			Test::Builder tests
-cpan/Test-Simple/t/subtest/plan.t			Test::Builder tests
-cpan/Test-Simple/t/subtest/predicate.t			Test::Builder tests
-cpan/Test-Simple/t/subtest/singleton.t			Test::More test
-cpan/Test-Simple/t/subtest/threads.t			Test::More test
-cpan/Test-Simple/t/subtest/todo.t			Test::Builder tests
-cpan/Test-Simple/t/subtest/wstat.t			Test::More test
-cpan/Test-Simple/t/tbm_doesnt_set_exported_to.t		Test::Builder::Module test
-cpan/Test-Simple/t/Tester/tbt_01basic.t			Test::Builder::Tester test
-cpan/Test-Simple/t/Tester/tbt_02fhrestore.t		Test::Builder::Tester test
-cpan/Test-Simple/t/Tester/tbt_03die.t			Test::Builder::Tester test
-cpan/Test-Simple/t/Tester/tbt_04line_num.t		Test::Builder::Tester test
-cpan/Test-Simple/t/Tester/tbt_05faildiag.t		Test::Builder::Tester test
-cpan/Test-Simple/t/Tester/tbt_06errormess.t		Test::Builder::Tester test
-cpan/Test-Simple/t/Tester/tbt_07args.t			Test::Builder::Tester test
-cpan/Test-Simple/t/Tester/tbt_08subtest.t		Test::Builder::Tester test
-cpan/Test-Simple/t/Tester/tbt_09do_script.pl		Test::Builder::Tester test
-cpan/Test-Simple/t/Tester/tbt_09do.t			Test::Builder::Tester test
-cpan/Test-Simple/t/threads.t				Test::Builder thread-safe checks
-cpan/Test-Simple/t/thread_taint.t			Test::Simple test
-cpan/Test-Simple/t/todo.t				Test::More test, TODO tests
-cpan/Test-Simple/t/undef.t				Test::More test, undefs don't cause warnings
-cpan/Test-Simple/t/useing.t				Test::More test, compile test
-cpan/Test-Simple/t/use_ok.t				Test::More test, use_ok()
-cpan/Test-Simple/t/utf8.t				Test::More test
-cpan/Test-Simple/t/versions.t				Test::More test
+cpan/Test-Simple/lib/ok.pm			Test::Simple library
+cpan/Test-Simple/lib/Test/Builder/Module.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Builder.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Builder/Tester/Color.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Builder/Tester.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/FAQ.pod			Test::Simple module
+cpan/Test-Simple/lib/Test/More/DeepCheck.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/More/DeepCheck/Strict.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/More/DeepCheck/Tolerant.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/More.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/More/Tools.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/MostlyLike.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Simple.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Architecture.pod			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/ArrayBase/Meta.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/ArrayBase.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Carp.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Context.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Event/Bail.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Event/Child.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Event/Diag.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Event/Finish.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Event/Note.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Event/Ok.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Event/Plan.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Event.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Event/Subtest.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/ExitMagic/Context.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/ExitMagic.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Exporter/Meta.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Exporter.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/IOSets.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Meta.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/PackageUtil.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Tester/Checks/Event.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Tester/Checks.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Tester/Events/Event.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Tester/Events.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Tester/Grab.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Tester.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Threads.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Toolset.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Util.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Tester/Capture.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Tester.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Tutorial.pod			Test::Simple documentation
+cpan/Test-Simple/lib/Test/Tutorial/WritingTests.pod			Test::Simple documentation
+cpan/Test-Simple/lib/Test/Tutorial/WritingTools.pod			Test::Simple documentation
+cpan/Test-Simple/lib/Test/use/ok.pm			Test::Simple library
+cpan/Test-Simple/t/Behavior/388-threadedsubtest.load			Test::Simple Test
+cpan/Test-Simple/t/Behavior/388-threadedsubtest.t			Test::Simple test
+cpan/Test-Simple/t/Behavior/478-cmp_ok_hash.t			Test::Simple test
+cpan/Test-Simple/t/Behavior/490-inherit_exporter.t			Test::Simple test
+cpan/Test-Simple/t/Behavior/cmp_ok_xor.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/encoding_test.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/fork_new_end.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/MonkeyPatching_diag.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/MonkeyPatching_done_testing.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/MonkeyPatching_note.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/MonkeyPatching_ok.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/MonkeyPatching_plan.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/Munge.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/NotTB15.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/skip_all_in_subtest.load			Test::Simple Test
+cpan/Test-Simple/t/Behavior/skip_all_in_subtest.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/Tester2_subtest.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/threads_with_taint_mode.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/todo.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/bad_plan.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/bail_out.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/BEGIN_require_ok.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/BEGIN_use_ok.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/buffer.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/Builder.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/carp.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/create.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/current_test.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/current_test_without_plan.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/details.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/done_testing_double.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/done_testing_plan_mismatch.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/done_testing.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/done_testing_with_no_plan.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/done_testing_with_number.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/done_testing_with_plan.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/fork_with_new_stdout.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/has_plan2.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/has_plan.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/is_fh.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/is_passing.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/maybe_regex.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/no_diag.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/no_ending.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/no_header.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/no_plan_at_all.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/ok_obj.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/output.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/reset_outputs.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Builder/reset.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/c_flag.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/circular_data.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/cmp_ok.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/dependents.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/diag.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/died.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/dont_overwrite_die_handler.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/eq_set.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/exit.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/explain.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/extra_one.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/extra.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/fail-like.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/fail-more.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/fail_one.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/fail.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/filehandles.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/fork_in_subtest.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/fork.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/harness_active.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/import.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/is_deeply_dne_bug.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/is_deeply_fail.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/is_deeply_with_threads.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/missing.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/More.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/new_ok.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/no_plan.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/no_tests.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/note.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/overload.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/overload_threads.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/PerlIO.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/plan_bad.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/plan_is_noplan.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/plan_no_plan.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/plan_shouldnt_import.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/plan_skip_all.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/plan.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/pod.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/require_ok.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/ribasushi_diag.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/ribasushi_threads2.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/ribasushi_threads.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Simple/load.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/simple.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/skipall.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/skip.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/strays.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/args.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/bail_out.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/basic.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/die.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/do.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/exceptions.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/for_do_t.test			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/fork.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/implicit_done.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/line_numbers.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/plan.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/predicate.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/singleton.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/threads.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/todo.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/subtest/wstat.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/tbm_doesnt_set_exported_to.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Tester/tbt_01basic.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Tester/tbt_02fhrestore.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Tester/tbt_03die.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Tester/tbt_04line_num.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Tester/tbt_05faildiag.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Tester/tbt_06errormess.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Tester/tbt_07args.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Tester/tbt_08subtest.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Tester/tbt_09do_script.pl			Test::Simple Test
+cpan/Test-Simple/t/Legacy/Tester/tbt_09do.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/TestTester/auto.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/TestTester/check_tests.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/TestTester/depth.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/TestTester/is_bug.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/TestTester/run_test.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/test_use_ok.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/threads.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/thread_taint.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/todo.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/undef.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/useing.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/use_ok.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/utf8.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/versions.t			Test::Simple Test
+cpan/Test-Simple/t/lib/Dev/Null.pm			Test::Simple Test
+cpan/Test-Simple/t/lib/Dummy.pm			Test::Simple Test
+cpan/Test-Simple/t/lib/MyOverload.pm			Test::Simple Test
+cpan/Test-Simple/t/lib/MyTest.pm			Test::Simple Test
+cpan/Test-Simple/t/lib/NoExporter.pm			Test::Simple Test
+cpan/Test-Simple/t/lib/SigDie.pm			Test::Simple Test
+cpan/Test-Simple/t/lib/SmallTest.pm			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Builder/NoOutput.pm			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/Catch.pm			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/death_in_eval.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/death.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/death_with_handler.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/exit.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/extras.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/five_fail.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/last_minute_death.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/missing_done_testing.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/one_fail.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/one_fail_without_plan.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/pre_plan_death.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/require.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/success.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/too_few_fail.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/too_few.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/Test/Simple/sample_tests/two_fail.plx			Test::Simple Test
+cpan/Test-Simple/t/lib/TieOut.pm			Test::Simple Test
+cpan/Test-Simple/t/Test-Builder.t			Test::Simple Test
+cpan/Test-Simple/t/Test-More-DeepCheck.t			Test::Simple Test
+cpan/Test-Simple/t/Test-More.t			Test::Simple Test
+cpan/Test-Simple/t/Test-MostlyLike.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Simple.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-ArrayBase-Meta.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-ArrayBase.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Carp.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Event-Diag.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Event-Finish.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Event-Note.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Event.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-ExitMagic-Context.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Exporter-Meta.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Exporter.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-IOSets.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Meta.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-PackageUtil.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Tester-Grab.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Tester.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Toolset.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Util.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Tester-Capture.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Tester.t			Test::Simple Test
+cpan/Test-Simple/t/Test-use-ok.t			Test::Simple Test
+cpan/Test-Simple/t/xt/dependents.t			Test::Simple Test
 cpan/Test/t/05_about_verbose.t	See if Test works
 cpan/Test/t/fail.t		See if Test works
 cpan/Test/t/mix.t		See if Test works
@@ -3209,6 +3319,7 @@ dist/PathTools/lib/File/Spec/Unix.pm		portable operations on Unix file names
 dist/PathTools/lib/File/Spec/VMS.pm		portable operations on VMS file names
 dist/PathTools/lib/File/Spec/Win32.pm		portable operations on Win32 and NetWare file names
 dist/PathTools/Makefile.PL			makefile writer for Cwd
+dist/PathTools/t/abs2rel.t		See if File::Spec->abs2rel works
 dist/PathTools/t/crossplatform.t		See if File::Spec works crossplatform
 dist/PathTools/t/cwd.t			See if Cwd works
 dist/PathTools/t/Functions.t			See if File::Spec::Functions works
@@ -3817,6 +3928,7 @@ ext/XS-APItest/t/gv_fetchmeth.t		XS::APItest: tests for gv_fetchmeth() and varia
 ext/XS-APItest/t/gv_init.t	XS::APItest: tests for gv_init and variants
 ext/XS-APItest/t/handy.t	XS::APItest: tests for handy.h
 ext/XS-APItest/t/hash.t		XS::APItest: tests for hash related APIs
+ext/XS-APItest/t/join_with_space.t	test op_convert_list
 ext/XS-APItest/t/keyword_multiline.t	test keyword plugin parsing across lines
 ext/XS-APItest/t/keyword_plugin.t	test keyword plugin mechanism
 ext/XS-APItest/t/labelconst.aux	auxiliary file for label test
@@ -3835,6 +3947,7 @@ ext/XS-APItest/t/multicall.t	XS::APItest: test MULTICALL macros
 ext/XS-APItest/t/my_cxt.t	XS::APItest: test MY_CXT interface
 ext/XS-APItest/t/my_exit.t	XS::APItest: test my_exit
 ext/XS-APItest/t/newCONSTSUB.t	XS::APItest: test newCONSTSUB(_flags)
+ext/XS-APItest/t/newDEFSVOP.t	XS::APItest: test newDEFSVOP
 ext/XS-APItest/t/Null.pm	Helper for ./blockhooks.t
 ext/XS-APItest/t/op_contextualize.t	test op_contextualize() API
 ext/XS-APItest/t/op_list.t	test OP list construction API
@@ -3867,6 +3980,7 @@ ext/XS-APItest/t/svsetsv.t	Test behaviour of sv_setsv with/without PERL_CORE
 ext/XS-APItest/t/swaplabel.t	test recursive descent label parsing
 ext/XS-APItest/t/swaptwostmts.t	test recursive descent statement parsing
 ext/XS-APItest/t/sym-hook.t	Test rv2cv hooks for bareword lookup
+ext/XS-APItest/t/synthetic_scope.t	Test block_start/block_end/intro_my
 ext/XS-APItest/t/temp_lv_sub.t	XS::APItest: tests for lvalue subs returning temps
 ext/XS-APItest/t/underscore_length.t	Test find_rundefsv()
 ext/XS-APItest/t/utf16_to_utf8.t	Test behaviour of utf16_to_utf8{,reversed}
@@ -4471,6 +4585,7 @@ pod/perl5211delta.pod		Perl changes in version 5.21.1
 pod/perl5212delta.pod		Perl changes in version 5.21.2
 pod/perl5213delta.pod		Perl changes in version 5.21.3
 pod/perl5214delta.pod		Perl changes in version 5.21.4
+pod/perl5215delta.pod		Perl changes in version 5.21.5
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4867,6 +4982,7 @@ t/io/print.t			See if print commands work
 t/io/pvbm.t			See if PVBMs break IO commands
 t/io/read.t			See if read works
 t/io/say.t			See if say works
+t/io/semctl.t			See if SysV semaphore semctl works
 t/io/sem.t			See if SysV semaphores work
 t/io/shm.t			See if SysV shared memory works
 t/io/socket.t			See if socket functions work
@@ -4936,7 +5052,6 @@ t/lib/warnings/doio		Tests for doio.c for warnings.t
 t/lib/warnings/doop		Tests for doop.c for warnings.t
 t/lib/warnings/gv		Tests for gv.c for warnings.t
 t/lib/warnings/hv		Tests for hv.c for warnings.t
-t/lib/warnings/irs		Tests for $/ for warnings.t
 t/lib/warnings/malloc		Tests for malloc.c for warnings.t
 t/lib/warnings/mg		Tests for mg.c for warnings.t
 t/lib/warnings/op		Tests for op.c for warnings.t
@@ -5063,6 +5178,7 @@ t/op/closure.t			See if closures work
 t/op/closure_test.pl		Extra file for closure.t
 t/op/concat2.t			Tests too complex for concat.t
 t/op/cond.t			See if conditional expressions work
+t/op/const-optree.t		Tests for sub(){...} becoming constant
 t/op/context.t			See if context propagation works
 t/op/coreamp.t			Test &foo() calls for CORE subs
 t/op/coresubs.t			Generic tests for CORE subs
@@ -5150,7 +5266,6 @@ t/op/negate.t			See if unary minus works
 t/op/not.t			See if not works
 t/op/numconvert.t		See if accessing fields does not change numeric values
 t/op/oct.t			See if oct and hex work
-t/op/opt.t			Test presence of some op optimisations
 t/op/ord.t			See if ord works
 t/op/or.t			See if || works in weird situations
 t/op/overload_integer.t		See if overload::constant for integer works after "use".
@@ -5240,6 +5355,11 @@ t/op/warn.t			See if warn works
 t/op/while.t			See if while loops work
 t/op/write.t			See if write works (formats work)
 t/op/yadayada.t			See if ... works
+t/perf/benchmarks		snippets of benchmarking/profiling code
+t/perf/benchmarks.t		test t/perf/benchmarks syntax
+t/perf/opcount.t		See if optimised subs have the right op counts
+t/perf/optree.t			Test presence of some op optimisations
+t/perf/speed.t			See if optimisations are keeping things fast
 t/perl.supp			Perl valgrind suppressions
 t/porting/args_assert.t		Check that all PERL_ARGS_ASSERT* macros are used
 t/porting/authors.t		Check that all authors have been acknowledged

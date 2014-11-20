@@ -13,7 +13,7 @@ use warnings;
 use strict;
 use Test::More;
 
-my $tests = 25; # not counting those in the __DATA__ section
+my $tests = 28; # not counting those in the __DATA__ section
 
 use B::Deparse;
 my $deparse = B::Deparse->new();
@@ -125,8 +125,6 @@ $a = `$^X $path "-MO=Deparse" -anlwi.bak -e 1 2>&1`;
 $a =~ s/-e syntax OK\n//g;
 $a =~ s/.*possible typo.*\n//;	   # Remove warning line
 $a =~ s/.*-i used with no filenames.*\n//;	# Remove warning line
-$a =~ s{\\340\\242}{\\s} if (ord("\\") == 224); # EBCDIC, cp 1047 or 037
-$a =~ s{\\274\\242}{\\s} if (ord("\\") == 188); # $^O eq 'posix-bc'
 $b = quotemeta <<'EOF';
 BEGIN { $^I = ".bak"; }
 BEGIN { $^W = 1; }
@@ -323,6 +321,59 @@ $a = readpipe qq`$^X $path "-MO=Deparse" -Xe `
 like($a, qr/my sub __DATA__;\n\(\);\nCORE::__DATA__/,
     'CORE::__DATA__ after my sub __DATA__');
 
+# sub declarations
+$a = readpipe qq`$^X $path "-MO=Deparse" -e "sub foo{}" 2>&1`;
+like($a, qr/sub foo\s*\{\s+\}/, 'sub declarations');
+
+# BEGIN blocks
+SKIP : {
+    skip "BEGIN output is wrong on old perls", 1 if $] < 5.021006;
+    my $prog = '
+      BEGIN { pop }
+      {
+        BEGIN { pop }
+        {
+          no overloading;
+          {
+            BEGIN { pop }
+            die
+          }
+        }
+      }';
+    $prog =~ s/\n//g;
+    $a = readpipe qq`$^X $path "-MO=Deparse" -e "$prog" 2>&1`;
+    $a =~ s/-e syntax OK\n//g;
+    is($a, <<'EOCODJ', 'BEGIN blocks');
+sub BEGIN {
+    pop @ARGV;
+}
+{
+    sub BEGIN {
+        pop @ARGV;
+    }
+    {
+        no overloading;
+        {
+            sub BEGIN {
+                pop @ARGV;
+            }
+            die;
+        }
+    }
+}
+EOCODJ
+}
+
+# [perl #115066]
+my $prog = 'use constant FOO => do { 1 }; no overloading; die';
+$a = readpipe qq`$^X $path "-MO=-qq,Deparse" -e "$prog" 2>&1`;
+is($a, <<'EOCODK', '[perl #115066] use statements accidentally nested');
+use constant ('FOO', do {
+    1
+});
+no overloading;
+die;
+EOCODK
 
 done_testing($tests);
 
@@ -354,6 +405,9 @@ $test /= 2 if ++$test;
 # list x
 -((1, 2) x 2);
 ####
+# Assignment to list x
+((undef) x 3) = undef;
+####
 # lvalue sub
 {
     my $test = sub : lvalue {
@@ -369,6 +423,10 @@ $test /= 2 if ++$test;
     }
     ;
 }
+####
+# anonsub attrs at statement start
+my $x = do { +sub : lvalue { my $y; } };
+my $z = do { foo: +sub : method { my $a; } };
 ####
 # block with continue
 {
@@ -1054,6 +1112,9 @@ s/foo/\(3);/eg;
 # y///r
 tr/a/b/r;
 ####
+# y///d in list [perl #119815]
+() = tr/a//d;
+####
 # [perl #90898]
 <a,>;
 ####
@@ -1507,7 +1568,7 @@ state($s3, $s4);
 #@z = ($s7, undef, $s8);
 ($s7, undef, $s8) = (1, 2, 3);
 ####
-# anon lists with padrange
+# anon arrays with padrange
 my($a, $b);
 my $c = [$a, $b];
 my $d = {$a, $b};

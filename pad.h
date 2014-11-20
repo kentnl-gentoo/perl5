@@ -39,6 +39,9 @@ struct padlist {
  * flagging that a lexical is being introduced, or has not yet left scope
  */
 #define PERL_PADSEQ_INTRO  U32_MAX
+#define COP_SEQMAX_INC \
+	(PL_cop_seqmax++, \
+	 (void)(PL_cop_seqmax == PERL_PADSEQ_INTRO && PL_cop_seqmax++))
 
 
 /* B.xs needs these for the benefit of B::Deparse */
@@ -301,7 +304,10 @@ Restore the old pad saved into the local variable opad by PAD_SAVE_LOCAL()
 #define PadnameOUTER(pn)	!!SvFAKE(pn)
 #define PadnameIsSTATE(pn)	!!SvPAD_STATE(pn)
 #define PadnameTYPE(pn)		(SvPAD_TYPED(pn) ? SvSTASH(pn) : NULL)
+#define PadnameLVALUE(pn) \
+    ((SvFLAGS(pn) & (SVpad_NAME|SVpad_LVALUE))==(SVpad_NAME|SVpad_LVALUE))
 
+#define PadnameLVALUE_on(pn)	(SvFLAGS(pn) |= SVpad_NAME|SVpad_LVALUE)
 
 #ifdef DEBUGGING
 #  define PAD_SV(po)	   pad_sv(po)

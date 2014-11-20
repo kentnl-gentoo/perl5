@@ -477,10 +477,7 @@ PerlIO_allocate(pTHX)
 	last = (PerlIOl **) (f);
 	for (i = 1; i < PERLIO_TABLE_SIZE; i++) {
 	    if (!((++f)->next)) {
-		f->flags = 0; /* lockcnt */
-		f->tab = NULL;
-		f->head = f;
-		return (PerlIO *)f;
+		goto good_exit;
 	    }
 	}
     }
@@ -489,6 +486,8 @@ PerlIO_allocate(pTHX)
 	return NULL;
     }
     *last = (PerlIOl*) f++;
+
+    good_exit:
     f->flags = 0; /* lockcnt */
     f->tab = NULL;
     f->head = f;
@@ -883,7 +882,7 @@ XS(XS_PerlIO__Layer__find)
     else {
 	STRLEN len;
 	const char * const name = SvPV_const(ST(1), len);
-	const bool load = (items > 2) ? SvTRUE(ST(2)) : 0;
+	const bool load = (items > 2) ? SvTRUE_NN(ST(2)) : 0;
 	PerlIO_funcs * const layer = PerlIO_find_layer(aTHX_ name, len, load);
 	ST(0) =
 	    (layer) ? sv_2mortal(PerlIO_tab_sv(aTHX_ layer)) :
@@ -1004,8 +1003,7 @@ PerlIO_default_buffer(pTHX_ PerlIO_list_t *av)
 	tab = &PerlIO_stdio;
 #endif
     PerlIO_debug("Pushing %s\n", tab->name);
-    PerlIO_list_push(aTHX_ av, PerlIO_find_layer(aTHX_ tab->name, 0, 0),
-		     &PL_sv_undef);
+    PerlIO_list_push(aTHX_ av, (PerlIO_funcs *)tab, &PL_sv_undef);
 }
 
 SV *
@@ -1093,9 +1091,8 @@ PerlIO_default_layers(pTHX)
 	PerlIO_define_layer(aTHX_ PERLIO_FUNCS_CAST(&PerlIO_utf8));
 	PerlIO_define_layer(aTHX_ PERLIO_FUNCS_CAST(&PerlIO_remove));
 	PerlIO_define_layer(aTHX_ PERLIO_FUNCS_CAST(&PerlIO_byte));
-	PerlIO_list_push(aTHX_ PL_def_layerlist,
-			 PerlIO_find_layer(aTHX_ osLayer->name, 0, 0),
-			 &PL_sv_undef);
+	PerlIO_list_push(aTHX_ PL_def_layerlist, (PerlIO_funcs *)osLayer,
+                         &PL_sv_undef);
 	if (s) {
 	    PerlIO_parse_layers(aTHX_ PL_def_layerlist, s);
 	}
@@ -1459,7 +1456,7 @@ PerlIO_resolve_layers(pTHX_ const char *layers,
 	 * If it is a reference but not an object see if we have a handler
 	 * for it
 	 */
-	if (SvROK(arg) && !sv_isobject(arg)) {
+	if (SvROK(arg) && !SvOBJECT(SvRV(arg))) {
 	    PerlIO_funcs * const handler = PerlIO_layer_from_ref(aTHX_ SvRV(arg));
 	    if (handler) {
 		def = PerlIO_list_alloc(aTHX);
@@ -2062,6 +2059,7 @@ PerlIOBase_read(pTHX_ PerlIO *f, void *vbuf, Size_t count)
         if (!(PerlIOBase(f)->flags & PERLIO_F_CANREAD)) {
 	    PerlIOBase(f)->flags |= PERLIO_F_ERROR;
 	    SETERRNO(EBADF, SS_IVCHAN);
+	    PerlIO_save_errno(f);
 	    return 0;
 	}
 	while (count > 0) {
@@ -2734,6 +2732,7 @@ PerlIOUnix_read(pTHX_ PerlIO *f, void *vbuf, Size_t count)
 	    if (len < 0) {
 		if (errno != EAGAIN) {
 		    PerlIOBase(f)->flags |= PERLIO_F_ERROR;
+		    PerlIO_save_errno(f);
 		}
 	    }
 	    else if (len == 0 && count != 0) {
@@ -2766,6 +2765,7 @@ PerlIOUnix_write(pTHX_ PerlIO *f, const void *vbuf, Size_t count)
 	    if (len < 0) {
 		if (errno != EAGAIN) {
 		    PerlIOBase(f)->flags |= PERLIO_F_ERROR;
+		    PerlIO_save_errno(f);
 		}
 	    }
 	    return len;
@@ -2930,11 +2930,27 @@ PerlIO_importFILE(FILE *stdio, const char *mode)
 {
     dTHX;
     PerlIO *f = NULL;
+#ifdef EBCDIC
+	 int rc;
+	 char filename[FILENAME_MAX];
+	 fldata_t fileinfo;
+#endif
     if (stdio) {
 	PerlIOStdio *s;
         int fd0 = fileno(stdio);
         if (fd0 < 0) {
+#ifdef EBCDIC
+			  rc = fldata(stdio,filename,&fileinfo);
+			  if(rc != 0){
+				  return NULL;
+			  }
+			  if(fileinfo.__dsorgHFS){
             return NULL;
+        }
+			  /*This MVS dataset , OK!*/
+#else
+            return NULL;
+#endif
         }
 	if (!mode || !*mode) {
 	    /* We need to probe to see how we can open the stream
@@ -2966,7 +2982,24 @@ PerlIO_importFILE(FILE *stdio, const char *mode)
 	if ((f = PerlIO_push(aTHX_(PerlIO_allocate(aTHX)), PERLIO_FUNCS_CAST(&PerlIO_stdio), mode, NULL))) {
 	    s = PerlIOSelf(f, PerlIOStdio);
 	    s->stdio = stdio;
+#ifdef EBCDIC
+		fd0 = fileno(stdio);
+		if(fd0 != -1){
+			PerlIOUnix_refcnt_inc(fd0);
+		}
+		else{
+			rc = fldata(stdio,filename,&fileinfo);
+			if(rc != 0){
+				PerlIOUnix_refcnt_inc(fd0);
+			}
+			if(fileinfo.__dsorgHFS){
+				PerlIOUnix_refcnt_inc(fd0);
+			}
+			  /*This MVS dataset , OK!*/
+		}
+#else
 	    PerlIOUnix_refcnt_inc(fileno(stdio));
+#endif
 	}
     }
     return f;
@@ -3899,6 +3932,7 @@ PerlIOBuf_flush(pTHX_ PerlIO *f)
 	    }
 	    else if (count < 0 || PerlIO_error(n)) {
 		PerlIOBase(f)->flags |= PERLIO_F_ERROR;
+		PerlIO_save_errno(f);
 		code = -1;
 		break;
 	    }
@@ -4001,7 +4035,10 @@ PerlIOBuf_fill(pTHX_ PerlIO *f)
 	if (avail == 0)
 	    PerlIOBase(f)->flags |= PERLIO_F_EOF;
 	else
+	{
 	    PerlIOBase(f)->flags |= PERLIO_F_ERROR;
+	    PerlIO_save_errno(f);
+	}
 	return -1;
     }
     b->end = b->buf + avail;
@@ -5025,6 +5062,34 @@ PerlIO_tmpfile(void)
      return f;
 }
 
+void
+Perl_PerlIO_save_errno(pTHX_ PerlIO *f)
+{
+    if (!PerlIOValid(f))
+	return;
+    PerlIOBase(f)->err = errno;
+#ifdef VMS
+    PerlIOBase(f)->os_err = vaxc$errno;
+#elif defined(OS2)
+    PerlIOBase(f)->os_err = Perl_rc;
+#elif defined(WIN32)
+    PerlIOBase(f)->os_err = GetLastError();
+#endif
+}
+
+void
+Perl_PerlIO_restore_errno(pTHX_ PerlIO *f)
+{
+    if (!PerlIOValid(f))
+	return;
+    SETERRNO(PerlIOBase(f)->err, PerlIOBase(f)->os_err);
+#ifdef OS2
+    Perl_rc = PerlIOBase(f)->os_err);
+#elif defined(WIN32)
+    SetLastError(PerlIOBase(f)->os_err);
+#endif
+}
+
 #undef HAS_FSETPOS
 #undef HAS_FGETPOS
 
@@ -5070,11 +5135,13 @@ int
 PerlIO_setpos(PerlIO *f, SV *pos)
 {
     if (SvOK(pos)) {
-	STRLEN len;
-	dTHX;
-	const Off_t * const posn = (Off_t *) SvPV(pos, len);
-	if (f && len == sizeof(Off_t))
-	    return PerlIO_seek(f, *posn, SEEK_SET);
+	if (f) {
+	    dTHX;
+	    STRLEN len;
+	    const Off_t * const posn = (Off_t *) SvPV(pos, len);
+	    if(len == sizeof(Off_t))
+		return PerlIO_seek(f, *posn, SEEK_SET);
+	}
     }
     SETERRNO(EINVAL, SS_IVCHAN);
     return -1;
@@ -5084,15 +5151,16 @@ PerlIO_setpos(PerlIO *f, SV *pos)
 int
 PerlIO_setpos(PerlIO *f, SV *pos)
 {
-    dTHX;
     if (SvOK(pos)) {
-	STRLEN len;
-	Fpos_t * const fpos = (Fpos_t *) SvPV(pos, len);
-	if (f && len == sizeof(Fpos_t)) {
+	if (f) {
+	    dTHX;
+	    STRLEN len;
+	    Fpos_t * const fpos = (Fpos_t *) SvPV(pos, len);
+	    if(len == sizeof(Fpos_t))
 #if defined(USE_64_BIT_STDIO) && defined(USE_FSETPOS64)
-	    return fsetpos64(f, fpos);
+		return fsetpos64(f, fpos);
 #else
-	    return fsetpos(f, fpos);
+		return fsetpos(f, fpos);
 #endif
 	}
     }
@@ -5148,6 +5216,22 @@ vfprintf(FILE *fd, char *pat, char *args)
 }
 
 #endif
+
+/* print a failure format string message to stderr and fail exit the process
+   using only libc without depending on any perl data structures being
+   initialized.
+*/
+
+void
+Perl_noperl_die(const char* pat, ...)
+{
+    va_list(arglist);
+    PERL_ARGS_ASSERT_NOPERL_DIE;
+    va_start(arglist, pat);
+    vfprintf(stderr, pat, arglist);
+    va_end(arglist);
+    exit(1);
+}
 
 /*
  * Local variables:

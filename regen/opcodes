@@ -84,10 +84,10 @@ rcatline	append I/O operator	ck_null		t$
 regcmaybe	regexp internal guard	ck_fun		s1	S
 regcreset	regexp internal reset	ck_fun		s1	S
 regcomp		regexp compilation	ck_null		s|	S
-match		pattern match (m//)	ck_match	d/
+match		pattern match (m//)	ck_match	/
 qr		pattern quote (qr//)	ck_match	s/
-subst		substitution (s///)	ck_match	dis/	S
-substcont	substitution iterator	ck_null		dis|	
+subst		substitution (s///)	ck_match	is/	S
+substcont	substitution iterator	ck_null		is|	
 trans		transliteration (tr///)	ck_match	is"	S
 # y///r
 transr		transliteration (tr///)	ck_match	is"	S
@@ -111,10 +111,10 @@ preinc		preincrement (++)		ck_lfun		dIs1	S
 i_preinc	integer preincrement (++)	ck_lfun		dis1	S
 predec		predecrement (--)		ck_lfun		dIs1	S
 i_predec	integer predecrement (--)	ck_lfun		dis1	S
-postinc		postincrement (++)		ck_lfun		dIst1	S
-i_postinc	integer postincrement (++)	ck_lfun		disT1	S
-postdec		postdecrement (--)		ck_lfun		dIst1	S
-i_postdec	integer postdecrement (--)	ck_lfun		disT1	S
+postinc		postincrement (++)		ck_lfun		Ist1	S
+i_postinc	integer postincrement (++)	ck_lfun		ist1	S
+postdec		postdecrement (--)		ck_lfun		Ist1	S
+i_postdec	integer postdecrement (--)	ck_lfun		ist1	S
 
 # Ordinary operators.
 
@@ -126,7 +126,7 @@ divide		division (/)		ck_null		IfsT2	S S
 i_divide	integer division (/)	ck_null		ifsT2	S S
 modulo		modulus (%)		ck_null		IifsT2	S S
 i_modulo	integer modulus (%)	ck_null		ifsT2	S S
-repeat		repeat (x)		ck_repeat	fmt2	L S
+repeat		repeat (x)		ck_repeat	fmT2	L S
 
 add		addition (+)		ck_null		IfsT2	S S
 i_add		integer addition (+)	ck_null		ifsT2	S S
@@ -166,7 +166,7 @@ bit_xor		bitwise xor (^)		ck_bitop	fst2	S S
 bit_or		bitwise or (|)		ck_bitop	fst2	S S
 
 negate		negation (-)		ck_null		Ifst1	S
-i_negate	integer negation (-)	ck_null		ifsT1	S
+i_negate	integer negation (-)	ck_null		ifst1	S
 not		not			ck_null		ifs1	S
 complement	1's complement (~)	ck_bitop	fst1	S
 
@@ -194,7 +194,7 @@ abs		abs			ck_fun		fsTu%	S?
 
 length		length			ck_length	ifsTu%	S?
 substr		substr			ck_substr	st@	S S S? S?
-vec		vec			ck_fun		ist@	S S S
+vec		vec			ck_fun		isT@	S S S
 
 index		index			ck_index	isT@	S S S?
 rindex		rindex			ck_index	isT@	S S S?
@@ -219,14 +219,14 @@ aelem		array element		ck_null		s2	A S
 aslice		array slice		ck_null		m@	A L
 kvaslice	index/value array slice	ck_null		m@	A L
 
-aeach		each on array		ck_each		%	A
+aeach		each on array		ck_each		d%	A
 akeys		keys on array		ck_each		t%	A
-avalues		values on array		ck_each		t%	A
+avalues		values on array		ck_each		dt%	A
 
 # Hashes.
 
-each		each			ck_each		%	H
-values		values			ck_each		t%	H
+each		each			ck_each		d%	H
+values		values			ck_each		dt%	H
 keys		keys			ck_each		t%	H
 delete		delete			ck_delete	%	S
 exists		exists			ck_exists	is%	S
@@ -239,14 +239,14 @@ kvhslice	key/value hash slice	ck_null		m@	H L
 
 unpack		unpack			ck_fun		u@	S S?
 pack		pack			ck_fun		fmst@	S L
-split		split			ck_split	t@	S S S
+split		split			ck_split	T@	S S S
 join		join or string		ck_join		fmst@	S L
 
 # List operators.
 
 list		list			ck_null		m@	L
 lslice		list slice		ck_null		2	H L L
-anonlist	anonymous list ([])	ck_fun		ms@	L
+anonlist	anonymous array ([])	ck_fun		ms@	L
 anonhash	anonymous hash ({})	ck_fun		ms@	L
 
 splice		splice			ck_fun		m@	A S? S? L
@@ -254,14 +254,14 @@ push		push			ck_fun		imsT@	A L
 pop		pop			ck_shift	s%	A?
 shift		shift			ck_shift	s%	A?
 unshift		unshift			ck_fun		imsT@	A L
-sort		sort			ck_sort		dm@	C? L
+sort		sort			ck_sort		m@	C? L
 reverse		reverse			ck_fun		mt@	L
 
-grepstart	grep			ck_grep		dm@	C L
-grepwhile	grep iterator		ck_null		dt|	
+grepstart	grep			ck_grep		m@	C L
+grepwhile	grep iterator		ck_null		t|	
 
-mapstart	map			ck_grep		dm@	C L
-mapwhile	map iterator		ck_null		dt|
+mapstart	map			ck_grep		m@	C L
+mapwhile	map iterator		ck_null		t|
 
 # Range stuff.
 
@@ -275,7 +275,7 @@ and		logical and (&&)		ck_null		|
 or		logical or (||)			ck_null		|	
 xor		logical xor			ck_null		fs2	S S	
 dor		defined or (//)			ck_null		|
-cond_expr	conditional expression		ck_null		d|	
+cond_expr	conditional expression		ck_null		|	
 andassign	logical and assignment (&&=)	ck_null		s|	
 orassign	logical or assignment (||=)	ck_null		s|	
 dorassign	defined or assignment (//=)	ck_null		s|
@@ -286,7 +286,7 @@ leavesub	subroutine exit		ck_null		1
 leavesublv	lvalue subroutine return	ck_null		1	
 caller		caller			ck_fun		t%	S?
 warn		warn			ck_fun		imst@	L
-die		die			ck_fun		dimst@	L
+die		die			ck_fun		imst@	L
 reset		symbol reset		ck_fun		is%	S?
 
 lineseq		line sequence		ck_null		@	
@@ -300,13 +300,13 @@ enteriter	foreach loop entry	ck_null		d{
 iter		foreach loop iterator	ck_null		0	
 enterloop	loop entry		ck_null		d{	
 leaveloop	loop exit		ck_null		2	
-return		return			ck_return	dm@	L
-last		last			ck_null		ds}	
-next		next			ck_null		ds}	
-redo		redo			ck_null		ds}	
+return		return			ck_return	m@	L
+last		last			ck_null		s}	
+next		next			ck_null		s}	
+redo		redo			ck_null		s}	
 dump		dump			ck_null		ds}	
-goto		goto			ck_null		ds}	
-exit		exit			ck_fun		ds%	S?
+goto		goto			ck_null		s}	
+exit		exit			ck_fun		s%	S?
 method_named	method with known name	ck_null		d.
 
 entergiven	given()			ck_null		d|
@@ -328,7 +328,7 @@ binmode		binmode			ck_fun		s@	F S?
 
 tie		tie			ck_fun		idms@	R S L
 untie		untie			ck_fun		is%	R
-tied		tied			ck_fun		s%	R
+tied		tied			ck_fun		ds%	R
 dbmopen		dbmopen			ck_fun		is@	H S S
 dbmclose	dbmclose		ck_fun		is%	H
 
@@ -337,7 +337,7 @@ select		select			ck_select	st@	F?
 
 getc		getc			ck_eof		st%	F?
 read		read			ck_fun		imst@	F R S S?
-enterwrite	write			ck_fun		dis%	F?
+enterwrite	write			ck_fun		is%	F?
 leavewrite	write exit		ck_null		1	
 
 prtf		printf			ck_listiob	ims@	F? L
@@ -442,8 +442,8 @@ fork		fork			ck_null		ist0
 wait		wait			ck_null		isT0	
 waitpid		waitpid			ck_fun		isT@	S S
 system		system			ck_exec		imsT@	S? L
-exec		exec			ck_exec		dimsT@	S? L
-kill		kill			ck_fun		dimsT@	L
+exec		exec			ck_exec		imsT@	S? L
+kill		kill			ck_fun		imsT@	L
 getppid		getppid			ck_null		isT0	
 getpgrp		getpgrp			ck_fun		isT%	S?
 setpgrp		setpgrp			ck_fun		isT@	S? S?
@@ -537,9 +537,9 @@ once		once			ck_null		|
 custom		unknown custom operator		ck_null		0
 
 # For smart dereference for each/keys/values
-reach		each on reference			ck_each		%	S
+reach		each on reference	ck_each		d%	S
 rkeys		keys on reference			ck_each		t%	S
-rvalues		values on reference			ck_each		t%	S
+rvalues		values on reference	ck_each		dt%	S
 
 # For CORE:: subs
 coreargs	CORE:: subroutine	ck_null		$	

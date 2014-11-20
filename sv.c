@@ -48,25 +48,23 @@
     PERL_UNUSED_RESULT(Gconvert((NV)(nv), (int)ndig, 0, buffer))
 #endif
 
-#ifdef PERL_NEW_COPY_ON_WRITE
-#   ifndef SV_COW_THRESHOLD
+#ifndef SV_COW_THRESHOLD
 #    define SV_COW_THRESHOLD                    0   /* COW iff len > K */
-#   endif
-#   ifndef SV_COWBUF_THRESHOLD
+#endif
+#ifndef SV_COWBUF_THRESHOLD
 #    define SV_COWBUF_THRESHOLD                 1250 /* COW iff len > K */
-#   endif
-#   ifndef SV_COW_MAX_WASTE_THRESHOLD
+#endif
+#ifndef SV_COW_MAX_WASTE_THRESHOLD
 #    define SV_COW_MAX_WASTE_THRESHOLD          80   /* COW iff (len - cur) < K */
-#   endif
-#   ifndef SV_COWBUF_WASTE_THRESHOLD
+#endif
+#ifndef SV_COWBUF_WASTE_THRESHOLD
 #    define SV_COWBUF_WASTE_THRESHOLD           80   /* COW iff (len - cur) < K */
-#   endif
-#   ifndef SV_COW_MAX_WASTE_FACTOR_THRESHOLD
+#endif
+#ifndef SV_COW_MAX_WASTE_FACTOR_THRESHOLD
 #    define SV_COW_MAX_WASTE_FACTOR_THRESHOLD   2    /* COW iff len < (cur * K) */
-#   endif
-#   ifndef SV_COWBUF_WASTE_FACTOR_THRESHOLD
+#endif
+#ifndef SV_COWBUF_WASTE_FACTOR_THRESHOLD
 #    define SV_COWBUF_WASTE_FACTOR_THRESHOLD    2    /* COW iff len < (cur * K) */
-#   endif
 #endif
 /* Work around compiler warnings about unsigned >= THRESHOLD when thres-
    hold is 0. */
@@ -261,14 +259,14 @@ Public API:
 #  define SvARENA_CHAIN_SET(sv,val)	(sv)->sv_u.svu_rv = MUTABLE_SV((val))
 /* Whilst I'd love to do this, it seems that things like to check on
    unreferenced scalars
-#  define POSION_SV_HEAD(sv)	PoisonNew(sv, 1, struct STRUCT_SV)
+#  define POISON_SV_HEAD(sv)	PoisonNew(sv, 1, struct STRUCT_SV)
 */
-#  define POSION_SV_HEAD(sv)	PoisonNew(&SvANY(sv), 1, void *), \
+#  define POISON_SV_HEAD(sv)	PoisonNew(&SvANY(sv), 1, void *), \
 				PoisonNew(&SvREFCNT(sv), 1, U32)
 #else
 #  define SvARENA_CHAIN(sv)	SvANY(sv)
 #  define SvARENA_CHAIN_SET(sv,val)	SvANY(sv) = (void *)(val)
-#  define POSION_SV_HEAD(sv)
+#  define POISON_SV_HEAD(sv)
 #endif
 
 /* Mark an SV head as unused, and add to free list.
@@ -284,7 +282,7 @@ Public API:
 	MEM_LOG_DEL_SV(p, __FILE__, __LINE__, FUNCTION__);  \
 	DEBUG_SV_SERIAL(p);				\
 	FREE_SV_DEBUG_FILE(p);				\
-	POSION_SV_HEAD(p);				\
+	POISON_SV_HEAD(p);				\
 	SvFLAGS(p) = SVTYPEMASK;			\
 	if (!(old_flags & SVf_BREAK)) {		\
 	    SvARENA_CHAIN_SET(p, PL_sv_root);	\
@@ -611,6 +609,8 @@ static void
 do_curse(pTHX_ SV * const sv) {
     if ((PL_stderrgv && GvGP(PL_stderrgv) && (SV*)GvIO(PL_stderrgv) == sv)
      || (PL_defoutgv && GvGP(PL_defoutgv) && (SV*)GvIO(PL_defoutgv) == sv))
+	return;
+    if (SvPAD_NAME(sv))
 	return;
     (void)curse(sv, 0);
 }
@@ -2117,9 +2117,6 @@ S_sv_2iuv_common(pTHX_ SV *const sv)
 	 * IV or UV at same time to avoid this. */
 	/* IV-over-UV optimisation - choose to cache IV if possible */
 
-        if (UNLIKELY(Perl_isinfnan(SvNVX(sv))))
-            return FALSE;
-
 	if (SvTYPE(sv) == SVt_NV)
 	    sv_upgrade(sv, SVt_PVNV);
 
@@ -2128,6 +2125,13 @@ S_sv_2iuv_common(pTHX_ SV *const sv)
 	   certainly cast into the IV range at IV_MAX, whereas the correct
 	   answer is the UV IV_MAX +1. Hence < ensures that dodgy boundary
 	   cases go to UV */
+#if defined(NAN_COMPARE_BROKEN) && defined(Perl_isnan)
+	if (Perl_isnan(SvNVX(sv))) {
+	    SvUV_set(sv, 0);
+	    SvIsUV_on(sv);
+	    return FALSE;
+	}
+#endif
 	if (SvNVX(sv) < (NV)IV_MAX + 0.5) {
 	    SvIV_set(sv, I_V(SvNVX(sv)));
 	    if (SvNVX(sv) == (NV) SvIVX(sv)
@@ -2279,6 +2283,13 @@ S_sv_2iuv_common(pTHX_ SV *const sv)
 #ifdef NV_PRESERVES_UV
             (void)SvIOKp_on(sv);
             (void)SvNOK_on(sv);
+#if defined(NAN_COMPARE_BROKEN) && defined(Perl_isnan)
+            if (Perl_isnan(SvNVX(sv))) {
+                SvUV_set(sv, 0);
+                SvIsUV_on(sv);
+                return FALSE;
+            }
+#endif
             if (SvNVX(sv) < (NV)IV_MAX + 0.5) {
                 SvIV_set(sv, I_V(SvNVX(sv)));
                 if ((NV)(SvIVX(sv)) == SvNVX(sv)) {
@@ -2388,9 +2399,6 @@ Perl_sv_2iv_flags(pTHX_ SV *const sv, const I32 flags)
     if (SvGMAGICAL(sv) && (flags & SV_GMAGIC))
 	mg_get(sv);
 
-    if (SvNOK(sv) && UNLIKELY(Perl_isinfnan(SvNVX(sv))))
-        return 0; /* So wrong but what can we do. */
-
     if (SvROK(sv)) {
 	if (SvAMAGIC(sv)) {
 	    SV * tmpstr;
@@ -2418,9 +2426,8 @@ Perl_sv_2iv_flags(pTHX_ SV *const sv, const I32 flags)
 	    UV value;
 	    const char * const ptr =
 		isREGEXP(sv) ? RX_WRAPPED((REGEXP*)sv) : SvPVX_const(sv);
-	    const int numtype = grok_number(ptr, SvCUR(sv), &value);
-
-            assert((numtype & (IS_NUMBER_INFINITY | IS_NUMBER_NAN)) == 0);
+	    const int numtype
+		= grok_number(ptr, SvCUR(sv), &value);
 
 	    if ((numtype & (IS_NUMBER_IN_UV | IS_NUMBER_NOT_INT))
 		== IS_NUMBER_IN_UV) {
@@ -2433,6 +2440,13 @@ Perl_sv_2iv_flags(pTHX_ SV *const sv, const I32 flags)
 			return (IV)value;
 		}
 	    }
+
+            /* Quite wrong but no good choices. */
+            if ((numtype & IS_NUMBER_INFINITY)) {
+                return (numtype & IS_NUMBER_NEG) ? IV_MIN : IV_MAX;
+            } else if ((numtype & IS_NUMBER_NAN)) {
+                return 0; /* So wrong. */
+            }
 
 	    if (!numtype) {
 		if (ckWARN(WARN_NUMERIC))
@@ -2483,9 +2497,6 @@ Perl_sv_2uv_flags(pTHX_ SV *const sv, const I32 flags)
     if (SvGMAGICAL(sv) && (flags & SV_GMAGIC))
 	mg_get(sv);
 
-    if (SvNOK(sv) && UNLIKELY(Perl_isinfnan(SvNVX(sv))))
-        return 0; /* So wrong but what can we do. */
-
     if (SvROK(sv)) {
 	if (SvAMAGIC(sv)) {
 	    SV *tmpstr;
@@ -2508,9 +2519,8 @@ Perl_sv_2uv_flags(pTHX_ SV *const sv, const I32 flags)
 	    UV value;
 	    const char * const ptr =
 		isREGEXP(sv) ? RX_WRAPPED((REGEXP*)sv) : SvPVX_const(sv);
-	    const int numtype = grok_number(ptr, SvCUR(sv), &value);
-
-            assert((numtype & (IS_NUMBER_INFINITY | IS_NUMBER_NAN)) == 0);
+	    const int numtype
+		= grok_number(ptr, SvCUR(sv), &value);
 
 	    if ((numtype & (IS_NUMBER_IN_UV | IS_NUMBER_NOT_INT))
 		== IS_NUMBER_IN_UV) {
@@ -2518,6 +2528,13 @@ Perl_sv_2uv_flags(pTHX_ SV *const sv, const I32 flags)
 		if (!(numtype & IS_NUMBER_NEG))
 		    return value;
 	    }
+
+            /* Quite wrong but no good choices. */
+            if ((numtype & IS_NUMBER_INFINITY)) {
+                return UV_MAX; /* So wrong. */
+            } else if ((numtype & IS_NUMBER_NAN)) {
+                return 0; /* So wrong. */
+            }
 
 	    if (!numtype) {
 		if (ckWARN(WARN_NUMERIC))
@@ -2677,107 +2694,100 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
 	else
 	    SvNOKp_on(sv);
 #else
-        if ((numtype & IS_NUMBER_INFINITY)) {
-            SvNV_set(sv, (numtype & IS_NUMBER_NEG) ? -NV_INF : NV_INF);
-            SvNOK_on(sv);
-        } else if ((numtype & IS_NUMBER_NAN)) {
-            SvNV_set(sv, NV_NAN);
+	SvNV_set(sv, Atof(SvPVX_const(sv)));
+	/* Only set the public NV OK flag if this NV preserves the value in
+	   the PV at least as well as an IV/UV would.
+	   Not sure how to do this 100% reliably. */
+	/* if that shift count is out of range then Configure's test is
+	   wonky. We shouldn't be in here with NV_PRESERVES_UV_BITS ==
+	   UV_BITS */
+	if (((UV)1 << NV_PRESERVES_UV_BITS) >
+	    U_V(SvNVX(sv) > 0 ? SvNVX(sv) : -SvNVX(sv))) {
+	    SvNOK_on(sv); /* Definitely small enough to preserve all bits */
+	} else if (!(numtype & IS_NUMBER_IN_UV)) {
+            /* Can't use strtol etc to convert this string, so don't try.
+               sv_2iv and sv_2uv will use the NV to convert, not the PV.  */
             SvNOK_on(sv);
         } else {
-            SvNV_set(sv, Atof(SvPVX_const(sv)));
-            /* Only set the public NV OK flag if this NV preserves the value in
-               the PV at least as well as an IV/UV would.
-               Not sure how to do this 100% reliably. */
-            /* if that shift count is out of range then Configure's test is
-               wonky. We shouldn't be in here with NV_PRESERVES_UV_BITS ==
-               UV_BITS */
-            if (((UV)1 << NV_PRESERVES_UV_BITS) >
-                U_V(SvNVX(sv) > 0 ? SvNVX(sv) : -SvNVX(sv))) {
-                SvNOK_on(sv); /* Definitely small enough to preserve all bits */
-            } else if (!(numtype & IS_NUMBER_IN_UV)) {
-                /* Can't use strtol etc to convert this string, so don't try.
-                   sv_2iv and sv_2uv will use the NV to convert, not the PV.  */
-                SvNOK_on(sv);
+            /* value has been set.  It may not be precise.  */
+	    if ((numtype & IS_NUMBER_NEG) && (value > (UV)IV_MIN)) {
+		/* 2s complement assumption for (UV)IV_MIN  */
+                SvNOK_on(sv); /* Integer is too negative.  */
             } else {
-                /* value has been set.  It may not be precise.  */
-                if ((numtype & IS_NUMBER_NEG) && (value > (UV)IV_MIN)) {
-                    /* 2s complement assumption for (UV)IV_MIN  */
-                    SvNOK_on(sv); /* Integer is too negative.  */
+                SvNOKp_on(sv);
+                SvIOKp_on(sv);
+
+                if (numtype & IS_NUMBER_NEG) {
+                    SvIV_set(sv, -(IV)value);
+                } else if (value <= (UV)IV_MAX) {
+		    SvIV_set(sv, (IV)value);
+		} else {
+		    SvUV_set(sv, value);
+		    SvIsUV_on(sv);
+		}
+
+                if (numtype & IS_NUMBER_NOT_INT) {
+                    /* I believe that even if the original PV had decimals,
+                       they are lost beyond the limit of the FP precision.
+                       However, neither is canonical, so both only get p
+                       flags.  NWC, 2000/11/25 */
+                    /* Both already have p flags, so do nothing */
                 } else {
-                    SvNOKp_on(sv);
-                    SvIOKp_on(sv);
-
-                    if (numtype & IS_NUMBER_NEG) {
-                        SvIV_set(sv, -(IV)value);
-                    } else if (value <= (UV)IV_MAX) {
-                        SvIV_set(sv, (IV)value);
-                    } else {
-                        SvUV_set(sv, value);
-                        SvIsUV_on(sv);
-                    }
-
-                    if (numtype & IS_NUMBER_NOT_INT) {
-                        /* I believe that even if the original PV had decimals,
-                           they are lost beyond the limit of the FP precision.
-                           However, neither is canonical, so both only get p
-                           flags.  NWC, 2000/11/25 */
-                        /* Both already have p flags, so do nothing */
-                    } else {
-                        const NV nv = SvNVX(sv);
-                        if (SvNVX(sv) < (NV)IV_MAX + 0.5) {
-                            if (SvIVX(sv) == I_V(nv)) {
-                                SvNOK_on(sv);
-                            } else {
-                                /* It had no "." so it must be integer.  */
-                            }
-                            SvIOK_on(sv);
+		    const NV nv = SvNVX(sv);
+                    /* XXX should this spot have NAN_COMPARE_BROKEN, too? */
+                    if (SvNVX(sv) < (NV)IV_MAX + 0.5) {
+                        if (SvIVX(sv) == I_V(nv)) {
+                            SvNOK_on(sv);
                         } else {
-                            /* between IV_MAX and NV(UV_MAX).
-                               Could be slightly > UV_MAX */
+                            /* It had no "." so it must be integer.  */
+                        }
+			SvIOK_on(sv);
+                    } else {
+                        /* between IV_MAX and NV(UV_MAX).
+                           Could be slightly > UV_MAX */
 
-                            if (numtype & IS_NUMBER_NOT_INT) {
-                                /* UV and NV both imprecise.  */
-                            } else {
-                                const UV nv_as_uv = U_V(nv);
+                        if (numtype & IS_NUMBER_NOT_INT) {
+                            /* UV and NV both imprecise.  */
+                        } else {
+			    const UV nv_as_uv = U_V(nv);
 
-                                if (value == nv_as_uv && SvUVX(sv) != UV_MAX) {
-                                    SvNOK_on(sv);
-                                }
-                                SvIOK_on(sv);
+                            if (value == nv_as_uv && SvUVX(sv) != UV_MAX) {
+                                SvNOK_on(sv);
                             }
+			    SvIOK_on(sv);
                         }
                     }
                 }
             }
-            /* It might be more code efficient to go through the entire logic above
-               and conditionally set with SvNOKp_on() rather than SvNOK(), but it
-               gets complex and potentially buggy, so more programmer efficient
-	   to do it this way, by turning off the public flags:  */
-            if (!numtype)
-                SvFLAGS(sv) &= ~(SVf_IOK|SVf_NOK);
         }
+	/* It might be more code efficient to go through the entire logic above
+	   and conditionally set with SvNOKp_on() rather than SvNOK(), but it
+	   gets complex and potentially buggy, so more programmer efficient
+	   to do it this way, by turning off the public flags:  */
+	if (!numtype)
+	    SvFLAGS(sv) &= ~(SVf_IOK|SVf_NOK);
 #endif /* NV_PRESERVES_UV */
     }
     else  {
-        if (isGV_with_GP(sv)) {
-            glob_2number(MUTABLE_GV(sv));
-            return 0.0;
-        }
+	if (isGV_with_GP(sv)) {
+	    glob_2number(MUTABLE_GV(sv));
+	    return 0.0;
+	}
 
-        if (!PL_localizing && ckWARN(WARN_UNINITIALIZED))
-            report_uninit(sv);
-        assert (SvTYPE(sv) >= SVt_NV);
-        /* Typically the caller expects that sv_any is not NULL now.  */
-        /* XXX Ilya implies that this is a bug in callers that assume this
-           and ideally should be fixed.  */
-        return 0.0;
+	if (!PL_localizing && ckWARN(WARN_UNINITIALIZED))
+	    report_uninit(sv);
+	assert (SvTYPE(sv) >= SVt_NV);
+	/* Typically the caller expects that sv_any is not NULL now.  */
+	/* XXX Ilya implies that this is a bug in callers that assume this
+	   and ideally should be fixed.  */
+	return 0.0;
     }
     DEBUG_c({
-            STORE_NUMERIC_LOCAL_SET_STANDARD();
-            PerlIO_printf(Perl_debug_log, "0x%"UVxf" 2nv(%" NVgf ")\n",
-                          PTR2UV(sv), SvNVX(sv));
-            RESTORE_NUMERIC_LOCAL();
-        });
+	STORE_NUMERIC_LOCAL_SET_STANDARD();
+	PerlIO_printf(Perl_debug_log, "0x%"UVxf" 2nv(%" NVgf ")\n",
+		      PTR2UV(sv), SvNVX(sv));
+	RESTORE_NUMERIC_LOCAL();
+    });
     return SvNVX(sv);
 }
 
@@ -3065,7 +3075,6 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 	    sv_upgrade(sv, SVt_PVNV);
 	if (SvNVX(sv) == 0.0
 #if defined(NAN_COMPARE_BROKEN) && defined(Perl_isnan)
-            /* XXX Create SvNVXeq(sv, x)? Or just SvNVXzero(sv)? */
 	    && !Perl_isnan(SvNVX(sv))
 #endif
 	) {
@@ -6449,10 +6458,12 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 	    goto free_head;
 	}
 
-	assert(!SvOBJECT(sv) || type >= SVt_PVMG); /* objs are always >= MG */
+	/* objs are always >= MG, but pad names use the SVs_OBJECT flag
+	   for another purpose  */
+	assert(!SvOBJECT(sv) || type >= SVt_PVMG || SvPAD_NAME(sv));
 
 	if (type >= SVt_PVMG) {
-	    if (SvOBJECT(sv)) {
+	    if (SvOBJECT(sv) && !SvPAD_NAME(sv)) {
 		if (!curse(sv, 1)) goto get_next_sv;
 		type = SvTYPE(sv); /* destructor may have changed it */
 	    }
@@ -6486,7 +6497,10 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 		IoIFP(sv) != PerlIO_stderr() &&
 		!(IoFLAGS(sv) & IOf_FAKE_DIRP))
 	    {
-		io_close(MUTABLE_IO(sv), FALSE);
+		io_close(MUTABLE_IO(sv), NULL, FALSE,
+			 (IoTYPE(sv) == IoTYPE_WRONLY ||
+			  IoTYPE(sv) == IoTYPE_RDWR   ||
+			  IoTYPE(sv) == IoTYPE_APPEND));
 	    }
 	    if (IoDIRP(sv) && !(IoFLAGS(sv) & IOf_FAKE_DIRP))
 		PerlDir_close(IoDIRP(sv));
@@ -10700,6 +10714,12 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
     sv_vcatpvfn_flags(sv, pat, patlen, args, svargs, svmax, maybe_tainted, SV_GMAGIC|SV_SMAGIC);
 }
 
+#if DOUBLEKIND == DOUBLE_IS_IEEE_754_32_BIT_LITTLE_ENDIAN || \
+    DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_LITTLE_ENDIAN || \
+    DOUBLEKIND == DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN
+#  define DOUBLE_LITTLE_ENDIAN
+#endif
+
 #if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN || \
     LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN || \
     LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN
@@ -10723,17 +10743,24 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
 /* The first double can be as large as 2**1023, or '1' x '0' x 1023.
  * The second double can be as small as 2**-1074, or '0' x 1073 . '1'.
  * The sum of them can be '1' . '0' x 2096 . '1', with implied radix point
- * after the first 1023 zero bits. */
+ * after the first 1023 zero bits.
+ *
+ * XXX The 2098 is quite large (262.25 bytes) and therefore some sort
+ * of dynamically growing buffer might be better, start at just 16 bytes
+ * (for example) and grow only when necessary.  Or maybe just by looking
+ * at the exponents of the two doubles? */
 #  define DOUBLEDOUBLE_MAXBITS 2098
 #endif
 
 /* vhex will contain the values (0..15) of the hex digits ("nybbles"
  * of 4 bits); 1 for the implicit 1, and the mantissa bits, four bits
- * per xdigit.  For the double-double case, this can be rather many. */
+ * per xdigit.  For the double-double case, this can be rather many.
+ * The non-double-double-long-double overshoots since all bits of NV
+ * are not mantissa bits, there are also exponent bits. */
 #ifdef LONGDOUBLE_DOUBLEDOUBLE
 #  define VHEX_SIZE (1+DOUBLEDOUBLE_MAXBITS/4)
 #else
-#  define VHEX_SIZE (1+128/4)
+#  define VHEX_SIZE (1+(NVSIZE * 8)/4)
 #endif
 
 /* If we do not have a known long double format, (including not using
@@ -10753,15 +10780,12 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
 #  define MANTISSASIZE UVSIZE
 #endif
 
-/* We make here the wild assumption that the endianness of doubles
- * is similar to the endianness of integers, and that there is no
- * middle-endianness.  This may come back to haunt us (the rumor
- * has it that ARM can be quite haunted). */
-#if BYTEORDER == 0x12345678 || BYTEORDER == 0x1234 || \
-     defined(DOUBLEKIND_LITTLE_ENDIAN)
+#if defined(DOUBLE_LITTLE_ENDIAN) || defined(LONGDOUBLE_LITTLE_ENDIAN)
 #  define HEXTRACT_LITTLE_ENDIAN
-#else
+#elif defined(DOUBLE_BIG_ENDIAN) || defined(LONGDOUBLE_BIG_ENDIAN)
 #  define HEXTRACT_BIG_ENDIAN
+#else
+#  define HEXTRACT_MIX_ENDIAN
 #endif
 
 /* S_hextract() is a helper for Perl_sv_vcatpvfn_flags, for extracting
@@ -10804,16 +10828,30 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
    } STMT_END
 #define HEXTRACT_BYTE(ix) \
     STMT_START { \
-    if (vend) HEXTRACT_OUTPUT(ix); else HEXTRACT_COUNT(ix, 2); \
+      if (vend) HEXTRACT_OUTPUT(ix); else HEXTRACT_COUNT(ix, 2); \
    } STMT_END
 #define HEXTRACT_LO_NYBBLE(ix) \
     STMT_START { \
       if (vend) HEXTRACT_OUTPUT_LO(ix); else HEXTRACT_COUNT(ix, 1); \
    } STMT_END
-#  define HEXTRACT_IMPLICIT_BIT(nv) \
+    /* HEXTRACT_TOP_NYBBLE is just convenience disguise,
+     * to make it look less odd when the top bits of a NV
+     * are extracted using HEXTRACT_LO_NYBBLE: the highest
+     * order bits can be in the "low nybble" of a byte. */
+#define HEXTRACT_TOP_NYBBLE(ix) HEXTRACT_LO_NYBBLE(ix)
+#define HEXTRACT_BYTES_LE(a, b) \
+    for (ix = a; ix >= b; ix--) { HEXTRACT_BYTE(ix); }
+#define HEXTRACT_BYTES_BE(a, b) \
+    for (ix = a; ix <= b; ix++) { HEXTRACT_BYTE(ix); }
+#define HEXTRACT_IMPLICIT_BIT(nv) \
     STMT_START { \
         if (vend) *v++ = ((nv) == 0.0) ? 0 : 1; else v++; \
    } STMT_END
+
+/* Most formats do.  Those which don't should undef this. */
+#define HEXTRACT_HAS_IMPLICIT_BIT
+/* Many formats do.  Those which don't should undef this. */
+#define HEXTRACT_HAS_TOP_NYBBLE
 
     /* HEXTRACTSIZE is the maximum number of xdigits. */
 #if defined(USE_LONG_DOUBLE) && defined(LONGDOUBLE_DOUBLEDOUBLE)
@@ -10822,176 +10860,207 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
 #  define HEXTRACTSIZE 2 * NVSIZE
 #endif
 
-    const U8* nvp = (const U8*)(&nv);
     const U8* vmaxend = vhex + HEXTRACTSIZE;
+    PERL_UNUSED_VAR(ix); /* might happen */
     (void)Perl_frexp(PERL_ABS(nv), exponent);
     if (vend && (vend <= vhex || vend > vmaxend))
         Perl_croak(aTHX_ "Hexadecimal float: internal error");
-
-    /* First check if using long doubles. */
-#if NVSIZE > DOUBLESIZE
+    {
+        /* First check if using long doubles. */
+#if defined(USE_LONG_DOUBLE) && (NVSIZE > DOUBLESIZE)
 #  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN
-    /* Used in e.g. VMS and HP-UX IA-64, e.g. -0.1L:
-     * 9a 99 99 99 99 99 99 99 99 99 99 99 99 99 fb 3f */
-    /* The bytes 13..0 are the mantissa/fraction,
-     * the 15,14 are the sign+exponent. */
-    HEXTRACT_IMPLICIT_BIT(nv);
-    for (ix = 13; ix >= 0; ix--) {
-        HEXTRACT_BYTE(ix);
-    }
+        /* Used in e.g. VMS and HP-UX IA-64, e.g. -0.1L:
+         * 9a 99 99 99 99 99 99 99 99 99 99 99 99 99 fb 3f */
+        /* The bytes 13..0 are the mantissa/fraction,
+         * the 15,14 are the sign+exponent. */
+        const U8* nvp = (const U8*)(&nv);
+        HEXTRACT_IMPLICIT_BIT(nv);
+#   undef HEXTRACT_HAS_TOP_NYBBLE
+        HEXTRACT_BYTES_LE(13, 0);
 #  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_BIG_ENDIAN
-    /* Used in e.g. Solaris Sparc and HP-UX PA-RISC, e.g. -0.1L:
-     * bf fb 99 99 99 99 99 99 99 99 99 99 99 99 99 9a */
-    /* The bytes 2..15 are the mantissa/fraction,
-     * the 0,1 are the sign+exponent. */
-    HEXTRACT_IMPLICIT_BIT(nv);
-    for (ix = 2; ix <= 15; ix++) {
-        HEXTRACT_BYTE(ix);
-    }
+        /* Used in e.g. Solaris Sparc and HP-UX PA-RISC, e.g. -0.1L:
+         * bf fb 99 99 99 99 99 99 99 99 99 99 99 99 99 9a */
+        /* The bytes 2..15 are the mantissa/fraction,
+         * the 0,1 are the sign+exponent. */
+        const U8* nvp = (const U8*)(&nv);
+        HEXTRACT_IMPLICIT_BIT(nv);
+#   undef HEXTRACT_HAS_TOP_NYBBLE
+        HEXTRACT_BYTES_BE(2, 15);
 #  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN
-    /* x86 80-bit "extended precision", 64 bits of mantissa / fraction /
-     * significand, 15 bits of exponent, 1 bit of sign.  NVSIZE can
-     * be either 12 (ILP32, Solaris x86) or 16 (LP64, Linux and OS X),
-     * meaning that 2 or 6 bytes are empty padding. */
-    /* The bytes 7..0 are the mantissa/fraction */
-
-    /* Intentionally NO HEXTRACT_IMPLICIT_BIT here. */
-    for (ix = 7; ix >= 0; ix--) {
-        HEXTRACT_BYTE(ix);
-    }
+        /* x86 80-bit "extended precision", 64 bits of mantissa / fraction /
+         * significand, 15 bits of exponent, 1 bit of sign.  NVSIZE can
+         * be either 12 (ILP32, Solaris x86) or 16 (LP64, Linux and OS X),
+         * meaning that 2 or 6 bytes are empty padding. */
+        /* The bytes 7..0 are the mantissa/fraction */
+        const U8* nvp = (const U8*)(&nv);
+#    undef HEXTRACT_HAS_IMPLICIT_BIT
+#    undef HEXTRACT_HAS_TOP_NYBBLE
+        HEXTRACT_BYTES_LE(7, 0);
 #  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN
-    /* Does this format ever happen? (Wikipedia says the Motorola
-     * 6888x math coprocessors used format _like_ this but padded
-     * to 96 bits with 16 unused bits between the exponent and the
-     * mantissa.) */
-
-    /* Intentionally NO HEXTRACT_IMPLICIT_BIT here. */
-    for (ix = 0; ix < 8; ix++) {
-        HEXTRACT_BYTE(ix);
-    }
-#  elif defined(LONGDOUBLE_DOUBLEDOUBLE)
-    /* Double-double format: two doubles next to each other.
-     * The first double is the high-order one, exactly like
-     * it would be for a "lone" double.  The second double
-     * is shifted down using the exponent so that that there
-     * are no common bits.  The tricky part is that the value
-     * of the double-double is the SUM of the two doubles and
-     * the second one can be also NEGATIVE.
-     *
-     * Because of this tricky construction the bytewise extraction we
-     * use for the other long double formats doesn't work, we must
-     * extract the values bit by bit.
-     *
-     * The little-endian double-double is used .. somewhere?
-     *
-     * The big endian double-double is used in e.g. PPC/Power (AIX)
-     * and MIPS (SGI).
-     *
-     * The mantissa bits are in two separate stretches, e.g. for -0.1L:
-     * 9a 99 99 99 99 99 59 bc 9a 99 99 99 99 99 b9 3f (LE)
-     * 3f b9 99 99 99 99 99 9a bc 59 99 99 99 99 99 9a (BE)
-     */
-
-    if (nv == (NV)0.0) {
-        if (vend)
-            *v++ = 0;
-        else
-            v++;
-        *exponent = 0;
-    }
-    else {
-        NV d = nv < 0 ? -nv : nv;
-        NV e = (NV)1.0;
-        U8 ha = 0x0; /* hexvalue accumulator */
-        U8 hd = 0x8; /* hexvalue digit */
-
-        /* Shift d and e (and update exponent) so that e <= d < 2*e,
-         * this is essentially manual frexp(). Multiplying by 0.5 and
-         * doubling should be lossless in binary floating point. */
-
-        *exponent = 1;
-
-        while (e > d) {
-            e *= (NV)0.5;
-            (*exponent)--;
-        }
-        /* Now d >= e */
-
-        while (d >= e + e) {
-            e += e;
-            (*exponent)++;
-        }
-        /* Now e <= d < 2*e */
-
-        /* First extract the leading hexdigit (the implicit bit). */
-        if (d >= e) {
-            d -= e;
-            if (vend)
-                *v++ = 1;
-            else
-                v++;
-        }
-        else {
+        /* Does this format ever happen? (Wikipedia says the Motorola
+         * 6888x math coprocessors used format _like_ this but padded
+         * to 96 bits with 16 unused bits between the exponent and the
+         * mantissa.) */
+        const U8* nvp = (const U8*)(&nv);
+#    undef HEXTRACT_HAS_IMPLICIT_BIT
+#    undef HEXTRACT_HAS_TOP_NYBBLE
+        HEXTRACT_BYTES_BE(0, 7);
+#  else
+#    define HEXTRACT_FALLBACK
+        /* Double-double format: two doubles next to each other.
+         * The first double is the high-order one, exactly like
+         * it would be for a "lone" double.  The second double
+         * is shifted down using the exponent so that that there
+         * are no common bits.  The tricky part is that the value
+         * of the double-double is the SUM of the two doubles and
+         * the second one can be also NEGATIVE.
+         *
+         * Because of this tricky construction the bytewise extraction we
+         * use for the other long double formats doesn't work, we must
+         * extract the values bit by bit.
+         *
+         * The little-endian double-double is used .. somewhere?
+         *
+         * The big endian double-double is used in e.g. PPC/Power (AIX)
+         * and MIPS (SGI).
+         *
+         * The mantissa bits are in two separate stretches, e.g. for -0.1L:
+         * 9a 99 99 99 99 99 59 bc 9a 99 99 99 99 99 b9 3f (LE)
+         * 3f b9 99 99 99 99 99 9a bc 59 99 99 99 99 99 9a (BE)
+         */
+#  endif
+#else /* #if defined(USE_LONG_DOUBLE) && (NVSIZE > DOUBLESIZE) */
+        /* Using normal doubles, not long doubles.
+         *
+         * We generate 4-bit xdigits (nybble/nibble) instead of 8-bit
+         * bytes, since we might need to handle printf precision, and
+         * also need to insert the radix. */
+#  if NVSIZE == 8
+#    ifdef HEXTRACT_LITTLE_ENDIAN
+        /* 0 1 2 3 4 5 6 7 (MSB = 7, LSB = 0, 6+7 = exponent+sign) */
+        const U8* nvp = (const U8*)(&nv);
+        HEXTRACT_IMPLICIT_BIT(nv);
+        HEXTRACT_TOP_NYBBLE(6);
+        HEXTRACT_BYTES_LE(5, 0);
+#    elif defined(HEXTRACT_BIG_ENDIAN)
+        /* 7 6 5 4 3 2 1 0 (MSB = 7, LSB = 0, 6+7 = exponent+sign) */
+        const U8* nvp = (const U8*)(&nv);
+        HEXTRACT_IMPLICIT_BIT(nv);
+        HEXTRACT_TOP_NYBBLE(1);
+        HEXTRACT_BYTES_BE(2, 7);
+#    elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_MIXED_ENDIAN_LE_BE
+        /* 4 5 6 7 0 1 2 3 (MSB = 7, LSB = 0, 6:7 = nybble:exponent:sign) */
+        const U8* nvp = (const U8*)(&nv);
+        HEXTRACT_IMPLICIT_BIT(nv);
+        HEXTRACT_TOP_NYBBLE(2); /* 6 */
+        HEXTRACT_BYTE(1); /* 5 */
+        HEXTRACT_BYTE(0); /* 4 */
+        HEXTRACT_BYTE(7); /* 3 */
+        HEXTRACT_BYTE(6); /* 2 */
+        HEXTRACT_BYTE(5); /* 1 */
+        HEXTRACT_BYTE(4); /* 0 */
+#    elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_MIXED_ENDIAN_BE_LE
+        /* 3 2 1 0 7 6 5 4 (MSB = 7, LSB = 0, 7:6 = sign:exponent:nybble) */
+        const U8* nvp = (const U8*)(&nv);
+        HEXTRACT_IMPLICIT_BIT(nv);
+        HEXTRACT_TOP_NYBBLE(5); /* 6 */
+        HEXTRACT_BYTE(6); /* 5 */
+        HEXTRACT_BYTE(7); /* 4 */
+        HEXTRACT_BYTE(0); /* 3 */
+        HEXTRACT_BYTE(1); /* 2 */
+        HEXTRACT_BYTE(2); /* 1 */
+        HEXTRACT_BYTE(3); /* 0 */
+#    else
+#      define HEXTRACT_FALLBACK
+#    endif
+#  else
+#    define HEXTRACT_FALLBACK
+#  endif
+#endif /* #if defined(USE_LONG_DOUBLE) && (NVSIZE > DOUBLESIZE) #else */
+#  ifdef HEXTRACT_FALLBACK
+#    undef HEXTRACT_HAS_TOP_NYBBLE /* Meaningless, but consistent. */
+        /* The fallback is used for the double-double format, and
+         * for unknown long double formats, and for unknown double
+         * formats, or in general unknown NV formats. */
+        if (nv == (NV)0.0) {
             if (vend)
                 *v++ = 0;
             else
                 v++;
+            *exponent = 0;
         }
-        e *= (NV)0.5;
+        else {
+            NV d = nv < 0 ? -nv : nv;
+            NV e = (NV)1.0;
+            U8 ha = 0x0; /* hexvalue accumulator */
+            U8 hd = 0x8; /* hexvalue digit */
 
-        /* Then extract the remaining hexdigits. */
-        while (d > (NV)0.0) {
-            if (d >= e) {
-                ha |= hd;
-                d -= e;
+            /* Shift d and e (and update exponent) so that e <= d < 2*e,
+             * this is essentially manual frexp(). Multiplying by 0.5 and
+             * doubling should be lossless in binary floating point. */
+
+            *exponent = 1;
+
+            while (e > d) {
+                e *= (NV)0.5;
+                (*exponent)--;
             }
-            if (hd == 1) {
-                /* Output or count in groups of four bits,
-                 * that is, when the hexdigit is down to one. */
+            /* Now d >= e */
+
+            while (d >= e + e) {
+                e += e;
+                (*exponent)++;
+            }
+            /* Now e <= d < 2*e */
+
+            /* First extract the leading hexdigit (the implicit bit). */
+            if (d >= e) {
+                d -= e;
+                if (vend)
+                    *v++ = 1;
+                else
+                    v++;
+            }
+            else {
+                if (vend)
+                    *v++ = 0;
+                else
+                    v++;
+            }
+            e *= (NV)0.5;
+
+            /* Then extract the remaining hexdigits. */
+            while (d > (NV)0.0) {
+                if (d >= e) {
+                    ha |= hd;
+                    d -= e;
+                }
+                if (hd == 1) {
+                    /* Output or count in groups of four bits,
+                     * that is, when the hexdigit is down to one. */
+                    if (vend)
+                        *v++ = ha;
+                    else
+                        v++;
+                    /* Reset the hexvalue. */
+                    ha = 0x0;
+                    hd = 0x8;
+                }
+                else
+                    hd >>= 1;
+                e *= (NV)0.5;
+            }
+
+            /* Flush possible pending hexvalue. */
+            if (ha) {
                 if (vend)
                     *v++ = ha;
                 else
                     v++;
-                /* Reset the hexvalue. */
-                ha = 0x0;
-                hd = 0x8;
             }
-            else 
-                hd >>= 1;
-            e *= (NV)0.5;
         }
-
-        /* Flush possible pending hexvalue. */
-        if (ha) {
-            if (vend)
-                *v++ = ha;
-            else
-                v++;
-        }
-    }
-#  else
-    Perl_croak(aTHX_
-               "Hexadecimal float: unsupported long double format");
 #  endif
-#else
-    /* Using normal doubles, not long doubles.
-     *
-     * We generate 4-bit xdigits (nybble/nibble) instead of 8-bit
-     * bytes, since we might need to handle printf precision, and
-     * also need to insert the radix. */
-    HEXTRACT_IMPLICIT_BIT(nv);
-#  ifdef HEXTRACT_LITTLE_ENDIAN
-    HEXTRACT_LO_NYBBLE(6);
-    for (ix = 5; ix >= 0; ix--) {
-        HEXTRACT_BYTE(ix);
     }
-#  else
-    HEXTRACT_LO_NYBBLE(1);
-    for (ix = 2; ix < NVSIZE; ix++) {
-        HEXTRACT_BYTE(ix);
-    }
-#  endif
-#endif
     /* Croak for various reasons: if the output pointer escaped the
      * output buffer, if the extraction index escaped the extraction
      * buffer, or if the ending output pointer didn't match the
@@ -11074,7 +11143,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	return;
     }
 
-#ifndef USE_LONG_DOUBLE
+#if !defined(USE_LONG_DOUBLE) && !defined(USE_QUADMATH)
     /* special-case "%.<number>[gf]" */
     if ( !args && patlen <= 5 && pat[0] == '%' && pat[1] == '.'
 	 && (pat[patlen-1] == 'g' || pat[patlen-1] == 'f') ) {
@@ -11166,7 +11235,9 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 #if defined(HAS_LONG_DOUBLE) && LONG_DOUBLESIZE > DOUBLESIZE && \
 	defined(PERL_PRIgldbl) && !defined(USE_QUADMATH)
 	long double fv;
-#  define FV_ISFINITE(x) Perl_isfinitel(x)
+#  ifdef Perl_isfinitel
+#    define FV_ISFINITE(x) Perl_isfinitel(x)
+#  endif
 #  define FV_GF PERL_PRIgldbl
 #    if defined(__VMS) && defined(__ia64) && defined(__IEEE_FLOAT)
        /* Work around breakage in OTS$CVT_FLOAT_T_X */
@@ -11179,9 +11250,11 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 #    endif
 #else
 	NV fv;
-#  define FV_ISFINITE(x) Perl_isfinite((NV)(x))
 #  define FV_GF NVgf
 #  define NV_TO_FV(nv,fv) (fv)=(nv)
+#endif
+#ifndef FV_ISFINITE
+#  define FV_ISFINITE(x) Perl_isfinite((NV)(x))
 #endif
 	STRLEN have;
 	STRLEN need;
@@ -11882,7 +11955,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	    */
 	    switch (intsize) {
 	    case 'V':
-#if defined(USE_LONG_DOUBLE)
+#if defined(USE_LONG_DOUBLE) || defined(USE_QUADMATH)
 		intsize = 'q';
 #endif
 		break;
@@ -11890,7 +11963,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	    case 'l':
 		/* FALLTHROUGH */
 	    default:
-#if defined(USE_LONG_DOUBLE)
+#if defined(USE_LONG_DOUBLE) || defined(USE_QUADMATH)
 		intsize = args ? 0 : 'q';
 #endif
 		break;
@@ -12115,10 +12188,14 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                 S_hextract(aTHX_ (NV)fv, &exponent, vhex, vend);
 
 #if NVSIZE > DOUBLESIZE
-#  ifdef LONGDOUBLE_X86_80_BIT
-                exponent -= 4;
-#  else
+#  ifdef HEXTRACT_HAS_IMPLICIT_BIT
+                /* In this case there is an implicit bit,
+                 * and therefore the exponent is shifted shift by one. */
                 exponent--;
+#  else
+                /* In this case there is no implicit bit,
+                 * and the exponent is shifted by the first xdigit. */
+                exponent -= 4;
 #  endif
 #endif
 
@@ -12270,8 +12347,13 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                 char *ptr = ebuf + sizeof ebuf;
                 *--ptr = '\0';
                 *--ptr = c;
+#if defined(USE_QUADMATH)
+		if (intsize == 'q') {
+                    /* "g" -> "Qg" */
+                    *--ptr = 'Q';
+                }
                 /* FIXME: what to do if HAS_LONG_DOUBLE but not PERL_PRIfldbl? */
-#if defined(HAS_LONG_DOUBLE) && defined(PERL_PRIfldbl)
+#elif defined(HAS_LONG_DOUBLE) && defined(PERL_PRIfldbl)
 		/* Note that this is HAS_LONG_DOUBLE and PERL_PRIfldbl,
 		 * not USE_LONG_DOUBLE and NVff.  In other words,
 		 * this needs to work without USE_LONG_DOUBLE. */
@@ -12279,13 +12361,9 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		    /* Copy the one or more characters in a long double
 		     * format before the 'base' ([efgEFG]) character to
 		     * the format string. */
-#ifdef USE_QUADMATH
-                    *--ptr = 'Q';
-#else
 		    static char const ldblf[] = PERL_PRIfldbl;
 		    char const *p = ldblf + sizeof(ldblf) - 3;
 		    while (p >= ldblf) { *--ptr = *p--; }
-#endif
 		}
 #endif
 		if (has_precis) {
@@ -13240,7 +13318,9 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 #endif
 
     /* don't clone objects whose class has asked us not to */
-    if (SvOBJECT(sstr) && ! (SvFLAGS(SvSTASH(sstr)) & SVphv_CLONEABLE)) {
+    if (SvOBJECT(sstr) && !SvPAD_NAME(sstr)
+     && ! (SvFLAGS(SvSTASH(sstr)) & SVphv_CLONEABLE))
+    {
 	SvFLAGS(dstr) = 0;
 	return dstr;
     }
@@ -13331,7 +13411,7 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 		    NOOP;
 		} else if (SvMAGIC(dstr))
 		    SvMAGIC_set(dstr, mg_dup(SvMAGIC(dstr), param));
-		if (SvOBJECT(dstr) && SvSTASH(dstr))
+		if (SvOBJECT(dstr) && !SvPAD_NAME(dstr) && SvSTASH(dstr))
 		    SvSTASH_set(dstr, hv_dup_inc(SvSTASH(dstr), param));
 		else SvSTASH_set(dstr, 0); /* don't copy DESTROY cache */
 	    }
@@ -13560,7 +13640,15 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 			? NULL
 			: gv_dup(CvGV(sstr), param);
 
-		CvPADLIST(dstr) = padlist_dup(CvPADLIST(sstr), param);
+		if (!CvISXSUB(sstr)) {
+		    PADLIST * padlist = CvPADLIST(sstr);
+		    if(padlist)
+			padlist = padlist_dup(padlist, param);
+		    CvPADLIST_set(dstr, padlist);
+		} else
+/* unthreaded perl can't sv_dup so we dont support unthreaded's CvHSCXT */
+		    PoisonPADLIST(dstr);
+
 		CvOUTSIDE(dstr)	=
 		    CvWEAKOUTSIDE(sstr)
 		    ? cv_dup(    CvOUTSIDE(dstr), param)
@@ -14526,12 +14614,12 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_incgv		= gv_dup_inc(proto_perl->Iincgv, param);
     PL_hintgv		= gv_dup_inc(proto_perl->Ihintgv, param);
     PL_origfilename	= SAVEPV(proto_perl->Iorigfilename);
+    PL_xsubfilename	= proto_perl->Ixsubfilename;
     PL_diehook		= sv_dup_inc(proto_perl->Idiehook, param);
     PL_warnhook		= sv_dup_inc(proto_perl->Iwarnhook, param);
 
     /* switches */
     PL_patchlevel	= sv_dup_inc(proto_perl->Ipatchlevel, param);
-    PL_apiversion	= sv_dup_inc(proto_perl->Iapiversion, param);
     PL_inplace		= SAVEPV(proto_perl->Iinplace);
     PL_e_script		= sv_dup_inc(proto_perl->Ie_script, param);
 
@@ -15459,7 +15547,7 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 	    /* index is constant */
 	    SV* kidsv;
 	    if (negate) {
-		kidsv = sv_2mortal(newSVpvs("-"));
+		kidsv = newSVpvs_flags("-", SVs_TEMP);
 		sv_catsv(kidsv, cSVOPx_sv(kid));
 	    }
 	    else
@@ -15551,14 +15639,12 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
     case OP_SUBST:
     case OP_MATCH:
 	if ( !(obase->op_flags & OPf_STACKED)) {
-	    if (uninit_sv == ((obase->op_private & OPpTARGET_MY)
-				 ? PAD_SVl(obase->op_targ)
-				 : DEFSV))
-	    {
-		sv = sv_newmortal();
-		sv_setpvs(sv, "$_");
-		return sv;
-	    }
+	    if (uninit_sv == DEFSV)
+		return newSVpvs_flags("$_", SVs_TEMP);
+	    else if (obase->op_targ
+		  && uninit_sv == PAD_SVl(obase->op_targ))
+		return varname(NULL, '$', obase->op_targ, NULL, 0,
+			       FUV_SUBSCRIPT_NONE);
 	}
 	goto do_op;
 

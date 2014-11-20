@@ -158,10 +158,10 @@ esac
 # under a compiler other than c89.
 case "$usedl" in
 define)
-echo 'cat >.$$.c; '"$cc"' -D_OE_SOCKETS -D_XOPEN_SOURCE_EXTENDED -D_ALL_SOURCE -D_SHR_ENVIRON -E -Wc,"LANGLVL(DOLLARINNAMES)",NOLOC ${1+"$@"} .$$.c | grep -v "??="; rm .$$.c' > cppstdin
+echo 'cat >.$$.c; '"$cc"' -D_OE_SOCKETS -D_XOPEN_SOURCE_EXTENDED -D_ALL_SOURCE -D_SHR_ENVIRON -E -Wc,"LANGLVL(DOLLARINNAMES)",NOLOC ${1+"$@"} .$$.c | fgrep -v "??="; rm .$$.c' > cppstdin
     ;;
 *)
-echo 'cat >.$$.c; '"$cc"' -D_OE_SOCKETS -D_XOPEN_SOURCE_EXTENDED -D_ALL_SOURCE -E -Wc,"LANGLVL(DOLLARINNAMES)",NOLOC ${1+"$@"} .$$.c | grep -v "??="; rm .$$.c' > cppstdin
+echo 'cat >.$$.c; '"$cc"' -D_OE_SOCKETS -D_XOPEN_SOURCE_EXTENDED -D_ALL_SOURCE -E -Wc,"LANGLVL(DOLLARINNAMES)",NOLOC ${1+"$@"} .$$.c | fgrep -v "??="; rm .$$.c' > cppstdin
     ;;
 esac
 
@@ -231,3 +231,22 @@ d_gethostbyaddr_r='undef'
 d_gethostbyname_r='undef'
 d_gethostent_r='undef'
 
+# The z/OS C compiler compiler supports the attribute keyword, but in a
+# limited manner.
+#
+# Ideally, Configure's tests should test the attributes as they are expected
+# to be used in perl, and, ideally, those tests would fail on z/OS.
+# Until then, just tell Configure to ignore the attributes.  Currently,
+# Configure thinks attributes are supported because it does not recognize
+# warning messages like this:
+#
+# INFORMATIONAL CCN4108 ./proto.h:4534  The use of keyword '__attribute__' is non-portable.
+
+d_attribute_deprecated='undef'
+d_attribute_format='undef'
+d_attribute_malloc='undef'
+d_attribute_nonnull='undef'
+d_attribute_noreturn='undef'
+d_attribute_pure='undef'
+d_attribute_unused='undef'
+d_attribute_warn_unused_result='undef'

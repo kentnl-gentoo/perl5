@@ -1,5 +1,8 @@
 #!./perl
 
+# Test that $lexical = <some op> optimises the assignment away correctly
+# and causes no ill side-effects.
+
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
@@ -50,6 +53,52 @@ my $xxx = 'b';
 $xxx = 'c' . ($xxx || 'e');
 is( $xxx, 'cb', 'variables can be read before being overwritten');
 
+# Chains of assignments
+
+my ($l1, $l2, $l3, $l4);
+my $zzzz = 12;
+$zzz1 = $l1 = $l2 = $zzz2 = $l3 = $l4 = 1 + $zzzz;
+
+is($zzz1, 13, 'chain assignment, part1');
+is($zzz2, 13, 'chain assignment, part2');
+is($l1,   13, 'chain assignment, part3');
+is($l2,   13, 'chain assignment, part4');
+is($l3,   13, 'chain assignment, part5');
+is($l4,   13, 'chain assignment, part6');
+
+for (@INPUT) {
+  ($op, undef, $comment) = /^([^\#]+)(\#\s+(.*))?/;
+  $comment = $op unless defined $comment;
+  chomp;
+  $op = "$op==$op" unless $op =~ /==/;
+  ($op, $expectop) = $op =~ /(.*)==(.*)/;
+  
+  $skip = ($op =~ /^'\?\?\?'/ or $comment =~ /skip\(.*\Q$^O\E.*\)/i);
+  $integer = ($comment =~ /^i_/) ? "use integer" : '' ;
+  if ($skip) {
+    SKIP: {
+        skip $comment, 1;
+    }
+    next;
+  }
+  
+  eval <<EOE;
+  local \$SIG{__WARN__} = \\&wrn;
+  my \$a = 'fake';
+  $integer;
+  \$a = $op;
+  \$b = $expectop;
+  is (\$a, \$b, \$comment);
+EOE
+  if ($@) {
+    $warning = $@;
+    chomp $warning;
+    if ($@ !~ /(?:is un|not )implemented/) {
+      fail($_ . ' ' . $warning);
+    }
+  }
+}
+
 {				# Check calling STORE
   note('Tied variables, calling STORE');
   my $sc = 0;
@@ -74,64 +123,16 @@ is( $xxx, 'cb', 'variables can be read before being overwritten');
   is( $sc, 3, 'called on self-increment' );
   is( $m,  89, 'checking the tied variable result' );
 
-}
-
-# Chains of assignments
-
-my ($l1, $l2, $l3, $l4);
-my $zzzz = 12;
-$zzz1 = $l1 = $l2 = $zzz2 = $l3 = $l4 = 1 + $zzzz;
-
-is($zzz1, 13, 'chain assignment, part1');
-is($zzz2, 13, 'chain assignment, part2');
-is($l1,   13, 'chain assignment, part3');
-is($l2,   13, 'chain assignment, part4');
-is($l3,   13, 'chain assignment, part5');
-is($l4,   13, 'chain assignment, part6');
-
-for (@INPUT) {
-  ($op, undef, $comment) = /^([^\#]+)(\#\s+(.*))?/;
-  $comment = $op unless defined $comment;
-  chomp;
-  $op = "$op==$op" unless $op =~ /==/;
-  ($op, $expectop) = $op =~ /(.*)==(.*)/;
-  
-  $skip = ($op =~ /^'\?\?\?'/ or $comment =~ /skip\(.*\Q$^O\E.*\)/i)
-	  ? "skip" : "# '$_'\nnot";
-  $integer = ($comment =~ /^i_/) ? "use integer" : '' ;
-  if ($skip eq 'skip') {
-    SKIP: {
-        skip $comment, 1;
-        pass();
-    }
-    next;
-  }
-  
-  eval <<EOE;
-  local \$SIG{__WARN__} = \\&wrn;
-  my \$a = 'fake';
-  $integer;
-  \$a = $op;
-  \$b = $expectop;
-  if (\$a ne \$b) {
-    SKIP: {
-        skip "\$comment: got '\$a', expected '\$b'", 1;
-        pass("")
-    }
-  }
-  pass();
-EOE
-  if ($@) {
-    $warning = $@;
-    chomp $warning;
-    if ($@ =~ /is unimplemented/) {
-      SKIP: {
-        skip $warning, 1;
-        pass($comment);
-      }
-    } else {
-      fail($_ . ' ' . $warning);
-    }
+  for (@INPUT) {
+    ($op, undef, $comment) = /^([^\#]+)(\#\s+(.*))?/;
+    $comment = $op unless defined $comment;
+    next if ($op =~ /^'\?\?\?'/ or $comment =~ /skip\(.*\Q$^O\E.*\)/i);
+    $op =~ s/==.*//;
+    
+    $sc = 0;
+    local $SIG{__WARN__} = \&wrn;
+    eval "\$m = $op";
+    like $sc, $@ ? qr/^[01]\z/ : qr/^1\z/, "STORE count for $comment";
   }
 }
 
@@ -151,7 +152,7 @@ EOE
   if ($@) {
     $warning = $@;
     chomp $warning;
-    if ($@ =~ /is unimplemented/) {
+    if ($@ =~ /(?:is un|not )implemented/) {
       SKIP: {
         skip $warning, 1;
         pass($comment);
@@ -168,6 +169,8 @@ EOE
   }
 }
 
+# XXX This test does not really belong here, as it has nothing to do with
+#     OPpTARGET_MY optimisation.  But where should it go?
 eval {
     sub PVBM () { 'foo' }
     index 'foo', PVBM;
@@ -228,6 +231,7 @@ $n ^ $n				# bit_xor
 $n | $n				# bit_or
 -$n				# negate
 -$n				# i_negate
+-$a=="-fake"			# i_negate with string
 ~$n				# complement
 atan2 $n,$n			# atan2
 sin $n				# sin
@@ -248,6 +252,7 @@ rindex $posstr, 2		# rindex
 sprintf "%i%i", $n, $n		# sprintf
 ord $n				# ord
 chr $n				# chr
+chr ${\256}			# chr $wide
 crypt $n, $n			# crypt
 ucfirst ($cstr . "a")		# ucfirst padtmp
 ucfirst $cstr			# ucfirst
@@ -316,7 +321,7 @@ system "$runme -e 0"		# system skip(VMS)
 '???'				# kill
 getppid				# getppid
 getpgrp				# getpgrp
-'???'				# setpgrp
+setpgrp				# setpgrp
 getpriority $$, $$		# getpriority
 '???'				# setpriority
 time				# time

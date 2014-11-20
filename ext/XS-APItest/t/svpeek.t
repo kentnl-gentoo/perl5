@@ -27,8 +27,9 @@ if ($^O eq 'VMS') {
 }
   is (DPeek ($|),    'PVMG(1)',			'$|');
 
-  "abc" =~ m/(b)/;	# Don't know why these magic vars have this content
-like (DPeek ($1), qr'^PVMG\("',			' $1');
+  "abc" =~ m/b/;	# Don't know why these magic vars have this content
+  () = $1 || '';
+  is (DPeek ($1),    'PVMG()',			' $1');
   is (DPeek ($`),    'PVMG()',			' $`');
   is (DPeek ($&),    'PVMG()',			' $&');
   is (DPeek ($'),    'PVMG()',			" \$'");

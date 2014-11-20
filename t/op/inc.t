@@ -188,7 +188,7 @@ cmp_ok($a, '==', 2147483647, "postdecrement properly downgrades from double");
 
 SKIP: {
     if ($Config{uselongdouble} &&
-        ($Config{longdblkind} == 6 || $Config{longdoublekind} == 5)) {
+        ($Config{longdblkind} == 6 || $Config{longdblkind} == 5)) {
         skip "the double-double format is weird", 1;
     }
 
@@ -287,6 +287,29 @@ isnt(scalar eval { my $pvbm = PVBM; --$pvbm }, undef, "predecrement defined");
     }
 }
 
+# *Do* use pad TARG if it is actually a named variable, even when the thing
+# you’re copying is a ref.  The fix for #9466 broke this.
+{
+    package P9466_2;
+    my $x;
+    sub DESTROY { $x = 1 }
+    for (2..3) {
+	$x = 0;
+	my $a = bless {};
+	my $b;
+	use integer;
+	if ($_ == 2) {
+	    $b = $a--; # sassign optimised away
+	}
+	else {
+	    $b = $a++;
+	}
+	::is(ref $b, __PACKAGE__, 'i_post(in|de)c/TARGMY on ref');
+	undef $a; undef $b;
+	::is($x, 1, "9466 case $_");
+    }
+}
+
 $_ = ${qr //};
 $_--;
 is($_, -1, 'regexp--');
@@ -300,5 +323,30 @@ is($_, -1, 'regexp--');
 $_ = v97;
 $_++;
 isnt(ref\$_, 'VSTRING', '++ flattens vstrings');
+
+sub TIESCALAR {bless\my $x}
+sub STORE { ++$store::called }
+tie my $t, "";
+{
+    $t = $_++;
+    $t = $_--;
+    use integer;
+    $t = $_++;
+    $t = $_--;
+}
+is $store::called, 4, 'STORE called on "my" target';
+
+{
+    # Temporarily broken between before 5.6.0 (b162f9ea/21f5b33c) and
+    # between 5.21.5 and 5.21.6 (9e319cc4fd)
+    my $x = 7;
+    $x = $x++;
+    is $x, 7, '$lex = $lex++';
+    $x = 7;
+    # broken in b162f9ea (5.6.0); fixed in 5.21.6
+    use integer;
+    $x = $x++;
+    is $x, 7, '$lex = $lex++ under use integer';
+}
 
 done_testing();

@@ -46,9 +46,28 @@ sub dies_ok (&@) {
 }
 
 {
+  my $undef_hash = { Undef => undef };
+  my $z_hash = { ZeroLength => '' };
+
+  my $warning;
+  local $SIG{__WARN__} = sub { $warning = join("\n",@_) };
+
+  my $req = CPAN::Meta::Requirements->from_string_hash($undef_hash);
+  like ($warning, qr/Undefined requirement.*treated as '0'/, "undef requirement warns");
+  $req->add_string_requirement(%$z_hash);
+  like ($warning, qr/Undefined requirement.*treated as '0'/, "'' requirement warns");
+
+  is_deeply(
+    $req->as_string_hash,
+    { map { ($_ => 0) } keys(%$undef_hash), keys(%$z_hash) },
+    "undef/'' requirements treated as '0'",
+  );
+}
+
+{
   my $string_hash = {
     Left   => 10,
-    Shared => undef,
+    Shared => v50.44.60,
     Right  => 18,
   };
 
@@ -57,13 +76,23 @@ sub dies_ok (&@) {
 
   my $req = CPAN::Meta::Requirements->from_string_hash($string_hash);
 
-  is(
-    $req->as_string_hash->{Shared}, 0,
-    "undef requirement treated as '0'",
+  ok(
+    $req->accepts_module(Shared => 'v50.44.60'),
+    "vstring treated as if string",
+  );
+}
+
+
+{
+  my $req = CPAN::Meta::Requirements->from_string_hash(
+    { Bad => 'invalid', },
+    { bad_version_hook => sub { version->new(42) } },
   );
 
-  like ($warning, qr/Undefined requirement.*treated as '0'/, "undef requirement warns");
-
+  ok(
+    $req->accepts_module(Bad => 42),
+    "options work 2nd arg to f_s_h",
+  );
 }
 
 done_testing;

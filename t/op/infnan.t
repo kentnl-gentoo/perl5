@@ -41,7 +41,7 @@ if ($Config{ivsize} == 8) {
     push @packi_fmt, qw(q Q);
 }
 
-if ($Config{uselongdouble}) {
+if ($Config{uselongdouble} && $Config{nvsize} > $Config{doublesize}) {
     push @packf_fmt, 'D';
 }
 
@@ -69,7 +69,9 @@ cmp_ok($NInf + $NInf, '==', $NInf, "-Inf - Inf is -Inf");
 cmp_ok($PInf * 2, '==', $PInf, "twice Inf is Inf");
 cmp_ok($PInf / 2, '==', $PInf, "half of Inf is Inf");
 
-cmp_ok($PInf * $PInf, '==', $PInf, "-Inf * +Inf is +Inf");
+cmp_ok($PInf * $PInf, '==', $PInf, "+Inf * +Inf is +Inf");
+cmp_ok($PInf * $NInf, '==', $NInf, "+Inf * -Inf is -Inf");
+cmp_ok($NInf * $PInf, '==', $NInf, "-Inf * +Inf is -Inf");
 cmp_ok($NInf * $NInf, '==', $PInf, "-Inf * -Inf is +Inf");
 
 is(sprintf("%g", $PInf), "Inf", "$PInf sprintf %g is Inf");
@@ -102,16 +104,20 @@ ok(!defined eval { $a = chr("-Inf") }, "chr(stringy -Inf) undef");
 like($@, qr/Cannot chr/, "stringy -Inf chr() fails");
 
 for my $f (@packi_fmt) {
+    undef $a;
     ok(!defined eval { $a = pack($f, $PInf) }, "pack $f +Inf undef");
     like($@, $f eq 'w' ? qr/Cannot compress Inf/: qr/Cannot pack Inf/,
          "+Inf pack $f fails");
+    undef $a;
     ok(!defined eval { $a = pack($f, "Inf") },
       "pack $f stringy +Inf undef");
     like($@, $f eq 'w' ? qr/Cannot compress Inf/: qr/Cannot pack Inf/,
          "stringy +Inf pack $f fails");
+    undef $a;
     ok(!defined eval { $a = pack($f, $NInf) }, "pack $f -Inf undef");
     like($@, $f eq 'w' ? qr/Cannot compress -Inf/: qr/Cannot pack -Inf/,
          "-Inf pack $f fails");
+    undef $a;
     ok(!defined eval { $a = pack($f, "-Inf") },
       "pack $f stringy -Inf undef");
     like($@, $f eq 'w' ? qr/Cannot compress -Inf/: qr/Cannot pack -Inf/,
@@ -119,19 +125,25 @@ for my $f (@packi_fmt) {
 }
 
 for my $f (@packf_fmt) {
+    undef $a;
+    undef $b;
     ok(defined eval { $a = pack($f, $PInf) }, "pack $f +Inf defined");
     eval { $b = unpack($f, $a) };
     cmp_ok($b, '==', $PInf, "pack $f +Inf equals $PInf");
 
+    undef $a;
+    undef $b;
     ok(defined eval { $a = pack($f, $NInf) }, "pack $f -Inf defined");
     eval { $b = unpack($f, $a) };
     cmp_ok($b, '==', $NInf, "pack $f -Inf equals $NInf");
 }
 
 for my $f (@packs_fmt) {
+    undef $a;
     ok(defined eval { $a = pack($f, $PInf) }, "pack $f +Inf defined");
     is($a, pack($f, "Inf"), "pack $f +Inf same as 'Inf'");
 
+    undef $a;
     ok(defined eval { $a = pack($f, $NInf) }, "pack $f -Inf defined");
     is($a, pack($f, "-Inf"), "pack $f -Inf same as 'Inf'");
 }
@@ -335,6 +347,15 @@ SKIP: {
         skip "$here: pow doesn't generate Inf, so sin(Inf) won't happen", 1;
     }
     is(sin(9**9**9), $NaN, "sin(9**9**9) is NaN");
+}
+
+SKIP: {
+    my @FNaN = qw(NaX XNAN Ind Inx);
+    # Silence "isn't numeric in addition", that's kind of the point.
+    local $^W = 0;
+    for my $i (@FNaN) {
+        cmp_ok("$i" + 0, '==', 0, "false nan $i");
+    }
 }
 
 # === Tests combining Inf and NaN ===

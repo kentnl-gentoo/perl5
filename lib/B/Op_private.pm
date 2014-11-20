@@ -31,11 +31,12 @@ B::Op_private -  OP op_private flag definitions
 
 =head1 DESCRIPTION
 
-This module provides three global hashes:
+This module provides four global hashes:
 
     %B::Op_private::bits
     %B::Op_private::defines
     %B::Op_private::labels
+    %B::Op_private::ops_using
 
 which contain information about the per-op meanings of the bits in the
 op_private field.
@@ -103,6 +104,13 @@ and C<perl -Dx>, e.g.
 If the label equals '-', then Concise will treat the bit as a raw bit and
 not try to display it symbolically.
 
+=head2 C<%ops_using>
+
+For each define, this gives a reference to an array of op names that use
+the flag.
+
+    @ops_using_lvintro = @{ $B::Op_private::ops_using{OPp_LVAL_INTRO} };
+
 =cut
 
 package B::Op_private;
@@ -110,10 +118,10 @@ package B::Op_private;
 our %bits;
 
 
-our $VERSION = "5.021005";
+our $VERSION = "5.021006";
 
 $bits{$_}{3} = 'OPpENTERSUB_AMPER' for qw(entersub rv2cv);
-$bits{$_}{4} = 'OPpENTERSUB_DB' for qw(entersub rv2cv);
+$bits{$_}{6} = 'OPpENTERSUB_DB' for qw(entersub rv2cv);
 $bits{$_}{2} = 'OPpENTERSUB_HASTARG' for qw(entersub rv2cv);
 $bits{$_}{6} = 'OPpFLIP_LINENUM' for qw(flip flop);
 $bits{$_}{1} = 'OPpFT_ACCESS' for qw(fteexec fteread ftewrite ftrexec ftrread ftrwrite);
@@ -121,30 +129,28 @@ $bits{$_}{4} = 'OPpFT_AFTER_t' for qw(ftatime ftbinary ftblk ftchr ftctime ftdir
 $bits{$_}{2} = 'OPpFT_STACKED' for qw(ftatime ftbinary ftblk ftchr ftctime ftdir fteexec fteowned fteread ftewrite ftfile ftis ftlink ftmtime ftpipe ftrexec ftrowned ftrread ftrwrite ftsgid ftsize ftsock ftsuid ftsvtx fttext fttty ftzero);
 $bits{$_}{3} = 'OPpFT_STACKING' for qw(ftatime ftbinary ftblk ftchr ftctime ftdir fteexec fteowned fteread ftewrite ftfile ftis ftlink ftmtime ftpipe ftrexec ftrowned ftrread ftrwrite ftsgid ftsize ftsock ftsuid ftsvtx fttext fttty ftzero);
 $bits{$_}{1} = 'OPpGREP_LEX' for qw(grepstart grepwhile mapstart mapwhile);
-$bits{$_}{6} = 'OPpHINT_M_VMSISH_STATUS' for qw(dbstate nextstate);
-$bits{$_}{7} = 'OPpHINT_M_VMSISH_TIME' for qw(dbstate nextstate);
 $bits{$_}{1} = 'OPpHINT_STRICT_REFS' for qw(entersub rv2av rv2cv rv2gv rv2hv rv2sv);
 $bits{$_}{5} = 'OPpHUSH_VMSISH' for qw(dbstate nextstate);
 $bits{$_}{2} = 'OPpITER_REVERSED' for qw(enteriter iter);
 $bits{$_}{7} = 'OPpLVALUE' for qw(leave leaveloop);
-$bits{$_}{4} = 'OPpLVAL_DEFER' for qw(aelem helem);
+$bits{$_}{6} = 'OPpLVAL_DEFER' for qw(aelem helem);
 $bits{$_}{7} = 'OPpLVAL_INTRO' for qw(aelem aslice cond_expr delete enteriter entersub gvsv helem hslice list lvavref lvref lvrefslice padav padhv padrange padsv pushmark refassign rv2av rv2gv rv2hv rv2sv);
 $bits{$_}{2} = 'OPpLVREF_ELEM' for qw(lvref refassign);
 $bits{$_}{3} = 'OPpLVREF_ITER' for qw(lvref refassign);
 $bits{$_}{3} = 'OPpMAYBE_LVSUB' for qw(aassign aelem aslice av2arylen helem hslice keys kvaslice kvhslice padav padhv pos rkeys rv2av rv2gv rv2hv substr vec);
-$bits{$_}{6} = 'OPpMAYBE_TRUEBOOL' for qw(padhv rv2hv);
+$bits{$_}{4} = 'OPpMAYBE_TRUEBOOL' for qw(padhv rv2hv);
 $bits{$_}{7} = 'OPpOFFBYONE' for qw(caller runcv wantarray);
 $bits{$_}{5} = 'OPpOPEN_IN_CRLF' for qw(backtick open);
 $bits{$_}{4} = 'OPpOPEN_IN_RAW' for qw(backtick open);
 $bits{$_}{7} = 'OPpOPEN_OUT_CRLF' for qw(backtick open);
 $bits{$_}{6} = 'OPpOPEN_OUT_RAW' for qw(backtick open);
-$bits{$_}{4} = 'OPpOUR_INTRO' for qw(enteriter gvsv rv2av rv2hv rv2sv split);
-$bits{$_}{4} = 'OPpPAD_STATE' for qw(lvavref lvref padav padhv padsv pushmark refassign);
+$bits{$_}{6} = 'OPpOUR_INTRO' for qw(enteriter gvsv rv2av rv2hv rv2sv split);
+$bits{$_}{6} = 'OPpPAD_STATE' for qw(lvavref lvref padav padhv padsv pushmark refassign);
 $bits{$_}{7} = 'OPpPV_IS_UTF8' for qw(dump goto last next redo);
 $bits{$_}{6} = 'OPpREFCOUNTED' for qw(leave leaveeval leavesub leavesublv leavewrite);
 $bits{$_}{6} = 'OPpRUNTIME' for qw(match pushre qr subst substcont);
 $bits{$_}{2} = 'OPpSLICEWARNING' for qw(aslice hslice padav padhv rv2av rv2hv);
-$bits{$_}{4} = 'OPpTARGET_MY' for qw(abs add atan2 chdir chmod chomp chown chr chroot concat cos crypt divide exec exp flock getpgrp getppid getpriority hex i_add i_divide i_modulo i_multiply i_negate i_postdec i_postinc i_subtract index int kill left_shift length link log match mkdir modulo multiply oct ord pow push rand rename right_shift rindex rmdir schomp setpgrp setpriority sin sleep sqrt srand stringify subst subtract symlink system time trans transr unlink unshift utime wait waitpid);
+$bits{$_}{4} = 'OPpTARGET_MY' for qw(abs add atan2 chdir chmod chomp chown chr chroot concat cos crypt divide exec exp flock getpgrp getppid getpriority hex i_add i_divide i_modulo i_multiply i_subtract index int kill left_shift length link log match mkdir modulo multiply oct ord pow push rand rename repeat right_shift rindex rmdir schomp setpgrp setpriority sin sleep split sqrt srand stringify subst subtract symlink system time trans transr unlink unshift utime vec wait waitpid);
 $bits{$_}{5} = 'OPpTRANS_COMPLEMENT' for qw(trans transr);
 $bits{$_}{7} = 'OPpTRANS_DELETE' for qw(trans transr);
 $bits{$_}{0} = 'OPpTRANS_FROM_UTF' for qw(trans transr);
@@ -199,9 +205,9 @@ my @bf = (
     },
     {
         mask_def  => 'OPpDEREF',
-        bitmin    => 5,
-        bitmax    => 6,
-        bitmask   => 96,
+        bitmin    => 4,
+        bitmax    => 5,
+        bitmask   => 48,
         enum      => [
             1, 'OPpDEREF_AV', 'DREFAV',
             2, 'OPpDEREF_HV', 'DREFHV',
@@ -210,9 +216,9 @@ my @bf = (
     },
     {
         mask_def  => 'OPpLVREF_TYPE',
-        bitmin    => 5,
-        bitmax    => 6,
-        bitmask   => 96,
+        bitmin    => 4,
+        bitmax    => 5,
+        bitmask   => 48,
         enum      => [
             0, 'OPpLVREF_SV', 'SV',
             1, 'OPpLVREF_AV', 'AV',
@@ -227,7 +233,7 @@ $bits{abs}{0} = $bf[0];
 @{$bits{accept}}{3,2,1,0} = ($bf[3], $bf[3], $bf[3], $bf[3]);
 @{$bits{add}}{1,0} = ($bf[1], $bf[1]);
 $bits{aeach}{0} = $bf[0];
-@{$bits{aelem}}{6,5,1,0} = ($bf[6], $bf[6], $bf[1], $bf[1]);
+@{$bits{aelem}}{5,4,1,0} = ($bf[6], $bf[6], $bf[1], $bf[1]);
 @{$bits{aelemfast}}{7,6,5,4,3,2,1,0} = ($bf[5], $bf[5], $bf[5], $bf[5], $bf[5], $bf[5], $bf[5], $bf[5]);
 @{$bits{aelemfast_lex}}{7,6,5,4,3,2,1,0} = ($bf[5], $bf[5], $bf[5], $bf[5], $bf[5], $bf[5], $bf[5], $bf[5]);
 $bits{akeys}{0} = $bf[0];
@@ -278,7 +284,7 @@ $bits{each}{0} = $bf[0];
 @{$bits{entereval}}{5,4,3,2,1,0} = ('OPpEVAL_RE_REPARSING', 'OPpEVAL_COPHH', 'OPpEVAL_BYTES', 'OPpEVAL_UNICODE', 'OPpEVAL_HAS_HH', $bf[0]);
 $bits{entergiven}{0} = $bf[0];
 $bits{enteriter}{3} = 'OPpITER_DEF';
-@{$bits{entersub}}{6,5,0} = ($bf[6], $bf[6], 'OPpENTERSUB_INARGS');
+@{$bits{entersub}}{5,4,0} = ($bf[6], $bf[6], 'OPpENTERSUB_INARGS');
 $bits{entertry}{0} = $bf[0];
 $bits{enterwhen}{0} = $bf[0];
 @{$bits{enterwrite}}{3,2,1,0} = ($bf[3], $bf[3], $bf[3], $bf[3]);
@@ -348,7 +354,7 @@ $bits{grepwhile}{0} = $bf[0];
 @{$bits{gsockopt}}{3,2,1,0} = ($bf[3], $bf[3], $bf[3], $bf[3]);
 @{$bits{gt}}{1,0} = ($bf[1], $bf[1]);
 $bits{gv}{5} = 'OPpEARLY_CV';
-@{$bits{helem}}{6,5,1,0} = ($bf[6], $bf[6], $bf[1], $bf[1]);
+@{$bits{helem}}{5,4,1,0} = ($bf[6], $bf[6], $bf[1], $bf[1]);
 $bits{hex}{0} = $bf[0];
 @{$bits{i_add}}{1,0} = ($bf[1], $bf[1]);
 @{$bits{i_divide}}{1,0} = ($bf[1], $bf[1]);
@@ -396,7 +402,7 @@ $bits{log}{0} = $bf[0];
 $bits{lstat}{0} = $bf[0];
 @{$bits{lt}}{1,0} = ($bf[1], $bf[1]);
 $bits{lvavref}{0} = $bf[0];
-@{$bits{lvref}}{6,5,0} = ($bf[7], $bf[7], $bf[0]);
+@{$bits{lvref}}{5,4,0} = ($bf[7], $bf[7], $bf[0]);
 $bits{mapwhile}{0} = $bf[0];
 $bits{method}{0} = $bf[0];
 $bits{method_named}{0} = $bf[0];
@@ -421,7 +427,7 @@ $bits{orassign}{0} = $bf[0];
 $bits{ord}{0} = $bf[0];
 @{$bits{pack}}{3,2,1,0} = ($bf[3], $bf[3], $bf[3], $bf[3]);
 @{$bits{padrange}}{6,5,4,3,2,1,0} = ($bf[4], $bf[4], $bf[4], $bf[4], $bf[4], $bf[4], $bf[4]);
-@{$bits{padsv}}{6,5} = ($bf[6], $bf[6]);
+@{$bits{padsv}}{5,4} = ($bf[6], $bf[6]);
 @{$bits{pipe_op}}{3,2,1,0} = ($bf[3], $bf[3], $bf[3], $bf[3]);
 $bits{pop}{0} = $bf[0];
 $bits{pos}{0} = $bf[0];
@@ -443,7 +449,7 @@ $bits{readlink}{0} = $bf[0];
 @{$bits{recv}}{3,2,1,0} = ($bf[3], $bf[3], $bf[3], $bf[3]);
 $bits{redo}{0} = $bf[0];
 $bits{ref}{0} = $bf[0];
-@{$bits{refassign}}{6,5,1,0} = ($bf[7], $bf[7], $bf[1], $bf[1]);
+@{$bits{refassign}}{5,4,1,0} = ($bf[7], $bf[7], $bf[1], $bf[1]);
 $bits{refgen}{0} = $bf[0];
 $bits{regcmaybe}{0} = $bf[0];
 $bits{regcomp}{0} = $bf[0];
@@ -459,10 +465,10 @@ $bits{rewinddir}{0} = $bf[0];
 $bits{rkeys}{0} = $bf[0];
 $bits{rmdir}{0} = $bf[0];
 $bits{rv2av}{0} = $bf[0];
-@{$bits{rv2cv}}{7,6,0} = ('OPpENTERSUB_NOPAREN', 'OPpMAY_RETURN_CONSTANT', $bf[0]);
-@{$bits{rv2gv}}{6,5,4,2,0} = ($bf[6], $bf[6], 'OPpALLOW_FAKE', 'OPpDONT_INIT_GV', $bf[0]);
+@{$bits{rv2cv}}{7,5,0} = ('OPpENTERSUB_NOPAREN', 'OPpMAY_RETURN_CONSTANT', $bf[0]);
+@{$bits{rv2gv}}{6,5,4,2,0} = ('OPpALLOW_FAKE', $bf[6], $bf[6], 'OPpDONT_INIT_GV', $bf[0]);
 $bits{rv2hv}{0} = $bf[0];
-@{$bits{rv2sv}}{6,5,0} = ($bf[6], $bf[6], $bf[0]);
+@{$bits{rv2sv}}{5,4,0} = ($bf[6], $bf[6], $bf[0]);
 $bits{rvalues}{0} = $bf[0];
 @{$bits{sassign}}{7,6,1,0} = ('OPpASSIGN_CV_TO_GV', 'OPpASSIGN_BACKWARDS', $bf[1], $bf[1]);
 $bits{scalar}{0} = $bf[0];
@@ -543,7 +549,7 @@ $bits{values}{0} = $bf[0];
 
 
 our %defines = (
-    OPpALLOW_FAKE            =>  16,
+    OPpALLOW_FAKE            =>  64,
     OPpARG1_MASK             =>   1,
     OPpARG2_MASK             =>   3,
     OPpARG3_MASK             =>   7,
@@ -560,14 +566,14 @@ our %defines = (
     OPpCOREARGS_DEREF2       =>   2,
     OPpCOREARGS_PUSHMARK     => 128,
     OPpCOREARGS_SCALARMOD    =>  64,
-    OPpDEREF                 =>  96,
-    OPpDEREF_AV              =>  32,
-    OPpDEREF_HV              =>  64,
-    OPpDEREF_SV              =>  96,
+    OPpDEREF                 =>  48,
+    OPpDEREF_AV              =>  16,
+    OPpDEREF_HV              =>  32,
+    OPpDEREF_SV              =>  48,
     OPpDONT_INIT_GV          =>   4,
     OPpEARLY_CV              =>  32,
     OPpENTERSUB_AMPER        =>   8,
-    OPpENTERSUB_DB           =>  16,
+    OPpENTERSUB_DB           =>  64,
     OPpENTERSUB_HASTARG      =>   4,
     OPpENTERSUB_INARGS       =>   1,
     OPpENTERSUB_NOPAREN      => 128,
@@ -583,35 +589,33 @@ our %defines = (
     OPpFT_STACKED            =>   4,
     OPpFT_STACKING           =>   8,
     OPpGREP_LEX              =>   2,
-    OPpHINT_M_VMSISH_STATUS  =>  64,
-    OPpHINT_M_VMSISH_TIME    => 128,
     OPpHINT_STRICT_REFS      =>   2,
     OPpHUSH_VMSISH           =>  32,
     OPpITER_DEF              =>   8,
     OPpITER_REVERSED         =>   4,
     OPpLIST_GUESSED          =>  64,
     OPpLVALUE                => 128,
-    OPpLVAL_DEFER            =>  16,
+    OPpLVAL_DEFER            =>  64,
     OPpLVAL_INTRO            => 128,
-    OPpLVREF_AV              =>  32,
-    OPpLVREF_CV              =>  96,
+    OPpLVREF_AV              =>  16,
+    OPpLVREF_CV              =>  48,
     OPpLVREF_ELEM            =>   4,
-    OPpLVREF_HV              =>  64,
+    OPpLVREF_HV              =>  32,
     OPpLVREF_ITER            =>   8,
     OPpLVREF_SV              =>   0,
-    OPpLVREF_TYPE            =>  96,
+    OPpLVREF_TYPE            =>  48,
     OPpMAYBE_LVSUB           =>   8,
-    OPpMAYBE_TRUEBOOL        =>  64,
-    OPpMAY_RETURN_CONSTANT   =>  64,
+    OPpMAYBE_TRUEBOOL        =>  16,
+    OPpMAY_RETURN_CONSTANT   =>  32,
     OPpOFFBYONE              => 128,
     OPpOPEN_IN_CRLF          =>  32,
     OPpOPEN_IN_RAW           =>  16,
     OPpOPEN_OUT_CRLF         => 128,
     OPpOPEN_OUT_RAW          =>  64,
-    OPpOUR_INTRO             =>  16,
+    OPpOUR_INTRO             =>  64,
     OPpPADRANGE_COUNTMASK    => 127,
     OPpPADRANGE_COUNTSHIFT   =>   7,
-    OPpPAD_STATE             =>  16,
+    OPpPAD_STATE             =>  64,
     OPpPV_IS_UTF8            => 128,
     OPpREFCOUNTED            =>  64,
     OPpREPEAT_DOLIST         =>  64,
@@ -675,8 +679,6 @@ our %labels = (
     OPpFT_STACKED            => 'FTSTACKED',
     OPpFT_STACKING           => 'FTSTACKING',
     OPpGREP_LEX              => 'GREPLEX',
-    OPpHINT_M_VMSISH_STATUS  => 'VMSISH_STATUS',
-    OPpHINT_M_VMSISH_TIME    => 'VMSISH_TIME',
     OPpHINT_STRICT_REFS      => 'STRICT',
     OPpHUSH_VMSISH           => 'HUSH',
     OPpITER_DEF              => 'DEF',
@@ -727,5 +729,87 @@ our %labels = (
     OPpTRANS_TO_UTF          => '>UTF',
     OPpTRUEBOOL              => 'BOOL',
 );
+
+
+our %ops_using = (
+    OPpALLOW_FAKE            => [qw(rv2gv)],
+    OPpASSIGN_BACKWARDS      => [qw(sassign)],
+    OPpASSIGN_COMMON         => [qw(aassign)],
+    OPpCONST_BARE            => [qw(const)],
+    OPpCOREARGS_DEREF1       => [qw(coreargs)],
+    OPpEARLY_CV              => [qw(gv)],
+    OPpENTERSUB_AMPER        => [qw(entersub rv2cv)],
+    OPpENTERSUB_INARGS       => [qw(entersub)],
+    OPpENTERSUB_NOPAREN      => [qw(rv2cv)],
+    OPpEVAL_BYTES            => [qw(entereval)],
+    OPpEXISTS_SUB            => [qw(exists)],
+    OPpFLIP_LINENUM          => [qw(flip flop)],
+    OPpFT_ACCESS             => [qw(fteexec fteread ftewrite ftrexec ftrread ftrwrite)],
+    OPpFT_AFTER_t            => [qw(ftatime ftbinary ftblk ftchr ftctime ftdir fteexec fteowned fteread ftewrite ftfile ftis ftlink ftmtime ftpipe ftrexec ftrowned ftrread ftrwrite ftsgid ftsize ftsock ftsuid ftsvtx fttext fttty ftzero)],
+    OPpGREP_LEX              => [qw(grepstart grepwhile mapstart mapwhile)],
+    OPpHINT_STRICT_REFS      => [qw(entersub rv2av rv2cv rv2gv rv2hv rv2sv)],
+    OPpHUSH_VMSISH           => [qw(dbstate nextstate)],
+    OPpITER_DEF              => [qw(enteriter)],
+    OPpITER_REVERSED         => [qw(enteriter iter)],
+    OPpLIST_GUESSED          => [qw(list)],
+    OPpLVALUE                => [qw(leave leaveloop)],
+    OPpLVAL_DEFER            => [qw(aelem helem)],
+    OPpLVAL_INTRO            => [qw(aelem aslice cond_expr delete enteriter entersub gvsv helem hslice list lvavref lvref lvrefslice padav padhv padrange padsv pushmark refassign rv2av rv2gv rv2hv rv2sv)],
+    OPpLVREF_ELEM            => [qw(lvref refassign)],
+    OPpMAYBE_LVSUB           => [qw(aassign aelem aslice av2arylen helem hslice keys kvaslice kvhslice padav padhv pos rkeys rv2av rv2gv rv2hv substr vec)],
+    OPpMAYBE_TRUEBOOL        => [qw(padhv rv2hv)],
+    OPpOFFBYONE              => [qw(caller runcv wantarray)],
+    OPpOPEN_IN_CRLF          => [qw(backtick open)],
+    OPpOUR_INTRO             => [qw(enteriter gvsv rv2av rv2hv rv2sv split)],
+    OPpPAD_STATE             => [qw(lvavref lvref padav padhv padsv pushmark refassign)],
+    OPpPV_IS_UTF8            => [qw(dump goto last next redo)],
+    OPpREFCOUNTED            => [qw(leave leaveeval leavesub leavesublv leavewrite)],
+    OPpREPEAT_DOLIST         => [qw(repeat)],
+    OPpREVERSE_INPLACE       => [qw(reverse)],
+    OPpRUNTIME               => [qw(match pushre qr subst substcont)],
+    OPpSLICE                 => [qw(delete)],
+    OPpSLICEWARNING          => [qw(aslice hslice padav padhv rv2av rv2hv)],
+    OPpSORT_DESCEND          => [qw(sort)],
+    OPpSPLIT_IMPLIM          => [qw(split)],
+    OPpSUBSTR_REPL_FIRST     => [qw(substr)],
+    OPpTARGET_MY             => [qw(abs add atan2 chdir chmod chomp chown chr chroot concat cos crypt divide exec exp flock getpgrp getppid getpriority hex i_add i_divide i_modulo i_multiply i_subtract index int kill left_shift length link log match mkdir modulo multiply oct ord pow push rand rename repeat right_shift rindex rmdir schomp setpgrp setpriority sin sleep split sqrt srand stringify subst subtract symlink system time trans transr unlink unshift utime vec wait waitpid)],
+    OPpTRANS_COMPLEMENT      => [qw(trans transr)],
+);
+
+$ops_using{OPpASSIGN_CV_TO_GV} = $ops_using{OPpASSIGN_BACKWARDS};
+$ops_using{OPpCONST_ENTERED} = $ops_using{OPpCONST_BARE};
+$ops_using{OPpCONST_NOVER} = $ops_using{OPpCONST_BARE};
+$ops_using{OPpCONST_SHORTCIRCUIT} = $ops_using{OPpCONST_BARE};
+$ops_using{OPpCONST_STRICT} = $ops_using{OPpCONST_BARE};
+$ops_using{OPpCOREARGS_DEREF2} = $ops_using{OPpCOREARGS_DEREF1};
+$ops_using{OPpCOREARGS_PUSHMARK} = $ops_using{OPpCOREARGS_DEREF1};
+$ops_using{OPpCOREARGS_SCALARMOD} = $ops_using{OPpCOREARGS_DEREF1};
+$ops_using{OPpDONT_INIT_GV} = $ops_using{OPpALLOW_FAKE};
+$ops_using{OPpENTERSUB_DB} = $ops_using{OPpENTERSUB_AMPER};
+$ops_using{OPpENTERSUB_HASTARG} = $ops_using{OPpENTERSUB_AMPER};
+$ops_using{OPpEVAL_COPHH} = $ops_using{OPpEVAL_BYTES};
+$ops_using{OPpEVAL_HAS_HH} = $ops_using{OPpEVAL_BYTES};
+$ops_using{OPpEVAL_RE_REPARSING} = $ops_using{OPpEVAL_BYTES};
+$ops_using{OPpEVAL_UNICODE} = $ops_using{OPpEVAL_BYTES};
+$ops_using{OPpFT_STACKED} = $ops_using{OPpFT_AFTER_t};
+$ops_using{OPpFT_STACKING} = $ops_using{OPpFT_AFTER_t};
+$ops_using{OPpLVREF_ITER} = $ops_using{OPpLVREF_ELEM};
+$ops_using{OPpMAY_RETURN_CONSTANT} = $ops_using{OPpENTERSUB_NOPAREN};
+$ops_using{OPpOPEN_IN_RAW} = $ops_using{OPpOPEN_IN_CRLF};
+$ops_using{OPpOPEN_OUT_CRLF} = $ops_using{OPpOPEN_IN_CRLF};
+$ops_using{OPpOPEN_OUT_RAW} = $ops_using{OPpOPEN_IN_CRLF};
+$ops_using{OPpSORT_INPLACE} = $ops_using{OPpSORT_DESCEND};
+$ops_using{OPpSORT_INTEGER} = $ops_using{OPpSORT_DESCEND};
+$ops_using{OPpSORT_NUMERIC} = $ops_using{OPpSORT_DESCEND};
+$ops_using{OPpSORT_QSORT} = $ops_using{OPpSORT_DESCEND};
+$ops_using{OPpSORT_REVERSE} = $ops_using{OPpSORT_DESCEND};
+$ops_using{OPpSORT_STABLE} = $ops_using{OPpSORT_DESCEND};
+$ops_using{OPpTRANS_DELETE} = $ops_using{OPpTRANS_COMPLEMENT};
+$ops_using{OPpTRANS_FROM_UTF} = $ops_using{OPpTRANS_COMPLEMENT};
+$ops_using{OPpTRANS_GROWS} = $ops_using{OPpTRANS_COMPLEMENT};
+$ops_using{OPpTRANS_IDENTICAL} = $ops_using{OPpTRANS_COMPLEMENT};
+$ops_using{OPpTRANS_SQUASH} = $ops_using{OPpTRANS_COMPLEMENT};
+$ops_using{OPpTRANS_TO_UTF} = $ops_using{OPpTRANS_COMPLEMENT};
+$ops_using{OPpTRUEBOOL} = $ops_using{OPpMAYBE_TRUEBOOL};
 
 # ex: set ro:

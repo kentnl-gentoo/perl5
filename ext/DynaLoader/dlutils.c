@@ -20,6 +20,10 @@
 #endif
 #define MY_CXT_KEY "DynaLoader::_guts" XS_VERSION
 
+/* disable version checking since DynaLoader can't be DynaLoaded */
+#undef dXSBOOTARGSXSAPIVERCHK
+#define dXSBOOTARGSXSAPIVERCHK dXSBOOTARGSNOVERCHK
+
 typedef struct {
     SV*		x_dl_last_error;	/* pointer to allocated memory for
 					   last error message */
@@ -75,12 +79,13 @@ dl_unload_all_files(pTHX_ void *unused)
 
     if ((sub = get_cvs("DynaLoader::dl_unload_file", 0)) != NULL) {
         dl_librefs = get_av("DynaLoader::dl_librefs", 0);
+        EXTEND(SP,1);
         while ((dl_libref = av_pop(dl_librefs)) != &PL_sv_undef) {
            dSP;
            ENTER;
            SAVETMPS;
            PUSHMARK(SP);
-           XPUSHs(sv_2mortal(dl_libref));
+           PUSHs(sv_2mortal(dl_libref));
            PUTBACK;
            call_sv((SV*)sub, G_DISCARD | G_NODEBUG);
            FREETMPS;

@@ -18,9 +18,9 @@ use File::Glob qw(:case);
 @IGNORABLE = qw(
     .cvsignore .dualLivedDiffConfig .gitignore .perlcriticrc .perltidyrc
     ANNOUNCE Announce Artistic AUTHORS BENCHMARK BUGS Build.PL
-    CHANGELOG ChangeLog Changelog CHANGES Changes CONTRIBUTING COPYING Copying
-    cpanfile CREDITS dist.ini GOALS HISTORY INSTALL INSTALL.SKIP LICENSE
-    Makefile.PL MANIFEST MANIFEST.SKIP META.json META.yml MYMETA.json
+    CHANGELOG ChangeLog Changelog CHANGES Changes CONTRIBUTING CONTRIBUTING.mkdn
+    COPYING Copying cpanfile CREDITS dist.ini GOALS HISTORY INSTALL INSTALL.skip
+    LICENSE Makefile.PL MANIFEST MANIFEST.SKIP META.json META.yml MYMETA.json
     MYMETA.yml NEW NEWS NOTES perlcritic.rc ppport.h README README.PATCHING
     SIGNATURE THANKS TODO Todo VERSION WHATSNEW
 );
@@ -288,7 +288,7 @@ use File::Glob qw(:case);
     # Note: When updating CPAN-Meta the META.* files will need to be regenerated
     # perl -Icpan/CPAN-Meta/lib Porting/makemeta
     'CPAN::Meta' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.142690.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.143240.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta],
         'EXCLUDED'     => [
             qw[t/00-report-prereqs.t],
@@ -300,7 +300,7 @@ use File::Glob qw(:case);
     },
 
     'CPAN::Meta::Requirements' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-Requirements-2.128.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-Requirements-2.130.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta-Requirements],
         'EXCLUDED'     => [
             qw(CONTRIBUTING.mkdn),
@@ -373,7 +373,7 @@ use File::Glob qw(:case);
     },
 
     'Digest::SHA' => {
-        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.92.tar.gz',
+        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.93.tar.gz',
         'FILES'        => q[cpan/Digest-SHA],
         'EXCLUDED'     => [
             qw( t/pod.t
@@ -381,9 +381,6 @@ use File::Glob qw(:case);
                 examples/dups
                 ),
         ],
-        # Was hoping to be merged upstream in CPAN RT#96498,
-        # but that has been rejected...
-        'CUSTOMIZED'   => ['hints/hpux.pl'],
     },
 
     'Dumpvalue' => {
@@ -393,7 +390,7 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.62.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.64.tar.gz',
         'FILES'        => q[cpan/Encode],
     },
 
@@ -413,7 +410,7 @@ use File::Glob qw(:case);
     },
 
     'experimental' => {
-        'DISTRIBUTION' => 'LEONT/experimental-0.012.tar.gz',
+        'DISTRIBUTION' => 'LEONT/experimental-0.013.tar.gz',
         'FILES'        => q[cpan/experimental],
         'EXCLUDED'     => [
           qr{^t/release-.*\.t},
@@ -476,7 +473,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::MakeMaker' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-6.98.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-7.02.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -488,17 +485,13 @@ use File::Glob qw(:case);
             'README.packaging',
         ],
         'CUSTOMIZED'   => [
-            # Already merged upstream in GitHub 0116aaf4e, just awaiting
-            # a new stable CPAN release
-            qw(	t/pm_to_blib.t ),
-            # Already merged upstream in GitHub 46586b12c, just awaiting
-            # a new stable CPAN release
-            qw( lib/ExtUtils/Liblist/Kid.pm ),
+            # Applied upstream
+            q(lib/ExtUtils/MM_Unix.pm),
         ],
     },
 
     'ExtUtils::Manifest' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-Manifest-1.68.tar.gz',
+        'DISTRIBUTION' => 'ETHER/ExtUtils-Manifest-1.69.tar.gz',
         'FILES'        => q[cpan/ExtUtils-Manifest],
         'EXCLUDED'     => [qr(^xt/)],
     },
@@ -596,7 +589,7 @@ use File::Glob qw(:case);
     },
 
     'HTTP::Tiny' => {
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.050.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.051.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/00-report-prereqs.t',
@@ -808,7 +801,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20141002.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20141020.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -884,7 +877,7 @@ use File::Glob qw(:case);
     },
 
     'perlfaq' => {
-        'DISTRIBUTION' => 'LLAP/perlfaq-5.0150045.tar.gz',
+        'DISTRIBUTION' => 'ETHER/perlfaq-5.0150046.tar.gz',
         'FILES'        => q[cpan/perlfaq],
         'EXCLUDED'     => [
             qw( t/release-pod-syntax.t
@@ -1055,7 +1048,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Harness' => {
-        'DISTRIBUTION' => 'LEONT/Test-Harness-3.33.tar.gz',
+        'DISTRIBUTION' => 'LEONT/Test-Harness-3.34.tar.gz',
         'FILES'        => q[cpan/Test-Harness],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1074,22 +1067,24 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.001008.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.301001_073.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^t/xt},
+            qr{^xt},
+            qr{^profiling},
             qw( .perlcriticrc
                 .perltidyrc
                 examples/indent.pl
                 examples/subtest.t
-                t/00compile.t
-                t/pod.t
-                t/pod-coverage.t
-                t/Builder/reset_outputs.t
-                lib/Test/Builder/IO/Scalar.pm
+                t/Legacy/00compile.t
+                t/Legacy/pod.t
                 ),
         ],
-    },
+       'CUSTOMIZED'   => [
+            # Waiting to be merged upstream: see pull request #494
+            qw( t/Legacy/exit.t ),
+        ],    },
 
     'Text::Abbrev' => {
         'DISTRIBUTION' => 'FLORA/Text-Abbrev-1.02.tar.gz',

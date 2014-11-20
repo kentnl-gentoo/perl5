@@ -4,7 +4,7 @@ use strict;
 use vars qw(@ISA $VERSION);
 require File::Spec::Unix;
 
-$VERSION = '3.51';
+$VERSION = '3.52';
 $VERSION =~ tr/_//;
 
 @ISA = qw(File::Spec::Unix);
@@ -204,7 +204,7 @@ sub catfile {
         # Only passed a single file?
         my $xfile = (defined($file) && length($file)) ? $file : '';
 
-        $rslt = $unix_rpt ? $file : vmsify($file);
+        $rslt = $unix_rpt ? $xfile : vmsify($xfile);
     }
     return $self->canonpath($rslt) unless $unix_rpt;
 
@@ -439,12 +439,16 @@ Attempt to convert an absolute file specification to a relative specification.
 sub abs2rel {
     my $self = shift;
     return vmspath(File::Spec::Unix::abs2rel( $self, @_ ))
-        if grep m{/}, @_;
+        if ((grep m{/}, @_) && !(grep m{(?<!\^)[\[<:]}, @_));
 
     my($path,$base) = @_;
     $base = $self->_cwd() unless defined $base and length $base;
 
-    for ($path, $base) { $_ = $self->canonpath($_) }
+    # If there is no device or directory syntax on $base, make sure it
+    # is treated as a directory.
+    $base = VMS::Filespec::vmspath($base) unless $base =~ m{(?<!\^)[\[<:]};
+
+    for ($path, $base) { $_ = $self->rel2abs($_) }
 
     # Are we even starting $path on the same (node::)device as $base?  Note that
     # logical paths or nodename differences may be on the "same device" 
@@ -459,8 +463,6 @@ sub abs2rel {
     my ($path_volume, $path_directories, $path_file) = $self->splitpath($path);
     my ($base_volume, $base_directories, $base_file) = $self->splitpath($base);
     return $path unless lc($path_volume) eq lc($base_volume);
-
-    for ($path, $base) { $_ = $self->rel2abs($_) }
 
     # Now, remove all leading components that are the same
     my @pathchunks = $self->splitdir( $path_directories );

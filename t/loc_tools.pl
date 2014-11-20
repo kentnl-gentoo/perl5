@@ -8,6 +8,11 @@
 # anyway later during the scanning process (and besides, some clueless
 # vendor might have them capitalized erroneously anyway).
 
+# Some of the locales on the system may not play well with Perl.  Since, we
+# may be trying every possible locale, we don't want to be warned about the
+# weird ones.
+no warnings 'locale';
+
 sub _trylocale {    # Adds the locale given by the first parameter to the list
                     # given by the 3rd iff the platform supports the locale in
                     # each of the categories given by the 2nd parameter, which
@@ -53,6 +58,7 @@ sub _decode_encodings {
             push @enc, "$_.65001"; # Windows UTF-8
             push @enc, "$_.ACP"; # Windows ANSI code page
             push @enc, "$_.OCP"; # Windows OEM code page
+            push @enc, "$_.1252"; # Windows
 	}
     }
     if ($^O eq 'os390') {
@@ -68,7 +74,9 @@ sub find_locales ($) {  # Returns an array of all the locales we found on the
                         # system.  The parameter is either a single locale
                         # category or a reference to a list of categories to
                         # find valid locales for it (or in the case of
-                        # multiple) for all of them
+                        # multiple) for all of them.  Note that currently the
+                        # array includes even those locales that don't play
+                        # well with Perl
     my $categories = shift;
 
     use Config;;
@@ -156,7 +164,6 @@ sub find_locales ($) {  # Returns an array of all the locales we found on the
         # This is going to be slow.
         my @Data;
 
-
         # Locales whose name differs if the utf8 bit is on are stored in these two
         # files with appropriate encodings.
         if ($^H & 0x08 || (${^OPEN} || "") =~ /:utf8/) {
@@ -203,12 +210,14 @@ sub find_locales ($) {  # Returns an array of all the locales we found on the
     @Locale = sort @Locale;
 
     return @Locale;
-
-
 }
 
 sub is_locale_utf8 ($) { # Return a boolean as to if core Perl thinks the input
                          # is a UTF-8 locale
+
+    # On z/OS, even locales marked as UTF-8 aren't.
+    return 0 if ord "A" != 65;
+
     my $locale = shift;
 
     use locale;
@@ -246,7 +255,7 @@ sub is_locale_utf8 ($) { # Return a boolean as to if core Perl thinks the input
     return $ret;
 }
 
-sub find_utf8_ctype_locale (;$) { # Return the name of locale that core Perl
+sub find_utf8_ctype_locale (;$) { # Return the name of a locale that core Perl
                                   # thinks is a UTF-8 LC_CTYPE locale.
                                   # Optional parameter is a reference to a
                                   # list of locales to try; if omitted, this

@@ -80,16 +80,26 @@ Operation "uc" returns its argument for non-Unicode code point 0x110000 at - lin
 use warnings 'utf8';
 my $d800  = uc(chr(0xD800));
 my $nonUnicode =  uc(chr(0x110000));
-my $big_nonUnicode = uc(chr(0x8000_0000));
 no warnings 'non_unicode';
 my $d800  = uc(chr(0xD800));
 my $nonUnicode =  uc(chr(0x110000));
-my $big_nonUnicode = uc(chr(0x8000_0000));
 EXPECT
 Operation "uc" returns its argument for UTF-16 surrogate U+D800 at - line 2.
 Operation "uc" returns its argument for non-Unicode code point 0x110000 at - line 3.
-Operation "uc" returns its argument for non-Unicode code point 0x80000000 at - line 4.
-Operation "uc" returns its argument for UTF-16 surrogate U+D800 at - line 6.
+Operation "uc" returns its argument for UTF-16 surrogate U+D800 at - line 5.
+########
+BEGIN {
+    if (ord('A') == 193) {
+        print "SKIPPED\n# ebcdic platforms can't handle this large a code point";
+        exit 0;
+    }
+}
+use warnings 'utf8';
+my $big_nonUnicode = uc(chr(0x8000_0000));
+no warnings 'non_unicode';
+my $big_nonUnicode = uc(chr(0x8000_0000));
+EXPECT
+Operation "uc" returns its argument for non-Unicode code point 0x80000000 at - line 8.
 ########
 use warnings 'utf8';
 my $d7ff  = lc pack("U", 0xD7FF);
@@ -571,3 +581,25 @@ print $fh "\x{10FFFF}", "\n";
 print $fh "\x{110000}", "\n";
 close $fh;
 EXPECT
+########
+# NAME Case change crosses 255/256 under non-UTF8 locale
+eval { require POSIX; POSIX->import("locale_h") };
+if ($@) {
+    print("SKIPPED\n# no POSIX\n"),exit;
+}
+use warnings 'locale';
+use feature 'fc';
+use locale;
+setlocale(&POSIX::LC_CTYPE, "C");
+my $a;
+$a = lc("\x{178}");
+$a = fc("\x{1E9E}");
+$a = fc("\x{FB05}");
+$a = uc("\x{FB00}");
+$a = ucfirst("\x{149}");
+EXPECT
+Can't do lc("\x{178}") on non-UTF-8 locale; resolved to "\x{178}". at - line 10.
+Can't do fc("\x{1E9E}") on non-UTF-8 locale; resolved to "\x{17F}\x{17F}". at - line 11.
+Can't do fc("\x{FB05}") on non-UTF-8 locale; resolved to "\x{FB06}". at - line 12.
+Can't do uc("\x{FB00}") on non-UTF-8 locale; resolved to "\x{FB00}". at - line 13.
+Can't do ucfirst("\x{149}") on non-UTF-8 locale; resolved to "\x{149}". at - line 14.

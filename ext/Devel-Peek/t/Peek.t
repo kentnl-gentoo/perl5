@@ -90,7 +90,7 @@ sub do_test {
 	    /mge;
 	    $pattern =~ s/^\h+COW_REFCNT = .*\n//mg
 		if $Config{ccflags} =~
-			/-DPERL_(?:OLD_COPY_ON_WRITE|NO_COW)/
+			/-DPERL_(?:OLD_COPY_ON_WRITE|NO_COW)\b/
 			    || $] < 5.019003;
 	    print $pattern, "\n" if $DEBUG;
 	    my ($dump, $dump2) = split m/\*\*\*\*\*\n/, scalar <IN>;
@@ -185,7 +185,7 @@ my $type = do_test('result of addition',
 do_test('floating point value',
        $d,
        $] < 5.019003
-        || $Config{ccflags} =~ /-DPERL_(?:NO_COW|OLD_COPY_ON_WRITE)/
+        || $Config{ccflags} =~ /-DPERL_(?:NO_COW|OLD_COPY_ON_WRITE)\b/
        ?
 'SV = PVNV\\($ADDR\\) at $ADDR
   REFCNT = 1
@@ -688,7 +688,8 @@ do_test('constant subroutine',
     FLAGS = 0xc					# $] >= 5.013 && $] < 5.015
     FLAGS = 0x100c				# $] >= 5.015
     OUTSIDE_SEQ = 0
-    PADLIST = 0x0
+    PADLIST = 0x0				# $] < 5.021006
+    HSCXT = $ADDR				# $] >= 5.021006
     OUTSIDE = 0x0 \\(null\\)');	
 
 do_test('isUV should show on PVMG',
@@ -1474,7 +1475,7 @@ for my $test (
 }
 
 my $e = <<'EODUMP';
-dumpindent is 4 at - line 1.
+dumpindent is 4 at -e line 1.
 {
 1   TYPE = leave  ===> NULL
     TARG = 1
@@ -1522,7 +1523,11 @@ EODUMP
 
 $e =~ s/GV_OR_PADIX/$threads ? "PADIX = 2" : "GV = t::DumpProg"/e;
 $e =~ s/.*PRIVATE = \(0x1\).*\n// if $] < 5.021004;
-
-test_DumpProg("package t;", $e, "DumpProg() has no 'Attempt to free X prematurely' warning", "is" );
+my $out = t::runperl
+             switches => ['-Ilib'],
+             prog => 'package t; use Devel::Peek q-DumpProg-; DumpProg();',
+             stderr=>1;
+$out =~ s/ *SEQ = .*\n//;
+is $out, $e, "DumpProg() has no 'Attempt to free X prematurely' warning";
 
 done_testing();

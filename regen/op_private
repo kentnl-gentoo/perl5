@@ -35,7 +35,7 @@ bit bit field. Here's a general example:
 
     addbits('aelem',
             7 => qw(OPpLVAL_INTRO LVINTRO),
-       '5..6' =>  {
+       '4..5' =>  {
                        mask_def  => 'OPpDEREF',
                        enum => [ qw(
                                    1   OPpDEREF_AV   DREFAV
@@ -43,7 +43,7 @@ bit bit field. Here's a general example:
                                    3   OPpDEREF_SV   DREFSV
                                )],
                    },
-            4 => qw(OPpLVAL_DEFER LVDEFER),
+            6 => qw(OPpLVAL_DEFER LVDEFER),
     );
 
 Here for the op C<aelem>, bits 4 and 7 (bits are numbered 0..7) are
@@ -287,10 +287,6 @@ use strict;
 for (qw(nextstate dbstate)) {
     addbits($_,
         5 => qw(OPpHUSH_VMSISH          HUSH),
-        # should match HINT_M_VMSISH_STATUS, HINT_M_VMSISH_TIME
-        6 => qw(OPpHINT_M_VMSISH_STATUS VMSISH_STATUS),
-        7 => qw(OPpHINT_M_VMSISH_TIME   VMSISH_TIME),
-
     );
 }
 
@@ -322,8 +318,13 @@ addbits($_, 7 => qw(OPpLVAL_INTRO LVINTRO))
 # Safe to set if the ppcode uses:
 #	tryAMAGICbin, tryAMAGICun, SETn, SETi, SETu, PUSHn, PUSHTARG, SETTARG,
 #	SETs(TARG), XPUSHn, XPUSHu,
+# but make sure set-magic is invoked separately for SETs(TARG) (or change
+# it to SETTARG).
 #
 # Unsafe to set if the ppcode uses dTARG or [X]RETPUSH[YES|NO|UNDEF]
+#
+# Only the code paths that handle scalar rvalue context matter.  If dTARG
+# or RETPUSHNO occurs only in list or lvalue paths, T is safe.
 #
 # lt and friends do SETs (including ncmp, but not scmp)
 #
@@ -332,13 +333,11 @@ addbits($_, 7 => qw(OPpLVAL_INTRO LVINTRO))
 # If the target coincides with one of the arguments ==> kaboom.
 #
 # pp.c	pos substr each not OK (RETPUSHUNDEF)
-#	substr vec also not OK due to LV to target (are they???)
 #	ref not OK (RETPUSHNO)
 #	trans not OK (dTARG; TARG = sv_newmortal();)
 #	ucfirst etc not OK: TMP arg processed inplace
 #	quotemeta not OK (unsafe when TARG == arg)
-#	each repeat not OK too due to list context
-#	pack split - unknown whether they are safe
+#	pack - unknown whether it is safe
 #	sprintf: is calling do_sprintf(TARG,...) which can act on TARG
 #	  before other args are processed.
 #
@@ -355,8 +354,8 @@ addbits($_, 7 => qw(OPpLVAL_INTRO LVINTRO))
 #	grepwhile not OK (not always setting)
 #	join not OK (unsafe when TARG == arg)
 #
-#	Suspicious wrt "additional mode of failure": concat (dealt with
-#	in ck_sassign()), join (same).
+#	concat - pp_concat special-cases TARG==arg to avoid
+#		"additional mode of failure"
 #
 # pp_ctl.c
 #	mapwhile flip caller not OK (not always setting)
@@ -404,7 +403,7 @@ addbits($_, 6 => qw(OPpRUNTIME RTIME))
 
 # autovivify: Want ref to something
 for (qw(rv2gv rv2sv padsv aelem helem entersub)) {
-    addbits($_, '5..6' => {
+    addbits($_, '4..5' => {
                 mask_def  => 'OPpDEREF',
                 enum => [ qw(
                             1   OPpDEREF_AV   DREFAV
@@ -418,7 +417,7 @@ for (qw(rv2gv rv2sv padsv aelem helem entersub)) {
 
 
 # Defer creation of array/hash elem
-addbits($_, 4 => qw(OPpLVAL_DEFER LVDEFER)) for qw(aelem helem);
+addbits($_, 6 => qw(OPpLVAL_DEFER LVDEFER)) for qw(aelem helem);
 
 
 
@@ -429,7 +428,7 @@ addbits($_, 2 => qw(OPpSLICEWARNING SLICEWARN)) # warn about @hash{$scalar}
 
 # XXX Concise seemed to think that OPpOUR_INTRO is used in rv2gv too,
 # but I can't see it - DAPM
-addbits($_, 4 => qw(OPpOUR_INTRO OURINTR)) # Variable was in an our()
+addbits($_, 6 => qw(OPpOUR_INTRO OURINTR)) # Variable was in an our()
     for qw(gvsv rv2sv rv2av rv2hv enteriter split);
 
 
@@ -443,8 +442,8 @@ addbits($_, 3 => qw(OPpMAYBE_LVSUB LVSUB))
 
 for (qw(rv2hv padhv)) {
     addbits($_,                           # e.g. %hash in (%hash || $foo) ...
+        4 => qw(OPpMAYBE_TRUEBOOL BOOL?), # ... cx not known till run time
         5 => qw(OPpTRUEBOOL       BOOL),  # ... in void cxt
-        6 => qw(OPpMAYBE_TRUEBOOL BOOL?), # ... cx not known till run time
     );
 }
 
@@ -473,7 +472,7 @@ addbits($_, 7 => qw(OPpPV_IS_UTF8 UTF)) for qw(last redo next goto dump);
 
 
 
-addbits($_, 4 => qw(OPpPAD_STATE STATE))  for qw(padav padhv padsv lvavref
+addbits($_, 6 => qw(OPpPAD_STATE STATE))  for qw(padav padhv padsv lvavref
                                                  lvref refassign pushmark);
 
 
@@ -528,9 +527,9 @@ addbits('repeat', 6 => qw(OPpREPEAT_DOLIST DOLIST)); # List replication
 #     1  HINT_STRICT_REFS    check   HINT_STRICT_REFS       check
 #     2  OPpENTERSUB_HASTARG checki  OPpENTERSUB_HASTARG
 #     3  OPpENTERSUB_AMPER   check   OPpENTERSUB_AMPER      parser
-#     4  OPpENTERSUB_DB      check   OPpENTERSUB_DB
-#     5  OPpDEREF_AV         context
-#     6  OPpDEREF_HV         context OPpMAY_RETURN_CONSTANT parser/context
+#     4  OPpDEREF_AV         context
+#     5  OPpDEREF_HV         context OPpMAY_RETURN_CONSTANT parser/context
+#     6  OPpENTERSUB_DB      check   OPpENTERSUB_DB
 #     7  OPpLVAL_INTRO       context OPpENTERSUB_NOPAREN    parser
 
 # NB: OPpHINT_STRICT_REFS must equal HINT_STRICT_REFS
@@ -540,8 +539,8 @@ addbits('entersub',
     1      => qw(OPpHINT_STRICT_REFS  STRICT), # 'use strict' in scope
     2      => qw(OPpENTERSUB_HASTARG  TARG  ), # Called from OP tree
     3      => qw(OPpENTERSUB_AMPER    AMPER),  # Used & form to call
-    4      => qw(OPpENTERSUB_DB       DBG   ), # Debug subroutine
-    # 5..6 => OPpDEREF,      already defined above
+    # 4..5 => OPpDEREF,      already defined above
+    6      => qw(OPpENTERSUB_DB       DBG   ), # Debug subroutine
     # 7    => OPpLVAL_INTRO, already defined above
 );
 
@@ -552,9 +551,9 @@ addbits('rv2cv',
     1 => qw(OPpHINT_STRICT_REFS    STRICT), # 'use strict' in scope
     2 => qw(OPpENTERSUB_HASTARG    TARG  ), # If const sub, return the const
     3 => qw(OPpENTERSUB_AMPER      AMPER ), # Used & form to call
-    4 => qw(OPpENTERSUB_DB         DBG   ), # Debug subroutine
 
-    6 => qw(OPpMAY_RETURN_CONSTANT CONST ),
+    5 => qw(OPpMAY_RETURN_CONSTANT CONST ),
+    6 => qw(OPpENTERSUB_DB         DBG   ), # Debug subroutine
     7 => qw(OPpENTERSUB_NOPAREN    NO()  ), # bare sub call (without parens)
 );
 
@@ -596,7 +595,7 @@ addbits('rv2gv',
     2 => qw(OPpDONT_INIT_GV NOINIT), # Call gv_fetchpv with GV_NOINIT
                             # (Therefore will return whatever is currently in
                             # the symbol table, not guaranteed to be a PVGV)
-    4 => qw(OPpALLOW_FAKE   FAKE),   # OK to return fake glob
+    6 => qw(OPpALLOW_FAKE   FAKE),   # OK to return fake glob
 );
 
 
@@ -719,11 +718,10 @@ addbits('split', 7 => qw(OPpSPLIT_IMPLIM IMPLIM)); # implicit limit
 
 
 
-# OPpLVREF_TYPE must not conflict with generic magic flags in mg.h.
 addbits($_,
     2 => qw(OPpLVREF_ELEM ELEM   ),
     3 => qw(OPpLVREF_ITER ITER   ),
-'5..6'=> {
+'4..5'=> {
            mask_def => 'OPpLVREF_TYPE',
            enum     => [ qw(
                              0   OPpLVREF_SV   SV

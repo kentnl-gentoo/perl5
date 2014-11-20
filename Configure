@@ -373,6 +373,8 @@ d__fwalk=''
 d_access=''
 d_accessx=''
 d_acosh=''
+d_asinh=''
+d_atanh=''
 d_aintl=''
 d_alarm=''
 asctime_r_proto=''
@@ -396,6 +398,7 @@ d_c99_variadic_macros=''
 d_casti32=''
 castflags=''
 d_castneg=''
+d_cbrt=''
 d_chown=''
 d_chroot=''
 d_chsize=''
@@ -405,6 +408,7 @@ d_closedir=''
 d_void_closedir=''
 d_cmsghdr_s=''
 d_const=''
+d_copysign=''
 d_copysignl=''
 d_cplusplus=''
 cryptlib=''
@@ -453,12 +457,17 @@ endpwent_r_proto=''
 d_endsent=''
 d_endservent_r=''
 endservent_r_proto=''
+d_erf=''
+d_erfc=''
+d_exp2=''
+d_expm1=''
 d_faststdio=''
 d_fchdir=''
 d_fchmod=''
 d_fchown=''
 d_fcntl=''
 d_fcntl_can_lock=''
+d_fdim=''
 d_fd_macros=''
 d_fd_set=''
 d_fds_bits=''
@@ -469,6 +478,10 @@ d_finitel=''
 d_flexfnam=''
 d_flock=''
 d_flockproto=''
+d_fdim=''
+d_fma=''
+d_fmax=''
+d_fmin=''
 d_fork=''
 d_fp_class=''
 d_fp_classl=''
@@ -576,6 +589,8 @@ d_gnulibc=''
 gnulibc_version=''
 d_hasmntopt=''
 d_htonl=''
+d_hypot=''
+d_ilogb=''
 d_ilogbl=''
 d_inetaton=''
 d_inetntop=''
@@ -589,13 +604,18 @@ d_isinf=''
 d_isinfl=''
 d_isnan=''
 d_isnanl=''
+d_isnormal=''
 d_j0=''
 d_j0l=''
 d_killpg=''
 d_lchown=''
 d_ldbl_dig=''
+d_lgamma=''
+d_lgamma_r=''
 d_libm_lib_version=''
 d_link=''
+d_llrint=''
+d_llround=''
 d_localtime_r=''
 d_localtime_r_needs_tzset=''
 localtime_r_proto=''
@@ -603,11 +623,16 @@ d_locconv=''
 d_lc_monetary_2008=''
 d_lockf=''
 d_ldexpl=''
+d_log1p=''
+d_log2=''
+d_logb=''
 d_longdbl=''
 longdblkind=''
 longdblsize=''
 d_longlong=''
 longlongsize=''
+d_lrint=''
+d_lround=''
 d_lseekproto=''
 d_lstat=''
 d_madvise=''
@@ -641,6 +666,10 @@ d_msgrcv=''
 d_msgsnd=''
 d_msync=''
 d_munmap=''
+d_nan=''
+d_nearbyint=''
+d_nextafter=''
+d_nexttoward=''
 d_nice=''
 d_nl_langinfo=''
 d_off64_t=''
@@ -677,12 +706,17 @@ readdir_r_proto=''
 d_readlink=''
 d_readv=''
 d_recvmsg=''
+d_remainder=''
+d_remquo=''
 d_rename=''
+d_rint=''
 d_rmdir=''
+d_round=''
 d_safebcpy=''
 d_safemcpy=''
 d_sanemcmp=''
 d_sbrkproto=''
+d_scalbn=''
 d_scalbnl=''
 d_select=''
 d_sem=''
@@ -835,6 +869,8 @@ clocktype=''
 d_times=''
 d_tmpnam_r=''
 tmpnam_r_proto=''
+d_tgamma=''
+d_trunc=''
 d_truncate=''
 d_truncl=''
 d_ttyname_r=''
@@ -875,6 +911,7 @@ ld=''
 ld_can_script=''
 lddlflags=''
 usedl=''
+doublekind=''
 doublesize=''
 ebcdic=''
 fflushNULL=''
@@ -2815,36 +2852,39 @@ $define|true|[yY]*)
 	*)	case "$lns:$issymlink" in
 		*"ln"*" -s:"*"test -"?)
 			echo "Creating the symbolic links..." >&4
-			echo "(First creating the subdirectories...)" >&4
 			cd ..
-			awk '{print $1}' $src/MANIFEST | grep / | sed 's:/[^/]*$::' | sort -u | while true; do
-				read directory
-				test -z "$directory" && break
-				mkdir -p $directory
-			done
+			awk '{print $1}' $src/MANIFEST | sed -e 's:/\([^/]*\)$: \1:' |
+			awk 'NF == 1 {
+				dir=".";
+				file=$1 "";
+			     }
+			     NF == 2 {
+				dir=$1 "";
+				file=$2 "";
+			     }
+			     {
+				 print "# dir = ", dir, "file = ", file
+				 mf[dir] = mf[dir]" "src"/"dir"/"file;
+			     } END {
+				 for (d in mf) {
+				     if (d != ".") { print("mkdir -p "d) }
+				     print("ln -sf "mf[d]" "d);
+				 }
+			     }' src="$src" > UU/mksymlinks.$$
+			sh UU/mksymlinks.$$
+			rm UU/mksymlinks.$$
 			# Sanity check 1.
 			if test ! -d t/base; then
 				echo "Failed to create the subdirectories.  Aborting." >&4
 				exit 1
 			fi
-			echo "(Then creating the symlinks...)" >&4
-			awk '{print $1}' $src/MANIFEST | while true; do
-				read filename
-				test -z "$filename" && break
-				if test -f $filename; then
-					if $issymlink $filename; then
-						rm -f $filename
-					fi
-				fi
-				if test -f $filename; then
-					echo "$filename already exists, not symlinking."
-				else
-					ln -s $src/$filename $filename
-				fi
-			done
 			# Sanity check 2.
 			if test ! -f t/base/lex.t; then
 				echo "Failed to create the symlinks (t/base/lex.t missing).  Aborting." >&4
+				exit 1
+			fi
+			if test ! -f win32/win32.c; then
+				echo "Failed to create the symlinks (win32/win32.c missing).  Aborting." >&4
 				exit 1
 			fi
 			cd UU
@@ -4451,8 +4491,6 @@ eval $setvar
 case "$usequadmath" in
 "$define"|true|[yY]*)
 	usequadmath="$define"
-        # if usequadmath enabled also enable uselongdouble
-	uselongdouble="$define"
 	;;
 *)	usequadmath="$undef" ;;
 esac
@@ -6790,6 +6828,93 @@ $rm_try
 set float.h i_float
 eval $inhdr
 
+echo " "
+$echo "Checking the kind of doubles you have..." >&4
+$cat <<EOP >try.c
+#$i_stdlib I_STDLIB
+#define DOUBLESIZE $doublesize
+#ifdef I_STDLIB
+#include <stdlib.h>
+#endif
+#include <stdio.h>
+static const double d = -0.1;
+int main() {
+  unsigned const char* b = (unsigned const char*)(&d);
+#if DOUBLESIZE == 4
+  if (b[0] == 0xCD && b[3] == 0xBD) {
+    /* IEEE 754 32-bit little-endian */
+    printf("1\n");
+    exit(0);
+  }
+  if (b[0] == 0xBD && b[3] == 0xCD) {
+    /* IEEE 754 32-bit big-endian */
+    printf("2\n");
+    exit(0);
+  }
+#endif
+#if DOUBLESIZE == 8
+  if (b[0] == 0x9A && b[7] == 0xBF) {
+    /* IEEE 754 64-bit little-endian */
+    printf("3\n");
+    exit(0);
+  }
+  if (b[0] == 0xBF && b[7] == 0x9A) {
+    /* IEEE 754 64-bit big-endian */
+    printf("4\n");
+    exit(0);
+  }
+  if (b[0] == 0x99 && b[3] == 0xBF && b[4] == 0x9A && b[7] == 0x99) {
+   /* ARM mixed endian: two little-endian 32-bit floats, in big endian order:
+    * 4 5 6 7 0 1 2 3 (MSB = 7, LSB = 0)
+    * 99 99 b9 bf 9a 99 99 99 */
+    printf("7\n");
+    exit(0);
+  }
+  if (b[0] == 0x99 && b[3] == 0x9A && b[4] == 0xBF && b[7] == 0x99) {
+   /* The opposite of case 7, mixed endian: two big-endian 32-bit floats,
+    * in little endian order: 3 2 1 0 7 6 5 4 (MSB = 7, LSB = 0)
+    * 99 99 99 9a bf b9 99 99 */
+    printf("8\n");
+    exit(0);
+  }
+#endif
+#if DOUBLESIZE == 16
+  if (b[0] == 0x9A && b[15] == 0xBF) {
+    /* IEEE 754 128-bit little-endian */
+    printf("5\n");
+    exit(0);
+  }
+  if (b[0] == 0xBF && b[15] == 0x9A) {
+    /* IEEE 754 128-bit big-endian */
+    printf("6\n");
+    exit(0);
+  }
+#endif
+  /* Rumoredly some old ARM processors have 'mixed endian' doubles,
+   * two 32-bit little endians stored in big-endian order. */
+  /* Then there are old mainframe/miniframe formats like VAX, IBM, and CRAY.
+   * Whether those environments can still build Perl is debatable. */
+  printf("-1\n"); /* unknown */
+  exit(0);
+}
+EOP
+set try
+if eval $compile; then
+    doublekind=`$run ./try`
+else
+    doublekind=-1
+fi
+case "$doublekind" in
+1) echo "You have IEEE 754 32-bit little endian doubles." >&4 ;;
+2) echo "You have IEEE 754 32-bit big endian doubles." >&4 ;;
+3) echo "You have IEEE 754 64-bit little endian doubles." >&4 ;;
+4) echo "You have IEEE 754 64-bit big endian doubles." >&4 ;;
+5) echo "You have IEEE 754 128-bit little endian doubles." >&4 ;;
+6) echo "You have IEEE 754 128-bit big endian doubles." >&4 ;;
+*) echo "Cannot figure out your double.  You VAX, or something?" >&4 ;;
+esac
+$rm_try
+
 : check for long doubles
 echo " "
 echo "Checking to see if you have long double..." >&4
@@ -6848,6 +6973,7 @@ EOCP
 esac
 $rm_try
 
+echo " "
 $echo "Checking the kind of long doubles you have..." >&4
 case "$d_longdbl" in
 define)
@@ -6855,23 +6981,21 @@ $cat <<EOP >try.c
 #$i_float I_FLOAT
 #$i_stdlib I_STDLIB
 #define LONGDBLSIZE $longdblsize
+#define DOUBLESIZE $doublesize
 #ifdef I_FLOAT
 #include <float.h>
 #endif
 #ifdef I_STDLIB
 #include <stdlib.h>
 #endif
-#$usequadmath USE_QUADMATH
-#$i_quadmath I_QUADMATH
-#if defined(USE_QUADMATH) && defined(I_QUADMATH)
-#include <quadmath.h>
-static const __float128 d = -0.1Q;
-#else
 static const long double d = -0.1L;
-#endif
 #include <stdio.h>
 int main() {
   unsigned const char* b = (unsigned const char*)(&d);
+#if DOUBLESIZE == LONGDBLSIZE
+  printf("0\n"); /* if it floats like double */
+  exit(0);
+#endif
 #if (LDBL_MANT_DIG == 113 || FLT128_MANT_DIG == 113) && LONGDBLSIZE == 16
   if (b[0] == 0x9A && b[1] == 0x99 && b[15] == 0xBF) {
     /* IEEE 754 128-bit little-endian */
@@ -6934,10 +7058,160 @@ case "$longdblkind" in
 1) echo "You have IEEE 754 128-bit little endian long doubles." >&4 ;;
 2) echo "You have IEEE 754 128-bit big endian long doubles." >&4 ;;
 3) echo "You have x86 80-bit little endian long doubles." >& 4 ;;
+4) echo "You have x86 80-bit big endian long doubles." >& 4 ;;
+5) echo "You have 128-bit little-endian double-double long doubles." >& 4 ;;
+6) echo "You have 128-bit big-endian double-double long doubles." >& 4 ;;
 *) echo "Cannot figure out your long double." >&4 ;;
 esac
 $rm_try
 
+: Check print/scan long double stuff
+echo " "
+
+if $test X"$d_longdbl" = X"$define"; then
+
+echo "Checking how to print long doubles..." >&4
+
+if $test X"$sPRIfldbl" = X -a X"$doublesize" = X"$longdblsize"; then
+	$cat >try.c <<'EOCP'
+#include <sys/types.h>
+#include <stdio.h>
+int main() {
+  double d = 123.456;
+  printf("%.3f\n", d);
+}
+EOCP
+	set try
+	if eval $compile; then
+		yyy=`$run ./try`
+		case "$yyy" in
+		123.456)
+			sPRIfldbl='"f"'; sPRIgldbl='"g"'; sPRIeldbl='"e"';
+			sPRIFUldbl='"F"'; sPRIGUldbl='"G"'; sPRIEUldbl='"E"';
+			echo "We will use %f."
+			;;
+		esac
+	fi
+fi
+
+if $test X"$sPRIfldbl" = X; then
+	$cat >try.c <<'EOCP'
+#include <sys/types.h>
+#include <stdio.h>
+int main() {
+  long double d = 123.456;
+  printf("%.3Lf\n", d);
+}
+EOCP
+	set try
+	if eval $compile; then
+		yyy=`$run ./try`
+		case "$yyy" in
+		123.456)
+			sPRIfldbl='"Lf"'; sPRIgldbl='"Lg"'; sPRIeldbl='"Le"';
+			sPRIFUldbl='"LF"'; sPRIGUldbl='"LG"'; sPRIEUldbl='"LE"';
+			echo "We will use %Lf."
+			;;
+		esac
+	fi
+fi
+
+if $test X"$sPRIfldbl" = X; then
+	$cat >try.c <<'EOCP'
+#include <sys/types.h>
+#include <stdio.h>
+int main() {
+  long double d = 123.456;
+  printf("%.3llf\n", d);
+}
+EOCP
+	set try
+	if eval $compile; then
+		yyy=`$run ./try`
+		case "$yyy" in
+		123.456)
+			sPRIfldbl='"llf"'; sPRIgldbl='"llg"'; sPRIeldbl='"lle"';
+			sPRIFUldbl='"llF"'; sPRIGUldbl='"llG"'; sPRIEUldbl='"llE"';
+			echo "We will use %llf."
+			;;
+		esac
+	fi
+fi
+
+if $test X"$sPRIfldbl" = X; then
+	$cat >try.c <<'EOCP'
+#include <sys/types.h>
+#include <stdio.h>
+int main() {
+  long double d = 123.456;
+  printf("%.3lf\n", d);
+}
+EOCP
+	set try
+	if eval $compile; then
+		yyy=`$run ./try`
+		case "$yyy" in
+		123.456)
+			sPRIfldbl='"lf"'; sPRIgldbl='"lg"'; sPRIeldbl='"le"';
+			sPRIFUldbl='"lF"'; sPRIGUldbl='"lG"'; sPRIEUldbl='"lE"';
+			echo "We will use %lf."
+			;;
+		esac
+	fi
+fi
+
+if $test X"$sPRIfldbl" = X; then
+	echo "Cannot figure out how to print long doubles." >&4
+else
+	sSCNfldbl=$sPRIfldbl	# expect consistency
+fi
+
+$rm_try
+
+fi # d_longdbl
+
+case "$sPRIfldbl" in
+'')	d_PRIfldbl="$undef"; d_PRIgldbl="$undef"; d_PRIeldbl="$undef";
+	d_PRIFUldbl="$undef"; d_PRIGUldbl="$undef"; d_PRIEUldbl="$undef";
+	d_SCNfldbl="$undef";
+	;;
+*)	d_PRIfldbl="$define"; d_PRIgldbl="$define"; d_PRIeldbl="$define";
+	d_PRIFUldbl="$define"; d_PRIGUldbl="$define"; d_PRIEUldbl="$define";
+	d_SCNfldbl="$define";
+	;;
+esac
+
+: Before committing on uselongdouble, see whether that looks sane.
+if $test "$uselongdouble" = "$define"; then
+    message=""
+    echo " "
+    echo "Checking if your long double math functions work right..." >&4
+    $cat > try.c <<EOF
+#include <math.h>
+#include <stdio.h>
+int main() {
+  printf("%"$sPRIgldbl"\n", sqrtl(logl(expl(cosl(sinl(0.0L))))+powl(2.0L, 3.0L)));
+}
+EOF
+    case "$osname:$gccversion" in
+    aix:)	saveccflags="$ccflags"
+		ccflags="$ccflags -qlongdouble" ;; # to avoid core dump
+    esac
+    set try
+    if eval $compile_ok; then
+      yyy=`$run ./try`
+    fi
+    case "$yyy" in
+    3) echo "Your long double math functions are working correctly." >&4 ;;
+    *) echo "Your long double math functions are broken, not using long doubles." >&4
+       uselongdouble=$undef
+       ;;
+    esac
+    $rm_try
+    case "$osname:$gccversion" in
+    aix:)	ccflags="$saveccflags" ;; # restore
+    esac
+fi
 
 : determine the architecture name
 echo " "
@@ -7063,6 +7337,18 @@ $define)
 	        esac
 		;;
 	esac
+	;;
+esac
+case "$usequadmath" in
+$define)
+	echo "quadmath selected." >&4
+	case "$archname" in
+        *-ld*) echo "...and architecture name already has -quadmath." >&4
+                ;;
+        *)      archname="$archname-quadmath"
+                echo "...setting architecture name to $archname." >&4
+		;;
+        esac
 	;;
 esac
 if $test -f archname.cbu; then
@@ -9976,122 +10262,6 @@ esac
 set qgcvt d_qgcvt
 eval $inlibc
 
-: Check print/scan long double stuff
-echo " "
-
-if $test X"$d_longdbl" = X"$define"; then
-
-echo "Checking how to print long doubles..." >&4
-
-if $test X"$sPRIfldbl" = X -a X"$doublesize" = X"$longdblsize"; then
-	$cat >try.c <<'EOCP'
-#include <sys/types.h>
-#include <stdio.h>
-int main() {
-  double d = 123.456;
-  printf("%.3f\n", d);
-}
-EOCP
-	set try
-	if eval $compile; then
-		yyy=`$run ./try`
-		case "$yyy" in
-		123.456)
-			sPRIfldbl='"f"'; sPRIgldbl='"g"'; sPRIeldbl='"e"';
-                	sPRIFUldbl='"F"'; sPRIGUldbl='"G"'; sPRIEUldbl='"E"';
-			echo "We will use %f."
-			;;
-		esac
-	fi
-fi
-
-if $test X"$sPRIfldbl" = X; then
-	$cat >try.c <<'EOCP'
-#include <sys/types.h>
-#include <stdio.h>
-int main() {
-  long double d = 123.456;
-  printf("%.3Lf\n", d);
-}
-EOCP
-	set try
-	if eval $compile; then
-		yyy=`$run ./try`
-		case "$yyy" in
-		123.456)
-			sPRIfldbl='"Lf"'; sPRIgldbl='"Lg"'; sPRIeldbl='"Le"';
-                	sPRIFUldbl='"LF"'; sPRIGUldbl='"LG"'; sPRIEUldbl='"LE"';
-			echo "We will use %Lf."
-			;;
-		esac
-	fi
-fi
-
-if $test X"$sPRIfldbl" = X; then
-	$cat >try.c <<'EOCP'
-#include <sys/types.h>
-#include <stdio.h>
-int main() {
-  long double d = 123.456;
-  printf("%.3llf\n", d);
-}
-EOCP
-	set try
-	if eval $compile; then
-		yyy=`$run ./try`
-		case "$yyy" in
-		123.456)
-			sPRIfldbl='"llf"'; sPRIgldbl='"llg"'; sPRIeldbl='"lle"';
-                	sPRIFUldbl='"llF"'; sPRIGUldbl='"llG"'; sPRIEUldbl='"llE"';
-			echo "We will use %llf."
-			;;
-		esac
-	fi
-fi
-
-if $test X"$sPRIfldbl" = X; then
-	$cat >try.c <<'EOCP'
-#include <sys/types.h>
-#include <stdio.h>
-int main() {
-  long double d = 123.456;
-  printf("%.3lf\n", d);
-}
-EOCP
-	set try
-	if eval $compile; then
-		yyy=`$run ./try`
-		case "$yyy" in
-		123.456)
-			sPRIfldbl='"lf"'; sPRIgldbl='"lg"'; sPRIeldbl='"le"';
-                	sPRIFUldbl='"lF"'; sPRIGUldbl='"lG"'; sPRIEUldbl='"lE"';
-			echo "We will use %lf."
-			;;
-		esac
-	fi
-fi
-
-if $test X"$sPRIfldbl" = X; then
-	echo "Cannot figure out how to print long doubles." >&4
-else
-	sSCNfldbl=$sPRIfldbl	# expect consistency
-fi
-
-$rm_try
-
-fi # d_longdbl
-
-case "$sPRIfldbl" in
-'')	d_PRIfldbl="$undef"; d_PRIgldbl="$undef"; d_PRIeldbl="$undef";
-	d_PRIFUldbl="$undef"; d_PRIGUldbl="$undef"; d_PRIEUldbl="$undef";
-	d_SCNfldbl="$undef";
-	;;
-*)	d_PRIfldbl="$define"; d_PRIgldbl="$define"; d_PRIeldbl="$define";
-	d_PRIFUldbl="$define"; d_PRIGUldbl="$define"; d_PRIEUldbl="$define";
-	d_SCNfldbl="$define";
-	;;
-esac
-
 : Check how to convert floats to strings.
 
 if test "X$d_Gconvert" = X; then
@@ -10389,10 +10559,6 @@ $rm -f access*
 
 : see if accessx exists
 set accessx d_accessx
-eval $inlibc
-
-: see if acosh exists
-set acosh d_acosh
 eval $inlibc
 
 : see if aintl exists
@@ -13016,6 +13182,146 @@ esac
 set i_sysfile
 eval $setvar
 
+: see if acosh exists
+set acosh d_acosh
+eval $inlibc
+
+: see if asinh exists
+set asinh d_asinh
+eval $inlibc
+
+: see if atanh exists
+set atanh d_atanh
+eval $inlibc
+
+: see if cbrt exists
+set cbrt d_cbrt
+eval $inlibc
+
+: see if copysign exists
+set copysign d_copysign
+eval $inlibc
+
+: see if erf exists
+set erf d_erf
+eval $inlibc
+
+: see if erfc exists
+set erfc d_erfc
+eval $inlibc
+
+: see if exp2 exists
+set exp2 d_exp2
+eval $inlibc
+
+: see if expm1 exists
+set expm1 d_expm1
+eval $inlibc
+
+: see if fdim exists
+set fdim d_fdim
+eval $inlibc
+
+: see if fma exists
+set fma d_fma
+eval $inlibc
+
+: see if fmax exists
+set fmax d_fmax
+eval $inlibc
+
+: see if fmin exists
+set fmin d_fmin
+eval $inlibc
+
+: see if hypot exists
+set hypot d_hypot
+eval $inlibc
+
+: see if ilogb exists
+set ilogb d_ilogb
+eval $inlibc
+
+: see if lgamma exists
+set lgamma d_lgamma
+eval $inlibc
+
+: see if lgamma_r exists
+set lgamma_r d_lgamma_r
+eval $inlibc
+
+: see if llrint exists
+set llrint d_llrint
+eval $inlibc
+
+: see if llround exists
+set llround d_llround
+eval $inlibc
+
+: see if log1p exists
+set log1p d_log1p
+eval $inlibc
+
+: see if log2 exists
+set log2 d_log2
+eval $inlibc
+
+: see if logb exists
+set logb d_logb
+eval $inlibc
+
+: see if lrint exists
+set lrint d_lrint
+eval $inlibc
+
+: see if lround exists
+set lround d_lround
+eval $inlibc
+
+: see if nan exists
+set nan d_nan
+eval $inlibc
+
+: see if nearbyint exists
+set nearbyint d_nearbyint
+eval $inlibc
+
+: see if nextafter exists
+set nextafter d_nextafter
+eval $inlibc
+
+: see if nexttoward exists
+set nexttoward d_nexttoward
+eval $inlibc
+
+: see if remainder exists
+set remainder d_remainder
+eval $inlibc
+
+: see if remquo exists
+set remquo d_remquo
+eval $inlibc
+
+: see if rint exists
+set rint d_rint
+eval $inlibc
+
+: see if round exists
+set round d_round
+eval $inlibc
+
+: see if scalbn exists
+set scalbn d_scalbn
+eval $inlibc
+
+: see if tgamma exists
+set tgamma d_tgamma
+eval $inlibc
+
+: see if trunc exists
+set trunc d_trunc
+eval $inlibc
+
 : see if fcntl.h is there
 val=''
 set fcntl.h val
@@ -15589,6 +15895,27 @@ eval $setvar
 set isinfl d_isinfl
 eval $inlibc
 
+: check for isless
+echo "Checking to see if you have isless..." >&4
+$cat >try.c <<EOCP
+#$i_math I_MATH
+#ifdef I_MATH
+#include <math.h>
+#endif
+int main() { return isless(0.0); }
+EOCP
+set try
+if eval $compile; then
+	val="$define"
+	echo "You have isless."
+else
+	val="$undef"
+	echo "You do not have isless."
+fi
+$rm_try
+set d_isless
+eval $setvar
+
 : check for isnan
 echo "Checking to see if you have isnan..." >&4
 $cat >try.c <<EOCP
@@ -15613,6 +15940,27 @@ eval $setvar
 : see if isnanl exists
 set isnanl d_isnanl
 eval $inlibc
+
+: check for isnormal
+echo "Checking to see if you have isnormal..." >&4
+$cat >try.c <<EOCP
+#$i_math I_MATH
+#ifdef I_MATH
+#include <math.h>
+#endif
+int main() { return isnormal(0.0); }
+EOCP
+set try
+if eval $compile; then
+	val="$define"
+	echo "You have isnormal."
+else
+	val="$undef"
+	echo "You do not have isnormal."
+fi
+$rm_try
+set d_isnormal
+eval $setvar
 
 : see if j0 exists
 set j0 d_j0
@@ -23476,6 +23824,8 @@ d_alarm='$d_alarm'
 d_archlib='$d_archlib'
 d_asctime64='$d_asctime64'
 d_asctime_r='$d_asctime_r'
+d_asinh='$d_asinh'
+d_atanh='$d_atanh'
 d_atolf='$d_atolf'
 d_atoll='$d_atoll'
 d_attribute_deprecated='$d_attribute_deprecated'
@@ -23498,6 +23848,7 @@ d_bzero='$d_bzero'
 d_c99_variadic_macros='$d_c99_variadic_macros'
 d_casti32='$d_casti32'
 d_castneg='$d_castneg'
+d_cbrt='$d_cbrt'
 d_charvspr='$d_charvspr'
 d_chown='$d_chown'
 d_chroot='$d_chroot'
@@ -23507,6 +23858,7 @@ d_clearenv='$d_clearenv'
 d_closedir='$d_closedir'
 d_cmsghdr_s='$d_cmsghdr_s'
 d_const='$d_const'
+d_copysign='$d_copysign'
 d_copysignl='$d_copysignl'
 d_cplusplus='$d_cplusplus'
 d_crypt='$d_crypt'
@@ -23546,7 +23898,11 @@ d_endpwent_r='$d_endpwent_r'
 d_endsent='$d_endsent'
 d_endservent_r='$d_endservent_r'
 d_eofnblk='$d_eofnblk'
+d_erf='$d_erf'
+d_erfc='$d_erfc'
 d_eunice='$d_eunice'
+d_exp2='$d_exp2'
+d_expm1='$d_expm1'
 d_faststdio='$d_faststdio'
 d_fchdir='$d_fchdir'
 d_fchmod='$d_fchmod'
@@ -23555,6 +23911,7 @@ d_fcntl='$d_fcntl'
 d_fcntl_can_lock='$d_fcntl_can_lock'
 d_fd_macros='$d_fd_macros'
 d_fd_set='$d_fd_set'
+d_fdim='$d_fdim'
 d_fds_bits='$d_fds_bits'
 d_fegetround='$d_fegetround'
 d_fgetpos='$d_fgetpos'
@@ -23563,6 +23920,9 @@ d_finitel='$d_finitel'
 d_flexfnam='$d_flexfnam'
 d_flock='$d_flock'
 d_flockproto='$d_flockproto'
+d_fma='$d_fma'
+d_fmax='$d_fmax'
+d_fmin='$d_fmin'
 d_fork='$d_fork'
 d_fp_class='$d_fp_class'
 d_fp_classify='$d_fp_classify'
@@ -23649,6 +24009,8 @@ d_gnulibc='$d_gnulibc'
 d_grpasswd='$d_grpasswd'
 d_hasmntopt='$d_hasmntopt'
 d_htonl='$d_htonl'
+d_hypot='$d_hypot'
+d_ilogb='$d_ilogb'
 d_ilogbl='$d_ilogbl'
 d_inc_version_list='$d_inc_version_list'
 d_index='$d_index'
@@ -23668,23 +24030,34 @@ d_isinf='$d_isinf'
 d_isinfl='$d_isinfl'
 d_isnan='$d_isnan'
 d_isnanl='$d_isnanl'
+d_isnormal='$d_isnormal'
 d_j0='$d_j0'
 d_j0l='$d_j0l'
 d_killpg='$d_killpg'
 d_lchown='$d_lchown'
+d_lc_monetary_2008='$d_lc_monetary_2008'
 d_ldbl_dig='$d_ldbl_dig'
 d_ldexpl='$d_ldexpl'
+d_lgamma='$d_lgamma'
+d_lgamma_r='$d_lgamma_r'
 d_libm_lib_version='$d_libm_lib_version'
 d_libname_unique='$d_libname_unique'
 d_link='$d_link'
+d_llrint='$d_llrint'
+d_llround='$d_llround'
 d_localtime64='$d_localtime64'
 d_localtime_r='$d_localtime_r'
 d_localtime_r_needs_tzset='$d_localtime_r_needs_tzset'
 d_locconv='$d_locconv'
-d_lc_monetary_2008='$d_lc_monetary_2008'
+d_lgamma='$d_lgamma'
 d_lockf='$d_lockf'
+d_log1p='$d_log1p'
+d_log2='$d_log2'
+d_logb='$d_logb'
 d_longdbl='$d_longdbl'
 d_longlong='$d_longlong'
+d_lrint='$d_lrint'
+d_lround='$d_lround'
 d_lseekproto='$d_lseekproto'
 d_lstat='$d_lstat'
 d_madvise='$d_madvise'
@@ -23724,8 +24097,12 @@ d_msgsnd='$d_msgsnd'
 d_msync='$d_msync'
 d_munmap='$d_munmap'
 d_mymalloc='$d_mymalloc'
+d_nan='$d_nan'
 d_ndbm='$d_ndbm'
 d_ndbm_h_uses_prototypes='$d_ndbm_h_uses_prototypes'
+d_nearbyint='$d_nearbyint'
+d_nextafter='$d_nextafter'
+d_nexttoward='$d_nexttoward'
 d_nice='$d_nice'
 d_nl_langinfo='$d_nl_langinfo'
 d_nv_preserves_uv='$d_nv_preserves_uv'
@@ -23768,13 +24145,18 @@ d_readdir_r='$d_readdir_r'
 d_readlink='$d_readlink'
 d_readv='$d_readv'
 d_recvmsg='$d_recvmsg'
+d_remainder='$d_remainder'
+d_remquo='$d_remquo'
 d_rename='$d_rename'
 d_rewinddir='$d_rewinddir'
+d_rint='$d_rint'
 d_rmdir='$d_rmdir'
+d_round='$d_round'
 d_safebcpy='$d_safebcpy'
 d_safemcpy='$d_safemcpy'
 d_sanemcmp='$d_sanemcmp'
 d_sbrkproto='$d_sbrkproto'
+d_scalbn='$d_scalbn'
 d_scalbnl='$d_scalbnl'
 d_sched_yield='$d_sched_yield'
 d_scm_rights='$d_scm_rights'
@@ -23888,6 +24270,7 @@ d_tcgetpgrp='$d_tcgetpgrp'
 d_tcsetpgrp='$d_tcsetpgrp'
 d_telldir='$d_telldir'
 d_telldirproto='$d_telldirproto'
+d_tgamma='$d_tgamma'
 d_time='$d_time'
 d_timegm='$d_timegm'
 d_times='$d_times'
@@ -23895,6 +24278,7 @@ d_tm_tm_gmtoff='$d_tm_tm_gmtoff'
 d_tm_tm_zone='$d_tm_tm_zone'
 d_tmpnam_r='$d_tmpnam_r'
 d_truncate='$d_truncate'
+d_trunc='$d_trunc'
 d_truncl='$d_truncl'
 d_ttyname_r='$d_ttyname_r'
 d_tzname='$d_tzname'
@@ -23936,6 +24320,7 @@ db_version_patch='$db_version_patch'
 direntrytype='$direntrytype'
 dlext='$dlext'
 dlsrc='$dlsrc'
+doublekind='$doublekind'
 doublesize='$doublesize'
 drand01='$drand01'
 drand48_r_proto='$drand48_r_proto'
