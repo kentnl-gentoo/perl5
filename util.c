@@ -170,21 +170,20 @@ Perl_safesysmalloc(MEM_SIZE size)
 #ifdef MDH_HAS_SIZE
 	header->size = size;
 #endif
-        ptr = (Malloc_t)((char*)ptr+PERL_MEMORY_DEBUG_HEADER_SIZE);
+	ptr = (Malloc_t)((char*)ptr+PERL_MEMORY_DEBUG_HEADER_SIZE);
 	DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%"UVxf": (%05ld) malloc %ld bytes\n",PTR2UV(ptr),(long)PL_an++,(long)size));
-	return ptr;
-}
+
+    }
     else {
 #ifndef ALWAYS_NEED_THX
 	dTHX;
 #endif
 	if (PL_nomemok)
-	    return NULL;
-	else {
+	    ptr =  NULL;
+	else
 	    croak_no_mem();
-	}
     }
-    /*NOTREACHED*/
+    return ptr;
 }
 
 /* paranoid version of system's realloc() */
@@ -207,105 +206,102 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
 
     if (!size) {
 	safesysfree(where);
-	return NULL;
+	ptr = NULL;
     }
-
-    if (!where)
-	return safesysmalloc(size);
+    else if (!where) {
+	ptr = safesysmalloc(size);
+    }
+    else {
 #ifdef USE_MDH
-    where = (Malloc_t)((char*)where-PERL_MEMORY_DEBUG_HEADER_SIZE);
-    size += PERL_MEMORY_DEBUG_HEADER_SIZE;
-    {
-	struct perl_memory_debug_header *const header
-	    = (struct perl_memory_debug_header *)where;
+	where = (Malloc_t)((char*)where-PERL_MEMORY_DEBUG_HEADER_SIZE);
+	size += PERL_MEMORY_DEBUG_HEADER_SIZE;
+	{
+	    struct perl_memory_debug_header *const header
+		= (struct perl_memory_debug_header *)where;
 
 # ifdef PERL_TRACK_MEMPOOL
-	if (header->interpreter != aTHX) {
-	    Perl_croak_nocontext("panic: realloc from wrong pool, %p!=%p",
-				 header->interpreter, aTHX);
-	}
-	assert(header->next->prev == header);
-	assert(header->prev->next == header);
+	    if (header->interpreter != aTHX) {
+		Perl_croak_nocontext("panic: realloc from wrong pool, %p!=%p",
+				     header->interpreter, aTHX);
+	    }
+	    assert(header->next->prev == header);
+	    assert(header->prev->next == header);
 #  ifdef PERL_POISON
-	if (header->size > size) {
-	    const MEM_SIZE freed_up = header->size - size;
-	    char *start_of_freed = ((char *)where) + size;
-	    PoisonFree(start_of_freed, freed_up, char);
-	}
+	    if (header->size > size) {
+		const MEM_SIZE freed_up = header->size - size;
+		char *start_of_freed = ((char *)where) + size;
+		PoisonFree(start_of_freed, freed_up, char);
+	    }
 #  endif
 # endif
 # ifdef MDH_HAS_SIZE
-	header->size = size;
+	    header->size = size;
 # endif
-    }
+	}
 #endif
 #ifdef DEBUGGING
-    if ((SSize_t)size < 0)
-	Perl_croak_nocontext("panic: realloc, size=%"UVuf, (UV)size);
+	if ((SSize_t)size < 0)
+	    Perl_croak_nocontext("panic: realloc, size=%"UVuf, (UV)size);
 #endif
 #ifdef PERL_DEBUG_READONLY_COW
-    if ((ptr = mmap(0, size, PROT_READ|PROT_WRITE,
-		    MAP_ANON|MAP_PRIVATE, -1, 0)) == MAP_FAILED) {
-	perror("mmap failed");
-	abort();
-    }
-    Copy(where,ptr,oldsize < size ? oldsize : size,char);
-    if (munmap(where, oldsize)) {
-	perror("munmap failed");
-	abort();
-    }
+	if ((ptr = mmap(0, size, PROT_READ|PROT_WRITE,
+			MAP_ANON|MAP_PRIVATE, -1, 0)) == MAP_FAILED) {
+	    perror("mmap failed");
+	    abort();
+	}
+	Copy(where,ptr,oldsize < size ? oldsize : size,char);
+	if (munmap(where, oldsize)) {
+	    perror("munmap failed");
+	    abort();
+	}
 #else
-    ptr = (Malloc_t)PerlMem_realloc(where,size);
+	ptr = (Malloc_t)PerlMem_realloc(where,size);
 #endif
-    PERL_ALLOC_CHECK(ptr);
+	PERL_ALLOC_CHECK(ptr);
 
     /* MUST do this fixup first, before doing ANYTHING else, as anything else
        might allocate memory/free/move memory, and until we do the fixup, it
        may well be chasing (and writing to) free memory.  */
-    if (ptr != NULL) {
+	if (ptr != NULL) {
 #ifdef PERL_TRACK_MEMPOOL
-	struct perl_memory_debug_header *const header
-	    = (struct perl_memory_debug_header *)ptr;
+	    struct perl_memory_debug_header *const header
+		= (struct perl_memory_debug_header *)ptr;
 
 #  ifdef PERL_POISON
-	if (header->size < size) {
-	    const MEM_SIZE fresh = size - header->size;
-	    char *start_of_fresh = ((char *)ptr) + size;
-	    PoisonNew(start_of_fresh, fresh, char);
-	}
+	    if (header->size < size) {
+		const MEM_SIZE fresh = size - header->size;
+		char *start_of_fresh = ((char *)ptr) + size;
+		PoisonNew(start_of_fresh, fresh, char);
+	    }
 #  endif
 
-	maybe_protect_rw(header->next);
-	header->next->prev = header;
-	maybe_protect_ro(header->next);
-	maybe_protect_rw(header->prev);
-	header->prev->next = header;
-	maybe_protect_ro(header->prev);
+	    maybe_protect_rw(header->next);
+	    header->next->prev = header;
+	    maybe_protect_ro(header->next);
+	    maybe_protect_rw(header->prev);
+	    header->prev->next = header;
+	    maybe_protect_ro(header->prev);
 #endif
-        ptr = (Malloc_t)((char*)ptr+PERL_MEMORY_DEBUG_HEADER_SIZE);
-    }
+	    ptr = (Malloc_t)((char*)ptr+PERL_MEMORY_DEBUG_HEADER_SIZE);
+	}
 
     /* In particular, must do that fixup above before logging anything via
      *printf(), as it can reallocate memory, which can cause SEGVs.  */
 
-    DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%"UVxf": (%05ld) rfree\n",PTR2UV(where),(long)PL_an++));
-    DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%"UVxf": (%05ld) realloc %ld bytes\n",PTR2UV(ptr),(long)PL_an++,(long)size));
+	DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%"UVxf": (%05ld) rfree\n",PTR2UV(where),(long)PL_an++));
+	DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%"UVxf": (%05ld) realloc %ld bytes\n",PTR2UV(ptr),(long)PL_an++,(long)size));
 
-
-    if (ptr != NULL) {
-	return ptr;
-    }
-    else {
+	if (ptr == NULL) {
 #ifndef ALWAYS_NEED_THX
-	dTHX;
+	    dTHX;
 #endif
-	if (PL_nomemok)
-	    return NULL;
-	else {
-	    croak_no_mem();
+	    if (PL_nomemok)
+		ptr = NULL;
+	    else
+		croak_no_mem();
 	}
     }
-    /*NOTREACHED*/
+    return ptr;
 }
 
 /* safe version of system's free() */
@@ -1308,7 +1304,7 @@ Perl_closest_cop(pTHX_ const COP *cop, const OP *o, const OP *curop,
 
     if (o->op_flags & OPf_KIDS) {
 	const OP *kid;
-	for (kid = cUNOPo->op_first; kid; kid = OP_SIBLING(kid)) {
+	for (kid = cUNOPo->op_first; kid; kid = OpSIBLING(kid)) {
 	    const COP *new_cop;
 
 	    /* If the OP_NEXTSTATE has been optimised away we can still use it
@@ -1401,7 +1397,7 @@ Perl_mess_sv(pTHX_ SV *basemsg, bool consume)
 	 */
 
 	const COP *cop =
-	    closest_cop(PL_curcop, OP_SIBLING(PL_curcop), PL_op, FALSE);
+	    closest_cop(PL_curcop, OpSIBLING(PL_curcop), PL_op, FALSE);
 	if (!cop)
 	    cop = PL_curcop;
 
@@ -1560,7 +1556,7 @@ Perl_die_sv(pTHX_ SV *baseex)
 {
     PERL_ARGS_ASSERT_DIE_SV;
     croak_sv(baseex);
-    assert(0); /* NOTREACHED */
+    /* NOTREACHED */
     NORETURN_FUNCTION_END;
 }
 #ifdef _MSC_VER
@@ -1592,7 +1588,7 @@ Perl_die_nocontext(const char* pat, ...)
     va_list args;
     va_start(args, pat);
     vcroak(pat, &args);
-    assert(0); /* NOTREACHED */
+    NOT_REACHED; /* NOTREACHED */
     va_end(args);
     NORETURN_FUNCTION_END;
 }
@@ -1614,7 +1610,7 @@ Perl_die(pTHX_ const char* pat, ...)
     va_list args;
     va_start(args, pat);
     vcroak(pat, &args);
-    assert(0); /* NOTREACHED */
+    NOT_REACHED; /* NOTREACHED */
     va_end(args);
     NORETURN_FUNCTION_END;
 }
@@ -1717,7 +1713,7 @@ Perl_croak_nocontext(const char *pat, ...)
     va_list args;
     va_start(args, pat);
     vcroak(pat, &args);
-    assert(0); /* NOTREACHED */
+    NOT_REACHED; /* NOTREACHED */
     va_end(args);
 }
 #endif /* PERL_IMPLICIT_CONTEXT */
@@ -1728,7 +1724,7 @@ Perl_croak(pTHX_ const char *pat, ...)
     va_list args;
     va_start(args, pat);
     vcroak(pat, &args);
-    assert(0); /* NOTREACHED */
+    NOT_REACHED; /* NOTREACHED */
     va_end(args);
 }
 
@@ -5347,28 +5343,42 @@ Perl_my_cxt_init(pTHX_ const char *my_cxt_key, size_t size)
 #endif /* PERL_IMPLICIT_CONTEXT */
 
 
-/* The meaning of the varargs is determined U32 key arg. This is not a format
-   string. The U32 key is assembled with HS_KEY.
+/* Perl_xs_handshake():
+   implement the various XS_*_BOOTCHECK macros, which are added to .c
+   files by ExtUtils::ParseXS, to check that the perl the module was built
+   with is binary compatible with the running perl.
 
-   v_my_perl arg is "PerlInterpreter * my_perl" if PERL_IMPLICIT_CONTEXT and
-   otherwise "CV * cv" (boot xsub's CV *). v_my_perl will catch where a threaded
-   future perl526.dll calling IO.dll for example, and IO.dll was linked with
-   threaded perl524.dll, and both perl526.dll and perl524.dll are in %PATH and
-   the Win32 DLL loader sucessfully can load IO.dll into the process but
-   simultaniously it loaded a interp of a different version into the process,
-   and XS code will naturally pass SV*s created by perl524.dll for perl526.dll
-   to use through perl526.dll's my_perl->Istack_base.
+   usage:
+       Perl_xs_handshake(U32 key, void * v_my_perl, const char * file,
+            [U32 items, U32 ax], [char * api_version], [char * xs_version])
 
-   v_my_perl (v=void) can not be the first arg since then key will be out of
-   place in a threaded vs non-threaded mixup and analyzing the key number's
-   bitfields won't reveal the problem since it will be a valid key
-   (unthreaded perl) on interp side, but croak reports the XS mod's key as
-   gibberish (it is really my_perl ptr) (threaded XS mod), or if threaded perl
-   and unthreaded XS module, threaded perl will look at uninit C stack or uninit
-   register to get var key (remember it assumes 1st arg is interp cxt).
+   The meaning of the varargs is determined the U32 key arg (which is not
+   a format string). The fields of key are assembled by using HS_KEY().
 
-Perl_xs_handshake(U32 key, void * v_my_perl, const char * file,
-[U32 items, U32 ax], [char * api_version], [char * xs_version]) */
+   Under PERL_IMPLICIT_CONTEX, the v_my_perl arg is of type
+   "PerlInterpreter *" and represents the callers context; otherwise it is
+   of type "CV *", and is the boot xsub's CV.
+
+   v_my_perl will catch where a threaded future perl526.dll calling IO.dll
+   for example, and IO.dll was linked with threaded perl524.dll, and both
+   perl526.dll and perl524.dll are in %PATH and the Win32 DLL loader
+   successfully can load IO.dll into the process but simultaneously it
+   loaded an interpreter of a different version into the process, and XS
+   code will naturally pass SV*s created by perl524.dll for perl526.dll to
+   use through perl526.dll's my_perl->Istack_base.
+
+   v_my_perl cannot be the first arg, since then 'key' will be out of
+   place in a threaded vs non-threaded mixup; and analyzing the key
+   number's bitfields won't reveal the problem, since it will be a valid
+   key (unthreaded perl) on interp side, but croak will report the XS mod's
+   key as gibberish (it is really a my_perl ptr) (threaded XS mod); or if
+   it's a threaded perl and an unthreaded XS module, threaded perl will
+   look at an uninit C stack or an uninit register to get 'key'
+   (remember that it assumes that the 1st arg is the interp cxt).
+
+   'file' is the source filename of the caller.
+*/
+
 I32
 Perl_xs_handshake(const U32 key, void * v_my_perl, const char * file, ...)
 {
@@ -5415,8 +5425,8 @@ Perl_xs_handshake(const U32 key, void * v_my_perl, const char * file, ...)
     if(UNLIKELY(got != need)) {
 	bad_handshake:/* recycle branch and string from above */
 	if(got != (void *)HSf_NOCHK)
-	    noperl_die("%s: Invalid handshake key got %p"
-		" needed %p, binaries are mismatched",
+	    noperl_die("%s: loadable library and perl binaries are mismatched"
+                       " (got handshake key %p, needed %p)\n",
 		file, got, need);
     }
 
@@ -5455,15 +5465,16 @@ Perl_xs_handshake(const U32 key, void * v_my_perl, const char * file, ...)
 	U32 xsverlen;
 	assert(HS_GETXSVERLEN(key) <= UCHAR_MAX && HS_GETXSVERLEN(key) <= HS_APIVERLEN_MAX);
 	if((xsverlen = HS_GETXSVERLEN(key)))
-	    Perl_xs_version_bootcheck(aTHX_
+	    S_xs_version_bootcheck(aTHX_
 		items, ax, va_arg(args, char*), xsverlen);
     }
     va_end(args);
     return ax;
 }
 
-void
-Perl_xs_version_bootcheck(pTHX_ U32 items, U32 ax, const char *xs_p,
+
+STATIC void
+S_xs_version_bootcheck(pTHX_ U32 items, U32 ax, const char *xs_p,
 			  STRLEN xs_len)
 {
     SV *sv;
@@ -5665,7 +5676,7 @@ Perl_my_dirfd(DIR * dir) {
     return dir->dd_fd;
 #else
     Perl_croak_nocontext(PL_no_func, "dirfd");
-    assert(0); /* NOT REACHED */
+    NOT_REACHED; /* NOT REACHED */
     return 0;
 #endif 
 }

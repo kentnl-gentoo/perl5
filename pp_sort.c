@@ -1476,7 +1476,7 @@ PP(pp_sort)
     AV* av = NULL;
     GV *gv;
     CV *cv = NULL;
-    I32 gimme = GIMME;
+    I32 gimme = GIMME_V;
     OP* const nextop = PL_op->op_next;
     I32 overloading = 0;
     bool hasargs = FALSE;
@@ -1507,7 +1507,7 @@ PP(pp_sort)
     SAVEVPTR(PL_sortcop);
     if (flags & OPf_STACKED) {
 	if (flags & OPf_SPECIAL) {
-	    OP *nullop = OP_SIBLING(cLISTOP->op_first);	/* pass pushmark */
+            OP *nullop = OpSIBLING(cLISTOP->op_first);  /* pass pushmark */
             assert(nullop->op_type == OP_NULL);
 	    PL_sortcop = nullop->op_next;
 	}

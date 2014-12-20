@@ -11,7 +11,7 @@ use Symbol;
 
 our $VERSION;
 BEGIN {
-  $VERSION = '3.26';
+  $VERSION = '3.27';
 }
 use ExtUtils::ParseXS::Constants $VERSION;
 use ExtUtils::ParseXS::CountLines $VERSION;
@@ -914,6 +914,8 @@ EOF
 ##else
 #    const char* file = __FILE__;
 ##endif
+#
+#    PERL_UNUSED_VAR(file);
 EOF
 
   print Q("#\n");
@@ -1865,7 +1867,10 @@ sub generate_init {
 
   my $typem = $typemaps->get_typemap(ctype => $type);
   my $xstype = $typem->xstype;
-  $xstype =~ s/OBJ$/REF/ if $self->{func_name} =~ /DESTROY$/;
+  #this is an optimization from perl 5.0 alpha 6, class check is skipped
+  #T_REF_IV_REF is missing since it has no untyped analog at the moment
+  $xstype =~ s/OBJ$/REF/ || $xstype =~ s/^T_REF_IV_PTR$/T_PTRREF/
+    if $self->{func_name} =~ /DESTROY$/;
   if ($xstype eq 'T_PV' and exists $self->{lengthof}->{$var}) {
     print "\t$var" unless $printed_name;
     print " = ($type)SvPV($arg, STRLEN_length_of_$var);\n";
@@ -2019,36 +2024,78 @@ sub generate_output {
       print "\t\tSvSETMAGIC(ST(ix_$var));\n" if $do_setmagic;
     }
     elsif ($var eq 'RETVAL') {
+      my $orig_arg = $arg;
+      my $indent;
+      my $use_RETVALSV = 1;
+      my $do_mortal = 0;
+      my $do_copy_tmp = 1;
+      my $pre_expr;
+      local $eval_vars->{arg} = $arg = 'RETVALSV';
       my $evalexpr = $self->eval_output_typemap_code("qq\a$expr\a", $eval_vars);
+
       if ($expr =~ /^\t\Q$arg\E = new/) {
         # We expect that $arg has refcnt 1, so we need to
         # mortalize it.
-        print $evalexpr;
-        print "\tsv_2mortal(ST($num));\n";
-        print "\tSvSETMAGIC(ST($num));\n" if $do_setmagic;
+        $do_mortal = 1;
       }
       # If RETVAL is immortal, don't mortalize it. This code is not perfect:
       # It won't detect a func or expression that only returns immortals, for
       # example, this RE must be tried before next elsif.
       elsif ($evalexpr =~ /^\t\Q$arg\E\s*=\s*(boolSV\(|(&PL_sv_yes|&PL_sv_no|&PL_sv_undef)\s*;)/) {
-        print $evalexpr;
+        $do_copy_tmp = 0; #$arg will be a ST(X), no SV* RETVAL, no RETVALSV
+        $use_RETVALSV = 0;
       }
       elsif ($evalexpr =~ /^\s*\Q$arg\E\s*=/) {
         # We expect that $arg has refcnt >=1, so we need
         # to mortalize it!
-        print $evalexpr;
-        print "\tsv_2mortal(ST(0));\n";
-        print "\tSvSETMAGIC(ST(0));\n" if $do_setmagic;
+        $use_RETVALSV = 0 if $ntype eq "SVPtr";#reuse SV* RETVAL vs open new block
+        $do_mortal = 1;
       }
       else {
         # Just hope that the entry would safely write it
         # over an already mortalized value. By
-        # coincidence, something like $arg = &sv_undef
+        # coincidence, something like $arg = &PL_sv_undef
         # works too, but should be caught above.
-        print "\tST(0) = sv_newmortal();\n";
-        print $evalexpr;
+        $pre_expr = "RETVALSV = sv_newmortal();\n";
         # new mortals don't have set magic
+        $do_setmagic = 0;
       }
+      if($use_RETVALSV) {
+        print "\t{\n\t    SV * RETVALSV;\n";
+        $indent = "\t    ";
+      } else {
+        $indent = "\t";
+      }
+      print $indent.$pre_expr if $pre_expr;
+
+      if($use_RETVALSV) {
+        #take control of 1 layer of indent, may or may not indent more
+        $evalexpr =~ s/^(\t|        )/$indent/gm;
+        #"\t    \t" doesn't draw right in some IDEs
+        #break down all \t into spaces
+        $evalexpr =~ s/\t/        /g;
+        #rebuild back into \t'es, \t==8 spaces, indent==4 spaces
+        $evalexpr =~ s/        /\t/g;
+      }
+      else {
+        if($do_mortal || $do_setmagic) {
+        #typemap entry evaled with RETVALSV, if we aren't using RETVALSV replace
+          $evalexpr =~ s/RETVALSV/RETVAL/g; #all uses with RETVAL for prettier code
+        }
+        else { #if no extra boilerplate (no mortal, no set magic) is needed
+            #after $evalexport, get rid of RETVALSV's visual cluter and change
+          $evalexpr =~ s/RETVALSV/$orig_arg/g;#the lvalue to ST(X)
+        }
+      }
+      #stop "	RETVAL = RETVAL;" for SVPtr type
+      print $evalexpr if $evalexpr !~ /^\s*RETVAL = RETVAL;$/;
+      print $indent.'RETVAL'.($use_RETVALSV ? 'SV':'')
+            .' = sv_2mortal(RETVAL'.($use_RETVALSV ? 'SV':'').");\n" if $do_mortal;
+      print $indent.'SvSETMAGIC(RETVAL'.($use_RETVALSV ? 'SV':'').");\n" if $do_setmagic;
+      #dont do "RETVALSV = boolSV(RETVAL); ST(0) = RETVALSV;", it is visual clutter
+      print $indent."$orig_arg = RETVAL".($use_RETVALSV ? 'SV':'').";\n"
+        if $do_mortal || $do_setmagic || $do_copy_tmp;
+      print "\t}\n" if $use_RETVALSV;
     }
     elsif ($do_push) {
       print "\tPUSHs(sv_newmortal());\n";

@@ -21,7 +21,10 @@ BEGIN {
 }
 use Config;
 my $have_strtod = $Config{d_strtod} eq 'define';
-my @locales = eval { find_locales( [ &LC_ALL, &LC_CTYPE, &LC_NUMERIC ] ) };
+my @locales = eval { find_locales( [ &LC_ALL, &LC_CTYPE, &LC_NUMERIC ],
+                                  1 # Only return locales that work well with
+                                    # Perl
+                                 ) };
 skip_all("no locales available") unless @locales;
 
 plan tests => &last;
@@ -283,7 +286,7 @@ EOF
 
     # within this block, STDERR is closed. This is because fresh_perl_is()
     # forks a shell, and some shells (like bash) can complain noisily when
-    #LC_ALL or similar is set to an invalid value
+    # LC_ALL or similar is set to an invalid value
 
     {
         open my $saved_stderr, ">&STDERR" or die "Can't dup STDERR: $!";
@@ -293,9 +296,10 @@ EOF
             local $ENV{LC_ALL} = "invalid";
             local $ENV{LC_NUMERIC} = "invalid";
             local $ENV{LANG} = $different;
+            local $ENV{PERL_BADLANG} = 0;
 
             # Can't turn off the warnings, so send them to /dev/null
-            if (! fresh_perl_is(<<"EOF", "$difference", { stderr => "devnull" },
+            if (! fresh_perl_is(<<"EOF", "$difference", { },
                 if (\$ENV{LC_ALL} ne "invalid") {
                     # Make the test pass if the sh didn't accept the ENV set
                     print "$difference\n";
@@ -321,9 +325,10 @@ EOF
                 local $ENV{LC_ALL} = "invalid";
                 local $ENV{LC_NUMERIC} = "invalid";
                 local $ENV{LANG} = "invalid";
+                local $ENV{PERL_BADLANG} = 0;
 
                 # Can't turn off the warnings, so send them to /dev/null
-                if (! fresh_perl_is(<<"EOF", 4.2, { stderr => "devnull" },
+                if (! fresh_perl_is(<<"EOF", 4.2, { },
                     if (\$ENV{LC_ALL} ne "invalid") {
                         print "$difference\n";
                         exit 0;

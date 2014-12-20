@@ -15,7 +15,7 @@ use ExtUtils::MakeMaker qw($Verbose neatvalue);
 
 # If we make $VERSION an our variable parse_version() breaks
 use vars qw($VERSION);
-$VERSION = '7.02';
+$VERSION = '7.04';
 $VERSION = eval $VERSION;  ## no critic [BuiltinFunctions::ProhibitStringyEval]
 
 require ExtUtils::MM_Any;
@@ -192,9 +192,10 @@ sub cflags {
 	= @Config{qw(cc ccflags optimize shellflags)};
 
     # Perl 5.21.4 adds the (gcc) warning (-Wall ...) and std (-std=c89)
-    # flags to the %Config, and the modules in the core can be built
-    # with those.
-    my @ccextraflags = qw(ccwarnflags ccstdflags);
+    # flags to the %Config, and the modules in the core should be built
+    # with the warning flags, but NOT the -std=c89 flags (the latter
+    # would break using any system header files that are strict C99).
+    my @ccextraflags = qw(ccwarnflags);
     if ($ENV{PERL_CORE}) {
       for my $x (@ccextraflags) {
         if (exists $Config{$x}) {

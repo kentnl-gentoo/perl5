@@ -2297,6 +2297,12 @@ same underlying descriptor:
             "not have a real file descriptor\n";
     }
 
+The behavior of C<fileno> on a directory handle depends on the operating
+system.  On a system with dirfd(3) or similar, C<fileno> on a directory
+handle returns the underlying file descriptor associated with the
+handle; on systems with no such support, it returns the undefined value,
+and sets C<$!> (errno).
+
 =item flock FILEHANDLE,OPERATION
 X<flock> X<lock> X<locking>
 
@@ -2716,7 +2722,8 @@ various get routines are as follows:
  $comment,  $gcos,     $dir,       $shell,   $expire ) = getpw*
  # 5        6          7           8         9
 
-(If the entry doesn't exist you get an empty list.)
+(If the entry doesn't exist, the return value is a single meaningless true
+value.)
 
 The exact meaning of the $gcos field varies but it usually contains
 the real name of the user (as opposed to the login name) and other
@@ -4369,7 +4376,9 @@ existing variable: a package variable of the same name.
 
 This means that when C<use strict 'vars'> is in effect, C<our> lets you use
 a package variable without qualifying it with the package name, but only within
-the lexical scope of the C<our> declaration.
+the lexical scope of the C<our>
+declaration.  This applies immediately--even
+within the same statement.
 
     package Foo;
     use strict;
@@ -4394,6 +4403,16 @@ package variables spring into existence when first used.
     our $foo = 23;   # just like $Foo::foo = 23
 
     print $Foo::foo; # prints 23
+
+Because the variable becomes legal immediately under C<use strict 'vars'>, so
+long as there is no variable with that name is already in scope, you can then
+reference the package variable again even within the same statement.
+
+    package Foo;
+    use strict;
+
+    my  $foo = $foo; # error, undeclared $foo on right-hand side
+    our $foo = $foo; # no errors
 
 If more than one variable is listed, the list must be placed
 in parentheses.

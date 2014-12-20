@@ -7,7 +7,7 @@ package IO::Socket::IP;
 # $VERSION needs to be set before  use base 'IO::Socket'
 #  - https://rt.cpan.org/Ticket/Display.html?id=92107
 BEGIN {
-   $VERSION = '0.32';
+   $VERSION = '0.34';
 }
 
 use strict;
@@ -684,13 +684,13 @@ sub connect
       }
 
       my $vec = ''; vec( $vec, $self->fileno, 1 ) = 1;
-      if( !select( $vec, $vec, $vec, $timeout ) ) {
+      if( !select( undef, $vec, $vec, $timeout ) ) {
          $! = ETIMEDOUT;
          return undef;
       }
 
       # Hoist the error by connect()ing a second time
-      $err = defined CORE::connect( $self, $addr ) ? 0 : $!+0;
+      $err = $self->getsockopt( SOL_SOCKET, SO_ERROR );
       $err = 0 if $err == EISCONN; # Some OSes give EISCONN
 
       $self->blocking( $was_blocking );

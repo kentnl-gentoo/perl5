@@ -833,10 +833,6 @@ The first code point of the lowercased version is returned
 
 The input character at C<p> is assumed to be well-formed.
 
-=for apidoc Am|U8|toLOWER_LC|U8 ch
-Converts the specified character to lowercase using the current locale's rules,
-if possible; otherwise returns the input character itself.
-
 =for apidoc Am|U8|toTITLE|U8 ch
 Converts the specified character to titlecase.  If the input is anything but an
 ASCII lowercase character, that input character itself is returned.  Variant
@@ -1351,7 +1347,7 @@ EXTCONST U32 PL_charclass[];
                                                 ? (c)                          \
                                                 : (IN_UTF8_CTYPE_LOCALE)       \
                                                   ? PL_latin1_lc[ (U8) (c) ]   \
-                                                : function((cast)(c)))
+                                                : (cast)function((cast)(c)))
 
 /* Note that the result can be larger than a byte in a UTF-8 locale.  It
  * returns a single value, so can't adequately return the upper case of LATIN
@@ -1362,7 +1358,7 @@ EXTCONST U32 PL_charclass[];
                     (! FITS_IN_8_BITS(c)                                       \
                     ? (c)                                                      \
                     : ((! IN_UTF8_CTYPE_LOCALE)                                \
-                      ? function((cast)(c))                                    \
+                      ? (cast)function((cast)(c))                                    \
                       : ((((U8)(c)) == MICRO_SIGN)                             \
                         ? GREEK_CAPITAL_LETTER_MU                              \
                         : ((((U8)(c)) == LATIN_SMALL_LETTER_Y_WITH_DIAERESIS)  \

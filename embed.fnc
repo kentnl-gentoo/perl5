@@ -330,6 +330,7 @@ ApR	|I32	|cxinc
 Afp	|void	|deb		|NN const char* pat|...
 Ap	|void	|vdeb		|NN const char* pat|NULLOK va_list* args
 Ap	|void	|debprofdump
+EXp	|SV*	|unop_aux_stringify	|NN const OP* o|NN CV *cv
 Ap	|I32	|debop		|NN const OP* o
 Ap	|I32	|debstack
 Ap	|I32	|debstackptrs
@@ -546,8 +547,10 @@ p	|void	|gv_setref	|NN SV *const dstr|NN SV *const sstr
 Apd	|HV*	|gv_stashpv	|NN const char* name|I32 flags
 Apd	|HV*	|gv_stashpvn	|NN const char* name|U32 namelen|I32 flags
 #if defined(PERL_IN_GV_C)
-i	|HV*	|gv_stashpvn_internal|NN const char* name|U32 namelen|I32 flags
-i	|HV*	|gv_stashsvpvn_cached|NULLOK SV *namesv|NULLOK const char* name|U32 namelen|I32 flags
+i	|HV*	|gv_stashpvn_internal	|NN const char* name|U32 namelen|I32 flags
+i	|HV*	|gv_stashsvpvn_cached	|NULLOK SV *namesv|NULLOK const char* name|U32 namelen|I32 flags
+i	|GV*	|gv_fetchmeth_internal	|NULLOK HV* stash|NULLOK SV* meth|NULLOK const char* name \
+					|STRLEN len|I32 level|U32 flags
 #endif
 Apd	|HV*	|gv_stashsv	|NN SV* sv|I32 flags
 Apd	|void	|hv_clear	|NULLOK HV *hv
@@ -698,7 +701,8 @@ ADMpPR	|bool	|is_uni_lower_lc|UV c
 ADMpPR	|bool	|is_uni_print_lc|UV c
 ADMpPR	|bool	|is_uni_punct_lc|UV c
 ADMpPR	|bool	|is_uni_xdigit_lc|UV c
-Anpd	|bool	|is_ascii_string|NN const U8 *s|STRLEN len
+AnpdR	|bool	|is_invariant_string|NN const U8 *s|STRLEN len
+AmpdR	|bool	|is_ascii_string|NN const U8 *s|STRLEN len
 AnpdD	|STRLEN	|is_utf8_char	|NN const U8 *s
 Abmnpd	|STRLEN	|is_utf8_char_buf|NN const U8 *buf|NN const U8 *buf_end
 Anpd	|bool	|is_utf8_string	|NN const U8 *s|STRLEN len
@@ -999,13 +1003,16 @@ AmdbR	|HV*	|newHV
 ApaR	|HV*	|newHVhv	|NULLOK HV *hv
 Apabm	|IO*	|newIO
 Apda	|OP*	|newLISTOP	|I32 type|I32 flags|NULLOK OP* first|NULLOK OP* last
+AMpda	|PADNAME *|newPADNAMEouter|NN PADNAME *outer
+AMpda	|PADNAME *|newPADNAMEpvn|NN const char *s|STRLEN len
+AMpda	|PADNAMELIST *|newPADNAMELIST|size_t max
 #ifdef USE_ITHREADS
 Apda	|OP*	|newPADOP	|I32 type|I32 flags|NN SV* sv
 #endif
 Apda	|OP*	|newPMOP	|I32 type|I32 flags
 Apda	|OP*	|newPVOP	|I32 type|I32 flags|NULLOK char* pv
 Apa	|SV*	|newRV		|NN SV *const sv
-Apda	|SV*	|newRV_noinc	|NN SV *const sv
+Apda	|SV*	|newRV_noinc	|NN SV *const tmpRef
 Apda	|SV*	|newSV		|const STRLEN len
 Apa	|OP*	|newSVREF	|NN OP* o
 Apda	|OP*	|newSVOP	|I32 type|I32 flags|NN SV* sv
@@ -1026,6 +1033,8 @@ Apd	|SV*	|newSVrv	|NN SV *const rv|NULLOK const char *const classname
 Apda	|SV*	|newSVsv	|NULLOK SV *const old
 Apda	|SV*	|newSV_type	|const svtype type
 Apda	|OP*	|newUNOP	|I32 type|I32 flags|NULLOK OP* first
+Apda	|OP*	|newUNOP_AUX	|I32 type|I32 flags|NULLOK OP* first \
+				|NULLOK UNOP_AUX_item *aux
 Apda	|OP*	|newWHENOP	|NULLOK OP* cond|NN OP* block
 Apda	|OP*	|newWHILEOP	|I32 flags|I32 debuggable|NULLOK LOOP* loop \
 				|NULLOK OP* expr|NULLOK OP* block|NULLOK OP* cont \
@@ -1506,17 +1515,21 @@ EiMRn	|UV*	|invlist_array	|NN SV* const invlist
 EsM	|void	|invlist_extend    |NN SV* const invlist|const UV len
 EiMRn	|UV	|invlist_max	|NN SV* const invlist
 EiM	|void	|invlist_set_len|NN SV* const invlist|const UV len|const bool offset
+#ifndef PERL_EXT_RE_BUILD
 EiMRn	|IV*	|get_invlist_previous_index_addr|NN SV* invlist
-EiMRn	|IV	|invlist_previous_index|NN SV* const invlist
-EiMn	|void	|invlist_set_previous_index|NN SV* const invlist|const IV index
-EiMn	|void	|invlist_trim	|NN SV* const invlist
-EiMR	|SV*	|invlist_clone	|NN SV* const invlist
 EiMRn	|bool	|invlist_is_iterating|NN SV* const invlist
+EiMn	|void	|invlist_set_previous_index|NN SV* const invlist|const IV index
+EiMRn	|IV	|invlist_previous_index|NN SV* const invlist
+EiMn	|void	|invlist_trim	|NN SV* const invlist
+#endif
+EiMR	|SV*	|invlist_clone	|NN SV* const invlist
 EiMRn	|STRLEN*|get_invlist_iter_addr	|NN SV* invlist
 EiMn	|void	|invlist_iterinit|NN SV* invlist
 EsMRn	|bool	|invlist_iternext|NN SV* invlist|NN UV* start|NN UV* end
 EiMn	|void	|invlist_iterfinish|NN SV* invlist
 EiMRn	|UV	|invlist_highest|NN SV* const invlist
+EMRs	|SV*	|_make_exactf_invlist	|NN RExC_state_t *pRExC_state \
+					|NN regnode *node
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_UTF8_C)
 EXmM	|void	|_invlist_intersection	|NN SV* const a|NN SV* const b|NN SV** i
@@ -2046,7 +2059,7 @@ s	|OP*	|do_smartmatch	|NULLOK HV* seen_this \
 
 #if defined(PERL_IN_PP_HOT_C)
 s	|void	|do_oddball	|NN SV **oddkey|NN SV **firstkey
-sR	|SV*	|method_common	|NN SV* meth|NULLOK U32* hashp
+i	|HV*	|opmethod_stash	|NN SV* meth
 #endif
 
 #if defined(PERL_IN_PP_SORT_C)
@@ -2418,9 +2431,12 @@ s	|bool	|isa_lookup	|NN HV *stash|NN const char * const name \
                                         |STRLEN len|U32 flags
 #endif
 
+#if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
+s	|char*	|stdize_locale	|NN char* locs
+#endif
+
 #if defined(USE_LOCALE) \
     && (defined(PERL_IN_LOCALE_C) || defined (PERL_EXT_POSIX))
-s	|char*	|stdize_locale	|NN char* locs
 ApM	|bool	|_is_cur_LC_category_utf8|int category
 #endif
 
@@ -2524,10 +2540,10 @@ s	|void	|deb_stack_n	|NN SV** stack_base|I32 stack_min \
 : pad API
 Apda	|PADLIST*|pad_new	|int flags
 #ifdef DEBUGGING
-pX	|void|set_padlist| NN CV * cv | NULLOK PADLIST * padlist
+pnX	|void|set_padlist| NN CV * cv | NULLOK PADLIST * padlist
 #endif
 #if defined(PERL_IN_PAD_C)
-s	|PADOFFSET|pad_alloc_name|NN SV *namesv|U32 flags \
+s	|PADOFFSET|pad_alloc_name|NN PADNAME *name|U32 flags \
 				|NULLOK HV *typestash|NULLOK HV *ourstash
 #endif
 Apd	|PADOFFSET|pad_add_name_pvn|NN const char *namepv|STRLEN namelen\
@@ -2541,8 +2557,10 @@ Apd	|PADOFFSET|pad_add_name_sv|NN SV *name\
 				|NULLOK HV *ourstash
 AMpd	|PADOFFSET|pad_alloc	|I32 optype|U32 tmptype
 Apd	|PADOFFSET|pad_add_anon	|NN CV* func|I32 optype
+p	|void	|pad_add_weakref|NN CV* func
 #if defined(PERL_IN_PAD_C)
-sd	|void	|pad_check_dup	|NN SV *name|U32 flags|NULLOK const HV *ourstash
+sd	|void	|pad_check_dup	|NN PADNAME *name|U32 flags \
+				|NULLOK const HV *ourstash
 #endif
 Apd	|PADOFFSET|pad_findmy_pvn|NN const char* namepv|STRLEN namelen|U32 flags
 Apd	|PADOFFSET|pad_findmy_pv|NN const char* name|U32 flags
@@ -2554,8 +2572,8 @@ p	|SV*	|find_rundefsv2	|NN CV *cv|U32 seq
 #if defined(PERL_IN_PAD_C)
 sd	|PADOFFSET|pad_findlex	|NN const char *namepv|STRLEN namelen|U32 flags \
 				|NN const CV* cv|U32 seq|int warn \
-				|NULLOK SV** out_capture|NN SV** out_name_sv \
-				|NN int *out_flags
+				|NULLOK SV** out_capture \
+				|NN PADNAME** out_name|NN int *out_flags
 #endif
 #ifdef DEBUGGING
 Apd	|SV*	|pad_sv		|PADOFFSET po
@@ -2580,8 +2598,16 @@ Apd	|CV*	|cv_clone	|NN CV* proto
 p	|CV*	|cv_clone_into	|NN CV* proto|NN CV *target
 pd	|void	|pad_fixup_inner_anons|NN PADLIST *padlist|NN CV *old_cv|NN CV *new_cv
 pdX	|void	|pad_push	|NN PADLIST *padlist|int depth
-ApdR	|HV*	|pad_compname_type|const PADOFFSET po
+ApbdR	|HV*	|pad_compname_type|const PADOFFSET po
+AMpdR	|PADNAME *|padnamelist_fetch|NN PADNAMELIST *pnl|SSize_t key
+Xop	|void	|padnamelist_free|NN PADNAMELIST *pnl
+AMpd	|PADNAME **|padnamelist_store|NN PADNAMELIST *pnl|SSize_t key \
+				     |NULLOK PADNAME *val
+Xop	|void	|padname_free	|NN PADNAME *pn
 #if defined(USE_ITHREADS)
+pdR	|PADNAME *|padname_dup	|NN PADNAME *src|NN CLONE_PARAMS *param
+pR	|PADNAMELIST *|padnamelist_dup|NN PADNAMELIST *srcpad \
+				      |NN CLONE_PARAMS *param
 pdR	|PADLIST *|padlist_dup	|NN PADLIST *srcpad \
 				|NN CLONE_PARAMS *param
 #endif
@@ -2632,7 +2658,8 @@ s	|SV *	|find_hash_subscript|NULLOK const HV *const hv \
 s	|I32	|find_array_subscript|NULLOK const AV *const av \
 		|NN const SV *const val
 sMd	|SV*	|find_uninit_var|NULLOK const OP *const obase \
-		|NULLOK const SV *const uninit_sv|bool top
+		|NULLOK const SV *const uninit_sv|bool match \
+		|NN const char **desc_p
 #endif
 
 Ap	|GV*	|gv_fetchpvn_flags|NN const char* name|STRLEN len|I32 flags|const svtype sv_type
@@ -2677,11 +2704,10 @@ Apo	|int	|my_cxt_index	|NN const char *my_cxt_key
 Apo	|void*	|my_cxt_init	|NN int *index|size_t size
 #endif
 #endif
-
-: This function is an implementation detail. The public API for this is
-: XS_VERSION_BOOTCHECK
-Xpo	|void	|xs_version_bootcheck|U32 items|U32 ax|NN const char *xs_p \
+#if defined(PERL_IN_UTIL_C)
+so	|void	|xs_version_bootcheck|U32 items|U32 ax|NN const char *xs_p \
 				|STRLEN xs_len
+#endif
 Xpon	|I32	|xs_handshake	|const U32 key|NN void * v_my_perl\
 				|NN const char * file| ...
 Xp	|void	|xs_boot_epilog	|const U32 ax
@@ -2773,5 +2799,7 @@ Xop	|bool	|feature_is_enabled|NN const char *const name \
 Ei	|STRLEN	|sv_or_pv_pos_u2b|NN SV *sv|NN const char *pv|STRLEN pos \
 				 |NULLOK STRLEN *lenp
 #endif
+
+EMpPX	|SV*	|_get_encoding
 
 : ex: set ts=8 sts=4 sw=4 noet:

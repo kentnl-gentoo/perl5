@@ -49,12 +49,15 @@ within non-zero characters.
 */
 
 /*
-=for apidoc is_ascii_string
+=for apidoc is_invariant_string
 
-Returns true if the first C<len> bytes of the string C<s> are the same whether
-or not the string is encoded in UTF-8 (or UTF-EBCDIC on EBCDIC machines).  That
-is, if they are invariant.  On ASCII-ish machines, only ASCII characters
-fit this definition, hence the function's name.
+Returns true iff the first C<len> bytes of the string C<s> are the same
+regardless of the UTF-8 encoding of the string (or UTF-EBCDIC encoding on
+EBCDIC machines).  That is, if they are UTF-8 invariant.  On ASCII-ish
+machines, all the ASCII characters and only the ASCII characters fit this
+definition.  On EBCDIC machines, the ASCII-range characters are invariant, but
+so also are the C1 controls and C<\c?> (which isn't in the ASCII range on
+EBCDIC).
 
 If C<len> is 0, it will be calculated using C<strlen(s)>, (which means if you
 use this option, that C<s> can't have embedded C<NUL> characters and has to
@@ -66,12 +69,12 @@ See also L</is_utf8_string>(), L</is_utf8_string_loclen>(), and L</is_utf8_strin
 */
 
 bool
-Perl_is_ascii_string(const U8 *s, STRLEN len)
+Perl_is_invariant_string(const U8 *s, STRLEN len)
 {
     const U8* const send = s + (len ? len : strlen((const char *)s));
     const U8* x = s;
 
-    PERL_ARGS_ASSERT_IS_ASCII_STRING;
+    PERL_ARGS_ASSERT_IS_INVARIANT_STRING;
 
     for (; x < send; ++x) {
 	if (!UTF8_IS_INVARIANT(*x))
@@ -137,7 +140,7 @@ Perl_uvoffuni_to_utf8_flags(pTHX_ U8 *d, UV uv, UV flags)
 	    {
 #ifdef EBCDIC
                 Perl_die(aTHX_ "Can't represent character for Ox%"UVXf" on this platform", uv);
-                assert(0);
+                NOT_REACHED;
 #endif
 		return NULL;
 	    }
@@ -340,7 +343,7 @@ using C<strlen(s)> (which means if you use this option, that C<s> can't have
 embedded C<NUL> characters and has to have a terminating C<NUL> byte).  Note
 that all characters being ASCII constitute 'a valid UTF-8 string'.
 
-See also L</is_ascii_string>(), L</is_utf8_string_loclen>(), and L</is_utf8_string_loc>().
+See also L</is_invariant_string>(), L</is_utf8_string_loclen>(), and L</is_utf8_string_loc>().
 
 =cut
 */
@@ -1427,7 +1430,7 @@ Perl__to_upper_title_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp, const char S_
 		return 'S';
 	    default:
 		Perl_croak(aTHX_ "panic: to_upper_title_latin1 did not expect '%c' to map to '%c'", c, LATIN_SMALL_LETTER_Y_WITH_DIAERESIS);
-		assert(0); /* NOTREACHED */
+		NOT_REACHED; /* NOTREACHED */
 	}
     }
 
@@ -2179,11 +2182,16 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags)
 
 	if (flags & FOLD_FLAGS_LOCALE) {
 
+#           define CAP_SHARP_S   LATIN_CAPITAL_LETTER_SHARP_S_UTF8
+#           define LONG_S_T      LATIN_SMALL_LIGATURE_LONG_S_T_UTF8
+
+            const unsigned int cap_sharp_s_len = sizeof(CAP_SHARP_S) - 1;
+            const unsigned int long_s_t_len    = sizeof(LONG_S_T) - 1;
+
             /* Special case these two characters, as what normally gets
              * returned under locale doesn't work */
-            if (UTF8SKIP(p) == sizeof(LATIN_CAPITAL_LETTER_SHARP_S_UTF8) - 1
-                && memEQ((char *) p, LATIN_CAPITAL_LETTER_SHARP_S_UTF8,
-                          sizeof(LATIN_CAPITAL_LETTER_SHARP_S_UTF8) - 1))
+            if (UTF8SKIP(p) == cap_sharp_s_len
+                && memEQ((char *) p, CAP_SHARP_S, cap_sharp_s_len))
             {
                 /* diag_listed_as: Can't do %s("%s") on non-UTF-8 locale; resolved to "%s". */
                 Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),
@@ -2191,9 +2199,8 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags)
                               "resolved to \"\\x{17F}\\x{17F}\".");
                 goto return_long_s;
             }
-            else if (UTF8SKIP(p) == sizeof(LATIN_SMALL_LIGATURE_LONG_S_T) - 1
-                && memEQ((char *) p, LATIN_SMALL_LIGATURE_LONG_S_T_UTF8,
-                          sizeof(LATIN_SMALL_LIGATURE_LONG_S_T_UTF8) - 1))
+            else if (UTF8SKIP(p) == long_s_t_len
+                     && memEQ((char *) p, LONG_S_T, long_s_t_len))
             {
                 /* diag_listed_as: Can't do %s("%s") on non-UTF-8 locale; resolved to "%s". */
                 Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),

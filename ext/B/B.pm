@@ -15,7 +15,7 @@ require Exporter;
 # walkoptree comes from B.xs
 
 BEGIN {
-    $B::VERSION = '1.53';
+    $B::VERSION = '1.54';
     @B::EXPORT_OK = ();
 
     # Our BOOT code needs $VERSION set, and will append to @EXPORT_OK.
@@ -60,6 +60,7 @@ push @B::EXPORT_OK, (qw(minus_c ppname save_BEGINs
 
 @B::OP::ISA = 'B::OBJECT';
 @B::UNOP::ISA = 'B::OP';
+@B::UNOP_AUX::ISA = 'B::UNOP';
 @B::BINOP::ISA = 'B::UNOP';
 @B::LOGOP::ISA = 'B::UNOP';
 @B::LISTOP::ISA = 'B::BINOP';
@@ -73,7 +74,8 @@ push @B::EXPORT_OK, (qw(minus_c ppname save_BEGINs
 
 @B::SPECIAL::ISA = 'B::OBJECT';
 
-@B::optype = qw(OP UNOP BINOP LOGOP LISTOP PMOP SVOP PADOP PVOP LOOP COP METHOP);
+@B::optype = qw(OP UNOP BINOP LOGOP LISTOP PMOP SVOP PADOP PVOP LOOP COP
+                METHOP UNOP_AUX);
 # bytecode.pl contained the following comment:
 # Nullsv *must* come first in the following so that the condition
 # ($$sv == 0) can continue to be used to test (sv == Nullsv).
@@ -741,7 +743,9 @@ unsigned.
 
 =item COP_SEQ_RANGE_HIGH
 
-These last two are only valid for pad name SVs.
+These last two are only valid for pad name SVs.  They only existed in the
+B::NV class before Perl 5.22.  In 5.22 they were moved to the B::PADNAME
+class.
 
 =back
 
@@ -856,6 +860,22 @@ in the MAGIC.
 =item RARE
 
 =item TABLE
+
+=back
+
+=head2 B::REGEXP Methods
+
+=over 4
+
+=item REGEX
+
+=item precomp
+
+=item qr_anoncv
+
+=item compflags
+
+The last two were added in Perl 5.22.
 
 =back
 
@@ -1075,8 +1095,9 @@ information is no longer stored directly in the hash.
 
 =head2 OP-RELATED CLASSES
 
-C<B::OP>, C<B::UNOP>, C<B::BINOP>, C<B::LOGOP>, C<B::LISTOP>, C<B::PMOP>,
-C<B::SVOP>, C<B::PADOP>, C<B::PVOP>, C<B::LOOP>, C<B::COP>, C<B::METHOP>.
+C<B::OP>, C<B::UNOP>, C<B::UNOP_AUX>, C<B::BINOP>, C<B::LOGOP>,
+C<B::LISTOP>, C<B::PMOP>, C<B::SVOP>, C<B::PADOP>, C<B::PVOP>, C<B::LOOP>,
+C<B::COP>, C<B::METHOP>.
 
 These classes correspond in the obvious way to the underlying C
 structures of similar names.  The inheritance hierarchy mimics the
@@ -1087,15 +1108,17 @@ underlying C "inheritance":
                    +----------+---------+--------+-------+---------+
                    |          |         |        |       |         |
                 B::UNOP    B::SVOP  B::PADOP  B::COP  B::PVOP  B::METHOP
-                 ,'  `-.
-                /       `--.
-           B::BINOP     B::LOGOP
+                   |
+               +---+---+---------+
+               |       |         |
+           B::BINOP  B::LOGOP  B::UNOP_AUX
                |
                |
            B::LISTOP
-             ,' `.
-            /     \
-        B::LOOP B::PMOP
+               |
+           +---+---+
+           |       |
+        B::LOOP   B::PMOP
 
 Access methods correspond to the underlying C structure field names,
 with the leading "class indication" prefix (C<"op_">) removed.
@@ -1144,7 +1167,7 @@ This returns the op description from the global C PL_op_desc array
 
 =back
 
-=head2 B::UNOP METHOD
+=head2 B::UNOP Method
 
 =over 4
 
@@ -1152,7 +1175,28 @@ This returns the op description from the global C PL_op_desc array
 
 =back
 
-=head2 B::BINOP METHOD
+=head2 B::UNOP_AUX Methods (since 5.22)
+
+=over 4
+
+=item aux_list(cv)
+
+This returns a list of the elements of the op's aux data structure,
+or a null list if there is no aux. What will be returned depends on the
+object's type, but will typically be a collection of C<B::IV>, C<B::GV>,
+etc. objects. C<cv> is the C<B::CV> object representing the sub that the
+op is contained within.
+
+=item string(cv)
+
+This returns a textual representation of the object (likely to b useful
+for deparsing and debugging), or an empty string if the op type doesn't
+support this. C<cv> is the C<B::CV> object representing the sub that the
+op is contained within.
+
+=back
+
+=head2 B::BINOP Method
 
 =over 4
 
@@ -1160,7 +1204,7 @@ This returns the op description from the global C PL_op_desc array
 
 =back
 
-=head2 B::LOGOP METHOD
+=head2 B::LOGOP Method
 
 =over 4
 
@@ -1168,7 +1212,7 @@ This returns the op description from the global C PL_op_desc array
 
 =back
 
-=head2 B::LISTOP METHOD
+=head2 B::LISTOP Method
 
 =over 4
 
@@ -1204,9 +1248,16 @@ Only when perl was compiled with ithreads.
 
 Since perl 5.17.1
 
+=item pmregexp
+
+Added in perl 5.22, this method returns the B::REGEXP associated with the
+op.  While PMOPs do not actually have C<pmregexp> fields under threaded
+builds, this method returns the regexp under threads nonetheless, for
+convenience.
+
 =back
 
-=head2 B::SVOP METHOD
+=head2 B::SVOP Methods
 
 =over 4
 
@@ -1216,7 +1267,7 @@ Since perl 5.17.1
 
 =back
 
-=head2 B::PADOP METHOD
+=head2 B::PADOP Method
 
 =over 4
 
@@ -1224,7 +1275,7 @@ Since perl 5.17.1
 
 =back
 
-=head2 B::PVOP METHOD
+=head2 B::PVOP Method
 
 =over 4
 
@@ -1245,6 +1296,9 @@ Since perl 5.17.1
 =back
 
 =head2 B::COP Methods
+
+The C<B::COP> class is used for "nextstate" and "dbstate" ops.  As of Perl
+5.22, it is also used for "null" ops that started out as COPs.
 
 =over 4
 
@@ -1284,10 +1338,12 @@ Since perl 5.17.1
 
 =back
 
-=head2 OTHER CLASSES
+=head2 PAD-RELATED CLASSES
 
-Perl 5.18 introduces a new class, B::PADLIST, returned by B::CV's
+Perl 5.18 introduced a new class, B::PADLIST, returned by B::CV's
 C<PADLIST> method.
+
+Perl 5.22 introduced the B::PADNAMELIST and B::PADNAME classes.
 
 =head2 B::PADLIST Methods
 
@@ -1297,15 +1353,90 @@ C<PADLIST> method.
 
 =item ARRAY
 
-A list of pads.  The first one contains the names.  These are currently
-B::AV objects, but that is likely to change in future versions.
+A list of pads.  The first one contains the names.
+
+The first one is a B::PADNAMELIST under Perl 5.22, and a B::AV under
+earlier versions.  The rest are currently B::AV objects, but that could
+change in future versions.
 
 =item ARRAYelt
 
 Like C<ARRAY>, but takes an index as an argument to get only one element,
 rather than a list of all of them.
 
+=item NAMES
+
+This method, introduced in 5.22, returns the B::PADNAMELIST.  It is
+equivalent to C<ARRAYelt> with a 0 argument.
+
 =item REFCNT
+
+=back
+
+=head2 B::PADNAMELIST Methods
+
+=over 4
+
+=item MAX
+
+=item ARRAY
+
+=item ARRAYelt
+
+These two methods return the pad names, using B::SPECIAL objects for null
+pointers and B::PADNAME objects otherwise.
+
+=item REFCNT
+
+=back
+
+=head2 B::PADNAME Methods
+
+=over 4
+
+=item PV
+
+=item PVX
+
+=item LEN
+
+=item REFCNT
+
+=item FLAGS
+
+For backward-compatibility, if the PADNAMEt_OUTER flag is set, the FLAGS
+method adds the SVf_FAKE flag, too.
+
+=item TYPE
+
+A B::HV object representing the stash for a typed lexical.
+
+=item SvSTASH
+
+A backward-compatibility alias for TYPE.
+
+=item OURSTASH
+
+A B::HV object representing the stash for 'our' variables.
+
+=item PROTOCV
+
+The prototype CV for a 'my' sub.
+
+=item COP_SEQ_RANGE_LOW
+
+=item COP_SEQ_RANGE_HIGH
+
+Sequence numbers representing the scope within which a lexical is visible.
+Meaningless if PADNAMEt_OUTER is set.
+
+=item PARENT_PAD_INDEX
+
+Only meaningful if PADNAMEt_OUTER is set.
+
+=item PARENT_FAKELEX_FLAGS
+
+Only meaningful if PADNAMEt_OUTER is set.
 
 =back
 

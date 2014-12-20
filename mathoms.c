@@ -24,6 +24,9 @@
  * versions of Perl.  For binary or source compatibility reasons, though,
  * we cannot completely remove them from the core code.  
  *
+ * REMEMBER to update makedef.pl when adding a function to mathoms.c whose
+ * name doesn't begin with "Perl_".
+ *
  * SMP - Oct. 24, 2005
  *
  * The compilation of this file can be suppressed; see INSTALL
@@ -1771,6 +1774,22 @@ void
 Perl_save_re_context(pTHX)
 {
     PERL_UNUSED_CONTEXT;
+}
+
+/*
+=for apidoc Am|HV *|pad_compname_type|PADOFFSET po
+
+Looks up the type of the lexical variable at position I<po> in the
+currently-compiling pad.  If the variable is typed, the stash of the
+class to which it is typed is returned.  If not, C<NULL> is returned.
+
+=cut
+*/
+
+HV *
+Perl_pad_compname_type(pTHX_ const PADOFFSET po)
+{
+    return PAD_COMPNAME_TYPE(po);
 }
 
 

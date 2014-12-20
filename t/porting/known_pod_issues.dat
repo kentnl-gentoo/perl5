@@ -20,6 +20,7 @@ Array::Base
 Attribute::Constant
 B::Lint
 B::Lint::Debug
+B::Utils
 basename(1)
 Benchmark::Perl::Formance
 ByteLoader
@@ -104,6 +105,7 @@ Mail::Send
 Mail::SpamAssassin
 man(5)
 man(7)
+Mason
 Math::Big
 Math::BigInt::Constant
 Math::BigInt::GMP
@@ -188,6 +190,7 @@ String::Base
 String::Scanf
 Switch
 tar(1)
+Template::Declare
 Term::UI
 Term::UI::History
 Test::Harness::TAP
@@ -210,6 +213,7 @@ unzip(1)
 Version::Requirements
 wait(2)
 waitpid(3)
+Want
 wget(1)
 Win32::Locale
 XML::LibXML
@@ -255,6 +259,7 @@ pod/perlcygwin.pod	Verbatim line length including indents exceeds 79 by	24
 pod/perldebguts.pod	Verbatim line length including indents exceeds 79 by	34
 pod/perldebtut.pod	Verbatim line length including indents exceeds 79 by	22
 pod/perldebug.pod	Verbatim line length including indents exceeds 79 by	3
+pod/perldelta.pod	? Should you be using F<...> or maybe L<...> instead of	1
 pod/perldelta.pod	Pod NAME already used	1
 pod/perldsc.pod	Verbatim line length including indents exceeds 79 by	4
 pod/perldtrace.pod	Verbatim line length including indents exceeds 79 by	26
@@ -305,4 +310,6 @@ lib/config.pod	? Should you be using L<...> instead of	-1
 lib/extutils/embed.pm	Verbatim line length including indents exceeds 79 by	2
 lib/perl5db.pl	? Should you be using L<...> instead of	1
 lib/pod/text/overstrike.pm	Verbatim line length including indents exceeds 79 by	1
+lib/test/stream/subtest.pm	Apparent broken link	1
+lib/test/stream/subtest.pm	There is no NAME	1
 porting/perl5220delta.pod	Pod NAME already used	1

@@ -68,12 +68,11 @@ sub testit {
 
 	if ($lex == 2) {
 	    my $repl = 'my $a';
-	    if ($expr =~ /CORE::(chomp|chop|lstat|stat)\b/
-	     or $expr =~ ($lexsub ? qr/::map\(\$a/ : qr/\bmap\(\$a/)) {
-		# for some reason only these do:
-		#  'foo my $a, $b,' => foo my($a), $b, ...
-		#  the rest don't parenthesize the my var.
-		$repl = 'my($a)';
+	    if ($expr =~ 'CORE::do') {
+		# do foo() is a syntax error, so B::Deparse emits
+		# do (foo()), but does not distinguish between foo and my,
+		# because it is too complicated.
+		$repl = '(my $a)';
 	    }
 	    s/\$a/$repl/ for $expr, $expected_expr;
 	}
@@ -102,7 +101,7 @@ sub testit {
 
 	my $got_text = $deparse->coderef2text($code_ref);
 
-	unless ($got_text =~ /^\{
+	unless ($got_text =~ /
     package (?:lexsub)?test;
     BEGIN \{\$\{\^WARNING_BITS} = "[^"]*"}
     use strict 'refs', 'subs';
@@ -612,7 +611,7 @@ sin              01    $
 sleep            01    -
 socket           4     p
 socketpair       5     p
-sort             @     p+
+sort             @     p1+
 # split handled specially
 splice           12345 p
 sprintf          123   p

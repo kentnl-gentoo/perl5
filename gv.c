@@ -636,13 +636,14 @@ of an SV instead of a string/length pair.
 GV *
 Perl_gv_fetchmeth_sv(pTHX_ HV *stash, SV *namesv, I32 level, U32 flags)
 {
-   char *namepv;
-   STRLEN namelen;
-   PERL_ARGS_ASSERT_GV_FETCHMETH_SV;
-   namepv = SvPV(namesv, namelen);
-   if (SvUTF8(namesv))
-       flags |= SVf_UTF8;
-   return gv_fetchmeth_pvn(stash, namepv, namelen, level, flags);
+    char *namepv;
+    STRLEN namelen;
+    PERL_ARGS_ASSERT_GV_FETCHMETH_SV;
+    if (LIKELY(SvPOK_nog(namesv))) /* common case */
+        return gv_fetchmeth_internal(stash, namesv, NULL, 0, level, flags);
+    namepv = SvPV(namesv, namelen);
+    if (SvUTF8(namesv)) flags |= SVf_UTF8;
+    return gv_fetchmeth_pvn(stash, namepv, namelen, level, flags);
 }
 
 /*
@@ -658,7 +659,7 @@ GV *
 Perl_gv_fetchmeth_pv(pTHX_ HV *stash, const char *name, I32 level, U32 flags)
 {
     PERL_ARGS_ASSERT_GV_FETCHMETH_PV;
-    return gv_fetchmeth_pvn(stash, name, strlen(name), level, flags);
+    return gv_fetchmeth_internal(stash, NULL, name, strlen(name), level, flags);
 }
 
 /*
@@ -689,10 +690,11 @@ obtained from the GV with the C<GvCV> macro.
 
 /* NOTE: No support for tied ISA */
 
-GV *
-Perl_gv_fetchmeth_pvn(pTHX_ HV *stash, const char *name, STRLEN len, I32 level, U32 flags)
+PERL_STATIC_INLINE GV*
+S_gv_fetchmeth_internal(pTHX_ HV* stash, SV* meth, const char* name, STRLEN len, I32 level, U32 flags)
 {
     GV** gvp;
+    HE* he;
     AV* linear_av;
     SV** linear_svp;
     SV* linear_sv;
@@ -701,12 +703,10 @@ Perl_gv_fetchmeth_pvn(pTHX_ HV *stash, const char *name, STRLEN len, I32 level, 
     CV* cand_cv = NULL;
     GV* topgv = NULL;
     const char *hvname;
-    I32 create = (level >= 0) ? 1 : 0;
+    I32 create = (level >= 0) ? HV_FETCH_LVALUE : 0;
     I32 items;
     U32 topgen_cmp;
     U32 is_utf8 = flags & SVf_UTF8;
-
-    PERL_ARGS_ASSERT_GV_FETCHMETH_PVN;
 
     /* UNIVERSAL methods should be callable without a stash */
     if (!stash) {
@@ -722,10 +722,11 @@ Perl_gv_fetchmeth_pvn(pTHX_ HV *stash, const char *name, STRLEN len, I32 level, 
       Perl_croak(aTHX_ "Can't use anonymous symbol table for method lookup");
 
     assert(hvname);
-    assert(name);
+    assert(name || meth);
 
     DEBUG_o( Perl_deb(aTHX_ "Looking for %smethod %s in package %s\n",
-		      flags & GV_SUPER ? "SUPER " : "",name,hvname) );
+		      flags & GV_SUPER ? "SUPER " : "",
+		      name ? name : SvPV_nolen(meth), hvname) );
 
     topgen_cmp = HvMROMETA(stash)->cache_gen + PL_sub_generation;
 
@@ -737,14 +738,22 @@ Perl_gv_fetchmeth_pvn(pTHX_ HV *stash, const char *name, STRLEN len, I32 level, 
     else cachestash = stash;
 
     /* check locally for a real method or a cache entry */
-    gvp = (GV**)hv_fetch(cachestash, name, is_utf8 ? -(I32)len : (I32)len,
-			 create);
+    he = (HE*)hv_common(
+        cachestash, meth, name, len, (flags & SVf_UTF8) ? HVhek_UTF8 : 0, create, NULL, 0
+    );
+    if (he) gvp = (GV**)&HeVAL(he);
+    else gvp = NULL;
+
     if(gvp) {
         topgv = *gvp;
       have_gv:
         assert(topgv);
         if (SvTYPE(topgv) != SVt_PVGV)
+        {
+            if (!name)
+                name = SvPV_nomg(meth, len);
             gv_init_pvn(topgv, stash, name, len, GV_ADDMULTI|is_utf8);
+        }
         if ((cand_cv = GvCV(topgv))) {
             /* If genuine method or valid cache entry, use it */
             if (!GvCVGEN(topgv) || GvCVGEN(topgv) == topgen_cmp) {
@@ -823,7 +832,8 @@ Perl_gv_fetchmeth_pvn(pTHX_ HV *stash, const char *name, STRLEN len, I32 level, 
 
     /* Check UNIVERSAL without caching */
     if(level == 0 || level == -1) {
-        candidate = gv_fetchmeth_pvn(NULL, name, len, 1, flags &~GV_SUPER);
+        candidate = gv_fetchmeth_internal(NULL, meth, name, len, 1,
+                                          flags &~GV_SUPER);
         if(candidate) {
             cand_cv = GvCV(candidate);
             if (topgv && (GvREFCNT(topgv) == 1) && (CvROOT(cand_cv) || CvXSUB(cand_cv))) {
@@ -843,6 +853,13 @@ Perl_gv_fetchmeth_pvn(pTHX_ HV *stash, const char *name, STRLEN len, I32 level, 
     }
 
     return 0;
+}
+
+GV *
+Perl_gv_fetchmeth_pvn(pTHX_ HV *stash, const char *name, STRLEN len, I32 level, U32 flags)
+{
+    PERL_ARGS_ASSERT_GV_FETCHMETH_PVN;
+    return gv_fetchmeth_internal(stash, NULL, name, len, level, flags);
 }
 
 /*
@@ -1846,7 +1863,7 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 	} else
 #endif
 	{
-	    const char * const name2 = name + 1;
+	    const char * name2 = name + 1;
 	    switch (*name) {
 	    case 'A':
 		if (strEQ(name2, "RGV")) {
@@ -1905,6 +1922,9 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 		    goto magicalize;
 		break;
 	    case '\005':	/* $^ENCODING */
+                if (*name2 == '_') {
+                    name2++;
+                }
 		if (strEQ(name2, "NCODING"))
 		    goto magicalize;
 		break;
@@ -3539,6 +3559,8 @@ Perl_gv_try_downgrade(pTHX_ GV *gv)
 	sv_clear((SV*)gv);
 	SvREFCNT(gv) = 1;
 	SvFLAGS(gv) = SVt_IV|SVf_ROK|SVprv_PCS_IMPORTED * imported;
+
+        /* See also: 'SET_SVANY_FOR_BODYLESS_IV' in sv.c */
 	SvANY(gv) = (XPVGV*)((char*)&(gv->sv_u.svu_iv) -
 				STRUCT_OFFSET(XPVIV, xiv_iv));
 	SvRV_set(gv, value);

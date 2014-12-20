@@ -108,6 +108,9 @@ my $obj = B::svref_2object($r);
 my $regexp =  ($] < 5.011) ? $obj->MAGIC : $obj;
 ok($regexp->precomp() eq 'foo', 'Get string from qr//');
 like($regexp->REGEX(), qr/\d+/, "REGEX() returns numeric value");
+like($regexp->compflags, qr/^\d+\z/, "compflags returns numeric value");
+is B::svref_2object(qr/(?{time})/)->qr_anoncv->ROOT->first->name, 'qr',
+  'qr_anoncv';
 my $iv = 1;
 my $iv_ref = B::svref_2object(\$iv);
 is(ref $iv_ref, "B::IV", "Test B:IV return from svref_2object");
@@ -298,6 +301,16 @@ B::svref_2object(sub{y/\x{100}//})->ROOT->first->first->sibling->sv;
 ok 1, 'B knows that UTF trans is a padop in 5.8.9, not an svop';
 
 {
+    my $o = B::svref_2object(sub{0;0})->ROOT->first->first;
+    # Make sure we are testing what we think we are testing.  If these two
+    # fail, tweak the test to find a nulled cop a different way.
+    is $o->name, "null", 'first op of sub{0;0} is a null';
+    is B::ppname($o->targ),'pp_nextstate','first op of sub{0;0} was a cop';
+    # Test its class
+    is B::class($o), "COP", 'nulled cops are of class COP';
+}
+
+{
     format FOO =
 foo
 .
@@ -327,6 +340,11 @@ SKIP: {
     isnt $cop->stashoff, $bobby->stashoff,
 	'different COP->stashoff for different stashes';
 }
+
+my $pmop = B::svref_2object(sub{ qr/fit/ })->ROOT->first->first->sibling;
+$regexp = $pmop->pmregexp;
+is B::class($regexp), 'REGEXP', 'B::PMOP::pmregexp returns a regexp';
+is $regexp->precomp, 'fit', 'pmregexp returns the right regexp';
 
 
 # Test $B::overlay

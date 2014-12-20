@@ -70,6 +70,9 @@ PERLVARI(I, hash_rand_bits_enabled, U8, 1) /* used to randomize hash stuff 0 == 
 PERLVARI(I, hash_rand_bits, UV, 0)      /* used to randomize hash stuff */
 #endif
 PERLVAR(I, strtab,	HV *)		/* shared string table */
+/* prog counter for the currently executing OP_MULTIDEREF Used to signal
+ * to S_find_uninit_var() where we are */
+PERLVAR(I, multideref_pc, UNOP_AUX_item *)
 
 /* Fields used by magic variables such as $@, $/ and so on */
 PERLVAR(I, curpm,	PMOP *)		/* what to do \ interps in REs from */
@@ -146,6 +149,8 @@ C<&PL_sv_yes>.
 PERLVAR(I, sv_undef,	SV)
 PERLVAR(I, sv_no,	SV)
 PERLVAR(I, sv_yes,	SV)
+PERLVAR(I, padname_undef,	PADNAME)
+PERLVAR(I, padname_const,	PADNAME)
 PERLVAR(I, Sv,		SV *)		/* used to hold temporary values */
 
 PERLVAR(I, parser,	yy_parser *)	/* current parser state */
@@ -174,7 +179,7 @@ PERLVAR(I, statgv,	GV *)
 PERLVARI(I, statname,	SV *,	NULL)
 
 #ifdef HAS_TIMES
-/* Will be removed soon after v5.21.6. See RT #121351 */
+/* Will be removed soon after v5.21.7. See RT #121351 */
 PERLVAR(I, timesbuf,	struct tms)
 #endif
 
@@ -672,7 +677,8 @@ PERLVARI(I, known_layers, PerlIO_list_t *, NULL)
 PERLVARI(I, def_layerlist, PerlIO_list_t *, NULL)
 #endif
 
-PERLVARI(I, encoding,	SV *,	NULL)	/* character encoding */
+PERLVARI(I, encoding,	SV *,	NULL)	/* $^ENCODING */
+PERLVARI(I, lex_encoding, SV *,	NULL)	/* encoding pragma */
 
 PERLVAR(I, utf8_idstart, SV *)
 PERLVAR(I, utf8_idcont,	SV *)
@@ -741,7 +747,9 @@ PERLVAR(I, debug_pad,	struct perl_debug_pad)	/* always needed because of the re 
 /* Hook for File::Glob */
 PERLVARI(I, globhook,	globhook_t, NULL)
 
-/* The last unconditional member of the interpreter structure when 5.21.6 was
+PERLVARI(I, padlist_generation, U32, 1)	/* id to identify padlist clones */
+
+/* The last unconditional member of the interpreter structure when 5.21.7 was
    released. The offset of the end of this is baked into a global variable in 
    any shared perl library which will allow a sanity test in future perl
    releases.  */

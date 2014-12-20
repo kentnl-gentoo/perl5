@@ -11,8 +11,21 @@ use Test::Stream::Event(
     accessors => [qw/state events exception/],
 );
 
+sub subevents {
+    return (
+        @{$_[0]->[DIAG] || []},
+        map { $_, $_->subevents } @{$_[0]->[EVENTS] || []},
+    );
+}
+
 sub init {
     my $self = shift;
+
+    if ($self->[EXCEPTION] && !(blessed($self->[EXCEPTION]) && $self->[EXCEPTION]->isa('Test::Stream::Event'))) {
+        push @{$self->[DIAG]} => "Exception in subtest '$self->[NAME]': $self->[EXCEPTION]";
+        $self->[STATE]->[STATE_PASSING] = 0;
+        $self->[BOOL] = 0;
+    }
 
     $self->[REAL_BOOL] = $self->[STATE]->[STATE_PASSING] && $self->[STATE]->[STATE_COUNT];
     $self->[EVENTS] ||= [];

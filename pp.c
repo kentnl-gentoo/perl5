@@ -78,7 +78,7 @@ PP(pp_padav)
     } else if (PL_op->op_private & OPpMAYBE_LVSUB) {
        const I32 flags = is_lvalue_sub();
        if (flags && !(flags & OPpENTERSUB_INARGS)) {
-	if (GIMME == G_SCALAR)
+	if (GIMME_V == G_SCALAR)
 	    /* diag_listed_as: Can't return %s to lvalue scalar context */
 	    Perl_croak(aTHX_ "Can't return array to lvalue scalar context");
 	PUSHs(TARG);
@@ -130,7 +130,7 @@ PP(pp_padhv)
     else if (PL_op->op_private & OPpMAYBE_LVSUB) {
       const I32 flags = is_lvalue_sub();
       if (flags && !(flags & OPpENTERSUB_INARGS)) {
-	if (GIMME == G_SCALAR)
+	if (GIMME_V == G_SCALAR)
 	    /* diag_listed_as: Can't return %s to lvalue scalar context */
 	    Perl_croak(aTHX_ "Can't return hash to lvalue scalar context");
 	RETURN;
@@ -170,34 +170,30 @@ PP(pp_introcv)
 PP(pp_clonecv)
 {
     dTARGET;
-    MAGIC * const mg =
-	mg_find(PadlistNAMESARRAY(CvPADLIST(find_runcv(NULL)))[ARGTARG],
-		PERL_MAGIC_proto);
+    CV * const protocv = PadnamePROTOCV(
+	PadlistNAMESARRAY(CvPADLIST(find_runcv(NULL)))[ARGTARG]
+    );
     assert(SvTYPE(TARG) == SVt_PVCV);
-    assert(mg);
-    assert(mg->mg_obj);
-    if (CvISXSUB(mg->mg_obj)) { /* constant */
+    assert(protocv);
+    if (CvISXSUB(protocv)) { /* constant */
 	/* XXX Should we clone it here? */
 	/* If this changes to use SAVECLEARSV, we can move the SAVECLEARSV
 	   to introcv and remove the SvPADSTALE_off. */
 	SAVEPADSVANDMORTALIZE(ARGTARG);
-	PAD_SVl(ARGTARG) = SvREFCNT_inc_simple_NN(mg->mg_obj);
+	PAD_SVl(ARGTARG) = SvREFCNT_inc_simple_NN(protocv);
     }
     else {
-	if (CvROOT(mg->mg_obj)) {
-	    assert(CvCLONE(mg->mg_obj));
-	    assert(!CvCLONED(mg->mg_obj));
+	if (CvROOT(protocv)) {
+	    assert(CvCLONE(protocv));
+	    assert(!CvCLONED(protocv));
 	}
-	cv_clone_into((CV *)mg->mg_obj,(CV *)TARG);
+	cv_clone_into(protocv,(CV *)TARG);
 	SAVECLEARSV(PAD_SVl(ARGTARG));
     }
     return NORMAL;
 }
 
 /* Translations. */
-
-static const char S_no_symref_sv[] =
-    "Can't use string (\"%" SVf32 "\"%s) as %s ref while \"strict refs\" in use";
 
 /* In some cases this function inspects PL_op.  If this function is called
    for new op types, more bool parameters may need to be added in place of
@@ -275,7 +271,7 @@ S_rv2gv(pTHX_ SV *sv, const bool vivify_sv, const bool strict,
 	    else {
 		if (strict) {
                     Perl_die(aTHX_
-                             S_no_symref_sv,
+                             PL_no_symref_sv,
                              sv,
                              (SvPOKp(sv) && SvCUR(sv)>32 ? "..." : ""),
                              "a symbol"
@@ -330,7 +326,7 @@ Perl_softref2xv(pTHX_ SV *const sv, const char *const what,
 
     if (PL_op->op_private & HINT_STRICT_REFS) {
 	if (SvOK(sv))
-	    Perl_die(aTHX_ S_no_symref_sv, sv,
+	    Perl_die(aTHX_ PL_no_symref_sv, sv,
 		     (SvPOKp(sv) && SvCUR(sv)>32 ? "..." : ""), what);
 	else
 	    Perl_die(aTHX_ PL_no_usym, what);
@@ -537,7 +533,7 @@ PP(pp_srefgen)
 PP(pp_refgen)
 {
     dSP; dMARK;
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	if (++MARK <= SP)
 	    *MARK = *SP;
 	else
@@ -809,14 +805,14 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
             Perl_croak_no_modify();
     }
 
-    if (PL_encoding) {
+    if (IN_ENCODING) {
 	if (!SvUTF8(sv)) {
 	    /* XXX, here sv is utf8-ized as a side-effect!
 	       If encoding.pm is used properly, almost string-generating
 	       operations, including literal strings, chr(), input data, etc.
 	       should have been utf8-ized already, right?
 	    */
-	    sv_recode_to_utf8(sv, PL_encoding);
+	    sv_recode_to_utf8(sv, _get_encoding());
 	}
     }
 
@@ -861,11 +857,11 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 			}
 			rsptr = temp_buffer;
 		    }
-		    else if (PL_encoding) {
+		    else if (IN_ENCODING) {
 			/* RS is 8 bit, encoding.pm is used.
 			 * Do not recode PL_rs as a side-effect. */
 			svrecode = newSVpvn(rsptr, rslen);
-			sv_recode_to_utf8(svrecode, PL_encoding);
+			sv_recode_to_utf8(svrecode, _get_encoding());
 			rsptr = SvPV_const(svrecode, rslen);
 			rs_charlen = sv_len_utf8(svrecode);
 		    }
@@ -1644,7 +1640,7 @@ PP(pp_repeat)
     IV count;
     SV *sv;
 
-    if (GIMME == G_ARRAY && PL_op->op_private & OPpREPEAT_DOLIST) {
+    if (GIMME_V == G_ARRAY && PL_op->op_private & OPpREPEAT_DOLIST) {
 	/* TODO: think of some way of doing list-repeat overloading ??? */
 	sv = POPs;
 	SvGETMAGIC(sv);
@@ -1700,7 +1696,7 @@ PP(pp_repeat)
                                          "Negative repeat count does nothing");
     }
 
-    if (GIMME == G_ARRAY && PL_op->op_private & OPpREPEAT_DOLIST) {
+    if (GIMME_V == G_ARRAY && PL_op->op_private & OPpREPEAT_DOLIST) {
 	dMARK;
 	static const char* const oom_list_extend = "Out of memory during list extend";
 	const I32 items = SP - MARK;
@@ -2051,7 +2047,7 @@ Perl_do_ncmp(pTHX_ SV* const left, SV * const right)
 		    return (leftuv > (UV)rightiv) - (leftuv < (UV)rightiv);
 		}
 	    }
-	    assert(0); /* NOTREACHED */
+	    NOT_REACHED; /* NOTREACHED */
     }
 #endif
     {
@@ -2454,7 +2450,8 @@ PP(pp_i_divide)
     }
 }
 
-#if defined(__GLIBC__) && IVSIZE == 8 && !defined(PERL_DEBUG_READONLY_OPS)
+#if defined(__GLIBC__) && IVSIZE == 8 && !defined(PERL_DEBUG_READONLY_OPS) \
+    && ( __GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 8))
 STATIC
 PP(pp_i_modulo_0)
 #else
@@ -2477,7 +2474,8 @@ PP(pp_i_modulo)
      }
 }
 
-#if defined(__GLIBC__) && IVSIZE == 8 && !defined(PERL_DEBUG_READONLY_OPS)
+#if defined(__GLIBC__) && IVSIZE == 8 && !defined(PERL_DEBUG_READONLY_OPS) \
+    && ( __GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 8))
 STATIC
 PP(pp_i_modulo_1)
 
@@ -2513,7 +2511,7 @@ PP(pp_i_modulo)
 	       PL_ppaddr[OP_I_MODULO] =
 	           Perl_pp_i_modulo_0;
 	  /* .. but if we have glibc, we might have a buggy _moddi3
-	   * (at least glicb 2.2.5 is known to have this bug), in other
+	   * (at least glibc 2.2.5 is known to have this bug), in other
 	   * words our integer modulus with negative quad as the second
 	   * argument might be broken.  Test for this and re-patch the
 	   * opcode dispatch table if that is the case, remembering to
@@ -2836,8 +2834,8 @@ PP(pp_int)
       }
       else {
 	  const NV value = SvNV_nomg(sv);
-          if (SvNOK(sv) && UNLIKELY(Perl_isinfnan(SvNV(sv))))
-              SETn(SvNV(sv));
+	  if (UNLIKELY(Perl_isinfnan(value)))
+	      SETn(value);
 	  else if (value >= 0.0) {
 	      if (value < (NV)UV_MAX + 0.5) {
 		  SETu(U_V(value));
@@ -2956,7 +2954,7 @@ PP(pp_length)
     /* simplest case shortcut */
     /* turn off SVf_UTF8 in tmp flags if HINT_BYTES on*/
     U32 svflags = (SvFLAGS(sv) ^ (in_bytes << 26)) & (SVf_POK|SVs_GMG|SVf_UTF8);
-    assert(HINT_BYTES == 0x00000008 && SVf_UTF8 == 0x20000000 && (SVf_UTF8 == HINT_BYTES << 26));
+    STATIC_ASSERT_STMT(HINT_BYTES == 0x00000008 && SVf_UTF8 == 0x20000000 && (SVf_UTF8 == HINT_BYTES << 26));
     SETs(TARG);
 
     if(LIKELY(svflags == SVf_POK))
@@ -3262,7 +3260,7 @@ PP(pp_index)
     little_utf8 = DO_UTF8(little);
     if (big_utf8 ^ little_utf8) {
 	/* One needs to be upgraded.  */
-	if (little_utf8 && !PL_encoding) {
+	if (little_utf8 && !IN_ENCODING) {
 	    /* Well, maybe instead we might be able to downgrade the small
 	       string?  */
 	    char * const pv = (char*)bytes_from_utf8((U8 *)little_p, &llen,
@@ -3284,8 +3282,8 @@ PP(pp_index)
 	    temp = little_utf8
 		? newSVpvn(big_p, biglen) : newSVpvn(little_p, llen);
 
-	    if (PL_encoding) {
-		sv_recode_to_utf8(temp, PL_encoding);
+	    if (IN_ENCODING) {
+		sv_recode_to_utf8(temp, _get_encoding());
 	    } else {
 		sv_utf8_upgrade(temp);
 	    }
@@ -3342,7 +3340,7 @@ PP(pp_index)
 	retval = -1;
     else {
 	retval = little_p - big_p;
-	if (retval > 0 && big_utf8)
+	if (retval > 1 && big_utf8)
 	    retval = sv_pos_b2u_flags(big, retval, SV_CONST_RETURN);
     }
     SvREFCNT_dec(temp);
@@ -3370,9 +3368,9 @@ PP(pp_ord)
     STRLEN len;
     const U8 *s = (U8*)SvPV_const(argsv, len);
 
-    if (PL_encoding && SvPOK(argsv) && !DO_UTF8(argsv)) {
+    if (IN_ENCODING && SvPOK(argsv) && !DO_UTF8(argsv)) {
         SV * const tmpsv = sv_2mortal(newSVsv(argsv));
-        s = (U8*)sv_recode_to_utf8(tmpsv, PL_encoding);
+        s = (U8*)sv_recode_to_utf8(tmpsv, _get_encoding());
         len = UTF8SKIP(s);  /* Should be well-formed; so this is its length */
         argsv = tmpsv;
     }
@@ -3392,6 +3390,8 @@ PP(pp_chr)
     SV *top = POPs;
 
     SvGETMAGIC(top);
+    if (UNLIKELY(SvAMAGIC(top)))
+	top = sv_2num(top);
     if (UNLIKELY(isinfnansv(top)))
         Perl_croak(aTHX_ "Cannot chr %"NVgf, SvNV(top));
     else {
@@ -3435,8 +3435,8 @@ PP(pp_chr)
     *tmps = '\0';
     (void)SvPOK_only(TARG);
 
-    if (PL_encoding && !IN_BYTES) {
-        sv_recode_to_utf8(TARG, PL_encoding);
+    if (IN_ENCODING && !IN_BYTES) {
+        sv_recode_to_utf8(TARG, _get_encoding());
 	tmps = SvPVX(TARG);
 	if (SvCUR(TARG) == 0
 	    || ! is_utf8_string((U8*)tmps, SvCUR(TARG))
@@ -4445,7 +4445,7 @@ PP(pp_aslice)
 	    *MARK = svp ? *svp : &PL_sv_undef;
 	}
     }
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	MARK = ORIGMARK;
 	*++MARK = SP > ORIGMARK ? *SP : &PL_sv_undef;
 	SP = MARK;
@@ -4490,7 +4490,7 @@ PP(pp_kvaslice)
         }
 	*++MARK = svp ? *svp : &PL_sv_undef;
     }
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	MARK = SP - items*2;
 	*++MARK = items > 0 ? *SP : &PL_sv_undef;
 	SP = MARK;
@@ -4891,7 +4891,7 @@ PP(pp_hslice)
         }
         *MARK = svp && *svp ? *svp : &PL_sv_undef;
     }
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	MARK = ORIGMARK;
 	*++MARK = SP > ORIGMARK ? *SP : &PL_sv_undef;
 	SP = MARK;
@@ -4940,7 +4940,7 @@ PP(pp_kvhslice)
         }
         *++MARK = svp && *svp ? *svp : &PL_sv_undef;
     }
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	MARK = SP - items*2;
 	*++MARK = items > 0 ? *SP : &PL_sv_undef;
 	SP = MARK;
@@ -4953,7 +4953,7 @@ PP(pp_kvhslice)
 PP(pp_list)
 {
     I32 markidx = POPMARK;
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	SV **mark = PL_stack_base + markidx;
 	dSP;
 	if (++MARK <= SP)
@@ -4973,13 +4973,12 @@ PP(pp_lslice)
     SV ** const lastlelem = PL_stack_base + POPMARK;
     SV ** const firstlelem = PL_stack_base + POPMARK + 1;
     SV ** const firstrelem = lastlelem + 1;
-    I32 is_something_there = FALSE;
     const U8 mod = PL_op->op_flags & OPf_MOD;
 
     const I32 max = lastrelem - lastlelem;
     SV **lelem;
 
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	I32 ix = SvIV(*lastlelem);
 	if (ix < 0)
 	    ix += max;
@@ -5003,7 +5002,6 @@ PP(pp_lslice)
 	if (ix < 0 || ix >= max)
 	    *lelem = &PL_sv_undef;
 	else {
-	    is_something_there = TRUE;
 	    if (!(*lelem = firstrelem[ix]))
 		*lelem = &PL_sv_undef;
 	    else if (mod && SvPADTMP(*lelem)) {
@@ -5011,10 +5009,7 @@ PP(pp_lslice)
             }
 	}
     }
-    if (is_something_there)
-	SP = lastlelem;
-    else
-	SP = firstlelem - 1;
+    SP = lastlelem;
     RETURN;
 }
 
@@ -5168,7 +5163,7 @@ PP(pp_splice)
 	}
 
 	MARK = ORIGMARK + 1;
-	if (GIMME == G_ARRAY) {			/* copy return vals to stack */
+	if (GIMME_V == G_ARRAY) {		/* copy return vals to stack */
 	    const bool real = cBOOL(AvREAL(ary));
 	    MEXTEND(MARK, length);
 	    if (real)
@@ -5264,7 +5259,7 @@ PP(pp_splice)
 	}
 
 	MARK = ORIGMARK + 1;
-	if (GIMME == G_ARRAY) {			/* copy return vals to stack */
+	if (GIMME_V == G_ARRAY) {		/* copy return vals to stack */
 	    if (length) {
 		const bool real = cBOOL(AvREAL(ary));
 		if (real)
@@ -5387,7 +5382,7 @@ PP(pp_reverse)
 {
     dSP; dMARK;
 
-    if (GIMME == G_ARRAY) {
+    if (GIMME_V == G_ARRAY) {
 	if (PL_op->op_private & OPpREVERSE_INPLACE) {
 	    AV *av;
 
@@ -6229,9 +6224,10 @@ PP(pp_refassign)
     if (bad)
 	/* diag_listed_as: Assigned value is not %s reference */
 	DIE(aTHX_ "Assigned value is not a%s reference", bad);
+    {
+    MAGIC *mg;
+    HV *stash;
     switch (left ? SvTYPE(left) : 0) {
-	MAGIC *mg;
-	HV *stash;
     case 0:
     {
 	SV * const old = PAD_SV(ARGTARG);
@@ -6260,13 +6256,14 @@ PP(pp_refassign)
 	if (UNLIKELY(PL_op->op_private & OPpLVAL_INTRO))
 	    S_localise_helem_lval(aTHX_ (HV *)left, key,
 					SvCANEXISTDELETE(left));
-	hv_store_ent((HV *)left, key, SvREFCNT_inc_simple_NN(SvRV(sv)), 0);
+	(void)hv_store_ent((HV *)left, key, SvREFCNT_inc_simple_NN(SvRV(sv)), 0);
     }
     if (PL_op->op_flags & OPf_MOD)
 	SETs(sv_2mortal(newSVsv(sv)));
     /* XXX else can weak references go stale before they are read, e.g.,
        in leavesub?  */
     RETURN;
+    }
 }
 
 PP(pp_lvref)

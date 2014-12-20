@@ -928,8 +928,8 @@ S_scan_commit(pTHX_ const RExC_state_t *pRExC_state, scan_data_t *data,
 	else { /* *data->longest == data->longest_float */
 	    data->offset_float_min = l ? data->last_start_min : data->pos_min;
 	    data->offset_float_max = (l
-				      ? data->last_start_max
-				      : (data->pos_delta == SSize_t_MAX
+                          ? data->last_start_max
+                          : (data->pos_delta > SSize_t_MAX - data->pos_min
 					 ? SSize_t_MAX
 					 : data->pos_min + data->pos_delta));
 	    if (is_inf
@@ -4513,9 +4513,6 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
         else if (PL_regkind[OP(scan)] == EXACT) {
             /* But OP != EXACT!, so is EXACTFish */
 	    SSize_t l = STR_LEN(scan);
-	    UV uc = *((U8*)STRING(scan));
-            SV* EXACTF_invlist = _new_invlist(4); /* Start out big enough for 2
-                                                     separate code points */
             const U8 * s = (U8*)STRING(scan);
 
 	    /* Search for fixed substrings supports EXACT only. */
@@ -4524,7 +4521,6 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
                 scan_commit(pRExC_state, data, minlenp, is_inf);
 	    }
 	    if (UTF) {
-		uc = utf8_to_uvchr_buf(s, s + l, NULL);
 		l = utf8_length(s, s + l);
 	    }
 	    if (unfolded_multi_char) {
@@ -4544,156 +4540,27 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		}
 	    }
 
-            if (OP(scan) != EXACTFL && flags & SCF_DO_STCLASS_AND) {
-                ssc_clear_locale(data->start_class);
+            if (flags & SCF_DO_STCLASS) {
+                SV* EXACTF_invlist = _make_exactf_invlist(pRExC_state, scan);
+
+                assert(EXACTF_invlist);
+                if (flags & SCF_DO_STCLASS_AND) {
+                    if (OP(scan) != EXACTFL)
+                        ssc_clear_locale(data->start_class);
+                    ANYOF_FLAGS(data->start_class) &= ~SSC_MATCHES_EMPTY_STRING;
+                    ANYOF_POSIXL_ZERO(data->start_class);
+                    ssc_intersection(data->start_class, EXACTF_invlist, FALSE);
+                }
+                else {  /* SCF_DO_STCLASS_OR */
+                    ssc_union(data->start_class, EXACTF_invlist, FALSE);
+                    ssc_and(pRExC_state, data->start_class, (regnode_charclass *) and_withp);
+
+                    /* See commit msg 749e076fceedeb708a624933726e7989f2302f6a */
+                    ANYOF_FLAGS(data->start_class) &= ~SSC_MATCHES_EMPTY_STRING;
+                }
+                flags &= ~SCF_DO_STCLASS;
+                SvREFCNT_dec(EXACTF_invlist);
             }
-
-            if (! UTF) {
-
-                /* We punt and assume can match anything if the node begins
-                 * with a multi-character fold.  Things are complicated.  For
-                 * example, /ffi/i could match any of:
-                 *  "\N{LATIN SMALL LIGATURE FFI}"
-                 *  "\N{LATIN SMALL LIGATURE FF}I"
-                 *  "F\N{LATIN SMALL LIGATURE FI}"
-                 *  plus several other things; and making sure we have all the
-                 *  possibilities is hard. */
-                if (is_MULTI_CHAR_FOLD_latin1_safe(s, s + STR_LEN(scan))) {
-                    EXACTF_invlist =
-                             _add_range_to_invlist(EXACTF_invlist, 0, UV_MAX);
-                }
-                else {
-
-                    /* Any Latin1 range character can potentially match any
-                     * other depending on the locale */
-                    if (OP(scan) == EXACTFL) {
-                        _invlist_union(EXACTF_invlist, PL_Latin1,
-                                                              &EXACTF_invlist);
-                    }
-                    else {
-                        /* But otherwise, it matches at least itself.  We can
-                         * quickly tell if it has a distinct fold, and if so,
-                         * it matches that as well */
-                        EXACTF_invlist = add_cp_to_invlist(EXACTF_invlist, uc);
-                        if (IS_IN_SOME_FOLD_L1(uc)) {
-                            EXACTF_invlist = add_cp_to_invlist(EXACTF_invlist,
-                                                           PL_fold_latin1[uc]);
-                        }
-                    }
-
-                    /* Some characters match above-Latin1 ones under /i.  This
-                     * is true of EXACTFL ones when the locale is UTF-8 */
-                    if (HAS_NONLATIN1_SIMPLE_FOLD_CLOSURE(uc)
-                        && (! isASCII(uc) || (OP(scan) != EXACTFA
-                                            && OP(scan) != EXACTFA_NO_TRIE)))
-                    {
-                        add_above_Latin1_folds(pRExC_state,
-                                               (U8) uc,
-                                               &EXACTF_invlist);
-                    }
-                }
-            }
-            else {  /* Pattern is UTF-8 */
-                U8 folded[UTF8_MAX_FOLD_CHAR_EXPAND * UTF8_MAXBYTES_CASE + 1] = { '\0' };
-                STRLEN foldlen = UTF8SKIP(s);
-                const U8* e = s + STR_LEN(scan);
-                SV** listp;
-
-                /* The only code points that aren't folded in a UTF EXACTFish
-                 * node are are the problematic ones in EXACTFL nodes */
-                if (OP(scan) == EXACTFL
-                    && is_PROBLEMATIC_LOCALE_FOLDEDS_START_cp(uc))
-                {
-                    /* We need to check for the possibility that this EXACTFL
-                     * node begins with a multi-char fold.  Therefore we fold
-                     * the first few characters of it so that we can make that
-                     * check */
-                    U8 *d = folded;
-                    int i;
-
-                    for (i = 0; i < UTF8_MAX_FOLD_CHAR_EXPAND && s < e; i++) {
-                        if (isASCII(*s)) {
-                            *(d++) = (U8) toFOLD(*s);
-                            s++;
-                        }
-                        else {
-                            STRLEN len;
-                            to_utf8_fold(s, d, &len);
-                            d += len;
-                            s += UTF8SKIP(s);
-                        }
-                    }
-
-                    /* And set up so the code below that looks in this folded
-                     * buffer instead of the node's string */
-                    e = d;
-                    foldlen = UTF8SKIP(folded);
-                    s = folded;
-                }
-
-                /* When we reach here 's' points to the fold of the first
-                 * character(s) of the node; and 'e' points to far enough along
-                 * the folded string to be just past any possible multi-char
-                 * fold. 'foldlen' is the length in bytes of the first
-                 * character in 's'
-                 *
-                 * Unlike the non-UTF-8 case, the macro for determining if a
-                 * string is a multi-char fold requires all the characters to
-                 * already be folded.  This is because of all the complications
-                 * if not.  Note that they are folded anyway, except in EXACTFL
-                 * nodes.  Like the non-UTF case above, we punt if the node
-                 * begins with a multi-char fold  */
-
-                if (is_MULTI_CHAR_FOLD_utf8_safe(s, e)) {
-                    EXACTF_invlist =
-                             _add_range_to_invlist(EXACTF_invlist, 0, UV_MAX);
-                }
-                else {  /* Single char fold */
-
-                    /* It matches all the things that fold to it, which are
-                     * found in PL_utf8_foldclosures (including itself) */
-                    EXACTF_invlist = add_cp_to_invlist(EXACTF_invlist, uc);
-                    if (! PL_utf8_foldclosures) {
-                        _load_PL_utf8_foldclosures();
-                    }
-                    if ((listp = hv_fetch(PL_utf8_foldclosures,
-                                        (char *) s, foldlen, FALSE)))
-                    {
-                        AV* list = (AV*) *listp;
-                        IV k;
-                        for (k = 0; k <= av_tindex(list); k++) {
-                            SV** c_p = av_fetch(list, k, FALSE);
-                            UV c;
-                            assert(c_p);
-
-                            c = SvUV(*c_p);
-
-                            /* /aa doesn't allow folds between ASCII and non- */
-                            if ((OP(scan) == EXACTFA || OP(scan) == EXACTFA_NO_TRIE)
-                                && isASCII(c) != isASCII(uc))
-                            {
-                                continue;
-                            }
-
-                            EXACTF_invlist = add_cp_to_invlist(EXACTF_invlist, c);
-                        }
-                    }
-                }
-            }
-	    if (flags & SCF_DO_STCLASS_AND) {
-                ANYOF_FLAGS(data->start_class) &= ~SSC_MATCHES_EMPTY_STRING;
-                ANYOF_POSIXL_ZERO(data->start_class);
-                ssc_intersection(data->start_class, EXACTF_invlist, FALSE);
-	    }
-	    else if (flags & SCF_DO_STCLASS_OR) {
-                ssc_union(data->start_class, EXACTF_invlist, FALSE);
-		ssc_and(pRExC_state, data->start_class, (regnode_charclass *) and_withp);
-
-                /* See commit msg 749e076fceedeb708a624933726e7989f2302f6a */
-                ANYOF_FLAGS(data->start_class) &= ~SSC_MATCHES_EMPTY_STRING;
-	    }
-	    flags &= ~SCF_DO_STCLASS;
-            SvREFCNT_dec(EXACTF_invlist);
 	}
 	else if (REGNODE_VARIES(OP(scan))) {
 	    SSize_t mincount, maxcount, minnext, deltanext, pos_before = 0;
@@ -5021,8 +4888,11 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 			} else {
 			    /* start offset must point into the last copy */
 			    data->last_start_min += minnext * (mincount - 1);
-			    data->last_start_max += is_inf ? SSize_t_MAX
-				: (maxcount - 1) * (minnext + data->pos_delta);
+			    data->last_start_max =
+                              is_inf
+                               ? SSize_t_MAX
+			       : data->last_start_max +
+                                 (maxcount - 1) * (minnext + data->pos_delta);
 			}
 		    }
 		    /* It is counted once already... */
@@ -5644,7 +5514,8 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVuf" RHS=%"UVuf"\n",
                     data->longest = &(data->longest_float);
             }
             min += min1;
-            delta += max1 - min1;
+            if (delta != SSize_t_MAX)
+                delta += max1 - min1;
             if (flags & SCF_DO_STCLASS_OR) {
                 ssc_or(pRExC_state, data->start_class, (regnode_charclass *) &accum);
                 if (min1) {
@@ -5754,7 +5625,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVuf" RHS=%"UVuf"\n",
         }
         return final_minlen;
     }
-    /* not-reached */
+    NOT_REACHED;
 }
 
 STATIC U32
@@ -6007,7 +5878,7 @@ S_concat_pat(pTHX_ RExC_state_t * const pRExC_state,
             if (oplist) {
                 assert(oplist->op_type == OP_PADAV
                     || oplist->op_type == OP_RV2AV);
-                oplist = OP_SIBLING(oplist);
+                oplist = OpSIBLING(oplist);
             }
 
             if (SvRMAGICAL(av)) {
@@ -6054,10 +5925,10 @@ S_concat_pat(pTHX_ RExC_state_t * const pRExC_state,
                 pRExC_state->code_blocks[n].src_regex = NULL;
                 n++;
                 code = 1;
-                oplist = OP_SIBLING(oplist); /* skip CONST */
+                oplist = OpSIBLING(oplist); /* skip CONST */
                 assert(oplist);
             }
-            oplist = OP_SIBLING(oplist);;
+            oplist = OpSIBLING(oplist);;
         }
 
 	/* apply magic and QR overloading to arg */
@@ -6561,7 +6432,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 	OP *o;
 	int ncode = 0;
 
-	for (o = cLISTOPx(expr)->op_first; o; o = OP_SIBLING(o))
+	for (o = cLISTOPx(expr)->op_first; o; o = OpSIBLING(o))
 	    if (o->op_type == OP_NULL && (o->op_flags & OPf_SPECIAL))
 		ncode++; /* count of DO blocks */
 	if (ncode) {
@@ -6582,7 +6453,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
         if (expr->op_type == OP_CONST)
             n = 1;
         else
-            for (o = cLISTOPx(expr)->op_first; o; o = OP_SIBLING(o)) {
+            for (o = cLISTOPx(expr)->op_first; o; o = OpSIBLING(o)) {
                 if (o->op_type == OP_CONST)
                     n++;
             }
@@ -6598,7 +6469,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
         if (expr->op_type == OP_CONST)
             new_patternp[n] = cSVOPx_sv(expr);
         else
-            for (o = cLISTOPx(expr)->op_first; o; o = OP_SIBLING(o)) {
+            for (o = cLISTOPx(expr)->op_first; o; o = OpSIBLING(o)) {
                 if (o->op_type == OP_CONST)
                     new_patternp[n++] = cSVOPo_sv;
             }
@@ -6618,7 +6489,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
             assert(   expr->op_type == OP_PUSHMARK
                    || (expr->op_type == OP_NULL && expr->op_targ == OP_PUSHMARK)
                    || expr->op_type == OP_PADRANGE);
-            expr = OP_SIBLING(expr);
+            expr = OpSIBLING(expr);
     }
 
     pat = S_concat_pat(aTHX_ pRExC_state, NULL, new_patternp, pat_count,
@@ -8013,7 +7884,7 @@ S_reg_scan_name(pTHX_ RExC_state_t *pRExC_state, U32 flags)
             Perl_croak(aTHX_ "panic: bad flag %lx in reg_scan_name",
 		       (unsigned long) flags);
         }
-        assert(0); /* NOT REACHED */
+        NOT_REACHED; /* NOT REACHED */
     }
     return NULL;
 }
@@ -8170,6 +8041,8 @@ S_invlist_set_len(pTHX_ SV* const invlist, const UV len, const bool offset)
     assert(SvLEN(invlist) == 0 || SvCUR(invlist) <= SvLEN(invlist));
 }
 
+#ifndef PERL_IN_XSUB_RE
+
 PERL_STATIC_INLINE IV*
 S_get_invlist_previous_index_addr(SV* invlist)
 {
@@ -8203,6 +8076,28 @@ S_invlist_set_previous_index(SV* const invlist, const IV index)
 
     *get_invlist_previous_index_addr(invlist) = index;
 }
+
+PERL_STATIC_INLINE void
+S_invlist_trim(SV* const invlist)
+{
+    PERL_ARGS_ASSERT_INVLIST_TRIM;
+
+    assert(SvTYPE(invlist) == SVt_INVLIST);
+
+    /* Change the length of the inversion list to how many entries it currently
+     * has */
+    SvPV_shrink_to_cur((SV *) invlist);
+}
+
+PERL_STATIC_INLINE bool
+S_invlist_is_iterating(SV* const invlist)
+{
+    PERL_ARGS_ASSERT_INVLIST_IS_ITERATING;
+
+    return *(get_invlist_iter_addr(invlist)) < (STRLEN) UV_MAX;
+}
+
+#endif /* ifndef PERL_IN_XSUB_RE */
 
 PERL_STATIC_INLINE UV
 S_invlist_max(SV* const invlist)
@@ -8321,18 +8216,6 @@ S_invlist_extend(pTHX_ SV* const invlist, const UV new_max)
     /* Add one to account for the zero element at the beginning which may not
      * be counted by the calling parameters */
     SvGROW((SV *)invlist, TO_INTERNAL_SIZE(new_max + 1));
-}
-
-PERL_STATIC_INLINE void
-S_invlist_trim(SV* const invlist)
-{
-    PERL_ARGS_ASSERT_INVLIST_TRIM;
-
-    assert(SvTYPE(invlist) == SVt_INVLIST);
-
-    /* Change the length of the inversion list to how many entries it currently
-     * has */
-    SvPV_shrink_to_cur((SV *) invlist);
 }
 
 STATIC void
@@ -9295,14 +9178,6 @@ S_invlist_iternext(SV* invlist, UV* start, UV* end)
     return TRUE;
 }
 
-PERL_STATIC_INLINE bool
-S_invlist_is_iterating(SV* const invlist)
-{
-    PERL_ARGS_ASSERT_INVLIST_IS_ITERATING;
-
-    return *(get_invlist_iter_addr(invlist)) < (STRLEN) UV_MAX;
-}
-
 PERL_STATIC_INLINE UV
 S_invlist_highest(SV* const invlist)
 {
@@ -9497,6 +9372,152 @@ S__invlistEQ(pTHX_ SV* const a, SV* const b, const bool complement_b)
 }
 #endif
 
+/*
+ * As best we can, determine the characters that can match the start of
+ * the given EXACTF-ish node.
+ *
+ * Returns the invlist as a new SV*; it is the caller's responsibility to
+ * call SvREFCNT_dec() when done with it.
+ */
+STATIC SV*
+S__make_exactf_invlist(pTHX_ RExC_state_t *pRExC_state, regnode *node)
+{
+    const U8 * s = (U8*)STRING(node);
+    SSize_t bytelen = STR_LEN(node);
+    UV uc;
+    /* Start out big enough for 2 separate code points */
+    SV* invlist = _new_invlist(4);
+
+    PERL_ARGS_ASSERT__MAKE_EXACTF_INVLIST;
+
+    if (! UTF) {
+        uc = *s;
+
+        /* We punt and assume can match anything if the node begins
+         * with a multi-character fold.  Things are complicated.  For
+         * example, /ffi/i could match any of:
+         *  "\N{LATIN SMALL LIGATURE FFI}"
+         *  "\N{LATIN SMALL LIGATURE FF}I"
+         *  "F\N{LATIN SMALL LIGATURE FI}"
+         *  plus several other things; and making sure we have all the
+         *  possibilities is hard. */
+        if (is_MULTI_CHAR_FOLD_latin1_safe(s, s + bytelen)) {
+            invlist = _add_range_to_invlist(invlist, 0, UV_MAX);
+        }
+        else {
+            /* Any Latin1 range character can potentially match any
+             * other depending on the locale */
+            if (OP(node) == EXACTFL) {
+                _invlist_union(invlist, PL_Latin1, &invlist);
+            }
+            else {
+                /* But otherwise, it matches at least itself.  We can
+                 * quickly tell if it has a distinct fold, and if so,
+                 * it matches that as well */
+                invlist = add_cp_to_invlist(invlist, uc);
+                if (IS_IN_SOME_FOLD_L1(uc))
+                    invlist = add_cp_to_invlist(invlist, PL_fold_latin1[uc]);
+            }
+
+            /* Some characters match above-Latin1 ones under /i.  This
+             * is true of EXACTFL ones when the locale is UTF-8 */
+            if (HAS_NONLATIN1_SIMPLE_FOLD_CLOSURE(uc)
+                && (! isASCII(uc) || (OP(node) != EXACTFA
+                                    && OP(node) != EXACTFA_NO_TRIE)))
+            {
+                add_above_Latin1_folds(pRExC_state, (U8) uc, &invlist);
+            }
+        }
+    }
+    else {  /* Pattern is UTF-8 */
+        U8 folded[UTF8_MAX_FOLD_CHAR_EXPAND * UTF8_MAXBYTES_CASE + 1] = { '\0' };
+        STRLEN foldlen = UTF8SKIP(s);
+        const U8* e = s + bytelen;
+        SV** listp;
+
+        uc = utf8_to_uvchr_buf(s, s + bytelen, NULL);
+
+        /* The only code points that aren't folded in a UTF EXACTFish
+         * node are are the problematic ones in EXACTFL nodes */
+        if (OP(node) == EXACTFL && is_PROBLEMATIC_LOCALE_FOLDEDS_START_cp(uc)) {
+            /* We need to check for the possibility that this EXACTFL
+             * node begins with a multi-char fold.  Therefore we fold
+             * the first few characters of it so that we can make that
+             * check */
+            U8 *d = folded;
+            int i;
+
+            for (i = 0; i < UTF8_MAX_FOLD_CHAR_EXPAND && s < e; i++) {
+                if (isASCII(*s)) {
+                    *(d++) = (U8) toFOLD(*s);
+                    s++;
+                }
+                else {
+                    STRLEN len;
+                    to_utf8_fold(s, d, &len);
+                    d += len;
+                    s += UTF8SKIP(s);
+                }
+            }
+
+            /* And set up so the code below that looks in this folded
+             * buffer instead of the node's string */
+            e = d;
+            foldlen = UTF8SKIP(folded);
+            s = folded;
+        }
+
+        /* When we reach here 's' points to the fold of the first
+         * character(s) of the node; and 'e' points to far enough along
+         * the folded string to be just past any possible multi-char
+         * fold. 'foldlen' is the length in bytes of the first
+         * character in 's'
+         *
+         * Unlike the non-UTF-8 case, the macro for determining if a
+         * string is a multi-char fold requires all the characters to
+         * already be folded.  This is because of all the complications
+         * if not.  Note that they are folded anyway, except in EXACTFL
+         * nodes.  Like the non-UTF case above, we punt if the node
+         * begins with a multi-char fold  */
+
+        if (is_MULTI_CHAR_FOLD_utf8_safe(s, e)) {
+            invlist = _add_range_to_invlist(invlist, 0, UV_MAX);
+        }
+        else {  /* Single char fold */
+
+            /* It matches all the things that fold to it, which are
+             * found in PL_utf8_foldclosures (including itself) */
+            invlist = add_cp_to_invlist(invlist, uc);
+            if (! PL_utf8_foldclosures)
+                _load_PL_utf8_foldclosures();
+            if ((listp = hv_fetch(PL_utf8_foldclosures,
+                                (char *) s, foldlen, FALSE)))
+            {
+                AV* list = (AV*) *listp;
+                IV k;
+                for (k = 0; k <= av_tindex(list); k++) {
+                    SV** c_p = av_fetch(list, k, FALSE);
+                    UV c;
+                    assert(c_p);
+
+                    c = SvUV(*c_p);
+
+                    /* /aa doesn't allow folds between ASCII and non- */
+                    if ((OP(node) == EXACTFA || OP(node) == EXACTFA_NO_TRIE)
+                        && isASCII(c) != isASCII(uc))
+                    {
+                        continue;
+                    }
+
+                    invlist = add_cp_to_invlist(invlist, c);
+                }
+            }
+        }
+    }
+
+    return invlist;
+}
+
 #undef HEADER_LENGTH
 #undef TO_INTERNAL_SIZE
 #undef FROM_INTERNAL_SIZE
@@ -9625,12 +9646,12 @@ S_parse_lparen_question_flags(pTHX_ RExC_state_t *pRExC_state)
                 else {
                     vFAIL3("Regexp modifiers \"%c\" and \"%c\" are mutually exclusive", has_charset_modifier, *(RExC_parse - 1));
                 }
-                /*NOTREACHED*/
+                NOT_REACHED; /*NOTREACHED*/
             neg_modifier:
                 RExC_parse++;
                 vFAIL2("Regexp modifier \"%c\" may not appear after the \"-\"",
                                     *(RExC_parse - 1));
-                /*NOTREACHED*/
+                NOT_REACHED; /*NOTREACHED*/
             case ONCE_PAT_MOD: /* 'o' */
             case GLOBAL_PAT_MOD: /* 'g' */
                 if (PASS2 && ckWARN(WARN_REGEXP)) {
@@ -9703,7 +9724,7 @@ S_parse_lparen_question_flags(pTHX_ RExC_state_t *pRExC_state)
 		/* diag_listed_as: Sequence (?%s...) not recognized in regex; marked by <-- HERE in m/%s/ */
                 vFAIL2utf8f("Sequence (%"UTF8f"...) not recognized",
                       UTF8fARG(UTF, RExC_parse-seqstart, seqstart));
-                /*NOTREACHED*/
+                NOT_REACHED; /*NOTREACHED*/
         }
 
         ++RExC_parse;
@@ -9951,7 +9972,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                 /* diag_listed_as: Sequence (?%s...) not recognized in regex; marked by <-- HERE in m/%s/ */
 		vFAIL3("Sequence (%.*s...) not recognized",
                                 RExC_parse-seqstart, seqstart);
-		/*NOTREACHED*/
+		NOT_REACHED; /*NOTREACHED*/
             case '<':           /* (?<...) */
 		if (*RExC_parse == '!')
 		    paren = ',';
@@ -10084,7 +10105,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                 if (RExC_parse == RExC_end || *RExC_parse != ')')
                     vFAIL("Sequence (?&... not terminated");
                 goto gen_recurse_regop;
-                assert(0); /* NOT REACHED */
+                /* NOT REACHED */
             case '+':
                 if (!(RExC_parse[0] >= '1' && RExC_parse[0] <= '9')) {
                     RExC_parse++;
@@ -10162,7 +10183,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                 nextchar(pRExC_state);
                 return ret;
 
-            assert(0); /* NOT REACHED */
+            /* NOT REACHED */
 
 	    case '?':           /* (??...) */
 		is_logical = 1;
@@ -10172,7 +10193,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                     vFAIL2utf8f(
                         "Sequence (%"UTF8f"...) not recognized",
                         UTF8fARG(UTF, RExC_parse-seqstart, seqstart));
-		    /*NOTREACHED*/
+		    NOT_REACHED; /*NOTREACHED*/
 		}
 		*flagp |= POSTPONED;
 		paren = *RExC_parse++;
@@ -10638,7 +10659,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 	}
 	else
 	    FAIL("Junk on end of regexp");	/* "Can't happen". */
-	assert(0); /* NOTREACHED */
+	NOT_REACHED; /* NOTREACHED */
     }
 
     if (RExC_in_lookbehind) {
@@ -10838,7 +10859,8 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 
 	do_curly:
 	    if ((flags&SIMPLE)) {
-		RExC_naughty += 2 + RExC_naughty / 2;
+                if (RExC_naughty < I32_MAX / 2)
+                    RExC_naughty += 2 + RExC_naughty / 2;
 		reginsert(pRExC_state, CURLY, ret, depth+1);
                 Set_Node_Offset(ret, parse_start+1); /* MJD */
                 Set_Node_Cur_Length(ret, parse_start);
@@ -10864,7 +10886,8 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                 REGTAIL(pRExC_state, ret, reg_node(pRExC_state, NOTHING));
 		if (SIZE_ONLY)
 		    RExC_whilem_seen++, RExC_extralen += 3;
-		RExC_naughty += 4 + RExC_naughty;	/* compound interest */
+                if (RExC_naughty < I32_MAX / 4)
+                    RExC_naughty += 4 + RExC_naughty; /* compound interest */
 	    }
 	    ret->flags = 0;
 
@@ -12242,7 +12265,7 @@ tryagain:
 				vFAIL(error_msg);
 			    }
                             ender = result;
-			    if (PL_encoding && ender < 0x100) {
+			    if (IN_ENCODING && ender < 0x100) {
 				goto recode_encoding;
 			    }
 			    if (ender > 0xff) {
@@ -12272,7 +12295,7 @@ tryagain:
 			    }
                             ender = result;
 
-			    if (PL_encoding && ender < 0x100) {
+			    if (IN_ENCODING && ender < 0x100) {
 				goto recode_encoding;
 			    }
 			    if (ender > 0xff) {
@@ -12331,12 +12354,12 @@ tryagain:
                                          form_short_octal_warning(p, numlen));
                             }
 			}
-			if (PL_encoding && ender < 0x100)
+			if (IN_ENCODING && ender < 0x100)
 			    goto recode_encoding;
 			break;
 		    recode_encoding:
 			if (! RExC_override_recoding) {
-			    SV* enc = PL_encoding;
+			    SV* enc = _get_encoding();
 			    ender = reg_recode((const char)(U8)ender, &enc);
 			    if (!enc && PASS2)
 				ckWARNreg(p, "Invalid escape in the specified encoding");
@@ -13742,6 +13765,11 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
     /* In a range, counts how many 0-2 of the ends of it came from literals,
      * not escapes.  Thus we can tell if 'A' was input vs \x{C1} */
     UV literal_endpoint = 0;
+
+    /* Is the range unicode? which means on a platform that isn't 1-1 native
+     * to Unicode (i.e. non-ASCII), each code point in it should be considered
+     * to be a Unicode value.  */
+    bool unicode_range = FALSE;
 #endif
     bool invert = FALSE;    /* Is this class to be complemented */
 
@@ -13947,8 +13975,10 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                     }
                     /* Here, is a single code point, and <value> contains it */
 #ifdef EBCDIC
-                    /* We consider named characters to be literal characters */
+                    /* We consider named characters to be literal characters,
+                     * and they are Unicode */
                     literal_endpoint++;
+                    unicode_range = TRUE;
 #endif
                 }
                 break;
@@ -14147,7 +14177,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 			vFAIL(error_msg);
 		    }
 		}
-		if (PL_encoding && value < 0x100) {
+		if (IN_ENCODING && value < 0x100) {
 		    goto recode_encoding;
 		}
 		break;
@@ -14166,7 +14196,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 			vFAIL(error_msg);
 		    }
 		}
-		if (PL_encoding && value < 0x100)
+		if (IN_ENCODING && value < 0x100)
 		    goto recode_encoding;
 		break;
 	    case 'c':
@@ -14198,13 +14228,13 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                             (void)ReREFCNT_inc(RExC_rx_sv);
                         }
                     }
-		    if (PL_encoding && value < 0x100)
+		    if (IN_ENCODING && value < 0x100)
 			goto recode_encoding;
 		    break;
 		}
 	    recode_encoding:
 		if (! RExC_override_recoding) {
-		    SV* enc = PL_encoding;
+		    SV* enc = _get_encoding();
 		    value = reg_recode((const char)(U8)value, &enc);
 		    if (!enc) {
                         if (strict) {
@@ -14406,8 +14436,23 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
          * minus sign */
 
 	if (range) {
+#ifdef EBCDIC
+            /* For unicode ranges, we have to test that the Unicode as opposed
+             * to the native values are not decreasing.  (Above 255, and there
+             * is no difference between native and Unicode) */
+	    if (unicode_range && prevvalue < 255 && value < 255) {
+                if (NATIVE_TO_LATIN1(prevvalue) > NATIVE_TO_LATIN1(value)) {
+                    goto backwards_range;
+                }
+            }
+            else
+#endif
 	    if (prevvalue > value) /* b-a */ {
-		const int w = RExC_parse - rangebegin;
+		int w;
+#ifdef EBCDIC
+              backwards_range:
+#endif
+                w = RExC_parse - rangebegin;
                 vFAIL2utf8f(
                     "Invalid [] range \"%"UTF8f"\"",
                     UTF8fARG(UTF, w, rangebegin));
@@ -14542,32 +14587,40 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
             cp_foldable_list = _add_range_to_invlist(cp_foldable_list,
                                                      prevvalue, value);
 #else
-            SV* this_range = _new_invlist(1);
-            _append_range_to_invlist(this_range, prevvalue, value);
-
-            /* In EBCDIC, the ranges 'A-Z' and 'a-z' are each not contiguous.
-             * If this range was specified using something like 'i-j', we want
-             * to include only the 'i' and the 'j', and not anything in
-             * between, so exclude non-ASCII, non-alphabetics from it.
-             * However, if the range was specified with something like
-             * [\x89-\x91] or [\x89-j], all code points within it should be
-             * included.  literal_endpoint==2 means both ends of the range used
-             * a literal character, not \x{foo} */
-	    if (literal_endpoint == 2
-                && ((isLOWER_A(prevvalue) && isLOWER_A(value))
-                    || (isUPPER_A(prevvalue) && isUPPER_A(value))))
+            /* On non-ASCII platforms, for ranges that span all of 0..255, and
+             * ones that don't require special handling, we can just add the
+             * range like we do for ASCII platforms */
+            if ((UNLIKELY(prevvalue == 0) && value >= 255)
+                || ! (prevvalue < 256
+                      && (unicode_range
+                          || (literal_endpoint == 2
+                              && ((isLOWER_A(prevvalue) && isLOWER_A(value))
+                                  || (isUPPER_A(prevvalue)
+                                      && isUPPER_A(value)))))))
             {
-                _invlist_intersection(this_range, PL_XPosix_ptrs[_CC_ASCII],
-                                      &this_range);
-
-                /* Since 'this_range' now only contains ascii, the intersection
-                 * of it with anything will still yield only ascii */
-                _invlist_intersection(this_range, PL_XPosix_ptrs[_CC_ALPHA],
-                                      &this_range);
+                cp_foldable_list = _add_range_to_invlist(cp_foldable_list,
+                                                         prevvalue, value);
             }
-            _invlist_union(cp_foldable_list, this_range, &cp_foldable_list);
-            literal_endpoint = 0;
-            SvREFCNT_dec_NN(this_range);
+            else {
+                /* Here, requires special handling.  This can be because it is
+                 * a range whose code points are considered to be Unicode, and
+                 * so must be individually translated into native, or because
+                 * its a subrange of 'A-Z' or 'a-z' which each aren't
+                 * contiguous in EBCDIC, but we have defined them to include
+                 * only the "expected" upper or lower case ASCII alphabetics.
+                 * Subranges above 255 are the same in native and Unicode, so
+                 * can be added as a range */
+                U8 start = NATIVE_TO_LATIN1(prevvalue);
+                unsigned j;
+                U8 end = (value < 256) ? NATIVE_TO_LATIN1(value) : 255;
+                for (j = start; j <= end; j++) {
+                    cp_foldable_list = add_cp_to_invlist(cp_foldable_list, LATIN1_TO_NATIVE(j));
+                }
+                if (value > 255) {
+                    cp_foldable_list = _add_range_to_invlist(cp_foldable_list,
+                                                             256, value);
+                }
+            }
 #endif
         }
 
@@ -17255,7 +17308,9 @@ S_put_range(pTHX_ SV *sv, UV start, const UV end, const bool allow_literals)
         format = (this_end < 256)
                  ? "\\x{%02"UVXf"}-\\x{%02"UVXf"}"
                  : "\\x{%04"UVXf"}-\\x{%04"UVXf"}";
+        GCC_DIAG_IGNORE(-Wformat-nonliteral);
         Perl_sv_catpvf(aTHX_ sv, format, start, this_end);
+        GCC_DIAG_RESTORE;
         break;
     }
 }

@@ -6,7 +6,7 @@ use strict;
 
 our($VERSION, @ISA, @EXPORT_OK);
 
-$VERSION = "1.29";
+$VERSION = "1.30";
 
 use Carp;
 use Exporter ();
@@ -312,7 +312,7 @@ invert_opset function.
     av2arylen
 
     rv2hv helem hslice kvhslice each values keys exists delete
-    aeach akeys avalues reach rvalues rkeys
+    aeach akeys avalues reach rvalues rkeys multideref
 
     preinc i_preinc predec i_predec postinc i_postinc
     postdec i_postdec int hex oct abs pow multiply i_multiply
@@ -340,6 +340,7 @@ invert_opset function.
     rv2cv anoncode prototype coreargs
 
     entersub leavesub leavesublv return method method_named
+    method_super method_redir method_redir_super
      -- XXX loops via recursion?
 
     leaveeval -- needed for Safe to operate, is safe

@@ -761,6 +761,9 @@ Perl_leave_scope(pTHX_ I32 base)
     /* Localise the effects of the TAINT_NOT inside the loop.  */
     bool was = TAINT_get;
 
+    I32 i;
+    SV *sv;
+
     ANY arg0, arg1, arg2;
 
     /* these initialisations are logically unnecessary, but they shut up
@@ -969,6 +972,9 @@ Perl_leave_scope(pTHX_ I32 base)
 	case SAVEt_FREESV:
 	    SvREFCNT_dec(ARG0_SV);
 	    break;
+	case SAVEt_FREEPADNAME:
+	    PadnameREFCNT_dec((PADNAME *)ARG0_PTR);
+	    break;
 	case SAVEt_FREECOPHH:
 	    cophh_free((COPHH *)ARG0_PTR);
 	    break;
@@ -982,11 +988,6 @@ Perl_leave_scope(pTHX_ I32 base)
 	case SAVEt_FREEPV:
 	    Safefree(ARG0_PTR);
 	    break;
-
-        {
-          SV **svp;
-          I32 i;
-          SV *sv;
 
         case SAVEt_CLEARPADRANGE:
             i = (I32)((uv >> SAVE_TIGHT_SHIFT) & OPpPADRANGE_COUNTMASK);
@@ -1107,7 +1108,6 @@ Perl_leave_scope(pTHX_ I32 base)
                 }
             }
 	    break;
-        }
 	case SAVEt_DELETE:
 	    (void)hv_delete(ARG0_HV, ARG2_PV, ARG1_I32, G_DISCARD);
 	    SvREFCNT_dec(ARG0_HV);

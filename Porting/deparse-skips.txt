@@ -389,17 +389,11 @@ __DEPARSE_FAILURES__
 ../lib/overload.t
 ../lib/overloading.t
 ../lib/utf8.t
-base/lex.t
-comp/final_line_num.t
-comp/fold.t
-comp/form_scope.t
-comp/hints.t
-comp/opsubs.t
-comp/parser.t
-comp/proto.t
+base/lex.t                # checks regexp stringification
+comp/final_line_num.t     # tests syntax error after BEGIN block
+comp/fold.t               # mutability of folded constants
+comp/parser.t             # crazy #line directives ==> shell syntax errors
 comp/require.t
-io/inplace.t
-io/utf8.t
 lib/deprecate.t
 lib/mypragma.t
 mro/basic.t
@@ -425,26 +419,11 @@ mro/recursion_c3.t
 mro/recursion_c3_utf8.t
 mro/recursion_dfs.t
 mro/recursion_dfs_utf8.t
-op/array.t
-op/array_base.t
-op/attrhand.t
-op/attrs.t
-op/bop.t
+op/attrhand.t             # Custom attrs ignored; also AH provides none
+op/attrs.t                # [perl #70205] my attrs
 op/caller.t
-op/chdir.t
-op/chop.t
-op/chr.t
-op/closure.t
-op/concat2.t
-op/coreamp.t
-op/crypt.t
-op/die.t
-op/do.t
-op/each.t
-op/eval.t
-op/evalbytes.t
-op/exec.t
-op/filetest.t
+op/each.t                 # utf8ness of deparsed strings
+op/getpid.t               # [perl #70205] my attrs
 op/goto.t
 op/hash-rt85026.t
 op/hashassign.t
@@ -459,7 +438,6 @@ op/lexsub.t
 op/local.t
 op/magic.t
 op/method.t
-op/my.t
 op/mydef.t
 op/not.t
 op/ord.t
@@ -496,30 +474,20 @@ op/vec.t
 op/ver.t
 op/warn.t
 op/write.t
-opbasic/cmp.t
-opbasic/concat.t
 porting/diag.t
 porting/globvar.t
 porting/podcheck.t
-re/fold_grind.t
-re/overload.t
-re/pat.t
-re/pat_advanced.t
-re/pat_re_eval.t
-re/pat_rt_report.t
-re/reg_eval_scope.t
-re/reg_fold.t
-re/reg_mesg.t
-re/reg_pmod.t
-re/reg_posixcc.t
+re/overload.t             # [perl #123385] %^H output
+re/pat.t                  # [perl #90590]
+re/pat_advanced.t         # [perl #123417]
+re/pat_rt_report.t        # malformed utf8 constant; also /\c@/ -> /\c\@/
+re/reg_fold.t             # [perl #123385] %^H output
 re/regex_sets.t
 re/regexp_unicode_prop.t
-re/rxcode.t
+re/rxcode.t               # checks regexp stringification
 re/subst.t
-run/switchC.t
-run/switchI.t
-run/switchd-78586.t
-run/switches.t
+run/switchI.t             # -I on #! line is not deparsed
+run/switchd-78586.t       # -I on #! line is not deparsed
 uni/attrs.t
 uni/bless.t
 uni/chomp.t

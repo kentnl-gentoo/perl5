@@ -14,7 +14,7 @@ use warnings; # uses #3 and #4, since warnings uses Carp
 
 use Exporter (); # use #5
 
-our $VERSION   = "0.995";
+our $VERSION   = "0.996";
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw( set_style set_style_standard add_callback
 		     concise_subref concise_cv concise_main
@@ -401,7 +401,7 @@ my $lastnext;	# remembers op-chain, used to insert gotos
 my %opclass = ('OP' => "0", 'UNOP' => "1", 'BINOP' => "2", 'LOGOP' => "|",
 	       'LISTOP' => "@", 'PMOP' => "/", 'SVOP' => "\$", 'GVOP' => "*",
 	       'PVOP' => '"', 'LOOP' => "{", 'COP' => ";", 'PADOP' => "#",
-	       'METHOP' => '.');
+	       'METHOP' => '.', UNOP_AUX => '+');
 
 no warnings 'qw'; # "Possible attempt to put comments..."; use #7
 my @linenoise =
@@ -472,7 +472,12 @@ sub walk_topdown {
 	}
     }
     if (class($op) eq "PMOP") {
-	my $maybe_root = $op->pmreplroot;
+	my $maybe_root = $op->code_list;
+	if ( ref($maybe_root) and $maybe_root->isa("B::OP")
+	 and not $op->flags & OPf_KIDS) {
+	    walk_topdown($maybe_root, $sub, $level + 1);
+	}
+	$maybe_root = $op->pmreplroot;
 	if (ref($maybe_root) and $maybe_root->isa("B::OP")) {
 	    # It really is the root of the replacement, not something
 	    # else stored here for lack of space elsewhere
@@ -784,7 +789,9 @@ sub concise_op {
 	for my $i (0..$count-1) {
 	    my ($targarg, $targarglife);
 	    my $padname = (($curcv->PADLIST->ARRAY)[0]->ARRAY)[$h{targ}+$i];
-	    if (defined $padname and class($padname) ne "SPECIAL") {
+	    if (defined $padname and class($padname) ne "SPECIAL" and
+		$padname->LEN)
+	    {
 		$targarg  = $padname->PVX;
 		if ($padname->FLAGS & SVf_FAKE) {
 		    # These changes relate to the jumbo closure fix.
@@ -891,16 +898,27 @@ sub concise_op {
 	}
     }
     elsif ($h{class} eq "METHOP") {
-        if ($h{name} eq "method_named") {
+        my $prefix = '';
+        if ($h{name} eq 'method_redir' or $h{name} eq 'method_redir_super') {
+            my $rclass_sv = $op->rclass;
+            $rclass_sv = (($curcv->PADLIST->ARRAY)[1]->ARRAY)[$rclass_sv]
+                unless ref $rclass_sv;
+            $prefix .= 'PACKAGE "'.$rclass_sv->PV.'", ';
+        }
+        if ($h{name} ne "method") {
             if (${$op->meth_sv}) {
-                $h{arg} = "(" . concise_sv($op->meth_sv, \%h, 1) . ")";
+                $h{arg} = "($prefix" . concise_sv($op->meth_sv, \%h, 1) . ")";
             } else {
                 my $sv = (($curcv->PADLIST->ARRAY)[1]->ARRAY)[$op->targ];
-                $h{arg} = "[" . concise_sv($sv, \%h, 1) . "]";
+                $h{arg} = "[$prefix" . concise_sv($sv, \%h, 1) . "]";
                 $h{targarglife} = $h{targarg} = "";
             }
         }
     }
+    elsif ($h{class} eq "UNOP_AUX") {
+        $h{arg} = "(" . $op->string($curcv) . ")";
+    }
+
     $h{seq} = $h{hyphseq} = seq($op);
     $h{seq} = "" if $h{seq} eq "-";
     $h{opt} = $op->opt;
@@ -1369,6 +1387,7 @@ B:: namespace that represents the ops in your Perl code.
 
     0      OP (aka BASEOP)  An OP with no children
     1      UNOP             An OP with one child
+    +      UNOP_AUX         A UNOP with auxillary fields
     2      BINOP            An OP with two children
     |      LOGOP            A control branch OP
     @      LISTOP           An OP that could have lots of children

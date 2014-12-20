@@ -534,9 +534,9 @@ Perl_tied_method(pTHX_ SV *methname, SV **sp, SV *const sv,
     PERL_ARGS_ASSERT_TIED_METHOD;
 
     /* Ensure that our flag bits do not overlap.  */
-    assert((TIED_METHOD_MORTALIZE_NOT_NEEDED & G_WANT) == 0);
-    assert((TIED_METHOD_ARGUMENTS_ON_STACK & G_WANT) == 0);
-    assert((TIED_METHOD_SAY & G_WANT) == 0);
+    STATIC_ASSERT_STMT((TIED_METHOD_MORTALIZE_NOT_NEEDED & G_WANT) == 0);
+    STATIC_ASSERT_STMT((TIED_METHOD_ARGUMENTS_ON_STACK & G_WANT) == 0);
+    STATIC_ASSERT_STMT((TIED_METHOD_SAY & G_WANT) == 0);
 
     PUTBACK; /* sp is at *foot* of args, so this pops args from old stack */
     PUSHSTACKi(PERLSI_MAGIC);
@@ -741,6 +741,22 @@ PP(pp_fileno)
 	&& (mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar)))
     {
 	return tied_method0(SV_CONST(FILENO), SP, MUTABLE_SV(io), mg);
+    }
+
+    if (io && IoDIRP(io)) {
+#if defined(HAS_DIRFD) || defined(HAS_DIR_DD_FD)
+        PUSHi(my_dirfd(IoDIRP(io)));
+        RETURN;
+#elif defined(ENOTSUP)
+        errno = ENOTSUP;        /* Operation not supported */
+        RETPUSHUNDEF;
+#elif defined(EOPNOTSUPP)
+        errno = EOPNOTSUPP;     /* Operation not supported on socket */
+        RETPUSHUNDEF;
+#else
+        errno = EINVAL;         /* Invalid argument */
+        RETPUSHUNDEF;
+#endif
     }
 
     if (!io || !(fp = IoIFP(io))) {
@@ -1231,7 +1247,7 @@ PP(pp_sselect)
     }
 
     PUSHi(nfound);
-    if (GIMME == G_ARRAY && tbuf) {
+    if (GIMME_V == G_ARRAY && tbuf) {
 	value = (NV)(timebuf.tv_sec) +
 		(NV)(timebuf.tv_usec) / 1000000.0;
 	mPUSHn(value);
@@ -1756,7 +1772,7 @@ PP(pp_sysread)
        bytes from a byte file handle into a UTF8 buffer, but it won't harm us
        unduly.
        (should be 2 * length + offset + 1, or possibly something longer if
-       PL_encoding is true) */
+       IN_ENCODING Is true) */
     buffer  = SvGROW(bufsv, (STRLEN)(length+offset+1));
     if (offset > 0 && offset > (SSize_t)orig_size) { /* Zero any newly allocated space */
     	Zero(buffer+orig_size, offset-orig_size, char);
@@ -2115,14 +2131,18 @@ PP(pp_eof)
     if (!MAXARG && (PL_op->op_flags & OPf_SPECIAL)) {	/* eof() */
 	if (io && !IoIFP(io)) {
 	    if ((IoFLAGS(io) & IOf_START) && av_tindex(GvAVn(gv)) < 0) {
+		SV ** svp;
 		IoLINES(io) = 0;
 		IoFLAGS(io) &= ~IOf_START;
 		do_open6(gv, "-", 1, NULL, NULL, 0);
-		if (GvSV(gv))
-		    sv_setpvs(GvSV(gv), "-");
+		svp = &GvSV(gv);
+		if (*svp) {
+		    SV * sv = *svp;
+		    sv_setpvs(sv, "-");
+		    SvSETMAGIC(sv);
+		}
 		else
-		    GvSV(gv) = newSVpvs("-");
-		SvSETMAGIC(GvSV(gv));
+		    *svp = newSVpvs("-");
 	    }
 	    else if (!nextargv(gv, FALSE))
 		RETPUSHYES;
@@ -3486,12 +3506,12 @@ PP(pp_fttext)
 #endif
 
     assert(len);
-    if (! is_ascii_string((U8 *) s, len)) {
+    if (! is_invariant_string((U8 *) s, len)) {
         const U8 *ep;
 
-        /* Here contains a non-ASCII.  See if the entire string is UTF-8.  But
-         * the buffer may end in a partial character, so consider it UTF-8 if
-         * the first non-UTF8 char is an ending partial */
+        /* Here contains a variant under UTF-8 .  See if the entire string is
+         * UTF-8.  But the buffer may end in a partial character, so consider
+         * it UTF-8 if the first non-UTF8 char is an ending partial */
         if (is_utf8_string_loc((U8 *) s, len, &ep)
             || ep + UTF8SKIP(ep)  > (U8 *) (s + len))
         {
@@ -3943,7 +3963,7 @@ PP(pp_readdir)
     dSP;
 
     SV *sv;
-    const I32 gimme = GIMME;
+    const I32 gimme = GIMME_V;
     GV * const gv = MUTABLE_GV(POPs);
     const Direntry_t *dp;
     IO * const io = GvIOn(gv);
@@ -3977,7 +3997,7 @@ PP(pp_readdir)
 nope:
     if (!errno)
 	SETERRNO(EBADF,RMS_ISI);
-    if (GIMME == G_ARRAY)
+    if (gimme == G_ARRAY)
 	RETURN;
     else
 	RETPUSHUNDEF;
@@ -4532,7 +4552,7 @@ PP(pp_tms)
     (void)PerlProc_times(&timesbuf);
 
     mPUSHn(((NV)timesbuf.tms_utime)/(NV)PL_clocktick);
-    if (GIMME == G_ARRAY) {
+    if (GIMME_V == G_ARRAY) {
 	mPUSHn(((NV)timesbuf.tms_stime)/(NV)PL_clocktick);
 	mPUSHn(((NV)timesbuf.tms_cutime)/(NV)PL_clocktick);
 	mPUSHn(((NV)timesbuf.tms_cstime)/(NV)PL_clocktick);
@@ -4543,7 +4563,7 @@ PP(pp_tms)
     dSP;
     mPUSHn(0.0);
     EXTEND(SP, 4);
-    if (GIMME == G_ARRAY) {
+    if (GIMME_V == G_ARRAY) {
 	 mPUSHn(0.0);
 	 mPUSHn(0.0);
 	 mPUSHn(0.0);
@@ -4621,7 +4641,7 @@ PP(pp_gmtime)
 		       "%s(%.0" NVff ") failed", opname, when);
     }
 
-    if (GIMME != G_ARRAY) {	/* scalar context */
+    if (GIMME_V != G_ARRAY) {	/* scalar context */
         EXTEND(SP, 1);
         EXTEND_MORTAL(1);
 	if (err == NULL)
@@ -4848,7 +4868,7 @@ PP(pp_ghostent)
 	}
 #endif
 
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	PUSHs(sv = sv_newmortal());
 	if (hent) {
 	    if (which == OP_GHBYNAME) {
@@ -4935,7 +4955,7 @@ PP(pp_gnetent)
 #endif
 
     EXTEND(SP, 4);
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	PUSHs(sv = sv_newmortal());
 	if (nent) {
 	    if (which == OP_GNBYNAME)
@@ -4999,7 +5019,7 @@ PP(pp_gprotoent)
 #endif
 
     EXTEND(SP, 3);
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	PUSHs(sv = sv_newmortal());
 	if (pent) {
 	    if (which == OP_GPBYNAME)
@@ -5065,7 +5085,7 @@ PP(pp_gservent)
 #endif
 
     EXTEND(SP, 4);
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	PUSHs(sv = sv_newmortal());
 	if (sent) {
 	    if (which == OP_GSBYNAME) {
@@ -5301,7 +5321,7 @@ PP(pp_gpwent)
     }
 
     EXTEND(SP, 10);
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	PUSHs(sv = sv_newmortal());
 	if (pwent) {
 	    if (which == OP_GPWNAM)
@@ -5443,7 +5463,7 @@ PP(pp_ggrent)
 #endif
 
     EXTEND(SP, 4);
-    if (GIMME != G_ARRAY) {
+    if (GIMME_V != G_ARRAY) {
 	SV * const sv = sv_newmortal();
 
 	PUSHs(sv);

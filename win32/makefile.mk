@@ -44,7 +44,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.21.6
+#INST_VER	*= \5.21.7
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -625,6 +625,9 @@ LIBBASEFILES    += bufferoverflowU.lib
 LIBFILES	= $(LIBBASEFILES) $(LIBC)
 
 EXTRACFLAGS	= -nologo -GF -W3
+.IF "$(__ICC)" == "define"
+EXTRACFLAGS	= $(EXTRACFLAGS) -Qstd=c99
+.ENDIF
 CFLAGS		= $(EXTRACFLAGS) $(INCLUDES) $(DEFINES) $(LOCDEFS) \
 		$(PCHFLAGS) $(OPTIMIZE)
 LINK_FLAGS	= -nologo -nodefaultlib $(LINK_DBG) \
@@ -1073,6 +1076,7 @@ config.w32 : $(CFGSH_TMPL)
 	@echo #undef PERL_SCNfldbl>>$@
 	@echo #undef NVTYPE>>$@
 	@echo #undef NVSIZE>>$@
+	@echo #undef LONG_DOUBLESIZE>>$@
 	@echo #undef NV_OVERFLOWS_INTEGERS_AT>>$@
 	@echo #undef NVef>>$@
 	@echo #undef NVff>>$@
@@ -1147,7 +1151,13 @@ config.w32 : $(CFGSH_TMPL)
 	@echo #define PERL_PRIeldbl "Le">>$@
 	@echo #define PERL_SCNfldbl "Lf">>$@
 	@echo #define NVTYPE long double>>$@
+.IF "$(WIN64)"=="define"
+	@echo #define NVSIZE ^16>>$@
+	@echo #define LONG_DOUBLESIZE ^16>>$@
+.ELSE
 	@echo #define NVSIZE ^12>>$@
+	@echo #define LONG_DOUBLESIZE ^12>>$@
+.ENDIF
 	@echo #define NV_OVERFLOWS_INTEGERS_AT 256.0*256.0*256.0*256.0*256.0*256.0*256.0*2.0*2.0*2.0*2.0*2.0*2.0*2.0*2.0>>$@
 	@echo #define NVef "Le">>$@
 	@echo #define NVff "Lf">>$@
@@ -1167,6 +1177,7 @@ config.w32 : $(CFGSH_TMPL)
 	@echo #undef PERL_SCNfldbl>>$@
 	@echo #define NVTYPE double>>$@
 	@echo #define NVSIZE ^8>>$@
+	@echo #define LONG_DOUBLESIZE ^8>>$@
 	@echo #define NV_OVERFLOWS_INTEGERS_AT 256.0*256.0*256.0*256.0*256.0*256.0*2.0*2.0*2.0*2.0*2.0>>$@
 	@echo #define NVef "e">>$@
 	@echo #define NVff "f">>$@
@@ -1432,7 +1443,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5216delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5217delta.pod
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1527,7 +1538,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5216delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5217delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \

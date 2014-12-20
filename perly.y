@@ -194,7 +194,8 @@ formblock:	'=' remember ';' FORMRBRACK formstmtseq ';' '.'
 	;
 
 remember:	/* NULL */	/* start a full lexical scope */
-			{ $$ = block_start(TRUE); }
+			{ $$ = block_start(TRUE);
+			  parser->parsed_sub = 0; }
 	;
 
 mblock	:	'{' mremember stmtseq '}'
@@ -205,7 +206,8 @@ mblock	:	'{' mremember stmtseq '}'
 	;
 
 mremember:	/* NULL */	/* start a partial lexical scope */
-			{ $$ = block_start(FALSE); }
+			{ $$ = block_start(FALSE);
+			  parser->parsed_sub = 0; }
 	;
 
 /* A sequence of statements in the program */
@@ -258,9 +260,9 @@ barestmt:	PLUGSTMT
 			  newFORM($2, $3, $4);
 			  $$ = (OP*)NULL;
 			  if (CvOUTSIDE(fmtcv) && !CvEVAL(CvOUTSIDE(fmtcv))) {
-			      SvREFCNT_inc_simple_void(fmtcv);
-			      pad_add_anon(fmtcv, OP_NULL);
+			      pad_add_weakref(fmtcv);
 			  }
+			  parser->parsed_sub = 1;
 			}
 	|	SUB subname startsub
 			{
@@ -293,6 +295,7 @@ barestmt:	PLUGSTMT
 			  ;
 			  $$ = (OP*)NULL;
 			  intro_my();
+			  parser->parsed_sub = 1;
 			}
 	|	PACKAGE WORD WORD ';'
 			{
@@ -307,6 +310,7 @@ barestmt:	PLUGSTMT
 			{
 			  SvREFCNT_inc_simple_void(PL_compcv);
 			  utilize($1, $2, $4, $5, $6);
+			  parser->parsed_sub = 1;
 			  $$ = (OP*)NULL;
 			}
 	|	IF '(' remember mexpr ')' mblock else
@@ -366,6 +370,7 @@ barestmt:	PLUGSTMT
 				      newOP(OP_UNSTACK, OPf_SPECIAL),
 				      forop));
 			  }
+			  PL_hints |= HINT_BLOCK_SCOPE;
 			  $$ = block_end($3, forop);
 			  parser->copline = (line_t)$1;
 			}

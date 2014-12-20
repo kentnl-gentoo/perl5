@@ -177,7 +177,7 @@ STATIC OP *ab_ck_sassign(pTHX_ OP *o) {
  o = (*ab_old_ck_sassign)(aTHX_ o);
  if (o->op_type == OP_SASSIGN && FEATURE_ARYBASE_IS_ENABLED) {
   OP *right = cBINOPx(o)->op_first;
-  OP *left = OP_SIBLING(right);
+  OP *left = OpSIBLING(right);
   if (left) ab_process_assignment(left, right);
  }
  return o;
@@ -187,9 +187,9 @@ STATIC OP *ab_ck_aassign(pTHX_ OP *o) {
  o = (*ab_old_ck_aassign)(aTHX_ o);
  if (o->op_type == OP_AASSIGN && FEATURE_ARYBASE_IS_ENABLED) {
   OP *right = cBINOPx(o)->op_first;
-  OP *left = OP_SIBLING(right);
-  left = OP_SIBLING(cBINOPx(left)->op_first);
-  right = OP_SIBLING(cBINOPx(right)->op_first);
+  OP *left = OpSIBLING(right);
+  left = OpSIBLING(cBINOPx(left)->op_first);
+  right = OpSIBLING(cBINOPx(right)->op_first);
   ab_process_assignment(left, right);
  }
  return o;
@@ -236,6 +236,7 @@ static OP *ab_pp_basearg(pTHX) {
  SV **svp;
  UV count = 1;
  ab_op_info oi;
+ Zero(&oi, 1, ab_op_info);
  ab_map_fetch(PL_op, &oi);
  
  switch (PL_op->op_type) {
@@ -277,6 +278,7 @@ static OP *ab_pp_av2arylen(pTHX) {
  SV *sv;
  ab_op_info oi;
  OP *ret;
+ Zero(&oi, 1, ab_op_info);
  ab_map_fetch(PL_op, &oi);
  ret = (*oi.old_pp)(aTHX);
  if (PL_op->op_flags & OPf_MOD || LVRET) {
@@ -297,6 +299,7 @@ static OP *ab_pp_keys(pTHX) {
  OP *retval;
  const I32 offset = SP - PL_stack_base;
  SV **svp;
+ Zero(&oi, 1, ab_op_info);
  ab_map_fetch(PL_op, &oi);
  retval = (*oi.old_pp)(aTHX);
  if (GIMME_V == G_SCALAR) return retval;
@@ -311,6 +314,7 @@ static OP *ab_pp_each(pTHX) {
  ab_op_info oi;
  OP *retval;
  const I32 offset = SP - PL_stack_base;
+ Zero(&oi, 1, ab_op_info);
  ab_map_fetch(PL_op, &oi);
  retval = (*oi.old_pp)(aTHX);
  SPAGAIN;
@@ -325,6 +329,7 @@ static OP *ab_pp_index(pTHX) {
  dVAR; dSP;
  ab_op_info oi;
  OP *retval;
+ Zero(&oi, 1, ab_op_info);
  ab_map_fetch(PL_op, &oi);
  if (MAXARG == 3 && TOPs) replace_sv(TOPs,oi.base);
  retval = (*oi.old_pp)(aTHX);
@@ -379,7 +384,7 @@ static OP *ab_ck_base(pTHX_ OP *o)
    /* Break the aelemfast optimisation */
    if (o->op_type == OP_AELEM) {
     OP *const first = cBINOPo->op_first;
-    OP *second = OP_SIBLING(first);
+    OP *second = OpSIBLING(first);
     OP *newop;
     if (second->op_type == OP_CONST) {
      /* cut out second arg and replace it with a new unop which is

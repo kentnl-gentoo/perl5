@@ -1,4 +1,5 @@
 Artistic		The "Artistic License"
+asan_ignore		Errors to skip under clang's Addresss Sanitizer
 AUTHORS			Contact info for contributors
 autodoc.pl		Creates pod/perlintern.pod and pod/perlapi.pod
 av.c			Array value code
@@ -1101,6 +1102,7 @@ cpan/Filter-Util-Call/Call.pm	Filter::Util::Call extension module
 cpan/Filter-Util-Call/Call.xs	Filter::Util::Call extension external subroutines
 cpan/Filter-Util-Call/filter-util.pl		See if Filter::Util::Call works
 cpan/Filter-Util-Call/t/call.t	See if Filter::Util::Call works
+cpan/Filter-Util-Call/t/rt_54452-rebless.t
 cpan/Getopt-Long/lib/Getopt/Long.pm	Fetch command options (GetOptions)
 cpan/Getopt-Long/t/gol-basic.t		See if Getopt::Long works
 cpan/Getopt-Long/t/gol-linkage.t	See if Getopt::Long works
@@ -1231,6 +1233,7 @@ cpan/IO-Compress/lib/IO/Uncompress/Gunzip.pm		IO::Compress
 cpan/IO-Compress/lib/IO/Uncompress/Inflate.pm		IO::Compress
 cpan/IO-Compress/lib/IO/Uncompress/RawInflate.pm	IO::Compress
 cpan/IO-Compress/lib/IO/Uncompress/Unzip.pm		IO::Compress
+cpan/IO-Compress/Makefile.PL				IO::Compress
 cpan/IO-Compress/private/MakeUtil.pm			IO::Compress
 cpan/IO-Compress/t/000prereq.t				IO::Compress
 cpan/IO-Compress/t/001bzip2.t				IO::Compress
@@ -2259,6 +2262,8 @@ cpan/Test-Simple/lib/Test/Builder/Module.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Builder.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Builder/Tester/Color.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Builder/Tester.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/CanFork.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/CanThread.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/FAQ.pod			Test::Simple module
 cpan/Test-Simple/lib/Test/More/DeepCheck.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/More/DeepCheck/Strict.pm			Test::Simple module
@@ -2267,6 +2272,7 @@ cpan/Test-Simple/lib/Test/More.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/More/Tools.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/MostlyLike.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Simple.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/API.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Architecture.pod			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/ArrayBase/Meta.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/ArrayBase.pm			Test::Simple module
@@ -2285,10 +2291,12 @@ cpan/Test-Simple/lib/Test/Stream/ExitMagic/Context.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/ExitMagic.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Exporter/Meta.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Exporter.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/ForceExit.pm			Test-Simple module
 cpan/Test-Simple/lib/Test/Stream/IOSets.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Meta.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/PackageUtil.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Subtest.pm			Test::Simple modules
 cpan/Test-Simple/lib/Test/Stream/Tester/Checks/Event.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Tester/Checks.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Tester/Events/Event.pm			Test::Simple module
@@ -2309,6 +2317,7 @@ cpan/Test-Simple/t/Behavior/388-threadedsubtest.t			Test::Simple test
 cpan/Test-Simple/t/Behavior/478-cmp_ok_hash.t			Test::Simple test
 cpan/Test-Simple/t/Behavior/490-inherit_exporter.t			Test::Simple test
 cpan/Test-Simple/t/Behavior/cmp_ok_xor.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/CustomOutput.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/encoding_test.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/fork_new_end.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/MonkeyPatching_diag.t			Test::Simple Test
@@ -2318,8 +2327,10 @@ cpan/Test-Simple/t/Behavior/MonkeyPatching_ok.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/MonkeyPatching_plan.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/Munge.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/NotTB15.t			Test::Simple Test
-cpan/Test-Simple/t/Behavior/skip_all_in_subtest.load			Test::Simple Test
+cpan/Test-Simple/t/Behavior/skip_all_in_subtest1.load			Test::Simple::Test
+cpan/Test-Simple/t/Behavior/skip_all_in_subtest2.load			Test::Simple::Test
 cpan/Test-Simple/t/Behavior/skip_all_in_subtest.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/subtest_die.t	Test::Simple test
 cpan/Test-Simple/t/Behavior/Tester2_subtest.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/threads_with_taint_mode.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/todo.t			Test::Simple Test
@@ -2371,6 +2382,7 @@ cpan/Test-Simple/t/Legacy/fail-more.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/fail_one.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/fail.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/filehandles.t			Test::Simple Test
+cpan/Test-Simple/t/Legacy/fork_die.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/fork_in_subtest.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/fork.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/harness_active.t			Test::Simple Test
@@ -2475,6 +2487,7 @@ cpan/Test-Simple/t/Test-More-DeepCheck.t			Test::Simple Test
 cpan/Test-Simple/t/Test-More.t			Test::Simple Test
 cpan/Test-Simple/t/Test-MostlyLike.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Simple.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-API.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-ArrayBase-Meta.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-ArrayBase.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-Carp.t			Test::Simple Test
@@ -2485,6 +2498,7 @@ cpan/Test-Simple/t/Test-Stream-Event.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-ExitMagic-Context.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-Exporter-Meta.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-Exporter.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-ForceExit.t			Test-Simple test
 cpan/Test-Simple/t/Test-Stream-IOSets.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-Meta.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-PackageUtil.t			Test::Simple Test
@@ -4578,6 +4592,7 @@ pod/perl5163delta.pod		Perl changes in version 5.16.3
 pod/perl5180delta.pod		Perl changes in version 5.18.0
 pod/perl5181delta.pod		Perl changes in version 5.18.1
 pod/perl5182delta.pod		Perl changes in version 5.18.2
+pod/perl5184delta.pod		Perl changes in version 5.18.4
 pod/perl5200delta.pod		Perl changes in version 5.20.0
 pod/perl5201delta.pod		Perl changes in version 5.20.1
 pod/perl5210delta.pod		Perl changes in version 5.21.0
@@ -4586,6 +4601,7 @@ pod/perl5212delta.pod		Perl changes in version 5.21.2
 pod/perl5213delta.pod		Perl changes in version 5.21.3
 pod/perl5214delta.pod		Perl changes in version 5.21.4
 pod/perl5215delta.pod		Perl changes in version 5.21.5
+pod/perl5216delta.pod		Perl changes in version 5.21.6
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4693,6 +4709,7 @@ pod/splitpod			Splits perlfunc into multiple pod pages
 Policy_sh.SH			Hold site-wide preferences between Configure runs.
 Porting/acknowledgements.pl	Generate perldelta acknowledgements text
 Porting/add-package.pl		Add/Update CPAN modules that are part of Core
+Porting/bench.pl		Run benchmarks against t/perf/benchmarks
 Porting/bisect-example.sh	Example script to use with git bisect run
 Porting/bisect.pl		A tool to make bisecting easy
 Porting/bisect-runner.pl	Tool to be called by git bisect run
@@ -4907,6 +4924,7 @@ t/base/num.t			See if numbers work
 t/base/pat.t			See if pattern matching works
 t/base/rs.t			See if record-read works
 t/base/term.t			See if various terms work
+t/base/translate.t		See if character set translation works
 t/base/while.t			See if while work
 t/benchmark/rt26188-speed-up-keys-on-empty-hash.t	Benchmark if keys on empty hashes is fast enough
 t/bigmem/index.t		Check that index() handles large offsets
@@ -4990,12 +5008,10 @@ t/io/tell.t			See if file seeking works
 t/io/through.t			See if pipe passes data intact
 t/io/utf8.t			See if file seeking works
 t/japh/abigail.t		Obscure tests
-t/lib/1_compile.t		See if the various libraries and extensions compile
 t/lib/charnames/alias		Tests of "use charnames" with aliases.
 t/lib/Cname.pm			Test charnames in regexes (op/pat.t)
 t/lib/common.pl			Helper for lib/{warnings,feature}.t
 t/lib/commonsense.t		See if configuration meets basic needs
-t/lib/compmod.pl		Helper for 1_compile.t
 t/lib/Count.pm			Helper for t/op/method.t
 t/lib/croak/mg			Test croak calls from mg.c
 t/lib/croak/op			Test croak calls from op.c
@@ -5259,6 +5275,7 @@ t/op/magic-27839.t		Test for #27839, skipped for minitest
 t/op/magic.t			See if magic variables work
 t/op/method.t			See if method calls work
 t/op/mkdir.t			See if mkdir works
+t/op/multideref.t		See if "$a[0]{foo}[$i]{$k}" etc works
 t/op/mydef.t			See if "my $_" works
 t/op/my_stash.t			See if my Package works
 t/op/my.t			See if lexical scoping works
@@ -5363,6 +5380,7 @@ t/perf/speed.t			See if optimisations are keeping things fast
 t/perl.supp			Perl valgrind suppressions
 t/porting/args_assert.t		Check that all PERL_ARGS_ASSERT* macros are used
 t/porting/authors.t		Check that all authors have been acknowledged
+t/porting/bench.t		Check that Porting/bench.pl is okay
 t/porting/bincompat.t		Check that {non_,}bincompat_options are ordered
 t/porting/checkcase.t		Check whether we are case-insensitive-fs-friendly
 t/porting/checkcfgvar.t		Check that all config.sh-like files are good

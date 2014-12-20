@@ -309,7 +309,7 @@
 #endif
 
 #ifndef PERL_UNUSED_DECL
-#  if defined(HASATTRIBUTE_UNUSED) && !defined(__cplusplus)
+#  if defined(HASATTRIBUTE_UNUSED) && (!defined(__cplusplus) || (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 3)))
 #    define PERL_UNUSED_DECL __attribute__unused__
 #  else
 #    define PERL_UNUSED_DECL
@@ -766,6 +766,10 @@
 #       define my_setlocale(a,b) setlocale(a,b)
 #   endif
 #endif /* !NO_LOCALE && HAS_SETLOCALE */
+
+/* Is $^ENCODING set, or are we under the encoding pragma? */
+#define IN_ENCODING UNLIKELY(PL_encoding                                      \
+                             || (PL_lex_encoding && _get_encoding() != NULL))
 
 #include <setjmp.h>
 
@@ -2590,6 +2594,7 @@ typedef MEM_SIZE STRLEN;
 typedef struct op OP;
 typedef struct cop COP;
 typedef struct unop UNOP;
+typedef struct unop_aux UNOP_AUX;
 typedef struct binop BINOP;
 typedef struct listop LISTOP;
 typedef struct logop LOGOP;
@@ -2648,12 +2653,12 @@ typedef struct ptr_tbl_ent PTR_TBL_ENT_t;
 typedef struct ptr_tbl PTR_TBL_t;
 typedef struct clone_params CLONE_PARAMS;
 
-/* a pad or name pad is currently just an AV; but that might change,
+/* a pad is currently just an AV; but that might change,
  * so hide the type.  */
 typedef struct padlist PADLIST;
 typedef AV PAD;
-typedef AV PADNAMELIST;
-typedef SV PADNAME;
+typedef struct padnamelist PADNAMELIST;
+typedef struct padname PADNAME;
 
 /* enable PERL_NEW_COPY_ON_WRITE by default */
 #if !defined(PERL_OLD_COPY_ON_WRITE) && !defined(PERL_NEW_COPY_ON_WRITE) && !defined(PERL_NO_COW)
@@ -3403,6 +3408,9 @@ typedef pthread_key_t	perl_key;
 #endif
 #define UTF8fARG(u,l,p) (int)cBOOL(u), (UV)(l), (void*)(p)
 
+#define PNf UTF8f
+#define PNfARG(pn) (int)1, (UV)PadnameLEN(pn), (void *)PadnamePV(pn)
+
 #ifdef PERL_CORE
 /* not used; but needed for backward compatibility with XS code? - RMB */
 #  undef UVf
@@ -3463,7 +3471,10 @@ typedef pthread_key_t	perl_key;
 #  define __attribute__warn_unused_result__
 #endif
 
-#if defined(DEBUGGING) && defined(I_ASSERT)
+#ifdef I_ASSERT
+#  if !defined(DEBUGGING) && !defined(NDEBUG)
+#    define NDEBUG 1
+#  endif
 #  include <assert.h>
 #endif
 
@@ -3494,6 +3505,27 @@ typedef pthread_key_t	perl_key;
 /* placeholder */
 #endif
 
+#if defined(static_assert) || (defined(__cplusplus) && __cplusplus >= 201103L)
+/* static_assert is a macro defined in <assert.h> in C11 or a compiler
+   builtin in C++11.
+*/
+#  define STATIC_ASSERT_GLOBAL(COND) static_assert(COND, #COND)
+#else
+/* We use a bit-field instead of an array because gcc accepts
+   'typedef char x[n]' where n is not a compile-time constant.
+   We want to enforce constantness.
+*/
+#  define STATIC_ASSERT_2(COND, SUFFIX) \
+    typedef struct { \
+        unsigned int _static_assertion_failed_##SUFFIX : (COND) ? 1 : -1; \
+    } _static_assertion_failed_##SUFFIX PERL_UNUSED_DECL
+#  define STATIC_ASSERT_1(COND, SUFFIX) STATIC_ASSERT_2(COND, SUFFIX)
+#  define STATIC_ASSERT_GLOBAL(COND)    STATIC_ASSERT_1(COND, __LINE__)
+#endif
+/* We need this wrapper even in C11 because 'case X: static_assert(...);' is an
+   error (static_assert is a declaration, and only statements can have labels).
+*/
+#define STATIC_ASSERT_STMT(COND)      do { STATIC_ASSERT_GLOBAL(COND); } while (0)
 
 #ifndef __has_builtin
 #  define __has_builtin(x) 0 /* not a clang style compiler */
@@ -3510,7 +3542,7 @@ typedef pthread_key_t	perl_key;
 
 #ifndef DEBUGGING
 #  if __has_builtin(__builtin_unreachable) \
-     || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5 || __GNUC__ > 5) /* 4.5 -> */
+     || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5 || __GNUC__ > 4) /* 4.5 -> */
 #    define ASSUME(x) ((x) ? (void) 0 : __builtin_unreachable())
 #  elif defined(_MSC_VER)
 #    define ASSUME(x) __assume(x)
@@ -4004,6 +4036,7 @@ Gid_t getegid (void);
 #  define DEBUG_Pv_TEST DEBUG_Pv_TEST_
 
 #  define PERL_DEB(a)                  a
+#  define PERL_DEB2(a,b)               a
 #  define PERL_DEBUG(a) if (PL_debug)  a
 #  define DEBUG_p(a) if (DEBUG_p_TEST) a
 #  define DEBUG_s(a) if (DEBUG_s_TEST) a
@@ -4086,6 +4119,7 @@ Gid_t getegid (void);
 #  define DEBUG_Pv_TEST (0)
 
 #  define PERL_DEB(a)
+#  define PERL_DEB2(a,b)               b
 #  define PERL_DEBUG(a)
 #  define DEBUG_p(a)
 #  define DEBUG_s(a)
@@ -4128,11 +4162,11 @@ Gid_t getegid (void);
 /* Keep the old croak based assert for those who want it, and as a fallback if
    the platform is so heretically non-ANSI that it can't assert.  */
 
-#define Perl_assert(what)	PERL_DEB( 				\
+#define Perl_assert(what)	PERL_DEB2( 				\
 	((what) ? ((void) 0) :						\
 	    (Perl_croak_nocontext("Assertion %s failed: file \"" __FILE__ \
 			"\", line %d", STRINGIFY(what), __LINE__),	\
-	    (void) 0)))
+             (void) 0)), ((void)0))
 
 /* assert() gets defined if DEBUGGING (and I_ASSERT).
  * If no DEBUGGING, the <assert.h> has not been included. */
@@ -4571,12 +4605,13 @@ EXTCONST char PL_warn_nl[]
   INIT("Unsuccessful %s on filename containing newline");
 EXTCONST char PL_no_wrongref[]
   INIT("Can't use %s ref as %s ref");
-/* The core no longer needs these here. If you require the string constant,
+/* The core no longer needs this here. If you require the string constant,
    please inline a copy into your own code.  */
 EXTCONST char PL_no_symref[] __attribute__deprecated__
   INIT("Can't use string (\"%.32s\") as %s ref while \"strict refs\" in use");
-EXTCONST char PL_no_symref_sv[] __attribute__deprecated__
-  INIT("Can't use string (\"%" SVf32 "\") as %s ref while \"strict refs\" in use");
+EXTCONST char PL_no_symref_sv[]
+  INIT("Can't use string (\"%" SVf32 "\"%s) as %s ref while \"strict refs\" in use");
+
 EXTCONST char PL_no_usym[]
   INIT("Can't use an undefined value as %s reference");
 EXTCONST char PL_no_aelem[]

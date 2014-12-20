@@ -2728,13 +2728,6 @@ instead, except within S<C<(?[   ])>>, where it is a fatal error.
 The S<<-- HERE> shows whereabouts in the regular expression the
 escape was discovered.
 
-=item %s: Invalid handshake key got %p needed %p, binaries are mismatched
-
-(P) A dynamic loading library C<.so> or C<.dll> was being loaded into the
-process that was built against a different build of perl than the
-said library was compiled against.  Reinstalling the XS module will
-likely fix this error.
-
 =item Invalid hexadecimal number in \N{U+...}
 
 =item Invalid hexadecimal number in \N{U+...} in regex; marked by
@@ -2979,6 +2972,13 @@ L<perlfunc/listen>.
 (F) On some platforms, notably Windows, the three-or-more-arguments
 form of C<open> does not support pipes, such as C<open($pipe, '|-', @args)>.
 Use the two-argument C<open($pipe, '|prog arg1 arg2...')> form instead.
+
+=item %s: loadable library and perl binaries are mismatched (got handshake key %p, needed %p)
+
+(P) A dynamic loading library C<.so> or C<.dll> was being loaded into the
+process that was built against a different build of perl than the
+said library was compiled against.  Reinstalling the XS module will
+likely fix this error.
 
 =item Locale '%s' may not work well.%s
 
@@ -3306,6 +3306,8 @@ file-specification as an argument.  See L<perlfunc/require>.
 =item Missing right brace on \%c{} in regex; marked by S<<-- HERE> in m/%s/
 
 (F) Missing right brace in C<\x{...}>, C<\p{...}>, C<\P{...}>, or C<\N{...}>.
+
+=item Missing right brace on \N{}
 
 =item Missing right brace on \N{} or unescaped left brace after \N
 
@@ -5219,6 +5221,11 @@ didn't think so.
 forget to check the return value of your socket() call?  See
 L<perlfunc/setsockopt>.
 
+=item Setting ${^ENCODING} is deprecated
+
+(D deprecated) You assigned a non-C<undef> value to C<${^ENCODING}>.
+This is deprecated; see C<L<perlvar/${^ENCODING}>> for details.
+
 =item Setting $/ to a reference to %s as a form of slurp is deprecated, treating as undef
 
 (D deprecated) You assigned a reference to a scalar to C<$/> where the
@@ -5441,6 +5448,25 @@ the scope or until all closure references to it are destroyed.
 	no warnings 'redefine';
 	eval "sub name { ... }";
     }
+
+=item Subroutine "%s" will not stay shared
+
+(W closure) An inner (nested) I<named> subroutine is referencing a "my"
+subroutine defined in an outer named subroutine.
+
+When the inner subroutine is called, it will see the value of the outer
+subroutine's lexical subroutine as it was before and during the *first*
+call to the outer subroutine; in this case, after the first call to the
+outer subroutine is complete, the inner and outer subroutines will no
+longer share a common value for the lexical subroutine.  In other words,
+it will no longer be shared.  This will especially make a difference
+if the lexical subroutines accesses lexical variables declared in its
+surrounding scope.
+
+This problem can usually be solved by making the inner subroutine
+anonymous, using the C<sub {}> syntax.  When inner anonymous subs that
+reference lexical subroutines in outer subroutines are created, they
+are automatically rebound to the current values of such lexical subs.
 
 =item Substitution loop
 

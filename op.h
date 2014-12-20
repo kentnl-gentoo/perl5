@@ -109,6 +109,7 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  On control verbs, we saw no label */
 				/*  On flipflop, we saw ... instead of .. */
 				/*  On UNOPs, saw bare parens, e.g. eof(). */
+				/*  On OP_CHDIR, handle (or bare parens) */
 				/*  On OP_NULL, saw a "do". */
 				/*  On OP_EXISTS, treat av as av, not avhv.  */
 				/*  On OP_(ENTER|LEAVE)EVAL, don't clear $@ */
@@ -124,9 +125,10 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  On OP_SMARTMATCH, an implicit smartmatch */
 				/*  On OP_ANONHASH and OP_ANONLIST, create a
 				    reference to the new anon hash or array */
-				/*  On OP_HELEM and OP_HSLICE, localization will be followed
-				    by assignment, so do not wipe the target if it is special
-				    (e.g. a glob or a magic SV) */
+				/*  On OP_HELEM, OP_MULTIDEREF and OP_HSLICE,
+                                    localization will be followed by assignment,
+                                    so do not wipe the target if it is special
+                                    (e.g. a glob or a magic SV) */
 				/*  On OP_MATCH, OP_SUBST & OP_TRANS, the
 				    operand of a logical or conditional
 				    that was optimised away, so it should
@@ -138,17 +140,24 @@ Deprecated.  Use C<GIMME_V> instead.
 			         */
                                 /*  On OP_PADRANGE, push @_ */
                                 /*  On OP_DUMP, has no label */
+                                /*  On OP_UNSTACK, in a C-style for loop */
+/* There is no room in op_flags for this one, so it has its own bit-
+   field member (op_folded) instead.  The flag is only used to tell
+   op_convert_list to set op_folded.  */
+#define OPf_FOLDED      1<<16
 
 /* old names; don't use in new code, but don't break them, either */
 #define OPf_LIST	OPf_WANT_LIST
 #define OPf_KNOW	OPf_WANT
 
-#define GIMME \
+#ifndef PERL_CORE
+#  define GIMME \
 	  (PL_op->op_flags & OPf_WANT					\
 	   ? ((PL_op->op_flags & OPf_WANT) == OPf_WANT_LIST		\
 	      ? G_ARRAY							\
 	      : G_SCALAR)						\
 	   : dowantarray())
+#endif
 
 
 /* NOTE: OPp* flags are now auto-generated and defined in opcode.h,
@@ -164,6 +173,22 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpENTERSUB_LVAL_MASK (OPpLVAL_INTRO|OPpENTERSUB_INARGS)
 
 
+/* things that can be elements of op_aux */
+typedef union  {
+    PADOFFSET pad_offset;
+    SV        *sv;
+    IV        iv;
+    UV        uv;
+} UNOP_AUX_item;
+
+#ifdef USE_ITHREADS
+#  define UNOP_AUX_item_sv(item) PAD_SVl((item)->pad_offset);
+#else
+#  define UNOP_AUX_item_sv(item) ((item)->sv);
+#endif
+
+
+
 
 struct op {
     BASEOP
@@ -172,6 +197,12 @@ struct op {
 struct unop {
     BASEOP
     OP *	op_first;
+};
+
+struct unop_aux {
+    BASEOP
+    OP  	  *op_first;
+    UNOP_AUX_item *op_aux;
 };
 
 struct binop {
@@ -201,6 +232,11 @@ struct methop {
         OP* op_first;   /* optree for method name */
         SV* op_meth_sv; /* static method name */
     } op_u;
+#ifdef USE_ITHREADS
+    PADOFFSET op_rclass_targ; /* pad index for redirect class */
+#else
+    SV*       op_rclass_sv;   /* static redirect class $o->A::meth() */
+#endif
 };
 
 struct pmop {
@@ -384,6 +420,7 @@ struct loop {
 };
 
 #define cUNOPx(o)	((UNOP*)o)
+#define cUNOP_AUXx(o)	((UNOP_AUX*)o)
 #define cBINOPx(o)	((BINOP*)o)
 #define cLISTOPx(o)	((LISTOP*)o)
 #define cLOGOPx(o)	((LOGOP*)o)
@@ -396,6 +433,7 @@ struct loop {
 #define cMETHOPx(o)	((METHOP*)o)
 
 #define cUNOP		cUNOPx(PL_op)
+#define cUNOP_AUX	cUNOP_AUXx(PL_op)
 #define cBINOP		cBINOPx(PL_op)
 #define cLISTOP		cLISTOPx(PL_op)
 #define cLOGOP		cLOGOPx(PL_op)
@@ -407,6 +445,7 @@ struct loop {
 #define cLOOP		cLOOPx(PL_op)
 
 #define cUNOPo		cUNOPx(o)
+#define cUNOP_AUXo	cUNOP_AUXx(o)
 #define cBINOPo		cBINOPx(o)
 #define cLISTOPo	cLISTOPx(o)
 #define cLOGOPo		cLOGOPx(o)
@@ -418,6 +457,7 @@ struct loop {
 #define cLOOPo		cLOOPx(o)
 
 #define kUNOP		cUNOPx(kid)
+#define kUNOP_AUX	cUNOP_AUXx(kid)
 #define kBINOP		cBINOPx(kid)
 #define kLISTOP		cLISTOPx(kid)
 #define kLOGOP		cLOGOPx(kid)
@@ -440,6 +480,7 @@ struct loop {
 				 ? cSVOPx(v)->op_sv : PAD_SVl((v)->op_targ))
 #  define	cSVOPx_svp(v)	(cSVOPx(v)->op_sv \
 				 ? &cSVOPx(v)->op_sv : &PAD_SVl((v)->op_targ))
+#  define	cMETHOPx_rclass(v) PAD_SVl(cMETHOPx(v)->op_rclass_targ)
 #else
 #  define	cGVOPx_gv(o)	((GV*)cSVOPx(o)->op_sv)
 #  ifndef PERL_CORE
@@ -448,6 +489,7 @@ struct loop {
 #  endif
 #  define	cSVOPx_sv(v)	(cSVOPx(v)->op_sv)
 #  define	cSVOPx_svp(v)	(&cSVOPx(v)->op_sv)
+#  define	cMETHOPx_rclass(v) (cMETHOPx(v)->op_rclass_sv)
 #endif
 
 #  define	cMETHOPx_meth(v)	cSVOPx_sv(v)
@@ -493,6 +535,7 @@ struct loop {
 #define OA_FILESTATOP (12 << OCSHIFT)
 #define OA_LOOPEXOP (13 << OCSHIFT)
 #define OA_METHOP (14 << OCSHIFT)
+#define OA_UNOP_AUX (15 << OCSHIFT)
 
 /* Each remaining nybble of PL_opargs (i.e. bits 12..15, 16..19 etc)
  * encode the type for each arg */
@@ -883,13 +926,13 @@ is also available as well as C<OP_TYPE_IS_OR_WAS_NN>
 and C<OP_TYPE_ISNT_AND_WASNT_NN> which elide
 the NULL pointer check.
 
-=for apidoc Am|bool|OP_HAS_SIBLING|OP *o
+=for apidoc Am|bool|OpHAS_SIBLING|OP *o
 Returns true if o has a sibling
 
-=for apidoc Am|bool|OP_SIBLING|OP *o
+=for apidoc Am|bool|OpSIBLING|OP *o
 Returns the sibling of o, or NULL if there is no sibling
 
-=for apidoc Am|bool|OP_SIBLING_set|OP *o|OP *sib
+=for apidoc Am|bool|OpSIBLING_set|OP *o|OP *sib
 Sets the sibling of o to sib
 
 =cut
@@ -929,13 +972,16 @@ Sets the sibling of o to sib
     ( (o) && OP_TYPE_ISNT_AND_WASNT_NN(o, type) )
 
 #ifdef PERL_OP_PARENT
-#  define OP_HAS_SIBLING(o)      (!cBOOL((o)->op_lastsib))
-#  define OP_SIBLING(o)          (0 + (o)->op_lastsib ? NULL : (o)->op_sibling)
-#  define OP_SIBLING_set(o, sib) ((o)->op_sibling = (sib))
+#  define OpHAS_SIBLING(o)	(!cBOOL((o)->op_lastsib))
+#  define OpSIBLING(o)		(0 + (o)->op_lastsib ? NULL : (o)->op_sibling)
+#  define OpSIBLING_set(o, sib)	((o)->op_sibling = (sib))
 #else
-#  define OP_HAS_SIBLING(o)      (cBOOL((o)->op_sibling))
-#  define OP_SIBLING(o)          (0 + (o)->op_sibling)
-#  define OP_SIBLING_set(o, sib) ((o)->op_sibling = (sib))
+#  define OpHAS_SIBLING(o)	(cBOOL((o)->op_sibling))
+#  define OpSIBLING(o)		(0 + (o)->op_sibling)
+#  define OpSIBLING_set(o, sib)	((o)->op_sibling = (sib))
+#endif
+#if !defined(PERL_CORE) && !defined(PERL_EXT)
+#  define OP_SIBLING(o)		OpSIBLING(o)
 #endif
 
 #define newATTRSUB(f, o, p, a, b) Perl_newATTRSUB_x(aTHX_  f, o, p, a, b, FALSE)
@@ -956,6 +1002,47 @@ Sets the sibling of o to sib
 #  define OP_CHECK_MUTEX_UNLOCK		NOOP
 #  define OP_CHECK_MUTEX_TERM		NOOP
 #endif
+
+
+/* Stuff for OP_MULTDEREF/pp_multideref. */
+
+/* actions */
+
+/* Load another word of actions/flag bits. Must be 0 */
+#define MDEREF_reload                       0
+
+#define MDEREF_AV_pop_rv2av_aelem           1
+#define MDEREF_AV_gvsv_vivify_rv2av_aelem   2
+#define MDEREF_AV_padsv_vivify_rv2av_aelem  3
+#define MDEREF_AV_vivify_rv2av_aelem        4
+#define MDEREF_AV_padav_aelem               5
+#define MDEREF_AV_gvav_aelem                6
+
+#define MDEREF_HV_pop_rv2hv_helem           8
+#define MDEREF_HV_gvsv_vivify_rv2hv_helem   9
+#define MDEREF_HV_padsv_vivify_rv2hv_helem 10
+#define MDEREF_HV_vivify_rv2hv_helem       11
+#define MDEREF_HV_padhv_helem              12
+#define MDEREF_HV_gvhv_helem               13
+
+#define MDEREF_ACTION_MASK                0xf
+
+/* key / index type */
+
+#define MDEREF_INDEX_none   0x00 /* run external ops to generate index */
+#define MDEREF_INDEX_const  0x10 /* index is const PV/UV */
+#define MDEREF_INDEX_padsv  0x20 /* index is lexical var */
+#define MDEREF_INDEX_gvsv   0x30 /* index is GV */
+
+#define MDEREF_INDEX_MASK   0x30
+
+/* bit flags */
+
+#define MDEREF_FLAG_last    0x40 /* the last [ah]elem; PL_op flags apply */
+
+#define MDEREF_MASK         0x7F
+#define MDEREF_SHIFT           7
+
 
 /*
  * Local variables:

@@ -259,7 +259,12 @@ rmagical_a_dummy(pTHX_ IV idx, SV *sv) {
     return 0;
 }
 
-STATIC MGVTBL rmagical_b = { 0 };
+/* We could do "= { 0 };" but some versions of gcc do warn
+ * (with -Wextra) about missing initializer, this is probably gcc
+ * being a bit too paranoid.  But since this is file-static, we can
+ * just have it without initializer, since it should get
+ * zero-initialized. */
+STATIC MGVTBL rmagical_b;
 
 STATIC void
 blockhook_csc_start(pTHX_ int full)
@@ -400,9 +405,9 @@ THX_ck_entersub_args_scalars(pTHX_ OP *entersubop, GV *namegv, SV *ckobj)
     OP *aop = cUNOPx(entersubop)->op_first;
     PERL_UNUSED_ARG(namegv);
     PERL_UNUSED_ARG(ckobj);
-    if (!OP_HAS_SIBLING(aop))
+    if (!OpHAS_SIBLING(aop))
 	aop = cUNOPx(aop)->op_first;
-    for (aop = OP_SIBLING(aop); OP_HAS_SIBLING(aop); aop = OP_SIBLING(aop)) {
+    for (aop = OpSIBLING(aop); OpHAS_SIBLING(aop); aop = OpSIBLING(aop)) {
 	op_contextualize(aop, G_SCALAR);
     }
     return entersubop;
@@ -416,13 +421,13 @@ THX_ck_entersub_multi_sum(pTHX_ OP *entersubop, GV *namegv, SV *ckobj)
     OP *pushop = cUNOPx(entersubop)->op_first;
     PERL_UNUSED_ARG(namegv);
     PERL_UNUSED_ARG(ckobj);
-    if (!OP_HAS_SIBLING(pushop)) {
+    if (!OpHAS_SIBLING(pushop)) {
         parent = pushop;
 	pushop = cUNOPx(pushop)->op_first;
     }
     while (1) {
-	OP *aop = OP_SIBLING(pushop);
-	if (!OP_HAS_SIBLING(aop))
+	OP *aop = OpSIBLING(pushop);
+	if (!OpHAS_SIBLING(aop))
 	    break;
         /* cut out first arg */
         op_sibling_splice(parent, pushop, 1, NULL);
@@ -452,7 +457,7 @@ test_op_list_describe_part(SV *res, OP *o)
     if (o->op_flags & OPf_KIDS) {
 	OP *k;
 	sv_catpvs(res, "[");
-	for (k = cUNOPx(o)->op_first; k; k = OP_SIBLING(k))
+	for (k = cUNOPx(o)->op_first; k; k = OpSIBLING(k))
 	    test_op_list_describe_part(res, k);
 	sv_catpvs(res, "]");
     } else {
@@ -559,12 +564,12 @@ THX_ck_entersub_establish_cleanup(pTHX_ OP *entersubop, GV *namegv, SV *ckobj)
     ck_entersub_args_proto(entersubop, namegv, ckobj);
     parent = entersubop;
     pushop = cUNOPx(entersubop)->op_first;
-    if(!OP_HAS_SIBLING(pushop)) {
+    if(!OpHAS_SIBLING(pushop)) {
         parent = pushop;
         pushop = cUNOPx(pushop)->op_first;
     }
     /* extract out first arg, then delete the rest of the tree */
-    argop = OP_SIBLING(pushop);
+    argop = OpSIBLING(pushop);
     op_sibling_splice(parent, pushop, 1, NULL);
     op_free(entersubop);
 
@@ -581,11 +586,11 @@ THX_ck_entersub_postinc(pTHX_ OP *entersubop, GV *namegv, SV *ckobj)
     ck_entersub_args_proto(entersubop, namegv, ckobj);
     parent = entersubop;
     pushop = cUNOPx(entersubop)->op_first;
-    if(!OP_HAS_SIBLING(pushop)) {
+    if(!OpHAS_SIBLING(pushop)) {
         parent = pushop;
         pushop = cUNOPx(pushop)->op_first;
     }
-    argop = OP_SIBLING(pushop);
+    argop = OpSIBLING(pushop);
     op_sibling_splice(parent, pushop, 1, NULL);
     op_free(entersubop);
     return newUNOP(OP_POSTINC, 0,
@@ -600,13 +605,13 @@ THX_ck_entersub_pad_scalar(pTHX_ OP *entersubop, GV *namegv, SV *ckobj)
     SV *a0, *a1;
     ck_entersub_args_proto(entersubop, namegv, ckobj);
     pushop = cUNOPx(entersubop)->op_first;
-    if(!OP_HAS_SIBLING(pushop))
+    if(!OpHAS_SIBLING(pushop))
         pushop = cUNOPx(pushop)->op_first;
-    argop = OP_SIBLING(pushop);
-    if(argop->op_type != OP_CONST || OP_SIBLING(argop)->op_type != OP_CONST)
+    argop = OpSIBLING(pushop);
+    if(argop->op_type != OP_CONST || OpSIBLING(argop)->op_type != OP_CONST)
 	croak("bad argument expression type for pad_scalar()");
     a0 = cSVOPx_sv(argop);
-    a1 = cSVOPx_sv(OP_SIBLING(argop));
+    a1 = cSVOPx_sv(OpSIBLING(argop));
     switch(SvIV(a0)) {
 	case 1: {
 	    SV *namesv = sv_2mortal(newSVpvs("$"));
@@ -1214,8 +1219,8 @@ addissub_myck_add(pTHX_ OP *op)
     OP *aop, *bop;
     U8 flags;
     if (!(flag_svp && SvTRUE(*flag_svp) && (op->op_flags & OPf_KIDS) &&
-	    (aop = cBINOPx(op)->op_first) && (bop = OP_SIBLING(aop)) &&
-	    !OP_HAS_SIBLING(bop)))
+	    (aop = cBINOPx(op)->op_first) && (bop = OpSIBLING(aop)) &&
+	    !OpHAS_SIBLING(bop)))
 	return addissub_nxck_add(aTHX_ op);
     flags = op->op_flags;
     op_sibling_splice(op, NULL, 1, NULL); /* excise aop */
@@ -1255,6 +1260,14 @@ MODULE = XS::APItest		PACKAGE = XS::APItest
 INCLUDE: const-xs.inc
 
 INCLUDE: numeric.xs
+
+void
+assertx(int x)
+    CODE:
+        /* this only needs to compile and checks that assert() can be
+           used this way syntactically */
+	(void)(assert(x), 1);
+	(void)(x);
 
 MODULE = XS::APItest::utf8	PACKAGE = XS::APItest::utf8
 
@@ -3635,14 +3648,25 @@ test_newFOROP_without_slab()
 CODE:
     {
 	const I32 floor = start_subparse(0,0);
+	OP *o;
 	/* The slab allocator does not like CvROOT being set. */
 	CvROOT(PL_compcv) = (OP *)1;
-	op_free(newFOROP(0, 0, newOP(OP_PUSHMARK, 0), 0, 0));
+	o = newFOROP(0, 0, newOP(OP_PUSHMARK, 0), 0, 0);
+#ifdef PERL_OP_PARENT
+	if (cLOOPx(cUNOPo->op_first)->op_last->op_sibling
+		!= cUNOPo->op_first)
+	{
+	    Perl_warn(aTHX_ "Op parent pointer is stale");
+	    RETVAL = FALSE;
+	}
+	else
+#endif
+	    /* If we do not crash before returning, the test passes. */
+	    RETVAL = TRUE;
+	op_free(o);
 	CvROOT(PL_compcv) = NULL;
 	SvREFCNT_dec(PL_compcv);
 	LEAVE_SCOPE(floor);
-	/* If we have not crashed yet, then the test passes. */
-	RETVAL = TRUE;
     }
 OUTPUT:
     RETVAL
@@ -3726,6 +3750,50 @@ sv_catpvn(SV *sv, SV *sv2)
 	const char *s = SvPV(sv2,len);
 	sv_catpvn_flags(sv,s,len, SvUTF8(sv2) ? SV_CATUTF8 : SV_CATBYTES);
     }
+
+bool
+test_newOP_CUSTOM()
+    CODE:
+    {
+	OP *o = newLISTOP(OP_CUSTOM, 0, NULL, NULL);
+	op_free(o);
+	o = newOP(OP_CUSTOM, 0);
+	op_free(o);
+	o = newUNOP(OP_CUSTOM, 0, NULL);
+	op_free(o);
+	o = newUNOP_AUX(OP_CUSTOM, 0, NULL, NULL);
+	op_free(o);
+	o = newMETHOP(OP_CUSTOM, 0, newOP(OP_NULL,0));
+	op_free(o);
+	o = newMETHOP_named(OP_CUSTOM, 0, newSV(0));
+	op_free(o);
+	o = newBINOP(OP_CUSTOM, 0, NULL, NULL);
+	op_free(o);
+	o = newPMOP(OP_CUSTOM, 0);
+	op_free(o);
+	o = newSVOP(OP_CUSTOM, 0, newSV(0));
+	op_free(o);
+#ifdef USE_ITHREADS
+	ENTER;
+	lex_start(NULL, NULL, 0);
+	{
+	    I32 ix = start_subparse(FALSE,0);
+	    o = newPADOP(OP_CUSTOM, 0, newSV(0));
+	    op_free(o);
+	    LEAVE_SCOPE(ix);
+	}
+	LEAVE;
+#endif
+	o = newPVOP(OP_CUSTOM, 0, NULL);
+	op_free(o);
+	o = newLOGOP(OP_CUSTOM, 0, newOP(OP_NULL,0), newOP(OP_NULL,0));
+	op_free(o);
+	o = newLOOPEX(OP_CUSTOM, newOP(OP_NULL,0));
+	op_free(o);
+	RETVAL = TRUE;
+    }
+    OUTPUT:
+	RETVAL
 
 MODULE = XS::APItest PACKAGE = XS::APItest::AUTOLOADtest
 

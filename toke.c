@@ -399,7 +399,7 @@ S_tokereport(pTHX_ I32 rv, const YYSTYPE* lvalp)
 	}
 	if (name)
 	    Perl_sv_catpv(aTHX_ report, name);
-	else if ((char)rv > ' ' && (char)rv <= '~')
+	else if (isGRAPH(rv))
 	{
 	    Perl_sv_catpvf(aTHX_ report, "'%c'", (char)rv);
 	    if ((char)rv == 'p')
@@ -730,7 +730,7 @@ Perl_lex_start(pTHX_ SV *line, PerlIO *rsfp, U32 flags)
     parser->bufend = parser->bufptr + SvCUR(parser->linestr);
     parser->last_lop = parser->last_uni = NULL;
 
-    assert(FITS_IN_8_BITS(LEX_IGNORE_UTF8_HINTS|LEX_EVALBYTES
+    STATIC_ASSERT_STMT(FITS_IN_8_BITS(LEX_IGNORE_UTF8_HINTS|LEX_EVALBYTES
                                                         |LEX_DONT_CLOSE_RSFP));
     parser->lex_flags = (U8) (flags & (LEX_IGNORE_UTF8_HINTS|LEX_EVALBYTES
                                                         |LEX_DONT_CLOSE_RSFP));
@@ -1968,7 +1968,7 @@ S_newSV_maybe_utf8(pTHX_ const char *const start, STRLEN len)
     SV * const sv = newSVpvn_utf8(start, len,
 				  !IN_BYTES
 				  && UTF
-				  && !is_ascii_string((const U8*)start, len)
+				  && !is_invariant_string((const U8*)start, len)
 				  && is_utf8_string((const U8*)start, len));
     return sv;
 }
@@ -2005,9 +2005,10 @@ S_force_word(pTHX_ char *start, int token, int check_keyword, int allow_pack)
 	s = scan_word(s, PL_tokenbuf, sizeof PL_tokenbuf, allow_pack, &len);
 	if (check_keyword) {
 	  char *s2 = PL_tokenbuf;
+	  STRLEN len2 = len;
 	  if (allow_pack && len > 6 && strnEQ(s2, "CORE::", 6))
-	    s2 += 6, len -= 6;
-	  if (keyword(s2, len, 0))
+	    s2 += 6, len2 -= 6;
+	  if (keyword(s2, len2, 0))
 	    return start;
 	}
 	if (token == METHOD) {
@@ -2490,6 +2491,9 @@ S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
     const char* backslash_ptr = s - 3; /* Points to the <\> of \N{... */
 
     PERL_ARGS_ASSERT_GET_AND_CHECK_BACKSLASH_N_NAME;
+
+    if (!SvCUR(res))
+        return res;
 
     if (UTF && ! is_utf8_string_loc((U8 *) backslash_ptr,
                                      e - backslash_ptr,
@@ -3189,9 +3193,13 @@ S_scan_const(pTHX_ char *start)
 			SvPOK_on(sv);
 			*d = '\0';
 			/* See Note on sizing above.  */
-			sv_utf8_upgrade_flags_grow(sv,
-					SV_GMAGIC|SV_FORCE_UTF8_UPGRADE,
-					UNISKIP(uv) + (STRLEN)(send - s) + 1);
+			sv_utf8_upgrade_flags_grow(
+                                         sv,
+                                         SV_GMAGIC|SV_FORCE_UTF8_UPGRADE
+                                                  /* Above-latin1 in string
+                                                   * implies no encoding */
+                                                  |SV_UTF8_NO_ENCODING,
+                                         UNISKIP(uv) + (STRLEN)(send - s) + 1);
 			d = SvPVX(sv) + SvCUR(sv);
 			has_utf8 = TRUE;
                     }
@@ -3278,34 +3286,68 @@ S_scan_const(pTHX_ char *start)
 
 		if (*s == 'U' && s[1] == '+') { /* \N{U+...} */
 		    I32 flags = PERL_SCAN_ALLOW_UNDERSCORES
+				| PERL_SCAN_SILENT_ILLDIGIT
 				| PERL_SCAN_DISALLOW_PREFIX;
 		    STRLEN len;
 
 		    s += 2;	    /* Skip to next char after the 'U+' */
 		    len = e - s;
 		    uv = grok_hex(s, &len, &flags, NULL);
-		    if (len == 0 || len != (STRLEN)(e - s)) {
+		    if (len == 0
+		     || (  len != (STRLEN)(e - s) && s[len] != '.'
+			&& PL_lex_inpat))
+		    {
+		      bad_NU:
 			yyerror("Invalid hexadecimal number in \\N{U+...}");
 			s = e + 1;
 			continue;
 		    }
 
 		    if (PL_lex_inpat) {
-			s -= 5;	    /* Include the '\N{U+' */
 #ifdef EBCDIC
+			s -= 5;	    /* Include the '\N{U+' */
                         /* On EBCDIC platforms, in \N{U+...}, the '...' is a
                          * Unicode value, so convert to native so downstream
                          * code can continue to assume it's native */
+                        /* XXX This should be in the regexp parser,
+                               because doing it here makes /\N{U+41}/ and
+                               =~ '\N{U+41}' do different things.  */
 			d += my_snprintf(d, e - s + 1 + 1,  /* includes the '}'
 							       and the \0 */
-                                         "\\N{U+%X}",
+                                         "\\N{U+%X",
                                          (unsigned int) UNI_TO_NATIVE(uv));
+                        s += 5 + len;
+                        while (*s == '.') {
+                            s++;
+                            len = e - s;
+                            uv = grok_hex(s, &len, &flags, NULL);
+                            if (!len
+                             || (len != (STRLEN)(e - s) && s[len] != '.'))
+                                goto bad_NU;
+                            s--;
+                            d += my_snprintf(
+                                     d, e - s + 1 + 1, ".%X",
+                                     (unsigned int)UNI_TO_NATIVE(uv)
+                                 );
+                            s += len + 1;
+                        }
+                        *(d++) = '}';
 #else
                         /* On non-EBCDIC platforms, pass it through unchanged.
-                         * The reason we evaluated the number above is to make
+                         * The reason we evaluate the numbers is to make
                          * sure there wasn't a syntax error. */
-			Copy(s, d, e - s + 1, char);	/* +1 is for the '}' */
-			d += e - s + 1;
+                        const char * const orig_s = s - 5;
+                        while (*s == '.') {
+                            s++;
+                            len = e - s;
+                            uv = grok_hex(s, &len, &flags, NULL);
+                            if (!len
+                             || (len != (STRLEN)(e - s) && s[len] != '.'))
+                                goto bad_NU;
+                        }
+                        /* +1 is for the '}' */
+                        Copy(orig_s, d, e - orig_s + 1, char);
+                        d += e - orig_s + 1;
 #endif
 		    }
 		    else {  /* Not a pattern: convert the hex to string */
@@ -3471,8 +3513,8 @@ S_scan_const(pTHX_ char *start)
 			    const STRLEN off = d - SvPVX_const(sv);
 			    d = off + SvGROW(sv, off + len + (STRLEN)(send - s) + 1);
 			}
-                        if (! SvUTF8(res)) {    /* Make sure is \N{} return is UTF-8 */
-                            sv_utf8_upgrade(res);
+                        if (! SvUTF8(res)) {    /* Make sure \N{} return is UTF-8 */
+                            sv_utf8_upgrade_flags(res, SV_UTF8_NO_ENCODING);
                             str = SvPV_const(res, len);
                         }
 			Copy(str, d, len, char);
@@ -3588,8 +3630,8 @@ S_scan_const(pTHX_ char *start)
 		   " >= %"UVuf, (UV)SvCUR(sv), (UV)SvLEN(sv));
 
     SvPOK_on(sv);
-    if (PL_encoding && !has_utf8) {
-	sv_recode_to_utf8(sv, PL_encoding);
+    if (IN_ENCODING && !has_utf8) {
+	sv_recode_to_utf8(sv, _get_encoding());
 	if (SvUTF8(sv))
 	    has_utf8 = TRUE;
     }
@@ -4944,7 +4986,7 @@ Perl_yylex(pTHX)
 	Perl_croak(aTHX_
       "\t(Maybe you didn't strip carriage returns after a network transfer?)\n");
 #endif
-    case ' ': case '\t': case '\f': case 013:
+    case ' ': case '\t': case '\f': case '\v':
 	s++;
 	goto retry;
     case '#':
@@ -6251,7 +6293,7 @@ Perl_yylex(pTHX)
 	    }
 	    /* avoid v123abc() or $h{v1}, allow C<print v10;> */
 	    if (!isALPHA(*start) && (PL_expect == XTERM
-			|| PL_expect == XSTATE
+			|| PL_expect == XREF || PL_expect == XSTATE
 			|| PL_expect == XTERMORDORDOR)) {
 		GV *const gv = gv_fetchpvn_flags(s, start - s,
                                                     UTF ? SVf_UTF8 : 0, SVt_PVCV);
@@ -6388,7 +6430,7 @@ Perl_yylex(pTHX)
 	    char tmpbuf[sizeof PL_tokenbuf + 1];
 	    *tmpbuf = '&';
 	    Copy(PL_tokenbuf, tmpbuf+1, len, char);
-	    off = pad_findmy_pvn(tmpbuf, len+1, UTF ? SVf_UTF8 : 0);
+	    off = pad_findmy_pvn(tmpbuf, len+1, 0);
 	    if (off != NOT_IN_PAD) {
 		assert(off); /* we assume this is boolean-true below */
 		if (PAD_COMPNAME_FLAGS_isOUR(off)) {
@@ -6920,13 +6962,13 @@ Perl_yylex(pTHX)
 		if (!IN_BYTES) {
 		    if (UTF)
 			PerlIO_apply_layers(aTHX_ PL_rsfp, NULL, ":utf8");
-		    else if (PL_encoding) {
+		    else if (IN_ENCODING) {
 			SV *name;
 			dSP;
 			ENTER;
 			SAVETMPS;
 			PUSHMARK(sp);
-			XPUSHs(PL_encoding);
+			XPUSHs(_get_encoding());
 			PUTBACK;
 			call_method("name", G_SCALAR);
 			SPAGAIN;
@@ -7877,7 +7919,7 @@ Perl_yylex(pTHX)
 		    *PL_tokenbuf = '&';
 		    if (memchr(tmpbuf, ':', len) || key != KEY_sub
 		     || pad_findmy_pvn(
-			    PL_tokenbuf, len + 1, UTF ? SVf_UTF8 : 0
+			    PL_tokenbuf, len + 1, 0
 			) != NOT_IN_PAD)
 			sv_setpvn(PL_subname, tmpbuf, len);
 		    else {
@@ -8178,7 +8220,7 @@ S_pending_ident(pTHX)
     if (!has_colon) {
 	if (!PL_in_my)
 	    tmp = pad_findmy_pvn(PL_tokenbuf, tokenbuf_len,
-                                    UTF ? SVf_UTF8 : 0);
+                                 0);
         if (tmp != NOT_IN_PAD) {
             /* might be an "our" variable" */
             if (PAD_COMPNAME_FLAGS_isOUR(tmp)) {
@@ -8296,7 +8338,7 @@ S_checkcomma(pTHX_ const char *s, const char *name, const char *what)
 		char tmpbuf[256];
 		Copy(w, tmpbuf+1, s - w, char);
 		*tmpbuf = '&';
-		off = pad_findmy_pvn(tmpbuf, s-w+1, UTF ? SVf_UTF8 : 0);
+		off = pad_findmy_pvn(tmpbuf, s-w+1, 0);
 		if (off != NOT_IN_PAD) return;
 	    }
 	    Perl_croak(aTHX_ "No comma allowed after %s", what);
@@ -8584,7 +8626,9 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
  *
  *      Because all ASCII characters have the same representation whether
  *      encoded in UTF-8 or not, we can use the foo_A macros below and '\0' and
- *      '{' without knowing if is UTF-8 or not */
+ *      '{' without knowing if is UTF-8 or not.
+ * EBCDIC already uses the rules that ASCII platforms will use after the
+ * deprecation cycle; see comment below about the deprecation. */
 #ifdef EBCDIC
 #   define VALID_LEN_ONE_IDENT(s, is_utf8)                                    \
     (isGRAPH_A(*(s)) || ((is_utf8)                                            \
@@ -9334,8 +9378,8 @@ S_scan_heredoc(pTHX_ char *s)
     if (!IN_BYTES) {
 	if (UTF && is_utf8_string((U8*)SvPVX_const(tmpstr), SvCUR(tmpstr)))
 	    SvUTF8_on(tmpstr);
-	else if (PL_encoding)
-	    sv_recode_to_utf8(tmpstr, PL_encoding);
+	else if (IN_ENCODING)
+	    sv_recode_to_utf8(tmpstr, _get_encoding());
     }
     PL_lex_stuff = tmpstr;
     pl_yylval.ival = op_type;
@@ -9446,7 +9490,7 @@ S_scan_inputsymbol(pTHX_ char *start)
 	    /* try to find it in the pad for this block, otherwise find
 	       add symbol table ops
 	    */
-	    const PADOFFSET tmp = pad_findmy_pvn(d, len, UTF ? SVf_UTF8 : 0);
+	    const PADOFFSET tmp = pad_findmy_pvn(d, len, 0);
 	    if (tmp != NOT_IN_PAD) {
 		if (PAD_COMPNAME_FLAGS_isOUR(tmp)) {
 		    HV * const stash = PAD_COMPNAME_OURSTASH(tmp);
@@ -9625,12 +9669,12 @@ S_scan_str(pTHX_ char *start, int keep_bracketed_quoted, int keep_delims, int re
 	sv_catpvn(sv, s, termlen);
     s += termlen;
     for (;;) {
-	if (PL_encoding && !UTF && !re_reparse) {
+	if (IN_ENCODING && !UTF && !re_reparse) {
 	    bool cont = TRUE;
 
 	    while (cont) {
 		int offset = s - SvPVX_const(PL_linestr);
-		const bool found = sv_cat_decode(sv, PL_encoding, PL_linestr,
+		const bool found = sv_cat_decode(sv, _get_encoding(), PL_linestr,
 					   &offset, (char*)termstr, termlen);
 		const char *ns;
 		char *svlast;
@@ -9843,13 +9887,13 @@ S_scan_str(pTHX_ char *start, int keep_bracketed_quoted, int keep_delims, int re
 
     /* at this point, we have successfully read the delimited string */
 
-    if (!PL_encoding || UTF || re_reparse) {
+    if (!IN_ENCODING || UTF || re_reparse) {
 
 	if (keep_delims)
 	    sv_catpvn(sv, s, termlen);
 	s += termlen;
     }
-    if (has_utf8 || (PL_encoding && !re_reparse))
+    if (has_utf8 || (IN_ENCODING && !re_reparse))
 	SvUTF8_on(sv);
 
     PL_multi_end = CopLINE(PL_curcop);
@@ -10506,7 +10550,7 @@ S_scan_formline(pTHX_ char *s)
 	if (needargs) {
 	    const char *s2 = s;
 	    while (*s2 == '\r' || *s2 == ' ' || *s2 == '\t' || *s2 == '\f'
-		|| *s2 == 013)
+		|| *s2 == '\v')
 		s2++;
 	    if (*s2 == '{') {
 		PL_expect = XTERMBLOCK;
@@ -10519,8 +10563,8 @@ S_scan_formline(pTHX_ char *s)
 	if (!IN_BYTES) {
 	    if (UTF && is_utf8_string((U8*)SvPVX_const(stuff), SvCUR(stuff)))
 		SvUTF8_on(stuff);
-	    else if (PL_encoding)
-		sv_recode_to_utf8(stuff, PL_encoding);
+	    else if (IN_ENCODING)
+		sv_recode_to_utf8(stuff, _get_encoding());
 	}
 	NEXTVAL_NEXTTOKE.opval = (OP*)newSVOP(OP_CONST, 0, stuff);
 	force_next(THING);
@@ -10551,8 +10595,7 @@ Perl_start_subparse(pTHX_ I32 is_format, U32 flags)
     CvOUTSIDE(PL_compcv) = MUTABLE_CV(SvREFCNT_inc_simple(outsidecv));
     CvOUTSIDE_SEQ(PL_compcv) = PL_cop_seqmax;
     if (outsidecv && CvPADLIST(outsidecv))
-	CvPADLIST(PL_compcv)->xpadl_outid =
-	    PadlistNAMES(CvPADLIST(outsidecv));
+	CvPADLIST(PL_compcv)->xpadl_outid = CvPADLIST(outsidecv)->xpadl_id;
 
     return oldsavestack_ix;
 }
@@ -10629,7 +10672,7 @@ Perl_yyerror_pvn(pTHX_ const char *const s, STRLEN len, U32 flags)
     }
     else if (yychar > 255)
 	sv_catpvs(where_sv, "next token ???");
-    else if (yychar == -2) { /* YYEMPTY */
+    else if (yychar == YYEMPTY) {
 	if (PL_lex_state == LEX_NORMAL ||
 	   (PL_lex_state == LEX_KNOWNEXT && PL_lex_defer == LEX_NORMAL))
 	    sv_catpvs(where_sv, "at end of line");

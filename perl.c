@@ -1290,9 +1290,10 @@ perl_destruct(pTHXx)
     TAINTING_set(FALSE);
     TAINT_WARN_set(FALSE);
     PL_hints = 0;		/* Reset hints. Should hints be per-interpreter ? */
-    PL_debug = 0;
 
     DEBUG_P(debprofdump());
+
+    PL_debug = 0;
 
 #ifdef USE_REENTRANT_API
     Perl_reentrant_free(aTHX);
@@ -2420,7 +2421,7 @@ S_run_body(pTHX_ I32 oldscope)
 	CALLRUNOPS(aTHX);
     }
     my_exit(0);
-    assert(0); /* NOTREACHED */
+    NOT_REACHED; /* NOTREACHED */
 }
 
 /*
@@ -2741,7 +2742,7 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
 	    FREETMPS;
 	    JMPENV_POP;
 	    my_exit_jump();
-	    assert(0); /* NOTREACHED */
+	    NOT_REACHED; /* NOTREACHED */
 	case 3:
 	    if (PL_restartop) {
 		PL_restartjmpenv = NULL;
@@ -2850,7 +2851,7 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
 	FREETMPS;
 	JMPENV_POP;
 	my_exit_jump();
-	assert(0); /* NOTREACHED */
+	NOT_REACHED; /* NOTREACHED */
     case 3:
 	if (PL_restartop) {
 	    PL_restartjmpenv = NULL;
@@ -3059,11 +3060,6 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
       const char *const *p = usage_msgd;
       while (*p) PerlIO_puts(PerlIO_stdout(), *p++);
     }
-#  ifdef EBCDIC
-    if ((i & DEBUG_p_FLAG) && ckWARN_d(WARN_DEBUGGING))
-	Perl_warner(aTHX_ packWARN(WARN_DEBUGGING),
-		"-Dp not implemented on this platform\n");
-#  endif
     return i;
 }
 #endif
@@ -4871,7 +4867,7 @@ Perl_call_list(pTHX_ I32 oldscope, AV *paramList)
 	    CopLINE_set(PL_curcop, oldline);
 	    JMPENV_POP;
 	    my_exit_jump();
-	    assert(0); /* NOTREACHED */
+	    NOT_REACHED; /* NOTREACHED */
 	case 3:
 	    if (PL_restartop) {
 		PL_curcop = &PL_compiling;

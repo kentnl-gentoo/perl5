@@ -803,7 +803,7 @@ static NV my_tgamma(NV x)
     if (x < 1.0)
       y += 1.0;
     else {
-      n = Perl_floor(y) - 1;
+      n = (int)Perl_floor(y) - 1;
       y -= n;
     }
     z = y - 1;
@@ -829,9 +829,15 @@ static NV my_tgamma(NV x)
   }
 
   /* Third interval: [12, +Inf) */
-  if (x > 171.624) { /* XXX Too low for quad precision */
+#if LDBL_MANT_DIG == 113 /* IEEE quad prec */
+  if (x > 1755.548) {
     return NV_INF;
   }
+#else
+  if (x > 171.624) {
+    return NV_INF;
+  }
+#endif
 
   return Perl_exp(c99_lgamma(x));
 }
@@ -1128,7 +1134,9 @@ char *tzname[] = { "" , "" };
 #  define setuid(a)		not_here("setuid")
 #  define setgid(a)		not_here("setgid")
 #endif	/* NETWARE */
+#ifndef USE_LONG_DOUBLE
 #  define strtold(s1,s2)	not_here("strtold")
+#endif  /* USE_LONG_DOUBLE */
 #else
 
 #  ifndef HAS_MKFIFO
@@ -1572,7 +1580,7 @@ static XSPROTO(is_common)
                 Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
                             "Calling POSIX::%"HEKf"() is deprecated",
                             HEKfARG(GvNAME_HEK(CvGV(cv))));
-		hv_store(warned, (const char *)&PL_op, sizeof(PL_op), &PL_sv_yes, 0);
+		(void)hv_store(warned, (const char *)&PL_op, sizeof(PL_op), &PL_sv_yes, 0);
             }
         }
 
@@ -1969,9 +1977,9 @@ localeconv()
                                       strlen(value),
 
                                       /* We mark it as UTF-8 if a utf8 locale
-                                       * and is valid, non-ascii UTF-8 */
+                                       * and is valid and variant under UTF-8 */
                                       is_utf8_locale
-                                        && ! is_ascii_string((U8 *) value, 0)
+                                        && ! is_invariant_string((U8 *) value, 0)
                                         && is_utf8_string((U8 *) value, 0)),
                         0);
                   }
@@ -2131,6 +2139,7 @@ acos(x)
 	y0 = 29
 	y1 = 30
     CODE:
+	PERL_UNUSED_VAR(x);
 	RETVAL = NV_NAN;
 	switch (ix) {
 	case 0:
@@ -2352,6 +2361,7 @@ fesetround(x)
         default: RETVAL = -1; break;
 	}
 #else
+	PERL_UNUSED_VAR(x);
 	RETVAL = -1;
 	not_here("fesetround");
 #endif
@@ -2371,6 +2381,7 @@ fpclassify(x)
 	lround = 7
         signbit = 8
     CODE:
+        PERL_UNUSED_VAR(x);
 	RETVAL = -1;
 	switch (ix) {
 	case 0:
@@ -2449,6 +2460,8 @@ copysign(x,y)
 	nexttoward = 13
 	remainder = 14
     CODE:
+        PERL_UNUSED_VAR(x);
+        PERL_UNUSED_VAR(y);
 	RETVAL = NV_NAN;
 	switch (ix) {
 	case 0:
@@ -2548,9 +2561,9 @@ copysign(x,y)
 	case 14:
 	default:
 #ifdef c99_remainder
-	    RETVAL = c99_remainder(x, y);
+          RETVAL = c99_remainder(x, y);
 #else
-	    not_here("remainder");
+          not_here("remainder");
 #endif
 	    break;
 	}
@@ -2590,6 +2603,8 @@ remquo(x,y)
         PUSHs(sv_2mortal(newSVnv(c99_remquo(x,y,&intvar))));
         PUSHs(sv_2mortal(newSVnv(intvar)));
 #else
+	PERL_UNUSED_VAR(x);
+	PERL_UNUSED_VAR(y);
 	not_here("remquo");
 #endif
 
@@ -2601,6 +2616,8 @@ scalbn(x,y)
 #ifdef c99_scalbn
 	RETVAL = c99_scalbn(x, y);
 #else
+	PERL_UNUSED_VAR(x);
+	PERL_UNUSED_VAR(y);
 	RETVAL = NV_NAN;
 	not_here("scalbn");
 #endif
@@ -2614,6 +2631,9 @@ fma(x,y,z)
 	NV		z
     CODE:
 #ifdef c99_fma
+	PERL_UNUSED_VAR(x);
+	PERL_UNUSED_VAR(y);
+	PERL_UNUSED_VAR(z);
 	RETVAL = c99_fma(x, y, z);
 #endif
     OUTPUT:
@@ -2623,10 +2643,10 @@ NV
 nan(s = 0)
 	char*	s;
     CODE:
+	PERL_UNUSED_VAR(s);
 #ifdef c99_nan
 	RETVAL = c99_nan(s ? s : "");
 #elif defined(NV_NAN)
-	PERL_UNUSED_VAR(s);
 	/* XXX if s != NULL, warn about unused argument,
          * or implement the nan payload setting. */
 	RETVAL = NV_NAN;
@@ -2643,21 +2663,23 @@ jn(x,y)
     ALIAS:
 	yn = 1
     CODE:
+	PERL_UNUSED_VAR(x);
+	PERL_UNUSED_VAR(y);
 	RETVAL = NV_NAN;
         switch (ix) {
 	case 0:
 #ifdef bessel_jn
-	    RETVAL = bessel_jn(x, y);
+          RETVAL = bessel_jn(x, y);
 #else
-	    not_here("jn");
+          not_here("jn");
 #endif
             break;
 	case 1:
 	default:
 #ifdef bessel_yn
-	    RETVAL = bessel_yn(x, y);
+          RETVAL = bessel_yn(x, y);
 #else
-	    not_here("yn");
+          not_here("yn");
 #endif
             break;
 	}
@@ -3016,7 +3038,7 @@ tmpnam()
 	    HV *warned = get_hv("POSIX::_warned", GV_ADD | GV_ADDMULTI);
             if (! hv_exists(warned, (const char *)&PL_op, sizeof(PL_op))) {
                 Perl_warner(aTHX_ packWARN(WARN_DEPRECATED), "Calling POSIX::tmpnam() is deprecated");
-                hv_store(warned, (const char *)&PL_op, sizeof(PL_op), &PL_sv_yes, 0);
+                (void)hv_store(warned, (const char *)&PL_op, sizeof(PL_op), &PL_sv_yes, 0);
             }
         }
 	len = strlen(tmpnam(SvPV(RETVAL, i)));
@@ -3133,6 +3155,8 @@ strtoul(str, base = 0)
 	unsigned long num;
 	char *unparsed;
     PPCODE:
+	PERL_UNUSED_VAR(str);
+	PERL_UNUSED_VAR(base);
 	num = strtoul(str, &unparsed, base);
 #if IVSIZE <= LONGSIZE
 	if (num > IV_MAX)
@@ -3311,7 +3335,7 @@ strftime(fmt, sec, min, hour, mday, mon, year, wday = -1, yday = -1, isdst = -1)
                 STRLEN len = strlen(buf);
 		sv_usepvn_flags(sv, buf, len, SV_HAS_TRAILING_NUL);
 		if (SvUTF8(fmt)
-                    || (! is_ascii_string((U8*) buf, len)
+                    || (! is_invariant_string((U8*) buf, len)
                         && is_utf8_string((U8*) buf, len)
 #ifdef USE_LOCALE_TIME
                         && _is_cur_LC_category_utf8(LC_TIME)
@@ -3366,6 +3390,7 @@ cuserid(s = 0)
 #ifdef HAS_CUSERID
   RETVAL = cuserid(s);
 #else
+  PERL_UNUSED_VAR(s);
   RETVAL = 0;
   not_here("cuserid");
 #endif
@@ -3431,6 +3456,9 @@ lchown(uid, gid, path)
         * but consistent with CORE::chown() */
        RETVAL = lchown(path, uid, gid);
 #else
+       PERL_UNUSED_VAR(uid);
+       PERL_UNUSED_VAR(gid);
+       PERL_UNUSED_VAR(path);
        RETVAL = not_here("lchown");
 #endif
     OUTPUT:

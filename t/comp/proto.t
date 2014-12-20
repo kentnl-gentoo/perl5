@@ -18,7 +18,7 @@ BEGIN {
 # strict
 use strict;
 
-print "1..201\n";
+print "1..214\n";
 
 my $i = 1;
 
@@ -285,10 +285,26 @@ sub tmp_sub_1 { printf "ok %d\n",$i++ }
 
 a_sub { printf "ok %d\n",$i++ };
 a_sub \&tmp_sub_1;
+a_sub \(&tmp_sub_1);
 
 @array = ( \&tmp_sub_1 );
 eval 'a_sub @array';
 print "not " unless $@;
+printf "ok %d\n",$i++;
+eval 'a_sub \@array';
+print "not " unless $@ =~ /Type of arg/;
+printf "ok %d\n",$i++;
+eval 'a_sub \%hash';
+print "not " unless $@ =~ /Type of arg/;
+printf "ok %d\n",$i++;
+eval 'a_sub \$scalar';
+print "not " unless $@ =~ /Type of arg/;
+printf "ok %d\n",$i++;
+eval 'a_sub \($list, %of, @refs)';
+print "not " unless $@ =~ /Type of arg/;
+printf "ok %d\n",$i++;
+eval 'a_sub undef';
+print "not " unless $@ =~ /Type of arg/;
 printf "ok %d\n",$i++;
 
 ##
@@ -309,6 +325,17 @@ a_subx &tmp_sub_2;
 eval 'a_subx @array';
 print "not " unless $@;
 printf "ok %d\n",$i++;
+my $bad =
+    qr/Type of arg 1 to .* must be subroutine \(not subroutine entry\)/;
+eval 'a_subx &tmp_sub_2()';
+print "not " unless $@ =~ $bad;
+printf "ok %d - \\& prohibits &foo()\n",$i++;
+eval 'a_subx tmp_sub_2()';
+print "not " unless $@ =~ $bad;
+printf "ok %d - \\& prohibits foo()\n",$i++;
+eval 'a_subx tmp_sub_2';
+print "not " unless $@ =~ $bad;
+printf "ok %d - \\& prohibits foo where foo is an existing sub\n",$i++;
 
 ##
 ##
@@ -380,6 +407,11 @@ a_hash_ref %hash;
 print "not " unless $hash{'b'} == 2;
 printf "ok %d\n",$i++;
 
+%hash = ( a => 1);
+a_hash_ref +(%hash);
+print "not " unless $hash{'b'} == 2;
+printf "ok %d\n",$i++;
+
 ##
 ##
 ##
@@ -398,6 +430,16 @@ sub array_ref_plus (\@@) {
   array_ref_plus @array, @more; }
 print "not " unless @array == 4;
 print @array;
+
+@array = ('a');
+{ my @more = ('x');
+  array_ref_plus +(@array), @more; }
+print "not " unless @array == 4;
+print @array;
+
+##
+##
+##
 
 my $p;
 print "not " if defined prototype('CORE::print');

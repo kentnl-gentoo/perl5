@@ -4,7 +4,7 @@ use 5.008001;
 use strict;
 use warnings;
 
-our $VERSION = '1.301001_075';
+our $VERSION = '1.301001_090';
 $VERSION = eval $VERSION;    ## no critic (BuiltinFunctions::ProhibitStringyEval)
 
 
@@ -141,7 +141,8 @@ sub _copy {
 sub subtest {
     my $self = shift;
     my $ctx = $self->ctx();
-    return tmt->subtest(@_);
+    require Test::Stream::Subtest;
+    return Test::Stream::Subtest::subtest(@_);
 }
 
 sub child {
@@ -866,13 +867,10 @@ sub _try {
 
     my $error;
     my $return;
-    {
-        local $!;               # eval can mess up $!
-        local $@;               # don't set $@ in the test
-        local $SIG{__DIE__};    # don't trip an outside DIE handler.
+    protect {
         $return = eval { $code->() };
         $error = $@;
-    }
+    };
 
     die $error if $error and $opts{die_on_fail};
 
@@ -1048,7 +1046,7 @@ Check if something is a filehandle
 
 =item $TB->level
 
-Get/Set C<$Test::Builder::Level>. $Level is a package var, and most thigns
+Get/Set C<$Test::Builder::Level>. $Level is a package var, and most things
 localize it, so this method is pretty useless.
 
 =item $TB->maybe_regex

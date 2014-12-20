@@ -390,8 +390,6 @@ S_mg_findext_flags(const SV *sv, int type, const MGVTBL *vtbl, U32 flags)
     if (sv) {
 	MAGIC *mg;
 
-	assert(!(SvTYPE(sv) == SVt_PVAV && AvPAD_NAMELIST(sv)));
-
 	for (mg = SvMAGIC(sv); mg; mg = mg->mg_moremagic) {
 	    if (mg->mg_type == type && (!flags || mg->mg_virtual == vtbl)) {
 		return mg;
@@ -751,20 +749,61 @@ S_fixup_errno_string(pTHX_ SV* sv)
          * case we should turn on that flag.  This didn't use to happen, and to
          * avoid as many possible backward compatibility issues as possible, we
          * don't turn on the flag unless we have to.  So the flag stays off for
-         * an entirely ASCII string.  We assume that if the string looks like
-         * UTF-8, it really is UTF-8:  "text in any other encoding that uses
-         * bytes with the high bit set is extremely unlikely to pass a UTF-8
-         * validity test" (http://en.wikipedia.org/wiki/Charset_detection).
-         * There is a potential that we will get it wrong however, especially
-         * on short error message text.  (If it turns out to be necessary, we
-         * could also keep track if the current LC_MESSAGES locale is UTF-8) */
+         * an entirely invariant string.  We assume that if the string looks
+         * like UTF-8, it really is UTF-8:  "text in any other encoding that
+         * uses bytes with the high bit set is extremely unlikely to pass a
+         * UTF-8 validity test"
+         * (http://en.wikipedia.org/wiki/Charset_detection).  There is a
+         * potential that we will get it wrong however, especially on short
+         * error message text.  (If it turns out to be necessary, we could also
+         * keep track if the current LC_MESSAGES locale is UTF-8) */
         if (! IN_BYTES  /* respect 'use bytes' */
-            && ! is_ascii_string((U8*) SvPVX_const(sv), SvCUR(sv))
+            && ! is_invariant_string((U8*) SvPVX_const(sv), SvCUR(sv))
             && is_utf8_string((U8*) SvPVX_const(sv), SvCUR(sv)))
         {
             SvUTF8_on(sv);
         }
     }
+}
+
+SV*
+Perl__get_encoding(pTHX)
+{
+    /* For core Perl use only: Returns the $^ENCODING or 'use encoding' in
+     * effect; NULL if none.
+     *
+     * $^ENCODING maps to PL_encoding, and is the old way to do things, and is
+     * retained for backwards compatibility.  Now, there is a shadow variable
+     * ${^E_NCODING} set only by the encoding pragma, used to give this pragma
+     * lexical scope, unlike the global scope it (shudder) used to have.  This
+     * variable maps to PL_lex_encoding.  Again for backwards compatibility,
+     * PL_encoding has precedence over PL_lex_encoding.  The hints hash is used
+     * to determine if PL_lex_encoding is in scope, and hence valid.  The hints
+     * hash only accepts simple values, so we can't put an Encode object into
+     * it, so we put the object into the global, and put a simple boolean into
+     * the hints hash giving whether the global is valid or not */
+
+    dVAR;
+    SV *is_encoding;
+
+    if (PL_encoding) {
+        return PL_encoding;
+    }
+
+    if (! PL_lex_encoding) {
+        return NULL;
+    }
+
+    is_encoding = cop_hints_fetch_pvs(PL_curcop, "encoding", 0);
+    if (   is_encoding
+        && is_encoding != &PL_sv_placeholder
+        && SvIOK(is_encoding)
+        && SvIV(is_encoding))  /* non-zero mean valid */
+    {
+        return PL_lex_encoding;
+    }
+
+    return NULL;
 }
 
 #ifdef VMS
@@ -817,7 +856,9 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
     case '\005':  /* ^E */
 	 if (nextchar != '\0') {
             if (strEQ(remaining, "NCODING"))
-                sv_setsv(sv, PL_encoding);
+                sv_setsv(sv, _get_encoding());
+            else if (strEQ(remaining, "_NCODING"))
+                sv_setsv(sv, NULL);
             break;
         }
 
@@ -2504,8 +2545,8 @@ Perl_magic_setlvref(pTHX_ SV *sv, MAGIC *mg)
 		 SvREFCNT_inc_simple_NN(SvRV(sv)));
 	break;
     case SVt_PVHV:
-	hv_store_ent((HV *)mg->mg_obj, (SV *)mg->mg_ptr,
-		     SvREFCNT_inc_simple_NN(SvRV(sv)), 0);
+	(void)hv_store_ent((HV *)mg->mg_obj, (SV *)mg->mg_ptr,
+                           SvREFCNT_inc_simple_NN(SvRV(sv)), 0);
     }
     if (mg->mg_flags & MGf_PERSIST)
 	NOOP; /* This sv is in use as an iterator var and will be reused,
@@ -2601,15 +2642,43 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 #  endif
 #endif
 	}
-	else if (strEQ(mg->mg_ptr+1, "NCODING")) {
-	    SvREFCNT_dec(PL_encoding);
-	    if (SvOK(sv) || SvGMAGICAL(sv)) {
-		PL_encoding = newSVsv(sv);
-	    }
-	    else {
-		PL_encoding = NULL;
-	    }
-	}
+	else {
+            unsigned int offset = 1;
+            bool lex = FALSE;
+
+            /* It may be the shadow variable ${E_NCODING} which has lexical
+             * scope.  See comments at Perl__get_encoding in this file */
+            if (*(mg->mg_ptr + 1) == '_') {
+                if (CopSTASH(PL_curcop) != get_hv("encoding::",0))
+                    Perl_croak_no_modify();
+                lex = TRUE;
+                offset++;
+            }
+            if (strEQ(mg->mg_ptr + offset, "NCODING")) {
+                if (lex) {  /* Use the shadow global */
+                    SvREFCNT_dec(PL_lex_encoding);
+                    if (SvOK(sv) || SvGMAGICAL(sv)) {
+                        PL_lex_encoding = newSVsv(sv);
+                    }
+                    else {
+                        PL_lex_encoding = NULL;
+                    }
+                }
+                else { /* Use the regular global */
+                    SvREFCNT_dec(PL_encoding);
+                    if (SvOK(sv) || SvGMAGICAL(sv)) {
+                        if (PL_localizing != 2) {
+                            Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
+                                          "Setting ${^ENCODING} is deprecated");
+                        }
+                        PL_encoding = newSVsv(sv);
+                    }
+                    else {
+                        PL_encoding = NULL;
+                    }
+                }
+            }
+        }
 	break;
     case '\006':	/* ^F */
 	PL_maxsysfd = SvIV(sv);

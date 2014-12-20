@@ -295,7 +295,7 @@ sub display {
     foreach my $x (@_) {
         if (defined $x and not ref $x) {
             my $y = '';
-            foreach my $c (unpack("U*", $x)) {
+            foreach my $c (unpack("W*", $x)) {
                 if ($c > 255) {
                     $y = $y . sprintf "\\x{%x}", $c;
                 } elsif ($backslash_escape{$c}) {
@@ -645,7 +645,7 @@ sub _create_runperl { # Create the string to qx in runperl().
     if (defined $args{prog}) {
 	die "test.pl:runperl(): both 'prog' and 'progs' cannot be used " . _where()
 	    if defined $args{progs};
-        $args{progs} = [$args{prog}]
+        $args{progs} = [split /\n/, $args{prog}, -1]
     }
     if (defined $args{progs}) {
 	die "test.pl:runperl(): 'progs' must be an ARRAYREF " . _where()

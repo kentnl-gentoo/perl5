@@ -14,6 +14,7 @@
 # padop/svop  - $            padop    - # (unused)   loop       - {
 # baseop/unop - %            loopexop - }            filestatop - -
 # pvop/svop   - "            cop      - ;            methop     - .
+# unop_aux    - +
 
 # Other options are:
 #   needs stack mark                    - m  (OA_MARK)
@@ -50,7 +51,7 @@ const		constant item		ck_svconst	s$
 
 gvsv		scalar variable		ck_null		ds$	
 gv		glob value		ck_null		ds$	
-gelem		glob elem		ck_null		d2	S S
+gelem		glob elem		ck_null		ds2	S S
 padsv		private variable	ck_null		ds0
 padav		private array		ck_null		d0
 padhv		private hash		ck_null		d0
@@ -235,6 +236,10 @@ helem		hash element		ck_null		s2	H S
 hslice		hash slice		ck_null		m@	H L
 kvhslice	key/value hash slice	ck_null		m@	H L
 
+# mixed array and hash access
+
+multideref	array or hash lookup	ck_null		ds+	
+
 # Explosives and implosives.
 
 unpack		unpack			ck_fun		u@	S S?
@@ -308,6 +313,9 @@ dump		dump			ck_null		ds}
 goto		goto			ck_null		s}	
 exit		exit			ck_fun		s%	S?
 method_named	method with known name	ck_null		d.
+method_super	super with known name	ck_null		d.
+method_redir	redirect method with known name	ck_null	d.
+method_redir_super	redirect super method with known name	ck_null	d.
 
 entergiven	given()			ck_null		d|
 leavegiven	leave given block	ck_null		1
@@ -481,7 +489,7 @@ semctl		semctl			ck_fun		imst@	S S S S
 
 # Eval.
 
-require		require			ck_require	du%	S?
+require		require			ck_require	dsu%	S?
 dofile		do "file"		ck_fun		d1	S
 hintseval	eval hints		ck_svconst	s$
 entereval	eval "string"		ck_eval		du%	S?
@@ -553,7 +561,7 @@ padcv		private subroutine	ck_null		d0
 introcv		private subroutine	ck_null		d0
 clonecv		private subroutine	ck_null		d0
 padrange	list of private variables	ck_null		d0
-refassign	lvalue ref assignment	ck_refassign	d2
+refassign	lvalue ref assignment	ck_refassign	ds2
 lvref		lvalue ref assignment	ck_null		d%
 lvrefslice	lvalue ref assignment	ck_null		d@
 lvavref		lvalue array reference	ck_null		d%

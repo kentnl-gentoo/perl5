@@ -288,7 +288,7 @@ PP(pp_substcont)
 	    POPSUBST(cx);
 	    PERL_ASYNC_CHECK();
 	    RETURNOP(pm->op_next);
-	    assert(0); /* NOTREACHED */
+	    NOT_REACHED; /* NOTREACHED */
 	}
 	cx->sb_iters = saviters;
     }
@@ -674,7 +674,7 @@ PP(pp_formline)
 	    goto append;
 
 	case FF_CHOP: /* (for ^*) chop the current item */
-	    {
+	    if (sv != &PL_sv_no) {
 		const char *s = chophere;
 		if (chopspace) {
 		    while (isSPACE(*s))
@@ -701,11 +701,11 @@ PP(pp_formline)
 		const char *const send = s + len;
 
 		item_is_utf8 = DO_UTF8(sv);
+		chophere = s + len;
 		if (!len)
 		    break;
 		trans = 0;
 		gotsome = TRUE;
-		chophere = s + len;
 		source = (U8 *) s;
 		to_copy = len;
 		while (s < send) {
@@ -1109,7 +1109,7 @@ PP(pp_mapwhile)
 
 PP(pp_range)
 {
-    if (GIMME == G_ARRAY)
+    if (GIMME_V == G_ARRAY)
 	return NORMAL;
     if (SvTRUEx(PAD_SV(PL_op->op_targ)))
 	return cLOGOP->op_other;
@@ -1121,7 +1121,7 @@ PP(pp_flip)
 {
     dSP;
 
-    if (GIMME == G_ARRAY) {
+    if (GIMME_V == G_ARRAY) {
 	RETURNOP(((LOGOP*)cUNOP->op_first)->op_other);
     }
     else {
@@ -1175,7 +1175,7 @@ PP(pp_flop)
 {
     dSP;
 
-    if (GIMME == G_ARRAY) {
+    if (GIMME_V == G_ARRAY) {
 	dPOPPOPssrl;
 
 	SvGETMAGIC(left);
@@ -1676,13 +1676,13 @@ Perl_die_unwind(pTHX_ SV *msv)
 	    PL_restartjmpenv = restartjmpenv;
 	    PL_restartop = restartop;
 	    JMPENV_JUMP(3);
-	    assert(0); /* NOTREACHED */
+	    NOT_REACHED; /* NOTREACHED */
 	}
     }
 
     write_to_stderr(exceptsv);
     my_failure_exit();
-    assert(0); /* NOTREACHED */
+    NOT_REACHED; /* NOTREACHED */
 }
 
 PP(pp_xor)
@@ -1762,7 +1762,7 @@ PP(pp_caller)
     dSP;
     const PERL_CONTEXT *cx;
     const PERL_CONTEXT *dbcx;
-    I32 gimme;
+    I32 gimme = GIMME_V;
     const HEK *stash_hek;
     I32 count = 0;
     bool has_arg = MAXARG && TOPs;
@@ -1776,7 +1776,7 @@ PP(pp_caller)
 
     cx = caller_cx(count + !!(PL_op->op_private & OPpOFFBYONE), &dbcx);
     if (!cx) {
-	if (GIMME != G_ARRAY) {
+	if (gimme != G_ARRAY) {
 	    EXTEND(SP, 1);
 	    RETPUSHUNDEF;
 	}
@@ -1788,7 +1788,7 @@ PP(pp_caller)
     stash_hek = SvTYPE(CopSTASH(cx->blk_oldcop)) == SVt_PVHV
       ? HvNAME_HEK((HV*)CopSTASH(cx->blk_oldcop))
       : NULL;
-    if (GIMME != G_ARRAY) {
+    if (gimme != G_ARRAY) {
         EXTEND(SP, 1);
 	if (!stash_hek)
 	    PUSHs(&PL_sv_undef);
@@ -1810,7 +1810,7 @@ PP(pp_caller)
 	PUSHTARG;
     }
     mPUSHs(newSVpv(OutCopFILE(cx->blk_oldcop), 0));
-    lcop = closest_cop(cx->blk_oldcop, OP_SIBLING(cx->blk_oldcop),
+    lcop = closest_cop(cx->blk_oldcop, OpSIBLING(cx->blk_oldcop),
 		       cx->blk_sub.retop, TRUE);
     if (!lcop)
 	lcop = cx->blk_oldcop;
@@ -2709,7 +2709,7 @@ S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstac
     if (o->op_flags & OPf_KIDS) {
 	OP *kid;
 	/* First try all the kids at this level, since that's likeliest. */
-	for (kid = cUNOPo->op_first; kid; kid = OP_SIBLING(kid)) {
+	for (kid = cUNOPo->op_first; kid; kid = OpSIBLING(kid)) {
 	    if (kid->op_type == OP_NEXTSTATE || kid->op_type == OP_DBSTATE) {
                 STRLEN kid_label_len;
                 U32 kid_label_flags;
@@ -2729,7 +2729,7 @@ S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstac
 		    return kid;
 	    }
 	}
-	for (kid = cUNOPo->op_first; kid; kid = OP_SIBLING(kid)) {
+	for (kid = cUNOPo->op_first; kid; kid = OpSIBLING(kid)) {
 	    if (kid == PL_lastgotoprobe)
 		continue;
 	    if (kid->op_type == OP_NEXTSTATE || kid->op_type == OP_DBSTATE) {
@@ -3017,13 +3017,13 @@ PP(pp_goto)
 	    case CXt_LOOP_PLAIN:
 	    case CXt_GIVEN:
 	    case CXt_WHEN:
-		gotoprobe = OP_SIBLING(cx->blk_oldcop);
+		gotoprobe = OpSIBLING(cx->blk_oldcop);
 		break;
 	    case CXt_SUBST:
 		continue;
 	    case CXt_BLOCK:
 		if (ix) {
-		    gotoprobe = OP_SIBLING(cx->blk_oldcop);
+		    gotoprobe = OpSIBLING(cx->blk_oldcop);
 		    in_block = TRUE;
 		} else
 		    gotoprobe = PL_main_root;
@@ -3051,9 +3051,9 @@ PP(pp_goto)
 				    enterops, enterops + GOTO_DEPTH);
 		if (retop)
 		    break;
-		if ( (sibl1 = OP_SIBLING(gotoprobe)) &&
+		if ( (sibl1 = OpSIBLING(gotoprobe)) &&
 		     sibl1->op_type == OP_UNSTACK &&
-		     (sibl2 = OP_SIBLING(sibl1)))
+		     (sibl2 = OpSIBLING(sibl1)))
                 {
 		    retop = dofindlabel(sibl2,
 					label, label_len, label_flags, enterops,
@@ -3237,7 +3237,7 @@ S_docatch(pTHX_ OP *o)
 	JMPENV_POP;
 	PL_op = oldop;
 	JMPENV_JUMP(ret);
-	assert(0); /* NOTREACHED */
+	NOT_REACHED; /* NOTREACHED */
     }
     JMPENV_POP;
     PL_op = oldop;
@@ -3297,7 +3297,7 @@ Perl_find_runcv_where(pTHX_ U8 cond, IV arg, U32 *db_seqp)
 		switch (cond) {
 		case FIND_RUNCV_padid_eq:
 		    if (!CvPADLIST(cv)
-		     || PadlistNAMES(CvPADLIST(cv)) != INT2PTR(PADNAMELIST *, arg))
+		     || CvPADLIST(cv)->xpadl_id != (U32)arg)
 			continue;
 		    return cv;
 		case FIND_RUNCV_level_eq:
@@ -3335,7 +3335,7 @@ S_try_yyparse(pTHX_ int gramtype)
     default:
 	JMPENV_POP;
 	JMPENV_JUMP(ret);
-	assert(0); /* NOTREACHED */
+	NOT_REACHED; /* NOTREACHED */
     }
     JMPENV_POP;
     return ret;
@@ -3691,7 +3691,6 @@ PP(pp_require)
     SV *filter_state = NULL;
     SV *filter_sub = NULL;
     SV *hook_sv = NULL;
-    SV *encoding;
     OP *op;
     int saved_errno;
     bool path_searchable;
@@ -4049,7 +4048,8 @@ PP(pp_require)
 	if (PL_op->op_type == OP_REQUIRE) {
 	    if(saved_errno == EMFILE || saved_errno == EACCES) {
 		/* diag_listed_as: Can't locate %s */
-		DIE(aTHX_ "Can't locate %s:   %s", name, Strerror(saved_errno));
+		DIE(aTHX_ "Can't locate %s:   %s: %s",
+		    name, tryname, Strerror(saved_errno));
 	    } else {
 	        if (namesv) {			/* did we lookup @INC? */
 		    AV * const ar = GvAVn(PL_incgv);
@@ -4138,17 +4138,10 @@ PP(pp_require)
 
     PUTBACK;
 
-    /* Store and reset encoding. */
-    encoding = PL_encoding;
-    PL_encoding = NULL;
-
     if (doeval(gimme, NULL, PL_curcop->cop_seq, NULL))
 	op = DOCATCH(PL_eval_start);
     else
 	op = PL_op->op_next;
-
-    /* Restore encoding. */
-    PL_encoding = encoding;
 
     LOADED_FILE_PROBE(unixname);
 

@@ -6,7 +6,7 @@
 
  All comments/suggestions/problems are welcome
 
-     Copyright (c) 1995-2013 Paul Marquess. All rights reserved.
+     Copyright (c) 1995-2014 Paul Marquess. All rights reserved.
      This program is free software; you can redistribute it and/or
      modify it under the same terms as Perl itself.
 
@@ -125,6 +125,8 @@
 #  include "ppport.h"
 #endif
 
+int DB_File___unused() { return 0; }
+
 /* Mention DB_VERSION_MAJOR_CFG, DB_VERSION_MINOR_CFG, and
    DB_VERSION_PATCH_CFG here so that Configure pulls them all in. */
 
@@ -153,6 +155,10 @@
 #    include <db.h>
 #endif
 
+#ifndef PERL_UNUSED_ARG
+#  define PERL_UNUSED_ARG(x) ((void)x)
+#endif
+
 /* Wall starts with 5.7.x */
 
 #if PERL_REVISION > 5 || (PERL_REVISION == 5 && PERL_VERSION >= 7)
@@ -167,7 +173,7 @@
 #    ifdef __cplusplus
 #        define dNOOP (void)0
 #    else
-#        define dNOOP extern int DB_File___notused
+#        define dNOOP extern int DB_File___notused()
 #    endif
 
     /* Ditto for dXSARGS. */
@@ -599,6 +605,9 @@ const DBT * key2 ;
     int retval ;
     int count ;
     
+#ifdef AT_LEAST_DB_3_2
+    PERL_UNUSED_ARG(db);
+#endif
 
     if (CurrentDB->in_compare) {
         tidyUp(CurrentDB);
@@ -684,6 +693,10 @@ const DBT * key2 ;
     int retval ;
     int count ;
     
+#ifdef AT_LEAST_DB_3_2
+    PERL_UNUSED_ARG(db);
+#endif
+
     if (CurrentDB->in_prefix){
         tidyUp(CurrentDB);
         croak ("DB_File btree_prefix: recursion detected\n") ;
@@ -773,6 +786,10 @@ HASH_CB_SIZE_TYPE size ;
     int retval = 0;
     int count ;
 
+#ifdef AT_LEAST_DB_3_2
+    PERL_UNUSED_ARG(db);
+#endif
+
     if (CurrentDB->in_hash){
         tidyUp(CurrentDB);
         croak ("DB_File hash callback: recursion detected\n") ;
@@ -828,6 +845,9 @@ db_errcall_cb(const char * db_errpfx, char * buffer)
     dTHX;
 #endif    
     SV * sv = perl_get_sv(ERR_BUFF, FALSE) ;
+#ifdef AT_LEAST_DB_4_3
+    PERL_UNUSED_ARG(dbenv);
+#endif
     if (sv) {
         if (db_errpfx)
             sv_setpvf(sv, "%s: %s", db_errpfx, buffer) ;
@@ -1530,6 +1550,9 @@ BOOT:
     SV * sv_err = perl_get_sv(ERR_BUFF, GV_ADD|GV_ADDMULTI) ; 
 #endif
     MY_CXT_INIT;
+#ifdef WANT_ERROR
+    PERL_UNUSED_VAR(sv_err); /* huh? we just retrieved it... */
+#endif
     __getBerkeleyDBInfo() ;
  
     DBT_clear(empty) ; 
@@ -1606,6 +1629,7 @@ db_DELETE(db, key, flags=0)
 	PREINIT:
 	  dMY_CXT;
 	INIT:
+	  (void)flags;
 	  CurrentDB = db ;
 
 
@@ -1654,6 +1678,7 @@ db_STORE(db, key, value, flags=0)
 	PREINIT:
 	  dMY_CXT;
 	INIT:
+	  (void)flags;
 	  CurrentDB = db ;
 
 

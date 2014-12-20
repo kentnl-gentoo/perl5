@@ -1318,10 +1318,16 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		    len = UTF8SKIP(result);
 		    if (!uni_to_bytes(aTHX_ &ptr, strend,
 				      (char *) &result[1], len-1, 'U')) break;
-		    auv = utf8n_to_uvchr(result, len, &retlen, UTF8_ALLOW_DEFAULT);
+		    auv = NATIVE_TO_UNI(utf8n_to_uvchr(result,
+                                                       len,
+                                                       &retlen,
+                                                       UTF8_ALLOW_DEFAULT));
 		    s = ptr;
 		} else {
-		    auv = utf8n_to_uvchr((U8*)s, strend - s, &retlen, UTF8_ALLOW_DEFAULT);
+		    auv = NATIVE_TO_UNI(utf8n_to_uvchr((U8*)s,
+                                                       strend - s,
+                                                       &retlen,
+                                                       UTF8_ALLOW_DEFAULT));
 		    if (retlen == (STRLEN) -1 || retlen == 0)
 			Perl_croak(aTHX_ "Malformed UTF-8 string in unpack");
 		    s += retlen;
@@ -1792,7 +1798,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 	    if (!checksum)
 		XPUSHs(sv);
 	    break;
-	}
+	} /* End of switch */
 
 	if (checksum) {
 	    if (strchr("fFdD", TYPE_NO_MODIFIERS(datumtype)) ||
@@ -2082,10 +2088,12 @@ S_sv_exp_grow(pTHX_ SV *sv, STRLEN needed) {
     return SvGROW(sv, len+extend+1);
 }
 
-static void
+static SV *
 S_sv_check_infnan(pTHX_ SV *sv, I32 datumtype)
 {
     SvGETMAGIC(sv);
+    if (UNLIKELY(SvAMAGIC(sv)))
+	sv = sv_2num(sv);
     if (UNLIKELY(isinfnansv(sv))) {
 	const I32 c = TYPE_NO_MODIFIERS(datumtype);
 	const NV nv = SvNV_nomg(sv);
@@ -2094,10 +2102,13 @@ S_sv_check_infnan(pTHX_ SV *sv, I32 datumtype)
 	else
 	    Perl_croak(aTHX_ "Cannot pack %"NVgf" with '%c'", nv, (int) c);
     }
+    return sv;
 }
 
-#define SvIV_no_inf(sv,d) (S_sv_check_infnan(aTHX_ sv,d), SvIV_nomg(sv))
-#define SvUV_no_inf(sv,d) (S_sv_check_infnan(aTHX_ sv,d), SvUV_nomg(sv))
+#define SvIV_no_inf(sv,d) \
+	((sv) = S_sv_check_infnan(aTHX_ sv,d), SvIV_nomg(sv))
+#define SvUV_no_inf(sv,d) \
+	((sv) = S_sv_check_infnan(aTHX_ sv,d), SvUV_nomg(sv))
 
 STATIC
 SV **
@@ -2666,7 +2677,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 		auv = SvUV_no_inf(fromstr, datumtype);
 		if (utf8) {
 		    U8 buffer[UTF8_MAXLEN], *endb;
-		    endb = uvchr_to_utf8_flags(buffer, auv,
+		    endb = uvchr_to_utf8_flags(buffer, UNI_TO_NATIVE(auv),
 					       warn_utf8 ?
 					       0 : UNICODE_ALLOW_ANY);
 		    if (cur+(endb-buffer)*UTF8_EXPAND >= end) {
@@ -2684,7 +2695,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 			GROWING(0, cat, start, cur, len+UTF8_MAXLEN);
 			end = start+SvLEN(cat)-UTF8_MAXLEN;
 		    }
-		    cur = (char *) uvchr_to_utf8_flags((U8 *) cur, auv,
+		    cur = (char *) uvchr_to_utf8_flags((U8 *) cur, UNI_TO_NATIVE(auv),
 						       warn_utf8 ?
 						       0 : UNICODE_ALLOW_ANY);
 		}
