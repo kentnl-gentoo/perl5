@@ -16,6 +16,9 @@ operations, plus various examples of the same, see discussions of
 C<m//>, C<s///>, C<qr//> and C<??> in L<perlop/"Regexp Quote-Like
 Operators">.
 
+New in v5.22, L<C<use re 'strict'>|re/'strict' mode> applies stricter
+rules than otherwise when compiling regular expression patterns.  It can
+find things that, while legal, may not be what you intended.
 
 =head2 Modifiers
 
@@ -102,6 +105,27 @@ These modifiers, all new in 5.14, affect which character-set rules
 (Unicode, etc.) are used, as described below in
 L</Character set modifiers>.
 
+=item n
+X</n> X<regex, non-capture> X<regexp, non-capture>
+X<regular expression, non-capture>
+
+Prevent the grouping metacharacters C<()> from capturing. This modifier,
+new in 5.22, will stop C<$1>, C<$2>, etc... from being filled in.
+
+  "hello" =~ /(hi|hello)/;   # $1 is "hello"
+  "hello" =~ /(hi|hello)/n;  # $1 is undef
+
+This is equivalent to putting C<?:> at the beginning of every capturing group:
+
+  "hello" =~ /(?:hi|hello)/; # $1 is undef
+
+C</n> can be negated on a per-group basis. Alternatively, named captures
+may still be used.
+
+  "hello" =~ /(?-n:(hi|hello))/n;   # $1 is "hello"
+  "hello" =~ /(?<greet>hi|hello)/n; # $1 is "hello", $+{greet} is
+                                    # "hello"
+
 =item Other Modifiers
 
 There are a number of flags that can be found at the end of regular
@@ -117,7 +141,7 @@ L<perlretut/"Using regular expressions in Perl"> are:
 
 Substitution-specific modifiers described in
 
-L<perlop/"s/PATTERN/REPLACEMENT/msixpodualgcer"> are:
+L<perlop/"s/PATTERN/REPLACEMENT/msixpodualngcer"> are:
 
   e  - evaluate the right-hand side as an expression
   ee - evaluate the right side as a string then eval the result
@@ -2309,17 +2333,25 @@ classes C<\w>, C<\W>, C<\s>, C<\S>, C<\d>, or C<\D> as endpoints of
 a range, the "-" is understood literally.
 
 Note also that the whole range idea is rather unportable between
-character sets--and even within character sets they may cause results
-you probably didn't expect.  A sound principle is to use only ranges
-that begin from and end at either alphabetics of equal case ([a-e],
-[A-E]), or digits ([0-9]).  Anything else is unsafe or unclear.  If in
-doubt, spell out the character sets in full.  Specifying the end points
-of the range using the C<\N{...}> syntax, using Unicode names or code
-points makes the range portable, but still likely not easily
-understandable to someone reading the code.  For example,
-C<[\N{U+04}-\N{U+07}]> means to match the Unicode code points
-C<\N{U+04}>, C<\N{U+05}>, C<\N{U+06}>, and C<\N{U+07}>, whatever their
-native values may be on the platform.
+character sets, except for four situations that Perl handles specially.
+Any subset of the ranges C<[A-Z]>, C<[a-z]>, and C<[0-9]> are guaranteed
+to match the expected subset of ASCII characters, no matter what
+character set the platform is running.  The fourth portable way to
+specify ranges is to use the C<\N{...}> syntax to specify either end
+point of the range.  For example, C<[\N{U+04}-\N{U+07}]> means to match
+the Unicode code points C<\N{U+04}>, C<\N{U+05}>, C<\N{U+06}>, and
+C<\N{U+07}>, whatever their native values may be on the platform.  Under
+L<use re 'strict'|re/'strict' mode> or within a L</C<(?[ ])>>, a warning
+is raised, if enabled, and the other end point of a range which has a
+C<\N{...}> endpoint is not portably specified.  For example,
+
+ [\N{U+00}-\x06]    # Warning under "use re 'strict'".
+
+It is hard to understand without digging what exactly matches ranges
+other than subsets of C<[A-Z]>, C<[a-z]>, and C<[0-9]>.  A sound
+principle is to use only ranges that begin from and end at either
+alphabetics of equal case ([a-e], [A-E]), or digits ([0-9]).  Anything
+else is unsafe or unclear.  If in doubt, spell out the range in full.
 
 Characters may be specified using a metacharacter syntax much like that
 used in C: "\n" matches a newline, "\t" a tab, "\r" a carriage return,

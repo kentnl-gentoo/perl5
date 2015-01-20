@@ -140,14 +140,14 @@
 #    ifdef PERL_GLOBAL_STRUCT_PRIVATE
        EXTERN_C struct perl_vars* Perl_GetVarsPrivate();
 #      define PERL_GET_VARS() Perl_GetVarsPrivate() /* see miniperlmain.c */
-#      ifndef PERLIO_FUNCS_CONST
-#        define PERLIO_FUNCS_CONST /* Can't have these lying around. */
-#      endif
 #    else
 #      define PERL_GET_VARS() PL_VarsPtr
 #    endif
 #  endif
 #endif
+
+/* this used to be off by default, now its on, see perlio.h */
+#define PERLIO_FUNCS_CONST
 
 #define pVAR    struct perl_vars* my_vars PERL_UNUSED_DECL
 
@@ -1269,19 +1269,22 @@ EXTERN_C char *crypt(const char *, const char *);
 
 #define ERRSV GvSVn(PL_errgv)
 
+/* contains inlined gv_add_by_type */
 #define CLEAR_ERRSV() STMT_START {					\
-    if (!GvSV(PL_errgv)) {						\
-	sv_setpvs(GvSV(gv_add_by_type(PL_errgv, SVt_PV)), "");		\
-    } else if (SvREADONLY(GvSV(PL_errgv))) {				\
-	SvREFCNT_dec(GvSV(PL_errgv));					\
-	GvSV(PL_errgv) = newSVpvs("");					\
+    SV ** const svp = &GvSV(PL_errgv);					\
+    if (!*svp) {							\
+	goto clresv_newemptypv;						\
+    } else if (SvREADONLY(*svp)) {					\
+	SvREFCNT_dec_NN(*svp);						\
+	clresv_newemptypv:						\
+	*svp = newSVpvs("");						\
     } else {								\
-	SV *const errsv = GvSV(PL_errgv);				\
+	SV *const errsv = *svp;						\
 	sv_setpvs(errsv, "");						\
+	SvPOK_only(errsv);						\
 	if (SvMAGICAL(errsv)) {						\
 	    mg_free(errsv);						\
 	}								\
-	SvPOK_only(errsv);						\
     }									\
     } STMT_END
 
@@ -5558,14 +5561,7 @@ EXTCONST runops_proc_t PL_runops_std
 EXTCONST runops_proc_t PL_runops_dbg
   INIT(Perl_runops_debug);
 
-/* PERL_GLOBAL_STRUCT_PRIVATE wants to keep global data like the
- * magic vtables const, but this is incompatible with SWIG which
- * does want to modify the vtables. */
-#ifdef PERL_GLOBAL_STRUCT_PRIVATE
-#  define EXT_MGVTBL EXTCONST MGVTBL
-#else
-#  define EXT_MGVTBL EXT MGVTBL
-#endif
+#define EXT_MGVTBL EXTCONST MGVTBL
 
 #define PERL_MAGIC_READONLY_ACCEPTABLE 0x40
 #define PERL_MAGIC_VALUE_MAGIC 0x80
@@ -5783,6 +5779,45 @@ typedef struct am_table_short AMTS;
 #   define IN_LC(category)  \
                     (IN_LC_COMPILETIME(category) || IN_LC_RUNTIME(category))
 
+#   if defined (PERL_CORE) || defined (PERL_IN_XSUB_RE)
+
+        /* This internal macro should be called from places that operate under
+         * locale rules.  It there is a problem with the current locale that
+         * hasn't been raised yet, it will output a warning this time.  Because
+         * this will so rarely  be true, there is no point to optimize for
+         * time; instead it makes sense to minimize space used and do all the
+         * work in the rarely called function */
+#       define _CHECK_AND_WARN_PROBLEMATIC_LOCALE                           \
+	STMT_START {                                                        \
+            if (UNLIKELY(PL_warn_locale)) {                                 \
+                _warn_problematic_locale();                                 \
+            }                                                               \
+        }  STMT_END
+
+
+    /* These two internal macros are called when a warning should be raised,
+     * and will do so if enabled.  The first takes a single code point
+     * argument; the 2nd, is a pointer to the first byte of the UTF-8 encoded
+     * string, and an end position which it won't try to read past */
+#   define _CHECK_AND_OUTPUT_WIDE_LOCALE_CP_MSG(cp)                         \
+      Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),                           \
+             "Wide character (U+%"UVXf") in %s", (UV) cp, OP_DESC(PL_op));
+
+#  define _CHECK_AND_OUTPUT_WIDE_LOCALE_UTF8_MSG(s, send)                   \
+	STMT_START { /* Check if to warn before doing the conversion work */\
+            if (ckWARN(WARN_LOCALE)) {                                      \
+                UV cp = utf8_to_uvchr_buf((U8 *) s, (U8 *) send, NULL);     \
+                Perl_warner(aTHX_ packWARN(WARN_LOCALE),                    \
+                    "Wide character (U+%"UVXf") in %s",                     \
+                    (cp == 0)                                               \
+                     ? UNICODE_REPLACEMENT                                  \
+                     : (UV) cp,                                             \
+                    OP_DESC(PL_op));                                        \
+            }                                                               \
+        }  STMT_END
+
+#   endif   /* PERL_CORE or PERL_IN_XSUB_RE */
+
 #else   /* No locale usage */
 #   define IN_LOCALE_RUNTIME                0
 #   define IN_SOME_LOCALE_FORM_RUNTIME      0
@@ -5797,6 +5832,10 @@ typedef struct am_table_short AMTS;
 #   define IN_LC_COMPILETIME(category)      0
 #   define IN_LC_RUNTIME(category)          0
 #   define IN_LC(category)                  0
+
+#   define _CHECK_AND_WARN_PROBLEMATIC_LOCALE
+#   define _CHECK_AND_OUTPUT_WIDE_LOCALE_CP_MSG(a)
+#   define _CHECK_AND_OUTPUT_WIDE_LOCALE_UTF8_MSG(a,b)
 #endif
 
 #ifdef USE_LOCALE_NUMERIC
@@ -6114,8 +6153,10 @@ typedef struct am_table_short AMTS;
 /* Clones the per-interpreter data. */
 #  define MY_CXT_CLONE \
 	my_cxt_t *my_cxtp = (my_cxt_t*)SvPVX(newSV(sizeof(my_cxt_t)-1));\
-	Copy(PL_my_cxt_list[MY_CXT_INDEX], my_cxtp, 1, my_cxt_t);\
-	PL_my_cxt_list[MY_CXT_INDEX] = my_cxtp				\
+	void * old_my_cxtp = PL_my_cxt_list[MY_CXT_INDEX];		\
+	PL_my_cxt_list[MY_CXT_INDEX] = my_cxtp;				\
+	Copy(old_my_cxtp, my_cxtp, 1, my_cxt_t);
+
 
 
 /* This macro must be used to access members of the my_cxt_t structure.

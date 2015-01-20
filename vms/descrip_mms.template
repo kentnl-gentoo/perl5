@@ -131,7 +131,7 @@ POSIX = POSIX
 #: __DEBUG__: builds images with full VMS debugger support
 .ifdef __DEBUG__
 DBGCCFLAGS = /List/Debug/NoOpt$(DBGSPECFLAGS)
-DBGLINKFLAGS = /Trace/Debug/Map/Full/Cross
+DBGLINKFLAGS = /Trace/Debug/Map=$(MMS$TARGET_NAME).MAP/Full/Cross
 DBG = DBG
 .else
 DBGCCFLAGS = /NoList
@@ -307,7 +307,7 @@ utils : $(utils1) $(utils2) $(utils3) $(utils4) $(utils5)
 extra.pods : miniperl
 	@ @extra_pods.com
 
-PERLDELTA_CURRENT = [.pod]perl5217delta.pod
+PERLDELTA_CURRENT = [.pod]perl5218delta.pod
 
 $(PERLDELTA_CURRENT) : [.pod]perldelta.pod
 	Copy/NoConfirm/Log $(MMS$SOURCE) $(PERLDELTA_CURRENT)

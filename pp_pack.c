@@ -1882,7 +1882,7 @@ PP(pp_unpack)
 }
 
 STATIC U8 *
-doencodes(U8 *h, const char *s, I32 len)
+doencodes(U8 *h, const U8 *s, I32 len)
 {
     *h++ = PL_uuemap[len];
     while (len > 2) {
@@ -1894,7 +1894,7 @@ doencodes(U8 *h, const char *s, I32 len)
 	len -= 3;
     }
     if (len > 0) {
-        const char r = (len > 1 ? s[1] : '\0');
+        const U8 r = (len > 1 ? s[1] : '\0');
 	*h++ = PL_uuemap[(077 & (s[0] >> 2))];
 	*h++ = PL_uuemap[(077 & (((s[0] << 4) & 060) | ((r >> 4) & 017)))];
 	*h++ = PL_uuemap[(077 & ((r << 2) & 074))];
@@ -2719,7 +2719,10 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 		    afloat = -FLT_MAX;
 		else afloat = (float)anv;
 # else
-		afloat = (float)anv;
+                /* a simple cast to float is undefined if outside
+                 * the range of values that can be represented */
+		afloat = (float)(anv >  FLT_MAX ?  NV_INF :
+                                 anv < -FLT_MAX ? -NV_INF : anv);
 # endif
                 PUSH_VAR(utf8, cur, afloat, needs_swap);
 	    }
@@ -3107,9 +3110,9 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 				   "aptr=%p, aend=%p, buffer=%p, todo=%ld",
 				   aptr, aend, buffer, (long) todo);
 		    }
-		    end = doencodes(hunk, buffer, todo);
+		    end = doencodes(hunk, (const U8 *)buffer, todo);
 		} else {
-		    end = doencodes(hunk, aptr, todo);
+		    end = doencodes(hunk, (const U8 *)aptr, todo);
 		    aptr += todo;
 		}
 		PUSH_BYTES(utf8, cur, hunk, end-hunk, 0);

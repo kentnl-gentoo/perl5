@@ -299,15 +299,10 @@ PP(pp_concat)
     }
 
     if (!rcopied) {
-	if (left == right)
-	    /* $r.$r: do magic twice: tied might return different 2nd time */
-	    SvGETMAGIC(right);
 	rpv = SvPV_nomg_const(right, rlen);
 	rbyte = !DO_UTF8(right);
     }
     if (lbyte != rbyte) {
-	/* sv_utf8_upgrade_nomg() may reallocate the stack */
-	PUTBACK;
 	if (lbyte)
 	    sv_utf8_upgrade_nomg(TARG);
 	else {
@@ -316,7 +311,6 @@ PP(pp_concat)
 	    sv_utf8_upgrade_nomg(right);
 	    rpv = SvPV_nomg_const(right, rlen);
 	}
-	SPAGAIN;
     }
     sv_catpvn_nomg(TARG, rpv, rlen);
 
@@ -653,8 +647,8 @@ PP(pp_add)
 		    if (aiv >= 0) {
 			auv = aiv;
 			auvok = 1;	/* Now acting as a sign flag.  */
-		    } else { /* 2s complement assumption for IV_MIN */
-			auv = (UV)-aiv;
+		    } else {
+			auv = (aiv == IV_MIN) ? (UV)aiv : (UV)(-aiv);
 		    }
 		}
 		a_valid = 1;
@@ -674,7 +668,7 @@ PP(pp_add)
 		    buv = biv;
 		    buvok = 1;
 		} else
-		    buv = (UV)-biv;
+                    buv = (biv == IV_MIN) ? (UV)biv : (UV)(-biv);
 	    }
 	    /* ?uvok if value is >= 0. basically, flagged as UV if it's +ve,
 	       else "IV" now, independent of how it came in.
@@ -715,7 +709,8 @@ PP(pp_add)
 		else {
 		    /* Negate result */
 		    if (result <= (UV)IV_MIN)
-			SETi( -(IV)result );
+                        SETi(result == (UV)IV_MIN
+                                ? IV_MIN : -(IV)result);
 		    else {
 			/* result valid, but out of range for IV.  */
 			SETn( -(NV)result );
@@ -2514,8 +2509,8 @@ PP(pp_subst)
     char *strend;
     const char *c;
     STRLEN clen;
-    I32 iters = 0;
-    I32 maxiters;
+    SSize_t iters = 0;
+    SSize_t maxiters;
     bool once;
     U8 rxtainted = 0; /* holds various SUBST_TAINT_* flag bits.
 			See "how taint works" above */
@@ -2739,7 +2734,7 @@ PP(pp_subst)
 		Move(s, d, i+1, char);		/* include the NUL */
 	    }
 	    SPAGAIN;
-	    mPUSHi((I32)iters);
+	    mPUSHi(iters);
 	}
     }
     else {
@@ -2851,7 +2846,7 @@ PP(pp_subst)
 	    SvPV_set(dstr, NULL);
 
 	    SPAGAIN;
-	    mPUSHi((I32)iters);
+	    mPUSHi(iters);
 	}
     }
 

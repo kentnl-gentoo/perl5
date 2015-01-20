@@ -272,7 +272,11 @@ __UNDEFINED__ isXDIGIT(c)       isxdigit(c)
 # endif
 
 #ifdef HAS_QUAD
-# define WIDEST_UTYPE U64TYPE
+# ifdef U64TYPE
+#  define WIDEST_UTYPE U64TYPE
+# else
+#  define WIDEST_UTYPE Quad_t
+# endif
 #else
 # define WIDEST_UTYPE U32
 #endif
@@ -306,6 +310,8 @@ XS(XS_Devel__PPPort_dXSTARG)
   dXSARGS;
   dXSTARG;
   IV iv;
+
+  PERL_UNUSED_VAR(cv);
   SP -= items;
   iv = SvIV(ST(0)) + 1;
   PUSHi(iv);
@@ -319,6 +325,8 @@ XS(XS_Devel__PPPort_dAXMARK)
   dAXMARK;
   dITEMS;
   IV iv;
+
+  PERL_UNUSED_VAR(cv);
   SP -= items;
   iv = SvIV(ST(0)) - 1;
   mPUSHi(iv);

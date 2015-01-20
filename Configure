@@ -1450,8 +1450,8 @@ libswanted_uselargefiles=''
 : set usesocks on the Configure command line to enable socks.
 : List of libraries we want.
 : If anyone needs extra -lxxx, put those in a hint file.
-libswanted="socket bind inet nsl nm ndbm gdbm dbm db malloc dl ld sun"
-libswanted="$libswanted m crypt sec util c cposix posix pthread ucb bsd BSD"
+libswanted="cl pthread socket bind inet nsl nm ndbm gdbm dbm db malloc dl ld"
+libswanted="$libswanted sun m crypt sec util c cposix posix ucb bsd BSD"
 : We probably want to search /usr/shlib before most other libraries.
 : This is only used by the lib/ExtUtils/MakeMaker.pm routine extliblist.
 glibpth=`echo " $glibpth " | sed -e 's! /usr/shlib ! !'`
@@ -3341,7 +3341,7 @@ EOM
 	$test -f /bin/mips && /bin/mips && osname=mips
 	$test -d /usr/apollo/bin && osname=apollo
 	$test -f /etc/saf/_sactab && osname=svr4
-	$test -d /usr/include/minix && osname=minix
+	$test -d /usr/include/minix && osname=minix && osvers=`$uname -r`
 	$test -f /system/gnu_library/bin/ar.pm && osname=vos
 	if $test -d /MachTen -o -d /MachTen_Folder; then
 		osname=machten
@@ -8734,11 +8734,8 @@ if "$useshrplib"; then
 	freebsd|mirbsd|netbsd|openbsd|interix|dragonfly|bitrig)
 		xxx="-Wl,-R$shrpdir"
 		;;
-	bsdos|linux|irix*|dec_osf|gnu*)
+	bsdos|linux|irix*|dec_osf|gnu*|haiku)
 		xxx="-Wl,-rpath,$shrpdir"
-		;;
-	haiku)
-		# Haiku doesn't like the default, either.
 		;;
 	hpux*)
 		# hpux doesn't like the default, either.
@@ -11602,7 +11599,7 @@ int main()
 EOCP
 set try
 if eval $compile_ok; then
-	$run ./try
+	$run ./try 2>/dev/null
 	yyy=$?
 else
 	echo "(I can't seem to compile the test program--assuming it can't)"
@@ -11702,7 +11699,7 @@ int main()
 EOCP
 set try
 if eval $compile_ok; then
-	$run ./try
+	$run ./try 2>/dev/null
 	castflags=$?
 else
 	echo "(I can't seem to compile the test program--assuming it can't)"
@@ -21456,7 +21453,7 @@ int main (int argc, char *argv[])
 EOCP
 	set try
 	if eval $compile; then
-	    eval `$run ./try`
+	    eval `$run ./try 2>/dev/null`
 	else
 	    echo "Cannot determine sGMTIME_max and sGMTIME_min." >&4
 	    fi
@@ -21537,7 +21534,7 @@ int main (int argc, char *argv[])
 EOCP
 	set try
 	if eval $compile; then
-	    eval `$run ./try`
+	    eval `$run ./try 2>/dev/null`
 	else
 	    echo "Cannot determine sLOCALTIME_max and sLOCALTIME_min." >&4
 	    fi
@@ -21669,7 +21666,7 @@ int main() {
 EOCP
 		set try
 		if eval $compile_ok; then
-			selectminbits=`$run ./try`
+			selectminbits=`$run ./try 2>/dev/null`
 			case "$selectminbits" in
 			'')	cat >&4 <<EOM
 Cannot figure out on how many bits at a time your select() operates.

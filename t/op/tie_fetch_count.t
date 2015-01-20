@@ -7,7 +7,7 @@ BEGIN {
     chdir 't' if -d 't';
     require './test.pl';
     set_up_inc('../lib');
-    plan (tests => 345);
+    plan (tests => 347);
 }
 
 use strict;
@@ -217,6 +217,10 @@ $dummy  = &$var5        ; check_count '&{}';
     defined $$var7          ; check_count 'symbolic defined ${}';
 }
 
+# Constructors
+$dummy  = {$var,$var}   ; check_count '{}', 2;
+$dummy  = [$var]        ; check_count '[]';
+
 tie my $var8 => 'main', 'main';
 sub bolgy {}
 $var8->bolgy            ; check_count '->method';
@@ -253,7 +257,10 @@ $dummy  =   crypt $var,0; check_count 'crypt $tied_utf8, ...';
 $var = substr(chr 256,0,0);
 $dummy  =   crypt 0,$var; check_count 'crypt ..., $tied_utf8';
 
+SKIP:
 {
+    skip "select not implemented on Win32 miniperl", 3
+        if $^O eq "MSWin32" and is_miniperl;
     no warnings;
     $var = *foo;
     $dummy  =  select $var, undef, undef, 0

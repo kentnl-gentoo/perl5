@@ -1003,9 +1003,9 @@ AmdbR	|HV*	|newHV
 ApaR	|HV*	|newHVhv	|NULLOK HV *hv
 Apabm	|IO*	|newIO
 Apda	|OP*	|newLISTOP	|I32 type|I32 flags|NULLOK OP* first|NULLOK OP* last
-AMpda	|PADNAME *|newPADNAMEouter|NN PADNAME *outer
-AMpda	|PADNAME *|newPADNAMEpvn|NN const char *s|STRLEN len
-AMpda	|PADNAMELIST *|newPADNAMELIST|size_t max
+AMpdan	|PADNAME *|newPADNAMEouter|NN PADNAME *outer
+AMpdan	|PADNAME *|newPADNAMEpvn|NN const char *s|STRLEN len
+AMpdan	|PADNAMELIST *|newPADNAMELIST|size_t max
 #ifdef USE_ITHREADS
 Apda	|OP*	|newPADOP	|I32 type|I32 flags|NN SV* sv
 #endif
@@ -1130,6 +1130,7 @@ ApOM	|int	|init_i18nl14n	|int printwarn
 ApM	|char*	|my_strerror	|const int errnum
 ApOM	|void	|new_collate	|NULLOK const char* newcoll
 ApOM	|void	|new_ctype	|NN const char* newctype
+ApMn	|void	|_warn_problematic_locale
 ApOM	|void	|new_numeric	|NULLOK const char* newcoll
 Ap	|void	|set_numeric_local
 Ap	|void	|set_numeric_radix
@@ -1144,7 +1145,8 @@ Apd	|void	|packlist 	|NN SV *cat|NN const char *pat|NN const char *patend|NN SV 
 s	|void	|pidgone	|Pid_t pid|int status
 #endif
 : Used in perly.y
-p	|OP*	|pmruntime	|NN OP *o|NN OP *expr|bool isreg|I32 floor
+p	|OP*	|pmruntime	|NN OP *o|NN OP *expr|NULLOK OP *repl \
+				|bool isreg|I32 floor
 #if defined(PERL_IN_OP_C)
 s	|OP*	|pmtrans	|NN OP* o|NN OP* expr|NN OP* repl
 #endif
@@ -1786,6 +1788,7 @@ Apdmb	|void	|sv_force_normal|NN SV *sv
 Apd	|void	|sv_force_normal_flags|NN SV *const sv|const U32 flags
 pX	|SSize_t|tmps_grow_p	|SSize_t ix
 Apd	|SV*	|sv_rvweaken	|NN SV *const sv
+ApPMd	|SV*	|sv_get_backrefs|NN SV *const sv
 : This is indirectly referenced by globals.c. This is somewhat annoying.
 p	|int	|magic_killbackrefs|NN SV *sv|NN MAGIC *mg
 Ap	|OP*	|newANONATTRSUB	|I32 floor|NULLOK OP *proto|NULLOK OP *attrs|NULLOK OP *block
@@ -1936,8 +1939,8 @@ s	|OP *	|my_kid		|NULLOK OP *o|NULLOK OP *attrs|NN OP **imopsp
 s	|OP *	|dup_attrlist	|NN OP *o
 s	|void	|apply_attrs	|NN HV *stash|NN SV *target|NULLOK OP *attrs
 s	|void	|apply_attrs_my	|NN HV *stash|NN OP *target|NULLOK OP *attrs|NN OP **imopsp
-s	|void	|bad_type_pv	|I32 n|NN const char *t|NN const char *name|U32 flags|NN const OP *kid
-s	|void	|bad_type_gv	|I32 n|NN const char *t|NN GV *gv|U32 flags|NN const OP *kid
+s	|void	|bad_type_pv	|I32 n|NN const char *t|NN const OP *o|NN const OP *kid
+s	|void	|bad_type_gv	|I32 n|NN GV *gv|NN const OP *kid|NN const char *t
 s	|void	|no_bareword_allowed|NN OP *o
 sR	|OP*	|no_fh_allowed|NN OP *o
 sR	|OP*	|too_few_arguments_pv|NN OP *o|NN const char* name|U32 flags
@@ -2109,8 +2112,6 @@ Es	|regnode*|regatom	|NN RExC_state_t *pRExC_state \
 				|NN I32 *flagp|U32 depth
 Es	|regnode*|regbranch	|NN RExC_state_t *pRExC_state \
 				|NN I32 *flagp|I32 first|U32 depth
-Ei	|STRLEN	|reguni		|NN const RExC_state_t *pRExC_state \
-				|UV uv|NN char *s
 Es	|void	 |set_ANYOF_arg	|NN RExC_state_t* const pRExC_state \
 				|NN regnode* const node                    \
 				|NULLOK SV* const cp_list                  \
@@ -2121,10 +2122,11 @@ Es	|void	 |set_ANYOF_arg	|NN RExC_state_t* const pRExC_state \
 Es	|AV*	 |add_multi_match|NULLOK AV* multi_char_matches		    \
 				|NN SV* multi_string			    \
 				|const STRLEN cp_count
-Es	|regnode*|regclass	|NN RExC_state_t *pRExC_state \
+Es	|regnode*|regclass	|NN RExC_state_t *pRExC_state                 \
 				|NN I32 *flagp|U32 depth|const bool stop_at_1 \
 				|bool allow_multi_fold                        \
-				|const bool silence_non_portable	      \
+				|const bool silence_non_portable              \
+				|const bool strict                            \
 				|NULLOK SV** ret_invlist
 Es	|void|add_above_Latin1_folds|NN RExC_state_t *pRExC_state|const U8 cp \
 				|NN SV** invlist
@@ -2211,6 +2213,7 @@ Es	|I32	|make_trie	|NN RExC_state_t *pRExC_state \
 				|U32 word_count|U32 flags|U32 depth
 Es	|regnode *|construct_ahocorasick_from_trie|NN RExC_state_t *pRExC_state \
                                 |NN regnode *source|U32 depth
+EnPs	|const char *|cntrl_to_mnemonic|const U8 c
 #  ifdef DEBUGGING
 Es        |void        |regdump_intflags|NULLOK const char *lead| const U32 flags
 Es	|void	|regdump_extflags|NULLOK const char *lead| const U32 flags
@@ -2219,7 +2222,6 @@ Es	|const regnode*|dumpuntil|NN const regexp *r|NN const regnode *start \
 				|NULLOK const regnode *last \
 				|NULLOK const regnode *plast \
 				|NN SV* sv|I32 indent|U32 depth
-EnPs	|const char *|cntrl_to_mnemonic|const U8 c
 Es	|void	|put_code_point	|NN SV* sv|UV c
 Es	|bool	|put_charclass_bitmap_innards|NN SV* sv	    \
 				|NN char* bitmap	    \
@@ -2461,7 +2463,6 @@ sn	|NV|mulexp10	|NV value|I32 exponent
 
 #if defined(PERL_IN_UTF8_C)
 sRM	|UV	|check_locale_boundary_crossing				    \
-		|NN const char * const func_name			    \
 		|NN const U8* const p					    \
 		|const UV result					    \
 		|NN U8* const ustrp					    \
@@ -2599,7 +2600,7 @@ p	|CV*	|cv_clone_into	|NN CV* proto|NN CV *target
 pd	|void	|pad_fixup_inner_anons|NN PADLIST *padlist|NN CV *old_cv|NN CV *new_cv
 pdX	|void	|pad_push	|NN PADLIST *padlist|int depth
 ApbdR	|HV*	|pad_compname_type|const PADOFFSET po
-AMpdR	|PADNAME *|padnamelist_fetch|NN PADNAMELIST *pnl|SSize_t key
+AMpdRn	|PADNAME *|padnamelist_fetch|NN PADNAMELIST *pnl|SSize_t key
 Xop	|void	|padnamelist_free|NN PADNAMELIST *pnl
 AMpd	|PADNAME **|padnamelist_store|NN PADNAMELIST *pnl|SSize_t key \
 				     |NULLOK PADNAME *val

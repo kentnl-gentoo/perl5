@@ -12,11 +12,6 @@ $works &&= eval { require threads; 'threads'->import; 1 };
 sub import {
     my $class = shift;
 
-    if ($] == 5.010000) {
-        require Test::More;
-        Test::More::plan(skip_all => "Threads are broken on 5.10.0");
-    }
-
     unless ($works) {
         require Test::More;
         Test::More::plan(skip_all => "Skip no working threads");
@@ -34,8 +29,32 @@ sub import {
         Test::More::plan(skip_all => "This threaded test will only run when the '$var' environment variable is set.");
     }
 
-    unshift @_ => 'threads';
-    goto &threads::import;
+    if ($] == 5.010000) {
+        require File::Temp;
+        require File::Spec;
+
+        my $perl = File::Spec->rel2abs($^X);
+        my ($fh, $fn) = File::Temp::tempfile();
+        print $fh <<'        EOT';
+            BEGIN { print STDERR "# Checking for thread segfaults\n# " }
+            use threads;
+            my $t = threads->create(sub { 1 });
+            $t->join;
+            print STDERR "Threads appear to work\n";
+            exit 0;
+        EOT
+        close($fh);
+
+        my $exit = system(qq{"$perl" "$fn"});
+
+        if ($exit) {
+            require Test::More;
+            Test::More::plan(skip_all => "Threads segfault on this perl");
+        }
+    }
+
+    my $caller = caller;
+    eval "package $caller; use threads; 1" || die $@;
 }
 
 1;

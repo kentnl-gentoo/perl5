@@ -21,6 +21,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
          CVf_METHOD CVf_LVALUE
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED PMf_EXTENDED_MORE
+	 PADNAMEt_OUTER
         MDEREF_reload
         MDEREF_AV_pop_rv2av_aelem
         MDEREF_AV_gvsv_vivify_rv2av_aelem
@@ -45,7 +46,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
         MDEREF_SHIFT
     );
 
-$VERSION = '1.31';
+$VERSION = '1.32';
 use strict;
 use vars qw/$AUTOLOAD/;
 use warnings ();
@@ -57,7 +58,7 @@ BEGIN {
     # be to fake up a dummy constant that will never actually be true.
     foreach (qw(OPpSORT_INPLACE OPpSORT_DESCEND OPpITER_REVERSED OPpCONST_NOVER
 		OPpPAD_STATE PMf_SKIPWHITE RXf_SKIPWHITE
-		RXf_PMf_CHARSET RXf_PMf_KEEPCOPY
+		RXf_PMf_CHARSET RXf_PMf_KEEPCOPY CVf_ANONCONST
 		CVf_LOCKED OPpREVERSE_INPLACE OPpSUBSTR_REPL_FIRST
 		PMf_NONDESTRUCT OPpCONST_ARYBASE OPpEVAL_BYTES
 		OPpLVREF_TYPE OPpLVREF_SV OPpLVREF_AV OPpLVREF_HV
@@ -476,7 +477,8 @@ sub null {
 sub todo {
     my $self = shift;
     my($cv, $is_form, $name) = @_;
-    return unless ($cv->FILE eq $0 || exists $self->{files}{$cv->FILE});
+    my $cvfile = $cv->FILE//'';
+    return unless ($cvfile eq $0 || exists $self->{files}{$cvfile});
     my $seq;
     if ($cv->OUTSIDE_SEQ) {
 	$seq = $cv->OUTSIDE_SEQ;
@@ -1164,14 +1166,25 @@ sub pad_subs {
 	if (defined $name && $name =~ /^&./) {
 	    my $low = $_->COP_SEQ_RANGE_LOW;
 	    my $flags = $_->FLAGS;
+	    my $outer = $flags & PADNAMEt_OUTER;
 	    if ($flags & SVpad_OUR) {
-		push @todo, [$low, undef, 0, $_];
+		push @todo, [$low, undef, 0, $_]
 		          # [seq, no cv, not format, padname]
+		    unless $outer;
 		next;
 	    }
 	    my $protocv = $flags & SVpad_STATE
 		? $values[$ix]
 		: $_->PROTOCV;
+	    my $defined_in_this_sub = ${$protocv->OUTSIDE} == $$cv || do {
+		my $other = $protocv->PADLIST;
+		$$other && $other->outid == $padlist->id;
+	    };
+	    if ($flags & PADNAMEt_OUTER) {
+		next unless $defined_in_this_sub;
+		push @todo, [$protocv->OUTSIDE_SEQ, $protocv, 0, $_];
+		next;
+	    }
 	    my $outseq = $protocv->OUTSIDE_SEQ;
 	    if ($outseq <= $low) {
 		# defined before its name is visible, so it’s gotta be
@@ -1180,8 +1193,9 @@ sub pad_subs {
 	    }
 	    else {
 		# declared and defined separately: my sub f; sub f { ... }
-		push @todo, [$low, undef, 0, $_],
-			    [$outseq, $protocv, 0, $_];
+		push @todo, [$low, undef, 0, $_];
+		push @todo, [$outseq, $protocv, 0, $_]
+		    if $defined_in_this_sub;
 	    }
 	}
     }}
@@ -1199,11 +1213,12 @@ Carp::confess("SPECIAL in deparse_sub") if $cv->isa("B::SPECIAL");
     if ($cv->FLAGS & SVf_POK) {
 	$proto = "(". $cv->PV . ") ";
     }
-    if ($cv->CvFLAGS & (CVf_METHOD|CVf_LOCKED|CVf_LVALUE)) {
+    if ($cv->CvFLAGS & (CVf_METHOD|CVf_LOCKED|CVf_LVALUE|CVf_ANONCONST)) {
         $proto .= ": ";
         $proto .= "lvalue " if $cv->CvFLAGS & CVf_LVALUE;
         $proto .= "locked " if $cv->CvFLAGS & CVf_LOCKED;
         $proto .= "method " if $cv->CvFLAGS & CVf_METHOD;
+        $proto .= "const "  if $cv->CvFLAGS & CVf_ANONCONST;
     }
 
     local($self->{'curcv'}) = $cv;
@@ -1706,6 +1721,41 @@ sub stash_variable {
     return $prefix . $self->maybe_qualify($prefix, $name);
 }
 
+my %unctrl = # portable to EBCDIC
+    (
+     "\c@" => '@',	# unused
+     "\cA" => 'A',
+     "\cB" => 'B',
+     "\cC" => 'C',
+     "\cD" => 'D',
+     "\cE" => 'E',
+     "\cF" => 'F',
+     "\cG" => 'G',
+     "\cH" => 'H',
+     "\cI" => 'I',
+     "\cJ" => 'J',
+     "\cK" => 'K',
+     "\cL" => 'L',
+     "\cM" => 'M',
+     "\cN" => 'N',
+     "\cO" => 'O',
+     "\cP" => 'P',
+     "\cQ" => 'Q',
+     "\cR" => 'R',
+     "\cS" => 'S',
+     "\cT" => 'T',
+     "\cU" => 'U',
+     "\cV" => 'V',
+     "\cW" => 'W',
+     "\cX" => 'X',
+     "\cY" => 'Y',
+     "\cZ" => 'Z',
+     "\c[" => '[',	# unused
+     "\c\\" => '\\',	# unused
+     "\c]" => ']',	# unused
+     "\c_" => '_',	# unused
+    );
+
 # Return just the name, without the prefix.  It may be returned as a quoted
 # string.  The second return value is a boolean indicating that.
 sub stash_variable_name {
@@ -1713,7 +1763,7 @@ sub stash_variable_name {
     my $name = $self->gv_name($gv, 1);
     $name = $self->maybe_qualify($prefix,$name);
     if ($name =~ /^(?:\S|(?!\d)[\ca-\cz]?(?:\w|::)*|\d+)\z/) {
-	$name =~ s/^([\ca-\cz])/'^'.($1|'@')/e;
+	$name =~ s/^([\ca-\cz])/'^' . $unctrl{$1}/e;
 	$name =~ /^(\^..|{)/ and $name = "{$name}";
 	return $name, 0; # not quoted
     }
@@ -1977,7 +2027,9 @@ sub declare_warnings {
     elsif (($to & WARN_MASK) eq ("\0"x length($to) & WARN_MASK)) {
 	return $self->keyword("no") . " warnings;\n";
     }
-    return "BEGIN {\${^WARNING_BITS} = ".perlstring($to)."}\n\cK";
+    return "BEGIN {\${^WARNING_BITS} = \""
+           . join("", map { sprintf("\\x%02x", ord $_) } split "", $to)
+           . "\"}\n\cK";
 }
 
 sub declare_hints {
@@ -2536,6 +2588,9 @@ sub pp_refgen {
     my $kid = $op->first;
     if ($kid->name eq "null") {
 	my $anoncode = $kid = $kid->first;
+	if ($anoncode->name eq "anonconst") {
+	    $anoncode = $anoncode->first->first->sibling;
+	}
 	if ($anoncode->name eq "anoncode"
 	 or !null($anoncode = $kid->sibling) and
 		 $anoncode->name eq "anoncode") {
@@ -2819,7 +2874,7 @@ sub pp_i_lt { binop(@_, "<", 15) }
 sub pp_i_gt { binop(@_, ">", 15) }
 sub pp_i_ge { binop(@_, ">=", 15) }
 sub pp_i_le { binop(@_, "<=", 15) }
-sub pp_i_ncmp { binop(@_, "<=>", 14) }
+sub pp_i_ncmp { maybe_targmy(@_, \&binop, "<=>", 14) }
 
 sub pp_seq { binop(@_, "eq", 14) }
 sub pp_sne { binop(@_, "ne", 14) }
@@ -2827,7 +2882,7 @@ sub pp_slt { binop(@_, "lt", 15) }
 sub pp_sgt { binop(@_, "gt", 15) }
 sub pp_sge { binop(@_, "ge", 15) }
 sub pp_sle { binop(@_, "le", 15) }
-sub pp_scmp { binop(@_, "cmp", 14) }
+sub pp_scmp { maybe_targmy(@_, \&binop, "cmp", 14) }
 
 sub pp_sassign { binop(@_, "=", 7, SWAP_CHILDREN) }
 sub pp_aassign { binop(@_, "=", 7, SWAP_CHILDREN | LIST_CONTEXT) }
@@ -4220,7 +4275,7 @@ sub check_proto {
     1 while $proto =~ s/(?<!\\)([@%])[^\]]+$/$1/;
     $proto =~ s/^\s*//;
     while ($proto) {
-	$proto =~ s/^(\\?[\$\@&%*_]|\\\[[\$\@&%*]+\]|;)\s*//;
+	$proto =~ s/^(\\?[\$\@&%*_]|\\\[[\$\@&%*]+\]|;|)\s*//;
 	my $chr = $1;
 	if ($chr eq "") {
 	    return "&" if @args;
@@ -4351,6 +4406,7 @@ sub pp_entersub {
     }
     my $simple = 0;
     my $proto = undef;
+    my $lexical;
     if (is_scope($kid)) {
 	$amper = "&";
 	$kid = "{" . $self->deparse($kid, 0) . "}";
@@ -4397,13 +4453,29 @@ sub pp_entersub {
 	$kid = $self->deparse($kid, 24);
     } else {
 	$prefix = "";
-	my $arrow = is_subscriptable($kid->first) || $kid->first->name eq "padcv" ? "" : "->";
+	my $grandkid = $kid->first;
+	my $arrow = ($lexical = $grandkid->name eq "padcv")
+		 || is_subscriptable($grandkid)
+		    ? ""
+		    : "->";
 	$kid = $self->deparse($kid, 24) . $arrow;
+	if ($lexical) {
+	    my $padlist = $self->{'curcv'}->PADLIST;
+	    my $padoff = $grandkid->targ;
+	    my $padname = $padlist->ARRAYelt(0)->ARRAYelt($padoff);
+	    my $protocv = $padname->FLAGS & SVpad_STATE
+		? $padlist->ARRAYelt(1)->ARRAYelt($padoff)
+		: $padname->PROTOCV;
+	    if ($protocv->FLAGS & SVf_POK) {
+		$proto = $protocv->PV
+	    }
+	    $simple = 1;
+	}
     }
 
     # Doesn't matter how many prototypes there are, if
     # they haven't happened yet!
-    my $declared = exists $self->{'subs_declared'}{$kid};
+    my $declared = $lexical || exists $self->{'subs_declared'}{$kid};
     if (not $declared and $self->{'in_coderef2text'}) {
 	no strict 'refs';
 	no warnings 'uninitialized';
@@ -4449,17 +4521,18 @@ sub pp_entersub {
 	$kid =~ s/^CORE::GLOBAL:://;
 
 	my $dproto = defined($proto) ? $proto : "undefined";
+	my $scalar_proto = $dproto =~ /^;*(?:[\$*_+]|\\.|\\\[[^]]\])\z/;
         if (!$declared) {
 	    return "$kid(" . $args . ")";
 	} elsif ($dproto =~ /^\s*\z/) {
 	    return $kid;
-	} elsif ($dproto eq "\$" and is_scalar($exprs[0])) {
+	} elsif ($scalar_proto and is_scalar($exprs[0])) {
 	    # is_scalar is an excessively conservative test here:
 	    # really, we should be comparing to the precedence of the
 	    # top operator of $exprs[0] (ala unop()), but that would
 	    # take some major code restructuring to do right.
 	    return $self->maybe_parens_func($kid, $args, $cx, 16);
-	} elsif ($dproto ne '$' and defined($proto) || $simple) { #'
+	} elsif (not $scalar_proto and defined($proto) || $simple) { #'
 	    return $self->maybe_parens_func($kid, $args, $cx, 5);
 	} else {
 	    return "$kid(" . $args . ")";
@@ -4521,53 +4594,19 @@ sub re_uninterp {
 }
 }
 
-my %unctrl = # portable to EBCDIC
-    (
-     "\c@" => '\c@',	# unused
-     "\cA" => '\cA',
-     "\cB" => '\cB',
-     "\cC" => '\cC',
-     "\cD" => '\cD',
-     "\cE" => '\cE',
-     "\cF" => '\cF',
-     "\cG" => '\cG',
-     "\cH" => '\cH',
-     "\cI" => '\cI',
-     "\cJ" => '\cJ',
-     "\cK" => '\cK',
-     "\cL" => '\cL',
-     "\cM" => '\cM',
-     "\cN" => '\cN',
-     "\cO" => '\cO',
-     "\cP" => '\cP',
-     "\cQ" => '\cQ',
-     "\cR" => '\cR',
-     "\cS" => '\cS',
-     "\cT" => '\cT',
-     "\cU" => '\cU',
-     "\cV" => '\cV',
-     "\cW" => '\cW',
-     "\cX" => '\cX',
-     "\cY" => '\cY',
-     "\cZ" => '\cZ',
-     "\c[" => '\c[',	# unused
-     "\c\\" => '\c\\',	# unused
-     "\c]" => '\c]',	# unused
-     "\c_" => '\c_',	# unused
-    );
-
 # character escapes, but not delimiters that might need to be escaped
 sub escape_str { # ASCII, UTF8
     my($str) = @_;
     $str =~ s/(.)/ord($1) > 255 ? sprintf("\\x{%x}", ord($1)) : $1/eg;
     $str =~ s/\a/\\a/g;
-#    $str =~ s/\cH/\\b/g; # \b means something different in a regex
+#    $str =~ s/\cH/\\b/g; # \b means something different in a regex; and \cH
+                          # isn't a backspace in EBCDIC
     $str =~ s/\t/\\t/g;
     $str =~ s/\n/\\n/g;
     $str =~ s/\e/\\e/g;
     $str =~ s/\f/\\f/g;
     $str =~ s/\r/\\r/g;
-    $str =~ s/([\cA-\cZ])/$unctrl{$1}/ge;
+    $str =~ s/([\cA-\cZ])/'\\c' . $unctrl{$1}/ge;
     $str =~ s/([[:^print:]])/sprintf("\\%03o", ord($1))/age;
     return $str;
 }
@@ -4961,7 +5000,11 @@ sub pchr { # ASCII
 	return '\\\\';
     } elsif ($n == ord "-") {
 	return "\\-";
-    } elsif ($n >= ord(' ') and $n <= ord('~')) {
+    } elsif (utf8::native_to_unicode($n) >= utf8::native_to_unicode(ord(' '))
+             and utf8::native_to_unicode($n) <= utf8::native_to_unicode(ord('~')))
+    {
+        # I'm presuming a regex is not ok here, otherwise we could have used
+        # /[[:print:]]/a to get here
 	return chr($n);
     } elsif ($n == ord "\a") {
 	return '\\a';
@@ -4978,7 +5021,7 @@ sub pchr { # ASCII
     } elsif ($n == ord "\r") {
 	return '\\r';
     } elsif ($n >= ord("\cA") and $n <= ord("\cZ")) {
-	return '\\c' . chr(ord("@") + $n);
+	return '\\c' . unctrl{chr $n};
     } else {
 #	return '\x' . sprintf("%02x", $n);
 	return '\\' . sprintf("%03o", $n);
@@ -5364,7 +5407,7 @@ sub re_flags {
     if (my $charset = $pmflags & RXf_PMf_CHARSET) {
 	# Hardcoding this is fragile, but B does not yet export the
 	# constants we need.
-	$flags .= qw(d l u a aa)[$charset >> 6]
+	$flags .= qw(d l u a aa)[$charset >> 7]
     }
     # The /d flag is indicated by 0; only show it if necessary.
     elsif ($self->{hinthash} and

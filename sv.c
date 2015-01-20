@@ -1594,8 +1594,11 @@ Perl_sv_grow(pTHX_ SV *const sv, STRLEN newlen)
      * make more strings COW-able.
      * If the new size is a big power of two, don't bother: we assume the
      * caller wanted a nice 2^N sized block and will be annoyed at getting
-     * 2^N+1 */
-    if (newlen & 0xff)
+     * 2^N+1.
+     * Only increment if the allocation isn't MEM_SIZE_MAX,
+     * otherwise it will wrap to 0.
+     */
+    if (newlen & 0xff && newlen != MEM_SIZE_MAX)
         newlen++;
 #endif
 
@@ -2158,6 +2161,7 @@ S_sv_2iuv_common(pTHX_ SV *const sv)
 	    SvIV_set(sv, I_V(SvNVX(sv)));
 	    if (SvNVX(sv) == (NV) SvIVX(sv)
 #ifndef NV_PRESERVES_UV
+                && SvIVX(sv) != IV_MIN /* avoid negating IV_MIN below */
 		&& (((UV)1 << NV_PRESERVES_UV_BITS) >
 		    (UV)(SvIVX(sv) > 0 ? SvIVX(sv) : -SvIVX(sv)))
 		/* Don't flag it as "accurately an integer" if the number
@@ -2245,6 +2249,8 @@ S_sv_2iuv_common(pTHX_ SV *const sv)
 	    sv_upgrade(sv, SVt_PVNV);
 
         if ((numtype & (IS_NUMBER_INFINITY | IS_NUMBER_NAN))) {
+            if (ckWARN(WARN_NUMERIC) && ((numtype & IS_NUMBER_NAN)))
+		not_a_number(sv);
             S_sv_setnv(aTHX_ sv, numtype);
             return FALSE;
         }
@@ -2273,7 +2279,8 @@ S_sv_2iuv_common(pTHX_ SV *const sv)
 	    } else {
 		/* 2s complement assumption  */
 		if (value <= (UV)IV_MIN) {
-		    SvIV_set(sv, -(IV)value);
+		    SvIV_set(sv, value == (UV)IV_MIN
+                                    ? IV_MIN : -(IV)value);
 		} else {
 		    /* Too negative for an IV.  This is a double upgrade, but
 		       I'm assuming it will be rare.  */
@@ -2732,7 +2739,7 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
             SvNOK_on(sv);
         } else {
             /* value has been set.  It may not be precise.  */
-	    if ((numtype & IS_NUMBER_NEG) && (value > (UV)IV_MIN)) {
+	    if ((numtype & IS_NUMBER_NEG) && (value >= (UV)IV_MIN)) {
 		/* 2s complement assumption for (UV)IV_MIN  */
                 SvNOK_on(sv); /* Integer is too negative.  */
             } else {
@@ -2740,6 +2747,10 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
                 SvIOKp_on(sv);
 
                 if (numtype & IS_NUMBER_NEG) {
+                    /* -IV_MIN is undefined, but we should never reach
+                     * this point with both IS_NUMBER_NEG and value ==
+                     * (UV)IV_MIN */
+                    assert(value != (UV)IV_MIN);
                     SvIV_set(sv, -(IV)value);
                 } else if (value <= (UV)IV_MAX) {
 		    SvIV_set(sv, (IV)value);
@@ -2861,7 +2872,7 @@ S_uiv_2buf(char *const buf, const IV iv, UV uv, const int is_uv, char **const pe
 	uv = iv;
 	sign = 0;
     } else {
-	uv = -iv;
+        uv = (iv == IV_MIN) ? (UV)iv : (UV)(-iv);
 	sign = 1;
     }
     do {
@@ -2883,7 +2894,7 @@ S_uiv_2buf(char *const buf, const IV iv, UV uv, const int is_uv, char **const pe
  * shared string constants we point to, instead of generating a new
  * string for each instance. */
 STATIC size_t
-S_infnan_2pv(NV nv, char* buffer, size_t maxlen) {
+S_infnan_2pv(NV nv, char* buffer, size_t maxlen, char plus) {
     assert(maxlen >= 4);
     if (maxlen < 4) /* "Inf\0", "NaN\0" */
         return 0;
@@ -2894,6 +2905,8 @@ S_infnan_2pv(NV nv, char* buffer, size_t maxlen) {
                 if (maxlen < 5) /* "-Inf\0"  */
                     return 0;
                 *s++ = '-';
+            } else if (plus) {
+                *s++ = '+';
             }
             *s++ = 'I';
             *s++ = 'n';
@@ -3108,7 +3121,7 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
             STRLEN size = 5; /* "-Inf\0" */
 
             s = SvGROW_mutable(sv, size);
-            len = S_infnan_2pv(SvNVX(sv), s, size);
+            len = S_infnan_2pv(SvNVX(sv), s, size, 0);
             if (len > 0) {
                 s += len;
                 SvPOK_on(sv);
@@ -5927,6 +5940,46 @@ Perl_sv_rvweaken(pTHX_ SV *const sv)
     SvWEAKREF_on(sv);
     SvREFCNT_dec_NN(tsv);
     return sv;
+}
+
+/*
+=for apidoc sv_get_backrefs
+
+If the sv is the target of a weakrefence then return
+the backrefs structure associated with the sv, otherwise
+return NULL.
+
+When returning a non-null result the type of the return
+is relevant. If it is an AV then the contents of the AV
+are the weakrefs which point at this item. If it is any
+other type then the item itself is the weakref.
+
+See also Perl_sv_add_backref(), Perl_sv_del_backref(),
+Perl_sv_kill_backrefs()
+
+=cut
+*/
+
+SV *
+Perl_sv_get_backrefs(pTHX_ SV *const sv)
+{
+    SV *backrefs= NULL;
+
+    PERL_ARGS_ASSERT_SV_GET_BACKREFS;
+
+    /* find slot to store array or singleton backref */
+
+    if (SvTYPE(sv) == SVt_PVHV) {
+        if (SvOOK(sv)) {
+            struct xpvhv_aux * const iter = HvAUX((HV *)sv);
+            backrefs = (SV *)iter->xhv_backreferences;
+        }
+    } else if (SvMAGICAL(sv)) {
+        MAGIC *mg = mg_find(sv, PERL_MAGIC_backref);
+        if (mg)
+            backrefs = mg->mg_obj;
+    }
+    return backrefs;
 }
 
 /* Give tsv backref magic if it hasn't already got it, then push a
@@ -10729,7 +10782,7 @@ S_F0convert(NV nv, char *const endbuf, STRLEN *const len)
     PERL_ARGS_ASSERT_F0CONVERT;
 
     if (UNLIKELY(Perl_isinfnan(nv))) {
-        STRLEN n = S_infnan_2pv(nv, endbuf - *len, *len);
+        STRLEN n = S_infnan_2pv(nv, endbuf - *len, *len, 0);
         *len = n;
         return endbuf - n;
     }
@@ -11858,7 +11911,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 			esignbuf[esignlen++] = plus;
 		}
 		else {
-		    uv = -iv;
+		    uv = (iv == IV_MIN) ? (UV)iv : (UV)(-iv);
 		    esignbuf[esignlen++] = '-';
 		}
 	    }
@@ -12318,12 +12371,14 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 #endif
 
                     if (precis > 0) {
-                        v = vhex + precis + 1;
-                        if (v < vend) {
+                        if ((SSize_t)(precis + 1) < vend - vhex) {
+                            bool round;
+
+                            v = vhex + precis + 1;
                             /* Round away from zero: if the tail
                              * beyond the precis xdigits is equal to
                              * or greater than 0x8000... */
-                            bool round = *v > 0x8;
+                            round = *v > 0x8;
                             if (!round && *v == 0x8) {
                                 for (v++; v < vend; v++) {
                                     if (*v) {
@@ -12421,8 +12476,25 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                     elen = width;
                 }
             }
-            else
-                elen = S_infnan_2pv(fv, PL_efloatbuf, PL_efloatsize);
+            else {
+                elen = S_infnan_2pv(fv, PL_efloatbuf, PL_efloatsize, plus);
+                if (elen) {
+                    /* Not affecting infnan output: precision, alt, fill. */
+                    if (elen < width) {
+                        if (left) {
+                            /* Pack the back with spaces. */
+                            memset(PL_efloatbuf + elen, ' ', width - elen);
+                        } else {
+                            /* Move it to the right. */
+                            Move(PL_efloatbuf, PL_efloatbuf + width - elen,
+                                 elen, char);
+                            /* Pad the front with spaces. */
+                            memset(PL_efloatbuf, ' ', width - elen);
+                        }
+                        elen = width;
+                    }
+                }
+            }
 
             if (elen == 0) {
                 char *ptr = ebuf + sizeof ebuf;
@@ -14526,6 +14598,8 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     PL_subline		= proto_perl->Isubline;
 
+    PL_cv_has_eval	= proto_perl->Icv_has_eval;
+
 #ifdef FCRYPT
     PL_cryptseen	= proto_perl->Icryptseen;
 #endif
@@ -14781,6 +14855,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_endav		= av_dup_inc(proto_perl->Iendav, param);
     PL_checkav		= av_dup_inc(proto_perl->Icheckav, param);
     PL_initav		= av_dup_inc(proto_perl->Iinitav, param);
+    PL_savebegin	= proto_perl->Isavebegin;
 
     PL_isarev		= hv_dup_inc(proto_perl->Iisarev, param);
 
@@ -14859,6 +14934,11 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     }
 
     PL_subname		= sv_dup_inc(proto_perl->Isubname, param);
+
+#ifdef USE_LOCALE_CTYPE
+    /* Should we warn if uses locale? */
+    PL_warn_locale      = sv_dup_inc(proto_perl->Iwarn_locale, param);
+#endif
 
 #ifdef USE_LOCALE_COLLATE
     PL_collation_name	= SAVEPV(proto_perl->Icollation_name);

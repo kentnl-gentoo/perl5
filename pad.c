@@ -1320,10 +1320,6 @@ S_pad_findlex(pTHX_ const char *namepv, STRLEN namelen, U32 flags, const CV* cv,
 	return 0; /* this dummy (and invalid) value isnt used by the caller */
 
     {
-	/* This relies on sv_setsv_flags() upgrading the destination to the same
-	   type as the source, independent of the flags set, and on it being
-	   "good" and only copying flag bits and pointers that it understands.
-	*/
 	PADNAME *new_name = newPADNAMEouter(*out_name);
 	PADNAMELIST * const ocomppad_name = PL_comppad_name;
 	PAD * const ocomppad = PL_comppad;
@@ -1944,10 +1940,11 @@ the immediately surrounding code.
 =cut
 */
 
-static CV *S_cv_clone(pTHX_ CV *proto, CV *cv, CV *outside);
+static CV *S_cv_clone(pTHX_ CV *proto, CV *cv, CV *outside, HV *cloned);
 
 static CV *
-S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, bool newcv)
+S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, HV *cloned,
+		     bool newcv)
 {
     I32 ix;
     PADLIST* const protopadlist = CvPADLIST(proto);
@@ -1959,7 +1956,8 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, bool newcv)
     const I32 fpad = AvFILLp(protopad);
     SV** outpad;
     long depth;
-    bool subclones = FALSE;
+    U32 subclones = 0;
+    bool trouble = FALSE;
 
     assert(!CvUNIQUE(proto));
 
@@ -2046,7 +2044,9 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, bool newcv)
 		       second pass. */
 		    if (SvPAD_STATE(namesv) && !CvCLONED(ppad[ix])) {
 			assert(SvTYPE(ppad[ix]) == SVt_PVCV);
-			subclones = 1;
+			subclones ++;
+			if (CvOUTSIDE(ppad[ix]) != proto)
+			     trouble = TRUE;
 			sv = newSV_type(SVt_PVCV);
 			CvLEXICAL_on(sv);
 		    }
@@ -2092,12 +2092,70 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, bool newcv)
     }
 
     if (subclones)
-	for (ix = fpad; ix > 0; ix--) {
+    {
+	if (trouble || cloned) {
+	    /* Uh-oh, we have trouble!  At least one of the state subs here
+	       has its CvOUTSIDE pointer pointing somewhere unexpected.  It
+	       could be pointing to another state protosub that we are
+	       about to clone.  So we have to track which sub clones come
+	       from which protosubs.  If the CvOUTSIDE pointer for a parti-
+	       cular sub points to something we have not cloned yet, we
+	       delay cloning it.  We must loop through the pad entries,
+	       until we get a full pass with no cloning.  If any uncloned
+	       subs remain (probably nested inside anonymous or ‘my’ subs),
+	       then they get cloned in a final pass.
+	     */
+	    bool cloned_in_this_pass;
+	    if (!cloned)
+		cloned = (HV *)sv_2mortal((SV *)newHV());
+	    do {
+		cloned_in_this_pass = FALSE;
+		for (ix = fpad; ix > 0; ix--) {
+		    PADNAME * const name =
+			(ix <= fname) ? pname[ix] : NULL;
+		    if (name && name != &PL_padname_undef
+		     && !PadnameOUTER(name) && PadnamePV(name)[0] == '&'
+		     && PadnameIsSTATE(name) && !CvCLONED(PL_curpad[ix]))
+		    {
+			CV * const protokey = CvOUTSIDE(ppad[ix]);
+			CV ** const cvp = protokey == proto
+			    ? &cv
+			    : (CV **)hv_fetch(cloned, (char *)&protokey,
+					      sizeof(CV *), 0);
+			if (cvp && *cvp) {
+			    S_cv_clone(aTHX_ (CV *)ppad[ix],
+					     (CV *)PL_curpad[ix],
+					     *cvp, cloned);
+			    hv_store(cloned, (char *)&ppad[ix],
+				     sizeof(CV *),
+				     SvREFCNT_inc_simple_NN(PL_curpad[ix]),
+				     0);
+			    subclones--;
+			    cloned_in_this_pass = TRUE;
+			}
+		    }
+		}
+	    } while (cloned_in_this_pass);
+	    if (subclones)
+		for (ix = fpad; ix > 0; ix--) {
+		    PADNAME * const name =
+			(ix <= fname) ? pname[ix] : NULL;
+		    if (name && name != &PL_padname_undef
+		     && !PadnameOUTER(name) && PadnamePV(name)[0] == '&'
+		     && PadnameIsSTATE(name) && !CvCLONED(PL_curpad[ix]))
+			S_cv_clone(aTHX_ (CV *)ppad[ix],
+					 (CV *)PL_curpad[ix],
+					 CvOUTSIDE(ppad[ix]), cloned);
+		}
+	}
+	else for (ix = fpad; ix > 0; ix--) {
 	    PADNAME * const name = (ix <= fname) ? pname[ix] : NULL;
 	    if (name && name != &PL_padname_undef && !PadnameOUTER(name)
 	     && PadnamePV(name)[0] == '&' && PadnameIsSTATE(name))
-		S_cv_clone(aTHX_ (CV *)ppad[ix], (CV *)PL_curpad[ix], cv);
+		S_cv_clone(aTHX_ (CV *)ppad[ix], (CV *)PL_curpad[ix], cv,
+				 NULL);
 	}
+    }
 
     if (newcv) SvREFCNT_inc_simple_void_NN(cv);
     LEAVE;
@@ -2190,7 +2248,7 @@ S_cv_clone_pad(pTHX_ CV *proto, CV *cv, CV *outside, bool newcv)
 }
 
 static CV *
-S_cv_clone(pTHX_ CV *proto, CV *cv, CV *outside)
+S_cv_clone(pTHX_ CV *proto, CV *cv, CV *outside, HV *cloned)
 {
 #ifdef USE_ITHREADS
     dVAR;
@@ -2225,7 +2283,7 @@ S_cv_clone(pTHX_ CV *proto, CV *cv, CV *outside)
 	mg_copy((SV *)proto, (SV *)cv, 0, 0);
 
     if (CvPADLIST(proto))
-	cv = S_cv_clone_pad(aTHX_ proto, cv, outside, newcv);
+	cv = S_cv_clone_pad(aTHX_ proto, cv, outside, cloned, newcv);
 
     DEBUG_Xv(
 	PerlIO_printf(Perl_debug_log, "\nPad CV clone\n");
@@ -2243,7 +2301,7 @@ Perl_cv_clone(pTHX_ CV *proto)
     PERL_ARGS_ASSERT_CV_CLONE;
 
     if (!CvPADLIST(proto)) Perl_croak(aTHX_ "panic: no pad in cv_clone");
-    return S_cv_clone(aTHX_ proto, NULL, NULL);
+    return S_cv_clone(aTHX_ proto, NULL, NULL, NULL);
 }
 
 /* Called only by pp_clonecv */
@@ -2252,7 +2310,7 @@ Perl_cv_clone_into(pTHX_ CV *proto, CV *target)
 {
     PERL_ARGS_ASSERT_CV_CLONE_INTO;
     cv_undef(target);
-    return S_cv_clone(aTHX_ proto, target, NULL);
+    return S_cv_clone(aTHX_ proto, target, NULL, NULL);
 }
 
 /*
@@ -2327,18 +2385,30 @@ Perl_pad_fixup_inner_anons(pTHX_ PADLIST *padlist, CV *old_cv, CV *new_cv)
     PERL_UNUSED_ARG(old_cv);
 
     for (ix = PadnamelistMAX(comppad_name); ix > 0; ix--) {
-        const PADNAME * const name = namepad[ix];
-	if (name && name != &PL_padname_undef && !PadnameIsSTATE(name)
+        const PADNAME *name = namepad[ix];
+	if (name && name != &PL_padname_undef && !PadnameIsOUR(name)
 	    && *PadnamePV(name) == '&')
 	{
-	  if (SvTYPE(curpad[ix]) == SVt_PVCV) {
+	  CV *innercv = MUTABLE_CV(curpad[ix]);
+	  if (UNLIKELY(PadnameOUTER(name))) {
+	    CV *cv = new_cv;
+	    PADNAME **names = namepad;
+	    PADOFFSET i = ix;
+	    while (PadnameOUTER(name)) {
+		cv = CvOUTSIDE(cv);
+		names = PadlistNAMESARRAY(CvPADLIST(cv));
+		i = PARENT_PAD_INDEX(name);
+		name = names[i];
+	    }
+	    innercv = (CV *)PadARRAY(PadlistARRAY(CvPADLIST(cv))[1])[i];
+	  }
+	  if (SvTYPE(innercv) == SVt_PVCV) {
 	    /* XXX 0afba48f added code here to check for a proto CV
 		   attached to the pad entry by magic.  But shortly there-
 		   after 81df9f6f95 moved the magic to the pad name.  The
 		   code here was never updated, so it wasn’t doing anything
 		   and got deleted when PADNAME became a distinct type.  Is
 		   there any bug as a result?  */
-	    CV * const innercv = MUTABLE_CV(curpad[ix]);
 	    if (CvOUTSIDE(innercv) == old_cv) {
 		if (!CvWEAKOUTSIDE(innercv)) {
 		    SvREFCNT_dec(old_cv);
@@ -2580,7 +2650,7 @@ is allocated.
 */
 
 PADNAMELIST *
-Perl_newPADNAMELIST(pTHX_ size_t max)
+Perl_newPADNAMELIST(size_t max)
 {
     PADNAMELIST *pnl;
     Newx(pnl, 1, PADNAMELIST);
@@ -2635,7 +2705,7 @@ Fetches the pad name from the given index.
 */
 
 PADNAME *
-Perl_padnamelist_fetch(pTHX_ PADNAMELIST *pnl, SSize_t key)
+Perl_padnamelist_fetch(PADNAMELIST *pnl, SSize_t key)
 {
     PERL_ARGS_ASSERT_PADNAMELIST_FETCH;
     ASSUME(key >= 0);
@@ -2712,7 +2782,7 @@ L</newPADNAMEouter>.
 */
 
 PADNAME *
-Perl_newPADNAMEpvn(pTHX_ const char *s, STRLEN len)
+Perl_newPADNAMEpvn(const char *s, STRLEN len)
 {
     struct padname_with_str *alloc;
     char *alloc2; /* for Newxz */
@@ -2743,7 +2813,7 @@ PADNAMEt_OUTER flag already set.
 */
 
 PADNAME *
-Perl_newPADNAMEouter(pTHX_ PADNAME *outer)
+Perl_newPADNAMEouter(PADNAME *outer)
 {
     PADNAME *pn;
     PERL_ARGS_ASSERT_NEWPADNAMEOUTER;

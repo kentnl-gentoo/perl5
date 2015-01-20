@@ -82,6 +82,7 @@ cpan/autodie/t/hints_provider_does.t	autodie - Test hints/does roles
 cpan/autodie/t/hints_provider_easy_does_it.t	autodie - Test easy hints/does
 cpan/autodie/t/hints_provider_isa.t	autodie - Test hints/inheritance
 cpan/autodie/t/hints.t			autodie - Test hints interface
+cpan/autodie/t/import-into.t
 cpan/autodie/t/internal-backcompat.t	autodie - Back-compatibility tests
 cpan/autodie/t/internal.t		autodie - internal interface tests
 cpan/autodie/t/kill.t
@@ -98,6 +99,7 @@ cpan/autodie/t/lib/Hints_provider_isa.pm	autodie - Hints/inherit helper
 cpan/autodie/t/lib/Hints_test.pm	autodie - Hints test helper
 cpan/autodie/t/lib/lethal.pm		autodie - with a better name
 cpan/autodie/t/lib/my/autodie.pm	autodie - blog_hints.t helper
+cpan/autodie/t/lib/my/pragma.pm
 cpan/autodie/t/lib/OtherTypes.pm	autodie - Format clobberer helper.
 cpan/autodie/t/lib/pujHa/ghach/Dotlh.pm	autodie - With Klingon honour
 cpan/autodie/t/lib/pujHa/ghach.pm	autodie - Like a Klingon
@@ -105,6 +107,7 @@ cpan/autodie/t/lib/Some/Module.pm	autodie - blog_hints.t helper
 cpan/autodie/t/mkdir.t			autodie - filesystem tests
 cpan/autodie/t/no_carp.t
 cpan/autodie/t/open.t			autodie - Testing open
+cpan/autodie/t/read.t
 cpan/autodie/t/recv.t			autodie - send/recv tests
 cpan/autodie/t/repeat.t			autodie - repeat autodie leak tests
 cpan/autodie/t/rt-74246.t
@@ -256,6 +259,7 @@ cpan/CPAN-Meta-Requirements/t/basic.t
 cpan/CPAN-Meta-Requirements/t/finalize.t
 cpan/CPAN-Meta-Requirements/t/from-hash.t
 cpan/CPAN-Meta-Requirements/t/merge.t
+cpan/CPAN-Meta-Requirements/t/strings.t
 cpan/CPAN-Meta/t/converter-bad.t
 cpan/CPAN-Meta/t/converter-fail.t
 cpan/CPAN-Meta/t/converter-fragments.t
@@ -406,6 +410,7 @@ cpan/Devel-PPPort/module2.c		Devel::PPPort test file
 cpan/Devel-PPPort/module3.c		Devel::PPPort test file
 cpan/Devel-PPPort/parts/apicheck.pl	Devel::PPPort apicheck generator
 cpan/Devel-PPPort/parts/apidoc.fnc	Devel::PPPort Perl API listing
+cpan/Devel-PPPort/parts/base/5003070	Devel::PPPort baseline todo file
 cpan/Devel-PPPort/parts/base/5004000	Devel::PPPort baseline todo file
 cpan/Devel-PPPort/parts/base/5004010	Devel::PPPort baseline todo file
 cpan/Devel-PPPort/parts/base/5004020	Devel::PPPort baseline todo file
@@ -499,10 +504,31 @@ cpan/Devel-PPPort/parts/base/5017010	Devel::PPPort baseline todo file
 cpan/Devel-PPPort/parts/base/5017011	Devel::PPPort baseline todo file
 cpan/Devel-PPPort/parts/base/5018000	Devel::PPPort baseline todo file
 cpan/Devel-PPPort/parts/base/5018001	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5018002	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5018003	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5018004	Devel::PPPort baseline todo file
 cpan/Devel-PPPort/parts/base/5019000	Devel::PPPort baseline todo file
 cpan/Devel-PPPort/parts/base/5019001	Devel::PPPort baseline todo file
 cpan/Devel-PPPort/parts/base/5019002	Devel::PPPort baseline todo file
 cpan/Devel-PPPort/parts/base/5019003	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5019004	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5019005	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5019006	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5019007	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5019008	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5019009	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5019010	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5019011	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5020000	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5020001	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5021000	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5021001	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5021002	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5021004	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5021005	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5021006	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5021007	Devel::PPPort baseline todo file
+cpan/Devel-PPPort/parts/base/5021008	Devel::PPPort baseline todo file
 cpan/Devel-PPPort/parts/embed.fnc	Devel::PPPort Perl API listing
 cpan/Devel-PPPort/parts/inc/call	Devel::PPPort include
 cpan/Devel-PPPort/parts/inc/cop		Devel::PPPort include
@@ -542,6 +568,7 @@ cpan/Devel-PPPort/parts/inc/version	Devel::PPPort include
 cpan/Devel-PPPort/parts/inc/warn	Devel::PPPort include
 cpan/Devel-PPPort/parts/ppport.fnc	Devel::PPPort API listing
 cpan/Devel-PPPort/parts/ppptools.pl	Devel::PPPort various utilities
+cpan/Devel-PPPort/parts/todo/5003070	Devel::PPPort todo file
 cpan/Devel-PPPort/parts/todo/5004000	Devel::PPPort todo file
 cpan/Devel-PPPort/parts/todo/5004010	Devel::PPPort todo file
 cpan/Devel-PPPort/parts/todo/5004020	Devel::PPPort todo file
@@ -635,10 +662,31 @@ cpan/Devel-PPPort/parts/todo/5017010	Devel::PPPort todo file
 cpan/Devel-PPPort/parts/todo/5017011	Devel::PPPort todo file
 cpan/Devel-PPPort/parts/todo/5018000	Devel::PPPort todo file
 cpan/Devel-PPPort/parts/todo/5018001	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5018002	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5018003	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5018004	Devel::PPPort todo file
 cpan/Devel-PPPort/parts/todo/5019000	Devel::PPPort todo file
 cpan/Devel-PPPort/parts/todo/5019001	Devel::PPPort todo file
 cpan/Devel-PPPort/parts/todo/5019002	Devel::PPPort todo file
 cpan/Devel-PPPort/parts/todo/5019003	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5019004	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5019005	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5019006	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5019007	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5019008	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5019009	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5019010	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5019011	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5020000	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5020001	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5021000	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5021001	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5021002	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5021004	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5021005	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5021006	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5021007	Devel::PPPort todo file
+cpan/Devel-PPPort/parts/todo/5021008	Devel::PPPort todo file
 cpan/Devel-PPPort/ppport_h.PL		Devel::PPPort ppport.h writer
 cpan/Devel-PPPort/PPPort_pm.PL		Devel::PPPort PPPort.pm writer
 cpan/Devel-PPPort/PPPort.xs		Devel::PPPort dummy PPPort.xs
@@ -709,6 +757,7 @@ cpan/Digest-SHA/src/sha.h		Digest::SHA extension
 cpan/Digest-SHA/t/allfcns.t		See if Digest::SHA works
 cpan/Digest-SHA/t/base64.t		See if Digest::SHA works
 cpan/Digest-SHA/t/bitbuf.t		See if Digest::SHA works
+cpan/Digest-SHA/t/bitorder.t
 cpan/Digest-SHA/t/fips180-4.t		See if Digest::SHA works
 cpan/Digest-SHA/t/fips198.t		See if Digest::SHA works
 cpan/Digest-SHA/t/gglong.t		See if Digest::SHA works
@@ -1844,6 +1893,10 @@ cpan/Pod-Simple/t/corpus/8859_7.pod			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/8859_7.xml			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/cp1256.txt			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/cp1256.xml			Pod::Simple test file
+cpan/Pod-Simple/t/corpus/enc_char_directive.txt			Pod::Simple test file
+cpan/Pod-Simple/t/corpus/enc_char_directive.xml			Pod::Simple test file
+cpan/Pod-Simple/t/corpus/enc_char_wrong_directive.txt			Pod::Simple test file
+cpan/Pod-Simple/t/corpus/enc_char_wrong_directive.xml			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/encwarn01.txt			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/encwarn01.xml			Pod::Simple test file
 cpan/Pod-Simple/t/corpus/encwarn02.txt			Pod::Simple test file
@@ -2276,6 +2329,7 @@ cpan/Test-Simple/lib/Test/Stream/API.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Architecture.pod			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/ArrayBase/Meta.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/ArrayBase.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Block.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Carp.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Context.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Event/Bail.pm			Test::Simple module
@@ -2307,6 +2361,8 @@ cpan/Test-Simple/lib/Test/Stream/Threads.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Toolset.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Util.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Tester/Capture.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Tester/CaptureRunner.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Tester/Delegate.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Tester.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Tutorial.pod			Test::Simple documentation
 cpan/Test-Simple/lib/Test/Tutorial/WritingTests.pod			Test::Simple documentation
@@ -2490,6 +2546,7 @@ cpan/Test-Simple/t/Test-Simple.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-API.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-ArrayBase-Meta.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-ArrayBase.t			Test::Simple Test
+cpan/Test-Simple/t/Test-Stream-Block.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-Carp.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-Event-Diag.t			Test::Simple Test
 cpan/Test-Simple/t/Test-Stream-Event-Finish.t			Test::Simple Test
@@ -3824,6 +3881,7 @@ ext/POSIX/t/math.t		Basic math tests for POSIX
 ext/POSIX/t/posix.t		See if POSIX works
 ext/POSIX/t/sigaction.t		See if POSIX::sigaction works
 ext/POSIX/t/sigset.t		See if POSIX::SigSet works
+ext/POSIX/t/strerror_errno.t	See if POSIX:strerror doesn't trash $!
 ext/POSIX/t/sysconf.t		See if POSIX works
 ext/POSIX/t/taint.t		See if POSIX works with taint
 ext/POSIX/t/termios.t		See if POSIX works
@@ -3847,36 +3905,36 @@ ext/re/t/re_funcs_u.t		See if exportable 're' funcs in universal.c work
 ext/re/t/regop.pl		generate debug output for various patterns
 ext/re/t/regop.t		test RE optimizations by scraping debug output
 ext/re/t/re.t			see if re pragma works
+ext/re/t/strict.t		see if re 'strict' subpragma works
+ext/SDBM_File/biblio	SDBM kit
+ext/SDBM_File/CHANGES	SDBM kit
+ext/SDBM_File/COMPARE	SDBM kit
+ext/SDBM_File/dba.c	SDBM kit
+ext/SDBM_File/dbd.c	SDBM kit
+ext/SDBM_File/dbe.1	SDBM kit
+ext/SDBM_File/dbe.c	SDBM kit
+ext/SDBM_File/dbu.c	SDBM kit
+ext/SDBM_File/grind	SDBM kit
+ext/SDBM_File/hash.c	SDBM kit
+ext/SDBM_File/linux.patches	SDBM kit
 ext/SDBM_File/Makefile.PL	SDBM extension makefile writer
-ext/SDBM_File/sdbm/biblio	SDBM kit
-ext/SDBM_File/sdbm/CHANGES	SDBM kit
-ext/SDBM_File/sdbm/COMPARE	SDBM kit
-ext/SDBM_File/sdbm/dba.c	SDBM kit
-ext/SDBM_File/sdbm/dbd.c	SDBM kit
-ext/SDBM_File/sdbm/dbe.1	SDBM kit
-ext/SDBM_File/sdbm/dbe.c	SDBM kit
-ext/SDBM_File/sdbm/dbu.c	SDBM kit
+ext/SDBM_File/makefile.sdbm	SDBM kit
+ext/SDBM_File/pair.c	SDBM kit
+ext/SDBM_File/pair.h	SDBM kit
+ext/SDBM_File/README	SDBM kit
+ext/SDBM_File/readme.ms	SDBM kit
+ext/SDBM_File/README.too	SDBM kit
+ext/SDBM_File/sdbm.3	SDBM kit
+ext/SDBM_File/sdbm.c	SDBM kit
 ext/SDBM_File/SDBM_File.pm	SDBM extension Perl module
 ext/SDBM_File/SDBM_File.xs	SDBM extension external subroutines
-ext/SDBM_File/sdbm/grind	SDBM kit
-ext/SDBM_File/sdbm/hash.c	SDBM kit
-ext/SDBM_File/sdbm/linux.patches	SDBM kit
-ext/SDBM_File/sdbm/Makefile.PL	SDBM kit
-ext/SDBM_File/sdbm/makefile.sdbm	SDBM kit
-ext/SDBM_File/sdbm/pair.c	SDBM kit
-ext/SDBM_File/sdbm/pair.h	SDBM kit
-ext/SDBM_File/sdbm/README	SDBM kit
-ext/SDBM_File/sdbm/readme.ms	SDBM kit
-ext/SDBM_File/sdbm/README.too	SDBM kit
-ext/SDBM_File/sdbm/sdbm.3	SDBM kit
-ext/SDBM_File/sdbm/sdbm.c	SDBM kit
-ext/SDBM_File/sdbm/sdbm.h	SDBM kit
-ext/SDBM_File/sdbm/tune.h	SDBM kit
-ext/SDBM_File/sdbm/util.c	SDBM kit
+ext/SDBM_File/sdbm.h	SDBM kit
 ext/SDBM_File/t/constants.t	See if SDBM_File constants work
 ext/SDBM_File/t/prep.t		See if SDBM_File with extra argument works
 ext/SDBM_File/t/sdbm.t		See if SDBM_File works
+ext/SDBM_File/tune.h	SDBM kit
 ext/SDBM_File/typemap		SDBM extension interface types
+ext/SDBM_File/util.c	SDBM kit
 ext/Sys-Hostname/Hostname.pm	Sys::Hostname extension Perl module
 ext/Sys-Hostname/Hostname.xs	Sys::Hostname extension external subroutines
 ext/Sys-Hostname/t/Hostname.t	See if Sys::Hostname works
@@ -3999,6 +4057,7 @@ ext/XS-APItest/t/temp_lv_sub.t	XS::APItest: tests for lvalue subs returning temp
 ext/XS-APItest/t/underscore_length.t	Test find_rundefsv()
 ext/XS-APItest/t/utf16_to_utf8.t	Test behaviour of utf16_to_utf8{,reversed}
 ext/XS-APItest/t/utf8.t		Tests for code in utf8.c
+ext/XS-APItest/t/weaken.t	XS::APItest: tests for sv_rvweaken() and sv_get_backrefs()
 ext/XS-APItest/t/whichsig.t	XS::APItest: tests for whichsig() and variants
 ext/XS-APItest/t/xs_special_subs_require.t	for require too
 ext/XS-APItest/t/xs_special_subs.t	Test that XS BEGIN/CHECK/INIT/END work
@@ -4602,6 +4661,7 @@ pod/perl5213delta.pod		Perl changes in version 5.21.3
 pod/perl5214delta.pod		Perl changes in version 5.21.4
 pod/perl5215delta.pod		Perl changes in version 5.21.5
 pod/perl5216delta.pod		Perl changes in version 5.21.6
+pod/perl5217delta.pod		Perl changes in version 5.21.7
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4697,6 +4757,7 @@ pod/perltooc.pod
 pod/perltoot.pod		
 pod/perltrap.pod		Perl traps for the unwary
 pod/perlunicode.pod		Perl Unicode support
+pod/perlunicook.pod		Perl Unicode cookbook
 pod/perlunifaq.pod		Perl Unicode FAQ
 pod/perluniintro.pod		Perl Unicode introduction
 pod/perlunitut.pod		Perl Unicode tutorial
@@ -4931,6 +4992,7 @@ t/bigmem/index.t		Check that index() handles large offsets
 t/bigmem/pos.t			Check that pos() handles large offsets
 t/bigmem/read.t			Check read() handles large offsets
 t/bigmem/regexp.t		Test regular expressions with large strings
+t/bigmem/subst.t		Test s/// with large strings
 t/bigmem/vec.t			Check vec() handles large offsets
 t/charset_tools.pl		To aid in portable testing across platforms with different character sets
 t/cmd/elsif.t			See if else-if works
@@ -5165,6 +5227,7 @@ t/mro/vulcan_dfs_utf8.t		utf8 mro tests
 toke.c				The tokener
 t/op/64bitint.t			See if 64 bit integers work
 t/op/alarm.t			See if alarm works
+t/op/anonconst.t		See if :const works
 t/op/anonsub.t			See if anonymous subroutines work
 t/op/append.t			See if . works
 t/op/args.t			See if operations on @_ work
@@ -5452,6 +5515,7 @@ t/re/reg_fold.t			See if case folding works properly
 t/re/reg_mesg.t			See if one can get regular expression errors
 t/re/reg_namedcapture.t		Make sure glob assignment doesn't break named capture
 t/re/reg_nc_tie.t		Test the tied methods of Tie::Hash::NamedCapture
+t/re/reg_nocapture.t		Test the /n flag for regexps
 t/re/reg_pmod.t			See if regexp /p modifier works as expected
 t/re/reg_posixcc.t		See if posix character classes behave consistently
 t/re/re_tests			Regular expressions for regexp.t

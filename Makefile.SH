@@ -311,6 +311,9 @@ PATH_SEP = $p_
 MINIPERL_EXE = miniperl\$(EXE_EXT)
 MINIPERL = \$(LDLIBPTH) ./miniperl\$(EXE_EXT) -Ilib
 
+# Macros to invoke sort the MANIFEST during build
+MANIFEST_SRT = MANIFEST.srt
+
 !GROK!THIS!
 
 case "$usecrosscompile$perl" in
@@ -489,7 +492,7 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5217delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5218delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -563,9 +566,14 @@ splintfiles = $(c1)
 	@echo `$(CCCMDSRC)` -S $*.c
 	@`$(CCCMDSRC)` -S $*.c
 
-all: $(FIRSTMAKEFILE) $(MINIPERL_EXE) $(generated_pods) $(private) $(unidatafiles) $(public) $(dynamic_ext) $(nonxs_ext) extras.make
+all: $(FIRSTMAKEFILE) $(MINIPERL_EXE) $(generated_pods) $(private) $(unidatafiles) $(public) $(dynamic_ext) $(nonxs_ext) extras.make $(MANIFEST_SRT)
 	@echo " ";
 	@echo "	Everything is up to date. Type '$(MAKE) test' to run test suite."
+
+$(MANIFEST_SRT):	MANIFEST
+	@perl Porting/manisort -q || (echo "WARNING: re-sorting MANIFEST"; \
+		perl Porting/manisort -q -o MANIFEST; sh -c true)
+	@touch $(MANIFEST_SRT)
 
 .PHONY: all utilities
 
@@ -1012,9 +1020,9 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) pod/perlmodlib.PL -q
 
-pod/perl5217delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl5217delta.pod
-	$(LNS) perldelta.pod pod/perl5217delta.pod
+pod/perl5218delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl5218delta.pod
+	$(LNS) perldelta.pod pod/perl5218delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1239,6 +1247,7 @@ _clobber:
 	-rm -rf host
 	rm -f t/test_state
 	rm -f config.sh cppstdin Policy.sh extras.lst
+	rm -f $(MANIFEST_SRT)
 
 clobber:	_realcleaner _mopup _clobber
 

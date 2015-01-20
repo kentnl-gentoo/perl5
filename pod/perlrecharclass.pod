@@ -619,6 +619,17 @@ endpoints.  These indicate that the specified range is to be interpreted
 using Unicode values, so C<[\N{U+27}-\N{U+3F}]> means to match
 C<\N{U+27}>, C<\N{U+28}>, C<\N{U+29}>, ..., C<\N{U+3D}>, C<\N{U+3E}>,
 and C<\N{U+3F}>, whatever the native code point versions for those are.
+These are called "Unicode" ranges.  If either end is of the C<\N{...}>
+form, the range is considered Unicode.  A C<regexp> warning is raised
+under C<S<"use re 'strict'">> if the other endpoint is specified
+non-portably:
+
+ [\N{U+00}-\x09]    # Warning under re 'strict'; \x09 is non-portable
+ [\N{U+00}-\t]      # No warning;
+
+Both of the above match the characters C<\N{U+00}> C<\N{U+01}>, ...
+C<\N{U+08}>, C<\N{U+09}>, but the C<\x09> looks like it could be a
+mistake so the warning is raised (under C<re 'strict'>) for it.
 
 Perl also guarantees that the ranges C<A-Z>, C<a-z>, C<0-9>, and any
 subranges of these match what an English-only speaker would expect them
@@ -760,6 +771,12 @@ Perl recognizes the following POSIX character classes:
  word   A Perl extension ("[A-Za-z0-9_]"), equivalent to "\w".
  xdigit Any hexadecimal digit ("[0-9a-fA-F]").
 
+Like the L<Unicode properties|/Unicode Properties>, most of the POSIX
+properties match the same regardless of whether case-insensitive (C</i>)
+matching is in effect or not.  The two exceptions are C<[:upper:]> and
+C<[:lower:]>.  Under C</i>, they each match the union of C<[:upper:]> and
+C<[:lower:]>.
+
 Most POSIX character classes have two Unicode-style C<\p> property
 counterparts.  (They are not official Unicode properties, but Perl extensions
 derived from official Unicode properties.)  The table below shows the relation
@@ -805,8 +822,9 @@ C<\p{Blank}> and C<\p{HorizSpace}> are synonyms.
 
 Control characters don't produce output as such, but instead usually control
 the terminal somehow: for example, newline and backspace are control characters.
-In the ASCII range, characters whose code points are between 0 and 31 inclusive,
-plus 127 (C<DEL>) are control characters.
+On ASCII platforms, in the ASCII range, characters whose code points are
+between 0 and 31 inclusive, plus 127 (C<DEL>) are control characters; on
+EBCDIC platforms, their counterparts are control characters.
 
 =item [3]
 

@@ -393,7 +393,6 @@ base/lex.t                # checks regexp stringification
 comp/final_line_num.t     # tests syntax error after BEGIN block
 comp/fold.t               # mutability of folded constants
 comp/parser.t             # crazy #line directives ==> shell syntax errors
-comp/require.t
 lib/deprecate.t
 lib/mypragma.t
 mro/basic.t
@@ -425,15 +424,10 @@ op/caller.t
 op/each.t                 # utf8ness of deparsed strings
 op/getpid.t               # [perl #70205] my attrs
 op/goto.t
-op/hash-rt85026.t
-op/hashassign.t
+op/gv.t                   # glob copy constants
 op/index.t
-op/join.t
-op/kvaslice.t
-op/kvhslice.t
-op/lc.t
-op/leaky-magic.t
-op/length.t
+op/join.t                 # mutability of folded constants
+op/length.t               # utf8ness of deparsed strings
 op/lexsub.t
 op/local.t
 op/magic.t

@@ -66,7 +66,7 @@ rv2sv		scalar dereference	ck_rvconst	ds1
 av2arylen	array length		ck_null		is1	
 rv2cv		subroutine dereference	ck_rvconst	d1
 anoncode	anonymous subroutine	ck_anoncode	s$	
-prototype	subroutine prototype	ck_null		s%	S
+prototype	subroutine prototype	ck_prototype	su%	S?
 refgen		reference constructor	ck_spair	m1	L
 srefgen		single ref constructor	ck_null		fs1	S
 ref		reference-type operator	ck_fun		stu%	S?
@@ -152,7 +152,7 @@ i_eq		integer eq (==)		ck_null		ifs2	S S<
 ne		numeric ne (!=)		ck_null		Iifs2	S S<
 i_ne		integer ne (!=)		ck_null		ifs2	S S<
 ncmp		numeric comparison (<=>)	ck_null		Iifst2	S S<
-i_ncmp		integer comparison (<=>)	ck_null		ifst2	S S<
+i_ncmp		integer comparison (<=>)	ck_null		ifsT2	S S<
 
 slt		string lt		ck_null		ifs2	S S
 sgt		string gt		ck_null		ifs2	S S
@@ -160,7 +160,7 @@ sle		string le		ck_null		ifs2	S S
 sge		string ge		ck_null		ifs2	S S
 seq		string eq		ck_null		ifs2	S S
 sne		string ne		ck_null		ifs2	S S
-scmp		string comparison (cmp)	ck_null		ifst2	S S
+scmp		string comparison (cmp)	ck_null		ifsT2	S S
 
 bit_and		bitwise and (&)		ck_bitop	fst2	S S
 bit_xor		bitwise xor (^)		ck_bitop	fst2	S S
@@ -169,7 +169,7 @@ bit_or		bitwise or (|)		ck_bitop	fst2	S S
 negate		negation (-)		ck_null		Ifst1	S
 i_negate	integer negation (-)	ck_null		ifst1	S
 not		not			ck_null		ifs1	S
-complement	1's complement (~)	ck_bitop	fst1	S
+complement	1's complement (~)	ck_bitop	fsT1	S
 
 smartmatch	smart match		ck_smartmatch	s2
 
@@ -286,7 +286,7 @@ orassign	logical or assignment (||=)	ck_null		s|
 dorassign	defined or assignment (//=)	ck_null		s|
 
 method		method lookup		ck_method	d.
-entersub	subroutine entry	ck_subr		dmt1	L
+entersub	subroutine entry	ck_subr		dm1	L
 leavesub	subroutine exit		ck_null		1	
 leavesublv	lvalue subroutine return	ck_null		1	
 caller		caller			ck_fun		t%	S?
@@ -565,3 +565,4 @@ refassign	lvalue ref assignment	ck_refassign	ds2
 lvref		lvalue ref assignment	ck_null		d%
 lvrefslice	lvalue ref assignment	ck_null		d@
 lvavref		lvalue array reference	ck_null		d%
+anonconst	anonymous constant	ck_null		ds1

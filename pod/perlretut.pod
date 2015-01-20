@@ -49,6 +49,10 @@ is harder to pronounce.  The Perl pod documentation is evenly split on
 regexp vs regex; in Perl, there is more than one way to abbreviate it.
 We'll use regexp in this tutorial.
 
+New in v5.22, L<C<use re 'strict'>|re/'strict' mode> applies stricter
+rules than otherwise when compiling regular expression patterns.  It can
+find things that, while legal, may not be what you intended.
+
 =head1 Part 1: The basics
 
 =head2 Simple word matching
@@ -958,6 +962,12 @@ required for some reason:
     @num = split /(a|b)+/, $x;    # @num = ('12','a','34','a','5')
     @num = split /(?:a|b)+/, $x;  # @num = ('12','34','5')
 
+In Perl 5.22 and later, all groups within a regexp can be set to
+non-capturing by using the new C</n> flag:
+
+    "hello" =~ /(hi|hello)/n; # $1 is not set!
+
+See L<perlre/"n"> for more information.
 
 =head2 Matching repetitions
 

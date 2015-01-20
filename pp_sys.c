@@ -3633,11 +3633,13 @@ PP(pp_chdir)
 #endif
     RETURN;
 
+#ifdef HAS_FCHDIR
  nuts:
     report_evil_fh(gv);
     SETERRNO(EBADF,RMS_IFI);
     PUSHi(0);
     RETURN;
+#endif
 }
 
 
@@ -4607,11 +4609,16 @@ PP(pp_gmtime)
     }
     else {
 	NV input = Perl_floor(POPn);
+	const bool pl_isnan = Perl_isnan(input);
 	when = (Time64_T)input;
-	if (when != input) {
+	if (UNLIKELY(pl_isnan || when != input)) {
 	    /* diag_listed_as: gmtime(%f) too large */
 	    Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
 			   "%s(%.0" NVff ") too large", opname, input);
+	    if (pl_isnan) {
+		err = NULL;
+		goto failed;
+	    }
 	}
     }
 
@@ -4637,24 +4644,26 @@ PP(pp_gmtime)
     if (err == NULL) {
 	/* diag_listed_as: gmtime(%f) failed */
 	/* XXX %lld broken for quads */
+      failed:
 	Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
 		       "%s(%.0" NVff ") failed", opname, when);
     }
 
     if (GIMME_V != G_ARRAY) {	/* scalar context */
         EXTEND(SP, 1);
-        EXTEND_MORTAL(1);
 	if (err == NULL)
 	    RETPUSHUNDEF;
        else {
-           mPUSHs(Perl_newSVpvf(aTHX_ "%s %s %2d %02d:%02d:%02d %"IVdf,
+           dTARGET;
+           PUSHs(TARG);
+           Perl_sv_setpvf_mg(aTHX_ TARG, "%s %s %2d %02d:%02d:%02d %"IVdf,
                                 dayname[tmbuf.tm_wday],
                                 monname[tmbuf.tm_mon],
                                 tmbuf.tm_mday,
                                 tmbuf.tm_hour,
                                 tmbuf.tm_min,
                                 tmbuf.tm_sec,
-                                (IV)tmbuf.tm_year + 1900));
+                                (IV)tmbuf.tm_year + 1900);
         }
     }
     else {			/* list context */

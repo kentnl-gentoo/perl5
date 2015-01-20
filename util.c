@@ -1944,8 +1944,13 @@ bool
 Perl_ckwarn(pTHX_ U32 w)
 {
     /* If lexical warnings have not been set, use $^W.  */
-    if (isLEXWARN_off)
-	return PL_dowarn & G_WARN_ON;
+    if (isLEXWARN_off) {
+	/* TODO: Hardcoding this here sucks, see the commit that added this */
+	if (w == WARN_VOID_UNUSUAL)
+	    return FALSE;
+	else
+	    return PL_dowarn & G_WARN_ON;
+    }
 
     return ckwarn_common(w);
 }
@@ -1956,8 +1961,13 @@ bool
 Perl_ckwarn_d(pTHX_ U32 w)
 {
     /* If lexical warnings have not been set then default classes warn.  */
-    if (isLEXWARN_off)
-	return TRUE;
+    if (isLEXWARN_off) {
+	/* TODO: Hardcoding this here sucks, see the commit that added this */
+	if (w == WARN_VOID_UNUSUAL)
+	    return FALSE;
+	else
+	    return TRUE;
+    }
 
     return ckwarn_common(w);
 }
@@ -1965,8 +1975,13 @@ Perl_ckwarn_d(pTHX_ U32 w)
 static bool
 S_ckwarn_common(pTHX_ U32 w)
 {
-    if (PL_curcop->cop_warnings == pWARN_ALL)
-	return TRUE;
+    if (PL_curcop->cop_warnings == pWARN_ALL) {
+	/* TODO: Hardcoding this here sucks, see the commit that added this */
+	if (w == WARN_VOID_UNUSUAL)
+	    return FALSE;
+	else
+	    return TRUE;
+    }
 
     if (PL_curcop->cop_warnings == pWARN_NONE)
 	return FALSE;
@@ -5820,6 +5835,9 @@ static void bfd_update(bfd_context* ctx, Dl_info* dl_info)
     /* BFD open and scan only if the filename changed. */
     if (ctx->fname_prev == NULL ||
         strNE(dl_info->dli_fname, ctx->fname_prev)) {
+        if (ctx->abfd) {
+            bfd_close(ctx->abfd);
+        }
         ctx->abfd = bfd_openr(dl_info->dli_fname, 0);
         if (ctx->abfd) {
             if (bfd_check_format(ctx->abfd, bfd_object)) {
@@ -6316,6 +6334,9 @@ Perl_get_c_backtrace(pTHX_ int depth, int skip)
     }
 #ifdef USE_BFD
     Safefree(symbol_names);
+    if (bfd_ctx.abfd) {
+        bfd_close(bfd_ctx.abfd);
+    }
 #endif
     Safefree(source_lines);
     Safefree(source_name_sizes);

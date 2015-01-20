@@ -1600,22 +1600,23 @@ Perl__to_uni_fold_flags(pTHX_ UV c, U8* p, STRLEN *lenp, U8 flags)
 
     PERL_ARGS_ASSERT__TO_UNI_FOLD_FLAGS;
 
-    /* Tread a UTF-8 locale as not being in locale at all */
-    if (IN_UTF8_CTYPE_LOCALE) {
-        flags &= ~FOLD_FLAGS_LOCALE;
+    if (flags & FOLD_FLAGS_LOCALE) {
+        /* Treat a UTF-8 locale as not being in locale at all */
+        if (IN_UTF8_CTYPE_LOCALE) {
+            flags &= ~FOLD_FLAGS_LOCALE;
+        }
+        else {
+            _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+            goto needs_full_generality;
+        }
     }
 
     if (c < 256) {
-	UV result = _to_fold_latin1((U8) c, p, lenp,
+        return _to_fold_latin1((U8) c, p, lenp,
 			    flags & (FOLD_FLAGS_FULL | FOLD_FLAGS_NOMIX_ASCII));
-	/* It is illegal for the fold to cross the 255/256 boundary under
-	 * locale; in this case return the original */
-	return (result > 256 && flags & FOLD_FLAGS_LOCALE)
-	       ? c
-	       : result;
     }
 
-    /* If no special needs, just use the macro */
+    /* Here, above 255.  If no special needs, just use the macro */
     if ( ! (flags & (FOLD_FLAGS_LOCALE|FOLD_FLAGS_NOMIX_ASCII))) {
 	uvchr_to_utf8(p, c);
 	return CALL_FOLD_CASE(p, p, lenp, flags & FOLD_FLAGS_FULL);
@@ -1623,6 +1624,8 @@ Perl__to_uni_fold_flags(pTHX_ UV c, U8* p, STRLEN *lenp, U8 flags)
     else {  /* Otherwise, _to_utf8_fold_flags has the intelligence to deal with
 	       the special flags. */
 	U8 utf8_c[UTF8_MAXBYTES + 1];
+
+      needs_full_generality:
 	uvchr_to_utf8(utf8_c, c);
 	return _to_utf8_fold_flags(utf8_c, p, lenp, flags);
     }
@@ -1876,7 +1879,7 @@ Perl_to_utf8_case(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp,
 }
 
 STATIC UV
-S_check_locale_boundary_crossing(pTHX_ const char * const func_name, const U8* const p, const UV result, U8* const ustrp, STRLEN *lenp)
+S_check_locale_boundary_crossing(pTHX_ const U8* const p, const UV result, U8* const ustrp, STRLEN *lenp)
 {
     /* This is called when changing the case of a utf8-encoded character above
      * the Latin1 range, and the operation is in a non-UTF-8 locale.  If the
@@ -1911,7 +1914,8 @@ S_check_locale_boundary_crossing(pTHX_ const char * const func_name, const U8* c
 	    s += UTF8SKIP(s);
 	}
 
-	/* Here, no characters crossed, result is ok as-is */
+        /* Here, no characters crossed, result is ok as-is, but we warn. */
+        _CHECK_AND_OUTPUT_WIDE_LOCALE_UTF8_MSG(p, p + UTF8SKIP(p));
 	return result;
     }
 
@@ -1924,7 +1928,7 @@ bad_crossing:
     Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),
                            "Can't do %s(\"\\x{%"UVXf"}\") on non-UTF-8 locale; "
                            "resolved to \"\\x{%"UVXf"}\".",
-                           func_name,
+                           OP_DESC(PL_op),
                            original,
                            original);
     Copy(p, ustrp, *lenp, char);
@@ -1949,8 +1953,14 @@ Perl__to_utf8_upper_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, bool flags
 
     PERL_ARGS_ASSERT__TO_UTF8_UPPER_FLAGS;
 
-    if (flags && IN_UTF8_CTYPE_LOCALE) {
-        flags = FALSE;
+    if (flags) {
+        /* Treat a UTF-8 locale as not being in locale at all */
+        if (IN_UTF8_CTYPE_LOCALE) {
+            flags = FALSE;
+        }
+        else {
+            _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+        }
     }
 
     if (UTF8_IS_INVARIANT(*p)) {
@@ -1975,7 +1985,7 @@ Perl__to_utf8_upper_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, bool flags
 	result = CALL_UPPER_CASE(p, ustrp, lenp);
 
 	if (flags) {
-	    result = check_locale_boundary_crossing("uc", p, result, ustrp, lenp);
+	    result = check_locale_boundary_crossing(p, result, ustrp, lenp);
 	}
 	return result;
     }
@@ -2014,8 +2024,14 @@ Perl__to_utf8_title_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, bool flags
 
     PERL_ARGS_ASSERT__TO_UTF8_TITLE_FLAGS;
 
-    if (flags && IN_UTF8_CTYPE_LOCALE) {
-        flags = FALSE;
+    if (flags) {
+        /* Treat a UTF-8 locale as not being in locale at all */
+        if (IN_UTF8_CTYPE_LOCALE) {
+            flags = FALSE;
+        }
+        else {
+            _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+        }
     }
 
     if (UTF8_IS_INVARIANT(*p)) {
@@ -2040,7 +2056,7 @@ Perl__to_utf8_title_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, bool flags
 	result = CALL_TITLE_CASE(p, ustrp, lenp);
 
 	if (flags) {
-	    result = check_locale_boundary_crossing("ucfirst", p, result, ustrp, lenp);
+	    result = check_locale_boundary_crossing(p, result, ustrp, lenp);
 	}
 	return result;
     }
@@ -2078,8 +2094,14 @@ Perl__to_utf8_lower_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, bool flags
 
     PERL_ARGS_ASSERT__TO_UTF8_LOWER_FLAGS;
 
-    if (flags && IN_UTF8_CTYPE_LOCALE) {
-        flags = FALSE;
+    if (flags) {
+        /* Treat a UTF-8 locale as not being in locale at all */
+        if (IN_UTF8_CTYPE_LOCALE) {
+            flags = FALSE;
+        }
+        else {
+            _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+        }
     }
 
     if (UTF8_IS_INVARIANT(*p)) {
@@ -2104,7 +2126,7 @@ Perl__to_utf8_lower_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, bool flags
 	result = CALL_LOWER_CASE(p, ustrp, lenp);
 
 	if (flags) {
-	    result = check_locale_boundary_crossing("lc", p, result, ustrp, lenp);
+	    result = check_locale_boundary_crossing(p, result, ustrp, lenp);
 	}
 
 	return result;
@@ -2153,8 +2175,14 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags)
 
     assert(p != ustrp); /* Otherwise overwrites */
 
-    if (flags & FOLD_FLAGS_LOCALE && IN_UTF8_CTYPE_LOCALE) {
-        flags &= ~FOLD_FLAGS_LOCALE;
+    if (flags & FOLD_FLAGS_LOCALE) {
+        /* Treat a UTF-8 locale as not being in locale at all */
+        if (IN_UTF8_CTYPE_LOCALE) {
+            flags &= ~FOLD_FLAGS_LOCALE;
+        }
+        else {
+            _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+        }
     }
 
     if (UTF8_IS_INVARIANT(*p)) {
@@ -2208,7 +2236,7 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags)
                               "resolved to \"\\x{FB06}\".");
                 goto return_ligature_st;
             }
-	    return check_locale_boundary_crossing("fc", p, result, ustrp, lenp);
+	    return check_locale_boundary_crossing(p, result, ustrp, lenp);
 	}
 	else if (! (flags & FOLD_FLAGS_NOMIX_ASCII)) {
 	    return result;
@@ -3911,8 +3939,18 @@ L<http://www.unicode.org/unicode/reports/tr21/> (Case Mappings).
  *  FOLDEQ_LOCALE	    is set iff the rules from the current underlying
  *	                    locale are to be used.
  *  FOLDEQ_S1_ALREADY_FOLDED  s1 has already been folded before calling this
- *                            routine.  This allows that step to be skipped.
+ *                          routine.  This allows that step to be skipped.
+ *                          Currently, this requires s1 to be encoded as UTF-8
+ *                          (u1 must be true), which is asserted for.
+ *  FOLDEQ_S1_FOLDS_SANE    With either NOMIX_ASCII or LOCALE, no folds may
+ *                          cross certain boundaries.  Hence, the caller should
+ *                          let this function do the folding instead of
+ *                          pre-folding.  This code contains an assertion to
+ *                          that effect.  However, if the caller knows what
+ *                          it's doing, it can pass this flag to indicate that,
+ *                          and the assertion is skipped.
  *  FOLDEQ_S2_ALREADY_FOLDED  Similarly.
+ *  FOLDEQ_S2_FOLDS_SANE
  */
 I32
 Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, UV l1, bool u1, const char *s2, char **pe2, UV l2, bool u2, U32 flags)
@@ -3928,11 +3966,15 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, UV l1, bool u1, const c
     STRLEN n1 = 0, n2 = 0;              /* Number of bytes in current char */
     U8 foldbuf1[UTF8_MAXBYTES_CASE+1];
     U8 foldbuf2[UTF8_MAXBYTES_CASE+1];
+    U8 flags_for_folder = FOLD_FLAGS_FULL;
 
     PERL_ARGS_ASSERT_FOLDEQ_UTF8_FLAGS;
 
     assert( ! ((flags & (FOLDEQ_UTF8_NOMIX_ASCII | FOLDEQ_LOCALE))
-           && (flags & (FOLDEQ_S1_ALREADY_FOLDED | FOLDEQ_S2_ALREADY_FOLDED))));
+               && (((flags & FOLDEQ_S1_ALREADY_FOLDED)
+                     && !(flags & FOLDEQ_S1_FOLDS_SANE))
+                   || ((flags & FOLDEQ_S2_ALREADY_FOLDED)
+                       && !(flags & FOLDEQ_S2_FOLDS_SANE)))));
     /* The algorithm is to trial the folds without regard to the flags on
      * the first line of the above assert(), and then see if the result
      * violates them.  This means that the inputs can't be pre-folded to a
@@ -3944,8 +3986,13 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, UV l1, bool u1, const c
      * and /iaa matches are most likely to involve code points 0-255, and this
      * function only under rare conditions gets called for 0-255. */
 
-    if (IN_UTF8_CTYPE_LOCALE) {
-        flags &= ~FOLDEQ_LOCALE;
+    if (flags & FOLDEQ_LOCALE) {
+        if (IN_UTF8_CTYPE_LOCALE) {
+            flags &= ~FOLDEQ_LOCALE;
+        }
+        else {
+            flags_for_folder |= FOLD_FLAGS_LOCALE;
+        }
     }
 
     if (pe1) {
@@ -3997,98 +4044,59 @@ Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, UV l1, bool u1, const c
     while (p1 < e1 && p2 < e2) {
 
         /* If at the beginning of a new character in s1, get its fold to use
-	 * and the length of the fold.  (exception: locale rules just get the
-	 * character to a single byte) */
+	 * and the length of the fold. */
         if (n1 == 0) {
 	    if (flags & FOLDEQ_S1_ALREADY_FOLDED) {
 		f1 = (U8 *) p1;
+                assert(u1);
 		n1 = UTF8SKIP(f1);
 	    }
 	    else {
-		/* If in locale matching, we use two sets of rules, depending
-		 * on if the code point is above or below 255.  Here, we test
-		 * for and handle locale rules */
-		if ((flags & FOLDEQ_LOCALE)
-		    && (! u1 || ! UTF8_IS_ABOVE_LATIN1(*p1)))
-		{
-		    /* There is no mixing of code points above and below 255. */
-		    if (u2 && UTF8_IS_ABOVE_LATIN1(*p2)) {
-			return 0;
-		    }
+                if (isASCII(*p1) && ! (flags & FOLDEQ_LOCALE)) {
 
-		    /* We handle locale rules by converting, if necessary, the
-		     * code point to a single byte. */
-		    if (! u1 || UTF8_IS_INVARIANT(*p1)) {
-			*foldbuf1 = *p1;
-		    }
-		    else {
-			*foldbuf1 = TWO_BYTE_UTF8_TO_NATIVE(*p1, *(p1 + 1));
-		    }
-		    n1 = 1;
-		}
-		else if (isASCII(*p1)) {    /* Note, that here won't be both
-					       ASCII and using locale rules */
-
-		    /* If trying to mix non- with ASCII, and not supposed to,
-		     * fail */
-		    if ((flags & FOLDEQ_UTF8_NOMIX_ASCII) && ! isASCII(*p2)) {
-			return 0;
-		    }
-		    n1 = 1;
-		    *foldbuf1 = toFOLD(*p1);
-		}
-		else if (u1) {
-		    to_utf8_fold(p1, foldbuf1, &n1);
-		}
-		else {  /* Not utf8, get utf8 fold */
-		    to_uni_fold(*p1, foldbuf1, &n1);
-		}
-		f1 = foldbuf1;
-	    }
+                    /* We have to forbid mixing ASCII with non-ASCII if the
+                     * flags so indicate.  And, we can short circuit having to
+                     * call the general functions for this common ASCII case,
+                     * all of whose non-locale folds are also ASCII, and hence
+                     * UTF-8 invariants, so the UTF8ness of the strings is not
+                     * relevant. */
+                    if ((flags & FOLDEQ_UTF8_NOMIX_ASCII) && ! isASCII(*p2)) {
+                        return 0;
+                    }
+                    n1 = 1;
+                    *foldbuf1 = toFOLD(*p1);
+                }
+                else if (u1) {
+                    _to_utf8_fold_flags(p1, foldbuf1, &n1, flags_for_folder);
+                }
+                else {  /* Not utf8, get utf8 fold */
+                    _to_uni_fold_flags(*p1, foldbuf1, &n1, flags_for_folder);
+                }
+                f1 = foldbuf1;
+            }
         }
 
         if (n2 == 0) {    /* Same for s2 */
 	    if (flags & FOLDEQ_S2_ALREADY_FOLDED) {
 		f2 = (U8 *) p2;
+                assert(u2);
 		n2 = UTF8SKIP(f2);
 	    }
 	    else {
-		if ((flags & FOLDEQ_LOCALE)
-		    && (! u2 || ! UTF8_IS_ABOVE_LATIN1(*p2)))
-		{
-		    /* Here, the next char in s2 is < 256.  We've already
-		     * worked on s1, and if it isn't also < 256, can't match */
-		    if (u1 && UTF8_IS_ABOVE_LATIN1(*p1)) {
-			return 0;
-		    }
-		    if (! u2 || UTF8_IS_INVARIANT(*p2)) {
-			*foldbuf2 = *p2;
-		    }
-		    else {
-			*foldbuf2 = TWO_BYTE_UTF8_TO_NATIVE(*p2, *(p2 + 1));
-		    }
-
-		    /* Use another function to handle locale rules.  We've made
-		     * sure that both characters to compare are single bytes */
-		    if (! foldEQ_locale((char *) f1, (char *) foldbuf2, 1)) {
-			return 0;
-		    }
-		    n1 = n2 = 0;
-		}
-		else if (isASCII(*p2)) {
-		    if ((flags & FOLDEQ_UTF8_NOMIX_ASCII) && ! isASCII(*p1)) {
-			return 0;
-		    }
-		    n2 = 1;
-		    *foldbuf2 = toFOLD(*p2);
-		}
-		else if (u2) {
-		    to_utf8_fold(p2, foldbuf2, &n2);
-		}
-		else {
-		    to_uni_fold(*p2, foldbuf2, &n2);
-		}
-		f2 = foldbuf2;
+                if (isASCII(*p2) && ! (flags & FOLDEQ_LOCALE)) {
+                    if ((flags & FOLDEQ_UTF8_NOMIX_ASCII) && ! isASCII(*p1)) {
+                        return 0;
+                    }
+                    n2 = 1;
+                    *foldbuf2 = toFOLD(*p2);
+                }
+                else if (u2) {
+                    _to_utf8_fold_flags(p2, foldbuf2, &n2, flags_for_folder);
+                }
+                else {
+                    _to_uni_fold_flags(*p2, foldbuf2, &n2, flags_for_folder);
+                }
+                f2 = foldbuf2;
 	    }
         }
 

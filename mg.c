@@ -1389,11 +1389,13 @@ Perl_csighandler(int sig)
 #else
     dTHX;
 #endif
+#if defined(HAS_SIGACTION) && defined(SA_SIGINFO)
 #if defined(__cplusplus) && defined(__GNUC__)
     /* g++ doesn't support PERL_UNUSED_DECL, so the sip and uap
      * parameters would be warned about. */
     PERL_UNUSED_ARG(sip);
     PERL_UNUSED_ARG(uap);
+#endif
 #endif
 #ifdef FAKE_PERSISTENT_SIGNAL_HANDLERS
     (void) rsignal(sig, PL_csighandlerp);
@@ -2772,17 +2774,6 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 			    PerlMemShared_free(PL_compiling.cop_warnings);
 			PL_compiling.cop_warnings = pWARN_NONE;
 		    }
-		    /* Yuck. I can't see how to abstract this:  */
-		    else if (isWARN_on(
-                                ((STRLEN *)SvPV_nolen_const(sv)) - 1,
-                                WARN_ALL)
-                            && !any_fatals)
-                    {
-			if (!specialWARN(PL_compiling.cop_warnings))
-			    PerlMemShared_free(PL_compiling.cop_warnings);
-	                PL_compiling.cop_warnings = pWARN_ALL;
-	                PL_dowarn |= G_WARN_ONCE ;
-	            }
                     else {
 			STRLEN len;
 			const char *const p = SvPV_const(sv, len);

@@ -272,6 +272,13 @@ Perl_new_ctype(pTHX_ const char *newctype)
 
     PERL_ARGS_ASSERT_NEW_CTYPE;
 
+    /* We will replace any bad locale warning with 1) nothing if the new one is
+     * ok; or 2) a new warning for the bad new locale */
+    if (PL_warn_locale) {
+        SvREFCNT_dec_NN(PL_warn_locale);
+        PL_warn_locale = NULL;
+    }
+
     PL_in_utf8_CTYPE_locale = _is_cur_LC_category_utf8(LC_CTYPE);
 
     /* A UTF-8 locale gets standard rules.  But note that code still has to
@@ -360,17 +367,9 @@ Perl_new_ctype(pTHX_ const char *newctype)
 #endif
 
         if (bad_count || multi_byte_locale) {
-
-            /* We have to save 'newctype' because the setlocale() just below
-             * may destroy it.  The next setlocale() further down should
-             * restore it properly so that the intermediate change here is
-             * transparent to this function's caller */
-            const char * const badlocale = savepv(newctype);
-
-            setlocale(LC_CTYPE, "C");
-            Perl_warner(aTHX_ packWARN(WARN_LOCALE),
+            PL_warn_locale = Perl_newSVpvf(aTHX_
                              "Locale '%s' may not work well.%s%s%s\n",
-                             badlocale,
+                             newctype,
                              (multi_byte_locale)
                               ? "  Some characters in it are not recognized by"
                                 " Perl."
@@ -384,7 +383,27 @@ Perl_new_ctype(pTHX_ const char *newctype)
                               ? bad_chars_list
                               : ""
                             );
-            setlocale(LC_CTYPE, badlocale);
+            /* If we are actually in the scope of the locale, output the
+             * message now.  Otherwise we save it to be output at the first
+             * operation using this locale, if that actually happens.  Most
+             * programs don't use locales, so they are immune to bad ones */
+            if (IN_LC(LC_CTYPE)) {
+
+                /* We have to save 'newctype' because the setlocale() just
+                 * below may destroy it.  The next setlocale() further down
+                 * should restore it properly so that the intermediate change
+                 * here is transparent to this function's caller */
+                const char * const badlocale = savepv(newctype);
+
+                setlocale(LC_CTYPE, "C");
+
+                /* The '0' below suppresses a bogus gcc compiler warning */
+                Perl_warner(aTHX_ packWARN(WARN_LOCALE), SvPVX(PL_warn_locale), 0);
+                setlocale(LC_CTYPE, badlocale);
+                Safefree(badlocale);
+                SvREFCNT_dec_NN(PL_warn_locale);
+                PL_warn_locale = NULL;
+            }
         }
     }
 
@@ -392,6 +411,32 @@ Perl_new_ctype(pTHX_ const char *newctype)
     PERL_ARGS_ASSERT_NEW_CTYPE;
     PERL_UNUSED_ARG(newctype);
     PERL_UNUSED_CONTEXT;
+}
+
+void
+Perl__warn_problematic_locale()
+{
+
+#ifdef USE_LOCALE_CTYPE
+
+    dTHX;
+
+    /* Internal-to-core function that outputs the message in PL_warn_locale,
+     * and then NULLS it.  Should be called only through the macro
+     * _CHECK_AND_WARN_PROBLEMATIC_LOCALE */
+
+    if (PL_warn_locale) {
+        /*GCC_DIAG_IGNORE(-Wformat-security);   Didn't work */
+        Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),
+                             SvPVX(PL_warn_locale),
+                             0 /* dummy to avoid compiler warning */ );
+        /* GCC_DIAG_RESTORE; */
+        SvREFCNT_dec_NN(PL_warn_locale);
+        PL_warn_locale = NULL;
+    }
+
+#endif
+
 }
 
 void

@@ -256,6 +256,7 @@ a[bcd]+dcdcde	adcdcde	n	-	-
 ((a)(b)c)(d)	abcd	y	$-[4]	3
 ((a)(b)c)(d)	abcd	y	$+[4]	4
 [a-zA-Z_][a-zA-Z0-9_]*	alpha	y	$&	alpha
+[_A-Z]	}	n	-	-		# This could match on EBCDIC if A-Z not excluding things in middle
 ^a(bc+|b[eh])g|.h$	abh	y	$&-$1	bh-
 (bc+d$|ef*g.|h?i(j|k))	effgz	y	$&-$1-$2	effgz-effgz-
 (bc+d$|ef*g.|h?i(j|k))	ij	y	$&-$1-$2	ij-ij-j
@@ -1432,6 +1433,7 @@ foo(\h)bar	foo\tbar	y	$1	\t
 # Verify that \N{U+...} forces Unicode rules
 /\N{U+41}\x{c1}/i	a\x{e1}	y	$&	a\x{e1}
 /[\N{U+41}\x{c1}]/i	\x{e1}	y	$&	\x{e1}
+/\N{}\xe4/i	\xc4	y	$&	\xc4		# Empty \N{} should change /d to /u
 
 [\s][\S]	\x{a0}\x{a0}	n	-	-	# Unicode complements should not match same character
 
@@ -1895,6 +1897,10 @@ A+(*PRUNE)BC(?{})	AAABC	y	$&	AAABC
 /(alias|status)es$/i	Statuses	y	$1	Status		# [perl #121778]
 /( (?&solution) | % ) \Z (?(DEFINE) (?<solution>7\%\ solution) )/x	7% solution	y	$1	7% solution		# [perl #122890]
 (.)(?{$~=$^N})	\x{100}	y	$~	\x{100}		# [perl #123135]
+
+# pat	string	y/n/etc	expr	expected-expr	skip-reason	comment
+/[a-z]/i	\N{KELVIN SIGN}	y	$&	\N{KELVIN SIGN}
+/[A-Z]/i	\N{LATIN SMALL LETTER LONG S}	y	$&	\N{LATIN SMALL LETTER LONG S}
 
 # Keep these lines at the end of the file
 # vim: softtabstop=0 noexpandtab

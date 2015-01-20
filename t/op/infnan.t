@@ -20,7 +20,11 @@ BEGIN {
 
 my $PInf = "Inf"  + 0;
 my $NInf = "-Inf" + 0;
-my $NaN  = "NaN"  + 0;
+my $NaN;
+{
+    local $^W = 0; # warning-ness tested later.
+    $NaN  = "NaN" + 0;
+}
 
 my @PInf = ("Inf", "inf", "INF", "+Inf",
             "Infinity", "INFINITE",
@@ -81,11 +85,23 @@ for my $f (@printf_fmt) {
     is(sprintf("%$f", $PInf), "Inf", "$PInf sprintf %$f is Inf");
 }
 
+is(sprintf("%+g", $PInf), "+Inf", "$PInf sprintf %+g");
+is(sprintf("%+g", $NInf), "-Inf", "$PInf sprintf %+g");
+
+is(sprintf("%4g",  $PInf), " Inf", "$PInf sprintf %4g");
+is(sprintf("%-4g", $PInf), "Inf ", "$PInf sprintf %-4g");
+
+is(sprintf("%+-5g", $PInf), "+Inf ", "$PInf sprintf %+-5g");
+is(sprintf("%-+5g", $PInf), "+Inf ", "$PInf sprintf %-+5g");
+
+is(sprintf("%-+5g", $NInf), "-Inf ", "$NInf sprintf %-+5g");
+is(sprintf("%+-5g", $NInf), "-Inf ", "$NInf sprintf %+-5g");
+
 ok(!defined eval { $a = sprintf("%c", $PInf)}, "sprintf %c +Inf undef");
 like($@, qr/Cannot printf/, "$PInf sprintf fails");
 ok(!defined eval { $a = sprintf("%c", "Inf")},
   "stringy sprintf %c +Inf undef");
-like($@, qr/Cannot printf/, "stringy $PInf sprintf fails");
+like($@, qr/Cannot printf/, "stringy $PInf sprintf %c fails");
 
 ok(!defined eval { $a = chr($PInf) }, "chr(+Inf) undef");
 like($@, qr/Cannot chr/, "+Inf chr() fails");
@@ -96,7 +112,7 @@ ok(!defined eval { $a = sprintf("%c", $NInf)}, "sprintf %c -Inf undef");
 like($@, qr/Cannot printf/, "$NInf sprintf fails");
 ok(!defined eval { $a = sprintf("%c", "-Inf")},
   "sprintf %c stringy -Inf undef");
-like($@, qr/Cannot printf/, "stringy $NInf sprintf fails");
+like($@, qr/Cannot printf/, "stringy $NInf sprintf %c fails");
 
 ok(!defined eval { $a = chr($NInf) }, "chr(-Inf) undef");
 like($@, qr/Cannot chr/, "-Inf chr() fails");
@@ -241,6 +257,21 @@ SKIP: {
     }
 }
 
+{
+    # Silence "Non-finite repeat count", that is tested elsewhere.
+    local $^W = 0;
+    is("a" x $PInf, "", "x +Inf");
+    is("a" x $NInf, "", "x -Inf");
+}
+
+{
+    eval 'for my $x (0..$PInf) { last }';
+    like($@, qr/Range iterator outside integer range/, "0..+Inf fails");
+
+    eval 'for my $x ($NInf..0) { last }';
+    like($@, qr/Range iterator outside integer range/, "-Inf..0 fails");
+}
+
 # === NaN ===
 
 cmp_ok($NaN, '!=', $NaN, "NaN is NaN numerically (by not being NaN)");
@@ -248,8 +279,11 @@ ok($NaN eq $NaN, "NaN is NaN stringifically");
 
 is("$NaN", "NaN", "$NaN value stringifies as NaN");
 
-is("+NaN" + 0, "NaN", "+NaN is NaN");
-is("-NaN" + 0, "NaN", "-NaN is NaN");
+{
+    local $^W = 0; # warning-ness tested later.
+    is("+NaN" + 0, "NaN", "+NaN is NaN");
+    is("-NaN" + 0, "NaN", "-NaN is NaN");
+}
 
 is($NaN + 0, $NaN, "NaN + zero is NaN");
 
@@ -265,11 +299,19 @@ for my $f (@printf_fmt) {
     is(sprintf("%$f", $NaN), "NaN", "$NaN sprintf %$f is NaN");
 }
 
+is(sprintf("%+g", $NaN), "NaN", "$NaN sprintf %+g");
+
+is(sprintf("%4g",  $NaN), " NaN", "$NaN sprintf %4g");
+is(sprintf("%-4g", $NaN), "NaN ", "$NaN sprintf %-4g");
+
+is(sprintf("%+-5g", $NaN), "NaN  ", "$NaN sprintf %+-5g");
+is(sprintf("%-+5g", $NaN), "NaN  ", "$NaN sprintf %-+5g");
+
 ok(!defined eval { $a = sprintf("%c", $NaN)}, "sprintf %c NaN undef");
 like($@, qr/Cannot printf/, "$NaN sprintf fails");
 ok(!defined eval { $a = sprintf("%c", "NaN")},
   "sprintf %c stringy NaN undef");
-like($@, qr/Cannot printf/, "stringy $NaN sprintf fails");
+like($@, qr/Cannot printf/, "stringy $NaN sprintf %c fails");
 
 ok(!defined eval { $a = chr($NaN) }, "chr NaN undef");
 like($@, qr/Cannot chr/, "NaN chr() fails");
@@ -301,6 +343,7 @@ is eval { unpack "p", pack 'p', $NaN }, "NaN", "pack p +NaN";
 is eval { unpack "P3", pack 'P', $NaN }, "NaN", "pack P +NaN";
 
 for my $i (@NaN) {
+    local $^W = 0; # warning-ness tested later.
     cmp_ok($i + 0, '!=', $i + 0, "$i is NaN numerically (by not being NaN)");
     is("@{[$i+0]}", "NaN", "$i value stringifies as NaN");
 }
@@ -358,6 +401,28 @@ SKIP: {
     }
 }
 
+{
+    # Silence "Non-finite repeat count", that is tested elsewhere.
+    local $^W = 0;
+    is("a" x $NaN, "", "x NaN");
+}
+
+{
+    my $w;
+    local $SIG{__WARN__} = sub { $w = shift };
+    local $^W = 1;
+    my $a;
+    eval '$a = "nancy" + 1';
+    is($a, "$NaN", "nancy plus one is $NaN");
+    like($w, qr/^Argument "nancy" isn't numeric/, "nancy numify (compile time)");
+
+    my $n = "nanana";
+    my $b;
+    eval '$b = $n + 1';
+    is($b, "$NaN", "$n plus one is $NaN");
+    like($w, qr/^Argument "$n" isn't numeric/, "$n numify (runtime)");
+}
+
 # === Tests combining Inf and NaN ===
 
 # is() okay with $NaN because it uses eq.
@@ -377,6 +442,14 @@ ok(!($NaN == $NInf), "NaN is not eq -Inf");
 ok(!($NaN >  $NInf), "NaN is not gt -Inf");
 
 is(sin($PInf), $NaN, "sin(+Inf) is NaN");
+
+{
+    eval 'for my $x (0..$NaN) { last }';
+    like($@, qr/Range iterator outside integer range/, "0..NaN fails");
+
+    eval 'for my $x ($NaN..0) { last }';
+    like($@, qr/Range iterator outside integer range/, "NaN..0 fails");
+}
 
 # === Overflows and Underflows ===
 

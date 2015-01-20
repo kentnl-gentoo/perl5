@@ -179,7 +179,7 @@ PERLVAR(I, statgv,	GV *)
 PERLVARI(I, statname,	SV *,	NULL)
 
 #ifdef HAS_TIMES
-/* Will be removed soon after v5.21.7. See RT #121351 */
+/* Will be removed soon after v5.21.8. See RT #121351 */
 PERLVAR(I, timesbuf,	struct tms)
 #endif
 
@@ -238,6 +238,7 @@ PERLVAR(I, exit_flags,	U8)		/* was exit() unexpected, etc. */
 
 PERLVAR(I, utf8locale,	bool)		/* utf8 locale detected */
 PERLVAR(I, in_utf8_CTYPE_locale, bool)
+PERLVAR(I, warn_locale, SV *)
 
 PERLVARA(I, colors,6,	char *)		/* values from PERL_RE_COLORS env var */
 
@@ -749,7 +750,7 @@ PERLVARI(I, globhook,	globhook_t, NULL)
 
 PERLVARI(I, padlist_generation, U32, 1)	/* id to identify padlist clones */
 
-/* The last unconditional member of the interpreter structure when 5.21.7 was
+/* The last unconditional member of the interpreter structure when 5.21.8 was
    released. The offset of the end of this is baked into a global variable in 
    any shared perl library which will allow a sanity test in future perl
    releases.  */

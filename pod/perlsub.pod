@@ -15,20 +15,20 @@ X<subroutine, declaration> X<sub>
 
     sub NAME BLOCK		  # A declaration and a definition.
     sub NAME(PROTO) BLOCK	  #  ditto, but with prototypes
-    sub NAME SIG BLOCK            #  with signature
+    sub NAME(SIG) BLOCK           #  with a signature instead
     sub NAME : ATTRS BLOCK	  #  with attributes
     sub NAME(PROTO) : ATTRS BLOCK #  with prototypes and attributes
-    sub NAME : ATTRS SIG BLOCK    #  with attributes and signature
+    sub NAME(SIG) : ATTRS BLOCK   #  with a signature and attributes
 
 To define an anonymous subroutine at runtime:
 X<subroutine, anonymous>
 
     $subref = sub BLOCK;		 # no proto
     $subref = sub (PROTO) BLOCK;	 # with proto
-    $subref = sub SIG BLOCK;             # with signature
+    $subref = sub (SIG) BLOCK;           # with signature
     $subref = sub : ATTRS BLOCK;	 # with attributes
     $subref = sub (PROTO) : ATTRS BLOCK; # with proto and attributes
-    $subref = sub : ATTRS SIG BLOCK;     # with attribs and signature
+    $subref = sub (SIG) : ATTRS BLOCK;   # with signature and attributes
 
 To import subroutines:
 X<import>
@@ -489,13 +489,12 @@ a signature.  They do different jobs: the prototype affects compilation
 of calls to the subroutine, and the signature puts argument values into
 lexical variables at runtime.  You can therefore write
 
-    sub foo :prototype($$) ($left, $right) {
+    sub foo ($left, $right) : prototype($$) {
 	return $left + $right;
     }
 
-The prototype attribute, and any other attributes, must come before
-the signature.  The signature always immediately precedes the block of
-the subroutine's body.
+The prototype attribute, and any other attributes, come after 
+the signature.
 
 =head2 Private Variables via my()
 X<my> X<variable, lexical> X<lexical> X<lexical variable> X<scope, lexical>
@@ -1701,6 +1700,21 @@ declared.
         $x = 54321;
         *ALSO_INLINED = sub () { $x };
     }
+
+Perl 5.22 also introduces the experimental "const" attribute as an
+alternative.  (Disable the "experimental::const_attr" warnings if you want
+to use it.)  When applied to an anonymous subroutine, it forces the sub to
+be called when the C<sub> expression is evaluated.  The return value is
+captured and turned into a constant subroutine:
+
+    my $x = 54321;
+    *INLINED = sub : const { $x };
+    $x++;
+
+The return value of C<INLINED> in this example will always be 54321,
+regardless of later modifications to $x.  You can also put any arbitrary
+code inside the sub, at it will be executed immediately and its return
+value captured the same way.
 
 If you really want a subroutine with a C<()> prototype that returns a
 lexical variable you can easily force it to not be inlined by adding

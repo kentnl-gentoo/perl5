@@ -866,6 +866,7 @@ sub run_tests {
         ok "\x{100}X" =~ /$re/, "S_cl_and ANYOF_UNICODE & ANYOF_INVERTED";
         my $loc_re = qq /(?l:^([^X]*)X)/;
         utf8::upgrade ($loc_re);
+        no warnings 'locale';
         ok "\x{100}X" =~ /$loc_re/, "locale, S_cl_and ANYOF_UNICODE & ANYOF_INVERTED";
     }
 
@@ -1046,7 +1047,7 @@ sub run_tests {
 
         undef $w;
         my $Cedilla_Latin1 = "GAR"
-                           . latin1_to_native("\xC7")
+                           . uni_to_native("\xC7")
                            . "ON";
         my $Cedilla_utf8 = $Cedilla_Latin1;
         utf8::upgrade($Cedilla_utf8);
@@ -1059,9 +1060,9 @@ sub run_tests {
 
         undef $w;
         my $NBSP_Latin1 = "NBSP"
-                        . latin1_to_native("\xA0")
+                        . uni_to_native("\xA0")
                         . "SEPARATED"
-                        . latin1_to_native("\xA0")
+                        . uni_to_native("\xA0")
                         . "SPACE";
         my $NBSP_utf8 = $NBSP_Latin1;
         utf8::upgrade($NBSP_utf8);

@@ -381,7 +381,7 @@ L<Data::Util> version 0.63
 
 =item *
 
-L<Function::Parameters> version 1.0602
+L<Lexical::Var> version 0.009
 
 =item *
 
@@ -419,7 +419,7 @@ here.
 
 XXX Generate this with:
 
-  perl Porting/acknowledgements.pl v5.21.7..HEAD
+  perl Porting/acknowledgements.pl v5.21.8..HEAD
 
 =head1 Reporting Bugs
 

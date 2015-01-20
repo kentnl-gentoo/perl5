@@ -12,6 +12,10 @@ BEGIN {
 $|  = 1;
 use warnings;
 use strict;
+BEGIN  {
+    eval { require threads; threads->import; }
+}
+use Test::Stream 'enable_fork';
 use Test::More;
 
 BEGIN { use_ok( 'B' ); }
@@ -217,6 +221,18 @@ is($gv_ref->GPFLAGS & B::GPf_ALIASED_SV, 0, 'GPFLAGS are unset');
 is(ref B::sv_yes(), "B::SPECIAL", "B::sv_yes()");
 is(ref B::sv_no(), "B::SPECIAL", "B::sv_no()");
 is(ref B::sv_undef(), "B::SPECIAL", "B::sv_undef()");
+SKIP: {
+    skip('no fork', 1)
+	unless ($Config::Config{d_fork} or $Config::Config{d_pseudofork});
+    my $pid;
+    if ($pid = fork) {
+        waitpid($pid,0);
+    }
+    else {
+        is(ref B::svref_2object(\(!!0)), "B::SPECIAL", "special SV table works after psuedofork");
+        exit;
+    }
+}
 
 # More utility functions
 is(B::ppname(0), "pp_null", "Testing ppname (this might break if opnames.h is changed)");
@@ -502,6 +518,35 @@ SKIP: {
         pass();
     }
 
+}
+
+
+# Some pad tests
+{
+    my $sub = sub { my main $a; CORE::state @b; our %c };
+    my $padlist = B::svref_2object($sub)->PADLIST;
+    is $padlist->MAX, 1, 'padlist MAX';
+    my @array = $padlist->ARRAY;
+    is @array, 2, 'two items from padlist ARRAY';
+    is ${$padlist->ARRAYelt(0)}, ${$array[0]},
+      'ARRAYelt(0) is first item from ARRAY';
+    is ${$padlist->ARRAYelt(1)}, ${$array[1]},
+      'ARRAYelt(1) is second item from ARRAY';
+    is ${$padlist->NAMES}, ${$array[0]},
+      'NAMES is first item from ARRAY';
+    my @names = $array[0]->ARRAY;
+    cmp_ok @names, ">=", 4, 'at least 4 pad names';
+    is join(" ", map($_->PV//"undef",@names[0..3])), 'undef $a @b %c',
+       'pad name PVs';
+
+    my @closures;
+    for (1,2) { push @closures, sub { sub { @closures } } }
+    my $sub1 = B::svref_2object($closures[0]);
+    my $sub2 = B::svref_2object($closures[1]);
+    is $sub2->PADLIST->id, $sub1->PADLIST->id, 'padlist id';
+    $sub1 = B::svref_2object(my $lr = $closures[0]());
+    $sub2 = B::svref_2object(my $lr2= $closures[1]());
+    is $sub2->PADLIST->outid, $sub1->PADLIST->outid, 'padlist outid';
 }
 
 

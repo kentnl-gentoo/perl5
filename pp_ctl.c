@@ -210,7 +210,7 @@ PP(pp_substcont)
     rxres_restore(&cx->sb_rxres, rx);
 
     if (cx->sb_iters++) {
-	const I32 saviters = cx->sb_iters;
+	const SSize_t saviters = cx->sb_iters;
 	if (cx->sb_iters > cx->sb_maxiters)
 	    DIE(aTHX_ "Substitution loop");
 
@@ -586,6 +586,7 @@ PP(pp_formline)
                         break;
                 }
                 itembytes = s - item;
+                chophere = s;
 		break;
 	    }
 
@@ -1209,8 +1210,10 @@ PP(pp_flop)
 	    else
 		n = 0;
 	    while (n--) {
-		SV * const sv = sv_2mortal(newSViv(i++));
+		SV * const sv = sv_2mortal(newSViv(i));
 		PUSHs(sv);
+                if (n) /* avoid incrementing above IV_MAX */
+                    i++;
 	    }
 	}
 	else {
@@ -2088,6 +2091,28 @@ PP(pp_leave)
     RETURN;
 }
 
+static bool
+S_outside_integer(pTHX_ SV *sv)
+{
+  if (SvOK(sv)) {
+    const NV nv = SvNV_nomg(sv);
+    if (Perl_isinfnan(nv))
+      return TRUE;
+#ifdef NV_PRESERVES_UV
+    if (nv < (NV)IV_MIN || nv > (NV)IV_MAX)
+      return TRUE;
+#else
+    if (nv <= (NV)IV_MIN)
+      return TRUE;
+    if ((nv > 0) &&
+        ((nv > (NV)UV_MAX ||
+          SvUV_nomg(sv) > (UV)IV_MAX)))
+      return TRUE;
+#endif
+  }
+  return FALSE;
+}
+
 PP(pp_enteriter)
 {
     dSP; dMARK;
@@ -2146,32 +2171,13 @@ PP(pp_enteriter)
 	    SvGETMAGIC(sv);
 	    SvGETMAGIC(right);
 	    if (RANGE_IS_NUMERIC(sv,right)) {
-		NV nv;
 		cx->cx_type &= ~CXTYPEMASK;
 		cx->cx_type |= CXt_LOOP_LAZYIV;
 		/* Make sure that no-one re-orders cop.h and breaks our
 		   assumptions */
 		assert(CxTYPE(cx) == CXt_LOOP_LAZYIV);
-#ifdef NV_PRESERVES_UV
-		if ((SvOK(sv) && (((nv = SvNV_nomg(sv)) < (NV)IV_MIN) ||
-				  (nv > (NV)IV_MAX)))
-			||
-		    (SvOK(right) && (((nv = SvNV_nomg(right)) > (NV)IV_MAX) ||
-				     (nv < (NV)IV_MIN))))
-#else
-		if ((SvOK(sv) && (((nv = SvNV_nomg(sv)) <= (NV)IV_MIN)
-				  ||
-				  ((nv > 0) &&
-					((nv > (NV)UV_MAX) ||
-					 (SvUV_nomg(sv) > (UV)IV_MAX)))))
-			||
-		    (SvOK(right) && (((nv = SvNV_nomg(right)) <= (NV)IV_MIN)
-				     ||
-				     ((nv > 0) &&
-					((nv > (NV)UV_MAX) ||
-					 (SvUV_nomg(right) > (UV)IV_MAX))
-				     ))))
-#endif
+		if (S_outside_integer(aTHX_ sv) ||
+                    S_outside_integer(aTHX_ right))
 		    DIE(aTHX_ "Range iterator outside integer range");
 		cx->blk_loop.state_u.lazyiv.cur = SvIV_nomg(sv);
 		cx->blk_loop.state_u.lazyiv.end = SvIV_nomg(right);
@@ -3576,6 +3582,7 @@ S_check_type_and_open(pTHX_ SV *name)
 {
     Stat_t st;
     STRLEN len;
+    PerlIO * retio;
     const char *p = SvPV_const(name, len);
     int st_rc;
 
@@ -3590,6 +3597,11 @@ S_check_type_and_open(pTHX_ SV *name)
     if (!IS_SAFE_PATHNAME(p, len, "require"))
         return NULL;
 
+    /* on Win32 stat is expensive (it does an open() and close() twice and
+       a couple other IO calls), the open will fail with a dir on its own with
+       errno EACCES, so only do a stat to separate a dir from a real EACCES
+       caused by user perms */
+#ifndef WIN32
     /* we use the value of errno later to see how stat() or open() failed.
      * We don't want it set if the stat succeeded but we still failed,
      * such as if the name exists, but is a directory */
@@ -3600,12 +3612,29 @@ S_check_type_and_open(pTHX_ SV *name)
     if (st_rc < 0 || S_ISDIR(st.st_mode) || S_ISBLK(st.st_mode)) {
 	return NULL;
     }
+#endif
 
 #if !defined(PERLIO_IS_STDIO)
-    return PerlIO_openn(aTHX_ ":", PERL_SCRIPT_MODE, -1, 0, 0, NULL, 1, &name);
+    retio = PerlIO_openn(aTHX_ ":", PERL_SCRIPT_MODE, -1, 0, 0, NULL, 1, &name);
 #else
-    return PerlIO_open(p, PERL_SCRIPT_MODE);
+    retio = PerlIO_open(p, PERL_SCRIPT_MODE);
 #endif
+#ifdef WIN32
+    /* EACCES stops the INC search early in pp_require to implement
+       feature RT #113422 */
+    if(!retio && errno == EACCES) { /* exists but probably a directory */
+	int eno;
+	st_rc = PerlLIO_stat(p, &st);
+	if (st_rc >= 0) {
+	    if(S_ISDIR(st.st_mode) || S_ISBLK(st.st_mode))
+		eno = 0;
+	    else
+		eno = EACCES;
+	    errno = eno;
+	}
+    }
+#endif
+    return retio;
 }
 
 #ifndef PERL_DISABLE_PMC

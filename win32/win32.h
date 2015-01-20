@@ -23,6 +23,9 @@
 #  define WIN32_NO_SOCKETS
 /* less I/O calls during each require */
 #  define PERL_DISABLE_PMC
+
+/* allow minitest to work */
+#  define PERL_TEXTMODE_SCRIPTS
 #endif
 
 #ifdef WIN32_NO_SOCKETS
@@ -243,8 +246,6 @@ typedef long		gid_t;
 typedef unsigned short	mode_t;
 #endif
 
-#pragma  warning(disable: 4102)	/* "unreferenced label" */
-
 #if _MSC_VER < 1800
 #define isnan		_isnan	/* Defined already in VC++ 12.0 */
 #endif
@@ -366,6 +367,7 @@ typedef struct {
 
 DllExport void		win32_get_child_IO(child_IO_table* ptr);
 DllExport HWND		win32_create_message_window(void);
+DllExport int		win32_async_check(pTHX);
 
 extern int		my_fclose(FILE *);
 extern char *		win32_get_privlib(const char *pl, STRLEN *const len);
@@ -469,8 +471,6 @@ struct interp_intern {
     unsigned 	poll_count;
     Sighandler_t sigtable[SIG_SIZE];
 };
-
-DllExport int win32_async_check(pTHX);
 
 #define WIN32_POLL_INTERVAL 32768
 #define PERL_ASYNC_CHECK() if (w32_do_async || PL_sig_pending) win32_async_check(aTHX)

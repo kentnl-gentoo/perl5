@@ -13,7 +13,7 @@ BEGIN {
 use warnings;
 use strict;
 
-my $tests = 43; # not counting those in the __DATA__ section
+my $tests = 44; # not counting those in the __DATA__ section
 
 use B::Deparse;
 my $deparse = B::Deparse->new();
@@ -505,6 +505,11 @@ is runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path, '-T' ],
            prog => '$x =~ (1?/$a/:0)'),
   '$x =~ ($_ =~ /$a/);'."\n",
   '$foo =~ <branch-folded match> under taint mode';
+
+unlike runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path, '-w' ],
+               prog => 'BEGIN { undef &foo }'),
+       qr'Use of uninitialized value',
+      'no warnings for undefined sub';
 
 done_testing($tests);
 
@@ -1852,12 +1857,12 @@ my sub f {}
 print f();
 >>>>
 use feature 'lexical_subs';
-BEGIN {${^WARNING_BITS} = "TUUUUUUUUUUUUTUUU\005"}
+BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x50\x15"}
 my sub f {
-    BEGIN {${^WARNING_BITS} = "TUUUUUUUUUUUUTUU\005"}
+    BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x10"}
     
 }
-BEGIN {${^WARNING_BITS} = "TUUUUUUUUUUUUTUU\005"}
+BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x10"}
 print f();
 ####
 # SKIP ?$] < 5.017004 && "lexical subs not implemented on this Perl version"
@@ -1868,13 +1873,13 @@ state sub f {}
 print f();
 >>>>
 use feature 'lexical_subs';
-BEGIN {${^WARNING_BITS} = "TUUUUUUUUUUUUTUUU\005"}
+BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x50\x15"}
 CORE::state sub f {
-    BEGIN {${^WARNING_BITS} = "TUUUUUUUUUUUUTUU\005"}
+    BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x10"}
     use feature 'state';
     
 }
-BEGIN {${^WARNING_BITS} = "TUUUUUUUUUUUUTUU\005"}
+BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x10"}
 use feature 'state';
 print f();
 ####
@@ -1887,7 +1892,7 @@ print f();
     {
       foo();
       my sub b;
-      b();
+      b ;
       main::b();
       &main::b;
       &main::b();
@@ -1898,10 +1903,27 @@ print f();
   b();
 }
 ####
+# self-referential lexical subroutine
+# CONTEXT use feature 'lexical_subs', 'state'; no warnings 'experimental::lexical_subs';
+();
+state sub sb2;
+sub sb2 {
+    sb2 ;
+}
+####
+# lexical subroutine with outer declaration and inner definition
+# CONTEXT use feature 'lexical_subs'; no warnings 'experimental::lexical_subs';
+();
+my sub f;
+my sub g {
+    ();
+    sub f { }
+}
+####
 # Elements of %# should not be confused with $#{ array }
 () = ${#}{'foo'};
 ####
-# $; [perl #12335]
+# $; [perl #123357]
 $_ = $;;
 do {
     $;
@@ -1918,6 +1940,65 @@ package prototest;
 ####
 # coderef2text and prototyped sub calls [perl #123435]
 is 'foo', 'oo';
+####
+# prototypes with unary precedence
+package prototest;
+sub dollar($) {}
+sub optdollar(;$) {}
+sub optoptdollar(;;$) {}
+sub splat(*) {}
+sub optsplat(;*) {}
+sub optoptsplat(;;*) {}
+sub bar(_) {}
+sub optbar(;_) {}
+sub optoptbar(;;_) {}
+sub plus(+) {}
+sub optplus(;+) {}
+sub optoptplus(;;+) {}
+sub wack(\$) {}
+sub optwack(;\$) {}
+sub optoptwack(;;\$) {}
+sub wackbrack(\[$]) {}
+sub optwackbrack(;\[$]) {}
+sub optoptwackbrack(;;\[$]) {}
+dollar($a < $b);
+optdollar($a < $b);
+optoptdollar($a < $b);
+splat($a < $b);     # Some of these deparse with ‘&’; if that changes, just
+optsplat($a < $b);  # change the tests.
+optoptsplat($a < $b);
+bar($a < $b);
+optbar($a < $b);
+optoptbar($a < $b);
+plus($a < $b);
+optplus($a < $b);
+optoptplus($a < $b);
+wack($a = $b);
+optwack($a = $b);
+optoptwack($a = $b);
+wackbrack($a = $b);
+optwackbrack($a = $b);
+optoptwackbrack($a = $b);
+>>>>
+package prototest;
+dollar($a < $b);
+optdollar($a < $b);
+optoptdollar($a < $b);
+&splat($a < $b);
+&optsplat($a < $b);
+&optoptsplat($a < $b);
+bar($a < $b);
+optbar($a < $b);
+optoptbar($a < $b);
+&plus($a < $b);
+&optplus($a < $b);
+&optoptplus($a < $b);
+&wack(\($a = $b));
+&optwack(\($a = $b));
+&optoptwack(\($a = $b));
+&wackbrack(\($a = $b));
+&optwackbrack(\($a = $b));
+&optoptwackbrack(\($a = $b));
 ####
 # ensure aelemfast works in the range -128..127 and that there's no
 # funky edge cases

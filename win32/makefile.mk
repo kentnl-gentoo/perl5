@@ -44,7 +44,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.21.7
+#INST_VER	*= \5.21.8
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -85,15 +85,6 @@ USE_ITHREADS	*= define
 # will auto-enable) USE_MULTI above.
 #
 USE_IMP_SYS	*= define
-
-#
-# Comment out next assign to disable perl's I/O subsystem and use compiler's 
-# stdio for IO - depending on your compiler vendor and run time library you may 
-# then get a number of fails from make test i.e. bugs - complain to them not us ;-). 
-# You will also be unable to take full advantage of perl5.8's support for multiple 
-# encodings and may see lower IO performance. You have been warned.
-#
-USE_PERLIO	*= define
 
 #
 # Comment this out if you don't want to enable large file support for
@@ -299,7 +290,6 @@ USE_SITECUST	*= undef
 USE_MULTI	*= undef
 USE_ITHREADS	*= undef
 USE_IMP_SYS	*= undef
-USE_PERLIO	*= undef
 USE_LARGE_FILES	*= undef
 USE_64_BIT_INT	*= undef
 USE_LONG_DOUBLE	*= undef
@@ -386,15 +376,7 @@ ARCHITECTURE	= ia64
 .IF "$(USE_MULTI)" == "define"
 ARCHNAME	= MSWin32-$(ARCHITECTURE)-multi
 .ELSE
-.IF "$(USE_PERLIO)" == "define"
 ARCHNAME	= MSWin32-$(ARCHITECTURE)-perlio
-.ELSE
-ARCHNAME	= MSWin32-$(ARCHITECTURE)
-.ENDIF
-.ENDIF
-
-.IF "$(USE_PERLIO)" == "define"
-BUILDOPT       += -DUSE_PERLIO
 .ENDIF
 
 .IF "$(USE_ITHREADS)" == "define"
@@ -854,15 +836,10 @@ EXTRACORE_SRC	+= ..\perlio.c
 
 WIN32_SRC	=		\
 		.\win32.c	\
+		.\win32io.c	\
 		.\win32sck.c	\
 		.\win32thread.c	\
 		.\fcrypt.c
-
-# We need this for miniperl build unless we override canned 
-# config.h #define building mini\*
-#.IF "$(USE_PERLIO)" == "define"
-WIN32_SRC	+= .\win32io.c
-#.ENDIF
 
 CORE_NOCFG_H	=		\
 		..\av.h		\
@@ -972,7 +949,6 @@ CFG_VARS	=					\
 		usethreads=$(USE_ITHREADS)	~	\
 		useithreads=$(USE_ITHREADS)	~	\
 		usemultiplicity=$(USE_MULTI)	~	\
-		useperlio=$(USE_PERLIO)		~	\
 		use64bitint=$(USE_64_BIT_INT)	~	\
 		uselongdouble=$(USE_LONG_DOUBLE)	~	\
 		uselargefiles=$(USE_LARGE_FILES)	~	\
@@ -1198,7 +1174,7 @@ config.w32 : $(CFGSH_TMPL)
 
 # This target is for when changes to the main config.sh happen.
 # Edit config.gc, then make perl using GCC in a minimal configuration (i.e.
-# with MULTI, ITHREADS, IMP_SYS, LARGE_FILES and PERLIO off), then make
+# with MULTI, ITHREADS, IMP_SYS and LARGE_FILES off), then make
 # this target to regenerate config_H.gc.
 regen_config_h:
 	$(MINIPERL) -I..\lib config_sh.PL --cfgsh-option-file $(mktmp $(CFG_VARS)) \
@@ -1399,7 +1375,7 @@ Extensions_realclean :
 
 
 doc: $(PERLEXE) ..\pod\perltoc.pod
-	$(PERLEXE) -I..\lib ..\installhtml --podroot=.. --htmldir=$(HTMLDIR) \
+	$(PERLEXE) ..\installhtml --podroot=.. --htmldir=$(HTMLDIR) \
 	    --podpath=pod:lib:utils --htmlroot="file://$(INST_HTML:s,:,|,)"\
 	    --recurse
 
@@ -1443,7 +1419,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5217delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5218delta.pod
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1538,7 +1514,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5217delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5218delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \
@@ -1589,26 +1565,27 @@ $(UNIDATAFILES) ..\pod\perluniprops.pod .UPDATEALL : $(MINIPERL) $(CONFIGPM) ..\
 	cd ..\lib\unicore && \
 	..\$(MINIPERL) -I.. -I..\..\dist\Cwd\lib -I..\..\dist\Cwd mktables -P ..\..\pod -maketest -makelist -p
 
-minitest : $(MINIPERL) $(GLOBEXE) $(CONFIGPM) $(UNIDATAFILES) utils
+minitest : .\config.h $(MINIPERL) ..\git_version.h $(GLOBEXE) $(CONFIGPM) $(UNIDATAFILES) test-prep-gcc
 	$(XCOPY) $(MINIPERL) ..\t\$(NULL)
 	if exist ..\t\perl.exe del /f ..\t\perl.exe
 	rename ..\t\miniperl.exe perl.exe
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
-	attrib -r ..\t\*.*
-	cd ..\t && \
-	$(MINIPERL) -I..\lib harness base/*.t comp/*.t cmd/*.t io/*.t opbasic/*.t op/*.t pragma/*.t
+# Note this perl.exe is miniperl
+	cd ..\t && perl.exe TEST base/*.t comp/*.t cmd/*.t run/*.t io/*.t re/*.t opbasic/*.t op/*.t uni/*.t perf/*.t pragma/*.t
 
-test-prep : all utils ..\pod\perltoc.pod
+test-prep : all utils ..\pod\perltoc.pod test-prep-gcc
 	$(XCOPY) $(PERLEXE) ..\t\$(NULL)
 	$(XCOPY) $(PERLDLL) ..\t\$(NULL)
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
-.IF "$(CCTYPE)" == "GCC"
+
 # If building with gcc versions 4.x.x or greater, then
 # the GCC helper DLL will also need copied to the test directory.
 # The name of the dll can change, depending upon which vendor has supplied
 # your compiler, and upon the values of "x".
 # libstdc++-6.dll is copied if it exists as it, too, may then be needed.
 # Without this copying, the op/taint.t test script will fail.
+test-prep-gcc :
+.IF "$(CCTYPE)" == "GCC"
 	if exist $(CCDLLDIR)\libgcc_s_seh-1.dll $(XCOPY) $(CCDLLDIR)\libgcc_s_seh-1.dll ..\t\$(NULL)
 	if exist $(CCDLLDIR)\libgcc_s_sjlj-1.dll $(XCOPY) $(CCDLLDIR)\libgcc_s_sjlj-1.dll ..\t\$(NULL)
 	if exist $(CCDLLDIR)\libgcc_s_dw2-1.dll $(XCOPY) $(CCDLLDIR)\libgcc_s_dw2-1.dll ..\t\$(NULL)
@@ -1618,34 +1595,32 @@ test-prep : all utils ..\pod\perltoc.pod
 
 test : test-prep
 	set PERL_STATIC_EXT=$(STATIC_EXT) && \
-	    cd ..\t && $(PERLEXE) -I..\lib harness $(TEST_SWITCHES) $(TEST_FILES)
+	    cd ..\t && perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
 
 test_porting : test-prep
 	set PERL_STATIC_EXT=$(STATIC_EXT) && \
-	    cd ..\t && $(PERLEXE) -I..\lib harness $(TEST_SWITCHES) porting\*.t ..\lib\diagnostics.t
+	    cd ..\t && perl.exe harness $(TEST_SWITCHES) porting\*.t ..\lib\diagnostics.t
 
 test-reonly : reonly utils
 	$(XCOPY) $(PERLEXE) ..\t\$(NULL)
 	$(XCOPY) $(PERLDLL) ..\t\$(NULL)
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
-	cd ..\t && \
-	$(PERLEXE) -I..\lib harness $(OPT) -re \bpat\\/ $(EXTRA) && \
-	cd ..\win32
+	cd ..\t && perl.exe harness $(OPT) -re \bpat\\/ $(EXTRA)
 
 regen :
-	cd .. && regen.pl && cd win32
+	cd .. && regen.pl
 
 test-notty : test-prep
 	set PERL_STATIC_EXT=$(STATIC_EXT) && \
 	    set PERL_SKIP_TTY_TEST=1 && \
-	    cd ..\t && $(PERLEXE) -I.\lib harness $(TEST_SWITCHES) $(TEST_FILES)
+	    cd ..\t && perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
 
 _test :
 	$(XCOPY) $(PERLEXE) ..\t\$(NULL)
 	$(XCOPY) $(PERLDLL) ..\t\$(NULL)
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
 	set PERL_STATIC_EXT=$(STATIC_EXT) && \
-	    cd ..\t && $(PERLEXE) -I..\lib harness $(TEST_SWITCHES) $(TEST_FILES)
+	    cd ..\t && perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
 
 _clean :
 	-@erase miniperlmain$(o)
@@ -1687,13 +1662,13 @@ realclean : Extensions_realclean _clean
 # Please *don't* use this unless all tests pass.
 # If you want to report test failures, use "dmake nok" instead.
 ok: utils
-	$(PERLEXE) -I..\lib ..\utils\perlbug -ok -s "(UNINSTALLED)"
+	$(PERLEXE) ..\utils\perlbug -ok -s "(UNINSTALLED)"
 
 okfile: utils
-	$(PERLEXE) -I..\lib ..\utils\perlbug -ok -s "(UNINSTALLED)" -F perl.ok
+	$(PERLEXE) ..\utils\perlbug -ok -s "(UNINSTALLED)" -F perl.ok
 
 nok: utils
-	$(PERLEXE) -I..\lib ..\utils\perlbug -nok -s "(UNINSTALLED)"
+	$(PERLEXE) ..\utils\perlbug -nok -s "(UNINSTALLED)"
 
 nokfile: utils
-	$(PERLEXE) -I..\lib ..\utils\perlbug -nok -s "(UNINSTALLED)" -F perl.nok
+	$(PERLEXE) ..\utils\perlbug -nok -s "(UNINSTALLED)" -F perl.nok

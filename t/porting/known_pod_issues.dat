@@ -18,6 +18,7 @@ Apache::MP3
 Archive::Extract
 Array::Base
 Attribute::Constant
+B::Generate
 B::Lint
 B::Lint::Debug
 B::Utils
@@ -67,6 +68,7 @@ Devel::PPPort
 Devel::SawAmpersand
 dirname(1)
 Encode::Locale
+Eval::WithLexicals
 Exporter::Easy
 ExtUtils::Constant::ProxySubs
 fetch(1)
@@ -93,7 +95,11 @@ IPC::Signal
 kill(3)
 langinfo(3)
 LaTeX::Encode
+Lexical::Var
+Lingua::JA::Romanize::Japanese
 Lingua::KO::Hangul::Util
+Lingua::KO::Romanize::Hangul
+Lingua::ZH::Romanize::Pinyin
 List::Gather
 local::lib
 Log::Message
@@ -204,10 +210,13 @@ Time::Object
 Tk
 Tk::Pod
 tty(1)
+Unicode::CaseFold
 Unicode::Casing
+Unicode::GCString
 Unicode::LineBreak
 Unicode::Regex::Set
 Unicode::Semantics
+Unicode::Tussle
 Unicode::Unihan
 unzip(1)
 Version::Requirements
@@ -239,6 +248,7 @@ ext/hash-util/lib/hash/util.pm	Verbatim line length including indents exceeds 79
 ext/pod-html/testdir/perlpodspec-copy.pod	Verbatim line length including indents exceeds 79 by	8
 ext/pod-html/testdir/perlvar-copy.pod	? Should you be using L<...> instead of	3
 ext/pod-html/testdir/perlvar-copy.pod	Verbatim line length including indents exceeds 79 by	6
+ext/posix/lib/posix.pod	? Should you be using F<...> or maybe L<...> instead of	1
 ext/vms-dclsym/dclsym.pm	? Should you be using L<...> instead of	1
 ext/vms-filespec/lib/vms/filespec.pm	Verbatim line length including indents exceeds 79 by	1
 install	? Should you be using F<...> or maybe L<...> instead of	1
@@ -259,7 +269,6 @@ pod/perlcygwin.pod	Verbatim line length including indents exceeds 79 by	24
 pod/perldebguts.pod	Verbatim line length including indents exceeds 79 by	34
 pod/perldebtut.pod	Verbatim line length including indents exceeds 79 by	22
 pod/perldebug.pod	Verbatim line length including indents exceeds 79 by	3
-pod/perldelta.pod	? Should you be using F<...> or maybe L<...> instead of	1
 pod/perldelta.pod	Pod NAME already used	1
 pod/perldsc.pod	Verbatim line length including indents exceeds 79 by	4
 pod/perldtrace.pod	Verbatim line length including indents exceeds 79 by	26
@@ -300,7 +309,7 @@ pod/perltru64.pod	? Should you be using F<...> or maybe L<...> instead of	1
 pod/perltru64.pod	Verbatim line length including indents exceeds 79 by	5
 pod/perlvms.pod	? Should you be using F<...> or maybe L<...> instead of	1
 pod/perlwin32.pod	Verbatim line length including indents exceeds 79 by	12
-porting/epigraphs.pod	Verbatim line length including indents exceeds 79 by	23
+porting/epigraphs.pod	Verbatim line length including indents exceeds 79 by	16
 porting/expand-macro.pl	Verbatim line length including indents exceeds 79 by	2
 porting/release_managers_guide.pod	Verbatim line length including indents exceeds 79 by	6
 porting/todo.pod	Verbatim line length including indents exceeds 79 by	7

@@ -15,7 +15,7 @@ require Exporter;
 # walkoptree comes from B.xs
 
 BEGIN {
-    $B::VERSION = '1.54';
+    $B::VERSION = '1.55';
     @B::EXPORT_OK = ();
 
     # Our BOOT code needs $VERSION set, and will append to @EXPORT_OK.
@@ -1370,6 +1370,15 @@ This method, introduced in 5.22, returns the B::PADNAMELIST.  It is
 equivalent to C<ARRAYelt> with a 0 argument.
 
 =item REFCNT
+
+=item id
+
+This method, introduced in 5.22, returns an ID shared by clones of the same
+padlist.
+
+=item outid
+
+This method, also added in 5.22, returns the ID of the outer padlist.
 
 =back
 

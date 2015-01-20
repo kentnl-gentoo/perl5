@@ -2458,7 +2458,7 @@ S_sublex_done(pTHX)
 		 + PL_parser->herelines;
 	    PL_parser->herelines = 0;
 	}
-	return ',';
+	return '/';
     }
     else {
 	const line_t l = CopLINE(PL_curcop);
@@ -3827,11 +3827,10 @@ S_intuit_more(pTHX_ char *s)
 		    && !(last_un_char == '$' || last_un_char == '@'
 			 || last_un_char == '&')
 		    && isALPHA(*s) && s[1] && isALPHA(s[1])) {
-		    char *d = tmpbuf;
+		    char *d = s;
 		    while (isALPHA(*s))
-			*d++ = *s++;
-		    *d = '\0';
-		    if (keyword(tmpbuf, d - tmpbuf, 0))
+			s++;
+		    if (keyword(d, s - d, 0))
 			weight -= 150;
 		}
 		if (un_char == last_un_char + 1)
@@ -5366,6 +5365,19 @@ Perl_yylex(pTHX)
 			sv_free(sv);
 			CvMETHOD_on(PL_compcv);
 		    }
+		    else if (!PL_in_my && len == 5
+			  && strnEQ(SvPVX(sv), "const", len))
+		    {
+			sv_free(sv);
+			Perl_ck_warner_d(aTHX_
+			    packWARN(WARN_EXPERIMENTAL__CONST_ATTR),
+			   ":const is experimental"
+			);
+			CvANONCONST_on(PL_compcv);
+			if (!CvANON(PL_compcv))
+			    yyerror(":const is not permitted on named "
+				    "subroutines");
+		    }
 		    /* After we've set the flags, it could be argued that
 		       we don't need to do the attributes.pm-based setting
 		       process, and shouldn't bother appending recognized
@@ -5789,30 +5801,30 @@ Perl_yylex(pTHX)
 	    s--;
 	    if (PL_expect == XSTATE && isALPHA(tmp) &&
 		(s == PL_linestart+1 || s[-2] == '\n') )
-		{
-		    if ((PL_in_eval && !PL_rsfp && !PL_parser->filtered)
-			|| PL_lex_state != LEX_NORMAL) {
-			d = PL_bufend;
-			while (s < d) {
-			    if (*s++ == '\n') {
-				incline(s);
-				if (strnEQ(s,"=cut",4)) {
-				    s = strchr(s,'\n');
-				    if (s)
-					s++;
-				    else
-					s = d;
-				    incline(s);
-				    goto retry;
-				}
-			    }
-			}
-			goto retry;
-		    }
-		    s = PL_bufend;
-		    PL_parser->in_pod = 1;
-		    goto retry;
-		}
+            {
+                if ((PL_in_eval && !PL_rsfp && !PL_parser->filtered)
+                    || PL_lex_state != LEX_NORMAL) {
+                    d = PL_bufend;
+                    while (s < d) {
+                        if (*s++ == '\n') {
+                            incline(s);
+                            if (strnEQ(s,"=cut",4)) {
+                                s = strchr(s,'\n');
+                                if (s)
+                                    s++;
+                                else
+                                    s = d;
+                                incline(s);
+                                goto retry;
+                            }
+                        }
+                    }
+                    goto retry;
+                }
+                s = PL_bufend;
+                PL_parser->in_pod = 1;
+                goto retry;
+            }
 	}
 	if (PL_expect == XBLOCK) {
 	    const char *t = s;
@@ -10591,7 +10603,7 @@ Perl_start_subparse(pTHX_ I32 is_format, U32 flags)
     CvFLAGS(PL_compcv) |= flags;
 
     PL_subline = CopLINE(PL_curcop);
-    CvPADLIST_set(PL_compcv, pad_new(padnew_SAVE|padnew_SAVESUB));
+    CvPADLIST(PL_compcv) = pad_new(padnew_SAVE|padnew_SAVESUB);
     CvOUTSIDE(PL_compcv) = MUTABLE_CV(SvREFCNT_inc_simple(outsidecv));
     CvOUTSIDE_SEQ(PL_compcv) = PL_cop_seqmax;
     if (outsidecv && CvPADLIST(outsidecv))

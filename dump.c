@@ -1382,6 +1382,7 @@ const struct flag_to_name regexp_extflags_names[] = {
     {RXf_PMf_EXTENDED,    "PMf_EXTENDED,"},
     {RXf_PMf_EXTENDED_MORE, "PMf_EXTENDED_MORE,"},
     {RXf_PMf_KEEPCOPY,    "PMf_KEEPCOPY,"},
+    {RXf_PMf_NOCAPTURE,   "PMf_NOCAPURE,"},
     {RXf_IS_ANCHORED,     "IS_ANCHORED,"},
     {RXf_NO_INPLACE_SUBST, "NO_INPLACE_SUBST,"},
     {RXf_EVAL_SEEN,       "EVAL_SEEN,"},
@@ -2288,7 +2289,9 @@ S_append_padvar(pTHX_ PADOFFSET off, CV *cv, SV *out, int n,
         if (namepad && (sv = padnamelist_fetch(namepad, off + i)))
         {
             STRLEN cur = SvCUR(out);
-            Perl_sv_catpvf(aTHX_ out, "[%"PNf, PNfARG(sv));
+            Perl_sv_catpvf(aTHX_ out, "[%"UTF8f,
+                                 UTF8fARG(1, PadnameLEN(sv) - 1,
+                                          PadnamePV(sv) + 1));
             if (is_scalar)
                 SvPVX(out)[cur] = '$';
         }
@@ -2336,7 +2339,7 @@ Perl_unop_aux_stringify(pTHX_ const OP *o, CV *cv)
     bool last = 0;
     bool is_hash = FALSE;
     int derefs = 0;
-    SV *out = sv_2mortal(newSVpv("",0));
+    SV *out = newSVpvn_flags("",0,SVs_TEMP);
 #ifdef USE_ITHREADS
     PADLIST * const padlist = CvPADLIST(cv);
     PAD *comppad = PadlistARRAY(padlist)[1];

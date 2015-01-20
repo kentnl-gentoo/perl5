@@ -38,7 +38,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.21.7
+#INST_VER	= \5.21.8
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -79,15 +79,6 @@ USE_ITHREADS	= define
 # will auto-enable) USE_MULTI above.
 #
 USE_IMP_SYS	= define
-
-#
-# Comment out next assign to disable perl's I/O subsystem and use compiler's 
-# stdio for IO - depending on your compiler vendor and run time library you may 
-# then get a number of fails from make test i.e. bugs - complain to them not us ;-). 
-# You will also be unable to take full advantage of perl5.8's support for multiple 
-# encodings and may see lower IO performance. You have been warned.
-#
-USE_PERLIO	= define
 
 #
 # Comment this out if you don't want to enable large file support for
@@ -278,10 +269,6 @@ USE_ITHREADS	= undef
 USE_IMP_SYS	= undef
 !ENDIF
 
-!IF "$(USE_PERLIO)" == ""
-USE_PERLIO	= undef
-!ENDIF
-
 !IF "$(USE_LARGE_FILES)" == ""
 USE_LARGE_FILES	= undef
 !ENDIF
@@ -368,15 +355,7 @@ ARCHITECTURE	= ia64
 !IF "$(USE_MULTI)" == "define"
 ARCHNAME	= MSWin32-$(ARCHITECTURE)-multi
 !ELSE
-!IF "$(USE_PERLIO)" == "define"
 ARCHNAME	= MSWin32-$(ARCHITECTURE)-perlio
-!ELSE
-ARCHNAME	= MSWin32-$(ARCHITECTURE)
-!ENDIF
-!ENDIF
-
-!IF "$(USE_PERLIO)" == "define"
-BUILDOPT	= $(BUILDOPT) -DUSE_PERLIO
 !ENDIF
 
 !IF "$(USE_ITHREADS)" == "define"
@@ -717,16 +696,10 @@ EXTRACORE_SRC	= $(EXTRACORE_SRC) ..\perlio.c
 
 WIN32_SRC	=		\
 		.\win32.c	\
+		.\win32io.c	\
 		.\win32sck.c	\
 		.\win32thread.c	\
 		.\fcrypt.c
-
-# We need this for miniperl build unless we override canned 
-# config.h #define building mini\*
-#!IF "$(USE_PERLIO)" == "define"
-WIN32_SRC	= $(WIN32_SRC) .\win32io.c
-#!ENDIF
-
 
 CORE_NOCFG_H	=		\
 		..\av.h		\
@@ -830,8 +803,8 @@ CFG_VARS	=					\
 		"usethreads=$(USE_ITHREADS)"		\
 		"useithreads=$(USE_ITHREADS)"		\
 		"usemultiplicity=$(USE_MULTI)"		\
-		"useperlio=$(USE_PERLIO)"		\
 		"use64bitint=$(USE_64_BIT_INT)"		\
+		"uselongdouble=undef"			\
 		"uselargefiles=$(USE_LARGE_FILES)"	\
 		"usesitecustomize=$(USE_SITECUST)"	\
 		"LINK_FLAGS=$(LINK_FLAGS:"=\")"		\
@@ -970,7 +943,7 @@ config.w32 : $(CFGSH_TMPL)
 
 # This target is for when changes to the main config.sh happen.
 # Edit config.vc, then make perl in a minimal configuration (i.e. with MULTI,
-# ITHREADS, IMP_SYS, LARGE_FILES and PERLIO off), then make this target
+# ITHREADS, IMP_SYS and LARGE_FILES off), then make this target
 # to regenerate config_H.vc.
 regen_config_h:
 	$(MINIPERL) -I..\lib config_sh.PL $(CFG_VARS) $(CFGSH_TMPL) > ..\config.sh
@@ -1118,7 +1091,7 @@ Extensions_realclean:
 #-------------------------------------------------------------------------------
 
 doc: $(PERLEXE) ..\pod\perltoc.pod
-	$(PERLEXE) -I..\lib ..\installhtml --podroot=.. --htmldir=$(HTMLDIR) \
+	$(PERLEXE) ..\installhtml --podroot=.. --htmldir=$(HTMLDIR) \
 	    --podpath=pod:lib:utils --htmlroot="file://$(INST_HTML::=|)" \
 	    --recurse
 
@@ -1165,7 +1138,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5217delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5218delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1261,7 +1234,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5217delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5218delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \
@@ -1312,14 +1285,13 @@ $(UNIDATAFILES) ..\pod\perluniprops.pod : $(MINIPERL) $(CONFIGPM) ..\lib\unicore
 	cd ..\lib\unicore && \
 	..\$(MINIPERL) -I.. -I..\..\dist\Cwd\lib -I..\..\dist\Cwd mktables -P ..\..\pod -maketest -makelist -p -check $@ $(FIRSTUNIFILE)
 
-minitest : $(MINIPERL) $(GLOBEXE) $(CONFIGPM) utils $(UNIDATAFILES)
+minitest : .\config.h $(MINIPERL) ..\git_version.h $(GLOBEXE) $(CONFIGPM) $(UNIDATAFILES)
 	$(XCOPY) $(MINIPERL) ..\t\$(NULL)
 	if exist ..\t\perl.exe del /f ..\t\perl.exe
 	rename ..\t\miniperl.exe perl.exe
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
-	attrib -r ..\t\*.*
-	cd ..\t && \
-	$(MINIPERL) -I..\lib harness base/*.t comp/*.t cmd/*.t io/*.t opbasic/*.t op/*.t pragma/*.t
+# Note this perl.exe is miniperl
+	cd ..\t && perl.exe TEST base/*.t comp/*.t cmd/*.t run/*.t io/*.t re/*.t opbasic/*.t op/*.t uni/*.t perf/*.t pragma/*.t
 
 test-prep : all utils ../pod/perltoc.pod
 	$(XCOPY) $(PERLEXE) ..\t\$(NULL)
@@ -1329,12 +1301,12 @@ test-prep : all utils ../pod/perltoc.pod
 
 test : test-prep
 	cd ..\t
-	$(PERLEXE) -I..\lib harness $(TEST_SWITCHES) $(TEST_FILES)
+	perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
 	cd ..\win32
 
 test_porting : test-prep
 	cd ..\t
-	$(PERLEXE) -I..\lib harness $(TEST_SWITCHES) porting\*.t ..\lib\diagnostics.t
+	perl.exe harness $(TEST_SWITCHES) porting\*.t ..\lib\diagnostics.t
 	cd ..\win32
 
 test-reonly : reonly utils
@@ -1342,7 +1314,7 @@ test-reonly : reonly utils
 	$(XCOPY) $(PERLDLL) ..\t\$(NULL)
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
 	cd ..\t
-	$(PERLEXE) -I..\lib harness $(OPT) -re \bre\\/ $(EXTRA)
+	perl.exe harness $(OPT) -re \bre\\/ $(EXTRA)
 	cd ..\win32
 
 regen :
@@ -1353,7 +1325,7 @@ regen :
 test-notty : test-prep
 	set PERL_SKIP_TTY_TEST=1
 	cd ..\t
-	$(PERLEXE) -I..\lib harness $(TEST_SWITCHES) $(TEST_FILES)
+	perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
 	cd ..\win32
 
 _test : 
@@ -1361,7 +1333,7 @@ _test :
        $(XCOPY) $(PERLDLL) ..\t\$(NULL)
        $(XCOPY) $(GLOBEXE) ..\t\$(NULL)
        cd ..\t
-       $(PERLEXE) -I..\lib harness $(TEST_SWITCHES) $(TEST_FILES)
+       perl.exe harness $(TEST_SWITCHES) $(TEST_FILES)
        cd ..\win32
 
 _clean :
@@ -1402,13 +1374,13 @@ realclean : Extensions_realclean _clean
 # Please *don't* use this unless all tests pass.
 # If you want to report test failures, use "nmake nok" instead.
 ok: utils
-	$(PERLEXE) -I..\lib ..\utils\perlbug -ok -s "(UNINSTALLED)"
+	$(PERLEXE) ..\utils\perlbug -ok -s "(UNINSTALLED)"
 
 okfile: utils
-	$(PERLEXE) -I..\lib ..\utils\perlbug -ok -s "(UNINSTALLED)" -F perl.ok
+	$(PERLEXE) ..\utils\perlbug -ok -s "(UNINSTALLED)" -F perl.ok
 
 nok: utils
-	$(PERLEXE) -I..\lib ..\utils\perlbug -nok -s "(UNINSTALLED)"
+	$(PERLEXE) ..\utils\perlbug -nok -s "(UNINSTALLED)"
 
 nokfile: utils
-	$(PERLEXE) -I..\lib ..\utils\perlbug -nok -s "(UNINSTALLED)" -F perl.nok
+	$(PERLEXE) ..\utils\perlbug -nok -s "(UNINSTALLED)" -F perl.nok

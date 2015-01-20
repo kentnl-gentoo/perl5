@@ -1040,6 +1040,7 @@ perl_destruct(pTHXx)
     SvREFCNT_dec(PL_Latin1);
     SvREFCNT_dec(PL_NonL1NonFinalFold);
     SvREFCNT_dec(PL_HasMultiCharFold);
+    SvREFCNT_dec(PL_warn_locale);
     PL_utf8_mark	= NULL;
     PL_utf8_toupper	= NULL;
     PL_utf8_totitle	= NULL;
@@ -1051,6 +1052,7 @@ perl_destruct(pTHXx)
     PL_AboveLatin1       = NULL;
     PL_InBitmap          = NULL;
     PL_HasMultiCharFold  = NULL;
+    PL_warn_locale       = NULL;
     PL_Latin1            = NULL;
     PL_NonL1NonFinalFold = NULL;
     PL_UpperLatin1       = NULL;
@@ -3469,7 +3471,7 @@ S_minus_v(pTHX)
 #endif
 
 	PerlIO_printf(PIO_stdout,
-		      "\n\nCopyright 1987-2014, Larry Wall\n");
+		      "\n\nCopyright 1987-2015, Larry Wall\n");
 #ifdef MSDOS
 	PerlIO_printf(PIO_stdout,
 		      "\nMS-DOS port Copyright (c) 1989, 1990, Diomidis Spinellis\n");
@@ -3624,7 +3626,7 @@ S_init_main_stash(pTHX)
     GvMULTI_on(PL_replgv);
     (void)Perl_form(aTHX_ "%240s","");	/* Preallocate temp - for immediate signals. */
 #ifdef PERL_DONT_CREATE_GVSV
-    gv_SVadd(PL_errgv);
+    (void)gv_SVadd(PL_errgv);
 #endif
     sv_grow(ERRSV, 240);	/* Preallocate - for immediate signals. */
     CLEAR_ERRSV();

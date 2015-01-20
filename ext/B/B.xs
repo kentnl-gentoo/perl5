@@ -103,14 +103,25 @@ static const size_t opsizes[] = {
 #define MY_CXT_KEY "B::_guts" XS_VERSION
 
 typedef struct {
-    int		x_walkoptree_debug;	/* Flag for walkoptree debug hook */
     SV *	x_specialsv_list[7];
+    int		x_walkoptree_debug;	/* Flag for walkoptree debug hook */
 } my_cxt_t;
 
 START_MY_CXT
 
 #define walkoptree_debug	(MY_CXT.x_walkoptree_debug)
 #define specialsv_list		(MY_CXT.x_specialsv_list)
+
+
+static void B_init_my_cxt(pTHX_ my_cxt_t * cxt) {
+    cxt->x_specialsv_list[0] = Nullsv;
+    cxt->x_specialsv_list[1] = &PL_sv_undef;
+    cxt->x_specialsv_list[2] = &PL_sv_yes;
+    cxt->x_specialsv_list[3] = &PL_sv_no;
+    cxt->x_specialsv_list[4] = (SV *) pWARN_ALL;
+    cxt->x_specialsv_list[5] = (SV *) pWARN_NONE;
+    cxt->x_specialsv_list[6] = (SV *) pWARN_STD;
+}
 
 static opclass
 cc_opclass(pTHX_ const OP *o)
@@ -672,7 +683,7 @@ static XSPROTO(intrpvar_sv_common)
 
 /* table that drives most of the B::*OP methods */
 
-struct OP_methods {
+const struct OP_methods {
     const char *name;
     U8 namelen;
     U8    type; /* if op_offset_special, access is handled on a case-by-case basis */
@@ -778,14 +789,7 @@ BOOT:
     CV *cv;
     const char *file = __FILE__;
     MY_CXT_INIT;
-    specialsv_list[0] = Nullsv;
-    specialsv_list[1] = &PL_sv_undef;
-    specialsv_list[2] = &PL_sv_yes;
-    specialsv_list[3] = &PL_sv_no;
-    specialsv_list[4] = (SV *) pWARN_ALL;
-    specialsv_list[5] = (SV *) pWARN_NONE;
-    specialsv_list[6] = (SV *) pWARN_STD;
-    
+    B_init_my_cxt(aTHX_ &(MY_CXT));
     cv = newXS("B::init_av", intrpvar_sv_common, file);
     ASSIGN_COMMON_ALIAS(I, initav);
     cv = newXS("B::check_av", intrpvar_sv_common, file);
@@ -975,7 +979,18 @@ threadsv_names()
     PPCODE:
 
 
+#ifdef USE_ITHREADS
+void
+CLONE(...)
+PPCODE:
+    PUTBACK; /* some vars go out of scope now in machine code */
+    {
+	MY_CXT_CLONE;
+	B_init_my_cxt(aTHX_ &(MY_CXT));
+    }
+    return; /* dont execute another implied XSPP PUTBACK */
 
+#endif
 
 MODULE = B	PACKAGE = B::OP
 
@@ -2330,6 +2345,11 @@ MODULE = B	PACKAGE = B::PADNAME	PREFIX = Padname
 	sv_U32p | STRUCT_OFFSET(struct padname, xpadn_high)
 #define PNL_refcnt_ix \
 	sv_U32p | STRUCT_OFFSET(struct padnamelist, xpadnl_refcnt)
+#define PL_id_ix \
+	sv_U32p | STRUCT_OFFSET(struct padlist, xpadl_id)
+#define PL_outid_ix \
+	sv_U32p | STRUCT_OFFSET(struct padlist, xpadl_outid)
+
 
 void
 PadnameTYPE(pn)
@@ -2342,6 +2362,8 @@ PadnameTYPE(pn)
 	B::PADNAME::COP_SEQ_RANGE_LOW	 = PN_cop_seq_range_low_ix
 	B::PADNAME::COP_SEQ_RANGE_HIGH	 = PN_cop_seq_range_high_ix
 	B::PADNAMELIST::REFCNT	= PNL_refcnt_ix
+	B::PADLIST::id		= PL_id_ix
+	B::PADLIST::outid	= PL_outid_ix
     PREINIT:
 	char *ptr;
 	SV *ret;

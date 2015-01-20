@@ -7,7 +7,7 @@ BEGIN {
     *bar::is = *is;
     *bar::like = *like;
 }
-plan 147;
+plan 151;
 
 # -------------------- Errors with feature disabled -------------------- #
 
@@ -291,6 +291,45 @@ sub make_anon_with_state_sub{
     'state subs in anon subs are cloned';
   is &$s(0), &$s(0), 'but only when the anon sub is cloned';
 }
+# Check that nested state subs close over variables properly
+{
+  is sub {
+    state sub a;
+    state sub b {
+      state sub c {
+        state $x = 42;
+        sub a { $x }
+      }
+      c();
+    }
+    b();
+    a();
+  }->(), 42, 'state sub with body defined in doubly-nested state subs';
+  is sub {
+    state sub a;
+    state sub b;
+    state sub c {
+      sub b {
+        state $x = 42;
+        sub a { $x }
+      }
+    }
+    b();
+    a();
+  }->(), 42, 'nested state subs declared in same scope';
+  state $w;
+  local $SIG{__WARN__} = sub { $w .= shift };
+  use warnings 'closure';
+  my $sub = sub {
+    state sub a;
+    sub {
+      my $x;
+      sub a { $x }
+    }
+  };
+  like $w, qr/Variable \"\$x\" is not available at /,
+      "unavailability warning when state closure is defined in anon sub";
+}
 {
   state sub BEGIN { exit };
   pass 'state subs are never special blocks';
@@ -431,6 +470,18 @@ is runperl(switches => ['-lXMfeature=:all'],
   like $@, qr/^Undefined subroutine &φου called at /,
     'state sub with utf8 name';
 }
+# This used to crash, but only as a standalone script
+is runperl(switches => ['-lXMfeature=:all'],
+           prog     => '$::x = global=>;
+                        sub x;
+                        sub x {
+                          state $x = 42;
+                          state sub x { print eval q|$x| }
+                          x()
+                        }
+                        x()',
+           stderr   => 1), "42\n",
+  'closure behaviour of state sub in predeclared package sub';
 
 # -------------------- my -------------------- #
 

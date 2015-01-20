@@ -150,7 +150,7 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPf_LIST	OPf_WANT_LIST
 #define OPf_KNOW	OPf_WANT
 
-#ifndef PERL_CORE
+#if !defined(PERL_CORE) && !defined(PERL_EXT)
 #  define GIMME \
 	  (PL_op->op_flags & OPf_WANT					\
 	   ? ((PL_op->op_flags & OPf_WANT) == OPf_WANT_LIST		\
@@ -319,7 +319,7 @@ struct pmop {
  * allocate off the low end until you get to PMf_BASE_SHIFT+0.  If that isn't
  * enough, move PMf_BASE_SHIFT down (if possible) and add the new bit at the
  * other end instead; this preserves binary compatibility. */
-#define PMf_BASE_SHIFT (_RXf_PMf_SHIFT_NEXT+4)
+#define PMf_BASE_SHIFT (_RXf_PMf_SHIFT_NEXT+2)
 
 /* 'use re "taint"' in scope: taint $1 etc. if target tainted */
 #define PMf_RETAINT	(1U<<(PMf_BASE_SHIFT+5))
@@ -419,18 +419,18 @@ struct loop {
     OP *	op_lastop;
 };
 
-#define cUNOPx(o)	((UNOP*)o)
-#define cUNOP_AUXx(o)	((UNOP_AUX*)o)
-#define cBINOPx(o)	((BINOP*)o)
-#define cLISTOPx(o)	((LISTOP*)o)
-#define cLOGOPx(o)	((LOGOP*)o)
-#define cPMOPx(o)	((PMOP*)o)
-#define cSVOPx(o)	((SVOP*)o)
-#define cPADOPx(o)	((PADOP*)o)
-#define cPVOPx(o)	((PVOP*)o)
-#define cCOPx(o)	((COP*)o)
-#define cLOOPx(o)	((LOOP*)o)
-#define cMETHOPx(o)	((METHOP*)o)
+#define cUNOPx(o)	((UNOP*)(o))
+#define cUNOP_AUXx(o)	((UNOP_AUX*)(o))
+#define cBINOPx(o)	((BINOP*)(o))
+#define cLISTOPx(o)	((LISTOP*)(o))
+#define cLOGOPx(o)	((LOGOP*)(o))
+#define cPMOPx(o)	((PMOP*)(o))
+#define cSVOPx(o)	((SVOP*)(o))
+#define cPADOPx(o)	((PADOP*)(o))
+#define cPVOPx(o)	((PVOP*)(o))
+#define cCOPx(o)	((COP*)(o))
+#define cLOOPx(o)	((LOOP*)(o))
+#define cMETHOPx(o)	((METHOP*)(o))
 
 #define cUNOP		cUNOPx(PL_op)
 #define cUNOP_AUX	cUNOP_AUXx(PL_op)
@@ -908,7 +908,7 @@ For custom ops the type is returned from the registration, and it is up
 to the registree to ensure it is accurate.  The value returned will be
 one of the OA_* constants from op.h.
 
-=for apidoc Am|bool|OP_TYPE_IS|OP *o, Optype type
+=for apidoc Am|bool|OP_TYPE_IS|OP *o|Optype type
 Returns true if the given OP is not a NULL pointer
 and if it is of the given type.
 
@@ -916,7 +916,7 @@ The negation of this macro, C<OP_TYPE_ISNT> is also available
 as well as C<OP_TYPE_IS_NN> and C<OP_TYPE_ISNT_NN> which elide
 the NULL pointer check.
 
-=for apidoc Am|bool|OP_TYPE_IS_OR_WAS|OP *o, Optype type
+=for apidoc Am|bool|OP_TYPE_IS_OR_WAS|OP *o|Optype type
 Returns true if the given OP is not a NULL pointer and
 if it is of the given type or used to be before being
 replaced by an OP of type OP_NULL.
