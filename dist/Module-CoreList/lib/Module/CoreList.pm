@@ -4,7 +4,7 @@ use vars qw/$VERSION %released %version %families %upstream
 	    %bug_tracker %deprecated %delta/;
 use Module::CoreList::TieHashDelta;
 use version;
-$VERSION = '5.20150131';
+$VERSION = '5.20150214';
 
 my $dumpinc = 0;
 sub import {
@@ -261,7 +261,7 @@ sub changes_between {
     5.021006 => '2014-11-20',
     5.021007 => '2014-12-20',
     5.021008 => '2015-01-20',
-    5.020002 => '????-??-??',
+    5.020002 => '2015-02-14',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -11075,9 +11075,9 @@ for my $version ( sort { $a <=> $b } keys %released ) {
             'File::Spec::VMS'       => '3.48_01',
             'File::Spec::Win32'     => '3.48_01',
             'IO::Socket'            => '1.38',
-            'Module::CoreList'      => '5.20150131',
-            'Module::CoreList::TieHashDelta'=> '5.20150131',
-            'Module::CoreList::Utils'=> '5.20150131',
+            'Module::CoreList'      => '5.20150214',
+            'Module::CoreList::TieHashDelta'=> '5.20150214',
+            'Module::CoreList::Utils'=> '5.20150214',
             'PerlIO::scalar'        => '0.18_01',
             'Pod::PlainText'        => '2.07',
             'Storable'              => '2.49_01',
