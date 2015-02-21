@@ -13,7 +13,7 @@ BEGIN {
 use warnings;
 use strict;
 
-my $tests = 44; # not counting those in the __DATA__ section
+my $tests = 46; # not counting those in the __DATA__ section
 
 use B::Deparse;
 my $deparse = B::Deparse->new();
@@ -500,6 +500,17 @@ like runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path ],
              prog => 'sub foo{foo()}'),
      qr/^sub foo \{\s+foo\(\)/m,
     'recursive sub';
+
+like runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path ],
+             prog => 'use feature lexical_subs=>state=>;
+                      state sub sb5; sub { sub sb5 { } }'),
+     qr/sub \{\s*\(\);\s*sub sb5 \{/m,
+    'state sub in anon sub but declared outside';
+
+is runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path ],
+             prog => 'BEGIN { $::{f}=\!0 }'),
+   "sub BEGIN {\n    \$main::{'f'} = \\1;\n}\n",
+   '&PL_sv_yes constant (used to croak)';
 
 is runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path, '-T' ],
            prog => '$x =~ (1?/$a/:0)'),
@@ -1857,12 +1868,12 @@ my sub f {}
 print f();
 >>>>
 use feature 'lexical_subs';
-BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x50\x15"}
+BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55\x55\x01"}
 my sub f {
-    BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x10"}
+    BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55\x01"}
     
 }
-BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x10"}
+BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55\x01"}
 print f();
 ####
 # SKIP ?$] < 5.017004 && "lexical subs not implemented on this Perl version"
@@ -1873,13 +1884,13 @@ state sub f {}
 print f();
 >>>>
 use feature 'lexical_subs';
-BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x50\x15"}
+BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55\x55\x01"}
 CORE::state sub f {
-    BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x10"}
+    BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55\x01"}
     use feature 'state';
     
 }
-BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x54\x55\x10"}
+BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55\x01"}
 use feature 'state';
 print f();
 ####
@@ -1919,6 +1930,21 @@ my sub g {
     ();
     sub f { }
 }
+####
+# TODO only partially fixed
+# lexical state subroutine with outer declaration and inner definition
+# CONTEXT use feature 'lexical_subs', 'state'; no warnings 'experimental::lexical_subs';
+();
+state sub sb4;
+state sub a {
+    ();
+    sub sb4 { }
+}
+state sub sb5;
+sub {
+    ();
+    sub sb5 { }
+} ;
 ####
 # Elements of %# should not be confused with $#{ array }
 () = ${#}{'foo'};
@@ -2366,3 +2392,20 @@ my $x = $h{'foo'}[$i + $j]{$k};
 chdir 'file';
 chdir FH;
 chdir;
+####
+# 5.22 bitops
+# CONTEXT use feature "bitwise"; no warnings "experimental::bitwise";
+$_ = $_ | $_;
+$_ = $_ & $_;
+$_ = $_ ^ $_;
+$_ = ~$_;
+$_ = $_ |. $_;
+$_ = $_ &. $_;
+$_ = $_ ^. $_;
+$_ = ~.$_;
+$_ |= $_;
+$_ &= $_;
+$_ ^= $_;
+$_ |.= $_;
+$_ &.= $_;
+$_ ^.= $_;

@@ -22,7 +22,7 @@ BEGIN {
     skip_all_without_unicode_tables();
 }
 
-plan tests => 759;  # Update this when adding/deleting tests.
+plan tests => 774;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1634,6 +1634,65 @@ EOP
 		my $match = eval $eval;
 		ok(1, "did not crash");
 		ok($match, "[bbb...] resolved as character class, not subscript");
+	}
+
+	{	# [perl #123755]
+		for my $pat ('(??', '(?P', '(?i-') {
+			eval qq{ qr/$pat/ };
+			ok(1, "qr/$pat/ did not crash");
+			eval qq{ qr/${pat}\x{123}/ };
+			my $e = $@;
+			like($e, qr{\x{123}},
+				"qr/${pat}x/ shows x in error even if it's a wide character");
+		}
+	}
+
+	{
+		# Expect one of these sizes to cause overflow and wrap to negative
+		for my $bits (32, 64) {
+			my $wrapneg = 2 ** ($bits - 2) * 3;
+			for my $sign ('', '-') {
+				my $pat = sprintf "qr/(?%s%u)/", $sign, $wrapneg;
+				eval $pat;
+				ok(1, "big backref $pat did not crash");
+			}
+		}
+	}
+        {
+            # Test that we handle qr/\8888888/ and variants without an infinite loop,
+            # we use a test within a test so we can todo it, and make sure we don't
+            # infinite loop our tests.
+            # NOTE - Do not put quotes in the code!
+            # NOTE - We have to triple escape the backref in the pattern below.
+            my $code='
+                BEGIN{require q(test.pl);}
+                watchdog(3);
+                for my $len (1 .. 20) {
+                    my $eights= q(8) x $len;
+                    eval qq{ qr/\\\\$eights/ };
+                }
+                print q(No infinite loop here!);
+            ';
+            fresh_perl_is($code, "No infinite loop here!", {},
+                "test that we handle things like m/\\888888888/ without infinite loops" );
+        }
+
+	{
+		# [perl #123843] hits SEGV trying to compile this pattern
+		my $match;
+		eval q{ ($match) = ("xxyxxyxy" =~ m{(x+(y(?1))*)}) };
+		ok(1, "compiled GOSUB in CURLYM ok");
+		is($match, 'xxyxxyx', "matched GOSUB in CURLYM");
+	}
+
+	{
+		# [perl #123852] doesn't avoid all the capture-related work with
+		# //n, leading to possible memory corruption
+		eval q{ qr{()(?1)}n };
+		my $error = $@;
+		ok(1, "qr{()(?1)}n didn't crash");
+		like($error, qr{Reference to nonexistent group},
+				'gave appropriate error for qr{()(?1)}n');
 	}
 } # End of sub run_tests
 

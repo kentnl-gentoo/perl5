@@ -189,6 +189,11 @@ alternatives.
 that expected a numeric value instead.  If you're fortunate the message
 will identify which operator was so unfortunate.
 
+Note that for the C<Inf> and C<NaN> (infinity and not-a-number) the
+definition of "numeric" is somewhat unusual: the strings themselves
+(like "Inf") are considered numeric, and anything following them is
+considered non-numeric.
+
 =item Argument list not closed for PerlIO layer "%s"
 
 (W layer) When pushing a layer with arguments onto the Perl I/O
@@ -2889,6 +2894,12 @@ with 'useperlio'.
 (F) Your machine doesn't implement the sockatmark() functionality,
 neither as a system call nor an ioctl call (SIOCATMARK).
 
+=item '%s' is an unknown bound type in regex; marked by <-- HERE in m/%s/
+
+(F) You used C<\b{...}> or C<\B{...}> and the C<...> is not known to
+Perl.  The current valid ones are given in
+L<perlrebackslash/\b{}, \b, \B{}, \B>.
+
 =item "%s" is more clearly written simply as "%s" in regex; marked by <-- HERE in m/%s/
 
 (W regexp) (only under C<S<use re 'strict'>> or within C<(?[...])>)
@@ -3295,45 +3306,6 @@ Currently only emitted when a printf-type format required more
 arguments than were supplied, but might be used in the future for
 other cases where we can statically determine that arguments to
 functions are missing, e.g. for the L<perlfunc/pack> function.
-
-=item Ranges of ASCII printables should be some subset of "0-9", "A-Z", or
-"a-z" in regex; marked by <-- HERE in m/%s/
-
-(W regexp) (only under C<S<use re 'strict'>> or within C<(?[...])>)
-
-Stricter rules help to find typos and other errors.  Perhaps you didn't
-even intend a range here, if the C<"-"> was meant to be some other
-character, or should have been escaped (like C<"\-">).  If you did
-intend a range, the one that was used is not portable between ASCII and
-EBCDIC platforms, and doesn't have an obvious meaning to a casual
-reader.
-
- [3-7]    # OK; Obvious and portable
- [d-g]    # OK; Obvious and portable
- [A-Y]    # OK; Obvious and portable
- [A-z]    # WRONG; Not portable; not clear what is meant
- [a-Z]    # WRONG; Not portable; not clear what is meant
- [%-.]    # WRONG; Not portable; not clear what is meant
- [\x41-Z] # WRONG; Not portable; not obvious to non-geek
-
-(You can force portability by specifying a Unicode range, which means that
-the endpoints are specified by
-L<C<\N{...}>|perlrecharclass/Character Ranges>, but the meaning may
-still not be obvious.)
-The stricter rules require that ranges that start or stop with an ASCII
-character that is not a control have all their endpoints be the literal
-character, and not some escape sequence (like C<"\x41">), and the ranges
-must be all digits, or all uppercase letters, or all lowercase letters.
-
-=item Ranges of digits should be from the same group in regex; marked by
-<-- HERE in m/%s/
-
-(W regexp) (only under C<S<use re 'strict'>> or within C<(?[...])>)
-
-Stricter rules help to find typos and other errors.  You included a
-range, and at least one of the end points is a decimal digit.  Under the
-stricter rules, when this happens, both end points should be digits in
-the same group of 10 consecutive digits.
 
 =item Missing argument to -%c
 
@@ -4738,7 +4710,7 @@ Note this may be also triggered for constructs like:
 
     sub { 1 if die; }
 
-=item Possible precedence problem on bitwise %c operator
+=item Possible precedence problem on bitwise %s operator
 
 (W precedence) Your program uses a bitwise logical operator in conjunction
 with a numeric comparison operator, like this :
@@ -4898,6 +4870,45 @@ C</abc(?=(?:xyz){3})/>, not C</abc(?=xyz){3}/>.
 are outside the range which can be represented by integers internally.
 One possible workaround is to force Perl to use magical string increment
 by prepending "0" to your numbers.
+
+=item Ranges of ASCII printables should be some subset of "0-9", "A-Z", or
+"a-z" in regex; marked by <-- HERE in m/%s/
+
+(W regexp) (only under C<S<use re 'strict'>> or within C<(?[...])>)
+
+Stricter rules help to find typos and other errors.  Perhaps you didn't
+even intend a range here, if the C<"-"> was meant to be some other
+character, or should have been escaped (like C<"\-">).  If you did
+intend a range, the one that was used is not portable between ASCII and
+EBCDIC platforms, and doesn't have an obvious meaning to a casual
+reader.
+
+ [3-7]    # OK; Obvious and portable
+ [d-g]    # OK; Obvious and portable
+ [A-Y]    # OK; Obvious and portable
+ [A-z]    # WRONG; Not portable; not clear what is meant
+ [a-Z]    # WRONG; Not portable; not clear what is meant
+ [%-.]    # WRONG; Not portable; not clear what is meant
+ [\x41-Z] # WRONG; Not portable; not obvious to non-geek
+
+(You can force portability by specifying a Unicode range, which means that
+the endpoints are specified by
+L<C<\N{...}>|perlrecharclass/Character Ranges>, but the meaning may
+still not be obvious.)
+The stricter rules require that ranges that start or stop with an ASCII
+character that is not a control have all their endpoints be the literal
+character, and not some escape sequence (like C<"\x41">), and the ranges
+must be all digits, or all uppercase letters, or all lowercase letters.
+
+=item Ranges of digits should be from the same group in regex; marked by
+<-- HERE in m/%s/
+
+(W regexp) (only under C<S<use re 'strict'>> or within C<(?[...])>)
+
+Stricter rules help to find typos and other errors.  You included a
+range, and at least one of the end points is a decimal digit.  Under the
+stricter rules, when this happens, both end points should be digits in
+the same group of 10 consecutive digits.
 
 =item readdir() attempted on invalid dirhandle %s
 
@@ -5745,6 +5756,18 @@ as a compiler directive.  You may say only one of
 This is to prevent the problem of one module changing the array base out
 from under another module inadvertently.  See L<perlvar/$[> and L<arybase>.
 
+=item The bitwise feature is experimental
+
+(S experimental::bitwise) This warning is emitted if you use bitwise
+operators (C<& | ^ ~ &. |. ^. ~.>) with the "bitwise" feature enabled.
+Simply suppress the warning if you want to use the feature, but know
+that in doing so you are taking the risk of using an experimental
+feature which may change or be removed in a future Perl version:
+
+    no warnings "experimental::bitwise";
+    use feature "bitwise";
+    $x |.= $y;
+
 =item The crypt() function is unimplemented due to excessive paranoia.
 
 (F) Configure couldn't find the crypt() function on your machine,
@@ -6579,17 +6602,6 @@ since they are often used in statements like
 String constants that would normally evaluate to 0 or 1 are warned
 about.
 
-=item Unusual use of %s in void context
-
-(W void_unusual) Similar to the "Useless use of %s in void context"
-warning, but only turned on by the top-level "pedantic" warning
-category, used for e.g. C<grep> in void context, which may indicate a
-bug, but could also just be someone using C<grep> for its side-effects
-as a loop.
-
-Enabled as part of "extra" warnings, not in the "all" category. See
-L<warnings> for details
-
 =item Useless use of (?-p) in regex; marked by S<<-- HERE> in m/%s/
 
 (W regexp) The C<p> modifier cannot be turned off once set.  Trying to do
@@ -6631,6 +6643,15 @@ is deprecated.  See L<perlvar/"$[">.
 (D deprecated) You are now encouraged to use the explicitly quoted
 form if you wish to use an empty line as the terminator of the
 here-document.
+
+=item Use of \b{} for non-UTF-8 locale is wrong.  Assuming a UTF-8 locale
+
+(W locale)  You are matching a regular expression using locale rules,
+and a Unicode boundary is being matched, but the locale is not a Unicode
+one.  This doesn't make sense.  Perl will continue, assuming a Unicode
+(UTF-8) locale, but the results could well be wrong except if the locale
+happens to be ISO-8859-1 (Latin1) where this message is spurious and can
+be ignored.
 
 =item Use of chdir('') or chdir(undef) as chdir() deprecated
 
@@ -6852,6 +6873,15 @@ the whole thing correctly, except when the class is inverted
 a range.  For these, what should happen isn't clear at all.  In
 these circumstances, Perl discards all but the first character
 of the returned sequence, which is not likely what you want.
+
+=item Using /u for '%s' instead of /%s in regex; marked by <-- HERE in m/%s/
+
+(W regexp) You used a Unicode boundary (C<\b{...}> or C<\B{...}>) in a
+portion of a regular expression where the character set modifiers C</a>
+or C</aa> are in effect.  These two modifiers indicate an ASCII
+interpretation, and this doesn't make sense for a Unicode defintion.
+The generated regular expression will compile so that the boundary uses
+all of Unicode.  No other portion of the regular expression is affected.
 
 =item Using !~ with %s doesn't make sense
 

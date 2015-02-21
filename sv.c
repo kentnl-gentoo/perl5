@@ -1616,7 +1616,9 @@ Perl_sv_grow(pTHX_ SV *const sv, STRLEN newlen)
         /* Don't round up on the first allocation, as odds are pretty good that
          * the initial request is accurate as to what is really needed */
         if (SvLEN(sv)) {
-            newlen = PERL_STRLEN_ROUNDUP(newlen);
+            STRLEN rounded = PERL_STRLEN_ROUNDUP(newlen);
+            if (rounded > newlen)
+                newlen = rounded;
         }
 #endif
 	if (SvLEN(sv) && s) {
@@ -1936,6 +1938,7 @@ Perl_looks_like_number(pTHX_ SV *const sv)
 {
     const char *sbegin;
     STRLEN len;
+    int numtype;
 
     PERL_ARGS_ASSERT_LOOKS_LIKE_NUMBER;
 
@@ -1944,7 +1947,8 @@ Perl_looks_like_number(pTHX_ SV *const sv)
     }
     else
 	return SvFLAGS(sv) & (SVf_NOK|SVp_NOK|SVf_IOK|SVp_IOK);
-    return grok_number(sbegin, len, NULL);
+    numtype = grok_number(sbegin, len, NULL);
+    return ((numtype & IS_NUMBER_TRAILING)) ? 0 : numtype;
 }
 
 STATIC bool
@@ -2105,6 +2109,10 @@ S_sv_2iuv_non_preserve(pTHX_ SV *const sv
 
 /* If numtype is infnan, set the NV of the sv accordingly.
  * If numtype is anything else, try setting the NV using Atof(PV). */
+#ifdef USING_MSVC6
+#  pragma warning(push)
+#  pragma warning(disable:4756;disable:4056)
+#endif
 static void
 S_sv_setnv(pTHX_ SV* sv, int numtype)
 {
@@ -2129,6 +2137,9 @@ S_sv_setnv(pTHX_ SV* sv, int numtype)
             SvPOK_on(sv); /* PV is okay, though. */
     }
 }
+#ifdef USING_MSVC6
+#  pragma warning(pop)
+#endif
 
 STATIC bool
 S_sv_2iuv_common(pTHX_ SV *const sv)
@@ -2249,7 +2260,7 @@ S_sv_2iuv_common(pTHX_ SV *const sv)
 	    sv_upgrade(sv, SVt_PVNV);
 
         if ((numtype & (IS_NUMBER_INFINITY | IS_NUMBER_NAN))) {
-            if (ckWARN(WARN_NUMERIC) && ((numtype & IS_NUMBER_NAN)))
+            if (ckWARN(WARN_NUMERIC) && ((numtype & IS_NUMBER_TRAILING)))
 		not_a_number(sv);
             S_sv_setnv(aTHX_ sv, numtype);
             return FALSE;
@@ -3250,14 +3261,6 @@ include SV_GMAGIC.
 */
 
 void
-Perl_sv_copypv(pTHX_ SV *const dsv, SV *const ssv)
-{
-    PERL_ARGS_ASSERT_SV_COPYPV;
-
-    sv_copypv_flags(dsv, ssv, 0);
-}
-
-void
 Perl_sv_copypv_flags(pTHX_ SV *const dsv, SV *const ssv, const I32 flags)
 {
     STRLEN len;
@@ -3528,7 +3531,7 @@ Perl_sv_utf8_upgrade_flags_grow(pTHX_ SV *const sv, const I32 flags, STRLEN extr
 	if (extra) SvGROW(sv, SvCUR(sv) + extra);
 	return SvCUR(sv);
 
-must_be_utf8:
+      must_be_utf8:
 
 	/* Here, the string should be converted to utf8, either because of an
 	 * input flag (two_byte_count = 0), or because a character that
@@ -5961,7 +5964,7 @@ Perl_sv_kill_backrefs()
 */
 
 SV *
-Perl_sv_get_backrefs(pTHX_ SV *const sv)
+Perl_sv_get_backrefs(SV *const sv)
 {
     SV *backrefs= NULL;
 
@@ -8587,13 +8590,13 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 	    goto thats_all_folks;
     }
 
-thats_all_folks:
+  thats_all_folks:
     /* check if we have actually found the separator - only really applies
      * when rslen > 1 */
     if ((rslen > 1 && (STRLEN)(bp - (STDCHAR*)SvPVX_const(sv)) < rslen) ||
 	  memNE((char*)bp - rslen, rsptr, rslen))
 	goto screamer;				/* go back to the fray */
-thats_really_all_folks:
+  thats_really_all_folks:
     if (shortbuffered)
 	cnt += shortbuffered;
 	DEBUG_P(PerlIO_printf(Perl_debug_log,
@@ -8621,7 +8624,7 @@ thats_really_all_folks:
 	STDCHAR buf[8192];
 #endif
 
-screamer2:
+      screamer2:
 	if (rslen) {
             const STDCHAR * const bpe = buf + sizeof(buf);
 	    bp = buf;
@@ -10840,34 +10843,7 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
     sv_vcatpvfn_flags(sv, pat, patlen, args, svargs, svmax, maybe_tainted, SV_GMAGIC|SV_SMAGIC);
 }
 
-#if DOUBLEKIND == DOUBLE_IS_IEEE_754_32_BIT_LITTLE_ENDIAN || \
-    DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_LITTLE_ENDIAN || \
-    DOUBLEKIND == DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN
-#  define DOUBLE_LITTLE_ENDIAN
-#endif
-
-#ifdef HAS_LONG_DOUBLEKIND
-
-#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN || \
-      LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN || \
-      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN
-#    define LONGDOUBLE_LITTLE_ENDIAN
-#  endif
-
-#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_BIG_ENDIAN || \
-      LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN || \
-      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN
-#    define LONGDOUBLE_BIG_ENDIAN
-#  endif
-
-#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN || \
-      LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN
-#    define LONGDOUBLE_X86_80_BIT
-#  endif
-
-#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN || \
-      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN
-#    define LONGDOUBLE_DOUBLEDOUBLE
+#ifdef LONGDOUBLE_DOUBLEDOUBLE
 /* The first double can be as large as 2**1023, or '1' x '0' x 1023.
  * The second double can be as small as 2**-1074, or '0' x 1073 . '1'.
  * The sum of them can be '1' . '0' x 2096 . '1', with implied radix point
@@ -10877,10 +10853,8 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
  * of dynamically growing buffer might be better, start at just 16 bytes
  * (for example) and grow only when necessary.  Or maybe just by looking
  * at the exponents of the two doubles? */
-#    define DOUBLEDOUBLE_MAXBITS 2098
-#  endif
-
-#endif /* HAS_LONG_DOUBLE */
+#  define DOUBLEDOUBLE_MAXBITS 2098
+#endif
 
 /* vhex will contain the values (0..15) of the hex digits ("nybbles"
  * of 4 bits); 1 for the implicit 1, and the mantissa bits, four bits
@@ -11386,6 +11360,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 #ifndef FV_ISFINITE
 #  define FV_ISFINITE(x) Perl_isfinite((NV)(x))
 #endif
+        NV nv;
 	STRLEN have;
 	STRLEN need;
 	STRLEN gap;
@@ -12129,19 +12104,25 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 #ifdef USE_QUADMATH
                 fv = intsize == 'q' ?
                     va_arg(*args, NV) : va_arg(*args, double);
+                nv = fv;
 #elif LONG_DOUBLESIZE > DOUBLESIZE
-                if (intsize == 'q')
+                if (intsize == 'q') {
                     fv = va_arg(*args, long double);
-                else
-                    NV_TO_FV(va_arg(*args, double), fv);
+                    nv = fv;
+                } else {
+                    nv = va_arg(*args, double);
+                    NV_TO_FV(nv, fv);
+                }
 #else
-                fv = va_arg(*args, double);
+                nv = va_arg(*args, double);
+                fv = nv;
 #endif
             }
             else
             {
                 if (!infnan) SvGETMAGIC(argsv);
-                NV_TO_FV(SvNV_nomg(argsv), fv);
+                nv = SvNV_nomg(argsv);
+                NV_TO_FV(nv, fv);
             }
 
 	    need = 0;
@@ -12288,7 +12269,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 			goto float_converted;
 		    }
 		} else if ( c == 'f' && !precis ) {
-		    if ((eptr = F0convert(fv, ebuf + sizeof ebuf, &elen)))
+		    if ((eptr = F0convert(nv, ebuf + sizeof ebuf, &elen)))
 			break;
 		}
 	    }
@@ -12316,10 +12297,8 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                  * should be output as 0x0.0000000000001p-1022 to
                  * match its internal structure. */
 
-                /* Note: fv can be (and often is) long double.
-                 * Here it is explicitly cast to NV. */
-                vend = S_hextract(aTHX_ (NV)fv, &exponent, vhex, NULL);
-                S_hextract(aTHX_ (NV)fv, &exponent, vhex, vend);
+                vend = S_hextract(aTHX_ nv, &exponent, vhex, NULL);
+                S_hextract(aTHX_ nv, &exponent, vhex, vend);
 
 #if NVSIZE > DOUBLESIZE
 #  ifdef HEXTRACT_HAS_IMPLICIT_BIT
@@ -12477,7 +12456,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                 }
             }
             else {
-                elen = S_infnan_2pv(fv, PL_efloatbuf, PL_efloatsize, plus);
+                elen = S_infnan_2pv(nv, PL_efloatbuf, PL_efloatsize, plus);
                 if (elen) {
                     /* Not affecting infnan output: precision, alt, fill. */
                     if (elen < width) {
@@ -12553,7 +12532,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                     if (!qfmt)
                         Perl_croak_nocontext("panic: quadmath invalid format \"%s\"", ptr);
                     elen = quadmath_snprintf(PL_efloatbuf, PL_efloatsize,
-                                             qfmt, fv);
+                                             qfmt, nv);
                     if ((IV)elen == -1)
                         Perl_croak_nocontext("panic: quadmath_snprintf failed, format \"%s|'", qfmt);
                     if (qfmt != ptr)
@@ -14965,9 +14944,10 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     for (i = 0; i < POSIX_CC_COUNT; i++) {
         PL_XPosix_ptrs[i] = sv_dup_inc(proto_perl->IXPosix_ptrs[i], param);
     }
+    PL_GCB_invlist = sv_dup_inc(proto_perl->IGCB_invlist, param);
+    PL_SB_invlist = sv_dup_inc(proto_perl->ISB_invlist, param);
+    PL_WB_invlist = sv_dup_inc(proto_perl->IWB_invlist, param);
     PL_utf8_mark	= sv_dup_inc(proto_perl->Iutf8_mark, param);
-    PL_utf8_X_regular_begin	= sv_dup_inc(proto_perl->Iutf8_X_regular_begin, param);
-    PL_utf8_X_extend	= sv_dup_inc(proto_perl->Iutf8_X_extend, param);
     PL_utf8_toupper	= sv_dup_inc(proto_perl->Iutf8_toupper, param);
     PL_utf8_totitle	= sv_dup_inc(proto_perl->Iutf8_totitle, param);
     PL_utf8_tolower	= sv_dup_inc(proto_perl->Iutf8_tolower, param);

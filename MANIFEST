@@ -784,6 +784,7 @@ cpan/Digest/t/file.t		See if Digest extensions work
 cpan/Digest/t/lib/Digest/Dummy.pm		See if Digest extensions work
 cpan/Digest/t/security.t		See if Digest extensions work
 cpan/Encode/bin/enc2xs		Encode module generator
+cpan/Encode/bin/encguess		guess character encodings of files
 cpan/Encode/bin/piconv		iconv by perl
 cpan/Encode/bin/ucm2table	Table Generator for testing
 cpan/Encode/bin/ucmlint		A UCM Lint utility
@@ -2343,6 +2344,7 @@ cpan/Test-Simple/lib/Test/Stream/Event.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Event/Subtest.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/ExitMagic/Context.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/ExitMagic.pm			Test::Simple module
+cpan/Test-Simple/lib/Test/Stream/Explanation.pod			Test::Simple POD
 cpan/Test-Simple/lib/Test/Stream/Exporter/Meta.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/Exporter.pm			Test::Simple module
 cpan/Test-Simple/lib/Test/Stream/ForceExit.pm			Test-Simple module
@@ -2372,9 +2374,11 @@ cpan/Test-Simple/t/Behavior/388-threadedsubtest.load			Test::Simple Test
 cpan/Test-Simple/t/Behavior/388-threadedsubtest.t			Test::Simple test
 cpan/Test-Simple/t/Behavior/478-cmp_ok_hash.t			Test::Simple test
 cpan/Test-Simple/t/Behavior/490-inherit_exporter.t			Test::Simple test
+cpan/Test-Simple/t/Behavior/cmp_ok_undef.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/cmp_ok_xor.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/CustomOutput.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/encoding_test.t			Test::Simple Test
+cpan/Test-Simple/t/Behavior/event_clone_args.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/fork_new_end.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/MonkeyPatching_diag.t			Test::Simple Test
 cpan/Test-Simple/t/Behavior/MonkeyPatching_done_testing.t			Test::Simple Test
@@ -2463,7 +2467,6 @@ cpan/Test-Simple/t/Legacy/plan_skip_all.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/plan.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/pod.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/require_ok.t			Test::Simple Test
-cpan/Test-Simple/t/Legacy/ribasushi_diag.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/ribasushi_threads2.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/ribasushi_threads.t			Test::Simple Test
 cpan/Test-Simple/t/Legacy/Simple/load.t			Test::Simple Test
@@ -4378,7 +4381,9 @@ lib/Unicode/UCD.t		See if Unicode character database works
 lib/unicore/ArabicShaping.txt			Unicode character database
 lib/unicore/auxiliary/GCBTest.txt	Unicode character database
 lib/unicore/auxiliary/GraphemeBreakProperty.txt	Unicode character database
+lib/unicore/auxiliary/SBTest.txt	Unicode character database
 lib/unicore/auxiliary/SentenceBreakProperty.txt	Unicode character database
+lib/unicore/auxiliary/WBTest.txt	Unicode character database
 lib/unicore/auxiliary/WordBreakProperty.txt	Unicode character database
 lib/unicore/BidiBrackets.txt			Unicode character database
 lib/unicore/BidiMirroring.txt			Unicode character database
@@ -4654,6 +4659,7 @@ pod/perl5182delta.pod		Perl changes in version 5.18.2
 pod/perl5184delta.pod		Perl changes in version 5.18.4
 pod/perl5200delta.pod		Perl changes in version 5.20.0
 pod/perl5201delta.pod		Perl changes in version 5.20.1
+pod/perl5202delta.pod		Perl changes in version 5.20.2
 pod/perl5210delta.pod		Perl changes in version 5.21.0
 pod/perl5211delta.pod		Perl changes in version 5.21.1
 pod/perl5212delta.pod		Perl changes in version 5.21.2
@@ -4662,6 +4668,7 @@ pod/perl5214delta.pod		Perl changes in version 5.21.4
 pod/perl5215delta.pod		Perl changes in version 5.21.5
 pod/perl5216delta.pod		Perl changes in version 5.21.6
 pod/perl5217delta.pod		Perl changes in version 5.21.7
+pod/perl5218delta.pod		Perl changes in version 5.21.8
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5275,6 +5282,7 @@ t/op/die.t			See if die works
 t/op/die_unwind.t		Check die/eval early-$@ backcompat hack
 t/op/dor.t			See if defined-or (//) works
 t/op/do.t			See if subroutines work
+t/op/dump.t			See if dump works.
 t/op/each_array.t		See if array iterators work
 t/op/each.t			See if hash iterators work
 t/op/evalbytes.t		See if evalbytes operator works
@@ -5622,6 +5630,7 @@ utils/c2ph.PL			program to translate dbx stabs to perl
 utils/corelist.PL		Module::CoreList
 utils/cpan.PL			easily interact with CPAN from the command line
 utils/enc2xs.PL			Encode module generator
+utils/encguess.PL			guess character encodings of files
 utils/h2ph.PL			A thing to turn C .h files into perl .ph files
 utils/h2xs.PL			Program to make .xs files from C header files
 utils/instmodsh.PL		Give information about installed extensions

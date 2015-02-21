@@ -788,6 +788,7 @@ BOOT:
 {
     CV *cv;
     const char *file = __FILE__;
+    SV *sv;
     MY_CXT_INIT;
     B_init_my_cxt(aTHX_ &(MY_CXT));
     cv = newXS("B::init_av", intrpvar_sv_common, file);
@@ -820,6 +821,12 @@ BOOT:
     ASSIGN_COMMON_ALIAS(I, warnhook);
     cv = newXS("B::diehook", intrpvar_sv_common, file);
     ASSIGN_COMMON_ALIAS(I, diehook);
+    sv = get_sv("B::OP::does_parent", GV_ADDMULTI);
+#ifdef PERL_OP_PARENT
+    sv_setsv(sv, &PL_sv_yes);
+#else
+    sv_setsv(sv, &PL_sv_no);
+#endif
 }
 
 #ifndef PL_formfeed
@@ -1359,7 +1366,7 @@ string(o, cv)
     PPCODE:
         switch (o->op_type) {
         case OP_MULTIDEREF:
-            ret = unop_aux_stringify(o, cv);
+            ret = multideref_stringify(o, cv);
             break;
         default:
             ret = sv_2mortal(newSVpvn("", 0));
@@ -1736,13 +1743,13 @@ REGEX(sv)
 	    PUSHs(newSVpvn_flags(RX_PRECOMP(sv), RX_PRELEN(sv), SVs_TEMP));
 	} else if (ix == 2) {
 	    PUSHs(make_sv_object(aTHX_ (SV *)ReANY(sv)->qr_anoncv));
-	} else if (ix) {
-	    dXSTARG;
-	    PUSHu(RX_COMPFLAGS(sv));
 	} else {
 	    dXSTARG;
+	    if (ix)
+		PUSHu(RX_COMPFLAGS(sv));
+	    else
 	    /* FIXME - can we code this method more efficiently?  */
-	    PUSHi(PTR2IV(sv));
+		PUSHi(PTR2IV(sv));
 	}
 
 #endif
@@ -2421,7 +2428,7 @@ PadnameFLAGS(pn)
 	/* backward-compatibility hack, which should be removed if the
 	   flags field becomes large enough to hold SVf_FAKE (and
 	   PADNAMEt_OUTER should be renumbered to match SVf_FAKE) */
-	STATIC_ASSERT_STMT(SVf_FAKE >= 1<<(sizeof(PadnameFLAGS(pn)) * 8));
+	STATIC_ASSERT_STMT(SVf_FAKE >= 1<<(sizeof(PadnameFLAGS((B__PADNAME)NULL)) * 8));
 	if (PadnameOUTER(pn))
 	    RETVAL |= SVf_FAKE;
     OUTPUT:

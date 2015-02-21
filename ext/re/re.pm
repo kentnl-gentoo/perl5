@@ -4,7 +4,7 @@ package re;
 use strict;
 use warnings;
 
-our $VERSION     = "0.30";
+our $VERSION     = "0.31";
 our @ISA         = qw(Exporter);
 our @EXPORT_OK   = ('regmust',
                     qw(is_regexp regexp_pattern
@@ -111,7 +111,17 @@ sub _load_unload {
 sub bits {
     my $on = shift;
     my $bits = 0;
+    my $turning_all_off = ! @_ && ! $on;
     my %seen;   # Has flag already been seen?
+    if ($turning_all_off) {
+
+        # Pretend were called with certain parameters, which are best dealt
+        # with that way.
+        push @_, keys %bitmask; # taint and eval
+        push @_, 'strict';
+    }
+
+    # Process each subpragma parameter
    ARG:
     foreach my $idx (0..$#_){
         my $s=$_[$idx];
@@ -156,7 +166,7 @@ sub bits {
                 }
             }
             else {
-                $^H{reflags} &= ~$reflags{$s};
+                $^H{reflags} &= ~$reflags{$s} if $^H{reflags};
 
                 # Turn off warnings if we turned them on.
                 warnings->unimport('regexp') if $^H{re_strict};
@@ -211,8 +221,8 @@ sub bits {
 		    }
 		    else {
 			delete $^H{reflags_charset}
-			 if  defined $^H{reflags_charset}
-			  && $^H{reflags_charset} == $reflags{$_};
+                                     if defined $^H{reflags_charset}
+                                        && $^H{reflags_charset} == $reflags{$_};
 		    }
 		} elsif (exists $reflags{$_}) {
                     $seen{$_}++;
@@ -228,8 +238,8 @@ sub bits {
 		}
 	    }
 	    ($^H{reflags} = $reflags or defined $^H{reflags_charset})
-	     ? $^H |= $flags_hint
-	     : ($^H &= ~$flags_hint);
+	                    ? $^H |= $flags_hint
+	                    : ($^H &= ~$flags_hint);
 	} else {
 	    require Carp;
 	    Carp::carp("Unknown \"re\" subpragma '$s' (known ones are: ",
@@ -249,6 +259,14 @@ sub bits {
             warnings::warn("regexp", $message);
         }
     }
+
+    if ($turning_all_off) {
+        _load_unload(0);
+        $^H{reflags} = 0;
+        $^H{reflags_charset} = 0;
+        $^H &= ~$flags_hint;
+    }
+
     $bits;
 }
 

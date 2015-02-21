@@ -17,6 +17,19 @@ Consult your favorite dictionary for details.
 
 =head1 EPIGRAPHS
 
+=head2 v5.21.8 - Bill Watterson, "Scientific Progress Goes 'Boink': A Calvin and Hobbes Collection"
+
+L<Announced on 2015-01-20 by Matthew Horsfall|http://www.nntp.perl.org/group/perl.perl5.porters/2015/01/msg224869.html>
+
+Calvin:   OK Hobbes, press the button and duplicate me.
+Hobbes:   Are you sure this is such a good idea?
+Calvin:   Brother! You doubting Thomases get in the way of more scientific advances with your stupid ethical questions! This is a *BRILLIANT* idea! Hit the button, will ya?
+Hobbes:   I'd hate to be accused of inhibiting scientific progress... Here you go.
+[Box]:    *BOINK*
+Hobbes:   Scientific progress goes "BOINK"?
+Calvin?:  It worked! It worked! I'm a genius!
+Cavlin??: No you're not, you liar! *I* invented this!
+
 =head2 v5.21.7 - Robert Heinlein, "The Number of the Beast"
 
 L<Announced on 2014-12-20 by Max Maischein|http://www.nntp.perl.org/group/perl.perl5.porters/2014/12/msg223774.html>
@@ -226,6 +239,51 @@ L<Announced on 2014-05-27 by Ricardo Signes|http://www.nntp.perl.org/group/perl.
     From the burning brow,
   Till the work its master honour.
   Blessing comes from Heaven’s Donor.
+
+=head2 v5.20.2 - Jonathan "Jonti" Picking, L<"Magical Trevor"|http://www.weebls-stuff.com/other-toons/video/magical-trevor.html>
+
+L<Announced on 2015-02-14 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2015/02/msg225777.html>
+
+  Everyone loves Magical Trevor,
+  'Cos the tricks that he does are ever so clever;
+  Look at him now, disappearin' the cow,
+  Where is the cow hidden right now?
+
+  Taking a bow, it's Magical Trevor,
+  Everybody's seen that the trick is clever;
+  Look at him there with his leathery, leathery whip!
+  It's made of magic, and with a little flip--
+
+  Yeah, yeah, yeah, the cow is back,
+  Yeah, yeah, yeah, the cow is back;
+  Back, back, back from his magical journey,
+  Yeah!
+
+  What did he see in the parallel dimension?
+  He saw beans, lots of beans, lots of beans, lots of beans;
+  Oh, beans, lots of beans, lots of beans, lots of beans,
+  Yeah, yeah!
+
+=head2 v5.20.2-RC1 - Jonathan "Jonti" Picking, L<"Scampi"|http://www.weebls-stuff.com/other-toons/video/scampi.html>
+
+L<Announced on 2015-02-01 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2015/02/msg225273.html>
+
+  I've seen things,
+  I've seen them with my eyes;
+  I've seen things,
+  They're often in disguise.
+
+  Like carrots, handbags, cheese, toilets,
+  Russians, planets, hamsters, weddings,
+  Poets, Stalin, Kuala Lumpur!
+  Pygmies, budgies, Kuala Lumpur!
+
+  I've seen things,
+  I've seen them with my eyes;
+  I've seen things,
+  They're often in disguise.
+
+  Like carrots, handbags, cheese...
 
 =head2 v5.20.1 - Lorenzo da Ponte, trans. Diana Reed, "Così fan tutte"
 

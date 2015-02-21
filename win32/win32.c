@@ -149,7 +149,7 @@ static long	filetime_to_clock(PFILETIME ft);
 static BOOL	filetime_from_time(PFILETIME ft, time_t t);
 static char*	create_command_line(char *cname, STRLEN clen,
 				    const char * const *args);
-static char*	qualified_path(const char *cmd);
+static char*	qualified_path(const char *cmd, bool other_exts);
 static void	ansify_path(void);
 static LRESULT	win32_process_message(HWND hwnd, UINT msg,
 			WPARAM wParam, LPARAM lParam);
@@ -2142,7 +2142,7 @@ do_raise(pTHX_ int sig)
 	    }
 	}
     }
-    /* Tell caller to exit thread/process as approriate */
+    /* Tell caller to exit thread/process as appropriate */
     return 1;
 }
 
@@ -2228,7 +2228,7 @@ win32_msgwait(pTHX_ DWORD count, LPHANDLE handles, DWORD timeout, LPDWORD result
      * This scenario can only be created if the timespan from the return of
      * MsgWaitForMultipleObjects to GetSystemTimeAsFileTime exceeds 1 ms. To
      * generate the scenario, manual breakpoints in a C debugger are required,
-     * or a context switch occured in win32_async_check in PeekMessage, or random
+     * or a context switch occurred in win32_async_check in PeekMessage, or random
      * messages are delivered to the *thread* message queue of the Perl thread
      * from another process (msctf.dll doing IPC among its instances, VS debugger
      * causes msctf.dll to be loaded into Perl by kernel), see [perl #33096].
@@ -3009,23 +3009,20 @@ do_popen(const char *mode, const char *command, IV narg, SV **args) {
 	}
 	else {
 	    int i;
+	    const char *exe_name;
 
 	    Newx(args_pvs, narg + 1 + w32_perlshell_items, const char *);
 	    SAVEFREEPV(args_pvs);
 	    for (i = 0; i < narg; ++i)
 	        args_pvs[i] = SvPV_nolen(args[i]);
 	    args_pvs[i] = NULL;
+	    exe_name = qualified_path(args_pvs[0], TRUE);
+	    if (!exe_name)
+	        /* let CreateProcess() try to find it instead */
+	        exe_name = args_pvs[0];
 
-	    if ((childpid = do_spawnvp_handles(P_NOWAIT, args_pvs[0], args_pvs, handles)) == -1) {
-	        if (errno == ENOEXEC || errno == ENOENT) {
-	            /* possible shell-builtin, invoke with shell */
-		    Move(args_pvs, args_pvs+w32_perlshell_items, narg+1, const char *);
-		    Copy(w32_perlshell_vec, args_pvs, w32_perlshell_items, const char *);
-		    if ((childpid = do_spawnvp_handles(P_NOWAIT, args_pvs[0], args_pvs, handles)) == -1)
-		        goto cleanup;
-		}
-		else
-		  goto cleanup;
+	    if ((childpid = do_spawnvp_handles(P_NOWAIT, exe_name, args_pvs, handles)) == -1) {
+	        goto cleanup;
 	    }
 	}
 
@@ -3550,8 +3547,15 @@ create_command_line(char *cname, STRLEN clen, const char * const *args)
     return cmd;
 }
 
+static const char *exe_extensions[] =
+  {
+    ".exe", /* this must be first */
+    ".cmd",
+    ".bat"
+  };
+
 static char *
-qualified_path(const char *cmd)
+qualified_path(const char *cmd, bool other_exts)
 {
     char *pathstr;
     char *fullcmd, *curfullcmd;
@@ -3590,10 +3594,16 @@ qualified_path(const char *cmd)
 	if (cmd[cmdlen-1] != '.'
 	    && (cmdlen < 4 || cmd[cmdlen-4] != '.'))
 	{
-	    strcpy(curfullcmd, ".exe");
-	    res = GetFileAttributes(fullcmd);
-	    if (res != 0xFFFFFFFF && !(res & FILE_ATTRIBUTE_DIRECTORY))
-		return fullcmd;
+	    int i;
+	    /* first extension is .exe */
+	    int ext_limit = other_exts ? C_ARRAY_LENGTH(exe_extensions) : 1;
+	    for (i = 0; i < ext_limit; ++i) {
+	        strcpy(curfullcmd, exe_extensions[i]);
+	        res = GetFileAttributes(fullcmd);
+	        if (res != 0xFFFFFFFF && !(res & FILE_ATTRIBUTE_DIRECTORY))
+		    return fullcmd;
+	    }
+
 	    *curfullcmd = '\0';
 	}
 
@@ -3830,7 +3840,7 @@ RETRY:
 	 * jump through our own hoops by picking out the path
 	 * we really want it to use. */
 	if (!fullcmd) {
-	    fullcmd = qualified_path(cname);
+	    fullcmd = qualified_path(cname, FALSE);
 	    if (fullcmd) {
 		if (cname != cmdname)
 		    Safefree(cname);

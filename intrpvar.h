@@ -179,7 +179,7 @@ PERLVAR(I, statgv,	GV *)
 PERLVARI(I, statname,	SV *,	NULL)
 
 #ifdef HAS_TIMES
-/* Will be removed soon after v5.21.8. See RT #121351 */
+/* Will be removed soon after v5.21.9. See RT #121351 */
 PERLVAR(I, timesbuf,	struct tms)
 #endif
 
@@ -598,8 +598,6 @@ PERLVAR(I, HasMultiCharFold,   SV *)
 
 /* utf8 character class swashes */
 PERLVAR(I, utf8_mark,	SV *)
-PERLVAR(I, utf8_X_regular_begin, SV *)
-PERLVAR(I, utf8_X_extend, SV *)
 PERLVAR(I, utf8_toupper, SV *)
 PERLVAR(I, utf8_totitle, SV *)
 PERLVAR(I, utf8_tolower, SV *)
@@ -610,6 +608,9 @@ PERLVAR(I, utf8_charname_continue, SV *)
 PERLVARA(I, utf8_swash_ptrs, POSIX_SWASH_COUNT, SV *)
 PERLVARA(I, Posix_ptrs, POSIX_CC_COUNT, SV *)
 PERLVARA(I, XPosix_ptrs, POSIX_CC_COUNT, SV *)
+PERLVAR(I, GCB_invlist, SV *)
+PERLVAR(I, SB_invlist, SV *)
+PERLVAR(I, WB_invlist, SV *)
 
 PERLVAR(I, last_swash_hv, HV *)
 PERLVAR(I, last_swash_tmps, U8 *)
@@ -750,7 +751,7 @@ PERLVARI(I, globhook,	globhook_t, NULL)
 
 PERLVARI(I, padlist_generation, U32, 1)	/* id to identify padlist clones */
 
-/* The last unconditional member of the interpreter structure when 5.21.8 was
+/* The last unconditional member of the interpreter structure when 5.21.9 was
    released. The offset of the end of this is baked into a global variable in 
    any shared perl library which will allow a sanity test in future perl
    releases.  */

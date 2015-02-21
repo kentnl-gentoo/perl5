@@ -27,14 +27,13 @@ my $NaN;
 }
 
 my @PInf = ("Inf", "inf", "INF", "+Inf",
-            "Infinity", "INFINITE",
-            "1.#INF", "1#INF");
+            "Infinity",
+            "1.#INF", "1#INF", "1.#INF00");
 my @NInf = map { "-$_" } grep { ! /^\+/ } @PInf;
 
 my @NaN = ("NAN", "nan", "qnan", "SNAN", "NanQ", "NANS",
-           "1.#QNAN", "+1#SNAN", "-1.#NAN", "1#IND",
-           "NaN123", "NAN(123)", "nan%",
-           "nanonano"); # RIP, Robin Williams.
+           "1.#QNAN", "+1#SNAN", "-1.#NAN", "1#IND", "1.#IND00",
+           "NAN(123)");
 
 my @printf_fmt = qw(e f g a d u o i b x p);
 my @packi_fmt = qw(c C s S l L i I n N v V j J w W U);
@@ -246,14 +245,14 @@ TODO: {
 }
 
 SKIP: {
-    my @FInf = qw(Info Infiniti Infinityz);
+    my @FInf = qw(Infinite Info Inf123 Infiniti Infinityz);
     if ($Config{usequadmath}) {
         skip "quadmath strtoflt128() accepts false infinities", scalar @FInf;
     }
-    # Silence "isn't numeric in addition", that's kind of the point.
-    local $^W = 0;
     for my $i (@FInf) {
-        cmp_ok("$i" + 0, '==', 0, "false infinity $i");
+        # Silence "isn't numeric in addition", that's kind of the point.
+        local $^W = 0;
+        cmp_ok("$i" + 0, '==', $PInf, "false infinity $i");
     }
 }
 
@@ -293,7 +292,12 @@ is($NaN * 2, $NaN, "twice NaN is NaN");
 is($NaN / 2, $NaN, "half of NaN is NaN");
 
 is($NaN * $NaN, $NaN, "NaN * NaN is NaN");
-is($NaN / $NaN, $NaN, "NaN / NaN is NaN");
+SKIP: {
+    if ($NaN == 0) {
+        skip "NaN looks like zero, avoiding dividing by it", 1;
+    }
+    is($NaN / $NaN, $NaN, "NaN / NaN is NaN");
+}
 
 for my $f (@printf_fmt) {
     is(sprintf("%$f", $NaN), "NaN", "$NaN sprintf %$f is NaN");
@@ -343,7 +347,6 @@ is eval { unpack "p", pack 'p', $NaN }, "NaN", "pack p +NaN";
 is eval { unpack "P3", pack 'P', $NaN }, "NaN", "pack P +NaN";
 
 for my $i (@NaN) {
-    local $^W = 0; # warning-ness tested later.
     cmp_ok($i + 0, '!=', $i + 0, "$i is NaN numerically (by not being NaN)");
     is("@{[$i+0]}", "NaN", "$i value stringifies as NaN");
 }
@@ -407,22 +410,6 @@ SKIP: {
     is("a" x $NaN, "", "x NaN");
 }
 
-{
-    my $w;
-    local $SIG{__WARN__} = sub { $w = shift };
-    local $^W = 1;
-    my $a;
-    eval '$a = "nancy" + 1';
-    is($a, "$NaN", "nancy plus one is $NaN");
-    like($w, qr/^Argument "nancy" isn't numeric/, "nancy numify (compile time)");
-
-    my $n = "nanana";
-    my $b;
-    eval '$b = $n + 1';
-    is($b, "$NaN", "$n plus one is $NaN");
-    like($w, qr/^Argument "$n" isn't numeric/, "$n numify (runtime)");
-}
-
 # === Tests combining Inf and NaN ===
 
 # is() okay with $NaN because it uses eq.
@@ -464,5 +451,78 @@ cmp_ok(1e-9999,    '==', 0,     "underflow to 0 (compile time) from pos");
 cmp_ok('1e-9999',  '==', 0,     "underflow to 0 (runtime) from pos");
 cmp_ok(-1e-9999,   '==', 0,     "underflow to 0 (compile time) from neg");
 cmp_ok('-1e-9999', '==', 0,     "underflow to 0 (runtime) from neg");
+
+# === Warnings triggered when and only when appropriate ===
+{
+    my $w;
+    local $SIG{__WARN__} = sub { $w = shift };
+    local $^W = 1;
+
+    my $T =
+        [
+         [ "inf",          0, $PInf ],
+         [ "infinity",     0, $PInf ],
+         [ "infxy",        1, $PInf ],
+         [ "inf34",        1, $PInf ],
+         [ "1.#INF",       0, $PInf ],
+         [ "1.#INFx",      1, $PInf ],
+         [ "1.#INF00",     0, $PInf ],
+         [ "1.#INFxy",     1, $PInf ],
+         [ " inf",         0, $PInf ],
+         [ "inf ",         0, $PInf ],
+         [ " inf ",        0, $PInf ],
+
+         [ "nan",          0, $NaN ],
+         [ "nanxy",        1, $NaN ],
+         [ "nan34",        1, $NaN ],
+         [ "nanq",         0, $NaN ],
+         [ "nans",         0, $NaN ],
+         [ "nanx",         1, $NaN ],
+         [ "nanqy",        1, $NaN ],
+         [ "nan(123)",     0, $NaN ],
+         [ "nan(0x123)",   0, $NaN ],
+         [ "nan(123xy)",   1, $NaN ],
+         [ "nan(0x123xy)", 1, $NaN ],
+         [ "nanq(123)",    0, $NaN ],
+         [ "nan(123",      1, $NaN ],
+         [ "nan(",         1, $NaN ],
+         [ "1.#NANQ",      0, $NaN ],
+         [ "1.#QNAN",      0, $NaN ],
+         [ "1.#NANQx",     1, $NaN ],
+         [ "1.#QNANx",     1, $NaN ],
+         [ "1.#IND",       0, $NaN ],
+         [ "1.#IND00",     0, $NaN ],
+         [ "1.#INDxy",     1, $NaN ],
+         [ " nan",         0, $NaN ],
+         [ "nan ",         0, $NaN ],
+         [ " nan ",        0, $NaN ],
+        ];
+
+    for my $t (@$T) {
+        print "# '$t->[0]' compile time\n";
+        my $a;
+        $w = '';
+        eval '$a = "'.$t->[0].'" + 1';
+        is("$a", "$t->[2]", "$t->[0] plus one is $t->[2]");
+        if ($t->[1]) {
+            like($w, qr/^Argument \Q"$t->[0]"\E isn't numeric/,
+                 "$t->[2] numify warn");
+        } else {
+            is($w, "", "no warning expected");
+        }
+        print "# '$t->[0]' runtime\n";
+        my $n = $t->[0];
+        my $b;
+        $w = '';
+        eval '$b = $n + 1';
+        is("$b", "$t->[2]", "$n plus one is $t->[2]");
+        if ($t->[1]) {
+            like($w, qr/^Argument \Q"$n"\E isn't numeric/,
+                 "$n numify warn");
+        } else {
+            is($w, "", "no warning expected");
+        }
+    }
+}
 
 done_testing();

@@ -566,12 +566,12 @@ escaping.
 Examples:
 
  "+"   =~ /[+?*]/     #  Match, "+" in a character class is not special.
- "\cH" =~ /[\b]/      #  Match, \b inside in a character class.
+ "\cH" =~ /[\b]/      #  Match, \b inside in a character class
                       #  is equivalent to a backspace.
- "]"   =~ /[][]/      #  Match, as the character class contains.
+ "]"   =~ /[][]/      #  Match, as the character class contains
                       #  both [ and ].
  "[]"  =~ /[[]]/      #  Match, the pattern contains a character class
-                      #  containing just ], and the character class is
+                      #  containing just [, and the character class is
                       #  followed by a ].
 
 =head3 Character Ranges
@@ -611,7 +611,7 @@ Examples:
  [\N{APOSTROPHE}-\N{QUESTION MARK}]
              #  Matches any of the characters  '()*+,-./0123456789:;<=>?
              #  even on an EBCDIC platform.
- [\N{U+27}-\N{U+3F}] # Same. (U+27 is "'", and U+3F is "?"
+ [\N{U+27}-\N{U+3F}] # Same. (U+27 is "'", and U+3F is "?")
 
 As the final two examples above show, you can achieve portablity to
 non-ASCII platforms by using the C<\N{...}> form for the range

@@ -730,6 +730,7 @@ sub _create_runperl { # Create the string to qx in runperl().
     return $runperl;
 }
 
+# sub run_perl {} is alias to below
 sub runperl {
     die "test.pl:runperl() does not take a hashref"
 	if ref $_[0] and ref $_[0] eq 'HASH';
@@ -1441,7 +1442,7 @@ sub class_ok {
     # Written so as to count as one test
     local $Level = $Level + 1;
     if( ref $class ) {
-        ok( 0, "$class is a refrence, not a class name" );
+        ok( 0, "$class is a reference, not a class name" );
     }
     else {
         isa_ok($class, $isa, $class_name);

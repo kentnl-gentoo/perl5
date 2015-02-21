@@ -171,7 +171,7 @@ use File::Glob qw(:case);
     },
 
     'B::Debug' => {
-        'DISTRIBUTION' => 'RURBAN/B-Debug-1.22.tar.gz',
+        'DISTRIBUTION' => 'RURBAN/B-Debug-1.23.tar.gz',
         'FILES'        => q[cpan/B-Debug],
         'EXCLUDED'     => ['t/pod.t'],
     },
@@ -220,7 +220,7 @@ use File::Glob qw(:case);
     },
 
     'Config::Perl::V' => {
-        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.22.tgz',
+        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.23.tgz',
         'FILES'        => q[cpan/Config-Perl-V],
         'EXCLUDED'     => [qw(
 		examples/show-v.pl
@@ -277,6 +277,18 @@ use File::Glob qw(:case);
                 t/yaml_code.yml
                 ),
         ],
+        # Waiting to be merged upstream: see pull request #83
+        'CUSTOMIZED'   => [
+            qw( lib/CPAN/Author.pm
+                lib/CPAN/CacheMgr.pm
+                lib/CPAN/FTP.pm
+                lib/CPAN/HTTP/Client.pm
+                lib/CPAN/HandleConfig.pm
+                lib/CPAN/Index.pm
+                lib/CPAN/LWP/UserAgent.pm
+                lib/CPAN/Mirrors.pm
+                ),
+        ],
     },
 
     # Note: When updating CPAN-Meta the META.* files will need to be regenerated
@@ -294,7 +306,7 @@ use File::Glob qw(:case);
     },
 
     'CPAN::Meta::Requirements' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-Requirements-2.131.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-Requirements-2.132.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta-Requirements],
         'EXCLUDED'     => [
             qw(CONTRIBUTING.mkdn),
@@ -380,11 +392,13 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.67.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.70.tar.gz',
         'FILES'        => q[cpan/Encode],
-        # Waiting to be merged upstream if it smokes ok: see CPAN RT#100347,
-        # in particular see khw's comments on that ticket on 21 Nov 2014.
-        'CUSTOMIZED'   => [ qw( encoding.pm ) ],
+        'CUSTOMIZED'   => [
+            # Waiting to be merged upstream if it smokes ok: see CPAN RT#100347,
+            # in particular see khw's comments on that ticket on 21 Nov 2014.
+            qw( encoding.pm ),
+        ],
     },
 
     'encoding::warnings' => {
@@ -583,7 +597,7 @@ use File::Glob qw(:case);
     },
 
     'HTTP::Tiny' => {
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.053.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.054.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/00-report-prereqs.t',
@@ -792,7 +806,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20141220.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150214.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -862,13 +876,13 @@ use File::Glob qw(:case);
     },
 
     'Perl::OSType' => {
-        'DISTRIBUTION' => 'DAGOLDEN/Perl-OSType-1.007.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/Perl-OSType-1.008.tar.gz',
         'FILES'        => q[cpan/Perl-OSType],
         'EXCLUDED'     => [qw(tidyall.ini), qr/^xt/, qr{^t/00-}],
     },
 
     'perlfaq' => {
-        'DISTRIBUTION' => 'ETHER/perlfaq-5.0150046.tar.gz',
+        'DISTRIBUTION' => 'ETHER/perlfaq-5.021009.tar.gz',
         'FILES'        => q[cpan/perlfaq],
         'EXCLUDED'     => [
             qw( inc/CreateQuestionList.pm
@@ -900,12 +914,12 @@ use File::Glob qw(:case);
     },
 
     'Pod::Parser' => {
-        'DISTRIBUTION' => 'MAREKR/Pod-Parser-1.62.tar.gz',
+        'DISTRIBUTION' => 'MAREKR/Pod-Parser-1.63.tar.gz',
         'FILES'        => q[cpan/Pod-Parser],
     },
 
     'Pod::Perldoc' => {
-        'DISTRIBUTION' => 'MALLEN/Pod-Perldoc-3.24.tar.gz',
+        'DISTRIBUTION' => 'MALLEN/Pod-Perldoc-3.25.tar.gz',
         'FILES'        => q[cpan/Pod-Perldoc],
 
         # Note that we use the CPAN-provided Makefile.PL, since it
@@ -973,7 +987,7 @@ use File::Glob qw(:case);
     },
 
     'Socket' => {
-        'DISTRIBUTION' => 'PEVANS/Socket-2.016.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Socket-2.018.tar.gz',
         'FILES'        => q[cpan/Socket],
     },
 
@@ -1053,7 +1067,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.301001_073.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.301001_098.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^t/xt},
@@ -1065,6 +1079,9 @@ use File::Glob qw(:case);
                 examples/subtest.t
                 t/Legacy/00compile.t
                 t/Legacy/pod.t
+                t/xxx-changes_updated.t
+                t/zzz-check-breaks.t
+                t/Legacy/ribasushi_diag.t
                 ),
         ],
        'CUSTOMIZED'   => [
@@ -1222,7 +1239,7 @@ use File::Glob qw(:case);
     },
 
     'Unicode::Collate' => {
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.10.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.11.tar.gz',
         'FILES'        => q[cpan/Unicode-Collate],
         'EXCLUDED'     => [
             qr{N$},
@@ -1280,16 +1297,15 @@ use File::Glob qw(:case);
     },
 
     'Win32' => {
-        'DISTRIBUTION' => "JDB/Win32-0.49.tar.gz",
+        'DISTRIBUTION' => "JDB/Win32-0.51.tar.gz",
         'FILES'        => q[cpan/Win32],
     },
 
     'Win32API::File' => {
-        'DISTRIBUTION' => 'CHORNY/Win32API-File-0.1201.tar.gz',
+        'DISTRIBUTION' => 'CHORNY/Win32API-File-0.1202.tar.gz',
         'FILES'        => q[cpan/Win32API-File],
         'EXCLUDED'     => [
             qr{^ex/},
-            't/pod.t',
         ],
     },
 

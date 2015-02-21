@@ -1,4 +1,4 @@
-# This file is the data file for t/porting/podcheck.t.
+# This file is the data file for porting/podcheck.t.
 # There are three types of lines.
 # Comment lines are white-space only or begin with a '#', like this one.  Any
 #   changes you make to the comment lines will be lost when the file is
@@ -18,6 +18,7 @@ Apache::MP3
 Archive::Extract
 Array::Base
 Attribute::Constant
+autobox
 B::Generate
 B::Lint
 B::Lint::Debug
@@ -270,7 +271,6 @@ pod/perldebguts.pod	Verbatim line length including indents exceeds 79 by	34
 pod/perldebtut.pod	Verbatim line length including indents exceeds 79 by	22
 pod/perldebug.pod	Verbatim line length including indents exceeds 79 by	3
 pod/perldelta.pod	Pod NAME already used	1
-pod/perldsc.pod	Verbatim line length including indents exceeds 79 by	4
 pod/perldtrace.pod	Verbatim line length including indents exceeds 79 by	26
 pod/perlfunc.pod	? Should you be using F<...> or maybe L<...> instead of	1
 pod/perlgit.pod	Verbatim line length including indents exceeds 79 by	12
@@ -311,9 +311,11 @@ pod/perlvms.pod	? Should you be using F<...> or maybe L<...> instead of	1
 pod/perlwin32.pod	Verbatim line length including indents exceeds 79 by	12
 porting/epigraphs.pod	Verbatim line length including indents exceeds 79 by	16
 porting/expand-macro.pl	Verbatim line length including indents exceeds 79 by	2
-porting/release_managers_guide.pod	Verbatim line length including indents exceeds 79 by	6
+porting/release_managers_guide.pod	Verbatim line length including indents exceeds 79 by	7
 porting/todo.pod	Verbatim line length including indents exceeds 79 by	7
 utils/c2ph	Verbatim line length including indents exceeds 79 by	44
+utils/encguess	Apparent broken link	1
+utils/encguess	There is no NAME	1
 lib/benchmark.pm	Verbatim line length including indents exceeds 79 by	2
 lib/config.pod	? Should you be using L<...> instead of	-1
 lib/extutils/embed.pm	Verbatim line length including indents exceeds 79 by	2

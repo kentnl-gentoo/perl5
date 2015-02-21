@@ -12,7 +12,7 @@ BEGIN {
 
 use warnings;
 
-plan( tests => 271 );
+plan( tests => 273 );
 
 # type coercion on assignment
 $foo = 'foo';
@@ -1066,6 +1066,9 @@ is runperl(prog =>
   "Undefined subroutine &main::foo called at -e line 1.\n",
   "gv_try_downgrade does not anonymise CVs referenced elsewhere";
 
+SKIP: {
+    skip_if_miniperl("no dynamic loading on miniperl, so can't load IO::File", 4);
+
 package glob_constant_test {
   sub foo { 42 }
   use constant bar => *foo;
@@ -1073,6 +1076,16 @@ package glob_constant_test {
   ::is eval { bar->() }, eval { &{+bar} },
     'glob_constant->() is not mangled at compile time';
   ::is "$@", "", 'no error from eval { &{+glob_constant} }';
+  use constant quux => do {
+    local *F;
+    my $f = *F;
+    *$f = *STDOUT{IO};
+  };
+  ::is eval { quux->autoflush; 420 }, 420,
+    'glob_constant->method() works';
+  ::is "$@", "", 'no error from eval { glob_constant->method() }';
+}
+
 }
 
 {

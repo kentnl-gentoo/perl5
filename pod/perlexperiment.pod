@@ -135,6 +135,18 @@ L<[perl #123630]|https://rt.perl.org/rt3/Ticket/Display.html?id=123630>.
 
 See also: L<perlsub/Constant Functions>
 
+=item String- and number-specific bitwise operators
+
+Introduced in: Perl 5.22.0
+
+See also: L<perlop/Bitwise String Operators>
+
+Using this feature triggers warnings in the category
+C<experimental::bitwise>.
+
+The ticket for this feature is
+L<[perl #123707]|https://rt.perl.org/rt3/Ticket/Display.html?id=123707>.
+
 =item The <:win32> IO pseudolayer
 
 The ticket for this feature is

@@ -548,6 +548,260 @@ Perl_grok_numeric_radix(pTHX_ const char **sp, const char *send)
 }
 
 /*
+=for apidoc grok_infnan
+
+Helper for grok_number(), accepts various ways of spelling "infinity"
+or "not a number", and returns one of the following flag combinations:
+
+  IS_NUMBER_INFINITE
+  IS_NUMBER_NAN
+  IS_NUMBER_INFINITE | IS_NUMBER_NEG
+  IS_NUMBER_NAN | IS_NUMBER_NEG
+  0
+
+possibly |-ed with IS_NUMBER_TRAILING.
+
+If an infinity or a not-a-number is recognized, the *sp will point to
+one byte past the end of the recognized string.  If the recognition fails,
+zero is returned, and the *sp will not move.
+
+=cut
+*/
+
+int
+Perl_grok_infnan(pTHX_ const char** sp, const char* send)
+{
+    const char* s = *sp;
+    int flags = 0;
+    bool odh = FALSE; /* one-dot-hash: 1.#INF */
+
+    PERL_ARGS_ASSERT_GROK_INFNAN;
+
+    if (*s == '+') {
+        s++; if (s == send) return 0;
+    }
+    else if (*s == '-') {
+        flags |= IS_NUMBER_NEG; /* Yes, -NaN happens. Incorrect but happens. */
+        s++; if (s == send) return 0;
+    }
+
+    if (*s == '1') {
+        /* Visual C: 1.#SNAN, -1.#QNAN, 1#INF, 1.#IND (maybe also 1.#NAN)
+         * Let's keep the dot optional. */
+        s++; if (s == send) return 0;
+        if (*s == '.') {
+            s++; if (s == send) return 0;
+        }
+        if (*s == '#') {
+            s++; if (s == send) return 0;
+        } else
+            return 0;
+        odh = TRUE;
+    }
+
+    if (isALPHA_FOLD_EQ(*s, 'I')) {
+        /* INF or IND (1.#IND is "indeterminate", a certain type of NAN) */
+
+        s++; if (s == send || isALPHA_FOLD_NE(*s, 'N')) return 0;
+        s++; if (s == send) return 0;
+        if (isALPHA_FOLD_EQ(*s, 'F')) {
+            s++;
+            if (s < send && (isALPHA_FOLD_EQ(*s, 'I'))) {
+                int fail =
+                    flags | IS_NUMBER_INFINITY | IS_NUMBER_NOT_INT | IS_NUMBER_TRAILING;
+                s++; if (s == send || isALPHA_FOLD_NE(*s, 'N')) return fail;
+                s++; if (s == send || isALPHA_FOLD_NE(*s, 'I')) return fail;
+                s++; if (s == send || isALPHA_FOLD_NE(*s, 'T')) return fail;
+                s++; if (s == send || isALPHA_FOLD_NE(*s, 'Y')) return fail;
+                s++;
+            } else if (odh) {
+                while (*s == '0') { /* 1.#INF00 */
+                    s++;
+                }
+            }
+            while (s < send && isSPACE(*s))
+                s++;
+            if (s < send && *s) {
+                flags |= IS_NUMBER_TRAILING;
+            }
+            flags |= IS_NUMBER_INFINITY | IS_NUMBER_NOT_INT;
+        }
+        else if (isALPHA_FOLD_EQ(*s, 'D') && odh) { /* 1.#IND */
+            s++;
+            flags |= IS_NUMBER_NAN | IS_NUMBER_NOT_INT;
+            while (*s == '0') { /* 1.#IND00 */
+                s++;
+            }
+            if (*s) {
+                flags |= IS_NUMBER_TRAILING;
+            }
+        } else
+            return 0;
+    }
+    else {
+        /* Maybe NAN of some sort */
+
+        if (isALPHA_FOLD_EQ(*s, 'S') || isALPHA_FOLD_EQ(*s, 'Q')) {
+            /* snan, qNaN */
+            /* XXX do something with the snan/qnan difference */
+            s++; if (s == send) return 0;
+        }
+
+        if (isALPHA_FOLD_EQ(*s, 'N')) {
+            s++; if (s == send || isALPHA_FOLD_NE(*s, 'A')) return 0;
+            s++; if (s == send || isALPHA_FOLD_NE(*s, 'N')) return 0;
+            s++;
+
+            flags |= IS_NUMBER_NAN | IS_NUMBER_NOT_INT;
+
+            /* NaN can be followed by various stuff (NaNQ, NaNS), but
+             * there are also multiple different NaN values, and some
+             * implementations output the "payload" values,
+             * e.g. NaN123, NAN(abc), while some legacy implementations
+             * have weird stuff like NaN%. */
+            if (isALPHA_FOLD_EQ(*s, 'q') ||
+                isALPHA_FOLD_EQ(*s, 's')) {
+                /* "nanq" or "nans" are ok, though generating
+                 * these portably is tricky. */
+                s++;
+            }
+            if (*s == '(') {
+                /* C99 style "nan(123)" or Perlish equivalent "nan($uv)". */
+                const char *t;
+                s++;
+                if (s == send) {
+                    return flags | IS_NUMBER_TRAILING;
+                }
+                t = s + 1;
+                while (t < send && *t && *t != ')') {
+                    t++;
+                }
+                if (t == send) {
+                    return flags | IS_NUMBER_TRAILING;
+                }
+                if (*t == ')') {
+                    int nantype;
+                    UV nanval;
+                    if (s[0] == '0' && s + 2 < t &&
+                        isALPHA_FOLD_EQ(s[1], 'x') &&
+                        isXDIGIT(s[2])) {
+                        STRLEN len = t - s;
+                        I32 flags = PERL_SCAN_ALLOW_UNDERSCORES;
+                        nanval = grok_hex(s, &len, &flags, NULL);
+                        if ((flags & PERL_SCAN_GREATER_THAN_UV_MAX)) {
+                            nantype = 0;
+                        } else {
+                            nantype = IS_NUMBER_IN_UV;
+                        }
+                        s += len;
+                    } else if (s[0] == '0' && s + 2 < t &&
+                               isALPHA_FOLD_EQ(s[1], 'b') &&
+                               (s[2] == '0' || s[2] == '1')) {
+                        STRLEN len = t - s;
+                        I32 flags = PERL_SCAN_ALLOW_UNDERSCORES;
+                        nanval = grok_bin(s, &len, &flags, NULL);
+                        if ((flags & PERL_SCAN_GREATER_THAN_UV_MAX)) {
+                            nantype = 0;
+                        } else {
+                            nantype = IS_NUMBER_IN_UV;
+                        }
+                        s += len;
+                    } else {
+                        const char *u;
+                        nantype =
+                            grok_number_flags(s, t - s, &nanval,
+                                              PERL_SCAN_TRAILING |
+                                              PERL_SCAN_ALLOW_UNDERSCORES);
+                        /* Unfortunately grok_number_flags() doesn't
+                         * tell how far we got and the ')' will always
+                         * be "trailing", so we need to double-check
+                         * whether we had something dubious. */
+                        for (u = s; u < t; u++) {
+                            if (!isDIGIT(*u)) {
+                                flags |= IS_NUMBER_TRAILING;
+                                break;
+                            }
+                        }
+                        s = u;
+                    }
+
+                    /* XXX Doesn't do octal: nan("0123").
+                     * Probably not a big loss. */
+
+                    if ((nantype & IS_NUMBER_NOT_INT) ||
+                        !(nantype && IS_NUMBER_IN_UV)) {
+                        /* XXX the nanval is currently unused, that is,
+                         * not inserted as the NaN payload of the NV.
+                         * But the above code already parses the C99
+                         * nan(...)  format.  See below, and see also
+                         * the nan() in POSIX.xs.
+                         *
+                         * Certain configuration combinations where
+                         * NVSIZE is greater than UVSIZE mean that
+                         * a single UV cannot contain all the possible
+                         * NaN payload bits.  There would need to be
+                         * some more generic syntax than "nan($uv)".
+                         *
+                         * Issues to keep in mind:
+                         *
+                         * (1) In most common cases there would
+                         * not be an integral number of bytes that
+                         * could be set, only a certain number of bits.
+                         * For example for the common case of
+                         * NVSIZE == UVSIZE == 8 there is room for 52
+                         * bits in the payload, but the most significant
+                         * bit is commonly reserved for the
+                         * signaling/quiet bit, leaving 51 bits.
+                         * Furthermore, the C99 nan() is supposed
+                         * to generate quiet NaNs, so it is doubtful
+                         * whether it should be able to generate
+                         * signaling NaNs.  For the x86 80-bit doubles
+                         * (if building a long double Perl) there would
+                         * be 62 bits (s/q bit being the 63rd).
+                         *
+                         * (2) Endianness of the payload bits. If the
+                         * payload is specified as an UV, the low-order
+                         * bits of the UV are naturally little-endianed
+                         * (rightmost) bits of the payload.  The endianness
+                         * of UVs and NVs can be different. */
+                        return 0;
+                    }
+                    if (s < t) {
+                        flags |= IS_NUMBER_TRAILING;
+                    }
+                } else {
+                    /* Looked like nan(...), but no close paren. */
+                    flags |= IS_NUMBER_TRAILING;
+                }
+            } else {
+                while (s < send && isSPACE(*s))
+                    s++;
+                if (s < send && *s) {
+                    /* Note that we here implicitly accept (parse as
+                     * "nan", but with warnings) also any other weird
+                     * trailing stuff for "nan".  In the above we just
+                     * check that if we got the C99-style "nan(...)",
+                     * the "..."  looks sane.
+                     * If in future we accept more ways of specifying
+                     * the nan payload, the accepting would happen around
+                     * here. */
+                    flags |= IS_NUMBER_TRAILING;
+                }
+            }
+            s = send;
+        }
+        else
+            return 0;
+    }
+
+    while (s < send && isSPACE(*s))
+        s++;
+
+    *sp = s;
+    return flags;
+}
+
+/*
 =for apidoc grok_number_flags
 
 Recognise (or not) a number.  The type of the number is returned
@@ -584,110 +838,6 @@ Perl_grok_number(pTHX_ const char *pv, STRLEN len, UV *valuep)
     PERL_ARGS_ASSERT_GROK_NUMBER;
 
     return grok_number_flags(pv, len, valuep, 0);
-}
-
-/*
-=for apidoc grok_infnan
-
-Helper for grok_number(), accepts various ways of spelling "infinity"
-or "not a number", and returns one of the following flag combinations:
-
-  IS_NUMBER_INFINITE
-  IS_NUMBER_NAN
-  IS_NUMBER_INFINITE | IS_NUMBER_NEG
-  IS_NUMBER_NAN | IS_NUMBER_NEG
-  0
-
-If an infinity or not-a-number is recognized, the *sp will point to
-one past the end of the recognized string.  If the recognition fails,
-zero is returned, and the *sp will not move.
-
-=cut
-*/
-
-int
-Perl_grok_infnan(const char** sp, const char* send)
-{
-    const char* s = *sp;
-    int flags = 0;
-    bool odh = FALSE; /* one dot hash: 1.#INF */
-
-    PERL_ARGS_ASSERT_GROK_INFNAN;
-
-    if (*s == '+') {
-        s++; if (s == send) return 0;
-    }
-    else if (*s == '-') {
-        flags |= IS_NUMBER_NEG; /* Yes, -NaN happens. Incorrect but happens. */
-        s++; if (s == send) return 0;
-    }
-
-    if (*s == '1') {
-        /* Visual C: 1.#SNAN, -1.#QNAN, 1#INF, 1#.IND (maybe also 1.#NAN) */
-        s++; if (s == send) return 0;
-        if (*s == '.') {
-            s++; if (s == send) return 0;
-        }
-        if (*s == '#') {
-            s++; if (s == send) return 0;
-        } else
-            return 0;
-        odh = TRUE;
-    }
-
-    if (isALPHA_FOLD_EQ(*s, 'I')) {
-        /* INF or IND (1.#IND is indeterminate, a certain type of NAN) */
-        s++; if (s == send || isALPHA_FOLD_NE(*s, 'N')) return 0;
-        s++; if (s == send) return 0;
-        if (isALPHA_FOLD_EQ(*s, 'F')) {
-            s++;
-            if (s < send && (isALPHA_FOLD_EQ(*s, 'I'))) {
-                s++; if (s == send || isALPHA_FOLD_NE(*s, 'N')) return 0;
-                s++; if (s == send || isALPHA_FOLD_NE(*s, 'I')) return 0;
-                s++; if (s == send || isALPHA_FOLD_NE(*s, 'T')) return 0;
-                s++; if (s == send ||
-                         /* allow either Infinity or Infinite */
-                         !(isALPHA_FOLD_EQ(*s, 'Y') ||
-                           isALPHA_FOLD_EQ(*s, 'E'))) return 0;
-                s++; if (s < send) return 0;
-            } else if (*s)
-                return 0;
-            flags |= IS_NUMBER_INFINITY | IS_NUMBER_NOT_INT;
-        }
-        else if (isALPHA_FOLD_EQ(*s, 'D') && odh) { /* 1.#IND */
-            s++;
-            flags |= IS_NUMBER_NAN | IS_NUMBER_NOT_INT;
-        } else
-            return 0;
-    }
-    else {
-        /* NAN */
-        if (isALPHA_FOLD_EQ(*s, 'S') || isALPHA_FOLD_EQ(*s, 'Q')) {
-            /* snan, qNaN */
-            /* XXX do something with the snan/qnan difference */
-            s++; if (s == send) return 0;
-        }
-
-        if (isALPHA_FOLD_EQ(*s, 'N')) {
-            s++; if (s == send || isALPHA_FOLD_NE(*s, 'A')) return 0;
-            s++; if (s == send || isALPHA_FOLD_NE(*s, 'N')) return 0;
-            s++;
-
-            flags |= IS_NUMBER_NAN | IS_NUMBER_NOT_INT;
-
-            /* NaN can be followed by various stuff (NaNQ, NaNS), but
-             * there are also multiple different NaN values, and some
-             * implementations output the "payload" values,
-             * e.g. NaN123, NAN(abc), while some implementations just
-             * have weird stuff like NaN%. */
-            s = send;
-        }
-        else
-            return 0;
-    }
-
-    *sp = s;
-    return flags;
 }
 
 static const UV uv_max_div_10 = UV_MAX / 10;
@@ -867,7 +1017,7 @@ Perl_grok_number_flags(pTHX_ const char *pv, STRLEN len, UV *valuep, U32 flags)
   if ((s + 2 < send) && strchr("inqs#", toFOLD(*s))) {
       /* Really detect inf/nan. Start at d, not s, since the above
        * code might have already consumed the "1." or "1". */
-      int infnan = Perl_grok_infnan(&d, send);
+      int infnan = Perl_grok_infnan(aTHX_ &d, send);
       if ((infnan & IS_NUMBER_INFINITY)) {
           return (numtype | infnan); /* Keep sign for infinity. */
       }
@@ -1109,8 +1259,13 @@ Perl_my_atof(pTHX_ const char* s)
     return x;
 }
 
+
+#ifdef USING_MSVC6
+#  pragma warning(push)
+#  pragma warning(disable:4756;disable:4056)
+#endif
 static char*
-S_my_atof_infnan(const char* s, bool negative, const char* send, NV* value)
+S_my_atof_infnan(pTHX_ const char* s, bool negative, const char* send, NV* value)
 {
     const char *p0 = negative ? s - 1 : s;
     const char *p = p0;
@@ -1180,6 +1335,9 @@ S_my_atof_infnan(const char* s, bool negative, const char* send, NV* value)
     }
     return NULL;
 }
+#ifdef USING_MSVC6
+#  pragma warning(pop)
+#endif
 
 char*
 Perl_my_atof2(pTHX_ const char* orig, NV* value)
@@ -1265,7 +1423,7 @@ Perl_my_atof2(pTHX_ const char* orig, NV* value)
 
     {
         const char* endp;
-        if ((endp = S_my_atof_infnan(s, negative, send, value)))
+        if ((endp = S_my_atof_infnan(aTHX_ s, negative, send, value)))
             return (char*)endp;
     }
 

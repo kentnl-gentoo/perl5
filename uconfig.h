@@ -3960,11 +3960,25 @@
  */
 /*#define HAS_LLRINT		/ **/
 
+/* HAS_LLRINTL:
+ *	This symbol, if defined, indicates that the llrintl routine is
+ *	available to return the closest long long value of the long double
+ *	argument according to the current rounding mode.
+ */
+/*#define HAS_LLRINTL		/ **/
+
 /* HAS_LLROUND:
  *	This symbol, if defined, indicates that the llround routine is
  *	available to return the nearest long long value.
  */
 /*#define HAS_LLROUND		/ **/
+
+/* HAS_LLROUNDL:
+ *	This symbol, if defined, indicates that the llroundl routine is
+ *	available to return the nearest long long value away from zero of
+ *	the long double argument value.
+ */
+/*#define HAS_LLROUNDL		/ **/
 
 /* HAS_LOG1P:
  *	This symbol, if defined, indicates that the log1p routine is
@@ -3991,11 +4005,25 @@
  */
 /*#define HAS_LRINT		/ **/
 
+/* HAS_LRINTL:
+ *	This symbol, if defined, indicates that the lrintl routine is
+ *	available to return the closest integral value of the long double
+ *	argument according to the current rounding mode.
+ */
+/*#define HAS_LRINTL		/ **/
+
 /* HAS_LROUND:
  *	This symbol, if defined, indicates that the lround routine is
  *	available to return the nearest integral value.
  */
 /*#define HAS_LROUND		/ **/
+
+/* HAS_LROUNDL:
+ *	This symbol, if defined, indicates that the lroundl routine is
+ *	available to return the nearest integral value away from zero of
+ *	the long double argument value.
+ */
+/*#define HAS_LROUNDL		/ **/
 
 /* HAS_MADVISE:
  *	This symbol, if defined, indicates that the madvise system call is
@@ -5133,6 +5161,6 @@
 #endif
 
 /* Generated from:
- * 45b69f7afc4f5a9118deafae60c017b206cc0acf790bf42c0c80cfe114a06e47 config_h.SH
- * 37fcea608869353fa4ba82c931a6a9668f955825992315f17a1500b8bcba2bf8 uconfig.sh
+ * 0b960722a4dac6f7f6060a886109bb674ad8acdc08d0d14e9c3af5e1bf9e89a6 config_h.SH
+ * f00aaa095a00a83a70716ff4b9df8a1e7feb27fbb4d9b759d4ca27e6412545b1 uconfig.sh
  * ex: set ro: */

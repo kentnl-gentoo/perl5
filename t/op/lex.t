@@ -1,10 +1,13 @@
 #!perl
+
+# Tests too complex for t/base/lex.t
+
 use strict;
 use warnings;
 
 BEGIN { chdir 't' if -d 't'; require './test.pl'; }
 
-plan(tests => 10);
+plan(tests => 19);
 
 {
     no warnings 'deprecated';
@@ -93,3 +96,73 @@ $_ = "rhubarb";
 is ${no strict; \$_}, "rhubarb", '${no strict; ...}';
 is join("", map{no strict; "rhu$_" } "barb"), 'rhubarb',
   'map{no strict;...}';
+
+# [perl #123753]
+fresh_perl_is(
+  '$eq = "ok\n"; print $' . "\0eq\n",
+  "ok\n",
+   { stderr => 1 },
+  '$ <null> ident'
+);
+fresh_perl_is(
+  '@eq = "ok\n"; print @' . "\0eq\n",
+  "ok\n",
+   { stderr => 1 },
+  '@ <null> ident'
+);
+fresh_perl_is(
+  '%eq = ("o"=>"k\n"); print %' . "\0eq\n",
+  "ok\n",
+   { stderr => 1 },
+  '% <null> ident'
+);
+fresh_perl_is(
+  'sub eq { "ok\n" } print &' . "\0eq\n",
+  "ok\n",
+   { stderr => 1 },
+  '& <null> ident'
+);
+fresh_perl_is(
+  '$eq = "ok\n"; print ${*' . "\0eq{SCALAR}}\n",
+  "ok\n",
+   { stderr => 1 },
+  '* <null> ident'
+);
+SKIP: {
+    skip "Different output on EBCDIC (presumably)", 2 if ord("A") != 65;
+    fresh_perl_is(
+      qq'"ab}"ax;&\0z\x8Ao}\x82x;', <<gibberish,
+Bareword found where operator expected at - line 1, near ""ab}"ax"
+	(Missing operator before ax?)
+syntax error at - line 1, near ""ab}"ax"
+Unrecognized character \\x8A; marked by <-- HERE after ab}"ax;&\0z<-- HERE near column 12 at - line 1.
+gibberish
+       { stderr => 1 },
+      'gibberish containing &\0z - used to crash [perl #123753]'
+    );
+    fresh_perl_is(
+      qq'"ab}"ax;&{+z}\x8Ao}\x82x;', <<gibberish,
+Bareword found where operator expected at - line 1, near ""ab}"ax"
+	(Missing operator before ax?)
+syntax error at - line 1, near ""ab}"ax"
+Unrecognized character \\x8A; marked by <-- HERE after }"ax;&{+z}<-- HERE near column 14 at - line 1.
+gibberish
+       { stderr => 1 },
+      'gibberish containing &{+z} - used to crash [perl #123753]'
+    );
+}
+
+fresh_perl_is(
+  '/$a[/<<a',
+  "syntax error at - line 1, next char ;\n" .
+  "Can't find string terminator \"a\" anywhere before EOF at - line 1.\n",
+   { stderr => 1 },
+  '/$a[/<<a with no newline [perl #123712]'
+);
+fresh_perl_is(
+  '/$a[m||/<<a',
+  "syntax error at - line 1, next char ;\n" .
+  "Execution of - aborted due to compilation errors.\n",
+   { stderr => 1 },
+  '/$a[m||/<<a with no newline [perl #123712]'
+);

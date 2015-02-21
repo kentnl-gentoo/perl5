@@ -28,7 +28,7 @@
 #  pragma message disable (ADDRCONSTEXT,NEEDCONSTEXT)
 #endif
 #ifdef __DECCXX
-#  pragma message informational (INTSIGNCHANGE,CASTQUALTYP,ASSCOMMEA,NOCTOBUTCONREFM)
+#  pragma message informational (INTSIGNCHANGE,CASTQUALTYP,ASSCOMMEA,NOCTOBUTCONREFM,MISSINGRETURN)
 #endif
 
 /* DEC's C compilers and gcc use incompatible definitions of _to(upp|low)er() */
@@ -791,4 +791,8 @@ char *	my_getlogin (void);
 #define PERL_RMSEXPAND_M_VMS_IN		0x08 /* Assume input is VMS already */
 #define PERL_RMSEXPAND_M_SYMLINK	0x20 /* Use symbolic link, not target */
 
+/* With long doubles, NaN == NaN, which it shouldn't. */
+#ifdef USE_LONG_DOUBLE
+#  define NAN_COMPARE_BROKEN 1
+#endif
 #endif  /* __vmsish_h_included */

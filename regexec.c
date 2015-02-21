@@ -37,6 +37,9 @@
 #include "re_top.h"
 #endif
 
+#define B_ON_NON_UTF8_LOCALE_IS_WRONG            \
+      "Use of \\b{} for non-UTF-8 locale is wrong.  Assuming a UTF-8 locale"
+
 /*
  * pregcomp and pregexec -- regsub and regerror are not used in perl
  *
@@ -191,18 +194,6 @@ static const char* const non_utf8_target_but_utf8_required
                                         PL_XPosix_ptrs[_CC_WORDCHAR],         \
                                         LATIN_CAPITAL_LETTER_SHARP_S_UTF8);
 
-#define LOAD_UTF8_CHARCLASS_GCB()  /* Grapheme cluster boundaries */          \
-    STMT_START {                                                              \
-	LOAD_UTF8_CHARCLASS_DEBUG_TEST(PL_utf8_X_regular_begin,               \
-                                       "_X_regular_begin",                    \
-                                       NULL,                                  \
-                                       LATIN_CAPITAL_LETTER_SHARP_S_UTF8);    \
-	LOAD_UTF8_CHARCLASS_DEBUG_TEST(PL_utf8_X_extend,                      \
-                                       "_X_extend",                           \
-                                       NULL,                                  \
-                                       COMBINING_GRAVE_ACCENT_UTF8);          \
-    } STMT_END
-
 #define PLACEHOLDER	/* Something for the preprocessor to grab onto */
 /* TODO: Combine JUMPABLE and HAS_TEXT to cache OP(rn) */
 
@@ -261,16 +252,6 @@ static const char* const non_utf8_target_but_utf8_required
 	else rn += NEXT_OFF(rn); \
     } \
 } STMT_END 
-
-/* These constants are for finding GCB=LV and GCB=LVT in the CLUMP regnode.
- * These are for the pre-composed Hangul syllables, which are all in a
- * contiguous block and arranged there in such a way so as to facilitate
- * alorithmic determination of their characteristics.  As such, they don't need
- * a swash, but can be determined by simple arithmetic.  Almost all are
- * GCB=LVT, but every 28th one is a GCB=LV */
-#define SBASE 0xAC00    /* Start of block */
-#define SCount 11172    /* Length of block */
-#define TCount 28
 
 #define SLAB_FIRST(s) (&(s)->states[0])
 #define SLAB_LAST(s)  (&(s)->states[PERL_REGMATCH_SLAB_SLOTS-1])
@@ -754,7 +735,7 @@ Perl_re_intuit_start(pTHX_
 
         /* ml_anch: check after \n?
          *
-         * A note about IMPLICIT: on an un-anchored pattern beginning
+         * A note about PREGf_IMPLICIT: on an un-anchored pattern beginning
          * with /.*.../, these flags will have been added by the
          * compiler:
          *   /.*abc/, /.*abc/m:  PREGf_IMPLICIT | PREGf_ANCH_MBOL
@@ -1713,7 +1694,7 @@ REXEC_FBC_SCAN( /* Loops while (s < strend) */                 \
           FBC_UTF8(TEST_UV, TEST_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER),          \
           TEST_NON_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER)
 
-#define FBC_BOUND_A(TEST_NON_UTF8, TEST_UV, TEST_UTF8)                         \
+#define FBC_BOUND_A(TEST_NON_UTF8)                                             \
     FBC_BOUND_COMMON(                                                          \
             FBC_UTF8_A(TEST_NON_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER),           \
             TEST_NON_UTF8, REXEC_FBC_TRYIT, PLACEHOLDER)
@@ -1723,11 +1704,63 @@ REXEC_FBC_SCAN( /* Loops while (s < strend) */                 \
           FBC_UTF8(TEST_UV, TEST_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT),          \
           TEST_NON_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT)
 
-#define FBC_NBOUND_A(TEST_NON_UTF8, TEST_UV, TEST_UTF8)                        \
+#define FBC_NBOUND_A(TEST_NON_UTF8)                                            \
     FBC_BOUND_COMMON(                                                          \
             FBC_UTF8_A(TEST_NON_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT),           \
             TEST_NON_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT)
 
+/* Takes a pointer to an inversion list, a pointer to its corresponding
+ * inversion map, and a code point, and returns the code point's value
+ * according to the two arrays.  It assumes that all code points have a value.
+ * This is used as the base macro for macros for particular properties */
+#define _generic_GET_BREAK_VAL_CP(invlist, invmap, cp)              \
+                             invmap[_invlist_search(invlist, cp)]
+
+/* Same as above, but takes begin, end ptrs to a UTF-8 encoded string instead
+ * of a code point, returning the value for the first code point in the string.
+ * And it takes the particular macro name that finds the desired value given a
+ * code point.  Merely convert the UTF-8 to code point and call the cp macro */
+#define _generic_GET_BREAK_VAL_UTF8(cp_macro, pos, strend)                     \
+             (__ASSERT_(pos < strend)                                          \
+                 /* Note assumes is valid UTF-8 */                             \
+             (cp_macro(utf8_to_uvchr_buf((pos), (strend), NULL))))
+
+/* Returns the GCB value for the input code point */
+#define getGCB_VAL_CP(cp)                                                      \
+          _generic_GET_BREAK_VAL_CP(                                           \
+                                    PL_GCB_invlist,                            \
+                                    Grapheme_Cluster_Break_invmap,             \
+                                    (cp))
+
+/* Returns the GCB value for the first code point in the UTF-8 encoded string
+ * bounded by pos and strend */
+#define getGCB_VAL_UTF8(pos, strend)                                           \
+    _generic_GET_BREAK_VAL_UTF8(getGCB_VAL_CP, pos, strend)
+
+
+/* Returns the SB value for the input code point */
+#define getSB_VAL_CP(cp)                                                       \
+          _generic_GET_BREAK_VAL_CP(                                           \
+                                    PL_SB_invlist,                             \
+                                    Sentence_Break_invmap,                     \
+                                    (cp))
+
+/* Returns the SB value for the first code point in the UTF-8 encoded string
+ * bounded by pos and strend */
+#define getSB_VAL_UTF8(pos, strend)                                            \
+    _generic_GET_BREAK_VAL_UTF8(getSB_VAL_CP, pos, strend)
+
+/* Returns the WB value for the input code point */
+#define getWB_VAL_CP(cp)                                                       \
+          _generic_GET_BREAK_VAL_CP(                                           \
+                                    PL_WB_invlist,                             \
+                                    Word_Break_invmap,                         \
+                                    (cp))
+
+/* Returns the WB value for the first code point in the UTF-8 encoded string
+ * bounded by pos and strend */
+#define getWB_VAL_UTF8(pos, strend)                                            \
+    _generic_GET_BREAK_VAL_UTF8(getWB_VAL_CP, pos, strend)
 
 /* We know what class REx starts with.  Try to find this position... */
 /* if reginfo->intuit, its a dryrun */
@@ -1845,7 +1878,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 
         /* FALLTHROUGH */
 
-    do_exactf_non_utf8: /* Neither pattern nor string are UTF8, and there
+      do_exactf_non_utf8: /* Neither pattern nor string are UTF8, and there
                            are no glitches with fold-length differences
                            between the target string and pattern */
 
@@ -1879,8 +1912,8 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
         }
         break;
 
-    do_exactf_utf8:
-    {
+      do_exactf_utf8:
+      {
         unsigned expansion;
 
         /* If one of the operands is in utf8, we can't use the simpler folding
@@ -1937,30 +1970,259 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 
     case BOUNDL:
         _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+        if (FLAGS(c) != TRADITIONAL_BOUND) {
+            Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),
+                                                B_ON_NON_UTF8_LOCALE_IS_WRONG);
+            goto do_boundu;
+        }
+
         FBC_BOUND(isWORDCHAR_LC, isWORDCHAR_LC_uvchr, isWORDCHAR_LC_utf8);
         break;
+
     case NBOUNDL:
         _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+        if (FLAGS(c) != TRADITIONAL_BOUND) {
+            Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),
+                                                B_ON_NON_UTF8_LOCALE_IS_WRONG);
+            goto do_nboundu;
+        }
+
         FBC_NBOUND(isWORDCHAR_LC, isWORDCHAR_LC_uvchr, isWORDCHAR_LC_utf8);
         break;
-    case BOUND:
+
+    case BOUND: /* regcomp.c makes sure that this only has the traditional \b
+                   meaning */
+        assert(FLAGS(c) == TRADITIONAL_BOUND);
+
         FBC_BOUND(isWORDCHAR, isWORDCHAR_uni, isWORDCHAR_utf8);
         break;
-    case BOUNDA:
-        FBC_BOUND_A(isWORDCHAR_A, isWORDCHAR_A, isWORDCHAR_A);
+
+    case BOUNDA: /* regcomp.c makes sure that this only has the traditional \b
+                   meaning */
+        assert(FLAGS(c) == TRADITIONAL_BOUND);
+
+        FBC_BOUND_A(isWORDCHAR_A);
         break;
-    case NBOUND:
+
+    case NBOUND: /* regcomp.c makes sure that this only has the traditional \b
+                   meaning */
+        assert(FLAGS(c) == TRADITIONAL_BOUND);
+
         FBC_NBOUND(isWORDCHAR, isWORDCHAR_uni, isWORDCHAR_utf8);
         break;
-    case NBOUNDA:
-        FBC_NBOUND_A(isWORDCHAR_A, isWORDCHAR_A, isWORDCHAR_A);
+
+    case NBOUNDA: /* regcomp.c makes sure that this only has the traditional \b
+                   meaning */
+        assert(FLAGS(c) == TRADITIONAL_BOUND);
+
+        FBC_NBOUND_A(isWORDCHAR_A);
         break;
-    case BOUNDU:
-        FBC_BOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
-        break;
+
     case NBOUNDU:
-        FBC_NBOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
+        if ((bound_type) FLAGS(c) == TRADITIONAL_BOUND) {
+            FBC_NBOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
+            break;
+        }
+
+      do_nboundu:
+
+        to_complement = 1;
+        /* FALLTHROUGH */
+
+    case BOUNDU:
+      do_boundu:
+        switch((bound_type) FLAGS(c)) {
+            case TRADITIONAL_BOUND:
+                FBC_BOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
+                break;
+            case GCB_BOUND:
+                if (s == reginfo->strbeg) { /* GCB always matches at begin and
+                                               end */
+                    if (to_complement ^ cBOOL(reginfo->intuit
+                                                      || regtry(reginfo, &s)))
+                    {
+                        goto got_it;
+                    }
+                    s += (utf8_target) ? UTF8SKIP(s) : 1;
+                }
+
+                if (utf8_target) {
+                    PL_GCB_enum before = getGCB_VAL_UTF8(
+                                               reghop3((U8*)s, -1,
+                                                       (U8*)(reginfo->strbeg)),
+                                               (U8*) reginfo->strend);
+                    while (s < strend) {
+                        PL_GCB_enum after = getGCB_VAL_UTF8((U8*) s,
+                                                        (U8*) reginfo->strend);
+                        if (to_complement ^ isGCB(before, after)) {
+                            if (reginfo->intuit || regtry(reginfo, &s)) {
+                                goto got_it;
+                            }
+                            before = after;
+                        }
+                        s += UTF8SKIP(s);
+                    }
+                }
+                else {  /* Not utf8.  Everything is a GCB except between CR and
+                           LF */
+                    while (s < strend) {
+                        if (to_complement ^ (UCHARAT(s - 1) != '\r'
+                                             || UCHARAT(s) != '\n'))
+                        {
+                            if (reginfo->intuit || regtry(reginfo, &s)) {
+                                goto got_it;
+                            }
+                            s++;
+                        }
+                    }
+                }
+
+                if (to_complement ^ cBOOL(reginfo->intuit || regtry(reginfo, &s))) {
+                    goto got_it;
+                }
+                break;
+
+            case SB_BOUND:
+                if (s == reginfo->strbeg) { /* SB always matches at beginning */
+                    if (to_complement
+                                ^ cBOOL(reginfo->intuit || regtry(reginfo, &s)))
+                    {
+                        goto got_it;
+                    }
+
+                    /* Didn't match.  Go try at the next position */
+                    s += (utf8_target) ? UTF8SKIP(s) : 1;
+                }
+
+                if (utf8_target) {
+                    PL_SB_enum before = getSB_VAL_UTF8(reghop3((U8*)s,
+                                                        -1,
+                                                        (U8*)(reginfo->strbeg)),
+                                                      (U8*) reginfo->strend);
+                    while (s < strend) {
+                        PL_SB_enum after = getSB_VAL_UTF8((U8*) s,
+                                                         (U8*) reginfo->strend);
+                        if (to_complement ^ isSB(before,
+                                                 after,
+                                                 (U8*) reginfo->strbeg,
+                                                 (U8*) s,
+                                                 (U8*) reginfo->strend,
+                                                 utf8_target))
+                        {
+                            if (reginfo->intuit || regtry(reginfo, &s)) {
+                                goto got_it;
+                            }
+                            before = after;
+                        }
+                        s += UTF8SKIP(s);
+                    }
+                }
+                else {  /* Not utf8. */
+                    PL_SB_enum before = getSB_VAL_CP((U8) *(s -1));
+                    while (s < strend) {
+                        PL_SB_enum after = getSB_VAL_CP((U8) *s);
+                        if (to_complement ^ isSB(before,
+                                                 after,
+                                                 (U8*) reginfo->strbeg,
+                                                 (U8*) s,
+                                                 (U8*) reginfo->strend,
+                                                 utf8_target))
+                        {
+                            if (reginfo->intuit || regtry(reginfo, &s)) {
+                                goto got_it;
+                            }
+                            before = after;
+                        }
+                        s++;
+                    }
+                }
+
+                /* Here are at the final position in the target string.  The SB
+                 * value is always true here, so matches, depending on other
+                 * constraints */
+                if (to_complement ^ cBOOL(reginfo->intuit
+                                                      || regtry(reginfo, &s)))
+                {
+                    goto got_it;
+                }
+
+                break;
+
+            case WB_BOUND:
+                if (s == reginfo->strbeg) {
+                    if (to_complement ^ cBOOL(reginfo->intuit
+                                              || regtry(reginfo, &s)))
+                    {
+                        goto got_it;
+                    }
+                    s += (utf8_target) ? UTF8SKIP(s) : 1;
+                }
+
+                if (utf8_target) {
+                    /* We are at a boundary between char_sub_0 and char_sub_1.
+                     * We also keep track of the value for char_sub_-1 as we
+                     * loop through the line.   Context may be needed to make a
+                     * determination, and if so, this can save having to
+                     * recalculate it */
+                    PL_WB_enum previous = PL_WB_UNKNOWN;
+                    PL_WB_enum before = getWB_VAL_UTF8(
+                                              reghop3((U8*)s,
+                                                      -1,
+                                                      (U8*)(reginfo->strbeg)),
+                                              (U8*) reginfo->strend);
+                    while (s < strend) {
+                        PL_WB_enum after = getWB_VAL_UTF8((U8*) s,
+                                                        (U8*) reginfo->strend);
+                        if (to_complement ^ isWB(previous,
+                                                 before,
+                                                 after,
+                                                 (U8*) reginfo->strbeg,
+                                                 (U8*) s,
+                                                 (U8*) reginfo->strend,
+                                                 utf8_target))
+                        {
+                            if (reginfo->intuit || regtry(reginfo, &s)) {
+                                goto got_it;
+                            }
+                            previous = before;
+                            before = after;
+                        }
+                        s += UTF8SKIP(s);
+                    }
+                }
+                else {  /* Not utf8. */
+                    PL_WB_enum previous = PL_WB_UNKNOWN;
+                    PL_WB_enum before = getWB_VAL_CP((U8) *(s -1));
+                    while (s < strend) {
+                        PL_WB_enum after = getWB_VAL_CP((U8) *s);
+                        if (to_complement ^ isWB(previous,
+                                                 before,
+                                                 after,
+                                                 (U8*) reginfo->strbeg,
+                                                 (U8*) s,
+                                                 (U8*) reginfo->strend,
+                                                 utf8_target))
+                        {
+                            if (reginfo->intuit || regtry(reginfo, &s)) {
+                                goto got_it;
+                            }
+                            previous = before;
+                            before = after;
+                        }
+                        s++;
+                    }
+                }
+
+                if (to_complement ^ cBOOL(reginfo->intuit
+                                          || regtry(reginfo, &s)))
+                {
+                    goto got_it;
+                }
+
+                break;
+        }
         break;
+
     case LNBREAK:
         REXEC_FBC_CSCAN(is_LNBREAK_utf8_safe(s, strend),
                         is_LNBREAK_latin1_safe(s, strend)
@@ -2021,7 +2283,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
         }
         else {
 
-      posix_utf8:
+          posix_utf8:
             classnum = (_char_class_number) FLAGS(c);
             if (classnum < _FIRST_NON_SWASH_CC) {
                 while (s < strend) {
@@ -2755,86 +3017,52 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
 	));
     }
 
-    /* Simplest case:  anchored match need be tried only once. */
-    /*  [unless only anchor is MBOL - implying multiline is set] */
-    if (prog->intflags & (PREGf_ANCH & ~PREGf_ANCH_GPOS)) {
-	if (s == startpos && regtry(reginfo, &s))
-	    goto got_it;
-        else if (multiline || (prog->intflags & (PREGf_IMPLICIT | PREGf_ANCH_MBOL))) /* XXXX SBOL? */
-	{
-	    char *end;
+    /* Simplest case: anchored match need be tried only once, or with
+     * MBOL, only at the beginning of each line.
+     *
+     * Note that /.*.../ sets PREGf_IMPLICIT|MBOL, while /.*.../s sets
+     * PREGf_IMPLICIT|SBOL. The idea is that with /.*.../s, if it doesn't
+     * match at the start of the string then it won't match anywhere else
+     * either; while with /.*.../, if it doesn't match at the beginning,
+     * the earliest it could match is at the start of the next line */
 
-	    if (minlen)
-		dontbother = minlen - 1;
-	    end = HOP3c(strend, -dontbother, strbeg) - 1;
-	    /* for multiline we only have to try after newlines */
-	    if (prog->check_substr || prog->check_utf8) {
-                /* because of the goto we can not easily reuse the macros for bifurcating the
-                   unicode/non-unicode match modes here like we do elsewhere - demerphq */
-                if (utf8_target) {
-                    if (s == startpos)
-                        goto after_try_utf8;
-                    while (1) {
-                        if (regtry(reginfo, &s)) {
-                            goto got_it;
-                        }
-                      after_try_utf8:
-                        if (s > end) {
-                            goto phooey;
-                        }
-                        if (prog->extflags & RXf_USE_INTUIT) {
-                            s = re_intuit_start(rx, sv, strbeg,
-                                    s + UTF8SKIP(s), strend, flags, NULL);
-                            if (!s) {
-                                goto phooey;
-                            }
-                        }
-                        else {
-                            s += UTF8SKIP(s);
-                        }
-                    }
-                } /* end search for check string in unicode */
-                else {
-                    if (s == startpos) {
-                        goto after_try_latin;
-                    }
-                    while (1) {
-                        if (regtry(reginfo, &s)) {
-                            goto got_it;
-                        }
-                      after_try_latin:
-                        if (s > end) {
-                            goto phooey;
-                        }
-                        if (prog->extflags & RXf_USE_INTUIT) {
-                            s = re_intuit_start(rx, sv, strbeg,
-                                        s + 1, strend, flags, NULL);
-                            if (!s) {
-                                goto phooey;
-                            }
-                        }
-                        else {
-                            s++;
-                        }
-                    }
-                } /* end search for check string in latin*/
-	    } /* end search for check string */
-	    else { /* search for newline */
-		if (s > startpos) {
-                    /*XXX: The s-- is almost definitely wrong here under unicode - demeprhq*/
-		    s--;
-		}
-		/* We can use a more efficient search as newlines are the same in unicode as they are in latin */
-		while (s <= end) { /* note it could be possible to match at the end of the string */
-		    if (*s++ == '\n') {	/* don't need PL_utf8skip here */
-			if (regtry(reginfo, &s))
-			    goto got_it;
-		    }
-		}
-	    } /* end search for newline */
-	} /* end anchored/multiline check string search */
-	goto phooey;
-    } else if (prog->intflags & PREGf_ANCH_GPOS)
+    if (prog->intflags & (PREGf_ANCH & ~PREGf_ANCH_GPOS)) {
+        char *end;
+
+	if (regtry(reginfo, &s))
+	    goto got_it;
+
+        if (!(prog->intflags & PREGf_ANCH_MBOL))
+            goto phooey;
+
+        /* didn't match at start, try at other newline positions */
+
+        if (minlen)
+            dontbother = minlen - 1;
+        end = HOP3c(strend, -dontbother, strbeg) - 1;
+
+        /* skip to next newline */
+
+        while (s <= end) { /* note it could be possible to match at the end of the string */
+            /* NB: newlines are the same in unicode as they are in latin */
+            if (*s++ != '\n')
+                continue;
+            if (prog->check_substr || prog->check_utf8) {
+            /* note that with PREGf_IMPLICIT, intuit can only fail
+             * or return the start position, so it's of limited utility.
+             * Nevertheless, I made the decision that the potential for
+             * quick fail was still worth it - DAPM */
+                s = re_intuit_start(rx, sv, strbeg, s, strend, flags, NULL);
+                if (!s)
+                    goto phooey;
+            }
+            if (regtry(reginfo, &s))
+                goto got_it;
+        }
+        goto phooey;
+    } /* end anchored search */
+
+    if (prog->intflags & PREGf_ANCH_GPOS)
     {
         /* PREGf_ANCH_GPOS should never be true if PREGf_GPOS_SEEN is not true */
         assert(prog->intflags & PREGf_GPOS_SEEN);
@@ -3147,7 +3375,7 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
     /* Failure. */
     goto phooey;
 
-got_it:
+  got_it:
     /* s/// doesn't like it if $& is earlier than where we asked it to
      * start searching (which can happen on something like /.\G/) */
     if (       (flags & REXEC_FAIL_ON_UNDERFLOW)
@@ -3187,7 +3415,7 @@ got_it:
 
     return 1;
 
-phooey:
+  phooey:
     DEBUG_EXECUTE_r(PerlIO_printf(Perl_debug_log, "%sMatch failed%s\n",
 			  PL_colors[4], PL_colors[5]));
 
@@ -3926,6 +4154,620 @@ S_setup_EXACTISH_ST_c1_c2(pTHX_ const regnode * const text_node, int *c1p,
     return TRUE;
 }
 
+/* This creates a single number by combining two, with 'before' being like the
+ * 10's digit, but this isn't necessarily base 10; it is base however many
+ * elements of the enum there are */
+#define GCBcase(before, after) ((PL_GCB_ENUM_COUNT * before) + after)
+
+STATIC bool
+S_isGCB(const PL_GCB_enum before, const PL_GCB_enum after)
+{
+    /* returns a boolean indicating if there is a Grapheme Cluster Boundary
+     * between the inputs.  See http://www.unicode.org/reports/tr29/ */
+
+    switch (GCBcase(before, after)) {
+
+        /*  Break at the start and end of text.
+            GB1.   sot ÷
+            GB2.   ÷ eot
+
+            Break before and after controls except between CR and LF
+            GB4.  ( Control | CR | LF )  ÷
+            GB5.   ÷  ( Control | CR | LF )
+
+            Otherwise, break everywhere.
+            GB10.  Any  ÷  Any */
+        default:
+            return TRUE;
+
+        /* Do not break between a CR and LF.
+            GB3.  CR  ×  LF */
+        case GCBcase(PL_GCB_CR, PL_GCB_LF):
+            return FALSE;
+
+        /* Do not break Hangul syllable sequences.
+            GB6.  L  ×  ( L | V | LV | LVT ) */
+        case GCBcase(PL_GCB_L, PL_GCB_L):
+        case GCBcase(PL_GCB_L, PL_GCB_V):
+        case GCBcase(PL_GCB_L, PL_GCB_LV):
+        case GCBcase(PL_GCB_L, PL_GCB_LVT):
+            return FALSE;
+
+        /*  GB7.  ( LV | V )  ×  ( V | T ) */
+        case GCBcase(PL_GCB_LV, PL_GCB_V):
+        case GCBcase(PL_GCB_LV, PL_GCB_T):
+        case GCBcase(PL_GCB_V, PL_GCB_V):
+        case GCBcase(PL_GCB_V, PL_GCB_T):
+            return FALSE;
+
+        /*  GB8.  ( LVT | T)  ×  T */
+        case GCBcase(PL_GCB_LVT, PL_GCB_T):
+        case GCBcase(PL_GCB_T, PL_GCB_T):
+            return FALSE;
+
+        /* Do not break between regional indicator symbols.
+            GB8a.  Regional_Indicator  ×  Regional_Indicator */
+        case GCBcase(PL_GCB_Regional_Indicator, PL_GCB_Regional_Indicator):
+            return FALSE;
+
+        /* Do not break before extending characters.
+            GB9.     ×  Extend */
+        case GCBcase(PL_GCB_Other, PL_GCB_Extend):
+        case GCBcase(PL_GCB_Extend, PL_GCB_Extend):
+        case GCBcase(PL_GCB_L, PL_GCB_Extend):
+        case GCBcase(PL_GCB_LV, PL_GCB_Extend):
+        case GCBcase(PL_GCB_LVT, PL_GCB_Extend):
+        case GCBcase(PL_GCB_Prepend, PL_GCB_Extend):
+        case GCBcase(PL_GCB_Regional_Indicator, PL_GCB_Extend):
+        case GCBcase(PL_GCB_SpacingMark, PL_GCB_Extend):
+        case GCBcase(PL_GCB_T, PL_GCB_Extend):
+        case GCBcase(PL_GCB_V, PL_GCB_Extend):
+            return FALSE;
+
+        /* Do not break before SpacingMarks, or after Prepend characters.
+            GB9a.     ×  SpacingMark */
+        case GCBcase(PL_GCB_Other, PL_GCB_SpacingMark):
+        case GCBcase(PL_GCB_Extend, PL_GCB_SpacingMark):
+        case GCBcase(PL_GCB_L, PL_GCB_SpacingMark):
+        case GCBcase(PL_GCB_LV, PL_GCB_SpacingMark):
+        case GCBcase(PL_GCB_LVT, PL_GCB_SpacingMark):
+        case GCBcase(PL_GCB_Prepend, PL_GCB_SpacingMark):
+        case GCBcase(PL_GCB_Regional_Indicator, PL_GCB_SpacingMark):
+        case GCBcase(PL_GCB_SpacingMark, PL_GCB_SpacingMark):
+        case GCBcase(PL_GCB_T, PL_GCB_SpacingMark):
+        case GCBcase(PL_GCB_V, PL_GCB_SpacingMark):
+            return FALSE;
+
+        /* GB9b.  Prepend  ×   */
+        case GCBcase(PL_GCB_Prepend, PL_GCB_Other):
+        case GCBcase(PL_GCB_Prepend, PL_GCB_L):
+        case GCBcase(PL_GCB_Prepend, PL_GCB_LV):
+        case GCBcase(PL_GCB_Prepend, PL_GCB_LVT):
+        case GCBcase(PL_GCB_Prepend, PL_GCB_Prepend):
+        case GCBcase(PL_GCB_Prepend, PL_GCB_Regional_Indicator):
+        case GCBcase(PL_GCB_Prepend, PL_GCB_T):
+        case GCBcase(PL_GCB_Prepend, PL_GCB_V):
+            return FALSE;
+    }
+
+    NOT_REACHED;
+}
+
+#define SBcase(before, after) ((SB_ENUM_COUNT * before) + after)
+
+STATIC bool
+S_isSB(pTHX_ PL_SB_enum before,
+             PL_SB_enum after,
+             const U8 * const strbeg,
+             const U8 * const curpos,
+             const U8 * const strend,
+             const bool utf8_target)
+{
+    /* returns a boolean indicating if there is a Sentence Boundary Break
+     * between the inputs.  See http://www.unicode.org/reports/tr29/ */
+
+    U8 * lpos = (U8 *) curpos;
+    U8 * temp_pos;
+    PL_SB_enum backup;
+
+    PERL_ARGS_ASSERT_ISSB;
+
+    /* Break at the start and end of text.
+        SB1.  sot  ÷
+        SB2.  ÷  eot */
+    if (before == PL_SB_EDGE || after == PL_SB_EDGE) {
+        return TRUE;
+    }
+
+    /* SB 3: Do not break within CRLF. */
+    if (before == PL_SB_CR && after == PL_SB_LF) {
+        return FALSE;
+    }
+
+    /* Break after paragraph separators.  (though why CR and LF are considered
+     * so is beyond me (khw)
+       SB4.  Sep | CR | LF  ÷ */
+    if (before == PL_SB_Sep || before == PL_SB_CR || before == PL_SB_LF) {
+        return TRUE;
+    }
+
+    /* Ignore Format and Extend characters, except after sot, Sep, CR, or LF.
+     * (See Section 6.2, Replacing Ignore Rules.)
+        SB5.  X (Extend | Format)*  →  X */
+    if (after == PL_SB_Extend || after == PL_SB_Format) {
+        return FALSE;
+    }
+
+    if (before == PL_SB_Extend || before == PL_SB_Format) {
+        before = backup_one_SB(strbeg, &lpos, utf8_target);
+    }
+
+    /* Do not break after ambiguous terminators like period, if they are
+     * immediately followed by a number or lowercase letter, if they are
+     * between uppercase letters, if the first following letter (optionally
+     * after certain punctuation) is lowercase, or if they are followed by
+     * "continuation" punctuation such as comma, colon, or semicolon. For
+     * example, a period may be an abbreviation or numeric period, and thus may
+     * not mark the end of a sentence.
+
+     * SB6. ATerm  ×  Numeric */
+    if (before == PL_SB_ATerm && after == PL_SB_Numeric) {
+        return FALSE;
+    }
+
+    /* SB7.  Upper ATerm  ×  Upper */
+    if (before == PL_SB_ATerm && after == PL_SB_Upper) {
+        temp_pos = lpos;
+        if (PL_SB_Upper == backup_one_SB(strbeg, &temp_pos, utf8_target)) {
+            return FALSE;
+        }
+    }
+
+    /* SB8a.  (STerm | ATerm) Close* Sp*  ×  (SContinue | STerm | ATerm)
+     * SB10.  (STerm | ATerm) Close* Sp*  ×  ( Sp | Sep | CR | LF )      */
+    backup = before;
+    temp_pos = lpos;
+    while (backup == PL_SB_Sp) {
+        backup = backup_one_SB(strbeg, &temp_pos, utf8_target);
+    }
+    while (backup == PL_SB_Close) {
+        backup = backup_one_SB(strbeg, &temp_pos, utf8_target);
+    }
+    if ((backup == PL_SB_STerm || backup == PL_SB_ATerm)
+        && (   after == PL_SB_SContinue
+            || after == PL_SB_STerm
+            || after == PL_SB_ATerm
+            || after == PL_SB_Sp
+            || after == PL_SB_Sep
+            || after == PL_SB_CR
+            || after == PL_SB_LF))
+    {
+        return FALSE;
+    }
+
+    /* SB8.  ATerm Close* Sp*  ×  ( ¬(OLetter | Upper | Lower | Sep | CR | LF |
+     *                                              STerm | ATerm) )* Lower */
+    if (backup == PL_SB_ATerm) {
+        U8 * rpos = (U8 *) curpos;
+        PL_SB_enum later = after;
+
+        while (    later != PL_SB_OLetter
+                && later != PL_SB_Upper
+                && later != PL_SB_Lower
+                && later != PL_SB_Sep
+                && later != PL_SB_CR
+                && later != PL_SB_LF
+                && later != PL_SB_STerm
+                && later != PL_SB_ATerm
+                && later != PL_SB_EDGE)
+        {
+            later = advance_one_SB(&rpos, strend, utf8_target);
+        }
+        if (later == PL_SB_Lower) {
+            return FALSE;
+        }
+    }
+
+    /* Break after sentence terminators, but include closing punctuation,
+     * trailing spaces, and a paragraph separator (if present). [See note
+     * below.]
+     * SB9.  ( STerm | ATerm ) Close*  ×  ( Close | Sp | Sep | CR | LF ) */
+    backup = before;
+    temp_pos = lpos;
+    while (backup == PL_SB_Close) {
+        backup = backup_one_SB(strbeg, &temp_pos, utf8_target);
+    }
+    if ((backup == PL_SB_STerm || backup == PL_SB_ATerm)
+        && (   after == PL_SB_Close
+            || after == PL_SB_Sp
+            || after == PL_SB_Sep
+            || after == PL_SB_CR
+            || after == PL_SB_LF))
+    {
+        return FALSE;
+    }
+
+
+    /* SB11.  ( STerm | ATerm ) Close* Sp* ( Sep | CR | LF )?  ÷ */
+    temp_pos = lpos;
+    backup = backup_one_SB(strbeg, &temp_pos, utf8_target);
+    if (   backup == PL_SB_Sep
+        || backup == PL_SB_CR
+        || backup == PL_SB_LF)
+    {
+        lpos = temp_pos;
+    }
+    else {
+        backup = before;
+    }
+    while (backup == PL_SB_Sp) {
+        backup = backup_one_SB(strbeg, &lpos, utf8_target);
+    }
+    while (backup == PL_SB_Close) {
+        backup = backup_one_SB(strbeg, &lpos, utf8_target);
+    }
+    if (backup == PL_SB_STerm || backup == PL_SB_ATerm) {
+        return TRUE;
+    }
+
+    /* Otherwise, do not break.
+    SB12.  Any  ×  Any */
+
+    return FALSE;
+}
+
+STATIC PL_SB_enum
+S_advance_one_SB(pTHX_ U8 ** curpos, const U8 * const strend, const bool utf8_target)
+{
+    PL_SB_enum sb;
+
+    PERL_ARGS_ASSERT_ADVANCE_ONE_SB;
+
+    if (*curpos >= strend) {
+        return PL_SB_EDGE;
+    }
+
+    if (utf8_target) {
+        do {
+            *curpos += UTF8SKIP(*curpos);
+            if (*curpos >= strend) {
+                return PL_SB_EDGE;
+            }
+            sb = getSB_VAL_UTF8(*curpos, strend);
+        } while (sb == PL_SB_Extend || sb == PL_SB_Format);
+    }
+    else {
+        do {
+            (*curpos)++;
+            if (*curpos >= strend) {
+                return PL_SB_EDGE;
+            }
+            sb = getSB_VAL_CP(**curpos);
+        } while (sb == PL_SB_Extend || sb == PL_SB_Format);
+    }
+
+    return sb;
+}
+
+STATIC PL_SB_enum
+S_backup_one_SB(pTHX_ const U8 * const strbeg, U8 ** curpos, const bool utf8_target)
+{
+    PL_SB_enum sb;
+
+    PERL_ARGS_ASSERT_BACKUP_ONE_SB;
+
+    if (*curpos < strbeg) {
+        return PL_SB_EDGE;
+    }
+
+    if (utf8_target) {
+        U8 * prev_char_pos = reghopmaybe3(*curpos, -1, strbeg);
+        if (! prev_char_pos) {
+            return PL_SB_EDGE;
+        }
+
+        /* Back up over Extend and Format.  curpos is always just to the right
+         * of the characater whose value we are getting */
+        do {
+            U8 * prev_prev_char_pos;
+            if ((prev_prev_char_pos = reghopmaybe3((U8 *) prev_char_pos, -1,
+                                                                      strbeg)))
+            {
+                sb = getSB_VAL_UTF8(prev_prev_char_pos, prev_char_pos);
+                *curpos = prev_char_pos;
+                prev_char_pos = prev_prev_char_pos;
+            }
+            else {
+                *curpos = (U8 *) strbeg;
+                return PL_SB_EDGE;
+            }
+        } while (sb == PL_SB_Extend || sb == PL_SB_Format);
+    }
+    else {
+        do {
+            if (*curpos - 2 < strbeg) {
+                *curpos = (U8 *) strbeg;
+                return PL_SB_EDGE;
+            }
+            (*curpos)--;
+            sb = getSB_VAL_CP(*(*curpos - 1));
+        } while (sb == PL_SB_Extend || sb == PL_SB_Format);
+    }
+
+    return sb;
+}
+
+#define WBcase(before, after) ((PL_WB_ENUM_COUNT * before) + after)
+
+STATIC bool
+S_isWB(pTHX_ PL_WB_enum previous,
+             PL_WB_enum before,
+             PL_WB_enum after,
+             const U8 * const strbeg,
+             const U8 * const curpos,
+             const U8 * const strend,
+             const bool utf8_target)
+{
+    /*  Return a boolean as to if the boundary between 'before' and 'after' is
+     *  a Unicode word break, using their published algorithm.  Context may be
+     *  needed to make this determination.  If the value for the character
+     *  before 'before' is known, it is passed as 'previous'; otherwise that
+     *  should be set to PL_WB_UNKNOWN.  The other input parameters give the
+     *  boundaries and current position in the matching of the string.  That
+     *  is, 'curpos' marks the position where the character whose wb value is
+     *  'after' begins.  See http://www.unicode.org/reports/tr29/ */
+
+    U8 * before_pos = (U8 *) curpos;
+    U8 * after_pos = (U8 *) curpos;
+
+    PERL_ARGS_ASSERT_ISWB;
+
+    /* WB1 and WB2: Break at the start and end of text. */
+    if (before == PL_WB_EDGE || after == PL_WB_EDGE) {
+        return TRUE;
+    }
+
+    /* WB 3: Do not break within CRLF. */
+    if (before == PL_WB_CR && after == PL_WB_LF) {
+        return FALSE;
+    }
+
+    /* WB 3a and WB 3b: Otherwise break before and after Newlines (including CR
+     * and LF) */
+    if (   before == PL_WB_CR || before == PL_WB_LF || before == PL_WB_Newline
+        || after ==  PL_WB_CR || after ==  PL_WB_LF || after ==  PL_WB_Newline)
+    {
+        return TRUE;
+    }
+
+    /* Ignore Format and Extend characters, except when they appear at the
+     * beginning of a region of text.
+     * WB4.  X (Extend | Format)*  →  X. */
+
+    if (after == PL_WB_Extend || after == PL_WB_Format) {
+        return FALSE;
+    }
+
+    if (before == PL_WB_Extend || before == PL_WB_Format) {
+        before = backup_one_WB(&previous, strbeg, &before_pos, utf8_target);
+    }
+
+    switch (WBcase(before, after)) {
+            /* Otherwise, break everywhere (including around ideographs).
+                WB14.  Any  ÷  Any */
+            default:
+                return TRUE;
+
+            /* Do not break between most letters.
+                WB5.  (ALetter | Hebrew_Letter) × (ALetter | Hebrew_Letter) */
+            case WBcase(PL_WB_ALetter, PL_WB_ALetter):
+            case WBcase(PL_WB_ALetter, PL_WB_Hebrew_Letter):
+            case WBcase(PL_WB_Hebrew_Letter, PL_WB_ALetter):
+            case WBcase(PL_WB_Hebrew_Letter, PL_WB_Hebrew_Letter):
+                return FALSE;
+
+            /* Do not break letters across certain punctuation.
+                WB6.  (ALetter | Hebrew_Letter)
+                        × (MidLetter | MidNumLet | Single_Quote) (ALetter
+                                                            | Hebrew_Letter) */
+            case WBcase(PL_WB_ALetter, PL_WB_MidLetter):
+            case WBcase(PL_WB_ALetter, PL_WB_MidNumLet):
+            case WBcase(PL_WB_ALetter, PL_WB_Single_Quote):
+            case WBcase(PL_WB_Hebrew_Letter, PL_WB_MidLetter):
+            case WBcase(PL_WB_Hebrew_Letter, PL_WB_MidNumLet):
+            /*case WBcase(PL_WB_Hebrew_Letter, PL_WB_Single_Quote):*/
+                after = advance_one_WB(&after_pos, strend, utf8_target);
+                return after != PL_WB_ALetter && after != PL_WB_Hebrew_Letter;
+
+            /* WB7.  (ALetter | Hebrew_Letter) (MidLetter | MidNumLet |
+             *                    Single_Quote) ×  (ALetter | Hebrew_Letter) */
+            case WBcase(PL_WB_MidLetter, PL_WB_ALetter):
+            case WBcase(PL_WB_MidLetter, PL_WB_Hebrew_Letter):
+            case WBcase(PL_WB_MidNumLet, PL_WB_ALetter):
+            case WBcase(PL_WB_MidNumLet, PL_WB_Hebrew_Letter):
+            case WBcase(PL_WB_Single_Quote, PL_WB_ALetter):
+            case WBcase(PL_WB_Single_Quote, PL_WB_Hebrew_Letter):
+                before
+                  = backup_one_WB(&previous, strbeg, &before_pos, utf8_target);
+                return before != PL_WB_ALetter && before != PL_WB_Hebrew_Letter;
+
+            /* WB7a.  Hebrew_Letter  ×  Single_Quote */
+            case WBcase(PL_WB_Hebrew_Letter, PL_WB_Single_Quote):
+                return FALSE;
+
+            /* WB7b.  Hebrew_Letter  ×  Double_Quote Hebrew_Letter */
+            case WBcase(PL_WB_Hebrew_Letter, PL_WB_Double_Quote):
+                return advance_one_WB(&after_pos, strend, utf8_target)
+                                                        != PL_WB_Hebrew_Letter;
+
+            /* WB7c.  Hebrew_Letter Double_Quote  ×  Hebrew_Letter */
+            case WBcase(PL_WB_Double_Quote, PL_WB_Hebrew_Letter):
+                return backup_one_WB(&previous, strbeg, &before_pos, utf8_target)
+                                                        != PL_WB_Hebrew_Letter;
+
+            /* Do not break within sequences of digits, or digits adjacent to
+             * letters (“3a”, or “A3”).
+                WB8.  Numeric  ×  Numeric */
+            case WBcase(PL_WB_Numeric, PL_WB_Numeric):
+                return FALSE;
+
+            /* WB9.  (ALetter | Hebrew_Letter)  ×  Numeric */
+            case WBcase(PL_WB_ALetter, PL_WB_Numeric):
+            case WBcase(PL_WB_Hebrew_Letter, PL_WB_Numeric):
+                return FALSE;
+
+            /* WB10.  Numeric  ×  (ALetter | Hebrew_Letter) */
+            case WBcase(PL_WB_Numeric, PL_WB_ALetter):
+            case WBcase(PL_WB_Numeric, PL_WB_Hebrew_Letter):
+                return FALSE;
+
+            /* Do not break within sequences, such as “3.2” or “3,456.789”.
+                WB11.   Numeric (MidNum | MidNumLet | Single_Quote)  ×  Numeric
+             */
+            case WBcase(PL_WB_MidNum, PL_WB_Numeric):
+            case WBcase(PL_WB_MidNumLet, PL_WB_Numeric):
+            case WBcase(PL_WB_Single_Quote, PL_WB_Numeric):
+                return backup_one_WB(&previous, strbeg, &before_pos, utf8_target)
+                                                               != PL_WB_Numeric;
+
+            /*  WB12.   Numeric  ×  (MidNum | MidNumLet | Single_Quote) Numeric
+             *  */
+            case WBcase(PL_WB_Numeric, PL_WB_MidNum):
+            case WBcase(PL_WB_Numeric, PL_WB_MidNumLet):
+            case WBcase(PL_WB_Numeric, PL_WB_Single_Quote):
+                return advance_one_WB(&after_pos, strend, utf8_target)
+                                                               != PL_WB_Numeric;
+
+            /* Do not break between Katakana.
+               WB13.  Katakana  ×  Katakana */
+            case WBcase(PL_WB_Katakana, PL_WB_Katakana):
+                return FALSE;
+
+            /* Do not break from extenders.
+               WB13a.  (ALetter | Hebrew_Letter | Numeric | Katakana |
+                                            ExtendNumLet)  ×  ExtendNumLet */
+            case WBcase(PL_WB_ALetter, PL_WB_ExtendNumLet):
+            case WBcase(PL_WB_Hebrew_Letter, PL_WB_ExtendNumLet):
+            case WBcase(PL_WB_Numeric, PL_WB_ExtendNumLet):
+            case WBcase(PL_WB_Katakana, PL_WB_ExtendNumLet):
+            case WBcase(PL_WB_ExtendNumLet, PL_WB_ExtendNumLet):
+                return FALSE;
+
+            /* WB13b.  ExtendNumLet  ×  (ALetter | Hebrew_Letter | Numeric
+             *                                                 | Katakana) */
+            case WBcase(PL_WB_ExtendNumLet, PL_WB_ALetter):
+            case WBcase(PL_WB_ExtendNumLet, PL_WB_Hebrew_Letter):
+            case WBcase(PL_WB_ExtendNumLet, PL_WB_Numeric):
+            case WBcase(PL_WB_ExtendNumLet, PL_WB_Katakana):
+                return FALSE;
+
+            /* Do not break between regional indicator symbols.
+               WB13c.  Regional_Indicator  ×  Regional_Indicator */
+            case WBcase(PL_WB_Regional_Indicator, PL_WB_Regional_Indicator):
+                return FALSE;
+
+    }
+
+    NOT_REACHED;
+}
+
+STATIC PL_WB_enum
+S_advance_one_WB(pTHX_ U8 ** curpos, const U8 * const strend, const bool utf8_target)
+{
+    PL_WB_enum wb;
+
+    PERL_ARGS_ASSERT_ADVANCE_ONE_WB;
+
+    if (*curpos >= strend) {
+        return PL_WB_EDGE;
+    }
+
+    if (utf8_target) {
+
+        /* Advance over Extend and Format */
+        do {
+            *curpos += UTF8SKIP(*curpos);
+            if (*curpos >= strend) {
+                return PL_WB_EDGE;
+            }
+            wb = getWB_VAL_UTF8(*curpos, strend);
+        } while (wb == PL_WB_Extend || wb == PL_WB_Format);
+    }
+    else {
+        do {
+            (*curpos)++;
+            if (*curpos >= strend) {
+                return PL_WB_EDGE;
+            }
+            wb = getWB_VAL_CP(**curpos);
+        } while (wb == PL_WB_Extend || wb == PL_WB_Format);
+    }
+
+    return wb;
+}
+
+STATIC PL_WB_enum
+S_backup_one_WB(pTHX_ PL_WB_enum * previous, const U8 * const strbeg, U8 ** curpos, const bool utf8_target)
+{
+    PL_WB_enum wb;
+
+    PERL_ARGS_ASSERT_BACKUP_ONE_WB;
+
+    /* If we know what the previous character's break value is, don't have
+        * to look it up */
+    if (*previous != PL_WB_UNKNOWN) {
+        wb = *previous;
+        *previous = PL_WB_UNKNOWN;
+        /* XXX Note that doesn't change curpos, and maybe should */
+
+        /* But we always back up over these two types */
+        if (wb != PL_WB_Extend && wb != PL_WB_Format) {
+            return wb;
+        }
+    }
+
+    if (*curpos < strbeg) {
+        return PL_WB_EDGE;
+    }
+
+    if (utf8_target) {
+        U8 * prev_char_pos = reghopmaybe3(*curpos, -1, strbeg);
+        if (! prev_char_pos) {
+            return PL_WB_EDGE;
+        }
+
+        /* Back up over Extend and Format.  curpos is always just to the right
+         * of the characater whose value we are getting */
+        do {
+            U8 * prev_prev_char_pos;
+            if ((prev_prev_char_pos = reghopmaybe3((U8 *) prev_char_pos,
+                                                   -1,
+                                                   strbeg)))
+            {
+                wb = getWB_VAL_UTF8(prev_prev_char_pos, prev_char_pos);
+                *curpos = prev_char_pos;
+                prev_char_pos = prev_prev_char_pos;
+            }
+            else {
+                *curpos = (U8 *) strbeg;
+                return PL_WB_EDGE;
+            }
+        } while (wb == PL_WB_Extend || wb == PL_WB_Format);
+    }
+    else {
+        do {
+            if (*curpos - 2 < strbeg) {
+                *curpos = (U8 *) strbeg;
+                return PL_WB_EDGE;
+            }
+            (*curpos)--;
+            wb = getWB_VAL_CP(*(*curpos - 1));
+        } while (wb == PL_WB_Extend || wb == PL_WB_Format);
+    }
+
+    return wb;
+}
+
 /* returns -1 on failure, $+[0] on success */
 STATIC SSize_t
 S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
@@ -3998,6 +4840,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
     int to_complement;  /* Invert the result? */
     _char_class_number classnum;
     bool is_utf8_pat = reginfo->is_utf8_pat;
+    bool match = FALSE;
+
 
 #ifdef DEBUGGING
     GET_RE_DEBUG_FLAGS_DECL;
@@ -4456,8 +5300,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	    DEBUG_EXECUTE_r({
 		AV *const trie_words
 		    = MUTABLE_AV(rexi->data->data[ARG(ST.me)+TRIE_WORDS_OFFSET]);
-		SV ** const tmp = av_fetch( trie_words,
-		    ST.nextword-1, 0 );
+		SV ** const tmp = trie_words
+                        ? av_fetch(trie_words, ST.nextword - 1, 0) : NULL;
 		SV *sv= tmp ? sv_newmortal() : NULL;
 
 		PerlIO_printf( Perl_debug_log,
@@ -4657,89 +5501,219 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	    break;
 	}
 
-	/* XXX Could improve efficiency by separating these all out using a
-	 * macro or in-line function.  At that point regcomp.c would no longer
-	 * have to set the FLAGS fields of these */
-	case BOUNDL:  /*  /\b/l  */
 	case NBOUNDL: /*  /\B/l  */
-            _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+            to_complement = 1;
             /* FALLTHROUGH */
-	case BOUND:   /*  /\b/   */
-	case BOUNDU:  /*  /\b/u  */
-	case BOUNDA:  /*  /\b/a  */
-	case NBOUND:  /*  /\B/   */
-	case NBOUNDU: /*  /\B/u  */
-	case NBOUNDA: /*  /\B/a  */
-	    /* was last char in word? */
-	    if (utf8_target
-		&& FLAGS(scan) != REGEX_ASCII_RESTRICTED_CHARSET
-		&& FLAGS(scan) != REGEX_ASCII_MORE_RESTRICTED_CHARSET)
-	    {
+
+	case BOUNDL:  /*  /\b/l  */
+            _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+
+            if (FLAGS(scan) != TRADITIONAL_BOUND) {
+                if (! IN_UTF8_CTYPE_LOCALE) {
+                    Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),
+                                                B_ON_NON_UTF8_LOCALE_IS_WRONG);
+                }
+                goto boundu;
+            }
+
+	    if (utf8_target) {
 		if (locinput == reginfo->strbeg)
-		    ln = '\n';
+		    ln = isWORDCHAR_LC('\n');
 		else {
-		    const U8 * const r =
-                            reghop3((U8*)locinput, -1, (U8*)(reginfo->strbeg));
-
-		    ln = utf8n_to_uvchr(r, (U8*) reginfo->strend - r,
-                                                                   0, uniflags);
+                    ln = isWORDCHAR_LC_utf8(reghop3((U8*)locinput, -1,
+                                                        (U8*)(reginfo->strbeg)));
 		}
-		if (FLAGS(scan) != REGEX_LOCALE_CHARSET) {
-		    ln = isWORDCHAR_uni(ln);
-                    if (NEXTCHR_IS_EOS)
-                        n = 0;
-                    else {
-                        LOAD_UTF8_CHARCLASS_ALNUM();
-                        n = swash_fetch(PL_utf8_swash_ptrs[_CC_WORDCHAR], (U8*)locinput,
-                                                                utf8_target);
-                    }
-		}
-		else {
-		    ln = isWORDCHAR_LC_uvchr(ln);
-		    n = NEXTCHR_IS_EOS ? 0 : isWORDCHAR_LC_utf8((U8*)locinput);
-		}
+                n = (NEXTCHR_IS_EOS)
+                    ? isWORDCHAR_LC('\n')
+                    : isWORDCHAR_LC_utf8((U8*)locinput);
 	    }
-	    else {
-
-		/* Here the string isn't utf8, or is utf8 and only ascii
-		 * characters are to match \w.  In the latter case looking at
-		 * the byte just prior to the current one may be just the final
-		 * byte of a multi-byte character.  This is ok.  There are two
-		 * cases:
-		 * 1) it is a single byte character, and then the test is doing
-		 *	just what it's supposed to.
-		 * 2) it is a multi-byte character, in which case the final
-		 *	byte is never mistakable for ASCII, and so the test
-		 *	will say it is not a word character, which is the
-		 *	correct answer. */
-		ln = (locinput != reginfo->strbeg) ?
-		    UCHARAT(locinput - 1) : '\n';
-		switch (FLAGS(scan)) {
-		    case REGEX_UNICODE_CHARSET:
-			ln = isWORDCHAR_L1(ln);
-			n = NEXTCHR_IS_EOS ? 0 : isWORDCHAR_L1(nextchr);
-			break;
-		    case REGEX_LOCALE_CHARSET:
-			ln = isWORDCHAR_LC(ln);
-			n = NEXTCHR_IS_EOS ? 0 : isWORDCHAR_LC(nextchr);
-			break;
-		    case REGEX_DEPENDS_CHARSET:
-			ln = isWORDCHAR(ln);
-			n = NEXTCHR_IS_EOS ? 0 : isWORDCHAR(nextchr);
-			break;
-		    case REGEX_ASCII_RESTRICTED_CHARSET:
-		    case REGEX_ASCII_MORE_RESTRICTED_CHARSET:
-			ln = isWORDCHAR_A(ln);
-			n = NEXTCHR_IS_EOS ? 0 : isWORDCHAR_A(nextchr);
-			break;
-		    default:
-			Perl_croak(aTHX_ "panic: Unexpected FLAGS %u in op %u", FLAGS(scan), OP(scan));
-		}
+	    else { /* Here the string isn't utf8 */
+		ln = (locinput == reginfo->strbeg)
+                     ? isWORDCHAR_LC('\n')
+                     : isWORDCHAR_LC(UCHARAT(locinput - 1));
+                n = (NEXTCHR_IS_EOS)
+                    ? isWORDCHAR_LC('\n')
+                    : isWORDCHAR_LC(nextchr);
 	    }
-	    /* Note requires that all BOUNDs be lower than all NBOUNDs in
-	     * regcomp.sym */
-	    if (((!ln) == (!n)) == (OP(scan) < NBOUND))
-		    sayNO;
+            if (to_complement ^ (ln == n)) {
+                sayNO;
+            }
+	    break;
+
+	case NBOUND:  /*  /\B/   */
+            to_complement = 1;
+            /* FALLTHROUGH */
+
+	case BOUND:   /*  /\b/   */
+	    if (utf8_target) {
+                goto bound_utf8;
+            }
+            goto bound_ascii_match_only;
+
+	case NBOUNDA: /*  /\B/a  */
+            to_complement = 1;
+            /* FALLTHROUGH */
+
+	case BOUNDA:  /*  /\b/a  */
+
+          bound_ascii_match_only:
+            /* Here the string isn't utf8, or is utf8 and only ascii characters
+             * are to match \w.  In the latter case looking at the byte just
+             * prior to the current one may be just the final byte of a
+             * multi-byte character.  This is ok.  There are two cases:
+             * 1) it is a single byte character, and then the test is doing
+             *    just what it's supposed to.
+             * 2) it is a multi-byte character, in which case the final byte is
+             *    never mistakable for ASCII, and so the test will say it is
+             *    not a word character, which is the correct answer. */
+            ln = (locinput == reginfo->strbeg)
+                 ? isWORDCHAR_A('\n')
+                 : isWORDCHAR_A(UCHARAT(locinput - 1));
+            n = (NEXTCHR_IS_EOS)
+                ? isWORDCHAR_A('\n')
+                : isWORDCHAR_A(nextchr);
+            if (to_complement ^ (ln == n)) {
+                sayNO;
+            }
+	    break;
+
+	case NBOUNDU: /*  /\B/u  */
+            to_complement = 1;
+            /* FALLTHROUGH */
+
+	case BOUNDU:  /*  /\b/u  */
+
+          boundu:
+	    if (utf8_target) {
+
+              bound_utf8:
+                switch((bound_type) FLAGS(scan)) {
+                    case TRADITIONAL_BOUND:
+                        ln = (locinput == reginfo->strbeg)
+                             ? isWORDCHAR_L1('\n')
+                             : isWORDCHAR_utf8(reghop3((U8*)locinput, -1,
+                                                                (U8*)(reginfo->strbeg)));
+                        n = (NEXTCHR_IS_EOS)
+                            ? isWORDCHAR_L1('\n')
+                            : isWORDCHAR_utf8((U8*)locinput);
+                        match = ln != n;
+                        break;
+                    case GCB_BOUND:
+                        if (locinput == reginfo->strbeg || NEXTCHR_IS_EOS) {
+                            match = TRUE; /* GCB always matches at begin and
+                                             end */
+                        }
+                        else {
+                            /* Find the gcb values of previous and current
+                             * chars, then see if is a break point */
+                            match = isGCB(getGCB_VAL_UTF8(
+                                                reghop3((U8*)locinput,
+                                                        -1,
+                                                        (U8*)(reginfo->strbeg)),
+                                                (U8*) reginfo->strend),
+                                          getGCB_VAL_UTF8((U8*) locinput,
+                                                        (U8*) reginfo->strend));
+                        }
+                        break;
+
+                    case SB_BOUND: /* Always matches at begin and end */
+                        if (locinput == reginfo->strbeg || NEXTCHR_IS_EOS) {
+                            match = TRUE;
+                        }
+                        else {
+                            match = isSB(getSB_VAL_UTF8(
+                                                reghop3((U8*)locinput,
+                                                        -1,
+                                                        (U8*)(reginfo->strbeg)),
+                                                (U8*) reginfo->strend),
+                                          getSB_VAL_UTF8((U8*) locinput,
+                                                        (U8*) reginfo->strend),
+                                          (U8*) reginfo->strbeg,
+                                          (U8*) locinput,
+                                          (U8*) reginfo->strend,
+                                          utf8_target);
+                        }
+                        break;
+
+                    case WB_BOUND:
+                        if (locinput == reginfo->strbeg || NEXTCHR_IS_EOS) {
+                            match = TRUE;
+                        }
+                        else {
+                            match = isWB(PL_WB_UNKNOWN,
+                                         getWB_VAL_UTF8(
+                                                reghop3((U8*)locinput,
+                                                        -1,
+                                                        (U8*)(reginfo->strbeg)),
+                                                (U8*) reginfo->strend),
+                                          getWB_VAL_UTF8((U8*) locinput,
+                                                        (U8*) reginfo->strend),
+                                          (U8*) reginfo->strbeg,
+                                          (U8*) locinput,
+                                          (U8*) reginfo->strend,
+                                          utf8_target);
+                        }
+                        break;
+                }
+	    }
+	    else {  /* Not utf8 target */
+                switch((bound_type) FLAGS(scan)) {
+                    case TRADITIONAL_BOUND:
+                        ln = (locinput == reginfo->strbeg)
+                            ? isWORDCHAR_L1('\n')
+                            : isWORDCHAR_L1(UCHARAT(locinput - 1));
+                        n = (NEXTCHR_IS_EOS)
+                            ? isWORDCHAR_L1('\n')
+                            : isWORDCHAR_L1(nextchr);
+                        match = ln != n;
+                        break;
+
+                    case GCB_BOUND:
+                        if (locinput == reginfo->strbeg || NEXTCHR_IS_EOS) {
+                            match = TRUE; /* GCB always matches at begin and
+                                             end */
+                        }
+                        else {  /* Only CR-LF combo isn't a GCB in 0-255
+                                   range */
+                            match =    UCHARAT(locinput - 1) != '\r'
+                                    || UCHARAT(locinput) != '\n';
+                        }
+                        break;
+
+                    case SB_BOUND: /* Always matches at begin and end */
+                        if (locinput == reginfo->strbeg || NEXTCHR_IS_EOS) {
+                            match = TRUE;
+                        }
+                        else {
+                            match = isSB(getSB_VAL_CP(UCHARAT(locinput -1)),
+                                         getSB_VAL_CP(UCHARAT(locinput)),
+                                         (U8*) reginfo->strbeg,
+                                         (U8*) locinput,
+                                         (U8*) reginfo->strend,
+                                         utf8_target);
+                        }
+                        break;
+
+                    case WB_BOUND:
+                        if (locinput == reginfo->strbeg || NEXTCHR_IS_EOS) {
+                            match = TRUE;
+                        }
+                        else {
+                            match = isWB(PL_WB_UNKNOWN,
+                                         getWB_VAL_CP(UCHARAT(locinput -1)),
+                                         getWB_VAL_CP(UCHARAT(locinput)),
+                                         (U8*) reginfo->strbeg,
+                                         (U8*) locinput,
+                                         (U8*) reginfo->strend,
+                                         utf8_target);
+                        }
+                        break;
+                }
+	    }
+
+            if (to_complement ^ ! match) {
+                sayNO;
+            }
 	    break;
 
 	case ANYOFL:  /*  /[abc]/l      */
@@ -4873,7 +5847,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                 locinput += 2;
             }
             else {  /* Handle above Latin-1 code points */
-          utf8_posix_above_latin1:
+              utf8_posix_above_latin1:
                 classnum = (_char_class_number) FLAGS(scan);
                 if (classnum < _FIRST_NON_SWASH_CC) {
 
@@ -4941,38 +5915,6 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 
 	case CLUMP: /* Match \X: logical Unicode character.  This is defined as
 		       a Unicode extended Grapheme Cluster */
-	    /* From http://www.unicode.org/reports/tr29 (5.2 version).  An
-	      extended Grapheme Cluster is:
-
-            CR LF
-            | Prepend* Begin Extend*
-            | .
-
-            Begin is:           ( Special_Begin | ! Control )
-            Special_Begin is:   ( Regional-Indicator+ | Hangul-syllable )
-            Extend is:          ( Grapheme_Extend | Spacing_Mark )
-            Control is:         [ GCB_Control | CR | LF ]
-            Hangul-syllable is: ( T+ | ( L* ( L | ( LVT | ( V | LV ) V* ) T* ) ))
-
-               If we create a 'Regular_Begin' = Begin - Special_Begin, then
-               we can rewrite
-
-                   Begin is ( Regular_Begin + Special Begin )
-
-               It turns out that 98.4% of all Unicode code points match
-               Regular_Begin.  Doing it this way eliminates a table match in
-               the previous implementation for almost all Unicode code points.
-
-	       There is a subtlety with Prepend* which showed up in testing.
-	       Note that the Begin, and only the Begin is required in:
-	        | Prepend* Begin Extend*
-	       Also, Begin contains '! Control'.  A Prepend must be a
-	       '!  Control', which means it must also be a Begin.  What it
-	       comes down to is that if we match Prepend* and then find no
-	       suitable Begin afterwards, that if we backtrack the last
-	       Prepend, that one will be a suitable Begin.
-	    */
-
 	    if (NEXTCHR_IS_EOS)
 		sayNO;
 	    if  (! utf8_target) {
@@ -4990,147 +5932,27 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	    }
 	    else {
 
-		/* Utf8: See if is ( CR LF ); already know that locinput <
-		 * reginfo->strend, so locinput+1 is in bounds */
-		if ( nextchr == '\r' && locinput+1 < reginfo->strend
-                     && UCHARAT(locinput + 1) == '\n')
-                {
-		    locinput += 2;
-		}
-		else {
-                    STRLEN len;
+                /* Get the gcb type for the current character */
+                PL_GCB_enum prev_gcb = getGCB_VAL_UTF8((U8*) locinput,
+                                                       (U8*) reginfo->strend);
 
-		    /* In case have to backtrack to beginning, then match '.' */
-		    char *starting = locinput;
-
-		    /* In case have to backtrack the last prepend */
-		    char *previous_prepend = NULL;
-
-		    LOAD_UTF8_CHARCLASS_GCB();
-
-                    /* Match (prepend)*   */
-                    while (locinput < reginfo->strend
-                           && (len = is_GCB_Prepend_utf8(locinput)))
-                    {
-                        previous_prepend = locinput;
-                        locinput += len;
+                /* Then scan through the input until we get to the first
+                 * character whose type is supposed to be a gcb with the
+                 * current character.  (There is always a break at the
+                 * end-of-input) */
+                locinput += UTF8SKIP(locinput);
+                while (locinput < reginfo->strend) {
+                    PL_GCB_enum cur_gcb = getGCB_VAL_UTF8((U8*) locinput,
+                                                         (U8*) reginfo->strend);
+                    if (isGCB(prev_gcb, cur_gcb)) {
+                        break;
                     }
 
-		    /* As noted above, if we matched a prepend character, but
-		     * the next thing won't match, back off the last prepend we
-		     * matched, as it is guaranteed to match the begin */
-		    if (previous_prepend
-			&& (locinput >=  reginfo->strend
-			    || (! swash_fetch(PL_utf8_X_regular_begin,
-					     (U8*)locinput, utf8_target)
-			         && ! is_GCB_SPECIAL_BEGIN_START_utf8(locinput)))
-                        )
-		    {
-			locinput = previous_prepend;
-		    }
+                    prev_gcb = cur_gcb;
+                    locinput += UTF8SKIP(locinput);
+                }
 
-		    /* Note that here we know reginfo->strend > locinput, as we
-		     * tested that upon input to this switch case, and if we
-		     * moved locinput forward, we tested the result just above
-		     * and it either passed, or we backed off so that it will
-		     * now pass */
-		    if (swash_fetch(PL_utf8_X_regular_begin,
-                                    (U8*)locinput, utf8_target)) {
-                        locinput += UTF8SKIP(locinput);
-                    }
-                    else if (! is_GCB_SPECIAL_BEGIN_START_utf8(locinput)) {
 
-			/* Here did not match the required 'Begin' in the
-			 * second term.  So just match the very first
-			 * character, the '.' of the final term of the regex */
-			locinput = starting + UTF8SKIP(starting);
-                        goto exit_utf8;
-		    } else {
-
-                        /* Here is a special begin.  It can be composed of
-                         * several individual characters.  One possibility is
-                         * RI+ */
-                        if ((len = is_GCB_RI_utf8(locinput))) {
-                            locinput += len;
-                            while (locinput < reginfo->strend
-                                   && (len = is_GCB_RI_utf8(locinput)))
-                            {
-                                locinput += len;
-                            }
-                        } else if ((len = is_GCB_T_utf8(locinput))) {
-                            /* Another possibility is T+ */
-                            locinput += len;
-                            while (locinput < reginfo->strend
-                                && (len = is_GCB_T_utf8(locinput)))
-                            {
-                                locinput += len;
-                            }
-                        } else {
-
-                            /* Here, neither RI+ nor T+; must be some other
-                             * Hangul.  That means it is one of the others: L,
-                             * LV, LVT or V, and matches:
-                             * L* (L | LVT T* | V * V* T* | LV  V* T*) */
-
-                            /* Match L*           */
-                            while (locinput < reginfo->strend
-                                   && (len = is_GCB_L_utf8(locinput)))
-                            {
-                                locinput += len;
-                            }
-
-                            /* Here, have exhausted L*.  If the next character
-                             * is not an LV, LVT nor V, it means we had to have
-                             * at least one L, so matches L+ in the original
-                             * equation, we have a complete hangul syllable.
-                             * Are done. */
-
-                            if (locinput < reginfo->strend
-                                && is_GCB_LV_LVT_V_utf8(locinput))
-                            {
-                                /* Otherwise keep going.  Must be LV, LVT or V.
-                                 * See if LVT, by first ruling out V, then LV */
-                                if (! is_GCB_V_utf8(locinput)
-                                        /* All but every TCount one is LV */
-                                    && (valid_utf8_to_uvchr((U8 *) locinput,
-                                                                         NULL)
-                                                                        - SBASE)
-                                        % TCount != 0)
-                                {
-                                    locinput += UTF8SKIP(locinput);
-                                } else {
-
-                                    /* Must be  V or LV.  Take it, then match
-                                     * V*     */
-                                    locinput += UTF8SKIP(locinput);
-                                    while (locinput < reginfo->strend
-                                           && (len = is_GCB_V_utf8(locinput)))
-                                    {
-                                        locinput += len;
-                                    }
-                                }
-
-                                /* And any of LV, LVT, or V can be followed
-                                 * by T*            */
-                                while (locinput < reginfo->strend
-                                       && (len = is_GCB_T_utf8(locinput)))
-                                {
-                                    locinput += len;
-                                }
-                            }
-                        }
-                    }
-
-                    /* Match any extender */
-                    while (locinput < reginfo->strend
-                            && swash_fetch(PL_utf8_X_extend,
-                                            (U8*)locinput, utf8_target))
-                    {
-                        locinput += UTF8SKIP(locinput);
-                    }
-		}
-            exit_utf8:
-		if (locinput > reginfo->strend) sayNO;
 	    }
 	    break;
             
@@ -5566,7 +6388,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                 maxopenparen = 0;
                 /* run the pattern returned from (??{...}) */
 
-        eval_recurse_doit: /* Share code with GOSUB below this line
+              eval_recurse_doit: /* Share code with GOSUB below this line
                             * At this point we expect the stack context to be
                             * set up correctly */
 
@@ -6668,7 +7490,7 @@ NULL
             /* NOTREACHED */
 	    NOT_REACHED;
 
-	curly_try_B_max:
+          curly_try_B_max:
 	    /* a successful greedy match: now try to match B */
             if (cur_eval && cur_eval->u.eval.close_paren &&
                 cur_eval->u.eval.close_paren == (U32)ST.paren) {
@@ -6718,7 +7540,7 @@ NULL
 #undef ST
 
 	case END: /*  last op of main pattern  */
-	    fake_end:
+          fake_end:
 	    if (cur_eval) {
 		/* we've just finished A in /(??{A})B/; now continue with B */
 
@@ -6969,7 +7791,7 @@ NULL
 
         /* this is a point to jump to in order to increment
          * locinput by one character */
-        increment_locinput:
+          increment_locinput:
             assert(!NEXTCHR_IS_EOS);
             if (utf8_target) {
                 locinput += PL_utf8skip[nextchr];
@@ -7042,7 +7864,7 @@ NULL
     sayNO;
     NOT_REACHED;
 
-yes:
+  yes:
     if (yes_state) {
 	/* we have successfully completed a subexpression, but we must now
 	 * pop to the state marked by yes_state and continue from there */
@@ -7103,7 +7925,7 @@ yes:
     result = 1;
     goto final_exit;
 
-no:
+  no:
     DEBUG_EXECUTE_r(
 	PerlIO_printf(Perl_debug_log,
             "%*s  %sfailed...%s\n",
@@ -7111,7 +7933,7 @@ no:
             PL_colors[4], PL_colors[5])
 	);
 
-no_silent:
+  no_silent:
     if (no_final) {
         if (yes_state) {
             goto yes;
@@ -7362,7 +8184,7 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
     case EXACTFU:
 	utf8_flags = reginfo->is_utf8_pat ? FOLDEQ_S2_ALREADY_FOLDED : 0;
 
-    do_exactf: {
+      do_exactf: {
         int c1, c2;
         U8 c1_utf8[UTF8_MAXBYTES+1], c2_utf8[UTF8_MAXBYTES+1];
 
@@ -7523,7 +8345,7 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
             }
 	}
 	else {
-      utf8_posix:
+          utf8_posix:
             classnum = (_char_class_number) FLAGS(p);
             if (classnum < _FIRST_NON_SWASH_CC) {
 

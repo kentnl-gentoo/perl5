@@ -4,7 +4,7 @@ use vars qw/$VERSION %released %version %families %upstream
 	    %bug_tracker %deprecated %delta/;
 use Module::CoreList::TieHashDelta;
 use version;
-$VERSION = '5.20150120';
+$VERSION = '5.20150220';
 
 my $dumpinc = 0;
 sub import {
@@ -261,6 +261,8 @@ sub changes_between {
     5.021006 => '2014-11-20',
     5.021007 => '2014-12-20',
     5.021008 => '2015-01-20',
+    5.020002 => '2015-02-14',
+    5.021009 => '2015-02-21',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -10914,9 +10916,9 @@ for my $version ( sort { $a <=> $b } keys %released ) {
             'IO::Uncompress::RawInflate'=> '2.068',
             'IO::Uncompress::Unzip' => '2.068',
             'MIME::Base64'          => '3.15',
-            'Module::CoreList'      => '5.20150120',
-            'Module::CoreList::TieHashDelta'=> '5.20150120',
-            'Module::CoreList::Utils'=> '5.20150120',
+            'Module::CoreList'      => '5.20150220',
+            'Module::CoreList::TieHashDelta'=> '5.20150220',
+            'Module::CoreList::Utils'=> '5.20150220',
             'Module::Load::Conditional'=> '0.64',
             'Module::Metadata'      => '1.000026',
             'Net::Cmd'              => '3.05',
@@ -11045,6 +11047,141 @@ for my $version ( sort { $a <=> $b } keys %released ) {
             'ok'                    => '1.301001_097',
             're'                    => '0.30',
             'warnings'              => '1.30',
+        },
+        removed => {
+        }
+    },
+    5.020002 => {
+        delta_from => 5.020001,
+        changed => {
+            'CPAN::Author'          => '5.5002',
+            'CPAN::CacheMgr'        => '5.5002',
+            'CPAN::FTP'             => '5.5006',
+            'CPAN::HTTP::Client'    => '1.9601',
+            'CPAN::HandleConfig'    => '5.5005',
+            'CPAN::Index'           => '1.9601',
+            'CPAN::LWP::UserAgent'  => '1.9601',
+            'CPAN::Mirrors'         => '1.9601',
+            'Config'                => '5.020002',
+            'Cwd'                   => '3.48_01',
+            'Data::Dumper'          => '2.151_01',
+            'Errno'                 => '1.20_05',
+            'File::Spec'            => '3.48_01',
+            'File::Spec::Cygwin'    => '3.48_01',
+            'File::Spec::Epoc'      => '3.48_01',
+            'File::Spec::Functions' => '3.48_01',
+            'File::Spec::Mac'       => '3.48_01',
+            'File::Spec::OS2'       => '3.48_01',
+            'File::Spec::Unix'      => '3.48_01',
+            'File::Spec::VMS'       => '3.48_01',
+            'File::Spec::Win32'     => '3.48_01',
+            'IO::Socket'            => '1.38',
+            'Module::CoreList'      => '5.20150214',
+            'Module::CoreList::TieHashDelta'=> '5.20150214',
+            'Module::CoreList::Utils'=> '5.20150214',
+            'PerlIO::scalar'        => '0.18_01',
+            'Pod::PlainText'        => '2.07',
+            'Storable'              => '2.49_01',
+            'VMS::DCLsym'           => '1.05_01',
+            'VMS::Stdio'            => '2.41',
+            'attributes'            => '0.23',
+            'feature'               => '1.36_01',
+        },
+        removed => {
+        }
+    },
+    5.021009 => {
+        delta_from => 5.021008,
+        changed => {
+            'B'                     => '1.56',
+            'B::Debug'              => '1.23',
+            'B::Deparse'            => '1.33',
+            'B::Op_private'         => '5.021009',
+            'Benchmark'             => '1.20',
+            'CPAN::Author'          => '5.5002',
+            'CPAN::CacheMgr'        => '5.5002',
+            'CPAN::FTP'             => '5.5006',
+            'CPAN::HTTP::Client'    => '1.9601',
+            'CPAN::HandleConfig'    => '5.5005',
+            'CPAN::Index'           => '1.9601',
+            'CPAN::LWP::UserAgent'  => '1.9601',
+            'CPAN::Meta::Requirements'=> '2.132',
+            'CPAN::Mirrors'         => '1.9601',
+            'Carp'                  => '1.35',
+            'Carp::Heavy'           => '1.35',
+            'Config'                => '5.021009',
+            'Config::Perl::V'       => '0.23',
+            'Data::Dumper'          => '2.157',
+            'Devel::Peek'           => '1.22',
+            'DynaLoader'            => '1.31',
+            'Encode'                => '2.70',
+            'Encode::MIME::Header'  => '2.16',
+            'Errno'                 => '1.23',
+            'ExtUtils::Miniperl'    => '1.04',
+            'HTTP::Tiny'            => '0.054',
+            'Module::CoreList'      => '5.20150220',
+            'Module::CoreList::TieHashDelta'=> '5.20150220',
+            'Module::CoreList::Utils'=> '5.20150220',
+            'Opcode'                => '1.32',
+            'POSIX'                 => '1.51',
+            'Perl::OSType'          => '1.008',
+            'PerlIO::scalar'        => '0.22',
+            'Pod::Find'             => '1.63',
+            'Pod::InputObjects'     => '1.63',
+            'Pod::ParseUtils'       => '1.63',
+            'Pod::Parser'           => '1.63',
+            'Pod::Perldoc'          => '3.25',
+            'Pod::Perldoc::BaseTo'  => '3.25',
+            'Pod::Perldoc::GetOptsOO'=> '3.25',
+            'Pod::Perldoc::ToANSI'  => '3.25',
+            'Pod::Perldoc::ToChecker'=> '3.25',
+            'Pod::Perldoc::ToMan'   => '3.25',
+            'Pod::Perldoc::ToNroff' => '3.25',
+            'Pod::Perldoc::ToPod'   => '3.25',
+            'Pod::Perldoc::ToRtf'   => '3.25',
+            'Pod::Perldoc::ToTerm'  => '3.25',
+            'Pod::Perldoc::ToText'  => '3.25',
+            'Pod::Perldoc::ToTk'    => '3.25',
+            'Pod::Perldoc::ToXml'   => '3.25',
+            'Pod::PlainText'        => '2.07',
+            'Pod::Select'           => '1.63',
+            'Socket'                => '2.018',
+            'Storable'              => '2.53',
+            'Test::Builder'         => '1.301001_098',
+            'Test::Builder::Module' => '1.301001_098',
+            'Test::Builder::Tester' => '1.301001_098',
+            'Test::Builder::Tester::Color'=> '1.301001_098',
+            'Test::More'            => '1.301001_098',
+            'Test::Simple'          => '1.301001_098',
+            'Test::Stream'          => '1.301001_098',
+            'Test::Tester'          => '1.301001_098',
+            'Test::use::ok'         => '1.301001_098',
+            'Unicode::Collate'      => '1.11',
+            'Unicode::Collate::CJK::Big5'=> '1.11',
+            'Unicode::Collate::CJK::GB2312'=> '1.11',
+            'Unicode::Collate::CJK::JISX0208'=> '1.11',
+            'Unicode::Collate::CJK::Korean'=> '1.11',
+            'Unicode::Collate::CJK::Pinyin'=> '1.11',
+            'Unicode::Collate::CJK::Stroke'=> '1.11',
+            'Unicode::Collate::CJK::Zhuyin'=> '1.11',
+            'Unicode::Collate::Locale'=> '1.11',
+            'Unicode::UCD'          => '0.61',
+            'VMS::Stdio'            => '2.41',
+            'Win32'                 => '0.51',
+            'Win32API::File'        => '0.1202',
+            'attributes'            => '0.26',
+            'bigint'                => '0.39',
+            'bignum'                => '0.39',
+            'bigrat'                => '0.39',
+            'constant'              => '1.33',
+            'encoding'              => '2.13',
+            'feature'               => '1.40',
+            'ok'                    => '1.301001_098',
+            'overload'              => '1.25',
+            'perlfaq'               => '5.021009',
+            're'                    => '0.31',
+            'threads::shared'       => '1.48',
+            'warnings'              => '1.31',
         },
         removed => {
         }
@@ -11529,6 +11666,20 @@ for my $version (sort { $a <=> $b } keys %delta) {
     },
     5.021008 => {
         delta_from => 5.021007,
+        changed => {
+        },
+        removed => {
+        }
+    },
+    5.020002 => {
+        delta_from => 5.020001,
+        changed => {
+        },
+        removed => {
+        }
+    },
+    5.021009 => {
+        delta_from => 5.021008,
         changed => {
         },
         removed => {
@@ -12419,9 +12570,9 @@ for my $version (sort { $a <=> $b } keys %deprecated) {
     'ok'                    => 'http://github.com/Test-More/test-more/issues/',
     'parent'                => undef,
     'perlfaq'               => 'https://github.com/perl-doc-cats/perlfaq/issues',
-    'version'               => 'http://rt.cpan.org/Public/Dist/Display.html?version',
-    'version::regex'        => 'http://rt.cpan.org/Public/Dist/Display.html?version',
-    'version::vpp'          => 'http://rt.cpan.org/Public/Dist/Display.html?version',
+    'version'               => 'https://rt.cpan.org/Public/Dist/Display.html?Name=version',
+    'version::regex'        => 'https://rt.cpan.org/Public/Dist/Display.html?Name=version',
+    'version::vpp'          => 'https://rt.cpan.org/Public/Dist/Display.html?Name=version',
 );
 
 # Create aliases with trailing zeros for $] use

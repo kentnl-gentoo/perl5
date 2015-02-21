@@ -128,7 +128,12 @@ Perl_safesysmalloc(MEM_SIZE size)
     dTHX;
 #endif
     Malloc_t ptr;
+
+#ifdef USE_MDH
+    if (size + PERL_MEMORY_DEBUG_HEADER_SIZE < size)
+        goto out_of_memory;
     size += PERL_MEMORY_DEBUG_HEADER_SIZE;
+#endif
 #ifdef DEBUGGING
     if ((SSize_t)size < 0)
 	Perl_croak_nocontext("panic: malloc, size=%"UVuf, (UV) size);
@@ -175,13 +180,18 @@ Perl_safesysmalloc(MEM_SIZE size)
 
     }
     else {
-#ifndef ALWAYS_NEED_THX
-	dTHX;
+#ifdef USE_MDH
+      out_of_memory:
 #endif
-	if (PL_nomemok)
-	    ptr =  NULL;
-	else
-	    croak_no_mem();
+        {
+#ifndef ALWAYS_NEED_THX
+            dTHX;
+#endif
+            if (PL_nomemok)
+                ptr =  NULL;
+            else
+                croak_no_mem();
+        }
     }
     return ptr;
 }
@@ -214,6 +224,8 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
     else {
 #ifdef USE_MDH
 	where = (Malloc_t)((char*)where-PERL_MEMORY_DEBUG_HEADER_SIZE);
+        if (size + PERL_MEMORY_DEBUG_HEADER_SIZE < size)
+            goto out_of_memory;
 	size += PERL_MEMORY_DEBUG_HEADER_SIZE;
 	{
 	    struct perl_memory_debug_header *const header
@@ -292,13 +304,18 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
 	DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%"UVxf": (%05ld) realloc %ld bytes\n",PTR2UV(ptr),(long)PL_an++,(long)size));
 
 	if (ptr == NULL) {
-#ifndef ALWAYS_NEED_THX
-	    dTHX;
+#ifdef USE_MDH
+          out_of_memory:
 #endif
-	    if (PL_nomemok)
-		ptr = NULL;
-	    else
-		croak_no_mem();
+            {
+#ifndef ALWAYS_NEED_THX
+                dTHX;
+#endif
+                if (PL_nomemok)
+                    ptr = NULL;
+                else
+                    croak_no_mem();
+            }
 	}
     }
     return ptr;
@@ -1944,13 +1961,8 @@ bool
 Perl_ckwarn(pTHX_ U32 w)
 {
     /* If lexical warnings have not been set, use $^W.  */
-    if (isLEXWARN_off) {
-	/* TODO: Hardcoding this here sucks, see the commit that added this */
-	if (w == WARN_VOID_UNUSUAL)
-	    return FALSE;
-	else
-	    return PL_dowarn & G_WARN_ON;
-    }
+    if (isLEXWARN_off)
+	return PL_dowarn & G_WARN_ON;
 
     return ckwarn_common(w);
 }
@@ -1961,13 +1973,8 @@ bool
 Perl_ckwarn_d(pTHX_ U32 w)
 {
     /* If lexical warnings have not been set then default classes warn.  */
-    if (isLEXWARN_off) {
-	/* TODO: Hardcoding this here sucks, see the commit that added this */
-	if (w == WARN_VOID_UNUSUAL)
-	    return FALSE;
-	else
-	    return TRUE;
-    }
+    if (isLEXWARN_off)
+	return TRUE;
 
     return ckwarn_common(w);
 }
@@ -1975,13 +1982,8 @@ Perl_ckwarn_d(pTHX_ U32 w)
 static bool
 S_ckwarn_common(pTHX_ U32 w)
 {
-    if (PL_curcop->cop_warnings == pWARN_ALL) {
-	/* TODO: Hardcoding this here sucks, see the commit that added this */
-	if (w == WARN_VOID_UNUSUAL)
-	    return FALSE;
-	else
-	    return TRUE;
-    }
+    if (PL_curcop->cop_warnings == pWARN_ALL)
+	return TRUE;
 
     if (PL_curcop->cop_warnings == pWARN_NONE)
 	return FALSE;
@@ -2981,7 +2983,7 @@ Perl_wait4pid(pTHX_ Pid_t pid, int *statusp, int flags)
 		*statusp = SvIVX(sv);
 		/* The hash iterator is currently on this entry, so simply
 		   calling hv_delete would trigger the lazy delete, which on
-		   aggregate does more work, beacuse next call to hv_iterinit()
+		   aggregate does more work, because next call to hv_iterinit()
 		   would spot the flag, and have to call the delete routine,
 		   while in the meantime any new entries can't re-use that
 		   memory.  */
@@ -3951,7 +3953,7 @@ Fill the sv with current working directory
 /* Originally written in Perl by John Bazik; rewritten in C by Ben Sugars.
  * rewritten again by dougm, optimized for use with xs TARG, and to prefer
  * getcwd(3) if available
- * Comments from the orignal:
+ * Comments from the original:
  *     This is a faster version of getcwd.  It's also more dangerous
  *     because you might chdir out of a directory that you can't chdir
  *     back into. */

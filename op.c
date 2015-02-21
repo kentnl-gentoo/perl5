@@ -953,7 +953,7 @@ Perl_op_clear(pTHX_ OP *o)
 	/* FALLTHROUGH */
     case OP_MATCH:
     case OP_QR:
-clear_pmop:
+    clear_pmop:
 	if (!(cPMOPo->op_pmflags & PMf_CODELIST_PRIVATE))
 	    op_free(cPMOPo->op_code_list);
 	cPMOPo->op_code_list = NULL;
@@ -1767,7 +1767,6 @@ Perl_scalarvoid(pTHX_ OP *arg)
     do {
         SV *useless_sv = NULL;
         const char* useless = NULL;
-        bool useless_is_grep = FALSE;
 
         if (o->op_type == OP_NEXTSTATE
             || o->op_type == OP_DBSTATE
@@ -1887,14 +1886,8 @@ Perl_scalarvoid(pTHX_ OP *arg)
         case OP_HELEM:
         case OP_HSLICE:
             if (!(o->op_private & (OPpLVAL_INTRO|OPpOUR_INTRO)))
-                useless = OP_DESC(o);
-            break;
-        case OP_GREPWHILE:
-            if (!(o->op_private & (OPpLVAL_INTRO|OPpOUR_INTRO))) {
                 /* Otherwise it's "Useless use of grep iterator" */
-                useless = "grep";
-                useless_is_grep = TRUE;
-            }
+                useless = OP_DESC(o);
             break;
 
         case OP_SPLIT:
@@ -2125,15 +2118,9 @@ Perl_scalarvoid(pTHX_ OP *arg)
                            SVfARG(sv_2mortal(useless_sv)));
         }
         else if (useless) {
-	    if (useless_is_grep) {
-                Perl_ck_warner(aTHX_ packWARN(WARN_VOID_UNUSUAL),
-                               "Unusual use of %s in void context",
-                               useless);
-	    } else {
-                Perl_ck_warner(aTHX_ packWARN(WARN_VOID),
-                               "Useless use of %s in void context",
-                               useless);
-	    }
+            Perl_ck_warner(aTHX_ packWARN(WARN_VOID),
+                           "Useless use of %s in void context",
+                           useless);
         }
     } while ( (o = POP_DEFERRED_OP()) );
 
@@ -6826,7 +6813,7 @@ S_search_const(pTHX_ OP *o)
 	    } while (kid);
 	    if (!kid)
 		kid = cLISTOPo->op_last;
-last:
+          last:
 	    return search_const(kid);
 	}
     }
@@ -9494,10 +9481,15 @@ Perl_ck_bitop(pTHX_ OP *o)
     PERL_ARGS_ASSERT_CK_BITOP;
 
     o->op_private = (U8)(PL_hints & HINT_INTEGER);
+
+    if (o->op_type == OP_NBIT_OR     || o->op_type == OP_SBIT_OR
+     || o->op_type == OP_NBIT_XOR    || o->op_type == OP_SBIT_XOR
+     || o->op_type == OP_NBIT_AND    || o->op_type == OP_SBIT_AND
+     || o->op_type == OP_NCOMPLEMENT || o->op_type == OP_SCOMPLEMENT)
+	Perl_ck_warner_d(aTHX_ packWARN(WARN_EXPERIMENTAL__BITWISE),
+			      "The bitwise feature is experimental");
     if (!(o->op_flags & OPf_STACKED) /* Not an assignment */
-	    && (o->op_type == OP_BIT_OR
-	     || o->op_type == OP_BIT_AND
-	     || o->op_type == OP_BIT_XOR))
+	    && OP_IS_INFIX_BIT(o->op_type))
     {
 	const OP * const left = cBINOPo->op_first;
 	const OP * const right = OpSIBLING(left);
@@ -9506,9 +9498,15 @@ Perl_ck_bitop(pTHX_ OP *o)
 	    (OP_IS_NUMCOMPARE(right->op_type) &&
 		(right->op_flags & OPf_PARENS) == 0))
 	    Perl_ck_warner(aTHX_ packWARN(WARN_PRECEDENCE),
-			   "Possible precedence problem on bitwise %c operator",
-			   o->op_type == OP_BIT_OR ? '|'
-			   : o->op_type == OP_BIT_AND ? '&' : '^'
+			  "Possible precedence problem on bitwise %s operator",
+			   o->op_type ==  OP_BIT_OR
+			 ||o->op_type == OP_NBIT_OR  ? "|"
+			:  o->op_type ==  OP_BIT_AND
+			 ||o->op_type == OP_NBIT_AND ? "&"
+			:  o->op_type ==  OP_BIT_XOR
+			 ||o->op_type == OP_NBIT_XOR ? "^"
+			:  o->op_type == OP_SBIT_OR  ? "|."
+			:  o->op_type == OP_SBIT_AND ? "&." : "^."
 			   );
     }
     return o;
@@ -9671,7 +9669,7 @@ Perl_ck_eval(pTHX_ OP *o)
 	SVOP * const kid = (SVOP*)cUNOPo->op_first;
 	assert(kid);
 
-	if (kid->op_type == OP_LINESEQ || kid->op_type == OP_STUB) {
+	if (o->op_type == OP_ENTERTRY) {
 	    LOGOP *enter;
 
             /* cut whole sibling chain free from o */
@@ -9878,8 +9876,10 @@ Perl_ck_ftst(pTHX_ OP *o)
 	}
 	if ((PL_hints & HINT_FILETEST_ACCESS) && OP_IS_FILETEST_ACCESS(o->op_type))
 	    o->op_private |= OPpFT_ACCESS;
-	if (PL_check[kidtype] == Perl_ck_ftst
-	        && kidtype != OP_STAT && kidtype != OP_LSTAT) {
+	if (type != OP_STAT && type != OP_LSTAT
+            && PL_check[kidtype] == Perl_ck_ftst
+            && kidtype != OP_STAT && kidtype != OP_LSTAT
+        ) {
 	    o->op_private |= OPpFT_STACKED;
 	    kid->op_private |= OPpFT_STACKING;
 	    if (kidtype == OP_FTTTY && (
@@ -11894,7 +11894,7 @@ Perl_ck_subr(pTHX_ OP *o)
 	    }
 	    /* make class name a shared cow string to speedup method calls */
 	    /* constant string might be replaced with object, f.e. bigint */
-	    if (const_class && !SvROK(*const_class)) {
+	    if (const_class && SvPOK(*const_class)) {
 		STRLEN len;
 		const char* str = SvPV(*const_class, len);
 		if (len) {
@@ -12893,7 +12893,8 @@ Perl_rpeep(pTHX_ OP *o)
                  * update the code accordingly. This applies to all the
                  * other ASSUMEs in the block of code too.
                  */
-                ASSUME(!(o2->op_flags & ~(OPf_WANT|OPf_MOD|OPf_SPECIAL)));
+                ASSUME(!(o2->op_flags &
+                            ~(OPf_WANT|OPf_MOD|OPf_PARENS|OPf_SPECIAL)));
                 ASSUME(!(o2->op_private & ~OPpEARLY_CV));
 
                 o2 = o2->op_next;

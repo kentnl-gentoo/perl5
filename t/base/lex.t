@@ -482,3 +482,15 @@ print "not " unless &{sub :lvalue { "a" }} eq "a";
 print "ok $test - &{sub :lvalue...}\n"; $test++;
 print "not " unless ref +(map{sub :lvalue { "a" }} 1)[0] eq "CODE";
 print "ok $test - map{sub :lvalue...}\n"; $test++;
+
+# Used to crash [perl #123711]
+0-5x-l{0};
+
+# Used to fail an assertion [perl #123617]
+eval '"$a{ 1 m// }"; //';
+
+# Pending token stack overflow [perl #123677]
+{
+ local $SIG{__WARN__}=sub{};
+ eval q|s)$0{0h());qx(@0);qx(@0);qx(@0)|;
+}

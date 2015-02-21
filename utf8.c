@@ -32,7 +32,6 @@
 #define PERL_IN_UTF8_C
 #include "perl.h"
 #include "inline_invlist.c"
-#include "charclass_invlists.h"
 
 static const char unees[] =
     "Malformed UTF-8 character (unexpected end of string)";
@@ -316,22 +315,6 @@ U8 *
 Perl_uvchr_to_utf8_flags(pTHX_ U8 *d, UV uv, UV flags)
 {
     return uvchr_to_utf8_flags(d, uv, flags);
-}
-
-/*
-=for apidoc is_utf8_char_buf
-
-This is identical to the macro L</isUTF8_CHAR>.
-
-=cut */
-
-STRLEN
-Perl_is_utf8_char_buf(const U8 *buf, const U8* buf_end)
-{
-
-    PERL_ARGS_ASSERT_IS_UTF8_CHAR_BUF;
-
-    return isUTF8_CHAR(buf, buf_end);
 }
 
 /*
@@ -806,13 +789,13 @@ Perl_utf8n_to_uvchr(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
      *	    is the label <malformed>.
      */
 
-malformed:
+  malformed:
 
     if (sv && ckWARN_d(WARN_UTF8)) {
 	pack_warn = packWARN(WARN_UTF8);
     }
 
-disallowed:
+  disallowed:
 
     if (flags & UTF8_CHECK_ONLY) {
 	if (retlen)
@@ -820,7 +803,7 @@ disallowed:
 	return 0;
     }
 
-do_warn:
+  do_warn:
 
     if (pack_warn) {	/* <pack_warn> was initialized to 0, and changed only
 			   if warnings are to be raised. */
@@ -1294,19 +1277,26 @@ Perl_utf16_to_utf8(pTHX_ U8* p, U8* d, I32 bytelen, I32 *newlen)
 #define LAST_HIGH_SURROGATE  0xDBFF
 #define FIRST_LOW_SURROGATE  0xDC00
 #define LAST_LOW_SURROGATE   UNICODE_SURROGATE_LAST
-	if (uv >= FIRST_HIGH_SURROGATE && uv <= LAST_HIGH_SURROGATE) {
-	    if (p >= pend) {
-		Perl_croak(aTHX_ "Malformed UTF-16 surrogate");
-	    } else {
+
+        /* This assumes that most uses will be in the first Unicode plane, not
+         * needing surrogates */
+	if (UNLIKELY(uv >= UNICODE_SURROGATE_FIRST
+                  && uv <= UNICODE_SURROGATE_LAST))
+        {
+            if (UNLIKELY(p >= pend) || UNLIKELY(uv > LAST_HIGH_SURROGATE)) {
+                Perl_croak(aTHX_ "Malformed UTF-16 surrogate");
+            }
+	    else {
 		UV low = (p[0] << 8) + p[1];
-		p += 2;
-		if (low < FIRST_LOW_SURROGATE || low > LAST_LOW_SURROGATE)
+		if (   UNLIKELY(low < FIRST_LOW_SURROGATE)
+                    || UNLIKELY(low > LAST_LOW_SURROGATE))
+                {
 		    Perl_croak(aTHX_ "Malformed UTF-16 surrogate");
+                }
+		p += 2;
 		uv = ((uv - FIRST_HIGH_SURROGATE) << 10)
                                        + (low - FIRST_LOW_SURROGATE) + 0x10000;
 	    }
-	} else if (uv >= FIRST_LOW_SURROGATE && uv <= LAST_LOW_SURROGATE) {
-	    Perl_croak(aTHX_ "Malformed UTF-16 surrogate");
 	}
 #ifdef EBCDIC
         d = uvoffuni_to_utf8_flags(d, uv, 0);
@@ -1919,7 +1909,7 @@ S_check_locale_boundary_crossing(pTHX_ const U8* const p, const UV result, U8* c
 	return result;
     }
 
-bad_crossing:
+  bad_crossing:
 
     /* Failed, have to return the original */
     original = valid_utf8_to_uvchr(p, lenp);

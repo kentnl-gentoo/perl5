@@ -35,6 +35,7 @@ bit bit field. Here's a general example:
 
     addbits('aelem',
             7 => qw(OPpLVAL_INTRO LVINTRO),
+            6 => qw(OPpLVAL_DEFER LVDEFER),
        '4..5' =>  {
                        mask_def  => 'OPpDEREF',
                        enum => [ qw(
@@ -43,10 +44,9 @@ bit bit field. Here's a general example:
                                    3   OPpDEREF_SV   DREFSV
                                )],
                    },
-            6 => qw(OPpLVAL_DEFER LVDEFER),
     );
 
-Here for the op C<aelem>, bits 4 and 7 (bits are numbered 0..7) are
+Here for the op C<aelem>, bits 6 and 7 (bits are numbered 0..7) are
 defined as single-bit flags. The first string following the bit number is
 the define name that gets emitted in F<opcode.h>, and the second string is
 the label, which will be displayed by F<Concise.pm> and Perl_do_op_dump()
@@ -202,6 +202,9 @@ use strict;
 
     $args1{$_} = 1 for (
                         qw(reverse), # ck_fun(), but most bits stolen
+                        qw(mapstart grepstart), # set in ck_fun, but
+                                                # cleared in ck_grep,
+                                                # unless there is an error
                         grep !$maxarg{$_} && !$args0{$_},
                             ops_with_flag('1'), # UNOP
                             ops_with_flag('+'), # UNOP_AUX

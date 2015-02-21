@@ -1103,7 +1103,6 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	    sv_setiv(sv, (IV)IoPAGE(GvIOp(PL_defoutgv)));
 	break;
     case ':':
-	break;
     case '/':
 	break;
     case '[':
@@ -2774,6 +2773,17 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 			    PerlMemShared_free(PL_compiling.cop_warnings);
 			PL_compiling.cop_warnings = pWARN_NONE;
 		    }
+		    /* Yuck. I can't see how to abstract this:  */
+		    else if (isWARN_on(
+                                ((STRLEN *)SvPV_nolen_const(sv)) - 1,
+                                WARN_ALL)
+                            && !any_fatals)
+                    {
+			if (!specialWARN(PL_compiling.cop_warnings))
+			    PerlMemShared_free(PL_compiling.cop_warnings);
+	                PL_compiling.cop_warnings = pWARN_ALL;
+	                PL_dowarn |= G_WARN_ONCE ;
+	            }
                     else {
 			STRLEN len;
 			const char *const p = SvPV_const(sv, len);
@@ -2857,6 +2867,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
                         );
                     }
                 } else {
+                    sv_setsv(sv, PL_rs);
               /* diag_listed_as: Setting $/ to %s reference is forbidden */
                     Perl_croak(aTHX_ "Setting $/ to a%s %s reference is forbidden",
                                       *reftype == 'A' ? "n" : "", reftype);
@@ -3341,7 +3352,7 @@ Perl_sighandler(int sig)
 	}
     }
 
-cleanup:
+  cleanup:
     /* pop any of SAVEFREESV, SAVEDESTRUCTOR_X and "save in progress" */
     PL_savestack_ix = old_ss_ix;
     if (flags & 8)

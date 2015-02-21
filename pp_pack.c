@@ -142,7 +142,7 @@ typedef union {
 #  error "Unsupported byteorder"
         /* Need to add code here to re-instate mixed endian support.
            NEEDS_SWAP would need to hold a flag indicating which action to
-           take, and S_reverse_copy and the code in uni_to_bytes would need
+           take, and S_reverse_copy and the code in S_utf8_to_bytes would need
            logic adding to deal with any mixed-endian transformations needed.
         */
 #endif
@@ -151,7 +151,7 @@ typedef union {
 #define SHIFT_BYTES(utf8, s, strend, buf, len, datumtype, needs_swap)	\
 STMT_START {						\
     if (UNLIKELY(utf8)) {                               \
-        if (!uni_to_bytes(aTHX_ &s, strend,		\
+        if (!S_utf8_to_bytes(aTHX_ &s, strend,		\
 	  (char *) (buf), len, datumtype)) break;	\
     } else {						\
         if (UNLIKELY(needs_swap))                       \
@@ -216,16 +216,8 @@ S_mul128(pTHX_ SV *sv, U8 m)
 
 /* Explosives and implosives. */
 
-#if 'I' == 73 && 'J' == 74
-/* On an ASCII/ISO kind of system */
-#define ISUUCHAR(ch)    ((ch) >= ' ' && (ch) < 'a')
-#else
-/*
-  Some other sort of character set - use memchr() so we don't match
-  the null byte.
- */
-#define ISUUCHAR(ch)    (memchr(PL_uuemap, (ch), sizeof(PL_uuemap)-1) || (ch) == ' ')
-#endif
+#define ISUUCHAR(ch)    (NATIVE_TO_LATIN1(ch) >= NATIVE_TO_LATIN1(' ')  \
+                      && NATIVE_TO_LATIN1(ch) <  NATIVE_TO_LATIN1('a'))
 
 /* type modifiers */
 #define TYPE_IS_SHRIEKING	0x100
@@ -256,7 +248,7 @@ S_reverse_copy(const char *src, char *dest, STRLEN len)
 }
 
 STATIC U8
-uni_to_byte(pTHX_ const char **s, const char *end, I32 datumtype)
+utf8_to_byte(pTHX_ const char **s, const char *end, I32 datumtype)
 {
     STRLEN retlen;
     UV val = utf8n_to_uvchr((U8 *) *s, end-*s, &retlen,
@@ -278,11 +270,11 @@ uni_to_byte(pTHX_ const char **s, const char *end, I32 datumtype)
 }
 
 #define SHIFT_BYTE(utf8, s, strend, datumtype) ((utf8) ? \
-	uni_to_byte(aTHX_ &(s), (strend), (datumtype)) : \
+	utf8_to_byte(aTHX_ &(s), (strend), (datumtype)) : \
 	*(U8 *)(s)++)
 
 STATIC bool
-uni_to_bytes(pTHX_ const char **s, const char *end, const char *buf, int buf_len, I32 datumtype)
+S_utf8_to_bytes(pTHX_ const char **s, const char *end, const char *buf, int buf_len, I32 datumtype)
 {
     UV val;
     STRLEN retlen;
@@ -334,24 +326,9 @@ uni_to_bytes(pTHX_ const char **s, const char *end, const char *buf, int buf_len
     return TRUE;
 }
 
-STATIC bool
-next_uni_uu(pTHX_ const char **s, const char *end, I32 *out)
-{
-    STRLEN retlen;
-    const UV val = utf8n_to_uvchr((U8 *) *s, end-*s, &retlen, UTF8_CHECK_ONLY);
-    if (val >= 0x100 || !ISUUCHAR(val) ||
-	retlen == (STRLEN) -1 || retlen == 0) {
-	*out = 0;
-	return FALSE;
-    }
-    *out = PL_uudmap[val] & 077;
-    *s += retlen;
-    return TRUE;
-}
-
 STATIC char *
-S_bytes_to_uni(const U8 *start, STRLEN len, char *dest, const bool needs_swap) {
-    PERL_ARGS_ASSERT_BYTES_TO_UNI;
+S_my_bytes_to_utf8(const U8 *start, STRLEN len, char *dest, const bool needs_swap) {
+    PERL_ARGS_ASSERT_MY_BYTES_TO_UTF8;
 
     if (UNLIKELY(needs_swap)) {
         const U8 *p = start + len;
@@ -371,7 +348,7 @@ S_bytes_to_uni(const U8 *start, STRLEN len, char *dest, const bool needs_swap) {
 #define PUSH_BYTES(utf8, cur, buf, len, needs_swap)             \
 STMT_START {							\
     if (UNLIKELY(utf8))	                                        \
-	(cur) = S_bytes_to_uni((U8 *) buf, len, (cur), needs_swap);       \
+	(cur) = my_bytes_to_utf8((U8 *) buf, len, (cur), needs_swap);       \
     else {							\
         if (UNLIKELY(needs_swap))                               \
             S_reverse_copy((char *)(buf), cur, len);            \
@@ -409,7 +386,7 @@ STMT_START {					\
 STMT_START {					\
     if (utf8) {					\
 	const U8 au8 = (byte);			\
-	(s) = S_bytes_to_uni(&au8, 1, (s), 0);	\
+	(s) = my_bytes_to_utf8(&au8, 1, (s), 0);\
     } else *(U8 *)(s)++ = (byte);		\
 } STMT_END
 
@@ -1128,7 +1105,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 	    if (checksum) {
 		if (utf8)
 		    while (len >= 8 && s < strend) {
-			cuv += PL_bitcount[uni_to_byte(aTHX_ &s, strend, datumtype)];
+			cuv += PL_bitcount[utf8_to_byte(aTHX_ &s, strend, datumtype)];
 			len -= 8;
 		    }
 		else
@@ -1163,7 +1140,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		    if (len & 7) bits >>= 1;
 		    else if (utf8) {
 			if (s >= strend) break;
-			bits = uni_to_byte(aTHX_ &s, strend, datumtype);
+			bits = utf8_to_byte(aTHX_ &s, strend, datumtype);
 		    } else bits = *(U8 *) s++;
 		    *str++ = bits & 1 ? '1' : '0';
 		}
@@ -1174,7 +1151,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		    if (len & 7) bits <<= 1;
 		    else if (utf8) {
 			if (s >= strend) break;
-			bits = uni_to_byte(aTHX_ &s, strend, datumtype);
+			bits = utf8_to_byte(aTHX_ &s, strend, datumtype);
 		    } else bits = *(U8 *) s++;
 		    *str++ = bits & 0x80 ? '1' : '0';
 		}
@@ -1202,7 +1179,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		    if (len & 1) bits >>= 4;
 		    else if (utf8) {
 			if (s >= strend) break;
-			bits = uni_to_byte(aTHX_ &s, strend, datumtype);
+			bits = utf8_to_byte(aTHX_ &s, strend, datumtype);
 		    } else bits = * (U8 *) s++;
 		    if (!checksum)
 			*str++ = PL_hexdigit[bits & 15];
@@ -1214,7 +1191,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		    if (len & 1) bits <<= 4;
 		    else if (utf8) {
 			if (s >= strend) break;
-			bits = uni_to_byte(aTHX_ &s, strend, datumtype);
+			bits = utf8_to_byte(aTHX_ &s, strend, datumtype);
 		    } else bits = *(U8 *) s++;
 		    if (!checksum)
 			*str++ = PL_hexdigit[(bits >> 4) & 15];
@@ -1312,11 +1289,11 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		    STRLEN len;
 		    /* Bug: warns about bad utf8 even if we are short on bytes
 		       and will break out of the loop */
-		    if (!uni_to_bytes(aTHX_ &ptr, strend, (char *) result, 1,
+		    if (!S_utf8_to_bytes(aTHX_ &ptr, strend, (char *) result, 1,
 				      'U'))
 			break;
 		    len = UTF8SKIP(result);
-		    if (!uni_to_bytes(aTHX_ &ptr, strend,
+		    if (!S_utf8_to_bytes(aTHX_ &ptr, strend,
 				      (char *) &result[1], len-1, 'U')) break;
 		    auv = NATIVE_TO_UNI(utf8n_to_uvchr(result,
                                                        len,
@@ -1729,72 +1706,48 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		sv = sv_2mortal(newSV(l));
 		if (l) SvPOK_on(sv);
 	    }
-	    if (utf8) {
-		while (next_uni_uu(aTHX_ &s, strend, &len)) {
-		    I32 a, b, c, d;
-		    char hunk[3];
 
-		    while (len > 0) {
-			next_uni_uu(aTHX_ &s, strend, &a);
-			next_uni_uu(aTHX_ &s, strend, &b);
-			next_uni_uu(aTHX_ &s, strend, &c);
-			next_uni_uu(aTHX_ &s, strend, &d);
-			hunk[0] = (char)((a << 2) | (b >> 4));
-			hunk[1] = (char)((b << 4) | (c >> 2));
-			hunk[2] = (char)((c << 6) | d);
-			if (!checksum)
-			    sv_catpvn(sv, hunk, (len > 3) ? 3 : len);
-			len -= 3;
-		    }
-		    if (s < strend) {
-			if (*s == '\n') {
-                            s++;
-                        }
-			else {
-			    /* possible checksum byte */
-			    const char *skip = s+UTF8SKIP(s);
-			    if (skip < strend && *skip == '\n')
-                                s = skip+1;
-			}
-		    }
-		}
-	    } else {
-		while (s < strend && *s > ' ' && ISUUCHAR(*s)) {
-		    I32 a, b, c, d;
-		    char hunk[3];
+            /* Note that all legal uuencoded strings are ASCII printables, so
+             * have the same representation under UTF-8 vs not.  This means we
+             * can ignore UTF8ness on legal input.  For illegal we stop at the
+             * first failure, and don't report where/what that is, so again we
+             * can ignore UTF8ness */
 
-		    len = PL_uudmap[*(U8*)s++] & 077;
-		    while (len > 0) {
-			if (s < strend && ISUUCHAR(*s))
-			    a = PL_uudmap[*(U8*)s++] & 077;
-			else
-			    a = 0;
-			if (s < strend && ISUUCHAR(*s))
-			    b = PL_uudmap[*(U8*)s++] & 077;
-			else
-			    b = 0;
-			if (s < strend && ISUUCHAR(*s))
-			    c = PL_uudmap[*(U8*)s++] & 077;
-			else
-			    c = 0;
-			if (s < strend && ISUUCHAR(*s))
-			    d = PL_uudmap[*(U8*)s++] & 077;
-			else
-			    d = 0;
-			hunk[0] = (char)((a << 2) | (b >> 4));
-			hunk[1] = (char)((b << 4) | (c >> 2));
-			hunk[2] = (char)((c << 6) | d);
-			if (!checksum)
-			    sv_catpvn(sv, hunk, (len > 3) ? 3 : len);
-			len -= 3;
-		    }
-		    if (*s == '\n')
-			s++;
-		    else	/* possible checksum byte */
-			if (s + 1 < strend && s[1] == '\n')
-			    s += 2;
-		}
-	    }
+            while (s < strend && *s != ' ' && ISUUCHAR(*s)) {
+                I32 a, b, c, d;
+                char hunk[3];
+
+                len = PL_uudmap[*(U8*)s++] & 077;
+                while (len > 0) {
+                    if (s < strend && ISUUCHAR(*s))
+                        a = PL_uudmap[*(U8*)s++] & 077;
+                    else
+                        a = 0;
+                    if (s < strend && ISUUCHAR(*s))
+                        b = PL_uudmap[*(U8*)s++] & 077;
+                    else
+                        b = 0;
+                    if (s < strend && ISUUCHAR(*s))
+                        c = PL_uudmap[*(U8*)s++] & 077;
+                    else
+                        c = 0;
+                    if (s < strend && ISUUCHAR(*s))
+                        d = PL_uudmap[*(U8*)s++] & 077;
+                    else
+                        d = 0;
+                    hunk[0] = (char)((a << 2) | (b >> 4));
+                    hunk[1] = (char)((b << 4) | (c >> 2));
+                    hunk[2] = (char)((c << 6) | d);
+                    if (!checksum)
+                        sv_catpvn(sv, hunk, (len > 3) ? 3 : len);
+                    len -= 3;
+                }
+                if (*s == '\n')
+                    s++;
+                else	/* possible checksum byte */
+                    if (s + 1 < strend && s[1] == '\n')
+                        s += 2;
+            }
 	    if (!checksum)
 		XPUSHs(sv);
 	    break;
@@ -2141,7 +2094,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	char *cur   = start + SvCUR(cat);
         bool needs_swap;
 
-#define NEXTFROM (lengthcode ? lengthcode : items-- > 0 ? *beglist++ : &PL_sv_no)
+#define NEXTFROM (lengthcode ? lengthcode : items > 0 ? (--items, *beglist++) : &PL_sv_no)
 #define PEEKFROM (lengthcode ? lengthcode : items > 0 ? *beglist : &PL_sv_no)
 
         switch (howlen) {
@@ -2387,7 +2340,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 		    if (datumtype == 'Z') len++;
 		}
 		GROWING(0, cat, start, cur, len);
-		if (!uni_to_bytes(aTHX_ &aptr, end, cur, fromlen,
+		if (!S_utf8_to_bytes(aTHX_ &aptr, end, cur, fromlen,
 				  datumtype | TYPE_IS_PACK))
 		    Perl_croak(aTHX_ "panic: predicted utf8 length not available, "
 			       "for '%c', aptr=%p end=%p cur=%p, fromlen=%"UVuf,
@@ -2687,7 +2640,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 				len+(endb-buffer)*UTF8_EXPAND);
 			end = start+SvLEN(cat);
 		    }
-                    cur = S_bytes_to_uni(buffer, endb-buffer, cur, 0);
+                    cur = my_bytes_to_utf8(buffer, endb-buffer, cur, 0);
 		} else {
 		    if (cur >= end) {
 			*cur = '\0';
@@ -3102,7 +3055,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 		    todo = fromlen;
 		if (from_utf8) {
 		    char buffer[64];
-		    if (!uni_to_bytes(aTHX_ &aptr, aend, buffer, todo,
+		    if (!S_utf8_to_bytes(aTHX_ &aptr, aend, buffer, todo,
 				      'u' | TYPE_IS_PACK)) {
 			*cur = '\0';
 			SvCUR_set(cat, cur - start);

@@ -38,7 +38,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.21.8
+#INST_VER	= \5.21.9
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -133,9 +133,26 @@ CCTYPE		= MSVC60
 #__ICC		= define
 
 #
-# uncomment next line if you want debug version of perl (big,slow)
+# Uncomment this if you want to build everything in C++ mode
+#
+#USE_CPLUSPLUS	= define
+
+#
+# uncomment next line if you want debug version of perl (big/slow)
 # If not enabled, we automatically try to use maximum optimization
 # with all compilers that are known to have a working optimizer.
+#
+# You can also set CFG = DebugSymbols for a slightly smaller/faster
+# debug build without the special debugging code in perl which is
+# enabled via -DDEBUGGING;
+#
+# or you can set CFG = DebugFull for an even fuller (bigger/slower)
+# debug build using the debug version of the CRT, and enabling VC++
+# debug features such as extra assertions and invalid parameter warnings
+# in perl and CRT code via -D_DEBUG.  (Note that the invalid parameter
+# handler does get triggered from time to time in this configuration,
+# which causes warnings to be printed on STDERR, which in turn causes a
+# few tests to fail.)
 #
 #CFG		= Debug
 
@@ -427,10 +444,19 @@ LOCDEFS		= -DPERLDLL -DPERL_CORE
 SUBSYS		= console
 CXX_FLAG	= -TP -EHsc
 
-LIBC	= msvcrt.lib
+LIBC		= msvcrt.lib
 
 !IF  "$(CFG)" == "Debug"
 OPTIMIZE	= -Od -MD -Zi -DDEBUGGING
+LINK_DBG	= -debug
+!ELSE
+!IF  "$(CFG)" == "DebugSymbols"
+OPTIMIZE	= -Od -MD -Zi
+LINK_DBG	= -debug
+!ELSE
+!IF  "$(CFG)" == "DebugFull"
+LIBC		= msvcrtd.lib
+OPTIMIZE	= -Od -MDd -Zi -D_DEBUG -DDEBUGGING
 LINK_DBG	= -debug
 !ELSE
 # -O1 yields smaller code, which turns out to be faster than -O2 on x86 and x64
@@ -449,6 +475,8 @@ OPTIMIZE	= $(OPTIMIZE) -GL
 LINK_DBG	= $(LINK_DBG) -ltcg
 LIB_FLAGS	= -ltcg
 !  ENDIF
+!ENDIF
+!ENDIF
 !ENDIF
 
 !IF "$(WIN64)" == "define"
@@ -504,6 +532,9 @@ LIBFILES	= $(LIBBASEFILES) $(LIBC)
 EXTRACFLAGS	= -nologo -GF -W3
 !IF "$(__ICC)" == "define"
 EXTRACFLAGS	= $(EXTRACFLAGS) -Qstd=c99
+!ENDIF
+!IF "$(USE_CPLUSPLUS)" == "define"
+EXTRACFLAGS	= $(EXTRACFLAGS) $(CXX_FLAG)
 !ENDIF
 CFLAGS		= $(EXTRACFLAGS) $(INCLUDES) $(DEFINES) $(LOCDEFS) \
 		$(PCHFLAGS) $(OPTIMIZE)
@@ -615,6 +646,7 @@ UTILS		=			\
 		..\utils\perlivp	\
 		..\utils\libnetcfg	\
 		..\utils\enc2xs		\
+		..\utils\encguess		\
 		..\utils\piconv		\
 		..\utils\corelist	\
 		..\utils\cpan		\
@@ -791,6 +823,7 @@ CFG_VARS	=					\
 		"cc=$(CC)"				\
 		"ld=$(LINK32)"				\
 		"ccflags=$(EXTRACFLAGS) $(OPTIMIZE:"=\") $(DEFINES) $(BUILDOPT)"	\
+		"usecplusplus=$(USE_CPLUSPLUS)"		\
 		"cf_email=$(EMAIL)"	 		\
 		"d_mymalloc=$(PERL_MALLOC)"		\
 		"libs=$(LIBFILES)"			\
@@ -879,6 +912,7 @@ config.w32 : $(CFGSH_TMPL)
 	@echo #undef UVXf>>$@
 	@echo #undef USE_64_BIT_INT>>$@
 	@echo #undef Size_t_size>>$@
+	@echo #undef USE_CPLUSPLUS>>$@
 !IF "$(USE_LARGE_FILES)"=="define"
 	@echo #define Off_t __int64>>$@
 	@echo #define LSEEKSIZE ^8>>$@
@@ -930,6 +964,11 @@ config.w32 : $(CFGSH_TMPL)
 	@echo #define UVXf "lX">>$@
 	@echo #undef USE_64_BIT_INT>>$@
 !ENDIF
+!IF "$(USE_CPLUSPLUS)"=="define"
+	@echo #define USE_CPLUSPLUS>>$@
+!ELSE
+	@echo #undef USE_CPLUSPLUS>>$@
+!ENDIF
 	@echo #endif>>$@
 
 ..\git_version.h : $(MINIPERL) ..\make_patchnum.pl
@@ -954,7 +993,6 @@ regen_config_h:
 
 $(CONFIGPM) : $(MINIPERL) ..\config.sh config_h.PL
 	$(MINIPERL) -I..\lib ..\configpm --chdir=..
-	if exist lib\* $(RCOPY) lib\*.* ..\lib\$(NULL)
 	$(XCOPY) ..\*.h $(COREDIR)\*.*
 	$(XCOPY) *.h $(COREDIR)\*.*
 	$(RCOPY) include $(COREDIR)\*.*
@@ -1138,7 +1176,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5218delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5219delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1234,7 +1272,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5218delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5219delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \
@@ -1245,7 +1283,7 @@ distclean: realclean
 	    perltru64.pod perltw.pod perluniprops.pod perlvos.pod \
 	    perlwin32.pod
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph pstruct h2xs \
-	    perldoc perlivp libnetcfg enc2xs piconv cpan *.bat \
+	    perldoc perlivp libnetcfg enc2xs encguess piconv cpan *.bat \
 	    xsubpp pod2html instmodsh json_pp prove ptar ptardiff ptargrep shasum corelist zipdetails
 	-del /f ..\config.sh perlmain.c dlutils.c config.h.new \
 	        perlmainst.c
@@ -1283,7 +1321,7 @@ inst_lib : $(CONFIGPM)
 
 $(UNIDATAFILES) ..\pod\perluniprops.pod : $(MINIPERL) $(CONFIGPM) ..\lib\unicore\mktables Extensions_nonxs
 	cd ..\lib\unicore && \
-	..\$(MINIPERL) -I.. -I..\..\dist\Cwd\lib -I..\..\dist\Cwd mktables -P ..\..\pod -maketest -makelist -p -check $@ $(FIRSTUNIFILE)
+	..\$(MINIPERL) -I.. mktables -P ..\..\pod -maketest -makelist -p -check $@ $(FIRSTUNIFILE)
 
 minitest : .\config.h $(MINIPERL) ..\git_version.h $(GLOBEXE) $(CONFIGPM) $(UNIDATAFILES)
 	$(XCOPY) $(MINIPERL) ..\t\$(NULL)

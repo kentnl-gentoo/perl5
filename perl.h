@@ -1226,6 +1226,7 @@ EXTERN_C char *crypt(const char *, const char *);
 #   define SS_IVCHAN  		SS$_IVCHAN
 #   define SS_NORMAL  		SS$_NORMAL
 #   define SS_NOPRIV  		SS$_NOPRIV
+#   define SS_BUFFEROVF		SS$_BUFFEROVF
 #else
 #   define LIB_INVARG 		0
 #   define RMS_DIR    		0
@@ -1240,6 +1241,7 @@ EXTERN_C char *crypt(const char *, const char *);
 #   define SS_IVCHAN  		0
 #   define SS_NORMAL  		0
 #   define SS_NOPRIV  		0
+#   define SS_BUFFEROVF		0
 #endif
 
 #ifdef WIN32
@@ -2683,6 +2685,7 @@ typedef struct padname PADNAME;
 #endif
 
 #include "handy.h"
+#include "charclass_invlists.h"
 
 #if defined(USE_LARGE_FILES) && !defined(NO_64_BIT_RAWIO)
 #   if LSEEKSIZE == 8 && !defined(USE_64_BIT_RAWIO)
@@ -3508,10 +3511,23 @@ typedef pthread_key_t	perl_key;
 /* placeholder */
 #endif
 
-#if defined(static_assert) || (defined(__cplusplus) && __cplusplus >= 201103L)
+/* STATIC_ASSERT_GLOBAL/STATIC_ASSERT_STMT are like assert(), but for compile
+   time invariants. That is, their argument must be a constant expression that
+   can be verified by the compiler. This expression can contain anything that's
+   known to the compiler, e.g. #define constants, enums, or sizeof (...). If
+   the expression evaluates to 0, compilation fails.
+   Because they generate no runtime code (i.e.  their use is "free"), they're
+   always active, even under non-DEBUGGING builds.
+   STATIC_ASSERT_GLOBAL expands to a declaration and is suitable for use at
+   file scope (outside of any function).
+   STATIC_ASSERT_STMT expands to a statement and is suitable for use inside a
+   function.
+*/
+#if (defined(static_assert) || (defined(__cplusplus) && __cplusplus >= 201103L)) && (!defined(__IBMC__) || __IBMC__ >= 1210)
 /* static_assert is a macro defined in <assert.h> in C11 or a compiler
    builtin in C++11.
 */
+/* IBM XL C V11 does not support _Static_assert, no matter what <assert.h> says */
 #  define STATIC_ASSERT_GLOBAL(COND) static_assert(COND, #COND)
 #else
 /* We use a bit-field instead of an array because gcc accepts
@@ -3539,7 +3555,7 @@ typedef pthread_key_t	perl_key;
    expression, which allows the compiler to generate better machine code.
    In a debug build, ASSUME(x) is a synonym for assert(x). ASSUME(0) means
    the control path is unreachable. In a for loop, ASSUME can be used to hint
-   that a loop will run atleast X times. ASSUME is based off MSVC's __assume
+   that a loop will run at least X times. ASSUME is based off MSVC's __assume
    intrinsic function, see its documents for more details.
 */
 
@@ -4254,14 +4270,6 @@ START_EXTERN_C
 END_EXTERN_C
 #endif
 
-#ifdef WIN32
-#  if !defined(NV_INF) && defined(HUGE_VAL)
-#    define NV_INF HUGE_VAL
-#  endif
-/* For WIN32 the best NV_NAN is the __PL_nan_u trick, see below.
- * There is no supported way of getting the NAN across all the crts. */
-#endif
-
 /* If you are thinking of using HUGE_VAL for infinity, or using
  * <math.h> functions to generate NV_INF (e.g. exp(1e9), log(-1.0)),
  * stop.  Neither will work portably: HUGE_VAL can be just DBL_MAX,
@@ -4321,9 +4329,11 @@ static const union { unsigned int __i; float __f; } __PL_inf_u =
 #   endif
 #   if !defined(NV_NAN) && defined(LDBL_QNAN)
 #       define NV_NAN LDBL_QNAN
+#       define NV_QNAN LDBL_QNAN
 #   endif
 #   if !defined(NV_NAN) && defined(LDBL_SNAN)
 #       define NV_NAN LDBL_SNAN
+#       define NV_SNAN LDBL_SNAN
 #   endif
 #endif
 #if !defined(NV_NAN) && defined(DBL_NAN)
@@ -4331,18 +4341,27 @@ static const union { unsigned int __i; float __f; } __PL_inf_u =
 #endif
 #if !defined(NV_NAN) && defined(DBL_QNAN)
 #  define NV_NAN (NV)DBL_QNAN
+#  define NV_QNAN DBL_QNAN
 #endif
 #if !defined(NV_NAN) && defined(DBL_SNAN)
 #  define NV_NAN (NV)DBL_SNAN
+#  define NV_SNAN DBL_SNAN
 #endif
 #if !defined(NV_NAN) && defined(NAN)
 #  define NV_NAN (NV)NAN
 #endif
 #if !defined(NV_NAN) && defined(QNAN)
 #  define NV_NAN (NV)QNAN
+#  define NV_QNAN QNAN
 #endif
 #if !defined(NV_NAN) && defined(SNAN)
 #  define NV_NAN (NV)SNAN
+#  define NV_SNAN SNAN
+#endif
+#if !defined(NV_NAN) && defined(I_SUNMATH)
+#  define NV_NAN (NV)quiet_nan()
+#  define NV_QNAN (NV)quiet_nan()
+#  define NV_SNAN (NV)signaling_nan()
 #endif
 #if !defined(NV_NAN)
 #  if INTSIZE == 4
@@ -6252,7 +6271,7 @@ int flock(int fd, int op);
 					      int).  value returned in pointed-
 					      to UV */
 #define IS_NUMBER_GREATER_THAN_UV_MAX 0x02 /* pointed to UV undefined */
-#define IS_NUMBER_NOT_INT	      0x04 /* saw . or E notation */
+#define IS_NUMBER_NOT_INT	      0x04 /* saw . or E notation or infnan */
 #define IS_NUMBER_NEG		      0x08 /* leading minus sign */
 #define IS_NUMBER_INFINITY	      0x10 /* this is big */
 #define IS_NUMBER_NAN                 0x20 /* this is not */
@@ -6410,6 +6429,84 @@ extern void moncontrol(int);
 /* used by pv_display in dump.c*/
 #define PERL_PV_PRETTY_DUMP  PERL_PV_PRETTY_ELLIPSES|PERL_PV_PRETTY_QUOTE
 #define PERL_PV_PRETTY_REGPROP PERL_PV_PRETTY_ELLIPSES|PERL_PV_PRETTY_LTGT|PERL_PV_ESCAPE_RE|PERL_PV_ESCAPE_NONASCII
+
+#if DOUBLEKIND == DOUBLE_IS_IEEE_754_32_BIT_LITTLE_ENDIAN || \
+    DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_LITTLE_ENDIAN || \
+    DOUBLEKIND == DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN
+#  define DOUBLE_LITTLE_ENDIAN
+#endif
+
+#if DOUBLEKIND == DOUBLE_IS_IEEE_754_32_BIT_BIG_ENDIAN || \
+    DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_BIG_ENDIAN || \
+    DOUBLEKIND == DOUBLE_IS_IEEE_754_128_BIT_BIG_ENDIAN
+#  define DOUBLE_BIG_ENDIAN
+#endif
+
+#if DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_MIXED_ENDIAN_LE_BE || \
+    DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_MIXED_ENDIAN_BE_LE
+#  define DOUBLE_MIX_ENDIAN
+#endif
+
+/* All the basic IEEE formats have the implicit bit,
+ * except for the 80-bit extended formats, which will undef this. */
+#define NV_IMPLICIT_BIT
+
+#ifdef LONG_DOUBLEKIND
+
+#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN || \
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN || \
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN
+#    define LONGDOUBLE_LITTLE_ENDIAN
+#  endif
+
+#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_BIG_ENDIAN || \
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN || \
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN
+#    define LONGDOUBLE_BIG_ENDIAN
+#  endif
+
+#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN || \
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN
+#    define LONGDOUBLE_X86_80_BIT
+#    ifdef USE_LONG_DOUBLE
+#      undef NV_IMPLICIT_BIT
+#    endif
+#  endif
+
+#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN || \
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN
+#    define LONGDOUBLE_DOUBLEDOUBLE
+#  endif
+
+#endif /* LONG_DOUBLEKIND */
+
+#if NVSIZE == DOUBLESIZE
+#  ifdef DOUBLE_LITTLE_ENDIAN
+#    define NV_LITTLE_ENDIAN
+#  endif
+#  ifdef DOUBLE_BIG_ENDIAN
+#    define NV_BIG_ENDIAN
+#  endif
+#  ifdef DOUBLE_MIX_ENDIAN
+#    define NV_MIX_ENDIAN
+#  endif
+#elif NVSIZE == LONG_DOUBLESIZE
+#  ifdef LONGDOUBLE_LITTLE_ENDIAN
+#    define NV_LITTLE_ENDIAN
+#  endif
+#  ifdef LONGDOUBLE_BIG_ENDIAN
+#    define NV_BIG_ENDIAN
+#  endif
+#endif
+
+/* The implicit bit platforms include the implicit bit
+ * in the NV_MANT_DIG.  The bit isn't really there, however,
+ * so the real count of mantissa bits is one less. */
+#ifdef NV_IMPLICIT_BIT
+#  define NV_MANT_REAL_DIG (NV_MANT_DIG - 1)
+#else
+#  define NV_MANT_REAL_DIG (NV_MANT_DIG)
+#endif
 
 /*
 

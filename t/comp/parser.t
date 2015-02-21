@@ -527,6 +527,13 @@ $x[FILE1->[0]];
 # Used to crash [perl #123542]
 eval 's /${<>{}) //';
 
+# Also used to crash [perl #123652]
+eval{$1=eval{a:}};
+
+# Used to fail assertions [perl #123753]
+eval "map+map";
+eval "grep+grep";
+
 # Add new tests HERE (above this line)
 
 # bug #74022: Loop on characters in \p{OtherIDContinue}

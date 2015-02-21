@@ -89,44 +89,63 @@
 
 #else
 
+#  ifdef USE_LONG_DOUBLE
+#    undef M_E
+#    undef M_LOG2E
+#    undef M_LOG10E
+#    undef M_LN2
+#    undef M_LN10
+#    undef M_PI
+#    undef M_PI_2
+#    undef M_PI_4
+#    undef M_1_PI
+#    undef M_2_PI
+#    undef M_2_SQRTPI
+#    undef M_SQRT2
+#    undef M_SQRT1_2
+#    define FLOAT_C(c) CAT2(c,L)
+#  else
+#    define FLOAT_C(c) (c)
+#  endif
+
 #  ifndef M_E
-#    define M_E		2.71828182845904523536028747135266250
+#    define M_E		FLOAT_C(2.71828182845904523536028747135266250)
 #  endif
 #  ifndef M_LOG2E
-#    define M_LOG2E	1.44269504088896340735992468100189214
+#    define M_LOG2E	FLOAT_C(1.44269504088896340735992468100189214)
 #  endif
 #  ifndef M_LOG10E
-#    define M_LOG10E	0.434294481903251827651128918916605082
+#    define M_LOG10E	FLOAT_C(0.434294481903251827651128918916605082)
 #  endif
 #  ifndef M_LN2
-#    define M_LN2	0.693147180559945309417232121458176568
+#    define M_LN2	FLOAT_C(0.693147180559945309417232121458176568)
 #  endif
 #  ifndef M_LN10
-#    define M_LN10	2.30258509299404568401799145468436421
+#    define M_LN10	FLOAT_C(2.30258509299404568401799145468436421)
 #  endif
 #  ifndef M_PI
-#    define M_PI	3.14159265358979323846264338327950288
+#    define M_PI	FLOAT_C(3.14159265358979323846264338327950288)
 #  endif
 #  ifndef M_PI_2
-#    define M_PI_2	1.57079632679489661923132169163975144
+#    define M_PI_2	FLOAT_C(1.57079632679489661923132169163975144)
 #  endif
 #  ifndef M_PI_4
-#    define M_PI_4	0.785398163397448309615660845819875721
+#    define M_PI_4	FLOAT_C(0.785398163397448309615660845819875721)
 #  endif
 #  ifndef M_1_PI
-#    define M_1_PI	0.318309886183790671537767526745028724
+#    define M_1_PI	FLOAT_C(0.318309886183790671537767526745028724)
 #  endif
 #  ifndef M_2_PI
-#    define M_2_PI	0.636619772367581343075535053490057448
+#    define M_2_PI	FLOAT_C(0.636619772367581343075535053490057448)
 #  endif
 #  ifndef M_2_SQRTPI
-#    define M_2_SQRTPI	1.12837916709551257389615890312154517
+#    define M_2_SQRTPI	FLOAT_C(1.12837916709551257389615890312154517)
 #  endif
 #  ifndef M_SQRT2
-#    define M_SQRT2	1.41421356237309504880168872420969808
+#    define M_SQRT2	FLOAT_C(1.41421356237309504880168872420969808)
 #  endif
 #  ifndef M_SQRT1_2
-#    define M_SQRT1_2	0.707106781186547524400844362104849039
+#    define M_SQRT1_2	FLOAT_C(0.707106781186547524400844362104849039)
 #  endif
 
 #endif
@@ -276,14 +295,14 @@
 #  define c99_log1p	log1pl
 #  define c99_log2	log2l
 #  define c99_logb	logbl
-#  if defined(USE_64_BIT_INT) && QUADKIND == QUAD_IS_LONG_LONG
-#   define c99_lrint	llrintl
-#  else
+#  if defined(USE_64_BIT_INT) && QUADKIND == QUAD_IS_LONG_LONG && defined(HAS_LLRINTL)
+#    define c99_lrint	llrintl
+#  elif defined(HAS_LRINTL)
 #    define c99_lrint	lrintl
 #  endif
-#  if defined(USE_64_BIT_INT) && QUADKIND == QUAD_IS_LONG_LONG
+#  if defined(USE_64_BIT_INT) && QUADKIND == QUAD_IS_LONG_LONG && defined(HAS_LLROUNDL)
 #    define c99_lround	llroundl
-#  else
+#  elif defined(HAS_LROUNDL)
 #    define c99_lround	lroundl
 #  endif
 #  define c99_nan	nanl
@@ -345,6 +364,45 @@
 #  endif
 #  define c99_tgamma	tgamma
 #  define c99_trunc	trunc
+#endif
+
+/* AIX xlc (__IBMC__) really doesn't have the following long double
+ * math interfaces (no __acoshl128 aka acoshl, etc.), see
+ * hints/aix.sh.  These are in the -lc128 but fail to be found
+ * during dynamic linking/loading.
+ *
+ * XXX1 Better Configure scans
+ * XXX2 Is this xlc version dependent? */
+#if defined(USE_LONG_DOUBLE) && defined(__IBMC__)
+#  undef c99_acosh
+#  undef c99_asinh
+#  undef c99_atanh
+#  undef c99_cbrt
+#  undef c99_copysign
+#  undef c99_exp2
+#  undef c99_expm1
+#  undef c99_fdim
+#  undef c99_fma
+#  undef c99_fmax
+#  undef c99_fmin
+#  undef c99_hypot
+#  undef c99_ilogb
+#  undef c99_lrint
+#  undef c99_lround
+#  undef c99_log1p
+#  undef c99_log2
+#  undef c99_logb
+#  undef c99_nan
+#  undef c99_nearbyint
+#  undef c99_nextafter
+#  undef c99_nexttoward
+#  undef c99_remainder
+#  undef c99_remquo
+#  undef c99_rint
+#  undef c99_round
+#  undef c99_scalbn
+#  undef c99_tgamma
+#  undef c99_trunc
 #endif
 
 #ifndef isunordered
@@ -740,16 +798,18 @@ static IV my_ilogb(NV x)
 /* Note that the tgamma() and lgamma() implementations
  * here depend on each other. */
 
-#ifndef HAS_TGAMMA
+#if !defined(HAS_TGAMMA) || !defined(c99_tgamma)
 static NV my_tgamma(NV x);
 #  define c99_tgamma my_tgamma
+#  define USE_MY_TGAMMA
 #endif
-#ifndef HAS_LGAMMA
+#if !defined(HAS_LGAMMA) || !defined(c99_lgamma)
 static NV my_lgamma(NV x);
 #  define c99_lgamma my_lgamma
+#  define USE_MY_LGAMMA
 #endif
 
-#ifndef HAS_TGAMMA
+#ifdef USE_MY_TGAMMA
 static NV my_tgamma(NV x)
 {
   const NV gamma = 0.577215664901532860606512090; /* Euler's gamma constant. */
@@ -843,7 +903,7 @@ static NV my_tgamma(NV x)
 }
 #endif
 
-#ifndef HAS_LGAMMA
+#ifdef USE_MY_LGAMMA
 static NV my_lgamma(NV x)
 {
   if (Perl_isnan(x))

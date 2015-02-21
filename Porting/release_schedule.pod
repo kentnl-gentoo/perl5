@@ -24,7 +24,8 @@ Code freezes (which happen in the 5.21.X series)
 
   2014-05-27  5.20.0 ✓        Ricardo Signes
   2014-09-14  5.20.1 ✓        Steve Hay
-  2015-01-??  5.20.2          Steve Hay
+  2015-02-14  5.20.2 ✓        Steve Hay
+  2015-??-??  5.20.3          ??
 
 =head2 Perl 5.18
 
@@ -59,9 +60,9 @@ you should reset the version numbers to the next blead series.
   2014-10-20  5.21.5 ✓        Abigail
   2014-11-20  5.21.6 ✓        Chris "BinGOs" Williams
   2014-12-20  5.21.7 ✓        Max Maischein
-  2015-01-20  5.21.8          Matthew Horsfall
-  2015-02-20  5.21.9          ?
-  2015-03-20  5.21.10         ?
+  2015-01-20  5.21.8 ✓        Matthew Horsfall
+  2015-02-20  5.21.9          Sawyer X
+  2015-03-20  5.21.10         Steve Hay
   2015-04-20  5.21.11         ?
 
 (RC0 for 5.22.0 will be released once we think that all the blockers have been
