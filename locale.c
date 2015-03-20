@@ -675,7 +675,10 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
     const bool locwarn = (printwarn > 1
                           || (printwarn
                               && (! bad_lang_use_once
-                                  || grok_atou(bad_lang_use_once, NULL))));
+                                  || (
+                                    /* disallow with "" or "0" */
+                                    *bad_lang_use_once
+                                    && strNE("0", bad_lang_use_once)))));
     bool done = FALSE;
 #ifdef WIN32
     /* In some systems you can find out the system default locale
@@ -1080,16 +1083,16 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
     Safefree(curnum);
 #endif /* USE_LOCALE_NUMERIC */
 
-#else  /* !USE_LOCALE */
-    PERL_UNUSED_ARG(printwarn);
-#endif /* USE_LOCALE */
-
 #ifdef __GLIBC__
     Safefree(language);
 #endif
 
     Safefree(lc_all);
     Safefree(lang);
+
+#else  /* !USE_LOCALE */
+    PERL_UNUSED_ARG(printwarn);
+#endif /* USE_LOCALE */
 
     return ok;
 }

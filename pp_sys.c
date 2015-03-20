@@ -3340,6 +3340,7 @@ PP(pp_fttty)
     GV *gv;
     char *name = NULL;
     STRLEN namelen;
+    UV uv;
 
     tryAMAGICftest_MG('t');
 
@@ -3355,8 +3356,8 @@ PP(pp_fttty)
 
     if (GvIO(gv) && IoIFP(GvIOp(gv)))
 	fd = PerlIO_fileno(IoIFP(GvIOp(gv)));
-    else if (name && isDIGIT(*name))
-        fd = grok_atou(name, NULL);
+    else if (name && isDIGIT(*name) && grok_atoUV(name, &uv, NULL) && uv <= PERL_INT_MAX)
+        fd = (int)uv;
     else
 	FT_RETURNUNDEF;
     if (fd < 0) {
@@ -4805,7 +4806,7 @@ S_space_join_names_mortal(pTHX_ char *const *array)
 
     PERL_ARGS_ASSERT_SPACE_JOIN_NAMES_MORTAL;
 
-    if (array && *array) {
+    if (*array) {
 	target = newSVpvs_flags("", SVs_TEMP);
 	while (1) {
 	    sv_catpv(target, *array);

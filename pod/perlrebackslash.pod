@@ -298,7 +298,7 @@ beginning with a "0".
 =head3 Hexadecimal escapes
 
 Like octal escapes, there are two forms of hexadecimal escapes, but both start
-with the same thing, C<\x>.  This is followed by either exactly two hexadecimal
+with the sequence C<\x>.  This is followed by either exactly two hexadecimal
 digits forming a number, or a hexadecimal number of arbitrary length surrounded
 by curly braces. The hexadecimal number is the code point of the character you
 want to express.
@@ -558,8 +558,10 @@ non-word characters nor for string ends.  It may help to understand how
     \b	really means	(?:(?<=\w)(?!\w)|(?<!\w)(?=\w))
     \B	really means	(?:(?<=\w)(?=\w)|(?<!\w)(?!\w))
 
-In contrast, C<\b{...}> may or may not match at the beginning and end of
-the line depending on the boundary type (and C<\B{...}> never does).
+In contrast, C<\b{...}> and C<\B{...}> may or may not match at the
+beginning and end of the line, depending on the boundary type.  These
+implement the Unicode default boundaries, specified in
+L<http://www.unicode.org/reports/tr29/>.
 The boundary types currently available are:
 
 =over
@@ -577,17 +579,51 @@ whichever is most convenient for your situation.
 This matches a Unicode "Sentence Boundary".  This is an aid to parsing
 natural language sentences.  It gives good, but imperfect results.  For
 example, it thinks that "Mr. Smith" is two sentences.  More details are
-at L<http://www.unicode.org/reports/tr29/>.
+at L<http://www.unicode.org/reports/tr29/>.  Note also that it thinks
+that anything matching L</\R> (except form feed and vertical tab) is a
+sentence boundary.  C<\b{sb}> works with text designed for
+word-processors which wrap lines
+automatically for display, but hard-coded line boundaries are considered
+to be essentially the ends of text blocks (paragraphs really), and hence
+the ends of sententces.  C<\b{sb}> doesn't do well with text containing
+embedded newlines, like the source text of the document you are reading.
+Such text needs to be preprocessed to get rid of the line separators
+before looking for sentence boundaries.  Some people view this as a bug
+in the Unicode standard.
 
 =item C<\b{wb}>
 
 This matches a Unicode "Word Boundary".  This gives better (though not
 perfect) results for natural language processing than plain C<\b>
 (without braces) does.  For example, it understands that apostrophes can
-be in the middle of words.   More details are at
-L<http://www.unicode.org/reports/tr29/>.
+be in the middle of words and that parentheses aren't (see the examples
+below).   More details are at L<http://www.unicode.org/reports/tr29/>.
 
 =back
+
+It is important to realize when you use these Unicode boundaries,
+that you are taking a risk that a future version of Perl which contains
+a later version of the Unicode Standard will not work precisely the same
+way as it did when your code was written.  These rules are not
+considered stable and have been somewhat more subject to change than the
+rest of the Standard.  Unicode reserves the right to change them at
+will, and Perl reserves the right to update its implementation to
+Unicode's new rules.  In the past, some changes have been because new
+characters have been added to the Standard which have different
+characteristics than all previous characters, so new rules are
+formulated for handling them.  These should not cause any backward
+compatibility issues.  But some changes have changed the treatment of
+existing characters because the Unicode Technical Committee has decided
+that the change is warranted for whatever reason.  This could be to fix
+a bug, or because they think better results are obtained with the new
+rule.
+
+It is also important to realize that these are default boundary
+definitions, and that implementations may wish to tailor the results for
+particular purposes and locales.
+
+Unicode defines a fourth boundary type, accessible through the
+L<Unicode::LineBreak> module.
 
 Mnemonic: I<b>oundary.
 
@@ -612,9 +648,12 @@ Mnemonic: I<b>oundary.
       print $1;           # Prints 'cat'
   }
 
-  print join "\n", "I don't care" =~ m/ ( .+? \b{wb} ) /xg;
+  my $s = "He said, \"Is pi 3.14? (I'm not sure).\"";
+  print join("|", $s =~ m/ ( .+? \b     ) /xg), "\n";
+  print join("|", $s =~ m/ ( .+? \b{wb} ) /xg), "\n";
  prints
-  I, ,don't, ,care
+  He| |said|, "|Is| |pi| |3|.|14|? (|I|'|m| |not| |sure
+  He| |said|,| |"|Is| |pi| |3.14|?| |(|I'm| |not| |sure|)|.|"
 
 =head2 Misc
 

@@ -4,12 +4,15 @@
 
 # NOTE:
 #
-# Increment ($x++) has a certain amount of cleverness for things like
+# It's best to not features found only in more modern Perls here, as some cpan
+# distributions copy this file and operate on older Perls.  Similarly keep
+# things simple as this may be run under fairly broken circumstances.  For
+# example, increment ($x++) has a certain amount of cleverness for things like
 #
 #   $x = 'zz';
 #   $x++; # $x eq 'aaa';
 #
-# stands more chance of breaking than just a simple
+# This stands more chance of breaking than just a simple
 #
 #   $x = $x + 1
 #
@@ -300,13 +303,19 @@ sub display {
                     $y = $y . $backslash_escape{$c};
                 } else {
                     my $z = chr $c; # Maybe we can get away with a literal...
-                    if ($z =~ /[[:^print:]]/) {
 
-                        # Use octal for characters traditionally expressed as
-                        # such: the low controls, which on EBCDIC aren't
-                        # necessarily the same ones as on ASCII platforms, but
-                        # are small ordinals, nonetheless
-                        if ($c <= 037) {
+                    if ($z !~ /[^[:^print:][:^ascii:]]/) {
+                        # The pattern above is equivalent (by de Morgan's
+                        # laws) to:
+                        #     $z !~ /(?[ [:print:] & [:ascii:] ])/
+                        # or, $z is not an ascii printable character
+
+                        # Use octal for characters with small ordinals that
+                        # are traditionally expressed as octal: the controls
+                        # below space, which on EBCDIC are almost all the
+                        # controls, but on ASCII don't include DEL nor the C1
+                        # controls.
+                        if ($c < ord " ") {
                             $z = sprintf "\\%03o", $c;
                         } else {
                             $z = sprintf "\\x{%x}", $c;

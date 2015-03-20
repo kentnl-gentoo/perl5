@@ -193,7 +193,7 @@ use File::Glob qw(:case);
     },
 
     'Carp' => {
-        'DISTRIBUTION' => 'ZEFRAM/Carp-1.3301.tar.gz',
+        'DISTRIBUTION' => 'RJBS/Carp-1.36.tar.gz',
         'FILES'        => q[dist/Carp],
     },
 
@@ -243,13 +243,14 @@ use File::Glob qw(:case);
     },
 
     'CPAN' => {
-        'DISTRIBUTION' => 'ANDK/CPAN-2.05.tar.gz',
+        'DISTRIBUTION' => 'ANDK/CPAN-2.10.tar.gz',
         'FILES'        => q[cpan/CPAN],
         'EXCLUDED'     => [
             qr{^distroprefs/},
             qr{^inc/Test/},
             qr{^t/CPAN/},
             qr{^t/data/},
+            qr{^t/97-},
             qw( lib/CPAN/Admin.pm
                 scripts/cpan-mirrors
                 PAUSE2015.pub
@@ -277,24 +278,12 @@ use File::Glob qw(:case);
                 t/yaml_code.yml
                 ),
         ],
-        # Waiting to be merged upstream: see pull request #83
-        'CUSTOMIZED'   => [
-            qw( lib/CPAN/Author.pm
-                lib/CPAN/CacheMgr.pm
-                lib/CPAN/FTP.pm
-                lib/CPAN/HTTP/Client.pm
-                lib/CPAN/HandleConfig.pm
-                lib/CPAN/Index.pm
-                lib/CPAN/LWP/UserAgent.pm
-                lib/CPAN/Mirrors.pm
-                ),
-        ],
     },
 
     # Note: When updating CPAN-Meta the META.* files will need to be regenerated
     # perl -Icpan/CPAN-Meta/lib Porting/makemeta
     'CPAN::Meta' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.143240.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.150001.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta],
         'EXCLUDED'     => [
             qw[t/00-report-prereqs.t],
@@ -346,7 +335,7 @@ use File::Glob qw(:case);
     },
 
     'Devel::PPPort' => {
-        'DISTRIBUTION' => 'WOLFSAGE/Devel-PPPort-3.28.tar.gz',
+        'DISTRIBUTION' => 'WOLFSAGE/Devel-PPPort-3.31.tar.gz',
         # RJBS has asked MHX to have UPSTREAM be 'blead'
         # (i.e. move this from cpan/ to dist/)
         'FILES'        => q[cpan/Devel-PPPort],
@@ -392,13 +381,8 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.70.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.72.tar.gz',
         'FILES'        => q[cpan/Encode],
-        'CUSTOMIZED'   => [
-            # Waiting to be merged upstream if it smokes ok: see CPAN RT#100347,
-            # in particular see khw's comments on that ticket on 21 Nov 2014.
-            qw( encoding.pm ),
-        ],
     },
 
     'encoding::warnings' => {
@@ -585,7 +569,7 @@ use File::Glob qw(:case);
     },
 
     'Getopt::Long' => {
-        'DISTRIBUTION' => 'JV/Getopt-Long-2.43.tar.gz',
+        'DISTRIBUTION' => 'JV/Getopt-Long-2.45.tar.gz',
         'FILES'        => q[cpan/Getopt-Long],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -702,7 +686,7 @@ use File::Glob qw(:case);
     },
 
     'Locale-Codes' => {
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.33.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.34.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( README.first
@@ -806,7 +790,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150214.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150220.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -856,7 +840,7 @@ use File::Glob qw(:case);
     },
 
     'parent' => {
-        'DISTRIBUTION' => 'CORION/parent-0.228.tar.gz',
+        'DISTRIBUTION' => 'CORION/parent-0.232.tar.gz',
         'FILES'        => q[cpan/parent],
     },
 
@@ -886,6 +870,7 @@ use File::Glob qw(:case);
         'FILES'        => q[cpan/perlfaq],
         'EXCLUDED'     => [
             qw( inc/CreateQuestionList.pm
+                inc/perlfaq.tt
                 t/00-compile.t),
             qr{^xt/},
         ],
@@ -1067,27 +1052,20 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.301001_098.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.001014.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^t/xt},
             qr{^xt},
-            qr{^profiling},
             qw( .perlcriticrc
                 .perltidyrc
                 examples/indent.pl
                 examples/subtest.t
-                t/Legacy/00compile.t
-                t/Legacy/pod.t
+                t/00compile.t
                 t/xxx-changes_updated.t
-                t/zzz-check-breaks.t
-                t/Legacy/ribasushi_diag.t
                 ),
         ],
-       'CUSTOMIZED'   => [
-            # Waiting to be merged upstream: see pull request #494
-            qw( t/Legacy/exit.t ),
-        ],    },
+    },
 
     'Text::Abbrev' => {
         'DISTRIBUTION' => 'FLORA/Text-Abbrev-1.02.tar.gz',
@@ -1096,7 +1074,7 @@ use File::Glob qw(:case);
     },
 
     'Text::Balanced' => {
-        'DISTRIBUTION' => 'ADAMK/Text-Balanced-2.02.tar.gz',
+        'DISTRIBUTION' => 'SHAY/Text-Balanced-2.03.tar.gz',
         'FILES'        => q[cpan/Text-Balanced],
         'EXCLUDED'     => [
             qw( t/97_meta.t
@@ -1104,39 +1082,18 @@ use File::Glob qw(:case);
                 t/99_pmv.t
                 ),
         ],
-
-        # Waiting to be merged upstream: see CPAN RT#87788
-        'CUSTOMIZED'   => [
-            qw( t/01_compile.t
-                t/02_extbrk.t
-                t/03_extcbk.t
-                t/04_extdel.t
-                t/05_extmul.t
-                t/06_extqlk.t
-                t/07_exttag.t
-                t/08_extvar.t
-                t/09_gentag.t
-                ),
-        ],
-
     },
 
     'Text::ParseWords' => {
-        'DISTRIBUTION' => 'CHORNY/Text-ParseWords-3.29.tar.gz',
+        'DISTRIBUTION' => 'CHORNY/Text-ParseWords-3.30.tar.gz',
         'FILES'        => q[cpan/Text-ParseWords],
 
-        # Waiting to be merged upstream: see CPAN RT#50929
+        # Waiting to be merged upstream:
+        # see https://github.com/chorny/Text-ParseWords/pull/6
         'CUSTOMIZED'   => [
             qw( t/ParseWords.t
-                t/taint.t
                 ),
         ],
-
-        # For the benefit of make_ext.pl, we have to have this accessible:
-        'MAP' => {
-            'ParseWords.pm' => 'cpan/Text-ParseWords/lib/Text/ParseWords.pm',
-            ''              => 'cpan/Text-ParseWords/',
-        },
     },
 
     'Text-Tabs+Wrap' => {
@@ -1182,13 +1139,8 @@ use File::Glob qw(:case);
     },
 
     'threads' => {
-        'DISTRIBUTION' => 'JDHEDDEN/threads-1.96.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-2.01.tar.gz',
         'FILES'        => q[dist/threads],
-        'CUSTOMIZED'   => [
-            # Waiting to be merged upstream: see CPAN RT#100755
-            qw( threads.xs
-                lib/threads.pm),
-        ],
         'EXCLUDED'     => [
             qr{^examples/},
             qw( t/pod.t
@@ -1239,7 +1191,7 @@ use File::Glob qw(:case);
     },
 
     'Unicode::Collate' => {
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.11.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.12.tar.gz',
         'FILES'        => q[cpan/Unicode-Collate],
         'EXCLUDED'     => [
             qr{N$},
@@ -1306,6 +1258,21 @@ use File::Glob qw(:case);
         'FILES'        => q[cpan/Win32API-File],
         'EXCLUDED'     => [
             qr{^ex/},
+        ],
+
+        # Currently all EOL differences. Waiting for a new upstream release:
+        # All the files in the GitHub repo have UNIX EOLs already.
+        'CUSTOMIZED'   => [
+            qw( ExtUtils/Myconst2perl.pm
+                Makefile.PL
+                buffers.h
+                cFile.h
+                cFile.pc
+                const2perl.h
+                t/file.t
+                t/tie.t
+                typemap
+                ),
         ],
     },
 
@@ -1399,6 +1366,7 @@ use File::Glob qw(:case);
                 lib/FindBin.{pm,t}
                 lib/Getopt/Std.{pm,t}
                 lib/Internals.t
+                lib/meta_notation.{pm,t}
                 lib/Net/hostent.{pm,t}
                 lib/Net/netent.{pm,t}
                 lib/Net/protoent.{pm,t}

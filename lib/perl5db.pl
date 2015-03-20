@@ -528,7 +528,7 @@ BEGIN {
 # Debugger for Perl 5.00x; perl5db.pl patch level:
 use vars qw($VERSION $header);
 
-$VERSION = '1.47';
+$VERSION = '1.48';
 
 $header = "perl5db.pl version $VERSION";
 
@@ -6540,11 +6540,10 @@ sub _dump_trace_calc_saved_single_arg
         s/(.*)/'$1'/s
         unless /^(?: -?[\d.]+ | \*[\w:]* )$/x;
 
-        # Turn high-bit characters into meta-whatever.
-        s/([\200-\377])/sprintf("M-%c",ord($1)&0177)/eg;
-
-        # Turn control characters into ^-whatever.
-        s/([\0-\37\177])/sprintf("^%c",ord($1)^64)/eg;
+        # Turn high-bit characters into meta-whatever, and controls into like
+        # '^D'.
+        require 'meta_notation.pm';
+        $_ = _meta_notation($_) if /[[:^print:]]/a;
 
         return $_;
     }
@@ -7573,7 +7572,7 @@ variables during a restart.
 Set_list packages up items to be stored in a set of environment variables
 (VAR_n, containing the number of items, and VAR_0, VAR_1, etc., containing
 the values). Values outside the standard ASCII charset are stored by encoding
-then as hexadecimal values.
+them as hexadecimal values.
 
 =cut
 
@@ -7589,7 +7588,9 @@ sub set_list {
     for my $i ( 0 .. $#list ) {
         $val = $list[$i];
         $val =~ s/\\/\\\\/g;
-        $val =~ s/([\0-\37\177\200-\377])/"\\0x" . unpack('H2',$1)/eg;
+        no warnings 'experimental::regex_sets';
+        $val =~ s/ ( (?[ [\000-\xFF] & [:^print:] ]) ) /
+                                                "\\0x" . unpack('H2',$1)/xaeg;
         $ENV{"${stem}_$i"} = $val;
     } ## end for $i (0 .. $#list)
 } ## end sub set_list
@@ -8429,7 +8430,7 @@ sub print_help {
     # wide.  If it's wider than that, an extra space will be added.
     $help_str =~ s{
         ^                       # only matters at start of line
-          ( \040{4} | \t )*     # some subcommands are indented
+          ( \ {4} | \t )*       # some subcommands are indented
           ( < ?                 # so <CR> works
             [BI] < [^\t\n] + )  # find an eeevil ornament
           ( \t+ )               # original separation, discarded

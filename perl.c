@@ -385,7 +385,6 @@ perl_construct(pTHXx)
     PL_XPosix_ptrs[_CC_PRINT] = _new_invlist_C_array(XPosixPrint_invlist);
     PL_XPosix_ptrs[_CC_PUNCT] = _new_invlist_C_array(XPosixPunct_invlist);
     PL_XPosix_ptrs[_CC_SPACE] = _new_invlist_C_array(XPerlSpace_invlist);
-    PL_XPosix_ptrs[_CC_PSXSPC] = _new_invlist_C_array(XPosixSpace_invlist);
     PL_XPosix_ptrs[_CC_UPPER] = _new_invlist_C_array(XPosixUpper_invlist);
     PL_XPosix_ptrs[_CC_VERTSPACE] = _new_invlist_C_array(VertSpace_invlist);
     PL_XPosix_ptrs[_CC_WORDCHAR] = _new_invlist_C_array(XPosixWord_invlist);
@@ -551,7 +550,11 @@ perl_destruct(pTHXx)
             if (strEQ(s, "-1")) { /* Special case: modperl folklore. */
                 i = -1;
             } else {
-                i = grok_atou(s, NULL);
+                UV uv;
+                if (grok_atoUV(s, &uv, NULL) && uv <= INT_MAX)
+                    i = (int)uv;
+                else
+                    i = 0;
             }
 #ifdef DEBUGGING
 	    if (destruct_level < i) destruct_level = i;
@@ -1042,7 +1045,9 @@ perl_destruct(pTHXx)
     SvREFCNT_dec(PL_Latin1);
     SvREFCNT_dec(PL_NonL1NonFinalFold);
     SvREFCNT_dec(PL_HasMultiCharFold);
+#ifdef USE_LOCALE_CTYPE
     SvREFCNT_dec(PL_warn_locale);
+#endif
     PL_utf8_mark	= NULL;
     PL_utf8_toupper	= NULL;
     PL_utf8_totitle	= NULL;
@@ -1054,7 +1059,9 @@ perl_destruct(pTHXx)
     PL_AboveLatin1       = NULL;
     PL_InBitmap          = NULL;
     PL_HasMultiCharFold  = NULL;
+#ifdef USE_LOCALE_CTYPE
     PL_warn_locale       = NULL;
+#endif
     PL_Latin1            = NULL;
     PL_NonL1NonFinalFold = NULL;
     PL_UpperLatin1       = NULL;
@@ -1306,6 +1313,13 @@ perl_destruct(pTHXx)
     Perl_reentrant_free(aTHX);
 #endif
 
+    /* These all point to HVs that are about to be blown away.
+       Code in core and on CPAN assumes that if the interpreter is re-started
+       that they will be cleanly NULL or pointing to a valid HV.  */
+    PL_custom_op_names = NULL;
+    PL_custom_op_descs = NULL;
+    PL_custom_ops = NULL;
+
     sv_free_arenas();
 
     while (PL_regmatch_slab) {
@@ -1470,7 +1484,7 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
     {
         const char * const s = PerlEnv_getenv("PERL_HASH_SEED_DEBUG");
 
-        if (s && (grok_atou(s, NULL) == 1)) {
+        if (s && strEQ(s, "1")) {
             unsigned char *seed= PERL_HASH_SEED;
             unsigned char *seed_end= PERL_HASH_SEED + PERL_HASH_SEED_BYTES;
             PerlIO_printf(Perl_debug_log, "HASH_FUNCTION = %s HASH_SEED = 0x", PERL_HASH_FUNC);
@@ -1773,7 +1787,7 @@ S_Internals_V(pTHX_ CV *cv)
 #  endif	       
 	;
     PERL_UNUSED_ARG(cv);
-    PERL_UNUSED_ARG(items);
+    PERL_UNUSED_VAR(items);
 
     EXTEND(SP, entries);
 
@@ -2001,6 +2015,10 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 #endif
 	(s = PerlEnv_getenv("PERL5OPT")))
     {
+        /* s points to static memory in getenv(), which may be overwritten at
+         * any time; use a mortal copy instead */
+	s = SvPVX(sv_2mortal(newSVpv(s, 0)));
+
 	while (isSPACE(*s))
 	    s++;
 	if (*s == '-' && *(s+1) == 'T') {
@@ -2305,7 +2323,9 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 #ifdef MYMALLOC
     {
 	const char *s;
-        if ((s=PerlEnv_getenv("PERL_DEBUG_MSTATS")) && grok_atou(s, NULL) >= 2)
+        UV uv;
+        s = PerlEnv_getenv("PERL_DEBUG_MSTATS");
+        if (s && grok_atoUV(s, &uv, NULL) && uv >= 2)
             dump_mstats("after compilation:");
     }
 #endif
@@ -2588,13 +2608,11 @@ Perl_call_argv(pTHX_ const char *sub_name, I32 flags, char **argv)
     PERL_ARGS_ASSERT_CALL_ARGV;
 
     PUSHMARK(SP);
-    if (argv) {
-	while (*argv) {
-	    mXPUSHs(newSVpv(*argv,0));
-	    argv++;
-	}
-	PUTBACK;
+    while (*argv) {
+        mXPUSHs(newSVpv(*argv,0));
+        argv++;
     }
+    PUTBACK;
     return call_pv(sub_name, flags);
 }
 
@@ -3039,7 +3057,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
       "  L  trace some locale setting information--for Perl core development\n",
       NULL
     };
-    int i = 0;
+    UV uv = 0;
 
     PERL_ARGS_ASSERT_GET_DEBUG_OPTS;
 
@@ -3050,7 +3068,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
 	for (; isWORDCHAR(**s); (*s)++) {
 	    const char * const d = strchr(debopts,**s);
 	    if (d)
-		i |= 1 << (d - debopts);
+		uv |= 1 << (d - debopts);
 	    else if (ckWARN_d(WARN_DEBUGGING))
 	        Perl_warner(aTHX_ packWARN(WARN_DEBUGGING),
 		    "invalid option -D%c, use -D'' to see choices\n", **s);
@@ -3058,8 +3076,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
     }
     else if (isDIGIT(**s)) {
         const char* e;
-	i = grok_atou(*s, &e);
-        if (e)
+	if (grok_atoUV(*s, &uv, &e))
             *s = e;
 	for (; isWORDCHAR(**s); (*s)++) ;
     }
@@ -3067,7 +3084,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
       const char *const *p = usage_msgd;
       while (*p) PerlIO_puts(PerlIO_stdout(), *p++);
     }
-    return i;
+    return (int)uv; /* ignore any UV->int conversion loss */
 }
 #endif
 
@@ -3207,9 +3224,12 @@ Perl_moreswitches(pTHX_ const char *s)
 	for (s++; isWORDCHAR(*s); s++) ;
 #endif
 	return s;
+        NOT_REACHED; /* NOTREACHED */
     }	
     case 'h':
 	usage();
+        NOT_REACHED; /* NOTREACHED */
+
     case 'i':
 	Safefree(PL_inplace);
 #if defined(__CYGWIN__) /* do backup extension automagically */
@@ -3658,14 +3678,17 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
 	PL_origfilename = savepvs("-e");
     }
     else {
+        const char *s;
+        UV uv;
 	/* if find_script() returns, it returns a malloc()-ed value */
 	scriptname = PL_origfilename = find_script(scriptname, dosearch, NULL, 1);
 
-	if (strnEQ(scriptname, "/dev/fd/", 8) && isDIGIT(scriptname[8]) ) {
-            const char *s = scriptname + 8;
-            const char* e;
-	    fdscript = grok_atou(s, &e);
-	    s = e;
+	if (strnEQ(scriptname, "/dev/fd/", 8)
+            && isDIGIT(scriptname[8])
+            && grok_atoUV(scriptname + 8, &uv, &s)
+            && uv <= PERL_INT_MAX
+        ) {
+            fdscript = (int)uv;
 	    if (*s) {
 		/* PSz 18 Feb 04
 		 * Tell apart "normal" usage of fdscript, e.g.

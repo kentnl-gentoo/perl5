@@ -1425,6 +1425,7 @@ Perl_sv_upgrade(pTHX_ SV *const sv, svtype new_type)
 	   no route from NV to PVIV, NOK can never be true  */
 	assert(!SvNOKp(sv));
 	assert(!SvNOK(sv));
+        /* FALLTHROUGH */
     case SVt_PVIO:
     case SVt_PVFM:
     case SVt_PVGV:
@@ -3159,7 +3160,8 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 #else
                 {
                     bool local_radix;
-                    DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED();
+                    DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+                    STORE_LC_NUMERIC_SET_TO_NEEDED();
 
                     local_radix =
                         PL_numeric_local &&
@@ -6305,8 +6307,6 @@ Perl_sv_insert_flags(pTHX_ SV *const bigstr, const STRLEN offset, const STRLEN l
 
     PERL_ARGS_ASSERT_SV_INSERT_FLAGS;
 
-    if (!bigstr)
-	Perl_croak(aTHX_ "Can't modify nonexistent substring");
     SvPV_force_flags(bigstr, curlen, flags);
     (void)SvPOK_only_UTF8(bigstr);
     if (offset + len > curlen) {
@@ -6520,7 +6520,8 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
     SV* iter_sv = NULL;
     SV* next_sv = NULL;
     SV *sv = orig_sv;
-    STRLEN hash_index;
+    STRLEN hash_index = 0; /* initialise to make Coverity et al happy.
+                              Not strictly necessary */
 
     PERL_ARGS_ASSERT_SV_CLEAR;
 
@@ -6611,17 +6612,19 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 		PL_last_swash_hv = NULL;
 	    }
 	    if (HvTOTALKEYS((HV*)sv) > 0) {
-		const char *name;
+		const HEK *hek;
 		/* this statement should match the one at the beginning of
 		 * hv_undef_flags() */
 		if (   PL_phase != PERL_PHASE_DESTRUCT
-		    && (name = HvNAME((HV*)sv)))
+		    && (hek = HvNAME_HEK((HV*)sv)))
 		{
 		    if (PL_stashcache) {
-                    DEBUG_o(Perl_deb(aTHX_ "sv_clear clearing PL_stashcache for '%"SVf"'\n",
-                                     SVfARG(sv)));
+			DEBUG_o(Perl_deb(aTHX_
+			    "sv_clear clearing PL_stashcache for '%"HEKf
+			    "'\n",
+			     HEKfARG(hek)));
 			(void)hv_deletehek(PL_stashcache,
-					   HvNAME_HEK((HV*)sv), G_DISCARD);
+                                           hek, G_DISCARD);
                     }
 		    hv_name_set((HV*)sv, NULL, 0, 0);
 		}
@@ -6672,6 +6675,7 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 	    else if (LvTYPE(sv) != 't') /* unless tie: unrefcnted fake SV**  */
 		SvREFCNT_dec(LvTARG(sv));
 	    if (isREGEXP(sv)) goto freeregexp;
+            /* FALLTHROUGH */
 	case SVt_PVGV:
 	    if (isGV_with_GP(sv)) {
 		if(GvCVu((const GV *)sv) && (stash = GvSTASH(MUTABLE_GV(sv)))
@@ -6696,6 +6700,7 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 		PL_statgv = NULL;
             else if ((const GV *)sv == PL_stderrgv)
                 PL_stderrgv = NULL;
+            /* FALLTHROUGH */
 	case SVt_PVMG:
 	case SVt_PVNV:
 	case SVt_PVIV:
@@ -11201,7 +11206,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
     bool no_redundant_warning = FALSE; /* did we use any explicit format parameter index? */
     bool hexfp = FALSE; /* hexadecimal floating point? */
 
-    DECLARATION_FOR_STORE_LC_NUMERIC_SET_TO_NEEDED;
+    DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
 
     PERL_ARGS_ASSERT_SV_VCATPVFN_FLAGS;
     PERL_UNUSED_ARG(maybe_tainted);
@@ -13877,17 +13882,22 @@ Perl_cx_dup(pTHX_ PERL_CONTEXT *cxs, I32 ix, I32 max, CLONE_PARAMS* param)
 	    case CXt_LOOP_LAZYSV:
 		ncx->blk_loop.state_u.lazysv.end
 		    = sv_dup_inc(ncx->blk_loop.state_u.lazysv.end, param);
-		/* We are taking advantage of av_dup_inc and sv_dup_inc
-		   actually being the same function, and order equivalence of
-		   the two unions.
+                /* Fallthrough: duplicate lazysv.cur by using the ary.ary
+                   duplication code instead.
+                   We are taking advantage of (1) av_dup_inc and sv_dup_inc
+                   actually being the same function, and (2) order
+                   equivalence of the two unions.
 		   We can assert the later [but only at run time :-(]  */
 		assert ((void *) &ncx->blk_loop.state_u.ary.ary ==
 			(void *) &ncx->blk_loop.state_u.lazysv.cur);
+                /* FALLTHROUGH */
 	    case CXt_LOOP_FOR:
 		ncx->blk_loop.state_u.ary.ary
 		    = av_dup_inc(ncx->blk_loop.state_u.ary.ary, param);
+                /* FALLTHROUGH */
 	    case CXt_LOOP_LAZYIV:
 	    case CXt_LOOP_PLAIN:
+                /* code common to all CXt_LOOP_* types */
 		if (CxPADLOOP(ncx)) {
 		    ncx->blk_loop.itervar_u.oldcomppad
 			= (PAD*)ptr_table_fetch(PL_ptr_table,
@@ -15341,7 +15351,7 @@ Perl_sv_cat_decode(pTHX_ SV *dsv, SV *encoding,
 
     PERL_ARGS_ASSERT_SV_CAT_DECODE;
 
-    if (SvPOK(ssv) && SvPOK(dsv) && SvROK(encoding) && offset) {
+    if (SvPOK(ssv) && SvPOK(dsv) && SvROK(encoding)) {
 	SV *offsv;
 	dSP;
 	ENTER;

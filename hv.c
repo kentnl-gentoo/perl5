@@ -1726,7 +1726,7 @@ S_clear_placeholders(pTHX_ HV *hv, U32 items)
     } while (--i >= 0);
     /* You can't get here, hence assertion should always fail.  */
     assert (items == 0);
-    NOT_REACHED;
+    NOT_REACHED; /* NOTREACHED */
 }
 
 STATIC void
@@ -2096,11 +2096,6 @@ Perl_hv_iterinit(pTHX_ HV *hv)
 {
     PERL_ARGS_ASSERT_HV_ITERINIT;
 
-    /* FIXME: Are we not NULL, or do we croak? Place bets now! */
-
-    if (!hv)
-	Perl_croak(aTHX_ "Bad hash");
-
     if (SvOOK(hv)) {
 	struct xpvhv_aux * iter = HvAUX(hv);
 	HE * const entry = iter->xhv_eiter; /* HvEITER(hv) */
@@ -2128,9 +2123,6 @@ Perl_hv_riter_p(pTHX_ HV *hv) {
 
     PERL_ARGS_ASSERT_HV_RITER_P;
 
-    if (!hv)
-	Perl_croak(aTHX_ "Bad hash");
-
     iter = SvOOK(hv) ? HvAUX(hv) : hv_auxinit(hv);
     return &(iter->xhv_riter);
 }
@@ -2141,9 +2133,6 @@ Perl_hv_eiter_p(pTHX_ HV *hv) {
 
     PERL_ARGS_ASSERT_HV_EITER_P;
 
-    if (!hv)
-	Perl_croak(aTHX_ "Bad hash");
-
     iter = SvOOK(hv) ? HvAUX(hv) : hv_auxinit(hv);
     return &(iter->xhv_eiter);
 }
@@ -2153,9 +2142,6 @@ Perl_hv_riter_set(pTHX_ HV *hv, I32 riter) {
     struct xpvhv_aux *iter;
 
     PERL_ARGS_ASSERT_HV_RITER_SET;
-
-    if (!hv)
-	Perl_croak(aTHX_ "Bad hash");
 
     if (SvOOK(hv)) {
 	iter = HvAUX(hv);
@@ -2175,9 +2161,6 @@ Perl_hv_rand_set(pTHX_ HV *hv, U32 new_xhv_rand) {
     PERL_ARGS_ASSERT_HV_RAND_SET;
 
 #ifdef PERL_HASH_RANDOMIZE_KEYS
-    if (!hv)
-        Perl_croak(aTHX_ "Bad hash");
-
     if (SvOOK(hv)) {
         iter = HvAUX(hv);
     } else {
@@ -2194,9 +2177,6 @@ Perl_hv_eiter_set(pTHX_ HV *hv, HE *eiter) {
     struct xpvhv_aux *iter;
 
     PERL_ARGS_ASSERT_HV_EITER_SET;
-
-    if (!hv)
-	Perl_croak(aTHX_ "Bad hash");
 
     if (SvOOK(hv)) {
 	iter = HvAUX(hv);
@@ -2334,10 +2314,12 @@ Perl_hv_ename_add(pTHX_ HV *hv, const char *name, U32 len, U32 flags)
     PERL_HASH(hash, name, len);
 
     if (aux->xhv_name_count) {
-	HEK ** const xhv_name = aux->xhv_name_u.xhvnameu_names;
 	I32 count = aux->xhv_name_count;
-	HEK **hekp = xhv_name + (count < 0 ? -count : count);
+	HEK ** const xhv_name = aux->xhv_name_u.xhvnameu_names + (count<0);
+	HEK **hekp = xhv_name + (count < 0 ? -count - 1 : count);
 	while (hekp-- > xhv_name)
+	{
+	    assert(*hekp);
 	    if (
                  (HEK_UTF8(*hekp) || (flags & SVf_UTF8)) 
                     ? hek_eq_pvn_flags(aTHX_ *hekp, name, (I32)len, flags)
@@ -2347,6 +2329,7 @@ Perl_hv_ename_add(pTHX_ HV *hv, const char *name, U32 len, U32 flags)
 		    aux->xhv_name_count = -count;
 		return;
 	    }
+	}
 	if (count < 0) aux->xhv_name_count--, count = -count;
 	else aux->xhv_name_count++;
 	Renew(aux->xhv_name_u.xhvnameu_names, count + 1, HEK *);
@@ -2514,9 +2497,6 @@ Perl_hv_iternext_flags(pTHX_ HV *hv, I32 flags)
     struct xpvhv_aux *iter;
 
     PERL_ARGS_ASSERT_HV_ITERNEXT_FLAGS;
-
-    if (!hv)
-	Perl_croak(aTHX_ "Bad hash");
 
     xhv = (XPVHV*)SvANY(hv);
 

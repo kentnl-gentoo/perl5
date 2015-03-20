@@ -72,7 +72,7 @@ is(charprop($cp, "script"),     "Common");
 $cp = utf8::unicode_to_native(0x41);
 my $A_code = sprintf("%04X", ord("A"));
 my $a_code = sprintf("%04X", ord("a"));
-$charinfo = charinfo(utf8::unicode_to_native($cp));
+$charinfo = charinfo($cp);
 
 is($charinfo->{code},           $A_code, "LATIN CAPITAL LETTER A");
 is($charinfo->{name},           "LATIN CAPITAL LETTER A");
@@ -367,7 +367,7 @@ is(charblock(0x1FFFF),        "No_Block", "0x1FFFF - unused charblock");
 
 my $fraction_3_4_code = sprintf("%04X", utf8::unicode_to_native(0xbe));
 $cp = $fraction_3_4_code;
-$charinfo = charinfo(hex $fraction_3_4_code);
+$charinfo = charinfo($fraction_3_4_code);
 
 is($charinfo->{code},           $fraction_3_4_code, "VULGAR FRACTION THREE QUARTERS");
 is($charinfo->{name},           "VULGAR FRACTION THREE QUARTERS");
@@ -394,11 +394,11 @@ is(charprop($cp, 'na1'),        "FRACTION THREE QUARTERS");
 is($charinfo->{comment},        "");
 is(charprop($cp, 'isc'),        "");
 is($charinfo->{upper},          "");
-is(charprop($cp, 'uc'),         "\x{be}");
+is(charprop($cp, 'uc'),         chr hex $cp);
 is($charinfo->{lower},          "");
-is(charprop($cp, 'lc'),         "\x{be}");
+is(charprop($cp, 'lc'),         chr hex $cp);
 is($charinfo->{title},          "");
-is(charprop($cp, 'tc'),         "\x{be}");
+is(charprop($cp, 'tc'),         chr hex $cp);
 is($charinfo->{block},          "Latin-1 Supplement");
 is(charprop($cp, 'block'),      "Latin_1_Supplement");
 is($charinfo->{script},         "Common");
@@ -1167,33 +1167,33 @@ my $prop;
 my ($invlist_ref, $invmap_ref, $format, $missing);
 if ($::IS_ASCII) { # On EBCDIC, other things will come first, and can vary
                 # according to code page
-$prop = "uc";
-($invlist_ref, $invmap_ref, $format, $missing) = prop_invmap($prop);
-is($format, 'al', "prop_invmap() format of '$prop' is 'al'");
-is($missing, '0', "prop_invmap() missing of '$prop' is '0'");
-is($invlist_ref->[1], 0x61, "prop_invmap('$prop') list[1] is 0x61");
-is($invmap_ref->[1], 0x41, "prop_invmap('$prop') map[1] is 0x41");
+    $prop = "uc";
+    ($invlist_ref, $invmap_ref, $format, $missing) = prop_invmap($prop);
+    is($format, 'al', "prop_invmap() format of '$prop' is 'al'");
+    is($missing, '0', "prop_invmap() missing of '$prop' is '0'");
+    is($invlist_ref->[1], 0x61, "prop_invmap('$prop') list[1] is 0x61");
+    is($invmap_ref->[1], 0x41, "prop_invmap('$prop') map[1] is 0x41");
 
-$prop = "upper";
-($invlist_ref, $invmap_ref, $format, $missing) = prop_invmap($prop);
-is($format, 's', "prop_invmap() format of '$prop' is 's");
-is($missing, 'N', "prop_invmap() missing of '$prop' is 'N'");
-is($invlist_ref->[1], 0x41, "prop_invmap('$prop') list[1] is 0x41");
-is($invmap_ref->[1], 'Y', "prop_invmap('$prop') map[1] is 'Y'");
+    $prop = "upper";
+    ($invlist_ref, $invmap_ref, $format, $missing) = prop_invmap($prop);
+    is($format, 's', "prop_invmap() format of '$prop' is 's");
+    is($missing, 'N', "prop_invmap() missing of '$prop' is 'N'");
+    is($invlist_ref->[1], 0x41, "prop_invmap('$prop') list[1] is 0x41");
+    is($invmap_ref->[1], 'Y', "prop_invmap('$prop') map[1] is 'Y'");
 
-$prop = "lower";
-($invlist_ref, $invmap_ref, $format, $missing) = prop_invmap($prop);
-is($format, 's', "prop_invmap() format of '$prop' is 's'");
-is($missing, 'N', "prop_invmap() missing of '$prop' is 'N'");
-is($invlist_ref->[1], 0x61, "prop_invmap('$prop') list[1] is 0x61");
-is($invmap_ref->[1], 'Y', "prop_invmap('$prop') map[1] is 'Y'");
+    $prop = "lower";
+    ($invlist_ref, $invmap_ref, $format, $missing) = prop_invmap($prop);
+    is($format, 's', "prop_invmap() format of '$prop' is 's'");
+    is($missing, 'N', "prop_invmap() missing of '$prop' is 'N'");
+    is($invlist_ref->[1], 0x61, "prop_invmap('$prop') list[1] is 0x61");
+    is($invmap_ref->[1], 'Y', "prop_invmap('$prop') map[1] is 'Y'");
 
-$prop = "lc";
-($invlist_ref, $invmap_ref, $format, $missing) = prop_invmap($prop);
-is($format, 'al', "prop_invmap() format of '$prop' is 'al'");
-is($missing, '0', "prop_invmap() missing of '$prop' is '0'");
-is($invlist_ref->[1], 0x41, "prop_invmap('$prop') list[1] is 0x41");
-is($invmap_ref->[1], 0x61, "prop_invmap('$prop') map[1] is 0x61");
+    $prop = "lc";
+    ($invlist_ref, $invmap_ref, $format, $missing) = prop_invmap($prop);
+    is($format, 'al', "prop_invmap() format of '$prop' is 'al'");
+    is($missing, '0', "prop_invmap() missing of '$prop' is '0'");
+    is($invlist_ref->[1], 0x41, "prop_invmap('$prop') list[1] is 0x41");
+    is($invmap_ref->[1], 0x61, "prop_invmap('$prop') map[1] is 0x61");
 }
 
 # This property is stable and small, so can test all of it

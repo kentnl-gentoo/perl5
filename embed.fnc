@@ -334,7 +334,7 @@ ApR	|I32	|cxinc
 Afp	|void	|deb		|NN const char* pat|...
 Ap	|void	|vdeb		|NN const char* pat|NULLOK va_list* args
 Ap	|void	|debprofdump
-EXp	|SV*	|multideref_stringify	|NN const OP* o|NN CV *cv
+EXp	|SV*	|multideref_stringify	|NN const OP* o|NULLOK CV *cv
 Ap	|I32	|debop		|NN const OP* o
 Ap	|I32	|debstack
 Ap	|I32	|debstackptrs
@@ -445,7 +445,7 @@ Ap	|void	|dump_all
 p	|void	|dump_all_perl	|bool justperl
 Ap	|void	|dump_eval
 Ap	|void	|dump_form	|NN const GV* gv
-Ap	|void	|gv_dump	|NN GV* gv
+Ap	|void	|gv_dump	|NULLOK GV* gv
 Ap	|void	|op_dump	|NN const OP *o
 Ap	|void	|pmop_dump	|NULLOK PMOP* pm
 Ap	|void	|dump_packsubs	|NN const HV* stash
@@ -818,7 +818,7 @@ Apd	|int	|grok_number	|NN const char *pv|STRLEN len|NULLOK UV *valuep
 Apd	|int	|grok_number_flags|NN const char *pv|STRLEN len|NULLOK UV *valuep|U32 flags
 ApdR	|bool	|grok_numeric_radix|NN const char **sp|NN const char *send
 Apd	|UV	|grok_oct	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV *result
-Apdn	|UV	|grok_atou	|NN const char* pv|NULLOK const char** endptr
+EXpn	|bool	|grok_atoUV	|NN const char* pv|NN UV* valptr|NULLOK const char** endptr
 : These are all indirectly referenced by globals.c. This is somewhat annoying.
 p	|int	|magic_clearenv	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_clear_all_env|NN SV* sv|NN MAGIC* mg
@@ -1134,7 +1134,7 @@ ApOM	|int	|init_i18nl14n	|int printwarn
 ApM	|char*	|my_strerror	|const int errnum
 ApOM	|void	|new_collate	|NULLOK const char* newcoll
 ApOM	|void	|new_ctype	|NN const char* newctype
-ApMn	|void	|_warn_problematic_locale
+EXpMn	|void	|_warn_problematic_locale
 ApOM	|void	|new_numeric	|NULLOK const char* newcoll
 Ap	|void	|set_numeric_local
 Ap	|void	|set_numeric_radix
@@ -1447,6 +1447,7 @@ Apd	|void	|sv_magic	|NN SV *const sv|NULLOK SV *const obj|const int how \
 Apd	|MAGIC *|sv_magicext	|NN SV *const sv|NULLOK SV *const obj|const int how \
 				|NULLOK const MGVTBL *const vtbl|NULLOK const char *const name \
 				|const I32 namlen
+Ein	|bool	|sv_only_taint_gmagic|NN SV *sv
 : exported for re.pm
 EXp	|MAGIC *|sv_magicext_mglob|NN SV *sv
 ApdbamR	|SV*	|sv_mortalcopy	|NULLOK SV *const oldsv
@@ -1769,7 +1770,7 @@ Ap	|void	|do_gvgv_dump	|I32 level|NN PerlIO *file|NN const char *name\
 				|NULLOK GV *sv
 Ap	|void	|do_hv_dump	|I32 level|NN PerlIO *file|NN const char *name\
 				|NULLOK HV *sv
-Ap	|void	|do_magic_dump	|I32 level|NN PerlIO *file|NN const MAGIC *mg|I32 nest \
+Ap	|void	|do_magic_dump	|I32 level|NN PerlIO *file|NULLOK const MAGIC *mg|I32 nest \
 				|I32 maxnest|bool dumpops|STRLEN pvlim
 Ap	|void	|do_op_dump	|I32 level|NN PerlIO *file|NULLOK const OP *o
 Ap	|void	|do_pmop_dump	|I32 level|NN PerlIO *file|NULLOK const PMOP *pm
@@ -2135,6 +2136,7 @@ Es	|regnode*|regclass	|NN RExC_state_t *pRExC_state                 \
 Es	|void|add_above_Latin1_folds|NN RExC_state_t *pRExC_state|const U8 cp \
 				|NN SV** invlist
 Esn	|bool|could_it_be_a_POSIX_class|NN RExC_state_t *pRExC_state
+EsnP	|unsigned int|regex_set_precedence|const U8 my_operator
 Es	|regnode*|handle_regex_sets|NN RExC_state_t *pRExC_state \
 				|NULLOK SV ** return_invlist            \
 				|NN I32 *flagp|U32 depth                \
@@ -2144,10 +2146,12 @@ Es	|regnode*|reg_node	|NN RExC_state_t *pRExC_state|U8 op
 Es	|UV	|reg_recode	|const char value|NN SV **encp
 Es	|regnode*|regpiece	|NN RExC_state_t *pRExC_state \
 				|NN I32 *flagp|U32 depth
-Es	|STRLEN	|grok_bslash_N	|NN RExC_state_t *pRExC_state		    \
-				|NULLOK regnode** nodep|NULLOK UV *valuep   \
-				|NN I32 *flagp|U32 depth		    \
-				|NULLOK SV** substitute_parse
+Es	|bool	|grok_bslash_N	|NN RExC_state_t *pRExC_state		    \
+				|NULLOK regnode** nodep			    \
+				|NULLOK UV *code_point_p		    \
+				|NULLOK int* cp_count			    \
+				|NN I32 *flagp				    \
+				|const U32 depth
 Es	|void	|reginsert	|NN RExC_state_t *pRExC_state \
 				|U8 op|NN regnode *opnd|U32 depth
 Es	|void	|regtail	|NN RExC_state_t *pRExC_state \
@@ -2276,30 +2280,30 @@ Es	|void	|to_utf8_substr	|NN regexp * prog
 Es	|bool	|to_byte_substr	|NN regexp * prog
 ERsn	|I32	|reg_check_named_buff_matched	|NN const regexp *rex \
 						|NN const regnode *scan
-EsnR	|bool	|isGCB		|const PL_GCB_enum before|const PL_GCB_enum after
-EsR	|bool	|isSB		|PL_SB_enum before				\
-				|PL_SB_enum after				\
+EsnR	|bool	|isGCB		|const GCB_enum before|const GCB_enum after
+EsR	|bool	|isSB		|SB_enum before				\
+				|SB_enum after				\
 				|NN const U8 * const strbeg			\
 				|NN const U8 * const curpos			\
 				|NN const U8 * const strend			\
 				|const bool utf8_target
-EsR	|PL_SB_enum|advance_one_SB|NN U8 ** curpos				\
+EsR	|SB_enum|advance_one_SB |NN U8 ** curpos				\
 				|NN const U8 * const strend			\
 				|const bool utf8_target
-EsR	|PL_SB_enum|backup_one_SB|NN const U8 * const strbeg			\
+EsR	|SB_enum|backup_one_SB  |NN const U8 * const strbeg			\
 				|NN U8 ** curpos				\
 				|const bool utf8_target
-EsR	|bool	|isWB		|PL_WB_enum previous				\
-				|PL_WB_enum before				\
-				|PL_WB_enum after				\
+EsR	|bool	|isWB		|WB_enum previous				\
+				|WB_enum before				\
+				|WB_enum after				\
 				|NN const U8 * const strbeg			\
 				|NN const U8 * const curpos			\
 				|NN const U8 * const strend			\
 				|const bool utf8_target
-EsR	|PL_WB_enum|advance_one_WB|NN U8 ** curpos				\
+EsR	|WB_enum|advance_one_WB |NN U8 ** curpos				\
 				|NN const U8 * const strend			\
 				|const bool utf8_target
-EsR	|PL_WB_enum|backup_one_WB|NN PL_WB_enum * previous			\
+EsR	|WB_enum|backup_one_WB  |NN WB_enum * previous			\
 				|NN const U8 * const strbeg			\
 				|NN U8 ** curpos				\
 				|const bool utf8_target

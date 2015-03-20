@@ -180,6 +180,9 @@ struct RExC_state_t {
     I32		contains_locale;
     I32		contains_i;
     I32		override_recoding;
+#ifdef EBCDIC
+    I32		recode_x_to_native;
+#endif
     I32		in_multi_char_class;
     struct reg_code_block *code_blocks;	/* positions of literal (?{})
 					    within pattern */
@@ -255,6 +258,9 @@ struct RExC_state_t {
 #define RExC_contains_locale	(pRExC_state->contains_locale)
 #define RExC_contains_i (pRExC_state->contains_i)
 #define RExC_override_recoding (pRExC_state->override_recoding)
+#ifdef EBCDIC
+#   define RExC_recode_x_to_native (pRExC_state->recode_x_to_native)
+#endif
 #define RExC_in_multi_char_class (pRExC_state->in_multi_char_class)
 #define RExC_frame_head (pRExC_state->frame_head)
 #define RExC_frame_last (pRExC_state->frame_last)
@@ -5637,7 +5643,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVuf" RHS=%"UVuf"\n",
         }
         return final_minlen;
     }
-    NOT_REACHED;
+    NOT_REACHED; /* NOTREACHED */
 }
 
 STATIC U32
@@ -6629,6 +6635,9 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
     RExC_seen_zerolen = *exp == '^' ? -1 : 0;
     RExC_extralen = 0;
     RExC_override_recoding = 0;
+#ifdef EBCDIC
+    RExC_recode_x_to_native = 0;
+#endif
     RExC_in_multi_char_class = 0;
 
     /* First pass: determine size, legality. */
@@ -7891,7 +7900,7 @@ S_reg_scan_name(pTHX_ RExC_state_t *pRExC_state, U32 flags)
             Perl_croak(aTHX_ "panic: bad flag %lx in reg_scan_name",
 		       (unsigned long) flags);
         }
-        NOT_REACHED; /* NOT REACHED */
+        NOT_REACHED; /* NOTREACHED */
     }
     return NULL;
 }
@@ -10095,14 +10104,14 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                 if (RExC_parse == RExC_end || *RExC_parse != ')')
                     vFAIL("Sequence (?&... not terminated");
                 goto gen_recurse_regop;
-                /* NOT REACHED */
+                /* NOTREACHED */
             case '+':
                 if (!(RExC_parse[0] >= '1' && RExC_parse[0] <= '9')) {
                     RExC_parse++;
                     vFAIL("Illegal pattern");
                 }
                 goto parse_recursion;
-                /* NOT REACHED*/
+                /* NOTREACHED*/
             case '-': /* (?-1) */
                 if (!(RExC_parse[0] >= '1' && RExC_parse[0] <= '9')) {
                     RExC_parse--; /* rewind to let it be handled later */
@@ -10121,10 +10130,13 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                         RExC_parse++;
                         is_neg = TRUE;
                     }
-                    unum = grok_atou(RExC_parse, &endptr);
-                    num = (unum > I32_MAX) ? I32_MAX : (I32)unum;
-                    if (endptr)
-			RExC_parse = (char*)endptr;
+                    if (grok_atoUV(RExC_parse, &unum, &endptr)
+                        && unum <= I32_MAX
+                    ) {
+                        num = (I32)unum;
+                        RExC_parse = (char*)endptr;
+                    } else
+                        num = I32_MAX;
                     if (is_neg) {
                         /* Some limit for num? */
                         num = -num;
@@ -10175,7 +10187,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                 nextchar(pRExC_state);
                 return ret;
 
-            /* NOT REACHED */
+            /* NOTREACHED */
 
 	    case '?':           /* (??...) */
 		is_logical = 1;
@@ -10308,9 +10320,14 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 		    RExC_parse++;
 		    parno = 0;
 		    if (RExC_parse[0] >= '1' && RExC_parse[0] <= '9' ) {
-		        parno = grok_atou(RExC_parse, &endptr);
-		        if (endptr)
+                        UV uv;
+                        if (grok_atoUV(RExC_parse, &uv, &endptr)
+                            && uv <= I32_MAX
+                        ) {
+                            parno = (I32)uv;
                             RExC_parse = (char*)endptr;
+                        }
+                        /* else "Switch condition not recognized" below */
 		    } else if (RExC_parse[0] == '&') {
 		        SV *sv_dat;
 		        RExC_parse++;
@@ -10327,9 +10344,14 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                     /* (?(1)...) */
 		    char c;
 		    char *tmp;
-		    parno = grok_atou(RExC_parse, &endptr);
-                    if (endptr)
-			RExC_parse = (char*)endptr;
+                    UV uv;
+                    if (grok_atoUV(RExC_parse, &uv, &endptr)
+                        && uv <= I32_MAX
+                    ) {
+                        parno = (I32)uv;
+                        RExC_parse = (char*)endptr;
+                    }
+                    /* XXX else what? */
                     ret = reganode(pRExC_state, GROUPP, parno);
 
                  insert_if_check_paren:
@@ -10772,6 +10794,7 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
     char *parse_start;
 #endif
     const char *maxpos = NULL;
+    UV uv;
 
     /* Save the original in case we change the emitted regop to a FAIL. */
     regnode * const orig_emit = RExC_emit;
@@ -10813,16 +10836,28 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 	    if (!maxpos)
 		maxpos = next;
 	    RExC_parse++;
-	    min = grok_atou(RExC_parse, &endptr);
+            if (isDIGIT(*RExC_parse)) {
+                if (!grok_atoUV(RExC_parse, &uv, &endptr))
+                    vFAIL("Invalid quantifier in {,}");
+                if (uv >= REG_INFTY)
+                    vFAIL2("Quantifier in {,} bigger than %d", REG_INFTY - 1);
+                min = (I32)uv;
+            } else {
+                min = 0;
+            }
 	    if (*maxpos == ',')
 		maxpos++;
 	    else
 		maxpos = RExC_parse;
-	    max = grok_atou(maxpos, &endptr);
-	    if (!max && *maxpos != '0')
+            if (isDIGIT(*maxpos)) {
+                if (!grok_atoUV(maxpos, &uv, &endptr))
+                    vFAIL("Invalid quantifier in {,}");
+                if (uv >= REG_INFTY)
+                    vFAIL2("Quantifier in {,} bigger than %d", REG_INFTY - 1);
+                max = (I32)uv;
+            } else {
 		max = REG_INFTY;		/* meaning "infinity" */
-	    else if (max >= REG_INFTY)
-		vFAIL2("Quantifier in {,} bigger than %d", REG_INFTY - 1);
+            }
 	    RExC_parse = next;
 	    nextchar(pRExC_state);
             if (max < min) {    /* If can't match, warn and optimize to fail
@@ -10992,95 +11027,94 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
     return(ret);
 }
 
-STATIC STRLEN
-S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
-                      UV *valuep, I32 *flagp, U32 depth, SV** substitute_parse
+STATIC bool
+S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state,
+                regnode ** node_p,
+                UV * code_point_p,
+                int * cp_count,
+                I32 * flagp,
+                const U32 depth
     )
 {
+ /* This routine teases apart the various meanings of \N and returns
+  * accordingly.  The input parameters constrain which meaning(s) is/are valid
+  * in the current context.
+  *
+  * Exactly one of <node_p> and <code_point_p> must be non-NULL.
+  *
+  * If <code_point_p> is not NULL, the context is expecting the result to be a
+  * single code point.  If this \N instance turns out to a single code point,
+  * the function returns TRUE and sets *code_point_p to that code point.
+  *
+  * If <node_p> is not NULL, the context is expecting the result to be one of
+  * the things representable by a regnode.  If this \N instance turns out to be
+  * one such, the function generates the regnode, returns TRUE and sets *node_p
+  * to point to that regnode.
+  *
+  * If this instance of \N isn't legal in any context, this function will
+  * generate a fatal error and not return.
+  *
+  * On input, RExC_parse should point to the first char following the \N at the
+  * time of the call.  On successful return, RExC_parse will have been updated
+  * to point to just after the sequence identified by this routine.  Also
+  * *flagp has been updated as needed.
+  *
+  * When there is some problem with the current context and this \N instance,
+  * the function returns FALSE, without advancing RExC_parse, nor setting
+  * *node_p, nor *code_point_p, nor *flagp.
+  *
+  * If <cp_count> is not NULL, the caller wants to know the length (in code
+  * points) that this \N sequence matches.  This is set even if the function
+  * returns FALSE, as detailed below.
+  *
+  * There are 5 possibilities here, as detailed in the next 5 paragraphs.
+  *
+  * Probably the most common case is for the \N to specify a single code point.
+  * *cp_count will be set to 1, and *code_point_p will be set to that code
+  * point.
+  *
+  * Another possibility is for the input to be an empty \N{}, which for
+  * backwards compatibility we accept.  *cp_count will be set to 0. *node_p
+  * will be set to a generated NOTHING node.
+  *
+  * Still another possibility is for the \N to mean [^\n]. *cp_count will be
+  * set to 0. *node_p will be set to a generated REG_ANY node.
+  *
+  * The fourth possibility is that \N resolves to a sequence of more than one
+  * code points.  *cp_count will be set to the number of code points in the
+  * sequence. *node_p * will be set to a generated node returned by this
+  * function calling S_reg().
+  *
+  * The final possibility, which happens only when the fourth one would
+  * otherwise be in effect, is that one of those code points requires the
+  * pattern to be recompiled as UTF-8.  The function returns FALSE, and sets
+  * the RESTART_UTF8 flag in *flagp.  When this happens, the caller needs to
+  * desist from continuing parsing, and return this information to its caller.
+  * This is not set for when there is only one code point, as this can be
+  * called as part of an ANYOF node, and they can store above-Latin1 code
+  * points without the pattern having to be in UTF-8.
+  *
+  * For non-single-quoted regexes, the tokenizer has resolved character and
+  * sequence names inside \N{...} into their Unicode values, normalizing the
+  * result into what we should see here: '\N{U+c1.c2...}', where c1... are the
+  * hex-represented code points in the sequence.  This is done there because
+  * the names can vary based on what charnames pragma is in scope at the time,
+  * so we need a way to take a snapshot of what they resolve to at the time of
+  * the original parse. [perl #56444].
+  *
+  * That parsing is skipped for single-quoted regexes, so we may here get
+  * '\N{NAME}'.  This is a fatal error.  These names have to be resolved by the
+  * parser.  But if the single-quoted regex is something like '\N{U+41}', that
+  * is legal and handled here.  The code point is Unicode, and has to be
+  * translated into the native character set for non-ASCII platforms.
+  * the tokenizer passes the \N sequence through unchanged; this code will not
+  * attempt to determine this nor expand those, instead raising a syntax error.
+  */
 
- /* This is expected to be called by a parser routine that has recognized '\N'
-   and needs to handle the rest. RExC_parse is expected to point at the first
-   char following the N at the time of the call.  On successful return,
-   RExC_parse has been updated to point to just after the sequence identified
-   by this routine, <*flagp> has been updated, and the non-NULL input pointers
-   have been set appropriately.
-
-   The typical case for this is \N{some character name}.  This is usually
-   called while parsing the input, filling in or ready to fill in an EXACTish
-   node, and the code point for the character should be returned, so that it
-   can be added to the node, and parsing continued with the next input
-   character.  But it may be that instead of a single character the \N{}
-   expands to more than one, a named sequence.  In this case any following
-   quantifier applies to the whole sequence, and it is easier, given the code
-   structure that calls this, to handle it from a different area of the code.
-   For this reason, the input parameters can be set so that it returns valid
-   only on one or the other of these cases.
-
-   Another possibility is for the input to be an empty \N{}, which for
-   backwards compatibility we accept, but generate a NOTHING node which should
-   later get optimized out.  This is handled from the area of code which can
-   handle a named sequence, so if called with the parameters for the other, it
-   fails.
-
-   Still another possibility is for the \N to mean [^\n], and not a single
-   character or explicit sequence at all.  This is determined by context.
-   Again, this is handled from the area of code which can handle a named
-   sequence, so if called with the parameters for the other, it also fails.
-
-   And the final possibility is for the \N to be called from within a bracketed
-   character class.  In this case the [^\n] meaning makes no sense, and so is
-   an error.  Other anomalous situations are left to the calling code to handle.
-
-   For non-single-quoted regexes, the tokenizer has attempted to decide which
-   of the above applies, and in the case of a named sequence, has converted it
-   into one of the forms: \N{} (if the sequence is null), or \N{U+c1.c2...},
-   where c1... are the characters in the sequence.  For single-quoted regexes,
-   the tokenizer passes the \N sequence through unchanged; this code will not
-   attempt to determine this nor expand those, instead raising a syntax error.
-   The net effect is that if the beginning of the passed-in pattern isn't '{U+'
-   or there is no '}', it signals that this \N occurrence means to match a
-   non-newline. (This mostly was done because of [perl #56444].)
-
-   The API is somewhat convoluted due to historical and the above reasons.
-
-   The function raises an error (via vFAIL), and doesn't return for various
-   syntax errors.  For other failures, it returns (STRLEN) -1.  For successes,
-   it returns a count of how many characters were accounted for by it.  (This
-   can be 0 for \N{}; 1 for it meaning [^\n]; and otherwise the number of code
-   points in the sequence.  It sets <node_p>, <valuep>, and/or
-   <substitute_parse> on success.
-
-   If <valuep> is non-null, it means the caller can accept an input sequence
-   consisting of just a single code point; <*valuep> is set to the value of the
-   only or first code point in the input.
-
-   If <substitute_parse> is non-null, it means the caller can accept an input
-   sequence consisting of one or more code points; <*substitute_parse> is a
-   newly created mortal SV* in this case, containing \x{} escapes representing
-   those code points.
-
-   Both <valuep> and <substitute_parse> can be non-NULL.
-
-   If <node_p> is non-null, <substitute_parse> must be NULL.  This signifies
-   that the caller can accept any legal sequence other than a single code
-   point.  To wit, <*node_p> is set as follows:
-    1) \N means not-a-NL: points to a newly created REG_ANY node; return is 1
-    2) \N{}:              points to a new NOTHING node; return is 0
-    3) otherwise:         points to a new EXACT node containing the resolved
-                          string; return is the number of code points in the
-                          string.  This will never be 1.
-   Note that failure is returned for single code point sequences if <valuep> is
-   null and <node_p> is not.
- */
-
-    char * endbrace;    /* '}' following the name */
-    char* p;
+    char * endbrace;    /* points to '}' following the name */
     char *endchar;	/* Points to '.' or '}' ending cur char in the input
                            stream */
-    bool has_multiple_chars; /* true if the input stream contains a sequence of
-                                more than one character */
-    bool in_char_class = substitute_parse != NULL;
-    STRLEN count = 0;   /* Number of characters in this sequence */
+    char* p;            /* Temporary */
 
     GET_RE_DEBUG_FLAGS_DECL;
 
@@ -11088,11 +11122,15 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
 
     GET_RE_DEBUG_FLAGS;
 
-    assert(cBOOL(node_p) ^ cBOOL(valuep));  /* Exactly one should be set */
-    assert(! (node_p && substitute_parse)); /* At most 1 should be set */
+    assert(cBOOL(node_p) ^ cBOOL(code_point_p));  /* Exactly one should be set */
+    assert(! (node_p && cp_count));               /* At most 1 should be set */
+
+    if (cp_count) {     /* Initialize return for the most common case */
+        *cp_count = 1;
+    }
 
     /* The [^\n] meaning of \N ignores spaces and comments under the /x
-     * modifier.  The other meaning does not, so use a temporary until we find
+     * modifier.  The other meanings do not, so use a temporary until we find
      * out which we are being called with */
     p = (RExC_flags & RXf_PMf_EXTENDED)
 	? regpatws(pRExC_state, RExC_parse,
@@ -11100,15 +11138,16 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
 	: RExC_parse;
 
     /* Disambiguate between \N meaning a named character versus \N meaning
-     * [^\n].  The former is assumed when it can't be the latter. */
+     * [^\n].  The latter is assumed when the {...} following the \N is a legal
+     * quantifier, or there is no a '{' at all */
     if (*p != '{' || regcurly(p)) {
 	RExC_parse = p;
+        if (cp_count) {
+            *cp_count = -1;
+        }
+
 	if (! node_p) {
-	    /* no bare \N allowed in a charclass */
-            if (in_char_class) {
-                vFAIL("\\N in a character class must be a named character: \\N{...}");
-            }
-            return (STRLEN) -1;
+            return FALSE;
         }
         RExC_parse--;   /* Need to back off so nextchar() doesn't skip the
                            current char */
@@ -11117,7 +11156,7 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
 	*flagp |= HASWIDTH|SIMPLE;
 	MARK_NAUGHTY(1);
         Set_Node_Length(*node_p, 1); /* MJD */
-	return 1;
+	return TRUE;
     }
 
     /* Here, we have decided it should be a named character or sequence */
@@ -11145,14 +11184,16 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
     RExC_uni_semantics = 1; /* Unicode named chars imply Unicode semantics */
 
     if (endbrace == RExC_parse) {   /* empty: \N{} */
-	if (node_p) {
-	    *node_p = reg_node(pRExC_state,NOTHING);
-	}
-        else if (! in_char_class) {
-            return (STRLEN) -1;
+        if (cp_count) {
+            *cp_count = 0;
         }
         nextchar(pRExC_state);
-        return 0;
+	if (! node_p) {
+            return FALSE;
+        }
+
+        *node_p = reg_node(pRExC_state,NOTHING);
+        return TRUE;
     }
 
     RExC_parse += 2;	/* Skip past the 'U+' */
@@ -11161,116 +11202,128 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
 
     /* Code points are separated by dots.  If none, there is only one code
      * point, and is terminated by the brace */
-    has_multiple_chars = (endchar < endbrace);
 
-    /* We get the first code point if we want it, and either there is only one,
-     * or we can accept both cases of one and there is more than one */
-    if (valuep && (substitute_parse || ! has_multiple_chars)) {
-	STRLEN length_of_hex = (STRLEN)(endchar - RExC_parse);
-	I32 grok_hex_flags = PERL_SCAN_ALLOW_UNDERSCORES
+    if (endchar >= endbrace) {
+	STRLEN length_of_hex;
+	I32 grok_hex_flags;
+
+        /* Here, exactly one code point.  If that isn't what is wanted, fail */
+        if (! code_point_p) {
+            RExC_parse = p;
+            return FALSE;
+        }
+
+        /* Convert code point from hex */
+	length_of_hex = (STRLEN)(endchar - RExC_parse);
+	grok_hex_flags = PERL_SCAN_ALLOW_UNDERSCORES
                            | PERL_SCAN_DISALLOW_PREFIX
 
                              /* No errors in the first pass (See [perl
                               * #122671].)  We let the code below find the
                               * errors when there are multiple chars. */
-                           | ((SIZE_ONLY || has_multiple_chars)
+                           | ((SIZE_ONLY)
                               ? PERL_SCAN_SILENT_ILLDIGIT
                               : 0);
 
-	*valuep = grok_hex(RExC_parse, &length_of_hex, &grok_hex_flags, NULL);
+        /* This routine is the one place where both single- and double-quotish
+         * \N{U+xxxx} are evaluated.  The value is a Unicode code point which
+         * must be converted to native. */
+	*code_point_p = UNI_TO_NATIVE(grok_hex(RExC_parse,
+                                         &length_of_hex,
+                                         &grok_hex_flags,
+                                         NULL));
 
 	/* The tokenizer should have guaranteed validity, but it's possible to
          * bypass it by using single quoting, so check.  Don't do the check
          * here when there are multiple chars; we do it below anyway. */
-        if (! has_multiple_chars) {
-            if (length_of_hex == 0
-                || length_of_hex != (STRLEN)(endchar - RExC_parse) )
-            {
-                RExC_parse += length_of_hex;	/* Includes all the valid */
-                RExC_parse += (RExC_orig_utf8)	/* point to after 1st invalid */
-                                ? UTF8SKIP(RExC_parse)
-                                : 1;
-                /* Guard against malformed utf8 */
-                if (RExC_parse >= endchar) {
-                    RExC_parse = endchar;
-                }
-                vFAIL("Invalid hexadecimal number in \\N{U+...}");
+        if (length_of_hex == 0
+            || length_of_hex != (STRLEN)(endchar - RExC_parse) )
+        {
+            RExC_parse += length_of_hex;	/* Includes all the valid */
+            RExC_parse += (RExC_orig_utf8)	/* point to after 1st invalid */
+                            ? UTF8SKIP(RExC_parse)
+                            : 1;
+            /* Guard against malformed utf8 */
+            if (RExC_parse >= endchar) {
+                RExC_parse = endchar;
             }
-
-            RExC_parse = endbrace + 1;
-            return 1;
+            vFAIL("Invalid hexadecimal number in \\N{U+...}");
         }
+
+        RExC_parse = endbrace + 1;
+        return TRUE;
     }
-
-    /* Here, we should have already handled the case where a single character
-     * is expected and found.  So it is a failure if we aren't expecting
-     * multiple chars and got them; or didn't get them but wanted them.  We
-     * fail without advancing the parse, so that the caller can try again with
-     * different acceptance criteria */
-    if ((! node_p && ! substitute_parse) || ! has_multiple_chars) {
-        RExC_parse = p;
-        return (STRLEN) -1;
-    }
-
-    {
-	/* What is done here is to convert this to a sub-pattern of the form
-	 * \x{char1}\x{char2}...
-         * and then either return it in <*substitute_parse> if non-null; or
-         * call reg recursively to parse it (enclosing in "(?: ... )" ).  That
-         * way, it retains its atomicness, while not having to worry about
-         * special handling that some code points may have.  toke.c has
-         * converted the original Unicode values to native, so that we can just
-         * pass on the hex values unchanged.  We do have to set a flag to keep
-         * recoding from happening in the recursion */
-
-	SV * dummy = NULL;
+    else {  /* Is a multiple character sequence */
+	SV * substitute_parse;
 	STRLEN len;
 	char *orig_end = RExC_end;
         I32 flags;
 
-        if (substitute_parse) {
-            *substitute_parse = newSVpvs("");
+        /* Count the code points, if desired, in the sequence */
+        if (cp_count) {
+            *cp_count = 0;
+            while (RExC_parse < endbrace) {
+                /* Point to the beginning of the next character in the sequence. */
+                RExC_parse = endchar + 1;
+                endchar = RExC_parse + strcspn(RExC_parse, ".}");
+                (*cp_count)++;
+            }
         }
-        else {
-            substitute_parse = &dummy;
-            *substitute_parse = newSVpvs("?:");
+
+        /* Fail if caller doesn't want to handle a multi-code-point sequence.
+         * But don't backup up the pointer if the caller want to know how many
+         * code points there are (they can then handle things) */
+        if (! node_p) {
+            if (! cp_count) {
+                RExC_parse = p;
+            }
+            return FALSE;
         }
-        *substitute_parse = sv_2mortal(*substitute_parse);
+
+	/* What is done here is to convert this to a sub-pattern of the form
+         * \x{char1}\x{char2}...  and then call reg recursively to parse it
+         * (enclosing in "(?: ... )" ).  That way, it retains its atomicness,
+         * while not having to worry about special handling that some code
+         * points may have. */
+
+	substitute_parse = newSVpvs("?:");
 
 	while (RExC_parse < endbrace) {
 
 	    /* Convert to notation the rest of the code understands */
-	    sv_catpv(*substitute_parse, "\\x{");
-	    sv_catpvn(*substitute_parse, RExC_parse, endchar - RExC_parse);
-	    sv_catpv(*substitute_parse, "}");
+	    sv_catpv(substitute_parse, "\\x{");
+	    sv_catpvn(substitute_parse, RExC_parse, endchar - RExC_parse);
+	    sv_catpv(substitute_parse, "}");
 
 	    /* Point to the beginning of the next character in the sequence. */
 	    RExC_parse = endchar + 1;
 	    endchar = RExC_parse + strcspn(RExC_parse, ".}");
 
-            count++;
 	}
-        if (! in_char_class) {
-            sv_catpv(*substitute_parse, ")");
-        }
+        sv_catpv(substitute_parse, ")");
 
-	RExC_parse = SvPV(*substitute_parse, len);
+	RExC_parse = SvPV(substitute_parse, len);
 
 	/* Don't allow empty number */
-	if (len < (STRLEN) ((substitute_parse) ? 6 : 8)) {
+	if (len < (STRLEN) 8) {
             RExC_parse = endbrace;
 	    vFAIL("Invalid hexadecimal number in \\N{U+...}");
 	}
 	RExC_end = RExC_parse + len;
 
-	/* The values are Unicode, and therefore not subject to recoding */
+        /* The values are Unicode, and therefore not subject to recoding, but
+         * have to be converted to native on a non-Unicode (meaning non-ASCII)
+         * platform. */
 	RExC_override_recoding = 1;
+#ifdef EBCDIC
+        RExC_recode_x_to_native = 1;
+#endif
 
         if (node_p) {
             if (!(*node_p = reg(pRExC_state, 1, &flags, depth+1))) {
                 if (flags & RESTART_UTF8) {
                     *flagp = RESTART_UTF8;
-                    return (STRLEN) -1;
+                    return FALSE;
                 }
                 FAIL2("panic: reg returned NULL to grok_bslash_N, flags=%#"UVxf"",
                     (UV) flags);
@@ -11278,14 +11331,19 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** node_p,
             *flagp |= flags&(HASWIDTH|SPSTART|SIMPLE|POSTPONED);
         }
 
+        /* Restore the saved values */
 	RExC_parse = endbrace;
 	RExC_end = orig_end;
 	RExC_override_recoding = 0;
+#ifdef EBCDIC
+        RExC_recode_x_to_native = 0;
+#endif
 
+        SvREFCNT_dec_NN(substitute_parse);
         nextchar(pRExC_state);
-    }
 
-    return count;
+        return TRUE;
+    }
 }
 
 
@@ -11516,10 +11574,10 @@ static I32
 S_backref_value(char *p)
 {
     const char* endptr;
-    UV val = grok_atou(p, &endptr);
-    if (endptr == p || endptr == NULL || val > I32_MAX)
-        return I32_MAX;
-    return (I32)val;
+    UV val;
+    if (grok_atoUV(p, &val, &endptr) && val <= I32_MAX)
+        return (I32)val;
+    return I32_MAX;
 }
 
 
@@ -11969,26 +12027,35 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 	    }
 	    break;
         case 'N':
-            /* Handle \N and \N{NAME} with multiple code points here and not
-             * below because it can be multicharacter. join_exact() will join
-             * them up later on.  Also this makes sure that things like
-             * /\N{BLAH}+/ and \N{BLAH} being multi char Just Happen. dmq.
-             * The options to the grok function call causes it to fail if the
-             * sequence is just a single code point.  We then go treat it as
-             * just another character in the current EXACT node, and hence it
-             * gets uniform treatment with all the other characters.  The
-             * special treatment for quantifiers is not needed for such single
-             * character sequences */
+            /* Handle \N, \N{} and \N{NAMED SEQUENCE} (the latter meaning the
+             * \N{...} evaluates to a sequence of more than one code points).
+             * The function call below returns a regnode, which is our result.
+             * The parameters cause it to fail if the \N{} evaluates to a
+             * single code point; we handle those like any other literal.  The
+             * reason that the multicharacter case is handled here and not as
+             * part of the EXACtish code is because of quantifiers.  In
+             * /\N{BLAH}+/, the '+' applies to the whole thing, and doing it
+             * this way makes that Just Happen. dmq.
+             * join_exact() will join this up with adjacent EXACTish nodes
+             * later on, if appropriate. */
             ++RExC_parse;
-            if ((STRLEN) -1 == grok_bslash_N(pRExC_state, &ret, NULL, flagp,
-                                             depth, FALSE))
-            {
-                if (*flagp & RESTART_UTF8)
-                    return NULL;
-                RExC_parse--;
-                goto defchar;
+            if (grok_bslash_N(pRExC_state,
+                              &ret,     /* Want a regnode returned */
+                              NULL,     /* Fail if evaluates to a single code
+                                           point */
+                              NULL,     /* Don't need a count of how many code
+                                           points */
+                              flagp,
+                              depth)
+            ) {
+                break;
             }
-            break;
+
+            if (*flagp & RESTART_UTF8)
+                return NULL;
+            RExC_parse--;
+            goto defchar;
+
 	case 'k':    /* Handle \k<NAME> and \k'NAME' */
       parse_named_seq:
         {
@@ -12297,18 +12364,24 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 			p++;
 			break;
 		    case 'N': /* Handle a single-code point named character. */
-                        /* The options cause it to fail if a multiple code
-                         * point sequence.  Handle those in the switch() above
-                         * */
                         RExC_parse = p + 1;
-                        if ((STRLEN) -1 == grok_bslash_N(pRExC_state, NULL,
-                                                         &ender,
-                                                         flagp,
-                                                         depth,
-                                                         FALSE
-                        )) {
+                        if (! grok_bslash_N(pRExC_state,
+                                            NULL,   /* Fail if evaluates to
+                                                       anything other than a
+                                                       single code point */
+                                            &ender, /* The returned single code
+                                                       point */
+                                            NULL,   /* Don't need a count of
+                                                       how many code points */
+                                            flagp,
+                                            depth)
+                        ) {
                             if (*flagp & RESTART_UTF8)
                                 FAIL("panic: grok_bslash_N set RESTART_UTF8");
+
+                            /* Here, it wasn't a single code point.  Go close
+                             * up this EXACTish node.  The switch() prior to
+                             * this switch handles the other cases */
                             RExC_parse = p = oldp;
                             goto loopdone;
                         }
@@ -12387,10 +12460,18 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 			    }
                             ender = result;
 
-			    if (IN_ENCODING && ender < 0x100) {
-				goto recode_encoding;
+                            if (ender < 0x100) {
+#ifdef EBCDIC
+                                if (RExC_recode_x_to_native) {
+                                    ender = LATIN1_TO_NATIVE(ender);
+                                }
+                                else
+#endif
+                                if (IN_ENCODING) {
+                                    goto recode_encoding;
+                                }
 			    }
-			    if (ender > 0xff) {
+                            else {
 				REQUIRE_UTF8;
 			    }
 			    break;
@@ -13051,7 +13132,7 @@ S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value, const bool strict)
 			    break;
 			case 'e':
 			    if (memEQ(posixcc, "spac", 4)) /* space */
-				namedclass = ANYOF_PSXSPC;
+				namedclass = ANYOF_SPACE;
 			    break;
 			case 'h':
 			    if (memEQ(posixcc, "grap", 4)) /* graph */
@@ -13185,6 +13266,34 @@ S_could_it_be_a_POSIX_class(RExC_state_t *pRExC_state)
             && first_char == *(p - 1));
 }
 
+STATIC unsigned  int
+S_regex_set_precedence(const U8 my_operator) {
+
+    /* Returns the precedence in the (?[...]) construct of the input operator,
+     * specified by its character representation.  The precedence follows
+     * general Perl rules, but it extends this so that ')' and ']' have (low)
+     * precedence even though they aren't really operators */
+
+    switch (my_operator) {
+        case '!':
+            return 5;
+        case '&':
+            return 4;
+        case '^':
+        case '|':
+        case '+':
+        case '-':
+            return 3;
+        case ')':
+            return 2;
+        case ']':
+            return 1;
+    }
+
+    NOT_REACHED; /* NOTREACHED */
+    return 0;   /* Silence compiler warning */
+}
+
 STATIC regnode *
 S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                     I32 *flagp, U32 depth,
@@ -13192,24 +13301,35 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
 {
     /* Handle the (?[...]) construct to do set operations */
 
-    U8 curchar;
-    UV start, end;	/* End points of code point ranges */
-    SV* result_string;
-    char *save_end, *save_parse;
-    SV* final;
-    STRLEN len;
-    regnode* node;
-    AV* stack;
-    const bool save_fold = FOLD;
+    U8 curchar;                     /* Current character being parsed */
+    UV start, end;	            /* End points of code point ranges */
+    SV* final = NULL;               /* The end result inversion list */
+    SV* result_string;              /* 'final' stringified */
+    AV* stack;                      /* stack of operators and operands not yet
+                                       resolved */
+    AV* fence_stack = NULL;         /* A stack containing the positions in
+                                       'stack' of where the undealt-with left
+                                       parens would be if they were actually
+                                       put there */
+    IV fence = 0;                   /* Position of where most recent undealt-
+                                       with left paren in stack is; -1 if none.
+                                     */
+    STRLEN len;                     /* Temporary */
+    regnode* node;                  /* Temporary, and final regnode returned by
+                                       this function */
+    const bool save_fold = FOLD;    /* Temporary */
+    char *save_end, *save_parse;    /* Temporaries */
 
     GET_RE_DEBUG_FLAGS_DECL;
 
     PERL_ARGS_ASSERT_HANDLE_REGEX_SETS;
 
-    if (LOC) {
+    if (LOC) {  /* XXX could make valid in UTF-8 locales */
         vFAIL("(?[...]) not valid in locale");
     }
-    RExC_uni_semantics = 1;
+    RExC_uni_semantics = 1;     /* The use of this operator implies /u.  This
+                                   is required so that the compile time values
+                                   are valid in all runtime cases */
 
     /* This will return only an ANYOF regnode, or (unlikely) something smaller
      * (such as EXACT).  Thus we can skip most everything if just sizing.  We
@@ -13218,16 +13338,7 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
      * upon an unescaped ']' that isn't one ending a regclass.  To do both
      * these things, we need to realize that something preceded by a backslash
      * is escaped, so we have to keep track of backslashes */
-    if (PASS2) {
-        Perl_ck_warner_d(aTHX_
-            packWARN(WARN_EXPERIMENTAL__REGEX_SETS),
-            "The regex_sets feature is experimental" REPORT_LOCATION,
-                UTF8fARG(UTF, (RExC_parse - RExC_precomp), RExC_precomp),
-                UTF8fARG(UTF,
-                         RExC_end - RExC_start - (RExC_parse - RExC_precomp),
-                         RExC_precomp + (RExC_parse - RExC_precomp)));
-    }
-    else {
+    if (SIZE_ONLY) {
         UV depth = 0; /* how many nested (?[...]) constructs */
 
         while (RExC_parse < RExC_end) {
@@ -13273,8 +13384,8 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                                   TRUE, /* strict */
                                   &current
                                  ))
-                        FAIL2("panic: regclass returned NULL to handle_sets, flags=%#"UVxf"",
-                              (UV) *flagp);
+                        FAIL2("panic: regclass returned NULL to handle_sets, "
+                              "flags=%#"UVxf"", (UV) *flagp);
 
                     /* function call leaves parse pointing to the ']', except
                      * if we faked it */
@@ -13308,69 +13419,124 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
         FAIL("Syntax error in (?[...])");
     }
 
-    /* Pass 2 only after this.  Everything in this construct is a
-     * metacharacter.  Operands begin with either a '\' (for an escape
-     * sequence), or a '[' for a bracketed character class.  Any other
-     * character should be an operator, or parenthesis for grouping.  Both
-     * types of operands are handled by calling regclass() to parse them.  It
-     * is called with a parameter to indicate to return the computed inversion
-     * list.  The parsing here is implemented via a stack.  Each entry on the
-     * stack is a single character representing one of the operators, or the
-     * '('; or else a pointer to an operand inversion list. */
+    /* Pass 2 only after this. */
+    Perl_ck_warner_d(aTHX_
+        packWARN(WARN_EXPERIMENTAL__REGEX_SETS),
+        "The regex_sets feature is experimental" REPORT_LOCATION,
+            UTF8fARG(UTF, (RExC_parse - RExC_precomp), RExC_precomp),
+            UTF8fARG(UTF,
+                     RExC_end - RExC_start - (RExC_parse - RExC_precomp),
+                     RExC_precomp + (RExC_parse - RExC_precomp)));
+
+    /* Everything in this construct is a metacharacter.  Operands begin with
+     * either a '\' (for an escape sequence), or a '[' for a bracketed
+     * character class.  Any other character should be an operator, or
+     * parenthesis for grouping.  Both types of operands are handled by calling
+     * regclass() to parse them.  It is called with a parameter to indicate to
+     * return the computed inversion list.  The parsing here is implemented via
+     * a stack.  Each entry on the stack is a single character representing one
+     * of the operators; or else a pointer to an operand inversion list. */
 
 #define IS_OPERAND(a)  (! SvIOK(a))
 
-    /* The stack starts empty.  It is a syntax error if the first thing parsed
-     * is a binary operator; everything else is pushed on the stack.  When an
-     * operand is parsed, the top of the stack is examined.  If it is a binary
-     * operator, the item before it should be an operand, and both are replaced
-     * by the result of doing that operation on the new operand and the one on
-     * the stack.   Thus a sequence of binary operands is reduced to a single
-     * one before the next one is parsed.
+    /* The stack is kept in Łukasiewicz order.  (That's pronounced similar
+     * to luke-a-shave-itch (or -itz), but people who didn't want to bother
+     * with prounouncing it called it Reverse Polish instead, but now that YOU
+     * know how to prounounce it you can use the correct term, thus giving due
+     * credit to the person who invented it, and impressing your geek friends.
+     * Wikipedia says that the pronounciation of "Ł" has been changing so that
+     * it is now more like an English initial W (as in wonk) than an L.)
      *
-     * A unary operator may immediately follow a binary in the input, for
-     * example
+     * This means that, for example, 'a | b & c' is stored on the stack as
+     *
+     * c  [4]
+     * b  [3]
+     * &  [2]
+     * a  [1]
+     * |  [0]
+     *
+     * where the numbers in brackets give the stack [array] element number.
+     * In this implementation, parentheses are not stored on the stack.
+     * Instead a '(' creates a "fence" so that the part of the stack below the
+     * fence is invisible except to the corresponding ')' (this allows us to
+     * replace testing for parens, by using instead subtraction of the fence
+     * position).  As new operands are processed they are pushed onto the stack
+     * (except as noted in the next paragraph).  New operators of higher
+     * precedence than the current final one are inserted on the stack before
+     * the lhs operand (so that when the rhs is pushed next, everything will be
+     * in the correct positions shown above.  When an operator of equal or
+     * lower precedence is encountered in parsing, all the stacked operations
+     * of equal or higher precedence are evaluated, leaving the result as the
+     * top entry on the stack.  This makes higher precedence operations
+     * evaluate before lower precedence ones, and causes operations of equal
+     * precedence to left associate.
+     *
+     * The only unary operator '!' is immediately pushed onto the stack when
+     * encountered.  When an operand is encountered, if the top of the stack is
+     * a '!", the complement is immediately performed, and the '!' popped.  The
+     * resulting value is treated as a new operand, and the logic in the
+     * previous paragraph is executed.  Thus in the expression
      *      [a] + ! [b]
-     * When an operand is parsed and the top of the stack is a unary operator,
-     * the operation is performed, and then the stack is rechecked to see if
-     * this new operand is part of a binary operation; if so, it is handled as
-     * above.
+     * the stack looks like
      *
-     * A '(' is simply pushed on the stack; it is valid only if the stack is
-     * empty, or the top element of the stack is an operator or another '('
-     * (for which the parenthesized expression will become an operand).  By the
-     * time the corresponding ')' is parsed everything in between should have
-     * been parsed and evaluated to a single operand (or else is a syntax
-     * error), and is handled as a regular operand */
+     * !
+     * a
+     * +
+     *
+     * as 'b' gets parsed, the latter gets evaluated to '!b', and the stack
+     * becomes
+     *
+     * !b
+     * a
+     * +
+     *
+     * A ')' is treated as an operator with lower precedence than all the
+     * aforementioned ones, which causes all operations on the stack above the
+     * corresponding '(' to be evaluated down to a single resultant operand.
+     * Then the fence for the '(' is removed, and the operand goes through the
+     * algorithm above, without the fence.
+     *
+     * A separate stack is kept of the fence positions, so that the position of
+     * the latest so-far unbalanced '(' is at the top of it.
+     *
+     * The ']' ending the construct is treated as the lowest operator of all,
+     * so that everything gets evaluated down to a single operand, which is the
+     * result */
 
     sv_2mortal((SV *)(stack = newAV()));
+    sv_2mortal((SV *)(fence_stack = newAV()));
 
     while (RExC_parse < RExC_end) {
-        I32 top_index = av_tindex(stack);
-        SV** top_ptr;
-        SV* current = NULL;
+        I32 top_index;              /* Index of top-most element in 'stack' */
+        SV** top_ptr;               /* Pointer to top 'stack' element */
+        SV* current = NULL;         /* To contain the current inversion list
+                                       operand */
+        SV* only_to_avoid_leaks;
 
         /* Skip white space */
         RExC_parse = regpatws(pRExC_state, RExC_parse,
-                                         TRUE /* means recognize comments */ );
+                TRUE /* means recognize comments */ );
         if (RExC_parse >= RExC_end) {
             Perl_croak(aTHX_ "panic: Read past end of '(?[ ])'");
         }
-        if ((curchar = UCHARAT(RExC_parse)) == ']') {
-            break;
-        }
+
+        curchar = UCHARAT(RExC_parse);
+
+redo_curchar:
+
+        top_index = av_tindex(stack);
 
         switch (curchar) {
+            SV** stacked_ptr;       /* Ptr to something already on 'stack' */
+            char stacked_operator;  /* The topmost operator on the 'stack'. */
+            SV* lhs;                /* Operand to the left of the operator */
+            SV* rhs;                /* Operand to the right of the operator */
+            SV* fence_ptr;          /* Pointer to top element of the fence
+                                       stack */
 
-            case '?':
-                if (av_tindex(stack) >= 0   /* This makes sure that we can
-                                               safely subtract 1 from
-                                               RExC_parse in the next clause.
-                                               If we have something on the
-                                               stack, we have parsed something
-                                             */
-                    && UCHARAT(RExC_parse - 1) == '('
-                    && RExC_parse < RExC_end)
+            case '(':
+
+                if (RExC_parse < RExC_end && (UCHARAT(RExC_parse + 1) == '?'))
                 {
                     /* If is a '(?', could be an embedded '(?flags:(?[...])'.
                      * This happens when we have some thing like
@@ -13385,14 +13551,18 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                      * interpolated expression evaluates to.  We use the flags
                      * from the interpolated pattern. */
                     U32 save_flags = RExC_flags;
-                    const char * const save_parse = ++RExC_parse;
+                    const char * save_parse;
 
+                    RExC_parse += 2;        /* Skip past the '(?' */
+                    save_parse = RExC_parse;
+
+                    /* Parse any flags for the '(?' */
                     parse_lparen_question_flags(pRExC_state);
 
                     if (RExC_parse == save_parse  /* Makes sure there was at
-                                                     least one flag (or this
-                                                     embedding wasn't compiled)
-                                                   */
+                                                     least one flag (or else
+                                                     this embedding wasn't
+                                                     compiled) */
                         || RExC_parse >= RExC_end - 4
                         || UCHARAT(RExC_parse) != ':'
                         || UCHARAT(++RExC_parse) != '('
@@ -13412,25 +13582,50 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                         }
                         vFAIL("Expecting '(?flags:(?[...'");
                     }
+
+                    /* Recurse, with the meat of the embedded expression */
                     RExC_parse++;
                     (void) handle_regex_sets(pRExC_state, &current, flagp,
                                                     depth+1, oregcomp_parse);
 
                     /* Here, 'current' contains the embedded expression's
                      * inversion list, and RExC_parse points to the trailing
-                     * ']'; the next character should be the ')' which will be
-                     * paired with the '(' that has been put on the stack, so
-                     * the whole embedded expression reduces to '(operand)' */
+                     * ']'; the next character should be the ')' */
                     RExC_parse++;
+                    assert(RExC_parse < RExC_end && UCHARAT(RExC_parse) == ')');
 
+                    /* Then the ')' matching the original '(' handled by this
+                     * case: statement */
+                    RExC_parse++;
+                    assert(RExC_parse < RExC_end && UCHARAT(RExC_parse) == ')');
+
+                    RExC_parse++;
                     RExC_flags = save_flags;
                     goto handle_operand;
                 }
-                /* FALLTHROUGH */
 
-            default:
-                RExC_parse += (UTF) ? UTF8SKIP(RExC_parse) : 1;
-                vFAIL("Unexpected character");
+                /* A regular '('.  Look behind for illegal syntax */
+                if (top_index - fence >= 0) {
+                    /* If the top entry on the stack is an operator, it had
+                     * better be a '!', otherwise the entry below the top
+                     * operand should be an operator */
+                    if ( ! (top_ptr = av_fetch(stack, top_index, FALSE))
+                        || (! IS_OPERAND(*top_ptr) && SvUV(*top_ptr) != '!')
+                        || top_index - fence < 1
+                        || ! (stacked_ptr = av_fetch(stack,
+                                                     top_index - 1,
+                                                     FALSE))
+                        || IS_OPERAND(*stacked_ptr))
+                    {
+                        RExC_parse++;
+                        vFAIL("Unexpected '(' with no preceding operator");
+                    }
+                }
+
+                /* Stack the position of this undealt-with left paren */
+                fence = top_index + 1;
+                av_push(fence_stack, newSViv(fence));
+                break;
 
             case '\\':
                 /* regclass() can only return RESTART_UTF8 if multi-char
@@ -13440,10 +13635,12 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                               FALSE, /* don't allow multi-char folds */
                               FALSE, /* don't silence non-portable warnings.  */
                               TRUE,  /* strict */
-                              &current
-                             ))
-                    FAIL2("panic: regclass returned NULL to handle_sets, flags=%#"UVxf"",
-                          (UV) *flagp);
+                              &current))
+                {
+                    FAIL2("panic: regclass returned NULL to handle_sets, "
+                          "flags=%#"UVxf"", (UV) *flagp);
+                }
+
                 /* regclass() will return with parsing just the \ sequence,
                  * leaving the parse pointer at the next thing to parse */
                 RExC_parse--;
@@ -13467,8 +13664,11 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                              TRUE,   /* strict */
                              &current
                             ))
-                    FAIL2("panic: regclass returned NULL to handle_sets, flags=%#"UVxf"",
-                          (UV) *flagp);
+                {
+                    FAIL2("panic: regclass returned NULL to handle_sets, "
+                          "flags=%#"UVxf"", (UV) *flagp);
+                }
+
                 /* function call leaves parse pointing to the ']', except if we
                  * faked it */
                 if (is_posix_class) {
@@ -13478,147 +13678,237 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                 goto handle_operand;
             }
 
+            case ']':
+                if (top_index >= 1) {
+                    goto join_operators;
+                }
+
+                /* Only a single operand on the stack: are done */
+                goto done;
+
+            case ')':
+                if (av_tindex(fence_stack) < 0) {
+                    RExC_parse++;
+                    vFAIL("Unexpected ')'");
+                }
+
+                 /* If at least two thing on the stack, treat this as an
+                  * operator */
+                if (top_index - fence >= 1) {
+                    goto join_operators;
+                }
+
+                /* Here only a single thing on the fenced stack, and there is a
+                 * fence.  Get rid of it */
+                fence_ptr = av_pop(fence_stack);
+                assert(fence_ptr);
+                fence = SvIV(fence_ptr) - 1;
+                SvREFCNT_dec_NN(fence_ptr);
+                fence_ptr = NULL;
+
+                if (fence < 0) {
+                    fence = 0;
+                }
+
+                /* Having gotten rid of the fence, we pop the operand at the
+                 * stack top and process it as a newly encountered operand */
+                current = av_pop(stack);
+                assert(IS_OPERAND(current));
+                goto handle_operand;
+
             case '&':
             case '|':
             case '+':
             case '-':
             case '^':
-                if (top_index < 0
+
+                /* These binary operators should have a left operand already
+                 * parsed */
+                if (   top_index - fence < 0
+                    || top_index - fence == 1
                     || ( ! (top_ptr = av_fetch(stack, top_index, FALSE)))
                     || ! IS_OPERAND(*top_ptr))
                 {
-                    RExC_parse++;
-                    vFAIL2("Unexpected binary operator '%c' with no preceding operand", curchar);
+                    goto unexpected_binary;
                 }
-                av_push(stack, newSVuv(curchar));
-                break;
 
-            case '!':
-                av_push(stack, newSVuv(curchar));
-                break;
+                /* If only the one operand is on the part of the stack visible
+                 * to us, we just place this operator in the proper position */
+                if (top_index - fence < 2) {
 
-            case '(':
-                if (top_index >= 0) {
-                    top_ptr = av_fetch(stack, top_index, FALSE);
-                    assert(top_ptr);
-                    if (IS_OPERAND(*top_ptr)) {
-                        RExC_parse++;
-                        vFAIL("Unexpected '(' with no preceding operator");
+                    /* Place the operator before the operand */
+
+                    SV* lhs = av_pop(stack);
+                    av_push(stack, newSVuv(curchar));
+                    av_push(stack, lhs);
+                    break;
+                }
+
+                /* But if there is something else on the stack, we need to
+                 * process it before this new operator if and only if the
+                 * stacked operation has equal or higher precedence than the
+                 * new one */
+
+             join_operators:
+
+                /* The operator on the stack is supposed to be below both its
+                 * operands */
+                if (   ! (stacked_ptr = av_fetch(stack, top_index - 2, FALSE))
+                    || IS_OPERAND(*stacked_ptr))
+                {
+                    /* But if not, it's legal and indicates we are completely
+                     * done if and only if we're currently processing a ']',
+                     * which should be the final thing in the expression */
+                    if (curchar == ']') {
+                        goto done;
+                    }
+
+                  unexpected_binary:
+                    RExC_parse++;
+                    vFAIL2("Unexpected binary operator '%c' with no "
+                           "preceding operand", curchar);
+                }
+                stacked_operator = (char) SvUV(*stacked_ptr);
+
+                if (regex_set_precedence(curchar)
+                    > regex_set_precedence(stacked_operator))
+                {
+                    /* Here, the new operator has higher precedence than the
+                     * stacked one.  This means we need to add the new one to
+                     * the stack to await its rhs operand (and maybe more
+                     * stuff).  We put it before the lhs operand, leaving
+                     * untouched the stacked operator and everything below it
+                     * */
+                    lhs = av_pop(stack);
+                    assert(IS_OPERAND(lhs));
+
+                    av_push(stack, newSVuv(curchar));
+                    av_push(stack, lhs);
+                    break;
+                }
+
+                /* Here, the new operator has equal or lower precedence than
+                 * what's already there.  This means the operation already
+                 * there should be performed now, before the new one. */
+                rhs = av_pop(stack);
+                lhs = av_pop(stack);
+
+                assert(IS_OPERAND(rhs));
+                assert(IS_OPERAND(lhs));
+
+                switch (stacked_operator) {
+                    case '&':
+                        _invlist_intersection(lhs, rhs, &rhs);
+                        break;
+
+                    case '|':
+                    case '+':
+                        _invlist_union(lhs, rhs, &rhs);
+                        break;
+
+                    case '-':
+                        _invlist_subtract(lhs, rhs, &rhs);
+                        break;
+
+                    case '^':   /* The union minus the intersection */
+                    {
+                        SV* i = NULL;
+                        SV* u = NULL;
+                        SV* element;
+
+                        _invlist_union(lhs, rhs, &u);
+                        _invlist_intersection(lhs, rhs, &i);
+                        /* _invlist_subtract will overwrite rhs
+                            without freeing what it already contains */
+                        element = rhs;
+                        _invlist_subtract(u, i, &rhs);
+                        SvREFCNT_dec_NN(i);
+                        SvREFCNT_dec_NN(u);
+                        SvREFCNT_dec_NN(element);
+                        break;
                     }
                 }
+                SvREFCNT_dec(lhs);
+
+                /* Here, the higher precedence operation has been done, and the
+                 * result is in 'rhs'.  We overwrite the stacked operator with
+                 * the result.  Then we redo this code to either push the new
+                 * operator onto the stack or perform any higher precedence
+                 * stacked operation */
+                only_to_avoid_leaks = av_pop(stack);
+                SvREFCNT_dec(only_to_avoid_leaks);
+                av_push(stack, rhs);
+                goto redo_curchar;
+
+            case '!':   /* Highest priority, right associative, so just push
+                           onto stack */
                 av_push(stack, newSVuv(curchar));
                 break;
 
-            case ')':
-            {
-                SV* lparen;
-                if (top_index < 1
-                    || ! (current = av_pop(stack))
-                    || ! IS_OPERAND(current)
-                    || ! (lparen = av_pop(stack))
-                    || IS_OPERAND(lparen)
-                    || SvUV(lparen) != '(')
+            default:
+                RExC_parse += (UTF) ? UTF8SKIP(RExC_parse) : 1;
+                vFAIL("Unexpected character");
+
+          handle_operand:
+
+            /* Here 'current' is the operand.  If something is already on the
+             * stack, we have to check if it is a !. */
+            top_index = av_tindex(stack);   /* Code above may have altered the
+                                             * stack in the time since we
+                                             * earlier set 'top_index'. */
+            if (top_index - fence >= 0) {
+                /* If the top entry on the stack is an operator, it had better
+                 * be a '!', otherwise the entry below the top operand should
+                 * be an operator */
+                top_ptr = av_fetch(stack, top_index, FALSE);
+                assert(top_ptr);
+                if (! IS_OPERAND(*top_ptr)) {
+
+                    /* The only permissible operator at the top of the stack is
+                     * '!', which is applied immediately to this operand. */
+                    curchar = (char) SvUV(*top_ptr);
+                    if (curchar != '!') {
+                        SvREFCNT_dec(current);
+                        vFAIL2("Unexpected binary operator '%c' with no "
+                                "preceding operand", curchar);
+                    }
+
+                    _invlist_invert(current);
+
+                    only_to_avoid_leaks = av_pop(stack);
+                    SvREFCNT_dec(only_to_avoid_leaks);
+                    top_index = av_tindex(stack);
+
+                    /* And we redo with the inverted operand.  This allows
+                     * handling multiple ! in a row */
+                    goto handle_operand;
+                }
+                          /* Single operand is ok only for the non-binary ')'
+                           * operator */
+                else if ((top_index - fence == 0 && curchar != ')')
+                         || (top_index - fence > 0
+                             && (! (stacked_ptr = av_fetch(stack,
+                                                           top_index - 1,
+                                                           FALSE))
+                                 || IS_OPERAND(*stacked_ptr))))
                 {
                     SvREFCNT_dec(current);
-                    RExC_parse++;
-                    vFAIL("Unexpected ')'");
+                    vFAIL("Operand with no preceding operator");
                 }
-                top_index -= 2;
-                SvREFCNT_dec_NN(lparen);
-
-                /* FALLTHROUGH */
             }
 
-              handle_operand:
+            /* Here there was nothing on the stack or the top element was
+             * another operand.  Just add this new one */
+            av_push(stack, current);
 
-                /* Here, we have an operand to process, in 'current' */
-
-                if (top_index < 0) {    /* Just push if stack is empty */
-                    av_push(stack, current);
-                }
-                else {
-                    SV* top = av_pop(stack);
-                    SV *prev = NULL;
-                    char current_operator;
-
-                    if (IS_OPERAND(top)) {
-                        SvREFCNT_dec_NN(top);
-                        SvREFCNT_dec_NN(current);
-                        vFAIL("Operand with no preceding operator");
-                    }
-                    current_operator = (char) SvUV(top);
-                    switch (current_operator) {
-                        case '(':   /* Push the '(' back on followed by the new
-                                       operand */
-                            av_push(stack, top);
-                            av_push(stack, current);
-                            SvREFCNT_inc(top);  /* Counters the '_dec' done
-                                                   just after the 'break', so
-                                                   it doesn't get wrongly freed
-                                                 */
-                            break;
-
-                        case '!':
-                            _invlist_invert(current);
-
-                            /* Unlike binary operators, the top of the stack,
-                             * now that this unary one has been popped off, may
-                             * legally be an operator, and we now have operand
-                             * for it. */
-                            top_index--;
-                            SvREFCNT_dec_NN(top);
-                            goto handle_operand;
-
-                        case '&':
-                            prev = av_pop(stack);
-                            _invlist_intersection(prev,
-                                                   current,
-                                                   &current);
-                            av_push(stack, current);
-                            break;
-
-                        case '|':
-                        case '+':
-                            prev = av_pop(stack);
-                            _invlist_union(prev, current, &current);
-                            av_push(stack, current);
-                            break;
-
-                        case '-':
-                            prev = av_pop(stack);;
-                            _invlist_subtract(prev, current, &current);
-                            av_push(stack, current);
-                            break;
-
-                        case '^':   /* The union minus the intersection */
-                        {
-                            SV* i = NULL;
-                            SV* u = NULL;
-                            SV* element;
-
-                            prev = av_pop(stack);
-                            _invlist_union(prev, current, &u);
-                            _invlist_intersection(prev, current, &i);
-                            /* _invlist_subtract will overwrite current
-                                without freeing what it already contains */
-                            element = current;
-                            _invlist_subtract(u, i, &current);
-                            av_push(stack, current);
-                            SvREFCNT_dec_NN(i);
-                            SvREFCNT_dec_NN(u);
-                            SvREFCNT_dec_NN(element);
-                            break;
-                        }
-
-                        default:
-                            Perl_croak(aTHX_ "panic: Unexpected item on '(?[ ])' stack");
-                }
-                SvREFCNT_dec_NN(top);
-                SvREFCNT_dec(prev);
-            }
-        }
+        } /* End of switch on next parse token */
 
         RExC_parse += (UTF) ? UTF8SKIP(RExC_parse) : 1;
+    } /* End of loop parsing through the construct */
+
+  done:
+    if (av_tindex(fence_stack) >= 0) {
+        vFAIL("Unmatched (");
     }
 
     if (av_tindex(stack) < 0   /* Was empty */
@@ -13626,6 +13916,7 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
         || ! IS_OPERAND(final)
         || av_tindex(stack) >= 0)  /* More left on stack */
     {
+        SvREFCNT_dec(final);
         vFAIL("Incomplete expression within '(?[ ])'");
     }
 
@@ -13650,6 +13941,8 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
         }
     }
 
+    /* About to generate an ANYOF (or similar) node from the inversion list we
+     * have calculated */
     save_parse = RExC_parse;
     RExC_parse = SvPV(result_string, len);
     save_end = RExC_end;
@@ -14066,14 +14359,24 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 	    case 'H':	namedclass = ANYOF_NHORIZWS;	break;
             case 'N':  /* Handle \N{NAME} in class */
                 {
-                    SV *as_text;
-                    STRLEN cp_count = grok_bslash_N(pRExC_state, NULL, &value,
-                                                    flagp, depth, &as_text);
-                    if (*flagp & RESTART_UTF8)
-                        FAIL("panic: grok_bslash_N set RESTART_UTF8");
-                    if (cp_count != 1) {    /* The typical case drops through */
-                        assert(cp_count != (STRLEN) -1);
-                        if (cp_count == 0) {
+                    const char * const backslash_N_beg = RExC_parse - 2;
+                    int cp_count;
+
+                    if (! grok_bslash_N(pRExC_state,
+                                        NULL,      /* No regnode */
+                                        &value,    /* Yes single value */
+                                        &cp_count, /* Multiple code pt count */
+                                        flagp,
+                                        depth)
+                    ) {
+
+                        if (*flagp & RESTART_UTF8)
+                            FAIL("panic: grok_bslash_N set RESTART_UTF8");
+
+                        if (cp_count < 0) {
+                            vFAIL("\\N in a character class must be a named character: \\N{...}");
+                        }
+                        else if (cp_count == 0) {
                             if (strict) {
                                 RExC_parse++;   /* Position after the "}" */
                                 vFAIL("Zero length \\N{}");
@@ -14093,16 +14396,18 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                                     else if (PASS2) {
                                         ckWARNreg(RExC_parse, "Using just the first character returned by \\N{} in character class");
                                     }
+                                    break; /* <value> contains the first code
+                                              point. Drop out of the switch to
+                                              process it */
                                 }
                                 else {
+                                    SV * multi_char_N = newSVpvn(backslash_N_beg,
+                                                 RExC_parse - backslash_N_beg);
                                     multi_char_matches
                                         = add_multi_match(multi_char_matches,
-                                                          as_text,
+                                                          multi_char_N,
                                                           cp_count);
                                 }
-                                break; /* <value> contains the first code
-                                          point. Drop out of the switch to
-                                          process it */
                             }
                         } /* End of cp_count != 1 */
 
@@ -14614,7 +14919,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                 vFAIL2utf8f(
                     "Invalid [] range \"%"UTF8f"\"",
                     UTF8fARG(UTF, w, rangebegin));
-                NOT_REACHED; /* NOT REACHED */
+                NOT_REACHED; /* NOTREACHED */
 	    }
 	}
 	else {
@@ -14788,9 +15093,18 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                          * same element, neither should be a digit. */
                         if (index_start == index_final) {
                             assert(! ELEMENT_RANGE_MATCHES_INVLIST(index_start)
-                            || invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start+1]
-                            - invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start]
-                            == 10);
+                            || (invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start+1]
+                               - invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start]
+                               == 10)
+                               /* But actually Unicode did have one group of 11
+                                * 'digits' in 5.2, so in case we are operating
+                                * on that version, let that pass */
+                            || (invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start+1]
+                               - invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start]
+                                == 11
+                               && invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start]
+                                == 0x19D0)
+                            );
                         }
                         else if ((index_start >= 0
                                   && ELEMENT_RANGE_MATCHES_INVLIST(index_start))
@@ -16481,8 +16795,7 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_
     || _CC_UPPER != 4 || _CC_PUNCT != 5 || _CC_PRINT != 6                   \
     || _CC_ALPHANUMERIC != 7 || _CC_GRAPH != 8 || _CC_CASED != 9            \
     || _CC_SPACE != 10 || _CC_BLANK != 11 || _CC_XDIGIT != 12               \
-    || _CC_PSXSPC != 13 || _CC_CNTRL != 14 || _CC_ASCII != 15               \
-    || _CC_VERTSPACE != 16
+    || _CC_CNTRL != 13 || _CC_ASCII != 14 || _CC_VERTSPACE != 15
   #error Need to adjust order of anyofs[]
 #endif
         "\\w",
@@ -16511,8 +16824,6 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_
         "[:^blank:]",
         "[:xdigit:]",
         "[:^xdigit:]",
-        "[:space:]",
-        "[:^space:]",
         "[:cntrl:]",
         "[:^cntrl:]",
         "[:ascii:]",

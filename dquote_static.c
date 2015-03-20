@@ -88,7 +88,9 @@ S_grok_bslash_o(pTHX_ char **s, UV *uv, const char** error_msg,
 
 /*  Documentation to be supplied when interface nailed down finally
  *  This returns FALSE if there is an error which the caller need not recover
- *  from; , otherwise TRUE.  In either case the caller should look at *len
+ *  from; otherwise TRUE.  In either case the caller should look at *len [???].
+ *  It guarantees that the returned codepoint, *uv, when expressed as
+ *  utf8 bytes, would fit within the skipped "\o{...}" bytes.
  *  On input:
  *	s   is the address of a pointer to a NULL terminated string that begins
  *	    with 'o', and the previous character was a backslash.  At exit, *s
@@ -117,6 +119,11 @@ S_grok_bslash_o(pTHX_ char **s, UV *uv, const char** error_msg,
 		/* XXX Until the message is improved in grok_oct, handle errors
 		 * ourselves */
 	        | PERL_SCAN_SILENT_ILLDIGIT;
+
+#ifdef DEBUGGING
+    char *start = *s - 1;
+    assert(*start == '\\');
+#endif
 
     PERL_ARGS_ASSERT_GROK_BSLASH_O;
 
@@ -176,6 +183,10 @@ S_grok_bslash_o(pTHX_ char **s, UV *uv, const char** error_msg,
     /* Return past the '}' */
     *s = e + 1;
 
+    /* guarantee replacing "\o{...}" with utf8 bytes fits within
+     * existing space */
+    assert(OFFUNISKIP(*uv) < *s - start);
+
     return TRUE;
 }
 
@@ -188,7 +199,10 @@ S_grok_bslash_x(pTHX_ char **s, UV *uv, const char** error_msg,
 
 /*  Documentation to be supplied when interface nailed down finally
  *  This returns FALSE if there is an error which the caller need not recover
- *  from; , otherwise TRUE.
+ *  from; otherwise TRUE.
+ *  It guarantees that the returned codepoint, *uv, when expressed as
+ *  utf8 bytes, would fit within the skipped "\x{...}" bytes.
+ *
  *  On input:
  *	s   is the address of a pointer to a NULL terminated string that begins
  *	    with 'x', and the previous character was a backslash.  At exit, *s
@@ -215,10 +229,12 @@ S_grok_bslash_x(pTHX_ char **s, UV *uv, const char** error_msg,
     char* e;
     STRLEN numbers_len;
     I32 flags = PERL_SCAN_DISALLOW_PREFIX;
+#ifdef DEBUGGING
+    char *start = *s - 1;
+    assert(*start == '\\');
+#endif
 
     PERL_ARGS_ASSERT_GROK_BSLASH_X;
-
-    PERL_UNUSED_ARG(output_warning);
 
     assert(**s == 'x');
     (*s)++;
@@ -242,7 +258,7 @@ S_grok_bslash_x(pTHX_ char **s, UV *uv, const char** error_msg,
             }
             return FALSE;
         }
-	return TRUE;
+	goto ok;
     }
 
     e = strchr(*s, '}');
@@ -269,7 +285,7 @@ S_grok_bslash_x(pTHX_ char **s, UV *uv, const char** error_msg,
         }
         *s = e + 1;
         *uv = 0;
-        return TRUE;
+        goto ok;
     }
 
     flags |= PERL_SCAN_ALLOW_UNDERSCORES;
@@ -291,6 +307,10 @@ S_grok_bslash_x(pTHX_ char **s, UV *uv, const char** error_msg,
     /* Return past the '}' */
     *s = e + 1;
 
+  ok:
+    /* guarantee replacing "\x{...}" with utf8 bytes fits within
+     * existing space */
+    assert(OFFUNISKIP(*uv) < *s - start);
     return TRUE;
 }
 

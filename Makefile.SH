@@ -473,7 +473,7 @@ h5 = utf8.h warnings.h mydtrace.h op_reg_common.h l1_char_class_tab.h
 h6 = charclass_invlists.h
 h = $(h1) $(h2) $(h3) $(h4) $(h5) $(h6)
 
-c1 = av.c scope.c op.c doop.c doio.c dump.c gv.c hv.c mg.c reentr.c mro.c perl.c
+c1 = av.c scope.c op.c doop.c doio.c dump.c gv.c hv.c mg.c reentr.c mro_core.c perl.c
 c2 = perly.c pp.c pp_hot.c pp_ctl.c pp_sys.c regcomp.c regexec.c utf8.c sv.c
 c3 = taint.c toke.c util.c deb.c run.c universal.c pad.c globals.c keywords.c
 c4 = perlio.c perlapi.c numeric.c mathoms.c locale.c pp_pack.c pp_sort.c caretx.c
@@ -483,7 +483,7 @@ c = $(c1) $(c2) $(c3) $(c4) $(c5) miniperlmain.c opmini.c perlmini.c
 
 obj0 = op$(OBJ_EXT) perl$(OBJ_EXT)
 obj0mini = perlmini$(OBJ_EXT) opmini$(OBJ_EXT) miniperlmain$(OBJ_EXT)
-obj1 = $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) pad$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT) mro$(OBJ_EXT) keywords$(OBJ_EXT)
+obj1 = $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) pad$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT) mro_core$(OBJ_EXT) keywords$(OBJ_EXT)
 obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
 obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT) perlapi$(OBJ_EXT) numeric$(OBJ_EXT) mathoms$(OBJ_EXT) locale$(OBJ_EXT) pp_pack$(OBJ_EXT) pp_sort$(OBJ_EXT) caretx$(OBJ_EXT)
 
@@ -492,7 +492,7 @@ mini_obj = $(minindt_obj) $(MINIDTRACE_O)
 ndt_obj = $(obj0) $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 obj = $(ndt_obj) $(DTRACE_O)
 
-perltoc_pod_prereqs = extra.pods pod/perl5219delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl52110delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -1020,9 +1020,9 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) pod/perlmodlib.PL -q
 
-pod/perl5219delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl5219delta.pod
-	$(LNS) perldelta.pod pod/perl5219delta.pod
+pod/perl52110delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl52110delta.pod
+	$(LNS) perldelta.pod pod/perl52110delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1310,26 +1310,22 @@ _cleaner2:
 	-rmdir lib/autodie/Scope lib/autodie lib/XS lib/Win32API lib/VMS
 	-rmdir lib/Unicode/Collate/Locale lib/Unicode/Collate/CJK
 	-rmdir lib/Unicode/Collate lib/Tie/Hash lib/Thread lib/Text
-	-rmdir lib/Test/use lib/Test/Tutorial lib/Test/Tester
-	-rmdir lib/Test/Stream/Tester/Events lib/Test/Stream/Tester/Checks
-	-rmdir lib/Test/Stream/Tester lib/Test/Stream/Exporter
-	-rmdir lib/Test/Stream/ExitMagic lib/Test/Stream/Event
-	-rmdir lib/Test/Stream/ArrayBase lib/Test/Stream
-	-rmdir lib/Test/More/DeepCheck lib/Test/More lib/Test/Builder/Tester
-	-rmdir lib/Test/Builder lib/Test lib/Term lib/TAP/Parser/YAMLish
-	-rmdir lib/TAP/Parser/SourceHandler lib/TAP/Parser/Scheduler
-	-rmdir lib/TAP/Parser/Result lib/TAP/Parser/Iterator lib/TAP/Parser
-	-rmdir lib/TAP/Harness lib/TAP/Formatter/File
-	-rmdir lib/TAP/Formatter/Console lib/TAP/Formatter lib/TAP
-	-rmdir lib/Sys/Syslog lib/Sys lib/Sub lib/Search lib/Scalar
-	-rmdir lib/Pod/Text lib/Pod/Simple lib/Pod/Perldoc lib/PerlIO/via
-	-rmdir lib/PerlIO lib/Perl lib/Parse/CPAN lib/Parse lib/Params
-	-rmdir lib/Net/FTP lib/Module/Load lib/Module/CoreList lib/Module
-	-rmdir lib/Memoize lib/Math/BigInt lib/Math/BigFloat lib/Math lib/MIME
-	-rmdir lib/Locale/Maketext lib/Locale/Codes lib/Locale lib/List/Util
-	-rmdir lib/List lib/JSON/PP lib/JSON lib/IPC lib/IO/Uncompress/Adapter
-	-rmdir lib/IO/Uncompress lib/IO/Socket lib/IO/Compress/Zlib
-	-rmdir lib/IO/Compress/Zip lib/IO/Compress/Gzip lib/IO/Compress/Base
+	-rmdir lib/Test/use lib/Test/Tester lib/Test/Builder/Tester
+	-rmdir lib/Test/Builder/IO lib/Test/Builder lib/Test lib/Term
+	-rmdir lib/TAP/Parser/YAMLish lib/TAP/Parser/SourceHandler
+	-rmdir lib/TAP/Parser/Scheduler lib/TAP/Parser/Result
+	-rmdir lib/TAP/Parser/Iterator lib/TAP/Parser lib/TAP/Harness
+	-rmdir lib/TAP/Formatter/File lib/TAP/Formatter/Console
+	-rmdir lib/TAP/Formatter lib/TAP lib/Sys/Syslog lib/Sys lib/Sub
+	-rmdir lib/Search lib/Scalar lib/Pod/Text lib/Pod/Simple
+	-rmdir lib/Pod/Perldoc lib/PerlIO/via lib/PerlIO lib/Perl
+	-rmdir lib/Parse/CPAN lib/Parse lib/Params lib/Net/FTP lib/Module/Load
+	-rmdir lib/Module/CoreList lib/Module lib/Memoize lib/Math/BigInt
+	-rmdir lib/Math/BigFloat lib/Math lib/MIME lib/Locale/Maketext
+	-rmdir lib/Locale/Codes lib/Locale lib/List/Util lib/List lib/JSON/PP
+	-rmdir lib/JSON lib/IPC lib/IO/Uncompress/Adapter lib/IO/Uncompress
+	-rmdir lib/IO/Socket lib/IO/Compress/Zlib lib/IO/Compress/Zip
+	-rmdir lib/IO/Compress/Gzip lib/IO/Compress/Base
 	-rmdir lib/IO/Compress/Adapter lib/IO/Compress lib/IO
 	-rmdir lib/I18N/LangTags lib/I18N lib/Hash/Util lib/Hash lib/HTTP
 	-rmdir lib/Filter/Util lib/Filter lib/File/Spec lib/ExtUtils/Typemaps
@@ -1341,10 +1337,10 @@ _cleaner2:
 	-rmdir lib/Exporter lib/Encode/Unicode lib/Encode/MIME/Header
 	-rmdir lib/Encode/MIME lib/Encode/KR lib/Encode/JP lib/Encode/CN
 	-rmdir lib/Encode lib/Digest lib/Devel lib/Data lib/Config/Perl
-	-rmdir lib/Compress/Raw lib/Compress lib/Carp lib/CPAN/Meta/History
-	-rmdir lib/CPAN/Meta lib/CPAN/LWP lib/CPAN/Kwalify lib/CPAN/HTTP
-	-rmdir lib/CPAN/FTP lib/CPAN/Exception lib/CPAN/API lib/CPAN
-	-rmdir lib/Attribute lib/Archive/Tar lib/Archive
+	-rmdir lib/Compress/Raw lib/Compress lib/Carp lib/CPAN/Plugin
+	-rmdir lib/CPAN/Meta/History lib/CPAN/Meta lib/CPAN/LWP
+	-rmdir lib/CPAN/Kwalify lib/CPAN/HTTP lib/CPAN/FTP lib/CPAN/Exception
+	-rmdir lib/CPAN/API lib/CPAN lib/Attribute lib/Archive/Tar lib/Archive
 	-rmdir lib/App/Prove/State/Result lib/App/Prove/State lib/App/Prove
 	-rmdir lib/App
 

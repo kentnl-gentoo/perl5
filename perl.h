@@ -2918,6 +2918,26 @@ typedef struct padname PADNAME;
          signal(SIGFPE, SIG_IGN); \
      } STMT_END
 #endif
+/* In IRIX the default for Flush to Zero bit is true,
+ * which means that results going below the minimum of normal
+ * floating points go to zero, instead of going denormal/subnormal.
+ * This is unlike almost any other system running Perl, so let's clear it.
+ * [perl #123767] IRIX64 blead (ddce084a) opbasic/arith.t failure, originally
+ * [perl #120426] small numbers shouldn't round to zero if they have extra floating digits
+ *
+ * XXX The flush-to-zero behaviour should be a Configure scan.
+ * To change the behaviour usually requires some system-specific
+ * incantation, though, like the below. */
+#ifdef __sgi
+#  include <sys/fpu.h>
+#  define PERL_SYS_FPU_INIT \
+     STMT_START { \
+         union fpc_csr csr; \
+         csr.fc_word = get_fpc_csr(); \
+         csr.fc_struct.flush = 0; \
+         set_fpc_csr(csr.fc_word); \
+     } STMT_END
+#endif
 
 #ifndef PERL_SYS_FPU_INIT
 #  define PERL_SYS_FPU_INIT NOOP
@@ -4329,11 +4349,6 @@ static const union { unsigned int __i; float __f; } __PL_inf_u =
 #   endif
 #   if !defined(NV_NAN) && defined(LDBL_QNAN)
 #       define NV_NAN LDBL_QNAN
-#       define NV_QNAN LDBL_QNAN
-#   endif
-#   if !defined(NV_NAN) && defined(LDBL_SNAN)
-#       define NV_NAN LDBL_SNAN
-#       define NV_SNAN LDBL_SNAN
 #   endif
 #endif
 #if !defined(NV_NAN) && defined(DBL_NAN)
@@ -4341,27 +4356,15 @@ static const union { unsigned int __i; float __f; } __PL_inf_u =
 #endif
 #if !defined(NV_NAN) && defined(DBL_QNAN)
 #  define NV_NAN (NV)DBL_QNAN
-#  define NV_QNAN DBL_QNAN
-#endif
-#if !defined(NV_NAN) && defined(DBL_SNAN)
-#  define NV_NAN (NV)DBL_SNAN
-#  define NV_SNAN DBL_SNAN
 #endif
 #if !defined(NV_NAN) && defined(NAN)
 #  define NV_NAN (NV)NAN
 #endif
 #if !defined(NV_NAN) && defined(QNAN)
 #  define NV_NAN (NV)QNAN
-#  define NV_QNAN QNAN
-#endif
-#if !defined(NV_NAN) && defined(SNAN)
-#  define NV_NAN (NV)SNAN
-#  define NV_SNAN SNAN
 #endif
 #if !defined(NV_NAN) && defined(I_SUNMATH)
 #  define NV_NAN (NV)quiet_nan()
-#  define NV_QNAN (NV)quiet_nan()
-#  define NV_SNAN (NV)signaling_nan()
 #endif
 #if !defined(NV_NAN)
 #  if INTSIZE == 4
@@ -5806,12 +5809,16 @@ typedef struct am_table_short AMTS;
          * this will so rarely  be true, there is no point to optimize for
          * time; instead it makes sense to minimize space used and do all the
          * work in the rarely called function */
-#       define _CHECK_AND_WARN_PROBLEMATIC_LOCALE                           \
-	STMT_START {                                                        \
-            if (UNLIKELY(PL_warn_locale)) {                                 \
-                _warn_problematic_locale();                                 \
-            }                                                               \
-        }  STMT_END
+#       ifdef USE_LOCALE_CTYPE
+#           define _CHECK_AND_WARN_PROBLEMATIC_LOCALE                         \
+                STMT_START {                                                  \
+                    if (UNLIKELY(PL_warn_locale)) {                           \
+                        _warn_problematic_locale();                           \
+                    }                                                         \
+                }  STMT_END
+#       else
+#           define _CHECK_AND_WARN_PROBLEMATIC_LOCALE
+#       endif
 
 
     /* These two internal macros are called when a warning should be raised,
@@ -5859,48 +5866,128 @@ typedef struct am_table_short AMTS;
 
 #ifdef USE_LOCALE_NUMERIC
 
-/* These macros are for toggling between the underlying locale (LOCAL) and the
- * C locale. */
+/* These macros are for toggling between the underlying locale (UNDERLYING or
+ * LOCAL) and the C locale (STANDARD).
 
-/* The first set makes sure that the locale is set to C unless within a 'use
- * locale's scope; otherwise to the default locale.  A function pointer is
- * used, which can be declared separately by
- * DECLARATION_FOR_STORE_LC_NUMERIC_SET_TO_NEEDED, followed by the actual
- * setting (using STORE_LC_NUMERIC_SET_TO_NEEDED()), or the two can be combined
- * into one call DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED().
- * RESTORE_LC_NUMERIC() in all cases restores the locale to what it was before
- * these were called */
+=head1 Locale-related functions and macros
+
+=for apidoc Amn|void|DECLARATION_FOR_LC_NUMERIC_MANIPULATION
+
+This macro should be used as a statement.  It declares a private variable
+(whose name begins with an underscore) that is needed by the other macros in
+this section.  Failing to include this correctly should lead to a syntax error.
+For compatibility with C89 C compilers it should be placed in a block before
+any executable statements.
+
+=for apidoc Am|void|STORE_LC_NUMERIC_FORCE_TO_UNDERLYING
+
+This is used by XS code that that is C<LC_NUMERIC> locale-aware to force the
+locale for category C<LC_NUMERIC> to be what perl thinks is the current
+underlying locale.  (The perl interpreter could be wrong about what the
+underlying locale actually is if some C or XS code has called the C library
+function L<setlocale(3)> behind its back; calling L</sync_locale> before calling
+this macro will update perl's records.)
+
+A call to L</DECLARATION_FOR_LC_NUMERIC_MANIPULATION> must have been made to
+declare at compile time a private variable used by this macro.  This macro
+should be called as a single statement, not an expression, but with an empty
+argument list, like this:
+
+ {
+    DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+     ...
+    STORE_LC_NUMERIC_FORCE_TO_UNDERLYING();
+     ...
+    RESTORE_LC_NUMERIC();
+     ...
+ }
+
+The private variable is used to save the current locale state, so
+that the requisite matching call to L</RESTORE_LC_NUMERIC> can restore it.
+
+=for apidoc Am|void|STORE_LC_NUMERIC_SET_TO_NEEDED
+
+This is used to help wrap XS or C code that that is C<LC_NUMERIC> locale-aware.
+This locale category is generally kept set to the C locale by Perl for
+backwards compatibility, and because most XS code that reads floating point
+values can cope only with the decimal radix character being a dot.
+
+This macro makes sure the current C<LC_NUMERIC> state is set properly, to be
+aware of locale if the call to the XS or C code from the Perl program is
+from within the scope of a S<C<use locale>>; or to ignore locale if the call is
+instead from outside such scope.
+
+This macro is the start of wrapping the C or XS code; the wrap ending is done
+by calling the L</RESTORE_LC_NUMERIC> macro after the operation.  Otherwise
+the state can be changed that will adversely affect other XS code.
+
+A call to L</DECLARATION_FOR_LC_NUMERIC_MANIPULATION> must have been made to
+declare at compile time a private variable used by this macro.  This macro
+should be called as a single statement, not an expression, but with an empty
+argument list, like this:
+
+ {
+    DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+     ...
+    STORE_LC_NUMERIC_SET_TO_NEEDED();
+     ...
+    RESTORE_LC_NUMERIC();
+     ...
+ }
+
+=for apidoc Am|void|RESTORE_LC_NUMERIC
+
+This is used in conjunction with one of the macros
+L</STORE_LC_NUMERIC_SET_TO_NEEDED>
+and
+L</STORE_LC_NUMERIC_FORCE_TO_UNDERLYING>
+
+to properly restore the C<LC_NUMERIC> state.
+
+A call to L</DECLARATION_FOR_LC_NUMERIC_MANIPULATION> must have been made to
+declare at compile time a private variable used by this macro and the two
+C<STORE> ones.  This macro should be called as a single statement, not an
+expression, but with an empty argument list, like this:
+
+ {
+    DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+     ...
+    RESTORE_LC_NUMERIC();
+     ...
+ }
+
+=cut
+
+*/
 
 #define _NOT_IN_NUMERIC_STANDARD (! PL_numeric_standard)
 
 /* We can lock the category to stay in the C locale, making requests to the
- * contrary noops, in the dynamic scope by setting PL_numeric_standard to 2 */
-#define _NOT_IN_NUMERIC_LOCAL    (! PL_numeric_local && PL_numeric_standard < 2)
+ * contrary be noops, in the dynamic scope by setting PL_numeric_standard to 2.
+ * */
+#define _NOT_IN_NUMERIC_UNDERLYING                                          \
+                        (! PL_numeric_local && PL_numeric_standard < 2)
 
-#define DECLARATION_FOR_STORE_LC_NUMERIC_SET_TO_NEEDED                       \
-    void (*_restore_LC_NUMERIC_function)(pTHX) = NULL;
+#define DECLARATION_FOR_LC_NUMERIC_MANIPULATION                             \
+    void (*_restore_LC_NUMERIC_function)(pTHX) = NULL
 
-#define STORE_LC_NUMERIC_SET_TO_NEEDED()                                     \
-    if (IN_LC(LC_NUMERIC)) {                                                 \
-        if (_NOT_IN_NUMERIC_LOCAL) {                                         \
-            set_numeric_local();                                             \
-            _restore_LC_NUMERIC_function = &Perl_set_numeric_standard;       \
-        }                                                                    \
-    }                                                                        \
-    else {                                                                   \
-        if (_NOT_IN_NUMERIC_STANDARD) {                                      \
-            SET_NUMERIC_STANDARD();                                          \
-            _restore_LC_NUMERIC_function = &Perl_set_numeric_local;          \
-        }                                                                    \
+#define STORE_LC_NUMERIC_SET_TO_NEEDED()                                    \
+    if (IN_LC(LC_NUMERIC)) {                                                \
+        if (_NOT_IN_NUMERIC_UNDERLYING) {                                   \
+            set_numeric_local();                                            \
+            _restore_LC_NUMERIC_function = &Perl_set_numeric_standard;      \
+        }                                                                   \
+    }                                                                       \
+    else {                                                                  \
+        if (_NOT_IN_NUMERIC_STANDARD) {                                     \
+            SET_NUMERIC_STANDARD();                                         \
+            _restore_LC_NUMERIC_function = &Perl_set_numeric_local;         \
+        }                                                                   \
     }
 
-#define DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED()                             \
-    DECLARATION_FOR_STORE_LC_NUMERIC_SET_TO_NEEDED;                          \
-    STORE_LC_NUMERIC_SET_TO_NEEDED();
-
-#define RESTORE_LC_NUMERIC()                                                 \
-    if (_restore_LC_NUMERIC_function) {                                      \
-        _restore_LC_NUMERIC_function(aTHX);                                  \
+#define RESTORE_LC_NUMERIC()                                                \
+    if (_restore_LC_NUMERIC_function) {                                     \
+        _restore_LC_NUMERIC_function(aTHX);                                 \
     }
 
 /* The next two macros set unconditionally.  These should be rarely used, and
@@ -5909,66 +5996,87 @@ typedef struct am_table_short AMTS;
 	STMT_START { if (_NOT_IN_NUMERIC_STANDARD) set_numeric_standard();  \
                                                                  } STMT_END
 
-#define SET_NUMERIC_LOCAL()                                                 \
-	STMT_START { if (_NOT_IN_NUMERIC_LOCAL)                             \
+#define SET_NUMERIC_UNDERLYING()                                            \
+	STMT_START { if (_NOT_IN_NUMERIC_UNDERLYING)                        \
                                             set_numeric_local(); } STMT_END
 
 /* The rest of these LC_NUMERIC macros toggle to one or the other state, with
  * the RESTORE_foo ones called to switch back, but only if need be */
-#define STORE_NUMERIC_LOCAL_SET_STANDARD()          \
-	bool _was_local = _NOT_IN_NUMERIC_STANDARD; \
+#define STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD()                          \
+	bool _was_local = _NOT_IN_NUMERIC_STANDARD;                         \
 	if (_was_local) set_numeric_standard();
 
 /* Doesn't change to underlying locale unless within the scope of some form of
  * 'use locale'.  This is the usual desired behavior. */
-#define STORE_NUMERIC_STANDARD_SET_LOCAL()              \
-	bool _was_standard = _NOT_IN_NUMERIC_LOCAL      \
-                            && IN_LC(LC_NUMERIC);       \
+#define STORE_LC_NUMERIC_STANDARD_SET_UNDERLYING()                          \
+	bool _was_standard = _NOT_IN_NUMERIC_UNDERLYING                     \
+                            && IN_LC(LC_NUMERIC);                           \
 	if (_was_standard) set_numeric_local();
 
 /* Rarely, we want to change to the underlying locale even outside of 'use
  * locale'.  This is principally in the POSIX:: functions */
-#define STORE_NUMERIC_STANDARD_FORCE_LOCAL()            \
-	bool _was_standard = _NOT_IN_NUMERIC_LOCAL;     \
-	if (_was_standard) set_numeric_local();
+#define STORE_LC_NUMERIC_FORCE_TO_UNDERLYING()                              \
+    if (_NOT_IN_NUMERIC_UNDERLYING) {                                       \
+        set_numeric_local();                                                \
+        _restore_LC_NUMERIC_function = &Perl_set_numeric_standard;          \
+    }
 
 /* Lock to the C locale until unlock is called */
-#define LOCK_NUMERIC_STANDARD()                         \
-        (__ASSERT_(PL_numeric_standard)                 \
+#define LOCK_LC_NUMERIC_STANDARD()                          \
+        (__ASSERT_(PL_numeric_standard)                     \
         PL_numeric_standard = 2)
 
-#define UNLOCK_NUMERIC_STANDARD()                       \
-        (__ASSERT_(PL_numeric_standard == 2)            \
+#define UNLOCK_LC_NUMERIC_STANDARD()                        \
+        (__ASSERT_(PL_numeric_standard == 2)                \
         PL_numeric_standard = 1)
 
-#define RESTORE_NUMERIC_LOCAL() \
+#define RESTORE_LC_NUMERIC_UNDERLYING()                     \
 	if (_was_local) set_numeric_local();
 
-#define RESTORE_NUMERIC_STANDARD() \
-	if (_was_standard) SET_NUMERIC_STANDARD();
-
-#define Atof				my_atof
+#define RESTORE_LC_NUMERIC_STANDARD()                       \
+    if (_restore_LC_NUMERIC_function) {                     \
+        _restore_LC_NUMERIC_function(aTHX);                 \
+    }
 
 #else /* !USE_LOCALE_NUMERIC */
 
-#define SET_NUMERIC_STANDARD()  	/**/
-#define SET_NUMERIC_LOCAL()     	/**/
+#define SET_LC_NUMERIC_STANDARD()
+#define SET_LC_NUMERIC_UNDERLYING()
 #define IS_NUMERIC_RADIX(a, b)		(0)
-#define STORE_NUMERIC_LOCAL_SET_STANDARD()	/**/
-#define STORE_NUMERIC_STANDARD_SET_LOCAL()	/**/
-#define STORE_NUMERIC_STANDARD_FORCE_LOCAL()
-#define RESTORE_NUMERIC_LOCAL()		/**/
-#define RESTORE_NUMERIC_STANDARD()	/**/
-#define DECLARATION_FOR_STORE_LC_NUMERIC_SET_TO_NEEDED
+#define STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD()
+#define STORE_LC_NUMERIC_STANDARD_SET_UNDERLYING()
+#define STORE_LC_NUMERIC_FORCE_TO_UNDERLYING()
+#define RESTORE_LC_NUMERIC_UNDERLYING()
+#define RESTORE_LC_NUMERIC_STANDARD()
+#define DECLARATION_FOR_LC_NUMERIC_MANIPULATION
 #define STORE_LC_NUMERIC_SET_TO_NEEDED()
-#define DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED()
 #define RESTORE_LC_NUMERIC()
-#define LOCK_NUMERIC_STANDARD()
-#define UNLOCK_NUMERIC_STANDARD()
+#define LOCK_LC_NUMERIC_STANDARD()
+#define UNLOCK_LC_NUMERIC_STANDARD()
+
+#endif /* !USE_LOCALE_NUMERIC */
 
 #define Atof				my_atof
 
-#endif /* !USE_LOCALE_NUMERIC */
+/* Back-compat names */
+#define DECLARATION_FOR_STORE_LC_NUMERIC_SET_TO_NEEDED              \
+                        DECLARATION_FOR_LC_NUMERIC_MANIPULATION
+#define DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED()                    \
+                DECLARATION_FOR_STORE_LC_NUMERIC_SET_TO_NEEDED;     \
+                STORE_LC_NUMERIC_SET_TO_NEEDED();
+#define LOCK_NUMERIC_STANDARD() LOCK_LC_NUMERIC_STANDARD()
+#define RESTORE_NUMERIC_LOCAL() RESTORE_LC_NUMERIC_UNDERLYING()
+#define RESTORE_NUMERIC_STANDARD() RESTORE_LC_NUMERIC_STANDARD()
+#define SET_NUMERIC_LOCAL() SET_NUMERIC_UNDERLYING()
+#define STORE_NUMERIC_LOCAL_SET_STANDARD()                          \
+                    STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD()
+#define STORE_NUMERIC_STANDARD_SET_LOCAL()                          \
+                    STORE_LC_NUMERIC_STANDARD_SET_UNDERLYING()
+#define STORE_NUMERIC_STANDARD_FORCE_LOCAL()                        \
+                        STORE_LC_NUMERIC_FORCE_TO_UNDERLYING()
+#define UNLOCK_NUMERIC_STANDARD() UNLOCK_LC_NUMERIC_STANDARD()
+
+
 
 #ifdef USE_QUADMATH
 #  define Perl_strtod(s, e) strtoflt128(s, e)
@@ -6497,15 +6605,6 @@ extern void moncontrol(int);
 #  ifdef LONGDOUBLE_BIG_ENDIAN
 #    define NV_BIG_ENDIAN
 #  endif
-#endif
-
-/* The implicit bit platforms include the implicit bit
- * in the NV_MANT_DIG.  The bit isn't really there, however,
- * so the real count of mantissa bits is one less. */
-#ifdef NV_IMPLICIT_BIT
-#  define NV_MANT_REAL_DIG (NV_MANT_DIG - 1)
-#else
-#  define NV_MANT_REAL_DIG (NV_MANT_DIG)
 #endif
 
 /*

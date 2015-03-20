@@ -477,9 +477,9 @@ Perl_sv_peek(pTHX_ SV *sv)
 	}
     }
     else if (SvNOKp(sv)) {
-	STORE_NUMERIC_LOCAL_SET_STANDARD();
+	STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD();
 	Perl_sv_catpvf(aTHX_ t, "(%"NVgf")",SvNVX(sv));
-	RESTORE_NUMERIC_LOCAL();
+	RESTORE_LC_NUMERIC_UNDERLYING();
     }
     else if (SvIOKp(sv)) {
 	if (SvIsUV(sv))
@@ -572,7 +572,10 @@ Perl_dump_packsubs_perl(pTHX_ const HV *stash, bool justperl)
     for (i = 0; i <= (I32) HvMAX(stash); i++) {
         const HE *entry;
 	for (entry = HvARRAY(stash)[i]; entry; entry = HeNEXT(entry)) {
-	    const GV * const gv = (const GV *)HeVAL(entry);
+	    GV * gv = (GV *)HeVAL(entry);
+            if (SvROK(gv) && SvTYPE(SvRV(gv)) == SVt_PVCV)
+                /* unfake a fake GV */
+                (void)CvGV(SvRV(gv));
 	    if (SvTYPE(gv) != SVt_PVGV || !GvGP(gv))
 		continue;
 	    if (GvCVu(gv))
@@ -902,7 +905,10 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
                         sv_catpv(tmpsv, &PL_op_private_labels[label]);
                         sv_catpv(tmpsv, "=");
                     }
-                    sv_catpv(tmpsv, &PL_op_private_labels[enum_label]);
+                    if (enum_label == -1)
+                        Perl_sv_catpvf(aTHX_ tmpsv, "0x%"UVxf, (UV)val);
+                    else
+                        sv_catpv(tmpsv, &PL_op_private_labels[enum_label]);
 
                 }
                 else {
@@ -1083,9 +1089,6 @@ Perl_gv_dump(pTHX_ GV *gv)
     STRLEN len;
     const char* name;
     SV *sv, *tmp = newSVpvs_flags("", SVs_TEMP);
-
-
-    PERL_ARGS_ASSERT_GV_DUMP;
 
     if (!gv) {
 	PerlIO_printf(Perl_debug_log, "{}\n");
@@ -1572,9 +1575,9 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 		&& type != SVt_PVCV && type != SVt_PVFM  && type != SVt_REGEXP
 		&& type != SVt_PVIO && !isGV_with_GP(sv) && !SvVALID(sv))
 	       || type == SVt_NV) {
-	STORE_NUMERIC_LOCAL_SET_STANDARD();
+	STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD();
 	Perl_dump_indent(aTHX_ level, file, "  NV = %.*" NVgf "\n", NV_DIG, SvNVX(sv));
-	RESTORE_NUMERIC_LOCAL();
+	RESTORE_LC_NUMERIC_UNDERLYING();
     }
 
     if (SvROK(sv)) {
@@ -2320,7 +2323,8 @@ S_append_gv_name(pTHX_ GV *gv, SV *out)
 }
 
 #ifdef USE_ITHREADS
-#  define ITEM_SV(item) *av_fetch(comppad, (item)->pad_offset, FALSE);
+#  define ITEM_SV(item) (comppad ? \
+    *av_fetch(comppad, (item)->pad_offset, FALSE) : NULL);
 #else
 #  define ITEM_SV(item) UNOP_AUX_item_sv(item)
 #endif
@@ -2341,8 +2345,14 @@ Perl_multideref_stringify(pTHX_ const OP *o, CV *cv)
     int derefs = 0;
     SV *out = newSVpvn_flags("",0,SVs_TEMP);
 #ifdef USE_ITHREADS
-    PADLIST * const padlist = CvPADLIST(cv);
-    PAD *comppad = PadlistARRAY(padlist)[1];
+    PAD *comppad;
+
+    if (cv) {
+        PADLIST *padlist = CvPADLIST(cv);
+        comppad = PadlistARRAY(padlist)[1];
+    }
+    else
+        comppad = NULL;
 #endif
 
     PERL_ARGS_ASSERT_MULTIDEREF_STRINGIFY;
@@ -2353,38 +2363,50 @@ Perl_multideref_stringify(pTHX_ const OP *o, CV *cv)
         case MDEREF_reload:
             actions = (++items)->uv;
             continue;
+            NOT_REACHED; /* NOTREACHED */
 
         case MDEREF_HV_padhv_helem:
             is_hash = TRUE;
+            /* FALLTHROUGH */
         case MDEREF_AV_padav_aelem:
             derefs = 1;
             S_append_padvar(aTHX_ (++items)->pad_offset, cv, out, 1, 0, 1);
             goto do_elem;
+            NOT_REACHED; /* NOTREACHED */
 
         case MDEREF_HV_gvhv_helem:
             is_hash = TRUE;
+            /* FALLTHROUGH */
         case MDEREF_AV_gvav_aelem:
             derefs = 1;
-            sv = ITEM_SV(++items);
+            items++;
+            sv = ITEM_SV(items);
             S_append_gv_name(aTHX_ (GV*)sv, out);
             goto do_elem;
+            NOT_REACHED; /* NOTREACHED */
 
         case MDEREF_HV_gvsv_vivify_rv2hv_helem:
             is_hash = TRUE;
+            /* FALLTHROUGH */
         case MDEREF_AV_gvsv_vivify_rv2av_aelem:
-            sv = ITEM_SV(++items);
+            items++;
+            sv = ITEM_SV(items);
             S_append_gv_name(aTHX_ (GV*)sv, out);
             goto do_vivify_rv2xv_elem;
+            NOT_REACHED; /* NOTREACHED */
 
         case MDEREF_HV_padsv_vivify_rv2hv_helem:
             is_hash = TRUE;
+            /* FALLTHROUGH */
         case MDEREF_AV_padsv_vivify_rv2av_aelem:
             S_append_padvar(aTHX_ (++items)->pad_offset, cv, out, 1, 0, 1);
             goto do_vivify_rv2xv_elem;
+            NOT_REACHED; /* NOTREACHED */
 
         case MDEREF_HV_pop_rv2hv_helem:
         case MDEREF_HV_vivify_rv2hv_helem:
             is_hash = TRUE;
+            /* FALLTHROUGH */
         do_vivify_rv2xv_elem:
         case MDEREF_AV_pop_rv2av_aelem:
         case MDEREF_AV_vivify_rv2av_aelem:
@@ -2401,15 +2423,20 @@ Perl_multideref_stringify(pTHX_ const OP *o, CV *cv)
             switch (actions & MDEREF_INDEX_MASK) {
             case MDEREF_INDEX_const:
                 if (is_hash) {
-                    STRLEN cur;
-                    char *s;
-                    sv = ITEM_SV(++items);
-                    s = SvPV(sv, cur);
-                    pv_pretty(out, s, cur, 30,
-                                NULL, NULL,
-                                (PERL_PV_PRETTY_NOCLEAR
-                                |PERL_PV_PRETTY_QUOTE
-                                |PERL_PV_PRETTY_ELLIPSES));
+                    items++;
+                    sv = ITEM_SV(items);
+                    if (!sv)
+                        sv_catpvs_nomg(out, "???");
+                    else {
+                        STRLEN cur;
+                        char *s;
+                        s = SvPV(sv, cur);
+                        pv_pretty(out, s, cur, 30,
+                                    NULL, NULL,
+                                    (PERL_PV_PRETTY_NOCLEAR
+                                    |PERL_PV_PRETTY_QUOTE
+                                    |PERL_PV_PRETTY_ELLIPSES));
+                    }
                 }
                 else
                     Perl_sv_catpvf(aTHX_ out, "%"IVdf, (++items)->iv);
@@ -2418,7 +2445,8 @@ Perl_multideref_stringify(pTHX_ const OP *o, CV *cv)
                 S_append_padvar(aTHX_ (++items)->pad_offset, cv, out, 1, 0, 1);
                 break;
             case MDEREF_INDEX_gvsv:
-                sv = ITEM_SV(++items);
+                items++;
+                sv = ITEM_SV(items);
                 S_append_gv_name(aTHX_ (GV*)sv, out);
                 break;
             }
@@ -2509,19 +2537,27 @@ Perl_debop(pTHX_ const OP *o)
 }
 
 STATIC CV*
-S_deb_curcv(pTHX_ const I32 ix)
+S_deb_curcv(pTHX_ I32 ix)
 {
-    const PERL_CONTEXT * const cx = &cxstack[ix];
-    if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT)
-        return cx->blk_sub.cv;
-    else if (CxTYPE(cx) == CXt_EVAL && !CxTRYBLOCK(cx))
-        return cx->blk_eval.cv;
-    else if (ix == 0 && PL_curstackinfo->si_type == PERLSI_MAIN)
-        return PL_main_cv;
-    else if (ix <= 0)
-        return NULL;
-    else
-        return deb_curcv(ix - 1);
+    PERL_SI *si = PL_curstackinfo;
+    for (; ix >=0; ix--) {
+        const PERL_CONTEXT * const cx = &(si->si_cxstack)[ix];
+
+        if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT)
+            return cx->blk_sub.cv;
+        else if (CxTYPE(cx) == CXt_EVAL && !CxTRYBLOCK(cx))
+            return cx->blk_eval.cv;
+        else if (ix == 0 && si->si_type == PERLSI_MAIN)
+            return PL_main_cv;
+        else if (ix == 0 && CxTYPE(cx) == CXt_NULL
+               && si->si_type == PERLSI_SORT)
+        {
+            /* fake sort sub; use CV of caller */
+            si = si->si_prev;
+            ix = si->si_cxix + 1;
+        }
+    }
+    return NULL;
 }
 
 void

@@ -7,7 +7,7 @@ use warnings;
 
 BEGIN { chdir 't' if -d 't'; require './test.pl'; }
 
-plan(tests => 19);
+plan(tests => 25);
 
 {
     no warnings 'deprecated';
@@ -154,15 +154,58 @@ gibberish
 
 fresh_perl_is(
   '/$a[/<<a',
-  "syntax error at - line 1, next char ;\n" .
-  "Can't find string terminator \"a\" anywhere before EOF at - line 1.\n",
+  "Missing right curly or square bracket at - line 1, within pattern\n" .
+  "syntax error at - line 1, at EOF\n" .
+  "Execution of - aborted due to compilation errors.\n",
    { stderr => 1 },
   '/$a[/<<a with no newline [perl #123712]'
 );
 fresh_perl_is(
   '/$a[m||/<<a',
-  "syntax error at - line 1, next char ;\n" .
+  "Missing right curly or square bracket at - line 1, within pattern\n" .
+  "syntax error at - line 1, at EOF\n" .
   "Execution of - aborted due to compilation errors.\n",
    { stderr => 1 },
   '/$a[m||/<<a with no newline [perl #123712]'
+);
+
+fresh_perl_is(
+  '"@{"',
+  "Missing right curly or square bracket at - line 1, within string\n" .
+  "syntax error at - line 1, at EOF\n" .
+  "Execution of - aborted due to compilation errors.\n",
+   { stderr => 1 },
+  '"@{" [perl #123712]'
+);
+
+fresh_perl_is(
+  '/$0{}/',
+  'syntax error at - line 1, near "{}"' . "\n" .
+  "Execution of - aborted due to compilation errors.\n",
+   { stderr => 1 },
+  '/$0{}/ with no newline [perl #123802]'
+);
+fresh_perl_is(
+  '"\L\L"',
+  'syntax error at - line 1, near "\L\L"' . "\n" .
+  "Execution of - aborted due to compilation errors.\n",
+   { stderr => 1 },
+  '"\L\L" with no newline [perl #123802]'
+);
+fresh_perl_is(
+  '<\L\L>',
+  'syntax error at - line 1, near "\L\L"' . "\n" .
+  "Execution of - aborted due to compilation errors.\n",
+   { stderr => 1 },
+  '<\L\L> with no newline [perl #123802]'
+);
+
+is eval "qq'@\x{ff13}'", "\@\x{ff13}",
+  '"@<fullwidth digit>" [perl #123963]';
+
+fresh_perl_is(
+  "s;\@{<<a;\n",
+  "Can't find string terminator \"a\" anywhere before EOF at - line 1.\n",
+   { stderr => 1 },
+  's;@{<<a; [perl #123995]'
 );

@@ -3013,6 +3013,12 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	}
     case ')':
 	{
+/* (hv) best guess: maybe we'll need configure probes to do a better job,
+ * but you can override it if you need to.
+ */
+#ifndef INVALID_GID
+#define INVALID_GID ((Gid_t)-1)
+#endif
         /* XXX $) currently silently ignores failures */
 	Gid_t new_egid;
 #ifdef HAS_SETGROUPS
@@ -3020,6 +3026,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    const char *p = SvPV_const(sv, len);
             Groups_t *gary = NULL;
             const char* endptr;
+            UV uv;
 #ifdef _SC_NGROUPS_MAX
            int maxgrp = sysconf(_SC_NGROUPS_MAX);
 
@@ -3031,7 +3038,12 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 
             while (isSPACE(*p))
                 ++p;
-            new_egid = (Gid_t)grok_atou(p, &endptr);
+            if (grok_atoUV(p, &uv, &endptr))
+                new_egid = (Gid_t)uv;
+            else {
+                new_egid = INVALID_GID;
+                endptr = NULL;
+            }
             for (i = 0; i < maxgrp; ++i) {
                 if (endptr == NULL)
                     break;
@@ -3044,7 +3056,12 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
                     Newx(gary, i + 1, Groups_t);
                 else
                     Renew(gary, i + 1, Groups_t);
-                gary[i] = (Groups_t)grok_atou(p, &endptr);
+                if (grok_atoUV(p, &uv, &endptr))
+                    gary[i] = (Groups_t)uv;
+                else {
+                    gary[i] = INVALID_GID;
+                    endptr = NULL;
+                }
             }
             if (i)
                 PERL_UNUSED_RESULT(setgroups(i, gary));

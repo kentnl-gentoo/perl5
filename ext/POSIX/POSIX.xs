@@ -248,10 +248,10 @@
 #  define c99_ilogb	ilogbq
 #  define c99_lgamma	lgammaq
 #  define c99_log1p	log1pq
+#  define c99_llrint	llrintq
 #  define c99_log2	log2q
 /* no logbq */
-/* no llrintq */
-/* no llroundq */
+#  define c99_lround	llroundq
 #  define c99_lrint	lrintq
 #  define c99_lround	lroundq
 #  define c99_nan	nanq
@@ -2002,7 +2002,8 @@ localeconv()
 
         /* localeconv() deals with both LC_NUMERIC and LC_MONETARY, but
          * LC_MONETARY is already in the correct locale */
-        STORE_NUMERIC_STANDARD_FORCE_LOCAL();
+        DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+        STORE_LC_NUMERIC_FORCE_TO_UNDERLYING();
 
 	RETVAL = newHV();
 	sv_2mortal((SV*)RETVAL);
@@ -2011,7 +2012,7 @@ localeconv()
 	    const struct lconv_offset *integers = lconv_integers;
 	    const char *ptr = (const char *) lcbuf;
 
-	    do {
+	    while (strings->name) {
                 /* This string may be controlled by either LC_NUMERIC, or
                  * LC_MONETARY */
                 bool is_utf8_locale
@@ -2042,18 +2043,20 @@ localeconv()
                                         && ! is_invariant_string((U8 *) value, 0)
                                         && is_utf8_string((U8 *) value, 0)),
                         0);
-                  }
-	    } while ((++strings)->name);
+                }
+                strings++;
+	    }
 
-	    do {
+	    while (integers->name) {
 		const char value = *((const char *)(ptr + integers->offset));
 
 		if (value != CHAR_MAX)
 		    (void) hv_store(RETVAL, integers->name,
 				    strlen(integers->name), newSViv(value), 0);
-	    } while ((++integers)->name);
+                integers++;
+            }
 	}
-        RESTORE_NUMERIC_STANDARD();
+        RESTORE_LC_NUMERIC_STANDARD();
 #endif  /* HAS_LOCALECONV */
     OUTPUT:
 	RETVAL
@@ -2077,7 +2080,7 @@ setlocale(category, locale = 0)
             }
 #   ifdef LC_ALL
             else if (category == LC_ALL) {
-                SET_NUMERIC_LOCAL();
+                SET_NUMERIC_UNDERLYING();
             }
 #   endif
         }
@@ -2099,8 +2102,8 @@ setlocale(category, locale = 0)
         /* Save retval since subsequent setlocale() calls may overwrite it. */
         retval = savepv(retval);
 
-        /* For locale == 0, we may have switched to NUMERIC_LOCAL.  Switch back
-         * */
+        /* For locale == 0, we may have switched to NUMERIC_UNDERLYING.  Switch
+         * back */
         if (locale == 0) {
             SET_NUMERIC_STANDARD();
             XSRETURN_PV(retval);
@@ -2320,6 +2323,8 @@ acos(x)
 	case 20:
 #ifdef c99_logb
 	    RETVAL = c99_logb(x);
+#elif defined(c99_log2) && FLT_RADIX == 2
+	    RETVAL = Perl_floor(c99_log2(PERL_ABS(x)));
 #else
 	    not_here("logb");
 #endif
@@ -3184,7 +3189,8 @@ strtod(str)
 	double num;
 	char *unparsed;
     PPCODE:
-        STORE_NUMERIC_STANDARD_FORCE_LOCAL();
+        DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+        STORE_LC_NUMERIC_FORCE_TO_UNDERLYING();
 	num = strtod(str, &unparsed);
 	PUSHs(sv_2mortal(newSVnv(num)));
 	if (GIMME_V == G_ARRAY) {
@@ -3194,7 +3200,7 @@ strtod(str)
 	    else
 		PUSHs(&PL_sv_undef);
 	}
-        RESTORE_NUMERIC_STANDARD();
+        RESTORE_LC_NUMERIC_STANDARD();
 
 #ifdef HAS_STRTOLD
 
@@ -3205,7 +3211,8 @@ strtold(str)
 	long double num;
 	char *unparsed;
     PPCODE:
-        STORE_NUMERIC_STANDARD_FORCE_LOCAL();
+        DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+        STORE_LC_NUMERIC_FORCE_TO_UNDERLYING();
 	num = strtold(str, &unparsed);
 	PUSHs(sv_2mortal(newSVnv(num)));
 	if (GIMME_V == G_ARRAY) {
@@ -3215,7 +3222,7 @@ strtold(str)
 	    else
 		PUSHs(&PL_sv_undef);
 	}
-        RESTORE_NUMERIC_STANDARD();
+        RESTORE_LC_NUMERIC_STANDARD();
 
 #endif
 

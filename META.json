@@ -4,7 +4,7 @@
       "perl5-porters@perl.org"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "CPAN::Meta version 2.143240",
+   "generated_by" : "CPAN::Meta version 2.150001",
    "license" : [
       "perl_5"
    ],
@@ -124,5 +124,5 @@
          "url" : "http://perl5.git.perl.org/"
       }
    },
-   "version" : "5.021009"
+   "version" : "5.021010"
 }

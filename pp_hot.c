@@ -1790,8 +1790,7 @@ PP(pp_helem)
     const bool localizing = PL_op->op_private & OPpLVAL_INTRO;
     bool preeminent = TRUE;
 
-    if (SvTYPE(hv) != SVt_PVHV)
-	RETPUSHUNDEF;
+    assert(SvTYPE(hv) == SVt_PVHV);
 
     if (localizing) {
 	MAGIC *mg;
@@ -1878,14 +1877,14 @@ S_softref2xv_lite(pTHX_ SV *const sv, const char *const what,
 }
 
 
-/* handle one or more derefs and array/hash indexings, e.g.
- * $h->{foo} or $a[0]{$key}[$i] or f()->[1]
+/* Handle one or more aggregate derefs and array/hash indexings, e.g.
+ * $h->{foo}  or  $a[0]{$key}[$i]  or  f()->[1]
  *
  * op_aux points to an array of unions of UV / IV / SV* / PADOFFSET.
- * Each of these either contains an action, or an argument, such as
- * a UV to use as an array index, or a lexical var to retrieve.
- * In fact, several actions re stored per UV; we keep shifting new actions
- * of the one UV, and only reload when it becomes zero.
+ * Each of these either contains a set of actions, or an argument, such as
+ * an IV to use as an array index, or a lexical var to retrieve.
+ * Several actions re stored per UV; we keep shifting new actions off the
+ * one UV, and only reload when it becomes zero.
  */
 
 PP(pp_multideref)

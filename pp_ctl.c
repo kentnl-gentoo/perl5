@@ -824,7 +824,8 @@ PP(pp_formline)
 	    {
                 Size_t max = SvLEN(PL_formtarget) - (t - SvPVX(PL_formtarget));
                 int len;
-                DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED();
+                DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+                STORE_LC_NUMERIC_SET_TO_NEEDED();
                 arg &= ~(FORM_NUM_POINT|FORM_NUM_BLANK);
 #ifdef USE_QUADMATH
                 {
@@ -4507,6 +4508,7 @@ STATIC bool
 S_matcher_matches_sv(pTHX_ PMOP *matcher, SV *sv)
 {
     dSP;
+    bool result;
 
     PERL_ARGS_ASSERT_MATCHER_MATCHES_SV;
     
@@ -4515,7 +4517,10 @@ S_matcher_matches_sv(pTHX_ PMOP *matcher, SV *sv)
     PUTBACK;
     (void) Perl_pp_match(aTHX);
     SPAGAIN;
-    return (SvTRUEx(POPs));
+    result = SvTRUEx(POPs);
+    PUTBACK;
+
+    return result;
 }
 
 STATIC void
@@ -4577,7 +4582,7 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
     }
 
     SP -= 2;	/* Pop the values */
-
+    PUTBACK;
 
     /* ~~ undef */
     if (!SvOK(e)) {
@@ -4774,11 +4779,14 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 		(void) hv_iterinit(hv);
 		while ( (he = hv_iternext(hv)) ) {
 		    DEBUG_M(Perl_deb(aTHX_ "        testing key against pattern...\n"));
+                    PUTBACK;
 		    if (matcher_matches_sv(matcher, hv_iterkeysv(he))) {
+                        SPAGAIN;
 			(void) hv_iterinit(hv);
 			destroy_matcher(matcher);
 			RETPUSHYES;
 		    }
+                    SPAGAIN;
 		}
 		destroy_matcher(matcher);
 		RETPUSHNO;
@@ -4883,10 +4891,13 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 		for(i = 0; i <= this_len; ++i) {
 		    SV * const * const svp = av_fetch(MUTABLE_AV(SvRV(e)), i, FALSE);
 		    DEBUG_M(Perl_deb(aTHX_ "        testing element against pattern...\n"));
+                    PUTBACK;
 		    if (svp && matcher_matches_sv(matcher, *svp)) {
+                        SPAGAIN;
 			destroy_matcher(matcher);
 			RETPUSHYES;
 		    }
+                    SPAGAIN;
 		}
 		destroy_matcher(matcher);
 		RETPUSHNO;
@@ -4947,12 +4958,13 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other, const bool copied)
 	}
 	else {
 	    PMOP * const matcher = make_matcher((REGEXP*) SvRV(e));
+            bool result;
 
 	    DEBUG_M(Perl_deb(aTHX_ "    applying rule Any-Regex\n"));
 	    PUTBACK;
-	    PUSHs(matcher_matches_sv(matcher, d)
-		    ? &PL_sv_yes
-		    : &PL_sv_no);
+	    result = matcher_matches_sv(matcher, d);
+            SPAGAIN;
+	    PUSHs(result ? &PL_sv_yes : &PL_sv_no);
 	    destroy_matcher(matcher);
 	    RETURN;
 	}

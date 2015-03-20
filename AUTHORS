@@ -11,6 +11,9 @@
 # is strictly forbidden.  (Passive distribution with the Perl source
 # code kit is, of course, allowed.)
 #
+# This should contain the preferred addresses.  Alternate addresses are in
+# Porting/checkAUTHORS.pl.
+#
 # After editing, please run: make test_porting
 -- 
 A. C. Yardley			<yardley@tanet.net>
@@ -330,7 +333,7 @@ David Starks-Browning		<dstarks@rc.tudelft.nl>
 David Steinbrunner		<dsteinbrunner@pobox.com>
 David Sundstrom			<sunds@asictest.sc.ti.com>
 David M. Syzdek			<david@syzdek.net>
-David Wheeler			<david@wheeler.net>
+David Wheeler			<david@justatheory.com>
 Davin Milun			<milun@cs.Buffalo.EDU>
 Dean Roehrich			<roehrich@cray.com>
 Dee Newcum			<perl.org@paperlined.org>
@@ -534,6 +537,7 @@ Jared Rhine			<jared@organic.com>
 Jari Aalto			<jari.aalto@poboxes.com>
 Jarkko Hietaniemi		<jhi@iki.fi>
 Jasmine Ahuja			<jasmine.ahuja11@gmail.com>
+Jasmine Ngan			<jasmine.ngan@outlook.com>
 Jason A. Smith			<smithj4@rpi.edu>
 Jason E. Stewart		<jason@openinformatics.com>
 Jason Hord			<pravus@cpan.org>

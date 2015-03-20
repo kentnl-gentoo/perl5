@@ -45,7 +45,6 @@
 #define _to_utf8_lower_flags(a,b,c,d)	Perl__to_utf8_lower_flags(aTHX_ a,b,c,d)
 #define _to_utf8_title_flags(a,b,c,d)	Perl__to_utf8_title_flags(aTHX_ a,b,c,d)
 #define _to_utf8_upper_flags(a,b,c,d)	Perl__to_utf8_upper_flags(aTHX_ a,b,c,d)
-#define _warn_problematic_locale	Perl__warn_problematic_locale
 #define amagic_call(a,b,c,d)	Perl_amagic_call(aTHX_ a,b,c,d)
 #define amagic_deref_call(a,b)	Perl_amagic_deref_call(aTHX_ a,b)
 #define append_utf8_from_native_byte	S_append_utf8_from_native_byte
@@ -179,7 +178,6 @@
 #define getcwd_sv(a)		Perl_getcwd_sv(aTHX_ a)
 #define gp_free(a)		Perl_gp_free(aTHX_ a)
 #define gp_ref(a)		Perl_gp_ref(aTHX_ a)
-#define grok_atou		Perl_grok_atou
 #define grok_bin(a,b,c,d)	Perl_grok_bin(aTHX_ a,b,c,d)
 #define grok_hex(a,b,c,d)	Perl_grok_hex(aTHX_ a,b,c,d)
 #define grok_infnan(a,b)	Perl_grok_infnan(aTHX_ a,b)
@@ -898,9 +896,11 @@
 #endif
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #define _get_encoding()		Perl__get_encoding(aTHX)
+#define _warn_problematic_locale	Perl__warn_problematic_locale
 #define av_reify(a)		Perl_av_reify(aTHX_ a)
 #define current_re_engine()	Perl_current_re_engine(aTHX)
 #define cv_ckproto_len_flags(a,b,c,d,e)	Perl_cv_ckproto_len_flags(aTHX_ a,b,c,d,e)
+#define grok_atoUV		Perl_grok_atoUV
 #define mg_find_mglob(a)	Perl_mg_find_mglob(aTHX_ a)
 #define multideref_stringify(a,b)	Perl_multideref_stringify(aTHX_ a,b)
 #define op_clear(a)		Perl_op_clear(aTHX_ a)
@@ -914,6 +914,7 @@
 #define reg_temp_copy(a,b)	Perl_reg_temp_copy(aTHX_ a,b)
 #define report_uninit(a)	Perl_report_uninit(aTHX_ a)
 #define sv_magicext_mglob(a)	Perl_sv_magicext_mglob(aTHX_ a)
+#define sv_only_taint_gmagic	S_sv_only_taint_gmagic
 #define validate_proto(a,b,c)	Perl_validate_proto(aTHX_ a,b,c)
 #define vivify_defelem(a)	Perl_vivify_defelem(aTHX_ a)
 #define yylex()			Perl_yylex(aTHX)
@@ -991,6 +992,7 @@
 #define regatom(a,b,c)		S_regatom(aTHX_ a,b,c)
 #define regbranch(a,b,c,d)	S_regbranch(aTHX_ a,b,c,d)
 #define regclass(a,b,c,d,e,f,g,h)	S_regclass(aTHX_ a,b,c,d,e,f,g,h)
+#define regex_set_precedence	S_regex_set_precedence
 #define reginsert(a,b,c,d)	S_reginsert(aTHX_ a,b,c,d)
 #define regnode_guts(a,b,c,d)	S_regnode_guts(aTHX_ a,b,c,d)
 #define regpatws		S_regpatws

@@ -986,10 +986,9 @@ PERL_CALLCONV void	Perl_do_join(pTHX_ SV *sv, SV *delim, SV **mark, SV **sp)
 	assert(sv); assert(delim); assert(mark); assert(sp)
 
 PERL_CALLCONV void	Perl_do_magic_dump(pTHX_ I32 level, PerlIO *file, const MAGIC *mg, I32 nest, I32 maxnest, bool dumpops, STRLEN pvlim)
-			__attribute__nonnull__(pTHX_2)
-			__attribute__nonnull__(pTHX_3);
+			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_DO_MAGIC_DUMP	\
-	assert(file); assert(mg)
+	assert(file)
 
 PERL_CALLCONV I32	Perl_do_ncmp(pTHX_ SV *const left, SV *const right)
 			__attribute__warn_unused_result__
@@ -1340,10 +1339,11 @@ PERL_CALLCONV int	Perl_getcwd_sv(pTHX_ SV* sv)
 
 PERL_CALLCONV void	Perl_gp_free(pTHX_ GV* gv);
 PERL_CALLCONV GP*	Perl_gp_ref(pTHX_ GP* gp);
-PERL_CALLCONV UV	Perl_grok_atou(const char* pv, const char** endptr)
-			__attribute__nonnull__(1);
-#define PERL_ARGS_ASSERT_GROK_ATOU	\
-	assert(pv)
+PERL_CALLCONV bool	Perl_grok_atoUV(const char* pv, UV* valptr, const char** endptr)
+			__attribute__nonnull__(1)
+			__attribute__nonnull__(2);
+#define PERL_ARGS_ASSERT_GROK_ATOUV	\
+	assert(pv); assert(valptr)
 
 PERL_CALLCONV UV	Perl_grok_bin(pTHX_ const char* start, STRLEN* len_p, I32* flags, NV *result)
 			__attribute__nonnull__(pTHX_1)
@@ -1426,11 +1426,7 @@ PERL_CALLCONV SV*	Perl_gv_const_sv(pTHX_ GV* gv)
 #define PERL_ARGS_ASSERT_GV_CONST_SV	\
 	assert(gv)
 
-PERL_CALLCONV void	Perl_gv_dump(pTHX_ GV* gv)
-			__attribute__nonnull__(pTHX_1);
-#define PERL_ARGS_ASSERT_GV_DUMP	\
-	assert(gv)
-
+PERL_CALLCONV void	Perl_gv_dump(pTHX_ GV* gv);
 PERL_CALLCONV void	Perl_gv_efullname(pTHX_ SV* sv, const GV* gv)
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2);
@@ -2774,10 +2770,9 @@ PERL_CALLCONV SV*	Perl_mro_set_private_data(pTHX_ struct mro_meta *const smeta, 
 	assert(smeta); assert(which); assert(data)
 
 PERL_CALLCONV SV*	Perl_multideref_stringify(pTHX_ const OP* o, CV *cv)
-			__attribute__nonnull__(pTHX_1)
-			__attribute__nonnull__(pTHX_2);
+			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_MULTIDEREF_STRINGIFY	\
-	assert(o); assert(cv)
+	assert(o)
 
 PERL_CALLCONV NV	Perl_my_atof(pTHX_ const char *s)
 			__attribute__nonnull__(pTHX_1);
@@ -4473,6 +4468,11 @@ PERL_CALLCONV void	Perl_sv_nosharing(pTHX_ SV *sv);
 PERL_CALLCONV NV	Perl_sv_nv(pTHX_ SV* sv)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_SV_NV	\
+	assert(sv)
+
+PERL_STATIC_INLINE bool	S_sv_only_taint_gmagic(SV *sv)
+			__attribute__nonnull__(1);
+#define PERL_ARGS_ASSERT_SV_ONLY_TAINT_GMAGIC	\
 	assert(sv)
 
 PERL_CALLCONV char*	Perl_sv_peek(pTHX_ SV* sv);
@@ -6940,9 +6940,9 @@ PERL_STATIC_INLINE STRLEN*	S_get_invlist_iter_addr(SV* invlist)
 #define PERL_ARGS_ASSERT_GET_INVLIST_ITER_ADDR	\
 	assert(invlist)
 
-STATIC STRLEN	S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** nodep, UV *valuep, I32 *flagp, U32 depth, SV** substitute_parse)
+STATIC bool	S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** nodep, UV *code_point_p, int* cp_count, I32 *flagp, const U32 depth)
 			__attribute__nonnull__(pTHX_1)
-			__attribute__nonnull__(pTHX_4);
+			__attribute__nonnull__(pTHX_5);
 #define PERL_ARGS_ASSERT_GROK_BSLASH_N	\
 	assert(pRExC_state); assert(flagp)
 
@@ -7099,6 +7099,9 @@ STATIC regnode*	S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 dept
 			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_REGCLASS	\
 	assert(pRExC_state); assert(flagp)
+
+STATIC unsigned int	S_regex_set_precedence(const U8 my_operator)
+			__attribute__pure__;
 
 STATIC void	S_reginsert(pTHX_ RExC_state_t *pRExC_state, U8 op, regnode *opnd, U32 depth)
 			__attribute__nonnull__(pTHX_1)
@@ -7414,28 +7417,28 @@ PERL_CALLCONV SV*	Perl__swash_to_invlist(pTHX_ SV* const swash)
 
 #endif
 #if defined(PERL_IN_REGEXEC_C)
-STATIC PL_SB_enum	S_advance_one_SB(pTHX_ U8 ** curpos, const U8 * const strend, const bool utf8_target)
+STATIC SB_enum	S_advance_one_SB(pTHX_ U8 ** curpos, const U8 * const strend, const bool utf8_target)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_ADVANCE_ONE_SB	\
 	assert(curpos); assert(strend)
 
-STATIC PL_WB_enum	S_advance_one_WB(pTHX_ U8 ** curpos, const U8 * const strend, const bool utf8_target)
+STATIC WB_enum	S_advance_one_WB(pTHX_ U8 ** curpos, const U8 * const strend, const bool utf8_target)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_ADVANCE_ONE_WB	\
 	assert(curpos); assert(strend)
 
-STATIC PL_SB_enum	S_backup_one_SB(pTHX_ const U8 * const strbeg, U8 ** curpos, const bool utf8_target)
+STATIC SB_enum	S_backup_one_SB(pTHX_ const U8 * const strbeg, U8 ** curpos, const bool utf8_target)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_BACKUP_ONE_SB	\
 	assert(strbeg); assert(curpos)
 
-STATIC PL_WB_enum	S_backup_one_WB(pTHX_ PL_WB_enum * previous, const U8 * const strbeg, U8 ** curpos, const bool utf8_target)
+STATIC WB_enum	S_backup_one_WB(pTHX_ WB_enum * previous, const U8 * const strbeg, U8 ** curpos, const bool utf8_target)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2)
@@ -7461,10 +7464,10 @@ STATIC bool	S_isFOO_utf8_lc(pTHX_ const U8 classnum, const U8* character)
 #define PERL_ARGS_ASSERT_ISFOO_UTF8_LC	\
 	assert(character)
 
-STATIC bool	S_isGCB(const PL_GCB_enum before, const PL_GCB_enum after)
+STATIC bool	S_isGCB(const GCB_enum before, const GCB_enum after)
 			__attribute__warn_unused_result__;
 
-STATIC bool	S_isSB(pTHX_ PL_SB_enum before, PL_SB_enum after, const U8 * const strbeg, const U8 * const curpos, const U8 * const strend, const bool utf8_target)
+STATIC bool	S_isSB(pTHX_ SB_enum before, SB_enum after, const U8 * const strbeg, const U8 * const curpos, const U8 * const strend, const bool utf8_target)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_3)
 			__attribute__nonnull__(pTHX_4)
@@ -7472,7 +7475,7 @@ STATIC bool	S_isSB(pTHX_ PL_SB_enum before, PL_SB_enum after, const U8 * const s
 #define PERL_ARGS_ASSERT_ISSB	\
 	assert(strbeg); assert(curpos); assert(strend)
 
-STATIC bool	S_isWB(pTHX_ PL_WB_enum previous, PL_WB_enum before, PL_WB_enum after, const U8 * const strbeg, const U8 * const curpos, const U8 * const strend, const bool utf8_target)
+STATIC bool	S_isWB(pTHX_ WB_enum previous, WB_enum before, WB_enum after, const U8 * const strbeg, const U8 * const curpos, const U8 * const strend, const bool utf8_target)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_4)
 			__attribute__nonnull__(pTHX_5)

@@ -1649,6 +1649,7 @@ S_incline(pTHX_ const char *s)
     const char *n;
     const char *e;
     line_t line_num;
+    UV uv;
 
     PERL_ARGS_ASSERT_INCLINE;
 
@@ -1698,7 +1699,9 @@ S_incline(pTHX_ const char *s)
     if (*e != '\n' && *e != '\0')
 	return;		/* false alarm */
 
-    line_num = grok_atou(n, &e) - 1;
+    if (!grok_atoUV(n, &uv, &e))
+        return;
+    line_num = ((line_t)uv) - 1;
 
     if (t - s > 0) {
 	const STRLEN len = t - s;
@@ -2381,6 +2384,7 @@ S_sublex_push(pTHX)
        popping.  We must not have a PL_lex_stuff value left dangling, as
        that breaks assumptions elsewhere.  See bug #123617.  */
     SAVEGENERICSV(PL_lex_stuff);
+    SAVEGENERICSV(PL_sublex_info.repl);
 
     PL_bufend = PL_bufptr = PL_oldbufptr = PL_oldoldbufptr = PL_linestart
 	= SvPVX(PL_linestr);
@@ -3052,7 +3056,7 @@ S_scan_const(pTHX_ char *start)
 	   (@foo, @::foo, @'foo, @{foo}, @$foo, @+, @-)
 	   */
 	else if (*s == '@' && s[1]) {
-	    if (isWORDCHAR_lazy_if(s+1,UTF))
+	    if (UTF ? isIDFIRST_utf8((U8*)s+1) : isWORDCHAR_A(s[1]))
 		break;
 	    if (strchr(":'{$", s[1]))
 		break;
@@ -3272,12 +3276,7 @@ S_scan_const(pTHX_ char *start)
                  *  Otherwise must be some \N{NAME}: convert to \N{U+c1.c2...}
                  *      if a pattern; otherwise convert to utf8
                  *
-                 * If the regex compiler should ever need to differentiate
-                 * between the \N{U+...} and \N{name} forms, that could easily
-                 * be done here by stripping any leading zeros from the
-                 * \N{U+...} case, and adding them to the other one. */
-
-                /* Here, 's' points to the 'N'; the test below is guaranteed to
+                 * Here, 's' points to the 'N'; the test below is guaranteed to
 		 * succeed if we are being called on a pattern, as we already
                  * know from a test above that the next character is a '{'.  A
                  * non-pattern \N must mean 'named character', which requires
@@ -3409,9 +3408,15 @@ S_scan_const(pTHX_ char *start)
                                     char hex_string[4];
                                     int len =
                                         my_snprintf(hex_string,
-                                                    sizeof(hex_string),
-                                                    "%02X.", (U8) *str);
-                                    PERL_MY_SNPRINTF_POST_GUARD(len, sizeof(hex_string));
+                                                  sizeof(hex_string),
+                                                  "%02X.",
+
+                                                  /* The regex compiler is
+                                                   * expecting Unicode, not
+                                                   * native */
+                                                  (U8) NATIVE_TO_LATIN1(*str));
+                                    PERL_MY_SNPRINTF_POST_GUARD(len,
+                                                           sizeof(hex_string));
                                     Copy(hex_string, d, 3, char);
                                     d += 3;
                                     str++;
@@ -3435,12 +3440,12 @@ S_scan_const(pTHX_ char *start)
                                                         len,
                                                         &char_length,
                                                         UTF8_ALLOW_ANYUV);
-                                /* Convert first code point to hex, including
-                                 * the boiler plate before it. */
+                                /* Convert first code point to Unicode hex,
+                                 * including the boiler plate before it. */
                                 output_length =
                                     my_snprintf(hex_string, sizeof(hex_string),
-                                                "\\N{U+%X",
-                                                (unsigned int) uv);
+                                             "\\N{U+%X",
+                                             (unsigned int) NATIVE_TO_UNI(uv));
 
                                 /* Make sure there is enough space to hold it */
                                 d = off + SvGROW(sv, off
@@ -3452,7 +3457,7 @@ S_scan_const(pTHX_ char *start)
                                 d += output_length;
 
                                 /* For each subsequent character, append dot and
-                                * its ordinal in hex */
+                                * its Unicode code point in hex */
                                 while ((str += char_length) < str_end) {
                                     const STRLEN off = d - SvPVX_const(sv);
                                     U32 uv = utf8n_to_uvchr((U8 *) str,
@@ -3461,9 +3466,9 @@ S_scan_const(pTHX_ char *start)
                                                             UTF8_ALLOW_ANYUV);
                                     output_length =
                                         my_snprintf(hex_string,
-                                                    sizeof(hex_string),
-                                                    ".%X",
-                                                    (unsigned int) uv);
+                                             sizeof(hex_string),
+                                             ".%X",
+                                             (unsigned int) NATIVE_TO_UNI(uv));
 
                                     d = off + SvGROW(sv, off
                                                         + output_length
@@ -4493,6 +4498,14 @@ Perl_yylex(pTHX)
 	/* FALLTHROUGH */
 
     case LEX_INTERPEND:
+	/* Treat state as LEX_NORMAL if we have no inner lexing scope.
+	   XXX This hack can be removed if we stop setting PL_lex_state to
+	   LEX_KNOWNEXT, as can the hack under LEX_INTREPCONCAT below.  */
+	if (UNLIKELY(!PL_lex_inwhat)) {
+	    PL_lex_state = LEX_NORMAL;
+	    break;
+	}
+
 	if (PL_lex_dojoin) {
 	    const U8 dojoin_was = PL_lex_dojoin;
 	    PL_lex_dojoin = FALSE;
@@ -4544,6 +4557,14 @@ Perl_yylex(pTHX)
 	    Perl_croak(aTHX_ "panic: INTERPCONCAT, lex_brackets=%ld",
 		       (long) PL_lex_brackets);
 #endif
+	/* Treat state as LEX_NORMAL when not in an inner lexing scope.
+	   XXX This hack can be removed if we stop setting PL_lex_state to
+	   LEX_KNOWNEXT.  */
+	if (UNLIKELY(!PL_lex_inwhat)) {
+	    PL_lex_state = LEX_NORMAL;
+	    break;
+	}
+
 	if (PL_bufptr == PL_bufend)
 	    return REPORT(sublex_done());
 
@@ -4624,7 +4645,8 @@ Perl_yylex(pTHX)
     case 26:
 	goto fake_eof;			/* emulate EOF on ^D or ^Z */
     case 0:
-	if (!PL_rsfp && (!PL_parser->filtered || s+1 < PL_bufend)) {
+	if ((!PL_rsfp || PL_lex_inwhat)
+	 && (!PL_parser->filtered || s+1 < PL_bufend)) {
 	    PL_last_uni = 0;
 	    PL_last_lop = 0;
 	    if (PL_lex_brackets &&
@@ -9262,8 +9284,13 @@ S_scan_heredoc(pTHX_ char *s)
 	       lexing scope.  In a file, we will have broken out of the
 	       loop in the previous iteration.  In an eval, the string buf-
 	       fer ends with "\n;", so the while condition above will have
-	       evaluated to false.  So shared can never be null. */
-	    assert(shared);
+	       evaluated to false.  So shared can never be null.  Or so you
+	       might think.  Odd syntax errors like s;@{<<; can gobble up
+	       the implicit semicolon at the end of a flie, causing the
+	       file handle to be closed even when we are not in a string
+	       eval.  So shared may be null in that case.  */
+	    if (UNLIKELY(!shared))
+		goto interminable;
 	    /* A LEXSHARED struct with a null ls_prev pointer is the outer-
 	       most lexing scope.  In a file, shared->ls_linestr at that
 	       level is just one line, so there is no body to steal. */
@@ -10445,7 +10472,7 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
               floatit = TRUE;
         }
 	if (floatit) {
-            STORE_NUMERIC_LOCAL_SET_STANDARD();
+            STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD();
 	    /* terminate the string */
 	    *d = '\0';
             if (UNLIKELY(hexfp)) {
@@ -10462,7 +10489,7 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
             } else {
                 nv = Atof(PL_tokenbuf);
             }
-            RESTORE_NUMERIC_LOCAL();
+            RESTORE_LC_NUMERIC_UNDERLYING();
             sv = newSVnv(nv);
 	}
 
