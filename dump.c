@@ -844,7 +844,7 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
         if (o->op_savefree) sv_catpvs(tmpsv, ",SAVEFREE");
         if (o->op_static)   sv_catpvs(tmpsv, ",STATIC");
         if (o->op_folded)   sv_catpvs(tmpsv, ",FOLDED");
-        if (o->op_lastsib)  sv_catpvs(tmpsv, ",LASTSIB");
+        if (o->op_moresib)  sv_catpvs(tmpsv, ",MORESIB");
         Perl_dump_indent(aTHX_ level, file, "FLAGS = (%s)\n",
                          SvCUR(tmpsv) ? SvPVX_const(tmpsv) + 1 : "");
     }
@@ -2599,11 +2599,5 @@ Perl_debprofdump(pTHX)
 
 
 /*
- * Local variables:
- * c-indentation-style: bsd
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- *
  * ex: set ts=8 sts=4 sw=4 et:
  */

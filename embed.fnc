@@ -781,9 +781,11 @@ Apd	|void	|op_null	|NN OP* o
 EXp	|void	|op_clear	|NN OP* o
 Ap	|void	|op_refcnt_lock
 Ap	|void	|op_refcnt_unlock
-Apdn	|OP*	|op_sibling_splice|NN OP *parent|NULLOK OP *start \
+Apdn	|OP*	|op_sibling_splice|NULLOK OP *parent|NULLOK OP *start \
 		|int del_count|NULLOK OP* insert
+#ifdef PERL_OP_PARENT
 Apdn	|OP*	|op_parent|NN OP *o
+#endif
 #if defined(PERL_IN_OP_C)
 s	|OP*	|listkids	|NULLOK OP* o
 #endif
@@ -2317,7 +2319,7 @@ Es	|void	|debug_start_match|NN const REGEXP *prog|const bool do_utf8\
 #endif
 
 #if defined(PERL_IN_DUMP_C)
-s	|CV*	|deb_curcv	|const I32 ix
+s	|CV*	|deb_curcv	|I32 ix
 s	|void	|debprof	|NN const OP *o
 s	|UV	|sequence_num	|NULLOK const OP *o
 s	|SV*	|pm_description	|NN const PMOP *pm

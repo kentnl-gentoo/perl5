@@ -46,7 +46,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
         MDEREF_SHIFT
     );
 
-$VERSION = '1.34';
+$VERSION = '1.35';
 use strict;
 use vars qw/$AUTOLOAD/;
 use warnings ();
@@ -2642,7 +2642,11 @@ sub pp_readline {
     my $self = shift;
     my($op, $cx) = @_;
     my $kid = $op->first;
-    return "<" . $self->deparse($kid, 1) . ">" if is_scalar($kid);
+    if (is_scalar($kid)) {
+        my $kid_deparsed = $self->deparse($kid, 1);
+        return '<<>>' if $op->flags & OPf_SPECIAL and $kid_deparsed eq 'ARGV';
+        return "<$kid_deparsed>";
+    }
     return $self->unop($op, $cx, "readline");
 }
 

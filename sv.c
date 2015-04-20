@@ -13641,7 +13641,7 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 		    }
 		    items = AvMAX((const AV *)sstr) - AvFILLp((const AV *)sstr);
 		    while (items-- > 0) {
-			*dst_ary++ = &PL_sv_undef;
+			*dst_ary++ = NULL;
 		    }
 		}
 		else {
@@ -15286,6 +15286,7 @@ Perl_sv_recode_to_utf8(pTHX_ SV *sv, SV *encoding)
 	    nsv = sv_newmortal();
 	    SvSetSV_nosteal(nsv, sv);
 	}
+	save_re_context();
 	PUSHMARK(sp);
 	EXTEND(SP, 3);
 	PUSHs(encoding);
@@ -15356,6 +15357,7 @@ Perl_sv_cat_decode(pTHX_ SV *dsv, SV *encoding,
 	dSP;
 	ENTER;
 	SAVETMPS;
+	save_re_context();
 	PUSHMARK(sp);
 	EXTEND(SP, 6);
 	PUSHs(encoding);
@@ -16226,11 +16228,5 @@ Perl_report_uninit(pTHX_ const SV *uninit_sv)
 }
 
 /*
- * Local variables:
- * c-indentation-style: bsd
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- *
  * ex: set ts=8 sts=4 sw=4 et:
  */

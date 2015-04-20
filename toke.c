@@ -1841,13 +1841,13 @@ S_check_uni(pTHX)
 	PL_last_uni++;
     s = PL_last_uni;
     while (isWORDCHAR_lazy_if(s,UTF) || *s == '-')
-	s++;
+	s += UTF ? UTF8SKIP(s) : 1;
     if ((t = strchr(s, '(')) && t < PL_bufptr)
 	return;
 
     Perl_ck_warner_d(aTHX_ packWARN(WARN_AMBIGUOUS),
-		     "Warning: Use of \"%.*s\" without parentheses is ambiguous",
-		     (int)(s - PL_last_uni), PL_last_uni);
+		     "Warning: Use of \"%"UTF8f"\" without parentheses is ambiguous",
+		     UTF8fARG(UTF, (int)(s - PL_last_uni), PL_last_uni));
 }
 
 /*
@@ -2342,6 +2342,7 @@ S_sublex_push(pTHX)
     SAVEI32(PL_lex_casemods);
     SAVEI32(PL_lex_starts);
     SAVEI8(PL_lex_state);
+    SAVEI8(PL_lex_defer);
     SAVESPTR(PL_lex_repl);
     SAVEVPTR(PL_lex_inpat);
     SAVEI16(PL_lex_inwhat);
@@ -2529,9 +2530,10 @@ S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
         /* We deliberately don't try to print the malformed character, which
          * might not print very well; it also may be just the first of many
          * malformations, so don't print what comes after it */
-        yyerror(Perl_form(aTHX_
+        yyerror_pv(Perl_form(aTHX_
             "Malformed UTF-8 character immediately after '%.*s'",
-            (int) (first_bad_char_loc - (U8 *) backslash_ptr), backslash_ptr));
+            (int) (first_bad_char_loc - (U8 *) backslash_ptr), backslash_ptr),
+                   SVf_UTF8);
 	return NULL;
     }
 
@@ -6049,14 +6051,14 @@ Perl_yylex(pTHX)
 			char *t = s+1;
 
 			while (isSPACE(*t) || isWORDCHAR_lazy_if(t,UTF) || *t == '$')
-			    t++;
+			    t += UTF ? UTF8SKIP(t) : 1;
 			if (*t++ == ',') {
 			    PL_bufptr = skipspace(PL_bufptr); /* XXX can realloc */
 			    while (t < PL_bufend && *t != ']')
 				t++;
 			    Perl_warner(aTHX_ packWARN(WARN_SYNTAX),
-					"Multidimensional syntax %.*s not supported",
-				    (int)((t - PL_bufptr) + 1), PL_bufptr);
+					"Multidimensional syntax %"UTF8f" not supported",
+                                        UTF8fARG(UTF,(int)((t - PL_bufptr) + 1), PL_bufptr));
 			}
 		    }
 		}
@@ -9210,10 +9212,14 @@ S_scan_heredoc(pTHX_ char *s)
 	    term = '"';
 	if (!isWORDCHAR_lazy_if(s,UTF))
 	    deprecate("bare << to mean <<\"\"");
-	for (; isWORDCHAR_lazy_if(s,UTF); s++) {
-	    if (d < e)
-		*d++ = *s;
+	peek = s;
+	while (isWORDCHAR_lazy_if(peek,UTF)) {
+	    peek += UTF ? UTF8SKIP(peek) : 1;
 	}
+	len = (peek - s >= e - d) ? (e - d) : (peek - s);
+	Copy(s, d, len, char);
+	s += len;
+	d += len;
     }
     if (d >= PL_tokenbuf + sizeof PL_tokenbuf - 1)
 	Perl_croak(aTHX_ "Delimiter for here document is too long");
@@ -11737,11 +11743,5 @@ Perl_parse_subsignature(pTHX)
 }
 
 /*
- * Local variables:
- * c-indentation-style: bsd
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- *
  * ex: set ts=8 sts=4 sw=4 et:
  */

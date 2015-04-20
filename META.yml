@@ -51,6 +51,7 @@ no_index:
     - dist/threads-shared
     - dist/Tie-File
     - dist/XSLoader
+    - lib/perl5db
     - win32
   file:
     - autodoc.pl
@@ -111,4 +112,4 @@ resources:
   homepage: http://www.perl.org/
   license: http://dev.perl.org/licenses/
   repository: http://perl5.git.perl.org/
-version: '5.021010'
+version: '5.021011'

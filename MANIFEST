@@ -785,6 +785,7 @@ cpan/Digest/t/digest.t		See if Digest extensions work
 cpan/Digest/t/file.t		See if Digest extensions work
 cpan/Digest/t/lib/Digest/Dummy.pm		See if Digest extensions work
 cpan/Digest/t/security.t		See if Digest extensions work
+cpan/.dir-locals.el			Emacs control file
 cpan/Encode/bin/enc2xs		Encode module generator
 cpan/Encode/bin/encguess		guess character encodings of files
 cpan/Encode/bin/piconv		iconv by perl
@@ -2852,6 +2853,7 @@ Cross/warp			Cross-compilation
 cv.h				Code value header
 cygwin/cygwin.c			Additional code for Cygwin port
 deb.c				Debugging routines
+.dir-locals.el			Emacs control file
 dist/Attribute-Handlers/Changes				Attribute::Handlers
 dist/Attribute-Handlers/demo/demo2.pl			Attribute::Handlers demo
 dist/Attribute-Handlers/demo/demo3.pl			Attribute::Handlers demo
@@ -3897,6 +3899,7 @@ ext/XS-APItest/t/fetch_pad_names.t	Tests for UTF8 names in pad
 ext/XS-APItest/t/gotosub.t	XS::APItest: tests goto &xsub and hints
 ext/XS-APItest/t/grok.t		XS::APItest: tests for grok* functions
 ext/XS-APItest/t/gv_autoload4.t	XS::APItest: tests for gv_autoload4() and variants
+ext/XS-APItest/t/gv_const_sv.t	XS::APItest: test gv_const_sv()
 ext/XS-APItest/t/gv_fetchmeth_autoload.t	XS::APItest: tests for gv_fetchmeth_autoload() and variants
 ext/XS-APItest/t/gv_fetchmethod_flags.t	XS::APItest: tests for gv_fetchmethod_flags() and variants
 ext/XS-APItest/t/gv_fetchmeth.t		XS::APItest: tests for gv_fetchmeth() and variants
@@ -4563,6 +4566,7 @@ pod/perl5200delta.pod		Perl changes in version 5.20.0
 pod/perl5201delta.pod		Perl changes in version 5.20.1
 pod/perl5202delta.pod		Perl changes in version 5.20.2
 pod/perl5210delta.pod		Perl changes in version 5.21.0
+pod/perl52110delta.pod		Perl changes in version 5.21.10
 pod/perl5211delta.pod		Perl changes in version 5.21.1
 pod/perl5212delta.pod		Perl changes in version 5.21.2
 pod/perl5213delta.pod		Perl changes in version 5.21.3
@@ -5380,6 +5384,7 @@ t/porting/perlfunc.t		Test that Functions_pm.PL can parse perlfunc.pod
 t/porting/podcheck.t		Test the POD of shipped modules is well formed
 t/porting/pod_rules.t		Check that various pod lists are consistent
 t/porting/readme.t		Check that all files in Porting/ are mentioned in Porting/README.pod
+t/porting/re_context.t		Check assumptions made by save_re_context()
 t/porting/regen.t		Check that regen.pl doesn't need running
 t/porting/ss_dup.t		Check that sv.c:ss_dup handle everything
 t/porting/test_bootstrap.t	Test that the instructions for test bootstrapping aren't accidentally overlooked.

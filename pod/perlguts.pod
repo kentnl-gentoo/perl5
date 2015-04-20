@@ -39,7 +39,7 @@ values that can be loaded: an integer value (IV), an unsigned integer
 value (UV), a double (NV), a string (PV), and another scalar (SV).
 ("PV" stands for "Pointer Value".  You might think that it is misnamed
 because it is described as pointing only to strings.  However, it is
-possible to have it point to other things  For example, it could point
+possible to have it point to other things.  For example, it could point
 to an array of UVs.  But,
 using it for non-strings requires care, as the underlying assumption of
 much of the internals is that PVs are just for strings.  Often, for
@@ -323,22 +323,40 @@ Hence, at this point, the start of the buffer that we allocated lives
 at C<SvPVX(sv) - SvIV(sv)> in memory and the PV pointer is pointing
 into the middle of this allocated storage.
 
-This is best demonstrated by example:
+This is best demonstrated by example.  Normally copy-on-write will prevent
+the substitution from operator from using this hack, but if you can craft a
+string for which copy-on-write is not possible, you can see it in play.  In
+the current implementation, the final byte of a string buffer is used as a
+copy-on-write reference count.  If the buffer is not big enough, then
+copy-on-write is skipped.  First have a look at an empty string:
 
-  % ./perl -Ilib -MDevel::Peek -le '$a="12345"; $a=~s/.//; Dump($a)'
-  SV = PVIV(0x8128450) at 0x81340f0
+  % ./perl -Ilib -MDevel::Peek -le '$a=""; $a .= ""; Dump $a'
+  SV = PV(0x7ffb7c008a70) at 0x7ffb7c030390
+    REFCNT = 1
+    FLAGS = (POK,pPOK)
+    PV = 0x7ffb7bc05b50 ""\0
+    CUR = 0
+    LEN = 10
+
+Notice here the LEN is 10.  (It may differ on your platform.)  Extend the
+length of the string to one less than 10, and do a substitution:
+
+  % ./perl -Ilib -MDevel::Peek -le '$a=""; $a.="123456789"; $a=~s/.//; Dump($a)'
+  SV = PV(0x7ffa04008a70) at 0x7ffa04030390
     REFCNT = 1
     FLAGS = (POK,OOK,pPOK)
-    IV = 1  (OFFSET)
-    PV = 0x8135781 ( "1" . ) "2345"\0
-    CUR = 4
-    LEN = 5
+    OFFSET = 1
+    PV = 0x7ffa03c05b61 ( "\1" . ) "23456789"\0
+    CUR = 8
+    LEN = 9
 
-Here the number of bytes chopped off (1) is put into IV, and
-C<Devel::Peek::Dump> helpfully reminds us that this is an offset.  The
+Here the number of bytes chopped off (1) is shown next as the OFFSET.  The
 portion of the string between the "real" and the "fake" beginnings is
 shown in parentheses, and the values of C<SvCUR> and C<SvLEN> reflect
-the fake beginning, not the real one.
+the fake beginning, not the real one.  (The first character of the string
+buffer happens to have changed to "\1" here, not "1", because the current
+implementation stores the offset count in the string buffer.  This is
+subject to change.)
 
 Something similar to the offset hack is performed on AVs to enable
 efficient shifting and splicing off the beginning of the array; while
@@ -1962,7 +1980,7 @@ C<op_first> field but also an C<op_last> field.  The most complex type of
 op is a C<LISTOP>, which has any number of children.  In this case, the
 first child is pointed to by C<op_first> and the last child by
 C<op_last>.  The children in between can be found by iteratively
-following the C<op_sibling> pointer from the first child to the last (but
+following the C<OpSIBLING> pointer from the first child to the last (but
 see below).
 
 There are also some other op types: a C<PMOP> holds a regular expression,
@@ -1974,7 +1992,7 @@ have children in accordance with its former type.
 
 Finally, there is a C<LOGOP>, or logic op. Like a C<LISTOP>, this has one
 or more children, but it doesn't have an C<op_last> field: so you have to
-follow C<op_first> and then the C<op_sibling> chain itself to find the
+follow C<op_first> and then the C<OpSIBLING> chain itself to find the
 last child. Instead it has an C<op_other> field, which is comparable to
 the C<op_next> field described below, and represents an alternate
 execution path. Operators like C<and>, C<or> and C<?> are C<LOGOP>s. Note
@@ -1983,13 +2001,15 @@ of the C<LOGOP>.
 
 Starting in version 5.21.2, perls built with the experimental
 define C<-DPERL_OP_PARENT> add an extra boolean flag for each op,
-C<op_lastsib>.  When set, this indicates that this is the last op in an
-C<op_sibling> chain. This frees up the C<op_sibling> field on the last
-sibling to point back to the parent op. The macro C<OpSIBLING(o)> wraps
-this special behaviour, and always returns NULL on the last sibling.
-With this build the C<op_parent(o)> function can be used to find the
-parent of any op. Thus for forward compatibility, you should always use
-the C<OpSIBLING(o)> macro rather than accessing C<op_sibling> directly.
+C<op_moresib>.  When not set, this indicates that this is the last op in an
+C<OpSIBLING> chain. This frees up the C<op_sibling> field on the last
+sibling to point back to the parent op. Under this build, that field is
+also renamed C<op_sibparent> to reflect its joint role. The macro
+C<OpSIBLING(o)> wraps this special behaviour, and always returns NULL on
+the last sibling.  With this build the C<op_parent(o)> function can be
+used to find the parent of any op. Thus for forward compatibility, you
+should always use the C<OpSIBLING(o)> macro rather than accessing
+C<op_sibling> directly.
 
 Another way to examine the tree is to use a compiler back-end module, such
 as L<B::Concise>.

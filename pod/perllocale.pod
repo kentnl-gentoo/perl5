@@ -34,7 +34,8 @@ locales", based on Unicode.  These are locales whose character set is
 Unicode, encoded in UTF-8.  Starting in v5.20, Perl fully supports
 UTF-8 locales, except for sorting and string comparisons.  (Use
 L<Unicode::Collate> for these.)  Perl continues to support the old
-non UTF-8 locales as well.
+non UTF-8 locales as well.  There are currently no UTF-8 locales for
+EBCDIC platforms.
 
 (Unicode is also creating C<CLDR>, the "Common Locale Data Repository",
 L<http://cldr.unicode.org/> which includes more types of information than
@@ -887,8 +888,8 @@ L<Perl will warn, default enabled|warnings/Category Hierarchy>,
 using the C<locale> warning category, whenever such a locale is switched
 into.)  The UTF-8 locale support is actually a
 superset of POSIX locales, because it is really full Unicode behavior
-as if no locale were in effect at all (except for tainting; see
-L</SECURITY>).  POSIX locales, even UTF-8 ones,
+as if no C<LC_CTYPE> locale were in effect at all (except for tainting;
+see L</SECURITY>).  POSIX locales, even UTF-8 ones,
 are lacking certain concepts in Unicode, such as the idea that changing
 the case of a character could expand to be more than one character.
 Perl in a UTF-8 locale, will give you that expansion.  Prior to v5.20,
@@ -909,8 +910,10 @@ but new-line) works on the platform character set.
 
 Starting in v5.22, Perl will by default warn when switching into a
 locale that redefines any ASCII printable character (plus C<\t> and
-C<\n>) into a different class than expected.  This is unlikely to
-happen on modern locales, but can happen with the ISO 646 and other
+C<\n>) into a different class than expected.  This is likely to
+happen on modern locales only on EBCDIC platforms, where, for example,
+a CCSID 0037 locale on a CCSID 1047 machine moves C<"[">, but it can
+happen on ASCII platforms with the ISO 646 and other
 7-bit locales that are essentially obsolete.  Things may still work,
 depending on what features of Perl are used by the program.  For
 example, in the example from above where C<"|"> becomes a C<\w>, and
@@ -1248,7 +1251,7 @@ priority than C<LC_ALL>.  Moreover, it's not a single value but
 instead a "path" (":"-separated list) of I<languages> (not locales).
 See the GNU C<gettext> library documentation for more information.
 
-=item C<LC_CTYPE>.
+=item C<LC_CTYPE>
 
 In the absence of C<LC_ALL>, C<LC_CTYPE> chooses the character type
 locale.  In the absence of both C<LC_ALL> and C<LC_CTYPE>, C<LANG>
@@ -1282,7 +1285,7 @@ C<LANG> chooses the date and time formatting locale.
 
 C<LANG> is the "catch-all" locale environment variable. If it is set, it
 is used as the last resort after the overall C<LC_ALL> and the
-category-specific C<LC_I<foo>>
+category-specific C<LC_I<foo>>.
 
 =back
 

@@ -1529,6 +1529,7 @@ S_invoke_exception_hook(pTHX_ SV *ex, bool warn)
 	SV *exarg;
 
 	ENTER;
+	save_re_context();
 	if (warn) {
 	    SAVESPTR(*hook);
 	    *hook = NULL;
@@ -6493,11 +6494,5 @@ Perl_dump_c_backtrace(pTHX_ PerlIO* fp, int depth, int skip)
 #endif /* #ifdef USE_C_BACKTRACE */
 
 /*
- * Local variables:
- * c-indentation-style: bsd
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- *
  * ex: set ts=8 sts=4 sw=4 et:
  */

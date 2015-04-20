@@ -155,7 +155,7 @@ Perl_gv_const_sv(pTHX_ GV *gv)
 
     if (SvTYPE(gv) == SVt_PVGV)
 	return cv_const_sv(GvCVu(gv));
-    return SvROK(gv) && SvTYPE(SvRV(gv)) != SVt_PVAV ? SvRV(gv) : NULL;
+    return SvROK(gv) && SvTYPE(SvRV(gv)) != SVt_PVAV && SvTYPE(SvRV(gv)) != SVt_PVCV ? SvRV(gv) : NULL;
 }
 
 GP *
@@ -3606,11 +3606,5 @@ core_xsub(pTHX_ CV* cv)
 }
 
 /*
- * Local variables:
- * c-indentation-style: bsd
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- *
  * ex: set ts=8 sts=4 sw=4 et:
  */

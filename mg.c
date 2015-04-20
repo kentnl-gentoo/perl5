@@ -1802,6 +1802,7 @@ Perl_magic_methcall(pTHX_ SV *sv, const MAGIC *mg, SV *meth, U32 flags,
     if (flags & G_WRITING_TO_STDERR) {
 	SAVETMPS;
 
+	save_re_context();
 	SAVESPTR(PL_stderrgv);
 	PL_stderrgv = NULL;
     }
@@ -3576,11 +3577,5 @@ Perl_magic_getdebugvar(pTHX_ SV *sv, MAGIC *mg) {
 }
 
 /*
- * Local variables:
- * c-indentation-style: bsd
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- *
  * ex: set ts=8 sts=4 sw=4 et:
  */

@@ -1633,8 +1633,7 @@ Perl_do_readline(pTHX)
 	if (gimme == G_SCALAR) {
 	    /* undef TARG, and push that undefined value */
 	    if (type != OP_RCATLINE) {
-		SV_CHECK_THINKFIRST_COW_DROP(TARG);
-		SvOK_off(TARG);
+		sv_setsv(TARG,NULL);
 	    }
 	    PUSHTARG;
 	}
@@ -1790,7 +1789,8 @@ PP(pp_helem)
     const bool localizing = PL_op->op_private & OPpLVAL_INTRO;
     bool preeminent = TRUE;
 
-    assert(SvTYPE(hv) == SVt_PVHV);
+    if (SvTYPE(hv) != SVt_PVHV)
+	RETPUSHUNDEF;
 
     if (localizing) {
 	MAGIC *mg;
@@ -3611,11 +3611,5 @@ PP(pp_method_redir_super)
 }
 
 /*
- * Local variables:
- * c-indentation-style: bsd
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- *
  * ex: set ts=8 sts=4 sw=4 et:
  */

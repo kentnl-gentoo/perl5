@@ -220,12 +220,10 @@ use File::Glob qw(:case);
     },
 
     'Config::Perl::V' => {
-        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.23.tgz',
+        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.24.tgz',
         'FILES'        => q[cpan/Config-Perl-V],
         'EXCLUDED'     => [qw(
 		examples/show-v.pl
-		t/00_pod.t
-		t/01_pod.t
 		)],
     },
 
@@ -628,7 +626,7 @@ use File::Glob qw(:case);
     },
 
     'IO::Socket::IP' => {
-        'DISTRIBUTION' => 'PEVANS/IO-Socket-IP-0.36.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/IO-Socket-IP-0.37.tar.gz',
         'FILES'        => q[cpan/IO-Socket-IP],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -790,7 +788,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150220.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150320.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 

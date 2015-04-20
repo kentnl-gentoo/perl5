@@ -365,6 +365,10 @@ soon:
 
 =item *
 
+L<B::Generate> version 1.50
+
+=item *
+
 L<B::Utils> version 0.25
 
 =item *
@@ -419,7 +423,7 @@ here.
 
 XXX Generate this with:
 
-  perl Porting/acknowledgements.pl v5.21.10..HEAD
+  perl Porting/acknowledgements.pl v5.21.11..HEAD
 
 =head1 Reporting Bugs
 

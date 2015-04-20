@@ -278,21 +278,21 @@ Does not use C<TARG>.  See also C<XPUSHu>, C<mPUSHu> and C<PUSHu>.
                        } STMT_END
 /* Same thing, but update mark register too. */
 # define MEXTEND(p,n)   STMT_START {                                    \
-                            const int markoff = mark - PL_stack_base;   \
+                            const SSize_t markoff = mark - PL_stack_base; \
                             sp = stack_grow(sp,p,(SSize_t) (n));        \
                             mark = PL_stack_base + markoff;             \
                             PERL_UNUSED_VAR(sp);                        \
                         } STMT_END
 #else
 # define EXTEND(p,n)   STMT_START {                                     \
-                         if (UNLIKELY(PL_stack_max - p < (int)(n))) {   \
+                         if (UNLIKELY(PL_stack_max - p < (SSize_t)(n))) { \
                            sp = stack_grow(sp,p,(SSize_t) (n));         \
                            PERL_UNUSED_VAR(sp);                         \
                          } } STMT_END
 /* Same thing, but update mark register too. */
 # define MEXTEND(p,n)  STMT_START {                                     \
-                         if (UNLIKELY(PL_stack_max - p < (int)(n))) {   \
-                           const int markoff = mark - PL_stack_base;    \
+                         if (UNLIKELY(PL_stack_max - p < (SSize_t)(n))) { \
+                           const SSize_t markoff = mark - PL_stack_base;  \
                            sp = stack_grow(sp,p,(SSize_t) (n));         \
                            mark = PL_stack_base + markoff;              \
                            PERL_UNUSED_VAR(sp);                         \
@@ -528,11 +528,5 @@ True if this op will be the return value of an lvalue subroutine
 #endif
 
 /*
- * Local variables:
- * c-indentation-style: bsd
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- *
  * ex: set ts=8 sts=4 sw=4 et:
  */

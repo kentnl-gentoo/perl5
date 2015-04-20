@@ -53,6 +53,7 @@
          "dist/threads-shared",
          "dist/Tie-File",
          "dist/XSLoader",
+         "lib/perl5db",
          "win32"
       ],
       "file" : [
@@ -124,5 +125,5 @@
          "url" : "http://perl5.git.perl.org/"
       }
    },
-   "version" : "5.021010"
+   "version" : "5.021011"
 }

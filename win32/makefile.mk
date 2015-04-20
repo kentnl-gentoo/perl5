@@ -44,7 +44,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.21.10
+#INST_VER	*= \5.21.11
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -511,6 +511,9 @@ EXEOUT_FLAG	= -o
 LIBOUT_FLAG	=
 
 BUILDOPT	+= -fno-strict-aliasing -mms-bitfields
+MINIBUILDOPT	+= -fno-strict-aliasing
+
+TESTPREPGCC	= test-prep-gcc
 
 .ELSE
 
@@ -656,6 +659,8 @@ LIB_FLAGS	= $(LIB_FLAGS) -nologo
 OBJOUT_FLAG	= -Fo
 EXEOUT_FLAG	= -Fe
 LIBOUT_FLAG	= /out:
+
+TESTPREPGCC	=
 
 .ENDIF
 
@@ -1463,7 +1468,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl52110delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl52111delta.pod
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1558,7 +1563,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl52110delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl52111delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \
@@ -1630,15 +1635,14 @@ test-prep : all utils ..\pod\perltoc.pod $(TESTPREPGCC)
 # Without this copying, the op/taint.t test script will fail.
 
 .IF "$(CCTYPE)" == "GCC"
-TESTPREPGCC	= test-prep-gcc
+
 test-prep-gcc :
 	if exist $(CCDLLDIR)\libgcc_s_seh-1.dll $(XCOPY) $(CCDLLDIR)\libgcc_s_seh-1.dll ..\t\$(NULL)
 	if exist $(CCDLLDIR)\libgcc_s_sjlj-1.dll $(XCOPY) $(CCDLLDIR)\libgcc_s_sjlj-1.dll ..\t\$(NULL)
 	if exist $(CCDLLDIR)\libgcc_s_dw2-1.dll $(XCOPY) $(CCDLLDIR)\libgcc_s_dw2-1.dll ..\t\$(NULL)
 	if exist $(CCDLLDIR)\libstdc++-6.dll $(XCOPY) $(CCDLLDIR)\libstdc++-6.dll ..\t\$(NULL)
 	if exist $(CCDLLDIR)\libwinpthread-1.dll $(XCOPY) $(CCDLLDIR)\libwinpthread-1.dll ..\t\$(NULL)
-.ELSE
-TESTPREPGCC	=
+
 .ENDIF
 
 test : test-prep

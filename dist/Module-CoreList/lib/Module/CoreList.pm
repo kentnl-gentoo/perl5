@@ -4,7 +4,7 @@ use vars qw/$VERSION %released %version %families %upstream
 	    %bug_tracker %deprecated %delta/;
 use Module::CoreList::TieHashDelta;
 use version;
-$VERSION = '5.20150320';
+$VERSION = '5.20150420';
 
 sub _released_order {   # Sort helper, to make '?' sort after everything else
     (substr($released{$a}, 0, 1) eq "?")
@@ -274,6 +274,7 @@ sub changes_between {
     5.020002 => '2015-02-14',
     5.021009 => '2015-02-21',
     5.021010 => '2015-03-20',
+    5.021011 => '2015-04-20',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -11351,6 +11352,50 @@ for my $version ( sort { $a <=> $b } keys %released ) {
             'Test::Stream::Util'    => 1,
         }
     },
+    5.021011 => {
+        delta_from => 5.021010,
+        changed => {
+            'B'                     => '1.58',
+            'B::Deparse'            => '1.35',
+            'B::Op_private'         => '5.021011',
+            'CPAN'                  => '2.11',
+            'Config'                => '5.021011',
+            'Config::Perl::V'       => '0.24',
+            'Cwd'                   => '3.56',
+            'ExtUtils::Miniperl'    => '1.05',
+            'ExtUtils::ParseXS'     => '3.28',
+            'ExtUtils::ParseXS::Constants'=> '3.28',
+            'ExtUtils::ParseXS::CountLines'=> '3.28',
+            'ExtUtils::ParseXS::Eval'=> '3.28',
+            'ExtUtils::ParseXS::Utilities'=> '3.28',
+            'ExtUtils::Typemaps'    => '3.28',
+            'ExtUtils::Typemaps::Cmd'=> '3.28',
+            'ExtUtils::Typemaps::InputMap'=> '3.28',
+            'ExtUtils::Typemaps::OutputMap'=> '3.28',
+            'ExtUtils::Typemaps::Type'=> '3.28',
+            'File::Spec'            => '3.56',
+            'File::Spec::Cygwin'    => '3.56',
+            'File::Spec::Epoc'      => '3.56',
+            'File::Spec::Functions' => '3.56',
+            'File::Spec::Mac'       => '3.56',
+            'File::Spec::OS2'       => '3.56',
+            'File::Spec::Unix'      => '3.56',
+            'File::Spec::VMS'       => '3.56',
+            'File::Spec::Win32'     => '3.56',
+            'IO::Socket::IP'        => '0.37',
+            'Module::CoreList'      => '5.20150420',
+            'Module::CoreList::TieHashDelta'=> '5.20150420',
+            'Module::CoreList::Utils'=> '5.20150420',
+            'PerlIO::mmap'          => '0.014',
+            'XS::APItest'           => '0.72',
+            'attributes'            => '0.27',
+            'if'                    => '0.0604',
+            'utf8'                  => '1.16',
+            'warnings'              => '1.32',
+        },
+        removed => {
+        }
+    },
 );
 
 sub is_core
@@ -11368,7 +11413,7 @@ sub is_core
 
     my $final_release = removed_from($module);
 
-    return 0 if defined($final_release) && $perl_version > $final_release;
+    return 0 if defined($final_release) && $perl_version >= $final_release;
 
     # If a minimum version of the module was specified:
     # Step through all perl releases ($prn)
@@ -11383,7 +11428,9 @@ sub is_core
         my @releases = ($perl_version);
         my $rel = $perl_version;
         while (defined($rel)) {
-            $rel = $delta{$rel}->{delta_from};
+            # XXX: This line is a sign of failure. -- rjbs, 2015-04-15
+            my $this_delta = $delta{$rel} || $delta{ sprintf '%0.6f', $rel };
+            $rel = $this_delta->{delta_from};
             unshift(@releases, $rel) if defined($rel);
         }
         RELEASE:
@@ -11852,6 +11899,13 @@ for my $version (sort { $a <=> $b } keys %delta) {
     },
     5.021010 => {
         delta_from => 5.021009,
+        changed => {
+        },
+        removed => {
+        }
+    },
+    5.021011 => {
+        delta_from => 5.02101,
         changed => {
         },
         removed => {

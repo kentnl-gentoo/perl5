@@ -903,7 +903,7 @@ XS(XS_re_regexp_pattern)
 {
     dXSARGS;
     REGEXP *re;
-    U8 const gimme = GIMME_V;
+    I32 const gimme = GIMME_V;
 
     EXTEND(SP, 2);
     SP -= items;
@@ -1124,11 +1124,5 @@ Perl_boot_core_UNIVERSAL(pTHX)
 }
 
 /*
- * Local variables:
- * c-indentation-style: bsd
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- *
  * ex: set ts=8 sts=4 sw=4 et:
  */

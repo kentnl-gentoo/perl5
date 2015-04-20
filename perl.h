@@ -5826,12 +5826,17 @@ typedef struct am_table_short AMTS;
      * argument; the 2nd, is a pointer to the first byte of the UTF-8 encoded
      * string, and an end position which it won't try to read past */
 #   define _CHECK_AND_OUTPUT_WIDE_LOCALE_CP_MSG(cp)                         \
-      Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),                           \
-             "Wide character (U+%"UVXf") in %s", (UV) cp, OP_DESC(PL_op));
+	STMT_START {                                                        \
+            if (! PL_in_utf8_CTYPE_locale && ckWARN(WARN_LOCALE)) {         \
+                Perl_warner(aTHX_ packWARN(WARN_LOCALE),                    \
+                                        "Wide character (U+%"UVXf") in %s", \
+                                        (UV) cp, OP_DESC(PL_op));           \
+            }                                                               \
+        }  STMT_END
 
 #  define _CHECK_AND_OUTPUT_WIDE_LOCALE_UTF8_MSG(s, send)                   \
 	STMT_START { /* Check if to warn before doing the conversion work */\
-            if (ckWARN(WARN_LOCALE)) {                                      \
+            if (! PL_in_utf8_CTYPE_locale && ckWARN(WARN_LOCALE)) {         \
                 UV cp = utf8_to_uvchr_buf((U8 *) s, (U8 *) send, NULL);     \
                 Perl_warner(aTHX_ packWARN(WARN_LOCALE),                    \
                     "Wide character (U+%"UVXf") in %s",                     \
@@ -6040,8 +6045,8 @@ expression, but with an empty argument list, like this:
 
 #else /* !USE_LOCALE_NUMERIC */
 
-#define SET_LC_NUMERIC_STANDARD()
-#define SET_LC_NUMERIC_UNDERLYING()
+#define SET_NUMERIC_STANDARD()
+#define SET_NUMERIC_UNDERLYING()
 #define IS_NUMERIC_RADIX(a, b)		(0)
 #define STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD()
 #define STORE_LC_NUMERIC_STANDARD_SET_UNDERLYING()
@@ -6660,11 +6665,5 @@ extern void moncontrol(int);
 #endif /* Include guard */
 
 /*
- * Local variables:
- * c-indentation-style: bsd
- * c-basic-offset: 4
- * indent-tabs-mode: nil
- * End:
- *
  * ex: set ts=8 sts=4 sw=4 et:
  */
