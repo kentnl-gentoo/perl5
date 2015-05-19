@@ -79,11 +79,14 @@ the variable.  The COP_SEQ_RANGE_LOW and _HIGH fields form a range
 valid.  During compilation, these fields may hold the special value
 PERL_PADSEQ_INTRO to indicate various stages:
 
-   COP_SEQ_RANGE_LOW        _HIGH
-   -----------------        -----
-   PERL_PADSEQ_INTRO            0   variable not yet introduced:   { my ($x
-   valid-seq#   PERL_PADSEQ_INTRO   variable in scope:             { my ($x)
-   valid-seq#          valid-seq#   compilation of scope complete: { my ($x) }
+ COP_SEQ_RANGE_LOW        _HIGH
+ -----------------        -----
+ PERL_PADSEQ_INTRO            0   variable not yet introduced:
+                                  { my ($x
+ valid-seq#   PERL_PADSEQ_INTRO   variable in scope:
+                                  { my ($x)
+ valid-seq#          valid-seq#   compilation of scope complete:
+                                  { my ($x) }
 
 For typed lexicals PadnameTYPE points at the type stash.  For C<our>
 lexicals, PadnameOURSTASH points at the stash of the associated global (so
@@ -159,7 +162,7 @@ Perl_set_padlist(CV * cv, PADLIST *padlist){
 #  if PTRSIZE == 8
     assert((Size_t)padlist != UINT64_C(0xEFEFEFEFEFEFEFEF));
 #  elif PTRSIZE == 4
-    assert((Size_t)padlist != UINT64_C(0xEFEFEFEF));
+    assert((Size_t)padlist != 0xEFEFEFEF);
 #  else
 #    error unknown pointer size
 #  endif
@@ -497,11 +500,12 @@ finished its job, so it can forget the slab.
 void
 Perl_cv_forget_slab(pTHX_ CV *cv)
 {
-    const bool slabbed = !!CvSLABBED(cv);
+    bool slabbed;
     OPSLAB *slab = NULL;
 
-    PERL_ARGS_ASSERT_CV_FORGET_SLAB;
-
+    if (!cv)
+        return;
+    slabbed = cBOOL(CvSLABBED(cv));
     if (!slabbed) return;
 
     CvSLABBED_off(cv);
@@ -582,9 +586,9 @@ identifies the type.  If I<ourstash> is non-null, it's a lexical reference
 to a package variable, and this identifies the package.  The following
 flags can be OR'ed together:
 
-    padadd_OUR          redundantly specifies if it's a package var
-    padadd_STATE        variable will retain value persistently
-    padadd_NO_DUP_CHECK skip check for lexical shadowing
+ padadd_OUR          redundantly specifies if it's a package var
+ padadd_STATE        variable will retain value persistently
+ padadd_NO_DUP_CHECK skip check for lexical shadowing
 
 =cut
 */
@@ -958,6 +962,10 @@ Perl_pad_findmy_pvn(pTHX_ const char *namepv, STRLEN namelen, U32 flags)
     if (flags)
 	Perl_croak(aTHX_ "panic: pad_findmy_pvn illegal flag bits 0x%" UVxf,
 		   (UV)flags);
+
+    /* compilation errors can zero PL_compcv */
+    if (!PL_compcv)
+        return NOT_IN_PAD;
 
     offset = pad_findlex(namepv, namelen, flags,
                 PL_compcv, PL_cop_seqmax, 1, NULL, &out_pn, &out_flags);

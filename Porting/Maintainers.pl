@@ -474,7 +474,40 @@ use File::Glob qw(:case);
             'README.packaging',
         ],
         # Applied upstream remove customisation when updating EUMM
-        'CUSTOMIZED'   => [ qw[ t/pm_to_blib.t ] ],
+        'CUSTOMIZED'   => [ qw[ t/pm_to_blib.t
+                                t/basic.t
+                                lib/ExtUtils/Command/MM.pm
+                                lib/ExtUtils/Liblist.pm
+                                lib/ExtUtils/Liblist/Kid.pm
+                                lib/ExtUtils/MM.pm
+                                lib/ExtUtils/MM_AIX.pm
+                                lib/ExtUtils/MM_Any.pm
+                                lib/ExtUtils/MM_BeOS.pm
+                                lib/ExtUtils/MM_Cygwin.pm
+                                lib/ExtUtils/MM_DOS.pm
+                                lib/ExtUtils/MM_Darwin.pm
+                                lib/ExtUtils/MM_MacOS.pm
+                                lib/ExtUtils/MM_NW5.pm
+                                lib/ExtUtils/MM_OS2.pm
+                                lib/ExtUtils/MM_QNX.pm
+                                lib/ExtUtils/MM_UWIN.pm
+                                lib/ExtUtils/MM_Unix.pm
+                                lib/ExtUtils/MM_VMS.pm
+                                lib/ExtUtils/MM_VOS.pm
+                                lib/ExtUtils/MM_Win32.pm
+                                lib/ExtUtils/MM_Win95.pm
+                                lib/ExtUtils/MY.pm
+                                lib/ExtUtils/MakeMaker.pm
+                                lib/ExtUtils/MakeMaker/Config.pm
+                                lib/ExtUtils/MakeMaker/FAQ.pod
+                                lib/ExtUtils/MakeMaker/Locale.pm
+                                lib/ExtUtils/MakeMaker/Tutorial.pod
+                                lib/ExtUtils/MakeMaker/version.pm
+                                lib/ExtUtils/MakeMaker/version/regex.pm
+                                lib/ExtUtils/MakeMaker/version/vpp.pm
+                                lib/ExtUtils/Mkbootstrap.pm
+                                lib/ExtUtils/Mksymlists.pm
+                                lib/ExtUtils/testlib.pm ] ],
     },
 
     'ExtUtils::Manifest' => {
@@ -788,7 +821,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150320.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150420.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -875,15 +908,8 @@ use File::Glob qw(:case);
     },
 
     'PerlIO::via::QuotedPrint' => {
-        'DISTRIBUTION' => 'ELIZABETH/PerlIO-via-QuotedPrint-0.07.tar.gz',
+        'DISTRIBUTION' => 'SHAY/PerlIO-via-QuotedPrint-0.08.tar.gz',
         'FILES'        => q[cpan/PerlIO-via-QuotedPrint],
-
-        # Waiting to be merged upstream: see CPAN RT#54047
-        'CUSTOMIZED'   => [
-            qw( t/QuotedPrint.t
-                ),
-        ],
-
     },
 
     'Pod::Checker' => {

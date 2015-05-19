@@ -1325,10 +1325,19 @@ Perl_op_sibling_splice(OP *parent, OP *start, int del_count, OP* insert)
         if (!parent)
             goto no_parent;
 
+        /* ought to use OP_CLASS(parent) here, but that can't handle
+         * ex-foo OP_NULL ops. Also note that XopENTRYCUSTOM() can't
+         * either */
         type = parent->op_type;
-        if (type == OP_NULL)
-            type = parent->op_targ;
-        type = PL_opargs[type] & OA_CLASS_MASK;
+        if (type == OP_CUSTOM) {
+            dTHX;
+            type = XopENTRYCUSTOM(parent, xop_class);
+        }
+        else {
+            if (type == OP_NULL)
+                type = parent->op_targ;
+            type = PL_opargs[type] & OA_CLASS_MASK;
+        }
 
         lastop = last_ins ? last_ins : start ? start : NULL;
         if (   type == OA_BINOP
@@ -11118,11 +11127,11 @@ Perl_ck_stringify(pTHX_ OP *o)
 {
     OP * const kid = OpSIBLING(cUNOPo->op_first);
     PERL_ARGS_ASSERT_CK_STRINGIFY;
-    if (kid->op_type == OP_JOIN || kid->op_type == OP_QUOTEMETA
-     || kid->op_type == OP_LC   || kid->op_type == OP_LCFIRST
-     || kid->op_type == OP_UC   || kid->op_type == OP_UCFIRST)
+    if ((   kid->op_type == OP_JOIN || kid->op_type == OP_QUOTEMETA
+         || kid->op_type == OP_LC   || kid->op_type == OP_LCFIRST
+         || kid->op_type == OP_UC   || kid->op_type == OP_UCFIRST)
+	&& !OpHAS_SIBLING(kid)) /* syntax errs can leave extra children */
     {
-	assert(!OpHAS_SIBLING(kid));
 	op_sibling_splice(o, cUNOPo->op_first, -1, NULL);
 	op_free(o);
 	return kid;
@@ -11408,11 +11417,12 @@ Perl_ck_entersub_args_proto(pTHX_ OP *entersubop, GV *namegv, SV *protosv)
 	    case '&':
 		proto++;
 		arg++;
-		if (o3->op_type != OP_SREFGEN
-		 || (  cUNOPx(cUNOPx(o3)->op_first)->op_first->op_type
-			!= OP_ANONCODE
-		    && cUNOPx(cUNOPx(o3)->op_first)->op_first->op_type
-			!= OP_RV2CV))
+		if (    o3->op_type != OP_UNDEF
+                    && (o3->op_type != OP_SREFGEN
+                        || (  cUNOPx(cUNOPx(o3)->op_first)->op_first->op_type
+                                != OP_ANONCODE
+                            && cUNOPx(cUNOPx(o3)->op_first)->op_first->op_type
+                                != OP_RV2CV)))
 		    bad_type_gv(arg, namegv, o3,
 			    arg == 1 ? "block or sub {}" : "sub {}");
 		break;
@@ -11711,7 +11721,7 @@ The C-level function pointer is returned in I<*ckfun_p>, and an SV
 argument for it is returned in I<*ckobj_p>.  The function is intended
 to be called in this manner:
 
-    entersubop = (*ckfun_p)(aTHX_ entersubop, namegv, (*ckobj_p));
+ entersubop = (*ckfun_p)(aTHX_ entersubop, namegv, (*ckobj_p));
 
 In this call, I<entersubop> is a pointer to the C<entersub> op,
 which may be replaced by the check function, and I<namegv> is a GV
