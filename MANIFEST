@@ -47,8 +47,8 @@ cpan/autodie/lib/autodie/hints.pm	Hinting interface for autodie
 cpan/autodie/lib/autodie.pm		Functions succeed or die with lexical scope
 cpan/autodie/lib/autodie/Scope/Guard.pm
 cpan/autodie/lib/autodie/Scope/GuardStack.pm
-cpan/autodie/lib/autodie/ScopeUtil.pm
 cpan/autodie/lib/autodie/skip.pm
+cpan/autodie/lib/autodie/Util.pm
 cpan/autodie/lib/Fatal.pm		Make errors in functions/builtins fatal
 cpan/autodie/t/00-load.t		autodie - basic load
 cpan/autodie/t/args.t
@@ -299,6 +299,7 @@ cpan/CPAN-Meta/t/data-test/META-1_3.yml
 cpan/CPAN-Meta/t/data-test/META-1_4.yml
 cpan/CPAN-Meta/t/data-test/META-2.json
 cpan/CPAN-Meta/t/data-test/META-2.meta
+cpan/CPAN-Meta/t/data-test/preserve-release-status.yml
 cpan/CPAN-Meta/t/data-test/provides-version-missing.json
 cpan/CPAN-Meta/t/data-test/resources.yml
 cpan/CPAN-Meta/t/data-test/restricted-2.json
@@ -326,6 +327,7 @@ cpan/CPAN-Meta/t/repository.t
 cpan/CPAN-Meta/t/save-load.t
 cpan/CPAN-Meta/t/validator.t
 cpan/CPAN-Meta-YAML/lib/CPAN/Meta/YAML.pm		CPAN-Meta-YAML files
+cpan/CPAN-Meta-YAML/t/00-report-prereqs.dd
 cpan/CPAN-Meta-YAML/t/01_api.t
 cpan/CPAN-Meta-YAML/t/01_compile.t		CPAN-Meta-YAML files
 cpan/CPAN-Meta-YAML/t/10_read.t
@@ -337,6 +339,7 @@ cpan/CPAN-Meta-YAML/t/21_yamlpm_compat.t
 cpan/CPAN-Meta-YAML/t/30_yaml_spec_tml.t
 cpan/CPAN-Meta-YAML/t/31_local_tml.t
 cpan/CPAN-Meta-YAML/t/32_world_tml.t
+cpan/CPAN-Meta-YAML/t/86_fail.t
 cpan/CPAN-Meta-YAML/t/data/ascii.yml
 cpan/CPAN-Meta-YAML/t/data/latin1.yml
 cpan/CPAN-Meta-YAML/t/data/multibyte.yml		CPAN-Meta-YAML files
@@ -351,6 +354,7 @@ cpan/CPAN-Meta-YAML/t/tml-local/dump-error/circular.tml
 cpan/CPAN-Meta-YAML/t/tml-local/load-error/document.tml
 cpan/CPAN-Meta-YAML/t/tml-local/load-error/scalar.tml
 cpan/CPAN-Meta-YAML/t/tml-local/load-error/tag.tml
+cpan/CPAN-Meta-YAML/t/tml-local/load-warning/document.tml
 cpan/CPAN-Meta-YAML/t/tml-local/perl-to-yaml/quoting.tml
 cpan/CPAN-Meta-YAML/t/tml-local/yaml-roundtrip/collection.tml
 cpan/CPAN-Meta-YAML/t/tml-local/yaml-roundtrip/comment.tml
@@ -859,6 +863,7 @@ cpan/Encode/t/gb2312.utf		test data
 cpan/Encode/t/grow.t			test script
 cpan/Encode/t/gsm0338.t			test script
 cpan/Encode/t/guess.t			test script
+cpan/Encode/t/isa.t
 cpan/Encode/t/jis7-fallback.t		test script
 cpan/Encode/t/jisx0201.enc		test data
 cpan/Encode/t/jisx0201.utf		test data
@@ -1228,6 +1233,7 @@ cpan/HTTP-Tiny/corpus/redirect-06.txt
 cpan/HTTP-Tiny/corpus/redirect-07.txt
 cpan/HTTP-Tiny/corpus/redirect-08.txt
 cpan/HTTP-Tiny/corpus/redirect-09.txt
+cpan/HTTP-Tiny/corpus/redirect-10.txt
 cpan/HTTP-Tiny/lib/HTTP/Tiny.pm
 cpan/HTTP-Tiny/t/000_load.t
 cpan/HTTP-Tiny/t/001_api.t
@@ -1517,7 +1523,6 @@ cpan/libnet/t/time.t		libnet
 cpan/Locale-Codes/lib/Locale/Codes/API.pod	Locale::Codes documentation
 cpan/Locale-Codes/lib/Locale/Codes/Changes.pod	Locale::Codes documentation
 cpan/Locale-Codes/lib/Locale/Codes/Constants.pm	Locale::Codes
-cpan/Locale-Codes/lib/Locale/Codes/Constants.pod	Locale::Codes documentation
 cpan/Locale-Codes/lib/Locale/Codes/Country_Codes.pm	Locale::Codes
 cpan/Locale-Codes/lib/Locale/Codes/Country.pm	Locale::Codes
 cpan/Locale-Codes/lib/Locale/Codes/Country.pod	Locale::Codes documentation
@@ -1692,17 +1697,17 @@ cpan/parent/t/parent-classfromfile.t		tests for parent.pm
 cpan/parent/t/parent-pmc.t			tests for parent.pm
 cpan/parent/t/parent-returns-false.t		tests for parent.pm
 cpan/parent/t/parent.t				tests for parent.pm
+cpan/Parse-CPAN-Meta/corpus/BadMETA.yml
+cpan/Parse-CPAN-Meta/corpus/bareyaml.meta
+cpan/Parse-CPAN-Meta/corpus/json.meta
+cpan/Parse-CPAN-Meta/corpus/META-VR.json
+cpan/Parse-CPAN-Meta/corpus/META-VR.yml
+cpan/Parse-CPAN-Meta/corpus/yaml.meta
 cpan/Parse-CPAN-Meta/lib/Parse/CPAN/Meta.pm
 cpan/Parse-CPAN-Meta/t/02_api.t
 cpan/Parse-CPAN-Meta/t/03_functions.t
 cpan/Parse-CPAN-Meta/t/04_export.t
 cpan/Parse-CPAN-Meta/t/05_errors.t
-cpan/Parse-CPAN-Meta/t/data/BadMETA.yml
-cpan/Parse-CPAN-Meta/t/data/bareyaml.meta
-cpan/Parse-CPAN-Meta/t/data/json.meta
-cpan/Parse-CPAN-Meta/t/data/META-VR.json
-cpan/Parse-CPAN-Meta/t/data/META-VR.yml
-cpan/Parse-CPAN-Meta/t/data/yaml.meta
 cpan/Parse-CPAN-Meta/t/lib/Parse/CPAN/Meta/Test.pm
 cpan/perlfaq/lib/perlfaq1.pod		General Questions About Perl
 cpan/perlfaq/lib/perlfaq2.pod	Obtaining and Learning about Perl
@@ -1870,6 +1875,7 @@ cpan/Pod-Simple/t/20_skip.t				Pod::Simple test file
 cpan/Pod-Simple/t/accept01.t				Pod::Simple test file
 cpan/Pod-Simple/t/accept05.t				Pod::Simple test file
 cpan/Pod-Simple/t/ac_d.t				Pod::Simple test file
+cpan/Pod-Simple/t/ascii_order.pl
 cpan/Pod-Simple/t/basic.t				Pod::Simple test file
 cpan/Pod-Simple/t/begin.t				Pod::Simple test file
 cpan/Pod-Simple/t/cbacks.t				Pod::Simple test file
@@ -2034,10 +2040,16 @@ cpan/Pod-Simple/t/xhtml-bkb.t
 cpan/Pod-Simple/t/x_nixer.t				Pod::Simple test file
 cpan/Pod-Usage/lib/Pod/Usage.pm
 cpan/Pod-Usage/scripts/pod2usage.PL
+cpan/Pod-Usage/t/pod/headwithmarkup.pl
+cpan/Pod-Usage/t/pod/headwithmarkup.t
 cpan/Pod-Usage/t/pod/p2u_data.pl
 cpan/Pod-Usage/t/pod/pod2usage2.t
 cpan/Pod-Usage/t/pod/pod2usage.t
 cpan/Pod-Usage/t/pod/pod2usage.xr
+cpan/Pod-Usage/t/pod/selectheaders.pl
+cpan/Pod-Usage/t/pod/selectheaders.t
+cpan/Pod-Usage/t/pod/selectsections.pl
+cpan/Pod-Usage/t/pod/selectsections.t
 cpan/Pod-Usage/t/pod/testcmp.pl
 cpan/Pod-Usage/t/pod/testp2pt.pl
 cpan/Pod-Usage/t/pod/usage2.pod
@@ -2548,12 +2560,14 @@ cpan/Time-Piece/Piece.pm	Time::Piece extension
 cpan/Time-Piece/Piece.xs	Time::Piece extension
 cpan/Time-Piece/Seconds.pm	Time::Piece extension
 cpan/Time-Piece/t/01base.t	Test for Time::Piece
+cpan/Time-Piece/t/02core_dst.t
 cpan/Time-Piece/t/02core.t	Test for Time::Piece
 cpan/Time-Piece/t/03compare.t	Test for Time::Piece
 cpan/Time-Piece/t/04mjd.t	Test for Time::Piece
 cpan/Time-Piece/t/05overload.t	Test for Time::Piece
 cpan/Time-Piece/t/06subclass.t	Test for Time::Piece
 cpan/Time-Piece/t/07arith.t	Test for Time::Piece
+cpan/Time-Piece/t/lib/Time/Piece/Twin.pm
 cpan/Unicode-Collate/Collate/allkeys.txt	Unicode::Collate
 cpan/Unicode-Collate/Collate/CJK/Big5.pm			Unicode::Collate
 cpan/Unicode-Collate/Collate/CJK/GB2312.pm			Unicode::Collate
@@ -4228,6 +4242,7 @@ lib/perl5db/t/source-cmd-test.perldb		Tests for the Perl debugger
 lib/perl5db/t/symbol-table-bug	Tests for the Perl debugger
 lib/perl5db/t/taint		Tests for the Perl debugger
 lib/perl5db/t/test-a-statement-1	Tests for the Perl debugger
+lib/perl5db/t/test-a-statement-2	Tests for the Perl debugger
 lib/perl5db/t/test-dieLevel-option-1	Tests for the Perl debugger
 lib/perl5db/t/test-frame-option-1	Tests for the Perl debugger
 lib/perl5db/t/test-l-statement-1	Tests for the Perl debugger
@@ -4314,7 +4329,7 @@ lib/unicore/extracted/DNumType.txt		Unicode character database
 lib/unicore/extracted/DNumValues.txt		Unicode character database
 lib/unicore/HangulSyllableType.txt		Unicode character database
 lib/unicore/Index.txt				Unicode character database
-lib/unicore/IndicMatraCategory.txt		Unicode character database
+lib/unicore/IndicPositionalCategory.txt		Unicode character database
 lib/unicore/IndicSyllabicCategory.txt		Unicode character database
 lib/unicore/Jamo.txt				Unicode character database
 lib/unicore/LineBreak.txt			Unicode character database
@@ -4565,18 +4580,7 @@ pod/perl5184delta.pod		Perl changes in version 5.18.4
 pod/perl5200delta.pod		Perl changes in version 5.20.0
 pod/perl5201delta.pod		Perl changes in version 5.20.1
 pod/perl5202delta.pod		Perl changes in version 5.20.2
-pod/perl5210delta.pod		Perl changes in version 5.21.0
-pod/perl52110delta.pod		Perl changes in version 5.21.10
-pod/perl52111delta.pod		Perl changes in version 5.21.11
-pod/perl5211delta.pod		Perl changes in version 5.21.1
-pod/perl5212delta.pod		Perl changes in version 5.21.2
-pod/perl5213delta.pod		Perl changes in version 5.21.3
-pod/perl5214delta.pod		Perl changes in version 5.21.4
-pod/perl5215delta.pod		Perl changes in version 5.21.5
-pod/perl5216delta.pod		Perl changes in version 5.21.6
-pod/perl5217delta.pod		Perl changes in version 5.21.7
-pod/perl5218delta.pod		Perl changes in version 5.21.8
-pod/perl5219delta.pod		Perl changes in version 5.21.9
+pod/perl5220delta.pod		Perl changes in version 5.22.0
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5606,6 +5610,7 @@ win32/create_perllibst_h.pl	creates perllibst.h file for inclusion from perllib.
 win32/distclean.bat		Remove _ALL_ files not listed here in MANIFEST
 win32/fcrypt.c			crypt() implementation
 win32/FindExt.pm		Scan for extensions
+win32/GNUmakefile		Win32 makefile for GNU make
 win32/include/arpa/inet.h	Win32 port
 win32/include/dirent.h		Win32 port
 win32/include/netdb.h		Win32 port

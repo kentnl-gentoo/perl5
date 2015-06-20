@@ -438,8 +438,11 @@ Perl_do_open6(pTHX_ GV *gv, const char *oname, STRLEN len,
 			    else if (IoTYPE(thatio) == IoTYPE_SOCKET)
 				IoTYPE(io) = IoTYPE_SOCKET;
 			}
-			else
-			    wanted_fd = -1;
+                        else {
+                            SETERRNO(EBADF, RMS_IFI);
+                            fp = NULL;
+                            goto say_false;
+                        }
 		    }
 		    if (!num_svs)
 			type = NULL;
@@ -1103,12 +1106,13 @@ Perl_io_close(pTHX_ IO *io, GV *gv, bool not_implicit, bool warn_on_fail)
 		Perl_ck_warner_d(aTHX_ packWARN(WARN_IO),
 				"Warning: unable to close filehandle %"
 				 HEKf" properly: %"SVf,
-				 GvNAME_HEK(gv), get_sv("!",GV_ADD));
+				 HEKfARG(GvNAME_HEK(gv)),
+                                 SVfARG(get_sv("!",GV_ADD)));
 	    else
 		Perl_ck_warner_d(aTHX_ packWARN(WARN_IO),
 				"Warning: unable to close filehandle "
 				"properly: %"SVf,
-				 get_sv("!",GV_ADD));
+				 SVfARG(get_sv("!",GV_ADD)));
 	}
     }
     else if (not_implicit) {

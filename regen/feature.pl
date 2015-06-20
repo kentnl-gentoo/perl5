@@ -59,6 +59,8 @@ my %feature_bundle = (
 		    evalbytes current_sub fc)],
     "5.21"   =>	[qw(say state switch unicode_strings unicode_eval
 		    evalbytes current_sub fc)],
+    "5.23"   =>	[qw(say state switch unicode_strings unicode_eval
+		    evalbytes current_sub fc)],
 );
 
 # not actually used currently
@@ -365,7 +367,7 @@ read_only_bottom_close_and_rename($h);
 __END__
 package feature;
 
-our $VERSION = '1.40';
+our $VERSION = '1.41';
 
 FEATURES
 
@@ -720,7 +722,7 @@ bundle is automatically loaded instead.
 =cut
 
 sub import {
-    my $class = shift;
+    shift;
 
     if (!@_) {
         croak("No features specified");
@@ -730,7 +732,7 @@ sub import {
 }
 
 sub unimport {
-    my $class = shift;
+    shift;
 
     # A bare C<no feature> should reset to the default bundle
     if (!@_) {

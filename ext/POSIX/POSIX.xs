@@ -248,12 +248,15 @@
 #  define c99_ilogb	ilogbq
 #  define c99_lgamma	lgammaq
 #  define c99_log1p	log1pq
-#  define c99_llrint	llrintq
 #  define c99_log2	log2q
 /* no logbq */
-#  define c99_lround	llroundq
-#  define c99_lrint	lrintq
-#  define c99_lround	lroundq
+#  if defined(USE_64_BIT_INT) && QUADKIND == QUAD_IS_LONG_LONG
+#    define c99_lrint	llrintq
+#    define c99_lround	llroundq
+#  else
+#    define c99_lrint	lrintq
+#    define c99_lround	lroundq
+#  endif
 #  define c99_nan	nanq
 #  define c99_nearbyint	nearbyintq
 #  define c99_nextafter	nextafterq
@@ -1115,6 +1118,167 @@ static NV my_trunc(NV x)
 #  define c99_trunc my_trunc
 #endif
 
+#undef NV_PAYLOAD_DEBUG
+
+/* NOTE: the NaN payload API implementation is hand-rolled, since the
+ * APIs are only proposed ones as of June 2015, so very few, if any,
+ * platforms have implementations yet, so HAS_SETPAYLOAD and such are
+ * unlikely to be helpful.
+ *
+ * XXX - if the core numification wants to actually generate
+ * the nan payload in "nan(123)", and maybe "nans(456)", for
+ * signaling payload", this needs to be moved to e.g. numeric.c
+ * (look for grok_infnan)
+ *
+ * Conversely, if the core stringification wants the nan payload
+ * and/or the nan quiet/signaling distinction, S_getpayload()
+ * from this file needs to be moved, to e.g. sv.c (look for S_infnan_2pv),
+ * and the (trivial) functionality of issignaling() copied
+ * (for generating "NaNS", or maybe even "NaNQ") -- or maybe there
+ * are too many formatting parameters for simple stringification?
+ */
+
+/* While it might make sense for the payload to be UV or IV,
+ * to avoid conversion loss, the proposed ISO interfaces use
+ * a floating point input, which is then truncated to integer,
+ * and only the integer part being used.  This is workable,
+ * except for: (1) the conversion loss (2) suboptimal for
+ * 32-bit integer platforms.  A workaround API for (2) and
+ * in general for bit-honesty would be an array of integers
+ * as the payload... but the proposed C API does nothing of
+ * the kind. */
+#if NVSIZE == UVSIZE
+#  define NV_PAYLOAD_TYPE UV
+#else
+#  define NV_PAYLOAD_TYPE NV
+#endif
+
+#ifdef LONGDOUBLE_DOUBLEDOUBLE
+#  define NV_PAYLOAD_SIZEOF_ASSERT(a) assert(sizeof(a) == NVSIZE / 2)
+#else
+#  define NV_PAYLOAD_SIZEOF_ASSERT(a) assert(sizeof(a) == NVSIZE)
+#endif
+
+static void S_setpayload(NV* nvp, NV_PAYLOAD_TYPE payload, bool signaling)
+{
+  dTHX;
+  static const U8 m[] = { NV_NAN_PAYLOAD_MASK };
+  static const U8 p[] = { NV_NAN_PAYLOAD_PERM };
+  UV a[(NVSIZE + UVSIZE - 1) / UVSIZE] = { 0 };
+  int i;
+  NV_PAYLOAD_SIZEOF_ASSERT(m);
+  NV_PAYLOAD_SIZEOF_ASSERT(p);
+  *nvp = NV_NAN;
+  /* Divide the input into the array in "base unsigned integer" in
+   * little-endian order.  Note that the integer might be smaller than
+   * an NV (if UV is U32, for example). */
+#if NVSIZE == UVSIZE
+  a[0] = payload;  /* The trivial case. */
+#else
+  {
+    NV t1 = c99_trunc(payload); /* towards zero (drop fractional) */
+#ifdef NV_PAYLOAD_DEBUG
+    Perl_warn(aTHX_ "t1 = %"NVgf" (payload %"NVgf")\n", t1, payload);
+#endif
+    if (t1 <= UV_MAX) {
+      a[0] = (UV)t1;  /* Fast path, also avoids rounding errors (right?) */
+    } else {
+      /* UVSIZE < NVSIZE or payload > UV_MAX.
+       *
+       * This may happen for example if:
+       * (1) UVSIZE == 32 and common 64-bit double NV
+       *     (32-bit system not using -Duse64bitint)
+       * (2) UVSIZE == 64 and the x86-style 80-bit long double NV
+       *     (note that here the room for payload is actually the 64 bits)
+       * (3) UVSIZE == 64 and the 128-bit IEEE 764 quadruple NV
+       *     (112 bits in mantissa, 111 bits room for payload)
+       *
+       * NOTE: this is very sensitive to correctly functioning
+       * fmod()/fmodl(), and correct casting of big-unsigned-integer to NV.
+       * If these don't work right, especially the low order bits
+       * are in danger.  For example Solaris and AIX seem to have issues
+       * here, especially if using 32-bit UVs. */
+      NV t2;
+      for (i = 0, t2 = t1; i < (int)C_ARRAY_LENGTH(a); i++) {
+        a[i] = (UV)Perl_fmod(t2, (NV)UV_MAX);
+        t2 = Perl_floor(t2 / (NV)UV_MAX);
+      }
+    }
+  }
+#endif
+#ifdef NV_PAYLOAD_DEBUG
+  for (i = 0; i < (int)C_ARRAY_LENGTH(a); i++) {
+    Perl_warn(aTHX_ "a[%d] = 0x%"UVxf"\n", i, a[i]);
+  }
+#endif
+  for (i = 0; i < (int)sizeof(p); i++) {
+    if (m[i] && p[i] < sizeof(p)) {
+      U8 s = (p[i] % UVSIZE) << 3;
+      UV u = a[p[i] / UVSIZE] & ((UV)0xFF << s);
+      U8 b = (U8)((u >> s) & m[i]);
+      ((U8 *)(nvp))[i] &= ~m[i]; /* For NaNs with non-zero payload bits. */
+      ((U8 *)(nvp))[i] |= b;
+#ifdef NV_PAYLOAD_DEBUG
+      Perl_warn(aTHX_ "set p[%2d] = %02x (i = %d, m = %02x, s = %2d, b = %02x, u = %08"UVxf")\n", i, ((U8 *)(nvp))[i], i, m[i], s, b, u);
+#endif
+      a[p[i] / UVSIZE] &= ~u;
+    }
+  }
+  if (signaling) {
+    NV_NAN_SET_SIGNALING(nvp);
+  }
+#ifdef USE_LONG_DOUBLE
+# if LONG_DOUBLEKIND == 3 || LONG_DOUBLEKIND == 4
+  memset((char *)nvp + 10, '\0', LONG_DOUBLESIZE - 10); /* x86 long double */
+# endif
+#endif
+  for (i = 0; i < (int)C_ARRAY_LENGTH(a); i++) {
+    if (a[i]) {
+      Perl_warn(aTHX_ "payload lost bits (%"UVxf")", a[i]);
+      break;
+    }
+  }
+#ifdef NV_PAYLOAD_DEBUG
+  for (i = 0; i < NVSIZE; i++) {
+    PerlIO_printf(Perl_debug_log, "%02x ", ((U8 *)(nvp))[i]);
+  }
+  PerlIO_printf(Perl_debug_log, "\n");
+#endif
+}
+
+static NV_PAYLOAD_TYPE S_getpayload(NV nv)
+{
+  dTHX;
+  static const U8 m[] = { NV_NAN_PAYLOAD_MASK };
+  static const U8 p[] = { NV_NAN_PAYLOAD_PERM };
+  UV a[(NVSIZE + UVSIZE - 1) / UVSIZE] = { 0 };
+  int i;
+  NV payload;
+  NV_PAYLOAD_SIZEOF_ASSERT(m);
+  NV_PAYLOAD_SIZEOF_ASSERT(p);
+  payload = 0;
+  for (i = 0; i < (int)sizeof(p); i++) {
+    if (m[i] && p[i] < NVSIZE) {
+      U8 s = (p[i] % UVSIZE) << 3;
+      a[p[i] / UVSIZE] |= (UV)(((U8 *)(&nv))[i] & m[i]) << s;
+    }
+  }
+  for (i = (int)C_ARRAY_LENGTH(a) - 1; i >= 0; i--) {
+#ifdef NV_PAYLOAD_DEBUG
+    Perl_warn(aTHX_ "a[%d] = %"UVxf"\n", i, a[i]);
+#endif
+    payload *= UV_MAX;
+    payload += a[i];
+  }
+#ifdef NV_PAYLOAD_DEBUG
+  for (i = 0; i < NVSIZE; i++) {
+    PerlIO_printf(Perl_debug_log, "%02x ", ((U8 *)(&nv))[i]);
+  }
+  PerlIO_printf(Perl_debug_log, "\n");
+#endif
+  return payload;
+}
+
 /* XXX This comment is just to make I_TERMIO and I_SGTTY visible to
    metaconfig for future extension writers.  We don't use them in POSIX.
    (This is really sneaky :-)  --AD
@@ -1660,7 +1824,6 @@ MODULE = POSIX		PACKAGE = POSIX
 BOOT:
 {
     CV *cv;
-    const char *file = __FILE__;
 
 
     /* silence compiler warning about not_here() defined but not used */
@@ -1669,37 +1832,37 @@ BOOT:
     /* Ensure we get the function, not a macro implementation. Like the C89
        standard says we can...  */
 #undef isalnum
-    cv = newXS("POSIX::isalnum", is_common, file);
+    cv = newXS_deffile("POSIX::isalnum", is_common);
     XSANY.any_dptr = (any_dptr_t) &isalnum;
 #undef isalpha
-    cv = newXS("POSIX::isalpha", is_common, file);
+    cv = newXS_deffile("POSIX::isalpha", is_common);
     XSANY.any_dptr = (any_dptr_t) &isalpha;
 #undef iscntrl
-    cv = newXS("POSIX::iscntrl", is_common, file);
+    cv = newXS_deffile("POSIX::iscntrl", is_common);
     XSANY.any_dptr = (any_dptr_t) &iscntrl;
 #undef isdigit
-    cv = newXS("POSIX::isdigit", is_common, file);
+    cv = newXS_deffile("POSIX::isdigit", is_common);
     XSANY.any_dptr = (any_dptr_t) &isdigit;
 #undef isgraph
-    cv = newXS("POSIX::isgraph", is_common, file);
+    cv = newXS_deffile("POSIX::isgraph", is_common);
     XSANY.any_dptr = (any_dptr_t) &isgraph;
 #undef islower
-    cv = newXS("POSIX::islower", is_common, file);
+    cv = newXS_deffile("POSIX::islower", is_common);
     XSANY.any_dptr = (any_dptr_t) &islower;
 #undef isprint
-    cv = newXS("POSIX::isprint", is_common, file);
+    cv = newXS_deffile("POSIX::isprint", is_common);
     XSANY.any_dptr = (any_dptr_t) &isprint;
 #undef ispunct
-    cv = newXS("POSIX::ispunct", is_common, file);
+    cv = newXS_deffile("POSIX::ispunct", is_common);
     XSANY.any_dptr = (any_dptr_t) &ispunct;
 #undef isspace
-    cv = newXS("POSIX::isspace", is_common, file);
+    cv = newXS_deffile("POSIX::isspace", is_common);
     XSANY.any_dptr = (any_dptr_t) &isspace;
 #undef isupper
-    cv = newXS("POSIX::isupper", is_common, file);
+    cv = newXS_deffile("POSIX::isupper", is_common);
     XSANY.any_dptr = (any_dptr_t) &isupper;
 #undef isxdigit
-    cv = newXS("POSIX::isxdigit", is_common, file);
+    cv = newXS_deffile("POSIX::isxdigit", is_common);
     XSANY.any_dptr = (any_dptr_t) &isxdigit;
 }
 
@@ -1974,7 +2137,7 @@ WEXITSTATUS(status)
 #endif
 	    break;
 	default:
-	    Perl_croak(aTHX_ "Illegal alias %d for POSIX::W*", (int)ix);
+	    croak("Illegal alias %d for POSIX::W*", (int)ix);
 	}
     OUTPUT:
 	RETVAL
@@ -2506,6 +2669,41 @@ fpclassify(x)
 	RETVAL
 
 NV
+getpayload(nv)
+	NV nv
+    CODE:
+	RETVAL = S_getpayload(nv);
+    OUTPUT:
+	RETVAL
+
+void
+setpayload(nv, payload)
+	NV nv
+	NV payload
+    CODE:
+	S_setpayload(&nv, payload, FALSE);
+    OUTPUT:
+	nv
+
+void
+setpayloadsig(nv, payload)
+	NV nv
+	NV payload
+    CODE:
+	nv = NV_NAN;
+	S_setpayload(&nv, payload, TRUE);
+    OUTPUT:
+	nv
+
+int
+issignaling(nv)
+	NV nv
+    CODE:
+	RETVAL = Perl_isnan(nv) && NV_NAN_IS_SIGNALING(&nv);
+    OUTPUT:
+	RETVAL
+
+NV
 copysign(x,y)
 	NV		x
 	NV		y
@@ -2705,51 +2903,27 @@ fma(x,y,z)
 	RETVAL
 
 NV
-nan(s = 0)
-	char*	s;
+nan(payload = 0)
+	NV payload
     CODE:
-	PERL_UNUSED_VAR(s);
-#ifdef c99_nan
-	RETVAL = c99_nan(s ? s : "");
-#elif defined(NV_NAN)
-	/* XXX if s != NULL, warn about unused argument,
-         * or implement the nan payload setting. */
-        /* NVSIZE == 8: the NaN "header" (the exponent) is 0x7FF (the 0x800
-         * is the sign bit, which should be irrelevant for NaN, so really
-         * also 0xFFF), leaving 64 - 12 = 52 bits for the NaN payload
-         * (6.5 bytes, note about infinities below).
-         *
-         * (USE_LONG_DOUBLE and)
-         * LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN:
-         * the NaN "header" is still 0x7FF, leaving 80 - 12 = 68 bits
-         * for the payload (8.5 bytes, note about infinities below).
-         *
-         * doubledouble? aargh. Maybe like doubles, 52 + 52 = 104 bits?
-         *
-         * NVSIZE == 16:
-         * the NaN "header" is still 0x7FF, leaving 128 - 12 = 116 bits
-         * for the payload (14.5 bytes, note about infinities below)
-         *
-         * Which ones of the NaNs are 'signaling' and which are 'quiet',
-         * depends.  In the IEEE-754 1985, nothing was specified.  But the
-         * majority of companies decided that the MSB of the mantissa was
-         * the bit for 'quiet'.  (Only PA-RISC and MIPS were different,
-         * using the MSB as 'signaling'.)  The IEEE-754 2008 *recommended*
-         * (but did not dictate) the MSB as the 'quiet' bit.
-         *
-         * In other words, on most platforms, and for 64-bit doubles:
-         * [7FF8000000000000, 7FFFFFFFFFFFFFFF] quiet
-         * [FFF8000000000000, FFFFFFFFFFFFFFFF] quiet
-         * [7FF0000000000001, 7FF7FFFFFFFFFFFF] signaling
-         * [FFF0000000000001, FFF7FFFFFFFFFFFF] signaling
-         *
-         * The C99 nan() is supposed to generate *quiet* NaNs.
-         *
-         * Note the asymmetry:
-         * The 7FF0000000000000 is positive infinity,
-         * the FFF0000000000000 is negative infinity.
-         */
-	RETVAL = NV_NAN;
+#ifdef NV_NAN
+        /* If no payload given, just return the default NaN.
+         * This makes a difference in platforms where the default
+         * NaN is not all zeros. */
+	if (items == 0) {
+          RETVAL = NV_NAN;
+	} else {
+          S_setpayload(&RETVAL, payload, FALSE);
+        }
+#elif defined(c99_nan)
+	{
+	  STRLEN elen = my_snprintf(PL_efloatbuf, PL_efloatsize, "%g", nv);
+          if ((IV)elen == -1) {
+	    RETVAL = NV_NAN;
+          } else {
+            RETVAL = c99_nan(PL_efloatbuf);
+          }
+        }
 #else
 	not_here("nan");
 #endif

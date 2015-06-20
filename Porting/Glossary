@@ -2840,6 +2840,10 @@ dlsrc (dlsrc.U):
 	This variable contains the name of the dynamic loading file that
 	will be used with the package.
 
+doubleinfbytes (infnan.U):
+	This variable contains comma-separated list of hexadecimal bytes
+	for the double precision infinity.
+
 doublekind (longdblfio.U):
 	This variable, if defined, encodes the type of a double:
 	1 = IEEE 754 32-bit big little endian,
@@ -2851,6 +2855,17 @@ doublekind (longdblfio.U):
 	7 = IEEE 754 64-bit big mixed endian le-be,
 	8 = IEEE 754 64-bit big mixed endian be-le,
 	-1 = unknown format.
+
+doublemantbits (mantbits.U):
+	This symbol, if defined, tells how many mantissa bits
+	there are in double precision floating point format.
+	Note that this is usually DBL_MANT_DIG minus one, since
+	with the standard IEEE 754 formats DBL_MANT_DIG includes
+	the implicit bit which doesn't really exist.
+
+doublenanbytes (infnan.U):
+	This variable contains comma-separated list of hexadecimal bytes
+	for the double precision not-a-number.
 
 doublesize (doublesize.U):
 	This variable contains the value of the DOUBLESIZE symbol, which
@@ -4076,12 +4091,28 @@ loclibpth (libpth.U):
 	libraries.  It is prepended to libpth, and is intended to be easily
 	set from the command line.
 
+longdblinfbytes (infnan.U):
+	This variable contains comma-separated list of hexadecimal bytes
+	for the long double precision infinity.
+
 longdblkind (d_longdbl.U):
 	This variable, if defined, encodes the type of a long double:
 	0 = double, 1 = IEEE 754 128-bit big little endian,
 	2 = IEEE 754 128-bit big big endian, 3 = x86 80-bit little endian,
 	4 = x86 80-bit big endian, 5 = double-double 128-bit little endian,
 	6 = double-double 128-bit big endian, -1 = unknown format.
+
+longdblmantbits (longdblmant.U):
+	This symbol, if defined, tells how many mantissa bits
+	there are in long double precision floating point format.
+	Note that this can be LDBL_MANT_DIG minus one,
+	since LDBL_MANT_DIG can include the IEEE 754 implicit bit.
+	The common x86-style 80-bit long double does not have
+	an implicit bit.
+
+longdblnanbytes (infnan.U):
+	This variable contains comma-separated list of hexadecimal bytes
+	for the long double precision not-a-number.
 
 longdblsize (d_longdbl.U):
 	This variable contains the value of the LONG_DOUBLESIZE symbol, which
@@ -4350,6 +4381,10 @@ nvgformat (perlxvf.U):
 nvGUformat (perlxvf.U):
 	This variable contains the format string used for printing
 	a Perl NV using %G-ish floating point format.
+
+nvmantbits (mantbits.U):
+	This variable tells how many bits the mantissa of a Perl NV has,
+	not including the possible implicit bit.
 
 nvsize (perlxv.U):
 	This variable is the size of a Perl NV in bytes.

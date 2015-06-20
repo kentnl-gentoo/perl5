@@ -4,7 +4,7 @@ use warnings;
 
 our ($AUTOLOAD, %SIGRT);
 
-our $VERSION = '1.53';
+our $VERSION = '1.54';
 
 require XSLoader;
 
@@ -403,6 +403,8 @@ my %other_export_tags = (
     )],
 
     stdlib_h_c99 => [ @{$default_export_tags{stdlib_h}}, 'strtold' ],
+
+    nan_payload => [ qw(getpayload setpayload setpayloadsig issignaling) ],
 );
 
 {

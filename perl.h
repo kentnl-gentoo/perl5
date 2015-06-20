@@ -231,7 +231,7 @@
     Perl_pregfree(aTHX_ (prog))
 
 #define CALLREGFREE_PVT(prog) \
-    if(prog) RX_ENGINE(prog)->free(aTHX_ (prog))
+    if(prog) RX_ENGINE(prog)->rxfree(aTHX_ (prog))
 
 #define CALLREG_NUMBUF_FETCH(rx,paren,usesv)                                \
     RX_ENGINE(rx)->numbered_buff_FETCH(aTHX_ (rx),(paren),(usesv))
@@ -493,26 +493,6 @@
 #    define dTHXs		dVAR
 #  else
 #    define dTHXs		dNOOP
-#  endif
-#endif
-
-/* Some platforms require marking function declarations
- * for them to be exportable.  Used in perlio.h, proto.h
- * is handled either by the makedef.pl or by defining the
- * PERL_CALLCONV to be something special.  See also the
- * definition of XS() in XSUB.h. */
-#ifndef PERL_EXPORT_C
-#  ifdef __cplusplus
-#    define PERL_EXPORT_C extern "C"
-#  else
-#    define PERL_EXPORT_C extern
-#  endif
-#endif
-#ifndef PERL_XS_EXPORT_C
-#  ifdef __cplusplus
-#    define PERL_XS_EXPORT_C extern "C"
-#  else
-#    define PERL_XS_EXPORT_C
 #  endif
 #endif
 
@@ -1994,8 +1974,6 @@ extern long double Perl_my_frexpl(long double x, int *e);
 #   define NV_EPSILON FLT128_EPSILON
 #   define NV_MIN_10_EXP FLT128_MIN_10_EXP
 #   define NV_MAX_10_EXP FLT128_MAX_10_EXP
-#   define NV_INF HUGE_VALQ
-#   define NV_NAN nanq("0")
 #   define Perl_acos acosq
 #   define Perl_asin asinq
 #   define Perl_atan atanq
@@ -3508,9 +3486,9 @@ typedef pthread_key_t	perl_key;
    appropriate to call return.  In either case, include the lint directive.
  */
 #ifdef HASATTRIBUTE_NORETURN
-#  define NORETURN_FUNCTION_END NOT_REACHED; /* NOTREACHED */
+#  define NORETURN_FUNCTION_END NOT_REACHED;
 #else
-#  define NORETURN_FUNCTION_END NOT_REACHED; /* NOTREACHED */ return 0
+#  define NORETURN_FUNCTION_END NOT_REACHED; return 0
 #endif
 
 /* Some OS warn on NULL format to printf */
@@ -3683,6 +3661,30 @@ typedef        struct crypt_data {     /* straight from /usr/include/crypt.h */
 } CRYPTD;
 #endif /* threading */
 #endif /* AIX */
+
+#ifndef PERL_CALLCONV
+#  ifdef __cplusplus
+#    define PERL_CALLCONV extern "C"
+#  else
+#    define PERL_CALLCONV
+#  endif
+#endif
+#ifndef PERL_CALLCONV_NO_RET
+#    define PERL_CALLCONV_NO_RET PERL_CALLCONV
+#endif
+
+/* PERL_STATIC_NO_RET is supposed to be equivalent to STATIC on builds that
+   dont have a noreturn as a declaration specifier
+*/
+#ifndef PERL_STATIC_NO_RET
+#  define PERL_STATIC_NO_RET STATIC
+#endif
+/* PERL_STATIC_NO_RET is supposed to be equivalent to PERL_STATIC_INLINE on
+   builds that dont have a noreturn as a declaration specifier
+*/
+#ifndef PERL_STATIC_INLINE_NO_RET
+#  define PERL_STATIC_INLINE_NO_RET PERL_STATIC_INLINE
+#endif
 
 #if !defined(OS2)
 #  include "iperlsys.h"
@@ -4007,8 +4009,7 @@ Gid_t getegid (void);
 #define DEBUG_MASK		0x07FFEFFF /* mask of all the standard flags */
 
 #define DEBUG_DB_RECURSE_FLAG	0x40000000
-#define DEBUG_TOP_FLAG		0x80000000 /* XXX what's this for ??? Signal
-					      that something was done? */
+#define DEBUG_TOP_FLAG		0x80000000 /* -D was given --> PL_debug |= FLAG */
 
 #  define DEBUG_p_TEST_ (PL_debug & DEBUG_p_FLAG)
 #  define DEBUG_s_TEST_ (PL_debug & DEBUG_s_FLAG)
@@ -4289,98 +4290,6 @@ START_EXTERN_C
 	    double pow (double,double);
 END_EXTERN_C
 #endif
-
-/* If you are thinking of using HUGE_VAL for infinity, or using
- * <math.h> functions to generate NV_INF (e.g. exp(1e9), log(-1.0)),
- * stop.  Neither will work portably: HUGE_VAL can be just DBL_MAX,
- * and the math functions might be just generating DBL_MAX, or even
- * zero.  */
-
-#if !defined(NV_INF) && defined(USE_LONG_DOUBLE)
-#  if !defined(NV_INF) && defined(LDBL_INFINITY)
-#    define NV_INF LDBL_INFINITY
-#  endif
-#  if !defined(NV_INF) && defined(INFINITYL)
-#    define NV_INF INFINITYL
-#  endif
-#endif
-#if !defined(NV_INF) && defined(DBL_INFINITY)
-#  define NV_INF (NV)DBL_INFINITY
-#endif
-#if !defined(NV_INF) && defined(INFINITY)
-#  define NV_INF (NV)INFINITY
-#endif
-#if !defined(NV_INF) && defined(INF)
-#  define NV_INF (NV)INF
-#endif
-#if !defined(NV_INF)
-#  if INTSIZE == 4
-/* At this point we assume the IEEE 754 floating point (and of course,
- * we also assume a floating point format that can encode an infinity).
- * We will coerce an int32 (which will encode the infinity) into
- * a 32-bit float, which will then be cast into NV.
- *
- * Note that we intentionally use a float and 32-bit int, instead of
- * shifting a small integer into a full IV, and from that into a full
- * NV, because:
- *
- * (1) an IV might not be wide enough to cover all the bits of an NV.
- * (2) the exponent part (including the infinity and nan bits) of a NV
- *     might be wider than just 16 bits.
- *
- * Below the NV_NAN logic has similar __PL_nan_u fallback, the only
- * difference being the int32 constant being coerced. */
-#    define __PL_inf_float_int32 0x7F800000
-static const union { unsigned int __i; float __f; } __PL_inf_u =
-    { __PL_inf_float_int32 };
-#    define NV_INF ((NV)(__PL_inf_u.__f))
-#  endif
-#endif
-#if !defined(NV_INF)
-#  define NV_INF ((NV)1.0/0.0) /* Some compilers will warn. */
-#endif
-
-#if !defined(NV_NAN) && defined(USE_LONG_DOUBLE)
-#   if !defined(NV_NAN) && defined(LDBL_NAN)
-#       define NV_NAN LDBL_NAN
-#   endif
-#   if !defined(NV_NAN) && defined(NANL)
-#       define NV_NAN NANL
-#   endif
-#   if !defined(NV_NAN) && defined(LDBL_QNAN)
-#       define NV_NAN LDBL_QNAN
-#   endif
-#endif
-#if !defined(NV_NAN) && defined(DBL_NAN)
-#  define NV_NAN (NV)DBL_NAN
-#endif
-#if !defined(NV_NAN) && defined(DBL_QNAN)
-#  define NV_NAN (NV)DBL_QNAN
-#endif
-#if !defined(NV_NAN) && defined(NAN)
-#  define NV_NAN (NV)NAN
-#endif
-#if !defined(NV_NAN) && defined(QNAN)
-#  define NV_NAN (NV)QNAN
-#endif
-#if !defined(NV_NAN) && defined(I_SUNMATH)
-#  define NV_NAN (NV)quiet_nan()
-#endif
-#if !defined(NV_NAN)
-#  if INTSIZE == 4
-/* See the discussion near __PL_inf_u. */
-#    define __PL_nan_float_int32 0x7FC00000
-static const union { unsigned int __i; float __f; } __PL_nan_u =
-    { __PL_nan_float_int32 };
-#    define NV_NAN ((NV)(__PL_nan_u.__f))
-#  endif
-#endif
-#if !defined(NV_NAN)
-#  define NV_NAN ((NV)0.0/0.0) /* Some compilers will warn. */
-#endif
-/* Do NOT try doing NV_NAN based on NV_INF and trying (NV_INF-NV_INF).
- * Though IEEE-754-logically correct, some compilers (like Visual C 2003)
- * falsely misoptimize that to zero (x-x is zero, right?) */
 
 #ifndef __cplusplus
 #  if !defined(WIN32) && !defined(VMS)
@@ -5469,31 +5378,6 @@ struct tempsym; /* defined in pp_pack.c */
 #include "thread.h"
 #include "pp.h"
 
-#ifndef PERL_CALLCONV
-#  ifdef __cplusplus
-#    define PERL_CALLCONV extern "C"
-#  else
-#    define PERL_CALLCONV
-#  endif
-#endif
-#ifndef PERL_CALLCONV_NO_RET
-#    define PERL_CALLCONV_NO_RET PERL_CALLCONV
-#endif
-
-/* PERL_STATIC_NO_RET is supposed to be equivalent to STATIC on builds that
-   dont have a noreturn as a declaration specifier
-*/
-#ifndef PERL_STATIC_NO_RET
-#  define PERL_STATIC_NO_RET STATIC
-#endif
-/* PERL_STATIC_NO_RET is supposed to be equivalent to PERL_STATIC_INLINE on
-   builds that dont have a noreturn as a declaration specifier
-*/
-#ifndef PERL_STATIC_INLINE_NO_RET
-#  define PERL_STATIC_INLINE_NO_RET PERL_STATIC_INLINE
-#endif
-
-
 #undef PERL_CKDEF
 #undef PERL_PPDEF
 #define PERL_CKDEF(s)	PERL_CALLCONV OP *s (pTHX_ OP *o);
@@ -5501,6 +5385,14 @@ struct tempsym; /* defined in pp_pack.c */
 
 #ifdef MYMALLOC
 #  include "malloc_ctl.h"
+#endif
+
+/*
+ * This provides a layer of functions and macros to ensure extensions will
+ * get to use the same RTL functions as the core.
+ */
+#if defined(WIN32)
+#  include "win32iop.h"
 #endif
 
 #include "proto.h"
@@ -5633,6 +5525,123 @@ EXTCONST bool PL_valid_types_NV_set[];
 
 #endif
 
+/* In C99 we could use designated (named field) union initializers.
+ * In C89 we need to initialize the member declared first.
+ *
+ * With the U8_NV version you will want to have inner braces,
+ * while with the NV_U8 use just the NV.*/
+#define INFNAN_U8_NV_DECL EXTCONST union { U8 u8[NVSIZE]; NV nv; }
+#define INFNAN_NV_U8_DECL EXTCONST union { NV nv; U8 u8[NVSIZE]; }
+
+#ifdef DOINIT
+
+/* PL_inf and PL_nan initialization.
+ *
+ * For inf and nan initialization the ultimate fallback is dividing
+ * one or zero by zero: however, some compilers will warn or even fail
+ * on divide-by-zero, but hopefully something earlier will work.
+ *
+ * If you are thinking of using HUGE_VAL for infinity, or using
+ * <math.h> functions to generate NV_INF (e.g. exp(1e9), log(-1.0)),
+ * stop.  Neither will work portably: HUGE_VAL can be just DBL_MAX,
+ * and the math functions might be just generating DBL_MAX, or even zero.
+ *
+ * Also, do NOT try doing NV_NAN based on NV_INF and trying (NV_INF-NV_INF).
+ * Though logically correct, some compilers (like Visual C 2003)
+ * falsely misoptimize that to zero (x-x is always zero, right?)
+ */
+
+/* The quadmath literals are anon structs which -Wc++-compat doesn't like. */
+GCC_DIAG_IGNORE(-Wc++-compat)
+
+#  ifdef USE_QUADMATH
+/* Cannot use HUGE_VALQ for PL_inf because not a compile-time
+ * constant. */
+INFNAN_NV_U8_DECL PL_inf = { 1.0Q/0.0Q };
+#  elif NVSIZE == LONG_DOUBLESIZE && defined(LONGDBLINFBYTES)
+INFNAN_U8_NV_DECL PL_inf = { { LONGDBLINFBYTES } };
+#  elif NVSIZE == DOUBLESIZE && defined(DOUBLEINFBYTES)
+INFNAN_U8_NV_DECL PL_inf = { { DOUBLEINFBYTES } };
+#  else
+#    if NVSIZE == LONG_DOUBLESIZE && defined(USE_LONG_DOUBLE)
+#      if defined(LDBL_INFINITY)
+INFNAN_NV_U8_DECL PL_inf = { LDBL_INFINITY };
+#      elif defined(LDBL_INF)
+INFNAN_NV_U8_DECL PL_inf = { LDBL_INF };
+#      elif defined(INFINITY)
+INFNAN_NV_U8_DECL PL_inf = { (NV)INFINITY };
+#      elif defined(INF)
+INFNAN_NV_U8_DECL PL_inf = { (NV)INF };
+#      else
+INFNAN_NV_U8_DECL PL_inf = { 1.0L/0.0L }; /* keep last */
+#      endif
+#    else
+#      if defined(DBL_INFINITY)
+INFNAN_NV_U8_DECL PL_inf = { DBL_INFINITY };
+#      elif defined(DBL_INF)
+INFNAN_NV_U8_DECL PL_inf = { DBL_INF };
+#      elif defined(INFINITY) /* C99 */
+INFNAN_NV_U8_DECL PL_inf = { (NV)INFINITY };
+#      elif defined(INF)
+INFNAN_NV_U8_DECL PL_inf = { (NV)INF };
+#      else
+INFNAN_NV_U8_DECL PL_inf = { 1.0/0.0 }; /* keep last */
+#      endif
+#    endif
+#  endif
+
+#  ifdef USE_QUADMATH
+/* Cannot use nanq("0") for PL_nan because not a compile-time
+ * constant. */
+INFNAN_NV_U8_DECL PL_nan = { 0.0Q/0.0Q };
+#  elif NVSIZE == LONG_DOUBLESIZE && defined(LONGDBLNANBYTES)
+INFNAN_U8_NV_DECL PL_nan = { { LONGDBLNANBYTES } };
+#  elif NVSIZE == DOUBLESIZE && defined(DOUBLENANBYTES)
+INFNAN_U8_NV_DECL PL_nan = { { DOUBLENANBYTES } };
+#  else
+#    if NVSIZE == LONG_DOUBLESIZE && defined(USE_LONG_DOUBLE)
+#      if defined(LDBL_NAN)
+INFNAN_NV_U8_DECL PL_nan = { LDBL_NAN };
+#      elif defined(LDBL_QNAN)
+INFNAN_NV_U8_DECL PL_nan = { LDBL_QNAN };
+#      elif defined(NAN)
+INFNAN_NV_U8_DECL PL_nan = { (NV)NAN };
+#      else
+INFNAN_NV_U8_DECL PL_nan = { 0.0L/0.0L }; /* keep last */
+#      endif
+#    else
+#      if defined(DBL_NAN)
+INFNAN_NV_U8_DECL PL_nan = { DBL_NAN };
+#      elif defined(DBL_QNAN)
+INFNAN_NV_U8_DECL PL_nan = { DBL_QNAN };
+#      elif defined(NAN) /* C99 */
+INFNAN_NV_U8_DECL PL_nan = { (NV)NAN };
+#      else
+INFNAN_NV_U8_DECL PL_nan = { 0.0/0.0 }; /* keep last */
+#      endif
+#    endif
+#  endif
+
+GCC_DIAG_RESTORE
+
+#else
+
+INFNAN_NV_U8_DECL PL_inf;
+INFNAN_NV_U8_DECL PL_nan;
+
+#endif
+
+/* If you have not defined NV_INF/NV_NAN (like for example win32/win32.h),
+ * we will define NV_INF/NV_NAN as the nv part of the global const
+ * PL_inf/PL_nan.  Note, however, that the preexisting NV_INF/NV_NAN
+ * might not be a compile-time constant, in which case it cannot be
+ * used to initialize PL_inf/PL_nan above. */
+#ifndef NV_INF
+#  define NV_INF PL_inf.nv
+#endif
+#ifndef NV_NAN
+#  define NV_NAN PL_nan.nv
+#endif
 
 /* if these never got defined, they need defaults */
 #ifndef PERL_SET_CONTEXT
@@ -6593,7 +6602,15 @@ extern void moncontrol(int);
 
 #endif /* LONG_DOUBLEKIND */
 
-#if NVSIZE == DOUBLESIZE
+#ifdef USE_QUADMATH /* assume quadmath endianness == native double endianness */
+#  if defined(DOUBLE_LITTLE_ENDIAN)
+#    define NV_LITTLE_ENDIAN
+#  elif defined(DOUBLE_BIG_ENDIAN)
+#    define NV_BIG_ENDIAN
+#  elif defined(DOUBLE_MIX_ENDIAN) /* stretch */
+#    define NV_MIX_ENDIAN
+#  endif
+#elif NVSIZE == DOUBLESIZE
 #  ifdef DOUBLE_LITTLE_ENDIAN
 #    define NV_LITTLE_ENDIAN
 #  endif
@@ -6612,6 +6629,333 @@ extern void moncontrol(int);
 #  endif
 #endif
 
+/* NaNs (not-a-numbers) can carry payload bits, in addition to
+ * "nan-ness".  Part of the payload is the quiet/signaling bit.
+ * To back up a bit (harhar):
+ *
+ * For IEEE 754 64-bit formats [1]:
+ *
+ * s 000 (mantissa all-zero)  zero
+ * s 000 (mantissa non-zero)  subnormals (denormals)
+ * s 001 ... 7fe              normals
+ * s 7ff q                    nan
+ *
+ * For IEEE 754 128-bit formats:
+ *
+ * s 0000 (mantissa all-zero)  zero
+ * s 0000 (mantissa non-zero)  subnormals (denormals)
+ * s 0001 ... 7ffe             normals
+ * s 7fff q                    nan
+ *
+ * [1] this looks like big-endian, but applies equally to little-endian.
+ *
+ * s = Sign bit.  Yes, zeros and nans can have negative sign,
+ *     the interpretation is application-specific.
+ *
+ * q = Quietness bit, the interpretation is platform-specific.
+ *     Most platforms have the most significant bit being one
+ *     meaning quiet, but some (older mips, hppa) have the msb
+ *     being one meaning signaling.  Note that the above means
+ *     that on most platforms there cannot be signaling nan with
+ *     zero payload because that is identical with infinity;
+ *     while conversely on older mips/hppa there cannot be a quiet nan
+ *     because that is identical with infinity.
+ *
+ *     Moreover, whether there is any behavioral difference
+ *     between quiet and signaling NaNs, depends on the platform.
+ *
+ * x86 80-bit extended precision is different, the mantissa bits:
+ *
+ * 63 62 61   30387+    pre-387    visual c
+ * --------   ----      --------   --------
+ *  0  0  0   invalid   infinity
+ *  0  0  1   invalid   snan
+ *  0  1  0   invalid   snan
+ *  0  1  1   invalid   snan
+ *  1  0  0   infinity  snan        1.#INF
+ *  1  0  1   snan                  1.#SNAN
+ *  1  1  0   qnan                 -1.#IND  (x86 chooses this to negative)
+ *  1  1  1   qnan                  1.#QNAN
+ *
+ * This means that in this format there are 61 bits available
+ * for the nan payload.
+ *
+ * In all platforms, the payload bytes (and bits, some of them are
+ * often in a partial byte) themselves can be either all zero (x86),
+ * all one (sparc or mips), or a mixture: in IEEE 754 128-bit double
+ * or in a double-double, the first half of the payload can follow the
+ * native double, while in the second half the payload can be all
+ * zeros.  (Therefore the mask for payload bits is not necessarily
+ * identical to bit complement of the NaN.)  Another way of putting
+ * this: the payload for the default NaN might not be zero.
+ *
+ * For the x86 80-bit long doubles, the trailing bytes (the 80 bits
+ * being 'packaged' in either 12 or 16 bytes) can be whatever random
+ * garbage.
+ *
+ * Furthermore, the semantics of the sign bit on NaNs are platform-specific.
+ * On normal floats, the sign bit being on means negative.  But this may,
+ * or may not, be reverted on NaNs: in other words, the default NaN might
+ * have the sign bit on, and therefore look like negative if you look
+ * at it at the bit level.
+ *
+ * NaN payloads are not propagated even on copies, or in arithmetics.
+ * They *might* be, according to some rules, on your particular
+ * cpu/os/compiler/libraries, but no guarantees.
+ *
+ * To summarize, on most platforms, and for 64-bit doubles
+ * (using big-endian ordering here):
+ *
+ * [7FF8000000000000..7FFFFFFFFFFFFFFF] quiet
+ * [FFF8000000000000..FFFFFFFFFFFFFFFF] quiet
+ * [7FF0000000000001..7FF7FFFFFFFFFFFF] signaling
+ * [FFF0000000000001..FFF7FFFFFFFFFFFF] signaling
+ *
+ * The C99 nan() is supposed to generate *quiet* NaNs.
+ *
+ * Note the asymmetry:
+ * The 7FF0000000000000 is positive infinity,
+ * the FFF0000000000000 is negative infinity.
+ */
+
+/* NVMANTBITS is the number of _real_ mantissa bits in an NV.
+ * For the standard IEEE 754 fp this number is usually one less that
+ * *DBL_MANT_DIG because of the implicit (aka hidden) bit, which isn't
+ * real.  For the 80-bit extended precision formats (x86*), the number
+ * of mantissa bits... depends. For normal floats, it's 64.  But for
+ * the inf/nan, it's different (zero for inf, 61 for nan).
+ * NVMANTBITS works for normal floats. */
+
+/* We do not want to include the quiet/signaling bit. */
+#define NV_NAN_BITS (NVMANTBITS - 1)
+
+#if defined(USE_LONG_DOUBLE) && NVSIZE > DOUBLESIZE
+#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 13
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_BIG_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 2
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 7
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 2
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 13
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 1
+#  else
+#    error "Unexpected long double format"
+#  endif
+#else
+#  ifdef USE_QUADMATH
+#    ifdef NV_LITTLE_ENDIAN
+#      define NV_NAN_QS_BYTE_OFFSET 13
+#    elif defined(NV_BIG_ENDIAN)
+#      define NV_NAN_QS_BYTE_OFFSET 2
+#    else
+#      error "Unexpected quadmath format"
+#    endif
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_32_BIT_LITTLE_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 2
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_32_BIT_BIG_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 1
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_LITTLE_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 6
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_BIG_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 1
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 13
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_128_BIT_BIG_ENDIAN
+#    define NV_NAN_QS_BYTE_OFFSET 2
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_MIXED_ENDIAN_LE_BE
+#    define NV_NAN_QS_BYTE_OFFSET 2 /* bytes 4 5 6 7 0 1 2 3 (MSB 7) */
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_MIXED_ENDIAN_BE_LE
+#    define NV_NAN_QS_BYTE_OFFSET 5 /* bytes 3 2 1 0 7 6 5 4 (MSB 7) */
+#  else
+#    error "Unexpected double format"
+#  endif
+#endif
+/* NV_NAN_QS_BYTE is the byte to test for the quiet/signaling */
+#define NV_NAN_QS_BYTE(nvp) (((U8*)(nvp))[NV_NAN_QS_BYTE_OFFSET])
+/* NV_NAN_QS_BIT is the bit to test in the NV_NAN_QS_BYTE_OFFSET
+ * for the quiet/signaling */
+#if defined(USE_LONG_DOUBLE) && \
+  (LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN || \
+   LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN)
+#  define NV_NAN_QS_BIT_SHIFT 6 /* 0x40 */
+#elif defined(USE_LONG_DOUBLE) && \
+  (LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN || \
+   LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN)
+#  define NV_NAN_QS_BIT_SHIFT 3 /* 0x08, but not via NV_NAN_BITS */
+#else
+#  define NV_NAN_QS_BIT_SHIFT ((NV_NAN_BITS) % 8) /* usually 3, or 0x08 */
+#endif
+#define NV_NAN_QS_BIT (1 << (NV_NAN_QS_BIT_SHIFT))
+/* NV_NAN_QS_BIT_OFFSET is the bit offset from the beginning of a NV
+ * (bytes ordered big-endianly) for the quiet/signaling bit
+ * for the quiet/signaling */
+#define NV_NAN_QS_BIT_OFFSET \
+    (8 * (NV_NAN_QS_BYTE_OFFSET) + (NV_NAN_QS_BIT_SHIFT))
+/* NV_NAN_QS_QUIET (always defined) is one if the NV_NAN_QS_QS_BIT being
+ * on/one indicates quiet NaN. NV_NAN_QS_SIGNALING (also always defined)
+ * is on/one if the NV_NAN_QS_BIT being one indicates signaling NaN. */
+#define NV_NAN_QS_QUIET \
+    ((NV_NAN_QS_BYTE(PL_nan.u8) & NV_NAN_QS_BIT) == NV_NAN_QS_BIT)
+#define NV_NAN_QS_SIGNALING (!(NV_NAN_QS_QUIET))
+#define NV_NAN_QS_TEST(nvp) (NV_NAN_QS_BYTE(nvp) & NV_NAN_QS_BIT)
+/* NV_NAN_IS_QUIET() returns true if the NV behind nvp is a NaN,
+ * whether it is a quiet NaN, NV_NAN_IS_SIGNALING() if a signaling NaN.
+ * Note however that these do not check whether the nvp is a NaN. */
+#define NV_NAN_IS_QUIET(nvp) \
+    (NV_NAN_QS_TEST(nvp) == (NV_NAN_QS_QUIET ? NV_NAN_QS_BIT : 0))
+#define NV_NAN_IS_SIGNALING(nvp) \
+    (NV_NAN_QS_TEST(nvp) == (NV_NAN_QS_QUIET ? 0 : NV_NAN_QS_BIT))
+#define NV_NAN_SET_QUIET(nvp) \
+    (NV_NAN_QS_QUIET ? \
+     (NV_NAN_QS_BYTE(nvp) |= NV_NAN_QS_BIT) : \
+     (NV_NAN_QS_BYTE(nvp) &= ~NV_NAN_QS_BIT))
+#define NV_NAN_SET_SIGNALING(nvp) \
+    (NV_NAN_QS_QUIET ? \
+     (NV_NAN_QS_BYTE(nvp) &= ~NV_NAN_QS_BIT) : \
+     (NV_NAN_QS_BYTE(nvp) |= NV_NAN_QS_BIT))
+#define NV_NAN_QS_XOR(nvp) (NV_NAN_QS_BYTE(nvp) ^= NV_NAN_QS_BIT)
+
+/* NV_NAN_PAYLOAD_MASK: masking the nan payload bits.
+ *
+ * NV_NAN_PAYLOAD_PERM: permuting the nan payload bytes.
+ * 0xFF means "don't go here".*/
+
+/* Shorthands to avoid typoses. */
+#define NV_NAN_PAYLOAD_PERM_0_TO_7 \
+  0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7
+#define NV_NAN_PAYLOAD_PERM_7_TO_0 \
+  0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0x0
+#define NV_NAN_PAYLOAD_MASK_IEEE_754_128_LE \
+  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, \
+  0xff, 0xff, 0xff, 0xff, 0xff, 0x7f, 0x00, 0x00
+#define NV_NAN_PAYLOAD_PERM_IEEE_754_128_LE \
+  NV_NAN_PAYLOAD_PERM_0_TO_7, \
+  0x8, 0x9, 0xa, 0xb, 0xc, 0xd, 0xFF, 0xFF
+#define NV_NAN_PAYLOAD_MASK_IEEE_754_128_BE \
+  0x00, 0x00, 0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, \
+  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+#define NV_NAN_PAYLOAD_PERM_IEEE_754_128_BE \
+  0xFF, 0xFF, 0xd, 0xc, 0xb, 0xa, 0x9, 0x8, \
+  NV_NAN_PAYLOAD_PERM_7_TO_0
+#define NV_NAN_PAYLOAD_MASK_IEEE_754_64_LE \
+  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x07, 0x00
+#define NV_NAN_PAYLOAD_PERM_IEEE_754_64_LE \
+  0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0xFF
+#define NV_NAN_PAYLOAD_MASK_IEEE_754_64_BE \
+  0x00, 0x07, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
+#define NV_NAN_PAYLOAD_PERM_IEEE_754_64_BE \
+  0xFF, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0x0
+
+#if defined(USE_LONG_DOUBLE) && NVSIZE > DOUBLESIZE
+#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN
+#    define NV_NAN_PAYLOAD_MASK NV_NAN_PAYLOAD_MASK_IEEE_754_128_LE
+#    define NV_NAN_PAYLOAD_PERM NV_NAN_PAYLOAD_PERM_IEEE_754_128_LE
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_BIG_ENDIAN
+#    define NV_NAN_PAYLOAD_MASK NV_NAN_PAYLOAD_MASK_IEEE_754_128_BE
+#    define NV_NAN_PAYLOAD_PERM NV_NAN_PAYLOAD_PERM_IEEE_754_128_BE
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN
+#    if LONG_DOUBLESIZE == 10
+#      define NV_NAN_PAYLOAD_MASK \
+         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f, \
+         0x00, 0x00
+#      define NV_NAN_PAYLOAD_PERM \
+         NV_NAN_PAYLOAD_PERM_0_TO_7, 0xFF, 0xFF
+#    elif LONG_DOUBLESIZE == 12
+#      define NV_NAN_PAYLOAD_MASK \
+         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f, \
+         0x00, 0x00, 0x00, 0x00
+#      define NV_NAN_PAYLOAD_PERM \
+         NV_NAN_PAYLOAD_PERM_0_TO_7, 0xFF, 0xFF, 0xFF, 0xFF
+#    elif LONG_DOUBLESIZE == 16
+#      define NV_NAN_PAYLOAD_MASK \
+         0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1f, \
+         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+#      define NV_NAN_PAYLOAD_PERM \
+         NV_NAN_PAYLOAD_PERM_0_TO_7, \
+         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+#    else
+#      error "Unexpected x86 80-bit little-endian long double format"
+#    endif
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN
+#    if LONG_DOUBLESIZE == 10
+#      define NV_NAN_PAYLOAD_MASK \
+         0x00, 0x00, 0x1f, 0xff, 0xff, 0xff, 0xff, 0xff, \
+         0xff, 0xff
+#      define NV_NAN_PAYLOAD_PERM \
+         NV_NAN_PAYLOAD_PERM_7_TO_0, 0xFF, 0xFF
+#    elif LONG_DOUBLESIZE == 12
+#      define NV_NAN_PAYLOAD_MASK \
+         0x00, 0x00, 0x1f, 0xff, 0xff, 0xff, 0xff, 0xff, \
+         0xff, 0xff, 0x00, 0x00
+#      define NV_NAN_PAYLOAD_PERM \
+         NV_NAN_PAYLOAD_PERM_7_TO_0, 0xFF, 0xFF, 0xFF, 0xFF
+#    elif LONG_DOUBLESIZE == 16
+#      define NV_NAN_PAYLOAD_MASK \
+         0x00, 0x00, 0x1f, 0xff, 0xff, 0xff, 0xff, 0xff, \
+         0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+#      define NV_NAN_PAYLOAD_PERM \
+         NV_NAN_PAYLOAD_PERM_7_TO_0, \
+         0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+#    else
+#      error "Unexpected x86 80-bit big-endian long double format"
+#    endif
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN
+/* For double-double we assume only the first double is used for NaN. */
+#    define NV_NAN_PAYLOAD_MASK \
+       NV_NAN_PAYLOAD_MASK_IEEE_754_64_LE
+#    define NV_NAN_PAYLOAD_PERM \
+       NV_NAN_PAYLOAD_PERM_IEEE_754_64_LE
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN
+#    define NV_NAN_PAYLOAD_MASK \
+       NV_NAN_PAYLOAD_MASK_IEEE_754_64_BE
+#    define NV_NAN_PAYLOAD_PERM \
+       NV_NAN_PAYLOAD_PERM_IEEE_754_64_BE
+#  else
+#    error "Unexpected long double format"
+#  endif
+#else
+#  ifdef USE_QUADMATH /* quadmath is not long double */
+#    ifdef NV_LITTLE_ENDIAN
+#      define NV_NAN_PAYLOAD_MASK NV_NAN_PAYLOAD_MASK_IEEE_754_128_LE
+#      define NV_NAN_PAYLOAD_PERM NV_NAN_PAYLOAD_PERM_IEEE_754_128_LE
+#    elif defined(NV_BIG_ENDIAN)
+#      define NV_NAN_PAYLOAD_MASK NV_NAN_PAYLOAD_MASK_IEEE_754_128_BE
+#      define NV_NAN_PAYLOAD_PERM NV_NAN_PAYLOAD_PERM_IEEE_754_128_BE
+#    else
+#      error "Unexpected quadmath format"
+#    endif
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_32_BIT_LITTLE_ENDIAN
+#    define NV_NAN_PAYLOAD_MASK 0xff, 0xff, 0x07, 0x00
+#    define NV_NAN_PAYLOAD_PERM 0x0, 0x1, 0x2, 0xFF
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_32_BIT_BIG_ENDIAN
+#    define NV_NAN_PAYLOAD_MASK 0x00, 0x07, 0xff, 0xff
+#    define NV_NAN_PAYLOAD_PERM 0xFF, 0x2, 0x1, 0x0
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_LITTLE_ENDIAN
+#    define NV_NAN_PAYLOAD_MASK NV_NAN_PAYLOAD_MASK_IEEE_754_64_LE
+#    define NV_NAN_PAYLOAD_PERM NV_NAN_PAYLOAD_PERM_IEEE_754_64_LE
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_BIG_ENDIAN
+#    define NV_NAN_PAYLOAD_MASK NV_NAN_PAYLOAD_MASK_IEEE_754_64_BE
+#    define NV_NAN_PAYLOAD_PERM NV_NAN_PAYLOAD_PERM_IEEE_754_64_BE
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN
+#    define NV_NAN_PAYLOAD_MASK NV_NAN_PAYLOAD_MASK_IEEE_754_128_LE
+#    define NV_NAN_PAYLOAD_PERM NV_NAN_PAYLOAD_PERM_IEEE_754_128_LE
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_128_BIT_BIG_ENDIAN
+#    define NV_NAN_PAYLOAD_MASK NV_NAN_PAYLOAD_MASK_IEEE_754_128_BE
+#    define NV_NAN_PAYLOAD_PERM NV_NAN_PAYLOAD_PERM_IEEE_754_128_BE
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_MIXED_ENDIAN_LE_BE
+#    define NV_NAN_PAYLOAD_MASK 0xff, 0xff, 0x07, 0x00, 0xff, 0xff, 0xff, 0xff
+#    define NV_NAN_PAYLOAD_PERM 0x4, 0x5, 0x6, 0xFF, 0x0, 0x1, 0x2, 0x3
+#  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_MIXED_ENDIAN_BE_LE
+#    define NV_NAN_PAYLOAD_MASK 0xff, 0xff, 0xff, 0xff, 0x00, 0x07, 0xff, 0xff
+#    define NV_NAN_PAYLOAD_PERM 0x3, 0x2, 0x1, 0x0, 0xFF, 0x6, 0x5, 0x4
+#  else
+#    error "Unexpected double format"
+#  endif
+#endif
 /*
 
    (KEEP THIS LAST IN perl.h!)

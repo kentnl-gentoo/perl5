@@ -5,7 +5,7 @@
 
 package feature;
 
-our $VERSION = '1.40';
+our $VERSION = '1.41';
 
 our %feature = (
     fc              => 'feature_fc',
@@ -43,6 +43,8 @@ $feature_bundle{"5.19"} = $feature_bundle{"5.15"};
 $feature_bundle{"5.20"} = $feature_bundle{"5.15"};
 $feature_bundle{"5.21"} = $feature_bundle{"5.15"};
 $feature_bundle{"5.22"} = $feature_bundle{"5.15"};
+$feature_bundle{"5.23"} = $feature_bundle{"5.15"};
+$feature_bundle{"5.24"} = $feature_bundle{"5.15"};
 $feature_bundle{"5.9.5"} = $feature_bundle{"5.10"};
 
 our $hint_shift   = 26;
@@ -370,6 +372,9 @@ The following feature bundles are available:
   :5.22     say state switch unicode_strings
             unicode_eval evalbytes current_sub fc
 
+  :5.24     say state switch unicode_strings
+            unicode_eval evalbytes current_sub fc
+
 The C<:default> bundle represents the feature set that is enabled before
 any C<use feature> or C<no feature> declaration.
 
@@ -424,7 +429,7 @@ bundle is automatically loaded instead.
 =cut
 
 sub import {
-    my $class = shift;
+    shift;
 
     if (!@_) {
         croak("No features specified");
@@ -434,7 +439,7 @@ sub import {
 }
 
 sub unimport {
-    my $class = shift;
+    shift;
 
     # A bare C<no feature> should reset to the default bundle
     if (!@_) {

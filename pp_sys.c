@@ -1082,9 +1082,11 @@ PP(pp_dbmopen)
 	PUTBACK;
 	call_sv(MUTABLE_SV(GvCV(gv)), G_SCALAR);
 	SPAGAIN;
+        if (sv_isobject(TOPs))
+            goto retie;
     }
-
-    if (sv_isobject(TOPs)) {
+    else {
+        retie:
 	sv_unmagic(MUTABLE_SV(hv), PERL_MAGIC_tied);
 	sv_magic(MUTABLE_SV(hv), TOPs, PERL_MAGIC_tied, NULL, 0);
     }
@@ -1435,8 +1437,9 @@ PP(pp_leavewrite)
     I32 gimme;
     PERL_CONTEXT *cx;
     OP *retop;
+    bool is_return = cBOOL(PL_op->op_type == OP_RETURN);
 
-    if (!io || !(ofp = IoOFP(io)))
+    if (is_return || !io || !(ofp = IoOFP(io)))
         goto forget_top;
 
     DEBUG_f(PerlIO_printf(Perl_debug_log, "left=%ld, todo=%ld\n",
@@ -1514,7 +1517,13 @@ PP(pp_leavewrite)
     SP = newsp; /* ignore retval of formline */
     LEAVE;
 
-    if (!io || !(fp = IoOFP(io))) {
+    if (is_return)
+        /* XXX the semantics of doing 'return' in a format aren't documented.
+         * Currently we ignore any args to 'return' and just return
+         * a single undef in both scalar and list contexts
+         */
+	PUSHs(&PL_sv_undef);
+    else if (!io || !(fp = IoOFP(io))) {
 	if (io && IoIFP(io))
 	    report_wrongway_fh(gv, '<');
 	else
@@ -2304,10 +2313,22 @@ PP(pp_truncate)
 	        result = 0;
 #else
 	    {
-		const int tmpfd = PerlLIO_open(name, O_RDWR);
+                int mode = O_RDWR;
+                int tmpfd;
+
+#if defined(USE_64_BIT_RAWIO) && defined(O_LARGEFILE)
+                mode |= O_LARGEFILE;	/* Transparently largefiley. */
+#endif
+#ifdef O_BINARY
+                /* On open(), the Win32 CRT tries to seek around text
+                 * files using 32-bit offsets, which causes the open()
+                 * to fail on large files, so open in binary mode.
+                 */
+                mode |= O_BINARY;
+#endif
+                tmpfd = PerlLIO_open(name, mode);
 
 		if (tmpfd < 0) {
-                    SETERRNO(EBADF,RMS_IFI);
 		    result = 0;
 		} else {
 		    if (my_chsize(tmpfd, len) < 0)
@@ -3577,8 +3598,7 @@ PP(pp_chdir)
         else if (!(gv = MAYBE_DEREF_GV(sv)))
 		tmps = SvPV_nomg_const_nolen(sv);
     }
-
-    if( !gv && (!tmps || !*tmps) ) {
+    else {
 	HV * const table = GvHVn(PL_envgv);
 	SV **svp;
 
@@ -3589,8 +3609,6 @@ PP(pp_chdir)
 #endif
            )
         {
-            if( MAXARG == 1 )
-                deprecate("chdir('') or chdir(undef) as chdir()");
             tmps = SvPV_nolen_const(*svp);
         }
         else {

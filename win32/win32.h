@@ -60,9 +60,6 @@
 #  ifdef PERL_GLOBAL_STRUCT
 #    error PERL_GLOBAL_STRUCT cannot be defined with PERL_IMPLICIT_SYS
 #  endif
-#  define win32_get_privlib PerlEnv_lib_path
-#  define win32_get_sitelib PerlEnv_sitelib_path
-#  define win32_get_vendorlib PerlEnv_vendorlib_path
 #endif
 
 #ifdef __GNUC__
@@ -635,14 +632,6 @@ EXTERN_C _CRTIMP ioinfo* __pioinfo[];
 #undef  PERLIO_NOT_STDIO
 #endif
 #define PERLIO_NOT_STDIO 0
-
-#include "perlio.h"
-
-/*
- * This provides a layer of functions and macros to ensure extensions will
- * get to use the same RTL functions as the core.
- */
-#include "win32iop.h"
 
 #define EXEC_ARGV_CAST(x) ((const char *const *) x)
 

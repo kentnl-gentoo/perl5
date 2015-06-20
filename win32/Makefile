@@ -5,7 +5,7 @@
 #	Windows SDK 64-bit compiler and tools
 #
 # This is set up to build a perl.exe that runs off a shared library
-# (perl522.dll).  Also makes individual DLLs for the XS extensions.
+# (perl523.dll).  Also makes individual DLLs for the XS extensions.
 #
 
 ##
@@ -38,7 +38,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.22.0
+#INST_VER	= \5.23.0
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -185,7 +185,7 @@ CCTYPE		= MSVC60
 # set this to additionally provide a statically linked perl-static.exe.
 # Note that dynamic loading will not work with this perl, so you must
 # include required modules statically using the STATIC_EXT or ALL_STATIC
-# variables below. A static library perl522s.lib will also be created.
+# variables below. A static library perl523s.lib will also be created.
 # Ordinary perl.exe is not affected by this option.
 #
 #BUILD_STATIC	= define
@@ -441,7 +441,6 @@ INCLUDES	= -I$(COREDIR) -I.\include -I. -I..
 #PCHFLAGS	= -Fpc:\temp\vcmoduls.pch -YX
 DEFINES		= -DWIN32 -D_CONSOLE -DNO_STRICT
 LOCDEFS		= -DPERLDLL -DPERL_CORE
-SUBSYS		= console
 CXX_FLAG	= -TP -EHsc
 
 LIBC		= msvcrt.lib
@@ -553,6 +552,24 @@ LINK_FLAGS	= $(LINK_FLAGS) "/manifestdependency:type='Win32' name='Microsoft.Win
 RSC_FLAGS	= -DINCLUDE_MANIFEST
 !ENDIF
 
+# For XP support in >= 2013, subsystem is always in Config.pm LINK_FLAGS
+# else subsystem is only needed for EXE building, not XS DLL building
+# Console vs GUI makes no difference for DLLs, so use default for cleaner
+# building cmd lines
+!IF "$(CCTYPE)" == "MSVC120" || "$(CCTYPE)" == "MSVC120FREE" \
+    || "$(CCTYPE)" == "MSVC150" || "$(CCTYPE)" == "MSVC150FREE"
+!  IF "$(WIN64)" == "define"
+LINK_FLAGS	= $(LINK_FLAGS) -subsystem:console,"5.02"
+!  ELSE
+LINK_FLAGS	= $(LINK_FLAGS) -subsystem:console,"5.01"
+!  ENDIF
+PRIV_LINK_FLAGS	=
+
+!ELSE
+PRIV_LINK_FLAGS	= -subsystem:console
+!ENDIF
+
+BLINK_FLAGS	= $(PRIV_LINK_FLAGS) $(LINK_FLAGS)
 
 #################### do not edit below this line #######################
 ############# NO USER-SERVICEABLE PARTS BEYOND THIS POINT ##############
@@ -578,8 +595,8 @@ o = .obj
 	$(NOOP)
 
 $(o).dll:
-	$(LINK32) -dll -subsystem:windows -implib:$(*B).lib -def:$(*B).def \
-	    -out:$@ $(LINK_FLAGS) $(LIBFILES) $< $(LIBPERL)
+	$(LINK32) -dll -implib:$(*B).lib -def:$(*B).def \
+	    -out:$@ $(BLINK_FLAGS) $(LIBFILES) $< $(LIBPERL)
 	$(EMBED_DLL_MANI)
 
 .rc.res:
@@ -590,9 +607,9 @@ $(o).dll:
 
 # makedef.pl must be updated if this changes, and this should normally
 # only change when there is an incompatible revision of the public API.
-PERLIMPLIB	= ..\perl522.lib
-PERLSTATICLIB	= ..\perl522s.lib
-PERLDLL		= ..\perl522.dll
+PERLIMPLIB	= ..\perl523.lib
+PERLSTATICLIB	= ..\perl523s.lib
+PERLDLL		= ..\perl523.dll
 
 MINIPERL	= ..\miniperl.exe
 MINIDIR		= .\mini
@@ -867,7 +884,7 @@ static: $(PERLEXESTATIC)
 #------------------------------------------------------------
 
 $(GLOBEXE) : perlglob$(o)
-	$(LINK32) $(LINK_FLAGS) $(LIBFILES) -out:$@ -subsystem:$(SUBSYS) \
+	$(LINK32) $(BLINK_FLAGS) $(LIBFILES) -out:$@ \
 	    perlglob$(o) setargv$(o)
 	$(EMBED_EXE_MANI)
 
@@ -1003,8 +1020,8 @@ $(CONFIGPM) : $(MINIPERL) ..\config.sh config_h.PL
 $(MINIPERL) : ..\lib\buildcustomize.pl 
 
 ..\lib\buildcustomize.pl : $(MINIDIR) $(MINI_OBJ) ..\write_buildcustomize.pl
-	$(LINK32) -subsystem:console -out:$(MINIPERL) @<<
-	$(LINK_FLAGS) $(DELAYLOAD) $(LIBFILES) $(MINI_OBJ)
+	$(LINK32) -out:$(MINIPERL) @<<
+	$(BLINK_FLAGS) $(DELAYLOAD) $(LIBFILES) $(MINI_OBJ)
 <<
 	$(EMBED_EXE_MANI:..\lib\buildcustomize.pl=..\miniperl.exe)
 	$(MINIPERL) -I..\lib -f ..\write_buildcustomize.pl ..
@@ -1041,7 +1058,7 @@ perldll.def : $(MINIPERL) $(CONFIGPM) ..\embed.fnc ..\makedef.pl create_perllibs
 
 $(PERLDLL): perldll.def $(PERLDLL_OBJ) $(PERLDLL_RES) Extensions_static
 	$(LINK32) -dll -def:perldll.def -base:0x28000000 -out:$@ @Extensions_static @<<
-		$(LINK_FLAGS) $(DELAYLOAD) $(LIBFILES) $(PERLDLL_OBJ) $(PERLDLL_RES)
+		$(BLINK_FLAGS) $(DELAYLOAD) $(LIBFILES) $(PERLDLL_OBJ) $(PERLDLL_RES)
 <<
 	$(EMBED_DLL_MANI)
 	$(XCOPY) $(PERLIMPLIB) $(COREDIR)
@@ -1064,8 +1081,8 @@ $(BITCOUNT_H) : $(GENUUDMAP)
 $(GENUUDMAP_OBJ) : ..\mg_raw.h
 
 $(GENUUDMAP) : $(GENUUDMAP_OBJ)
-	$(LINK32) -subsystem:console -out:$@ @<<
-		$(LINK_FLAGS) $(LIBFILES) $(GENUUDMAP_OBJ)
+	$(LINK32) -out:$@ @<<
+		$(BLINK_FLAGS) $(LIBFILES) $(GENUUDMAP_OBJ)
 <<
 	$(EMBED_EXE_MANI)
 
@@ -1082,14 +1099,14 @@ perlmainst$(o) : perlmainst.c
 	$(CC) $(CFLAGS_O) $(OBJOUT_FLAG)$@ -c perlmainst.c
 
 $(PERLEXE): $(PERLDLL) $(CONFIGPM) $(PERLEXE_OBJ) $(PERLEXE_RES)
-	$(LINK32) -subsystem:console -out:$@ $(LINK_FLAGS) \
+	$(LINK32) -out:$@ $(BLINK_FLAGS) \
 	    $(PERLEXE_OBJ) $(PERLEXE_RES) $(PERLIMPLIB) $(LIBFILES) $(SETARGV_OBJ)
 	$(EMBED_EXE_MANI)
 	copy $(PERLEXE) $(WPERLEXE)
 	$(MINIPERL) -I..\lib bin\exetype.pl $(WPERLEXE) WINDOWS
 
 $(PERLEXESTATIC): $(PERLSTATICLIB) $(CONFIGPM) $(PERLEXEST_OBJ) $(PERLEXE_RES)
-	$(LINK32) -subsystem:console -out:$@ $(LINK_FLAGS) \
+	$(LINK32) -out:$@ $(BLINK_FLAGS) \
 	    $(PERLEXEST_OBJ) $(PERLEXE_RES) $(PERLSTATICLIB) $(LIBFILES) $(SETARGV_OBJ)
 	$(EMBED_EXE_MANI)
 
@@ -1176,7 +1193,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5220delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5230delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1272,7 +1289,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5220delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5230delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \

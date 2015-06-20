@@ -3661,6 +3661,9 @@ $ IF link_status .NE. good_link
 $ THEN
 $   longdblsize="0"
 $   longdblkind="0"
+$   longdblinfbytes="undef"
+$   longdblnanbytes="undef"
+$   longdblmantbits="undef"
 $   d_longdbl="undef"
 $   echo "You do not have long double."
 $ ELSE
@@ -3669,6 +3672,9 @@ $   echo4 "Checking to see how big your long doubles are..."
 $   GOSUB just_mcr_it
 $   longdblsize = tmp
 $   longdblkind = "1"
+$   longdblinfbytes="0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x7f"
+$   longdblnanbytes="0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xff"
+$   longdblmantbits="112"
 $   d_longdbl = "define"
 $   echo "Your long doubles are ''longdblsize' bytes long."
 $ ENDIF
@@ -5569,9 +5575,13 @@ $   i64size="undef"
 $   u64size="undef"
 $ ENDIF
 $!
+$ doublemantbits = "52"
 $ IF uselongdouble .OR. uselongdouble .EQS. "define"
 $ THEN
 $   nvtype="long double"
+$   nvmantbits = longdblmantbits
+$ ELSE
+$   nvmantbits = doublemantbits
 $ ENDIF
 $!
 $ tmp = "''ivtype'"
@@ -6472,6 +6482,9 @@ $ WC "dlext='" + dlext + "'"
 $ WC "dlobj='" + dlobj + "'"
 $ WC "dlsrc='dl_vms.xs'"
 $ WC "doublekind='3'"
+$ WC "doubleinfbytes='0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x7f'"
+$ WC "doublenanbytes='0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf8, 0x7f'"
+$ WC "doublemantbits='" + doublemantbits + "'"
 $ WC "doublesize='" + doublesize + "'"
 $ WC "drand01='" + drand01 + "'"
 $ WC "dtrace='" + "'"
@@ -6648,6 +6661,9 @@ $ WC "libswanted='" + "'"
 $ WC "libswanted_uselargefiles='" + "'"
 $ WC "longdblsize='" + longdblsize + "'"
 $ WC "longdblkind='" + longdblkind + "'"
+$ WC "longdblinfbytes='" + longdblinfbytes + "'"
+$ WC "longdblnanbytes='" + longdblnanbytes + "'"
+$ WC "longdblmantbits='" + longdblmantbits + "'"
 $ WC "longlongsize='" + longlongsize + "'"
 $ WC "longsize='" + longsize + "'"
 $ IF uselargefiles .OR. uselargefiles .EQS. "define"
@@ -6683,6 +6699,7 @@ $ WC "nvfformat='" + nvfformat + "'"
 $ WC "nvFUformat='" + nvFUformat + "'"
 $ WC "nvgformat='" + nvgformat + "'"
 $ WC "nvGUformat='" + nvGUformat + "'"
+$ WC "nvmantbits='" + nvmantbits + "'"
 $ WC "nvsize='" + nvsize + "'"
 $ WC "nvtype='" + nvtype + "'"
 $ WC "o_nonblock=' '"
@@ -7002,12 +7019,12 @@ $     WRITE CONFIG "Gnu_CC:[000000]gcclib.olb/library"
 $   ENDIF
 $   WRITE CONFIG "Sys$Share:VAXCRTL/Share"
 $   CLOSE CONFIG
-$   'ld' munchconfig.obj,munchconfig.opt/opt
+$   'ld'/EXE='exe_ext' munchconfig'obj_ext',munchconfig.opt/opt
 $   DELETE/NOLOG/NOCONFIRM munchconfig.opt;
 $ ELSE
-$   'ld' munchconfig.obj
+$   'ld'/EXE='exe_ext' munchconfig'obj_ext'
 $ ENDIF
-$ IF F$SEARCH("munchconfig.obj") .NES. "" THEN DELETE/NOLOG/NOCONFIRM munchconfig.obj;
+$ IF F$SEARCH("munchconfig''obj_ext'") .NES. "" THEN DELETE/NOLOG/NOCONFIRM munchconfig'obj_ext';
 $ IF F$SEARCH("munchconfig.c") .NES. "" THEN DELETE/NOLOG/NOCONFIRM munchconfig.c;
 $ IF ccname .EQS. "CXX"
 $ THEN
@@ -7097,7 +7114,7 @@ $ echo4 "Extracting config.h (with variable substitutions)"
 $!
 $! Now build the normal config.h
 $ DEFINE/USER_MODE sys$output [-]config.main
-$ mcr []munchconfig 'config_sh' [-]config_h.sh
+$ mcr []munchconfig'exe_ext' 'config_sh' [-]config_h.sh
 $ ! Concatenate them together
 $ copy [-]config.local,[-]config.main [-]config.h
 $! Clean up
@@ -7186,9 +7203,9 @@ $ close CONFIG
 $!
 $ echo4 "Extracting ''defmakefile' (with variable substitutions)"
 $ DEFINE/USER_MODE sys$output 'UUmakefile'
-$ mcr []munchconfig 'config_sh' 'Makefile_SH' -f extra_subs.txt
+$ mcr []munchconfig'exe_ext' 'config_sh' 'Makefile_SH' -f extra_subs.txt
 $! Clean up after ourselves
-$ DELETE/NOLOG/NOCONFIRM []munchconfig.exe;
+$ DELETE/NOLOG/NOCONFIRM []munchconfig'exe_ext';
 $ DELETE/NOLOG/NOCONFIRM []extra_subs.txt;
 $!
 $! Note that the /key qualifier to search, as in:
@@ -7203,6 +7220,7 @@ $!   NOTE: This file is extracted as part of the VMS configuration process.
 $!   Any changes made to it directly will be lost.  If you need to make any
 $!   changes, please edit the template in Configure.Com instead.
 $!   Use FORCE if you've just podified a README.* file on VMS.
+$ miniperl = f$search("sys$disk:[]miniperl.%xe;") ! could have alternate extension
 $ if f$search("extra.pods") .eqs. "" .or. P1 .eqs. "FORCE" then -
     search README.* "=head"/window=0/output=extra.pods
 $ open/read/error=extra_close EXTRA extra.pods
@@ -7225,7 +7243,7 @@ $       pod_file_rdt = f$cvtime(f$file_attributes(pod_file,"RDT"))
 $       if file_rdt .GTS. pod_file_rdt then do_copy := true
 $     endif
 $     ! wacky method to preserve case on ODS-5 even when parse style is traditional
-$     if do_copy then mcr sys$disk:[]miniperl.exe -e "exit 0+$^E unless File::Copy::rmscopy(q{''file'}, q{''pod_file'});"
+$     if do_copy then mcr 'miniperl' -e "exit 0+$^E unless File::Copy::rmscopy(q{''file'}, q{''pod_file'});"
 $   endif
 $ endif
 $ goto extra_loop

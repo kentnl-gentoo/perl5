@@ -3,6 +3,7 @@
 use strict;
 
 use POSIX ':math_h_c99';
+use POSIX ':nan_payload';
 use Test::More;
 
 use Config;
@@ -69,13 +70,11 @@ sub near {
 }
 
 SKIP: {
-    my $C99_SKIP = 59;
-
     unless ($Config{d_acosh}) {
-        skip "no acosh, suspecting no C99 math", $C99_SKIP;
+        skip "no acosh, suspecting no C99 math";
     }
     if ($^O =~ /Win32|VMS/) {
-        skip "running in $^O, C99 math support uneven", $C99_SKIP;
+        skip "running in $^O, C99 math support uneven";
     }
     near(M_SQRT2, 1.4142135623731, "M_SQRT2", 1e-9);
     near(M_E, 2.71828182845905, "M_E", 1e-9);
@@ -132,13 +131,96 @@ SKIP: {
     ok(isgreater(2, 1), "isgreater 2 1");
     ok(islessequal(1, 1), "islessequal 1 1");
     ok(isunordered(1, NaN), "isunordered 1 NaN");
+
+    near(erf(0.5), 0.520499877813047, "erf 0.5", 1.5e-7);
     near(erf(1), 0.842700792949715, "erf 1", 1.5e-7);
+    near(erf(9), 1, "erf 9", 1.5e-7);
+    near(erfc(0.5), 0.479500122186953, "erfc 0.5", 1.5e-7);
     near(erfc(1), 0.157299207050285, "erfc 1", 1.5e-7);
+    near(erfc(9), 0, "erfc 9", 1.5e-7);
+
+    # tgamma(n) = (n - 1)!
+    # lgamma(n) = log(tgamma(n))
+    near(tgamma(5), 24, "tgamma 5", 1.5e-7);
+    near(tgamma(5.5), 52.3427777845535, "tgamma 5.5", 1.5e-7);
     near(tgamma(9), 40320, "tgamma 9", 1.5e-7);
+    near(lgamma(5), 3.17805383034795, "lgamma 4", 1.5e-7);
+    near(lgamma(5.5), 3.95781396761872, "lgamma 5.5", 1.5e-7);
     near(lgamma(9), 10.6046029027452, "lgamma 9", 1.5e-7);
 
-    # If adding more tests here, update also the $C99_SKIP
-    # at the beginning of this SKIP block.
+    # These don't work on old mips/hppa platforms because == Inf (or == -Inf).
+    # ok(isnan(setpayload(0)), "setpayload zero");
+    # is(getpayload(setpayload(0)), 0, "setpayload + getpayload (zero)");
+    #
+    # These don't work on most platforms because == Inf (or == -Inf).
+    # ok(isnan(setpayloadsig(0)), "setpayload zero");
+    # is(getpayload(setpayloadsig(0)), 0, "setpayload + getpayload (zero)");
+
+    # Verify that the payload set be setpayload()
+    # (1) still is a nan
+    # (2) but the payload can be retrieved
+    # (3) but is not signaling
+    my $x = 0;
+    setpayload($x, 0x12345);
+    ok(isnan($x), "setpayload + isnan");
+    is(getpayload($x), 0x12345, "setpayload + getpayload");
+    ok(!issignaling($x), "setpayload + issignaling");
+
+    # Verify that the signaling payload set be setpayloadsig()
+    # (1) still is a nan
+    # (2) but the payload can be retrieved
+    # (3) and is signaling
+    setpayloadsig($x, 0x12345);
+    ok(isnan($x), "setpayloadsig + isnan");
+    is(getpayload($x), 0x12345, "setpayload + getpayload");
+    ok(issignaling($x), "setpayloadsig + issignaling");
+
+    # Try a payload more than one byte.
+    is(getpayload(nan(0x12345)), 0x12345, "nan + getpayload");
+
+    # Try payloads of 2^k, most importantly at and beyond 2^32.  These
+    # tests will fail if NV is just 32-bit float, but that Should Not
+    # Happen (tm).
+    is(getpayload(nan(2**31)), 2**31, "nan + getpayload 2**31");
+    is(getpayload(nan(2**32)), 2**32, "nan + getpayload 2**32");
+    is(getpayload(nan(2**33)), 2**33, "nan + getpayload 2**33");
+
+    # Payloads just lower than 2^k.
+    is(getpayload(nan(2**31-1)), 2**31-1, "nan + getpayload 2**31-1");
+    is(getpayload(nan(2**32-1)), 2**32-1, "nan + getpayload 2**32-1");
+
+    # Payloads not divisible by two (and larger than 2**32).
+
+    SKIP: {
+        # solaris gets 10460353202 from getpayload() when it should
+        # get 10460353203 (the 3**21). Things go wrong already in
+        # the nan() payload setting: [0x2, 0x6f7c52b4] (ivsize=4)
+        # instead [0x2, 0x6f7c52b3].  Then at getpayload() things
+        # go wrong again, now in other direction: with the (wrong)
+        # [0x2, 0x6f7c52b4] encoded in the nan we should decode into
+        # 10460353204, but we get 10460353202.  It doesn't seem to
+        # help even if we use 'unsigned long long' instead of UV/U32
+        # in the POSIX.xs:S_setpayload/S_getpayload.
+        #
+        # casting bug?  fmod() bug?  Though also broken with
+        # -Duselongdouble + fmodl(), so maybe Solaris cc bug
+        # in general?
+        #
+        # Ironically, the large prime seems to work even in Solaris,
+        # probably just by blind luck.
+        skip($^O, 1) if $^O eq 'solaris';
+        is(getpayload(nan(3**21)), 3**21, "nan + getpayload 3**21");
+    }
+    is(getpayload(nan(4294967311)), 4294967311, "nan + getpayload prime");
+
+    # Truncates towards zero.
+    is(getpayload(nan(1234.567)), 1234, "nan (trunc) + getpayload");
+
+    # Not signaling.
+    ok(!issignaling(0), "issignaling zero");
+    ok(!issignaling(+Inf), "issignaling +Inf");
+    ok(!issignaling(-Inf), "issignaling -Inf");
+    ok(!issignaling(NaN), "issignaling NaN");
 } # SKIP
 
 done_testing();

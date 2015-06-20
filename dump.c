@@ -1415,7 +1415,6 @@ const struct flag_to_name regexp_core_intflags_names[] = {
     {PREGf_CUTGROUP_SEEN,   "CUTGROUP_SEEN,"},
     {PREGf_USE_RE_EVAL,     "USE_RE_EVAL,"},
     {PREGf_NOSCAN,          "NOSCAN,"},
-    {PREGf_CANY_SEEN,       "CANY_SEEN,"},
     {PREGf_GPOS_SEEN,       "GPOS_SEEN,"},
     {PREGf_GPOS_FLOAT,      "GPOS_FLOAT,"},
     {PREGf_ANCH_MBOL,       "ANCH_MBOL,"},
@@ -2318,7 +2317,7 @@ S_append_gv_name(pTHX_ GV *gv, SV *out)
     }
     sv = newSV(0);
     gv_fullname4(sv, gv, NULL, FALSE);
-    Perl_sv_catpvf(aTHX_ out, "%c%-p", '$', sv);
+    Perl_sv_catpvf(aTHX_ out, "$%"SVf, SVfARG(sv));
     SvREFCNT_dec_NN(sv);
 }
 
@@ -2525,8 +2524,8 @@ Perl_debop(pTHX_ const OP *o)
         break;
 
     case OP_MULTIDEREF:
-        PerlIO_printf(Perl_debug_log, "(%-p)",
-            multideref_stringify(o, deb_curcv(cxstack_ix)));
+        PerlIO_printf(Perl_debug_log, "(%"SVf")",
+            SVfARG(multideref_stringify(o, deb_curcv(cxstack_ix))));
         break;
 
     default:

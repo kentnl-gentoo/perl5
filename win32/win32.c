@@ -89,12 +89,6 @@ END_EXTERN_C
 #define EXECF_SPAWN_NOWAIT 3
 
 #if defined(PERL_IMPLICIT_SYS)
-#  undef win32_get_privlib
-#  define win32_get_privlib g_win32_get_privlib
-#  undef win32_get_sitelib
-#  define win32_get_sitelib g_win32_get_sitelib
-#  undef win32_get_vendorlib
-#  define win32_get_vendorlib g_win32_get_vendorlib
 #  undef getlogin
 #  define getlogin g_getlogin
 #endif
@@ -3372,7 +3366,7 @@ win32_rmdir(const char *dir)
 DllExport int
 win32_chdir(const char *dir)
 {
-    if (!dir) {
+    if (!dir || !*dir) {
 	errno = ENOENT;
 	return -1;
     }

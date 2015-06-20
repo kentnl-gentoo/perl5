@@ -915,8 +915,8 @@
  *	This symbol contains the ~name expanded version of ARCHLIB, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-/*#define ARCHLIB "/usr/local/lib/perl5/5.22/unknown"		/ **/
-/*#define ARCHLIB_EXP "/usr/local/lib/perl5/5.22/unknown"		/ **/
+/*#define ARCHLIB "/usr/local/lib/perl5/5.23/unknown"		/ **/
+/*#define ARCHLIB_EXP "/usr/local/lib/perl5/5.23/unknown"		/ **/
 
 /* ARCHNAME:
  *	This symbol holds a string representing the architecture name.
@@ -3075,8 +3075,8 @@
  *	This symbol contains the ~name expanded version of PRIVLIB, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-#define PRIVLIB "/usr/local/lib/perl5/5.22"		/**/
-#define PRIVLIB_EXP "/usr/local/lib/perl5/5.22"		/**/
+#define PRIVLIB "/usr/local/lib/perl5/5.23"		/**/
+#define PRIVLIB_EXP "/usr/local/lib/perl5/5.23"		/**/
 
 /* CAN_PROTOTYPE:
  *	If defined, this macro indicates that the C compiler can handle
@@ -3219,8 +3219,8 @@
  *	This symbol contains the ~name expanded version of SITEARCH, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-/*#define SITEARCH "/usr/local/lib/perl5/5.22/unknown"		/ **/
-/*#define SITEARCH_EXP "/usr/local/lib/perl5/5.22/unknown"		/ **/
+/*#define SITEARCH "/usr/local/lib/perl5/5.23/unknown"		/ **/
+/*#define SITEARCH_EXP "/usr/local/lib/perl5/5.23/unknown"		/ **/
 
 /* SITELIB:
  *	This symbol contains the name of the private library for this package.
@@ -3242,8 +3242,8 @@
  *	removed.  The elements in inc_version_list (inc_version_list.U) can
  *	be tacked onto this variable to generate a list of directories to search.
  */
-#define SITELIB "/usr/local/lib/perl5/5.22"		/**/
-#define SITELIB_EXP "/usr/local/lib/perl5/5.22"		/**/
+#define SITELIB "/usr/local/lib/perl5/5.23"		/**/
+#define SITELIB_EXP "/usr/local/lib/perl5/5.23"		/**/
 #define SITELIB_STEM "/usr/local/lib/perl5"		/**/
 
 /* Size_t_size:
@@ -4802,6 +4802,53 @@
 /*#define PERL_PRIeldbl	"lle"	/ **/
 /*#define PERL_SCNfldbl	"llf"	/ **/
 
+/* DOUBLEINFBYTES:
+ *	This symbol, if defined, is a comma-separated list of
+ *	hexadecimal bytes for the double precision infinity.
+ */
+/* DOUBLENANBYTES:
+ *	This symbol, if defined, is a comma-separated list of
+ *	hexadecimal bytes (0xHH) for the double precision not-a-number.
+ */
+/* LONGDBLINFBYTES:
+ *	This symbol, if defined, is a comma-separated list of
+ *	hexadecimal bytes for the long double precision infinity.
+ */
+/* LONGDBLNANBYTES:
+ *	This symbol, if defined, is a comma-separated list of
+ *	hexadecimal bytes (0xHH) for the long double precision not-a-number.
+ */
+#define DOUBLEINFBYTES 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x7f		/**/
+#define DOUBLENANBYTES 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xf8, 0x7f		/**/
+#define LONGDBLINFBYTES 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00		/**/
+#define LONGDBLNANBYTES 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0xff, 0x7f, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00		/**/
+
+/* DOUBLEMANTBITS:
+ *	This symbol, if defined, tells how many mantissa bits
+ *	there are in double precision floating point format.
+ *      Note that this is usually DBL_MANT_DIG minus one, since
+ *      with the standard IEEE 754 formats DBL_MANT_DIG includes
+ *	the implicit bit, which doesn't really exist.
+ */
+#define DOUBLEMANTBITS 52
+
+/* LONGDBLMANTBITS:
+ *	This symbol, if defined, tells how many mantissa bits
+ *	there are in long double precision floating point format.
+ *      Note that this can be LDBL_MANT_DIG minus one,
+ *      since LDBL_MANT_DIG can include the IEEE 754 implicit bit.
+ *      The common x86-style 80-bit long double does not have
+ *	an implicit bit.
+ */
+#define LONGDBLMANTBITS 64
+
+/* NVMANTBITS:
+ *	This symbol, if defined, tells how many mantissa bits
+ *	(not including implicit bit) there are in a Perl NV.
+ *	This depends on which floating point type was chosen.
+ */
+#define NVMANTBITS 52		/**/
+
 /* NEED_VA_COPY:
  *	This symbol, if defined, indicates that the system stores
  *	the variable argument list datatype, va_list, in a format
@@ -5167,6 +5214,6 @@
 #endif
 
 /* Generated from:
- * 496e563499c7b715275d61ae663d25dd20d963c75f9d3ee7850dae949df14136 config_h.SH
- * 45fb46f69ab3d7fd8ea14fc29d490d044cbdd81e8a0111bc0b37aff4321d6182 uconfig.sh
+ * c784534c0c9ca4f445c518a18404c8fd0b3be9aac3de1ee4a94453807935584c config_h.SH
+ * 0ce9d24f6ed83c533882929bc7c0138fe345656c4b7070aad99bb103dbf3790a uconfig.sh
  * ex: set ro: */
