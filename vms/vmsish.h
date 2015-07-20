@@ -42,11 +42,6 @@
 #define _tolower(c) (((c) < 'A' || (c) > 'Z') ? (c) : (c) | 040)
 
 /* Assorted things to look like Unix */
-#ifdef __GNUC__
-#ifndef _IOLBF /* gcc's stdio.h doesn't define this */
-#define _IOLBF 1
-#endif
-#endif
 #include <processes.h> /* for vfork() */
 #include <unixio.h>
 #include <unixlib.h>
@@ -64,7 +59,6 @@
 /* Set the maximum filespec size here as it is larger for EFS file
  * specifications.
  */
-#ifndef __VAX
 #ifndef VMS_MAXRSS
 #ifdef NAML$C_MAXRSS
 #define VMS_MAXRSS (NAML$C_MAXRSS+1)
@@ -73,7 +67,6 @@
 #endif /* VMS_LONGNAME_SUPPORT */
 #endif /* NAML$C_MAXRSS */
 #endif /* VMS_MAXRSS */
-#endif
 
 #ifndef VMS_MAXRSS
 #define VMS_MAXRSS (NAM$C_MAXRSS + 1)
@@ -157,7 +150,6 @@
 #define my_gconvert(a,b,c,d)		Perl_my_gconvert(a,b,c,d)
 #define my_getenv(a,b)			Perl_my_getenv(aTHX_ a,b)
 #define my_getenv_len(a,b,c)		Perl_my_getenv_len(aTHX_ a,b,c)
-#define my_getlogin			Perl_my_getlogin
 #define my_getpwent()			Perl_my_getpwent(aTHX)
 #define my_getpwnam(a)			Perl_my_getpwnam(aTHX_ a)
 #define my_getpwuid(a)			Perl_my_getpwuid(aTHX_ a)
@@ -365,11 +357,7 @@ struct interp_intern {
  *	getgrgid() routines are available to get group entries.
  *	The getgrent() has a separate definition, HAS_GETGRENT.
  */
-#if __CRTL_VER >= 70302000
 #define HAS_GROUP		/**/
-#else
-#undef HAS_GROUP		/**/
-#endif
 
 /* HAS_PASSWD
  *	This symbol, if defined, indicates that the getpwnam() and
@@ -503,9 +491,6 @@ struct utimbuf {
 #define ENVgetenv(v) my_getenv(v,FALSE)
 #define ENVgetenv_len(v,l) my_getenv_len(v,l,FALSE)
 
-
-/* Thin jacket around cuserid() to match Unix' calling sequence */
-#define getlogin my_getlogin
 
 /* Ditto for sys$hash_password() . . . */
 #define crypt(a,b)  Perl_my_crypt(aTHX_ a,b)
@@ -759,7 +744,6 @@ int	Perl_my_flush (pTHX_ FILE *);
 struct passwd *	Perl_my_getpwnam (pTHX_ const char *name);
 struct passwd *	Perl_my_getpwuid (pTHX_ Uid_t uid);
 void	Perl_my_endpwent (pTHX);
-char *	my_getlogin (void);
 
 #ifdef __cplusplus
 }

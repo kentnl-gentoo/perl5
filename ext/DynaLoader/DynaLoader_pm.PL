@@ -85,7 +85,7 @@ package DynaLoader;
 # Tim.Bunce@ig.co.uk, August 1994
 
 BEGIN {
-    $VERSION = '1.32';
+    $VERSION = '1.33';
 }
 
 use Config;
@@ -899,7 +899,7 @@ Syntax:
 
 Create a new Perl external subroutine named $perl_name using $symref as
 a pointer to the function which implements the routine.  This is simply
-a direct call to newXSUB().  Returns a reference to the installed
+a direct call to newXS()/newXS_flags().  Returns a reference to the installed
 function.
 
 The $filename parameter is used by Perl to identify the source file for

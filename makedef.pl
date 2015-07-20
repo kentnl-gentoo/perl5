@@ -285,8 +285,7 @@ else {
 			 );
 }
 
-unless ($define{'PERL_OLD_COPY_ON_WRITE'}
-     || $define{'PERL_NEW_COPY_ON_WRITE'}) {
+unless ($define{'PERL_COPY_ON_WRITE'}) {
     ++$skip{Perl_sv_setsv_cow};
 }
 
@@ -955,7 +954,6 @@ elsif ($ARGS{PLATFORM} eq 'vms') {
 		      Perl_my_gconvert
 		      Perl_my_getenv
 		      Perl_my_getenv_len
-		      Perl_my_getlogin
 		      Perl_my_getpwnam
 		      Perl_my_getpwuid
 		      Perl_my_gmtime

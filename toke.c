@@ -4863,6 +4863,8 @@ Perl_yylex(pTHX)
 		d = instr(s,"perl -");
 		if (!d) {
 		    d = instr(s,"perl");
+                    if (d && d[4] == '6')
+                        d = NULL;
 #if defined(DOSISH)
 		    /* avoid getting into infinite loops when shebang
 		     * line contains "Perl" rather than "perl" */
@@ -5131,17 +5133,12 @@ Perl_yylex(pTHX)
 	    else if (*s == '>') {
 		s++;
 		s = skipspace(s);
-		if (FEATURE_POSTDEREF_IS_ENABLED && (
-		    ((*s == '$' || *s == '&') && s[1] == '*')
+		if (((*s == '$' || *s == '&') && s[1] == '*')
 		  ||(*s == '$' && s[1] == '#' && s[2] == '*')
 		  ||((*s == '@' || *s == '%') && strchr("*[{", s[1]))
 		  ||(*s == '*' && (s[1] == '*' || s[1] == '{'))
-		 ))
+		 )
 		{
-		    Perl_ck_warner_d(aTHX_
-			packWARN(WARN_EXPERIMENTAL__POSTDEREF),
-			"Postfix dereference is experimental"
-		    );
 		    PL_expect = XPOSTDEREF;
 		    TOKEN(ARROW);
 		}
@@ -8612,6 +8609,34 @@ S_scan_word(pTHX_ char *s, char *dest, STRLEN destlen, int allow_package, STRLEN
     return s;
 }
 
+/* Is the byte 'd' a legal single character identifier name?  'u' is true
+ * iff Unicode semantics are to be used.  The legal ones are any of:
+ *  a) all ASCII characters except:
+ *          1) control and space-type ones, like NUL, SOH, \t, and SPACE;
+ *          2) '{'
+ *     The final case currently doesn't get this far in the program, so we
+ *     don't test for it.  If that were to change, it would be ok to allow it.
+ *  c) When not under Unicode rules, any upper Latin1 character
+ *  d) Otherwise, when unicode rules are used, all XIDS characters.
+ *
+ *      Because all ASCII characters have the same representation whether
+ *      encoded in UTF-8 or not, we can use the foo_A macros below and '\0' and
+ *      '{' without knowing if is UTF-8 or not.
+ * EBCDIC already uses the rules that ASCII platforms will use after the
+ * deprecation cycle; see comment below about the deprecation. */
+#ifdef EBCDIC
+#   define VALID_LEN_ONE_IDENT(s, is_utf8)                                    \
+    (isGRAPH_A(*(s)) || ((is_utf8)                                            \
+                         ? isIDFIRST_utf8((U8*) (s))                          \
+                         : (isGRAPH_L1(*s)                                    \
+                            && LIKELY((U8) *(s) != LATIN1_TO_NATIVE(0xAD)))))
+#else
+#   define VALID_LEN_ONE_IDENT(s, is_utf8)                                    \
+    (isGRAPH_A(*(s)) || ((is_utf8)                                            \
+                         ? isIDFIRST_utf8((U8*) (s))                          \
+                         : ! isASCII_utf8((U8*) (s))))
+#endif
+
 STATIC char *
 S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
 {
@@ -8634,7 +8659,7 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
 	    *d++ = *s++;
 	}
     }
-    else {
+    else {  /* See if it is a "normal" identifier */
         parse_ident(&s, &d, e, 1, is_utf8);
     }
     *d = '\0';
@@ -8646,6 +8671,9 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
 	    PL_lex_state = LEX_INTERPENDMAYBE;
 	return s;
     }
+
+    /* Here, it is not a run-of-the-mill identifier name */
+
     if (*s == '$' && s[1] &&
       (isIDFIRST_lazy_if(s+1,is_utf8)
          || isDIGIT_A((U8)s[1])
@@ -8667,36 +8695,6 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
             s = skipspace(s);
         }
     }
-
-/* Is the byte 'd' a legal single character identifier name?  'u' is true
- * iff Unicode semantics are to be used.  The legal ones are any of:
- *  a) all ASCII characters except:
- *          1) space-type ones, like \t and SPACE;
-            2) NUL;
- *          3) '{'
- *     The final case currently doesn't get this far in the program, so we
- *     don't test for it.  If that were to change, it would be ok to allow it.
- *  c) When not under Unicode rules, any upper Latin1 character
- *  d) Otherwise, when unicode rules are used, all XIDS characters.
- *
- *      Because all ASCII characters have the same representation whether
- *      encoded in UTF-8 or not, we can use the foo_A macros below and '\0' and
- *      '{' without knowing if is UTF-8 or not.
- * EBCDIC already uses the rules that ASCII platforms will use after the
- * deprecation cycle; see comment below about the deprecation. */
-#ifdef EBCDIC
-#   define VALID_LEN_ONE_IDENT(s, is_utf8)                                    \
-    (isGRAPH_A(*(s)) || ((is_utf8)                                            \
-                         ? isIDFIRST_utf8((U8*) (s))                          \
-                         : (isGRAPH_L1(*s)                                    \
-                            && LIKELY((U8) *(s) != LATIN1_TO_NATIVE(0xAD)))))
-#else
-#   define VALID_LEN_ONE_IDENT(s, is_utf8) (! isSPACE_A(*(s))                 \
-                                            && LIKELY(*(s) != '\0')           \
-                                            && (! is_utf8                     \
-                                                || isASCII_utf8((U8*) (s))    \
-                                                || isIDFIRST_utf8((U8*) (s))))
-#endif
     if ((s <= PL_bufend - (is_utf8)
                           ? UTF8SKIP(s)
                           : 1)
@@ -8711,13 +8709,7 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
             : (! isGRAPH_L1( (U8) *s)
                || UNLIKELY((U8) *(s) == LATIN1_TO_NATIVE(0xAD))))
         {
-            /* Split messages for back compat */
-            if (isCNTRL_A( (U8) *s)) {
-                deprecate("literal control characters in variable names");
-            }
-            else {
-                deprecate("literal non-graphic characters in variable names");
-            }
+            deprecate("literal non-graphic characters in variable names");
         }
         
         if (is_utf8) {
@@ -8748,8 +8740,8 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
             /* if it starts as a valid identifier, assume that it is one.
                (the later check for } being at the expected point will trap
                cases where this doesn't pan out.)  */
-        d += is_utf8 ? UTF8SKIP(d) : 1;
-        parse_ident(&s, &d, e, 1, is_utf8);
+            d += is_utf8 ? UTF8SKIP(d) : 1;
+            parse_ident(&s, &d, e, 1, is_utf8);
 	    *d = '\0';
             tmp_copline = CopLINE(PL_curcop);
             if (s < PL_bufend && isSPACE(*s)) {

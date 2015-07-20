@@ -2290,13 +2290,18 @@ PP(pp_truncate)
                         SETERRNO(EBADF,RMS_IFI);
                         result = 0;
                     } else {
-                        PerlIO_flush(fp);
-#ifdef HAS_TRUNCATE
-                        if (ftruncate(fd, len) < 0)
-#else
-                        if (my_chsize(fd, len) < 0)
-#endif
+                        if (len < 0) {
+                            SETERRNO(EINVAL, LIB_INVARG);
                             result = 0;
+                        } else {
+                           PerlIO_flush(fp);
+#ifdef HAS_TRUNCATE
+                           if (ftruncate(fd, len) < 0)
+#else
+                           if (my_chsize(fd, len) < 0)
+#endif
+                               result = 0;
+                        }
                     }
 		}
 	    }
@@ -3594,6 +3599,16 @@ PP(pp_chdir)
 	SV * const sv = POPs;
 	if (PL_op->op_flags & OPf_SPECIAL) {
 	    gv = gv_fetchsv(sv, 0, SVt_PVIO);
+            if (!gv) {
+                if (ckWARN(WARN_UNOPENED)) {
+                    Perl_warner(aTHX_ packWARN(WARN_UNOPENED),
+                                "chdir() on unopened filehandle %" SVf, sv);
+                }
+                SETERRNO(EBADF,RMS_IFI);
+                PUSHi(0);
+                TAINT_PROPER("chdir");
+                RETURN;
+            }
 	}
         else if (!(gv = MAYBE_DEREF_GV(sv)))
 		tmps = SvPV_nomg_const_nolen(sv);
@@ -3613,6 +3628,7 @@ PP(pp_chdir)
         }
         else {
             PUSHi(0);
+            SETERRNO(EINVAL, LIB_INVARG);
             TAINT_PROPER("chdir");
             RETURN;
         }
@@ -3904,7 +3920,7 @@ PP(pp_mkdir)
     STRLEN len;
     const char *tmps;
     bool copy = FALSE;
-    const int mode = (MAXARG > 1 && (TOPs||((void)POPs,0))) ? POPi : 0777;
+    const unsigned int mode = (MAXARG > 1 && (TOPs||((void)POPs,0))) ? POPu : 0777;
 
     TRIMSLASHES(tmps,len,copy);
 
@@ -4708,13 +4724,30 @@ PP(pp_alarm)
 {
 #ifdef HAS_ALARM
     dSP; dTARGET;
-    int anum;
-    anum = POPi;
-    anum = alarm((unsigned int)anum);
-    if (anum < 0)
-	RETPUSHUNDEF;
-    PUSHi(anum);
-    RETURN;
+    /* alarm() takes an unsigned int number of seconds, and return the
+     * unsigned int number of seconds remaining in the previous alarm
+     * (alarms don't stack).  Therefore negative return values are not
+     * possible. */
+    int anum = POPi;
+    if (anum < 0) {
+        /* Note that while the C library function alarm() as such has
+         * no errors defined (or in other words, properly behaving client
+         * code shouldn't expect any), alarm() being obsoleted by
+         * setitimer() and often being implemented in terms of
+         * setitimer(), can fail. */
+        /* diag_listed_as: %s() with negative argument */
+        Perl_ck_warner_d(aTHX_ packWARN(WARN_MISC),
+                         "alarm() with negative argument");
+        SETERRNO(EINVAL, LIB_INVARG);
+        RETPUSHUNDEF;
+    }
+    else {
+        unsigned int retval = alarm(anum);
+        if ((int)retval < 0) /* Strictly speaking "cannot happen". */
+            RETPUSHUNDEF;
+        PUSHu(retval);
+        RETURN;
+    }
 #else
     DIE(aTHX_ PL_no_func, "alarm");
 #endif
@@ -4732,7 +4765,16 @@ PP(pp_sleep)
 	PerlProc_pause();
     else {
 	duration = POPi;
-	PerlProc_sleep((unsigned int)duration);
+        if (duration < 0) {
+          /* diag_listed_as: %s() with negative argument */
+          Perl_ck_warner_d(aTHX_ packWARN(WARN_MISC),
+                           "sleep() with negative argument");
+          SETERRNO(EINVAL, LIB_INVARG);
+          XPUSHi(0);
+          RETURN;
+        } else {
+          PerlProc_sleep((unsigned int)duration);
+        }
     }
     (void)time(&when);
     XPUSHi(when - lasttime);
@@ -5480,7 +5522,13 @@ PP(pp_ggrent)
 	grent = (const struct group *)getgrnam(name);
     }
     else if (which == OP_GGRGID) {
+#if Gid_t_sign == 1
+	const Gid_t gid = POPu;
+#elif Gid_t_sign == -1
 	const Gid_t gid = POPi;
+#else
+#  error "Unexpected Gid_t_sign"
+#endif
 	grent = (const struct group *)getgrgid(gid);
     }
     else

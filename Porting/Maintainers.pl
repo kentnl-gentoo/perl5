@@ -22,7 +22,7 @@ use File::Glob qw(:case);
     COPYING Copying cpanfile CREDITS dist.ini GOALS HISTORY INSTALL INSTALL.SKIP
     LICENCE LICENSE Makefile.PL MANIFEST MANIFEST.SKIP META.json META.yml
     MYMETA.json MYMETA.yml NEW NEWS NOTES perlcritic.rc ppport.h README
-    README.PATCHING SIGNATURE THANKS TODO Todo VERSION WHATSNEW
+    README.md README.PATCHING SIGNATURE THANKS TODO Todo VERSION WHATSNEW
 );
 
 # Each entry in the  %Modules hash roughly represents a distribution,
@@ -133,7 +133,7 @@ use File::Glob qw(:case);
     },
 
     'autodie' => {
-        'DISTRIBUTION' => 'PJF/autodie-2.27.tar.gz',
+        'DISTRIBUTION' => 'PJF/autodie-2.29.tar.gz',
         'FILES'        => q[cpan/autodie],
         'EXCLUDED'     => [
             qr{benchmarks},
@@ -143,7 +143,6 @@ use File::Glob qw(:case);
             # building the core.  Hence, they can
             # never run, and should not be merged.
             qw( t/author-critic.t
-                t/boilerplate.t
                 t/critic.t
                 t/fork.t
                 t/kwalitee.t
@@ -230,7 +229,7 @@ use File::Glob qw(:case);
     },
 
     'constant' => {
-        'DISTRIBUTION' => 'SAPER/constant-1.27.tar.gz',
+        'DISTRIBUTION' => 'RJBS/constant-1.33.tar.gz',
         'FILES'        => q[dist/constant],
         'EXCLUDED'     => [
             qw( t/00-load.t
@@ -278,6 +277,8 @@ use File::Glob qw(:case);
                 t/yaml_code.yml
                 ),
         ],
+        # See commit 3198fda65dbcd975c56916e4b98f515fab7f02e5
+        'CUSTOMIZED'   => [ qw[ lib/CPAN.pm ] ],
     },
 
     # Note: When updating CPAN-Meta the META.* files will need to be regenerated
@@ -286,9 +287,11 @@ use File::Glob qw(:case);
         'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.150005.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta],
         'EXCLUDED'     => [
-            qw[t/00-report-prereqs.t],
-            qw[t/00-report-prereqs.dd],
-            qr{t/README-data.txt},
+            qw[t/00-report-prereqs.t
+               t/00-report-prereqs.dd
+               t/data-test/x_deprecated-META.json
+               t/data-valid/x_deprecated-META.yml
+               t/README-data.txt],
             qr{^xt},
             qr{^history},
         ],
@@ -339,7 +342,6 @@ use File::Glob qw(:case);
         'FILES'        => q[cpan/Devel-PPPort],
         'EXCLUDED'     => [
             'PPPort.pm',    # we use PPPort_pm.PL instead
-            'README.md',
         ]
     },
 
@@ -379,7 +381,7 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.73.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.75.tar.gz',
         'FILES'        => q[cpan/Encode],
     },
 
@@ -530,17 +532,13 @@ use File::Glob qw(:case);
     },
 
     'File::Path' => {
-        'DISTRIBUTION' => 'DLAND/File-Path-2.09.tar.gz',
+        'DISTRIBUTION' => 'RICHE/File-Path-2.11.tar.gz',
         'FILES'        => q[cpan/File-Path],
         'EXCLUDED'     => [
             qw( eg/setup-extra-tests
-                t/pod.t
+                t/Path-Class.t
                 )
         ],
-        'MAP' => {
-            ''   => 'cpan/File-Path/lib/File/',
-            't/' => 'cpan/File-Path/t/',
-        },
     },
 
     'File::Temp' => {
@@ -600,7 +598,7 @@ use File::Glob qw(:case);
     },
 
     'Getopt::Long' => {
-        'DISTRIBUTION' => 'JV/Getopt-Long-2.46.tar.gz',
+        'DISTRIBUTION' => 'JV/Getopt-Long-2.47.tar.gz',
         'FILES'        => q[cpan/Getopt-Long],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -702,7 +700,7 @@ use File::Glob qw(:case);
     },
 
     'libnet' => {
-        'DISTRIBUTION' => 'SHAY/libnet-3.06.tar.gz',
+        'DISTRIBUTION' => 'SHAY/libnet-3.07.tar.gz',
         'FILES'        => q[cpan/libnet],
         'EXCLUDED'     => [
             qw( Configure
@@ -821,7 +819,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150520.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150620.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -844,7 +842,6 @@ use File::Glob qw(:case);
         'DISTRIBUTION' => 'ETHER/Module-Metadata-1.000027.tar.gz',
         'FILES'        => q[cpan/Module-Metadata],
         'EXCLUDED'     => [
-            qw(README.md),
             qw(t/00-report-prereqs.t),
             qw(t/00-report-prereqs.dd),
             qr{^xt},
@@ -854,9 +851,6 @@ use File::Glob qw(:case);
     'Net::Ping' => {
         'DISTRIBUTION' => 'SMPETERS/Net-Ping-2.41.tar.gz',
         'FILES'        => q[dist/Net-Ping],
-        'EXCLUDED'     => [
-            qr{^README.md},
-        ],
     },
 
     'NEXT' => {
@@ -879,6 +873,7 @@ use File::Glob qw(:case);
         'DISTRIBUTION' => 'DAGOLDEN/Parse-CPAN-Meta-1.4417.tar.gz',
         'FILES'        => q[cpan/Parse-CPAN-Meta],
         'EXCLUDED'     => [
+            qw[t/00-report-prereqs.dd],
             qw[t/00-report-prereqs.t],
             qr{^xt},
         ],
@@ -946,9 +941,16 @@ use File::Glob qw(:case);
         'FILES'        => q[cpan/Pod-Simple],
         # https://rt.cpan.org/Public/Bug/Display.html?id=103439
         # https://rt.cpan.org/Public/Bug/Display.html?id=105192
+        # https://rt.cpan.org/Public/Bug/Display.html?id=105511
         'CUSTOMIZED'   => [
-            qw( cpan/Pod-Simple/lib/Pod/Simple/Search.pm
-                cpan/Pod-Simple/lib/Pod/Simple/BlackBox.pm
+            qw( lib/Pod/Simple/Search.pm
+                lib/Pod/Simple/BlackBox.pm
+                t/search10.t
+                t/search12.t
+                t/search20.t
+                t/search22.t
+                t/search26.t
+                t/search28.t
             ),
         ],
     },
@@ -1013,7 +1015,7 @@ use File::Glob qw(:case);
     },
 
     'Socket' => {
-        'DISTRIBUTION' => 'PEVANS/Socket-2.019.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Socket-2.020.tar.gz',
         'FILES'        => q[cpan/Socket],
     },
 
@@ -1232,7 +1234,7 @@ use File::Glob qw(:case);
     },
 
     'Unicode::Collate' => {
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.12.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.14.tar.gz',
         'FILES'        => q[cpan/Unicode-Collate],
         'EXCLUDED'     => [
             qr{N$},
@@ -1246,7 +1248,7 @@ use File::Glob qw(:case);
     },
 
     'Unicode::Normalize' => {
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Normalize-1.18.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Normalize-1.19.tar.gz',
         'FILES'        => q[cpan/Unicode-Normalize],
     },
 

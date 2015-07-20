@@ -126,7 +126,7 @@ for (@tests) {
     }
 
     if ($x eq ">$result<") {
-        ok(1, ">$result<");
+        ok(1, join ' ', grep length, ">$result<", $comment);
     }
     elsif ($skip) {
         ok(1, "skip $comment");
@@ -308,6 +308,10 @@ __END__
 >%+.*d<     >[-2,0]<      >+0<
 >% .*d<     >[-2,0]<      > 0<
 >%0.*d<     >[-2,0]<      >0<
+>%.*2$d<    >[5,3]<       >005<           >reordered precision arg<
+>%4.*2$d<   >[5,3]<       > 005<          >width with reordered precision<
+>%*3$.*2$d< >[5,3,4]<     > 005<          >reordered width with reordered precision<
+>%3$*2$.*1$d< >[3,4,5]<   > 005<          >reordered param, width, precision<
 >%d<        >-1<          >-1<
 >%-d<       >-1<          >-1<
 >%+d<       >-1<          >-1<
@@ -647,7 +651,8 @@ __END__
 >%y<        >''<          >%y INVALID REDUNDANT<
 >%z<        >''<          >%z INVALID REDUNDANT<
 >%2$d %1$d<	>[12, 34]<	>34 12<
->%*2$d<		>[12, 3]<	> 12 REDUNDANT<
+>%*2$d<		>[12, 3]<	> 12<             >RT#125469<
+>%*3$d<		>[12, 9, 3]<	> 12<             >related to RT#125469<
 >%2$d %d<	>[12, 34]<	>34 12<
 >%2$d %d %d<	>[12, 34]<	>34 12 34<
 >%3$d %d %d<	>[12, 34, 56]<	>56 12 34<
@@ -655,8 +660,8 @@ __END__
 >%*3$2$d %d<	>[12, 34, 3]<	>%*3$2$d 12 INVALID REDUNDANT<
 >%2$d<		>12<	>0 MISSING<
 >%0$d<		>12<	>%0$d INVALID REDUNDANT<
->%1$$d<		>12<	>%1$$d INVALID<
->%1$1$d<	>12<	>%1$1$d INVALID<
+>%1$$d<		>12<	>%1$$d INVALID REDUNDANT<
+>%1$1$d<	>12<	>%1$1$d INVALID REDUNDANT<
 >%*2$*2$d<	>[12, 3]<	>%*2$*2$d INVALID REDUNDANT<
 >%*2*2$d<	>[12, 3]<	>%*2*2$d INVALID REDUNDANT<
 >%*2$1d<	>[12, 3]<	>%*2$1d INVALID REDUNDANT<
@@ -713,7 +718,7 @@ __END__
 >%V-%s<		>["Hello"]<	>%V-Hello INVALID<
 >%K %d %d<	>[13, 29]<	>%K 13 29 INVALID<
 >%*.*K %d<	>[13, 29, 76]<	>%*.*K 13 INVALID REDUNDANT<
->%4$K %d<	>[45, 67]<	>%4$K 45 MISSING INVALID<
+>%4$K %d<	>[45, 67]<	>%4$K 45 INVALID REDUNDANT<
 >%d %K %d<	>[23, 45]<	>23 %K 45 INVALID<
 >%*v*999\$d %d %d<	>[11, 22, 33]<	>%*v*999\$d 11 22 INVALID REDUNDANT<
 >%#b<		>0<	>0<
@@ -737,3 +742,4 @@ a>%*v.*X<	>[':', 3, '012']<	>030:031:032<	>perl #83194: vector flag + custom sep
 e>%*v.*X<	>[':', 3, '012']<	>0F0:0F1:0F2<	>perl #83194: vector flag + custom separator + dynamic precision<
 a>%vd<	>"version"<	>118.101.114.115.105.111.110<	>perl #102586: vector flag + "version"<
 e>%vd<   >"version"<    >165.133.153.162.137.150.149<   >perl #102586: vector flag + "version"<
+>%3$*4$v*2$.*1$x<  >[3, 4, "\x11\x22\x33", "/"]< > 011/ 022/ 033< >four reordered args<

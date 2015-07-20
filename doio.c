@@ -1206,7 +1206,10 @@ Perl_do_sysseek(pTHX_ GV *gv, Off_t pos, int whence)
 
     if (io && (fp = IoIFP(io))) {
         int fd = PerlIO_fileno(fp);
-        if (fd >= 0) {
+        if (fd < 0 || (whence == SEEK_SET && pos < 0)) {
+            SETERRNO(EINVAL,LIB_INVARG);
+            return -1;
+        } else {
             return PerlLIO_lseek(fd, pos, whence);
         }
     }
@@ -2340,7 +2343,12 @@ Perl_do_msgsnd(pTHX_ SV **mark, SV **sp)
     if (msize < 0)
 	Perl_croak(aTHX_ "Arg too short for msgsnd");
     SETERRNO(0,0);
-    return msgsnd(id, (struct msgbuf *)mbuf, msize, flags);
+    if (id >= 0 && flags >= 0) {
+      return msgsnd(id, (struct msgbuf *)mbuf, msize, flags);
+    } else {
+      SETERRNO(EINVAL,LIB_INVARG);
+      return -1;
+    }
 #else
     PERL_UNUSED_ARG(sp);
     PERL_UNUSED_ARG(mark);
@@ -2373,7 +2381,12 @@ Perl_do_msgrcv(pTHX_ SV **mark, SV **sp)
     mbuf = SvGROW(mstr, sizeof(long)+msize+1);
 
     SETERRNO(0,0);
-    ret = msgrcv(id, (struct msgbuf *)mbuf, msize, mtype, flags);
+    if (id >= 0 && msize >= 0 && flags >= 0) {
+        ret = msgrcv(id, (struct msgbuf *)mbuf, msize, mtype, flags);
+    } else {
+        SETERRNO(EINVAL,LIB_INVARG);
+        ret = -1;
+    }
     if (ret >= 0) {
 	SvCUR_set(mstr, sizeof(long)+ret);
 	*SvEND(mstr) = '\0';
@@ -2457,7 +2470,12 @@ Perl_do_shmio(pTHX_ I32 optype, SV **mark, SV **sp)
 	SETERRNO(EFAULT,SS_ACCVIO);		/* can't do as caller requested */
 	return -1;
     }
-    shm = (char *)shmat(id, NULL, (optype == OP_SHMREAD) ? SHM_RDONLY : 0);
+    if (id >= 0) {
+        shm = (char *)shmat(id, NULL, (optype == OP_SHMREAD) ? SHM_RDONLY : 0);
+    } else {
+        SETERRNO(EINVAL,LIB_INVARG);
+        return -1;
+    }
     if (shm == (char *)-1)	/* I hate System V IPC, I really do */
 	return -1;
     if (optype == OP_SHMREAD) {

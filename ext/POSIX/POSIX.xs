@@ -1953,11 +1953,21 @@ setattr(termios_ref, fd = 0, optional_actions = DEF_SETATTR_ACTION)
 	int		fd
 	int		optional_actions
     CODE:
-	/* The second argument to the call is mandatory, but we'd like to give
-	   it a useful default. 0 isn't valid on all operating systems - on
-	   Solaris (at least) TCSANOW, TCSADRAIN and TCSAFLUSH have the same
-	   values as the equivalent ioctls, TCSETS, TCSETSW and TCSETSF.  */
-	RETVAL = tcsetattr(fd, optional_actions, termios_ref);
+	if (fd >= 0) {
+            /* The second argument to the call is mandatory, but we'd like to give
+               it a useful default. 0 isn't valid on all operating systems - on
+               Solaris (at least) TCSANOW, TCSADRAIN and TCSAFLUSH have the same
+               values as the equivalent ioctls, TCSETS, TCSETSW and TCSETSF.  */
+            if (optional_actions < 0) {
+               SETERRNO(EINVAL, LIB_INVARG);
+               RETVAL = -1;
+            } else {
+                RETVAL = tcsetattr(fd, optional_actions, termios_ref);
+            }
+        } else {
+            SETERRNO(EBADF,RMS_IFI);
+            RETVAL = -1;
+        }
     OUTPUT:
 	RETVAL
 
@@ -3193,14 +3203,20 @@ dup2(fd1, fd2)
 	int		fd1
 	int		fd2
     CODE:
+	if (fd1 >= 0 && fd2 >= 0) {
 #ifdef WIN32
-	/* RT #98912 - More Microsoft muppetry - failing to actually implemented
-	   the well known documented POSIX behaviour for a POSIX API.
-	   http://msdn.microsoft.com/en-us/library/8syseb29.aspx   */
-	RETVAL = dup2(fd1, fd2) == -1 ? -1 : fd2;
+            /* RT #98912 - More Microsoft muppetry - failing to
+               actually implemented the well known documented POSIX
+               behaviour for a POSIX API.
+               http://msdn.microsoft.com/en-us/library/8syseb29.aspx  */
+            RETVAL = dup2(fd1, fd2) == -1 ? -1 : fd2;
 #else
-	RETVAL = dup2(fd1, fd2);
+            RETVAL = dup2(fd1, fd2);
 #endif
+        } else {
+            SETERRNO(EBADF,RMS_IFI);
+            RETVAL = -1;
+        }
     OUTPUT:
 	RETVAL
 
@@ -3210,9 +3226,14 @@ lseek(fd, offset, whence)
 	Off_t		offset
 	int		whence
     CODE:
-	Off_t pos = PerlLIO_lseek(fd, offset, whence);
-	RETVAL = sizeof(Off_t) > sizeof(IV)
-		 ? newSVnv((NV)pos) : newSViv((IV)pos);
+	if (fd >= 0) {
+            Off_t pos = PerlLIO_lseek(fd, offset, whence);
+            RETVAL = sizeof(Off_t) > sizeof(IV)
+              ? newSVnv((NV)pos) : newSViv((IV)pos);
+        } else {
+            SETERRNO(EBADF,RMS_IFI);
+            RETVAL = newSViv(-1);
+        }
     OUTPUT:
 	RETVAL
 
@@ -3408,20 +3429,29 @@ strtol(str, base = 0)
 	long num;
 	char *unparsed;
     PPCODE:
-	num = strtol(str, &unparsed, base);
-#if IVSIZE <= LONGSIZE
-	if (num < IV_MIN || num > IV_MAX)
-	    PUSHs(sv_2mortal(newSVnv((double)num)));
-	else
+	if (base == 0 || (base >= 2 && base <= 36)) {
+            num = strtol(str, &unparsed, base);
+#if IVSIZE < LONGSIZE
+            if (num < IV_MIN || num > IV_MAX)
+                PUSHs(sv_2mortal(newSVnv((double)num)));
+            else
 #endif
-	    PUSHs(sv_2mortal(newSViv((IV)num)));
-	if (GIMME_V == G_ARRAY) {
-	    EXTEND(SP, 1);
-	    if (unparsed)
-		PUSHs(sv_2mortal(newSViv(strlen(unparsed))));
-	    else
-		PUSHs(&PL_sv_undef);
-	}
+                PUSHs(sv_2mortal(newSViv((IV)num)));
+            if (GIMME_V == G_ARRAY) {
+                EXTEND(SP, 1);
+                if (unparsed)
+                    PUSHs(sv_2mortal(newSViv(strlen(unparsed))));
+                else
+                    PUSHs(&PL_sv_undef);
+            }
+        } else {
+	    SETERRNO(EINVAL, LIB_INVARG);
+            PUSHs(&PL_sv_undef);
+            if (GIMME_V == G_ARRAY) {
+               EXTEND(SP, 1);
+               PUSHs(&PL_sv_undef);
+            }
+        }
 
 void
 strtoul(str, base = 0)
@@ -3433,20 +3463,29 @@ strtoul(str, base = 0)
     PPCODE:
 	PERL_UNUSED_VAR(str);
 	PERL_UNUSED_VAR(base);
-	num = strtoul(str, &unparsed, base);
+	if (base == 0 || (base >= 2 && base <= 36)) {
+            num = strtoul(str, &unparsed, base);
 #if IVSIZE <= LONGSIZE
-	if (num > IV_MAX)
-	    PUSHs(sv_2mortal(newSVnv((double)num)));
-	else
+            if (num > IV_MAX)
+                PUSHs(sv_2mortal(newSVnv((double)num)));
+            else
 #endif
-	    PUSHs(sv_2mortal(newSViv((IV)num)));
-	if (GIMME_V == G_ARRAY) {
-	    EXTEND(SP, 1);
-	    if (unparsed)
-		PUSHs(sv_2mortal(newSViv(strlen(unparsed))));
-	    else
-		PUSHs(&PL_sv_undef);
-	}
+                PUSHs(sv_2mortal(newSViv((IV)num)));
+            if (GIMME_V == G_ARRAY) {
+                EXTEND(SP, 1);
+                if (unparsed)
+                    PUSHs(sv_2mortal(newSViv(strlen(unparsed))));
+                else
+                  PUSHs(&PL_sv_undef);
+            }
+	} else {
+	    SETERRNO(EINVAL, LIB_INVARG);
+            PUSHs(&PL_sv_undef);
+            if (GIMME_V == G_ARRAY) {
+               EXTEND(SP, 1);
+               PUSHs(&PL_sv_undef);
+            }
+        }
 
 void
 strxfrm(src)
@@ -3494,8 +3533,13 @@ tcdrain(fd)
 	close = 1
 	dup = 2
     CODE:
-	RETVAL = ix == 1 ? close(fd)
-	    : (ix < 1 ? tcdrain(fd) : dup(fd));
+	if (fd >= 0) {
+	    RETVAL = ix == 1 ? close(fd)
+	      : (ix < 1 ? tcdrain(fd) : dup(fd));
+	} else {
+	    SETERRNO(EBADF,RMS_IFI);
+	    RETVAL = -1;
+	}
     OUTPUT:
 	RETVAL
 
@@ -3508,8 +3552,13 @@ tcflow(fd, action)
 	tcflush = 1
 	tcsendbreak = 2
     CODE:
-	RETVAL = ix == 1 ? tcflush(fd, action)
-	    : (ix < 1 ? tcflow(fd, action) : tcsendbreak(fd, action));
+        if (fd >= 0 && action >= 0) {
+            RETVAL = ix == 1 ? tcflush(fd, action)
+              : (ix < 1 ? tcflow(fd, action) : tcsendbreak(fd, action));
+        } else {
+            SETERRNO(EBADF,RMS_IFI);
+            RETVAL = -1;
+        }
     OUTPUT:
 	RETVAL
 

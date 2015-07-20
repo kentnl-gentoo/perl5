@@ -212,20 +212,24 @@ typedef struct hek HEK;
 	HE**	svu_hash;		\
 	GP*	svu_gp;			\
 	PerlIO *svu_fp;			\
-    }	sv_u
+    }	sv_u				\
+    _SV_HEAD_DEBUG
 
+#ifdef DEBUG_LEAKING_SCALARS
+#define _SV_HEAD_DEBUG ;\
+    PERL_BITFIELD32 sv_debug_optype:9;	/* the type of OP that allocated us */ \
+    PERL_BITFIELD32 sv_debug_inpad:1;	/* was allocated in a pad for an OP */ \
+    PERL_BITFIELD32 sv_debug_line:16;	/* the line where we were allocated */ \
+    UV		    sv_debug_serial;	/* serial number of sv allocation   */ \
+    char *	    sv_debug_file;	/* the file where we were allocated */ \
+    SV *	    sv_debug_parent	/* what we were cloned from (ithreads)*/
+#else
+#define _SV_HEAD_DEBUG
+#endif
 
 struct STRUCT_SV {		/* struct sv { */
     _SV_HEAD(void*);
     _SV_HEAD_UNION;
-#ifdef DEBUG_LEAKING_SCALARS
-    PERL_BITFIELD32 sv_debug_optype:9;	/* the type of OP that allocated us */
-    PERL_BITFIELD32 sv_debug_inpad:1;	/* was allocated in a pad for an OP */
-    PERL_BITFIELD32 sv_debug_line:16;	/* the line where we were allocated */
-    UV		    sv_debug_serial;	/* serial number of sv allocation   */
-    char *	    sv_debug_file;	/* the file where we were allocated */
-    SV *	    sv_debug_parent;	/* what we were cloned from (ithreads)*/
-#endif
 };
 
 struct gv {
@@ -857,7 +861,7 @@ Set the actual length of the string which is in the SV.  See C<SvIV_set>.
 
 #define SvOKp(sv)		(SvFLAGS(sv) & (SVp_IOK|SVp_NOK|SVp_POK))
 #define SvIOKp(sv)		(SvFLAGS(sv) & SVp_IOK)
-#define SvIOKp_on(sv)		(assert_not_glob(sv) SvRELEASE_IVX_(sv)	\
+#define SvIOKp_on(sv)		(assert_not_glob(sv)	\
 				    SvFLAGS(sv) |= SVp_IOK)
 #define SvNOKp(sv)		(SvFLAGS(sv) & SVp_NOK)
 #define SvNOKp_on(sv)		(assert_not_glob(sv) SvFLAGS(sv) |= SVp_NOK)
@@ -866,7 +870,7 @@ Set the actual length of the string which is in the SV.  See C<SvIV_set>.
 				 SvFLAGS(sv) |= SVp_POK)
 
 #define SvIOK(sv)		(SvFLAGS(sv) & SVf_IOK)
-#define SvIOK_on(sv)		(assert_not_glob(sv) SvRELEASE_IVX_(sv)	\
+#define SvIOK_on(sv)		(assert_not_glob(sv)	\
 				    SvFLAGS(sv) |= (SVf_IOK|SVp_IOK))
 #define SvIOK_off(sv)		(SvFLAGS(sv) &= ~(SVf_IOK|SVp_IOK|SVf_IVisUV))
 #define SvIOK_only(sv)		(SvOK_off(sv), \
@@ -1820,6 +1824,9 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>.
 #define SV_HAS_TRAILING_NUL	256
 #define SV_COW_SHARED_HASH_KEYS	512
 /* This one is only enabled for PERL_OLD_COPY_ON_WRITE */
+/* XXX This flag actually enabled for any COW.  But it appears not to do
+       anything.  Can we just remove it?  Or will it serve some future
+       purpose.  */
 #define SV_COW_OTHER_PVS	1024
 /* Make sv_2pv_flags return NULL if something is undefined.  */
 #define SV_UNDEF_RETURNS_NULL	2048
@@ -1861,26 +1868,7 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>.
 #define SV_CHECK_THINKFIRST_COW_DROP(sv) if (SvTHINKFIRST(sv)) \
 				    sv_force_normal_flags(sv, SV_COW_DROP_PV)
 
-#ifdef PERL_OLD_COPY_ON_WRITE
-#define SvRELEASE_IVX(sv)   \
-    ((SvIsCOW(sv) ? sv_force_normal_flags(sv, 0) : (void) 0), 0)
-#  define SvIsCOW_normal(sv)	(SvIsCOW(sv) && SvLEN(sv))
-#  define SvRELEASE_IVX_(sv)	SvRELEASE_IVX(sv),
-#  define SvCANCOW(sv) \
-	(SvIsCOW(sv) || (SvFLAGS(sv) & CAN_COW_MASK) == CAN_COW_FLAGS)
-/* This is a pessimistic view. Scalar must be purely a read-write PV to copy-
-   on-write.  */
-#  define CAN_COW_MASK	(SVs_OBJECT|SVs_GMG|SVs_SMG|SVs_RMG|SVf_IOK|SVf_NOK| \
-			 SVf_POK|SVf_ROK|SVp_IOK|SVp_NOK|SVp_POK|SVf_FAKE| \
-			 SVf_OOK|SVf_BREAK|SVf_READONLY|SVf_PROTECT)
-#else
-#  define SvRELEASE_IVX(sv)   0
-/* This little game brought to you by the need to shut this warning up:
-mg.c: In function 'Perl_magic_get':
-mg.c:1024: warning: left-hand operand of comma expression has no effect
-*/
-#  define SvRELEASE_IVX_(sv)  /**/
-#  ifdef PERL_NEW_COPY_ON_WRITE
+#ifdef PERL_COPY_ON_WRITE
 #   define SvCANCOW(sv)					    \
 	(SvIsCOW(sv)					     \
 	 ? SvLEN(sv) ? CowREFCNT(sv) != SV_COW_REFCNT_MAX : 1 \
@@ -1891,8 +1879,7 @@ mg.c:1024: warning: left-hand operand of comma expression has no effect
 #   define SV_COW_REFCNT_MAX	((1 << sizeof(U8)*8) - 1)
 #   define CAN_COW_MASK	(SVf_POK|SVf_ROK|SVp_POK|SVf_FAKE| \
 			 SVf_OOK|SVf_BREAK|SVf_READONLY|SVf_PROTECT)
-#  endif
-#endif /* PERL_OLD_COPY_ON_WRITE */
+#endif
 
 #define CAN_COW_FLAGS	(SVp_POK|SVf_POK)
 

@@ -1905,6 +1905,37 @@ PP(pp_subtract)
     }
 }
 
+#define IV_BITS (IVSIZE * 8)
+
+static UV S_uv_shift(UV uv, int shift, bool left)
+{
+   if (shift < 0) {
+       shift = -shift;
+       left = !left;
+   }
+   if (shift >= IV_BITS) {
+       return 0;
+   }
+   return left ? uv << shift : uv >> shift;
+}
+
+static IV S_iv_shift(IV iv, int shift, bool left)
+{
+   if (shift < 0) {
+       shift = -shift;
+       left = !left;
+   }
+   if (shift >= IV_BITS) {
+       return iv < 0 && !left ? -1 : 0;
+   }
+   return left ? iv << shift : iv >> shift;
+}
+
+#define UV_LEFT_SHIFT(uv, shift) S_uv_shift(uv, shift, TRUE)
+#define UV_RIGHT_SHIFT(uv, shift) S_uv_shift(uv, shift, FALSE)
+#define IV_LEFT_SHIFT(iv, shift) S_iv_shift(iv, shift, TRUE)
+#define IV_RIGHT_SHIFT(iv, shift) S_iv_shift(iv, shift, FALSE)
+
 PP(pp_left_shift)
 {
     dSP; dATARGET; SV *svl, *svr;
@@ -1914,12 +1945,10 @@ PP(pp_left_shift)
     {
       const IV shift = SvIV_nomg(svr);
       if (PL_op->op_private & HINT_INTEGER) {
-	const IV i = SvIV_nomg(svl);
-	SETi(i << shift);
+          SETi(IV_LEFT_SHIFT(SvIV_nomg(svl), shift));
       }
       else {
-	const UV u = SvUV_nomg(svl);
-	SETu(u << shift);
+	  SETu(UV_LEFT_SHIFT(SvUV_nomg(svl), shift));
       }
       RETURN;
     }
@@ -1934,12 +1963,10 @@ PP(pp_right_shift)
     {
       const IV shift = SvIV_nomg(svr);
       if (PL_op->op_private & HINT_INTEGER) {
-	const IV i = SvIV_nomg(svl);
-	SETi(i >> shift);
+	  SETi(IV_RIGHT_SHIFT(SvIV_nomg(svl), shift));
       }
       else {
-	const UV u = SvUV_nomg(svl);
-	SETu(u >> shift);
+          SETu(UV_RIGHT_SHIFT(SvUV_nomg(svl), shift));
       }
       RETURN;
     }
@@ -4637,47 +4664,6 @@ PP(pp_kvaslice)
 }
 
 
-/* Smart dereferencing for keys, values and each */
-
-/* also used for: pp_reach() pp_rvalues() */
-
-PP(pp_rkeys)
-{
-    dSP;
-    dPOPss;
-
-    SvGETMAGIC(sv);
-
-    if (
-         !SvROK(sv)
-      || (sv = SvRV(sv),
-            (SvTYPE(sv) != SVt_PVHV && SvTYPE(sv) != SVt_PVAV)
-          || SvOBJECT(sv)
-         )
-    ) {
-	DIE(aTHX_
-	   "Type of argument to %s must be unblessed hashref or arrayref",
-	    PL_op_desc[PL_op->op_type] );
-    }
-
-    if (PL_op->op_flags & OPf_SPECIAL && SvTYPE(sv) == SVt_PVAV)
-	DIE(aTHX_
-	   "Can't modify %s in %s",
-	    PL_op_desc[PL_op->op_type], PL_op_desc[PL_op->op_next->op_type]
-	);
-
-    /* Delegate to correct function for op type */
-    PUSHs(sv);
-    if (PL_op->op_type == OP_RKEYS || PL_op->op_type == OP_RVALUES) {
-	return (SvTYPE(sv) == SVt_PVHV) ? Perl_do_kv(aTHX) : Perl_pp_akeys(aTHX);
-    }
-    else {
-	return (SvTYPE(sv) == SVt_PVHV)
-               ? Perl_pp_each(aTHX)
-               : Perl_pp_aeach(aTHX);
-    }
-}
-
 PP(pp_aeach)
 {
     dSP;
@@ -4722,7 +4708,7 @@ PP(pp_akeys)
 
         EXTEND(SP, n + 1);
 
-	if (PL_op->op_type == OP_AKEYS || PL_op->op_type == OP_RKEYS) {
+	if (PL_op->op_type == OP_AKEYS) {
 	    for (i = 0;  i <= n;  i++) {
 		mPUSHi(i);
 	    }
@@ -6381,6 +6367,7 @@ PP(pp_refassign)
 	SvSETMAGIC(left);
 	break;
     case SVt_PVAV:
+        assert(key);
 	if (UNLIKELY(PL_op->op_private & OPpLVAL_INTRO)) {
 	    S_localise_aelem_lval(aTHX_ (AV *)left, key,
 					SvCANEXISTDELETE(left));
@@ -6388,9 +6375,11 @@ PP(pp_refassign)
 	av_store((AV *)left, SvIV(key), SvREFCNT_inc_simple_NN(SvRV(sv)));
 	break;
     case SVt_PVHV:
-	if (UNLIKELY(PL_op->op_private & OPpLVAL_INTRO))
+        if (UNLIKELY(PL_op->op_private & OPpLVAL_INTRO)) {
+            assert(key);
 	    S_localise_helem_lval(aTHX_ (HV *)left, key,
 					SvCANEXISTDELETE(left));
+        }
 	(void)hv_store_ent((HV *)left, key, SvREFCNT_inc_simple_NN(SvRV(sv)), 0);
     }
     if (PL_op->op_flags & OPf_MOD)
@@ -6415,13 +6404,16 @@ PP(pp_lvref)
 	mg->mg_flags |= MGf_PERSIST;
     if (UNLIKELY(PL_op->op_private & OPpLVAL_INTRO)) {
       if (elem) {
-	MAGIC *mg;
-	HV *stash;
-	const bool can_preserve = SvCANEXISTDELETE(arg);
-	if (SvTYPE(arg) == SVt_PVAV)
-	    S_localise_aelem_lval(aTHX_ (AV *)arg, elem, can_preserve);
-	else
-	    S_localise_helem_lval(aTHX_ (HV *)arg, elem, can_preserve);
+        MAGIC *mg;
+        HV *stash;
+        assert(arg);
+        {
+            const bool can_preserve = SvCANEXISTDELETE(arg);
+            if (SvTYPE(arg) == SVt_PVAV)
+              S_localise_aelem_lval(aTHX_ (AV *)arg, elem, can_preserve);
+            else
+              S_localise_helem_lval(aTHX_ (HV *)arg, elem, can_preserve);
+        }
       }
       else if (arg) {
 	S_localise_gv_slot(aTHX_ (GV *)arg, 

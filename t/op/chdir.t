@@ -9,28 +9,14 @@ BEGIN {
     # chdir() works!  Instead, we'll hedge our bets and put both
     # possibilities into @INC.
     unshift @INC, qw(t . lib ../lib);
-    require "./test.pl";
-    plan(tests => 42);
+    require "test.pl";
+    plan(tests => 47);
 }
 
 use Config;
-use Errno qw(ENOENT);
+use Errno qw(ENOENT EBADF EINVAL);
 
 my $IsVMS   = $^O eq 'VMS';
-
-my $vms_unix_rpt = 0;
-my $vms_efs = 0;
-if ($IsVMS) {
-    if (eval 'require VMS::Feature') {
-        $vms_unix_rpt = VMS::Feature::current("filename_unix_report");
-        $vms_efs = VMS::Feature::current("efs_charset");
-    } else {
-        my $unix_rpt = $ENV{'DECC$FILENAME_UNIX_REPORT'} || '';
-        my $efs_charset = $ENV{'DECC$EFS_CHARSET'} || '';
-        $vms_unix_rpt = $unix_rpt =~ /^[ET1]/i; 
-        $vms_efs = $efs_charset =~ /^[ET1]/i; 
-    }
-}
 
 # For an op regression test, I don't want to rely on "use constant" working.
 my $has_fchdir = ($Config{d_fchdir} || "") eq "define";
@@ -68,7 +54,7 @@ SKIP: {
 $Cwd = abs_path;
 
 SKIP: {
-    skip("no fchdir", 16) unless $has_fchdir;
+    skip("no fchdir", 23) unless $has_fchdir;
     my $has_dirfd = ($Config{d_dirfd} || $Config{d_dir_dd_fd} || "") eq "define";
     ok(opendir(my $dh, "."), "opendir .");
     ok(open(my $fh, "<", "op"), "open op");
@@ -121,7 +107,24 @@ SKIP: {
     ok(closedir(H), "closedir");
     ok(chdir(H), "fchdir to base");
     ok(-f "cond.t", "verify that we are in 'base'");
-    chdir ".." or die $!;
+    ok(close(H), "close");
+    $! = 0;
+    {
+        my $warn;
+        local $SIG{__WARN__} = sub { $warn = shift };
+        ok(!chdir(H), "check we can't chdir to closed handle");
+        is(0+$!, EBADF, 'check $! set appropriately');
+        like($warn, qr/on closed filehandle H/, 'like closed');
+        $! = 0;
+    }
+    {
+        my $warn;
+        local $SIG{__WARN__} = sub { $warn = shift };
+        ok(!chdir(NEVEROPENED), "check we can't chdir to never opened handle");
+        is(0+$!, EBADF, 'check $! set appropriately');
+        like($warn, qr/on unopened filehandle NEVEROPENED/, 'like never opened');
+        chdir ".." or die $!;
+    }
 }
 
 SKIP: {
@@ -141,7 +144,7 @@ sub check_env {
     if( $key eq 'SYS$LOGIN' && !$IsVMS ) {
         ok( !chdir(),         "chdir() on $^O ignores only \$ENV{$key} set" );
         is( abs_path, $Cwd,   '  abs_path() did not change' );
-        pass( "  no need to test SYS\$LOGIN on $^O" ) for 1..7;
+        pass( "  no need to test SYS\$LOGIN on $^O" ) for 1..4;
     }
     else {
         ok( chdir(),              "chdir() w/ only \$ENV{$key} set" );
@@ -165,7 +168,6 @@ sub clean_env {
 
         # Can't actually delete SYS$ stuff on VMS.
         next if $IsVMS && $env eq 'SYS$LOGIN';
-        next if $IsVMS && $env eq 'HOME' && !$Config{'d_setenv'};
 
 	# On VMS, %ENV is many layered.
 	delete $ENV{$env} while exists $ENV{$env};
@@ -194,17 +196,20 @@ foreach my $key (@magic_envs) {
     no warnings 'uninitialized';
 
     clean_env;
-    $ENV{$key} = catdir $Cwd, ($IsVMS ? 'OP' : 'op');
+    $ENV{$key} = catdir $Cwd, 'op';
 
     check_env($key);
 }
 
 {
     clean_env;
-    if ($IsVMS && !$Config{'d_setenv'}) {
-        pass("Can't reset HOME, so chdir() test meaningless");
-    } else {
+  SKIP:
+    {
+        $IsVMS
+          and skip "Can't delete SYS\$LOGIN, so chdir() test meaningless", 2;
+        $! = 0;
         ok( !chdir(),                   'chdir() w/o any ENV set' );
+        is( $!+0, EINVAL,               'check $! set to EINVAL');
     }
     is( abs_path, $Cwd,             '  abs_path() agrees' );
 }

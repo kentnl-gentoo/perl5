@@ -417,6 +417,7 @@ static MAGIC *THX_sv_magicext(pTHX_ SV *sv, SV *obj, int type,
 #define INIT_STCXT							\
 	dSTCXT;									\
 	NEW_STORABLE_CXT_OBJ(cxt);				\
+	assert(perinterp_sv);					\
 	sv_setiv(perinterp_sv, PTR2IV(cxt->my_sv))
 
 #define SET_STCXT(x)								\
@@ -1716,6 +1717,7 @@ static int last_op_in_netorder(pTHX)
 {
 	dSTCXT;
 
+	assert(cxt);
 	return cxt->netorder;
 }
 
@@ -2657,7 +2659,9 @@ static int store_hash(pTHX_ stcxt_t *cxt, HV *hv)
                             TRACEME(("(#%d) key '%s'", i, key));
                         }
                         if (flags & SHV_K_ISSV) {
-                            store(aTHX_ cxt, key_sv);
+                            int ret;
+                            if ((ret = store(aTHX_ cxt, key_sv)))
+                                goto out;
                         } else {
                             WLEN(len);
                             if (len)
@@ -3845,6 +3849,7 @@ static int do_store(
 	 * free up memory for them now.
 	 */
 
+	assert(cxt);
 	if (cxt->s_dirty)
 		clean_context(aTHX_ cxt);
 
@@ -3946,6 +3951,7 @@ static SV *mbuf2sv(pTHX)
 {
 	dSTCXT;
 
+	assert(cxt);
 	return newSVpv(mbase, MBUF_SIZE());
 }
 
@@ -6263,6 +6269,7 @@ static SV *do_retrieve(
 	 * free up memory for them now.
 	 */
 
+	assert(cxt);
 	if (cxt->s_dirty)
 		clean_context(aTHX_ cxt);
 
@@ -6509,6 +6516,7 @@ static SV *dclone(pTHX_ SV *sv)
 	 * free up memory for them now.
 	 */
 
+        assert(cxt);
 	if (cxt->s_dirty)
 		clean_context(aTHX_ cxt);
 
@@ -6546,6 +6554,7 @@ static SV *dclone(pTHX_ SV *sv)
 	 * Now, 'cxt' may refer to a new context.
 	 */
 
+	assert(cxt);
 	ASSERT(!cxt->s_dirty, ("clean context"));
 	ASSERT(!cxt->entry, ("entry will not cause new context allocation"));
 
@@ -6668,6 +6677,7 @@ SV *	obj
  ALIAS:
   net_mstore = 1
  CODE:
+  RETVAL = &PL_sv_undef;
   if (!do_store(aTHX_ (PerlIO*) 0, obj, 0, ix, &RETVAL))
     RETVAL = &PL_sv_undef;
  OUTPUT:
@@ -6708,6 +6718,7 @@ last_op_in_netorder()
   if (ix) {
    dSTCXT;
 
+   assert(cxt);
    result = cxt->entry && (cxt->optype & ix) ? TRUE : FALSE;
   } else {
    result = !!last_op_in_netorder(aTHX);
