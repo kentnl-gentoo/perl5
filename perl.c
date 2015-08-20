@@ -389,9 +389,9 @@ perl_construct(pTHXx)
     PL_XPosix_ptrs[_CC_VERTSPACE] = _new_invlist_C_array(VertSpace_invlist);
     PL_XPosix_ptrs[_CC_WORDCHAR] = _new_invlist_C_array(XPosixWord_invlist);
     PL_XPosix_ptrs[_CC_XDIGIT] = _new_invlist_C_array(XPosixXDigit_invlist);
-    PL_GCB_invlist = _new_invlist_C_array(Grapheme_Cluster_Break_invlist);
-    PL_SB_invlist = _new_invlist_C_array(Sentence_Break_invlist);
-    PL_WB_invlist = _new_invlist_C_array(Word_Break_invlist);
+    PL_GCB_invlist = _new_invlist_C_array(_Perl_GCB_invlist);
+    PL_SB_invlist = _new_invlist_C_array(_Perl_SB_invlist);
+    PL_WB_invlist = _new_invlist_C_array(_Perl_WB_invlist);
 
     ENTER;
 }
@@ -2664,8 +2664,22 @@ Perl_call_method(pTHX_ const char *methname, I32 flags)
 /*
 =for apidoc p||call_sv
 
-Performs a callback to the Perl sub whose name is in the SV.  See
-L<perlcall>.
+Performs a callback to the Perl sub specified by the SV.
+
+If neither the C<G_METHOD> nor C<G_METHOD_NAMED> flag is supplied, the
+SV may be any of a CV, a GV, a reference to a CV, a reference to a GV
+or C<SvPV(sv)> will be used as the name of the sub to call.
+
+If the C<G_METHOD> flag is supplied, the SV may be a reference to a CV or
+C<SvPV(sv)> will be used as the name of the method to call.
+
+If the C<G_METHOD_NAMED> flag is supplied, C<SvPV(sv)> will be used as
+the name of the method to call.
+
+Some other values are treated specially for internal use and should
+not be depended on.
+
+See L<perlcall>.
 
 =cut
 */
@@ -5066,7 +5080,7 @@ read_e_script(pTHX_ int idx, SV *buf_sv, int maxlen)
 
 /* removes boilerplate code at the end of each boot_Module xsub */
 void
-Perl_xs_boot_epilog(pTHX_ const U32 ax)
+Perl_xs_boot_epilog(pTHX_ const I32 ax)
 {
   if (PL_unitcheckav)
 	call_list(PL_scopestack_ix, PL_unitcheckav);

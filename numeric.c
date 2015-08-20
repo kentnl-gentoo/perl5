@@ -107,23 +107,23 @@ Perl_cast_uv(NV f)
 
 converts a string representing a binary number to numeric form.
 
-On entry I<start> and I<*len> give the string to scan, I<*flags> gives
-conversion flags, and I<result> should be NULL or a pointer to an NV.
+On entry C<start> and C<*len> give the string to scan, C<*flags> gives
+conversion flags, and C<result> should be NULL or a pointer to an NV.
 The scan stops at the end of the string, or the first invalid character.
-Unless C<PERL_SCAN_SILENT_ILLDIGIT> is set in I<*flags>, encountering an
+Unless C<PERL_SCAN_SILENT_ILLDIGIT> is set in C<*flags>, encountering an
 invalid character will also trigger a warning.
-On return I<*len> is set to the length of the scanned string,
-and I<*flags> gives output flags.
+On return C<*len> is set to the length of the scanned string,
+and C<*flags> gives output flags.
 
 If the value is <= C<UV_MAX> it is returned as a UV, the output flags are clear,
-and nothing is written to I<*result>.  If the value is > UV_MAX C<grok_bin>
+and nothing is written to C<*result>.  If the value is > UV_MAX C<grok_bin>
 returns UV_MAX, sets C<PERL_SCAN_GREATER_THAN_UV_MAX> in the output flags,
-and writes the value to I<*result> (or the value is discarded if I<result>
+and writes the value to C<*result> (or the value is discarded if C<result>
 is NULL).
 
 The binary number may optionally be prefixed with "0b" or "b" unless
-C<PERL_SCAN_DISALLOW_PREFIX> is set in I<*flags> on entry.  If
-C<PERL_SCAN_ALLOW_UNDERSCORES> is set in I<*flags> then the binary
+C<PERL_SCAN_DISALLOW_PREFIX> is set in C<*flags> on entry.  If
+C<PERL_SCAN_ALLOW_UNDERSCORES> is set in C<*flags> then the binary
 number may use '_' characters to separate digits.
 
 =cut
@@ -230,23 +230,23 @@ Perl_grok_bin(pTHX_ const char *start, STRLEN *len_p, I32 *flags, NV *result)
 
 converts a string representing a hex number to numeric form.
 
-On entry I<start> and I<*len_p> give the string to scan, I<*flags> gives
-conversion flags, and I<result> should be NULL or a pointer to an NV.
+On entry C<start> and C<*len_p> give the string to scan, C<*flags> gives
+conversion flags, and C<result> should be NULL or a pointer to an NV.
 The scan stops at the end of the string, or the first invalid character.
-Unless C<PERL_SCAN_SILENT_ILLDIGIT> is set in I<*flags>, encountering an
+Unless C<PERL_SCAN_SILENT_ILLDIGIT> is set in C<*flags>, encountering an
 invalid character will also trigger a warning.
-On return I<*len> is set to the length of the scanned string,
-and I<*flags> gives output flags.
+On return C<*len> is set to the length of the scanned string,
+and C<*flags> gives output flags.
 
 If the value is <= UV_MAX it is returned as a UV, the output flags are clear,
-and nothing is written to I<*result>.  If the value is > UV_MAX C<grok_hex>
+and nothing is written to C<*result>.  If the value is > UV_MAX C<grok_hex>
 returns UV_MAX, sets C<PERL_SCAN_GREATER_THAN_UV_MAX> in the output flags,
-and writes the value to I<*result> (or the value is discarded if I<result>
+and writes the value to C<*result> (or the value is discarded if C<result>
 is NULL).
 
 The hex number may optionally be prefixed with "0x" or "x" unless
-C<PERL_SCAN_DISALLOW_PREFIX> is set in I<*flags> on entry.  If
-C<PERL_SCAN_ALLOW_UNDERSCORES> is set in I<*flags> then the hex
+C<PERL_SCAN_DISALLOW_PREFIX> is set in C<*flags> on entry.  If
+C<PERL_SCAN_ALLOW_UNDERSCORES> is set in C<*flags> then the hex
 number may use '_' characters to separate digits.
 
 =cut
@@ -351,21 +351,21 @@ Perl_grok_hex(pTHX_ const char *start, STRLEN *len_p, I32 *flags, NV *result)
 
 converts a string representing an octal number to numeric form.
 
-On entry I<start> and I<*len> give the string to scan, I<*flags> gives
-conversion flags, and I<result> should be NULL or a pointer to an NV.
+On entry C<start> and C<*len> give the string to scan, C<*flags> gives
+conversion flags, and C<result> should be NULL or a pointer to an NV.
 The scan stops at the end of the string, or the first invalid character.
-Unless C<PERL_SCAN_SILENT_ILLDIGIT> is set in I<*flags>, encountering an
+Unless C<PERL_SCAN_SILENT_ILLDIGIT> is set in C<*flags>, encountering an
 8 or 9 will also trigger a warning.
-On return I<*len> is set to the length of the scanned string,
-and I<*flags> gives output flags.
+On return C<*len> is set to the length of the scanned string,
+and C<*flags> gives output flags.
 
 If the value is <= UV_MAX it is returned as a UV, the output flags are clear,
-and nothing is written to I<*result>.  If the value is > UV_MAX C<grok_oct>
+and nothing is written to C<*result>.  If the value is > UV_MAX C<grok_oct>
 returns UV_MAX, sets C<PERL_SCAN_GREATER_THAN_UV_MAX> in the output flags,
-and writes the value to I<*result> (or the value is discarded if I<result>
+and writes the value to C<*result> (or the value is discarded if C<result>
 is NULL).
 
-If C<PERL_SCAN_ALLOW_UNDERSCORES> is set in I<*flags> then the octal
+If C<PERL_SCAN_ALLOW_UNDERSCORES> is set in C<*flags> then the octal
 number may use '_' characters to separate digits.
 
 =cut
@@ -808,7 +808,7 @@ Perl_grok_infnan(pTHX_ const char** sp, const char* send)
 Recognise (or not) a number.  The type of the number is returned
 (0 if unrecognised), otherwise it is a bit-ORed combination of
 IS_NUMBER_IN_UV, IS_NUMBER_GREATER_THAN_UV_MAX, IS_NUMBER_NOT_INT,
-IS_NUMBER_NEG, IS_NUMBER_INFINITY, IS_NUMBER_NAN (defined in perl.h).
+IS_NUMBER_NEG, IS_NUMBER_INFINITY, IS_NUMBER_NAN (defined in F<perl.h>).
 
 If the value of the number can fit in a UV, it is returned in the *valuep
 IS_NUMBER_IN_UV will be set to indicate that *valuep is valid, IS_NUMBER_IN_UV
@@ -1610,7 +1610,7 @@ Perl_my_frexpl(long double x, int *e) {
 Return a non-zero integer if the sign bit on an NV is set, and 0 if
 it is not.  
 
-If Configure detects this system has a signbit() that will work with
+If F<Configure> detects this system has a signbit() that will work with
 our NVs, then we just use it via the #define in perl.h.  Otherwise,
 fall back on this implementation.  The main use of this function
 is catching -0.0.
@@ -1621,7 +1621,7 @@ function or macro that doesn't happen to work with our particular choice
 of NVs.  We shouldn't just re-#define signbit as Perl_signbit and expect
 the standard system headers to be happy.  Also, this is a no-context
 function (no pTHX_) because Perl_signbit() is usually re-#defined in
-perl.h as a simple macro call to the system's signbit().
+F<perl.h> as a simple macro call to the system's signbit().
 Users should just always call Perl_signbit().
 
 =cut

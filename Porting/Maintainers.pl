@@ -18,11 +18,12 @@ use File::Glob qw(:case);
 @IGNORABLE = qw(
     .cvsignore .dualLivedDiffConfig .gitignore .perlcriticrc .perltidyrc
     .travis.yml ANNOUNCE Announce Artistic AUTHORS BENCHMARK BUGS Build.PL
-    CHANGELOG ChangeLog Changelog CHANGES Changes CONTRIBUTING CONTRIBUTING.mkdn
-    COPYING Copying cpanfile CREDITS dist.ini GOALS HISTORY INSTALL INSTALL.SKIP
-    LICENCE LICENSE Makefile.PL MANIFEST MANIFEST.SKIP META.json META.yml
-    MYMETA.json MYMETA.yml NEW NEWS NOTES perlcritic.rc ppport.h README
-    README.md README.PATCHING SIGNATURE THANKS TODO Todo VERSION WHATSNEW
+    CHANGELOG ChangeLog Changelog CHANGES Changes CONTRIBUTING CONTRIBUTING.md
+    CONTRIBUTING.mkdn COPYING Copying cpanfile CREDITS dist.ini GOALS HISTORY
+    INSTALL INSTALL.SKIP LICENCE LICENSE Makefile.PL MANIFEST MANIFEST.SKIP
+    META.json META.yml MYMETA.json MYMETA.yml NEW NEWS NOTES perlcritic.rc
+    ppport.h README README.md README.pod README.PATCHING SIGNATURE THANKS TODO
+    Todo VERSION WHATSNEW
 );
 
 # Each entry in the  %Modules hash roughly represents a distribution,
@@ -128,7 +129,7 @@ use File::Glob qw(:case);
     },
 
     'Attribute::Handlers' => {
-        'DISTRIBUTION' => 'SMUELLER/Attribute-Handlers-0.96.tar.gz',
+        'DISTRIBUTION' => 'RJBS/Attribute-Handlers-0.99.tar.gz',
         'FILES'        => q[dist/Attribute-Handlers],
     },
 
@@ -309,7 +310,7 @@ use File::Glob qw(:case);
     },
 
     'CPAN::Meta::YAML' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-YAML-0.016.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-YAML-0.017-TRIAL.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta-YAML],
         'EXCLUDED'     => [
             't/00-report-prereqs.t',
@@ -381,7 +382,7 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.75.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.76.tar.gz',
         'FILES'        => q[cpan/Encode],
     },
 
@@ -562,7 +563,7 @@ use File::Glob qw(:case);
     },
 
     'Filter::Util::Call' => {
-        'DISTRIBUTION' => 'RURBAN/Filter-1.54.tar.gz',
+        'DISTRIBUTION' => 'RURBAN/Filter-1.55.tar.gz',
         'FILES'        => q[cpan/Filter-Util-Call
                  pod/perlfilter.pod
                 ],
@@ -747,7 +748,7 @@ use File::Glob qw(:case);
     },
 
     'Math::BigInt' => {
-        'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-1.9993.tar.gz',
+        'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-1.9997.tar.gz',
         'FILES'        => q[dist/Math-BigInt],
         'EXCLUDED'     => [
             qr{^inc/},
@@ -819,7 +820,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150620.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150720.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -892,7 +893,7 @@ use File::Glob qw(:case);
     },
 
     'perlfaq' => {
-        'DISTRIBUTION' => 'ETHER/perlfaq-5.021009.tar.gz',
+        'DISTRIBUTION' => 'LLAP/perlfaq-5.021010.tar.gz',
         'FILES'        => q[cpan/perlfaq],
         'EXCLUDED'     => [
             qw( inc/CreateQuestionList.pm
@@ -1054,7 +1055,7 @@ use File::Glob qw(:case);
     },
 
     'Term::Cap' => {
-        'DISTRIBUTION' => 'JSTOWE/Term-Cap-1.15.tar.gz',
+        'DISTRIBUTION' => 'JSTOWE/Term-Cap-1.17.tar.gz',
         'FILES'        => q[cpan/Term-Cap],
     },
 

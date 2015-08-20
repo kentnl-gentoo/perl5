@@ -1206,7 +1206,11 @@ PP(pp_flop)
                     /* The wraparound of signed integers is undefined
                      * behavior, but here we aim for count >=1, and
                      * negative count is just wrong. */
-                    if (n < 1)
+                    if (n < 1
+#if IVSIZE > Size_t_size
+                        || n > SSize_t_MAX
+#endif
+                        )
                         overflow = TRUE;
                 }
                 if (overflow)
@@ -2145,7 +2149,6 @@ PP(pp_enteriter)
 	save_pushptrptr(gv, SvREFCNT_inc(*svp), SAVEt_GVSV);
 	*svp = newSV(0);
 	itervar = (void *)gv;
-	save_aliased_sv(gv);
     }
     else {
 	SV * const sv = POPs;
@@ -3107,7 +3110,7 @@ Check for the cases 0 or 3 of cur_env.je_ret, only used inside an eval context.
 
 3 is used for a die caught by an inner eval - continue inner loop
 
-See cop.h: je_mustcatch, when set at any runlevel to TRUE, means eval ops must
+See F<cop.h>: je_mustcatch, when set at any runlevel to TRUE, means eval ops must
 establish a local jmpenv to handle exception traps.
 
 =cut
@@ -3517,11 +3520,7 @@ S_check_type_and_open(pTHX_ SV *name)
     }
 #endif
 
-#if !defined(PERLIO_IS_STDIO)
     retio = PerlIO_openn(aTHX_ ":", PERL_SCRIPT_MODE, -1, 0, 0, NULL, 1, &name);
-#else
-    retio = PerlIO_open(p, PERL_SCRIPT_MODE);
-#endif
 #ifdef WIN32
     /* EACCES stops the INC search early in pp_require to implement
        feature RT #113422 */
@@ -4181,7 +4180,7 @@ PP(pp_entereval)
 
     /* prepare to compile string */
 
-    if ((PERLDB_LINE || PERLDB_SAVESRC) && PL_curstash != PL_debstash)
+    if (PERLDB_LINE_OR_SAVESRC && PL_curstash != PL_debstash)
 	save_lines(CopFILEAV(&PL_compiling), PL_parser->linestr);
     else {
 	/* XXX For C<eval "...">s within BEGIN {} blocks, this ends up
@@ -4198,7 +4197,7 @@ PP(pp_entereval)
 
     if (doeval(gimme, runcv, seq, saved_hh)) {
 	if (was != PL_breakable_sub_gen /* Some subs defined here. */
-	    ? (PERLDB_LINE || PERLDB_SAVESRC)
+	    ?  PERLDB_LINE_OR_SAVESRC
 	    :  PERLDB_SAVESRC_NOSUBS) {
 	    /* Retain the filegv we created.  */
 	} else if (!saved_delete) {
@@ -4210,7 +4209,7 @@ PP(pp_entereval)
 	/* We have already left the scope set up earlier thanks to the LEAVE
 	   in doeval().  */
 	if (was != PL_breakable_sub_gen /* Some subs defined here. */
-	    ? (PERLDB_LINE || PERLDB_SAVESRC)
+	    ?  PERLDB_LINE_OR_SAVESRC
 	    :  PERLDB_SAVESRC_INVALID) {
 	    /* Retain the filegv we created.  */
 	} else if (!saved_delete) {

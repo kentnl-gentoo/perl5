@@ -5452,7 +5452,9 @@ Perl_xs_handshake(const U32 key, void * v_my_perl, const char * file, ...)
 	SAVEPPTR(PL_xsubfilename);/* which was require'd from a XSUB BEGIN */
 	PL_xsubfilename = file;   /* so the old name must be restored for
 				     additional XSUBs to register themselves */
-	(void)gv_fetchfile(file);
+	/* XSUBs can't be perl lang/perl5db.pl debugged
+	if (PERLDB_LINE_OR_SAVESRC)
+	    (void)gv_fetchfile(file); */
     }
 
     if(key & HSf_POPMARK) {
@@ -5767,7 +5769,7 @@ Perl_drand48_init_r(perl_drand48_t *random_state, U32 seed)
     PERL_ARGS_ASSERT_DRAND48_INIT_R;
 
 #ifdef PERL_DRAND48_QUAD
-    *random_state = FREEBSD_DRAND48_SEED_0 + ((U64TYPE)seed << 16);
+    *random_state = FREEBSD_DRAND48_SEED_0 + ((U64)seed << 16);
 #else
     random_state->seed[0] = FREEBSD_DRAND48_SEED_0;
     random_state->seed[1] = (U16) seed;
@@ -6393,7 +6395,7 @@ be missing) tells how much inside the S_parse_body the program counter was.
 
 The util.c:1716 is the source code file and line number.
 
-The /usr/bin/perl is obvious (hopefully).
+The F</usr/bin/perl> is obvious (hopefully).
 
 Unknowns are C<"-">.  Unknowns can happen unfortunately quite easily:
 if the platform doesn't support retrieving the information;

@@ -798,22 +798,22 @@ p	|OP*	|localize	|NN OP *o|I32 lex
 ApdR	|I32	|looks_like_number|NN SV *const sv
 Apd	|UV	|grok_bin	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV *result
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_TOKE_C)
-EMsR	|char	|grok_bslash_c	|const char source|const bool output_warning
-EMsR	|bool	|grok_bslash_o	|NN char** s|NN UV* uv           \
-				|NN const char** error_msg       \
-				|const bool output_warning       \
-				|const bool strict               \
-				|const bool silence_non_portable \
-				|const bool utf8
 EMiR	|bool	|grok_bslash_x	|NN char** s|NN UV* uv           \
 				|NN const char** error_msg       \
 				|const bool output_warning       \
 				|const bool strict               \
 				|const bool silence_non_portable \
 				|const bool utf8
-EMsPR	|char*|form_short_octal_warning|NN const char * const s  \
-				|const STRLEN len
 #endif
+EMpRX	|char	|grok_bslash_c	|const char source|const bool output_warning
+EMpRX	|bool	|grok_bslash_o	|NN char** s|NN UV* uv           \
+				|NN const char** error_msg       \
+				|const bool output_warning       \
+				|const bool strict               \
+				|const bool silence_non_portable \
+				|const bool utf8
+EMpPRX	|char*|form_short_octal_warning|NN const char * const s  \
+				|const STRLEN len
 Apd	|UV	|grok_hex	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV *result
 Apd	|int	|grok_infnan	|NN const char** sp|NN const char *send
 Apd	|int	|grok_number	|NN const char *pv|STRLEN len|NULLOK UV *valuep
@@ -962,9 +962,6 @@ ADMnoPR	|UV	|ASCII_TO_NEED	|const UV enc|const UV ch
 Apa	|OP*	|newANONLIST	|NULLOK OP* o
 Apa	|OP*	|newANONHASH	|NULLOK OP* o
 Ap	|OP*	|newANONSUB	|I32 floor|NULLOK OP* proto|NULLOK OP* block
-#if defined(PERL_IN_OP_C)
-i	|bool	|aassign_common_vars	|NULLOK OP* o
-#endif
 Apda	|OP*	|newASSIGNOP	|I32 flags|NULLOK OP* left|I32 optype|NULLOK OP* right
 Apda	|OP*	|newCONDOP	|I32 flags|NN OP* first|NULLOK OP* trueop|NULLOK OP* falseop
 Apd	|CV*	|newCONSTSUB	|NULLOK HV* stash|NULLOK const char* name|NULLOK SV* sv
@@ -1260,7 +1257,6 @@ Ap	|void	|savestack_grow_cnt	|I32 need
 Amp	|void	|save_aelem	|NN AV* av|SSize_t idx|NN SV **sptr
 Ap	|void	|save_aelem_flags|NN AV* av|SSize_t idx|NN SV **sptr \
 				 |const U32 flags
-p	|void	|save_aliased_sv|NN GV* gv
 Ap	|I32	|save_alloc	|I32 size|I32 pad
 Ap	|void	|save_aptr	|NN AV** aptr
 Ap	|AV*	|save_ary	|NN GV* gv
@@ -2745,7 +2741,7 @@ so	|void	|xs_version_bootcheck|U32 items|U32 ax|NN const char *xs_p \
 #endif
 Xpon	|I32	|xs_handshake	|const U32 key|NN void * v_my_perl\
 				|NN const char * file| ...
-Xp	|void	|xs_boot_epilog	|const U32 ax
+Xp	|void	|xs_boot_epilog	|const I32 ax
 #ifndef HAS_STRLCAT
 Apnod	|Size_t	|my_strlcat	|NULLOK char *dst|NULLOK const char *src|Size_t size
 #endif

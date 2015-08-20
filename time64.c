@@ -33,12 +33,15 @@ long' type can use localtime64_r() and gmtime64_r() which correctly
 converts the time even on 32-bit systems. Whether you have 64-bit time
 values will depend on the operating system.
 
-S_localtime64_r() is a 64-bit equivalent of localtime_r().
+Perl_localtime64_r() is a 64-bit equivalent of localtime_r().
 
-S_gmtime64_r() is a 64-bit equivalent of gmtime_r().
+Perl_gmtime64_r() is a 64-bit equivalent of gmtime_r().
 
 */
 
+#include "EXTERN.h"
+#define PERL_IN_TIME64_C
+#include "perl.h"
 #include "time64.h"
 
 static const char days_in_month[2][12] = {
@@ -67,16 +70,6 @@ static const short safe_years[SOLAR_CYCLE_LENGTH] = {
     2032, 2033, 2034, 2035,
     2036, 2037, 2010, 2011,
     2012, 2013, 2014, 2015
-};
-
-static const char dow_year_start[SOLAR_CYCLE_LENGTH] = {
-    5, 0, 1, 2,     /* 0       2016 - 2019 */
-    3, 5, 6, 0,     /* 4  */
-    1, 3, 4, 5,     /* 8  */
-    6, 1, 2, 3,     /* 12 */
-    4, 6, 0, 1,     /* 16 */
-    2, 4, 5, 6,     /* 20      2036, 2037, 2010, 2011 */
-    0, 2, 3, 4      /* 24      2012, 2013, 2014, 2015 */
 };
 
 /* Let's assume people are going to be looking for dates in the future.
@@ -340,7 +333,7 @@ static struct tm * S_gmtime_r(const time_t *clock, struct tm *result) {
 }
 #endif
 
-static struct TM *S_gmtime64_r (const Time64_T *in_time, struct TM *p)
+struct TM *Perl_gmtime64_r (const Time64_T *in_time, struct TM *p)
 {
     int v_tm_sec, v_tm_min, v_tm_hour, v_tm_mon, v_tm_wday;
     Time64_T v_tm_tday;
@@ -467,7 +460,7 @@ static struct TM *S_gmtime64_r (const Time64_T *in_time, struct TM *p)
 }
 
 
-static struct TM *S_localtime64_r (const Time64_T *time, struct TM *local_tm)
+struct TM *Perl_localtime64_r (const Time64_T *time, struct TM *local_tm)
 {
     time_t safe_time;
     struct tm safe_date;
@@ -491,7 +484,7 @@ static struct TM *S_localtime64_r (const Time64_T *time, struct TM *local_tm)
         return local_tm;
     }
 
-    if( S_gmtime64_r(time, &gm_tm) == NULL ) {
+    if( Perl_gmtime64_r(time, &gm_tm) == NULL ) {
         TIME64_TRACE1("gmtime64_r returned null for %lld\n", *time);
         return NULL;
     }

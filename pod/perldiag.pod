@@ -1217,6 +1217,11 @@ missing.  You need to figure out where your CRTL misplaced its environ
 or define F<PERL_ENV_TABLES> (see L<perlvms>) so that environ is not
 searched.
 
+=item Can't redeclare "%s" in "%s"
+
+(F) A "my", "our" or "state" declaration was found within another declaration,
+such as C<my ($x, my($y), $z)> or C<our (my $x)>.
+
 =item Can't "redo" outside a loop block
 
 (F) A "redo" statement was executed to restart the current block, but
@@ -2402,7 +2407,7 @@ than the floating point supports.
 (W overflow) The hexadecimal floating point has a smaller exponent
 than the floating point supports.
 
-=item Hexadecimal float: internal error
+=item Hexadecimal float: internal error (%s)
 
 (F) Something went horribly bad in hexadecimal float handling.
 
@@ -2618,6 +2623,27 @@ it returns and when evaluating its argument, while C<@foo{&bar}> and
 provides a list context to its subscript, which can do weird things
 if you're expecting only one subscript.  When called in list context,
 it also returns the key in addition to the value.
+
+=item %s() is deprecated on :utf8 handles
+
+(W deprecated) The sysread(), recv(), syswrite() and send() operators
+are deprecated on handles that have the C<:utf8> layer, either
+explicitly, or implicitly, eg., with the C<:encoding(UTF-16LE)> layer.
+
+Both sysread() and recv() currently use only the C<:utf8> flag for the
+stream, ignoring the actual layers.  Since sysread() and recv() do no
+UTF-8 validation they can end up creating invalidly encoded scalars.
+
+Similarly, syswrite() and send() use only the C<:utf8> flag, otherwise
+ignoring any layers.  If the flag is set, both write the value UTF-8
+encoded, even if the layer is some different encoding, such as the
+example above.
+
+Ideally, all of these operators would completely ignore the C<:utf8>
+state, working only with bytes, but this would result in silently
+breaking existing code.  To avoid this a future version of perl will
+throw an exception when any of sysread(), recv(), syswrite() or send()
+are called on handle with the C<:utf8> layer.
 
 =item Insecure dependency in %s
 

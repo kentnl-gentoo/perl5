@@ -60,9 +60,6 @@ PERLVAR(I, markstack,	I32 *)		/* stack_sp locations we're
 PERLVAR(I, markstack_ptr, I32 *)
 PERLVAR(I, markstack_max, I32 *)
 
-PERLVARI(I, sawalias,	bool,	FALSE)	/* must enable common-vars
-					   pessimisation */
-
 #ifdef PERL_HASH_RANDOMIZE_KEYS
 #ifdef USE_PERL_PERTURB_KEYS
 PERLVARI(I, hash_rand_bits_enabled, U8, 1) /* used to randomize hash stuff 0 == no-random, 1 == random, 2 == determinsitic */
@@ -179,7 +176,7 @@ PERLVAR(I, statgv,	GV *)
 PERLVARI(I, statname,	SV *,	NULL)
 
 #ifdef HAS_TIMES
-/* Will be removed soon after v5.23.1. See RT #121351 */
+/* Will be removed soon after v5.23.2. See RT #121351 */
 PERLVAR(I, timesbuf,	struct tms)
 #endif
 
@@ -492,7 +489,8 @@ PERLVAR(I, sys_intern,	struct interp_intern)
 
 /* more statics moved here */
 PERLVAR(I, DBcv,	CV *)		/* from perl.c */
-PERLVARI(I, generation,	int,	100)	/* from op.c */
+PERLVARI(I, generation,	int,	100)	/* scan sequence# for OP_AASSIGN
+                                           compile-time common elem detection */
 
 PERLVAR(I, unicode, U32)	/* Unicode features: $ENV{PERL_UNICODE} or -C */
 
@@ -753,7 +751,7 @@ PERLVARI(I, globhook,	globhook_t, NULL)
 
 PERLVARI(I, padlist_generation, U32, 1)	/* id to identify padlist clones */
 
-/* The last unconditional member of the interpreter structure when 5.23.1 was
+/* The last unconditional member of the interpreter structure when 5.23.2 was
    released. The offset of the end of this is baked into a global variable in 
    any shared perl library which will allow a sanity test in future perl
    releases.  */

@@ -30,9 +30,9 @@
 #include "unicode_constants.h"
 
 /* For to_utf8_fold_flags, q.v. */
-#define FOLD_FLAGS_LOCALE 0x1
-#define FOLD_FLAGS_FULL   0x2
-#define FOLD_FLAGS_NOMIX_ASCII 0x4
+#define FOLD_FLAGS_LOCALE       0x1
+#define FOLD_FLAGS_FULL         0x2
+#define FOLD_FLAGS_NOMIX_ASCII  0x4
 
 /* For _core_swash_init(), internal core use only */
 #define _CORE_SWASH_INIT_USER_DEFINED_PROPERTY 0x1
@@ -112,7 +112,7 @@ EXTCONST unsigned char PL_utf8skip[] = {
 /* 0xA0 */ 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /* bogus: continuation byte */
 /* 0xB0 */ 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /* bogus: continuation byte */
 /* 0xC0 */ 2,2,				    /* overlong */
-/* 0xC2 */ 2,2,2,2,2,2,2,2,2,2,2,2,2,2,     /* U+0080 to U+03FF */
+/* 0xC2 */     2,2,2,2,2,2,2,2,2,2,2,2,2,2, /* U+0080 to U+03FF */
 /* 0xD0 */ 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, /* U+0400 to U+07FF */
 /* 0xE0 */ 3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3, /* U+0800 to U+FFFF */
 /* 0xF0 */ 4,4,4,4,4,4,4,4,5,5,5,5,6,6,	    /* above BMP to 2**31 - 1 */
@@ -196,16 +196,16 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
 
 /* Is the UTF8-encoded byte 'c' part of a variant sequence in UTF-8?  This is
  * the inverse of UTF8_IS_INVARIANT */
-#define UTF8_IS_CONTINUED(c) 		(((U8)c) &  0x80)
+#define UTF8_IS_CONTINUED(c)        (((U8)c) &  0x80)
 
 /* Is the byte 'c' the first byte of a multi-byte UTF8-8 encoded sequence?
  * This doesn't catch invariants (they are single-byte).  It also excludes the
  * illegal overlong sequences that begin with C0 and C1. */
-#define UTF8_IS_START(c)		(((U8)c) >= 0xc2)
+#define UTF8_IS_START(c)            (((U8)c) >= 0xc2)
 
 /* Is the byte 'c' part of a multi-byte UTF8-8 encoded sequence, and not the
  * first byte thereof?  */
-#define UTF8_IS_CONTINUATION(c)		((((U8)c) & 0xC0) == 0x80)
+#define UTF8_IS_CONTINUATION(c)     ((((U8)c) & 0xC0) == 0x80)
 
 /* Is the UTF8-encoded byte 'c' the first byte of a two byte sequence?  Use
  * UTF8_IS_NEXT_CHAR_DOWNGRADEABLE() instead if the input isn't known to
@@ -215,7 +215,7 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
 
 /* Is the UTF8-encoded byte 'c' the first byte of a sequence of bytes that
  * represent a code point > 255? */
-#define UTF8_IS_ABOVE_LATIN1(c)	((U8)(c) >= 0xc4)
+#define UTF8_IS_ABOVE_LATIN1(c)     ((U8)(c) >= 0xc4)
 
 /* This defines the 1-bits that are to be in the first byte of a multi-byte
  * UTF-8 encoded character that give the number of bytes that comprise the
@@ -367,7 +367,8 @@ only) byte is pointed to by C<s>.
 
 =cut
  */
-#define UTF8SKIP(s) PL_utf8skip[*(const U8*)(s)]
+#define UTF8SKIP(s)  PL_utf8skip[*(const U8*)(s)]
+#define UTF8_SKIP(s) UTF8SKIP(s)
 
 /* Is the byte 'c' the same character when encoded in UTF-8 as when not.  This
  * works on both UTF-8 encoded strings and non-encoded, as it returns TRUE in
@@ -390,8 +391,8 @@ only) byte is pointed to by C<s>.
 
 /* These two are helper macros for the other three sets, and should not be used
  * directly anywhere else.  'translate_function' is either NATIVE_TO_LATIN1
- * (which works for code points up to 0xFF) or NATIVE_TO_UNI which works for any
- * code point */
+ * (which works for code points up through 0xFF) or NATIVE_TO_UNI which works
+ * for any code point */
 #define __BASE_TWO_BYTE_HI(c, translate_function)                               \
             I8_TO_NATIVE_UTF8((translate_function(c) >> UTF_ACCUMULATION_SHIFT) \
                               | UTF_START_MARK(2))
@@ -465,7 +466,12 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
 =cut
 */
 #define DO_UTF8(sv) (SvUTF8(sv) && !IN_BYTES)
-#define IN_UNI_8_BIT \
+
+/* Should all strings be treated as Unicode, and not just UTF-8 encoded ones?
+ * Is so within 'feature unicode_strings' or 'locale :not_characters', and not
+ * within 'use bytes'.  UTF-8 locales are not tested for here, but perhaps
+ * could be */
+#define IN_UNI_8_BIT                                                             \
 	    (((CopHINTS_get(PL_curcop) & (HINT_UNI_8_BIT))                       \
                || (CopHINTS_get(PL_curcop) & HINT_LOCALE_PARTIAL                 \
                    /* -1 below is for :not_characters */                         \
@@ -529,7 +535,11 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
 #define UTF8_FIRST_PROBLEMATIC_CODE_POINT_FIRST_BYTE \
                                     FIRST_SURROGATE_UTF8_FIRST_BYTE
 
-#define UTF8_IS_SURROGATE(s) cBOOL(is_SURROGATE_utf8(s))
+/* Several of the macros below have a second parameter that is currently
+ * unused; but could be used in the future to make sure that the input is
+ * well-formed. */
+
+#define UTF8_IS_SURROGATE(s, e) cBOOL(is_SURROGATE_utf8(s))
 #define UTF8_IS_REPLACEMENT(s, send) cBOOL(is_REPLACEMENT_utf8_safe(s,send))
 
 /*		  ASCII		     EBCDIC I8
@@ -540,20 +550,20 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
  * BE AWARE that this test doesn't rule out malformed code points, in
  * particular overlongs */
 #ifdef EBCDIC /* Both versions assume well-formed UTF8 */
-#   define UTF8_IS_SUPER(s) (NATIVE_UTF8_TO_I8(* (U8*) (s)) >= 0xF9             \
+#   define UTF8_IS_SUPER(s, e) (NATIVE_UTF8_TO_I8(* (U8*) (s)) >= 0xF9          \
                          && (NATIVE_UTF8_TO_I8(* (U8*) (s)) > 0xF9              \
                              || (NATIVE_UTF8_TO_I8(* ((U8*) (s) + 1)) >= 0xA2)))
 #else
-#   define UTF8_IS_SUPER(s) (*(U8*) (s) >= 0xF4                                 \
-                            && (*(U8*) (s) > 0xF4 || (*((U8*) (s) + 1) >= 0x90)))
+#   define UTF8_IS_SUPER(s, e) (*(U8*) (s) >= 0xF4                              \
+                           && (*(U8*) (s) > 0xF4 || (*((U8*) (s) + 1) >= 0x90)))
 #endif
 
 /* These are now machine generated, and the 'given' clause is no longer
  * applicable */
-#define UTF8_IS_NONCHAR_GIVEN_THAT_NON_SUPER_AND_GE_PROBLEMATIC(s)             \
+#define UTF8_IS_NONCHAR_GIVEN_THAT_NON_SUPER_AND_GE_PROBLEMATIC(s, e)          \
                                                     cBOOL(is_NONCHAR_utf8(s))
-#define UTF8_IS_NONCHAR_(s)                                                    \
-                    UTF8_IS_NONCHAR_GIVEN_THAT_NON_SUPER_AND_GE_PROBLEMATIC(s)
+#define UTF8_IS_NONCHAR(s, e)                                                  \
+                UTF8_IS_NONCHAR_GIVEN_THAT_NON_SUPER_AND_GE_PROBLEMATIC(s, e)
 
 #define UNICODE_SURROGATE_FIRST		0xD800
 #define UNICODE_SURROGATE_LAST		0xDFFF
@@ -611,7 +621,11 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
 #define GREEK_CAPITAL_LETTER_MU                 0x039C	/* Upper and title case
                                                            of MICRON */
 #define LATIN_CAPITAL_LETTER_Y_WITH_DIAERESIS   0x0178	/* Also is title case */
-#define LATIN_CAPITAL_LETTER_SHARP_S	        0x1E9E
+#ifdef LATIN_CAPITAL_LETTER_SHARP_S_UTF8
+#   define LATIN_CAPITAL_LETTER_SHARP_S	        0x1E9E
+#endif
+#define LATIN_CAPITAL_LETTER_I_WITH_DOT_ABOVE   0x130
+#define LATIN_SMALL_LETTER_DOTLESS_I            0x131
 #define LATIN_SMALL_LETTER_LONG_S               0x017F
 #define LATIN_SMALL_LIGATURE_LONG_S_T           0xFB05
 #define LATIN_SMALL_LIGATURE_ST                 0xFB06
@@ -654,9 +668,9 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
  * on the order of 10 minutes to generate, and is never going to change, unless
  * the generated code is improved.
  *
- * The EBCDIC versions have been cut to not cover all of legal Unicode, so
- * don't take too long to generate, and there is a separate one for each code
- * page, so they are in regcharclass.h instead of here */
+ * The EBCDIC versions have been cut to not cover all of legal Unicode,
+ * otherwise they take too long to generate; besides there is a separate one
+ * for each code page, so they are in regcharclass.h instead of here */
 /*
 	UTF8_CHAR: Matches legal UTF-8 encoded characters from 2 through 4 bytes
 

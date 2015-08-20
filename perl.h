@@ -4779,7 +4779,14 @@ EXTCONST  unsigned char PL_mod_latin1_uc[] = {
 	192,	193,	194,	195,	196,	197,	198,	199,
 	200,	201,	202,	203,	204,	205,	206,	207,
 	208,	209,	210,	211,	212,	213,	214,	215,
-	216,	217,	218,	219,	220,	221,	222,	255 /*sharp s*/,	
+	216,	217,	218,	219,	220,	221,	222,
+#if    UNICODE_MAJOR_VERSION > 2                                        \
+   || (UNICODE_MAJOR_VERSION == 2 && UNICODE_DOT_VERSION >= 1		\
+                                  && UNICODE_DOT_DOT_VERSION >= 8)
+	                                                        255 /*sharp s*/,
+#else   /* uc() is itself in early unicode */
+	                                                        223,
+#endif
 	224-32,	225-32,	226-32,	227-32,	228-32,	229-32,	230-32,	231-32,
 	232-32,	233-32,	234-32,	235-32,	236-32,	237-32,	238-32,	239-32,
 	240-32,	241-32,	242-32,	243-32,	244-32,	245-32,	246-32,	247,
@@ -5767,6 +5774,8 @@ typedef struct am_table_short AMTS;
 #define PERLDB_SAVESRC_NOSUBS	(PL_perldb & PERLDBf_SAVESRC_NOSUBS)
 #define PERLDB_SAVESRC_INVALID	(PL_perldb & PERLDBf_SAVESRC_INVALID)
 
+#define PERLDB_LINE_OR_SAVESRC (PL_perldb & (PERLDBf_LINE | PERLDBf_SAVESRC))
+
 #ifdef USE_LOCALE
 /* These locale things are all subject to change */
 /* Returns TRUE if the plain locale pragma without a parameter is in effect
@@ -6673,6 +6682,10 @@ extern void moncontrol(int);
  * This means that in this format there are 61 bits available
  * for the nan payload.
  *
+ * Note that the 32-bit x86 ABI cannot do signaling nans: the x87
+ * simply cannot preserve the bit.  You can either use the 80-bit
+ * extended precision (long double, -Duselongdouble), or use x86-64.
+ *
  * In all platforms, the payload bytes (and bits, some of them are
  * often in a partial byte) themselves can be either all zero (x86),
  * all one (sparc or mips), or a mixture: in IEEE 754 128-bit double
@@ -6788,9 +6801,9 @@ extern void moncontrol(int);
  * for the quiet/signaling */
 #define NV_NAN_QS_BIT_OFFSET \
     (8 * (NV_NAN_QS_BYTE_OFFSET) + (NV_NAN_QS_BIT_SHIFT))
-/* NV_NAN_QS_QUIET (always defined) is one if the NV_NAN_QS_QS_BIT being
- * on/one indicates quiet NaN. NV_NAN_QS_SIGNALING (also always defined)
- * is on/one if the NV_NAN_QS_BIT being one indicates signaling NaN. */
+/* NV_NAN_QS_QUIET (always defined) is true if the NV_NAN_QS_QS_BIT being
+ * on indicates quiet NaN.  NV_NAN_QS_SIGNALING (also always defined)
+ * is true if the NV_NAN_QS_BIT being on indicates signaling NaN. */
 #define NV_NAN_QS_QUIET \
     ((NV_NAN_QS_BYTE(PL_nan.u8) & NV_NAN_QS_BIT) == NV_NAN_QS_BIT)
 #define NV_NAN_QS_SIGNALING (!(NV_NAN_QS_QUIET))

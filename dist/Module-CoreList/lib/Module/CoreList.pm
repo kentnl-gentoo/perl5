@@ -4,7 +4,7 @@ use vars qw/$VERSION %released %version %families %upstream
 	    %bug_tracker %deprecated %delta/;
 use Module::CoreList::TieHashDelta;
 use version;
-$VERSION = '5.20150720';
+$VERSION = '5.20150820';
 
 sub _released_order {   # Sort helper, to make '?' sort after everything else
     (substr($released{$a}, 0, 1) eq "?")
@@ -281,6 +281,7 @@ sub changes_between {
     5.022000 => '2015-06-01',
     5.023000 => '2015-06-20',
     5.023001 => '2015-07-20',
+    5.023002 => '2015-08-20',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -11651,6 +11652,44 @@ for my $version ( sort { $a <=> $b } keys %released ) {
             'autodie::ScopeUtil'    => 1,
         }
     },
+    5.023002 => {
+        delta_from => 5.023001,
+        changed => {
+            'Attribute::Handlers'   => '0.99',
+            'B::Op_private'         => '5.023002',
+            'CPAN::Meta::YAML'      => '0.017',
+            'Config'                => '5.023002',
+            'Cwd'                   => '3.57',
+            'Encode'                => '2.76',
+            'ExtUtils::ParseXS'     => '3.29',
+            'ExtUtils::ParseXS::Constants'=> '3.29',
+            'ExtUtils::ParseXS::CountLines'=> '3.29',
+            'ExtUtils::ParseXS::Eval'=> '3.29',
+            'ExtUtils::ParseXS::Utilities'=> '3.29',
+            'ExtUtils::Typemaps'    => '3.29',
+            'File::Find'            => '1.30',
+            'File::Spec'            => '3.57',
+            'File::Spec::Cygwin'    => '3.57',
+            'File::Spec::Epoc'      => '3.57',
+            'File::Spec::Functions' => '3.57',
+            'File::Spec::Mac'       => '3.57',
+            'File::Spec::OS2'       => '3.57',
+            'File::Spec::Unix'      => '3.57',
+            'File::Spec::VMS'       => '3.57',
+            'File::Spec::Win32'     => '3.57',
+            'Filter::Util::Call'    => '1.55',
+            'Hash::Util'            => '0.19',
+            'Module::CoreList'      => '5.20150820',
+            'Module::CoreList::TieHashDelta'=> '5.20150820',
+            'Module::CoreList::Utils'=> '5.20150820',
+            'POSIX'                 => '1.56',
+            'Term::Cap'             => '1.17',
+            'Unicode::UCD'          => '0.62',
+            'perlfaq'               => '5.021010',
+        },
+        removed => {
+        }
+    },
 );
 
 sub is_core
@@ -12216,6 +12255,13 @@ for my $version (sort { $a <=> $b } keys %delta) {
     },
     5.023001 => {
         delta_from => 5.023000,
+        changed => {
+        },
+        removed => {
+        }
+    },
+    5.023002 => {
+        delta_from => 5.023001,
         changed => {
         },
         removed => {

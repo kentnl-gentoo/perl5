@@ -817,14 +817,13 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 
     s = SvPV(sv, len);
     if (chomping) {
-	char *temp_buffer = NULL;
-	SV *svrecode = NULL;
-
 	if (s && len) {
+	    char *temp_buffer = NULL;
+	    SV *svrecode = NULL;
 	    s += --len;
 	    if (RsPARA(PL_rs)) {
 		if (*s != '\n')
-		    goto nope;
+		    goto nope_free_nothing;
 		++count;
 		while (len && s[-1] == '\n') {
 		    --len;
@@ -848,11 +847,12 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 			temp_buffer = (char*)bytes_from_utf8((U8*)rsptr,
 							     &rslen, &is_utf8);
 			if (is_utf8) {
-			    /* Cannot downgrade, therefore cannot possibly match
+			    /* Cannot downgrade, therefore cannot possibly match.
+			       At this point, temp_buffer is not alloced, and
+			       is the buffer inside PL_rs, so dont free it.
 			     */
 			    assert (temp_buffer == rsptr);
-			    temp_buffer = NULL;
-			    goto nope;
+			    goto nope_free_sv;
 			}
 			rsptr = temp_buffer;
 		    }
@@ -872,16 +872,16 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 		}
 		if (rslen == 1) {
 		    if (*s != *rsptr)
-			goto nope;
+			goto nope_free_all;
 		    ++count;
 		}
 		else {
 		    if (len < rslen - 1)
-			goto nope;
+			goto nope_free_all;
 		    len -= rslen - 1;
 		    s -= rslen - 1;
 		    if (memNE(s, rsptr, rslen))
-			goto nope;
+			goto nope_free_all;
 		    count += rs_charlen;
 		}
 	    }
@@ -890,12 +890,13 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 	    *SvEND(sv) = '\0';
 	    SvNIOK_off(sv);
 	    SvSETMAGIC(sv);
+
+	    nope_free_all:
+	    Safefree(temp_buffer);
+	    nope_free_sv:
+	    SvREFCNT_dec(svrecode);
+	    nope_free_nothing: ;
 	}
-    nope:
-
-	SvREFCNT_dec(svrecode);
-
-	Safefree(temp_buffer);
     } else {
 	if (len && (!SvPOK(sv) || SvIsCOW(sv)))
 	    s = SvPV_force_nomg(sv, len);
@@ -3470,7 +3471,7 @@ PP(pp_index)
 	   SvPV_const some lines above. We can't remove that, as we need to
 	   call some SvPV to trigger overloading early and find out if the
 	   string is UTF-8.
-	   This is all getting to messy. The API isn't quite clean enough,
+	   This is all getting too messy. The API isn't quite clean enough,
 	   because data access has side effects.
 	*/
 	little = newSVpvn_flags(little_p, llen,
@@ -4096,6 +4097,9 @@ PP(pp_uc)
 		     * just above.  
 		     * Use the source to distinguish between the three cases */
 
+#if    UNICODE_MAJOR_VERSION > 2                                        \
+   || (UNICODE_MAJOR_VERSION == 2 && UNICODE_DOT_VERSION >= 1		\
+                                  && UNICODE_DOT_DOT_VERSION >= 8)
 		    if (*s == LATIN_SMALL_LETTER_SHARP_S) {
 
 			/* uc() of this requires 2 characters, but they are
@@ -4108,6 +4112,7 @@ PP(pp_uc)
 			*d++ = 'S'; *d = 'S'; /* upper case is 'SS' */
 			continue;   /* Back to the tight loop; still in ASCII */
 		    }
+#endif
 
 		    /* The other two special handling characters have their
 		     * upper cases outside the latin1 range, hence need to be
@@ -4401,8 +4406,14 @@ PP(pp_fc)
     const U8 *send;
     U8 *d;
     U8 tmpbuf[UTF8_MAXBYTES_CASE + 1];
+#if    UNICODE_MAJOR_VERSION > 3 /* no multifolds in early Unicode */   \
+   || (UNICODE_MAJOR_VERSION == 3 && (   UNICODE_DOT_VERSION > 0)       \
+                                      || UNICODE_DOT_DOT_VERSION > 0)
     const bool full_folding = TRUE; /* This variable is here so we can easily
                                        move to more generality later */
+#else
+    const bool full_folding = FALSE;
+#endif
     const U8 flags = ( full_folding      ? FOLD_FLAGS_FULL   : 0 )
 #ifdef USE_LOCALE_CTYPE
                    | ( IN_LC_RUNTIME(LC_CTYPE) ? FOLD_FLAGS_LOCALE : 0 )

@@ -1442,7 +1442,7 @@ S_alloc_LOGOP(pTHX_ I32 type, OP *first, OP* other)
 =for apidoc Am|OP *|op_contextualize|OP *o|I32 context
 
 Applies a syntactic context to an op tree representing an expression.
-I<o> is the op tree, and I<context> must be C<G_SCALAR>, C<G_ARRAY>,
+C<o> is the op tree, and C<context> must be C<G_SCALAR>, C<G_ARRAY>,
 or C<G_VOID> to specify the context to apply.  The modified op tree
 is returned.
 
@@ -2584,7 +2584,7 @@ S_finalize_op(pTHX_ OP* o)
 =for apidoc Amx|OP *|op_lvalue|OP *o|I32 type
 
 Propagate lvalue ("modifiable") context to an op and its children.
-I<type> represents the context type, roughly based on the type of op that
+C<type> represents the context type, roughly based on the type of op that
 would do the modifying, although C<local()> is represented by OP_NULL,
 because it has no op type of its own (it is signalled by a flag on
 the lvalue op).
@@ -3905,9 +3905,9 @@ Perl_block_start(pTHX_ int full)
 /*
 =for apidoc Am|OP *|block_end|I32 floor|OP *seq
 
-Handles compile-time scope exit.  I<floor>
+Handles compile-time scope exit.  C<floor>
 is the savestack index returned by
-C<block_start>, and I<seq> is the body of the block.  Returns the block,
+C<block_start>, and C<seq> is the body of the block.  Returns the block,
 possibly modified.
 
 =cut
@@ -4455,10 +4455,10 @@ S_gen_constant_list(pTHX_ OP *o)
 =for apidoc Am|OP *|op_append_elem|I32 optype|OP *first|OP *last
 
 Append an item to the list of ops contained directly within a list-type
-op, returning the lengthened list.  I<first> is the list-type op,
-and I<last> is the op to append to the list.  I<optype> specifies the
-intended opcode for the list.  If I<first> is not already a list of the
-right type, it will be upgraded into one.  If either I<first> or I<last>
+op, returning the lengthened list.  C<first> is the list-type op,
+and C<last> is the op to append to the list.  C<optype> specifies the
+intended opcode for the list.  If C<first> is not already a list of the
+right type, it will be upgraded into one.  If either C<first> or C<last>
 is null, the other is returned unchanged.
 
 =cut
@@ -4488,10 +4488,10 @@ Perl_op_append_elem(pTHX_ I32 type, OP *first, OP *last)
 =for apidoc Am|OP *|op_append_list|I32 optype|OP *first|OP *last
 
 Concatenate the lists of ops contained directly within two list-type ops,
-returning the combined list.  I<first> and I<last> are the list-type ops
-to concatenate.  I<optype> specifies the intended opcode for the list.
-If either I<first> or I<last> is not already a list of the right type,
-it will be upgraded into one.  If either I<first> or I<last> is null,
+returning the combined list.  C<first> and C<last> are the list-type ops
+to concatenate.  C<optype> specifies the intended opcode for the list.
+If either C<first> or C<last> is not already a list of the right type,
+it will be upgraded into one.  If either C<first> or C<last> is null,
 the other is returned unchanged.
 
 =cut
@@ -4526,10 +4526,10 @@ Perl_op_append_list(pTHX_ I32 type, OP *first, OP *last)
 =for apidoc Am|OP *|op_prepend_elem|I32 optype|OP *first|OP *last
 
 Prepend an item to the list of ops contained directly within a list-type
-op, returning the lengthened list.  I<first> is the op to prepend to the
-list, and I<last> is the list-type op.  I<optype> specifies the intended
-opcode for the list.  If I<last> is not already a list of the right type,
-it will be upgraded into one.  If either I<first> or I<last> is null,
+op, returning the lengthened list.  C<first> is the op to prepend to the
+list, and C<last> is the list-type op.  C<optype> specifies the intended
+opcode for the list.  If C<last> is not already a list of the right type,
+it will be upgraded into one.  If either C<first> or C<last> is null,
 the other is returned unchanged.
 
 =cut
@@ -4563,8 +4563,8 @@ Perl_op_prepend_elem(pTHX_ I32 type, OP *first, OP *last)
 /*
 =for apidoc Am|OP *|op_convert_list|I32 type|I32 flags|OP *o
 
-Converts I<o> into a list op if it is not one already, and then converts it
-into the specified I<type>, calling its check function, allocating a target if
+Converts C<o> into a list op if it is not one already, and then converts it
+into the specified C<type>, calling its check function, allocating a target if
 it needs one, and folding constants.
 
 A list-type op is usually constructed one kid at a time via C<newLISTOP>,
@@ -4664,9 +4664,9 @@ S_force_list(pTHX_ OP *o, bool nullit)
 /*
 =for apidoc Am|OP *|newLISTOP|I32 type|I32 flags|OP *first|OP *last
 
-Constructs, checks, and returns an op of any list type.  I<type> is
-the opcode.  I<flags> gives the eight bits of C<op_flags>, except that
-C<OPf_KIDS> will be set automatically if required.  I<first> and I<last>
+Constructs, checks, and returns an op of any list type.  C<type> is
+the opcode.  C<flags> gives the eight bits of C<op_flags>, except that
+C<OPf_KIDS> will be set automatically if required.  C<first> and C<last>
 supply up to two ops to be direct children of the list op; they are
 consumed by this function and become part of the constructed op tree.
 
@@ -4722,7 +4722,7 @@ Perl_newLISTOP(pTHX_ I32 type, I32 flags, OP *first, OP *last)
 =for apidoc Am|OP *|newOP|I32 type|I32 flags
 
 Constructs, checks, and returns an op of any base type (any type that
-has no extra fields).  I<type> is the opcode.  I<flags> gives the
+has no extra fields).  C<type> is the opcode.  C<flags> gives the
 eight bits of C<op_flags>, and, shifted up eight bits, the eight bits
 of C<op_private>.
 
@@ -4761,11 +4761,11 @@ Perl_newOP(pTHX_ I32 type, I32 flags)
 /*
 =for apidoc Am|OP *|newUNOP|I32 type|I32 flags|OP *first
 
-Constructs, checks, and returns an op of any unary type.  I<type> is
-the opcode.  I<flags> gives the eight bits of C<op_flags>, except that
+Constructs, checks, and returns an op of any unary type.  C<type> is
+the opcode.  C<flags> gives the eight bits of C<op_flags>, except that
 C<OPf_KIDS> will be set automatically if required, and, shifted up eight
 bits, the eight bits of C<op_private>, except that the bit with value 1
-is automatically set.  I<first> supplies an optional op to be the direct
+is automatically set.  C<first> supplies an optional op to be the direct
 child of the unary op; it is consumed by this function and become part
 of the constructed op tree.
 
@@ -4851,10 +4851,10 @@ Perl_newUNOP_AUX(pTHX_ I32 type, I32 flags, OP *first, UNOP_AUX_item *aux)
 =for apidoc Am|OP *|newMETHOP|I32 type|I32 flags|OP *first
 
 Constructs, checks, and returns an op of method type with a method name
-evaluated at runtime.  I<type> is the opcode.  I<flags> gives the eight
+evaluated at runtime.  C<type> is the opcode.  C<flags> gives the eight
 bits of C<op_flags>, except that C<OPf_KIDS> will be set automatically,
 and, shifted up eight bits, the eight bits of C<op_private>, except that
-the bit with value 1 is automatically set.  I<dynamic_meth> supplies an
+the bit with value 1 is automatically set.  C<dynamic_meth> supplies an
 op which evaluates method name; it is consumed by this function and
 become part of the constructed op tree.
 Supported optypes: OP_METHOD.
@@ -4908,9 +4908,9 @@ Perl_newMETHOP (pTHX_ I32 type, I32 flags, OP* dynamic_meth) {
 =for apidoc Am|OP *|newMETHOP_named|I32 type|I32 flags|SV *const_meth
 
 Constructs, checks, and returns an op of method type with a constant
-method name.  I<type> is the opcode.  I<flags> gives the eight bits of
+method name.  C<type> is the opcode.  C<flags> gives the eight bits of
 C<op_flags>, and, shifted up eight bits, the eight bits of
-C<op_private>.  I<const_meth> supplies a constant method name;
+C<op_private>.  C<const_meth> supplies a constant method name;
 it must be a shared COW string.
 Supported optypes: OP_METHOD_NAMED.
 
@@ -4926,11 +4926,11 @@ Perl_newMETHOP_named (pTHX_ I32 type, I32 flags, SV* const_meth) {
 /*
 =for apidoc Am|OP *|newBINOP|I32 type|I32 flags|OP *first|OP *last
 
-Constructs, checks, and returns an op of any binary type.  I<type>
-is the opcode.  I<flags> gives the eight bits of C<op_flags>, except
+Constructs, checks, and returns an op of any binary type.  C<type>
+is the opcode.  C<flags> gives the eight bits of C<op_flags>, except
 that C<OPf_KIDS> will be set automatically, and, shifted up eight bits,
 the eight bits of C<op_private>, except that the bit with value 1 or
-2 is automatically set as required.  I<first> and I<last> supply up to
+2 is automatically set as required.  C<first> and C<last> supply up to
 two ops to be the direct children of the binary op; they are consumed
 by this function and become part of the constructed op tree.
 
@@ -5161,7 +5161,7 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 		}
 	    }
 
-	    /* now see which range will peter our first, if either. */
+	    /* now see which range will peter out first, if either. */
 	    tdiff = tlast - tfirst;
 	    rdiff = rlast - rfirst;
 	    tcount += tdiff + 1;
@@ -5332,7 +5332,7 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 =for apidoc Am|OP *|newPMOP|I32 type|I32 flags
 
 Constructs, checks, and returns an op of any pattern matching type.
-I<type> is the opcode.  I<flags> gives the eight bits of C<op_flags>
+C<type> is the opcode.  C<flags> gives the eight bits of C<op_flags>
 and, shifted up eight bits, the eight bits of C<op_private>.
 
 =cut
@@ -5773,8 +5773,8 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, OP *repl, bool isreg, I32 floor)
 =for apidoc Am|OP *|newSVOP|I32 type|I32 flags|SV *sv
 
 Constructs, checks, and returns an op of any type that involves an
-embedded SV.  I<type> is the opcode.  I<flags> gives the eight bits
-of C<op_flags>.  I<sv> gives the SV to embed in the op; this function
+embedded SV.  C<type> is the opcode.  C<flags> gives the eight bits
+of C<op_flags>.  C<sv> gives the SV to embed in the op; this function
 takes ownership of one reference to it.
 
 =cut
@@ -5836,9 +5836,9 @@ Perl_newDEFSVOP(pTHX)
 =for apidoc Am|OP *|newPADOP|I32 type|I32 flags|SV *sv
 
 Constructs, checks, and returns an op of any type that involves a
-reference to a pad element.  I<type> is the opcode.  I<flags> gives the
+reference to a pad element.  C<type> is the opcode.  C<flags> gives the
 eight bits of C<op_flags>.  A pad slot is automatically allocated, and
-is populated with I<sv>; this function takes ownership of one reference
+is populated with C<sv>; this function takes ownership of one reference
 to it.
 
 This function only exists if Perl has been compiled to use ithreads.
@@ -5881,8 +5881,8 @@ Perl_newPADOP(pTHX_ I32 type, I32 flags, SV *sv)
 =for apidoc Am|OP *|newGVOP|I32 type|I32 flags|GV *gv
 
 Constructs, checks, and returns an op of any type that involves an
-embedded reference to a GV.  I<type> is the opcode.  I<flags> gives the
-eight bits of C<op_flags>.  I<gv> identifies the GV that the op should
+embedded reference to a GV.  C<type> is the opcode.  C<flags> gives the
+eight bits of C<op_flags>.  C<gv> identifies the GV that the op should
 reference; calling this function does not transfer ownership of any
 reference to it.
 
@@ -5905,8 +5905,8 @@ Perl_newGVOP(pTHX_ I32 type, I32 flags, GV *gv)
 =for apidoc Am|OP *|newPVOP|I32 type|I32 flags|char *pv
 
 Constructs, checks, and returns an op of any type that involves an
-embedded C-level pointer (PV).  I<type> is the opcode.  I<flags> gives
-the eight bits of C<op_flags>.  I<pv> supplies the C-level pointer, which
+embedded C-level pointer (PV).  C<type> is the opcode.  C<flags> gives
+the eight bits of C<op_flags>.  C<pv> supplies the C-level pointer, which
 must have been allocated using C<PerlMemShared_malloc>; the memory will
 be freed when the op is destroyed.
 
@@ -6221,11 +6221,11 @@ Perl_dofile(pTHX_ OP *term, I32 force_builtin)
 
 =for apidoc Am|OP *|newSLICEOP|I32 flags|OP *subscript|OP *listval
 
-Constructs, checks, and returns an C<lslice> (list slice) op.  I<flags>
+Constructs, checks, and returns an C<lslice> (list slice) op.  C<flags>
 gives the eight bits of C<op_flags>, except that C<OPf_KIDS> will
 be set automatically, and, shifted up eight bits, the eight bits of
 C<op_private>, except that the bit with value 1 or 2 is automatically
-set as required.  I<listval> and I<subscript> supply the parameters of
+set as required.  C<listval> and C<subscript> supply the parameters of
 the slice; they are consumed by this function and become part of the
 constructed op tree.
 
@@ -6303,149 +6303,23 @@ S_assignment_type(pTHX_ const OP *o)
     return ret;
 }
 
-/*
-  Helper function for newASSIGNOP to detect commonality between the
-  lhs and the rhs.  (It is actually called very indirectly.  newASSIGNOP
-  flags the op and the peephole optimizer calls this helper function
-  if the flag is set.)  Marks all variables with PL_generation.  If it
-  returns TRUE the assignment must be able to handle common variables.
-
-  PL_generation sorcery:
-  An assignment like ($a,$b) = ($c,$d) is easier than
-  ($a,$b) = ($c,$a), since there is no need for temporary vars.
-  To detect whether there are common vars, the global var
-  PL_generation is incremented for each assign op we compile.
-  Then, while compiling the assign op, we run through all the
-  variables on both sides of the assignment, setting a spare slot
-  in each of them to PL_generation.  If any of them already have
-  that value, we know we've got commonality.  Also, if the
-  generation number is already set to PERL_INT_MAX, then
-  the variable is involved in aliasing, so we also have
-  potential commonality in that case.  We could use a
-  single bit marker, but then we'd have to make 2 passes, first
-  to clear the flag, then to test and set it.  And that
-  wouldn't help with aliasing, either.  To find somewhere
-  to store these values, evil chicanery is done with SvUVX().
-*/
-PERL_STATIC_INLINE bool
-S_aassign_common_vars(pTHX_ OP* o)
-{
-    OP *curop;
-    for (curop = cUNOPo->op_first; curop; curop = OpSIBLING(curop)) {
-	if (PL_opargs[curop->op_type] & OA_DANGEROUS) {
-	    if (curop->op_type == OP_GV || curop->op_type == OP_GVSV
-	     || curop->op_type == OP_AELEMFAST) {
-		GV *gv = cGVOPx_gv(curop);
-		if (gv == PL_defgv
-		    || (int)GvASSIGN_GENERATION(gv) == PL_generation)
-		    return TRUE;
-		GvASSIGN_GENERATION_set(gv, PL_generation);
-	    }
-	    else if (curop->op_type == OP_PADSV ||
-		curop->op_type == OP_PADAV ||
-		curop->op_type == OP_PADHV ||
-		curop->op_type == OP_AELEMFAST_LEX ||
-		curop->op_type == OP_PADANY)
-		{
-		  padcheck:
-		    if (PAD_COMPNAME_GEN(curop->op_targ)
-			== (STRLEN)PL_generation
-		     || PAD_COMPNAME_GEN(curop->op_targ) == PERL_INT_MAX)
-			return TRUE;
-		    PAD_COMPNAME_GEN_set(curop->op_targ, PL_generation);
-
-		}
-	    else if (curop->op_type == OP_RV2CV)
-		return TRUE;
-	    else if (curop->op_type == OP_RV2SV ||
-		curop->op_type == OP_RV2AV ||
-		curop->op_type == OP_RV2HV ||
-		curop->op_type == OP_RV2GV) {
-		if (cUNOPx(curop)->op_first->op_type != OP_GV)	/* funny deref? */
-		    return TRUE;
-	    }
-	    else if (curop->op_type == OP_PUSHRE) {
-		GV *const gv =
-#ifdef USE_ITHREADS
-		    ((PMOP*)curop)->op_pmreplrootu.op_pmtargetoff
-			? MUTABLE_GV(PAD_SVl(((PMOP*)curop)->op_pmreplrootu.op_pmtargetoff))
-			: NULL;
-#else
-		    ((PMOP*)curop)->op_pmreplrootu.op_pmtargetgv;
-#endif
-		if (gv) {
-		    if (gv == PL_defgv
-			|| (int)GvASSIGN_GENERATION(gv) == PL_generation)
-			return TRUE;
-		    GvASSIGN_GENERATION_set(gv, PL_generation);
-		}
-		else if (curop->op_targ)
-		    goto padcheck;
-	    }
-	    else if (curop->op_type == OP_PADRANGE)
-		/* Ignore padrange; checking its siblings is sufficient. */
-		continue;
-	    else
-		return TRUE;
-	}
-	else if (PL_opargs[curop->op_type] & OA_TARGLEX
-	      && curop->op_private & OPpTARGET_MY)
-	    goto padcheck;
-
-	if (curop->op_flags & OPf_KIDS) {
-	    if (aassign_common_vars(curop))
-		return TRUE;
-	}
-    }
-    return FALSE;
-}
-
-/* This variant only handles lexical aliases.  It is called when
-   newASSIGNOP decides that we don’t have any common vars, as lexical ali-
-   ases trump that decision.  */
-PERL_STATIC_INLINE bool
-S_aassign_common_vars_aliases_only(pTHX_ OP *o)
-{
-    OP *curop;
-    for (curop = cUNOPo->op_first; curop; curop = OpSIBLING(curop)) {
-	if ((curop->op_type == OP_PADSV ||
-	     curop->op_type == OP_PADAV ||
-	     curop->op_type == OP_PADHV ||
-	     curop->op_type == OP_AELEMFAST_LEX ||
-	     curop->op_type == OP_PADANY ||
-	     (  PL_opargs[curop->op_type] & OA_TARGLEX
-	     && curop->op_private & OPpTARGET_MY  ))
-	   && PAD_COMPNAME_GEN(curop->op_targ) == PERL_INT_MAX)
-	    return TRUE;
-
-	if (curop->op_type == OP_PUSHRE && curop->op_targ
-	 && PAD_COMPNAME_GEN(curop->op_targ) == PERL_INT_MAX)
-	    return TRUE;
-
-	if (curop->op_flags & OPf_KIDS) {
-	    if (S_aassign_common_vars_aliases_only(aTHX_ curop))
-		return TRUE;
-	}
-    }
-    return FALSE;
-}
 
 /*
 =for apidoc Am|OP *|newASSIGNOP|I32 flags|OP *left|I32 optype|OP *right
 
-Constructs, checks, and returns an assignment op.  I<left> and I<right>
+Constructs, checks, and returns an assignment op.  C<left> and C<right>
 supply the parameters of the assignment; they are consumed by this
 function and become part of the constructed op tree.
 
-If I<optype> is C<OP_ANDASSIGN>, C<OP_ORASSIGN>, or C<OP_DORASSIGN>, then
-a suitable conditional optree is constructed.  If I<optype> is the opcode
+If C<optype> is C<OP_ANDASSIGN>, C<OP_ORASSIGN>, or C<OP_DORASSIGN>, then
+a suitable conditional optree is constructed.  If C<optype> is the opcode
 of a binary operator, such as C<OP_BIT_OR>, then an op is constructed that
 performs the binary operation and assigns the result to the left argument.
-Either way, if I<optype> is non-zero then I<flags> has no effect.
+Either way, if C<optype> is non-zero then C<flags> has no effect.
 
-If I<optype> is zero, then a plain scalar or list assignment is
+If C<optype> is zero, then a plain scalar or list assignment is
 constructed.  Which type of assignment it is is automatically determined.
-I<flags> gives the eight bits of C<op_flags>, except that C<OPf_KIDS>
+C<flags> gives the eight bits of C<op_flags>, except that C<OPf_KIDS>
 will be set automatically, and, shifted up eight bits, the eight bits
 of C<op_private>, except that the bit with value 1 or 2 is automatically
 set as required.
@@ -6475,7 +6349,6 @@ Perl_newASSIGNOP(pTHX_ I32 flags, OP *left, I32 optype, OP *right)
 	static const char no_list_state[] = "Initialization of state variables"
 	    " in list context currently forbidden";
 	OP *curop;
-	bool maybe_common_vars = TRUE;
 
 	if (left->op_type == OP_ASLICE || left->op_type == OP_HSLICE)
 	    left->op_private &= ~ OPpSLICEWARNING;
@@ -6489,47 +6362,24 @@ Perl_newASSIGNOP(pTHX_ I32 flags, OP *left, I32 optype, OP *right)
 	if (OP_TYPE_IS_OR_WAS(left, OP_LIST))
 	{
 	    OP* lop = ((LISTOP*)left)->op_first;
-	    maybe_common_vars = FALSE;
 	    while (lop) {
-		if (lop->op_type == OP_PADSV ||
-		    lop->op_type == OP_PADAV ||
-		    lop->op_type == OP_PADHV ||
-		    lop->op_type == OP_PADANY) {
-		    if (!(lop->op_private & OPpLVAL_INTRO))
-			maybe_common_vars = TRUE;
-
-		    if (lop->op_private & OPpPAD_STATE) {
-			if (left->op_private & OPpLVAL_INTRO) {
-			    /* Each variable in state($a, $b, $c) = ... */
-			}
-			else {
-			    /* Each state variable in
-			       (state $a, my $b, our $c, $d, undef) = ... */
-			}
-			yyerror(no_list_state);
-		    } else {
-			/* Each my variable in
-			   (state $a, my $b, our $c, $d, undef) = ... */
-		    }
-		} else if (lop->op_type == OP_UNDEF ||
-                           OP_TYPE_IS_OR_WAS(lop, OP_PUSHMARK)) {
-		    /* undef may be interesting in
-		       (state $a, undef, state $c) */
-		} else {
-		    /* Other ops in the list. */
-		    maybe_common_vars = TRUE;
-		}
+		if ((lop->op_type == OP_PADSV ||
+		     lop->op_type == OP_PADAV ||
+		     lop->op_type == OP_PADHV ||
+		     lop->op_type == OP_PADANY)
+		  && (lop->op_private & OPpPAD_STATE)
+                )
+                    yyerror(no_list_state);
 		lop = OpSIBLING(lop);
 	    }
 	}
-	else if ((left->op_private & OPpLVAL_INTRO)
+	else if (  (left->op_private & OPpLVAL_INTRO)
+                && (left->op_private & OPpPAD_STATE)
 		&& (   left->op_type == OP_PADSV
 		    || left->op_type == OP_PADAV
 		    || left->op_type == OP_PADHV
-		    || left->op_type == OP_PADANY))
-	{
-	    if (left->op_type == OP_PADSV) maybe_common_vars = FALSE;
-	    if (left->op_private & OPpPAD_STATE) {
+		    || left->op_type == OP_PADANY)
+        ) {
 		/* All single variable list context state assignments, hence
 		   state ($a) = ...
 		   (state $a) = ...
@@ -6541,13 +6391,6 @@ Perl_newASSIGNOP(pTHX_ I32 flags, OP *left, I32 optype, OP *right)
 		   (state %a) = ...
 		*/
 		yyerror(no_list_state);
-	    }
-	}
-
-	if (maybe_common_vars) {
-		/* The peephole optimizer will do the full check and pos-
-		   sibly turn this off.  */
-		o->op_private |= OPpASSIGN_COMMON;
 	}
 
 	if (right && right->op_type == OP_SPLIT
@@ -6660,13 +6503,13 @@ Perl_newASSIGNOP(pTHX_ I32 flags, OP *left, I32 optype, OP *right)
 Constructs a state op (COP).  The state op is normally a C<nextstate> op,
 but will be a C<dbstate> op if debugging is enabled for currently-compiled
 code.  The state op is populated from C<PL_curcop> (or C<PL_compiling>).
-If I<label> is non-null, it supplies the name of a label to attach to
+If C<label> is non-null, it supplies the name of a label to attach to
 the state op; this function takes ownership of the memory pointed at by
-I<label>, and will free it.  I<flags> gives the eight bits of C<op_flags>
+C<label>, and will free it.  C<flags> gives the eight bits of C<op_flags>
 for the state op.
 
-If I<o> is null, the state op is returned.  Otherwise the state op is
-combined with I<o> into a C<lineseq> list op, which is returned.  I<o>
+If C<o> is null, the state op is returned.  Otherwise the state op is
+combined with C<o> into a C<lineseq> list op, which is returned.  C<o>
 is consumed by this function and becomes part of the returned op tree.
 
 =cut
@@ -6748,12 +6591,12 @@ Perl_newSTATEOP(pTHX_ I32 flags, char *label, OP *o)
 /*
 =for apidoc Am|OP *|newLOGOP|I32 type|I32 flags|OP *first|OP *other
 
-Constructs, checks, and returns a logical (flow control) op.  I<type>
-is the opcode.  I<flags> gives the eight bits of C<op_flags>, except
+Constructs, checks, and returns a logical (flow control) op.  C<type>
+is the opcode.  C<flags> gives the eight bits of C<op_flags>, except
 that C<OPf_KIDS> will be set automatically, and, shifted up eight bits,
 the eight bits of C<op_private>, except that the bit with value 1 is
-automatically set.  I<first> supplies the expression controlling the
-flow, and I<other> supplies the side (alternate) chain of ops; they are
+automatically set.  C<first> supplies the expression controlling the
+flow, and C<other> supplies the side (alternate) chain of ops; they are
 consumed by this function and become part of the constructed op tree.
 
 =cut
@@ -7012,11 +6855,11 @@ S_new_logop(pTHX_ I32 type, I32 flags, OP** firstp, OP** otherp)
 =for apidoc Am|OP *|newCONDOP|I32 flags|OP *first|OP *trueop|OP *falseop
 
 Constructs, checks, and returns a conditional-expression (C<cond_expr>)
-op.  I<flags> gives the eight bits of C<op_flags>, except that C<OPf_KIDS>
+op.  C<flags> gives the eight bits of C<op_flags>, except that C<OPf_KIDS>
 will be set automatically, and, shifted up eight bits, the eight bits of
 C<op_private>, except that the bit with value 1 is automatically set.
-I<first> supplies the expression selecting between the two branches,
-and I<trueop> and I<falseop> supply the branches; they are consumed by
+C<first> supplies the expression selecting between the two branches,
+and C<trueop> and C<falseop> supply the branches; they are consumed by
 this function and become part of the constructed op tree.
 
 =cut
@@ -7087,10 +6930,10 @@ Perl_newCONDOP(pTHX_ I32 flags, OP *first, OP *trueop, OP *falseop)
 =for apidoc Am|OP *|newRANGE|I32 flags|OP *left|OP *right
 
 Constructs and returns a C<range> op, with subordinate C<flip> and
-C<flop> ops.  I<flags> gives the eight bits of C<op_flags> for the
+C<flop> ops.  C<flags> gives the eight bits of C<op_flags> for the
 C<flip> op and, shifted up eight bits, the eight bits of C<op_private>
 for both the C<flip> and C<range> ops, except that the bit with value
-1 is automatically set.  I<left> and I<right> supply the expressions
+1 is automatically set.  C<left> and C<right> supply the expressions
 controlling the endpoints of the range; they are consumed by this function
 and become part of the constructed op tree.
 
@@ -7156,11 +6999,11 @@ Perl_newRANGE(pTHX_ I32 flags, OP *left, OP *right)
 Constructs, checks, and returns an op tree expressing a loop.  This is
 only a loop in the control flow through the op tree; it does not have
 the heavyweight loop structure that allows exiting the loop by C<last>
-and suchlike.  I<flags> gives the eight bits of C<op_flags> for the
+and suchlike.  C<flags> gives the eight bits of C<op_flags> for the
 top-level op, except that some bits will be set automatically as required.
-I<expr> supplies the expression controlling loop iteration, and I<block>
+C<expr> supplies the expression controlling loop iteration, and C<block>
 supplies the body of the loop; they are consumed by this function and
-become part of the constructed op tree.  I<debuggable> is currently
+become part of the constructed op tree.  C<debuggable> is currently
 unused and should always be 1.
 
 =cut
@@ -7254,18 +7097,18 @@ Constructs, checks, and returns an op tree expressing a C<while> loop.
 This is a heavyweight loop, with structure that allows exiting the loop
 by C<last> and suchlike.
 
-I<loop> is an optional preconstructed C<enterloop> op to use in the
+C<loop> is an optional preconstructed C<enterloop> op to use in the
 loop; if it is null then a suitable op will be constructed automatically.
-I<expr> supplies the loop's controlling expression.  I<block> supplies the
-main body of the loop, and I<cont> optionally supplies a C<continue> block
+C<expr> supplies the loop's controlling expression.  C<block> supplies the
+main body of the loop, and C<cont> optionally supplies a C<continue> block
 that operates as a second half of the body.  All of these optree inputs
 are consumed by this function and become part of the constructed op tree.
 
-I<flags> gives the eight bits of C<op_flags> for the C<leaveloop>
+C<flags> gives the eight bits of C<op_flags> for the C<leaveloop>
 op and, shifted up eight bits, the eight bits of C<op_private> for
 the C<leaveloop> op, except that (in both cases) some bits will be set
-automatically.  I<debuggable> is currently unused and should always be 1.
-I<has_my> can be supplied as true to force the
+automatically.  C<debuggable> is currently unused and should always be 1.
+C<has_my> can be supplied as true to force the
 loop body to be enclosed in its own scope.
 
 =cut
@@ -7380,15 +7223,15 @@ Constructs, checks, and returns an op tree expressing a C<foreach>
 loop (iteration through a list of values).  This is a heavyweight loop,
 with structure that allows exiting the loop by C<last> and suchlike.
 
-I<sv> optionally supplies the variable that will be aliased to each
+C<sv> optionally supplies the variable that will be aliased to each
 item in turn; if null, it defaults to C<$_> (either lexical or global).
-I<expr> supplies the list of values to iterate over.  I<block> supplies
-the main body of the loop, and I<cont> optionally supplies a C<continue>
+C<expr> supplies the list of values to iterate over.  C<block> supplies
+the main body of the loop, and C<cont> optionally supplies a C<continue>
 block that operates as a second half of the body.  All of these optree
 inputs are consumed by this function and become part of the constructed
 op tree.
 
-I<flags> gives the eight bits of C<op_flags> for the C<leaveloop>
+C<flags> gives the eight bits of C<op_flags> for the C<leaveloop>
 op and, shifted up eight bits, the eight bits of C<op_private> for
 the C<leaveloop> op, except that (in both cases) some bits will be set
 automatically.
@@ -7528,7 +7371,7 @@ Perl_newFOROP(pTHX_ I32 flags, OP *sv, OP *expr, OP *block, OP *cont)
 =for apidoc Am|OP *|newLOOPEX|I32 type|OP *label
 
 Constructs, checks, and returns a loop-exiting op (such as C<goto>
-or C<last>).  I<type> is the opcode.  I<label> supplies the parameter
+or C<last>).  C<type> is the opcode.  C<label> supplies the parameter
 determining the target of the op; it is consumed by this function and
 becomes part of the constructed op tree.
 
@@ -7750,10 +7593,10 @@ S_looks_like_bool(pTHX_ const OP *o)
 =for apidoc Am|OP *|newGIVENOP|OP *cond|OP *block|PADOFFSET defsv_off
 
 Constructs, checks, and returns an op tree expressing a C<given> block.
-I<cond> supplies the expression that will be locally assigned to a lexical
-variable, and I<block> supplies the body of the C<given> construct; they
+C<cond> supplies the expression that will be locally assigned to a lexical
+variable, and C<block> supplies the body of the C<given> construct; they
 are consumed by this function and become part of the constructed op tree.
-I<defsv_off> is the pad offset of the scalar lexical variable that will
+C<defsv_off> is the pad offset of the scalar lexical variable that will
 be affected.  If it is 0, the global $_ will be used.
 
 =cut
@@ -7774,9 +7617,9 @@ Perl_newGIVENOP(pTHX_ OP *cond, OP *block, PADOFFSET defsv_off)
 =for apidoc Am|OP *|newWHENOP|OP *cond|OP *block
 
 Constructs, checks, and returns an op tree expressing a C<when> block.
-I<cond> supplies the test expression, and I<block> supplies the block
+C<cond> supplies the test expression, and C<block> supplies the block
 that will be executed if the test evaluates to true; they are consumed
-by this function and become part of the constructed op tree.  I<cond>
+by this function and become part of the constructed op tree.  C<cond>
 will be interpreted DWIMically, often as a comparison against C<$_>,
 and may be null to generate a C<default> block.
 
@@ -9026,7 +8869,7 @@ Perl_newCONSTSUB_flags(pTHX_ HV *stash, const char *name, STRLEN len,
 /*
 =for apidoc U||newXS
 
-Used by C<xsubpp> to hook up XSUBs as Perl subs.  I<filename> needs to be
+Used by C<xsubpp> to hook up XSUBs as Perl subs.  C<filename> needs to be
 static storage, as it is used directly as CvFILE(), without a copy being made.
 
 =cut
@@ -9116,7 +8959,9 @@ Perl_newXS_len_flags(pTHX_ const char *name, STRLEN len,
 
         CvGV_set(cv, gv);
         if(filename) {
-            (void)gv_fetchfile(filename);
+            /* XSUBs can't be perl lang/perl5db.pl debugged
+            if (PERLDB_LINE_OR_SAVESRC)
+                (void)gv_fetchfile(filename); */
             assert(!CvDYNFILE(cv)); /* cv_undef should have turned it off */
             if (flags & XS_DYNAMIC_FILENAME) {
                 CvDYNFILE_on(cv);
@@ -10621,7 +10466,11 @@ Perl_ck_refassign(pTHX_ OP *o)
     assert (left);
     assert (left->op_type == OP_SREFGEN);
 
-    o->op_private = varop->op_private & (OPpLVAL_INTRO|OPpPAD_STATE);
+    o->op_private = 0;
+    /* we use OPpPAD_STATE in refassign to mean either of those things,
+     * and the code assumes the two flags occupy the same bit position
+     * in the various ops below */
+    assert(OPpPAD_STATE == OPpOUR_INTRO);
 
     switch (varop->op_type) {
     case OP_PADAV:
@@ -10629,12 +10478,15 @@ Perl_ck_refassign(pTHX_ OP *o)
 	goto settarg;
     case OP_PADHV:
 	o->op_private |= OPpLVREF_HV;
+        /* FALLTHROUGH */
     case OP_PADSV:
       settarg:
+        o->op_private |= (varop->op_private & (OPpLVAL_INTRO|OPpPAD_STATE));
 	o->op_targ = varop->op_targ;
 	varop->op_targ = 0;
 	PAD_COMPNAME_GEN_set(o->op_targ, PERL_INT_MAX);
 	break;
+
     case OP_RV2AV:
 	o->op_private |= OPpLVREF_AV;
 	goto checkgv;
@@ -10644,6 +10496,7 @@ Perl_ck_refassign(pTHX_ OP *o)
         /* FALLTHROUGH */
     case OP_RV2SV:
       checkgv:
+        o->op_private |= (varop->op_private & (OPpLVAL_INTRO|OPpOUR_INTRO));
 	if (cUNOPx(varop)->op_first->op_type != OP_GV) goto bad;
       detach_and_stack:
 	/* Point varop to its GV kid, detached.  */
@@ -10666,6 +10519,7 @@ Perl_ck_refassign(pTHX_ OP *o)
     }
     case OP_AELEM:
     case OP_HELEM:
+        o->op_private |= (varop->op_private & OPpLVAL_INTRO);
 	o->op_private |= OPpLVREF_ELEM;
 	op_null(varop);
 	stacked = TRUE;
@@ -11181,7 +11035,7 @@ Perl_ck_join(pTHX_ OP *o)
 Examines an op, which is expected to identify a subroutine at runtime,
 and attempts to determine at compile time which subroutine it identifies.
 This is normally used during Perl compilation to determine whether
-a prototype can be applied to a function call.  I<cvop> is the op
+a prototype can be applied to a function call.  C<cvop> is the op
 being considered, normally an C<rv2cv> op.  A pointer to the identified
 subroutine is returned, if it could be determined statically, and a null
 pointer is returned if it was not possible to determine statically.
@@ -11195,14 +11049,14 @@ has the C<OPpENTERSUB_AMPER> flag set then no attempt is made to identify
 the subroutine statically: this flag is used to suppress compile-time
 magic on a subroutine call, forcing it to use default runtime behaviour.
 
-If I<flags> has the bit C<RV2CVOPCV_MARK_EARLY> set, then the handling
+If C<flags> has the bit C<RV2CVOPCV_MARK_EARLY> set, then the handling
 of a GV reference is modified.  If a GV was examined and its CV slot was
 found to be empty, then the C<gv> op has the C<OPpEARLY_CV> flag set.
 If the op is not optimised away, and the CV slot is later populated with
 a subroutine having a prototype, that flag eventually triggers the warning
 "called too early to check prototype".
 
-If I<flags> has the bit C<RV2CVOPCV_RETURN_NAME_GV> set, then instead
+If C<flags> has the bit C<RV2CVOPCV_RETURN_NAME_GV> set, then instead
 of returning a pointer to the subroutine it returns a pointer to the
 GV giving the most appropriate name for the subroutine in this context.
 Normally this is just the C<CvGV> of the subroutine, but for an anonymous
@@ -11335,7 +11189,7 @@ the prototype.  This is the standard treatment used on a subroutine call,
 not marked with C<&>, where the callee can be identified at compile time
 and has a prototype.
 
-I<protosv> supplies the subroutine prototype to be applied to the call.
+C<protosv> supplies the subroutine prototype to be applied to the call.
 It may be a normal defined scalar, of which the string value will be used.
 Alternatively, for convenience, it may be a subroutine object (a C<CV*>
 that has been cast to C<SV*>) which has a prototype.  The prototype
@@ -11347,7 +11201,7 @@ an unacceptable number of arguments, a valid op tree is returned anyway.
 The error is reflected in the parser state, normally resulting in a single
 exception at the top level of parsing which covers all the compilation
 errors that occurred.  In the error message, the callee is referred to
-by the name defined by the I<namegv> parameter.
+by the name defined by the C<namegv> parameter.
 
 =cut
 */
@@ -11580,7 +11434,7 @@ based on a subroutine prototype or using default list-context processing.
 This is the standard treatment used on a subroutine call, not marked
 with C<&>, where the callee can be identified at compile time.
 
-I<protosv> supplies the subroutine prototype to be applied to the call,
+C<protosv> supplies the subroutine prototype to be applied to the call,
 or indicates that there is no prototype.  It may be a normal scalar,
 in which case if it is defined then the string value will be used
 as a prototype, and if it is undefined then there is no prototype.
@@ -11594,7 +11448,7 @@ an unacceptable number of arguments, a valid op tree is returned anyway.
 The error is reflected in the parser state, normally resulting in a single
 exception at the top level of parsing which covers all the compilation
 errors that occurred.  In the error message, the callee is referred to
-by the name defined by the I<namegv> parameter.
+by the name defined by the C<namegv> parameter.
 
 =cut
 */
@@ -11709,19 +11563,19 @@ Perl_ck_entersub_args_core(pTHX_ OP *entersubop, GV *namegv, SV *protosv)
 /*
 =for apidoc Am|void|cv_get_call_checker|CV *cv|Perl_call_checker *ckfun_p|SV **ckobj_p
 
-Retrieves the function that will be used to fix up a call to I<cv>.
+Retrieves the function that will be used to fix up a call to C<cv>.
 Specifically, the function is applied to an C<entersub> op tree for a
 subroutine call, not marked with C<&>, where the callee can be identified
-at compile time as I<cv>.
+at compile time as C<cv>.
 
-The C-level function pointer is returned in I<*ckfun_p>, and an SV
-argument for it is returned in I<*ckobj_p>.  The function is intended
+The C-level function pointer is returned in C<*ckfun_p>, and an SV
+argument for it is returned in C<*ckobj_p>.  The function is intended
 to be called in this manner:
 
  entersubop = (*ckfun_p)(aTHX_ entersubop, namegv, (*ckobj_p));
 
-In this call, I<entersubop> is a pointer to the C<entersub> op,
-which may be replaced by the check function, and I<namegv> is a GV
+In this call, C<entersubop> is a pointer to the C<entersub> op,
+which may be replaced by the check function, and C<namegv> is a GV
 supplying the name that should be used by the check function to refer
 to the callee of the C<entersub> op if it needs to emit any diagnostics.
 It is permitted to apply the check function in non-standard situations,
@@ -11729,7 +11583,7 @@ such as to a call to a different subroutine or to a method call.
 
 By default, the function is
 L<Perl_ck_entersub_args_proto_or_list|/ck_entersub_args_proto_or_list>,
-and the SV parameter is I<cv> itself.  This implements standard
+and the SV parameter is C<cv> itself.  This implements standard
 prototype processing.  It can be changed, for a particular subroutine,
 by L</cv_set_call_checker>.
 
@@ -11764,13 +11618,13 @@ Perl_cv_get_call_checker(pTHX_ CV *cv, Perl_call_checker *ckfun_p, SV **ckobj_p)
 /*
 =for apidoc Am|void|cv_set_call_checker_flags|CV *cv|Perl_call_checker ckfun|SV *ckobj|U32 flags
 
-Sets the function that will be used to fix up a call to I<cv>.
+Sets the function that will be used to fix up a call to C<cv>.
 Specifically, the function is applied to an C<entersub> op tree for a
 subroutine call, not marked with C<&>, where the callee can be identified
-at compile time as I<cv>.
+at compile time as C<cv>.
 
-The C-level function pointer is supplied in I<ckfun>, and an SV argument
-for it is supplied in I<ckobj>.  The function should be defined like this:
+The C-level function pointer is supplied in C<ckfun>, and an SV argument
+for it is supplied in C<ckobj>.  The function should be defined like this:
 
     STATIC OP * ckfun(pTHX_ OP *op, GV *namegv, SV *ckobj)
 
@@ -11778,17 +11632,17 @@ It is intended to be called in this manner:
 
     entersubop = ckfun(aTHX_ entersubop, namegv, ckobj);
 
-In this call, I<entersubop> is a pointer to the C<entersub> op,
-which may be replaced by the check function, and I<namegv> supplies
+In this call, C<entersubop> is a pointer to the C<entersub> op,
+which may be replaced by the check function, and C<namegv> supplies
 the name that should be used by the check function to refer
 to the callee of the C<entersub> op if it needs to emit any diagnostics.
 It is permitted to apply the check function in non-standard situations,
 such as to a call to a different subroutine or to a method call.
 
-I<namegv> may not actually be a GV.  For efficiency, perl may pass a
+C<namegv> may not actually be a GV.  For efficiency, perl may pass a
 CV or other SV instead.  Whatever is passed can be used as the first
 argument to L</cv_name>.  You can force perl to pass a GV by including
-C<CALL_CHECKER_REQUIRE_GV> in the I<flags>.
+C<CALL_CHECKER_REQUIRE_GV> in the C<flags>.
 
 The current setting for a particular CV can be retrieved by
 L</cv_get_call_checker>.
@@ -12094,6 +11948,418 @@ Perl_ck_length(pTHX_ OP *o)
 
     return o;
 }
+
+
+
+/* 
+   ---------------------------------------------------------
+ 
+   Common vars in list assignment
+
+   There now follows some enums and static functions for detecting
+   common variables in list assignments. Here is a little essay I wrote
+   for myself when trying to get my head around this. DAPM.
+
+   ----
+
+   First some random observations:
+   
+   * If a lexical var is an alias of something else, e.g.
+       for my $x ($lex, $pkg, $a[0]) {...}
+     then the act of aliasing will increase the reference count of the SV
+   
+   * If a package var is an alias of something else, it may still have a
+     reference count of 1, depending on how the alias was created, e.g.
+     in *a = *b, $a may have a refcount of 1 since the GP is shared
+     with a single GvSV pointer to the SV. So If it's an alias of another
+     package var, then RC may be 1; if it's an alias of another scalar, e.g.
+     a lexical var or an array element, then it will have RC > 1.
+   
+   * There are many ways to create a package alias; ultimately, XS code
+     may quite legally do GvSV(gv) = SvREFCNT_inc(sv) for example, so
+     run-time tracing mechanisms are unlikely to be able to catch all cases.
+   
+   * When the LHS is all my declarations, the same vars can't appear directly
+     on the RHS, but they can indirectly via closures, aliasing and lvalue
+     subs. But those techniques all involve an increase in the lexical
+     scalar's ref count.
+   
+   * When the LHS is all lexical vars (but not necessarily my declarations),
+     it is possible for the same lexicals to appear directly on the RHS, and
+     without an increased ref count, since the stack isn't refcounted.
+     This case can be detected at compile time by scanning for common lex
+     vars with PL_generation.
+   
+   * lvalue subs defeat common var detection, but they do at least
+     return vars with a temporary ref count increment. Also, you can't
+     tell at compile time whether a sub call is lvalue.
+   
+    
+   So...
+         
+   A: There are a few circumstances where there definitely can't be any
+     commonality:
+   
+       LHS empty:  () = (...);
+       RHS empty:  (....) = ();
+       RHS contains only constants or other 'can't possibly be shared'
+           elements (e.g. ops that return PADTMPs):  (...) = (1,2, length)
+           i.e. they only contain ops not marked as dangerous, whose children
+           are also not dangerous;
+       LHS ditto;
+       LHS contains a single scalar element: e.g. ($x) = (....); because
+           after $x has been modified, it won't be used again on the RHS;
+       RHS contains a single element with no aggregate on LHS: e.g.
+           ($a,$b,$c)  = ($x); again, once $a has been modified, its value
+           won't be used again.
+   
+   B: If LHS are all 'my' lexical var declarations (or safe ops, which
+     we can ignore):
+   
+       my ($a, $b, @c) = ...;
+   
+       Due to closure and goto tricks, these vars may already have content.
+       For the same reason, an element on the RHS may be a lexical or package
+       alias of one of the vars on the left, or share common elements, for
+       example:
+   
+           my ($x,$y) = f(); # $x and $y on both sides
+           sub f : lvalue { ($x,$y) = (1,2); $y, $x }
+   
+       and
+   
+           my $ra = f();
+           my @a = @$ra;  # elements of @a on both sides
+           sub f { @a = 1..4; \@a }
+   
+   
+       First, just consider scalar vars on LHS:
+   
+           RHS is safe only if (A), or in addition,
+               * contains only lexical *scalar* vars, where neither side's
+                 lexicals have been flagged as aliases 
+   
+           If RHS is not safe, then it's always legal to check LHS vars for
+           RC==1, since the only RHS aliases will always be associated
+           with an RC bump.
+   
+           Note that in particular, RHS is not safe if:
+   
+               * it contains package scalar vars; e.g.:
+   
+                   f();
+                   my ($x, $y) = (2, $x_alias);
+                   sub f { $x = 1; *x_alias = \$x; }
+   
+               * It contains other general elements, such as flattened or
+               * spliced or single array or hash elements, e.g.
+   
+                   f();
+                   my ($x,$y) = @a; # or $a[0] or @a{@b} etc 
+   
+                   sub f {
+                       ($x, $y) = (1,2);
+                       use feature 'refaliasing';
+                       \($a[0], $a[1]) = \($y,$x);
+                   }
+   
+                 It doesn't matter if the array/hash is lexical or package.
+   
+               * it contains a function call that happens to be an lvalue
+                 sub which returns one or more of the above, e.g.
+   
+                   f();
+                   my ($x,$y) = f();
+   
+                   sub f : lvalue {
+                       ($x, $y) = (1,2);
+                       *x1 = \$x;
+                       $y, $x1;
+                   }
+   
+                   (so a sub call on the RHS should be treated the same
+                   as having a package var on the RHS).
+   
+               * any other "dangerous" thing, such an op or built-in that
+                 returns one of the above, e.g. pp_preinc
+   
+   
+           If RHS is not safe, what we can do however is at compile time flag
+           that the LHS are all my declarations, and at run time check whether
+           all the LHS have RC == 1, and if so skip the full scan.
+   
+       Now consider array and hash vars on LHS: e.g. my (...,@a) = ...;
+   
+           Here the issue is whether there can be elements of @a on the RHS
+           which will get prematurely freed when @a is cleared prior to
+           assignment. This is only a problem if the aliasing mechanism
+           is one which doesn't increase the refcount - only if RC == 1
+           will the RHS element be prematurely freed.
+   
+           Because the array/hash is being INTROed, it or its elements
+           can't directly appear on the RHS:
+   
+               my (@a) = ($a[0], @a, etc) # NOT POSSIBLE
+   
+           but can indirectly, e.g.:
+   
+               my $r = f();
+               my (@a) = @$r;
+               sub f { @a = 1..3; \@a }
+   
+           So if the RHS isn't safe as defined by (A), we must always
+           mortalise and bump the ref count of any remaining RHS elements
+           when assigning to a non-empty LHS aggregate.
+   
+           Lexical scalars on the RHS aren't safe if they've been involved in
+           aliasing, e.g.
+   
+               use feature 'refaliasing';
+   
+               f();
+               \(my $lex) = \$pkg;
+               my @a = ($lex,3); # equivalent to ($a[0],3)
+   
+               sub f {
+                   @a = (1,2);
+                   \$pkg = \$a[0];
+               }
+   
+           Similarly with lexical arrays and hashes on the RHS:
+   
+               f();
+               my @b;
+               my @a = (@b);
+   
+               sub f {
+                   @a = (1,2);
+                   \$b[0] = \$a[1];
+                   \$b[1] = \$a[0];
+               }
+   
+   
+   
+   C: As (B), but in addition the LHS may contain non-intro lexicals, e.g.
+       my $a; ($a, my $b) = (....);
+   
+       The difference between (B) and (C) is that it is now physically
+       possible for the LHS vars to appear on the RHS too, where they
+       are not reference counted; but in this case, the compile-time
+       PL_generation sweep will detect such common vars.
+   
+       So the rules for (C) differ from (B) in that if common vars are
+       detected, the runtime "test RC==1" optimisation can no longer be used,
+       and a full mark and sweep is required
+   
+   D: As (C), but in addition the LHS may contain package vars.
+   
+       Since package vars can be aliased without a corresponding refcount
+       increase, all bets are off. It's only safe if (A). E.g.
+   
+           my ($x, $y) = (1,2);
+   
+           for $x_alias ($x) {
+               ($x_alias, $y) = (3, $x); # whoops
+           }
+   
+       Ditto for LHS aggregate package vars.
+   
+   E: Any other dangerous ops on LHS, e.g.
+           (f(), $a[0], @$r) = (...);
+   
+       this is similar to (E) in that all bets are off. In addition, it's
+       impossible to determine at compile time whether the LHS
+       contains a scalar or an aggregate, e.g.
+   
+           sub f : lvalue { @a }
+           (f()) = 1..3;
+
+* ---------------------------------------------------------
+*/
+
+
+/* A set of bit flags returned by S_aassign_scan(). Each flag indicates
+ * that at least one of the things flagged was seen.
+ */
+
+enum {
+    AAS_MY_SCALAR       = 0x001, /* my $scalar */
+    AAS_MY_AGG          = 0x002, /* aggregate: my @array or my %hash */
+    AAS_LEX_SCALAR      = 0x004, /* $lexical */
+    AAS_LEX_AGG         = 0x008, /* @lexical or %lexical aggregate */
+    AAS_LEX_SCALAR_COMM = 0x010, /* $lexical seen on both sides */
+    AAS_PKG_SCALAR      = 0x020, /* $scalar (where $scalar is pkg var) */
+    AAS_PKG_AGG         = 0x040, /* package @array or %hash aggregate */
+    AAS_DANGEROUS       = 0x080, /* an op (other than the above)
+                                         that's flagged OA_DANGEROUS */
+    AAS_SAFE_SCALAR     = 0x100, /* produces at least one scalar SV that's
+                                        not in any of the categories above */
+    AAS_DEFAV           = 0x200, /* contains just a single '@_' on RHS */
+};
+
+
+
+/* helper function for S_aassign_scan().
+ * check a PAD-related op for commonality and/or set its generation number.
+ * Returns a boolean indicating whether its shared */
+
+static bool
+S_aassign_padcheck(pTHX_ OP* o, bool rhs)
+{
+    if (PAD_COMPNAME_GEN(o->op_targ) == PERL_INT_MAX)
+        /* lexical used in aliasing */
+        return TRUE;
+
+    if (rhs)
+        return cBOOL(PAD_COMPNAME_GEN(o->op_targ) == (STRLEN)PL_generation);
+    else
+        PAD_COMPNAME_GEN_set(o->op_targ, PL_generation);
+
+    return FALSE;
+}
+
+
+/*
+  Helper function for OPpASSIGN_COMMON* detection in rpeep().
+  It scans the left or right hand subtree of the aassign op, and returns a
+  set of flags indicating what sorts of things it found there.
+  'rhs' indicates whether we're scanning the LHS or RHS. If the former, we
+  set PL_generation on lexical vars; if the latter, we see if
+  PL_generation matches.
+  'top' indicates whether we're recursing or at the top level.
+  'scalars_p' is a pointer to a counter of the number of scalar SVs seen.
+  This fn will increment it by the number seen. It's not intended to
+  be an accurate count (especially as many ops can push a variable
+  number of SVs onto the stack); rather it's used as to test whether there
+  can be at most 1 SV pushed; so it's only meanings are "0, 1, many".
+*/
+
+static int
+S_aassign_scan(pTHX_ OP* o, bool rhs, bool top, int *scalars_p)
+{
+    int flags = 0;
+    bool kid_top = FALSE;
+
+    /* first, look for a solitary @_ on the RHS */
+    if (   rhs
+        && top
+        && (o->op_flags & OPf_KIDS)
+        && OP_TYPE_IS_OR_WAS(o, OP_LIST)
+    ) {
+        OP *kid = cUNOPo->op_first;
+        if (   (   kid->op_type == OP_PUSHMARK
+                || kid->op_type == OP_PADRANGE) /* ex-pushmark */
+            && ((kid = OpSIBLING(kid)))
+            && !OpHAS_SIBLING(kid)
+            && kid->op_type == OP_RV2AV
+            && !(kid->op_flags & OPf_REF)
+            && !(kid->op_private & (OPpLVAL_INTRO|OPpMAYBE_LVSUB))
+            && ((kid->op_flags & OPf_WANT) == OPf_WANT_LIST)
+            && ((kid = cUNOPx(kid)->op_first))
+            && kid->op_type == OP_GV
+            && cGVOPx_gv(kid) == PL_defgv
+        )
+            flags |= AAS_DEFAV;
+    }
+
+    switch (o->op_type) {
+    case OP_GVSV:
+        (*scalars_p)++;
+        return AAS_PKG_SCALAR;
+
+    case OP_PADAV:
+    case OP_PADHV:
+        (*scalars_p) += 2;
+        if (top && (o->op_flags & OPf_REF))
+            return (o->op_private & OPpLVAL_INTRO)
+                ? AAS_MY_AGG : AAS_LEX_AGG;
+        return AAS_DANGEROUS;
+
+    case OP_PADSV:
+        {
+            int comm = S_aassign_padcheck(aTHX_ o, rhs)
+                        ?  AAS_LEX_SCALAR_COMM : 0;
+            (*scalars_p)++;
+            return (o->op_private & OPpLVAL_INTRO)
+                ? (AAS_MY_SCALAR|comm) : (AAS_LEX_SCALAR|comm);
+        }
+
+    case OP_RV2AV:
+    case OP_RV2HV:
+        (*scalars_p) += 2;
+        if (cUNOPx(o)->op_first->op_type != OP_GV)
+            return AAS_DANGEROUS; /* @{expr}, %{expr} */
+        /* @pkg, %pkg */
+        if (top && (o->op_flags & OPf_REF))
+            return AAS_PKG_AGG;
+        return AAS_DANGEROUS;
+
+    case OP_RV2SV:
+        (*scalars_p)++;
+        if (cUNOPx(o)->op_first->op_type != OP_GV) {
+            (*scalars_p) += 2;
+            return AAS_DANGEROUS; /* ${expr} */
+        }
+        return AAS_PKG_SCALAR; /* $pkg */
+
+    case OP_SPLIT:
+        if (cLISTOPo->op_first->op_type == OP_PUSHRE) {
+            /* "@foo = split... " optimises away the aassign and stores its
+             * destination array in the OP_PUSHRE that precedes it.
+             * A flattened array is always dangerous.
+             */
+            (*scalars_p) += 2;
+            return AAS_DANGEROUS;
+        }
+        break;
+
+    case OP_UNDEF:
+    case OP_PUSHMARK:
+    case OP_STUB:
+        /* these are all no-ops; they don't push a potentially common SV
+         * onto the stack, so they are neither AAS_DANGEROUS nor
+         * AAS_SAFE_SCALAR */
+        return 0;
+
+    case OP_PADRANGE: /* Ignore padrange; checking its siblings is enough */
+        break;
+
+    case OP_NULL:
+    case OP_LIST:
+        /* these do nothing but may have children; but their children
+         * should also be treated as top-level */
+        kid_top = top;
+        break;
+
+    default:
+        if (PL_opargs[o->op_type] & OA_DANGEROUS) {
+            (*scalars_p) += 2;
+            return AAS_DANGEROUS;
+        }
+
+        if (   (PL_opargs[o->op_type] & OA_TARGLEX)
+            && (o->op_private & OPpTARGET_MY))
+        {
+            (*scalars_p)++;
+            return S_aassign_padcheck(aTHX_ o, rhs)
+                ? AAS_LEX_SCALAR_COMM : AAS_LEX_SCALAR;
+        }
+
+        /* if its an unrecognised, non-dangerous op, assume that it
+         * it the cause of at least one safe scalar */
+        (*scalars_p)++;
+        flags = AAS_SAFE_SCALAR;
+        break;
+    }
+
+    if (o->op_flags & OPf_KIDS) {
+        OP *kid;
+        for (kid = cUNOPo->op_first; kid; kid = OpSIBLING(kid))
+            flags |= S_aassign_scan(aTHX_ kid, rhs, kid_top, scalars_p);
+    }
+    return flags;
+}
+
 
 /* Check for in place reverse and sort assignments like "@a = reverse @a"
    and modify the optree to make them work inplace */
@@ -13939,28 +14205,99 @@ Perl_rpeep(pTHX_ OP *o)
 	    }
 	    break;
 
-	case OP_AASSIGN:
-	    /* We do the common-vars check here, rather than in newASSIGNOP
-	       (as formerly), so that all lexical vars that get aliased are
-	       marked as such before we do the check.  */
-	    /* There can’t be common vars if the lhs is a stub.  */
-	    if (OpSIBLING(cLISTOPx(cBINOPo->op_last)->op_first)
-		    == cLISTOPx(cBINOPo->op_last)->op_last
-	     && cLISTOPx(cBINOPo->op_last)->op_last->op_type == OP_STUB)
-	    {
-		o->op_private &=~ OPpASSIGN_COMMON;
-		break;
-	    }
-	    if (o->op_private & OPpASSIGN_COMMON) {
-		 /* See the comment before S_aassign_common_vars concerning
-		    PL_generation sorcery.  */
-		PL_generation++;
-		if (!aassign_common_vars(o))
-		    o->op_private &=~ OPpASSIGN_COMMON;
-	    }
-	    else if (S_aassign_common_vars_aliases_only(aTHX_ o))
-		o->op_private |= OPpASSIGN_COMMON;
+	case OP_AASSIGN: {
+            int l, r, lr, lscalars, rscalars;
+
+            /* handle common vars detection, e.g. ($a,$b) = ($b,$a).
+               Note that we do this now rather than in newASSIGNOP(),
+               since only by now are aliased lexicals flagged as such
+
+               See the essay "Common vars in list assignment" above for
+               the full details of the rationale behind all the conditions
+               below.
+
+               PL_generation sorcery:
+               To detect whether there are common vars, the global var
+               PL_generation is incremented for each assign op we scan.
+               Then we run through all the lexical variables on the LHS,
+               of the assignment, setting a spare slot in each of them to
+               PL_generation.  Then we scan the RHS, and if any lexicals
+               already have that value, we know we've got commonality.
+               Also, if the generation number is already set to
+               PERL_INT_MAX, then the variable is involved in aliasing, so
+               we also have potential commonality in that case.
+             */
+
+            PL_generation++;
+            /* scan LHS */
+            lscalars = 0;
+            l = S_aassign_scan(aTHX_ cLISTOPo->op_last,  FALSE, 1, &lscalars);
+            /* scan RHS */
+            rscalars = 0;
+            r = S_aassign_scan(aTHX_ cLISTOPo->op_first, TRUE, 1, &rscalars);
+            lr = (l|r);
+
+
+            /* After looking for things which are *always* safe, this main
+             * if/else chain selects primarily based on the type of the
+             * LHS, gradually working its way down from the more dangerous
+             * to the more restrictive and thus safer cases */
+
+            if (   !l                      /* () = ....; */
+                || !r                      /* .... = (); */
+                || !(l & ~AAS_SAFE_SCALAR) /* (undef, pos()) = ...; */
+                || !(r & ~AAS_SAFE_SCALAR) /* ... = (1,2,length,undef); */
+                || (lscalars < 2)          /* ($x) = ... */
+            ) {
+                NOOP; /* always safe */
+            }
+            else if (l & AAS_DANGEROUS) {
+                /* always dangerous */
+                o->op_private |= OPpASSIGN_COMMON_SCALAR;
+                o->op_private |= OPpASSIGN_COMMON_AGG;
+            }
+            else if (l & (AAS_PKG_SCALAR|AAS_PKG_AGG)) {
+                /* package vars are always dangerous - too many
+                 * aliasing possibilities */
+                if (l & AAS_PKG_SCALAR)
+                    o->op_private |= OPpASSIGN_COMMON_SCALAR;
+                if (l & AAS_PKG_AGG)
+                    o->op_private |= OPpASSIGN_COMMON_AGG;
+            }
+            else if (l & ( AAS_MY_SCALAR|AAS_MY_AGG
+                          |AAS_LEX_SCALAR|AAS_LEX_AGG))
+            {
+                /* LHS contains only lexicals and safe ops */
+
+                if (l & (AAS_MY_AGG|AAS_LEX_AGG))
+                    o->op_private |= OPpASSIGN_COMMON_AGG;
+
+                if (l & (AAS_MY_SCALAR|AAS_LEX_SCALAR)) {
+                    if (lr & AAS_LEX_SCALAR_COMM)
+                        o->op_private |= OPpASSIGN_COMMON_SCALAR;
+                    else if (   !(l & AAS_LEX_SCALAR)
+                             && (r & AAS_DEFAV))
+                    {
+                        /* falsely mark
+                         *    my (...) = @_
+                         * as scalar-safe for performance reasons.
+                         * (it will still have been marked _AGG if necessary */
+                        NOOP;
+                    }
+                    else if (r  & (AAS_PKG_SCALAR|AAS_PKG_AGG|AAS_DANGEROUS))
+                        o->op_private |= OPpASSIGN_COMMON_RC1;
+                }
+            }
+
+            /* ... = ($x)
+             * may have to handle aggregate on LHS, but we can't
+             * have common scalars*/
+            if (rscalars < 2)
+                o->op_private &=
+                        ~(OPpASSIGN_COMMON_SCALAR|OPpASSIGN_COMMON_RC1);
+
 	    break;
+        }
 
 	case OP_CUSTOM: {
 	    Perl_cpeep_t cpeep = 
@@ -14362,12 +14699,12 @@ hook variables.
 
 Puts a C function into the chain of check functions for a specified op
 type.  This is the preferred way to manipulate the L</PL_check> array.
-I<opcode> specifies which type of op is to be affected.  I<new_checker>
+C<opcode> specifies which type of op is to be affected.  C<new_checker>
 is a pointer to the C function that is to be added to that opcode's
-check chain, and I<old_checker_p> points to the storage location where a
+check chain, and C<old_checker_p> points to the storage location where a
 pointer to the next function in the chain will be stored.  The value of
-I<new_pointer> is written into the L</PL_check> array, while the value
-previously stored there is written to I<*old_checker_p>.
+C<new_pointer> is written into the L</PL_check> array, while the value
+previously stored there is written to C<*old_checker_p>.
 
 The function should be defined like this:
 
@@ -14377,30 +14714,30 @@ It is intended to be called in this manner:
 
     new_checker(aTHX_ op)
 
-I<old_checker_p> should be defined like this:
+C<old_checker_p> should be defined like this:
 
     static Perl_check_t old_checker_p;
 
 L</PL_check> is global to an entire process, and a module wishing to
 hook op checking may find itself invoked more than once per process,
 typically in different threads.  To handle that situation, this function
-is idempotent.  The location I<*old_checker_p> must initially (once
+is idempotent.  The location C<*old_checker_p> must initially (once
 per process) contain a null pointer.  A C variable of static duration
 (declared at file scope, typically also marked C<static> to give
 it internal linkage) will be implicitly initialised appropriately,
 if it does not have an explicit initialiser.  This function will only
-actually modify the check chain if it finds I<*old_checker_p> to be null.
+actually modify the check chain if it finds C<*old_checker_p> to be null.
 This function is also thread safe on the small scale.  It uses appropriate
 locking to avoid race conditions in accessing L</PL_check>.
 
-When this function is called, the function referenced by I<new_checker>
-must be ready to be called, except for I<*old_checker_p> being unfilled.
-In a threading situation, I<new_checker> may be called immediately,
-even before this function has returned.  I<*old_checker_p> will always
-be appropriately set before I<new_checker> is called.  If I<new_checker>
+When this function is called, the function referenced by C<new_checker>
+must be ready to be called, except for C<*old_checker_p> being unfilled.
+In a threading situation, C<new_checker> may be called immediately,
+even before this function has returned.  C<*old_checker_p> will always
+be appropriately set before C<new_checker> is called.  If C<new_checker>
 decides not to do anything special with an op that it is given (which
 is the usual case for most uses of op check hooking), it must chain the
-check function referenced by I<*old_checker_p>.
+check function referenced by C<*old_checker_p>.
 
 If you want to influence compilation of calls to a specific subroutine,
 then use L</cv_set_call_checker> rather than hooking checking of all

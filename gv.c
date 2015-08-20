@@ -34,7 +34,7 @@ Perl stores its global variables.
 #include "EXTERN.h"
 #define PERL_IN_GV_C
 #include "perl.h"
-#include "overload.c"
+#include "overload.inc"
 #include "keywords.h"
 #include "feature.h"
 
@@ -129,7 +129,7 @@ Perl_gv_fetchfile_flags(pTHX_ const char *const name, const STRLEN namelen,
 	sv_setpvn(GvSV(gv), name, namelen);
 #endif
     }
-    if ((PERLDB_LINE || PERLDB_SAVESRC) && !GvAV(gv))
+    if (PERLDB_LINE_OR_SAVESRC && !GvAV(gv))
 	    hv_magic(GvHVn(gv), GvAVn(gv), PERL_MAGIC_dbfile);
     if (tmpbuf != smallbuf)
 	Safefree(tmpbuf);
@@ -572,7 +572,9 @@ S_maybe_add_coresub(pTHX_ HV * const stash, GV *gv,
     }
     CvGV_set(cv, gv); /* This stops new ATTRSUB from setting CvFILE
                          from PL_curcop. */
-    (void)gv_fetchfile(file);
+    /* XSUBs can't be perl lang/perl5db.pl debugged
+    if (PERLDB_LINE_OR_SAVESRC)
+        (void)gv_fetchfile(file); */
     CvFILE(cv) = (char *)file;
     /* XXX This is inefficient, as doing things this order causes
            a prototype check in newATTRSUB.  But we have to do
@@ -1411,7 +1413,7 @@ S_gv_stashpvn_internal(pTHX_ const char *name, U32 namelen, I32 flags)
     tmpgv = gv_fetchpvn_flags(tmpbuf, tmplen, flags, SVt_PVHV);
     if (tmpbuf != smallbuf)
 	Safefree(tmpbuf);
-    if (!tmpgv)
+    if (!tmpgv || !isGV_with_GP(tmpgv))
 	return NULL;
     stash = GvHV(tmpgv);
     if (!(flags & ~GV_NOADD_MASK) && !stash) return NULL;

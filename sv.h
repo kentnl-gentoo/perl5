@@ -16,7 +16,7 @@
 =head1 SV Flags
 
 =for apidoc AmU||svtype
-An enum of flags for Perl types.  These are found in the file B<sv.h>
+An enum of flags for Perl types.  These are found in the file F<sv.h>
 in the C<svtype> enum.  Test these flags with the C<SvTYPE> macro.
 
 The types are:
@@ -278,7 +278,7 @@ All of the following SvREFCNT_inc* macros are optimized versions of
 SvREFCNT_inc, and can be replaced with SvREFCNT_inc.
 
 =for apidoc Am|SV*|SvREFCNT_inc_NN|SV* sv
-Same as SvREFCNT_inc, but can only be used if you know I<sv>
+Same as SvREFCNT_inc, but can only be used if you know C<sv>
 is not NULL.  Since we don't have to check the NULLness, it's faster
 and smaller.
 
@@ -288,7 +288,7 @@ return value.  The macro doesn't need to return a meaningful value.
 
 =for apidoc Am|void|SvREFCNT_inc_void_NN|SV* sv
 Same as SvREFCNT_inc, but can only be used if you don't need the return
-value, and you know that I<sv> is not NULL.  The macro doesn't need
+value, and you know that C<sv> is not NULL.  The macro doesn't need
 to return a meaningful value, or check for NULLness, so it's smaller
 and faster.
 
@@ -297,7 +297,7 @@ Same as SvREFCNT_inc, but can only be used with expressions without side
 effects.  Since we don't have to store a temporary value, it's faster.
 
 =for apidoc Am|SV*|SvREFCNT_inc_simple_NN|SV* sv
-Same as SvREFCNT_inc_simple, but can only be used if you know I<sv>
+Same as SvREFCNT_inc_simple, but can only be used if you know C<sv>
 is not NULL.  Since we don't have to check the NULLness, it's faster
 and smaller.
 
@@ -307,15 +307,15 @@ return value.  The macro doesn't need to return a meaningful value.
 
 =for apidoc Am|void|SvREFCNT_inc_simple_void_NN|SV* sv
 Same as SvREFCNT_inc, but can only be used if you don't need the return
-value, and you know that I<sv> is not NULL.  The macro doesn't need
+value, and you know that C<sv> is not NULL.  The macro doesn't need
 to return a meaningful value, or check for NULLness, so it's smaller
 and faster.
 
 =for apidoc Am|void|SvREFCNT_dec|SV* sv
-Decrements the reference count of the given SV.  I<sv> may be NULL.
+Decrements the reference count of the given SV.  C<sv> may be NULL.
 
 =for apidoc Am|void|SvREFCNT_dec_NN|SV* sv
-Same as SvREFCNT_dec, but can only be used if you know I<sv>
+Same as SvREFCNT_dec, but can only be used if you know C<sv>
 is not NULL.  Since we don't have to check the NULLness, it's faster
 and smaller.
 
@@ -399,7 +399,9 @@ perform the upgrade if necessary.  See C<svtype>.
 #define SVf_BREAK	0x04000000  /* refcnt is artificially low - used by
 				       SVs in final arena cleanup.
 				       Set in S_regtry on PL_reg_curpm, so that
-				       perl_destruct will skip it. */
+				       perl_destruct will skip it.
+                                       Used for mark and sweep by OP_AASSIGN
+                                       */
 #define SVf_READONLY	0x08000000  /* may not be modified */
 
 
@@ -2156,11 +2158,11 @@ Creates a new SV containing the pad name.
 /*
 =for apidoc Am|void|SvOOK_offset|NN SV*sv|STRLEN len
 
-Reads into I<len> the offset from SvPVX back to the true start of the
+Reads into C<len> the offset from SvPVX back to the true start of the
 allocated buffer, which will be non-zero if C<sv_chop> has been used to
 efficiently remove characters from start of the buffer.  Implemented as a
-macro, which takes the address of I<len>, which must be of type C<STRLEN>.
-Evaluates I<sv> more than once.  Sets I<len> to 0 if C<SvOOK(sv)> is false.
+macro, which takes the address of C<len>, which must be of type C<STRLEN>.
+Evaluates C<sv> more than once.  Sets C<len> to 0 if C<SvOOK(sv)> is false.
 
 =cut
 */

@@ -288,7 +288,7 @@ If you want to delete your temporary branch, you may do so with:
 Assuming that you'd like to commit all the changes you've made as a
 single atomic unit, run this command:
 
-   % git commit -a
+  % git commit -a
 
 (That C<-a> tells git to add every file you've changed to this commit.
 New files aren't automatically added to your commit when you use
@@ -477,24 +477,25 @@ binary searches.
 =head2 Topic branches and rewriting history
 
 Individual committers should create topic branches under
-B<yourname>/B<some_descriptive_name>. Other committers should check
-with a topic branch's creator before making any change to it.
-
-The simplest way to create a remote topic branch that works on all
-versions of git is to push the current head as a new branch on the
-remote, then check it out locally:
-
-  $ branch="$yourname/$some_descriptive_name"
-  $ git push origin HEAD:$branch
-  $ git checkout -b $branch origin/$branch
-
-Users of git 1.7 or newer can do it in a more obvious manner:
+B<yourname>/B<some_descriptive_name>:
 
   $ branch="$yourname/$some_descriptive_name"
   $ git checkout -b $branch
+  ... do local edits, commits etc ...
   $ git push origin -u $branch
 
-If you are not the creator of B<yourname>/B<some_descriptive_name>, you
+Should you be stuck with an ancient version of git (prior to 1.7), then
+C<git push> will not have the C<-u> switch, and you have to replace the
+last step with the following sequence:
+
+  $ git push origin $branch:refs/heads/$branch
+  $ git config branch.$branch.remote origin
+  $ git config branch.$branch.merge refs/heads/$branch
+
+If you want to make changes to someone else's topic branch, you should
+check with its creator before making any change to it.
+
+You
 might sometimes find that the original author has edited the branch's
 history. There are lots of good reasons for this. Sometimes, an author
 might simply be rebasing the branch onto a newer source point.
@@ -518,37 +519,37 @@ this via the following formula (see the explanation about C<refspec>'s
 in the git push documentation for details) after you have rebased your
 branch:
 
-   # first rebase
-   $ git checkout $user/$topic
-   $ git fetch
-   $ git rebase origin/blead
+  # first rebase
+  $ git checkout $user/$topic
+  $ git fetch
+  $ git rebase origin/blead
 
-   # then "delete-and-push"
-   $ git push origin :$user/$topic
-   $ git push origin $user/$topic
+  # then "delete-and-push"
+  $ git push origin :$user/$topic
+  $ git push origin $user/$topic
 
 B<NOTE:> it is forbidden at the repository level to delete any of the
 "primary" branches. That is any branch matching
 C<m!^(blead|maint|perl)!>. Any attempt to do so will result in git
 producing an error like this:
 
-    $ git push origin :blead
-    *** It is forbidden to delete blead/maint branches in this repository
-    error: hooks/update exited with error code 1
-    error: hook declined to update refs/heads/blead
-    To ssh://perl5.git.perl.org/perl
-     ! [remote rejected] blead (hook declined)
-     error: failed to push some refs to 'ssh://perl5.git.perl.org/perl'
+  $ git push origin :blead
+  *** It is forbidden to delete blead/maint branches in this repository
+  error: hooks/update exited with error code 1
+  error: hook declined to update refs/heads/blead
+  To ssh://perl5.git.perl.org/perl
+   ! [remote rejected] blead (hook declined)
+   error: failed to push some refs to 'ssh://perl5.git.perl.org/perl'
 
 As a matter of policy we do B<not> edit the history of the blead and
 maint-* branches. If a typo (or worse) sneaks into a commit to blead or
 maint-*, we'll fix it in another commit. The only types of updates
-allowed on these branches are "fast-forward's", where all history is
+allowed on these branches are "fast-forwards", where all history is
 preserved.
 
 Annotated tags in the canonical perl.git repository will never be
 deleted or modified. Think long and hard about whether you want to push
-a local tag to perl.git before doing so. (Pushing unannotated tags is
+a local tag to perl.git before doing so. (Pushing simple tags is
 not allowed.)
 
 =head2 Grafts

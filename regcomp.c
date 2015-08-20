@@ -86,8 +86,8 @@ EXTERN_C const struct regexp_engine my_reg_engine;
 #  include "regcomp.h"
 #endif
 
-#include "dquote_static.c"
-#include "inline_invlist.c"
+#include "dquote_inline.h"
+#include "invlist_inline.h"
 #include "unicode_constants.h"
 
 #define HAS_NONLATIN1_FOLD_CLOSURE(i) \
@@ -2001,7 +2001,7 @@ is the recommended Unicode-aware way of saying
 #define TRIE_STORE_REVCHAR(val)                                            \
     STMT_START {                                                           \
 	if (UTF) {							   \
-            SV *zlopp = newSV(7); /* XXX: optimize me */                   \
+            SV *zlopp = newSV(UTF8_MAXBYTES);				   \
 	    unsigned char *flrbbbbb = (unsigned char *) SvPVX(zlopp);	   \
             unsigned const char *const kapow = uvchr_to_utf8(flrbbbbb, val); \
 	    SvCUR_set(zlopp, kapow - flrbbbbb);				   \
@@ -3652,6 +3652,9 @@ S_join_exact(pTHX_ RExC_state_t *pRExC_state, regnode *scan,
              * this function, we need to flag any occurrences of the sharp s.
              * This character forbids trie formation (because of added
              * complexity) */
+#if    UNICODE_MAJOR_VERSION > 3 /* no multifolds in early Unicode */   \
+   || (UNICODE_MAJOR_VERSION == 3 && (   UNICODE_DOT_VERSION > 0)       \
+                                      || UNICODE_DOT_DOT_VERSION > 0)
 	    while (s < s_end) {
                 if (*s == LATIN_SMALL_LETTER_SHARP_S) {
                     OP(scan) = EXACTFA_NO_TRIE;
@@ -3659,7 +3662,6 @@ S_join_exact(pTHX_ RExC_state_t *pRExC_state, regnode *scan,
                     break;
                 }
                 s++;
-                continue;
             }
         }
 	else {
@@ -3705,6 +3707,7 @@ S_join_exact(pTHX_ RExC_state_t *pRExC_state, regnode *scan,
                 *min_subtract += len - 1;
                 s += len;
 	    }
+#endif
 	}
     }
 
@@ -6754,7 +6757,8 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 	for (n = 0; n < pRExC_state->num_code_blocks; n++)
 	    if (pRExC_state->code_blocks[n].src_regex)
 		SAVEFREESV(pRExC_state->code_blocks[n].src_regex);
-	SAVEFREEPV(pRExC_state->code_blocks);
+	if(pRExC_state->code_blocks)
+	    SAVEFREEPV(pRExC_state->code_blocks); /* often null */
     }
 
     {
@@ -7981,7 +7985,7 @@ S_reg_scan_name(pTHX_ RExC_state_t *pRExC_state, U32 flags)
  * Some of the methods should always be private to the implementation, and some
  * should eventually be made public */
 
-/* The header definitions are in F<inline_invlist.c> */
+/* The header definitions are in F<invlist_inline.h> */
 
 PERL_STATIC_INLINE UV*
 S__invlist_array_init(SV* const invlist, const bool will_have_0)
@@ -8998,7 +9002,13 @@ Perl__add_range_to_invlist(pTHX_ SV* invlist, const UV start, const UV end)
     }
 
     /* Here, can't just append things, create and return a new inversion list
-     * which is the union of this range and the existing inversion list */
+     * which is the union of this range and the existing inversion list.  (If
+     * the new range is well-behaved wrt to the old one, we could just insert
+     * it, doing a Move() down on the tail of the old one (potentially growing
+     * it first).  But to determine that means we would have the extra
+     * (possibly throw-away) work of first finding where the new one goes and
+     * whether it disrupts (splits) an existing range, so it doesn't appear to
+     * me (khw) that it's worth it) */
     range_invlist = _new_invlist(2);
     _append_range_to_invlist(range_invlist, start, end);
 
@@ -11499,8 +11509,13 @@ S_alloc_maybe_populate_EXACT(pTHX_ RExC_state_t *pRExC_state,
             *character = (U8) code_point;
             len = 1;
         } /* Else is folded non-UTF8 */
+#if    UNICODE_MAJOR_VERSION > 3 /* no multifolds in early Unicode */   \
+   || (UNICODE_MAJOR_VERSION == 3 && (   UNICODE_DOT_VERSION > 0)       \
+                                      || UNICODE_DOT_DOT_VERSION > 0)
         else if (LIKELY(code_point != LATIN_SMALL_LETTER_SHARP_S)) {
-
+#else
+        else if (1) {
+#endif
             /* We don't fold any non-UTF8 except possibly the Sharp s  (see
              * comments at join_exact()); */
             *character = (U8) code_point;
@@ -11544,9 +11559,13 @@ S_alloc_maybe_populate_EXACT(pTHX_ RExC_state_t *pRExC_state,
     /* A single character node is SIMPLE, except for the special-cased SHARP S
      * under /di. */
     if ((len == 1 || (UTF && len == UNISKIP(code_point)))
-        && (code_point != LATIN_SMALL_LETTER_SHARP_S
-            || ! FOLD || ! DEPENDS_SEMANTICS))
-    {
+#if    UNICODE_MAJOR_VERSION > 3 /* no multifolds in early Unicode */   \
+   || (UNICODE_MAJOR_VERSION == 3 && (   UNICODE_DOT_VERSION > 0)       \
+                                      || UNICODE_DOT_DOT_VERSION > 0)
+        && ( code_point != LATIN_SMALL_LETTER_SHARP_S
+            || ! FOLD || ! DEPENDS_SEMANTICS)
+#endif
+    ) {
         *flagp |= SIMPLE;
     }
 
@@ -12644,11 +12663,15 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                 }
                 else /* A regular FOLD code point */
                     if (! ( UTF
+#if    UNICODE_MAJOR_VERSION > 3 /* no multifolds in early Unicode */   \
+   || (UNICODE_MAJOR_VERSION == 3 && (   UNICODE_DOT_VERSION > 0)       \
+                                      || UNICODE_DOT_DOT_VERSION > 0)
                         /* See comments for join_exact() as to why we fold this
                          * non-UTF at compile time */
                         || (node_type == EXACTFU
-                            && ender == LATIN_SMALL_LETTER_SHARP_S)))
-                {
+                            && ender == LATIN_SMALL_LETTER_SHARP_S)
+#endif
+                )) {
                     /* Here, are folding and are not UTF-8 encoded; therefore
                      * the character must be in the range 0-255, and is not /l
                      * (Not /l because we already handled these under /l in
@@ -12661,11 +12684,15 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                          * 'ss' */
                         if (maybe_exactfu
                             && (PL_fold[ender] != PL_fold_latin1[ender]
+#if    UNICODE_MAJOR_VERSION > 3 /* no multifolds in early Unicode */   \
+   || (UNICODE_MAJOR_VERSION == 3 && (   UNICODE_DOT_VERSION > 0)       \
+                                      || UNICODE_DOT_DOT_VERSION > 0)
                                 || ender == LATIN_SMALL_LETTER_SHARP_S
                                 || (len > 0
                                    && isALPHA_FOLD_EQ(ender, 's')
-                                   && isALPHA_FOLD_EQ(*(s-1), 's'))))
-                        {
+                                   && isALPHA_FOLD_EQ(*(s-1), 's'))
+#endif
+                        )) {
                             maybe_exactfu = FALSE;
                         }
                     }
@@ -14008,9 +14035,30 @@ S_add_above_Latin1_folds(pTHX_ RExC_state_t *pRExC_state, const U8 cp, SV** invl
           *invlist = add_cp_to_invlist(*invlist,
                                         LATIN_CAPITAL_LETTER_Y_WITH_DIAERESIS);
             break;
+
+#ifdef LATIN_CAPITAL_LETTER_SHARP_S /* not defined in early Unicode releases */
+
         case LATIN_SMALL_LETTER_SHARP_S:
           *invlist = add_cp_to_invlist(*invlist, LATIN_CAPITAL_LETTER_SHARP_S);
             break;
+
+#endif
+
+#if    UNICODE_MAJOR_VERSION < 3                                        \
+   || (UNICODE_MAJOR_VERSION == 3 && UNICODE_DOT_VERSION == 0)
+
+        /* In 3.0 and earlier, U+0130 folded simply to 'i'; and in 3.0.1 so did
+         * U+0131.  */
+        case 'i':
+        case 'I':
+          *invlist =
+             add_cp_to_invlist(*invlist, LATIN_CAPITAL_LETTER_I_WITH_DOT_ABOVE);
+#   if UNICODE_DOT_DOT_VERSION == 1
+          *invlist = add_cp_to_invlist(*invlist, LATIN_SMALL_LETTER_DOTLESS_I);
+#   endif
+            break;
+#endif
+
         default:
             /* Use deprecated warning to increase the chances of this being
              * output */
@@ -14202,6 +14250,12 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 #endif
 
     DEBUG_PARSE("clas");
+
+#if UNICODE_MAJOR_VERSION < 3 /* no multifolds in early Unicode */      \
+    || (UNICODE_MAJOR_VERSION == 3 && UNICODE_DOT_VERSION == 0          \
+                                   && UNICODE_DOT_DOT_VERSION == 0)
+    allow_multi_folds = FALSE;
+#endif
 
     /* Assume we are going to generate an ANYOF node. */
     ret = reganode(pRExC_state,

@@ -4119,18 +4119,7 @@ Perl_gv_setref(pTHX_ SV *const dstr, SV *const sstr)
 	    && CopSTASH_ne(PL_curcop, GvSTASH(dstr))) {
 	    GvFLAGS(dstr) |= import_flag;
 	}
-	if (import_flag == GVf_IMPORTED_SV) {
-	    if (intro) {
-		save_aliased_sv((GV *)dstr);
-	    }
-	    /* Turn off the flag if sref is not referenced elsewhere,
-	       even by weak refs.  (SvRMAGICAL is a pessimistic check for
-	       back refs.)  */
-	    if (SvREFCNT(sref) <= 2 && !SvRMAGICAL(sref))
-		GvALIASED_SV_off(dstr);
-	    else
-		GvALIASED_SV_on(dstr);
-	}
+
 	if (stype == SVt_PVHV) {
 	    const char * const name = GvNAME((GV*)dstr);
 	    const STRLEN len = GvNAMELEN(dstr);
@@ -7203,7 +7192,7 @@ the start of the string, to a count of the equivalent number of bytes; if
 lenp is non-zero, it does the same to lenp, but this time starting from
 the offset, rather than from the start
 of the string.  Handles type coercion.
-I<flags> is passed to C<SvPV_flags>, and usually should be
+C<flags> is passed to C<SvPV_flags>, and usually should be
 C<SV_GMAGIC|SV_CONST_RETURN> to handle magic.
 
 =cut
@@ -7480,7 +7469,7 @@ S_sv_pos_b2u_midway(pTHX_ const U8 *const s, const U8 *const target,
 
 Converts the offset from a count of bytes from the start of the string, to
 a count of the equivalent number of UTF-8 chars.  Handles type coercion.
-I<flags> is passed to C<SvPV_flags>, and usually should be
+C<flags> is passed to C<SvPV_flags>, and usually should be
 C<SV_GMAGIC|SV_CONST_RETURN> to handle magic.
 
 =cut
@@ -8244,16 +8233,6 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
                            If 0 then the pv buffer can hold the full
                            amount left, otherwise this is the amount it
                            can hold. */
-
-#if defined(__VMS) && defined(PERLIO_IS_STDIO)
-    /* An ungetc()d char is handled separately from the regular
-     * buffer, so we getc() it back out and stuff it in the buffer.
-     */
-    i = PerlIO_getc(fp);
-    if (i == EOF) return 0;
-    *(--((*fp)->_ptr)) = (unsigned char) i;
-    (*fp)->_cnt++;
-#endif
 
     /* Here is some breathtakingly efficient cheating */
 
@@ -10723,7 +10702,7 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
  * The non-double-double-long-double overshoots since all bits of NV
  * are not mantissa bits, there are also exponent bits. */
 #ifdef LONGDOUBLE_DOUBLEDOUBLE
-#  define VHEX_SIZE (1+DOUBLEDOUBLE_MAXBITS/4)
+#  define VHEX_SIZE (3+DOUBLEDOUBLE_MAXBITS/4)
 #else
 #  define VHEX_SIZE (1+(NVSIZE * 8)/4)
 #endif
@@ -10820,7 +10799,7 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
 
     /* HEXTRACTSIZE is the maximum number of xdigits. */
 #if defined(USE_LONG_DOUBLE) && defined(LONGDOUBLE_DOUBLEDOUBLE)
-#  define HEXTRACTSIZE (DOUBLEDOUBLE_MAXBITS/4)
+#  define HEXTRACTSIZE (2+DOUBLEDOUBLE_MAXBITS/4)
 #else
 #  define HEXTRACTSIZE 2 * NVSIZE
 #endif
@@ -10828,8 +10807,10 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
     const U8* vmaxend = vhex + HEXTRACTSIZE;
     PERL_UNUSED_VAR(ix); /* might happen */
     (void)Perl_frexp(PERL_ABS(nv), exponent);
-    if (vend && (vend <= vhex || vend > vmaxend))
-        Perl_croak(aTHX_ "Hexadecimal float: internal error");
+    if (vend && (vend <= vhex || vend > vmaxend)) {
+        /* diag_listed_as: Hexadecimal float: internal error (%s) */
+        Perl_croak(aTHX_ "Hexadecimal float: internal error (entry)");
+    }
     {
         /* First check if using long doubles. */
 #if defined(USE_LONG_DOUBLE) && (NVSIZE > DOUBLESIZE)
@@ -11035,8 +11016,10 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
          * which is convenient since the HEXTRACTSIZE is tricky
          * for double-double. */
         ixmin < 0 || ixmax >= NVSIZE ||
-        (vend && v != vend))
-        Perl_croak(aTHX_ "Hexadecimal float: internal error");
+        (vend && v != vend)) {
+        /* diag_listed_as: Hexadecimal float: internal error (%s) */
+        Perl_croak(aTHX_ "Hexadecimal float: internal error (overflow)");
+    }
     return v;
 }
 
@@ -14169,13 +14152,6 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl, CLONE_PARAMS* param)
 	    ptr = POPPTR(ss,ix);
 	    TOPPTR(nss,ix) = parser_dup((const yy_parser*)ptr, param);
 	    break;
-	case SAVEt_GP_ALIASED_SV: {
-	    GP * gp_ptr = (GP *)POPPTR(ss,ix);
-	    GP * new_gp_ptr = gp_dup(gp_ptr, param);
-	    TOPPTR(nss,ix) = new_gp_ptr;
-	    new_gp_ptr->gp_refcnt++;
-	    break;
-	}
 	default:
 	    Perl_croak(aTHX_
 		       "panic: ss_dup inconsistency (%"IVdf")", (IV) type);
@@ -14244,7 +14220,7 @@ the ptr_table using the function
 C<ptr_table_free(PL_ptr_table); PL_ptr_table = NULL;>,
 reason to keep it around is if you want to dup some of your own
 variable who are outside the graph perl scans, example of this
-code is in threads.xs create.
+code is in F<threads.xs> create.
 
 CLONEf_CLONE_HOST -
 This is a win32 thing, it is ignored on unix, it tells perls
@@ -14410,7 +14386,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_minus_F		= proto_perl->Iminus_F;
     PL_doswitches	= proto_perl->Idoswitches;
     PL_dowarn		= proto_perl->Idowarn;
-    PL_sawalias		= proto_perl->Isawalias;
 #ifdef PERL_SAWAMPERSAND
     PL_sawampersand	= proto_perl->Isawampersand;
 #endif

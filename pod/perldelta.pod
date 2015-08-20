@@ -2,88 +2,78 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.23.1
+perldelta - what is new for perl v5.23.2
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.23.0 release and the 5.23.1
+This document describes differences between the 5.23.1 release and the 5.23.2
 release.
 
-If you are upgrading from an earlier release such as 5.22.0, first read
-L<perl5230delta>, which describes differences between 5.22.0 and 5.23.0.
-
-=head1 Core Enhancements
-
-=head2 Integer shift (C<< << >> and C<< >> >>) now more explicitly defined
-
-Negative shifts are reverse shifts: left shift becomes right shift,
-and right shift becomes left shift.
-
-Shifting by the number of bits in a native integer (or more) is zero,
-except when the "overshift" is right shifting a negative value under
-C<use integer>, in which case the result is -1 (arithmetic shift).
-
-Until now negative shifting and overshifting have been undefined
-because they have relied on whatever the C implementation happens
-to do.  For example, for the overshift a common C behavior is
-"modulo shift":
-
-  1 >> 64 == 1 >> (64 % 64) == 1 >> 0 == 1  # Common C behavior.
-
-  # And the same for <<, while Perl now produces 0 for both.
-
-Now these behaviors are well-defined under Perl, regardless of what
-the underlying C implementation does.  Note, however, that you cannot
-escape the native integer width, you need to know how far left you
-can go.  You can use for example:
-
-  use Config;
-  my $wordbits = $Config{uvsize} * 8;  # Or $Config{uvsize} << 3.
-
-If you need a more bits on the left shift, you can use for example
-the C<bigint> pragma, or the C<Bit::Vector> module from CPAN.
-
-=head2 Postfix dereferencing is no longer experimental
-
-Using the C<postderef> and C<postderef_qq> features no longer emits a
-warning. Existing code that disables the C<experimental::postderef> warning
-category that they previously used will continue to work. The C<postderef>
-feature has no effect; all Perl code can use postfix dereferencing,
-regardless of what feature declarations are in scope. The C<5.24> feature
-bundle now includes the C<postderef_qq> feature.
-
-=head2 printf and sprintf now allow reordered precision arguments
-
-That is, C<< sprintf '|%.*2$|', 2, 3 >> now returns C<|002|>. This extends
-the existing reordering mechanism (which allows reordering for arguments
-that are used as format fields, widths, and vector separators).
+If you are upgrading from an earlier release such as 5.23.0, first read
+L<perl5231delta>, which describes differences between 5.23.0 and 5.23.1.
 
 =head1 Incompatible Changes
 
-=head2 ASCII characters in variable names must now be all visible
+=head2 Nested declarations are now disallowed
 
-It was legal until now on ASCII platforms for variable names to contain
-non-graphical ASCII control characters (ordinals 0 through 31, and 127,
-which are the C0 controls and C<DELETE>).  This usage has been
-deprecated since v5.20, and as of now causes a syntax error.  The
-variables these names referred to are special, reserved by Perl for
-whatever use it may choose, now, or in the future.  Each such variable
-has an alternative way of spelling it.  Instead of the single
-non-graphic control character, a two character sequence beginning with a
-caret is used, like C<$^]> and C<${^GLOBAL_PHASE}>.  Details are at
-L<perlvar>.   It remains legal, though unwise and deprecated (raising a
-deprecation warning), to use certain non-graphic non-ASCII characters in
-variables names when not under S<C<use utf8>>.  No code should do this,
-as all such variables are reserved by Perl, and Perl doesn't currently
-define any of them (but could at any time, without notice).
+A C<my>, C<our>, or C<state> declaration is no longer allowed inside
+of another C<my>, C<our>, or C<state> declaration.
 
-=head2 The C<autoderef> feature has been removed
+For example, these are now fatal:
 
-The experimental C<autoderef> feature (which allowed calling C<push>,
-C<pop>, C<shift>, C<unshift>, C<splice>, C<keys>, C<values>, and C<each> on
-a scalar argument) has been deemed unsuccessful. It has now been removed;
-trying to use the feature (or to disable the C<experimental::autoderef>
-warning it previously triggered) now yields an exception.
+   my ($x, my($y));
+   our (my $x);
+
+L<[perl #125587]|https://rt.perl.org/Ticket/Display.html?id=125587>
+
+L<[perl #121058]|https://rt.perl.org/Ticket/Display.html?id=121058>
+
+=head1 Deprecations
+
+=head2 sysread(), syswrite(), recv() and send() are deprecated on
+:utf8 handles
+
+The sysread(), recv(), syswrite() and send() operators
+are deprecated on handles that have the C<:utf8> layer, either
+explicitly, or implicitly, eg., with the C<:encoding(UTF-16LE)> layer.
+
+Both sysread() and recv() currently use only the C<:utf8> flag for the
+stream, ignoring the actual layers.  Since sysread() and recv() do no
+UTF-8 validation they can end up creating invalidly encoded scalars.
+
+Similarly, syswrite() and send() use only the C<:utf8> flag, otherwise
+ignoring any layers.  If the flag is set, both write the value UTF-8
+encoded, even if the layer is some different encoding, such as the
+example above.
+
+Ideally, all of these operators would completely ignore the C<:utf8>
+state, working only with bytes, but this would result in silently
+breaking existing code.  To avoid this a future version of perl will
+throw an exception when any of sysread(), recv(), syswrite() or send()
+are called on handle with the C<:utf8> layer.
+
+=head1 Performance Enhancements
+
+=over 4
+
+=item *
+
+Creating Perl debugger data structures (see L<perldebguts/"Debugger Internals">)
+for XSUBs and const subs has been removed.  This removed one glob/scalar combo
+for each unique C<.c> file that XSUBs and const subs came from.  On startup
+(C<perl -e"0">) about half a dozen glob/scalar debugger combos were created.
+Loading XS modules created more glob/scalar combos.  These things were created
+regardless if the perl debugger was being used or not, unlike for pure perl
+subs, and ignores that the perl debugger can not debug C code.
+
+=item *
+
+Single arguments in list assign are now slightly faster:
+
+  ($x) = (...);
+  (...) = ($x);
+
+=back
 
 =head1 Modules and Pragmata
 
@@ -93,88 +83,100 @@ warning it previously triggered) now yields an exception.
 
 =item *
 
-The libnet distribution has been upgraded from version 3.06 to 3.07.
+The PathTools module collection has been upgraded from version 3.55 to
+3.56.
+
+Minor optimizations.
+L<[perl #125712]|https://rt.perl.org/Ticket/Display.html?id=125712>
 
 =item *
 
-L<autodie> has been upgraded from version 2.27 to 2.29.
+L<Attribute::Handlers> has been upgraded from version 0.97 to 0.99.
 
 =item *
 
-L<DynaLoader> has been upgraded from version 1.32 to 1.33.
+L<CPAN::Meta::YAML> has been upgraded from version 0.016 to 0.017.
 
 =item *
 
-L<Encode> has been upgraded from version 2.73 to 2.75.
+L<Encode> has been upgraded from version 2.75 to 2.76.
 
 =item *
 
-L<encoding> has been upgraded from version 2.15 to 2.16.
+L<ExtUtils::ParseXS> has been upgraded from version 3.28 to 3.29.
 
 =item *
 
-L<feature> has been upgraded from version 1.41 to 1.42.
+L<ExtUtils::Typemaps> has been upgraded from version 3.28 to 3.29.
 
 =item *
 
-L<File::Path> has been upgraded from version 2.09 to 2.11.
+L<File::Find> has been upgraded from version 1.29 to 1.30.
 
 =item *
 
-L<Getopt::Long> has been upgraded from version 2.46 to 2.47.
+L<File::Spec> has been upgraded from version 3.56 to 3.57.
 
 =item *
 
-L<I18N::Langinfo> has been upgraded from version 0.12 to 0.13.
+L<Filter::Util::Call> has been upgraded from version 1.54 to 1.55.
 
 =item *
 
-L<IPC::Open3> has been upgraded from version 1.18 to 1.19.
+L<Hash::Util> has been upgraded from version 0.18 to 0.19.
 
-If a Perl exception was thrown from inside this module, the exception
-C<IPC::Open3> threw to the callers of C<open3> would have an irrelevant
-message derived from C<$!> which was in an undefined state, instead of the
-C<$@> message which triggers the failure path inside C<open3>.
+C<unlock_hashref_recurse> and C<unlock_hash_recurse> didn't
+actually unlock parts of the data structures...
 
-=item *
-
-L<Module::CoreList> has been upgraded from version 5.20150620 to 5.20150720.
+...now they do.
 
 =item *
 
-L<Opcode> has been upgraded from version 1.32 to 1.33.
+L<Module::CoreList> has been upgraded from version 5.20150720 to 5.20150820.
 
 =item *
 
-L<PerlIO::scalar> has been upgraded from version 0.22 to 0.23.
+L<perlfaq> has been upgraded from version 5.021009 to 5.021010.
 
 =item *
 
-L<POSIX> has been upgraded from version 1.54 to 1.55.
+L<POSIX> has been upgraded from version 1.55 to 1.56.
 
 =item *
 
-L<Socket> has been upgraded from version 2.019 to 2.020.
+L<Term::Cap> has been upgraded from version 1.15 to 1.17.
 
 =item *
 
-L<Storable> has been upgraded from version 2.53 to 2.54.
+L<Unicode::UCD> has been upgraded from version 0.61 to 0.62.
+
+=back
+
+=head1 Documentation
+
+=head2 Changes to Existing Documentation
+
+=head3 L<perlpolicy>
+
+=over 4
 
 =item *
 
-L<Unicode::Collate> has been upgraded from version 1.12 to 1.14.
+This note has been added to perlpolicy:
+
+  While civility is required, kindness is encouraged; if you have any doubt
+  about whether you are being civil, simply ask yourself, "Am I being kind?"
+  and aspire to that.
+
+=back
+
+=head3 L<perlvar>
+
+=over 4
 
 =item *
 
-L<Unicode::Normalize> has been upgraded from version 1.18 to 1.19.
-
-=item *
-
-L<warnings> has been upgraded from version 1.32 to 1.33.
-
-=item *
-
-L<XS::Typemap> has been upgraded from version 0.13 to 0.14.
+Use of C<$OLD_PERL_VERSION> is now discouraged.
 
 =back
 
@@ -184,37 +186,79 @@ The following additions or changes have been made to diagnostic output,
 including warnings and fatal error messages.  For the complete list of
 diagnostic messages, see L<perldiag>.
 
+=head2 New Diagnostics
+
+=head3 New Errors
+
+=over 4
+
+=item *
+
+L<Can't redeclare "%s" in "%s"|perldiag/"Can't redeclare "%s" in "%s"">
+
+(F) A "my", "our" or "state" declaration was found within another declaration,
+such as C<my ($x, my($y), $z)> or C<our (my $x)>.
+
+=back
+
+=head3 New Warnings
+
+=over 4
+
+=item *
+
+L<%s() is deprecated on :utf8 handles|perldiag/"%s() is deprecated on :utf8 handles">
+
+(W deprecated) The sysread(), recv(), syswrite() and send() operators
+are deprecated on handles that have the C<:utf8> layer, either
+explicitly, or implicitly, eg., with the C<:encoding(UTF-16LE)> layer.
+
+Both sysread() and recv() currently use only the C<:utf8> flag for the
+stream, ignoring the actual layers.  Since sysread() and recv() do no
+UTF-8 validation they can end up creating invalidly encoded scalars.
+
+Similarly, syswrite() and send() use only the C<:utf8> flag, otherwise
+ignoring any layers.  If the flag is set, both write the value UTF-8
+encoded, even if the layer is some different encoding, such as the
+example above.
+
+Ideally, all of these operators would completely ignore the C<:utf8>
+state, working only with bytes, but this would result in silently
+breaking existing code.  To avoid this a future version of perl will
+throw an exception when any of sysread(), recv(), syswrite() or send()
+are called on handle with the C<:utf8> layer.
+
+=back
+
 =head2 Changes to Existing Diagnostics
 
 =over 4
 
 =item *
 
-The C<printf> and C<sprintf> builtins are now more careful about the
-warnings they emit: argument reordering now disables the "redundant
-argument" warning in all cases; and invalid format strings are no longer
-treated as absorbing arguments (so "redundant argument" warnings can
-correctly be emitted by such code).
+The diagnostic C<< Hexadecimal float: internal error >> has been changed to
+C<< Hexadecimal float: internal error (%s) >> to include more information.
 
 =back
 
-=head1 Platform Support
-
-=head2 Platform-Specific Notes
+=head1 Configuration and Compilation
 
 =over 4
 
-=item VMS
+=item *
 
-=over
+F<Configure> should handle spaces in paths a little better.
+
+=back
+
+=head1 Testing
+
+=over 4
 
 =item *
 
-The minimum supported version of VMS is now v7.3-2, released in 2003.  As a
-side effect of this change, VAX is no longer supported as the terminal
-release of OpenVMS VAX was v7.3 in 2001.
-
-=back
+A new test (F<t/op/aassign.t>) has been added to test the list assignment operator
+C<OP_AASSIGN>.
 
 =back
 
@@ -224,10 +268,11 @@ release of OpenVMS VAX was v7.3 in 2001.
 
 =item *
 
-C<sv_catpvf> and related functions (including C<sv_vcatpvfn_flags> when
-called with a C<va_list> rather than an array of SV pointers) have never
-handled argument reordering. Attempts to reorder arguments now yield an
-exception, rather than being silently ignored.
+C<PL_sawalias> and C<GPf_ALIASED_SV> have been removed.
+
+=item *
+
+C<GvASSIGN_GENERATION> and C<GvASSIGN_GENERATION_set> have been removed.
 
 =back
 
@@ -237,37 +282,50 @@ exception, rather than being silently ignored.
 
 =item *
 
-A leak in the XS typemap caused one scalar to be leaked each time a C<FILE *>
-or a C<PerlIO *> was C<OUTPUT:>ed or imported to Perl, since perl 5.000. These
-particular typemap entries are thought to be extremely rarely used by XS
-modules. [perl #124181]
+Perl can again be compiled with any Unicode version.  This used to
+(mostly) work, but was lost in v5.18 through v5.20.  The property
+C<Name_Alias> did not exist prior to Unicode 5.0.  L<Unicode::UCD>
+incorrectly said it did.  This has been fixed.
 
 =item *
 
-C<alarm()> and C<sleep()> will now warn if the argument is a negative number
-and return undef. Previously they would pass the negative value to the
-underlying C function which may have set up a timer with a surprising value.
+Very large code-points (beyond Unicode) in regular expressions no
+longer cause a buffer overflow in some cases when converted to UTF-8.
+L<[perl #125826]|https://rt.perl.org/Ticket/Display.html?id=125826>
+
+=item *
+
+The integer overflow check for the range operator (...) in list
+context now correctly handles the case where the size of the range is
+larger than the address space.  This could happen on 32-bits with
+-Duse64bitint.
+L<[perl #125781]|https://rt.perl.org/Ticket/Display.html?id=125781>
+
+=item *
+
+A crash with C<< %::=(); J->${\"::"} >> has been fixed.
+L<[perl #125541]|https://rt.perl.org/Ticket/Display.html?id=125541>
 
 =back
 
 =head1 Acknowledgements
 
-Perl 5.23.1 represents approximately 4 weeks of development since Perl 5.23.0
-and contains approximately 8,400 lines of changes across 320 files from 22
+Perl 5.23.2 represents approximately 4 weeks of development since Perl 5.23.1
+and contains approximately 22,000 lines of changes across 240 files from 23
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 5,000 lines of changes to 140 .pm, .t, .c and .h files.
+approximately 17,000 lines of changes to 140 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.23.1:
+improvements that became Perl 5.23.2:
 
-Aaron Crane, Aristotle Pagaltzis, Chas. Owens, Chris 'BinGOs' Williams, Craig
-A. Berry, Daniel Dragan, David Mitchell, Father Chrysostomos, Herbert Breunung,
-H.Merijn Brand, James E Keenan, Jarkko Hietaniemi, Karen Etheridge, Karl
-Williamson, Leon Timmermans, Matthew Horsfall, Max Maischein, Rafael
-Garcia-Suarez, Ricardo Signes, Stanislaw Pusep, Steve Hay, Tony Cook.
+Aaron Priven, Aristotle Pagaltzis, Chris 'BinGOs' Williams, Craig A. Berry,
+Dagfinn Ilmari Mannsåker, Daniel Dragan, David Mitchell, Ed J, Father
+Chrysostomos, H.Merijn Brand, Ivan Pozdeev, James E Keenan, Jarkko Hietaniemi,
+Karen Etheridge, Karl Williamson, Ludovic E. R. Tolhurst-Cleaver, Lukas Mai,
+Matthew Horsfall, Reini Urban, Ricardo Signes, Sisyphus, Steve Hay, Tony Cook.
 
 The list above is almost certainly incomplete as it is automatically generated
 from version control history. In particular, it does not include the names of
