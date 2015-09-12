@@ -193,11 +193,6 @@ L<[perl #123748]|https://rt.perl.org/Ticket/Display.html?id=123748>
 
 =item *
 
-New bitwise ops added in Perl 5.21.9 accidentally caused C<$^H |= 0x1c020000>
-to enable all features.  This has now been fixed.
-
-=item *
-
 UTF-8 variable names used in array indexes, unquoted UTF-8 HERE-document
 terminators and UTF-8 function names all now work correctly.
 L<[perl #124113]|https://rt.perl.org/Ticket/Display.html?id=124113>
@@ -251,8 +246,8 @@ L<[perl #123712]|https://rt.perl.org/Ticket/Display.html?id=123712>
 
 =head1 Acknowledgements
 
-Perl 5.20.3 represents approximately 6 months of development since Perl 5.20.2
-and contains approximately 3,100 lines of changes across 99 files from 26
+Perl 5.20.3 represents approximately 7 months of development since Perl 5.20.2
+and contains approximately 3,200 lines of changes across 99 files from 26
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
