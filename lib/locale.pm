@@ -1,6 +1,6 @@
 package locale;
 
-our $VERSION = '1.06';
+our $VERSION = '1.07';
 use Config;
 
 $Carp::Internal{ (__PACKAGE__) } = 1;
@@ -102,10 +102,20 @@ sub import {
             }
 
             # Map our names to the ones defined by POSIX
-            $arg = "LC_" . uc($arg);
+            my $LC = "LC_" . uc($arg);
 
-            my $bit = eval "&POSIX::$arg";
+            my $bit = eval "&POSIX::$LC";
             if (defined $bit) {
+
+                # Verify our assumption.
+                if (! ($bit >= 0 && $bit < 31)) {
+                    require Carp;
+                    Carp::croak("Cannot have ':$arg' parameter to 'use locale'"
+                              . " on this platform.  Use the 'perlbug' utility"
+                              . " to report this problem, or send email to"
+                              . " 'perlbug\@perl.org'.  $LC=$bit");
+                }
+
                 # 1 is added so that the pseudo-category :characters, which is
                 # -1, comes out 0.
                 $^H{locale} |= 1 << ($bit + 1);

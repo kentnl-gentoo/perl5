@@ -278,9 +278,22 @@ print $out_fh <<END;
 END
 
 # Output the table using fairly short names for each char.
+my $is_for_ascii = 1;   # get_supported_code_pages() returns the ASCII
+                        # character set first
 foreach my $charset (get_supported_code_pages()) {
     my @a2n = @{get_a2n($charset)};
     my @out;
+    my @utf_to_i8;
+
+    if ($is_for_ascii) {
+        $is_for_ascii = 0;
+    }
+    else {  # EBCDIC.  Calculate mapping from UTF-EBCDIC bytes to I8
+        my $i8_to_utf_ref = get_I8_2_utf($charset);
+        for my $i (0..255) {
+            $utf_to_i8[$i8_to_utf_ref->[$i]] = $i;
+        }
+    }
 
     print $out_fh "\n" . get_conditional_compile_line_start($charset);
     for my $ord (0..255) {
@@ -338,10 +351,38 @@ foreach my $charset (get_supported_code_pages()) {
                 $name =~ s/:.*//;
             }
         }
+
         my $index = $a2n[$ord];
-        $out[$index] = ($ord == $index)
-                    ? sprintf "/* U+%02X %s */ %s,\n", $ord, $name, $bits[$ord]
-                    : sprintf "/* 0x%02X U+%02X %s */ %s,\n", $index, $ord, $name, $bits[$ord];
+        my $i8;
+        $i8 = $utf_to_i8[$index] if @utf_to_i8;
+
+        $out[$index] = "/* ";
+        $out[$index] .= sprintf "0x%02X ", $index if $ord != $index;
+        $out[$index] .= sprintf "U+%02X ", $ord;
+        $out[$index] .= sprintf "I8=%02X ", $i8 if defined $i8 && $i8 != $ord;
+        $out[$index] .= "$name */ ";
+        $out[$index] .= $bits[$ord];
+
+        # For EBCDIC character sets, we also add some data for when the bytes
+        # are in UTF-EBCDIC; these are based on the fundamental
+        # characteristics of UTF-EBCDIC.
+        if (@utf_to_i8) {
+            if ($i8 >= 0xC5 && $i8 != 0xE0) {
+                $out[$index] .= '|(1U<<_CC_UTF8_IS_START)';
+                if ($i8 <= 0xC7) {
+                    $out[$index] .= '|(1U<<_CC_UTF8_IS_DOWNGRADEABLE_START)';
+                }
+            }
+            if (($i8 & 0xE0) == 0xA0) {
+                $out[$index] .= '|(1U<<_CC_UTF8_IS_CONTINUATION)';
+            }
+            if ($i8 >= 0xF1) {
+                $out[$index] .=
+                          '|(1U<<_CC_UTF8_START_BYTE_IS_FOR_AT_LEAST_SURROGATE)';
+            }
+        }
+
+        $out[$index] .= ",\n";
     }
     $out[-1] =~ s/,$//;     # No trailing comma in the final entry
 

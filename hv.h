@@ -152,14 +152,14 @@ Null HV pointer.
 =head1 Hash Manipulation Functions
 
 =for apidoc Am|char*|HvNAME|HV* stash
-Returns the package name of a stash, or NULL if C<stash> isn't a stash.
-See C<SvSTASH>, C<CvSTASH>.
+Returns the package name of a stash, or C<NULL> if C<stash> isn't a stash.
+See C<L</SvSTASH>>, C<L</CvSTASH>>.
 
 =for apidoc Am|STRLEN|HvNAMELEN|HV *stash
 Returns the length of the stash's name.
 
 =for apidoc Am|unsigned char|HvNAMEUTF8|HV *stash
-Returns true if the name is in UTF8 encoding.
+Returns true if the name is in UTF-8 encoding.
 
 =for apidoc Am|char*|HvENAME|HV* stash
 Returns the effective name of a stash, or NULL if there is none.  The
@@ -173,7 +173,7 @@ caches.
 Returns the length of the stash's effective name.
 
 =for apidoc Am|unsigned char|HvENAMEUTF8|HV *stash
-Returns true if the effective name is in UTF8 encoding.
+Returns true if the effective name is in UTF-8 encoding.
 
 =for apidoc Am|void*|HeKEY|HE* he
 Returns the actual pointer stored in the key slot of the hash entry.  The
@@ -208,7 +208,7 @@ variable C<PL_na>, though this is rather less efficient than using a local
 variable.  Remember though, that hash keys in perl are free to contain
 embedded nulls, so using C<strlen()> or similar is not a good way to find
 the length of hash keys.  This is very similar to the C<SvPV()> macro
-described elsewhere in this document.  See also C<HeUTF8>.
+described elsewhere in this document.  See also C<L</HeUTF8>>.
 
 If you are using C<HePV> to get values to pass to C<newSVpvn()> to create a
 new SV, you should consider using C<newSVhek(HeKEY_hek(he))> as it is more

@@ -63,7 +63,7 @@ my $dumper = Dumpvalue->new(
 sub debug {
   return unless $debug;
   my($mess) = join "", '# ', @_;
-  chop $mess;
+  chomp $mess;
   print STDERR $dumper->stringify($mess,1), "\n";
 }
 
@@ -88,6 +88,7 @@ sub ok {
     print "ok " . ++$test_num;
     print " $message";
     print "\n";
+    return ($result) ? 1 : 0;
 }
 
 # First we'll do a lot of taint checking for locales.
@@ -113,6 +114,20 @@ sub check_taint_not ($;$) {
     my $message_tail = $_[1] // "";
     $message_tail = ":  $message_tail" if $message_tail;
     ok((not is_tainted($_[0])), "verify that isn't tainted$message_tail");
+}
+
+foreach my $category (qw(ALL COLLATE CTYPE MESSAGES MONETARY NUMERIC TIME)) {
+    my $short_result = locales_enabled($category);
+    ok ($short_result == 0 || $short_result == 1,
+        "Verify locales_enabled('$category') returns 0 or 1");
+    debug("locales_enabled('$category') returned '$short_result'");
+    my $long_result = locales_enabled("LC_$category");
+    if (! ok ($long_result == $short_result,
+              "   and locales_enabled('LC_$category') returns "
+            . "the same value")
+    ) {
+        debug("locales_enabled('LC_$category') returned $long_result");
+    }
 }
 
 "\tb\t" =~ /^m?(\s)(.*)\1$/;

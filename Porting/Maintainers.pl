@@ -219,6 +219,9 @@ use File::Glob qw(:case);
                 t/99pod.t
                 ),
         ],
+
+        # https://rt.cpan.org/Ticket/Display.html?id=106799
+        'CUSTOMIZED'   => [ qw[ Zlib.xs ] ],
     },
 
     'Config::Perl::V' => {
@@ -382,7 +385,7 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.76.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.77.tar.gz',
         'FILES'        => q[cpan/Encode],
     },
 
@@ -402,7 +405,7 @@ use File::Glob qw(:case);
     },
 
     'experimental' => {
-        'DISTRIBUTION' => 'LEONT/experimental-0.013.tar.gz',
+        'DISTRIBUTION' => 'LEONT/experimental-0.014.tar.gz',
         'FILES'        => q[cpan/experimental],
         'EXCLUDED'     => [
           qr{^t/release-.*\.t},
@@ -427,12 +430,6 @@ use File::Glob qw(:case);
             qw(README.mkdn),
             qr{^xt},
         ],
-    },
-
-    'ExtUtils::Command' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-Command-1.20.tar.gz',
-        'FILES'        => q[cpan/ExtUtils-Command],
-        'EXCLUDED'     => [qr{^xt/}],
     },
 
     'ExtUtils::Constant' => {
@@ -465,7 +462,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::MakeMaker' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-7.04.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-7.10.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -476,41 +473,14 @@ use File::Glob qw(:case);
             'PATCHING',
             'README.packaging',
         ],
-        # Applied upstream remove customisation when updating EUMM
-        'CUSTOMIZED'   => [ qw[ t/pm_to_blib.t
-                                t/basic.t
-                                lib/ExtUtils/Command/MM.pm
-                                lib/ExtUtils/Liblist.pm
-                                lib/ExtUtils/Liblist/Kid.pm
-                                lib/ExtUtils/MM.pm
-                                lib/ExtUtils/MM_AIX.pm
-                                lib/ExtUtils/MM_Any.pm
-                                lib/ExtUtils/MM_BeOS.pm
-                                lib/ExtUtils/MM_Cygwin.pm
-                                lib/ExtUtils/MM_DOS.pm
-                                lib/ExtUtils/MM_Darwin.pm
-                                lib/ExtUtils/MM_MacOS.pm
-                                lib/ExtUtils/MM_NW5.pm
-                                lib/ExtUtils/MM_OS2.pm
-                                lib/ExtUtils/MM_QNX.pm
-                                lib/ExtUtils/MM_UWIN.pm
-                                lib/ExtUtils/MM_Unix.pm
-                                lib/ExtUtils/MM_VMS.pm
-                                lib/ExtUtils/MM_VOS.pm
-                                lib/ExtUtils/MM_Win32.pm
-                                lib/ExtUtils/MM_Win95.pm
-                                lib/ExtUtils/MY.pm
-                                lib/ExtUtils/MakeMaker.pm
-                                lib/ExtUtils/MakeMaker/Config.pm
-                                lib/ExtUtils/MakeMaker/FAQ.pod
-                                lib/ExtUtils/MakeMaker/Locale.pm
-                                lib/ExtUtils/MakeMaker/Tutorial.pod
-                                lib/ExtUtils/MakeMaker/version.pm
-                                lib/ExtUtils/MakeMaker/version/regex.pm
-                                lib/ExtUtils/MakeMaker/version/vpp.pm
-                                lib/ExtUtils/Mkbootstrap.pm
-                                lib/ExtUtils/Mksymlists.pm
-                                lib/ExtUtils/testlib.pm ] ],
+        # Upstreamed as https://github.com/Perl-Toolchain-Gang/ExtUtils-MakeMaker/commit/ede9ea4a
+        'CUSTOMIZED'   => [
+            qq[lib/ExtUtils/MakeMaker.pm],
+            qq[t/prereq.t],
+            qq[t/vstrings.t],
+        # Upstreamed as https://github.com/Perl-Toolchain-Gang/ExtUtils-MakeMaker/commit/dd1e236ab
+            qq[lib/ExtUtils/MM_VMS.pm],
+        ],
     },
 
     'ExtUtils::Manifest' => {
@@ -523,7 +493,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::ParseXS' => {
-        'DISTRIBUTION' => 'SMUELLER/ExtUtils-ParseXS-3.24.tar.gz',
+        'DISTRIBUTION' => 'SMUELLER/ExtUtils-ParseXS-3.30.tar.gz',
         'FILES'        => q[dist/ExtUtils-ParseXS],
     },
 
@@ -716,7 +686,7 @@ use File::Glob qw(:case);
     },
 
     'Locale-Codes' => {
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.35.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.36.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( README.first
@@ -749,7 +719,7 @@ use File::Glob qw(:case);
 
     'Math::BigInt' => {
         'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-1.9997.tar.gz',
-        'FILES'        => q[dist/Math-BigInt],
+        'FILES'        => q[cpan/Math-BigInt],
         'EXCLUDED'     => [
             qr{^inc/},
             qr{^examples/},
@@ -763,7 +733,7 @@ use File::Glob qw(:case);
 
     'Math::BigInt::FastCalc' => {
         'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-FastCalc-0.31.tar.gz',
-        'FILES'        => q[dist/Math-BigInt-FastCalc],
+        'FILES'        => q[cpan/Math-BigInt-FastCalc],
         'EXCLUDED'     => [
             qr{^inc/},
             qw( t/00sig.t
@@ -786,7 +756,7 @@ use File::Glob qw(:case);
 
     'Math::BigRat' => {
         'DISTRIBUTION' => 'PJACKLAM/Math-BigRat-0.2606.tar.gz',
-        'FILES'        => q[dist/Math-BigRat],
+        'FILES'        => q[cpan/Math-BigRat],
         'EXCLUDED'     => [
             qr{^inc/},
             qw( t/00sig.t
@@ -820,7 +790,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150720.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.201509R12tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -935,6 +905,9 @@ use File::Glob qw(:case);
         # XXX We can and should fix this, but clean up the DRY-failure in utils
         # first
         'EXCLUDED' => ['perldoc'],
+
+        # https://rt.cpan.org/Ticket/Display.html?id=106798
+        'CUSTOMIZED'   => [ qw[ lib/Pod/Perldoc.pm ] ],
     },
 
     'Pod::Simple' => {
@@ -1018,6 +991,9 @@ use File::Glob qw(:case);
     'Socket' => {
         'DISTRIBUTION' => 'PEVANS/Socket-2.020.tar.gz',
         'FILES'        => q[cpan/Socket],
+
+        # https://rt.cpan.org/Ticket/Display.html?id=106797
+        'CUSTOMIZED'   => [ qw[ Socket.xs ] ],
     },
 
     'Storable' => {
@@ -1073,7 +1049,7 @@ use File::Glob qw(:case);
 
     'Test' => {
         'DISTRIBUTION' => 'JESSE/Test-1.26.tar.gz',
-        'FILES'        => q[cpan/Test],
+        'FILES'        => q[dist/Test],
     },
 
     'Test::Harness' => {
@@ -1159,7 +1135,7 @@ use File::Glob qw(:case);
     # correct for this (and Thread::Semaphore, threads, and threads::shared)
     # to be under dist/ rather than cpan/
     'Thread::Queue' => {
-        'DISTRIBUTION' => 'JDHEDDEN/Thread-Queue-3.05.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/Thread-Queue-3.06.tar.gz',
         'FILES'        => q[dist/Thread-Queue],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1217,7 +1193,7 @@ use File::Glob qw(:case);
     },
 
     'Time::HiRes' => {
-        'DISTRIBUTION' => 'ZEFRAM/Time-HiRes-1.9726.tar.gz',
+        'DISTRIBUTION' => 'RJBS/Time-HiRes-1.9727_02.tar.gz',
         'FILES'        => q[cpan/Time-HiRes],
     },
 
@@ -1293,7 +1269,7 @@ use File::Glob qw(:case);
     },
 
     'Win32' => {
-        'DISTRIBUTION' => "JDB/Win32-0.51.tar.gz",
+        'DISTRIBUTION' => "JDB/Win32-0.52.tar.gz",
         'FILES'        => q[cpan/Win32],
     },
 
@@ -1346,6 +1322,8 @@ use File::Glob qw(:case);
 
     '_PERLLIB' => {
         'FILES'    => q[
+                ext/Amiga-ARexx/
+                ext/Amiga-Exec/
                 ext/B/
                 ext/Devel-Peek/
                 ext/DynaLoader/

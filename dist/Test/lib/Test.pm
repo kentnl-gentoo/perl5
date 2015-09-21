@@ -20,7 +20,7 @@ sub _reset_globals {
     $planned    = 0;
 }
 
-$VERSION = '1.26';
+$VERSION = '1.27';
 require Exporter;
 @ISA=('Exporter');
 
@@ -239,9 +239,31 @@ sub _quote {
     $str =~ s/\n/\\n/g;
     $str =~ s/\r/\\r/g;
     $str =~ s/\t/\\t/g;
-    $str =~ s/([\0-\037])(?!\d)/sprintf('\\%o',ord($1))/eg;
-    $str =~ s/([\0-\037\177-\377])/sprintf('\\x%02X',ord($1))/eg;
-    $str =~ s/([^\0-\176])/sprintf('\\x{%X}',ord($1))/eg;
+    if (defined $^V && $^V ge v5.6) {
+        $str =~ s/([[:cntrl:]])(?!\d)/sprintf('\\%o',ord($1))/eg;
+        $str =~ s/([[:^print:]])/sprintf('\\x%02X',ord($1))/eg;
+        $str =~ s/([[:^ascii:]])/sprintf('\\x{%X}',ord($1))/eg;
+    }
+    elsif (ord("A") == 65) {
+        $str =~ s/([\0-\037])(?!\d)/sprintf('\\%o',ord($1))/eg;
+        $str =~ s/([\0-\037\177-\377])/sprintf('\\x%02X',ord($1))/eg;
+        $str =~ s/([^\0-\176])/sprintf('\\x{%X}',ord($1))/eg;
+    }
+    else { # Assuming EBCDIC on this ancient Perl
+
+        # The controls except for one are 0-\077, so almost all controls on
+        # EBCDIC platforms will be expressed in octal, instead of just the C0
+        # ones.
+        $str =~ s/([\0-\077])(?!\d)/sprintf('\\%o',ord($1))/eg;
+        $str =~ s/([\0-\077])/sprintf('\\x%02X',ord($1))/eg;
+
+        $str =~ s/([^\0-\xFF])/sprintf('\\x{%X}',ord($1))/eg;
+
+        # What remains to be escaped are the non-ASCII-range characters,
+        # including the one control that isn't in the 0-077 range.
+        # (We don't escape further any ASCII printables.)
+        $str =~ s<[^ !"\$\%#'()*+,\-./0123456789:;\<=\>?\@ABCDEFGHIJKLMNOPQRSTUVWXYZ\[\\\]^_`abcdefghijklmnopqrstuvwxyz{|}~]><sprintf('\\x%02X',ord($1))>eg;
+    }
     #if( $_[1] ) {
     #  substr( $str , 218-3 ) = "..."
     #   if length($str) >= 218 and !$ENV{PERL_TEST_NO_TRUNC};
@@ -273,14 +295,16 @@ the test fails.  Examples:
     ok( $foo =~ /bar/ );        # ok if $foo contains 'bar'
     ok( baz($x + $y) eq 'Armondo' );    # ok if baz($x + $y) returns
                                         # 'Armondo'
-    ok( @a == @b );             # ok if @a and @b are the same length
+    ok( @a == @b );             # ok if @a and @b are the same
+                                # length
 
 The expression is evaluated in scalar context.  So the following will
 work:
 
-    ok( @stuff );                       # ok if @stuff has any elements
-    ok( !grep !defined $_, @stuff );    # ok if everything in @stuff is
-                                        # defined.
+    ok( @stuff );                       # ok if @stuff has any
+                                        # elements
+    ok( !grep !defined $_, @stuff );    # ok if everything in @stuff
+                                        # is defined.
 
 A special case is if the expression is a subroutine reference (in either
 C<sub {...}> syntax or C<\&foo> syntax).  In
@@ -634,7 +658,8 @@ Example usage:
   my $if_MSWin =
     $^O =~ m/MSWin/ ? 'Skip if under MSWin' : '';
 
-  # A test to be skipped if under MSWin (i.e., run except under MSWin)
+  # A test to be skipped if under MSWin (i.e., run except under
+  # MSWin)
   skip($if_MSWin, thing($foo), thing($bar) );
 
 Or, going the other way:
@@ -642,7 +667,8 @@ Or, going the other way:
   my $unless_MSWin =
     $^O =~ m/MSWin/ ? '' : 'Skip unless under MSWin';
 
-  # A test to be skipped unless under MSWin (i.e., run only under MSWin)
+  # A test to be skipped unless under MSWin (i.e., run only under
+  # MSWin)
   skip($unless_MSWin, thing($foo), thing($bar) );
 
 The tricky thing to remember is that the first parameter is true if
@@ -931,7 +957,7 @@ L<Test::Builder> for building your own testing library.
 
 L<Test::Unit> is an interesting XUnit-style testing library.
 
-L<Test::Inline> and L<SelfTest> let you embed tests in code.
+L<Test::Inline> lets you embed tests in code.
 
 
 =head1 AUTHOR

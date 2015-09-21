@@ -214,6 +214,7 @@ struct RExC_state_t {
 #define RExC_mysv2	(pRExC_state->mysv2)
 
 #endif
+    bool        seen_unfolded_sharp_s;
 };
 
 #define RExC_flags	(pRExC_state->flags)
@@ -226,6 +227,17 @@ struct RExC_state_t {
 #define RExC_end	(pRExC_state->end)
 #define RExC_parse	(pRExC_state->parse)
 #define RExC_whilem_seen	(pRExC_state->whilem_seen)
+
+/* Set during the sizing pass when there is a LATIN SMALL LETTER SHARP S in any
+ * EXACTF node, hence was parsed under /di rules.  If later in the parse,
+ * something forces the pattern into using /ui rules, the sharp s should be
+ * folded into the sequence 'ss', which takes up more space than previously
+ * calculated.  This means that the sizing pass needs to be restarted.  (The
+ * node also becomes an EXACTFU_SS.)  For all other characters, an EXACTF node
+ * that gets converted to /ui (and EXACTFU) occupies the same amount of space,
+ * so there is no need to resize [perl #125990]. */
+#define RExC_seen_unfolded_sharp_s (pRExC_state->seen_unfolded_sharp_s)
+
 #ifdef RE_TRACK_PATTERN_OFFSETS
 #define RExC_offsets	(pRExC_state->rxi->u.offsets) /* I am not like the
                                                          others */
@@ -299,7 +311,9 @@ struct RExC_state_t {
 #define	SPSTART		0x04	/* Starts with * or + */
 #define POSTPONED	0x08    /* (?1),(?&name), (??{...}) or similar */
 #define TRYAGAIN	0x10	/* Weeded out a declaration. */
-#define RESTART_UTF8    0x20    /* Restart, need to calcuate sizes as UTF-8 */
+#define RESTART_PASS1   0x20    /* Need to restart sizing pass */
+#define NEED_UTF8       0x40    /* In conjunction with RESTART_PASS1, need to
+                                   calcuate sizes as UTF-8 */
 
 #define REG_NODE_NUM(x) ((x) ? (int)((x)-RExC_emit_start) : -1)
 
@@ -318,12 +332,30 @@ struct RExC_state_t {
 #define PAREN_SET(u8str,paren) PBYTE(u8str,paren) |= PBITVAL(paren)
 #define PAREN_UNSET(u8str,paren) PBYTE(u8str,paren) &= (~PBITVAL(paren))
 
-#define REQUIRE_UTF8	STMT_START {                                       \
+#define REQUIRE_UTF8(flagp) STMT_START {                                   \
                                      if (!UTF) {                           \
-                                         *flagp = RESTART_UTF8;            \
+                                         assert(PASS1);                    \
+                                         *flagp = RESTART_PASS1|NEED_UTF8; \
                                          return NULL;                      \
                                      }                                     \
-                        } STMT_END
+                             } STMT_END
+
+/* Change from /d into /u rules, and restart the parse if we've already seen
+ * something whose size would increase as a result, by setting *flagp and
+ * returning 'restart_retval'.  RExC_uni_semantics is a flag that indicates
+ * we've change to /u during the parse.  */
+#define REQUIRE_UNI_RULES(flagp, restart_retval)                            \
+    STMT_START {                                                            \
+            if (DEPENDS_SEMANTICS) {                                        \
+                assert(PASS1);                                              \
+                set_regex_charset(&RExC_flags, REGEX_UNICODE_CHARSET);      \
+                RExC_uni_semantics = 1;                                     \
+                if (RExC_seen_unfolded_sharp_s) {                           \
+                    *flagp |= RESTART_PASS1;                                \
+                    return restart_retval;                                  \
+                }                                                           \
+            }                                                               \
+    } STMT_END
 
 /* This converts the named class defined in regcomp.h to its equivalent class
  * number defined in handy.h. */
@@ -1177,7 +1209,9 @@ S_get_ANYOF_cp_list_for_ssc(pTHX_ const RExC_state_t *pRExC_state,
 
     /* If this can match all upper Latin1 code points, have to add them
      * as well */
-    if (ANYOF_FLAGS(node) & ANYOF_MATCHES_ALL_NON_UTF8_NON_ASCII) {
+    if (OP(node) == ANYOFD
+        && (ANYOF_FLAGS(node) & ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER))
+    {
         _invlist_union(invlist, PL_UpperLatin1, &invlist);
     }
 
@@ -1255,12 +1289,19 @@ S_ssc_and(pTHX_ const RExC_state_t *pRExC_state, regnode_ssc *ssc,
          * that should be; while the consequences for having /l bugs is
          * incorrect matches */
         if (ssc_is_anything((regnode_ssc *)and_with)) {
-            anded_flags |= ANYOF_WARN_SUPER;
+            anded_flags |= ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER;
         }
     }
     else {
         anded_cp_list = get_ANYOF_cp_list_for_ssc(pRExC_state, and_with);
-        anded_flags = ANYOF_FLAGS(and_with) & ANYOF_COMMON_FLAGS;
+        if (OP(and_with) == ANYOFD) {
+            anded_flags = ANYOF_FLAGS(and_with) & ANYOF_COMMON_FLAGS;
+        }
+        else {
+            anded_flags = ANYOF_FLAGS(and_with)
+            &( ANYOF_COMMON_FLAGS
+              |ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER);
+        }
     }
 
     ANYOF_FLAGS(ssc) &= anded_flags;
@@ -1411,6 +1452,11 @@ S_ssc_or(pTHX_ const RExC_state_t *pRExC_state, regnode_ssc *ssc,
     else {
         ored_cp_list = get_ANYOF_cp_list_for_ssc(pRExC_state, or_with);
         ored_flags = ANYOF_FLAGS(or_with) & ANYOF_COMMON_FLAGS;
+        if (OP(or_with) != ANYOFD) {
+            ored_flags
+            |= ANYOF_FLAGS(or_with)
+             & ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER;
+        }
     }
 
     ANYOF_FLAGS(ssc) |= ored_flags;
@@ -1609,7 +1655,9 @@ S_ssc_finalize(pTHX_ RExC_state_t *pRExC_state, regnode_ssc *ssc)
     /* The code in this file assumes that all but these flags aren't relevant
      * to the SSC, except SSC_MATCHES_EMPTY_STRING, which should be cleared
      * by the time we reach here */
-    assert(! (ANYOF_FLAGS(ssc) & ~ANYOF_COMMON_FLAGS));
+    assert(! (ANYOF_FLAGS(ssc)
+        & ~( ANYOF_COMMON_FLAGS
+            |ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER)));
 
     populate_ANYOF_from_invlist( (regnode *) ssc, &invlist);
 
@@ -1621,6 +1669,10 @@ S_ssc_finalize(pTHX_ RExC_state_t *pRExC_state, regnode_ssc *ssc)
 
     if (ANYOF_POSIXL_SSC_TEST_ANY_SET(ssc)) {
         ANYOF_FLAGS(ssc) |= ANYOF_MATCHES_POSIXL;
+    }
+
+    if (RExC_contains_locale) {
+        OP(ssc) = ANYOFL;
     }
 
     assert(! (ANYOF_FLAGS(ssc) & ANYOF_LOCALE_FLAGS) || RExC_contains_locale);
@@ -5097,6 +5149,7 @@ PerlIO_printf(Perl_debug_log, "LHS=%"UVuf" RHS=%"UVuf"\n",
 		    }
 		    break;
 
+                case ANYOFD:
                 case ANYOFL:
                 case ANYOF:
 		    if (flags & SCF_DO_STCLASS_AND)
@@ -6546,7 +6599,9 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 
     /* ignore the utf8ness if the pattern is 0 length */
     RExC_utf8 = RExC_orig_utf8 = (plen == 0 || IN_BYTES) ? 0 : SvUTF8(pat);
+
     RExC_uni_semantics = 0;
+    RExC_seen_unfolded_sharp_s = 0;
     RExC_contains_locale = 0;
     RExC_contains_i = 0;
     RExC_strict = cBOOL(pm_flags & RXf_PMf_STRICT);
@@ -6567,8 +6622,8 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
         });
 
   redo_first_pass:
-    /* we jump here if we upgrade the pattern to utf8 and have to
-     * recompile */
+    /* we jump here if we have to recompile, e.g., from upgrading the pattern
+     * to utf8 */
 
     if ((pm_flags & PMf_USE_RE_EVAL)
 		/* this second condition covers the non-regex literal case,
@@ -6602,7 +6657,9 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
     if (rx_flags & PMf_FOLD) {
         RExC_contains_i = 1;
     }
-    if (RExC_utf8 && initial_charset == REGEX_DEPENDS_CHARSET) {
+    if (   initial_charset == REGEX_DEPENDS_CHARSET
+        && (RExC_utf8 ||RExC_uni_semantics))
+    {
 
 	/* Set to use unicode semantics if the pattern is in utf8 and has the
 	 * 'depends' charset specified, as it means unicode when utf8  */
@@ -6688,9 +6745,16 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
         at least some part of the pattern, and therefore must convert the whole
         thing.
         -- dmq */
-        if (flags & RESTART_UTF8) {
-            S_pat_upgrade_to_utf8(aTHX_ pRExC_state, &exp, &plen,
+        if (flags & RESTART_PASS1) {
+            if (flags & NEED_UTF8) {
+                S_pat_upgrade_to_utf8(aTHX_ pRExC_state, &exp, &plen,
                                     pRExC_state->num_code_blocks);
+            }
+            else {
+                DEBUG_PARSE_r(PerlIO_printf(Perl_debug_log,
+                "Need to redo pass 1\n"));
+            }
+
             goto redo_first_pass;
         }
         Perl_croak(aTHX_ "panic: reg returned NULL to re_op_compile for sizing pass, flags=%#"UVxf"", (UV) flags);
@@ -6773,24 +6837,24 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
                     || ! has_charset);
         bool has_runon = ((RExC_seen & REG_RUN_ON_COMMENT_SEEN)
                                                    == REG_RUN_ON_COMMENT_SEEN);
-	U16 reganch = (U16)((r->extflags & RXf_PMf_STD_PMMOD)
+	U8 reganch = (U8)((r->extflags & RXf_PMf_STD_PMMOD)
 			    >> RXf_PMf_STD_PMMOD_SHIFT);
 	const char *fptr = STD_PAT_MODS;        /*"msixn"*/
 	char *p;
-        /* Allocate for the worst case, which is all the std flags are turned
-         * on.  If more precision is desired, we could do a population count of
-         * the flags set.  This could be done with a small lookup table, or by
-         * shifting, masking and adding, or even, when available, assembly
-         * language for a machine-language population count.
-         * We never output a minus, as all those are defaults, so are
+
+        /* We output all the necessary flags; we never output a minus, as all
+         * those are defaults, so are
          * covered by the caret */
 	const STRLEN wraplen = plen + has_p + has_runon
             + has_default       /* If needs a caret */
+            + PL_bitcount[reganch] /* 1 char for each set standard flag */
 
 		/* If needs a character set specifier */
 	    + ((has_charset) ? MAX_CHARSET_NAME_LENGTH : 0)
-            + (sizeof(STD_PAT_MODS) - 1)
             + (sizeof("(?:)") - 1);
+
+        /* make sure PL_bitcount bounds not exceeded */
+        assert(sizeof(STD_PAT_MODS) <= 8);
 
         Newx(p, wraplen + 1, char); /* +1 for the ending NUL */
 	r->xpv_len_u.xpvlenu_pv = p;
@@ -9747,10 +9811,10 @@ S_parse_lparen_question_flags(pTHX_ RExC_state_t *pRExC_state)
 #endif
 
 /* Returns NULL, setting *flagp to TRYAGAIN at the end of (?) that only sets
-   flags. Returns NULL, setting *flagp to RESTART_UTF8 if the sizing scan
-   needs to be restarted.
-   Otherwise would only return NULL if regbranch() returns NULL, which
-   cannot happen.  */
+   flags. Returns NULL, setting *flagp to RESTART_PASS1 if the sizing scan
+   needs to be restarted, or'd with NEED_UTF8 if the pattern needs to be
+   upgraded to UTF-8.  Otherwise would only return NULL if regbranch() returns
+   NULL, which cannot happen.  */
 STATIC regnode *
 S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
     /* paren: Parenthesized? 0=top; 1,2=inside '(': changed to letter.
@@ -10278,8 +10342,8 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 			    ret->flags = 1;
 
                         tail = reg(pRExC_state, 1, &flag, depth+1);
-                        if (flag & RESTART_UTF8) {
-                            *flagp = RESTART_UTF8;
+                        if (flag & (RESTART_PASS1|NEED_UTF8)) {
+                            *flagp = flag & (RESTART_PASS1|NEED_UTF8);
                             return NULL;
                         }
                         REGTAIL(pRExC_state, ret, tail);
@@ -10367,8 +10431,8 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                     REGTAIL(pRExC_state, ret, reganode(pRExC_state, IFTHEN, 0));
                     br = regbranch(pRExC_state, &flags, 1,depth+1);
 		    if (br == NULL) {
-                        if (flags & RESTART_UTF8) {
-                            *flagp = RESTART_UTF8;
+                        if (flags & (RESTART_PASS1|NEED_UTF8)) {
+                            *flagp = flags & (RESTART_PASS1|NEED_UTF8);
                             return NULL;
                         }
                         FAIL2("panic: regbranch returned NULL, flags=%#"UVxf"",
@@ -10387,8 +10451,8 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                         lastbr = reganode(pRExC_state, IFTHEN, 0);
 
                         if (!regbranch(pRExC_state, &flags, 1,depth+1)) {
-                            if (flags & RESTART_UTF8) {
-                                *flagp = RESTART_UTF8;
+                            if (flags & (RESTART_PASS1|NEED_UTF8)) {
+                                *flagp = flags & (RESTART_PASS1|NEED_UTF8);
                                 return NULL;
                             }
                             FAIL2("panic: regbranch returned NULL, flags=%#"UVxf"",
@@ -10485,8 +10549,8 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
     /*     branch_len = (paren != 0); */
 
     if (br == NULL) {
-        if (flags & RESTART_UTF8) {
-            *flagp = RESTART_UTF8;
+        if (flags & (RESTART_PASS1|NEED_UTF8)) {
+            *flagp = flags & (RESTART_PASS1|NEED_UTF8);
             return NULL;
         }
         FAIL2("panic: regbranch returned NULL, flags=%#"UVxf"", (UV) flags);
@@ -10532,8 +10596,8 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
         br = regbranch(pRExC_state, &flags, 0, depth+1);
 
 	if (br == NULL) {
-            if (flags & RESTART_UTF8) {
-                *flagp = RESTART_UTF8;
+            if (flags & (RESTART_PASS1|NEED_UTF8)) {
+                *flagp = flags & (RESTART_PASS1|NEED_UTF8);
                 return NULL;
             }
             FAIL2("panic: regbranch returned NULL, flags=%#"UVxf"", (UV) flags);
@@ -10664,8 +10728,12 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 
     /* Check for proper termination. */
     if (paren) {
-        /* restore original flags, but keep (?p) */
+        /* restore original flags, but keep (?p) and, if we've changed from /d
+         * rules to /u, keep the /u */
 	RExC_flags = oregflags | (RExC_flags & RXf_PMf_KEEPCOPY);
+        if (DEPENDS_SEMANTICS && RExC_uni_semantics) {
+            set_regex_charset(&RExC_flags, REGEX_UNICODE_CHARSET);
+        }
 	if (RExC_parse >= RExC_end || *nextchar(pRExC_state) != ')') {
 	    RExC_parse = oregcomp_parse;
 	    vFAIL("Unmatched (");
@@ -10694,8 +10762,8 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
  *
  * Implements the concatenation operator.
  *
- * Returns NULL, setting *flagp to RESTART_UTF8 if the sizing scan needs to be
- * restarted.
+ * Returns NULL, setting *flagp to RESTART_PASS1 if the sizing scan needs to be
+ * restarted, or'd with NEED_UTF8 if the pattern needs to be upgraded to UTF-8
  */
 STATIC regnode *
 S_regbranch(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, I32 first, U32 depth)
@@ -10734,8 +10802,8 @@ S_regbranch(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, I32 first, U32 depth)
 	if (latest == NULL) {
 	    if (flags & TRYAGAIN)
 		continue;
-            if (flags & RESTART_UTF8) {
-                *flagp = RESTART_UTF8;
+            if (flags & (RESTART_PASS1|NEED_UTF8)) {
+                *flagp = flags & (RESTART_PASS1|NEED_UTF8);
                 return NULL;
             }
             FAIL2("panic: regpiece returned NULL, flags=%#"UVxf"", (UV) flags);
@@ -10777,8 +10845,8 @@ S_regbranch(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, I32 first, U32 depth)
  *
  * Returns NULL, setting *flagp to TRYAGAIN if regatom() returns NULL with
  * TRYAGAIN.
- * Returns NULL, setting *flagp to RESTART_UTF8 if the sizing scan needs to be
- * restarted.
+ * Returns NULL, setting *flagp to RESTART_PASS1 if the sizing scan needs to be
+ * restarted, or'd with NEED_UTF8 if the pattern needs to be upgraded to UTF-8
  */
 STATIC regnode *
 S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
@@ -10807,8 +10875,8 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 
     ret = regatom(pRExC_state, &flags,depth+1);
     if (ret == NULL) {
-	if (flags & (TRYAGAIN|RESTART_UTF8))
-	    *flagp |= flags & (TRYAGAIN|RESTART_UTF8);
+	if (flags & (TRYAGAIN|RESTART_PASS1|NEED_UTF8))
+	    *flagp |= flags & (TRYAGAIN|RESTART_PASS1|NEED_UTF8);
         else
             FAIL2("panic: regatom returned NULL, flags=%#"UVxf"", (UV) flags);
 	return(NULL);
@@ -10877,9 +10945,7 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                 ret = reg_node(pRExC_state, OPFAIL);
                 return ret;
             }
-            else if (min == max
-                     && RExC_parse < RExC_end
-                     && (*RExC_parse == '?' || *RExC_parse == '+'))
+            else if (min == max && RExC_parse < RExC_end && *RExC_parse == '?')
             {
                 if (PASS2) {
                     ckWARN2reg(RExC_parse + 1,
@@ -10893,6 +10959,20 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 
 	  do_curly:
 	    if ((flags&SIMPLE)) {
+                if (min == 0 && max == REG_INFTY) {
+                    reginsert(pRExC_state, STAR, ret, depth+1);
+                    ret->flags = 0;
+                    MARK_NAUGHTY(4);
+                    RExC_seen |= REG_UNBOUNDED_QUANTIFIER_SEEN;
+                    goto nest_check;
+                }
+                if (min == 1 && max == REG_INFTY) {
+                    reginsert(pRExC_state, PLUS, ret, depth+1);
+                    ret->flags = 0;
+                    MARK_NAUGHTY(3);
+                    RExC_seen |= REG_UNBOUNDED_QUANTIFIER_SEEN;
+                    goto nest_check;
+                }
                 MARK_NAUGHTY_EXP(2, 2);
 		reginsert(pRExC_state, CURLY, ret, depth+1);
                 Set_Node_Offset(ret, parse_start+1); /* MJD */
@@ -10966,21 +11046,9 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 
     *flagp = (op != '+') ? (WORST|SPSTART|HASWIDTH) : (WORST|HASWIDTH);
 
-    if (op == '*' && (flags&SIMPLE)) {
-	reginsert(pRExC_state, STAR, ret, depth+1);
-	ret->flags = 0;
-	MARK_NAUGHTY(4);
-        RExC_seen |= REG_UNBOUNDED_QUANTIFIER_SEEN;
-    }
-    else if (op == '*') {
+    if (op == '*') {
 	min = 0;
 	goto do_curly;
-    }
-    else if (op == '+' && (flags&SIMPLE)) {
-	reginsert(pRExC_state, PLUS, ret, depth+1);
-	ret->flags = 0;
-	MARK_NAUGHTY(3);
-        RExC_seen |= REG_UNBOUNDED_QUANTIFIER_SEEN;
     }
     else if (op == '+') {
 	min = 1;
@@ -11085,14 +11153,17 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state,
   * sequence. *node_p * will be set to a generated node returned by this
   * function calling S_reg().
   *
-  * The final possibility, which happens only when the fourth one would
-  * otherwise be in effect, is that one of those code points requires the
+  * The final possibility, which happens is that it is premature to be calling
+  * this function; that pass1 needs to be restarted.  This can happen when this
+  * changes from /d to /u rules, or when the pattern needs to be upgraded to
+  * UTF-8.  The latter occurs only when the fourth possibility would otherwise
+  * be in effect, and is because one of those code points requires the
   * pattern to be recompiled as UTF-8.  The function returns FALSE, and sets
-  * the RESTART_UTF8 flag in *flagp.  When this happens, the caller needs to
-  * desist from continuing parsing, and return this information to its caller.
-  * This is not set for when there is only one code point, as this can be
-  * called as part of an ANYOF node, and they can store above-Latin1 code
-  * points without the pattern having to be in UTF-8.
+  * the RESTART_PASS1 and NEED_UTF8 flags in *flagp, as appropriate.  When this
+  * happens, the caller needs to desist from continuing parsing, and return
+  * this information to its caller.  This is not set for when there is only one
+  * code point, as this can be called as part of an ANYOF node, and they can
+  * store above-Latin1 code points without the pattern having to be in UTF-8.
   *
   * For non-single-quoted regexes, the tokenizer has resolved character and
   * sequence names inside \N{...} into their Unicode values, normalizing the
@@ -11181,7 +11252,8 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state,
 	vFAIL("\\N{NAME} must be resolved by the lexer");
     }
 
-    RExC_uni_semantics = 1; /* Unicode named chars imply Unicode semantics */
+    REQUIRE_UNI_RULES(flagp, FALSE); /* Unicode named chars imply Unicode
+                                        semantics */
 
     if (endbrace == RExC_parse) {   /* empty: \N{} */
         if (cp_count) {
@@ -11321,8 +11393,8 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state,
 
         if (node_p) {
             if (!(*node_p = reg(pRExC_state, 1, &flags, depth+1))) {
-                if (flags & RESTART_UTF8) {
-                    *flagp = RESTART_UTF8;
+                if (flags & (RESTART_PASS1|NEED_UTF8)) {
+                    *flagp = flags & (RESTART_PASS1|NEED_UTF8);
                     return FALSE;
                 }
                 FAIL2("panic: reg returned NULL to grok_bslash_N, flags=%#"UVxf"",
@@ -11558,7 +11630,7 @@ S_alloc_maybe_populate_EXACT(pTHX_ RExC_state_t *pRExC_state,
 
     /* A single character node is SIMPLE, except for the special-cased SHARP S
      * under /di. */
-    if ((len == 1 || (UTF && len == UNISKIP(code_point)))
+    if ((len == 1 || (UTF && len == UVCHR_SKIP(code_point)))
 #if    UNICODE_MAJOR_VERSION > 3 /* no multifolds in early Unicode */   \
    || (UNICODE_MAJOR_VERSION == 3 && (   UNICODE_DOT_VERSION > 0)       \
                                       || UNICODE_DOT_DOT_VERSION > 0)
@@ -11651,8 +11723,8 @@ S_backref_value(char *p)
 
    Returns NULL, setting *flagp to TRYAGAIN if reg() returns NULL with
    TRYAGAIN.
-   Returns NULL, setting *flagp to RESTART_UTF8 if the sizing scan needs to be
-   restarted.
+   Returns NULL, setting *flagp to RESTART_PASS1 if the sizing scan needs to be
+   restarted, or'd with NEED_UTF8 if the pattern needs to be upgraded to UTF-8
    Otherwise does not return NULL.
 */
 
@@ -11713,17 +11785,18 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                        TRUE, /* allow multi-char folds */
                        FALSE, /* don't silence non-portable warnings. */
                        (bool) RExC_strict,
+                       TRUE, /* Allow an optimized regnode result */
                        NULL);
-	if (*RExC_parse != ']') {
-	    RExC_parse = oregcomp_parse;
-	    vFAIL("Unmatched [");
-	}
         if (ret == NULL) {
-            if (*flagp & RESTART_UTF8)
+            if (*flagp & (RESTART_PASS1|NEED_UTF8))
                 return NULL;
             FAIL2("panic: regclass returned NULL to regatom, flags=%#"UVxf"",
                   (UV) *flagp);
         }
+	if (*RExC_parse != ']') {
+	    RExC_parse = oregcomp_parse;
+	    vFAIL("Unmatched [");
+	}
 	nextchar(pRExC_state);
         Set_Node_Length(ret, RExC_parse - oregcomp_parse + 1); /* MJD */
 	break;
@@ -11740,8 +11813,8 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 		    }
 		    goto tryagain;
 		}
-                if (flags & RESTART_UTF8) {
-                    *flagp = RESTART_UTF8;
+                if (flags & (RESTART_PASS1|NEED_UTF8)) {
+                    *flagp = flags & (RESTART_PASS1|NEED_UTF8);
                     return NULL;
                 }
                 FAIL2("panic: reg returned NULL to regatom, flags=%#"UVxf"",
@@ -11905,7 +11978,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                         NOT_REACHED; /*NOTREACHED*/
                 }
                 RExC_parse = endbrace;
-                RExC_uni_semantics = 1;
+                REQUIRE_UNI_RULES(flagp, NULL);
 
                 if (PASS2 && op >= BOUNDA) {  /* /aa is same as /a */
                     OP(ret) = BOUNDU;
@@ -12015,9 +12088,12 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                                          It would be a bug if these returned
                                          non-portables */
                                (bool) RExC_strict,
+                               TRUE, /* Allow an optimized regnode result */
                                NULL);
-                /* regclass() can only return RESTART_UTF8 if multi-char folds
-                   are allowed.  */
+                if (*flagp & RESTART_PASS1)
+                    return NULL;
+                /* regclass() can only return RESTART_PASS1 and NEED_UTF8 if
+                 * multi-char folds are allowed.  */
                 if (!ret)
                     FAIL2("panic: regclass returned NULL to regatom, flags=%#"UVxf"",
                           (UV) *flagp);
@@ -12054,7 +12130,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                 break;
             }
 
-            if (*flagp & RESTART_UTF8)
+            if (*flagp & RESTART_PASS1)
                 return NULL;
             RExC_parse--;
             goto defchar;
@@ -12262,7 +12338,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
              * string's UTF8ness.  The reason to do this is that EXACTF is not
              * trie-able, EXACTFU is.
              *
-             * Similarly, we can convert EXACTFL nodes to EXACTFU if they
+             * Similarly, we can convert EXACTFL nodes to EXACTFLU8 if they
              * contain only above-Latin1 characters (hence must be in UTF8),
              * which don't participate in folds with Latin1-range characters,
              * as the latter's folds aren't known until runtime.  (We don't
@@ -12379,8 +12455,10 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                                             flagp,
                                             depth)
                         ) {
-                            if (*flagp & RESTART_UTF8)
-                                FAIL("panic: grok_bslash_N set RESTART_UTF8");
+                            if (*flagp & NEED_UTF8)
+                                FAIL("panic: grok_bslash_N set NEED_UTF8");
+                            if (*flagp & RESTART_PASS1)
+                                return NULL;
 
                             /* Here, it wasn't a single code point.  Go close
                              * up this EXACTish node.  The switch() prior to
@@ -12390,7 +12468,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                         }
                         p = RExC_parse;
                         if (ender > 0xff) {
-                            REQUIRE_UTF8;
+                            REQUIRE_UTF8(flagp);
                         }
                         break;
 		    case 'r':
@@ -12437,7 +12515,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 				goto recode_encoding;
 			    }
 			    if (ender > 0xff) {
-				REQUIRE_UTF8;
+				REQUIRE_UTF8(flagp);
 			    }
 			    break;
 			}
@@ -12475,7 +12553,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                                 }
 			    }
                             else {
-				REQUIRE_UTF8;
+				REQUIRE_UTF8(flagp);
 			    }
 			    break;
 			}
@@ -12520,7 +12598,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 			    STRLEN numlen = 3;
 			    ender = grok_oct(p, &numlen, &flags, NULL);
 			    if (ender > 0xff) {
-				REQUIRE_UTF8;
+				REQUIRE_UTF8(flagp);
 			    }
 			    p += numlen;
                             if (PASS2   /* like \08, \178 */
@@ -12542,7 +12620,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 			    ender = reg_recode((const char)(U8)ender, &enc);
 			    if (!enc && PASS2)
 				ckWARNreg(p, "Invalid escape in the specified encoding");
-			    REQUIRE_UTF8;
+			    REQUIRE_UTF8(flagp);
 			}
 			break;
 		    case '\0':
@@ -12573,7 +12651,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 		    /*FALLTHROUGH*/
 		default:    /* A literal character */
 		  normal_default:
-		    if (UTF8_IS_START(*p) && UTF) {
+		    if (! UTF8_IS_INVARIANT(*p) && UTF) {
 			STRLEN numlen;
 			ender = utf8n_to_uvchr((U8*)p, RExC_end - p,
 					       &numlen, UTF8_ALLOW_DEFAULT);
@@ -12612,7 +12690,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                      * its representation until PASS2. */
                     if (SIZE_ONLY) {
                         if (UTF) {
-                            const STRLEN unilen = UNISKIP(ender);
+                            const STRLEN unilen = UVCHR_SKIP(ender);
                             s += unilen;
 
                             /* We have to subtract 1 just below (and again in
@@ -12682,15 +12760,18 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                         /* See if the character's fold differs between /d and
                          * /u.  This includes the multi-char fold SHARP S to
                          * 'ss' */
-                        if (maybe_exactfu
+                        if (UNLIKELY(ender == LATIN_SMALL_LETTER_SHARP_S)) {
+                            RExC_seen_unfolded_sharp_s = 1;
+                            maybe_exactfu = FALSE;
+                        }
+                        else if (maybe_exactfu
                             && (PL_fold[ender] != PL_fold_latin1[ender]
 #if    UNICODE_MAJOR_VERSION > 3 /* no multifolds in early Unicode */   \
    || (UNICODE_MAJOR_VERSION == 3 && (   UNICODE_DOT_VERSION > 0)       \
                                       || UNICODE_DOT_DOT_VERSION > 0)
-                                || ender == LATIN_SMALL_LETTER_SHARP_S
-                                || (len > 0
-                                   && isALPHA_FOLD_EQ(ender, 's')
-                                   && isALPHA_FOLD_EQ(*(s-1), 's'))
+                                || (   len > 0
+                                    && isALPHA_FOLD_EQ(ender, 's')
+                                    && isALPHA_FOLD_EQ(*(s-1), 's'))
 #endif
                         )) {
                             maybe_exactfu = FALSE;
@@ -12701,7 +12782,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                      * we have an array that finds its fold quickly */
                     *(s++) = (char) ender;
                 }
-                else {  /* FOLD and UTF */
+                else {  /* FOLD, and UTF (or sharp s) */
                     /* Unlike the non-fold case, we do actually have to
                      * calculate the results here in pass 1.  This is for two
                      * reasons, the folded length may be longer than the
@@ -12831,7 +12912,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                             }
                         }
                         else if (UTF8_IS_DOWNGRADEABLE_START(*s)) {
-                            if (! IS_NON_FINAL_FOLD(TWO_BYTE_UTF8_TO_NATIVE(
+                            if (! IS_NON_FINAL_FOLD(EIGHT_BIT_UTF8_TO_NATIVE(
                                                                   *s, *(s+1))))
                             {
                                 break;
@@ -13330,17 +13411,20 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                                        this function */
     const bool save_fold = FOLD;    /* Temporary */
     char *save_end, *save_parse;    /* Temporaries */
+    const bool in_locale = LOC;     /* we turn off /l during processing */
 
     GET_RE_DEBUG_FLAGS_DECL;
 
     PERL_ARGS_ASSERT_HANDLE_REGEX_SETS;
 
-    if (LOC) {  /* XXX could make valid in UTF-8 locales */
-        vFAIL("(?[...]) not valid in locale");
+    if (in_locale) {
+        set_regex_charset(&RExC_flags, REGEX_UNICODE_CHARSET);
     }
-    RExC_uni_semantics = 1;     /* The use of this operator implies /u.  This
-                                   is required so that the compile time values
-                                   are valid in all runtime cases */
+
+    REQUIRE_UNI_RULES(flagp, NULL);   /* The use of this operator implies /u.
+                                         This is required so that the compile
+                                         time values are valid in all runtime
+                                         cases */
 
     /* This will return only an ANYOF regnode, or (unlikely) something smaller
      * (such as EXACT).  Thus we can skip most everything if just sizing.  We
@@ -13384,8 +13468,8 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                         RExC_parse++;
                     }
 
-                    /* regclass() can only return RESTART_UTF8 if multi-char
-                       folds are allowed.  */
+                    /* regclass() can only return RESTART_PASS1 and NEED_UTF8
+                     * if multi-char folds are allowed.  */
                     if (!regclass(pRExC_state, flagp,depth+1,
                                   is_posix_class, /* parse the whole char
                                                      class only if not a
@@ -13393,6 +13477,7 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                                   FALSE, /* don't allow multi-char folds */
                                   TRUE, /* silence non-portable warnings. */
                                   TRUE, /* strict */
+                                  FALSE, /* Require return to be an ANYOF */
                                   &current
                                  ))
                         FAIL2("panic: regclass returned NULL to handle_sets, "
@@ -13419,6 +13504,10 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                         nextchar(pRExC_state);
                         Set_Node_Length(node,
                                 RExC_parse - oregcomp_parse + 1); /* MJD */
+                        if (in_locale) {
+                            set_regex_charset(&RExC_flags, REGEX_LOCALE_CHARSET);
+                        }
+
                         return node;
                     }
                     goto no_close;
@@ -13448,12 +13537,13 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
      * a stack.  Each entry on the stack is a single character representing one
      * of the operators; or else a pointer to an operand inversion list. */
 
-#define IS_OPERAND(a)  (! SvIOK(a))
+#define IS_OPERATOR(a) SvIOK(a)
+#define IS_OPERAND(a)  (! IS_OPERATOR(a))
 
     /* The stack is kept in Łukasiewicz order.  (That's pronounced similar
      * to luke-a-shave-itch (or -itz), but people who didn't want to bother
-     * with prounouncing it called it Reverse Polish instead, but now that YOU
-     * know how to prounounce it you can use the correct term, thus giving due
+     * with pronouncing it called it Reverse Polish instead, but now that YOU
+     * know how to pronounce it you can use the correct term, thus giving due
      * credit to the person who invented it, and impressing your geek friends.
      * Wikipedia says that the pronounciation of "Ł" has been changing so that
      * it is now more like an English initial W (as in wonk) than an L.)
@@ -13620,13 +13710,14 @@ redo_curchar:
                     /* If the top entry on the stack is an operator, it had
                      * better be a '!', otherwise the entry below the top
                      * operand should be an operator */
-                    if ( ! (top_ptr = av_fetch(stack, top_index, FALSE))
-                        || (! IS_OPERAND(*top_ptr) && SvUV(*top_ptr) != '!')
-                        || top_index - fence < 1
-                        || ! (stacked_ptr = av_fetch(stack,
-                                                     top_index - 1,
-                                                     FALSE))
-                        || IS_OPERAND(*stacked_ptr))
+                    if (   ! (top_ptr = av_fetch(stack, top_index, FALSE))
+                        || (IS_OPERATOR(*top_ptr) && SvUV(*top_ptr) != '!')
+                        || (   IS_OPERAND(*top_ptr)
+                            && (   top_index - fence < 1
+                                || ! (stacked_ptr = av_fetch(stack,
+                                                             top_index - 1,
+                                                             FALSE))
+                                || ! IS_OPERATOR(*stacked_ptr))))
                     {
                         RExC_parse++;
                         vFAIL("Unexpected '(' with no preceding operator");
@@ -13639,13 +13730,14 @@ redo_curchar:
                 break;
 
             case '\\':
-                /* regclass() can only return RESTART_UTF8 if multi-char
-                   folds are allowed.  */
+                /* regclass() can only return RESTART_PASS1 and NEED_UTF8 if
+                 * multi-char folds are allowed.  */
                 if (!regclass(pRExC_state, flagp,depth+1,
                               TRUE, /* means parse just the next thing */
                               FALSE, /* don't allow multi-char folds */
                               FALSE, /* don't silence non-portable warnings.  */
                               TRUE,  /* strict */
+                              FALSE, /* Require return to be an ANYOF */
                               &current))
                 {
                     FAIL2("panic: regclass returned NULL to handle_sets, "
@@ -13665,14 +13757,15 @@ redo_curchar:
                     RExC_parse++;
                 }
 
-                /* regclass() can only return RESTART_UTF8 if multi-char
-                   folds are allowed.  */
+                /* regclass() can only return RESTART_PASS1 and NEED_UTF8 if
+                 * multi-char folds are allowed.  */
                 if(!regclass(pRExC_state, flagp,depth+1,
                              is_posix_class, /* parse the whole char class
                                                 only if not a posix class */
                              FALSE, /* don't allow multi-char folds */
                              FALSE, /* don't silence non-portable warnings.  */
                              TRUE,   /* strict */
+                             FALSE, /* Require return to be an ANYOF */
                              &current
                             ))
                 {
@@ -13873,7 +13966,7 @@ redo_curchar:
                  * be an operator */
                 top_ptr = av_fetch(stack, top_index, FALSE);
                 assert(top_ptr);
-                if (! IS_OPERAND(*top_ptr)) {
+                if (IS_OPERATOR(*top_ptr)) {
 
                     /* The only permissible operator at the top of the stack is
                      * '!', which is applied immediately to this operand. */
@@ -13925,6 +14018,7 @@ redo_curchar:
     if (av_tindex(stack) < 0   /* Was empty */
         || ((final = av_pop(stack)) == NULL)
         || ! IS_OPERAND(final)
+        || SvTYPE(final) != SVt_INVLIST
         || av_tindex(stack) >= 0)  /* More left on stack */
     {
         SvREFCNT_dec(final);
@@ -13963,8 +14057,8 @@ redo_curchar:
      * already has all folding taken into consideration, and we don't want
      * regclass() to add to that */
     RExC_flags &= ~RXf_PMf_FOLD;
-    /* regclass() can only return RESTART_UTF8 if multi-char folds are allowed.
-     */
+    /* regclass() can only return RESTART_PASS1 and NEED_UTF8 if multi-char
+     * folds are allowed.  */
     node = regclass(pRExC_state, flagp,depth+1,
                     FALSE, /* means parse the whole char class */
                     FALSE, /* don't allow multi-char folds */
@@ -13972,14 +14066,42 @@ redo_curchar:
                              well have generated non-portable code points, but
                              they're valid on this machine */
                     FALSE, /* similarly, no need for strict */
+                    FALSE, /* Require return to be an ANYOF */
                     NULL
                 );
     if (!node)
         FAIL2("panic: regclass returned NULL to handle_sets, flags=%#"UVxf,
                     PTR2UV(flagp));
+
+    /* Fix up the node type if we are in locale.  (We have pretended we are
+     * under /u for the purposes of regclass(), as this construct will only
+     * work under UTF-8 locales.  But now we change the opcode to be ANYOFL (so
+     * as to cause any warnings about bad locales to be output in regexec.c),
+     * and add the flag that indicates to check if not in a UTF-8 locale.  The
+     * reason we above forbid optimization into something other than an ANYOF
+     * node is simply to minimize the number of code changes in regexec.c.
+     * Otherwise we would have to create new EXACTish node types and deal with
+     * them.  This decision could be revisited should this construct become
+     * popular.
+     *
+     * (One might think we could look at the resulting ANYOF node and suppress
+     * the flag if everything is above 255, as those would be UTF-8 only,
+     * but this isn't true, as the components that led to that result could
+     * have been locale-affected, and just happen to cancel each other out
+     * under UTF-8 locales.) */
+    if (in_locale) {
+        set_regex_charset(&RExC_flags, REGEX_LOCALE_CHARSET);
+
+        assert(OP(node) == ANYOF);
+
+        OP(node) = ANYOFL;
+        ANYOF_FLAGS(node) |= ANYOF_LOC_REQ_UTF8;
+    }
+
     if (save_fold) {
         RExC_flags |= RXf_PMf_FOLD;
     }
+
     RExC_parse = save_parse + 1;
     RExC_end = save_end;
     SvREFCNT_dec_NN(final);
@@ -13989,6 +14111,7 @@ redo_curchar:
     Set_Node_Length(node, RExC_parse - oregcomp_parse + 1); /* MJD */
     return node;
 }
+#undef IS_OPERATOR
 #undef IS_OPERAND
 
 STATIC void
@@ -14131,6 +14254,8 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                                                        about too large
                                                        characters */
                  const bool strict,
+                 bool optimizable,                  /* ? Allow a non-ANYOF return
+                                                       node */
                  SV** ret_invlist  /* Return an inversion list, not a node */
           )
 {
@@ -14155,8 +14280,9 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
      * are extra bits for \w, etc. in locale ANYOFs, as what these match is not
      * determinable at compile time
      *
-     * Returns NULL, setting *flagp to RESTART_UTF8 if the sizing scan needs
-     * to be restarted.  This can only happen if ret_invlist is non-NULL.
+     * Returns NULL, setting *flagp to RESTART_PASS1 if the sizing scan needs
+     * to be restarted, or'd with NEED_UTF8 if the pattern needs to be upgraded
+     * to UTF-8.  This can only happen if ret_invlist is non-NULL.
      */
 
     UV prevvalue = OOB_UNICODE, save_prevvalue = OOB_UNICODE;
@@ -14261,7 +14387,9 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
     ret = reganode(pRExC_state,
                    (LOC)
                     ? ANYOFL
-                    : ANYOF,
+                    : (DEPENDS_SEMANTICS)
+                      ? ANYOFD
+                      : ANYOF,
                    0);
 
     if (SIZE_ONLY) {
@@ -14408,8 +14536,10 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                                         depth)
                     ) {
 
-                        if (*flagp & RESTART_UTF8)
-                            FAIL("panic: grok_bslash_N set RESTART_UTF8");
+                        if (*flagp & NEED_UTF8)
+                            FAIL("panic: grok_bslash_N set NEED_UTF8");
+                        if (*flagp & RESTART_PASS1)
+                            return NULL;
 
                         if (cp_count < 0) {
                             vFAIL("\\N in a character class must be a named character: \\N{...}");
@@ -14573,6 +14703,8 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                                         (value == 'p' ? '+' : '!'),
                                         UTF8fARG(UTF, n, name));
                         has_user_defined_property = TRUE;
+                        optimizable = FALSE;    /* Will have to leave this an
+                                                   ANYOF node */
 
                         /* We don't know yet, so have to assume that the
                          * property could match something in the Latin1 range,
@@ -14630,7 +14762,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                                                 named */
 
 		/* \p means they want Unicode semantics */
-		RExC_uni_semantics = 1;
+		REQUIRE_UNI_RULES(flagp, NULL);
 		}
 		break;
 	    case 'n':	value = '\n';			break;
@@ -14807,6 +14939,12 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                     }
                     ANYOF_FLAGS(ret) |= ANYOF_MATCHES_POSIXL;
                     ANYOF_POSIXL_ZERO(ret);
+
+                    /* We can't change this into some other type of node
+                     * (unless this is the only element, in which case there
+                     * are nodes that mean exactly this) as has runtime
+                     * dependencies */
+                    optimizable = FALSE;
                 }
 
                 /* Coverity thinks it is possible for this to be negative; both
@@ -15016,7 +15154,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 	/* non-Latin1 code point implies unicode semantics.  Must be set in
 	 * pass1 so is there for the whole of pass 2 */
 	if (value > 255) {
-	    RExC_uni_semantics = 1;
+            REQUIRE_UNI_RULES(flagp, NULL);
 	}
 
         /* Ready to process either the single value, or the completed range.
@@ -15298,7 +15436,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 
 	ret = reg(pRExC_state, 1, &reg_flags, depth+1);
 
-	*flagp |= reg_flags&(HASWIDTH|SIMPLE|SPSTART|POSTPONED|RESTART_UTF8);
+	*flagp |= reg_flags&(HASWIDTH|SIMPLE|SPSTART|POSTPONED|RESTART_PASS1|NEED_UTF8);
 
 	RExC_parse = save_parse;
 	RExC_end = save_end;
@@ -15318,8 +15456,9 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
      * 2) if the character class contains only a single element (including a
      *    single range), we see if there is an equivalent node for it.
      * Other checks are possible */
-    if (! ret_invlist   /* Can't optimize if returning the constructed
-                           inversion list */
+    if (   optimizable
+        && ! ret_invlist   /* Can't optimize if returning the constructed
+                              inversion list */
         && (UNLIKELY(posixl_matches_all) || element_count == 1))
     {
         U8 op = END;
@@ -15530,7 +15669,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
             /* Our calculated list will be for Unicode rules.  For locale
              * matching, we have to keep a separate list that is consulted at
              * runtime only when the locale indicates Unicode rules.  For
-             * non-locale, we just use to the general list */
+             * non-locale, we just use the general list */
             if (LOC) {
                 use_list = &only_utf8_locale_list;
             }
@@ -15680,7 +15819,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
             if (DEPENDS_SEMANTICS) {
                 /* Under /d, everything in the upper half of the Latin1 range
                  * matches these complements */
-                ANYOF_FLAGS(ret) |= ANYOF_MATCHES_ALL_NON_UTF8_NON_ASCII;
+                ANYOF_FLAGS(ret) |= ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER;
             }
             else if (AT_LEAST_ASCII_RESTRICTED) {
                 /* Under /a and /aa, everything above ASCII matches these
@@ -15767,7 +15906,12 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
         }
 
         if (warn_super) {
-            ANYOF_FLAGS(ret) |= ANYOF_WARN_SUPER;
+            ANYOF_FLAGS(ret)
+             |= ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER;
+
+            /* Because an ANYOF node is the only one that warns, this node
+             * can't be optimized into something else */
+            optimizable = FALSE;
         }
     }
 
@@ -15789,8 +15933,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
         if (only_utf8_locale_list) {
             ANYOF_FLAGS(ret) |= ANYOF_LOC_FOLD;
         }
-        else if (cp_list) { /* Look to see if there a 0-255 code point is in
-                               the list */
+        else if (cp_list) { /* Look to see if a 0-255 code point is in list */
             UV start, end;
             invlist_iterinit(cp_list);
             if (invlist_iternext(cp_list, &start, &end) && start < 256) {
@@ -15849,21 +15992,14 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
      * adjacent such nodes.  And if the class is equivalent to things like /./,
      * expensive run-time swashes can be avoided.  Now that we have more
      * complete information, we can find things necessarily missed by the
-     * earlier code.  I (khw) am not sure how much to look for here.  It would
-     * be easy, but perhaps too slow, to check any candidates against all the
-     * node types they could possibly match using _invlistEQ(). */
+     * earlier code.  I (khw) did some benchmarks and found essentially no
+     * speed difference between using a POSIXA node versus an ANYOF node, so
+     * there is no reason to optimize, for example [A-Za-z0-9_] into
+     * [[:word:]]/a (although if we did it in the sizing pass it would save
+     * space).  _invlistEQ() could be used if one ever wanted to do something
+     * like this at this point in the code */
 
-    if (cp_list
-        && ! invert
-        && ! depends_list
-        && ! (ANYOF_FLAGS(ret) & (ANYOF_LOCALE_FLAGS))
-        && ! HAS_NONLOCALE_RUNTIME_PROPERTY_DEFINITION
-
-           /* We don't optimize if we are supposed to make sure all non-Unicode
-            * code points raise a warning, as only ANYOF nodes have this check.
-            * */
-        && ! ((ANYOF_FLAGS(ret) & ANYOF_WARN_SUPER) && ALWAYS_WARN_SUPER))
-    {
+    if (optimizable && cp_list && ! invert && ! depends_list) {
         UV start, end;
         U8 op = END;  /* The optimzation node-type */
         const char * cur_parse= RExC_parse;
@@ -15872,9 +16008,9 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
         if (! invlist_iternext(cp_list, &start, &end)) {
 
             /* Here, the list is empty.  This happens, for example, when a
-             * Unicode property is the only thing in the character class, and
-             * it doesn't match anything.  (perluniprops.pod notes such
-             * properties) */
+             * Unicode property that doesn't match anything is the only element
+             * in the character class (perluniprops.pod notes such properties).
+             * */
             op = OPFAIL;
             *flagp |= HASWIDTH|SIMPLE;
         }
@@ -15930,7 +16066,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                     }
                 }
             }
-        }
+        }   /* End of first range contains just a single code point */
         else if (start == 0) {
             if (end == UV_MAX) {
                 op = SANY;
@@ -16932,9 +17068,15 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_
         }
 
     } else if (k == CURLY) {
+        U32 lo = ARG1(o), hi = ARG2(o);
 	if (OP(o) == CURLYM || OP(o) == CURLYN || OP(o) == CURLYX)
 	    Perl_sv_catpvf(aTHX_ sv, "[%d]", o->flags); /* Parenth number */
-	Perl_sv_catpvf(aTHX_ sv, " {%d,%d}", ARG1(o), ARG2(o));
+        Perl_sv_catpvf(aTHX_ sv, "{%u,", (unsigned) lo);
+        if (hi == REG_INFTY)
+            sv_catpvs(sv, "INFTY");
+        else
+            Perl_sv_catpvf(aTHX_ sv, "%u", (unsigned) hi);
+        sv_catpvs(sv, "}");
     }
     else if (k == WHILEM && o->flags)			/* Ordinal/of */
 	Perl_sv_catpvf(aTHX_ sv, "[%d/%d]", o->flags & 0xf, o->flags>>4);
@@ -17011,8 +17153,14 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_
         SV* bitmap_invlist;  /* Will hold what the bit map contains */
 
 
-	if (OP(o) == ANYOFL)
-	    sv_catpvs(sv, "{loc}");
+	if (OP(o) == ANYOFL) {
+            if (flags & ANYOF_LOC_REQ_UTF8) {
+                sv_catpvs(sv, "{utf8-loc}");
+            }
+            else {
+                sv_catpvs(sv, "{loc}");
+            }
+        }
 	if (flags & ANYOF_LOC_FOLD)
 	    sv_catpvs(sv, "{i}");
 	Perl_sv_catpvf(aTHX_ sv, "[%s", PL_colors[0]);
@@ -17048,7 +17196,9 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_
                     sv_catpvs(sv, "^");
             }
 
-            if (flags & ANYOF_MATCHES_ALL_NON_UTF8_NON_ASCII) {
+            if (OP(o) == ANYOFD
+                && (flags & ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER))
+            {
                 sv_catpvs(sv, "{non-utf8-latin1-all}");
             }
 

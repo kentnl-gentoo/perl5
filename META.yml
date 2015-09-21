@@ -32,9 +32,6 @@ no_index:
     - dist/IO/
     - dist/lib/
     - dist/Locale-Maketext
-    - dist/Math-BigInt
-    - dist/Math-BigInt-FastCalc
-    - dist/Math-BigRat
     - dist/Module-CoreList
     - dist/Net-Ping
     - dist/PathTools
@@ -44,6 +41,7 @@ no_index:
     - dist/Storable
     - dist/Term-Complete
     - dist/Term-ReadLine
+    - dist/Test
     - dist/Text-Abbrev
     - dist/Thread-Queue
     - dist/Thread-Semaphore
@@ -112,5 +110,5 @@ resources:
   homepage: http://www.perl.org/
   license: http://dev.perl.org/licenses/
   repository: http://perl5.git.perl.org/
-version: '5.023002'
+version: '5.023003'
 x_serialization_backend: 'CPAN::Meta::YAML version 0.017'

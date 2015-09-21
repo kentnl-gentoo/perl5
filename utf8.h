@@ -127,8 +127,8 @@ END_EXTERN_C
 
 /* Native character to/from iso-8859-1.  Are the identity functions on ASCII
  * platforms */
-#define NATIVE_TO_LATIN1(ch)     (ch)
-#define LATIN1_TO_NATIVE(ch)     (ch)
+#define NATIVE_TO_LATIN1(ch)     (__ASSERT_(FITS_IN_8_BITS(ch)) (ch))
+#define LATIN1_TO_NATIVE(ch)     (__ASSERT_(FITS_IN_8_BITS(ch)) (ch))
 
 /* I8 is an intermediate version of UTF-8 used only in UTF-EBCDIC.  We thus
  * consider it to be identical to UTF-8 on ASCII platforms.  Strictly speaking
@@ -136,8 +136,8 @@ END_EXTERN_C
  * because they are 8-bit encodings that serve the same purpose in Perl, and
  * rarely do we need to distinguish them.  The term "NATIVE_UTF8" applies to
  * whichever one is applicable on the current platform */
-#define NATIVE_UTF8_TO_I8(ch) (ch)
-#define I8_TO_NATIVE_UTF8(ch) (ch)
+#define NATIVE_UTF8_TO_I8(ch) (__ASSERT_(FITS_IN_8_BITS(ch)) (ch))
+#define I8_TO_NATIVE_UTF8(ch) (__ASSERT_(FITS_IN_8_BITS(ch)) (ch))
 
 /* Transforms in wide UV chars */
 #define UNI_TO_NATIVE(ch)        (ch)
@@ -190,12 +190,17 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
 
 */
 
-/* Is the representation of the Unicode code point 'c' the same regardless of
+/* Is the representation of the Unicode code point 'cp' the same regardless of
  * being encoded in UTF-8 or not? */
-#define UNI_IS_INVARIANT(c)		(((UV)c) <  0x80)
+#define OFFUNI_IS_INVARIANT(cp)     isASCII(cp)
 
-/* Is the UTF8-encoded byte 'c' part of a variant sequence in UTF-8?  This is
- * the inverse of UTF8_IS_INVARIANT */
+/* Is the representation of the code point 'cp' the same regardless of
+ * being encoded in UTF-8 or not?  'cp' is native if < 256; Unicode otherwise
+ * */
+#define UVCHR_IS_INVARIANT(uv)      OFFUNI_IS_INVARIANT(uv)
+
+/* Misleadingly named: is the UTF8-encoded byte 'c' part of a variant sequence
+ * in UTF-8?  This is the inverse of UTF8_IS_INVARIANT */
 #define UTF8_IS_CONTINUED(c)        (((U8)c) &  0x80)
 
 /* Is the byte 'c' the first byte of a multi-byte UTF8-8 encoded sequence?
@@ -293,6 +298,23 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
 
 #define UTF8_MAXBYTES_CASE	UTF8_MAXBYTES
 
+/*
+
+=for apidoc Am|STRLEN|UVCHR_SKIP|UV cp
+returns the number of bytes required to represent the code point C<cp> when
+encoded as UTF-8.  C<cp> is a native (ASCII or EBCDIC) code point if less than
+255; a Unicode code point otherwise.
+
+=cut
+ */
+#define UVCHR_SKIP(uv) OFFUNISKIP(uv)
+
+/* Surrogates, non-character code points and above-Unicode code points are
+ * problematic in some contexts.  This allows code that needs to check for
+ * those to to quickly exclude the vast majority of code points it will
+ * encounter */
+#define isUTF8_POSSIBLY_PROBLEMATIC(c) ((U8) c >= 0xED)
+
 #endif /* EBCDIC vs ASCII */
 
 /* Rest of these are attributes of Unicode and perl's internals rather than the
@@ -328,24 +350,31 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
                                                && UTF8_IS_CONTINUATION(*((s)+1)))
 
 /* Number of bytes a code point occupies in UTF-8. */
-#define NATIVE_SKIP(uv) OFFUNISKIP(NATIVE_TO_UNI(uv))
-
-/*
-
-=for apidoc Am|STRLEN|UVCHR_SKIP|UV cp
-returns the number of bytes required to represent the code point C<cp> when
-encoded as UTF-8.  C<cp> is a native (ASCII or EBCDIC) code point if less than
-255; a Unicode code point otherwise.
-
-=cut
- */
+#define NATIVE_SKIP(uv) UVCHR_SKIP(uv)
 
 /* Most code which says UNISKIP is really thinking in terms of native code
  * points (0-255) plus all those beyond.  This is an imprecise term, but having
  * it means existing code continues to work.  For precision, use UVCHR_SKIP,
- * NATIVE_SKIP, and OFFUNISKIP */
-#define UNISKIP(uv)   NATIVE_SKIP(uv)
-#define UVCHR_SKIP(uv) NATIVE_SKIP(uv)
+ * NATIVE_SKIP, or OFFUNISKIP */
+#define UNISKIP(uv)   UVCHR_SKIP(uv)
+
+/* Longer, but more accurate name */
+#define UTF8_IS_ABOVE_LATIN1_START(c)     UTF8_IS_ABOVE_LATIN1(c)
+
+/* Convert a UTF-8 variant Latin1 character to a native code point value.
+ * Needs just one iteration of accumulate.  Should be used only if it is known
+ * that the code point is < 256, and is not UTF-8 invariant.  Use the slower
+ * but more general TWO_BYTE_UTF8_TO_NATIVE() which handles any code point
+ * representable by two bytes (which turns out to be up through
+ * MAX_PORTABLE_UTF8_TWO_BYTE).  The two parameters are:
+ *  HI: a downgradable start byte;
+ *  LO: continuation.
+ * */
+#define EIGHT_BIT_UTF8_TO_NATIVE(HI, LO)                                        \
+    ( __ASSERT_(UTF8_IS_DOWNGRADEABLE_START(HI))                                \
+      __ASSERT_(UTF8_IS_CONTINUATION(LO))                                       \
+     LATIN1_TO_NATIVE(UTF8_ACCUMULATE((                                         \
+                            NATIVE_UTF8_TO_I8(HI) & UTF_START_MASK(2)), (LO))))
 
 /* Convert a two (not one) byte utf8 character to a native code point value.
  * Needs just one iteration of accumulate.  Should not be used unless it is
@@ -353,8 +382,10 @@ encoded as UTF-8.  C<cp> is a native (ASCII or EBCDIC) code point if less than
  * Note that the result can be larger than 255 if the input character is not
  * downgradable */
 #define TWO_BYTE_UTF8_TO_NATIVE(HI, LO) \
+    ( __ASSERT_(UTF8SKIP(HI) == 2)                                              \
+      __ASSERT_(UTF8_IS_CONTINUATION(LO))                                       \
      UNI_TO_NATIVE(UTF8_ACCUMULATE((NATIVE_UTF8_TO_I8(HI) & UTF_START_MASK(2)), \
-                                   (LO)))
+                                   (LO))))
 
 /* Should never be used, and be deprecated */
 #define TWO_BYTE_UTF8_TO_UNI(HI, LO) NATIVE_TO_UNI(TWO_BYTE_UTF8_TO_NATIVE(HI, LO))
@@ -370,18 +401,21 @@ only) byte is pointed to by C<s>.
 #define UTF8SKIP(s)  PL_utf8skip[*(const U8*)(s)]
 #define UTF8_SKIP(s) UTF8SKIP(s)
 
+/* Most code that says 'UNI_' really means the native value for code points up
+ * through 255 */
+#define UNI_IS_INVARIANT(cp)   UVCHR_IS_INVARIANT(cp)
+
 /* Is the byte 'c' the same character when encoded in UTF-8 as when not.  This
  * works on both UTF-8 encoded strings and non-encoded, as it returns TRUE in
- * each for the exact same set of bit patterns.  (And it works on any byte in a
- * UTF-8 encoded string) */
-#define UTF8_IS_INVARIANT(c)		UNI_IS_INVARIANT(NATIVE_UTF8_TO_I8(c))
+ * each for the exact same set of bit patterns.  It is valid on a subset of
+ * what UVCHR_IS_INVARIANT is valid on, so can just use that; and the compiler
+ * should optimize out anything extraneous given the implementation of the
+ * latter */
+#define UTF8_IS_INVARIANT(c)	UVCHR_IS_INVARIANT(c)
 
-/* Like the above, but its name implies a non-UTF8 input, and is implemented
- * differently (for no particular reason) */
-#define NATIVE_BYTE_IS_INVARIANT(c)	UNI_IS_INVARIANT(NATIVE_TO_LATIN1(c))
-
-/* Like the above, but accepts any UV as input */
-#define UVCHR_IS_INVARIANT(uv)          UNI_IS_INVARIANT(NATIVE_TO_UNI(uv))
+/* Like the above, but its name implies a non-UTF8 input, which as the comments
+ * above show, doesn't matter as to its implementation */
+#define NATIVE_BYTE_IS_INVARIANT(c)	UVCHR_IS_INVARIANT(c)
 
 #define MAX_PORTABLE_UTF8_TWO_BYTE 0x3FF    /* constrained by EBCDIC */
 
@@ -517,7 +551,9 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
 #define UTF8_ALLOW_FFFF 0
 #define UTF8_ALLOW_SURROGATE 0
 
-#define UTF8_DISALLOW_ILLEGAL_INTERCHANGE (UTF8_DISALLOW_SUPER|UTF8_DISALLOW_NONCHAR|UTF8_DISALLOW_SURROGATE|UTF8_DISALLOW_FE_FF)
+#define UTF8_DISALLOW_ILLEGAL_INTERCHANGE                                      \
+                                (UTF8_DISALLOW_SUPER|UTF8_DISALLOW_NONCHAR     \
+                                 |UTF8_DISALLOW_SURROGATE|UTF8_DISALLOW_FE_FF)
 #define UTF8_WARN_ILLEGAL_INTERCHANGE \
 	(UTF8_WARN_SUPER|UTF8_WARN_NONCHAR|UTF8_WARN_SURROGATE|UTF8_WARN_FE_FF)
 #define UTF8_ALLOW_ANY \
@@ -527,13 +563,6 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
 	  & ~(UTF8_DISALLOW_ILLEGAL_INTERCHANGE|UTF8_WARN_ILLEGAL_INTERCHANGE))
 #define UTF8_ALLOW_DEFAULT		(ckWARN(WARN_UTF8) ? 0 : \
 					 UTF8_ALLOW_ANYUV)
-
-/* Surrogates, non-character code points and above-Unicode code points are
- * problematic in some contexts.  This allows code that needs to check for
- * those to to quickly exclude the vast majority of code points it will
- * encounter */
-#define UTF8_FIRST_PROBLEMATIC_CODE_POINT_FIRST_BYTE \
-                                    FIRST_SURROGATE_UTF8_FIRST_BYTE
 
 /* Several of the macros below have a second parameter that is currently
  * unused; but could be used in the future to make sure that the input is
@@ -694,9 +723,9 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
 =for apidoc Am|STRLEN|isUTF8_CHAR|const U8 *s|const U8 *e
 
 Returns the number of bytes beginning at C<s> which form a legal UTF-8 (or
-UTF-EBCDIC) encoded character, looking no further than C<e - s> bytes into
-C<s>.  Returns 0 if the sequence starting at C<s> through C<e - 1> is not
-well-formed UTF-8
+UTF-EBCDIC) encoded character, looking no further than S<C<e - s>> bytes into
+C<s>.  Returns 0 if the sequence starting at C<s> through S<C<e - 1>> is not
+well-formed UTF-8.
 
 Note that an INVARIANT character (i.e. ASCII on non-EBCDIC
 machines) is a valid UTF-8 character.

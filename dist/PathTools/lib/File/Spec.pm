@@ -3,7 +3,7 @@ package File::Spec;
 use strict;
 use vars qw(@ISA $VERSION);
 
-$VERSION = '3.57';
+$VERSION = '3.58';
 $VERSION =~ tr/_//;
 
 my %module = (MacOS   => 'Mac',
@@ -14,7 +14,8 @@ my %module = (MacOS   => 'Mac',
 	      NetWare => 'Win32', # Yes, File::Spec::Win32 works on NetWare.
 	      symbian => 'Win32', # Yes, File::Spec::Win32 works on symbian.
 	      dos     => 'OS2',   # Yes, File::Spec::OS2 works on DJGPP.
-	      cygwin  => 'Cygwin');
+	      cygwin  => 'Cygwin',
+	      amigaos => 'AmigaOS');
 
 
 my $module = $module{$^O} || 'Unix';

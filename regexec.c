@@ -37,9 +37,6 @@
 #include "re_top.h"
 #endif
 
-#define B_ON_NON_UTF8_LOCALE_IS_WRONG            \
-      "Use of \\b{} or \\B{} for non-UTF-8 locale is wrong.  Assuming a UTF-8 locale"
-
 /*
  * pregcomp and pregexec -- regsub and regerror are not used in perl
  *
@@ -85,6 +82,12 @@
 
 #include "invlist_inline.h"
 #include "unicode_constants.h"
+
+#define B_ON_NON_UTF8_LOCALE_IS_WRONG            \
+ "Use of \\b{} or \\B{} for non-UTF-8 locale is wrong.  Assuming a UTF-8 locale"
+
+static const char utf8_locale_required[] =
+      "Use of (?[ ]) for non-UTF-8 locale is wrong.  Assuming a UTF-8 locale";
 
 #ifdef DEBUGGING
 /* At least one required character in the target string is expressible only in
@@ -489,7 +492,7 @@ S_isFOO_utf8_lc(pTHX_ const U8 classnum, const U8* character)
     }
     else if (UTF8_IS_DOWNGRADEABLE_START(*character)) {
         return isFOO_lc(classnum,
-                        TWO_BYTE_UTF8_TO_NATIVE(*character, *(character + 1)));
+                        EIGHT_BIT_UTF8_TO_NATIVE(*character, *(character + 1)));
     }
 
     _CHECK_AND_OUTPUT_WIDE_LOCALE_UTF8_MSG(character, character + UTF8SKIP(character));
@@ -1481,7 +1484,7 @@ STMT_START {                                                                    
         } else {                                                                    \
             uvc = _to_utf8_fold_flags( (const U8*) uc, foldbuf, &foldlen, flags);   \
             len = UTF8SKIP(uc);                                                     \
-            skiplen = UNISKIP( uvc );                                               \
+            skiplen = UVCHR_SKIP( uvc );                                            \
             foldlen -= skiplen;                                                     \
             uscan = foldbuf + skiplen;                                              \
         }                                                                           \
@@ -1498,7 +1501,7 @@ STMT_START {                                                                    
         } else {                                                                    \
             len = 1;                                                                \
             uvc = _to_fold_latin1( (U8) *uc, foldbuf, &foldlen, flags);             \
-            skiplen = UNISKIP( uvc );                                               \
+            skiplen = UVCHR_SKIP( uvc );                                            \
             foldlen -= skiplen;                                                     \
             uscan = foldbuf + skiplen;                                              \
         }                                                                           \
@@ -1822,7 +1825,13 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
     switch (OP(c)) {
     case ANYOFL:
         _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+
+        if ((FLAGS(c) & ANYOF_LOC_REQ_UTF8) && ! IN_UTF8_CTYPE_LOCALE) {
+            Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE), utf8_locale_required);
+        }
+
         /* FALLTHROUGH */
+    case ANYOFD:
     case ANYOF:
         if (utf8_target) {
             REXEC_FBC_UTF8_CLASS_SCAN(
@@ -2320,7 +2329,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                                                                 classnum)))
                         || (UTF8_IS_DOWNGRADEABLE_START(*s)
                             && to_complement ^ cBOOL(
-                                _generic_isCC(TWO_BYTE_UTF8_TO_NATIVE(*s,
+                                _generic_isCC(EIGHT_BIT_UTF8_TO_NATIVE(*s,
                                                                       *(s + 1)),
                                               classnum))))
                     {
@@ -5377,7 +5386,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                             l++;
                         }
                         else {
-                            if (TWO_BYTE_UTF8_TO_NATIVE(*l, *(l+1)) != * (U8*) s)
+                            if (EIGHT_BIT_UTF8_TO_NATIVE(*l, *(l+1)) != * (U8*) s)
                             {
                                 sayNO;
                             }
@@ -5401,7 +5410,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                             s++;
                         }
                         else {
-                            if (TWO_BYTE_UTF8_TO_NATIVE(*s, *(s+1)) != * (U8*) l)
+                            if (EIGHT_BIT_UTF8_TO_NATIVE(*s, *(s+1)) != * (U8*) l)
                             {
                                 sayNO;
                             }
@@ -5729,7 +5738,13 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 
 	case ANYOFL:  /*  /[abc]/l      */
             _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+
+            if ((FLAGS(scan) & ANYOF_LOC_REQ_UTF8) && ! IN_UTF8_CTYPE_LOCALE)
+            {
+              Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE), utf8_locale_required);
+            }
             /* FALLTHROUGH */
+	case ANYOFD:  /*   /[abc]/d       */
 	case ANYOF:  /*   /[abc]/       */
             if (NEXTCHR_IS_EOS)
                 sayNO;
@@ -5768,7 +5783,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
             }
             else if (UTF8_IS_DOWNGRADEABLE_START(nextchr)) {
                 if (! (to_complement ^ cBOOL(isFOO_lc(FLAGS(scan),
-                                           (U8) TWO_BYTE_UTF8_TO_NATIVE(nextchr,
+                                           (U8) EIGHT_BIT_UTF8_TO_NATIVE(nextchr,
                                                             *(locinput + 1))))))
                 {
                     sayNO;
@@ -5849,7 +5864,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
             }
             else if (UTF8_IS_DOWNGRADEABLE_START(nextchr)) {
                 if (! (to_complement
-                       ^ cBOOL(_generic_isCC(TWO_BYTE_UTF8_TO_NATIVE(nextchr,
+                       ^ cBOOL(_generic_isCC(EIGHT_BIT_UTF8_TO_NATIVE(nextchr,
                                                                *(locinput + 1)),
                                              FLAGS(scan)))))
                 {
@@ -8126,7 +8141,7 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
 
                 /* Target isn't utf8; convert the character in the UTF-8
                  * pattern to non-UTF8, and do a simple loop */
-                c = TWO_BYTE_UTF8_TO_NATIVE(c, *(STRING(p) + 1));
+                c = EIGHT_BIT_UTF8_TO_NATIVE(c, *(STRING(p) + 1));
                 while (scan < loceol && UCHARAT(scan) == c) {
                     scan++;
                 }
@@ -8243,7 +8258,12 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
     }
     case ANYOFL:
         _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
+
+        if ((FLAGS(p) & ANYOF_LOC_REQ_UTF8) && ! IN_UTF8_CTYPE_LOCALE) {
+            Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE), utf8_locale_required);
+        }
         /* FALLTHROUGH */
+    case ANYOFD:
     case ANYOF:
 	if (utf8_target) {
 	    while (hardcount < max
@@ -8365,7 +8385,7 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
                     }
                     else if (UTF8_IS_DOWNGRADEABLE_START(*scan)) {
                         if (! (to_complement
-                              ^ cBOOL(_generic_isCC(TWO_BYTE_UTF8_TO_NATIVE(*scan,
+                              ^ cBOOL(_generic_isCC(EIGHT_BIT_UTF8_TO_NATIVE(*scan,
                                                                      *(scan + 1)),
                                                     classnum))))
                         {
@@ -8586,7 +8606,7 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
 		 * UTF8_ALLOW_FFFF */
 	if (c_len == (STRLEN)-1)
 	    Perl_croak(aTHX_ "Malformed UTF-8 character (fatal)");
-        if (c > 255 && OP(n) == ANYOFL && ! is_ANYOF_SYNTHETIC(n)) {
+        if (c > 255 && OP(n) == ANYOFL && ! (flags & ANYOF_LOC_REQ_UTF8)) {
             _CHECK_AND_OUTPUT_WIDE_LOCALE_CP_MSG(c);
         }
     }
@@ -8595,7 +8615,9 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
     if (c < NUM_ANYOF_CODE_POINTS) {
 	if (ANYOF_BITMAP_TEST(n, c))
 	    match = TRUE;
-	else if ((flags & ANYOF_MATCHES_ALL_NON_UTF8_NON_ASCII)
+	else if ((flags
+                & ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER)
+                  && OP(n) == ANYOFD
 		  && ! utf8_target
 		  && ! isASCII(c))
 	{
@@ -8698,7 +8720,9 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
 	}
 
         if (UNICODE_IS_SUPER(c)
-            && (flags & ANYOF_WARN_SUPER)
+            && (flags
+               & ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER)
+            && OP(n) != ANYOFD
             && ckWARN_d(WARN_NON_UNICODE))
         {
             Perl_warner(aTHX_ packWARN(WARN_NON_UNICODE),
@@ -8737,6 +8761,9 @@ S_reghop3(U8 *s, SSize_t off, const U8* lim)
             if (UTF8_IS_CONTINUED(*s)) {
                 while (s > lim && UTF8_IS_CONTINUATION(*s))
                     s--;
+                if (! UTF8_IS_START(*s)) {
+                    Perl_croak_nocontext("Malformed UTF-8 character (fatal)");
+                }
 	    }
             /* XXX could check well-formedness here */
 	}
@@ -8761,6 +8788,9 @@ S_reghop4(U8 *s, SSize_t off, const U8* llim, const U8* rlim)
             if (UTF8_IS_CONTINUED(*s)) {
                 while (s > llim && UTF8_IS_CONTINUATION(*s))
                     s--;
+                if (! UTF8_IS_START(*s)) {
+                    Perl_croak_nocontext("Malformed UTF-8 character (fatal)");
+                }
             }
             /* XXX could check well-formedness here */
         }
@@ -8790,6 +8820,9 @@ S_reghopmaybe3(U8* s, SSize_t off, const U8* lim)
             if (UTF8_IS_CONTINUED(*s)) {
                 while (s > lim && UTF8_IS_CONTINUATION(*s))
                     s--;
+                if (! UTF8_IS_START(*s)) {
+                    Perl_croak_nocontext("Malformed UTF-8 character (fatal)");
+                }
 	    }
             /* XXX could check well-formedness here */
 	}

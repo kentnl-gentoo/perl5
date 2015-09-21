@@ -962,14 +962,23 @@ patched there.  The file as of this writing is cpan/Devel-PPPort/parts/inc/misc
 #  define _CC_NON_FINAL_FOLD           21
 #  define _CC_IS_IN_SOME_FOLD          22
 #  define _CC_MNEMONIC_CNTRL           23
-/* Unused: 24-31
+
+/* This next group is only used on EBCDIC platforms, so theoretically could be
+ * shared with something entirely different that's only on ASCII platforms */
+#  define _CC_UTF8_START_BYTE_IS_FOR_AT_LEAST_SURROGATE 28
+#  define _CC_UTF8_IS_START                             29
+#  define _CC_UTF8_IS_DOWNGRADEABLE_START               30
+#  define _CC_UTF8_IS_CONTINUATION                      31
+/* Unused: 24-27
  * If more bits are needed, one could add a second word for non-64bit
  * QUAD_IS_INT systems, using some #ifdefs to distinguish between having a 2nd
  * word or not.  The IS_IN_SOME_FOLD bit is the most easily expendable, as it
  * is used only for optimization (as of this writing), and differs in the
  * Latin1 range from the ALPHA bit only in two relatively unimportant
  * characters: the masculine and feminine ordinal indicators, so removing it
- * would just cause /i regexes which match them to run less efficiently */
+ * would just cause /i regexes which match them to run less efficiently.
+ * Similarly the EBCDIC-only bits are used just for speed, and could be
+ * replaced by other means */
 
 #if defined(PERL_CORE) || defined(PERL_EXT)
 /* An enum version of the character class numbers, to help compilers
@@ -1579,7 +1588,7 @@ END_EXTERN_C
                                          ? _generic_isCC(*(p), classnum)       \
                                          : (UTF8_IS_DOWNGRADEABLE_START(*(p))) \
                                            ? _generic_isCC(                    \
-                                                TWO_BYTE_UTF8_TO_NATIVE(*(p),  \
+                                                EIGHT_BIT_UTF8_TO_NATIVE(*(p), \
                                                                    *((p)+1 )), \
                                                 classnum)                      \
                                            : utf8)
@@ -1665,7 +1674,7 @@ END_EXTERN_C
                          (UTF8_IS_INVARIANT(*(p))                           \
                          ? macro(*(p))                                      \
                          : (UTF8_IS_DOWNGRADEABLE_START(*(p)))              \
-                           ? macro(TWO_BYTE_UTF8_TO_NATIVE(*(p), *((p)+1))) \
+                           ? macro(EIGHT_BIT_UTF8_TO_NATIVE(*(p), *((p)+1)))\
                            : utf8)
 
 #define _generic_LC_swash_utf8(macro, classnum, p)                         \
@@ -1812,13 +1821,13 @@ there for use in XS modules supporting older perls.
 
 =for apidoc Am|void|Newxc|void* ptr|int nitems|type|cast
 The XSUB-writer's interface to the C C<malloc> function, with
-cast.  See also C<Newx>.
+cast.  See also C<L</Newx>>.
 
 Memory obtained by this should B<ONLY> be freed with L<"Safefree">.
 
 =for apidoc Am|void|Newxz|void* ptr|int nitems|type
 The XSUB-writer's interface to the C C<malloc> function.  The allocated
-memory is zeroed with C<memzero>.  See also C<Newx>.
+memory is zeroed with C<memzero>.  See also C<L</Newx>>.
 
 Memory obtained by this should B<ONLY> be freed with L<"Safefree">.
 
@@ -1841,21 +1850,21 @@ This should B<ONLY> be used on memory obtained using L<"Newx"> and friends.
 =for apidoc Am|void|Move|void* src|void* dest|int nitems|type
 The XSUB-writer's interface to the C C<memmove> function.  The C<src> is the
 source, C<dest> is the destination, C<nitems> is the number of items, and
-C<type> is the type.  Can do overlapping moves.  See also C<Copy>.
+C<type> is the type.  Can do overlapping moves.  See also C<L</Copy>>.
 
 =for apidoc Am|void *|MoveD|void* src|void* dest|int nitems|type
-Like C<Move> but returns dest.  Useful
+Like C<Move> but returns C<dest>.  Useful
 for encouraging compilers to tail-call
 optimise.
 
 =for apidoc Am|void|Copy|void* src|void* dest|int nitems|type
 The XSUB-writer's interface to the C C<memcpy> function.  The C<src> is the
 source, C<dest> is the destination, C<nitems> is the number of items, and
-C<type> is the type.  May fail on overlapping copies.  See also C<Move>.
+C<type> is the type.  May fail on overlapping copies.  See also C<L</Move>>.
 
 =for apidoc Am|void *|CopyD|void* src|void* dest|int nitems|type
 
-Like C<Copy> but returns dest.  Useful
+Like C<Copy> but returns C<dest>.  Useful
 for encouraging compilers to tail-call
 optimise.
 

@@ -38,7 +38,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.23.2
+#INST_VER	= \5.23.3
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -1195,7 +1195,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5232delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5233delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1230,6 +1230,7 @@ distclean: realclean
 	-del /f $(LIBDIR)\buildcustomize.pl
 	-del /f $(DISTDIR)\XSLoader\XSLoader.pm
 	-del /f *.def *.map
+	-if exist $(LIBDIR)\Amiga rmdir /s /q $(LIBDIR)\Amiga
 	-if exist $(LIBDIR)\App rmdir /s /q $(LIBDIR)\App
 	-if exist $(LIBDIR)\Archive rmdir /s /q $(LIBDIR)\Archive
 	-if exist $(LIBDIR)\Attribute rmdir /s /q $(LIBDIR)\Attribute
@@ -1291,7 +1292,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5232delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5233delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \

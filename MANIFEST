@@ -1,3 +1,8 @@
+amigaos4/amigaio.c	AmigaOS4 port
+amigaos4/amigaio.h	AmigaOS4 port
+amigaos4/amigaos.c	AmigaOS4 port
+amigaos4/amigaos.h	AmigaOS4 port
+amigaos4/config.sh	AmigaOS4 config
 Artistic		The "Artistic License"
 asan_ignore		Errors to skip under clang's Addresss Sanitizer
 AUTHORS			Contact info for contributors
@@ -1002,10 +1007,6 @@ cpan/encoding-warnings/t/3-normal.t	tests for encoding::warnings
 cpan/encoding-warnings/t/4-lexical.t	tests for encoding::warnings
 cpan/experimental/lib/experimental.pm
 cpan/experimental/t/basic.t
-cpan/ExtUtils-Command/lib/ExtUtils/Command.pm	Utilities for Make on non-UNIX platforms
-cpan/ExtUtils-Command/t/cp.t			See if ExtUtils::Command works
-cpan/ExtUtils-Command/t/eu_command.t		See if ExtUtils::Command works
-cpan/ExtUtils-Command/t/lib/TieOut.pm		Testing library to capture prints
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant/Base.pm		generate XS code to import C header constants
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant.pm			generate XS code to import C header constants
 cpan/ExtUtils-Constant/lib/ExtUtils/Constant/ProxySubs.pm	generate XS code for proxy constants
@@ -1026,6 +1027,7 @@ cpan/ExtUtils-Install/t/lib/TieOut.pm			Testing library to capture prints
 cpan/ExtUtils-Install/t/Packlist.t			See if Packlist works
 cpan/ExtUtils-MakeMaker/bin/instmodsh				Give information about installed extensions
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/Command/MM.pm		Calling MM functions from the cmd line
+cpan/ExtUtils-MakeMaker/lib/ExtUtils/Command.pm
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/Liblist/Kid.pm		Does the real work of the above
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/Liblist.pm			Locates libraries
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/Config.pm	MakeMaker wrapper for Config
@@ -1065,8 +1067,10 @@ cpan/ExtUtils-MakeMaker/t/basic.t				See if MakeMaker can build a module
 cpan/ExtUtils-MakeMaker/t/build_man.t				Set if MakeMaker builds manpages
 cpan/ExtUtils-MakeMaker/t/cd.t					Test to see cd works
 cpan/ExtUtils-MakeMaker/t/config.t				Test ExtUtils::MakeMaker::Config
+cpan/ExtUtils-MakeMaker/t/cp.t
 cpan/ExtUtils-MakeMaker/t/dir_target.t				Verify if dir_target() is supported
 cpan/ExtUtils-MakeMaker/t/echo.t				Test for ExtUtils::MakeMaker
+cpan/ExtUtils-MakeMaker/t/eu_command.t
 cpan/ExtUtils-MakeMaker/t/FIRST_MAKEFILE.t			See if FIRST_MAKEFILE works
 cpan/ExtUtils-MakeMaker/t/fixin.t				See if ExtUtils::MakeMaker works
 cpan/ExtUtils-MakeMaker/t/fix_libs.t				Test for ExtUtils::MakeMaker
@@ -1563,8 +1567,6 @@ cpan/Locale-Codes/lib/Locale/Language.pm	Locale::Codes
 cpan/Locale-Codes/lib/Locale/Language.pod	Locale::Codes documentation
 cpan/Locale-Codes/lib/Locale/Script.pm		Locale::Codes
 cpan/Locale-Codes/lib/Locale/Script.pod		Locale::Codes documentation
-cpan/Locale-Codes/t/alias_code_old.t	Locale::Codes tests
-cpan/Locale-Codes/t/alias_code.t		Locale::Codes tests
 cpan/Locale-Codes/t/code2country_old.t	Locale::Codes tests
 cpan/Locale-Codes/t/code2country.t		Locale::Codes tests
 cpan/Locale-Codes/t/code2currency.t		Locale::Codes tests
@@ -1600,6 +1602,89 @@ cpan/Locale-Maketext-Simple/t/po_with_i_default/fr.po		Locale::Simple tests
 cpan/Locale-Maketext-Simple/t/po_with_i_default/i_default.po	Locale::Simple tests
 cpan/Locale-Maketext-Simple/t/po_without_i_default/en.po	Locale::Simple tests
 cpan/Locale-Maketext-Simple/t/po_without_i_default/fr.po	Locale::Simple tests
+cpan/Math-BigInt-FastCalc/FastCalc.xs	Math::BigInt::FastCalc extension
+cpan/Math-BigInt-FastCalc/lib/Math/BigInt/FastCalc.pm	Math::BigInt::FastCalc extension
+cpan/Math-BigInt-FastCalc/t/bigintfc.t	Math::BigInt::FastCalc extension
+cpan/Math-BigInt-FastCalc/t/bootstrap.t	Math::BigInt::FastCalc extension
+cpan/Math-BigInt-FastCalc/t/leak.t	test for memory leaks in Math::BigInt::FastCalc
+cpan/Math-BigInt-FastCalc/t/mbi_rand.t	Math::BigInt::FastCalc extension
+cpan/Math-BigInt/lib/Math/BigFloat.pm		An arbitrary precision floating-point arithmetic package
+cpan/Math-BigInt/lib/Math/BigInt/CalcEmu.pm	Pure Perl module to support Math::BigInt
+cpan/Math-BigInt/lib/Math/BigInt/Calc.pm	Pure Perl module to support Math::BigInt
+cpan/Math-BigInt/lib/Math/BigInt.pm	An arbitrary precision integer arithmetic package
+cpan/Math-BigInt/t/alias.inc		Support for BigInt tests
+cpan/Math-BigInt/t/bare_mbf.t		Test MBF under Math::BigInt::BareCalc
+cpan/Math-BigInt/t/bare_mbi.t		Test MBI under Math::BigInt::BareCalc
+cpan/Math-BigInt/t/bare_mif.t		Rounding tests under BareCalc
+cpan/Math-BigInt/t/bigfltpm.inc		Shared tests for bigfltpm.t and sub_mbf.t
+cpan/Math-BigInt/t/bigfltpm.t		See if BigFloat.pm works
+cpan/Math-BigInt/t/bigintc.t		See if BigInt/Calc.pm works
+cpan/Math-BigInt/t/bigintpm.inc		Shared tests for bigintpm.t and sub_mbi.t
+cpan/Math-BigInt/t/bigintpm.t		See if BigInt.pm works
+cpan/Math-BigInt/t/bigints.t		See if BigInt.pm works
+cpan/Math-BigInt/t/biglog.t		Test the log function
+cpan/Math-BigInt/t/big_pi_e.t		test bpi() and bexp()
+cpan/Math-BigInt/t/bigroot.t		Test the broot function
+cpan/Math-BigInt/t/calling.t		Test calling conventions
+cpan/Math-BigInt/t/config.t		Test Math::BigInt->config()
+cpan/Math-BigInt/t/constant.t		Test Math::BigInt/BigFloat under :constant
+cpan/Math-BigInt/t/const_mbf.t		Test Math::BigInt
+cpan/Math-BigInt/t/downgrade.t		Test if use Math::BigInt(); under downgrade works
+cpan/Math-BigInt/t/_e_math.t		Helper routine in BigFloat for _e math
+cpan/Math-BigInt/t/inf_nan.t		Special tests for inf and *NaN* handling
+cpan/Math-BigInt/t/isa.t		Test for Math::BigInt inheritance
+cpan/Math-BigInt/t/lib_load.t		Test sane lib names
+cpan/Math-BigInt/t/Math/BigFloat/Subclass.pm	Empty subclass of BigFloat for test
+cpan/Math-BigInt/t/Math/BigInt/BareCalc.pm	Bigint's simulation of Calc
+cpan/Math-BigInt/t/Math/BigInt/Scalar.pm	Pure Perl module to support Math::BigInt
+cpan/Math-BigInt/t/Math/BigInt/Subclass.pm	Empty subclass of BigInt for test
+cpan/Math-BigInt/t/mbf_ali.t		Tests for BigFloat
+cpan/Math-BigInt/t/mbi_ali.t		Tests for BigInt
+cpan/Math-BigInt/t/mbimbf.inc		Actual BigInt/BigFloat accuracy, precision and fallback, round_mode tests
+cpan/Math-BigInt/t/mbimbf.t		BigInt/BigFloat accuracy, precision and fallback, round_mode
+cpan/Math-BigInt/t/mbi_rand.t		Test Math::BigInt randomly
+cpan/Math-BigInt/t/nan_cmp.t		overloaded comparison involving *NaN*
+cpan/Math-BigInt/t/new_overloaded.t	test overloaded numbers in BigFloat's new()
+cpan/Math-BigInt/t/req_mbf0.t		test: require Math::BigFloat; ->bzero();
+cpan/Math-BigInt/t/req_mbf1.t		test: require Math::BigFloat; ->bone();
+cpan/Math-BigInt/t/req_mbfa.t		test: require Math::BigFloat; ->bnan();
+cpan/Math-BigInt/t/req_mbfi.t		test: require Math::BigFloat; ->binf();
+cpan/Math-BigInt/t/req_mbfn.t		test: require Math::BigFloat; ->new();
+cpan/Math-BigInt/t/req_mbfw.t		require Math::BigFloat; import ( with => );
+cpan/Math-BigInt/t/require.t		Test if require Math::BigInt works
+cpan/Math-BigInt/t/round.t		Test rounding with non-integer A and P
+cpan/Math-BigInt/t/rt-16221.t		Tests for objectify() w/foreign objs
+cpan/Math-BigInt/t/sub_ali.t		Tests for aliases in BigInt subclasses
+cpan/Math-BigInt/t/sub_mbf.t		Empty subclass test of BigFloat
+cpan/Math-BigInt/t/sub_mbi.t		Empty subclass test of BigInt
+cpan/Math-BigInt/t/sub_mif.t		Test A & P with subclasses using mbimbf.inc
+cpan/Math-BigInt/t/trap.t		Test whether trap_nan and trap_inf work
+cpan/Math-BigInt/t/upgrade2.t		Test that two upgrade levels work
+cpan/Math-BigInt/t/upgradef.t		Test if use Math::BigFloat(); under upgrade works
+cpan/Math-BigInt/t/upgrade.inc		Actual tests for upgrade.t
+cpan/Math-BigInt/t/upgrade.t		Test if use Math::BigInt(); under upgrade works
+cpan/Math-BigInt/t/use_lib1.t		Test combinations of Math::BigInt and BigFloat
+cpan/Math-BigInt/t/use_lib2.t		Test combinations of Math::BigInt and BigFloat
+cpan/Math-BigInt/t/use_lib3.t		Test combinations of Math::BigInt and BigFloat
+cpan/Math-BigInt/t/use_lib4.t		Test combinations of Math::BigInt and BigFloat
+cpan/Math-BigInt/t/use_mbfw.t		use BigFloat w/ with and lib at the same time
+cpan/Math-BigInt/t/use.t		Test if use Math::BigInt(); works
+cpan/Math-BigInt/t/with_sub.t		Test use Math::BigFloat with => package
+cpan/Math-BigRat/lib/Math/BigRat.pm	Math::BigRat
+cpan/Math-BigRat/t/big_ap.t		Math::BigRat test
+cpan/Math-BigRat/t/bigfltpm.inc		Math::BigRat test
+cpan/Math-BigRat/t/bigfltrt.t		Math::BigRat test
+cpan/Math-BigRat/t/biglog.t		Math::BigRat test
+cpan/Math-BigRat/t/bigratpm.inc		Math::BigRat test
+cpan/Math-BigRat/t/bigratpm.t		Math::BigRat test
+cpan/Math-BigRat/t/bigrat.t		Math::BigRat test
+cpan/Math-BigRat/t/bigratup.t		test under $Math::BigInt::upgrade
+cpan/Math-BigRat/t/bigroot.t		Math::BigRat test
+cpan/Math-BigRat/t/bitwise.t		Math::BigRat test
+cpan/Math-BigRat/t/hang.t		Math::BigRat test for bug #34584 - hang in exp()
+cpan/Math-BigRat/t/Math/BigRat/Test.pm	Math::BigRat test helper
+cpan/Math-BigRat/t/requirer.t		see if require works properly
+cpan/Math-BigRat/t/trap.t		see if trap_nan and trap_inf work
 cpan/Math-Complex/lib/Math/Complex.pm	A Complex package
 cpan/Math-Complex/lib/Math/Trig.pm	A simple interface to complex trigonometry
 cpan/Math-Complex/t/Complex.t		See if Math::Complex works
@@ -2327,7 +2412,6 @@ cpan/Test-Harness/t/unicode.t				Test::Harness test
 cpan/Test-Harness/t/yamlish-output.t			Test::Harness test
 cpan/Test-Harness/t/yamlish.t				Test::Harness test
 cpan/Test-Harness/t/yamlish-writer.t			Test::Harness test
-cpan/Test/lib/Test.pm		A simple framework for writing test scripts
 cpan/Test-Simple/lib/ok.pm
 cpan/Test-Simple/lib/Test/Builder/IO/Scalar.pm
 cpan/Test-Simple/lib/Test/Builder/Module.pm
@@ -2485,15 +2569,6 @@ cpan/Test-Simple/t/useing.t
 cpan/Test-Simple/t/use_ok.t
 cpan/Test-Simple/t/utf8.t
 cpan/Test-Simple/t/versions.t
-cpan/Test/t/05_about_verbose.t	See if Test works
-cpan/Test/t/fail.t		See if Test works
-cpan/Test/t/mix.t		See if Test works
-cpan/Test/t/multiline.t		See if Test works
-cpan/Test/t/onfail.t		See if Test works
-cpan/Test/t/qr.t		See if Test works
-cpan/Test/t/skip.t		See if Test works
-cpan/Test/t/success.t		See if Test works
-cpan/Test/t/todo.t		See if Test works
 cpan/Text-Balanced/lib/Text/Balanced.pm	Text::Balanced
 cpan/Text-Balanced/t/01_compile.t	See if Text::Balanced works
 cpan/Text-Balanced/t/02_extbrk.t	See if Text::Balanced works
@@ -3182,89 +3257,6 @@ dist/Locale-Maketext/t/60_super.t			See if Locale::Maketext works
 dist/Locale-Maketext/t/70_fail_auto.t			See if Locale::Maketext works
 dist/Locale-Maketext/t/90_utf8.t			See if Locale::Maketext works
 dist/Locale-Maketext/t/91_backslash.t			See if Locale::Maketext works
-dist/Math-BigInt-FastCalc/FastCalc.xs	Math::BigInt::FastCalc extension
-dist/Math-BigInt-FastCalc/lib/Math/BigInt/FastCalc.pm	Math::BigInt::FastCalc extension
-dist/Math-BigInt-FastCalc/t/bigintfc.t	Math::BigInt::FastCalc extension
-dist/Math-BigInt-FastCalc/t/bootstrap.t	Math::BigInt::FastCalc extension
-dist/Math-BigInt-FastCalc/t/leak.t	test for memory leaks in Math::BigInt::FastCalc
-dist/Math-BigInt-FastCalc/t/mbi_rand.t	Math::BigInt::FastCalc extension
-dist/Math-BigInt/lib/Math/BigFloat.pm		An arbitrary precision floating-point arithmetic package
-dist/Math-BigInt/lib/Math/BigInt/CalcEmu.pm	Pure Perl module to support Math::BigInt
-dist/Math-BigInt/lib/Math/BigInt/Calc.pm	Pure Perl module to support Math::BigInt
-dist/Math-BigInt/lib/Math/BigInt.pm	An arbitrary precision integer arithmetic package
-dist/Math-BigInt/t/alias.inc		Support for BigInt tests
-dist/Math-BigInt/t/bare_mbf.t		Test MBF under Math::BigInt::BareCalc
-dist/Math-BigInt/t/bare_mbi.t		Test MBI under Math::BigInt::BareCalc
-dist/Math-BigInt/t/bare_mif.t		Rounding tests under BareCalc
-dist/Math-BigInt/t/bigfltpm.inc		Shared tests for bigfltpm.t and sub_mbf.t
-dist/Math-BigInt/t/bigfltpm.t		See if BigFloat.pm works
-dist/Math-BigInt/t/bigintc.t		See if BigInt/Calc.pm works
-dist/Math-BigInt/t/bigintpm.inc		Shared tests for bigintpm.t and sub_mbi.t
-dist/Math-BigInt/t/bigintpm.t		See if BigInt.pm works
-dist/Math-BigInt/t/bigints.t		See if BigInt.pm works
-dist/Math-BigInt/t/biglog.t		Test the log function
-dist/Math-BigInt/t/big_pi_e.t		test bpi() and bexp()
-dist/Math-BigInt/t/bigroot.t		Test the broot function
-dist/Math-BigInt/t/calling.t		Test calling conventions
-dist/Math-BigInt/t/config.t		Test Math::BigInt->config()
-dist/Math-BigInt/t/constant.t		Test Math::BigInt/BigFloat under :constant
-dist/Math-BigInt/t/const_mbf.t		Test Math::BigInt
-dist/Math-BigInt/t/downgrade.t		Test if use Math::BigInt(); under downgrade works
-dist/Math-BigInt/t/_e_math.t		Helper routine in BigFloat for _e math
-dist/Math-BigInt/t/inf_nan.t		Special tests for inf and *NaN* handling
-dist/Math-BigInt/t/isa.t		Test for Math::BigInt inheritance
-dist/Math-BigInt/t/lib_load.t		Test sane lib names
-dist/Math-BigInt/t/Math/BigFloat/Subclass.pm	Empty subclass of BigFloat for test
-dist/Math-BigInt/t/Math/BigInt/BareCalc.pm	Bigint's simulation of Calc
-dist/Math-BigInt/t/Math/BigInt/Scalar.pm	Pure Perl module to support Math::BigInt
-dist/Math-BigInt/t/Math/BigInt/Subclass.pm	Empty subclass of BigInt for test
-dist/Math-BigInt/t/mbf_ali.t		Tests for BigFloat
-dist/Math-BigInt/t/mbi_ali.t		Tests for BigInt
-dist/Math-BigInt/t/mbimbf.inc		Actual BigInt/BigFloat accuracy, precision and fallback, round_mode tests
-dist/Math-BigInt/t/mbimbf.t		BigInt/BigFloat accuracy, precision and fallback, round_mode
-dist/Math-BigInt/t/mbi_rand.t		Test Math::BigInt randomly
-dist/Math-BigInt/t/nan_cmp.t		overloaded comparison involving *NaN*
-dist/Math-BigInt/t/new_overloaded.t	test overloaded numbers in BigFloat's new()
-dist/Math-BigInt/t/req_mbf0.t		test: require Math::BigFloat; ->bzero();
-dist/Math-BigInt/t/req_mbf1.t		test: require Math::BigFloat; ->bone();
-dist/Math-BigInt/t/req_mbfa.t		test: require Math::BigFloat; ->bnan();
-dist/Math-BigInt/t/req_mbfi.t		test: require Math::BigFloat; ->binf();
-dist/Math-BigInt/t/req_mbfn.t		test: require Math::BigFloat; ->new();
-dist/Math-BigInt/t/req_mbfw.t		require Math::BigFloat; import ( with => );
-dist/Math-BigInt/t/require.t		Test if require Math::BigInt works
-dist/Math-BigInt/t/round.t		Test rounding with non-integer A and P
-dist/Math-BigInt/t/rt-16221.t		Tests for objectify() w/foreign objs
-dist/Math-BigInt/t/sub_ali.t		Tests for aliases in BigInt subclasses
-dist/Math-BigInt/t/sub_mbf.t		Empty subclass test of BigFloat
-dist/Math-BigInt/t/sub_mbi.t		Empty subclass test of BigInt
-dist/Math-BigInt/t/sub_mif.t		Test A & P with subclasses using mbimbf.inc
-dist/Math-BigInt/t/trap.t		Test whether trap_nan and trap_inf work
-dist/Math-BigInt/t/upgrade2.t		Test that two upgrade levels work
-dist/Math-BigInt/t/upgradef.t		Test if use Math::BigFloat(); under upgrade works
-dist/Math-BigInt/t/upgrade.inc		Actual tests for upgrade.t
-dist/Math-BigInt/t/upgrade.t		Test if use Math::BigInt(); under upgrade works
-dist/Math-BigInt/t/use_lib1.t		Test combinations of Math::BigInt and BigFloat
-dist/Math-BigInt/t/use_lib2.t		Test combinations of Math::BigInt and BigFloat
-dist/Math-BigInt/t/use_lib3.t		Test combinations of Math::BigInt and BigFloat
-dist/Math-BigInt/t/use_lib4.t		Test combinations of Math::BigInt and BigFloat
-dist/Math-BigInt/t/use_mbfw.t		use BigFloat w/ with and lib at the same time
-dist/Math-BigInt/t/use.t		Test if use Math::BigInt(); works
-dist/Math-BigInt/t/with_sub.t		Test use Math::BigFloat with => package
-dist/Math-BigRat/lib/Math/BigRat.pm	Math::BigRat
-dist/Math-BigRat/t/big_ap.t		Math::BigRat test
-dist/Math-BigRat/t/bigfltpm.inc		Math::BigRat test
-dist/Math-BigRat/t/bigfltrt.t		Math::BigRat test
-dist/Math-BigRat/t/biglog.t		Math::BigRat test
-dist/Math-BigRat/t/bigratpm.inc		Math::BigRat test
-dist/Math-BigRat/t/bigratpm.t		Math::BigRat test
-dist/Math-BigRat/t/bigrat.t		Math::BigRat test
-dist/Math-BigRat/t/bigratup.t		test under $Math::BigInt::upgrade
-dist/Math-BigRat/t/bigroot.t		Math::BigRat test
-dist/Math-BigRat/t/bitwise.t		Math::BigRat test
-dist/Math-BigRat/t/hang.t		Math::BigRat test for bug #34584 - hang in exp()
-dist/Math-BigRat/t/Math/BigRat/Test.pm	Math::BigRat test helper
-dist/Math-BigRat/t/requirer.t		see if require works properly
-dist/Math-BigRat/t/trap.t		see if trap_nan and trap_inf work
 dist/Module-CoreList/Changes			Module::CoreList Changes
 dist/Module-CoreList/corelist			The corelist command-line utility
 dist/Module-CoreList/identify-dependencies	A usage example for Module::CoreList
@@ -3301,6 +3293,7 @@ dist/Net-Ping/t/510_ping_udp.t		Ping Net::Ping
 dist/Net-Ping/t/520_icmp_ttl.t		Ping Net::Ping
 dist/PathTools/Cwd.pm				Various cwd routines (getcwd, fastcwd, chdir)
 dist/PathTools/Cwd.xs				Cwd extension external subroutines
+dist/PathTools/lib/File/Spec/AmigaOS.pm		portable operations on AmigaOS file names
 dist/PathTools/lib/File/Spec/Cygwin.pm	portable operations on Cygwin file names
 dist/PathTools/lib/File/Spec/Epoc.pm		portable operations on EPOC file names
 dist/PathTools/lib/File/Spec/Functions.pm	Function interface to File::Spec object methods
@@ -3410,6 +3403,16 @@ dist/Term-ReadLine/t/AE.t			See if Term::ReadLine works
 dist/Term-ReadLine/t/AETk.t			See if Term::ReadLine works
 dist/Term-ReadLine/t/ReadLine.t			See if Term::ReadLine works
 dist/Term-ReadLine/t/Tk.t			See if Term::ReadLine works
+dist/Test/lib/Test.pm		A simple framework for writing test scripts
+dist/Test/t/05_about_verbose.t	See if Test works
+dist/Test/t/fail.t		See if Test works
+dist/Test/t/mix.t		See if Test works
+dist/Test/t/multiline.t		See if Test works
+dist/Test/t/onfail.t		See if Test works
+dist/Test/t/qr.t		See if Test works
+dist/Test/t/skip.t		See if Test works
+dist/Test/t/success.t		See if Test works
+dist/Test/t/todo.t		See if Test works
 dist/Text-Abbrev/lib/Text/Abbrev.pm		An abbreviation table builder
 dist/Text-Abbrev/t/Abbrev.t		Test Text::Abbrev
 dist/Thread-Queue/lib/Thread/Queue.pm	Thread-safe queues
@@ -3423,6 +3426,7 @@ dist/Thread-Queue/t/07_lock.t		Thread::Queue tests
 dist/Thread-Queue/t/08_nothreads.t	Thread::Queue tests
 dist/Thread-Queue/t/09_ended.t		Thread::Queue tests
 dist/Thread-Queue/t/10_timed.t	Thread::Queue tests
+dist/Thread-Queue/t/11_limit.t	Thread::Queue tests
 dist/Thread-Semaphore/lib/Thread/Semaphore.pm	Thread-safe semaphores
 dist/Thread-Semaphore/t/01_basic.t		Thread::Semaphore tests
 dist/Thread-Semaphore/t/02_errs.t		Thread::Semaphore tests
@@ -3536,6 +3540,20 @@ ebcdic_tables.h		Generated tables included in utfebcdic.h
 embed.fnc		Database used by embed.pl
 embed.h			Maps symbols to safer names
 embedvar.h		C namespace management
+ext/Amiga-ARexx/ARexx.pm	Amiga::ARexx extension
+ext/Amiga-ARexx/ARexx.xs	Amiga::ARexx extension
+ext/Amiga-ARexx/__examples/simplecommand.pl	Amiga::ARexx extension
+ext/Amiga-ARexx/__examples/simplehost.pl	Amiga::ARexx extension
+ext/Amiga-ARexx/Makefile.PL	Amiga::ARexx extension
+ext/Amiga-ARexx/tagtypes.h			Amiga::ARexx extension
+ext/Amiga-ARexx/typemap	Amiga::ARexx extension
+ext/Amiga-Exec/__examples/simplecommand.pl	Amiga::Exec extension
+ext/Amiga-Exec/__examples/simplehost.pl		Amiga::Exec extension
+ext/Amiga-Exec/Exec.pm	Amiga::Exec extension
+ext/Amiga-Exec/Exec.xs	Amiga::Exec extension
+ext/Amiga-Exec/Makefile.PL			Amiga::Exec extension
+ext/Amiga-Exec/tagtypes.h	Amiga::Exec extension
+ext/Amiga-Exec/typemap		Amiga::Exec extension
 ext/arybase/arybase.pm		For $[
 ext/arybase/arybase.xs		For $[
 ext/arybase/ptable.h		For $[
@@ -4584,9 +4602,11 @@ pod/perl5184delta.pod		Perl changes in version 5.18.4
 pod/perl5200delta.pod		Perl changes in version 5.20.0
 pod/perl5201delta.pod		Perl changes in version 5.20.1
 pod/perl5202delta.pod		Perl changes in version 5.20.2
+pod/perl5203delta.pod		Perl changes in version 5.20.3
 pod/perl5220delta.pod		Perl changes in version 5.22.0
 pod/perl5230delta.pod		Perl changes in version 5.23.0
 pod/perl5231delta.pod		Perl changes in version 5.23.1
+pod/perl5232delta.pod		Perl changes in version 5.23.2
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1

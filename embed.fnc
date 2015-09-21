@@ -71,7 +71,8 @@
 :
 :   M  May change:
 :
-:         any doc entry is marked that function may change
+:         any doc entry is marked that function may change.  Also used to
+:	  suppress making a doc entry if it would just be a placeholder.
 :
 :   m  Implemented as a macro:
 :
@@ -349,9 +350,9 @@ Afrpd   |OP*    |die            |NULLOK const char* pat|...
 pr	|void	|die_unwind	|NN SV* msv
 Ap	|void	|dounwind	|I32 cxix
 : FIXME
-pmb	|bool	|do_aexec	|NULLOK SV* really|NN SV** mark|NN SV** sp
+pmb	|bool|do_aexec	|NULLOK SV* really|NN SV** mark|NN SV** sp
 : Used in pp_sys.c
-p	|bool	|do_aexec5	|NULLOK SV* really|NN SV** mark|NN SV** sp|int fd|int do_report
+p	|bool|do_aexec5	|NULLOK SV* really|NN SV** mark|NN SV** sp|int fd|int do_report
 Ap	|int	|do_binmode	|NN PerlIO *fp|int iotype|int mode
 : Used in pp.c
 Ap	|bool	|do_close	|NULLOK GV* gv|bool not_implicit
@@ -359,9 +360,9 @@ Ap	|bool	|do_close	|NULLOK GV* gv|bool not_implicit
 p	|bool	|do_eof		|NN GV* gv
 
 #ifdef PERL_DEFAULT_DO_EXEC3_IMPLEMENTATION
-pm	|bool	|do_exec	|NN const char* cmd
+pm	|bool|do_exec	|NN const char* cmd
 #else
-p	|bool	|do_exec	|NN const char* cmd
+p	|bool|do_exec	|NN const char* cmd
 #endif
 
 #if defined(WIN32) || defined(__SYMBIAN32__) || defined(VMS)
@@ -370,7 +371,7 @@ Ap	|int	|do_spawn	|NN char* cmd
 Ap	|int	|do_spawn_nowait|NN char* cmd
 #endif
 #if !defined(WIN32)
-p	|bool	|do_exec3	|NN const char *incmd|int fd|int do_report
+p	|bool|do_exec3	|NN const char *incmd|int fd|int do_report
 #endif
 p	|void	|do_execfree
 #if defined(PERL_IN_DOIO_C)
@@ -2130,6 +2131,7 @@ Es	|regnode*|regclass	|NN RExC_state_t *pRExC_state                 \
 				|bool allow_multi_fold                        \
 				|const bool silence_non_portable              \
 				|const bool strict                            \
+				|bool optimizable                       \
 				|NULLOK SV** ret_invlist
 Es	|void|add_above_Latin1_folds|NN RExC_state_t *pRExC_state|const U8 cp \
 				|NN SV** invlist
@@ -2470,7 +2472,13 @@ s	|char*	|stdize_locale	|NN char* locs
 #if defined(USE_LOCALE) \
     && (defined(PERL_IN_LOCALE_C) || defined (PERL_EXT_POSIX))
 ApM	|bool	|_is_cur_LC_category_utf8|int category
+#	ifdef DEBUGGING
+AMnPpR	|char *	|_setlocale_debug_string|const int category		    \
+					|NULLOK const char* const locale    \
+					|NULLOK const char* const retval
+#	endif
 #endif
+
 
 #if defined(PERL_IN_UTIL_C)
 s	|SV*	|mess_alloc

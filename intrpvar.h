@@ -84,7 +84,7 @@ PERLVAR(I, defgv,	GV *)           /* the *_ glob */
 
 =for apidoc mn|bool|PL_dowarn
 
-The C variable which corresponds to Perl's $^W warning variable.
+The C variable which corresponds to Perl's C<$^W> warning variable.
 
 =cut
 */
@@ -133,11 +133,11 @@ PERLVAR(I, comppad,	PAD *)		/* storage for lexically scoped temporaries */
 This is the C<undef> SV.  Always refer to this as C<&PL_sv_undef>.
 
 =for apidoc Amn|SV|PL_sv_no
-This is the C<false> SV.  See C<PL_sv_yes>.  Always refer to this as
+This is the C<false> SV.  See C<L</PL_sv_yes>>.  Always refer to this as
 C<&PL_sv_no>.
 
 =for apidoc Amn|SV|PL_sv_yes
-This is the C<true> SV.  See C<PL_sv_no>.  Always refer to this as
+This is the C<true> SV.  See C<L</PL_sv_no>>.  Always refer to this as
 C<&PL_sv_yes>.
 
 =cut
@@ -176,7 +176,7 @@ PERLVAR(I, statgv,	GV *)
 PERLVARI(I, statname,	SV *,	NULL)
 
 #ifdef HAS_TIMES
-/* Will be removed soon after v5.23.2. See RT #121351 */
+/* Will be removed soon after v5.23.3. See RT #121351 */
 PERLVAR(I, timesbuf,	struct tms)
 #endif
 
@@ -375,19 +375,19 @@ PERLVAR(I, DBline,	GV *)		/*  *DB::line   */
 When Perl is run in debugging mode, with the B<-d> switch, this GV contains
 the SV which holds the name of the sub being debugged.  This is the C
 variable which corresponds to Perl's $DB::sub variable.  See
-C<PL_DBsingle>.
+C<L</PL_DBsingle>>.
 
 =for apidoc mn|SV *|PL_DBsingle
 When Perl is run in debugging mode, with the B<-d> switch, this SV is a
 boolean which indicates whether subs are being single-stepped.
 Single-stepping is automatically turned on after every step.  This is the C
 variable which corresponds to Perl's $DB::single variable.  See
-C<PL_DBsub>.
+C<L</PL_DBsub>>.
 
 =for apidoc mn|SV *|PL_DBtrace
 Trace variable used when Perl is run in debugging mode, with the B<-d>
 switch.  This is the C variable which corresponds to Perl's $DB::trace
-variable.  See C<PL_DBsingle>.
+variable.  See C<L</PL_DBsingle>>.
 
 =cut
 */
@@ -751,7 +751,7 @@ PERLVARI(I, globhook,	globhook_t, NULL)
 
 PERLVARI(I, padlist_generation, U32, 1)	/* id to identify padlist clones */
 
-/* The last unconditional member of the interpreter structure when 5.23.2 was
+/* The last unconditional member of the interpreter structure when 5.23.3 was
    released. The offset of the end of this is baked into a global variable in 
    any shared perl library which will allow a sanity test in future perl
    releases.  */

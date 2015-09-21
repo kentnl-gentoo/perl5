@@ -777,7 +777,21 @@
 
 /* If this causes problems, set i_unistd=undef in the hint file.  */
 #ifdef I_UNISTD
+#    if defined(__amigaos4__)
+#        ifdef I_NETINET_IN
+#            include <netinet/in.h>
+#        endif
+#   endif
 #   include <unistd.h>
+#   if defined(__amigaos4__)
+/* Under AmigaOS 4 newlib.library provides an environ.  However using
+ * it doesn't give us enough control over inheritance of variables by
+ * subshells etc. so replace with custom version based on abc-shell
+ * code. */
+extern char **myenviron;
+#       undef environ
+#       define environ myenviron
+#   endif
 #endif
 
 /* for WCOREDUMP */
@@ -2789,6 +2803,11 @@ typedef struct padname PADNAME;
 #   include "unixish.h"
 #endif
 
+#ifdef __amigaos4__
+#    include "amigaos.h"
+#    undef FD_CLOEXEC /* a lie in AmigaOS */
+#endif
+
 /* NSIG logic from Configure --> */
 /* Strange style to avoid deeply-nested #if/#else/#endif */
 #ifndef NSIG
@@ -3250,6 +3269,32 @@ typedef pthread_key_t	perl_key;
      vaxc$errno = PL_statusvalue_vms = MY_POSIX_EXIT ? \
 	(C_FAC_POSIX | (1 << 3) | STS$K_ERROR | STS$M_INHIB_MSG) : SS$_ABORT)
 
+#elif defined(__amigaos4__)
+ /* A somewhat experimental attempt to simulate posix return code values */
+#   define STATUS_NATIVE	PL_statusvalue_posix
+#   define STATUS_NATIVE_CHILD_SET(n)                      \
+        STMT_START {                                       \
+            PL_statusvalue_posix = (n);                    \
+            if (PL_statusvalue_posix < 0) {                \
+                PL_statusvalue = -1;                       \
+            }                                              \
+            else {                                         \
+                PL_statusvalue = n << 8;                   \
+            }                                              \
+        } STMT_END
+#   define STATUS_UNIX_SET(n)		\
+	STMT_START {			\
+	    PL_statusvalue = (n);		\
+	    if (PL_statusvalue != -1)	\
+		PL_statusvalue &= 0xFFFF;	\
+	} STMT_END
+#   define STATUS_UNIX_EXIT_SET(n) STATUS_UNIX_SET(n)
+#   define STATUS_EXIT_SET(n) STATUS_UNIX_SET(n)
+#   define STATUS_CURRENT STATUS_UNIX
+#   define STATUS_EXIT STATUS_UNIX
+#   define STATUS_ALL_SUCCESS	(PL_statusvalue = 0, PL_statusvalue_posix = 0)
+#   define STATUS_ALL_FAILURE	(PL_statusvalue = 1, PL_statusvalue_posix = 1)
+
 #else
 #   define STATUS_NATIVE	PL_statusvalue_posix
 #   if defined(WCOREDUMP)
@@ -3702,11 +3747,10 @@ typedef        struct crypt_data {     /* straight from /usr/include/crypt.h */
 #  define USE_HASH_SEED
 #endif
 
-/* Win32 defines a type 'WORD' in windef.h. This conflicts with the enumerator
- * 'WORD' defined in perly.h. The yytokentype enum is only a debugging aid, so
- * it's not really needed.
- */
-#if defined(WIN32)
+/* Win32 defines a type 'WORD' in windef.h, and AmigaOS in exec/types.h.
+ * This conflicts with the enumerator 'WORD' defined in perly.h.
+ * The yytokentype enum is only a debugging aid, so it's not really needed. */
+#if defined(WIN32) || defined(__amigaos4__)
 #  define YYTOKENTYPE
 #endif
 #include "perly.h"
@@ -4037,6 +4081,7 @@ Gid_t getegid (void);
 #  define DEBUG_Xv_TEST_ (DEBUG_X_TEST_ && DEBUG_v_TEST_)
 #  define DEBUG_Uv_TEST_ (DEBUG_U_TEST_ && DEBUG_v_TEST_)
 #  define DEBUG_Pv_TEST_ (DEBUG_P_TEST_ && DEBUG_v_TEST_)
+#  define DEBUG_Lv_TEST_ (DEBUG_L_TEST_ && DEBUG_v_TEST_)
 
 #ifdef DEBUGGING
 
@@ -4070,6 +4115,7 @@ Gid_t getegid (void);
 #  define DEBUG_Xv_TEST DEBUG_Xv_TEST_
 #  define DEBUG_Uv_TEST DEBUG_Uv_TEST_
 #  define DEBUG_Pv_TEST DEBUG_Pv_TEST_
+#  define DEBUG_Lv_TEST DEBUG_Lv_TEST_
 
 #  define PERL_DEB(a)                  a
 #  define PERL_DEB2(a,b)               a
@@ -4109,6 +4155,7 @@ Gid_t getegid (void);
 #  define DEBUG_Xv(a) DEBUG__(DEBUG_Xv_TEST, a)
 #  define DEBUG_Uv(a) DEBUG__(DEBUG_Uv_TEST, a)
 #  define DEBUG_Pv(a) DEBUG__(DEBUG_Pv_TEST, a)
+#  define DEBUG_Lv(a) DEBUG__(DEBUG_Lv_TEST, a)
 
 #  define DEBUG_S(a) DEBUG__(DEBUG_S_TEST, a)
 #  define DEBUG_T(a) DEBUG__(DEBUG_T_TEST, a)
@@ -4153,6 +4200,7 @@ Gid_t getegid (void);
 #  define DEBUG_Xv_TEST (0)
 #  define DEBUG_Uv_TEST (0)
 #  define DEBUG_Pv_TEST (0)
+#  define DEBUG_Lv_TEST (0)
 
 #  define PERL_DEB(a)
 #  define PERL_DEB2(a,b)               b
@@ -4186,6 +4234,7 @@ Gid_t getegid (void);
 #  define DEBUG_Xv(a)
 #  define DEBUG_Uv(a)
 #  define DEBUG_Pv(a)
+#  define DEBUG_Lv(a)
 #endif /* DEBUGGING */
 
 
@@ -5395,6 +5444,7 @@ struct tempsym; /* defined in pp_pack.c */
 #  include "win32iop.h"
 #endif
 
+
 #include "proto.h"
 
 /* this has structure inits, so it cannot be included before here */
@@ -6342,6 +6392,10 @@ expression, but with an empty argument list, like this:
 #  include <fcntl.h>
 #endif
 
+#ifdef __amigaos4__
+#  undef FD_CLOEXEC /* a lie in AmigaOS */
+#endif
+
 #ifdef I_SYS_FILE
 #  include <sys/file.h>
 #endif
@@ -6518,7 +6572,7 @@ extern void moncontrol(int);
 
 #define IS_SAFE_PATHNAME(p, len, op_name) IS_SAFE_SYSCALL((p), (len), "pathname", (op_name))
 
-#if defined(OEMVS)
+#if defined(OEMVS) || defined(__amigaos4__)
 #define NO_ENV_ARRAY_IN_MAIN
 #endif
 

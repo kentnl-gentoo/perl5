@@ -3828,6 +3828,12 @@ STATIC int	S_tokereport(pTHX_ I32 rv, const YYSTYPE* lvalp);
 #define PERL_ARGS_ASSERT_TOKEREPORT	\
 	assert(lvalp)
 #  endif
+#  if defined(USE_LOCALE)     && (defined(PERL_IN_LOCALE_C) || defined (PERL_EXT_POSIX))
+PERL_CALLCONV char *	Perl__setlocale_debug_string(const int category, const char* const locale, const char* const retval)
+			__attribute__warn_unused_result__
+			__attribute__pure__;
+
+#  endif
 #endif
 #if defined(DEBUG_LEAKING_SCALARS_FORK_DUMP)
 PERL_CALLCONV void	Perl_dump_sv_child(pTHX_ SV *sv);
@@ -4768,7 +4774,7 @@ STATIC regnode*	S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth
 STATIC regnode*	S_regbranch(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, I32 first, U32 depth);
 #define PERL_ARGS_ASSERT_REGBRANCH	\
 	assert(pRExC_state); assert(flagp)
-STATIC regnode*	S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth, const bool stop_at_1, bool allow_multi_fold, const bool silence_non_portable, const bool strict, SV** ret_invlist);
+STATIC regnode*	S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth, const bool stop_at_1, bool allow_multi_fold, const bool silence_non_portable, const bool strict, bool optimizable, SV** ret_invlist);
 #define PERL_ARGS_ASSERT_REGCLASS	\
 	assert(pRExC_state); assert(flagp)
 STATIC unsigned int	S_regex_set_precedence(const U8 my_operator)

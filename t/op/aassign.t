@@ -269,7 +269,11 @@ sub sh {
 # b) it's such an important usage that for performance reasons we
 #    mark it as safe even though it isn't really. Hence it's a TODO.
 
-{
+SKIP: {
+    use Config;
+    # debugging builds will detect this failure and panic
+    skip "DEBUGGING build" if $::Config{ccflags} =~ /DEBUGGING/
+                              or $^O eq 'VMS' && $::Config{usedebugging_perl} eq 'Y';
     local $::TODO = 'cheat and optimise my (....) = @_';
     local @_ = 1..3;
     &f17;
@@ -329,6 +333,14 @@ sub sh {
     is (substr($a[0], 0, 7), "abcdefx", 'NOSTEAL non-empty $a[0]');
     is (substr($a[1], 0, 7), "abcdefx", 'NOSTEAL non-empty $a[1]');
 
+}
+
+{
+    my $x = 1;
+    my $y = 2;
+    ($x,$y) = (undef, $x);
+    is($x, undef, 'single scalar on RHS, but two on LHS: x');
+    is($y, 1, 'single scalar on RHS, but two on LHS: y');
 }
 
 

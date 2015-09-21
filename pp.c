@@ -2464,7 +2464,7 @@ S_scomplement(pTHX_ SV *targ, SV *sv)
 	  while (tmps < send) {
 	    const UV c = utf8n_to_uvchr(tmps, send-tmps, &l, utf8flags);
 	    tmps += l;
-	    targlen += UNISKIP(~c);
+	    targlen += UVCHR_SKIP(~c);
 	    nchar++;
 	    if (c > 0xff)
 		nwide++;
@@ -3558,7 +3558,8 @@ PP(pp_chr)
             && ((SvIOKp(top) && !SvIsUV(top) && SvIV_nomg(top) < 0)
                 ||
                 ((SvNOKp(top) || (SvOK(top) && !SvIsUV(top)))
-                 && SvNV_nomg(top) < 0.0))) {
+                 && SvNV_nomg(top) < 0.0)))
+        {
 	    if (ckWARN(WARN_UTF8)) {
 		if (SvGMAGICAL(top)) {
 		    SV *top2 = sv_newmortal();
@@ -3577,7 +3578,7 @@ PP(pp_chr)
     SvUPGRADE(TARG,SVt_PV);
 
     if (value > 255 && !IN_BYTES) {
-	SvGROW(TARG, (STRLEN)UNISKIP(value)+1);
+	SvGROW(TARG, (STRLEN)UVCHR_SKIP(value)+1);
 	tmps = (char*)uvchr_to_utf8_flags((U8*)SvPVX(TARG), value, 0);
 	SvCUR_set(TARG, tmps - SvPVX_const(TARG));
 	*tmps = '\0';
@@ -4348,7 +4349,7 @@ PP(pp_quotemeta)
 		    IN_LC_RUNTIME(LC_CTYPE)
 			||
 #endif
-			_isQUOTEMETA(TWO_BYTE_UTF8_TO_NATIVE(*s, *(s + 1))))
+			_isQUOTEMETA(EIGHT_BIT_UTF8_TO_NATIVE(*s, *(s + 1))))
 		    {
 			to_quote = TRUE;
 		    }

@@ -741,9 +741,10 @@ S_openn_cleanup(pTHX_ GV *gv, IO *io, PerlIO *fp, char *mode, const char *oname,
                 int ofd = PerlIO_fileno(fp);
                 int dupfd = ofd >= 0 ? PerlLIO_dup(ofd) : -1;
 #if defined(HAS_FCNTL) && defined(F_SETFD)
-		/* Assume if we have F_SETFD we have F_GETFD */
-                int coe = ofd >= 0 ? fcntl(ofd, F_GETFD) : -1;
-                if (coe < 0) {
+		/* Assume if we have F_SETFD we have F_GETFD. */
+                /* Get a copy of all the fd flags. */
+                int fd_flags = ofd >= 0 ? fcntl(ofd, F_GETFD) : -1;
+                if (fd_flags < 0) {
                     if (dupfd >= 0)
                         PerlLIO_close(dupfd);
                     goto say_false;
@@ -757,8 +758,9 @@ S_openn_cleanup(pTHX_ GV *gv, IO *io, PerlIO *fp, char *mode, const char *oname,
                 PerlIO_close(fp);
                 PerlLIO_dup2(dupfd, ofd);
 #if defined(HAS_FCNTL) && defined(F_SETFD)
-		/* The dup trick has lost close-on-exec on ofd */
-		fcntl(ofd,F_SETFD, coe);
+		/* The dup trick has lost close-on-exec on ofd,
+                 * and possibly any other flags, so restore them. */
+		fcntl(ofd,F_SETFD, fd_flags);
 #endif
                 PerlLIO_close(dupfd);
 	    }
@@ -769,12 +771,10 @@ S_openn_cleanup(pTHX_ GV *gv, IO *io, PerlIO *fp, char *mode, const char *oname,
 	PerlIO_clearerr(fp);
 	fd = PerlIO_fileno(fp);
     }
-#if defined(HAS_FCNTL) && defined(F_SETFD)
-    if (fd >= 0) {
-        if (fcntl(fd, F_SETFD, fd > PL_maxsysfd) < 0) {
-            PerlLIO_close(fd);
-            goto say_false;
-        }
+#if defined(HAS_FCNTL) && defined(F_SETFD) && defined(FD_CLOEXEC)
+    if (fd > PL_maxsysfd && fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
+        PerlLIO_close(fd);
+        goto say_false;
     }
 #endif
     IoIFP(io) = fp;
@@ -943,7 +943,7 @@ Perl_nextargv(pTHX_ GV *gv, bool nomagicopen)
 #endif
 		}
 		else {
-#if !defined(DOSISH) && !defined(AMIGAOS)
+#if !defined(DOSISH) && !defined(__amigaos4__)
 #  ifndef VMS  /* Don't delete; use automatic file versioning */
 		    if (UNLINK(PL_oldname) < 0) {
 			Perl_ck_warner_d(aTHX_ packWARN(WARN_INPLACE),
@@ -1528,9 +1528,10 @@ S_exec_failed(pTHX_ const char *cmd, int fd, int do_report)
 {
     const int e = errno;
     PERL_ARGS_ASSERT_EXEC_FAILED;
+
     if (ckWARN(WARN_EXEC))
-	Perl_warner(aTHX_ packWARN(WARN_EXEC), "Can't exec \"%s\": %s",
-		    cmd, Strerror(e));
+        Perl_warner(aTHX_ packWARN(WARN_EXEC), "Can't exec \"%s\": %s",
+                    cmd, Strerror(e));
     if (do_report) {
         /* XXX silently ignore failures */
         PERL_UNUSED_RESULT(PerlLIO_write(fd, (void*)&e, sizeof(int)));
@@ -1566,10 +1567,11 @@ Perl_do_aexec5(pTHX_ SV *really, SV **mark, SV **sp,
 	    (really && *tmps != '/'))		/* will execvp use PATH? */
 	    TAINT_ENV();		/* testing IFS here is overkill, probably */
 	PERL_FPU_PRE_EXEC
-	if (really && *tmps)
-	    PerlProc_execvp(tmps,EXEC_ARGV_CAST(PL_Argv));
-	else
-	    PerlProc_execvp(PL_Argv[0],EXEC_ARGV_CAST(PL_Argv));
+	if (really && *tmps) {
+            PerlProc_execvp(tmps,EXEC_ARGV_CAST(PL_Argv));
+	} else {
+            PerlProc_execvp(PL_Argv[0],EXEC_ARGV_CAST(PL_Argv));
+	}
 	PERL_FPU_POST_EXEC
  	S_exec_failed(aTHX_ (really ? tmps : PL_Argv[0]), fd, do_report);
     }
@@ -1683,7 +1685,7 @@ Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report)
 	    }
 	  doshell:
 	    PERL_FPU_PRE_EXEC
-	    PerlProc_execl(PL_sh_path, "sh", "-c", cmd, (char *)NULL);
+            PerlProc_execl(PL_sh_path, "sh", "-c", cmd, (char *)NULL);
 	    PERL_FPU_POST_EXEC
  	    S_exec_failed(aTHX_ PL_sh_path, fd, do_report);
 	    Safefree(buf);
@@ -1707,7 +1709,7 @@ Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report)
     *a = NULL;
     if (PL_Argv[0]) {
 	PERL_FPU_PRE_EXEC
-	PerlProc_execvp(PL_Argv[0],EXEC_ARGV_CAST(PL_Argv));
+        PerlProc_execvp(PL_Argv[0],EXEC_ARGV_CAST(PL_Argv));
 	PERL_FPU_POST_EXEC
 	if (errno == ENOEXEC) {		/* for system V NIH syndrome */
 	    do_execfree();
@@ -1721,10 +1723,6 @@ Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report)
 }
 
 #endif /* OS2 || WIN32 */
-
-#ifdef VMS
-#include <starlet.h> /* for sys$delprc */
-#endif
 
 I32
 Perl_apply(pTHX_ I32 type, SV **mark, SV **sp)
@@ -1887,40 +1885,7 @@ nothing in the core.
 	}
 	APPLY_TAINT_PROPER();
 	tot = sp - mark;
-#ifdef VMS
-	/* kill() doesn't do process groups (job trees?) under VMS */
-	if (val == SIGKILL) {
-	    /* Use native sys$delprc() to insure that target process is
-	     * deleted; supervisor-mode images don't pay attention to
-	     * CRTL's emulation of Unix-style signals and kill()
-	     */
-	    while (++mark <= sp) {
-		I32 proc;
-		unsigned long int __vmssts;
-		SvGETMAGIC(*mark);
-		if (!(SvIOK(*mark) || SvNOK(*mark) || looks_like_number(*mark)))
-		    Perl_croak(aTHX_ "Can't kill a non-numeric process ID");
-		proc = SvIV_nomg(*mark);
-		APPLY_TAINT_PROPER();
-		if (!((__vmssts = sys$delprc(&proc,0)) & 1)) {
-		    tot--;
-		    switch (__vmssts) {
-			case SS$_NONEXPR:
-			case SS$_NOSUCHNODE:
-			    SETERRNO(ESRCH,__vmssts);
-			    break;
-			case SS$_NOPRIV:
-			    SETERRNO(EPERM,__vmssts);
-			    break;
-			default:
-			    SETERRNO(EVMSERR,__vmssts);
-		    }
-		}
-	    }
-	    PERL_ASYNC_CHECK();
-	    break;
-	}
-#endif
+
 	while (++mark <= sp) {
 	    Pid_t proc;
 	    SvGETMAGIC(*mark);
@@ -1952,7 +1917,21 @@ nothing in the core.
             }
 	    else if (PL_unsafe) {
 		if (UNLINK(s))
+		{
 		    tot--;
+		}
+#if defined(__amigaos4__) && defined(NEWLIB)
+		else
+		{
+                  /* Under AmigaOS4 unlink only 'fails' if the
+                   * filename is invalid.  It may not remove the file
+                   * if it's locked, so check if it's still around. */
+                  if ((access(s,F_OK) != -1))
+                  {
+                    tot--;
+                  }
+		}
+#endif
 	    }
 	    else {	/* don't let root wipe out directories without -U */
 		if (PerlLIO_lstat(s,&PL_statbuf) < 0)
@@ -1963,7 +1942,21 @@ nothing in the core.
 		}
 		else {
 		    if (UNLINK(s))
-			tot--;
+		    {
+				tot--;
+			}
+#if defined(__amigaos4__) && defined(NEWLIB)
+			else
+			{
+				/* Under AmigaOS4 unlink only 'fails' if the filename is invalid */
+				/* It may not remove the file if it's Locked, so check if it's still */
+				/* arround */
+				if((access(s,F_OK) != -1))
+				{
+					tot--;
+				}
+			}	
+#endif
 		}
 	    }
 	}

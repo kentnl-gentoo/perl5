@@ -45,6 +45,10 @@
 int putenv(char *);
 #endif
 
+#ifdef __amigaos__
+# include "amigaos4/amigaio.h"
+#endif
+
 #ifdef HAS_SELECT
 # ifdef I_SYS_SELECT
 #  include <sys/select.h>
@@ -630,7 +634,7 @@ Perl_rninstr(const char *big, const char *bigend, const char *little, const char
 
 =for apidoc fbm_compile
 
-Analyses the string in order to make fast searches on it using fbm_instr()
+Analyses the string in order to make fast searches on it using C<fbm_instr()>
 -- the Boyer-Moore algorithm.
 
 =cut
@@ -732,7 +736,7 @@ Perl_fbm_compile(pTHX_ SV *sv, U32 flags)
 
 Returns the location of the SV in the string delimited by C<big> and
 C<bigend>.  It returns C<NULL> if the string can't be found.  The C<sv>
-does not have to be fbm_compiled, but the search will not be as fast
+does not have to be C<fbm_compiled>, but the search will not be as fast
 then.
 
 =cut
@@ -929,7 +933,8 @@ Perl_fbm_instr(pTHX_ unsigned char *big, unsigned char *bigend, SV *littlestr, U
 /*
 =for apidoc foldEQ
 
-Returns true if the leading len bytes of the strings s1 and s2 are the same
+Returns true if the leading C<len> bytes of the strings C<s1> and C<s2> are the
+same
 case-insensitively; false otherwise.  Uppercase and lowercase ASCII range bytes
 match themselves and their opposite case counterparts.  Non-cased and non-ASCII
 range bytes match only themselves.
@@ -982,8 +987,8 @@ Perl_foldEQ_latin1(const char *s1, const char *s2, I32 len)
 /*
 =for apidoc foldEQ_locale
 
-Returns true if the leading len bytes of the strings s1 and s2 are the same
-case-insensitively in the current locale; false otherwise.
+Returns true if the leading C<len> bytes of the strings C<s1> and C<s2> are the
+same case-insensitively in the current locale; false otherwise.
 
 =cut
 */
@@ -1110,7 +1115,7 @@ Perl_savesharedpv(pTHX_ const char *pv)
 =for apidoc savesharedpvn
 
 A version of C<savepvn()> which allocates the duplicate string in memory
-which is shared between threads.  (With the specific difference that a NULL
+which is shared between threads.  (With the specific difference that a C<NULL>
 pointer is not acceptable)
 
 =cut
@@ -1444,7 +1449,8 @@ Perl_mess_sv(pTHX_ SV *basemsg, bool consume)
 =for apidoc Am|SV *|vmess|const char *pat|va_list *args
 
 C<pat> and C<args> are a sprintf-style format pattern and encapsulated
-argument list.  These are used to generate a string message.  If the
+argument list, respectively.  These are used to generate a string message.  If
+the
 message does not end with a newline, then it will be extended with
 some indication of the current location in the code, as described for
 L</mess_sv>.
@@ -2049,6 +2055,9 @@ void
 Perl_my_setenv(pTHX_ const char *nam, const char *val)
 {
   dVAR;
+#ifdef __amigaos4__
+  amigaos4_obtain_environ(__FUNCTION__);
+#endif
 #ifdef USE_ITHREADS
   /* only parent thread can modify process environment */
   if (PL_curinterp == aTHX)
@@ -2090,7 +2099,11 @@ Perl_my_setenv(pTHX_ const char *nam, const char *val)
                 environ[i] = environ[i+1];
                 i++;
             }
+#ifdef __amigaos4__
+            goto my_setenv_out;
+#else
             return;
+#endif
         }
         if (!environ[i]) {                 /* does not exist yet */
             environ = (char**)safesysrealloc(environ, (i+2) * sizeof(char*));
@@ -2151,6 +2164,10 @@ Perl_my_setenv(pTHX_ const char *nam, const char *val)
     }
 #endif
   }
+#ifdef __amigaos4__
+my_setenv_out:
+  amigaos4_release_environ(__FUNCTION__);
+#endif
 }
 
 #else /* WIN32 || NETWARE */
@@ -2329,7 +2346,7 @@ vsprintf(char *dest, const char *pat, void *args)
 PerlIO *
 Perl_my_popen_list(pTHX_ const char *mode, int n, SV **args)
 {
-#if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(OS2) && !defined(VMS) && !defined(NETWARE) && !defined(__LIBCATAMOUNT__)
+#if (!defined(DOSISH) || defined(HAS_FORK)) && !defined(OS2) && !defined(VMS) && !defined(NETWARE) && !defined(__LIBCATAMOUNT__) && !defined(__amigaos4__)
     int p[2];
     I32 This, that;
     Pid_t pid;
@@ -2373,7 +2390,7 @@ Perl_my_popen_list(pTHX_ const char *mode, int n, SV **args)
 	/* Close parent's end of error status pipe (if any) */
 	if (did_pipes) {
 	    PerlLIO_close(pp[0]);
-#if defined(HAS_FCNTL) && defined(F_SETFD)
+#if defined(HAS_FCNTL) && defined(F_SETFD) && defined(FD_CLOEXEC)
 	    /* Close error pipe automatically if exec works */
 	    if (fcntl(pp[1], F_SETFD, FD_CLOEXEC) < 0)
                 return NULL;
@@ -2467,8 +2484,8 @@ Perl_my_popen_list(pTHX_ const char *mode, int n, SV **args)
 #endif
 }
 
-    /* VMS' my_popen() is in VMS.c, same with OS/2. */
-#if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS) && !defined(__LIBCATAMOUNT__)
+    /* VMS' my_popen() is in VMS.c, same with OS/2 and AmigaOS 4. */
+#if (!defined(DOSISH) || defined(HAS_FORK)) && !defined(VMS) && !defined(__LIBCATAMOUNT__) && !defined(__amigaos4__)
 PerlIO *
 Perl_my_popen(pTHX_ const char *cmd, const char *mode)
 {
@@ -2688,6 +2705,8 @@ Perl_my_fork(void)
     pid = fork();
 #endif
     return pid;
+#elif defined(__amigaos4__)
+    return amigaos_fork();
 #else
     /* this "canna happen" since nothing should be calling here if !HAS_FORK */
     Perl_croak_nocontext("fork() not available");
@@ -2887,7 +2906,7 @@ Perl_rsignal_restore(pTHX_ int signo, Sigsave_t *save)
 #endif /* !PERL_MICRO */
 
     /* VMS' my_pclose() is in VMS.c; same with OS/2 */
-#if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS) && !defined(__LIBCATAMOUNT__)
+#if (!defined(DOSISH) || defined(HAS_FORK)) && !defined(VMS) && !defined(__LIBCATAMOUNT__) && !defined(__amigaos4__)
 I32
 Perl_my_pclose(pTHX_ PerlIO *ptr)
 {
@@ -3047,7 +3066,10 @@ S_pidgone(pTHX_ Pid_t pid, int status)
 }
 #endif
 
-#if defined(OS2)
+#if defined(OS2) || defined(__amigaos4__)
+#  if defined(__amigaos4__) && defined(pclose)
+#    undef pclose
+#  endif
 int pclose();
 #ifdef HAS_FORK
 int					/* Cannot prototype with I32
@@ -3947,7 +3969,7 @@ return FALSE
 
 =for apidoc getcwd_sv
 
-Fill the sv with current working directory
+Fill C<sv> with current working directory
 
 =cut
 */
@@ -4378,7 +4400,7 @@ Perl_my_socketpair (int family, int type, int protocol, int fd[2]) {
 Dummy routine which "shares" an SV when there is no sharing module present.
 Or "locks" it.  Or "unlocks" it.  In other
 words, ignores its single SV argument.
-Exists to avoid test for a NULL function pointer and because it could
+Exists to avoid test for a C<NULL> function pointer and because it could
 potentially warn under some level of strict-ness.
 
 =cut
@@ -4397,7 +4419,7 @@ Perl_sv_nosharing(pTHX_ SV *sv)
 
 Dummy routine which reports that object can be destroyed when there is no
 sharing module present.  It ignores its single SV argument, and returns
-'true'.  Exists to avoid test for a NULL function pointer and because it
+'true'.  Exists to avoid test for a C<NULL> function pointer and because it
 could potentially warn under some level of strict-ness.
 
 =cut
@@ -4528,7 +4550,11 @@ Perl_seed(pTHX)
     * if there isn't enough entropy available.  You can compile with
     * PERL_RANDOM_DEVICE to it if you'd prefer Perl to block until there
     * is enough real entropy to fill the seed. */
-#  define PERL_RANDOM_DEVICE "/dev/urandom"
+#  ifdef __amigaos4__
+#    define PERL_RANDOM_DEVICE "RANDOM:SIZE=4"
+#  else
+#    define PERL_RANDOM_DEVICE "/dev/urandom"
+#  endif
 #endif
     fd = PerlLIO_open(PERL_RANDOM_DEVICE, 0);
     if (fd != -1) {
@@ -4946,18 +4972,18 @@ Perl_my_sprintf(char *buffer, const char* pat, ...)
 /*
 =for apidoc quadmath_format_single
 
-quadmath_snprintf() is very strict about its format string and will
-fail, returning -1, if the format is invalid.  It acccepts exactly
+C<quadmath_snprintf()> is very strict about its C<format> string and will
+fail, returning -1, if the format is invalid.  It accepts exactly
 one format spec.
 
-quadmath_format_single() checks that the intended single spec looks
+C<quadmath_format_single()> checks that the intended single spec looks
 sane: begins with C<%>, has only one C<%>, ends with C<[efgaEFGA]>,
 and has C<Q> before it.  This is not a full "printf syntax check",
 just the basics.
 
 Returns the format if it is valid, NULL if not.
 
-quadmath_format_single() can and will actually patch in the missing
+C<quadmath_format_single()> can and will actually patch in the missing
 C<Q>, if necessary.  In this case it will return the modified copy of
 the format, B<which the caller will need to free.>
 
@@ -4995,18 +5021,18 @@ Perl_quadmath_format_single(const char* format)
 /*
 =for apidoc quadmath_format_needed
 
-quadmath_format_needed() returns true if the format string seems to
-contain at least one non-Q-prefixed %[efgaEFGA] format specifier,
+C<quadmath_format_needed()> returns true if the C<format> string seems to
+contain at least one non-Q-prefixed C<%[efgaEFGA]> format specifier,
 or returns false otherwise.
 
 The format specifier detection is not complete printf-syntax detection,
 but it should catch most common cases.
 
 If true is returned, those arguments B<should> in theory be processed
-with quadmath_snprintf(), but in case there is more than one such
+with C<quadmath_snprintf()>, but in case there is more than one such
 format specifier (see L</quadmath_format_single>), and if there is
 anything else beyond that one (even just a single byte), they
-B<cannot> be processed because quadmath_snprintf() is very strict,
+B<cannot> be processed because C<quadmath_snprintf()> is very strict,
 accepting only one format spec, and nothing else.
 In this case, the code should probably fail.
 
@@ -6129,10 +6155,10 @@ static void atos_symbolize(atos_context* ctx,
 =for apidoc get_c_backtrace
 
 Collects the backtrace (aka "stacktrace") into a single linear
-malloced buffer, which the caller B<must> Perl_free_c_backtrace().
+malloced buffer, which the caller B<must> C<Perl_free_c_backtrace()>.
 
-Scans the frames back by depth + skip, then drops the skip innermost,
-returning at most depth frames.
+Scans the frames back by S<C<depth + skip>>, then drops the C<skip> innermost,
+returning at most C<depth> frames.
 
 =cut
 */
@@ -6378,8 +6404,8 @@ Deallocates a backtrace received from get_c_bracktrace.
 /*
 =for apidoc get_c_backtrace_dump
 
-Returns a SV a dump of |depth| frames of the call stack, skipping
-the |skip| innermost ones.  depth of 20 is usually enough.
+Returns a SV containing a dump of C<depth> frames of the call stack, skipping
+the C<skip> innermost ones.  C<depth> of 20 is usually enough.
 
 The appended output looks like:
 
@@ -6390,10 +6416,10 @@ The appended output looks like:
 
 The fields are tab-separated.  The first column is the depth (zero
 being the innermost non-skipped frame).  In the hex:offset, the hex is
-where the program counter was in S_parse_body, and the :offset (might
-be missing) tells how much inside the S_parse_body the program counter was.
+where the program counter was in C<S_parse_body>, and the :offset (might
+be missing) tells how much inside the C<S_parse_body> the program counter was.
 
-The util.c:1716 is the source code file and line number.
+The C<util.c:1716> is the source code file and line number.
 
 The F</usr/bin/perl> is obvious (hopefully).
 
@@ -6461,7 +6487,7 @@ Perl_get_c_backtrace_dump(pTHX_ int depth, int skip)
 /*
 =for apidoc dump_c_backtrace
 
-Dumps the C backtrace to the given fp.
+Dumps the C backtrace to the given C<fp>.
 
 Returns true if a backtrace could be retrieved, false if not.
 

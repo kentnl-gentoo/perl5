@@ -17,6 +17,60 @@ Consult your favorite dictionary for details.
 
 =head1 EPIGRAPHS
 
+=head2 v5.23.2 - Blind Guardian, "Skalds and Shadows"
+
+L<Announced on 2015-08-20 by Matthew Horsfall|http://www.nntp.perl.org/group/perl.perl5.porters/2015/08/msg230298.html>
+
+  Would you believe in a night like this
+  A night like this, when visions come true
+  Would you believe in a tale like this
+  A lay of bliss, praise in the old lore
+  Come to the blazing fire and
+
+  See me in the shadows
+  See me in the shadows
+  Songs I will sing
+  Of runes and rings
+  Just hand me my harp
+  This night turns into myth
+  Nothing seems real
+  You soon will feel
+  The world we live in is another skald's
+  Dream in the shadows
+  Dream in the shadows
+
+  Do you believe there is sense in it
+  Is it truth or myth?
+  They´re one in my rhymes
+  Nobody knows the meaning behind
+  The weaver's line
+  Well nobody else but the Norns can
+  See through the blazing fires of time and
+  All things will proceed as the
+  Child of the hallowed
+  Will speak to you now
+
+  See me in the shadows
+  See me in the shadows
+  Songs I will sing of tribes and kings
+  The carrion bird and the hall of the slain
+  Nothing seems real
+  You soon will feel
+  The world we live in is another skald´s
+  Dream in the shadows
+  Dream in the shadows
+
+  Do not fear for my reason
+  There's nothing to hide
+  How bitter your treason
+  How bitter the lie
+  Remember the runes and remember the light
+  All I ever want is to be at your side
+  We'll gladden the raven now I will
+  Run through the blazing fires
+  That's my choice
+  Cause things shall proceed as foreseen
+
 =head2 v5.23.1 - Elizabeth Haydon, "The Assassin King"
 
 L<Announced on 2015-07-20 by Matthew Horsfall|http://www.nntp.perl.org/group/perl.perl5.porters/2015/07/msg229413.html>
@@ -382,6 +436,98 @@ L<Announced on 2014-05-27 by Ricardo Signes|http://www.nntp.perl.org/group/perl.
     From the burning brow,
   Till the work its master honour.
   Blessing comes from Heaven’s Donor.
+
+=head2 v5.20.3 - Elias Lönnrot, trans. Keith Bosley, "The Kalevala", Canto 42: Stealing the Sampo
+
+L<Announced on 2015-09-12 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2015/09/msg230945.html>
+
+  Steady old Väinämöinen
+  uttered a word and spoke thus:
+  'No lilting on the waters
+  and no singing on the waves!
+    Song keeps you lazy
+    tales delay rowing.
+  Precious day would pass and night
+  would overtake us midway
+    on these wide waters
+    upon these vast waves.'
+
+  The wanton Lemminkäinen
+  uttered a word and spoke thus:
+  'The time will pass anyway
+    the fair day will flee
+  and the night will come panting
+  and the twilight will steal in
+  if you don't sing while you live
+    nor hum in this world.'
+
+=head2 v5.20.3-RC2 - Anon., trans. Malcolm C. Lyons, "The Story of Abu Muhammad the Idle and the Marvels He Encountered with the Ape As Well As the Marvels of the Seas and Islands", from "Tales of the Marvellous and News of the Strange"
+
+L<Announced on 2015-08-29 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2015/08/msg230544.html>
+
+'I fled from Basra, sad and tearful, with no idea where I was going,
+and I was reciting these lines:
+
+  The pain of parting makes me melt away,
+  As lovers do when those they love are harsh.
+  I wonder at the patience that I showed
+  When I had lost my love, for that was wonderful.
+  Beloved, do you know that since you left,
+  I have remained confused in misery.
+
+I then heard a voice that said: "Damn you, have you no fear of
+Almighty God that you hand over a girl to an unbelieving 'ifrit?"  I
+walked for a time amongst the palm-trees until I caught sight of a
+person, whom I approached.  When I asked him who he was he said: "I
+am one of the jinn who were converted to Islam at the hands of 'Ali
+ibn Abi Talib, may God ennoble him."  "How can I get to my wife?" I
+asked him, and he said: "Wretched fellow, you had a bird which you
+allowed to fly away and now you want to fly after it."  But he
+added: "Follow this road with God's blessing all night until dawn
+and then by the shore you will see a huge cave in which there is an
+idol made of white stone.  You must drink of the water that there is
+coming out of the cave and smear your face with its mud.  Stay there
+and a barge will pass you as you stand opposite the statue.  Various
+different creatures will emerge, heads without bodies and bodies
+without heads, and they will prostrate themselves in adoration to
+the idol rather than to Almighty God.  When you see that, embark on
+the barge and cross to the other bank and walk along it until
+sunset.  On a high point you will see a castle built of bricks of
+gold and silver.  That is where your 'ifrit will be.  I have now
+told you about this, so goodbye."
+
+=head2 v5.20.3-RC1 - Anon., trans. Malcolm C. Lyons, "The Story of Abu Muhammad the Idle and the Marvels He Encountered with the Ape As Well As the Marvels of the Seas and Islands", from "Tales of the Marvellous and News of the Strange"
+
+L<Announced on 2015-08-22 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2015/08/msg230359.html>
+
+'On the night of the wedding the ape came to sit in front of me and
+asked me what I intended to do.  "Whatever you tell me," I replied,
+and he said: "Take care not to covet the girl, or I shall come back
+and burn you up and leave you as a lesson for those who can learn."
+I agreed to this and when evening came I found the world full of
+candles and torches burning in holders of gold and silver.  There
+were servants and serving girls, and everyone who saw me
+congratulated me on my good fortune, as there was no girl on the
+face of the earth more beautiful than my bride.
+[...]
+'Next morning I went out to the market, and people went in and asked
+her how the night had been.  "He never looked up at me," she told
+them.  Then, when it was afternoon, I went to my house, where the
+ape was sitting by the door.  "Tell me what you did," it said, and I
+told it: "By God, I did not learn and do not know whether this was a
+man or a girl."  "That's what I want," it said.
+[...]
+'On the second night my bride was brought to me, after which the
+servants left her and went away.  She fell asleep, and, while she
+was sleeping, I killed the cock, wrapped it in the cloth and put the
+four poles from the couch over it.  Suddenly there was a huge crash
+like a peal of thunder and a fiery 'ifrit swooped on the girl.  I
+fainted at the sight and when I recovered I heard a voice saying:
+"By the Lord of the Ka'ba, the girl has been carried off!" and there
+was a sound like the rustling of wind and bitter weeping.  At this I
+shed tears, struck my head and was filled with regret when it was no
+longer of any use, for to me the whole world was worth no more than
+a bean.
 
 =head2 v5.20.2 - Jonathan "Jonti" Picking, L<"Magical Trevor"|http://www.weebls-stuff.com/other-toons/video/magical-trevor.html>
 

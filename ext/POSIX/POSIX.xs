@@ -1366,7 +1366,7 @@ char *tzname[] = { "" , "" };
 #else
 
 #  ifndef HAS_MKFIFO
-#    if defined(OS2)
+#    if defined(OS2) || defined(__amigaos4__)
 #      define mkfifo(a,b) not_here("mkfifo")
 #    else	/* !( defined OS2 ) */
 #      ifndef mkfifo
@@ -1382,7 +1382,9 @@ char *tzname[] = { "" , "" };
 #  ifdef HAS_UNAME
 #    include <sys/utsname.h>
 #  endif
-#  include <sys/wait.h>
+#  ifndef __amigaos4__
+#    include <sys/wait.h>
+#  endif
 #  ifdef I_UTIME
 #    include <utime.h>
 #  endif
@@ -1648,8 +1650,10 @@ restore_sigmask(pTHX_ SV *osset_sv)
       * supposed to return -1 from sigaction unless the disposition
       * was unaffected.
       */
+#if !(defined(__amigaos4__) && defined(__NEWLIB__))
      sigset_t *ossetp = (sigset_t *) SvPV_nolen( osset_sv );
      (void)sigprocmask(SIG_SETMASK, ossetp, (sigset_t *)0);
+#endif
 }
 
 static void *
@@ -2265,6 +2269,9 @@ setlocale(category, locale = 0)
 #else
 	retval = setlocale(category, locale);
 #endif
+        DEBUG_L(PerlIO_printf(Perl_debug_log,
+            "%s:%d: %s\n", __FILE__, __LINE__,
+                _setlocale_debug_string(category, locale, retval)));
 	if (! retval) {
             /* Should never happen that a query would return an error, but be
              * sure and reset to C locale */
@@ -2294,8 +2301,12 @@ setlocale(category, locale = 0)
 	    {
 		char *newctype;
 #ifdef LC_ALL
-		if (category == LC_ALL)
+		if (category == LC_ALL) {
 		    newctype = setlocale(LC_CTYPE, NULL);
+                    DEBUG_Lv(PerlIO_printf(Perl_debug_log,
+                        "%s:%d: %s\n", __FILE__, __LINE__,
+                        _setlocale_debug_string(LC_CTYPE, NULL, newctype)));
+                }
 		else
 #endif
 		    newctype = RETVAL;
@@ -2311,8 +2322,12 @@ setlocale(category, locale = 0)
 	    {
 		char *newcoll;
 #ifdef LC_ALL
-		if (category == LC_ALL)
+		if (category == LC_ALL) {
 		    newcoll = setlocale(LC_COLLATE, NULL);
+                    DEBUG_Lv(PerlIO_printf(Perl_debug_log,
+                        "%s:%d: %s\n", __FILE__, __LINE__,
+                        _setlocale_debug_string(LC_COLLATE, NULL, newcoll)));
+                }
 		else
 #endif
 		    newcoll = RETVAL;
@@ -2328,8 +2343,12 @@ setlocale(category, locale = 0)
 	    {
 		char *newnum;
 #ifdef LC_ALL
-		if (category == LC_ALL)
+		if (category == LC_ALL) {
 		    newnum = setlocale(LC_NUMERIC, NULL);
+                    DEBUG_Lv(PerlIO_printf(Perl_debug_log,
+                        "%s:%d: %s\n", __FILE__, __LINE__,
+                        _setlocale_debug_string(LC_NUMERIC, NULL, newnum)));
+                }
 		else
 #endif
 		    newnum = RETVAL;
@@ -2978,7 +2997,7 @@ sigaction(sig, optaction, oldaction = 0)
 	SV *			optaction
 	POSIX::SigAction	oldaction
     CODE:
-#if defined(WIN32) || defined(NETWARE)
+#if defined(WIN32) || defined(NETWARE) || (defined(__amigaos4__) && defined(__NEWLIB__))
 	RETVAL = not_here("sigaction");
 #else
 # This code is really grody because we're trying to make the signal
@@ -3168,7 +3187,11 @@ sigpending(sigset)
     ALIAS:
 	sigsuspend = 1
     CODE:
+#ifdef __amigaos4__
+	RETVAL = not_here("sigpending");
+#else
 	RETVAL = ix ? sigsuspend(sigset) : sigpending(sigset);
+#endif
     OUTPUT:
 	RETVAL
     CLEANUP:

@@ -1500,6 +1500,14 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
         }
     }
 #endif /* #if defined(USE_HASH_SEED) || defined(USE_HASH_SEED_EXPLICIT) */
+
+#ifdef __amigaos4__
+    {
+        struct NameTranslationInfo nti;
+        __translate_amiga_to_unix_path_name(&argv[0],&nti); 
+    }
+#endif
+
     PL_origargc = argc;
     PL_origargv = argv;
 
@@ -2515,7 +2523,7 @@ Perl_get_av(pTHX_ const char *name, I32 flags)
 Returns the HV of the specified Perl hash.  C<flags> are passed to
 C<gv_fetchpv>.  If C<GV_ADD> is set and the
 Perl variable does not exist then it will be created.  If C<flags> is zero
-and the variable does not exist then NULL is returned.
+and the variable does not exist then C<NULL> is returned.
 
 =cut
 */
@@ -2589,7 +2597,7 @@ Perl_get_cv(pTHX_ const char *name, I32 flags)
 =for apidoc p||call_argv
 
 Performs a callback to the specified named and package-scoped Perl subroutine 
-with C<argv> (a NULL-terminated array of strings) as arguments.  See
+with C<argv> (a C<NULL>-terminated array of strings) as arguments.  See
 L<perlcall>.
 
 Approximate Perl equivalent: C<&{"$sub_name"}(@$argv)>.
@@ -2820,7 +2828,7 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
 =for apidoc p||eval_sv
 
 Tells Perl to C<eval> the string in the SV.  It supports the same flags
-as C<call_sv>, with the obvious exception of G_EVAL.  See L<perlcall>.
+as C<call_sv>, with the obvious exception of C<G_EVAL>.  See L<perlcall>.
 
 =cut
 */
@@ -3135,10 +3143,10 @@ Perl_moreswitches(pTHX_ const char *s)
 		   s--;
 	      }
 	      PL_rs = newSVpvs("");
-	      SvGROW(PL_rs, (STRLEN)(UNISKIP(rschar) + 1));
+	      SvGROW(PL_rs, (STRLEN)(UVCHR_SKIP(rschar) + 1));
 	      tmps = (U8*)SvPVX(PL_rs);
 	      uvchr_to_utf8(tmps, rschar);
-	      SvCUR_set(PL_rs, UNISKIP(rschar));
+	      SvCUR_set(PL_rs, UVCHR_SKIP(rschar));
 	      SvUTF8_on(PL_rs);
 	 }
 	 else {
@@ -3796,10 +3804,10 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
 		    CopFILE(PL_curcop), Strerror(errno));
     }
     fd = PerlIO_fileno(rsfp);
-#if defined(HAS_FCNTL) && defined(F_SETFD)
+#if defined(HAS_FCNTL) && defined(F_SETFD) && defined(FD_CLOEXEC)
     if (fd >= 0) {
         /* ensure close-on-exec */
-        if (fcntl(fd, F_SETFD, 1) < 0) {
+        if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
             Perl_croak(aTHX_ "Can't open perl script \"%s\": %s\n",
                        CopFILE(PL_curcop), Strerror(errno));
         }

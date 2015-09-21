@@ -11,10 +11,12 @@
  *  http://www.unicode.org/unicode/reports/tr16
  *
  * To summarize, the way it works is:
- * To convert an EBCDIC character to UTF-EBCDIC:
- *  1)	convert to Unicode.  The table in the generated file 'ebcdic_tables.h'
- *      that does this for EBCDIC bytes is PL_e2a (with inverse PL_a2e).  The
- *      'a' stands for ASCII platform, meaning latin1.
+ * To convert an EBCDIC code point to UTF-EBCDIC:
+ *  1)	convert to Unicode.  No conversion is necesary for code points above
+ *      255, as Unicode and EBCDIC are identical in this range.  For smaller
+ *      code points, the conversion is done by lookup in the PL_e2a table (with
+ *      inverse PL_a2e) in the generated file 'ebcdic_tables.h'.  The 'a'
+ *      stands for ASCII platform, meaning 0-255 Unicode.
  *  2)	convert that to a utf8-like string called I8 ('I' stands for
  *	intermediate) with variant characters occupying multiple bytes.  This
  *	step is similar to the utf8-creating step from Unicode, but the details
@@ -131,15 +133,17 @@ END_EXTERN_C
 
 /* EBCDIC-happy ways of converting native code to UTF-8 */
 
-#define NATIVE_TO_LATIN1(ch)            PL_e2a[(U8)(ch)]
-#define LATIN1_TO_NATIVE(ch)            PL_a2e[(U8)(ch)]
+/* Use these when ch is known to be < 256 */
+#define NATIVE_TO_LATIN1(ch)            (__ASSERT_(FITS_IN_8_BITS(ch)) PL_e2a[(U8)(ch)])
+#define LATIN1_TO_NATIVE(ch)            (__ASSERT_(FITS_IN_8_BITS(ch)) PL_a2e[(U8)(ch)])
 
-#define NATIVE_UTF8_TO_I8(ch)           PL_e2utf[(U8)(ch)]
-#define I8_TO_NATIVE_UTF8(ch)           PL_utf2e[(U8)(ch)]
+/* Use these on bytes */
+#define NATIVE_UTF8_TO_I8(b)           (__ASSERT_(FITS_IN_8_BITS(b)) PL_e2utf[(U8)(b)])
+#define I8_TO_NATIVE_UTF8(b)           (__ASSERT_(FITS_IN_8_BITS(b)) PL_utf2e[(U8)(b)])
 
 /* Transforms in wide UV chars */
-#define NATIVE_TO_UNI(ch)        (((ch) > 255) ? (ch) : NATIVE_TO_LATIN1(ch))
-#define UNI_TO_NATIVE(ch)        (((ch) > 255) ? (ch) : LATIN1_TO_NATIVE(ch))
+#define NATIVE_TO_UNI(ch)    (FITS_IN_8_BITS(ch) ? NATIVE_TO_LATIN1(ch) : (ch))
+#define UNI_TO_NATIVE(ch)    (FITS_IN_8_BITS(ch) ? LATIN1_TO_NATIVE(ch) : (ch))
 
 /*
   The following table is adapted from tr16, it shows I8 encoding of Unicode code points.
@@ -167,26 +171,47 @@ END_EXTERN_C
 		         (uv) < 0x400000    ? 5 : \
 		         (uv) < 0x4000000   ? 6 : 7 )
 
+#define OFFUNI_IS_INVARIANT(c) (((UV)(c)) <  0xA0)
 
-#define UNI_IS_INVARIANT(c)		(((UV)(c)) <  0xA0)
+/* It turns out that on EBCDIC platforms, the invariants are the characters
+ * that have ASCII equivalents, plus the C1 controls.  Since the C0 controls
+ * and DELETE are ASCII, this is the same as: (isASCII(uv) || isCNTRL_L1(uv))
+ * */
+#define UVCHR_IS_INVARIANT(uv) cBOOL(FITS_IN_8_BITS(uv)                        \
+   && (PL_charclass[(U8) (uv)] & (_CC_mask(_CC_ASCII) | _CC_mask(_CC_CNTRL))))
 
-/* UTF-EBCDIC semantic macros - transform back into I8 and then compare
+#define UVCHR_SKIP(uv) (UVCHR_IS_INVARIANT(uv)  ? 1 :                       \
+                        (uv) < 0x400            ? 2 :                       \
+		        (uv) < 0x4000           ? 3 :                       \
+		        (uv) < 0x40000          ? 4 :                       \
+		        (uv) < 0x400000         ? 5 :                       \
+		        (uv) < 0x4000000        ? 6 : 7 )
+
+/* UTF-EBCDIC semantic macros - We used to transform back into I8 and then
+ * compare, but now only have to do a single lookup by using a bit in
+ * l1_char_class_tab.h.
  * Comments as to the meaning of each are given at their corresponding utf8.h
  * definitions. */
 
-#define UTF8_IS_START(c)		(NATIVE_UTF8_TO_I8(c) >= 0xC5     \
-                                         && NATIVE_UTF8_TO_I8(c) != 0xE0)
-#define UTF8_IS_CONTINUATION(c)		((NATIVE_UTF8_TO_I8(c) & 0xE0) == 0xA0)
-#define UTF8_IS_CONTINUED(c) 		(NATIVE_UTF8_TO_I8(c) >= 0xA0)
+#define UTF8_IS_START(c)		_generic_isCC(c, _CC_UTF8_IS_START)
+#define UTF8_IS_CONTINUATION(c)		_generic_isCC(c, _CC_UTF8_IS_CONTINUATION)
 
-#define UTF8_IS_DOWNGRADEABLE_START(c)	(NATIVE_UTF8_TO_I8(c) >= 0xC5     \
-                                         && NATIVE_UTF8_TO_I8(c) <= 0xC7)
-/* Saying it this way adds a runtime test, but removes 2 run-time lookups */
-/*#define UTF8_IS_DOWNGRADEABLE_START(c)  ((c) == I8_TO_NATIVE_UTF8(0xC5)     \
-                                         || (c) == I8_TO_NATIVE_UTF8(0xC6)  \
-                                         || (c) == I8_TO_NATIVE_UTF8(0xC7))
-*/
-#define UTF8_IS_ABOVE_LATIN1(c)	(NATIVE_UTF8_TO_I8(c) >= 0xC8)
+/* Equivalent to ! UVCHR_IS_INVARIANT(c) */
+#define UTF8_IS_CONTINUED(c) 		cBOOL(FITS_IN_8_BITS(c)                 \
+   && ! (PL_charclass[(U8) (c)] & (_CC_mask(_CC_ASCII) | _CC_mask(_CC_CNTRL))))
+
+#define UTF8_IS_DOWNGRADEABLE_START(c)   _generic_isCC(c,                       \
+                                              _CC_UTF8_IS_DOWNGRADEABLE_START)
+
+/* Equivalent to (UTF8_IS_START(c) && ! UTF8_IS_DOWNGRADEABLE_START(c))
+ * Makes sure that the START bit is set and the DOWNGRADEABLE bit isn't */
+#define UTF8_IS_ABOVE_LATIN1(c) cBOOL(FITS_IN_8_BITS(c)                         \
+  && ((PL_charclass[(U8) (c)] & ( _CC_mask(_CC_UTF8_IS_START)                   \
+                                 |_CC_mask(_CC_UTF8_IS_DOWNGRADEABLE_START)))   \
+                        == _CC_mask(_CC_UTF8_IS_START)))
+
+#define isUTF8_POSSIBLY_PROBLEMATIC(c)                                          \
+                _generic_isCC(c, _CC_UTF8_START_BYTE_IS_FOR_AT_LEAST_SURROGATE)
 
 /* Can't exceed 7 on EBCDIC platforms */
 #define UTF_START_MARK(len) (0xFF & (0xFE << (7-(len))))
