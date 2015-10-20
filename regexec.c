@@ -1205,10 +1205,10 @@ Perl_re_intuit_start(pTHX_
              * didn't contradict, so just retry the anchored "other"
              * substr */
             DEBUG_EXECUTE_r(PerlIO_printf(Perl_debug_log,
-                "  Found /%s^%s/m, rescanning for anchored from offset %ld (rx_origin now %"IVdf")...\n",
+                "  Found /%s^%s/m, rescanning for anchored from offset %"IVdf" (rx_origin now %"IVdf")...\n",
                 PL_colors[0], PL_colors[1],
-                (long)(rx_origin - strbeg + prog->anchored_offset),
-                (long)(rx_origin - strbeg)
+                (IV)(rx_origin - strbeg + prog->anchored_offset),
+                (IV)(rx_origin - strbeg)
             ));
             goto do_other_substr;
         }
@@ -2065,14 +2065,17 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                 FBC_BOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
                 break;
             case GCB_BOUND:
-                if (s == reginfo->strbeg) { /* GCB always matches at begin and
-                                               end */
-                    if (to_complement ^ cBOOL(reginfo->intuit
-                                                      || regtry(reginfo, &s)))
+                if (s == reginfo->strbeg) {
+                    if (reginfo->intuit || regtry(reginfo, &s))
                     {
                         goto got_it;
                     }
+
+                    /* Didn't match.  Try at the next position (if there is one) */
                     s += (utf8_target) ? UTF8SKIP(s) : 1;
+                    if (UNLIKELY(s >= reginfo->strend)) {
+                        break;
+                    }
                 }
 
                 if (utf8_target) {
@@ -2083,44 +2086,44 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                     while (s < strend) {
                         GCB_enum after = getGCB_VAL_UTF8((U8*) s,
                                                         (U8*) reginfo->strend);
-                        if (to_complement ^ isGCB(before, after)) {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            before = after;
+                        if (   (to_complement ^ isGCB(before, after))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
+                        {
+                            goto got_it;
                         }
+                        before = after;
                         s += UTF8SKIP(s);
                     }
                 }
                 else {  /* Not utf8.  Everything is a GCB except between CR and
                            LF */
                     while (s < strend) {
-                        if (to_complement ^ (UCHARAT(s - 1) != '\r'
-                                             || UCHARAT(s) != '\n'))
+                        if ((to_complement ^ (   UCHARAT(s - 1) != '\r'
+                                              || UCHARAT(s) != '\n'))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
                         {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            s++;
+                            goto got_it;
                         }
+                        s++;
                     }
                 }
 
-                if (to_complement ^ cBOOL(reginfo->intuit || regtry(reginfo, &s))) {
+                /* And, since this is a bound, it can match after the final
+                 * character in the string */
+                if ((reginfo->intuit || regtry(reginfo, &s))) {
                     goto got_it;
                 }
                 break;
 
             case SB_BOUND:
-                if (s == reginfo->strbeg) { /* SB always matches at beginning */
-                    if (to_complement
-                                ^ cBOOL(reginfo->intuit || regtry(reginfo, &s)))
-                    {
+                if (s == reginfo->strbeg) {
+                    if (reginfo->intuit || regtry(reginfo, &s)) {
                         goto got_it;
                     }
-
-                    /* Didn't match.  Go try at the next position */
                     s += (utf8_target) ? UTF8SKIP(s) : 1;
+                    if (UNLIKELY(s >= reginfo->strend)) {
+                        break;
+                    }
                 }
 
                 if (utf8_target) {
@@ -2131,18 +2134,17 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                     while (s < strend) {
                         SB_enum after = getSB_VAL_UTF8((U8*) s,
                                                          (U8*) reginfo->strend);
-                        if (to_complement ^ isSB(before,
-                                                 after,
-                                                 (U8*) reginfo->strbeg,
-                                                 (U8*) s,
-                                                 (U8*) reginfo->strend,
-                                                 utf8_target))
+                        if ((to_complement ^ isSB(before,
+                                                  after,
+                                                  (U8*) reginfo->strbeg,
+                                                  (U8*) s,
+                                                  (U8*) reginfo->strend,
+                                                  utf8_target))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
                         {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            before = after;
+                            goto got_it;
                         }
+                        before = after;
                         s += UTF8SKIP(s);
                     }
                 }
@@ -2150,18 +2152,17 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                     SB_enum before = getSB_VAL_CP((U8) *(s -1));
                     while (s < strend) {
                         SB_enum after = getSB_VAL_CP((U8) *s);
-                        if (to_complement ^ isSB(before,
-                                                 after,
-                                                 (U8*) reginfo->strbeg,
-                                                 (U8*) s,
-                                                 (U8*) reginfo->strend,
-                                                 utf8_target))
+                        if ((to_complement ^ isSB(before,
+                                                  after,
+                                                  (U8*) reginfo->strbeg,
+                                                  (U8*) s,
+                                                  (U8*) reginfo->strend,
+                                                  utf8_target))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
                         {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            before = after;
+                            goto got_it;
                         }
+                        before = after;
                         s++;
                     }
                 }
@@ -2169,9 +2170,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                 /* Here are at the final position in the target string.  The SB
                  * value is always true here, so matches, depending on other
                  * constraints */
-                if (to_complement ^ cBOOL(reginfo->intuit
-                                                      || regtry(reginfo, &s)))
-                {
+                if (reginfo->intuit || regtry(reginfo, &s)) {
                     goto got_it;
                 }
 
@@ -2179,12 +2178,13 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 
             case WB_BOUND:
                 if (s == reginfo->strbeg) {
-                    if (to_complement ^ cBOOL(reginfo->intuit
-                                              || regtry(reginfo, &s)))
-                    {
+                    if (reginfo->intuit || regtry(reginfo, &s)) {
                         goto got_it;
                     }
                     s += (utf8_target) ? UTF8SKIP(s) : 1;
+                    if (UNLIKELY(s >= reginfo->strend)) {
+                        break;
+                    }
                 }
 
                 if (utf8_target) {
@@ -2202,20 +2202,19 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                     while (s < strend) {
                         WB_enum after = getWB_VAL_UTF8((U8*) s,
                                                         (U8*) reginfo->strend);
-                        if (to_complement ^ isWB(previous,
-                                                 before,
-                                                 after,
-                                                 (U8*) reginfo->strbeg,
-                                                 (U8*) s,
-                                                 (U8*) reginfo->strend,
-                                                 utf8_target))
+                        if ((to_complement ^ isWB(previous,
+                                                  before,
+                                                  after,
+                                                  (U8*) reginfo->strbeg,
+                                                  (U8*) s,
+                                                  (U8*) reginfo->strend,
+                                                  utf8_target))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
                         {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            previous = before;
-                            before = after;
+                            goto got_it;
                         }
+                        previous = before;
+                        before = after;
                         s += UTF8SKIP(s);
                     }
                 }
@@ -2224,31 +2223,26 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                     WB_enum before = getWB_VAL_CP((U8) *(s -1));
                     while (s < strend) {
                         WB_enum after = getWB_VAL_CP((U8) *s);
-                        if (to_complement ^ isWB(previous,
-                                                 before,
-                                                 after,
-                                                 (U8*) reginfo->strbeg,
-                                                 (U8*) s,
-                                                 (U8*) reginfo->strend,
-                                                 utf8_target))
+                        if ((to_complement ^ isWB(previous,
+                                                  before,
+                                                  after,
+                                                  (U8*) reginfo->strbeg,
+                                                  (U8*) s,
+                                                  (U8*) reginfo->strend,
+                                                  utf8_target))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
                         {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            previous = before;
-                            before = after;
+                            goto got_it;
                         }
+                        previous = before;
+                        before = after;
                         s++;
                     }
                 }
 
-                if (to_complement ^ cBOOL(reginfo->intuit
-                                          || regtry(reginfo, &s)))
-                {
+                if (reginfo->intuit || regtry(reginfo, &s)) {
                     goto got_it;
                 }
-
-                break;
         }
         break;
 
@@ -3478,7 +3472,7 @@ Perl_regexec_flags(pTHX_ REGEXP * const rx, char *stringarg, char *strend,
 /*
  - regtry - try match at specific point
  */
-STATIC I32			/* 0 failure, 1 success */
+STATIC bool			/* 0 failure, 1 success */
 S_regtry(pTHX_ regmatch_info *reginfo, char **startposp)
 {
     CHECKPOINT lastcp;
@@ -4743,10 +4737,24 @@ S_backup_one_WB(pTHX_ WB_enum * previous, const U8 * const strbeg, U8 ** curpos,
         * to look it up */
     if (*previous != WB_UNKNOWN) {
         wb = *previous;
-        *previous = WB_UNKNOWN;
-        /* XXX Note that doesn't change curpos, and maybe should */
 
-        /* But we always back up over these two types */
+        /* But we need to move backwards by one */
+        if (utf8_target) {
+            *curpos = reghopmaybe3(*curpos, -1, strbeg);
+            if (! *curpos) {
+                *previous = WB_EDGE;
+                *curpos = (U8 *) strbeg;
+            }
+            else {
+                *previous = WB_UNKNOWN;
+            }
+        }
+        else {
+            (*curpos)--;
+            *previous = (*curpos <= strbeg) ? WB_EDGE : WB_UNKNOWN;
+        }
+
+        /* And we always back up over these two types */
         if (wb != WB_Extend && wb != WB_Format) {
             return wb;
         }
@@ -5526,6 +5534,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
             /* FALLTHROUGH */
 
 	case BOUNDL:  /*  /\b/l  */
+        {
+            bool b1, b2;
             _CHECK_AND_WARN_PROBLEMATIC_LOCALE;
 
             if (FLAGS(scan) != TRADITIONAL_BOUND) {
@@ -5538,27 +5548,28 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 
 	    if (utf8_target) {
 		if (locinput == reginfo->strbeg)
-		    ln = isWORDCHAR_LC('\n');
+		    b1 = isWORDCHAR_LC('\n');
 		else {
-                    ln = isWORDCHAR_LC_utf8(reghop3((U8*)locinput, -1,
+                    b1 = isWORDCHAR_LC_utf8(reghop3((U8*)locinput, -1,
                                                         (U8*)(reginfo->strbeg)));
 		}
-                n = (NEXTCHR_IS_EOS)
+                b2 = (NEXTCHR_IS_EOS)
                     ? isWORDCHAR_LC('\n')
                     : isWORDCHAR_LC_utf8((U8*)locinput);
 	    }
 	    else { /* Here the string isn't utf8 */
-		ln = (locinput == reginfo->strbeg)
+		b1 = (locinput == reginfo->strbeg)
                      ? isWORDCHAR_LC('\n')
                      : isWORDCHAR_LC(UCHARAT(locinput - 1));
-                n = (NEXTCHR_IS_EOS)
+                b2 = (NEXTCHR_IS_EOS)
                     ? isWORDCHAR_LC('\n')
                     : isWORDCHAR_LC(nextchr);
 	    }
-            if (to_complement ^ (ln == n)) {
+            if (to_complement ^ (b1 == b2)) {
                 sayNO;
             }
 	    break;
+        }
 
 	case NBOUND:  /*  /\B/   */
             to_complement = 1;
@@ -5575,6 +5586,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
             /* FALLTHROUGH */
 
 	case BOUNDA:  /*  /\b/a  */
+        {
+            bool b1, b2;
 
           bound_ascii_match_only:
             /* Here the string isn't utf8, or is utf8 and only ascii characters
@@ -5586,16 +5599,17 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
              * 2) it is a multi-byte character, in which case the final byte is
              *    never mistakable for ASCII, and so the test will say it is
              *    not a word character, which is the correct answer. */
-            ln = (locinput == reginfo->strbeg)
+            b1 = (locinput == reginfo->strbeg)
                  ? isWORDCHAR_A('\n')
                  : isWORDCHAR_A(UCHARAT(locinput - 1));
-            n = (NEXTCHR_IS_EOS)
+            b2 = (NEXTCHR_IS_EOS)
                 ? isWORDCHAR_A('\n')
                 : isWORDCHAR_A(nextchr);
-            if (to_complement ^ (ln == n)) {
+            if (to_complement ^ (b1 == b2)) {
                 sayNO;
             }
 	    break;
+        }
 
 	case NBOUNDU: /*  /\B/u  */
             to_complement = 1;
@@ -5604,20 +5618,25 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	case BOUNDU:  /*  /\b/u  */
 
           boundu:
-	    if (utf8_target) {
-
+            if (UNLIKELY(reginfo->strbeg >= reginfo->strend)) {
+                match = FALSE;
+            }
+            else if (utf8_target) {
               bound_utf8:
                 switch((bound_type) FLAGS(scan)) {
                     case TRADITIONAL_BOUND:
-                        ln = (locinput == reginfo->strbeg)
+                    {
+                        bool b1, b2;
+                        b1 = (locinput == reginfo->strbeg)
                              ? 0 /* isWORDCHAR_L1('\n') */
                              : isWORDCHAR_utf8(reghop3((U8*)locinput, -1,
                                                                 (U8*)(reginfo->strbeg)));
-                        n = (NEXTCHR_IS_EOS)
+                        b2 = (NEXTCHR_IS_EOS)
                             ? 0 /* isWORDCHAR_L1('\n') */
                             : isWORDCHAR_utf8((U8*)locinput);
-                        match = cBOOL(ln != n);
+                        match = cBOOL(b1 != b2);
                         break;
+                    }
                     case GCB_BOUND:
                         if (locinput == reginfo->strbeg || NEXTCHR_IS_EOS) {
                             match = TRUE; /* GCB always matches at begin and
@@ -5679,14 +5698,17 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	    else {  /* Not utf8 target */
                 switch((bound_type) FLAGS(scan)) {
                     case TRADITIONAL_BOUND:
-                        ln = (locinput == reginfo->strbeg)
+                    {
+                        bool b1, b2;
+                        b1 = (locinput == reginfo->strbeg)
                             ? 0 /* isWORDCHAR_L1('\n') */
                             : isWORDCHAR_L1(UCHARAT(locinput - 1));
-                        n = (NEXTCHR_IS_EOS)
+                        b2 = (NEXTCHR_IS_EOS)
                             ? 0 /* isWORDCHAR_L1('\n') */
                             : isWORDCHAR_L1(nextchr);
-                        match = cBOOL(ln != n);
+                        match = cBOOL(b1 != b2);
                         break;
+                    }
 
                     case GCB_BOUND:
                         if (locinput == reginfo->strbeg || NEXTCHR_IS_EOS) {
@@ -6529,7 +6551,9 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	    break;
 
         case ACCEPT:  /*  (*ACCEPT)  */
-            if (ARG(scan)){
+            if (scan->flags)
+                sv_yes_mark = MUTABLE_SV(rexi->data->data[ ARG( scan ) ]);
+            if (ARG2L(scan)){
                 regnode *cursor;
                 for (cursor=scan;
                      cursor && OP(cursor)!=END; 
@@ -7001,8 +7025,9 @@ NULL
 	    NOT_REACHED; /* NOTREACHED */
 
         case CUTGROUP:  /*  /(*THEN)/  */
-            sv_yes_mark = st->u.mark.mark_name = scan->flags ? NULL :
-                MUTABLE_SV(rexi->data->data[ ARG( scan ) ]);
+            sv_yes_mark = st->u.mark.mark_name = scan->flags
+                ? MUTABLE_SV(rexi->data->data[ ARG( scan ) ])
+                : NULL;
             PUSH_STATE_GOTO(CUTGROUP_next, next, locinput);
             /* NOTREACHED */
             NOT_REACHED; /* NOTREACHED */
@@ -7699,7 +7724,7 @@ NULL
 	    /* FALLTHROUGH */
 
 	case PRUNE:   /*  (*PRUNE)   */
-	    if (!scan->flags)
+            if (scan->flags)
 	        sv_yes_mark = sv_commit = MUTABLE_SV(rexi->data->data[ ARG( scan ) ]);
 	    PUSH_STATE_GOTO(COMMIT_next, next, locinput);
             /* NOTREACHED */
@@ -7708,9 +7733,21 @@ NULL
 	case COMMIT_next_fail:
 	    no_final = 1;    
 	    /* FALLTHROUGH */	    
+            sayNO;
+            NOT_REACHED; /* NOTREACHED */
 
 	case OPFAIL:   /* (*FAIL)  */
-	    sayNO;
+            if (scan->flags)
+                sv_commit = MUTABLE_SV(rexi->data->data[ ARG( scan ) ]);
+            if (logical) {
+                /* deal with (?(?!)X|Y) properly,
+                 * make sure we trigger the no branch
+                 * of the trailing IFTHEN structure*/
+                sw= 0;
+                break;
+            } else {
+                sayNO;
+            }
             /* NOTREACHED */
 	    NOT_REACHED; /* NOTREACHED */
 
@@ -7754,7 +7791,7 @@ NULL
             NOT_REACHED; /* NOTREACHED */
 
         case SKIP:  /*  (*SKIP)  */
-            if (scan->flags) {
+            if (!scan->flags) {
                 /* (*SKIP) : if we fail we cut here*/
                 ST.mark_name = NULL;
                 ST.mark_loc = locinput;

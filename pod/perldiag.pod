@@ -868,13 +868,6 @@ found in the PATH did not have correct permissions.
 (F) A string of a form C<CORE::word> was given to prototype(), but there
 is no builtin with the name C<word>.
 
-=item Can't find %s character property "%s"
-
-(F) You used C<\p{}> or C<\P{}> but the character property by that name
-could not be found.  Maybe you misspelled the name of the property?
-See L<perluniprops/Properties accessible through \p{} and \P{}>
-for a complete list of available official properties.
-
 =item Can't find label %s
 
 (F) You said to goto a label that isn't mentioned anywhere that it's
@@ -907,13 +900,19 @@ L<perlop> for the full details on here-documents.
 
 =item Can't find Unicode property definition "%s"
 
-(F) You may have tried to use C<\p> which means a Unicode
-property (for example C<\p{Lu}> matches all uppercase
-letters).  If you did mean to use a Unicode property, see
+=item Can't find Unicode property definition "%s" in regex; marked by <-- HERE in m/%s/
+
+(F) The named property which you specified via C<\p> or C<\P> is not one
+known to Perl.  Perhaps you misspelled the name?  See
 L<perluniprops/Properties accessible through \p{} and \P{}>
-for a complete list of available properties.  If you didn't
-mean to use a Unicode property, escape the C<\p>, either by
-C<\\p> (just the C<\p>) or by C<\Q\p> (the rest of the string, or
+for a complete list of available official
+properties.  If it is a
+L<user-defined property|perlunicode/User-Defined Character Properties>
+it must have been defined by the time the regular expression is
+matched.
+
+If you didn't mean to use a Unicode property, escape the C<\p>, either
+by C<\\p> (just the C<\p>) or by C<\Q\p> (the rest of the string, or
 until C<\E>).
 
 =item Can't fork: %s
@@ -1108,7 +1107,7 @@ to change it, such as with an auto-increment.
 (P) The internal routine that does assignment to a substr() was handed
 a NULL.
 
-=item Can't modify non-lvalue subroutine call
+=item Can't modify non-lvalue subroutine call of &%s
 
 (F) Subroutines meant to be used in lvalue context should be declared as
 such.  See L<perlsub/"Lvalue subroutines">.
@@ -1477,6 +1476,13 @@ Perhaps you need to copy the value to a temporary, and repeat that.
 Note that ASCII characters that don't map to control characters are
 discouraged, and will generate the warning (when enabled)
 L</""\c%c" is more clearly written simply as "%s"">.
+
+=item Character following \%c must be '{' or a single-character Unicode property name in regex; marked by <-- HERE in m/%s/
+
+(F) (In the above the C<%c> is replaced by either C<p> or C<P>.)  You
+specified something that isn't a legal Unicode property name.  Most
+Unicode properties are specified by C<\p{...}>.  But if the name is a
+single character one, the braces may be omitted.
 
 =item Character in 'C' format wrapped in pack
 
@@ -2542,6 +2548,15 @@ L<C<(?I<PARNO>)>|perlre/(?PARNO) (?-PARNO) (?+PARNO) (?R) (?0)>.
 
 (X) The PERL5OPT environment variable may only be used to set the
 following switches: B<-[CDIMUdmtw]>.
+
+=item Illegal user-defined property name
+
+(F) You specified a Unicode-like property name in a regular expression
+pattern (using C<\p{}> or C<\P{}>) that Perl knows isn't an official
+Unicode property, and was likely meant to be a user-defined property
+name, but it can't be one of those, as they must begin with either C<In>
+or C<Is>.  Check the spelling.  See also
+L</Can't find Unicode property definition "%s">.
 
 =item Ill-formed CRTL environ value "%s"
 
@@ -4813,16 +4828,6 @@ port.  One can easily disable this by appropriate sighandlers, see
 L<perlipc/"Signals">.  See also "Process terminated by SIGTERM/SIGINT"
 in L<perlos2>.
 
-=item Property '%s' is unknown in regex; marked by S<<-- HERE> in m/%s/
-
-(F) The named property which you specified via C<\p> or C<\P> is not one
-known to Perl.  Perhaps you misspelled the name?  See
-L<perluniprops/Properties accessible through \p{} and \P{}>
-for a complete list of available official
-properties.  If it is a L<user-defined property|perlunicode/User-Defined Character Properties>
-it must have been defined by the time the regular expression is
-compiled.
-
 =item Prototype after '%c' for %s : %s
 
 (W illegalproto) A character follows % or @ in a prototype.  This is
@@ -6741,12 +6746,6 @@ for historical reasons.
 (W io) A filehandle represents an opened file, and when you opened the file
 it already went past any symlink you are presumably trying to look for.
 The operation returned C<undef>.  Use a filename instead.
-
-=item Use of my $_ is experimental
-
-(S experimental::lexical_topic) Lexical $_ is an experimental feature and
-its behavior may change or even be removed in any future release of perl.
-See the explanation under L<perlvar/$_>.
 
 =item Use of %s on a handle without * is deprecated
 

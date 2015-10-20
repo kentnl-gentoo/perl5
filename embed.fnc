@@ -1374,7 +1374,7 @@ Apd	|I32	|sv_true	|NULLOK SV *const sv
 sd	|void	|sv_add_arena	|NN char *const ptr|const U32 size \
 				|const U32 flags
 #endif
-Apdn	|int	|sv_backoff	|NN SV *const sv
+Apdn	|void	|sv_backoff	|NN SV *const sv
 Apd	|SV*	|sv_bless	|NN SV *const sv|NN HV *const stash
 #if defined(PERL_DEBUG_READONLY_COW)
 p	|void	|sv_buf_to_ro	|NN SV *sv
@@ -2162,13 +2162,14 @@ Es	|U32	|join_exact	|NN RExC_state_t *pRExC_state \
 				|NN regnode *scan|NN UV *min_subtract  \
 				|NN bool *unfolded_multi_char          \
 				|U32 flags|NULLOK regnode *val|U32 depth
-EsRn	|char *	|regpatws	|NN RExC_state_t *pRExC_state \
-				|NN char *p|const bool recognize_comment
 Ei	|void   |alloc_maybe_populate_EXACT|NN RExC_state_t *pRExC_state \
 				|NN regnode *node|NN I32 *flagp|STRLEN len \
 				|UV code_point|bool downgradable
 Ein	|U8   |compute_EXACTish|NN RExC_state_t *pRExC_state
-Es	|char *	|nextchar	|NN RExC_state_t *pRExC_state
+Es	|void	|nextchar	|NN RExC_state_t *pRExC_state
+Es	|void	|skip_to_be_ignored_text|NN RExC_state_t *pRExC_state  \
+				|NN char ** p			    \
+				|const bool force_to_xmod
 Ein	|char *	|reg_skipcomment|NN RExC_state_t *pRExC_state|NN char * p
 Es	|void	|scan_commit	|NN const RExC_state_t *pRExC_state \
 				|NN struct scan_data_t *data        \
@@ -2259,7 +2260,7 @@ ERs	|I32	|regrepeat	|NN regexp *prog|NN char **startposp \
 				|NN regmatch_info *const reginfo \
 				|I32 max \
 				|int depth
-ERs	|I32	|regtry		|NN regmatch_info *reginfo|NN char **startposp
+ERs	|bool	|regtry		|NN regmatch_info *reginfo|NN char **startposp
 ERs	|bool	|reginclass	|NULLOK regexp * const prog  \
 				|NN const regnode * const n  \
 				|NN const U8 * const p       \
@@ -2606,8 +2607,6 @@ Apd	|PADOFFSET|pad_findmy_pv|NN const char* name|U32 flags
 Apd	|PADOFFSET|pad_findmy_sv|NN SV* name|U32 flags
 ApdD	|PADOFFSET|find_rundefsvoffset	|
 Apd	|SV*	|find_rundefsv	|
-: Used in pp.c
-p	|SV*	|find_rundefsv2	|NN CV *cv|U32 seq
 #if defined(PERL_IN_PAD_C)
 sd	|PADOFFSET|pad_findlex	|NN const char *namepv|STRLEN namelen|U32 flags \
 				|NN const CV* cv|U32 seq|int warn \

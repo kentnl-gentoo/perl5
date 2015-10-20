@@ -93,8 +93,8 @@
 #define	INSUBP                	79	/* 0x4f Whether we are in a specific recurse. */
 #define	DEFINEP               	80	/* 0x50 Never execute directly. */
 #define	ENDLIKE               	81	/* 0x51 Used only for the type field of verbs */
-#define	OPFAIL                	82	/* 0x52 Same as (?!) */
-#define	ACCEPT                	83	/* 0x53 Accepts the current matched string. */
+#define	OPFAIL                	82	/* 0x52 Same as (?!), but with verb arg */
+#define	ACCEPT                	83	/* 0x53 Accepts the current matched string, with verbar */
 #define	VERB                  	84	/* 0x54 Used only for the type field of verbs */
 #define	PRUNE                 	85	/* 0x55 Pattern fails at this startpoint if no-backtracking through this */
 #define	MARKPOINT             	86	/* 0x56 Push the current location for rollback by cut. */
@@ -291,9 +291,10 @@ EXTCONST U8 PL_regkind[] = {
 };
 #endif
 
+#ifdef REG_COMP_C
+
 /* regarglen[] - How large is the argument part of the node (in regnodes) */
 
-#ifdef REG_COMP_C
 static const U8 regarglen[] = {
 	0,                                   	/* END          */
 	0,                                   	/* SUCCEED      */
@@ -377,8 +378,8 @@ static const U8 regarglen[] = {
 	EXTRA_SIZE(struct regnode_1),        	/* INSUBP       */
 	EXTRA_SIZE(struct regnode_1),        	/* DEFINEP      */
 	0,                                   	/* ENDLIKE      */
-	0,                                   	/* OPFAIL       */
-	EXTRA_SIZE(struct regnode_1),        	/* ACCEPT       */
+	EXTRA_SIZE(struct regnode_1),        	/* OPFAIL       */
+	EXTRA_SIZE(struct regnode_2L),       	/* ACCEPT       */
 	EXTRA_SIZE(struct regnode_1),        	/* VERB         */
 	EXTRA_SIZE(struct regnode_1),        	/* PRUNE        */
 	EXTRA_SIZE(struct regnode_1),        	/* MARKPOINT    */
@@ -491,6 +492,7 @@ static const char reg_off_by_arg[] = {
 };
 
 #endif /* REG_COMP_C */
+
 
 /* reg_name[] - Opcode/state names in string form, for debugging */
 

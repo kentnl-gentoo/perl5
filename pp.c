@@ -88,18 +88,18 @@ PP(pp_padav)
     gimme = GIMME_V;
     if (gimme == G_ARRAY) {
         /* XXX see also S_pushav in pp_hot.c */
-	const Size_t maxarg = AvFILL(MUTABLE_AV(TARG)) + 1;
+	const SSize_t maxarg = AvFILL(MUTABLE_AV(TARG)) + 1;
 	EXTEND(SP, maxarg);
 	if (SvMAGICAL(TARG)) {
-	    Size_t i;
+	    SSize_t i;
 	    for (i=0; i < maxarg; i++) {
 		SV * const * const svp = av_fetch(MUTABLE_AV(TARG), i, FALSE);
 		SP[i+1] = (svp) ? *svp : &PL_sv_undef;
 	    }
 	}
 	else {
-	    PADOFFSET i;
-	    for (i=0; i < (PADOFFSET)maxarg; i++) {
+	    SSize_t i;
+	    for (i=0; i < maxarg; i++) {
 		SV * const sv = AvARRAY((const AV *)TARG)[i];
 		SP[i+1] = sv ? sv : &PL_sv_undef;
 	    }
@@ -762,7 +762,8 @@ PP(pp_trans)
 	PUSHs(newsv);
     }
     else {
-	mPUSHi(do_trans(sv));
+	I32 i = do_trans(sv);
+	mPUSHi(i);
     }
     RETURN;
 }
@@ -1393,7 +1394,17 @@ PP(pp_multiply)
       NV right = SvNV_nomg(svr);
       NV left  = SvNV_nomg(svl);
       (void)POPs;
+#if defined(__sgi) && defined(USE_LONG_DOUBLE) && LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN && NVSIZE == 16
+      {
+          NV result = left * right;
+          if (Perl_isinf(result)) {
+              Zero((U8*)&result + 8, 8, U8);
+          }
+          SETn( result );
+      }
+#else
       SETn( left * right );
+#endif
       RETURN;
     }
 }
@@ -1718,14 +1729,15 @@ PP(pp_repeat)
 
     if (GIMME_V == G_ARRAY && PL_op->op_private & OPpREPEAT_DOLIST) {
 	dMARK;
-	const Size_t items = SP - MARK;
+	const SSize_t items = SP - MARK;
 	const U8 mod = PL_op->op_flags & OPf_MOD;
 
 	if (count > 1) {
-	    Size_t max;
+	    SSize_t max;
 
-            if (  items > MEM_SIZE_MAX / (UV)count   /* max would overflow */
-               || items > (U32)I32_MAX / sizeof(SV *) /* repeatcpy would overflow */
+            if (  items > SSize_t_MAX / count   /* max would overflow */
+                                                /* repeatcpy would overflow */
+               || items > I32_MAX / (I32)sizeof(SV *)
             )
                Perl_croak(aTHX_ "%s","Out of memory during list extend");
             max = items * count;
@@ -1746,7 +1758,7 @@ PP(pp_repeat)
 	    SP += max;
 	}
 	else if (count <= 0)
-	    SP -= items;
+	    SP = MARK;
     }
     else {	/* Note: mark already snarfed by pp_list */
 	SV * const tmpstr = POPs;
@@ -5441,6 +5453,10 @@ PP(pp_push)
 	/* SPAGAIN; not needed: SP is assigned to immediately below */
     }
     else {
+        /* PL_delaymagic is restored by JUMPENV_POP on dieing, so we
+         * only need to save locally, not on the save stack */
+        U16 old_delaymagic = PL_delaymagic;
+
 	if (SvREADONLY(ary) && MARK < SP) Perl_croak_no_modify();
 	PL_delaymagic = DM_DELAY;
 	for (++MARK; MARK <= SP; MARK++) {
@@ -5453,8 +5469,7 @@ PP(pp_push)
 	}
 	if (PL_delaymagic & DM_ARRAY_ISA)
 	    mg_set(MUTABLE_SV(ary));
-
-	PL_delaymagic = 0;
+        PL_delaymagic = old_delaymagic;
     }
     SP = ORIGMARK;
     if (OP_GIMME(PL_op, 0) != G_VOID) {
@@ -5494,12 +5509,20 @@ PP(pp_unshift)
 	/* SPAGAIN; not needed: SP is assigned to immediately below */
     }
     else {
+        /* PL_delaymagic is restored by JUMPENV_POP on dieing, so we
+         * only need to save locally, not on the save stack */
+        U16 old_delaymagic = PL_delaymagic;
 	SSize_t i = 0;
+
 	av_unshift(ary, SP - MARK);
+        PL_delaymagic = DM_DELAY;
 	while (MARK < SP) {
 	    SV * const sv = newSVsv(*++MARK);
 	    (void)av_store(ary, i++, sv);
 	}
+        if (PL_delaymagic & DM_ARRAY_ISA)
+            mg_set(MUTABLE_SV(ary));
+        PL_delaymagic = old_delaymagic;
     }
     SP = ORIGMARK;
     if (OP_GIMME(PL_op, 0) != G_VOID) {
@@ -5596,7 +5619,7 @@ PP(pp_reverse)
 	if (SP - MARK > 1)
 	    do_join(TARG, &PL_sv_no, MARK, SP);
 	else {
-	    sv_setsv(TARG, SP > MARK ? *SP : find_rundefsv());
+	    sv_setsv(TARG, SP > MARK ? *SP : DEFSV);
 	}
 
 	up = SvPV_force(TARG, len);
@@ -5660,7 +5683,7 @@ PP(pp_split)
     SSize_t maxiters = slen + 10;
     I32 trailing_empty = 0;
     const char *orig;
-    const I32 origlimit = limit;
+    const IV origlimit = limit;
     I32 realarray = 0;
     I32 base;
     const I32 gimme = GIMME_V;
@@ -5834,11 +5857,13 @@ PP(pp_split)
           split //, $str, $i;
         */
 	if (!gimme_scalar) {
-	    const U32 items = limit - 1;
-	    if (items < slen)
+	    const IV items = limit - 1;
+            /* setting it to -1 will trigger a panic in EXTEND() */
+            const SSize_t sslen = slen > SSize_t_MAX ?  -1 : (SSize_t)slen;
+	    if (items >=0 && items < sslen)
 		EXTEND(SP, items);
 	    else
-		EXTEND(SP, slen);
+		EXTEND(SP, sslen);
 	}
 
         if (do_utf8) {
@@ -6183,10 +6208,7 @@ PP(pp_coreargs)
 	case OA_SCALAR:
 	  try_defsv:
 	    if (!numargs && defgv && whicharg == minargs + 1) {
-		PUSHs(find_rundefsv2(
-		    find_runcv_where(FIND_RUNCV_level_eq, 1, NULL),
-		    cxstack[cxstack_ix].blk_oldcop->cop_seq
-		));
+		PUSHs(DEFSV);
 	    }
 	    else PUSHs(numargs ? svp && *svp ? *svp : &PL_sv_undef : NULL);
 	    break;

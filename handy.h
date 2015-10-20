@@ -280,8 +280,13 @@ typedef U64TYPE U64;
 /* This is a helper macro to avoid preprocessor issues, replaced by nothing
  * unless under DEBUGGING, where it expands to an assert of its argument,
  * followed by a comma (hence the comma operator).  If we just used a straight
- * assert(), we would get a comma with nothing before it when not DEBUGGING */
-#ifdef DEBUGGING
+ * assert(), we would get a comma with nothing before it when not DEBUGGING.
+ *
+ * We also use empty definition under Coverity since the __ASSERT__
+ * checks often check for things that Really Cannot Happen, and Coverity
+ * detects that and gets all excited. */
+
+#if defined(DEBUGGING) && !defined(__COVERITY__)
 #   define __ASSERT_(statement)  assert(statement),
 #else
 #   define __ASSERT_(statement)
@@ -1917,10 +1922,13 @@ PoisonWith(0xEF) for catching access to freed memory.
  * As well as avoiding the need for a run-time check in some cases, it's
  * designed to avoid compiler warnings like:
  *     comparison is always false due to limited range of data type
+ * It's mathematically equivalent to
+ *    max(n) * sizeof(t) > MEM_SIZE_MAX
  */
 
 #  define _MEM_WRAP_NEEDS_RUNTIME_CHECK(n,t) \
-    (sizeof(t) > ((MEM_SIZE)1 << 8*(sizeof(MEM_SIZE) - sizeof(n))))
+    (  sizeof(MEM_SIZE) < sizeof(n) \
+    || sizeof(t) > ((MEM_SIZE)1 << 8*(sizeof(MEM_SIZE) - sizeof(n))))
 
 /* This is written in a slightly odd way to avoid various spurious
  * compiler warnings. We *want* to write the expression as

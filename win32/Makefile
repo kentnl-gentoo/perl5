@@ -38,7 +38,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.23.3
+#INST_VER	= \5.23.4
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -94,6 +94,13 @@ USE_LARGE_FILES	= define
 # Note: This option is not supported in 32-bit MSVC60 builds.
 #
 #USE_64_BIT_INT	= define
+
+#
+# Uncomment this if you want to disable looking up values from
+# HKEY_CURRENT_USER\Software\Perl and HKEY_LOCAL_MACHINE\Software\Perl in
+# the Registry.
+#
+#USE_NO_REGISTRY = define
 
 #
 # uncomment exactly one of the following
@@ -294,6 +301,10 @@ USE_LARGE_FILES	= undef
 USE_64_BIT_INT	= undef
 !ENDIF
 
+!IF "$(USE_NO_REGISTRY)" == ""
+USE_NO_REGISTRY	= undef
+!ENDIF
+
 !IF "$(USE_IMP_SYS)$(USE_MULTI)" == "defineundef"
 USE_MULTI	= define
 !ENDIF
@@ -312,6 +323,10 @@ BUILDOPT	= $(BUILDOPT) -DPERL_IMPLICIT_CONTEXT
 
 !IF "$(USE_IMP_SYS)" != "undef"
 BUILDOPT	= $(BUILDOPT) -DPERL_IMPLICIT_SYS
+!ENDIF
+
+!IF "$(USE_NO_REGISTRY)" != "undef"
+BUILDOPT	= $(BUILDOPT) -DWIN32_NO_REGISTRY
 !ENDIF
 
 !IF "$(PROCESSOR_ARCHITECTURE)" == ""
@@ -388,7 +403,16 @@ ARCHNAME	= $(ARCHNAME)-64int
 # All but the free version of VC++ 7.1 can load DLLs on demand.  Makes the test
 # suite run in about 10% less time.
 !IF "$(CCTYPE)" != "MSVC70FREE"
+# If no registry, advapi32 is only used for Perl_pp_getlogin/getlogin/GetUserNameA
+# which is rare to execute
+!IF "$(USE_NO_REGISTRY)" != "undef"
+DELAYLOAD	= -DELAYLOAD:ws2_32.dll -DELAYLOAD:advapi32.dll delayimp.lib
+MINIDELAYLOAD	=
+!ELSE
 DELAYLOAD	= -DELAYLOAD:ws2_32.dll delayimp.lib
+#miniperl never does any registry lookups
+MINIDELAYLOAD	= -DELAYLOAD:advapi32.dll
+!ENDIF
 !ENDIF
 
 # Visual C++ 2005 and 2008 (VC++ 8.0 and 9.0) create manifest files for EXEs and
@@ -1023,7 +1047,7 @@ $(MINIPERL) : ..\lib\buildcustomize.pl
 
 ..\lib\buildcustomize.pl : $(MINIDIR) $(MINI_OBJ) ..\write_buildcustomize.pl
 	$(LINK32) -out:$(MINIPERL) @<<
-	$(BLINK_FLAGS) $(DELAYLOAD) $(LIBFILES) $(MINI_OBJ)
+	$(BLINK_FLAGS) $(DELAYLOAD) $(MINIDELAYLOAD) $(LIBFILES) $(MINI_OBJ)
 <<
 	$(EMBED_EXE_MANI:..\lib\buildcustomize.pl=..\miniperl.exe)
 	$(MINIPERL) -I..\lib -f ..\write_buildcustomize.pl ..
@@ -1195,7 +1219,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5233delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5234delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1292,7 +1316,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5233delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5234delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \

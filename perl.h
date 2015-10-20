@@ -35,7 +35,7 @@
  * NOTE 2: headers lie.  Do not expect that if HAS_C99 gets to be true,
  * all the C99 features are there and are correct. */
 #if (defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L) || \
-     defined(_STDC_C99)
+    defined(_STDC_C99) || defined(__c99)
 #  define HAS_C99 1
 #endif
 
@@ -1965,11 +1965,15 @@ extern long double Perl_my_frexpl(long double x, int *e);
 #   ifndef Perl_isnan
 #       if defined(HAS_ISNANL) && !(defined(isnan) && defined(HAS_C99))
 #           define Perl_isnan(x) isnanl(x)
+#       elif defined(__sgi) && defined(__c99)  /* XXX Configure test needed */
+#           define Perl_isnan(x) isnan(x)
 #       endif
 #   endif
 #   ifndef Perl_isinf
 #       if defined(HAS_ISINFL) && !(defined(isinf) && defined(HAS_C99))
 #           define Perl_isinf(x) isinfl(x)
+#       elif defined(__sgi) && defined(__c99)  /* XXX Configure test needed */
+#           define Perl_isinf(x) isinf(x)
 #       elif defined(LDBL_MAX) && !defined(NAN_COMPARE_BROKEN)
 #           define Perl_isinf(x) ((x) > LDBL_MAX || (x) < -LDBL_MAX)
 #       endif
@@ -2157,7 +2161,7 @@ extern long double Perl_my_frexpl(long double x, int *e);
 /* Solaris and IRIX have fpclass/fpclassl, but they are using
  * an enum typedef, not cpp symbols, and Configure doesn't detect that.
  * Define some symbols also as cpp symbols so we can detect them. */
-#    if defined(__sun) || defined(__irix__) /* XXX Configure test instead */
+#    if defined(__sun) || defined(__sgi) /* XXX Configure test instead */
 #     define FP_PINF FP_PINF
 #     define FP_QNAN FP_QNAN
 #    endif
@@ -2207,7 +2211,7 @@ extern long double Perl_my_frexpl(long double x, int *e);
 #        include <fp_class.h>
 #    endif
 #    if defined(FP_POS_INF) && defined(FP_QNAN)
-#        ifdef __irix__ /* XXX Configure test instead */
+#        ifdef __sgi /* XXX Configure test instead */
 #            ifdef USE_LONG_DOUBLE
 #                define Perl_fp_class(x)	fp_class_l(x)
 #            else
@@ -6484,14 +6488,6 @@ extern void moncontrol(int);
 /* ISO 6429 NEL - C1 control NExt Line */
 /* See http://www.unicode.org/unicode/reports/tr13/ */
 #define NEXT_LINE_CHAR	NEXT_LINE_NATIVE
-
-/* The UTF-8 bytes of the Unicode LS and PS, U+2028 and U+2029 */
-#define UNICODE_LINE_SEPA_0	0xE2
-#define UNICODE_LINE_SEPA_1	0x80
-#define UNICODE_LINE_SEPA_2	0xA8
-#define UNICODE_PARA_SEPA_0	0xE2
-#define UNICODE_PARA_SEPA_1	0x80
-#define UNICODE_PARA_SEPA_2	0xA9
 
 #ifndef PIPESOCK_MODE
 #  define PIPESOCK_MODE

@@ -27,7 +27,6 @@ like("a", qr/(?[ [a]      # This is a comment
 like("a", qr/(?[ [a]      # [[:notaclass:]]
                     ])/, 'A comment isn\'t parsed');
 unlike(uni_to_native("\x85"), qr/(?[ \t ])/, 'NEL is white space');
-unlike(uni_to_native("\x85"), qr/(?[ [\t] ])/, '... including within nested []');
 like(uni_to_native("\x85"), qr/(?[ \t + \ ])/, 'can escape NEL to match');
 like(uni_to_native("\x85"), qr/(?[ [\] ])/, '... including within nested []');
 like("\t", qr/(?[ \t + \ ])/, 'can do basic union');
@@ -99,6 +98,8 @@ is($@, "", 'qr/(?[ [a] ])/ can be interpolated');
 
 like("B", qr/(?[ [B] | ! ( [^B] ) ])/, "[perl #125892]");
 
+like("a", qr/(?[ (?#comment) [a]])/, "Can have (?#comments)");
+
 if (! is_miniperl() && locales_enabled('LC_CTYPE')) {
     my $utf8_locale = find_utf8_ctype_locale;
     SKIP: {
@@ -138,6 +139,25 @@ if (! is_miniperl() && locales_enabled('LC_CTYPE')) {
     }
 }
 
+# RT #126181: \cX behaves strangely inside (?[])
+{
+	no warnings qw(syntax regexp);
+
+	eval { $_ = '/(?[(\c]) /'; qr/$_/ };
+	like($@, qr/^Syntax error/, '/(?[(\c]) / should not panic');
+	eval { $_ = '(?[\c#]' . "\n])"; qr/$_/ };
+	like($@, qr/^Syntax error/, '/(?[(\c]) / should not panic');
+	eval { $_ = '(?[(\c])'; qr/$_/ };
+	like($@, qr/^Syntax error/, '/(?[(\c])/ should be a syntax error');
+	eval { $_ = '(?[(\c]) ]\b'; qr/$_/ };
+	like($@, qr/^Syntax error/, '/(?[(\c]) ]\b/ should be a syntax error');
+	eval { $_ = '(?[\c[]](])'; qr/$_/ };
+	like($@, qr/^Syntax error/, '/(?[\c[]](])/ should be a syntax error');
+	like("\c#", qr/(?[\c#])/, '\c# should match itself');
+	like("\c[", qr/(?[\c[])/, '\c[ should match itself');
+	like("\c\ ", qr/(?[\c\])/, '\c\ should match itself');
+	like("\c]", qr/(?[\c]])/, '\c] should match itself');
+}
 
 done_testing();
 

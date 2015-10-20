@@ -860,9 +860,6 @@ PERL_CALLCONV CV*	Perl_find_runcv_where(pTHX_ U8 cond, IV arg, U32 *db_seqp)
 			__attribute__warn_unused_result__;
 
 PERL_CALLCONV SV*	Perl_find_rundefsv(pTHX);
-PERL_CALLCONV SV*	Perl_find_rundefsv2(pTHX_ CV *cv, U32 seq);
-#define PERL_ARGS_ASSERT_FIND_RUNDEFSV2	\
-	assert(cv)
 PERL_CALLCONV PADOFFSET	Perl_find_rundefsvoffset(pTHX)
 			__attribute__deprecated__;
 
@@ -2900,7 +2897,7 @@ PERL_CALLCONV char*	Perl_sv_2pvutf8(pTHX_ SV *sv, STRLEN *const lp);
 PERL_CALLCONV UV	Perl_sv_2uv_flags(pTHX_ SV *const sv, const I32 flags);
 #define PERL_ARGS_ASSERT_SV_2UV_FLAGS	\
 	assert(sv)
-PERL_CALLCONV int	Perl_sv_backoff(SV *const sv);
+PERL_CALLCONV void	Perl_sv_backoff(SV *const sv);
 #define PERL_ARGS_ASSERT_SV_BACKOFF	\
 	assert(sv)
 PERL_CALLCONV SV*	Perl_sv_bless(pTHX_ SV *const sv, HV *const stash);
@@ -4733,7 +4730,7 @@ STATIC U32	S_join_exact(pTHX_ RExC_state_t *pRExC_state, regnode *scan, UV *min_
 STATIC I32	S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch, regnode *first, regnode *last, regnode *tail, U32 word_count, U32 flags, U32 depth);
 #define PERL_ARGS_ASSERT_MAKE_TRIE	\
 	assert(pRExC_state); assert(startbranch); assert(first); assert(last); assert(tail)
-STATIC char *	S_nextchar(pTHX_ RExC_state_t *pRExC_state);
+STATIC void	S_nextchar(pTHX_ RExC_state_t *pRExC_state);
 #define PERL_ARGS_ASSERT_NEXTCHAR	\
 	assert(pRExC_state)
 STATIC void	S_parse_lparen_question_flags(pTHX_ RExC_state_t *pRExC_state);
@@ -4786,11 +4783,6 @@ STATIC void	S_reginsert(pTHX_ RExC_state_t *pRExC_state, U8 op, regnode *opnd, U
 STATIC regnode*	S_regnode_guts(pTHX_ RExC_state_t *pRExC_state, const U8 op, const STRLEN extra_len, const char* const name);
 #define PERL_ARGS_ASSERT_REGNODE_GUTS	\
 	assert(pRExC_state); assert(name)
-STATIC char *	S_regpatws(RExC_state_t *pRExC_state, char *p, const bool recognize_comment)
-			__attribute__warn_unused_result__;
-#define PERL_ARGS_ASSERT_REGPATWS	\
-	assert(pRExC_state); assert(p)
-
 STATIC regnode*	S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth);
 #define PERL_ARGS_ASSERT_REGPIECE	\
 	assert(pRExC_state); assert(flagp)
@@ -4806,6 +4798,9 @@ STATIC void	S_scan_commit(pTHX_ const RExC_state_t *pRExC_state, struct scan_dat
 STATIC void	S_set_ANYOF_arg(pTHX_ RExC_state_t* const pRExC_state, regnode* const node, SV* const cp_list, SV* const runtime_defns, SV* const only_utf8_locale_list, SV* const swash, const bool has_user_defined_property);
 #define PERL_ARGS_ASSERT_SET_ANYOF_ARG	\
 	assert(pRExC_state); assert(node)
+STATIC void	S_skip_to_be_ignored_text(pTHX_ RExC_state_t *pRExC_state, char ** p, const bool force_to_xmod);
+#define PERL_ARGS_ASSERT_SKIP_TO_BE_IGNORED_TEXT	\
+	assert(pRExC_state); assert(p)
 PERL_STATIC_INLINE void	S_ssc_add_range(pTHX_ regnode_ssc *ssc, UV const start, UV const end);
 #define PERL_ARGS_ASSERT_SSC_ADD_RANGE	\
 	assert(ssc)
@@ -5052,7 +5047,7 @@ STATIC I32	S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p, r
 #define PERL_ARGS_ASSERT_REGREPEAT	\
 	assert(prog); assert(startposp); assert(p); assert(reginfo)
 
-STATIC I32	S_regtry(pTHX_ regmatch_info *reginfo, char **startposp)
+STATIC bool	S_regtry(pTHX_ regmatch_info *reginfo, char **startposp)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_REGTRY	\
 	assert(reginfo); assert(startposp)

@@ -1485,8 +1485,8 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
         const char * const s = PerlEnv_getenv("PERL_HASH_SEED_DEBUG");
 
         if (s && strEQ(s, "1")) {
-            unsigned char *seed= PERL_HASH_SEED;
-            unsigned char *seed_end= PERL_HASH_SEED + PERL_HASH_SEED_BYTES;
+            const unsigned char *seed= PERL_HASH_SEED;
+            const unsigned char *seed_end= PERL_HASH_SEED + PERL_HASH_SEED_BYTES;
             PerlIO_printf(Perl_debug_log, "HASH_FUNCTION = %s HASH_SEED = 0x", PERL_HASH_FUNC);
             while (seed < seed_end) {
                 PerlIO_printf(Perl_debug_log, "%02x", *seed++);
@@ -1786,6 +1786,9 @@ S_Internals_V(pTHX_ CV *cv)
 #  endif
 #  ifdef USE_LOCALE_CTYPE
 			     " USE_LOCALE_CTYPE"
+#  endif
+#  ifdef WIN32_NO_REGISTRY
+			     " USE_NO_REGISTRY"
 #  endif
 #  ifdef USE_PERL_ATOF
 			     " USE_PERL_ATOF"
@@ -2696,7 +2699,7 @@ I32
 Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
           		/* See G_* flags in cop.h */
 {
-    dVAR; dSP;
+    dVAR;
     LOGOP myop;		/* fake syntax tree node */
     METHOP method_op;
     I32 oldmark;
@@ -2726,9 +2729,12 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
     SAVEOP();
     PL_op = (OP*)&myop;
 
-    EXTEND(PL_stack_sp, 1);
-    if (!(flags & G_METHOD_NAMED))
-        *++PL_stack_sp = sv;
+    if (!(flags & G_METHOD_NAMED)) {
+	dSP;
+	EXTEND(SP, 1);
+	PUSHs(sv);
+	PUTBACK;
+    }
     oldmark = TOPMARK;
     oldscope = PL_scopestack_ix;
 
@@ -2839,9 +2845,8 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
           		/* See G_* flags in cop.h */
 {
     dVAR;
-    dSP;
     UNOP myop;		/* fake syntax tree node */
-    VOL I32 oldmark = SP - PL_stack_base;
+    VOL I32 oldmark;
     VOL I32 retval = 0;
     int ret;
     OP* const oldop = PL_op;
@@ -2857,8 +2862,13 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
     SAVEOP();
     PL_op = (OP*)&myop;
     Zero(&myop, 1, UNOP);
-    EXTEND(PL_stack_sp, 1);
-    *++PL_stack_sp = sv;
+    {
+	dSP;
+	oldmark = SP - PL_stack_base;
+	EXTEND(SP, 1);
+	PUSHs(sv);
+	PUTBACK;
+    }
 
     if (!(flags & G_NOARGS))
 	myop.op_flags = OPf_STACKED;
@@ -3824,14 +3834,6 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
     return rsfp;
 }
 
-/* Mention
- * I_SYSSTATVFS	HAS_FSTATVFS
- * I_SYSMOUNT
- * I_STATFS	HAS_FSTATFS	HAS_GETFSSTAT
- * I_MNTENT	HAS_GETMNTENT	HAS_HASMNTOPT
- * here so that metaconfig picks them up. */
-
-
 #ifdef SETUID_SCRIPTS_ARE_SECURE_NOW
 /* Don't even need this function.  */
 #else
@@ -3848,16 +3850,13 @@ S_validate_suid(pTHX_ PerlIO *rsfp)
     if (my_euid != my_uid || my_egid != my_gid) {	/* (suidperl doesn't exist, in fact) */
 	dVAR;
         int fd = PerlIO_fileno(rsfp);
-        if (fd < 0) {
-            Perl_croak(aTHX_ "Illegal suidscript");
-        } else {
-            if (PerlLIO_fstat(fd, &PL_statbuf) < 0) {	/* may be either wrapped or real suid */
-                Perl_croak(aTHX_ "Illegal suidscript");
-            }
+        Stat_t statbuf;
+        if (fd < 0 || PerlLIO_fstat(fd, &statbuf) < 0) { /* may be either wrapped or real suid */
+            Perl_croak_nocontext( "Illegal suidscript");
         }
-        if ((my_euid != my_uid && my_euid == PL_statbuf.st_uid && PL_statbuf.st_mode & S_ISUID)
+        if ((my_euid != my_uid && my_euid == statbuf.st_uid && statbuf.st_mode & S_ISUID)
             ||
-            (my_egid != my_gid && my_egid == PL_statbuf.st_gid && PL_statbuf.st_mode & S_ISGID)
+            (my_egid != my_gid && my_egid == statbuf.st_gid && statbuf.st_mode & S_ISGID)
             )
 	    if (!PL_do_undump)
 		Perl_croak(aTHX_ "YOU HAVEN'T DISABLED SET-ID SCRIPTS IN THE KERNEL YET!\n\

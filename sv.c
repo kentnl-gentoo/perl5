@@ -1525,7 +1525,11 @@ wrapper instead.
 =cut
 */
 
-int
+/* prior to 5.000 stable, this function returned the new OOK-less SvFLAGS
+   prior to 5.23.4 this function always returned 0
+*/
+
+void
 Perl_sv_backoff(SV *const sv)
 {
     STRLEN delta;
@@ -1541,9 +1545,9 @@ Perl_sv_backoff(SV *const sv)
     
     SvLEN_set(sv, SvLEN(sv) + delta);
     SvPV_set(sv, SvPVX(sv) - delta);
-    Move(s, SvPVX(sv), SvCUR(sv)+1, char);
     SvFLAGS(sv) &= ~SVf_OOK;
-    return 0;
+    Move(s, SvPVX(sv), SvCUR(sv)+1, char);
+    return;
 }
 
 /*
@@ -11444,9 +11448,10 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		   is safe. */
 		is_utf8 = (bool)va_arg(*args, int);
 		elen = va_arg(*args, UV);
-                if ((IV)elen < 0) {
-                    /* check if utf8 length is larger than 0 when cast to IV */
-                    assert( (IV)elen >= 0 ); /* in DEBUGGING build we want to crash */
+                /* if utf8 length is larger than 0x7ffff..., then it might
+                 * have been a signed value that wrapped */
+                if (elen  > ((~(STRLEN)0) >> 1)) {
+                    assert(0); /* in DEBUGGING build we want to crash */
                     elen= 0; /* otherwise we want to treat this as an empty string */
                 }
 		eptr = va_arg(*args, char *);
@@ -12690,7 +12695,8 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	    }
 	}
 
-        assert((IV)elen >= 0); /* here zero elen is fine */
+        /* signed value that's wrapped? */
+        assert(elen  <= ((~(STRLEN)0) >> 1));
 	have = esignlen + zeros + elen;
 	if (have < zeros)
 	    croak_memory_wrap();

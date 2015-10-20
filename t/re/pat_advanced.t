@@ -15,6 +15,7 @@ BEGIN {
 use strict;
 use warnings;
 use 5.010;
+our ($REGMARK, $REGERROR);
 
 sub run_tests;
 
@@ -1286,7 +1287,7 @@ sub run_tests {
 
     {
         # Test named commits and the $REGERROR var
-        our $REGERROR;
+        local $REGERROR;
         for my $name ('', ':foo') {
             for my $pat ("(*PRUNE$name)",
                          ($name ? "(*MARK$name)" : "") . "(*SKIP$name)",
@@ -1305,6 +1306,7 @@ sub run_tests {
         # Test named commits and the $REGERROR var
         package Fnorble;
         our $REGERROR;
+        local $REGERROR;
         for my $name ('', ':foo') {
             for my $pat ("(*PRUNE$name)",
                          ($name ? "(*MARK$name)" : "") . "(*SKIP$name)",
@@ -1322,7 +1324,7 @@ sub run_tests {
     {
         # Test named commits and the $REGERROR var
 	my $message = '$REGERROR';
-        our $REGERROR;
+        local $REGERROR;
         for my $word (qw (bar baz bop)) {
             $REGERROR = "";
             "aaaaa$word" =~
@@ -1392,7 +1394,8 @@ sub run_tests {
     {
         my $message = '$REGMARK';
         our @r = ();
-        our ($REGMARK, $REGERROR);
+        local $REGMARK;
+        local $REGERROR;
         like('foofoo', qr/foo (*MARK:foo) (?{push @r,$REGMARK}) /x, $message);
         is("@r","foo", $message);
         is($REGMARK, "foo", $message);
@@ -1659,8 +1662,8 @@ sub run_tests {
     {
         # Test for keys in %+ and %-
         my $message = 'Test keys in %+ and %-';
-        no warnings 'uninitialized', 'deprecated', 'experimental::lexical_topic';
-        my $_ = "abcdef";
+        no warnings 'uninitialized';
+        local $_ = "abcdef";
         /(?<foo>a)|(?<foo>b)/;
         is((join ",", sort keys %+), "foo", $message);
         is((join ",", sort keys %-), "foo", $message);
@@ -1680,8 +1683,7 @@ sub run_tests {
 
     {
         # length() on captures, the numbered ones end up in Perl_magic_len
-        no warnings 'deprecated', 'experimental::lexical_topic';
-        my $_ = "aoeu " . uni_to_native("\xe6") . "var ook";
+        local $_ = "aoeu " . uni_to_native("\xe6") . "var ook";
         /^ \w+ \s (?<eek>\S+)/x;
 
         is(length $`,      0, q[length $`]);

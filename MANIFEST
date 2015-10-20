@@ -136,6 +136,35 @@ cpan/AutoLoader/t/01AutoLoader.t	See if AutoLoader works
 cpan/AutoLoader/t/02AutoSplit.t		See if AutoSplit works
 cpan/B-Debug/Debug.pm	Compiler Debug backend
 cpan/B-Debug/t/debug.t	See if B::Debug works
+cpan/bignum/lib/bigint.pm		bigint
+cpan/bignum/lib/bignum.pm		bignum
+cpan/bignum/lib/bigrat.pm		bigrat
+cpan/bignum/lib/Math/BigFloat/Trace.pm	bignum tracing
+cpan/bignum/lib/Math/BigInt/Trace.pm	bignum tracing
+cpan/bignum/t/auth-bigint-hex.t		See if bignum works
+cpan/bignum/t/auth-bigint-oct.t		See if bignum works
+cpan/bignum/t/big_e_pi.t		See if bignum exports e() and PI()
+cpan/bignum/t/bigexp.t			See if bignum works
+cpan/bignum/t/bigint.t			See if bigint works
+cpan/bignum/t/bignum.t			See if bignum works
+cpan/bignum/t/bigrat.t			See if bigrat works
+cpan/bignum/t/bii_e_pi.t		See if bigint exports e() and PI()
+cpan/bignum/t/biinfnan.t		See if bignum works
+cpan/bignum/t/bir_e_pi.t		See if bigrat exports e() and PI()
+cpan/bignum/t/bninfnan.t		See if bignum works
+cpan/bignum/t/bn_lite.t			See if bignum with Math::BigInt::Lite works
+cpan/bignum/t/brinfnan.t		See if bignum works
+cpan/bignum/t/br_lite.t			See if bigrat with Math::BigInt::Lite works
+cpan/bignum/t/in_effect.t		See if in_effect() works
+cpan/bignum/t/infnan.inc		See if bignum with inf/NaN works
+cpan/bignum/t/option_a.t		See if bignum a => X works
+cpan/bignum/t/option_l.t		See if bignum l => X works
+cpan/bignum/t/option_p.t		See if bignum p => X works
+cpan/bignum/t/overrides.t		See if global overrides behave
+cpan/bignum/t/ratopt_a.t		See if bigrat a => X works
+cpan/bignum/t/scope_f.t			See if no bignum works
+cpan/bignum/t/scope_i.t			See if no bigint works
+cpan/bignum/t/scope_r.t			See if no bigrat works
 cpan/Compress-Raw-Bzip2/bzip2-src/blocksort.c
 cpan/Compress-Raw-Bzip2/bzip2-src/bzlib.c
 cpan/Compress-Raw-Bzip2/bzip2-src/bzlib.h
@@ -1147,7 +1176,10 @@ cpan/File-Fetch/lib/File/Fetch.pm	File::Fetch
 cpan/File-Fetch/t/01_File-Fetch.t	File::Fetch tests
 cpan/File-Fetch/t/null_subclass.t
 cpan/File-Path/lib/File/Path.pm		Do things like 'mkdir -p' and 'rm -r'
+cpan/File-Path/t/FilePathTest.pm	See if File::Path works
+cpan/File-Path/t/Path_root.t		See if File::Path works
 cpan/File-Path/t/Path.t			See if File::Path works
+cpan/File-Path/t/Path_win32.t		See if File::Path works
 cpan/File-Path/t/taint.t		See if File::Path works with -T
 cpan/File-Temp/lib/File/Temp.pm	create safe temporary files and file handles
 cpan/File-Temp/t/cmp.t		See if File::Temp works
@@ -1625,6 +1657,8 @@ cpan/Math-BigInt/t/bigints.t		See if BigInt.pm works
 cpan/Math-BigInt/t/biglog.t		Test the log function
 cpan/Math-BigInt/t/big_pi_e.t		test bpi() and bexp()
 cpan/Math-BigInt/t/bigroot.t		Test the broot function
+cpan/Math-BigInt/t/blog-mbf.t		Math::BigInt tests
+cpan/Math-BigInt/t/blog-mbi.t		Math::BigInt tests
 cpan/Math-BigInt/t/calling.t		Test calling conventions
 cpan/Math-BigInt/t/config.t		Test Math::BigInt->config()
 cpan/Math-BigInt/t/constant.t		Test Math::BigInt/BigFloat under :constant
@@ -1645,6 +1679,8 @@ cpan/Math-BigInt/t/mbimbf.t		BigInt/BigFloat accuracy, precision and fallback, r
 cpan/Math-BigInt/t/mbi_rand.t		Test Math::BigInt randomly
 cpan/Math-BigInt/t/nan_cmp.t		overloaded comparison involving *NaN*
 cpan/Math-BigInt/t/new_overloaded.t	test overloaded numbers in BigFloat's new()
+cpan/Math-BigInt/t/objectify_mbf.t	Math::BigInt tests
+cpan/Math-BigInt/t/objectify_mbi.t	Math::BigInt tests
 cpan/Math-BigInt/t/req_mbf0.t		test: require Math::BigFloat; ->bzero();
 cpan/Math-BigInt/t/req_mbf1.t		test: require Math::BigFloat; ->bone();
 cpan/Math-BigInt/t/req_mbfa.t		test: require Math::BigFloat; ->bnan();
@@ -1756,9 +1792,12 @@ cpan/Module-Metadata/lib/Module/Metadata.pm
 cpan/Module-Metadata/t/contains_pod.t
 cpan/Module-Metadata/t/encoding.t
 cpan/Module-Metadata/t/endpod.t
+cpan/Module-Metadata/t/extract-package.t
+cpan/Module-Metadata/t/extract-version.t
 cpan/Module-Metadata/t/lib/0_1/Foo.pm
 cpan/Module-Metadata/t/lib/0_2/Foo.pm
 cpan/Module-Metadata/t/lib/ENDPOD.pm
+cpan/Module-Metadata/t/lib/GeneratePackage.pm
 cpan/Module-Metadata/t/metadata.t
 cpan/Module-Metadata/t/taint.t
 cpan/Module-Metadata/t/version.t
@@ -2990,33 +3029,6 @@ dist/base/t/lib/HasSigDie.pm	Module for testing base.pm
 dist/base/t/sigdie.t		See if base works with SIGDIE
 dist/base/t/version.t		See if base works with versions
 dist/base/t/warnings.t		See if base works with warnings
-dist/bignum/lib/bigint.pm		bigint
-dist/bignum/lib/bignum.pm		bignum
-dist/bignum/lib/bigrat.pm		bigrat
-dist/bignum/lib/Math/BigFloat/Trace.pm	bignum tracing
-dist/bignum/lib/Math/BigInt/Trace.pm	bignum tracing
-dist/bignum/t/big_e_pi.t		See if bignum exports e() and PI()
-dist/bignum/t/bigexp.t			See if bignum works
-dist/bignum/t/bigint.t			See if bigint works
-dist/bignum/t/bignum.t			See if bignum works
-dist/bignum/t/bigrat.t			See if bigrat works
-dist/bignum/t/bii_e_pi.t		See if bigint exports e() and PI()
-dist/bignum/t/biinfnan.t		See if bignum works
-dist/bignum/t/bir_e_pi.t		See if bigrat exports e() and PI()
-dist/bignum/t/bninfnan.t		See if bignum works
-dist/bignum/t/bn_lite.t			See if bignum with Math::BigInt::Lite works
-dist/bignum/t/brinfnan.t		See if bignum works
-dist/bignum/t/br_lite.t			See if bigrat with Math::BigInt::Lite works
-dist/bignum/t/in_effect.t		See if in_effect() works
-dist/bignum/t/infnan.inc		See if bignum with inf/NaN works
-dist/bignum/t/option_a.t		See if bignum a => X works
-dist/bignum/t/option_l.t		See if bignum l => X works
-dist/bignum/t/option_p.t		See if bignum p => X works
-dist/bignum/t/overrides.t		See if global overrides behave
-dist/bignum/t/ratopt_a.t		See if bigrat a => X works
-dist/bignum/t/scope_f.t			See if no bignum works
-dist/bignum/t/scope_i.t			See if no bigint works
-dist/bignum/t/scope_r.t			See if no bigrat works
 dist/Carp/lib/Carp/Heavy.pm	Error message retired workhorse
 dist/Carp/lib/Carp.pm		Error message extension
 dist/Carp/Makefile.PL		makefile writer for Carp
@@ -3192,6 +3204,7 @@ dist/I18N-LangTags/t/20_locales.t		See whether I18N::LangTags works
 dist/I18N-LangTags/t/50_super.t			See whether I18N::LangTags works
 dist/I18N-LangTags/t/55_supers_strict.t		See whether I18N::LangTags works
 dist/I18N-LangTags/t/80_all_env.t		See whether I18N::LangTags works
+dist/if/Changes			if perl module change log
 dist/if/if.pm			For "use if"
 dist/if/t/if.t			Tests for "use if"
 dist/IO/ChangeLog		IO perl module change log
@@ -3749,6 +3762,7 @@ ext/PerlIO-encoding/encoding.xs	PerlIO::encoding
 ext/PerlIO-encoding/t/encoding.t	See if PerlIO encoding conversion works
 ext/PerlIO-encoding/t/fallback.t	See if PerlIO fallbacks work
 ext/PerlIO-encoding/t/nolooping.t	Tests for PerlIO::encoding
+ext/PerlIO-encoding/t/threads.t		Tests PerlIO::encoding and threads
 ext/PerlIO-mmap/mmap.pm	PerlIO layer for memory maps
 ext/PerlIO-mmap/mmap.xs	PerlIO layer for memory maps
 ext/PerlIO-scalar/scalar.pm	PerlIO layer for scalars
@@ -3930,6 +3944,7 @@ ext/XS-APItest/t/customop.t	XS::APItest: tests for custom ops
 ext/XS-APItest/t/cv_name.t	test cv_name
 ext/XS-APItest/t/eval-filter.t	Simple source filter/eval test
 ext/XS-APItest/t/exception.t	XS::APItest extension
+ext/XS-APItest/t/extend.t	test EXTEND() macro
 ext/XS-APItest/t/fetch_pad_names.t	Tests for UTF8 names in pad
 ext/XS-APItest/t/gotosub.t	XS::APItest: tests goto &xsub and hints
 ext/XS-APItest/t/grok.t		XS::APItest: tests for grok* functions
@@ -4607,6 +4622,7 @@ pod/perl5220delta.pod		Perl changes in version 5.22.0
 pod/perl5230delta.pod		Perl changes in version 5.23.0
 pod/perl5231delta.pod		Perl changes in version 5.23.1
 pod/perl5232delta.pod		Perl changes in version 5.23.2
+pod/perl5233delta.pod		Perl changes in version 5.23.3
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4723,6 +4739,7 @@ Porting/bump-perl-version	bump the perl version in relevant files
 Porting/check83.pl		Check whether we are 8.3-friendly
 Porting/checkansi.pl		Check source code for ANSI-C violations
 Porting/checkAUTHORS.pl		Check that the AUTHORS file is complete
+Porting/checkcfguse.pl		Check that config symbols are being used
 Porting/checkcfgvar.pl		Check that config scripts define all symbols
 Porting/check-cpan-pollution	Check for commits that may wrongly touch CPAN distros
 Porting/checkpodencoding.pl	Check POD encoding

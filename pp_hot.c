@@ -1174,6 +1174,9 @@ PP(pp_aassign)
     SSize_t i;
     int magic;
     U32 lval;
+    /* PL_delaymagic is restored by JUMPENV_POP on dieing, so we
+     * only need to save locally, not on the save stack */
+    U16 old_delaymagic = PL_delaymagic;
 #ifdef DEBUGGING
     bool fake = 0;
 #endif
@@ -1275,7 +1278,9 @@ PP(pp_aassign)
             }
 
             av_clear(ary);
-	    av_extend(ary, lastrelem - relem);
+	    if (relem <= lastrelem)
+                av_extend(ary, lastrelem - relem);
+
 	    i = 0;
 	    while (relem <= lastrelem) {	/* gobble up all the rest */
 		SV **didstore;
@@ -1543,7 +1548,7 @@ PP(pp_aassign)
         PERL_UNUSED_VAR(tmp_egid);
 #endif
     }
-    PL_delaymagic = 0;
+    PL_delaymagic = old_delaymagic;
 
     if (gimme == G_VOID)
 	SP = firstrelem - 1;
@@ -1962,6 +1967,7 @@ Perl_do_readline(pTHX)
 	XPUSHs(sv);
 	if (type == OP_GLOB) {
 	    const char *t1;
+	    Stat_t statbuf;
 
 	    if (SvCUR(sv) > 0 && SvCUR(PL_rs) > 0) {
 		char * const tmps = SvEND(sv) - 1;
@@ -1977,7 +1983,7 @@ Perl_do_readline(pTHX)
 		if (strchr("$&*(){}[]'\";\\|?<>~`", *t1))
 #endif
 			break;
-	    if (*t1 && PerlLIO_lstat(SvPVX_const(sv), &PL_statbuf) < 0) {
+	    if (*t1 && PerlLIO_lstat(SvPVX_const(sv), &statbuf) < 0) {
 		(void)POPs;		/* Unmatched wildcard?  Chuck it... */
 		continue;
 	    }
@@ -3137,15 +3143,8 @@ PP(pp_grepwhile)
 	(void)POPMARK;				/* pop dst */
 	SP = PL_stack_base + POPMARK;		/* pop original mark */
 	if (gimme == G_SCALAR) {
-	    if (PL_op->op_private & OPpGREP_LEX) {
-		SV* const sv = sv_newmortal();
-		sv_setiv(sv, items);
-		PUSHs(sv);
-	    }
-	    else {
 		dTARGET;
 		XPUSHi(items);
-	    }
 	}
 	else if (gimme == G_ARRAY)
 	    SP += items;
@@ -3163,10 +3162,7 @@ PP(pp_grepwhile)
 	    PL_tmps_floor++;
 	}
 	SvTEMP_off(src);
-	if (PL_op->op_private & OPpGREP_LEX)
-	    PAD_SVl(PL_op->op_targ) = src;
-	else
-	    DEFSV_set(src);
+	DEFSV_set(src);
 
 	RETURNOP(cLOGOP->op_other);
     }
@@ -3434,7 +3430,8 @@ PP(pp_entersub)
 	SAVETMPS;
 	if (UNLIKELY((cx->blk_u16 & OPpENTERSUB_LVAL_MASK) == OPpLVAL_INTRO &&
 	    !CvLVALUE(cv)))
-	    DIE(aTHX_ "Can't modify non-lvalue subroutine call");
+            DIE(aTHX_ "Can't modify non-lvalue subroutine call of &%"SVf,
+                SVfARG(cv_name(cv, NULL, 0)));
 	/* warning must come *after* we fully set up the context
 	 * stuff so that __WARN__ handlers can safely dounwind()
 	 * if they want to
@@ -3455,7 +3452,8 @@ PP(pp_entersub)
 	       & PUSHSUB_GET_LVALUE_MASK(Perl_is_lvalue_sub)
              ) & OPpENTERSUB_LVAL_MASK) == OPpLVAL_INTRO &&
 	    !CvLVALUE(cv)))
-	    DIE(aTHX_ "Can't modify non-lvalue subroutine call");
+            DIE(aTHX_ "Can't modify non-lvalue subroutine call of &%"SVf,
+                SVfARG(cv_name(cv, NULL, 0)));
 
 	if (UNLIKELY(!hasargs && GvAV(PL_defgv))) {
 	    /* Need to copy @_ to stack. Alternative may be to

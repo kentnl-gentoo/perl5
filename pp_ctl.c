@@ -940,10 +940,7 @@ PP(pp_grepstart)
     ENTER_with_name("grep");					/* enter outer scope */
 
     SAVETMPS;
-    if (PL_op->op_private & OPpGREP_LEX)
-	SAVESPTR(PAD_SVl(PL_op->op_targ));
-    else
-	SAVE_DEFSV;
+    SAVE_DEFSV;
     ENTER_with_name("grep_item");					/* enter inner scope */
     SAVEVPTR(PL_curpm);
 
@@ -953,10 +950,7 @@ PP(pp_grepstart)
 	PL_tmps_floor++;
     }
     SvTEMP_off(src);
-    if (PL_op->op_private & OPpGREP_LEX)
-	PAD_SVl(PL_op->op_targ) = src;
-    else
-	DEFSV_set(src);
+    DEFSV_set(src);
 
     PUTBACK;
     if (PL_op->op_type == OP_MAPSTART)
@@ -1078,15 +1072,8 @@ PP(pp_mapwhile)
 	(void)POPMARK;				/* pop dst */
 	SP = PL_stack_base + POPMARK;		/* pop original mark */
 	if (gimme == G_SCALAR) {
-	    if (PL_op->op_private & OPpGREP_LEX) {
-		SV* sv = sv_newmortal();
-		sv_setiv(sv, items);
-		PUSHs(sv);
-	    }
-	    else {
 		dTARGET;
 		XPUSHi(items);
-	    }
 	}
 	else if (gimme == G_ARRAY)
 	    SP += items;
@@ -1104,10 +1091,7 @@ PP(pp_mapwhile)
             src = sv_mortalcopy(src);
         }
 	SvTEMP_off(src);
-	if (PL_op->op_private & OPpGREP_LEX)
-	    PAD_SVl(PL_op->op_targ) = src;
-	else
-	    DEFSV_set(src);
+	DEFSV_set(src);
 
 	RETURNOP(cLOGOP->op_other);
     }
@@ -3497,11 +3481,14 @@ S_check_type_and_open(pTHX_ SV *name)
     /* checking here captures a reasonable error message when
      * PERL_DISABLE_PMC is true, but when PMC checks are enabled, the
      * user gets a confusing message about looking for the .pmc file
-     * rather than for the .pm file.
+     * rather than for the .pm file so do the check in S_doopen_pm when
+     * PMC is on instead of here. S_doopen_pm calls this func.
      * This check prevents a \0 in @INC causing problems.
      */
+#ifdef PERL_DISABLE_PMC
     if (!IS_SAFE_PATHNAME(p, len, "require"))
         return NULL;
+#endif
 
     /* on Win32 stat is expensive (it does an open() and close() twice and
        a couple other IO calls), the open will fail with a dir on its own with
@@ -3557,13 +3544,14 @@ S_doopen_pm(pTHX_ SV *name)
 
     if (namelen > 3 && memEQs(p + namelen - 3, 3, ".pm")) {
 	SV *const pmcsv = sv_newmortal();
-	Stat_t pmcstat;
+	PerlIO * pmcio;
 
 	SvSetSV_nosteal(pmcsv,name);
 	sv_catpvs(pmcsv, "c");
 
-	if (PerlLIO_stat(SvPV_nolen_const(pmcsv), &pmcstat) >= 0)
-	    return check_type_and_open(pmcsv);
+	pmcio = check_type_and_open(pmcsv);
+	if (pmcio)
+	    return pmcio;
     }
     return check_type_and_open(name);
 }
@@ -4356,15 +4344,9 @@ PP(pp_entergiven)
     ENTER_with_name("given");
     SAVETMPS;
 
-    if (PL_op->op_targ) {
-	SAVEPADSVANDMORTALIZE(PL_op->op_targ);
-	SvREFCNT_dec(PAD_SVl(PL_op->op_targ));
-	PAD_SVl(PL_op->op_targ) = SvREFCNT_inc_NN(POPs);
-    }
-    else {
-	SAVE_DEFSV;
-	DEFSV_set(POPs);
-    }
+    assert(!PL_op->op_targ); /* used to be set for lexical $_ */
+    SAVE_DEFSV;
+    DEFSV_set(POPs);
 
     PUSHBLOCK(cx, CXt_GIVEN, SP);
     PUSHGIVEN(cx);

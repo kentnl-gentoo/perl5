@@ -1041,6 +1041,11 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 			  *PL_compiling.cop_warnings);
 	    }
 	}
+#ifdef WIN32
+	else if (strEQ(remaining, "IN32_SLOPPY_STAT")) {
+	    sv_setiv(sv, w32_sloppystat);
+	}
+#endif
 	break;
     case '+':
 	if (PL_curpm && (rx = PM_GETRE(PL_curpm))) {
@@ -1810,7 +1815,9 @@ Perl_magic_methcall(pTHX_ SV *sv, const MAGIC *mg, SV *meth, U32 flags,
     PUSHSTACKi(PERLSI_MAGIC);
     PUSHMARK(SP);
 
-    EXTEND(SP, argc+1);
+    /* EXTEND() expects a signed argc; don't wrap when casting */
+    assert(argc <= I32_MAX);
+    EXTEND(SP, (I32)argc+1);
     PUSHs(SvTIED_obj(sv, mg));
     if (flags & G_UNDEF_FILL) {
 	while (argc--) {
@@ -2800,6 +2807,11 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 		}
 	    }
 	}
+#ifdef WIN32
+	else if (strEQ(mg->mg_ptr+1, "IN32_SLOPPY_STAT")) {
+	    w32_sloppystat = (bool)sv_true(sv);
+	}
+#endif
 	break;
     case '.':
 	if (PL_localizing) {

@@ -23,7 +23,7 @@ BEGIN {
     skip_all_without_unicode_tables();
 }
 
-plan tests => 775;  # Update this when adding/deleting tests.
+plan tests => 776;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1681,7 +1681,10 @@ EOP
             my $code='
                 BEGIN{require q(test.pl);}
                 use Encode qw(_utf8_on);
-                my $malformed = "a\x80\n";
+                # \x80 and \x41 are continuation bytes in their respective
+                # character sets
+                my $malformed = (ord("A") == 65) ? "a\x80\n" : "a\x41\n";
+                utf8::downgrade($malformed);
                 _utf8_on($malformed);
                 watchdog(3);
                 $malformed =~ /(\n\r|\r)$/;
@@ -1707,6 +1710,16 @@ EOP
 		ok(1, "qr{()(?1)}n didn't crash");
 		like($error, qr{Reference to nonexistent group},
 				'gave appropriate error for qr{()(?1)}n');
+	}
+
+	{
+            # [perl #126406] panic with unmatchable quantifier
+            my $code='
+                no warnings "regexp";
+                "" =~ m/(.0\N{6,0}0\N{6,0}000000000000000000000000000000000)/;
+            ';
+            fresh_perl_is($code, "", {},
+                            "perl [#126406] panic");
 	}
 } # End of sub run_tests
 

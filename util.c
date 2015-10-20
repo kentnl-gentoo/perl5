@@ -727,20 +727,36 @@ Perl_fbm_compile(pTHX_ SV *sv, U32 flags)
 			  s[rarest], (UV)rarest));
 }
 
-/* If SvTAIL(littlestr), it has a fake '\n' at end. */
-/* If SvTAIL is actually due to \Z or \z, this gives false positives
-   if multiline */
 
 /*
 =for apidoc fbm_instr
 
 Returns the location of the SV in the string delimited by C<big> and
-C<bigend>.  It returns C<NULL> if the string can't be found.  The C<sv>
+C<bigend> (C<bigend>) is the char following the last char).
+It returns C<NULL> if the string can't be found.  The C<sv>
 does not have to be C<fbm_compiled>, but the search will not be as fast
 then.
 
 =cut
+
+If SvTAIL(littlestr) is true, a fake "\n" was appended to to the string
+during FBM compilation due to FBMcf_TAIL in flags. It indicates that
+the littlestr must be anchored to the end of bigstr (or to any \n if
+FBMrf_MULTILINE).
+
+E.g. The regex compiler would compile /abc/ to a littlestr of "abc",
+while /abc$/ compiles to "abc\n" with SvTAIL() true.
+
+A littlestr of "abc", !SvTAIL matches as /abc/;
+a littlestr of "ab\n", SvTAIL matches as:
+   without FBMrf_MULTILINE: /ab\n?\z/
+   with    FBMrf_MULTILINE: /ab\n/ || /ab\z/;
+
+(According to Ilya from 1999; I don't know if this is still true, DAPM 2015):
+  "If SvTAIL is actually due to \Z or \z, this gives false positives
+  if multiline".
 */
+
 
 char *
 Perl_fbm_instr(pTHX_ unsigned char *big, unsigned char *bigend, SV *littlestr, U32 flags)
@@ -766,82 +782,103 @@ Perl_fbm_instr(pTHX_ unsigned char *big, unsigned char *bigend, SV *littlestr, U
     switch (littlelen) { /* Special cases for 0, 1 and 2  */
     case 0:
 	return (char*)big;		/* Cannot be SvTAIL! */
+
     case 1:
-	    if (SvTAIL(littlestr) && !multiline) { /* Anchor only! */
-		/* Know that bigend != big.  */
-		if (bigend[-1] == '\n')
-		    return (char *)(bigend - 1);
-		return (char *) bigend;
-	    }
-	    s = big;
-	    while (s < bigend) {
-		if (*s == *little)
-		    return (char *)s;
-		s++;
-	    }
+	    if (SvTAIL(littlestr) && !multiline) /* Anchor only! */
+		/* [-1] is safe because we know that bigend != big.  */
+		return (char *) (bigend - (bigend[-1] == '\n'));
+
+	    s = (unsigned char *)memchr((void*)big, *little, bigend-big);
+            if (s)
+                return (char *)s;
 	    if (SvTAIL(littlestr))
 		return (char *) bigend;
 	    return NULL;
+
     case 2:
 	if (SvTAIL(littlestr) && !multiline) {
-	    if (bigend[-1] == '\n' && bigend[-2] == *little)
+            /* a littlestr with SvTAIL must be of the form "X\n" (where X
+             * is a single char). It is anchored, and can only match
+             * "....X\n"  or  "....X" */
+            if (bigend[-2] == *little && bigend[-1] == '\n')
 		return (char*)bigend - 2;
 	    if (bigend[-1] == *little)
 		return (char*)bigend - 1;
 	    return NULL;
 	}
-	{
-	    /* This should be better than FBM if c1 == c2, and almost
-	       as good otherwise: maybe better since we do less indirection.
-	       And we save a lot of memory by caching no table. */
-	    const unsigned char c1 = little[0];
-	    const unsigned char c2 = little[1];
 
-	    s = big + 1;
-	    bigend--;
-	    if (c1 != c2) {
-		while (s <= bigend) {
-		    if (s[0] == c2) {
-			if (s[-1] == c1)
-			    return (char*)s - 1;
-			s += 2;
-			continue;
-		    }
-		  next_chars:
-		    if (s[0] == c1) {
-			if (s == bigend)
-			    goto check_1char_anchor;
-			if (s[1] == c2)
-			    return (char*)s;
-			else {
-			    s++;
-			    goto next_chars;
-			}
-		    }
-		    else
-			s += 2;
-		}
-		goto check_1char_anchor;
-	    }
-	    /* Now c1 == c2 */
-	    while (s <= bigend) {
-		if (s[0] == c1) {
-		    if (s[-1] == c1)
-			return (char*)s - 1;
-		    if (s == bigend)
-			goto check_1char_anchor;
-		    if (s[1] == c1)
-			return (char*)s;
-		    s += 3;
-		}
-		else
-		    s += 2;
-	    }
-	}
-      check_1char_anchor:		/* One char and anchor! */
-	if (SvTAIL(littlestr) && (*bigend == *little))
-	    return (char *)bigend;	/* bigend is already decremented. */
-	return NULL;
+	{
+            /* memchr() is likely to be very fast, possibly using whatever
+             * hardware support is available, such as checking a whole
+             * cache line in one instruction.
+             * So for a 2 char pattern, calling memchr() is likely to be
+             * faster than running FBM, or rolling our own. The previous
+             * version of this code was roll-your-own which typically
+             * only needed to read every 2nd char, which was good back in
+             * the day, but no longer.
+             */
+	    unsigned char c1 = little[0];
+	    unsigned char c2 = little[1];
+
+            /* *** for all this case, bigend points to the last char,
+             * not the trailing \0: this makes the conditions slightly
+             * simpler */
+            bigend--;
+	    s = big;
+            if (c1 != c2) {
+                while (s < bigend) {
+                    /* do a quick test for c1 before calling memchr();
+                     * this avoids the expensive fn call overhead when
+                     * there are lots of c1's */
+                    if (LIKELY(*s != c1)) {
+                        s++;
+                        s = (unsigned char *)memchr((void*)s, c1, bigend - s);
+                        if (!s)
+                            break;
+                    }
+                    if (s[1] == c2)
+                        return (char*)s;
+
+                    /* failed; try searching for c2 this time; that way
+                     * we don't go pathologically slow when the string
+                     * consists mostly of c1's or vice versa.
+                     */
+                    s += 2;
+                    if (s > bigend)
+                        break;
+                    s = (unsigned char *)memchr((void*)s, c2, bigend - s + 1);
+                    if (!s)
+                        break;
+                    if (s[-1] == c1)
+                        return (char*)s - 1;
+                }
+            }
+            else {
+                /* c1, c2 the same */
+                while (s < bigend) {
+                    if (s[0] == c1) {
+                      got_1char:
+                        if (s[1] == c1)
+                            return (char*)s;
+                        s += 2;
+                    }
+                    else {
+                        s++;
+                        s = (unsigned char *)memchr((void*)s, c1, bigend - s);
+                        if (!s || s >= bigend)
+                            break;
+                        goto got_1char;
+                    }
+                }
+            }
+
+            /* failed to find 2 chars; try anchored match at end without
+             * the \n */
+            if (SvTAIL(littlestr) && bigend[0] == little[0])
+                return (char *)bigend;
+            return NULL;
+        }
+
     default:
 	break; /* Only lengths 0 1 and 2 have special-case code.  */
     }
@@ -861,7 +898,9 @@ Perl_fbm_instr(pTHX_ unsigned char *big, unsigned char *bigend, SV *littlestr, U
 	}
 	return NULL;
     }
+
     if (!SvVALID(littlestr)) {
+        /* not compiled; use Perl_ninstr() instead */
 	char * const b = ninstr((char*)big,(char*)bigend,
 			 (char*)little, (char*)little + littlelen);
 
@@ -895,15 +934,30 @@ Perl_fbm_instr(pTHX_ unsigned char *big, unsigned char *bigend, SV *littlestr, U
 	oldlittle = little;
 	if (s < bigend) {
 	    const unsigned char * const table = (const unsigned char *) mg->mg_ptr;
+            const unsigned char lastc = *little;
 	    I32 tmp;
 
 	  top2:
 	    if ((tmp = table[*s])) {
-		if ((s += tmp) < bigend)
-		    goto top2;
-		goto check_end;
+                /* *s != lastc; earliest position it could match now is
+                 * tmp slots further on */
+		if ((s += tmp) >= bigend)
+                    goto check_end;
+                if (LIKELY(*s != lastc)) {
+                    s++;
+                    s = (unsigned char *)memchr((void*)s, lastc, bigend - s);
+                    if (!s) {
+                        s = bigend;
+                        goto check_end;
+                    }
+                    goto top2;
+                }
 	    }
-	    else {		/* less expensive than calling strncmp() */
+
+
+            /* hand-rolled strncmp(): less expensive than calling the
+             * real function (maybe???) */
+	    {
 		unsigned char * const olds = s;
 
 		tmp = littlelen;
@@ -929,6 +983,7 @@ Perl_fbm_instr(pTHX_ unsigned char *big, unsigned char *bigend, SV *littlestr, U
 	return NULL;
     }
 }
+
 
 /*
 =for apidoc foldEQ
@@ -3255,6 +3310,7 @@ Perl_find_script(pTHX_ const char *scriptname, bool dosearch,
 	while (deftypes ||
 	       (!hasdir && my_trnlnm("DCL$PATH",tmpbuf,idx++)) )
 	{
+	    Stat_t statbuf;
 	    if (deftypes) {
 		deftypes = 0;
 		*tmpbuf = '\0';
@@ -3281,13 +3337,16 @@ Perl_find_script(pTHX_ const char *scriptname, bool dosearch,
 #endif
 	    DEBUG_p(PerlIO_printf(Perl_debug_log,
 				  "Looking for %s\n",cur));
-	    if (PerlLIO_stat(cur,&PL_statbuf) >= 0
-		&& !S_ISDIR(PL_statbuf.st_mode)) {
-		dosearch = 0;
-		scriptname = cur;
+	    {
+		Stat_t statbuf;
+		if (PerlLIO_stat(cur,&statbuf) >= 0
+		    && !S_ISDIR(statbuf.st_mode)) {
+		    dosearch = 0;
+		    scriptname = cur;
 #ifdef SEARCH_EXTS
-		break;
+		    break;
 #endif
+		}
 	    }
 #ifdef SEARCH_EXTS
 	    if (cur == scriptname) {
@@ -3313,6 +3372,7 @@ Perl_find_script(pTHX_ const char *scriptname, bool dosearch,
 
 	bufend = s + strlen(s);
 	while (s < bufend) {
+	    Stat_t statbuf;
 #  ifdef DOSISH
 	    for (len = 0; *s
 		    && *s != ';'; len++, s++) {
@@ -3349,8 +3409,8 @@ Perl_find_script(pTHX_ const char *scriptname, bool dosearch,
 	    do {
 #endif
 	    	DEBUG_p(PerlIO_printf(Perl_debug_log, "Looking for %s\n",tmpbuf));
-		retval = PerlLIO_stat(tmpbuf,&PL_statbuf);
-		if (S_ISDIR(PL_statbuf.st_mode)) {
+		retval = PerlLIO_stat(tmpbuf,&statbuf);
+		if (S_ISDIR(statbuf.st_mode)) {
 		    retval = -1;
 		}
 #ifdef SEARCH_EXTS
@@ -3361,10 +3421,10 @@ Perl_find_script(pTHX_ const char *scriptname, bool dosearch,
 #endif
 	    if (retval < 0)
 		continue;
-	    if (S_ISREG(PL_statbuf.st_mode)
-		&& cando(S_IRUSR,TRUE,&PL_statbuf)
+	    if (S_ISREG(statbuf.st_mode)
+		&& cando(S_IRUSR,TRUE,&statbuf)
 #if !defined(DOSISH)
-		&& cando(S_IXUSR,TRUE,&PL_statbuf)
+		&& cando(S_IXUSR,TRUE,&statbuf)
 #endif
 		)
 	    {
@@ -3375,11 +3435,16 @@ Perl_find_script(pTHX_ const char *scriptname, bool dosearch,
 		xfailed = savepv(tmpbuf);
 	}
 #ifndef DOSISH
-	if (!xfound && !seen_dot && !xfailed &&
-	    (PerlLIO_stat(scriptname,&PL_statbuf) < 0
-	     || S_ISDIR(PL_statbuf.st_mode)))
+	{
+	    Stat_t statbuf;
+	    if (!xfound && !seen_dot && !xfailed &&
+		(PerlLIO_stat(scriptname,&statbuf) < 0
+		 || S_ISDIR(statbuf.st_mode)))
 #endif
-	    seen_dot = 1;			/* Disable message. */
+		seen_dot = 1;			/* Disable message. */
+#ifndef DOSISH
+	}
+#endif
 	if (!xfound) {
 	    if (flags & 1) {			/* do or die? */
 		/* diag_listed_as: Can't execute %s */

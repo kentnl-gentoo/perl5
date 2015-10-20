@@ -14,6 +14,61 @@ typedef PTR_TBL_t *XS__APItest__PtrTable;
 #define croak_fail() croak("fail at " __FILE__ " line %d", __LINE__)
 #define croak_fail_ne(h, w) croak("fail %p!=%p at " __FILE__ " line %d", (h), (w), __LINE__)
 
+#ifdef EBCDIC
+
+void
+cat_utf8a2n(SV* sv, const char * const ascii_utf8, STRLEN len)
+{
+    /* Converts variant UTF-8 text pointed to by 'ascii_utf8' of length 'len',
+     * to UTF-EBCDIC, appending that text to the text already in 'sv'.
+     * Currently doesn't work on invariants, as that is unneeded here, and we
+     * could get double translations if we did.
+     *
+     * It has the algorithm for strict UTF-8 hard-coded in to find the code
+     * point it represents, then calls uvchr_to_utf8() to convert to
+     * UTF-EBCDIC).
+     *
+     * Note that this uses code points, not characters.  Thus if the input is
+     * the UTF-8 for the code point 0xFF, the output will be the UTF-EBCDIC for
+     * 0xFF, even though that code point represents different characters on
+     * ASCII vs EBCDIC platforms. */
+
+    dTHX;
+    char * p = (char *) ascii_utf8;
+    const char * const e = p + len;
+
+    while (p < e) {
+        UV code_point;
+        U8 native_utf8[UTF8_MAXBYTES + 1];
+        U8 * char_end;
+        U8 start = (U8) *p;
+
+        /* Start bytes are the same in both UTF-8 and I8, therefore we can
+         * treat this ASCII UTF-8 byte as an I8 byte.  But PL_utf8skip[] is
+         * indexed by NATIVE_UTF8 bytes, so transform to that */
+        STRLEN char_bytes_len = PL_utf8skip[I8_TO_NATIVE_UTF8(start)];
+
+        if (start < 0xc2) {
+            croak("fail: Expecting start byte, instead got 0x%X at %s line %d",
+                                                  (U8) *p, __FILE__, __LINE__);
+        }
+        code_point = (start & (((char_bytes_len) >= 7)
+                                ? 0x00
+                                : (0x1F >> ((char_bytes_len)-2))));
+        p++;
+        while (p < e && ((( (U8) *p) & 0xC0) == 0x80)) {
+
+            code_point = (code_point << 6) | (( (U8) *p) & 0x3F);
+            p++;
+        }
+
+        char_end = uvchr_to_utf8(native_utf8, code_point);
+	sv_catpvn(sv, (char *) native_utf8, char_end - native_utf8);
+    }
+}
+
+#endif
+
 /* for my_cxt tests */
 
 #define MY_CXT_KEY "XS::APItest::_guts" XS_VERSION
@@ -134,6 +189,9 @@ test_freeent(freeent_function *f) {
     SvREFCNT_dec(test_scalar);
 }
 
+/* Not that it matters much, but it's handy for the flipped character to just
+ * be the opposite case (at least for ASCII-range and most Latin1 as well). */
+#define FLIP_BIT ('A' ^ 'a')
 
 static I32
 bitflip_key(pTHX_ IV action, SV *field) {
@@ -145,24 +203,33 @@ bitflip_key(pTHX_ IV action, SV *field) {
 	const char *p = SvPV(keysv, len);
 
 	if (len) {
-	    SV *newkey = newSV(len);
-	    char *new_p = SvPVX(newkey);
+            /* Allow for the flipped val to be longer than the original.  This
+             * is just for testing, so can afford to have some slop */
+            const STRLEN newlen = len * 2;
+
+	    SV *newkey = newSV(newlen);
+	    const char * const new_p_orig = SvPVX(newkey);
+	    char *new_p = (char *) new_p_orig;
 
 	    if (SvUTF8(keysv)) {
 		const char *const end = p + len;
 		while (p < end) {
-		    STRLEN len;
-		    UV chr = utf8_to_uvchr_buf((U8 *)p, (U8 *) end, &len);
-		    new_p = (char *)uvchr_to_utf8((U8 *)new_p, chr ^ 32);
-		    p += len;
+		    STRLEN curlen;
+		    UV chr = utf8_to_uvchr_buf((U8 *)p, (U8 *) end, &curlen);
+
+                    /* Make sure don't exceed bounds */
+                    assert(new_p - new_p_orig + curlen < newlen);
+
+		    new_p = (char *)uvchr_to_utf8((U8 *)new_p, chr ^ FLIP_BIT);
+		    p += curlen;
 		}
 		SvUTF8_on(newkey);
 	    } else {
 		while (len--)
-		    *new_p++ = *p++ ^ 32;
+		    *new_p++ = *p++ ^ FLIP_BIT;
 	    }
 	    *new_p = '\0';
-	    SvCUR_set(newkey, SvCUR(keysv));
+	    SvCUR_set(newkey, new_p - new_p_orig);
 	    SvPOK_on(newkey);
 
 	    mg->mg_obj = newkey;
@@ -1388,6 +1455,61 @@ XS_APIVERSION_valid(...)
         XS_APIVERSION_BOOTCHECK;
         XSRETURN_EMPTY;
 
+void
+xsreturn( int len )
+    PPCODE:
+        int i = 0;
+        EXTEND( SP, len );
+        for ( ; i < len; i++ ) {
+            ST(i) = sv_2mortal( newSViv(i) );
+        }
+        XSRETURN( len );
+
+void
+xsreturn_iv()
+    PPCODE:
+        XSRETURN_IV( (1<<31) + 1 );
+
+void
+xsreturn_uv()
+    PPCODE:
+        XSRETURN_UV( (U32)((1<<31) + 1) );
+
+void
+xsreturn_nv()
+    PPCODE:
+        XSRETURN_NV(0.25);
+
+void
+xsreturn_pv()
+    PPCODE:
+        XSRETURN_PV("returned");
+
+void
+xsreturn_pvn()
+    PPCODE:
+        XSRETURN_PVN("returned too much",8);
+
+void
+xsreturn_no()
+    PPCODE:
+        XSRETURN_NO;
+
+void
+xsreturn_yes()
+    PPCODE:
+        XSRETURN_YES;
+
+void
+xsreturn_undef()
+    PPCODE:
+        XSRETURN_UNDEF;
+
+void
+xsreturn_empty()
+    PPCODE:
+        XSRETURN_EMPTY;
+
 MODULE = XS::APItest:Hash		PACKAGE = XS::APItest::Hash
 
 void
@@ -1683,7 +1805,7 @@ void
 test_force_keys(HV *hv)
     PREINIT:
         HE *he;
-	STRLEN count = 0;
+	SSize_t count = 0;
     PPCODE:
         hv_iterinit(hv);
         he = hv_iternext(hv);
@@ -2081,6 +2203,39 @@ mxpushu()
 	mXPUSHu(2);
 	mXPUSHu(3);
 	XSRETURN(3);
+
+
+ # test_EXTEND(): excerise the EXTEND() macro.
+ # After calling EXTEND(), it also does *(p+n) = NULL and
+ # *PL_stack_max = NULL to allow valgrind etc to spot if the stack hasn't
+ # actually been extended properly.
+ #
+ # max_offset specifies the SP to use.  It is treated as a signed offset
+ #              from PL_stack_max.
+ # nsv        is the SV holding the value of n indicating how many slots
+ #              to extend the stack by.
+ # use_ss     is a boolean indicating that n should be cast to a SSize_t
+
+void
+test_EXTEND(max_offset, nsv, use_ss)
+    IV   max_offset;
+    SV  *nsv;
+    bool use_ss;
+PREINIT:
+    SV **sp = PL_stack_max + max_offset;
+PPCODE:
+    if (use_ss) {
+        SSize_t n = (SSize_t)SvIV(nsv);
+        EXTEND(sp, n);
+        *(sp + n) = NULL;
+    }
+    else {
+        IV n = SvIV(nsv);
+        EXTEND(sp, n);
+        *(sp + n) = NULL;
+    }
+    *PL_stack_max = NULL;
+
 
 void
 call_sv_C()
@@ -2907,6 +3062,11 @@ void
 test_cophh()
     PREINIT:
 	COPHH *a, *b;
+#ifdef EBCDIC
+        SV* key_sv;
+        char * key_name;
+        STRLEN key_len;
+#endif
     CODE:
 #define check_ph(EXPR) \
     	    do { if((EXPR) != &PL_sv_placeholder) croak("fail"); } while(0)
@@ -2970,24 +3130,81 @@ test_cophh()
 	check_iv(cophh_fetch_pvs(a, "foo_3", 0), 333);
 	check_iv(cophh_fetch_pvs(a, "foo_4", 0), 444);
 	check_ph(cophh_fetch_pvs(a, "foo_5", 0));
-	a = cophh_store_pvs(a, "foo_1", msviv(11111), COPHH_KEY_UTF8);
+        a = cophh_store_pvs(a, "foo_1", msviv(11111), COPHH_KEY_UTF8);
 	a = cophh_store_pvs(a, "foo_\xaa", msviv(123), 0);
+#ifndef EBCDIC
 	a = cophh_store_pvs(a, "foo_\xc2\xbb", msviv(456), COPHH_KEY_UTF8);
+#else
+        /* On EBCDIC, we need to translate the UTF-8 in the ASCII test to the
+         * equivalent UTF-EBCDIC for the code page.  This is done at runtime
+         * (with the helper function in this file).  Therefore we can't use
+         * cophhh_store_pvs(), as we don't have literal string */
+        key_sv = sv_2mortal(newSVpvs("foo_"));
+        cat_utf8a2n(key_sv, STR_WITH_LEN("\xc2\xbb"));
+	key_name = SvPV(key_sv, key_len);
+	a = cophh_store_pvn(a, key_name, key_len, 0, msviv(456), COPHH_KEY_UTF8);
+#endif
+#ifndef EBCDIC
 	a = cophh_store_pvs(a, "foo_\xc3\x8c", msviv(789), COPHH_KEY_UTF8);
+#else
+        sv_setpvs(key_sv, "foo_");
+        cat_utf8a2n(key_sv, STR_WITH_LEN("\xc3\x8c"));
+	key_name = SvPV(key_sv, key_len);
+	a = cophh_store_pvn(a, key_name, key_len, 0, msviv(789), COPHH_KEY_UTF8);
+#endif
+#ifndef EBCDIC
 	a = cophh_store_pvs(a, "foo_\xd9\xa6", msviv(666), COPHH_KEY_UTF8);
+#else
+        sv_setpvs(key_sv, "foo_");
+        cat_utf8a2n(key_sv, STR_WITH_LEN("\xd9\xa6"));
+	key_name = SvPV(key_sv, key_len);
+	a = cophh_store_pvn(a, key_name, key_len, 0, msviv(666), COPHH_KEY_UTF8);
+#endif
 	check_iv(cophh_fetch_pvs(a, "foo_1", 0), 11111);
 	check_iv(cophh_fetch_pvs(a, "foo_1", COPHH_KEY_UTF8), 11111);
 	check_iv(cophh_fetch_pvs(a, "foo_\xaa", 0), 123);
+#ifndef EBCDIC
 	check_iv(cophh_fetch_pvs(a, "foo_\xc2\xaa", COPHH_KEY_UTF8), 123);
 	check_ph(cophh_fetch_pvs(a, "foo_\xc2\xaa", 0));
+#else
+        sv_setpvs(key_sv, "foo_");
+        cat_utf8a2n(key_sv, STR_WITH_LEN("\xc2\xaa"));
+	key_name = SvPV(key_sv, key_len);
+	check_iv(cophh_fetch_pvn(a, key_name, key_len, 0, COPHH_KEY_UTF8), 123);
+	check_ph(cophh_fetch_pvn(a, key_name, key_len, 0, 0));
+#endif
 	check_iv(cophh_fetch_pvs(a, "foo_\xbb", 0), 456);
+#ifndef EBCDIC
 	check_iv(cophh_fetch_pvs(a, "foo_\xc2\xbb", COPHH_KEY_UTF8), 456);
 	check_ph(cophh_fetch_pvs(a, "foo_\xc2\xbb", 0));
+#else
+        sv_setpvs(key_sv, "foo_");
+        cat_utf8a2n(key_sv, STR_WITH_LEN("\xc2\xbb"));
+	key_name = SvPV(key_sv, key_len);
+	check_iv(cophh_fetch_pvn(a, key_name, key_len, 0, COPHH_KEY_UTF8), 456);
+	check_ph(cophh_fetch_pvn(a, key_name, key_len, 0, 0));
+#endif
 	check_iv(cophh_fetch_pvs(a, "foo_\xcc", 0), 789);
+#ifndef EBCDIC
 	check_iv(cophh_fetch_pvs(a, "foo_\xc3\x8c", COPHH_KEY_UTF8), 789);
 	check_ph(cophh_fetch_pvs(a, "foo_\xc2\x8c", 0));
+#else
+        sv_setpvs(key_sv, "foo_");
+        cat_utf8a2n(key_sv, STR_WITH_LEN("\xc3\x8c"));
+	key_name = SvPV(key_sv, key_len);
+	check_iv(cophh_fetch_pvn(a, key_name, key_len, 0, COPHH_KEY_UTF8), 789);
+	check_ph(cophh_fetch_pvn(a, key_name, key_len, 0, 0));
+#endif
+#ifndef EBCDIC
 	check_iv(cophh_fetch_pvs(a, "foo_\xd9\xa6", COPHH_KEY_UTF8), 666);
 	check_ph(cophh_fetch_pvs(a, "foo_\xd9\xa6", 0));
+#else
+        sv_setpvs(key_sv, "foo_");
+        cat_utf8a2n(key_sv, STR_WITH_LEN("\xd9\xa6"));
+	key_name = SvPV(key_sv, key_len);
+	check_iv(cophh_fetch_pvn(a, key_name, key_len, 0, COPHH_KEY_UTF8), 666);
+	check_ph(cophh_fetch_pvn(a, key_name, key_len, 0, 0));
+#endif
 	ENTER;
 	SAVEFREECOPHH(a);
 	LEAVE;
@@ -3022,15 +3239,41 @@ HV *
 example_cophh_2hv()
     PREINIT:
 	COPHH *a;
+#ifdef EBCDIC
+        SV* key_sv;
+        char * key_name;
+        STRLEN key_len;
+#endif
     CODE:
 #define msviv(VALUE) sv_2mortal(newSViv(VALUE))
 	a = cophh_new_empty();
 	a = cophh_store_pvs(a, "foo_0", msviv(999), 0);
 	a = cophh_store_pvs(a, "foo_1", msviv(111), 0);
 	a = cophh_store_pvs(a, "foo_\xaa", msviv(123), 0);
+#ifndef EBCDIC
 	a = cophh_store_pvs(a, "foo_\xc2\xbb", msviv(456), COPHH_KEY_UTF8);
+#else
+        key_sv = sv_2mortal(newSVpvs("foo_"));
+        cat_utf8a2n(key_sv, STR_WITH_LEN("\xc2\xbb"));
+	key_name = SvPV(key_sv, key_len);
+	a = cophh_store_pvn(a, key_name, key_len, 0, msviv(456), COPHH_KEY_UTF8);
+#endif
+#ifndef EBCDIC
 	a = cophh_store_pvs(a, "foo_\xc3\x8c", msviv(789), COPHH_KEY_UTF8);
+#else
+        sv_setpvs(key_sv, "foo_");
+        cat_utf8a2n(key_sv, STR_WITH_LEN("\xc3\x8c"));
+	key_name = SvPV(key_sv, key_len);
+	a = cophh_store_pvn(a, key_name, key_len, 0, msviv(789), COPHH_KEY_UTF8);
+#endif
+#ifndef EBCDIC
 	a = cophh_store_pvs(a, "foo_\xd9\xa6", msviv(666), COPHH_KEY_UTF8);
+#else
+        sv_setpvs(key_sv, "foo_");
+        cat_utf8a2n(key_sv, STR_WITH_LEN("\xd9\xa6"));
+	key_name = SvPV(key_sv, key_len);
+	a = cophh_store_pvn(a, key_name, key_len, 0, msviv(666), COPHH_KEY_UTF8);
+#endif
 	a = cophh_delete_pvs(a, "foo_0", 0);
 	a = cophh_delete_pvs(a, "foo_2", 0);
 	RETVAL = cophh_2hv(a, 0);
@@ -3375,7 +3618,7 @@ CODE:
     CV *cv;
     AV *av;
     SV **p;
-    Size_t i, size;
+    SSize_t i, size;
 
     cv = sv_2cv(block, &stash, &gv, 0);
     if (cv == Nullcv) {

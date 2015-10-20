@@ -22,6 +22,8 @@ find things that, while legal, may not be what you intended.
 
 =head2 Modifiers
 
+=head3 Overview
+
 Matching operations can have various modifiers.  Modifiers
 that relate to the interpretation of the regular expression inside
 are listed below.  Modifiers that alter the way a regular expression
@@ -152,11 +154,16 @@ L<perlop/"s/PATTERN/REPLACEMENT/msixpodualngcer"> are:
 
 Regular expression modifiers are usually written in documentation
 as e.g., "the C</x> modifier", even though the delimiter
-in question might not really be a slash.  The modifiers C</imsxadlup>
+in question might not really be a slash.  The modifiers C</imnsxadlup>
 may also be embedded within the regular expression itself using
 the C<(?...)> construct, see L</Extended Patterns> below.
 
-=head3 /x
+=head3 Details on some modifiers
+
+Some of the modifiers require more explanation than given in the
+L</Overview> above.
+
+=head4 /x
 
 C</x> tells
 the regular expression parser to ignore most whitespace that is neither
@@ -220,7 +227,7 @@ calls "Pattern White Space", namely:
  U+2028 LINE SEPARATOR
  U+2029 PARAGRAPH SEPARATOR
 
-=head3 Character set modifiers
+=head4 Character set modifiers
 
 C</d>, C</u>, C</a>, and C</l>, available starting in 5.14, are called
 the character set modifiers; they affect the character set rules
@@ -1067,9 +1074,9 @@ a backslash if it appears in the comment.
 
 See L</E<sol>x> for another way to have comments in patterns.
 
-=item C<(?adlupimsx-imsx)>
+=item C<(?adlupimnsx-imnsx)>
 
-=item C<(?^alupimsx)>
+=item C<(?^alupimnsx)>
 X<(?)> X<(?^)>
 
 One or more embedded pattern-match modifiers, to be turned on (or
@@ -1107,7 +1114,7 @@ expressions compiled within the scope of a C<use re>.  See
 L<re/"'/flags' mode">.
 
 Starting in Perl 5.14, a C<"^"> (caret or circumflex accent) immediately
-after the C<"?"> is a shorthand equivalent to C<d-imsx>.  Flags (except
+after the C<"?"> is a shorthand equivalent to C<d-imnsx>.  Flags (except
 C<"d">) may follow the caret to override it.
 But a minus sign is not legal with it.
 
@@ -1125,9 +1132,9 @@ anywhere in a pattern has a global effect.
 =item C<(?:pattern)>
 X<(?:)>
 
-=item C<(?adluimsx-imsx:pattern)>
+=item C<(?adluimnsx-imnsx:pattern)>
 
-=item C<(?^aluimsx:pattern)>
+=item C<(?^aluimnsx:pattern)>
 X<(?^:)>
 
 This is for clustering, not capturing; it groups subexpressions like
@@ -1143,7 +1150,7 @@ but doesn't spit out extra fields.  It's also cheaper not to capture
 characters if you don't need to.
 
 Any letters between C<?> and C<:> act as flags modifiers as with
-C<(?adluimsx-imsx)>.  For example,
+C<(?adluimnsx-imnsx)>.  For example,
 
     /(?s-i:more.*than).*million/i
 
@@ -1151,18 +1158,21 @@ is equivalent to the more verbose
 
     /(?:(?s-i)more.*than).*million/i
 
+Note that any C<(...)> constructs enclosed within this one will still
+capture unless the C</n> modifier is in effect.
+
 Starting in Perl 5.14, a C<"^"> (caret or circumflex accent) immediately
-after the C<"?"> is a shorthand equivalent to C<d-imsx>.  Any positive
+after the C<"?"> is a shorthand equivalent to C<d-imnsx>.  Any positive
 flags (except C<"d">) may follow the caret, so
 
     (?^x:foo)
 
 is equivalent to
 
-    (?x-ims:foo)
+    (?x-imns:foo)
 
 The caret tells Perl that this cluster doesn't inherit the flags of any
-surrounding pattern, but uses the system defaults (C<d-imsx>),
+surrounding pattern, but uses the system defaults (C<d-imnsx>),
 modified by any flags specified.
 
 The caret allows for simpler stringification of compiled regular
@@ -1856,7 +1866,7 @@ See L<perlrecharclass/Extended Bracketed Character Classes>.
 
 These special patterns are generally of the form C<(*VERB:ARG)>. Unless
 otherwise stated the ARG argument is optional; in some cases, it is
-forbidden.
+mandatory.
 
 Any pattern containing a special backtracking verb that allows an argument
 has the special behaviour that when executed it sets the current package's
@@ -1884,7 +1894,7 @@ argument, then C<$REGERROR> and C<$REGMARK> are not touched at all.
 
 =over 3
 
-=item Verbs that take an argument
+=item Verbs
 
 =over 4
 
@@ -2040,13 +2050,7 @@ is not the same as
 as after matching the A but failing on the B the C<(*THEN)> verb will
 backtrack and try C; but the C<(*PRUNE)> verb will simply fail.
 
-=back
-
-=item Verbs without an argument
-
-=over 4
-
-=item C<(*COMMIT)>
+=item C<(*COMMIT)> C<(*COMMIT:args)>
 X<(*COMMIT)>
 
 This is the Perl 6 "commit pattern" C<< <commit> >> or C<:::>. It's a
@@ -2067,16 +2071,18 @@ In other words, once the C<(*COMMIT)> has been entered, and if the pattern
 does not match, the regex engine will not try any further matching on the
 rest of the string.
 
-=item C<(*FAIL)> C<(*F)>
+=item C<(*FAIL)> C<(*F)> C<(*FAIL:arg)>
 X<(*FAIL)> X<(*F)>
 
 This pattern matches nothing and always fails. It can be used to force the
 engine to backtrack. It is equivalent to C<(?!)>, but easier to read. In
-fact, C<(?!)> gets optimised into C<(*FAIL)> internally.
+fact, C<(?!)> gets optimised into C<(*FAIL)> internally. You can provide
+an argument so that if the match fails because of this FAIL directive
+the argument can be obtained from $REGERROR.
 
 It is probably useful only when combined with C<(?{})> or C<(??{})>.
 
-=item C<(*ACCEPT)>
+=item C<(*ACCEPT)> C<(*ACCEPT:arg)>
 X<(*ACCEPT)>
 
 This pattern matches nothing and causes the end of successful matching at
@@ -2094,6 +2100,9 @@ For instance:
 will match, and C<$1> will be C<AB> and C<$2> will be C<B>, C<$3> will not
 be set. If another branch in the inner parentheses was matched, such as in the
 string 'ACDE', then the C<D> and C<E> would have to be matched as well.
+
+You can provide an argument, which will be available in the var $REGMARK
+after the match completes.
 
 =back
 

@@ -379,9 +379,6 @@ addbits($_, 7 => qw(OPpLVAL_INTRO LVINTRO))
 
 addbits($_, 4 => qw(OPpTARGET_MY TARGMY))
     for ops_with_flag('T'),
-    # This flag is also used to indicate matches against implicit $_,
-    # where $_ is lexical; e.g. my $_; ....; /foo/
-    qw(match subst pushre qr trans transr);
 ;
 
 
@@ -625,7 +622,7 @@ addbits('rv2gv',
 
 addbits('enteriter',
                     2 => qw(OPpITER_REVERSED REVERSED),# for (reverse ...)
-                    3 => qw(OPpITER_DEF      DEF),     # 'for $_' or 'for my $_'
+                    3 => qw(OPpITER_DEF      DEF),     # 'for $_'
 );
 addbits('iter',     2 => qw(OPpITER_REVERSED REVERSED));
 
@@ -706,11 +703,6 @@ for (grep { $_ !~ /^l?stat$/ } ops_with_flag('-')) {
         4 => qw(OPpFT_AFTER_t  FTAFTERt  ),  # previous op was -t
     );
 }
-
-
-
-addbits($_, 1 => qw(OPpGREP_LEX GREPLEX)) # iterate over lexical $_
-    for qw(mapwhile mapstart grepwhile grepstart);
 
 
 

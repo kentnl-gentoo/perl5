@@ -467,7 +467,7 @@ perform the upgrade if necessary.  See C<L</svtype>>.
 /* PVHV */
 #define SVphv_HASKFLAGS	0x80000000  /* keys have flag byte after hash */
 /* PVGV when SVpbm_VALID is true */
-#define SVpbm_TAIL	0x80000000
+#define SVpbm_TAIL	0x80000000  /* string has a fake "\n" appended */
 /* RV upwards. However, SVf_ROK and SVp_IOK are exclusive  */
 #define SVprv_WEAKREF   0x80000000  /* Weak reference */
 /* pad name vars only */
@@ -949,7 +949,7 @@ in gv.h: */
 
 #define SvOOK(sv)		(SvFLAGS(sv) & SVf_OOK)
 #define SvOOK_on(sv)		(SvFLAGS(sv) |= SVf_OOK)
-#define SvOOK_off(sv)		((void)(SvOOK(sv) && sv_backoff(sv)))
+#define SvOOK_off(sv)		((void)(SvOOK(sv) && (sv_backoff(sv),0)))
 
 #define SvFAKE(sv)		(SvFLAGS(sv) & SVf_FAKE)
 #define SvFAKE_on(sv)		(SvFLAGS(sv) |= SVf_FAKE)
@@ -1051,7 +1051,7 @@ For example, if your scalar is a reference and you want to modify the C<SvIVX>
 slot, you can't just do C<SvROK_off>, as that will leak the referent.
 
 This is used internally by various sv-modifying functions, such as
-C<sv_setsv>, C<sv_setiv> and C<sv_pvn_force..
+C<sv_setsv>, C<sv_setiv> and C<sv_pvn_force>.
 
 One case that this does not handle is a gv without SvFAKE set.  After
 
