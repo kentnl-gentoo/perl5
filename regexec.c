@@ -2073,14 +2073,17 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                 FBC_BOUND(isWORDCHAR_L1, isWORDCHAR_uni, isWORDCHAR_utf8);
                 break;
             case GCB_BOUND:
-                if (s == reginfo->strbeg) { /* GCB always matches at begin and
-                                               end */
-                    if (to_complement ^ cBOOL(reginfo->intuit
-                                                      || regtry(reginfo, &s)))
+                if (s == reginfo->strbeg) {
+                    if (reginfo->intuit || regtry(reginfo, &s))
                     {
                         goto got_it;
                     }
+
+                    /* Didn't match.  Try at the next position (if there is one) */
                     s += (utf8_target) ? UTF8SKIP(s) : 1;
+                    if (UNLIKELY(s >= reginfo->strend)) {
+                        break;
+                    }
                 }
 
                 if (utf8_target) {
@@ -2091,44 +2094,42 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                     while (s < strend) {
                         GCB_enum after = getGCB_VAL_UTF8((U8*) s,
                                                         (U8*) reginfo->strend);
-                        if (to_complement ^ isGCB(before, after)) {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            before = after;
+                        if (   (to_complement ^ isGCB(before, after))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
+                        {
+                            goto got_it;
                         }
+                        before = after;
                         s += UTF8SKIP(s);
                     }
                 }
                 else {  /* Not utf8.  Everything is a GCB except between CR and
                            LF */
                     while (s < strend) {
-                        if (to_complement ^ (UCHARAT(s - 1) != '\r'
-                                             || UCHARAT(s) != '\n'))
+                        if ((to_complement ^ (   UCHARAT(s - 1) != '\r'
+                                              || UCHARAT(s) != '\n'))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
                         {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            s++;
+                            goto got_it;
                         }
+                        s++;
                     }
                 }
 
-                if (to_complement ^ cBOOL(reginfo->intuit || regtry(reginfo, &s))) {
+                if ((reginfo->intuit || regtry(reginfo, &s))) {
                     goto got_it;
                 }
                 break;
 
             case SB_BOUND:
-                if (s == reginfo->strbeg) { /* SB always matches at beginning */
-                    if (to_complement
-                                ^ cBOOL(reginfo->intuit || regtry(reginfo, &s)))
-                    {
+                if (s == reginfo->strbeg) {
+                    if (reginfo->intuit || regtry(reginfo, &s)) {
                         goto got_it;
                     }
-
-                    /* Didn't match.  Go try at the next position */
                     s += (utf8_target) ? UTF8SKIP(s) : 1;
+                    if (UNLIKELY(s >= reginfo->strend)) {
+                        break;
+                    }
                 }
 
                 if (utf8_target) {
@@ -2139,18 +2140,17 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                     while (s < strend) {
                         SB_enum after = getSB_VAL_UTF8((U8*) s,
                                                          (U8*) reginfo->strend);
-                        if (to_complement ^ isSB(before,
-                                                 after,
-                                                 (U8*) reginfo->strbeg,
-                                                 (U8*) s,
-                                                 (U8*) reginfo->strend,
-                                                 utf8_target))
+                        if ((to_complement ^ isSB(before,
+                                                  after,
+                                                  (U8*) reginfo->strbeg,
+                                                  (U8*) s,
+                                                  (U8*) reginfo->strend,
+                                                  utf8_target))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
                         {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            before = after;
+                            goto got_it;
                         }
+                        before = after;
                         s += UTF8SKIP(s);
                     }
                 }
@@ -2158,18 +2158,17 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                     SB_enum before = getSB_VAL_CP((U8) *(s -1));
                     while (s < strend) {
                         SB_enum after = getSB_VAL_CP((U8) *s);
-                        if (to_complement ^ isSB(before,
-                                                 after,
-                                                 (U8*) reginfo->strbeg,
-                                                 (U8*) s,
-                                                 (U8*) reginfo->strend,
-                                                 utf8_target))
+                        if ((to_complement ^ isSB(before,
+                                                  after,
+                                                  (U8*) reginfo->strbeg,
+                                                  (U8*) s,
+                                                  (U8*) reginfo->strend,
+                                                  utf8_target))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
                         {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            before = after;
+                            goto got_it;
                         }
+                        before = after;
                         s++;
                     }
                 }
@@ -2177,9 +2176,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                 /* Here are at the final position in the target string.  The SB
                  * value is always true here, so matches, depending on other
                  * constraints */
-                if (to_complement ^ cBOOL(reginfo->intuit
-                                                      || regtry(reginfo, &s)))
-                {
+                if (reginfo->intuit || regtry(reginfo, &s)) {
                     goto got_it;
                 }
 
@@ -2187,12 +2184,13 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 
             case WB_BOUND:
                 if (s == reginfo->strbeg) {
-                    if (to_complement ^ cBOOL(reginfo->intuit
-                                              || regtry(reginfo, &s)))
-                    {
+                    if (reginfo->intuit || regtry(reginfo, &s)) {
                         goto got_it;
                     }
                     s += (utf8_target) ? UTF8SKIP(s) : 1;
+                    if (UNLIKELY(s >= reginfo->strend)) {
+                        break;
+                    }
                 }
 
                 if (utf8_target) {
@@ -2210,20 +2208,19 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                     while (s < strend) {
                         WB_enum after = getWB_VAL_UTF8((U8*) s,
                                                         (U8*) reginfo->strend);
-                        if (to_complement ^ isWB(previous,
-                                                 before,
-                                                 after,
-                                                 (U8*) reginfo->strbeg,
-                                                 (U8*) s,
-                                                 (U8*) reginfo->strend,
-                                                 utf8_target))
+                        if ((to_complement ^ isWB(previous,
+                                                  before,
+                                                  after,
+                                                  (U8*) reginfo->strbeg,
+                                                  (U8*) s,
+                                                  (U8*) reginfo->strend,
+                                                  utf8_target))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
                         {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            previous = before;
-                            before = after;
+                            goto got_it;
                         }
+                        previous = before;
+                        before = after;
                         s += UTF8SKIP(s);
                     }
                 }
@@ -2232,27 +2229,24 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
                     WB_enum before = getWB_VAL_CP((U8) *(s -1));
                     while (s < strend) {
                         WB_enum after = getWB_VAL_CP((U8) *s);
-                        if (to_complement ^ isWB(previous,
-                                                 before,
-                                                 after,
-                                                 (U8*) reginfo->strbeg,
-                                                 (U8*) s,
-                                                 (U8*) reginfo->strend,
-                                                 utf8_target))
+                        if ((to_complement ^ isWB(previous,
+                                                  before,
+                                                  after,
+                                                  (U8*) reginfo->strbeg,
+                                                  (U8*) s,
+                                                  (U8*) reginfo->strend,
+                                                  utf8_target))
+                            && (reginfo->intuit || regtry(reginfo, &s)))
                         {
-                            if (reginfo->intuit || regtry(reginfo, &s)) {
-                                goto got_it;
-                            }
-                            previous = before;
-                            before = after;
+                            goto got_it;
                         }
+                        previous = before;
+                        before = after;
                         s++;
                     }
                 }
 
-                if (to_complement ^ cBOOL(reginfo->intuit
-                                          || regtry(reginfo, &s)))
-                {
+                if (reginfo->intuit || regtry(reginfo, &s)) {
                     goto got_it;
                 }
 
@@ -4750,10 +4744,24 @@ S_backup_one_WB(pTHX_ WB_enum * previous, const U8 * const strbeg, U8 ** curpos,
         * to look it up */
     if (*previous != WB_UNKNOWN) {
         wb = *previous;
-        *previous = WB_UNKNOWN;
-        /* XXX Note that doesn't change curpos, and maybe should */
 
-        /* But we always back up over these two types */
+        /* But we need to move backwards by one */
+        if (utf8_target) {
+            *curpos = reghopmaybe3(*curpos, -1, strbeg);
+            if (! *curpos) {
+                *previous = WB_EDGE;
+                *curpos = (U8 *) strbeg;
+            }
+            else {
+                *previous = WB_UNKNOWN;
+            }
+        }
+        else {
+            (*curpos)--;
+            *previous = (*curpos <= strbeg) ? WB_EDGE : WB_UNKNOWN;
+        }
+
+        /* And we always back up over these two types */
         if (wb != WB_Extend && wb != WB_Format) {
             return wb;
         }
@@ -5617,8 +5625,10 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	case BOUNDU:  /*  /\b/u  */
 
           boundu:
-	    if (utf8_target) {
-
+            if (UNLIKELY(reginfo->strbeg >= reginfo->strend)) {
+                match = FALSE;
+            }
+            else if (utf8_target) {
               bound_utf8:
                 switch((bound_type) FLAGS(scan)) {
                     case TRADITIONAL_BOUND:
@@ -8769,6 +8779,10 @@ S_reghop3(U8 *s, SSize_t off, const U8* lim)
             if (UTF8_IS_CONTINUED(*s)) {
                 while (s > lim && UTF8_IS_CONTINUATION(*s))
                     s--;
+                if (! UTF8_IS_START(*s)) {
+                    dTHX;
+                    Perl_croak(aTHX_ "Malformed UTF-8 character (fatal)");
+                }
 	    }
             /* XXX could check well-formedness here */
 	}
@@ -8793,6 +8807,10 @@ S_reghop4(U8 *s, SSize_t off, const U8* llim, const U8* rlim)
             if (UTF8_IS_CONTINUED(*s)) {
                 while (s > llim && UTF8_IS_CONTINUATION(*s))
                     s--;
+                if (! UTF8_IS_START(*s)) {
+                    dTHX;
+                    Perl_croak(aTHX_ "Malformed UTF-8 character (fatal)");
+                }
             }
             /* XXX could check well-formedness here */
         }
@@ -8822,6 +8840,10 @@ S_reghopmaybe3(U8* s, SSize_t off, const U8* lim)
             if (UTF8_IS_CONTINUED(*s)) {
                 while (s > lim && UTF8_IS_CONTINUATION(*s))
                     s--;
+                if (! UTF8_IS_START(*s)) {
+                    dTHX;
+                    Perl_croak(aTHX_ "Malformed UTF-8 character (fatal)");
+                }
 	    }
             /* XXX could check well-formedness here */
 	}

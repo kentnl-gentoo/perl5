@@ -1485,8 +1485,8 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
         const char * const s = PerlEnv_getenv("PERL_HASH_SEED_DEBUG");
 
         if (s && strEQ(s, "1")) {
-            unsigned char *seed= PERL_HASH_SEED;
-            unsigned char *seed_end= PERL_HASH_SEED + PERL_HASH_SEED_BYTES;
+            const unsigned char *seed= PERL_HASH_SEED;
+            const unsigned char *seed_end= PERL_HASH_SEED + PERL_HASH_SEED_BYTES;
             PerlIO_printf(Perl_debug_log, "HASH_FUNCTION = %s HASH_SEED = 0x", PERL_HASH_FUNC);
             while (seed < seed_end) {
                 PerlIO_printf(Perl_debug_log, "%02x", *seed++);
@@ -2664,8 +2664,22 @@ Perl_call_method(pTHX_ const char *methname, I32 flags)
 /*
 =for apidoc p||call_sv
 
-Performs a callback to the Perl sub whose name is in the SV.  See
-L<perlcall>.
+Performs a callback to the Perl sub specified by the SV.
+
+If neither the C<G_METHOD> or C<G_METHOD_NAMED> flag is supplied, the
+SV may be any of a CV, a GV, a reference to a CV, a reference to a GV
+or C<SvPV(sv)> will be used as the name of the sub to call.
+
+If the C<G_METHOD> flag is supplied, the SV may be a reference to a CV or
+C<SvPV(sv)> will be used as the name of the method to call.
+
+If the C<G_METHOD_NAMED> flag is supplied, C<SvPV(sv)> will be used as
+the name of the method to call.
+
+Some other values are treated specially for internal use and should
+not be depended on.
+
+See L<perlcall>.
 
 =cut
 */

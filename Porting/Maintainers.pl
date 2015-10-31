@@ -276,6 +276,9 @@ use File::Glob qw(:case);
                 t/yaml_code.yml
                 ),
         ],
+        'CUSTOMIZED'   => [
+            qw( lib/CPAN.pm ),
+        ],
     },
 
     # Note: When updating CPAN-Meta the META.* files will need to be regenerated
@@ -821,7 +824,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150420.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150720.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -1273,7 +1276,7 @@ use File::Glob qw(:case);
     },
 
     'Win32' => {
-        'DISTRIBUTION' => "JDB/Win32-0.51.tar.gz",
+        'DISTRIBUTION' => "JDB/Win32-0.52.tar.gz",
         'FILES'        => q[cpan/Win32],
     },
 

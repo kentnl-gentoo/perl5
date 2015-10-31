@@ -96,6 +96,40 @@ like("k", $still_fold, "/i on interpolated (?[ ]) is retained in outer without /
 eval 'my $x = qr/(?[ [a] ])/; qr/(?[ $x ])/';
 is($@, "", 'qr/(?[ [a] ])/ can be interpolated');
 
+like("B", qr/(?[ [B] | ! ( [^B] ) ])/, "[perl #125892]");
+
+# RT #126181: \cX behaves strangely inside (?[])
+{
+	no warnings qw(syntax regexp);
+
+	eval { $_ = '/(?[(\c]) /'; qr/$_/ };
+	like($@, qr/^Syntax error/, '/(?[(\c]) / should not panic');
+	eval { $_ = '(?[\c#]' . "\n])"; qr/$_/ };
+	like($@, qr/^Syntax error/, '/(?[(\c]) / should not panic');
+	eval { $_ = '(?[(\c])'; qr/$_/ };
+	like($@, qr/^Syntax error/, '/(?[(\c])/ should be a syntax error');
+	eval { $_ = '(?[(\c]) ]\b'; qr/$_/ };
+	like($@, qr/^Syntax error/, '/(?[(\c]) ]\b/ should be a syntax error');
+	eval { $_ = '(?[\c[]](])'; qr/$_/ };
+	like($@, qr/^Syntax error/, '/(?[\c[]](])/ should be a syntax error');
+	like("\c#", qr/(?[\c#])/, '\c# should match itself');
+	like("\c[", qr/(?[\c[])/, '\c[ should match itself');
+	like("\c\ ", qr/(?[\c\])/, '\c\ should match itself');
+	like("\c]", qr/(?[\c]])/, '\c] should match itself');
+}
+
+# RT #126481 !! with syntax error panics
+{
+    fresh_perl_like('no warnings "experimental::regex_sets"; qr/(?[ ! ! (\w])/',
+                    qr/^Unmatched \(/, {},
+                    'qr/(?[ ! ! (\w])/ doesnt panic');
+    # The following didn't panic before, but easy to add this here with a
+    # paren between the !!
+    fresh_perl_like('no warnings "experimental::regex_sets";qr/(?[ ! ( ! (\w)])/',
+                    qr/^Unmatched \(/, {},
+                    'qr/qr/(?[ ! ( ! (\w)])/');
+}
+
 done_testing();
 
 1;

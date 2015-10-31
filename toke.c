@@ -6313,7 +6313,13 @@ Perl_yylex(pTHX)
 
     case '`':
 	s = scan_str(s,FALSE,FALSE,FALSE,NULL);
-	DEBUG_T( { printbuf("### Saw backtick string before %s\n", s); } );
+	DEBUG_T( {
+            if (s)
+                printbuf("### Saw backtick string before %s\n", s);
+            else
+		PerlIO_printf(Perl_debug_log,
+			     "### Saw unterminated backtick string\n");
+        } );
 	if (PL_expect == XOPERATOR)
 	    no_op("Backticks",s);
 	if (!s)
@@ -8029,7 +8035,13 @@ Perl_yylex(pTHX)
 
 		if (*s == ':' && s[1] != ':')
 		    PL_expect = attrful;
-		else if ((*s != '{' && *s != '(') && key == KEY_sub) {
+		else if ((*s != '{' && *s != '(') && key != KEY_format) {
+                    assert(key == KEY_sub || key == KEY_AUTOLOAD ||
+                           key == KEY_DESTROY || key == KEY_BEGIN ||
+                           key == KEY_UNITCHECK || key == KEY_CHECK ||
+                           key == KEY_INIT || key == KEY_END ||
+                           key == KEY_my || key == KEY_state ||
+                           key == KEY_our);
 		    if (!have_name)
 			Perl_croak(aTHX_ "Illegal declaration of anonymous subroutine");
 		    else if (*s != ';' && *s != '}')
@@ -10263,23 +10275,21 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
                                 hexfp_exp *= 10;
                                 hexfp_exp += *h - '0';
 #ifdef NV_MIN_EXP
-                                if (negexp &&
-                                    -hexfp_exp < NV_MIN_EXP - 1) {
+                                if (negexp
+                                    && -hexfp_exp < NV_MIN_EXP - 1) {
                                     Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
                                                    "Hexadecimal float: exponent underflow");
-#endif
                                     break;
                                 }
-                                else {
-#ifdef NV_MAX_EXP
-                                    if (!negexp &&
-                                        hexfp_exp > NV_MAX_EXP - 1) {
-                                        Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
-                                                   "Hexadecimal float: exponent overflow");
-                                        break;
-                                    }
 #endif
+#ifdef NV_MAX_EXP
+                                if (!negexp
+                                    && hexfp_exp > NV_MAX_EXP - 1) {
+                                    Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
+                                                   "Hexadecimal float: exponent overflow");
+                                    break;
                                 }
+#endif
                             }
                             h++;
                         }

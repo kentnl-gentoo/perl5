@@ -134,7 +134,14 @@ a[^]b]c	adc	y	$&	adc
 \By\b	xy	y	-	-
 \by\B	yz	y	-	-
 \By\B	xyz	y	-	-
+\b		n	-	-
+\b{gcb}		n	-	-
+\b{sb}		n	-	-
+\b{wb}		n	-	-
 \B		y	-	-
+\B{gcb}		y	-	-
+\B{sb}		y	-	-
+\B{wb}		y	-	-
 \w	a	y	-	-
 \w	-	n	-	-
 \W	a	n	-	-
@@ -1924,6 +1931,13 @@ A+(*PRUNE)BC(?{})	AAABC	y	$&	AAABC
 # RT #123840: these used to hang in re_intuit_start
 /w\zxy?\z/i	\x{100}a\x{80}a	n	-	-
 /w\z\R\z/i	\x{100}a\x{80}a	n	-	-
+
+/(a+){1}+a/	aaa	n	-	-		# [perl #125825]
+
+(?i	-	c	-	Sequence (?... not terminated
+(?a-x	-	c	-	Sequence (?... not terminated
+.{1}??	-	c	-	Nested quantifiers
+.{1}?+	-	c	-	Nested quantifiers
 
 # Keep these lines at the end of the file
 # vim: softtabstop=0 noexpandtab

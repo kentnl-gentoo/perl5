@@ -1938,7 +1938,10 @@ Perl_vwarner(pTHX_ U32  err, const char* pat, va_list* args)
 {
     dVAR;
     PERL_ARGS_ASSERT_VWARNER;
-    if (PL_warnhook == PERL_WARNHOOK_FATAL || ckDEAD(err)) {
+    if (
+        (PL_warnhook == PERL_WARNHOOK_FATAL || ckDEAD(err)) &&
+        !(PL_in_eval & EVAL_KEEPERR)
+    ) {
 	SV * const msv = vmess(pat, args);
 
 	if (PL_parser && PL_parser->error_count) {
@@ -4420,16 +4423,15 @@ Perl_parse_unicode_opts(pTHX_ const char **popt)
        if (isDIGIT(*p)) {
             const char* endptr;
             UV uv;
-            if (grok_atoUV(p, &uv, &endptr)
-                && uv <= U32_MAX
-                && (p = endptr)
-                && *p && *p != '\n' && *p != '\r'
-            ) {
+            if (grok_atoUV(p, &uv, &endptr) && uv <= U32_MAX) {
                 opt = (U32)uv;
-                if (isSPACE(*p))
-                    goto the_end_of_the_opts_parser;
-                else
-                    Perl_croak(aTHX_ "Unknown Unicode option letter '%c'", *p);
+                p = endptr;
+                if (p && *p && *p != '\n' && *p != '\r') {
+                    if (isSPACE(*p))
+                        goto the_end_of_the_opts_parser;
+                    else
+                        Perl_croak(aTHX_ "Unknown Unicode option letter '%c'", *p);
+                }
             }
         }
         else {

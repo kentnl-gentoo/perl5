@@ -9726,9 +9726,7 @@ S_parse_lparen_question_flags(pTHX_ RExC_state_t *pRExC_state)
         ++RExC_parse;
     }
 
-    if (PASS2) {
-        STD_PMMOD_FLAGS_PARSE_X_WARN(x_mod_count);
-    }
+    vFAIL("Sequence (?... not terminated");
 }
 
 /*
@@ -10878,18 +10876,13 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                 ret = reg_node(pRExC_state, OPFAIL);
                 return ret;
             }
-            else if (min == max
-                     && RExC_parse < RExC_end
-                     && (*RExC_parse == '?' || *RExC_parse == '+'))
+            else if (min == max && RExC_parse < RExC_end && *RExC_parse == '?')
             {
                 if (PASS2) {
                     ckWARN2reg(RExC_parse + 1,
                                "Useless use of greediness modifier '%c'",
                                *RExC_parse);
                 }
-                /* Absorb the modifier, so later code doesn't see nor use
-                    * it */
-                nextchar(pRExC_state);
             }
 
 	  do_curly:
@@ -13360,6 +13353,10 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                      * default: case next time and keep on incrementing until
                      * we find one of the invariants we do handle. */
                     RExC_parse++;
+                    if (*RExC_parse == 'c') {
+                            /* Skip the \cX notation for control characters */
+                            RExC_parse++;
+                    }
                     break;
                 case '[':
                 {
@@ -13438,7 +13435,8 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
      * a stack.  Each entry on the stack is a single character representing one
      * of the operators; or else a pointer to an operand inversion list. */
 
-#define IS_OPERAND(a)  (! SvIOK(a))
+#define IS_OPERATOR(a) SvIOK(a)
+#define IS_OPERAND(a)  (! IS_OPERATOR(a))
 
     /* The stack is kept in Łukasiewicz order.  (That's pronounced similar
      * to luke-a-shave-itch (or -itz), but people who didn't want to bother
@@ -13610,13 +13608,14 @@ redo_curchar:
                     /* If the top entry on the stack is an operator, it had
                      * better be a '!', otherwise the entry below the top
                      * operand should be an operator */
-                    if ( ! (top_ptr = av_fetch(stack, top_index, FALSE))
-                        || (! IS_OPERAND(*top_ptr) && SvUV(*top_ptr) != '!')
-                        || top_index - fence < 1
-                        || ! (stacked_ptr = av_fetch(stack,
-                                                     top_index - 1,
-                                                     FALSE))
-                        || IS_OPERAND(*stacked_ptr))
+                    if (   ! (top_ptr = av_fetch(stack, top_index, FALSE))
+                        || (IS_OPERATOR(*top_ptr) && SvUV(*top_ptr) != '!')
+                        || (   IS_OPERAND(*top_ptr)
+                            && (   top_index - fence < 1
+                                || ! (stacked_ptr = av_fetch(stack,
+                                                             top_index - 1,
+                                                             FALSE))
+                                || ! IS_OPERATOR(*stacked_ptr))))
                     {
                         RExC_parse++;
                         vFAIL("Unexpected '(' with no preceding operator");
@@ -13714,8 +13713,12 @@ redo_curchar:
                 /* Having gotten rid of the fence, we pop the operand at the
                  * stack top and process it as a newly encountered operand */
                 current = av_pop(stack);
-                assert(IS_OPERAND(current));
-                goto handle_operand;
+                if (IS_OPERAND(current)) {
+                    goto handle_operand;
+                }
+
+                RExC_parse++;
+                goto bad_syntax;
 
             case '&':
             case '|':
@@ -13791,10 +13794,16 @@ redo_curchar:
                 /* Here, the new operator has equal or lower precedence than
                  * what's already there.  This means the operation already
                  * there should be performed now, before the new one. */
-                rhs = av_pop(stack);
-                lhs = av_pop(stack);
 
-                assert(IS_OPERAND(rhs));
+                rhs = av_pop(stack);
+                if (! IS_OPERAND(rhs)) {
+
+                    /* This can happen when a ! is not followed by an operand,
+                     * like in /(?[\t &!])/ */
+                    goto bad_syntax;
+                }
+
+                lhs = av_pop(stack);
                 assert(IS_OPERAND(lhs));
 
                 switch (stacked_operator) {
@@ -13841,9 +13850,20 @@ redo_curchar:
                 av_push(stack, rhs);
                 goto redo_curchar;
 
-            case '!':   /* Highest priority, right associative, so just push
-                           onto stack */
-                av_push(stack, newSVuv(curchar));
+            case '!':   /* Highest priority, right associative */
+
+                /* If what's already at the top of the stack is another '!",
+                 * they just cancel each other out */
+                if (   (top_ptr = av_fetch(stack, top_index, FALSE))
+                    && (IS_OPERATOR(*top_ptr) && SvUV(*top_ptr) == '!'))
+                {
+                    only_to_avoid_leaks = av_pop(stack);
+                    SvREFCNT_dec(only_to_avoid_leaks);
+                }
+                else { /* Otherwise, since it's right associative, just push
+                          onto the stack */
+                    av_push(stack, newSVuv(curchar));
+                }
                 break;
 
             default:
@@ -13863,7 +13883,7 @@ redo_curchar:
                  * be an operator */
                 top_ptr = av_fetch(stack, top_index, FALSE);
                 assert(top_ptr);
-                if (! IS_OPERAND(*top_ptr)) {
+                if (IS_OPERATOR(*top_ptr)) {
 
                     /* The only permissible operator at the top of the stack is
                      * '!', which is applied immediately to this operand. */
@@ -13915,8 +13935,10 @@ redo_curchar:
     if (av_tindex(stack) < 0   /* Was empty */
         || ((final = av_pop(stack)) == NULL)
         || ! IS_OPERAND(final)
+        || SvTYPE(final) != SVt_INVLIST
         || av_tindex(stack) >= 0)  /* More left on stack */
     {
+      bad_syntax:
         SvREFCNT_dec(final);
         vFAIL("Incomplete expression within '(?[ ])'");
     }
@@ -13979,6 +14001,7 @@ redo_curchar:
     Set_Node_Length(node, RExC_parse - oregcomp_parse + 1); /* MJD */
     return node;
 }
+#undef IS_OPERATOR
 #undef IS_OPERAND
 
 STATIC void

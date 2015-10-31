@@ -1,8 +1,28 @@
+5.20151031
+  - Updated for v5.22.1
+
+5.20151020
+  - Updated for v5.23.4
+
+5.20150920
+  - Updated for v5.23.3
+
+5.20150912
+  - Updated for v5.20.3
+
+5.20150820
+  - Updated for v5.23.2
+
+5.20150720
+  - Updated for v5.23.1
+
 5.20150520
-  - Updated for v5.21.12
+  - Updated for v5.22.0
 
 5.20150420
   - Updated for v5.21.11
+  - fixes a fencepost error in is_core()
+  - copes with versions that do not match x.yyyzzz
 
 5.20150320
   - Updated for v5.21.10

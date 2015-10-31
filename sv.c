@@ -3974,9 +3974,15 @@ S_glob_assign_glob(pTHX_ SV *const dstr, SV *const sstr, const int dtype)
         SvREFCNT_inc_simple_void_NN(sv_2mortal(dstr));
     }
 
+    /* freeing dstr's GP might free sstr (e.g. *x = $x),
+     * so temporarily protect it */
+    ENTER;
+    SAVEFREESV(SvREFCNT_inc_simple_NN(sstr));
     gp_free(MUTABLE_GV(dstr));
     GvINTRO_off(dstr);		/* one-shot flag */
     GvGP_set(dstr, gp_ref(GvGP(sstr)));
+    LEAVE;
+
     if (SvTAINTED(sstr))
 	SvTAINT(dstr);
     if (GvIMPORTED(dstr) != GVf_IMPORTED
@@ -10866,7 +10872,7 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
  * The non-double-double-long-double overshoots since all bits of NV
  * are not mantissa bits, there are also exponent bits. */
 #ifdef LONGDOUBLE_DOUBLEDOUBLE
-#  define VHEX_SIZE (1+DOUBLEDOUBLE_MAXBITS/4)
+#  define VHEX_SIZE (3+DOUBLEDOUBLE_MAXBITS/4)
 #else
 #  define VHEX_SIZE (1+(NVSIZE * 8)/4)
 #endif
@@ -10963,7 +10969,7 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
 
     /* HEXTRACTSIZE is the maximum number of xdigits. */
 #if defined(USE_LONG_DOUBLE) && defined(LONGDOUBLE_DOUBLEDOUBLE)
-#  define HEXTRACTSIZE (DOUBLEDOUBLE_MAXBITS/4)
+#  define HEXTRACTSIZE (2+DOUBLEDOUBLE_MAXBITS/4)
 #else
 #  define HEXTRACTSIZE 2 * NVSIZE
 #endif
@@ -10971,8 +10977,10 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
     const U8* vmaxend = vhex + HEXTRACTSIZE;
     PERL_UNUSED_VAR(ix); /* might happen */
     (void)Perl_frexp(PERL_ABS(nv), exponent);
-    if (vend && (vend <= vhex || vend > vmaxend))
-        Perl_croak(aTHX_ "Hexadecimal float: internal error");
+    if (vend && (vend <= vhex || vend > vmaxend)) {
+        /* diag_listed_as: Hexadecimal float: internal error (%s) */
+        Perl_croak(aTHX_ "Hexadecimal float: internal error (entry)");
+    }
     {
         /* First check if using long doubles. */
 #if defined(USE_LONG_DOUBLE) && (NVSIZE > DOUBLESIZE)
@@ -11178,8 +11186,10 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
          * which is convenient since the HEXTRACTSIZE is tricky
          * for double-double. */
         ixmin < 0 || ixmax >= NVSIZE ||
-        (vend && v != vend))
-        Perl_croak(aTHX_ "Hexadecimal float: internal error");
+        (vend && v != vend)) {
+        /* diag_listed_as: Hexadecimal float: internal error (%s) */
+        Perl_croak(aTHX_ "Hexadecimal float: internal error (overflow)");
+    }
     return v;
 }
 
@@ -11522,9 +11532,12 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
       tryasterisk:
 	if (*q == '*') {
 	    q++;
-	    if ( (ewix = expect_number(&q)) )
-		if (*q++ != '$')
+	    if ( (ewix = expect_number(&q)) ) {
+		if (*q++ == '$')
+                    no_redundant_warning = TRUE;
+                else
 		    goto unknown;
+            }
 	    asterisk = TRUE;
 	}
 	if (*q == 'v') {

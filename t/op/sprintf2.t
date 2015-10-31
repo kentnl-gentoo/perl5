@@ -243,7 +243,7 @@ if ($Config{nvsize} == 8 &&
     print "# no hexfloat tests\n";
 }
 
-plan tests => 1408 + ($Q ? 0 : 12) + @hexfloat;
+plan tests => 1408 + ($Q ? 0 : 12) + @hexfloat + 6;
 
 use strict;
 use Config;
@@ -577,6 +577,7 @@ is $o::count,    0, 'sprintf %d string overload count is 0';
 is $o::numcount, 1, 'sprintf %d number overload count is 1';
 
 my $ppc64_linux = $Config{archname} =~ /^ppc64-linux/;
+my $irix_ld     = $Config{archname} =~ /^IP\d+-irix-ld$/;
 
 for my $t (@hexfloat) {
     my ($format, $arg, $expected) = @$t;
@@ -586,6 +587,15 @@ for my $t (@hexfloat) {
     if ($doubledouble && $ppc64_linux && $arg =~ /^2.71828/) {
         # ppc64-linux has buggy exp(1).
         local $::TODO = "$Config{archname} exp(1)";
+        ok($ok, "'$format' '$arg' -> '$result' cf '$expected'");
+        next;
+    }
+    if ($doubledouble && $irix_ld && $arg =~ /^1.41421/) {
+        # irix has buggy sqrt(2),
+        # last hexdigit one bit error:
+        # gets  '0x1.6a09e667f3bcc908b2fb1366eacp+0'
+        # wants '0x1.6a09e667f3bcc908b2fb1366ea8p+0'
+        local $::TODO = "$Config{archname} sqrt(2)";
         ok($ok, "'$format' '$arg' -> '$result' cf '$expected'");
         next;
     }
@@ -647,4 +657,23 @@ for my $t (@hexfloat) {
         }
     }
     ok($ok, "'$format' '$arg' -> '$result' cf '$expected'");
+}
+
+# double-double long double %a special testing.
+SKIP: {
+    skip("$^O doublekind=$Config{doublekind}", 6)
+        unless ($Config{doublekind} == 4 && $^O eq 'linux');
+    # [rt.perl.org 125633]
+    like(sprintf("%La\n", (2**1020) + (2**-1072)),
+         qr/^0x1.0{522}1p\+1020$/);
+    like(sprintf("%La\n", (2**1021) + (2**-1072)),
+         qr/^0x1.0{523}8p\+1021$/);
+    like(sprintf("%La\n", (2**1022) + (2**-1072)),
+         qr/^0x1.0{523}4p\+1022$/);
+    like(sprintf("%La\n", (2**1023) + (2**-1072)),
+         qr/^0x1.0{523}2p\+1023$/);
+    like(sprintf("%La\n", (2**1023) + (2**-1073)),
+         qr/^0x1.0{523}1p\+1023$/);
+    like(sprintf("%La\n", (2**1023) + (2**-1074)),
+         qr/^0x1.0{524}8p\+1023$/);
 }
