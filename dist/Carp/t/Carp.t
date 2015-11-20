@@ -8,6 +8,9 @@ use Test::More tests => 65;
 sub runperl {
     my(%args) = @_;
     my($w, $r);
+
+    local $ENV{PERL5LIB} = join ($Config::Config{path_sep}, @INC);
+
     my $pid = open3($w, $r, undef, $^X, "-e", $args{prog});
     close $w;
     my $output = "";

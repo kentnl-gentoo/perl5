@@ -671,8 +671,8 @@ sub installlib {
     return if $name =~ /^(?:cpan|instmodsh|prove|corelist|ptar|ptardiff|ptargrep|zipdetails)\z/;
     # ignore the Makefiles
     return if $name =~ /^makefile$/i;
-    # ignore the test extensions
-    return if $dir =~ m{\bXS/(?:APItest|Typemap)\b};
+    # ignore the test extensions, dont install PPPort.so/.dll
+    return if $dir =~ m{\b(?:XS/(?:APItest|Typemap)|Devel/PPPort)\b};
     return if $name =~ m{\b(?:APItest|Typemap)\.pm$};
     # ignore the build support code
     return if $name =~ /\bbuildcustomize\.pl$/;
@@ -714,6 +714,9 @@ sub installlib {
     return if /\.pod\z/ && is_duplicate_pod($_);
 
     return if $name eq 'ExtUtils/XSSymSet.pm' and !$Is_VMS;
+
+    #blead comes with version, blead isn't 5.8/5.6
+    return if $name eq 'ExtUtils/MakeMaker/version/regex.pm';
 
     my $installlib = $installprivlib;
     if ($dir =~ /^auto\// ||

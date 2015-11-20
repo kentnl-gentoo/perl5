@@ -12,17 +12,20 @@ package Math::BigFloat;
 #   _a	: accuracy
 #   _p	: precision
 
-$VERSION = '1.999704';
-require 5.006002;
+use 5.006002;
+use strict;
+use warnings;
+
+our $VERSION = '1.999710';
 
 require Exporter;
-@ISA		= qw/Math::BigInt/;
-@EXPORT_OK	= qw/bpi/;
+our @ISA	= qw/Math::BigInt/;
+our @EXPORT_OK	= qw/bpi/;
 
-use strict;
 # $_trap_inf/$_trap_nan are internal and should never be accessed from outside
-use vars qw/$AUTOLOAD $accuracy $precision $div_scale $round_mode $rnd_mode
-	    $upgrade $downgrade $_trap_nan $_trap_inf/;
+our ($AUTOLOAD, $accuracy, $precision, $div_scale, $round_mode, $rnd_mode,
+     $upgrade, $downgrade, $_trap_nan, $_trap_inf);
+
 my $class = "Math::BigFloat";
 
 use overload
@@ -220,10 +223,10 @@ sub new
       }
     $self->{sign} = $$mis;
 
-    # for something like 0Ey, set y to 1, and -0 => +0
+    # for something like 0Ey, set y to 0, and -0 => +0
     # Check $$miv for being '0' and $$mfv eq '', because otherwise _m could not
     # have become 0. That's faster than to call $MBI->_is_zero().
-    $self->{sign} = '+', $self->{_e} = $MBI->_one()
+    $self->{sign} = '+', $self->{_e} = $MBI->_zero()
      if $$miv eq '0' and $$mfv eq '';
 
     return $self->round(@r) if !$downgrade;
@@ -318,11 +321,11 @@ sub _bone
 
 sub _bzero
   {
-  # used by parent class bone() to initialize number to 0
+  # used by parent class bzero() to initialize number to 0
   my $self = shift;
   $IMPORT=1;					# call our import only once
   $self->{_m} = $MBI->_zero();
-  $self->{_e} = $MBI->_one();
+  $self->{_e} = $MBI->_zero();
   $self->{_es} = '+';
   }
 
@@ -437,10 +440,23 @@ sub bsstr
     
 sub numify 
   {
-  # Convert a Perl scalar number from a BigFloat object.
-  # Create a string and let Perl's atoi()/atof() handle the rest.
+  # Make a Perl scalar number from a Math::BigFloat object.
   my ($self,$x) = ref($_[0]) ? (undef,$_[0]) : objectify(1,@_);
-  return 0 + $x->bsstr(); 
+
+  if ($x -> is_nan()) {
+      require Math::Complex;
+      my $inf = Math::Complex::Inf();
+      return $inf - $inf;
+  }
+
+  if ($x -> is_inf()) {
+      require Math::Complex;
+      my $inf = Math::Complex::Inf();
+      return $x -> is_negative() ? -$inf : $inf;
+  }
+
+  # Create a string and let Perl's atoi()/atof() handle the rest.
+  return 0 + $x -> bsstr();
   }
 
 ##############################################################################
@@ -1302,7 +1318,7 @@ sub _log
   $over->bmul($u);
   $factor = $self->new(3); $f = $self->new(2);
 
-  my $steps = 0 if DEBUG;  
+  my $steps = 0;
   $limit = $self->new("1E-". ($scale-1));
   while (3 < 5)
     {
@@ -2811,48 +2827,77 @@ sub bpi
   my $fallback = defined $n ? 0 : 1;
   $n = 40 if !defined $n || $n < 1;
 
-  # after 黃見利 (Hwang Chien-Lih) (1997)
-  # pi/4 = 183 * atan(1/239) + 32 * atan(1/1023) – 68 * atan(1/5832)
-  #	 + 12 * atan(1/110443) - 12 * atan(1/4841182) - 100 * atan(1/6826318)
+  if ($n < 1000) {
 
-  # a few more to prevent rounding errors
-  $n += 4;
+      # after 黃見利 (Hwang Chien-Lih) (1997)
+      # pi/4 = 183 * atan(1/239) + 32 * atan(1/1023) – 68 * atan(1/5832)
+      #	 + 12 * atan(1/110443) - 12 * atan(1/4841182) - 100 * atan(1/6826318)
 
-  my ($a,$b) = $self->_atan_inv( $MBI->_new(239),$n);
-  my ($c,$d) = $self->_atan_inv( $MBI->_new(1023),$n);
-  my ($e,$f) = $self->_atan_inv( $MBI->_new(5832),$n);
-  my ($g,$h) = $self->_atan_inv( $MBI->_new(110443),$n);
-  my ($i,$j) = $self->_atan_inv( $MBI->_new(4841182),$n);
-  my ($k,$l) = $self->_atan_inv( $MBI->_new(6826318),$n);
+      # Use a few more digits in the intermediate computations.
 
-  $MBI->_mul($a, $MBI->_new(732));
-  $MBI->_mul($c, $MBI->_new(128));
-  $MBI->_mul($e, $MBI->_new(272));
-  $MBI->_mul($g, $MBI->_new(48));
-  $MBI->_mul($i, $MBI->_new(48));
-  $MBI->_mul($k, $MBI->_new(400));
+      my $nextra = $n < 800 ? 4 : 5;
+      $n += $nextra;
 
-  my $x = $self->bone(); $x->{_m} = $a; my $x_d = $self->bone(); $x_d->{_m} = $b;
-  my $y = $self->bone(); $y->{_m} = $c; my $y_d = $self->bone(); $y_d->{_m} = $d;
-  my $z = $self->bone(); $z->{_m} = $e; my $z_d = $self->bone(); $z_d->{_m} = $f;
-  my $u = $self->bone(); $u->{_m} = $g; my $u_d = $self->bone(); $u_d->{_m} = $h;
-  my $v = $self->bone(); $v->{_m} = $i; my $v_d = $self->bone(); $v_d->{_m} = $j;
-  my $w = $self->bone(); $w->{_m} = $k; my $w_d = $self->bone(); $w_d->{_m} = $l;
-  $x->bdiv($x_d, $n);
-  $y->bdiv($y_d, $n);
-  $z->bdiv($z_d, $n);
-  $u->bdiv($u_d, $n);
-  $v->bdiv($v_d, $n);
-  $w->bdiv($w_d, $n);
+      my ($a,$b) = $self->_atan_inv( $MBI->_new(239),$n);
+      my ($c,$d) = $self->_atan_inv( $MBI->_new(1023),$n);
+      my ($e,$f) = $self->_atan_inv( $MBI->_new(5832),$n);
+      my ($g,$h) = $self->_atan_inv( $MBI->_new(110443),$n);
+      my ($i,$j) = $self->_atan_inv( $MBI->_new(4841182),$n);
+      my ($k,$l) = $self->_atan_inv( $MBI->_new(6826318),$n);
 
-  delete $x->{_a}; delete $y->{_a}; delete $z->{_a};
-  delete $u->{_a}; delete $v->{_a}; delete $w->{_a};
-  $x->badd($y)->bsub($z)->badd($u)->bsub($v)->bsub($w);
+      $MBI->_mul($a, $MBI->_new(732));
+      $MBI->_mul($c, $MBI->_new(128));
+      $MBI->_mul($e, $MBI->_new(272));
+      $MBI->_mul($g, $MBI->_new(48));
+      $MBI->_mul($i, $MBI->_new(48));
+      $MBI->_mul($k, $MBI->_new(400));
 
-  $x->bround($n-4);
-  delete $x->{_a} if $fallback == 1;
-  $x;
+      my $x = $self->bone(); $x->{_m} = $a; my $x_d = $self->bone(); $x_d->{_m} = $b;
+      my $y = $self->bone(); $y->{_m} = $c; my $y_d = $self->bone(); $y_d->{_m} = $d;
+      my $z = $self->bone(); $z->{_m} = $e; my $z_d = $self->bone(); $z_d->{_m} = $f;
+      my $u = $self->bone(); $u->{_m} = $g; my $u_d = $self->bone(); $u_d->{_m} = $h;
+      my $v = $self->bone(); $v->{_m} = $i; my $v_d = $self->bone(); $v_d->{_m} = $j;
+      my $w = $self->bone(); $w->{_m} = $k; my $w_d = $self->bone(); $w_d->{_m} = $l;
+      $x->bdiv($x_d, $n);
+      $y->bdiv($y_d, $n);
+      $z->bdiv($z_d, $n);
+      $u->bdiv($u_d, $n);
+      $v->bdiv($v_d, $n);
+      $w->bdiv($w_d, $n);
+
+      delete $x->{_a}; delete $y->{_a}; delete $z->{_a};
+      delete $u->{_a}; delete $v->{_a}; delete $w->{_a};
+      $x->badd($y)->bsub($z)->badd($u)->bsub($v)->bsub($w);
+
+      $x->bround($n-$nextra);
+      delete $x->{_a} if $fallback == 1;
+      $x;
+
+  } else {
+
+      # For large accuracy, the arctan formulas become very inefficient with
+      # Math::BigFloat. Switch to Brent-Salamin (aka AGM or Gauss-Legendre).
+
+      # Use a few more digits in the intermediate computations.
+      my $nextra = 8;
+
+      $HALF = $self -> new($HALF) unless ref($HALF);
+      my ($an, $bn, $tn, $pn) = ($self -> bone, $HALF -> copy -> bsqrt($n),
+                                 $HALF -> copy -> bmul($HALF), $self -> bone);
+      while ($pn < $n) {
+          my $prev_an = $an -> copy;
+          $an -> badd($bn) -> bmul($HALF, $n);
+          $bn -> bmul($prev_an) -> bsqrt($n);
+          $prev_an -> bsub($an);
+          $tn -> bsub($pn * $prev_an * $prev_an);
+          $pn -> badd($pn);
+      }
+      $an -> badd($bn);
+      $an -> bmul($an, $n) -> bdiv(4 * $tn, $n - $nextra);
+      delete $an -> {_a} if $fallback == 1;
+      return $an;
   }
+}
 
 sub bcos
   {
@@ -3962,6 +4007,89 @@ sub length
   $len;
   }
 
+sub from_hex {
+    my $self    = shift;
+    my $selfref = ref $self;
+    my $class   = $selfref || $self;
+
+    my $str = shift;
+
+    $self = $class -> bzero() unless $selfref;
+
+    if ($str =~ s/
+                     ^
+
+                     # sign
+                     ( [+-]? )
+
+                     # optional "hex marker"
+                     (?: 0? x )?
+
+                     # significand using the hex digits 0..9 and a..f
+                     (
+                         [0-9a-fA-F]+ (?: _ [0-9a-fA-F]+ )*
+                         (?:
+                             \.
+                             (?: [0-9a-fA-F]+ (?: _ [0-9a-fA-F]+ )* )?
+                         )?
+                     |
+                         \.
+                         [0-9a-fA-F]+ (?: _ [0-9a-fA-F]+ )*
+                     )
+
+                     # exponent (power of 2) using decimal digits
+                     (?:
+                         [Pp]
+                         ( [+-]? )
+                         ( \d+ (?: _ \d+ )* )
+                     )?
+
+                     $
+                 //x)
+    {
+        my $s_sign  = $1 || '+';
+        my $s_value = $2;
+        my $e_sign  = $3 || '+';
+        my $e_value = $4 || '0';
+        $s_value =~ tr/_//d;
+        $e_value =~ tr/_//d;
+
+        # The significand must be multiplied by 2 raised to this exponent.
+
+        my $two_expon = $class -> new($e_value);
+        $two_expon -> bneg() if $e_sign eq '-';
+
+        # If there is a dot in the significand, remove it and adjust the
+        # exponent according to the number of digits in the fraction part of
+        # the significand. Multiply the exponent adjustment value by 4 since
+        # the digits in the significand are in base 16, but the exponent is
+        # only in base 2.
+
+        my $idx = index($s_value, '.');
+        if ($idx >= 0) {
+            substr($s_value, $idx, 1) = '';
+            $two_expon -= $class -> new(CORE::length($s_value))
+                                 -> bsub($idx)
+                                 -> bmul("4");
+        }
+
+        $self -> {sign} = $s_sign;
+        $self -> {_m}   = $MBI -> _from_hex('0x' . $s_value);
+
+        if ($two_expon > 0) {
+            my $factor = $class -> new("2") -> bpow($two_expon);
+            $self -> bmul($factor);
+        } elsif ($two_expon < 0) {
+            my $factor = $class -> new("0.5") -> bpow(-$two_expon);
+            $self -> bmul($factor);
+        }
+
+        return $self;
+    }
+
+    return $self->bnan();
+}
+
 1;
 
 __END__
@@ -3985,6 +4113,9 @@ Math::BigFloat - Arbitrary size floating point math package
  my $inf = Math::BigFloat->binf('-');	# create a -inf
  my $one = Math::BigFloat->bone();	# create a +1
  my $mone = Math::BigFloat->bone('-');	# create a -1
+ my $x = Math::BigFloat->bone('-');	#
+
+ my $h = Math::BigFloat->from_hex('0xc.afep+3');    # from hexadecimal
 
  my $pi = Math::BigFloat->bpi(100);	# PI to 100 digits
 
@@ -4097,7 +4228,7 @@ Math::BigFloat - Arbitrary size floating point math package
 All operators (including basic math operations) are overloaded if you
 declare your big floating point numbers as
 
-  $i = new Math::BigFloat '12_3.456_789_123_456_789E-2';
+  $i = Math::BigFloat -> new('12_3.456_789_123_456_789E-2');
 
 Operations with overloaded operators preserve the arguments, which is
 exactly what you expect.
@@ -4174,8 +4305,6 @@ as BigInts such that:
 
 C<< ($m,$e) = $x->parts(); >> is just a shortcut giving you both of them.
 
-A zero is represented and returned as C<0E1>, B<not> C<0E0> (after Knuth).
-
 Currently the mantissa is reduced as much as possible, favouring higher
 exponents over lower ones (e.g. returning 1e7 instead of 10e6 or 10000000e0).
 This might change in the future, so do not depend on it.
@@ -4241,26 +4370,26 @@ functions like so:
 
 =over
 
-=item ffround ( +$scale )
+=item bfround ( +$scale )
 
 Rounds to the $scale'th place left from the '.', counting from the dot.
 The first digit is numbered 1. 
 
-=item ffround ( -$scale )
+=item bfround ( -$scale )
 
 Rounds to the $scale'th place right from the '.', counting from the dot.
 
-=item ffround ( 0 )
+=item bfround ( 0 )
 
 Rounds to an integer.
 
-=item fround  ( +$scale )
+=item bround  ( +$scale )
 
 Preserves accuracy to $scale digits from the left (aka significant digits)
 and pads the rest with zeros. If the number is between 1 and -1, the
 significant digits count from the first non-zero after the '.'
 
-=item fround  ( -$scale ) and fround ( 0 )
+=item bround  ( -$scale ) and bround ( 0 )
 
 These are effectively no-ops.
 
@@ -4452,6 +4581,17 @@ object that has the same class as $x, a subclass thereof, or a string that
 C<ref($x)-E<gt>new()> can parse to create an object.
 
 In Math::BigFloat, C<as_float()> has the same effect as C<copy()>.
+
+=item from_hex()
+
+    $x -> from_hex("0x1.921fb54442d18p+1");
+    $x = Math::BigFloat -> from_hex("0x1.921fb54442d18p+1");
+
+Interpret input as a hexadecimal string. A "0x" or "x" prefix is optional. A
+single underscore character may be placed between any two digits. If the input
+is invalid, a NaN is returned. The exponent is in base 2 using decimal digits.
+
+If called as an instance method, the value is assigned to the invocand.
 
 =back
 
@@ -4742,8 +4882,24 @@ because they solve the autoupgrading/downgrading issue, at least partly.
 
 =head1 AUTHORS
 
-Mark Biggar, overloaded interface by Ilya Zakharevich.
-Completely rewritten by Tels L<http://bloodgate.com> in 2001 - 2006, and still
-at it in 2007.
+=over 4
+
+=item *
+
+Mark Biggar, overloaded interface by Ilya Zakharevich, 1996-2001.
+
+=item *
+
+Completely rewritten by Tels L<http://bloodgate.com> in 2001-2008.
+
+=item *
+
+Florian Ragwitz L<flora@cpan.org>, 2010.
+
+=item *
+
+Peter John Acklam, L<pjacklam@online.no>, 2011-.
+
+=back
 
 =cut

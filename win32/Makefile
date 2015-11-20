@@ -38,7 +38,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.23.4
+#INST_VER	= \5.23.5
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -916,9 +916,6 @@ $(GLOBEXE) : perlglob$(o)
 
 perlglob$(o)  : perlglob.c
 
-config.w32 : $(CFGSH_TMPL)
-	copy $(CFGSH_TMPL) config.w32
-
 #
 # Copy the template config.h and set configurables at the end of it
 # as per the options chosen and compiler used.
@@ -1020,8 +1017,8 @@ config.w32 : $(CFGSH_TMPL)
 # make sure that we recompile perl.c if the git version changes
 ..\perl$(o) : ..\git_version.h
 
-..\config.sh : config.w32 $(MINIPERL) config_sh.PL FindExt.pm
-	$(MINIPERL) -I..\lib config_sh.PL $(CFG_VARS) config.w32 > ..\config.sh
+..\config.sh : $(CFGSH_TMPL) config_sh.PL FindExt.pm $(MINIPERL)
+	$(MINIPERL) -I..\lib config_sh.PL $(CFG_VARS) $(CFGSH_TMPL) > ..\config.sh
 
 # This target is for when changes to the main config.sh happen.
 # Edit config.vc, then make perl in a minimal configuration (i.e. with MULTI,
@@ -1219,7 +1216,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5234delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5235delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1316,7 +1313,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5234delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5235delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \
@@ -1424,7 +1421,6 @@ _clean :
 	-@$(DEL) perlglob$(o)
 	-@$(DEL) perlmain$(o)
 	-@$(DEL) perlmainst$(o)
-	-@$(DEL) config.w32
 	-@$(DEL) config.h
 	-@$(DEL) ..\git_version.h
 	-@$(DEL) $(GLOBEXE)

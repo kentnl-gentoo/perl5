@@ -97,6 +97,13 @@ than just the ASCII characters, so C<is_invariant_string> is preferred.
 #else	/* ! EBCDIC */
 START_EXTERN_C
 
+/* How wide can a single UTF-8 encoded character become in bytes. */
+/* NOTE: Strictly speaking Perl's UTF-8 should not be called UTF-8 since UTF-8
+ * is an encoding of Unicode, and Unicode's upper limit, 0x10FFFF, can be
+ * expressed with 4 bytes.  However, Perl thinks of UTF-8 as a way to encode
+ * non-negative integers in a binary format, even those above Unicode */
+#define UTF8_MAXBYTES 13
+
 #ifdef DOINIT
 EXTCONST unsigned char PL_utf8skip[] = {
 /* 0x00 */ 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, /* ascii */
@@ -116,8 +123,10 @@ EXTCONST unsigned char PL_utf8skip[] = {
 /* 0xD0 */ 2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, /* U+0400 to U+07FF */
 /* 0xE0 */ 3,3,3,3,3,3,3,3,3,3,3,3,3,3,3,3, /* U+0800 to U+FFFF */
 /* 0xF0 */ 4,4,4,4,4,4,4,4,5,5,5,5,6,6,	    /* above BMP to 2**31 - 1 */
-/* 0xFE */ 7,13, /* Perl extended (never was official UTF-8).  Up to 72bit
-		    allowed (64-bit + reserved). */
+           /* Perl extended (never was official UTF-8).  Up to 36 bit */
+/* 0xFE */                             7,
+           /* More extended, Up to 72 bits (64-bit + reserved) */
+/* 0xFF */                               UTF8_MAXBYTES
 };
 #else
 EXTCONST unsigned char PL_utf8skip[];
@@ -197,7 +206,7 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
 /* Is the representation of the code point 'cp' the same regardless of
  * being encoded in UTF-8 or not?  'cp' is native if < 256; Unicode otherwise
  * */
-#define UVCHR_IS_INVARIANT(uv)      OFFUNI_IS_INVARIANT(uv)
+#define UVCHR_IS_INVARIANT(cp)      OFFUNI_IS_INVARIANT(cp)
 
 /* Misleadingly named: is the UTF8-encoded byte 'c' part of a variant sequence
  * in UTF-8?  This is the inverse of UTF8_IS_INVARIANT */
@@ -245,13 +254,6 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
 /* 2**UTF_ACCUMULATION_SHIFT - 1 */
 #define UTF_CONTINUATION_MASK		((U8)0x3f)
 
-/* If a value is anded with this, and the result is non-zero, then using the
- * original value in UTF8_ACCUMULATE will overflow, shifting bits off the left
- * */
-#define UTF_ACCUMULATION_OVERFLOW_MASK					\
-    (((UV) UTF_CONTINUATION_MASK) << ((sizeof(UV) * CHARBITS)           \
-           - UTF_ACCUMULATION_SHIFT))
-
 #if UVSIZE >= 8
 #  define UTF8_QUAD_MAX UINT64_C(0x1000000000)
 
@@ -262,7 +264,7 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
 		      (uv) < 0x200000       ? 4 : \
 		      (uv) < 0x4000000      ? 5 : \
 		      (uv) < 0x80000000     ? 6 : \
-                      (uv) < UTF8_QUAD_MAX ? 7 : 13 )
+                      (uv) < UTF8_QUAD_MAX ? 7 : UTF8_MAXBYTES )
 #else
 /* No, I'm not even going to *TRY* putting #ifdef inside a #define */
 #define OFFUNISKIP(uv) ( (uv) < 0x80        ? 1 : \
@@ -272,13 +274,6 @@ Perl's extended UTF-8 means we can have start bytes up to FF.
 		      (uv) < 0x4000000      ? 5 : \
 		      (uv) < 0x80000000     ? 6 : 7 )
 #endif
-
-/* How wide can a single UTF-8 encoded character become in bytes. */
-/* NOTE: Strictly speaking Perl's UTF-8 should not be called UTF-8 since UTF-8
- * is an encoding of Unicode, and Unicode's upper limit, 0x10FFFF, can be
- * expressed with 4 bytes.  However, Perl thinks of UTF-8 as a way to encode
- * non-negative integers in a binary format, even those above Unicode */
-#define UTF8_MAXBYTES 13
 
 /* The maximum number of UTF-8 bytes a single Unicode character can
  * uppercase/lowercase/fold into.  Unicode guarantees that the maximum
@@ -343,6 +338,13 @@ encoded as UTF-8.  C<cp> is a native (ASCII or EBCDIC) code point if less than
 #define UTF8_ACCUMULATE(old, new) (((old) << UTF_ACCUMULATION_SHIFT)           \
                                    | ((NATIVE_UTF8_TO_I8((U8)new))             \
                                        & UTF_CONTINUATION_MASK))
+
+/* If a value is anded with this, and the result is non-zero, then using the
+ * original value in UTF8_ACCUMULATE will overflow, shifting bits off the left
+ * */
+#define UTF_ACCUMULATION_OVERFLOW_MASK					\
+    (((UV) UTF_CONTINUATION_MASK) << ((sizeof(UV) * CHARBITS)           \
+           - UTF_ACCUMULATION_SHIFT))
 
 /* This works in the face of malformed UTF-8. */
 #define UTF8_IS_NEXT_CHAR_DOWNGRADEABLE(s, e) (UTF8_IS_DOWNGRADEABLE_START(*s) \

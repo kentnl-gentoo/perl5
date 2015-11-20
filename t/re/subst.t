@@ -9,7 +9,7 @@ BEGIN {
     require './loc_tools.pl';
 }
 
-plan( tests => 267 );
+plan( tests => 268 );
 
 $_ = 'david';
 $a = s/david/rules/r;
@@ -265,10 +265,10 @@ if (defined $Config{ebcdic} && $Config{ebcdic} eq 'define') {	# EBCDIC.
 ok( $_ eq 'abcdefghijklmnopqrstuvwxyz0123456789' );
 
 SKIP: {
-    skip("not ASCII",1) unless (ord("+") == ord(",") - 1
-			     && ord(",") == ord("-") - 1
-			     && ord("a") == ord("b") - 1
-			     && ord("b") == ord("c") - 1);
+    skip("ASCII-centric test",1) unless (ord("+") == ord(",") - 1
+			              && ord(",") == ord("-") - 1
+			              && ord("a") == ord("b") - 1
+			              && ord("b") == ord("c") - 1);
     $_ = '+,-';
     tr/+--/a-c/;
     ok( $_ eq 'abc' );
@@ -458,9 +458,7 @@ $pv1 =~ s/A/\x{100}/;
 substr($pv2,0,1) = "\x{100}";
 is($pv1, $pv2);
 
-SKIP: {
-    skip("EBCDIC", 3) if ord("A") == 193; 
-
+{
     {   
 	# Gregor Chrupala <gregor.chrupala@star-group.net>
 	use utf8;
@@ -1079,4 +1077,9 @@ SKIP: {
     my $s1 = 0;
     $s1 =~ s/.?/$s1++/ge;
     is($s1, "01","RT #123954 s1");
+}
+{
+    # RT #126602 double free if the value being modified is freed in the replacement
+    fresh_perl_is('s//*_=0;s|0||;00.y0/e; print qq(ok\n)', "ok\n", { stderr => 1 },
+                  "[perl #126602] s//*_=0;s|0||/e crashes");
 }

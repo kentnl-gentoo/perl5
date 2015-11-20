@@ -6679,7 +6679,8 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
     RExC_pm_flags = pm_flags;
 
     if (runtime_code) {
-	if (TAINTING_get && TAINT_get)
+        assert(TAINTING_get || !TAINT_get);
+	if (TAINT_get)
 	    Perl_croak(aTHX_ "Eval-group in insecure regular expression");
 
 	if (!S_compile_runtime_code(aTHX_ pRExC_state, exp, plen)) {
@@ -9797,9 +9798,7 @@ S_parse_lparen_question_flags(pTHX_ RExC_state_t *pRExC_state)
         ++RExC_parse;
     }
 
-    if (PASS2) {
-        STD_PMMOD_FLAGS_PARSE_X_WARN(x_mod_count);
-    }
+    vFAIL("Sequence (?... not terminated");
 }
 
 /*
@@ -10956,8 +10955,6 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                                "Useless use of greediness modifier '%c'",
                                *RExC_parse);
                 }
-                /* Absorb the modifier, so later code doesn't see nor use it */
-                nextchar(pRExC_state);
             }
 
 	  do_curly:
@@ -11427,10 +11424,10 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state,
  * it returns U+FFFD (Replacement character) and sets *encp to NULL.
  */
 STATIC UV
-S_reg_recode(pTHX_ const char value, SV **encp)
+S_reg_recode(pTHX_ const U8 value, SV **encp)
 {
     STRLEN numlen = 1;
-    SV * const sv = newSVpvn_flags(&value, numlen, SVs_TEMP);
+    SV * const sv = newSVpvn_flags((const char *) &value, numlen, SVs_TEMP);
     const char * const s = *encp ? sv_recode_to_utf8(sv, *encp) : SvPVX(sv);
     const STRLEN newlen = SvCUR(sv);
     UV uv = UNICODE_REPLACEMENT;
@@ -12621,7 +12618,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 		      recode_encoding:
 			if (! RExC_override_recoding) {
 			    SV* enc = _get_encoding();
-			    ender = reg_recode((const char)(U8)ender, &enc);
+			    ender = reg_recode((U8)ender, &enc);
 			    if (!enc && PASS2)
 				ckWARNreg(p, "Invalid escape in the specified encoding");
 			    REQUIRE_UTF8(flagp);
@@ -13902,7 +13899,13 @@ redo_curchar:
                 }
 
                 lhs = av_pop(stack);
-                assert(IS_OPERAND(lhs));
+
+                if (! IS_OPERAND(lhs)) {
+
+                    /* This can happen when there is an empty (), like in
+                     * /(?[[0]+()+])/ */
+                    goto bad_syntax;
+                }
 
                 switch (stacked_operator) {
                     case '&':
@@ -13948,9 +13951,20 @@ redo_curchar:
                 av_push(stack, rhs);
                 goto redo_curchar;
 
-            case '!':   /* Highest priority, right associative, so just push
-                           onto stack */
-                av_push(stack, newSVuv(curchar));
+            case '!':   /* Highest priority, right associative */
+
+                /* If what's already at the top of the stack is another '!",
+                 * they just cancel each other out */
+                if (   (top_ptr = av_fetch(stack, top_index, FALSE))
+                    && (IS_OPERATOR(*top_ptr) && SvUV(*top_ptr) == '!'))
+                {
+                    only_to_avoid_leaks = av_pop(stack);
+                    SvREFCNT_dec(only_to_avoid_leaks);
+                }
+                else { /* Otherwise, since it's right associative, just push
+                          onto the stack */
+                    av_push(stack, newSVuv(curchar));
+                }
                 break;
 
             default:
@@ -14909,7 +14923,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 	      recode_encoding:
 		if (! RExC_override_recoding) {
 		    SV* enc = _get_encoding();
-		    value = reg_recode((const char)(U8)value, &enc);
+		    value = reg_recode((U8)value, &enc);
 		    if (!enc) {
                         if (strict) {
                             vFAIL("Invalid escape in the specified encoding");

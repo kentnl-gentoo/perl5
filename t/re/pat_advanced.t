@@ -215,13 +215,16 @@ sub run_tests {
         ## Should probably put in tests for all the POSIX stuff,
         ## but not sure how to guarantee a specific locale......
 
-        skip "Not an ASCII platform", 2 unless $::IS_ASCII;
         my $message = 'Test [[:cntrl:]]';
         my $AllBytes = join "" => map {chr} 0 .. 255;
         (my $x = $AllBytes) =~ s/[[:cntrl:]]//g;
+        $x = join "", sort { $a cmp $b }
+                      map { chr utf8::native_to_unicode(ord $_) } split "", $x;
         is($x, join("", map {chr} 0x20 .. 0x7E, 0x80 .. 0xFF), $message);
 
         ($x = $AllBytes) =~ s/[^[:cntrl:]]//g;
+        $x = join "", sort { $a cmp $b }
+                       map { chr utf8::native_to_unicode(ord $_) } split "", $x;
         is($x, (join "", map {chr} 0x00 .. 0x1F, 0x7F), $message);
     }
 
@@ -2316,10 +2319,12 @@ EOF
         is "$1" || $@, "at", 'empty \N{...} stringified and retoked';
     }
 
+    is (scalar split(/\b{sb}/, "Don't think twice.  It's all right."),
+        2, '\b{wb} splits sentences correctly');
 
-    #
-    # Keep the following tests last -- they may crash perl
-    #
+
+    # !!! NOTE!  Keep the following tests last -- they may crash perl
+
     print "# Tests that follow may crash perl\n";
     {
         eval '/\k/';
@@ -2451,9 +2456,9 @@ EOF
 		      "buffer overflow in TRIE_STORE_REVCHAR");
     }
 
-
     # !!! NOTE that tests that aren't at all likely to crash perl should go
-    # a ways above, above these last ones.
+    # a ways above, above these last ones.  There's a comment there that, like
+    # this comment, contains the word 'NOTE'
 
     done_testing();
 } # End of sub run_tests

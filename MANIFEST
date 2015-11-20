@@ -235,9 +235,12 @@ cpan/Config-Perl-V/t/25_plv516.t		Config::Perl::V
 cpan/Config-Perl-V/t/26_plv5182.t		Config::Perl::V
 cpan/Config-Perl-V/t/26_plv518.t		Config::Perl::V
 cpan/Config-Perl-V/t/27_plv5200.t		Config::Perl::V
+cpan/Config-Perl-V/t/27_plv5202.t		Config::Perl::V
+cpan/Config-Perl-V/t/28_plv52201w.t		Config::Perl::V
+cpan/Config-Perl-V/t/28_plv5220.t		Config::Perl::V
 cpan/Config-Perl-V/V.pm				Config::Perl::V
 cpan/CPAN/lib/App/Cpan.pm		helper package for CPAN.pm
-cpan/CPAN/lib/CPAN/API/HOWTO.pod		recipe book for programming with CPAN.pm
+cpan/CPAN/lib/CPAN/API/HOWTO.pod	recipe book for programming with CPAN.pm
 cpan/CPAN/lib/CPAN/Author.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/Bundle.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/CacheMgr.pm		helper package for CPAN.pm
@@ -1066,7 +1069,6 @@ cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker.pm		Write Makefiles for extension
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/Tutorial.pod	Writing a module with MakeMaker
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/version.pm
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/version/regex.pm
-cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker/version/vpp.pm
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/Mkbootstrap.pm		Writes a bootstrap file (see MakeMaker)
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/Mksymlists.pm		Writes a linker options file for extensions
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_AIX.pm			MakeMaker methods for AIX
@@ -1665,6 +1667,7 @@ cpan/Math-BigInt/t/constant.t		Test Math::BigInt/BigFloat under :constant
 cpan/Math-BigInt/t/const_mbf.t		Test Math::BigInt
 cpan/Math-BigInt/t/downgrade.t		Test if use Math::BigInt(); under downgrade works
 cpan/Math-BigInt/t/_e_math.t		Helper routine in BigFloat for _e math
+cpan/Math-BigInt/t/from_hex-mbf.t	Test Math::BigInt
 cpan/Math-BigInt/t/inf_nan.t		Special tests for inf and *NaN* handling
 cpan/Math-BigInt/t/isa.t		Test for Math::BigInt inheritance
 cpan/Math-BigInt/t/lib_load.t		Test sane lib names
@@ -2908,7 +2911,9 @@ cpan/Unicode-Collate/t/variable.t		Unicode::Collate
 cpan/Unicode-Collate/t/version.t		Unicode::Collate
 cpan/Unicode-Collate/t/view.t			Unicode::Collate
 cpan/Unicode-Normalize/Makefile.PL	Unicode::Normalize
+cpan/Unicode-Normalize/mkheader		Unicode::Normalize
 cpan/Unicode-Normalize/Normalize.pm	Unicode::Normalize
+cpan/Unicode-Normalize/Normalize.xs	Unicode::Normalize
 cpan/Unicode-Normalize/t/fcdc.t		Unicode::Normalize
 cpan/Unicode-Normalize/t/form.t		Unicode::Normalize
 cpan/Unicode-Normalize/t/func.t		Unicode::Normalize
@@ -2925,8 +2930,6 @@ cpan/version/lib/version/Internals.pod	Description of the internals of version o
 cpan/version/lib/version.pm		Support for version objects
 cpan/version/lib/version.pod		Documentation of the version module
 cpan/version/lib/version/regex.pm	Regex for matching version objects
-cpan/version/lib/version/vpp.pm		Pure Perl implementation of XS code
-cpan/version/t/00impl-pp.t		Tests for version objects
 cpan/version/t/01base.t			Tests for version objects
 cpan/version/t/02derived.t		Tests for version objects
 cpan/version/t/03require.t		Tests for version objects
@@ -3011,8 +3014,7 @@ dist/autouse/t/lib/MyTestModule.pm	Test module for autouse
 dist/base/Changes		base.pm changelog
 dist/base/lib/base.pm		Establish IS-A relationship at compile time
 dist/base/lib/fields.pm		Set up object field names for pseudo-hash-using classes
-dist/base/MANIFEST		base.pm manifest
-dist/base/META.yml		base.pm META.yml file
+dist/base/Makefile.PL	base.pm Makefile.PL
 dist/base/t/base-open-chunk.t	See if base works
 dist/base/t/base-open-line.t	See if base works
 dist/base/t/base.t		See if base works
@@ -3029,9 +3031,11 @@ dist/base/t/lib/HasSigDie.pm	Module for testing base.pm
 dist/base/t/sigdie.t		See if base works with SIGDIE
 dist/base/t/version.t		See if base works with versions
 dist/base/t/warnings.t		See if base works with warnings
+dist/Carp/Changes		Changelog for Carp's CPAN releases
 dist/Carp/lib/Carp/Heavy.pm	Error message retired workhorse
 dist/Carp/lib/Carp.pm		Error message extension
 dist/Carp/Makefile.PL		makefile writer for Carp
+dist/Carp/README		README for Carp's CPAN releases
 dist/Carp/t/arg_regexp.t		See if Carp formats regexp args OK in stack traces
 dist/Carp/t/arg_string.t		See if Carp formats string args OK in stack traces
 dist/Carp/t/baduni.t		See if Carp handles non-char Unicode
@@ -4623,6 +4627,7 @@ pod/perl5230delta.pod		Perl changes in version 5.23.0
 pod/perl5231delta.pod		Perl changes in version 5.23.1
 pod/perl5232delta.pod		Perl changes in version 5.23.2
 pod/perl5233delta.pod		Perl changes in version 5.23.3
+pod/perl5234delta.pod		Perl changes in version 5.23.4
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1

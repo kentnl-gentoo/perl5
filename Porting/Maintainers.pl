@@ -197,7 +197,7 @@ use File::Glob qw(:case);
     },
 
     'Carp' => {
-        'DISTRIBUTION' => 'RJBS/Carp-1.36.tar.gz',
+        'DISTRIBUTION' => 'RJBS/Carp-1.38.tar.gz',
         'FILES'        => q[dist/Carp],
     },
 
@@ -476,6 +476,7 @@ use File::Glob qw(:case);
             qr{^\.perlcriticrc},
             'PATCHING',
             'README.packaging',
+            'lib/ExtUtils/MakeMaker/version/vpp.pm',
         ],
         # Upstreamed as https://github.com/Perl-Toolchain-Gang/ExtUtils-MakeMaker/commit/ede9ea4a
         'CUSTOMIZED'   => [
@@ -572,7 +573,7 @@ use File::Glob qw(:case);
     },
 
     'Getopt::Long' => {
-        'DISTRIBUTION' => 'JV/Getopt-Long-2.47.tar.gz',
+        'DISTRIBUTION' => 'JV/Getopt-Long-2.48.tar.gz',
         'FILES'        => q[cpan/Getopt-Long],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -721,7 +722,7 @@ use File::Glob qw(:case);
     },
 
     'Math::BigInt' => {
-        'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-1.999704.tar.gz',
+        'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-1.999710.tar.gz',
         'FILES'        => q[cpan/Math-BigInt],
         'EXCLUDED'     => [
             qr{^inc/},
@@ -735,7 +736,7 @@ use File::Glob qw(:case);
     },
 
     'Math::BigInt::FastCalc' => {
-        'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-FastCalc-0.34.tar.gz',
+        'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-FastCalc-0.37.tar.gz',
         'FILES'        => q[cpan/Math-BigInt-FastCalc],
         'EXCLUDED'     => [
             qr{^inc/},
@@ -797,7 +798,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20150920.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20151020.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -817,7 +818,7 @@ use File::Glob qw(:case);
     },
 
     'Module::Metadata' => {
-        'DISTRIBUTION' => 'ETHER/Module-Metadata-1.000029-TRIAL.tar.gz',
+        'DISTRIBUTION' => 'ETHER/Module-Metadata-1.000030-TRIAL.tar.gz',
         'FILES'        => q[cpan/Module-Metadata],
         'EXCLUDED'     => [
             qw(t/00-report-prereqs.t),
@@ -825,9 +826,6 @@ use File::Glob qw(:case);
             qr{weaver.ini},
             qr{^xt},
         ],
-        # Already merged upstream:
-        # https://github.com/Perl-Toolchain-Gang/Module-Metadata/commit/9658697
-        'CUSTOMIZED'   => [ qw[ t/lib/GeneratePackage.pm ] ],
     },
 
     'Net::Ping' => {
@@ -862,7 +860,7 @@ use File::Glob qw(:case);
     },
 
     'PathTools' => {
-        'DISTRIBUTION' => 'SMUELLER/PathTools-3.47.tar.gz',
+        'DISTRIBUTION' => 'RJBS/PathTools-3.59.tar.gz',
         'FILES'        => q[dist/PathTools],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -925,22 +923,8 @@ use File::Glob qw(:case);
     },
 
     'Pod::Simple' => {
-        'DISTRIBUTION' => 'DWHEELER/Pod-Simple-3.30.tar.gz',
+        'DISTRIBUTION' => 'MARCGREEN/Pod-Simple-3.32.tar.gz',
         'FILES'        => q[cpan/Pod-Simple],
-        # https://rt.cpan.org/Public/Bug/Display.html?id=103439
-        # https://rt.cpan.org/Public/Bug/Display.html?id=105192
-        # https://rt.cpan.org/Public/Bug/Display.html?id=105511
-        'CUSTOMIZED'   => [
-            qw( lib/Pod/Simple/Search.pm
-                lib/Pod/Simple/BlackBox.pm
-                t/search10.t
-                t/search12.t
-                t/search20.t
-                t/search22.t
-                t/search26.t
-                t/search28.t
-            ),
-        ],
     },
 
     'Pod::Usage' => {
@@ -1153,7 +1137,7 @@ use File::Glob qw(:case);
     # correct for this (and Thread::Semaphore, threads, and threads::shared)
     # to be under dist/ rather than cpan/
     'Thread::Queue' => {
-        'DISTRIBUTION' => 'JDHEDDEN/Thread-Queue-3.06.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/Thread-Queue-3.07.tar.gz',
         'FILES'        => q[dist/Thread-Queue],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1211,7 +1195,7 @@ use File::Glob qw(:case);
     },
 
     'Time::HiRes' => {
-        'DISTRIBUTION' => 'RJBS/Time-HiRes-1.9727_02.tar.gz',
+        'DISTRIBUTION' => 'RJBS/Time-HiRes-1.9728.tar.gz',
         'FILES'        => q[cpan/Time-HiRes],
     },
 
@@ -1224,7 +1208,7 @@ use File::Glob qw(:case);
     },
 
     'Time::Piece' => {
-        'DISTRIBUTION' => 'RJBS/Time-Piece-1.30.tar.gz',
+        'DISTRIBUTION' => 'ESAYM/Time-Piece-1.31.tar.gz',
         'FILES'        => q[cpan/Time-Piece],
     },
 
@@ -1243,7 +1227,7 @@ use File::Glob qw(:case);
     },
 
     'Unicode::Normalize' => {
-        'DISTRIBUTION' => 'KHW/Unicode-Normalize-1.21.tar.gz',
+        'DISTRIBUTION' => 'KHW/Unicode-Normalize-1.23.tar.gz',
         'FILES'        => q[cpan/Unicode-Normalize],
     },
 
@@ -1255,7 +1239,9 @@ use File::Glob qw(:case);
             'vutil/Makefile.PL',
             'vutil/ppport.h',
             'vutil/vxs.xs',
+            't/00impl-pp.t',
             't/survey_locales',
+            'lib/version/vpp.pm',
         ],
 
         # When adding the CPAN-distributed files for version.pm, it is necessary

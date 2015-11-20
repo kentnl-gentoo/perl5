@@ -134,7 +134,8 @@ PP(pp_sassign)
 	SV * const temp = left;
 	left = right; right = temp;
     }
-    if (TAINTING_get && UNLIKELY(TAINT_get) && !SvTAINTED(right))
+    assert(TAINTING_get || !TAINT_get);
+    if (UNLIKELY(TAINT_get) && !SvTAINTED(right))
 	TAINT_NOT;
     if (UNLIKELY(PL_op->op_private & OPpASSIGN_CV_TO_GV)) {
         /* *foo =\&bar */
@@ -208,7 +209,7 @@ PP(pp_sassign)
 		assert(source);
 		assert(CvFLAGS(source) & CVf_CONST);
 
-		SvREFCNT_inc_void(source);
+		SvREFCNT_inc_simple_void_NN(source);
 		SvREFCNT_dec_NN(upgraded);
 		SvRV_set(right, MUTABLE_SV(source));
 	    }
@@ -464,25 +465,44 @@ PP(pp_eq)
 }
 
 
-/* also used for: pp_i_predec() pp_i_preinc() pp_predec() */
+/* also used for: pp_i_preinc() */
 
 PP(pp_preinc)
 {
-    dSP;
-    const bool inc =
-	PL_op->op_type == OP_PREINC || PL_op->op_type == OP_I_PREINC;
-    if (UNLIKELY(SvTYPE(TOPs) >= SVt_PVAV || (isGV_with_GP(TOPs) && !SvFAKE(TOPs))))
-	Perl_croak_no_modify();
-    if (LIKELY(!SvREADONLY(TOPs) && !SvGMAGICAL(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs))
-        && SvIVX(TOPs) != (inc ? IV_MAX : IV_MIN))
+    SV *sv = *PL_stack_sp;
+
+    if (LIKELY(((sv->sv_flags &
+                        (SVf_THINKFIRST|SVs_GMG|SVf_IVisUV|
+                         SVf_IOK|SVf_NOK|SVf_POK|SVp_NOK|SVp_POK|SVf_ROK))
+                == SVf_IOK))
+        && SvIVX(sv) != IV_MAX)
     {
-	SvIV_set(TOPs, SvIVX(TOPs) + (inc ? 1 : -1));
-	SvFLAGS(TOPs) &= ~(SVp_NOK|SVp_POK);
+	SvIV_set(sv, SvIVX(sv) + 1);
     }
-    else /* Do all the PERL_PRESERVE_IVUV conditionals in sv_inc */
-	if (inc) sv_inc(TOPs);
-	else sv_dec(TOPs);
-    SvSETMAGIC(TOPs);
+    else /* Do all the PERL_PRESERVE_IVUV and hard cases in sv_inc */
+	sv_inc(sv);
+    SvSETMAGIC(sv);
+    return NORMAL;
+}
+
+
+/* also used for: pp_i_predec() */
+
+PP(pp_predec)
+{
+    SV *sv = *PL_stack_sp;
+
+    if (LIKELY(((sv->sv_flags &
+                        (SVf_THINKFIRST|SVs_GMG|SVf_IVisUV|
+                         SVf_IOK|SVf_NOK|SVf_POK|SVp_NOK|SVp_POK|SVf_ROK))
+                == SVf_IOK))
+        && SvIVX(sv) != IV_MIN)
+    {
+	SvIV_set(sv, SvIVX(sv) - 1);
+    }
+    else /* Do all the PERL_PRESERVE_IVUV and hard cases  in sv_dec */
+	sv_dec(sv);
+    SvSETMAGIC(sv);
     return NORMAL;
 }
 
@@ -563,15 +583,62 @@ PP(pp_defined)
     RETPUSHNO;
 }
 
+
+
 PP(pp_add)
 {
     dSP; dATARGET; bool useleft; SV *svl, *svr;
+
     tryAMAGICbin_MG(add_amg, AMGf_assign|AMGf_numeric);
     svr = TOPs;
     svl = TOPm1s;
 
-    useleft = USE_LEFT(svl);
 #ifdef PERL_PRESERVE_IVUV
+
+    /* special-case some simple common cases */
+    if (!((svl->sv_flags|svr->sv_flags) & (SVf_IVisUV|SVs_GMG))) {
+        IV il, ir;
+        U32 flags = (svl->sv_flags & svr->sv_flags);
+        if (flags & SVf_IOK) {
+            /* both args are simple IVs */
+            UV topl, topr;
+            il = SvIVX(svl);
+            ir = SvIVX(svr);
+          do_iv:
+            topl = ((UV)il) >> (UVSIZE * 8 - 2);
+            topr = ((UV)ir) >> (UVSIZE * 8 - 2);
+
+            /* if both are in a range that can't under/overflow, do a
+             * simple integer add: if the top of both numbers
+             * are 00  or 11, then it's safe */
+            if (!( ((topl+1) | (topr+1)) & 2)) {
+                SP--;
+                TARGi(il + ir, 0); /* args not GMG, so can't be tainted */
+                SETs(TARG);
+                RETURN;
+            }
+            goto generic;
+        }
+        else if (flags & SVf_NOK) {
+            /* both args are NVs */
+            NV nl = SvNVX(svl);
+            NV nr = SvNVX(svr);
+
+            il = (IV)nl;
+            ir = (IV)nr;
+            if (nl == (NV)il && nr == (NV)ir)
+                /* nothing was lost by converting to IVs */
+                goto do_iv;
+            SP--;
+            TARGn(nl + nr, 0); /* args not GMG, so can't be tainted */
+            SETs(TARG);
+            RETURN;
+        }
+    }
+
+  generic:
+
+    useleft = USE_LEFT(svl);
     /* We must see if we can perform the addition with integers if possible,
        as the integer code detects overflow while the NV code doesn't.
        If either argument hasn't had a numeric conversion yet attempt to get
@@ -715,7 +782,11 @@ PP(pp_add)
 	    } /* Overflow, drop through to NVs.  */
 	}
     }
+
+#else
+    useleft = USE_LEFT(svl);
 #endif
+
     {
 	NV value = SvNV_nomg(svr);
 	(void)POPs;
@@ -1311,11 +1382,11 @@ PP(pp_aassign)
 		    if (lval && !already_copied)
 			*relem = sv_mortalcopy(*relem);
 		    /* XXX else check for weak refs?  */
-		    sv = SvREFCNT_inc_simple_NN(SvRV(*relem));
+		    sv = SvREFCNT_inc_NN(SvRV(*relem));
 		}
 		relem++;
                 if (already_copied)
-                    SvREFCNT_inc_simple_NN(sv); /* undo mortal free */
+                    SvREFCNT_inc_simple_void_NN(sv); /* undo mortal free */
 		didstore = av_store(ary,i++,sv);
 		if (magic) {
 		    if (!didstore)
@@ -1410,7 +1481,7 @@ PP(pp_aassign)
 			}
 		    }
                     if (already_copied)
-                        SvREFCNT_inc_simple_NN(tmpstr); /* undo mortal free */
+                        SvREFCNT_inc_simple_void_NN(tmpstr); /* undo mortal free */
 		    didstore = hv_store_ent(hash,sv,tmpstr,0);
 		    if (magic) {
 			if (!didstore) sv_2mortal(tmpstr);
@@ -2059,7 +2130,7 @@ PP(pp_helem)
 	    LvTYPE(lv) = 'y';
 	    sv_magic(lv, key2 = newSVsv(keysv), PERL_MAGIC_defelem, NULL, 0);
 	    SvREFCNT_dec_NN(key2);	/* sv_magic() increments refcount */
-	    LvTARG(lv) = SvREFCNT_inc_simple(hv);
+	    LvTARG(lv) = SvREFCNT_inc_simple_NN(hv);
 	    LvTARGLEN(lv) = 1;
 	    PUSHs(lv);
 	    RETURN;
@@ -2495,7 +2566,7 @@ PP(pp_multideref)
                                                 PERL_MAGIC_defelem, NULL, 0);
                             /* sv_magic() increments refcount */
                             SvREFCNT_dec_NN(key2);
-                            LvTARG(lv) = SvREFCNT_inc_simple(hv);
+                            LvTARG(lv) = SvREFCNT_inc_simple_NN(hv);
                             LvTARGLEN(lv) = 1;
                             sv = lv;
                         }
@@ -3055,7 +3126,8 @@ PP(pp_subst)
 	    }
 	    if (once)
 		break;
-	} while (CALLREGEXEC(rx, s, strend, orig, s == m,
+	} while (CALLREGEXEC(rx, s, strend, orig,
+                             s == m,    /* Yields minend of 0 or 1 */
 			     TARG, NULL,
                     REXEC_NOT_FIRST|REXEC_IGNOREPOS|REXEC_FAIL_ON_UNDERFLOW));
 	sv_catpvn_nomg_maybeutf8(dstr, s, strend - s, DO_UTF8(TARG));
@@ -3156,9 +3228,9 @@ PP(pp_grepwhile)
 	ENTER_with_name("grep_item");					/* enter inner scope */
 	SAVEVPTR(PL_curpm);
 
-	src = PL_stack_base[*PL_markstack_ptr];
+	src = PL_stack_base[TOPMARK];
 	if (SvPADTMP(src)) {
-	    src = PL_stack_base[*PL_markstack_ptr] = sv_mortalcopy(src);
+	    src = PL_stack_base[TOPMARK] = sv_mortalcopy(src);
 	    PL_tmps_floor++;
 	}
 	SvTEMP_off(src);

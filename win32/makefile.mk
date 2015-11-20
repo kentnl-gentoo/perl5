@@ -44,7 +44,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.23.4
+#INST_VER	*= \5.23.5
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -498,11 +498,9 @@ LIBC		=
 #LIBC		= -lmsvcrt
 
 # same libs as MSVC
-LIBFILES	= $(LIBC) \
-		  -lmoldname -lkernel32 -luser32 -lgdi32 \
-		  -lwinspool -lcomdlg32 -ladvapi32 -lshell32 -lole32 \
-		  -loleaut32 -lnetapi32 -luuid -lws2_32 -lmpr \
-		  -lwinmm -lversion -lodbc32 -lodbccp32 -lcomctl32
+LIBFILES	= $(LIBC) -lmoldname -lkernel32 -luser32 -lgdi32 -lwinspool \
+	-lcomdlg32 -ladvapi32 -lshell32 -lole32 -loleaut32 -lnetapi32 \
+	-luuid -lws2_32 -lmpr -lwinmm -lversion -lodbc32 -lodbccp32 -lcomctl32
 
 .IF  "$(CFG)" == "Debug"
 OPTIMIZE	= -g -O2 -DDEBUGGING
@@ -643,11 +641,10 @@ BUILDOPT	+= -D_USE_32BIT_TIME_T
 .ENDIF
 .ENDIF
 
-LIBBASEFILES	= \
-		oldnames.lib kernel32.lib user32.lib gdi32.lib winspool.lib \
-		comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib \
-		netapi32.lib uuid.lib ws2_32.lib mpr.lib winmm.lib \
-		version.lib odbc32.lib odbccp32.lib comctl32.lib
+LIBBASEFILES	= oldnames.lib kernel32.lib user32.lib gdi32.lib winspool.lib \
+	comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib \
+	netapi32.lib uuid.lib ws2_32.lib mpr.lib winmm.lib version.lib \
+	odbc32.lib odbccp32.lib comctl32.lib
 
 # Avoid __intel_new_proc_init link error for libircmt.
 # libmmd is /MD equivelent, other variants exist.
@@ -1067,7 +1064,7 @@ CFG_VARS	=					\
 # Top targets
 #
 
-all : CHECKDMAKE  rebasePE $(UNIDATAFILES) Extensions_nonxs $(PERLSTATIC)
+all : CHECKDMAKE  rebasePE Extensions_nonxs $(PERLSTATIC)
 
 ..\regcomp$(o) : ..\regnodes.h ..\regcharclass.h
 
@@ -1088,18 +1085,14 @@ CHECKDMAKE :
 	@exit 1
 .ENDIF
 
-$(GLOBEXE) : perlglob$(o)
+$(GLOBEXE) : perlglob.c
 .IF "$(CCTYPE)" == "GCC"
-	$(LINK32) $(BLINK_FLAGS) -mconsole -o $@ perlglob$(o) $(LIBFILES)
+	$(LINK32) $(OPTIMIZE) $(BLINK_FLAGS) -mconsole -o $@ perlglob.c $(LIBFILES)
 .ELSE
-	$(LINK32) $(BLINK_FLAGS) $(LIBFILES) -out:$@ perlglob$(o) setargv$(o)
-	$(EMBED_EXE_MANI)
+	$(CC) $(OPTIMIZE) -Fe$@ perlglob.c -link $(BLINK_FLAGS) setargv$(o) \
+	$(LIBFILES) && $(EMBED_EXE_MANI)
 .ENDIF
 
-perlglob$(o)  : perlglob.c
-
-config.w32 : $(CFGSH_TMPL)
-	copy $(CFGSH_TMPL) config.w32
 
 ..\git_version.h : $(HAVEMINIPERL) ..\make_patchnum.pl
 	cd .. && miniperl -Ilib make_patchnum.pl
@@ -1107,9 +1100,9 @@ config.w32 : $(CFGSH_TMPL)
 # make sure that we recompile perl.c if the git version changes
 ..\perl$(o) : ..\git_version.h
 
-..\config.sh : config.w32 $(HAVEMINIPERL) config_sh.PL FindExt.pm
+..\config.sh : $(CFGSH_TMPL) config_sh.PL FindExt.pm $(HAVEMINIPERL)
 	$(MINIPERL) -I..\lib config_sh.PL --cfgsh-option-file \
-	    $(mktmp $(CFG_VARS)) config.w32 > ..\config.sh
+	    $(mktmp $(CFG_VARS)) $(CFGSH_TMPL) > ..\config.sh
 
 # This target is for when changes to the main config.sh happen.
 # Edit config.gc, then make perl using GCC in a minimal configuration (i.e.
@@ -1408,8 +1401,8 @@ $(MINIDIR)\globals$(o) : $(GENERATED_HEADERS)
 
 $(GENUUDMAP) $(GENERATED_HEADERS) .UPDATEALL : ..\mg_raw.h
 .IF "$(CCTYPE)" == "GCC"
-	$(LINK32) $(CFLAGS_O) -o..\generate_uudmap.exe ..\generate_uudmap.c $(BLINK_FLAGS) \
-	    $(mktmp $(LKPRE) $(LIBFILES) $(LKPOST))
+	$(LINK32) $(CFLAGS_O) -o..\generate_uudmap.exe ..\generate_uudmap.c \
+	$(BLINK_FLAGS) -x $(mktmp $(LKPRE) $(LIBFILES) $(LKPOST))
 .ELSE
 	$(CC) $(CFLAGS_O) -Fe..\generate_uudmap.exe ..\generate_uudmap.c @$(mktmp -link $(LIBFILES)) -link $(BLINK_FLAGS) 
 	$(EMBED_EXE_MANI:s/$@/..\generate_uudmap.exe/)
@@ -1463,7 +1456,10 @@ $(PERLEXESTATIC): $(PERLSTATICLIB) $(CONFIGPM) $(PERLEXEST_OBJ) $(PERLEXE_RES)
 
 #most of deps of this target are in DYNALOADER and therefore omitted here
 Extensions : $(PERLDEP) $(DYNALOADER) $(GLOBEXE)
-	$(MINIPERL) -I..\lib ..\make_ext.pl "MAKE=$(PLMAKE)" --dir=$(CPANDIR) --dir=$(DISTDIR) --dir=$(EXTDIR) --dynamic
+	$(MINIPERL) -I..\lib ..\make_ext.pl "MAKE=$(PLMAKE)" --dir=$(CPANDIR) --dir=$(DISTDIR) --dir=$(EXTDIR) --dynamic !Unicode/Normalize
+
+Extensions_normalize : $(PERLDEP) $(DYNALOADER) $(GLOBEXE) $(UNIDATAFILES)
+	$(MINIPERL) -I..\lib ..\make_ext.pl "MAKE=$(PLMAKE)" --dir=$(CPANDIR) --dir=$(DISTDIR) --dir=$(EXTDIR) --dynamic +Unicode/Normalize
 
 Extensions_reonly : $(PERLDEP) $(DYNALOADER)
 	$(MINIPERL) -I..\lib ..\make_ext.pl "MAKE=$(PLMAKE)" --dir=$(CPANDIR) --dir=$(DISTDIR) --dir=$(EXTDIR) --dynamic +re
@@ -1489,9 +1485,9 @@ Extensions_realclean :
 # be running in parallel like UNIDATAFILES, this target a placeholder for the
 # future
 .IF "$(BUILD_STATIC)"=="define"
-rebasePE : Extensions $(PERLDLL) $(PERLEXE) $(GLOBEXE) $(PERLEXESTATIC)
+rebasePE : Extensions $(PERLDLL) Extensions_normalize $(PERLEXE) $(GLOBEXE) $(PERLEXESTATIC)
 .ELSE
-rebasePE : Extensions $(PERLDLL) $(PERLEXE) $(GLOBEXE)
+rebasePE : Extensions $(PERLDLL) Extensions_normalize $(PERLEXE) $(GLOBEXE)
 .ENDIF
 	$(NOOP)
 
@@ -1543,7 +1539,7 @@ utils: $(HAVEMINIPERL) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5234delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5235delta.pod
 	$(MINIPERL) -I..\lib $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1639,7 +1635,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5234delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5235delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \
@@ -1756,7 +1752,6 @@ _clean :
 	-@erase perlglob$(o)
 	-@erase perlmain$(o)
 	-@erase perlmainst$(o)
-	-@erase config.w32
 	-@erase /f config.h
 	-@erase /f ..\git_version.h
 	-@erase $(GLOBEXE)

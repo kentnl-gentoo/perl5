@@ -8773,6 +8773,10 @@ Perl_sv_inc_nomg(pTHX_ SV *const sv)
 	return;
     }
 
+    /* treat AV/HV/CV/FM/IO and non-fake GVs as immutable */
+    if (SvTYPE(sv) >= SVt_PVAV || (isGV_with_GP(sv) && !SvFAKE(sv)))
+        Perl_croak_no_modify();
+
     if (!(flags & SVp_POK) || !*SvPVX_const(sv)) {
 	if ((flags & SVTYPEMASK) < SVt_PVIV)
 	    sv_upgrade(sv, ((flags & SVTYPEMASK) > SVt_IV ? SVt_PVIV : SVt_IV));
@@ -8952,6 +8956,11 @@ Perl_sv_dec_nomg(pTHX_ SV *const sv)
 	    return;
 	}
     }
+
+    /* treat AV/HV/CV/FM/IO and non-fake GVs as immutable */
+    if (SvTYPE(sv) >= SVt_PVAV || (isGV_with_GP(sv) && !SvFAKE(sv)))
+        Perl_croak_no_modify();
+
     if (!(flags & SVp_POK)) {
 	if ((flags & SVTYPEMASK) < SVt_PVIV)
 	    sv_upgrade(sv, ((flags & SVTYPEMASK) > SVt_IV) ? SVt_PVIV : SVt_IV);
@@ -9933,6 +9942,9 @@ Perl_sv_pvutf8n_force(pTHX_ SV *const sv, STRLEN *const lp)
 
 Returns a string describing what the SV is a reference to.
 
+If ob is true and the SV is blessed, the string is the class name,
+otherwise it is the type of the SV, "SCALAR", "ARRAY" etc.
+
 =cut
 */
 
@@ -9990,6 +10002,12 @@ Perl_sv_reftype(pTHX_ const SV *const sv, const int ob)
 =for apidoc sv_ref
 
 Returns a SV describing what the SV passed in is a reference to.
+
+dst can be a SV to be set to the description or NULL, in which case a
+mortal SV is returned.
+
+If ob is true and the SV is blessed, the description is the class
+name, otherwise it is the type of the SV, "SCALAR", "ARRAY" etc.
 
 =cut
 */
@@ -12567,7 +12585,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                     elen = quadmath_snprintf(PL_efloatbuf, PL_efloatsize,
                                              qfmt, nv);
                     if ((IV)elen == -1)
-                        Perl_croak_nocontext("panic: quadmath_snprintf failed, format \"%s|'", qfmt);
+                        Perl_croak_nocontext("panic: quadmath_snprintf failed, format \"%s\"", qfmt);
                     if (qfmt != ptr)
                         Safefree(qfmt);
                 }

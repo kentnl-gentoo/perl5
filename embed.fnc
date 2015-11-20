@@ -231,7 +231,9 @@ Apd	|void	|av_push	|NN AV *av|NN SV *val
 EXp	|void	|av_reify	|NN AV *av
 ApdR	|SV*	|av_shift	|NN AV *av
 Apd	|SV**	|av_store	|NN AV *av|SSize_t key|NULLOK SV *val
+#ifndef PERL_NO_INLINE_FUNCTIONS
 AidR	|SSize_t|av_top_index	|NN AV *av
+#endif
 AmpdR	|SSize_t|av_tindex	|NN AV *av
 Apd	|void	|av_undef	|NN AV *av
 ApdoxM	|SV**	|av_create_and_unshift_one|NN AV **const avp|NN SV *const val
@@ -654,7 +656,9 @@ pR	|OP*	|invert		|NULLOK OP* cmd
 ApR	|I32	|is_lvalue_sub
 : Used in cop.h
 XopR	|I32	|was_lvalue_sub
+#ifndef PERL_NO_INLINE_FUNCTIONS
 AiMRn	|STRLEN	|_is_utf8_char_slow|NN const U8 *s|NN const U8 *e
+#endif
 ADMpPR	|U32	|to_uni_upper_lc|U32 c
 ADMpPR	|U32	|to_uni_title_lc|U32 c
 ADMpPR	|U32	|to_uni_lower_lc|U32 c
@@ -1446,7 +1450,9 @@ Apd	|void	|sv_magic	|NN SV *const sv|NULLOK SV *const obj|const int how \
 Apd	|MAGIC *|sv_magicext	|NN SV *const sv|NULLOK SV *const obj|const int how \
 				|NULLOK const MGVTBL *const vtbl|NULLOK const char *const name \
 				|const I32 namlen
+#ifndef PERL_NO_INLINE_FUNCTIONS
 Ein	|bool	|sv_only_taint_gmagic|NN SV *sv
+#endif
 : exported for re.pm
 EXp	|MAGIC *|sv_magicext_mglob|NN SV *sv
 ApdbamR	|SV*	|sv_mortalcopy	|NULLOK SV *const oldsv
@@ -1467,7 +1473,7 @@ Apd	|char*	|sv_recode_to_utf8	|NN SV* sv|NN SV *encoding
 Apd	|bool	|sv_cat_decode	|NN SV* dsv|NN SV *encoding|NN SV *ssv|NN int *offset \
 				|NN char* tstr|int tlen
 ApdR	|const char*	|sv_reftype	|NN const SV *const sv|const int ob
-pd	|SV*	|sv_ref	|NULLOK SV *dst|NN const SV *const sv|const int ob
+Apd	|SV*	|sv_ref	|NULLOK SV *dst|NN const SV *const sv|const int ob
 Apd	|void	|sv_replace	|NN SV *const sv|NN SV *const nsv
 Apd	|void	|sv_report_used
 Apd	|void	|sv_reset	|NN const char* s|NULLOK HV *const stash
@@ -1690,8 +1696,10 @@ Am	|I32	|whichsig	|NN const char* sig
 Ap     |I32    |whichsig_sv    |NN SV* sigsv
 Ap     |I32    |whichsig_pv    |NN const char* sig
 Ap     |I32    |whichsig_pvn   |NN const char* sig|STRLEN len
+#ifndef PERL_NO_INLINE_FUNCTIONS
 : used to check for NULs in pathnames and other names
 AiR	|bool	|is_safe_syscall|NN const char *pv|STRLEN len|NN const char *what|NN const char *op_name
+#endif
 #ifdef PERL_CORE
 inR	|bool	|should_warn_nl|NN const char *pv
 #endif
@@ -2143,7 +2151,7 @@ Es	|regnode*|handle_regex_sets|NN RExC_state_t *pRExC_state \
 				|NN char * const oregcomp_parse
 Es	|void|parse_lparen_question_flags|NN RExC_state_t *pRExC_state
 Es	|regnode*|reg_node	|NN RExC_state_t *pRExC_state|U8 op
-Es	|UV	|reg_recode	|const char value|NN SV **encp
+Es	|UV	|reg_recode	|const U8 value|NN SV **encp
 Es	|regnode*|regpiece	|NN RExC_state_t *pRExC_state \
 				|NN I32 *flagp|U32 depth
 Es	|bool	|grok_bslash_N	|NN RExC_state_t *pRExC_state		    \
@@ -2513,7 +2521,9 @@ sRM	|U8*	|swash_scan_list_line|NN U8* l|NN U8* const lend|NN UV* min \
 		|NN const U8* const typestr
 #endif
 
+#ifndef PERL_NO_INLINE_FUNCTIONS
 AiMn	|void	|append_utf8_from_native_byte|const U8 byte|NN U8** dest
+#endif
 
 Apd	|void	|sv_setsv_flags	|NN SV *dstr|NULLOK SV *sstr|const I32 flags
 Apd	|void	|sv_catpvn_flags|NN SV *const dstr|NN const char *sstr|const STRLEN len \

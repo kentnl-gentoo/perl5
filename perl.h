@@ -597,9 +597,9 @@
 #   define TAINT_WARN_get       0
 #   define TAINT_WARN_set(s)    NOOP
 #else
-#   define TAINT		(PL_tainted = TRUE)
+#   define TAINT		(PL_tainted = PL_tainting)
 #   define TAINT_NOT	(PL_tainted = FALSE)
-#   define TAINT_IF(c)	if (UNLIKELY(c)) { PL_tainted = TRUE; }
+#   define TAINT_IF(c)	if (UNLIKELY(c)) { PL_tainted = PL_tainting; }
 #   define TAINT_ENV()	if (UNLIKELY(PL_tainting)) { taint_env(); }
 #   define TAINT_PROPER(s)	if (UNLIKELY(PL_tainting)) { taint_proper(NULL, s); }
 #   define TAINT_set(s)		(PL_tainted = (s))
@@ -1866,6 +1866,9 @@ typedef NVTYPE NV;
 #endif
 #if defined(__DECC) && defined(__osf__)
 /* Also Tru64 cc has broken NaN comparisons. */
+#  define NAN_COMPARE_BROKEN
+#endif
+#if defined(__sgi)
 #  define NAN_COMPARE_BROKEN
 #endif
 

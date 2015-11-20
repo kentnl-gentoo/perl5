@@ -17,6 +17,20 @@ Consult your favorite dictionary for details.
 
 =head1 EPIGRAPHS
 
+=head2 v5.23.4 - Denis Diderot, trans. David Coward, "Jacques the Fatalist"
+
+L<Announced on 2015-10-20 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2015/10/msg232040.html>
+
+Well, everybody's got a dog.  The prime minister is the king's dog.  The
+first secretary is the prime minister's dog.  A wife is a husband's dog,
+or a husband is a wife's dog.  Favourite is Madame So-and-so's dog and
+Thibaut is the man on the corner's dog.  When my Master tells me to talk
+when I'd prefer not to, which to be honest doesn't happen very often,
+when he tells me to shut up when I feel like talking, which I find very
+difficult, when he asks me to tell the story of my love-life and then
+keeps interrupting, what am I if not his dog?  Weak men are the dogs of
+strong men.
+
 =head2 v5.23.3 - Oliver Wendell Holmes, "The Deacon’s Masterpiece or The Wonderful 'One-Hoss Shay': A Logical Story"
 
 L<Announced on 2015-09-20 by Peter Martini|http://www.nntp.perl.org/group/perl.perl5.porters/2015/09/msg231173.html>
@@ -139,6 +153,44 @@ L<Announced on 2015-06-20 by Ricardo Signes|http://www.nntp.perl.org/group/perl.
   To be just like them
   They sing while you slave and I just get bored
   I ain't gonna work on Maggie's farm no more
+
+=head2 v5.22.1-RC2 - Wilhelm Müller, trans. Anon., "The Old Head" (No. 14 in Schubert's song-cycle, "Winterreise")
+
+L<Announced on 2015-11-15 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2015/11/msg232632.html>
+
+  The hoary frost has a white sheen
+  Strewn all over my hair,
+  So I thought I was an old man
+  And thought life dealt me fair.
+
+  Yet soon was thawed my old white mane,
+  And I have my black hair again.
+  How I abhor my young fair years,
+  How long to wait for death and biers?
+
+  From setting sun to morning's hue
+  Many a head turns white.
+  Who'll credit it? My hair did not
+  In all this lifelong plight!
+
+=head2 v5.22.1-RC1 - Wilhelm Müller, trans. Anon., "Will-o'-the Wisp" (No. 9 in Schubert's song-cycle, "Winterreise")
+
+L<Announced on 2015-10-31 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2015/10/msg232321.html>
+
+  In the deepest rocky crevice
+  A will-o'-the wisp lured me;
+  How I could find my way from here,
+  For me it's easy memory!
+
+  For I am used to straying ways,
+  Every path to th'end a way,
+  All our joys and all our suffering,--
+  To a will-o'-the wisp it 's all play!
+
+  Through the dried-up bed of torrents
+  I quite calmly downward stroll;
+  Every stream its sea will enter,
+  Every suffering finds its goal!
 
 =head2 v5.22.0 - Gene Wolfe, The Citadel of the Autarch
 

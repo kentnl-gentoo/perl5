@@ -1131,13 +1131,13 @@ package Tie_Array_to_FH {  # So printing actually goes to an array
 }
 
 
-my %filename_to_checker; # Map a filename to it's pod checker object
-my %id_to_checker;      # Map a checksum to it's pod checker object
-my %nodes;              # key is filename, values are nodes in that file.
-my %nodes_first_word;   # same, but value is first word of each node
-my %valid_modules;      # List of modules known to exist outside us.
-my %digests;            # checksums of files, whose names are the keys
-my %filename_to_pod;    # Map a filename to its pod NAME
+my %filename_to_checker; # Map a filename to its pod checker object
+my %id_to_checker;       # Map a checksum to its pod checker object
+my %nodes;               # key is filename, values are nodes in that file.
+my %nodes_first_word;    # same, but value is first word of each node
+my %valid_modules;       # List of modules known to exist outside us.
+my %digests;             # checksums of files, whose names are the keys
+my %filename_to_pod;     # Map a filename to its pod NAME
 my %files_with_unknown_issues;
 my %files_with_fixes;
 
@@ -1480,49 +1480,49 @@ else { # No input files -- go find all the possibilities.
 plan (tests => scalar @files) if ! $regen;
 
 
- # Sort file names so we get consistent results, and to put cpan last,
- # preceded by the ones that we don't generally parse.  This is because both
- # these classes are generally parsed only if there is a link to the interior
- # of them, and we have to parse all others first to guarantee that they don't
- # have such a link. 'lib' files come just before these, as some of these are
- # duplicates of others.  We already have figured this out when gathering the
- # data as a special case for all such files, but this, while unnecessary,
- # puts the derived file last in the output.  'readme' files come before those,
- # as those also could be duplicates of others, which are considered the
- # primary ones.  These currently aren't figured out when gathering data, so
- # are done here.
- @files = sort { if ($a =~ /^cpan/) {
-                    return 1 if $b !~ /^cpan/;
-                    return lc $a cmp lc $b;
-                }
-                elsif ($b =~ /^cpan/) {
-                    return -1;
-                }
-                elsif ($a =~ /$only_for_interior_links_re/) {
-                    return 1 if $b !~ /$only_for_interior_links_re/;
-                    return lc $a cmp lc $b;
-                }
-                elsif ($b =~ /$only_for_interior_links_re/) {
-                    return -1;
-                }
-                elsif ($a =~ /^lib/) {
-                    return 1 if $b !~ /^lib/;
-                    return lc $a cmp lc $b;
-                }
-                elsif ($b =~ /^lib/) {
-                    return -1;
-                } elsif ($a =~ /\breadme\b/i) {
-                    return 1 if $b !~ /\breadme\b/i;
-                    return lc $a cmp lc $b;
-                }
-                elsif ($b =~ /\breadme\b/i) {
-                    return -1;
-                }
-                else {
-                    return lc $a cmp lc $b;
-                }
-            }
-            @files;
+# Sort file names so we get consistent results, and to put cpan last,
+# preceded by the ones that we don't generally parse.  This is because both
+# these classes are generally parsed only if there is a link to the interior
+# of them, and we have to parse all others first to guarantee that they don't
+# have such a link. 'lib' files come just before these, as some of these are
+# duplicates of others.  We already have figured this out when gathering the
+# data as a special case for all such files, but this, while unnecessary,
+# puts the derived file last in the output.  'readme' files come before those,
+# as those also could be duplicates of others, which are considered the
+# primary ones.  These currently aren't figured out when gathering data, so
+# are done here.
+@files = sort { if ($a =~ /^cpan/) {
+                   return 1 if $b !~ /^cpan/;
+                   return lc $a cmp lc $b;
+               }
+               elsif ($b =~ /^cpan/) {
+                   return -1;
+               }
+               elsif ($a =~ /$only_for_interior_links_re/) {
+                   return 1 if $b !~ /$only_for_interior_links_re/;
+                   return lc $a cmp lc $b;
+               }
+               elsif ($b =~ /$only_for_interior_links_re/) {
+                   return -1;
+               }
+               elsif ($a =~ /^lib/) {
+                   return 1 if $b !~ /^lib/;
+                   return lc $a cmp lc $b;
+               }
+               elsif ($b =~ /^lib/) {
+                   return -1;
+               } elsif ($a =~ /\breadme\b/i) {
+                   return 1 if $b !~ /\breadme\b/i;
+                   return lc $a cmp lc $b;
+               }
+               elsif ($b =~ /\breadme\b/i) {
+                   return -1;
+               }
+               else {
+                   return lc $a cmp lc $b;
+               }
+           }
+           @files;
 
 # Now go through all the files and parse them
 FILE:
