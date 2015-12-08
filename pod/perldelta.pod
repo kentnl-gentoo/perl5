@@ -38,7 +38,7 @@ L<[perl #126319]|https://rt.perl.org/Ticket/Display.html?id=126319>
 
 =item *
 
-L<Module::CoreList> has been upgraded from version 5.20150520 to 5.20151202.
+L<Module::CoreList> has been upgraded from version 5.20150520 to 5.20151208.
 
 =item *
 
@@ -262,6 +262,12 @@ the C<%a> format specifier could variously lose the sign of the negative zero,
 fail to display zeros after the radix point with the requested precision, or
 even lose the radix point after the leftmost hexadecimal digit completely.
 
+=item *
+
+A crash caused by incomplete expressions within C<< /(?[ ])/ >> (e.g.
+C<< /(?[[0]+()+])/ >>) has been fixed.
+L<[perl #126615]|https://rt.perl.org/Ticket/Display.html?id=126615>
+
 =back
 
 =head1 Acknowledgements
@@ -271,7 +277,7 @@ and contains approximately 19,000 lines of changes across 130 files from 27
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 1,700 lines of changes to 43 .pm, .t, .c and .h files.
+approximately 1,700 lines of changes to 44 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers.  The following people are known to have contributed
