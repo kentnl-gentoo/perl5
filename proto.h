@@ -4853,6 +4853,9 @@ PERL_CALLCONV void	Perl__invlist_dump(pTHX_ PerlIO *file, I32 level, const char*
 	assert(file); assert(indent); assert(invlist)
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_PERL_C) || defined(PERL_IN_UTF8_C)
+PERL_CALLCONV bool	Perl__invlistEQ(pTHX_ SV* const a, SV* const b, const bool complement_b);
+#define PERL_ARGS_ASSERT__INVLISTEQ	\
+	assert(a); assert(b)
 PERL_CALLCONV SV*	Perl__new_invlist_C_array(pTHX_ const UV* const list)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT__NEW_INVLIST_C_ARRAY	\
@@ -5314,6 +5317,9 @@ STATIC bool	S_isa_lookup(pTHX_ HV *stash, const char * const name, STRLEN len, U
 	assert(stash); assert(name)
 #endif
 #if defined(PERL_IN_UTF8_C)
+STATIC UV	S__to_utf8_case(pTHX_ const UV uv1, const U8 *p, U8* ustrp, STRLEN *lenp, SV **swashp, const char *normal, const char *special);
+#define PERL_ARGS_ASSERT__TO_UTF8_CASE	\
+	assert(p); assert(ustrp); assert(swashp); assert(normal)
 STATIC UV	S_check_locale_boundary_crossing(pTHX_ const U8* const p, const UV result, U8* const ustrp, STRLEN *lenp)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_CHECK_LOCALE_BOUNDARY_CROSSING	\

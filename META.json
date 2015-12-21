@@ -23,6 +23,7 @@
          "dist/Data-Dumper",
          "dist/Devel-SelfStubber",
          "dist/Dumpvalue",
+         "dist/encoding-warnings",
          "dist/Env",
          "dist/Exporter",
          "dist/ExtUtils-CBuilder",
@@ -122,6 +123,6 @@
          "url" : "http://perl5.git.perl.org/"
       }
    },
-   "version" : "5.023005",
+   "version" : "5.023006",
    "x_serialization_backend" : "JSON::PP version 2.27300"
 }

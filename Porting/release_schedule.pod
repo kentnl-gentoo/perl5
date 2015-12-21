@@ -23,7 +23,7 @@ Code freezes (which happen in the 5.23.X series)
 =head2 Perl 5.22
 
   2015-06-01  5.22.0 ✓        Ricardo Signes
-  2015-10-??  5.22.1          Steve Hay
+  2015-12-13  5.22.1 ✓        Steve Hay
   2016-??-??  5.22.2          Steve Hay
   2016-??-??  5.22.3          ??
 
@@ -56,7 +56,7 @@ you should reset the version numbers to the next blead series.
   2015-08-20  5.23.2 ✓        Matthew Horsfall
   2015-09-20  5.23.3 ✓        Peter Martini
   2015-10-20  5.23.4 ✓        Steve Hay
-  2015-11-20  5.23.5          Abigail
+  2015-11-20  5.23.5 ✓        Abigail
   2015-12-20  5.23.6          David Golden
 
 (RC0 for 5.24.0 will be released once we think that all the blockers have been
@@ -71,30 +71,30 @@ and can't find a substitute amongst this list, mail p5p.
 (Please do not add any names to this list without prior
 consent of the Pumpking.)
 
-Abigail <abigail@abigail.be>
-Aristotle Pagaltzis <pagaltzis@gmx.de>
-Ask Bjørn Hansen <ask@perl.org>
-Chris Williams <bingos@cpan.org>
-Dave Cross <dave@perlhacks.com>
-Dave Rolsky <autarch@urth.org>
-David Golden <dagolden@cpan.org>
-Florian Ragwitz <rafl@debian.org>
-Jesse Luehrs <doy@cpan.org>
-Jesse Vincent <jesse@cpan.org>
-Leon Brocard <acme@astray.com>
-Matt Trout <mst@shadowcat.co.uk>
-Matthew Horsfall <wolfsage@gmail.com>
-Max Maischein <corion@cpan.org>
-Peter Martini <petercmartini@gmail.com>
-Philippe Bruhat <book@cpan.org>
-Ricardo Signes <rjbs@cpan.org>
-Stevan Little <stevan.little@iinteractive.com>
-Steve Hay <steve.m.hay@googlemail.com>
-Tatsuhiko Miyagawa <miyagawa@bulknews.net>
-Tony Cook <tony@develop-help.com>
-Yves Orton <demerphq@gmail.com>
-Zefram <zefram@fysh.org>
-Ævar Arnfjörð Bjarmason <avar@cpan.org>
+  Abigail <abigail@abigail.be>
+  Aristotle Pagaltzis <pagaltzis@gmx.de>
+  Ask Bjørn Hansen <ask@perl.org>
+  Chris Williams <bingos@cpan.org>
+  Dave Cross <dave@perlhacks.com>
+  Dave Rolsky <autarch@urth.org>
+  David Golden <dagolden@cpan.org>
+  Florian Ragwitz <rafl@debian.org>
+  Jesse Luehrs <doy@cpan.org>
+  Jesse Vincent <jesse@cpan.org>
+  Leon Brocard <acme@astray.com>
+  Matt Trout <mst@shadowcat.co.uk>
+  Matthew Horsfall <wolfsage@gmail.com>
+  Max Maischein <corion@cpan.org>
+  Peter Martini <petercmartini@gmail.com>
+  Philippe Bruhat <book@cpan.org>
+  Ricardo Signes <rjbs@cpan.org>
+  Stevan Little <stevan.little@iinteractive.com>
+  Steve Hay <steve.m.hay@googlemail.com>
+  Tatsuhiko Miyagawa <miyagawa@bulknews.net>
+  Tony Cook <tony@develop-help.com>
+  Yves Orton <demerphq@gmail.com>
+  Zefram <zefram@fysh.org>
+  Ævar Arnfjörð Bjarmason <avar@cpan.org>
 
 =head1 AUTHOR
 

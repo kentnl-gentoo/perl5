@@ -35,6 +35,10 @@
 
 static const char unees[] =
     "Malformed UTF-8 character (unexpected end of string)";
+static const char cp_above_legal_max[] =
+ "Use of code point 0x%"UVXf" is deprecated; the permissible max is 0x%"UVXf"";
+
+#define MAX_NON_DEPRECATED_CP (IV_MAX)
 
 /*
 =head1 Unicode Support
@@ -99,144 +103,162 @@ For details, see the description for L</uvchr_to_utf8_flags>.
 =cut
 */
 
+#define HANDLE_UNICODE_SURROGATE(uv, flags)                         \
+    STMT_START {                                                    \
+        if (flags & UNICODE_WARN_SURROGATE) {                       \
+            Perl_ck_warner_d(aTHX_ packWARN(WARN_SURROGATE),        \
+                                "UTF-16 surrogate U+%04"UVXf, uv);  \
+        }                                                           \
+        if (flags & UNICODE_DISALLOW_SURROGATE) {                   \
+            return NULL;                                            \
+        }                                                           \
+    } STMT_END;
+
+#define HANDLE_UNICODE_NONCHAR(uv, flags)                           \
+    STMT_START {                                                    \
+        if (flags & UNICODE_WARN_NONCHAR) {                         \
+            Perl_ck_warner_d(aTHX_ packWARN(WARN_NONCHAR),          \
+		 "Unicode non-character U+%04"UVXf" is not "        \
+                 "recommended for open interchange", uv);           \
+        }                                                           \
+        if (flags & UNICODE_DISALLOW_NONCHAR) {                     \
+            return NULL;                                            \
+        }                                                           \
+    } STMT_END;
+
+/*  Use shorter names internally in this file */
+#define SHIFT   UTF_ACCUMULATION_SHIFT
+#undef  MARK
+#define MARK    UTF_CONTINUATION_MARK
+#define MASK    UTF_CONTINUATION_MASK
+
 U8 *
 Perl_uvoffuni_to_utf8_flags(pTHX_ U8 *d, UV uv, UV flags)
 {
     PERL_ARGS_ASSERT_UVOFFUNI_TO_UTF8_FLAGS;
 
     if (OFFUNI_IS_INVARIANT(uv)) {
-	*d++ = (U8) LATIN1_TO_NATIVE(uv);
+	*d++ = LATIN1_TO_NATIVE(uv);
 	return d;
     }
 
-#ifdef EBCDIC
-    /* Not representable in UTF-EBCDIC */
-    flags |= UNICODE_DISALLOW_FE_FF;
-#endif
-
-    /* The first problematic code point is the first surrogate */
-    if (   flags    /* It's common to turn off all these */
-        && uv >= UNICODE_SURROGATE_FIRST
-        && ckWARN3_d(WARN_SURROGATE, WARN_NON_UNICODE, WARN_NONCHAR))
-    {
-	if (UNICODE_IS_SURROGATE(uv)) {
-	    if (flags & UNICODE_WARN_SURROGATE) {
-		Perl_ck_warner_d(aTHX_ packWARN(WARN_SURROGATE),
-					    "UTF-16 surrogate U+%04"UVXf, uv);
-	    }
-	    if (flags & UNICODE_DISALLOW_SURROGATE) {
-		return NULL;
-	    }
-	}
-	else if (UNICODE_IS_SUPER(uv)) {
-	    if (flags & UNICODE_WARN_SUPER
-		|| (UNICODE_IS_FE_FF(uv) && (flags & UNICODE_WARN_FE_FF)))
-	    {
-		Perl_ck_warner_d(aTHX_ packWARN(WARN_NON_UNICODE),
-			  "Code point 0x%04"UVXf" is not Unicode, may not be portable", uv);
-	    }
-	    if (flags & UNICODE_DISALLOW_SUPER
-		|| (UNICODE_IS_FE_FF(uv) && (flags & UNICODE_DISALLOW_FE_FF)))
-	    {
-#ifdef EBCDIC
-                Perl_die(aTHX_ "Can't represent character for Ox%"UVXf" on this platform", uv);
-                NOT_REACHED; /* NOTREACHED */
-#endif
-		return NULL;
-	    }
-	}
-	else if (UNICODE_IS_NONCHAR(uv)) {
-	    if (flags & UNICODE_WARN_NONCHAR) {
-		Perl_ck_warner_d(aTHX_ packWARN(WARN_NONCHAR),
-		 "Unicode non-character U+%04"UVXf" is not recommended for open interchange",
-		 uv);
-	    }
-	    if (flags & UNICODE_DISALLOW_NONCHAR) {
-		return NULL;
-	    }
-	}
+    if (uv <= MAX_UTF8_TWO_BYTE) {
+        *d++ = I8_TO_NATIVE_UTF8(( uv >> SHIFT) | UTF_START_MARK(2));
+        *d++ = I8_TO_NATIVE_UTF8(( uv           & MASK) |   MARK);
+        return d;
     }
 
-#if defined(EBCDIC)
+    /* Not 2-byte; test for and handle 3-byte result.   In the test immediately
+     * below, the 16 is for start bytes E0-EF (which are all the possible ones
+     * for 3 byte characters).  The 2 is for 2 continuation bytes; these each
+     * contribute SHIFT bits.  This yields 0x4000 on EBCDIC platforms, 0x1_0000
+     * on ASCII; so 3 bytes covers the range 0x400-0x3FFF on EBCDIC;
+     * 0x800-0xFFFF on ASCII */
+    if (uv < (16 * (1U << (2 * SHIFT)))) {
+	*d++ = I8_TO_NATIVE_UTF8(( uv >> ((3 - 1) * SHIFT)) | UTF_START_MARK(3));
+	*d++ = I8_TO_NATIVE_UTF8(((uv >> ((2 - 1) * SHIFT)) & MASK) |   MARK);
+	*d++ = I8_TO_NATIVE_UTF8(( uv  /* (1 - 1) */        & MASK) |   MARK);
+
+#ifndef EBCDIC  /* These problematic code points are 4 bytes on EBCDIC, so
+                   aren't tested here */
+        /* The most likely code points in this range are below the surrogates.
+         * Do an extra test to quickly exclude those. */
+        if (UNLIKELY(uv >= UNICODE_SURROGATE_FIRST)) {
+            if (UNLIKELY(   UNICODE_IS_32_CONTIGUOUS_NONCHARS(uv)
+                         || UNICODE_IS_END_PLANE_NONCHAR_GIVEN_NOT_SUPER(uv)))
+            {
+                HANDLE_UNICODE_NONCHAR(uv, flags);
+            }
+            else if (UNLIKELY(UNICODE_IS_SURROGATE(uv))) {
+                HANDLE_UNICODE_SURROGATE(uv, flags);
+            }
+        }
+#endif
+	return d;
+    }
+
+    /* Not 3-byte; that means the code point is at least 0x1_0000 on ASCII
+     * platforms, and 0x4000 on EBCDIC.  There are problematic cases that can
+     * happen starting with 4-byte characters on ASCII platforms.  We unify the
+     * code for these with EBCDIC, even though some of them require 5-bytes on
+     * those, because khw believes the code saving is worth the very slight
+     * performance hit on these high EBCDIC code points. */
+
+    if (UNLIKELY(UNICODE_IS_SUPER(uv))) {
+        if (   UNLIKELY(uv > MAX_NON_DEPRECATED_CP)
+            && ckWARN_d(WARN_DEPRECATED))
+        {
+            Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
+                        cp_above_legal_max, uv, MAX_NON_DEPRECATED_CP);
+        }
+        if (   (flags & UNICODE_WARN_SUPER)
+            || (   UNICODE_IS_ABOVE_31_BIT(uv)
+                && (flags & UNICODE_WARN_ABOVE_31_BIT)))
+        {
+            Perl_ck_warner_d(aTHX_ packWARN(WARN_NON_UNICODE),
+
+              /* Choose the more dire applicable warning */
+              (UNICODE_IS_ABOVE_31_BIT(uv))
+              ? "Code point 0x%"UVXf" is not Unicode, and not portable"
+              : "Code point 0x%"UVXf" is not Unicode, may not be portable",
+             uv);
+        }
+        if (flags & UNICODE_DISALLOW_SUPER
+            || (   UNICODE_IS_ABOVE_31_BIT(uv)
+                && (flags & UNICODE_DISALLOW_ABOVE_31_BIT)))
+        {
+            return NULL;
+        }
+    }
+    else if (UNLIKELY(UNICODE_IS_END_PLANE_NONCHAR_GIVEN_NOT_SUPER(uv))) {
+        HANDLE_UNICODE_NONCHAR(uv, flags);
+    }
+
+    /* Test for and handle 4-byte result.   In the test immediately below, the
+     * 8 is for start bytes F0-F7 (which are all the possible ones for 4 byte
+     * characters).  The 3 is for 3 continuation bytes; these each contribute
+     * SHIFT bits.  This yields 0x4_0000 on EBCDIC platforms, 0x20_0000 on
+     * ASCII, so 4 bytes covers the range 0x4000-0x3_FFFF on EBCDIC;
+     * 0x1_0000-0x1F_FFFF on ASCII */
+    if (uv < (8 * (1U << (3 * SHIFT)))) {
+	*d++ = I8_TO_NATIVE_UTF8(( uv >> ((4 - 1) * SHIFT)) | UTF_START_MARK(4));
+	*d++ = I8_TO_NATIVE_UTF8(((uv >> ((3 - 1) * SHIFT)) & MASK) |   MARK);
+	*d++ = I8_TO_NATIVE_UTF8(((uv >> ((2 - 1) * SHIFT)) & MASK) |   MARK);
+	*d++ = I8_TO_NATIVE_UTF8(( uv  /* (1 - 1) */        & MASK) |   MARK);
+
+#ifdef EBCDIC   /* These were handled on ASCII platforms in the code for 3-byte
+                   characters.  The end-plane non-characters for EBCDIC were
+                   handled just above */
+        if (UNLIKELY(UNICODE_IS_32_CONTIGUOUS_NONCHARS(uv))) {
+            HANDLE_UNICODE_NONCHAR(uv, flags);
+        }
+        else if (UNLIKELY(UNICODE_IS_SURROGATE(uv))) {
+            HANDLE_UNICODE_SURROGATE(uv, flags);
+        }
+#endif
+
+	return d;
+    }
+
+    /* Not 4-byte; that means the code point is at least 0x20_0000 on ASCII
+     * platforms, and 0x4000 on EBCDIC.  At this point we switch to a loop
+     * format.  The unrolled version above turns out to not save all that much
+     * time, and at these high code points (well above the legal Unicode range
+     * on ASCII platforms, and well above anything in common use in EBCDIC),
+     * khw believes that less code outweighs slight performance gains. */
+
     {
 	STRLEN len  = OFFUNISKIP(uv);
 	U8 *p = d+len-1;
 	while (p > d) {
-	    *p-- = (U8) I8_TO_NATIVE_UTF8((uv & UTF_CONTINUATION_MASK) | UTF_CONTINUATION_MARK);
+	    *p-- = I8_TO_NATIVE_UTF8((uv & UTF_CONTINUATION_MASK) | UTF_CONTINUATION_MARK);
 	    uv >>= UTF_ACCUMULATION_SHIFT;
 	}
-	*p = (U8) I8_TO_NATIVE_UTF8((uv & UTF_START_MASK(len)) | UTF_START_MARK(len));
+	*p = I8_TO_NATIVE_UTF8((uv & UTF_START_MASK(len)) | UTF_START_MARK(len));
 	return d+len;
     }
-#else /* Non loop style */
-    if (uv < 0x800) {
-	*d++ = (U8)(( uv >>  6)         | 0xc0);
-	*d++ = (U8)(( uv        & 0x3f) | 0x80);
-	return d;
-    }
-    if (uv < 0x10000) {
-	*d++ = (U8)(( uv >> 12)         | 0xe0);
-	*d++ = (U8)(((uv >>  6) & 0x3f) | 0x80);
-	*d++ = (U8)(( uv        & 0x3f) | 0x80);
-	return d;
-    }
-    if (uv < 0x200000) {
-	*d++ = (U8)(( uv >> 18)         | 0xf0);
-	*d++ = (U8)(((uv >> 12) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >>  6) & 0x3f) | 0x80);
-	*d++ = (U8)(( uv        & 0x3f) | 0x80);
-	return d;
-    }
-    if (uv < 0x4000000) {
-	*d++ = (U8)(( uv >> 24)         | 0xf8);
-	*d++ = (U8)(((uv >> 18) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 12) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >>  6) & 0x3f) | 0x80);
-	*d++ = (U8)(( uv        & 0x3f) | 0x80);
-	return d;
-    }
-    if (uv < 0x80000000) {
-	*d++ = (U8)(( uv >> 30)         | 0xfc);
-	*d++ = (U8)(((uv >> 24) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 18) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 12) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >>  6) & 0x3f) | 0x80);
-	*d++ = (U8)(( uv        & 0x3f) | 0x80);
-	return d;
-    }
-#ifdef UTF8_QUAD_MAX
-    if (uv < UTF8_QUAD_MAX)
-#endif
-    {
-	*d++ =                            0xfe;	/* Can't match U+FEFF! */
-	*d++ = (U8)(((uv >> 30) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 24) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 18) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 12) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >>  6) & 0x3f) | 0x80);
-	*d++ = (U8)(( uv        & 0x3f) | 0x80);
-	return d;
-    }
-#ifdef UTF8_QUAD_MAX
-    {
-	*d++ =                            0xff;		/* Can't match U+FFFE! */
-	*d++ =                            0x80;		/* 6 Reserved bits */
-	*d++ = (U8)(((uv >> 60) & 0x0f) | 0x80);	/* 2 Reserved bits */
-	*d++ = (U8)(((uv >> 54) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 48) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 42) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 36) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 30) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 24) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 18) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >> 12) & 0x3f) | 0x80);
-	*d++ = (U8)(((uv >>  6) & 0x3f) | 0x80);
-	*d++ = (U8)(( uv        & 0x3f) | 0x80);
-	return d;
-    }
-#endif
-#endif /* Non loop style */
 }
+
 /*
 =for apidoc uvchr_to_utf8
 
@@ -251,8 +273,12 @@ is the recommended wide native character-aware way of saying
 
     *(d++) = uv;
 
-This function accepts any UV as input.  To forbid or warn on non-Unicode code
-points, or those that may be problematic, see L</uvchr_to_utf8_flags>.
+This function accepts any UV as input, but very high code points (above
+C<IV_MAX> on the platform)  will raise a deprecation warning.  This is
+typically 0x7FFF_FFFF in a 32-bit word.
+
+It is possible to forbid or warn on non-Unicode code points, or those that may
+be problematic by using L</uvchr_to_utf8_flags>.
 
 =cut
 */
@@ -284,27 +310,54 @@ This is the Unicode-aware way of saying
 
     *(d++) = uv;
 
-This function will convert to UTF-8 (and not warn) even code points that aren't
-legal Unicode or are problematic, unless C<flags> contains one or more of the
-following flags:
+If C<flags> is 0, this function accepts any UV as input, but very high code
+points (above C<IV_MAX> for the platform)  will raise a deprecation warning.
+This is typically 0x7FFF_FFFF in a 32-bit word.
+
+Specifying C<flags> can further restrict what is allowed and not warned on, as
+follows:
 
 If C<uv> is a Unicode surrogate code point and C<UNICODE_WARN_SURROGATE> is set,
-the function will raise a warning, provided UTF8 warnings are enabled.  If instead
-C<UNICODE_DISALLOW_SURROGATE> is set, the function will fail and return NULL.
-If both flags are set, the function will both warn and return NULL.
+the function will raise a warning, provided UTF8 warnings are enabled.  If
+instead C<UNICODE_DISALLOW_SURROGATE> is set, the function will fail and return
+NULL.  If both flags are set, the function will both warn and return NULL.
 
-The C<UNICODE_WARN_NONCHAR> and C<UNICODE_DISALLOW_NONCHAR> flags
-affect how the function handles a Unicode non-character.  And likewise, the
-C<UNICODE_WARN_SUPER> and C<UNICODE_DISALLOW_SUPER> flags affect the handling of
-code points that are
-above the Unicode maximum of 0x10FFFF.  Code points above 0x7FFF_FFFF (which are
-even less portable) can be warned and/or disallowed even if other above-Unicode
-code points are accepted, by the C<UNICODE_WARN_FE_FF> and
-C<UNICODE_DISALLOW_FE_FF> flags.
+Similarly, the C<UNICODE_WARN_NONCHAR> and C<UNICODE_DISALLOW_NONCHAR> flags
+affect how the function handles a Unicode non-character.
 
-And finally, the flag C<UNICODE_WARN_ILLEGAL_INTERCHANGE> selects all four of
+And likewise, the C<UNICODE_WARN_SUPER> and C<UNICODE_DISALLOW_SUPER> flags
+affect the handling of code points that are above the Unicode maximum of
+0x10FFFF.  Languages other than Perl may not be able to accept files that
+contain these.
+
+The flag C<UNICODE_WARN_ILLEGAL_INTERCHANGE> selects all three of
 the above WARN flags; and C<UNICODE_DISALLOW_ILLEGAL_INTERCHANGE> selects all
-four DISALLOW flags.
+three DISALLOW flags.
+
+Code points above 0x7FFF_FFFF (2**31 - 1) were never specified in any standard,
+so using them is more problematic than other above-Unicode code points.  Perl
+invented an extension to UTF-8 to represent the ones above 2**36-1, so it is
+likely that non-Perl languages will not be able to read files that contain
+these that written by the perl interpreter; nor would Perl understand files
+written by something that uses a different extension.  For these reasons, there
+is a separate set of flags that can warn and/or disallow these extremely high
+code points, even if other above-Unicode ones are accepted.  These are the
+C<UNICODE_WARN_ABOVE_31_BIT> and C<UNICODE_DISALLOW_ABOVE_31_BIT> flags.  These
+are entirely independent from the deprecation warning for code points above
+C<IV_MAX>.  On 32-bit machines, it will eventually be forbidden to have any
+code point that needs more than 31 bits to represent.  When that happens,
+effectively the C<UNICODE_DISALLOW_ABOVE_31_BIT> flag will always be set on
+32-bit machines.  (Of course C<UNICODE_DISALLOW_SUPER> will treat all
+above-Unicode code points, including these, as malformations; and
+C<UNICODE_WARN_SUPER> warns on these.)
+
+On EBCDIC platforms starting in Perl v5.24, the Perl extension for representing
+extremely high code points kicks in at 0x3FFF_FFFF (2**30 -1), which is lower
+than on ASCII.  Prior to that, code points 2**31 and higher were simply
+unrepresentable, and a different, incompatible method was used to represent
+code points between 2**30 and 2**31 - 1.  The flags C<UNICODE_WARN_ABOVE_31_BIT>
+and C<UNICODE_DISALLOW_ABOVE_31_BIT> have the same function as on ASCII
+platforms, warning and disallowing 2**31 and higher.
 
 =cut
 */
@@ -459,21 +512,35 @@ a malformation and raise a warning, specify both the WARN and DISALLOW flags.
 (But note that warnings are not raised if lexically disabled nor if
 C<UTF8_CHECK_ONLY> is also specified.)
 
-Very large code points (above 0x7FFF_FFFF) are considered more problematic than
-the others that are above the Unicode legal maximum.  There are several
-reasons: they requre at least 32 bits to represent them on ASCII platforms, are
-not representable at all on EBCDIC platforms, and the original UTF-8
-specification never went above this number (the current 0x10FFFF limit was
-imposed later).  (The smaller ones, those that fit into 32 bits, are
-representable by a UV on ASCII platforms, but not by an IV, which means that
-the number of operations that can be performed on them is quite restricted.)
-The UTF-8 encoding on ASCII platforms for these large code points begins with a
-byte containing 0xFE or 0xFF.  The C<UTF8_DISALLOW_FE_FF> flag will cause them to
-be treated as malformations, while allowing smaller above-Unicode code points.
-(Of course C<UTF8_DISALLOW_SUPER> will treat all above-Unicode code points,
-including these, as malformations.)
-Similarly, C<UTF8_WARN_FE_FF> acts just like
-the other WARN flags, but applies just to these code points.
+It is now deprecated to have very high code points (above C<IV_MAX> on the
+platforms) and this function will raise a deprecation warning for these (unless
+such warnings are turned off).  This value, is typically 0x7FFF_FFFF (2**31 -1)
+in a 32-bit word.
+
+Code points above 0x7FFF_FFFF (2**31 - 1) were never specified in any standard,
+so using them is more problematic than other above-Unicode code points.  Perl
+invented an extension to UTF-8 to represent the ones above 2**36-1, so it is
+likely that non-Perl languages will not be able to read files that contain
+these that written by the perl interpreter; nor would Perl understand files
+written by something that uses a different extension.  For these reasons, there
+is a separate set of flags that can warn and/or disallow these extremely high
+code points, even if other above-Unicode ones are accepted.  These are the
+C<UTF8_WARN_ABOVE_31_BIT> and C<UTF8_DISALLOW_ABOVE_31_BIT> flags.  These
+are entirely independent from the deprecation warning for code points above
+C<IV_MAX>.  On 32-bit machines, it will eventually be forbidden to have any
+code point that needs more than 31 bits to represent.  When that happens,
+effectively the C<UTF8_DISALLOW_ABOVE_31_BIT> flag will always be set on
+32-bit machines.  (Of course C<UTF8_DISALLOW_SUPER> will treat all
+above-Unicode code points, including these, as malformations; and
+C<UTF8_WARN_SUPER> warns on these.)
+
+On EBCDIC platforms starting in Perl v5.24, the Perl extension for representing
+extremely high code points kicks in at 0x3FFF_FFFF (2**30 -1), which is lower
+than on ASCII.  Prior to that, code points 2**31 and higher were simply
+unrepresentable, and a different, incompatible method was used to represent
+code points between 2**30 and 2**31 - 1.  The flags C<UTF8_WARN_ABOVE_31_BIT>
+and C<UTF8_DISALLOW_ABOVE_31_BIT> have the same function as on ASCII
+platforms, warning and disallowing 2**31 and higher.
 
 All other code points corresponding to Unicode characters, including private
 use and those yet to be assigned, are never considered malformed and never
@@ -587,7 +654,6 @@ Perl_utf8n_to_uvchr(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
 
     for (s = s0 + 1; s < send; s++) {
 	if (LIKELY(UTF8_IS_CONTINUATION(*s))) {
-#ifndef EBCDIC	/* Can't overflow in EBCDIC */
 	    if (uv & UTF_ACCUMULATION_OVERFLOW_MASK) {
 
 		/* The original implementors viewed this malformation as more
@@ -599,7 +665,6 @@ Perl_utf8n_to_uvchr(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
 		overflowed = TRUE;
 		overflow_byte = *s; /* Save for warning message's use */
 	    }
-#endif
 	    uv = UTF8_ACCUMULATE(uv, *s);
 	}
 	else {
@@ -666,12 +731,10 @@ Perl_utf8n_to_uvchr(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
 	}
     }
 
-#ifndef EBCDIC	/* EBCDIC can't overflow */
     if (UNLIKELY(overflowed)) {
 	sv = sv_2mortal(Perl_newSVpvf(aTHX_ "%s (overflow at byte 0x%02x, after start byte 0x%02x)", malformed_text, overflow_byte, *s0));
 	goto malformed;
     }
-#endif
 
     if (do_overlong_test
 	&& expectlen > (STRLEN) OFFUNISKIP(uv)
@@ -690,8 +753,16 @@ Perl_utf8n_to_uvchr(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
     /* Here, the input is considered to be well-formed, but it still could be a
      * problematic code point that is not allowed by the input parameters. */
     if (uv >= UNICODE_SURROGATE_FIRST /* isn't problematic if < this */
-	&& (flags & (UTF8_DISALLOW_ILLEGAL_INTERCHANGE
-		     |UTF8_WARN_ILLEGAL_INTERCHANGE)))
+	&& ((flags & ( UTF8_DISALLOW_NONCHAR
+                      |UTF8_DISALLOW_SURROGATE
+                      |UTF8_DISALLOW_SUPER
+                      |UTF8_DISALLOW_ABOVE_31_BIT
+	              |UTF8_WARN_NONCHAR
+                      |UTF8_WARN_SURROGATE
+                      |UTF8_WARN_SUPER
+                      |UTF8_WARN_ABOVE_31_BIT))
+            || (   UNLIKELY(uv > MAX_NON_DEPRECATED_CP)
+                && ckWARN_d(WARN_DEPRECATED))))
     {
 	if (UNICODE_IS_SURROGATE(uv)) {
 
@@ -711,34 +782,70 @@ Perl_utf8n_to_uvchr(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
 	    if ((flags & (UTF8_WARN_SUPER|UTF8_CHECK_ONLY)) == UTF8_WARN_SUPER
                 && ckWARN_d(WARN_NON_UNICODE))
 	    {
-		sv = sv_2mortal(Perl_newSVpvf(aTHX_ "Code point 0x%04"UVXf" is not Unicode, may not be portable", uv));
+		sv = sv_2mortal(Perl_newSVpvf(aTHX_
+                   "Code point 0x%04"UVXf" is not Unicode, may not be portable",
+                   uv));
 		pack_warn = packWARN(WARN_NON_UNICODE);
 	    }
-#ifndef EBCDIC	/* Can never have the equivalent of FE nor FF on EBCDIC, since
-                   not representable in UTF-EBCDIC */
 
-            /* The first byte being 0xFE or 0xFF is a subset of the SUPER code
-             * points.  We test for these after the regular SUPER ones, and
-             * before possibly bailing out, so that the more dire warning
-             * overrides the regular one, if applicable */
-            if ((*s0 & 0xFE) == 0xFE	/* matches both FE, FF */
-                && (flags & (UTF8_WARN_FE_FF|UTF8_DISALLOW_FE_FF)))
+            /* The maximum code point ever specified by a standard was
+             * 2**31 - 1.  Anything larger than that is a Perl extension that
+             * very well may not be understood by other applications (including
+             * earlier perl versions on EBCDIC platforms).  On ASCII platforms,
+             * these code points are indicated by the first UTF-8 byte being
+             * 0xFE or 0xFF.  We test for these after the regular SUPER ones,
+             * and before possibly bailing out, so that the slightly more dire
+             * warning will override the regular one. */
+            if (
+#ifndef EBCDIC
+                (*s0 & 0xFE) == 0xFE	/* matches both FE, FF */
+#else
+                 /* The I8 for 2**31 (U+80000000) is
+                  *   \xFF\xA0\xA0\xA0\xA0\xA0\xA0\xA2\xA0\xA0\xA0\xA0\xA0\xA0
+                  * and it turns out that on all EBCDIC pages recognized that
+                  * the UTF-EBCDIC for that code point is
+                  *   \xFE\x41\x41\x41\x41\x41\x41\x43\x41\x41\x41\x41\x41\x41
+                  * For the next lower code point, the 1047 UTF-EBCDIC is
+                  *   \xFE\x41\x41\x41\x41\x41\x41\x42\x73\x73\x73\x73\x73\x73
+                  * The other code pages differ only in the bytes following
+                  * \x42.  Thus the following works (the minimum continuation
+                  * byte is \x41). */
+                *s0 == 0xFE && send - s0 > 7 && (   s0[1] > 0x41
+                                                 || s0[2] > 0x41
+                                                 || s0[3] > 0x41
+                                                 || s0[4] > 0x41
+                                                 || s0[5] > 0x41
+                                                 || s0[6] > 0x41
+                                                 || s0[7] > 0x42)
+#endif
+                && (flags & (UTF8_WARN_ABOVE_31_BIT|UTF8_WARN_SUPER
+                            |UTF8_DISALLOW_ABOVE_31_BIT)))
             {
-                if ((flags & (UTF8_WARN_FE_FF|UTF8_CHECK_ONLY))
-                                                            == UTF8_WARN_FE_FF
-                    && ckWARN_d(WARN_UTF8))
+                if (  ! (flags & UTF8_CHECK_ONLY)
+                    &&  (flags & (UTF8_WARN_ABOVE_31_BIT|UTF8_WARN_SUPER))
+                    &&  ckWARN_d(WARN_UTF8))
                 {
-                    sv = sv_2mortal(Perl_newSVpvf(aTHX_ "Code point 0x%"UVXf" is not Unicode, and not portable", uv));
+                    sv = sv_2mortal(Perl_newSVpvf(aTHX_
+                        "Code point 0x%"UVXf" is not Unicode, and not portable",
+                        uv));
                     pack_warn = packWARN(WARN_UTF8);
                 }
-                if (flags & UTF8_DISALLOW_FE_FF) {
+                if (flags & UTF8_DISALLOW_ABOVE_31_BIT) {
                     goto disallowed;
                 }
             }
-#endif
+
 	    if (flags & UTF8_DISALLOW_SUPER) {
 		goto disallowed;
 	    }
+
+            /* The deprecated warning overrides any non-deprecated one */
+            if (UNLIKELY(uv > MAX_NON_DEPRECATED_CP) && ckWARN_d(WARN_DEPRECATED))
+            {
+                sv = sv_2mortal(Perl_newSVpvf(aTHX_ cp_above_legal_max,
+                                              uv, MAX_NON_DEPRECATED_CP));
+                pack_warn = packWARN(WARN_DEPRECATED);
+            }
 	}
 	else if (UNICODE_IS_NONCHAR(uv)) {
 	    if ((flags & (UTF8_WARN_NONCHAR|UTF8_CHECK_ONLY)) == UTF8_WARN_NONCHAR
@@ -840,6 +947,9 @@ the next possible position in C<s> that could begin a non-malformed character.
 See L</utf8n_to_uvchr> for details on when the REPLACEMENT CHARACTER is
 returned.
 
+Code points above the platform's C<IV_MAX> will raise a deprecation warning,
+unless those are turned off.
+
 =cut
 */
 
@@ -914,6 +1024,9 @@ the Unicode REPLACEMENT CHARACTER, if not) is silently returned, and C<*retlen>
 is set (if C<retlen> isn't NULL) so that (S<C<s> + C<*retlen>>) is the
 next possible position in C<s> that could begin a non-malformed character.
 See L</utf8n_to_uvchr> for details on when the REPLACEMENT CHARACTER is returned.
+
+Code points above the platform's C<IV_MAX> will raise a deprecation warning,
+unless those are turned off.
 
 =cut
 */
@@ -1445,14 +1558,14 @@ Perl__to_upper_title_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp, const char S_
  * LENP will be set to the length in bytes of the string of changed characters
  *
  * The functions return the ordinal of the first character in the string of OUTP */
-#define CALL_UPPER_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_toupper, "ToUc", "")
-#define CALL_TITLE_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_totitle, "ToTc", "")
-#define CALL_LOWER_CASE(INP, OUTP, LENP) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_tolower, "ToLc", "")
+#define CALL_UPPER_CASE(uv, s, d, lenp) _to_utf8_case(uv, s, d, lenp, &PL_utf8_toupper, "ToUc", "")
+#define CALL_TITLE_CASE(uv, s, d, lenp) _to_utf8_case(uv, s, d, lenp, &PL_utf8_totitle, "ToTc", "")
+#define CALL_LOWER_CASE(uv, s, d, lenp) _to_utf8_case(uv, s, d, lenp, &PL_utf8_tolower, "ToLc", "")
 
-/* This additionally has the input parameter SPECIALS, which if non-zero will
- * cause this to use the SPECIALS hash for folding (meaning get full case
+/* This additionally has the input parameter 'specials', which if non-zero will
+ * cause this to use the specials hash for folding (meaning get full case
  * folding); otherwise, when zero, this implies a simple case fold */
-#define CALL_FOLD_CASE(INP, OUTP, LENP, SPECIALS) Perl_to_utf8_case(aTHX_ INP, OUTP, LENP, &PL_utf8_tofold, "ToCf", (SPECIALS) ? "" : NULL)
+#define CALL_FOLD_CASE(uv, s, d, lenp, specials) _to_utf8_case(uv, s, d, lenp, &PL_utf8_tofold, "ToCf", (specials) ? "" : NULL)
 
 UV
 Perl_to_uni_upper(pTHX_ UV c, U8* p, STRLEN *lenp)
@@ -1472,7 +1585,7 @@ Perl_to_uni_upper(pTHX_ UV c, U8* p, STRLEN *lenp)
     }
 
     uvchr_to_utf8(p, c);
-    return CALL_UPPER_CASE(p, p, lenp);
+    return CALL_UPPER_CASE(c, p, p, lenp);
 }
 
 UV
@@ -1485,7 +1598,7 @@ Perl_to_uni_title(pTHX_ UV c, U8* p, STRLEN *lenp)
     }
 
     uvchr_to_utf8(p, c);
-    return CALL_TITLE_CASE(p, p, lenp);
+    return CALL_TITLE_CASE(c, p, p, lenp);
 }
 
 STATIC U8
@@ -1523,7 +1636,7 @@ Perl_to_uni_lower(pTHX_ UV c, U8* p, STRLEN *lenp)
     }
 
     uvchr_to_utf8(p, c);
-    return CALL_LOWER_CASE(p, p, lenp);
+    return CALL_LOWER_CASE(c, p, p, lenp);
 }
 
 UV
@@ -1543,14 +1656,15 @@ Perl__to_fold_latin1(pTHX_ const U8 c, U8* p, STRLEN *lenp, const unsigned int f
 
     assert (! (flags & FOLD_FLAGS_LOCALE));
 
-    if (c == MICRO_SIGN) {
+    if (UNLIKELY(c == MICRO_SIGN)) {
 	converted = GREEK_SMALL_LETTER_MU;
     }
 #if    UNICODE_MAJOR_VERSION > 3 /* no multifolds in early Unicode */   \
    || (UNICODE_MAJOR_VERSION == 3 && (   UNICODE_DOT_VERSION > 0)       \
                                       || UNICODE_DOT_DOT_VERSION > 0)
-    else if ((flags & FOLD_FLAGS_FULL) && c == LATIN_SMALL_LETTER_SHARP_S) {
-
+    else if (   (flags & FOLD_FLAGS_FULL)
+             && UNLIKELY(c == LATIN_SMALL_LETTER_SHARP_S))
+    {
         /* If can't cross 127/128 boundary, can't return "ss"; instead return
          * two U+017F characters, as fc("\df") should eq fc("\x{17f}\x{17f}")
          * under those circumstances. */
@@ -1619,7 +1733,7 @@ Perl__to_uni_fold_flags(pTHX_ UV c, U8* p, STRLEN *lenp, U8 flags)
     /* Here, above 255.  If no special needs, just use the macro */
     if ( ! (flags & (FOLD_FLAGS_LOCALE|FOLD_FLAGS_NOMIX_ASCII))) {
 	uvchr_to_utf8(p, c);
-	return CALL_FOLD_CASE(p, p, lenp, flags & FOLD_FLAGS_FULL);
+	return CALL_FOLD_CASE(c, p, p, lenp, flags & FOLD_FLAGS_FULL);
     }
     else {  /* Otherwise, _to_utf8_fold_flags has the intelligence to deal with
 	       the special flags. */
@@ -1756,6 +1870,11 @@ Perl__is_utf8_mark(pTHX_ const U8 *p)
 /*
 =for apidoc to_utf8_case
 
+Instead use the appropriate one of L</toUPPER_utf8>,
+L</toTITLE_utf8>,
+L</toLOWER_utf8>,
+or L</toFOLD_utf8>.
+
 C<p> contains the pointer to the UTF-8 string encoding
 the character that is being converted.  This routine assumes that the character
 at C<p> is well-formed.
@@ -1778,37 +1897,123 @@ mappings, like C<"utf8::ToSpecLower">.
 C<normal> is a string like C<"ToLower"> which means the swash
 C<%utf8::ToLower>.
 
+Code points above the platform's C<IV_MAX> will raise a deprecation warning,
+unless those are turned off.
+
 =cut */
 
 UV
 Perl_to_utf8_case(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp,
 			SV **swashp, const char *normal, const char *special)
 {
-    STRLEN len = 0;
-    const UV uv1 = valid_utf8_to_uvchr(p, NULL);
-
     PERL_ARGS_ASSERT_TO_UTF8_CASE;
 
-    /* Note that swash_fetch() doesn't output warnings for these because it
-     * assumes we will */
-    if (uv1 >= UNICODE_SURROGATE_FIRST) {
-	if (uv1 <= UNICODE_SURROGATE_LAST) {
-	    if (ckWARN_d(WARN_SURROGATE)) {
-		const char* desc = (PL_op) ? OP_DESC(PL_op) : normal;
-		Perl_warner(aTHX_ packWARN(WARN_SURROGATE),
-		    "Operation \"%s\" returns its argument for UTF-16 surrogate U+%04"UVXf"", desc, uv1);
-	    }
-	}
-	else if (UNICODE_IS_SUPER(uv1)) {
-	    if (ckWARN_d(WARN_NON_UNICODE)) {
-		const char* desc = (PL_op) ? OP_DESC(PL_op) : normal;
-		Perl_warner(aTHX_ packWARN(WARN_NON_UNICODE),
-		    "Operation \"%s\" returns its argument for non-Unicode code point 0x%04"UVXf"", desc, uv1);
-	    }
-	}
+    return _to_utf8_case(valid_utf8_to_uvchr(p, NULL), p, ustrp, lenp, swashp, normal, special);
+}
+
+    /* change namve uv1 to 'from' */
+UV
+S__to_utf8_case(pTHX_ const UV uv1, const U8 *p, U8* ustrp, STRLEN *lenp,
+		SV **swashp, const char *normal, const char *special)
+{
+    STRLEN len = 0;
+
+    PERL_ARGS_ASSERT__TO_UTF8_CASE;
+
+    /* For code points that don't change case, we already know that the output
+     * of this function is the unchanged input, so we can skip doing look-ups
+     * for them.  Unfortunately the case-changing code points are scattered
+     * around.  But there are some long consecutive ranges where there are no
+     * case changing code points.  By adding tests, we can eliminate the lookup
+     * for all the ones in such ranges.  This is currently done here only for
+     * just a few cases where the scripts are in common use in modern commerce
+     * (and scripts adjacent to those which can be included without additional
+     * tests). */
+
+    if (uv1 >= 0x0590) {
+        /* This keeps from needing further processing the code points most
+         * likely to be used in the following non-cased scripts: Hebrew,
+         * Arabic, Syriac, Thaana, NKo, Samaritan, Mandaic, Devanagari,
+         * Bengali, Gurmukhi, Gujarati, Oriya, Tamil, Telugu, Kannada,
+         * Malayalam, Sinhala, Thai, Lao, Tibetan, Myanmar */
+        if (uv1 < 0x10A0) {
+            goto cases_to_self;
+        }
+
+        /* The following largish code point ranges also don't have case
+         * changes, but khw didn't think they warranted extra tests to speed
+         * them up (which would slightly slow down everything else above them):
+         * 1100..139F   Hangul Jamo, Ethiopic
+         * 1400..1CFF   Unified Canadian Aboriginal Syllabics, Ogham, Runic,
+         *              Tagalog, Hanunoo, Buhid, Tagbanwa, Khmer, Mongolian,
+         *              Limbu, Tai Le, New Tai Lue, Buginese, Tai Tham,
+         *              Combining Diacritical Marks Extended, Balinese,
+         *              Sundanese, Batak, Lepcha, Ol Chiki
+         * 2000..206F   General Punctuation
+         */
+
+        if (uv1 >= 0x2D30) {
+
+            /* This keeps the from needing further processing the code points
+             * most likely to be used in the following non-cased major scripts:
+             * CJK, Katakana, Hiragana, plus some less-likely scripts.
+             *
+             * (0x2D30 above might have to be changed to 2F00 in the unlikely
+             * event that Unicode eventually allocates the unused block as of
+             * v8.0 2FE0..2FEF to code points that are cased.  khw has verified
+             * that the test suite will start having failures to alert you
+             * should that happen) */
+            if (uv1 < 0xA640) {
+                goto cases_to_self;
+            }
+
+            if (uv1 >= 0xAC00) {
+                if (UNLIKELY(UNICODE_IS_SURROGATE(uv1))) {
+                    if (ckWARN_d(WARN_SURROGATE)) {
+                        const char* desc = (PL_op) ? OP_DESC(PL_op) : normal;
+                        Perl_warner(aTHX_ packWARN(WARN_SURROGATE),
+                            "Operation \"%s\" returns its argument for UTF-16 surrogate U+%04"UVXf"", desc, uv1);
+                    }
+                    goto cases_to_self;
+                }
+
+                /* AC00..FAFF Catches Hangul syllables and private use, plus
+                 * some others */
+                if (uv1 < 0xFB00) {
+                    goto cases_to_self;
+
+                }
+
+                if (UNLIKELY(UNICODE_IS_SUPER(uv1))) {
+                    if (   UNLIKELY(uv1 > MAX_NON_DEPRECATED_CP)
+                        && ckWARN_d(WARN_DEPRECATED))
+                    {
+                        Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
+                                cp_above_legal_max, uv1, MAX_NON_DEPRECATED_CP);
+                    }
+                    if (ckWARN_d(WARN_NON_UNICODE)) {
+                        const char* desc = (PL_op) ? OP_DESC(PL_op) : normal;
+                        Perl_warner(aTHX_ packWARN(WARN_NON_UNICODE),
+                            "Operation \"%s\" returns its argument for non-Unicode code point 0x%04"UVXf"", desc, uv1);
+                    }
+                    goto cases_to_self;
+                }
+#ifdef HIGHEST_CASE_CHANGING_CP_FOR_USE_ONLY_BY_UTF8_DOT_C
+                if (UNLIKELY(uv1
+                    > HIGHEST_CASE_CHANGING_CP_FOR_USE_ONLY_BY_UTF8_DOT_C))
+                {
+
+                    /* As of this writing, this means we avoid swash creation
+                     * for anything beyond low Plane 1 */
+                    goto cases_to_self;
+                }
+#endif
+            }
+        }
 
 	/* Note that non-characters are perfectly legal, so no warning should
-	 * be given */
+         * be given.  There are so few of them, that it isn't worth the extra
+         * tests to avoid swash creation */
     }
 
     if (!*swashp) /* load on-demand */
@@ -1866,6 +2071,7 @@ Perl_to_utf8_case(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp,
 
     /* Here, there was no mapping defined, which means that the code point maps
      * to itself.  Return the inputs */
+  cases_to_self:
     len = UTF8SKIP(p);
     if (p != ustrp) {   /* Don't copy onto itself */
         Copy(p, ustrp, len, U8);
@@ -1982,7 +2188,7 @@ Perl__to_utf8_upper_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, bool flags
 	}
     }
     else {  /* UTF-8, ord above 255 */
-	result = CALL_UPPER_CASE(p, ustrp, lenp);
+	result = CALL_UPPER_CASE(valid_utf8_to_uvchr(p, NULL), p, ustrp, lenp);
 
 	if (flags) {
 	    result = check_locale_boundary_crossing(p, result, ustrp, lenp);
@@ -2053,7 +2259,7 @@ Perl__to_utf8_title_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, bool flags
 	}
     }
     else {  /* UTF-8, ord above 255 */
-	result = CALL_TITLE_CASE(p, ustrp, lenp);
+	result = CALL_TITLE_CASE(valid_utf8_to_uvchr(p, NULL), p, ustrp, lenp);
 
 	if (flags) {
 	    result = check_locale_boundary_crossing(p, result, ustrp, lenp);
@@ -2123,7 +2329,7 @@ Perl__to_utf8_lower_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, bool flags
 	}
     }
     else {  /* UTF-8, ord above 255 */
-	result = CALL_LOWER_CASE(p, ustrp, lenp);
+	result = CALL_LOWER_CASE(valid_utf8_to_uvchr(p, NULL), p, ustrp, lenp);
 
 	if (flags) {
 	    result = check_locale_boundary_crossing(p, result, ustrp, lenp);
@@ -2206,7 +2412,7 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp, U8 flags)
 	}
     }
     else {  /* UTF-8, ord above 255 */
-	result = CALL_FOLD_CASE(p, ustrp, lenp, flags & FOLD_FLAGS_FULL);
+	result = CALL_FOLD_CASE(valid_utf8_to_uvchr(p, NULL), p, ustrp, lenp, flags & FOLD_FLAGS_FULL);
 
 	if (flags & FOLD_FLAGS_LOCALE) {
 
@@ -2650,7 +2856,7 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
  * (see lib/unicore/SpecCase.txt) The SWASHGET in lib/utf8_heavy.pl is
  * the lower-level routine, and it is similarly broken for returning
  * multiple values.  --jhi
- * For those, you should use to_utf8_case() instead */
+ * For those, you should use S__to_utf8_case() instead */
 /* Now SWASHGET is recasted into S_swatch_get in this file. */
 
 /* Note:
@@ -3323,7 +3529,7 @@ Perl__swash_inversion_hash(pTHX_ SV* const swash)
     * Code could be written to automatically figure this out, similar to the
     * code that does this for multi-character folds, but this is the only case
     * where something like this is ever likely to happen, as all the single
-    * char folds to The 0-255 range are now quite settled.  Instead there is a
+    * char folds to the 0-255 range are now quite settled.  Instead there is a
     * little special code that is compiled only for this Unicode version.  This
     * is smaller and didn't require much coding time to do.  But this makes
     * this routine strongly tied to being used just for CaseFolding.  If ever
@@ -3829,7 +4035,10 @@ Perl_check_utf8_print(pTHX_ const U8* s, const STRLEN len)
     /* May change: warns if surrogates, non-character code points, or
      * non-Unicode code points are in s which has length len bytes.  Returns
      * TRUE if none found; FALSE otherwise.  The only other validity check is
-     * to make sure that this won't exceed the string's length */
+     * to make sure that this won't exceed the string's length.
+     *
+     * Code points above the platform's C<IV_MAX> will raise a deprecation
+     * warning, unless those are turned off.  */
 
     const U8* const e = s + len;
     bool ok = TRUE;
@@ -3845,11 +4054,33 @@ Perl_check_utf8_print(pTHX_ const U8* s, const STRLEN len)
 	if (UNLIKELY(isUTF8_POSSIBLY_PROBLEMATIC(*s))) {
 	    STRLEN char_len;
 	    if (UTF8_IS_SUPER(s, e)) {
-		if (ckWARN_d(WARN_NON_UNICODE)) {
+                if (   ckWARN_d(WARN_NON_UNICODE)
+                    || (   ckWARN_d(WARN_DEPRECATED)
+#if defined(UV_IS_QUAD)
+                        /* 2**63 and up meet these conditions provided we have
+                         * a 64-bit word. */
+#   ifdef EBCDIC
+                        && *s == 0xFE && e - s >= UTF8_MAXBYTES
+                        && s[1] >= 0x49
+#   else
+                        && *s == 0xFF && e -s >= UTF8_MAXBYTES
+                        && s[2] >= 0x88
+#   endif
+#else   /* Below is 32-bit words */
+                        /* 2**31 and above meet these conditions on all EBCDIC
+                         * pages recognized for 32-bit platforms */
+#   ifdef EBCDIC
+                        && *s == 0xFE && e - s >= UTF8_MAXBYTES
+                        && s[6] >= 0x43
+#   else
+                        && *s >= 0xFE
+#   endif
+#endif
+                )) {
                     /* A side effect of this function will be to warn */
                     (void) utf8n_to_uvchr(s, e - s, &char_len, UTF8_WARN_SUPER);
-		    ok = FALSE;
-		}
+                    ok = FALSE;
+                }
 	    }
 	    else if (UTF8_IS_SURROGATE(s, e)) {
 		if (ckWARN_d(WARN_SURROGATE)) {

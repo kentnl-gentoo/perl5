@@ -179,7 +179,7 @@ use File::Glob qw(:case);
     },
 
     'base' => {
-        'DISTRIBUTION' => 'RGARCIA/base-2.18.tar.gz',
+        'DISTRIBUTION' => 'RJBS/base-2.23.tar.gz',
         'FILES'        => q[dist/base],
     },
 
@@ -226,7 +226,7 @@ use File::Glob qw(:case);
     },
 
     'Config::Perl::V' => {
-        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.24.tgz',
+        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.25.tgz',
         'FILES'        => q[cpan/Config-Perl-V],
         'EXCLUDED'     => [qw(
 		examples/show-v.pl
@@ -303,7 +303,7 @@ use File::Glob qw(:case);
     },
 
     'CPAN::Meta::Requirements' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-Requirements-2.133.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-Requirements-2.140.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta-Requirements],
         'EXCLUDED'     => [
             qw(t/00-report-prereqs.t),
@@ -314,7 +314,7 @@ use File::Glob qw(:case);
     },
 
     'CPAN::Meta::YAML' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-YAML-0.017-TRIAL.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-YAML-0.018.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta-YAML],
         'EXCLUDED'     => [
             't/00-report-prereqs.t',
@@ -398,7 +398,7 @@ use File::Glob qw(:case);
 
     'encoding::warnings' => {
         'DISTRIBUTION' => 'AUDREYT/encoding-warnings-0.11.tar.gz',
-        'FILES'        => q[cpan/encoding-warnings],
+        'FILES'        => q[dist/encoding-warnings],
         'EXCLUDED'     => [
             qr{^inc/Module/},
             qw(t/0-signature.t),
@@ -438,10 +438,7 @@ use File::Glob qw(:case);
 
     'ExtUtils::Constant' => {
 
-        # Nick has confirmed that while we have diverged from CPAN,
-        # this package isn't primarily maintained in core
-        # Another release will happen "Sometime"
-        'DISTRIBUTION' => '',    #'NWCLARK/ExtUtils-Constant-0.16.tar.gz',
+        'DISTRIBUTION' => 'NWCLARK/ExtUtils-Constant-0.23.tar.gz',
         'FILES'    => q[cpan/ExtUtils-Constant],
         'EXCLUDED' => [
             qw( lib/ExtUtils/Constant/Aaargh56Hash.pm
@@ -449,6 +446,8 @@ use File::Glob qw(:case);
                 examples/perl_regcomp_posix_keyword.pl
                 ),
         ],
+        # cc37ebcee3 to fix VMS failure
+        'CUSTOMIZED'   => [ qw(t/Constant.t) ],
     },
 
     'ExtUtils::Install' => {
@@ -690,7 +689,7 @@ use File::Glob qw(:case);
     },
 
     'Locale-Codes' => {
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.36.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.37.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( README.first
@@ -736,7 +735,7 @@ use File::Glob qw(:case);
     },
 
     'Math::BigInt::FastCalc' => {
-        'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-FastCalc-0.37.tar.gz',
+        'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-FastCalc-0.38.tar.gz',
         'FILES'        => q[cpan/Math-BigInt-FastCalc],
         'EXCLUDED'     => [
             qr{^inc/},
@@ -798,7 +797,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20151020.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20151120.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -818,7 +817,7 @@ use File::Glob qw(:case);
     },
 
     'Module::Metadata' => {
-        'DISTRIBUTION' => 'ETHER/Module-Metadata-1.000030-TRIAL.tar.gz',
+        'DISTRIBUTION' => 'ETHER/Module-Metadata-1.000031-TRIAL.tar.gz',
         'FILES'        => q[cpan/Module-Metadata],
         'EXCLUDED'     => [
             qw(t/00-report-prereqs.t),
@@ -860,7 +859,7 @@ use File::Glob qw(:case);
     },
 
     'PathTools' => {
-        'DISTRIBUTION' => 'RJBS/PathTools-3.59.tar.gz',
+        'DISTRIBUTION' => 'RJBS/PathTools-3.60.tar.gz',
         'FILES'        => q[dist/PathTools],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -919,6 +918,7 @@ use File::Glob qw(:case);
         'EXCLUDED' => ['perldoc'],
 
         # https://rt.cpan.org/Ticket/Display.html?id=106798
+        # https://rt.cpan.org/Ticket/Display.html?id=110368
         'CUSTOMIZED'   => [ qw[ lib/Pod/Perldoc.pm ] ],
     },
 
@@ -1021,7 +1021,7 @@ use File::Glob qw(:case);
     },
 
     'Term::ANSIColor' => {
-        'DISTRIBUTION' => 'RRA/Term-ANSIColor-4.03.tar.gz',
+        'DISTRIBUTION' => 'RRA/Term-ANSIColor-4.04.tar.gz',
         'FILES'        => q[cpan/Term-ANSIColor],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1109,13 +1109,6 @@ use File::Glob qw(:case);
     'Text::ParseWords' => {
         'DISTRIBUTION' => 'CHORNY/Text-ParseWords-3.30.tar.gz',
         'FILES'        => q[cpan/Text-ParseWords],
-
-        # Waiting to be merged upstream:
-        # see https://github.com/chorny/Text-ParseWords/pull/6
-        'CUSTOMIZED'   => [
-            qw( t/ParseWords.t
-                ),
-        ],
     },
 
     'Text-Tabs+Wrap' => {
@@ -1227,7 +1220,7 @@ use File::Glob qw(:case);
     },
 
     'Unicode::Normalize' => {
-        'DISTRIBUTION' => 'KHW/Unicode-Normalize-1.23.tar.gz',
+        'DISTRIBUTION' => 'KHW/Unicode-Normalize-1.24.tar.gz',
         'FILES'        => q[cpan/Unicode-Normalize],
     },
 

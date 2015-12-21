@@ -21,6 +21,7 @@ no_index:
     - dist/Data-Dumper
     - dist/Devel-SelfStubber
     - dist/Dumpvalue
+    - dist/encoding-warnings
     - dist/Env
     - dist/Exporter
     - dist/ExtUtils-CBuilder
@@ -109,5 +110,5 @@ resources:
   homepage: http://www.perl.org/
   license: http://dev.perl.org/licenses/
   repository: http://perl5.git.perl.org/
-version: '5.023005'
-x_serialization_backend: 'CPAN::Meta::YAML version 0.017'
+version: '5.023006'
+x_serialization_backend: 'CPAN::Meta::YAML version 0.018'

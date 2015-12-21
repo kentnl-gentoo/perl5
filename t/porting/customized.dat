@@ -2,12 +2,13 @@ CPAN cpan/CPAN/lib/CPAN.pm ce62c43d72f101c011184dbbc59e21c2790826f0
 Encode cpan/Encode/Encode.xs ef106510cceba35eaae4c52127116162f5d7260f
 Encode cpan/Encode/encoding.pm 51c19efc9bfe8467d6ae12a4654f6e7f980715bf
 Encode cpan/Encode/Unicode/Unicode.xs c7ab75e09f6b2685060d3c0bd091862fc2d31724
+ExtUtils::Constant cpan/ExtUtils-Constant/t/Constant.t a0369c919e216fb02767a637666bb4577ad79b02
 ExtUtils::MakeMaker cpan/ExtUtils-MakeMaker/lib/ExtUtils/MakeMaker.pm fd048a43fc1a53acbe133bd96ddbf1421cfb28cf
 ExtUtils::MakeMaker cpan/ExtUtils-MakeMaker/lib/ExtUtils/MM_VMS.pm 0c78ba02d6249dfcca12ac9886a7c7cfb60e77fe
 ExtUtils::MakeMaker cpan/ExtUtils-MakeMaker/t/prereq.t 53bda2c549fd13a6b6c13a070ca6bc79883081c0
 ExtUtils::MakeMaker cpan/ExtUtils-MakeMaker/t/vstrings.t 90035a2bdbf45f15b9c3196d072d7cba7e662871
 Math::BigRat cpan/Math-BigRat/lib/Math/BigRat.pm 682352dde33638125ce12ca44990bd1cd44af4f8
-Pod::Perldoc cpan/Pod-Perldoc/lib/Pod/Perldoc.pm dcd53fba13060dbb71b1b5861fbc5c0881c8625a
+Pod::Perldoc cpan/Pod-Perldoc/lib/Pod/Perldoc.pm fe0bc906fb74b69cfd3fb289316ba669d770d465
 Scalar-List-Utils cpan/Scalar-List-Utils/lib/List/Util.pm 62d2a82a811b531a3fd25cb60c4c2ef943858892
 Scalar-List-Utils cpan/Scalar-List-Utils/lib/List/Util/XS.pm 08abbe1a707927cee53e85ba85d6bd35c1c2ae50
 Scalar-List-Utils cpan/Scalar-List-Utils/lib/Scalar/Util.pm 7f1e6eb11105623200ef9cdcb881545ccb769ded
@@ -15,7 +16,6 @@ Scalar-List-Utils cpan/Scalar-List-Utils/lib/Sub/Util.pm d87811528ae3587f04e2f09
 Scalar-List-Utils cpan/Scalar-List-Utils/ListUtil.xs ed25abc419771d6f3f12323f1f0a372f043d51b2
 Socket cpan/Socket/Socket.pm bdc42a2bd5cb560ed1120a3e6f408ed7ece14dce
 Socket cpan/Socket/Socket.xs 6102315291684e56e360ff5e0dd237c9394c49b8
-Text::ParseWords cpan/Text-ParseWords/t/ParseWords.t 9bae51c9b944cd5c0bbabe9d397e573976a2be8e
 Win32API::File cpan/Win32API-File/buffers.h 02d230ac9ac7091365128161a0ed671898baefae
 Win32API::File cpan/Win32API-File/cFile.h fca7e383e76979c3ac3adf12d11d1bcd2618e489
 Win32API::File cpan/Win32API-File/cFile.pc 992421eea7782a5957b64f66764f6ffb5093bee4

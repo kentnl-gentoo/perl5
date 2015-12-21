@@ -421,6 +421,16 @@
 #  define GCC_DIAG_IGNORE(w)
 #  define GCC_DIAG_RESTORE
 #endif
+/* for clang specific pragmas */
+#if defined(__clang__) || defined(__clang)
+#  define CLANG_DIAG_PRAGMA(x) _Pragma (#x)
+#  define CLANG_DIAG_IGNORE(x) _Pragma("clang diagnostic push") \
+                               CLANG_DIAG_PRAGMA(clang diagnostic ignored #x)
+#  define CLANG_DIAG_RESTORE   _Pragma("clang diagnostic pop")
+#else
+#  define CLANG_DIAG_IGNORE(w)
+#  define CLANG_DIAG_RESTORE
+#endif
 
 #define NOOP /*EMPTY*/(void)0
 /* cea2e8a9dd23747f accidentally lost the comment originally from the first
@@ -3052,6 +3062,103 @@ freeing any remaining Perl interpreters.
  * May make sense to have threads after "*ish.h" anyway
  */
 
+/* clang Thread Safety Analysis/Annotations/Attributes
+ * http://clang.llvm.org/docs/ThreadSafetyAnalysis.html
+ *
+ * Available since clang 3.6-ish (appeared in 3.4, but shaky still in 3.5).
+ * Apple XCode hijacks __clang_major__ and __clang_minor__
+ * (6.1 means really clang 3.6), so needs extra hijinks
+ * (could probably also test the contents of __apple_build_version__).
+ */
+#if defined(USE_ITHREADS) && defined(I_PTHREAD) && \
+    defined(__clang__) && \
+    !defined(SWIG) && \
+  ((!defined(__apple_build_version__) &&               \
+    ((__clang_major__ == 3 && __clang_minor__ >= 6) || \
+     (__clang_major__ >= 4))) || \
+   (defined(__apple_build_version__) &&                \
+    ((__clang_major__ == 6 && __clang_minor__ >= 1) || \
+     (__clang_major__ >= 7))))
+#  define PERL_TSA__(x)   __attribute__((x))
+#  define PERL_TSA_ACTIVE
+#else
+#  define PERL_TSA__(x)   /* No TSA, make TSA attributes no-ops. */
+#  undef PERL_TSA_ACTIVE
+#endif
+
+/* PERL_TSA_CAPABILITY() is used to annotate typedefs.
+ * typedef old_type PERL_TSA_CAPABILITY("mutex") new_type;
+ */
+#define PERL_TSA_CAPABILITY(x) \
+    PERL_TSA__(capability(x))
+
+/* In the below examples the mutex must be lexically visible, usually
+ * either as global variables, or as function arguments. */
+
+/* PERL_TSA_GUARDED_BY() is used to annotate global variables.
+ *
+ * Foo foo PERL_TSA_GUARDED_BY(mutex);
+ */
+#define PERL_TSA_GUARDED_BY(x) \
+    PERL_TSA__(guarded_by(x))
+
+/* PERL_TSA_PT_GUARDED_BY() is used to annotate global pointers.
+ * The data _behind_ the pointer is guarded.
+ *
+ * Foo* ptr PERL_TSA_PT_GUARDED_BY(mutex);
+ */
+#define PERL_TSA_PT_GUARDED_BY(x) \
+    PERL_TSA__(pt_guarded_by(x))
+
+/* PERL_TSA_REQUIRES() is used to annotate functions.
+ * The caller MUST hold the resource when calling the function.
+ *
+ * void Foo() PERL_TSA_REQUIRES(mutex);
+ */
+#define PERL_TSA_REQUIRES(x) \
+    PERL_TSA__(requires_capability(x))
+
+/* PERL_TSA_EXCLUDES() is used to annotate functions.
+ * The caller MUST NOT hold resource when calling the function.
+ *
+ * EXCLUDES should be used when the function first acquires
+ * the resource and then releases it.  Use to avoid deadlock.
+ *
+ * void Foo() PERL_TSA_EXCLUDES(mutex);
+ */
+#define PERL_TSA_EXCLUDES(x) \
+    PERL_TSA__(locks_excluded(x))
+
+/* PERL_TSA_ACQUIRE() is used to annotate functions.
+ * The caller MUST NOT hold the resource when calling the function,
+ * and the function will acquire the resource.
+ *
+ * void Foo() PERL_TSA_ACQUIRE(mutex);
+ */
+#define PERL_TSA_ACQUIRE(x) \
+    PERL_TSA__(acquire_capability(x))
+
+/* PERL_TSA_RELEASE() is used to annotate functions.
+ * The caller MUST hold the resource when calling the function,
+ * and the function will release the resource.
+ *
+ * void Foo() PERL_TSA_RELEASE(mutex);
+ */
+#define PERL_TSA_RELEASE(x) \
+    PERL_TSA__(release_capability(x))
+
+/* PERL_TSA_NO_TSA is used to annotate functions.
+ * Used when being intentionally unsafe, or when the code is too
+ * complicated for the analysis.  Use sparingly.
+ *
+ * void Foo() PERL_TSA_NO_TSA;
+ */
+#define PERL_TSA_NO_TSA \
+    PERL_TSA__(no_thread_safety_analysis)
+
+/* There are more annotations/attributes available, see the clang
+ * documentation for details. */
+
 #if defined(USE_ITHREADS)
 #  ifdef NETWARE
 #   include <nw5thread.h>
@@ -3073,7 +3180,7 @@ typedef void *		perl_key;
 #            include <pthread.h>
 #          endif
 typedef pthread_t	perl_os_thread;
-typedef pthread_mutex_t	perl_mutex;
+typedef pthread_mutex_t PERL_TSA_CAPABILITY("mutex") perl_mutex;
 typedef pthread_cond_t	perl_cond;
 typedef pthread_key_t	perl_key;
 #        endif /* I_MACH_CTHREADS */
@@ -3081,6 +3188,25 @@ typedef pthread_key_t	perl_key;
 #    endif /* WIN32 */
 #  endif /* NETWARE */
 #endif /* USE_ITHREADS */
+
+#ifdef PERL_TSA_ACTIVE
+/* Since most pthread mutex interfaces have not been annotated, we
+ * need to have these wrappers. The NO_TSA annotation is quite ugly
+ * but it cannot be avoided in plain C, unlike in C++, where one could
+ * e.g. use ACQUIRE() with no arg on a mutex lock method.
+ *
+ * The bodies of these wrappers are in util.c
+ *
+ * TODO: however, some platforms are starting to get these clang
+ * thread safety annotations for pthreads, for example FreeBSD.
+ * Do we need a way to a bypass these wrappers? */
+int perl_tsa_mutex_lock(perl_mutex* mutex)
+  PERL_TSA_ACQUIRE(*mutex)
+  PERL_TSA_NO_TSA;
+int perl_tsa_mutex_unlock(perl_mutex* mutex)
+  PERL_TSA_RELEASE(*mutex)
+  PERL_TSA_NO_TSA;
+#endif
 
 #if defined(WIN32)
 #  include "win32.h"
@@ -6632,14 +6758,19 @@ extern void moncontrol(int);
 
 #  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN || \
       LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN || \
-      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_LE
 #    define LONGDOUBLE_LITTLE_ENDIAN
 #  endif
 
 #  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_BIG_ENDIAN || \
       LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN || \
-      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_BE
 #    define LONGDOUBLE_BIG_ENDIAN
+#  endif
+
+#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_BE || \
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_LE
+#    define LONGDOUBLE_MIX_ENDIAN
 #  endif
 
 #  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN || \
@@ -6650,8 +6781,10 @@ extern void moncontrol(int);
 #    endif
 #  endif
 
-#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN || \
-      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN
+#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_LE || \
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_BE || \
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_BE || \
+      LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_LE
 #    define LONGDOUBLE_DOUBLEDOUBLE
 #  endif
 
@@ -6681,6 +6814,9 @@ extern void moncontrol(int);
 #  endif
 #  ifdef LONGDOUBLE_BIG_ENDIAN
 #    define NV_BIG_ENDIAN
+#  endif
+#  ifdef LONGDOUBLE_MIX_ENDIAN
+#    define NV_MIX_ENDIAN
 #  endif
 #endif
 
@@ -6797,10 +6933,14 @@ extern void moncontrol(int);
 #    define NV_NAN_QS_BYTE_OFFSET 7
 #  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN
 #    define NV_NAN_QS_BYTE_OFFSET 2
-#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_LE
 #    define NV_NAN_QS_BYTE_OFFSET 13
-#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_BE
 #    define NV_NAN_QS_BYTE_OFFSET 1
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_BE
+#    define NV_NAN_QS_BYTE_OFFSET 9
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_LE
+#    define NV_NAN_QS_BYTE_OFFSET 6
 #  else
 #    error "Unexpected long double format"
 #  endif
@@ -6842,8 +6982,10 @@ extern void moncontrol(int);
    LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN)
 #  define NV_NAN_QS_BIT_SHIFT 6 /* 0x40 */
 #elif defined(USE_LONG_DOUBLE) && \
-  (LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN || \
-   LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN)
+  (LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_LE || \
+   LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_BE || \
+   LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_BE || \
+   LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_LE)
 #  define NV_NAN_QS_BIT_SHIFT 3 /* 0x08, but not via NV_NAN_BITS */
 #else
 #  define NV_NAN_QS_BIT_SHIFT ((NV_NAN_BITS) % 8) /* usually 3, or 0x08 */
@@ -6884,6 +7026,10 @@ extern void moncontrol(int);
  * 0xFF means "don't go here".*/
 
 /* Shorthands to avoid typoses. */
+#define NV_NAN_PAYLOAD_MASK_SKIP_EIGHT \
+  0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0
+#define NV_NAN_PAYLOAD_PERM_SKIP_EIGHT \
+  0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff
 #define NV_NAN_PAYLOAD_PERM_0_TO_7 \
   0x0, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7
 #define NV_NAN_PAYLOAD_PERM_7_TO_0 \
@@ -6962,17 +7108,28 @@ extern void moncontrol(int);
 #    else
 #      error "Unexpected x86 80-bit big-endian long double format"
 #    endif
-#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN
-/* For double-double we assume only the first double is used for NaN. */
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_LE
+/* For double-double we assume only the first double (in LE or BE terms)
+ * is used for NaN. */
 #    define NV_NAN_PAYLOAD_MASK \
-       NV_NAN_PAYLOAD_MASK_IEEE_754_64_LE
+       NV_NAN_PAYLOAD_MASK_SKIP_EIGHT, NV_NAN_PAYLOAD_MASK_IEEE_754_64_LE
 #    define NV_NAN_PAYLOAD_PERM \
-       NV_NAN_PAYLOAD_PERM_IEEE_754_64_LE
-#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN
+       NV_NAN_PAYLOAD_PERM_SKIP_EIGHT, NV_NAN_PAYLOAD_PERM_IEEE_754_64_LE
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_BE
 #    define NV_NAN_PAYLOAD_MASK \
        NV_NAN_PAYLOAD_MASK_IEEE_754_64_BE
 #    define NV_NAN_PAYLOAD_PERM \
        NV_NAN_PAYLOAD_PERM_IEEE_754_64_BE
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_BE
+#    define NV_NAN_PAYLOAD_MASK \
+       NV_NAN_PAYLOAD_MASK_IEEE_754_64_LE
+#    define NV_NAN_PAYLOAD_PERM \
+       NV_NAN_PAYLOAD_PERM_IEEE_754_64_LE
+#  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_LE
+#    define NV_NAN_PAYLOAD_MASK \
+       NV_NAN_PAYLOAD_MASK_SKIP_EIGHT, NV_NAN_PAYLOAD_MASK_IEEE_754_64_BE
+#    define NV_NAN_PAYLOAD_PERM \
+       NV_NAN_PAYLOAD_PERM_SKIP_EIGHT, NV_NAN_PAYLOAD_PERM_IEEE_754_64_BE
 #  else
 #    error "Unexpected long double format"
 #  endif

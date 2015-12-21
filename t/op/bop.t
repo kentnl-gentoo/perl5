@@ -4,6 +4,9 @@
 # test the bit operators '&', '|', '^', '~', '<<', and '>>'
 #
 
+use warnings;
+no warnings 'deprecated';
+
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
@@ -136,9 +139,7 @@ is (sprintf("%vd", v120.300 ^ v200.400), '176.188');
 # UTF8 ~ behaviour
 #
 
-SKIP: {
-    skip "Complements exceed maximum representable on EBCDIC ", 5 if $::IS_EBCDIC;
-
+{
     my @not36;
 
     for (0x100...0xFFF) {
@@ -621,6 +622,7 @@ is $^A, "123", '~v0 clears vstring magic on retval';
     # not necessarily the ideal behavior, but that is what is happening.
     if ($w == 64) {
         no warnings "portable";
+        no warnings "overflow"; # prevent compile-time warning for ivsize=4
         is(-1 << 1, 0xFFFF_FFFF_FFFF_FFFE,
            "neg UV (sic) left shift  = 0xFF..E");
         is(-1 >> 1, 0x7FFF_FFFF_FFFF_FFFF,

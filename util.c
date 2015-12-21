@@ -2714,6 +2714,15 @@ Perl_my_popen(pTHX_ const char *cmd, const char *mode)
 /* this is called in parent before the fork() */
 void
 Perl_atfork_lock(void)
+#if defined(USE_ITHREADS)
+#  ifdef USE_PERLIO
+  PERL_TSA_ACQUIRE(PL_perlio_mutex)
+#  endif
+#  ifdef MYMALLOC
+  PERL_TSA_ACQUIRE(PL_malloc_mutex)
+#  endif
+  PERL_TSA_ACQUIRE(PL_op_mutex)
+#endif
 {
 #if defined(USE_ITHREADS)
     dVAR;
@@ -2731,6 +2740,15 @@ Perl_atfork_lock(void)
 /* this is called in both parent and child after the fork() */
 void
 Perl_atfork_unlock(void)
+#if defined(USE_ITHREADS)
+#  ifdef USE_PERLIO
+  PERL_TSA_RELEASE(PL_perlio_mutex)
+#  endif
+#  ifdef MYMALLOC
+  PERL_TSA_RELEASE(PL_malloc_mutex)
+#  endif
+  PERL_TSA_RELEASE(PL_op_mutex)
+#endif
 {
 #if defined(USE_ITHREADS)
     dVAR;
@@ -4519,6 +4537,9 @@ Perl_parse_unicode_opts(pTHX_ const char **popt)
                     else
                         Perl_croak(aTHX_ "Unknown Unicode option letter '%c'", *p);
                 }
+            }
+            else {
+                Perl_croak(aTHX_ "Invalid number '%s' for -C option.\n", p);
             }
         }
         else {
@@ -6576,6 +6597,28 @@ Perl_dump_c_backtrace(pTHX_ PerlIO* fp, int depth, int skip)
 }
 
 #endif /* #ifdef USE_C_BACKTRACE */
+
+#ifdef PERL_TSA_ACTIVE
+
+/* pthread_mutex_t and perl_mutex are typedef equivalent
+ * so casting the pointers is fine. */
+
+int perl_tsa_mutex_lock(perl_mutex* mutex)
+{
+    return pthread_mutex_lock((pthread_mutex_t *) mutex);
+}
+
+int perl_tsa_mutex_unlock(perl_mutex* mutex)
+{
+    return pthread_mutex_unlock((pthread_mutex_t *) mutex);
+}
+
+int perl_tsa_mutex_destroy(perl_mutex* mutex)
+{
+    return pthread_mutex_destroy((pthread_mutex_t *) mutex);
+}
+
+#endif
 
 /*
  * ex: set ts=8 sts=4 sw=4 et:

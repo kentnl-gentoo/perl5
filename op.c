@@ -719,7 +719,7 @@ Perl_op_free(pTHX_ OP *o)
          *   * we've errored, as op flags are often left in an
          *     inconsistent state then. Note that an error when
          *     compiling the main program leaves PL_parser NULL, so
-         *     we can't spot faults in the main code, onoly
+         *     we can't spot faults in the main code, only
          *     evaled/required code */
 #ifdef DEBUGGING
         if (   o->op_ppaddr == PL_ppaddr[o->op_type]
@@ -1194,6 +1194,7 @@ Perl_op_null(pTHX_ OP *o)
 
 void
 Perl_op_refcnt_lock(pTHX)
+  PERL_TSA_ACQUIRE(PL_op_mutex)
 {
 #ifdef USE_ITHREADS
     dVAR;
@@ -1204,6 +1205,7 @@ Perl_op_refcnt_lock(pTHX)
 
 void
 Perl_op_refcnt_unlock(pTHX)
+  PERL_TSA_RELEASE(PL_op_mutex)
 {
 #ifdef USE_ITHREADS
     dVAR;
@@ -4154,7 +4156,8 @@ Perl_localize(pTHX_ OP *o, I32 lex)
 		s++;
 
 	    while (1) {
-		if (*s && strchr("@$%*", *s) && *++s
+		if (*s && (strchr("@$%", *s) || (!lex && *s == '*'))
+		       && *++s
 		       && (isWORDCHAR(*s) || UTF8_IS_CONTINUED(*s))) {
 		    s++;
 		    sigil = TRUE;
@@ -8395,7 +8398,8 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 	block->op_next = 0;
         if (ps && !*ps && !attrs && !CvLVALUE(PL_compcv))
             const_sv =
-                S_op_const_sv(aTHX_ start, PL_compcv, CvCLONE(PL_compcv));
+                S_op_const_sv(aTHX_ start, PL_compcv,
+                                        cBOOL(CvCLONE(PL_compcv)));
         else
             const_sv = NULL;
     }
@@ -11155,11 +11159,20 @@ OP *
 Perl_ck_entersub_args_list(pTHX_ OP *entersubop)
 {
     OP *aop;
+
     PERL_ARGS_ASSERT_CK_ENTERSUB_ARGS_LIST;
+
     aop = cUNOPx(entersubop)->op_first;
     if (!OpHAS_SIBLING(aop))
 	aop = cUNOPx(aop)->op_first;
     for (aop = OpSIBLING(aop); OpHAS_SIBLING(aop); aop = OpSIBLING(aop)) {
+        /* skip the extra attributes->import() call implicitly added in
+         * something like foo(my $x : bar)
+         */
+        if (   aop->op_type == OP_ENTERSUB
+            && (aop->op_flags & OPf_WANT) == OPf_WANT_VOID
+        )
+            continue;
         list(aop);
         op_lvalue(aop, OP_ENTERSUB);
     }
@@ -13114,6 +13127,11 @@ Perl_rpeep(pTHX_ OP *o)
 	}
 
       redo:
+
+        /* oldoldop -> oldop -> o should be a chain of 3 adjacent ops */
+        assert(!oldoldop || oldoldop->op_next == oldop);
+        assert(!oldop    || oldop->op_next    == o);
+
 	/* By default, this op has now been optimised. A couple of cases below
 	   clear this again.  */
 	o->op_opt = 1;
@@ -13435,9 +13453,10 @@ Perl_rpeep(pTHX_ OP *o)
 		    op_null(o);
 		    if (oldop)
 			oldop->op_next = nextop;
+                    o = nextop;
 		    /* Skip (old)oldop assignment since the current oldop's
 		       op_next already points to the next op.  */
-		    continue;
+		    goto redo;
 		}
 	    }
 	    break;
@@ -13649,9 +13668,17 @@ Perl_rpeep(pTHX_ OP *o)
                     break;
 
                 /* there's a biggest base we can fit into a
-                 * SAVEt_CLEARPADRANGE in pp_padrange */
-                if (intro && base >
-                        (UV_MAX >> (OPpPADRANGE_COUNTSHIFT+SAVE_TIGHT_SHIFT)))
+                 * SAVEt_CLEARPADRANGE in pp_padrange.
+                 * (The sizeof() stuff will be constant-folded, and is
+                 * intended to avoid getting "comparison is always false"
+                 * compiler warnings)
+                 */
+                if (   intro
+                    && (8*sizeof(base) >
+                        8*sizeof(UV)-OPpPADRANGE_COUNTSHIFT-SAVE_TIGHT_SHIFT
+                        ? base : 0) >
+                        (UV_MAX >> (OPpPADRANGE_COUNTSHIFT+SAVE_TIGHT_SHIFT))
+                )
                     break;
 
                 /* Success! We've got another valid pad op to optimise away */
@@ -13834,7 +13861,8 @@ Perl_rpeep(pTHX_ OP *o)
 		    oldoldop = NULL;
 		    goto redo;
 		}
-		o = oldop;
+		o = oldop->op_next;
+                goto redo;
 	    }
 	    else if (o->op_next->op_type == OP_RV2SV) {
 		if (!(o->op_next->op_private & OPpDEREF)) {
@@ -14131,6 +14159,11 @@ Perl_rpeep(pTHX_ OP *o)
 	    op_null(o);
 	    enter->op_private |= OPpITER_REVERSED;
 	    iter->op_private |= OPpITER_REVERSED;
+
+            oldoldop = NULL;
+            oldop    = ourlast;
+            o        = oldop->op_next;
+            goto redo;
 	    
 	    break;
 	}

@@ -3357,10 +3357,7 @@ S_scan_const(pTHX_ char *start)
 		}
 
 	      NUM_ESCAPE_INSERT:
-		/* Insert oct or hex escaped character.  There will always be
-		 * enough room in sv since such escapes will be longer than any
-		 * UTF-8 sequence they can end up as, except if they force us
-		 * to recode the rest of the string into utf8 */
+		/* Insert oct or hex escaped character. */
 		
 		/* Here uv is the ordinal of the next character being added */
 		if (UVCHR_IS_INVARIANT(uv)) {
@@ -3388,6 +3385,20 @@ S_scan_const(pTHX_ char *start)
                     }
 
                     if (has_utf8) {
+                       /* Usually, there will already be enough room in 'sv'
+                        * since such escapes are likely longer than any UTF-8
+                        * sequence they can end up as.  This isn't the case on
+                        * EBCDIC where \x{40000000} contains 12 bytes, and the
+                        * UTF-8 for it contains 14.  And, we have to allow for
+                        * a trailing NUL.  It probably can't happen on ASCII
+                        * platforms, but be safe */
+                        const STRLEN needed = d - SvPVX(sv) + UVCHR_SKIP(uv)
+                                            + 1;
+                        if (UNLIKELY(needed > SvLEN(sv))) {
+                            SvCUR_set(sv, d - SvPVX_const(sv));
+                            d = sv_grow(sv, needed) + SvCUR(sv);
+                        }
+
 		        d = (char*)uvchr_to_utf8((U8*)d, uv);
 			if (PL_lex_inwhat == OP_TRANS
                             && PL_sublex_info.sub_op)
@@ -3582,7 +3593,7 @@ S_scan_const(pTHX_ char *start)
                                                   /* The regex compiler is
                                                    * expecting Unicode, not
                                                    * native */
-                                                  (U8) NATIVE_TO_LATIN1(*str));
+                                                  NATIVE_TO_LATIN1(*str));
                                     PERL_MY_SNPRINTF_POST_GUARD(len,
                                                            sizeof(hex_string));
                                     Copy(hex_string, d, 3, char);
@@ -9617,12 +9628,14 @@ S_scan_heredoc(pTHX_ char *s)
     else
     {
       SV *linestr_save;
+      char *oldbufptr_save;
      streaming:
       sv_setpvs(tmpstr,"");   /* avoid "uninitialized" warning */
       term = PL_tokenbuf[1];
       len--;
       linestr_save = PL_linestr; /* must restore this afterwards */
       d = s;			 /* and this */
+      oldbufptr_save = PL_oldbufptr;
       PL_linestr = newSVpvs("");
       PL_bufend = SvPVX(PL_linestr);
       while (1) {
@@ -9639,6 +9652,7 @@ S_scan_heredoc(pTHX_ char *s)
 	       restore PL_linestr. */
 	    SvREFCNT_dec_NN(PL_linestr);
 	    PL_linestr = linestr_save;
+            PL_oldbufptr = oldbufptr_save;
 	    goto interminable;
 	}
 	CopLINE_set(PL_curcop, origline);
@@ -9673,6 +9687,7 @@ S_scan_heredoc(pTHX_ char *s)
 	    PL_linestr = linestr_save;
 	    PL_linestart = SvPVX(linestr_save);
 	    PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
+            PL_oldbufptr = oldbufptr_save;
 	    s = d;
 	    break;
 	}
@@ -10505,6 +10520,7 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
                                 hexfp_uquad |= b;
                                 hexfp_frac_bits += shift2;
 #else /* HEXFP_NV */
+                                PERL_UNUSED_VAR(shift2);
                                 hexfp_nv += b * mult;
                                 mult /= 16.0;
 #endif
@@ -11377,10 +11393,7 @@ Perl_scan_vstring(pTHX_ const char *s, const char *const e, SV *sv)
 					 "Integer overflow in decimal number");
 		}
 	    }
-#ifdef EBCDIC
-	    if (rev > 0x7FFFFFFF)
-		 Perl_croak(aTHX_ "In EBCDIC the v-string components cannot exceed 2147483647");
-#endif
+
 	    /* Append native character for the rev point */
 	    tmpend = uvchr_to_utf8(tmpbuf, rev);
 	    sv_catpvn(sv, (const char*)tmpbuf, tmpend - tmpbuf);

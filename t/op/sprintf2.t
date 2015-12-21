@@ -67,6 +67,10 @@ if ($Config{nvsize} == 8 &&
         [ '% 20.10a', '3.14',   '   0x1.91eb851eb8p+1' ],
         [ '%020.10a', '3.14',   '0x0001.91eb851eb8p+1' ],
 
+        [ '%.13a',    '1',   '0x1.0000000000000p+0' ],
+        [ '%.13a',    '-1',  '-0x1.0000000000000p+0' ],
+        [ '%.13a',    '0',   '0x0.0000000000000p+0' ],
+
         [ '%30a',  '3.14',   '          0x1.91eb851eb851fp+1' ],
         [ '%-30a', '3.14',   '0x1.91eb851eb851fp+1          ' ],
         [ '%030a',  '3.14',  '0x00000000001.91eb851eb851fp+1' ],
@@ -243,7 +247,7 @@ if ($Config{nvsize} == 8 &&
     print "# no hexfloat tests\n";
 }
 
-plan tests => 1408 + ($Q ? 0 : 12) + @hexfloat + 6;
+plan tests => 1408 + ($Q ? 0 : 12) + @hexfloat + 9;
 
 use strict;
 use Config;
@@ -576,23 +580,27 @@ $o::count = 0;
 is $o::count,    0, 'sprintf %d string overload count is 0';
 is $o::numcount, 1, 'sprintf %d number overload count is 1';
 
-my $ppc64_linux = $Config{archname} =~ /^ppc64-linux/;
-my $irix_ld     = $Config{archname} =~ /^IP\d+-irix-ld$/;
+my $ppc_linux = $Config{archname} =~ /^(?:ppc|power(?:pc)?)(?:64)?-linux/;
+my $irix_ld   = $Config{archname} =~ /^IP\d+-irix-ld$/;
 
 for my $t (@hexfloat) {
     my ($format, $arg, $expected) = @$t;
     $arg = eval $arg;
     my $result = sprintf($format, $arg);
     my $ok = $result eq $expected;
-    if ($doubledouble && $ppc64_linux && $arg =~ /^2.71828/) {
-        # ppc64-linux has buggy exp(1).
+    # For certain platforms (all of which are currently double-double,
+    # but different implementations, GNU vs vendor, two different archs
+    # (ppc and mips), and two different libm interfaces) we have some
+    # bits-in-the-last-hexdigit differences.
+    # Patch them up as TODOs instead of deadly errors.
+    if ($doubledouble && $ppc_linux && $arg =~ /^2.71828/) {
+        # gets  '0x1.5bf0a8b1457695355fb8ac404ecp+1'
+        # wants '0x1.5bf0a8b1457695355fb8ac404e8p+1'
         local $::TODO = "$Config{archname} exp(1)";
         ok($ok, "'$format' '$arg' -> '$result' cf '$expected'");
         next;
     }
     if ($doubledouble && $irix_ld && $arg =~ /^1.41421/) {
-        # irix has buggy sqrt(2),
-        # last hexdigit one bit error:
         # gets  '0x1.6a09e667f3bcc908b2fb1366eacp+0'
         # wants '0x1.6a09e667f3bcc908b2fb1366ea8p+0'
         local $::TODO = "$Config{archname} sqrt(2)";
@@ -661,8 +669,17 @@ for my $t (@hexfloat) {
 
 # double-double long double %a special testing.
 SKIP: {
-    skip("$^O doublekind=$Config{doublekind}", 6)
-        unless ($Config{doublekind} == 4 && $^O eq 'linux');
+    skip("uselongdouble=" . ($Config{uselongdouble} ? 'define' : 'undef')
+         . " longdblkind=$Config{longdblkind} os=$^O", 6)
+        unless ($Config{uselongdouble} &&
+                ($Config{longdblkind} == 5 ||
+                 $Config{longdblkind} == 6)
+                # Gating on 'linux' (ppc) here is due to the differing
+                # double-double implementations: other (also big-endian)
+                # double-double platforms (e.g. AIX on ppc or IRIX on mips)
+                # do not behave similarly.
+                && $^O eq 'linux'
+                );
     # [rt.perl.org 125633]
     like(sprintf("%La\n", (2**1020) + (2**-1072)),
          qr/^0x1.0{522}1p\+1020$/);
@@ -676,4 +693,12 @@ SKIP: {
          qr/^0x1.0{523}1p\+1023$/);
     like(sprintf("%La\n", (2**1023) + (2**-1074)),
          qr/^0x1.0{524}8p\+1023$/);
+}
+
+SKIP: {
+    skip("negative zero not available\n", 3)
+        unless sprintf('%+f', -0.0) =~ /^-0/;
+    is(sprintf("%a", -0.0), "-0x0p+0", "negative zero");
+    is(sprintf("%+a", -0.0), "-0x0p+0", "negative zero");
+    is(sprintf("%.13a", -0.0), "-0x0.0000000000000p+0", "negative zero");
 }

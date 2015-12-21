@@ -131,8 +131,9 @@ Perl_markstack_grow(pTHX)
     Renew(PL_markstack, newmax, I32);
     PL_markstack_max = PL_markstack + newmax;
     PL_markstack_ptr = PL_markstack + oldmax;
-    DEBUG_s(PerlIO_printf(Perl_debug_log, "MARK grow %p %d by %d\n",
-            PL_markstack_ptr, *PL_markstack_ptr, oldmax));
+    DEBUG_s(DEBUG_v(PerlIO_printf(Perl_debug_log,
+            "MARK grow %p %"IVdf" by %"IVdf"\n",
+            PL_markstack_ptr, (IV)*PL_markstack_ptr, (IV)oldmax)));
     return PL_markstack_ptr;
 }
 
@@ -296,6 +297,19 @@ Perl_save_set_svflags(pTHX_ SV* sv, U32 mask, U32 val)
     SS_ADD_UV(SAVEt_SET_SVFLAGS);
     SS_ADD_END(4);
 }
+
+/*
+=for apidoc save_gp
+
+Saves the current GP of gv on the save stack to be restored on scope exit.
+
+If empty is true, replace the GP with a new GP.
+
+If empty is false, mark gv with GVf_INTRO so the next reference
+assigned is localized, which is how C< local *foo = $someref; > works.
+
+=cut
+*/
 
 void
 Perl_save_gp(pTHX_ GV *gv, I32 empty)
@@ -840,9 +854,18 @@ Perl_leave_scope(pTHX_ I32 base)
 	    *svp = ARG0_SV;
 	    SvREFCNT_dec(sv);
             if (UNLIKELY(SvSMAGICAL(ARG0_SV))) {
+                /* mg_set could die, skipping the freeing of ARG0_SV and
+                 * refsv; Ensure that they're always freed in that case */
+                dSS_ADD;
+                SS_ADD_PTR(ARG0_SV);
+                SS_ADD_UV(SAVEt_FREESV);
+                SS_ADD_PTR(refsv);
+                SS_ADD_UV(SAVEt_FREESV);
+                SS_ADD_END(4);
                 PL_localizing = 2;
                 mg_set(ARG0_SV);
                 PL_localizing = 0;
+                break;
             }
 	    SvREFCNT_dec_NN(ARG0_SV);
 	    SvREFCNT_dec(refsv);
@@ -897,23 +920,25 @@ Perl_leave_scope(pTHX_ I32 base)
 	case SAVEt_AV:				/* array reference */
 	    SvREFCNT_dec(GvAV(ARG1_GV));
 	    GvAV(ARG1_GV) = ARG0_AV;
+          avhv_common:
             if (UNLIKELY(SvSMAGICAL(ARG0_SV))) {
+                /* mg_set might die, so make sure ARG1 isn't leaked */
+                dSS_ADD;
+                SS_ADD_PTR(ARG1_SV);
+                SS_ADD_UV(SAVEt_FREESV);
+                SS_ADD_END(2);
                 PL_localizing = 2;
                 mg_set(ARG0_SV);
                 PL_localizing = 0;
+                break;
             }
 	    SvREFCNT_dec_NN(ARG1_GV);
 	    break;
 	case SAVEt_HV:				/* hash reference */
 	    SvREFCNT_dec(GvHV(ARG1_GV));
 	    GvHV(ARG1_GV) = ARG0_HV;
-            if (UNLIKELY(SvSMAGICAL(ARG0_SV))) {
-                PL_localizing = 2;
-                mg_set(ARG0_SV);
-                PL_localizing = 0;
-            }
-	    SvREFCNT_dec_NN(ARG1_GV);
-	    break;
+            goto avhv_common;
+
 	case SAVEt_INT_SMALL:
 	    *(int*)ARG0_PTR = (int)(uv >> SAVE_TIGHT_SHIFT);
 	    break;
