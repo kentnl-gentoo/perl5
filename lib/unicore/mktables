@@ -1389,6 +1389,7 @@ my $has_hangul_syllables = 0;
 my $needing_code_points_ending_in_code_point = 0;
 
 my @backslash_X_tests;     # List of tests read in for testing \X
+my @LB_tests;              # List of tests read in for testing \b{lb}
 my @SB_tests;              # List of tests read in for testing \b{sb}
 my @WB_tests;              # List of tests read in for testing \b{wb}
 my @unhandled_properties;  # Will contain a list of properties found in
@@ -2284,6 +2285,15 @@ sub trace { return main::trace(@_); }
     # may not be the actual reality, but probably nobody cares anyway for
     # these obsolete characters.)
     #
+    # [3] if present is the default value for the property to assign for code
+    # points not given in the input.  If not present, the default from the
+    # normal property is used
+    #
+    # [4] if present must be the string 'ONLY_EARLY'.  Normally, when
+    # compiling Unicode versions that don't invoke the early handling, the
+    # name in [1] is added as an alias to the property name used for these.
+    # This parameter says to not do this.
+    #
     # Not all files can be handled in the above way, and so the code ref
     # alternative is available.  It can do whatever it needs to.  The other
     # array elements are optional in this case, and the code is free to use or
@@ -2404,6 +2414,11 @@ sub trace { return main::trace(@_); }
         my $progress;
         my $function_instead_of_file = 0;
 
+        if ($early{$addr}->@* > 4 && $early{$addr}[4] ne 'ONLY_EARLY') {
+            Carp::my_carp_bug("If present, element [4] in 'Early => [ ... ]'"
+                            . " must be the string 'ONLY_EARLY'");
+        }
+
         # If we are compiling a Unicode release earlier than the file became
         # available, the constructor may have supplied a substitute
         if ($first_released{$addr} gt $v_version && $early{$addr}->@*) {
@@ -2428,10 +2443,13 @@ sub trace { return main::trace(@_); }
                                                 Perl_Extension => 1,
                                                 );
 
-                # Use the default mapping for the regular property for this
-                # substitute one.
-                if (    defined $property{$addr}
-                    &&  defined $default_mapping{$property{$addr}})
+                # If not specified by the constructor, use the default mapping
+                # for the regular property for this substitute one.
+                if ($early{$addr}[3]) {
+                    $prop_object->set_default_map($early{$addr}[3]);
+                }
+                elsif (    defined $property{$addr}
+                       &&  defined $default_mapping{$property{$addr}})
                 {
                     $prop_object
                         ->set_default_map($default_mapping{$property{$addr}});
@@ -2479,7 +2497,7 @@ END
                 push $each_line_handler{$addr}->@*, \&_exclude_unassigned;
 
                 if (   $v_version lt v2.0        # Hanguls in this release ...
-                    && defined $early{$addr}[3]) # ... need special treatment
+                    && defined $early{$addr}[4]) # ... need special treatment
                 {
                     push $eof_handler{$addr}->@*, \&_fixup_obsolete_hanguls;
                 }
@@ -2701,7 +2719,9 @@ END
                 # will work regardless.
                 if (! $early{$addr}[0] && $early{$addr}->@* > 2) {
                     my $early_property_name = $early{$addr}[2];
-                    if ($property{$addr} ne $early_property_name) {
+                    if (   $property{$addr} ne $early_property_name
+                        && $early{$addr}->@* < 5)
+                    {
                         main::property_ref($property{$addr})
                                             ->add_alias($early_property_name);
                     }
@@ -12032,6 +12052,18 @@ sub process_GCB_test {
     return;
 }
 
+sub process_LB_test {
+
+    my $file = shift;
+    Carp::carp_extra_args(\@_) if main::DEBUG && @_;
+
+    while ($file->next_line) {
+        push @LB_tests, $_;
+    }
+
+    return;
+}
+
 sub process_SB_test {
 
     my $file = shift;
@@ -15039,6 +15071,87 @@ END
                                UCD => 0,
                                Status => $alias->status,
                                OK_as_Filename => 0);
+        }
+    }
+
+    # Perl tailors the WordBreak property so that \b{wb} doesn't split
+    # adjacent spaces into separate words.  First create a copy of the regular
+    # WB property as '_Perl_WB'.  (On Unicode releases earlier than when WB
+    # was defined for, this will already have been done by the substitute file
+    # portion for 'Input_file' code for WB.)
+    my $perl_wb = property_ref('_Perl_WB');
+    if (! defined $perl_wb) {
+        $perl_wb = Property->new('_Perl_WB',
+                                 Fate => $INTERNAL_ONLY,
+                                 Perl_Extension => 1,
+                                 Directory => $map_directory,
+                                 Type => $STRING);
+        my $wb = property_ref('Word_Break');
+        $perl_wb->initialize($wb);
+        $perl_wb->set_default_map($wb->default_map);
+    }
+
+    # And simply replace the mappings of horizontal space characters that
+    # otherwise would map to the default to instead map to our tailoring.
+    my $default = $perl_wb->default_map;
+    for my $range ($Blank->ranges) {
+        for my $i ($range->start .. $range->end) {
+            next unless $perl_wb->value_of($i) eq $default;
+            $perl_wb->add_map($i, $i, 'Perl_Tailored_HSpace',
+                              Replace => $UNCONDITIONALLY);
+        }
+    }
+
+    # Create a version of the LineBreak property with the mappings that are
+    # omitted in the default algorithm remapped to what
+    # http://www.unicode.org/reports/tr14 says they should be.
+    #
+    # Original 	   Resolved  General_Category
+    # AI, SG, XX      AL      Any
+    # SA              CM      Only Mn or Mc
+    # SA              AL      Any except Mn and Mc
+    # CJ              NS      Any
+    my $perl_lb = property_ref('_Perl_LB');
+    if (! defined $perl_lb) {
+        $perl_lb = Property->new('_Perl_LB',
+                                 Fate => $INTERNAL_ONLY,
+                                 Perl_Extension => 1,
+                                 Directory => $map_directory,
+                                 Type => $STRING);
+        my $lb = property_ref('Line_Break');
+        $perl_lb->initialize($lb);
+    }
+    $perl_lb->set_default_map('AL');
+
+    # It's a little iffy relying on Unicode to not change which property value
+    # synonym they use, but if they do, tests should start failing and we can
+    # fix this up
+    for my $range ($perl_lb->ranges) {
+        my $value = standardize($range->value);
+        if (   $value eq standardize('Unknown')
+            || $value eq standardize('XX')
+            || $value eq standardize('AI')
+            || $value eq standardize('SG'))
+        {
+            $perl_lb->add_map($range->start, $range->end, 'AL',
+                              Replace => $UNCONDITIONALLY);
+        }
+        elsif ($value eq standardize('CJ')) {
+            $perl_lb->add_map($range->start, $range->end, 'NS',
+                              Replace => $UNCONDITIONALLY);
+        }
+        elsif ($value eq standardize('SA')) {
+            for my $i ($range->start .. $range->end) {
+                my $gc_val = $gc->value_of($i);
+                if ($gc_val eq 'Mn' || $gc_val eq 'Mc') {
+                    $perl_lb->add_map($i, $i, 'CM',
+                                      Replace => $UNCONDITIONALLY);
+                }
+                else {
+                    $perl_lb->add_map($i, $i, 'AL',
+                                      Replace => $UNCONDITIONALLY);
+                }
+            }
         }
     }
 
@@ -18517,7 +18630,9 @@ sub make_property_test_script() {
                     }
                 }
             }
+            $table->DESTROY();
         }
+        $property->DESTROY();
     }
 
     &write($t_path,
@@ -18526,6 +18641,7 @@ sub make_property_test_script() {
             <DATA>,
             @output,
             (map {"Test_GCB('$_');\n"} @backslash_X_tests),
+            (map {"Test_LB('$_');\n"} @LB_tests),
             (map {"Test_SB('$_');\n"} @SB_tests),
             (map {"Test_WB('$_');\n"} @WB_tests),
             "Finished();\n"
@@ -18790,6 +18906,13 @@ my @input_file_objects = (
                     Each_Line_Handler => (($v_version lt v3.1.0)
                                         ? \&filter_early_ea_lb
                                         : undef),
+                    Early => [ "LBsubst.txt", '_Perl_LB', 'AL',
+                               'AL', # default
+
+                               # Don't use _Perl_LB as a synonym for
+                               # Line_Break in later perls, as it is tailored
+                               # and isn't the same as Line_Break
+                               'ONLY_EARLY' ],
                    ),
     Input_file->new('EastAsianWidth.txt', v3.0.0,
                     Property => 'East_Asian_Width',
@@ -18913,7 +19036,12 @@ my @input_file_objects = (
                     Skip => $Documentation,
                    ),
     Input_file->new("$AUXILIARY/WordBreakProperty.txt", v4.1.0,
-                    Early => [ "WBsubst.txt", '_Perl_WB', 'ALetter' ],
+                    Early => [ "WBsubst.txt", '_Perl_WB', 'ALetter',
+
+                               # Don't use _Perl_WB as a synonym for
+                               # Word_Break in later perls, as it is tailored
+                               # and isn't the same as Word_Break
+                               'ONLY_EARLY' ],
                     Property => 'Word_Break',
                     Has_Missings_Defaults => $NOT_IGNORED,
                    ),
@@ -18985,7 +19113,7 @@ my @input_file_objects = (
                           . 'F<NamedSequences.txt> and recompile perl',
                    ),
     Input_file->new("$AUXILIARY/LBTest.txt", v5.1.0,
-                    Skip => $Validation,
+                    Handler => \&process_LB_test,
                    ),
     Input_file->new("$AUXILIARY/LineBreakTest.html", v5.1.0,
                     Skip => $Validation_Documentation,
@@ -19555,6 +19683,9 @@ if (defined &locales_enabled) {
     }
 }
 
+# Eval'd so can run on versions earlier than the property is available in
+my $WB_Extend_or_Format_re = eval 'qr/[\p{WB=Extend}\p{WB=Format}]/';
+
 sub _test_break($$) {
     # Test various break property matches.  The 2nd parameter gives the
     # property name.  The input is a line from auxiliary/*Test.txt for the
@@ -19589,6 +19720,61 @@ sub _test_break($$) {
         use bytes;
         $template =~ s/$nobreak_utf8/$nobreak/g;
         $template =~ s/$breakable_utf8/$breakable/g;
+    }
+
+    # Perl customizes wb.  So change the official tests accordingly
+    if ($break_type eq 'wb' && $WB_Extend_or_Format_re) {
+
+        # Split into elements that alternate between code point and
+        # break/no-break
+        my @line = split / +/, $template;
+
+        # Look at each code point and its following one
+        for (my $i = 1; $i <  @line - 1 - 1; $i+=2) {
+
+            # The customization only involves changing some breaks to
+            # non-breaks.
+            next if $line[$i+1] =~ /$nobreak/;
+
+            my $lhs = chr hex $line[$i];
+            my $rhs = chr hex $line[$i+2];
+
+            # And it only affects adjacent space characters.
+            next if $lhs !~ /\s/u;
+
+            # But, we want to make sure to test spaces followed by a Extend
+            # or Format.
+            next if $rhs !~ /\s|$WB_Extend_or_Format_re/;
+
+            # To test the customization, add some white-space before this to
+            # create a span.  The $lhs white space may or may not be bound to
+            # that span, and also with the $rhs.  If the $rhs is a binding
+            # character, the $lhs is bound to it and not to the span, unless
+            # $lhs is vertical space.  In all other cases, the $lhs is bound
+            # to the span.  If the $rhs is white space, it is bound to the
+            # $lhs
+            my $bound;
+            my $span;
+            if ($rhs =~ /$WB_Extend_or_Format_re/) {
+                if ($lhs =~ /\v/) {
+                    $bound = $breakable;
+                    $span = $nobreak;
+                }
+                else {
+                    $bound = $nobreak;
+                    $span = $breakable;
+                }
+            }
+            else {
+                $span = $nobreak;
+                $bound = $nobreak;
+            }
+
+            splice @line, $i, 0, ( '0020', $nobreak, '0020', $span);
+            $i += 4;
+            $line[$i+1] = $bound;
+        }
+        $template = join " ", @line;
     }
 
     # The input is just the break/no-break symbols and sequences of Unicode
@@ -19635,7 +19821,7 @@ sub _test_break($$) {
 
         my @modifiers = qw(a aa d u i);
         if ($are_ctype_locales_available) {
-            push @modifiers, "l" if defined &find_utf8_ctype_locale;
+            push @modifiers, "l$utf8_locale" if defined $utf8_locale;
 
             # The /l modifier has C after it to indicate the locale to try
             push @modifiers, "lC";
@@ -19694,7 +19880,7 @@ sub _test_break($$) {
                 }
                 print " correctly matched $should_display[$i]; line $line\n";
             } else {
-                $matches[$i] = join("", map { sprintf "\\x{%04X}", $_ }
+                $matches[$i] = join("", map { sprintf "\\x{%04X}", ord $_ }
                                                     split "", $matches[$i]);
                 print "not ok $Tests - In \"$display_string\" =~ /(\\X)/g, \\X #",
                     $i + 1,
@@ -19721,6 +19907,10 @@ sub Test_GCB($) {
     _test_break(shift, 'gcb');
 }
 
+sub Test_LB($) {
+    _test_break(shift, 'lb');
+}
+
 sub Test_SB($) {
     _test_break(shift, 'sb');
 }
@@ -19739,3 +19929,10 @@ Test_GCB("1100 $nobreak 1161");  # Bug #70940
 Expect(0, 0x2028, '\p{Print}', ""); # Bug # 71722
 Expect(0, 0x2029, '\p{Print}', ""); # Bug # 71722
 Expect(1, 0xFF10, '\p{XDigit}', ""); # Bug # 71726
+
+# Make sure this gets tested; it was not part of the official test suite at
+# the time this was addded.  Note that this is as it would appear in the
+# official suite, and gets modified to check for the perl tailoring by
+# Test_WB()
+Test_WB("$breakable 0020 $breakable 0020 $breakable 0308 $breakable");
+Test_LB("$nobreak 200B $nobreak 0020 $nobreak 0020 $breakable 2060 $breakable");

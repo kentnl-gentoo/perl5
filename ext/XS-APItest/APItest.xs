@@ -1521,7 +1521,7 @@ xsreturn_iv()
 void
 xsreturn_uv()
     PPCODE:
-        XSRETURN_UV( (U32)((1<<31) + 1) );
+        XSRETURN_UV( (U32)((1U<<31) + 1) );
 
 void
 xsreturn_nv()
@@ -5517,3 +5517,12 @@ has_backrefs(SV *sv)
     OUTPUT:
         RETVAL
 
+#if defined(WIN32) && defined(PERL_IMPLICIT_SYS)
+
+const char *
+PerlDir_mapA(const char *path)
+
+const WCHAR *
+PerlDir_mapW(const WCHAR *wpath)
+
+#endif

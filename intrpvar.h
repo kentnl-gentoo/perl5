@@ -190,11 +190,6 @@ PERLVAR(I, statcache,	Stat_t)		/* _ */
 PERLVAR(I, statgv,	GV *)
 PERLVARI(I, statname,	SV *,	NULL)
 
-#ifdef HAS_TIMES
-/* Will be removed soon after v5.23.6. See RT #121351 */
-PERLVAR(I, timesbuf,	struct tms)
-#endif
-
 /*
 =for apidoc mn|SV*|PL_rs
 
@@ -624,6 +619,7 @@ PERLVARA(I, utf8_swash_ptrs, POSIX_SWASH_COUNT, SV *)
 PERLVARA(I, Posix_ptrs, POSIX_CC_COUNT, SV *)
 PERLVARA(I, XPosix_ptrs, POSIX_CC_COUNT, SV *)
 PERLVAR(I, GCB_invlist, SV *)
+PERLVAR(I, LB_invlist, SV *)
 PERLVAR(I, SB_invlist, SV *)
 PERLVAR(I, WB_invlist, SV *)
 
@@ -766,7 +762,7 @@ PERLVARI(I, globhook,	globhook_t, NULL)
 
 PERLVARI(I, padlist_generation, U32, 1)	/* id to identify padlist clones */
 
-/* The last unconditional member of the interpreter structure when 5.23.6 was
+/* The last unconditional member of the interpreter structure when 5.18.0 was
    released. The offset of the end of this is baked into a global variable in 
    any shared perl library which will allow a sanity test in future perl
    releases.  */
@@ -780,8 +776,11 @@ PERLVARI(I, my_cxt_keys, const char **, NULL) /* per-module array of pointers to
 #  endif
 #endif
 
-#ifdef PERL_TRACK_MEMPOOL
-/* For use with the memory debugging code in util.c  */
+#if defined(PERL_IMPLICIT_CONTEXT) || defined(PERL_DEBUG_READONLY_COW)
+/* For use with the memory debugging code in util.c. This is used only in
+ * DEBUGGING builds (as long as the relevant structure is defined), but
+ * defining it in non-debug builds too means that we retain binary
+ * compatibility between otherwise-compatible plain and debug builds. */
 PERLVAR(I, memory_debug_header, struct perl_memory_debug_header)
 #endif
 

@@ -2343,6 +2343,13 @@ S_check_hash_fields_and_hekify(pTHX_ UNOP *rop, SVOP *key_op)
             continue;
         svp = cSVOPx_svp(key_op);
 
+        /* make sure it's not a bareword under strict subs */
+        if (key_op->op_private & OPpCONST_BARE &&
+            key_op->op_private & OPpCONST_STRICT)
+        {
+            no_bareword_allowed((OP*)key_op);
+        }
+
         /* Make the CONST have a shared SV */
         if (   !SvIsCOW_shared_hash(sv = *svp)
             && SvTYPE(sv) < SVt_PVMG
@@ -8407,7 +8414,6 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
         const_sv = NULL;
 
     if (SvPOK(gv) || (SvROK(gv) && SvTYPE(SvRV(gv)) != SVt_PVCV)) {
-	assert (block);
 	cv_ckproto_len_flags((const CV *)gv,
 			     o ? (const GV *)cSVOPo->op_sv : NULL, ps,
 			     ps_len, ps_utf8|CV_CKPROTO_CURSTASH);
@@ -12344,7 +12350,8 @@ S_aassign_scan(pTHX_ OP* o, bool rhs, bool top, int *scalars_p)
     default:
         if (PL_opargs[o->op_type] & OA_DANGEROUS) {
             (*scalars_p) += 2;
-            return AAS_DANGEROUS;
+            flags = AAS_DANGEROUS;
+            break;
         }
 
         if (   (PL_opargs[o->op_type] & OA_TARGLEX)

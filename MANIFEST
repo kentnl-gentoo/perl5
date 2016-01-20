@@ -141,8 +141,6 @@ cpan/bignum/lib/bignum.pm		bignum
 cpan/bignum/lib/bigrat.pm		bigrat
 cpan/bignum/lib/Math/BigFloat/Trace.pm	bignum tracing
 cpan/bignum/lib/Math/BigInt/Trace.pm	bignum tracing
-cpan/bignum/t/auth-bigint-hex.t		See if bignum works
-cpan/bignum/t/auth-bigint-oct.t		See if bignum works
 cpan/bignum/t/big_e_pi.t		See if bignum exports e() and PI()
 cpan/bignum/t/bigexp.t			See if bignum works
 cpan/bignum/t/bigint.t			See if bigint works
@@ -1654,8 +1652,6 @@ cpan/Math-BigInt/t/bigints.t		See if BigInt.pm works
 cpan/Math-BigInt/t/biglog.t		Test the log function
 cpan/Math-BigInt/t/big_pi_e.t		test bpi() and bexp()
 cpan/Math-BigInt/t/bigroot.t		Test the broot function
-cpan/Math-BigInt/t/blog-mbf.t		Math::BigInt tests
-cpan/Math-BigInt/t/blog-mbi.t		Math::BigInt tests
 cpan/Math-BigInt/t/calling.t		Test calling conventions
 cpan/Math-BigInt/t/config.t		Test Math::BigInt->config()
 cpan/Math-BigInt/t/constant.t		Test Math::BigInt/BigFloat under :constant
@@ -1864,43 +1860,57 @@ cpan/Pod-Escapes/lib/Pod/Escapes.pm	Pod::Escapes
 cpan/Pod-Escapes/t/01_about_verbose.t	test Pod::Escapes
 cpan/Pod-Escapes/t/10_main.t		test Pod::Escapes
 cpan/Pod-Escapes/t/15_name2charnum.t	test Pod::Escapes
+cpan/podlators/bin/pod2man			Translator to turn pod into manpage
+cpan/podlators/bin/pod2text			Translator to turn pod into text
 cpan/podlators/lib/Pod/Man.pm			Convert POD data to *roff
 cpan/podlators/lib/Pod/ParseLink.pm		Perl an L<> formatting code in POD text
 cpan/podlators/lib/Pod/Text/Color.pm		Convert POD data to color ASCII text
 cpan/podlators/lib/Pod/Text/Overstrike.pm	Convert POD data to formatted overstrike text
 cpan/podlators/lib/Pod/Text.pm			Pod-Parser - convert POD data to formatted ASCII text
 cpan/podlators/lib/Pod/Text/Termcap.pm		Convert POD data to ASCII text with format escapes
-cpan/podlators/scripts/pod2man.PL	Precursor for translator to turn pod into manpage
-cpan/podlators/scripts/pod2text.PL	Precursor for translator to turn pod into text
-cpan/podlators/t/basic.cap			podlators test
-cpan/podlators/t/basic.clr			podlators test
-cpan/podlators/t/basic.man			podlators test
-cpan/podlators/t/basic.ovr			podlators test
-cpan/podlators/t/basic.pod			podlators test
-cpan/podlators/t/basic.t			podlators test
-cpan/podlators/t/basic.txt			podlators test
-cpan/podlators/t/color.t			podlators test
-cpan/podlators/t/devise-date.t			podlators test
-cpan/podlators/t/filehandle.t			podlators test
-cpan/podlators/t/man-empty.t			podlators test
-cpan/podlators/t/man-heading.t			podlators test
-cpan/podlators/t/man-options.t			podlators test
-cpan/podlators/t/man-perlio.t				podlators test
-cpan/podlators/t/man.t				podlators test
-cpan/podlators/t/man-utf8.t			podlators test
-cpan/podlators/t/overstrike.t			podlators test
-cpan/podlators/t/parselink.t			podlators test
-cpan/podlators/t/pod-parser.t			podlators test
-cpan/podlators/t/pod-spelling.t			podlators test
-cpan/podlators/t/pod.t				podlators test
-cpan/podlators/t/termcap.t			podlators test
-cpan/podlators/t/text-empty.t			podlators test
-cpan/podlators/t/text-encoding.t		podlators test
-cpan/podlators/t/text-options.t			podlators test
-cpan/podlators/t/text-perlio.t			podlators test
-cpan/podlators/t/text.t				podlators test
-cpan/podlators/t/text-utf8.t			podlators test
-cpan/podlators/VERSION				podlators distribution version
+cpan/podlators/Makefile.PL			podlators Makefile.PL
+cpan/podlators/t/data/basic.cap			podlators test			podlators test
+cpan/podlators/t/data/basic.clr			podlators test
+cpan/podlators/t/data/basic.man			podlators test
+cpan/podlators/t/data/basic.ovr			podlators test
+cpan/podlators/t/data/basic.pod			podlators test
+cpan/podlators/t/data/basic.txt			podlators test
+cpan/podlators/t/data/perl.conf			podlators test
+cpan/podlators/t/data/snippets/man/cpp			podlators test
+cpan/podlators/t/data/snippets/man/utf8-nonbreaking			podlators test
+cpan/podlators/t/data/snippets/man/utf8-verbatim			podlators test
+cpan/podlators/t/data/snippets/README			podlators test
+cpan/podlators/t/data/snippets/text/cpp			podlators test
+cpan/podlators/t/data/termcap			podlators test
+cpan/podlators/t/docs/pod-spelling.t			podlators test
+cpan/podlators/t/docs/pod.t			podlators test
+cpan/podlators/t/docs/synopsis.t			podlators test
+cpan/podlators/t/general/basic.t			podlators test
+cpan/podlators/t/general/filehandle.t			podlators test
+cpan/podlators/t/general/pod-parser.t			podlators test
+cpan/podlators/t/lib/Test/Podlators.pm			podlators test
+cpan/podlators/t/lib/Test/RRA/Config.pm			podlators test
+cpan/podlators/t/lib/Test/RRA.pm			podlators test
+cpan/podlators/t/man/basic.t			podlators test
+cpan/podlators/t/man/devise-date.t			podlators test
+cpan/podlators/t/man/devise-title.t			podlators test
+cpan/podlators/t/man/empty.t			podlators test
+cpan/podlators/t/man/heading.t			podlators test
+cpan/podlators/t/man/options.t			podlators test
+cpan/podlators/t/man/utf8-io.t			podlators test
+cpan/podlators/t/parselink/basic.t			podlators test
+cpan/podlators/t/style/minimum-version.t			podlators test
+cpan/podlators/t/style/module-version.t			podlators test
+cpan/podlators/t/style/strict.t			podlators test
+cpan/podlators/t/text/basic.t			podlators test
+cpan/podlators/t/text/color.t			podlators test
+cpan/podlators/t/text/empty.t			podlators test
+cpan/podlators/t/text/encoding.t			podlators test
+cpan/podlators/t/text/options.t			podlators test
+cpan/podlators/t/text/overstrike.t			podlators test
+cpan/podlators/t/text/perlio.t			podlators test
+cpan/podlators/t/text/termcap.t			podlators test
+cpan/podlators/t/text/utf8.t			podlators test
 cpan/Pod-Parser/lib/Pod/Find.pm			find POD documents in directory trees
 cpan/Pod-Parser/lib/Pod/InputObjects.pm		Pod-Parser - define objects for input streams
 cpan/Pod-Parser/lib/Pod/Parser.pm		Pod-Parser - define base class for parsing POD
@@ -3059,6 +3069,7 @@ dist/Data-Dumper/t/dumper.t	See if Data::Dumper works
 dist/Data-Dumper/t/dumpperl.t	See if Data::Dumper::Dumpperl works
 dist/Data-Dumper/t/freezer.t	See if Data::Dumper::Freezer works
 dist/Data-Dumper/t/freezer_useperl.t	See if Data::Dumper works
+dist/Data-Dumper/t/huge.t	See if Data::Dumper works on huge inputs
 dist/Data-Dumper/t/indent.t	See if Data::Dumper::Indent works
 dist/Data-Dumper/t/lib/Testing.pm	Functions used in testing Data-Dumper
 dist/Data-Dumper/t/misc.t	Miscellaneous tests for Data-Dumper
@@ -4021,6 +4032,7 @@ ext/XS-APItest/t/utf16_to_utf8.t	Test behaviour of utf16_to_utf8{,reversed}
 ext/XS-APItest/t/utf8.t		Tests for code in utf8.c
 ext/XS-APItest/t/weaken.t	XS::APItest: tests for sv_rvweaken() and sv_get_backrefs()
 ext/XS-APItest/t/whichsig.t	XS::APItest: tests for whichsig() and variants
+ext/XS-APItest/t/win32.t	Test Win32 specific APIs
 ext/XS-APItest/t/xs_special_subs_require.t	for require too
 ext/XS-APItest/t/xs_special_subs.t	Test that XS BEGIN/CHECK/INIT/END work
 ext/XS-APItest/t/xsub_h.t	Tests for XSUB.h
@@ -4343,6 +4355,7 @@ lib/Unicode/UCD.t		See if Unicode character database works
 lib/unicore/ArabicShaping.txt			Unicode character database
 lib/unicore/auxiliary/GCBTest.txt	Unicode character database
 lib/unicore/auxiliary/GraphemeBreakProperty.txt	Unicode character database
+lib/unicore/auxiliary/LBTest.txt	Unicode character database
 lib/unicore/auxiliary/SBTest.txt	Unicode character database
 lib/unicore/auxiliary/SentenceBreakProperty.txt	Unicode character database
 lib/unicore/auxiliary/WBTest.txt	Unicode character database
@@ -4631,6 +4644,7 @@ pod/perl5232delta.pod		Perl changes in version 5.23.2
 pod/perl5233delta.pod		Perl changes in version 5.23.3
 pod/perl5234delta.pod		Perl changes in version 5.23.4
 pod/perl5235delta.pod		Perl changes in version 5.23.5
+pod/perl5236delta.pod		Perl changes in version 5.23.6
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5576,6 +5590,7 @@ t/uni/universal.t		See if Unicode in calls to UNIVERSAL works
 t/uni/upper.t			See if Unicode casing works
 t/uni/variables.t		See that the rules for variable names work
 t/uni/write.t			See if Unicode formats work
+t/win32/crypt.t			Test Win32 crypt for compatibility
 t/win32/fs.t			Test Win32 link for compatibility
 t/win32/popen.t			Test for stdout races in backticks, etc
 t/win32/runenv.t		Test if Win* perl honors its env variables
@@ -5611,6 +5626,8 @@ utils/perlivp.PL		installation verification procedure
 utils/piconv.PL			iconv(1), reinvented in perl
 utils/pl2pm.PL			A pl to pm translator
 utils/pod2html.PL		Translator to turn pod into HTML
+utils/pod2man.PL		Convert POD data to formatted *roff input
+utils/pod2text.PL		Convert POD data to formatted ASCII text
 utils/prove.PL			The prove harness utility
 utils/ptardiff.PL		The ptardiff utility
 utils/ptargrep.PL		The ptargrep utility

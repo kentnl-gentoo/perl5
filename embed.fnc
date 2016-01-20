@@ -1591,7 +1591,7 @@ EXMp	|void	|_invlist_dump	|NN PerlIO *file|I32 level   \
 #endif
 Ap	|void	|taint_env
 Ap	|void	|taint_proper	|NULLOK const char* f|NN const char *const s
-Apd	|UV	|to_utf8_case	|NN const U8 *p					\
+ApdD	|UV	|to_utf8_case	|NN const U8 *p					\
 				|NN U8* ustrp					\
 				|NULLOK STRLEN *lenp				\
 				|NN SV **swashp					\
@@ -2096,9 +2096,9 @@ s	|I32	|sv_i_ncmp	|NN SV *const a|NN SV *const b
 s	|I32	|amagic_ncmp	|NN SV *const a|NN SV *const b
 s	|I32	|amagic_i_ncmp	|NN SV *const a|NN SV *const b
 s	|I32	|amagic_cmp	|NN SV *const str1|NN SV *const str2
-#   ifdef USE_LOCALE_COLLATE
+#  ifdef USE_LOCALE_COLLATE
 s	|I32	|amagic_cmp_locale|NN SV *const str1|NN SV *const str2
-#endif
+#  endif
 s	|I32	|sortcv		|NN SV *const a|NN SV *const b
 s	|I32	|sortcv_xsub	|NN SV *const a|NN SV *const b
 s	|I32	|sortcv_stacked	|NN SV *const a|NN SV *const b
@@ -2175,8 +2175,10 @@ Es	|bool	|grok_bslash_N	|NN RExC_state_t *pRExC_state		    \
 				|const U32 depth
 Es	|void	|reginsert	|NN RExC_state_t *pRExC_state \
 				|U8 op|NN regnode *opnd|U32 depth
-Es	|void	|regtail	|NN RExC_state_t *pRExC_state \
-				|NN regnode *p|NN const regnode *val|U32 depth
+Es	|void	|regtail	|NN RExC_state_t * pRExC_state		    \
+				|NN const regnode * const p		    \
+				|NN const regnode * const val		    \
+				|const U32 depth
 Es	|SV *	|reg_scan_name	|NN RExC_state_t *pRExC_state \
 				|U32 flags
 Es	|U32	|join_exact	|NN RExC_state_t *pRExC_state \
@@ -2302,7 +2304,19 @@ Es	|void	|to_utf8_substr	|NN regexp * prog
 Es	|bool	|to_byte_substr	|NN regexp * prog
 ERsn	|I32	|reg_check_named_buff_matched	|NN const regexp *rex \
 						|NN const regnode *scan
-EsnR	|bool	|isGCB		|const GCB_enum before|const GCB_enum after
+EinR	|bool	|isGCB		|const GCB_enum before|const GCB_enum after
+EsR	|bool	|isLB		|LB_enum before				\
+				|LB_enum after				\
+				|NN const U8 * const strbeg		\
+				|NN const U8 * const curpos		\
+				|NN const U8 * const strend		\
+				|const bool utf8_target
+EsR	|LB_enum|advance_one_LB |NN U8 ** curpos				\
+				|NN const U8 * const strend			\
+				|const bool utf8_target
+EsR	|LB_enum|backup_one_LB  |NN const U8 * const strbeg			\
+				|NN U8 ** curpos				\
+				|const bool utf8_target
 EsR	|bool	|isSB		|SB_enum before				\
 				|SB_enum after				\
 				|NN const U8 * const strbeg			\
@@ -2324,7 +2338,8 @@ EsR	|bool	|isWB		|WB_enum previous				\
 				|const bool utf8_target
 EsR	|WB_enum|advance_one_WB |NN U8 ** curpos				\
 				|NN const U8 * const strend			\
-				|const bool utf8_target
+				|const bool utf8_target				\
+				|const bool skip_Extend_Format
 EsR	|WB_enum|backup_one_WB  |NN WB_enum * previous			\
 				|NN const U8 * const strbeg			\
 				|NN U8 ** curpos				\

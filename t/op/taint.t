@@ -17,7 +17,7 @@ BEGIN {
 use strict;
 use Config;
 
-plan tests => 807;
+plan tests => 808;
 
 $| = 1;
 
@@ -1974,9 +1974,16 @@ foreach my $ord (78, 163, 256) {
           # return a null pointer, which Perl converts into undef. We assume
           # for now that all such platforms support glibc-style selection of
           # a different hashing algorithm.
+          # glibc supports MD5, but OpenBSD only supports Blowfish.
           my $alg = '';       # Use default algorithm
-          if ( !defined(crypt("ab", "cd")) ) {
-              $alg = '$5$';   # Use SHA-256
+          if ( !defined(crypt("ab", $alg."cd")) ) {
+              $alg = '$5$';   # Try SHA-256
+          }
+          if ( !defined(crypt("ab", $alg."cd")) ) {
+              $alg = '$2b$12$FPWWO2RJ3CK4FINTw0Hi';  # Try Blowfish
+          }
+          if ( !defined(crypt("ab", $alg."cd")) ) {
+              $alg = ''; # Nothing worked.  Back to default
           }
           my $x = crypt($_[0], $alg . $_[1]);
           $x
@@ -2369,6 +2376,19 @@ is eval { eval $::x.1 }, 1, 'reset does not taint undef';
     is_tainted $n2, "- SETn";
     $n3 = $tn * 2.2;
     is_tainted $n3, "* SETn";
+}
+
+# check that localizing something with get magic (e.g. taint) doesn't
+# upgrade pIOK to IOK
+
+{
+    local our $x = 1.1 + $TAINT0;  # $x should be NOK
+    my $ix = int($x);          #          now NOK, pIOK
+    {
+        local $x = 0;
+    }
+    my $x1 = $x * 1;
+    isnt($x, 1); # it should be 1.1, not 1
 }
 
 

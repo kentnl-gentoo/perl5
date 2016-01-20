@@ -735,6 +735,7 @@ marnix\100gmail.com                     pttesac!marnix!vanam
 marty+p5p\100kasei.com                  marty\100martian.org
 mats\100sm6sxl.net                      mats\100sm5sxl.net
 mbarbon\100dsi.unive.it                 mattia.barbon\100libero.it
++                                       mattia\100barbon.org
 mcmahon\100ibiblio.org                  mcmahon\100metalab.unc.edu
 me\100davidglasser.net                  glasser\100tang-eleven-seventy-nine.mit.edu
 merijnb\100iloquent.nl                  merijnb\100ms.com
@@ -914,7 +915,8 @@ stef\100mongueurs.net                   stef\100payrard.net
 +                                       s.payrard\100wanadoo.fr
 +                                       properler\100freesurf.fr
 +                                       stef\100francenet.fr
-stevan\100cpan.org                      stevan.little\100iinteractive.com
+stevan\100cpan.org                      stevan.little\100gmail.com
++                                       stevan.little\100iinteractive.com
 sthoenna\100efn.org                     ysth\100raven.shiftboard.com
 sisyphus1\100optusnet.com.au            sisyphus\100cpan.org
 

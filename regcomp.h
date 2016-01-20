@@ -403,24 +403,23 @@ struct regnode_ssc {
  *  2)  A subset of item 1) is if all possible code points outside the bitmap
  *      match.  This is a common occurrence when the class is complemented,
  *      like /[^ij]/.  Therefore a bit is reserved to indicate this,
- *      ANYOF_MATCHES_ALL_ABOVE_BITMAP.  If it became necessary, this bit could
- *      be replaced by using the normal swash mechanism, but with a performance
- *      penalty.
+ *      rather than having an expensive swash created,
+ *      ANYOF_MATCHES_ALL_ABOVE_BITMAP.
  *  3)  Under /d rules, it can happen that code points that are in the upper
  *      latin1 range (\x80-\xFF or their equivalents on EBCDIC platforms) match
  *      only if the runtime target string being matched against is UTF-8.  For
  *      example /[\w[:punct:]]/d.  This happens only for posix classes (with a
- *      couple of exceptions, like \d), and all such ones also have
- *      above-bitmap matches.  Thus, 3) implies 1) as well.  Note that /d rules
- *      are no longer encouraged; 'use 5.14' or higher deselects them.  But a
- *      flag is required so that they can be properly handled.  But it can be a
- *      shared flag: see 5) below.
- *  4)  Also under /d rules, something like /[\Wfoo] will match everything in
+ *      couple of exceptions, like \d where it doesn't happen), and all such
+ *      ones also have above-bitmap matches.  Thus, 3) implies 1) as well.
+ *      Note that /d rules are no longer encouraged; 'use 5.14' or higher
+ *      deselects them.  But a flag is required so that they can be properly
+ *      handled.  But it can be a shared flag: see 5) below.
+ *  4)  Also under /d rules, something like /[\Wfoo]/ will match everything in
  *      the \x80-\xFF range, unless the string being matched against is UTF-8.
  *      A swash could be created for this case, but this is relatively common,
  *      and it turns out that it's all or nothing:  if any one of these code
  *      points matches, they all do.  Hence a single bit suffices.  We use a
- *      shared bit that doesn't take up space by itself:
+ *      shared flag that doesn't take up space by itself:
  *      ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER.
  *      This also implies 1), with one exception: [:^cntrl:].
  *  5)  A user-defined \p{} property may not have been defined by the time the
@@ -433,72 +432,51 @@ struct regnode_ssc {
  *      is a better way to accomplish what this feature does.  This case also
  *      implies 1).
  *      ANYOF_SHARED_d_UPPER_LATIN1_UTF8_STRING_MATCHES_non_d_RUNTIME_USER_PROP
- *      is the shared bit.
+ *      is the shared flag.
  *  6)  /[foo]/il may have folds that are only valid if the runtime locale is a
  *      UTF-8 one.  These are quite rare, so it would be good to avoid the
  *      expense of looking for them.  But /l matching is slow anyway, and we've
- *      traditionally not worried to much about its performance.  And this
- *      condition requires the ANYOF_LOC_FOLD flag to be set, so testing for
+ *      traditionally not worried too much about its performance.  And this
+ *      condition requires the ANYOFL_FOLD flag to be set, so testing for
  *      that flag would be sufficient to rule out most cases of this.  So it is
- *      unclear if this should have a flag or not.  But, one is currently
- *      allocated for this purpose, ANYOF_ONLY_UTF8_LOC_FOLD_MATCHES (and the
- *      text below indicates how to share it, should another bit be needed).
+ *      unclear if this should have a flag or not.  But, this flag can be
+ *      shared with another, so it doesn't occupy extra space.
  *
- * At the moment, there are no spare bits, but this could be changed by various
- * tricks.  Notice that item 6) is not independent of the ANYOF_LOC_FOLD flag
- * below.  Also, the ANYOF_LOC_REQ_UTF8 flag is set only if both these aren't.
- * We can therefore use a 2-bit field to represent these 3 flags, as follows:
- *      00  => ANYOF_LOC_REQ_UTF8
- *      01  => no folding
- *      10  => ANYOF_LOC_FOLD alone
- *      11  => ANYOF_ONLY_UTF8_LOC_FOLD_MATCHES
+ * At the moment, there is one spare bit, but this could be increased by
+ * various tricks.
  *
- * Beyond that, note that the information may be conveyed by creating new
- * regnode types.  This is not the best solution, as shown later in this
- * paragraph, but it is something that is feasible.  We could have a regnode
- * for ANYOF_INVERT, for example.  A complication of this is that the regexec.c
- * REGINCLASS macro assumes that it can just use the bitmap if no flags are
- * set.  This would have to be changed to add extra tests for the node type, or
- * a special bit reserved that means unspecified special handling, and then the
- * node-type would be used internally to sort that out.  So we could gain a bit
- * by having an ANYOF_SPECIAL bit, and a node type for INVERT, and another for
- * POSIXL, and still another for INVERT_POSIXL.  This example illustrates one
- * problem with this, a combinatorial explosion of node types.  The one node
- * type khw can think of that doesn't have this explosion issue is
- * ANYOF_LOC_REQ_UTF8, but you'd do this only if you haven't done the 2-bit
- * field trick above.  This bit is a natural candidate for being a separate
- * node type because it is a specialization of the current ANYOFL, and because
- * no other ANYOFL-only bits are set when it is; also most of its uses are
- * actually outside the reginclass() function, so this could be done with no
- * performance penalty.  But again, the 2-bit field trick combines this bit so
- * it doesn't take up space anyway.  Another issue when turning a bit into a
- * node type, is that a SSC may use that bit -- not just a regular ANYOF[DL]?.
- * In the case of ANYOF_LOC_REQ_UTF8, the only likely problem is accurately
- * settting the SSC node-type to the new one, which would likely involve
- * S_ssc_or and S_ssc_and, and not how the SSC currently gets set to ANYOFL.
+ * If just one more bit is needed, at this writing it seems to khw that the
+ * best choice would be to make ANYOF_MATCHES_ALL_ABOVE_BITMAP not a flag, but
+ * something like
  *
- * Another possibility is to instead rename the ANYOF_POSIXL bit to be
- * ANYOFL_LARGE, to mean that the ANYOF node has an extra 32 bits beyond what a
- * regular one does.  That's what it effectively means now, with the extra
- * space all for the POSIX class bits.  But those classes actually only occupy
- * 30 bits, so the 2-bit field or 2 of the locale bits could be moved to that
- * extra space.  The downside of this is that ANYOFL nodes with whichever of
- * the bits get moved would have to have the extra space always allocated.
+ *      #define ANYOF_MATCHES_ALL_ABOVE_BITMAP      ((U32) -2)
+ *
+ * and access it through the ARG like ANYOF_ONLY_HAS_BITMAP is.  This flag is
+ * used by all ANYOF node types, and it could be used to avoid calling the
+ * handler function, as the macro REGINCLASS in regexec.c does now for other
+ * cases.
+ *
+ * Another possibility is to instead (or additionally) rename the ANYOF_POSIXL
+ * flag to be ANYOFL_LARGE, to mean that the ANYOF node has an extra 32 bits
+ * beyond what a regular one does.  That's what it effectively means now, with
+ * the extra space all for the POSIX class flags.  But those classes actually
+ * only occupy 30 bits, so the ANYOFL_FOLD and
+ * ANYOFL_SHARED_UTF8_LOCALE_fold_HAS_MATCHES_nonfold_REQD flags could be moved
+ * to that extra space.  The 30 bits in the extra word would indicate if a
+ * posix class should be looked up or not.  The downside of this is that ANYOFL
+ * nodes with folding would always have to have the extra space allocated, even
+ * if they didn't use the 30 posix bits.  There isn't an SSC problem as all
+ * SSCs are this large anyway.
  *
  * One could completely remove ANYOFL_LARGE and make all ANYOFL nodes large.
- * The 30 bits in the extra word would indicate if a posix class should be
- * looked up or not.  There isn't an SSC problem as all SSCs are this large
- * anyway, and the SSC could be set to this node type.   REGINCLASS would have
- * to be modified so that if the node type were this, it would call
- * reginclass(), as the flag bit that indicates to do this now would be gone.
- * If the 2-bit field is used and moved to the larger structure, this would
- * free up a total of 4 bits.  If this were done, we could create an
- * ANYOF_INVERT node-type without a combinatorial explosion, getting us to 5
- * bits.  And, keep in mind that ANYOF_MATCHES_ALL_ABOVE_BITMAP is solely for
- * performance, so could be removed.  The other performance-related bits are
- * shareable with bits that are required.
+ * REGINCLASS would have to be modified so that if the node type were this, it
+ * would call reginclass(), as the flag bit that indicates to do this now would
+ * be gone.
  *
- * Several flags are not used in synthetic start class (SSC) nodes, so could be
+ * All told, 5 bits could be available for other uses if all of the above were
+ * done.
+ *
+ * Some flags are not used in synthetic start class (SSC) nodes, so could be
  * shared should new flags be needed for SSCs, like SSC_MATCHES_EMPTY_STRING
  * now. */
 
@@ -520,17 +498,32 @@ struct regnode_ssc {
  * time.  However under locale, the actual folding varies depending on
  * what the locale is at the time of execution, so it has to be deferred until
  * then.  Only set under /l; never in an SSC  */
-#define ANYOF_LOC_FOLD                          0x04
+#define ANYOFL_FOLD                             0x04
 
-/* If set, ANYOF_LOC_FOLD is also set, and there are potential matches that
- * will be valid only if the locale is a UTF-8 one. */
-#define ANYOF_ONLY_UTF8_LOC_FOLD_MATCHES        0x08
+/* Shared bit set only with ANYOFL and SSC nodes:
+ *    If ANYOFL_FOLD is set, this means there are potential matches valid
+ *       only if the locale is a UTF-8 one.
+ *    If ANYOFL_FOLD is NOT set, this means to warn if the runtime locale
+ *       isn't a UTF-8 one (and the generated node assumes a UTF-8 locale).
+ *       None of INVERT, POSIXL,
+ *       ANYOF_SHARED_d_UPPER_LATIN1_UTF8_STRING_MATCHES_non_d_RUNTIME_USER_PROP
+ *       can be set.  */
+#define ANYOFL_SHARED_UTF8_LOCALE_fold_HAS_MATCHES_nonfold_REQD        0x08
 
-/* If set, means to warn if runtime locale isn't a UTF-8 one.  Only under /l.
- * If set, none of INVERT, LOC_FOLD, POSIXL,
- * ANYOF_SHARED_d_UPPER_LATIN1_UTF8_STRING_MATCHES_non_d_RUNTIME_USER_PROP can
- * be set.  Can be in an SSC */
-#define ANYOF_LOC_REQ_UTF8                      0x10
+/* Convenience macros for teasing apart the meanings when reading the above bit
+ * */
+#define ANYOFL_SOME_FOLDS_ONLY_IN_UTF8_LOCALE(flags)                        \
+    ((flags & ( ANYOFL_FOLD /* Both bits are set */                         \
+               |ANYOFL_SHARED_UTF8_LOCALE_fold_HAS_MATCHES_nonfold_REQD))   \
+             == ( ANYOFL_FOLD                                               \
+                 |ANYOFL_SHARED_UTF8_LOCALE_fold_HAS_MATCHES_nonfold_REQD))
+
+#define  ANYOFL_UTF8_LOCALE_REQD(flags)                                     \
+    ((flags & ( ANYOFL_FOLD /* Only REQD bit is set */                      \
+               |ANYOFL_SHARED_UTF8_LOCALE_fold_HAS_MATCHES_nonfold_REQD))   \
+             == ANYOFL_SHARED_UTF8_LOCALE_fold_HAS_MATCHES_nonfold_REQD)
+
+/* Spare:                                       0x10 */
 
 /* If set, the node matches every code point NUM_ANYOF_CODE_POINTS and above.
  * Can be in an SSC */
@@ -562,12 +555,12 @@ struct regnode_ssc {
 
 #define ANYOF_FLAGS_ALL		(0xff)
 
-#define ANYOF_LOCALE_FLAGS (ANYOF_LOC_FOLD | ANYOF_MATCHES_POSIXL)
+#define ANYOF_LOCALE_FLAGS (ANYOFL_FOLD | ANYOF_MATCHES_POSIXL)
 
 /* These are the flags that apply to both regular ANYOF nodes and synthetic
  * start class nodes during construction of the SSC.  During finalization of
  * the SSC, other of the flags may get added to it */
-#define ANYOF_COMMON_FLAGS      ANYOF_LOC_REQ_UTF8
+#define ANYOF_COMMON_FLAGS      0
 
 /* Character classes for node->classflags of ANYOF */
 /* Should be synchronized with a table in regprop() */
@@ -687,9 +680,9 @@ struct regnode_ssc {
 
 #define ANYOF_POSIXL_AND(source, dest) STMT_START { (dest)->classflags &= (source)->classflags ; } STMT_END
 
-#define ANYOF_BITMAP_ZERO(ret)	Zero(((struct regnode_charclass*)(ret))->bitmap, ANYOF_BITMAP_SIZE, char)
-#define ANYOF_BITMAP(p)		(((struct regnode_charclass*)(p))->bitmap)
-#define ANYOF_BITMAP_BYTE(p, c)	(ANYOF_BITMAP(p)[(((U8)(c)) >> 3) & 31])
+#define ANYOF_BITMAP_ZERO(ret)	Zero(((regnode_charclass*)(ret))->bitmap, ANYOF_BITMAP_SIZE, char)
+#define ANYOF_BITMAP(p)		((regnode_charclass*)(p))->bitmap
+#define ANYOF_BITMAP_BYTE(p, c)	BITMAP_BYTE(ANYOF_BITMAP(p), c)
 #define ANYOF_BITMAP_SET(p, c)	(ANYOF_BITMAP_BYTE(p, c) |=  ANYOF_BIT(c))
 #define ANYOF_BITMAP_CLEAR(p,c)	(ANYOF_BITMAP_BYTE(p, c) &= ~ANYOF_BIT(c))
 #define ANYOF_BITMAP_TEST(p, c)	cBOOL(ANYOF_BITMAP_BYTE(p, c) &   ANYOF_BIT(c))
@@ -699,7 +692,7 @@ struct regnode_ssc {
 #define ANYOF_BITMAP_CLEARALL(p)	\
 	Zero (ANYOF_BITMAP(p), ANYOF_BITMAP_SIZE)
 
-#define ANYOF_SKIP		EXTRA_SIZE(struct regnode_charclass)
+#define ANYOF_SKIP		EXTRA_SIZE(regnode_charclass)
 #define ANYOF_POSIXL_SKIP	EXTRA_SIZE(regnode_charclass_posixl)
 
 /*
@@ -915,7 +908,7 @@ typedef struct _reg_ac_data reg_ac_data;
    three different sets... */
 
 #define TRIE_BITMAP(p)		(((reg_trie_data *)(p))->bitmap)
-#define TRIE_BITMAP_BYTE(p, c)	(TRIE_BITMAP(p)[(((U8)(c)) >> 3) & 31])
+#define TRIE_BITMAP_BYTE(p, c)	BITMAP_BYTE(TRIE_BITMAP(p), c)
 #define TRIE_BITMAP_SET(p, c)	(TRIE_BITMAP_BYTE(p, c) |=  ANYOF_BIT((U8)c))
 #define TRIE_BITMAP_CLEAR(p,c)	(TRIE_BITMAP_BYTE(p, c) &= ~ANYOF_BIT((U8)c))
 #define TRIE_BITMAP_TEST(p, c)	(TRIE_BITMAP_BYTE(p, c) &   ANYOF_BIT((U8)c))
@@ -924,7 +917,7 @@ typedef struct _reg_ac_data reg_ac_data;
 #define IS_TRIE_AC(op) ((op)>=AHOCORASICK)
 
 
-#define BITMAP_BYTE(p, c)	(((U8*)p)[(((U8)(c)) >> 3) & 31])
+#define BITMAP_BYTE(p, c)	(( (U8*) p) [ ( ( (UV) (c)) >> 3) ] )
 #define BITMAP_TEST(p, c)	(BITMAP_BYTE(p, c) &   ANYOF_BIT((U8)c))
 
 /* these defines assume uniquecharcount is the correct variable, and state may be evaluated twice */
@@ -1113,6 +1106,7 @@ re.pm, especially to the documentation.
 typedef enum {
 	TRADITIONAL_BOUND = _CC_WORDCHAR,
 	GCB_BOUND,
+	LB_BOUND,
 	SB_BOUND,
 	WB_BOUND
 } bound_type;

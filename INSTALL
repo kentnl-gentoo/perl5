@@ -581,7 +581,7 @@ The directories set up by Configure fall into three broad categories.
 
 =item Directories for the perl distribution
 
-By default, Configure will use the following directories for 5.23.6.
+By default, Configure will use the following directories for 5.23.7.
 $version is the full perl version number, including subversion, e.g.
 5.12.3, and $archname is a string like sun4-sunos,
 determined by Configure.  The full definitions of all Configure
@@ -1729,12 +1729,12 @@ bval settings.  Upgrade your DB library or OS.
 
 =item Bad arg length for semctl, is XX, should be ZZZ
 
-If you get this error message from the F<ext/IPC/SysV/t/sem.t> test, your
+If you get this error message from the F<cpan/IPC-SysV/t/sem.t> test, your
 System V IPC may be broken.  The XX typically is 20, and that is what ZZZ
 also should be.  Consider upgrading your OS, or reconfiguring your OS
 to include the System V semaphores.
 
-=item ext/IPC/SysV/t/sem........semget: No space left on device
+=item cpan/IPC-SysV/t/sem........semget: No space left on device
 
 Either your account or the whole system has run out of semaphores.  Or
 both.  Either list the semaphores with "ipcs" and remove the unneeded
@@ -1782,7 +1782,7 @@ NCR Tower 32 (OS 2.01.01) may need -W2,-Sl,2000 and #undef MKDIR.
 
 UTS may need one or more of -K or -g, and #undef LSTAT.
 
-FreeBSD can fail the F<ext/IPC/SysV/t/sem.t> test if SysV IPC has not been
+FreeBSD can fail the F<cpan/IPC-SysV/t/sem.t> test if SysV IPC has not been
 configured in the kernel.  Perl tries to detect this, though, and
 you will get a message telling you what to do.
 
@@ -2073,8 +2073,10 @@ If your system is quite busy and doesn't respond quickly enough,
 these tests might fail.  If possible, try running the tests again
 with the system under a lighter load.  These timing-sensitive
 and load-sensitive tests include F<t/op/alarm.t>,
-F<ext/Time-HiRes/t/HiRes.t>, F<ext/threads-shared/t/waithires.t>,
-F<ext/threads-shared/t/stress.t>, F<lib/Benchmark.t>,
+F<cpan/Time-HiRes/t/alarm.t>, F<cpan/Time-HiRes/t/clock.t>,
+F<cpan/Time-HiRes/t/itimer.t>, F<cpan/Time-HiRes/t/usleep.t>,
+F<dist/threads-shared/t/waithires.t>,
+F<dist/threads-shared/t/stress.t>, F<lib/Benchmark.t>,
 F<lib/Memoize/t/expmod_t.t>, and F<lib/Memoize/t/speed.t>.
 
 You might also experience some failures in F<t/op/stat.t> if you build
@@ -2440,7 +2442,7 @@ http://www.chiark.greenend.org.uk/~sgtatham/bugs.html
 
 =head1 Coexistence with earlier versions of perl 5
 
-Perl 5.23.6 is not binary compatible with earlier versions of Perl.
+Perl 5.23.7 is not binary compatible with earlier versions of Perl.
 In other words, you will have to recompile your XS modules.
 
 In general, you can usually safely upgrade from one version of Perl
@@ -2515,9 +2517,9 @@ won't interfere with another version.  (The defaults guarantee this for
 libraries after 5.6.0, but not for executables. TODO?)  One convenient
 way to do this is by using a separate prefix for each version, such as
 
-	sh Configure -Dprefix=/opt/perl5.23.6
+	sh Configure -Dprefix=/opt/perl5.23.7
 
-and adding /opt/perl5.23.6/bin to the shell PATH variable.  Such users
+and adding /opt/perl5.23.7/bin to the shell PATH variable.  Such users
 may also wish to add a symbolic link /usr/local/bin/perl so that
 scripts can still start with #!/usr/local/bin/perl.
 
@@ -2530,13 +2532,13 @@ seriously consider using a separate directory, since development
 subversions may not have all the compatibility wrinkles ironed out
 yet.
 
-=head2 Upgrading from 5.23.5 or earlier
+=head2 Upgrading from 5.23.6 or earlier
 
-B<Perl 5.23.6 may not be binary compatible with Perl 5.23.5 or
+B<Perl 5.23.7 may not be binary compatible with Perl 5.23.6 or
 earlier Perl releases.>  Perl modules having binary parts
 (meaning that a C compiler is used) will have to be recompiled to be
-used with 5.23.6.  If you find you do need to rebuild an extension with
-5.23.6, you may safely do so without disturbing the older
+used with 5.23.7.  If you find you do need to rebuild an extension with
+5.23.7, you may safely do so without disturbing the older
 installations.  (See L<"Coexistence with earlier versions of perl 5">
 above.)
 
@@ -2569,15 +2571,15 @@ Firstly, the bare minimum to run this script
      print("$f\n");
   }
 
-in Linux with perl-5.23.6 is as follows (under $Config{prefix}):
+in Linux with perl-5.23.7 is as follows (under $Config{prefix}):
 
   ./bin/perl
-  ./lib/perl5/5.23.6/strict.pm
-  ./lib/perl5/5.23.6/warnings.pm
-  ./lib/perl5/5.23.6/i686-linux/File/Glob.pm
-  ./lib/perl5/5.23.6/feature.pm
-  ./lib/perl5/5.23.6/XSLoader.pm
-  ./lib/perl5/5.23.6/i686-linux/auto/File/Glob/Glob.so
+  ./lib/perl5/5.23.7/strict.pm
+  ./lib/perl5/5.23.7/warnings.pm
+  ./lib/perl5/5.23.7/i686-linux/File/Glob.pm
+  ./lib/perl5/5.23.7/feature.pm
+  ./lib/perl5/5.23.7/XSLoader.pm
+  ./lib/perl5/5.23.7/i686-linux/auto/File/Glob/Glob.so
 
 Secondly, for perl-5.10.1, the Debian perl-base package contains 591
 files, (of which 510 are for lib/unicore) totaling about 3.5MB in its

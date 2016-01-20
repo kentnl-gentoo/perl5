@@ -1429,6 +1429,11 @@ sub is_pod_file {
                 # name
                 if ($contents =~ /\G    # continue from the line after =head1
                                   \s*   # ignore any empty lines
+
+                                  # ignore =for paragraphs followed by empty
+                                  # lines
+                                  (?: ^ =for .*? \n (?: [^\s]*? \n )* \s* )*
+
                                   ^ \s* ( \S+?) \s* (?: [,-] | $ )/mx) {
                     my $name = $1;
                     $checker->name($name);
@@ -1918,7 +1923,7 @@ foreach my $filename (@files) {
 }
 
 if (! $regen
-    && ! ok (keys %known_problems == 0, "The known problems database includes no references to non-existent files"))
+    && ! ok (keys %known_problems == 0, "The known problems database ($data_dir/known_pod_issues.dat) includes no references to non-existent files"))
 {
     note("The following files were not found: "
          . join ", ", keys %known_problems);
