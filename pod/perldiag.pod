@@ -247,6 +247,33 @@ the special variable C<$[>, which is deprecated, is now a fixed zero value.
 must either both be scalars or both be lists.  Otherwise Perl won't
 know which context to supply to the right side.
 
+=item Assuming NOT a POSIX class since %s in regex; marked by S<<-- HERE> in m/%s/
+
+(W regexp) You had something like these:
+
+ [[:alnum]]
+ [[:digit:xyz]
+
+They look like they might have been meant to be the POSIX classes
+C<[:alnum:]> or C<[:digit:]>.  If so, they should be written:
+
+ [[:alnum:]]
+ [[:digit:]xyz]
+
+Since these aren't legal POSIX class specifications, but are legal
+bracketed character classes, Perl treats them as the latter.  In the
+first example, it matches the characters C<":">, C<"[">, C<"a">, C<"l">,
+C<"m">, C<"n">, and C<"u">.
+
+If these weren't meant to be POSIX classes, this warning message is
+spurious, and can be suppressed by reordering things, such as
+
+ [[al:num]]
+
+or
+
+ [[:munla]]
+
 =item <> at require-statement should be quotes
 
 (F) You wrote C<< require <file> >> when you should have written
@@ -2008,6 +2035,8 @@ type in a pack template.  See L<perlfunc/pack>.
 it's ugly.  Your code will be interpreted as an attempt to call a method
 named "elseif" for the class returned by the following block.  This is
 unlikely to be what you want.
+
+=item Empty \%c in regex; marked by S<<-- HERE> in m/%s/
 
 =item Empty \%c{} in regex; marked by S<<-- HERE> in m/%s/
 
@@ -4318,11 +4347,6 @@ there are in the savestack.
 (P) Failed an internal consistency check while trying to reset a weak
 reference.
 
-=item panic: die %s
-
-(P) We popped the context stack to an eval context, and then discovered
-it wasn't an eval context.
-
 =item panic: do_subst
 
 (P) The internal pp_subst() routine was called with invalid operational
@@ -4677,15 +4701,26 @@ not C<isprint>.  See L<perlre>.
 (F) Your system has POSIX getpgrp(), which takes no argument, unlike
 the BSD version, which takes a pid.
 
-=item POSIX syntax [%c %c] belongs inside character classes in regex; marked by 
+=item POSIX syntax [%c %c] belongs inside character classes%s in regex; marked by
 S<<-- HERE> in m/%s/
 
-(W regexp) The character class constructs [: :], [= =], and [. .]  go
-I<inside> character classes, the [] are part of the construct, for example:
-/[012[:alpha:]345]/.  Note that [= =] and [. .] are not currently
+(W regexp) Perl thinks that you intended to write a POSIX character
+class, but didn't use enough brackets.  These POSIX class constructs [:
+:], [= =], and [. .]  go I<inside> character classes, the [] are part of
+the construct, for example: C<qr/[012[:alpha:]345]/>.  What the regular
+expression pattern compiled to is probably not what you were intending.
+For example, C<qr/[:alpha:]/> compiles to a regular bracketed character
+class consisting of the four characters C<":">,  C<"a">,  C<"l">,
+C<"h">, and C<"p">.  To specify the POSIX class, it should have been
+written C<qr/[[:alpha:]]/>.
+
+Note that [= =] and [. .] are not currently
 implemented; they are simply placeholders for future extensions and
 will cause fatal errors.  The S<<-- HERE> shows whereabouts in the regular
 expression the problem was discovered.  See L<perlre>.
+
+If the specification of the class was not completely valid, the message
+indicates that.
 
 =item POSIX syntax [. .] is reserved for future extensions in regex; marked by 
 S<<-- HERE> in m/%s/
@@ -5307,6 +5342,18 @@ followed immediately by a ')'.
 m/%s/
 
 (F) A named reference of the form C<(?P=...)> was missing the final
+closing parenthesis after the name.  The S<<-- HERE> shows whereabouts
+in the regular expression the problem was discovered.
+
+=item Sequence (?PE<lt>... not terminated in regex; marked by S<<-- HERE> in m/%s/
+
+(F) A named group of the form C<(?PE<lt>...E<gt>')> was missing the final
+closing angle bracket.  The S<<-- HERE> shows whereabouts in the
+regular expression the problem was discovered.
+
+=item Sequence (?PE<gt>... not terminated in regex; marked by S<<-- HERE> in m/%s/
+
+(F) A named reference of the form C<(?PE<gt>...)> was missing the final
 closing parenthesis after the name.  The S<<-- HERE> shows whereabouts
 in the regular expression the problem was discovered.
 
@@ -6275,27 +6322,6 @@ Note that if you want to enable a warnings category registered by a
 module (e.g. C<use warnings 'File::Find'>), you must have loaded this
 module first.
 
-=item Unmatched '[' in POSIX class in regex; marked by S<<-- HERE> in m/%s/
-
-(F) You had something like this:
-
- (?[ [:digit: ])
-
-That should be written:
-
- (?[ [:digit:] ])
-
-=item Unmatched '%c' in POSIX class in regex; marked by S<<-- HERE> in
-m/%s/
-
-(F) You had something like this:
-
- (?[ [:alnum] ])
-
-There should be a second C<":">, like this:
-
- (?[ [:alnum:] ])
-
 =item Unmatched [ in regex; marked by S<<-- HERE> in m/%s/
 
 (F) The brackets around a character class must match.  If you wish to
@@ -7177,9 +7203,10 @@ Something Very Wrong.
 
 (F) Named Unicode character escapes (C<\N{...}>) may return a zero-length
 sequence.  Such an escape was used in an extended character class, i.e.
-C<(?[...])>, which is not permitted.  Check that the correct escape has
-been used, and the correct charnames handler is in scope.  The S<<-- HERE>
-shows whereabouts in the regular expression the problem was discovered.
+C<(?[...])>, or under C<use re 'strict'>, which is not permitted.  Check
+that the correct escape has been used, and the correct charnames handler
+is in scope.  The S<<-- HERE> shows whereabouts in the regular
+expression the problem was discovered.
 
 =back
 

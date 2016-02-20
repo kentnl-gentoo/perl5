@@ -38,7 +38,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.23.7
+#INST_VER	= \5.23.8
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -571,7 +571,7 @@ EXEOUT_FLAG	= -Fe
 CFLAGS_O	= $(CFLAGS) $(BUILDOPT)
 
 !IF "$(PREMSVC80)" == "undef"
-LINK_FLAGS	= $(LINK_FLAGS) "/manifestdependency:type='Win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"
+PRIV_LINK_FLAGS	= $(PRIV_LINK_FLAGS) "/manifestdependency:type='Win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'"
 !ELSE
 RSC_FLAGS	= -DINCLUDE_MANIFEST
 !ENDIF
@@ -587,10 +587,9 @@ LINK_FLAGS	= $(LINK_FLAGS) -subsystem:console,"5.02"
 !  ELSE
 LINK_FLAGS	= $(LINK_FLAGS) -subsystem:console,"5.01"
 !  ENDIF
-PRIV_LINK_FLAGS	=
 
 !ELSE
-PRIV_LINK_FLAGS	= -subsystem:console
+PRIV_LINK_FLAGS	= $(PRIV_LINK_FLAGS) -subsystem:console
 !ENDIF
 
 BLINK_FLAGS	= $(PRIV_LINK_FLAGS) $(LINK_FLAGS)
@@ -1216,7 +1215,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5237delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5238delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1313,7 +1312,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5237delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5238delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \

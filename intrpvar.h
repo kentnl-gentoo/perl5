@@ -51,7 +51,7 @@ PERLVAR(I, scopestack_max, I32)
 PERLVAR(I, tmps_stack,	SV **)		/* mortals we've made */
 PERLVARI(I, tmps_ix,	SSize_t,	-1)
 PERLVARI(I, tmps_floor,	SSize_t,	-1)
-PERLVAR(I, tmps_max,	SSize_t)
+PERLVAR(I, tmps_max,	SSize_t)        /* first unalloced slot in tmps stack */
 
 PERLVARI(I, sub_generation, U32, 1)	/* incr to invalidate method cache */
 
@@ -806,6 +806,8 @@ PERLVARA(I, op_exec_cnt, OP_max+2, UV)	/* Counts of executed OPs of the given ty
 #endif
 
 PERLVAR(I, random_state, PL_RANDOM_STATE_TYPE)
+
+PERLVARI(I, dump_re_max_len, STRLEN, 0)
 
 /* If you are adding a U8 or U16, check to see if there are 'Space' comments
  * above on where there are gaps which currently will be structure padding.  */

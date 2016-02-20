@@ -50,6 +50,7 @@
          "dist/threads",
          "dist/threads-shared",
          "dist/Tie-File",
+         "dist/Time-HiRes",
          "dist/XSLoader",
          "lib/perl5db",
          "win32"
@@ -123,6 +124,6 @@
          "url" : "http://perl5.git.perl.org/"
       }
    },
-   "version" : "5.023007",
+   "version" : "5.023008",
    "x_serialization_backend" : "JSON::PP version 2.27300"
 }

@@ -4,6 +4,8 @@
    Any changes made here will be lost!
  */
 
+#define PERL_BISON_VERSION  20007
+
 #ifdef PERL_CORE
 /* A Bison parser, made by GNU Bison 2.7.  */
 
@@ -276,6 +278,6 @@ int yyparse ();
 
 
 /* Generated from:
- * a0bc910627eeeffe8245b9a63dd97238e2e6b27b544be36b37d078cf6aba699b perly.y
- * d1d4df7b8e30ac9dede664af9179e6e5e7ddc7f2ad9c4eff9e2e5b32c9e16a6e regen_perly.pl
+ * 703ebd267cf8ca45f9dee9bc0f4b21511117a0c1dca1c8bc9438ce91950217ae perly.y
+ * a4923588f219644801577c514014847e1e5240f49413fa3b89d3306fa4874d07 regen_perly.pl
  * ex: set ro: */

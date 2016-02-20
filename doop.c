@@ -16,7 +16,7 @@
 
 /* This file contains some common functions needed to carry out certain
  * ops. For example, both pp_sprintf() and pp_prtf() call the function
- * do_printf() found in this file.
+ * do_sprintf() found in this file.
  */
 
 #include "EXTERN.h"
@@ -1238,7 +1238,7 @@ Perl_do_kv(pTHX)
     HV * const keys = MUTABLE_HV(POPs);
     HE *entry;
     SSize_t extend_size;
-    const I32 gimme = GIMME_V;
+    const U8 gimme = GIMME_V;
     const I32 dokv =     (PL_op->op_type == OP_RV2HV || PL_op->op_type == OP_PADHV);
     /* op_type is OP_RKEYS/OP_RVALUES if pp_rkeys delegated to here */
     const I32 dokeys =   dokv || (PL_op->op_type == OP_KEYS);

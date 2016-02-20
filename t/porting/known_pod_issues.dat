@@ -252,6 +252,8 @@ dist/storable/storable.pm	Verbatim line length including indents exceeds 79 by	4
 dist/thread-queue/lib/thread/queue.pm	Verbatim line length including indents exceeds 79 by	6
 dist/threads/lib/threads.pm	Verbatim line length including indents exceeds 79 by	3
 dist/tie-file/lib/tie/file.pm	Verbatim line length including indents exceeds 79 by	3
+dist/time-hires/hires.pm	Apparent broken link	2
+dist/time-hires/hires.pm	Verbatim line length including indents exceeds 79 by	1
 ext/amiga-arexx/arexx.pm	Verbatim line length including indents exceeds 79 by	2
 ext/amiga-exec/exec.pm	Verbatim line length including indents exceeds 79 by	2
 ext/devel-peek/peek.pm	? Should you be using L<...> instead of	2
@@ -266,7 +268,7 @@ ext/vms-dclsym/dclsym.pm	? Should you be using L<...> instead of	1
 ext/vms-filespec/lib/vms/filespec.pm	Verbatim line length including indents exceeds 79 by	1
 install	? Should you be using F<...> or maybe L<...> instead of	1
 pod/perl.pod	Verbatim line length including indents exceeds 79 by	8
-pod/perlandroid.pod	Verbatim line length including indents exceeds 79 by	1
+pod/perlandroid.pod	Verbatim line length including indents exceeds 79 by	3
 pod/perlbook.pod	Verbatim line length including indents exceeds 79 by	1
 pod/perlcall.pod	Verbatim line length including indents exceeds 79 by	2
 pod/perlce.pod	Verbatim line length including indents exceeds 79 by	3

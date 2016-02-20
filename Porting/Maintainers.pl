@@ -387,12 +387,10 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.78.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.80.tar.gz',
         'FILES'        => q[cpan/Encode],
         CUSTOMIZED     => [
-            qw( Encode.xs
-                Unicode/Unicode.xs
-                encoding.pm
+            qw( encoding.pm
                 ),
         ],
     },
@@ -487,6 +485,38 @@ use File::Glob qw(:case);
             qq[lib/ExtUtils/MM_VMS.pm],
         # Not yet submitted
             qq[t/lib/MakeMaker/Test/NoXS.pm],
+        # Backported commits from upstream
+            qw(lib/ExtUtils/Command/MM.pm
+               lib/ExtUtils/Liblist.pm
+               lib/ExtUtils/Liblist/Kid.pm
+               lib/ExtUtils/MM.pm
+               lib/ExtUtils/MM_AIX.pm
+               lib/ExtUtils/MM_Any.pm
+               lib/ExtUtils/MM_BeOS.pm
+               lib/ExtUtils/MM_Cygwin.pm
+               lib/ExtUtils/MM_DOS.pm
+               lib/ExtUtils/MM_Darwin.pm
+               lib/ExtUtils/MM_MacOS.pm
+               lib/ExtUtils/MM_NW5.pm
+               lib/ExtUtils/MM_OS2.pm
+               lib/ExtUtils/MM_QNX.pm
+               lib/ExtUtils/MM_UWIN.pm
+               lib/ExtUtils/MM_Unix.pm
+               lib/ExtUtils/MM_VOS.pm
+               lib/ExtUtils/MM_Win32.pm
+               lib/ExtUtils/MM_Win95.pm
+               lib/ExtUtils/MY.pm
+               lib/ExtUtils/MakeMaker/Config.pm
+               lib/ExtUtils/MakeMaker/FAQ.pod
+               lib/ExtUtils/MakeMaker/Tutorial.pod
+               lib/ExtUtils/MakeMaker/version.pm
+               lib/ExtUtils/MakeMaker/version/regex.pm
+               lib/ExtUtils/Mkbootstrap.pm
+               lib/ExtUtils/Mksymlists.pm
+               lib/ExtUtils/testlib.pm
+               t/cd.t
+               t/echo.t
+               ),
         ],
     },
 
@@ -802,7 +832,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20151220.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160120.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -938,25 +968,13 @@ use File::Glob qw(:case);
     },
 
     'podlators' => {
-        'DISTRIBUTION' => 'RRA/podlators-4.04.tar.gz',
+        'DISTRIBUTION' => 'RRA/podlators-4.06.tar.gz',
         'FILES'        => q[cpan/podlators pod/perlpodstyle.pod],
 
-        # The perl distribution has pod2man.PL and pod2text.PL,  which are
-        # run to create pod2man and pod2text, while the CPAN distribution
-        # just has the post-generated pod2man and pod2text files.
-        # The following entries attempt to codify that odd fact.
-        'CUSTOMIZED' => [
-            qw( scripts/pod2man.PL
-                scripts/pod2text.PL
-                ),
-        ],
         'MAP' => {
             ''                 => 'cpan/podlators/',
-            'scripts/pod2man'  => 'cpan/podlators/scripts/pod2man.PL',
-            'scripts/pod2text' => 'cpan/podlators/scripts/pod2text.PL',
-
             # this file lives outside the cpan/ directory
-            'pod/perlpodstyle.pod' => 'pod/perlpodstyle.pod',
+            'pod/perlpodstyle' => 'pod/perlpodstyle.pod',
         },
     },
 
@@ -1191,7 +1209,7 @@ use File::Glob qw(:case);
 
     'Time::HiRes' => {
         'DISTRIBUTION' => 'RJBS/Time-HiRes-1.9728.tar.gz',
-        'FILES'        => q[cpan/Time-HiRes],
+        'FILES'        => q[dist/Time-HiRes],
     },
 
     'Time::Local' => {

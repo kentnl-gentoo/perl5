@@ -1395,6 +1395,8 @@ typedef int SysRet;
 typedef long SysRetLong;
 typedef sigset_t* POSIX__SigSet;
 typedef HV* POSIX__SigAction;
+typedef int POSIX__SigNo;
+typedef int POSIX__Fd;
 #ifdef I_TERMIOS
 typedef struct termios* POSIX__Termios;
 #else /* Define termios types to int, and call not_here for the functions.*/
@@ -1556,13 +1558,13 @@ static const struct lconv_offset lconv_strings[] = {
 
 /* The Linux man pages say these are the field names for the structure
  * components that are LC_NUMERIC; the rest being LC_MONETARY */
-#   define isLC_NUMERIC_STRING(name) (strcmp(name, "decimal_point")     \
-                                      || strcmp(name, "thousands_sep")  \
+#   define isLC_NUMERIC_STRING(name) (strEQ(name, "decimal_point")     \
+                                      || strEQ(name, "thousands_sep")  \
                                                                         \
                                       /* There should be no harm done   \
                                        * checking for this, even if     \
                                        * NO_LOCALECONV_GROUPING */      \
-                                      || strcmp(name, "grouping"))
+                                      || strEQ(name, "grouping"))
 #else
 #   define isLC_NUMERIC_STRING(name) (0)
 #endif
@@ -1776,102 +1778,6 @@ my_tzset(pTHX)
     tzset();
 }
 
-typedef int (*isfunc_t)(int);
-typedef void (*any_dptr_t)(void *);
-
-/* This needs to be ALIASed in a custom way, hence can't easily be defined as
-   a regular XSUB.  */
-static XSPROTO(is_common); /* prototype to pass -Wmissing-prototypes */
-static XSPROTO(is_common)
-{
-    dXSARGS;
-
-    if (items != 1)
-       croak_xs_usage(cv,  "charstring");
-
-    {
-	dXSTARG;
-	STRLEN	len;
-        /*int	RETVAL = 0;   YYY means uncomment this to return false on an
-                            * empty string input */
-	int	RETVAL;
-	unsigned char *s = (unsigned char *) SvPV(ST(0), len);
-	unsigned char *e = s + len;
-	isfunc_t isfunc = (isfunc_t) XSANY.any_dptr;
-
-        if (ckWARN_d(WARN_DEPRECATED)) {
-
-            /* Warn exactly once for each lexical place this function is
-             * called.  See thread at
-             * http://markmail.org/thread/jhqcag5njmx7jpyu */
-
-	    HV *warned = get_hv("POSIX::_warned", GV_ADD | GV_ADDMULTI);
-	    if (! hv_exists(warned, (const char *)&PL_op, sizeof(PL_op))) {
-                Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
-                            "Calling POSIX::%"HEKf"() is deprecated",
-                            HEKfARG(GvNAME_HEK(CvGV(cv))));
-		(void)hv_store(warned, (const char *)&PL_op, sizeof(PL_op), &PL_sv_yes, 0);
-            }
-        }
-
-        /*if (e > s) { YYY */
-	for (RETVAL = 1; RETVAL && s < e; s++)
-	    if (!isfunc(*s))
-		RETVAL = 0;
-        /*} YYY */
-	XSprePUSH;
-	PUSHi((IV)RETVAL);
-    }
-    XSRETURN(1);
-}
-
-MODULE = POSIX		PACKAGE = POSIX
-
-BOOT:
-{
-    CV *cv;
-
-
-    /* silence compiler warning about not_here() defined but not used */
-    if (0) not_here("");
-
-    /* Ensure we get the function, not a macro implementation. Like the C89
-       standard says we can...  */
-#undef isalnum
-    cv = newXS_deffile("POSIX::isalnum", is_common);
-    XSANY.any_dptr = (any_dptr_t) &isalnum;
-#undef isalpha
-    cv = newXS_deffile("POSIX::isalpha", is_common);
-    XSANY.any_dptr = (any_dptr_t) &isalpha;
-#undef iscntrl
-    cv = newXS_deffile("POSIX::iscntrl", is_common);
-    XSANY.any_dptr = (any_dptr_t) &iscntrl;
-#undef isdigit
-    cv = newXS_deffile("POSIX::isdigit", is_common);
-    XSANY.any_dptr = (any_dptr_t) &isdigit;
-#undef isgraph
-    cv = newXS_deffile("POSIX::isgraph", is_common);
-    XSANY.any_dptr = (any_dptr_t) &isgraph;
-#undef islower
-    cv = newXS_deffile("POSIX::islower", is_common);
-    XSANY.any_dptr = (any_dptr_t) &islower;
-#undef isprint
-    cv = newXS_deffile("POSIX::isprint", is_common);
-    XSANY.any_dptr = (any_dptr_t) &isprint;
-#undef ispunct
-    cv = newXS_deffile("POSIX::ispunct", is_common);
-    XSANY.any_dptr = (any_dptr_t) &ispunct;
-#undef isspace
-    cv = newXS_deffile("POSIX::isspace", is_common);
-    XSANY.any_dptr = (any_dptr_t) &isspace;
-#undef isupper
-    cv = newXS_deffile("POSIX::isupper", is_common);
-    XSANY.any_dptr = (any_dptr_t) &isupper;
-#undef isxdigit
-    cv = newXS_deffile("POSIX::isxdigit", is_common);
-    XSANY.any_dptr = (any_dptr_t) &isxdigit;
-}
-
 MODULE = SigSet		PACKAGE = POSIX::SigSet		PREFIX = sig
 
 void
@@ -1893,7 +1799,7 @@ new(packname = "POSIX::SigSet", ...)
 SysRet
 addset(sigset, sig)
 	POSIX::SigSet	sigset
-	int		sig
+	POSIX::SigNo	sig
    ALIAS:
 	delset = 1
    CODE:
@@ -1914,7 +1820,7 @@ emptyset(sigset)
 int
 sigismember(sigset, sig)
 	POSIX::SigSet	sigset
-	int		sig
+	POSIX::SigNo	sig
 
 MODULE = Termios	PACKAGE = POSIX::Termios	PREFIX = cf
 
@@ -1940,7 +1846,7 @@ new(packname = "POSIX::Termios", ...)
 SysRet
 getattr(termios_ref, fd = 0)
 	POSIX::Termios	termios_ref
-	int		fd
+	POSIX::Fd		fd
     CODE:
 	RETVAL = tcgetattr(fd, termios_ref);
     OUTPUT:
@@ -1956,23 +1862,18 @@ getattr(termios_ref, fd = 0)
 SysRet
 setattr(termios_ref, fd = 0, optional_actions = DEF_SETATTR_ACTION)
 	POSIX::Termios	termios_ref
-	int		fd
+	POSIX::Fd	fd
 	int		optional_actions
     CODE:
-	if (fd >= 0) {
-            /* The second argument to the call is mandatory, but we'd like to give
-               it a useful default. 0 isn't valid on all operating systems - on
-               Solaris (at least) TCSANOW, TCSADRAIN and TCSAFLUSH have the same
-               values as the equivalent ioctls, TCSETS, TCSETSW and TCSETSF.  */
-            if (optional_actions < 0) {
-               SETERRNO(EINVAL, LIB_INVARG);
-               RETVAL = -1;
-            } else {
-                RETVAL = tcsetattr(fd, optional_actions, termios_ref);
-            }
-        } else {
-            SETERRNO(EBADF,RMS_IFI);
+	/* The second argument to the call is mandatory, but we'd like to give
+	   it a useful default. 0 isn't valid on all operating systems - on
+           Solaris (at least) TCSANOW, TCSADRAIN and TCSAFLUSH have the same
+           values as the equivalent ioctls, TCSETS, TCSETSW and TCSETSF.  */
+	if (optional_actions < 0) {
+            SETERRNO(EINVAL, LIB_INVARG);
             RETVAL = -1;
+        } else {
+            RETVAL = tcsetattr(fd, optional_actions, termios_ref);
         }
     OUTPUT:
 	RETVAL
@@ -2925,10 +2826,12 @@ fma(x,y,z)
 	NV		z
     CODE:
 #ifdef c99_fma
+	RETVAL = c99_fma(x, y, z);
+#else
 	PERL_UNUSED_VAR(x);
 	PERL_UNUSED_VAR(y);
 	PERL_UNUSED_VAR(z);
-	RETVAL = c99_fma(x, y, z);
+	not_here("fma");
 #endif
     OUTPUT:
 	RETVAL
@@ -2968,14 +2871,14 @@ jn(x,y)
     ALIAS:
 	yn = 1
     CODE:
-	PERL_UNUSED_VAR(x);
-	PERL_UNUSED_VAR(y);
 	RETVAL = NV_NAN;
         switch (ix) {
 	case 0:
 #ifdef bessel_jn
           RETVAL = bessel_jn(x, y);
 #else
+	  PERL_UNUSED_VAR(x);
+	  PERL_UNUSED_VAR(y);
           not_here("jn");
 #endif
             break;
@@ -2984,6 +2887,8 @@ jn(x,y)
 #ifdef bessel_yn
           RETVAL = bessel_yn(x, y);
 #else
+	  PERL_UNUSED_VAR(x);
+	  PERL_UNUSED_VAR(y);
           not_here("yn");
 #endif
             break;
@@ -3000,7 +2905,7 @@ sigaction(sig, optaction, oldaction = 0)
 #if defined(WIN32) || defined(NETWARE) || (defined(__amigaos4__) && defined(__NEWLIB__))
 	RETVAL = not_here("sigaction");
 #else
-# This code is really grody because we're trying to make the signal
+# This code is really grody because we are trying to make the signal
 # interface look beautiful, which is hard.
 
 	{
@@ -3247,17 +3152,14 @@ dup2(fd1, fd2)
 
 SV *
 lseek(fd, offset, whence)
-	int		fd
+	POSIX::Fd	fd
 	Off_t		offset
 	int		whence
     CODE:
-	if (fd >= 0) {
-            Off_t pos = PerlLIO_lseek(fd, offset, whence);
-            RETVAL = sizeof(Off_t) > sizeof(IV)
-              ? newSVnv((NV)pos) : newSViv((IV)pos);
-        } else {
-            SETERRNO(EBADF,RMS_IFI);
-            RETVAL = newSViv(-1);
+	{
+              Off_t pos = PerlLIO_lseek(fd, offset, whence);
+              RETVAL = sizeof(Off_t) > sizeof(IV)
+                ? newSVnv((NV)pos) : newSViv((IV)pos);
         }
     OUTPUT:
 	RETVAL
@@ -3289,7 +3191,7 @@ read(fd, buffer, nbytes)
     PREINIT:
         SV *sv_buffer = SvROK(ST(1)) ? SvRV(ST(1)) : ST(1);
     INPUT:
-        int             fd
+	POSIX::Fd	fd
         size_t          nbytes
         char *          buffer = sv_grow( sv_buffer, nbytes+1 );
     CLEANUP:
@@ -3310,11 +3212,11 @@ setsid()
 
 pid_t
 tcgetpgrp(fd)
-	int		fd
+	POSIX::Fd	fd
 
 SysRet
 tcsetpgrp(fd, pgrp_id)
-	int		fd
+	POSIX::Fd	fd
 	pid_t		pgrp_id
 
 void
@@ -3336,7 +3238,7 @@ uname()
 
 SysRet
 write(fd, buffer, nbytes)
-	int		fd
+	POSIX::Fd	fd
 	char *		buffer
 	size_t		nbytes
 
@@ -3553,7 +3455,7 @@ mkfifo(filename, mode)
 
 SysRet
 tcdrain(fd)
-	int		fd
+	POSIX::Fd	fd
     ALIAS:
 	close = 1
 	dup = 2
@@ -3571,17 +3473,17 @@ tcdrain(fd)
 
 SysRet
 tcflow(fd, action)
-	int		fd
+	POSIX::Fd	fd
 	int		action
     ALIAS:
 	tcflush = 1
 	tcsendbreak = 2
     CODE:
-        if (fd >= 0 && action >= 0) {
+        if (action >= 0) {
             RETVAL = ix == 1 ? tcflush(fd, action)
               : (ix < 1 ? tcflow(fd, action) : tcsendbreak(fd, action));
         } else {
-            SETERRNO(EBADF,RMS_IFI);
+            SETERRNO(EINVAL,LIB_INVARG);
             RETVAL = -1;
         }
     OUTPUT:
@@ -3749,7 +3651,7 @@ cuserid(s = 0)
 
 SysRetLong
 fpathconf(fd, name)
-	int		fd
+	POSIX::Fd	fd
 	int		name
 
 SysRetLong
@@ -3784,7 +3686,7 @@ sysconf(name)
 
 char *
 ttyname(fd)
-	int		fd
+	POSIX::Fd	fd
 
 void
 getcwd()

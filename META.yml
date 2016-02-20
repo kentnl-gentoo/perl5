@@ -48,6 +48,7 @@ no_index:
     - dist/threads
     - dist/threads-shared
     - dist/Tie-File
+    - dist/Time-HiRes
     - dist/XSLoader
     - lib/perl5db
     - win32
@@ -110,5 +111,5 @@ resources:
   homepage: http://www.perl.org/
   license: http://dev.perl.org/licenses/
   repository: http://perl5.git.perl.org/
-version: '5.023007'
+version: '5.023008'
 x_serialization_backend: 'CPAN::Meta::YAML version 0.018'

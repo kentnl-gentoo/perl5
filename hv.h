@@ -82,6 +82,7 @@ struct mro_meta {
     const struct mro_alg *mro_which; /* which mro alg is in use? */
     HV      *isa;            /* Everything this class @ISA */
     HV      *super;          /* SUPER method cache */
+    CV      *destroy;        /* DESTROY method if destroy_gen non-zero */
     U32     destroy_gen;     /* Generation number of DESTROY cache */
 };
 
@@ -402,7 +403,8 @@ C<SV*>.
 #define HVhek_UTF8	0x01 /* Key is utf8 encoded. */
 #define HVhek_WASUTF8	0x02 /* Key is bytes here, but was supplied as utf8. */
 #define HVhek_UNSHARED	0x08 /* This key isn't a shared hash key. */
-#define HVhek_FREEKEY	0x100 /* Internal flag to say key is malloc()ed.  */
+/* the following flags are options for functions, they are not stored in heks */
+#define HVhek_FREEKEY	0x100 /* Internal flag to say key is Newx()ed.  */
 #define HVhek_PLACEHOLD	0x200 /* Internal flag to create placeholder.
                                * (may change, but Storable is a core module) */
 #define HVhek_KEYCANONICAL 0x400 /* Internal flag - key is in canonical form.
@@ -543,8 +545,8 @@ struct refcounted_he {
 /*
 =for apidoc m|SV *|refcounted_he_fetch_pvs|const struct refcounted_he *chain|const char *key|U32 flags
 
-Like L</refcounted_he_fetch_pvn>, but takes a literal string instead of
-a string/length pair, and no precomputed hash.
+Like L</refcounted_he_fetch_pvn>, but takes a C<NUL>-terminated literal string
+instead of a string/length pair, and no precomputed hash.
 
 =cut
 */
@@ -555,8 +557,8 @@ a string/length pair, and no precomputed hash.
 /*
 =for apidoc m|struct refcounted_he *|refcounted_he_new_pvs|struct refcounted_he *parent|const char *key|SV *value|U32 flags
 
-Like L</refcounted_he_new_pvn>, but takes a literal string instead of
-a string/length pair, and no precomputed hash.
+Like L</refcounted_he_new_pvn>, but takes a C<NUL>-terminated literal string
+instead of a string/length pair, and no precomputed hash.
 
 =cut
 */

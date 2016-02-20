@@ -1615,6 +1615,8 @@ a(.)\4294967298	ab\o{42}94967298	ya	$1	b	\d not converted to native; \o{} is
 ^m?(\d)(.*)\1$	5b5	y	$1	5
 ^m?(\d)(.*)\1$	aba	n	-	-
 
+^_?[^\W_0-9]\w\z	\xAA\x{100}	y	$&	\xAA\x{100}		[perl #127537]
+
 # 17F is 'Long s';  This makes sure the a's in /aa can be separate
 /s/ai	\x{17F}	y	$&	\x{17F}
 /s/aia	\x{17F}	n	-	-
@@ -1755,6 +1757,12 @@ ab[c\\\](??{"x"})]{3}d	ab\\](d	y	-	-
 ^(A)((?(?{0})abc|xyz))$	Axyz	y	$1-$2	A-xyz	-
 ^(A)((?(?{return 1})abc|xyz))$	Aabc	y	$1-$2	A-abc	-
 ^(A)((?(?{return 0})abc|xyz))$	Axyz	y	$1-$2	A-xyz	-
+
+# using 'return' in code blocks with additional scopes to pop
+^(A)(?{ { 1; return "xyz"} })B$	AB	y	$1-$^R	A-xyz	-
+^(A)((??{ { 1; return "xyz" } }))$	Axyz	y	$1-$2	A-xyz	-
+^(A)((?(?{ { 1; return 1 } })abc|xyz))$	Aabc	y	$1-$2	A-abc	-
+^(A)((?(?{ { 1; return 0 } })abc|xyz))$	Axyz	y	$1-$2	A-xyz	-
 
 # pattern modifier flags should propagate into returned (??{}) pattern
 # p,d,l not tested

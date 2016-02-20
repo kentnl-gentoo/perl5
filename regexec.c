@@ -1736,12 +1736,26 @@ REXEC_FBC_SCAN( /* Loops while (s < strend) */                 \
             FBC_UTF8_A(TEST_NON_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT),           \
             TEST_NON_UTF8, PLACEHOLDER, REXEC_FBC_TRYIT)
 
+#ifdef DEBUGGING
+static IV
+S_get_break_val_cp_checked(SV* const invlist, const UV cp_in) {
+  IV cp_out = Perl__invlist_search(invlist, cp_in);
+  assert(cp_out >= 0);
+  return cp_out;
+}
+#  define _generic_GET_BREAK_VAL_CP_CHECKED(invlist, invmap, cp) \
+	invmap[S_get_break_val_cp_checked(invlist, cp)]
+#else
+#  define _generic_GET_BREAK_VAL_CP_CHECKED(invlist, invmap, cp) \
+	invmap[_invlist_search(invlist, cp)]
+#endif
+
 /* Takes a pointer to an inversion list, a pointer to its corresponding
  * inversion map, and a code point, and returns the code point's value
  * according to the two arrays.  It assumes that all code points have a value.
  * This is used as the base macro for macros for particular properties */
 #define _generic_GET_BREAK_VAL_CP(invlist, invmap, cp)              \
-                             invmap[_invlist_search(invlist, cp)]
+	_generic_GET_BREAK_VAL_CP_CHECKED(invlist, invmap, cp)
 
 /* Same as above, but takes begin, end ptrs to a UTF-8 encoded string instead
  * of a code point, returning the value for the first code point in the string.
@@ -4540,11 +4554,6 @@ S_backup_one_LB(pTHX_ const U8 * const strbeg, U8 ** curpos, const bool utf8_tar
     return lb;
 }
 
-/* This creates a single number by combining two, with 'before' being like the
- * 10's digit, but this isn't necessarily base 10; it is base however many
- * elements of the enum there are */
-#define SBcase(before, after) ((SB_ENUM_COUNT * before) + after)
-
 STATIC bool
 S_isSB(pTHX_ SB_enum before,
              SB_enum after,
@@ -4557,16 +4566,17 @@ S_isSB(pTHX_ SB_enum before,
      * between the inputs.  See http://www.unicode.org/reports/tr29/ */
 
     U8 * lpos = (U8 *) curpos;
-    U8 * temp_pos;
-    SB_enum backup;
+    bool has_para_sep = FALSE;
+    bool has_sp = FALSE;
 
     PERL_ARGS_ASSERT_ISSB;
 
     /* Break at the start and end of text.
         SB1.  sot  ÷
-        SB2.  ÷  eot */
+        SB2.  ÷  eot
+      But unstated in Unicode is don't break if the text is empty */
     if (before == SB_EDGE || after == SB_EDGE) {
-        return TRUE;
+        return before != after;
     }
 
     /* SB 3: Do not break within CRLF. */
@@ -4574,8 +4584,10 @@ S_isSB(pTHX_ SB_enum before,
         return FALSE;
     }
 
-    /* Break after paragraph separators.  (though why CR and LF are considered
-     * so is beyond me (khw)
+    /* Break after paragraph separators.  CR and LF are considered
+     * so because Unicode views text as like word processing text where there
+     * are no newlines except between paragraphs, and the word processor takes
+     * care of wrapping without there being hard line-breaks in the text *./
        SB4.  Sep | CR | LF  ÷ */
     if (before == SB_Sep || before == SB_CR || before == SB_LF) {
         return TRUE;
@@ -4585,11 +4597,31 @@ S_isSB(pTHX_ SB_enum before,
      * (See Section 6.2, Replacing Ignore Rules.)
         SB5.  X (Extend | Format)*  →  X */
     if (after == SB_Extend || after == SB_Format) {
+
+        /* Implied is that the these characters attach to everything
+         * immediately prior to them except for those separator-type
+         * characters.  And the rules earlier have already handled the case
+         * when one of those immediately precedes the extend char */
         return FALSE;
     }
 
     if (before == SB_Extend || before == SB_Format) {
-        before = backup_one_SB(strbeg, &lpos, utf8_target);
+        U8 * temp_pos = lpos;
+        const SB_enum backup = backup_one_SB(strbeg, &temp_pos, utf8_target);
+        if (   backup != SB_EDGE
+            && backup != SB_Sep
+            && backup != SB_CR
+            && backup != SB_LF)
+        {
+            before = backup;
+            lpos = temp_pos;
+        }
+
+        /* Here, both 'before' and 'backup' are these types; implied is that we
+         * don't break between them */
+        if (backup == SB_Extend || backup == SB_Format) {
+            return FALSE;
+        }
     }
 
     /* Do not break after ambiguous terminators like period, if they are
@@ -4607,97 +4639,107 @@ S_isSB(pTHX_ SB_enum before,
 
     /* SB7.  (Upper | Lower) ATerm  ×  Upper */
     if (before == SB_ATerm && after == SB_Upper) {
-        temp_pos = lpos;
-        backup = backup_one_SB(strbeg, &temp_pos, utf8_target);
+        U8 * temp_pos = lpos;
+        SB_enum backup = backup_one_SB(strbeg, &temp_pos, utf8_target);
         if (backup == SB_Upper || backup == SB_Lower) {
             return FALSE;
         }
     }
 
-    /* SB8a.  (STerm | ATerm) Close* Sp*  ×  (SContinue | STerm | ATerm)
-     * SB10.  (STerm | ATerm) Close* Sp*  ×  ( Sp | Sep | CR | LF )      */
-    backup = before;
-    temp_pos = lpos;
-    while (backup == SB_Sp) {
-        backup = backup_one_SB(strbeg, &temp_pos, utf8_target);
-    }
-    while (backup == SB_Close) {
-        backup = backup_one_SB(strbeg, &temp_pos, utf8_target);
-    }
-    if ((backup == SB_STerm || backup == SB_ATerm)
-        && (   after == SB_SContinue
-            || after == SB_STerm
-            || after == SB_ATerm
-            || after == SB_Sp
-            || after == SB_Sep
-            || after == SB_CR
-            || after == SB_LF))
-    {
-        return FALSE;
+    /* The remaining rules that aren't the final one, all require an STerm or
+     * an ATerm after having backed up over some Close* Sp*, and in one case an
+     * optional Paragraph separator, although one rule doesn't have any Sp's in it.
+     * So do that backup now, setting flags if either Sp or a paragraph
+     * separator are found */
+
+    if (before == SB_Sep || before == SB_CR || before == SB_LF) {
+        has_para_sep = TRUE;
+        before = backup_one_SB(strbeg, &lpos, utf8_target);
     }
 
-    /* SB8.  ATerm Close* Sp*  ×  ( ¬(OLetter | Upper | Lower | Sep | CR | LF |
-     *                                              STerm | ATerm) )* Lower */
-    if (backup == SB_ATerm) {
-        U8 * rpos = (U8 *) curpos;
-        SB_enum later = after;
-
-        while (    later != SB_OLetter
-                && later != SB_Upper
-                && later != SB_Lower
-                && later != SB_Sep
-                && later != SB_CR
-                && later != SB_LF
-                && later != SB_STerm
-                && later != SB_ATerm
-                && later != SB_EDGE)
-        {
-            later = advance_one_SB(&rpos, strend, utf8_target);
+    if (before == SB_Sp) {
+        has_sp = TRUE;
+        do {
+            before = backup_one_SB(strbeg, &lpos, utf8_target);
         }
-        if (later == SB_Lower) {
-            return FALSE;
+        while (before == SB_Sp);
+    }
+
+    while (before == SB_Close) {
+        before = backup_one_SB(strbeg, &lpos, utf8_target);
+    }
+
+    /* The next few rules apply only when the backed-up-to is an ATerm, and in
+     * most cases an STerm */
+    if (before == SB_STerm || before == SB_ATerm) {
+
+        /* So, here the lhs matches
+         *      (STerm | ATerm) Close* Sp* (Sep | CR | LF)?
+         * and we have set flags if we found an Sp, or the optional Sep,CR,LF.
+         * The rules that apply here are:
+         *
+         * SB8    ATerm Close* Sp*  ×  ( ¬(OLetter | Upper | Lower | Sep | CR
+                                           | LF | STerm | ATerm) )* Lower
+           SB8a  (STerm | ATerm) Close* Sp*  ×  (SContinue | STerm | ATerm)
+           SB9   (STerm | ATerm) Close*  ×  (Close | Sp | Sep | CR | LF)
+           SB10  (STerm | ATerm) Close* Sp*  ×  (Sp | Sep | CR | LF)
+           SB11  (STerm | ATerm) Close* Sp* (Sep | CR | LF)?  ÷
+         */
+
+        /* And all but SB11 forbid having seen a paragraph separator */
+        if (! has_para_sep) {
+            if (before == SB_ATerm) {          /* SB8 */
+                U8 * rpos = (U8 *) curpos;
+                SB_enum later = after;
+
+                while (    later != SB_OLetter
+                        && later != SB_Upper
+                        && later != SB_Lower
+                        && later != SB_Sep
+                        && later != SB_CR
+                        && later != SB_LF
+                        && later != SB_STerm
+                        && later != SB_ATerm
+                        && later != SB_EDGE)
+                {
+                    later = advance_one_SB(&rpos, strend, utf8_target);
+                }
+                if (later == SB_Lower) {
+                    return FALSE;
+                }
+            }
+
+            if (   after == SB_SContinue    /* SB8a */
+                || after == SB_STerm
+                || after == SB_ATerm)
+            {
+                return FALSE;
+            }
+
+            if (! has_sp) {     /* SB9 applies only if there was no Sp* */
+                if (   after == SB_Close
+                    || after == SB_Sp
+                    || after == SB_Sep
+                    || after == SB_CR
+                    || after == SB_LF)
+                {
+                    return FALSE;
+                }
+            }
+
+            /* SB10.  This and SB9 could probably be combined some way, but khw
+             * has decided to follow the Unicode rule book precisely for
+             * simplified maintenance */
+            if (   after == SB_Sp
+                || after == SB_Sep
+                || after == SB_CR
+                || after == SB_LF)
+            {
+                return FALSE;
+            }
         }
-    }
 
-    /* Break after sentence terminators, but include closing punctuation,
-     * trailing spaces, and a paragraph separator (if present). [See note
-     * below.]
-     * SB9.  ( STerm | ATerm ) Close*  ×  ( Close | Sp | Sep | CR | LF ) */
-    backup = before;
-    temp_pos = lpos;
-    while (backup == SB_Close) {
-        backup = backup_one_SB(strbeg, &temp_pos, utf8_target);
-    }
-    if ((backup == SB_STerm || backup == SB_ATerm)
-        && (   after == SB_Close
-            || after == SB_Sp
-            || after == SB_Sep
-            || after == SB_CR
-            || after == SB_LF))
-    {
-        return FALSE;
-    }
-
-
-    /* SB11.  ( STerm | ATerm ) Close* Sp* ( Sep | CR | LF )?  ÷ */
-    temp_pos = lpos;
-    backup = backup_one_SB(strbeg, &temp_pos, utf8_target);
-    if (   backup == SB_Sep
-        || backup == SB_CR
-        || backup == SB_LF)
-    {
-        lpos = temp_pos;
-    }
-    else {
-        backup = before;
-    }
-    while (backup == SB_Sp) {
-        backup = backup_one_SB(strbeg, &lpos, utf8_target);
-    }
-    while (backup == SB_Close) {
-        backup = backup_one_SB(strbeg, &lpos, utf8_target);
-    }
-    if (backup == SB_STerm || backup == SB_ATerm) {
+        /* SB11.  */
         return TRUE;
     }
 
@@ -4788,8 +4830,6 @@ S_backup_one_SB(pTHX_ const U8 * const strbeg, U8 ** curpos, const bool utf8_tar
     return sb;
 }
 
-#define WBcase(before, after) ((WB_ENUM_COUNT * before) + after)
-
 STATIC bool
 S_isWB(pTHX_ WB_enum previous,
              WB_enum before,
@@ -4811,190 +4851,144 @@ S_isWB(pTHX_ WB_enum previous,
 
     U8 * before_pos = (U8 *) curpos;
     U8 * after_pos = (U8 *) curpos;
+    WB_enum prev = before;
+    WB_enum next;
 
     PERL_ARGS_ASSERT_ISWB;
 
-    /* WB1 and WB2: Break at the start and end of text. */
-    if (before == WB_EDGE || after == WB_EDGE) {
-        return TRUE;
-    }
+    /* Rule numbers in the comments below are as of Unicode 8.0 */
 
-    /* WB 3 is: "Do not break within CRLF."  Perl extends this so that all
-     * white space sequences ending in a vertical space are treated as one
-     * unit. */
-
-    if (after == WB_CR || after == WB_LF || after == WB_Newline) {
-        if (before == WB_CR || before == WB_LF || before == WB_Newline
-                            || before == WB_Perl_Tailored_HSpace)
-        {
-            return FALSE;
-        }
-
-        /* WB 3a: Otherwise break before Newlines (including CR and LF) */
-        return TRUE;
-    }
-
-    /* Here, we know that 'after' is not a vertical space character, but
-     * 'before' could be.  WB 3b is: "Otherwise break after Newlines (including
-     * CR and LF)."  Perl changes that to not break-up spans of white space,
-     * except when horizontal space is followed by an Extend or Format
-     * character.  These apply just to the final white space character in the
-     * span, so it is broken away from the rest.  (If the Extend or Format
-     * character follows a vertical space character, it is treated as beginning
-     * a line, and doesn't modify the preceeding character.) */
-    if (   before == WB_CR || before == WB_LF || before == WB_Newline
-        || before == WB_Perl_Tailored_HSpace)
-    {
-        if (after == WB_Perl_Tailored_HSpace) {
-            U8 * temp_pos = (U8 *) curpos;
-            const WB_enum next
-                = advance_one_WB(&temp_pos, strend, utf8_target,
-                                 FALSE /* Don't skip Extend nor Format */ );
-            return next == WB_Extend || next == WB_Format;
-        }
-        else if (before != WB_Perl_Tailored_HSpace) {
-
-            /* Here, 'before' must be one of the vertical space characters, and
-             * after is not any type of white-space.  Follow WB 3b. */
+  redo:
+    before = prev;
+    switch (WB_table[before][after]) {
+        case WB_BREAKABLE:
             return TRUE;
-        }
 
-        /* Here, 'before' is horizontal space, and 'after' is not any kind of
-         * space.  Normal rules apply */
-    }
+        case WB_NOBREAK:
+            return FALSE;
 
-    /* Ignore Format and Extend characters, except when they appear at the
-     * beginning of a region of text.
-     * WB4.  X (Extend | Format)*  →  X. */
+        case WB_hs_then_hs:     /* 2 horizontal spaces in a row */
+            next = advance_one_WB(&after_pos, strend, utf8_target,
+                                 FALSE /* Don't skip Extend nor Format */ );
+            /* A space immediately preceeding an Extend or Format is attached
+             * to by them, and hence gets separated from previous spaces.
+             * Otherwise don't break between horizontal white space */
+            return next == WB_Extend || next == WB_Format;
 
-    if (after == WB_Extend || after == WB_Format) {
-        return FALSE;
-    }
+        /* WB4 Ignore Format and Extend characters, except when they appear at
+         * the beginning of a region of text.  This code currently isn't
+         * general purpose, but it works as the rules are currently and likely
+         * to be laid out.  The reason it works is that when 'they appear at
+         * the beginning of a region of text', the rule is to break before
+         * them, just like any other character.  Therefore, the default rule
+         * applies and we don't have to look in more depth.  Should this ever
+         * change, we would have to have 2 'case' statements, like in the
+         * rules below, and backup a single character (not spacing over the
+         * extend ones) and then see if that is one of the region-end
+         * characters and go from there */
+        case WB_Ex_or_FO_then_foo:
+            prev = backup_one_WB(&previous, strbeg, &before_pos, utf8_target);
+            goto redo;
 
-    if (before == WB_Extend || before == WB_Format) {
-        before = backup_one_WB(&previous, strbeg, &before_pos, utf8_target);
-    }
+        case WB_DQ_then_HL + WB_BREAKABLE:
+        case WB_DQ_then_HL + WB_NOBREAK:
 
-    switch (WBcase(before, after)) {
-            /* Otherwise, break everywhere (including around ideographs).
-                WB14.  Any  ÷  Any */
-            default:
-                return TRUE;
+            /* WB7c  Hebrew_Letter Double_Quote  ×  Hebrew_Letter */
 
-            /* Do not break between most letters.
-                WB5.  (ALetter | Hebrew_Letter) × (ALetter | Hebrew_Letter) */
-            case WBcase(WB_ALetter, WB_ALetter):
-            case WBcase(WB_ALetter, WB_Hebrew_Letter):
-            case WBcase(WB_Hebrew_Letter, WB_ALetter):
-            case WBcase(WB_Hebrew_Letter, WB_Hebrew_Letter):
+            if (backup_one_WB(&previous, strbeg, &before_pos, utf8_target)
+                                                            == WB_Hebrew_Letter)
+            {
                 return FALSE;
+            }
 
-            /* Do not break letters across certain punctuation.
-                WB6.  (ALetter | Hebrew_Letter)
-                        × (MidLetter | MidNumLet | Single_Quote) (ALetter
-                                                            | Hebrew_Letter) */
-            case WBcase(WB_ALetter, WB_MidLetter):
-            case WBcase(WB_ALetter, WB_MidNumLet):
-            case WBcase(WB_ALetter, WB_Single_Quote):
-            case WBcase(WB_Hebrew_Letter, WB_MidLetter):
-            case WBcase(WB_Hebrew_Letter, WB_MidNumLet):
-            /*case WBcase(WB_Hebrew_Letter, WB_Single_Quote):*/
-                after = advance_one_WB(&after_pos, strend, utf8_target,
-                                       TRUE /* Do skip Extend and Format */ );
-                return after != WB_ALetter && after != WB_Hebrew_Letter;
+             return WB_table[before][after] - WB_DQ_then_HL == WB_BREAKABLE;
 
-            /* WB7.  (ALetter | Hebrew_Letter) (MidLetter | MidNumLet |
-             *                    Single_Quote) ×  (ALetter | Hebrew_Letter) */
-            case WBcase(WB_MidLetter, WB_ALetter):
-            case WBcase(WB_MidLetter, WB_Hebrew_Letter):
-            case WBcase(WB_MidNumLet, WB_ALetter):
-            case WBcase(WB_MidNumLet, WB_Hebrew_Letter):
-            case WBcase(WB_Single_Quote, WB_ALetter):
-            case WBcase(WB_Single_Quote, WB_Hebrew_Letter):
-                before
-                  = backup_one_WB(&previous, strbeg, &before_pos, utf8_target);
-                return before != WB_ALetter && before != WB_Hebrew_Letter;
+        case WB_HL_then_DQ + WB_BREAKABLE:
+        case WB_HL_then_DQ + WB_NOBREAK:
 
-            /* WB7a.  Hebrew_Letter  ×  Single_Quote */
-            case WBcase(WB_Hebrew_Letter, WB_Single_Quote):
-                return FALSE;
+            /* WB7b  Hebrew_Letter  ×  Double_Quote Hebrew_Letter */
 
-            /* WB7b.  Hebrew_Letter  ×  Double_Quote Hebrew_Letter */
-            case WBcase(WB_Hebrew_Letter, WB_Double_Quote):
-                return advance_one_WB(&after_pos, strend, utf8_target,
+            if (advance_one_WB(&after_pos, strend, utf8_target,
                                        TRUE /* Do skip Extend and Format */ )
-                       != WB_Hebrew_Letter;
-
-            /* WB7c.  Hebrew_Letter Double_Quote  ×  Hebrew_Letter */
-            case WBcase(WB_Double_Quote, WB_Hebrew_Letter):
-                return backup_one_WB(&previous, strbeg, &before_pos, utf8_target)
-                                                        != WB_Hebrew_Letter;
-
-            /* Do not break within sequences of digits, or digits adjacent to
-             * letters (“3a”, or “A3”).
-                WB8.  Numeric  ×  Numeric */
-            case WBcase(WB_Numeric, WB_Numeric):
+                                                            == WB_Hebrew_Letter)
+            {
                 return FALSE;
+            }
 
-            /* WB9.  (ALetter | Hebrew_Letter)  ×  Numeric */
-            case WBcase(WB_ALetter, WB_Numeric):
-            case WBcase(WB_Hebrew_Letter, WB_Numeric):
+            return WB_table[before][after] - WB_HL_then_DQ == WB_BREAKABLE;
+
+        case WB_LE_or_HL_then_MB_or_ML_or_SQ + WB_NOBREAK:
+        case WB_LE_or_HL_then_MB_or_ML_or_SQ + WB_BREAKABLE:
+
+            /* WB6  (ALetter | Hebrew_Letter)  ×  (MidLetter | MidNumLet
+             *       | Single_Quote) (ALetter | Hebrew_Letter) */
+
+            next = advance_one_WB(&after_pos, strend, utf8_target,
+                                       TRUE /* Do skip Extend and Format */ );
+
+            if (next == WB_ALetter || next == WB_Hebrew_Letter)
+            {
                 return FALSE;
+            }
 
-            /* WB10.  Numeric  ×  (ALetter | Hebrew_Letter) */
-            case WBcase(WB_Numeric, WB_ALetter):
-            case WBcase(WB_Numeric, WB_Hebrew_Letter):
+            return WB_table[before][after]
+                            - WB_LE_or_HL_then_MB_or_ML_or_SQ == WB_BREAKABLE;
+
+        case WB_MB_or_ML_or_SQ_then_LE_or_HL + WB_NOBREAK:
+        case WB_MB_or_ML_or_SQ_then_LE_or_HL + WB_BREAKABLE:
+
+            /* WB7  (ALetter | Hebrew_Letter) (MidLetter | MidNumLet
+             *       | Single_Quote)  ×  (ALetter | Hebrew_Letter) */
+
+            prev = backup_one_WB(&previous, strbeg, &before_pos, utf8_target);
+            if (prev == WB_ALetter || prev == WB_Hebrew_Letter)
+            {
                 return FALSE;
+            }
 
-            /* Do not break within sequences, such as “3.2” or “3,456.789”.
-                WB11.   Numeric (MidNum | MidNumLet | Single_Quote)  ×  Numeric
-             */
-            case WBcase(WB_MidNum, WB_Numeric):
-            case WBcase(WB_MidNumLet, WB_Numeric):
-            case WBcase(WB_Single_Quote, WB_Numeric):
-                return backup_one_WB(&previous, strbeg, &before_pos, utf8_target)
-                                                               != WB_Numeric;
+            return WB_table[before][after]
+                            - WB_MB_or_ML_or_SQ_then_LE_or_HL == WB_BREAKABLE;
 
-            /*  WB12.   Numeric  ×  (MidNum | MidNumLet | Single_Quote) Numeric
-             *  */
-            case WBcase(WB_Numeric, WB_MidNum):
-            case WBcase(WB_Numeric, WB_MidNumLet):
-            case WBcase(WB_Numeric, WB_Single_Quote):
-                return advance_one_WB(&after_pos, strend, utf8_target,
-                                      TRUE /* Do skip Extend and Format */ )
-                        != WB_Numeric;
+        case WB_MB_or_MN_or_SQ_then_NU + WB_NOBREAK:
+        case WB_MB_or_MN_or_SQ_then_NU + WB_BREAKABLE:
 
-            /* Do not break between Katakana.
-               WB13.  Katakana  ×  Katakana */
-            case WBcase(WB_Katakana, WB_Katakana):
+            /* WB11  Numeric (MidNum | (MidNumLet | Single_Quote))  ×  Numeric
+             * */
+
+            if (backup_one_WB(&previous, strbeg, &before_pos, utf8_target)
+                                                            == WB_Numeric)
+            {
                 return FALSE;
+            }
 
-            /* Do not break from extenders.
-               WB13a.  (ALetter | Hebrew_Letter | Numeric | Katakana |
-                                            ExtendNumLet)  ×  ExtendNumLet */
-            case WBcase(WB_ALetter, WB_ExtendNumLet):
-            case WBcase(WB_Hebrew_Letter, WB_ExtendNumLet):
-            case WBcase(WB_Numeric, WB_ExtendNumLet):
-            case WBcase(WB_Katakana, WB_ExtendNumLet):
-            case WBcase(WB_ExtendNumLet, WB_ExtendNumLet):
+            return WB_table[before][after]
+                                - WB_MB_or_MN_or_SQ_then_NU == WB_BREAKABLE;
+
+        case WB_NU_then_MB_or_MN_or_SQ + WB_NOBREAK:
+        case WB_NU_then_MB_or_MN_or_SQ + WB_BREAKABLE:
+
+            /* WB12  Numeric  ×  (MidNum | MidNumLet | Single_Quote) Numeric */
+
+            if (advance_one_WB(&after_pos, strend, utf8_target,
+                                       TRUE /* Do skip Extend and Format */ )
+                                                            == WB_Numeric)
+            {
                 return FALSE;
+            }
 
-            /* WB13b.  ExtendNumLet  ×  (ALetter | Hebrew_Letter | Numeric
-             *                                                 | Katakana) */
-            case WBcase(WB_ExtendNumLet, WB_ALetter):
-            case WBcase(WB_ExtendNumLet, WB_Hebrew_Letter):
-            case WBcase(WB_ExtendNumLet, WB_Numeric):
-            case WBcase(WB_ExtendNumLet, WB_Katakana):
-                return FALSE;
+            return WB_table[before][after]
+                                - WB_NU_then_MB_or_MN_or_SQ == WB_BREAKABLE;
 
-            /* Do not break between regional indicator symbols.
-               WB13c.  Regional_Indicator  ×  Regional_Indicator */
-            case WBcase(WB_Regional_Indicator, WB_Regional_Indicator):
-                return FALSE;
-
+        default:
+            break;
     }
 
-    NOT_REACHED; /* NOTREACHED */
+#ifdef DEBUGGING
+    PerlIO_printf(Perl_error_log, "Unhandled WB pair: WB_table[%d, %d] = %d\n",
+                                  before, after, WB_table[before][after]);
+    assert(0);
+#endif
+    return TRUE;
 }
 
 STATIC WB_enum
@@ -5117,6 +5111,7 @@ S_backup_one_WB(pTHX_ WB_enum * previous, const U8 * const strbeg, U8 ** curpos,
 STATIC SSize_t
 S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 {
+
 #if PERL_VERSION < 9 && !defined(PERL_CORE)
     dMY_CXT;
 #endif
@@ -5135,7 +5130,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
     SSize_t ln = 0; /* len or last;  init to avoid compiler warning */
     char *locinput = startpos;
     char *pushinput; /* where to continue after a PUSH */
-    I32 nextchr;   /* is always set to UCHARAT(locinput) */
+    I32 nextchr;   /* is always set to UCHARAT(locinput), or -1 at EOS */
 
     bool result = 0;	    /* return value of S_regmatch */
     int depth = 0;	    /* depth of backtrack stack */
@@ -5177,7 +5172,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 			    */
     PAD* last_pad = NULL;
     dMULTICALL;
-    I32 gimme = G_SCALAR;
+    U8 gimme = G_SCALAR;
     CV *caller_cv = NULL;	/* who called us */
     CV *last_pushed_cv = NULL;	/* most recently called (?{}) CV */
     CHECKPOINT runops_cp;	/* savestack position before executing EVAL */
@@ -5197,11 +5192,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 
     /* shut up 'may be used uninitialized' compiler warnings for dMULTICALL */
     multicall_oldcatch = 0;
-    multicall_cv = NULL;
-    cx = NULL;
     PERL_UNUSED_VAR(multicall_cop);
-    PERL_UNUSED_VAR(newsp);
-
 
     PERL_ARGS_ASSERT_REGMATCH;
 
@@ -6120,7 +6111,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	case ANYOF:  /*   /[abc]/       */
             if (NEXTCHR_IS_EOS)
                 sayNO;
-	    if (utf8_target && ! UTF8_IS_INVARIANT(locinput)) {
+	    if (utf8_target && ! UTF8_IS_INVARIANT(*locinput)) {
 	        if (!reginclass(rex, scan, (U8*)locinput, (U8*)reginfo->strend,
                                                                    utf8_target))
 		    sayNO;
@@ -6192,7 +6183,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
             }
 
             to_complement = 1;
-            /* FALLTHROUGH */
+            goto join_nposixa;
 
         case POSIXA:    /* \w or [:punct:] etc. under /a */
 
@@ -6201,9 +6192,14 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
              * UTF-8, and also from NPOSIXA even in UTF-8 when the current
              * character is a single byte */
 
-            if (NEXTCHR_IS_EOS
-                || ! (to_complement ^ cBOOL(_generic_isCC_A(nextchr,
-                                                            FLAGS(scan)))))
+            if (NEXTCHR_IS_EOS) {
+                sayNO;
+            }
+
+          join_nposixa:
+
+            if (! (to_complement ^ cBOOL(_generic_isCC_A(nextchr,
+                                                                FLAGS(scan)))))
             {
                 sayNO;
             }
@@ -6590,6 +6586,13 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                     U8 flags = (CXp_SUB_RE |
                                 ((newcv == caller_cv) ? CXp_SUB_RE_FAKE : 0));
 		    if (last_pushed_cv) {
+                        /* PUSH/POP_MULTICALL save and restore the
+                         * caller's PL_comppad; if we call multiple subs
+                         * using the same CX block, we have to save and
+                         * unwind the varying PL_comppad's ourselves,
+                         * especially restoring the right PL_comppad on
+                         * backtrack - so save it on the save stack */
+                        SAVECOMPPAD();
 			CHANGE_MULTICALL_FLAGS(newcv, flags);
 		    }
 		    else {
@@ -6601,7 +6604,6 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
                     /* these assignments are just to silence compiler
                      * warnings */
 		    multicall_cop = NULL;
-		    newsp = NULL;
 		}
 		last_pad = PL_comppad;
 
@@ -6653,7 +6655,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 
 		/* we don't use MULTICALL here as we want to call the
 		 * first op of the block of interest, rather than the
-		 * first op of the sub */
+		 * first op of the sub. Also, we don't want to free
+                 * the savestack frame */
 		before = (IV)(SP-PL_stack_base);
 		PL_op = nop;
 		CALLRUNOPS(aTHX);			/* Scalar context. */

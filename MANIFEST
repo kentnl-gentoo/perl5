@@ -889,6 +889,7 @@ cpan/Encode/t/enc_module.enc		test data for t/enc_module.t
 cpan/Encode/t/enc_module.t		test script
 cpan/Encode/t/Encoder.t			test script
 cpan/Encode/t/Encode.t			test script
+cpan/Encode/t/encoding-locale.t		test script
 cpan/Encode/t/encoding.t		test script
 cpan/Encode/t/enc_utf8.t		test script
 cpan/Encode/t/fallback.t		test script
@@ -1860,8 +1861,6 @@ cpan/Pod-Escapes/lib/Pod/Escapes.pm	Pod::Escapes
 cpan/Pod-Escapes/t/01_about_verbose.t	test Pod::Escapes
 cpan/Pod-Escapes/t/10_main.t		test Pod::Escapes
 cpan/Pod-Escapes/t/15_name2charnum.t	test Pod::Escapes
-cpan/podlators/bin/pod2man			Translator to turn pod into manpage
-cpan/podlators/bin/pod2text			Translator to turn pod into text
 cpan/podlators/lib/Pod/Man.pm			Convert POD data to *roff
 cpan/podlators/lib/Pod/ParseLink.pm		Perl an L<> formatting code in POD text
 cpan/podlators/lib/Pod/Text/Color.pm		Convert POD data to color ASCII text
@@ -1869,6 +1868,8 @@ cpan/podlators/lib/Pod/Text/Overstrike.pm	Convert POD data to formatted overstri
 cpan/podlators/lib/Pod/Text.pm			Pod-Parser - convert POD data to formatted ASCII text
 cpan/podlators/lib/Pod/Text/Termcap.pm		Convert POD data to ASCII text with format escapes
 cpan/podlators/Makefile.PL			podlators Makefile.PL
+cpan/podlators/scripts/pod2man.PL		Translator to turn pod into manpage
+cpan/podlators/scripts/pod2text.PL		Translator to turn pod into text
 cpan/podlators/t/data/basic.cap			podlators test			podlators test
 cpan/podlators/t/data/basic.clr			podlators test
 cpan/podlators/t/data/basic.man			podlators test
@@ -1890,12 +1891,14 @@ cpan/podlators/t/general/filehandle.t			podlators test
 cpan/podlators/t/general/pod-parser.t			podlators test
 cpan/podlators/t/lib/Test/Podlators.pm			podlators test
 cpan/podlators/t/lib/Test/RRA/Config.pm			podlators test
+cpan/podlators/t/lib/Test/RRA/ModuleVersion.pm		podlators test
 cpan/podlators/t/lib/Test/RRA.pm			podlators test
 cpan/podlators/t/man/basic.t			podlators test
 cpan/podlators/t/man/devise-date.t			podlators test
 cpan/podlators/t/man/devise-title.t			podlators test
 cpan/podlators/t/man/empty.t			podlators test
 cpan/podlators/t/man/heading.t			podlators test
+cpan/podlators/t/man/no-encode.t		podlators test
 cpan/podlators/t/man/options.t			podlators test
 cpan/podlators/t/man/utf8-io.t			podlators test
 cpan/podlators/t/parselink/basic.t			podlators test
@@ -2652,32 +2655,6 @@ cpan/Tie-RefHash/t/rebless.t	Test for Tie::RefHash with rebless
 cpan/Tie-RefHash/t/refhash.t	Test for Tie::RefHash and Tie::RefHash::Nestable
 cpan/Tie-RefHash/t/storable.t	Test for Tie::RefHash with storable
 cpan/Tie-RefHash/t/threaded.t	Test for Tie::RefHash with threads
-cpan/Time-HiRes/fallback/const-c.inc	Time::HiRes extension
-cpan/Time-HiRes/fallback/const-xs.inc	Time::HiRes extension
-cpan/Time-HiRes/hints/aix.pl		Hint for Time::HiRes for named architecture
-cpan/Time-HiRes/hints/dec_osf.pl	Hint for Time::HiRes for named architecture
-cpan/Time-HiRes/hints/dynixptx.pl	Hint for Time::HiRes for named architecture
-cpan/Time-HiRes/hints/irix.pl		Hint for Time::HiRes for named architecture
-cpan/Time-HiRes/hints/linux.pl		Hints for Time::HiRes for named architecture
-cpan/Time-HiRes/hints/sco.pl		Hints for Time::HiRes for named architecture
-cpan/Time-HiRes/hints/solaris.pl	Hints for Time::HiRes for named architecture
-cpan/Time-HiRes/hints/svr4.pl		Hints for Time::HiRes for named architecture
-cpan/Time-HiRes/HiRes.pm		Time::HiRes extension
-cpan/Time-HiRes/HiRes.xs		Time::HiRes extension
-cpan/Time-HiRes/Makefile.PL		Time::HiRes extension
-cpan/Time-HiRes/t/alarm.t		Test for Time::HiRes
-cpan/Time-HiRes/t/clock.t		Test for Time::HiRes
-cpan/Time-HiRes/t/gettimeofday.t	Test for Time::HiRes
-cpan/Time-HiRes/t/itimer.t		Test for Time::HiRes
-cpan/Time-HiRes/t/nanosleep.t		Test for Time::HiRes
-cpan/Time-HiRes/t/sleep.t		Test for Time::HiRes
-cpan/Time-HiRes/t/stat.t		Test for Time::HiRes
-cpan/Time-HiRes/t/time.t		Test for Time::HiRes
-cpan/Time-HiRes/t/tv_interval.t		Test for Time::HiRes
-cpan/Time-HiRes/t/ualarm.t		Test for Time::HiRes
-cpan/Time-HiRes/t/usleep.t		Test for Time::HiRes
-cpan/Time-HiRes/t/Watchdog.pm		Test for Time::HiRes
-cpan/Time-HiRes/typemap			Time::HiRes extension
 cpan/Time-Local/lib/Time/Local.pm	Reverse translation of localtime, gmtime
 cpan/Time-Local/t/Local.t		See if Time::Local works
 cpan/Time-Piece/Piece.pm	Time::Piece extension
@@ -3550,6 +3527,33 @@ dist/Tie-File/t/33_defer_vs.t		Like 30_defer.t, but with varying-length records
 dist/Tie-File/t/40_abs_cache.t		Unit tests for Tie::File::Cache
 dist/Tie-File/t/41_heap.t		Unit tests for Tie::File::Heap
 dist/Tie-File/t/42_offset.t		Unit tests for the offset method
+dist/Time-HiRes/Changes			Time::HiRes extension
+dist/Time-HiRes/fallback/const-c.inc	Time::HiRes extension
+dist/Time-HiRes/fallback/const-xs.inc	Time::HiRes extension
+dist/Time-HiRes/hints/aix.pl		Hint for Time::HiRes for named architecture
+dist/Time-HiRes/hints/dec_osf.pl	Hint for Time::HiRes for named architecture
+dist/Time-HiRes/hints/dynixptx.pl	Hint for Time::HiRes for named architecture
+dist/Time-HiRes/hints/irix.pl		Hint for Time::HiRes for named architecture
+dist/Time-HiRes/hints/linux.pl		Hints for Time::HiRes for named architecture
+dist/Time-HiRes/hints/sco.pl		Hints for Time::HiRes for named architecture
+dist/Time-HiRes/hints/solaris.pl	Hints for Time::HiRes for named architecture
+dist/Time-HiRes/hints/svr4.pl		Hints for Time::HiRes for named architecture
+dist/Time-HiRes/HiRes.pm		Time::HiRes extension
+dist/Time-HiRes/HiRes.xs		Time::HiRes extension
+dist/Time-HiRes/Makefile.PL		Time::HiRes extension
+dist/Time-HiRes/t/alarm.t		Test for Time::HiRes
+dist/Time-HiRes/t/clock.t		Test for Time::HiRes
+dist/Time-HiRes/t/gettimeofday.t	Test for Time::HiRes
+dist/Time-HiRes/t/itimer.t		Test for Time::HiRes
+dist/Time-HiRes/t/nanosleep.t		Test for Time::HiRes
+dist/Time-HiRes/t/sleep.t		Test for Time::HiRes
+dist/Time-HiRes/t/stat.t		Test for Time::HiRes
+dist/Time-HiRes/t/time.t		Test for Time::HiRes
+dist/Time-HiRes/t/tv_interval.t		Test for Time::HiRes
+dist/Time-HiRes/t/ualarm.t		Test for Time::HiRes
+dist/Time-HiRes/t/usleep.t		Test for Time::HiRes
+dist/Time-HiRes/t/Watchdog.pm		Test for Time::HiRes
+dist/Time-HiRes/typemap			Time::HiRes extension
 dist/XSLoader/Makefile.PL	Dynamic Loader makefile writer
 dist/XSLoader/t/XSLoader.t	See if XSLoader works
 dist/XSLoader/XSLoader_pm.PL	Simple XS Loader perl module
@@ -3630,6 +3634,7 @@ ext/B/t/optree_varinit.t	my,our,local var init optimization
 ext/B/t/o.t		See if O works
 ext/B/t/pragma.t	See if user pragmas work.
 ext/B/t/showlex.t	See if B::ShowLex works
+ext/B/t/sv_stash.t	See if SvSTASH() works
 ext/B/t/terse.t		See if B::Terse works
 ext/B/t/walkoptree.t	See if B::walkoptree (and friends) work
 ext/B/t/xref.t		See if B::Xref works
@@ -3846,7 +3851,6 @@ ext/POSIX/Makefile.PL		POSIX extension makefile writer
 ext/POSIX/POSIX.xs		POSIX extension external subroutines
 ext/POSIX/t/export.t		Test @EXPORT and @EXPORT_OK
 ext/POSIX/t/iscrash		See if POSIX isxxx() crashes with threads on Win32
-ext/POSIX/t/is.t		See if POSIX isxxx() work
 ext/POSIX/t/math.t		Basic math tests for POSIX
 ext/POSIX/t/posix.t		See if POSIX works
 ext/POSIX/t/sigaction.t		See if POSIX::sigaction works
@@ -4645,6 +4649,7 @@ pod/perl5233delta.pod		Perl changes in version 5.23.3
 pod/perl5234delta.pod		Perl changes in version 5.23.4
 pod/perl5235delta.pod		Perl changes in version 5.23.5
 pod/perl5236delta.pod		Perl changes in version 5.23.6
+pod/perl5237delta.pod		Perl changes in version 5.23.7
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5626,8 +5631,6 @@ utils/perlivp.PL		installation verification procedure
 utils/piconv.PL			iconv(1), reinvented in perl
 utils/pl2pm.PL			A pl to pm translator
 utils/pod2html.PL		Translator to turn pod into HTML
-utils/pod2man.PL		Convert POD data to formatted *roff input
-utils/pod2text.PL		Convert POD data to formatted ASCII text
 utils/prove.PL			The prove harness utility
 utils/ptardiff.PL		The ptardiff utility
 utils/ptargrep.PL		The ptargrep utility

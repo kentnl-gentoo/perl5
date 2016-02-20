@@ -968,6 +968,7 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
         for (i=0; i < count;  i++)
             Perl_dump_indent(aTHX_ level+1, file, "%"UVuf" => 0x%"UVxf"\n",
                                     i, items[i].uv);
+	break;
     }
 
     case OP_CONST:
@@ -2201,6 +2202,8 @@ Perl_runops_debug(pTHX)
         ++PL_op_exec_cnt[PL_op->op_type];
 #endif
 	if (PL_debug) {
+            ENTER;
+            SAVETMPS;
 	    if (PL_watchaddr && (*PL_watchaddr != PL_watchok))
 		PerlIO_printf(Perl_debug_log,
 			      "WARNING: %"UVxf" changed from %"UVxf" to %"UVxf"\n",
@@ -2218,6 +2221,8 @@ Perl_runops_debug(pTHX)
 
 	    if (DEBUG_t_TEST_) debop(PL_op);
 	    if (DEBUG_P_TEST_) debprof(PL_op);
+            FREETMPS;
+            LEAVE;
 	}
 
         OP_ENTRY_PROBE(OP_NAME(PL_op));
@@ -2232,7 +2237,7 @@ Perl_runops_debug(pTHX)
 
 /* print the names of the n lexical vars starting at pad offset off */
 
-void
+STATIC void
 S_deb_padvar(pTHX_ PADOFFSET off, int n, bool paren)
 {
     PADNAME *sv;

@@ -385,6 +385,7 @@ Perl_gv_init_pvn(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, U32 flag
 	case SVt_PVIO:
             Perl_croak(aTHX_ "Cannot convert a reference to %s to typeglob",
 		       sv_reftype(has_constant, 0));
+            break;
 
 	default: NOOP;
 	}
@@ -3368,7 +3369,7 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
     SV* res;
     const bool oldcatch = CATCH_GET;
     I32 oldmark, nret;
-    int gimme = force_scalar ? G_SCALAR : GIMME_V;
+    U8 gimme = force_scalar ? G_SCALAR : GIMME_V;
 
     CATCH_SET(TRUE);
     Zero(&myop, 1, BINOP);

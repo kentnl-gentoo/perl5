@@ -713,38 +713,15 @@ See also L</isinf>, and L</fpclassify>.
 
 =item C<isalnum>
 
-Deprecated function whose use raises a warning, and which is slated to
-be removed in a future Perl version.  It is very similar to matching
-against S<C<qr/ ^ [[:alnum:]]+ $ /x>>, which you should convert to use
-instead.  The function is deprecated because 1) it doesn't handle UTF-8
-encoded strings properly; and 2) it returns C<TRUE> even if the input is
-the empty string.  The function return is always based on the current
-locale, whereas using locale rules is optional with the regular
-expression, based on pragmas in effect and pattern modifiers (see
-L<perlre/Character set modifiers> and L<perlre/Which character set
-modifier is in effect?>).
-
-The function returns C<TRUE> if the input string is empty, or if the
-corresponding C function returns C<TRUE> for every byte in the string.
-
-You may want to use the C<L<E<sol>\wE<sol>|perlrecharclass/Word
-characters>> construct instead.
+This function has been removed as of v5.24.  It was very similar to
+matching against S<C<qr/ ^ [[:alnum:]]+ $ /x>>, which you should convert
+to use instead.  See L<perlrecharclass/POSIX Character Classes>.
 
 =item C<isalpha>
 
-Deprecated function whose use raises a warning, and which is slated to
-be removed in a future Perl version.  It is very similar to matching
-against S<C<qr/ ^ [[:alpha:]]+ $ /x>>, which you should convert to use
-instead.  The function is deprecated because 1) it doesn't handle UTF-8
-encoded strings properly; and 2) it returns C<TRUE> even if the input is
-the empty string.  The function return is always based on the current
-locale, whereas using locale rules is optional with the regular
-expression, based on pragmas in effect and pattern modifiers (see
-L<perlre/Character set modifiers> and L<perlre/Which character set
-modifier is in effect?>).
-
-The function returns C<TRUE> if the input string is empty, or if the
-corresponding C function returns C<TRUE> for every byte in the string.
+This function has been removed as of v5.24.  It was very similar to
+matching against S<C<qr/ ^ [[:alpha:]]+ $ /x>>, which you should convert
+to use instead.  See L<perlrecharclass/POSIX Character Classes>.
 
 =item C<isatty>
 
@@ -753,38 +730,15 @@ to a tty.  Similar to the C<-t> operator, see L<perlfunc/-X>.
 
 =item C<iscntrl>
 
-Deprecated function whose use raises a warning, and which is slated to
-be removed in a future Perl version.  It is very similar to matching
-against S<C<qr/ ^ [[:cntrl:]]+ $ /x>>, which you should convert to use
-instead.  The function is deprecated because 1) it doesn't handle UTF-8
-encoded strings properly; and 2) it returns C<TRUE> even if the input is
-the empty string.  The function return is always based on the current
-locale, whereas using locale rules is optional with the regular
-expression, based on pragmas in effect and pattern modifiers (see
-L<perlre/Character set modifiers> and L<perlre/Which character set
-modifier is in effect?>).
-
-The function returns C<TRUE> if the input string is empty, or if the
-corresponding C function returns C<TRUE> for every byte in the string.
+This function has been removed as of v5.24.  It was very similar to
+matching against S<C<qr/ ^ [[:cntrl:]]+ $ /x>>, which you should convert
+to use instead.  See L<perlrecharclass/POSIX Character Classes>.
 
 =item C<isdigit>
 
-Deprecated function whose use raises a warning, and which is slated to
-be removed in a future Perl version.  It is very similar to matching
-against S<C<qr/ ^ [[:digit:]]+ $ /x>>, which you should convert to use
-instead.  The function is deprecated because 1) it doesn't handle UTF-8
-encoded strings properly; and 2) it returns C<TRUE> even if the input is
-the empty string.  The function return is always based on the current
-locale, whereas using locale rules is optional with the regular
-expression, based on pragmas in effect and pattern modifiers (see
-L<perlre/Character set modifiers> and L<perlre/Which character set
-modifier is in effect?>).
-
-The function returns C<TRUE> if the input string is empty, or if the
-corresponding C function returns C<TRUE> for every byte in the string.
-
-You may want to use the C<L<E<sol>\dE<sol>|perlrecharclass/Digits>>
-construct instead.
+This function has been removed as of v5.24.  It was very similar to
+matching against S<C<qr/ ^ [[:digit:]]+ $ /x>>, which you should convert
+to use instead.  See L<perlrecharclass/POSIX Character Classes>.
 
 =item C<isfinite>
 
@@ -795,19 +749,9 @@ See also L</isinf>, L</isnan>, and L</fpclassify>.
 
 =item C<isgraph>
 
-Deprecated function whose use raises a warning, and which is slated to
-be removed in a future Perl version.  It is very similar to matching
-against S<C<qr/ ^ [[:graph:]]+ $ /x>>, which you should convert to use
-instead.  The function is deprecated because 1) it doesn't handle UTF-8
-encoded strings properly; and 2) it returns C<TRUE> even if the input is
-the empty string.  The function return is always based on the current
-locale, whereas using locale rules is optional with the regular
-expression, based on pragmas in effect and pattern modifiers (see
-L<perlre/Character set modifiers> and L<perlre/Which character set
-modifier is in effect?>).
-
-The function returns C<TRUE> if the input string is empty, or if the
-corresponding C function returns C<TRUE> for every byte in the string.
+This function has been removed as of v5.24.  It was very similar to
+matching against S<C<qr/ ^ [[:graph:]]+ $ /x>>, which you should convert
+to use instead.  See L<perlrecharclass/POSIX Character Classes>.
 
 =item C<isgreater>
 
@@ -824,21 +768,9 @@ See also L</Inf>, L</isnan>, L</isfinite>, and L</fpclassify>.
 
 =item C<islower>
 
-Deprecated function whose use raises a warning, and which is slated to
-be removed in a future Perl version.  It is very similar to matching
-against S<C<qr/ ^ [[:lower:]]+ $ /x>>, which you should convert to use
-instead.  The function is deprecated because 1) it doesn't handle UTF-8
-encoded strings properly; and 2) it returns C<TRUE> even if the input is
-the empty string.  The function return is always based on the current
-locale, whereas using locale rules is optional with the regular
-expression, based on pragmas in effect and pattern modifiers (see
-L<perlre/Character set modifiers> and L<perlre/Which character set
-modifier is in effect?>).
-
-The function returns C<TRUE> if the input string is empty, or if the
-corresponding C function returns C<TRUE> for every byte in the string.
-
-Do B<not> use C</[a-z]/> unless you don't care about the current locale.
+This function has been removed as of v5.24.  It was very similar to
+matching against S<C<qr/ ^ [[:lower:]]+ $ /x>>, which you should convert
+to use instead.  See L<perlrecharclass/POSIX Character Classes>.
 
 =item C<isnan>
 
@@ -861,35 +793,15 @@ See also L</isfinite>, and L</fpclassify>.
 
 =item C<isprint>
 
-Deprecated function whose use raises a warning, and which is slated to
-be removed in a future Perl version.  It is very similar to matching
-against S<C<qr/ ^ [[:print:]]+ $ /x>>, which you should convert to use
-instead.  The function is deprecated because 1) it doesn't handle UTF-8
-encoded strings properly; and 2) it returns C<TRUE> even if the input is
-the empty string.  The function return is always based on the current
-locale, whereas using locale rules is optional with the regular
-expression, based on pragmas in effect and pattern modifiers (see
-L<perlre/Character set modifiers> and L<perlre/Which character set
-modifier is in effect?>).
-
-The function returns C<TRUE> if the input string is empty, or if the
-corresponding C function returns C<TRUE> for every byte in the string.
+This function has been removed as of v5.24.  It was very similar to
+matching against S<C<qr/ ^ [[:print:]]+ $ /x>>, which you should convert
+to use instead.  See L<perlrecharclass/POSIX Character Classes>.
 
 =item C<ispunct>
 
-Deprecated function whose use raises a warning, and which is slated to
-be removed in a future Perl version.  It is very similar to matching
-against S<C<qr/ ^ [[:punct:]]+ $ /x>>, which you should convert to use
-instead.  The function is deprecated because 1) it doesn't handle UTF-8
-encoded strings properly; and 2) it returns C<TRUE> even if the input is
-the empty string.  The function return is always based on the current
-locale, whereas using locale rules is optional with the regular
-expression, based on pragmas in effect and pattern modifiers (see
-L<perlre/Character set modifiers> and L<perlre/Which character set
-modifier is in effect?>).
-
-The function returns C<TRUE> if the input string is empty, or if the
-corresponding C function returns C<TRUE> for every byte in the string.
+This function has been removed as of v5.24.  It was very similar to
+matching against S<C<qr/ ^ [[:punct:]]+ $ /x>>, which you should convert
+to use instead.  See L<perlrecharclass/POSIX Character Classes>.
 
 =item C<issignaling>
 
@@ -904,56 +816,21 @@ See L</nan> for more discussion about C<NaN>.
 
 =item C<isspace>
 
-Deprecated function whose use raises a warning, and which is slated to
-be removed in a future Perl version.  It is very similar to matching
-against S<C<qr/ ^ [[:space:]]+ $ /x>>, which you should convert to use
-instead.  The function is deprecated because 1) it doesn't handle UTF-8
-encoded strings properly; and 2) it returns C<TRUE> even if the input is
-the empty string.  The function return is always based on the current
-locale, whereas using locale rules is optional with the regular
-expression, based on pragmas in effect and pattern modifiers (see
-L<perlre/Character set modifiers> and L<perlre/Which character set
-modifier is in effect?>).
-
-The function returns C<TRUE> if the input string is empty, or if the
-corresponding C function returns C<TRUE> for every byte in the string.
-
-You may want to use the C<L<E<sol>\sE<sol>|perlrecharclass/Whitespace>>
-construct instead.
+This function has been removed as of v5.24.  It was very similar to
+matching against S<C<qr/ ^ [[:space:]]+ $ /x>>, which you should convert
+to use instead.  See L<perlrecharclass/POSIX Character Classes>.
 
 =item C<isupper>
 
-Deprecated function whose use raises a warning, and which is slated to
-be removed in a future Perl version.  It is very similar to matching
-against S<C<qr/ ^ [[:upper:]]+ $ /x>>, which you should convert to use
-instead.  The function is deprecated because 1) it doesn't handle UTF-8
-encoded strings properly; and 2) it returns C<TRUE> even if the input is
-the empty string.  The function return is always based on the current
-locale, whereas using locale rules is optional with the regular
-expression, based on pragmas in effect and pattern modifiers (see
-L<perlre/Character set modifiers> and L<perlre/Which character set
-modifier is in effect?>).
-
-The function returns C<TRUE> if the input string is empty, or if the
-corresponding C function returns C<TRUE> for every byte in the string.
-
-Do B<not> use C</[A-Z]/> unless you don't care about the current locale.
+This function has been removed as of v5.24.  It was very similar to
+matching against S<C<qr/ ^ [[:upper:]]+ $ /x>>, which you should convert
+to use instead.  See L<perlrecharclass/POSIX Character Classes>.
 
 =item C<isxdigit>
 
-Deprecated function whose use raises a warning, and which is slated to
-be removed in a future Perl version.  It is very similar to matching
-against S<C<qr/ ^ [[:xdigit:]]+ $ /x>>, which you should convert to use
-instead.  The function is deprecated because 1) it doesn't handle UTF-8
-encoded strings properly; and 2) it returns C<TRUE> even if the input is
-the empty string.  The function return is always based on the current
-locale, whereas using locale rules is optional with the regular
-expression, based on pragmas in effect and pattern modifiers (see
-L<perlre/Character set modifiers> and L<perlre/Which character set
-modifier is in effect?>).
-
-The function returns C<TRUE> if the input string is empty, or if the
-corresponding C function returns C<TRUE> for every byte in the string.
+This function has been removed as of v5.24.  It was very similar to
+matching against S<C<qr/ ^ [[:xdigit:]]+ $ /x>>, which you should
+convert to use instead.  See L<perlrecharclass/POSIX Character Classes>.
 
 =item C<j0>
 
@@ -1641,6 +1518,9 @@ semantics, as defined by POSIX/SUSv3:
                 a user process and the uid and pid make sense,
                 otherwise the signal was sent by the kernel
 
+The constants for specific C<code> values can be imported individually
+or using the C<:signal_h_si_code> tag.
+
 The following are also defined by POSIX/SUSv3, but unfortunately
 not very widely implemented:
 
@@ -1648,6 +1528,8 @@ not very widely implemented:
     uid         the uid of the process id generating the signal
     status      exit value or signal for SIGCHLD
     band        band event for SIGPOLL
+    addr        address of faulting instruction or memory
+                reference for SIGILL, SIGFPE, SIGSEGV or SIGBUS
 
 A third argument is also passed to the handler, which contains a copy
 of the raw binary contents of the C<siginfo> structure: if a system has
@@ -2656,6 +2538,12 @@ C<SA_SIGINFO> C<SIGABRT> C<SIGALRM> C<SIGCHLD> C<SIGCONT> C<SIGFPE> C<SIGHUP> C<
 C<SIGKILL> C<SIGPIPE> C<SIGQUIT> C<SIGSEGV> C<SIGSTOP> C<SIGTERM> C<SIGTSTP> C<SIGTTIN> C<SIGTTOU>
 C<SIGUSR1> C<SIGUSR2> C<SIG_BLOCK> C<SIG_DFL> C<SIG_ERR> C<SIG_IGN> C<SIG_SETMASK>
 C<SIG_UNBLOCK>
+C<ILL_ILLOPC> C<ILL_ILLOPN> C<ILL_ILLADR> C<ILL_ILLTRP> C<ILL_PRVOPC> C<ILL_PRVREG> C<ILL_COPROC>
+C<ILL_BADSTK> C<FPE_INTDIV> C<FPE_INTOVF> C<FPE_FLTDIV> C<FPE_FLTOVF> C<FPE_FLTUND> C<FPE_FLTRES>
+C<FPE_FLTINV> C<FPE_FLTSUB> C<SEGV_MAPERR> C<SEGV_ACCERR> C<BUS_ADRALN> C<BUS_ADRERR>
+C<BUS_OBJERR> C<TRAP_BRKPT> C<TRAP_TRACE> C<CLD_EXITED> C<CLD_KILLED> C<CLD_DUMPED> C<CLD_TRAPPED>
+C<CLD_STOPPED> C<CLD_CONTINUED> C<POLL_IN> C<POLL_OUT> C<POLL_MSG> C<POLL_ERR> C<POLL_PRI>
+C<POLL_HUP> C<SI_USER> C<SI_QUEUE> C<SI_TIMER> C<SI_ASYNCIO> C<SI_MESGQ>
 
 =back
 

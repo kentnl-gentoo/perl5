@@ -3640,7 +3640,6 @@ CODE:
 	MULTICALL;
     }
     POP_MULTICALL;
-    PERL_UNUSED_VAR(newsp);
     XSRETURN_UNDEF;
 }
 
@@ -3698,8 +3697,6 @@ CODE:
 
     POP_MULTICALL;
 
-    PERL_UNUSED_VAR(newsp);
-
     size = AvFILLp(av) + 1;
     EXTEND(SP, size);
     for (i = 0; i < size; i++)
@@ -3725,11 +3722,12 @@ CODE:
     PERL_SET_CONTEXT(interp);
 
     POPSTACK_TO(PL_mainstack);
-    dounwind(-1);
+    if (cxstack_ix >= 0) {
+        dounwind(-1);
+        cx_popblock(cxstack);
+    }
     LEAVE_SCOPE(0);
-
-    while (interp->Iscopestack_ix > 1)
-        LEAVE;
+    PL_scopestack_ix = oldscope;
     FREETMPS;
 
     perl_destruct(interp);
@@ -5492,6 +5490,7 @@ test_Gconvert(SV * number, SV * num_digits)
     CODE:
         len = (int) SvIV(num_digits);
         if (len > 99) croak("Too long a number for test_Gconvert");
+        if (len < 0) croak("Too short a number for test_Gconvert");
         PERL_UNUSED_RESULT(Gconvert(SvNV(number), len,
                  0,    /* No trailing zeroes */
                  buffer));
@@ -5517,7 +5516,8 @@ has_backrefs(SV *sv)
     OUTPUT:
         RETVAL
 
-#if defined(WIN32) && defined(PERL_IMPLICIT_SYS)
+#ifdef WIN32
+#ifdef PERL_IMPLICIT_SYS
 
 const char *
 PerlDir_mapA(const char *path)
@@ -5526,3 +5526,40 @@ const WCHAR *
 PerlDir_mapW(const WCHAR *wpath)
 
 #endif
+
+void
+Comctl32Version()
+    PREINIT:
+        HMODULE dll;
+        VS_FIXEDFILEINFO *info;
+        UINT len;
+        HRSRC hrsc;
+        HGLOBAL ver;
+        void * vercopy;
+    PPCODE:
+        dll = GetModuleHandle("comctl32.dll"); /* must already be in proc */
+        if(!dll)
+            croak("Comctl32Version: comctl32.dll not in process???");
+        hrsc = FindResource(dll,    MAKEINTRESOURCE(VS_VERSION_INFO),
+                                    MAKEINTRESOURCE(VS_FILE_INFO));
+        if(!hrsc)
+            croak("Comctl32Version: comctl32.dll no version???");
+        ver = LoadResource(dll, hrsc);
+        len = SizeofResource(dll, hrsc);
+        vercopy = _alloca(len);
+        memcpy(vercopy, ver, len);
+        if (VerQueryValue(vercopy, "\\", (void**)&info, &len)) {
+            int dwValueMS1 = (info->dwFileVersionMS>>16);
+            int dwValueMS2 = (info->dwFileVersionMS&0xffff);
+            int dwValueLS1 = (info->dwFileVersionLS>>16);
+            int dwValueLS2 = (info->dwFileVersionLS&0xffff);
+            EXTEND(SP, 4);
+            mPUSHi(dwValueMS1);
+            mPUSHi(dwValueMS2);
+            mPUSHi(dwValueLS1);
+            mPUSHi(dwValueLS2);
+        }
+
+#endif
+
+

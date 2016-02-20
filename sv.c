@@ -125,6 +125,9 @@
 #   define ASSERT_UTF8_CACHE(cache) NOOP
 #endif
 
+static const char S_destroy[] = "DESTROY";
+#define S_destroy_len (sizeof(S_destroy)-1)
+
 /* ============================================================================
 
 =head1 Allocation and deallocation of SVs.
@@ -403,34 +406,6 @@ S_del_sv(pTHX_ SV *p)
 
 #endif /* DEBUGGING */
 
-/*
- * Bodyless IVs and NVs!
- *
- * Since 5.9.2, we can avoid allocating a body for SVt_IV-type SVs.
- * Since the larger IV-holding variants of SVs store their integer
- * values in their respective bodies, the family of SvIV() accessor
- * macros would  naively have to branch on the SV type to find the
- * integer value either in the HEAD or BODY. In order to avoid this
- * expensive branch, a clever soul has deployed a great hack:
- * We set up the SvANY pointer such that instead of pointing to a
- * real body, it points into the memory before the location of the
- * head. We compute this pointer such that the location of
- * the integer member of the hypothetical body struct happens to
- * be the same as the location of the integer member of the bodyless
- * SV head. This now means that the SvIV() family of accessors can
- * always read from the (hypothetical or real) body via SvANY.
- *
- * Since the 5.21 dev series, we employ the same trick for NVs
- * if the architecture can support it (NVSIZE <= IVSIZE).
- */
-
-/* The following two macros compute the necessary offsets for the above
- * trick and store them in SvANY for SvIV() (and friends) to use. */
-#define SET_SVANY_FOR_BODYLESS_IV(sv) \
-	SvANY(sv) = (XPVIV*)((char*)&(sv->sv_u.svu_iv) - STRUCT_OFFSET(XPVIV, xiv_iv))
-
-#define SET_SVANY_FOR_BODYLESS_NV(sv) \
-	SvANY(sv) = (XPVNV*)((char*)&(sv->sv_u.svu_nv) - STRUCT_OFFSET(XPVNV, xnv_u.xnv_nv))
 
 /*
 =head1 SV Manipulation Functions
@@ -3146,10 +3121,7 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
                     DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
                     STORE_LC_NUMERIC_SET_TO_NEEDED();
 
-                    local_radix =
-                        PL_numeric_local &&
-                        PL_numeric_radix_sv &&
-                        SvUTF8(PL_numeric_radix_sv);
+                    local_radix = PL_numeric_local && PL_numeric_radix_sv;
                     if (local_radix && SvLEN(PL_numeric_radix_sv) > 1) {
                         size += SvLEN(PL_numeric_radix_sv) - 1;
                         s = SvGROW_mutable(sv, size);
@@ -3159,8 +3131,10 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 
                     /* If the radix character is UTF-8, and actually is in the
                      * output, turn on the UTF-8 flag for the scalar */
-                    if (local_radix &&
-                        instr(s, SvPVX_const(PL_numeric_radix_sv))) {
+                    if (   local_radix
+                        && SvUTF8(PL_numeric_radix_sv)
+                        && instr(s, SvPVX_const(PL_numeric_radix_sv)))
+                    {
                         SvUTF8_on(sv);
                     }
 
@@ -4184,9 +4158,18 @@ Perl_gv_setref(pTHX_ SV *const dstr, SV *const sstr)
 	    }
 	    else
 	    {
+                SSize_t i;
 		sv_magic(
 		 sref, omg ? omg->mg_obj : dstr, PERL_MAGIC_isa, NULL, 0
 		);
+                for (i = 0; i <= AvFILL(sref); ++i) {
+                    SV **elem = av_fetch ((AV*)sref, i, 0);
+                    if (elem) {
+                        sv_magic(
+                          *elem, sref, PERL_MAGIC_isaelem, NULL, i
+                        );
+                    }
+                }
 		mg = mg_find(sref, PERL_MAGIC_isa);
 	    }
 	    /* Since the *ISA assignment could have affected more than
@@ -4263,25 +4246,83 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, SV* sstr, const I32 flags)
     U32 sflags;
     int dtype;
     svtype stype;
+    unsigned int both_type;
 
     PERL_ARGS_ASSERT_SV_SETSV_FLAGS;
 
     if (UNLIKELY( sstr == dstr ))
 	return;
 
-    if (SvIS_FREED(dstr)) {
-	Perl_croak(aTHX_ "panic: attempt to copy value %" SVf
-		   " to a freed scalar %p", SVfARG(sstr), (void *)dstr);
-    }
-    SV_CHECK_THINKFIRST_COW_DROP(dstr);
     if (UNLIKELY( !sstr ))
 	sstr = &PL_sv_undef;
-    if (SvIS_FREED(sstr)) {
-	Perl_croak(aTHX_ "panic: attempt to copy freed scalar %p to %p",
-		   (void*)sstr, (void*)dstr);
-    }
+
     stype = SvTYPE(sstr);
     dtype = SvTYPE(dstr);
+    both_type = (stype | dtype);
+
+    /* with these values, we can check that both SVs are NULL/IV (and not
+     * freed) just by testing the or'ed types */
+    STATIC_ASSERT_STMT(SVt_NULL == 0);
+    STATIC_ASSERT_STMT(SVt_IV   == 1);
+    if (both_type <= 1) {
+        /* both src and dst are UNDEF/IV/RV, so we can do a lot of
+         * special-casing */
+        U32 sflags;
+        U32 new_dflags;
+
+        /* minimal subset of SV_CHECK_THINKFIRST_COW_DROP(dstr) */
+        if (SvREADONLY(dstr))
+            Perl_croak_no_modify();
+        if (SvROK(dstr))
+            sv_unref_flags(dstr, 0);
+
+        assert(!SvGMAGICAL(sstr));
+        assert(!SvGMAGICAL(dstr));
+
+        sflags = SvFLAGS(sstr);
+        if (sflags & (SVf_IOK|SVf_ROK)) {
+            SET_SVANY_FOR_BODYLESS_IV(dstr);
+            new_dflags = SVt_IV;
+
+            if (sflags & SVf_ROK) {
+                dstr->sv_u.svu_rv = SvREFCNT_inc(SvRV(sstr));
+                new_dflags |= SVf_ROK;
+            }
+            else {
+                /* both src and dst are <= SVt_IV, so sv_any points to the
+                 * head; so access the head directly
+                 */
+                assert(    &(sstr->sv_u.svu_iv)
+                        == &(((XPVIV*) SvANY(sstr))->xiv_iv));
+                assert(    &(dstr->sv_u.svu_iv)
+                        == &(((XPVIV*) SvANY(dstr))->xiv_iv));
+                dstr->sv_u.svu_iv = sstr->sv_u.svu_iv;
+                new_dflags |= (SVf_IOK|SVp_IOK|(sflags & SVf_IVisUV));
+            }
+        }
+        else {
+            new_dflags = dtype; /* turn off everything except the type */
+        }
+        SvFLAGS(dstr) = new_dflags;
+
+        return;
+    }
+
+    if (UNLIKELY(both_type == SVTYPEMASK)) {
+        if (SvIS_FREED(dstr)) {
+            Perl_croak(aTHX_ "panic: attempt to copy value %" SVf
+                       " to a freed scalar %p", SVfARG(sstr), (void *)dstr);
+        }
+        if (SvIS_FREED(sstr)) {
+            Perl_croak(aTHX_ "panic: attempt to copy freed scalar %p to %p",
+                       (void*)sstr, (void*)dstr);
+        }
+    }
+
+
+
+    SV_CHECK_THINKFIRST_COW_DROP(dstr);
+    dtype = SvTYPE(dstr); /* THINKFIRST may have changed type */
 
     /* There's a lot of redundancy below but we're going for speed here */
 
@@ -6736,25 +6777,52 @@ S_curse(pTHX_ SV * const sv, const bool check_refcnt) {
 	  assert(SvTYPE(stash) == SVt_PVHV);
 	  if (HvNAME(stash)) {
 	    CV* destructor = NULL;
+            struct mro_meta *meta;
+
 	    assert (SvOOK(stash));
-	    if (!SvOBJECT(stash)) destructor = (CV *)SvSTASH(stash);
-	    if (!destructor || HvMROMETA(stash)->destroy_gen
-				!= PL_sub_generation)
-	    {
-		GV * const gv =
-		    gv_fetchmeth_autoload(stash, "DESTROY", 7, 0);
-		if (gv) destructor = GvCV(gv);
-		if (!SvOBJECT(stash))
-		{
-		    SvSTASH(stash) =
-			destructor ? (HV *)destructor : ((HV *)0)+1;
-		    HvAUX(stash)->xhv_mro_meta->destroy_gen =
-			PL_sub_generation;
-		}
+
+            DEBUG_o( Perl_deb(aTHX_ "Looking for DESTROY method for %s\n",
+                         HvNAME(stash)) );
+
+            /* don't make this an initialization above the assert, since it needs
+               an AUX structure */
+            meta = HvMROMETA(stash);
+            if (meta->destroy_gen && meta->destroy_gen == PL_sub_generation) {
+                destructor = meta->destroy;
+                DEBUG_o( Perl_deb(aTHX_ "Using cached DESTROY method %p for %s\n",
+                             (void *)destructor, HvNAME(stash)) );
+            }
+            else {
+                bool autoload = FALSE;
+		GV *gv =
+                    gv_fetchmeth_pvn(stash, S_destroy, S_destroy_len, -1, 0);
+		if (gv)
+                    destructor = GvCV(gv);
+                if (!destructor) {
+                    gv = gv_autoload_pvn(stash, S_destroy, S_destroy_len,
+                                         GV_AUTOLOAD_ISMETHOD);
+                    if (gv)
+                        destructor = GvCV(gv);
+                    if (destructor)
+                        autoload = TRUE;
+                }
+                /* we don't cache AUTOLOAD for DESTROY, since this code
+                   would then need to set $__PACKAGE__::AUTOLOAD, or the
+                   equivalent for XS AUTOLOADs */
+                if (!autoload) {
+                    meta->destroy_gen = PL_sub_generation;
+                    meta->destroy = destructor;
+
+                    DEBUG_o( Perl_deb(aTHX_ "Set cached DESTROY method %p for %s\n",
+                                      (void *)destructor, HvNAME(stash)) );
+                }
+                else {
+                    DEBUG_o( Perl_deb(aTHX_ "Not caching AUTOLOAD for DESTROY method for %s\n",
+                                      HvNAME(stash)) );
+                }
 	    }
-	    assert(!destructor || destructor == ((CV *)0)+1
-		|| SvTYPE(destructor) == SVt_PVCV);
-	    if (destructor && destructor != ((CV *)0)+1
+	    assert(!destructor || SvTYPE(destructor) == SVt_PVCV);
+	    if (destructor
 		/* A constant subroutine can have no side effects, so
 		   don't bother calling it.  */
 		&& !CvCONST(destructor)
@@ -12990,7 +13058,7 @@ Perl_dirp_dup(pTHX_ DIR *const dp, CLONE_PARAMS *const param)
 #if defined(HAS_FCHDIR) && defined(HAS_TELLDIR) && defined(HAS_SEEKDIR)
     DIR *pwd;
     const Direntry_t *dirent;
-    char smallbuf[256];
+    char smallbuf[256]; /* XXX MAXPATHLEN, surely? */
     char *name = NULL;
     STRLEN len = 0;
     long pos;
@@ -13040,6 +13108,14 @@ Perl_dirp_dup(pTHX_ DIR *const dp, CLONE_PARAMS *const param)
     pos = PerlDir_tell(dp);
     if ((dirent = PerlDir_read(dp))) {
 	len = d_namlen(dirent);
+        if (len > sizeof(dirent->d_name) && sizeof(dirent->d_name) > PTRSIZE) {
+            /* If the len is somehow magically longer than the
+             * maximum length of the directory entry, even though
+             * we could fit it in a buffer, we could not copy it
+             * from the dirent.  Bail out. */
+            PerlDir_close(ret);
+            return (DIR*)NULL;
+        }
 	if (len <= sizeof smallbuf) name = smallbuf;
 	else Newx(name, len, char);
 	Move(dirent->d_name, name, len, char);
@@ -13933,24 +14009,22 @@ Perl_cx_dup(pTHX_ PERL_CONTEXT *cxs, I32 ix, I32 max, CLONE_PARAMS* param)
 	    ncx->blk_oldcop = (COP*)any_dup(ncx->blk_oldcop, param->proto_perl);
 	    switch (CxTYPE(ncx)) {
 	    case CXt_SUB:
-		ncx->blk_sub.cv		= (ncx->blk_sub.olddepth == 0
-					   ? cv_dup_inc(ncx->blk_sub.cv, param)
-					   : cv_dup(ncx->blk_sub.cv,param));
+		ncx->blk_sub.cv		= cv_dup_inc(ncx->blk_sub.cv, param);
 		if(CxHASARGS(ncx)){
-		    ncx->blk_sub.argarray = av_dup_inc(ncx->blk_sub.argarray,param);
 		    ncx->blk_sub.savearray = av_dup_inc(ncx->blk_sub.savearray,param);
 		} else {
-		    ncx->blk_sub.argarray = NULL;
 		    ncx->blk_sub.savearray = NULL;
 		}
-		ncx->blk_sub.oldcomppad = (PAD*)ptr_table_fetch(PL_ptr_table,
-					   ncx->blk_sub.oldcomppad);
+		ncx->blk_sub.prevcomppad = (PAD*)ptr_table_fetch(PL_ptr_table,
+					   ncx->blk_sub.prevcomppad);
 		break;
 	    case CXt_EVAL:
 		ncx->blk_eval.old_namesv = sv_dup_inc(ncx->blk_eval.old_namesv,
 						      param);
+                /* XXX should this sv_dup_inc? Or only if SvSCREAM ???? */
 		ncx->blk_eval.cur_text	= sv_dup(ncx->blk_eval.cur_text, param);
 		ncx->blk_eval.cv = cv_dup(ncx->blk_eval.cv, param);
+                /* XXX what do do with cur_top_env ???? */
 		break;
 	    case CXt_LOOP_LAZYSV:
 		ncx->blk_loop.state_u.lazysv.end
@@ -13964,33 +14038,51 @@ Perl_cx_dup(pTHX_ PERL_CONTEXT *cxs, I32 ix, I32 max, CLONE_PARAMS* param)
 		assert ((void *) &ncx->blk_loop.state_u.ary.ary ==
 			(void *) &ncx->blk_loop.state_u.lazysv.cur);
                 /* FALLTHROUGH */
-	    case CXt_LOOP_FOR:
+	    case CXt_LOOP_ARY:
 		ncx->blk_loop.state_u.ary.ary
 		    = av_dup_inc(ncx->blk_loop.state_u.ary.ary, param);
                 /* FALLTHROUGH */
+	    case CXt_LOOP_LIST:
 	    case CXt_LOOP_LAZYIV:
-	    case CXt_LOOP_PLAIN:
-                /* code common to all CXt_LOOP_* types */
+                /* code common to all 'for' CXt_LOOP_* types */
+		ncx->blk_loop.itersave =
+                                    sv_dup_inc(ncx->blk_loop.itersave, param);
 		if (CxPADLOOP(ncx)) {
-		    ncx->blk_loop.itervar_u.oldcomppad
-			= (PAD*)ptr_table_fetch(PL_ptr_table,
-					ncx->blk_loop.itervar_u.oldcomppad);
-		} else {
+                    PADOFFSET off = ncx->blk_loop.itervar_u.svp
+                                    - &CX_CURPAD_SV(ncx->blk_loop, 0);
+                    ncx->blk_loop.oldcomppad =
+                                    (PAD*)ptr_table_fetch(PL_ptr_table,
+                                                ncx->blk_loop.oldcomppad);
+		    ncx->blk_loop.itervar_u.svp =
+                                    &CX_CURPAD_SV(ncx->blk_loop, off);
+                }
+		else {
+                    /* this copies the GV if CXp_FOR_GV, or the SV for an
+                     * alias (for \$x (...)) - relies on gv_dup being the
+                     * same as sv_dup */
 		    ncx->blk_loop.itervar_u.gv
 			= gv_dup((const GV *)ncx->blk_loop.itervar_u.gv,
 				    param);
 		}
 		break;
+	    case CXt_LOOP_PLAIN:
+		break;
 	    case CXt_FORMAT:
-		ncx->blk_format.cv	= cv_dup(ncx->blk_format.cv, param);
+		ncx->blk_format.prevcomppad =
+                        (PAD*)ptr_table_fetch(PL_ptr_table,
+					   ncx->blk_format.prevcomppad);
+		ncx->blk_format.cv	= cv_dup_inc(ncx->blk_format.cv, param);
 		ncx->blk_format.gv	= gv_dup(ncx->blk_format.gv, param);
 		ncx->blk_format.dfoutgv	= gv_dup_inc(ncx->blk_format.dfoutgv,
 						     param);
 		break;
+	    case CXt_GIVEN:
+		ncx->blk_givwhen.defsv_save =
+                                sv_dup_inc(ncx->blk_givwhen.defsv_save, param);
+		break;
 	    case CXt_BLOCK:
 	    case CXt_NULL:
 	    case CXt_WHEN:
-	    case CXt_GIVEN:
 		break;
 	    }
 	}
@@ -14198,6 +14290,10 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl, CLONE_PARAMS* param)
 	case SAVEt_STRLEN:			/* STRLEN/size_t ref */
 	    ptr = POPPTR(ss,ix);
 	    TOPPTR(nss,ix) = any_dup(ptr, proto_perl);
+	    iv = POPIV(ss,ix);
+	    TOPIV(nss,ix) = iv;
+	    break;
+	case SAVEt_TMPSFLOOR:
 	    iv = POPIV(ss,ix);
 	    TOPIV(nss,ix) = iv;
 	    break;
@@ -16281,13 +16377,10 @@ Perl_report_uninit(pTHX_ const SV *uninit_sv)
 		sv_insert(varname, 0, 0, " ", 1);
 	}
     }
-    else if (PL_curstackinfo->si_type == PERLSI_SORT
-             &&  CxMULTICALL(&cxstack[cxstack_ix]))
-    {
+    else if (PL_curstackinfo->si_type == PERLSI_SORT && cxstack_ix == 0)
         /* we've reached the end of a sort block or sub,
          * and the uninit value is probably what that code returned */
         desc = "sort";
-    }
 
     /* PL_warn_uninit_sv is constant */
     GCC_DIAG_IGNORE(-Wformat-nonliteral);

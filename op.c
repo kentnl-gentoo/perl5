@@ -802,6 +802,7 @@ Perl_op_free(pTHX_ OP *o)
 
 /* S_op_clear_gv(): free a GV attached to an OP */
 
+STATIC
 #ifdef USE_ITHREADS
 void S_op_clear_gv(pTHX_ OP *o, PADOFFSET *ixp)
 #else
@@ -1407,7 +1408,7 @@ Perl_op_parent(OP *o)
  * Returns the new UNOP.
  */
 
-OP *
+STATIC OP *
 S_op_sibling_newUNOP(pTHX_ OP *parent, OP *start, I32 type, I32 flags)
 {
     OP *kid, *newop;
@@ -1425,7 +1426,7 @@ S_op_sibling_newUNOP(pTHX_ OP *parent, OP *start, I32 type, I32 flags)
  * being spread throughout this file.
  */
 
-LOGOP *
+STATIC LOGOP *
 S_alloc_LOGOP(pTHX_ I32 type, OP *first, OP* other)
 {
     dVAR;
@@ -2303,7 +2304,7 @@ S_modkids(pTHX_ OP *o, I32 type)
  * key_op is the first key
  */
 
-void
+STATIC void
 S_check_hash_fields_and_hekify(pTHX_ UNOP *rop, SVOP *key_op)
 {
     PADNAME *lexname;
@@ -4055,7 +4056,7 @@ Perl_newPROG(pTHX_ OP *o)
 			       ((PL_in_eval & EVAL_KEEPERR)
 				? OPf_SPECIAL : 0), o);
 
-	cx = &cxstack[cxstack_ix];
+	cx = CX_CUR();
 	assert(CxTYPE(cx) == CXt_EVAL);
 
 	if ((cx->blk_gimme & G_WANT) == G_VOID)
@@ -4257,12 +4258,12 @@ S_fold_constants(pTHX_ OP *o)
     bool is_stringify;
     SV * VOL sv = NULL;
     int ret = 0;
-    I32 oldscope;
     OP *old_next;
     SV * const oldwarnhook = PL_warnhook;
     SV * const olddiehook  = PL_diehook;
     COP not_compiling;
     U8 oldwarn = PL_dowarn;
+    I32 old_cxix;
     dJMPENV;
 
     PERL_ARGS_ASSERT_FOLD_CONSTANTS;
@@ -4343,8 +4344,8 @@ S_fold_constants(pTHX_ OP *o)
     o->op_next = 0;
     PL_op = curop;
 
-    oldscope = PL_scopestack_ix;
-    create_eval_scope(G_FAKINGEVAL);
+    old_cxix = cxstack_ix;
+    create_eval_scope(NULL, G_FAKINGEVAL);
 
     /* Verify that we don't need to save it:  */
     assert(PL_curcop == &PL_compiling);
@@ -4395,9 +4396,13 @@ S_fold_constants(pTHX_ OP *o)
     PL_diehook  = olddiehook;
     PL_curcop = &PL_compiling;
 
-    if (PL_scopestack_ix > oldscope)
-	delete_eval_scope();
-
+    /* if we croaked, depending on how we croaked the eval scope
+     * may or may not have already been popped */
+    if (cxstack_ix > old_cxix) {
+        assert(cxstack_ix == old_cxix + 1);
+        assert(CxTYPE(CX_CUR()) == CXt_EVAL);
+        delete_eval_scope();
+    }
     if (ret)
 	goto nope;
 
@@ -7100,7 +7105,7 @@ Perl_newLOOPOP(pTHX_ I32 flags, I32 debuggable, OP *expr, OP *block)
 
     o->op_flags |= flags;
     o = op_scope(o);
-    o->op_flags |= OPf_SPECIAL;	/* suppress POPBLOCK curpm restoration*/
+    o->op_flags |= OPf_SPECIAL;	/* suppress cx_popblock() curpm restoration*/
     return o;
 }
 
@@ -8388,6 +8393,7 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 		: NULL;
 
     if (block) {
+	assert(PL_parser);
 	/* This makes sub {}; work as expected.  */
 	if (block->op_type == OP_STUB) {
 	    const line_t l = PL_parser->copline;
@@ -12480,7 +12486,7 @@ S_inplace_aassign(pTHX_ OP *o) {
  * OPpHINT_STRICT_REFS) as found in any rv2av/hv skipped by the caller.
  */
 
-void
+STATIC void
 S_maybe_multideref(pTHX_ OP *start, OP *orig_o, UV orig_action, U8 hints)
 {
     dVAR;
@@ -14470,10 +14476,12 @@ Perl_custom_op_get_field(pTHX_ const OP *o, const xop_flags_enum field)
 		}
 	    }
 	}
-        /* Some gcc releases emit a warning for this function:
+        /* On some platforms (HP-UX, IA64) gcc emits a warning for this function:
          * op.c: In function 'Perl_custom_op_get_field':
          * op.c:...: warning: 'any.xop_name' may be used uninitialized in this function [-Wmaybe-uninitialized]
-         * Whether this is true, is currently unknown. */
+         * This is because on those platforms (with -DEBUGGING) NOT_REACHED
+         * expands to assert(0), which expands to ((0) ? (void)0 :
+         * __assert(...)), and gcc doesn't know that __assert can never return. */
 	return any;
     }
 }

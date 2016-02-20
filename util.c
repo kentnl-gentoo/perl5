@@ -4906,7 +4906,7 @@ S_mem_log_common(enum mem_log_type mlt, const UV n,
         (void)time(&when);
 #   endif
 	/* If there are other OS specific ways of hires time than
-	 * gettimeofday() (see ext/Time-HiRes), the easiest way is
+	 * gettimeofday() (see dist/Time-HiRes), the easiest way is
 	 * probably that they would be used to fill in the struct
 	 * timeval. */
 	{
@@ -5270,13 +5270,11 @@ Perl_my_vsnprintf(char *buffer, const Size_t len, const char *format, va_list ap
     va_list apc;
 
     PERL_ARGS_ASSERT_MY_VSNPRINTF;
-#ifndef HAS_VSNPRINTF
-    PERL_UNUSED_VAR(len);
-#endif
     Perl_va_copy(ap, apc);
 # ifdef HAS_VSNPRINTF
     retval = vsnprintf(buffer, len, format, apc);
 # else
+    PERL_UNUSED_ARG(len);
     retval = vsprintf(buffer, format, apc);
 # endif
     va_end(apc);
@@ -5284,6 +5282,7 @@ Perl_my_vsnprintf(char *buffer, const Size_t len, const char *format, va_list ap
 # ifdef HAS_VSNPRINTF
     retval = vsnprintf(buffer, len, format, ap);
 # else
+    PERL_UNUSED_ARG(len);
     retval = vsprintf(buffer, format, ap);
 # endif
 #endif /* #ifdef NEED_VA_COPY */

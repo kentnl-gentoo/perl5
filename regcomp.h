@@ -553,7 +553,7 @@ struct regnode_ssc {
  * are cautioned about its shared nature */
 #define ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER 0x80
 
-#define ANYOF_FLAGS_ALL		(0xff)
+#define ANYOF_FLAGS_ALL		(0xff & ~0x10)
 
 #define ANYOF_LOCALE_FLAGS (ANYOFL_FOLD | ANYOF_MATCHES_POSIXL)
 
@@ -1055,7 +1055,7 @@ re.pm, especially to the documentation.
 /* get_sv() can return NULL during global destruction. */
 #define GET_RE_DEBUG_FLAGS DEBUG_r({ \
         SV * re_debug_flags_sv = NULL; \
-        re_debug_flags_sv = get_sv(RE_DEBUG_FLAGS, 1); \
+        re_debug_flags_sv = PL_curcop ? get_sv(RE_DEBUG_FLAGS, 1) : NULL; \
         if (re_debug_flags_sv) { \
             if (!SvIOK(re_debug_flags_sv)) \
                 sv_setuv(re_debug_flags_sv, RE_DEBUG_COMPILE_DUMP | RE_DEBUG_EXECUTE_MASK ); \
@@ -1069,22 +1069,25 @@ re.pm, especially to the documentation.
         PERL_UNUSED_VAR(re_debug_flags); GET_RE_DEBUG_FLAGS;
 
 #define RE_PV_COLOR_DECL(rpv,rlen,isuni,dsv,pv,l,m,c1,c2) \
-    const char * const rpv =                          \
-        pv_pretty((dsv), (pv), (l), (m), \
-            PL_colors[(c1)],PL_colors[(c2)], \
+    const char * const rpv =                                 \
+        pv_pretty((dsv), (pv), (l),                          \
+            (PL_dump_re_max_len) ? PL_dump_re_max_len : (m), \
+            PL_colors[(c1)],PL_colors[(c2)],                 \
             PERL_PV_ESCAPE_RE|PERL_PV_ESCAPE_NONASCII |((isuni) ? PERL_PV_ESCAPE_UNI : 0) );         \
     const int rlen = SvCUR(dsv)
 
-#define RE_SV_ESCAPE(rpv,isuni,dsv,sv,m) \
-    const char * const rpv =                          \
-        pv_pretty((dsv), (SvPV_nolen_const(sv)), (SvCUR(sv)), (m), \
-            PL_colors[(c1)],PL_colors[(c2)], \
+#define RE_SV_ESCAPE(rpv,isuni,dsv,sv,m)                        \
+    const char * const rpv =                                    \
+        pv_pretty((dsv), (SvPV_nolen_const(sv)), (SvCUR(sv)),   \
+            (PL_dump_re_max_len) ? PL_dump_re_max_len : (m),    \
+            PL_colors[(c1)],PL_colors[(c2)],                    \
             PERL_PV_ESCAPE_RE|PERL_PV_ESCAPE_NONASCII |((isuni) ? PERL_PV_ESCAPE_UNI : 0) )
 
 #define RE_PV_QUOTED_DECL(rpv,isuni,dsv,pv,l,m)                    \
     const char * const rpv =                                       \
-        pv_pretty((dsv), (pv), (l), (m), \
-            PL_colors[0], PL_colors[1], \
+        pv_pretty((dsv), (pv), (l),                                \
+            (PL_dump_re_max_len) ? PL_dump_re_max_len : (m),       \
+            PL_colors[0], PL_colors[1],                            \
             ( PERL_PV_PRETTY_QUOTE | PERL_PV_ESCAPE_RE | PERL_PV_ESCAPE_NONASCII | PERL_PV_PRETTY_ELLIPSES | \
               ((isuni) ? PERL_PV_ESCAPE_UNI : 0))                  \
         )

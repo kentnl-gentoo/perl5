@@ -13,7 +13,7 @@ BEGIN {
 use strict;
 no warnings 'once';
 
-plan(tests => 148);
+plan(tests => 150);
 
 @A::ISA = 'B';
 @B::ISA = 'C';
@@ -361,6 +361,7 @@ for my $meth (['Bar', 'Foo::Bar'],
 {
     fresh_perl_is(<<EOT,
 package UNIVERSAL; sub AUTOLOAD { my \$c = shift; print "\$c \$AUTOLOAD\\n" }
+sub DESTROY {} # prevent AUTOLOAD being called on DESTROY
 package Xyz;
 package main; Foo->$meth->[0]();
 EOT
@@ -458,6 +459,35 @@ is $kalled, 1, 'calling a class method via a magic variable';
       ::is( eval { NoSub->bluh }, "NoSub::bluh", "...which works as expected" );
    }
    { bless {}, "NoSub"; }
+}
+
+{
+    # [perl #124387]
+    my $autoloaded;
+    package AutoloadDestroy;
+    sub AUTOLOAD { $autoloaded = 1 }
+    package main;
+    bless {}, "AutoloadDestroy";
+    ok($autoloaded, "AUTOLOAD called for DESTROY");
+
+    # 127494 - AUTOLOAD for DESTROY was called without setting $AUTOLOAD
+    my %methods;
+    package AutoloadDestroy2;
+    sub AUTOLOAD {
+        our $AUTOLOAD;
+        (my $method = $AUTOLOAD) =~ s/.*:://;
+        ++$methods{$method};
+    }
+    package main;
+    # this cached AUTOLOAD as the DESTROY method
+    bless {}, "AutoloadDestroy2";
+    %methods = ();
+    my $o = bless {}, "AutoloadDestroy2";
+    # this sets $AUTOLOAD to "AutoloadDestroy2::foo"
+    $o->foo;
+    # this would call AUTOLOAD without setting $AUTOLOAD
+    undef $o;
+    ok($methods{DESTROY}, "\$AUTOLOAD set correctly for DESTROY");
 }
 
 eval { () = 3; new {} };

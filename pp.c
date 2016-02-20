@@ -66,7 +66,7 @@ PP(pp_stub)
 PP(pp_padav)
 {
     dSP; dTARGET;
-    I32 gimme;
+    U8 gimme;
     assert(SvTYPE(TARG) == SVt_PVAV);
     if (UNLIKELY( PL_op->op_private & OPpLVAL_INTRO ))
 	if (LIKELY( !(PL_op->op_private & OPpPAD_STATE) ))
@@ -121,7 +121,7 @@ PP(pp_padav)
 PP(pp_padhv)
 {
     dSP; dTARGET;
-    I32 gimme;
+    U8 gimme;
 
     assert(SvTYPE(TARG) == SVt_PVHV);
     XPUSHs(TARG);
@@ -1364,9 +1364,14 @@ PP(pp_multiply)
             NV nr = SvNVX(svr);
             NV result;
 
-            il = (IV)nl;
-            ir = (IV)nr;
-            if (nl == (NV)il && nr == (NV)ir)
+            if (
+#if defined(NAN_COMPARE_BROKEN) && defined(Perl_isnan)
+                !Perl_isnan(nl) && nl == (NV)(il = (IV)nl)
+                && !Perl_isnan(nr) && nr == (NV)(ir = (IV)nr)
+#else
+                nl == (NV)(il = (IV)nl) && nr == (NV)(ir = (IV)nr)
+#endif
+                )
                 /* nothing was lost by converting to IVs */
                 goto do_iv;
             SP--;
@@ -1940,9 +1945,14 @@ PP(pp_subtract)
             NV nl = SvNVX(svl);
             NV nr = SvNVX(svr);
 
-            il = (IV)nl;
-            ir = (IV)nr;
-            if (nl == (NV)il && nr == (NV)ir)
+            if (
+#if defined(NAN_COMPARE_BROKEN) && defined(Perl_isnan)
+                !Perl_isnan(nl) && nl == (NV)(il = (IV)nl)
+                && !Perl_isnan(nr) && nr == (NV)(ir = (IV)nr)
+#else
+                nl == (NV)(il = (IV)nl) && nr == (NV)(ir = (IV)nr)
+#endif
+                )
                 /* nothing was lost by converting to IVs */
                 goto do_iv;
             SP--;
@@ -3207,7 +3217,7 @@ PP(pp_abs)
 	    } else {
 	      /* 2s complement assumption. Also, not really needed as
 		 IV_MIN and -IV_MIN should both be %100...00 and NV-able  */
-	      SETu(IV_MIN);
+	      SETu((UV)IV_MIN);
 	    }
 	  }
 	}
@@ -4845,7 +4855,7 @@ PP(pp_aeach)
 {
     dSP;
     AV *array = MUTABLE_AV(POPs);
-    const I32 gimme = GIMME_V;
+    const U8 gimme = GIMME_V;
     IV *iterp = Perl_av_iter_p(aTHX_ array);
     const IV current = (*iterp)++;
 
@@ -4871,7 +4881,7 @@ PP(pp_akeys)
 {
     dSP;
     AV *array = MUTABLE_AV(POPs);
-    const I32 gimme = GIMME_V;
+    const U8 gimme = GIMME_V;
 
     *Perl_av_iter_p(aTHX_ array) = 0;
 
@@ -4907,7 +4917,7 @@ PP(pp_each)
     dSP;
     HV * hash = MUTABLE_HV(POPs);
     HE *entry;
-    const I32 gimme = GIMME_V;
+    const U8 gimme = GIMME_V;
 
     entry = hv_iternext(hash);
 
@@ -4931,7 +4941,7 @@ STATIC OP *
 S_do_delete_local(pTHX)
 {
     dSP;
-    const I32 gimme = GIMME_V;
+    const U8 gimme = GIMME_V;
     const MAGIC *mg;
     HV *stash;
     const bool sliced = !!(PL_op->op_private & OPpSLICE);
@@ -5041,7 +5051,7 @@ S_do_delete_local(pTHX)
 PP(pp_delete)
 {
     dSP;
-    I32 gimme;
+    U8 gimme;
     I32 discard;
 
     if (PL_op->op_private & OPpLVAL_INTRO)
@@ -5844,7 +5854,7 @@ PP(pp_split)
     const IV origlimit = limit;
     I32 realarray = 0;
     I32 base;
-    const I32 gimme = GIMME_V;
+    const U8 gimme = GIMME_V;
     bool gimme_scalar;
     const I32 oldsave = PL_savestack_ix;
     U32 make_mortal = SVs_TEMP;
@@ -6344,7 +6354,7 @@ PP(pp_coreargs)
        to return.  nextstate usually does this on sub entry, but we need
        to run the next op with the caller's hints, so we cannot have a
        nextstate. */
-    SP = PL_stack_base + cxstack[cxstack_ix].blk_oldsp;
+    SP = PL_stack_base + CX_CUR()->blk_oldsp;
 
     if(!maxargs) RETURN;
 
@@ -6428,13 +6438,14 @@ PP(pp_coreargs)
 		);
 	    PUSHs(SvRV(*svp));
 	    if (opnum == OP_UNDEF && SvRV(*svp) == (SV *)PL_defgv
-	     && cxstack[cxstack_ix].cx_type & CXp_HASARGS) {
+	     && CX_CUR()->cx_type & CXp_HASARGS) {
 		/* Undo @_ localisation, so that sub exit does not undo
 		   part of our undeffing. */
-		PERL_CONTEXT *cx = &cxstack[cxstack_ix];
-		POP_SAVEARRAY();
-		cx->cx_type &= ~ CXp_HASARGS;
-		assert(!AvREAL(cx->blk_sub.argarray));
+		PERL_CONTEXT *cx = CX_CUR();
+
+                assert(CxHASARGS(cx));
+                cx_popsub_args(cx);;
+		cx->cx_type &= ~CXp_HASARGS;
 	    }
 	  }
 	  break;
