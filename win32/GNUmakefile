@@ -67,7 +67,7 @@ INST_TOP := $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	:= \5.23.8
+#INST_VER	:= \5.23.9
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -357,11 +357,11 @@ endif
 ifeq ($(CCTYPE),GCC)
 ifeq ($(GCCTARGET),x86_64-w64-mingw32)
 WIN64 := define
-ARCHITECTURE := x64
+PROCESSOR_ARCHITECTURE := x64
 endif
 ifeq ($(GCCTARGET),i686-w64-mingw32)
 WIN64 := undef
-ARCHITECTURE := x86
+PROCESSOR_ARCHITECTURE := x86
 endif
 endif
 
@@ -1544,7 +1544,7 @@ utils: $(HAVEMINIPERL) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5238delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5239delta.pod
 	$(MINIPERL) -I..\lib $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1604,6 +1604,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Hash rmdir /s /q $(LIBDIR)\Hash
 	-if exist $(LIBDIR)\HTTP rmdir /s /q $(LIBDIR)\HTTP
 	-if exist $(LIBDIR)\I18N rmdir /s /q $(LIBDIR)\I18N
+	-if exist $(LIBDIR)\inc rmdir /s /q $(LIBDIR)\inc
 	-if exist $(LIBDIR)\IO rmdir /s /q $(LIBDIR)\IO
 	-if exist $(LIBDIR)\IPC rmdir /s /q $(LIBDIR)\IPC
 	-if exist $(LIBDIR)\JSON rmdir /s /q $(LIBDIR)\JSON
@@ -1639,7 +1640,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5238delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5239delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \

@@ -647,7 +647,7 @@ p	|void	|init_debugger
 Ap	|void	|init_stacks
 Ap	|void	|init_tm	|NN struct tm *ptm
 : Used in perly.y
-AnpPR	|char*	|instr		|NN const char* big|NN const char* little
+AbmnpPR	|char*	|instr		|NN const char* big|NN const char* little
 : Used in sv.c
 p	|bool	|io_close	|NN IO* io|NULLOK GV *gv \
 				|bool not_implicit|bool warn_on_fail
@@ -931,11 +931,11 @@ s	|void	|move_proto_attr|NN OP **proto|NN OP **attrs|NN const GV *name
 p	|int	|mode_from_discipline|NULLOK const char* s|STRLEN len
 Ap	|const char*	|moreswitches	|NN const char* s
 Ap	|NV	|my_atof	|NN const char *s
-#if (!defined(HAS_MEMCPY) && !defined(HAS_BCOPY)) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY) && !defined(HAS_SAFE_BCOPY))
-Anp	|char*	|my_bcopy	|NN const char* from|NN char* to|I32 len
+#if !defined(HAS_MEMCPY) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY))
+Anp	|void*	|my_bcopy	|NN const void* vfrom|NN void* vto|size_t len
 #endif
 #if !defined(HAS_BZERO) && !defined(HAS_MEMSET)
-Anp	|char*	|my_bzero	|NN char* loc|I32 len
+Anp	|void*	|my_bzero	|NN void* vloc|size_t len
 #endif
 Apr	|void	|my_exit	|U32 status
 Apr	|void	|my_failure_exit
@@ -946,10 +946,10 @@ Anp	|void	|atfork_unlock
 Apmb	|I32	|my_lstat
 pX	|I32	|my_lstat_flags	|NULLOK const U32 flags
 #if !defined(HAS_MEMCMP) || !defined(HAS_SANE_MEMCMP)
-AnpP	|I32	|my_memcmp	|NN const char* s1|NN const char* s2|I32 len
+AnpP	|int	|my_memcmp	|NN const void* vs1|NN const void* vs2|size_t len
 #endif
 #if !defined(HAS_MEMSET)
-Anp	|void*	|my_memset	|NN char* loc|I32 ch|I32 len
+Anp	|void*	|my_memset	|NN void* vloc|int ch|size_t len
 #endif
 #if !defined(PERL_IMPLICIT_SYS)
 Ap	|I32	|my_pclose	|NULLOK PerlIO* ptr
@@ -1526,10 +1526,12 @@ EiMRn	|UV	|invlist_max	|NN SV* const invlist
 EiM	|void	|invlist_set_len|NN SV* const invlist|const UV len|const bool offset
 EiMRn	|bool	|invlist_is_iterating|NN SV* const invlist
 #ifndef PERL_EXT_RE_BUILD
+EsM	|void	|invlist_replace_list_destroys_src|NN SV *dest|NN SV *src
 EiMRn	|IV*	|get_invlist_previous_index_addr|NN SV* invlist
 EiMn	|void	|invlist_set_previous_index|NN SV* const invlist|const IV index
 EiMRn	|IV	|invlist_previous_index|NN SV* const invlist
-EiMn	|void	|invlist_trim	|NN SV* const invlist
+EiMn	|void	|invlist_trim	|NN SV* invlist
+EiM	|void	|invlist_clear	|NN SV* invlist
 #endif
 EiMR	|SV*	|invlist_clone	|NN SV* const invlist
 EiMRn	|STRLEN*|get_invlist_iter_addr	|NN SV* invlist
@@ -2116,6 +2118,7 @@ p	|OP *	|tied_method|NN SV *methname|NN SV **sp \
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C)
 Ep	|void	|regprop	|NULLOK const regexp *prog|NN SV* sv|NN const regnode* o|NULLOK const regmatch_info *reginfo \
 				|NULLOK const RExC_state_t *pRExC_state
+Ep	|int	|re_printf	|NN const char *fmt|...
 #endif
 #if defined(PERL_IN_REGCOMP_C)
 Es	|regnode*|reg		|NN RExC_state_t *pRExC_state \
@@ -2141,6 +2144,10 @@ Es	|void	 |set_ANYOF_arg	|NN RExC_state_t* const pRExC_state \
 				|NULLOK SV* const only_utf8_locale_list	   \
 				|NULLOK SV* const swash                    \
 				|const bool has_user_defined_property
+Es	|void	|output_or_return_posix_warnings			    \
+				|NN RExC_state_t *pRExC_state		    \
+				|NN AV* posix_warnings			    \
+				|NULLOK AV** return_posix_warnings
 Es	|AV*	 |add_multi_match|NULLOK AV* multi_char_matches		    \
 				|NN SV* multi_string			    \
 				|const STRLEN cp_count
@@ -2151,7 +2158,7 @@ Es	|regnode*|regclass	|NN RExC_state_t *pRExC_state                 \
 				|const bool strict                            \
 				|bool optimizable			      \
 				|NULLOK SV** ret_invlist		      \
-				|NULLOK AV** posix_warnings
+				|NULLOK AV** return_posix_warnings
 Es	|void|add_above_Latin1_folds|NN RExC_state_t *pRExC_state|const U8 cp \
 				|NN SV** invlist
 Ei	|regnode*|handle_named_backref|NN RExC_state_t *pRExC_state	    \
@@ -2243,7 +2250,8 @@ Es	|int	|handle_possible_posix					    \
 				|NN RExC_state_t *pRExC_state		    \
 				|NN const char* const s			    \
 				|NULLOK char ** updated_parse_ptr	    \
-				|NULLOK AV** posix_warnings
+				|NULLOK AV** posix_warnings		    \
+				|const bool check_only
 Es	|I32	|make_trie	|NN RExC_state_t *pRExC_state \
 				|NN regnode *startbranch|NN regnode *first \
 				|NN regnode *last|NN regnode *tail \
@@ -2257,6 +2265,7 @@ EnPs	|int	|edit_distance	|NN const UV *src		    \
 				|const STRLEN y			    \
 				|const SSize_t maxDistance
 #  ifdef DEBUGGING
+Ep	|int	|re_indentf	|NN const char *fmt|U32 depth|...
 Es        |void        |regdump_intflags|NULLOK const char *lead| const U32 flags
 Es	|void	|regdump_extflags|NULLOK const char *lead| const U32 flags
 Es	|const regnode*|dumpuntil|NN const regexp *r|NN const regnode *start \
@@ -2368,10 +2377,12 @@ EsR	|WB_enum|backup_one_WB  |NN WB_enum * previous			\
 				|const bool utf8_target
 #  ifdef DEBUGGING
 Es	|void	|dump_exec_pos	|NN const char *locinput|NN const regnode *scan|NN const char *loc_regeol\
-				|NN const char *loc_bostr|NN const char *loc_reg_starttry|const bool do_utf8
+				|NN const char *loc_bostr|NN const char *loc_reg_starttry|const bool do_utf8|const U32 depth
 Es	|void	|debug_start_match|NN const REGEXP *prog|const bool do_utf8\
 				|NN const char *start|NN const char *end\
 				|NN const char *blurb
+
+Ep	|int	|re_exec_indentf	|NN const char *fmt|U32 depth|...
 #  endif
 #endif
 
@@ -2927,6 +2938,13 @@ AiM	|void	|cx_pushwhen     |NN PERL_CONTEXT *cx
 AiM	|void	|cx_popwhen      |NN PERL_CONTEXT *cx
 AiM	|void	|cx_pushgiven    |NN PERL_CONTEXT *cx|NULLOK SV *orig_defsv
 AiM	|void	|cx_popgiven     |NN PERL_CONTEXT *cx
+#endif
+
+#ifdef USE_DTRACE
+XEop    |void   |dtrace_probe_call |NN CV *cv|bool is_call
+XEop    |void   |dtrace_probe_load |NN const char *name|bool is_loading
+XEop    |void   |dtrace_probe_op   |NN const OP *op
+XEop    |void   |dtrace_probe_phase|enum perl_phase phase
 #endif
 
 : ex: set ts=8 sts=4 sw=4 noet:

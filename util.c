@@ -563,8 +563,34 @@ Perl_instr(const char *big, const char *little)
     return strstr((char*)big, (char*)little);
 }
 
-/* same as instr but allow embedded nulls.  The end pointers point to 1 beyond
- * the final character desired to be checked */
+/*
+=head1 Miscellaneous Functions
+
+=for apidoc Am|char *|ninstr|char * big|char * bigend|char * little|char * little_end
+
+Find the first (leftmost) occurrence of a sequence of bytes within another
+sequence.  This is the Perl version of C<strstr()>, extended to handle
+arbitrary sequences, potentially containing embedded C<NUL> characters (C<NUL>
+is what the initial C<n> in the function name stands for; some systems have an
+equivalent, C<memmem()>, but with a somewhat different API).
+
+Another way of thinking about this function is finding a needle in a haystack.
+C<big> points to the first byte in the haystack.  C<big_end> points to one byte
+beyond the final byte in the haystack.  C<little> points to the first byte in
+the needle.  C<little_end> points to one byte beyond the final byte in the
+needle.  All the parameters must be non-C<NULL>.
+
+The function returns C<NULL> if there is no occurrence of C<little> within
+C<big>.  If C<little> is the empty string, C<big> is returned.
+
+Because this function operates at the byte level, and because of the inherent
+characteristics of UTF-8 (or UTF-EBCDIC), it will work properly if both the
+needle and the haystack are strings with the same UTF-8ness, but not if the
+UTF-8ness differs.
+
+=cut
+
+*/
 
 char *
 Perl_ninstr(const char *big, const char *bigend, const char *little, const char *lend)
@@ -590,7 +616,18 @@ Perl_ninstr(const char *big, const char *bigend, const char *little, const char 
     return NULL;
 }
 
-/* reverse of the above--find last substring */
+/*
+=head1 Miscellaneous Functions
+
+=for apidoc Am|char *|rninstr|char * big|char * bigend|char * little|char * little_end
+
+Like C<L</ninstr>>, but instead finds the final (rightmost) occurrence of a
+sequence of bytes within another sequence, returning C<NULL> if there is no
+such occurrence.
+
+=cut
+
+*/
 
 char *
 Perl_rninstr(const char *big, const char *bigend, const char *little, const char *lend)
@@ -2263,16 +2300,19 @@ Perl_unlnk(pTHX_ const char *f)	/* unlink all versions of a file */
 }
 #endif
 
-/* this is a drop-in replacement for bcopy() */
-#if (!defined(HAS_MEMCPY) && !defined(HAS_BCOPY)) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY) && !defined(HAS_SAFE_BCOPY))
-char *
-Perl_my_bcopy(const char *from, char *to, I32 len)
+/* this is a drop-in replacement for bcopy(), except for the return
+ * value, which we need to be able to emulate memcpy()  */
+#if !defined(HAS_MEMCPY) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY))
+void *
+Perl_my_bcopy(const void *vfrom, void *vto, size_t len)
 {
-    char * const retval = to;
+#if defined(HAS_BCOPY) && defined(HAS_SAFE_BCOPY)
+    bcopy(vfrom, vto, len);
+#else
+    const unsigned char *from = (const unsigned char *)vfrom;
+    unsigned char *to = (unsigned char *)vto;
 
     PERL_ARGS_ASSERT_MY_BCOPY;
-
-    assert(len >= 0);
 
     if (from - to >= 0) {
 	while (len--)
@@ -2284,56 +2324,52 @@ Perl_my_bcopy(const char *from, char *to, I32 len)
 	while (len--)
 	    *(--to) = *(--from);
     }
-    return retval;
+#endif
+
+    return vto;
 }
 #endif
 
 /* this is a drop-in replacement for memset() */
 #ifndef HAS_MEMSET
 void *
-Perl_my_memset(char *loc, I32 ch, I32 len)
+Perl_my_memset(void *vloc, int ch, size_t len)
 {
-    char * const retval = loc;
+    unsigned char *loc = (unsigned char *)vloc;
 
     PERL_ARGS_ASSERT_MY_MEMSET;
 
-    assert(len >= 0);
-
     while (len--)
 	*loc++ = ch;
-    return retval;
+    return vloc;
 }
 #endif
 
 /* this is a drop-in replacement for bzero() */
 #if !defined(HAS_BZERO) && !defined(HAS_MEMSET)
-char *
-Perl_my_bzero(char *loc, I32 len)
+void *
+Perl_my_bzero(void *vloc, size_t len)
 {
-    char * const retval = loc;
+    unsigned char *loc = (unsigned char *)vloc;
 
     PERL_ARGS_ASSERT_MY_BZERO;
 
-    assert(len >= 0);
-
     while (len--)
 	*loc++ = 0;
-    return retval;
+    return vloc;
 }
 #endif
 
 /* this is a drop-in replacement for memcmp() */
 #if !defined(HAS_MEMCMP) || !defined(HAS_SANE_MEMCMP)
-I32
-Perl_my_memcmp(const char *s1, const char *s2, I32 len)
+int
+Perl_my_memcmp(const void *vs1, const void *vs2, size_t len)
 {
-    const U8 *a = (const U8 *)s1;
-    const U8 *b = (const U8 *)s2;
-    I32 tmp;
+    const U8 *a = (const U8 *)vs1;
+    const U8 *b = (const U8 *)vs2;
+    int tmp;
 
     PERL_ARGS_ASSERT_MY_MEMCMP;
-
-    assert(len >= 0);
 
     while (len--) {
         if ((tmp = *a++ - *b++))
@@ -3139,10 +3175,7 @@ S_pidgone(pTHX_ Pid_t pid, int status)
 }
 #endif
 
-#if defined(OS2) || defined(__amigaos4__)
-#  if defined(__amigaos4__) && defined(pclose)
-#    undef pclose
-#  endif
+#if defined(OS2)
 int pclose();
 #ifdef HAS_FORK
 int					/* Cannot prototype with I32
@@ -6615,6 +6648,84 @@ int perl_tsa_mutex_unlock(perl_mutex* mutex)
 int perl_tsa_mutex_destroy(perl_mutex* mutex)
 {
     return pthread_mutex_destroy((pthread_mutex_t *) mutex);
+}
+
+#endif
+
+
+#ifdef USE_DTRACE
+
+/* log a sub call or return */
+
+void
+Perl_dtrace_probe_call(pTHX_ CV *cv, bool is_call)
+{
+    const char *func;
+    const char *file;
+    const char *stash;
+    const COP  *start;
+    line_t      line;
+
+    PERL_ARGS_ASSERT_DTRACE_PROBE_CALL;
+
+    if (CvNAMED(cv)) {
+        HEK *hek = CvNAME_HEK(cv);
+        func = HEK_KEY(hek);
+    }
+    else {
+        GV  *gv = CvGV(cv);
+        func = GvENAME(gv);
+    }
+    start = (const COP *)CvSTART(cv);
+    file  = CopFILE(start);
+    line  = CopLINE(start);
+    stash = CopSTASHPV(start);
+
+    if (is_call) {
+        PERL_SUB_ENTRY(func, file, line, stash);
+    }
+    else {
+        PERL_SUB_RETURN(func, file, line, stash);
+    }
+}
+
+
+/* log a require file loading/loaded  */
+
+void
+Perl_dtrace_probe_load(pTHX_ const char *name, bool is_loading)
+{
+    PERL_ARGS_ASSERT_DTRACE_PROBE_LOAD;
+
+    if (is_loading) {
+	PERL_LOADING_FILE(name);
+    }
+    else {
+	PERL_LOADED_FILE(name);
+    }
+}
+
+
+/* log an op execution */
+
+void
+Perl_dtrace_probe_op(pTHX_ const OP *op)
+{
+    PERL_ARGS_ASSERT_DTRACE_PROBE_OP;
+
+    PERL_OP_ENTRY(OP_NAME(op));
+}
+
+
+/* log a compile/run phase change */
+
+void
+Perl_dtrace_probe_phase(pTHX_ enum perl_phase phase)
+{
+    const char *ph_old = PL_phase_names[PL_phase];
+    const char *ph_new = PL_phase_names[phase];
+
+    PERL_PHASE_CHANGE(ph_new, ph_old);
 }
 
 #endif

@@ -524,7 +524,7 @@ depends on how the system had been configured.  Also remember that for
 things such as DHCP and NAT, the hostname you get back might not be
 very useful.
 
-All the above "don't":s may look daunting, and they are, but the key
+All the above I<don't>s may look daunting, and they are, but the key
 is to degrade gracefully if one cannot reach the particular network
 service one wants.  Croaking or hanging do not look very professional.
 
@@ -744,6 +744,17 @@ consider keeping the platform-specific code in one place, making porting
 to other platforms easier.  Use the C<Config> module and the special
 variable C<$^O> to differentiate platforms, as described in
 L<"PLATFORMS">.
+
+Beware of the "else syndrome":
+
+  if ($^O eq 'MSWin32') {
+    # code that assumes Windows
+  } else {
+    # code that assumes Linux
+  }
+
+The C<else> branch should be used for the really ultimate fallback,
+not for code specific to some platform.
 
 Be careful in the tests you supply with your module or programs.
 Module code may be fully portable, but its tests might not be.  This
@@ -2241,7 +2252,7 @@ will work fine with the 5.8.0.
 
 Known to be broken for 5.8.0 (but 5.6.1 and 5.7.2 can be used):
 
-	AmigaOS
+	AmigaOS 3
 
 The following platforms have been known to build Perl from source in
 the past (5.005_03 and earlier), but we haven't been able to verify

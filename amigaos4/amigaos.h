@@ -32,7 +32,9 @@ int myexecl(bool isperlthread, const char *path, ...);
 
 int pipe(int filedes[2]);
 
-FILE *amigaos_popen(const char *cmd, const char *mode);
+//FILE *amigaos_popen(const char *cmd, const char *mode);
+//int   amigaos_pclose(FILE *f);
+
 void amigaos4_obtain_environ();
 void amigaos4_release_environ();
 

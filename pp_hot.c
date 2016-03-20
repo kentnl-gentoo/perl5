@@ -2892,7 +2892,7 @@ PP(pp_subst)
     STRLEN slen;
     bool doutf8 = FALSE; /* whether replacement is in utf8 */
 #ifdef PERL_ANY_COW
-    bool is_cow;
+    bool was_cow;
 #endif
     SV *nsv = NULL;
     /* known replacement string? */
@@ -2911,24 +2911,25 @@ PP(pp_subst)
 
     SvGETMAGIC(TARG); /* must come before cow check */
 #ifdef PERL_ANY_COW
-    /* Awooga. Awooga. "bool" types that are actually char are dangerous,
-       because they make integers such as 256 "false".  */
-    is_cow = SvIsCOW(TARG) ? TRUE : FALSE;
-#else
-    if (SvIsCOW(TARG))
-	sv_force_normal_flags(TARG,0);
+    /* note that a string might get converted to COW during matching */
+    was_cow = cBOOL(SvIsCOW(TARG));
 #endif
-    if (!(rpm->op_pmflags & PMf_NONDESTRUCT)
-	&& (SvREADONLY(TARG)
-	    || ( ((SvTYPE(TARG) == SVt_PVGV && isGV_with_GP(TARG))
-		  || SvTYPE(TARG) > SVt_PVLV)
-		 && !(SvTYPE(TARG) == SVt_PVGV && SvFAKE(TARG)))))
-	Perl_croak_no_modify();
+    if (!(rpm->op_pmflags & PMf_NONDESTRUCT)) {
+#ifndef PERL_ANY_COW
+	if (SvIsCOW(TARG))
+	    sv_force_normal_flags(TARG,0);
+#endif
+	if ((SvREADONLY(TARG)
+		|| ( ((SvTYPE(TARG) == SVt_PVGV && isGV_with_GP(TARG))
+		      || SvTYPE(TARG) > SVt_PVLV)
+		     && !(SvTYPE(TARG) == SVt_PVGV && SvFAKE(TARG)))))
+	    Perl_croak_no_modify();
+    }
     PUTBACK;
 
     orig = SvPV_nomg(TARG, len);
     /* note we don't (yet) force the var into being a string; if we fail
-     * to match, we leave as-is; on successful match howeverm, we *will*
+     * to match, we leave as-is; on successful match however, we *will*
      * coerce into a string, then repeat the match */
     if (!SvPOKp(TARG) || SvTYPE(TARG) == SVt_PVGV || SvVOK(TARG))
 	force_on_match = 1;
@@ -3013,7 +3014,7 @@ PP(pp_subst)
     /* can do inplace substitution? */
     if (c
 #ifdef PERL_ANY_COW
-	&& !is_cow
+	&& !was_cow
 #endif
         && (I32)clen <= RX_MINLENRET(rx)
         && (  once
@@ -3026,6 +3027,7 @@ PP(pp_subst)
     {
 
 #ifdef PERL_ANY_COW
+        /* string might have got converted to COW since we set was_cow */
 	if (SvIsCOW(TARG)) {
 	  if (!force_on_match)
 	    goto have_a_cow;

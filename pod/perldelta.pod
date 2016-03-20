@@ -2,47 +2,39 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.23.8
+perldelta - what is new for perl v5.23.9
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.23.7 release and the 5.23.8
+This document describes differences between the 5.23.8 release and the 5.23.9
 release.
 
-If you are upgrading from an earlier release such as 5.23.6, first read
-L<perl5237delta>, which describes differences between 5.23.6 and 5.23.7.
+If you are upgrading from an earlier release such as 5.23.7, first read
+L<perl5238delta>, which describes differences between 5.23.7 and 5.23.8.
 
 =head1 Core Enhancements
 
-=head2 More fields provided to C<sigaction> callback with C<SA_SIGINFO>
+=head2 perl will now croak when closing an in-place output file fails
 
-When passing the C<SA_SIGINFO> flag to L<sigaction|POSIX/sigaction>, the
-C<errno>, C<status>, C<uid>, C<pid>, C<addr> and C<band> fields are now
-included in the hash passed to the handler, if supported by the
-platform.
+Until now, failure to close the output file for an in-place edit was not
+detected, meaning that the input file could be clobbered without the edit being
+successfully completed.  Now, when the output file cannot be closed
+successfully, an exception is raised.
 
 =head1 Security
 
-=head2 Set proper umask before calling C<mkstemp(3)>
+=head2 Remove duplicate environment variables from C<environ>
 
-In 5.22 perl started setting umask to 0600 before calling C<mkstemp(3)>
-and restoring it afterwards. This wrongfully tells open(2) to strip
-the owner read and write bits from the given mode before applying it,
-rather than the intended negation of leaving only those bits in place.
+Previously, if an environment variable appeared more than once in
+C<environ[]>, C<%ENV> would contain the last entry for that name,
+while a typical C<getenv()> would return the first entry. We now
+make sure C<%ENV> contains the same as what C<getenv> returns.
 
-Systems that use mode 0666 in C<mkstemp(3)> (like old versions of
-glibc) create a file with permissions 0066, leaving world read and
-write permissions regardless of current umask.
+Second, we remove duplicates from C<environ[]>, so if a setting
+with that name is set in C<%ENV> we won't pass an unsafe value
+to a child process.
 
-This has been fixed by using umask 0177 instead. [perl #127322]
-
-=head1 Incompatible Changes
-
-=head2 C<qr/\N{}/> now disallowed under C<use re "strict">
-
-An empty C<\N{}> makes no sense, but for backwards compatibility is
-silently accepted as doing nothing.  But now this is a fatal error under
-the experimental feature L<re/'strict' mode>.
+[CVE-2016-2381]
 
 =head1 Performance Enhancements
 
@@ -50,16 +42,8 @@ the experimental feature L<re/'strict' mode>.
 
 =item *
 
-The overhead of scope entry and exit has been considerably reduced, so
-for example subroutine calls, loops and basic blocks are all faster now.
-This empty function call now takes about a third less time to execute:
-
-    sub f{} f();
-
-=item *
-
-On Win32, C<stat>ing or C<-X>ing a path, if the file or directory does not
-exist, is now 3.5x faster on a SSD (or any drive) than before.
+The number of calls to C<add_cp_to_invlist> has been reduced. This
+optimizes the compilation of inverted character classes.
 
 =back
 
@@ -71,77 +55,110 @@ exist, is now 3.5x faster on a SSD (or any drive) than before.
 
 =item *
 
-F<cpan/podlators/> has been upgraded from version 4.04 to 4.06.
+L<autouse> has been upgraded from version 1.08 to 1.11.
 
 =item *
 
-The PathTools module collection has been upgraded from version 3.62
-to 3.63.
+L<bytes> has been upgraded from version 1.04 to 1.05.
 
 =item *
 
-L<DynaLoader> has been upgraded from version 1.37 to 1.38.
+L<Carp> has been upgraded from version 1.38 to 1.40.
 
-DynaLoader now always looks for bootstrap files having the same base name as
-the module for which the bootstrap code is being run. Previously, and only on
-platforms that use C<mod2fname> to produce unique loadable library names,
-L<DynaLoader> would look for the bootstrap file using a base name that matched
-the loadable library and not find it.
+C<longmess> now returns the error in scalar context. [CPAN #107225]
 
 =item *
 
-L<Encode> has been upgraded from version 2.78 to 2.80.
+L<Errno> has been upgraded from version 1.24 to 1.25.
+
+It now exports Winsock error constants.
 
 =item *
 
-L<ExtUtils::CBuilder> has been upgraded from version 0.280224 to 0.280225.
+L<ExtUtils::Embed> has been upgraded from version 1.32 to 1.33.
 
 =item *
 
-L<ExtUtils::MakeMaker> has been upgraded from version 7.10 to 7.10_01.
+L<File::Find> has been upgraded from version 1.33 to 1.34.
 
 =item *
 
-L<File::Spec> has been upgraded from version 3.62 to 3.63.
+L<File::Glob> has been upgraded from version 1.25 to 1.26.
 
 =item *
 
-L<IPC::SysV> has been upgraded from version 2.04 to 2.05.
+L<IPC::SysV> has been upgraded from version 2.05 to 2.06_01.
 
 =item *
 
-L<Module::CoreList> has been upgraded from version 5.20160120 to 5.20160121.
+L<List::Util> has been upgraded from version 1.42_01 to 1.42_02.
 
 =item *
 
-L<ODBM_File> has been upgraded from version 1.12 to 1.13.
+L<Module::CoreList> has been upgraded from version 5.20160121 to
+5.20160320.
 
 =item *
 
-L<PerlIO::encoding> has been upgraded from version 0.23 to 0.24.
+L<Pod::Functions> has been upgraded from version 1.09 to 1.10.
 
 =item *
 
-L<POSIX> has been upgraded from version 1.59 to 1.63.
+L<POSIX> has been upgraded from version 1.63 to 1.64.
 
-It can now export constants for the C<code> value in the hash passed to the
-L<sigaction|POSIX/sigaction> handler when using the C<SA_SIGINFO> flag.
-
-These previously deprecated functions are now removed: C<isalnum>,
-C<isalpha>, C<iscntrl>, C<isdigit>, C<isgraph>, C<islower>, C<isprint>,
-C<ispunct>, C<isspace>, C<isupper>, and C<isxdigit>.
+It now exports Winsock error constants.
 
 =item *
 
-L<Storable> has been upgraded from version 2.54 to 2.55.
+L<Scalar::Util> has been upgraded from version 1.42_01 to 1.42_02.
 
 =item *
 
-L<Time::HiRes> has been upgraded from version 1.9728 to 1.9730.
+L<SelfLoader> has been upgraded from version 1.22 to 1.23.
 
-It can now export Linux-specific and FreeBSD-specific C<clock_gettime()>
-constants. It also now has emulation for OS X C<clock_nanosleep()>,
-C<clock_gettime()>, and C<clock_getres()>.
+=item *
+
+L<Socket> has been upgraded from version 2.020_02 to 2.020_03.
+
+=item *
+
+L<Storable> has been upgraded from version 2.55 to 2.56.
+
+=item *
+
+L<strict> has been upgraded from version 1.10 to 1.11.
+
+Narrowed the filename check.
+
+=item *
+
+L<Thread::Queue> has been upgraded from version 3.07 to 3.08.
+
+=item *
+
+L<threads> has been upgraded from version 2.05 to 2.06.
+
+=item *
+
+L<Tie::File> has been upgraded from version 1.01 to 1.02.
+
+=item *
+
+L<Time::HiRes> has been upgraded from version 1.9730 to 1.9732.
+
+=item *
+
+L<version> has been upgraded from version 0.9909 to 0.9916.
+
+=item *
+
+L<warnings> has been upgraded from version 1.35 to 1.36.
+
+Narrowed the filename check.
+
+=item *
+
+L<Win32API::File> has been upgraded from version 0.1202 to 0.1203.
 
 =back
 
@@ -149,65 +166,16 @@ C<clock_gettime()>, and C<clock_getres()>.
 
 =head2 Changes to Existing Documentation
 
-=head3 L<perlguts>
+=head3 L<perlfunc>
 
 =over 4
 
 =item *
 
-A new section has been added, L<perlguts/"Dynamic Scope and the Context
-Stack">, which explains how the perl context stack works.
-
-=back
-
-=head3 L<perlmodlib>
-
-=over 4
-
-=item *
-
-We now recommend contacting the module-authors list or PAUSE in seeking
-guidance on the naming of modules.
-
-=back
-
-=head1 Diagnostics
-
-The following additions or changes have been made to diagnostic output,
-including warnings and fatal error messages.  For the complete list of
-diagnostic messages, see L<perldiag>.
-
-=head2 New Diagnostics
-
-=head3 New Errors
-
-=over 4
-
-=item *
-
-L<<< Sequence (?PE<lt>... not terminated in regex; marked by E<lt>-- HERE in mE<sol>%sE<sol>
-|perldiag/"Sequence (?PE<lt>... not terminated in regex; marked by <-- HERE in mE<sol>%sE<sol>" >>>
-
-=item *
-
-L<Sequence (?PE<gt>... not terminated in regex; marked by E<lt>-- HERE in mE<sol>%sE<sol>
-|perldiag/"Sequence (?PE<gt>... not terminated in regex; marked by <-- HERE in mE<sol>%sE<sol>">
-
-=item *
-
-L<Empty \%c in regex; marked by E<lt>-- HERE in mE<sol>%sE<sol>
-|perldiag/"Empty \%c in regex; marked by <-- HERE in mE<sol>%sE<sol>">
-
-=back
-
-=head3 New Warnings
-
-=over 4
-
-=item *
-
-L<Assuming NOT a POSIX class since %s in regex; marked by E<lt>-- HERE in mE<sol>%sE<sol>|
-perldiag/Assuming NOT a POSIX class since %s in regex; marked by <-- HERE in mE<sol>%sE<sol>>
+The L<perlfunc> manual page got a cleanup: there's more consistency now
+(in POD usage, grammar, code examples), better practices in code examples
+(use of C<my>, removal of bareword filehandles, dropped usage of C<&>
+when calling subroutines, ...), etc.
 
 =back
 
@@ -217,15 +185,32 @@ perldiag/Assuming NOT a POSIX class since %s in regex; marked by <-- HERE in mE<
 
 =item *
 
-The GNU Make makefile for Win32 now supports parallel builds.  [perl #126632]
+Dtrace builds now build successfully on systems with a newer dtrace
+that require an input object file that uses the probes in the F<.d>
+file.
+
+Previously the probe would fail and cause a build failure. [perl
+#122287]
 
 =item *
 
-You can now build perl with MSVC++ on Win32 using GNU Make.  [perl #126632]
+F<installman> no longer warns if a module doesn't contain documentation,
+as this isn't actually an error. Now missing documentation will only
+be reported when using the B<--verbose> switch, and if it does, the
+missing documentation will be reported on C<STDOUT> instead of C<STDERR>.
 
 =item *
 
-Bison 3.0 is now supported.
+The B<u> option to the C<ar> command was removed. This was redundant
+anyway, and on some systems, it caused a warning.
+
+=item *
+
+Added F<Configure> probes for C<newlocale>, C<freelocale>, and C<uselocale>.
+
+=item *
+
+Fix up dtrace compile/link for Solaris. [perl #127543]
 
 =back
 
@@ -235,135 +220,37 @@ Bison 3.0 is now supported.
 
 =over 4
 
-=item VMS
+=item Win32
 
 =over
 
 =item *
 
-For those C<%ENV> elements based on the CRTL environ array, we've always
-preserved case when setting them but did look-ups only after upcasing the
-key first, which made lower- or mixed-case entries go missing. This problem
-has been corrected by making C<%ENV> elements derived from the environ array
-case-sensitive on look-up as well as case-preserving on store.
+Building a 64-bit perl with a 64-bit GCC but a 32-bit gmake would
+result in an invalid C<$Config{archname}> for the resulting perl.
+[perl #127584]
 
 =item *
 
-Environment look-ups for C<PERL5LIB> and C<PERLLIB> previously only
-considered logical names, but now consider all sources of C<%ENV> as
-determined by C<PERL_ENV_TABLES> and as documented in L<perlvms/%ENV>.
+Errors set by Winsock functions are now put directly into C<$^E>, and the
+relevant C<WSAE*> error codes are now exported from the L<Errno> and L<POSIX>
+modules for testing this against.
 
-=back
+The previous behaviour of putting the errors (converted to POSIX-style C<E*>
+error codes since Perl 5.20.0) into C<$!> was buggy due to the non-equivalence
+of like-named Winsock and POSIX error constants, a relationship between which
+has unfortunately been established in one way or another since Perl 5.8.0.
 
-=item Win32
+The new behaviour provides a much more robust solution for checking Winsock
+errors in portable software without accidentally matching POSIX tests that were
+intended for other OSes and may have different meanings for Winsock.
 
-Builds using Microsoft Visual C++ 2003 and earlier no longer produce
-an "INTERNAL COMPILER ERROR" message.  [perl #126045]
-
-=back
-
-=head1 Internal Changes
-
-=over 4
-
-=item *
-
-The implementation of perl's context stack system, and its internal API,
-have been heavily reworked. Note that no significant changes have been
-made to any external APIs, but XS code which relies on such internal
-details may need to be fixed. The main changes are:
-
-=over 4
-
-=item *
-
-The C<PUSHBLOCK()>, C<POPSUB()> etc. macros have been replaced with static
-inline functions such as C<cx_pushblock()>, C<cx_popsub()> etc. These use
-function args rather than implicitly relying on local vars such as
-C<gimme> and C<newsp> being available. Also their functionality has
-changed: in particular, C<cx_popblock()> no longer decrements
-C<cxstack_ix>. The ordering of the steps in the C<pp_leave*> functions
-involving C<cx_popblock()>, C<cx_popsub()> etc. has changed. See the new
-documentation, L<perlguts/"Dynamic Scope and the Context Stack">, for
-details on how to use them.
-
-=item *
-
-Various macros, which now consistently have a CX_ prefix, have been added:
-
-  CX_CUR(), CX_LEAVE_SCOPE(), CX_POP()
-
-or renamed:
-
-  CX_POP_SAVEARRAY(), CX_DEBUG(), CX_PUSHSUBST(), CX_POPSUBST()
-
-=item *
-
-C<cx_pushblock()> now saves C<PL_savestack_ix> and C<PL_tmps_floor>, so
-C<pp_enter*> and C<pp_leave*> no longer do
-
-  ENTER; SAVETMPS; ....; LEAVE
-
-=item *
-
-C<cx_popblock()> now also restores C<PL_curpm>.
-
-=item *
-
-In C<dounwind()> for every context type, the current savestack frame is
-now processed before each context is popped; formerly this was only done
-for sub-like context frames. This action has been removed from
-C<cx_popsub()> and placed into its own macro, C<CX_LEAVE_SCOPE(cx)>, which
-must be called before C<cx_popsub()> etc.
-
-C<dounwind()> now also does a C<cx_popblock()> on the last popped frame
-(formerly it only did the C<cx_popsub()> etc. actions on each frame).
-
-=item *
-
-The temps stack is now freed on scope exit; previously, temps created
-during the last statement of a block wouldn't be freed until the next
-C<nextstate> following the block (apart from an existing hack that did
-this for recursive subs in scalar context); and in something like
-C<f(g())>, the temps created by the last statement in C<g()> would
-formerly not be freed until the statement following the return from
-C<f()>.
-
-=item *
-
-Most values that were saved on the savestack on scope entry are now
-saved in suitable new fields in the context struct, and saved and
-restored directly by C<cx_pushfoo()> and C<cx_popfoo()>, which is much
-faster.
-
-=item *
-
-Various context struct fields have been added, removed or modified.
-
-=item *
-
-The handling of C<@_> in C<cx_pushsub()> and C<cx_popsub()> has been
-considerably tidied up, including removing the C<argarray> field from the
-context struct, and extracting out some common (but rarely used) code into
-a separate function, C<clear_defarray()>. Also, useful subsets of
-C<cx_popsub()> which had been unrolled in places like C<pp_goto> have been
-gathered into the new functions C<cx_popsub_args()> and
-C<cx_popsub_common()>.
-
-=item *
-
-C<pp_leavesub> and C<pp_leavesublv> now use the same function as the rest
-of the C<pp_leave*>'s to process return args.
-
-=item *
-
-C<CXp_FOR_PAD> and C<CXp_FOR_GV> flags have been added, and
-C<CXt_LOOP_FOR> has been split into C<CXt_LOOP_LIST>, C<CXt_LOOP_ARY>.
-
-=item *
-
-Some variables formerly declared by C<dMULTICALL> (but not documented) have
-been removed.
+The old behaviour is currently retained, warts and all, for backwards
+compatibility, but users are encouraged to change any code that tests C<$!>
+against C<E*> constants for Winsock errors to instead test C<$^E> against
+C<WSAE*> constants.  After a suitable deprecation period, the old behaviour may
+be removed, leaving C<$!> unchanged after Winsock function calls, to avoid any
+possible confusion over which error variable to check.
 
 =back
 
@@ -375,107 +262,127 @@ been removed.
 
 =item *
 
-Line numbers larger than 2**31-1 but less than 2**32 are no longer
-returned by caller() as negative numbers.  [perl #126991]
+It now works properly to specify a user-defined property, such as
+
+ qr/\p{mypkg1::IsMyProperty}/i
+
+with C</i> caseless matching, an explicit package name, and
+I<IsMyProperty> not defined at the time of the pattern compilation.
 
 =item *
 
-C<< unless ( I<assignment> ) >> now properly warns when syntax
-warnings are enabled.  [perl #127122]
+Perl's memcpy(), memmove(), memset() and memcmp() fallbacks are now
+more compatible with the originals.  [perl #127619]
 
 =item *
 
-Setting an C<ISA> glob to an array reference now properly adds
-C<isaelem> magic to any existing elements.  Previously modifying such
-an element would not update the ISA cache, so method calls would call
-the wrong function.  Perl would also crash if the C<ISA> glob was
-destroyed, since new code added in 5.23.7 would try to release the
-C<isaelem> magic from the elements.  [perl #127351]
+The peak memory usage when compiling some regular expression patterns is
+now significantly smaller. [perl #127392]
 
 =item *
 
-If a here-doc was found while parsing another operator, the parser had
-already read end of file, and the here-doc was not terminated, perl
-could produce an assertion or a segmentation fault.  This now reliably
-complains about the unterminated here-doc.  [perl #125540]
+A case has been fixed in which malformed UTF-8 in the source of a Perl
+script caused an assertion failure instead of an error message. [perl
+#127262]
 
 =item *
 
-untie() would sometimes return the last value returned by the UNTIE()
-handler as well as it's normal value, messing up the stack.  [perl
-#126621]
+Fixed a buffer overrun issue in F<Socked.xs> which was reported by Coverity.
+[CPAN #111707]
+
+=item * 
+
+Fixed a possible division by 0 error in C<Scalar::List::Utils::product>
+(reported by Coverity). [CPAN #105415]
 
 =item *
 
-Fixed an operator precedence problem when C< castflags & 2> is true.
-[perl #127474]
+Fixed the issue where a C<< s///r >>) with B<< -DPERL_NO_COW >> attempts
+to modify the source SV, resulting in the program dying. [perl #127635]
 
 =item *
 
-Caching of DESTROY methods could result in a non-pointer or a
-non-STASH stored in the SvSTASH() slot of a stash, breaking the B
-STASH() method.  The DESTROY method is now cached in the MRO metadata
-for the stash.  [perl #126410]
+Fixed a spurious warning about posix character classes. [perl #127581]
 
 =item *
 
-The AUTOLOAD method is now called when searching for a DESTROY method,
-and correctly sets C<$AUTOLOAD> too.  [perl #124387]  [perl #127494]
+Fixed an obscure case where a pattern could fail to match. This only 
+occurred when matching characters from the set of C1 controls, when
+the target matched string was in UTF-8, and only on EBCDIC platforms.
 
 =item *
 
-Avoid parsing beyond the end of the buffer when processing a C<#line>
-directive with no filename.  [perl #127334]
+Fixed over eager warnings for C<< /[.foo.]/ >>.
+
+This prevents Perl from warning about constructs like C<< /[.].*[.]/ >>.
+[perl #127582, #127604]
 
 =item *
 
-Perl now raises a warning when a regular expression pattern looks like
-it was supposed to contain a POSIX class, like C<qr/[[:alpha:]]/>, but
-there was some slight defect in its specification which causes it to
-instead be treated as a regular bracketed character class.  An example
-would be missing the second colon in the above like this:
-C<qr/[[:alpha]]/>.  This compiles to match a sequence of two characters.
-The second is C<"]">, and the first is any of: C<"[">, C<":">, C<"a">,
-C<"h">, C<"l">, or C<"p">.   This is unlikely to be the intended
-meaning, and now a warning is raised.  No warning is raised unless the
-specification is very close to one of the 14 legal POSIX classes.  (See
-L<perlrecharclass/POSIX Character Classes>.)
-[perl #8904]
+Narrow the filename check in F<strict.pm> and F<warnings.pm>. Previously,
+it assumed that if the filename (without the F<.pmc?> extension) differed
+from the package name, if was a misspelled use statement (i.e. C<use Strict>
+instead of C<use strict>). We now check whether there's really a 
+miscapitalization happening, and not another issue.
 
 =item *
 
-Certain regex patterns involving a complemented POSIX class in an
-inverted bracketed character class, and matching something else
-optionally would improperly fail to match.  An example of one that could
-fail is C</qr/_?[^\Wbar]\x{100}/>.  This has been fixed.
-[perl #127537]
+Turn an assertion into a more user friendly failure when parsing
+regexes. [perl #127599]
 
 =item *
 
-Perl 5.22 added support to the C99 hexadecimal floating point notation,
-but sometimes misparses hex floats. This had been fixed.
-[perl #127183]
+Correctly raise an error when trying to compile patterns with 
+unterminated character classes while there are trailing backslashes.
+[perl #126141].
+
+=item *
+
+Added a guard against malformed UTF-8. [perl #127262]
+
+=item *
+
+Only test C<semctl> if we have everything needed to use it. In a FreeBSD
+the C<semctl> entry point may exist, but it can be disabled by policy.
+[perl #127533]
+
+=item *
+
+Handle C<NOTHING> regops and C<EXACTFU_SS> regops in C<make_trie> properly.
+[perl #126206]
+
+=item *
+
+Fix a Solaris optimiser bug which prevented certain regular expression
+to be compiled. [perl #127455]
+
+=item *
+
+Improved the detection of infinite recursion in regular expressions.
+Previously, perl would in certain cases slowly consume resources until
+finally running out of memory. [perl #126182]
+
 
 =back
 
 =head1 Acknowledgements
 
-Perl 5.23.8 represents approximately 4 weeks of development since Perl 5.23.7
-and contains approximately 30,000 lines of changes across 350 files from 23
+Perl 5.23.9 represents approximately 4 weeks of development since Perl 5.23.8
+and contains approximately 21,000 lines of changes across 230 files from 23
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 14,000 lines of changes to 210 .pm, .t, .c and .h files.
+approximately 8,500 lines of changes to 120 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.23.8:
+improvements that became Perl 5.23.9:
 
-Aaron Crane, Chris 'BinGOs' Williams, Craig A. Berry, Dagfinn Ilmari
-Mannsåker, Daniel Dragan, David Mitchell, Ed J, Herbert Breunung, H.Merijn
-Brand, James E Keenan, Jarkko Hietaniemi, Karl Williamson, Lukas Mai, Niko
-Tyni, Pip Cet, Ricardo Signes, Sawyer X, Sisyphus, Stevan Little, Steve Hay,
-Todd Rinaldo, Tom Hukins, Tony Cook.
+Abigail, Alex Vandiver, Andy Broad, Aristotle Pagaltzis, Chris 'BinGOs'
+Williams, Craig A. Berry, Dagfinn Ilmari Mannsåker, Daniel Dragan, David
+Mitchell, Father Chrysostomos, H.Merijn Brand, Jarkko Hietaniemi, John Peacock,
+Karl Williamson, Leon Timmermans, Lukas Mai, Matthew Horsfall, Ricardo Signes,
+Sawyer X, Shlomi Fish, Steve Hay, Tony Cook, Yves Orton.
 
 The list above is almost certainly incomplete as it is automatically generated
 from version control history. In particular, it does not include the names of

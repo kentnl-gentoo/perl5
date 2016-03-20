@@ -689,6 +689,14 @@ use File::Glob qw(:case);
                 const-xs.inc
                 ),
         ],
+        'CUSTOMIZED' => [
+            # CPAN #118827
+	    qw(t/ipcsysv.t
+               lib/IPC/Msg.pm
+               lib/IPC/Semaphore.pm
+               lib/IPC/SharedMem.pm
+               lib/IPC/SysV.pm),
+        ],
     },
 
     'JSON::PP' => {
@@ -832,7 +840,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160120.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160121.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -988,12 +996,14 @@ use File::Glob qw(:case);
         'FILES'        => q[cpan/Scalar-List-Utils],
         # Waiting to be merged upstream:
         # https://github.com/Scalar-List-Utils/Scalar-List-Utils/pull/24
+        # https://rt.cpan.org/Public/Bug/Display.html?id=105415
         'CUSTOMIZED'   => [
             qw( ListUtil.xs
                 lib/List/Util.pm
                 lib/List/Util/XS.pm
                 lib/Scalar/Util.pm
                 lib/Sub/Util.pm
+                t/product.t
                 )
         ],
     },
@@ -1015,6 +1025,7 @@ use File::Glob qw(:case);
 
         # https://rt.cpan.org/Ticket/Display.html?id=106797
         # https://rt.cpan.org/Ticket/Display.html?id=107058
+        # https://rt.cpan.org/Ticket/Display.html?id=111707
         'CUSTOMIZED'   => [ qw[ Socket.pm Socket.xs ] ],
     },
 
@@ -1252,7 +1263,7 @@ use File::Glob qw(:case);
     },
 
     'version' => {
-        'DISTRIBUTION' => 'JPEACOCK/version-0.9909.tar.gz',
+        'DISTRIBUTION' => 'JPEACOCK/version-0.9916.tar.gz',
         'FILES'        => q[cpan/version vutil.c vutil.h vxs.inc],
         'EXCLUDED' => [
             qr{^vutil/lib/},
@@ -1298,25 +1309,10 @@ use File::Glob qw(:case);
     },
 
     'Win32API::File' => {
-        'DISTRIBUTION' => 'CHORNY/Win32API-File-0.1202.tar.gz',
+        'DISTRIBUTION' => 'CHORNY/Win32API-File-0.1203.tar.gz',
         'FILES'        => q[cpan/Win32API-File],
         'EXCLUDED'     => [
             qr{^ex/},
-        ],
-
-        # Currently all EOL differences. Waiting for a new upstream release:
-        # All the files in the GitHub repo have UNIX EOLs already.
-        'CUSTOMIZED'   => [
-            qw( ExtUtils/Myconst2perl.pm
-                Makefile.PL
-                buffers.h
-                cFile.h
-                cFile.pc
-                const2perl.h
-                t/file.t
-                t/tie.t
-                typemap
-                ),
         ],
     },
 

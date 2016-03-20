@@ -2921,14 +2921,15 @@ cpan/version/t/06noop.t			Tests for version objects
 cpan/version/t/07locale.t		Tests for version objects
 cpan/version/t/08_corelist.t		Tests for version objects
 cpan/version/t/09_list_util.t		Tests for version objects
+cpan/version/t/10_lyon.t		Tests for version objects
 cpan/version/t/coretests.pm		Tests for version objects
 cpan/Win32API-File/buffers.h	Win32API::File extension
 cpan/Win32API-File/cFile.h	Win32API::File extension
 cpan/Win32API-File/cFile.pc	Win32API::File extension
 cpan/Win32API-File/const2perl.h	Win32API::File extension
-cpan/Win32API-File/ExtUtils/Myconst2perl.pm	Win32API::File extension
 cpan/Win32API-File/File.pm	Win32API::File extension
 cpan/Win32API-File/File.xs	Win32API::File extension
+cpan/Win32API-File/inc/ExtUtils/Myconst2perl.pm	Win32API::File extension
 cpan/Win32API-File/Makefile.PL	Win32API::File extension makefile write
 cpan/Win32API-File/t/file.t	See if Win32API::File extension works
 cpan/Win32API-File/t/tie.t	See if Win32API::File extension works
@@ -3297,6 +3298,7 @@ dist/Net-Ping/t/450_service.t		Ping Net::Ping
 dist/Net-Ping/t/500_ping_icmp.t		Ping Net::Ping
 dist/Net-Ping/t/510_ping_udp.t		Ping Net::Ping
 dist/Net-Ping/t/520_icmp_ttl.t		Ping Net::Ping
+dist/PathTools/Changes			Changelog for PathTools dist
 dist/PathTools/Cwd.pm				Various cwd routines (getcwd, fastcwd, chdir)
 dist/PathTools/Cwd.xs				Cwd extension external subroutines
 dist/PathTools/lib/File/Spec/AmigaOS.pm		portable operations on AmigaOS file names
@@ -4650,6 +4652,7 @@ pod/perl5234delta.pod		Perl changes in version 5.23.4
 pod/perl5235delta.pod		Perl changes in version 5.23.5
 pod/perl5236delta.pod		Perl changes in version 5.23.6
 pod/perl5237delta.pod		Perl changes in version 5.23.7
+pod/perl5238delta.pod		Perl changes in version 5.23.8
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1

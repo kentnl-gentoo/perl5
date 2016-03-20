@@ -29,7 +29,9 @@
  * in such scope than if not.  However, various libc functions called by Perl
  * are affected by the LC_NUMERIC category, so there are macros in perl.h that
  * are used to toggle between the current locale and the C locale depending on
- * the desired behavior of those functions at the moment.
+ * the desired behavior of those functions at the moment.  And, LC_MESSAGES is
+ * switched to the C locale for outputting the message unless within the scope
+ * of 'use locale'.
  */
 
 #include "EXTERN.h"
@@ -122,7 +124,7 @@ Perl_set_numeric_radix(pTHX)
                                            ? SvPVX(PL_numeric_radix_sv)
                                            : "NULL",
                                           (PL_numeric_radix_sv)
-                                           ? SvUTF8(PL_numeric_radix_sv)
+                                           ? cBOOL(SvUTF8(PL_numeric_radix_sv))
                                            : 0));
 
 # endif /* HAS_LOCALECONV */
@@ -190,13 +192,17 @@ Perl_new_numeric(pTHX_ const char *newnum)
     }
 
     save_newnum = stdize_locale(savepv(newnum));
+
+    PL_numeric_standard = isNAME_C_OR_POSIX(save_newnum);
+    PL_numeric_local = TRUE;
+
     if (! PL_numeric_name || strNE(PL_numeric_name, save_newnum)) {
 	Safefree(PL_numeric_name);
 	PL_numeric_name = save_newnum;
     }
-
-    PL_numeric_standard = isNAME_C_OR_POSIX(save_newnum);
-    PL_numeric_local = TRUE;
+    else {
+	Safefree(save_newnum);
+    }
 
     /* Keep LC_NUMERIC in the C locale.  This is for XS modules, so they don't
      * have to worry about the radix being a non-dot.  (Core operations that

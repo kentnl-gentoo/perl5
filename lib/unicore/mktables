@@ -2289,10 +2289,10 @@ sub trace { return main::trace(@_); }
     # points not given in the input.  If not present, the default from the
     # normal property is used
     #
-    # [4] if present must be the string 'ONLY_EARLY'.  Normally, when
-    # compiling Unicode versions that don't invoke the early handling, the
-    # name in [1] is added as an alias to the property name used for these.
-    # This parameter says to not do this.
+    # [-1] If there is an extra final element that is the string 'ONLY_EARLY'.
+    # it means to not add the name in [1] as an alias to the property name
+    # used for these.  Normally, when compiling Unicode versions that don't
+    # invoke the early handling, the name is added as a synonym.
     #
     # Not all files can be handled in the above way, and so the code ref
     # alternative is available.  It can do whatever it needs to.  The other
@@ -2303,6 +2303,9 @@ sub trace { return main::trace(@_); }
     # indicate if an early alternative is actually being used or not.  This
     # makes for easier testing later on.
     main::set_access('early', \%early, 'c');
+
+    my %only_early;
+    main::set_access('only_early', \%only_early, 'c');
 
     my %required_even_in_debug_skip;
     # debug_skip is used to speed up compilation during debugging by skipping
@@ -2414,9 +2417,9 @@ sub trace { return main::trace(@_); }
         my $progress;
         my $function_instead_of_file = 0;
 
-        if ($early{$addr}->@* > 4 && $early{$addr}[4] ne 'ONLY_EARLY') {
-            Carp::my_carp_bug("If present, element [4] in 'Early => [ ... ]'"
-                            . " must be the string 'ONLY_EARLY'");
+        if ($early{$addr}->@* && $early{$addr}[-1] eq 'ONLY_EARLY') {
+            $only_early{$addr} = 1;
+            pop $early{$addr}->@*;
         }
 
         # If we are compiling a Unicode release earlier than the file became
@@ -2427,6 +2430,8 @@ sub trace { return main::trace(@_); }
             unshift $early{$addr}->@*, 1;
 
             # See the definition of %early for what the array elements mean.
+            # Note that we have just unshifted onto the array, so the numbers
+            # below are +1 of those in the %early description.
             # If we have a property this defines, create a table and default
             # map for it now (at essentially compile time), so that it will be
             # available for the whole of run time.  (We will want to add this
@@ -2445,8 +2450,8 @@ sub trace { return main::trace(@_); }
 
                 # If not specified by the constructor, use the default mapping
                 # for the regular property for this substitute one.
-                if ($early{$addr}[3]) {
-                    $prop_object->set_default_map($early{$addr}[3]);
+                if ($early{$addr}[4]) {
+                    $prop_object->set_default_map($early{$addr}[4]);
                 }
                 elsif (    defined $property{$addr}
                        &&  defined $default_mapping{$property{$addr}})
@@ -2497,7 +2502,7 @@ END
                 push $each_line_handler{$addr}->@*, \&_exclude_unassigned;
 
                 if (   $v_version lt v2.0        # Hanguls in this release ...
-                    && defined $early{$addr}[4]) # ... need special treatment
+                    && defined $early{$addr}[3]) # ... need special treatment
                 {
                     push $eof_handler{$addr}->@*, \&_fixup_obsolete_hanguls;
                 }
@@ -2717,11 +2722,12 @@ END
                 # official property, we still have to allow the publicly
                 # inaccessible early name so that the core code which uses it
                 # will work regardless.
-                if (! $early{$addr}[0] && $early{$addr}->@* > 2) {
+                if (   ! $only_early{$addr}
+                    && ! $early{$addr}[0]
+                    && $early{$addr}->@* > 2)
+                {
                     my $early_property_name = $early{$addr}[2];
-                    if (   $property{$addr} ne $early_property_name
-                        && $early{$addr}->@* < 5)
-                    {
+                    if ($property{$addr} ne $early_property_name) {
                         main::property_ref($property{$addr})
                                             ->add_alias($early_property_name);
                     }
@@ -6977,18 +6983,29 @@ sub trace { return main::trace(@_); }
 
     sub set_default_map {
         # Define what code points that are missing from the input files should
-        # map to
+        # map to.  The optional second parameter 'full_name' indicates to
+        # force using the full name of the map instead of its standard name.
 
         my $self = shift;
         my $map = shift;
+        my $use_full_name = shift // 0;
         Carp::carp_extra_args(\@_) if main::DEBUG && @_;
+
+        if ($use_full_name && $use_full_name ne 'full_name') {
+            Carp::my_carp_bug("Second parameter to set_default_map() if"
+                            . " present, must be 'full_name'");
+        }
 
         my $addr = do { no overloading; pack 'J', $self; };
 
         # Convert the input to the standard equivalent, if any (won't have any
         # for $STRING properties)
-        my $standard = $self->_find_table_from_alias->{$map};
-        $map = $standard->name if defined $standard;
+        my $standard = $self->property->table($map);
+        if (defined $standard) {
+            $map = ($use_full_name)
+                   ? $standard->full_name
+                   : $standard->name;
+        }
 
         # Warn if there already is a non-equivalent default map for this
         # property.  Note that a default map can be a ref, which means that
@@ -10604,8 +10621,8 @@ ea ; W         ; Wide
 END
     }
 
-    if (-e 'LineBreak.txt') {
-        push @return, split /\n/, <<'END';
+    if (-e 'LineBreak.txt' || -e 'LBsubst.txt') {
+        my @lb = split /\n/, <<'END';
 lb ; AI        ; Ambiguous
 lb ; AL        ; Alphabetic
 lb ; B2        ; Break_Both
@@ -10636,6 +10653,12 @@ lb ; SY        ; Break_Symbols
 lb ; XX        ; Unknown
 lb ; ZW        ; ZWSpace
 END
+        # If this Unicode version predates the lb property, we use our
+        # substitute one
+        if (-e 'LBsubst.txt') {
+            $_ = s/^lb/_Perl_LB/r for @lb;
+        }
+        push @return, @lb;
     }
 
     if (-e 'DNormalizationProps.txt') {
@@ -12147,6 +12170,24 @@ sub process_NamedSequences {
 
         return;
     }
+}
+
+sub filter_substitute_lb {
+    # Used on Unicodes that predate the LB property, where there is a
+    # substitute file.  This just does the regular ea_lb handling for such
+    # files, and then substitutes the long property value name for the short
+    # one that comes with the file.  (The other break files have the long
+    # names in them, so this is the odd one out.)  The reason for doing this
+    # kludge is that regen/mk_invlists.pl is expecting the long name.  This
+    # also fixes the typo 'Inseperable' that leads to problems.
+
+    filter_early_ea_lb;
+    return unless $_;
+
+    my @fields = split /\s*;\s*/;
+    $fields[1] = property_ref('_Perl_LB')->table($fields[1])->full_name;
+    $fields[1] = 'Inseparable' if lc $fields[1] eq 'inseperable';
+    $_ = join '; ', @fields;
 }
 
 sub filter_old_style_arabic_shaping {
@@ -15051,8 +15092,8 @@ END
                                                    0x2060 .. 0x206F,
                                                    0xFE00 .. 0xFE0F,
                                                    0xFFF0 .. 0xFFFB,
-                                                   0xE0000 .. 0xE0FFF,
                                                   ]);
+        $temp->add_range(0xE0000, 0xE0FFF) if $v_version ge v2.0;
         $quotemeta += $temp;
     }
     calculate_DI();
@@ -15111,6 +15152,10 @@ END
     # SA              CM      Only Mn or Mc
     # SA              AL      Any except Mn and Mc
     # CJ              NS      Any
+    #
+    # All property values are also written out in their long form, as
+    # regen/mk_invlist.pl expects that.  This also fixes occurrences of the
+    # typo in early Unicode versions: 'inseperable'.
     my $perl_lb = property_ref('_Perl_LB');
     if (! defined $perl_lb) {
         $perl_lb = Property->new('_Perl_LB',
@@ -15119,36 +15164,40 @@ END
                                  Directory => $map_directory,
                                  Type => $STRING);
         my $lb = property_ref('Line_Break');
-        $perl_lb->initialize($lb);
-    }
-    $perl_lb->set_default_map('AL');
 
-    # It's a little iffy relying on Unicode to not change which property value
-    # synonym they use, but if they do, tests should start failing and we can
-    # fix this up
+        # Populate from $lb, but use full name and fix typo.
+        foreach my $range ($lb->ranges) {
+            my $full_name = $lb->table($range->value)->full_name;
+            $full_name = 'Inseparable'
+                                if standardize($full_name) eq 'inseperable';
+            $perl_lb->add_map($range->start, $range->end, $full_name);
+        }
+    }
+
+    $perl_lb->set_default_map('Alphabetic', 'full_name');    # XX -> AL
+
     for my $range ($perl_lb->ranges) {
         my $value = standardize($range->value);
         if (   $value eq standardize('Unknown')
-            || $value eq standardize('XX')
-            || $value eq standardize('AI')
-            || $value eq standardize('SG'))
+            || $value eq standardize('Ambiguous')
+            || $value eq standardize('Surrogate'))
         {
-            $perl_lb->add_map($range->start, $range->end, 'AL',
+            $perl_lb->add_map($range->start, $range->end, 'Alphabetic',
                               Replace => $UNCONDITIONALLY);
         }
-        elsif ($value eq standardize('CJ')) {
-            $perl_lb->add_map($range->start, $range->end, 'NS',
+        elsif ($value eq standardize('Conditional_Japanese_Starter')) {
+            $perl_lb->add_map($range->start, $range->end, 'Nonstarter',
                               Replace => $UNCONDITIONALLY);
         }
-        elsif ($value eq standardize('SA')) {
+        elsif ($value eq standardize('Complex_Context')) {
             for my $i ($range->start .. $range->end) {
                 my $gc_val = $gc->value_of($i);
                 if ($gc_val eq 'Mn' || $gc_val eq 'Mc') {
-                    $perl_lb->add_map($i, $i, 'CM',
+                    $perl_lb->add_map($i, $i, 'Combining_Mark',
                                       Replace => $UNCONDITIONALLY);
                 }
                 else {
-                    $perl_lb->add_map($i, $i, 'AL',
+                    $perl_lb->add_map($i, $i, 'Alphabetic',
                                       Replace => $UNCONDITIONALLY);
                 }
             }
@@ -18602,6 +18651,18 @@ sub make_property_test_script() {
                                 # conflating is possible.  In our example, we
                                 # don't want 2/3 matching 7/10, if there is
                                 # a 7/10 code point.
+
+                                # First, integers are not in the rationals
+                                # table.  Don't generate an error if this
+                                # rounds to an integer using the given
+                                # precision.
+                                my $round = sprintf "%.0f", $table_name;
+                                next PLACE if abs($table_name - $round)
+                                                        < $MAX_FLOATING_SLOP;
+
+                                # Here, isn't close enough to an integer to be
+                                # confusable with one.  Now, see it it's
+                                # "close" to a known rational
                                 for my $existing
                                         (keys %nv_floating_to_rational)
                                 {
@@ -18903,11 +18964,16 @@ my @input_file_objects = (
                     Has_Missings_Defaults => $NOT_IGNORED,
                     Property => 'Line_Break',
                     # Early versions had problematic syntax
-                    Each_Line_Handler => (($v_version lt v3.1.0)
-                                        ? \&filter_early_ea_lb
-                                        : undef),
-                    Early => [ "LBsubst.txt", '_Perl_LB', 'AL',
-                               'AL', # default
+                    Each_Line_Handler => ($v_version ge v3.1.0)
+                                          ? undef
+                                          : ($v_version lt v3.0.0)
+                                            ? \&filter_substitute_lb
+                                            : \&filter_early_ea_lb,
+                    # Must use long names for property values see comments at
+                    # sub filter_substitute_lb
+                    Early => [ "LBsubst.txt", '_Perl_LB', 'Alphabetic',
+                               'Alphabetic', # default to this because XX ->
+                                             # AL
 
                                # Don't use _Perl_LB as a synonym for
                                # Line_Break in later perls, as it is tailored

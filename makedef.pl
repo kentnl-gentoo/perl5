@@ -285,7 +285,7 @@ else {
 			 );
 }
 
-unless ($define{'PERL_COPY_ON_WRITE'}) {
+if (!$define{'PERL_COPY_ON_WRITE'} || $define{'PERL_NO_COW'}) {
     ++$skip{Perl_sv_setsv_cow};
 }
 
@@ -424,6 +424,15 @@ unless ($define{'PERL_IMPLICIT_CONTEXT'}) {
 unless ($define{'PERL_OP_PARENT'}) {
     ++$skip{$_} foreach qw(
 		    Perl_op_parent
+                );
+}
+
+unless ($define{'USE_DTRACE'}) {
+    ++$skip{$_} foreach qw(
+                    Perl_dtrace_probe_call
+                    Perl_dtrace_probe_load
+                    Perl_dtrace_probe_op
+                    Perl_dtrace_probe_phase
                 );
 }
 

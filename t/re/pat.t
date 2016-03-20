@@ -23,7 +23,7 @@ BEGIN {
     skip_all_without_unicode_tables();
 }
 
-plan tests => 776;  # Update this when adding/deleting tests.
+plan tests => 789;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1721,6 +1721,43 @@ EOP
             fresh_perl_is($code, "", {},
                             "perl [#126406] panic");
 	}
+        {
+            my $bug="[perl #126182]"; # test for infinite pattern recursion
+            for my $tuple (
+                    [ 'q(a)=~/(.(?2))((?<=(?=(?1)).))/', "died", "look ahead left recursion fails fast" ],
+                    [ 'q(aa)=~/(?R)a/', "died", "left-recursion fails fast", ],
+                    [ 'q(bbaa)=~/(?&x)(?(DEFINE)(?<x>(?&y)*a)(?<y>(?&x)*b))/',
+                        "died", "inter-cyclic optional left recursion dies" ],
+                    [ 'q(abc) =~ /a((?1)?)c/', "died", "optional left recursion dies" ],
+                    [ 'q(abc) =~ /a((?1)??)c/', "died", "min mod left recursion dies" ],
+                    [ 'q(abc) =~ /a((?1)*)c/', "died", "* left recursion dies" ],
+                    [ 'q(abc) =~ /a((?1)+)c/', "died", "+ left recursion dies" ],
+                    [ 'q(abc) =~ /a((?1){0,3})c/', "died", "{0,3} left recursion fails fast" ],
+
+                    [ 'q(aaabbb)=~/a(?R)?b/', "matched", "optional self recursion works" ],
+                    [ '"((5maa-maa)(maa-3maa))" =~ /(\\\\((?:[^()]++|(?0))*+\\\\))/', "matched",
+                        "recursion and possessive captures", "((5maa-maa)(maa-3maa))"],
+                    [ '"((5maa-maa)(maa-3maa))" =~ /(\\\\((?:[^()]++|(?1))*+\\\\))/', "matched",
+                        "recursion and possessive captures", "((5maa-maa)(maa-3maa))"],
+                    [ '"((5maa-maa)(maa-3maa))" =~ /(\\\\((?:[^()]+|(?0))*\\\\))/', "matched",
+                        "recursion and possessive captures", "((5maa-maa)(maa-3maa))"],
+                    [ '"((5maa-maa)(maa-3maa))" =~ /(\\\\((?:[^()]+|(?1))*\\\\))/', "matched",
+                        "recursion and possessive captures", "((5maa-maa)(maa-3maa))"],
+            ) {
+                my ($expr, $expect, $test_name, $cap1)= @$tuple;
+                # avoid quotes in this code!
+                my $code='
+                    BEGIN{require q(test.pl);}
+                    watchdog(3);
+                    my $status= eval(q{ !(' . $expr . ') ? q(failed) : ' .
+                        ($cap1 ? '($1 ne q['.$cap1.']) ? qq(badmatch:$1) : ' : '') .
+                        ' q(matched) })
+                                || ( ( $@ =~ /Infinite recursion/ ) ? qq(died) : q(strange-death) );
+                    print $status;
+                ';
+                fresh_perl_is($code, $expect, {}, "$bug - $test_name" );
+            }
+        }
 } # End of sub run_tests
 
 1;

@@ -528,7 +528,7 @@ BEGIN {
 # Debugger for Perl 5.00x; perl5db.pl patch level:
 use vars qw($VERSION $header);
 
-$VERSION = '1.49_02';
+$VERSION = '1.49_03';
 
 $header = "perl5db.pl version $VERSION";
 
@@ -1548,14 +1548,27 @@ We then determine what the console should be on various systems:
         $console = "con";
     }
 
+=item * AmigaOS - use C<CONSOLE:>.
+
+=cut
+
+    elsif ( $^O eq 'amigaos' ) {
+        $console = "CONSOLE:";
+    }
+
 =item * VMS - use C<sys$command>.
 
 =cut
 
-    else {
+    elsif ($^O eq 'VMS') {
+        $console = 'sys$command';
+    }
 
-        # everything else is ...
-        $console = "sys\$command";
+# Keep this last.
+
+    else {
+        _db_warn("Can't figure out your console, using stdin");
+        undef $console;
     }
 
 =pod

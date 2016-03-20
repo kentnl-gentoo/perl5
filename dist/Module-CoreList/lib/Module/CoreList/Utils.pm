@@ -6,7 +6,7 @@ use vars qw[$VERSION %utilities];
 use Module::CoreList;
 use Module::CoreList::TieHashDelta;
 
-$VERSION = '5.20160121';
+$VERSION = '5.20160320';
 
 sub utilities {
     my $perl = shift;
@@ -1129,6 +1129,13 @@ my %delta = (
         removed => {
         }
     },
+    5.023009 => {
+        delta_from => 5.023008,
+        changed => {
+        },
+        removed => {
+        }
+    },
 );
 
 for my $version (sort { $a <=> $b } keys %delta) {
@@ -1175,8 +1182,11 @@ Module::CoreList::Utils - what utilities shipped with versions of perl
 
  print $Module::CoreList::Utils::utilities{5.009003}{ptar}; # prints 1
 
- print Module::CoreList::Utils->first_release('corelist');           # prints 5.008009
- print Module::CoreList::Utils->first_release_by_date('corelist');   # prints 5.009002
+ print Module::CoreList::Utils->first_release('corelist');
+ # prints 5.008009
+
+ print Module::CoreList::Utils->first_release_by_date('corelist');
+ # prints 5.009002
 
 =head1 DESCRIPTION
 

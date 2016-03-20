@@ -1702,7 +1702,7 @@ This variable was added in Perl v5.10.0.
 X<$^E> X<$EXTENDED_OS_ERROR>
 
 Error information specific to the current operating system.  At the
-moment, this differs from C<$!> under only VMS, OS/2, and Win32 (and
+moment, this differs from C<L</$!>> under only VMS, OS/2, and Win32 (and
 for MacPerl).  On all other platforms, C<$^E> is always just the same
 as C<$!>.
 
@@ -1720,7 +1720,7 @@ from within the Win32 API.  Most Win32-specific code will report errors
 via C<$^E>.  ANSI C and Unix-like calls set C<errno> and so most
 portable Perl code will report errors via C<$!>.
 
-Caveats mentioned in the description of C<$!> generally apply to
+Caveats mentioned in the description of C<L<$!>> generally apply to
 C<$^E>, also.
 
 This variable was added in Perl 5.003.
@@ -1907,8 +1907,10 @@ This variable was added in Perl v5.6.0.
 X<$^D> X<$DEBUGGING>
 
 The current value of the debugging flags.  May be read or set.  Like its
-command-line equivalent, you can use numeric or symbolic values, eg
-C<$^D = 10> or C<$^D = "st">.
+L<command-line equivalent|perlrun/B<-D>I<letters>>, you can use numeric
+or symbolic values, e.g. C<$^D = 10> or C<$^D = "st">.  See
+L<perlrun/B<-D>I<number>>.  The contents of this variable also affects the
+debugger operation.  See L<perldebguts/Debugger Internals>.
 
 Mnemonic: value of B<-D> switch.
 

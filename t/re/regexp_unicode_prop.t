@@ -105,7 +105,7 @@ my @USER_DEFINED_PROPERTIES = (
 my @USER_CASELESS_PROPERTIES = (
    #
    # User defined properties which differ depending on /i.  Second entry is
-   # false regularly, true under /i
+   # false normally, true under /i
    #
    'IsMyUpper'                => ["M", "!m" ],
 );
@@ -174,6 +174,7 @@ for (my $i = 0; $i < @CLASSES; $i += 2) {
 $count += 4 * @ILLEGAL_PROPERTIES;
 $count += 4 * grep {length $_ == 1} @ILLEGAL_PROPERTIES;
 $count += 8 * @USER_CASELESS_PROPERTIES;
+$count += 1;    # Test for pkg:IsMyLower
 
 plan(tests => $count);
 
@@ -271,7 +272,7 @@ sub run_tests {
     }
 
     print "# User-defined properties with /i differences\n";
-    foreach my $class (shift @USER_CASELESS_PROPERTIES) {
+    while (my $class = shift @USER_CASELESS_PROPERTIES) {
         my $chars_ref = shift @USER_CASELESS_PROPERTIES;
         my @in      =                       grep {!/^!./} @$chars_ref;
         my @out     = map {s/^!(?=.)//; $_} grep { /^!./} @$chars_ref;
@@ -348,6 +349,26 @@ sub IsMyUpper {
                ? 'Alphabetic'
                : 'Uppercase')
            . "\n&utf8::ASCII";
+}
+
+{   # This has to be done here and not like the others, because we have to
+    # make sure that the property is not known until after the regex is
+    # compiled.  It was previously getting confused about the pkg and /i
+    # combination
+
+    my $mylower = qr/\p{pkg::IsMyLower}/i;
+
+    sub pkg::IsMyLower {
+        my $caseless = shift;
+        return "+utf8::"
+            . (($caseless)
+                ? 'Alphabetic'
+                : 'Lowercase')
+            . "\n&utf8::ASCII";
+    }
+
+    like("A", $mylower, "Not available until runtime user-defined property with pkg:: and /i works");
+
 }
 
 # Verify that can use user-defined properties inside another one

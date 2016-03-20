@@ -1244,9 +1244,9 @@ PERL_CALLCONV void	Perl_init_stacks(pTHX);
 PERL_CALLCONV void	Perl_init_tm(pTHX_ struct tm *ptm);
 #define PERL_ARGS_ASSERT_INIT_TM	\
 	assert(ptm)
-PERL_CALLCONV char*	Perl_instr(const char* big, const char* little)
+/* PERL_CALLCONV char*	Perl_instr(const char* big, const char* little)
 			__attribute__warn_unused_result__
-			__attribute__pure__;
+			__attribute__pure__; */
 #define PERL_ARGS_ASSERT_INSTR	\
 	assert(big); assert(little)
 
@@ -3583,9 +3583,9 @@ PERL_CALLCONV_NO_RET int	Perl_magic_regdatum_set(pTHX_ SV* sv, MAGIC* mg)
 
 #endif
 #if !defined(HAS_BZERO) && !defined(HAS_MEMSET)
-PERL_CALLCONV char*	Perl_my_bzero(char* loc, I32 len);
+PERL_CALLCONV void*	Perl_my_bzero(void* vloc, size_t len);
 #define PERL_ARGS_ASSERT_MY_BZERO	\
-	assert(loc)
+	assert(vloc)
 #endif
 #if !defined(HAS_GETENV_LEN)
 PERL_CALLCONV char*	Perl_getenv_len(pTHX_ const char *env_elem, unsigned long *len);
@@ -3593,16 +3593,21 @@ PERL_CALLCONV char*	Perl_getenv_len(pTHX_ const char *env_elem, unsigned long *l
 	assert(env_elem); assert(len)
 #endif
 #if !defined(HAS_MEMCMP) || !defined(HAS_SANE_MEMCMP)
-PERL_CALLCONV I32	Perl_my_memcmp(const char* s1, const char* s2, I32 len)
+PERL_CALLCONV int	Perl_my_memcmp(const void* vs1, const void* vs2, size_t len)
 			__attribute__pure__;
 #define PERL_ARGS_ASSERT_MY_MEMCMP	\
-	assert(s1); assert(s2)
+	assert(vs1); assert(vs2)
 
 #endif
+#if !defined(HAS_MEMCPY) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY))
+PERL_CALLCONV void*	Perl_my_bcopy(const void* vfrom, void* vto, size_t len);
+#define PERL_ARGS_ASSERT_MY_BCOPY	\
+	assert(vfrom); assert(vto)
+#endif
 #if !defined(HAS_MEMSET)
-PERL_CALLCONV void*	Perl_my_memset(char* loc, I32 ch, I32 len);
+PERL_CALLCONV void*	Perl_my_memset(void* vloc, int ch, size_t len);
 #define PERL_ARGS_ASSERT_MY_MEMSET	\
-	assert(loc)
+	assert(vloc)
 #endif
 #if !defined(HAS_MKDIR) || !defined(HAS_RMDIR)
 #  if defined(PERL_IN_PP_SYS_C)
@@ -3659,15 +3664,21 @@ PERL_STATIC_INLINE IV*	S_get_invlist_previous_index_addr(SV* invlist)
 #define PERL_ARGS_ASSERT_GET_INVLIST_PREVIOUS_INDEX_ADDR	\
 	assert(invlist)
 
+PERL_STATIC_INLINE void	S_invlist_clear(pTHX_ SV* invlist);
+#define PERL_ARGS_ASSERT_INVLIST_CLEAR	\
+	assert(invlist)
 PERL_STATIC_INLINE IV	S_invlist_previous_index(SV* const invlist)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_INVLIST_PREVIOUS_INDEX	\
 	assert(invlist)
 
+STATIC void	S_invlist_replace_list_destroys_src(pTHX_ SV *dest, SV *src);
+#define PERL_ARGS_ASSERT_INVLIST_REPLACE_LIST_DESTROYS_SRC	\
+	assert(dest); assert(src)
 PERL_STATIC_INLINE void	S_invlist_set_previous_index(SV* const invlist, const IV index);
 #define PERL_ARGS_ASSERT_INVLIST_SET_PREVIOUS_INDEX	\
 	assert(invlist)
-PERL_STATIC_INLINE void	S_invlist_trim(SV* const invlist);
+PERL_STATIC_INLINE void	S_invlist_trim(SV* invlist);
 #define PERL_ARGS_ASSERT_INVLIST_TRIM	\
 	assert(invlist)
 #  endif
@@ -3794,11 +3805,6 @@ PERL_CALLCONV bool	Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report)
 #define PERL_ARGS_ASSERT_DO_EXEC3	\
 	assert(incmd)
 #endif
-#if (!defined(HAS_MEMCPY) && !defined(HAS_BCOPY)) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY) && !defined(HAS_SAFE_BCOPY))
-PERL_CALLCONV char*	Perl_my_bcopy(const char* from, char* to, I32 len);
-#define PERL_ARGS_ASSERT_MY_BCOPY	\
-	assert(from); assert(to)
-#endif
 #if defined(DEBUGGING)
 PERL_CALLCONV int	Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
 			__attribute__warn_unused_result__;
@@ -3848,6 +3854,9 @@ STATIC void	S_put_code_point(pTHX_ SV* sv, UV c);
 STATIC void	S_put_range(pTHX_ SV* sv, UV start, const UV end, const bool allow_literals);
 #define PERL_ARGS_ASSERT_PUT_RANGE	\
 	assert(sv)
+PERL_CALLCONV int	Perl_re_indentf(pTHX_ const char *fmt, U32 depth, ...);
+#define PERL_ARGS_ASSERT_RE_INDENTF	\
+	assert(fmt)
 STATIC void	S_regdump_extflags(pTHX_ const char *lead, const U32 flags);
 STATIC void	S_regdump_intflags(pTHX_ const char *lead, const U32 flags);
 STATIC U8	S_regtail_study(pTHX_ RExC_state_t *pRExC_state, regnode *p, const regnode *val, U32 depth);
@@ -3858,9 +3867,12 @@ STATIC U8	S_regtail_study(pTHX_ RExC_state_t *pRExC_state, regnode *p, const reg
 STATIC void	S_debug_start_match(pTHX_ const REGEXP *prog, const bool do_utf8, const char *start, const char *end, const char *blurb);
 #define PERL_ARGS_ASSERT_DEBUG_START_MATCH	\
 	assert(prog); assert(start); assert(end); assert(blurb)
-STATIC void	S_dump_exec_pos(pTHX_ const char *locinput, const regnode *scan, const char *loc_regeol, const char *loc_bostr, const char *loc_reg_starttry, const bool do_utf8);
+STATIC void	S_dump_exec_pos(pTHX_ const char *locinput, const regnode *scan, const char *loc_regeol, const char *loc_bostr, const char *loc_reg_starttry, const bool do_utf8, const U32 depth);
 #define PERL_ARGS_ASSERT_DUMP_EXEC_POS	\
 	assert(locinput); assert(scan); assert(loc_regeol); assert(loc_bostr); assert(loc_reg_starttry)
+PERL_CALLCONV int	Perl_re_exec_indentf(pTHX_ const char *fmt, U32 depth, ...);
+#define PERL_ARGS_ASSERT_RE_EXEC_INDENTF	\
+	assert(fmt)
 #  endif
 #  if defined(PERL_IN_SV_C)
 STATIC void	S_del_sv(pTHX_ SV *p);
@@ -4740,7 +4752,7 @@ STATIC bool	S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state, regnode** nodep, UV
 PERL_STATIC_INLINE regnode*	S_handle_named_backref(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, char * parse_start, char ch);
 #define PERL_ARGS_ASSERT_HANDLE_NAMED_BACKREF	\
 	assert(pRExC_state); assert(flagp); assert(parse_start)
-STATIC int	S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state, const char* const s, char ** updated_parse_ptr, AV** posix_warnings);
+STATIC int	S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state, const char* const s, char ** updated_parse_ptr, AV** posix_warnings, const bool check_only);
 #define PERL_ARGS_ASSERT_HANDLE_POSSIBLE_POSIX	\
 	assert(pRExC_state); assert(s)
 STATIC regnode*	S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV ** return_invlist, I32 *flagp, U32 depth, char * const oregcomp_parse);
@@ -4800,6 +4812,9 @@ STATIC I32	S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch, re
 STATIC void	S_nextchar(pTHX_ RExC_state_t *pRExC_state);
 #define PERL_ARGS_ASSERT_NEXTCHAR	\
 	assert(pRExC_state)
+STATIC void	S_output_or_return_posix_warnings(pTHX_ RExC_state_t *pRExC_state, AV* posix_warnings, AV** return_posix_warnings);
+#define PERL_ARGS_ASSERT_OUTPUT_OR_RETURN_POSIX_WARNINGS	\
+	assert(pRExC_state); assert(posix_warnings)
 STATIC void	S_parse_lparen_question_flags(pTHX_ RExC_state_t *pRExC_state);
 #define PERL_ARGS_ASSERT_PARSE_LPAREN_QUESTION_FLAGS	\
 	assert(pRExC_state)
@@ -4838,7 +4853,7 @@ STATIC regnode*	S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth
 STATIC regnode*	S_regbranch(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, I32 first, U32 depth);
 #define PERL_ARGS_ASSERT_REGBRANCH	\
 	assert(pRExC_state); assert(flagp)
-STATIC regnode*	S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth, const bool stop_at_1, bool allow_multi_fold, const bool silence_non_portable, const bool strict, bool optimizable, SV** ret_invlist, AV** posix_warnings);
+STATIC regnode*	S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth, const bool stop_at_1, bool allow_multi_fold, const bool silence_non_portable, const bool strict, bool optimizable, SV** ret_invlist, AV** return_posix_warnings);
 #define PERL_ARGS_ASSERT_REGCLASS	\
 	assert(pRExC_state); assert(flagp)
 STATIC unsigned int	S_regex_set_precedence(const U8 my_operator)
@@ -4929,6 +4944,9 @@ PERL_CALLCONV SV*	Perl__get_regclass_nonbitmap_data(pTHX_ const regexp *prog, co
 #define PERL_ARGS_ASSERT__GET_REGCLASS_NONBITMAP_DATA	\
 	assert(node)
 PERL_CALLCONV void	Perl__load_PL_utf8_foldclosures(pTHX);
+PERL_CALLCONV int	Perl_re_printf(pTHX_ const char *fmt, ...);
+#define PERL_ARGS_ASSERT_RE_PRINTF	\
+	assert(fmt)
 PERL_CALLCONV void	Perl_regprop(pTHX_ const regexp *prog, SV* sv, const regnode* o, const regmatch_info *reginfo, const RExC_state_t *pRExC_state);
 #define PERL_ARGS_ASSERT_REGPROP	\
 	assert(sv); assert(o)
@@ -5475,6 +5493,18 @@ PERL_CALLCONV bool	Perl_dump_c_backtrace(pTHX_ PerlIO* fp, int max_depth, int sk
 /* PERL_CALLCONV void	free_c_backtrace(pTHX_ Perl_c_backtrace* bt); */
 PERL_CALLCONV Perl_c_backtrace*	Perl_get_c_backtrace(pTHX_ int max_depth, int skip);
 PERL_CALLCONV SV*	Perl_get_c_backtrace_dump(pTHX_ int max_depth, int skip);
+#endif
+#if defined(USE_DTRACE)
+PERL_CALLCONV void	Perl_dtrace_probe_call(pTHX_ CV *cv, bool is_call);
+#define PERL_ARGS_ASSERT_DTRACE_PROBE_CALL	\
+	assert(cv)
+PERL_CALLCONV void	Perl_dtrace_probe_load(pTHX_ const char *name, bool is_loading);
+#define PERL_ARGS_ASSERT_DTRACE_PROBE_LOAD	\
+	assert(name)
+PERL_CALLCONV void	Perl_dtrace_probe_op(pTHX_ const OP *op);
+#define PERL_ARGS_ASSERT_DTRACE_PROBE_OP	\
+	assert(op)
+PERL_CALLCONV void	Perl_dtrace_probe_phase(pTHX_ enum perl_phase phase);
 #endif
 #if defined(USE_ITHREADS)
 PERL_CALLCONV PADOFFSET	Perl_alloccopstash(pTHX_ HV *hv);

@@ -1423,6 +1423,16 @@ const struct flag_to_name regexp_core_intflags_names[] = {
     {PREGf_ANCH_GPOS,       "ANCH_GPOS,"},
 };
 
+/* Perl_do_sv_dump():
+ *
+ * level:   amount to indent the output
+ * sv:      the object to dump
+ * nest:    the current level of recursion
+ * maxnest: the maximum allowed level of recursion
+ * dumpops: if true, also dump the ops associated with a CV
+ * pvlim:   limit on the length of any strings that are output
+ * */
+
 void
 Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops, STRLEN pvlim)
 {
@@ -2225,7 +2235,7 @@ Perl_runops_debug(pTHX)
             LEAVE;
 	}
 
-        OP_ENTRY_PROBE(OP_NAME(PL_op));
+        PERL_DTRACE_PROBE_OP(PL_op);
     } while ((PL_op = PL_op->op_ppaddr(aTHX)));
     DEBUG_l(Perl_deb(aTHX_ "leaving RUNOPS level\n"));
     PERL_ASYNC_CHECK();
