@@ -2110,7 +2110,7 @@ Perl_my_setenv(pTHX_ const char *nam, const char *val)
        Configure doesn't test for that yet.  For Solaris, setenv() and unsetenv()
        were introduced in Solaris 9, so testing for HAS UNSETENV is sufficient.
     */
-#   if defined(__CYGWIN__)|| defined(__SYMBIAN32__) || defined(__riscos__) || (defined(__sun) && defined(HAS_UNSETENV))
+#   if defined(__CYGWIN__)|| defined(__SYMBIAN32__) || defined(__riscos__) || (defined(__sun) && defined(HAS_UNSETENV)) || defined(PERL_DARWIN)
 #       if defined(HAS_UNSETENV)
         if (val == NULL) {
             (void)unsetenv(nam);
@@ -4884,6 +4884,8 @@ Perl_mem_log_alloc(const UV n, const UV typesize, const char *type_name,
 		   const char *filename, const int linenumber,
 		   const char *funcname)
 {
+    PERL_ARGS_ASSERT_MEM_LOG_ALLOC;
+
     mem_log_common_if(MLT_ALLOC, n, typesize, type_name,
 		      NULL, NULL, newalloc,
 		      filename, linenumber, funcname);
@@ -4896,6 +4898,8 @@ Perl_mem_log_realloc(const UV n, const UV typesize, const char *type_name,
 		     const char *filename, const int linenumber, 
 		     const char *funcname)
 {
+    PERL_ARGS_ASSERT_MEM_LOG_REALLOC;
+
     mem_log_common_if(MLT_REALLOC, n, typesize, type_name,
 		      NULL, oldalloc, newalloc, 
 		      filename, linenumber, funcname);
@@ -4907,6 +4911,8 @@ Perl_mem_log_free(Malloc_t oldalloc,
 		  const char *filename, const int linenumber, 
 		  const char *funcname)
 {
+    PERL_ARGS_ASSERT_MEM_LOG_FREE;
+
     mem_log_common_if(MLT_FREE, 0, 0, "", NULL, oldalloc, NULL, 
 		      filename, linenumber, funcname);
     return oldalloc;
@@ -6050,7 +6056,7 @@ static const char* atos_parse(const char* p,
     *source_name_size = source_name_end - p;
     if (grok_atoUV(source_number_start, &uv,  &source_line_end)
         && source_line_end == close_paren
-        && uv <= MAX_STRLEN
+        && uv <= PERL_INT_MAX
     ) {
         *source_line = (STRLEN)uv;
         return p;
@@ -6117,14 +6123,14 @@ static void atos_symbolize(atos_context* ctx,
             char out[1024];
             UV cnt = fread(out, 1, sizeof(out), fp);
             if (cnt < sizeof(out)) {
-                const char* p = atos_parse(out + cnt, out,
+                const char* p = atos_parse(out + cnt - 1, out,
                                            source_name_size,
                                            source_line);
                 if (p) {
                     Newx(*source_name,
-                         *source_name_size + 1, char);
+                         *source_name_size, char);
                     Copy(p, *source_name,
-                         *source_name_size + 1,  char);
+                         *source_name_size,  char);
                 }
             }
             pclose(fp);
@@ -6249,14 +6255,15 @@ Perl_get_c_backtrace(pTHX_ int depth, int skip)
         for (i = skip; i < try_depth; i++) {
             Dl_info* dl_info = &dl_infos[i];
 
-            total_bytes += sizeof(Perl_c_backtrace_frame);
-
+            object_name_sizes[i] = 0;
             source_names[i] = NULL;
             source_name_sizes[i] = 0;
             source_lines[i] = 0;
 
             /* Yes, zero from dladdr() is failure. */
             if (dladdr(raw_frames[i], dl_info)) {
+                total_bytes += sizeof(Perl_c_backtrace_frame);
+
                 object_name_sizes[i] =
                     dl_info->dli_fname ? strlen(dl_info->dli_fname) : 0;
                 symbol_name_sizes[i] =

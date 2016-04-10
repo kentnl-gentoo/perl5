@@ -1173,14 +1173,23 @@ S_get_ANYOF_cp_list_for_ssc(pTHX_ const RExC_state_t *pRExC_state,
     /* Add in the points from the bit map */
     for (i = 0; i < NUM_ANYOF_CODE_POINTS; i++) {
         if (ANYOF_BITMAP_TEST(node, i)) {
-            invlist = add_cp_to_invlist(invlist, i);
+            unsigned int start = i++;
+
+            for (; i < NUM_ANYOF_CODE_POINTS && ANYOF_BITMAP_TEST(node, i); ++i) {
+                /* empty */
+            }
+            invlist = _add_range_to_invlist(invlist, start, i-1);
             new_node_has_latin1 = TRUE;
         }
     }
 
     /* If this can match all upper Latin1 code points, have to add them
-     * as well */
-    if (ANYOF_FLAGS(node) & ANYOF_MATCHES_ALL_NON_UTF8_NON_ASCII) {
+     * as well.  But don't add them if inverting, as when that gets done below,
+     * it would exclude all these characters, including the ones it shouldn't
+     * that were added just above */
+    if ((ANYOF_FLAGS(node) & (ANYOF_INVERT|ANYOF_MATCHES_ALL_NON_UTF8_NON_ASCII))
+           == ANYOF_MATCHES_ALL_NON_UTF8_NON_ASCII)
+    {
         _invlist_union(invlist, PL_UpperLatin1, &invlist);
     }
 
@@ -2227,8 +2236,8 @@ S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch,
 
     for ( cur = first ; cur < last ; cur = regnext( cur ) ) {
         regnode *noper = NEXTOPER( cur );
-        const U8 *uc = (U8*)STRING( noper );
-        const U8 *e  = uc + STR_LEN( noper );
+        const U8 *uc;
+        const U8 *e;
         int foldlen = 0;
         U32 wordlen      = 0;         /* required init */
         STRLEN minchars = 0;
@@ -2238,16 +2247,18 @@ S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch,
 
         if (OP(noper) == NOTHING) {
             regnode *noper_next= regnext(noper);
-            if (noper_next != tail && OP(noper_next) == flags) {
-                noper = noper_next;
-                uc= (U8*)STRING(noper);
-                e= uc + STR_LEN(noper);
-		trie->minlen= STR_LEN(noper);
-            } else {
-		trie->minlen= 0;
-		continue;
-	    }
+            if (noper_next < tail)
+                noper= noper_next;
         }
+
+        if ( noper < tail && ( OP(noper) == flags || ( flags == EXACTFU && OP(noper) == EXACTFU_SS ) ) ) {
+            uc= (U8*)STRING(noper);
+            e= uc + STR_LEN(noper);
+        } else {
+            trie->minlen= 0;
+            continue;
+        }
+
 
         if ( set_bit ) { /* bitmap only alloced when !(UTF&&Folding) */
             TRIE_BITMAP_SET(trie,*uc); /* store the raw first byte
@@ -2454,22 +2465,20 @@ S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch,
         for ( cur = first ; cur < last ; cur = regnext( cur ) ) {
 
             regnode *noper   = NEXTOPER( cur );
-	    U8 *uc           = (U8*)STRING( noper );
-            const U8 *e      = uc + STR_LEN( noper );
 	    U32 state        = 1;         /* required init */
 	    U16 charid       = 0;         /* sanity init */
             U32 wordlen      = 0;         /* required init */
 
             if (OP(noper) == NOTHING) {
                 regnode *noper_next= regnext(noper);
-                if (noper_next != tail && OP(noper_next) == flags) {
-                    noper = noper_next;
-                    uc= (U8*)STRING(noper);
-                    e= uc + STR_LEN(noper);
-                }
+                if (noper_next < tail)
+                    noper= noper_next;
             }
 
-            if (OP(noper) != NOTHING) {
+            if ( noper < tail && ( OP(noper) == flags || ( flags == EXACTFU && OP(noper) == EXACTFU_SS ) ) ) {
+                const U8 *uc= (U8*)STRING(noper);
+                const U8 *e= uc + STR_LEN(noper);
+
                 for ( ; uc < e ; uc += len ) {
 
                     TRIE_READ_CHAR;
@@ -2673,8 +2682,6 @@ S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch,
         for ( cur = first ; cur < last ; cur = regnext( cur ) ) {
 
             regnode *noper   = NEXTOPER( cur );
-	    const U8 *uc     = (U8*)STRING( noper );
-            const U8 *e      = uc + STR_LEN( noper );
 
             U32 state        = 1;         /* required init */
 
@@ -2685,14 +2692,14 @@ S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch,
 
             if (OP(noper) == NOTHING) {
                 regnode *noper_next= regnext(noper);
-                if (noper_next != tail && OP(noper_next) == flags) {
-                    noper = noper_next;
-                    uc= (U8*)STRING(noper);
-                    e= uc + STR_LEN(noper);
-                }
+                if (noper_next < tail)
+                    noper= noper_next;
             }
 
-            if ( OP(noper) != NOTHING ) {
+            if ( noper < tail && ( OP(noper) == flags || ( flags == EXACTFU && OP(noper) == EXACTFU_SS ) ) ) {
+                const U8 *uc= (U8*)STRING(noper);
+                const U8 *e= uc + STR_LEN(noper);
+
                 for ( ; uc < e ; uc += len ) {
 
                     TRIE_READ_CHAR;
@@ -4188,8 +4195,8 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
                             U8 noper_trietype = TRIE_TYPE( noper_type );
 #if defined(DEBUGGING) || defined(NOJUMPTRIE)
                             regnode * const noper_next = regnext( noper );
-			    U8 noper_next_type = (noper_next && noper_next != tail) ? OP(noper_next) : 0;
-			    U8 noper_next_trietype = (noper_next && noper_next != tail) ? TRIE_TYPE( noper_next_type ) :0;
+                            U8 noper_next_type = (noper_next && noper_next < tail) ? OP(noper_next) : 0;
+                            U8 noper_next_trietype = (noper_next && noper_next < tail) ? TRIE_TYPE( noper_next_type ) :0;
 #endif
 
                             DEBUG_TRIE_COMPILE_r({
@@ -4217,7 +4224,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
                             if ( noper_trietype
                                   &&
                                   (
-                                        ( noper_trietype == NOTHING)
+                                        ( noper_trietype == NOTHING )
                                         || ( trietype == NOTHING )
                                         || ( trietype == noper_trietype )
                                   )
@@ -4235,7 +4242,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 				    if ( noper_trietype == NOTHING ) {
 #if !defined(DEBUGGING) && !defined(NOJUMPTRIE)
 					regnode * const noper_next = regnext( noper );
-                                        U8 noper_next_type = (noper_next && noper_next!=tail) ? OP(noper_next) : 0;
+                                        U8 noper_next_type = (noper_next && noper_next < tail) ? OP(noper_next) : 0;
 					U8 noper_next_trietype = noper_next_type ? TRIE_TYPE( noper_next_type ) :0;
 #endif
 
@@ -14356,6 +14363,11 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
         }
         else if (value == '\\') {
             /* Is a backslash; get the code point of the char after it */
+
+            if (RExC_parse >= RExC_end) {
+                vFAIL("Unmatched [");
+            }
+
 	    if (UTF && ! UTF8_IS_INVARIANT(UCHARAT(RExC_parse))) {
 		value = utf8n_to_uvchr((U8*)RExC_parse,
 				   RExC_end - RExC_parse,
