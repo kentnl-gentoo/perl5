@@ -238,6 +238,7 @@
 #define init_i18nl14n(a)	Perl_init_i18nl14n(aTHX_ a)
 #define init_stacks()		Perl_init_stacks(aTHX)
 #define init_tm(a)		Perl_init_tm(aTHX_ a)
+#define instr			Perl_instr
 #define intro_my()		Perl_intro_my(aTHX)
 #define isALNUM_lazy(a)		Perl_isALNUM_lazy(aTHX_ a)
 #define isIDFIRST_lazy(a)	Perl_isIDFIRST_lazy(aTHX_ a)
@@ -1813,6 +1814,11 @@
 #    if defined(PERL_MEM_LOG) && !defined(PERL_MEM_LOG_NOIMPL)
 #define mem_log_common		S_mem_log_common
 #    endif
+#  endif
+#  if defined(PERL_MEM_LOG)
+#define mem_log_alloc		Perl_mem_log_alloc
+#define mem_log_free		Perl_mem_log_free
+#define mem_log_realloc		Perl_mem_log_realloc
 #  endif
 #  if defined(PERL_USES_PL_PIDSTATUS) && defined(PERL_IN_UTIL_C)
 #define pidgone(a,b)		S_pidgone(aTHX_ a,b)

@@ -4,7 +4,7 @@ use vars qw/$VERSION %released %version %families %upstream
 	    %bug_tracker %deprecated %delta/;
 use Module::CoreList::TieHashDelta;
 use version;
-$VERSION = '5.20160320';
+$VERSION = '5.20160420';
 
 sub _released_order {   # Sort helper, to make '?' sort after everything else
     (substr($released{$a}, 0, 1) eq "?")
@@ -291,6 +291,7 @@ sub changes_between {
     5.023007 => '2016-01-20',
     5.023008 => '2016-02-20',
     5.023009 => '2016-03-20',
+    5.024000 => '2016-06-01',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -12359,6 +12360,25 @@ for my $version ( sort { $a <=> $b } keys %released ) {
             'Win32API::File::ExtUtils::Myconst2perl'=> 1,
         }
     },
+    5.024000 => {
+        delta_from => 5.023009,
+        changed => {
+            'B::Op_private'         => '5.024000',
+            'Config'                => '5.024',
+            'File::Path'            => '2.12_01',
+            'File::Spec::AmigaOS'   => '3.64',
+            'ODBM_File'             => '1.14',
+            'POSIX'                 => '1.65',
+            'Pod::Man'              => '4.07',
+            'Pod::ParseLink'        => '4.07',
+            'Pod::Text'             => '4.07',
+            'Pod::Text::Color'      => '4.07',
+            'Pod::Text::Overstrike' => '4.07',
+            'Pod::Text::Termcap'    => '4.07',
+        },
+        removed => {
+        }
+    },
 );
 
 sub is_core
@@ -12994,6 +13014,13 @@ for my $version (sort { $a <=> $b } keys %delta) {
     },
     5.023009 => {
         delta_from => 5.023008,
+        changed => {
+        },
+        removed => {
+        }
+    },
+    5.024000 => {
+        delta_from => 5.023009,
         changed => {
         },
         removed => {
@@ -13769,7 +13796,7 @@ for my $version (sort { $a <=> $b } keys %deprecated) {
     'TAP::Parser::SourceHandler::RawTAP'=> 'http://rt.cpan.org/Public/Dist/Display.html?Name=Test-Harness',
     'TAP::Parser::YAMLish::Reader'=> 'http://rt.cpan.org/Public/Dist/Display.html?Name=Test-Harness',
     'TAP::Parser::YAMLish::Writer'=> 'http://rt.cpan.org/Public/Dist/Display.html?Name=Test-Harness',
-    'Term::ANSIColor'       => 'https://rt.cpan.org/Public/Dist/Display.html?Name=Term::ANSIColor',
+    'Term::ANSIColor'       => 'https://rt.cpan.org/Dist/Display.html?Name=Term-ANSIColor',
     'Term::Cap'             => undef,
     'Test::Builder'         => 'http://github.com/Test-More/test-more/issues/',
     'Test::Builder::IO::Scalar'=> 'http://github.com/Test-More/test-more/issues/',

@@ -216,6 +216,11 @@ operator which expects either a number or a string matching
 C</^[a-zA-Z]*[0-9]*\z/>.  See L<perlop/Auto-increment and
 Auto-decrement> for details.
 
+=item Array passed to stat will be coerced to a scalar%s
+
+(W syntax) You called stat() on an array, but the array will be
+coerced to a scalar - the number of elements in the array.
+
 =item assertion botched: %s
 
 (X) The malloc package that comes with Perl had an internal failure.
@@ -6231,6 +6236,12 @@ problems when being input or output, which is likely where this message
 came from.  If you really really know what you are doing you can turn
 off this warning by C<no warnings 'surrogate';>.
 
+=item Unknown charname '' is deprecated
+
+(D deprecated) You had a C<\N{}> with nothing between the braces.  This
+usage is deprecated, and will be made a syntax error in a future Perl
+version.
+
 =item Unknown charname '%s'
 
 (F) The name you used inside C<\N{}> is unknown to Perl.  Check the
@@ -7095,8 +7106,21 @@ space.
 
 =item Warning: unable to close filehandle %s properly: %s
 
-(S io) An error occurred when Perl implicitly closed a filehandle.  This
-usually indicates your file system ran out of disk space.
+(S io) There were errors during the implicit close() done on a filehandle
+when its reference count reached zero while it was still open, e.g.:
+
+    {
+        open my $fh, '>', $file  or die "open: '$file': $!\n";
+        print $fh $data or die "print: $!";
+    } # implicit close here
+
+Because various errors may only be detected by close() (e.g. buffering could
+allow the C<print> in this example to return true even when the disk is full),
+it is dangerous to ignore its result. So when it happens implicitly, perl will
+signal errors by warning.
+
+B<Prior to version 5.22.0, perl ignored such errors>, so the common idiom shown
+above was liable to cause B<silent data loss>.
 
 =item Warning: Use of "%s" without parentheses is ambiguous
 

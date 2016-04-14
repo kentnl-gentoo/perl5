@@ -647,7 +647,7 @@ p	|void	|init_debugger
 Ap	|void	|init_stacks
 Ap	|void	|init_tm	|NN struct tm *ptm
 : Used in perly.y
-AbmnpPR	|char*	|instr		|NN const char* big|NN const char* little
+AnpPR	|char*	|instr		|NN const char* big|NN const char* little
 : Used in sv.c
 p	|bool	|io_close	|NN IO* io|NULLOK GV *gv \
 				|bool not_implicit|bool warn_on_fail
@@ -1642,7 +1642,7 @@ Ap	|U8*	|utf16_to_utf8	|NN U8* p|NN U8 *d|I32 bytelen|NN I32 *newlen
 Ap	|U8*	|utf16_to_utf8_reversed|NN U8* p|NN U8 *d|I32 bytelen|NN I32 *newlen
 AdpPR	|STRLEN	|utf8_length	|NN const U8* s|NN const U8 *e
 ApdPR	|IV	|utf8_distance	|NN const U8 *a|NN const U8 *b
-ApdPRn	|U8*	|utf8_hop	|NN const U8 *s|I32 off
+ApdPRn	|U8*	|utf8_hop	|NN const U8 *s|SSize_t off
 ApMd	|U8*	|utf8_to_bytes	|NN U8 *s|NN STRLEN *len
 Apd	|int	|bytes_cmp_utf8	|NN const U8 *b|STRLEN blen|NN const U8 *u \
 				|STRLEN ulen
@@ -2561,6 +2561,12 @@ sn	|void	|mem_log_common	|enum mem_log_type mlt|const UV n|const UV typesize \
 				|NN const char *filename|const int linenumber \
 				|NN const char *funcname
 #endif
+#endif
+
+#if defined(PERL_MEM_LOG)
+pn	|Malloc_t	|mem_log_alloc	|const UV nconst|UV typesize|NN const char *type_name|Malloc_t newalloc|NN const char *filename|const int linenumber|NN const char *funcname
+pn	|Malloc_t	|mem_log_realloc	|const UV n|const UV typesize|NN const char *type_name|Malloc_t oldalloc|Malloc_t newalloc|NN const char *filename|const int linenumber|NN const char *funcname
+pn	|Malloc_t	|mem_log_free	|Malloc_t oldalloc|NN const char *filename|const int linenumber|NN const char *funcname
 #endif
 
 #if defined(PERL_IN_NUMERIC_C)

@@ -933,7 +933,7 @@ Perl_re_indentf(pTHX_ const char *fmt, U32 depth, ...)
     PerlIO *f= Perl_debug_log;
     PERL_ARGS_ASSERT_RE_INDENTF;
     va_start(ap, depth);
-    PerlIO_printf(f, "%*s", ( depth % 20 ) * 2, "");
+    PerlIO_printf(f, "%*s", ( (int)depth % 20 ) * 2, "");
     result = PerlIO_vprintf(f, fmt, ap);
     va_end(ap);
     return result;
@@ -2166,7 +2166,8 @@ S_dump_trie_interim_table(pTHX_ const struct _reg_trie_data *trie,
         }
     }
 
-    Perl_re_printf( aTHX_  "\n%*sState+-",depth+1 );
+    Perl_re_printf( aTHX_ "\n");
+    Perl_re_indentf( aTHX_  "State+-", depth+1 );
 
     for( charid=0 ; charid < trie->uniquecharcount ; charid++ ) {
         Perl_re_printf( aTHX_  "%.*s", colwidth,"--------");

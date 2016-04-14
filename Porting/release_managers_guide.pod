@@ -183,6 +183,13 @@ is only needed on the day of the release or shortly afterwards.
 
 You will need a quotation to use as an epigraph to your release announcement.
 
+=head3 Install the previous version of perl
+
+During the testing phase of the release you have created, you will be
+asked to compare the installed files with a previous install. Save yourself
+some time on release day, and have a (clean) install of the previous
+version ready.
+
 =head2 Building a release - advance actions
 
 The work of building a release candidate for an even numbered release
@@ -350,8 +357,8 @@ Ensure dual-life CPAN modules are stable, which comes down to:
 =head3 monitor smoke tests for failures
 
 Similarly, monitor the smoking of core tests, and try to fix.  See
-L<http://smoke.procura.nl/index.html> and L<http://perl5.test-smoke.org/>
-for a summary. See also
+L<http://smoke.procura.nl/index.html>, L<http://perl5.test-smoke.org/>
+and L<http://perl.develop-help.com> for a summary. See also
 L<http://www.nntp.perl.org/group/perl.daily-build.reports/> which has
 the raw reports.
 
@@ -429,16 +436,15 @@ You may also need to regen opcodes:
 
  $ ./perl -Ilib regen/opcode.pl
 
-You may have to add stub entries in C<%Module::CoreList::version>,
-C<%Module::CoreList::deprecated> and C<%Module::CoreList::Utils::delta>.
-If so, you must up their version numbers as well.
-
 Test your changes:
 
  $ git clean -xdf   # careful if you don't have local files to keep!
  $ ./Configure -des -Dusedevel
  $ make
  $ make test
+
+Do note that at this stage, porting tests will fail. They will continue
+to fail until you've updated Module::CoreList, as described below.
 
 Commit your changes:
 

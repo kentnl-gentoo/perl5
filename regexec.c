@@ -3640,7 +3640,7 @@ S_regtry(pTHX_ regmatch_info *reginfo, char **startposp)
    messages are inline with the regop output that created them.
 */
 #define REPORT_CODE_OFF 29
-#define INDENT_CHARS(depth) ((depth) % 20)
+#define INDENT_CHARS(depth) ((int)(depth) % 20)
 #ifdef DEBUGGING
 int
 Perl_re_exec_indentf(pTHX_ const char *fmt, U32 depth, ...)
@@ -3650,7 +3650,7 @@ Perl_re_exec_indentf(pTHX_ const char *fmt, U32 depth, ...)
     PerlIO *f= Perl_debug_log;
     PERL_ARGS_ASSERT_RE_EXEC_INDENTF;
     va_start(ap, depth);
-    PerlIO_printf(f, "%*s|%4d| %*s", REPORT_CODE_OFF, "", depth, INDENT_CHARS(depth), "" );
+    PerlIO_printf(f, "%*s|%4"UVuf"| %*s", REPORT_CODE_OFF, "", (UV)depth, INDENT_CHARS(depth), "" );
     result = PerlIO_vprintf(f, fmt, ap);
     va_end(ap);
     return result;
@@ -5231,6 +5231,13 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
     _char_class_number classnum;
     bool is_utf8_pat = reginfo->is_utf8_pat;
     bool match = FALSE;
+
+/* Solaris Studio 12.3 messes up fetching PL_charclass['\n'] */
+#if (defined(__SUNPRO_C) && (__SUNPRO_C == 0x5120) && defined(__x86_64) && defined(USE_64_BIT_ALL))
+#  define SOLARIS_BAD_OPTIMIZER
+    const U32 *pl_charclass_dup = PL_charclass;
+#  define PL_charclass pl_charclass_dup
+#endif
 
 #ifdef DEBUGGING
     GET_RE_DEBUG_FLAGS_DECL;
@@ -6883,6 +6890,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	}
 
 	case EVAL_AB: /* cleanup after a successful (??{A})B */
+            /* note: this is called twice; first after popping B, then A */
             DEBUG_STACK_r({
                 Perl_re_exec_indentf( aTHX_  "EVAL_AB cur_eval=%p prev_eval=%p\n",
                     depth, cur_eval, ST.prev_eval);
@@ -8315,6 +8323,9 @@ NULL
             /* NOTREACHED */
 	}
     }
+#ifdef SOLARIS_BAD_OPTIMIZER
+#  undef PL_charclass
+#endif
 
     /*
     * We get here only if there's trouble -- normally "case END" is

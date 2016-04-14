@@ -3192,10 +3192,10 @@ typedef pthread_key_t	perl_key;
  * TODO: however, some platforms are starting to get these clang
  * thread safety annotations for pthreads, for example FreeBSD.
  * Do we need a way to a bypass these wrappers? */
-int perl_tsa_mutex_lock(perl_mutex* mutex)
+EXTERN_C int perl_tsa_mutex_lock(perl_mutex* mutex)
   PERL_TSA_ACQUIRE(*mutex)
   PERL_TSA_NO_TSA;
-int perl_tsa_mutex_unlock(perl_mutex* mutex)
+EXTERN_C int perl_tsa_mutex_unlock(perl_mutex* mutex)
   PERL_TSA_RELEASE(*mutex)
   PERL_TSA_NO_TSA;
 #endif
@@ -5275,7 +5275,7 @@ EXTCONST char *const PL_phase_names[];
 /* Do not use this macro. It only exists for extensions that rely on PL_dirty
  * instead of using the newer PL_phase, which provides everything PL_dirty
  * provided, and more. */
-#  define PL_dirty (PL_phase == PERL_PHASE_DESTRUCT)
+#  define PL_dirty cBOOL(PL_phase == PERL_PHASE_DESTRUCT)
 
 #  define PL_amagic_generation PL_na
 #endif /* !PERL_CORE */
@@ -5954,6 +5954,13 @@ typedef struct am_table_short AMTS;
 
 #ifdef USE_LOCALE
 /* These locale things are all subject to change */
+
+#   define LOCALE_INIT   MUTEX_INIT(&PL_locale_mutex)
+#   define LOCALE_TERM   MUTEX_DESTROY(&PL_locale_mutex)
+
+#   define LOCALE_LOCK   MUTEX_LOCK(&PL_locale_mutex)
+#   define LOCALE_UNLOCK MUTEX_UNLOCK(&PL_locale_mutex)
+
 /* Returns TRUE if the plain locale pragma without a parameter is in effect
  */
 #   define IN_LOCALE_RUNTIME	cBOOL(CopHINTS_get(PL_curcop) & HINT_LOCALE)
@@ -6037,6 +6044,10 @@ typedef struct am_table_short AMTS;
 #   endif   /* PERL_CORE or PERL_IN_XSUB_RE */
 
 #else   /* No locale usage */
+#   define LOCALE_INIT
+#   define LOCALE_TERM
+#   define LOCALE_LOCK
+#   define LOCALE_UNLOCK
 #   define IN_LOCALE_RUNTIME                0
 #   define IN_SOME_LOCALE_FORM_RUNTIME      0
 #   define IN_LOCALE_COMPILETIME            0

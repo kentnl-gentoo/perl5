@@ -1011,6 +1011,10 @@ Like L</round>, but as integer, as opposed to floating point [C99].
 
 See also L</ceil>, L</floor>, L</trunc>.
 
+Owing to an oversight, this is not currently exported by default, or as part of
+the C<:math_h_c99> export tag; importing it must therefore be done by explicit
+name. This will be changed in Perl 5.26.
+
 =item C<malloc>
 
 Not implemented.  C<malloc()> is C-specific.  Perl does memory management transparently.
@@ -1400,6 +1404,13 @@ Not implemented.  C<setjmp()> is C-specific: use C<eval {}> instead,
 see L<perlfunc/eval>.
 
 =item C<setlocale>
+
+WARNING!  Do NOT use this function in a L<thread|threads>.  The locale
+will change in all other threads at the same time, and should your
+thread get paused by the operating system, and another started, that
+thread will not have the locale it is expecting.  On some platforms,
+there can be a race leading to segfaults if two threads call this
+function nearly simultaneously.
 
 Modifies and queries the program's underlying locale.  Users of this
 function should read L<perllocale>, whch provides a comprehensive

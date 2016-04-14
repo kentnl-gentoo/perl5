@@ -93,6 +93,7 @@ S_init_tls_and_interp(PerlInterpreter *my_perl)
 	OP_REFCNT_INIT;
 	OP_CHECK_MUTEX_INIT;
 	HINTS_REFCNT_INIT;
+        LOCALE_INIT;
 	MUTEX_INIT(&PL_dollarzero_mutex);
 	MUTEX_INIT(&PL_my_ctx_mutex);
 #  endif
@@ -1783,6 +1784,9 @@ S_Internals_V(pTHX_ CV *cv)
 #  endif
 #  ifdef PERL_USE_SAFE_PUTENV
 			     " PERL_USE_SAFE_PUTENV"
+#  endif
+#  ifdef SILENT_NO_TAINT_SUPPORT
+                             " SILENT_NO_TAINT_SUPPORT"
 #  endif
 #  ifdef UNLINK_ALL_VERSIONS
 			     " UNLINK_ALL_VERSIONS"

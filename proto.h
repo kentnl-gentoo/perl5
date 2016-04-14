@@ -1244,9 +1244,9 @@ PERL_CALLCONV void	Perl_init_stacks(pTHX);
 PERL_CALLCONV void	Perl_init_tm(pTHX_ struct tm *ptm);
 #define PERL_ARGS_ASSERT_INIT_TM	\
 	assert(ptm)
-/* PERL_CALLCONV char*	Perl_instr(const char* big, const char* little)
+PERL_CALLCONV char*	Perl_instr(const char* big, const char* little)
 			__attribute__warn_unused_result__
-			__attribute__pure__; */
+			__attribute__pure__;
 #define PERL_ARGS_ASSERT_INSTR	\
 	assert(big); assert(little)
 
@@ -3376,7 +3376,7 @@ PERL_CALLCONV IV	Perl_utf8_distance(pTHX_ const U8 *a, const U8 *b)
 #define PERL_ARGS_ASSERT_UTF8_DISTANCE	\
 	assert(a); assert(b)
 
-PERL_CALLCONV U8*	Perl_utf8_hop(const U8 *s, I32 off)
+PERL_CALLCONV U8*	Perl_utf8_hop(const U8 *s, SSize_t off)
 			__attribute__warn_unused_result__
 			__attribute__pure__;
 #define PERL_ARGS_ASSERT_UTF8_HOP	\
@@ -5472,6 +5472,17 @@ STATIC void	S_mem_log_common(enum mem_log_type mlt, const UV n, const UV typesiz
 #define PERL_ARGS_ASSERT_MEM_LOG_COMMON	\
 	assert(type_name); assert(filename); assert(funcname)
 #  endif
+#endif
+#if defined(PERL_MEM_LOG)
+PERL_CALLCONV Malloc_t	Perl_mem_log_alloc(const UV nconst, UV typesize, const char *type_name, Malloc_t newalloc, const char *filename, const int linenumber, const char *funcname);
+#define PERL_ARGS_ASSERT_MEM_LOG_ALLOC	\
+	assert(type_name); assert(filename); assert(funcname)
+PERL_CALLCONV Malloc_t	Perl_mem_log_free(Malloc_t oldalloc, const char *filename, const int linenumber, const char *funcname);
+#define PERL_ARGS_ASSERT_MEM_LOG_FREE	\
+	assert(filename); assert(funcname)
+PERL_CALLCONV Malloc_t	Perl_mem_log_realloc(const UV n, const UV typesize, const char *type_name, Malloc_t oldalloc, Malloc_t newalloc, const char *filename, const int linenumber, const char *funcname);
+#define PERL_ARGS_ASSERT_MEM_LOG_REALLOC	\
+	assert(type_name); assert(filename); assert(funcname)
 #endif
 #if defined(PERL_OP_PARENT)
 PERL_CALLCONV OP*	Perl_op_parent(OP *o);

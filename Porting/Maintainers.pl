@@ -546,6 +546,8 @@ use File::Glob qw(:case);
             qw(t/Path-Class.t),
             qr{^xt/},
         ],
+        # https://github.com/rpcme/File-Path/pull/34
+        'CUSTOMIZED' => [ qw( lib/File/Path.pm t/Path_win32.t ) ],
     },
 
     'File::Temp' => {
@@ -840,7 +842,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160121.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160320.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -976,7 +978,7 @@ use File::Glob qw(:case);
     },
 
     'podlators' => {
-        'DISTRIBUTION' => 'RRA/podlators-4.06.tar.gz',
+        'DISTRIBUTION' => 'RRA/podlators-4.07.tar.gz',
         'FILES'        => q[cpan/podlators pod/perlpodstyle.pod],
 
         'MAP' => {
@@ -1280,10 +1282,6 @@ use File::Glob qw(:case);
         # only necessary with the CPAN release.
         'CUSTOMIZED'   => [
             qw( lib/version.pm
-                ),
-
-            # Merged upstream, waiting for new CPAN release: see CPAN RT#92721
-            qw( vutil.c
                 ),
         ],
 

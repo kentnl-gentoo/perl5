@@ -2313,6 +2313,7 @@ EOF
         is "$1" || $@, "foo", 'multichar \N{...} stringified and retoked';
     }
     {   # empty \N{...} tripping roundly
+        no warnings 'deprecated';
         BEGIN { $^H{charnames} = sub { "" } }
         my $qr = qr$(a\N{foo}t)$;
         "at" =~ eval "qr/$qr/";
@@ -2434,6 +2435,7 @@ EOF
 
         like($string, qr/$string/i, "LATIN SMALL SHARP S matches itself under /id");
         unlike($folded_string, qr/$string/i, "LATIN SMALL SHARP S doesn't match 'ss' under /di");
+        no warnings 'deprecated';
         like($folded_string, qr/\N{}$string/i, "\\N{} earlier than LATIN SMALL SHARP S transforms /di into /ui, matches 'ss'");
         like($folded_string, qr/$string\N{}/i, "\\N{} after LATIN SMALL SHARP S transforms /di into /ui, matches 'ss'");
     }
