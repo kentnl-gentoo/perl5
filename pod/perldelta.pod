@@ -79,7 +79,7 @@ C<canonpath()>">.
 
 =item *
 
-L<Module::CoreList> has been upgraded from version 5.20151213 to 5.20160410.
+L<Module::CoreList> has been upgraded from version 5.20151213 to 5.20160429.
 
 The version number of L<Digest::SHA> listed for Perl 5.18.4 was wrong and has
 been corrected.  Likewise for the version number of L<Config> in 5.18.3 and
@@ -249,7 +249,7 @@ L<[perl #127183]|https://rt.perl.org/Ticket/Display.html?id=127183>
 Certain regex patterns involving a complemented posix class in an inverted
 bracketed character class, and matching something else optionally would
 improperly fail to match.  An example of one that could fail is
-C</qr/_?[^\Wbar]\x{100}/>.  This has been fixed.
+C<qr/_?[^\Wbar]\x{100}/>.  This has been fixed.
 L<[perl #127537]|https://rt.perl.org/Ticket/Display.html?id=127537>
 
 =item *
@@ -321,8 +321,8 @@ Perl 5.24.0.
 
 =head1 Acknowledgements
 
-Perl 5.22.2 represents approximately 4 months of development since Perl 5.22.1
-and contains approximately 2,900 lines of changes across 110 files from 24
+Perl 5.22.2 represents approximately 5 months of development since Perl 5.22.1
+and contains approximately 3,000 lines of changes across 110 files from 24
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
