@@ -2135,9 +2135,93 @@ not always detected, giving incorrect results.  This is now fixed.
 
 =back
 
+=head1 Known Problems
+
+=over 4
+
+=item *
+
+Some modules have been broken by the L<context stack rework|/Internal Changes>.
+These modules were relying on non-guaranteed implementation details in perl.
+Their maintainers have been informed, and should contact perl5-porters for
+advice if needed.  Below is a subset of these modules:
+
+=over 4
+
+=item L<Algorithm::Permute>
+
+=item L<Coro>
+
+L<Coro> and perl v5.22.0 were already incompatible due to a change in the perl,
+and the reworking on the perl context stack creates a further incompatibility.
+perl5-porters has L<discussed the issue on the mailing
+list|http://www.nntp.perl.org/group/perl.perl5.porters/2016/05/msg236174.html>.
+
+=item L<Data::Alias>
+
+=item L<RPerl>
+
+=item L<Scope::Upper>
+
+=item L<TryCatch>
+
+=back
+
+=item *
+
+The module L<lexical::underscore> no longer works on perl v5.24.0, because perl
+no longer has a lexical C<$_>!
+
+=item *
+
+C<mod_perl> has been patched for compatibility for v5.22.0 and later but no
+release has been made.  The relevant patch (and other changes) can be found in
+their source code repository, L<mirrored at
+GitHub|https://github.com/apache/mod_perl/commit/82827132efd3c2e25cc413c85af61bb63375da6e>.
+
+=back
+
 =head1 Acknowledgements
 
-[ XXX: generate this just in time, Ricardo! ]
+Perl 5.24.0 represents approximately 11 months of development since Perl 5.22.0
+and contains approximately 360,000 lines of changes across 1,800 files from 77
+authors.
+
+Excluding auto-generated files, documentation and release tools, there were
+approximately 250,000 lines of changes to 1,200 .pm, .t, .c and .h files.
+
+Perl continues to flourish into its third decade thanks to a vibrant community
+of users and developers. The following people are known to have contributed the
+improvements that became Perl 5.24.0:
+
+Aaron Crane, Aaron Priven, Abigail, Achim Gratz, Alexander D'Archangel, Alex
+Vandiver, Andreas König, Andy Broad, Andy Dougherty, Aristotle Pagaltzis,
+Chase Whitener, Chas. Owens, Chris 'BinGOs' Williams, Craig A. Berry, Dagfinn
+Ilmari Mannsåker, Dan Collins, Daniel Dragan, David Golden, David Mitchell,
+Dominic Hargreaves, Doug Bell, Dr.Ruud, Ed Avis, Ed J, Father Chrysostomos,
+Herbert Breunung, H.Merijn Brand, Hugo van der Sanden, Ivan Pozdeev, James E
+Keenan, Jan Dubois, Jarkko Hietaniemi, Jerry D. Hedden, Jim Cromie, John
+Peacock, John SJ Anderson, Karen Etheridge, Karl Williamson, kmx, Leon
+Timmermans, Ludovic E. R. Tolhurst-Cleaver, Lukas Mai, Martijn Lievaart,
+Matthew Horsfall, Mattia Barbon, Max Maischein, Mohammed El-Afifi, Nicholas
+Clark, Nicolas R., Niko Tyni, Peter John Acklam, Peter Martini, Peter
+Rabbitson, Pip Cet, Rafael Garcia-Suarez, Reini Urban, Renee Baecker, Ricardo
+Signes, Sawyer X, Shlomi Fish, Sisyphus, Stanislaw Pusep, Steffen Müller,
+Stevan Little, Steve Hay, Sullivan Beck, Thomas Sibley, Todd Rinaldo, Tom
+Hukins, Tony Cook, Unicode Consortium, Victor Adam, Vincent Pit, Vladimir
+Timofeev, Yves Orton, Zachary Storer, Zefram.
+
+The list above is almost certainly incomplete as it is automatically generated
+from version control history. In particular, it does not include the names of
+the (very much appreciated) contributors who reported issues to the Perl bug
+tracker.
+
+Many of the changes included in this version originated in the CPAN modules
+included in Perl's core. We're grateful to the entire CPAN community for
+helping Perl to flourish.
+
+For a more complete list of all of Perl's historical contributors, please see
+the F<AUTHORS> file in the Perl source distribution.
 
 =head1 Reporting Bugs
 
