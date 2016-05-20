@@ -8139,13 +8139,18 @@ Perl_sv_collxfrm_flags(pTHX_ SV *const sv, STRLEN *const nxp, const I32 flags)
     PERL_ARGS_ASSERT_SV_COLLXFRM_FLAGS;
 
     mg = SvMAGICAL(sv) ? mg_find(sv, PERL_MAGIC_collxfrm) : (MAGIC *) NULL;
+
+    /* If we don't have collation magic on 'sv', or the locale has changed
+     * since the last time we calculated it, get it and save it now */
     if (!mg || !mg->mg_ptr || *(U32*)mg->mg_ptr != PL_collation_ix) {
 	const char *s;
 	char *xf;
 	STRLEN len, xlen;
 
+        /* Free the old space */
 	if (mg)
 	    Safefree(mg->mg_ptr);
+
 	s = SvPV_flags_const(sv, len, flags);
 	if ((xf = mem_collxfrm(s, len, &xlen))) {
 	    if (! mg) {
@@ -8163,6 +8168,7 @@ Perl_sv_collxfrm_flags(pTHX_ SV *const sv, STRLEN *const nxp, const I32 flags)
 	    }
 	}
     }
+
     if (mg && mg->mg_ptr) {
 	*nxp = mg->mg_len;
 	return mg->mg_ptr + sizeof(PL_collation_ix);
@@ -9706,6 +9712,8 @@ Perl_sv_resetpvn(pTHX_ const char *s, STRLEN len, HV * const stash)
 		if (!todo[(U8)*HeKEY(entry)])
 		    continue;
 		gv = MUTABLE_GV(HeVAL(entry));
+		if (!isGV(gv))
+		    continue;
 		sv = GvSV(gv);
 		if (sv && !SvREADONLY(sv)) {
 		    SV_CHECK_THINKFIRST_COW_DROP(sv);
@@ -10517,6 +10525,9 @@ Perl_sv_tainted(pTHX_ SV *const sv)
     return FALSE;
 }
 
+#ifndef NO_MATHOMS  /* Can't move these to mathoms.c because call uiv_2buf(),
+                       private to this file */
+
 /*
 =for apidoc sv_setpviv
 
@@ -10554,6 +10565,8 @@ Perl_sv_setpviv_mg(pTHX_ SV *const sv, const IV iv)
     sv_setpviv(sv, iv);
     SvSETMAGIC(sv);
 }
+
+#endif  /* NO_MATHOMS */
 
 #if defined(PERL_IMPLICIT_CONTEXT)
 
@@ -10744,7 +10757,7 @@ Perl_sv_catpvf(pTHX_ SV *const sv, const char *const pat, ...)
 =for apidoc sv_vcatpvf
 
 Processes its arguments like C<sv_catpvfn> called with a non-null C-style
-variable argument list, and appends the formatted
+variable argument list, and appends the formatted output
 to an SV.  Does not handle 'set' magic.  See C<L</sv_vcatpvf_mg>>.
 
 Usually used via its frontend C<sv_catpvf>.

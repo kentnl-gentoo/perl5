@@ -1249,7 +1249,7 @@ sub match_and_exit {
         while (<$fh>) {
             if ($_ =~ $re) {
                 ++$matches;
-                if (/[^[:^cntrl:]\h\v]/a) { # Matches non-spacing non-C1 controls
+                if (/[^[:^cntrl:]\h\v]/) { # Matches non-spacing non-C1 controls
                     print "Binary file $file matches\n";
                 } else {
                     $_ .= "\n" unless /\n\z/;
@@ -1403,7 +1403,15 @@ if (-f 'config.sh') {
     # Emulate noextensions if Configure doesn't support it.
     fake_noextensions()
         if $major < 10 && $defines{noextensions};
-    system_or_die('./Configure -S');
+    if (system './Configure -S') {
+        # See commit v5.23.5-89-g7a4fcb3.  Configure may try to run
+        # ./optdef.sh instead of UU/optdef.sh.  Copying the file is
+        # easier than patching Configure (which mentions optdef.sh multi-
+        # ple times).
+        require File::Copy;
+        File::Copy::copy("UU/optdef.sh", "./optdef.sh");
+        system_or_die('./Configure -S');
+    }
 }
 
 if ($target =~ /config\.s?h/) {

@@ -2785,13 +2785,7 @@ PP(pp_i_divide)
     }
 }
 
-#if defined(__GLIBC__) && IVSIZE == 8 && !defined(PERL_DEBUG_READONLY_OPS) \
-    && ( __GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 8))
-STATIC
-PP(pp_i_modulo_0)
-#else
 PP(pp_i_modulo)
-#endif
 {
      /* This is the vanilla old i_modulo. */
      dSP; dATARGET;
@@ -2809,11 +2803,10 @@ PP(pp_i_modulo)
      }
 }
 
-#if defined(__GLIBC__) && IVSIZE == 8 && !defined(PERL_DEBUG_READONLY_OPS) \
+#if defined(__GLIBC__) && IVSIZE == 8 \
     && ( __GLIBC__ < 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ < 8))
-STATIC
-PP(pp_i_modulo_1)
 
+PP(pp_i_modulo_glibc_bugfix)
 {
      /* This is the i_modulo with the workaround for the _moddi3 bug
       * in (at least) glibc 2.2.5 (the PERL_ABS() the workaround).
@@ -2829,49 +2822,6 @@ PP(pp_i_modulo_1)
 	      SETi( 0 );
 	  else
 	      SETi( left % PERL_ABS(right) );
-	  RETURN;
-     }
-}
-
-PP(pp_i_modulo)
-{
-     dVAR; dSP; dATARGET;
-     tryAMAGICbin_MG(modulo_amg, AMGf_assign);
-     {
-	  dPOPTOPiirl_nomg;
-	  if (!right)
-	       DIE(aTHX_ "Illegal modulus zero");
-	  /* The assumption is to use hereafter the old vanilla version... */
-	  PL_op->op_ppaddr =
-	       PL_ppaddr[OP_I_MODULO] =
-	           Perl_pp_i_modulo_0;
-	  /* .. but if we have glibc, we might have a buggy _moddi3
-	   * (at least glibc 2.2.5 is known to have this bug), in other
-	   * words our integer modulus with negative quad as the second
-	   * argument might be broken.  Test for this and re-patch the
-	   * opcode dispatch table if that is the case, remembering to
-	   * also apply the workaround so that this first round works
-	   * right, too.  See [perl #9402] for more information. */
-	  {
-	       IV l =   3;
-	       IV r = -10;
-	       /* Cannot do this check with inlined IV constants since
-		* that seems to work correctly even with the buggy glibc. */
-	       if (l % r == -3) {
-		    /* Yikes, we have the bug.
-		     * Patch in the workaround version. */
-		    PL_op->op_ppaddr =
-			 PL_ppaddr[OP_I_MODULO] =
-			     &Perl_pp_i_modulo_1;
-		    /* Make certain we work right this time, too. */
-		    right = PERL_ABS(right);
-	       }
-	  }
-	  /* avoid FPE_INTOVF on some platforms when left is IV_MIN */
-	  if (right == -1)
-	      SETi( 0 );
-	  else
-	      SETi( left % right );
 	  RETURN;
      }
 }
@@ -5357,41 +5307,11 @@ PP(pp_anonhash)
     RETURN;
 }
 
-static AV *
-S_deref_plain_array(pTHX_ AV *ary)
-{
-    if (SvTYPE(ary) == SVt_PVAV) return ary;
-    SvGETMAGIC((SV *)ary);
-    if (!SvROK(ary) || SvTYPE(SvRV(ary)) != SVt_PVAV)
-	Perl_die(aTHX_ "Not an ARRAY reference");
-    else if (SvOBJECT(SvRV(ary)))
-	Perl_die(aTHX_ "Not an unblessed ARRAY reference");
-    return (AV *)SvRV(ary);
-}
-
-#if defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN)
-# define DEREF_PLAIN_ARRAY(ary)       \
-   ({                                  \
-     AV *aRrRay = ary;                  \
-     SvTYPE(aRrRay) == SVt_PVAV          \
-      ? aRrRay                            \
-      : S_deref_plain_array(aTHX_ aRrRay); \
-   })
-#else
-# define DEREF_PLAIN_ARRAY(ary)            \
-   (                                        \
-     PL_Sv = (SV *)(ary),                    \
-     SvTYPE(PL_Sv) == SVt_PVAV                \
-      ? (AV *)PL_Sv                            \
-      : S_deref_plain_array(aTHX_ (AV *)PL_Sv)  \
-   )
-#endif
-
 PP(pp_splice)
 {
     dSP; dMARK; dORIGMARK;
     int num_args = (SP - MARK);
-    AV *ary = DEREF_PLAIN_ARRAY(MUTABLE_AV(*++MARK));
+    AV *ary = MUTABLE_AV(*++MARK);
     SV **src;
     SV **dst;
     SSize_t i;
@@ -5600,7 +5520,7 @@ PP(pp_splice)
 PP(pp_push)
 {
     dSP; dMARK; dORIGMARK; dTARGET;
-    AV * const ary = DEREF_PLAIN_ARRAY(MUTABLE_AV(*++MARK));
+    AV * const ary = MUTABLE_AV(*++MARK);
     const MAGIC * const mg = SvTIED_mg((const SV *)ary, PERL_MAGIC_tied);
 
     if (mg) {
@@ -5643,7 +5563,7 @@ PP(pp_shift)
 {
     dSP;
     AV * const av = PL_op->op_flags & OPf_SPECIAL
-	? MUTABLE_AV(GvAV(PL_defgv)) : DEREF_PLAIN_ARRAY(MUTABLE_AV(POPs));
+	? MUTABLE_AV(GvAVn(PL_defgv)) : MUTABLE_AV(POPs);
     SV * const sv = PL_op->op_type == OP_SHIFT ? av_shift(av) : av_pop(av);
     EXTEND(SP, 1);
     assert (sv);
@@ -5656,7 +5576,7 @@ PP(pp_shift)
 PP(pp_unshift)
 {
     dSP; dMARK; dORIGMARK; dTARGET;
-    AV *ary = DEREF_PLAIN_ARRAY(MUTABLE_AV(*++MARK));
+    AV *ary = MUTABLE_AV(*++MARK);
     const MAGIC * const mg = SvTIED_mg((const SV *)ary, PERL_MAGIC_tied);
 
     if (mg) {

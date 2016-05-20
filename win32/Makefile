@@ -38,7 +38,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.25.0
+#INST_VER	= \5.25.1
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -1215,7 +1215,7 @@ utils: $(PERLEXE) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5250delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5251delta.pod
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
@@ -1302,6 +1302,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\TAP rmdir /s /q $(LIBDIR)\TAP
 	-if exist $(LIBDIR)\Term rmdir /s /q $(LIBDIR)\Term
 	-if exist $(LIBDIR)\Test rmdir /s /q $(LIBDIR)\Test
+	-if exist $(LIBDIR)\Test2 rmdir /s /q $(LIBDIR)\Test2
 	-if exist $(LIBDIR)\Text rmdir /s /q $(LIBDIR)\Text
 	-if exist $(LIBDIR)\Thread rmdir /s /q $(LIBDIR)\Thread
 	-if exist $(LIBDIR)\threads rmdir /s /q $(LIBDIR)\threads
@@ -1313,7 +1314,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5250delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5251delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \

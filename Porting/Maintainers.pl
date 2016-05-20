@@ -120,7 +120,7 @@ use File::Glob qw(:case);
 %Modules = (
 
     'Archive::Tar' => {
-        'DISTRIBUTION' => 'BINGOS/Archive-Tar-2.04.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Archive-Tar-2.08.tar.gz',
         'FILES'        => q[cpan/Archive-Tar],
         'BUGS'         => 'bug-archive-tar@rt.cpan.org',
         'EXCLUDED'     => [
@@ -167,7 +167,7 @@ use File::Glob qw(:case);
     },
 
     'autouse' => {
-        'DISTRIBUTION' => 'WOLFSAGE/autouse-1.08.tar.gz',
+        'DISTRIBUTION' => 'RJBS/autouse-1.11.tar.gz',
         'FILES'        => q[dist/autouse],
         'EXCLUDED'     => [qr{^t/release-.*\.t}],
     },
@@ -227,7 +227,7 @@ use File::Glob qw(:case);
     },
 
     'Config::Perl::V' => {
-        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.25.tgz',
+        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.26.tgz',
         'FILES'        => q[cpan/Config-Perl-V],
         'EXCLUDED'     => [qw(
 		examples/show-v.pl
@@ -330,7 +330,7 @@ use File::Glob qw(:case);
     },
 
     'DB_File' => {
-        'DISTRIBUTION' => 'PMQS/DB_File-1.835.tar.gz',
+        'DISTRIBUTION' => 'PMQS/DB_File-1.838.tar.gz',
         'FILES'        => q[cpan/DB_File],
         'EXCLUDED'     => [
             qr{^patches/},
@@ -364,7 +364,7 @@ use File::Glob qw(:case);
     },
 
     'Digest::MD5' => {
-        'DISTRIBUTION' => 'GAAS/Digest-MD5-2.54.tar.gz',
+        'DISTRIBUTION' => 'GAAS/Digest-MD5-2.55.tar.gz',
         'FILES'        => q[cpan/Digest-MD5],
         'EXCLUDED'     => ['rfc1321.txt'],
     },
@@ -679,25 +679,17 @@ use File::Glob qw(:case);
     },
 
     'IPC::Cmd' => {
-        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.92.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.94.tar.gz',
         'FILES'        => q[cpan/IPC-Cmd],
     },
 
     'IPC::SysV' => {
-        'DISTRIBUTION' => 'MHX/IPC-SysV-2.04.tar.gz',
+        'DISTRIBUTION' => 'MHX/IPC-SysV-2.07.tar.gz',
         'FILES'        => q[cpan/IPC-SysV],
         'EXCLUDED'     => [
             qw( const-c.inc
                 const-xs.inc
                 ),
-        ],
-        'CUSTOMIZED' => [
-            # CPAN #118827
-	    qw(t/ipcsysv.t
-               lib/IPC/Msg.pm
-               lib/IPC/Semaphore.pm
-               lib/IPC/SharedMem.pm
-               lib/IPC/SysV.pm),
         ],
     },
 
@@ -732,7 +724,7 @@ use File::Glob qw(:case);
     },
 
     'Locale-Codes' => {
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.37.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.38.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( README.first
@@ -842,7 +834,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160320.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160507.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -862,7 +854,7 @@ use File::Glob qw(:case);
     },
 
     'Module::Metadata' => {
-        'DISTRIBUTION' => 'ETHER/Module-Metadata-1.000031-TRIAL.tar.gz',
+        'DISTRIBUTION' => 'ETHER/Module-Metadata-1.000032-TRIAL.tar.gz',
         'FILES'        => q[cpan/Module-Metadata],
         'EXCLUDED'     => [
             qw(t/00-report-prereqs.t),
@@ -919,7 +911,7 @@ use File::Glob qw(:case);
     },
 
     'perlfaq' => {
-        'DISTRIBUTION' => 'LLAP/perlfaq-5.021010.tar.gz',
+        'DISTRIBUTION' => 'LLAP/perlfaq-5.021011.tar.gz',
         'FILES'        => q[cpan/perlfaq],
         'EXCLUDED'     => [
             qw( inc/CreateQuestionList.pm
@@ -994,18 +986,16 @@ use File::Glob qw(:case);
     },
 
     'Scalar-List-Utils' => {
-        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.42.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.45.tar.gz',
         'FILES'        => q[cpan/Scalar-List-Utils],
-        # Waiting to be merged upstream:
-        # https://github.com/Scalar-List-Utils/Scalar-List-Utils/pull/24
-        # https://rt.cpan.org/Public/Bug/Display.html?id=105415
+        # Waiting to be merged upstream
+        # https://github.com/Scalar-List-Utils/Scalar-List-Utils/pull/42
         'CUSTOMIZED'   => [
             qw( ListUtil.xs
                 lib/List/Util.pm
                 lib/List/Util/XS.pm
                 lib/Scalar/Util.pm
                 lib/Sub/Util.pm
-                t/product.t
                 )
         ],
     },
@@ -1040,7 +1030,7 @@ use File::Glob qw(:case);
     },
 
     'Sys::Syslog' => {
-        'DISTRIBUTION' => 'SAPER/Sys-Syslog-0.33.tar.gz',
+        'DISTRIBUTION' => 'SAPER/Sys-Syslog-0.34.tar.gz',
         'FILES'        => q[cpan/Sys-Syslog],
         'EXCLUDED'     => [
             qr{^eg/},
@@ -1057,7 +1047,7 @@ use File::Glob qw(:case);
     },
 
     'Term::ANSIColor' => {
-        'DISTRIBUTION' => 'RRA/Term-ANSIColor-4.04.tar.gz',
+        'DISTRIBUTION' => 'RRA/Term-ANSIColor-4.05.tar.gz',
         'FILES'        => q[cpan/Term-ANSIColor],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1187,7 +1177,7 @@ use File::Glob qw(:case);
     },
 
     'threads' => {
-        'DISTRIBUTION' => 'JDHEDDEN/threads-2.07.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-2.08.tar.gz',
         'FILES'        => q[dist/threads],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1199,7 +1189,7 @@ use File::Glob qw(:case);
     },
 
     'threads::shared' => {
-        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.51.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.52.tar.gz',
         'FILES'        => q[dist/threads-shared],
         'EXCLUDED'     => [
             qw( examples/class.pl
@@ -1221,7 +1211,7 @@ use File::Glob qw(:case);
     },
 
     'Time::HiRes' => {
-        'DISTRIBUTION' => 'RJBS/Time-HiRes-1.9728.tar.gz',
+        'DISTRIBUTION' => 'JHI/Time-HiRes-1.9733.tar.gz',
         'FILES'        => q[dist/Time-HiRes],
     },
 
@@ -1459,6 +1449,7 @@ use File::Glob qw(:case);
                 lib/overload{.pm,.t,64.t}
                 lib/perl5db.{pl,t}
                 lib/perl5db/
+                lib/perlbug.t
                 lib/sigtrap.{pm,t}
                 lib/sort.{pm,t}
                 lib/strict.{pm,t}

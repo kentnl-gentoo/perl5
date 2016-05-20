@@ -7,7 +7,7 @@ BEGIN {
     *bar::is = *is;
     *bar::like = *like;
 }
-plan 151;
+plan 152;
 
 # -------------------- Errors with feature disabled -------------------- #
 
@@ -126,11 +126,11 @@ use feature 'state'; # state
 {
   state sub foo { 44 }
   isnt \&::foo, \&foo, 'state sub is not stored in the package';
-  is eval foo, 44, 'calling state sub from same package';
-  is eval &foo, 44, 'calling state sub from same package (amper)';
+  is foo, 44, 'calling state sub from same package';
+  is &foo, 44, 'calling state sub from same package (amper)';
   package bar;
-  is eval foo, 44, 'calling state sub from another package';
-  is eval &foo, 44, 'calling state sub from another package (amper)';
+  is foo, 44, 'calling state sub from another package';
+  is &foo, 44, 'calling state sub from another package (amper)';
 }
 package bar;
 is foo, 43, 'state sub falling out of scope';
@@ -760,6 +760,10 @@ not_lexical11();
   my sub x;
   eval 'sub x {3}';
   is x, 3, 'my sub defined inside eval';
+
+  my sub z;
+  BEGIN { eval 'sub z {4}' }
+  is z, 4, 'my sub defined in BEGIN { eval "..." }';
 }
 
 {
