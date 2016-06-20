@@ -21,17 +21,37 @@
 
 /*
  * This file contains mathoms, various binary artifacts from previous
- * versions of Perl.  For binary or source compatibility reasons, though,
- * we cannot completely remove them from the core code.
+ * versions of Perl which we cannot completely remove from the core
+ * code. There are two reasons functions should be here:
  *
- * REMEMBER to update makedef.pl when adding a function to mathoms.c whose
- * name doesn't begin with "Perl_".
+ * 1) A function has been been replaced by a macro within a minor release,
+ *    so XS modules compiled against an older release will expect to
+ *    still be able to link against the function
+ * 2) A function Perl_foo(...) with #define foo Perl_foo(aTHX_ ...)
+ *    has been replaced by a macro, e.g. #define foo(...) foo_flags(...,0)
+ *    but XS code may still explicitly use the long form, i.e.
+ *    Perl_foo(aTHX_ ...)
  *
- * SMP - Oct. 24, 2005
+ * NOTE: ALL FUNCTIONS IN THIS FILE should have an entry with the 'b' flag in
+ * embed.fnc.
+ *
+ * To move a function to this file, simply cut and paste it here, and change
+ * its embed.fnc entry to additionally have the 'b' flag.  If, for some reason
+ * a function you'd like to be treated as mathoms can't be moved from its
+ * current place, simply enclose it between
+ *
+ * #ifndef NO_MATHOMS
+ *    ...
+ * #endif
+ *
+ * and add the 'b' flag in embed.fnc.
  *
  * The compilation of this file can be suppressed; see INSTALL
  *
+ * Some blurb for perlapi.pod:
+
 =head1 Obsolete backwards compatibility functions
+
 Some of these are also deprecated.  You can exclude these from
 your compiled Perl by adding this option to Configure:
 C<-Accflags='-DNO_MATHOMS'>
@@ -50,22 +70,6 @@ C<-Accflags='-DNO_MATHOMS'>
    So make sure we have something in here by processing the headers anyway.
  */
 #else
-
-/* NOTE ALL FUNCTIONS IN THIS FILE should have an entry with the 'b' flag in
- * embed.fnc.
- *
- * To move a function to this file, simply cut and paste it here, and change
- * its embed.fnc entry to additionally have the 'b' flag.  If, for some reason
- * a function you'd like to be treated as mathoms can't be moved from its
- * current place, simply enclose it between
- *
- * #ifndef NO_MATHOMS
- *    ...
- * #endif
- *
- * and add the 'b' flag in embed.fnc.
- *
- * */
 
 /* ref() is now a macro using Perl_doref;
  * this version provided for binary compatibility only.
@@ -1092,6 +1096,18 @@ Perl_sv_collxfrm(pTHX_ SV *const sv, STRLEN *const nxp)
 {
     return sv_collxfrm_flags(sv, nxp, SV_GMAGIC);
 }
+
+char *
+Perl_mem_collxfrm(pTHX_ const char *input_string, STRLEN len, STRLEN *xlen)
+{
+    /* This function is retained for compatibility in case someone outside core
+     * is using this (but it is undocumented) */
+
+    PERL_ARGS_ASSERT_MEM_COLLXFRM;
+
+    return _mem_collxfrm(input_string, len, xlen, FALSE);
+}
+
 #endif
 
 bool

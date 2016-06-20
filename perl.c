@@ -22,6 +22,10 @@
  * and destroy a perl interpreter, plus the functions used by XS code to
  * call back into perl. Note that it does not contain the actual main()
  * function of the interpreter; that can be found in perlmain.c
+ *
+ * Note that at build time this file is also linked to as perlmini.c,
+ * and perlmini.o is then built with PERL_IS_MINIPERL defined, which is
+ * then used to create the miniperl executable, rather than perl.o.
  */
 
 #if defined(PERL_IS_MINIPERL) && !defined(USE_SITECUSTOMIZE)
@@ -3150,6 +3154,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
       "  M  trace smart match resolution\n"
       "  B  dump suBroutine definitions, including special Blocks like BEGIN\n",
       "  L  trace some locale setting information--for Perl core development\n",
+      "  i  trace PerlIO layer processing\n",
       NULL
     };
     UV uv = 0;
@@ -3158,7 +3163,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
 
     if (isALPHA(**s)) {
 	/* if adding extra options, remember to update DEBUG_MASK */
-	static const char debopts[] = "psltocPmfrxuUHXDSTRJvCAqMBL";
+	static const char debopts[] = "psltocPmfrxuUHXDSTRJvCAqMBLi";
 
 	for (; isWORDCHAR(**s); (*s)++) {
 	    const char * const d = strchr(debopts,**s);

@@ -2012,7 +2012,7 @@ S_force_word(pTHX_ char *start, int token, int check_keyword, int allow_pack)
     start = skipspace(start);
     s = start;
     if (isIDFIRST_lazy_if(s,UTF)
-        || (allow_pack && *s == ':') )
+        || (allow_pack && *s == ':' && s[1] == ':') )
     {
 	s = scan_word(s, PL_tokenbuf, sizeof PL_tokenbuf, allow_pack, &len);
 	if (check_keyword) {
@@ -4398,9 +4398,9 @@ S_tokenize_use(pTHX_ int is_use, char *s) {
 	};
 #endif
 
-#define word_takes_any_delimeter(p,l) S_word_takes_any_delimeter(p,l)
+#define word_takes_any_delimiter(p,l) S_word_takes_any_delimiter(p,l)
 STATIC bool
-S_word_takes_any_delimeter(char *p, STRLEN len)
+S_word_takes_any_delimiter(char *p, STRLEN len)
 {
     return (len == 1 && strchr("msyq", p[0]))
             || (len == 2
@@ -4422,6 +4422,26 @@ S_check_scalar_slice(pTHX_ char *s)
 	pl_yylval.ival = OPpSLICEWARNING;
 }
 
+#define lex_token_boundary() S_lex_token_boundary(aTHX)
+static void
+S_lex_token_boundary(pTHX)
+{
+    PL_oldoldbufptr = PL_oldbufptr;
+    PL_oldbufptr = PL_bufptr;
+}
+
+#define vcs_conflict_marker(s) S_vcs_conflict_marker(aTHX_ s)
+static char *
+S_vcs_conflict_marker(pTHX_ char *s)
+{
+    lex_token_boundary();
+    PL_bufptr = s;
+    yyerror("Version control conflict marker");
+    while (s < PL_bufend && *s != '\n')
+	s++;
+    return s;
+}
+
 /*
   yylex
 
@@ -4433,15 +4453,15 @@ S_check_scalar_slice(pTHX_ char *s)
     The type of the next token
 
   Structure:
+      Check if we have already built the token; if so, use it.
       Switch based on the current state:
-	  - if we already built the token before, use it
 	  - if we have a case modifier in a string, deal with that
 	  - handle other cases of interpolation inside a string
 	  - scan the next line if we are inside a format
-      In the normal state switch on the next character:
+      In the normal state, switch on the next character:
 	  - default:
 	    if alphabetic, go to key lookup
-	    unrecoginized character - croak
+	    unrecognized character - croak
 	  - 0/4/26: handle end-of-line or EOF
 	  - cases for whitespace
 	  - \n and #: handle comments and line numbers
@@ -5992,6 +6012,10 @@ Perl_yylex(pTHX)
 	{
 	    const char tmp = *s++;
 	    if (tmp == '=') {
+	        if ((s == PL_linestart+2 || s[-3] == '\n') && strnEQ(s, "=====", 5)) {
+	            s = vcs_conflict_marker(s + 5);
+	            goto retry;
+	        }
 		if (!PL_lex_allbrackets
                     && PL_lex_fakeeof >= LEX_FAKEEOF_COMPARE)
                 {
@@ -6106,8 +6130,13 @@ Perl_yylex(pTHX)
 	if (PL_expect != XOPERATOR) {
 	    if (s[1] != '<' && !strchr(s,'>'))
 		check_uni();
-	    if (s[1] == '<' && s[2] != '>')
+	    if (s[1] == '<' && s[2] != '>') {
+	        if ((s == PL_linestart || s[-1] == '\n') && strnEQ(s+2, "<<<<<", 5)) {
+	            s = vcs_conflict_marker(s + 7);
+	            goto retry;
+	        }
 		s = scan_heredoc(s);
+	    }
 	    else
 		s = scan_inputsymbol(s);
 	    PL_expect = XOPERATOR;
@@ -6117,6 +6146,10 @@ Perl_yylex(pTHX)
 	{
 	    char tmp = *s++;
 	    if (tmp == '<') {
+	        if ((s == PL_linestart+2 || s[-3] == '\n') && strnEQ(s, "<<<<<", 5)) {
+                    s = vcs_conflict_marker(s + 5);
+	            goto retry;
+	        }
 		if (*s == '=' && !PL_lex_allbrackets
                     && PL_lex_fakeeof >= LEX_FAKEEOF_ASSIGN)
                 {
@@ -6157,6 +6190,10 @@ Perl_yylex(pTHX)
 	{
 	    const char tmp = *s++;
 	    if (tmp == '>') {
+	        if ((s == PL_linestart+2 || s[-3] == '\n') && strnEQ(s, ">>>>>", 5)) {
+	            s = vcs_conflict_marker(s + 5);
+	            goto retry;
+	        }
 		if (*s == '=' && !PL_lex_allbrackets
                     && PL_lex_fakeeof >= LEX_FAKEEOF_ASSIGN)
                 {
@@ -6626,7 +6663,7 @@ Perl_yylex(pTHX)
 	s = scan_word(s, PL_tokenbuf, sizeof PL_tokenbuf, FALSE, &len);
 
 	/* Some keywords can be followed by any delimiter, including ':' */
-	anydelim = word_takes_any_delimeter(PL_tokenbuf, len);
+	anydelim = word_takes_any_delimiter(PL_tokenbuf, len);
 
 	/* x::* is just a word, unless x is "CORE" */
 	if (!anydelim && *s == ':' && s[1] == ':') {
@@ -7709,7 +7746,6 @@ Perl_yylex(pTHX)
 	    UNI(OP_LCFIRST);
 
 	case KEY_local:
-	    pl_yylval.ival = 0;
 	    OPERATOR(LOCAL);
 
 	case KEY_length:
@@ -7769,6 +7805,7 @@ Perl_yylex(pTHX)
 	case KEY_my:
 	case KEY_state:
 	    if (PL_in_my) {
+	        PL_bufptr = s;
 	        yyerror(Perl_form(aTHX_
 	                          "Can't redeclare \"%s\" in \"%s\"",
 	                           tmp      == KEY_my    ? "my" :
@@ -7781,17 +7818,7 @@ Perl_yylex(pTHX)
 	    if (isIDFIRST_lazy_if(s,UTF)) {
 		s = scan_word(s, PL_tokenbuf, sizeof PL_tokenbuf, TRUE, &len);
 		if (len == 3 && strnEQ(PL_tokenbuf, "sub", 3))
-		{
-		    if (!FEATURE_LEXSUBS_IS_ENABLED)
-			Perl_croak(aTHX_
-				  "Experimental \"%s\" subs not enabled",
-				   tmp == KEY_my    ? "my"    :
-				   tmp == KEY_state ? "state" : "our");
-		    Perl_ck_warner_d(aTHX_
-			packWARN(WARN_EXPERIMENTAL__LEXICAL_SUBS),
-			"The lexical_subs feature is experimental");
 		    goto really_sub;
-		}
 		PL_in_my_stash = find_in_my_stash(PL_tokenbuf, len);
 		if (!PL_in_my_stash) {
 		    char tmpbuf[1024];
@@ -7802,7 +7829,6 @@ Perl_yylex(pTHX)
 		    yyerror_pv(tmpbuf, UTF ? SVf_UTF8 : 0);
 		}
 	    }
-	    pl_yylval.ival = 1;
 	    OPERATOR(MY);
 
 	case KEY_next:
@@ -11725,7 +11751,7 @@ Perl_parse_label(pTHX_ U32 flags)
         if (!isIDFIRST_lazy_if(s, UTF))
 	    goto no_label;
 	t = scan_word(s, PL_tokenbuf, sizeof PL_tokenbuf, FALSE, &wlen);
-	if (word_takes_any_delimeter(s, wlen))
+	if (word_takes_any_delimiter(s, wlen))
 	    goto no_label;
 	bufptr_pos = s - SvPVX(PL_linestr);
 	PL_bufptr = t;
@@ -11827,14 +11853,6 @@ Perl_parse_stmtseq(pTHX_ U32 flags)
     if (c != -1 && c != /*{*/'}')
 	qerror(Perl_mess(aTHX_ "Parse error"));
     return stmtseqop;
-}
-
-#define lex_token_boundary() S_lex_token_boundary(aTHX)
-static void
-S_lex_token_boundary(pTHX)
-{
-    PL_oldoldbufptr = PL_oldbufptr;
-    PL_oldbufptr = PL_bufptr;
 }
 
 #define parse_opt_lexvar() S_parse_opt_lexvar(aTHX)

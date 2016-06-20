@@ -2,78 +2,87 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.25.1
+perldelta - what is new for perl v5.25.2
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.25.0 release and the 5.25.1
+This document describes differences between the 5.25.1 release and the 5.25.2
 release.
 
-If you are upgrading from an earlier release such as 5.24.0, first read
-L<perl5250delta>, which describes differences between 5.24.0 and 5.25.0.
+If you are upgrading from an earlier release such as 5.25.0, first read
+L<perl5251delta>, which describes differences between 5.25.0 and 5.25.1.
 
 =head1 Core Enhancements
 
-=head2 POSIX::tmpnam() has been removed
+=head2 Perl can now do default collation in UTF-8 locales on platforms
+that support it
 
-The fundamentally unsafe C<tmpnam()> interface was deprecated in
-Perl 5.22.0 and has now been removed.  In its place you can use
-for example the L<File::Temp> interfaces.
+Some platforms natively do a reasonable job of collating and sorting in
+UTF-8 locales.  Perl now works with those.  For portability and full
+control, L<Unicode::Collate> is still recommended, but now you may
+not need to do anything special to get good-enough results, depending on
+your application.  See
+L<perllocale/Category C<LC_COLLATE>: Collation: Text Comparisons and Sorting>.
 
-=head2 require ::Foo::Bar is now illegal.
+=head2 Better locale collation of strings containing embedded C<NUL>
+characters
 
-Formerly, C<require ::Foo::Bar> would try to read F</Foo/Bar.pm>. Now any
-bareword require which starts with a double colon dies instead.
+In locales that have multi-level character weights, these are now
+ignored at the higher priority ones.  There are still some gotchas in
+some strings, though.  See
+L<perllocale/Collation of strings containing embedded C<NUL> characters>.
 
-=head2 Unescaped literal C<"{"> characters in regular expression
-patterns are no longer permissible
+=head2 Lexical subroutines are no longer experimental
 
-You have to now say something like C<"\{"> or C<"[{]"> to specify to
-match a LEFT CURLY BRACKET.  This will allow future extensions to the
-language.  This restriction is not enforced, nor are there current plans
-to enforce it, if the C<"{"> is the first character in the pattern.
+Using the C<lexical_subs> feature no longer emits a warning.  Existing code that disables the C<experimental::lexical_subs> warning category that the
+feature previously used will continue to work.  The C<lexical_subs> feature
+has no effect; all Perl code can use lexical subroutines, regardless of
+what feature declarations are in scope.
 
-These have been deprecated since v5.16, with a deprecation message
-displayed starting in v5.22.
+=head2 C<CORE> subroutines for hash and array functions callable via
+reference
 
-=head2 Literal control character variable names are no longer permissible
+The hash and array functions in the C<CORE> namespace--C<keys>, C<each>,
+C<values>, C<push>, C<pop>, C<shift>, C<unshift> and C<splice>--, can now
+be called with ampersand syntax (C<&CORE::keys(\%hash>) and via reference
+(C<< my $k = \&CORE::keys; $k->(\%hash) >>).  Previously they could only be
+used when inlined.
 
-A variable name may no longer contain a literal control character under
-any circumstances.  These previously were allowed in single-character
-names on ASCII platforms, but have been deprecated there since Perl
-v5.20.  This affects things like C<$I<\cT>>, where I<\cT> is a literal
-control (such as a C<NAK> or C<NEGATIVE ACKNOWLEDGE> character) in the
-source code.
+=head1 Security
 
-=head2 C<qr//xx> is no longer permissible
+=head2 C<-Di> switch is now required for PerlIO debugging output
 
-Using more than one C</x> regular expression pattern modifier on a
-single pattern is now forbidden.  This is to allow a future enhancement
-to the language.  This usage has been deprecated since v5.22.
+Previously PerlIO debugging output would be sent to the file specified
+by the C<PERLIO_DEBUG> environment variable if perl wasn't running
+setuid and the C<-T> or C<-t> switches hadn't been parsed yet.
 
-=head2 C<NBSP> is no longer permissible in C<\N{...}>
+If perl performed output at a point where it hadn't yet parsed its
+switches this could result in perl creating or overwriting the file
+named by C<PERLIO_DEBUG> even when the C<-T> switch had been supplied.
 
-The name of a character may no longer contain non-breaking spaces.  It
-has been deprecated to do so since Perl v5.22.
+Perl now requires the C<-Di> switch to produce PerlIO debugging
+output.  By default this is written to C<stderr>, but can optionally
+be redirected to a file by setting the C<PERLIO_DEBUG> environment
+variable.
 
-=head1 Performance Enhancements
+If perl is running setuid or the C<-T> switch has supplied
+C<PERLIO_DEBUG> is ignored and the debugging output is sent to
+C<stderr> as for any other C<-D> switch.
 
-=over 4
+=head1 Incompatible Changes
 
-=item *
+=head2 C<keys> returned from an lvalue subroutine
 
-Bareword constant strings are now permitted to take part in constant
-folding. They were originally exempted from constant folding in August 1999,
-during the development of Perl 5.6, to ensure that C<use strict "subs">
-would still apply to bareword constants. That has now been accomplished a
-different way, so barewords, like other constants, now gain the performance
-benefits of constant folding.
+C<keys> returned from an lvalue subroutine can no longer be assigned
+to in list context.
 
-This also means that void-context warnings on constant expressions of
-barewords now report the folded constant operand, rather than the operation;
-this matches the behaviour for non-bareword constants.
+    sub foo : lvalue { keys(%INC) }
+    (foo) = 3; # death
+    sub bar : lvalue { keys(@_) }
+    (bar) = 3; # also an error
 
-=back
+This makes the lvalue sub case consistent with C<(keys %hash) = ...> and
+C<(keys @_) = ...>, which are also errors.  [perl #128187]
 
 =head1 Modules and Pragmata
 
@@ -83,96 +92,119 @@ this matches the behaviour for non-bareword constants.
 
 =item *
 
-L<Archive::Tar> has been upgraded from version 2.04 to 2.08.
+L<CPAN> has been upgraded from version 2.11 to 2.14.
 
 =item *
 
-L<Carp> has been upgraded from version 1.40 to 1.41.
+L<Devel::Peek> has been upgraded from version 1.23 to 1.24.
 
 =item *
 
-L<charnames> has been upgraded from version 1.43 to 1.44.
+L<diagnostics> has been upgraded from version 1.34 to 1.35.
 
 =item *
 
-L<Config::Perl::V> has been upgraded from version 0.25 to 0.26.
+L<DynaLoader> has been upgraded from version 1.38 to 1.39.
 
 =item *
 
-L<DB_File> has been upgraded from version 1.835 to 1.838.
+L<ExtUtils::MakeMaker> has been upgraded from version 7.10_01 to 7.18.
 
 =item *
 
-L<Digest::MD5> has been upgraded from version 2.54 to 2.55.
+L<ExtUtils::Miniperl> has been upgraded from version 1.05 to 1.06.
 
 =item *
 
-L<IPC::Cmd> has been upgraded from version 0.92 to 0.94.
+L<ExtUtils::ParseXS> has been upgraded from version 3.31 to 3.32.
 
 =item *
 
-L<IPC::SysV> has been upgraded from version 2.06_01 to 2.07.
+L<ExtUtils::Typemaps> has been upgraded from version 3.31 to 3.32.
 
 =item *
 
-L<List::Util> has been upgraded from version 1.42_02 to 1.45_01.
+L<feature> has been upgraded from version 1.43 to 1.44.
 
 =item *
 
-L<Locale::Codes> has been upgraded from version 3.37 to 3.38.
+L<File::Copy> has been upgraded from version 2.31 to 2.32.
 
 =item *
 
-L<Locale::Maketext> has been upgraded from version 1.26 to 1.27.
+L<File::Glob> has been upgraded from version 1.26 to 1.27.
 
 =item *
 
-L<Module::CoreList> has been upgraded from version 5.20160507 to 5.20160520.
+L<File::Spec> has been upgraded from version 3.63 to 3.64.
 
 =item *
 
-L<Module::Metadata> has been upgraded from version 1.000031 to 1.000032.
+L<FileHandle> has been upgraded from version 2.02 to 2.03.
 
 =item *
 
-L<perlfaq> has been upgraded from version 5.021010 to 5.021011.
+L<Getopt::Long> has been upgraded from version 2.48 to 2.49.
 
 =item *
 
-L<POSIX> has been upgraded from version 1.65 to 1.69. This remedies several
-defects in making its symbols exportable. [perl #127821]  Furthermore,
-the C<POSIX::tmpnam()> interface has been removed,
-see L</"POSIX::tmpnam() has been removed">.
+L<HTTP::Tiny> has been upgraded from version 0.056 to 0.058.
 
 =item *
 
-L<re> has been upgraded from version 0.32 to 0.33.
+L<JSON::PP> has been upgraded from version 2.27300 to 2.27400.
 
 =item *
 
-L<Scalar::Util> has been upgraded from version 1.42_02 to 1.45_01.
+L<Locale::Codes> has been upgraded from version 3.38 to 3.39.
 
 =item *
 
-L<Sys::Syslog> has been upgraded from version 0.33 to 0.34.
+L<Module::CoreList> has been upgraded from 5.20160520 to 5.20160620.
 
 =item *
 
-L<Term::ANSIColor> has been upgraded from version 4.04 to 4.05.
+L<Opcode> has been upgraded from version 1.34 to 1.35.
 
 =item *
 
-L<Test::Simple> has been upgraded from version 1.001014 to 1.302015.
+L<Pod::Checker> has been upgraded from version 1.60 to 1.73.
 
 =item *
 
-L<threads> has been upgraded from version 2.07 to 2.08. Compatibility
-with 5.8 has been restored.
+L<Pod::Functions> has been upgraded from version 1.10 to 1.11.
 
 =item *
 
-L<threads::shared> has been upgraded from version 1.51 to 1.52.
-Compatibility with 5.8 has been restored.
+L<Pod::Usage> has been upgraded from version 1.68 to 1.69.
+
+=item *
+
+L<POSIX> has been upgraded from version 1.69 to 1.70.
+
+=item *
+
+L<Test::Simple> has been upgraded from version 1.302015 to 1.302026.
+
+=item *
+
+L<Thread::Queue> has been upgraded from version 3.09 to 3.11.
+
+=item *
+
+L<threads> has been upgraded from version 2.08 to 2.09.
+
+=item *
+
+L<Time::HiRes> has been upgraded from version 1.9733 to 1.9734.
+
+=item *
+
+L<Unicode::UCD> has been upgraded from version 0.64 to 0.65.
+
+=item *
+
+L<VMS::DCLsym> has been upgraded from version 1.06 to 1.07.
 
 =back
 
@@ -180,15 +212,75 @@ Compatibility with 5.8 has been restored.
 
 =head2 Changes to Existing Documentation
 
+=head3 L<perlcommunity>
+
 =over 4
 
 =item *
 
-Fixed link to Crosby paper on hash complexity attack in L<perlsec>.
+All references to Usenet have been removed.
+
+=back
+
+=head3 L<perldelta>
+
+=over 4
+
+=item *
+
+All references to Usenet have been removed.
+
+=back
+
+=head3 L<perllocale>
+
+=over 4
+
+=item *
+
+Document NUL collation handling.
+
+=back
+
+=head3 L<perlmodinstall>
+
+=over 4
+
+=item *
+
+All references to Usenet have been removed.
+
+=back
+
+=head3 L<perlmodlib>
+
+=over 4
+
+=item *
+
+Updated the mirror list.
+
+=item *
+
+All references to Usenet have been removed.
+
+=back
+
+=head3 L<perlnewmod>
+
+=over 4
+
+=item *
+
+All references to Usenet have been removed.
 
 =back
 
 =head1 Diagnostics
+
+The following additions or changes have been made to diagnostic output,
+including warnings and fatal error messages.  For the complete list of
+diagnostic messages, see L<perldiag>.
 
 =head2 New Diagnostics
 
@@ -198,19 +290,40 @@ Fixed link to Crosby paper on hash complexity attack in L<perlsec>.
 
 =item *
 
-L<Bareword in require contains "%s"|perldiag/"Bareword in require contains "%s"">
+L<Version control conflict marker|perldiag/"Version control conflict marker">
+
+(F) The parser found a line starting with C<E<lt><<<<<<>,
+C<E<gt>E<gt>E<gt>E<gt>E<gt>E<gt>E<gt>>, or C<=======>. These may be left by a
+version control system to mark conflicts after a failed merge operation.
 
 =item *
 
-L<Bareword in require maps to empty filename|perldiag/"Bareword in require maps to empty filename">
+L<%s: command not found|perldiag/"%s: command not found">
+
+(A) You've accidentally run your script through B<bash> or another shell
+instead of Perl.  Check the #! line, or manually feed your script into
+Perl yourself.  The #! line at the top of your file could look like:
+
+  #!/usr/bin/perl
 
 =item *
 
-L<Bareword in require maps to disallowed filename "%s"|perldiag/"Bareword in require maps to disallowed filename "%s"">
+L<%s: command not found: %s|perldiag/"%s: command not found: %s">
+
+(A) You've accidentally run your script through B<zsh> or another shell
+instead of Perl.  Check the #! line, or manually feed your script into
+Perl yourself.  The #! line at the top of your file could look like:
+
+  #!/usr/bin/perl
 
 =item *
 
-L<Bareword in require must not start with a double-colon: "%s"|perldiag/"Bareword in require must not start with a double-colon: "%s"">
+L<Unescaped left brace in regex is deprecated here, passed through in regex; marked by S<<-- HERE> in mE<sol>%sE<sol>|perldiag/"Unescaped left brace in regex is deprecated here, passed through in regex; marked by S<<-- HERE> in m/%s/">
+
+Unescaped left braces are already illegal in some contexts in regular
+expression patterns, but, due to an oversight, no deprecation warning
+was raised in other contexts where they are intended to become illegal.
+This warning is now raised in these contexts.
 
 =back
 
@@ -220,57 +333,11 @@ L<Bareword in require must not start with a double-colon: "%s"|perldiag/"Barewor
 
 =item *
 
-Code like C<$x = $x . "a"> was incorrectly failing to yield a
-L<use of uninitialized value|perldiag/"Use of uninitialized value%s">
-warning when C<$x> was a lexical variable with an undefined value. That has
-now been fixed. [perl #127877]
+L<Unescaped left brace in regex is illegal here in regex; marked by S<<-- HERE> in mE<sol>%sE<sol>|perldiag/"Unescaped left brace in regex is illegal here in regex; marked by S<<-- HERE> in m/%s/">
 
-=item *
-
-When the error "Experimental push on scalar is now forbidden" is raised for
-the hash functions C<keys>, C<each>, and C<values>, it is now followed by
-the more helpful message, "Type of arg 1 to whatever must be hash or
-array". [perl #127976]
-
-=item *
-
-C<undef *_; shift> or C<undef *_; pop> inside a subroutine, with no
-argument to C<shift> or C<pop>, began crashing in Perl 5.14.0, but has now
-been fixed.
-
-=item *
-
-C<< "string$scalar-E<gt>$*" >> now correctly prefers concat overloading to
-string overloading if C<< $scalar-E<gt>$* >> returns an overloaded object,
-bringing it into consistency with C<$$scalar>.
-
-=item *
-
-C<< /@0{0*-E<gt>@*/*0 >> and similar contortions used to crash, but no longer
-do, but merely produce a syntax error. [perl #128171]
-
-=item *
-
-C<do> or C<require> with a reference or typeglob which, when stringified,
-contains a null character started crashing in Perl 5.20.0, but has now been
-fixed. [perl #128182]
-
-=back
-
-=head1 Utility Changes
-
-=head2 L<perlbug>
-
-=over 4
-
-=item *
-
-Long lines in the message body are now wrapped at 900 characters, to stay
-well within the 1000-character limit imposed by SMTP mail transfer agents.
-This is particularly likely to be important for the list of arguments to
-C<Configure>, which can readily exceed the limit if, for example, it names
-several non-default installation paths. This change also adds the first unit
-tests for perlbug. [perl #128020]
+The word "here" has been added to the message that was raised in
+v5.25.1.  This is to indicate that there are contexts in which unescaped
+left braces are not (yet) illegal.
 
 =back
 
@@ -280,36 +347,26 @@ tests for perlbug. [perl #128020]
 
 =item *
 
-C<Configure> now builds C<miniperl> and C<generate_uudmap> if you
-invoke it with C<-Dusecrosscompiler> but not C<-Dtargethost=somehost>.
-This means you can supply your target platform C<config.sh>, generate
-the headers and proceed to build your cross-target perl.  [perl #127234]
+F<make_ext.pl> no longer updates a module's F<pm_to_blib> file when no
+files require updates.  This could cause dependencies, F<perlmain.c>
+in particular, to be rebuilt unnecessarily.  [perl #126710]
 
 =item *
 
-Builds with C<-Accflags=-DPERL_TRACE_OPS> now only dump the operator
-counts when the environment variable C<PERL_TRACE_OPS> to be set to a
-non-zero integer.  This allows C<make test> to pass on such a build.
+The output of C<perl -V> has been reformatted so that each configuration
+and compile-time option is now listed one per line, to improve
+readability.
+
+=back
+
+=head1 Testing
+
+=over 4
 
 =item *
 
-When building with GCC 6 and link-time optimization (the C<-flto> option to
-C<gcc>), C<Configure> was treating all probed symbols as present on the
-system, regardless of whether they actually exist. This has been fixed.
-[perl #128131]
-
-=item *
-
-The F<t/test.pl> library is used for internal testing of Perl itself, and
-also copied by several CPAN modules. Some of those modules must work on
-older versions of Perl, so F<t/test.pl> must in turn avoid newer Perl
-features. Compatibility with Perl 5.8 was inadvertently removed some time
-ago; it has now been restored. [perl #128052]
-
-=item *
-
-The build process no longer emits an extra blank line before building each
-"simple" extension (those with only F<*.pm> and F<*.pod> files).
+F<t/harness> now tries really hard not to run tests outside of the Perl
+source tree. [perl #124050]
 
 =back
 
@@ -319,13 +376,8 @@ The build process no longer emits an extra blank line before building each
 
 =item *
 
-Perl is now built with the C<PERL_OP_PARENT> compiler define enabled by
-default. To disable it, use the C<PERL_NO_OP_PARENT> compiler define.
-This flag alters how the C<op_sibling> field is used in C<OP> structures,
-and has been available optionally since perl 5.22.0.
-
-See L<perl5220delta/"Internal Changes"> for more details of what this
-build option does.
+Perl no longer panics when switching into some locales on machines with
+buggy C<strxfrm()> implementations in their libc. [perl #121734]
 
 =back
 
@@ -335,45 +387,58 @@ build option does.
 
 =item *
 
-Expressions containing an C<&&> or C<||> operator (or their synonyms C<and>
-and C<or>) were being compiled incorrectly in some cases. If the left-hand
-side consisted of either a negated bareword constant or a negated C<do {}>
-block containing a constant expression, and the right-hand side consisted of
-a negated non-foldable expression, one of the negations was effectively
-ignored. The same was true of C<if> and C<unless> statement modifiers,
-though with the left-hand and right-hand sides swapped. This long-standing
-bug has now been fixed. [perl #127952]
+C< until ($x = 1) { ... } > and C< ... until $x = 1 > now properly
+warn when syntax warnings are enabled.  [perl #127333]
 
 =item *
 
-C<reset> with an argument no longer crashes when encountering stash entries
-other than globs. [perl #128106]
+socket() now leaves the error code returned by the system in C<$!> on
+failure.  [perl #128316]
 
 =item *
 
-Assignment of hashes to, and deletion of, typeglobs named C<*::::::> no
-longer causes crashes. [perl #128086]
+Assignment variants of any bitwise ops under the C<bitwise> feature would
+crash if the left-hand side was an array or hash.  [perl #128204]
+
+=item *
+
+C<require> followed by a single colon (as in C<foo() ? require : ...> is
+now parsed correctly as C<require> with implicit $_, rather than
+C<require "">.  [perl #128307]
+
+=item *
+
+Scalar C<keys %hash> can now be assigned to consistently in all scalar
+lvalue contexts.  Previously it worked for some contexts but not others.
+
+=item *
+
+List assignment to C<vec> or C<substr> with an array or hash for its first
+argument used to result in crashes or "Can't coerce" error messages at run
+time, unlike scalar assignment, which would give an error at compile time.
+List assignment now gives a compile-time error, too.  [perl #128260]
 
 =back
 
 =head1 Acknowledgements
 
-Perl 5.25.1 represents approximately 2 weeks of development since Perl 5.25.0
-and contains approximately 46,000 lines of changes across 630 files from 24
+Perl 5.25.2 represents approximately 4 weeks of development since Perl 5.25.1
+and contains approximately 32,000 lines of changes across 430 files from 28
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 40,000 lines of changes to 510 .pm, .t, .c and .h files.
+approximately 27,000 lines of changes to 300 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.25.1:
+improvements that became Perl 5.25.2:
 
-Aaron Crane, Andreas Voegele, Chad Granum, Chris 'BinGOs' Williams, Craig A.
-Berry, David Mitchell, Doug Bell, Father Chrysostomos, H.Merijn Brand, Hugo van
-der Sanden, Jarkko Hietaniemi, Jerry D. Hedden, Jim Cromie, John Lightsey,
-Karen Etheridge, Karl Williamson, Lukas Mai, Maxwell Carey, Nicholas Clark,
-Niko Tyni, Ricardo Signes, Sawyer X, Tony Cook, Yves Orton.
+Aaron Crane, Andreas König, Andy Lester, Chad Granum, Chase Whitener, Chris
+'BinGOs' Williams, Craig A. Berry, Dagfinn Ilmari Mannsåker, Dan Collins,
+David Mitchell, Dominic Hargreaves, Ed Avis, Father Chrysostomos, H.Merijn
+Brand, Ivan Pozdeev, James E Keenan, Jarkko Hietaniemi, Jerry D. Hedden, Jim
+Cromie, Karl Williamson, Lukas Mai, Matthew Horsfall, Misty De Meo, Samuel
+Thibault, Sawyer X, Sullivan Beck, Tony Cook, Yves Orton.
 
 The list above is almost certainly incomplete as it is automatically generated
 from version control history. In particular, it does not include the names of
@@ -389,9 +454,8 @@ the F<AUTHORS> file in the Perl source distribution.
 
 =head1 Reporting Bugs
 
-If you find what you think is a bug, you might check the articles recently
-posted to the comp.lang.perl.misc newsgroup and the perl bug database at
-L<https://rt.perl.org/> .  There may also be information at
+If you find what you think is a bug, you might check the perl bug database
+at L<https://rt.perl.org/> .  There may also be information at
 L<http://www.perl.org/> , the Perl Home Page.
 
 If you believe you have an unreported bug, please run the L<perlbug> program

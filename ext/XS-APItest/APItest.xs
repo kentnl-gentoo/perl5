@@ -4091,6 +4091,7 @@ lexical_import(SV *name, CV *cv)
 			      padadd_STATE, 0, 0);
 	SvREFCNT_dec(PL_curpad[off]);
 	PL_curpad[off] = SvREFCNT_inc(cv);
+	intro_my();
 	LEAVE;
     }
 
@@ -4193,7 +4194,7 @@ CODE:
     } else if (items == 3) {
 	Perl_load_module(aTHX_ flags, SvREFCNT_inc(name), SvREFCNT_inc(ST(2)));
     } else
-        Perl_croak(aTHX_ "load_module can't yet support %lu items", items);
+        Perl_croak(aTHX_ "load_module can't yet support %"IVdf" items", (IV)items);
 
 MODULE = XS::APItest PACKAGE = XS::APItest::AUTOLOADtest
 

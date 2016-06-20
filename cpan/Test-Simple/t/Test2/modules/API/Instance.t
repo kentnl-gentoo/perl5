@@ -11,8 +11,6 @@ my $one = $CLASS->new;
 is_deeply(
     $one,
     {
-        pid      => $$,
-        tid      => get_tid(),
         contexts => {},
 
         finalized => undef,
@@ -45,8 +43,6 @@ $one->reset;
 is_deeply(
     $one,
     {
-        pid      => $$,
-        tid      => get_tid(),
         contexts => {},
 
         ipc_polling => undef,
@@ -201,7 +197,7 @@ if (CAN_THREAD && $] ge '5.010') {
 
 {
     $one->reset();
-    $one->set_tid(1);
+    $one->set__tid(1);
     local $? = 0;
     $one->set_exit;
     is($?, 0, "no errors on exit");
@@ -226,6 +222,7 @@ if (CAN_THREAD && $] ge '5.010') {
 
 {
     $one->reset();
+    $one->load();
     $one->stack->top->set_failed(2);
     local $? = 0;
     $one->set_exit;
@@ -234,6 +231,7 @@ if (CAN_THREAD && $] ge '5.010') {
 
 {
     $one->reset();
+    $one->load();
     local $? = 500;
     $one->set_exit;
     is($?, 255, "set exit code to a sane number");
@@ -243,6 +241,7 @@ if (CAN_THREAD && $] ge '5.010') {
     local %INC = %INC;
     delete $INC{'Test2/IPC.pm'};
     $one->reset();
+    $one->load();
     my @events;
     $one->stack->top->filter(sub { push @events => $_[1]; undef});
     $one->stack->new_hub;
@@ -287,6 +286,7 @@ This is not a supported configuration, you will have problems.
     local *Test2::API::Breakage::report = sub { $ran++; return "foo" };
     use warnings qw/redefine once/;
     $one->reset();
+    $one->load();
 
     my $stderr = "";
     {
@@ -308,6 +308,7 @@ foo
 
 {
     $one->reset();
+    $one->load();
     my @events;
     $one->stack->top->filter(sub { push @events => $_[1]; undef});
     $one->stack->new_hub;
@@ -427,6 +428,7 @@ if (CAN_REALLY_FORK) {
 
 {
     $one->reset;
+
     ok(!@{$one->context_init_callbacks}, "no callbacks");
     is($one->ipc_polling, undef, "no polling, undef");
 
@@ -440,6 +442,8 @@ if (CAN_REALLY_FORK) {
     use warnings;
 
     $one->enable_ipc_polling;
+    ok(defined($one->{_pid}), "pid is defined");
+    ok(defined($one->{_tid}), "tid is defined");
     is(@{$one->context_init_callbacks}, 1, "added the callback");
     is($one->ipc_polling, 1, "polling on");
     $one->set_ipc_shm_last('abc1');

@@ -1532,8 +1532,11 @@ S_scalarboolean(pTHX_ OP *o)
 {
     PERL_ARGS_ASSERT_SCALARBOOLEAN;
 
-    if (o->op_type == OP_SASSIGN && cBINOPo->op_first->op_type == OP_CONST
-     && !(cBINOPo->op_first->op_flags & OPf_SPECIAL)) {
+    if ((o->op_type == OP_SASSIGN && cBINOPo->op_first->op_type == OP_CONST &&
+         !(cBINOPo->op_first->op_flags & OPf_SPECIAL)) ||
+        (o->op_type == OP_NOT     && cUNOPo->op_first->op_type == OP_SASSIGN &&
+         cBINOPx(cUNOPo->op_first)->op_first->op_type == OP_CONST &&
+         !(cBINOPx(cUNOPo->op_first)->op_first->op_flags & OPf_SPECIAL))) {
 	if (ckWARN(WARN_SYNTAX)) {
 	    const line_t oldline = CopLINE(PL_curcop);
 
@@ -2779,6 +2782,14 @@ S_lvref(pTHX_ OP *o, I32 type)
 	o->op_private |= OPpLVREF_ITER;
 }
 
+PERL_STATIC_INLINE bool
+S_potential_mod_type(I32 type)
+{
+    /* Types that only potentially result in modification.  */
+    return type == OP_GREPSTART || type == OP_ENTERSUB
+	|| type == OP_REFGEN    || type == OP_LEAVESUBLV;
+}
+
 OP *
 Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 {
@@ -2819,9 +2830,7 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 	else {				/* lvalue subroutine call */
 	    o->op_private |= OPpLVAL_INTRO;
 	    PL_modcount = RETURN_UNLIMITED_NUMBER;
-	    if (type == OP_GREPSTART || type == OP_ENTERSUB
-	     || type == OP_REFGEN    || type == OP_LEAVESUBLV) {
-		/* Potential lvalue context: */
+	    if (S_potential_mod_type(type)) {
 		o->op_private |= OPpENTERSUB_INARGS;
 		break;
 	    }
@@ -2883,8 +2892,7 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
       nomod:
 	if (flags & OP_LVALUE_NO_CROAK) return NULL;
 	/* grep, foreach, subcalls, refgen */
-	if (type == OP_GREPSTART || type == OP_ENTERSUB
-	 || type == OP_REFGEN    || type == OP_LEAVESUBLV)
+	if (S_potential_mod_type(type))
 	    break;
 	yyerror(Perl_form(aTHX_ "Can't modify %s in %s",
 		     (o->op_type == OP_NULL && (o->op_flags & OPf_SPECIAL)
@@ -2977,7 +2985,13 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 	break;
     case OP_KVHSLICE:
     case OP_KVASLICE:
+    case OP_AKEYS:
 	if (type == OP_LEAVESUBLV)
+	    o->op_private |= OPpMAYBE_LVSUB;
+        goto nomod;
+    case OP_AVHVSWITCH:
+	if (type == OP_LEAVESUBLV
+	 && (o->op_private & 3) + OP_EACH == OP_KEYS)
 	    o->op_private |= OPpMAYBE_LVSUB;
         goto nomod;
     case OP_AV2ARYLEN:
@@ -3033,7 +3047,7 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 	break;
 
     case OP_KEYS:
-	if (type != OP_SASSIGN && type != OP_LEAVESUBLV)
+	if (type != OP_LEAVESUBLV && !scalar_mod_type(NULL, type))
 	    goto nomod;
 	goto lvalue_func;
     case OP_SUBSTR:
@@ -3045,8 +3059,18 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
       lvalue_func:
 	if (type == OP_LEAVESUBLV)
 	    o->op_private |= OPpMAYBE_LVSUB;
-	if (o->op_flags & OPf_KIDS)
-	    op_lvalue(OpSIBLING(cBINOPo->op_first), type);
+	if (o->op_flags & OPf_KIDS && OpHAS_SIBLING(cBINOPo->op_first)) {
+	    /* substr and vec */
+	    /* If this op is in merely potential (non-fatal) modifiable
+	       context, then apply OP_ENTERSUB context to
+	       the kid op (to avoid croaking).  Other-
+	       wise pass this op’s own type so the correct op is mentioned
+	       in error messages.  */
+	    op_lvalue(OpSIBLING(cBINOPo->op_first),
+		      S_potential_mod_type(type)
+			? OP_ENTERSUB
+			: o->op_type);
+	}
 	break;
 
     case OP_AELEM:
@@ -3223,6 +3247,12 @@ S_scalar_mod_type(const OP *o, I32 type)
     case OP_BIT_AND:
     case OP_BIT_XOR:
     case OP_BIT_OR:
+    case OP_NBIT_AND:
+    case OP_NBIT_XOR:
+    case OP_NBIT_OR:
+    case OP_SBIT_AND:
+    case OP_SBIT_XOR:
+    case OP_SBIT_OR:
     case OP_CONCAT:
     case OP_SUBST:
     case OP_TRANS:
@@ -3233,6 +3263,8 @@ S_scalar_mod_type(const OP *o, I32 type)
     case OP_ANDASSIGN:
     case OP_ORASSIGN:
     case OP_DORASSIGN:
+    case OP_VEC:
+    case OP_SUBSTR:
 	return TRUE;
     default:
 	return FALSE;
@@ -3656,7 +3688,7 @@ S_my_kid(pTHX_ OP *o, OP *attrs, OP **imopsp)
 	return o;
     } else if (type == OP_RV2SV ||	/* "our" declaration */
 	       type == OP_RV2AV ||
-	       type == OP_RV2HV) { /* XXX does this let anything illegal in? */
+	       type == OP_RV2HV) {
 	if (cUNOPo->op_first->op_type != OP_GV) { /* MJD 20011224 */
 	    S_cant_declare(aTHX_ o);
 	} else if (attrs) {
@@ -11956,9 +11988,9 @@ Perl_ck_each(pTHX_ OP *o)
 		   )
 		    goto bad;
 	    default:
-                yyerror_pv(Perl_form(aTHX_
+                qerror(Perl_mess(aTHX_
                     "Experimental %s on scalar is now forbidden",
-                     PL_op_desc[orig_type]), 0);
+                     PL_op_desc[orig_type]));
                bad:
                 bad_type_pv(1, "hash or array", o, kid);
                 return o;
@@ -14688,6 +14720,12 @@ Perl_coresub_op(pTHX_ SV * const coreargssv, const int code,
 	                          newOP(OP_CALLER,0)
 	               )
 	       );
+    case OP_EACH:
+    case OP_KEYS:
+    case OP_VALUES:
+	o = newUNOP(OP_AVHVSWITCH,0,argop);
+	o->op_private = opnum-OP_EACH;
+	return o;
     case OP_SELECT: /* which represents OP_SSELECT as well */
 	if (code)
 	    return newCONDOP(

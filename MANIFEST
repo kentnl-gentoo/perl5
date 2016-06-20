@@ -1089,6 +1089,8 @@ cpan/ExtUtils-MakeMaker/lib/ExtUtils/MY.pm			MakeMaker user override class
 cpan/ExtUtils-MakeMaker/lib/ExtUtils/testlib.pm			Fixes up @INC to use just-built extension
 cpan/ExtUtils-MakeMaker/t/00compile.t				See if MakeMaker modules compile
 cpan/ExtUtils-MakeMaker/t/01perl_bugs.t
+cpan/ExtUtils-MakeMaker/t/02-xsdynamic.t
+cpan/ExtUtils-MakeMaker/t/03-xsstatic.t
 cpan/ExtUtils-MakeMaker/t/arch_check.t				Test MakeMaker's arch_check()
 cpan/ExtUtils-MakeMaker/t/backwards.t				Check MakeMaker's backwards compatibility
 cpan/ExtUtils-MakeMaker/t/basic.t				See if MakeMaker can build a module
@@ -1111,12 +1113,6 @@ cpan/ExtUtils-MakeMaker/t/is_of_type.t				Test for ExtUtils::MakeMaker
 cpan/ExtUtils-MakeMaker/t/Liblist.t				See if ExtUtils::Liblist works
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/NoXS.pm		MakeMaker test utilities
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/BFD.pm	MakeMaker test utilities
-cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/MPV.pm	MakeMaker test utilities
-cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/PL_FILES.pm	MakeMaker test utilities
-cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/Problem.pm	MakeMaker test utilities
-cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/Recurs.pm	MakeMaker test utilities
-cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/SAS.pm	MakeMaker test utilities
-cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/Unicode.pm
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Setup/XS.pm	MakeMaker test utilities
 cpan/ExtUtils-MakeMaker/t/lib/MakeMaker/Test/Utils.pm		MakeMaker test utilities
 cpan/ExtUtils-MakeMaker/t/lib/TieIn.pm				Testing library for dummy input handles
@@ -1167,7 +1163,6 @@ cpan/ExtUtils-MakeMaker/t/VERSION_FROM.t			See if MakeMaker's VERSION_FROM works
 cpan/ExtUtils-MakeMaker/t/vstrings.t
 cpan/ExtUtils-MakeMaker/t/WriteEmptyMakefile.t			See if WriteEmptyMakefile works
 cpan/ExtUtils-MakeMaker/t/writemakefile_args.t			See if WriteMakefile works
-cpan/ExtUtils-MakeMaker/t/xs.t					Part of MakeMaker's test suite
 cpan/ExtUtils-Manifest/lib/ExtUtils/Manifest.pm			Utilities to write MANIFEST files
 cpan/ExtUtils-Manifest/lib/ExtUtils/MANIFEST.SKIP		The default MANIFEST.SKIP
 cpan/ExtUtils-Manifest/t/Manifest.t				See if ExtUtils::Manifest works
@@ -1243,6 +1238,7 @@ cpan/HTTP-Tiny/corpus/get-18.txt
 cpan/HTTP-Tiny/corpus/get-19.txt
 cpan/HTTP-Tiny/corpus/get-20.txt
 cpan/HTTP-Tiny/corpus/get-21.txt
+cpan/HTTP-Tiny/corpus/get-22.txt
 cpan/HTTP-Tiny/corpus/head-01.txt
 cpan/HTTP-Tiny/corpus/keepalive-01.txt
 cpan/HTTP-Tiny/corpus/keepalive-02.txt
@@ -1850,6 +1846,7 @@ cpan/Pod-Checker/t/pod/contains_bad_pod.xr
 cpan/Pod-Checker/t/pod/empty.xr
 cpan/Pod-Checker/t/pod/podchkenc.t
 cpan/Pod-Checker/t/pod/podchkenc.xr
+cpan/Pod-Checker/t/pod/podchklink.t
 cpan/Pod-Checker/t/pod/poderrs.t
 cpan/Pod-Checker/t/pod/poderrs.xr
 cpan/Pod-Checker/t/pod/selfcheck.t
@@ -2175,6 +2172,10 @@ cpan/Pod-Simple/t/xhtml-bkb.t
 cpan/Pod-Simple/t/x_nixer.t				Pod::Simple test file
 cpan/Pod-Usage/lib/Pod/Usage.pm
 cpan/Pod-Usage/scripts/pod2usage.PL
+cpan/Pod-Usage/t/inc/Pod/InputObjects.pm
+cpan/Pod-Usage/t/inc/Pod/Parser.pm
+cpan/Pod-Usage/t/inc/Pod/PlainText.pm
+cpan/Pod-Usage/t/inc/Pod/Select.pm
 cpan/Pod-Usage/t/pod/headwithmarkup.pl
 cpan/Pod-Usage/t/pod/headwithmarkup.t
 cpan/Pod-Usage/t/pod/p2u_data.pl
@@ -2471,6 +2472,7 @@ cpan/Test-Simple/lib/Test2/API/Stack.pm
 cpan/Test-Simple/lib/Test2/Event/Bail.pm
 cpan/Test-Simple/lib/Test2/Event/Diag.pm
 cpan/Test-Simple/lib/Test2/Event/Exception.pm
+cpan/Test-Simple/lib/Test2/Event/Generic.pm
 cpan/Test-Simple/lib/Test2/Event/Note.pm
 cpan/Test-Simple/lib/Test2/Event/Ok.pm
 cpan/Test-Simple/lib/Test2/Event/Plan.pm
@@ -2509,7 +2511,6 @@ cpan/Test-Simple/lib/Test/Tester/Delegate.pm
 cpan/Test-Simple/lib/Test/Tester.pm
 cpan/Test-Simple/lib/Test/Tutorial.pod
 cpan/Test-Simple/lib/Test/use/ok.pm
-cpan/Test-Simple/t/00compile.t
 cpan/Test-Simple/t/Legacy/00test_harness_check.t
 cpan/Test-Simple/t/Legacy/01-basic.t
 cpan/Test-Simple/t/Legacy/478-cmp_ok_hash.t
@@ -2660,6 +2661,7 @@ cpan/Test-Simple/t/lib/Test/Simple/sample_tests/too_few.plx
 cpan/Test-Simple/t/lib/Test/Simple/sample_tests/two_fail.plx
 cpan/Test-Simple/t/lib/TieOut.pm
 cpan/Test-Simple/t/regression/642_persistent_end.t
+cpan/Test-Simple/t/regression/662-tbt-no-plan.t
 cpan/Test-Simple/t/regression/no_name_in_subtest.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_done_testing.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_fork.t
@@ -2685,6 +2687,7 @@ cpan/Test-Simple/t/Test2/modules/API.t
 cpan/Test-Simple/t/Test2/modules/Event/Bail.t
 cpan/Test-Simple/t/Test2/modules/Event/Diag.t
 cpan/Test-Simple/t/Test2/modules/Event/Exception.t
+cpan/Test-Simple/t/Test2/modules/Event/Generic.t
 cpan/Test-Simple/t/Test2/modules/Event/Note.t
 cpan/Test-Simple/t/Test2/modules/Event/Ok.t
 cpan/Test-Simple/t/Test2/modules/Event/Plan.t
@@ -4740,6 +4743,7 @@ pod/perl5221delta.pod		Perl changes in version 5.22.1
 pod/perl5222delta.pod		Perl changes in version 5.22.2
 pod/perl5240delta.pod		Perl changes in version 5.24.0
 pod/perl5250delta.pod		Perl changes in version 5.25.0
+pod/perl5251delta.pod		Perl changes in version 5.25.1
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5628,6 +5632,7 @@ t/run/switcha.t			Test the -a switch
 t/run/switchC.t			Test the -C switch
 t/run/switchd-78586.t		See whether bug 78586 is fixed
 t/run/switchd.t			Test the -d switch
+t/run/switchDx.t		Test the -D switch
 t/run/switches.t		Tests for the other switches (-0, -l, -c, -s, -M, -m, -V, -v, -h, -z, -i)
 t/run/switchF1.t		Pathological tests for the -F switch
 t/run/switchF2.t		Pathological tests for the -F switch

@@ -1,14 +1,22 @@
 use strict;
 use warnings;
 
+use Test2::Util qw/CAN_THREAD/;
 BEGIN {
-    my $skip = !eval { require threads; 1 };
-    if ($skip) {
-        require Test::More;
-        Test::More::plan(skip_all => 'no threads');
+    unless(CAN_THREAD) {
+        print "1..0 # Skip threads are not supported.\n";
+        exit 0;
     }
 }
 
+BEGIN {
+    unless ( $ENV{AUTHOR_TESTING} ) {
+        print "1..0 # Skip many perls have broken threads.  Enable with AUTHOR_TESTING.\n";
+        exit 0;
+    }
+}
+
+use Test2::IPC;
 use threads;
 use Test::More;
 
