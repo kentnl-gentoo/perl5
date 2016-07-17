@@ -243,7 +243,7 @@ necessary, fix things up. For example, you might think that both blead
 and maint are synchronised with a particular CPAN module, but one might
 have some extra changes.
 
-=head3 How to sync a CPAN module with a cpan/ distro
+=head3 How to sync a CPAN module with a cpanE<sol> distro
 
 =over 4
 
@@ -278,7 +278,7 @@ into the repository anyway.
 =item *
 
 For any new files in the distro, determine whether they are needed.
-If not, delete them, and list them in either C<EXCLUDED> or C<@INGORE>.
+If not, delete them, and list them in either C<EXCLUDED> or C<@IGNORABLE>.
 Otherwise, add them to C<MANIFEST>, and run C<git add> to add the files
 to the repository.
 
@@ -373,6 +373,11 @@ For any release except a BLEAD-POINT: Examine the relevant analysis report(s)
 at http://analysis.cpantesters.org/beforemaintrelease to see how the impending
 release is performing compared to previous releases with regard to building
 and testing CPAN modules.
+
+That page accepts a query parameter, C<pair> that takes a pair of
+colon-delimited versions to use for comparison.  For example:
+
+http://analysis.cpantesters.org/beforemaintrelease?pair=5.20.2:5.22.0%20RC1
 
 =head3 update perldelta
 
@@ -1379,18 +1384,6 @@ Make sure any recent F<pod/perlhist.pod> entries are copied to
 F<perlhist.pod> on blead.  e.g.
 
     5.8.9         2008-Dec-14
-
-=head3 bump RT version number
-
-Log into http://rt.perl.org/ and check whether the new version is in the RT
-fields C<Perl Version> and C<Fixed In>. The easiest way to determine this is to
-open up any ticket for modification and check the drop downs next to the
-C<Perl Version> and C<Fixed In> labels.
-
-Here, try this link: L<https://rt.perl.org/Ticket/Modify.html?id=10000>
-
-If the new version is not listed there, send an email to C<perlbug-admin at
-perl.org> requesting this.
 
 =head3 Relax!
 
