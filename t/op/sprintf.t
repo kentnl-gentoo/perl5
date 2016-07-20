@@ -111,18 +111,37 @@ for (@tests) {
     if ($comment =~ s/\s+skip:\s*(.*)//) {
 	my $os  = $1;
 	my $osv = exists $Config{osvers} ? $Config{osvers} : "0";
+	my $archname = $Config{archname};
 	# >comment skip: all<
 	if ($os =~ /\ball\b/i) {
 	    $skip = 1;
-	# >comment skip: VMS hpux:10.20<
 	} elsif ($os =~ /\b$^O(?::(\S+))?\b/i) {
-	    my $vsn = defined $1 ? $1 : "0";
-	    # Only compare on the the first pair of digits, as numeric
-	    # compares do not like 2.6.10-3mdksmp or 2.6.8-24.10-default
-	    s/^(\d+(\.\d+)?).*/$1/ for $osv, $vsn;
-	    $skip = $vsn ? ($osv <= $vsn ? 1 : 0) : 1;
+            # We can have the $^O followed by an optional condition.
+            # The condition, if present, can be one of:
+            # (1) a regex between slashes...
+            #     tested as a regex against $Config{archname}
+            # (2) starts with a digit...
+            #     the first pair of dot-separated digits is
+            #     tested against $Config{osvers}
+            # (3) tested as literal string against $Config{archname}
+            my $cond = $1;
+            if ($cond =~ m{^/(.+)/$}) {
+                # >comment skip: solaris:/86/<
+                my $vsr = $1;
+                $skip = $archname =~ /$vsr/;
+            } elsif ($cond =~ /^\d/) {
+                # >comment skip: hpux:10.20<
+                my $vsn = $cond;
+                # Only compare on the the first pair of digits, as numeric
+                # compares do not like 2.6.10-3mdksmp or 2.6.8-24.10-default
+                s/^(\d+(\.\d+)?).*/$1/ for $osv, $vsn;
+                $skip = $vsn ? ($osv <= $vsn ? 1 : 0) : 1;
+            } else {
+                # >comment skip: netbsd:vax-netbsd<
+                $skip = $cond eq $archname;
+            }
 	}
-	$skip and $comment =~ s/$/, failure expected on $^O $osv/;
+	$skip and $comment =~ s/$/, failure expected on $^O $osv $archname/;
     }
 
     if ($x eq ">$result<") {
@@ -163,9 +182,11 @@ for (@tests) {
 #
 # Tests that are expected to fail on a certain OS can be marked as such
 # by trailing the comment with a skip: section. Skips are tags separated
-# bu space consisting of a $^O optionally trailed with :osvers. In the
-# latter case, all os-levels below that are expected to fail. A special
-# tag 'all' is allowed for todo tests that should fail on any system
+# by space consisting of a $^O optionally trailed with :osvers or :archname.
+# In the osvers case, all os-levels below that are expected to fail.
+# In the archname case, an exact match is expected, unless the archname
+# begins (and ends) with a "/", in which case a regexp is expected.
+# A special tag 'all' is allowed for todo tests that should fail on any system
 #
 # >%G<   >1234567e96<  >1.23457E+102<   >exponent too big skip: os390<
 # >%.0g< >-0.0<        >-0<             >No minus skip: MSWin32 VMS hpux:10.20<
@@ -420,7 +441,7 @@ __END__
 > %.0g<     >[]<          > 0 MISSING<
 >%.2g<      >[]<          >0 MISSING<
 >%.2gC<      >[]<          >0C MISSING<
->%.0g<      >-0.0<        >-0<		   >C99 standard mandates minus sign but C89 does not skip: MSWin32 VMS hpux:10.20 openbsd netbsd:1.5 irix darwin freebsd:4.9 android<
+>%.0g<      >-0.0<        >-0<		   >C99 standard mandates minus sign but C89 does not skip: MSWin32 VMS netbsd:vax-netbsd hpux:10.20 openbsd netbsd:1.5 irix darwin freebsd:4.9 android<
 >%.0g<      >12345.6789<  >1e+04<
 >%#.0g<     >12345.6789<  >1.e+04<
 >%.2g<      >12345.6789<  >1.2e+04<

@@ -2,9 +2,24 @@ package Module::CoreList;
 use strict;
 use vars qw/$VERSION %released %version %families %upstream
 	    %bug_tracker %deprecated %delta/;
-use Module::CoreList::TieHashDelta;
 use version;
-$VERSION = '5.20160620';
+$VERSION = '5.20160720';
+
+sub _undelta {
+    my ($delta) = @_;
+    my %expanded;
+    for my $version (sort { $a cmp $b } keys %$delta) {
+        my $data = $delta->{$version};
+        my $from = $data->{delta_from};
+        my %full = (
+            ( $from ? %{$expanded{$from}} : () ),
+            %{$data->{changed} || {}},
+        );
+        delete @full{ keys %{$data->{removed}} };
+        $expanded{$version} = \%full;
+    }
+    return %expanded;
+}
 
 sub _released_order {   # Sort helper, to make '?' sort after everything else
     (substr($released{$a}, 0, 1) eq "?")
@@ -296,6 +311,7 @@ sub changes_between {
     5.025000 => '2016-05-09',
     5.025001 => '2016-05-20',
     5.025002 => '2016-06-20',
+    5.025003 => '2016-07-20',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -12702,6 +12718,116 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         removed => {
         }
     },
+    5.025003 => {
+        delta_from => 5.025002,
+        changed => {
+            'B::Op_private'         => '5.025003',
+            'Config'                => '5.025003',
+            'Data::Dumper'          => '2.161',
+            'Devel::PPPort'         => '3.35',
+            'Encode'                => '2.84',
+            'Encode::MIME::Header'  => '2.23',
+            'Encode::MIME::Header::ISO_2022_JP'=> '1.07',
+            'ExtUtils::ParseXS'     => '3.33',
+            'ExtUtils::ParseXS::Constants'=> '3.33',
+            'ExtUtils::ParseXS::CountLines'=> '3.33',
+            'ExtUtils::ParseXS::Eval'=> '3.33',
+            'ExtUtils::ParseXS::Utilities'=> '3.33',
+            'ExtUtils::Typemaps'    => '3.33',
+            'ExtUtils::Typemaps::Cmd'=> '3.33',
+            'ExtUtils::Typemaps::InputMap'=> '3.33',
+            'ExtUtils::Typemaps::OutputMap'=> '3.33',
+            'ExtUtils::Typemaps::Type'=> '3.33',
+            'Hash::Util'            => '0.20',
+            'Math::BigFloat'        => '1.999726',
+            'Math::BigFloat::Trace' => '0.43',
+            'Math::BigInt'          => '1.999726',
+            'Math::BigInt::Calc'    => '1.999726',
+            'Math::BigInt::CalcEmu' => '1.999726',
+            'Math::BigInt::FastCalc'=> '0.42',
+            'Math::BigInt::Trace'   => '0.43',
+            'Math::BigRat'          => '0.260804',
+            'Module::CoreList'      => '5.20160720',
+            'Module::CoreList::TieHashDelta'=> '5.20160720',
+            'Module::CoreList::Utils'=> '5.20160720',
+            'Net::Cmd'              => '3.09',
+            'Net::Config'           => '3.09',
+            'Net::Domain'           => '3.09',
+            'Net::FTP'              => '3.09',
+            'Net::FTP::A'           => '3.09',
+            'Net::FTP::E'           => '3.09',
+            'Net::FTP::I'           => '3.09',
+            'Net::FTP::L'           => '3.09',
+            'Net::FTP::dataconn'    => '3.09',
+            'Net::NNTP'             => '3.09',
+            'Net::Netrc'            => '3.09',
+            'Net::POP3'             => '3.09',
+            'Net::SMTP'             => '3.09',
+            'Net::Time'             => '3.09',
+            'Parse::CPAN::Meta'     => '1.4422',
+            'Perl::OSType'          => '1.010',
+            'Test2'                 => '1.302045',
+            'Test2::API'            => '1.302045',
+            'Test2::API::Breakage'  => '1.302045',
+            'Test2::API::Context'   => '1.302045',
+            'Test2::API::Instance'  => '1.302045',
+            'Test2::API::Stack'     => '1.302045',
+            'Test2::Event'          => '1.302045',
+            'Test2::Event::Bail'    => '1.302045',
+            'Test2::Event::Diag'    => '1.302045',
+            'Test2::Event::Exception'=> '1.302045',
+            'Test2::Event::Generic' => '1.302045',
+            'Test2::Event::Info'    => '1.302045',
+            'Test2::Event::Note'    => '1.302045',
+            'Test2::Event::Ok'      => '1.302045',
+            'Test2::Event::Plan'    => '1.302045',
+            'Test2::Event::Skip'    => '1.302045',
+            'Test2::Event::Subtest' => '1.302045',
+            'Test2::Event::Waiting' => '1.302045',
+            'Test2::Formatter'      => '1.302045',
+            'Test2::Formatter::TAP' => '1.302045',
+            'Test2::Hub'            => '1.302045',
+            'Test2::Hub::Interceptor'=> '1.302045',
+            'Test2::Hub::Interceptor::Terminator'=> '1.302045',
+            'Test2::Hub::Subtest'   => '1.302045',
+            'Test2::IPC'            => '1.302045',
+            'Test2::IPC::Driver'    => '1.302045',
+            'Test2::IPC::Driver::Files'=> '1.302045',
+            'Test2::Util'           => '1.302045',
+            'Test2::Util::ExternalMeta'=> '1.302045',
+            'Test2::Util::HashBase' => '1.302045',
+            'Test2::Util::Trace'    => '1.302045',
+            'Test::Builder'         => '1.302045',
+            'Test::Builder::Formatter'=> '1.302045',
+            'Test::Builder::Module' => '1.302045',
+            'Test::Builder::Tester' => '1.302045',
+            'Test::Builder::Tester::Color'=> '1.302045',
+            'Test::Builder::TodoDiag'=> '1.302045',
+            'Test::More'            => '1.302045',
+            'Test::Simple'          => '1.302045',
+            'Test::Tester'          => '1.302045',
+            'Test::Tester::Capture' => '1.302045',
+            'Test::Tester::CaptureRunner'=> '1.302045',
+            'Test::Tester::Delegate'=> '1.302045',
+            'Test::use::ok'         => '1.302045',
+            'Time::HiRes'           => '1.9739',
+            'Unicode'               => '9.0.0',
+            'Unicode::UCD'          => '0.66',
+            'XSLoader'              => '0.22',
+            'bigint'                => '0.43',
+            'bignum'                => '0.43',
+            'bigrat'                => '0.43',
+            'encoding'              => '2.17_01',
+            'encoding::warnings'    => '0.13',
+            'feature'               => '1.45',
+            'ok'                    => '1.302045',
+            'version'               => '0.9917',
+            'version::regex'        => '0.9917',
+            'warnings'              => '1.37',
+        },
+        removed => {
+        }
+    },
 );
 
 sub is_core
@@ -12755,13 +12881,7 @@ sub is_core
     return $perl_version <= $final_release;
 }
 
-for my $version (sort { $a <=> $b } keys %delta) {
-    my $data = $delta{$version};
-
-    tie %{$version{$version}}, 'Module::CoreList::TieHashDelta',
-        $data->{changed}, $data->{removed},
-        $data->{delta_from} ? $version{$data->{delta_from}} : undef;
-}
+%version = _undelta(\%delta);
 
 %deprecated = (
     5.011    => {
@@ -13376,15 +13496,16 @@ for my $version (sort { $a <=> $b } keys %delta) {
         removed => {
         }
     },
+    5.025003 => {
+        delta_from => 5.025002,
+        changed => {
+        },
+        removed => {
+        }
+    },
 );
 
-for my $version (sort { $a <=> $b } keys %deprecated) {
-    my $data = $deprecated{$version};
-
-    tie %{ $deprecated{$version} }, 'Module::CoreList::TieHashDelta',
-        $data->{changed}, $data->{removed},
-        $data->{delta_from} ? $deprecated{ $data->{delta_from} } : undef;
-}
+%deprecated = _undelta(\%deprecated);
 
 %upstream = (
     'App::Cpan'             => 'cpan',
@@ -13749,6 +13870,7 @@ for my $version (sort { $a <=> $b } keys %deprecated) {
     'Test2::Event::Diag'    => 'cpan',
     'Test2::Event::Exception'=> 'cpan',
     'Test2::Event::Generic' => 'cpan',
+    'Test2::Event::Info'    => 'cpan',
     'Test2::Event::Note'    => 'cpan',
     'Test2::Event::Ok'      => 'cpan',
     'Test2::Event::Plan'    => 'cpan',
@@ -14185,6 +14307,7 @@ for my $version (sort { $a <=> $b } keys %deprecated) {
     'Test2::Event::Diag'    => 'http://github.com/Test-More/test-more/issues',
     'Test2::Event::Exception'=> 'http://github.com/Test-More/test-more/issues',
     'Test2::Event::Generic' => 'http://github.com/Test-More/test-more/issues',
+    'Test2::Event::Info'    => 'http://github.com/Test-More/test-more/issues',
     'Test2::Event::Note'    => 'http://github.com/Test-More/test-more/issues',
     'Test2::Event::Ok'      => 'http://github.com/Test-More/test-more/issues',
     'Test2::Event::Plan'    => 'http://github.com/Test-More/test-more/issues',

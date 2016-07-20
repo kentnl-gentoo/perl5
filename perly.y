@@ -47,7 +47,7 @@
 
 %token <ival> '{' '}' '[' ']' '-' '+' '@' '%' '&' '=' '.'
 
-%token <opval> WORD METHOD FUNCMETH THING PMFUNC PRIVATEREF QWLIST
+%token <opval> BAREWORD METHOD FUNCMETH THING PMFUNC PRIVATEREF QWLIST
 %token <opval> FUNC0OP FUNC0SUB UNIOPSUB LSTOPSUB
 %token <opval> PLUGEXPR PLUGSTMT
 %token <pval> LABEL
@@ -336,7 +336,7 @@ barestmt:	PLUGSTMT
 			  intro_my();
 			  parser->parsed_sub = 1;
 			}
-	|	PACKAGE WORD WORD ';'
+	|	PACKAGE BAREWORD BAREWORD ';'
 			{
 			  package($3);
 			  if ($2)
@@ -345,7 +345,7 @@ barestmt:	PLUGSTMT
 			}
 	|	USE startsub
 			{ CvSPECIAL_on(PL_compcv); /* It's a BEGIN {} */ }
-		WORD WORD optlistexpr ';'
+		BAREWORD BAREWORD optlistexpr ';'
 			{
 			  SvREFCNT_inc_simple_void(PL_compcv);
 			  utilize($1, $2, $4, $5, $6);
@@ -418,18 +418,18 @@ barestmt:	PLUGSTMT
 				      op_lvalue($2, OP_ENTERLOOP), $5, $7, $8));
 			  parser->copline = (line_t)$1;
 			}
-	|	FOR REFGEN MY remember my_var
-			{ parser->in_my = 0; $<opval>$ = my($5); }
+	|	FOR my_refgen remember my_var
+			{ parser->in_my = 0; $<opval>$ = my($4); }
 		'(' mexpr ')' mblock cont
 			{
 			  $$ = block_end(
-				$4,
+				$3,
 				newFOROP(0,
 					 op_lvalue(
 					    newUNOP(OP_REFGEN, 0,
-						    $<opval>6),
+						    $<opval>5),
 					    OP_ENTERLOOP),
-					 $8, $10, $11)
+					 $7, $9, $10)
 			  );
 			  parser->copline = (line_t)$1;
 			}
@@ -453,7 +453,7 @@ barestmt:	PLUGSTMT
 			  $$ = newWHILEOP(0, 1, (LOOP*)(OP*)NULL,
 				  (OP*)NULL, $1, $2, 0);
 			}
-	|	PACKAGE WORD WORD '{' remember
+	|	PACKAGE BAREWORD BAREWORD '{' remember
 			{
 			  package($3);
 			  if ($2) {
@@ -581,7 +581,7 @@ mnexpr	:	nexpr
 			{ $$ = $1; intro_my(); }
 	;
 
-formname:	WORD		{ $$ = $1; }
+formname:	BAREWORD	{ $$ = $1; }
 	|	/* NULL */	{ $$ = (OP*)NULL; }
 	;
 
@@ -602,7 +602,7 @@ startformsub:	/* NULL */	/* start a format subroutine scope */
 	;
 
 /* Name of a subroutine - must be a bareword, could be special */
-subname	:	WORD
+subname	:	BAREWORD
 	|	PRIVATEREF
 	;
 
@@ -886,6 +886,8 @@ term	:	termbinop
 			{ $$ = newCONDOP(0, $1, $3, $5); }
 	|	REFGEN term                          /* \$x, \@y, \%z */
 			{ $$ = newUNOP(OP_REFGEN, 0, $2); }
+	|	MY REFGEN term
+			{ $$ = newUNOP(OP_REFGEN, 0, localize($3,1)); }
 	|	myattrterm	%prec UNIOP
 			{ $$ = $1; }
 	|	LOCAL term	%prec UNIOP
@@ -1026,7 +1028,7 @@ term	:	termbinop
 			}
 		    '(' listexpr optrepl ')'
 			{ $$ = pmruntime($1, $4, $5, 1, $<ival>2); }
-	|	WORD
+	|	BAREWORD
 	|	listop
 	|	YADAYADA
 			{
@@ -1041,6 +1043,8 @@ myattrterm:	MY myterm myattrlist
 			{ $$ = my_attrs($2,$3); }
 	|	MY myterm
 			{ $$ = localize($2,1); }
+	|	MY REFGEN myterm myattrlist
+			{ $$ = newUNOP(OP_REFGEN, 0, my_attrs($3,$4)); }
 	;
 
 /* Things that can be "my"'d */
@@ -1091,6 +1095,10 @@ refgen_topic:	my_var
 	|	amper
 	;
 
+my_refgen:	MY REFGEN
+	|	REFGEN MY
+	;
+
 amper	:	'&' indirob
 			{ $$ = newCVREF($1,$2); }
 	;
@@ -1137,7 +1145,7 @@ gelem	:	star
 	;
 
 /* Indirect objects */
-indirob	:	WORD
+indirob	:	BAREWORD
 			{ $$ = scalar($1); }
 	|	scalar %prec PREC_LOW
 			{ $$ = scalar($1); }

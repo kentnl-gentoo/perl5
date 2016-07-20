@@ -2,87 +2,66 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.25.2
+perldelta - what is new for perl v5.25.3
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.25.1 release and the 5.25.2
+This document describes differences between the 5.25.2 release and the 5.25.3
 release.
 
-If you are upgrading from an earlier release such as 5.25.0, first read
-L<perl5251delta>, which describes differences between 5.25.0 and 5.25.1.
+If you are upgrading from an earlier release such as 5.25.1, first read
+L<perl5252delta>, which describes differences between 5.25.1 and 5.25.2.
 
 =head1 Core Enhancements
 
-=head2 Perl can now do default collation in UTF-8 locales on platforms
-that support it
+=head2 Unicode 9.0 is now supported
 
-Some platforms natively do a reasonable job of collating and sorting in
-UTF-8 locales.  Perl now works with those.  For portability and full
-control, L<Unicode::Collate> is still recommended, but now you may
-not need to do anything special to get good-enough results, depending on
-your application.  See
-L<perllocale/Category C<LC_COLLATE>: Collation: Text Comparisons and Sorting>.
+A list of changes is at L<http://www.unicode.org/versions/Unicode9.0.0/>.
+Modules that are shipped with core Perl but not maintained by p5p do not
+necessarily support Unicode 9.0.  L<Unicode::Normalize> does work on 9.0.
 
-=head2 Better locale collation of strings containing embedded C<NUL>
-characters
+=head2 Use of C<\p{I<script>}> uses the improved Script_Extensions property
 
-In locales that have multi-level character weights, these are now
-ignored at the higher priority ones.  There are still some gotchas in
-some strings, though.  See
-L<perllocale/Collation of strings containing embedded C<NUL> characters>.
+Unicode 6.0 introduced an improved form of the Script (C<sc>) property, and
+called it Script_Extensions (C<scx>).  As of now, Perl uses this improved
+version when a property is specified as just C<\p{I<script>}>.  The meaning of
+compound forms, like C<\p{sc=I<script>}> are unchanged.  This should make
+programs be more accurate when determining if a character is used in a given
+script, but there is a slight chance of breakage for programs that very
+specifically needed the old behavior.  See L<perlunicode/Scripts>.
 
-=head2 Lexical subroutines are no longer experimental
+=head2 Declaring a reference to a variable
 
-Using the C<lexical_subs> feature no longer emits a warning.  Existing code that disables the C<experimental::lexical_subs> warning category that the
-feature previously used will continue to work.  The C<lexical_subs> feature
-has no effect; all Perl code can use lexical subroutines, regardless of
-what feature declarations are in scope.
+As an experimental feature, Perl now allows the referencing operator to come
+after L<C<my()>|perlfunc/my>, L<C<state()>|perlfunc/state>,
+L<C<our()>|perlfunc/our>, or L<C<local()>|perlfunc/local>.  This syntax must
+be enabled with C<use feature 'declared_refs'>.  It is experimental, and will
+warn by default unless C<no warnings 'experimental::refaliasing'> is in effect.
+It is intended mainly for use in assignments to references.  For example:
 
-=head2 C<CORE> subroutines for hash and array functions callable via
-reference
+    use experimental 'refaliasing', 'declared_refs';
+    my \$a = \$b;
 
-The hash and array functions in the C<CORE> namespace--C<keys>, C<each>,
-C<values>, C<push>, C<pop>, C<shift>, C<unshift> and C<splice>--, can now
-be called with ampersand syntax (C<&CORE::keys(\%hash>) and via reference
-(C<< my $k = \&CORE::keys; $k->(\%hash) >>).  Previously they could only be
-used when inlined.
-
-=head1 Security
-
-=head2 C<-Di> switch is now required for PerlIO debugging output
-
-Previously PerlIO debugging output would be sent to the file specified
-by the C<PERLIO_DEBUG> environment variable if perl wasn't running
-setuid and the C<-T> or C<-t> switches hadn't been parsed yet.
-
-If perl performed output at a point where it hadn't yet parsed its
-switches this could result in perl creating or overwriting the file
-named by C<PERLIO_DEBUG> even when the C<-T> switch had been supplied.
-
-Perl now requires the C<-Di> switch to produce PerlIO debugging
-output.  By default this is written to C<stderr>, but can optionally
-be redirected to a file by setting the C<PERLIO_DEBUG> environment
-variable.
-
-If perl is running setuid or the C<-T> switch has supplied
-C<PERLIO_DEBUG> is ignored and the debugging output is sent to
-C<stderr> as for any other C<-D> switch.
+See L<perlref/Assigning to References> for slightly more detail.
 
 =head1 Incompatible Changes
 
-=head2 C<keys> returned from an lvalue subroutine
+=head2 C<${^ENCODING}> has been removed
 
-C<keys> returned from an lvalue subroutine can no longer be assigned
-to in list context.
+Consequently, the L<encoding> pragma's default mode is no longer supported.  If
+you still need to write your source code in encodings other than UTF-8, use a
+source filter such as L<Filter::Encoding> on CPAN or L<encoding>'s C<Filter>
+option.
 
-    sub foo : lvalue { keys(%INC) }
-    (foo) = 3; # death
-    sub bar : lvalue { keys(@_) }
-    (bar) = 3; # also an error
+=head2 C<scalar(%hash)> return signature changed
 
-This makes the lvalue sub case consistent with C<(keys %hash) = ...> and
-C<(keys @_) = ...>, which are also errors.  [perl #128187]
+The value returned for C<scalar(%hash)> will no longer show information about
+the buckets allocated in the hash.  It will simply return the count of used
+keys.  It is thus equivalent to C<0+keys(%hash)>.
+
+A form of backwards compatibility is provided via C<Hash::Util::bucket_ratio()>
+which provides the same behavior as C<scalar(%hash)> provided prior to Perl
+5.25.
 
 =head1 Modules and Pragmata
 
@@ -92,119 +71,99 @@ C<(keys @_) = ...>, which are also errors.  [perl #128187]
 
 =item *
 
-L<CPAN> has been upgraded from version 2.11 to 2.14.
+L<bignum> has been upgraded from version 0.42 to 0.43.
 
 =item *
 
-L<Devel::Peek> has been upgraded from version 1.23 to 1.24.
+L<Data::Dumper> has been upgraded from version 2.160 to 2.161.
 
 =item *
 
-L<diagnostics> has been upgraded from version 1.34 to 1.35.
+L<Devel::PPPort> has been upgraded from version 3.32 to 3.35.
 
 =item *
 
-L<DynaLoader> has been upgraded from version 1.38 to 1.39.
+L<Encode> has been upgraded from version 2.80 to 2.84.
 
 =item *
 
-L<ExtUtils::MakeMaker> has been upgraded from version 7.10_01 to 7.18.
+L<encoding> has been upgraded from version 2.17 to 2.17_01.
+
+This module's default mode is no longer supported as of Perl 5.25.3.  It now
+dies when imported, unless the C<Filter> option is being used.
 
 =item *
 
-L<ExtUtils::Miniperl> has been upgraded from version 1.05 to 1.06.
+L<encoding::warnings> has been upgraded from version 0.12 to 0.13.
+
+This module is no longer supported as of Perl 5.25.3.  It emits a warning to
+that effect and then does nothing.
 
 =item *
 
-L<ExtUtils::ParseXS> has been upgraded from version 3.31 to 3.32.
+L<ExtUtils::ParseXS> has been upgraded from version 3.32 to 3.33.
 
 =item *
 
-L<ExtUtils::Typemaps> has been upgraded from version 3.31 to 3.32.
+L<ExtUtils::Typemaps> has been upgraded from version 3.32 to 3.33.
 
 =item *
 
-L<feature> has been upgraded from version 1.43 to 1.44.
+L<feature> has been upgraded from version 1.44 to 1.45.
 
 =item *
 
-L<File::Copy> has been upgraded from version 2.31 to 2.32.
+L<Hash::Util> has been upgraded from version 0.19 to 0.20.
 
 =item *
 
-L<File::Glob> has been upgraded from version 1.26 to 1.27.
+L<Math::BigInt> has been upgraded from version 1.999715 to 1.999726.
 
 =item *
 
-L<File::Spec> has been upgraded from version 3.63 to 3.64.
+L<Math::BigInt::FastCalc> has been upgraded from version 0.40 to 0.42.
 
 =item *
 
-L<FileHandle> has been upgraded from version 2.02 to 2.03.
+L<Math::BigRat> has been upgraded from version 0.260802 to 0.260804.
 
 =item *
 
-L<Getopt::Long> has been upgraded from version 2.48 to 2.49.
+L<Module::CoreList> has been upgraded from version 5.20160620 to 5.20160720.
 
 =item *
 
-L<HTTP::Tiny> has been upgraded from version 0.056 to 0.058.
+L<Parse::CPAN::Meta> has been upgraded from version 1.4417 to 1.4422.
 
 =item *
 
-L<JSON::PP> has been upgraded from version 2.27300 to 2.27400.
+L<Perl::OSType> has been upgraded from version 1.009 to 1.010.
 
 =item *
 
-L<Locale::Codes> has been upgraded from version 3.38 to 3.39.
+L<Test::Simple> has been upgraded from version 1.302026 to 1.302045.
 
 =item *
 
-L<Module::CoreList> has been upgraded from 5.20160520 to 5.20160620.
+L<Time::HiRes> has been upgraded from version 1.9734 to 1.9739.
 
 =item *
 
-L<Opcode> has been upgraded from version 1.34 to 1.35.
+L<Unicode::UCD> has been upgraded from version 0.65 to 0.66.
 
 =item *
 
-L<Pod::Checker> has been upgraded from version 1.60 to 1.73.
+L<version> has been upgraded from version 0.9916 to 0.9917.
 
 =item *
 
-L<Pod::Functions> has been upgraded from version 1.10 to 1.11.
+L<warnings> has been upgraded from version 1.36 to 1.37.
 
 =item *
 
-L<Pod::Usage> has been upgraded from version 1.68 to 1.69.
-
-=item *
-
-L<POSIX> has been upgraded from version 1.69 to 1.70.
-
-=item *
-
-L<Test::Simple> has been upgraded from version 1.302015 to 1.302026.
-
-=item *
-
-L<Thread::Queue> has been upgraded from version 3.09 to 3.11.
-
-=item *
-
-L<threads> has been upgraded from version 2.08 to 2.09.
-
-=item *
-
-L<Time::HiRes> has been upgraded from version 1.9733 to 1.9734.
-
-=item *
-
-L<Unicode::UCD> has been upgraded from version 0.64 to 0.65.
-
-=item *
-
-L<VMS::DCLsym> has been upgraded from version 1.06 to 1.07.
+L<XSLoader> has been upgraded from version 0.21 to 0.22, fixing a security hole
+in which binary files could be loaded from a path outside of
+L<C<@INC>|perlvar/@INC>.
 
 =back
 
@@ -212,67 +171,68 @@ L<VMS::DCLsym> has been upgraded from version 1.06 to 1.07.
 
 =head2 Changes to Existing Documentation
 
-=head3 L<perlcommunity>
+=head3 L<perldata> and L<perltie>
 
 =over 4
 
 =item *
 
-All references to Usenet have been removed.
+Updated documentation of C<scalar(%hash)>.  See L</scalar(%hash) return
+signature changed> above.
 
 =back
 
-=head3 L<perldelta>
+=head3 L<perlexperiment> and L<perlref>
 
 =over 4
 
 =item *
 
-All references to Usenet have been removed.
+Documented new feature: See L</Declaring a reference to a variable> above.
 
 =back
 
-=head3 L<perllocale>
+=head3 L<perlfunc>
 
 =over 4
 
 =item *
 
-Document NUL collation handling.
+Clarified documentation of L<C<seek()>|perlfunc/seek>,
+L<C<tell()>|perlfunc/tell> and L<C<sysseek()>|perlfunc/sysseek>.
+L<[perl #128607]|https://rt.perl.org/Public/Bug/Display.html?id=128607>
+
+=item *
+
+Removed obsolete documentation of L<C<study()>|perlfunc/study>.
 
 =back
 
-=head3 L<perlmodinstall>
+=head3 L<perlunicode>
 
 =over 4
 
 =item *
 
-All references to Usenet have been removed.
+Documented change to C<\p{I<script>}> to now use the improved Script_Extensions
+property.  See L</Use of \p{script} uses the improved Script_Extensions
+property> above.
+
+=item *
+
+Updated the text to correspond with changes in Unicode UTS#18, concerning
+regular expressions, and Perl compatibility with what it says.
 
 =back
 
-=head3 L<perlmodlib>
+=head3 L<perlvar>
 
 =over 4
 
 =item *
 
-Updated the mirror list.
-
-=item *
-
-All references to Usenet have been removed.
-
-=back
-
-=head3 L<perlnewmod>
-
-=over 4
-
-=item *
-
-All references to Usenet have been removed.
+Removed obsolete documentation of C<${^ENCODING}>.  See L</${^ENCODING} has
+been removed> above.
 
 =back
 
@@ -290,54 +250,40 @@ diagnostic messages, see L<perldiag>.
 
 =item *
 
-L<Version control conflict marker|perldiag/"Version control conflict marker">
+L<The experimental declared_refs feature is not enabled|perldiag/"The experimental declared_refs feature is not enabled">
 
-(F) The parser found a line starting with C<E<lt><<<<<<>,
-C<E<gt>E<gt>E<gt>E<gt>E<gt>E<gt>E<gt>>, or C<=======>. These may be left by a
-version control system to mark conflicts after a failed merge operation.
+(F) To declare references to variables, as in C<my \%x>, you must first enable
+the feature:
 
-=item *
-
-L<%s: command not found|perldiag/"%s: command not found">
-
-(A) You've accidentally run your script through B<bash> or another shell
-instead of Perl.  Check the #! line, or manually feed your script into
-Perl yourself.  The #! line at the top of your file could look like:
-
-  #!/usr/bin/perl
-
-=item *
-
-L<%s: command not found: %s|perldiag/"%s: command not found: %s">
-
-(A) You've accidentally run your script through B<zsh> or another shell
-instead of Perl.  Check the #! line, or manually feed your script into
-Perl yourself.  The #! line at the top of your file could look like:
-
-  #!/usr/bin/perl
-
-=item *
-
-L<Unescaped left brace in regex is deprecated here, passed through in regex; marked by S<<-- HERE> in mE<sol>%sE<sol>|perldiag/"Unescaped left brace in regex is deprecated here, passed through in regex; marked by S<<-- HERE> in m/%s/">
-
-Unescaped left braces are already illegal in some contexts in regular
-expression patterns, but, due to an oversight, no deprecation warning
-was raised in other contexts where they are intended to become illegal.
-This warning is now raised in these contexts.
+    no warnings "experimental::declared_refs";
+    use feature "declared_refs";
 
 =back
 
-=head2 Changes to Existing Diagnostics
+=head3 New Warnings
 
 =over 4
 
 =item *
 
-L<Unescaped left brace in regex is illegal here in regex; marked by S<<-- HERE> in mE<sol>%sE<sol>|perldiag/"Unescaped left brace in regex is illegal here in regex; marked by S<<-- HERE> in m/%s/">
+L<Declaring references is experimental|perldiag/"Declaring references is experimental">
 
-The word "here" has been added to the message that was raised in
-v5.25.1.  This is to indicate that there are contexts in which unescaped
-left braces are not (yet) illegal.
+(S experimental::declared_refs) This warning is emitted if you use a reference
+constructor on the right-hand side of C<my()>, C<state()>, C<our()>, or
+C<local()>.  Simply suppress the warning if you want to use the feature, but
+know that in doing so you are taking the risk of using an experimental feature
+which may change or be removed in a future Perl version:
+
+    no warnings "experimental::declared_refs";
+    use feature "declared_refs";
+    $fooref = my \$foo;
+
+=item *
+
+L<C<${^ENCODING}> is no longer supported|perldiag/"${^ENCODING} is no longer supported">
+
+(D deprecated) The special variable C<${^ENCODING}>, formerly used to implement
+the C<encoding> pragma, is no longer supported as of Perl 5.26.0.
 
 =back
 
@@ -347,15 +293,20 @@ left braces are not (yet) illegal.
 
 =item *
 
-F<make_ext.pl> no longer updates a module's F<pm_to_blib> file when no
-files require updates.  This could cause dependencies, F<perlmain.c>
-in particular, to be rebuilt unnecessarily.  [perl #126710]
+F<Configure> now aborts if both "-Duselongdouble" and "-Dusequadmath" are
+requested.
+L<[perl #126203]|https://rt.perl.org/Public/Bug/Display.html?id=126203>
 
 =item *
 
-The output of C<perl -V> has been reformatted so that each configuration
-and compile-time option is now listed one per line, to improve
-readability.
+Fixed a bug in which F<Configure> could append "-quadmath" to the archname even
+if it was already present.
+L<[perl #128538]|https://rt.perl.org/Public/Bug/Display.html?id=128538>
+
+=item *
+
+Clang builds with "-DPERL_GLOBAL_STRUCT" or "-DPERL_GLOBAL_STRUCT_PRIVATE" have
+been fixed (by disabling Thread Safety Analysis for these configurations).
 
 =back
 
@@ -365,19 +316,25 @@ readability.
 
 =item *
 
-F<t/harness> now tries really hard not to run tests outside of the Perl
-source tree. [perl #124050]
-
-=back
-
-=head1 Internal Changes
-
-=over 4
+A new test script, F<t/op/decl-refs.t>, has been added to test the new feature,
+"Declaring a reference to a variable".
 
 =item *
 
-Perl no longer panics when switching into some locales on machines with
-buggy C<strxfrm()> implementations in their libc. [perl #121734]
+A new test script, F<t/re/anyof.t>, has been added to test that the ANYOF nodes
+generated by bracketed character classes are as expected.
+
+=back
+
+=head1 Platform Support
+
+=head2 Platform-Specific Notes
+
+=over 4
+
+=item VAX
+
+VAX floating point formats are now supported.
 
 =back
 
@@ -387,66 +344,119 @@ buggy C<strxfrm()> implementations in their libc. [perl #121734]
 
 =item *
 
-C< until ($x = 1) { ... } > and C< ... until $x = 1 > now properly
-warn when syntax warnings are enabled.  [perl #127333]
+An assertion failure with C<%: = 0> has been fixed.
+L<[perl #128238]|https://rt.perl.org/Public/Bug/Display.html?id=128238>
 
 =item *
 
-socket() now leaves the error code returned by the system in C<$!> on
-failure.  [perl #128316]
+In Perl 5.18, the parsing of C<"$foo::$bar"> was accidentally changed, such
+that it would be treated as C<$foo."::".$bar>.  The previous behavior, which
+was to parse it as C<$foo:: . $bar>, has been restored.
+L<[perl #128478]|https://rt.perl.org/Public/Bug/Display.html?id=128478>
 
 =item *
 
-Assignment variants of any bitwise ops under the C<bitwise> feature would
-crash if the left-hand side was an array or hash.  [perl #128204]
+Since Perl 5.20, line numbers have been off by one when perl is invoked with
+the B<-x> switch.  This has been fixed.
+L<[perl #128508]|https://rt.perl.org/Public/Bug/Display.html?id=128508>
 
 =item *
 
-C<require> followed by a single colon (as in C<foo() ? require : ...> is
-now parsed correctly as C<require> with implicit $_, rather than
-C<require "">.  [perl #128307]
+Vivifying a subroutine stub in a deleted stash (e.g., C<delete $My::{"Foo::"};
+\&My::Foo::foo>) no longer crashes.  It had begun crashing in Perl 5.18.
+L<[perl #128532]|https://rt.perl.org/Public/Bug/Display.html?id=128532>
 
 =item *
 
-Scalar C<keys %hash> can now be assigned to consistently in all scalar
-lvalue contexts.  Previously it worked for some contexts but not others.
+Some obscure cases of subroutines and file handles being freed at the same time
+could result in crashes, but have been fixed.  The crash was introduced in Perl
+5.22.
+L<[perl #128597]|https://rt.perl.org/Public/Bug/Display.html?id=128597>
 
 =item *
 
-List assignment to C<vec> or C<substr> with an array or hash for its first
-argument used to result in crashes or "Can't coerce" error messages at run
-time, unlike scalar assignment, which would give an error at compile time.
-List assignment now gives a compile-time error, too.  [perl #128260]
+Code that looks for a variable name associated with an uninitialized value
+could cause an assertion in cases where magic is involved, such as
+C<$ISA[0][0]>.  This has now been fixed.
+L<[perl #128253]|https://rt.perl.org/Public/Bug/Display.html?id=128253>
+
+=item *
+
+A crash caused by code generating the warning "Subroutine STASH::NAME
+redefined" in cases such as C<sub P::f{} undef *P::; *P::f =sub{};> has been
+fixed.  In these cases, where the STASH is missing, the warning will now appear
+as "Subroutine NAME redefined".
+L<[perl #128257]|https://rt.perl.org/Public/Bug/Display.html?id=128257>
+
+=item *
+
+Fixed an assertion triggered by some code that handles deprecated behavior in
+formats, e.g. in cases like this:
+
+    format STDOUT =
+    @
+    0"$x"
+
+L<[perl #128255]|https://rt.perl.org/Public/Bug/Display.html?id=128255>
+
+=item *
+
+A possible divide by zero in string transformation code on Windows has been
+avoided, fixing a crash when collating an empty string.
+L<[perl #128618]|https://rt.perl.org/Public/Bug/Display.html?id=128618>
+
+=item *
+
+Some regular expression parsing glitches could lead to assertion failures with
+regular expressions such as C</(?<=/> and C</(?<!/>.  This has now been fixed.
+L<[perl #128170]|https://rt.perl.org/Public/Bug/Display.html?id=128170>
+
+=back
+
+=head1 Errata From Previous Releases
+
+=over 4
+
+=item *
+
+Parsing bad POSIX charclasses no longer leaks memory.  This was fixed in Perl
+5.25.2
+L<[perl #128313]|https://rt.perl.org/Public/Bug/Display.html?id=128313>
+
+=item *
+
+Fixed issues with recursive regexes.  The behavior was fixed in Perl 5.24.0.
+L<[perl #126182]|https://rt.perl.org/Public/Bug/Display.html?id=126182>
 
 =back
 
 =head1 Acknowledgements
 
-Perl 5.25.2 represents approximately 4 weeks of development since Perl 5.25.1
-and contains approximately 32,000 lines of changes across 430 files from 28
+Perl 5.25.3 represents approximately 4 weeks of development since Perl 5.25.2
+and contains approximately 67,000 lines of changes across 510 files from 25
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 27,000 lines of changes to 300 .pm, .t, .c and .h files.
+approximately 40,000 lines of changes to 290 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
-of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.25.2:
+of users and developers.  The following people are known to have contributed
+the improvements that became Perl 5.25.3:
 
-Aaron Crane, Andreas König, Andy Lester, Chad Granum, Chase Whitener, Chris
-'BinGOs' Williams, Craig A. Berry, Dagfinn Ilmari Mannsåker, Dan Collins,
-David Mitchell, Dominic Hargreaves, Ed Avis, Father Chrysostomos, H.Merijn
-Brand, Ivan Pozdeev, James E Keenan, Jarkko Hietaniemi, Jerry D. Hedden, Jim
-Cromie, Karl Williamson, Lukas Mai, Matthew Horsfall, Misty De Meo, Samuel
-Thibault, Sawyer X, Sullivan Beck, Tony Cook, Yves Orton.
+Aaron Crane, Ævar Arnfjörð Bjarmason, Alex Vandiver, Aristotle Pagaltzis,
+Chad Granum, Chris 'BinGOs' Williams, Chris Lamb, Craig A. Berry, Dan Collins,
+David Mitchell, Father Chrysostomos, H.Merijn Brand, Jarkko Hietaniemi, Karl
+Williamson, Lukas Mai, Matthew Horsfall, Salvador Fandiño, Sawyer X,
+Sébastien Aperghis-Tramoni, Steffen Müller, Steve Hay, Todd Rinaldo, Tony
+Cook, Unicode Consortium, Yves Orton.
 
 The list above is almost certainly incomplete as it is automatically generated
-from version control history. In particular, it does not include the names of
+from version control history.  In particular, it does not include the names of
 the (very much appreciated) contributors who reported issues to the Perl bug
 tracker.
 
 Many of the changes included in this version originated in the CPAN modules
-included in Perl's core. We're grateful to the entire CPAN community for
+included in Perl's core.  We're grateful to the entire CPAN community for
 helping Perl to flourish.
 
 For a more complete list of all of Perl's historical contributors, please see
@@ -454,8 +464,8 @@ the F<AUTHORS> file in the Perl source distribution.
 
 =head1 Reporting Bugs
 
-If you find what you think is a bug, you might check the perl bug database
-at L<https://rt.perl.org/> .  There may also be information at
+If you find what you think is a bug, you might check the perl bug database at
+L<https://rt.perl.org/> .  There may also be information at
 L<http://www.perl.org/> , the Perl Home Page.
 
 If you believe you have an unreported bug, please run the L<perlbug> program
@@ -465,8 +475,8 @@ will be sent off to perlbug@perl.org to be analysed by the Perl porting team.
 
 If the bug you are reporting has security implications which make it
 inappropriate to send to a publicly archived mailing list, then see
-L<perlsec/SECURITY VULNERABILITY CONTACT INFORMATION>
-for details of how to report the issue.
+L<perlsec/SECURITY VULNERABILITY CONTACT INFORMATION> for details of how to
+report the issue.
 
 =head1 SEE ALSO
 

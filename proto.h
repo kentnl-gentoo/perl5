@@ -42,9 +42,6 @@ PERL_CALLCONV void*	Perl_Slab_Alloc(pTHX_ size_t sz)
 PERL_CALLCONV void	Perl_Slab_Free(pTHX_ void *op);
 #define PERL_ARGS_ASSERT_SLAB_FREE	\
 	assert(op)
-PERL_CALLCONV SV*	Perl__get_encoding(pTHX)
-			__attribute__pure__;
-
 PERL_CALLCONV bool	Perl__is_in_locale_category(pTHX_ const bool compiling, const int category);
 PERL_CALLCONV bool	Perl__is_uni_FOO(pTHX_ const U8 classnum, const UV c)
 			__attribute__warn_unused_result__;
@@ -1117,6 +1114,11 @@ PERL_CALLCONV void	Perl_gv_try_downgrade(pTHX_ GV* gv);
 PERL_CALLCONV AV**	Perl_hv_backreferences_p(pTHX_ HV *hv);
 #define PERL_ARGS_ASSERT_HV_BACKREFERENCES_P	\
 	assert(hv)
+PERL_CALLCONV SV*	Perl_hv_bucket_ratio(pTHX_ HV *hv)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_HV_BUCKET_RATIO	\
+	assert(hv)
+
 PERL_CALLCONV void	Perl_hv_clear(pTHX_ HV *hv);
 PERL_CALLCONV void	Perl_hv_clear_placeholders(pTHX_ HV *hv);
 #define PERL_ARGS_ASSERT_HV_CLEAR_PLACEHOLDERS	\
@@ -3797,6 +3799,9 @@ STATIC PerlIO *	S_doopen_pm(pTHX_ SV *name)
 #endif
 #if !defined(PERL_EXT_RE_BUILD)
 #  if defined(PERL_IN_REGCOMP_C)
+STATIC void	S__append_range_to_invlist(pTHX_ SV* const invlist, const UV start, const UV end);
+#define PERL_ARGS_ASSERT__APPEND_RANGE_TO_INVLIST	\
+	assert(invlist)
 PERL_STATIC_INLINE IV*	S_get_invlist_previous_index_addr(SV* invlist)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_GET_INVLIST_PREVIOUS_INDEX_ADDR	\
@@ -3804,6 +3809,9 @@ PERL_STATIC_INLINE IV*	S_get_invlist_previous_index_addr(SV* invlist)
 
 PERL_STATIC_INLINE void	S_invlist_clear(pTHX_ SV* invlist);
 #define PERL_ARGS_ASSERT_INVLIST_CLEAR	\
+	assert(invlist)
+STATIC void	S_invlist_extend(pTHX_ SV* const invlist, const UV len);
+#define PERL_ARGS_ASSERT_INVLIST_EXTEND	\
 	assert(invlist)
 PERL_STATIC_INLINE IV	S_invlist_previous_index(SV* const invlist)
 			__attribute__warn_unused_result__;
@@ -3977,7 +3985,7 @@ STATIC void	S_dump_trie_interim_table(pTHX_ const struct _reg_trie_data *trie, H
 STATIC const regnode*	S_dumpuntil(pTHX_ const regexp *r, const regnode *start, const regnode *node, const regnode *last, const regnode *plast, SV* sv, I32 indent, U32 depth);
 #define PERL_ARGS_ASSERT_DUMPUNTIL	\
 	assert(r); assert(start); assert(node); assert(sv)
-STATIC bool	S_put_charclass_bitmap_innards(pTHX_ SV* sv, char* bitmap, SV* nonbitmap_invlist, SV* only_utf8_locale_invlist, const regnode * const node);
+STATIC bool	S_put_charclass_bitmap_innards(pTHX_ SV* sv, char* bitmap, SV* nonbitmap_invlist, SV* only_utf8_locale_invlist, const regnode * const node, const bool force_as_is_display);
 #define PERL_ARGS_ASSERT_PUT_CHARCLASS_BITMAP_INNARDS	\
 	assert(sv); assert(bitmap)
 STATIC SV*	S_put_charclass_bitmap_innards_common(pTHX_ SV* invlist, SV* posixes, SV* only_utf8, SV* not_utf8, SV* only_utf8_locale, const bool invert);
@@ -4845,9 +4853,6 @@ STATIC SV *	S_space_join_names_mortal(pTHX_ char *const *array);
 	assert(array)
 #endif
 #if defined(PERL_IN_REGCOMP_C)
-STATIC void	S__append_range_to_invlist(pTHX_ SV* const invlist, const UV start, const UV end);
-#define PERL_ARGS_ASSERT__APPEND_RANGE_TO_INVLIST	\
-	assert(invlist)
 PERL_STATIC_INLINE UV*	S__invlist_array_init(SV* const invlist, const bool will_have_0)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT__INVLIST_ARRAY_INIT	\
@@ -4919,9 +4924,6 @@ STATIC SV*	S_invlist_contents(pTHX_ SV* const invlist, const bool traditional_st
 #define PERL_ARGS_ASSERT_INVLIST_CONTENTS	\
 	assert(invlist)
 
-STATIC void	S_invlist_extend(pTHX_ SV* const invlist, const UV len);
-#define PERL_ARGS_ASSERT_INVLIST_EXTEND	\
-	assert(invlist)
 PERL_STATIC_INLINE UV	S_invlist_highest(SV* const invlist)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_INVLIST_HIGHEST	\
@@ -4986,9 +4988,6 @@ STATIC regnode*	S_reg2Lanode(pTHX_ RExC_state_t *pRExC_state, const U8 op, const
 STATIC regnode*	S_reg_node(pTHX_ RExC_state_t *pRExC_state, U8 op);
 #define PERL_ARGS_ASSERT_REG_NODE	\
 	assert(pRExC_state)
-STATIC UV	S_reg_recode(pTHX_ const U8 value, SV **encp);
-#define PERL_ARGS_ASSERT_REG_RECODE	\
-	assert(encp)
 STATIC SV *	S_reg_scan_name(pTHX_ RExC_state_t *pRExC_state, U32 flags);
 #define PERL_ARGS_ASSERT_REG_SCAN_NAME	\
 	assert(pRExC_state)
@@ -5118,7 +5117,7 @@ PERL_STATIC_INLINE UV	S__invlist_len(SV* const invlist)
 #define PERL_ARGS_ASSERT__INVLIST_LEN	\
 	assert(invlist)
 
-PERL_CALLCONV IV	Perl__invlist_search(SV* const invlist, const UV cp)
+PERL_CALLCONV SSize_t	Perl__invlist_search(SV* const invlist, const UV cp)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT__INVLIST_SEARCH	\
 	assert(invlist)
@@ -5171,7 +5170,7 @@ PERL_STATIC_INLINE I32	S_regcurly(const char *s)
 
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_UTF8_C)
-PERL_CALLCONV SV*	Perl__add_range_to_invlist(pTHX_ SV* invlist, const UV start, const UV end)
+PERL_CALLCONV SV*	Perl__add_range_to_invlist(pTHX_ SV* invlist, UV start, UV end)
 			__attribute__warn_unused_result__;
 
 /* PERL_CALLCONV void	_invlist_intersection(pTHX_ SV* const a, SV* const b, SV** i); */
@@ -5219,6 +5218,11 @@ STATIC WB_enum	S_advance_one_WB(pTHX_ U8 ** curpos, const U8 * const strend, con
 #define PERL_ARGS_ASSERT_ADVANCE_ONE_WB	\
 	assert(curpos); assert(strend)
 
+STATIC GCB_enum	S_backup_one_GCB(pTHX_ const U8 * const strbeg, U8 ** curpos, const bool utf8_target)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_BACKUP_ONE_GCB	\
+	assert(strbeg); assert(curpos)
+
 STATIC LB_enum	S_backup_one_LB(pTHX_ const U8 * const strbeg, U8 ** curpos, const bool utf8_target)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_BACKUP_ONE_LB	\
@@ -5247,8 +5251,10 @@ STATIC bool	S_isFOO_utf8_lc(pTHX_ const U8 classnum, const U8* character)
 #define PERL_ARGS_ASSERT_ISFOO_UTF8_LC	\
 	assert(character)
 
-PERL_STATIC_INLINE bool	S_isGCB(const GCB_enum before, const GCB_enum after)
+STATIC bool	S_isGCB(pTHX_ const GCB_enum before, const GCB_enum after, const U8 * const strbeg, const U8 * const curpos, const bool utf8_target)
 			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_ISGCB	\
+	assert(strbeg); assert(curpos)
 
 STATIC bool	S_isLB(pTHX_ LB_enum before, LB_enum after, const U8 * const strbeg, const U8 * const curpos, const U8 * const strend, const bool utf8_target)
 			__attribute__warn_unused_result__;
@@ -5286,7 +5292,7 @@ STATIC U8*	S_reghop4(U8 *s, SSize_t off, const U8 *llim, const U8 *rlim)
 #define PERL_ARGS_ASSERT_REGHOP4	\
 	assert(s); assert(llim); assert(rlim)
 
-STATIC U8*	S_reghopmaybe3(U8 *s, SSize_t off, const U8 *lim)
+STATIC U8*	S_reghopmaybe3(U8 *s, SSize_t off, const U8 * const lim)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_REGHOPMAYBE3	\
 	assert(s); assert(lim)
@@ -5342,7 +5348,7 @@ STATIC I32	S_expect_number(pTHX_ char **const pattern)
 #define PERL_ARGS_ASSERT_EXPECT_NUMBER	\
 	assert(pattern)
 
-STATIC I32	S_find_array_subscript(pTHX_ const AV *const av, const SV *const val);
+STATIC SSize_t	S_find_array_subscript(pTHX_ const AV *const av, const SV *const val);
 #define PERL_ARGS_ASSERT_FIND_ARRAY_SUBSCRIPT	\
 	assert(val)
 STATIC SV *	S_find_hash_subscript(pTHX_ const HV *const hv, const SV *const val);
@@ -5422,7 +5428,7 @@ STATIC void	S_unreferenced_to_tmp_stack(pTHX_ AV *const unreferenced);
 #  endif
 #endif
 #if defined(PERL_IN_SV_C) || defined (PERL_IN_OP_C)
-PERL_CALLCONV SV *	Perl_varname(pTHX_ const GV *const gv, const char gvtype, PADOFFSET targ, const SV *const keyname, I32 aindex, int subscript_type)
+PERL_CALLCONV SV *	Perl_varname(pTHX_ const GV *const gv, const char gvtype, PADOFFSET targ, const SV *const keyname, SSize_t aindex, int subscript_type)
 			__attribute__warn_unused_result__;
 
 #endif
@@ -5483,7 +5489,7 @@ STATIC SV*	S_new_constant(pTHX_ const char *s, STRLEN len, const char *key, STRL
 STATIC void	S_no_op(pTHX_ const char *const what, char *s);
 #define PERL_ARGS_ASSERT_NO_OP	\
 	assert(what)
-STATIC void	S_parse_ident(pTHX_ char **s, char **d, char * const e, int allow_package, bool is_utf8);
+STATIC void	S_parse_ident(pTHX_ char **s, char **d, char * const e, int allow_package, bool is_utf8, bool check_dollar);
 #define PERL_ARGS_ASSERT_PARSE_IDENT	\
 	assert(s); assert(d); assert(e)
 STATIC int	S_pending_ident(pTHX);

@@ -1,8 +1,9 @@
 package Test2::Formatter::TAP;
 use strict;
 use warnings;
+require PerlIO;
 
-our $VERSION = '1.302026';
+our $VERSION = '1.302045';
 
 
 use Test2::Util::HashBase qw{
@@ -108,8 +109,13 @@ sub write {
 sub _open_handles {
     my $self = shift;
 
-    open( my $out, '>&', STDOUT ) or die "Can't dup STDOUT:  $!";
-    open( my $err, '>&', STDERR ) or die "Can't dup STDERR:  $!";
+    my %seen;
+    open(my $out, '>&', STDOUT) or die "Can't dup STDOUT:  $!";
+    binmode($out, join(":", "", "raw", grep { $_ ne 'unix' and !$seen{$_}++ } PerlIO::get_layers(STDOUT)));
+
+    %seen = ();
+    open(my $err, '>&', STDERR) or die "Can't dup STDERR:  $!";
+    binmode($err, join(":", "", "raw", grep { $_ ne 'unix' and !$seen{$_}++ } PerlIO::get_layers(STDERR)));
 
     _autoflush($out);
     _autoflush($err);
@@ -381,7 +387,7 @@ order to do this you use the C<register_event()> class method.
     use Test2::Formatter::TAP;
 
     use base 'Test2::Event';
-    use Test2::Util::HashBase accessors => [qw/pass name diag note/];
+    use Test2::Util::HashBase qw/pass name diag note/;
 
     Test2::Formatter::TAP->register_event(
         __PACKAGE__,

@@ -1546,13 +1546,13 @@ ApRM	|SV*	|swash_init	|NN const char* pkg|NN const char* name|NN SV* listsv|I32 
 ApM	|UV	|swash_fetch	|NN SV *swash|NN const U8 *ptr|bool do_utf8
 #ifdef PERL_IN_REGCOMP_C
 EiMR	|SV*	|add_cp_to_invlist	|NULLOK SV* invlist|const UV cp
-EsM	|void	|_append_range_to_invlist   |NN SV* const invlist|const UV start|const UV end
 EiMRn	|UV*	|_invlist_array_init	|NN SV* const invlist|const bool will_have_0
-EsM	|void	|invlist_extend    |NN SV* const invlist|const UV len
 EiMRn	|UV	|invlist_max	|NN SV* const invlist
 EiM	|void	|invlist_set_len|NN SV* const invlist|const UV len|const bool offset
 EiMRn	|bool	|invlist_is_iterating|NN SV* const invlist
 #ifndef PERL_EXT_RE_BUILD
+EsM	|void	|_append_range_to_invlist   |NN SV* const invlist|const UV start|const UV end
+EsM	|void	|invlist_extend    |NN SV* const invlist|const UV len
 EsM	|void	|invlist_replace_list_destroys_src|NN SV *dest|NN SV *src
 EiMRn	|IV*	|get_invlist_previous_index_addr|NN SV* invlist
 EiMn	|void	|invlist_set_previous_index|NN SV* const invlist|const IV index
@@ -1584,7 +1584,7 @@ EXmM	|void	|_invlist_subtract|NN SV* const a|NN SV* const b|NN SV** result
 EXpM	|void	|_invlist_invert|NN SV* const invlist
 EXMpR	|SV*	|_new_invlist	|IV initial_size
 EXMpR	|SV*	|_swash_to_invlist	|NN SV* const swash
-EXMpR	|SV*	|_add_range_to_invlist	|NULLOK SV* invlist|const UV start|const UV end
+EXMpR	|SV*	|_add_range_to_invlist	|NULLOK SV* invlist|UV start|UV end
 EXMpR	|SV*	|_setup_canned_invlist|const STRLEN size|const UV element0|NN UV** other_elements_ptr
 EXMpn	|void	|_invlist_populate_swatch   |NN SV* const invlist|const UV start|const UV end|NN U8* swatch
 #endif
@@ -1598,7 +1598,7 @@ EiMRn	|UV*	|invlist_array	|NN SV* const invlist
 EiMRn	|bool*	|get_invlist_offset_addr|NN SV* invlist
 EiMRn	|UV	|_invlist_len	|NN SV* const invlist
 EMiRn	|bool	|_invlist_contains_cp|NN SV* const invlist|const UV cp
-EXpMRn	|IV	|_invlist_search	|NN SV* const invlist|const UV cp
+EXpMRn	|SSize_t|_invlist_search	|NN SV* const invlist|const UV cp
 EXMpR	|SV*	|_get_swash_invlist|NN SV* const swash
 EXMpR	|HV*	|_swash_inversion_hash	|NN SV* const swash
 #endif
@@ -2195,7 +2195,6 @@ Es	|regnode*|handle_regex_sets|NN RExC_state_t *pRExC_state \
 				|NN char * const oregcomp_parse
 Es	|void|parse_lparen_question_flags|NN RExC_state_t *pRExC_state
 Es	|regnode*|reg_node	|NN RExC_state_t *pRExC_state|U8 op
-Es	|UV	|reg_recode	|const U8 value|NN SV **encp
 Es	|regnode*|regpiece	|NN RExC_state_t *pRExC_state \
 				|NN I32 *flagp|U32 depth
 Es	|bool	|grok_bslash_N	|NN RExC_state_t *pRExC_state		    \
@@ -2301,7 +2300,8 @@ Es	|bool	|put_charclass_bitmap_innards|NN SV* sv		    \
 				|NN char* bitmap		    \
 				|NULLOK SV* nonbitmap_invlist	    \
 				|NULLOK SV* only_utf8_locale_invlist\
-				|NULLOK const regnode * const node
+				|NULLOK const regnode * const node  \
+				|const bool force_as_is_display
 Es	|SV*	|put_charclass_bitmap_innards_common		    \
 				|NN SV* invlist			    \
 				|NULLOK SV* posixes		    \
@@ -2350,7 +2350,7 @@ Es	|void	|regcppop	|NN regexp *rex\
 ERsn	|U8*	|reghop3	|NN U8 *s|SSize_t off|NN const U8 *lim
 ERsn	|U8*	|reghop4	|NN U8 *s|SSize_t off|NN const U8 *llim \
 				|NN const U8 *rlim
-ERsn	|U8*	|reghopmaybe3	|NN U8 *s|SSize_t off|NN const U8 *lim
+ERsn	|U8*	|reghopmaybe3	|NN U8 *s|SSize_t off|NN const U8 * const lim
 ERs	|char*	|find_byclass	|NN regexp * prog|NN const regnode *c \
 				|NN char *s|NN const char *strend \
 				|NULLOK regmatch_info *reginfo
@@ -2358,7 +2358,14 @@ Es	|void	|to_utf8_substr	|NN regexp * prog
 Es	|bool	|to_byte_substr	|NN regexp * prog
 ERsn	|I32	|reg_check_named_buff_matched	|NN const regexp *rex \
 						|NN const regnode *scan
-EinR	|bool	|isGCB		|const GCB_enum before|const GCB_enum after
+EsR	|bool	|isGCB		|const GCB_enum before			\
+				|const GCB_enum after			\
+				|NN const U8 * const strbeg		\
+				|NN const U8 * const curpos		\
+				|const bool utf8_target
+EsR	|GCB_enum|backup_one_GCB|NN const U8 * const strbeg			\
+				|NN U8 ** curpos				\
+				|const bool utf8_target
 EsR	|bool	|isLB		|LB_enum before				\
 				|LB_enum after				\
 				|NN const U8 * const strbeg		\
@@ -2433,7 +2440,7 @@ poM	|void	|sv_kill_backrefs	|NN SV *const sv|NULLOK AV *const av
 #if defined(PERL_IN_SV_C) || defined (PERL_IN_OP_C)
 pR	|SV *	|varname	|NULLOK const GV *const gv|const char gvtype \
 				|PADOFFSET targ|NULLOK const SV *const keyname \
-				|I32 aindex|int subscript_type
+				|SSize_t aindex|int subscript_type
 #endif
 
 pX	|void	|sv_del_backref	|NN SV *const tsv|NN SV *const sv
@@ -2541,7 +2548,7 @@ s	|int	|deprecate_commaless_var_list
 s	|int	|ao		|int toketype
 s  |void|parse_ident|NN char **s|NN char **d \
                      |NN char * const e|int allow_package \
-                     |bool is_utf8
+				|bool is_utf8|bool check_dollar
 #  if defined(PERL_CR_FILTER)
 s	|I32	|cr_textfilter	|int idx|NULLOK SV *sv|int maxlen
 s	|void	|strip_return	|NN SV *sv
@@ -2767,6 +2774,7 @@ Apod	|void	|hv_assert	|NN HV *hv
 #endif
 
 ApdR	|SV*	|hv_scalar	|NN HV *hv
+ApdRM	|SV*	|hv_bucket_ratio|NN HV *hv
 ApoR	|I32*	|hv_riter_p	|NN HV *hv
 ApoR	|HE**	|hv_eiter_p	|NN HV *hv
 Apo	|void	|hv_riter_set	|NN HV *hv|I32 riter
@@ -2793,7 +2801,7 @@ p	|SV*	|magic_scalarpack|NN HV *hv|NN MAGIC *mg
 #if defined(PERL_IN_SV_C)
 s	|SV *	|find_hash_subscript|NULLOK const HV *const hv \
 		|NN const SV *const val
-s	|I32	|find_array_subscript|NULLOK const AV *const av \
+s	|SSize_t|find_array_subscript|NULLOK const AV *const av \
 		|NN const SV *const val
 sMd	|SV*	|find_uninit_var|NULLOK const OP *const obase \
 		|NULLOK const SV *const uninit_sv|bool match \
@@ -2938,7 +2946,6 @@ Ei	|STRLEN	|sv_or_pv_pos_u2b|NN SV *sv|NN const char *pv|STRLEN pos \
 				 |NULLOK STRLEN *lenp
 #endif
 
-EMpPX	|SV*	|_get_encoding
 Ap	|void	|clear_defarray	|NN AV* av|bool abandon
 
 ApM	|void	|leave_adjust_stacks|NN SV **from_sp|NN SV **to_sp \

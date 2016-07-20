@@ -217,6 +217,7 @@
 #define gv_stashpv(a,b)		Perl_gv_stashpv(aTHX_ a,b)
 #define gv_stashpvn(a,b,c)	Perl_gv_stashpvn(aTHX_ a,b,c)
 #define gv_stashsv(a,b)		Perl_gv_stashsv(aTHX_ a,b)
+#define hv_bucket_ratio(a)	Perl_hv_bucket_ratio(aTHX_ a)
 #define hv_clear(a)		Perl_hv_clear(aTHX_ a)
 #define hv_clear_placeholders(a)	Perl_hv_clear_placeholders(aTHX_ a)
 #define hv_common(a,b,c,d,e,f,g,h)	Perl_hv_common(aTHX_ a,b,c,d,e,f,g,h)
@@ -930,7 +931,6 @@
 #define do_spawn_nowait(a)	Perl_do_spawn_nowait(aTHX_ a)
 #endif
 #if defined(PERL_CORE) || defined(PERL_EXT)
-#define _get_encoding()		Perl__get_encoding(aTHX)
 #define _warn_problematic_locale	Perl__warn_problematic_locale
 #define av_reify(a)		Perl_av_reify(aTHX_ a)
 #define current_re_engine()	Perl_current_re_engine(aTHX)
@@ -954,8 +954,10 @@
 #define yylex()			Perl_yylex(aTHX)
 #  if !defined(PERL_EXT_RE_BUILD)
 #    if defined(PERL_IN_REGCOMP_C)
+#define _append_range_to_invlist(a,b,c)	S__append_range_to_invlist(aTHX_ a,b,c)
 #define get_invlist_previous_index_addr	S_get_invlist_previous_index_addr
 #define invlist_clear(a)	S_invlist_clear(aTHX_ a)
+#define invlist_extend(a,b)	S_invlist_extend(aTHX_ a,b)
 #define invlist_previous_index	S_invlist_previous_index
 #define invlist_replace_list_destroys_src(a,b)	S_invlist_replace_list_destroys_src(aTHX_ a,b)
 #define invlist_set_previous_index	S_invlist_set_previous_index
@@ -971,7 +973,7 @@
 #define dump_trie_interim_list(a,b,c,d,e)	S_dump_trie_interim_list(aTHX_ a,b,c,d,e)
 #define dump_trie_interim_table(a,b,c,d,e)	S_dump_trie_interim_table(aTHX_ a,b,c,d,e)
 #define dumpuntil(a,b,c,d,e,f,g,h)	S_dumpuntil(aTHX_ a,b,c,d,e,f,g,h)
-#define put_charclass_bitmap_innards(a,b,c,d,e)	S_put_charclass_bitmap_innards(aTHX_ a,b,c,d,e)
+#define put_charclass_bitmap_innards(a,b,c,d,e,f)	S_put_charclass_bitmap_innards(aTHX_ a,b,c,d,e,f)
 #define put_charclass_bitmap_innards_common(a,b,c,d,e,f)	S_put_charclass_bitmap_innards_common(aTHX_ a,b,c,d,e,f)
 #define put_charclass_bitmap_innards_invlist(a,b)	S_put_charclass_bitmap_innards_invlist(aTHX_ a,b)
 #define put_code_point(a,b)	S_put_code_point(aTHX_ a,b)
@@ -998,7 +1000,6 @@
 #define sv_or_pv_pos_u2b(a,b,c,d)	S_sv_or_pv_pos_u2b(aTHX_ a,b,c,d)
 #  endif
 #  if defined(PERL_IN_REGCOMP_C)
-#define _append_range_to_invlist(a,b,c)	S__append_range_to_invlist(aTHX_ a,b,c)
 #define _invlist_array_init	S__invlist_array_init
 #define _make_exactf_invlist(a,b)	S__make_exactf_invlist(aTHX_ a,b)
 #define add_above_Latin1_folds(a,b,c)	S_add_above_Latin1_folds(aTHX_ a,b,c)
@@ -1018,7 +1019,6 @@
 #define handle_regex_sets(a,b,c,d,e)	S_handle_regex_sets(aTHX_ a,b,c,d,e)
 #define invlist_clone(a)	S_invlist_clone(aTHX_ a)
 #define invlist_contents(a,b)	S_invlist_contents(aTHX_ a,b)
-#define invlist_extend(a,b)	S_invlist_extend(aTHX_ a,b)
 #define invlist_highest		S_invlist_highest
 #define invlist_is_iterating	S_invlist_is_iterating
 #define invlist_iterfinish	S_invlist_iterfinish
@@ -1036,7 +1036,6 @@
 #define reg(a,b,c,d)		S_reg(aTHX_ a,b,c,d)
 #define reg2Lanode(a,b,c,d)	S_reg2Lanode(aTHX_ a,b,c,d)
 #define reg_node(a,b)		S_reg_node(aTHX_ a,b)
-#define reg_recode(a,b)		S_reg_recode(aTHX_ a,b)
 #define reg_scan_name(a,b)	S_reg_scan_name(aTHX_ a,b)
 #define reg_skipcomment		S_reg_skipcomment
 #define reganode(a,b,c)		S_reganode(aTHX_ a,b,c)
@@ -1111,13 +1110,14 @@
 #define advance_one_LB(a,b,c)	S_advance_one_LB(aTHX_ a,b,c)
 #define advance_one_SB(a,b,c)	S_advance_one_SB(aTHX_ a,b,c)
 #define advance_one_WB(a,b,c,d)	S_advance_one_WB(aTHX_ a,b,c,d)
+#define backup_one_GCB(a,b,c)	S_backup_one_GCB(aTHX_ a,b,c)
 #define backup_one_LB(a,b,c)	S_backup_one_LB(aTHX_ a,b,c)
 #define backup_one_SB(a,b,c)	S_backup_one_SB(aTHX_ a,b,c)
 #define backup_one_WB(a,b,c,d)	S_backup_one_WB(aTHX_ a,b,c,d)
 #define find_byclass(a,b,c,d,e)	S_find_byclass(aTHX_ a,b,c,d,e)
 #define isFOO_lc(a,b)		S_isFOO_lc(aTHX_ a,b)
 #define isFOO_utf8_lc(a,b)	S_isFOO_utf8_lc(aTHX_ a,b)
-#define isGCB			S_isGCB
+#define isGCB(a,b,c,d,e)	S_isGCB(aTHX_ a,b,c,d,e)
 #define isLB(a,b,c,d,e,f)	S_isLB(aTHX_ a,b,c,d,e,f)
 #define isSB(a,b,c,d,e,f)	S_isSB(aTHX_ a,b,c,d,e,f)
 #define isWB(a,b,c,d,e,f,g)	S_isWB(aTHX_ a,b,c,d,e,f,g)
@@ -1782,7 +1782,7 @@
 #define lop(a,b,c)		S_lop(aTHX_ a,b,c)
 #define missingterm(a)		S_missingterm(aTHX_ a)
 #define no_op(a,b)		S_no_op(aTHX_ a,b)
-#define parse_ident(a,b,c,d,e)	S_parse_ident(aTHX_ a,b,c,d,e)
+#define parse_ident(a,b,c,d,e,f)	S_parse_ident(aTHX_ a,b,c,d,e,f)
 #define pending_ident()		S_pending_ident(aTHX)
 #define scan_const(a)		S_scan_const(aTHX_ a)
 #define scan_formline(a)	S_scan_formline(aTHX_ a)

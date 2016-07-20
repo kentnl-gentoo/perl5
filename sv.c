@@ -2097,15 +2097,19 @@ S_sv_setnv(pTHX_ SV* sv, int numtype)
 {
     bool pok = cBOOL(SvPOK(sv));
     bool nok = FALSE;
+#ifdef NV_INF
     if ((numtype & IS_NUMBER_INFINITY)) {
         SvNV_set(sv, (numtype & IS_NUMBER_NEG) ? -NV_INF : NV_INF);
         nok = TRUE;
-    }
-    else if ((numtype & IS_NUMBER_NAN)) {
+    } else
+#endif
+#ifdef NV_NAN
+    if ((numtype & IS_NUMBER_NAN)) {
         SvNV_set(sv, NV_NAN);
         nok = TRUE;
-    }
-    else if (pok) {
+    } else
+#endif
+    if (pok) {
         SvNV_set(sv, Atof(SvPVX_const(sv)));
         /* Purposefully no true nok here, since we don't want to blow
          * away the possible IOK/UV of an existing sv. */
@@ -3452,12 +3456,6 @@ Perl_sv_utf8_upgrade_flags_grow(pTHX_ SV *const sv, const I32 flags, STRLEN extr
         S_sv_uncow(aTHX_ sv, 0);
     }
 
-    if (IN_ENCODING && !(flags & SV_UTF8_NO_ENCODING)) {
-        sv_recode_to_utf8(sv, _get_encoding());
-	if (extra) SvGROW(sv, SvCUR(sv) + extra);
-	return SvCUR(sv);
-    }
-
     if (SvCUR(sv) == 0) {
 	if (extra) SvGROW(sv, extra);
     } else { /* Assume Latin-1/EBCDIC */
@@ -4070,14 +4068,18 @@ Perl_gv_setref(pTHX_ SV *const dstr, SV *const sstr)
 			    CvCONST((const CV *)sref)
 				 ? cv_const_sv((const CV *)sref)
 				 : NULL;
+                        HV * const stash = GvSTASH((const GV *)dstr);
 			report_redefined_cv(
-			   sv_2mortal(Perl_newSVpvf(aTHX_
-				"%"HEKf"::%"HEKf,
-				HEKfARG(
-				 HvNAME_HEK(GvSTASH((const GV *)dstr))
-				),
-				HEKfARG(GvENAME_HEK(MUTABLE_GV(dstr)))
-			   )),
+			   sv_2mortal(
+                             stash
+                               ? Perl_newSVpvf(aTHX_
+				    "%"HEKf"::%"HEKf,
+				    HEKfARG(HvNAME_HEK(stash)),
+				    HEKfARG(GvENAME_HEK(MUTABLE_GV(dstr))))
+                               : Perl_newSVpvf(aTHX_
+				    "%"HEKf,
+				    HEKfARG(GvENAME_HEK(MUTABLE_GV(dstr))))
+			   ),
 			   cv,
 			   CvCONST((const CV *)sref) ? &new_const_sv : NULL
 			);
@@ -7749,37 +7751,17 @@ Perl_sv_eq_flags(pTHX_ SV *sv1, SV *sv2, const U32 flags)
 	pv2 = SvPV_flags_const(sv2, cur2, flags);
 
     if (cur1 && cur2 && SvUTF8(sv1) != SvUTF8(sv2) && !IN_BYTES) {
-        /* Differing utf8ness.
-	 * Do not UTF8size the comparands as a side-effect. */
-	 if (IN_ENCODING) {
-	      if (SvUTF8(sv1)) {
-		   svrecode = newSVpvn(pv2, cur2);
-		   sv_recode_to_utf8(svrecode, _get_encoding());
-		   pv2 = SvPV_const(svrecode, cur2);
-	      }
-	      else {
-		   svrecode = newSVpvn(pv1, cur1);
-		   sv_recode_to_utf8(svrecode, _get_encoding());
-		   pv1 = SvPV_const(svrecode, cur1);
-	      }
-	      /* Now both are in UTF-8. */
-	      if (cur1 != cur2) {
-		   SvREFCNT_dec_NN(svrecode);
-		   return FALSE;
-	      }
-	 }
-	 else {
-	      if (SvUTF8(sv1)) {
+        /* Differing utf8ness.  */
+	if (SvUTF8(sv1)) {
 		  /* sv1 is the UTF-8 one  */
 		  return bytes_cmp_utf8((const U8*)pv2, cur2,
 					(const U8*)pv1, cur1) == 0;
-	      }
-	      else {
+	}
+	else {
 		  /* sv2 is the UTF-8 one  */
 		  return bytes_cmp_utf8((const U8*)pv1, cur1,
 					(const U8*)pv2, cur2) == 0;
-	      }
-	 }
+	}
     }
 
     if (cur1 == cur2)
@@ -7839,31 +7821,16 @@ Perl_sv_cmp_flags(pTHX_ SV *const sv1, SV *const sv2,
 	pv2 = SvPV_flags_const(sv2, cur2, flags);
 
     if (cur1 && cur2 && SvUTF8(sv1) != SvUTF8(sv2) && !IN_BYTES) {
-        /* Differing utf8ness.
-	 * Do not UTF8size the comparands as a side-effect. */
+        /* Differing utf8ness.  */
 	if (SvUTF8(sv1)) {
-	    if (IN_ENCODING) {
-		 svrecode = newSVpvn(pv2, cur2);
-		 sv_recode_to_utf8(svrecode, _get_encoding());
-		 pv2 = SvPV_const(svrecode, cur2);
-	    }
-	    else {
 		const int retval = -bytes_cmp_utf8((const U8*)pv2, cur2,
 						   (const U8*)pv1, cur1);
 		return retval ? retval < 0 ? -1 : +1 : 0;
-	    }
 	}
 	else {
-	    if (IN_ENCODING) {
-		 svrecode = newSVpvn(pv1, cur1);
-		 sv_recode_to_utf8(svrecode, _get_encoding());
-		 pv1 = SvPV_const(svrecode, cur1);
-	    }
-	    else {
 		const int retval = bytes_cmp_utf8((const U8*)pv1, cur1,
 						  (const U8*)pv2, cur2);
 		return retval ? retval < 0 ? -1 : +1 : 0;
-	    }
 	}
     }
 
@@ -13860,7 +13827,6 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 			}
 			daux->xhv_name_count = saux->xhv_name_count;
 
-			daux->xhv_fill_lazy = saux->xhv_fill_lazy;
 			daux->xhv_aux_flags = saux->xhv_aux_flags;
 #ifdef PERL_HASH_RANDOMIZE_KEYS
 			daux->xhv_rand = saux->xhv_rand;
@@ -14963,9 +14929,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     /* magical thingies */
 
-    PL_encoding		= sv_dup(proto_perl->Iencoding, param);
-    PL_lex_encoding     = sv_dup(proto_perl->Ilex_encoding, param);
-
     sv_setpvs(PERL_DEBUG_PAD(0), "");	/* For regex debugging. */
     sv_setpvs(PERL_DEBUG_PAD(1), "");	/* ext/re needs these */
     sv_setpvs(PERL_DEBUG_PAD(2), "");	/* even without DEBUGGING. */
@@ -15613,7 +15576,7 @@ S_find_hash_subscript(pTHX_ const HV *const hv, const SV *const val)
 /* Look for an entry in the array whose value has the same SV as val;
  * If so, return the index, otherwise return -1. */
 
-STATIC I32
+STATIC SSize_t
 S_find_array_subscript(pTHX_ const AV *const av, const SV *const val)
 {
     PERL_ARGS_ASSERT_FIND_ARRAY_SUBSCRIPT;
@@ -15624,7 +15587,7 @@ S_find_array_subscript(pTHX_ const AV *const av, const SV *const val)
 
     if (val != &PL_sv_undef) {
 	SV ** const svp = AvARRAY(av);
-	I32 i;
+	SSize_t i;
 
 	for (i=AvFILLp(av); i>=0; i--)
 	    if (svp[i] == val)
@@ -15646,7 +15609,7 @@ S_find_array_subscript(pTHX_ const AV *const av, const SV *const val)
 
 SV*
 Perl_varname(pTHX_ const GV *const gv, const char gvtype, PADOFFSET targ,
-	const SV *const keyname, I32 aindex, int subscript_type)
+	const SV *const keyname, SSize_t aindex, int subscript_type)
 {
 
     SV * const name = sv_newmortal();
@@ -15683,9 +15646,12 @@ Perl_varname(pTHX_ const GV *const gv, const char gvtype, PADOFFSET targ,
 
     if (subscript_type == FUV_SUBSCRIPT_HASH) {
 	SV * const sv = newSV(0);
+        STRLEN len;
+        const char * const pv = SvPV_nomg_const((SV*)keyname, len);
+
 	*SvPVX(name) = '$';
 	Perl_sv_catpvf(aTHX_ name, "{%s}",
-	    pv_pretty(sv, SvPVX_const(keyname), SvCUR(keyname), 32, NULL, NULL,
+	    pv_pretty(sv, pv, len, 32, NULL, NULL,
 		    PERL_PV_PRETTY_DUMP | PERL_PV_ESCAPE_UNI_DETECT ));
 	SvREFCNT_dec_NN(sv);
     }
@@ -15756,7 +15722,7 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
                             || (obase->op_type == OP_PADRANGE
                                 && SvTYPE(PAD_SVl(obase->op_targ)) == SVt_PVHV)
                           );
-	I32 index = 0;
+	SSize_t index = 0;
 	SV *keysv = NULL;
 	int subscript_type = FUV_SUBSCRIPT_WITHIN;
 
@@ -15942,7 +15908,7 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 						keysv, 0, FUV_SUBSCRIPT_HASH);
 	    }
 	    else {
-		const I32 index
+		const SSize_t index
 		    = find_array_subscript((const AV *)sv, uninit_sv);
 		if (index >= 0)
 		    return varname(gv, '@', o->op_targ,
@@ -15962,11 +15928,14 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
         /* If we were executing OP_MULTIDEREF when the undef warning
          * triggered, then it must be one of the index values within
          * that triggered it. If not, then the only possibility is that
-         * the value retrieved by the last aggregate lookup might be the
+         * the value retrieved by the last aggregate index might be the
          * culprit. For the former, we set PL_multideref_pc each time before
          * using an index, so work though the item list until we reach
          * that point. For the latter, just work through the entire item
          * list; the last aggregate retrieved will be the candidate.
+         * There is a third rare possibility: something triggered
+         * magic while fetching an array/hash element. Just display
+         * nothing in this case.
          */
 
         /* the named aggregate, if any */
@@ -16066,7 +16035,7 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 
             if (   index_type == MDEREF_INDEX_none
                 || (actions & MDEREF_FLAG_last)
-                || (last && items == last)
+                || (last && items >= last)
             )
                 break;
 
@@ -16074,7 +16043,7 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
         } /* while */
 
 	if (PL_op == obase) {
-	    /* index was undef */
+	    /* most likely index was undef */
 
             *desc_p = (    (actions & MDEREF_FLAG_last)
                         && (obase->op_private
@@ -16085,13 +16054,22 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
                                 : "delete"
                         : is_hv ? "hash element" : "array element";
             assert(index_type != MDEREF_INDEX_none);
-            if (index_gv)
-                return varname(index_gv, '$', 0, NULL, 0, FUV_SUBSCRIPT_NONE);
-            if (index_targ)
-                return varname(NULL, '$', index_targ,
+            if (index_gv) {
+                if (GvSV(index_gv) == uninit_sv)
+                    return varname(index_gv, '$', 0, NULL, 0,
+                                                    FUV_SUBSCRIPT_NONE);
+                else
+                    return NULL;
+            }
+            if (index_targ) {
+                if (PL_curpad[index_targ] == uninit_sv)
+                    return varname(NULL, '$', index_targ,
 				    NULL, 0, FUV_SUBSCRIPT_NONE);
-            assert(is_hv); /* AV index is an IV and can't be undef */
-            /* can a const HV index ever be undef? */
+                else
+                    return NULL;
+            }
+            /* If we got to this point it was undef on a const subscript,
+             * so magic probably involved, e.g. $ISA[0]. Give up. */
             return NULL;
         }
 
@@ -16138,7 +16116,7 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 						keysv, 0, FUV_SUBSCRIPT_HASH);
 	    }
 	    else {
-		const I32 index
+		const SSize_t index
 		    = find_array_subscript((const AV *)sv, uninit_sv);
 		if (index >= 0)
 		    return varname(agg_gv, '@', agg_targ,

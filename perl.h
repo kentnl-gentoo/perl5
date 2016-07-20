@@ -757,10 +757,6 @@
 #   endif
 #endif /* !NO_LOCALE && HAS_SETLOCALE */
 
-/* Is $^ENCODING set, or are we under the encoding pragma? */
-#define IN_ENCODING UNLIKELY(PL_encoding                                      \
-                             || (PL_lex_encoding && _get_encoding() != NULL))
-
 #include <setjmp.h>
 
 #ifdef I_SYS_PARAM
@@ -3069,6 +3065,8 @@ freeing any remaining Perl interpreters.
  */
 #if defined(USE_ITHREADS) && defined(I_PTHREAD) && \
     defined(__clang__) && \
+    !defined(PERL_GLOBAL_STRUCT) && \
+    !defined(PERL_GLOBAL_STRUCT_PRIVATE) && \
     !defined(SWIG) && \
   ((!defined(__apple_build_version__) &&               \
     ((__clang_major__ == 3 && __clang_minor__ >= 6) || \
@@ -3877,12 +3875,6 @@ typedef        struct crypt_data {     /* straight from /usr/include/crypt.h */
 #  define USE_HASH_SEED
 #endif
 
-/* Win32 defines a type 'WORD' in windef.h, and AmigaOS in exec/types.h.
- * This conflicts with the enumerator 'WORD' defined in perly.h.
- * The yytokentype enum is only a debugging aid, so it's not really needed. */
-#if defined(WIN32) || defined(__amigaos4__)
-#  define YYTOKENTYPE
-#endif
 #include "perly.h"
 
 
@@ -5289,6 +5281,7 @@ EXTCONST char *const PL_phase_names[];
 #  define PL_dirty cBOOL(PL_phase == PERL_PHASE_DESTRUCT)
 
 #  define PL_amagic_generation PL_na
+#  define PL_encoding ((SV *)NULL)
 #endif /* !PERL_CORE */
 
 #define PL_hints PL_compiling.cop_hints
@@ -5736,6 +5729,12 @@ EXTCONST bool PL_valid_types_NV_set[];
  * Also, do NOT try doing NV_NAN based on NV_INF and trying (NV_INF-NV_INF).
  * Though logically correct, some compilers (like Visual C 2003)
  * falsely misoptimize that to zero (x-x is always zero, right?)
+ *
+ * Finally, note that not all floating point formats define Inf (or NaN).
+ * For the infinity a large number may be used instead.  Operations that
+ * under the IEEE floating point would return Inf or NaN may return
+ * either large numbers (positive or negative), or they may cause
+ * a floating point exception or some other fault.
  */
 
 /* The quadmath literals are anon structs which -Wc++-compat doesn't like. */
@@ -6743,6 +6742,14 @@ extern void moncontrol(int);
 #define PERL_PV_PRETTY_DUMP  PERL_PV_PRETTY_ELLIPSES|PERL_PV_PRETTY_QUOTE
 #define PERL_PV_PRETTY_REGPROP PERL_PV_PRETTY_ELLIPSES|PERL_PV_PRETTY_LTGT|PERL_PV_ESCAPE_RE|PERL_PV_ESCAPE_NONASCII
 
+#if DOUBLEKIND == DOUBLE_IS_VAX_F_FLOAT || \
+    DOUBLEKIND == DOUBLE_IS_VAX_D_FLOAT || \
+    DOUBLEKIND == DOUBLE_IS_VAX_G_FLOAT
+#  define DOUBLE_IS_VAX_FLOAT
+#else
+#  define DOUBLE_IS_IEEE_FORMAT
+#endif
+
 #if DOUBLEKIND == DOUBLE_IS_IEEE_754_32_BIT_LITTLE_ENDIAN || \
     DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_LITTLE_ENDIAN || \
     DOUBLEKIND == DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN
@@ -6760,11 +6767,63 @@ extern void moncontrol(int);
 #  define DOUBLE_MIX_ENDIAN
 #endif
 
+/* The VAX fp formats are neither consistently little-endian nor
+ * big-endian, and neither are they really IEEE-mixed endian like
+ * the mixed-endian ARM IEEE formats (with swapped bytes).
+ * Ultimately, the VAX format ultimately came from the PDP.
+ *
+ * The ordering of the parts in VAX floats is quite vexing.
+ * In the below the fraction_n are the mantissa bits.
+ *
+ * The fraction_1 is the most significant (numbering as by DEC/Digital),
+ * while the rightmost bit in each fraction is the least significant:
+ * in other words, big-endian bit order within the fractions.
+ *
+ * The fraction segments themselves would be big-endianly, except that
+ * within 32 bit segments the less significant half comes first, the more
+ * significant after, except that in the format H (used for long doubles)
+ * the first fraction segment is alone, because the exponent is wider.
+ * This means for example that both the most and the least significant
+ * bits can be in the middle of the floats, not at either end.
+ *
+ * References:
+ * http://nssdc.gsfc.nasa.gov/nssdc/formats/VAXFloatingPoint.htm
+ * http://www.quadibloc.com/comp/cp0201.htm
+ * http://h71000.www7.hp.com/doc/82final/6443/6443pro_028.html
+ * (somebody at HP should be fired for the URLs)
+ *
+ * F   fraction_2:16 sign:1 exp:8  fraction_1:7
+ *     (exponent bias 128)
+ *
+ * D   fraction_2:16 sign:1 exp:8  fraction_1:7
+ *     fraction_4:16               fraction_3:16
+ *     (exponent bias 128)
+ *
+ * G   fraction_2:16 sign:1 exp:11 fraction_1:4
+ *     fraction_4:16               fraction_3:16
+ *     (exponent bias 1024)
+ *
+ * H   fraction_1:16 sign:1 exp:15
+ *     fraction_3:16               fraction_2:16
+ *     fraction_5:16               fraction_4:16
+ *     fraction_7:16               fraction_6:16
+ *     (exponent bias 16384)
+ *
+ * The formats T and X are available on the Alpha (and IA64?)
+ * and are equivalent with the IEEE 754 64 and 128 bit formats.
+ */
+
+#ifdef DOUBLE_IS_VAX_FLOAT
+#  define DOUBLE_VAX_ENDIAN
+#endif
+
+#ifdef DOUBLE_IS_IEEE_FORMAT
 /* All the basic IEEE formats have the implicit bit,
  * except for the 80-bit extended formats, which will undef this. */
-#define NV_IMPLICIT_BIT
+#  define NV_IMPLICIT_BIT
+#endif
 
-#ifdef LONG_DOUBLEKIND
+#if defined(LONG_DOUBLEKIND) && LONG_DOUBLEKIND != LONG_DOUBLE_IS_DOUBLE
 
 #  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN || \
       LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN || \
@@ -6818,6 +6877,9 @@ extern void moncontrol(int);
 #  ifdef DOUBLE_MIX_ENDIAN
 #    define NV_MIX_ENDIAN
 #  endif
+#  ifdef DOUBLE_VAX_ENDIAN
+#    define NV_VAX_ENDIAN
+#  endif
 #elif NVSIZE == LONG_DOUBLESIZE
 #  ifdef LONGDOUBLE_LITTLE_ENDIAN
 #    define NV_LITTLE_ENDIAN
@@ -6829,6 +6891,13 @@ extern void moncontrol(int);
 #    define NV_MIX_ENDIAN
 #  endif
 #endif
+
+#ifdef DOUBLE_IS_IEEE_FORMAT
+#  define DOUBLE_HAS_INF
+#  define DOUBLE_HAS_NAN
+#endif
+
+#ifdef DOUBLE_HAS_NAN
 
 /* NaNs (not-a-numbers) can carry payload bits, in addition to
  * "nan-ness".  Part of the payload is the quiet/signaling bit.
@@ -6980,6 +7049,8 @@ extern void moncontrol(int);
 #  elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_MIXED_ENDIAN_BE_LE
 #    define NV_NAN_QS_BYTE_OFFSET 5 /* bytes 3 2 1 0 7 6 5 4 (MSB 7) */
 #  else
+/* For example the VAX formats should never
+ * get here because they do not have NaN. */
 #    error "Unexpected double format"
 #  endif
 #endif
@@ -7182,6 +7253,9 @@ extern void moncontrol(int);
 #    error "Unexpected double format"
 #  endif
 #endif
+
+#endif /* DOUBLE_HAS_NAN */
+
 /*
 
    (KEEP THIS LAST IN perl.h!)

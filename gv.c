@@ -1061,6 +1061,9 @@ Perl_gv_fetchmethod_pvn_flags(pTHX_ HV *stash, const char *name, const STRLEN le
 
     gv = gv_fetchmeth_pvn(stash, name, nend - name, 0, flags);
     if (!gv) {
+	/* This is the special case that exempts Foo->import and
+	   Foo->unimport from being an error even if there's no
+	  import/unimport subroutine */
 	if (strEQ(name,"import") || strEQ(name,"unimport"))
 	    gv = MUTABLE_GV(&PL_sv_yes);
 	else if (autoload)
@@ -1921,9 +1924,6 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 		    goto magicalize;
 		break;
 	    case '\005':	/* $^ENCODING */
-                if (*name2 == '_') {
-                    name2++;
-                }
 		if (strEQ(name2, "NCODING"))
 		    goto magicalize;
 		break;
@@ -2411,10 +2411,10 @@ Perl_gv_check(pTHX_ HV *stash)
 
     PERL_ARGS_ASSERT_GV_CHECK;
 
-    if (!HvARRAY(stash))
+    if (!SvOOK(stash))
 	return;
 
-    assert(SvOOK(stash));
+    assert(HvARRAY(stash));
 
     for (i = 0; i <= (I32) HvMAX(stash); i++) {
         const HE *entry;
@@ -2423,7 +2423,10 @@ Perl_gv_check(pTHX_ HV *stash)
 	for (entry = HvARRAY(stash)[i]; entry; entry = HeNEXT(entry)) {
             GV *gv;
             HV *hv;
-	    if (HeKEY(entry)[HeKLEN(entry)-1] == ':' &&
+	    STRLEN keylen = HeKLEN(entry);
+            const char * const key = HeKEY(entry);
+
+	    if (keylen >= 2 && key[keylen-2] == ':'  && key[keylen-1] == ':' &&
 		(gv = MUTABLE_GV(HeVAL(entry))) && isGV(gv) && (hv = GvHV(gv)))
 	    {
 		if (hv != PL_defstash && hv != stash

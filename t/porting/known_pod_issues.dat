@@ -54,6 +54,7 @@ connect(2)
 Coro
 cpan2dist(1)
 CPAN::Changes::Spec
+CPAN::Uploader
 cpanp(1)
 CPANPLUS
 crypt(3)
@@ -107,6 +108,7 @@ File::Findgrep
 File::Map
 File::MMagic
 File::ShareDir
+Filter::Encoding
 find(1)
 flock(2)
 flock(3)
@@ -311,10 +313,12 @@ Want
 wget(1)
 Win32::Locale
 write(2)
+WWW::Mechanize
 XML::LibXML
 YAML
 YAML::Syck
 YAML::Tiny
+dist/data-dumper/changes	Verbatim line length including indents exceeds 79 by	1
 dist/data-dumper/dumper.pm	? Should you be using L<...> instead of	1
 ext/amiga-exec/exec.pm	Verbatim line length including indents exceeds 79 by	1
 ext/dynaloader/dynaloader.pm	Verbatim line length including indents exceeds 79 by	1

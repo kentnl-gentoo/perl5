@@ -5,7 +5,7 @@ use warnings;
 no warnings 'surrogate';    # surrogates can be inputs to this
 use charnames ();
 
-our $VERSION = '0.65';
+our $VERSION = '0.66';
 
 require Exporter;
 
@@ -98,6 +98,9 @@ Unicode::UCD - Unicode character database
     use Unicode::UCD 'search_invlist';
     my $index = search_invlist(\@invlist, $code_point);
 
+    # The following function should be used only internally in
+    # implementations of the Unicode Normalization Algorithm, and there
+    # are better choices than it.
     use Unicode::UCD 'compexcl';
     my $compexcl = compexcl($codepoint);
 
@@ -335,7 +338,8 @@ See L</Blocks versus Scripts>.
 
 the script I<code> belongs to.
 The L</prop_value_aliases()> function can be used to get all the synonyms
-of the script name.
+of the script name.  Note that this is the older "Script" property value, and
+not the improved "Script_Extensions" value.
 
 See L</Blocks versus Scripts>.
 
@@ -963,6 +967,10 @@ that it doesn't have scripts, this function returns C<"Unknown">.
 The L</prop_value_aliases()> function can be used to get all the synonyms
 of the script name.
 
+Note that the Script_Extensions property is an improved version of the Script
+property, and you should probably be using that instead, with the
+L</charprop()> function.
+
 If supplied with an argument that can't be a code point, charscript() tries
 to do the opposite and interpret the argument as a script name. The
 return value is a I<range set>: an anonymous array of arrays that contain
@@ -1053,7 +1061,9 @@ names as the keys, and the code point ranges (see L</charscript()>) as
 the values.
 
 L<prop_invmap("script")|/prop_invmap()> can be used to get this same data in a
-different type of data structure.
+different type of data structure.  Since the Script_Extensions property is an
+improved version of the Script property, you should instead use
+L<prop_invmap("scx")|/prop_invmap()>.
 
 L<C<prop_values("Script")>|/prop_values()> can be used to get all
 the known script names as a list, without the code point ranges.
@@ -1199,6 +1209,12 @@ sub bidi_types {
 }
 
 =head2 B<compexcl()>
+
+WARNING: Unicode discourages the use of this function or any of the
+alternative mechanisms listed in this section (the documention of
+C<compexcl()>), except internally in implementations of the Unicode
+Normalization Algorithm.  You should be using L<Unicode::Normalize> directly
+instead of these.  Using these will likely lead to half-baked results.
 
     use Unicode::UCD 'compexcl';
 
@@ -2459,7 +2475,7 @@ resolving the input property's name as is done for regular expressions.  These
 are also specified in L<perluniprops|perluniprops/Properties accessible
 through \p{} and \P{}>.  Examples of using the "property=value" form are:
 
- say join ", ", prop_invlist("Script=Shavian");
+ say join ", ", prop_invlist("Script_Extensions=Shavian");
 
  prints:
  66640, 66688
@@ -3044,6 +3060,8 @@ L<Unicode::Normalize::NFD()|Unicode::Normalize>.
 
 Note that the mapping is the one that is specified in the Unicode data files,
 and to get the final decomposition, it may need to be applied recursively.
+Unicode in fact discourages use of this property except internally in
+implementations of the Unicode Normalization Algorithm.
 
 The fourth (index [3]) element (C<$default>) in the list returned for this
 format is 0.

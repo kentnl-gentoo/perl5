@@ -5241,6 +5241,20 @@ case "$usequadmath" in
 *)                    usequadmath="$undef"  ;;
 esac
 
+: Fail if both uselongdouble and usequadmath are requested
+case "$usequadmath:$uselongdouble" in
+define:define)
+	$cat <<EOM >&4
+
+*** You requested the use of the quadmath library and use
+*** of long doubles.
+***
+*** Please select one or the other.
+EOM
+	exit 1
+        ;;
+esac
+
 : Looking for optional libraries
 echo " "
 echo "Checking for optional libraries..." >&4
@@ -7187,7 +7201,7 @@ case "$usequadmath" in
 $define)
 	echo "quadmath selected." >&4
 	case "$archname" in
-	*-ld*) echo "...and architecture name already has -quadmath." >&4
+	*-quadmath*) echo "...and architecture name already has -quadmath." >&4
 		;;
 	*)      archname="$archname-quadmath"
 		echo "...setting architecture name to $archname." >&4
@@ -9381,17 +9395,20 @@ rp='Perl administrator e-mail address'
 . ./myread
 perladmin="$ans"
 
-: determine whether to only install version-specific parts.
+: determine whether to use a version number suffix for installed binaries
 echo " "
 $cat <<EOM
-Do you want to install only the version-specific parts of the perl
-distribution?  Usually you do *not* want to do this.
+Do you want to use a version number suffix for installed binaries? This
+will install 'perl$version' instead of 'perl', and likewise for other
+binaries like 'perldoc' and 'cpan'. This allows many versions of perl
+to be installed side-by-side. Unless you are a developer, you probably
+do *not* want to do this.
 EOM
 case "$versiononly" in
 "$define"|[Yy]*|true) dflt='y' ;;
 *) dflt='n';
 esac
-rp="Do you want to install only the version-specific parts of perl?"
+rp="Do you want to use a version number suffix for installed binaries?"
 . ./myread
 case "$ans" in
 [yY]*)	val="$define";;
@@ -10127,6 +10144,11 @@ int main() {
     printf("2\n");
     exit(0);
   }
+  if (b[0] == 0xCC && b[3] == 0xCC) {
+    /* VAX format F, 32-bit PDP-style mixed endian. */
+    printf("9\n");
+    exit(0);
+  }
 #endif
 #if DOUBLESIZE == 8
   if (b[0] == 0x9A && b[7] == 0xBF) {
@@ -10153,6 +10175,16 @@ int main() {
     printf("8\n");
     exit(0);
   }
+  if (b[0] == 0xCC && b[7] == 0xCC) {
+   /* VAX format D, 64-bit PDP-style mixed endian. */
+    printf("10\n");
+    exit(0);
+  }
+  if (b[0] == 0xD9 && b[7] == 0x99) {
+   /* VAX format G, 64-bit PDP-style mixed endian. */
+    printf("11\n");
+    exit(0);
+  }
 #endif
 #if DOUBLESIZE == 16
   if (b[0] == 0x9A && b[15] == 0xBF) {
@@ -10166,7 +10198,7 @@ int main() {
     exit(0);
   }
 #endif
-  /* Then there are old mainframe/miniframe formats like VAX, IBM, and CRAY.
+  /* Then there are old mainframe/miniframe formats like IBM and CRAY.
    * Whether those environments can still build Perl is debatable. */
   printf("-1\n"); /* unknown */
   exit(0);
@@ -10187,7 +10219,10 @@ case "$doublekind" in
 6) echo "You have IEEE 754 128-bit big endian doubles." >&4 ;;
 7) echo "You have IEEE 754 64-bit mixed endian doubles (32-bit LEs in BE)." >&4 ;;
 8) echo "You have IEEE 754 64-bit mixed endian doubles (32-bit BEs in LE)." >&4 ;;
-*) echo "Cannot figure out your double.  You VAX, or something?" >&4 ;;
+9) echo "You have VAX format F 32-bit PDP-style mixed endian doubles." >&4 ;;
+10) echo "You have VAX format D 64-bit PDP-style mixed endian doubles." >&4 ;;
+11) echo "You have VAX format G 64-bit PDP-style mixed endian doubles." >&4 ;;
+*) echo "Cannot figure out your double.  You CRAY, or something?" >&4 ;;
 esac
 $rm_try
 

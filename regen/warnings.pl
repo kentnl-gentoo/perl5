@@ -16,7 +16,7 @@
 #
 # This script is normally invoked from regen.pl.
 
-$VERSION = '1.36';
+$VERSION = '1.37';
 
 BEGIN {
     require 'regen/regen_lib.pl';
@@ -105,6 +105,8 @@ my $tree = {
                                     [ 5.021, DEFAULT_ON ],
                                 'experimental::bitwise' =>
                                     [ 5.021, DEFAULT_ON ],
+                                'experimental::declared_refs' =>
+                                    [ 5.025, DEFAULT_ON ],
                         }],
 
         'missing'       => [ 5.021, DEFAULT_OFF],
@@ -358,8 +360,10 @@ EOM
 
   print $warn <<'EOM';
 
-#define isLEXWARN_on 	cBOOL(PL_curcop->cop_warnings != pWARN_STD)
-#define isLEXWARN_off	cBOOL(PL_curcop->cop_warnings == pWARN_STD)
+#define isLEXWARN_on \
+	cBOOL(PL_curcop && PL_curcop->cop_warnings != pWARN_STD)
+#define isLEXWARN_off \
+	cBOOL(!PL_curcop || PL_curcop->cop_warnings == pWARN_STD)
 #define isWARN_ONCE	(PL_dowarn & (G_WARN_ON|G_WARN_ONCE))
 #define isWARN_on(c,x)	(IsSet((U8 *)(c + 1), 2*(x)))
 #define isWARNf_on(c,x)	(IsSet((U8 *)(c + 1), 2*(x)+1))
@@ -470,7 +474,7 @@ print $pm ");\n\n" ;
 print $pm "# These are used by various things, including our own tests\n";
 print $pm tab(6, 'our $NONE'), '=  "', ('\0' x $warn_size) , "\";\n" ;
 print $pm tab(6, 'our $DEFAULT'), '=  "', mkHex($warn_size, map $_ * 2, @def),
-			   '", # [', mkRange(@def), "]\n" ;
+			   '", # [', mkRange(sort { $a <=> $b } @def), "]\n" ;
 print $pm tab(6, 'our $LAST_BIT'), '=  ' . "$index ;\n" ;
 print $pm tab(6, 'our $BYTES'),    '=  ' . "$warn_size ;\n" ;
 while (<DATA>) {

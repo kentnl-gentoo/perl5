@@ -819,13 +819,30 @@ PP(pp_aelemfast)
     AV * const av = PL_op->op_type == OP_AELEMFAST_LEX
 	? MUTABLE_AV(PAD_SV(PL_op->op_targ)) : GvAVn(cGVOP_gv);
     const U32 lval = PL_op->op_flags & OPf_MOD;
-    SV** const svp = av_fetch(av, (I8)PL_op->op_private, lval);
-    SV *sv = (svp ? *svp : &PL_sv_undef);
+    const I8 key   = (I8)PL_op->op_private;
+    SV** svp;
+    SV *sv;
 
-    if (UNLIKELY(!svp && lval))
-        DIE(aTHX_ PL_no_aelem, (int)(I8)PL_op->op_private);
+    assert(SvTYPE(av) == SVt_PVAV);
 
     EXTEND(SP, 1);
+
+    /* inlined av_fetch() for simple cases ... */
+    if (!SvRMAGICAL(av) && key >= 0 && key <= AvFILLp(av)) {
+        sv = AvARRAY(av)[key];
+        if (sv && !SvIS_FREED(sv)) {
+            PUSHs(sv);
+            RETURN;
+        }
+    }
+
+    /* ... else do it the hard way */
+    svp = av_fetch(av, key, lval);
+    sv = (svp ? *svp : &PL_sv_undef);
+
+    if (UNLIKELY(!svp && lval))
+        DIE(aTHX_ PL_no_aelem, (int)key);
+
     if (!lval && SvRMAGICAL(av) && SvGMAGICAL(sv)) /* see note in pp_helem() */
 	mg_get(sv);
     PUSHs(sv);
@@ -2994,10 +3011,7 @@ PP(pp_subst)
 	if (DO_UTF8(TARG) && !doutf8) {
 	     nsv = sv_newmortal();
 	     SvSetSV(nsv, dstr);
-	     if (IN_ENCODING)
-		  sv_recode_to_utf8(nsv, _get_encoding());
-	     else
-		  sv_utf8_upgrade(nsv);
+	     sv_utf8_upgrade(nsv);
 	     c = SvPV_const(nsv, clen);
 	     doutf8 = TRUE;
 	}
@@ -3176,13 +3190,7 @@ PP(pp_subst)
 	      first = FALSE;
 	    }
 	    else {
-		if (IN_ENCODING) {
-		    if (!nsv) nsv = sv_newmortal();
-		    sv_copypv(nsv, repl);
-		    if (!DO_UTF8(nsv)) sv_recode_to_utf8(nsv, _get_encoding());
-		    sv_catsv(dstr, nsv);
-		}
-		else sv_catsv(dstr, repl);
+		sv_catsv(dstr, repl);
 		if (UNLIKELY(SvTAINTED(repl)))
 		    rxtainted |= SUBST_TAINT_REPL;
 	    }
