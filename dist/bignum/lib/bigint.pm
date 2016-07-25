@@ -1,7 +1,7 @@
 package bigint;
 use 5.006;
 
-$VERSION = '0.39';
+$VERSION = '0.39_01';
 use Exporter;
 @ISA		= qw( Exporter );
 @EXPORT_OK	= qw( PI e bpi bexp hex oct );
@@ -248,6 +248,8 @@ sub import
     # see if we can find Math::BigInt::Lite
     if (!defined $a && !defined $p)		# rounding won't work to well
       {
+      local @INC = @INC;
+      pop @INC if $INC[-1] eq '.';
       if (eval { require Math::BigInt::Lite; 1 })
         {
         @import = ( );				# :constant in Lite, not MBI

@@ -4,7 +4,7 @@ use strict;
 use warnings;
 # ABSTRACT: A small, simple, correct HTTP/1.1 client
 
-our $VERSION = '0.054';
+our $VERSION = '0.054_01';
 
 use Carp ();
 
@@ -1392,6 +1392,8 @@ sub _find_CA_file {
     return $self->{SSL_options}->{SSL_ca_file}
         if $self->{SSL_options}->{SSL_ca_file} and -e $self->{SSL_options}->{SSL_ca_file};
 
+    local @INC = @INC;
+    pop @INC if $INC[-1] eq '.';
     return Mozilla::CA::SSL_ca_file()
         if eval { require Mozilla::CA };
 
