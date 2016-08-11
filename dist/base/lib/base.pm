@@ -96,9 +96,9 @@ sub import {
             {
                 local $SIG{__DIE__};
                 my $fn = _module_to_filename($base);
+                local @INC = @INC;
+                pop @INC if my $dotty = $INC[-1] eq '.';
                 eval {
-                    local @INC = @INC;
-                    pop @INC if $INC[-1] eq '.';
                     require $fn
                 };
                 # Only ignore "Can't locate" errors from our eval require.
@@ -114,11 +114,24 @@ sub import {
                 unless (%{"$base\::"}) {
                     require Carp;
                     local $" = " ";
-                    Carp::croak(<<ERROR);
+                    my $e = <<ERROR;
 Base class package "$base" is empty.
     (Perhaps you need to 'use' the module which defines that package first,
     or make that module available in \@INC (\@INC contains: @INC).
 ERROR
+                    if ($dotty && -e $fn) {
+                        $e .= <<ERROS;
+    The file $fn does exist in the current directory.  But note
+    that base.pm, when loading a module, now ignores the current working
+    directory if it is the last entry in \@INC.  If your software worked on
+    previous versions of Perl, the best solution is to use FindBin to
+    detect the path properly and to add that path to \@INC.  As a last
+    resort, you can re-enable looking in the current working directory by
+    adding "use lib '.'" to your code.
+ERROS
+                    }
+                    $e =~ s/\n\z/)\n/;
+                    Carp::croak($e);
                 }
                 $sigdie = $SIG{__DIE__} || undef;
             }
