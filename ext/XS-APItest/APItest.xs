@@ -3,6 +3,9 @@
 /* We want to be able to test things that aren't API yet. */
 #define PERL_EXT
 
+/* Do *not* define PERL_NO_GET_CONTEXT.  This is the one place where we get
+   to test implicit Perl_get_context().  */
+
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
@@ -2396,6 +2399,23 @@ call_pv(subname, flags, ...)
 	PUSHs(sv_2mortal(newSViv(i)));
 
 void
+call_argv(subname, flags, ...)
+    char* subname
+    I32 flags
+    PREINIT:
+	I32 i;
+	char *tmpary[4];
+    PPCODE:
+	for (i=0; i<items-2; i++)
+	    tmpary[i] = SvPV_nolen(ST(i+2)); /* ignore first two args */
+	tmpary[i] = NULL;
+	PUTBACK;
+	i = call_argv(subname, flags, tmpary);
+	SPAGAIN;
+	EXTEND(SP, 1);
+	PUSHs(sv_2mortal(newSViv(i)));
+
+void
 call_method(methname, flags, ...)
     char* methname
     I32 flags
@@ -4687,6 +4707,20 @@ bool
 test_isDIGIT_LC(UV ord)
     CODE:
         RETVAL = isDIGIT_LC(ord);
+    OUTPUT:
+        RETVAL
+
+bool
+test_isOCTAL_A(UV ord)
+    CODE:
+        RETVAL = isOCTAL_A(ord);
+    OUTPUT:
+        RETVAL
+
+bool
+test_isOCTAL_L1(UV ord)
+    CODE:
+        RETVAL = isOCTAL_L1(ord);
     OUTPUT:
         RETVAL
 

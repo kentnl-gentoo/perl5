@@ -729,6 +729,10 @@
 #   include <locale.h>
 #endif
 
+#ifdef I_XLOCALE
+#   include <xlocale.h>
+#endif
+
 #if !defined(NO_LOCALE) && defined(HAS_SETLOCALE)
 #   define USE_LOCALE
 #   define HAS_SKIP_LOCALE_INIT /* Solely for XS code to test for this
@@ -2018,6 +2022,12 @@ extern long double Perl_my_frexpl(long double x, int *e);
 #   define Perl_isinf(x) isinfq(x)
 #   define Perl_isnan(x) isnanq(x)
 #   define Perl_isfinite(x) !(isnanq(x) || isinfq(x))
+#   define Perl_fp_class(x) ((x) == 0.0Q ? 0 : isinfq(x) ? 3 : isnanq(x) ? 4 : PERL_ABS(x) < FLT128_MIN ? 2 : 1)
+#   define Perl_fp_class_inf(x)    (Perl_fp_class(x) == 3)
+#   define Perl_fp_class_nan(x)    (Perl_fp_class(x) == 4)
+#   define Perl_fp_class_norm(x)   (Perl_fp_class(x) == 1)
+#   define Perl_fp_class_denorm(x) (Perl_fp_class(x) == 2)
+#   define Perl_fp_class_zero(x)   (Perl_fp_class(x) == 0)
 #else
 #   define NV_DIG DBL_DIG
 #   ifdef DBL_MANT_DIG
@@ -3792,6 +3802,14 @@ UNION_ANY_DEFINITION;
 #else
 union any {
     void*	any_ptr;
+    SV*         any_sv;
+    SV**        any_svp;
+    GV*         any_gv;
+    AV*         any_av;
+    HV*         any_hv;
+    OP*         any_op;
+    char*       any_pv;
+    char**      any_pvp;
     I32		any_i32;
     U32		any_u32;
     IV		any_iv;
@@ -3914,14 +3932,6 @@ typedef        struct crypt_data {     /* straight from /usr/include/crypt.h */
 #undef _XPV_HEAD
 #undef _XPVMG_HEAD
 #undef _XPVCV_COMMON
-
-typedef struct _sublex_info SUBLEXINFO;
-struct _sublex_info {
-    U8 super_state;	/* lexer state to save */
-    U16 sub_inwhat;	/* "lex_inwhat" to use */
-    OP *sub_op;		/* "lex_op" to use */
-    SV *repl;		/* replacement of s/// or y/// */
-};
 
 #include "parser.h"
 
@@ -5285,6 +5295,7 @@ EXTCONST char *const PL_phase_names[];
 #endif /* !PERL_CORE */
 
 #define PL_hints PL_compiling.cop_hints
+#define PL_maxo  MAXO
 
 END_EXTERN_C
 
@@ -5319,6 +5330,8 @@ typedef enum {
     XTERMORDORDOR /* evil hack */
     /* update exp_name[] in toke.c if adding to this enum */
 } expectation;
+
+#define KEY_sigvar 0xFFFF /* fake keyword representing a signature var */
 
 /* Hints are now stored in a dedicated U32, so the bottom 8 bits are no longer
    special and there is no need for HINT_PRIVATE_MASK for COPs
@@ -5966,7 +5979,23 @@ typedef struct am_table_short AMTS;
 /* These locale things are all subject to change */
 
 #   define LOCALE_INIT   MUTEX_INIT(&PL_locale_mutex)
-#   define LOCALE_TERM   MUTEX_DESTROY(&PL_locale_mutex)
+
+#   ifdef USE_THREAD_SAFE_LOCALE
+#       define LOCALE_TERM                                                  \
+                    STMT_START {                                            \
+                        MUTEX_DESTROY(&PL_locale_mutex);                    \
+                        if (PL_C_locale_obj) {                              \
+                            /* Make sure we aren't using the locale         \
+                             * space we are about to free */                \
+                            uselocale(LC_GLOBAL_LOCALE);                    \
+                            freelocale(PL_C_locale_obj);                    \
+                            PL_C_locale_obj = (locale_t) NULL;              \
+                        }                                                   \
+                     } STMT_END
+    }
+#   else
+#       define LOCALE_TERM   MUTEX_DESTROY(&PL_locale_mutex)
+#   endif
 
 #   define LOCALE_LOCK   MUTEX_LOCK(&PL_locale_mutex)
 #   define LOCALE_UNLOCK MUTEX_UNLOCK(&PL_locale_mutex)
@@ -6052,6 +6081,20 @@ typedef struct am_table_short AMTS;
         }  STMT_END
 
 #   endif   /* PERL_CORE or PERL_IN_XSUB_RE */
+
+#if      defined(USE_ITHREADS)              \
+    &&   defined(HAS_NEWLOCALE)             \
+    &&   defined(LC_ALL_MASK)               \
+    &&   defined(HAS_FREELOCALE)            \
+    &&   defined(HAS_USELOCALE)             \
+    && ! defined(NO_THREAD_SAFE_USELOCALE)
+
+    /* The code is written for simplicity to assume that any platform advanced
+     * enough to have the Posix 2008 locale functions has LC_ALL.  The test
+     * above makes sure that assumption is valid */
+
+#   define USE_THREAD_SAFE_LOCALE
+#endif
 
 #else   /* No locale usage */
 #   define LOCALE_INIT
@@ -6770,7 +6813,7 @@ extern void moncontrol(int);
 /* The VAX fp formats are neither consistently little-endian nor
  * big-endian, and neither are they really IEEE-mixed endian like
  * the mixed-endian ARM IEEE formats (with swapped bytes).
- * Ultimately, the VAX format ultimately came from the PDP.
+ * Ultimately, the VAX format came from the PDP-11.
  *
  * The ordering of the parts in VAX floats is quite vexing.
  * In the below the fraction_n are the mantissa bits.
@@ -6793,24 +6836,36 @@ extern void moncontrol(int);
  * (somebody at HP should be fired for the URLs)
  *
  * F   fraction_2:16 sign:1 exp:8  fraction_1:7
- *     (exponent bias 128)
+ *     (exponent bias 128, hidden first one-bit)
  *
  * D   fraction_2:16 sign:1 exp:8  fraction_1:7
  *     fraction_4:16               fraction_3:16
- *     (exponent bias 128)
+ *     (exponent bias 128, hidden first one-bit)
  *
  * G   fraction_2:16 sign:1 exp:11 fraction_1:4
  *     fraction_4:16               fraction_3:16
- *     (exponent bias 1024)
+ *     (exponent bias 1024, hidden first one-bit)
  *
  * H   fraction_1:16 sign:1 exp:15
  *     fraction_3:16               fraction_2:16
  *     fraction_5:16               fraction_4:16
  *     fraction_7:16               fraction_6:16
- *     (exponent bias 16384)
+ *     (exponent bias 16384, hidden first one-bit)
+ *     (available only on VAX, and only on Fortran?)
  *
- * The formats T and X are available on the Alpha (and IA64?)
- * and are equivalent with the IEEE 754 64 and 128 bit formats.
+ * The formats S, T and X are available on the Alpha (and Itanium,
+ * also known as I64/IA64) and are equivalent with the IEEE-754 formats
+ * binary32, binary64, and binary128 (commonly: float, double, long double).
+ *
+ * S   sign:1 exp:8 mantissa:23
+ *     (exponent bias 127, hidden first one-bit)
+ *
+ * T   sign:1 exp:11 mantissa:52
+ *     (exponent bias 1022, hidden first one-bit)
+ *
+ * X   sign:1 exp:15 mantissa:112
+ *     (exponent bias 16382, hidden first one-bit)
+ *
  */
 
 #ifdef DOUBLE_IS_VAX_FLOAT
@@ -6819,7 +6874,9 @@ extern void moncontrol(int);
 
 #ifdef DOUBLE_IS_IEEE_FORMAT
 /* All the basic IEEE formats have the implicit bit,
- * except for the 80-bit extended formats, which will undef this. */
+ * except for the x86 80-bit extended formats, which will undef this.
+ * Also note that the IEEE 754 subnormals (formerly known as denormals)
+ * do not have the implicit bit of one. */
 #  define NV_IMPLICIT_BIT
 #endif
 
@@ -6847,6 +6904,7 @@ extern void moncontrol(int);
 #    define LONGDOUBLE_X86_80_BIT
 #    ifdef USE_LONG_DOUBLE
 #      undef NV_IMPLICIT_BIT
+#      define NV_X86_80_BIT
 #    endif
 #  endif
 
@@ -6855,6 +6913,10 @@ extern void moncontrol(int);
       LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_BE || \
       LONG_DOUBLEKIND == LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_LE
 #    define LONGDOUBLE_DOUBLEDOUBLE
+#  endif
+
+#  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_VAX_H_FLOAT
+#    define LONGDOUBLE_VAX_ENDIAN
 #  endif
 
 #endif /* LONG_DOUBLEKIND */
@@ -6889,6 +6951,9 @@ extern void moncontrol(int);
 #  endif
 #  ifdef LONGDOUBLE_MIX_ENDIAN
 #    define NV_MIX_ENDIAN
+#  endif
+#  ifdef LONGDOUBLE_VAX_ENDIAN
+#    define NV_VAX_ENDIAN
 #  endif
 #endif
 

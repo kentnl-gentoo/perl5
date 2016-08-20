@@ -15,15 +15,15 @@ $| = 1;
 
 BEGIN {
     chdir 't' if -d 't';
-    @INC = ('../lib','.','../ext/re');
     require Config; import Config;
     require './test.pl'; require './charset_tools.pl';
     require './loc_tools.pl';
+    set_up_inc('../lib', '.', '../ext/re');
+}
     skip_all('no re module') unless defined &DynaLoader::boot_DynaLoader;
     skip_all_without_unicode_tables();
-}
 
-plan tests => 796;  # Update this when adding/deleting tests.
+plan tests => 799;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1781,6 +1781,21 @@ EOP
                 /.*a.*b.*c.*[de]/;
             ',"Timeout",{},"Test Perl 73464")
         }
+
+        {   # [perl #128686], crashed the the interpreter
+            my $AE = chr utf8::unicode_to_native(0xC6);
+            my $ae = chr utf8::unicode_to_native(0xE6);
+            my $re = qr/[$ae\s]/i;
+            ok($AE !~ $re, '/[\xE6\s]/i doesn\'t match \xC6 when not in UTF-8');
+            utf8::upgrade $AE;
+            ok($AE =~ $re, '/[\xE6\s]/i matches \xC6 when in UTF-8');
+        }
+
+        {   # [perl #126606 crashed the interpreter
+            no warnings 'deprecated';
+            like("sS", qr/\N{}Ss|/i, "\N{} with empty branch alternation works");
+        }
+
 } # End of sub run_tests
 
 1;

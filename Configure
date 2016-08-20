@@ -506,6 +506,7 @@ d_ftello=''
 d_ftime=''
 d_gettimeod=''
 d_futimes=''
+d_gai_strerror=''
 d_Gconvert=''
 d_getaddrinfo=''
 d_getcwd=''
@@ -5252,7 +5253,7 @@ define:define)
 *** Please select one or the other.
 EOM
 	exit 1
-        ;;
+	;;
 esac
 
 : Looking for optional libraries
@@ -7044,6 +7045,16 @@ int main() {
     exit(0);
   }
 #endif
+/* We are largely making this up because it may well be
+ * that the VAX format H was never made available to C,
+ * only to Fortran. */
+#if LONGDBLSIZE == 16 && defined(__vax__)
+  if (b[0] == 0xFD && b[15] == 0x99) {
+    /* VAX format H, PDP-11 mixed endian. */
+    printf("9\n");
+    exit(0);
+  }
+#endif
   printf("-1\n"); /* unknown */
   exit(0);
 }
@@ -7065,8 +7076,9 @@ case "$longdblkind" in
 4) echo "You have x86 80-bit big endian long doubles." >& 4 ;;
 5) echo "You have 128-bit fully little-endian double-double long doubles (64-bit LEs in LE)." >& 4 ;;
 6) echo "You have 128-bit fully big-endian double-double long doubles (64-bit BEs in BE)." >& 4 ;;
-7) echo "You have 128-bit mixed double-double long doubles (64-bit LEs in BE)." >& 4 ;;
-8) echo "You have 128-bit mixed double-double long doubles (64-bit BEs in LE)." >& 4 ;;
+7) echo "You have 128-bit mixed-endian double-double long doubles (64-bit LEs in BE)." >& 4 ;;
+8) echo "You have 128-bit mixed-endian double-double long doubles (64-bit BEs in LE)." >& 4 ;;
+9) echo "You have 128-bit PDP-style mixed-endian long doubles." >& 4 ;;
 *) echo "Cannot figure out your long double." >&4 ;;
 esac
 $rm_try
@@ -14282,6 +14294,34 @@ else
 fi
 $rm_try
 
+: look for gai_strerror
+echo " "
+$cat >try.c <<'EOCP'
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netdb.h>
+int main ()
+{
+    return (gai_strerror (0) ? 0 : 1);
+    }
+EOCP
+set try
+val="$undef"
+if eval $compile; then
+    `$run ./try`
+    case "$?" in
+	0)  echo "A working gai_strerror() found." >&4
+	    val="$define" ;;
+	*)  echo "gai_strerror() found, but it doesn't work" >&4
+	    ;;
+	esac
+else
+    echo "gai_strerror() NOT found." >&4
+    fi
+set d_gai_strerror
+eval $setvar
+$rm_try
+
 : see if ndbm.h is available
 set ndbm.h i_ndbm
 eval $inhdr
@@ -20512,6 +20552,7 @@ esac
 
 : Check what kind of inf/nan your system has
 $echo "Checking the kind of infinities and nans you have..." >&4
+$echo "(The following tests may crash.  That's okay.)" >&4
 $cat >try.c <<EOP
 #define DOUBLESIZE $doublesize
 #$d_longdbl HAS_LONG_DOUBLE
@@ -24363,6 +24404,7 @@ d_fsync='$d_fsync'
 d_ftello='$d_ftello'
 d_ftime='$d_ftime'
 d_futimes='$d_futimes'
+d_gai_strerror='$d_gai_strerror'
 d_gdbm_ndbm_h_uses_prototypes='$d_gdbm_ndbm_h_uses_prototypes'
 d_gdbmndbm_h_uses_prototypes='$d_gdbmndbm_h_uses_prototypes'
 d_getaddrinfo='$d_getaddrinfo'

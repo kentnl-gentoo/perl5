@@ -8376,6 +8376,8 @@ S_reg_scan_name(pTHX_ RExC_state_t *pRExC_state, U32 flags)
 
 /* The header definitions are in F<invlist_inline.h> */
 
+#ifndef PERL_IN_XSUB_RE
+
 PERL_STATIC_INLINE UV*
 S__invlist_array_init(SV* const invlist, const bool will_have_0)
 {
@@ -8401,6 +8403,8 @@ S__invlist_array_init(SV* const invlist, const bool will_have_0)
     *offset = 1 ^ will_have_0;
     return zero_addr + *offset;
 }
+
+#endif
 
 PERL_STATIC_INLINE void
 S_invlist_set_len(pTHX_ SV* const invlist, const UV len, const bool offset)
@@ -8538,6 +8542,8 @@ S_invlist_is_iterating(SV* const invlist)
     return *(get_invlist_iter_addr(invlist)) < (STRLEN) UV_MAX;
 }
 
+#ifndef PERL_IN_XSUB_RE
+
 PERL_STATIC_INLINE UV
 S_invlist_max(SV* const invlist)
 {
@@ -8554,8 +8560,6 @@ S_invlist_max(SV* const invlist)
            ? FROM_INTERNAL_SIZE(SvCUR(invlist)) - 1
            : FROM_INTERNAL_SIZE(SvLEN(invlist)) - 1;
 }
-
-#ifndef PERL_IN_XSUB_RE
 SV*
 Perl__new_invlist(pTHX_ IV initial_size)
 {
@@ -17471,22 +17475,15 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                                       &nonascii_but_latin1_properties);
 
                 /* And add them to the final list of such characters. */
-                if (has_upper_latin1_only_utf8_matches) {
-                    _invlist_union(has_upper_latin1_only_utf8_matches,
-                                   nonascii_but_latin1_properties,
-                                   &has_upper_latin1_only_utf8_matches);
-                    SvREFCNT_dec_NN(nonascii_but_latin1_properties);
-                }
-                else {
-                    has_upper_latin1_only_utf8_matches
-                                                = nonascii_but_latin1_properties;
-                }
+                _invlist_union(has_upper_latin1_only_utf8_matches,
+                               nonascii_but_latin1_properties,
+                               &has_upper_latin1_only_utf8_matches);
 
                 /* Remove them from what now becomes the unconditional list */
                 _invlist_subtract(posixes, nonascii_but_latin1_properties,
                                   &posixes);
 
-                /* And the remainder are the unconditional ones */
+                /* And add those unconditional ones to the final list */
                 if (cp_list) {
                     _invlist_union(cp_list, posixes, &cp_list);
                     SvREFCNT_dec_NN(posixes);
@@ -17496,8 +17493,11 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                     cp_list = posixes;
                 }
 
+                SvREFCNT_dec(nonascii_but_latin1_properties);
+
                 /* Get rid of any characters that we now know are matched
-                 * unconditionally from the conditional list */
+                 * unconditionally from the conditional list, which may make
+                 * that list empty */
                 _invlist_subtract(has_upper_latin1_only_utf8_matches,
                                   cp_list,
                                   &has_upper_latin1_only_utf8_matches);

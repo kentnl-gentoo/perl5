@@ -32,7 +32,7 @@ use strict;
 use feature 'fc', 'postderef';
 
 # =1 adds debugging output; =2 increases the verbosity somewhat
-my $debug = $ENV{PERL_DEBUG_FULL_TEST} // 0;
+our $debug = $ENV{PERL_DEBUG_FULL_TEST} // 0;
 
 # Certain tests have been shown to be problematical for a few locales.  Don't
 # fail them unless at least this percentage of the tested locales fail.
@@ -66,11 +66,17 @@ my $dumper = Dumpvalue->new(
                             quoteHighBit => 0,
                             unctrl => "quote"
                            );
+
 sub debug {
   return unless $debug;
   my($mess) = join "", '# ', @_;
   chomp $mess;
   print STDERR $dumper->stringify($mess,1), "\n";
+}
+
+sub note {
+    local $debug = 1;
+    debug @_;
 }
 
 sub debug_more {
@@ -973,7 +979,7 @@ foreach my $Locale (@Locale) {
         @{$posixes{'punct'}} = grep /[[:punct:]]/, map {chr } 0..255;
         @{$posixes{'upper'}} = grep /[[:upper:]]/, map {chr } 0..255;
         @{$posixes{'xdigit'}} = grep /[[:xdigit:]]/, map {chr } 0..255;
-        @{$posixes{'cased'}} = grep /[[:upper:]]/i, map {chr } 0..255;
+        @{$posixes{'cased'}} = grep /[[:upper:][:lower:]]/i, map {chr } 0..255;
 
         # Sieve the uppercase and the lowercase.
 
@@ -1004,7 +1010,7 @@ foreach my $Locale (@Locale) {
         @{$posixes{'punct'}} = grep /[[:punct:]]/, map {chr } 0..255;
         @{$posixes{'upper'}} = grep /[[:upper:]]/, map {chr } 0..255;
         @{$posixes{'xdigit'}} = grep /[[:xdigit:]]/, map {chr } 0..255;
-        @{$posixes{'cased'}} = grep /[[:upper:]]/i, map {chr } 0..255;
+        @{$posixes{'cased'}} = grep /[[:upper:][:lower:]]/i, map {chr } 0..255;
         for (@{$posixes{'word'}}) {
             if (/[^\d_]/) { # skip digits and the _
                 if (uc($_) eq $_) {
@@ -1024,13 +1030,13 @@ foreach my $Locale (@Locale) {
     debug ":cased:  = ", disp_chars(@{$posixes{'cased'}}), "\n";
     debug ":alpha:  = ", disp_chars(@{$posixes{'alpha'}}), "\n";
     debug ":alnum:  = ", disp_chars(@{$posixes{'alnum'}}), "\n";
-    debug " w       = ", disp_chars(@{$posixes{'word'}}), "\n";
+    debug ' \w      = ', disp_chars(@{$posixes{'word'}}), "\n";
     debug ":graph:  = ", disp_chars(@{$posixes{'graph'}}), "\n";
     debug ":print:  = ", disp_chars(@{$posixes{'print'}}), "\n";
-    debug " d       = ", disp_chars(@{$posixes{'digit'}}), "\n";
+    debug ' \d      = ', disp_chars(@{$posixes{'digit'}}), "\n";
     debug ":xdigit: = ", disp_chars(@{$posixes{'xdigit'}}), "\n";
     debug ":blank:  = ", disp_chars(@{$posixes{'blank'}}), "\n";
-    debug " s       = ", disp_chars(@{$posixes{'space'}}), "\n";
+    debug ' \s      = ', disp_chars(@{$posixes{'space'}}), "\n";
     debug ":punct:  = ", disp_chars(@{$posixes{'punct'}}), "\n";
     debug ":cntrl:  = ", disp_chars(@{$posixes{'cntrl'}}), "\n";
     debug ":ascii:  = ", disp_chars(@{$posixes{'ascii'}}), "\n";
@@ -1198,7 +1204,7 @@ foreach my $Locale (@Locale) {
                     (/[[:xdigit:]]/ xor /[[:^xdigit:]]/) ||
 
                     # effectively is what [:cased:] would be if it existed.
-                    (/[[:upper:]]/i xor /[[:^upper:]]/i);
+                    (/[[:upper:][:lower:]]/i xor /[^[:upper:][:lower:]]/i);
         }
         else {
             push @f, $_ unless   (/[[:alpha:]]/ xor /[[:^alpha:]]/)   ||
@@ -1214,7 +1220,7 @@ foreach my $Locale (@Locale) {
                     (/[[:upper:]]/ xor /[[:^upper:]]/)   ||
                     (/[[:word:]]/  xor /[[:^word:]]/)    ||
                     (/[[:xdigit:]]/ xor /[[:^xdigit:]]/) ||
-                    (/[[:upper:]]/i xor /[[:^upper:]]/i);
+                    (/[[:upper:][:lower:]]/i xor /[^[:upper:][:lower:]]/i);
         }
     }
     report_multi_result($Locale, $locales_test_number, \@f);
@@ -1739,7 +1745,11 @@ foreach my $Locale (@Locale) {
         use locale;
 
         my @sorted_controls = sort @{$posixes{'cntrl'}};
-        debug "sorted :cntrl: = ", disp_chars(@sorted_controls), "\n";
+        my $output = "";
+        for my $control (@sorted_controls) {
+            $output .= " " . disp_chars($control);
+        }
+        debug "sorted :cntrl: = $output\n";
 
         ++$locales_test_number;
         $test_names{$locales_test_number}
@@ -1978,11 +1988,15 @@ foreach my $Locale (@Locale) {
                 foreach my $err (keys %!) {
                     use Errno;
                     $! = eval "&Errno::$err";   # Convert to strerror() output
+                    my $errnum = 0+$!;
                     my $strerror = "$!";
                     if ("$strerror" =~ /\P{ASCII}/) {
                         $ok14 = utf8::is_utf8($strerror);
                         no locale;
                         $ok14_5 = "$!" !~ /\P{ASCII}/;
+                        debug( disp_str(
+                        "non-ASCII \$! for error $errnum='$strerror'"))
+                                                                   if ! $ok14_5;
                         last;
                     }
                 }
@@ -2028,8 +2042,9 @@ foreach my $Locale (@Locale) {
             use Errno;
             $! = eval "&Errno::$err";   # Convert to strerror() output
             my $strerror = "$!";
-            if ("$strerror" =~ /\P{ASCII}/) {
+            if ($strerror =~ /\P{ASCII}/) {
                 $ok21 = 0;
+                debug(disp_str("non-ASCII strerror=$strerror"));
                 last;
             }
         }
@@ -2148,7 +2163,7 @@ foreach my $Locale (@Locale) {
     debug "$first_f_test..$locales_test_number: \$f = $f, \$g = $g, back to locale = $Locale\n";
 
     # Does taking lc separately differ from taking
-    # the lc "in-line"?  (This was the bug 19990704.002, change #3568.)
+    # the lc "in-line"?  (This was the bug 19990704.002 (#965), change #3568.)
     # The bug was in the caching of the 'o'-magic.
     if (! $is_utf8_locale) {
 	use locale;
@@ -2609,7 +2624,7 @@ foreach ($first_locales_test_number..$final_locales_test_number) {
 	print <<EOW;
 #
 # If your users are not using these locales you are safe for the moment,
-# but please report this failure first to perlbug\@perl.com using the
+# but please report this failure first to perlbug\@perl.org using the
 # perlbug script (as described in the INSTALL file) so that the exact
 # details of the failures can be sorted out first and then your operating
 # system supplier can be alerted about these anomalies.

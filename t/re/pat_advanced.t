@@ -6,9 +6,9 @@
 
 BEGIN {
     chdir 't' if -d 't';
-    @INC = qw(../lib .);
     require './test.pl';
     require './charset_tools.pl';
+    set_up_inc(qw '../lib .');
     skip_all_if_miniperl("miniperl can't load Tie::Hash::NamedCapture, need for %+ and %-");
 }
 
@@ -62,7 +62,7 @@ sub run_tests {
     }
 
     {
-        my $message = 'bug id 20001008.001';
+        my $message = 'bug id 20001008.001 (#4407)';
 
         my $strasse = "stra" . uni_to_native("\337") . "e";
         my @x = ("$strasse 138", "$strasse 138");

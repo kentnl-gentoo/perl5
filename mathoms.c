@@ -748,17 +748,6 @@ Perl_save_long(pTHX_ long int *longp)
 }
 
 void
-Perl_save_iv(pTHX_ IV *ivp)
-{
-    PERL_ARGS_ASSERT_SAVE_IV;
-
-    SSCHECK(3);
-    SSPUSHIV(*ivp);
-    SSPUSHPTR(ivp);
-    SSPUSHUV(SAVEt_IV);
-}
-
-void
 Perl_save_nogv(pTHX_ GV *gv)
 {
     PERL_ARGS_ASSERT_SAVE_NOGV;
@@ -1194,7 +1183,7 @@ Perl_sv_copypv(pTHX_ SV *const dsv, SV *const ssv)
 {
     PERL_ARGS_ASSERT_SV_COPYPV;
 
-    sv_copypv_flags(dsv, ssv, 0);
+    sv_copypv_flags(dsv, ssv, SV_GMAGIC);
 }
 
 UV      /* Made into a function, so can be deprecated */

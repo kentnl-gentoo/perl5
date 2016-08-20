@@ -830,7 +830,7 @@ PP(pp_aelemfast)
     /* inlined av_fetch() for simple cases ... */
     if (!SvRMAGICAL(av) && key >= 0 && key <= AvFILLp(av)) {
         sv = AvARRAY(av)[key];
-        if (sv && !SvIS_FREED(sv)) {
+        if (sv) {
             PUSHs(sv);
             RETURN;
         }
@@ -4022,6 +4022,28 @@ Perl_sub_crush_depth(pTHX_ CV *cv)
 		    SVfARG(cv_name(cv,NULL,0)));
     }
 }
+
+
+
+/* like croak, but report in context of caller */
+
+void
+Perl_croak_caller(const char *pat, ...)
+{
+    dTHX;
+    va_list args;
+    const PERL_CONTEXT *cx = caller_cx(0, NULL);
+
+    /* make error appear at call site */
+    assert(cx);
+    PL_curcop = cx->blk_oldcop;
+
+    va_start(args, pat);
+    vcroak(pat, &args);
+    NOT_REACHED; /* NOTREACHED */
+    va_end(args);
+}
+
 
 PP(pp_aelem)
 {

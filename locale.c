@@ -677,9 +677,9 @@ Perl_new_collate(pTHX_ const char *newcoll)
 #ifdef DEBUGGING
             if (DEBUG_L_TEST || debug_initialization) {
                 PerlIO_printf(Perl_debug_log,
-                    "%s:%d: ?UTF-8 locale=%d; x_len_shorter=%"UVuf", "
-                    "x_len_longer=%"UVuf","
-                    " collate multipler=%"UVuf", collate base=%"UVuf"\n",
+                    "%s:%d: ?UTF-8 locale=%d; x_len_shorter=%zu, "
+                    "x_len_longer=%zu,"
+                    " collate multipler=%zu, collate base=%zu\n",
                     __FILE__, __LINE__,
                     PL_in_utf8_COLLATE_locale,
                     x_len_shorter, x_len_longer,
@@ -1031,7 +1031,7 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
                        : NULL;
 	sl_result = my_setlocale(LC_MESSAGES, locale_param);
         DEBUG_LOCALE_INIT(LC_MESSAGES, locale_param, sl_result);
-	if (! sl_result)
+	if (! sl_result) {
 	    setlocale_failure = TRUE;
         }
 #       endif /* USE_LOCALE_MESSAGES */
@@ -1453,6 +1453,8 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
 
     /* If this locale has defective collation, skip */
     if (PL_collxfrm_base == 0 && PL_collxfrm_mult == 0) {
+        DEBUG_L(PerlIO_printf(Perl_debug_log,
+                      "_mem_collxfrm: locale's collation is defective\n"));
         goto bad;
     }
 
@@ -1462,13 +1464,6 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
      * less-than-perfect results with that character and NUL.  This is
      * unavoidable unless we replace strxfrm with our own implementation.
      *
-     * XXX This code may be overkill.  khw wrote it before realizing that if
-     * you change a NUL into some other character, that that may change the
-     * strxfrm results if that character is part of a sequence with other
-     * characters for weight calculations.  To minimize the chances of this,
-     * now the replacement is restricted to another control (likely to be
-     * \001).  But the full generality has been retained.
-     *
      * This is one of the few places in the perl core, where we can use
      * standard functions like strlen() and strcat().  It's because we're
      * looking for NULs. */
@@ -1476,99 +1471,103 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
         char * e = s + len;
         char * sans_nuls;
         STRLEN cur_min_char_len;
+        int try_non_controls;
 
         /* If we don't know what control character sorts lowest for this
          * locale, find it */
         if (*PL_strxfrm_min_char == '\0') {
             int j;
 #ifdef DEBUGGING
-            U8     cur_min_cp = 1;  /* The code point that sorts lowest, so far */
+            U8     cur_min_cp = 1; /* The code point that sorts lowest, so far */
 #endif
             char * cur_min_x = NULL;    /* And its xfrm, (except it also
                                            includes the collation index
                                            prefixed. */
 
             DEBUG_Lv(PerlIO_printf(Perl_debug_log, "Looking to replace NUL\n"));
-            /* Look through all legal code points (NUL isn't) */
-            for (j = 1; j < 256; j++) {
-                char * x;       /* j's xfrm plus collation index */
-                STRLEN x_len;   /* length of 'x' */
-                STRLEN trial_len = 1;
 
-                /* Create a 1 byte string of the current code point, but with
-                 * room to be 2 bytes */
-                char cur_source[] = { (char) j, '\0' , '\0' };
+            /* Unlikely, but it may be that no control will work to replace
+             * NUL, in which case we instead look for any character */
+            for (try_non_controls = 0;
+                 try_non_controls < 2;
+                 try_non_controls++)
+            {
+                /* Look through all legal code points (NUL isn't) */
+                for (j = 1; j < 256; j++) {
+                    char * x;       /* j's xfrm plus collation index */
+                    STRLEN x_len;   /* length of 'x' */
+                    STRLEN trial_len = 1;
 
-                if (PL_in_utf8_COLLATE_locale) {
-                    if (! isCNTRL_L1(j)) {
+                    /* Create a 1 byte string of the current code point, but
+                     * with room to be 2 bytes */
+                    char cur_source[] = { (char) j, '\0' , '\0' };
+
+                    if (PL_in_utf8_COLLATE_locale) {
+                        if (! try_non_controls && ! isCNTRL_L1(j)) {
+                            continue;
+                        }
+
+                        /* If needs to be 2 bytes, find them */
+                        if (! UVCHR_IS_INVARIANT(j)) {
+                            char * d = cur_source;
+                            append_utf8_from_native_byte((U8) j, (U8 **) &d);
+                            trial_len = 2;
+                        }
+                    }
+                    else if (! try_non_controls && ! isCNTRL_LC(j)) {
                         continue;
                     }
 
-                    /* If needs to be 2 bytes, find them */
-                    if (! UVCHR_IS_INVARIANT(j)) {
-                        char * d = cur_source;
-                        append_utf8_from_native_byte((U8) j, (U8 **) &d);
-                        trial_len = 2;
+                    /* Then transform it */
+                    x = _mem_collxfrm(cur_source, trial_len, &x_len,
+                                      PL_in_utf8_COLLATE_locale);
+
+                    /* Ignore any character that didn't successfully transform
+                     * */
+                    if (! x) {
+                        continue;
                     }
-                }
-                else if (! isCNTRL_LC(j)) {
-                    continue;
-                }
 
-                /* Then transform it */
-                x = _mem_collxfrm(cur_source, trial_len, &x_len,
-                                  PL_in_utf8_COLLATE_locale);
-
-                /* If something went wrong (which it shouldn't), just
-                 * ignore this code point */
-                if (   x_len == 0
-                    || strlen(x + COLLXFRM_HDR_LEN) < x_len)
-                {
-                    continue;
-                }
-
-                /* If this character's transformation is lower than
-                 * the current lowest, this one becomes the lowest */
-                if (   cur_min_x == NULL
-                    || strLT(x         + COLLXFRM_HDR_LEN,
-                             cur_min_x + COLLXFRM_HDR_LEN))
-                {
-                    PL_strxfrm_min_char[0] = cur_source[0];
-                    PL_strxfrm_min_char[1] = cur_source[1];
-                    PL_strxfrm_min_char[2] = cur_source[2];
-                    cur_min_x = x;
+                    /* If this character's transformation is lower than
+                     * the current lowest, this one becomes the lowest */
+                    if (   cur_min_x == NULL
+                        || strLT(x         + COLLXFRM_HDR_LEN,
+                                 cur_min_x + COLLXFRM_HDR_LEN))
+                    {
+                        PL_strxfrm_min_char[0] = cur_source[0];
+                        PL_strxfrm_min_char[1] = cur_source[1];
+                        PL_strxfrm_min_char[2] = cur_source[2];
+                        cur_min_x = x;
 #ifdef DEBUGGING
-                    cur_min_cp = j;
+                        cur_min_cp = j;
 #endif
-                }
-                else {
-                    Safefree(x);
-                }
-            } /* end of loop through all bytes */
+                    }
+                    else {
+                        Safefree(x);
+                    }
+                } /* end of loop through all bytes */
 
-            /* Unlikely, but possible, if there aren't any controls in the
-             * locale, arbitrarily use \001 */
-            if (cur_min_x == NULL) {
-                STRLEN x_len;   /* temporary */
-                cur_min_x = _mem_collxfrm("\001", 1, &x_len,
-                                          PL_in_utf8_COLLATE_locale);
-                /* cur_min_cp was already initialized to 1 */
+                if (cur_min_x) {
+                    break;
+                }
+
+                /* Unlikely, but possible, if there aren't any controls that
+                 * work in the locale, repeat the loop, looking for any
+                 * character that works */
+                DEBUG_L(PerlIO_printf(Perl_debug_log,
+                "_mem_collxfrm: No control worked.  Trying non-controls\n"));
+            }
+
+            if (! cur_min_x) {
+                DEBUG_L(PerlIO_printf(Perl_debug_log,
+                    "_mem_collxfrm: Couldn't find any character to replace"
+                    " embedded NULs in locale %s with", PL_collation_name));
+                goto bad;
             }
 
             DEBUG_L(PerlIO_printf(Perl_debug_log,
-                    "_mem_collxfrm: lowest collating non-NUL control in the "
-                    "0-255 range in locale %s is 0x%02X\n",
-                    PL_collation_name,
-                    cur_min_cp));
-            if (DEBUG_Lv_TEST) {
-                unsigned i;
-                PerlIO_printf(Perl_debug_log, "Its xfrm is");
-                for (i = 0; i < strlen(cur_min_x + COLLXFRM_HDR_LEN); i ++) {
-                    PerlIO_printf(Perl_debug_log, " %02x",
-                                (U8) *(cur_min_x + COLLXFRM_HDR_LEN + i));
-                }
-                PerlIO_printf(Perl_debug_log, "\n");
-            }
+                    "_mem_collxfrm: Replacing embedded NULs in locale %s with "
+                    "0x%02X\n", PL_collation_name, cur_min_cp));
 
             Safefree(cur_min_x);
         }
@@ -1579,7 +1578,6 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
         cur_min_char_len = strlen(PL_strxfrm_min_char);
         Newx(sans_nuls, (len * cur_min_char_len) + 1, char);
         *sans_nuls = '\0';
-
 
         /* Replace each NUL with the lowest collating control.  Loop until have
          * exhausted all the NULs */
@@ -1668,8 +1666,7 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
 
                         /* If something went wrong (which it shouldn't), just
                          * ignore this code point */
-                        if (x_len == 0) {
-                            Safefree(x);
+                        if (! x) {
                             continue;
                         }
 
@@ -1687,23 +1684,19 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
                         }
                     }
 
+                    if (! cur_max_x) {
+                        DEBUG_L(PerlIO_printf(Perl_debug_log,
+                            "_mem_collxfrm: Couldn't find any character to"
+                            " replace above-Latin1 chars in locale %s with",
+                            PL_collation_name));
+                        goto bad;
+                    }
+
                     DEBUG_L(PerlIO_printf(Perl_debug_log,
                             "_mem_collxfrm: highest 1-byte collating character"
                             " in locale %s is 0x%02X\n",
                             PL_collation_name,
                             PL_strxfrm_max_cp));
-                    if (DEBUG_Lv_TEST) {
-                        unsigned i;
-                        PerlIO_printf(Perl_debug_log, "Its xfrm is ");
-                        for (i = 0;
-                             i < strlen(cur_max_x + COLLXFRM_HDR_LEN);
-                             i++)
-                        {
-                            PerlIO_printf(Perl_debug_log, " %02x",
-                                        (U8) cur_max_x[i + COLLXFRM_HDR_LEN]);
-                        }
-                        PerlIO_printf(Perl_debug_log, "\n");
-                    }
 
                     Safefree(cur_max_x);
                 }
@@ -1757,8 +1750,11 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
            + PL_collxfrm_base
            + (PL_collxfrm_mult * length_in_chars);
     Newx(xbuf, xAlloc, char);
-    if (UNLIKELY(! xbuf))
+    if (UNLIKELY(! xbuf)) {
+        DEBUG_L(PerlIO_printf(Perl_debug_log,
+                      "_mem_collxfrm: Couldn't malloc %zu bytes\n", xAlloc));
 	goto bad;
+    }
 
     /* Store the collation id */
     *(U32*)xbuf = PL_collation_ix;
@@ -1766,12 +1762,22 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
     /* Then the transformation of the input.  We loop until successful, or we
      * give up */
     for (;;) {
+
         *xlen = strxfrm(xbuf + COLLXFRM_HDR_LEN, s, xAlloc - COLLXFRM_HDR_LEN);
 
         /* If the transformed string occupies less space than we told strxfrm()
          * was available, it means it successfully transformed the whole
          * string. */
         if (*xlen < xAlloc - COLLXFRM_HDR_LEN) {
+
+            /* Some systems include a trailing NUL in the returned length.
+             * Ignore it, using a loop in case multiple trailing NULs are
+             * returned. */
+            while (   (*xlen) > 0
+                   && *(xbuf + COLLXFRM_HDR_LEN + (*xlen) - 1) == '\0')
+            {
+                (*xlen)--;
+            }
 
             /* If the first try didn't get it, it means our prediction was low.
              * Modify the coefficients so that we predict a larger value in any
@@ -1788,10 +1794,10 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
                                      : PL_collxfrm_mult;
 
                 DEBUG_Lv(PerlIO_printf(Perl_debug_log,
-                    "%s: %d: initial size of %"UVuf" bytes for a length "
-                    "%"UVuf" string was insufficient, %"UVuf" needed\n",
+                    "%s: %d: initial size of %zu bytes for a length "
+                    "%zu string was insufficient, %zu needed\n",
                     __FILE__, __LINE__,
-                    (UV) computed_guess, (UV) length_in_chars, (UV) needed));
+                    computed_guess, length_in_chars, needed));
 
                 /* If slope increased, use it, but discard this result for
                  * length 1 strings, as we can't be sure that it's a real slope
@@ -1810,20 +1816,20 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
                     }
 
                     DEBUG_Lv(PerlIO_printf(Perl_debug_log,
-                        "%s: %d: slope is now %"UVuf"; was %"UVuf", base "
-                        "is now %"UVuf"; was %"UVuf"\n",
+                        "%s: %d: slope is now %zu; was %zu, base "
+                        "is now %zu; was %zu\n",
                         __FILE__, __LINE__,
-                        (UV) PL_collxfrm_mult, (UV) old_m,
-                        (UV) PL_collxfrm_base, (UV) old_b));
+                        PL_collxfrm_mult, old_m,
+                        PL_collxfrm_base, old_b));
                 }
                 else {  /* Slope didn't change, but 'b' did */
                     const STRLEN new_b = needed
                                         - computed_guess
                                         + PL_collxfrm_base;
                     DEBUG_Lv(PerlIO_printf(Perl_debug_log,
-                        "%s: %d: base is now %"UVuf"; was %"UVuf"\n",
+                        "%s: %d: base is now %zu; was %zu\n",
                         __FILE__, __LINE__,
-                        (UV) new_b, (UV) PL_collxfrm_base));
+                        new_b, PL_collxfrm_base));
                     PL_collxfrm_base = new_b;
                 }
             }
@@ -1831,13 +1837,17 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
             break;
         }
 
-        if (UNLIKELY(*xlen >= PERL_INT_MAX))
+        if (UNLIKELY(*xlen >= PERL_INT_MAX)) {
+            DEBUG_L(PerlIO_printf(Perl_debug_log,
+                  "_mem_collxfrm: Needed %zu bytes, max permissible is %u\n",
+                  *xlen, PERL_INT_MAX));
             goto bad;
+        }
 
         /* A well-behaved strxfrm() returns exactly how much space it needs
-         * (not including the trailing NUL) when it fails due to not enough
-         * space being provided.  Assume that this is the case unless it's been
-         * proven otherwise */
+         * (usually not including the trailing NUL) when it fails due to not
+         * enough space being provided.  Assume that this is the case unless
+         * it's been proven otherwise */
         if (LIKELY(PL_strxfrm_is_behaved) && first_time) {
             xAlloc = *xlen + COLLXFRM_HDR_LEN + 1;
         }
@@ -1850,7 +1860,8 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
                 *      (Many versions of cygwin fit this.  When the buffer size
                 *      isn't sufficient, they return the input size instead of
                 *      how much is needed.)
-                * Increase the buffer size by a fixed percentage and try again. */
+                * Increase the buffer size by a fixed percentage and try again.
+                * */
             xAlloc += (xAlloc / 4) + 1;
             PL_strxfrm_is_behaved = FALSE;
 
@@ -1858,16 +1869,19 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
             if (DEBUG_Lv_TEST || debug_initialization) {
                 PerlIO_printf(Perl_debug_log,
                 "_mem_collxfrm required more space than previously calculated"
-                " for locale %s, trying again with new guess=%d+%"UVuf"\n",
+                " for locale %s, trying again with new guess=%d+%zu\n",
                 PL_collation_name, (int) COLLXFRM_HDR_LEN,
-                (UV) xAlloc - COLLXFRM_HDR_LEN);
+                xAlloc - COLLXFRM_HDR_LEN);
             }
 #endif
         }
 
         Renew(xbuf, xAlloc, char);
-        if (UNLIKELY(! xbuf))
+        if (UNLIKELY(! xbuf)) {
+            DEBUG_L(PerlIO_printf(Perl_debug_log,
+                      "_mem_collxfrm: Couldn't realloc %zu bytes\n", xAlloc));
             goto bad;
+        }
 
         first_time = FALSE;
     }
@@ -1875,35 +1889,10 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
 
 #ifdef DEBUGGING
     if (DEBUG_Lv_TEST || debug_initialization) {
-        unsigned i;
-        char * t = s;
-        bool prev_was_printable = TRUE;
-        bool first_time = TRUE;
-        PerlIO_printf(Perl_debug_log,
-            "_mem_collxfrm[%d]: returning %"UVuf" for locale %s string '",
-            PL_collation_ix, *xlen, PL_collation_name);
-        while (t < s + len ) {
-            UV cp = (utf8)
-                    ?  utf8_to_uvchr_buf((U8 *) t, s + len, NULL)
-                    : * (U8 *) t;
-            if (isPRINT(cp)) {
-                if (! prev_was_printable) {
-                    PerlIO_printf(Perl_debug_log, " ");
-                }
-                PerlIO_printf(Perl_debug_log, "%c", (U8) cp);
-                prev_was_printable = TRUE;
-            }
-            else {
-                if (! first_time) {
-                    PerlIO_printf(Perl_debug_log, " ");
-                }
-                PerlIO_printf(Perl_debug_log, "%02"UVXf"", cp);
-                prev_was_printable = FALSE;
-            }
-            t += (utf8) ? UTF8SKIP(t) : 1;
-            first_time = FALSE;
-        }
-        PerlIO_printf(Perl_debug_log, "'\nIts xfrm is");
+        Size_t i;
+
+        print_collxfrm_input_and_return(s, s + len, xlen, utf8);
+        PerlIO_printf(Perl_debug_log, "Its xfrm is:");
         for (i = COLLXFRM_HDR_LEN; i < *xlen + COLLXFRM_HDR_LEN; i++) {
             PerlIO_printf(Perl_debug_log, " %02x", (U8) xbuf[i]);
         }
@@ -1928,12 +1917,64 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
     *xlen = 0;
 #ifdef DEBUGGING
     if (DEBUG_Lv_TEST || debug_initialization) {
-        PerlIO_printf(Perl_debug_log, "_mem_collxfrm[%d] returning NULL\n",
-                                      PL_collation_ix);
+        print_collxfrm_input_and_return(s, s + len, NULL, utf8);
     }
 #endif
     return NULL;
 }
+
+#ifdef DEBUGGING
+
+void
+S_print_collxfrm_input_and_return(pTHX_
+                                  const char * const s,
+                                  const char * const e,
+                                  const STRLEN * const xlen,
+                                  const bool is_utf8)
+{
+    const char * t = s;
+    bool prev_was_printable = TRUE;
+    bool first_time = TRUE;
+
+    PERL_ARGS_ASSERT_PRINT_COLLXFRM_INPUT_AND_RETURN;
+
+    PerlIO_printf(Perl_debug_log, "_mem_collxfrm[%d]: returning ",
+                                                            PL_collation_ix);
+    if (xlen) {
+        PerlIO_printf(Perl_debug_log, "%"UVuf"", (UV) *xlen);
+    }
+    else {
+        PerlIO_printf(Perl_debug_log, "NULL");
+    }
+    PerlIO_printf(Perl_debug_log, " for locale '%s', string='",
+                                                            PL_collation_name);
+
+    while (t < e) {
+        UV cp = (is_utf8)
+                ?  utf8_to_uvchr_buf((U8 *) t, e, NULL)
+                : * (U8 *) t;
+        if (isPRINT(cp)) {
+            if (! prev_was_printable) {
+                PerlIO_printf(Perl_debug_log, " ");
+            }
+            PerlIO_printf(Perl_debug_log, "%c", (U8) cp);
+            prev_was_printable = TRUE;
+        }
+        else {
+            if (! first_time) {
+                PerlIO_printf(Perl_debug_log, " ");
+            }
+            PerlIO_printf(Perl_debug_log, "%02"UVXf"", cp);
+            prev_was_printable = FALSE;
+        }
+        t += (is_utf8) ? UTF8SKIP(t) : 1;
+        first_time = FALSE;
+    }
+
+    PerlIO_printf(Perl_debug_log, "'\n");
+}
+
+#endif   /* #ifdef DEBUGGING */
 
 #endif /* USE_LOCALE_COLLATE */
 
@@ -2464,47 +2505,112 @@ Perl__is_in_locale_category(pTHX_ const bool compiling, const int category)
 }
 
 char *
-Perl_my_strerror(pTHX_ const int errnum) {
+Perl_my_strerror(pTHX_ const int errnum)
+{
+    /* Returns a mortalized copy of the text of the error message associated
+     * with 'errnum'.  It uses the current locale's text unless the platform
+     * doesn't have the LC_MESSAGES category or we are not being called from
+     * within the scope of 'use locale'.  In the former case, it uses whatever
+     * strerror returns; in the latter case it uses the text from the C locale.
+     *
+     * The function just calls strerror(), but temporarily switches, if needed,
+     * to the C locale */
+
+    char *errstr;
+
+#ifdef USE_LOCALE_MESSAGES  /* If platform doesn't have messages category, we
+                               don't do any switching to the C locale; we just
+                               use whatever strerror() returns */
+    const bool within_locale_scope = IN_LC(LC_MESSAGES);
+
     dVAR;
 
-    /* Uses C locale for the error text unless within scope of 'use locale' for
-     * LC_MESSAGES */
+#  ifdef USE_THREAD_SAFE_LOCALE
+    locale_t save_locale;
+#  else
+    char * save_locale;
+    bool locale_is_C = FALSE;
 
-#ifdef USE_LOCALE_MESSAGES
-    if (! IN_LC(LC_MESSAGES)) {
-        char * save_locale;
+    /* We have a critical section to prevent another thread from changing the
+     * locale out from under us (or zapping the buffer returned from
+     * setlocale() ) */
+    LOCALE_LOCK;
 
-        /* We have a critical section to prevent another thread from changing
-         * the locale out from under us (or zapping the buffer returned from
-         * setlocale() ) */
-        LOCALE_LOCK;
+#  endif
 
-        save_locale = setlocale(LC_MESSAGES, NULL);
-        if (! isNAME_C_OR_POSIX(save_locale)) {
-            char *errstr;
+    if (! within_locale_scope) {
+        errno = 0;
 
-            /* The next setlocale likely will zap this, so create a copy */
-            save_locale = savepv(save_locale);
+#  ifdef USE_THREAD_SAFE_LOCALE /* Use the thread-safe locale functions */
 
-            setlocale(LC_MESSAGES, "C");
-
-            /* This points to the static space in Strerror, with all its
-             * limitations */
-            errstr = Strerror(errnum);
-
-            setlocale(LC_MESSAGES, save_locale);
-            Safefree(save_locale);
-
-            LOCALE_UNLOCK;
-
-            return errstr;
+        save_locale = uselocale(PL_C_locale_obj);
+        if (! save_locale) {
+            DEBUG_L(PerlIO_printf(Perl_debug_log,
+                                  "uselocale failed, errno=%d\n", errno));
         }
 
-        LOCALE_UNLOCK;
-    }
+#  else    /* Not thread-safe build */
+
+        save_locale = setlocale(LC_MESSAGES, NULL);
+        if (! save_locale) {
+            DEBUG_L(PerlIO_printf(Perl_debug_log,
+                                  "setlocale failed, errno=%d\n", errno));
+        }
+        else {
+            locale_is_C = isNAME_C_OR_POSIX(save_locale);
+
+            /* Switch to the C locale if not already in it */
+            if (! locale_is_C) {
+
+                /* The setlocale() just below likely will zap 'save_locale', so
+                 * create a copy.  */
+                save_locale = savepv(save_locale);
+                setlocale(LC_MESSAGES, "C");
+            }
+        }
+
+#  endif
+
+    }   /* end of ! within_locale_scope */
+
 #endif
 
-    return Strerror(errnum);
+    errstr = Strerror(errnum);
+    if (errstr) {
+        errstr = savepv(errstr);
+        SAVEFREEPV(errstr);
+    }
+
+#ifdef USE_LOCALE_MESSAGES
+
+    if (! within_locale_scope) {
+        errno = 0;
+
+#  ifdef USE_THREAD_SAFE_LOCALE
+
+        if (save_locale && ! uselocale(save_locale)) {
+            DEBUG_L(PerlIO_printf(Perl_debug_log,
+                          "uselocale restore failed, errno=%d\n", errno));
+        }
+    }
+
+#  else
+
+        if (save_locale && ! locale_is_C) {
+            if (! setlocale(LC_MESSAGES, save_locale)) {
+                DEBUG_L(PerlIO_printf(Perl_debug_log,
+                      "setlocale restore failed, errno=%d\n", errno));
+            }
+            Safefree(save_locale);
+        }
+    }
+
+    LOCALE_UNLOCK;
+
+#  endif
+#endif
+
+    return errstr;
 }
 
 /*

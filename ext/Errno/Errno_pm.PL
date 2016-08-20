@@ -2,7 +2,7 @@ use ExtUtils::MakeMaker;
 use Config;
 use strict;
 
-our $VERSION = "1.25";
+our $VERSION = "1.26";
 
 my %err = ();
 
@@ -391,6 +391,7 @@ sub STORE {
     Carp::confess("ERRNO hash is read only!");
 }
 
+# This is the true return value
 *CLEAR = *DELETE = \*STORE; # Typeglob aliasing uses less space
 
 sub NEXTKEY {
@@ -407,7 +408,9 @@ sub EXISTS {
     exists $err{$errname};
 }
 
-tie %!, __PACKAGE__; # Returns an object, objects are true.
+sub _tie_it {
+    tie %{$_[0]}, __PACKAGE__;
+}
 
 __END__
 

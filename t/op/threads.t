@@ -2,8 +2,8 @@
 
 BEGIN {
      chdir 't' if -d 't';
-     @INC = '../lib';
      require './test.pl';
+     set_up_inc( '../lib' );
      $| = 1;
 
      skip_all_without_config('useithreads');
@@ -399,7 +399,7 @@ fresh_perl_is(
   'no crash when deleting $::{INC} in thread'
 );
 
-fresh_perl_is(<<'CODE', 'ok', 'no crash modifying extended array element');
+fresh_perl_is(<<'CODE', 'ok', {}, 'no crash modifying extended array element');
 use threads;
 my @a = 1;
 threads->create(sub { $#a = 1; $a[1] = 2; print qq/ok\n/ })->join;

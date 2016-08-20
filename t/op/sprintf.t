@@ -10,13 +10,14 @@
 
 BEGIN {
     chdir 't' if -d 't';
-    @INC = qw '../lib ../cpan/version/lib';
+    require './test.pl';
+    set_up_inc(qw '../lib ../cpan/version/lib');
 }
 use warnings;
 use version;
 use Config;
 use strict;
-require './test.pl';
+
 
 my @tests = ();
 my ($template, $data, $result, $comment, $w, $x, $evalData, $n, $p);
@@ -31,6 +32,9 @@ if ($^O eq 'VMS') {
 
 # No %Config.
 my $Is_Ultrix_VAX = $^O eq 'ultrix' && `uname -m` =~ /^VAX$/;
+
+# The most generic VAX catcher.
+my $Is_VAX_Float = (pack("d", 1) =~ /^[\x80\x10]\x40/);
 
 our $IS_EBCDIC = $::IS_EBCDIC;  # Solely to avoid the 'used once' warning
 our $IS_ASCII = $::IS_ASCII;   # Solely to avoid the 'used once' warning
@@ -51,7 +55,7 @@ while (<DATA>) {
         $data   =~ s/([eE])\-101$/${1}-56/;  # larger exponents
         $result =~ s/([eE])\-102$/${1}-57/;  #  "       "
     }
-    if ($Is_VMS_VAX || $Is_Ultrix_VAX) {
+    if ($Is_VMS_VAX || $Is_Ultrix_VAX || $Is_VAX_Float) {
 	# VAX DEC C 5.3 at least since there is no
 	# ccflags =~ /float=ieee/ on VAX.
 	# AXP is unaffected whether or not it is using ieee.
@@ -113,23 +117,20 @@ for (@tests) {
 	my $osv = exists $Config{osvers} ? $Config{osvers} : "0";
 	my $archname = $Config{archname};
 	# >comment skip: all<
-	if ($os =~ /\ball\b/i) {
-	    $skip = 1;
-	} elsif ($os =~ /\b$^O(?::(\S+))?\b/i) {
+	# >comment skip: solaris<
+        # >comment skip: x86_64-linux-ld<
+	if ($os =~ /\b(?:all|\Q$^O\E|\Q$archname\E)\b/i) {
+            $skip = 1;
+	} elsif ($os =~ /\b\Q$^O\E(?::(\S+))\b/i) {
             # We can have the $^O followed by an optional condition.
             # The condition, if present, can be one of:
-            # (1) a regex between slashes...
-            #     tested as a regex against $Config{archname}
-            # (2) starts with a digit...
+            # (1) starts with a digit...
             #     the first pair of dot-separated digits is
-            #     tested against $Config{osvers}
-            # (3) tested as literal string against $Config{archname}
+            #     tested numerically against $Config{osvers}
+            # (2) otherwise...
+            #     tested as a \b/i regex against $Config{archname}
             my $cond = $1;
-            if ($cond =~ m{^/(.+)/$}) {
-                # >comment skip: solaris:/86/<
-                my $vsr = $1;
-                $skip = $archname =~ /$vsr/;
-            } elsif ($cond =~ /^\d/) {
+            if ($cond =~ /^\d/) {
                 # >comment skip: hpux:10.20<
                 my $vsn = $cond;
                 # Only compare on the the first pair of digits, as numeric
@@ -138,7 +139,7 @@ for (@tests) {
                 $skip = $vsn ? ($osv <= $vsn ? 1 : 0) : 1;
             } else {
                 # >comment skip: netbsd:vax-netbsd<
-                $skip = $cond eq $archname;
+                $skip = $archname =~ /\b\Q$cond\E\b/i;
             }
 	}
 	$skip and $comment =~ s/$/, failure expected on $^O $osv $archname/;
@@ -148,7 +149,7 @@ for (@tests) {
         ok(1, join ' ', grep length, ">$result<", $comment);
     }
     elsif ($skip) {
-        ok(1, "skip $comment");
+      SKIP: { skip($comment, 1) }
     }
     elsif ($y eq ">$result<")	# Some C libraries always give
     {				# three-digit exponent

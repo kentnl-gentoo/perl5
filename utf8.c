@@ -638,14 +638,10 @@ Perl_utf8n_to_uvchr(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
     /* Here is not a continuation byte, nor an invariant.  The only thing left
      * is a start byte (possibly for an overlong) */
 
-#ifdef EBCDIC
-    uv = NATIVE_UTF8_TO_I8(uv);
-#endif
-
-    /* Remove the leading bits that indicate the number of bytes in the
-     * character's whole UTF-8 sequence, leaving just the bits that are part of
-     * the value */
-    uv &= UTF_START_MASK(expectlen);
+    /* Convert to I8 on EBCDIC (no-op on ASCII), then remove the leading bits
+     * that indicate the number of bytes in the character's whole UTF-8
+     * sequence, leaving just the bits that are part of the value.  */
+    uv = NATIVE_UTF8_TO_I8(uv) & UTF_START_MASK(expectlen);
 
     /* Now, loop through the remaining bytes in the character's sequence,
      * accumulating each into the working value as we go.  Be sure to not look
@@ -2888,7 +2884,7 @@ Perl__core_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 m
  *
  * Non-binary properties are stored in as many bits as necessary to represent
  * their values (32 currently, though the code is more general than that), not
- * as single bits, but the principal is the same: the value for each key is a
+ * as single bits, but the principle is the same: the value for each key is a
  * vector that encompasses the property values for all code points whose UTF-8
  * representations are represented by the key.  That is, for all code points
  * whose UTF-8 representations are length N bytes, and the key is the first N-1

@@ -4,8 +4,8 @@
 
 BEGIN {
     chdir 't' if -d 't';
-    @INC = qw(. ../lib);
     require "./test.pl"; require './charset_tools.pl';
+    set_up_inc( qw(. ../lib) );
 }
 
 use warnings;
@@ -97,7 +97,7 @@ for (1) {
 is($count, 2, 'end of loop');
 
 # Does goto work correctly within a for(;;) loop?
-#  (BUG ID 20010309.004)
+#  (BUG ID 20010309.004 (#5998))
 
 for(my $i=0;!$i++;) {
   my $x=1;

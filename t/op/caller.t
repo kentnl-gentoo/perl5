@@ -3,9 +3,9 @@
 
 BEGIN {
     chdir 't' if -d 't';
-    @INC = '../lib';
     require './test.pl';
-    plan( tests => 96 );
+    set_up_inc('../lib');
+    plan( tests => 96 ); # some tests are run in a BEGIN block
 }
 
 my @c;
@@ -27,7 +27,7 @@ sub { @c = caller(0) } -> ();
 is( $c[3], "main::__ANON__", "anonymous subroutine name" );
 ok( $c[4], "hasargs true with anon sub" );
 
-# Bug 20020517.003, used to dump core
+# Bug 20020517.003 (#9367), used to dump core
 sub foo { @c = caller(0) }
 my $fooref = delete $::{foo};
 $fooref -> ();

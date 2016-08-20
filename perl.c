@@ -420,6 +420,9 @@ perl_construct(pTHXx)
     PL_SB_invlist = _new_invlist_C_array(_Perl_SB_invlist);
     PL_WB_invlist = _new_invlist_C_array(_Perl_WB_invlist);
     PL_LB_invlist = _new_invlist_C_array(_Perl_LB_invlist);
+#ifdef USE_THREAD_SAFE_LOCALE
+    PL_C_locale_obj = newlocale(LC_ALL_MASK, "C", NULL);
+#endif
 
     ENTER;
 }
@@ -618,8 +621,9 @@ perl_destruct(pTHXx)
         PerlIO *stdo = PerlIO_stdout();
         if (*stdo && PerlIO_flush(stdo)) {
             PerlIO_restore_errno(stdo);
-            PerlIO_printf(PerlIO_stderr(), "Unable to flush stdout: %s",
-                          Strerror(errno));
+            if (errno)
+                PerlIO_printf(PerlIO_stderr(), "Unable to flush stdout: %s",
+                    Strerror(errno));
             if (!STATUS_UNIX)
                 STATUS_ALL_FAILURE;
         }
@@ -2835,7 +2839,7 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
 	(void)POPMARK;
         old_cxix = cxstack_ix;
 	create_eval_scope(NULL, flags|G_FAKINGEVAL);
-	(void)INCMARK;
+	INCMARK;
 
 	JMPENV_PUSH(ret);
 
@@ -3221,8 +3225,7 @@ Perl_moreswitches(pTHX_ const char *s)
 		   s--;
 	      }
 	      PL_rs = newSVpvs("");
-	      SvGROW(PL_rs, (STRLEN)(UVCHR_SKIP(rschar) + 1));
-	      tmps = (U8*)SvPVX(PL_rs);
+	      tmps = (U8*) SvGROW(PL_rs, (STRLEN)(UVCHR_SKIP(rschar) + 1));
 	      uvchr_to_utf8(tmps, rschar);
 	      SvCUR_set(PL_rs, UVCHR_SKIP(rschar));
 	      SvUTF8_on(PL_rs);

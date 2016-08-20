@@ -120,7 +120,7 @@ use File::Glob qw(:case);
 %Modules = (
 
     'Archive::Tar' => {
-        'DISTRIBUTION' => 'BINGOS/Archive-Tar-2.08.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Archive-Tar-2.10.tar.gz',
         'FILES'        => q[cpan/Archive-Tar],
         'BUGS'         => 'bug-archive-tar@rt.cpan.org',
         'EXCLUDED'     => [
@@ -181,6 +181,10 @@ use File::Glob qw(:case);
     'base' => {
         'DISTRIBUTION' => 'RJBS/base-2.23.tar.gz',
         'FILES'        => q[dist/base],
+        'CUSTOMIZED'   => [
+            # https://rt.perl.org/Ticket/Display.html?id=127834
+            qw( lib/base.pm )
+        ],
     },
 
     'bignum' => {
@@ -194,6 +198,13 @@ use File::Glob qw(:case);
                 t/02pod.t
                 t/03podcov.t
                 ),
+        ],
+        'CUSTOMIZED'   => [
+            qw(
+               lib/Math/BigFloat/Trace.pm
+               lib/Math/BigInt/Trace.pm lib/bigint.pm
+               lib/bignum.pm lib/bigrat.pm
+            )
         ],
     },
 
@@ -227,7 +238,7 @@ use File::Glob qw(:case);
     },
 
     'Config::Perl::V' => {
-        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.26.tgz',
+        'DISTRIBUTION' => 'HMBRAND/Config-Perl-V-0.27.tgz',
         'FILES'        => q[cpan/Config-Perl-V],
         'EXCLUDED'     => [qw(
 		examples/show-v.pl
@@ -283,19 +294,23 @@ use File::Glob qw(:case);
                 t/yaml_code.yml
                 ),
         ],
+        'CUSTOMIZED'   => [
+            # CVE-2016-1238
+            qw(
+               lib/App/Cpan.pm lib/CPAN.pm scripts/cpan
+            )
+        ],
     },
 
     # Note: When updating CPAN-Meta the META.* files will need to be regenerated
     # perl -Icpan/CPAN-Meta/lib Porting/makemeta
     'CPAN::Meta' => {
-        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.150005.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/CPAN-Meta-2.150010.tar.gz',
         'FILES'        => q[cpan/CPAN-Meta],
         'EXCLUDED'     => [
             qw[t/00-report-prereqs.t
                t/00-report-prereqs.dd
-               t/data-test/x_deprecated-META.json
-               t/data-valid/x_deprecated-META.yml
-               t/README-data.txt],
+              ],
             qr{^xt},
             qr{^history},
         ],
@@ -359,6 +374,10 @@ use File::Glob qw(:case);
         'DISTRIBUTION' => 'GAAS/Digest-1.17.tar.gz',
         'FILES'        => q[cpan/Digest],
         'EXCLUDED'     => ['digest-bench'],
+        'CUSTOMIZED'   => [
+            # CVE-2016-1238
+            qw( Digest.pm )
+        ],
     },
 
     'Digest::MD5' => {
@@ -368,7 +387,7 @@ use File::Glob qw(:case);
     },
 
     'Digest::SHA' => {
-        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.95.tar.gz',
+        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.96.tar.gz',
         'FILES'        => q[cpan/Digest-SHA],
         'EXCLUDED'     => [
             qw( t/pod.t
@@ -385,19 +404,9 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.84.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.86.tar.gz',
         'FILES'        => q[cpan/Encode],
-        CUSTOMIZED     => [
-            qw( encoding.pm
-                Byte/Makefile.PL
-                t/enc_data.t
-                t/enc_eucjp.t
-                t/enc_module.t
-                t/enc_utf8.t
-                t/encoding.t
-                t/jperl.t
-                ),
-        ],
+        'CUSTOMIZED'   => [ qw[ Encode.xs ] ],
     },
 
     'encoding::warnings' => {
@@ -469,7 +478,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::MakeMaker' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-7.18.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-7.24.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -481,7 +490,6 @@ use File::Glob qw(:case);
             'README.packaging',
             'lib/ExtUtils/MakeMaker/version/vpp.pm',
         ],
-        'CUSTOMIZED' => [ qw( t/basic.t t/lib/MakeMaker/Test/Setup/XS.pm ) ],
     },
 
     'ExtUtils::Manifest' => {
@@ -499,7 +507,7 @@ use File::Glob qw(:case);
     },
 
     'File::Fetch' => {
-        'DISTRIBUTION' => 'BINGOS/File-Fetch-0.48.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/File-Fetch-0.52.tar.gz',
         'FILES'        => q[cpan/File-Fetch],
     },
 
@@ -583,7 +591,7 @@ use File::Glob qw(:case);
     },
 
     'HTTP::Tiny' => {
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.058.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.064.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/00-report-prereqs.t',
@@ -627,10 +635,41 @@ use File::Glob qw(:case);
             't/010examples-zlib.t',
             't/cz-05examples.t',
         ],
+        'CUSTOMIZED'   => [
+            # CVE-2016-1238
+            qw(
+               bin/zipdetails lib/Compress/Zlib.pm
+               lib/IO/Compress/Adapter/Bzip2.pm
+               lib/IO/Compress/Adapter/Deflate.pm
+               lib/IO/Compress/Adapter/Identity.pm
+               lib/IO/Compress/Base.pm
+               lib/IO/Compress/Base/Common.pm
+               lib/IO/Compress/Bzip2.pm
+               lib/IO/Compress/Deflate.pm
+               lib/IO/Compress/Gzip.pm
+               lib/IO/Compress/Gzip/Constants.pm
+               lib/IO/Compress/RawDeflate.pm
+               lib/IO/Compress/Zip.pm
+               lib/IO/Compress/Zip/Constants.pm
+               lib/IO/Compress/Zlib/Constants.pm
+               lib/IO/Compress/Zlib/Extra.pm
+               lib/IO/Uncompress/Adapter/Bunzip2.pm
+               lib/IO/Uncompress/Adapter/Identity.pm
+               lib/IO/Uncompress/Adapter/Inflate.pm
+               lib/IO/Uncompress/AnyInflate.pm
+               lib/IO/Uncompress/AnyUncompress.pm
+               lib/IO/Uncompress/Base.pm
+               lib/IO/Uncompress/Bunzip2.pm
+               lib/IO/Uncompress/Gunzip.pm
+               lib/IO/Uncompress/Inflate.pm
+               lib/IO/Uncompress/RawInflate.pm
+               lib/IO/Uncompress/Unzip.pm
+            )
+        ],
     },
 
     'IO::Socket::IP' => {
-        'DISTRIBUTION' => 'PEVANS/IO-Socket-IP-0.37.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/IO-Socket-IP-0.38.tar.gz',
         'FILES'        => q[cpan/IO-Socket-IP],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -643,7 +682,7 @@ use File::Glob qw(:case);
     },
 
     'IPC::Cmd' => {
-        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.94.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.96.tar.gz',
         'FILES'        => q[cpan/IPC-Cmd],
     },
 
@@ -660,6 +699,10 @@ use File::Glob qw(:case);
     'JSON::PP' => {
         'DISTRIBUTION' => 'MAKAMAKA/JSON-PP-2.27400.tar.gz',
         'FILES'        => q[cpan/JSON-PP],
+        'CUSTOMIZED'   => [
+            # CVE-2016-1238
+            qw( bin/json_pp lib/JSON/PP.pm ),
+        ],
     },
 
     'lib' => {
@@ -673,7 +716,7 @@ use File::Glob qw(:case);
     },
 
     'libnet' => {
-        'DISTRIBUTION' => 'SHAY/libnet-3.09.tar.gz',
+        'DISTRIBUTION' => 'SHAY/libnet-3.10.tar.gz',
         'FILES'        => q[cpan/libnet],
         'EXCLUDED'     => [
             qw( Configure
@@ -703,7 +746,7 @@ use File::Glob qw(:case);
     },
 
     'Locale::Maketext' => {
-        'DISTRIBUTION' => 'TODDR/Locale-Maketext-1.27.tar.gz',
+        'DISTRIBUTION' => 'TODDR/Locale-Maketext-1.28.tar.gz',
         'FILES'        => q[dist/Locale-Maketext],
         'EXCLUDED'     => [
             qw(
@@ -717,6 +760,10 @@ use File::Glob qw(:case);
     'Locale::Maketext::Simple' => {
         'DISTRIBUTION' => 'JESSE/Locale-Maketext-Simple-0.21.tar.gz',
         'FILES'        => q[cpan/Locale-Maketext-Simple],
+        'CUSTOMIZED'   => [
+            # CVE-2016-1238
+            qw( lib/Locale/Maketext/Simple.pm )
+        ],
     },
 
     'Math::BigInt' => {
@@ -785,6 +832,10 @@ use File::Glob qw(:case);
         'DISTRIBUTION' => 'MJD/Memoize-1.03.tgz',
         'FILES'        => q[cpan/Memoize],
         'EXCLUDED'     => ['article.html'],
+        'CUSTOMIZED'   => [
+            # CVE-2016-1238
+            qw( Memoize.pm )
+        ],
     },
 
     'MIME::Base64' => {
@@ -794,7 +845,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160620.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160720.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -804,7 +855,7 @@ use File::Glob qw(:case);
     },
 
     'Module::Load::Conditional' => {
-        'DISTRIBUTION' => 'BINGOS/Module-Load-Conditional-0.64.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-Load-Conditional-0.68.tar.gz',
         'FILES'        => q[cpan/Module-Load-Conditional],
     },
 
@@ -814,7 +865,7 @@ use File::Glob qw(:case);
     },
 
     'Module::Metadata' => {
-        'DISTRIBUTION' => 'ETHER/Module-Metadata-1.000032-TRIAL.tar.gz',
+        'DISTRIBUTION' => 'ETHER/Module-Metadata-1.000033.tar.gz',
         'FILES'        => q[cpan/Module-Metadata],
         'EXCLUDED'     => [
             qw(t/00-report-prereqs.t),
@@ -822,9 +873,6 @@ use File::Glob qw(:case);
             qr{weaver.ini},
             qr{^xt},
         ],
-        # https://rt.perl.org/Ticket/Display.html?id=128160
-	# https://github.com/Perl-Toolchain-Gang/Module-Metadata/commit/59b3f5b45ff862a1a422a409518255736fe81b66
-        'CUSTOMIZED'   => [ qw[ t/extract-package.t t/metadata.t ] ],
     },
 
     'Net::Ping' => {
@@ -833,7 +881,7 @@ use File::Glob qw(:case);
     },
 
     'NEXT' => {
-        'DISTRIBUTION' => 'FLORA/NEXT-0.65.tar.gz',
+        'DISTRIBUTION' => 'NEILB/NEXT-0.67.tar.gz',
         'FILES'        => q[cpan/NEXT],
         'EXCLUDED'     => [qr{^demo/}],
     },
@@ -846,16 +894,6 @@ use File::Glob qw(:case);
     'parent' => {
         'DISTRIBUTION' => 'CORION/parent-0.234.tar.gz',
         'FILES'        => q[cpan/parent],
-    },
-
-    'Parse::CPAN::Meta' => {
-        'DISTRIBUTION' => 'DAGOLDEN/Parse-CPAN-Meta-1.4422.tar.gz',
-        'FILES'        => q[cpan/Parse-CPAN-Meta],
-        'EXCLUDED'     => [
-            qw[t/00-report-prereqs.dd],
-            qw[t/00-report-prereqs.t],
-            qr{^xt},
-        ],
     },
 
     'PathTools' => {
@@ -911,21 +949,22 @@ use File::Glob qw(:case);
     },
 
     'Pod::Perldoc' => {
-        'DISTRIBUTION' => 'MALLEN/Pod-Perldoc-3.25.tar.gz',
+        'DISTRIBUTION' => 'MALLEN/Pod-Perldoc-3.27.tar.gz',
         'FILES'        => q[cpan/Pod-Perldoc],
 
         # Note that we use the CPAN-provided Makefile.PL, since it
         # contains special handling of the installation of perldoc.pod
 
-        # In blead, the perldoc executable is generated by perldoc.PL
-        # instead
-        # XXX We can and should fix this, but clean up the DRY-failure in utils
-        # first
-        'EXCLUDED' => ['perldoc'],
+        'EXCLUDED' => [
+            # In blead, the perldoc executable is generated by perldoc.PL
+            # instead
+            # XXX We can and should fix this, but clean up the DRY-failure in
+            # utils first
+            'perldoc',
 
-        # https://rt.cpan.org/Ticket/Display.html?id=106798
-        # https://rt.cpan.org/Ticket/Display.html?id=110368
-        'CUSTOMIZED'   => [ qw[ lib/Pod/Perldoc.pm ] ],
+            # https://rt.cpan.org/Ticket/Display.html?id=116827
+            't/02_module_pod_output.t'
+        ],
     },
 
     'Pod::Simple' => {
@@ -1013,6 +1052,10 @@ use File::Glob qw(:case);
                 win32/PerlLog.RES
                 ),
         ],
+        'CUSTOMIZED'   => [
+            # CVE-2016-1238
+            qw( Syslog.pm )
+        ],
     },
 
     'Term::ANSIColor' => {
@@ -1063,15 +1106,64 @@ use File::Glob qw(:case);
                 t/lib/if.pm
                 ),
         ],
+        'CUSTOMIZED'   => [
+            # CVE-2016-1238
+            qw(
+               bin/prove lib/App/Prove.pm lib/App/Prove/State.pm
+               lib/App/Prove/State/Result.pm
+               lib/App/Prove/State/Result/Test.pm
+               lib/TAP/Base.pm lib/TAP/Formatter/Base.pm
+               lib/TAP/Formatter/Color.pm
+               lib/TAP/Formatter/Console.pm
+               lib/TAP/Formatter/Console/ParallelSession.pm
+               lib/TAP/Formatter/Console/Session.pm
+               lib/TAP/Formatter/File.pm
+               lib/TAP/Formatter/File/Session.pm
+               lib/TAP/Formatter/Session.pm lib/TAP/Harness.pm
+               lib/TAP/Harness/Env.pm lib/TAP/Object.pm
+               lib/TAP/Parser.pm lib/TAP/Parser/Aggregator.pm
+               lib/TAP/Parser/Grammar.pm
+               lib/TAP/Parser/Iterator.pm
+               lib/TAP/Parser/Iterator/Array.pm
+               lib/TAP/Parser/Iterator/Process.pm
+               lib/TAP/Parser/Iterator/Stream.pm
+               lib/TAP/Parser/IteratorFactory.pm
+               lib/TAP/Parser/Multiplexer.pm
+               lib/TAP/Parser/Result.pm
+               lib/TAP/Parser/Result/Bailout.pm
+               lib/TAP/Parser/Result/Comment.pm
+               lib/TAP/Parser/Result/Plan.pm
+               lib/TAP/Parser/Result/Pragma.pm
+               lib/TAP/Parser/Result/Test.pm
+               lib/TAP/Parser/Result/Unknown.pm
+               lib/TAP/Parser/Result/Version.pm
+               lib/TAP/Parser/Result/YAML.pm
+               lib/TAP/Parser/ResultFactory.pm
+               lib/TAP/Parser/Scheduler.pm
+               lib/TAP/Parser/Scheduler/Job.pm
+               lib/TAP/Parser/Scheduler/Spinner.pm
+               lib/TAP/Parser/Source.pm
+               lib/TAP/Parser/SourceHandler.pm
+               lib/TAP/Parser/SourceHandler/Executable.pm
+               lib/TAP/Parser/SourceHandler/File.pm
+               lib/TAP/Parser/SourceHandler/Handle.pm
+               lib/TAP/Parser/SourceHandler/Perl.pm
+               lib/TAP/Parser/SourceHandler/RawTAP.pm
+               lib/TAP/Parser/YAMLish/Reader.pm
+               lib/TAP/Parser/YAMLish/Writer.pm
+               lib/Test/Harness.pm
+            )
+        ],
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302045.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302052.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^examples/},
             qr{^xt/},
-            qw( perltidyrc
+            qw( appveyor.yml
+                perltidyrc
                 t/00compile.t
                 t/00-report.t
                 t/zzz-check-breaks.t
@@ -1183,10 +1275,16 @@ use File::Glob qw(:case);
     },
 
     'Time::Local' => {
-        'DISTRIBUTION' => 'DROLSKY/Time-Local-1.2300.tar.gz',
+        'DISTRIBUTION' => 'DROLSKY/Time-Local-1.24.tar.gz',
         'FILES'        => q[cpan/Time-Local],
         'EXCLUDED'     => [
-            qr{^t/release-.*\.t},
+            qr{^xt/},
+            qw( perlcriticrc
+                perltidyrc
+                tidyall.ini
+                t/00-report-prereqs.t
+                t/00-report-prereqs.dd
+                ),
         ],
     },
 
@@ -1361,6 +1459,7 @@ use File::Glob qw(:case);
                 lib/FileHandle.{pm,t}
                 lib/FindBin.{pm,t}
                 lib/Getopt/Std.{pm,t}
+                lib/Internals.pod
                 lib/Internals.t
                 lib/meta_notation.{pm,t}
                 lib/Net/hostent.{pm,t}
@@ -1409,6 +1508,7 @@ use File::Glob qw(:case);
                 lib/integer.{pm,t}
                 lib/less.{pm,t}
                 lib/locale.{pm,t}
+                lib/locale_threads.t
                 lib/open.{pm,t}
                 lib/overload/numbers.pm
                 lib/overloading.{pm,t}

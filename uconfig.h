@@ -1907,6 +1907,7 @@
  *	LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_BE
  *	LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_BE
  *	LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_LE
+ *	LONG_DOUBLE_IS_VAX_H_FLOAT
  *	LONG_DOUBLE_IS_UNKNOWN_FORMAT
  *	It is only defined if the system supports long doubles.
  */
@@ -1924,6 +1925,7 @@
 #define LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_BE	6
 #define LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_BE	7
 #define LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_LE	8
+#define LONG_DOUBLE_IS_VAX_H_FLOAT			9
 #define LONG_DOUBLE_IS_UNKNOWN_FORMAT			-1
 #define LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LITTLE_ENDIAN	LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_LE_LE /* back-compat */
 #define LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BIG_ENDIAN	LONG_DOUBLE_IS_DOUBLEDOUBLE_128_BIT_BE_BE /* back-compat */
@@ -2845,6 +2847,13 @@
  */
 /*#define HAS_FUTIMES		/ **/
 
+/* HAS_GAI_STRERROR:
+ *	This symbol, if defined, indicates that the gai_strerror routine
+ *	is available to translate error codes returned by getaddrinfo()
+ *	into human readable strings.
+ */
+/*#define HAS_GAI_STRERROR	/ **/
+
 /* HAS_GETADDRINFO:
  *	This symbol, if defined, indicates that the getaddrinfo() function
  *	is available for use.
@@ -3215,10 +3224,15 @@
  *	This symbol, if defined, indicates that the querylocale routine is
  *	available to return the name of the locale for a category mask.
  */
+/* I_XLOCALE:
+ *	This symbol, if defined, indicates to the C program that it should
+ *	include <xlocale.h> to get uselocale() and its friends.
+ */
 /*#define	HAS_NEWLOCALE	/ **/
 /*#define	HAS_FREELOCALE	/ **/
 /*#define	HAS_USELOCALE	/ **/
 /*#define	HAS_QUERYLOCALE	/ **/
+/*#define	I_XLOCALE               / **/
 
 /* HAS_NEXTAFTER:
  *	This symbol, if defined, indicates that the nextafter routine is
@@ -5259,6 +5273,6 @@
 #endif
 
 /* Generated from:
- * 8559c6ec4e935f6478ac3149c106aed3eacfd60544281f97fd1383110d8a5cce config_h.SH
- * 3b14c76342a834042da506e8c3b4269f7d545453079733cb740970ab9cc4294e uconfig.sh
+ * 42be1deadbcceadd92a1463d6c11c441bad7c83fe2a4cd1c2ebec7742bb5e8a3 config_h.SH
+ * 0fca2bf99ac976bba919b593a18bacd059c581dbe6c8638dc0861b1e613b8406 uconfig.sh
  * ex: set ro: */

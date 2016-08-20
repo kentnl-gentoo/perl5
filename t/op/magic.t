@@ -3,9 +3,9 @@
 BEGIN {
     $| = 1;
     chdir 't' if -d 't';
-    @INC = '../lib';
     require './test.pl';
-    plan (tests => 192);
+    set_up_inc( '../lib' );
+    plan (tests => 192); # some tests are run in BEGIN block
 }
 
 # Test that defined() returns true for magic variables created on the fly,
@@ -61,6 +61,7 @@ $PERL =
     $Is_VMS     ? $^X      :
     $Is_MSWin32 ? '.\perl' :
                   './perl');
+
 
 sub env_is {
     my ($key, $val, $desc) = @_;
@@ -466,6 +467,7 @@ SKIP:  {
 
     undef %Errno::;
     delete $INC{"Errno.pm"};
+    delete $::{"!"};
 
     open(FOO, "nonesuch"); # Generate ENOENT
     my %errs = %{"!"}; # Cause Errno.pm to be loaded at run-time
@@ -705,6 +707,7 @@ is ++${^MPEN}, 1, '${^MPEN} can be incremented';
     sub FETCH { push @RT12608::G::ISA, "RT12608::H"; "RT12608::Y"; }
 }
 
+
 # ^^^^^^^^^ New tests go here ^^^^^^^^^
 
 SKIP: {
@@ -718,10 +721,12 @@ SKIP: {
 	    if $ENV{PERL_VALGRIND} || $Is_VMS;
 
 	    $PATH = $ENV{PATH};
+	    $SYSTEMROOT = $ENV{SYSTEMROOT} if exists $ENV{SYSTEMROOT}; # win32
 	    $PDL = $ENV{PERL_DESTRUCT_LEVEL} || 0;
 	    $ENV{foo} = "bar";
 	    %ENV = ();
 	    $ENV{PATH} = $PATH;
+	    $ENV{SYSTEMROOT} = $SYSTEMROOT if defined $SYSTEMROOT;
 	    $ENV{PERL_DESTRUCT_LEVEL} = $PDL || 0;
 	    if ($Is_MSWin32) {
 		is `set foo 2>NUL`, "";

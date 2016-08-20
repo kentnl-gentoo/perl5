@@ -1294,49 +1294,63 @@ Perl_gv_autoload_pvn(pTHX_ HV *stash, const char *name, STRLEN len, U32 flags)
 
 /* require_tie_mod() internal routine for requiring a module
  * that implements the logic of automatic ties like %! and %-
+ * It loads the module and then calls the _tie_it subroutine
+ * with the passed gv as an argument.
  *
  * The "gv" parameter should be the glob.
- * "varpv" holds the name of the var, used for error messages.
+ * "varname" holds the 1-char name of the var, used for error messages.
  * "namesv" holds the module name. Its refcount will be decremented.
- * "methpv" holds the method name to test for to check that things
- *   are working reasonably close to as expected.
  * "flags": if flag & 1 then save the scalar before loading.
  * For the protection of $! to work (it is set by this routine)
  * the sv slot must already be magicalized.
  */
-STATIC HV*
-S_require_tie_mod(pTHX_ GV *gv, const char *varpv, SV* namesv, const char *methpv,const U32 flags)
+STATIC void
+S_require_tie_mod(pTHX_ GV *gv, const char varname, const char * name,
+                        STRLEN len, const U32 flags)
 {
-    HV* stash = gv_stashsv(namesv, 0);
+    const SV * const target = varname == '[' ? GvSV(gv) : (SV *)GvHV(gv);
 
     PERL_ARGS_ASSERT_REQUIRE_TIE_MOD;
 
-    if (!stash || !(gv_fetchmethod_autoload(stash, methpv, FALSE))) {
-	SV *module = newSVsv(namesv);
-	char varname = *varpv; /* varpv might be clobbered by load_module,
-				  so save it. For the moment it's always
-				  a single char. */
+    /* If it is not tied */
+    if (!target || !SvRMAGICAL(target)
+     || !mg_find(target,
+                 varname == '[' ? PERL_MAGIC_tiedscalar : PERL_MAGIC_tied))
+    {
+      HV *stash;
+      GV **gvp;
+      dSP;
+
+      ENTER;
+
+#define HV_FETCH_TIE_FUNC (GV **)hv_fetch(stash, "_tie_it", 7, 0)
+
+      /* Load the module if it is not loaded.  */
+      if (!(stash = gv_stashpvn(name, len, 0))
+       || !(gvp = HV_FETCH_TIE_FUNC) || !*gvp || !GvCV(*gvp))
+      {
+	SV * const module = newSVpvn(name, len);
 	const char type = varname == '[' ? '$' : '%';
-#ifdef DEBUGGING
-	dSP;
-#endif
-	ENTER;
-	SAVEFREESV(namesv);
 	if ( flags & 1 )
 	    save_scalar(gv);
 	Perl_load_module(aTHX_ PERL_LOADMOD_NOIMPORT, module, NULL);
 	assert(sp == PL_stack_sp);
-	stash = gv_stashsv(namesv, 0);
+	stash = gv_stashpvn(name, len, 0);
 	if (!stash)
-	    Perl_croak(aTHX_ "panic: Can't use %c%c because %"SVf" is not available",
-		    type, varname, SVfARG(namesv));
-	else if (!gv_fetchmethod(stash, methpv))
-	    Perl_croak(aTHX_ "panic: Can't use %c%c because %"SVf" does not support method %s",
-		    type, varname, SVfARG(namesv), methpv);
-	LEAVE;
+	    Perl_croak(aTHX_ "panic: Can't use %c%c because %s is not available",
+		    type, varname, name);
+	else if (!(gvp = HV_FETCH_TIE_FUNC) || !*gvp || !GvCV(*gvp))
+	    Perl_croak(aTHX_ "panic: Can't use %c%c because %s does not define _tie_it",
+		    type, varname, name);
+      }
+      /* Now call the tie function.  It should be in *gvp.  */
+      assert(gvp); assert(*gvp); assert(GvCV(*gvp));
+      PUSHMARK(SP);
+      XPUSHs((SV *)gv);
+      PUTBACK;
+      call_sv((SV *)*gvp, G_VOID|G_DISCARD);
+      LEAVE;
     }
-    else SvREFCNT_dec_NN(namesv);
-    return stash;
 }
 
 /*
@@ -1432,7 +1446,7 @@ S_gv_stashpvn_internal(pTHX_ const char *name, U32 namelen, I32 flags)
 gv_stashsvpvn_cached
 
 Returns a pointer to the stash for a specified package, possibly
-cached.  Implements both C<gv_stashpvn> and C<gc_stashsv>.
+cached.  Implements both C<gv_stashpvn> and C<gv_stashsv>.
 
 Requires one of either namesv or namepv to be non-null.
 
@@ -1797,15 +1811,14 @@ S_find_default_stash(pTHX_ HV **stash, const char *name, STRLEN len,
  * Note that it does not insert the GV into the stash prior to
  * magicalization, which some variables require need in order
  * to work (like $[, %+, %-, %!), so callers must take care of
- * that beforehand.
+ * that.
  * 
- * The return value has a specific meaning for gv_fetchpvn_flags:
- * If it returns true, and the gv is empty, it indicates that its
- * refcount should be decreased.
+ * It returns true if the gv did turn out to be magical one; i.e.,
+ * if gv_magicalize actually did something.
  */
 PERL_STATIC_INLINE bool
 S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
-               bool addmg, const svtype sv_type)
+                      const svtype sv_type)
 {
     SSize_t paren;
 
@@ -1831,6 +1844,10 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 		    GvMULTI_on(gv);
 		break;
 	    case 'a':
+		if (stash == PL_debstash && len==4 && strEQ(name2,"rgs")) {
+		    GvMULTI_on(gv_AVadd(gv));
+		    break;
+		}
 	    case 'b':
 		if (len == 1 && sv_type == SVt_PV)
 		    GvMULTI_on(gv);
@@ -1838,7 +1855,7 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 	    default:
 		goto try_core;
 	    }
-	    return addmg;
+	    goto ret;
 	}
       try_core:
 	if (len > 1 /* shortest is uc */ && HvNAMELEN_get(stash) == 4) {
@@ -1989,7 +2006,7 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 		   this test  */
                 UV uv;
                 if (!grok_atoUV(name, &uv, NULL) || uv > I32_MAX)
-                    return addmg;
+                    goto ret;
                 /* XXX why are we using a SSize_t? */
                 paren = (SSize_t)(I32)uv;
                 goto storeparen;
@@ -2060,10 +2077,7 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 
             /* magicalization must be done before require_tie_mod is called */
 	    if (sv_type == SVt_PVHV || sv_type == SVt_PVGV)
-	    {
-		require_tie_mod(gv, "!", newSVpvs("Errno"), "TIEHASH", 1);
-                addmg = FALSE;
-	    }
+		require_tie_mod(gv, '!', "Errno", 5, 1);
 
 	    break;
 	case '-':		/* $- */
@@ -2080,10 +2094,7 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
             SvREADONLY_on(av);
 
             if (sv_type == SVt_PVHV || sv_type == SVt_PVGV)
-	    {
-                require_tie_mod(gv, name, newSVpvs("Tie::Hash::NamedCapture"), "TIEHASH", 0);
-                addmg = FALSE;
-	    }
+                require_tie_mod(gv, *name, "Tie::Hash::NamedCapture",23,0);
 
             break;
 	}
@@ -2103,8 +2114,7 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 	case '[':		/* $[ */
 	    if ((sv_type == SVt_PV || sv_type == SVt_PVGV)
 	     && FEATURE_ARYBASE_IS_ENABLED) {
-		require_tie_mod(gv,name,newSVpvs("arybase"),"FETCH",0);
-                addmg = FALSE;
+		require_tie_mod(gv,'[',"arybase",7,0);
 	    }
 	    else goto magicalize;
             break;
@@ -2172,7 +2182,13 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 	}
     }
 
-    return addmg;
+   ret:
+    /* Return true if we actually did something.  */
+    return GvAV(gv) || GvHV(gv) || GvIO(gv) || GvCV(gv)
+        || ( GvSV(gv) && (
+                           SvOK(GvSV(gv)) || SvMAGICAL(GvSV(gv))
+                         )
+           );
 }
 
 /* If we do ever start using this later on in the file, we need to make
@@ -2192,9 +2208,9 @@ S_maybe_multimagic_gv(pTHX_ GV *gv, const char *name, const svtype sv_type)
 
     if (sv_type == SVt_PVHV || sv_type == SVt_PVGV) {
         if (*name == '!')
-            require_tie_mod(gv, "!", newSVpvs("Errno"), "TIEHASH", 1);
+            require_tie_mod(gv, '!', "Errno", 5, 1);
         else if (*name == '-' || *name == '+')
-            require_tie_mod(gv, name, newSVpvs("Tie::Hash::NamedCapture"), "TIEHASH", 0);
+            require_tie_mod(gv, *name, "Tie::Hash::NamedCapture", 23, 0);
     } else if (sv_type == SVt_PV) {
         if (*name == '*' || *name == '#') {
             /* diag_listed_as: $* is no longer supported */
@@ -2206,7 +2222,7 @@ S_maybe_multimagic_gv(pTHX_ GV *gv, const char *name, const svtype sv_type)
     if (sv_type==SVt_PV || sv_type==SVt_PVGV) {
       switch (*name) {
       case '[':
-          require_tie_mod(gv,name,newSVpvs("arybase"),"FETCH",0);
+          require_tie_mod(gv,'[',"arybase",7,0);
           break;
 #ifdef PERL_SAWAMPERSAND
       case '`':
@@ -2335,33 +2351,22 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
     if ( isIDFIRST_lazy_if(name, is_utf8) && !ckWARN(WARN_ONCE) )
         GvMULTI_on(gv) ;
 
-    /* First, store the gv in the symtab if we're adding magic,
-     * but only for non-empty GVs
-     */
-#define GvEMPTY(gv)      !(GvAV(gv) || GvHV(gv) || GvIO(gv) \
-                        || GvCV(gv) || (GvSV(gv) && SvOK(GvSV(gv))))
-    
-    if ( addmg && !GvEMPTY(gv) ) {
-        (void)hv_store(stash,name,len,(SV *)gv,0);
-    }
-
     /* set up magic where warranted */
-    if ( gv_magicalize(gv, stash, name, len, addmg, sv_type) ) {
+    if ( gv_magicalize(gv, stash, name, len, sv_type) ) {
         /* See 23496c6 */
-        if (GvEMPTY(gv)) {
-            if ( GvSV(gv) && SvMAGICAL(GvSV(gv)) ) {
-                /* The GV was and still is "empty", except that now
-                 * it has the magic flags turned on, so we want it
+        if (addmg) {
+                /* gv_magicalize magicalised this gv, so we want it
                  * stored in the symtab.
+                 * Effectively the caller is asking, ‘Does this gv exist?’ 
+                 * And we respond, ‘Er, *now* it does!’
                  */
                 (void)hv_store(stash,name,len,(SV *)gv,0);
-            }
-            else {
-                /* Most likely the temporary GV created above */
+        }
+    }
+    else if (addmg) {
+                /* The temporary GV created above */
                 SvREFCNT_dec_NN(gv);
                 gv = NULL;
-            }
-        }
     }
     
     if (gv) gv_init_svtype(gv, faking_it ? SVt_PVCV : sv_type);

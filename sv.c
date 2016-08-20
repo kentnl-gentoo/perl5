@@ -4925,7 +4925,7 @@ Perl_sv_setpvn_mg(pTHX_ SV *const sv, const char *const ptr, const STRLEN len)
 =for apidoc sv_setpv
 
 Copies a string into an SV.  The string must be terminated with a C<NUL>
-character.
+character, and not contain embeded C<NUL>'s.
 Does not handle 'set' magic.  See C<L</sv_setpv_mg>>.
 
 =cut
@@ -8038,10 +8038,24 @@ Perl_sv_cmp_locale_flags(pTHX_ SV *const sv1, SV *const sv2,
     if (PL_collation_standard)
 	goto raw_compare;
 
-    len1 = 0;
-    pv1 = sv1 ? sv_collxfrm_flags(sv1, &len1, flags) : (char *) NULL;
-    len2 = 0;
-    pv2 = sv2 ? sv_collxfrm_flags(sv2, &len2, flags) : (char *) NULL;
+    len1 = len2 = 0;
+
+    /* Revert to using raw compare if both operands exist, but either one
+     * doesn't transform properly for collation */
+    if (sv1 && sv2) {
+        pv1 = sv_collxfrm_flags(sv1, &len1, flags);
+        if (! pv1) {
+            goto raw_compare;
+        }
+        pv2 = sv_collxfrm_flags(sv2, &len2, flags);
+        if (! pv2) {
+            goto raw_compare;
+        }
+    }
+    else {
+        pv1 = sv1 ? sv_collxfrm_flags(sv1, &len1, flags) : (char *) NULL;
+        pv2 = sv2 ? sv_collxfrm_flags(sv2, &len2, flags) : (char *) NULL;
+    }
 
     if (!pv1 || !len1) {
 	if (pv2 && len2)
@@ -10963,8 +10977,9 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
  * the hexadecimal values (for %a/%A).  The nv is the NV where the value
  * are being extracted from (either directly from the long double in-memory
  * presentation, or from the uquad computed via frexp+ldexp).  frexp also
- * is used to update the exponent.  vhex is the pointer to the beginning
- * of the output buffer (of VHEX_SIZE).
+ * is used to update the exponent.  The subnormal is set to true
+ * for IEEE 754 subnormals/denormals (including the x86 80-bit format).
+ * The vhex is the pointer to the beginning of the output buffer of VHEX_SIZE.
  *
  * The tricky part is that S_hextract() needs to be called twice:
  * the first time with vend as NULL, and the second time with vend as
@@ -10974,14 +10989,15 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
  * (the extraction of the hexadecimal values) takes place.
  * Sanity failures cause fatal failures during both rounds. */
 STATIC U8*
-S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
+S_hextract(pTHX_ const NV nv, int* exponent, bool *subnormal,
+           U8* vhex, U8* vend)
 {
     U8* v = vhex;
     int ix;
     int ixmin = 0, ixmax = 0;
 
-    /* XXX Inf/NaN/denormal handling in the HEXTRACT_IMPLICIT_BIT,
-     * and elsewhere. */
+    /* XXX Inf/NaN are not handled here, since it is
+     * assumed they are to be output as "Inf" and "NaN". */
 
     /* These macros are just to reduce typos, they have multiple
      * repetitions below, but usually only one (or sometimes two)
@@ -11014,13 +11030,20 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
     for (ix = a; ix >= b; ix--) { HEXTRACT_BYTE(ix); }
 #define HEXTRACT_BYTES_BE(a, b) \
     for (ix = a; ix <= b; ix++) { HEXTRACT_BYTE(ix); }
+#define HEXTRACT_GET_SUBNORMAL(nv) *subnormal = Perl_fp_class_denorm(nv)
 #define HEXTRACT_IMPLICIT_BIT(nv) \
     STMT_START { \
-        if (vend) *v++ = ((nv) == 0.0) ? 0 : 1; else v++; \
+        if (!*subnormal) { \
+            if (vend) *v++ = ((nv) == 0.0) ? 0 : 1; else v++; \
+        } \
    } STMT_END
 
-/* Most formats do.  Those which don't should undef this. */
+/* Most formats do.  Those which don't should undef this.
+ *
+ * But also note that IEEE 754 subnormals do not have it, or,
+ * expressed alternatively, their implicit bit is zero. */
 #define HEXTRACT_HAS_IMPLICIT_BIT
+
 /* Many formats do.  Those which don't should undef this. */
 #define HEXTRACT_HAS_TOP_NYBBLE
 
@@ -11034,6 +11057,7 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
     const U8* vmaxend = vhex + HEXTRACTSIZE;
     PERL_UNUSED_VAR(ix); /* might happen */
     (void)Perl_frexp(PERL_ABS(nv), exponent);
+    *subnormal = FALSE;
     if (vend && (vend <= vhex || vend > vmaxend)) {
         /* diag_listed_as: Hexadecimal float: internal error (%s) */
         Perl_croak(aTHX_ "Hexadecimal float: internal error (entry)");
@@ -11043,10 +11067,11 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
 #if defined(USE_LONG_DOUBLE) && (NVSIZE > DOUBLESIZE)
 #  if LONG_DOUBLEKIND == LONG_DOUBLE_IS_IEEE_754_128_BIT_LITTLE_ENDIAN
         /* Used in e.g. VMS and HP-UX IA-64, e.g. -0.1L:
-         * 9a 99 99 99 99 99 99 99 99 99 99 99 99 99 fb 3f */
+         * 9a 99 99 99 99 99 99 99 99 99 99 99 99 99 fb bf */
         /* The bytes 13..0 are the mantissa/fraction,
          * the 15,14 are the sign+exponent. */
         const U8* nvp = (const U8*)(&nv);
+	HEXTRACT_GET_SUBNORMAL(nv);
         HEXTRACT_IMPLICIT_BIT(nv);
 #   undef HEXTRACT_HAS_TOP_NYBBLE
         HEXTRACT_BYTES_LE(13, 0);
@@ -11056,18 +11081,21 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
         /* The bytes 2..15 are the mantissa/fraction,
          * the 0,1 are the sign+exponent. */
         const U8* nvp = (const U8*)(&nv);
+	HEXTRACT_GET_SUBNORMAL(nv);
         HEXTRACT_IMPLICIT_BIT(nv);
 #   undef HEXTRACT_HAS_TOP_NYBBLE
         HEXTRACT_BYTES_BE(2, 15);
 #  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_LITTLE_ENDIAN
         /* x86 80-bit "extended precision", 64 bits of mantissa / fraction /
-         * significand, 15 bits of exponent, 1 bit of sign.  NVSIZE can
-         * be either 12 (ILP32, Solaris x86) or 16 (LP64, Linux and OS X),
-         * meaning that 2 or 6 bytes are empty padding. */
-        /* The bytes 7..0 are the mantissa/fraction */
+         * significand, 15 bits of exponent, 1 bit of sign.  No implicit bit.
+         * NVSIZE can be either 12 (ILP32, Solaris x86) or 16 (LP64, Linux
+         * and OS X), meaning that 2 or 6 bytes are empty padding. */
+        /* The bytes 0..1 are the sign+exponent,
+	 * the bytes 2..9 are the mantissa/fraction. */
         const U8* nvp = (const U8*)(&nv);
 #    undef HEXTRACT_HAS_IMPLICIT_BIT
 #    undef HEXTRACT_HAS_TOP_NYBBLE
+	HEXTRACT_GET_SUBNORMAL(nv);
         HEXTRACT_BYTES_LE(7, 0);
 #  elif LONG_DOUBLEKIND == LONG_DOUBLE_IS_X86_80_BIT_BIG_ENDIAN
         /* Does this format ever happen? (Wikipedia says the Motorola
@@ -11077,6 +11105,7 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
         const U8* nvp = (const U8*)(&nv);
 #    undef HEXTRACT_HAS_IMPLICIT_BIT
 #    undef HEXTRACT_HAS_TOP_NYBBLE
+	HEXTRACT_GET_SUBNORMAL(nv);
         HEXTRACT_BYTES_BE(0, 7);
 #  else
 #    define HEXTRACT_FALLBACK
@@ -11112,18 +11141,21 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
 #    ifdef HEXTRACT_LITTLE_ENDIAN
         /* 0 1 2 3 4 5 6 7 (MSB = 7, LSB = 0, 6+7 = exponent+sign) */
         const U8* nvp = (const U8*)(&nv);
+	HEXTRACT_GET_SUBNORMAL(nv);
         HEXTRACT_IMPLICIT_BIT(nv);
         HEXTRACT_TOP_NYBBLE(6);
         HEXTRACT_BYTES_LE(5, 0);
 #    elif defined(HEXTRACT_BIG_ENDIAN)
         /* 7 6 5 4 3 2 1 0 (MSB = 7, LSB = 0, 6+7 = exponent+sign) */
         const U8* nvp = (const U8*)(&nv);
+	HEXTRACT_GET_SUBNORMAL(nv);
         HEXTRACT_IMPLICIT_BIT(nv);
         HEXTRACT_TOP_NYBBLE(1);
         HEXTRACT_BYTES_BE(2, 7);
 #    elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_MIXED_ENDIAN_LE_BE
         /* 4 5 6 7 0 1 2 3 (MSB = 7, LSB = 0, 6:7 = nybble:exponent:sign) */
         const U8* nvp = (const U8*)(&nv);
+	HEXTRACT_GET_SUBNORMAL(nv);
         HEXTRACT_IMPLICIT_BIT(nv);
         HEXTRACT_TOP_NYBBLE(2); /* 6 */
         HEXTRACT_BYTE(1); /* 5 */
@@ -11135,6 +11167,7 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
 #    elif DOUBLEKIND == DOUBLE_IS_IEEE_754_64_BIT_MIXED_ENDIAN_BE_LE
         /* 3 2 1 0 7 6 5 4 (MSB = 7, LSB = 0, 7:6 = sign:exponent:nybble) */
         const U8* nvp = (const U8*)(&nv);
+	HEXTRACT_GET_SUBNORMAL(nv);
         HEXTRACT_IMPLICIT_BIT(nv);
         HEXTRACT_TOP_NYBBLE(5); /* 6 */
         HEXTRACT_BYTE(6); /* 5 */
@@ -11151,6 +11184,7 @@ S_hextract(pTHX_ const NV nv, int* exponent, U8* vhex, U8* vend)
 #  endif
 #endif /* #if defined(USE_LONG_DOUBLE) && (NVSIZE > DOUBLESIZE) #else */
 #  ifdef HEXTRACT_FALLBACK
+	HEXTRACT_GET_SUBNORMAL(nv);
 #    undef HEXTRACT_HAS_TOP_NYBBLE /* Meaningless, but consistent. */
         /* The fallback is used for the double-double format, and
          * for unknown long double formats, and for unknown double
@@ -12382,6 +12416,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                 U8* vend; /* pointer to one beyond last digit of vhex */
                 U8* vfnz = NULL; /* first non-zero */
                 U8* vlnz = NULL; /* last non-zero */
+                U8* v0 = NULL; /* first output */
                 const bool lower = (c == 'a');
                 /* At output the values of vhex (up to vend) will
                  * be mapped through the xdig to get the actual
@@ -12390,33 +12425,47 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                 int zerotail = 0; /* how many extra zeros to append */
                 int exponent = 0; /* exponent of the floating point input */
                 bool hexradix = FALSE; /* should we output the radix */
+                bool subnormal = FALSE; /* IEEE 754 subnormal/denormal */
+                bool negative = FALSE;
 
-                /* XXX: denormals, NaN, Inf.
+                /* XXX: NaN, Inf -- though they are printed as "NaN" and "Inf".
                  *
                  * For example with denormals, (assuming the vanilla
                  * 64-bit double): the exponent is zero. 1xp-1074 is
                  * the smallest denormal and the smallest double, it
-                 * should be output as 0x0.0000000000001p-1022 to
+                 * could be output also as 0x0.0000000000001p-1022 to
                  * match its internal structure. */
 
-                vend = S_hextract(aTHX_ nv, &exponent, vhex, NULL);
-                S_hextract(aTHX_ nv, &exponent, vhex, vend);
+                vend = S_hextract(aTHX_ nv, &exponent, &subnormal, vhex, NULL);
+                S_hextract(aTHX_ nv, &exponent, &subnormal, vhex, vend);
 
 #if NVSIZE > DOUBLESIZE
 #  ifdef HEXTRACT_HAS_IMPLICIT_BIT
                 /* In this case there is an implicit bit,
-                 * and therefore the exponent is shifted shift by one. */
+                 * and therefore the exponent is shifted by one. */
                 exponent--;
 #  else
-                /* In this case there is no implicit bit,
-                 * and the exponent is shifted by the first xdigit. */
-                exponent -= 4;
+#   ifdef NV_X86_80_BIT
+                if (subnormal) {
+                    /* The subnormals of the x86-80 have a base exponent of -16382,
+                     * (while the physical exponent bits are zero) but the frexp()
+                     * returned the scientific-style floating exponent.  We want
+                     * to map the last one as:
+                     * -16831..-16384 -> -16382 (the last normal is 0x1p-16382)
+                     * -16835..-16388 -> -16384
+                     * since we want to keep the first hexdigit
+                     * as one of the [8421]. */
+                    exponent = -4 * ( (exponent + 1) / -4) - 2;
+                } else {
+                    exponent -= 4;
+                }
+#   endif
+                /* TBD: other non-implicit-bit platforms than the x86-80. */
 #  endif
 #endif
 
-                if (fv < 0
-                    || Perl_signbit(nv)
-                  )
+                negative = fv < 0 || Perl_signbit(nv);
+                if (negative)
                     *p++ = '-';
                 else if (plus)
                     *p++ = plus;
@@ -12451,50 +12500,98 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                         exponent--;
 #endif
 
-                    if (precis > 0) {
-                        if ((SSize_t)(precis + 1) < vend - vhex) {
-                            bool round;
+                    if (subnormal) {
+#ifndef NV_X86_80_BIT
+                      if (vfnz[0] > 1) {
+                        /* IEEE 754 subnormals (but not the x86 80-bit):
+                         * we want "normalize" the subnormal,
+			 * so we need to right shift the hex nybbles
+                         * so that the output of the subnormal starts
+                         * from the first true bit.  (Another, equally
+			 * valid, policy would be to dump the subnormal
+			 * nybbles as-is, to display the "physical" layout.) */
+                        int i, n;
+                        U8 *vshr;
+                        /* Find the ceil(log2(v[0])) of
+                         * the top non-zero nybble. */
+                        for (i = vfnz[0], n = 0; i > 1; i >>= 1, n++) { }
+                        assert(n < 4);
+                        vlnz[1] = 0;
+                        for (vshr = vlnz; vshr >= vfnz; vshr--) {
+                          vshr[1] |= (vshr[0] & (0xF >> (4 - n))) << (4 - n);
+                          vshr[0] >>= n;
+                        }
+                        if (vlnz[1]) {
+                          vlnz++;
+                        }
+                      }
+#endif
+                      v0 = vfnz;
+                    } else {
+                      v0 = vhex;
+                    }
 
-                            v = vhex + precis + 1;
-                            /* Round away from zero: if the tail
-                             * beyond the precis xdigits is equal to
-                             * or greater than 0x8000... */
-                            round = *v > 0x8;
-                            if (!round && *v == 0x8) {
-                                for (v++; v < vend; v++) {
-                                    if (*v) {
-                                        round = TRUE;
+                    if (has_precis) {
+                        U8* ve = (subnormal ? vlnz + 1 : vend);
+                        SSize_t vn = ve - (subnormal ? vfnz : vhex);
+                        if ((SSize_t)(precis + 1) < vn) {
+                            bool overflow = FALSE;
+                            if (v0[precis + 1] < 0x8) {
+                                /* Round down, nothing to do. */
+                            } else if (v0[precis + 1] > 0x8) {
+                                /* Round up. */
+                                v0[precis]++;
+                                overflow = v0[precis] > 0xF;
+                                v0[precis] &= 0xF;
+                            } else { /* v0[precis] == 0x8 */
+                                /* Half-point: round towards the one
+                                 * with the even least-significant digit:
+                                 * 08 -> 0  88 -> 8
+                                 * 18 -> 2  98 -> a
+                                 * 28 -> 2  a8 -> a
+                                 * 38 -> 4  b8 -> c
+                                 * 48 -> 4  c8 -> c
+                                 * 58 -> 6  d8 -> e
+                                 * 68 -> 6  e8 -> e
+                                 * 78 -> 8  f8 -> 10 */
+                                if ((v0[precis] & 0x1)) {
+                                    v0[precis]++;
+                                }
+                                overflow = v0[precis] > 0xF;
+                                v0[precis] &= 0xF;
+                            }
+
+                            if (overflow) {
+                                for (v = v0 + precis - 1; v >= v0; v--) {
+                                    (*v)++;
+                                    overflow = *v > 0xF;
+                                    (*v) &= 0xF;
+                                    if (!overflow) {
                                         break;
                                     }
                                 }
-                            }
-                            if (round) {
-                                for (v = vhex + precis; v >= vhex; v--) {
-                                    if (*v < 0xF) {
-                                        (*v)++;
-                                        break;
-                                    }
-                                    *v = 0;
-                                    if (v == vhex) {
-                                        /* If the carry goes all the way to
-                                         * the front, we need to output
-                                         * a single '1'. This goes against
-                                         * the "xdigit and then radix"
-                                         * but since this is "cannot happen"
-                                         * category, that is probably good. */
-                                        *p++ = xdig[1];
-                                    }
+                                if (v == v0 - 1 && overflow) {
+                                    /* If the overflow goes all the
+                                     * way to the front, we need to
+                                     * insert 0x1 in front, and adjust
+                                     * the exponent. */
+                                    Move(v0, v0 + 1, vn, char);
+                                    *v0 = 0x1;
+                                    exponent += 4;
                                 }
                             }
+
                             /* The new effective "last non zero". */
-                            vlnz = vhex + precis;
+                            vlnz = v0 + precis;
                         }
                         else {
-                            zerotail = precis - (vlnz - vhex);
+                            zerotail =
+                              subnormal ? precis - vn + 1 :
+                              precis - (vlnz - vhex);
                         }
                     }
 
-                    v = vhex;
+                    v = v0;
                     *p++ = xdig[*v++];
 
                     /* If there are non-zero xdigits, the radix
@@ -12554,12 +12651,18 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                         memset(PL_efloatbuf + elen, ' ', width - elen);
                     }
                     else if (fill == '0') {
-                        /* Insert the zeros between the "0x" and
-                         * the digits, otherwise we end up with
-                         * "0000xHHH..." */
+                        /* Insert the zeros after the "0x" and the
+                         * the potential sign, but before the digits,
+                         * otherwise we end up with "0000xH.HHH...",
+                         * when we want "0x000H.HHH..."  */
                         STRLEN nzero = width - elen;
                         char* zerox = PL_efloatbuf + 2;
-                        Move(zerox, zerox + nzero,  elen - 2, char);
+                        STRLEN nmove = elen - 2;
+                        if (negative || plus) {
+                            zerox++;
+                            nmove--;
+                        }
+                        Move(zerox, zerox + nzero, nmove, char);
                         memset(zerox, fill, nzero);
                     }
                     else {
@@ -12952,7 +13055,10 @@ Perl_parser_dup(pTHX_ const yy_parser *const proto, CLONE_PARAMS *const param)
     parser->multi_start	= proto->multi_start;
     parser->multi_end	= proto->multi_end;
     parser->preambled	= proto->preambled;
-    parser->sublex_info	= proto->sublex_info; /* XXX not quite right */
+    parser->lex_super_state = proto->lex_super_state;
+    parser->lex_sub_inwhat  = proto->lex_sub_inwhat;
+    parser->lex_sub_op	= proto->lex_sub_op;
+    parser->lex_sub_repl= sv_dup_inc(proto->lex_sub_repl, param);
     parser->linestr	= sv_dup_inc(proto->linestr, param);
     parser->expect	= proto->expect;
     parser->copline	= proto->copline;
@@ -12964,8 +13070,9 @@ Perl_parser_dup(pTHX_ const yy_parser *const proto, CLONE_PARAMS *const param)
     parser->in_my	= proto->in_my;
     parser->in_my_stash	= hv_dup(proto->in_my_stash, param);
     parser->error_count	= proto->error_count;
-
-
+    parser->sig_elems	= proto->sig_elems;
+    parser->sig_optelems= proto->sig_optelems;
+    parser->sig_slurpy  = proto->sig_slurpy;
     parser->linestr	= sv_dup_inc(proto->linestr, param);
 
     {
@@ -14694,8 +14801,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_forkprocess	= proto_perl->Iforkprocess;
 
     /* internal state */
-    PL_maxo		= proto_perl->Imaxo;
-
     PL_main_start	= proto_perl->Imain_start;
     PL_eval_root	= proto_perl->Ieval_root;
     PL_eval_start	= proto_perl->Ieval_start;
@@ -16159,6 +16264,7 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 	     */
 	     break;
 	}
+	match = 1;
 	goto do_op;
 
     /* ops where $_ may be an implicit arg */

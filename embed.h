@@ -955,9 +955,11 @@
 #  if !defined(PERL_EXT_RE_BUILD)
 #    if defined(PERL_IN_REGCOMP_C)
 #define _append_range_to_invlist(a,b,c)	S__append_range_to_invlist(aTHX_ a,b,c)
+#define _invlist_array_init	S__invlist_array_init
 #define get_invlist_previous_index_addr	S_get_invlist_previous_index_addr
 #define invlist_clear(a)	S_invlist_clear(aTHX_ a)
 #define invlist_extend(a,b)	S_invlist_extend(aTHX_ a,b)
+#define invlist_max		S_invlist_max
 #define invlist_previous_index	S_invlist_previous_index
 #define invlist_replace_list_destroys_src(a,b)	S_invlist_replace_list_destroys_src(aTHX_ a,b)
 #define invlist_set_previous_index	S_invlist_set_previous_index
@@ -1000,7 +1002,6 @@
 #define sv_or_pv_pos_u2b(a,b,c,d)	S_sv_or_pv_pos_u2b(aTHX_ a,b,c,d)
 #  endif
 #  if defined(PERL_IN_REGCOMP_C)
-#define _invlist_array_init	S__invlist_array_init
 #define _make_exactf_invlist(a,b)	S__make_exactf_invlist(aTHX_ a,b)
 #define add_above_Latin1_folds(a,b,c)	S_add_above_Latin1_folds(aTHX_ a,b,c)
 #define add_cp_to_invlist(a,b)	S_add_cp_to_invlist(aTHX_ a,b)
@@ -1024,7 +1025,6 @@
 #define invlist_iterfinish	S_invlist_iterfinish
 #define invlist_iterinit	S_invlist_iterinit
 #define invlist_iternext	S_invlist_iternext
-#define invlist_max		S_invlist_max
 #define invlist_set_len(a,b,c)	S_invlist_set_len(aTHX_ a,b,c)
 #define is_ssc_worth_it		S_is_ssc_worth_it
 #define join_exact(a,b,c,d,e,f,g)	S_join_exact(aTHX_ a,b,c,d,e,f,g)
@@ -1141,6 +1141,7 @@
 #ifdef PERL_CORE
 #define Slab_Alloc(a)		Perl_Slab_Alloc(aTHX_ a)
 #define Slab_Free(a)		Perl_Slab_Free(aTHX_ a)
+#define alloc_LOGOP(a,b,c)	Perl_alloc_LOGOP(aTHX_ a,b,c)
 #define allocmy(a,b,c)		Perl_allocmy(aTHX_ a,b,c)
 #define amagic_is_enabled(a)	Perl_amagic_is_enabled(aTHX_ a)
 #define apply(a,b,c)		Perl_apply(aTHX_ a,b,c)
@@ -1201,6 +1202,7 @@
 #define core_prototype(a,b,c,d)	Perl_core_prototype(aTHX_ a,b,c,d)
 #define coresub_op(a,b,c)	Perl_coresub_op(aTHX_ a,b,c)
 #define create_eval_scope(a,b)	Perl_create_eval_scope(aTHX_ a,b)
+#define croak_caller		Perl_croak_caller
 #define croak_no_mem		Perl_croak_no_mem
 #define croak_popstack		Perl_croak_popstack
 #define custom_op_get_field(a,b)	Perl_custom_op_get_field(aTHX_ a,b)
@@ -1338,7 +1340,6 @@
 #define pad_push(a,b)		Perl_pad_push(aTHX_ a,b)
 #define pad_swipe(a,b)		Perl_pad_swipe(aTHX_ a,b)
 #define padlist_store(a,b,c)	Perl_padlist_store(aTHX_ a,b,c)
-#define parse_subsignature()	Perl_parse_subsignature(aTHX)
 #define parse_unicode_opts(a)	Perl_parse_unicode_opts(aTHX_ a)
 #define parser_free(a)		Perl_parser_free(aTHX_ a)
 #define peep(a)			Perl_peep(aTHX_ a)
@@ -1461,6 +1462,9 @@
 #define printbuf(a,b)		S_printbuf(aTHX_ a,b)
 #define tokereport(a,b)		S_tokereport(aTHX_ a,b)
 #    endif
+#    if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
+#define print_collxfrm_input_and_return(a,b,c,d)	S_print_collxfrm_input_and_return(aTHX_ a,b,c,d)
+#    endif
 #  endif
 #  if defined(DEBUG_LEAKING_SCALARS_FORK_DUMP)
 #define dump_sv_child(a)	Perl_dump_sv_child(aTHX_ a)
@@ -1534,7 +1538,7 @@
 #define gv_fetchmeth_internal(a,b,c,d,e,f)	S_gv_fetchmeth_internal(aTHX_ a,b,c,d,e,f)
 #define gv_init_svtype(a,b)	S_gv_init_svtype(aTHX_ a,b)
 #define gv_is_in_main(a,b,c)	S_gv_is_in_main(aTHX_ a,b,c)
-#define gv_magicalize(a,b,c,d,e,f)	S_gv_magicalize(aTHX_ a,b,c,d,e,f)
+#define gv_magicalize(a,b,c,d,e)	S_gv_magicalize(aTHX_ a,b,c,d,e)
 #define gv_magicalize_isa(a)	S_gv_magicalize_isa(aTHX_ a)
 #define gv_stashpvn_internal(a,b,c)	S_gv_stashpvn_internal(aTHX_ a,b,c)
 #define gv_stashsvpvn_cached(a,b,c,d)	S_gv_stashsvpvn_cached(aTHX_ a,b,c,d)

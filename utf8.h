@@ -156,8 +156,8 @@ END_EXTERN_C
  * rarely do we need to distinguish them.  The term "NATIVE_UTF8" applies to
  * whichever one is applicable on the current platform */
 #ifdef PERL_SMALL_MACRO_BUFFER
-#define NATIVE_UTF8_TO_I8(ch) (ch)
-#define I8_TO_NATIVE_UTF8(ch) (ch)
+#define NATIVE_UTF8_TO_I8(ch) ((U8) (ch))
+#define I8_TO_NATIVE_UTF8(ch) ((U8) (ch))
 #else
 #define NATIVE_UTF8_TO_I8(ch) (__ASSERT_(FITS_IN_8_BITS(ch)) ((U8) (ch)))
 #define I8_TO_NATIVE_UTF8(ch) (__ASSERT_(FITS_IN_8_BITS(ch)) ((U8) (ch)))
@@ -338,11 +338,14 @@ encoded as UTF-8.  C<cp> is a native (ASCII or EBCDIC) code point if less than
  */
 #define UVCHR_SKIP(uv) ( UVCHR_IS_INVARIANT(uv) ? 1 : __BASE_UNI_SKIP(uv))
 
-/* As explained in the comments for __COMMON_UNI_SKIP, 32 start bytes with
+/* The largest code point representable by two UTF-8 bytes on this platform.
+ * As explained in the comments for __COMMON_UNI_SKIP, 32 start bytes with
  * UTF_ACCUMULATION_SHIFT bits of information each */
 #define MAX_UTF8_TWO_BYTE (32 * (1U << UTF_ACCUMULATION_SHIFT) - 1)
 
-/* constrained by EBCDIC which has 5 bits per continuation byte */
+/* The largest code point representable by two UTF-8 bytes on any platform that
+ * Perl runs on.  This value is constrained by EBCDIC which has 5 bits per
+ * continuation byte */
 #define MAX_PORTABLE_UTF8_TWO_BYTE (32 * (1U << 5) - 1)
 
 /* The maximum number of UTF-8 bytes a single Unicode character can

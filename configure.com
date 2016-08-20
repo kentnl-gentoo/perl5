@@ -1892,7 +1892,7 @@ $   DECK
 If you or somebody else will be maintaining perl at your site, please
 fill in the correct e-mail address here so that they may be contacted
 if necessary. Currently, the "perlbug" program included with perl
-will send mail to this address in addition to perlbug@perl.com. You may
+will send mail to this address in addition to perlbug@perl.org. You may
 enter "none" for no administrator.
 $   EOD
 $ ENDIF
@@ -6577,6 +6577,7 @@ $ WC "i_values='undef'"
 $ WC "i_varargs='undef'"
 $ WC "i_varhdr='stdarg.h'"
 $ WC "i_vfork='undef'"
+$ WC "i_xlocale='undef'"
 $ WC "inc_version_list='0'"
 $ WC "inc_version_list_init='0'"
 $ WC "installarchlib='" + installarchlib + "'"
@@ -6868,6 +6869,7 @@ $ WC "d_endprotoent_r='undef'"
 $ WC "d_endpwent_r='undef'"
 $ WC "d_endservent_r='undef'"
 $ WC "d_freelocale='undef'"
+$ WC "d_gai_strerror='undef'"
 $ WC "d_getgrent_r='undef'"
 $ WC "d_getgrgid_r='" + d_getgrgid_r + "'"
 $ WC "d_getgrnam_r='" + d_getgrnam_r + "'"

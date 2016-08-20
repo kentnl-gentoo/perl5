@@ -10,8 +10,8 @@
 #
 
 chdir 't' if -d 't';
-@INC = '../lib';
 require './test.pl';
+set_up_inc('../lib');
 
 $|=1;
 
@@ -284,7 +284,7 @@ EXPECT
 2
 ########
 
-#  [20020716.007] - nested FETCHES
+#  [20020716.007 (#10080)] - nested FETCHES
 
 sub F1::TIEARRAY { bless [], 'F1' }
 sub F1::FETCH { 1 }
