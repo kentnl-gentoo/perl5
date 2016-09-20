@@ -2,41 +2,26 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.25.4
+perldelta - what is new for perl v5.25.5
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.25.3 release and the 5.25.4
+This document describes differences between the 5.25.4 release and the 5.25.5
 release.
 
-If you are upgrading from an earlier release such as 5.25.2, first read
-L<perl5253delta>, which describes differences between 5.25.2 and 5.25.3.
+If you are upgrading from an earlier release such as 5.25.3, first read
+L<perl5254delta>, which describes differences between 5.25.3 and 5.25.4.
 
-=head1 Performance Enhancements
+=head1 Security
 
-=over 4
+=head2 "Escaped" colons and relative paths in PATH
 
-=item *
-
-The rather slow implementation for the experimental subroutine signatures
-feature has been made much faster; it is now comparable in speed with the
-old-style C<my ($a, $b, @c) = @_>.
-
-=back
-
-=head1 Documentation
-
-=head2 Changes to Existing Documentation
-
-=head3 L<perlcall>
-
-=over 4
-
-=item *
-
-Removed redundant C<dSP> from an example.
-
-=back
+On Unix systems, Perl treats any relative paths in the PATH environment
+variable as tainted when starting a new process.  Previously, it was
+allowing a backslash to escape a colon (unlike the OS), consequently
+allowing relative paths to be considered safe if the PATH was set to
+something like C</\:.>.  The check has been fixed to treat C<.> as tainted
+in that example.
 
 =head1 Modules and Pragmata
 
@@ -46,200 +31,67 @@ Removed redundant C<dSP> from an example.
 
 =item *
 
-L<Archive::Tar> has been upgraded from version 2.08 to 2.10.
+L<Filter::Simple> has been upgraded from version 0.92 to 0.93.
+
+It no longer treats C<no MyFilter> immediately following C<use MyFilter> as
+end-of-file.  [perl #107726]
 
 =item *
 
-L<arybase> has been upgraded from version 0.11 to 0.12.
+L<Locale::Codes> has been upgraded from 3.39 to 3.40.
 
 =item *
 
-L<B> has been upgraded from version 1.62 to 1.63.
+L<Module::CoreList> has been upgraded from version 5.20160820 to 5.20160920.
 
 =item *
 
-L<B::Concise> has been upgraded from version 0.996 to 0.998.
+L<POSIX> has been upgraded from version 1.71 to 1.72.
 
 =item *
 
-L<B::Deparse> has been upgraded from version 1.37 to 1.38.
+L<Sys::Syslog> has been upgraded from version 0.34_01 to 0.35.
 
 =item *
 
-L<base> has been upgraded from version 2.23 to 2.24.
+L<Test::Simple> has been upgraded from version 1.302052 to 1.302056.
 
 =item *
 
-L<bignum> has been upgraded from version 0.43 to 0.43_01.
+L<Thread::Semaphore> has been upgraded from 2.12 to 2.13.
+
+Added the C<down_timed> method.
 
 =item *
 
-L<Carp> has been upgraded from version 1.41 to 1.42.
-
-=item *
-
-L<Config::Perl::V> has been upgraded from version 0.26 to 0.27.
-
-=item *
-
-L<CPAN> has been upgraded from version 2.14 to 2.14_01.
-
-=item *
-
-L<CPAN::Meta> has been upgraded from version 2.150005 to 2.150010.
-
-=item *
-
-L<Digest> has been upgraded from version 1.17 to 1.17_01.
-
-=item *
-
-L<Digest::SHA> has been upgraded from version 5.95 to 5.96.
-
-=item *
-
-L<Encode> has been upgraded from version 2.84 to 2.86.
-
-=item *
-
-L<encoding> has been upgraded from version 2.17_01 to 2.18.
-
-=item *
-
-L<Errno> has been upgraded from version 1.25 to 1.26.
-
-=item *
-
-L<ExtUtils::MakeMaker> has been upgraded from version 7.18 to 7.24.
-
-=item *
-
-L<File::Fetch> has been upgraded from version 0.48 to 0.52.
-
-=item *
-
-L<File::Spec> has been upgraded from version 3.64 to 3.65.
-
-=item *
-
-L<Hash::Util> has been upgraded from version 0.20 to 0.21.
-
-=item *
-
-L<HTTP::Tiny> has been upgraded from version 0.058 to 0.064.
-
-=item *
-
-L<I18N::LangTags> has been upgraded from version 0.40 to 0.41.
-
-=item *
-
-L<IO> has been upgraded from version 1.36 to 1.37.
-
-=item *
-
-L<IO-Compress> has been upgraded from version 2.069 to 2.069_01.
-
-=item *
-
-L<IO::Socket::IP> has been upgraded from version 0.37 to 0.38.
-
-=item *
-
-L<IPC::Cmd> has been upgraded from version 0.94 to 0.96.
-
-=item *
-
-L<JSON::PP> has been upgraded from version 2.27400 to 2.27400_01.
-
-=item *
-
-L<Locale::Maketext> has been upgraded from version 1.27 to 1.28.
-
-=item *
-
-L<Locale::Maketext::Simple> has been upgraded from version 0.21 to 0.21_01.
-
-=item *
-
-L<Memoize> has been upgraded from version 1.03 to 1.03_01.
-
-=item *
-
-L<Module::CoreList> has been upgraded from version 5.20160720 to 5.20160820.
-
-=item *
-
-L<Module::Load::Conditional> has been upgraded from version 0.64 to 0.68.
-
-=item *
-
-L<Module::Metadata> has been upgraded from version 1.000032 to 1.000033.
-
-=item *
-
-L<Net::Ping> has been upgraded from version 2.43 to 2.44.
-
-=item *
-
-L<NEXT> has been upgraded from version 0.65 to 0.67.
-
-=item *
-
-L<Opcode> has been upgraded from version 1.35 to 1.37.
-
-=item *
-
-L<Pod::Html> has been upgraded from version 1.22 to 1.2201.
-
-=item *
-
-L<Pod::Perldoc> has been upgraded from version 3.25_02 to 3.27.
-
-=item *
-
-L<POSIX> has been upgraded from version 1.70 to 1.71.
-
-=item *
-
-L<Storable> has been upgraded from version 2.56 to 2.57.
-
-=item *
-
-L<Sys::Syslog> has been upgraded from version 0.34 to 0.34_01.
-
-=item *
-
-L<Test> has been upgraded from version 1.28 to 1.29.
-
-=item *
-
-L<Test::Harness> has been upgraded from version 3.36 to 3.36_01.
-
-=item *
-
-L<Test::Simple> has been upgraded from version 1.302045 to 1.302052.
-
-=item *
-
-L<Tie::Hash::NamedCapture> has been upgraded from version 0.09 to 0.10.
-
-=item *
-
-L<Time::Local> has been upgraded from version 1.2300 to 1.24.
+L<XSLoader> has been upgraded from version 0.22 to 0.24.
 
 =back
 
-=head1 Configuration and Compilation
+=head1 Documentation
+
+=head2 Changes to Existing Documentation
+
+=head3 L<perlinterp>
 
 =over 4
 
 =item *
 
-A probe for C<gai_strerror> was added to F<Configure> that checks if the
-the gai_strerror() routine is available and can be used to
-translate error codes returned by getaddrinfo() into human
-readable strings.
+L<perlinterp> has been expanded to give a more detailed example of how to
+hunt around in the parser for how a given operator is handled.
+
+=back
+
+=head1 Testing
+
+=over 4
+
+=item *
+
+F<t/re/regexp_nonull.t> has been added to test that the regular expression
+engine can handle scalars that do not have a null byte just past the end of
+the string.
 
 =back
 
@@ -249,10 +101,38 @@ readable strings.
 
 =over 4
 
-=item Hurd
+=item VMS
 
-The hints for Hurd have been improved enabling malloc wrap and reporting the
-GNU libc used (previously it was an empty string when reported).
+=over 4
+
+=item *
+
+The path separator for the C<PERL5LIB> and C<PERLLIB> environment entries is
+now a colon (C<:>) when running under a Unix shell. There is no change when
+running under DCL (it's still C<|>).
+
+=item *
+
+Remove some VMS-specific hacks from C<showlex.t>. These were added 15 years
+ago, and are no longer necessary for any VMS version now supported.
+
+=back
+
+=back
+
+=over 4
+
+=item Win32
+
+=over 4
+
+=item *
+
+Tweaks for Win32 VC vs GCC detection makefile code. This fixes issue that CCHOME
+depends on CCTYPE, which in auto detect mode is set after CCHOME, so CCHOME uses
+the uninit CCTYPE var. Also fix else vs .ELSE in makefile.mk
+
+=back
 
 =back
 
@@ -262,9 +142,16 @@ GNU libc used (previously it was an empty string when reported).
 
 =item *
 
-Three new ops, C<OP_ARGELEM>, C<OP_ARGDEFELEM> and C<OP_ARGCHECK> have
-been added. These are intended principally to implement the individual
-elements of a subroutine signature, plus any overall checking required.
+Several macros and functions have been added to the public API for
+dealing with Unicode and UTF-8-encoded strings.  See
+L<perlapi/Unicode Support>.
+
+=item *
+
+Use C<my_strlcat()> in C<locale.c>. While C<strcat()> is safe in this context,
+some compilers were optimizing this to C<strcpy()> causing a porting test to
+fail that looks for unsafe code. Rather than fighting this, we just use
+C<my_strlcat()> instead.
 
 =back
 
@@ -274,118 +161,128 @@ elements of a subroutine signature, plus any overall checking required.
 
 =item *
 
-Problems with in-place array sorts: code like C<@a = sort { ... } @a>,
-where the source and destination of the sort are the same plain array, are
-optimised to do less copying around. Two side-effects of this optimisation
-were that the contents of C<@a> as visible to to sort routine were
-partially sorted, and under some circumstances accessing C<@a> during the
-sort could crash the interpreter. Both these issues have been fixed, and
-Sort functions see the original value of C<@a>.
+Invalid assignments to a reference constructor (e.g., C<\eval=time>) could
+sometimes crash in addition to giving a syntax error.  [perl #125679]
 
 =item *
 
-Non-ASCII string delimiters are now reported correctly in error messages
-for unterminated strings.  [perl #128701]
+The parser could sometimes crash if a bareword came after C<evalbytes>.
+[perl #129196]
 
 =item *
 
-C<pack("p", ...)> used to emit its warning ("Attempt to pack pointer to
-temporary value") erroneously in some cases, but has been fixed.
+Autoloading via a method call would warn erroneously ("Use of inherited
+AUTOLOAD for non-method") if there was a stub present in the package into
+which the invocant had been blessed.  The warning is no longer emitted in
+such circumstances.  [perl #47047]
 
 =item *
 
-C<@DB::args> is now exempt from "used once" warnings.  The warnings only
-occurred under B<-w>, because F<warnings.pm> itself uses C<@DB::args>
-multiple times.
+A sub containing with a "forward" declaration with the same name (e.g.,
+C<sub c { sub c; }>) could sometimes crash or loop infinitely.  [perl
+#129090]
 
 =item *
 
-The use of built-in arrays or hash slices in a double-quoted string no
-longer issues a warning ("Possible unintended interpolation...") if the
-variable has not been mentioned before.  This affected code like
-C<qq|@DB::args|> and C<qq|@SIG{'CHLD', 'HUP'}|>.  (The special variables
-C<@-> and C<@+> were already exempt from the warning.)
+The use of C<splice> on arrays with nonexistent elements could cause other
+operators to crash.  [perl #129164]
 
 =item *
 
-C<gethostent> and similar functions now perform a null check internally, to
-avoid crashing with torsocks.  This was a regression from 5.22.  [perl
-#128740]
+Fixed case where C<re_untuit_start> will overshoot the length of a utf8
+string. [perl #129012]
 
 =item *
 
-C<defined *{'!'}>, C<defined *{'['}>, and C<defined *{'-'}> no longer leak
-memory if the typeglob in question has never been accessed before.
+Handle C<CXt_SUBST> better in C<Perl_deb_stack_all>, previously it wasn't
+checking that the I<current> C<cx> is the right type, and instead was always
+checking the base C<cx> (effectively a noop). [perl #129029]
 
 =item *
 
-In 5.25.4 fchown() was changed not to accept negative one as an argument
-because in some platforms that is an error.  However, in some other platforms
-that is an acceptable argument.  This change has been reverted [perl #128967].
+Fixed two possible use-after-free bugs in C<Perl_yylex>. C<Perl_yylex>
+maintains up to two pointers into the parser buffer, one of which can
+become stale under the right conditions. [perl #129069]
 
 =item *
 
-Mentioning the same constant twice in a row (which is a syntax error) no
-longer fails an assertion under debugging builds.  This was a regression
-from 5.20.  [perl #126482]
+Fixed a crash with C<s///l> where it thought it was dealing with UTF-8
+when it wasn't. [perl #129038]
 
 =item *
 
-Many issues relating to C<printf "%a"> of hexadecimal floating point
-were fixed.  In addition, the "subnormals" (formerly known as "denormals")
-floating point anumbers are now supported both with the plain IEEE 754
-floating point numbers (64-bit or 128-bit) and the x86 80-bit
-"extended precision".  Note that subnormal hexadecimal floating
-point literals will give a warning about "exponent underflow".
-[perl #128843, #128889, #128890, #128893, #128909, #128919]
+Fixed place where regex was not setting the syntax error correctly.
+[perl #129122]
 
 =item *
 
-A regression in 5.24 with C<tr/\N{U+...}/foo/> when the code point was between
-128 and 255 has been fixed. [perl #128734].
+The C<&.> operator (and the C<&> operator, when it treats its arguments as
+strings) were failing to append a trailing null byte if at least one string
+was marked as utf8 internally.  Many code paths (system calls, regexp
+compilation) still expect there to be a null byte in the string buffer
+just past the end of the logical string.  An assertion failure was the
+result.  [perl #129287]
 
 =item *
 
-A regression from the previous development release, 5.23.3, where
-compiling a regular expression could crash the interpreter has been
-fixed. [perl #128686].
+Check C<pack_sockaddr_un()>'s return value because C<pack_sockaddr_un()>
+silently truncates the supplied path if it won't fit into the C<sun_path>
+member of C<sockaddr_un>. This may change in the future, but for now
+check the path in theC<sockaddr> matches the desired path, and skip if
+it doesn't. [perl #128095]
 
 =item *
 
-Use of a string delimiter whose code point is above 2**31 now works
-correctly on platforms that allow this.  Previously, certain characters,
-due to truncation, would be confused with other delimiter characters
-with special meaning (such as C<?> in C<m?...?>), resulting
-in inconsistent behaviour.  Note that this is non-portable,
-and is based on Perl's extension to UTF-8, and is probably not
-displayable nor enterable by any editor. [perl #128738]
+Make sure C<PL_oldoldbufptr> is preserved in C<scan_heredoc()>. In some
+cases this is used in building error messages. [perl #128988]
 
 =item *
 
-C<@{x> followed by a newline where C<x> represents a control or non-ASCII
-character no longer produces a garbled syntax error message or a crash.
-[perl #128951]
+Check for null PL_curcop in IN_LC() [perl #129106]
+
+=item *
+
+Fixed the parser error handling for an 'C<:attr(foo>' that does not have
+an ending 'C<)>'.
+
+=item *
+
+Fix C<Perl_delimcpy()> to handle a backslash as last char, this
+actually fixed two bugs, [perl #129064] and [perl #129176].
+
+=item *
+
+[perl #129267] rework gv_fetchmethod_pvn_flags separator parsing to
+prevent possible string overrun with invalid len in gv.c
 
 =back
 
+=head1 Obituary
+
+Jon Portnoy (AVENJ), a prolific Perl author and admired Gentoo community
+member, has passed away on August 10, 2016. He will be remembered and
+missed by all those with which he came in contact and enriched with his
+intellect, wit, and spirit.
+
 =head1 Acknowledgements
 
-Perl 5.25.4 represents approximately 4 weeks of development since Perl 5.25.3
-and contains approximately 18,000 lines of changes across 820 files from 23
+Perl 5.25.5 represents approximately 4 weeks of development since Perl 5.25.4
+and contains approximately 67,000 lines of changes across 230 files from 25
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 9,200 lines of changes to 660 .pm, .t, .c and .h files.
+approximately 62,000 lines of changes to 160 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.25.4:
+improvements that became Perl 5.25.5:
 
-Chris 'BinGOs' Williams, Craig A. Berry, Dagfinn Ilmari Mannsåker, Dan
-Collins, Daniel Dragan, David Mitchell, Father Chrysostomos, H.Merijn Brand,
-James E Keenan, Jarkko Hietaniemi, Karen Etheridge, Karl Williamson, Lukas Mai,
-Neil Bowers, Nicolas R., Pino Toscano, Rafael Garcia-Suarez, Richard Levitte,
-Shlomi Fish, Smylers, Steve Hay, Tony Cook, Yves Orton.
+Aaron Crane, Aristotle Pagaltzis, Chris 'BinGOs' Williams, Craig A. Berry,
+Dagfinn Ilmari Mannsåker, Dan Collins, Daniel Dragan, Dave Cross, David
+Mitchell, E. Choroba, Father Chrysostomos, James E Keenan, Jerry D. Hedden,
+Karl Williamson, Lukas Mai, Ricardo Signes, Rick Delaney, Sawyer X, Stevan
+Little, Steve Hay, Sullivan Beck, Theo Buehler, Tony Cook, Yaroslav Kuzmin,
+Yves Orton.
 
 The list above is almost certainly incomplete as it is automatically generated
 from version control history. In particular, it does not include the names of

@@ -5,8 +5,9 @@
 # There are five columns, separated by tabs.
 # An optional sixth column is used to give a reason, only when skipping tests
 #
-# Column 1 contains the pattern, optionally enclosed in C<''>.
-# Modifiers can be put after the closing C<'>.
+# Column 1 contains the pattern, optionally enclosed in C<''> C<::> or
+# C<//>.  Modifiers can be put after the closing delimiter.  C<''> will
+# automatically be added to any other patterns.
 #
 # Column 2 contains the string to be matched.
 #
@@ -98,7 +99,8 @@ sub convert_from_ascii {
 use strict;
 use warnings FATAL=>"all";
 use vars qw($bang $ffff $nulnul); # used by the tests
-use vars qw($qr $skip_amp $qr_embed $qr_embed_thr $regex_sets); # set by our callers
+use vars qw($qr $skip_amp $qr_embed $qr_embed_thr $regex_sets
+            $no_null); # set by our callers
 
 
 
@@ -143,6 +145,11 @@ foreach (@tests) {
     $pat =~ s/(\$\{\w+\})/$1/eeg;
     $pat =~ s/\\n/\n/g unless $regex_sets;
     $pat = convert_from_ascii($pat) if ord("A") != 65;
+
+    my $no_null_pat;
+    if ($no_null && $pat =~ /^'(.*)'\z/) {
+       $no_null_pat = XS::APItest::string_without_null($1);
+    }
 
     $subject = convert_from_ascii($subject) if ord("A") != 65;
     $subject = eval qq("$subject"); die $@ if $@;
@@ -363,13 +370,16 @@ foreach (@tests) {
 	# Need to make a copy, else the utf8::upgrade of an already studied
 	# scalar confuses things.
 	my $subject = $subject;
+	$subject = XS::APItest::string_without_null($subject) if $no_null;
 	my $c = $iters;
 	my ($code, $match, $got);
         if ($repl eq 'pos') {
+            my $patcode = defined $no_null_pat ? '/$no_null_pat/g'
+                                               : "m${pat}g";
             $code= <<EOFCODE;
                 $study
                 pos(\$subject)=0;
-                \$match = ( \$subject =~ m${pat}g );
+                \$match = ( \$subject =~ $patcode );
                 \$got = pos(\$subject);
 EOFCODE
         }
@@ -388,6 +398,15 @@ EOFCODE
                 my \$RE = threads->new(sub {qr$pat})->join();
                 $study
                 \$match = (\$subject =~ /(?:)\$RE(?:)/) while \$c--;
+                \$got = "$repl";
+EOFCODE
+        }
+        elsif ($no_null) {
+            my $patcode = defined $no_null_pat ? '/$no_null_pat/'
+                                               :  $pat;
+            $code= <<EOFCODE;
+                $study
+                \$match = (\$subject =~ $OP$pat) while \$c--;
                 \$got = "$repl";
 EOFCODE
         }

@@ -7,7 +7,7 @@ BEGIN {
 }
 
 use strict;
-plan(tests => 41);
+plan(tests => 43);
 
 
 # heredoc without newline (#65838)
@@ -99,6 +99,15 @@ HEREDOC
         "don't use an invalid oldoldbufptr"
     );
 
+    # also read freed memory, but got an invalid oldoldbufptr in a different way
+    fresh_perl_like(
+        qq(<<\n\$          \n),
+        # valgrind and asan reports an error between these two lines
+        qr/^Use of bare << to mean <<"" is deprecated at - line 1\.\s+Final \$/,
+        {},
+        "don't use an invalid oldoldbufptr (some more)"
+    );
+
     # [perl #125540] this asserted or crashed
     fresh_perl_like(
 	q(map d$#<<<<),
@@ -106,4 +115,14 @@ HEREDOC
 	{},
 	"Don't assert parsing a here-doc if we hit EOF early"
     );
+
+    # [perl #129064] heap-buffer-overflow S_scan_heredoc
+    fresh_perl_like(
+        qq(<<`\\),
+        # valgrind and asan reports an error between these two lines
+        qr/^Unterminated delimiter for here document/,
+        {},
+        "delimcpy(): handle last char being backslash properly"
+    );
+
 }

@@ -122,7 +122,7 @@ Perl_set_numeric_radix(pTHX)
 		sv_setpv(PL_numeric_radix_sv, lc->decimal_point);
 	    else
 		PL_numeric_radix_sv = newSVpv(lc->decimal_point, 0);
-            if (! is_invariant_string((U8 *) lc->decimal_point, 0)
+            if (! is_utf8_invariant_string((U8 *) lc->decimal_point, 0)
                 && is_utf8_string((U8 *) lc->decimal_point, 0)
                 && _is_cur_LC_category_utf8(LC_NUMERIC))
             {
@@ -1462,15 +1462,13 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
      * This will give as good as possible results on strings that don't
      * otherwise contain that character, but otherwise there may be
      * less-than-perfect results with that character and NUL.  This is
-     * unavoidable unless we replace strxfrm with our own implementation.
-     *
-     * This is one of the few places in the perl core, where we can use
-     * standard functions like strlen() and strcat().  It's because we're
-     * looking for NULs. */
+     * unavoidable unless we replace strxfrm with our own implementation. */
     if (s_strlen < len) {
         char * e = s + len;
         char * sans_nuls;
         STRLEN cur_min_char_len;
+        STRLEN sans_nuls_len;
+        STRLEN sans_nuls_pos;
         int try_non_controls;
 
         /* If we don't know what control character sorts lowest for this
@@ -1576,16 +1574,22 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
          * character in it is NUL.  Multiply that by the length of each
          * replacement, and allow for a trailing NUL */
         cur_min_char_len = strlen(PL_strxfrm_min_char);
-        Newx(sans_nuls, (len * cur_min_char_len) + 1, char);
+        sans_nuls_len = (len * cur_min_char_len) + 1;
+        Newx(sans_nuls, sans_nuls_len, char);
         *sans_nuls = '\0';
+        sans_nuls_pos = 0;
 
         /* Replace each NUL with the lowest collating control.  Loop until have
          * exhausted all the NULs */
         while (s + s_strlen < e) {
-            strcat(sans_nuls, s);
+            sans_nuls_pos = my_strlcat(sans_nuls + sans_nuls_pos,
+                                       s,
+                                       sans_nuls_len);
 
             /* Do the actual replacement */
-            strcat(sans_nuls, PL_strxfrm_min_char);
+            sans_nuls_pos = my_strlcat(sans_nuls + sans_nuls_pos,
+                                       PL_strxfrm_min_char,
+                                       sans_nuls_len);
 
             /* Move past the input NUL */
             s += s_strlen + 1;
@@ -1593,7 +1597,7 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
         }
 
         /* And add anything that trails the final NUL */
-        strcat(sans_nuls, s);
+        my_strlcat(sans_nuls + sans_nuls_pos, s, sans_nuls_len);
 
         /* Switch so below we transform this modified string */
         s = sans_nuls;
@@ -2186,7 +2190,7 @@ Perl__is_cur_LC_category_utf8(pTHX_ int category)
         lc = localeconv();
         if (! lc
             || ! lc->currency_symbol
-            || is_invariant_string((U8 *) lc->currency_symbol, 0))
+            || is_utf8_invariant_string((U8 *) lc->currency_symbol, 0))
         {
             DEBUG_L(PerlIO_printf(Perl_debug_log, "Couldn't get currency symbol for %s, or contains only ASCII; can't use for determining if UTF-8 locale\n", save_input_locale));
             only_ascii = TRUE;
@@ -2266,7 +2270,9 @@ Perl__is_cur_LC_category_utf8(pTHX_ int category)
         for (i = 0; i < 7 + 12; i++) {  /* 7 days; 12 months */
             formatted_time = my_strftime("%A %B %Z %p",
                                     0, 0, hour, dom, month, 112, 0, 0, is_dst);
-            if (! formatted_time || is_invariant_string((U8 *) formatted_time, 0)) {
+            if ( ! formatted_time
+                || is_utf8_invariant_string((U8 *) formatted_time, 0))
+            {
 
                 /* Here, we didn't find a non-ASCII.  Try the next time through
                  * with the complemented dst and am/pm, and try with the next
@@ -2367,7 +2373,7 @@ Perl__is_cur_LC_category_utf8(pTHX_ int category)
                 break;
             }
             errmsg = savepv(errmsg);
-            if (! is_invariant_string((U8 *) errmsg, 0)) {
+            if (! is_utf8_invariant_string((U8 *) errmsg, 0)) {
                 non_ascii = TRUE;
                 is_utf8 = is_utf8_string((U8 *) errmsg, 0);
                 break;

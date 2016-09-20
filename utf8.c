@@ -52,42 +52,6 @@ within non-zero characters.
 */
 
 /*
-=for apidoc is_invariant_string
-
-Returns true iff the first C<len> bytes of the string C<s> are the same
-regardless of the UTF-8 encoding of the string (or UTF-EBCDIC encoding on
-EBCDIC machines).  That is, if they are UTF-8 invariant.  On ASCII-ish
-machines, all the ASCII characters and only the ASCII characters fit this
-definition.  On EBCDIC machines, the ASCII-range characters are invariant, but
-so also are the C1 controls and C<\c?> (which isn't in the ASCII range on
-EBCDIC).
-
-If C<len> is 0, it will be calculated using C<strlen(s)>, (which means if you
-use this option, that C<s> can't have embedded C<NUL> characters and has to
-have a terminating C<NUL> byte).
-
-See also L</is_utf8_string>(), L</is_utf8_string_loclen>(), and L</is_utf8_string_loc>().
-
-=cut
-*/
-
-bool
-Perl_is_invariant_string(const U8 *s, STRLEN len)
-{
-    const U8* const send = s + (len ? len : strlen((const char *)s));
-    const U8* x = s;
-
-    PERL_ARGS_ASSERT_IS_INVARIANT_STRING;
-
-    for (; x < send; ++x) {
-	if (!UTF8_IS_INVARIANT(*x))
-	    break;
-    }
-
-    return x == send;
-}
-
-/*
 =for apidoc uvoffuni_to_utf8_flags
 
 THIS FUNCTION SHOULD BE USED IN ONLY VERY SPECIALIZED CIRCUMSTANCES.
@@ -332,7 +296,14 @@ contain these.
 
 The flag C<UNICODE_WARN_ILLEGAL_INTERCHANGE> selects all three of
 the above WARN flags; and C<UNICODE_DISALLOW_ILLEGAL_INTERCHANGE> selects all
-three DISALLOW flags.
+three DISALLOW flags.  C<UNICODE_DISALLOW_ILLEGAL_INTERCHANGE> restricts the
+allowed inputs to the strict UTF-8 traditionally defined by Unicode.
+Similarly, C<UNICODE_WARN_ILLEGAL_C9_INTERCHANGE> and
+C<UNICODE_DISALLOW_ILLEGAL_C9_INTERCHANGE> are shortcuts to select the
+above-Unicode and surrogate flags, but not the non-character ones, as
+defined in
+L<Unicode Corrigendum #9|http://www.unicode.org/versions/corrigendum9.html>.
+See L<perlunicode/Noncharacter code points>.
 
 Code points above 0x7FFF_FFFF (2**31 - 1) were never specified in any standard,
 so using them is more problematic than other above-Unicode code points.  Perl
@@ -371,88 +342,318 @@ Perl_uvchr_to_utf8_flags(pTHX_ U8 *d, UV uv, UV flags)
     return uvchr_to_utf8_flags(d, uv, flags);
 }
 
-/*
-=for apidoc is_utf8_string
-
-Returns true if the first C<len> bytes of string C<s> form a valid
-UTF-8 string, false otherwise.  If C<len> is 0, it will be calculated
-using C<strlen(s)> (which means if you use this option, that C<s> can't have
-embedded C<NUL> characters and has to have a terminating C<NUL> byte).  Note
-that all characters being ASCII constitute 'a valid UTF-8 string'.
-
-See also L</is_invariant_string>(), L</is_utf8_string_loclen>(), and L</is_utf8_string_loc>().
-
-=cut
-*/
-
-bool
-Perl_is_utf8_string(const U8 *s, STRLEN len)
+PERL_STATIC_INLINE bool
+S_is_utf8_cp_above_31_bits(const U8 * const s, const U8 * const e)
 {
-    const U8* const send = s + (len ? len : strlen((const char *)s));
-    const U8* x = s;
+    /* Returns TRUE if the first code point represented by the Perl-extended-
+     * UTF-8-encoded string starting at 's', and looking no further than 'e -
+     * 1' doesn't fit into 31 bytes.  That is, that if it is >= 2**31.
+     *
+     * The function handles the case where the input bytes do not include all
+     * the ones necessary to represent a full character.  That is, they may be
+     * the intial bytes of the representation of a code point, but possibly
+     * the final ones necessary for the complete representation may be beyond
+     * 'e - 1'.
+     *
+     * The function assumes that the sequence is well-formed UTF-8 as far as it
+     * goes, and is for a UTF-8 variant code point.  If the sequence is
+     * incomplete, the function returns FALSE if there is any well-formed
+     * UTF-8 byte sequence that can complete it in such a way that a code point
+     * < 2**31 is produced; otherwise it returns TRUE.
+     *
+     * Getting this exactly right is slightly tricky, and has to be done in
+     * several places in this file, so is centralized here.  It is based on the
+     * following table:
+     *
+     * U+7FFFFFFF (2 ** 31 - 1)
+     *      ASCII: \xFD\xBF\xBF\xBF\xBF\xBF
+     *   IBM-1047: \xFE\x41\x41\x41\x41\x41\x41\x42\x73\x73\x73\x73\x73\x73
+     *    IBM-037: \xFE\x41\x41\x41\x41\x41\x41\x42\x72\x72\x72\x72\x72\x72
+     *   POSIX-BC: \xFE\x41\x41\x41\x41\x41\x41\x42\x75\x75\x75\x75\x75\x75
+     *         I8: \xFF\xA0\xA0\xA0\xA0\xA0\xA0\xA1\xBF\xBF\xBF\xBF\xBF\xBF
+     * U+80000000 (2 ** 31):
+     *      ASCII: \xFE\x82\x80\x80\x80\x80\x80
+     *              [0] [1] [2] [3] [4] [5] [6] [7] [8] [9] 10  11  12  13
+     *   IBM-1047: \xFE\x41\x41\x41\x41\x41\x41\x43\x41\x41\x41\x41\x41\x41
+     *    IBM-037: \xFE\x41\x41\x41\x41\x41\x41\x43\x41\x41\x41\x41\x41\x41
+     *   POSIX-BC: \xFE\x41\x41\x41\x41\x41\x41\x43\x41\x41\x41\x41\x41\x41
+     *         I8: \xFF\xA0\xA0\xA0\xA0\xA0\xA0\xA2\xA0\xA0\xA0\xA0\xA0\xA0
+     */
 
-    PERL_ARGS_ASSERT_IS_UTF8_STRING;
+#ifdef EBCDIC
 
-    while (x < send) {
-        STRLEN len = isUTF8_CHAR(x, send);
-        if (UNLIKELY(! len)) {
-            return FALSE;
-        }
-        x += len;
+        /* [0] is start byte    [1] [2] [3] [4] [5] [6] [7] */
+    const U8 * const prefix = "\x41\x41\x41\x41\x41\x41\x42";
+    const STRLEN prefix_len = sizeof(prefix) - 1;
+    const STRLEN len = e - s;
+    const cmp_len = MIN(prefix_len, len - 1);
+
+#else
+
+    PERL_UNUSED_ARG(e);
+
+#endif
+
+    PERL_ARGS_ASSERT_IS_UTF8_CP_ABOVE_31_BITS;
+
+    assert(! UTF8_IS_INVARIANT(*s));
+
+#ifndef EBCDIC
+
+    /* Technically, a start byte of FE can be for a code point that fits into
+     * 31 bytes, but not for well-formed UTF-8: doing that requires an overlong
+     * malformation. */
+    return (*s >= 0xFE);
+
+#else
+
+    /* On the EBCDIC code pages we handle, only 0xFE can mean a 32-bit or
+     * larger code point (0xFF is an invariant).  For 0xFE, we need at least 2
+     * bytes, and maybe up through 8 bytes, to be sure if the value is above 31
+     * bits. */
+    if (*s != 0xFE || len == 1) {
+        return FALSE;
     }
 
-    return TRUE;
+    /* Note that in UTF-EBCDIC, the two lowest possible continuation bytes are
+     * \x41 and \x42. */
+    return cBOOL(memGT(s + 1, prefix, cmp_len));
+
+#endif
+
 }
 
-/*
-Implemented as a macro in utf8.h
-
-=for apidoc is_utf8_string_loc
-
-Like L</is_utf8_string> but stores the location of the failure (in the
-case of "utf8ness failure") or the location C<s>+C<len> (in the case of
-"utf8ness success") in the C<ep>.
-
-See also L</is_utf8_string_loclen>() and L</is_utf8_string>().
-
-=for apidoc is_utf8_string_loclen
-
-Like L</is_utf8_string>() but stores the location of the failure (in the
-case of "utf8ness failure") or the location C<s>+C<len> (in the case of
-"utf8ness success") in the C<ep>, and the number of UTF-8
-encoded characters in the C<el>.
-
-See also L</is_utf8_string_loc>() and L</is_utf8_string>().
-
-=cut
-*/
-
-bool
-Perl_is_utf8_string_loclen(const U8 *s, STRLEN len, const U8 **ep, STRLEN *el)
+STRLEN
+Perl__is_utf8_char_helper(const U8 * const s, const U8 * e, const U32 flags)
 {
-    const U8* const send = s + (len ? len : strlen((const char *)s));
-    const U8* x = s;
-    STRLEN outlen = 0;
+    STRLEN len;
+    const U8 *x, *y;
 
-    PERL_ARGS_ASSERT_IS_UTF8_STRING_LOCLEN;
+    /* A helper function that should not be called directly.
+     *
+     * This function returns non-zero if the string beginning at 's' and
+     * looking no further than 'e - 1' is well-formed Perl-extended-UTF-8 for a
+     * code point; otherwise it returns 0.  The examination stops after the
+     * first code point in 's' is validated, not looking at the rest of the
+     * input.  If 'e' is such that there are not enough bytes to represent a
+     * complete code point, this function will return non-zero anyway, if the
+     * bytes it does have are well-formed UTF-8 as far as they go, and aren't
+     * excluded by 'flags'.
+     *
+     * A non-zero return gives the number of bytes required to represent the
+     * code point.  Be aware that if the input is for a partial character, the
+     * return will be larger than 'e - s'.
+     *
+     * This function assumes that the code point represented is UTF-8 variant.
+     * The caller should have excluded this possibility before calling this
+     * function.
+     *
+     * 'flags' can be 0, or any combination of the UTF8_DISALLOW_foo flags
+     * accepted by L</utf8n_to_uvchr>.  If non-zero, this function will return
+     * 0 if the code point represented is well-formed Perl-extended-UTF-8, but
+     * disallowed by the flags.  If the input is only for a partial character,
+     * the function will return non-zero if there is any sequence of
+     * well-formed UTF-8 that, when appended to the input sequence, could
+     * result in an allowed code point; otherwise it returns 0.  Non characters
+     * cannot be determined based on partial character input.  But many  of the
+     * other excluded types can be determined with just the first one or two
+     * bytes.
+     *
+     */
 
-    while (x < send) {
-        STRLEN len = isUTF8_CHAR(x, send);
-        if (UNLIKELY(! len)) {
-            goto out;
-        }
-        x += len;
-        outlen++;
+    PERL_ARGS_ASSERT__IS_UTF8_CHAR_HELPER;
+
+    assert(0 == (flags & ~(UTF8_DISALLOW_ILLEGAL_INTERCHANGE
+                          |UTF8_DISALLOW_ABOVE_31_BIT)));
+    assert(! UTF8_IS_INVARIANT(*s));
+
+    /* A variant char must begin with a start byte */
+    if (UNLIKELY(! UTF8_IS_START(*s))) {
+        return 0;
     }
 
- out:
-    if (el)
-        *el = outlen;
+    /* Examine a maximum of a single whole code point */
+    if (e - s > UTF8SKIP(s)) {
+        e = s + UTF8SKIP(s);
+    }
 
-    if (ep)
-        *ep = x;
-    return (x == send);
+    len = e - s;
+
+    if (flags && isUTF8_POSSIBLY_PROBLEMATIC(*s)) {
+        const U8 s0 = NATIVE_UTF8_TO_I8(s[0]);
+
+        /* The code below is derived from this table.  Keep in mind that legal
+         * continuation bytes range between \x80..\xBF for UTF-8, and
+         * \xA0..\xBF for I8.  Anything above those aren't continuation bytes.
+         * Hence, we don't have to test the upper edge because if any of those
+         * are encountered, the sequence is malformed, and will fail elsewhere
+         * in this function.
+         *              UTF-8            UTF-EBCDIC I8
+         *   U+D800: \xED\xA0\x80      \xF1\xB6\xA0\xA0      First surrogate
+         *   U+DFFF: \xED\xBF\xBF      \xF1\xB7\xBF\xBF      Final surrogate
+         * U+110000: \xF4\x90\x80\x80  \xF9\xA2\xA0\xA0\xA0  First above Unicode
+         *
+         */
+
+#ifdef EBCDIC   /* On EBCDIC, these are actually I8 bytes */
+#  define FIRST_START_BYTE_THAT_IS_DEFINITELY_SUPER  0xFA
+#  define IS_SUPER_2_BYTE(s0, s1)                ((s0) == 0xF9 && (s1) >= 0xA2)
+
+                                                               /* B6 and B7 */
+#  define IS_SURROGATE(s0, s1)         ((s0) == 0xF1 && ((s1) & 0xFE ) == 0xB6)
+#else
+#  define FIRST_START_BYTE_THAT_IS_DEFINITELY_SUPER  0xF5
+#  define IS_SUPER_2_BYTE(s0, s1)                ((s0) == 0xF4 && (s1) >= 0x90)
+#  define IS_SURROGATE(s0, s1)                   ((s0) == 0xED && (s1) >= 0xA0)
+#endif
+
+        if (  (flags & UTF8_DISALLOW_SUPER)
+            && UNLIKELY(s0 >= FIRST_START_BYTE_THAT_IS_DEFINITELY_SUPER)) {
+            return 0;           /* Above Unicode */
+        }
+
+        if (   (flags & UTF8_DISALLOW_ABOVE_31_BIT)
+            &&  UNLIKELY(is_utf8_cp_above_31_bits(s, e)))
+        {
+            return 0;           /* Above 31 bits */
+        }
+
+        if (len > 1) {
+            const U8 s1 = NATIVE_UTF8_TO_I8(s[1]);
+
+            if (   (flags & UTF8_DISALLOW_SUPER)
+                &&  UNLIKELY(IS_SUPER_2_BYTE(s0, s1)))
+            {
+                return 0;       /* Above Unicode */
+            }
+
+            if (   (flags & UTF8_DISALLOW_SURROGATE)
+                &&  UNLIKELY(IS_SURROGATE(s0, s1)))
+            {
+                return 0;       /* Surrogate */
+            }
+
+            if (  (flags & UTF8_DISALLOW_NONCHAR)
+                && UNLIKELY(UTF8_IS_NONCHAR(s, e)))
+            {
+                return 0;       /* Noncharacter code point */
+            }
+        }
+    }
+
+    /* Make sure that all that follows are continuation bytes */
+    for (x = s + 1; x < e; x++) {
+        if (UNLIKELY(! UTF8_IS_CONTINUATION(*x))) {
+            return 0;
+        }
+    }
+
+    /* Here is syntactically valid.  Next, make sure this isn't the start of an
+     * overlong.  Overlongs can occur whenever the number of continuation bytes
+     * changes.  That means whenever the number of leading 1 bits in a start
+     * byte increases from the next lower start byte.  That happens for start
+     * bytes C0, E0, F0, F8, FC, FE, and FF.  On modern perls, the following
+     * illegal start bytes have already been excluded, so don't need to be
+     * tested here;
+     * ASCII platforms: C0, C1
+     * EBCDIC platforms C0, C1, C2, C3, C4, E0
+     *
+     * At least a second byte is required to determine if other sequences will
+     * be an overlong. */
+
+    if (len > 1) {
+        const U8 s0 = NATIVE_UTF8_TO_I8(s[0]);
+        const U8 s1 = NATIVE_UTF8_TO_I8(s[1]);
+
+        /* Each platform has overlongs after the start bytes given above
+         * (expressed in I8 for EBCDIC).  What constitutes an overlong varies
+         * by platform, but the logic is the same, except the E0 overlong has
+         * already been excluded on EBCDIC platforms.   The  values below were
+         * found by manually inspecting the UTF-8 patterns.  See the tables in
+         * utf8.h and utfebcdic.h */
+
+#       ifdef EBCDIC
+#           define F0_ABOVE_OVERLONG 0xB0
+#           define F8_ABOVE_OVERLONG 0xA8
+#           define FC_ABOVE_OVERLONG 0xA4
+#           define FE_ABOVE_OVERLONG 0xA2
+#           define FF_OVERLONG_PREFIX "\xfe\x41\x41\x41\x41\x41\x41\x41"
+                                      /* I8(0xfe) is FF */
+#       else
+
+        if (s0 == 0xE0 && UNLIKELY(s1 < 0xA0)) {
+            return 0;       /* Overlong */
+        }
+
+#           define F0_ABOVE_OVERLONG 0x90
+#           define F8_ABOVE_OVERLONG 0x88
+#           define FC_ABOVE_OVERLONG 0x84
+#           define FE_ABOVE_OVERLONG 0x82
+#           define FF_OVERLONG_PREFIX "\xff\x80\x80\x80\x80\x80\x80"
+#       endif
+
+
+        if (   (s0 == 0xF0 && UNLIKELY(s1 < F0_ABOVE_OVERLONG))
+            || (s0 == 0xF8 && UNLIKELY(s1 < F8_ABOVE_OVERLONG))
+            || (s0 == 0xFC && UNLIKELY(s1 < FC_ABOVE_OVERLONG))
+            || (s0 == 0xFE && UNLIKELY(s1 < FE_ABOVE_OVERLONG)))
+        {
+            return 0;       /* Overlong */
+        }
+
+#   if defined(UV_IS_QUAD) || defined(EBCDIC)
+
+        /* Check for the FF overlong.  This happens only if all these bytes
+         * match; what comes after them doesn't matter.  See tables in utf8.h,
+         * utfebcdic.h.  (Can't happen on ASCII 32-bit platforms, as overflows
+         * instead.) */
+
+        if (   len >= sizeof(FF_OVERLONG_PREFIX) - 1
+            && UNLIKELY(memEQ(s, FF_OVERLONG_PREFIX,
+                                               sizeof(FF_OVERLONG_PREFIX) - 1)))
+        {
+            return 0;       /* Overlong */
+        }
+
+#endif
+
+    }
+
+    /* Finally, see if this would overflow a UV on this platform.  See if the
+     * UTF8 for this code point is larger than that for the highest
+     * representable code point.  (For ASCII platforms, we could use memcmp()
+     * because we don't have to convert each byte to I8, but it's very rare
+     * input indeed that would approach overflow, so the loop below will likely
+     * only get executed once */
+    y = (const U8 *) HIGHEST_REPRESENTABLE_UTF8;
+
+    for (x = s; x < e; x++, y++) {
+
+        /* If the same as this byte, go on to the next */
+        if (UNLIKELY(NATIVE_UTF8_TO_I8(*x) == *y)) {
+            continue;
+        }
+
+        /* If this is larger, it overflows */
+        if (UNLIKELY(NATIVE_UTF8_TO_I8(*x) > *y)) {
+            return 0;
+        }
+
+        /* But if smaller, it won't */
+        break;
+    }
+
+    return UTF8SKIP(s);
 }
+
+#undef FIRST_START_BYTE_THAT_IS_DEFINITELY_SUPER
+#undef IS_SUPER_2_BYTE
+#undef IS_SURROGATE
+#undef F0_ABOVE_OVERLONG
+#undef F8_ABOVE_OVERLONG
+#undef FC_ABOVE_OVERLONG
+#undef FE_ABOVE_OVERLONG
+#undef FF_OVERLONG_PREFIX
 
 /*
 
@@ -491,20 +692,30 @@ C<retlen> to C<-1> (cast to C<STRLEN>) and return zero.
 
 Note that this API requires disambiguation between successful decoding a C<NUL>
 character, and an error return (unless the C<UTF8_CHECK_ONLY> flag is set), as
-in both cases, 0 is returned.  To disambiguate, upon a zero return, see if the
-first byte of C<s> is 0 as well.  If so, the input was a C<NUL>; if not, the
-input had an error.
+in both cases, 0 is returned, and, depending on the malformation, C<retlen> may
+be set to 1.  To disambiguate, upon a zero return, see if the first byte of
+C<s> is 0 as well.  If so, the input was a C<NUL>; if not, the input had an
+error.
 
 Certain code points are considered problematic.  These are Unicode surrogates,
 Unicode non-characters, and code points above the Unicode maximum of 0x10FFFF.
 By default these are considered regular code points, but certain situations
-warrant special handling for them.  If C<flags> contains
-C<UTF8_DISALLOW_ILLEGAL_INTERCHANGE>, all three classes are treated as
-malformations and handled as such.  The flags C<UTF8_DISALLOW_SURROGATE>,
-C<UTF8_DISALLOW_NONCHAR>, and C<UTF8_DISALLOW_SUPER> (meaning above the legal
-Unicode maximum) can be set to disallow these categories individually.
+warrant special handling for them, which can be specified using the C<flags>
+parameter.  If C<flags> contains C<UTF8_DISALLOW_ILLEGAL_INTERCHANGE>, all
+three classes are treated as malformations and handled as such.  The flags
+C<UTF8_DISALLOW_SURROGATE>, C<UTF8_DISALLOW_NONCHAR>, and
+C<UTF8_DISALLOW_SUPER> (meaning above the legal Unicode maximum) can be set to
+disallow these categories individually.  C<UTF8_DISALLOW_ILLEGAL_INTERCHANGE>
+restricts the allowed inputs to the strict UTF-8 traditionally defined by
+Unicode.  Use C<UTF8_DISALLOW_ILLEGAL_C9_INTERCHANGE> to use the strictness
+definition given by
+L<Unicode Corrigendum #9|http://www.unicode.org/versions/corrigendum9.html>.
+The difference between traditional strictness and C9 strictness is that the
+latter does not forbid non-character code points.  (They are still discouraged,
+however.)  For more discussion see L<perlunicode/Noncharacter code points>.
 
-The flags C<UTF8_WARN_ILLEGAL_INTERCHANGE>, C<UTF8_WARN_SURROGATE>,
+The flags C<UTF8_WARN_ILLEGAL_INTERCHANGE>,
+C<UTF8_WARN_ILLEGAL_C9_INTERCHANGE>, C<UTF8_WARN_SURROGATE>,
 C<UTF8_WARN_NONCHAR>, and C<UTF8_WARN_SUPER> will cause warning messages to be
 raised for their respective categories, but otherwise the code points are
 considered valid (not malformations).  To get a category to both be treated as
@@ -787,35 +998,14 @@ Perl_utf8n_to_uvchr(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
             /* The maximum code point ever specified by a standard was
              * 2**31 - 1.  Anything larger than that is a Perl extension that
              * very well may not be understood by other applications (including
-             * earlier perl versions on EBCDIC platforms).  On ASCII platforms,
-             * these code points are indicated by the first UTF-8 byte being
-             * 0xFE or 0xFF.  We test for these after the regular SUPER ones,
-             * and before possibly bailing out, so that the slightly more dire
-             * warning will override the regular one. */
-            if (
-#ifndef EBCDIC
-                (*s0 & 0xFE) == 0xFE	/* matches both FE, FF */
-#else
-                 /* The I8 for 2**31 (U+80000000) is
-                  *   \xFF\xA0\xA0\xA0\xA0\xA0\xA0\xA2\xA0\xA0\xA0\xA0\xA0\xA0
-                  * and it turns out that on all EBCDIC pages recognized that
-                  * the UTF-EBCDIC for that code point is
-                  *   \xFE\x41\x41\x41\x41\x41\x41\x43\x41\x41\x41\x41\x41\x41
-                  * For the next lower code point, the 1047 UTF-EBCDIC is
-                  *   \xFE\x41\x41\x41\x41\x41\x41\x42\x73\x73\x73\x73\x73\x73
-                  * The other code pages differ only in the bytes following
-                  * \x42.  Thus the following works (the minimum continuation
-                  * byte is \x41). */
-                *s0 == 0xFE && send - s0 > 7 && (   s0[1] > 0x41
-                                                 || s0[2] > 0x41
-                                                 || s0[3] > 0x41
-                                                 || s0[4] > 0x41
-                                                 || s0[5] > 0x41
-                                                 || s0[6] > 0x41
-                                                 || s0[7] > 0x42)
-#endif
-                && (flags & (UTF8_WARN_ABOVE_31_BIT|UTF8_WARN_SUPER
-                            |UTF8_DISALLOW_ABOVE_31_BIT)))
+             * earlier perl versions on EBCDIC platforms).  We test for these
+             * after the regular SUPER ones, and before possibly bailing out,
+             * so that the slightly more dire warning will override the regular
+             * one. */
+            if (   (flags & (UTF8_WARN_ABOVE_31_BIT
+                            |UTF8_WARN_SUPER
+                            |UTF8_DISALLOW_ABOVE_31_BIT))
+                && UNLIKELY(is_utf8_cp_above_31_bits(s0, send)))
             {
                 if (  ! (flags & UTF8_CHECK_ONLY)
                     &&  (flags & (UTF8_WARN_ABOVE_31_BIT|UTF8_WARN_SUPER))
@@ -947,6 +1137,9 @@ Code points above the platform's C<IV_MAX> will raise a deprecation warning,
 unless those are turned off.
 
 =cut
+
+Also implemented as a macro in utf8.h
+
 */
 
 
@@ -959,49 +1152,8 @@ Perl_utf8_to_uvchr_buf(pTHX_ const U8 *s, const U8 *send, STRLEN *retlen)
 			  ckWARN_d(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY);
 }
 
-/* Like L</utf8_to_uvchr_buf>(), but should only be called when it is known that
- * there are no malformations in the input UTF-8 string C<s>.  surrogates,
- * non-character code points, and non-Unicode code points are allowed. */
-
-UV
-Perl_valid_utf8_to_uvchr(pTHX_ const U8 *s, STRLEN *retlen)
-{
-    UV expectlen = UTF8SKIP(s);
-    const U8* send = s + expectlen;
-    UV uv = *s;
-
-    PERL_ARGS_ASSERT_VALID_UTF8_TO_UVCHR;
-    PERL_UNUSED_CONTEXT;
-
-    if (retlen) {
-        *retlen = expectlen;
-    }
-
-    /* An invariant is trivially returned */
-    if (expectlen == 1) {
-	return uv;
-    }
-
-#ifdef EBCDIC
-    uv = NATIVE_UTF8_TO_I8(uv);
-#endif
-
-    /* Remove the leading bits that indicate the number of bytes, leaving just
-     * the bits that are part of the value */
-    uv &= UTF_START_MASK(expectlen);
-
-    /* Now, loop through the remaining bytes, accumulating each into the
-     * working total as we go.  (I khw tried unrolling the loop for up to 4
-     * bytes, but there was no performance improvement) */
-    for (++s; s < send; s++) {
-        uv = UTF8_ACCUMULATE(uv, *s);
-    }
-
-    return UNI_TO_NATIVE(uv);
-
-}
-
-/*
+/* This is marked as deprecated
+ *
 =for apidoc utf8_to_uvuni_buf
 
 Only in very rare circumstances should code need to be dealing in Unicode
@@ -1034,9 +1186,8 @@ Perl_utf8_to_uvuni_buf(pTHX_ const U8 *s, const U8 *send, STRLEN *retlen)
 
     assert(send > s);
 
-    /* Call the low level routine asking for checks */
-    return NATIVE_TO_UNI(Perl_utf8n_to_uvchr(aTHX_ s, send -s, retlen,
-			       ckWARN_d(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY));
+    /* Call the low level routine, asking for checks */
+    return NATIVE_TO_UNI(utf8_to_uvchr_buf(s, send, retlen));
 }
 
 /*
@@ -1078,62 +1229,6 @@ Perl_utf8_length(pTHX_ const U8 *s, const U8 *e)
     }
 
     return len;
-}
-
-/*
-=for apidoc utf8_distance
-
-Returns the number of UTF-8 characters between the UTF-8 pointers C<a>
-and C<b>.
-
-WARNING: use only if you *know* that the pointers point inside the
-same UTF-8 buffer.
-
-=cut
-*/
-
-IV
-Perl_utf8_distance(pTHX_ const U8 *a, const U8 *b)
-{
-    PERL_ARGS_ASSERT_UTF8_DISTANCE;
-
-    return (a < b) ? -1 * (IV) utf8_length(a, b) : (IV) utf8_length(b, a);
-}
-
-/*
-=for apidoc utf8_hop
-
-Return the UTF-8 pointer C<s> displaced by C<off> characters, either
-forward or backward.
-
-WARNING: do not use the following unless you *know* C<off> is within
-the UTF-8 data pointed to by C<s> *and* that on entry C<s> is aligned
-on the first byte of character or just after the last byte of a character.
-
-=cut
-*/
-
-U8 *
-Perl_utf8_hop(const U8 *s, SSize_t off)
-{
-    PERL_ARGS_ASSERT_UTF8_HOP;
-
-    /* Note: cannot use UTF8_IS_...() too eagerly here since e.g
-     * the bitops (especially ~) can create illegal UTF-8.
-     * In other words: in Perl UTF-8 is not just for Unicode. */
-
-    if (off >= 0) {
-	while (off--)
-	    s += UTF8SKIP(s);
-    }
-    else {
-	while (off++) {
-	    s--;
-	    while (UTF8_IS_CONTINUATION(*s))
-		s--;
-	}
-    }
-    return (U8 *)s;
 }
 
 /*
@@ -4050,27 +4145,21 @@ Perl_check_utf8_print(pTHX_ const U8* s, const STRLEN len)
 	}
 	if (UNLIKELY(isUTF8_POSSIBLY_PROBLEMATIC(*s))) {
 	    STRLEN char_len;
-	    if (UTF8_IS_SUPER(s, e)) {
+	    if (UNLIKELY(UTF8_IS_SUPER(s, e))) {
                 if (   ckWARN_d(WARN_NON_UNICODE)
                     || (   ckWARN_d(WARN_DEPRECATED)
-#if defined(UV_IS_QUAD)
+#ifndef UV_IS_QUAD
+                        && UNLIKELY(is_utf8_cp_above_31_bits(s, e))
+#else   /* Below is 64-bit words */
                         /* 2**63 and up meet these conditions provided we have
                          * a 64-bit word. */
 #   ifdef EBCDIC
-                        && *s == 0xFE && e - s >= UTF8_MAXBYTES
-                        && s[1] >= 0x49
+                        && *s == 0xFE
+                        && NATIVE_UTF8_TO_I8(s[1]) >= 0xA8
 #   else
-                        && *s == 0xFF && e -s >= UTF8_MAXBYTES
+                        && *s == 0xFF
+                           /* s[1] being above 0x80 overflows */
                         && s[2] >= 0x88
-#   endif
-#else   /* Below is 32-bit words */
-                        /* 2**31 and above meet these conditions on all EBCDIC
-                         * pages recognized for 32-bit platforms */
-#   ifdef EBCDIC
-                        && *s == 0xFE && e - s >= UTF8_MAXBYTES
-                        && s[6] >= 0x43
-#   else
-                        && *s >= 0xFE
 #   endif
 #endif
                 )) {
@@ -4079,7 +4168,7 @@ Perl_check_utf8_print(pTHX_ const U8* s, const STRLEN len)
                     ok = FALSE;
                 }
 	    }
-	    else if (UTF8_IS_SURROGATE(s, e)) {
+	    else if (UNLIKELY(UTF8_IS_SURROGATE(s, e))) {
 		if (ckWARN_d(WARN_SURROGATE)) {
                     /* This has a different warning than the one the called
                      * function would output, so can't just call it, unlike we
@@ -4090,7 +4179,7 @@ Perl_check_utf8_print(pTHX_ const U8* s, const STRLEN len)
 		    ok = FALSE;
 		}
 	    }
-	    else if ((UTF8_IS_NONCHAR(s, e)) && (ckWARN_d(WARN_NONCHAR))) {
+	    else if (UNLIKELY(UTF8_IS_NONCHAR(s, e)) && (ckWARN_d(WARN_NONCHAR))) {
                 /* A side effect of this function will be to warn */
                 (void) utf8n_to_uvchr(s, e - s, &char_len, UTF8_WARN_NONCHAR);
 		ok = FALSE;

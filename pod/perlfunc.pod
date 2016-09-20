@@ -1703,8 +1703,8 @@ produce, respectively
     /etc/games is no good, stopped at canasta line 123.
 
 If the output is empty and L<C<$@>|perlvar/$@> already contains a value
-(typically from a previous eval) that value is reused after appending
-C<"\t...propagated">.  This is useful for propagating exceptions:
+(typically from a previous L<C<eval>|/eval EXPR>) that value is reused after
+appending C<"\t...propagated">.  This is useful for propagating exceptions:
 
     eval { ... };
     die unless $@ =~ /Expected exception/;
@@ -4006,8 +4006,8 @@ Note that L<C<$_>|perlvar/$_> is an alias to the list value, so it can
 be used to modify the elements of the LIST.  While this is useful and
 supported, it can cause bizarre results if the elements of LIST are not
 variables.  Using a regular C<foreach> loop for this purpose would be
-clearer in most cases.  See also L<C<grep>|/grep BLOCK LIST> for an
-array composed of those items of the original list for which the BLOCK
+clearer in most cases.  See also L<C<grep>|/grep BLOCK LIST> for a
+list composed of those items of the original list for which the BLOCK
 or EXPR evaluates to true.
 
 C<{> starts both hash references and blocks, so C<map { ...> could be either
@@ -4350,7 +4350,7 @@ opens the UTF8-encoded file containing Unicode characters;
 see L<perluniintro>.  Note that if layers are specified in the
 three-argument form, then default layers stored in ${^OPEN} (see L<perlvar>;
 usually set by the L<open> pragma or the switch C<-CioD>) are ignored.
-Those layers will also be ignored if you specifying a colon with no name
+Those layers will also be ignored if you specify a colon with no name
 following it.  In that case the default layer for the operating system
 (:raw on Unix, :crlf on Windows) is used.
 
@@ -7406,6 +7406,8 @@ X<split>
 
 Splits the string EXPR into a list of strings and returns the
 list in list context, or the size of the list in scalar context.
+(Prior to Perl 5.11, it also overwrote C<@_> with the list in
+void and scalar context. If you target old perls, beware.)
 
 If only PATTERN is given, EXPR defaults to L<C<$_>|perlvar/$_>.
 

@@ -1008,11 +1008,11 @@ Perl_gv_fetchmethod_pv_flags(pTHX_ HV *stash, const char *name, U32 flags)
 GV *
 Perl_gv_fetchmethod_pvn_flags(pTHX_ HV *stash, const char *name, const STRLEN len, U32 flags)
 {
-    const char *nend;
-    const char *nsplit = NULL;
+    const char * const origname = name;
+    const char * const name_end = name + len;
+    const char *last_separator = NULL;
     GV* gv;
     HV* ostash = stash;
-    const char * const origname = name;
     SV *const error_report = MUTABLE_SV(stash);
     const U32 autoload = flags & GV_AUTOLOAD;
     const U32 do_croak = flags & GV_CROAK;
@@ -1023,43 +1023,60 @@ Perl_gv_fetchmethod_pvn_flags(pTHX_ HV *stash, const char *name, const STRLEN le
     if (SvTYPE(stash) < SVt_PVHV)
 	stash = NULL;
     else {
-	/* The only way stash can become NULL later on is if nsplit is set,
+	/* The only way stash can become NULL later on is if last_separator is set,
 	   which in turn means that there is no need for a SVt_PVHV case
 	   the error reporting code.  */
     }
 
-    for (nend = name; *nend || nend != (origname + len); nend++) {
-	if (*nend == '\'') {
-	    nsplit = nend;
-	    name = nend + 1;
-	}
-	else if (*nend == ':' && *(nend + 1) == ':') {
-	    nsplit = nend++;
-	    name = nend + 1;
-	}
+    {
+        /* check if the method name is fully qualified or
+         * not, and separate the package name from the actual
+         * method name.
+         *
+         * leaves last_separator pointing to the beginning of the
+         * last package separator (either ' or ::) or 0
+         * if none was found.
+         *
+         * leaves name pointing at the beginning of the
+         * method name.
+         */
+        const char *name_cursor = name;
+        const char * const name_em1 = name_end - 1; /* name_end minus 1 */
+        for (name_cursor = name; name_cursor < name_end ; name_cursor++) {
+            if (*name_cursor == '\'') {
+                last_separator = name_cursor;
+                name = name_cursor + 1;
+            }
+            else if (name_cursor < name_em1 && *name_cursor == ':' && name_cursor[1] == ':') {
+                last_separator = name_cursor++;
+                name = name_cursor + 1;
+            }
+        }
     }
-    if (nsplit) {
-	if ((nsplit - origname) == 5 && memEQ(origname, "SUPER", 5)) {
+
+    /* did we find a separator? */
+    if (last_separator) {
+	if ((last_separator - origname) == 5 && memEQ(origname, "SUPER", 5)) {
 	    /* ->SUPER::method should really be looked up in original stash */
 	    stash = CopSTASH(PL_curcop);
 	    flags |= GV_SUPER;
 	    DEBUG_o( Perl_deb(aTHX_ "Treating %s as %s::%s\n",
 			 origname, HvENAME_get(stash), name) );
 	}
-	else if ((nsplit - origname) >= 7 &&
-		 strnEQ(nsplit - 7, "::SUPER", 7)) {
+	else if ((last_separator - origname) >= 7 &&
+		 strnEQ(last_separator - 7, "::SUPER", 7)) {
             /* don't autovifify if ->NoSuchStash::SUPER::method */
-	    stash = gv_stashpvn(origname, nsplit - origname - 7, is_utf8);
+	    stash = gv_stashpvn(origname, last_separator - origname - 7, is_utf8);
 	    if (stash) flags |= GV_SUPER;
 	}
 	else {
             /* don't autovifify if ->NoSuchStash::method */
-            stash = gv_stashpvn(origname, nsplit - origname, is_utf8);
+            stash = gv_stashpvn(origname, last_separator - origname, is_utf8);
 	}
 	ostash = stash;
     }
 
-    gv = gv_fetchmeth_pvn(stash, name, nend - name, 0, flags);
+    gv = gv_fetchmeth_pvn(stash, name, name_end - name, 0, flags);
     if (!gv) {
 	/* This is the special case that exempts Foo->import and
 	   Foo->unimport from being an error even if there's no
@@ -1068,7 +1085,7 @@ Perl_gv_fetchmethod_pvn_flags(pTHX_ HV *stash, const char *name, const STRLEN le
 	    gv = MUTABLE_GV(&PL_sv_yes);
 	else if (autoload)
 	    gv = gv_autoload_pvn(
-		ostash, name, nend - name, GV_AUTOLOAD_ISMETHOD|flags
+		ostash, name, name_end - name, GV_AUTOLOAD_ISMETHOD|flags
 	    );
 	if (!gv && do_croak) {
 	    /* Right now this is exclusively for the benefit of S_method_common
@@ -1084,21 +1101,21 @@ Perl_gv_fetchmethod_pvn_flags(pTHX_ HV *stash, const char *name, const STRLEN le
 				       HV_FETCH_ISEXISTS, NULL, 0)
 		) {
 		    require_pv("IO/File.pm");
-		    gv = gv_fetchmeth_pvn(stash, name, nend - name, 0, flags);
+		    gv = gv_fetchmeth_pvn(stash, name, name_end - name, 0, flags);
 		    if (gv)
 			return gv;
 		}
 		Perl_croak(aTHX_
 			   "Can't locate object method \"%"UTF8f
 			   "\" via package \"%"HEKf"\"",
-			            UTF8fARG(is_utf8, nend - name, name),
+			            UTF8fARG(is_utf8, name_end - name, name),
                                     HEKfARG(HvNAME_HEK(stash)));
 	    }
 	    else {
                 SV* packnamesv;
 
-		if (nsplit) {
-		    packnamesv = newSVpvn_flags(origname, nsplit - origname,
+		if (last_separator) {
+		    packnamesv = newSVpvn_flags(origname, last_separator - origname,
                                                     SVs_TEMP | is_utf8);
 		} else {
 		    packnamesv = error_report;
@@ -1108,7 +1125,7 @@ Perl_gv_fetchmethod_pvn_flags(pTHX_ HV *stash, const char *name, const STRLEN le
 			   "Can't locate object method \"%"UTF8f
 			   "\" via package \"%"SVf"\""
 			   " (perhaps you forgot to load \"%"SVf"\"?)",
-			   UTF8fARG(is_utf8, nend - name, name),
+			   UTF8fARG(is_utf8, name_end - name, name),
                            SVfARG(packnamesv), SVfARG(packnamesv));
 	    }
 	}

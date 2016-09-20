@@ -2708,6 +2708,7 @@ cpan/Test-Simple/t/lib/MyOverload.pm
 cpan/Test-Simple/t/lib/MyTest.pm
 cpan/Test-Simple/t/lib/NoExporter.pm
 cpan/Test-Simple/t/lib/SigDie.pm
+cpan/Test-Simple/t/lib/SkipAll.pm
 cpan/Test-Simple/t/lib/SmallTest.pm
 cpan/Test-Simple/t/lib/Test/Builder/NoOutput.pm
 cpan/Test-Simple/t/lib/Test/Simple/Catch.pm
@@ -2732,6 +2733,7 @@ cpan/Test-Simple/t/regression/642_persistent_end.t
 cpan/Test-Simple/t/regression/662-tbt-no-plan.t
 cpan/Test-Simple/t/regression/684-nested_todo_diag.t
 cpan/Test-Simple/t/regression/694_note_diag_return_values.t
+cpan/Test-Simple/t/regression/696-intercept_skip_all.t
 cpan/Test-Simple/t/regression/no_name_in_subtest.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_done_testing.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_fork.t
@@ -2745,6 +2747,7 @@ cpan/Test-Simple/t/Test2/behavior/init_croak.t
 cpan/Test-Simple/t/Test2/behavior/nested_context_exception.t
 cpan/Test-Simple/t/Test2/behavior/no_load_api.t
 cpan/Test-Simple/t/Test2/behavior/run_subtest_inherit.t
+cpan/Test-Simple/t/Test2/behavior/special_names.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_buffer_formatter.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_events.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_plan.t
@@ -3348,6 +3351,7 @@ dist/Filter-Simple/t/lib/Filter/Simple/ExportTest.pm		Helper file for Filter::Si
 dist/Filter-Simple/t/lib/Filter/Simple/FilterOnlyTest.pm	Helper file for Filter::Simple tests
 dist/Filter-Simple/t/lib/Filter/Simple/FilterTest.pm		Helper file for Filter::Simple tests
 dist/Filter-Simple/t/lib/Filter/Simple/ImportTest.pm		Helper file for Filter::Simple tests
+dist/Filter-Simple/t/no.t					See if Filter::Simple works
 dist/I18N-Collate/lib/I18N/Collate.pm		Routines to do strxfrm-based collation
 dist/I18N-Collate/t/I18N-Collate.t		See if I18N::Collate works
 dist/I18N-LangTags/ChangeLog			I18N::LangTags
@@ -3608,6 +3612,7 @@ dist/Thread-Semaphore/t/02_errs.t		Thread::Semaphore tests
 dist/Thread-Semaphore/t/03_nothreads.t		Thread::Semaphore tests
 dist/Thread-Semaphore/t/04_nonblocking.t	Thread::Semaphore tests
 dist/Thread-Semaphore/t/05_force.t	Thread::Semaphore tests
+dist/Thread-Semaphore/t/06_timed.t	Thread::Semaphore tests
 dist/threads/hints/hpux.pl	Hint file for HPUX
 dist/threads/hints/linux.pl	Hint file for Linux
 dist/threads/lib/threads.pm		ithreads
@@ -4824,6 +4829,7 @@ pod/perl5250delta.pod		Perl changes in version 5.25.0
 pod/perl5251delta.pod		Perl changes in version 5.25.1
 pod/perl5252delta.pod		Perl changes in version 5.25.2
 pod/perl5253delta.pod		Perl changes in version 5.25.3
+pod/perl5254delta.pod		Perl changes in version 5.25.4
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5672,6 +5678,7 @@ t/re/regex_sets.t		Test (?[ ])
 t/re/regex_sets_compat.t	Test (?[ ]) is compatible with old [ ]
 t/re/regexp.t			See if regular expressions work
 t/re/regexp_noamp.t		See if regular expressions work with optimizations
+t/re/regexp_nonull.t		See if regexps work without trailing nulls
 t/re/regexp_notrie.t		See if regular expressions work without trie optimisation
 t/re/regexp_qr.t		See if regular expressions work as qr//
 t/re/regexp_qr_embed.t		See if regular expressions work with embedded qr//

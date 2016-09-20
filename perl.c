@@ -2300,6 +2300,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 
     /* PL_unicode is turned on by -C, or by $ENV{PERL_UNICODE},
      * or explicitly in some platforms.
+     * PL_utf8locale is conditionally turned on by
      * locale.c:Perl_init_i18nl10n() if the environment
      * look like the user wants to use UTF-8. */
 #if defined(__SYMBIAN32__)
@@ -4655,8 +4656,8 @@ S_init_perllib(pTHX)
 #if defined(DOSISH) || defined(__SYMBIAN32__)
 #    define PERLLIB_SEP ';'
 #else
-#  if defined(VMS)
-#    define PERLLIB_SEP '|'
+#  if defined(__VMS)
+#    define PERLLIB_SEP PL_perllib_sep
 #  else
 #    define PERLLIB_SEP ':'
 #  endif

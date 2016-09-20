@@ -3,7 +3,7 @@ use strict;
 use vars qw/$VERSION %released %version %families %upstream
 	    %bug_tracker %deprecated %delta/;
 use version;
-$VERSION = '5.20160820';
+$VERSION = '5.20160920';
 
 sub _undelta {
     my ($delta) = @_;
@@ -313,6 +313,7 @@ sub changes_between {
     5.025002 => '2016-06-20',
     5.025003 => '2016-07-20',
     5.025004 => '2016-08-20',
+    5.025005 => '2016-09-20',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -13085,6 +13086,96 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         removed => {
         }
     },
+    5.025005 => {
+        delta_from => 5.025004,
+        changed => {
+            'B::Op_private'         => '5.025005',
+            'Config'                => '5.025005',
+            'Filter::Simple'        => '0.93',
+            'Locale::Codes'         => '3.40',
+            'Locale::Codes::Constants'=> '3.40',
+            'Locale::Codes::Country'=> '3.40',
+            'Locale::Codes::Country_Codes'=> '3.40',
+            'Locale::Codes::Country_Retired'=> '3.40',
+            'Locale::Codes::Currency'=> '3.40',
+            'Locale::Codes::Currency_Codes'=> '3.40',
+            'Locale::Codes::Currency_Retired'=> '3.40',
+            'Locale::Codes::LangExt'=> '3.40',
+            'Locale::Codes::LangExt_Codes'=> '3.40',
+            'Locale::Codes::LangExt_Retired'=> '3.40',
+            'Locale::Codes::LangFam'=> '3.40',
+            'Locale::Codes::LangFam_Codes'=> '3.40',
+            'Locale::Codes::LangFam_Retired'=> '3.40',
+            'Locale::Codes::LangVar'=> '3.40',
+            'Locale::Codes::LangVar_Codes'=> '3.40',
+            'Locale::Codes::LangVar_Retired'=> '3.40',
+            'Locale::Codes::Language'=> '3.40',
+            'Locale::Codes::Language_Codes'=> '3.40',
+            'Locale::Codes::Language_Retired'=> '3.40',
+            'Locale::Codes::Script' => '3.40',
+            'Locale::Codes::Script_Codes'=> '3.40',
+            'Locale::Codes::Script_Retired'=> '3.40',
+            'Locale::Country'       => '3.40',
+            'Locale::Currency'      => '3.40',
+            'Locale::Language'      => '3.40',
+            'Locale::Script'        => '3.40',
+            'Module::CoreList'      => '5.20160920',
+            'Module::CoreList::TieHashDelta'=> '5.20160920',
+            'Module::CoreList::Utils'=> '5.20160920',
+            'POSIX'                 => '1.72',
+            'Sys::Syslog'           => '0.35',
+            'Test2'                 => '1.302056',
+            'Test2::API'            => '1.302056',
+            'Test2::API::Breakage'  => '1.302056',
+            'Test2::API::Context'   => '1.302056',
+            'Test2::API::Instance'  => '1.302056',
+            'Test2::API::Stack'     => '1.302056',
+            'Test2::Event'          => '1.302056',
+            'Test2::Event::Bail'    => '1.302056',
+            'Test2::Event::Diag'    => '1.302056',
+            'Test2::Event::Exception'=> '1.302056',
+            'Test2::Event::Generic' => '1.302056',
+            'Test2::Event::Info'    => '1.302056',
+            'Test2::Event::Note'    => '1.302056',
+            'Test2::Event::Ok'      => '1.302056',
+            'Test2::Event::Plan'    => '1.302056',
+            'Test2::Event::Skip'    => '1.302056',
+            'Test2::Event::Subtest' => '1.302056',
+            'Test2::Event::Waiting' => '1.302056',
+            'Test2::Formatter'      => '1.302056',
+            'Test2::Formatter::TAP' => '1.302056',
+            'Test2::Hub'            => '1.302056',
+            'Test2::Hub::Interceptor'=> '1.302056',
+            'Test2::Hub::Interceptor::Terminator'=> '1.302056',
+            'Test2::Hub::Subtest'   => '1.302056',
+            'Test2::IPC'            => '1.302056',
+            'Test2::IPC::Driver'    => '1.302056',
+            'Test2::IPC::Driver::Files'=> '1.302056',
+            'Test2::Util'           => '1.302056',
+            'Test2::Util::ExternalMeta'=> '1.302056',
+            'Test2::Util::HashBase' => '1.302056',
+            'Test2::Util::Trace'    => '1.302056',
+            'Test::Builder'         => '1.302056',
+            'Test::Builder::Formatter'=> '1.302056',
+            'Test::Builder::Module' => '1.302056',
+            'Test::Builder::Tester' => '1.302056',
+            'Test::Builder::Tester::Color'=> '1.302056',
+            'Test::Builder::TodoDiag'=> '1.302056',
+            'Test::More'            => '1.302056',
+            'Test::Simple'          => '1.302056',
+            'Test::Tester'          => '1.302056',
+            'Test::Tester::Capture' => '1.302056',
+            'Test::Tester::CaptureRunner'=> '1.302056',
+            'Test::Tester::Delegate'=> '1.302056',
+            'Test::use::ok'         => '1.302056',
+            'Thread::Semaphore'     => '2.13',
+            'XS::APItest'           => '0.84',
+            'XSLoader'              => '0.24',
+            'ok'                    => '1.302056',
+        },
+        removed => {
+        }
+    },
 );
 
 sub is_core
@@ -13762,6 +13853,13 @@ sub is_core
     },
     5.025004 => {
         delta_from => 5.025003,
+        changed => {
+        },
+        removed => {
+        }
+    },
+    5.025005 => {
+        delta_from => 5.025004,
         changed => {
         },
         removed => {

@@ -2571,6 +2571,9 @@ gv_fetchmethod_flags_type(stash, methname, type, flags)
                gv = gv_fetchmethod_pvn_flags(stash, name, len, flags | SvUTF8(methname));
                break;
             }
+           case 4:
+               gv = gv_fetchmethod_pvn_flags(stash, SvPV_nolen(methname),
+                                             flags, SvUTF8(methname));
         }
 	XPUSHs( gv ? (SV*)gv : &PL_sv_undef);
 
@@ -4216,6 +4219,18 @@ CODE:
     } else
         Perl_croak(aTHX_ "load_module can't yet support %"IVdf" items", (IV)items);
 
+SV *
+string_without_null(SV *sv)
+    CODE:
+    {
+        STRLEN len;
+        const char *s = SvPV(sv, len);
+        RETVAL = newSVpvn_flags(s, len, SvUTF8(sv));
+        *SvEND(RETVAL) = 0xff;
+    }
+    OUTPUT:
+        RETVAL
+
 MODULE = XS::APItest PACKAGE = XS::APItest::AUTOLOADtest
 
 int
@@ -5302,6 +5317,43 @@ bool
 test_isUTF8_POSSIBLY_PROBLEMATIC(char ch)
     CODE:
         RETVAL = isUTF8_POSSIBLY_PROBLEMATIC(ch);
+    OUTPUT:
+        RETVAL
+
+STRLEN
+test_isUTF8_CHAR(char *s, STRLEN len)
+    CODE:
+        RETVAL = isUTF8_CHAR((U8 *) s, (U8 *) s + len);
+    OUTPUT:
+        RETVAL
+
+STRLEN
+test_isUTF8_CHAR_flags(char *s, STRLEN len, U32 flags)
+    CODE:
+        RETVAL = isUTF8_CHAR_flags((U8 *) s, (U8 *) s + len, flags);
+    OUTPUT:
+        RETVAL
+
+STRLEN
+test_isSTRICT_UTF8_CHAR(char *s, STRLEN len)
+    CODE:
+        RETVAL = isSTRICT_UTF8_CHAR((U8 *) s, (U8 *) s + len);
+    OUTPUT:
+        RETVAL
+
+STRLEN
+test_isC9_STRICT_UTF8_CHAR(char *s, STRLEN len)
+    CODE:
+        RETVAL = isC9_STRICT_UTF8_CHAR((U8 *) s, (U8 *) s + len);
+    OUTPUT:
+        RETVAL
+
+IV
+test_is_utf8_valid_partial_char_flags(char *s, STRLEN len, U32 flags)
+    CODE:
+        /* RETVAL should be bool, but making it IV allows us to test it
+         * returning 0 or 1 */
+        RETVAL = is_utf8_valid_partial_char_flags((U8 *) s, (U8 *) s + len, flags);
     OUTPUT:
         RETVAL
 

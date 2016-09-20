@@ -522,17 +522,26 @@ Free_t   Perl_mfree (Malloc_t where)
 
 #endif
 
-/* copy a string up to some (non-backslashed) delimiter, if any */
+/* copy a string up to some (non-backslashed) delimiter, if any.
+ * With allow_escape, converts \<delimiter> to <delimiter>, while leaves
+ * \<non-delimiter> as-is.
+ * Returns the position in the src string of the closing delimiter, if
+ * any, or returns fromend otherwise.
+ * This is the internal implementation for Perl_delimcpy and
+ * Perl_delimcpy_no_escape.
+ */
 
-char *
-Perl_delimcpy(char *to, const char *toend, const char *from, const char *fromend, int delim, I32 *retlen)
+static char *
+S_delimcpy_intern(char *to, const char *toend, const char *from,
+	   const char *fromend, int delim, I32 *retlen,
+	   const bool allow_escape)
 {
     I32 tolen;
 
     PERL_ARGS_ASSERT_DELIMCPY;
 
     for (tolen = 0; from < fromend; from++, tolen++) {
-	if (*from == '\\') {
+	if (allow_escape && *from == '\\' && from + 1 < fromend) {
 	    if (from[1] != delim) {
 		if (to < toend)
 		    *to++ = *from;
@@ -549,6 +558,23 @@ Perl_delimcpy(char *to, const char *toend, const char *from, const char *fromend
 	*to = '\0';
     *retlen = tolen;
     return (char *)from;
+}
+
+char *
+Perl_delimcpy(char *to, const char *toend, const char *from, const char *fromend, int delim, I32 *retlen)
+{
+    PERL_ARGS_ASSERT_DELIMCPY;
+
+    return S_delimcpy_intern(to, toend, from, fromend, delim, retlen, 1);
+}
+
+char *
+Perl_delimcpy_no_escape(char *to, const char *toend, const char *from,
+			const char *fromend, int delim, I32 *retlen)
+{
+    PERL_ARGS_ASSERT_DELIMCPY_NO_ESCAPE;
+
+    return S_delimcpy_intern(to, toend, from, fromend, delim, retlen, 0);
 }
 
 /*
@@ -5704,9 +5730,13 @@ Note that C<size> is the full size of the destination buffer and
 the result is guaranteed to be C<NUL>-terminated if there is room.  Note that
 room for the C<NUL> should be included in C<size>.
 
+The return value is the total length that C<dst> would have if C<size> is
+sufficiently large.  Thus it is the initial length of C<dst> plus the length of
+C<src>.  If C<size> is smaller than the return, the excess was not appended.
+
 =cut
 
-Description stolen from http://www.openbsd.org/cgi-bin/man.cgi?query=strlcat
+Description stolen from http://man.openbsd.org/strlcat.3
 */
 #ifndef HAS_STRLCAT
 Size_t
@@ -5735,9 +5765,12 @@ This operates on C C<NUL>-terminated strings.
 C<my_strlcpy()> copies up to S<C<size - 1>> characters from the string C<src>
 to C<dst>, C<NUL>-terminating the result if C<size> is not 0.
 
+The return value is the total length C<src> would be if the copy completely
+succeeded.  If it is larger than C<size>, the excess was not copied.
+
 =cut
 
-Description stolen from http://www.openbsd.org/cgi-bin/man.cgi?query=strlcpy
+Description stolen from http://man.openbsd.org/strlcpy.3
 */
 #ifndef HAS_STRLCPY
 Size_t

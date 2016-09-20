@@ -241,7 +241,7 @@ static const char* const lex_state_names[] = {
 	if (have_x) PL_expect = x; \
 	PL_bufptr = s; \
 	PL_last_uni = PL_oldbufptr; \
-	PL_last_lop_op = f; \
+	PL_last_lop_op = (f) < 0 ? -(f) : (f); \
 	if (*s == '(') \
 	    return REPORT( (int)FUNC1 ); \
 	s = skipspace(s); \
@@ -1996,10 +1996,10 @@ STATIC SV *
 S_newSV_maybe_utf8(pTHX_ const char *const start, STRLEN len)
 {
     SV * const sv = newSVpvn_utf8(start, len,
-				  !IN_BYTES
-				  && UTF
-				  && !is_invariant_string((const U8*)start, len)
-				  && is_utf8_string((const U8*)start, len));
+                          !IN_BYTES
+                          && UTF
+                          && !is_utf8_invariant_string((const U8*)start, len)
+                          && is_utf8_string((const U8*)start, len));
     return sv;
 }
 
@@ -5621,18 +5621,13 @@ Perl_yylex(pTHX)
 		sv = newSVpvn_flags(s, len, UTF ? SVf_UTF8 : 0);
 		if (*d == '(') {
 		    d = scan_str(d,TRUE,TRUE,FALSE,NULL);
-		    COPLINE_SET_FROM_MULTI_END;
 		    if (!d) {
-			/* MUST advance bufptr here to avoid bogus
-			   "at end of line" context messages from yyerror().
-			 */
-			PL_bufptr = s + len;
-			yyerror("Unterminated attribute parameter in attribute list");
 			if (attrs)
 			    op_free(attrs);
 			sv_free(sv);
-			return REPORT(0);	/* EOF indicator */
+                        Perl_croak(aTHX_ "Unterminated attribute parameter in attribute list");
 		    }
+		    COPLINE_SET_FROM_MULTI_END;
 		}
 		if (PL_lex_stuff) {
 		    sv_catsv(sv, PL_lex_stuff);
@@ -7509,7 +7504,9 @@ Perl_yylex(pTHX)
 			      1, &len);
 		if (len && (len != 4 || strNE(PL_tokenbuf+1, "CORE"))
 		 && !keyword(PL_tokenbuf + 1, len, 0)) {
+                    SSize_t off = s-SvPVX(PL_linestr);
 		    d = skipspace(d);
+                    s = SvPVX(PL_linestr)+off;
 		    if (*d == '(') {
 			force_ident_maybe_lex('&');
 			s = d;
@@ -8285,8 +8282,9 @@ Perl_yylex(pTHX)
 		const int key = tmp;
                 SV *format_name = NULL;
 
-		d = s;
+                SSize_t off = s-SvPVX(PL_linestr);
 		s = skipspace(s);
+                d = SvPVX(PL_linestr)+off;
 
 		if (isIDFIRST_lazy_if(s,UTF)
                     || *s == '\''
@@ -9650,7 +9648,9 @@ S_scan_heredoc(pTHX_ char *s)
 	       might think.  Odd syntax errors like s;@{<<; can gobble up
 	       the implicit semicolon at the end of a flie, causing the
 	       file handle to be closed even when we are not in a string
-	       eval.  So shared may be null in that case.  */
+	       eval.  So shared may be null in that case.
+               (Closing '}' here to balance the earlier open brace for
+               editors that look for matched pairs.) */
 	    if (UNLIKELY(!shared))
 		goto interminable;
 	    /* A LEXSHARED struct with a null ls_prev pointer is the outer-
@@ -9721,6 +9721,7 @@ S_scan_heredoc(pTHX_ char *s)
     {
       SV *linestr_save;
       char *oldbufptr_save;
+      char *oldoldbufptr_save;
      streaming:
       sv_setpvs(tmpstr,"");   /* avoid "uninitialized" warning */
       term = PL_tokenbuf[1];
@@ -9728,6 +9729,7 @@ S_scan_heredoc(pTHX_ char *s)
       linestr_save = PL_linestr; /* must restore this afterwards */
       d = s;			 /* and this */
       oldbufptr_save = PL_oldbufptr;
+      oldoldbufptr_save = PL_oldoldbufptr;
       PL_linestr = newSVpvs("");
       PL_bufend = SvPVX(PL_linestr);
       while (1) {
@@ -9745,6 +9747,7 @@ S_scan_heredoc(pTHX_ char *s)
 	    SvREFCNT_dec_NN(PL_linestr);
 	    PL_linestr = linestr_save;
             PL_oldbufptr = oldbufptr_save;
+            PL_oldoldbufptr = oldoldbufptr_save;
 	    goto interminable;
 	}
 	CopLINE_set(PL_curcop, origline);
@@ -9780,6 +9783,7 @@ S_scan_heredoc(pTHX_ char *s)
 	    PL_linestart = SvPVX(linestr_save);
 	    PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
             PL_oldbufptr = oldbufptr_save;
+            PL_oldoldbufptr = oldoldbufptr_save;
 	    s = d;
 	    break;
 	}
@@ -9807,8 +9811,9 @@ S_scan_heredoc(pTHX_ char *s)
 }
 
 /* scan_inputsymbol
-   takes: current position in input buffer
-   returns: new position in input buffer
+   takes: position of first '<' in input buffer
+   returns: position of first char following the matching '>' in
+	    input buffer
    side-effects: pl_yylval and lex_op are set.
 
    This code handles:

@@ -758,7 +758,7 @@ S_fixup_errno_string(pTHX_ SV* sv)
          * error message text.  (If it turns out to be necessary, we could also
          * keep track if the current LC_MESSAGES locale is UTF-8) */
         if (! IN_BYTES  /* respect 'use bytes' */
-            && ! is_invariant_string((U8*) SvPVX_const(sv), SvCUR(sv))
+            && ! is_utf8_invariant_string((U8*) SvPVX_const(sv), SvCUR(sv))
             && is_utf8_string((U8*) SvPVX_const(sv), SvCUR(sv)))
         {
             SvUTF8_on(sv);
@@ -1208,21 +1208,26 @@ Perl_magic_setenv(pTHX_ SV *sv, MAGIC *mg)
 	if (s && klen == 4 && strEQ(key,"PATH")) {
 	    const char * const strend = s + len;
 
+            /* set MGf_TAINTEDDIR if any component of the new path is
+             * relative or world-writeable */
 	    while (s < strend) {
 		char tmpbuf[256];
 		Stat_t st;
 		I32 i;
-#ifdef VMS  /* Hmm.  How do we get $Config{path_sep} from C? */
-		const char path_sep = '|';
+#ifdef __VMS  /* Hmm.  How do we get $Config{path_sep} from C? */
+		const char path_sep = PL_perllib_sep;
 #else
 		const char path_sep = ':';
 #endif
-		s = delimcpy(tmpbuf, tmpbuf + sizeof tmpbuf,
+		s = delimcpy_no_escape(tmpbuf, tmpbuf + sizeof tmpbuf,
 			     s, strend, path_sep, &i);
 		s++;
 		if (i >= (I32)sizeof tmpbuf   /* too long -- assume the worst */
-#ifdef VMS
-		      || !strchr(tmpbuf, ':') /* no colon thus no device name -- assume relative path */
+#ifdef __VMS
+		      /* no colon thus no device name -- assume relative path */
+		      || (PL_perllib_sep != ':' && !strchr(tmpbuf, ':'))
+		      /* Using Unix separator, e.g. under bash, so act line Unix */
+		      || (PL_perllib_sep == ':' && *tmpbuf != '/')
 #else
 		      || *tmpbuf != '/'       /* no starting slash -- assume relative path */
 #endif

@@ -1008,7 +1008,7 @@ Perl_do_vop(pTHX_ I32 optype, SV *sv, SV *left, SV *right)
     PERL_ARGS_ASSERT_DO_VOP;
 
     if (sv != left || (optype != OP_BIT_AND && !SvOK(sv)))
-	sv_setpvs(sv, "");	/* avoid undef warning on |= and ^= */
+        sv_setpvn(sv, "", 0);        /* avoid undef warning on |= and ^= */
     if (sv == left) {
 	lsave = lc = SvPV_force_nomg(left, leftlen);
     }
@@ -1093,6 +1093,7 @@ Perl_do_vop(pTHX_ I32 optype, SV *sv, SV *left, SV *right)
 	    if (sv == left || sv == right)
 		(void)sv_usepvn(sv, dcorig, needlen);
 	    SvCUR_set(sv, dc - dcorig);
+	    *SvEND(sv) = 0;
 	    break;
 	case OP_BIT_XOR:
 	    while (lulen && rulen) {

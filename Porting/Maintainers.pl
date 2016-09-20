@@ -731,7 +731,7 @@ use File::Glob qw(:case);
     },
 
     'Locale-Codes' => {
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.39.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.40.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( README.first
@@ -845,7 +845,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160720.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160820.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -1038,7 +1038,7 @@ use File::Glob qw(:case);
     },
 
     'Sys::Syslog' => {
-        'DISTRIBUTION' => 'SAPER/Sys-Syslog-0.34.tar.gz',
+        'DISTRIBUTION' => 'SAPER/Sys-Syslog-0.35.tar.gz',
         'FILES'        => q[cpan/Sys-Syslog],
         'EXCLUDED'     => [
             qr{^eg/},
@@ -1051,10 +1051,6 @@ use File::Glob qw(:case);
                 t/portfs.t
                 win32/PerlLog.RES
                 ),
-        ],
-        'CUSTOMIZED'   => [
-            # CVE-2016-1238
-            qw( Syslog.pm )
         ],
     },
 
@@ -1157,7 +1153,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302052.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302056.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1224,7 +1220,7 @@ use File::Glob qw(:case);
     },
 
     'Thread::Semaphore' => {
-        'DISTRIBUTION' => 'JDHEDDEN/Thread-Semaphore-2.12.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/Thread-Semaphore-2.13.tar.gz',
         'FILES'        => q[dist/Thread-Semaphore],
         'EXCLUDED'     => [
             qw( examples/semaphore.pl
@@ -1369,7 +1365,7 @@ use File::Glob qw(:case);
     },
 
     'XSLoader' => {
-        'DISTRIBUTION' => 'SAPER/XSLoader-0.22.tar.gz',
+        'DISTRIBUTION' => 'SAPER/XSLoader-0.24.tar.gz',
         'FILES'        => q[dist/XSLoader],
         'EXCLUDED'     => [
             qr{^eg/},
