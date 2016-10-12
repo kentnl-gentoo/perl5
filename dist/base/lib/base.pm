@@ -6,6 +6,12 @@ use vars qw($VERSION);
 $VERSION = '2.23_01';
 $VERSION =~ tr/_//d;
 
+# simplest way to avoid indexing of the package: no package statement
+sub base::__inc_scope_guard::DESTROY {
+	my $noop = $_[0][0];
+	ref $_ and $_ == $noop and $_ = '.' for @INC;
+}
+
 # constant.pm is slow
 sub SUCCESS () { 1 }
 
@@ -91,15 +97,15 @@ sub import {
 
         next if grep $_->isa($base), ($inheritor, @bases);
 
-        # Following blocks help isolate $SIG{__DIE__} changes
+        # Following blocks help isolate $SIG{__DIE__} and @INC changes
         {
             my $sigdie;
             {
                 local $SIG{__DIE__};
                 my $fn = _module_to_filename($base);
-                local @INC = @INC;
-                pop @INC if my $dotty = $INC[-1] eq '.';
+                my $dotty = $INC[-1] eq '.' && ( $INC[-1] = sub {()} );
                 eval {
+                    my $redotty = $dotty && bless [ $dotty ], 'base::__inc_scope_guard';
                     require $fn
                 };
                 # Only ignore "Can't locate" errors from our eval require.
@@ -114,11 +120,12 @@ sub import {
                           || $@ =~ /Compilation failed in require at .* line [0-9]+(?:, <[^>]*> (?:line|chunk) [0-9]+)?\.\n\z/;
                 unless (%{"$base\::"}) {
                     require Carp;
+                    my @inc = $dotty ? @INC[0..$#INC-1] : @INC;
                     local $" = " ";
                     my $e = <<ERROR;
 Base class package "$base" is empty.
     (Perhaps you need to 'use' the module which defines that package first,
-    or make that module available in \@INC (\@INC contains: @INC).
+    or make that module available in \@INC (\@INC contains: @inc).
 ERROR
                     if ($dotty && -e $fn) {
                         $e .= <<ERROS;

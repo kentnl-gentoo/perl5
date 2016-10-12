@@ -17,6 +17,50 @@ Consult your favorite dictionary for details.
 
 =head1 EPIGRAPHS
 
+=head2 v5.25.5 - Philip K. Dick, VALIS
+
+L<Announced on 2016-09-20 by Stevan Little|http://www.nntp.perl.org/group/perl.perl5.porters/2016/09/msg239887.html>
+
+  We hypostatize information into objects. Rearrangement of objects is
+  change in the content of the information; the message has changed.
+  This is a language which we have lost the ability to read. We ourselves
+  are a part of this language; changes in us are changes in the content
+  of the information. We ourselves are information-rich; information
+  enters us, is processed and is then projected outward once more, now
+  in an altered form. We are not aware that we are doing this, that in
+  fact this is all we are doing
+
+=head2 v5.25.4 - Terry Pratchett, "Truckers"
+
+L<Announced on 2016-08-20 by Chris 'BinGOs' Williams|http://www.nntp.perl.org/group/perl.perl5.porters/2016/08/msg239191.html>
+
+  Concerning Nomes and Time
+
+  Nomes are small. On the whole, small creatures don't live for a long
+  time. But perhaps they do live fast.
+
+  Let me explain.
+
+  One of the shortest-lived creatures on the planet Earth is the adult
+  common mayfly. It lasts for one day. The longest-living things are
+  bristlecone pine trees, at 4,700 years and still counting.
+
+  This may seem tough on the mayflies. But the important thing is not
+  how long your life is, but how long it seems.
+
+  To a mayfly, a single hour may last as long as a century. Perhaps
+  old mayflies sit around complaining about how life this minute isn't a
+  patch on the good old minutes of long ago, when the world was
+  young and the sun seemed so much brighter and larvae showed you a
+  bit of respect. Whereas the trees, which are not famous to their
+  quick reactions, may just have time to notice the way the sky keeps
+  flickering before the dry rot and woodworm set in.
+
+  It's all a sort of relativity. The faster you live, the more time
+  stretches out. To a nome, a year lasts as long as ten years does to a
+  human. Remember it. Don't let it concern you. They don't. They don't
+  even know.
+
 =head2 v5.25.3 - Edward Lear, ed. Vivien Noakes, "The Complete Nonsense and Other Verse": The Dong with a Luminous Nose
 
 L<Announced on 2016-07-20 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2016/07/msg238158.html>
@@ -93,6 +137,22 @@ L<Announced on 2016-05-09 by Ricardo Signes|http://www.nntp.perl.org/group/perl.
     Wide fields of asphodel fore’er,
   To find that the utmost reward
     Of daring should be still to dare.
+
+=head2 v5.24.1-RC3 - Dante Alighieri, trans. Dorothy L. Sayers and Barbara Reynolds, "The Divine Comedy", Cantica III: Paradise, Canto XXIII
+
+L<Announced on 2016-08-11 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2016/08/msg238909.html>
+
+  A bird within the bower of her delight,
+    Quiet upon the nest with her sweet brood
+    Throughout the dark concealment of the night,
+
+  Anxious to look on them and gather food -
+    No weary task for her, for as at play
+    Blithely she toils to seek her fledglings' good -
+
+  Before the time, upon the topmost spray
+    Eager awaits the sun and on the East
+    Fixes her wakeful eye till break of day.
 
 =head2 v5.24.1-RC2 - Dante Alighieri, trans. Dorothy L. Sayers, "The Divine Comedy", Cantica II: Purgatory, Canto X
 
@@ -513,6 +573,22 @@ L<Announced on 2015-06-20 by Ricardo Signes|http://www.nntp.perl.org/group/perl.
   To be just like them
   They sing while you slave and I just get bored
   I ain't gonna work on Maggie's farm no more
+
+=head2 v5.22.3-RC3 - Dante Alighieri, trans. Dorothy L. Sayers and Barbara Reynolds, "The Divine Comedy", Cantica III: Paradise, Canto IV
+
+L<Announced on 2016-08-11 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2016/08/msg238908.html>
+
+  Between two dishes, equally attractive
+    And near to him, a free man, I suppose,
+    Would starve to death before his teeth got active;
+
+  So would a lamb 'twixt two fierce wolfish foes,
+    Fearing the fangs both ways, not stir a foot;
+    So would a deerhound halt between two does;
+
+  So I can't blame myself for standing mute,
+    Nor praise myself: for I must needs so do,
+    Suspended 'twixt two doubts, alike acute.
 
 =head2 v5.22.3-RC2 - Dante Alighieri, trans. Dorothy L. Sayers, "The Divine Comedy", Cantica II: Purgatory, Canto I
 
