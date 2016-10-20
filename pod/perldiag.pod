@@ -3344,10 +3344,13 @@ Perhaps the function's author was trying to write a subroutine signature
 but didn't enable that feature first (C<use feature 'signatures'>),
 so the signature was instead interpreted as a bad prototype.
 
-=item Malformed UTF-8 character (%s)
+=item Malformed UTF-8 character%s
 
-(S utf8)(F) Perl detected a string that didn't comply with UTF-8
-encoding rules, even though it had the UTF8 flag on.
+(S utf8)(F) Perl detected a string that should be UTF-8, but didn't
+comply with UTF-8 encoding rules, or represents a code point whose
+ordinal integer value doesn't fit into the word size of the current
+platform (overflows).  Details as to the exact malformation are given in
+the variable, C<%s>, part of the message.
 
 One possible cause is that you set the UTF8 flag yourself for data that
 you thought to be in UTF-8 but it wasn't (it was for example legacy
@@ -4430,10 +4433,6 @@ able to initialize properly.
 
 (P) Failed an internal consistency check trying to compile a grep.
 
-=item panic: ck_split, type=%u
-
-(P) Failed an internal consistency check trying to compile a split.
-
 =item panic: corrupt saved stack index %ld
 
 (P) The savestack was requested to restore more localized values than
@@ -4559,10 +4558,6 @@ and freeing temporaries and lexicals from.
 
 (P) The internal pp_match() routine was called with invalid operational
 data.
-
-=item panic: pp_split, pm=%p, s=%p
-
-(P) Something terrible went wrong in setting up for the split.
 
 =item panic: realloc, %s
 
@@ -6920,6 +6915,13 @@ separated by commas, not just aligned on a line.
 (S internal) The behavior of C<each()> after insertion is undefined;
 it may skip items, or visit items more than once.  Consider using
 C<keys()> instead of C<each()>.
+
+=item Use of the empty pattern inside of a regex code block is forbidden
+
+(F) You tried to use the empty pattern inside of a regex code block,
+for instance C</(?{ s!!! })/>. Currently for implementation reasons
+this is forbidden. Generally you can rewrite code that uses the empty
+pattern with the appropriate use of C<qr//>.
 
 =item Use of := for an empty attribute list is not allowed
 

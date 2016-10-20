@@ -242,7 +242,11 @@
 #define intro_my()		Perl_intro_my(aTHX)
 #define isALNUM_lazy(a)		Perl_isALNUM_lazy(aTHX_ a)
 #define isIDFIRST_lazy(a)	Perl_isIDFIRST_lazy(aTHX_ a)
+#define is_c9strict_utf8_string	S_is_c9strict_utf8_string
+#define is_c9strict_utf8_string_loclen	S_is_c9strict_utf8_string_loclen
 #define is_lvalue_sub()		Perl_is_lvalue_sub(aTHX)
+#define is_strict_utf8_string	S_is_strict_utf8_string
+#define is_strict_utf8_string_loclen	S_is_strict_utf8_string_loclen
 #define is_uni_alnum(a)		Perl_is_uni_alnum(aTHX_ a)
 #define is_uni_alnum_lc(a)	Perl_is_uni_alnum_lc(aTHX_ a)
 #define is_uni_alnumc(a)	Perl_is_uni_alnumc(aTHX_ a)
@@ -281,6 +285,7 @@
 #define is_utf8_char		Perl_is_utf8_char
 #define is_utf8_cntrl(a)	Perl_is_utf8_cntrl(aTHX_ a)
 #define is_utf8_digit(a)	Perl_is_utf8_digit(aTHX_ a)
+#define is_utf8_fixed_width_buf_loclen_flags	S_is_utf8_fixed_width_buf_loclen_flags
 #define is_utf8_graph(a)	Perl_is_utf8_graph(aTHX_ a)
 #define is_utf8_idcont(a)	Perl_is_utf8_idcont(aTHX_ a)
 #define is_utf8_idfirst(a)	Perl_is_utf8_idfirst(aTHX_ a)
@@ -294,7 +299,9 @@
 #define is_utf8_punct(a)	Perl_is_utf8_punct(aTHX_ a)
 #define is_utf8_space(a)	Perl_is_utf8_space(aTHX_ a)
 #define is_utf8_string		Perl_is_utf8_string
+#define is_utf8_string_flags	S_is_utf8_string_flags
 #define is_utf8_string_loclen	Perl_is_utf8_string_loclen
+#define is_utf8_string_loclen_flags	S_is_utf8_string_loclen_flags
 #define is_utf8_upper(a)	Perl_is_utf8_upper(aTHX_ a)
 #define is_utf8_valid_partial_char_flags	S_is_utf8_valid_partial_char_flags
 #define is_utf8_xdigit(a)	Perl_is_utf8_xdigit(aTHX_ a)
@@ -662,6 +669,7 @@
 #define sv_setnv(a,b)		Perl_sv_setnv(aTHX_ a,b)
 #define sv_setnv_mg(a,b)	Perl_sv_setnv_mg(aTHX_ a,b)
 #define sv_setpv(a,b)		Perl_sv_setpv(aTHX_ a,b)
+#define sv_setpv_bufsize(a,b,c)	Perl_sv_setpv_bufsize(aTHX_ a,b,c)
 #define sv_setpv_mg(a,b)	Perl_sv_setpv_mg(aTHX_ a,b)
 #ifndef PERL_IMPLICIT_CONTEXT
 #define sv_setpvf		Perl_sv_setpvf
@@ -730,7 +738,7 @@
 #define utf8_to_uvchr(a,b)	Perl_utf8_to_uvchr(aTHX_ a,b)
 #define utf8_to_uvuni(a,b)	Perl_utf8_to_uvuni(aTHX_ a,b)
 #define utf8_to_uvuni_buf(a,b,c)	Perl_utf8_to_uvuni_buf(aTHX_ a,b,c)
-#define utf8n_to_uvchr(a,b,c,d)	Perl_utf8n_to_uvchr(aTHX_ a,b,c,d)
+#define utf8n_to_uvchr_error(a,b,c,d,e)	Perl_utf8n_to_uvchr_error(aTHX_ a,b,c,d,e)
 #define utf8n_to_uvuni(a,b,c,d)	Perl_utf8n_to_uvuni(aTHX_ a,b,c,d)
 #define uvoffuni_to_utf8_flags(a,b,c)	Perl_uvoffuni_to_utf8_flags(aTHX_ a,b,c)
 #define uvuni_to_utf8(a,b)	Perl_uvuni_to_utf8(aTHX_ a,b)
@@ -996,6 +1004,11 @@
 #endif
 #    endif
 #  endif
+#  if defined(DEBUGGING) && defined(ENABLE_REGEX_SETS_DEBUGGING)
+#    if defined(PERL_IN_REGCOMP_C)
+#define dump_regex_sets_structures(a,b,c,d)	S_dump_regex_sets_structures(aTHX_ a,b,c,d)
+#    endif
+#  endif
 #  if defined(PERL_ANY_COW)
 #define sv_setsv_cow(a,b)	Perl_sv_setsv_cow(aTHX_ a,b)
 #  endif
@@ -1123,14 +1136,15 @@
 #define isSB(a,b,c,d,e,f)	S_isSB(aTHX_ a,b,c,d,e,f)
 #define isWB(a,b,c,d,e,f,g)	S_isWB(aTHX_ a,b,c,d,e,f,g)
 #define reg_check_named_buff_matched	S_reg_check_named_buff_matched
-#define regcppop(a,b)		S_regcppop(aTHX_ a,b)
-#define regcppush(a,b,c)	S_regcppush(aTHX_ a,b,c)
+#define regcp_restore(a,b,c)	S_regcp_restore(aTHX_ a,b,c _aDEPTH)
+#define regcppop(a,b)		S_regcppop(aTHX_ a,b _aDEPTH)
+#define regcppush(a,b,c)	S_regcppush(aTHX_ a,b,c _aDEPTH)
 #define reghop3			S_reghop3
 #define reghop4			S_reghop4
 #define reghopmaybe3		S_reghopmaybe3
 #define reginclass(a,b,c,d,e)	S_reginclass(aTHX_ a,b,c,d,e)
 #define regmatch(a,b,c)		S_regmatch(aTHX_ a,b,c)
-#define regrepeat(a,b,c,d,e,f)	S_regrepeat(aTHX_ a,b,c,d,e,f)
+#define regrepeat(a,b,c,d,e)	S_regrepeat(aTHX_ a,b,c,d,e _aDEPTH)
 #define regtry(a,b)		S_regtry(aTHX_ a,b)
 #define to_byte_substr(a)	S_to_byte_substr(aTHX_ a)
 #define to_utf8_substr(a)	S_to_utf8_substr(aTHX_ a)
@@ -1814,13 +1828,17 @@
 #define isa_lookup(a,b,c,d)	S_isa_lookup(aTHX_ a,b,c,d)
 #  endif
 #  if defined(PERL_IN_UTF8_C)
+#define _byte_dump_string(a,b)	S__byte_dump_string(aTHX_ a,b)
 #define _to_utf8_case(a,b,c,d,e,f,g)	S__to_utf8_case(aTHX_ a,b,c,d,e,f,g)
 #define check_locale_boundary_crossing(a,b,c,d)	S_check_locale_boundary_crossing(aTHX_ a,b,c,d)
+#define does_utf8_overflow	S_does_utf8_overflow
 #define is_utf8_common(a,b,c,d)	S_is_utf8_common(aTHX_ a,b,c,d)
 #define is_utf8_cp_above_31_bits	S_is_utf8_cp_above_31_bits
+#define is_utf8_overlong_given_start_byte_ok	S_is_utf8_overlong_given_start_byte_ok
 #define swash_scan_list_line(a,b,c,d,e,f,g)	S_swash_scan_list_line(aTHX_ a,b,c,d,e,f,g)
 #define swatch_get(a,b,c)	S_swatch_get(aTHX_ a,b,c)
 #define to_lower_latin1		S_to_lower_latin1
+#define unexpected_non_continuation_text(a,b,c,d)	S_unexpected_non_continuation_text(aTHX_ a,b,c,d)
 #  endif
 #  if defined(PERL_IN_UTF8_C) || defined(PERL_IN_PP_C)
 #define _to_upper_title_latin1(a,b,c,d)	Perl__to_upper_title_latin1(aTHX_ a,b,c,d)

@@ -87,6 +87,10 @@ extern "C" {
 #   undef ITIMER_REALPROF
 #endif
 
+#ifndef TIME_HIRES_CLOCKID_T
+typedef int clockid_t;
+#endif
+
 #if defined(TIME_HIRES_CLOCK_GETTIME) && defined(_STRUCT_ITIMERSPEC)
 
 /* HP-UX has CLOCK_XXX values but as enums, not as defines.
@@ -803,7 +807,7 @@ static int darwin_time_init() {
 }
 
 #ifdef TIME_HIRES_CLOCK_GETTIME_EMULATION
-static int clock_gettime(int clock_id, struct timespec *ts) {
+static int clock_gettime(clockid_t clock_id, struct timespec *ts) {
   if (darwin_time_init() && timebase_info.denom) {
     switch (clock_id) {
       case CLOCK_REALTIME:
@@ -837,7 +841,7 @@ static int clock_gettime(int clock_id, struct timespec *ts) {
 #endif /* TIME_HIRES_CLOCK_GETTIME_EMULATION */
 
 #ifdef TIME_HIRES_CLOCK_GETRES_EMULATION
-static int clock_getres(int clock_id, struct timespec *ts) {
+static int clock_getres(clockid_t clock_id, struct timespec *ts) {
   if (darwin_time_init() && timebase_info.denom) {
     switch (clock_id) {
       case CLOCK_REALTIME:
@@ -859,7 +863,7 @@ static int clock_getres(int clock_id, struct timespec *ts) {
 #endif /* TIME_HIRES_CLOCK_GETRES_EMULATION */
 
 #ifdef TIME_HIRES_CLOCK_NANOSLEEP_EMULATION
-static int clock_nanosleep(int clock_id, int flags,
+static int clock_nanosleep(clockid_t clock_id, int flags,
 			   const struct timespec *rqtp,
 			   struct timespec *rmtp) {
   if (darwin_time_init()) {
@@ -1439,7 +1443,7 @@ clock_gettime(clock_id = CLOCK_REALTIME)
 #ifdef TIME_HIRES_CLOCK_GETTIME_SYSCALL
 	status = syscall(SYS_clock_gettime, clock_id, &ts);
 #else
-	status = clock_gettime(clock_id, &ts);
+	status = clock_gettime((clockid_t)clock_id, &ts);
 #endif
 	RETVAL = status == 0 ? ts.tv_sec + (NV) ts.tv_nsec / NV_1E9 : -1;
 
@@ -1472,7 +1476,7 @@ clock_getres(clock_id = CLOCK_REALTIME)
 #ifdef TIME_HIRES_CLOCK_GETRES_SYSCALL
 	status = syscall(SYS_clock_getres, clock_id, &ts);
 #else
-	status = clock_getres(clock_id, &ts);
+	status = clock_getres((clockid_t)clock_id, &ts);
 #endif
 	RETVAL = status == 0 ? ts.tv_sec + (NV) ts.tv_nsec / NV_1E9 : -1;
 

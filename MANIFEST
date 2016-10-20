@@ -1890,6 +1890,7 @@ cpan/parent/t/parent-classfromclassfile.t	tests for parent.pm
 cpan/parent/t/parent-classfromfile.t		tests for parent.pm
 cpan/parent/t/parent-pmc.t			tests for parent.pm
 cpan/parent/t/parent-returns-false.t		tests for parent.pm
+cpan/parent/t/rt62341.t.disabled		test files for parent.pm
 cpan/Perl-OSType/lib/Perl/OSType.pm			Perl::OSType
 cpan/Perl-OSType/t/OSType.t			Perl::OSType
 cpan/perlfaq/lib/perlfaq.pm	Perl frequently asked questions
@@ -2220,7 +2221,20 @@ cpan/podlators/t/data/basic.ovr			podlators test
 cpan/podlators/t/data/basic.pod			podlators test
 cpan/podlators/t/data/basic.txt			podlators test
 cpan/podlators/t/data/perl.conf			podlators test
+cpan/podlators/t/data/snippets/man/bullet-after-nonbullet
 cpan/podlators/t/data/snippets/man/cpp			podlators test
+cpan/podlators/t/data/snippets/man/error-die
+cpan/podlators/t/data/snippets/man/error-none
+cpan/podlators/t/data/snippets/man/error-normal
+cpan/podlators/t/data/snippets/man/error-pod
+cpan/podlators/t/data/snippets/man/error-stderr
+cpan/podlators/t/data/snippets/man/error-stderr-opt
+cpan/podlators/t/data/snippets/man/fixed-font
+cpan/podlators/t/data/snippets/man/long-quote
+cpan/podlators/t/data/snippets/man/lquote-and-quote
+cpan/podlators/t/data/snippets/man/lquote-rquote
+cpan/podlators/t/data/snippets/man/nourls
+cpan/podlators/t/data/snippets/man/rquote-none
 cpan/podlators/t/data/snippets/man/utf8-nonbreaking			podlators test
 cpan/podlators/t/data/snippets/man/utf8-verbatim			podlators test
 cpan/podlators/t/data/snippets/README			podlators test
@@ -2734,6 +2748,7 @@ cpan/Test-Simple/t/regression/662-tbt-no-plan.t
 cpan/Test-Simple/t/regression/684-nested_todo_diag.t
 cpan/Test-Simple/t/regression/694_note_diag_return_values.t
 cpan/Test-Simple/t/regression/696-intercept_skip_all.t
+cpan/Test-Simple/t/regression/721-nested-streamed-subtest.t
 cpan/Test-Simple/t/regression/no_name_in_subtest.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_done_testing.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_fork.t
@@ -3453,7 +3468,9 @@ dist/Module-CoreList/t/pod.t			Module::CoreList tests
 dist/Module-CoreList/t/utils.t			Module::CoreList tests
 dist/Net-Ping/Changes			Net::Ping
 dist/Net-Ping/lib/Net/Ping.pm		Hello, anybody home?
-dist/Net-Ping/t/100_load.t		Ping Net::Ping
+dist/Net-Ping/t/000_load.t
+dist/Net-Ping/t/001_new.t
+dist/Net-Ping/t/010_pingecho.t
 dist/Net-Ping/t/110_icmp_inst.t		Ping Net::Ping
 dist/Net-Ping/t/120_udp_inst.t		Ping Net::Ping
 dist/Net-Ping/t/130_tcp_inst.t		Ping Net::Ping
@@ -4830,6 +4847,7 @@ pod/perl5251delta.pod		Perl changes in version 5.25.1
 pod/perl5252delta.pod		Perl changes in version 5.25.2
 pod/perl5253delta.pod		Perl changes in version 5.25.3
 pod/perl5254delta.pod		Perl changes in version 5.25.4
+pod/perl5255delta.pod		Perl changes in version 5.25.5
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4972,6 +4990,7 @@ Porting/git-find-p4-change	Find the change for a p4 change number
 Porting/git-make-p4-refs	Output git refs for each p4 change number, suitable for appending to .git/packed-refs
 Porting/GitUtils.pm		Generate the contents of a .patch file
 Porting/Glossary		Glossary of config.sh variables
+Porting/harness-timer-report.pl	Analyze the timings from the test harness
 Porting/how_to_write_a_perldelta.pod	Bluffer's guide to writing a perldelta.
 Porting/leakfinder.pl		Hacky script for finding memory leaks
 Porting/Maintainers		Program to pretty print info in Maintainers.pl
@@ -5694,7 +5713,16 @@ t/re/subst.t			See if substitution works
 t/re/subst_amp.t		See if $&-related substitution works
 t/re/subst_wamp.t		See if substitution works with $& present
 t/re/substT.t			See if substitution works with -T
-t/re/uniprops.t			Test unicode \p{} regex constructs
+t/re/uniprops01.t		Test unicode \p{} regex constructs
+t/re/uniprops02.t		Test unicode \p{} regex constructs
+t/re/uniprops03.t		Test unicode \p{} regex constructs
+t/re/uniprops04.t		Test unicode \p{} regex constructs
+t/re/uniprops05.t		Test unicode \p{} regex constructs
+t/re/uniprops06.t		Test unicode \p{} regex constructs
+t/re/uniprops07.t		Test unicode \p{} regex constructs
+t/re/uniprops08.t		Test unicode \p{} regex constructs
+t/re/uniprops09.t		Test unicode \p{} regex constructs
+t/re/uniprops10.t		Test unicode \p{} regex constructs
 t/README			Instructions for regression tests
 t/run/cloexec.t			Test close-on-exec.
 t/run/dtrace.pl			For dtrace.t

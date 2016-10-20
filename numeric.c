@@ -574,6 +574,7 @@ Perl_grok_infnan(pTHX_ const char** sp, const char* send)
 {
     const char* s = *sp;
     int flags = 0;
+#if defined(NV_INF) || defined(NV_NAN)
     bool odh = FALSE; /* one-dot-hash: 1.#INF */
 
     PERL_ARGS_ASSERT_GROK_INFNAN;
@@ -798,6 +799,9 @@ Perl_grok_infnan(pTHX_ const char** sp, const char* send)
     while (s < send && isSPACE(*s))
         s++;
 
+#else
+    PERL_UNUSED_ARG(send);
+#endif /* #if defined(NV_INF) || defined(NV_NAN) */
     *sp = s;
     return flags;
 }
@@ -1009,7 +1013,7 @@ Perl_grok_number_flags(pTHX_ const char *pv, STRLEN len, UV *valuep, U32 flags)
     s++;
   if (s >= send)
     return numtype;
-  if (len == 10 && memEQ(pv, "0 but true", 10)) {
+  if (len == 10 && _memEQs(pv, "0 but true")) {
     if (valuep)
       *valuep = 0;
     return IS_NUMBER_IN_UV;
@@ -1018,7 +1022,7 @@ Perl_grok_number_flags(pTHX_ const char *pv, STRLEN len, UV *valuep, U32 flags)
   if ((s + 2 < send) && strchr("inqs#", toFOLD(*s))) {
       /* Really detect inf/nan. Start at d, not s, since the above
        * code might have already consumed the "1." or "1". */
-      int infnan = Perl_grok_infnan(aTHX_ &d, send);
+      const int infnan = Perl_grok_infnan(aTHX_ &d, send);
       if ((infnan & IS_NUMBER_INFINITY)) {
           return (numtype | infnan); /* Keep sign for infinity. */
       }
@@ -1085,7 +1089,7 @@ Perl_grok_atoUV(const char *pv, UV *valptr, const char** endptr)
                 /* This could be unrolled like in grok_number(), but
                  * the expected uses of this are not speed-needy, and
                  * unlikely to need full 64-bitness. */
-                U8 digit = *s++ - '0';
+                const U8 digit = *s++ - '0';
                 if (val < uv_max_div_10 ||
                     (val == uv_max_div_10 && digit <= uv_max_mod_10)) {
                     val = val * 10 + digit;
@@ -1217,9 +1221,6 @@ Perl_my_atof(pTHX_ const char* s)
         DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
         STORE_LC_NUMERIC_SET_TO_NEEDED();
         if (PL_numeric_radix_sv && IN_LC(LC_NUMERIC)) {
-            const char *standard = NULL, *local = NULL;
-            bool use_standard_radix;
-
             /* Look through the string for the first thing that looks like a
              * decimal point: either the value in the current locale or the
              * standard fallback of '.'. The one which appears earliest in the
@@ -1227,10 +1228,9 @@ Perl_my_atof(pTHX_ const char* s)
              * that we have to determine this beforehand because on some
              * systems, Perl_atof2 is just a wrapper around the system's atof.
              * */
-            standard = strchr(s, '.');
-            local = strstr(s, SvPV_nolen(PL_numeric_radix_sv));
-
-            use_standard_radix = standard && (!local || standard < local);
+            const char * const standard = strchr(s, '.');
+            const char * const local = strstr(s, SvPV_nolen(PL_numeric_radix_sv));
+            const bool use_standard_radix = standard && (!local || standard < local);
 
             if (use_standard_radix)
                 SET_NUMERIC_STANDARD();
@@ -1262,7 +1262,7 @@ S_my_atof_infnan(pTHX_ const char* s, bool negative, const char* send, NV* value
 {
     const char *p0 = negative ? s - 1 : s;
     const char *p = p0;
-    int infnan = grok_infnan(&p, send);
+    const int infnan = grok_infnan(&p, send);
     if (infnan && p != p0) {
         /* If we can generate inf/nan directly, let's do so. */
 #ifdef NV_INF
@@ -1422,11 +1422,13 @@ Perl_my_atof2(pTHX_ const char* orig, NV* value)
 /* the max number we can accumulate in a UV, and still safely do 10*N+9 */
 #define MAX_ACCUMULATE ( (UV) ((UV_MAX - 9)/10))
 
+#if defined(NV_INF) || defined(NV_NAN)
     {
-        const char* endp;
+        char* endp;
         if ((endp = S_my_atof_infnan(aTHX_ s, negative, send, value)))
-            return (char*)endp;
+            return endp;
     }
+#endif
 
     /* we accumulate digits into an integer; when this becomes too
      * large, we add the total to NV and start again */
@@ -1549,6 +1551,7 @@ This is also the logical inverse of Perl_isfinite().
 bool
 Perl_isinfnan(NV nv)
 {
+  PERL_UNUSED_ARG(nv);
 #ifdef Perl_isinf
     if (Perl_isinf(nv))
         return TRUE;

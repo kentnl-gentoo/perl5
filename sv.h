@@ -487,10 +487,7 @@ perform the upgrade if necessary.  See C<L</svtype>>.
 union _xnvu {
     NV	    xnv_nv;		/* numeric value, if any */
     HV *    xgv_stash;
-    struct {
-	U32 xlow;
-	U32 xhigh;
-    }	    xpad_cop_seq;	/* used by pad.c for cop_sequence */
+    line_t  xnv_lines;           /* used internally by S_scan_subst() */
 };
 
 union _xivu {
@@ -2038,9 +2035,14 @@ Returns a pointer to the character
 buffer.  SV must be of type >= C<SVt_PV>.  One
 alternative is to call C<sv_grow> if you are not sure of the type of SV.
 
+=for apidoc Am|char *|SvPVCLEAR|SV* sv
+Ensures that sv is a SVt_PV and that its SvCUR is 0, and that it is
+properly null terminated. Equivalent to sv_setpvs(""), but more efficient.
+
 =cut
 */
 
+#define SvPVCLEAR(sv) sv_setpv_bufsize(sv,0,0)
 #define SvSHARE(sv) PL_sharehook(aTHX_ sv)
 #define SvLOCK(sv) PL_lockhook(aTHX_ sv)
 #define SvUNLOCK(sv) PL_unlockhook(aTHX_ sv)

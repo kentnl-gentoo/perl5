@@ -2,26 +2,33 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.25.5
+perldelta - what is new for perl v5.25.6
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.25.4 release and the 5.25.5
+This document describes differences between the 5.25.5 release and the 5.25.6
 release.
 
-If you are upgrading from an earlier release such as 5.25.3, first read
-L<perl5254delta>, which describes differences between 5.25.3 and 5.25.4.
+If you are upgrading from an earlier release such as 5.25.4, first read
+L<perl5255delta>, which describes differences between 5.25.4 and 5.25.5.
 
-=head1 Security
+=head1 Performance Enhancements
 
-=head2 "Escaped" colons and relative paths in PATH
+=over 4
 
-On Unix systems, Perl treats any relative paths in the PATH environment
-variable as tainted when starting a new process.  Previously, it was
-allowing a backslash to escape a colon (unlike the OS), consequently
-allowing relative paths to be considered safe if the PATH was set to
-something like C</\:.>.  The check has been fixed to treat C<.> as tainted
-in that example.
+=item *
+
+Converting a single-digit string to a number is now substantially faster.
+
+=item *
+
+The internal op implementing the C<split> builtin has been simplified and
+sped up. Firstly, it no longer requires a subsidiary internal C<pushre> op
+to do its work. Secondly, code of the form C<my @x = split(...)> is now
+optimised in the same way as C<@x = split(...)>, and is therefore a few
+percent faster.
+
+=back
 
 =head1 Modules and Pragmata
 
@@ -31,55 +38,158 @@ in that example.
 
 =item *
 
-L<Filter::Simple> has been upgraded from version 0.92 to 0.93.
-
-It no longer treats C<no MyFilter> immediately following C<use MyFilter> as
-end-of-file.  [perl #107726]
+L<Archive::Tar> has been upgraded from version 2.10 to 2.14.
 
 =item *
 
-L<Locale::Codes> has been upgraded from 3.39 to 3.40.
+L<attributes> has been upgraded from version 0.27 to 0.28.
 
 =item *
 
-L<Module::CoreList> has been upgraded from version 5.20160820 to 5.20160920.
+L<B> has been upgraded from version 1.63 to 1.64.
 
 =item *
 
-L<POSIX> has been upgraded from version 1.71 to 1.72.
+L<B::Concise> has been upgraded from version 0.998 to 0.999.
+
+Its output is now more descriptive for C<op_private> flags.
 
 =item *
 
-L<Sys::Syslog> has been upgraded from version 0.34_01 to 0.35.
+L<B::Deparse> has been upgraded from version 1.38 to 1.39.
 
 =item *
 
-L<Test::Simple> has been upgraded from version 1.302052 to 1.302056.
+L<Data::Dumper> has been upgraded from version 2.161 to 2.162.
 
 =item *
 
-L<Thread::Semaphore> has been upgraded from 2.12 to 2.13.
-
-Added the C<down_timed> method.
+L<Devel::Peek> has been upgraded from version 1.24 to 1.25.
 
 =item *
 
-L<XSLoader> has been upgraded from version 0.22 to 0.24.
+L<HTTP::Tiny> has been upgraded from version 0.064 to 0.070.
+
+Internal 599-series errors now include the redirect history.
+
+=item *
+
+L<List::Util> has been upgraded from version 1.45_01 to 1.46.
+
+=item *
+
+L<Module::CoreList> has been upgraded from version 5.20160920 to 5.20161020.
+
+=item *
+
+L<mro> has been upgraded from version 1.18 to 1.19.
+
+=item *
+
+L<Net::Ping> has been upgraded from version 2.44 to 2.51.
+
+IPv6 addresses and C<AF_INET6> sockets are now supported, along with several
+other enhancements.
+
+=item *
+
+L<Opcode> has been upgraded from version 1.37 to 1.38.
+
+=item *
+
+L<overload> has been upgraded from version 1.26 to 1.27.
+
+Its compilation speed has been improved slightly.
+
+=item *
+
+L<parent> has been upgraded from version 0.234 to 0.236.
+
+=item *
+
+L<PerlIO::encoding> has been upgraded from version 0.24 to 0.25.
+
+=item *
+
+podlators has been upgraded from version 4.07 to 4.08.
+
+=item *
+
+L<POSIX> has been upgraded from version 1.72 to 1.73.
+
+=item *
+
+L<Scalar::Util> has been upgraded from version 1.45_01 to 1.46.
+
+=item *
+
+L<Storable> has been upgraded from version 2.57 to 2.58.
+
+=item *
+
+L<Test::Simple> has been upgraded from version 1.302056 to 1.302059.
+
+=item *
+
+L<Time::HiRes> has been upgraded from version 1.9739 to 1.9740_01.
+
+It now builds on systems with C++11 compilers (such as G++ 6 and Clang++
+3.9).
+
+=item *
+
+L<VMS::Stdio> has been upgraded from version 2.41 to 2.42.
 
 =back
 
-=head1 Documentation
+=head1 Diagnostics
 
-=head2 Changes to Existing Documentation
+The following additions or changes have been made to diagnostic output,
+including warnings and fatal error messages.  For the complete list of
+diagnostic messages, see L<perldiag>.
 
-=head3 L<perlinterp>
+=head2 New Diagnostics
+
+=head3 New Errors
 
 =over 4
 
 =item *
 
-L<perlinterp> has been expanded to give a more detailed example of how to
-hunt around in the parser for how a given operator is handled.
+Using the empty pattern (which re-executes the last successfully-matched
+pattern) inside a code block in another regex, as in C</(?{ s!!new! })/>, has
+always previously yielded a segfault. It now produces an error: L<Use of the
+empty pattern inside of a regex code block is forbidden|perldiag/"Use of the
+empty pattern inside of a regex code block is forbidden">.
+
+=back
+
+=head2 Changes to Existing Diagnostics
+
+=over 4
+
+=item *
+
+Details as to the exact problem have been added to the diagnostics that
+occur when malformed UTF-8 is encountered when trying to convert to a
+code point.
+
+=item *
+
+Executing C<undef $x> where C<$x> is tied or magical no longer incorrectly
+blames the variable for an uninitialized-value warning encountered by the
+tied/magical code.
+
+=back
+
+=head1 Configuration and Compilation
+
+=over 4
+
+=item *
+
+Builds using C<USE_PAD_RESET> now work again; this configuration had
+bit-rotted.
 
 =back
 
@@ -89,50 +199,36 @@ hunt around in the parser for how a given operator is handled.
 
 =item *
 
-F<t/re/regexp_nonull.t> has been added to test that the regular expression
-engine can handle scalars that do not have a null byte just past the end of
-the string.
+Some parts of the test suite that try to exhaustively test edge cases in the
+regex implementation have been restricted to running for a maximum of five
+minutes. On slow systems they could otherwise take several hours, without
+significantly improving our understanding of the correctness of the code
+under test.
+
+In addition, some of those test cases have been split into more files, to
+allow them to be run in parallel on suitable systems.
+
+=item *
+
+A new internal facility allows analysing the time taken by the individual
+tests in Perl's own test suite; see F<Porting/harness-timer-report.pl>.
 
 =back
 
 =head1 Platform Support
 
-=head2 Platform-Specific Notes
+=head2 New Platforms
 
 =over 4
 
-=item VMS
+=item NetBSD/VAX
 
-=over 4
-
-=item *
-
-The path separator for the C<PERL5LIB> and C<PERLLIB> environment entries is
-now a colon (C<:>) when running under a Unix shell. There is no change when
-running under DCL (it's still C<|>).
-
-=item *
-
-Remove some VMS-specific hacks from C<showlex.t>. These were added 15 years
-ago, and are no longer necessary for any VMS version now supported.
-
-=back
-
-=back
-
-=over 4
-
-=item Win32
-
-=over 4
-
-=item *
-
-Tweaks for Win32 VC vs GCC detection makefile code. This fixes issue that CCHOME
-depends on CCTYPE, which in auto detect mode is set after CCHOME, so CCHOME uses
-the uninit CCTYPE var. Also fix else vs .ELSE in makefile.mk
-
-=back
+Perl now compiles under NetBSD on VAX machines.  However, it's not
+possible for that platform to implement floating-point infinities and
+NaNs compatibly with most modern systems, which implement the IEEE-754
+floating point standard.  The hexadecimal floating point (C<0x...p[+-]n>
+literals, C<printf %a>) is not implemented, either.
+The C<make test> passes 98% of tests.
 
 =back
 
@@ -142,16 +238,81 @@ the uninit CCTYPE var. Also fix else vs .ELSE in makefile.mk
 
 =item *
 
-Several macros and functions have been added to the public API for
-dealing with Unicode and UTF-8-encoded strings.  See
-L<perlapi/Unicode Support>.
+The C<PADOFFSET> type has changed from being unsigned to signed, and
+several pad-related variables such as C<PL_padix> have changed from being
+of type C<I32> to type C<PADOFFSET>.
 
 =item *
 
-Use C<my_strlcat()> in C<locale.c>. While C<strcat()> is safe in this context,
-some compilers were optimizing this to C<strcpy()> causing a porting test to
-fail that looks for unsafe code. Rather than fighting this, we just use
-C<my_strlcat()> instead.
+The function C<L<perlapi/utf8n_to_uvchr>> has been changed to not
+abandon searching for other malformations when the first one is
+encountered.  A call to it thus can generate multiple diagnostics,
+instead of just one.
+
+=item *
+
+A new function, C<L<perlapi/utf8n_to_uvchr_error>>, has been added for
+use by modules that need to know the details of UTF-8 malformations
+beyond pass/fail.  Previously, the only ways to know why a sequence was
+ill-formed was to capture and parse the generated diagnostics, or to do
+your own analysis.
+
+=item *
+
+Several new functions for handling Unicode have been added to the API:
+C<L<perlapi/is_strict_utf8_string>>,
+C<L<perlapi/is_c9strict_utf8_string>>,
+C<L<perlapi/is_utf8_string_flags>>,
+C<L<perlapi/is_strict_utf8_string_loc>>,
+C<L<perlapi/is_strict_utf8_string_loclen>>,
+C<L<perlapi/is_c9strict_utf8_string_loc>>,
+C<L<perlapi/is_c9strict_utf8_string_loclen>>,
+C<L<perlapi/is_utf8_string_loc_flags>>,
+C<L<perlapi/is_utf8_string_loclen_flags>>,
+C<L<perlapi/is_utf8_fixed_width_buf_flags>>,
+C<L<perlapi/is_utf8_fixed_width_buf_loc_flags>>,
+C<L<perlapi/is_utf8_fixed_width_buf_loclen_flags>>.
+
+These functions are all extensions of the C<is_utf8_string_*()> functions,
+that apply various restrictions to the UTF-8 recognized as valid.
+
+=item *
+
+A new API function C<sv_setvpv_bufsize()> allows simultaneously setting the
+length and allocated size of the buffer in an C<SV>, growing the buffer if
+necessary.
+
+=item *
+
+A new API macro C<SvPVCLEAR()> sets its C<SV> argument to an empty string,
+like Perl-space C<$x = ''>, but with several optimisations.
+
+=item *
+
+All parts of the internals now agree that the C<sassign> op is a C<BINOP>;
+previously it was listed as a C<BASEOP> in F<regen/opcodes>, which meant
+that several parts of the internals had to be special-cased to accommodate
+it. This oddity's original motivation was to handle code like C<$x ||= 1>;
+that is now handled in a simpler way.
+
+=item *
+
+Several new internal C macros have been added that take a string literal as
+arguments, alongside existing routines that take the equivalent value as two
+arguments, a character pointer and a length. The advantage of this is that
+the length of the string is calculated automatically, rather than having to
+be done manually. These routines are now used where appropriate across the
+entire codebase.
+
+=item *
+
+The code in F<gv.c> that determines whether a variable has a special meaning
+to Perl has been simplified.
+
+=item *
+
+The C<DEBUGGING>-mode output for regex compilation and execution has been
+enhanced.
 
 =back
 
@@ -161,128 +322,54 @@ C<my_strlcat()> instead.
 
 =item *
 
-Invalid assignments to a reference constructor (e.g., C<\eval=time>) could
-sometimes crash in addition to giving a syntax error.  [perl #125679]
-
-=item *
-
-The parser could sometimes crash if a bareword came after C<evalbytes>.
-[perl #129196]
-
-=item *
-
-Autoloading via a method call would warn erroneously ("Use of inherited
-AUTOLOAD for non-method") if there was a stub present in the package into
-which the invocant had been blessed.  The warning is no longer emitted in
-such circumstances.  [perl #47047]
-
-=item *
-
-A sub containing with a "forward" declaration with the same name (e.g.,
+A sub containing a "forward" declaration with the same name (e.g.,
 C<sub c { sub c; }>) could sometimes crash or loop infinitely.  [perl
 #129090]
 
 =item *
 
-The use of C<splice> on arrays with nonexistent elements could cause other
-operators to crash.  [perl #129164]
+A crash in executing a regex with a floating UTF-8 substring against a
+target string that also used UTF-8 has been fixed. [perl #129350]
 
 =item *
 
-Fixed case where C<re_untuit_start> will overshoot the length of a utf8
-string. [perl #129012]
+Previously, a shebang line like C<#!perl -i u> could be erroneously
+interpreted as requesting the C<-u> option. This has been fixed. [perl
+#129336]
 
 =item *
 
-Handle C<CXt_SUBST> better in C<Perl_deb_stack_all>, previously it wasn't
-checking that the I<current> C<cx> is the right type, and instead was always
-checking the base C<cx> (effectively a noop). [perl #129029]
+The regex engine was previously producing incorrect results in some rare
+situations when backtracking past a trie that matches only one thing; this
+showed up as capture buffers (C<$1>, C<$2>, etc) erroneously containing data
+from regex execution paths that weren't actually executed for the final
+match.  [perl #129897]
 
 =item *
 
-Fixed two possible use-after-free bugs in C<Perl_yylex>. C<Perl_yylex>
-maintains up to two pointers into the parser buffer, one of which can
-become stale under the right conditions. [perl #129069]
-
-=item *
-
-Fixed a crash with C<s///l> where it thought it was dealing with UTF-8
-when it wasn't. [perl #129038]
-
-=item *
-
-Fixed place where regex was not setting the syntax error correctly.
-[perl #129122]
-
-=item *
-
-The C<&.> operator (and the C<&> operator, when it treats its arguments as
-strings) were failing to append a trailing null byte if at least one string
-was marked as utf8 internally.  Many code paths (system calls, regexp
-compilation) still expect there to be a null byte in the string buffer
-just past the end of the logical string.  An assertion failure was the
-result.  [perl #129287]
-
-=item *
-
-Check C<pack_sockaddr_un()>'s return value because C<pack_sockaddr_un()>
-silently truncates the supplied path if it won't fit into the C<sun_path>
-member of C<sockaddr_un>. This may change in the future, but for now
-check the path in theC<sockaddr> matches the desired path, and skip if
-it doesn't. [perl #128095]
-
-=item *
-
-Make sure C<PL_oldoldbufptr> is preserved in C<scan_heredoc()>. In some
-cases this is used in building error messages. [perl #128988]
-
-=item *
-
-Check for null PL_curcop in IN_LC() [perl #129106]
-
-=item *
-
-Fixed the parser error handling for an 'C<:attr(foo>' that does not have
-an ending 'C<)>'.
-
-=item *
-
-Fix C<Perl_delimcpy()> to handle a backslash as last char, this
-actually fixed two bugs, [perl #129064] and [perl #129176].
-
-=item *
-
-[perl #129267] rework gv_fetchmethod_pvn_flags separator parsing to
-prevent possible string overrun with invalid len in gv.c
+Certain regexes making use of the experimental C<regex_sets> feature could
+trigger an assertion failure. This has been fixed. [perl #129322]
 
 =back
 
-=head1 Obituary
-
-Jon Portnoy (AVENJ), a prolific Perl author and admired Gentoo community
-member, has passed away on August 10, 2016. He will be remembered and
-missed by all those with which he came in contact and enriched with his
-intellect, wit, and spirit.
-
 =head1 Acknowledgements
 
-Perl 5.25.5 represents approximately 4 weeks of development since Perl 5.25.4
-and contains approximately 67,000 lines of changes across 230 files from 25
+Perl 5.25.6 represents approximately 4 weeks of development since Perl 5.25.5
+and contains approximately 16,000 lines of changes across 300 files from 23
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 62,000 lines of changes to 160 .pm, .t, .c and .h files.
+approximately 10,000 lines of changes to 190 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.25.5:
+improvements that became Perl 5.25.6:
 
-Aaron Crane, Aristotle Pagaltzis, Chris 'BinGOs' Williams, Craig A. Berry,
-Dagfinn Ilmari Mannsåker, Dan Collins, Daniel Dragan, Dave Cross, David
-Mitchell, E. Choroba, Father Chrysostomos, James E Keenan, Jerry D. Hedden,
-Karl Williamson, Lukas Mai, Ricardo Signes, Rick Delaney, Sawyer X, Stevan
-Little, Steve Hay, Sullivan Beck, Theo Buehler, Tony Cook, Yaroslav Kuzmin,
-Yves Orton.
+Aaron Crane, Andy Lester, Chris 'BinGOs' Williams, Dagfinn Ilmari Mannsåker,
+Dan Collins, David Mitchell, François Perrad, Hugo van der Sanden, James E
+Keenan, James Raspass, Jarkko Hietaniemi, Karl Williamson, Lukas Mai, Nicolas
+R., Reini Urban, Sawyer X, Sergey Aleynikov, Stevan Little, Steve Hay, Steven
+Humphrey, Thomas Sibley, Tony Cook, Yves Orton.
 
 The list above is almost certainly incomplete as it is automatically generated
 from version control history. In particular, it does not include the names of

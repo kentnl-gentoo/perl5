@@ -104,18 +104,6 @@ PP(pp_regcomp)
     assert (re != (REGEXP*) &PL_sv_undef);
     eng = re ? RX_ENGINE(re) : current_re_engine();
 
-    /*
-     In the below logic: these are basically the same - check if this regcomp is part of a split.
-
-    (PL_op->op_pmflags & PMf_split )
-    (PL_op->op_next->op_type == OP_PUSHRE)
-
-    We could add a new mask for this and copy the PMf_split, if we did
-    some bit definition fiddling first.
-
-    For now we leave this
-    */
-
     new_re = (eng->op_comp
 		    ? eng->op_comp
 		    : &Perl_re_op_compile
@@ -174,8 +162,13 @@ PP(pp_regcomp)
 #if !defined(USE_ITHREADS)
     /* can't change the optree at runtime either */
     /* PMf_KEEP is handled differently under threads to avoid these problems */
-    if (!RX_PRELEN(PM_GETRE(pm)) && PL_curpm)
+    /* Handle empty pattern */
+    if (!RX_PRELEN(PM_GETRE(pm)) && PL_curpm) {
+        if (PL_curpm == PL_reg_curpm)
+            Perl_croak(aTHX_ "Use of the empty pattern inside of "
+                  "a regex code block is forbidden");
 	pm = PL_curpm;
+    }
     if (pm->op_pmflags & PMf_KEEP) {
 	pm->op_private &= ~OPpRUNTIME;	/* no point compiling again */
 	cLOGOP->op_first->op_next = PL_op->op_next;
@@ -1151,7 +1144,7 @@ PP(pp_flip)
 		RETURNOP(((LOGOP*)cUNOP->op_first)->op_other);
 	    }
 	}
-	sv_setpvs(TARG, "");
+        SvPVCLEAR(TARG);
 	SETs(targ);
 	RETURN;
     }
@@ -2248,21 +2241,21 @@ PP(pp_leaveloop)
 {
     PERL_CONTEXT *cx;
     U8 gimme;
+    SV **base;
     SV **oldsp;
-    SV **mark;
 
     cx = CX_CUR();
     assert(CxTYPE_is_LOOP(cx));
-    mark = PL_stack_base + cx->blk_oldsp;
-    oldsp = CxTYPE(cx) == CXt_LOOP_LIST
+    oldsp = PL_stack_base + cx->blk_oldsp;
+    base = CxTYPE(cx) == CXt_LOOP_LIST
                 ? PL_stack_base + cx->blk_loop.state_u.stack.basesp
-                : mark;
+                : oldsp;
     gimme = cx->blk_gimme;
 
     if (gimme == G_VOID)
-        PL_stack_sp = oldsp;
+        PL_stack_sp = base;
     else
-        leave_adjust_stacks(MARK, oldsp, gimme,
+        leave_adjust_stacks(oldsp, base, gimme,
                                 PL_op->op_private & OPpLVALUE ? 3 : 1);
 
     CX_LEAVE_SCOPE(cx);

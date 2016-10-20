@@ -658,10 +658,9 @@ PP(pp_gelem)
     sv = NULL;
     if (elem) {
 	/* elem will always be NUL terminated.  */
-	const char * const second_letter = elem + 1;
 	switch (*elem) {
 	case 'A':
-	    if (len == 5 && strEQ(second_letter, "RRAY"))
+	    if (memEQs(elem, len, "ARRAY"))
 	    {
 		tmpRef = MUTABLE_SV(GvAV(gv));
 		if (tmpRef && !AvREAL((const AV *)tmpRef)
@@ -670,42 +669,42 @@ PP(pp_gelem)
 	    }
 	    break;
 	case 'C':
-	    if (len == 4 && strEQ(second_letter, "ODE"))
+	    if (memEQs(elem, len, "CODE"))
 		tmpRef = MUTABLE_SV(GvCVu(gv));
 	    break;
 	case 'F':
-	    if (len == 10 && strEQ(second_letter, "ILEHANDLE")) {
+	    if (memEQs(elem, len, "FILEHANDLE")) {
 		tmpRef = MUTABLE_SV(GvIOp(gv));
 	    }
 	    else
-		if (len == 6 && strEQ(second_letter, "ORMAT"))
+		if (memEQs(elem, len, "FORMAT"))
 		    tmpRef = MUTABLE_SV(GvFORM(gv));
 	    break;
 	case 'G':
-	    if (len == 4 && strEQ(second_letter, "LOB"))
+	    if (memEQs(elem, len, "GLOB"))
 		tmpRef = MUTABLE_SV(gv);
 	    break;
 	case 'H':
-	    if (len == 4 && strEQ(second_letter, "ASH"))
+	    if (memEQs(elem, len, "HASH"))
 		tmpRef = MUTABLE_SV(GvHV(gv));
 	    break;
 	case 'I':
-	    if (*second_letter == 'O' && !elem[2] && len == 2)
+	    if (memEQs(elem, len, "IO"))
 		tmpRef = MUTABLE_SV(GvIOp(gv));
 	    break;
 	case 'N':
-	    if (len == 4 && strEQ(second_letter, "AME"))
+	    if (memEQs(elem, len, "NAME"))
 		sv = newSVhek(GvNAME_HEK(gv));
 	    break;
 	case 'P':
-	    if (len == 7 && strEQ(second_letter, "ACKAGE")) {
+	    if (memEQs(elem, len, "PACKAGE")) {
 		const HV * const stash = GvSTASH(gv);
 		const HEK * const hek = stash ? HvNAME_HEK(stash) : NULL;
 		sv = hek ? newSVhek(hek) : newSVpvs("__ANON__");
 	    }
 	    break;
 	case 'S':
-	    if (len == 6 && strEQ(second_letter, "CALAR"))
+	    if (memEQs(elem, len, "SCALAR"))
 		tmpRef = GvSVn(gv);
 	    break;
 	}
@@ -902,7 +901,7 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 		}
 	    }
 	    else
-		sv_setpvs(retval, "");
+                SvPVCLEAR(retval);
 	}
 	else if (s && len) {
 	    s += --len;
@@ -913,7 +912,7 @@ S_do_chomp(pTHX_ SV *retval, SV *sv, bool chomping)
 	    SvNIOK_off(sv);
 	}
 	else
-	    sv_setpvs(retval, "");
+            SvPVCLEAR(retval);
 	SvSETMAGIC(sv);
     }
     return count;
@@ -2965,7 +2964,11 @@ PP(pp_sin)
     {
       SV * const arg = TOPs;
       const NV value = SvNV_nomg(arg);
+#ifdef NV_NAN
       NV result = NV_NAN;
+#else
+      NV result = 0.0;
+#endif
       if (neg_report) { /* log or sqrt */
 	  if (
 #if defined(NAN_COMPARE_BROKEN) && defined(Perl_isnan)
@@ -3444,7 +3447,7 @@ PP(pp_substr)
 		repl = SvPV_const(repl_sv_copy, repl_len);
 	    }
 	    if (!SvOK(sv))
-		sv_setpvs(sv, "");
+                SvPVCLEAR(sv);
 	    sv_insert_flags(sv, byte_pos, byte_len, repl, repl_len, 0);
 	    SvREFCNT_dec(repl_sv_copy);
 	}
@@ -5704,14 +5707,16 @@ PP(pp_reverse)
 PP(pp_split)
 {
     dSP; dTARG;
-    AV *ary = PL_op->op_flags & OPf_STACKED ? (AV *)POPs : NULL;
+    AV *ary = (   (PL_op->op_private & OPpSPLIT_ASSIGN) /* @a = split */
+               && (PL_op->op_flags & OPf_STACKED))      /* @{expr} = split */
+               ? (AV *)POPs : NULL;
     IV limit = POPi;			/* note, negative is forever */
     SV * const sv = POPs;
     STRLEN len;
     const char *s = SvPV_const(sv, len);
     const bool do_utf8 = DO_UTF8(sv);
     const char *strend = s + len;
-    PMOP *pm;
+    PMOP *pm = cPMOPx(PL_op);
     REGEXP *rx;
     SV *dstr;
     const char *m;
@@ -5727,38 +5732,40 @@ PP(pp_split)
     I32 base;
     const U8 gimme = GIMME_V;
     bool gimme_scalar;
-    const I32 oldsave = PL_savestack_ix;
+    I32 oldsave = PL_savestack_ix;
     U32 make_mortal = SVs_TEMP;
     bool multiline = 0;
     MAGIC *mg = NULL;
 
-#ifdef DEBUGGING
-    Copy(&LvTARGOFF(POPs), &pm, 1, PMOP*);
-#else
-    pm = (PMOP*)POPs;
-#endif
-    if (!pm)
-	DIE(aTHX_ "panic: pp_split, pm=%p, s=%p", pm, s);
     rx = PM_GETRE(pm);
 
     TAINT_IF(get_regex_charset(RX_EXTFLAGS(rx)) == REGEX_LOCALE_CHARSET &&
              (RX_EXTFLAGS(rx) & (RXf_WHITE | RXf_SKIPWHITE)));
 
+    /* handle @ary = split(...) optimisation */
+    if (PL_op->op_private & OPpSPLIT_ASSIGN) {
+        if (!(PL_op->op_flags & OPf_STACKED)) {
+            if (PL_op->op_private & OPpSPLIT_LEX) {
+                if (PL_op->op_private & OPpLVAL_INTRO)
+                    SAVECLEARSV(PAD_SVl(pm->op_pmreplrootu.op_pmtargetoff));
+                ary = (AV *)PAD_SVl(pm->op_pmreplrootu.op_pmtargetoff);
+            }
+            else {
+                GV *gv =
 #ifdef USE_ITHREADS
-    if (pm->op_pmreplrootu.op_pmtargetoff) {
-	ary = GvAVn(MUTABLE_GV(PAD_SVl(pm->op_pmreplrootu.op_pmtargetoff)));
-	goto have_av;
-    }
+                        MUTABLE_GV(PAD_SVl(pm->op_pmreplrootu.op_pmtargetoff));
 #else
-    if (pm->op_pmreplrootu.op_pmtargetgv) {
-	ary = GvAVn(pm->op_pmreplrootu.op_pmtargetgv);
-	goto have_av;
-    }
+                        pm->op_pmreplrootu.op_pmtargetgv;
 #endif
-    else if (pm->op_targ)
-	ary = (AV *)PAD_SVl(pm->op_targ);
-    if (ary) {
-	have_av:
+                if (PL_op->op_private & OPpLVAL_INTRO)
+                    ary = save_ary(gv);
+                else
+                    ary = GvAVn(gv);
+            }
+            /* skip anything pushed by OPpLVAL_INTRO above */
+            oldsave = PL_savestack_ix;
+        }
+
 	realarray = 1;
 	PUTBACK;
 	av_extend(ary,0);
@@ -5782,6 +5789,7 @@ PP(pp_split)
 	    make_mortal = 0;
 	}
     }
+
     base = SP - PL_stack_base;
     orig = s;
     if (RX_EXTFLAGS(rx) & RXf_SKIPWHITE) {
@@ -6367,7 +6375,7 @@ PP(pp_avhvswitch)
     dVAR; dSP;
     return PL_ppaddr[
 		(SvTYPE(TOPs) == SVt_PVAV ? OP_AEACH : OP_EACH)
-		    + (PL_op->op_private & 3)
+		    + (PL_op->op_private & OPpAVHVSWITCH_MASK)
 	   ](aTHX);
 }
 

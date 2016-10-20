@@ -156,7 +156,7 @@ Perl_pv_escape( pTHX_ SV *dsv, char const * const str,
 
     if (dsv && !(flags & PERL_PV_ESCAPE_NOCLEAR)) {
 	    /* This won't alter the UTF-8 flag */
-	    sv_setpvs(dsv, "");
+            SvPVCLEAR(dsv);
     }
     
     if ((flags & PERL_PV_ESCAPE_UNI_DETECT) && is_utf8_string((U8*)pv, count))
@@ -285,7 +285,7 @@ Perl_pv_pretty( pTHX_ SV *dsv, char const * const str, const STRLEN count,
    
     if (!(flags & PERL_PV_PRETTY_NOCLEAR)) {
         /* This won't alter the UTF-8 flag */
-        sv_setpvs(dsv, "");
+        SvPVCLEAR(dsv);
     }
     orig_cur= SvCUR(dsv);
 
@@ -358,7 +358,7 @@ Perl_sv_peek(pTHX_ SV *sv)
     int unref = 0;
     U32 type;
 
-    sv_setpvs(t, "");
+    SvPVCLEAR(t);
   retry:
     if (!sv) {
 	sv_catpv(t, "VOID");
@@ -670,10 +670,17 @@ Perl_do_pmop_dump(pTHX_ I32 level, PerlIO *file, const PMOP *pm)
 	     (pm->op_private & OPpRUNTIME) ? " (RUNTIME)" : "");
     else
 	Perl_dump_indent(aTHX_ level, file, "PMf_PRE (RUNTIME)\n");
-    if (pm->op_type != OP_PUSHRE && pm->op_pmreplrootu.op_pmreplroot) {
-	Perl_dump_indent(aTHX_ level, file, "PMf_REPL = ");
-	op_dump(pm->op_pmreplrootu.op_pmreplroot);
+
+    if (pm->op_type == OP_SPLIT)
+        Perl_dump_indent(aTHX_ level, file, "TARGOFF/GV = 0x%"UVxf"\n",
+                PTR2UV(pm->op_pmreplrootu.op_pmtargetgv));
+    else {
+        if (pm->op_pmreplrootu.op_pmreplroot) {
+            Perl_dump_indent(aTHX_ level, file, "PMf_REPL = ");
+            op_dump(pm->op_pmreplrootu.op_pmreplroot);
+        }
     }
+
     if (pm->op_code_list) {
 	if (pm->op_pmflags & PMf_CODELIST_PRIVATE) {
 	    Perl_dump_indent(aTHX_ level, file, "CODE_LIST =\n");
@@ -1043,7 +1050,7 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
 	else
 	    PerlIO_printf(file, "DONE\n");
 	break;
-    case OP_PUSHRE:
+    case OP_SPLIT:
     case OP_MATCH:
     case OP_QR:
     case OP_SUBST:
@@ -1667,7 +1674,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	Perl_dump_indent(aTHX_ level, file, "  MAX = %"IVdf"\n", (IV)AvMAX(sv));
 	Perl_dump_indent(aTHX_ level, file, "  ARYLEN = 0x%"UVxf"\n",
 				   SvMAGIC(sv) ? PTR2UV(AvARYLEN(sv)) : 0);
-	sv_setpvs(d, "");
+        SvPVCLEAR(d);
 	if (AvREAL(sv))	sv_catpv(d, ",REAL");
 	if (AvREIFY(sv))	sv_catpv(d, ",REIFY");
 	Perl_dump_indent(aTHX_ level, file, "  FLAGS = (%s)\n",

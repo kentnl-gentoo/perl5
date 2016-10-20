@@ -277,6 +277,15 @@ typedef U64TYPE U64;
 /* Unused by core; should be deprecated */
 #define Ctl(ch) ((ch) & 037)
 
+#if defined(PERL_CORE) || defined(PERL_EXT)
+#  ifndef MIN
+#    define MIN(a,b) ((a) < (b) ? (a) : (b))
+#  endif
+#  ifndef MAX
+#    define MAX(a,b) ((a) > (b) ? (a) : (b))
+#  endif
+#endif
+
 /* This is a helper macro to avoid preprocessor issues, replaced by nothing
  * unless under DEBUGGING, where it expands to an assert of its argument,
  * followed by a comma (hence the comma operator).  If we just used a straight
@@ -408,14 +417,7 @@ a string/length pair.
     Perl_gv_fetchpvn_flags(aTHX_ namebeg, len, add, sv_type)
 #define sv_catxmlpvs(dsv, str, utf8) \
     Perl_sv_catxmlpvn(aTHX_ dsv, STR_WITH_LEN(str), utf8)
-#define hv_fetchs(hv,key,lval)						\
-  ((SV **)Perl_hv_common(aTHX_ (hv), NULL, STR_WITH_LEN(key), 0,	\
-			 (lval) ? (HV_FETCH_JUST_SV | HV_FETCH_LVALUE)	\
-			 : HV_FETCH_JUST_SV, NULL, 0))
 
-#define hv_stores(hv,key,val)						\
-  ((SV **)Perl_hv_common(aTHX_ (hv), NULL, STR_WITH_LEN(key), 0,	\
-			 (HV_FETCH_ISSTORE|HV_FETCH_JUST_SV), (val), 0))
 
 #define lex_stuff_pvs(pv,flags) Perl_lex_stuff_pvn(aTHX_ STR_WITH_LEN(pv), flags)
 
@@ -472,14 +474,19 @@ Returns zero if non-equal, or non-zero if equal.
 =cut
 */
 
+
 #define strNE(s1,s2) (strcmp(s1,s2))
 #define strEQ(s1,s2) (!strcmp(s1,s2))
 #define strLT(s1,s2) (strcmp(s1,s2) < 0)
 #define strLE(s1,s2) (strcmp(s1,s2) <= 0)
 #define strGT(s1,s2) (strcmp(s1,s2) > 0)
 #define strGE(s1,s2) (strcmp(s1,s2) >= 0)
+
 #define strnNE(s1,s2,l) (strncmp(s1,s2,l))
 #define strnEQ(s1,s2,l) (!strncmp(s1,s2,l))
+
+#define strNEs(s1,s2) (strncmp(s1,"" s2 "", sizeof(s2)-1))
+#define strEQs(s1,s2) (!strncmp(s1,"" s2 "", sizeof(s2)-1))
 
 #ifdef HAS_MEMCMP
 #  define memNE(s1,s2,l) (memcmp(s1,s2,l))
@@ -491,8 +498,14 @@ Returns zero if non-equal, or non-zero if equal.
 
 /* memEQ and memNE where second comparand is a string constant */
 #define memEQs(s1, l, s2) \
-	(sizeof(s2)-1 == l && memEQ(s1, ("" s2 ""), (sizeof(s2)-1)))
+        (((sizeof(s2)-1) == (l)) && memEQ((s1), ("" s2 ""), (sizeof(s2)-1)))
 #define memNEs(s1, l, s2) !memEQs(s1, l, s2)
+
+/* memEQ and memNE where second comparand is a string constant
+ * and we can assume the length of s1 is at least that of the string */
+#define _memEQs(s1, s2) \
+        (memEQ((s1), ("" s2 ""), (sizeof(s2)-1)))
+#define _memNEs(s1, s2) (memNE((s1),("" s2 ""),(sizeof(s2)-1)))
 
 #define memLT(s1,s2,l) (memcmp(s1,s2,l) < 0)
 #define memLE(s1,s2,l) (memcmp(s1,s2,l) <= 0)

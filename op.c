@@ -853,10 +853,8 @@ Perl_op_free(pTHX_ OP *o)
 
         op_clear(o);
         FreeOp(o);
-#ifdef DEBUG_LEAKING_SCALARS
         if (PL_op == o)
             PL_op = NULL;
-#endif
     } while ( (o = POP_DEFERRED_OP()) );
 
     Safefree(defer_stack);
@@ -1015,14 +1013,20 @@ Perl_op_clear(pTHX_ OP *o)
     case OP_SUBST:
 	op_free(cPMOPo->op_pmreplrootu.op_pmreplroot);
 	goto clear_pmop;
-    case OP_PUSHRE:
+
+    case OP_SPLIT:
+        if (     (o->op_private & OPpSPLIT_ASSIGN) /* @array  = split */
+            && !(o->op_flags & OPf_STACKED))       /* @{expr} = split */
+        {
+            if (o->op_private & OPpSPLIT_LEX)
+                pad_free(cPMOPo->op_pmreplrootu.op_pmtargetoff);
+            else
 #ifdef USE_ITHREADS
-        if (cPMOPo->op_pmreplrootu.op_pmtargetoff) {
-	    pad_swipe(cPMOPo->op_pmreplrootu.op_pmtargetoff, TRUE);
-	}
+                pad_swipe(cPMOPo->op_pmreplrootu.op_pmtargetoff, TRUE);
 #else
-	SvREFCNT_dec(MUTABLE_SV(cPMOPo->op_pmreplrootu.op_pmtargetgv));
+                SvREFCNT_dec(MUTABLE_SV(cPMOPo->op_pmreplrootu.op_pmtargetgv));
 #endif
+        }
 	/* FALLTHROUGH */
     case OP_MATCH:
     case OP_QR:
@@ -1226,7 +1230,7 @@ S_find_and_forget_pmops(pTHX_ OP *o)
 	while (kid) {
 	    switch (kid->op_type) {
 	    case OP_SUBST:
-	    case OP_PUSHRE:
+	    case OP_SPLIT:
 	    case OP_MATCH:
 	    case OP_QR:
 		forget_pmop((PMOP*)kid);
@@ -1992,16 +1996,7 @@ Perl_scalarvoid(pTHX_ OP *arg)
             break;
 
         case OP_SPLIT:
-            kid = cLISTOPo->op_first;
-            if (kid && kid->op_type == OP_PUSHRE
-                && !kid->op_targ
-                && !(o->op_flags & OPf_STACKED)
-#ifdef USE_ITHREADS
-                && !((PMOP*)kid)->op_pmreplrootu.op_pmtargetoff
-#else
-                && !((PMOP*)kid)->op_pmreplrootu.op_pmtargetgv
-#endif
-                )
+            if (!(o->op_private & OPpSPLIT_ASSIGN))
                 useless = OP_DESC(o);
             break;
 
@@ -2648,8 +2643,6 @@ S_finalize_op(pTHX_ OP* o)
               || family == OA_FILESTATOP
               || family == OA_LOOPEXOP
               || family == OA_METHOP
-              /* I don't know why SASSIGN is tagged as OA_BASEOP - DAPM */
-              || type == OP_SASSIGN
               || type == OP_CUSTOM
               || type == OP_NULL /* new_logop does this */
               );
@@ -3240,16 +3233,7 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 	return o;
 
     case OP_SPLIT:
-	kid = cLISTOPo->op_first;
-	if (kid && kid->op_type == OP_PUSHRE &&
-		(  kid->op_targ
-		|| o->op_flags & OPf_STACKED
-#ifdef USE_ITHREADS
-		|| ((PMOP*)kid)->op_pmreplrootu.op_pmtargetoff
-#else
-		|| ((PMOP*)kid)->op_pmreplrootu.op_pmtargetgv
-#endif
-	)) {
+        if ((o->op_private & OPpSPLIT_ASSIGN)) {
 	    /* This is actually @array = split.  */
 	    PL_modcount = RETURN_UNLIMITED_NUMBER;
 	    break;
@@ -4774,7 +4758,13 @@ Perl_op_convert_list(pTHX_ I32 type, I32 flags, OP *o)
 	}
     }
 
-    OpTYPE_set(o, type);
+    if (type != OP_SPLIT)
+        /* At this point o is a LISTOP, but OP_SPLIT is a PMOP; let
+         * ck_split() create a real PMOP and leave the op's type as listop
+         * for now. Otherwise op_free() etc will crash.
+         */
+        OpTYPE_set(o, type);
+
     o->op_flags |= flags;
     if (flags & OPf_FOLDED)
 	o->op_folded = 1;
@@ -5121,7 +5111,7 @@ Perl_newBINOP(pTHX_ I32 type, I32 flags, OP *first, OP *last)
     BINOP *binop;
 
     ASSUME((PL_opargs[type] & OA_CLASS_MASK) == OA_BINOP
-	|| type == OP_SASSIGN || type == OP_NULL || type == OP_CUSTOM);
+	|| type == OP_NULL || type == OP_CUSTOM);
 
     NewOp(1101, binop, 1, BINOP);
 
@@ -5436,7 +5426,7 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 			tbl[i] = (short)i;
 		}
 		else {
-		    if (i < 128 && r[j] >= 128)
+		    if (UVCHR_IS_INVARIANT(i) && ! UVCHR_IS_INVARIANT(r[j]))
 			grows = 1;
 		    tbl[i] = r[j++];
 		}
@@ -5483,7 +5473,8 @@ S_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 		--j;
 	    }
 	    if (tbl[t[i]] == -1) {
-		if (t[i] < 128 && r[j] >= 128)
+                if (     UVCHR_IS_INVARIANT(t[i])
+                    && ! UVCHR_IS_INVARIANT(r[j]))
 		    grows = 1;
 		tbl[t[i]] = r[j];
 	    }
@@ -5602,10 +5593,12 @@ S_set_haseval(pTHX)
  * constant), or convert expr into a runtime regcomp op sequence (if it's
  * not)
  *
- * isreg indicates that the pattern is part of a regex construct, eg
+ * Flags currently has 2 bits of meaning:
+ * 1: isreg indicates that the pattern is part of a regex construct, eg
  * $x =~ /pattern/ or split /pattern/, as opposed to $x =~ $pattern or
  * split "pattern", which aren't. In the former case, expr will be a list
  * if the pattern contains more than one term (eg /a$b/).
+ * 2: The pattern is for a split.
  *
  * When the pattern has been compiled within a new anon CV (for
  * qr/(?{...})/ ), then floor indicates the savestack level just before
@@ -5613,7 +5606,7 @@ S_set_haseval(pTHX)
  */
 
 OP *
-Perl_pmruntime(pTHX_ OP *o, OP *expr, OP *repl, bool isreg, I32 floor)
+Perl_pmruntime(pTHX_ OP *o, OP *expr, OP *repl, UV flags, I32 floor)
 {
     PMOP *pm;
     LOGOP *rcop;
@@ -5621,6 +5614,8 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, OP *repl, bool isreg, I32 floor)
     bool is_trans = (o->op_type == OP_TRANS || o->op_type == OP_TRANSR);
     bool is_compiletime;
     bool has_code;
+    bool isreg    = cBOOL(flags & 1);
+    bool is_split = cBOOL(flags & 2);
 
     PERL_ARGS_ASSERT_PMRUNTIME;
 
@@ -5725,8 +5720,11 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, OP *repl, bool isreg, I32 floor)
 	U32 rx_flags = pm->op_pmflags & RXf_PMf_COMPILETIME;
 	regexp_engine const *eng = current_re_engine();
 
-        if (o->op_flags & OPf_SPECIAL)
+        if (is_split) {
+            /* make engine handle split ' ' specially */
+            pm->op_pmflags |= PMf_SPLIT;
             rx_flags |= RXf_SPLIT;
+        }
 
 	if (!has_code || !eng->op_comp) {
 	    /* compile-time simple constant pattern */
@@ -5744,7 +5742,13 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, OP *repl, bool isreg, I32 floor)
 		SSize_t i = 0;
 		assert(PadnamelistMAXNAMED(PL_comppad_name) == 0);
 		while (++i <= AvFILLp(PL_comppad)) {
+#  ifdef USE_PAD_RESET
+                    /* under USE_PAD_RESET, pad swipe replaces a swiped
+                     * folded constant with a fresh padtmp */
+		    assert(!PL_curpad[i] || SvPADTMP(PL_curpad[i]));
+#  else
 		    assert(!PL_curpad[i]);
+#  endif
 		}
 #endif
 		/* But we know that one op is using this CV's slab. */
@@ -5809,7 +5813,8 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, OP *repl, bool isreg, I32 floor)
 	    pm->op_pmflags |= PMf_CODELIST_PRIVATE;
 	}
 
-        if (o->op_flags & OPf_SPECIAL)
+        if (is_split)
+            /* make engine handle split ' ' specially */
             pm->op_pmflags |= PMf_SPLIT;
 
 	/* the OP_REGCMAYBE is a placeholder in the non-threaded case
@@ -6502,9 +6507,10 @@ Perl_newASSIGNOP(pTHX_ I32 flags, OP *left, I32 optype, OP *right)
 
     if (optype) {
 	if (optype == OP_ANDASSIGN || optype == OP_ORASSIGN || optype == OP_DORASSIGN) {
+            right = scalar(right);
 	    return newLOGOP(optype, 0,
 		op_lvalue(scalar(left), optype),
-		newUNOP(OP_SASSIGN, 0, scalar(right)));
+		newBINOP(OP_SASSIGN, OPpASSIGN_BACKWARDS<<8, right, right));
 	}
 	else {
 	    return newBINOP(optype, OPf_STACKED,
@@ -6560,91 +6566,94 @@ Perl_newASSIGNOP(pTHX_ I32 flags, OP *left, I32 optype, OP *right)
 		yyerror(no_list_state);
 	}
 
-	if (right && right->op_type == OP_SPLIT
-	 && !(right->op_flags & OPf_STACKED)) {
-	    OP* tmpop = ((LISTOP*)right)->op_first;
-	    PMOP * const pm = (PMOP*)tmpop;
-	    assert (tmpop && (tmpop->op_type == OP_PUSHRE));
-	    if (
+        /* optimise @a = split(...) into:
+        * @{expr}:              split(..., @{expr}) (where @a is not flattened)
+        * @a, my @a, local @a:  split(...)          (where @a is attached to
+        *                                            the split op itself)
+        */
+
+	if (   right
+            && right->op_type == OP_SPLIT
+            /* don't do twice, e.g. @b = (@a = split) */
+            && !(right->op_private & OPpSPLIT_ASSIGN))
+        {
+            OP *gvop = NULL;
+
+            if (   (  left->op_type == OP_RV2AV
+                   && (gvop=((UNOP*)left)->op_first)->op_type==OP_GV)
+                || left->op_type == OP_PADAV)
+            {
+                /* @pkg or @lex or local @pkg' or 'my @lex' */
+                OP *tmpop;
+                if (gvop) {
 #ifdef USE_ITHREADS
-		    !pm->op_pmreplrootu.op_pmtargetoff
+                    ((PMOP*)right)->op_pmreplrootu.op_pmtargetoff
+                        = cPADOPx(gvop)->op_padix;
+                    cPADOPx(gvop)->op_padix = 0;	/* steal it */
 #else
-		    !pm->op_pmreplrootu.op_pmtargetgv
+                    ((PMOP*)right)->op_pmreplrootu.op_pmtargetgv
+                        = MUTABLE_GV(cSVOPx(gvop)->op_sv);
+                    cSVOPx(gvop)->op_sv = NULL;	/* steal it */
 #endif
-		 && !pm->op_targ
-		) {
-		    if (!(left->op_private & OPpLVAL_INTRO) &&
-		        ( (left->op_type == OP_RV2AV &&
-			  (tmpop=((UNOP*)left)->op_first)->op_type==OP_GV)
-		        || left->op_type == OP_PADAV )
-			) {
-			if (tmpop != (OP *)pm) {
-#ifdef USE_ITHREADS
-			  pm->op_pmreplrootu.op_pmtargetoff
-			    = cPADOPx(tmpop)->op_padix;
-			  cPADOPx(tmpop)->op_padix = 0;	/* steal it */
-#else
-			  pm->op_pmreplrootu.op_pmtargetgv
-			    = MUTABLE_GV(cSVOPx(tmpop)->op_sv);
-			  cSVOPx(tmpop)->op_sv = NULL;	/* steal it */
-#endif
-			  right->op_private |=
-			    left->op_private & OPpOUR_INTRO;
-			}
-			else {
-			    pm->op_targ = left->op_targ;
-			    left->op_targ = 0; /* filch it */
-			}
-		      detach_split:
-			tmpop = cUNOPo->op_first;	/* to list (nulled) */
-			tmpop = ((UNOP*)tmpop)->op_first; /* to pushmark */
-                        /* detach rest of siblings from o subtree,
-                         * and free subtree */
-                        op_sibling_splice(cUNOPo->op_first, tmpop, -1, NULL);
-			op_free(o);			/* blow off assign */
-			right->op_flags &= ~OPf_WANT;
-				/* "I don't know and I don't care." */
-			return right;
-		    }
-		    else if (left->op_type == OP_RV2AV
-			  || left->op_type == OP_PADAV)
-		    {
-			/* Detach the array.  */
-#ifdef DEBUGGING
-			OP * const ary =
-#endif
-			op_sibling_splice(cBINOPo->op_last,
-					  cUNOPx(cBINOPo->op_last)
-						->op_first, 1, NULL);
-			assert(ary == left);
-			/* Attach it to the split.  */
-			op_sibling_splice(right, cLISTOPx(right)->op_last,
-					  0, left);
-			right->op_flags |= OPf_STACKED;
-			/* Detach split and expunge aassign as above.  */
-			goto detach_split;
-		    }
-		    else if (PL_modcount < RETURN_UNLIMITED_NUMBER &&
-			    ((LISTOP*)right)->op_last->op_type == OP_CONST)
-		    {
-			SV ** const svp =
-			    &((SVOP*)((LISTOP*)right)->op_last)->op_sv;
-			SV * const sv = *svp;
-			if (SvIOK(sv) && SvIVX(sv) == 0)
-			{
-			  if (right->op_private & OPpSPLIT_IMPLIM) {
-			    /* our own SV, created in ck_split */
-			    SvREADONLY_off(sv);
-			    sv_setiv(sv, PL_modcount+1);
-			  }
-			  else {
-			    /* SV may belong to someone else */
-			    SvREFCNT_dec(sv);
-			    *svp = newSViv(PL_modcount+1);
-			  }
-			}
-		    }
-	    }
+                    right->op_private |=
+                        left->op_private & OPpOUR_INTRO;
+                }
+                else {
+                    ((PMOP*)right)->op_pmreplrootu.op_pmtargetoff = left->op_targ;
+                    left->op_targ = 0;	/* steal it */
+                    right->op_private |= OPpSPLIT_LEX;
+                }
+                right->op_private |= left->op_private & OPpLVAL_INTRO;
+
+              detach_split:
+                tmpop = cUNOPo->op_first;	/* to list (nulled) */
+                tmpop = ((UNOP*)tmpop)->op_first; /* to pushmark */
+                assert(OpSIBLING(tmpop) == right);
+                assert(!OpHAS_SIBLING(right));
+                /* detach the split subtreee from the o tree,
+                 * then free the residual o tree */
+                op_sibling_splice(cUNOPo->op_first, tmpop, 1, NULL);
+                op_free(o);			/* blow off assign */
+                right->op_private |= OPpSPLIT_ASSIGN;
+                right->op_flags &= ~OPf_WANT;
+                        /* "I don't know and I don't care." */
+                return right;
+            }
+            else if (left->op_type == OP_RV2AV) {
+                /* @{expr} */
+
+                OP *pushop = cUNOPx(cBINOPo->op_last)->op_first;
+                assert(OpSIBLING(pushop) == left);
+                /* Detach the array ...  */
+                op_sibling_splice(cBINOPo->op_last, pushop, 1, NULL);
+                /* ... and attach it to the split.  */
+                op_sibling_splice(right, cLISTOPx(right)->op_last,
+                                  0, left);
+                right->op_flags |= OPf_STACKED;
+                /* Detach split and expunge aassign as above.  */
+                goto detach_split;
+            }
+            else if (PL_modcount < RETURN_UNLIMITED_NUMBER &&
+                    ((LISTOP*)right)->op_last->op_type == OP_CONST)
+            {
+                /* convert split(...,0) to split(..., PL_modcount+1) */
+                SV ** const svp =
+                    &((SVOP*)((LISTOP*)right)->op_last)->op_sv;
+                SV * const sv = *svp;
+                if (SvIOK(sv) && SvIVX(sv) == 0)
+                {
+                  if (right->op_private & OPpSPLIT_IMPLIM) {
+                    /* our own SV, created in ck_split */
+                    SvREADONLY_off(sv);
+                    sv_setiv(sv, PL_modcount+1);
+                  }
+                  else {
+                    /* SV may belong to someone else */
+                    SvREFCNT_dec(sv);
+                    *svp = newSViv(PL_modcount+1);
+                  }
+                }
+            }
 	}
 	return o;
     }
@@ -6978,9 +6987,6 @@ S_new_logop(pTHX_ I32 type, I32 flags, OP** firstp, OP** otherp)
 	    CopLINE_set(PL_curcop, oldline);
 	}
     }
-
-    if (type == OP_ANDASSIGN || type == OP_ORASSIGN || type == OP_DORASSIGN)
-	other->op_private |= OPpASSIGN_BACKWARDS;  /* other is an OP_SASSIGN */
 
     /* optimize AND and OR ops that have NOTs as children */
     if (first->op_type == OP_NOT
@@ -8199,7 +8205,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    CvSTASH_set(cv, PL_curstash);
 	    *spot = cv;
 	}
-	sv_setpvs(MUTABLE_SV(cv), "");  /* prototype is "" */
+        SvPVCLEAR(MUTABLE_SV(cv));  /* prototype is "" */
 	CvXSUBANY(cv).any_ptr = const_sv;
 	CvXSUB(cv) = const_sv_xsub;
 	CvCONST_on(cv);
@@ -8651,7 +8657,7 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 	if (cv) {
 	    assert(!CvROOT(cv) && !CvCONST(cv));
 	    cv_forget_slab(cv);
-	    sv_setpvs(MUTABLE_SV(cv), "");  /* prototype is "" */
+            SvPVCLEAR(MUTABLE_SV(cv));  /* prototype is "" */
 	    CvXSUBANY(cv).any_ptr = const_sv;
 	    CvXSUB(cv) = const_sv_xsub;
 	    CvCONST_on(cv);
@@ -10156,7 +10162,7 @@ Perl_ck_fun(pTHX_ OP *o)
 				if (want_dollar && *name != '$')
 				    sv_setpvs(namesv, "$");
 				else
-				    sv_setpvs(namesv, "");
+                                    SvPVCLEAR(namesv);
 				sv_catpvn(namesv, name, len);
                                 if ( name_utf8 ) SvUTF8_on(namesv);
 			    }
@@ -10491,7 +10497,7 @@ OP *
 Perl_ck_sassign(pTHX_ OP *o)
 {
     dVAR;
-    OP * const kid = cLISTOPo->op_first;
+    OP * const kid = cBINOPo->op_first;
 
     PERL_ARGS_ASSERT_CK_SASSIGN;
 
@@ -11125,52 +11131,76 @@ Perl_ck_split(pTHX_ OP *o)
 {
     dVAR;
     OP *kid;
+    OP *sibs;
 
     PERL_ARGS_ASSERT_CK_SPLIT;
+
+    assert(o->op_type == OP_LIST);
 
     if (o->op_flags & OPf_STACKED)
 	return no_fh_allowed(o);
 
     kid = cLISTOPo->op_first;
-    if (kid->op_type != OP_NULL)
-	Perl_croak(aTHX_ "panic: ck_split, type=%u", (unsigned) kid->op_type);
     /* delete leading NULL node, then add a CONST if no other nodes */
+    assert(kid->op_type == OP_NULL);
     op_sibling_splice(o, NULL, 1,
 	OpHAS_SIBLING(kid) ? NULL : newSVOP(OP_CONST, 0, newSVpvs(" ")));
     op_free(kid);
     kid = cLISTOPo->op_first;
 
     if (kid->op_type != OP_MATCH || kid->op_flags & OPf_STACKED) {
-        /* remove kid, and replace with new optree */
+        /* remove match expression, and replace with new optree with
+         * a match op at its head */
         op_sibling_splice(o, NULL, 1, NULL);
-        /* OPf_SPECIAL is used to trigger split " " behavior */
-        kid = pmruntime( newPMOP(OP_MATCH, OPf_SPECIAL), kid, NULL, 0, 0);
+        /* pmruntime will handle split " " behavior with flag==2 */
+        kid = pmruntime(newPMOP(OP_MATCH, 0), kid, NULL, 2, 0);
         op_sibling_splice(o, NULL, 0, kid);
     }
-    OpTYPE_set(kid, OP_PUSHRE);
-    /* target implies @ary=..., so wipe it */
-    kid->op_targ = 0;
-    scalar(kid);
+
+    assert(kid->op_type == OP_MATCH || kid->op_type == OP_SPLIT);
+
     if (((PMOP *)kid)->op_pmflags & PMf_GLOBAL) {
       Perl_ck_warner(aTHX_ packWARN(WARN_REGEXP),
 		     "Use of /g modifier is meaningless in split");
     }
 
-    if (!OpHAS_SIBLING(kid))
-	op_append_elem(OP_SPLIT, o, newDEFSVOP());
+    /* eliminate the split op, and move the match op (plus any children)
+     * into its place, then convert the match op into a split op. i.e.
+     *
+     *  SPLIT                    MATCH                 SPLIT(ex-MATCH)
+     *    |                        |                     |
+     *  MATCH - A - B - C   =>     R - A - B - C   =>    R - A - B - C
+     *    |                        |                     |
+     *    R                        X - Y                 X - Y
+     *    |
+     *    X - Y
+     *
+     * (R, if it exists, will be a regcomp op)
+     */
 
-    kid = OpSIBLING(kid);
-    assert(kid);
+    op_sibling_splice(o, NULL, 1, NULL); /* detach match op from o */
+    sibs = op_sibling_splice(o, NULL, -1, NULL); /* detach any other sibs */
+    op_sibling_splice(kid, cLISTOPx(kid)->op_last, 0, sibs); /* and reattach */
+    OpTYPE_set(kid, OP_SPLIT);
+    kid->op_flags   = (o->op_flags | (kid->op_flags & OPf_KIDS));
+    assert(!(kid->op_private & ~OPpRUNTIME));
+    kid->op_private = (o->op_private | (kid->op_private & OPpRUNTIME));
+    op_free(o);
+    o = kid;
+    kid = sibs; /* kid is now the string arg of the split */
+
+    if (!kid) {
+	kid = newDEFSVOP();
+	op_append_elem(OP_SPLIT, o, kid);
+    }
     scalar(kid);
 
-    if (!OpHAS_SIBLING(kid))
-    {
-	op_append_elem(OP_SPLIT, o, newSVOP(OP_CONST, 0, newSViv(0)));
+    kid = OpSIBLING(kid);
+    if (!kid) {
+        kid = newSVOP(OP_CONST, 0, newSViv(0));
+	op_append_elem(OP_SPLIT, o, kid);
 	o->op_private |= OPpSPLIT_IMPLIM;
     }
-    assert(OpHAS_SIBLING(kid));
-
-    kid = OpSIBLING(kid);
     scalar(kid);
 
     if (OpHAS_SIBLING(kid))
@@ -12488,6 +12518,7 @@ S_aassign_scan(pTHX_ OP* o, bool rhs, bool top, int *scalars_p)
     case OP_PADAV:
     case OP_PADHV:
         (*scalars_p) += 2;
+        /* if !top, could be e.g. @a[0,1] */
         if (top && (o->op_flags & OPf_REF))
             return (o->op_private & OPpLVAL_INTRO)
                 ? AAS_MY_AGG : AAS_LEX_AGG;
@@ -12508,6 +12539,7 @@ S_aassign_scan(pTHX_ OP* o, bool rhs, bool top, int *scalars_p)
         if (cUNOPx(o)->op_first->op_type != OP_GV)
             return AAS_DANGEROUS; /* @{expr}, %{expr} */
         /* @pkg, %pkg */
+        /* if !top, could be e.g. @a[0,1] */
         if (top && (o->op_flags & OPf_REF))
             return AAS_PKG_AGG;
         return AAS_DANGEROUS;
@@ -12521,15 +12553,32 @@ S_aassign_scan(pTHX_ OP* o, bool rhs, bool top, int *scalars_p)
         return AAS_PKG_SCALAR; /* $pkg */
 
     case OP_SPLIT:
-        if (cLISTOPo->op_first->op_type == OP_PUSHRE) {
-            /* "@foo = split... " optimises away the aassign and stores its
-             * destination array in the OP_PUSHRE that precedes it.
-             * A flattened array is always dangerous.
+        if (o->op_private & OPpSPLIT_ASSIGN) {
+            /* the assign in @a = split() has been optimised away
+             * and the @a attached directly to the split op
+             * Treat the array as appearing on the RHS, i.e.
+             *    ... = (@a = split)
+             * is treated like
+             *    ... = @a;
              */
+
+            if (o->op_flags & OPf_STACKED)
+                /* @{expr} = split() - the array expression is tacked
+                 * on as an extra child to split - process kid */
+                return S_aassign_scan(aTHX_ cLISTOPo->op_last, rhs,
+                                        top, scalars_p);
+
+            /* ... else array is directly attached to split op */
             (*scalars_p) += 2;
-            return AAS_DANGEROUS;
+            if (PL_op->op_private & OPpSPLIT_LEX)
+                return (o->op_private & OPpLVAL_INTRO)
+                    ? AAS_MY_AGG : AAS_LEX_AGG;
+            else
+                return AAS_PKG_AGG;
         }
-        break;
+        (*scalars_p)++;
+        /* other args of split can't be returned */
+        return AAS_SAFE_SCALAR;
 
     case OP_UNDEF:
         /* undef counts as a scalar on the RHS:
@@ -12985,6 +13034,13 @@ S_maybe_multideref(pTHX_ OP *start, OP *orig_o, UV orig_action, U8 hints)
              * abandon optimisation attempt */
             if (  (o->op_type == OP_AELEM || o->op_type == OP_HELEM)
                && PL_check[o->op_type] != Perl_ck_null)
+                return;
+            /* similarly for customised exists and delete */
+            if (  (o->op_type == OP_EXISTS)
+               && PL_check[o->op_type] != Perl_ck_exists)
+                return;
+            if (  (o->op_type == OP_DELETE)
+               && PL_check[o->op_type] != Perl_ck_delete)
                 return;
 
             if (   o->op_type != OP_AELEM
@@ -13901,7 +13957,7 @@ Perl_rpeep(pTHX_ OP *o)
                 if (   intro
                     && (8*sizeof(base) >
                         8*sizeof(UV)-OPpPADRANGE_COUNTSHIFT-SAVE_TIGHT_SHIFT
-                        ? base
+                        ? (Size_t)base
                         : (UV_MAX >> (OPpPADRANGE_COUNTSHIFT+SAVE_TIGHT_SHIFT))
                         ) >
                         (UV_MAX >> (OPpPADRANGE_COUNTSHIFT+SAVE_TIGHT_SHIFT))

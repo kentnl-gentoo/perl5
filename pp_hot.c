@@ -130,7 +130,7 @@ PP(pp_sassign)
     */
     SV *left = POPs; SV *right = TOPs;
 
-    if (PL_op->op_private & OPpASSIGN_BACKWARDS) {
+    if (PL_op->op_private & OPpASSIGN_BACKWARDS) { /* {or,and,dor}assign */
 	SV * const temp = left;
 	left = right; right = temp;
     }
@@ -289,7 +289,7 @@ PP(pp_concat)
                 && ckWARN(WARN_UNINITIALIZED)
                 )
                 report_uninit(left);
-	    sv_setpvs(left, "");
+            SvPVCLEAR(left);
 	}
         else {
             SvPV_force_nomg_nolen(left);
@@ -382,7 +382,8 @@ PP(pp_padrange)
                     | (count << SAVE_TIGHT_SHIFT)
                     | SAVEt_CLEARPADRANGE);
         STATIC_ASSERT_STMT(OPpPADRANGE_COUNTMASK + 1 == (1 << OPpPADRANGE_COUNTSHIFT));
-        assert((payload >> (OPpPADRANGE_COUNTSHIFT+SAVE_TIGHT_SHIFT)) == base);
+        assert((payload >> (OPpPADRANGE_COUNTSHIFT+SAVE_TIGHT_SHIFT))
+                == (Size_t)base);
         {
             dSS_ADD;
             SS_ADD_UV(payload);
@@ -856,25 +857,6 @@ PP(pp_join)
     do_join(TARG, *MARK, MARK, SP);
     SP = MARK;
     SETs(TARG);
-    RETURN;
-}
-
-PP(pp_pushre)
-{
-    dSP;
-#ifdef DEBUGGING
-    /*
-     * We ass_u_me that LvTARGOFF() comes first, and that two STRLENs
-     * will be enough to hold an OP*.
-     */
-    SV* const sv = sv_newmortal();
-    sv_upgrade(sv, SVt_PVLV);
-    LvTYPE(sv) = '/';
-    Copy(&PL_op, &LvTARGOFF(sv), 1, OP*);
-    XPUSHs(sv);
-#else
-    XPUSHs(MUTABLE_SV(PL_op));
-#endif
     RETURN;
 }
 
@@ -1781,8 +1763,10 @@ PP(pp_match)
 
     /* empty pattern special-cased to use last successful pattern if
        possible, except for qr// */
-    if (!ReANY(rx)->mother_re && !RX_PRELEN(rx)
-     && PL_curpm) {
+    if (!ReANY(rx)->mother_re && !RX_PRELEN(rx) && PL_curpm) {
+        if (PL_curpm == PL_reg_curpm)
+            Perl_croak(aTHX_ "Use of the empty pattern inside of "
+                  "a regex code block is forbidden");
 	pm = PL_curpm;
 	rx = PM_GETRE(pm);
     }
@@ -2978,8 +2962,11 @@ PP(pp_subst)
 				   position, once with zero-length,
 				   second time with non-zero. */
 
-    if (!RX_PRELEN(rx) && PL_curpm
-     && !ReANY(rx)->mother_re) {
+    /* handle the empty pattern */
+    if (!RX_PRELEN(rx) && PL_curpm && !ReANY(rx)->mother_re) {
+        if (PL_curpm == PL_reg_curpm)
+            Perl_croak(aTHX_ "Use of the empty pattern inside of "
+                  "a regex code block is forbidden");
 	pm = PL_curpm;
 	rx = PM_GETRE(pm);
     }

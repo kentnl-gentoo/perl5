@@ -120,7 +120,7 @@ use File::Glob qw(:case);
 %Modules = (
 
     'Archive::Tar' => {
-        'DISTRIBUTION' => 'BINGOS/Archive-Tar-2.10.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Archive-Tar-2.14.tar.gz',
         'FILES'        => q[cpan/Archive-Tar],
         'BUGS'         => 'bug-archive-tar@rt.cpan.org',
         'EXCLUDED'     => [
@@ -591,7 +591,7 @@ use File::Glob qw(:case);
     },
 
     'HTTP::Tiny' => {
-        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.064.tar.gz',
+        'DISTRIBUTION' => 'DAGOLDEN/HTTP-Tiny-0.070.tar.gz',
         'FILES'        => q[cpan/HTTP-Tiny],
         'EXCLUDED'     => [
             't/00-report-prereqs.t',
@@ -845,7 +845,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160820.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160920.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -876,8 +876,14 @@ use File::Glob qw(:case);
     },
 
     'Net::Ping' => {
-        'DISTRIBUTION' => 'SMPETERS/Net-Ping-2.41.tar.gz',
+        'DISTRIBUTION' => 'RURBAN/Net-Ping-2.51.tar.gz',
         'FILES'        => q[dist/Net-Ping],
+        'EXCLUDED'     => [
+            qw(t/020_external.t),
+            qw(t/600_pod.t),
+            qw(t/601_pod-coverage.t),
+        ],
+
     },
 
     'NEXT' => {
@@ -892,8 +898,11 @@ use File::Glob qw(:case);
     },
 
     'parent' => {
-        'DISTRIBUTION' => 'CORION/parent-0.234.tar.gz',
+        'DISTRIBUTION' => 'CORION/parent-0.236.tar.gz',
         'FILES'        => q[cpan/parent],
+        'EXCLUDED'     => [
+            qr{^xt}
+        ],
     },
 
     'PathTools' => {
@@ -978,7 +987,7 @@ use File::Glob qw(:case);
     },
 
     'podlators' => {
-        'DISTRIBUTION' => 'RRA/podlators-4.07.tar.gz',
+        'DISTRIBUTION' => 'RRA/podlators-4.08.tar.gz',
         'FILES'        => q[cpan/podlators pod/perlpodstyle.pod],
 
         'MAP' => {
@@ -994,18 +1003,8 @@ use File::Glob qw(:case);
     },
 
     'Scalar-List-Utils' => {
-        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.45.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.46.tar.gz',
         'FILES'        => q[cpan/Scalar-List-Utils],
-        # Waiting to be merged upstream
-        # https://github.com/Scalar-List-Utils/Scalar-List-Utils/pull/42
-        'CUSTOMIZED'   => [
-            qw( ListUtil.xs
-                lib/List/Util.pm
-                lib/List/Util/XS.pm
-                lib/Scalar/Util.pm
-                lib/Sub/Util.pm
-                )
-        ],
     },
 
     'Search::Dict' => {
@@ -1153,7 +1152,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302056.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302059.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1266,7 +1265,7 @@ use File::Glob qw(:case);
     },
 
     'Time::HiRes' => {
-        'DISTRIBUTION' => 'JHI/Time-HiRes-1.9739.tar.gz',
+        'DISTRIBUTION' => 'JHI/Time-HiRes-1.9740.tar.gz',
         'FILES'        => q[dist/Time-HiRes],
     },
 

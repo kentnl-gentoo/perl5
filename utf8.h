@@ -72,15 +72,14 @@ the string is invariant.
 #define utf8_to_uvchr_buf(s, e, lenp)                                          \
                      utf8n_to_uvchr(s, (U8*)(e) - (U8*)(s), lenp,              \
                                     ckWARN_d(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY)
+#define utf8n_to_uvchr(s, len, lenp, flags)                                    \
+                                utf8n_to_uvchr_error(s, len, lenp, flags, 0)
 
 #define to_uni_fold(c, p, lenp) _to_uni_fold_flags(c, p, lenp, FOLD_FLAGS_FULL)
 #define to_utf8_fold(c, p, lenp) _to_utf8_fold_flags(c, p, lenp, FOLD_FLAGS_FULL)
 #define to_utf8_lower(a,b,c) _to_utf8_lower_flags(a,b,c,0)
 #define to_utf8_upper(a,b,c) _to_utf8_upper_flags(a,b,c,0)
 #define to_utf8_title(a,b,c) _to_utf8_title_flags(a,b,c,0)
-
-/* Source backward compatibility. */
-#define is_utf8_string_loc(s, len, ep)	is_utf8_string_loclen(s, len, ep, 0)
 
 #define foldEQ_utf8(s1, pe1, l1, u1, s2, pe2, l2, u2) \
 		    foldEQ_utf8_flags(s1, pe1, l1, u1, s2, pe2, l2, u2, 0)
@@ -529,13 +528,6 @@ encoded as UTF-8.  C<cp> is a native (ASCII or EBCDIC) code point if less than
                                    | ((NATIVE_UTF8_TO_I8((U8)new))             \
                                        & UTF_CONTINUATION_MASK))
 
-/* If a value is anded with this, and the result is non-zero, then using the
- * original value in UTF8_ACCUMULATE will overflow, shifting bits off the left
- * */
-#define UTF_ACCUMULATION_OVERFLOW_MASK					\
-    (((UV) UTF_CONTINUATION_MASK) << ((sizeof(UV) * CHARBITS)           \
-           - UTF_ACCUMULATION_SHIFT))
-
 /* This works in the face of malformed UTF-8. */
 #define UTF8_IS_NEXT_CHAR_DOWNGRADEABLE(s, e) (UTF8_IS_DOWNGRADEABLE_START(*s) \
                                                && ( (e) - (s) > 1)             \
@@ -721,40 +713,52 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
 
 
 #define UTF8_ALLOW_EMPTY		0x0001	/* Allow a zero length string */
+#define UTF8_GOT_EMPTY                  UTF8_ALLOW_EMPTY
 
 /* Allow first byte to be a continuation byte */
 #define UTF8_ALLOW_CONTINUATION		0x0002
+#define UTF8_GOT_CONTINUATION		UTF8_ALLOW_CONTINUATION
 
-/* Allow second... bytes to be non-continuation bytes */
+/* Unexpected continuation byte */
 #define UTF8_ALLOW_NON_CONTINUATION	0x0004
+#define UTF8_GOT_NON_CONTINUATION	UTF8_ALLOW_NON_CONTINUATION
 
 /* expecting more bytes than were available in the string */
 #define UTF8_ALLOW_SHORT		0x0008
+#define UTF8_GOT_SHORT		        UTF8_ALLOW_SHORT
 
 /* Overlong sequence; i.e., the code point can be specified in fewer bytes. */
 #define UTF8_ALLOW_LONG                 0x0010
+#define UTF8_GOT_LONG                   UTF8_ALLOW_LONG
 
-#define UTF8_DISALLOW_SURROGATE		0x0020	/* Unicode surrogates */
-#define UTF8_WARN_SURROGATE		0x0040
+/* Currently no way to allow overflow */
+#define UTF8_GOT_OVERFLOW               0x0020
 
-#define UTF8_DISALLOW_NONCHAR           0x0080	/* Unicode non-character */
-#define UTF8_WARN_NONCHAR               0x0100	/*  code points */
+#define UTF8_DISALLOW_SURROGATE		0x0040	/* Unicode surrogates */
+#define UTF8_GOT_SURROGATE		UTF8_DISALLOW_SURROGATE
+#define UTF8_WARN_SURROGATE		0x0080
 
-#define UTF8_DISALLOW_SUPER		0x0200	/* Super-set of Unicode: code */
-#define UTF8_WARN_SUPER		        0x0400	/* points above the legal max */
+#define UTF8_DISALLOW_NONCHAR           0x0100	/* Unicode non-character */
+#define UTF8_GOT_NONCHAR                UTF8_DISALLOW_NONCHAR
+#define UTF8_WARN_NONCHAR               0x0200	/*  code points */
+
+#define UTF8_DISALLOW_SUPER		0x0400	/* Super-set of Unicode: code */
+#define UTF8_GOT_SUPER		        UTF8_DISALLOW_SUPER
+#define UTF8_WARN_SUPER		        0x0800	/* points above the legal max */
 
 /* Code points which never were part of the original UTF-8 standard, which only
  * went up to 2 ** 31 - 1.  Note that these all overflow a signed 32-bit word,
  * The first byte of these code points is FE or FF on ASCII platforms.  If the
  * first byte is FF, it will overflow a 32-bit word. */
-#define UTF8_DISALLOW_ABOVE_31_BIT      0x0800
-#define UTF8_WARN_ABOVE_31_BIT          0x1000
+#define UTF8_DISALLOW_ABOVE_31_BIT      0x1000
+#define UTF8_GOT_ABOVE_31_BIT           UTF8_DISALLOW_ABOVE_31_BIT
+#define UTF8_WARN_ABOVE_31_BIT          0x2000
 
 /* For back compat, these old names are misleading for UTF_EBCDIC */
 #define UTF8_DISALLOW_FE_FF             UTF8_DISALLOW_ABOVE_31_BIT
 #define UTF8_WARN_FE_FF                 UTF8_WARN_ABOVE_31_BIT
 
-#define UTF8_CHECK_ONLY			0x2000
+#define UTF8_CHECK_ONLY			0x4000
 
 /* For backwards source compatibility.  They do nothing, as the default now
  * includes what they used to mean.  The first one's meaning was to allow the
@@ -775,9 +779,7 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
 #define UTF8_ALLOW_ANY                                                          \
 	    (~( UTF8_DISALLOW_ILLEGAL_INTERCHANGE|UTF8_DISALLOW_ABOVE_31_BIT    \
                |UTF8_WARN_ILLEGAL_INTERCHANGE|UTF8_WARN_ABOVE_31_BIT))
-#define UTF8_ALLOW_ANYUV                                                        \
-         (UTF8_ALLOW_EMPTY                                                      \
-	  & ~(UTF8_DISALLOW_ILLEGAL_INTERCHANGE|UTF8_WARN_ILLEGAL_INTERCHANGE))
+#define UTF8_ALLOW_ANYUV  UTF8_ALLOW_EMPTY
 #define UTF8_ALLOW_DEFAULT		(ckWARN(WARN_UTF8) ? 0 : \
 					 UTF8_ALLOW_ANYUV)
 
@@ -964,14 +966,22 @@ Evaluates to non-zero if the first few bytes of the string starting at C<s> and
 looking no further than S<C<e - 1>> are well-formed UTF-8, as extended by Perl,
 that represents some code point; otherwise it evaluates to 0.  If non-zero, the
 value gives how many bytes starting at C<s> comprise the code point's
-representation.
+representation.  Any bytes remaining before C<e>, but beyond the ones needed to
+form the first code point in C<s>, are not examined.
 
 The code point can be any that will fit in a UV on this machine, using Perl's
 extension to official UTF-8 to represent those higher than the Unicode maximum
 of 0x10FFFF.  That means that this macro is used to efficiently decide if the
-next few bytes in C<s> is legal UTF-8 for a single character.  Use
-L</is_utf8_string>(), L</is_utf8_string_loclen>(), and
-L</is_utf8_string_loc>() to check entire strings.
+next few bytes in C<s> is legal UTF-8 for a single character.
+
+Use C<L</isSTRICT_UTF8_CHAR>> to restrict the acceptable code points to those
+defined by Unicode to be fully interchangeable across applications;
+C<L</isC9_STRICT_UTF8_CHAR>> to use the L<Unicode Corrigendum
+#9|http://www.unicode.org/versions/corrigendum9.html> definition of allowable
+code points; and C<L</isUTF8_CHAR_flags>> for a more customized definition.
+
+Use C<L</is_utf8_string>>, C<L</is_utf8_string_loc>>, and
+C<L</is_utf8_string_loclen>> to check entire strings.
 
 Note that it is deprecated to use code points higher than what will fit in an
 IV.  This macro does not raise any warnings for such code points, treating them
@@ -1004,15 +1014,24 @@ Evaluates to non-zero if the first few bytes of the string starting at C<s> and
 looking no further than S<C<e - 1>> are well-formed UTF-8 that represents some
 Unicode code point completely acceptable for open interchange between all
 applications; otherwise it evaluates to 0.  If non-zero, the value gives how
-many bytes starting at C<s> comprise the code point's representation.
+many bytes starting at C<s> comprise the code point's representation.  Any
+bytes remaining before C<e>, but beyond the ones needed to form the first code
+point in C<s>, are not examined.
 
 The largest acceptable code point is the Unicode maximum 0x10FFFF, and must not
 be a surrogate nor a non-character code point.  Thus this excludes any code
 point from Perl's extended UTF-8.
 
 This is used to efficiently decide if the next few bytes in C<s> is
-legal Unicode-acceptable UTF-8 for a single character.  Use
-C<L</isC9_STRICT_UTF8_CHAR>> to also accept non-character code points.
+legal Unicode-acceptable UTF-8 for a single character.
+
+Use C<L</isC9_STRICT_UTF8_CHAR>> to use the L<Unicode Corrigendum
+#9|http://www.unicode.org/versions/corrigendum9.html> definition of allowable
+code points; C<L</isUTF8_CHAR>> to check for Perl's extended UTF-8;
+and C<L</isUTF8_CHAR_flags>> for a more customized definition.
+
+Use C<L</is_strict_utf8_string>>, C<L</is_strict_utf8_string_loc>>, and
+C<L</is_strict_utf8_string_loclen>> to check entire strings.
 
 =cut
 */
@@ -1034,7 +1053,8 @@ Evaluates to non-zero if the first few bytes of the string starting at C<s> and
 looking no further than S<C<e - 1>> are well-formed UTF-8 that represents some
 Unicode non-surrogate code point; otherwise it evaluates to 0.  If non-zero,
 the value gives how many bytes starting at C<s> comprise the code point's
-representation.
+representation.  Any bytes remaining before C<e>, but beyond the ones needed to
+form the first code point in C<s>, are not examined.
 
 The largest acceptable code point is the Unicode maximum 0x10FFFF.  This
 differs from C<L</isSTRICT_UTF8_CHAR>> only in that it accepts non-character
@@ -1043,6 +1063,12 @@ L<Unicode Corrigendum #9|http://www.unicode.org/versions/corrigendum9.html>.
 which said that non-character code points are merely discouraged rather than
 completely forbidden in open interchange.  See
 L<perlunicode/Noncharacter code points>.
+
+Use C<L</isUTF8_CHAR>> to check for Perl's extended UTF-8; and
+C<L</isUTF8_CHAR_flags>> for a more customized definition.
+
+Use C<L</is_c9strict_utf8_string>>, C<L</is_c9strict_utf8_string_loc>>, and
+C<L</is_c9strict_utf8_string_loclen>> to check entire strings.
 
 =cut
 */
@@ -1064,7 +1090,9 @@ Evaluates to non-zero if the first few bytes of the string starting at C<s> and
 looking no further than S<C<e - 1>> are well-formed UTF-8, as extended by Perl,
 that represents some code point, subject to the restrictions given by C<flags>;
 otherwise it evaluates to 0.  If non-zero, the value gives how many bytes
-starting at C<s> comprise the code point's representation.
+starting at C<s> comprise the code point's representation.  Any bytes remaining
+before C<e>, but beyond the ones needed to form the first code point in C<s>,
+are not examined.
 
 If C<flags> is 0, this gives the same results as C<L</isUTF8_CHAR>>;
 if C<flags> is C<UTF8_DISALLOW_ILLEGAL_INTERCHANGE>, this gives the same results
@@ -1077,6 +1105,9 @@ understood by C<L</utf8n_to_uvchr>>, with the same meanings.
 The three alternative macros are for the most commonly needed validations; they
 are likely to run somewhat faster than this more general one, as they can be
 inlined into your code.
+
+Use L</is_utf8_string_flags>, L</is_utf8_string_loc_flags>, and
+L</is_utf8_string_loclen_flags> to check entire strings.
 
 =cut
 */

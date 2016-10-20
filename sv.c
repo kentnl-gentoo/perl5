@@ -2219,7 +2219,24 @@ S_sv_2iuv_common(pTHX_ SV *const sv)
     }
     else if (SvPOKp(sv)) {
 	UV value;
-	const int numtype = grok_number(SvPVX_const(sv), SvCUR(sv), &value);
+	int numtype;
+        const char *s = SvPVX_const(sv);
+        const STRLEN cur = SvCUR(sv);
+
+        /* short-cut for a single digit string like "1" */
+
+        if (cur == 1) {
+            char c = *s;
+            if (isDIGIT(c)) {
+                if (SvTYPE(sv) < SVt_PVIV)
+                    sv_upgrade(sv, SVt_PVIV);
+                (void)SvIOK_on(sv);
+                SvIV_set(sv, (IV)(c - '0'));
+                return FALSE;
+            }
+        }
+
+	numtype = grok_number(s, cur, &value);
 	/* We want to avoid a possible problem when we cache an IV/ a UV which
 	   may be later translated to an NV, and the resulting NV is not
 	   the same as the direct translation of the initial string
@@ -3749,11 +3766,11 @@ Perl_sv_utf8_encode(pTHX_ SV *const sv)
 /*
 =for apidoc sv_utf8_decode
 
-If the PV of the SV is an octet sequence in UTF-8
+If the PV of the SV is an octet sequence in Perl's extended UTF-8
 and contains a multiple-byte character, the C<SvUTF8> flag is turned on
 so that it looks like a character.  If the PV contains only single-byte
 characters, the C<SvUTF8> flag stays off.
-Scans PV for validity and returns false if the PV is invalid UTF-8.
+Scans PV for validity and returns FALSE if the PV is invalid UTF-8.
 
 =cut
 */
@@ -4856,6 +4873,35 @@ Perl_sv_setsv_cow(pTHX_ SV *dstr, SV *sstr)
     return dstr;
 }
 #endif
+
+/*
+=for apidoc sv_setpv_bufsize
+
+Sets the SV to be a string of cur bytes length, with at least
+len bytes available. Ensures that there is a null byte at SvEND.
+Returns a char * pointer to the SvPV buffer.
+
+=cut
+*/
+
+char *
+Perl_sv_setpv_bufsize(pTHX_ SV *const sv, const STRLEN cur, const STRLEN len)
+{
+    char *pv;
+
+    PERL_ARGS_ASSERT_SV_SETPV_BUFSIZE;
+
+    SV_CHECK_THINKFIRST_COW_DROP(sv);
+    SvUPGRADE(sv, SVt_PV);
+    pv = SvGROW(sv, len + 1);
+    SvCUR_set(sv, cur);
+    *(SvEND(sv))= '\0';
+    (void)SvPOK_only_UTF8(sv);                /* validate pointer */
+
+    SvTAINT(sv);
+    if (SvTYPE(sv) == SVt_PVCV) CvAUTOLOAD_off(sv);
+    return pv;
+}
 
 /*
 =for apidoc sv_setpvn
@@ -10075,7 +10121,7 @@ Perl_sv_ref(pTHX_ SV *dst, const SV *const sv, const int ob)
     if (ob && SvOBJECT(sv)) {
 	HvNAME_get(SvSTASH(sv))
                     ? sv_sethek(dst, HvNAME_HEK(SvSTASH(sv)))
-                    : sv_setpvn(dst, "__ANON__", 8);
+                    : sv_setpvs(dst, "__ANON__");
     }
     else {
         const char * reftype = sv_reftype(sv, 0);
@@ -10805,7 +10851,7 @@ Perl_sv_vsetpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
 {
     PERL_ARGS_ASSERT_SV_VSETPVFN;
 
-    sv_setpvs(sv, "");
+    SvPVCLEAR(sv);
     sv_vcatpvfn_flags(sv, pat, patlen, args, svargs, svmax, maybe_tainted, 0);
 }
 
@@ -11748,7 +11794,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 		 * vectorize happen normally
 		 */
 		if (sv_isobject(vecsv) && sv_derived_from(vecsv, "version")) {
-		    if ( hv_exists(MUTABLE_HV(SvRV(vecsv)), "alpha", 5 ) ) {
+		    if ( hv_existss(MUTABLE_HV(SvRV(vecsv)), "alpha") ) {
 			Perl_ck_warner_d(aTHX_ packWARN(WARN_PRINTF),
 			"vector argument not supported with alpha versions");
 			goto vdblank;
@@ -15028,9 +15074,9 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     /* magical thingies */
 
-    sv_setpvs(PERL_DEBUG_PAD(0), "");	/* For regex debugging. */
-    sv_setpvs(PERL_DEBUG_PAD(1), "");	/* ext/re needs these */
-    sv_setpvs(PERL_DEBUG_PAD(2), "");	/* even without DEBUGGING. */
+    SvPVCLEAR(PERL_DEBUG_PAD(0));        /* For regex debugging. */
+    SvPVCLEAR(PERL_DEBUG_PAD(1));        /* ext/re needs these */
+    SvPVCLEAR(PERL_DEBUG_PAD(2));        /* even without DEBUGGING. */
 
    
     /* Clone the regex array */
@@ -15806,6 +15852,11 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
 
     switch (obase->op_type) {
 
+    case OP_UNDEF:
+        /* undef should care if its args are undef - any warnings
+         * will be from tied/magic vars */
+        break;
+
     case OP_RV2AV:
     case OP_RV2HV:
     case OP_PADAV:
@@ -16352,7 +16403,6 @@ S_find_uninit_var(pTHX_ const OP *const obase, const SV *const uninit_sv,
     case OP_ALARM:
     case OP_SEMGET:
     case OP_GETLOGIN:
-    case OP_UNDEF:
     case OP_SUBSTR:
     case OP_AEACH:
     case OP_EACH:
