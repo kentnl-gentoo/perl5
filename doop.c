@@ -1216,12 +1216,20 @@ Perl_do_vop(pTHX_ I32 optype, SV *sv, SV *left, SV *right)
 		*dc++ = *lc++ | *rc++;
 	  mop_up:
 	    len = lensave;
-	    if (rightlen > len)
-		sv_catpvn_nomg(sv, rsave + len, rightlen - len);
-	    else if (leftlen > (STRLEN)len)
-		sv_catpvn_nomg(sv, lsave + len, leftlen - len);
-	    else
-		*SvEND(sv) = '\0';
+	    if (rightlen > len) {
+                if (dc == rc)
+                    SvCUR(sv) = rightlen;
+                else
+                    sv_catpvn_nomg(sv, rsave + len, rightlen - len);
+            }
+            else if (leftlen > len) {
+                if (dc == lc)
+                    SvCUR(sv) = leftlen;
+                else
+                    sv_catpvn_nomg(sv, lsave + len, leftlen - len);
+            }
+            *SvEND(sv) = '\0';
+
 	    break;
 	}
     }

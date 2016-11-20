@@ -11,16 +11,6 @@
 #ifndef H_PERL
 #define H_PERL 1
 
-/* this is used for functions which take a depth trailing
- * argument under debugging */
-#ifdef DEBUGGING
-#define _pDEPTH ,U32 depth
-#define _aDEPTH ,depth
-#else
-#define _pDEPTH
-#define _aDEPTH
-#endif
-
 #ifdef PERL_FOR_X2P
 /*
  * This file is being used for x2p stuff.
@@ -36,6 +26,16 @@
 #   include "uconfig.h"
 #else
 #   include "config.h"
+#endif
+
+/* this is used for functions which take a depth trailing
+ * argument under debugging */
+#ifdef DEBUGGING
+#define _pDEPTH ,U32 depth
+#define _aDEPTH ,depth
+#else
+#define _pDEPTH
+#define _aDEPTH
 #endif
 
 /* NOTE 1: that with gcc -std=c89 the __STDC_VERSION__ is *not* defined
@@ -1280,14 +1280,13 @@ EXTERN_C char *crypt(const char *, const char *);
 #define CLEAR_ERRSV() STMT_START {					\
     SV ** const svp = &GvSV(PL_errgv);					\
     if (!*svp) {							\
-	goto clresv_newemptypv;						\
+        *svp = newSVpvs("");                                            \
     } else if (SvREADONLY(*svp)) {					\
 	SvREFCNT_dec_NN(*svp);						\
-	clresv_newemptypv:						\
 	*svp = newSVpvs("");						\
     } else {								\
 	SV *const errsv = *svp;						\
-        SvPVCLEAR(errsv);                                                \
+        SvPVCLEAR(errsv);                                               \
 	SvPOK_only(errsv);						\
 	if (SvMAGICAL(errsv)) {						\
 	    mg_free(errsv);						\
@@ -4193,34 +4192,34 @@ Gid_t getegid (void);
 #define DEBUG_DB_RECURSE_FLAG	0x40000000
 #define DEBUG_TOP_FLAG		0x80000000 /* -D was given --> PL_debug |= FLAG */
 
-#  define DEBUG_p_TEST_ (PL_debug & DEBUG_p_FLAG)
-#  define DEBUG_s_TEST_ (PL_debug & DEBUG_s_FLAG)
-#  define DEBUG_l_TEST_ (PL_debug & DEBUG_l_FLAG)
-#  define DEBUG_t_TEST_ (PL_debug & DEBUG_t_FLAG)
-#  define DEBUG_o_TEST_ (PL_debug & DEBUG_o_FLAG)
-#  define DEBUG_c_TEST_ (PL_debug & DEBUG_c_FLAG)
-#  define DEBUG_P_TEST_ (PL_debug & DEBUG_P_FLAG)
-#  define DEBUG_m_TEST_ (PL_debug & DEBUG_m_FLAG)
-#  define DEBUG_f_TEST_ (PL_debug & DEBUG_f_FLAG)
-#  define DEBUG_r_TEST_ (PL_debug & DEBUG_r_FLAG)
-#  define DEBUG_x_TEST_ (PL_debug & DEBUG_x_FLAG)
-#  define DEBUG_u_TEST_ (PL_debug & DEBUG_u_FLAG)
-#  define DEBUG_U_TEST_ (PL_debug & DEBUG_U_FLAG)
-#  define DEBUG_H_TEST_ (PL_debug & DEBUG_H_FLAG)
-#  define DEBUG_X_TEST_ (PL_debug & DEBUG_X_FLAG)
-#  define DEBUG_D_TEST_ (PL_debug & DEBUG_D_FLAG)
-#  define DEBUG_S_TEST_ (PL_debug & DEBUG_S_FLAG)
-#  define DEBUG_T_TEST_ (PL_debug & DEBUG_T_FLAG)
-#  define DEBUG_R_TEST_ (PL_debug & DEBUG_R_FLAG)
-#  define DEBUG_J_TEST_ (PL_debug & DEBUG_J_FLAG)
-#  define DEBUG_v_TEST_ (PL_debug & DEBUG_v_FLAG)
-#  define DEBUG_C_TEST_ (PL_debug & DEBUG_C_FLAG)
-#  define DEBUG_A_TEST_ (PL_debug & DEBUG_A_FLAG)
-#  define DEBUG_q_TEST_ (PL_debug & DEBUG_q_FLAG)
-#  define DEBUG_M_TEST_ (PL_debug & DEBUG_M_FLAG)
-#  define DEBUG_B_TEST_ (PL_debug & DEBUG_B_FLAG)
-#  define DEBUG_L_TEST_ (PL_debug & DEBUG_L_FLAG)
-#  define DEBUG_i_TEST_ (PL_debug & DEBUG_i_FLAG)
+#  define DEBUG_p_TEST_ UNLIKELY(PL_debug & DEBUG_p_FLAG)
+#  define DEBUG_s_TEST_ UNLIKELY(PL_debug & DEBUG_s_FLAG)
+#  define DEBUG_l_TEST_ UNLIKELY(PL_debug & DEBUG_l_FLAG)
+#  define DEBUG_t_TEST_ UNLIKELY(PL_debug & DEBUG_t_FLAG)
+#  define DEBUG_o_TEST_ UNLIKELY(PL_debug & DEBUG_o_FLAG)
+#  define DEBUG_c_TEST_ UNLIKELY(PL_debug & DEBUG_c_FLAG)
+#  define DEBUG_P_TEST_ UNLIKELY(PL_debug & DEBUG_P_FLAG)
+#  define DEBUG_m_TEST_ UNLIKELY(PL_debug & DEBUG_m_FLAG)
+#  define DEBUG_f_TEST_ UNLIKELY(PL_debug & DEBUG_f_FLAG)
+#  define DEBUG_r_TEST_ UNLIKELY(PL_debug & DEBUG_r_FLAG)
+#  define DEBUG_x_TEST_ UNLIKELY(PL_debug & DEBUG_x_FLAG)
+#  define DEBUG_u_TEST_ UNLIKELY(PL_debug & DEBUG_u_FLAG)
+#  define DEBUG_U_TEST_ UNLIKELY(PL_debug & DEBUG_U_FLAG)
+#  define DEBUG_H_TEST_ UNLIKELY(PL_debug & DEBUG_H_FLAG)
+#  define DEBUG_X_TEST_ UNLIKELY(PL_debug & DEBUG_X_FLAG)
+#  define DEBUG_D_TEST_ UNLIKELY(PL_debug & DEBUG_D_FLAG)
+#  define DEBUG_S_TEST_ UNLIKELY(PL_debug & DEBUG_S_FLAG)
+#  define DEBUG_T_TEST_ UNLIKELY(PL_debug & DEBUG_T_FLAG)
+#  define DEBUG_R_TEST_ UNLIKELY(PL_debug & DEBUG_R_FLAG)
+#  define DEBUG_J_TEST_ UNLIKELY(PL_debug & DEBUG_J_FLAG)
+#  define DEBUG_v_TEST_ UNLIKELY(PL_debug & DEBUG_v_FLAG)
+#  define DEBUG_C_TEST_ UNLIKELY(PL_debug & DEBUG_C_FLAG)
+#  define DEBUG_A_TEST_ UNLIKELY(PL_debug & DEBUG_A_FLAG)
+#  define DEBUG_q_TEST_ UNLIKELY(PL_debug & DEBUG_q_FLAG)
+#  define DEBUG_M_TEST_ UNLIKELY(PL_debug & DEBUG_M_FLAG)
+#  define DEBUG_B_TEST_ UNLIKELY(PL_debug & DEBUG_B_FLAG)
+#  define DEBUG_L_TEST_ UNLIKELY(PL_debug & DEBUG_L_FLAG)
+#  define DEBUG_i_TEST_ UNLIKELY(PL_debug & DEBUG_i_FLAG)
 #  define DEBUG_Xv_TEST_ (DEBUG_X_TEST_ && DEBUG_v_TEST_)
 #  define DEBUG_Uv_TEST_ (DEBUG_U_TEST_ && DEBUG_v_TEST_)
 #  define DEBUG_Pv_TEST_ (DEBUG_P_TEST_ && DEBUG_v_TEST_)
@@ -4275,21 +4274,30 @@ Gid_t getegid (void);
      /* Temporarily turn off memory debugging in case the a
       * does memory allocation, either directly or indirectly. */
 #  define DEBUG_m(a)  \
-    STMT_START {							\
-        if (PERL_GET_INTERP) { dTHX; if (DEBUG_m_TEST) {PL_debug&=~DEBUG_m_FLAG; a; PL_debug|=DEBUG_m_FLAG;} } \
+    STMT_START {					                \
+        if (PERL_GET_INTERP) {                                          \
+                                dTHX;                                   \
+                                if (DEBUG_m_TEST) {                     \
+                                    PL_debug &= ~DEBUG_m_FLAG;          \
+                                    a;                                  \
+                                    PL_debug |= DEBUG_m_FLAG;           \
+                                }                                       \
+                              }                                         \
     } STMT_END
 
-#  define DEBUG__(t, a) \
-	STMT_START { \
-		if (t) STMT_START {a;} STMT_END; \
-	} STMT_END
+#  define DEBUG__(t, a)                                                 \
+        STMT_START {                                                    \
+                if (t) STMT_START {a;} STMT_END;                        \
+        } STMT_END
 
 #  define DEBUG_f(a) DEBUG__(DEBUG_f_TEST, a)
+
 #ifndef PERL_EXT_RE_BUILD
 #  define DEBUG_r(a) DEBUG__(DEBUG_r_TEST, a)
 #else
 #  define DEBUG_r(a) STMT_START {a;} STMT_END
 #endif /* PERL_EXT_RE_BUILD */
+
 #  define DEBUG_x(a) DEBUG__(DEBUG_x_TEST, a)
 #  define DEBUG_u(a) DEBUG__(DEBUG_u_TEST, a)
 #  define DEBUG_U(a) DEBUG__(DEBUG_U_TEST, a)
@@ -5963,8 +5971,8 @@ typedef struct am_table_short AMTS;
 	STMT_START {                                                        \
             if (! PL_in_utf8_CTYPE_locale && ckWARN(WARN_LOCALE)) {         \
                 Perl_warner(aTHX_ packWARN(WARN_LOCALE),                    \
-                                        "Wide character (U+%"UVXf") in %s", \
-                                        (UV) cp, OP_DESC(PL_op));           \
+                                       "Wide character (U+%" UVXf ") in %s",\
+                                       (UV) cp, OP_DESC(PL_op));            \
             }                                                               \
         }  STMT_END
 
@@ -5973,7 +5981,7 @@ typedef struct am_table_short AMTS;
             if (! PL_in_utf8_CTYPE_locale && ckWARN(WARN_LOCALE)) {         \
                 UV cp = utf8_to_uvchr_buf((U8 *) s, (U8 *) send, NULL);     \
                 Perl_warner(aTHX_ packWARN(WARN_LOCALE),                    \
-                    "Wide character (U+%"UVXf") in %s",                     \
+                    "Wide character (U+%" UVXf ") in %s",                   \
                     (cp == 0)                                               \
                      ? UNICODE_REPLACEMENT                                  \
                      : (UV) cp,                                             \

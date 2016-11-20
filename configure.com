@@ -1331,34 +1331,12 @@ $!
 $ GOSUB List_Parse
 $ IF .NOT.silent THEN echo ""
 $ echo "Default ""cc"" is ''line' ''archsufx' ''F$GETSYI("VERSION")'" 
-$ IF F$LOCATE("VAX",line).NE.F$LENGTH(line) 
+$ IF (F$LOCATE("VSI",line).NE.F$LENGTH(line)) -
+  .or.(F$LOCATE("HP",F$EDIT(line,"UPCASE")).NE.F$LENGTH(line)) -
+  .or.(F$LOCATE("Compaq",line).NE.F$LENGTH(line))
 $ THEN 
-$   IF .NOT.silent
-$   THEN 
-$     echo "Will try cc/decc..."
-$   ENDIF
-$   SET NOON
-$   DEFINE/USER_MODE SYS$ERROR NL:
-$   DEFINE/USER_MODE SYS$OUTPUT NL:
-$   cc/decc/NoObj/list=ccvms.lis ccvms.c
-$   tmp = $status
-$   SET ON
-$   IF (silent) THEN GOSUB Shut_up
-$   IF tmp.NE.%X10B90001
-$   THEN
-$     echo "Apparently you don't have that one."
-$   ELSE
-$     GOSUB List_parse
-$     echo "You also have: ''line' ''archsufx' ''F$GETSYI("VERSION")'"
-$     vms_cc_available = vms_cc_available + "cc/decc "
-$   ENDIF
-$ ELSE
-$   IF (F$LOCATE("DEC",line).NE.F$LENGTH(line)).or.(F$LOCATE("Compaq",line).NE.F$LENGTH(line)) -
-    .or.(F$LOCATE("HP",F$EDIT(line,"UPCASE")).NE.F$LENGTH(line))
-$   THEN 
-$     vms_cc_dflt = "/decc"
-$     vms_cc_available = vms_cc_available + "cc/decc "
-$   ENDIF
+$   vms_cc_dflt = "/decc"
+$   vms_cc_available = vms_cc_available + "cc/decc "
 $ ENDIF
 $!
 $Gcc_initial_check:
@@ -1491,7 +1469,8 @@ $ THEN
 $   ans = F$EDIT(ans,"TRIM, COMPRESS, LOWERCASE")
 $   Mcc = ans
 $   IF (F$LOCATE("dec",ans).NE.F$LENGTH(ans)).or.(F$LOCATE("compaq",ans).NE.F$LENGTH(ans)) -
-    .or.(F$LOCATE("hp",ans).NE.F$LENGTH(ans))
+    .or.(F$LOCATE("hp",ans).NE.F$LENGTH(ans)) -
+    .or.(F$LOCATE("vsi",ans).NE.F$LENGTH(ans))
 $   THEN
 $     Mcc = "cc/decc"
 $! CPQ ?
@@ -1508,7 +1487,8 @@ $   ELSE ! Not_cxx
 $     IF Mcc.NES.dflt
 $     THEN
 $       IF F$LOCATE("dec",dflt) .NE. F$LENGTH(dflt) .or. -
-           F$LOCATE("compaq",dflt) .NE. F$LENGTH(dflt)
+           F$LOCATE("compaq",dflt) .NE. F$LENGTH(dflt) -
+          .or.(F$LOCATE("vsi",dflt).NE.F$LENGTH(dflt))
 $       THEN 
 $         C_COMPILER_Replace = "CC=cc=''Mcc'"
 $       ELSE
@@ -2077,6 +2057,8 @@ $     ENDIF
 $   ELSE
 $     usethreads = "undef"
 $   ENDIF
+$ ELSE
+$   usethreads = "undef"
 $ ENDIF
 $ IF F$TYPE(usethreadupcalls) .EQS. "" THEN usethreadupcalls = "undef"
 $ IF F$TYPE(usekernelthreads) .EQS. "" THEN usekernelthreads = "undef"
@@ -3328,8 +3310,31 @@ $ d_ldexpl = "define"
 $ d_modfl = "define"
 $ d_modflproto = "define"
 $!
+$ d_double_has_inf = "undef"
+$ d_double_has_nan = "undef"
+$ d_double_has_negative_zero = "undef"
+$ d_double_has_subnormals = "undef"
+$ d_double_style_cray = "undef"
+$ d_double_style_ibm = "undef"
+$ d_double_style_ieee = "undef"
+$ d_double_style_vax = "undef"
+$ d_long_double_style_ieee = "undef"
+$ d_long_double_style_ieee_extended = "undef"
+$ d_long_double_style_ieee_std = "undef"
+$ d_long_double_style_vax = "undef"
 $ IF useieee .OR. useieee .EQS. "define"
 $ THEN
+$   d_double_has_inf = "define"
+$   d_double_has_nan = "define"
+$   d_double_has_negative_zero = "define"
+$   d_double_has_subnormals = "define"
+$   d_double_style_ieee = "define"
+$   IF uselongdouble .OR. uselongdouble .EQS. "define"
+$   THEN
+$       d_long_double_style_ieee = "define"
+$! TODO: will the Intel port have ieee_extended for long doubles?
+$       d_long_double_style_ieee_std = "define"
+$   ENDIF
 $   d_acosh = "define"
 $   d_asinh = "define"
 $   d_atanh = "define"
@@ -3368,6 +3373,12 @@ $   d_tgamma = "define"
 $   d_trunc = "define"
 $   d_truncl = "define"
 $ ELSE
+$   d_double_style_vax = "define"
+$   IF uselongdouble .OR. uselongdouble .EQS. "define"
+$   THEN
+$	d_long_double_style_vax = "undef" ! VAX format H unlikely
+$   ENDIF
+$   d_acosh = "undef"
 $   d_acosh = "undef"
 $   d_asinh = "undef"
 $   d_atanh = "undef"
@@ -5987,6 +5998,14 @@ $ ENDIF
 $ WC "d_dlsymun='undef'"
 $ WC "d_backtrace='undef'"
 $ WC "d_dosuid='undef'"
+$ WC "d_double_has_inf='" + d_double_has_inf + "'"
+$ WC "d_double_has_nan='" + d_double_has_nan + "'"
+$ WC "d_double_has_negative_zero='" + d_double_has_negative_zero + "'"
+$ WC "d_double_has_subnormals='" + d_double_has_subnormals + "'"
+$ WC "d_double_style_cray='undef'"
+$ WC "d_double_style_ibm='undef'"
+$ WC "d_double_style_ieee='" + d_double_style_ieee + "'"
+$ WC "d_double_style_vax='" + d_double_style_vax + "'"
 $ WC "d_drand48proto='" + d_drand48proto + "'"
 $ WC "d_dup2='define'"
 $ WC "d_eaccess='undef'"
@@ -6138,6 +6157,11 @@ $ WC "d_lockf='undef'"
 $ WC "d_log1p='" + d_log1p + "'"
 $ WC "d_log2='" + d_log2 + "'"
 $ WC "d_logb='" + d_logb + "'"
+$ WC "d_long_double_style_ieee='" + d_long_double_style_ieee + "'"
+$ WC "d_long_double_style_ieee_doubledouble='undef'"
+$ WC "d_long_double_style_ieee_extended='" + d_long_double_style_ieee_extended + "'"
+$ WC "d_long_double_style_ieee_std='" + d_long_double_style_ieee_std + "'"
+$ WC "d_long_double_style_vax='" + d_long_double_style_vax + "'"
 $ WC "d_longdbl='" + d_longdbl + "'"
 $ WC "d_longlong='" + d_longlong + "'"
 $ WC "d_lrint='" + d_lrint + "'"
@@ -6428,6 +6452,7 @@ $ WC "db_version_minor='" + "'"
 $ WC "db_version_patch='" + "'"
 $ WC "dbgprefix='" + dbgprefix + "'"
 $ WC "devtype='" + devtype + "'"
+$ WC "default_inc_excludes_dot='undef'"
 $ WC "direntrytype='struct dirent'"
 $ WC "dlext='" + dlext + "'"
 $ WC "dlobj='" + dlobj + "'"

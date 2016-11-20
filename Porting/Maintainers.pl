@@ -120,7 +120,7 @@ use File::Glob qw(:case);
 %Modules = (
 
     'Archive::Tar' => {
-        'DISTRIBUTION' => 'BINGOS/Archive-Tar-2.14.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Archive-Tar-2.18.tar.gz',
         'FILES'        => q[cpan/Archive-Tar],
         'BUGS'         => 'bug-archive-tar@rt.cpan.org',
         'EXCLUDED'     => [
@@ -700,8 +700,10 @@ use File::Glob qw(:case);
         'DISTRIBUTION' => 'MAKAMAKA/JSON-PP-2.27400.tar.gz',
         'FILES'        => q[cpan/JSON-PP],
         'CUSTOMIZED'   => [
-            # CVE-2016-1238
-            qw( bin/json_pp lib/JSON/PP.pm ),
+            'bin/json_pp',    # CVE-2016-1238
+            'lib/JSON/PP.pm', # CVE-2016-1238, CPAN RT 118469
+            't/011_pc_expo.t',      # CPAN RT 118469
+            't/018_json_checker.t', # CPAN RT 118469
         ],
     },
 
@@ -767,7 +769,7 @@ use File::Glob qw(:case);
     },
 
     'Math::BigInt' => {
-        'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-1.999726.tar.gz',
+        'DISTRIBUTION' => 'PJACKLAM/Math-BigInt-1.999727.tar.gz',
         'FILES'        => q[cpan/Math-BigInt],
         'EXCLUDED'     => [
             qr{^inc/},
@@ -821,6 +823,11 @@ use File::Glob qw(:case);
     'Math::Complex' => {
         'DISTRIBUTION' => 'ZEFRAM/Math-Complex-1.59.tar.gz',
         'FILES'        => q[cpan/Math-Complex],
+        'CUSTOMIZED'   => [
+            'lib/Math/Complex.pm', # CPAN RT 118467
+            't/Complex.t',         # CPAN RT 118467
+            't/Trig.t',            # CPAN RT 118467
+        ],
         'EXCLUDED'     => [
             qw( t/pod.t
                 t/pod-coverage.t
@@ -845,7 +852,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20160920.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20161020.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -876,12 +883,16 @@ use File::Glob qw(:case);
     },
 
     'Net::Ping' => {
-        'DISTRIBUTION' => 'RURBAN/Net-Ping-2.51.tar.gz',
+        'DISTRIBUTION' => 'RURBAN/Net-Ping-2.55.tar.gz',
         'FILES'        => q[dist/Net-Ping],
         'EXCLUDED'     => [
+            qw(README.md.PL),
             qw(t/020_external.t),
             qw(t/600_pod.t),
             qw(t/601_pod-coverage.t),
+        ],
+        'CUSTOMIZED'   => [
+            qw( t/000_load.t t/001_new.t t/010_pingecho.t t/500_ping_icmp.t),
         ],
 
     },
@@ -987,8 +998,11 @@ use File::Glob qw(:case);
     },
 
     'podlators' => {
-        'DISTRIBUTION' => 'RRA/podlators-4.08.tar.gz',
+        'DISTRIBUTION' => 'RRA/podlators-4.09.tar.gz',
         'FILES'        => q[cpan/podlators pod/perlpodstyle.pod],
+        'EXCLUDED'     => [
+            qr{^docs/metadata/},
+        ],
 
         'MAP' => {
             ''                 => 'cpan/podlators/',
@@ -1005,6 +1019,14 @@ use File::Glob qw(:case);
     'Scalar-List-Utils' => {
         'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.46.tar.gz',
         'FILES'        => q[cpan/Scalar-List-Utils],
+        'CUSTOMIZED'   => [
+            'lib/List/Util.pm',    # CPAN RT 118470
+            'lib/List/Util/XS.pm', # CPAN RT 118470
+            'lib/Scalar/Util.pm',  # CPAN RT 118470
+            'lib/Sub/Util.pm',     # CPAN RT 118470
+            't/lln.t',             # CPAN RT 118470
+            't/uniq.t',            # CPAN RT 118470
+        ],
     },
 
     'Search::Dict' => {
@@ -1054,9 +1076,10 @@ use File::Glob qw(:case);
     },
 
     'Term::ANSIColor' => {
-        'DISTRIBUTION' => 'RRA/Term-ANSIColor-4.05.tar.gz',
+        'DISTRIBUTION' => 'RRA/Term-ANSIColor-4.06.tar.gz',
         'FILES'        => q[cpan/Term-ANSIColor],
         'EXCLUDED'     => [
+            qr{^docs/},
             qr{^examples/},
             qr{^t/data/},
             qr{^t/docs/},
@@ -1152,7 +1175,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302059.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302062.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1289,7 +1312,7 @@ use File::Glob qw(:case);
     },
 
     'Unicode::Collate' => {
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.14.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.18.tar.gz',
         'FILES'        => q[cpan/Unicode-Collate],
         'EXCLUDED'     => [
             qr{N$},
@@ -1304,7 +1327,7 @@ use File::Glob qw(:case);
 
     'Unicode::Normalize' => {
         'DISTRIBUTION' => 'KHW/Unicode-Normalize-1.25.tar.gz',
-        'FILES'        => q[cpan/Unicode-Normalize],
+        'FILES'        => q[dist/Unicode-Normalize],
         'EXCLUDED'     => [
             qw( MANIFEST.N
                 Normalize.pmN

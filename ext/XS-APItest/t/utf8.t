@@ -72,7 +72,7 @@ sub start_byte_to_cont($) {
     my $byte = shift;
     my $len = test_UTF8_SKIP($byte);
     if ($len < 2) {
-        die "";
+        die "start_byte_to_cont() is expecting a UTF-8 variant";
     }
 
     $byte = ord native_to_I8($byte);
@@ -80,8 +80,8 @@ sub start_byte_to_cont($) {
     # Copied from utf8.h.  This gets rid of the leading 1 bits.
     $byte &= ((($len) >= 7) ? 0x00 : (0x1F >> (($len)-2)));
 
-    $byte |= (isASCII) ? 0x80 : ord I8_to_native("\xA0");
-    return chr $byte;
+    $byte |= (isASCII) ? 0x80 : 0xA0;
+    return I8_to_native(chr $byte);
 }
 
 my $is64bit = length sprintf("%x", ~0) > 8;
@@ -380,6 +380,9 @@ my $first_continuation = (isASCII) ? 0x80 : 0xA0;
 my $final_continuation = 0xBF;
 my $start = (isASCII) ? 0xC2 : 0xC5;
 
+my $max_bytes = (isASCII) ? 13 : 14; # Max number of bytes in a UTF-8 sequence
+                                     # representing a single code point
+
 my $continuation = $first_continuation - 1;
 
 while ($cp < 255) {
@@ -429,7 +432,7 @@ for my $u (sort { utf8::unicode_to_native($a) <=> utf8::unicode_to_native($b) }
                 $u < 0x200000       ? 4 :
                 $u < 0x4000000      ? 5 :
                 $u < 0x80000000     ? 6 : (($is64bit)
-                                        ? ($u < 0x1000000000 ? 7 : 13)
+                                        ? ($u < 0x1000000000 ? 7 : $max_bytes)
                                         : 7)
               )
             : ($u < 0xA0        ? 1 :
@@ -438,7 +441,7 @@ for my $u (sort { utf8::unicode_to_native($a) <=> utf8::unicode_to_native($b) }
                $u < 0x40000     ? 4 :
                $u < 0x400000    ? 5 :
                $u < 0x4000000   ? 6 :
-               $u < 0x40000000  ? 7 : 14 );
+               $u < 0x40000000  ? 7 : $max_bytes );
     }
 
     # If this test fails, subsequent ones are meaningless.
@@ -1051,7 +1054,7 @@ my @malformations = (
         (isASCII) ? "\xc1\xbf" : I8_to_native("\xc4\xbf"),
         2,
         $UTF8_ALLOW_LONG, $UTF8_GOT_LONG,
-        (isASCII) ? 0x7F : utf8::unicode_to_native(0xBF),
+        (isASCII) ? 0x7F : utf8::unicode_to_native(0x9F),
         2,
         qr/overlong/
     ],
@@ -1163,11 +1166,11 @@ if (isASCII && ! $is64bit) {    # 32-bit ASCII platform
         ],
         [ "overflow malformation, can tell on first byte",
             "\xff\x80\x80\x80\x80\x80\x81\x80\x80\x80\x80\x80\x80",
-            13,
+            $max_bytes,
             0,  # There is no way to allow this malformation
             $UTF8_GOT_OVERFLOW,
             $REPLACEMENT,
-            13,
+            $max_bytes,
             qr/overflows/
         ];
 }
@@ -1182,20 +1185,20 @@ else {
             (isASCII)
              ?              "\xff\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80\x80"
              : I8_to_native("\xff\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0"),
-            (isASCII) ? 13 : 14,
+            $max_bytes,
             $UTF8_ALLOW_LONG, $UTF8_GOT_LONG,
             0,   # NUL
-            (isASCII) ? 13 : 14,
+            $max_bytes,
             qr/overlong/,
         ],
         [ "overlong malformation, highest max-byte",
             (isASCII)    # 2**36-1 on ASCII; 2**30-1 on EBCDIC
              ?              "\xff\x80\x80\x80\x80\x80\x80\xbf\xbf\xbf\xbf\xbf\xbf"
              : I8_to_native("\xff\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xbf\xbf\xbf\xbf\xbf\xbf"),
-            (isASCII) ? 13 : 14,
+            $max_bytes,
             $UTF8_ALLOW_LONG, $UTF8_GOT_LONG,
             (isASCII) ? 0xFFFFFFFFF : 0x3FFFFFFF,
-            (isASCII) ? 13 : 14,
+            $max_bytes,
             qr/overlong/,
         ];
 
@@ -1203,11 +1206,11 @@ else {
         push @malformations,
         [ "overflow malformation",
             I8_to_native("\xff\xa0\xa0\xa0\xa0\xa0\xa0\xa4\xa0\xa0\xa0\xa0\xa0\xa0"),
-            14,
+            $max_bytes,
             0,  # There is no way to allow this malformation
             $UTF8_GOT_OVERFLOW,
             $REPLACEMENT,
-            14,
+            $max_bytes,
             qr/overflows/
         ];
     }
@@ -1217,11 +1220,11 @@ else {
                (isASCII)
                 ?              "\xff\x80\x90\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0"
                 : I8_to_native("\xff\xb0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0"),
-                (isASCII) ? 13 : 14,
+                $max_bytes,
                 0,  # There is no way to allow this malformation
                 $UTF8_GOT_OVERFLOW,
                 $REPLACEMENT,
-                (isASCII) ? 13 : 14,
+                $max_bytes,
                 qr/overflows/
             ];
     }
@@ -1417,7 +1420,7 @@ sub nonportable_regex ($) {
 
     my $code_point = shift;
 
-    my $string = sprintf '(Code point 0x%x is not Unicode, and'
+    my $string = sprintf '(Code point 0x%X is not Unicode, and'
                        . '|Any UTF-8 sequence that starts with'
                        . ' "(\\\x[[:xdigit:]]{2})+" is for a'
                        . ' non-Unicode code point, and is) not portable',
@@ -1725,15 +1728,24 @@ my @tests = (
         # 32-bit machines
         $UTF8_WARN_ABOVE_31_BIT, $UTF8_DISALLOW_ABOVE_31_BIT,
         $UTF8_GOT_ABOVE_31_BIT,
-        'utf8', 0x80000000, (isASCII) ? 7 :14,
+        'utf8', 0x80000000, (isASCII) ? 7 : $max_bytes,
         nonportable_regex(0x80000000)
+    ],
+    [ "highest 32 bit code point",
+        (isASCII)
+         ? "\xfe\x83\xbf\xbf\xbf\xbf\xbf"
+         : I8_to_native("\xff\xa0\xa0\xa0\xa0\xa0\xa0\xa3\xbf\xbf\xbf\xbf\xbf\xbf"),
+        $UTF8_WARN_ABOVE_31_BIT, $UTF8_DISALLOW_ABOVE_31_BIT,
+        $UTF8_GOT_ABOVE_31_BIT,
+        'utf8', 0xFFFFFFFF, (isASCII) ? 7 : $max_bytes,
+        nonportable_regex(0xffffffff)
     ],
     [ "requires at least 32 bits, and use SUPER-type flags, instead of ABOVE_31_BIT",
         (isASCII)
          ? "\xfe\x82\x80\x80\x80\x80\x80"
          : I8_to_native("\xff\xa0\xa0\xa0\xa0\xa0\xa0\xa2\xa0\xa0\xa0\xa0\xa0\xa0"),
         $UTF8_WARN_SUPER, $UTF8_DISALLOW_SUPER, $UTF8_GOT_SUPER,
-        'utf8', 0x80000000, (isASCII) ? 7 :14,
+        'utf8', 0x80000000, (isASCII) ? 7 : $max_bytes,
         nonportable_regex(0x80000000)
     ],
     [ "overflow with warnings/disallow for more than 31 bits",
@@ -1756,12 +1768,25 @@ my @tests = (
         $UTF8_DISALLOW_ABOVE_31_BIT,
         $UTF8_GOT_ABOVE_31_BIT,
         'utf8', 0,
-        (! isASCII) ? 14 : ($is64bit) ? 13 : 7,
+        (! isASCII) ? $max_bytes : ($is64bit) ? $max_bytes : 7,   # XXX
         qr/overflows/
     ],
 );
 
-if ($is64bit) {
+if (! $is64bit) {
+    if (isASCII) {
+        no warnings qw{portable overflow};
+        push @tests,
+            [ "Lowest 33 bit code point: overflow",
+                "\xFE\x84\x80\x80\x80\x80\x80",
+                $UTF8_WARN_ABOVE_31_BIT, $UTF8_DISALLOW_ABOVE_31_BIT,
+                $UTF8_GOT_ABOVE_31_BIT,
+                'utf8', 0x100000000, 7,
+                qr/and( is)? not portable/
+            ];
+    }
+}
+else {
     no warnings qw{portable overflow};
     push @tests,
         [ "More than 32 bits",
@@ -1770,7 +1795,7 @@ if ($is64bit) {
             : I8_to_native("\xff\xa0\xa0\xa0\xa0\xa0\xa2\xa0\xa0\xa0\xa0\xa0\xa0\xa0"),
             $UTF8_WARN_ABOVE_31_BIT, $UTF8_DISALLOW_ABOVE_31_BIT,
             $UTF8_GOT_ABOVE_31_BIT,
-            'utf8', 0x1000000000, (isASCII) ? 13 : 14,
+            'utf8', 0x1000000000, $max_bytes,
             qr/and( is)? not portable/
         ];
     if (! isASCII) {
@@ -1779,35 +1804,35 @@ if ($is64bit) {
                 I8_to_native("\xff\xa0\xa0\xa0\xa0\xa0\xa1\xa0\xa0\xa0\xa0\xa0\xa0\xa0"),
                 $UTF8_WARN_ABOVE_31_BIT,$UTF8_DISALLOW_ABOVE_31_BIT,
                 $UTF8_GOT_ABOVE_31_BIT,
-                'utf8', 0x800000000, 14,
+                'utf8', 0x800000000, $max_bytes,
                 nonportable_regex(0x80000000)
             ],
             [ "requires at least 32 bits",
                 I8_to_native("\xff\xa0\xa0\xa0\xa0\xa1\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0"),
                 $UTF8_WARN_ABOVE_31_BIT,$UTF8_DISALLOW_ABOVE_31_BIT,
                 $UTF8_GOT_ABOVE_31_BIT,
-                'utf8', 0x10000000000, 14,
+                'utf8', 0x10000000000, $max_bytes,
                 nonportable_regex(0x10000000000)
             ],
             [ "requires at least 32 bits",
                 I8_to_native("\xff\xa0\xa0\xa0\xa1\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0"),
                 $UTF8_WARN_ABOVE_31_BIT,$UTF8_DISALLOW_ABOVE_31_BIT,
                 $UTF8_GOT_ABOVE_31_BIT,
-                'utf8', 0x200000000000, 14,
+                'utf8', 0x200000000000, $max_bytes,
                 nonportable_regex(0x20000000000)
             ],
             [ "requires at least 32 bits",
                 I8_to_native("\xff\xa0\xa0\xa1\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0"),
                 $UTF8_WARN_ABOVE_31_BIT,$UTF8_DISALLOW_ABOVE_31_BIT,
                 $UTF8_GOT_ABOVE_31_BIT,
-                'utf8', 0x4000000000000, 14,
+                'utf8', 0x4000000000000, $max_bytes,
                 nonportable_regex(0x4000000000000)
             ],
             [ "requires at least 32 bits",
                 I8_to_native("\xff\xa0\xa1\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0"),
                 $UTF8_WARN_ABOVE_31_BIT,$UTF8_DISALLOW_ABOVE_31_BIT,
                 $UTF8_GOT_ABOVE_31_BIT,
-                'utf8', 0x80000000000000, 14,
+                'utf8', 0x80000000000000, $max_bytes,
                 nonportable_regex(0x80000000000000)
             ],
             [ "requires at least 32 bits",
@@ -1815,7 +1840,7 @@ if ($is64bit) {
                    #IBM-1047  \xFE\x41\x41\x41\x41\x41\x41\x43\x41\x41\x41\x41\x41\x41
                 $UTF8_WARN_ABOVE_31_BIT,$UTF8_DISALLOW_ABOVE_31_BIT,
                 $UTF8_GOT_ABOVE_31_BIT,
-                'utf8', 0x1000000000000000, 14,
+                'utf8', 0x1000000000000000, $max_bytes,
                 nonportable_regex(0x1000000000000000)
             ];
     }
@@ -1982,10 +2007,10 @@ foreach my $test (@tests) {
 
                         foreach my $overlong ("", "overlong") {
 
-                            # Our hard-coded overlong starts with \xFE, so
+                            # If we're already at the longest possible, we
+                            # can't create an overlong (which would be longer)
                             # can't handle anything larger.
-                            next if $overlong
-                            && ord native_to_I8(substr($bytes, 0, 1)) >= 0xFE;
+                            next if $overlong && $expected_len >= $max_bytes;
 
                             my @malformations;
                             my @expected_errors;
@@ -2026,12 +2051,13 @@ foreach my $test (@tests) {
                                     # overlong sequence.  This should evaluate
                                     # to the exact same code point as the
                                     # original.
-                                    $this_bytes = "\xfe"
-                                               . ("\x80"
-                                                   x ( 6 - length($this_bytes)))
-                                               . $this_bytes;
+                                    $this_bytes
+                                    = I8_to_native("\xff")
+                                    . (I8_to_native(chr $first_continuation)
+                                       x ( $max_bytes - 1 - length($this_bytes)))
+                                    . $this_bytes;
                                     $this_length = length($this_bytes);
-                                    $this_expected_len = 7;
+                                    $this_expected_len = $max_bytes;
                                     push @expected_errors, $UTF8_GOT_LONG;
                                 }
                                 if ($malformations_name =~ /short/) {
@@ -2069,10 +2095,10 @@ foreach my $test (@tests) {
                                           || $malformations_name;
                             my $this_name = "utf8n_to_uvchr_error() $testname: "
                                                         . (($disallow_flag)
-                                                            ? 'disallowed'
-                                                            : $disallowed
-                                                            ? $disallowed
-                                                            : 'allowed');
+                                                           ? 'disallowed'
+                                                           : $disallowed
+                                                             ? $disallowed
+                                                             : 'allowed');
                             $this_name .= ", $eval_warn";
                             $this_name .= ", " . (($warn_flag)
                                                 ? 'with warning flag'
@@ -2163,7 +2189,7 @@ foreach my $test (@tests) {
                                         }
                                     }
                                     fail("Expected '$malformation' warning"
-                                       . "but didn't get it");
+                                       . " but didn't get it");
 
                                 }
                             }
@@ -2372,6 +2398,52 @@ foreach my $test (@tests) {
                 }
             }
         }
+    }
+}
+
+SKIP:
+{
+    isASCII
+      or skip "These tests probably break on non-ASCII", 1;
+    my $simple = join "", "A" .. "J";
+    my $utf_ch = "\x{7fffffff}";
+    utf8::encode($utf_ch);
+    my $utf_ch_len = length $utf_ch;
+    note "utf_ch_len $utf_ch_len";
+    my $utf = $utf_ch x 10;
+    my $bad_start = substr($utf, 1);
+    # $bad_end ends with a start byte and a single continuation
+    my $bad_end = substr($utf, 0, length($utf)-$utf_ch_len+2);
+
+    # WARNING: all offsets are *byte* offsets
+    my @hop_tests =
+      (
+       # string      s                off        expected         name
+       [ $simple,    0,               5,         5,               "simple in range, forward" ],
+       [ $simple,    10,              -5,        5,               "simple in range, backward" ],
+       [ $simple,    5,               10,        10,              "simple out of range, forward" ],
+       [ $simple,    5,               -10,       0,               "simple out of range, backward" ],
+       [ $utf,       $utf_ch_len * 5, 5,         length($utf),    "utf in range, forward" ],
+       [ $utf,       $utf_ch_len * 5, -5,        0,               "utf in range, backward" ],
+       [ $utf,       $utf_ch_len * 5, 4,         $utf_ch_len * 9, "utf in range b, forward" ],
+       [ $utf,       $utf_ch_len * 5, -4,        $utf_ch_len,     "utf in range b, backward" ],
+       [ $utf,       $utf_ch_len * 5, 6,         length($utf),    "utf out of range, forward" ],
+       [ $utf,       $utf_ch_len * 5, -6,        0,               "utf out of range, backward"  ],
+       [ $bad_start, 0,               1,         1,               "bad start, forward 1 from 0" ],
+       [ $bad_start, 0,               $utf_ch_len-1, $utf_ch_len-1, "bad start, forward ch_len-1 from 0" ],
+       [ $bad_start, 0,               $utf_ch_len, $utf_ch_len*2-1, "bad start, forward ch_len from 0" ],
+       [ $bad_start, $utf_ch_len-1,   -1,        0,                "bad start, back 1 from first start byte" ],
+       [ $bad_start, $utf_ch_len-2,   -1,        0,                "bad start, back 1 from before first start byte" ],
+       [ $bad_start, 0,               -1,        0,                "bad start, back 1 from 0" ],
+       [ $bad_start, length $bad_start, -10,     0,                "bad start, back 10 from end" ],
+       [ $bad_end,   0,               10,        length $bad_end, "bad end, forward 10 from 0" ],
+       [ $bad_end,   length($bad_end)-1, 10,     length $bad_end, "bad end, forward 1 from end-1" ],
+       );
+
+    for my $test (@hop_tests) {
+        my ($str, $s_off, $off, $want, $name) = @$test;
+        my $result = test_utf8_hop_safe($str, $s_off, $off);
+        is($result, $want, "utf8_hop_safe: $name");
     }
 }
 

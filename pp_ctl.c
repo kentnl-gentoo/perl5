@@ -159,18 +159,25 @@ PP(pp_regcomp)
         RX_TAINT_on(new_re);
     }
 
+    /* handle the empty pattern */
+    if (!RX_PRELEN(PM_GETRE(pm)) && PL_curpm) {
+        if (PL_curpm == PL_reg_curpm) {
+            if (PL_curpm_under) {
+                if (PL_curpm_under == PL_reg_curpm) {
+                    Perl_croak(aTHX_ "Infinite recursion via empty pattern");
+                } else {
+                    pm = PL_curpm_under;
+                }
+            }
+        } else {
+            pm = PL_curpm;
+        }
+    }
+
 #if !defined(USE_ITHREADS)
     /* can't change the optree at runtime either */
     /* PMf_KEEP is handled differently under threads to avoid these problems */
-    /* Handle empty pattern */
-    if (!RX_PRELEN(PM_GETRE(pm)) && PL_curpm) {
-        if (PL_curpm == PL_reg_curpm)
-            Perl_croak(aTHX_ "Use of the empty pattern inside of "
-                  "a regex code block is forbidden");
-	pm = PL_curpm;
-    }
     if (pm->op_pmflags & PMf_KEEP) {
-	pm->op_private &= ~OPpRUNTIME;	/* no point compiling again */
 	cLOGOP->op_first->op_next = PL_op->op_next;
     }
 #endif
@@ -1566,7 +1573,7 @@ Perl_qerror(pTHX_ SV *err)
 
     if (PL_in_eval) {
 	if (PL_in_eval & EVAL_KEEPERR) {
-		Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "\t(in cleanup) %"SVf,
+		Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "\t(in cleanup) %" SVf,
                                                     SVfARG(err));
 	}
 	else
@@ -1575,7 +1582,7 @@ Perl_qerror(pTHX_ SV *err)
     else if (PL_errors)
 	sv_catsv(PL_errors, err);
     else
-	Perl_warn(aTHX_ "%"SVf, SVfARG(err));
+	Perl_warn(aTHX_ "%" SVf, SVfARG(err));
     if (PL_parser)
 	++PL_parser->error_count;
 }
@@ -1615,12 +1622,12 @@ S_pop_eval_context_maybe_croak(pTHX_ PERL_CONTEXT *cx, SV *errsv, int action)
 
         if (action == 1) {
             (void)hv_delete(inc_hv, key, klen, G_DISCARD);
-            fmt = "%"SVf" did not return a true value";
+            fmt = "%" SVf " did not return a true value";
             errsv = namesv;
         }
         else {
             (void)hv_store(inc_hv, key, klen, &PL_sv_undef, 0);
-            fmt = "%"SVf"Compilation failed in require";
+            fmt = "%" SVf "Compilation failed in require";
             if (!errsv)
                 errsv = newSVpvs_flags("Unknown error\n", SVs_TEMP);
         }
@@ -1684,7 +1691,7 @@ Perl_die_unwind(pTHX_ SV *msv)
                         (SV_GMAGIC|SV_DO_COW_SVSETSV|SV_NOSTEAL));
 
 	if (in_eval & EVAL_KEEPERR) {
-	    Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "\t(in cleanup) %"SVf,
+	    Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "\t(in cleanup) %" SVf,
 			   SVfARG(exceptsv));
 	}
 
@@ -2515,7 +2522,7 @@ S_unwind_loop(pTHX)
         cxix = dopoptolabel(label, label_len, label_flags);
 	if (cxix < 0)
 	    /* diag_listed_as: Label not found for "last %s" */
-	    Perl_croak(aTHX_ "Label not found for \"%s %"SVf"\"",
+	    Perl_croak(aTHX_ "Label not found for \"%s %" SVf "\"",
 				       OP_NAME(PL_op),
                                        SVfARG(PL_op->op_flags & OPf_STACKED
                                               && !SvGMAGICAL(TOPp1s)
@@ -2701,7 +2708,7 @@ PP(pp_goto)
 			continue;
 		    tmpstr = sv_newmortal();
 		    gv_efullname3(tmpstr, gv, NULL);
-		    DIE(aTHX_ "Goto undefined subroutine &%"SVf"", SVfARG(tmpstr));
+		    DIE(aTHX_ "Goto undefined subroutine &%" SVf, SVfARG(tmpstr));
 		}
 		DIE(aTHX_ "Goto undefined subroutine");
 	    }
@@ -2772,7 +2779,7 @@ PP(pp_goto)
 		if (gv) {
 		    SV * const tmpstr = sv_newmortal();
 		    gv_efullname3(tmpstr, gv, NULL);
-		    DIE(aTHX_ "Goto undefined subroutine &%"SVf"",
+		    DIE(aTHX_ "Goto undefined subroutine &%" SVf,
 			       SVfARG(tmpstr));
 		}
 		DIE(aTHX_ "Goto undefined subroutine");
@@ -2987,7 +2994,7 @@ PP(pp_goto)
 	    PL_lastgotoprobe = gotoprobe;
 	}
 	if (!retop)
-	    DIE(aTHX_ "Can't find label %"UTF8f, 
+	    DIE(aTHX_ "Can't find label %" UTF8f,
 		       UTF8fARG(label_flags, label_len, label));
 
 	/* if we're leaving an eval, check before we pop any frames
@@ -3347,7 +3354,7 @@ S_doeval_compile(pTHX_ U8 gimme, CV* outside, U32 seq, HV *hh)
     }
     else {
 	PL_hints = saveop->op_private & OPpEVAL_COPHH
-		     ? oldcurcop->cop_hints : saveop->op_targ;
+		     ? oldcurcop->cop_hints : (U32)saveop->op_targ;
 
         /* making 'use re eval' not be in scope when compiling the
          * qr/mabye_has_runtime_code_block/ ensures that we don't get
@@ -3601,7 +3608,7 @@ S_require_version(pTHX_ SV *sv)
         upg_version(PL_patchlevel, TRUE);
     if (cUNOP->op_first->op_type == OP_CONST && cUNOP->op_first->op_private & OPpCONST_NOVER) {
         if ( vcmp(sv,PL_patchlevel) <= 0 )
-            DIE(aTHX_ "Perls since %"SVf" too modern--this is %"SVf", stopped",
+            DIE(aTHX_ "Perls since %" SVf " too modern--this is %" SVf ", stopped",
                 SVfARG(sv_2mortal(vnormal(sv))),
                 SVfARG(sv_2mortal(vnormal(PL_patchlevel)))
             );
@@ -3622,8 +3629,8 @@ S_require_version(pTHX_ SV *sv)
                 || av_tindex(lav) > 1            /* FP with > 3 digits */
                 || strstr(SvPVX(pv),".0")        /* FP with leading 0 */
                ) {
-                DIE(aTHX_ "Perl %"SVf" required--this is only "
-                    "%"SVf", stopped",
+                DIE(aTHX_ "Perl %" SVf " required--this is only "
+                    "%" SVf ", stopped",
                     SVfARG(sv_2mortal(vnormal(req))),
                     SVfARG(sv_2mortal(vnormal(PL_patchlevel)))
                 );
@@ -3640,8 +3647,8 @@ S_require_version(pTHX_ SV *sv)
                                        (int)first, (int)second);
                 upg_version(hintsv, TRUE);
 
-                DIE(aTHX_ "Perl %"SVf" required (did you mean %"SVf"?)"
-                    "--this is only %"SVf", stopped",
+                DIE(aTHX_ "Perl %" SVf " required (did you mean %" SVf "?)"
+                    "--this is only %" SVf ", stopped",
                     SVfARG(sv_2mortal(vnormal(req))),
                     SVfARG(sv_2mortal(vnormal(sv_2mortal(hintsv)))),
                     SVfARG(sv_2mortal(vnormal(PL_patchlevel)))
@@ -3684,20 +3691,28 @@ S_require_file(pTHX_ SV *const sv)
     int saved_errno;
     bool path_searchable;
     I32 old_savestack_ix;
+    const bool op_is_require = PL_op->op_type == OP_REQUIRE;
+    const char *const op_name = op_is_require ? "require" : "do";
+
+    assert(op_is_require || PL_op->op_type == OP_DOFILE);
 
     if (!SvOK(sv))
-        DIE(aTHX_ "Missing or undefined argument to require");
+        DIE(aTHX_ "Missing or undefined argument to %s", op_name);
     name = SvPV_nomg_const(sv, len);
     if (!(name && len > 0 && *name))
-        DIE(aTHX_ "Missing or undefined argument to require");
+        DIE(aTHX_ "Missing or undefined argument to %s", op_name);
 
-    if (!IS_SAFE_PATHNAME(name, len, "require")) {
+    if (!IS_SAFE_PATHNAME(name, len, op_name)) {
+        if (!op_is_require) {
+            CLEAR_ERRSV();
+            RETPUSHUNDEF;
+        }
         DIE(aTHX_ "Can't locate %s:   %s",
             pv_escape(newSVpvs_flags("",SVs_TEMP),name,len,len*2,
                       NULL, SvUTF8(sv)?PERL_PV_ESCAPE_UNI:0),
             Strerror(ENOENT));
     }
-    TAINT_PROPER("require");
+    TAINT_PROPER(op_name);
 
     path_searchable = path_is_searchable(name);
 
@@ -3724,7 +3739,7 @@ S_require_file(pTHX_ SV *const sv)
 	unixname = (char *) name;
 	unixlen = len;
     }
-    if (PL_op->op_type == OP_REQUIRE) {
+    if (op_is_require) {
 	SV * const * const svp = hv_fetch(GvHVn(PL_incgv),
 					  unixname, unixlen, 0);
 	if ( svp ) {
@@ -3755,7 +3770,7 @@ S_require_file(pTHX_ SV *const sv)
                    that the generated filename ends .pm  */
                 if (!path_searchable || len < 3 || name[0] == '.'
                     || !memEQ(name + package_len, ".pm", 3))
-                    DIE(aTHX_ "Bareword in require maps to disallowed filename \"%"SVf"\"", sv);
+                    DIE(aTHX_ "Bareword in require maps to disallowed filename \"%" SVf "\"", sv);
                 if (memchr(name, 0, package_len)) {
                     /* diag_listed_as: Bareword in require contains "%s" */
                     DIE(aTHX_ "Bareword in require contains \"\\0\"");
@@ -3810,7 +3825,7 @@ S_require_file(pTHX_ SV *const sv)
 			SvGETMAGIC(loader);
 		    }
 
-		    Perl_sv_setpvf(aTHX_ namesv, "/loader/0x%"UVxf"/%s",
+		    Perl_sv_setpvf(aTHX_ namesv, "/loader/0x%" UVxf "/%s",
 				   PTR2UV(SvRV(dirsv)), name);
 		    tryname = SvPVX_const(namesv);
 		    tryrsfp = NULL;
@@ -3939,7 +3954,7 @@ S_require_file(pTHX_ SV *const sv)
 			dirlen = 0;
 		    }
 
-		    if (!IS_SAFE_SYSCALL(dir, dirlen, "@INC entry", "require"))
+		    if (!IS_SAFE_SYSCALL(dir, dirlen, "@INC entry", op_name))
 			continue;
 #ifdef VMS
 		    if ((unixdir =
@@ -3990,7 +4005,7 @@ S_require_file(pTHX_ SV *const sv)
 		    }
 #  endif
 #endif
-		    TAINT_PROPER("require");
+		    TAINT_PROPER(op_name);
 		    tryname = SvPVX_const(namesv);
 		    tryrsfp = doopen_pm(namesv);
 		    if (tryrsfp) {
@@ -4016,7 +4031,7 @@ S_require_file(pTHX_ SV *const sv)
     saved_errno = errno; /* sv_2mortal can realloc things */
     sv_2mortal(namesv);
     if (!tryrsfp) {
-	if (PL_op->op_type == OP_REQUIRE) {
+	if (op_is_require) {
 	    if(saved_errno == EMFILE || saved_errno == EACCES) {
 		/* diag_listed_as: Can't locate %s */
 		DIE(aTHX_ "Can't locate %s:   %s: %s",
@@ -4209,7 +4224,7 @@ PP(pp_entereval)
 
     if (PERLDB_NAMEEVAL && CopLINE(PL_curcop)) {
 	SV * const temp_sv = sv_newmortal();
-	Perl_sv_setpvf(aTHX_ temp_sv, "_<(eval %lu)[%s:%"IVdf"]",
+	Perl_sv_setpvf(aTHX_ temp_sv, "_<(eval %lu)[%s:%" IVdf "]",
 		       (unsigned long)++PL_evalseq,
 		       CopFILE(PL_curcop), (IV)CopLINE(PL_curcop));
 	tmpbuf = SvPVX(temp_sv);

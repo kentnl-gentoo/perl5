@@ -1683,6 +1683,7 @@ ApdD	|UV	|to_utf8_case	|NN const U8 *p					\
 #if defined(PERL_IN_UTF8_C)
 inRP	|bool	|does_utf8_overflow|NN const U8 * const s|NN const U8 * e
 inRP	|bool	|is_utf8_overlong_given_start_byte_ok|NN const U8 * const s|const STRLEN len
+inRP	|bool	|isFF_OVERLONG	|NN const U8 * const s|const STRLEN len
 sMR	|char *	|unexpected_non_continuation_text			\
 		|NN const U8 * const s					\
 		|STRLEN print_len					\
@@ -1733,6 +1734,9 @@ Ap	|U8*	|utf16_to_utf8_reversed|NN U8* p|NN U8 *d|I32 bytelen|NN I32 *newlen
 AdpPR	|STRLEN	|utf8_length	|NN const U8* s|NN const U8 *e
 AipdPR	|IV	|utf8_distance	|NN const U8 *a|NN const U8 *b
 AipdPRn	|U8*	|utf8_hop	|NN const U8 *s|SSize_t off
+AipdPRn	|U8*	|utf8_hop_back|NN const U8 *s|SSize_t off|NN const U8 *start
+AipdPRn	|U8*	|utf8_hop_forward|NN const U8 *s|SSize_t off|NN const U8 *end
+AipdPRn	|U8*	|utf8_hop_safe	|NN const U8 *s|SSize_t off|NN const U8 *start|NN const U8 *end
 ApMd	|U8*	|utf8_to_bytes	|NN U8 *s|NN STRLEN *len
 Apd	|int	|bytes_cmp_utf8	|NN const U8 *b|STRLEN blen|NN const U8 *u \
 				|STRLEN ulen
@@ -2606,7 +2610,7 @@ s	|void	|force_ident_maybe_lex|char pit
 s	|void	|incline	|NN const char *s
 s	|int	|intuit_method	|NN char *s|NULLOK SV *ioname|NULLOK CV *cv
 s	|int	|intuit_more	|NN char *s
-s	|I32	|lop		|I32 f|int x|NN char *s
+s	|I32	|lop		|I32 f|U8 x|NN char *s
 rs	|void	|missingterm	|NULLOK char *s
 s	|void	|no_op		|NN const char *const what|NULLOK char *s
 s	|int	|pending_ident

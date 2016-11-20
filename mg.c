@@ -471,9 +471,7 @@ Perl_mg_copy(pTHX_ SV *sv, SV *nsv, const char *key, I32 klen)
 		sv_magic(nsv,
 		     (type == PERL_MAGIC_tied)
 			? SvTIED_obj(sv, mg)
-			: (type == PERL_MAGIC_regdata && mg->mg_obj)
-			    ? sv
-			    : mg->mg_obj,
+                        : mg->mg_obj,
 		     toLOWER(type), key, klen);
 		count++;
 	    }
@@ -619,12 +617,13 @@ Perl_magic_regdata_cnt(pTHX_ SV *sv, MAGIC *mg)
     PERL_ARGS_ASSERT_MAGIC_REGDATA_CNT;
 
     if (PL_curpm) {
-	const REGEXP * const rx = PM_GETRE(PL_curpm);
+        REGEXP * const rx = PM_GETRE(PL_curpm);
 	if (rx) {
-	    if (mg->mg_obj) {			/* @+ */
+            UV uv= (UV)mg->mg_obj;
+            if (uv == '+') {          /* @+ */
 		/* return the number possible */
 		return RX_NPARENS(rx);
-	    } else {				/* @- */
+            } else {   /* @- @^CAPTURE  @{^CAPTURE} */
 		I32 paren = RX_LASTPAREN(rx);
 
 		/* return the last filled */
@@ -632,8 +631,14 @@ Perl_magic_regdata_cnt(pTHX_ SV *sv, MAGIC *mg)
 			&& (RX_OFFS(rx)[paren].start == -1
 			    || RX_OFFS(rx)[paren].end == -1) )
 		    paren--;
-		return (U32)paren;
-	    }
+                if (uv == '-') {
+                    /* @- */
+                    return (U32)paren;
+                } else {
+                    /* @^CAPTURE @{^CAPTURE} */
+                    return paren >= 0 ? (U32)(paren-1) : (U32)-1;
+                }
+            }
 	}
     }
 
@@ -648,9 +653,12 @@ Perl_magic_regdatum_get(pTHX_ SV *sv, MAGIC *mg)
     PERL_ARGS_ASSERT_MAGIC_REGDATUM_GET;
 
     if (PL_curpm) {
-	const REGEXP * const rx = PM_GETRE(PL_curpm);
+        REGEXP * const rx = PM_GETRE(PL_curpm);
 	if (rx) {
-	    const I32 paren = mg->mg_len;
+            const UV uv= (UV)mg->mg_obj;
+            /* @{^CAPTURE} does not contain $&, so we need to increment by 1 */
+            const I32 paren = mg->mg_len
+                            + (uv == '\003' ? 1 : 0);
 	    SSize_t s;
 	    SSize_t t;
 	    if (paren < 0)
@@ -660,10 +668,15 @@ Perl_magic_regdatum_get(pTHX_ SV *sv, MAGIC *mg)
 		(t = RX_OFFS(rx)[paren].end) != -1)
 		{
 		    SSize_t i;
-		    if (mg->mg_obj)		/* @+ */
+
+                    if (uv == '+')                /* @+ */
 			i = t;
-		    else			/* @- */
+                    else if (uv == '-')           /* @- */
 			i = s;
+                    else {                        /* @^CAPTURE @{^CAPTURE} */
+                        CALLREG_NUMBUF_FETCH(rx,paren,sv);
+                        return 0;
+                    }
 
 		    if (RX_MATCH_UTF8(rx)) {
 			const char * const b = RX_SUBBEG(rx);
@@ -1114,7 +1127,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
                 Newx(gary, num_groups, Groups_t);
                 num_groups = getgroups(num_groups, gary);
                 for (i = 0; i < num_groups; i++)
-                    Perl_sv_catpvf(aTHX_ sv, " %"IVdf, (IV)gary[i]);
+                    Perl_sv_catpvf(aTHX_ sv, " %" IVdf, (IV)gary[i]);
                 Safefree(gary);
             }
 	}
@@ -1989,7 +2002,7 @@ Perl_magic_setdbline(pTHX_ SV *sv, MAGIC *mg)
 
     /* The magic ptr/len for the debugger's hash should always be an SV.  */
     if (UNLIKELY(mg->mg_len != HEf_SVKEY)) {
-        Perl_croak(aTHX_ "panic: magic_setdbline len=%"IVdf", ptr='%s'",
+        Perl_croak(aTHX_ "panic: magic_setdbline len=%" IVdf ", ptr='%s'",
                    (IV)mg->mg_len, mg->mg_ptr);
     }
 
@@ -2430,13 +2443,9 @@ Perl_magic_setregexp(pTHX_ SV *sv, MAGIC *mg)
 
     PERL_ARGS_ASSERT_MAGIC_SETREGEXP;
 
-    if (type == PERL_MAGIC_qr) {
-    } else if (type == PERL_MAGIC_bm) {
-	SvTAIL_off(sv);
-	SvVALID_off(sv);
-    } else {
-	assert(type == PERL_MAGIC_fm);
-    }
+    assert(    type == PERL_MAGIC_fm
+            || type == PERL_MAGIC_qr
+            || type == PERL_MAGIC_bm);
     return sv_unmagic(sv, type);
 }
 
@@ -3237,7 +3246,7 @@ Perl_sighandler(int sig)
 			   : cv && CvGV(cv) ? GvENAME_HEK(CvGV(cv)) : NULL;
 	if (hek)
 	    Perl_ck_warner(aTHX_ packWARN(WARN_SIGNAL),
-				"SIG%s handler \"%"HEKf"\" not defined.\n",
+				"SIG%s handler \"%" HEKf "\" not defined.\n",
 			         PL_sig_name[sig], HEKfARG(hek));
 	     /* diag_listed_as: SIG%s handler "%s" not defined */
 	else Perl_ck_warner(aTHX_ packWARN(WARN_SIGNAL),

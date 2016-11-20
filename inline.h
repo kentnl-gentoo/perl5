@@ -131,7 +131,7 @@ PERL_STATIC_INLINE I32
 S_TOPMARK(pTHX)
 {
     DEBUG_s(DEBUG_v(PerlIO_printf(Perl_debug_log,
-				 "MARK top  %p %"IVdf"\n",
+				 "MARK top  %p %" IVdf "\n",
 				  PL_markstack_ptr,
 				  (IV)*PL_markstack_ptr)));
     return *PL_markstack_ptr;
@@ -141,7 +141,7 @@ PERL_STATIC_INLINE I32
 S_POPMARK(pTHX)
 {
     DEBUG_s(DEBUG_v(PerlIO_printf(Perl_debug_log,
-				 "MARK pop  %p %"IVdf"\n",
+				 "MARK pop  %p %" IVdf "\n",
 				  (PL_markstack_ptr-1),
 				  (IV)*(PL_markstack_ptr-1))));
     assert((PL_markstack_ptr > PL_markstack) || !"MARK underflow");
@@ -920,6 +920,117 @@ Perl_utf8_hop(const U8 *s, SSize_t off)
 }
 
 /*
+=for apidoc utf8_hop_forward
+
+Return the UTF-8 pointer C<s> displaced by up to C<off> characters,
+forward.
+
+C<off> must be non-negative.
+
+C<s> must be before or equal to C<end>.
+
+When moving forward it will not move beyond C<end>.
+
+Will not exceed this limit even if the string is not valid "UTF-8".
+
+=cut
+*/
+
+PERL_STATIC_INLINE U8 *
+Perl_utf8_hop_forward(const U8 *s, SSize_t off, const U8 *end)
+{
+    PERL_ARGS_ASSERT_UTF8_HOP_FORWARD;
+
+    /* Note: cannot use UTF8_IS_...() too eagerly here since e.g
+     * the bitops (especially ~) can create illegal UTF-8.
+     * In other words: in Perl UTF-8 is not just for Unicode. */
+
+    assert(s <= end);
+    assert(off >= 0);
+
+    while (off--) {
+        STRLEN skip = UTF8SKIP(s);
+        if ((STRLEN)(end - s) <= skip)
+            return (U8 *)end;
+        s += skip;
+    }
+
+    return (U8 *)s;
+}
+
+/*
+=for apidoc utf8_hop_back
+
+Return the UTF-8 pointer C<s> displaced by up to C<off> characters,
+backward.
+
+C<off> must be non-positive.
+
+C<s> must be after or equal to C<start>.
+
+When moving backward it will not move before C<start>.
+
+Will not exceed this limit even if the string is not valid "UTF-8".
+
+=cut
+*/
+
+PERL_STATIC_INLINE U8 *
+Perl_utf8_hop_back(const U8 *s, SSize_t off, const U8 *start)
+{
+    PERL_ARGS_ASSERT_UTF8_HOP_BACK;
+
+    /* Note: cannot use UTF8_IS_...() too eagerly here since e.g
+     * the bitops (especially ~) can create illegal UTF-8.
+     * In other words: in Perl UTF-8 is not just for Unicode. */
+
+    assert(start <= s);
+    assert(off <= 0);
+
+    while (off++ && s > start) {
+        s--;
+        while (UTF8_IS_CONTINUATION(*s) && s > start)
+            s--;
+    }
+    
+    return (U8 *)s;
+}
+
+/*
+=for apidoc utf8_hop_safe
+
+Return the UTF-8 pointer C<s> displaced by up to C<off> characters,
+either forward or backward.
+
+When moving backward it will not move before C<start>.
+
+When moving forward it will not move beyond C<end>.
+
+Will not exceed those limits even if the string is not valid "UTF-8".
+
+=cut
+*/
+
+PERL_STATIC_INLINE U8 *
+Perl_utf8_hop_safe(const U8 *s, SSize_t off, const U8 *start, const U8 *end)
+{
+    PERL_ARGS_ASSERT_UTF8_HOP_SAFE;
+
+    /* Note: cannot use UTF8_IS_...() too eagerly here since e.g
+     * the bitops (especially ~) can create illegal UTF-8.
+     * In other words: in Perl UTF-8 is not just for Unicode. */
+
+    assert(start <= s && s <= end);
+
+    if (off >= 0) {
+        return utf8_hop_forward(s, off, end);
+    }
+    else {
+        return utf8_hop_back(s, off, start);
+    }
+}
+
+/*
 
 =for apidoc is_utf8_valid_partial_char
 
@@ -1379,9 +1490,9 @@ S_cx_pusheval(pTHX_ PERL_CONTEXT *cx, OP *retop, SV *namesv)
     cx->blk_eval.cv            = NULL; /* later set by doeval_compile() */
     cx->blk_eval.cur_top_env   = PL_top_env;
 
-    assert(!(PL_in_eval     & ~ 0x7F));
+    assert(!(PL_in_eval     & ~ 0x3F));
     assert(!(PL_op->op_type & ~0x1FF));
-    cx->blk_u16 = (PL_in_eval & 0x7F) | ((U16)PL_op->op_type << 7);
+    cx->blk_u16 = (PL_in_eval & 0x3F) | ((U16)PL_op->op_type << 7);
 }
 
 
@@ -1394,9 +1505,10 @@ S_cx_popeval(pTHX_ PERL_CONTEXT *cx)
     assert(CxTYPE(cx) == CXt_EVAL);
 
     PL_in_eval = CxOLD_IN_EVAL(cx);
+    assert(!(PL_in_eval & 0xc0));
     PL_eval_root = cx->blk_eval.old_eval_root;
     sv = cx->blk_eval.cur_text;
-    if (sv && SvSCREAM(sv)) {
+    if (sv && CxEVAL_TXT_REFCNTED(cx)) {
         cx->blk_eval.cur_text = NULL;
         SvREFCNT_dec_NN(sv);
     }

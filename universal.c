@@ -184,6 +184,10 @@ The SV can be a Perl object or the name of a Perl class.
 
 #include "XSUB.h"
 
+/* a special string address whose value is "isa", but whicb perl knows
+ * to treat as if it were really "DOES" */
+char PL_isa_DOES[] = "isa";
+
 bool
 Perl_sv_does_sv(pTHX_ SV *sv, SV *namesv, U32 flags)
 {
@@ -222,11 +226,14 @@ Perl_sv_does_sv(pTHX_ SV *sv, SV *namesv, U32 flags)
     PUSHs(namesv);
     PUTBACK;
 
-    methodname = newSVpvs_flags("isa", SVs_TEMP);
-    /* ugly hack: use the SvSCREAM flag so S_method_common
-     * can figure out we're calling DOES() and not isa(),
-     * and report eventual errors correctly. --rgs */
-    SvSCREAM_on(methodname);
+    /* create a PV with value "isa", but with a special address
+     * so that perl knows were' realling doing "DOES" instead */
+    methodname = newSV_type(SVt_PV);
+    SvLEN(methodname) = 0;
+    SvCUR(methodname) = strlen(PL_isa_DOES);
+    SvPVX(methodname) = PL_isa_DOES;
+    SvPOK_on(methodname);
+    sv_2mortal(methodname);
     call_sv(methodname, G_SCALAR | G_METHOD);
     SPAGAIN;
 
@@ -294,7 +301,7 @@ A specialised variant of C<croak()> for emitting the usage message for xsubs
 works out the package name and subroutine name from C<cv>, and then calls
 C<croak()>.  Hence if C<cv> is C<&ouch::awk>, it would call C<croak> as:
 
- Perl_croak(aTHX_ "Usage: %"SVf"::%"SVf"(%s)", "ouch" "awk",
+ Perl_croak(aTHX_ "Usage: %" SVf "::%" SVf "(%s)", "ouch" "awk",
                                                      "eee_yow");
 
 =cut
@@ -313,13 +320,13 @@ Perl_croak_xs_usage(const CV *const cv, const char *const params)
 
 	if (HvNAME_get(stash))
 	    /* diag_listed_as: SKIPME */
-	    Perl_croak_nocontext("Usage: %"HEKf"::%"HEKf"(%s)",
+	    Perl_croak_nocontext("Usage: %" HEKf "::%" HEKf "(%s)",
                                 HEKfARG(HvNAME_HEK(stash)),
                                 HEKfARG(GvNAME_HEK(gv)),
                                 params);
 	else
 	    /* diag_listed_as: SKIPME */
-	    Perl_croak_nocontext("Usage: %"HEKf"(%s)",
+	    Perl_croak_nocontext("Usage: %" HEKf "(%s)",
                                 HEKfARG(GvNAME_HEK(gv)), params);
     } else {
         dTHX;
@@ -327,7 +334,7 @@ Perl_croak_xs_usage(const CV *const cv, const char *const params)
 
 	/* Pants. I don't think that it should be possible to get here. */
 	/* diag_listed_as: SKIPME */
-	Perl_croak(aTHX_ "Usage: CODE(0x%"UVxf")(%s)", PTR2UV(cv), params);
+	Perl_croak(aTHX_ "Usage: CODE(0x%" UVxf ")(%s)", PTR2UV(cv), params);
     }
 }
 
@@ -737,7 +744,7 @@ XS(XS_PerlIO_get_layers)
 		  }
 		  else {
 		       if (namok && argok)
-			    PUSHs(sv_2mortal(Perl_newSVpvf(aTHX_ "%"SVf"(%"SVf")",
+			    PUSHs(sv_2mortal(Perl_newSVpvf(aTHX_ "%" SVf "(%" SVf ")",
 						 SVfARG(*namsvp),
 						 SVfARG(*argsvp))));
 		       else if (namok)
@@ -958,12 +965,7 @@ XS(XS_re_regexp_pattern)
         } else {
             /* Scalar, so use the string that Perl would return */
             /* return the pattern in (?msixn:..) format */
-#if PERL_VERSION >= 11
             pattern = sv_2mortal(newSVsv(MUTABLE_SV(re)));
-#else
-            pattern = newSVpvn_flags(RX_WRAPPED(re), RX_WRAPLEN(re),
-				     (RX_UTF8(re) ? SVf_UTF8 : 0) | SVs_TEMP);
-#endif
             PUSHs(pattern);
             XSRETURN(1);
         }

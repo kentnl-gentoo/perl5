@@ -2733,6 +2733,26 @@ parent '%s'
 C3-consistent, and you have enabled the C3 MRO for this class.  See the C3
 documentation in L<mro> for more information.
 
+=item Indentation on line %d of here-doc doesn't match delimiter
+
+(F) You have an indented here-document where one or more of its lines
+have whitespace at the beginning that does not match the closing
+delimiter.
+
+For example, line 2 below is wrong because it does not have at least
+2 spaces, but lines 1 and 3 are fine because they have at least 2:
+
+    if ($something) {
+      print <<~EOF;
+        Line 1
+       Line 2 not
+          Line 3
+        EOF
+    }
+
+Note that tabs and spaces are compared strictly, meaning 1 tab will
+not match 8 spaces.
+
 =item Infinite recursion in regex
 
 (F) You used a pattern that references itself without consuming any input
@@ -3073,7 +3093,7 @@ L<perlrebackslash/\b{}, \b, \B{}, \B>.
 
 =item %s() is deprecated on :utf8 handles
 
-(W deprecated) The sysread(), recv(), syswrite() and send() operators are
+(D deprecated) The sysread(), recv(), syswrite() and send() operators are
 deprecated on handles that have the C<:utf8> layer, either explicitly, or
 implicitly, eg., with the C<:encoding(UTF-16LE)> layer.
 
@@ -3548,11 +3568,12 @@ can vary from one line to the next.
 (S syntax) This is an educated guess made in conjunction with the message
 "%s found where operator expected".  Often the missing operator is a comma.
 
-=item Missing or undefined argument to require
+=item Missing or undefined argument to %s
 
-(F) You tried to call require with no argument or with an undefined
+(F) You tried to call require or do with no argument or with an undefined
 value as an argument.  Require expects either a package name or a
-file-specification as an argument.  See L<perlfunc/require>.
+file-specification as an argument; do expects a filename.  See
+L<perlfunc/require EXPR> and L<perlfunc/do EXPR>.
 
 =item Missing right brace on \%c{} in regex; marked by S<<-- HERE> in m/%s/
 
@@ -6916,12 +6937,12 @@ separated by commas, not just aligned on a line.
 it may skip items, or visit items more than once.  Consider using
 C<keys()> instead of C<each()>.
 
-=item Use of the empty pattern inside of a regex code block is forbidden
+=item Infinite recursion via empty pattern
 
 (F) You tried to use the empty pattern inside of a regex code block,
-for instance C</(?{ s!!! })/>. Currently for implementation reasons
-this is forbidden. Generally you can rewrite code that uses the empty
-pattern with the appropriate use of C<qr//>.
+for instance C</(?{ s!!! })/>, which resulted in re-executing
+the same pattern, which is an infinite loop which is broken by
+throwing an exception.
 
 =item Use of := for an empty attribute list is not allowed
 
@@ -7193,7 +7214,7 @@ front of your variable.
 (F) Lookbehind is allowed only for subexpressions whose length is fixed and
 known at compile time.  For positive lookbehind, you can use the C<\K>
 regex construct as a way to get the equivalent functionality.  See
-L<perlre/(?<=pattern) \K>.
+L<(?<=pattern) and \K in perlre|perlre/\K>.
 
 There are non-obvious Unicode rules under C</i> that can match variably,
 but which you might not think could.  For example, the substring C<"ss">

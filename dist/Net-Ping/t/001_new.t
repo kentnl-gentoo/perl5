@@ -1,6 +1,13 @@
 use warnings;
 use strict;
 
+BEGIN {
+  unless (my $port = getservbyname('echo', 'tcp')) {
+    print "1..0 \# Skip: no echo port\n";
+    exit;
+  }
+}
+
 use Test::More qw(no_plan);
 BEGIN {use_ok('Net::Ping')};
 
@@ -44,8 +51,10 @@ like($@, qr/Data for ping must be from/, "new() errors for invalid data size");
 
 # force failures for tcp
 SKIP: {
-    diag "Checking icmp";
+    note "Checking icmp";
     eval { $p = Net::Ping->new('icmp'); };
+    skip "icmp ping requires root privileges.", 3
+      if !Net::Ping::_isroot() or $^O eq 'MSWin32';
     if($> and $^O ne 'VMS' and $^O ne 'cygwin') {
         like($@, qr/icmp ping requires root privilege/, "Need root for icmp");
         skip "icmp tests require root", 2;

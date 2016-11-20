@@ -328,8 +328,9 @@ Perl_new_ctype(pTHX_ const char *newctype)
          * NUL */
         char bad_chars_list[ (94 * 4) + (3 * 5) + 1 ];
 
-        bool check_for_problems = ckWARN_d(WARN_LOCALE); /* No warnings means
-                                                            no check */
+        /* Don't check for problems if we are suppressing the warnings */
+        bool check_for_problems = ckWARN_d(WARN_LOCALE)
+                               || UNLIKELY(DEBUG_L_TEST);
         bool multi_byte_locale = FALSE;     /* Assume is a single-byte locale
                                                to start */
         unsigned int bad_count = 0;         /* Count of bad characters */
@@ -418,11 +419,12 @@ Perl_new_ctype(pTHX_ const char *newctype)
                               ? bad_chars_list
                               : ""
                             );
-            /* If we are actually in the scope of the locale, output the
-             * message now.  Otherwise we save it to be output at the first
-             * operation using this locale, if that actually happens.  Most
-             * programs don't use locales, so they are immune to bad ones */
-            if (IN_LC(LC_CTYPE)) {
+            /* If we are actually in the scope of the locale or are debugging,
+             * output the message now.  Otherwise we save it to be output at
+             * the first operation using this locale, if that actually happens.
+             * Most programs don't use locales, so they are immune to bad ones.
+             * */
+            if (IN_LC(LC_CTYPE) || UNLIKELY(DEBUG_L_TEST)) {
 
                 /* We have to save 'newctype' because the setlocale() just
                  * below may destroy it.  The next setlocale() further down
@@ -1929,7 +1931,7 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
 
 #ifdef DEBUGGING
 
-void
+STATIC void
 S_print_collxfrm_input_and_return(pTHX_
                                   const char * const s,
                                   const char * const e,
@@ -1942,10 +1944,10 @@ S_print_collxfrm_input_and_return(pTHX_
 
     PERL_ARGS_ASSERT_PRINT_COLLXFRM_INPUT_AND_RETURN;
 
-    PerlIO_printf(Perl_debug_log, "_mem_collxfrm[%d]: returning ",
+    PerlIO_printf(Perl_debug_log, "_mem_collxfrm[%u]: returning ",
                                                             PL_collation_ix);
     if (xlen) {
-        PerlIO_printf(Perl_debug_log, "%"UVuf"", (UV) *xlen);
+        PerlIO_printf(Perl_debug_log, "%" UVuf, (UV) *xlen);
     }
     else {
         PerlIO_printf(Perl_debug_log, "NULL");
@@ -1968,7 +1970,7 @@ S_print_collxfrm_input_and_return(pTHX_
             if (! first_time) {
                 PerlIO_printf(Perl_debug_log, " ");
             }
-            PerlIO_printf(Perl_debug_log, "%02"UVXf"", cp);
+            PerlIO_printf(Perl_debug_log, "%02" UVXf, cp);
             prev_was_printable = FALSE;
         }
         t += (is_utf8) ? UTF8SKIP(t) : 1;
@@ -2670,8 +2672,9 @@ Perl__setlocale_debug_string(const int category,        /* category number,
 
     /* initialise to a non-null value to keep it out of BSS and so keep
      * -DPERL_GLOBAL_STRUCT_PRIVATE happy */
-    static char ret[128] = "x";
-
+    static char ret[128] = "If you can read this, thank your buggy C"
+                           " library strlcpy(), and change your hints file"
+                           " to undef it";
     my_strlcpy(ret, "setlocale(", sizeof(ret));
 
     switch (category) {

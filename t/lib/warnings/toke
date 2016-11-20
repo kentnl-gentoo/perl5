@@ -150,6 +150,15 @@ EXPECT
 Use of bare << to mean <<"" is deprecated at - line 2.
 ########
 # toke.c
+$a = <<~;
+
+$a = <<~ ;
+
+EXPECT
+Use of bare << to mean <<"" is deprecated at - line 2.
+Use of bare << to mean <<"" is deprecated at - line 4.
+########
+# toke.c
 $a =~ m/$foo/eq;
 $a =~ s/$foo/fool/seq;
 
@@ -1511,3 +1520,46 @@ my $v = 𝛃 - 5;
 EXPECT
 OPTION regex
 (Wide character.*\n)?Warning: Use of "𝛃" without parentheses is ambiguous
+########
+# RT #4346 Case 1: Warnings for print (...)
+# TODO RT #4346: Warnings for print(...) are inconsistent
+use warnings;
+print ("((\n");
+print (">>\n");
+EXPECT
+print (...) interpreted as function at - line 3.
+print (...) interpreted as function at - line 4.
+((
+>>
+########
+# RT #4346 Case 2: Warnings for print (...)
+use warnings;
+print ("((\n");
+print (">>\n")
+EXPECT
+print (...) interpreted as function at - line 3.
+print (...) interpreted as function at - line 4.
+((
+>>
+########
+# RT #4346 Case 3: Warnings for print (...)
+# TODO RT #4346: Warnings for print(...) are inconsistent
+use warnings;
+print (">>\n");
+print ("((\n");
+EXPECT
+print (...) interpreted as function at - line 3.
+print (...) interpreted as function at - line 4.
+>>
+((
+########
+# RT #4346 Case 4: Warnings for print (...)
+# TODO RT #4346: Warnings for print(...) are inconsistent
+use warnings;
+print (")\n");
+print ("))\n");
+EXPECT
+print (...) interpreted as function at - line 3.
+print (...) interpreted as function at - line 4.
+)
+))

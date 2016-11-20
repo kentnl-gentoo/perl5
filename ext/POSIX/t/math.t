@@ -59,11 +59,14 @@ SKIP: {
     skip "no fpclassify", 4 unless $Config{d_fpclassify};
     is(fpclassify(1), FP_NORMAL, "fpclassify 1");
     is(fpclassify(0), FP_ZERO, "fpclassify 0");
-    skip("no inf/nan", 2) if ($Config{doublekind} == 9 ||
-                              $Config{doublekind} == 10 ||
-                              $Config{doublekind} == 11);
-    is(fpclassify(INFINITY), FP_INFINITE, "fpclassify INFINITY");
-    is(fpclassify(NAN), FP_NAN, "fpclassify NAN");
+    SKIP: {
+        skip("no inf", 1) unless $Config{d_double_has_inf};
+        is(fpclassify(INFINITY), FP_INFINITE, "fpclassify INFINITY");
+    }
+    SKIP: {
+        skip("no nan", 1) unless $Config{d_double_has_nan};
+        is(fpclassify(NAN), FP_NAN, "fpclassify NAN");
+    }
 }
 
 sub near {
@@ -102,17 +105,18 @@ SKIP: {
     ok(!isinf(42), "isinf 42");
     ok(!isnan(42), "isnan Inf");
   SKIP: {
-      skip("no inf/nan", 9) if ($Config{doublekind} == 9 ||
-                                $Config{doublekind} == 10 ||
-                                $Config{doublekind} == 11);
+      skip("no inf", 4) unless $Config{d_double_has_inf};
       ok(!isfinite(Inf), "isfinite Inf");
-      ok(!isfinite(NaN), "isfinite NaN");
       ok(isinf(INFINITY), "isinf INFINITY");
       ok(isinf(Inf), "isinf Inf");
+      ok(!isnan(Inf), "isnan Inf");
+    }
+  SKIP: {
+      skip("no nan", 5) unless $Config{d_double_has_nan};
+      ok(!isfinite(NaN), "isfinite NaN");
       ok(!isinf(NaN), "isinf NaN");
       ok(isnan(NAN), "isnan NAN");
       ok(isnan(NaN), "isnan NaN");
-      ok(!isnan(Inf), "isnan Inf");
       cmp_ok(nan(), '!=', nan(), 'nan');
     }
     near(log1p(2), 1.09861228866811, "log1p", 1e-9);
@@ -120,14 +124,20 @@ SKIP: {
     near(log2(8), 3, "log2", 1e-9);
     is(signbit(2), 0, "signbit 2"); # zero
     ok(signbit(-2), "signbit -2"); # non-zero
+    is(signbit(0), 0, "signbit 0"); # zero
+    is(signbit(0.5), 0, "signbit 0.5"); # zero
+    ok(signbit(-0.5), "signbit -0.5"); # non-zero
     is(round(2.25), 2, "round 2.25");
     is(round(-2.25), -2, "round -2.25");
     is(round(2.5), 3, "round 2.5");
     is(round(-2.5), -3, "round -2.5");
     is(round(2.75), 3, "round 2.75");
     is(round(-2.75), -3, "round 2.75");
-    is(lround(-2.75), -3, "lround -0.25");
-    is(signbit(lround(-0.25)), 0, "lround -0.25 -> +0"); # unlike round()
+    is(lround(-2.75), -3, "lround -2.75");
+    is(lround(-0.25), 0, "lround -0.25");
+    is(lround(-0.50), -1, "lround -0.50");
+    is(signbit(lround(-0.25)), 0, "signbit lround -0.25 zero");
+    ok(signbit(lround(-0.50)), "signbit lround -0.50 non-zero"); # non-zero
     is(trunc(2.25), 2, "trunc 2.25");
     is(trunc(-2.25), -2, "trunc -2.25");
     is(trunc(2.5), 2, "trunc 2.5");
@@ -141,9 +151,7 @@ SKIP: {
     ok(islessequal(1, 1), "islessequal 1 1");
 
   SKIP: {
-      skip("no inf/nan", 2) if ($Config{doublekind} == 9 ||
-                                $Config{doublekind} == 10 ||
-                                $Config{doublekind} == 11);
+      skip("no nan", 2) unless $Config{d_double_has_nan};
       ok(!isless(1, NaN), "isless 1 NaN");
       ok(isunordered(1, NaN), "isunordered 1 NaN");
     }
@@ -165,9 +173,8 @@ SKIP: {
     near(lgamma(9), 10.6046029027452, "lgamma 9", 1.5e-7);
 
   SKIP: {
-      skip("no inf/nan", 19) if ($Config{doublekind} == 9 ||
-                                $Config{doublekind} == 10 ||
-                                $Config{doublekind} == 11);
+      skip("no inf/nan", 19) unless $Config{d_double_has_inf} && $Config{d_double_has_nan};
+
       # These don't work on old mips/hppa platforms
       # because nan with payload zero == Inf (or == -Inf).
       # ok(isnan(setpayload(0)), "setpayload zero");
