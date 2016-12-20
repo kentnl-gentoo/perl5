@@ -1881,8 +1881,11 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
             REXEC_FBC_UTF8_CLASS_SCAN(
                       reginclass(prog, c, (U8*)s, (U8*) strend, utf8_target));
         }
+        else if (ANYOF_FLAGS(c)) {
+            REXEC_FBC_CLASS_SCAN(reginclass(prog,c, (U8*)s, (U8*)s+1, 0));
+        }
         else {
-            REXEC_FBC_CLASS_SCAN(REGINCLASS(prog, c, (U8*)s, 0));
+            REXEC_FBC_CLASS_SCAN(ANYOF_BITMAP_TEST(c, *((U8*)s)));
         }
         break;
 
@@ -7496,6 +7499,7 @@ NULL
                         DEBUG_EXECUTE_r( Perl_re_exec_indentf( aTHX_  "whilem: (cache) already tried at this position...\n",
                             depth)
 			);
+                        cur_curlyx->u.curlyx.count--;
 			sayNO; /* cache records failure */
 		    }
 		    ST.cache_offset = offset;
@@ -8891,8 +8895,14 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
 		scan += UTF8SKIP(scan);
 		hardcount++;
 	    }
-	} else {
-	    while (scan < loceol && REGINCLASS(prog, p, (U8*)scan, 0))
+	}
+        else if (ANYOF_FLAGS(p)) {
+	    while (scan < loceol
+                    && reginclass(prog, p, (U8*)scan, (U8*)scan+1, 0))
+		scan++;
+        }
+        else {
+	    while (scan < loceol && ANYOF_BITMAP_TEST(p, *((U8*)scan)))
 		scan++;
 	}
 	break;
@@ -9215,11 +9225,8 @@ S_reginclass(pTHX_ regexp * const prog, const regnode * const n, const U8* const
      * UTF8_IS_INVARIANT() works even if not in UTF-8 */
     if (! UTF8_IS_INVARIANT(c) && utf8_target) {
         STRLEN c_len = 0;
-	c = utf8n_to_uvchr(p, p_end - p, &c_len,
-		(UTF8_ALLOW_DEFAULT & UTF8_ALLOW_ANYUV)
-		| UTF8_ALLOW_FFFF | UTF8_CHECK_ONLY);
-		/* see [perl #37836] for UTF8_ALLOW_ANYUV; [perl #38293] for
-		 * UTF8_ALLOW_FFFF */
+	c = utf8n_to_uvchr(p, p_end - p, &c_len, (  UTF8_ALLOW_DEFAULT
+                                                  | UTF8_CHECK_ONLY));
 	if (c_len == (STRLEN)-1)
 	    Perl_croak(aTHX_ "Malformed UTF-8 character (fatal)");
         if (c > 255 && OP(n) == ANYOFL && ! ANYOFL_UTF8_LOCALE_REQD(flags)) {

@@ -10360,11 +10360,13 @@ Perl_ck_defined(pTHX_ OP *o)		/* 19990527 MJD */
 	case OP_PADAV:
 	    Perl_croak(aTHX_ "Can't use 'defined(@array)'"
 			     " (Maybe you should just omit the defined()?)");
-	break;
+            NOT_REACHED; /* NOTREACHED */
+            break;
 	case OP_RV2HV:
 	case OP_PADHV:
 	    Perl_croak(aTHX_ "Can't use 'defined(%%hash)'"
 			     " (Maybe you should just omit the defined()?)");
+            NOT_REACHED; /* NOTREACHED */
 	    break;
 	default:
 	    /* no warning */
@@ -12635,6 +12637,11 @@ S_aassign_scan(pTHX_ OP* o, bool rhs, bool top, int *scalars_p)
         break;
     }
 
+    /* XXX this assumes that all other ops are "transparent" - i.e. that
+     * they can return some of their children. While this true for e.g.
+     * sort and grep, it's not true for e.g. map. We really need a
+     * 'transparent' flag added to regen/opcodes
+     */
     if (o->op_flags & OPf_KIDS) {
         OP *kid;
         for (kid = cUNOPo->op_first; kid; kid = OpSIBLING(kid))
@@ -13818,10 +13825,10 @@ Perl_rpeep(pTHX_ OP *o)
                  && kid->op_next->op_type == OP_REPEAT
                  && kid->op_next->op_private & OPpREPEAT_DOLIST
                  && (kid->op_next->op_flags & OPf_WANT) == OPf_WANT_LIST
-                 && SvIOK(kSVOP_sv) && SvIVX(kSVOP_sv) == 0)
+                 && SvIOK(kSVOP_sv) && SvIVX(kSVOP_sv) == 0
+                 && oldop)
                 {
                     o = kid->op_next; /* repeat */
-                    assert(oldop);
                     oldop->op_next = o;
                     op_free(cBINOPo->op_first);
                     op_free(cBINOPo->op_last );
@@ -14454,7 +14461,7 @@ Perl_rpeep(pTHX_ OP *o)
             oldop    = ourlast;
             o        = oldop->op_next;
             goto redo;
-	    
+            NOT_REACHED; /* NOTREACHED */
 	    break;
 	}
 
@@ -14605,6 +14612,17 @@ Perl_rpeep(pTHX_ OP *o)
                         NOOP;
                     }
                     else if (r  & (AAS_PKG_SCALAR|AAS_PKG_AGG|AAS_DANGEROUS))
+                        /* if there are only lexicals on the LHS and no
+                         * common ones on the RHS, then we assume that the
+                         * only way those lexicals could also get
+                         * on the RHS is via some sort of dereffing or
+                         * closure, e.g.
+                         *    $r = \$lex;
+                         *    ($lex, $x) = (1, $$r)
+                         * and in this case we assume the var must have
+                         *  a bumped ref count. So if its ref count is 1,
+                         *  it must only be on the LHS.
+                         */
                         o->op_private |= OPpASSIGN_COMMON_RC1;
                 }
             }

@@ -705,8 +705,8 @@ Perl_lex_start(pTHX_ SV *line, PerlIO *rsfp, U32 flags)
     PL_parser = parser;
 
     parser->stack = NULL;
+    parser->stack_max1 = NULL;
     parser->ps = NULL;
-    parser->stack_size = 0;
 
     /* on scope exit, free this parser and restore any outer one */
     SAVEPARSER(parser);
@@ -923,10 +923,18 @@ Perl_lex_grow_linestr(pTHX_ STRLEN len)
     char *buf;
     STRLEN bufend_pos, bufptr_pos, oldbufptr_pos, oldoldbufptr_pos;
     STRLEN linestart_pos, last_uni_pos, last_lop_pos, re_eval_start_pos;
+    bool current;
+
     linestr = PL_parser->linestr;
     buf = SvPVX(linestr);
     if (len <= SvLEN(linestr))
 	return buf;
+
+    /* Is the lex_shared linestr SV the same as the current linestr SV?
+     * Only in this case does re_eval_start need adjusting, since it
+     * points within lex_shared->ls_linestr's buffer */
+    current = (linestr == PL_parser->lex_shared->ls_linestr);
+
     bufend_pos = PL_parser->bufend - buf;
     bufptr_pos = PL_parser->bufptr - buf;
     oldbufptr_pos = PL_parser->oldbufptr - buf;
@@ -934,7 +942,7 @@ Perl_lex_grow_linestr(pTHX_ STRLEN len)
     linestart_pos = PL_parser->linestart - buf;
     last_uni_pos = PL_parser->last_uni ? PL_parser->last_uni - buf : 0;
     last_lop_pos = PL_parser->last_lop ? PL_parser->last_lop - buf : 0;
-    re_eval_start_pos = PL_parser->lex_shared->re_eval_start ?
+    re_eval_start_pos = (current && PL_parser->lex_shared->re_eval_start) ?
                             PL_parser->lex_shared->re_eval_start - buf : 0;
 
     buf = sv_grow(linestr, len);
@@ -948,7 +956,7 @@ Perl_lex_grow_linestr(pTHX_ STRLEN len)
 	PL_parser->last_uni = buf + last_uni_pos;
     if (PL_parser->last_lop)
 	PL_parser->last_lop = buf + last_lop_pos;
-    if (PL_parser->lex_shared->re_eval_start)
+    if (current && PL_parser->lex_shared->re_eval_start)
         PL_parser->lex_shared->re_eval_start  = buf + re_eval_start_pos;
     return buf;
 }
@@ -3775,9 +3783,17 @@ S_scan_const(pTHX_ char *start)
 	} /* end if (backslash) */
 
     default_action:
-	/* If we started with encoded form, or already know we want it,
-	   then encode the next character */
-	if (! NATIVE_BYTE_IS_INVARIANT((U8)(*s)) && (this_utf8 || has_utf8)) {
+        /* Just copy the input to the output, though we may have to convert
+         * to/from UTF-8.
+         *
+         * If the input has the same representation in UTF-8 as not, it will be
+         * a single byte, and we don't care about UTF8ness; or if neither
+         * source nor output is UTF-8, just copy the byte */
+        if (NATIVE_BYTE_IS_INVARIANT((U8)(*s)) || (! this_utf8 && ! has_utf8))
+        {
+	    *d++ = *s++;
+        }
+        else {
 	    STRLEN len  = 1;
 
 	    /* One might think that it is wasted effort in the case of the
@@ -3811,9 +3827,6 @@ S_scan_const(pTHX_ char *start)
 	    s += len;
 
 	    d = (char*)uvchr_to_utf8((U8*)d, nextuv);
-	}
-	else {
-	    *d++ = *s++;
 	}
     } /* while loop to process each character */
 
@@ -4621,9 +4634,7 @@ Perl_yylex(pTHX)
                 if (strnEQ(s, "L\\u", 3) || strnEQ(s, "U\\l", 3))
                     tmp = *s, *s = s[2], s[2] = (char)tmp;	/* misordered... */
 		if ((*s == 'L' || *s == 'U' || *s == 'F')
-                    && (strchr(PL_lex_casestack, 'L')
-                        || strchr(PL_lex_casestack, 'U')
-                        || strchr(PL_lex_casestack, 'F')))
+                    && (strpbrk(PL_lex_casestack, "LUF")))
                 {
 		    PL_lex_casestack[--PL_lex_casemods] = '\0';
 		    PL_lex_allbrackets--;
@@ -9897,8 +9908,8 @@ S_scan_heredoc(pTHX_ char *s)
 	STRLEN herelen = SvCUR(tmpstr);
 	char *ss = SvPVX(tmpstr);
 	char *se = ss + herelen;
-	SV *newstr = newSVpvs("");
-	SvGROW(newstr, herelen);
+        SV *newstr = newSV(herelen+1);
+        SvPOK_on(newstr);
 
 	/* Trim leading whitespace */
 	while (ss < se) {
@@ -9931,9 +9942,8 @@ S_scan_heredoc(pTHX_ char *s)
 		);
 	    }
 	}
-
-	sv_setsv(tmpstr,newstr);
-
+        /* avoid sv_setsv() as we dont wan't to COW here */
+        sv_setpvn(tmpstr,SvPVX(newstr),SvCUR(newstr));
 	Safefree(indent);
 	SvREFCNT_dec_NN(newstr);
     }

@@ -3249,7 +3249,7 @@ PP(pp_length)
 	}
     } else {
 	if (!SvPADTMP(TARG)) {
-	    sv_setsv_nomg(TARG, &PL_sv_undef);
+            sv_set_undef(TARG);
 	} else { /* TARG is on stack at this point and is overwriten by SETs.
                    This branch is the odd one out, so put TARG by default on
                    stack earlier to let local SP go out of liveness sooner */
@@ -6095,7 +6095,7 @@ PP(pp_split)
 	    while (iters > 0 && (!TOPs || !SvANY(TOPs) || SvCUR(TOPs) == 0)) {
 		if (TOPs && !make_mortal)
 		    sv_2mortal(TOPs);
-		*SP-- = &PL_sv_undef;
+		*SP-- = NULL;
 		iters--;
 	    }
 	}

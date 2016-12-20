@@ -4782,6 +4782,64 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, SV* sstr, const I32 flags)
 	SvTAINT(dstr);
 }
 
+
+/*
+=for apidoc sv_set_undef
+
+Equivalent to C<sv_setsv(sv, &PL_sv_undef)>, but more efficient.
+Doesn't handle set magic.
+
+The perl equivalent is C<$sv = undef;>. Note that it doesn't free any string
+buffer, unlike C<undef $sv>.
+
+Introduced in perl 5.26.0.
+
+=cut
+*/
+
+void
+Perl_sv_set_undef(pTHX_ SV *sv)
+{
+    U32 type = SvTYPE(sv);
+
+    PERL_ARGS_ASSERT_SV_SET_UNDEF;
+
+    /* shortcut, NULL, IV, RV */
+
+    if (type <= SVt_IV) {
+        assert(!SvGMAGICAL(sv));
+        if (SvREADONLY(sv))
+            Perl_croak_no_modify();
+
+        if (SvROK(sv)) {
+            if (SvWEAKREF(sv))
+                sv_unref_flags(sv, 0);
+            else {
+                SV *rv = SvRV(sv);
+                SvFLAGS(sv) = type; /* quickly turn off all flags */
+                SvREFCNT_dec_NN(rv);
+                return;
+            }
+        }
+        SvFLAGS(sv) = type; /* quickly turn off all flags */
+        return;
+    }
+
+    if (SvIS_FREED(sv))
+        Perl_croak(aTHX_ "panic: attempt to undefine a freed scalar %p",
+            (void *)sv);
+
+    SV_CHECK_THINKFIRST_COW_DROP(sv);
+
+    if (isGV_with_GP(sv))
+        Perl_ck_warner(aTHX_ packWARN(WARN_MISC),
+                       "Undefined value assigned to typeglob");
+
+    SvOK_off(sv);
+}
+
+
+
 /*
 =for apidoc sv_setsv_mg
 
@@ -8595,13 +8653,27 @@ Perl_sv_gets(pTHX_ SV *const sv, PerlIO *const fp, I32 append)
 	if (cnt > 0) {
             /* if there is a separator */
 	    if (rslen) {
-                /* loop until we hit the end of the read-ahead buffer */
-		while (cnt > 0) {		     /* this     |  eat */
-                    /* scan forward copying and searching for rslast as we go */
-		    cnt--;
-		    if ((*bp++ = *ptr++) == rslast)  /* really   |  dust */
-			goto thats_all_folks;	     /* screams  |  sed :-) */
-		}
+                /* find next rslast */
+                STDCHAR *p;
+
+                /* shortcut common case of blank line */
+                cnt--;
+                if ((*bp++ = *ptr++) == rslast)
+                    goto thats_all_folks;
+
+                p = (STDCHAR *)memchr(ptr, rslast, cnt);
+                if (p) {
+                    SSize_t got = p - ptr + 1;
+                    Copy(ptr, bp, got, STDCHAR);
+                    ptr += got;
+                    bp  += got;
+                    cnt -= got;
+                    goto thats_all_folks;
+                }
+                Copy(ptr, bp, cnt, STDCHAR);
+                ptr += cnt;
+                bp  += cnt;
+                cnt = 0;
 	    }
 	    else {
                 /* no separator, slurp the full buffer */
@@ -10272,7 +10344,7 @@ Perl_sv_setref_pv(pTHX_ SV *const rv, const char *const classname, void *const p
     PERL_ARGS_ASSERT_SV_SETREF_PV;
 
     if (!pv) {
-	sv_setsv(rv, &PL_sv_undef);
+	sv_set_undef(rv);
 	SvSETMAGIC(rv);
     }
     else
@@ -13072,7 +13144,7 @@ Perl_parser_dup(pTHX_ const yy_parser *const proto, CLONE_PARAMS *const param)
     parser->old_parser = NULL;
     parser->stack = NULL;
     parser->ps = NULL;
-    parser->stack_size = 0;
+    parser->stack_max1 = 0;
     /* XXX parser->stack->state = 0; */
 
     /* XXX eventually, just Copy() most of the parser struct ? */

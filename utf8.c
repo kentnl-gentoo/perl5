@@ -383,8 +383,8 @@ S_is_utf8_cp_above_31_bits(const U8 * const s, const U8 * const e)
 
 #ifdef EBCDIC
 
-        /* [0] is start byte           [1] [2] [3] [4] [5] [6] [7] */
-    const U8 * const prefix = (U8 *) "\x41\x41\x41\x41\x41\x41\x42";
+    /* [0] is start byte  [1] [2] [3] [4] [5] [6] [7] */
+    const U8 prefix[] = "\x41\x41\x41\x41\x41\x41\x42";
     const STRLEN prefix_len = sizeof(prefix) - 1;
     const STRLEN len = e - s;
     const STRLEN cmp_len = MIN(prefix_len, len - 1);
@@ -430,6 +430,12 @@ S_does_utf8_overflow(const U8 * const s, const U8 * e)
     const U8 *x;
     const U8 * y = (const U8 *) HIGHEST_REPRESENTABLE_UTF8;
 
+#if ! defined(UV_IS_QUAD) && ! defined(EBCDIC)
+
+    const STRLEN len = e - s;
+
+#endif
+
     /* Returns a boolean as to if this UTF-8 string would overflow a UV on this
      * platform, that is if it represents a code point larger than the highest
      * representable code point.  (For ASCII platforms, we could use memcmp()
@@ -449,10 +455,10 @@ S_does_utf8_overflow(const U8 * const s, const U8 * e)
     /* On 32 bit ASCII machines, many overlongs that start with FF don't
      * overflow */
 
-    if (isFF_OVERLONG(s, e - s)) {
+    if (isFF_OVERLONG(s, len)) {
         const U8 max_32_bit_overlong[] = "\xFF\x80\x80\x80\x80\x80\x80\x84";
         return memGE(s, max_32_bit_overlong,
-                                MIN(e - s, sizeof(max_32_bit_overlong) - 1));
+                                MIN(len, sizeof(max_32_bit_overlong) - 1));
     }
 
 #endif
@@ -931,7 +937,7 @@ to a C<U32> variable, which this function sets to indicate any errors found.
 Upon return, if C<*errors> is 0, there were no errors found.  Otherwise,
 C<*errors> is the bit-wise C<OR> of the bits described in the list below.  Some
 of these bits will be set if a malformation is found, even if the input
-C<flags> parameter indicates that the given malformation is allowed; the
+C<flags> parameter indicates that the given malformation is allowed; those
 exceptions are noted:
 
 =over 4
@@ -996,6 +1002,9 @@ C<UTF8_DISALLOW_SURROGATE> or the C<UTF8_WARN_SURROGATE> flags.
 
 =back
 
+To do your own error handling, call this function with the C<UTF8_CHECK_ONLY>
+flag to suppress any warnings, and then examine the C<*errors> return.
+
 =cut
 */
 
@@ -1015,6 +1024,7 @@ Perl_utf8n_to_uvchr_error(pTHX_ const U8 *s,
     STRLEN expectlen   = 0;     /* How long should this sequence be?
                                    (initialized to silence compilers' wrong
                                    warning) */
+    STRLEN avail_len   = 0;     /* When input is too short, gives what that is */
     U32 discard_errors = 0;     /* Used to save branches when 'errors' is NULL;
                                    this gets set and discarded */
 
@@ -1101,12 +1111,21 @@ Perl_utf8n_to_uvchr_error(pTHX_ const U8 *s,
      * sequence, leaving just the bits that are part of the value.  */
     uv = NATIVE_UTF8_TO_I8(uv) & UTF_START_MASK(expectlen);
 
+    /* Setup the loop end point, making sure to not look past the end of the
+     * input string, and flag it as too short if the size isn't big enough. */
+    send = (U8*) s0;
+    if (UNLIKELY(curlen < expectlen)) {
+        possible_problems |= UTF8_GOT_SHORT;
+        avail_len = curlen;
+        send += curlen;
+    }
+    else {
+        send += expectlen;
+    }
+    adjusted_send = send;
+
     /* Now, loop through the remaining bytes in the character's sequence,
-     * accumulating each into the working value as we go.  Be sure to not look
-     * past the end of the input string */
-    send = adjusted_send = (U8*) s0 + ((expectlen <= curlen)
-                                       ? expectlen
-                                       : curlen);
+     * accumulating each into the working value as we go. */
     for (s = s0 + 1; s < send; s++) {
 	if (LIKELY(UTF8_IS_CONTINUATION(*s))) {
 	    uv = UTF8_ACCUMULATE(uv, *s);
@@ -1116,21 +1135,17 @@ Perl_utf8n_to_uvchr_error(pTHX_ const U8 *s,
         /* Here, found a non-continuation before processing all expected bytes.
          * This byte indicates the beginning of a new character, so quit, even
          * if allowing this malformation. */
-        curlen = s - s0;    /* Save how many bytes we actually got */
         possible_problems |= UTF8_GOT_NON_CONTINUATION;
-        goto finish_short;
+        break;
     } /* End of loop through the character's bytes */
 
     /* Save how many bytes were actually in the character */
     curlen = s - s0;
 
-    /* Did we get all the continuation bytes that were expected?  Note that we
-     * know this result even without executing the loop above.  But we had to
-     * do the loop to see if there are unexpected non-continuations. */
-    if (UNLIKELY(curlen < expectlen)) {
-	possible_problems |= UTF8_GOT_SHORT;
+    /* A convenience macro that matches either of the too-short conditions.  */
+#   define UTF8_GOT_TOO_SHORT (UTF8_GOT_SHORT|UTF8_GOT_NON_CONTINUATION)
 
-      finish_short:
+    if (UNLIKELY(possible_problems & UTF8_GOT_TOO_SHORT)) {
         uv_so_far = uv;
         uv = UNICODE_REPLACEMENT;
     }
@@ -1163,10 +1178,6 @@ Perl_utf8n_to_uvchr_error(pTHX_ const U8 *s,
                                                                 send - s0))))))
     {
         possible_problems |= UTF8_GOT_LONG;
-
-        /* A convenience macro that matches either of the too-short conditions.
-         * */
-#       define UTF8_GOT_TOO_SHORT (UTF8_GOT_SHORT|UTF8_GOT_NON_CONTINUATION)
 
         if (UNLIKELY(possible_problems & UTF8_GOT_TOO_SHORT)) {
             UV min_uv = uv_so_far;
@@ -1264,6 +1275,9 @@ Perl_utf8n_to_uvchr_error(pTHX_ const U8 *s,
     /* At this point:
      * curlen               contains the number of bytes in the sequence that
      *                      this call should advance the input by.
+     * avail_len            gives the available number of bytes passed in, but
+     *                      only if this is less than the expected number of
+     *                      bytes, based on the code point's start byte.
      * possible_problems'   is 0 if there weren't any problems; otherwise a bit
      *                      is set in it for each potential problem found.
      * uv                   contains the code point the input sequence
@@ -1360,6 +1374,25 @@ Perl_utf8n_to_uvchr_error(pTHX_ const U8 *s,
                     }
                 }
             }
+            else if (possible_problems & UTF8_GOT_SHORT) {
+                possible_problems &= ~UTF8_GOT_SHORT;
+                *errors |= UTF8_GOT_SHORT;
+
+                if (! (flags & UTF8_ALLOW_SHORT)) {
+                    disallowed = TRUE;
+                    if (ckWARN_d(WARN_UTF8) && ! (flags & UTF8_CHECK_ONLY)) {
+                        pack_warn = packWARN(WARN_UTF8);
+                        message = Perl_form(aTHX_
+                                "%s: %s (too short; %d byte%s available, need %d)",
+                                malformed_text,
+                                _byte_dump_string(s0, send - s0),
+                                (int)avail_len,
+                                avail_len == 1 ? "" : "s",
+                                (int)expectlen);
+                    }
+                }
+
+            }
             else if (possible_problems & UTF8_GOT_NON_CONTINUATION) {
                 possible_problems &= ~UTF8_GOT_NON_CONTINUATION;
                 *errors |= UTF8_GOT_NON_CONTINUATION;
@@ -1375,25 +1408,6 @@ Perl_utf8n_to_uvchr_error(pTHX_ const U8 *s,
                                                             (int) expectlen));
                     }
                 }
-            }
-            else if (possible_problems & UTF8_GOT_SHORT) {
-                possible_problems &= ~UTF8_GOT_SHORT;
-                *errors |= UTF8_GOT_SHORT;
-
-                if (! (flags & UTF8_ALLOW_SHORT)) {
-                    disallowed = TRUE;
-                    if (ckWARN_d(WARN_UTF8) && ! (flags & UTF8_CHECK_ONLY)) {
-                        pack_warn = packWARN(WARN_UTF8);
-                        message = Perl_form(aTHX_
-                                "%s: %s (too short; got %d byte%s, need %d)",
-                                malformed_text,
-                                _byte_dump_string(s0, send - s0),
-                                (int)curlen,
-                                curlen == 1 ? "" : "s",
-                                (int)expectlen);
-                    }
-                }
-
             }
             else if (possible_problems & UTF8_GOT_LONG) {
                 possible_problems &= ~UTF8_GOT_LONG;
@@ -4646,7 +4660,6 @@ Perl_check_utf8_print(pTHX_ const U8* s, const STRLEN len)
 	    return FALSE;
 	}
 	if (UNLIKELY(isUTF8_POSSIBLY_PROBLEMATIC(*s))) {
-	    STRLEN char_len;
 	    if (UNLIKELY(UTF8_IS_SUPER(s, e))) {
                 if (   ckWARN_d(WARN_NON_UNICODE)
                     || (   ckWARN_d(WARN_DEPRECATED)
@@ -4666,7 +4679,7 @@ Perl_check_utf8_print(pTHX_ const U8* s, const STRLEN len)
 #endif
                 )) {
                     /* A side effect of this function will be to warn */
-                    (void) utf8n_to_uvchr(s, e - s, &char_len, UTF8_WARN_SUPER);
+                    (void) utf8n_to_uvchr(s, e - s, NULL, UTF8_WARN_SUPER);
                     ok = FALSE;
                 }
 	    }
@@ -4675,7 +4688,7 @@ Perl_check_utf8_print(pTHX_ const U8* s, const STRLEN len)
                     /* This has a different warning than the one the called
                      * function would output, so can't just call it, unlike we
                      * do for the non-chars and above-unicodes */
-		    UV uv = utf8_to_uvchr_buf(s, e, &char_len);
+		    UV uv = utf8_to_uvchr_buf(s, e, NULL);
 		    Perl_warner(aTHX_ packWARN(WARN_SURROGATE),
 			"Unicode surrogate U+%04" UVXf " is illegal in UTF-8", uv);
 		    ok = FALSE;
@@ -4683,7 +4696,7 @@ Perl_check_utf8_print(pTHX_ const U8* s, const STRLEN len)
 	    }
 	    else if (UNLIKELY(UTF8_IS_NONCHAR(s, e)) && (ckWARN_d(WARN_NONCHAR))) {
                 /* A side effect of this function will be to warn */
-                (void) utf8n_to_uvchr(s, e - s, &char_len, UTF8_WARN_NONCHAR);
+                (void) utf8n_to_uvchr(s, e - s, NULL, UTF8_WARN_NONCHAR);
 		ok = FALSE;
 	    }
 	}
