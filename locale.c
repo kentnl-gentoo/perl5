@@ -420,10 +420,10 @@ Perl_new_ctype(pTHX_ const char *newctype)
                               : ""
                             );
             /* If we are actually in the scope of the locale or are debugging,
-             * output the message now.  Otherwise we save it to be output at
-             * the first operation using this locale, if that actually happens.
-             * Most programs don't use locales, so they are immune to bad ones.
-             * */
+             * output the message now.  If not in that scope, we save the
+             * message to be output at the first operation using this locale,
+             * if that actually happens.  Most programs don't use locales, so
+             * they are immune to bad ones.  */
             if (IN_LC(LC_CTYPE) || UNLIKELY(DEBUG_L_TEST)) {
 
                 /* We have to save 'newctype' because the setlocale() just
@@ -436,10 +436,14 @@ Perl_new_ctype(pTHX_ const char *newctype)
 
                 /* The '0' below suppresses a bogus gcc compiler warning */
                 Perl_warner(aTHX_ packWARN(WARN_LOCALE), SvPVX(PL_warn_locale), 0);
+
                 setlocale(LC_CTYPE, badlocale);
                 Safefree(badlocale);
-                SvREFCNT_dec_NN(PL_warn_locale);
-                PL_warn_locale = NULL;
+
+                if (IN_LC(LC_CTYPE)) {
+                    SvREFCNT_dec_NN(PL_warn_locale);
+                    PL_warn_locale = NULL;
+                }
             }
         }
     }
@@ -549,7 +553,7 @@ Perl_new_collate(pTHX_ const char *newcoll)
          * This has the desired effect that strcmp() will look at the secondary
          * or tertiary weights only if the strings compare equal at all higher
          * priority weights.  The spaces shown here, like in
-         *  "A¹B¹C¹ * A²B²C² "
+         *  "A¹B¹C¹ A²B²C² "
          * are not just for readability.  In the general case, these must
          * actually be bytes, which we will call here 'separator weights'; and
          * they must be smaller than any other weight value, but since these
@@ -1723,13 +1727,14 @@ Perl__mem_collxfrm(pTHX_ const char *input_string,
                 {
                     STRLEN i;
                     STRLEN d= 0;
+                    char * e = (char *) t + len;
 
                     for (i = 0; i < len; i+= UTF8SKIP(t + i)) {
                         U8 cur_char = t[i];
                         if (UTF8_IS_INVARIANT(cur_char)) {
                             s[d++] = cur_char;
                         }
-                        else if (UTF8_IS_DOWNGRADEABLE_START(cur_char)) {
+                        else if (UTF8_IS_NEXT_CHAR_DOWNGRADEABLE(t + i, e)) {
                             s[d++] = EIGHT_BIT_UTF8_TO_NATIVE(cur_char, t[i+1]);
                         }
                         else {  /* Replace illegal cp with highest collating

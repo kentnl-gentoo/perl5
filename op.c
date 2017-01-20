@@ -652,11 +652,12 @@ Perl_allocmy(pTHX_ const char *const name, const STRLEN len, const U32 flags)
 		   (UV)flags);
 
     /* complain about "my $<special_var>" etc etc */
-    if (len &&
-	!(is_our ||
-	  isALPHA(name[1]) ||
-	  ((flags & SVf_UTF8) && isIDFIRST_utf8((U8 *)name+1)) ||
-	  (name[1] == '_' && len > 2)))
+    if (   len
+        && !(  is_our
+            || isALPHA(name[1])
+            || (   (flags & SVf_UTF8)
+                && isIDFIRST_utf8_safe((U8 *)name+1, name + len))
+            || (name[1] == '_' && len > 2)))
     {
 	if (!(flags & SVf_UTF8 && UTF8_IS_START(name[1]))
 	 && isASCII(name[1])
@@ -1669,10 +1670,12 @@ static void
 S_scalar_slice_warning(pTHX_ const OP *o)
 {
     OP *kid;
+    const bool h = o->op_type == OP_HSLICE
+		|| (o->op_type == OP_NULL && o->op_targ == OP_HSLICE);
     const char lbrack =
-	o->op_type == OP_HSLICE ? '{' : '[';
+	h ? '{' : '[';
     const char rbrack =
-	o->op_type == OP_HSLICE ? '}' : ']';
+	h ? '}' : ']';
     SV *name;
     SV *keysv = NULL; /* just to silence compiler warnings */
     const char *key = NULL;
@@ -2447,6 +2450,39 @@ S_check_hash_fields_and_hekify(pTHX_ UNOP *rop, SVOP *key_op)
 }
 
 
+/* do all the final processing on an optree (e.g. running the peephole
+ * optimiser on it), then attach it to cv (if cv is non-null)
+ */
+
+static void
+S_process_optree(pTHX_ CV *cv, OP *optree, OP* start)
+{
+    OP **startp;
+
+    /* XXX for some reason, evals, require and main optrees are
+     * never attached to their CV; instead they just hang off
+     * PL_main_root + PL_main_start or PL_eval_root + PL_eval_start
+     * and get manually freed when appropriate */
+    if (cv)
+        startp = &CvSTART(cv);
+    else
+        startp = PL_in_eval? &PL_eval_start : &PL_main_start;
+
+    *startp = start;
+    optree->op_private |= OPpREFCOUNTED;
+    OpREFCNT_set(optree, 1);
+    CALL_PEEP(*startp);
+    finalize_optree(optree);
+    S_prune_chain_head(startp);
+
+    if (cv) {
+        /* now that optimizer has done its work, adjust pad values */
+        pad_tidy(optree->op_type == OP_LEAVEWRITE ? padtidy_FORMAT
+                 : CvCLONE(cv) ? padtidy_SUBCLONE : padtidy_SUB);
+    }
+}
+
+
 /*
 =for apidoc finalize_optree
 
@@ -2595,6 +2631,10 @@ S_finalize_op(pTHX_ OP* o)
         S_check_hash_fields_and_hekify(aTHX_ rop, key_op);
 	break;
     }
+    case OP_NULL:
+	if (o->op_targ != OP_HSLICE && o->op_targ != OP_ASLICE)
+	    break;
+	/* FALLTHROUGH */
     case OP_ASLICE:
 	S_scalar_slice_warning(aTHX_ o);
 	break;
@@ -3163,9 +3203,32 @@ Perl_op_lvalue_flags(pTHX_ OP *o, I32 type, U32 flags)
 	    goto nomod;
 	else if (!(o->op_flags & OPf_KIDS))
 	    break;
+
 	if (o->op_targ != OP_LIST) {
-	    op_lvalue(cBINOPo->op_first, type);
-	    break;
+            OP *sib = OpSIBLING(cLISTOPo->op_first);
+            /* OP_TRANS and OP_TRANSR with argument have a weird optree
+             * that looks like
+             *
+             *   null
+             *      arg
+             *      trans
+             *
+             * compared with things like OP_MATCH which have the argument
+             * as a child:
+             *
+             *   match
+             *      arg
+             *
+             * so handle specially to correctly get "Can't modify" croaks etc
+             */
+
+            if (sib && (sib->op_type == OP_TRANS || sib->op_type == OP_TRANSR))
+            {
+                /* this should trigger a "Can't modify transliteration" err */
+                op_lvalue(sib, type);
+            }
+            op_lvalue(cBINOPo->op_first, type);
+            break;
 	}
 	/* FALLTHROUGH */
     case OP_LIST:
@@ -4167,6 +4230,8 @@ Perl_blockhook_register(pTHX_ BHK *hk)
 void
 Perl_newPROG(pTHX_ OP *o)
 {
+    OP *start;
+
     PERL_ARGS_ASSERT_NEWPROG;
 
     if (PL_in_eval) {
@@ -4188,16 +4253,12 @@ Perl_newPROG(pTHX_ OP *o)
 	else
 	    scalar(PL_eval_root);
 
-	PL_eval_start = op_linklist(PL_eval_root);
-	PL_eval_root->op_private |= OPpREFCOUNTED;
-	OpREFCNT_set(PL_eval_root, 1);
+        start = op_linklist(PL_eval_root);
 	PL_eval_root->op_next = 0;
 	i = PL_savestack_ix;
 	SAVEFREEOP(o);
 	ENTER;
-	CALL_PEEP(PL_eval_start);
-	finalize_optree(PL_eval_root);
-        S_prune_chain_head(&PL_eval_start);
+        S_process_optree(aTHX_ NULL, PL_eval_root, start);
 	LEAVE;
 	PL_savestack_ix = i;
     }
@@ -4236,13 +4297,9 @@ Perl_newPROG(pTHX_ OP *o)
 	}
 	PL_main_root = op_scope(sawparens(scalarvoid(o)));
 	PL_curcop = &PL_compiling;
-	PL_main_start = LINKLIST(PL_main_root);
-	PL_main_root->op_private |= OPpREFCOUNTED;
-	OpREFCNT_set(PL_main_root, 1);
+        start = LINKLIST(PL_main_root);
 	PL_main_root->op_next = 0;
-	CALL_PEEP(PL_main_start);
-	finalize_optree(PL_main_root);
-        S_prune_chain_head(&PL_main_start);
+        S_process_optree(aTHX_ NULL, PL_main_root, start);
 	cv_forget_slab(PL_compcv);
 	PL_compcv = 0;
 
@@ -6944,7 +7001,8 @@ S_new_logop(pTHX_ I32 type, I32 flags, OP** firstp, OP** otherp)
 		&& !(o2->op_private & OPpPAD_STATE))
 	    {
 		Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
-				 "Deprecated use of my() in false conditional");
+                                "Deprecated use of my() in false conditional. "
+                                "This will be a fatal error in Perl 5.30");
 	    }
 
 	    *otherp = NULL;
@@ -8321,8 +8379,6 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 
         PL_breakable_sub_gen++;
         CvROOT(cv) = block;
-        CvROOT(cv)->op_private |= OPpREFCOUNTED;
-        OpREFCNT_set(CvROOT(cv), 1);
         /* The cv no longer needs to hold a refcount on the slab, as CvROOT
            itself has a refcount. */
         CvSLABBED_off(cv);
@@ -8330,14 +8386,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 #ifdef PERL_DEBUG_READONLY_OPS
         slab = (OPSLAB *)CvSTART(cv);
 #endif
-        CvSTART(cv) = start;
-        CALL_PEEP(start);
-        finalize_optree(CvROOT(cv));
-        S_prune_chain_head(&CvSTART(cv));
-
-        /* now that optimizer has done its work, adjust pad values */
-
-        pad_tidy(CvCLONE(cv) ? padtidy_SUBCLONE : padtidy_SUB);
+        S_process_optree(aTHX_ cv, block, start);
     }
 
   attrs:
@@ -8814,8 +8863,6 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 
         PL_breakable_sub_gen++;
         CvROOT(cv) = block;
-        CvROOT(cv)->op_private |= OPpREFCOUNTED;
-        OpREFCNT_set(CvROOT(cv), 1);
         /* The cv no longer needs to hold a refcount on the slab, as CvROOT
            itself has a refcount. */
         CvSLABBED_off(cv);
@@ -8823,14 +8870,7 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 #ifdef PERL_DEBUG_READONLY_OPS
         slab = (OPSLAB *)CvSTART(cv);
 #endif
-        CvSTART(cv) = start;
-        CALL_PEEP(start);
-        finalize_optree(CvROOT(cv));
-        S_prune_chain_head(&CvSTART(cv));
-
-        /* now that optimizer has done its work, adjust pad values */
-
-        pad_tidy(CvCLONE(cv) ? padtidy_SUBCLONE : padtidy_SUB);
+        S_process_optree(aTHX_ cv, block, start);
     }
 
   attrs:
@@ -9236,8 +9276,9 @@ void
 Perl_newFORM(pTHX_ I32 floor, OP *o, OP *block)
 {
     CV *cv;
-
     GV *gv;
+    OP *root;
+    OP *start;
 
     if (PL_parser && PL_parser->error_count) {
 	op_free(block);
@@ -9272,15 +9313,11 @@ Perl_newFORM(pTHX_ I32 floor, OP *o, OP *block)
     CvFILE_set_from_cop(cv, PL_curcop);
 
 
-    pad_tidy(padtidy_FORMAT);
-    CvROOT(cv) = newUNOP(OP_LEAVEWRITE, 0, scalarseq(block));
-    CvROOT(cv)->op_private |= OPpREFCOUNTED;
-    OpREFCNT_set(CvROOT(cv), 1);
-    CvSTART(cv) = LINKLIST(CvROOT(cv));
-    CvROOT(cv)->op_next = 0;
-    CALL_PEEP(CvSTART(cv));
-    finalize_optree(CvROOT(cv));
-    S_prune_chain_head(&CvSTART(cv));
+    root = newUNOP(OP_LEAVEWRITE, 0, scalarseq(block));
+    CvROOT(cv) = root;
+    start = LINKLIST(root);
+    root->op_next = 0;
+    S_process_optree(aTHX_ cv, root, start);
     cv_forget_slab(cv);
 
   finish:
@@ -13359,6 +13396,79 @@ S_maybe_multideref(pTHX_ OP *start, OP *orig_o, UV orig_action, U8 hints)
     } /* for (pass = ...) */
 }
 
+/* See if the ops following o are such that o will always be executed in
+ * boolean context: that is, the SV which o pushes onto the stack will
+ * only ever be used by later ops with SvTRUE(sv) or similar.
+ * If so, set a suitable private flag on o. Normally this will be
+ * bool_flag; but if it's only possible to determine booleaness at run
+ * time (e.g. sub f { ....; (%h || $y) }), then set maybe_flag instead.
+ */
+
+static void
+S_check_for_bool_cxt(pTHX_ OP*o, U8 bool_flag, U8 maybe_flag)
+{
+    OP *lop;
+
+    assert((o->op_flags & OPf_WANT) == OPf_WANT_SCALAR);
+
+    lop = o->op_next;
+
+    while (lop) {
+        switch (lop->op_type) {
+        case OP_NULL:
+        case OP_SCALAR:
+            break;
+
+        /* these two consume the stack argument in the scalar case,
+         * and treat it as a boolean in the non linenumber case */
+        case OP_FLIP:
+        case OP_FLOP:
+            if (   ((lop->op_flags & OPf_WANT) == OPf_WANT_LIST)
+                || (lop->op_private & OPpFLIP_LINENUM))
+            {
+                lop = NULL;
+                break;
+            }
+            /* FALLTHROUGH */
+        /* these never leave the original value on the stack */
+        case OP_NOT:
+        case OP_XOR:
+        case OP_COND_EXPR:
+        case OP_GREPWHILE:
+            o->op_private |= bool_flag;
+            lop = NULL;
+            break;
+
+        /* OR DOR and AND evaluate their arg as a boolean, but then may
+         * leave the original scalar value on the stack when following the
+         * op_next route. If not in void context, we need to ensure
+         * that whatever follows consumes the arg only in boolean context
+         * too.
+         */
+        case OP_OR:
+        case OP_DOR:
+        case OP_AND:
+            if ((lop->op_flags & OPf_WANT) == OPf_WANT_VOID) {
+                o->op_private |= bool_flag;
+                lop = NULL;
+            }
+            else if (!(lop->op_flags & OPf_WANT)) {
+                /* unknown context - decide at runtime */
+                o->op_private |= maybe_flag;
+                lop = NULL;
+            }
+            break;
+
+        default:
+            lop = NULL;
+            break;
+        }
+
+        if (lop)
+            lop = lop->op_next;
+    }
+}
+
 
 
 /* mechanism for deferring recursion in rpeep() */
@@ -13394,8 +13504,6 @@ Perl_rpeep(pTHX_ OP *o)
     OP** defer_queue[MAX_DEFERRED]; /* small queue of deferred branches */
     int defer_base = 0;
     int defer_ix = -1;
-    OP *fop;
-    OP *sop;
 
     if (!o || o->op_opt)
 	return;
@@ -14090,19 +14198,26 @@ Perl_rpeep(pTHX_ OP *o)
             break;
         }
 
+	case OP_RV2HV:
+	case OP_PADHV:
+            /* see if %h is used in boolean context */
+            if ((o->op_flags & OPf_WANT) == OPf_WANT_SCALAR)
+                S_check_for_bool_cxt(aTHX_ o, OPpTRUEBOOL, OPpMAYBE_TRUEBOOL);
+            if (o->op_type != OP_PADHV)
+                break;
+            /* FALLTHROUGH */
 	case OP_PADAV:
 	case OP_PADSV:
-	case OP_PADHV:
-	/* Skip over state($x) in void context.  */
-	if (oldop && o->op_private == (OPpPAD_STATE|OPpLVAL_INTRO)
-	 && (o->op_flags & OPf_WANT) == OPf_WANT_VOID)
-	{
-	    oldop->op_next = o->op_next;
-	    goto redo_nextstate;
-	}
-	if (o->op_type != OP_PADAV)
-	    break;
-	/* FALLTHROUGH */
+            /* Skip over state($x) in void context.  */
+            if (oldop && o->op_private == (OPpPAD_STATE|OPpLVAL_INTRO)
+             && (o->op_flags & OPf_WANT) == OPf_WANT_VOID)
+            {
+                oldop->op_next = o->op_next;
+                goto redo_nextstate;
+            }
+            if (o->op_type != OP_PADAV)
+                break;
+            /* FALLTHROUGH */
 	case OP_GV:
 	    if (o->op_type == OP_PADAV || o->op_next->op_type == OP_RV2AV) {
 		OP* const pop = (o->op_type == OP_PADAV) ?
@@ -14182,25 +14297,12 @@ Perl_rpeep(pTHX_ OP *o)
 
 	    break;
         
-#define HV_OR_SCALARHV(op)                                   \
-    (  (op)->op_type == OP_PADHV || (op)->op_type == OP_RV2HV \
-       ? (op)                                                  \
-       : (op)->op_type == OP_SCALAR && (op)->op_flags & OPf_KIDS \
-       && (  cUNOPx(op)->op_first->op_type == OP_PADHV          \
-          || cUNOPx(op)->op_first->op_type == OP_RV2HV)          \
-         ? cUNOPx(op)->op_first                                   \
-         : NULL)
-
         case OP_NOT:
-            if ((fop = HV_OR_SCALARHV(cUNOP->op_first)))
-                fop->op_private |= OPpTRUEBOOL;
             break;
 
         case OP_AND:
 	case OP_OR:
 	case OP_DOR:
-            fop = cLOGOP->op_first;
-            sop = OpSIBLING(fop);
 	    while (cLOGOP->op_other->op_type == OP_NULL)
 		cLOGOP->op_other = cLOGOP->op_other->op_next;
 	    while (o->op_next && (   o->op_type == o->op_next->op_type
@@ -14222,53 +14324,10 @@ Perl_rpeep(pTHX_ OP *o)
 	        o->op_next = ((LOGOP*)o->op_next)->op_other;
 	    }
 	    DEFER(cLOGOP->op_other);
-          
 	    o->op_opt = 1;
-            fop = HV_OR_SCALARHV(fop);
-            if (sop) sop = HV_OR_SCALARHV(sop);
-            if (fop || sop
-            ){	
-                OP * nop = o;
-                OP * lop = o;
-                if (!((nop->op_flags & OPf_WANT) == OPf_WANT_VOID)) {
-                    while (nop && nop->op_next) {
-                        switch (nop->op_next->op_type) {
-                            case OP_NOT:
-                            case OP_AND:
-                            case OP_OR:
-                            case OP_DOR:
-                                lop = nop = nop->op_next;
-                                break;
-                            case OP_NULL:
-                                nop = nop->op_next;
-                                break;
-                            default:
-                                nop = NULL;
-                                break;
-                        }
-                    }            
-                }
-                if (fop) {
-                    if (  (lop->op_flags & OPf_WANT) == OPf_WANT_VOID
-                      || o->op_type == OP_AND  )
-                        fop->op_private |= OPpTRUEBOOL;
-                    else if (!(lop->op_flags & OPf_WANT))
-                        fop->op_private |= OPpMAYBE_TRUEBOOL;
-                }
-                if (  (lop->op_flags & OPf_WANT) == OPf_WANT_VOID
-                   && sop)
-                    sop->op_private |= OPpTRUEBOOL;
-            }                  
-            
-	    
 	    break;
 	
 	case OP_COND_EXPR:
-	    if ((fop = HV_OR_SCALARHV(cLOGOP->op_first)))
-		fop->op_private |= OPpTRUEBOOL;
-#undef HV_OR_SCALARHV
-	    /* GERONIMO! */ /* FALLTHROUGH */
-
 	case OP_MAPWHILE:
 	case OP_GREPWHILE:
 	case OP_ANDASSIGN:

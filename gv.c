@@ -1217,7 +1217,8 @@ Perl_gv_autoload_pvn(pTHX_ HV *stash, const char *name, STRLEN len, U32 flags)
     )
 	Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
 			 "Use of inherited AUTOLOAD for non-method %" SVf
-			 "::%" UTF8f "() is deprecated",
+			 "::%" UTF8f "() is deprecated. This will be "
+                         "fatal in Perl 5.28",
 			 SVfARG(packname),
                          UTF8fARG(is_utf8, len, name));
 
@@ -1591,7 +1592,10 @@ S_parse_gv_stash_name(pTHX_ HV **stash, GV **gv, const char **name,
 
     PERL_ARGS_ASSERT_PARSE_GV_STASH_NAME;
     
-    if (full_len > 2 && **name == '*' && isIDFIRST_lazy_if(*name + 1, is_utf8)) {
+    if (   full_len > 2
+        && **name == '*'
+        && isIDFIRST_lazy_if_safe(*name + 1, name_end, is_utf8))
+    {
         /* accidental stringify on a GV? */
         (*name)++;
     }
@@ -1676,7 +1680,7 @@ S_gv_is_in_main(pTHX_ const char *name, STRLEN len, const U32 is_utf8)
     PERL_ARGS_ASSERT_GV_IS_IN_MAIN;
     
     /* If it's an alphanumeric variable */
-    if ( len && isIDFIRST_lazy_if(name, is_utf8) ) {
+    if ( len && isIDFIRST_lazy_if_safe(name, name + len, is_utf8) ) {
         /* Some "normal" variables are always in main::,
          * like INC or STDOUT.
          */
@@ -2153,9 +2157,10 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
 	case '*':		/* $* */
 	case '#':		/* $# */
 	    if (sv_type == SVt_PV)
-		/* diag_listed_as: $* is no longer supported */
+		/* diag_listed_as: $* is no longer supported. Its use will be fatal in Perl 5.30 */
 		Perl_ck_warner_d(aTHX_ packWARN2(WARN_DEPRECATED, WARN_SYNTAX),
-				 "$%c is no longer supported", *name);
+				 "$%c is no longer supported. Its use "
+                                 "will be fatal in Perl 5.30", *name);
 	    break;
 	case '\010':	/* $^H */
 	    {
@@ -2265,10 +2270,11 @@ S_maybe_multimagic_gv(pTHX_ GV *gv, const char *name, const svtype sv_type)
             require_tie_mod_s(gv, *name, "Tie::Hash::NamedCapture", 0);
     } else if (sv_type == SVt_PV) {
         if (*name == '*' || *name == '#') {
-            /* diag_listed_as: $* is no longer supported */
+            /* diag_listed_as: $# is no longer supported. Its use will be fatal in Perl 5.30 */
             Perl_ck_warner_d(aTHX_ packWARN2(WARN_DEPRECATED,
                                              WARN_SYNTAX),
-                             "$%c is no longer supported", *name);
+                             "$%c is no longer supported. Its use "
+                             "will be fatal in Perl 5.30", *name);
         }
     }
     if (sv_type==SVt_PV || sv_type==SVt_PVGV) {
@@ -2400,8 +2406,12 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 		 UTF8fARG(is_utf8, name_end-nambeg, nambeg));
     gv_init_pvn(gv, stash, name, len, (add & GV_ADDMULTI)|is_utf8);
 
-    if ( isIDFIRST_lazy_if(name, is_utf8) && !ckWARN(WARN_ONCE) )
+    if (   full_len != 0
+        && isIDFIRST_lazy_if_safe(name, name + full_len, is_utf8)
+        && !ckWARN(WARN_ONCE) )
+    {
         GvMULTI_on(gv) ;
+    }
 
     /* set up magic where warranted */
     if ( gv_magicalize(gv, stash, name, len, sv_type) ) {
@@ -2492,8 +2502,12 @@ Perl_gv_check(pTHX_ HV *stash)
                 )
 		     gv_check(hv);              /* nested package */
 	    }
-            else if ( *HeKEY(entry) != '_'
-                        && isIDFIRST_lazy_if(HeKEY(entry), HeUTF8(entry)) ) {
+            else if (   HeKLEN(entry) != 0
+                     && *HeKEY(entry) != '_'
+                     && isIDFIRST_lazy_if_safe(HeKEY(entry),
+                                               HeKEY(entry) + HeKLEN(entry),
+                                               HeUTF8(entry)) )
+            {
                 const char *file;
 		gv = MUTABLE_GV(HeVAL(entry));
 		if (SvTYPE(gv) != SVt_PVGV || GvMULTI(gv))

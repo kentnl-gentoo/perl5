@@ -1073,9 +1073,14 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
 		/* 'A' strips both nulls and spaces */
 		const char *ptr;
 		if (utf8 && (symptr->flags & FLAG_WAS_UTF8)) {
-		    for (ptr = s+len-1; ptr >= s; ptr--)
-			if (*ptr != 0 && !UTF8_IS_CONTINUATION(*ptr) &&
-			    !isSPACE_utf8(ptr)) break;
+                    for (ptr = s+len-1; ptr >= s; ptr--) {
+                        if (   *ptr != 0
+                            && !UTF8_IS_CONTINUATION(*ptr)
+                            && !isSPACE_utf8_safe(ptr, strend))
+                        {
+                            break;
+                        }
+                    }
 		    if (ptr >= s) ptr += UTF8SKIP(ptr);
 		    else ptr++;
 		    if (ptr > s+len)
@@ -2582,7 +2587,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 		if (in_bytes) auv = auv % 0x100;
 		if (utf8) {
 		  W_utf8:
-		    if (cur > end) {
+		    if (cur >= end) {
 			*cur = '\0';
 			SvCUR_set(cat, cur - start);
 

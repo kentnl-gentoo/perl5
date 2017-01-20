@@ -206,7 +206,7 @@ use File::Glob qw(:case);
     },
 
     'Compress::Raw::Bzip2' => {
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.069.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Bzip2-2.070.tar.gz',
         'FILES'        => q[cpan/Compress-Raw-Bzip2],
         'EXCLUDED'     => [
             qr{^t/Test/},
@@ -217,7 +217,7 @@ use File::Glob qw(:case);
     },
 
     'Compress::Raw::Zlib' => {
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.069.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.070.tar.gz',
 
         'FILES'    => q[cpan/Compress-Raw-Zlib],
         'EXCLUDED' => [
@@ -251,7 +251,7 @@ use File::Glob qw(:case);
     },
 
     'CPAN' => {
-        'DISTRIBUTION' => 'ANDK/CPAN-2.14.tar.gz',
+        'DISTRIBUTION' => 'ANDK/CPAN-2.16-TRIAL2.tar.gz',
         'FILES'        => q[cpan/CPAN],
         'EXCLUDED'     => [
             qr{^distroprefs/},
@@ -285,12 +285,6 @@ use File::Glob qw(:case);
                 t/perlcriticrc
                 t/yaml_code.yml
                 ),
-        ],
-        'CUSTOMIZED'   => [
-            # CVE-2016-1238
-            qw(
-               lib/App/Cpan.pm lib/CPAN.pm scripts/cpan
-            )
         ],
     },
 
@@ -335,7 +329,7 @@ use File::Glob qw(:case);
     },
 
     'DB_File' => {
-        'DISTRIBUTION' => 'PMQS/DB_File-1.838.tar.gz',
+        'DISTRIBUTION' => 'PMQS/DB_File-1.840.tar.gz',
         'FILES'        => q[cpan/DB_File],
         'EXCLUDED'     => [
             qr{^patches/},
@@ -843,7 +837,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20161120.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20161220.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -1178,6 +1172,10 @@ use File::Glob qw(:case);
                 t/zzz-check-breaks.t
                 ),
         ],
+        'CUSTOMIZED'   => [
+            #
+            qw( t/Test2/modules/IPC/Driver/Files.t )
+        ],
     },
 
     'Text::Abbrev' => {
@@ -1245,7 +1243,7 @@ use File::Glob qw(:case);
     },
 
     'threads' => {
-        'DISTRIBUTION' => 'JDHEDDEN/threads-2.09.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-2.12.tar.gz',
         'FILES'        => q[dist/threads],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1257,7 +1255,7 @@ use File::Glob qw(:case);
     },
 
     'threads::shared' => {
-        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.52.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.54.tar.gz',
         'FILES'        => q[dist/threads-shared],
         'EXCLUDED'     => [
             qw( examples/class.pl

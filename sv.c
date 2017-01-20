@@ -2915,8 +2915,8 @@ S_infnan_2pv(NV nv, char* buffer, size_t maxlen, char plus) {
       return 0;
     }
     assert((s == buffer + 3) || (s == buffer + 4));
-    *s++ = 0;
-    return s - buffer - 1; /* -1: excluding the zero byte */
+    *s = 0;
+    return s - buffer;
 }
 
 /*
@@ -4808,8 +4808,13 @@ Perl_sv_set_undef(pTHX_ SV *sv)
 
     if (type <= SVt_IV) {
         assert(!SvGMAGICAL(sv));
-        if (SvREADONLY(sv))
+        if (SvREADONLY(sv)) {
+            /* does undeffing PL_sv_undef count as modifying a read-only
+             * variable? Some XS code does this */
+            if (sv == &PL_sv_undef)
+                return;
             Perl_croak_no_modify();
+        }
 
         if (SvROK(sv)) {
             if (SvWEAKREF(sv))
@@ -4834,8 +4839,8 @@ Perl_sv_set_undef(pTHX_ SV *sv)
     if (isGV_with_GP(sv))
         Perl_ck_warner(aTHX_ packWARN(WARN_MISC),
                        "Undefined value assigned to typeglob");
-
-    SvOK_off(sv);
+    else
+        SvOK_off(sv);
 }
 
 
@@ -15325,6 +15330,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_GCB_invlist = sv_dup_inc(proto_perl->IGCB_invlist, param);
     PL_SB_invlist = sv_dup_inc(proto_perl->ISB_invlist, param);
     PL_WB_invlist = sv_dup_inc(proto_perl->IWB_invlist, param);
+    PL_seen_deprecated_macro = hv_dup_inc(proto_perl->Iseen_deprecated_macro, param);
     PL_utf8_mark	= sv_dup_inc(proto_perl->Iutf8_mark, param);
     PL_utf8_toupper	= sv_dup_inc(proto_perl->Iutf8_toupper, param);
     PL_utf8_totitle	= sv_dup_inc(proto_perl->Iutf8_totitle, param);

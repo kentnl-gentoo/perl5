@@ -76,10 +76,15 @@ the string is invariant.
                                 utf8n_to_uvchr_error(s, len, lenp, flags, 0)
 
 #define to_uni_fold(c, p, lenp) _to_uni_fold_flags(c, p, lenp, FOLD_FLAGS_FULL)
-#define to_utf8_fold(c, p, lenp) _to_utf8_fold_flags(c, p, lenp, FOLD_FLAGS_FULL)
-#define to_utf8_lower(a,b,c) _to_utf8_lower_flags(a,b,c,0)
-#define to_utf8_upper(a,b,c) _to_utf8_upper_flags(a,b,c,0)
-#define to_utf8_title(a,b,c) _to_utf8_title_flags(a,b,c,0)
+
+#define to_utf8_fold(s, r, lenr)                                                \
+    _to_utf8_fold_flags (s, NULL, r, lenr, FOLD_FLAGS_FULL, __FILE__, __LINE__)
+#define to_utf8_lower(s, r, lenr)                                               \
+                  _to_utf8_lower_flags(s, NULL, r ,lenr, 0, __FILE__, __LINE__)
+#define to_utf8_upper(s, r, lenr)                                               \
+                  _to_utf8_upper_flags(s, NULL, r, lenr, 0, __FILE__, __LINE__)
+#define to_utf8_title(s, r, lenr)                                               \
+                  _to_utf8_title_flags(s, NULL, r, lenr ,0, __FILE__, __LINE__)
 
 #define foldEQ_utf8(s1, pe1, l1, u1, s2, pe2, l2, u2) \
 		    foldEQ_utf8_flags(s1, pe1, l1, u1, s2, pe2, l2, u2, 0)
@@ -672,13 +677,30 @@ with a ptr argument.
  * beginning of a utf8 character.  Now that foo_utf8() determines that itself,
  * no need to do it again here
  */
-#define isIDFIRST_lazy_if(p,UTF) ((IN_BYTES || !UTF)                \
-				 ? isIDFIRST(*(p))                  \
-				 : isIDFIRST_utf8((const U8*)p))
-#define isWORDCHAR_lazy_if(p,UTF)   ((IN_BYTES || (!UTF))           \
-				 ? isWORDCHAR(*(p))                 \
-				 : isWORDCHAR_utf8((const U8*)p))
-#define isALNUM_lazy_if(p,UTF)   isWORDCHAR_lazy_if(p,UTF)
+#define isIDFIRST_lazy_if(p,UTF)                                            \
+            _is_utf8_FOO(_CC_IDFIRST, (const U8 *) p, "isIDFIRST_lazy_if",  \
+                         "isIDFIRST_lazy_if_safe",                          \
+                         cBOOL(UTF && ! IN_BYTES), 0, __FILE__,__LINE__)
+
+#define isIDFIRST_lazy_if_safe(p, e, UTF)                                   \
+                   ((IN_BYTES || !UTF)                                      \
+                     ? isIDFIRST(*(p))                                      \
+                     : isIDFIRST_utf8_safe(p, e))
+
+#define isWORDCHAR_lazy_if(p,UTF)                                           \
+            _is_utf8_FOO(_CC_IDFIRST, (const U8 *) p, "isWORDCHAR_lazy_if", \
+                         "isWORDCHAR_lazy_if_safe",                         \
+                         cBOOL(UTF && ! IN_BYTES), 0, __FILE__,__LINE__)
+
+#define isWORDCHAR_lazy_if_safe(p, e, UTF)                                  \
+                   ((IN_BYTES || !UTF)                                      \
+                     ? isWORDCHAR(*(p))                                     \
+                     : isWORDCHAR_utf8_safe((U8 *) p, (U8 *) e))
+
+#define isALNUM_lazy_if(p,UTF)                                              \
+            _is_utf8_FOO(_CC_IDFIRST, (const U8 *) p, "isALNUM_lazy_if",    \
+                         "isWORDCHAR_lazy_if_safe",                         \
+                         cBOOL(UTF && ! IN_BYTES), 0, __FILE__,__LINE__)
 
 #define UTF8_MAXLEN UTF8_MAXBYTES
 
@@ -727,38 +749,42 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
 #define UTF8_ALLOW_SHORT		0x0008
 #define UTF8_GOT_SHORT		        UTF8_ALLOW_SHORT
 
-/* Overlong sequence; i.e., the code point can be specified in fewer bytes. */
+/* Overlong sequence; i.e., the code point can be specified in fewer bytes.
+ * First one will convert the overlong to the REPLACEMENT CHARACTER; second
+ * will return what the overlong evaluates to */
 #define UTF8_ALLOW_LONG                 0x0010
+#define UTF8_ALLOW_LONG_AND_ITS_VALUE   (UTF8_ALLOW_LONG|0x0020)
 #define UTF8_GOT_LONG                   UTF8_ALLOW_LONG
 
-/* Currently no way to allow overflow */
-#define UTF8_GOT_OVERFLOW               0x0020
+#define UTF8_ALLOW_OVERFLOW             0x0080
+#define UTF8_GOT_OVERFLOW               UTF8_ALLOW_OVERFLOW
 
-#define UTF8_DISALLOW_SURROGATE		0x0040	/* Unicode surrogates */
+#define UTF8_DISALLOW_SURROGATE		0x0100	/* Unicode surrogates */
 #define UTF8_GOT_SURROGATE		UTF8_DISALLOW_SURROGATE
-#define UTF8_WARN_SURROGATE		0x0080
+#define UTF8_WARN_SURROGATE		0x0200
 
-#define UTF8_DISALLOW_NONCHAR           0x0100	/* Unicode non-character */
+#define UTF8_DISALLOW_NONCHAR           0x0400	/* Unicode non-character */
 #define UTF8_GOT_NONCHAR                UTF8_DISALLOW_NONCHAR
-#define UTF8_WARN_NONCHAR               0x0200	/*  code points */
+#define UTF8_WARN_NONCHAR               0x0800	/*  code points */
 
-#define UTF8_DISALLOW_SUPER		0x0400	/* Super-set of Unicode: code */
+#define UTF8_DISALLOW_SUPER		0x1000	/* Super-set of Unicode: code */
 #define UTF8_GOT_SUPER		        UTF8_DISALLOW_SUPER
-#define UTF8_WARN_SUPER		        0x0800	/* points above the legal max */
+#define UTF8_WARN_SUPER		        0x2000	/* points above the legal max */
 
 /* Code points which never were part of the original UTF-8 standard, which only
  * went up to 2 ** 31 - 1.  Note that these all overflow a signed 32-bit word,
  * The first byte of these code points is FE or FF on ASCII platforms.  If the
  * first byte is FF, it will overflow a 32-bit word. */
-#define UTF8_DISALLOW_ABOVE_31_BIT      0x1000
+#define UTF8_DISALLOW_ABOVE_31_BIT      0x4000
 #define UTF8_GOT_ABOVE_31_BIT           UTF8_DISALLOW_ABOVE_31_BIT
-#define UTF8_WARN_ABOVE_31_BIT          0x2000
+#define UTF8_WARN_ABOVE_31_BIT          0x8000
 
 /* For back compat, these old names are misleading for UTF_EBCDIC */
 #define UTF8_DISALLOW_FE_FF             UTF8_DISALLOW_ABOVE_31_BIT
 #define UTF8_WARN_FE_FF                 UTF8_WARN_ABOVE_31_BIT
 
-#define UTF8_CHECK_ONLY			0x4000
+#define UTF8_CHECK_ONLY			0x10000
+#define _UTF8_NO_CONFIDENCE_IN_CURLEN   0x20000  /* Internal core use only */
 
 /* For backwards source compatibility.  They do nothing, as the default now
  * includes what they used to mean.  The first one's meaning was to allow the
@@ -776,12 +802,21 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
 #define UTF8_WARN_ILLEGAL_INTERCHANGE \
                           (UTF8_WARN_ILLEGAL_C9_INTERCHANGE|UTF8_WARN_NONCHAR)
 
-#define UTF8_ALLOW_ANY                                                          \
-	    (~( UTF8_DISALLOW_ILLEGAL_INTERCHANGE|UTF8_DISALLOW_ABOVE_31_BIT    \
-               |UTF8_WARN_ILLEGAL_INTERCHANGE|UTF8_WARN_ABOVE_31_BIT))
-#define UTF8_ALLOW_ANYUV  UTF8_ALLOW_EMPTY
-#define UTF8_ALLOW_DEFAULT		(ckWARN(WARN_UTF8) ? 0 : \
-					 UTF8_ALLOW_ANYUV)
+/* This is used typically for code that is willing to accept inputs of
+ * illformed UTF-8 sequences, for whatever reason.  However, all such sequences
+ * evaluate to the REPLACEMENT CHARACTER unless other flags overriding this are
+ * also present. */
+#define UTF8_ALLOW_ANY ( UTF8_ALLOW_CONTINUATION                                \
+                        |UTF8_ALLOW_NON_CONTINUATION                            \
+                        |UTF8_ALLOW_SHORT                                       \
+                        |UTF8_ALLOW_LONG                                        \
+                        |UTF8_ALLOW_OVERFLOW)
+
+/* Accept any Perl-extended UTF-8 that evaluates to any UV on the platform, but
+ * not any malformed.  This is the default.  (Note that UVs above IV_MAX are
+ * deprecated. */
+#define UTF8_ALLOW_ANYUV   0
+#define UTF8_ALLOW_DEFAULT UTF8_ALLOW_ANYUV
 
 /*
 =for apidoc Am|bool|UTF8_IS_SURROGATE|const U8 *s|const U8 *e

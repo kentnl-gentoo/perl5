@@ -2557,7 +2557,7 @@ S_set_dollarzero(pTHX_ SV *sv)
      * the setproctitle() routine to manipulate that. */
     if (PL_origalen != 1) {
         s = SvPV_const(sv, len);
-#   if __FreeBSD_version > 410001
+#   if __FreeBSD_version > 410001 || defined(__DragonFly__)
         /* The leading "-" removes the "perl: " prefix,
          * but not the "(perl) suffix from the ps(1)
          * output, because that's what ps(1) shows if the
@@ -2709,8 +2709,8 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	else {
             if (strEQ(mg->mg_ptr + 1, "NCODING") && SvOK(sv))
                         if (PL_localizing != 2) {
-                            Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
-                                    "${^ENCODING} is no longer supported");
+                            deprecate_fatal_in("5.28",
+                               "${^ENCODING} is no longer supported");
                         }
         }
 	break;
@@ -2890,17 +2890,19 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
             if (SvROK(sv)) {
                 SV *referent= SvRV(sv);
                 const char *reftype= sv_reftype(referent, 0);
-                /* XXX: dodgy type check: This leaves me feeling dirty, but the alternative
-                 * is to copy pretty much the entire sv_reftype() into this routine, or to do
-                 * a full string comparison on the return of sv_reftype() both of which
-                 * make me feel worse! NOTE, do not modify this comment without reviewing the
-                 * corresponding comment in sv_reftype(). - Yves */
+                /* XXX: dodgy type check: This leaves me feeling dirty, but
+                 * the alternative is to copy pretty much the entire
+                 * sv_reftype() into this routine, or to do a full string
+                 * comparison on the return of sv_reftype() both of which
+                 * make me feel worse! NOTE, do not modify this comment
+                 * without reviewing the corresponding comment in
+                 * sv_reftype(). - Yves */
                 if (reftype[0] == 'S' || reftype[0] == 'L') {
                     IV val= SvIV(referent);
                     if (val <= 0) {
                         tmpsv= &PL_sv_undef;
                         Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
-                            "Setting $/ to a reference to %s as a form of slurp is deprecated, treating as undef",
+                            "Setting $/ to a reference to %s as a form of slurp is deprecated, treating as undef. This will be fatal in Perl 5.28",
                             SvIV(SvRV(sv)) < 0 ? "a negative integer" : "zero"
                         );
                     }

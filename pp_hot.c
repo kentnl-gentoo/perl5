@@ -1039,7 +1039,7 @@ PP(pp_rv2av)
 	      || (  PL_op->op_private & OPpMAYBE_TRUEBOOL
 		 && block_gimme() == G_VOID  ))
 	      && (!SvRMAGICAL(sv) || !mg_find(sv, PERL_MAGIC_tied)))
-	    SETs(HvUSEDKEYS(sv) ? &PL_sv_yes : sv_2mortal(newSViv(0)));
+	    SETs(HvUSEDKEYS(sv) ? &PL_sv_yes : &PL_sv_no);
 	else if (gimme == G_SCALAR) {
 	    dTARG;
 	    TARG = Perl_hv_scalar(aTHX_ MUTABLE_HV(sv));
@@ -2883,6 +2883,8 @@ PP(pp_iter)
            It has SvPVX of "" and SvCUR of 0, which is what we want.  */
         STRLEN maxlen = 0;
         const char *max = SvPV_const(end, maxlen);
+        if (DO_UTF8(end) && IN_UNI_8_BIT)
+            maxlen = sv_len_utf8_nomg(end);
         if (UNLIKELY(SvNIOK(cur) || SvCUR(cur) > maxlen))
             goto retno;
 
@@ -4465,7 +4467,7 @@ S_opmethod_stash(pTHX_ SV* meth)
 		     && SvOBJECT(ob))))
     {
 	Perl_croak(aTHX_ "Can't call method \"%" SVf "\" on unblessed reference",
-		   SVfARG((SvPVX(meth) == PL_isa_DOES)
+		   SVfARG((SvPOK(meth) && SvPVX(meth) == PL_isa_DOES)
                                         ? newSVpvs_flags("DOES", SVs_TEMP)
                                         : meth));
     }

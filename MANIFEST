@@ -3689,6 +3689,7 @@ dist/threads/t/free2.t		More ithread destruction tests
 dist/threads/t/join.t		Testing the join function
 dist/threads/t/kill.t		Tests thread signalling
 dist/threads/t/kill2.t		Tests thread signalling
+dist/threads/t/kill3.t		Tests thread signalling
 dist/threads/t/libc.t		testing libc functions for threadsafety
 dist/threads/t/list.t		Test threads->list()
 dist/threads/t/no_threads.t	threads test for non-threaded Perls
@@ -4902,7 +4903,9 @@ pod/perl5203delta.pod		Perl changes in version 5.20.3
 pod/perl5220delta.pod		Perl changes in version 5.22.0
 pod/perl5221delta.pod		Perl changes in version 5.22.1
 pod/perl5222delta.pod		Perl changes in version 5.22.2
+pod/perl5223delta.pod		Perl changes in version 5.22.3
 pod/perl5240delta.pod		Perl changes in version 5.24.0
+pod/perl5241delta.pod		Perl changes in version 5.24.1
 pod/perl5250delta.pod		Perl changes in version 5.25.0
 pod/perl5251delta.pod		Perl changes in version 5.25.1
 pod/perl5252delta.pod		Perl changes in version 5.25.2
@@ -4911,6 +4914,7 @@ pod/perl5254delta.pod		Perl changes in version 5.25.4
 pod/perl5255delta.pod		Perl changes in version 5.25.5
 pod/perl5256delta.pod		Perl changes in version 5.25.6
 pod/perl5257delta.pod		Perl changes in version 5.25.7
+pod/perl5258delta.pod		Perl changes in version 5.25.8
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -4938,6 +4942,7 @@ pod/perldebguts.pod		Perl debugging guts and tips
 pod/perldebtut.pod		Perl debugging tutorial
 pod/perldebug.pod		Perl debugging
 pod/perldelta.pod		Perl changes since previous version
+pod/perldeprecation.pod		Perl deprecations
 pod/perldiag.pod		Perl diagnostic messages
 pod/perldsc.pod			Perl data structures intro
 pod/perldtrace.pod		Perl's support for DTrace
@@ -5724,6 +5729,7 @@ t/porting/utils.t		Check that utility scripts still compile
 t/re/anyof.t			See if bracketed char classes [...] compile properly
 t/re/charset.t			See if regex modifiers like /d, /u work properly
 t/re/fold_grind.t		See if case folding works properly
+t/re/keep_tabs.t		Tests where \t can't be expanded.
 t/re/no_utf8_pm.t		Verify utf8.pm doesn't get loaded unless required
 t/re/overload.t		Test against string corruption in pattern matches on overloaded objects
 t/re/pat.t			See if esoteric patterns work
@@ -5885,7 +5891,6 @@ utfebcdic.h			Unicode on EBCDIC (UTF-EBCDIC, tr16) header
 util.c				Utility routines
 util.h				Dummy header
 utils.lst			Lists utilities bundled with Perl
-utils/c2ph.PL			program to translate dbx stabs to perl
 utils/corelist.PL		Module::CoreList
 utils/cpan.PL			easily interact with CPAN from the command line
 utils/enc2xs.PL			Encode module generator

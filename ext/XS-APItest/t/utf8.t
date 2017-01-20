@@ -98,21 +98,23 @@ my $UTF8_GOT_NON_CONTINUATION   = $UTF8_ALLOW_NON_CONTINUATION;
 my $UTF8_ALLOW_SHORT            = 0x0008;
 my $UTF8_GOT_SHORT              = $UTF8_ALLOW_SHORT;
 my $UTF8_ALLOW_LONG             = 0x0010;
+my $UTF8_ALLOW_LONG_AND_ITS_VALUE = $UTF8_ALLOW_LONG|0x0020;
 my $UTF8_GOT_LONG               = $UTF8_ALLOW_LONG;
-my $UTF8_GOT_OVERFLOW           = 0x0020;
-my $UTF8_DISALLOW_SURROGATE     = 0x0040;
+my $UTF8_ALLOW_OVERFLOW         = 0x0080;
+my $UTF8_GOT_OVERFLOW           = $UTF8_ALLOW_OVERFLOW;
+my $UTF8_DISALLOW_SURROGATE     = 0x0100;
 my $UTF8_GOT_SURROGATE          = $UTF8_DISALLOW_SURROGATE;
-my $UTF8_WARN_SURROGATE         = 0x0080;
-my $UTF8_DISALLOW_NONCHAR       = 0x0100;
+my $UTF8_WARN_SURROGATE         = 0x0200;
+my $UTF8_DISALLOW_NONCHAR       = 0x0400;
 my $UTF8_GOT_NONCHAR            = $UTF8_DISALLOW_NONCHAR;
-my $UTF8_WARN_NONCHAR           = 0x0200;
-my $UTF8_DISALLOW_SUPER         = 0x0400;
+my $UTF8_WARN_NONCHAR           = 0x0800;
+my $UTF8_DISALLOW_SUPER         = 0x1000;
 my $UTF8_GOT_SUPER              = $UTF8_DISALLOW_SUPER;
-my $UTF8_WARN_SUPER             = 0x0800;
-my $UTF8_DISALLOW_ABOVE_31_BIT  = 0x1000;
+my $UTF8_WARN_SUPER             = 0x2000;
+my $UTF8_DISALLOW_ABOVE_31_BIT  = 0x4000;
 my $UTF8_GOT_ABOVE_31_BIT       = $UTF8_DISALLOW_ABOVE_31_BIT;
-my $UTF8_WARN_ABOVE_31_BIT      = 0x2000;
-my $UTF8_CHECK_ONLY             = 0x4000;
+my $UTF8_WARN_ABOVE_31_BIT      = 0x8000;
+my $UTF8_CHECK_ONLY             = 0x10000;
 my $UTF8_DISALLOW_ILLEGAL_C9_INTERCHANGE
                              = $UTF8_DISALLOW_SUPER|$UTF8_DISALLOW_SURROGATE;
 my $UTF8_DISALLOW_ILLEGAL_INTERCHANGE
@@ -1199,10 +1201,12 @@ my $REPLACEMENT = 0xFFFD;
 my @malformations = (
     # ($testname, $bytes, $length, $allow_flags, $expected_error_flags,
     #  $allowed_uv, $expected_len, $needed_to_discern_len, $message )
-    [ "zero length string malformation", "", 0,
-        $UTF8_ALLOW_EMPTY, $UTF8_GOT_EMPTY, 0, 0, 0,
-        qr/empty string/
-    ],
+
+# Now considered a program bug, and asserted against
+    #[ "zero length string malformation", "", 0,
+    #    $UTF8_ALLOW_EMPTY, $UTF8_GOT_EMPTY, $REPLACEMENT, 0, 0,
+    #    qr/empty string/
+    #],
     [ "orphan continuation byte malformation", I8_to_native("${I8c}a"), 2,
         $UTF8_ALLOW_CONTINUATION, $UTF8_GOT_CONTINUATION, $REPLACEMENT,
         1, 1,
@@ -1344,8 +1348,7 @@ if (isASCII && ! $is64bit) {    # 32-bit ASCII platform
         [ "overflow malformation",
             "\xfe\x84\x80\x80\x80\x80\x80",  # Represents 2**32
             7,
-            0,  # There is no way to allow this malformation
-            $UTF8_GOT_OVERFLOW,
+            $UTF8_ALLOW_OVERFLOW, $UTF8_GOT_OVERFLOW,
             $REPLACEMENT,
             7, 2,
             qr/overflows/
@@ -1353,8 +1356,7 @@ if (isASCII && ! $is64bit) {    # 32-bit ASCII platform
         [ "overflow malformation",
             "\xff\x80\x80\x80\x80\x80\x81\x80\x80\x80\x80\x80\x80",
             $max_bytes,
-            0,  # There is no way to allow this malformation
-            $UTF8_GOT_OVERFLOW,
+            $UTF8_ALLOW_OVERFLOW, $UTF8_GOT_OVERFLOW,
             $REPLACEMENT,
             $max_bytes, 1,
             qr/overflows/
@@ -1396,8 +1398,7 @@ else { # 64-bit ASCII, or EBCDIC of any size.
             I8_to_native(
                     "\xff\xa0\xa0\xa0\xa0\xa0\xa0\xa4\xa0\xa0\xa0\xa0\xa0\xa0"),
             $max_bytes,
-            0,  # There is no way to allow this malformation
-            $UTF8_GOT_OVERFLOW,
+            $UTF8_ALLOW_OVERFLOW, $UTF8_GOT_OVERFLOW,
             $REPLACEMENT,
             $max_bytes, 8,
             qr/overflows/
@@ -1411,14 +1412,36 @@ else { # 64-bit ASCII, or EBCDIC of any size.
                 : I8_to_native(
                     "\xff\xb0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0\xa0"),
                 $max_bytes,
-                0,  # There is no way to allow this malformation
-                $UTF8_GOT_OVERFLOW,
+                $UTF8_ALLOW_OVERFLOW, $UTF8_GOT_OVERFLOW,
                 $REPLACEMENT,
                 $max_bytes, (isASCII) ? 3 : 2,
                 qr/overflows/
             ];
     }
 }
+
+# For each overlong malformation in the list, we modify it, so that there are
+# two tests.  The first one returns the replacement character given the input
+# flags, and the second test adds a flag that causes the actual code point the
+# malformation represents to be returned.
+my @added_overlongs;
+foreach my $test (@malformations) {
+    my ($testname, $bytes, $length, $allow_flags, $expected_error_flags,
+        $allowed_uv, $expected_len, $needed_to_discern_len, $message ) = @$test;
+    next unless $testname =~ /overlong/;
+
+    $test->[0] .= "; use REPLACEMENT CHAR";
+    $test->[5] = $REPLACEMENT;
+
+    push @added_overlongs,
+        [ $testname . "; use actual value",
+          $bytes, $length,
+          $allow_flags | $UTF8_ALLOW_LONG_AND_ITS_VALUE,
+          $expected_error_flags, $allowed_uv, $expected_len,
+          $needed_to_discern_len, $message
+        ];
+}
+push @malformations, @added_overlongs;
 
 foreach my $test (@malformations) {
     my ($testname, $bytes, $length, $allow_flags, $expected_error_flags,

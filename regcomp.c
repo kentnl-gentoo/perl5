@@ -177,7 +177,6 @@ struct RExC_state_t {
     U32         study_chunk_recursed_bytes;  /* bytes in bitmap */
     I32		in_lookbehind;
     I32		contains_locale;
-    I32		contains_i;
     I32		override_recoding;
 #ifdef EBCDIC
     I32		recode_x_to_native;
@@ -272,8 +271,6 @@ struct RExC_state_t {
                                    (pRExC_state->study_chunk_recursed_bytes)
 #define RExC_in_lookbehind	(pRExC_state->in_lookbehind)
 #define RExC_contains_locale	(pRExC_state->contains_locale)
-#define RExC_contains_i (pRExC_state->contains_i)
-#define RExC_override_recoding (pRExC_state->override_recoding)
 #ifdef EBCDIC
 #   define RExC_recode_x_to_native (pRExC_state->recode_x_to_native)
 #endif
@@ -556,7 +553,6 @@ static const scan_data_t zero_scan_data =
 #define OOB_UNICODE		0xDEADBEEF
 
 #define CHR_SVLEN(sv) (UTF ? sv_len_utf8(sv) : SvCUR(sv))
-#define CHR_DIST(a,b) (UTF ? utf8_distance(a,b) : a - b)
 
 
 /* length of regex to show in messages that don't mark a position within */
@@ -821,6 +817,13 @@ static const scan_data_t zero_scan_data =
                                        m REPORT_LOCATION,               \
 	                               a1, a2, a3,                      \
                                        REPORT_LOCATION_ARGS(loc));      \
+} STMT_END
+
+#define	vWARN4dep(loc, m, a1, a2, a3) STMT_START {			       \
+    __ASSERT_(PASS2) Perl_warner(aTHX_ packWARN2(WARN_REGEXP,WARN_DEPRECATED), \
+                                       m REPORT_LOCATION,                      \
+	                               a1, a2, a3,                             \
+                                       REPORT_LOCATION_ARGS(loc));             \
 } STMT_END
 
 #define	ckWARN4reg(loc, m, a1, a2, a3) STMT_START {			\
@@ -3911,7 +3914,7 @@ S_join_exact(pTHX_ RExC_state_t *pRExC_state, regnode *scan,
                     }
                     else {
                         STRLEN len;
-                        _to_utf8_fold_flags(s, d, &len, FOLD_FLAGS_FULL);
+                        _toFOLD_utf8_flags(s, s_end, d, &len, FOLD_FLAGS_FULL);
                         d += len;
                     }
                     s += s_len;
@@ -6520,8 +6523,12 @@ S_compile_runtime_code(pTHX_ RExC_state_t * const pRExC_state,
 	    *p++ = pat[s];
 	}
 	*p++ = '\'';
-	if (pRExC_state->pm_flags & RXf_PMf_EXTENDED)
+	if (pRExC_state->pm_flags & RXf_PMf_EXTENDED) {
 	    *p++ = 'x';
+            if (pRExC_state->pm_flags & RXf_PMf_EXTENDED_MORE) {
+                *p++ = 'x';
+            }
+        }
 	*p++ = '\0';
 	DEBUG_COMPILE_r({
             Perl_re_printf( aTHX_
@@ -6922,7 +6929,6 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
     RExC_uni_semantics = 0;
     RExC_seen_unfolded_sharp_s = 0;
     RExC_contains_locale = 0;
-    RExC_contains_i = 0;
     RExC_strict = cBOOL(pm_flags & RXf_PMf_STRICT);
     RExC_study_started = 0;
     pRExC_state->runtime_code_qr = NULL;
@@ -6974,9 +6980,6 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 
     rx_flags = orig_rx_flags;
 
-    if (rx_flags & PMf_FOLD) {
-        RExC_contains_i = 1;
-    }
     if (   initial_charset == REGEX_DEPENDS_CHARSET
         && (RExC_utf8 ||RExC_uni_semantics))
     {
@@ -7013,7 +7016,6 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
     RExC_in_lookbehind = 0;
     RExC_seen_zerolen = *exp == '^' ? -1 : 0;
     RExC_extralen = 0;
-    RExC_override_recoding = 0;
 #ifdef EBCDIC
     RExC_recode_x_to_native = 0;
 #endif
@@ -7171,7 +7173,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
                                                    == REG_RUN_ON_COMMENT_SEEN);
 	U8 reganch = (U8)((r->extflags & RXf_PMf_STD_PMMOD)
 			    >> RXf_PMf_STD_PMMOD_SHIFT);
-	const char *fptr = STD_PAT_MODS;        /*"msixn"*/
+	const char *fptr = STD_PAT_MODS;        /*"msixxn"*/
 	char *p;
 
         /* We output all the necessary flags; we never output a minus, as all
@@ -8271,17 +8273,18 @@ S_reg_scan_name(pTHX_ RExC_state_t *pRExC_state, U32 flags)
 
     assert (RExC_parse <= RExC_end);
     if (RExC_parse == RExC_end) NOOP;
-    else if (isIDFIRST_lazy_if(RExC_parse, UTF)) {
+    else if (isIDFIRST_lazy_if_safe(RExC_parse, RExC_end, UTF)) {
          /* Note that the code here assumes well-formed UTF-8.  Skip IDFIRST by
           * using do...while */
 	if (UTF)
 	    do {
 		RExC_parse += UTF8SKIP(RExC_parse);
-	    } while (isWORDCHAR_utf8((U8*)RExC_parse));
+	    } while (   RExC_parse < RExC_end
+                     && isWORDCHAR_utf8_safe((U8*)RExC_parse, (U8*) RExC_end));
 	else
 	    do {
 		RExC_parse++;
-	    } while (isWORDCHAR(*RExC_parse));
+	    } while (RExC_parse < RExC_end && isWORDCHAR(*RExC_parse));
     } else {
         RExC_parse++; /* so the <- from the vFAIL is after the offending
                          character */
@@ -10044,9 +10047,10 @@ Perl__load_PL_utf8_foldclosures (pTHX)
      * to force that */
     if (! PL_utf8_tofold) {
         U8 dummy[UTF8_MAXBYTES_CASE+1];
+        const U8 hyphen[] = HYPHEN_UTF8;
 
         /* This string is just a short named one above \xff */
-        to_utf8_fold((U8*) HYPHEN_UTF8, dummy, NULL);
+        toFOLD_utf8_safe(hyphen, hyphen + sizeof(hyphen) - 1, dummy, NULL);
         assert(PL_utf8_tofold); /* Verify that worked */
     }
     PL_utf8_foldclosures = _swash_inversion_hash(PL_utf8_tofold);
@@ -10065,9 +10069,6 @@ Perl__invlistEQ(pTHX_ SV* const a, SV* const b, const bool complement_b)
     const UV* array_b = invlist_array(b);
     UV len_a = _invlist_len(a);
     UV len_b = _invlist_len(b);
-
-    UV i = 0;		    /* current index into the arrays */
-    bool retval = TRUE;     /* Assume are identical until proven otherwise */
 
     PERL_ARGS_ASSERT__INVLISTEQ;
 
@@ -10098,20 +10099,9 @@ Perl__invlistEQ(pTHX_ SV* const a, SV* const b, const bool complement_b)
         }
     }
 
-    /* Make sure that the lengths are the same, as well as the final element
-     * before looping through the remainder.  (Thus we test the length, final,
-     * and first elements right off the bat) */
-    if (len_a != len_b || array_a[len_a-1] != array_b[len_a-1]) {
-        retval = FALSE;
-    }
-    else for (i = 0; i < len_a - 1; i++) {
-        if (array_a[i] != array_b[i]) {
-            retval = FALSE;
-            break;
-        }
-    }
+    return    len_a == len_b
+           && memEQ(array_a, array_b, len_a * sizeof(array_a[0]));
 
-    return retval;
 }
 #endif
 
@@ -10197,7 +10187,7 @@ S__make_exactf_invlist(pTHX_ RExC_state_t *pRExC_state, regnode *node)
                 }
                 else {
                     STRLEN len;
-                    to_utf8_fold(s, d, &len);
+                    toFOLD_utf8_safe(s, e, d, &len);
                     d += len;
                     s += UTF8SKIP(s);
                 }
@@ -10447,21 +10437,23 @@ S_parse_lparen_question_flags(pTHX_ RExC_state_t *pRExC_state)
                 }
                 flagsp = &negflags;
                 wastedflags = 0;  /* reset so (?g-c) warns twice */
+                x_mod_count = 0;
                 break;
             case ':':
             case ')':
+
+                if ((posflags & (RXf_PMf_EXTENDED|RXf_PMf_EXTENDED_MORE)) == RXf_PMf_EXTENDED) {
+                    negflags |= RXf_PMf_EXTENDED_MORE;
+                }
                 RExC_flags |= posflags;
+
+                if (negflags & RXf_PMf_EXTENDED) {
+                    negflags |= RXf_PMf_EXTENDED_MORE;
+                }
                 RExC_flags &= ~negflags;
                 set_regex_charset(&RExC_flags, cs);
-                if (RExC_flags & RXf_PMf_FOLD) {
-                    RExC_contains_i = 1;
-                }
 
-                if (UNLIKELY((x_mod_count) > 1)) {
-                    vFAIL("Only one /x regex modifier is allowed");
-                }
                 return;
-                /*NOTREACHED*/
             default:
               fail_modifiers:
                 RExC_parse += SKIP_IF_CHAR(RExC_parse);
@@ -11608,7 +11600,7 @@ S_regbranch(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, I32 first, U32 depth)
 }
 
 /*
- - regpiece - something followed by possible [*+?]
+ - regpiece - something followed by possible quantifier * + ? {n,m}
  *
  * Note that the branching code sequences used for ? and the general cases
  * of * and + are somewhat optimized:  they use the same NOTHING node as
@@ -12160,7 +12152,6 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state,
         /* The values are Unicode, and therefore not subject to recoding, but
          * have to be converted to native on a non-Unicode (meaning non-ASCII)
          * platform. */
-	RExC_override_recoding = 1;
 #ifdef EBCDIC
         RExC_recode_x_to_native = 1;
 #endif
@@ -12181,7 +12172,6 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state,
 	RExC_start = RExC_adjusted_start = save_start;
 	RExC_parse = endbrace;
 	RExC_end = orig_end;
-	RExC_override_recoding = 0;
 #ifdef EBCDIC
         RExC_recode_x_to_native = 0;
 #endif
@@ -13380,6 +13370,12 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                         RExC_parse = p + 1;
 			vFAIL("Unescaped left brace in regex is illegal here");
 		    }
+		    goto normal_default;
+                case '}':
+                case ']':
+                    if (PASS2 && p > RExC_parse && RExC_strict) {
+                        ckWARN2reg(p + 1, "Unescaped literal '%c'", *p);
+                    }
 		    /*FALLTHROUGH*/
 		default:    /* A literal character */
 		  normal_default:
@@ -13799,7 +13795,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
     skip_to_be_ignored_text(pRExC_state, &RExC_parse,
                                             FALSE /* Don't force to /x */ );
     if (PASS2 && *RExC_parse == '{' && OP(ret) != SBOL && ! regcurly(RExC_parse)) {
-        ckWARNregdep(RExC_parse + 1, "Unescaped left brace in regex is deprecated here, passed through");
+        ckWARNregdep(RExC_parse + 1, "Unescaped left brace in regex is deprecated here (and will be fatal in Perl 5.30), passed through");
     }
 
     return(ret);
@@ -15814,8 +15810,10 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                                        character; used under /i */
     UV n;
     char * stop_ptr = RExC_end;    /* where to stop parsing */
-    const bool skip_white = cBOOL(ret_invlist); /* ignore unescaped white
-                                                   space? */
+
+    /* ignore unescaped whitespace? */
+    const bool skip_white = cBOOL(   ret_invlist
+                                  || (RExC_flags & RXf_PMf_EXTENDED_MORE));
 
     /* Unicode properties are stored in a swash; this holds the current one
      * being parsed.  If this swash is the only above-latin1 component of the
@@ -16811,15 +16809,19 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                      * must be be all digits or all letters of the same case.
                      * Otherwise, the range is non-portable and unclear as to
                      * what it contains */
-                    if ((isPRINT_A(prevvalue) || isPRINT_A(value))
-                        && (non_portable_endpoint
-                            || ! ((isDIGIT_A(prevvalue) && isDIGIT_A(value))
-                                   || (isLOWER_A(prevvalue) && isLOWER_A(value))
-                                   || (isUPPER_A(prevvalue) && isUPPER_A(value)))))
-                    {
-                        vWARN(RExC_parse, "Ranges of ASCII printables should be some subset of \"0-9\", \"A-Z\", or \"a-z\"");
+                    if (             (isPRINT_A(prevvalue) || isPRINT_A(value))
+                        && (          non_portable_endpoint
+                            || ! (   (isDIGIT_A(prevvalue) && isDIGIT_A(value))
+                                  || (isLOWER_A(prevvalue) && isLOWER_A(value))
+                                  || (isUPPER_A(prevvalue) && isUPPER_A(value))
+                    ))) {
+                        vWARN(RExC_parse, "Ranges of ASCII printables should"
+                                          " be some subset of \"0-9\","
+                                          " \"A-Z\", or \"a-z\"");
                     }
                     else if (prevvalue >= 0x660) { /* ARABIC_INDIC_DIGIT_ZERO */
+                        SSize_t index_start;
+                        SSize_t index_final;
 
                         /* But the nature of Unicode and languages mean we
                          * can't do the same checks for above-ASCII ranges,
@@ -16827,40 +16829,68 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                          * contain only digits from the same group of 10.  The
                          * ASCII case is handled just above.  0x660 is the
                          * first digit character beyond ASCII.  Hence here, the
-                         * range could be a range of digits.  Find out.  */
-                        IV index_start = _invlist_search(PL_XPosix_ptrs[_CC_DIGIT],
-                                                         prevvalue);
-                        IV index_final = _invlist_search(PL_XPosix_ptrs[_CC_DIGIT],
-                                                         value);
+                         * range could be a range of digits.  First some
+                         * unlikely special cases.  Grandfather in that a range
+                         * ending in 19DA (NEW TAI LUE THAM DIGIT ONE) is bad
+                         * if its starting value is one of the 10 digits prior
+                         * to it.  This is because it is an alternate way of
+                         * writing 19D1, and some people may expect it to be in
+                         * that group.  But it is bad, because it won't give
+                         * the expected results.  In Unicode 5.2 it was
+                         * considered to be in that group (of 11, hence), but
+                         * this was fixed in the next version */
 
-                        /* If the range start and final points are in the same
-                         * inversion list element, it means that either both
-                         * are not digits, or both are digits in a consecutive
-                         * sequence of digits.  (So far, Unicode has kept all
-                         * such sequences as distinct groups of 10, but assert
-                         * to make sure).  If the end points are not in the
-                         * same element, neither should be a digit. */
-                        if (index_start == index_final) {
-                            assert(! ELEMENT_RANGE_MATCHES_INVLIST(index_start)
-                            || (invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start+1]
-                               - invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start]
-                               == 10)
-                               /* But actually Unicode did have one group of 11
-                                * 'digits' in 5.2, so in case we are operating
-                                * on that version, let that pass */
-                            || (invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start+1]
-                               - invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start]
-                                == 11
-                               && invlist_array(PL_XPosix_ptrs[_CC_DIGIT])[index_start]
-                                == 0x19D0)
-                            );
+                        if (UNLIKELY(value == 0x19DA && prevvalue >= 0x19D0)) {
+                            goto warn_bad_digit_range;
                         }
-                        else if ((index_start >= 0
-                                  && ELEMENT_RANGE_MATCHES_INVLIST(index_start))
-                                 || (index_final >= 0
-                                     && ELEMENT_RANGE_MATCHES_INVLIST(index_final)))
+                        else if (UNLIKELY(   prevvalue >= 0x1D7CE
+                                          &&     value <= 0x1D7FF))
                         {
-                            vWARN(RExC_parse, "Ranges of digits should be from the same group of 10");
+                            /* This is the only other case currently in Unicode
+                             * where the algorithm below fails.  The code
+                             * points just above are the end points of a single
+                             * range containing only decimal digits.  It is 5
+                             * different series of 0-9.  All other ranges of
+                             * digits currently in Unicode are just a single
+                             * series.  (And mktables will notify us if a later
+                             * Unicode version breaks this.)
+                             *
+                             * If the range being checked is at most 9 long,
+                             * and the digit values represented are in
+                             * numerical order, they are from the same series.
+                             * */
+                            if (         value - prevvalue > 9
+                                ||    (((    value - 0x1D7CE) % 10)
+                                     <= (prevvalue - 0x1D7CE) % 10))
+                            {
+                                goto warn_bad_digit_range;
+                            }
+                        }
+                        else {
+
+                            /* For all other ranges of digits in Unicode, the
+                             * algorithm is just to check if both end points
+                             * are in the same series, which is the same range.
+                             * */
+                            index_start = _invlist_search(
+                                                    PL_XPosix_ptrs[_CC_DIGIT],
+                                                    prevvalue);
+
+                            /* Warn if the range starts and ends with a digit,
+                             * and they are not in the same group of 10. */
+                            if (   index_start >= 0
+                                && ELEMENT_RANGE_MATCHES_INVLIST(index_start)
+                                && (index_final =
+                                    _invlist_search(PL_XPosix_ptrs[_CC_DIGIT],
+                                                    value)) != index_start
+                                && index_final >= 0
+                                && ELEMENT_RANGE_MATCHES_INVLIST(index_final))
+                            {
+                              warn_bad_digit_range:
+                                vWARN(RExC_parse, "Ranges of digits should be"
+                                                  " from the same group of"
+                                                  " 10");
+                            }
                         }
                     }
                 }
@@ -16875,20 +16905,22 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                     literal[d++] = (char) value;
                     literal[d++] = '\0';
 
-                    vWARN4(RExC_parse,
-                           "\"%.*s\" is more clearly written simply as \"%s\"",
+                    vWARN4dep(RExC_parse,
+                           "\"%.*s\" is more clearly written simply as \"%s\". "
+                           "This will be a fatal error in Perl 5.28",
                            (int) (RExC_parse - rangebegin),
                            rangebegin,
                            literal
-                        );
+                    );
                 }
                 else if isMNEMONIC_CNTRL(value) {
-                    vWARN4(RExC_parse,
-                           "\"%.*s\" is more clearly written simply as \"%s\"",
+                    vWARN4dep(RExC_parse,
+                           "\"%.*s\" is more clearly written simply as \"%s\". "
+                           "This will be a fatal error in Perl 5.28",
                            (int) (RExC_parse - rangebegin),
                            rangebegin,
                            cntrl_to_mnemonic((U8) value)
-                        );
+                    );
                 }
             }
         }
@@ -17030,7 +17062,6 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
         RExC_adjusted_start = RExC_start + prefix_end;
 	RExC_end = RExC_parse + len;
         RExC_in_multi_char_class = 1;
-	RExC_override_recoding = 1;
         RExC_emit = (regnode *)orig_emit;
 
 	ret = reg(pRExC_state, 1, &reg_flags, depth+1);
@@ -17043,7 +17074,6 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
         RExC_precomp_adj = 0;
 	RExC_end = save_end;
 	RExC_in_multi_char_class = 0;
-	RExC_override_recoding = 0;
         SvREFCNT_dec_NN(multi_char_matches);
         return ret;
     }
