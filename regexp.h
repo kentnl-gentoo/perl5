@@ -85,6 +85,14 @@ struct reg_code_block {
     REGEXP *src_regex;
 };
 
+/* array of reg_code_block's plus header info */
+
+struct reg_code_blocks {
+    int refcnt; /* we may be pointed to from a regex and from the savestack */
+    int  count;    /* how many code blocks */
+    struct reg_code_block *cb; /* array of reg_code_block's */
+};
+
 
 /*
   The regexp/REGEXP struct, see L<perlreapi> for further documentation
@@ -262,7 +270,7 @@ and check for NULL.
 */
 
 #define SvRX(sv)   (Perl_get_re_arg(aTHX_ sv))
-#define SvRXOK(sv) (Perl_get_re_arg(aTHX_ sv) ? TRUE : FALSE)
+#define SvRXOK(sv) cBOOL(Perl_get_re_arg(aTHX_ sv))
 
 
 /* Flags stored in regexp->extflags

@@ -4985,6 +4985,8 @@ Perl_sv_setpvn(pTHX_ SV *const sv, const char *const ptr, const STRLEN len)
     PERL_ARGS_ASSERT_SV_SETPVN;
 
     SV_CHECK_THINKFIRST_COW_DROP(sv);
+    if (isGV_with_GP(sv))
+	Perl_croak_no_modify();
     if (!ptr) {
 	(void)SvOK_off(sv);
 	return;
@@ -6326,7 +6328,7 @@ C<SvPV_force_flags> that applies to C<bigstr>.
 */
 
 void
-Perl_sv_insert_flags(pTHX_ SV *const bigstr, const STRLEN offset, const STRLEN len, const char *const little, const STRLEN littlelen, const U32 flags)
+Perl_sv_insert_flags(pTHX_ SV *const bigstr, const STRLEN offset, const STRLEN len, const char *little, const STRLEN littlelen, const U32 flags)
 {
     char *big;
     char *mid;
@@ -6339,6 +6341,16 @@ Perl_sv_insert_flags(pTHX_ SV *const bigstr, const STRLEN offset, const STRLEN l
 
     SvPV_force_flags(bigstr, curlen, flags);
     (void)SvPOK_only_UTF8(bigstr);
+
+    if (little >= SvPVX(bigstr) &&
+        little < SvPVX(bigstr) + (SvLEN(bigstr) ? SvLEN(bigstr) : SvCUR(bigstr))) {
+        /* little is a pointer to within bigstr, since we can reallocate bigstr,
+           or little...little+littlelen might overlap offset...offset+len we make a copy
+        */
+        little = savepvn(little, littlelen);
+        SAVEFREEPV(little);
+    }
+
     if (offset + len > curlen) {
 	SvGROW(bigstr, offset+len+1);
 	Zero(SvPVX(bigstr)+curlen, offset+len-curlen, char);
@@ -9323,7 +9335,14 @@ SV is set to 1.  If C<len> is zero, Perl will compute the length using
 C<strlen()>, (which means if you use this option, that C<s> can't have embedded
 C<NUL> characters and has to have a terminating C<NUL> byte).
 
-For efficiency, consider using C<newSVpvn> instead.
+This function can cause reliability issues if you are likely to pass in
+empty strings that are not null terminated, because it will run
+strlen on the string and potentially run past valid memory.
+
+Using L</newSVpvn> is a safer alternative for non C<NUL> terminated strings.
+For string literals use L</newSVpvs> instead.  This function will work fine for
+C<NUL> terminated strings, but if you want to avoid the if statement on whether
+to call C<strlen> use C<newSVpvn> instead (calling C<strlen> yourself).
 
 =cut
 */
@@ -12872,8 +12891,11 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                         Perl_croak_nocontext("panic: quadmath invalid format \"%s\"", ptr);
                     elen = quadmath_snprintf(PL_efloatbuf, PL_efloatsize,
                                              qfmt, nv);
-                    if ((IV)elen == -1)
+                    if ((IV)elen == -1) {
+                        if (qfmt != ptr)
+                            SAVEFREEPV(qfmt);
                         Perl_croak_nocontext("panic: quadmath_snprintf failed, format \"%s\"", qfmt);
+                    }
                     if (qfmt != ptr)
                         Safefree(qfmt);
                 }
@@ -13192,6 +13214,7 @@ Perl_parser_dup(pTHX_ const yy_parser *const proto, CLONE_PARAMS *const param)
     parser->sig_elems	= proto->sig_elems;
     parser->sig_optelems= proto->sig_optelems;
     parser->sig_slurpy  = proto->sig_slurpy;
+    parser->recheck_utf8_validity = proto->recheck_utf8_validity;
     parser->linestr	= sv_dup_inc(proto->linestr, param);
 
     {

@@ -360,7 +360,6 @@ PP(pp_padrange)
     dSP;
     PADOFFSET base = PL_op->op_targ;
     int count = (int)(PL_op->op_private) & OPpPADRANGE_COUNTMASK;
-    int i;
     if (PL_op->op_flags & OPf_SPECIAL) {
         /* fake the RHS of my ($x,$y,..) = @_ */
         PUSHMARK(SP);
@@ -370,6 +369,8 @@ PP(pp_padrange)
 
     /* note, this is only skipped for compile-time-known void cxt */
     if ((PL_op->op_flags & OPf_WANT) != OPf_WANT_VOID) {
+        int i;
+
         EXTEND(SP, count);
         PUSHMARK(SP);
         for (i = 0; i <count; i++)
@@ -381,6 +382,8 @@ PP(pp_padrange)
                       (base << (OPpPADRANGE_COUNTSHIFT + SAVE_TIGHT_SHIFT))
                     | (count << SAVE_TIGHT_SHIFT)
                     | SAVEt_CLEARPADRANGE);
+        int i;
+
         STATIC_ASSERT_STMT(OPpPADRANGE_COUNTMASK + 1 == (1 << OPpPADRANGE_COUNTSHIFT));
         assert((payload >> (OPpPADRANGE_COUNTSHIFT+SAVE_TIGHT_SHIFT))
                 == (Size_t)base);
@@ -1039,7 +1042,7 @@ PP(pp_rv2av)
 	      || (  PL_op->op_private & OPpMAYBE_TRUEBOOL
 		 && block_gimme() == G_VOID  ))
 	      && (!SvRMAGICAL(sv) || !mg_find(sv, PERL_MAGIC_tied)))
-	    SETs(HvUSEDKEYS(sv) ? &PL_sv_yes : &PL_sv_no);
+	    SETs(HvUSEDKEYS(MUTABLE_HV(sv)) ? &PL_sv_yes : &PL_sv_no);
 	else if (gimme == G_SCALAR) {
 	    dTARG;
 	    TARG = Perl_hv_scalar(aTHX_ MUTABLE_HV(sv));
@@ -1182,6 +1185,7 @@ S_aassign_copy_common(pTHX_ SV **firstlelem, SV **lastlelem,
         assert(svr);
 
         if (UNLIKELY(SvFLAGS(svr) & (SVf_BREAK|SVs_GMG) || copy_all)) {
+            U32 brk = (SvFLAGS(svr) & SVf_BREAK);
 
 #ifdef DEBUGGING
             if (fake) {
@@ -1217,7 +1221,7 @@ S_aassign_copy_common(pTHX_ SV **firstlelem, SV **lastlelem,
             /* ... but restore afterwards in case it's needed again,
              * e.g. ($a,$b,$c) = (1,$a,$a)
              */
-            SvFLAGS(svr) |= SVf_BREAK;
+            SvFLAGS(svr) |= brk;
         }
 
         if (!lcount)

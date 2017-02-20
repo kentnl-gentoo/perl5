@@ -251,7 +251,7 @@ use File::Glob qw(:case);
     },
 
     'CPAN' => {
-        'DISTRIBUTION' => 'ANDK/CPAN-2.16-TRIAL2.tar.gz',
+        'DISTRIBUTION' => 'ANDK/CPAN-2.17-TRIAL2.tar.gz',
         'FILES'        => q[cpan/CPAN],
         'EXCLUDED'     => [
             qr{^distroprefs/},
@@ -837,7 +837,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20161220.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20170120.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -1011,6 +1011,7 @@ use File::Glob qw(:case);
             'lib/Sub/Util.pm',     # CPAN RT 118470
             't/lln.t',             # CPAN RT 118470
             't/uniq.t',            # CPAN RT 118470
+            't/tainted.t',         # CPAN RT 119169
         ],
     },
 
@@ -1219,7 +1220,7 @@ use File::Glob qw(:case);
     # correct for this (and Thread::Semaphore, threads, and threads::shared)
     # to be under dist/ rather than cpan/
     'Thread::Queue' => {
-        'DISTRIBUTION' => 'JDHEDDEN/Thread-Queue-3.11.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/Thread-Queue-3.12.tar.gz',
         'FILES'        => q[dist/Thread-Queue],
         'EXCLUDED'     => [
             qr{^examples/},

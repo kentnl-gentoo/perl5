@@ -505,6 +505,8 @@ PP(pp_formline)
 	SvTAINTED_on(PL_formtarget);
     if (DO_UTF8(PL_formtarget))
 	targ_is_utf8 = TRUE;
+    /* this is an initial estimate of how much output buffer space
+     * to allocate. It may be exceeded later */
     linemax = (SvCUR(formsv) * (IN_BYTES ? 1 : 3) + 1);
     t = SvGROW(PL_formtarget, len + linemax + 1);
     /* XXX from now onwards, SvCUR(PL_formtarget) is invalid */
@@ -766,6 +768,7 @@ PP(pp_formline)
 
 		if (targ_is_utf8 && !item_is_utf8) {
 		    source = tmp = bytes_to_utf8(source, &to_copy);
+                    grow = to_copy;
 		} else {
 		    if (item_is_utf8 && !targ_is_utf8) {
 			U8 *s;
@@ -2946,6 +2949,7 @@ PP(pp_goto)
 	OP *gotoprobe = NULL;
 	bool leaving_eval = FALSE;
 	bool in_block = FALSE;
+	bool pseudo_block = FALSE;
 	PERL_CONTEXT *last_eval_cx = NULL;
 
 	/* find label */
@@ -2984,11 +2988,9 @@ PP(pp_goto)
 		    gotoprobe = PL_main_root;
 		break;
 	    case CXt_SUB:
-		if (CvDEPTH(cx->blk_sub.cv) && !CxMULTICALL(cx)) {
-		    gotoprobe = CvROOT(cx->blk_sub.cv);
-		    break;
-		}
-		/* FALLTHROUGH */
+		gotoprobe = CvROOT(cx->blk_sub.cv);
+		pseudo_block = cBOOL(CxMULTICALL(cx));
+		break;
 	    case CXt_FORMAT:
 	    case CXt_NULL:
 		DIE(aTHX_ "Can't \"goto\" out of a pseudo block");
@@ -3017,6 +3019,8 @@ PP(pp_goto)
 			break;
 		}
 	    }
+	    if (pseudo_block)
+		DIE(aTHX_ "Can't \"goto\" out of a pseudo block");
 	    PL_lastgotoprobe = gotoprobe;
 	}
 	if (!retop)
@@ -5171,7 +5175,7 @@ S_doparseform(pTHX_ SV *sv)
 	SV *old = mg->mg_obj;
 	if ( !(!!SvUTF8(old) ^ !!SvUTF8(sv))
 	      && len == SvCUR(old)
-	      && strnEQ(SvPVX(old), SvPVX(sv), len)
+              && strnEQ(SvPVX(old), s, len)
 	) {
 	    DEBUG_f(PerlIO_printf(Perl_debug_log,"Re-using compiled format\n"));
 	    return mg;

@@ -506,6 +506,7 @@ p	|void	|dump_all_perl	|bool justperl
 Ap	|void	|dump_eval
 Ap	|void	|dump_form	|NN const GV* gv
 Ap	|void	|gv_dump	|NULLOK GV* gv
+Apd	|OPclass|op_class	|NULLOK const OP *o
 Ap	|void	|op_dump	|NN const OP *o
 Ap	|void	|pmop_dump	|NULLOK PMOP* pm
 Ap	|void	|dump_packsubs	|NN const HV* stash
@@ -678,9 +679,9 @@ ApbmM	|SV**	|hv_store_flags	|NULLOK HV *hv|NULLOK const char *key \
 Amd	|void	|hv_undef	|NULLOK HV *hv
 poX	|void	|hv_undef_flags	|NULLOK HV *hv|U32 flags
 AmP	|I32	|ibcmp		|NN const char* a|NN const char* b|I32 len
-AnpP	|I32	|foldEQ		|NN const char* a|NN const char* b|I32 len
+Ainp	|I32	|foldEQ		|NN const char* a|NN const char* b|I32 len
 AmP	|I32	|ibcmp_locale	|NN const char* a|NN const char* b|I32 len
-AnpP	|I32	|foldEQ_locale	|NN const char* a|NN const char* b|I32 len
+Ainp	|I32	|foldEQ_locale	|NN const char* a|NN const char* b|I32 len
 Am	|I32	|ibcmp_utf8	|NN const char *s1|NULLOK char **pe1|UV l1 \
 				|bool u1|NN const char *s2|NULLOK char **pe2 \
 				|UV l2|bool u2
@@ -690,7 +691,7 @@ Amd	|I32	|foldEQ_utf8	|NN const char *s1|NULLOK char **pe1|UV l1 \
 AMp	|I32	|foldEQ_utf8_flags |NN const char *s1|NULLOK char **pe1|UV l1 \
 				|bool u1|NN const char *s2|NULLOK char **pe2 \
 				|UV l2|bool u2|U32 flags
-AnpP	|I32	|foldEQ_latin1	|NN const char* a|NN const char* b|I32 len
+Ainp	|I32	|foldEQ_latin1	|NN const char* a|NN const char* b|I32 len
 #if defined(PERL_IN_DOIO_C)
 sR	|bool	|ingroup	|Gid_t testgid|bool effective
 #endif
@@ -858,6 +859,7 @@ pP	|I32	|keyword	|NN const char *name|I32 len|bool all_keywords
 s	|void	|inplace_aassign	|NN OP* o
 #endif
 Ap	|void	|leave_scope	|I32 base
+p	|void	|notify_parser_that_changed_to_utf8
 : Public lexer API
 AMpd	|void	|lex_start	|NULLOK SV* line|NULLOK PerlIO *rsfp|U32 flags
 AMpd	|bool	|lex_bufutf8
@@ -1526,7 +1528,7 @@ Apd	|char*	|sv_collxfrm_flags	|NN SV *const sv|NN STRLEN *const nxp|I32 const fl
 Apd	|int	|getcwd_sv	|NN SV* sv
 Apd	|void	|sv_dec		|NULLOK SV *const sv
 Apd	|void	|sv_dec_nomg	|NULLOK SV *const sv
-Ap	|void	|sv_dump	|NN SV* sv
+Ap	|void	|sv_dump	|NULLOK SV* sv
 ApdR	|bool	|sv_derived_from|NN SV* sv|NN const char *const name
 ApdR	|bool	|sv_derived_from_sv|NN SV* sv|NN SV *namesv|U32 flags
 ApdR	|bool	|sv_derived_from_pv|NN SV* sv|NN const char *const name|U32 flags
@@ -1551,7 +1553,7 @@ Apmdb	|void	|sv_insert	|NN SV *const bigstr|const STRLEN offset \
 				|const STRLEN len|NN const char *const little \
 				|const STRLEN littlelen
 Apd	|void	|sv_insert_flags|NN SV *const bigstr|const STRLEN offset|const STRLEN len \
-				|NN const char *const little|const STRLEN littlelen|const U32 flags
+				|NN const char *little|const STRLEN littlelen|const U32 flags
 Apd	|int	|sv_isa		|NULLOK SV* sv|NN const char *const name
 Apd	|int	|sv_isobject	|NULLOK SV* sv
 Apd	|STRLEN	|sv_len		|NULLOK SV *const sv
@@ -1713,6 +1715,10 @@ ApdD	|UV	|to_utf8_case	|NN const U8 *p					\
 				|NN SV **swashp					\
 				|NN const char *normal|				\
 				NULLOK const char *special
+ApM	|char *	|_byte_dump_string					\
+				|NN const U8 * s			\
+				|const STRLEN len			\
+				|const bool format
 #if defined(PERL_IN_UTF8_C)
 inR	|bool	|does_utf8_overflow|NN const U8 * const s|NN const U8 * e
 inR	|bool	|is_utf8_overlong_given_start_byte_ok|NN const U8 * const s|const STRLEN len
@@ -1722,7 +1728,6 @@ sMR	|char *	|unexpected_non_continuation_text			\
 		|STRLEN print_len					\
 		|const STRLEN non_cont_byte_pos				\
 		|const STRLEN expect_len
-sM	|char *	|_byte_dump_string|NN const U8 * s|const STRLEN len
 s	|void	|warn_on_first_deprecated_use				    \
 				|NN const char * const name		    \
 				|NN const char * const alternative	    \
@@ -1798,7 +1803,7 @@ ApMd	|U8*	|bytes_to_utf8	|NN const U8 *s|NN STRLEN *len
 ApdD	|UV	|utf8_to_uvchr	|NN const U8 *s|NULLOK STRLEN *retlen
 ApdD	|UV	|utf8_to_uvuni	|NN const U8 *s|NULLOK STRLEN *retlen
 ApMD	|UV	|valid_utf8_to_uvuni	|NN const U8 *s|NULLOK STRLEN *retlen
-Amd	|UV	|utf8_to_uvchr_buf	|NN const U8 *s|NN const U8 *send|NULLOK STRLEN *retlen
+Aopd	|UV	|utf8_to_uvchr_buf	|NN const U8 *s|NN const U8 *send|NULLOK STRLEN *retlen
 ApdD	|UV	|utf8_to_uvuni_buf	|NN const U8 *s|NN const U8 *send|NULLOK STRLEN *retlen
 pM	|bool	|check_utf8_print	|NN const U8 *s|const STRLEN len
 
@@ -1875,8 +1880,10 @@ inR	|bool	|should_warn_nl|NN const char *pv
 p	|void	|write_to_stderr|NN SV* msv
 : Used in op.c
 p	|int	|yyerror	|NN const char *const s
+p	|void	|yyquit
+p	|void	|abort_execution|NN const char * const msg|NN const char * const name
 p	|int	|yyerror_pv	|NN const char *const s|U32 flags
-p	|int	|yyerror_pvn	|NN const char *const s|STRLEN len|U32 flags
+p	|int	|yyerror_pvn	|NULLOK const char *const s|STRLEN len|U32 flags
 : Used in perly.y, and by Data::Alias
 EXp	|int	|yylex
 p	|void	|yyunlex
@@ -2339,7 +2346,7 @@ Es	|bool	|grok_bslash_N	|NN RExC_state_t *pRExC_state		    \
 				|const bool strict			    \
 				|const U32 depth
 Es	|void	|reginsert	|NN RExC_state_t *pRExC_state \
-				|U8 op|NN regnode *opnd|U32 depth
+				|U8 op|NN regnode *operand|U32 depth
 Es	|void	|regtail	|NN RExC_state_t * pRExC_state		    \
 				|NN const regnode * const p		    \
 				|NN const regnode * const val		    \
@@ -2644,7 +2651,7 @@ sR	|SV*	|get_and_check_backslash_N_name|NN const char* s \
 				|NN const char* const e
 sR	|char*	|scan_formline	|NN char *s
 sR	|char*	|scan_heredoc	|NN char *s
-s	|char*	|scan_ident	|NN char *s|NN char *dest \
+s	|char*	|scan_ident	|NN char *s|NN char *dest	\
 				|STRLEN destlen|I32 ck_uni
 sR	|char*	|scan_inputsymbol|NN char *start
 sR	|char*	|scan_pat	|NN char *start|I32 type

@@ -487,13 +487,13 @@ void
 Perl_opslab_force_free(pTHX_ OPSLAB *slab)
 {
     OPSLAB *slab2;
-    OPSLOT *slot;
 #ifdef DEBUGGING
     size_t savestack_count = 0;
 #endif
     PERL_ARGS_ASSERT_OPSLAB_FORCE_FREE;
     slab2 = slab;
     do {
+        OPSLOT *slot;
 	for (slot = slab2->opslab_first;
 	     slot->opslot_next;
 	     slot = slot->opslot_next) {
@@ -994,8 +994,9 @@ Perl_op_clear(pTHX_ OP *o)
 	/* FALLTHROUGH */
     case OP_TRANS:
     case OP_TRANSR:
-	if (o->op_private & (OPpTRANS_FROM_UTF|OPpTRANS_TO_UTF)) {
-	    assert(o->op_type == OP_TRANS || o->op_type == OP_TRANSR);
+	if (   (o->op_type == OP_TRANS || o->op_type == OP_TRANSR)
+            && (o->op_private & (OPpTRANS_FROM_UTF|OPpTRANS_TO_UTF)))
+        {
 #ifdef USE_ITHREADS
 	    if (cPADOPo->op_padix > 0) {
 		pad_swipe(cPADOPo->op_padix, TRUE);
@@ -1864,7 +1865,6 @@ Perl_scalarvoid(pTHX_ OP *arg)
     dVAR;
     OP *kid;
     SV* sv;
-    U8 want;
     SSize_t defer_stack_alloc = 0;
     SSize_t defer_ix = -1;
     OP **defer_stack = NULL;
@@ -1873,6 +1873,7 @@ Perl_scalarvoid(pTHX_ OP *arg)
     PERL_ARGS_ASSERT_SCALARVOID;
 
     do {
+        U8 want;
         SV *useless_sv = NULL;
         const char* useless = NULL;
 
@@ -4620,27 +4621,86 @@ static OP *
 S_gen_constant_list(pTHX_ OP *o)
 {
     dVAR;
-    OP *curop;
-    const SSize_t oldtmps_floor = PL_tmps_floor;
+    OP *curop, *old_next;
+    SV * const oldwarnhook = PL_warnhook;
+    SV * const olddiehook  = PL_diehook;
+    COP *old_curcop;
+    U8 oldwarn = PL_dowarn;
     SV **svp;
     AV *av;
+    I32 old_cxix;
+    COP not_compiling;
+    int ret = 0;
+    dJMPENV;
+    bool op_was_null;
 
     list(o);
     if (PL_parser && PL_parser->error_count)
 	return o;		/* Don't attempt to run with errors */
 
     curop = LINKLIST(o);
+    old_next = o->op_next;
     o->op_next = 0;
+    op_was_null = o->op_type == OP_NULL;
+    if (op_was_null) /* b3698342565fb462291fba4b432cfcd05b6eb4e1 */
+	o->op_type = OP_CUSTOM;
     CALL_PEEP(curop);
+    if (op_was_null)
+	o->op_type = OP_NULL;
     S_prune_chain_head(&curop);
     PL_op = curop;
-    Perl_pp_pushmark(aTHX);
-    CALLRUNOPS(aTHX);
-    PL_op = curop;
-    assert (!(curop->op_flags & OPf_SPECIAL));
-    assert(curop->op_type == OP_RANGE);
-    Perl_pp_anonlist(aTHX);
-    PL_tmps_floor = oldtmps_floor;
+
+    old_cxix = cxstack_ix;
+    create_eval_scope(NULL, G_FAKINGEVAL);
+
+    old_curcop = PL_curcop;
+    StructCopy(old_curcop, &not_compiling, COP);
+    PL_curcop = &not_compiling;
+    /* The above ensures that we run with all the correct hints of the
+       current COP, but that IN_PERL_RUNTIME is true. */
+    assert(IN_PERL_RUNTIME);
+    PL_warnhook = PERL_WARNHOOK_FATAL;
+    PL_diehook  = NULL;
+    JMPENV_PUSH(ret);
+
+    /* Effective $^W=1.  */
+    if ( ! (PL_dowarn & G_WARN_ALL_MASK))
+	PL_dowarn |= G_WARN_ON;
+
+    switch (ret) {
+    case 0:
+	Perl_pp_pushmark(aTHX);
+	CALLRUNOPS(aTHX);
+	PL_op = curop;
+	assert (!(curop->op_flags & OPf_SPECIAL));
+	assert(curop->op_type == OP_RANGE);
+	Perl_pp_anonlist(aTHX);
+	break;
+    case 3:
+	CLEAR_ERRSV();
+	o->op_next = old_next;
+	break;
+    default:
+	JMPENV_POP;
+	PL_warnhook = oldwarnhook;
+	PL_diehook = olddiehook;
+	Perl_croak(aTHX_ "panic: gen_constant_list JMPENV_PUSH returned %d",
+	    ret);
+    }
+
+    JMPENV_POP;
+    PL_dowarn = oldwarn;
+    PL_warnhook = oldwarnhook;
+    PL_diehook = olddiehook;
+    PL_curcop = old_curcop;
+
+    if (cxstack_ix > old_cxix) {
+        assert(cxstack_ix == old_cxix + 1);
+        assert(CxTYPE(CX_CUR()) == CXt_EVAL);
+        delete_eval_scope();
+    }
+    if (ret)
+	return o;
 
     OpTYPE_set(o, OP_RV2AV);
     o->op_flags &= ~OPf_REF;	/* treat \(1..2) like an ordinary list */
@@ -5781,6 +5841,11 @@ Perl_pmruntime(pTHX_ OP *o, OP *expr, OP *repl, UV flags, I32 floor)
             /* make engine handle split ' ' specially */
             pm->op_pmflags |= PMf_SPLIT;
             rx_flags |= RXf_SPLIT;
+        }
+
+        /* Skip compiling if parser found an error for this pattern */
+        if (pm->op_pmflags & PMf_HAS_ERROR) {
+            return o;
         }
 
 	if (!has_code || !eng->op_comp) {
@@ -10498,10 +10563,10 @@ Perl_ck_smartmatch(pTHX_ OP *o)
         op_sibling_splice(o, NULL, 0, first);
 	
 	/* Implicitly take a reference to a regular expression */
-	if (first->op_type == OP_MATCH) {
+	if (first->op_type == OP_MATCH && !(first->op_flags & OPf_STACKED)) {
             OpTYPE_set(first, OP_QR);
 	}
-	if (second->op_type == OP_MATCH) {
+	if (second->op_type == OP_MATCH && !(second->op_flags & OPf_STACKED)) {
             OpTYPE_set(second, OP_QR);
         }
     }
@@ -10830,7 +10895,6 @@ Perl_ck_require(pTHX_ OP *o)
 
     if (o->op_flags & OPf_KIDS) {	/* Shall we supply missing .pm? */
 	SVOP * const kid = (SVOP*)cUNOPo->op_first;
-	HEK *hek;
 	U32 hash;
 	char *s;
 	STRLEN len;
@@ -10840,6 +10904,7 @@ Perl_ck_require(pTHX_ OP *o)
 	  if (kid->op_private & OPpCONST_BARE) {
             dVAR;
 	    const char *end;
+            HEK *hek;
 
 	    if (was_readonly) {
 		    SvREADONLY_off(sv);
@@ -10882,6 +10947,7 @@ Perl_ck_require(pTHX_ OP *o)
 	    }
 	    else {
                 dVAR;
+                HEK *hek;
 		if (was_readonly) SvREADONLY_off(sv);
 		PERL_HASH(hash, s, len);
 		hek = share_hek(s,
@@ -10922,7 +10988,7 @@ Perl_ck_return(pTHX_ OP *o)
     PERL_ARGS_ASSERT_CK_RETURN;
 
     kid = OpSIBLING(cLISTOPo->op_first);
-    if (CvLVALUE(PL_compcv)) {
+    if (PL_compcv && CvLVALUE(PL_compcv)) {
 	for (; kid; kid = OpSIBLING(kid))
 	    op_lvalue(kid, OP_LEAVESUBLV);
     }
@@ -13118,6 +13184,27 @@ S_maybe_multideref(pTHX_ OP *start, OP *orig_o, UV orig_action, U8 hints)
                            && (   (o->op_private & OPpDEREF) == OPpDEREF_AV
                                || (o->op_private & OPpDEREF) == OPpDEREF_HV);
 
+                /* This doesn't make much sense but is legal:
+                 *    @{ local $x[0][0] } = 1
+                 * Since scope exit will undo the autovivification,
+                 * don't bother in the first place. The OP_LEAVE
+                 * assertion is in case there are other cases of both
+                 * OPpLVAL_INTRO and OPpDEREF which don't include a scope
+                 * exit that would undo the local - in which case this
+                 * block of code would need rethinking.
+                 */
+                if (is_deref && (o->op_private & OPpLVAL_INTRO)) {
+#ifdef DEBUGGING
+                    OP *n = o->op_next;
+                    while (n && (  n->op_type == OP_NULL
+                                || n->op_type == OP_LIST))
+                        n = n->op_next;
+                    assert(n && n->op_type == OP_LEAVE);
+#endif
+                    o->op_private &= ~OPpDEREF;
+                    is_deref = FALSE;
+                }
+
                 if (is_deref) {
                     ASSUME(!(o->op_flags &
                                  ~(OPf_WANT|OPf_KIDS|OPf_MOD|OPf_PARENS)));
@@ -14393,8 +14480,9 @@ Perl_rpeep(pTHX_ OP *o)
                       && (  kid->op_targ == OP_NEXTSTATE
                          || kid->op_targ == OP_DBSTATE  ))
                     || kid->op_type == OP_STUB
-                    || kid->op_type == OP_ENTER);
-                nullop->op_next = kLISTOP->op_next;
+                    || kid->op_type == OP_ENTER
+                    || (PL_parser && PL_parser->error_count));
+                nullop->op_next = kid->op_next;
                 DEFER(nullop->op_next);
 	    }
 

@@ -619,11 +619,11 @@ Perl_ninstr(const char *big, const char *bigend, const char *little, const char 
         return (char*)big;
     {
         const char first = *little;
-        const char *s, *x;
         bigend -= lend - little++;
     OUTER:
         while (big <= bigend) {
             if (*big++ == first) {
+                const char *s, *x;
                 for (x=big,s=little; s < lend; x++,s++) {
                     if (*s != *x)
                         goto OUTER;
@@ -951,16 +951,7 @@ Perl_fbm_instr(pTHX_ unsigned char *big, unsigned char *bigend, SV *littlestr, U
 	char * const b = ninstr((char*)big,(char*)bigend,
 			 (char*)little, (char*)little + littlelen);
 
-	if (!b && tail) {	/* Automatically multiline!  */
-	    /* Chop \n from littlestr: */
-	    s = bigend - littlelen + 1;
-	    if (*s == *little
-		&& memEQ((char*)s + 1, (char*)little + 1, littlelen - 2))
-	    {
-		return (char*)s;
-	    }
-	    return NULL;
-	}
+        assert(!tail); /* valid => FBM; tail only set on SvVALID SVs */
 	return b;
     }
 
@@ -1029,89 +1020,6 @@ Perl_fbm_instr(pTHX_ unsigned char *big, unsigned char *bigend, SV *littlestr, U
 	    return (char*)bigend - littlelen;
 	return NULL;
     }
-}
-
-
-/*
-=for apidoc foldEQ
-
-Returns true if the leading C<len> bytes of the strings C<s1> and C<s2> are the
-same
-case-insensitively; false otherwise.  Uppercase and lowercase ASCII range bytes
-match themselves and their opposite case counterparts.  Non-cased and non-ASCII
-range bytes match only themselves.
-
-=cut
-*/
-
-
-I32
-Perl_foldEQ(const char *s1, const char *s2, I32 len)
-{
-    const U8 *a = (const U8 *)s1;
-    const U8 *b = (const U8 *)s2;
-
-    PERL_ARGS_ASSERT_FOLDEQ;
-
-    assert(len >= 0);
-
-    while (len--) {
-	if (*a != *b && *a != PL_fold[*b])
-	    return 0;
-	a++,b++;
-    }
-    return 1;
-}
-I32
-Perl_foldEQ_latin1(const char *s1, const char *s2, I32 len)
-{
-    /* Compare non-utf8 using Unicode (Latin1) semantics.  Does not work on
-     * MICRO_SIGN, LATIN_SMALL_LETTER_SHARP_S, nor
-     * LATIN_SMALL_LETTER_Y_WITH_DIAERESIS, and does not check for these.  Nor
-     * does it check that the strings each have at least 'len' characters */
-
-    const U8 *a = (const U8 *)s1;
-    const U8 *b = (const U8 *)s2;
-
-    PERL_ARGS_ASSERT_FOLDEQ_LATIN1;
-
-    assert(len >= 0);
-
-    while (len--) {
-	if (*a != *b && *a != PL_fold_latin1[*b]) {
-	    return 0;
-	}
-	a++, b++;
-    }
-    return 1;
-}
-
-/*
-=for apidoc foldEQ_locale
-
-Returns true if the leading C<len> bytes of the strings C<s1> and C<s2> are the
-same case-insensitively in the current locale; false otherwise.
-
-=cut
-*/
-
-I32
-Perl_foldEQ_locale(const char *s1, const char *s2, I32 len)
-{
-    dVAR;
-    const U8 *a = (const U8 *)s1;
-    const U8 *b = (const U8 *)s2;
-
-    PERL_ARGS_ASSERT_FOLDEQ_LOCALE;
-
-    assert(len >= 0);
-
-    while (len--) {
-	if (*a != *b && *a != PL_fold_locale[*b])
-	    return 0;
-	a++,b++;
-    }
-    return 1;
 }
 
 /* copy a string to a safe spot */
@@ -1518,14 +1426,17 @@ Perl_mess_sv(pTHX_ SV *basemsg, bool consume)
 	 * from the sibling of PL_curcop.
 	 */
 
-	const COP *cop =
-	    closest_cop(PL_curcop, OpSIBLING(PL_curcop), PL_op, FALSE);
-	if (!cop)
-	    cop = PL_curcop;
+        if (PL_curcop) {
+            const COP *cop =
+                closest_cop(PL_curcop, OpSIBLING(PL_curcop), PL_op, FALSE);
+            if (!cop)
+                cop = PL_curcop;
 
-	if (CopLINE(cop))
-	    Perl_sv_catpvf(aTHX_ sv, " at %s line %" IVdf,
-	    OutCopFILE(cop), (IV)CopLINE(cop));
+            if (CopLINE(cop))
+                Perl_sv_catpvf(aTHX_ sv, " at %s line %" IVdf,
+                                OutCopFILE(cop), (IV)CopLINE(cop));
+        }
+
 	/* Seems that GvIO() can be untrustworthy during global destruction. */
 	if (GvIO(PL_last_in_gv) && (SvTYPE(GvIOp(PL_last_in_gv)) == SVt_PVIO)
 		&& IoLINES(GvIOp(PL_last_in_gv)))
@@ -2546,10 +2457,9 @@ Perl_my_popen_list(pTHX_ const char *mode, int n, SV **args)
     if (did_pipes && pid > 0) {
 	int errkid;
 	unsigned n = 0;
-	SSize_t n1;
 
 	while (n < sizeof(int)) {
-	    n1 = PerlLIO_read(pp[0],
+            const SSize_t n1 = PerlLIO_read(pp[0],
 			      (void*)(((char*)&errkid)+n),
 			      (sizeof(int)) - n);
 	    if (n1 <= 0)
@@ -2704,10 +2614,9 @@ Perl_my_popen(pTHX_ const char *cmd, const char *mode)
     if (did_pipes && pid > 0) {
 	int errkid;
 	unsigned n = 0;
-	SSize_t n1;
 
 	while (n < sizeof(int)) {
-	    n1 = PerlLIO_read(pp[0],
+            const SSize_t n1 = PerlLIO_read(pp[0],
 			      (void*)(((char*)&errkid)+n),
 			      (sizeof(int)) - n);
 	    if (n1 <= 0)
@@ -5244,8 +5153,13 @@ Perl_my_snprintf(char *buffer, const Size_t len, const char *format, ...)
         if (qfmt) {
             /* If the format looked promising, use it as quadmath. */
             retval = quadmath_snprintf(buffer, len, qfmt, va_arg(ap, NV));
-            if (retval == -1)
+            if (retval == -1) {
+                if (qfmt != format) {
+                    dTHX;
+                    SAVEFREEPV(qfmt);
+                }
                 Perl_croak_nocontext("panic: quadmath_snprintf failed, format \"%s\"", qfmt);
+            }
             quadmath_valid = TRUE;
             if (qfmt != format)
                 Safefree(qfmt);

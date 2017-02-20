@@ -41,6 +41,9 @@ PERL_CALLCONV void*	Perl_Slab_Alloc(pTHX_ size_t sz)
 PERL_CALLCONV void	Perl_Slab_Free(pTHX_ void *op);
 #define PERL_ARGS_ASSERT_SLAB_FREE	\
 	assert(op)
+PERL_CALLCONV char *	Perl__byte_dump_string(pTHX_ const U8 * s, const STRLEN len, const bool format);
+#define PERL_ARGS_ASSERT__BYTE_DUMP_STRING	\
+	assert(s)
 PERL_CALLCONV void	Perl__force_out_malformed_utf8_message(pTHX_ const U8 *const p, const U8 * const e, const U32 flags, const bool die_here);
 #define PERL_ARGS_ASSERT__FORCE_OUT_MALFORMED_UTF8_MESSAGE	\
 	assert(p); assert(e)
@@ -115,6 +118,9 @@ PERL_CALLCONV UV	Perl__to_utf8_upper_flags(pTHX_ const U8 *p, const U8 *e, U8* u
 #define PERL_ARGS_ASSERT__TO_UTF8_UPPER_FLAGS	\
 	assert(p); assert(ustrp); assert(file)
 PERL_CALLCONV void	Perl__warn_problematic_locale(void);
+PERL_CALLCONV void	Perl_abort_execution(pTHX_ const char * const msg, const char * const name);
+#define PERL_ARGS_ASSERT_ABORT_EXECUTION	\
+	assert(msg); assert(name)
 PERL_CALLCONV LOGOP*	Perl_alloc_LOGOP(pTHX_ I32 type, OP *first, OP *other);
 PERL_CALLCONV PADOFFSET	Perl_allocmy(pTHX_ const char *const name, const STRLEN len, const U32 flags);
 #define PERL_ARGS_ASSERT_ALLOCMY	\
@@ -880,24 +886,15 @@ PERL_CALLCONV PADOFFSET	Perl_find_rundefsvoffset(pTHX)
 PERL_CALLCONV char*	Perl_find_script(pTHX_ const char *scriptname, bool dosearch, const char *const *const search_ext, I32 flags);
 #define PERL_ARGS_ASSERT_FIND_SCRIPT	\
 	assert(scriptname)
-PERL_CALLCONV I32	Perl_foldEQ(const char* a, const char* b, I32 len)
-			__attribute__warn_unused_result__
-			__attribute__pure__;
+PERL_STATIC_INLINE I32	Perl_foldEQ(const char* a, const char* b, I32 len);
 #define PERL_ARGS_ASSERT_FOLDEQ	\
 	assert(a); assert(b)
-
-PERL_CALLCONV I32	Perl_foldEQ_latin1(const char* a, const char* b, I32 len)
-			__attribute__warn_unused_result__
-			__attribute__pure__;
+PERL_STATIC_INLINE I32	Perl_foldEQ_latin1(const char* a, const char* b, I32 len);
 #define PERL_ARGS_ASSERT_FOLDEQ_LATIN1	\
 	assert(a); assert(b)
-
-PERL_CALLCONV I32	Perl_foldEQ_locale(const char* a, const char* b, I32 len)
-			__attribute__warn_unused_result__
-			__attribute__pure__;
+PERL_STATIC_INLINE I32	Perl_foldEQ_locale(const char* a, const char* b, I32 len);
 #define PERL_ARGS_ASSERT_FOLDEQ_LOCALE	\
 	assert(a); assert(b)
-
 /* PERL_CALLCONV I32	foldEQ_utf8(pTHX_ const char *s1, char **pe1, UV l1, bool u1, const char *s2, char **pe2, UV l2, bool u2); */
 PERL_CALLCONV I32	Perl_foldEQ_utf8_flags(pTHX_ const char *s1, char **pe1, UV l1, bool u1, const char *s2, char **pe2, UV l2, bool u2, U32 flags);
 #define PERL_ARGS_ASSERT_FOLDEQ_UTF8_FLAGS	\
@@ -2331,6 +2328,7 @@ PERL_CALLCONV_NO_RET void	Perl_noperl_die(const char* pat, ...)
 	assert(pat)
 
 PERL_CALLCONV int	Perl_nothreadhook(pTHX);
+PERL_CALLCONV void	Perl_notify_parser_that_changed_to_utf8(pTHX);
 PERL_CALLCONV OP*	Perl_oopsAV(pTHX_ OP* o)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_OOPSAV	\
@@ -2343,6 +2341,7 @@ PERL_CALLCONV OP*	Perl_oopsHV(pTHX_ OP* o)
 
 PERL_CALLCONV OP*	Perl_op_append_elem(pTHX_ I32 optype, OP* first, OP* last);
 PERL_CALLCONV OP*	Perl_op_append_list(pTHX_ I32 optype, OP* first, OP* last);
+PERL_CALLCONV OPclass	Perl_op_class(pTHX_ const OP *o);
 PERL_CALLCONV void	Perl_op_clear(pTHX_ OP* o);
 #define PERL_ARGS_ASSERT_OP_CLEAR	\
 	assert(o)
@@ -3074,8 +3073,6 @@ PERL_CALLCONV bool	Perl_sv_does_sv(pTHX_ SV* sv, SV* namesv, U32 flags)
 	assert(sv); assert(namesv)
 
 PERL_CALLCONV void	Perl_sv_dump(pTHX_ SV* sv);
-#define PERL_ARGS_ASSERT_SV_DUMP	\
-	assert(sv)
 /* PERL_CALLCONV I32	sv_eq(pTHX_ SV* sv1, SV* sv2); */
 PERL_CALLCONV I32	Perl_sv_eq_flags(pTHX_ SV* sv1, SV* sv2, const U32 flags);
 #ifndef NO_MATHOMS
@@ -3107,7 +3104,7 @@ PERL_CALLCONV void	Perl_sv_insert(pTHX_ SV *const bigstr, const STRLEN offset, c
 #define PERL_ARGS_ASSERT_SV_INSERT	\
 	assert(bigstr); assert(little)
 #endif
-PERL_CALLCONV void	Perl_sv_insert_flags(pTHX_ SV *const bigstr, const STRLEN offset, const STRLEN len, const char *const little, const STRLEN littlelen, const U32 flags);
+PERL_CALLCONV void	Perl_sv_insert_flags(pTHX_ SV *const bigstr, const STRLEN offset, const STRLEN len, const char *little, const STRLEN littlelen, const U32 flags);
 #define PERL_ARGS_ASSERT_SV_INSERT_FLAGS	\
 	assert(bigstr); assert(little)
 PERL_CALLCONV int	Perl_sv_isa(pTHX_ SV* sv, const char *const name);
@@ -3549,7 +3546,9 @@ PERL_CALLCONV UV	Perl_utf8_to_uvchr(pTHX_ const U8 *s, STRLEN *retlen)
 #define PERL_ARGS_ASSERT_UTF8_TO_UVCHR	\
 	assert(s)
 
-/* PERL_CALLCONV UV	utf8_to_uvchr_buf(pTHX_ const U8 *s, const U8 *send, STRLEN *retlen); */
+PERL_CALLCONV UV	Perl_utf8_to_uvchr_buf(pTHX_ const U8 *s, const U8 *send, STRLEN *retlen);
+#define PERL_ARGS_ASSERT_UTF8_TO_UVCHR_BUF	\
+	assert(s); assert(send)
 PERL_CALLCONV UV	Perl_utf8_to_uvuni(pTHX_ const U8 *s, STRLEN *retlen)
 			__attribute__deprecated__;
 #define PERL_ARGS_ASSERT_UTF8_TO_UVUNI	\
@@ -3694,10 +3693,9 @@ PERL_CALLCONV int	Perl_yyerror_pv(pTHX_ const char *const s, U32 flags);
 #define PERL_ARGS_ASSERT_YYERROR_PV	\
 	assert(s)
 PERL_CALLCONV int	Perl_yyerror_pvn(pTHX_ const char *const s, STRLEN len, U32 flags);
-#define PERL_ARGS_ASSERT_YYERROR_PVN	\
-	assert(s)
 PERL_CALLCONV int	Perl_yylex(pTHX);
 PERL_CALLCONV int	Perl_yyparse(pTHX_ int gramtype);
+PERL_CALLCONV void	Perl_yyquit(pTHX);
 PERL_CALLCONV void	Perl_yyunlex(pTHX);
 #if !(defined(DEBUGGING))
 #  if !defined(NV_PRESERVES_UV)
@@ -5041,9 +5039,9 @@ STATIC regnode*	S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 dept
 STATIC unsigned int	S_regex_set_precedence(const U8 my_operator)
 			__attribute__warn_unused_result__;
 
-STATIC void	S_reginsert(pTHX_ RExC_state_t *pRExC_state, U8 op, regnode *opnd, U32 depth);
+STATIC void	S_reginsert(pTHX_ RExC_state_t *pRExC_state, U8 op, regnode *operand, U32 depth);
 #define PERL_ARGS_ASSERT_REGINSERT	\
-	assert(pRExC_state); assert(opnd)
+	assert(pRExC_state); assert(operand)
 STATIC regnode*	S_regnode_guts(pTHX_ RExC_state_t *pRExC_state, const U8 op, const STRLEN extra_len, const char* const name);
 #define PERL_ARGS_ASSERT_REGNODE_GUTS	\
 	assert(pRExC_state); assert(name)
@@ -5620,9 +5618,6 @@ STATIC bool	S_isa_lookup(pTHX_ HV *stash, const char * const name, STRLEN len, U
 	assert(stash); assert(name)
 #endif
 #if defined(PERL_IN_UTF8_C)
-STATIC char *	S__byte_dump_string(pTHX_ const U8 * s, const STRLEN len);
-#define PERL_ARGS_ASSERT__BYTE_DUMP_STRING	\
-	assert(s)
 STATIC UV	S__to_utf8_case(pTHX_ const UV uv1, const U8 *p, U8* ustrp, STRLEN *lenp, SV **swashp, const char *normal, const char *special);
 #define PERL_ARGS_ASSERT__TO_UTF8_CASE	\
 	assert(p); assert(ustrp); assert(swashp); assert(normal)

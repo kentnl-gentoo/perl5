@@ -4048,7 +4048,7 @@ static SV *retrieve_idx_blessed(pTHX_ stcxt_t *cxt, const char *cname)
  */
 static SV *retrieve_blessed(pTHX_ stcxt_t *cxt, const char *cname)
 {
-	I32 len;
+	U32 len;
 	SV *sv;
 	char buf[LG_BLESS + 1];		/* Avoid malloc() if possible */
 	char *classname = buf;
@@ -4069,6 +4069,9 @@ static SV *retrieve_blessed(pTHX_ stcxt_t *cxt, const char *cname)
 	if (len & 0x80) {
 		RLEN(len);
 		TRACEME(("** allocating %d bytes for class name", len+1));
+		if (len > I32_MAX) {
+			CROAK(("Corrupted classname length"));
+		}
 		New(10003, classname, len+1, char);
 		malloced_classname = classname;
 	}
@@ -4119,7 +4122,7 @@ static SV *retrieve_blessed(pTHX_ stcxt_t *cxt, const char *cname)
  */
 static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 {
-	I32 len;
+	U32 len;
 	char buf[LG_BLESS + 1];		/* Avoid malloc() if possible */
 	char *classname = buf;
 	unsigned int flags;
@@ -4253,6 +4256,10 @@ static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 		else
 			GETMARK(len);
 
+		if (len > I32_MAX) {
+			CROAK(("Corrupted classname length"));
+		}
+
 		if (len > LG_BLESS) {
 			TRACEME(("** allocating %d bytes for class name", len+1));
 			New(10003, classname, len+1, char);
@@ -4273,6 +4280,11 @@ static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 	}
 
 	TRACEME(("class name: %s", classname));
+
+	if (!(flags & SHF_IDX_CLASSNAME) && classname != buf) {
+                /* some execution paths can throw an exception */
+		SAVEFREEPV(classname);
+        }
 
 	/*
 	 * Decode user-frozen string length and read it in an SV.
@@ -4393,8 +4405,6 @@ static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 		SEEN0_NN(sv, 0);
 		SvRV_set(attached, NULL);
 		SvREFCNT_dec(attached);
-		if (!(flags & SHF_IDX_CLASSNAME) && classname != buf)
-		    Safefree(classname);
 		return sv;
 	    }
 	    CROAK(("STORABLE_attach did not return a %s object", classname));
@@ -4475,8 +4485,6 @@ static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 	SvREFCNT_dec(frozen);
 	av_undef(av);
 	sv_free((SV *) av);
-	if (!(flags & SHF_IDX_CLASSNAME) && classname != buf)
-		Safefree(classname);
 
 	/*
 	 * If we had an <extra> type, then the object was not as simple, and

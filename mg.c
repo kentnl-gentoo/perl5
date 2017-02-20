@@ -171,6 +171,7 @@ Perl_mg_get(pTHX_ SV *sv)
     const I32 mgs_ix = SSNEW(sizeof(MGS));
     bool saved = FALSE;
     bool have_new = 0;
+    bool taint_only = TRUE; /* the only get method seen is taint */
     MAGIC *newmg, *head, *cur, *mg;
 
     PERL_ARGS_ASSERT_MG_GET;
@@ -189,10 +190,13 @@ Perl_mg_get(pTHX_ SV *sv)
 	if (!(mg->mg_flags & MGf_GSKIP) && vtbl && vtbl->svt_get) {
 
 	    /* taint's mg get is so dumb it doesn't need flag saving */
-	    if (!saved && mg->mg_type != PERL_MAGIC_taint) {
-		save_magic(mgs_ix, sv);
-		saved = TRUE;
-	    }
+	    if (mg->mg_type != PERL_MAGIC_taint) {
+                taint_only = FALSE;
+                if (!saved) {
+                    save_magic(mgs_ix, sv);
+                    saved = TRUE;
+                }
+            }
 
 	    vtbl->svt_get(aTHX_ sv, mg);
 
@@ -210,8 +214,23 @@ Perl_mg_get(pTHX_ SV *sv)
 		     ~(SVs_GMG|SVs_SMG|SVs_RMG);
 	}
 	else if (vtbl == &PL_vtbl_utf8) {
-	    /* get-magic can reallocate the PV */
-	    magic_setutf8(sv, mg);
+	    /* get-magic can reallocate the PV, unless there's only taint
+             * magic */
+            if (taint_only) {
+                MAGIC *mg2;
+                for (mg2 = nextmg; mg2; mg2 = mg2->mg_moremagic) {
+                    if (   mg2->mg_type != PERL_MAGIC_taint
+                        && !(mg2->mg_flags & MGf_GSKIP)
+                        && mg2->mg_virtual
+                        && mg2->mg_virtual->svt_get
+                    ) {
+                        taint_only = FALSE;
+                        break;
+                    }
+                }
+            }
+            if (!taint_only)
+                magic_setutf8(sv, mg);
 	}
 
 	mg = nextmg;
@@ -588,9 +607,9 @@ Perl_mg_free_type(pTHX_ SV *sv, int how)
     MAGIC *mg, *prevmg, *moremg;
     PERL_ARGS_ASSERT_MG_FREE_TYPE;
     for (prevmg = NULL, mg = SvMAGIC(sv); mg; prevmg = mg, mg = moremg) {
-	MAGIC *newhead;
 	moremg = mg->mg_moremagic;
 	if (mg->mg_type == how) {
+            MAGIC *newhead;
 	    /* temporarily move to the head of the magic chain, in case
 	       custom free code relies on this historical aspect of mg_free */
 	    if (prevmg) {
@@ -925,7 +944,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	}
 	break;
     case '\010':		/* ^H */
-	sv_setiv(sv, (IV)PL_hints);
+	sv_setuv(sv, PL_hints);
 	break;
     case '\011':		/* ^I */ /* NOT \t in EBCDIC */
 	sv_setpv(sv, PL_inplace); /* Will undefine sv if PL_inplace is NULL */
@@ -989,7 +1008,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
         break;
     case '\027':		/* ^W  & $^WARNING_BITS */
 	if (nextchar == '\0')
-	    sv_setiv(sv, (IV)((PL_dowarn & G_WARN_ON) ? TRUE : FALSE));
+	    sv_setiv(sv, (IV)cBOOL(PL_dowarn & G_WARN_ON));
 	else if (strEQ(remaining, "ARNING_BITS")) {
 	    if (PL_compiling.cop_warnings == pWARN_NONE) {
 	        sv_setpvn(sv, WARN_NONEstring, WARNsize) ;
@@ -1119,9 +1138,9 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 #ifdef HAS_GETGROUPS
 	{
 	    Groups_t *gary = NULL;
-	    I32 i;
             I32 num_groups = getgroups(0, gary);
             if (num_groups > 0) {
+                I32 i;
                 Newx(gary, num_groups, Groups_t);
                 num_groups = getgroups(num_groups, gary);
                 for (i = 0; i < num_groups; i++)
@@ -2130,7 +2149,6 @@ Perl_magic_setpos(pTHX_ SV *sv, MAGIC *mg)
     SV* const lsv = LvTARG(sv);
     SSize_t pos;
     STRLEN len;
-    STRLEN ulen = 0;
     MAGIC* found;
     const char *s;
 
@@ -2152,7 +2170,7 @@ Perl_magic_setpos(pTHX_ SV *sv, MAGIC *mg)
     pos = SvIV(sv);
 
     if (DO_UTF8(lsv)) {
-	ulen = sv_or_pv_len_utf8(lsv, s, len);
+        const STRLEN ulen = sv_or_pv_len_utf8(lsv, s, len);
 	if (ulen)
 	    len = ulen;
     }
@@ -2718,7 +2736,15 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	PL_maxsysfd = SvIV(sv);
 	break;
     case '\010':	/* ^H */
-	PL_hints = SvIV(sv);
+        {
+            U32 save_hints = PL_hints;
+            PL_hints = SvUV(sv);
+
+            /* If wasn't UTF-8, and now is, notify the parser */
+            if ((PL_hints & HINT_UTF8) && ! (save_hints & HINT_UTF8)) {
+                notify_parser_that_changed_to_utf8();
+            }
+        }
 	break;
     case '\011':	/* ^I */ /* NOT \t in EBCDIC */
 	Safefree(PL_inplace);

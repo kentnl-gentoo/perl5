@@ -736,7 +736,7 @@ S_gv_fetchmeth_internal(pTHX_ HV* stash, SV* meth, const char* name, STRLEN len,
 
     /* check locally for a real method or a cache entry */
     he = (HE*)hv_common(
-        cachestash, meth, name, len, (flags & SVf_UTF8) ? HVhek_UTF8 : 0, create, NULL, 0
+        cachestash, meth, name, len, is_utf8 ? HVhek_UTF8 : 0, create, NULL, 0
     );
     if (he) gvp = (GV**)&HeVAL(he);
     else gvp = NULL;
@@ -1663,8 +1663,15 @@ S_parse_gv_stash_name(pTHX_ HV **stash, GV **gv, const char **name,
                 name_cursor++;
             *name = name_cursor+1;
             if (*name == name_end) {
-                if (!*gv)
-                    *gv = MUTABLE_GV(*hv_fetchs(PL_defstash, "main::", TRUE));
+                if (!*gv) {
+		    *gv = MUTABLE_GV(*hv_fetchs(PL_defstash, "main::", TRUE));
+		    if (SvTYPE(*gv) != SVt_PVGV) {
+			gv_init_pvn(*gv, PL_defstash, "main::", 6,
+				    GV_ADDMULTI);
+			GvHV(*gv) =
+			    MUTABLE_HV(SvREFCNT_inc_simple(PL_defstash));
+		    }
+		}
                 return TRUE;
             }
         }

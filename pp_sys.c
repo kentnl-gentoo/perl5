@@ -953,13 +953,26 @@ PP(pp_tie)
 	 */
        stash = gv_stashsv(*MARK, 0);
        if (!stash) {
-           SV *stashname = SvOK(*MARK) ? *MARK : &PL_sv_no;
-           if (!SvCUR(*MARK)) {
-               stashname = sv_2mortal(newSVpvs("main"));
+           if (SvROK(*MARK))
+               DIE(aTHX_ "Can't locate object method \"%s\" via package \"%" SVf "\"",
+                   methname, SVfARG(*MARK));
+           else if (isGV(*MARK)) {
+               /* If the glob doesn't name an existing package, using
+                * SVfARG(*MARK) would yield "*Foo::Bar" or *main::Foo. So
+                * generate the name for the error message explicitly. */
+               SV *stashname = sv_2mortal(newSV(0));
+               gv_fullname4(stashname, (GV *) *MARK, NULL, FALSE);
+               DIE(aTHX_ "Can't locate object method \"%s\" via package \"%" SVf "\"",
+                   methname, SVfARG(stashname));
            }
-           DIE(aTHX_ "Can't locate object method \"%s\" via package \"%" SVf "\""
-               " (perhaps you forgot to load \"%" SVf "\"?)",
-               methname, SVfARG(stashname), SVfARG(stashname));
+           else {
+               SV *stashname = !SvPOK(*MARK) ? &PL_sv_no
+                             : SvCUR(*MARK)  ? *MARK
+                             :                 sv_2mortal(newSVpvs("main"));
+               DIE(aTHX_ "Can't locate object method \"%s\" via package \"%" SVf "\""
+                   " (perhaps you forgot to load \"%" SVf "\"?)",
+                   methname, SVfARG(stashname), SVfARG(stashname));
+           }
        }
        else if (!(gv = gv_fetchmethod(stash, methname))) {
            /* The effective name can only be NULL for stashes that have
@@ -1419,7 +1432,6 @@ PP(pp_enterwrite)
     IO *io;
     GV *fgv;
     CV *cv = NULL;
-    SV *tmpsv = NULL;
 
     if (MAXARG == 0) {
 	EXTEND(SP, 1);
@@ -1443,7 +1455,7 @@ PP(pp_enterwrite)
 
     cv = GvFORM(fgv);
     if (!cv) {
-	tmpsv = sv_newmortal();
+        SV * const tmpsv = sv_newmortal();
 	gv_efullname4(tmpsv, fgv, NULL, FALSE);
 	DIE(aTHX_ "Undefined format \"%" SVf "\" called", SVfARG(tmpsv));
     }
@@ -4426,10 +4438,9 @@ PP(pp_system)
 	    if (did_pipes) {
 		int errkid;
 		unsigned n = 0;
-		SSize_t n1;
 
 		while (n < sizeof(int)) {
-		    n1 = PerlLIO_read(pp[0],
+                    const SSize_t n1 = PerlLIO_read(pp[0],
 				      (void*)(((char*)&errkid)+n),
 				      (sizeof(int)) - n);
 		    if (n1 <= 0)
@@ -4838,7 +4849,6 @@ PP(pp_alarm)
 PP(pp_sleep)
 {
     dSP; dTARGET;
-    I32 duration;
     Time_t lasttime;
     Time_t when;
 
@@ -4846,7 +4856,7 @@ PP(pp_sleep)
     if (MAXARG < 1 || (!TOPs && !POPs))
 	PerlProc_pause();
     else {
-	duration = POPi;
+        const I32 duration = POPi;
         if (duration < 0) {
           /* diag_listed_as: %s() with negative argument */
           Perl_ck_warner_d(aTHX_ packWARN(WARN_MISC),

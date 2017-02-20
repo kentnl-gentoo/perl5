@@ -707,7 +707,7 @@ with a ptr argument.
 /* A Unicode character can fold to up to 3 characters */
 #define UTF8_MAX_FOLD_CHAR_EXPAND 3
 
-#define IN_BYTES (CopHINTS_get(PL_curcop) & HINT_BYTES)
+#define IN_BYTES UNLIKELY(CopHINTS_get(PL_curcop) & HINT_BYTES)
 
 /*
 
@@ -726,12 +726,12 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
  * Is so within 'feature unicode_strings' or 'locale :not_characters', and not
  * within 'use bytes'.  UTF-8 locales are not tested for here, but perhaps
  * could be */
-#define IN_UNI_8_BIT                                                             \
-	    (((CopHINTS_get(PL_curcop) & (HINT_UNI_8_BIT))                       \
-               || (CopHINTS_get(PL_curcop) & HINT_LOCALE_PARTIAL                 \
-                   /* -1 below is for :not_characters */                         \
-                   && _is_in_locale_category(FALSE, -1)))                        \
-              && ! IN_BYTES)
+#define IN_UNI_8_BIT                                                    \
+	    ((    (      (CopHINTS_get(PL_curcop) & HINT_UNI_8_BIT))    \
+                   || (   CopHINTS_get(PL_curcop) & HINT_LOCALE_PARTIAL \
+                            /* -1 below is for :not_characters */       \
+                       && _is_in_locale_category(FALSE, -1)))           \
+              && (! IN_BYTES))
 
 
 #define UTF8_ALLOW_EMPTY		0x0001	/* Allow a zero length string */
@@ -802,10 +802,10 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
 #define UTF8_WARN_ILLEGAL_INTERCHANGE \
                           (UTF8_WARN_ILLEGAL_C9_INTERCHANGE|UTF8_WARN_NONCHAR)
 
-/* This is used typically for code that is willing to accept inputs of
- * illformed UTF-8 sequences, for whatever reason.  However, all such sequences
- * evaluate to the REPLACEMENT CHARACTER unless other flags overriding this are
- * also present. */
+/* This is typically used for code that processes UTF-8 input and doesn't want
+ * to have to deal with any malformations that might be present.  All such will
+ * be safely replaced by the REPLACEMENT CHARACTER, unless other flags
+ * overriding this are also present. */
 #define UTF8_ALLOW_ANY ( UTF8_ALLOW_CONTINUATION                                \
                         |UTF8_ALLOW_NON_CONTINUATION                            \
                         |UTF8_ALLOW_SHORT                                       \

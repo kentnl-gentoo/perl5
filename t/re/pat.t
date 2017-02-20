@@ -23,7 +23,7 @@ BEGIN {
     skip_all('no re module') unless defined &DynaLoader::boot_DynaLoader;
     skip_all_without_unicode_tables();
 
-plan tests => 835;  # Update this when adding/deleting tests.
+plan tests => 837;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1901,6 +1901,20 @@ EOP
 	    }msx, { stderr => 1 }, "Offsets in debug output are not negative");
 	}
     }
+    {
+        # buffer overflow
+        fresh_perl_is("BEGIN{\$^H=0x200000}\ns/[(?{//xx",
+                      "Unmatched [ in regex; marked by <-- HERE in m/[ <-- HERE (?{/ at (eval 1) line 1.\n",
+                      {}, "buffer overflow for regexp component");
+    }
+    {
+        # [perl #129281] buffer write overflow, detected by ASAN, valgrind
+        fresh_perl_is('/0(?0)|^*0(?0)|^*(^*())0|/', '', {}, "don't bump whilem_c too much");
+    }
 } # End of sub run_tests
 
 1;
+
+#
+# ex: set ts=8 sts=4 sw=4 et:
+#
