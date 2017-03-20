@@ -44,7 +44,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.25.10
+#INST_VER	*= \5.25.11
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -106,6 +106,12 @@ USE_LARGE_FILES	*= define
 # This option is not supported for MSVC builds.
 #
 #USE_LONG_DOUBLE *=define
+
+#
+# Comment this out if you want the legacy default behavior of including '.' at
+# the end of @INC.
+#
+DEFAULT_INC_EXCLUDES_DOT *= define
 
 #
 # Uncomment this if you want to disable looking up values from
@@ -304,6 +310,7 @@ USE_IMP_SYS	*= undef
 USE_LARGE_FILES	*= undef
 USE_64_BIT_INT	*= undef
 USE_LONG_DOUBLE	*= undef
+DEFAULT_INC_EXCLUDES_DOT *= undef
 USE_NO_REGISTRY	*= undef
 
 
@@ -1096,6 +1103,7 @@ CFG_VARS	=					\
 		uselongdouble=$(USE_LONG_DOUBLE)	~	\
 		uselargefiles=$(USE_LARGE_FILES)	~	\
 		usesitecustomize=$(USE_SITECUST)	~	\
+		default_inc_excludes_dot=$(DEFAULT_INC_EXCLUDES_DOT)	~	\
 		LINK_FLAGS=$(LINK_FLAGS)	~	\
 		optimize=$(OPTIMIZE)	~	\
 		ARCHPREFIX=$(ARCHPREFIX)	~	\
@@ -1566,7 +1574,7 @@ utils: $(HAVEMINIPERL) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl52510delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl52511delta.pod
 	$(MINIPERL) -I..\lib $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1664,7 +1672,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl52510delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl52511delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \

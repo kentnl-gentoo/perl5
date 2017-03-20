@@ -4134,8 +4134,8 @@ PP(pp_entersub)
             items = SP - MARK;
 	    if (UNLIKELY(items - 1 > AvMAX(av))) {
                 SV **ary = AvALLOC(av);
-                AvMAX(av) = items - 1;
                 Renew(ary, items, SV*);
+                AvMAX(av) = items - 1;
                 AvALLOC(av) = ary;
                 AvARRAY(av) = ary;
             }
@@ -4390,8 +4390,6 @@ Perl_vivify_ref(pTHX_ SV *sv, U32 to_what)
     }
     return sv;
 }
-
-extern char PL_isa_DOES[];
 
 PERL_STATIC_INLINE HV *
 S_opmethod_stash(pTHX_ SV* meth)

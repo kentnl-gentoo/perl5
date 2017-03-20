@@ -1807,20 +1807,30 @@ X<do>
 Uses the value of EXPR as a filename and executes the contents of the
 file as a Perl script.
 
-    do 'stat.pl';
+    do './stat.pl';
 
 is largely like
 
     eval `cat stat.pl`;
 
-except that it's more concise, runs no external processes, keeps track of
-the current filename for error messages, searches the
-L<C<@INC>|perlvar/@INC> directories, and updates L<C<%INC>|perlvar/%INC>
-if the file is found.  See L<perlvar/@INC> and L<perlvar/%INC> for these
-variables.  It also differs in that code evaluated with C<do FILE>
-cannot see lexicals in the enclosing scope; C<eval STRING> does.  It's
-the same, however, in that it does reparse the file every time you call
-it, so you probably don't want to do this inside a loop.
+except that it's more concise, runs no external processes, and keeps
+track of the current filename for error messages. It also differs in that
+code evaluated with C<do FILE> cannot see lexicals in the enclosing
+scope; C<eval STRING> does.  It's the same, however, in that it does
+reparse the file every time you call it, so you probably don't want
+to do this inside a loop.
+
+Using C<do> with no path, like
+
+    do 'stat.pl';
+
+will search the L<C<@INC>|perlvar/@INC> directories, and update
+L<C<%INC>|perlvar/%INC> if the file is found.  See L<perlvar/@INC>
+and L<perlvar/%INC> for these variables. In particular, note that
+whilst historically L<C<@INC>|perlvar/@INC> contained '.' (the
+current directory) making these two cases equivalent, that is no
+longer necessarily the case, as there is now a compile-time option
+to disable this behaviour.
 
 If L<C<do>|/do EXPR> can read the file but cannot compile it, it
 returns L<C<undef>|/undef EXPR> and sets an error message in
@@ -2137,7 +2147,7 @@ behavior.
 
 Any S<C<use utf8>> or S<C<no utf8>> declarations within the string have
 no effect, and source filters are forbidden.  (C<unicode_strings>,
-however, can appear within the string.  See also the
+however, can appear within the string.)  See also the
 L<C<evalbytes>|/evalbytes EXPR> operator, which works properly with
 source filters.
 
@@ -2285,8 +2295,8 @@ always parses its argument (or L<C<$_>|perlvar/$_> if EXPR is omitted)
 as a string of independent bytes.
 
 If called when S<C<use utf8>> is in effect, the string will be assumed
-to be encoded in UTF-8, and C<evalbytes> will make a temporary
-downgraded to non-UTF-8 copy to work from.  If this is not possible
+to be encoded in UTF-8, and C<evalbytes> will make a temporary copy to
+work from, downgraded to non-UTF-8.  If this is not possible
 (because one or more characters in it require UTF-8), the C<evalbytes>
 will fail with the error stored in C<$@>.
 
@@ -5755,7 +5765,7 @@ returning the filehandle value instead, in which case the LIST may not be
 omitted:
 
     print { $files[$i] } "stuff\n";
-    print { $OK ? STDOUT : STDERR } "stuff\n";
+    print { $OK ? *STDOUT : *STDERR } "stuff\n";
 
 Printing to a closed pipe or socket will generate a SIGPIPE signal.  See
 L<perlipc> for more on signal handling.
@@ -7574,6 +7584,10 @@ interpretation as the last successful match.
 If PATTERN is C</^/>, then it is treated as if it used the
 L<multiline modifier|perlreref/OPERATORS> (C</^/m>), since it
 isn't much use otherwise.
+
+C<E<sol>m> and any of the other pattern modifiers valid for C<qr>
+(summarized in L<perlop/qrE<sol>STRINGE<sol>msixpodualn>) may be
+specified explicitly.
 
 As another special case,
 L<C<split>|/split E<sol>PATTERNE<sol>,EXPR,LIMIT> emulates the default
@@ -9543,10 +9557,11 @@ extend the string with sufficiently many zero bytes.   It is an error
 to try to write off the beginning of the string (i.e., negative OFFSET).
 
 If the string happens to be encoded as UTF-8 internally (and thus has
-the UTF8 flag set), this is ignored by L<C<vec>|/vec EXPR,OFFSET,BITS>,
-and it operates on the
-internal byte string, not the conceptual character string, even if you
-only have characters with values less than 256.
+the UTF8 flag set), L<C<vec>|/vec EXPR,OFFSET,BITS> tries to convert it
+to use a one-byte-per-character internal representation. However, if the
+string contains characters with values of 256 or higher, that conversion
+will fail. In that situation, C<vec> will operate on the underlying buffer
+regardless, in its internal UTF-8 representation.
 
 Strings created with L<C<vec>|/vec EXPR,OFFSET,BITS> can also be
 manipulated with the logical

@@ -241,6 +241,7 @@ cpan/Config-Perl-V/t/28_plv5220.t		Config::Perl::V
 cpan/Config-Perl-V/t/28_plv52201w.t		Config::Perl::V
 cpan/Config-Perl-V/t/29_plv5235w.t		Config::Perl::V
 cpan/Config-Perl-V/t/30_plv5240.t		Config::Perl::V
+cpan/Config-Perl-V/t/31_plv52511.t		Config::Perl::V
 cpan/Config-Perl-V/V.pm				Config::Perl::V
 cpan/CPAN/lib/App/Cpan.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN.pm			Interface to Comprehensive Perl Archive Network
@@ -4930,6 +4931,7 @@ pod/perl5223delta.pod		Perl changes in version 5.22.3
 pod/perl5240delta.pod		Perl changes in version 5.24.0
 pod/perl5241delta.pod		Perl changes in version 5.24.1
 pod/perl5250delta.pod		Perl changes in version 5.25.0
+pod/perl52510delta.pod		Perl changes in version 5.25.10
 pod/perl5251delta.pod		Perl changes in version 5.25.1
 pod/perl5252delta.pod		Perl changes in version 5.25.2
 pod/perl5253delta.pod		Perl changes in version 5.25.3
@@ -5295,6 +5297,7 @@ t/comp/our.t			Tests for our declaration
 t/comp/package.t		See if packages work
 t/comp/package_block.t		See if package block syntax works
 t/comp/parser.t			See if the parser works in edge cases
+t/comp/parser_run.t			See if parser works in additional edge case
 t/comp/proto.t			See if function prototypes work
 t/comp/redef.t			See if we get correct warnings on redefined subs
 t/comp/require.t		See if require works

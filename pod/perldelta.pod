@@ -2,15 +2,34 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.25.10
+perldelta - what is new for perl v5.25.11
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.25.9 release and the 5.25.10
+This document describes differences between the 5.25.10 release and the 5.25.11
 release.
 
-If you are upgrading from an earlier release such as 5.25.8, first read
-L<perl5259delta>, which describes differences between 5.25.8 and 5.25.9.
+If you are upgrading from an earlier release such as 5.25.9, first read
+L<perl52510delta>, which describes differences between 5.25.9 and 5.25.10.
+
+=head1 Notice
+
+This release includes two important updates:
+
+=over 4
+
+=item * Turning on the removal of C<.> in C<@INC>
+
+=item * Providing a warning when C<do> is used on a file in C<.>
+
+=back
+
+=head1 Security
+
+=head2 Remove current dir (C<.>) from C<@INC>
+
+For security reasons, C<@INC> no longer contains the default directory
+(C<.>).
 
 =head1 Modules and Pragmata
 
@@ -20,128 +39,78 @@ L<perl5259delta>, which describes differences between 5.25.8 and 5.25.9.
 
 =item *
 
-L<B> has been upgraded from version 1.65 to 1.68.
+L<Compress::Raw::Bzip2> has been upgraded from version 2.070 to 2.074.
 
 =item *
 
-L<CPAN> has been upgraded from version 2.16 to 2.17.
+L<Compress::Raw::Zlib> has been upgraded from version 2.070 to 2.074.
 
 =item *
 
-L<feature> has been upgraded from version 1.46 to 1.47.
+L<Config::Perl::V> has been upgraded from version 0.27 to 0.28.
 
 =item *
 
-L<Getopt::Std> has been upgraded from version 1.11 to 1.12.
+L<ExtUtils::ParseXS> has been upgraded from version 3.33 to 3.34.
 
 =item *
 
-L<Module::CoreList> has been upgraded from version 5.20170120 to 5.20170220.
+L<ExtUtils::Typemaps> has been upgraded from version 3.33 to 3.34.
 
 =item *
 
-L<open> has been upgraded from version 1.10 to 1.11.
+L<File::Spec> has been upgraded from version 3.66 to 3.67.
 
 =item *
 
-L<PerlIO> has been upgraded from version 1.09 to 1.10.
+L<Module::CoreList> has been upgraded from version 5.20170220 to 5.20170320.
 
 =item *
 
-L<Storable> has been upgraded from version 2.61 to 2.62.
+L<Pod::Perldoc> has been upgraded from version 3.27 to 3.28.
 
 =item *
 
-L<Thread::Queue> has been upgraded from version 3.11 to 3.12.
+L<Test::Harness> has been upgraded from version 3.36_01 to 3.38.
 
 =item *
 
-L<threads> has been upgraded from version 2.12 to 2.13.
+L<threads> has been upgraded from version 2.13 to 2.15.
+
+=item *
+
+L<threads::shared> has been upgraded from version 1.54 to 1.55.
+
+=item *
+
+L<VMS::Stdio> has been upgraded from version 2.42 to 2.41.
 
 =back
 
 =head1 Diagnostics
 
-The following additions or changes have been made to diagnostic output,
-including warnings and fatal error messages.  For the complete list of
-diagnostic messages, see L<perldiag>.
+=head2 New Diagnostics
 
-=head2 Changes to Existing Diagnostics
+=head3 New Warnings
 
 =over 4
 
 =item *
 
-Use of unassigned code point or non-standalone grapheme for a delimiter will be a fatal error starting in Perl 5.30
+Since C<.> is removed from C<@INC>, C<do> will now trigger a warning
+recommending on fixing the C<do> statement.
 
-This was changed to drop a leading C<v> in C<v5.30>, so it uses the same
-style as other deprecation messages.
-
-=item * 
-
-"\c%c" is more clearly written simply as "%s".
-
-It was decided to undeprecate the use of "\c%c", see L<http://www.nntp.perl.org/group/perl.perl5.porters/2017/02/msg242944.html>
+L<do "%s" failed, '.' is no longer in @INC|perldiag/"do "%s" failed, '.' is no longer in @INC">
 
 =back
 
-=head1 Platform Support
-
-=head2 Platform-Specific Notes
-
-=over 4
-
-=item Windows
+=head1 Configuration and Compilation
 
 =over 4
 
 =item *
 
-Support for compiling perl on Windows using Microsoft Visual Studio 2015
-(containing Visual C++ 14.0) has been added.
-
-This version of VC++ includes a completely rewritten C run-time library, some
-of the changes in which mean that work done to resolve a socket close() bug in
-perl #120091 and perl #118059 is not workable in its current state with this
-version of VC++.  Therefore, we have effectively reverted that bug fix for
-VS2015 onwards on the basis that being able to build with VS2015 onwards is
-more important than keeping the bug fix.  We may revisit this in the future to
-attempt to fix the bug again in a way that is compatible with VS2015.
-
-These changes do not affect compilation with GCC or with Visual Studio versions
-up to and including VS2013, i.e. the bug fix is retained (unchanged) for those
-compilers.
-
-Note that you may experience compatibility problems if you mix a perl built
-with GCC or VS E<lt>= VS2013 with XS modules built with VS2015, or if you mix a
-perl built with VS2015 with XS modules built with GCC or VS E<lt>= VS2013.
-Some incompatibility may arise because of the bug fix that has been reverted
-for VS2015 builds of perl, but there may well be incompatibility anyway because
-of the rewritten CRT in VS2015 (e.g. see discussion at
-http://stackoverflow.com/questions/30412951).
-
-=back
-
-=back
-
-=head1 Internal Changes
-
-=over 4
-
-=item *
-
-The C<op_class()> API function has been added. This is like the existing
-C<OP_CLASS()> macro, but can more accurately determine what struct an op
-has been allocated as. For example C<OP_CLASS()> might return
-C<OA_BASEOP_OR_UNOP> indicating that ops of this type are usually
-allocated as an C<OP> or C<UNOP>; while C<op_class()> will return
-C<OPclass_BASEOP> or C<OPclass_UNOP> as appropriate.
-
-=item *
-
-The output format of the C<op_dump()> function (as used by C<perl -Dx>)
-has changed: it now displays an "ASCII-art" tree structure, and shows more
-low-level details about each op, such as its address and class.
+C<DEFAULT_INC_EXCLUDES_DOT> has been turned on as default.
 
 =back
 
@@ -151,71 +120,44 @@ low-level details about each op, such as its address and class.
 
 =item *
 
-Attempting to use the deprecated variable C<$#> as the object in an
-indirect object method call could cause a heap use after free or
-buffer overflow.  [perl #129274]
-
-=item *
-
-When checking for an indirect object method call in some rare cases
-the parser could reallocate the line buffer but then continue to use
-pointers to the old buffer.  [perl #129190]
-
-=item *
-
-Supplying a glob as the format argument to L<perlfunc/formline> would
-cause an assertion failure.  [perl #130722]
-
-=item *
-
-Code like C< $value1 =~ qr/.../ ~~ $value2 > would have the match
-converted into a qr// operator, leaving extra elements on the stack to
-confuse any surrounding expression.  [perl #130705]
-
-=item *
-
-Since 5.24.0 in some obscure cases, a regex which included code blocks
-from multiple sources (e.g. via embedded via qr// objects) could end up
-with the wrong current pad and crash or give weird results. [perl #129881]
-
-=item *
-
-Occasionally C<local()>s in a code block within a patterns weren't being
-undone when the pattern matching backtracked over the code block.
-[perl #126697]
-
-=item *
-
-Using C<substr()> to modify a magic variable could access freed memory
-in some cases.  [perl #129340]
-
-=item *
-
-Perl 5.25.9 was fixed so that under C<use utf8>, the entire Perl program
-is checked that the UTF-8 is wellformed.  It turns out that several edge
-cases were missed, and are now fixed.  [perl #126310] was the original
-ticket.
+C< $-{$name} > would leak an C<AV> on each access if the regular
+expression had no named captures.  The same applies to access to any
+hash tied with L<Tie::Hash::NamedCapture> and C<< all =E<gt> 1 >>. [perl
+#130822]
 
 =back
 
+=head1 Obituary
+
+It is with great sadness we note that Kip Hampton passed away. Probably
+best known as the author of the Perl & XML column on XML.com, he was a
+core contributor to AxKit, ab XML server platform that became an Apache
+Foundation project. He was a frequent speaker in the early days at
+OSCON, and most recently at YAPC::NA in Madison. He was frequently on
+irc.perl.org as `ubu`, generally in the #axkit-dahut community, the
+group responsible for YAPC::NA Asheville in 2011.
+
+Kip and his constant contributions to the community will be greatly missed.
+
 =head1 Acknowledgements
 
-Perl 5.25.10 represents approximately 4 weeks of development since Perl 5.25.9
-and contains approximately 12,000 lines of changes across 200 files from 25
+
+Perl 5.25.11 represents approximately 4 weeks of development since Perl 5.25.10
+and contains approximately 4,900 lines of changes across 240 files from 21
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 6,700 lines of changes to 130 .pm, .t, .c and .h files.
+approximately 2,200 lines of changes to 170 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.25.10:
+improvements that became Perl 5.25.11:
 
-Aaron Crane, Abigail, Andreas König, Andy Lester, Chris 'BinGOs' Williams,
-Christian Millour, Colin Newell, Dagfinn Ilmari Mannsåker, David Mitchell,
-Hugo van der Sanden, James E Keenan, Jarkko Hietaniemi, Jerry D. Hedden, John
-Lightsey, Karl Williamson, Neil Bowers, Pali, Renee Baecker, Sawyer X, Sergey
-Aleynikov, Steffen Müller, Steve Hay, Tony Cook, Yves Orton, Zefram.
+Aaron Crane, Andy Lester, Chris 'BinGOs' Williams, Craig A. Berry, Dave Cross,
+David Golden, David Mitchell, Dominic Hargreaves, H.Merijn Brand, Hugo van der
+Sanden, James E Keenan, Jarkko Hietaniemi, Jerry D. Hedden, Karl Williamson,
+Leon Timmermans, Matthew Horsfall, Renee Baecker, Sawyer X, Shlomi Fish, Steve
+Hay, Tony Cook.
 
 The list above is almost certainly incomplete as it is automatically generated
 from version control history. In particular, it does not include the names of
