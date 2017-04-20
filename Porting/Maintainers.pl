@@ -181,10 +181,6 @@ use File::Glob qw(:case);
     'base' => {
         'DISTRIBUTION' => 'RJBS/base-2.23.tar.gz',
         'FILES'        => q[dist/base],
-        'CUSTOMIZED'   => [
-            # https://rt.perl.org/Ticket/Display.html?id=127834
-            qw( lib/base.pm )
-        ],
     },
 
     'bignum' => {
@@ -251,7 +247,7 @@ use File::Glob qw(:case);
     },
 
     'CPAN' => {
-        'DISTRIBUTION' => 'ANDK/CPAN-2.17-TRIAL2.tar.gz',
+        'DISTRIBUTION' => 'ANDK/CPAN-2.18-TRIAL.tar.gz',
         'FILES'        => q[cpan/CPAN],
         'EXCLUDED'     => [
             qr{^distroprefs/},
@@ -806,7 +802,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20170220.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20170320.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
