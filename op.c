@@ -9773,11 +9773,11 @@ Perl_ck_delete(pTHX_ OP *o)
 	case OP_HELEM:
 	    break;
 	case OP_KVASLICE:
-	    Perl_croak(aTHX_ "delete argument is index/value array slice,"
-			     " use array slice");
+            o->op_flags |= OPf_SPECIAL;
+            /* FALLTHROUGH */
 	case OP_KVHSLICE:
-	    Perl_croak(aTHX_ "delete argument is key/value hash slice, use"
-			     " hash slice");
+            o->op_private |= OPpKVSLICE;
+            break;
 	default:
 	    Perl_croak(aTHX_ "delete argument is not a HASH or ARRAY "
 			     "element or slice");
@@ -14783,6 +14783,12 @@ Perl_rpeep(pTHX_ OP *o)
 
 	    break;
         }
+
+        case OP_REF:
+            /* see if ref() is used in boolean context */
+            if ((o->op_flags & OPf_WANT) == OPf_WANT_SCALAR)
+                S_check_for_bool_cxt(aTHX_ o, OPpTRUEBOOL, OPpMAYBE_TRUEBOOL);
+            break;
 
 	case OP_CUSTOM: {
 	    Perl_cpeep_t cpeep = 

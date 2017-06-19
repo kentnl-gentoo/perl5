@@ -816,6 +816,8 @@ Perl_fbm_instr(pTHX_ unsigned char *big, unsigned char *bigend, SV *littlestr, U
 
     PERL_ARGS_ASSERT_FBM_INSTR;
 
+    assert(bigend >= big);
+
     if ((STRLEN)(bigend - big) < littlelen) {
 	if (     tail
 	     && ((STRLEN)(bigend - big) == littlelen - 1)
@@ -3352,9 +3354,8 @@ Perl_find_script(pTHX_ const char *scriptname, bool dosearch,
 	    if (len < sizeof tmpbuf)
 		tmpbuf[len] = '\0';
 #  else
-	    s = delimcpy(tmpbuf, tmpbuf + sizeof tmpbuf, s, bufend,
-			':',
-			&len);
+	    s = delimcpy_no_escape(tmpbuf, tmpbuf + sizeof tmpbuf, s, bufend,
+                                   ':', &len);
 #  endif
 	    if (s < bufend)
 		s++;
@@ -4632,7 +4633,6 @@ Perl_get_hash_seed(pTHX_ unsigned char * const seed_buffer)
     env_pv= PerlEnv_getenv("PERL_HASH_SEED");
 
     if ( env_pv )
-#  ifndef USE_HASH_SEED_EXPLICIT
     {
         /* ignore leading spaces */
         while (isSPACE(*env_pv))
@@ -4667,8 +4667,7 @@ Perl_get_hash_seed(pTHX_ unsigned char * const seed_buffer)
         /* should we warn about insufficient hex? */
     }
     else
-#  endif
-#endif
+#endif /* NO_PERL_HASH_ENV */
     {
         (void)seedDrand01((Rand_seed_t)seed());
 

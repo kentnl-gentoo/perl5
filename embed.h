@@ -71,7 +71,7 @@
 #define block_gimme()		Perl_block_gimme(aTHX)
 #define block_start(a)		Perl_block_start(aTHX_ a)
 #define bytes_cmp_utf8(a,b,c,d)	Perl_bytes_cmp_utf8(aTHX_ a,b,c,d)
-#define bytes_from_utf8(a,b,c)	Perl_bytes_from_utf8(aTHX_ a,b,c)
+#define bytes_from_utf8_loc	Perl_bytes_from_utf8_loc
 #define bytes_to_utf8(a,b)	Perl_bytes_to_utf8(aTHX_ a,b)
 #define call_argv(a,b,c)	Perl_call_argv(aTHX_ a,b,c)
 #define call_atexit(a,b)	Perl_call_atexit(aTHX_ a,b)
@@ -294,7 +294,7 @@
 #define is_utf8_graph(a)	Perl_is_utf8_graph(aTHX_ a)
 #define is_utf8_idcont(a)	Perl_is_utf8_idcont(aTHX_ a)
 #define is_utf8_idfirst(a)	Perl_is_utf8_idfirst(aTHX_ a)
-#define is_utf8_invariant_string	S_is_utf8_invariant_string
+#define is_utf8_invariant_string_loc	S_is_utf8_invariant_string_loc
 #define is_utf8_lower(a)	Perl_is_utf8_lower(aTHX_ a)
 #define is_utf8_mark(a)		Perl_is_utf8_mark(aTHX_ a)
 #define is_utf8_perl_space(a)	Perl_is_utf8_perl_space(aTHX_ a)
@@ -729,7 +729,6 @@
 #define to_uni_title_lc(a)	Perl_to_uni_title_lc(aTHX_ a)
 #define to_uni_upper(a,b,c)	Perl_to_uni_upper(aTHX_ a,b,c)
 #define to_uni_upper_lc(a)	Perl_to_uni_upper_lc(aTHX_ a)
-#define to_utf8_case(a,b,c,d,e,f)	Perl_to_utf8_case(aTHX_ a,b,c,d,e,f)
 #define unpack_str(a,b,c,d,e,f,g,h)	Perl_unpack_str(aTHX_ a,b,c,d,e,f,g,h)
 #define unpackstring(a,b,c,d,e)	Perl_unpackstring(aTHX_ a,b,c,d,e)
 #define unsharepvn(a,b,c)	Perl_unsharepvn(aTHX_ a,b,c)
@@ -1042,6 +1041,7 @@
 #define is_ssc_worth_it		S_is_ssc_worth_it
 #define join_exact(a,b,c,d,e,f,g)	S_join_exact(aTHX_ a,b,c,d,e,f,g)
 #define make_trie(a,b,c,d,e,f,g,h)	S_make_trie(aTHX_ a,b,c,d,e,f,g,h)
+#define new_regcurly		S_new_regcurly
 #define nextchar(a)		S_nextchar(aTHX_ a)
 #define output_or_return_posix_warnings(a,b,c)	S_output_or_return_posix_warnings(aTHX_ a,b,c)
 #define parse_lparen_question_flags(a)	S_parse_lparen_question_flags(aTHX_ a)
@@ -1246,7 +1246,7 @@
 #define do_execfree()		Perl_do_execfree(aTHX)
 #define do_ncmp(a,b)		Perl_do_ncmp(aTHX_ a,b)
 #define do_open6(a,b,c,d,e,f)	Perl_do_open6(aTHX_ a,b,c,d,e,f)
-#define do_open_raw(a,b,c,d,e)	Perl_do_open_raw(aTHX_ a,b,c,d,e)
+#define do_open_raw(a,b,c,d,e,f)	Perl_do_open_raw(aTHX_ a,b,c,d,e,f)
 #define do_print(a,b)		Perl_do_print(aTHX_ a,b)
 #define do_readline()		Perl_do_readline(aTHX)
 #define do_seek(a,b,c)		Perl_do_seek(aTHX_ a,b,c)
@@ -1542,7 +1542,7 @@
 #  if defined(PERL_IN_DOIO_C)
 #define exec_failed(a,b,c)	S_exec_failed(aTHX_ a,b,c)
 #define ingroup(a,b)		S_ingroup(aTHX_ a,b)
-#define openn_cleanup(a,b,c,d,e,f,g,h,i,j,k,l)	S_openn_cleanup(aTHX_ a,b,c,d,e,f,g,h,i,j,k,l)
+#define openn_cleanup(a,b,c,d,e,f,g,h,i,j,k,l,m)	S_openn_cleanup(aTHX_ a,b,c,d,e,f,g,h,i,j,k,l,m)
 #define openn_setup(a,b,c,d,e,f)	S_openn_setup(aTHX_ a,b,c,d,e,f)
 #  endif
 #  if defined(PERL_IN_DOOP_C)
@@ -1796,7 +1796,6 @@
 #define ao(a)			S_ao(aTHX_ a)
 #define check_uni()		S_check_uni(aTHX)
 #define checkcomma(a,b,c)	S_checkcomma(aTHX_ a,b,c)
-#define deprecate_commaless_var_list()	S_deprecate_commaless_var_list(aTHX)
 #define filter_gets(a,b)	S_filter_gets(aTHX_ a,b)
 #define find_in_my_stash(a,b)	S_find_in_my_stash(aTHX_ a,b)
 #define force_ident(a,b)	S_force_ident(aTHX_ a,b)

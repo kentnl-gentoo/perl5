@@ -403,6 +403,7 @@ PP(pp_rv2sv)
 	else if (PL_op->op_private & OPpDEREF)
 	    sv = vivify_ref(sv, PL_op->op_private & OPpDEREF);
     }
+    SPAGAIN; /* in case chasing soft refs reallocated the stack */
     SETs(sv);
     RETURN;
 }
@@ -591,18 +592,49 @@ PP(pp_ref)
     SV * const sv = TOPs;
 
     SvGETMAGIC(sv);
-    if (!SvROK(sv))
+    if (!SvROK(sv)) {
 	SETs(&PL_sv_no);
-    else {
-	dTARGET;
-	SETs(TARG);
-	/* use the return value that is in a register, its the same as TARG */
-	TARG = sv_ref(TARG,SvRV(sv),TRUE);
-	SvSETMAGIC(TARG);
+        return NORMAL;
     }
 
-    return NORMAL;
+    /* op is in boolean context? */
+    if (   (PL_op->op_private & OPpTRUEBOOL)
+        || (   (PL_op->op_private & OPpMAYBE_TRUEBOOL)
+            && block_gimme() == G_VOID))
+    {
+        /* refs are always true - unless it's to an object blessed into a
+         * class with a false name, i.e. "0". So we have to check for
+         * that remote possibility. The following is is basically an
+         * unrolled SvTRUE(sv_reftype(rv)) */
+        SV * const rv = SvRV(sv);
+        if (SvOBJECT(rv)) {
+            HV *stash = SvSTASH(rv);
+            HEK *hek = HvNAME_HEK(stash);
+            if (hek) {
+                I32 len = HEK_LEN(hek);
+                /* bail out and do it the hard way? */
+                if (UNLIKELY(
+                       len == HEf_SVKEY
+                    || (len == 1 && HEK_KEY(hek)[0] == '0')
+                ))
+                    goto do_sv_ref;
+            }
+        }
+        SETs(&PL_sv_yes);
+        return NORMAL;
+    }
+
+  do_sv_ref:
+    {
+	dTARGET;
+	SETs(TARG);
+	sv_ref(TARG, SvRV(sv), TRUE);
+	SvSETMAGIC(TARG);
+	return NORMAL;
+    }
+
 }
+
 
 PP(pp_bless)
 {
@@ -2603,64 +2635,17 @@ S_scomplement(pTHX_ SV *targ, SV *sv)
 
 	sv_copypv_nomg(TARG, sv);
 	tmps = (U8*)SvPV_nomg(TARG, len);
-	anum = len;
+
 	if (SvUTF8(TARG)) {
-	  /* Calculate exact length, let's not estimate. */
-	  STRLEN targlen = 0;
-	  STRLEN l;
-	  UV nchar = 0;
-	  UV nwide = 0;
-	  U8 * const send = tmps + len;
-	  U8 * const origtmps = tmps;
-	  const UV utf8flags = UTF8_ALLOW_ANYUV;
+            if (len && ! utf8_to_bytes(tmps, &len)) {
+                Perl_croak(aTHX_ fatal_above_ff_msg, PL_op_desc[PL_op->op_type]);
+            }
+            SvCUR(TARG) = len;
+            SvUTF8_off(TARG);
+        }
 
-	  while (tmps < send) {
-	    const UV c = utf8n_to_uvchr(tmps, send-tmps, &l, utf8flags);
-	    tmps += l;
-	    targlen += UVCHR_SKIP(~c);
-	    nchar++;
-	    if (c > 0xff)
-		nwide++;
-	  }
+	anum = len;
 
-	  /* Now rewind strings and write them. */
-	  tmps = origtmps;
-
-	  if (nwide) {
-	      U8 *result;
-	      U8 *p;
-
-              Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
-                        deprecated_above_ff_msg, PL_op_desc[PL_op->op_type]);
-	      Newx(result, targlen + 1, U8);
-	      p = result;
-	      while (tmps < send) {
-		  const UV c = utf8n_to_uvchr(tmps, send-tmps, &l, utf8flags);
-		  tmps += l;
-		  p = uvchr_to_utf8_flags(p, ~c, UNICODE_ALLOW_ANY);
-	      }
-	      *p = '\0';
-	      sv_usepvn_flags(TARG, (char*)result, targlen,
-			      SV_HAS_TRAILING_NUL);
-	      SvUTF8_on(TARG);
-	  }
-	  else {
-	      U8 *result;
-	      U8 *p;
-
-	      Newx(result, nchar + 1, U8);
-	      p = result;
-	      while (tmps < send) {
-		  const U8 c = (U8)utf8n_to_uvchr(tmps, send-tmps, &l, utf8flags);
-		  tmps += l;
-		  *p++ = ~c;
-	      }
-	      *p = '\0';
-	      sv_usepvn_flags(TARG, (char*)result, nchar, SV_HAS_TRAILING_NUL);
-	      SvUTF8_off(TARG);
-	  }
-	  return;
-	}
 #ifdef LIBERAL
 	{
 	    long *tmpl;
@@ -3377,11 +3362,11 @@ PP(pp_substr)
 	LvTARGOFF(ret) =
 	    pos1_is_uv || pos1_iv >= 0
 		? (STRLEN)(UV)pos1_iv
-		: (LvFLAGS(ret) |= 1, (STRLEN)(UV)-pos1_iv);
+		: (LvFLAGS(ret) |= LVf_NEG_OFF, (STRLEN)(UV)-pos1_iv);
 	LvTARGLEN(ret) =
 	    len_is_uv || len_iv > 0
 		? (STRLEN)(UV)len_iv
-		: (LvFLAGS(ret) |= 2, (STRLEN)(UV)-len_iv);
+		: (LvFLAGS(ret) |= LVf_NEG_LEN, (STRLEN)(UV)-len_iv);
 
 	PUSHs(ret);    /* avoid SvSETMAGIC here */
 	RETURN;
@@ -3488,12 +3473,12 @@ PP(pp_vec)
 
         /* avoid a large UV being wrapped to a negative value */
         if (SvIOK_UV(offsetsv) && SvUVX(offsetsv) > (UV)IV_MAX)
-            errflags = 4; /* out of range */
+            errflags = LVf_OUT_OF_RANGE;
         else if (iv < 0)
-            errflags = (1|4); /* negative offset, out of range */
+            errflags = (LVf_NEG_OFF|LVf_OUT_OF_RANGE);
 #if PTRSIZE < IVSIZE
         else if (iv > Size_t_MAX)
-            errflags = 4; /* out of range */
+            errflags = LVf_OUT_OF_RANGE;
 #endif
         else
             offset = (STRLEN)iv;
@@ -4985,20 +4970,33 @@ PP(pp_delete)
     gimme = GIMME_V;
     discard = (gimme == G_VOID) ? G_DISCARD : 0;
 
-    if (PL_op->op_private & OPpSLICE) {
+    if (PL_op->op_private & (OPpSLICE|OPpKVSLICE)) {
 	dMARK; dORIGMARK;
 	HV * const hv = MUTABLE_HV(POPs);
 	const U32 hvtype = SvTYPE(hv);
+        int skip = 0;
+        if (PL_op->op_private & OPpKVSLICE) {
+            SSize_t items = SP - MARK;
+
+            MEXTEND(SP,items);
+            while (items > 1) {
+                *(MARK+items*2-1) = *(MARK+items);
+                items--;
+            }
+            items = SP - MARK;
+            SP += items;
+            skip = 1;
+        }
 	if (hvtype == SVt_PVHV) {			/* hash element */
-	    while (++MARK <= SP) {
-		SV * const sv = hv_delete_ent(hv, *MARK, discard, 0);
+            while ((MARK += (1+skip)) <= SP) {
+                SV * const sv = hv_delete_ent(hv, *(MARK-skip), discard, 0);
 		*MARK = sv ? sv : &PL_sv_undef;
 	    }
 	}
 	else if (hvtype == SVt_PVAV) {                  /* array element */
             if (PL_op->op_flags & OPf_SPECIAL) {
-                while (++MARK <= SP) {
-                    SV * const sv = av_delete(MUTABLE_AV(hv), SvIV(*MARK), discard);
+                while ((MARK += (1+skip)) <= SP) {
+                    SV * const sv = av_delete(MUTABLE_AV(hv), SvIV(*(MARK-skip)), discard);
                     *MARK = sv ? sv : &PL_sv_undef;
                 }
             }

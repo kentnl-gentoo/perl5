@@ -3691,24 +3691,24 @@ EXTERN_C int perl_tsa_mutex_unlock(perl_mutex* mutex)
 /* placeholder */
 #endif
 
-/* STATIC_ASSERT_GLOBAL/STATIC_ASSERT_STMT are like assert(), but for compile
+/* STATIC_ASSERT_DECL/STATIC_ASSERT_STMT are like assert(), but for compile
    time invariants. That is, their argument must be a constant expression that
    can be verified by the compiler. This expression can contain anything that's
    known to the compiler, e.g. #define constants, enums, or sizeof (...). If
    the expression evaluates to 0, compilation fails.
    Because they generate no runtime code (i.e.  their use is "free"), they're
    always active, even under non-DEBUGGING builds.
-   STATIC_ASSERT_GLOBAL expands to a declaration and is suitable for use at
+   STATIC_ASSERT_DECL expands to a declaration and is suitable for use at
    file scope (outside of any function).
    STATIC_ASSERT_STMT expands to a statement and is suitable for use inside a
    function.
 */
 #if (defined(static_assert) || (defined(__cplusplus) && __cplusplus >= 201103L)) && (!defined(__IBMC__) || __IBMC__ >= 1210)
 /* static_assert is a macro defined in <assert.h> in C11 or a compiler
-   builtin in C++11.
+   builtin in C++11.  But IBM XL C V11 does not support _Static_assert, no
+   matter what <assert.h> says.
 */
-/* IBM XL C V11 does not support _Static_assert, no matter what <assert.h> says */
-#  define STATIC_ASSERT_GLOBAL(COND) static_assert(COND, #COND)
+#  define STATIC_ASSERT_DECL(COND) static_assert(COND, #COND)
 #else
 /* We use a bit-field instead of an array because gcc accepts
    'typedef char x[n]' where n is not a compile-time constant.
@@ -3719,12 +3719,12 @@ EXTERN_C int perl_tsa_mutex_unlock(perl_mutex* mutex)
         unsigned int _static_assertion_failed_##SUFFIX : (COND) ? 1 : -1; \
     } _static_assertion_failed_##SUFFIX PERL_UNUSED_DECL
 #  define STATIC_ASSERT_1(COND, SUFFIX) STATIC_ASSERT_2(COND, SUFFIX)
-#  define STATIC_ASSERT_GLOBAL(COND)    STATIC_ASSERT_1(COND, __LINE__)
+#  define STATIC_ASSERT_DECL(COND)    STATIC_ASSERT_1(COND, __LINE__)
 #endif
 /* We need this wrapper even in C11 because 'case X: static_assert(...);' is an
    error (static_assert is a declaration, and only statements can have labels).
 */
-#define STATIC_ASSERT_STMT(COND)      do { STATIC_ASSERT_GLOBAL(COND); } while (0)
+#define STATIC_ASSERT_STMT(COND)      do { STATIC_ASSERT_DECL(COND); } while (0)
 
 #ifndef __has_builtin
 #  define __has_builtin(x) 0 /* not a clang style compiler */
@@ -3756,7 +3756,11 @@ EXTERN_C int perl_tsa_mutex_unlock(perl_mutex* mutex)
 #  define ASSUME(x) assert(x)
 #endif
 
-#define NOT_REACHED ASSUME(0)
+#if defined(__sun)      /* ASSUME() generates warnings on Solaris */
+#  define NOT_REACHED
+#else
+#  define NOT_REACHED ASSUME(0)
+#endif
 
 /* Some unistd.h's give a prototype for pause() even though
    HAS_PAUSE ends up undefined.  This causes the #define
@@ -3887,12 +3891,12 @@ typedef        struct crypt_data {     /* straight from /usr/include/crypt.h */
 #endif
 
 /* [perl #22371] Algorimic Complexity Attack on Perl 5.6.1, 5.8.0.
- * Note that the USE_HASH_SEED and USE_HASH_SEED_EXPLICIT are *NOT*
- * defined by Configure, despite their names being similar to the
- * other defines like USE_ITHREADS.  Configure in fact knows nothing
- * about the randomised hashes.  Therefore to enable/disable the hash
- * randomisation defines use the Configure -Accflags=... instead. */
-#if !defined(NO_HASH_SEED) && !defined(USE_HASH_SEED) && !defined(USE_HASH_SEED_EXPLICIT)
+ * Note that the USE_HASH_SEED and similar defines are *NOT* defined by
+ * Configure, despite their names being similar to other defines like
+ * USE_ITHREADS.  Configure in fact knows nothing about the randomised
+ * hashes.  Therefore to enable/disable the hash randomisation defines
+ * use the Configure -Accflags=... instead. */
+#if !defined(NO_HASH_SEED) && !defined(USE_HASH_SEED)
 #  define USE_HASH_SEED
 #endif
 
@@ -4167,7 +4171,7 @@ Gid_t getegid (void);
 #define DEBUG_u_FLAG		0x00000800 /*   2048 */
 /* U is reserved for Unofficial, exploratory hacking */
 #define DEBUG_U_FLAG		0x00001000 /*   4096 */
-#define DEBUG_H_FLAG		0x00002000 /*   8192 */
+/* spare                                        8192 */
 #define DEBUG_X_FLAG		0x00004000 /*  16384 */
 #define DEBUG_D_FLAG		0x00008000 /*  32768 */
 #define DEBUG_S_FLAG		0x00010000 /*  65536 */
@@ -4200,7 +4204,6 @@ Gid_t getegid (void);
 #  define DEBUG_x_TEST_ UNLIKELY(PL_debug & DEBUG_x_FLAG)
 #  define DEBUG_u_TEST_ UNLIKELY(PL_debug & DEBUG_u_FLAG)
 #  define DEBUG_U_TEST_ UNLIKELY(PL_debug & DEBUG_U_FLAG)
-#  define DEBUG_H_TEST_ UNLIKELY(PL_debug & DEBUG_H_FLAG)
 #  define DEBUG_X_TEST_ UNLIKELY(PL_debug & DEBUG_X_FLAG)
 #  define DEBUG_D_TEST_ UNLIKELY(PL_debug & DEBUG_D_FLAG)
 #  define DEBUG_S_TEST_ UNLIKELY(PL_debug & DEBUG_S_FLAG)
@@ -4235,7 +4238,6 @@ Gid_t getegid (void);
 #  define DEBUG_x_TEST DEBUG_x_TEST_
 #  define DEBUG_u_TEST DEBUG_u_TEST_
 #  define DEBUG_U_TEST DEBUG_U_TEST_
-#  define DEBUG_H_TEST DEBUG_H_TEST_
 #  define DEBUG_X_TEST DEBUG_X_TEST_
 #  define DEBUG_D_TEST DEBUG_D_TEST_
 #  define DEBUG_S_TEST DEBUG_S_TEST_
@@ -4296,7 +4298,6 @@ Gid_t getegid (void);
 #  define DEBUG_x(a) DEBUG__(DEBUG_x_TEST, a)
 #  define DEBUG_u(a) DEBUG__(DEBUG_u_TEST, a)
 #  define DEBUG_U(a) DEBUG__(DEBUG_U_TEST, a)
-#  define DEBUG_H(a) DEBUG__(DEBUG_H_TEST, a)
 #  define DEBUG_X(a) DEBUG__(DEBUG_X_TEST, a)
 #  define DEBUG_D(a) DEBUG__(DEBUG_D_TEST, a)
 #  define DEBUG_Xv(a) DEBUG__(DEBUG_Xv_TEST, a)
@@ -4331,7 +4332,6 @@ Gid_t getegid (void);
 #  define DEBUG_x_TEST (0)
 #  define DEBUG_u_TEST (0)
 #  define DEBUG_U_TEST (0)
-#  define DEBUG_H_TEST (0)
 #  define DEBUG_X_TEST (0)
 #  define DEBUG_D_TEST (0)
 #  define DEBUG_S_TEST (0)
@@ -4367,7 +4367,6 @@ Gid_t getegid (void);
 #  define DEBUG_x(a)
 #  define DEBUG_u(a)
 #  define DEBUG_U(a)
-#  define DEBUG_H(a)
 #  define DEBUG_X(a)
 #  define DEBUG_D(a)
 #  define DEBUG_S(a)
@@ -6187,14 +6186,20 @@ expression, but with an empty argument list, like this:
         _restore_LC_NUMERIC_function = &Perl_set_numeric_standard;          \
     }
 
-/* Lock to the C locale until unlock is called */
+/* Lock/unlock to the C locale until unlock is called.  This needs to be
+ * recursively callable.  [perl #128207] */
 #define LOCK_LC_NUMERIC_STANDARD()                          \
         (__ASSERT_(PL_numeric_standard)                     \
-        PL_numeric_standard = 2)
-
+        PL_numeric_standard++)
 #define UNLOCK_LC_NUMERIC_STANDARD()                        \
-        (__ASSERT_(PL_numeric_standard == 2)                \
-        PL_numeric_standard = 1)
+            STMT_START {                                    \
+                if (PL_numeric_standard > 1) {              \
+                    PL_numeric_standard--;                  \
+                }                                           \
+                else {                                      \
+                    assert(0);                              \
+                }                                           \
+            } STMT_END
 
 #define RESTORE_LC_NUMERIC_UNDERLYING()                     \
 	if (_was_local) set_numeric_local();

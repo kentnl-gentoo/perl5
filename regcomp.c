@@ -119,8 +119,7 @@ typedef struct scan_frame {
 
 /* Certain characters are output as a sequence with the first being a
  * backslash. */
-#define isBACKSLASHED_PUNCT(c)                                              \
-                    ((c) == '-' || (c) == ']' || (c) == '\\' || (c) == '^')
+#define isBACKSLASHED_PUNCT(c)  strchr("-[]\\^", c)
 
 
 struct RExC_state_t {
@@ -12018,7 +12017,8 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state,
 
     RExC_parse++;	/* Skip past the '{' */
 
-    if (! (endbrace = strchr(RExC_parse, '}'))) { /* no trailing brace */
+    endbrace = strchr(RExC_parse, '}');
+    if (! endbrace) { /* no trailing brace */
         vFAIL2("Missing right brace on \\%c{}", 'N');
     }
     else if(!(endbrace == RExC_parse		/* nothing between the {} */
@@ -12399,6 +12399,52 @@ S_alloc_maybe_populate_EXACT(pTHX_ RExC_state_t *pRExC_state,
     }
 }
 
+STATIC bool
+S_new_regcurly(const char *s, const char *e)
+{
+    /* This is a temporary function designed to match the most lenient form of
+     * a {m,n} quantifier we ever envision, with either number omitted, and
+     * spaces anywhere between/before/after them.
+     *
+     * If this function fails, then the string it matches is very unlikely to
+     * ever be considered a valid quantifier, so we can allow the '{' that
+     * begins it to be considered as a literal */
+
+    bool has_min = FALSE;
+    bool has_max = FALSE;
+
+    PERL_ARGS_ASSERT_NEW_REGCURLY;
+
+    if (s >= e || *s++ != '{')
+	return FALSE;
+
+    while (s < e && isSPACE(*s)) {
+        s++;
+    }
+    while (s < e && isDIGIT(*s)) {
+        has_min = TRUE;
+        s++;
+    }
+    while (s < e && isSPACE(*s)) {
+        s++;
+    }
+
+    if (*s == ',') {
+	s++;
+        while (s < e && isSPACE(*s)) {
+            s++;
+        }
+        while (s < e && isDIGIT(*s)) {
+            has_max = TRUE;
+            s++;
+        }
+        while (s < e && isSPACE(*s)) {
+            s++;
+        }
+    }
+
+    return s < e && *s == '}' && (has_min || has_max);
+}
 
 /* Parse backref decimal value, unless it's too big to sensibly be a backref,
  * in which case return I32_MAX (rather than possibly 32-bit wrapping) */
@@ -12833,6 +12879,12 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
             /* FALLTHROUGH */
 
           finish_meta_pat:
+            if (   UCHARAT(RExC_parse + 1) == '{'
+                && UNLIKELY(! new_regcurly(RExC_parse + 1, RExC_end)))
+            {
+                RExC_parse += 2;
+                vFAIL("Unescaped left brace in regex is illegal here");
+            }
 	    nextchar(pRExC_state);
             Set_Node_Length(ret, 2); /* MJD */
 	    break;
@@ -13382,22 +13434,25 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 		    } /* End of switch on '\' */
 		    break;
 		case '{':
-		    /* Currently we don't care if the lbrace is at the start
-		     * of a construct.  This catches it in the middle of a
-		     * literal string, or when it's the first thing after
-		     * something like "\b" */
-		    if (len || (p > RExC_start && isALPHA_A(*(p -1)))) {
+                    /* Currently we allow an lbrace at the start of a construct
+                     * without raising a warning.  This is because we think we
+                     * will never want such a brace to be meant to be other
+                     * than taken literally. */
+		    if (len || (p > RExC_start && isALPHA_A(*(p - 1)))) {
 
-                        /* GNU Autoconf is depended on by a lot of code, and
-                         * can't seem to release a new version that avoids the
-                         * deprecation now made fatal.  (A commit to do so has
-                         * been in its repository since early 2013; only one
-                         * pattern is affected.)  As a work-around, don't
-                         * fatalize this if the pattern being compiled is the
-                         * precise one that trips up Autoconf.  See [perl
-                         * #130497] for more details. */
-                        if (memNEs(RExC_start, RExC_end - RExC_start,
-                                   "\\${[^\\}]*}"))
+                        /* But, we raise a fatal warning otherwise, as the
+                         * deprecation cycle has come and gone.  Except that it
+                         * turns out that some heavily-relied on upstream
+                         * software, notably GNU Autoconf, have failed to fix
+                         * their uses.  For these, don't make it fatal unless
+                         * we anticipate using the '{' for something else.
+                         * This happens after any alpha, and for a looser {m,n}
+                         * quantifier specification */
+                        if (      RExC_strict
+                            || (  p > parse_start + 1
+                                && isALPHA_A(*(p - 1))
+                                && *(p - 2) == '\\')
+                            || new_regcurly(p, RExC_end))
                         {
                             RExC_parse = p + 1;
                             vFAIL("Unescaped left brace in regex is "
@@ -13447,10 +13502,10 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                  * this character again next time through, when it will be the
                  * only thing in its new node */
 
-                if ((next_is_quantifier = (   LIKELY(p < RExC_end)
-                                           && UNLIKELY(ISMULT2(p))))
-                    && LIKELY(len))
-		{
+                next_is_quantifier =    LIKELY(p < RExC_end)
+                                     && UNLIKELY(ISMULT2(p));
+
+                if (next_is_quantifier && LIKELY(len)) {
                     p = oldp;
                     goto loopdone;
                 }
@@ -13936,6 +13991,13 @@ S_populate_ANYOF_from_invlist(pTHX_ regnode *node, SV** invlist_ptr)
                                              REPORT_LOCATION_ARGS(p)));     \
         }                                                                   \
     } STMT_END
+#define CLEAR_POSIX_WARNINGS()                                              \
+    if (posix_warnings && RExC_warn_text)                                   \
+        av_clear(RExC_warn_text)
+
+#define CLEAR_POSIX_WARNINGS_AND_RETURN(ret)                                \
+    CLEAR_POSIX_WARNINGS();                                                 \
+    return ret
 
 STATIC int
 S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
@@ -14008,7 +14070,7 @@ S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
      *
      * The syntax for a legal posix class is:
      *
-     * qr/(?xa: \[ : \^? [:lower:]{4,6} : \] )/
+     * qr/(?xa: \[ : \^? [[:lower:]]{4,6} : \] )/
      *
      * What this routine considers syntactically to be an intended posix class
      * is this (the comments indicate some restrictions that the pattern
@@ -14033,7 +14095,7 @@ S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
      *                                      # for it to be considered to be
      *                                      # an intended posix class.
      *          \h*
-     *          [:punct:]?                  # The closing class character,
+     *          [[:punct:]]?                # The closing class character,
      *                                      # possibly omitted.  If not a colon
      *                                      # nor semi colon, the class name
      *                                      # must be even closer to a valid
@@ -14072,11 +14134,11 @@ S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
      * decide that no posix class was intended.  Should be at least
      * sizeof("alphanumeric") */
     UV input_text[15];
+    STATIC_ASSERT_DECL(C_ARRAY_LENGTH(input_text) >= sizeof "alphanumeric");
 
     PERL_ARGS_ASSERT_HANDLE_POSSIBLE_POSIX;
 
-    if (posix_warnings && RExC_warn_text)
-        av_clear(RExC_warn_text);
+    CLEAR_POSIX_WARNINGS();
 
     if (p >= e) {
         return NOT_MEANT_TO_BE_A_POSIX_CLASS;
@@ -14168,7 +14230,7 @@ S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
                     *updated_parse_ptr = (char *) temp_ptr;
                 }
 
-                return OOB_NAMEDCLASS;
+                CLEAR_POSIX_WARNINGS_AND_RETURN(OOB_NAMEDCLASS);
             }
         }
 
@@ -14238,7 +14300,7 @@ S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
         /* We consider something like [^:^alnum:]] to not have been intended to
          * be a posix class, but XXX maybe we should */
         if (complement) {
-            return NOT_MEANT_TO_BE_A_POSIX_CLASS;
+            CLEAR_POSIX_WARNINGS_AND_RETURN(NOT_MEANT_TO_BE_A_POSIX_CLASS);
         }
 
         complement = 1;
@@ -14265,7 +14327,7 @@ S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
          * this leaves this construct looking like [:] or [:^], which almost
          * certainly weren't intended to be posix classes */
         if (has_opening_bracket) {
-            return NOT_MEANT_TO_BE_A_POSIX_CLASS;
+            CLEAR_POSIX_WARNINGS_AND_RETURN(NOT_MEANT_TO_BE_A_POSIX_CLASS);
         }
 
         /* But this function can be called when we parse the colon for
@@ -14282,7 +14344,7 @@ S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
             /* XXX We are currently very restrictive here, so this code doesn't
              * consider the possibility that, say, /[alpha.]]/ was intended to
              * be a posix class. */
-            return NOT_MEANT_TO_BE_A_POSIX_CLASS;
+            CLEAR_POSIX_WARNINGS_AND_RETURN(NOT_MEANT_TO_BE_A_POSIX_CLASS);
         }
 
         /* Here we have something like 'foo:]'.  There was no initial colon,
@@ -14452,7 +14514,7 @@ S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
             }
 
             /* Otherwise, it can't have meant to have been a class */
-            return NOT_MEANT_TO_BE_A_POSIX_CLASS;
+            CLEAR_POSIX_WARNINGS_AND_RETURN(NOT_MEANT_TO_BE_A_POSIX_CLASS);
         }
 
         /* If we ran off the end, and the final character was a punctuation
@@ -14502,7 +14564,7 @@ S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
          * class name.  (We can do this on the first pass, as any second pass
          * will yield an even shorter name) */
         if (name_len < 3) {
-            return NOT_MEANT_TO_BE_A_POSIX_CLASS;
+            CLEAR_POSIX_WARNINGS_AND_RETURN(NOT_MEANT_TO_BE_A_POSIX_CLASS);
         }
 
         /* Find which class it is.  Initially switch on the length of the name.
@@ -14661,7 +14723,7 @@ S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
             }
 
             /* Here neither pass found a close-enough class name */
-            return NOT_MEANT_TO_BE_A_POSIX_CLASS;
+            CLEAR_POSIX_WARNINGS_AND_RETURN(NOT_MEANT_TO_BE_A_POSIX_CLASS);
         }
 
     probably_meant_to_be:
@@ -14703,7 +14765,7 @@ S_handle_possible_posix(pTHX_ RExC_state_t *pRExC_state,
             /* If it is a known class, return the class.  The class number
              * #defines are structured so each complement is +1 to the normal
              * one */
-            return class_number + complement;
+            CLEAR_POSIX_WARNINGS_AND_RETURN(class_number + complement);
         }
         else if (! check_only) {
 

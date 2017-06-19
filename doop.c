@@ -717,13 +717,14 @@ Perl_do_join(pTHX_ SV *sv, SV *delim, SV **mark, SV **sp)
 }
 
 void
-Perl_do_sprintf(pTHX_ SV *sv, I32 len, SV **sarg)
+Perl_do_sprintf(pTHX_ SV *sv, SSize_t len, SV **sarg)
 {
     STRLEN patlen;
     const char * const pat = SvPV_const(*sarg, patlen);
     bool do_taint = FALSE;
 
     PERL_ARGS_ASSERT_DO_SPRINTF;
+    assert(len >= 1);
 
     if (SvTAINTED(*sarg))
 	TAINT_PROPER(
@@ -736,7 +737,7 @@ Perl_do_sprintf(pTHX_ SV *sv, I32 len, SV **sarg)
     SvUTF8_off(sv);
     if (DO_UTF8(*sarg))
         SvUTF8_on(sv);
-    sv_vsetpvfn(sv, pat, patlen, NULL, sarg + 1, len - 1, &do_taint);
+    sv_vsetpvfn(sv, pat, patlen, NULL, sarg + 1, (Size_t)(len - 1), &do_taint);
     SvSETMAGIC(sv);
     if (do_taint)
 	SvTAINTED_on(sv);
@@ -763,9 +764,16 @@ Perl_do_vecget(pTHX_ SV *sv, STRLEN offset, int size)
 	Perl_croak(aTHX_ "Illegal number of bits in vec");
 
     if (SvUTF8(sv)) {
-	(void) Perl_sv_utf8_downgrade(aTHX_ sv, TRUE);
-        /* PVX may have changed */
-        s = (unsigned char *) SvPV_flags(sv, srclen, svpv_flags);
+	if (Perl_sv_utf8_downgrade(aTHX_ sv, TRUE)) {
+            /* PVX may have changed */
+            s = (unsigned char *) SvPV_flags(sv, srclen, svpv_flags);
+        }
+        else {
+            Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
+                                "Use of strings with code points over 0xFF as"
+                                " arguments to vec is deprecated. This will"
+                                " be a fatal error in Perl 5.32");
+        }
     }
 
     if (size < 8) {
@@ -920,8 +928,8 @@ Perl_do_vecset(pTHX_ SV *sv)
     /* some out-of-range errors have been deferred if/until the LV is
      * actually written to: f(vec($s,-1,8)) is not always fatal */
     if (errflags) {
-        assert(!(errflags & ~(1|4)));
-        if (errflags & 1)
+        assert(!(errflags & ~(LVf_NEG_OFF|LVf_OUT_OF_RANGE)));
+        if (errflags & LVf_NEG_OFF)
             Perl_croak_nocontext("Negative offset to vec in lvalue context");
         Perl_croak_nocontext("Out of memory!");
     }
@@ -1020,62 +1028,107 @@ Perl_do_vop(pTHX_ I32 optype, SV *sv, SV *left, SV *right)
     STRLEN lensave;
     const char *lsave;
     const char *rsave;
-    bool left_utf;
-    bool right_utf;
-    bool do_warn_above_ff = ckWARN_d(WARN_DEPRECATED);
     STRLEN needlen = 0;
+    bool result_needs_to_be_utf8 = FALSE;
+    bool left_utf8 = FALSE;
+    bool right_utf8 = FALSE;
+    U8 * left_non_downgraded = NULL;
+    U8 * right_non_downgraded = NULL;
+    Size_t left_non_downgraded_len = 0;
+    Size_t right_non_downgraded_len = 0;
+    char * non_downgraded = NULL;
+    Size_t non_downgraded_len = 0;
 
     PERL_ARGS_ASSERT_DO_VOP;
 
     if (sv != left || (optype != OP_BIT_AND && !SvOK(sv)))
         SvPVCLEAR(sv);        /* avoid undef warning on |= and ^= */
     if (sv == left) {
-	lsave = lc = SvPV_force_nomg(left, leftlen);
+	lc = SvPV_force_nomg(left, leftlen);
     }
     else {
-	lsave = lc = SvPV_nomg_const(left, leftlen);
+	lc = SvPV_nomg_const(left, leftlen);
 	SvPV_force_nomg_nolen(sv);
     }
-    rsave = rc = SvPV_nomg_const(right, rightlen);
+    rc = SvPV_nomg_const(right, rightlen);
 
     /* This needs to come after SvPV to ensure that string overloading has
        fired off.  */
 
-    left_utf = DO_UTF8(left);
-    right_utf = DO_UTF8(right);
+    /* Create downgraded temporaries of any UTF-8 encoded operands */
+    if (DO_UTF8(left)) {
+        const U8 * save_lc = (U8 *) lc;
 
-    if (left_utf && !right_utf) {
-	/* Avoid triggering overloading again by using temporaries.
-	   Maybe there should be a variant of sv_utf8_upgrade that takes pvn
-	*/
-	right = newSVpvn_flags(rsave, rightlen, SVs_TEMP);
-	sv_utf8_upgrade(right);
-	rsave = rc = SvPV_nomg_const(right, rightlen);
-	right_utf = TRUE;
+        left_utf8 = TRUE;
+        result_needs_to_be_utf8 = TRUE;
+
+        left_non_downgraded_len = leftlen;
+        lc = (char *) bytes_from_utf8_loc((const U8 *) lc, &leftlen,
+                                          &left_utf8,
+                                          (const U8 **) &left_non_downgraded);
+        /* Calculate the number of trailing unconvertible bytes.  This quantity
+         * is the original length minus the length of the converted portion. */
+        left_non_downgraded_len -= left_non_downgraded - save_lc;
+        SAVEFREEPV(lc);
     }
-    else if (!left_utf && right_utf) {
-	left = newSVpvn_flags(lsave, leftlen, SVs_TEMP);
-	sv_utf8_upgrade(left);
-	lsave = lc = SvPV_nomg_const(left, leftlen);
-	left_utf = TRUE;
+    if (DO_UTF8(right)) {
+        const U8 * save_rc = (U8 *) rc;
+
+        right_utf8 = TRUE;
+        result_needs_to_be_utf8 = TRUE;
+
+        right_non_downgraded_len = rightlen;
+        rc = (char *) bytes_from_utf8_loc((const U8 *) rc, &rightlen,
+                                          &right_utf8,
+                                          (const U8 **) &right_non_downgraded);
+        right_non_downgraded_len -= right_non_downgraded - save_rc;
+        SAVEFREEPV(rc);
     }
 
-    len = leftlen < rightlen ? leftlen : rightlen;
+    /* We set 'len' to the length that the operation actually operates on.  The
+     * dangling part of the longer operand doesn't actually participate in the
+     * operation.  What happens is that we pretend that the shorter operand has
+     * been extended to the right by enough imaginary zeros to match the length
+     * of the longer one.  But we know in advance the result of the operation
+     * on zeros without having to do it.  In the case of '&', the result is
+     * zero, and the dangling portion is simply discarded.  For '|' and '^', the
+     * result is the same as the other operand, so the dangling part is just
+     * appended to the final result, unchanged.  We currently accept above-FF
+     * code points in the dangling portion, as that's how it has long worked,
+     * and code depends on it staying that way.  But it is now fatal for
+     * above-FF to appear in the portion that does get operated on.  Hence, any
+     * above-FF must come only in the longer operand, and only in its dangling
+     * portion.  That means that at least one of the operands has to be
+     * entirely non-UTF-8, and the length of that operand has to be before the
+     * first above-FF in the other */
+    if (left_utf8) {
+        if (right_utf8 || rightlen > leftlen) {
+            Perl_croak(aTHX_ fatal_above_ff_msg, PL_op_desc[optype]);
+        }
+        len = rightlen;
+    }
+    else if (right_utf8) {
+        if (leftlen > rightlen) {
+            Perl_croak(aTHX_ fatal_above_ff_msg, PL_op_desc[optype]);
+        }
+        len = leftlen;
+    }
+    else {  /* Neither is UTF-8 */
+        len = leftlen < rightlen ? leftlen : rightlen;
+    }
+
     lensave = len;
+    lsave = lc;
+    rsave = rc;
+
     SvCUR_set(sv, len);
     (void)SvPOK_only(sv);
-    if ((left_utf || right_utf) && (sv == left || sv == right)) {
-	needlen = optype == OP_BIT_AND ? len : leftlen + rightlen;
-	Newxz(dc, needlen + 1, char);
-    }
-    else if (SvOK(sv) || SvTYPE(sv) > SVt_PVMG) {
+    if (SvOK(sv) || SvTYPE(sv) > SVt_PVMG) {
 	dc = SvPV_force_nomg_nolen(sv);
 	if (SvLEN(sv) < len + 1) {
 	    dc = SvGROW(sv, len + 1);
 	    (void)memzero(dc + SvCUR(sv), len - SvCUR(sv) + 1);
 	}
-	if (optype != OP_BIT_AND && (left_utf || right_utf))
-	    dc = SvGROW(sv, leftlen + rightlen + 1);
     }
     else {
 	needlen = optype == OP_BIT_AND
@@ -1084,100 +1137,7 @@ Perl_do_vop(pTHX_ I32 optype, SV *sv, SV *left, SV *right)
 	sv_usepvn_flags(sv, dc, needlen, SV_HAS_TRAILING_NUL);
 	dc = SvPVX(sv);		/* sv_usepvn() calls Renew() */
     }
-    if (left_utf || right_utf) {
-	char *dcorig = dc;
-	char *dcsave = NULL;
-	STRLEN lulen = leftlen;
-	STRLEN rulen = rightlen;
 
-	switch (optype) {
-	case OP_BIT_AND:
-	    while (lulen && rulen) {
-                UV duc, luc, ruc;
-                STRLEN ulen;
-		luc = utf8n_to_uvchr((U8*)lc, lulen, &ulen, UTF8_ALLOW_ANYUV);
-		lc += ulen;
-		lulen -= ulen;
-		ruc = utf8n_to_uvchr((U8*)rc, rulen, &ulen, UTF8_ALLOW_ANYUV);
-		rc += ulen;
-		rulen -= ulen;
-		duc = luc & ruc;
-		dc = (char*)uvchr_to_utf8((U8*)dc, duc);
-                if (do_warn_above_ff && (luc > 0xff || ruc > 0xff)) {
-                    Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
-                                deprecated_above_ff_msg, PL_op_desc[optype]);
-                    /* Warn only once per operation */
-                    do_warn_above_ff = FALSE;
-                }
-	    }
-	    if (sv == left || sv == right)
-		(void)sv_usepvn(sv, dcorig, needlen);
-	    SvCUR_set(sv, dc - dcorig);
-	    *SvEND(sv) = 0;
-	    break;
-	case OP_BIT_XOR:
-	    while (lulen && rulen) {
-                UV duc, luc, ruc;
-                STRLEN ulen;
-		luc = utf8n_to_uvchr((U8*)lc, lulen, &ulen, UTF8_ALLOW_ANYUV);
-		lc += ulen;
-		lulen -= ulen;
-		ruc = utf8n_to_uvchr((U8*)rc, rulen, &ulen, UTF8_ALLOW_ANYUV);
-		rc += ulen;
-		rulen -= ulen;
-		duc = luc ^ ruc;
-		dc = (char*)uvchr_to_utf8((U8*)dc, duc);
-                if (do_warn_above_ff && (luc > 0xff || ruc > 0xff)) {
-                    Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
-                                deprecated_above_ff_msg, PL_op_desc[optype]);
-                    do_warn_above_ff = FALSE;
-                }
-	    }
-	    goto mop_up_utf;
-	case OP_BIT_OR:
-	    while (lulen && rulen) {
-                UV duc, luc, ruc;
-                STRLEN ulen;
-		luc = utf8n_to_uvchr((U8*)lc, lulen, &ulen, UTF8_ALLOW_ANYUV);
-		lc += ulen;
-		lulen -= ulen;
-		ruc = utf8n_to_uvchr((U8*)rc, rulen, &ulen, UTF8_ALLOW_ANYUV);
-		rc += ulen;
-		rulen -= ulen;
-		duc = luc | ruc;
-		dc = (char*)uvchr_to_utf8((U8*)dc, duc);
-                if (do_warn_above_ff && (luc > 0xff || ruc > 0xff)) {
-                    Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
-                                deprecated_above_ff_msg, PL_op_desc[optype]);
-                    do_warn_above_ff = FALSE;
-                }
-	    }
-	  mop_up_utf:
-	    if (rulen)
-		dcsave = savepvn(rc, rulen);
-	    else if (lulen)
-		dcsave = savepvn(lc, lulen);
-	    if (sv == left || sv == right)
-		(void)sv_usepvn(sv, dcorig, needlen); /* uses Renew(); defaults to nomg */
-	    SvCUR_set(sv, dc - dcorig);
-	    if (rulen)
-		sv_catpvn_nomg(sv, dcsave, rulen);
-	    else if (lulen)
-		sv_catpvn_nomg(sv, dcsave, lulen);
-	    else
-		*SvEND(sv) = '\0';
-	    Safefree(dcsave);
-	    break;
-	default:
-	    if (sv == left || sv == right)
-		Safefree(dcorig);
-	    Perl_croak(aTHX_ "panic: do_vop called for op %u (%s)",
-			(unsigned)optype, PL_op_name[optype]);
-	}
-	SvUTF8_on(sv);
-	goto finish;
-    }
-    else
 #ifdef LIBERAL
     if (len >= sizeof(long)*4 &&
 	!((unsigned long)dc % sizeof(long)) &&
@@ -1224,40 +1184,59 @@ Perl_do_vop(pTHX_ I32 optype, SV *sv, SV *left, SV *right)
 	len = remainder;
     }
 #endif
-    {
-	switch (optype) {
-	case OP_BIT_AND:
-	    while (len--)
-		*dc++ = *lc++ & *rc++;
-	    *dc = '\0';
-	    break;
-	case OP_BIT_XOR:
-	    while (len--)
-		*dc++ = *lc++ ^ *rc++;
-	    goto mop_up;
-	case OP_BIT_OR:
-	    while (len--)
-		*dc++ = *lc++ | *rc++;
-	  mop_up:
-	    len = lensave;
-	    if (rightlen > len) {
-                if (dc == rc)
-                    SvCUR(sv) = rightlen;
-                else
-                    sv_catpvn_nomg(sv, rsave + len, rightlen - len);
-            }
-            else if (leftlen > len) {
-                if (dc == lc)
-                    SvCUR(sv) = leftlen;
-                else
-                    sv_catpvn_nomg(sv, lsave + len, leftlen - len);
-            }
-            *SvEND(sv) = '\0';
+    switch (optype) {
+    case OP_BIT_AND:
+        while (len--)
+            *dc++ = *lc++ & *rc++;
+        *dc = '\0';
+        break;
+    case OP_BIT_XOR:
+        while (len--)
+            *dc++ = *lc++ ^ *rc++;
+        goto mop_up;
+    case OP_BIT_OR:
+        while (len--)
+            *dc++ = *lc++ | *rc++;
+      mop_up:
+        len = lensave;
+        if (rightlen > len) {
+            if (dc == rc)
+                SvCUR(sv) = rightlen;
+            else
+                sv_catpvn_nomg(sv, rsave + len, rightlen - len);
+        }
+        else if (leftlen > len) {
+            if (dc == lc)
+                SvCUR(sv) = leftlen;
+            else
+                sv_catpvn_nomg(sv, lsave + len, leftlen - len);
+        }
+        *SvEND(sv) = '\0';
 
-	    break;
-	}
+        /* If there is trailing stuff that couldn't be converted from UTF-8, it
+         * is appended as-is for the ^ and | operators.  This preserves
+         * backwards compatibility */
+        if (right_non_downgraded) {
+            non_downgraded = (char *) right_non_downgraded;
+            non_downgraded_len = right_non_downgraded_len;
+        }
+        else if (left_non_downgraded) {
+            non_downgraded = (char *) left_non_downgraded;
+            non_downgraded_len = left_non_downgraded_len;
+        }
+
+        break;
     }
-  finish:
+
+    if (result_needs_to_be_utf8) {
+        sv_utf8_upgrade_nomg(sv);
+
+        /* Append any trailing UTF-8 as-is. */
+        if (non_downgraded) {
+            sv_catpvn_nomg(sv, non_downgraded, non_downgraded_len);
+        }
+    }
+
     SvTAINT(sv);
 }
 
@@ -1328,12 +1307,8 @@ Perl_do_kv(pTHX)
 	    XPUSHs(sv);
 	}
 	if (dovalues) {
-	    SV *tmpstr = hv_iterval(keys,entry);
-	    DEBUG_H(Perl_sv_setpvf(aTHX_ tmpstr, "%lu%%%d=%lu",
-			    (unsigned long)HeHASH(entry),
-			    (int)HvMAX(keys)+1,
-			    (unsigned long)(HeHASH(entry) & HvMAX(keys))));
-	    XPUSHs(tmpstr);
+	    SV *const sv = hv_iterval(keys,entry);
+	    XPUSHs(sv);
 	}
     }
     RETURN;

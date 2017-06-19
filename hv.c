@@ -34,7 +34,11 @@ holds the key and hash value.
 #define PERL_HASH_INTERNAL_ACCESS
 #include "perl.h"
 
-#define DO_HSPLIT(xhv) ((xhv)->xhv_keys > (xhv)->xhv_max) /* HvTOTALKEYS(hv) > HvMAX(hv) */
+/* we split when we collide and we have a load factor over 0.667.
+ * NOTE if you change this formula so we split earlier than previously
+ * you MUST change the logic in hv_ksplit()
+ */
+#define DO_HSPLIT(xhv) ( ((xhv)->xhv_keys + ((xhv)->xhv_keys >> 1))  > (xhv)->xhv_max )
 #define HV_FILL_THRESHOLD 31
 
 static const char S_strtab_error[]
@@ -343,6 +347,7 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
     HE **oentry;
     SV *sv;
     bool is_utf8;
+    bool in_collision;
     int masked_flags;
     const int return_svp = action & HV_FETCH_JUST_SV;
     HEK *keysv_hek = NULL;
@@ -835,6 +840,7 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
      * making it harder to see if there is a collision. We also
      * reset the iterator randomizer if there is one.
      */
+    in_collision = *oentry != NULL;
     if ( *oentry && PL_HASH_RAND_BITS_ENABLED) {
         PL_hash_rand_bits++;
         PL_hash_rand_bits= ROTL_UV(PL_hash_rand_bits,1);
@@ -877,7 +883,7 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 	HvHASKFLAGS_on(hv);
 
     xhv->xhv_keys++; /* HvTOTALKEYS(hv)++ */
-    if ( DO_HSPLIT(xhv) ) {
+    if ( in_collision && DO_HSPLIT(xhv) ) {
         const STRLEN oldsize = xhv->xhv_max + 1;
         const U32 items = (U32)HvPLACEHOLDERS_get(hv);
 
@@ -1450,29 +1456,42 @@ void
 Perl_hv_ksplit(pTHX_ HV *hv, IV newmax)
 {
     XPVHV* xhv = (XPVHV*)SvANY(hv);
-    const I32 oldsize = (I32) xhv->xhv_max+1; /* HvMAX(hv)+1 (sick) */
+    const I32 oldsize = (I32) xhv->xhv_max+1;       /* HvMAX(hv)+1 */
     I32 newsize;
+    I32 wantsize;
+    I32 trysize;
     char *a;
 
     PERL_ARGS_ASSERT_HV_KSPLIT;
 
-    newsize = (I32) newmax;			/* possible truncation here */
-    if (newsize != newmax || newmax <= oldsize)
+    wantsize = (I32) newmax;                            /* possible truncation here */
+    if (wantsize != newmax)
 	return;
-    while ((newsize & (1 + ~newsize)) != newsize) {
-	newsize &= ~(newsize & (1 + ~newsize));	/* get proper power of 2 */
+
+    wantsize= wantsize + (wantsize >> 1);           /* wantsize *= 1.5 */
+    if (wantsize < newmax)                          /* overflow detection */
+        return;
+
+    newsize = oldsize;
+    while (wantsize > newsize) {
+        trysize = newsize << 1;
+        if (trysize > newsize) {
+            newsize = trysize;
+        } else {
+            /* we overflowed */
+            return;
+        }
     }
-    if (newsize < newmax)
-	newsize *= 2;
-    if (newsize < newmax)
-	return;					/* overflow detection */
+
+    if (newsize <= oldsize)
+        return;                                            /* overflow detection */
 
     a = (char *) HvARRAY(hv);
     if (a) {
         hsplit(hv, oldsize, newsize);
     } else {
         Newxz(a, PERL_HV_ARRAY_ALLOC_BYTES(newsize), char);
-        xhv->xhv_max = --newsize;
+        xhv->xhv_max = newsize - 1;
         HvARRAY(hv) = (HE **) a;
     }
 }
@@ -1936,7 +1955,7 @@ Perl_hv_undef_flags(pTHX_ HV *hv, U32 flags)
 {
     XPVHV* xhv;
     bool save;
-    SSize_t orig_ix;
+    SSize_t orig_ix = PL_tmps_ix; /* silence compiler warning about unitialized vars */
 
     if (!hv)
 	return;
@@ -2947,7 +2966,7 @@ S_unshare_hek_or_pvn(pTHX_ const HEK *hek, const char *str, I32 len, U32 hash)
  * len and hash must both be valid for str.
  */
 HEK *
-Perl_share_hek(pTHX_ const char *str, I32 len, U32 hash)
+Perl_share_hek(pTHX_ const char *str, SSize_t len, U32 hash)
 {
     bool is_utf8 = FALSE;
     int flags = 0;
@@ -2979,7 +2998,7 @@ Perl_share_hek(pTHX_ const char *str, I32 len, U32 hash)
 }
 
 STATIC HEK *
-S_share_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags)
+S_share_hek_flags(pTHX_ const char *str, STRLEN len, U32 hash, int flags)
 {
     HE *entry;
     const int flags_masked = flags & HVhek_MASK;
@@ -2987,6 +3006,10 @@ S_share_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags)
     XPVHV * const xhv = (XPVHV*)SvANY(PL_strtab);
 
     PERL_ARGS_ASSERT_SHARE_HEK_FLAGS;
+
+    if (UNLIKELY(len > (STRLEN) I32_MAX)) {
+        Perl_croak_nocontext("Sorry, hash keys must be smaller than 2**31 bytes");
+    }
 
     /* what follows is the moral equivalent of:
 
@@ -3002,7 +3025,7 @@ S_share_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags)
     for (;entry; entry = HeNEXT(entry)) {
 	if (HeHASH(entry) != hash)		/* strings can't be equal */
 	    continue;
-	if (HeKLEN(entry) != len)
+	if (HeKLEN(entry) != (SSize_t) len)
 	    continue;
 	if (HeKEY(entry) != str && memNE(HeKEY(entry),str,len))	/* is this it? */
 	    continue;

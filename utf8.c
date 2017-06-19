@@ -37,7 +37,8 @@ static const char malformed_text[] = "Malformed UTF-8 character";
 static const char unees[] =
                         "Malformed UTF-8 character (unexpected end of string)";
 static const char cp_above_legal_max[] =
- "Use of code point 0x%" UVXf " is deprecated; the permissible max is 0x%" UVXf ". This will be fatal in Perl 5.28";
+      "Use of code point 0x%" UVXf " is not allowed; "
+      "the permissible max is 0x%" UVXf;
 
 #define MAX_NON_DEPRECATED_CP ((UV) (IV_MAX))
 
@@ -198,11 +199,8 @@ Perl_uvoffuni_to_utf8_flags(pTHX_ U8 *d, UV uv, const UV flags)
      * performance hit on these high EBCDIC code points. */
 
     if (UNLIKELY(UNICODE_IS_SUPER(uv))) {
-        if (   UNLIKELY(uv > MAX_NON_DEPRECATED_CP)
-            && ckWARN_d(WARN_DEPRECATED))
-        {
-            Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
-                        cp_above_legal_max, uv, MAX_NON_DEPRECATED_CP);
+        if (UNLIKELY(uv > MAX_NON_DEPRECATED_CP)) {
+            Perl_croak(aTHX_ cp_above_legal_max, uv, MAX_NON_DEPRECATED_CP);
         }
         if (   (flags & UNICODE_WARN_SUPER)
             || (   UNICODE_IS_ABOVE_31_BIT(uv)
@@ -1663,12 +1661,9 @@ Perl_utf8n_to_uvchr_error(pTHX_ const U8 *s,
                  * where 'uv' is not valid. */
                 if (   ! (orig_problems
                                     & (UTF8_GOT_TOO_SHORT|UTF8_GOT_OVERFLOW))
-                    && UNLIKELY(uv > MAX_NON_DEPRECATED_CP)
-                    && ckWARN_d(WARN_DEPRECATED))
-                {
-                    message = Perl_form(aTHX_ cp_above_legal_max,
-                                              uv, MAX_NON_DEPRECATED_CP);
-                    pack_warn = packWARN(WARN_DEPRECATED);
+                    && UNLIKELY(uv > MAX_NON_DEPRECATED_CP)) {
+                    Perl_croak(aTHX_ cp_above_legal_max, uv,
+                                     MAX_NON_DEPRECATED_CP);
                 }
             }
             else if (possible_problems & UTF8_GOT_NONCHAR) {
@@ -1912,10 +1907,14 @@ Perl_bytes_cmp_utf8(pTHX_ const U8 *b, STRLEN blen, const U8 *u, STRLEN ulen)
 /*
 =for apidoc utf8_to_bytes
 
-Converts a string C<s> of length C<len> from UTF-8 into native byte encoding.
+Converts a string C<"s"> of length C<*lenp> from UTF-8 into native byte encoding.
 Unlike L</bytes_to_utf8>, this over-writes the original string, and
-updates C<len> to contain the new length.
-Returns zero on failure, setting C<len> to -1.
+updates C<*lenp> to contain the new length.
+Returns zero on failure (leaving C<"s"> unchanged) setting C<*lenp> to -1.
+
+Upon successful return, the number of variants in the string can be computed by
+having saved the value of C<*lenp> before the call, and subtracting the
+after-call value of C<*lenp> from it.
 
 If you need a copy of the string, see L</bytes_from_utf8>.
 
@@ -1923,106 +1922,206 @@ If you need a copy of the string, see L</bytes_from_utf8>.
 */
 
 U8 *
-Perl_utf8_to_bytes(pTHX_ U8 *s, STRLEN *len)
+Perl_utf8_to_bytes(pTHX_ U8 *s, STRLEN *lenp)
 {
-    U8 * const save = s;
-    U8 * const send = s + *len;
-    U8 *d;
+    U8 * first_variant;
 
     PERL_ARGS_ASSERT_UTF8_TO_BYTES;
     PERL_UNUSED_CONTEXT;
 
-    /* ensure valid UTF-8 and chars < 256 before updating string */
-    while (s < send) {
-        if (! UTF8_IS_INVARIANT(*s)) {
-            if (! UTF8_IS_NEXT_CHAR_DOWNGRADEABLE(s, send)) {
-                *len = ((STRLEN) -1);
-                return 0;
+    /* This is a no-op if no variants at all in the input */
+    if (is_utf8_invariant_string_loc(s, *lenp, (const U8 **) &first_variant)) {
+        return s;
+    }
+
+    {
+        U8 * const save = s;
+        U8 * const send = s + *lenp;
+        U8 * d;
+
+        /* Nothing before the first variant needs to be changed, so start the real
+         * work there */
+        s = first_variant;
+        while (s < send) {
+            if (! UTF8_IS_INVARIANT(*s)) {
+                if (! UTF8_IS_NEXT_CHAR_DOWNGRADEABLE(s, send)) {
+                    *lenp = ((STRLEN) -1);
+                    return 0;
+                }
+                s++;
             }
             s++;
         }
-        s++;
-    }
 
-    d = s = save;
-    while (s < send) {
-	U8 c = *s++;
-	if (! UTF8_IS_INVARIANT(c)) {
-	    /* Then it is two-byte encoded */
-	    c = EIGHT_BIT_UTF8_TO_NATIVE(c, *s);
-            s++;
-	}
-	*d++ = c;
+        /* Is downgradable, so do it */
+        d = s = first_variant;
+        while (s < send) {
+            U8 c = *s++;
+            if (! UVCHR_IS_INVARIANT(c)) {
+                /* Then it is two-byte encoded */
+                c = EIGHT_BIT_UTF8_TO_NATIVE(c, *s);
+                s++;
+            }
+            *d++ = c;
+        }
+        *d = '\0';
+        *lenp = d - save;
+
+        return save;
     }
-    *d = '\0';
-    *len = d - save;
-    return save;
 }
 
 /*
 =for apidoc bytes_from_utf8
 
-Converts a string C<s> of length C<len> from UTF-8 into native byte encoding.
-Unlike L</utf8_to_bytes> but like L</bytes_to_utf8>, returns a pointer to
-the newly-created string, and updates C<len> to contain the new
-length.  Returns the original string if no conversion occurs, C<len>
-is unchanged.  Do nothing if C<is_utf8> points to 0.  Sets C<is_utf8> to
-0 if C<s> is converted or consisted entirely of characters that are invariant
-in UTF-8 (i.e., US-ASCII on non-EBCDIC machines).
+Converts a potentially UTF-8 encoded string C<s> of length C<*lenp> into native
+byte encoding.  On input, the boolean C<*is_utf8p> gives whether or not C<s> is
+actually encoded in UTF-8.
+
+Unlike L</utf8_to_bytes> but like L</bytes_to_utf8>, this is non-destructive of
+the input string.
+
+Do nothing if C<*is_utf8p> is 0, or if there are code points in the string
+not expressible in native byte encoding.  In these cases, C<*is_utf8p> and
+C<*lenp> are unchanged, and the return value is the original C<s>.
+
+Otherwise, C<*is_utf8p> is set to 0, and the return value is a pointer to a
+newly created string containing a downgraded copy of C<s>, and whose length is
+returned in C<*lenp>, updated.  The new string is C<NUL>-terminated.
+
+Upon successful return, the number of variants in the string can be computed by
+having saved the value of C<*lenp> before the call, and subtracting the
+after-call value of C<*lenp> from it.
 
 =cut
+
+There is a macro that avoids this function call, but this is retained for
+anyone who calls it with the Perl_ prefix */
+
+U8 *
+Perl_bytes_from_utf8(pTHX_ const U8 *s, STRLEN *lenp, bool *is_utf8p)
+{
+    PERL_ARGS_ASSERT_BYTES_FROM_UTF8;
+    PERL_UNUSED_CONTEXT;
+
+    return bytes_from_utf8_loc(s, lenp, is_utf8p, NULL);
+}
+
+/*
+No = here because currently externally undocumented
+for apidoc bytes_from_utf8_loc
+
+Like C<L</bytes_from_utf8>()>, but takes an extra parameter, a pointer to where
+to store the location of the first character in C<"s"> that cannot be
+converted to non-UTF8.
+
+If that parameter is C<NULL>, this function behaves identically to
+C<bytes_from_utf8>.
+
+Otherwise if C<*is_utf8p> is 0 on input, the function behaves identically to
+C<bytes_from_utf8>, except it also sets C<*first_non_downgradable> to C<NULL>.
+
+Otherwise, the function returns a newly created C<NUL>-terminated string
+containing the non-UTF8 equivalent of the convertible first portion of
+C<"s">.  C<*lenp> is set to its length, not including the terminating C<NUL>.
+If the entire input string was converted, C<*is_utf8p> is set to a FALSE value,
+and C<*first_non_downgradable> is set to C<NULL>.
+
+Otherwise, C<*first_non_downgradable> set to point to the first byte of the
+first character in the original string that wasn't converted.  C<*is_utf8p> is
+unchanged.  Note that the new string may have length 0.
+
+Another way to look at it is, if C<*first_non_downgradable> is non-C<NULL> and
+C<*is_utf8p> is TRUE, this function starts at the beginning of C<"s"> and
+converts as many characters in it as possible stopping at the first one it
+finds one that can't be converted to non-UTF-8.  C<*first_non_downgradable> is
+set to point to that.  The function returns the portion that could be converted
+in a newly created C<NUL>-terminated string, and C<*lenp> is set to its length,
+not including the terminating C<NUL>.  If the very first character in the
+original could not be converted, C<*lenp> will be 0, and the new string will
+contain just a single C<NUL>.  If the entire input string was converted,
+C<*is_utf8p> is set to FALSE and C<*first_non_downgradable> is set to C<NULL>.
+
+Upon successful return, the number of variants in the converted portion of the
+string can be computed by having saved the value of C<*lenp> before the call,
+and subtracting the after-call value of C<*lenp> from it.
+
+=cut
+
+
 */
 
 U8 *
-Perl_bytes_from_utf8(pTHX_ const U8 *s, STRLEN *len, bool *is_utf8)
+Perl_bytes_from_utf8_loc(const U8 *s, STRLEN *lenp, bool *is_utf8p, const U8** first_unconverted)
 {
     U8 *d;
-    const U8 *start = s;
-    const U8 *send;
-    I32 count = 0;
+    const U8 *original = s;
+    U8 *converted_start;
+    const U8 *send = s + *lenp;
 
-    PERL_ARGS_ASSERT_BYTES_FROM_UTF8;
-    PERL_UNUSED_CONTEXT;
-    if (!*is_utf8)
-        return (U8 *)start;
+    PERL_ARGS_ASSERT_BYTES_FROM_UTF8_LOC;
 
-    /* ensure valid UTF-8 and chars < 256 before converting string */
-    for (send = s + *len; s < send;) {
-        if (! UTF8_IS_INVARIANT(*s)) {
-            if (! UTF8_IS_NEXT_CHAR_DOWNGRADEABLE(s, send)) {
-                return (U8 *)start;
-            }
-            count++;
-            s++;
-	}
-        s++;
+    if (! *is_utf8p) {
+        if (first_unconverted) {
+            *first_unconverted = NULL;
+        }
+
+        return (U8 *) original;
     }
 
-    *is_utf8 = FALSE;
+    Newx(d, (*lenp) + 1, U8);
 
-    Newx(d, (*len) - count + 1, U8);
-    s = start; start = d;
+    converted_start = d;
     while (s < send) {
-	U8 c = *s++;
-	if (! UTF8_IS_INVARIANT(c)) {
-	    /* Then it is two-byte encoded */
-	    c = EIGHT_BIT_UTF8_TO_NATIVE(c, *s);
+        U8 c = *s++;
+        if (! UTF8_IS_INVARIANT(c)) {
+
+            /* Then it is multi-byte encoded.  If the code point is above 0xFF,
+             * have to stop now */
+            if (UNLIKELY (! UTF8_IS_NEXT_CHAR_DOWNGRADEABLE(s - 1, send))) {
+                if (first_unconverted) {
+                    *first_unconverted = s - 1;
+                    goto finish_and_return;
+                }
+                else {
+                    Safefree(converted_start);
+                    return (U8 *) original;
+                }
+            }
+
+            c = EIGHT_BIT_UTF8_TO_NATIVE(c, *s);
             s++;
-	}
-	*d++ = c;
+        }
+        *d++ = c;
     }
-    *d = '\0';
-    *len = d - start;
-    return (U8 *)start;
+
+    /* Here, converted the whole of the input */
+    *is_utf8p = FALSE;
+    if (first_unconverted) {
+        *first_unconverted = NULL;
+    }
+
+  finish_and_return:
+        *d = '\0';
+        *lenp = d - converted_start;
+
+    /* Trim unused space */
+    Renew(converted_start, *lenp + 1, U8);
+
+    return converted_start;
 }
 
 /*
 =for apidoc bytes_to_utf8
 
-Converts a string C<s> of length C<len> bytes from the native encoding into
+Converts a string C<s> of length C<*lenp> bytes from the native encoding into
 UTF-8.
-Returns a pointer to the newly-created string, and sets C<len> to
+Returns a pointer to the newly-created string, and sets C<*lenp> to
 reflect the new length in bytes.
+
+Upon successful return, the number of variants in the string can be computed by
+having saved the value of C<*lenp> before the call, and subtracting it from the
+after-call value of C<*lenp>.
 
 A C<NUL> character will be written after the end of the string.
 
@@ -2033,20 +2132,17 @@ see L</sv_recode_to_utf8>().
 =cut
 */
 
-/* This logic is duplicated in sv_catpvn_flags, so any bug fixes will
-   likewise need duplication. */
-
 U8*
-Perl_bytes_to_utf8(pTHX_ const U8 *s, STRLEN *len)
+Perl_bytes_to_utf8(pTHX_ const U8 *s, STRLEN *lenp)
 {
-    const U8 * const send = s + (*len);
+    const U8 * const send = s + (*lenp);
     U8 *d;
     U8 *dst;
 
     PERL_ARGS_ASSERT_BYTES_TO_UTF8;
     PERL_UNUSED_CONTEXT;
 
-    Newx(d, (*len) * 2 + 1, U8);
+    Newx(d, (*lenp) * 2 + 1, U8);
     dst = d;
 
     while (s < send) {
@@ -2054,7 +2150,7 @@ Perl_bytes_to_utf8(pTHX_ const U8 *s, STRLEN *len)
         s++;
     }
     *d = '\0';
-    *len = d-dst;
+    *lenp = d-dst;
     return dst;
 }
 
@@ -2571,7 +2667,7 @@ S_warn_on_first_deprecated_use(pTHX_ const char * const name,
 
 bool
 Perl__is_utf8_FOO(pTHX_       U8   classnum,
-                        const U8   *p,
+                        const U8   * const p,
                         const char * const name,
                         const char * const alternative,
                         const bool use_utf8,
@@ -2737,62 +2833,6 @@ Perl__is_utf8_mark(pTHX_ const U8 *p)
     return is_utf8_common(p, &PL_utf8_mark, "IsM", NULL);
 }
 
-/*
-=for apidoc to_utf8_case
-
-Instead use the appropriate one of L</toUPPER_utf8_safe>,
-L</toTITLE_utf8_safe>,
-L</toLOWER_utf8_safe>,
-or L</toFOLD_utf8_safe>.
-
-This function will be removed in Perl v5.28.
-
-C<p> contains the pointer to the UTF-8 string encoding
-the character that is being converted.  This routine assumes that the character
-at C<p> is well-formed.
-
-C<ustrp> is a pointer to the character buffer to put the
-conversion result to.  C<lenp> is a pointer to the length
-of the result.
-
-C<swashp> is a pointer to the swash to use.
-
-Both the special and normal mappings are stored in F<lib/unicore/To/Foo.pl>,
-and loaded by C<SWASHNEW>, using F<lib/utf8_heavy.pl>.  C<special> (usually,
-but not always, a multicharacter mapping), is tried first.
-
-C<special> is a string, normally C<NULL> or C<"">.  C<NULL> means to not use
-any special mappings; C<""> means to use the special mappings.  Values other
-than these two are treated as the name of the hash containing the special
-mappings, like C<"utf8::ToSpecLower">.
-
-C<normal> is a string like C<"ToLower"> which means the swash
-C<%utf8::ToLower>.
-
-Code points above the platform's C<IV_MAX> will raise a deprecation warning,
-unless those are turned off.
-
-=cut */
-
-UV
-Perl_to_utf8_case(pTHX_ const U8 *p, U8* ustrp, STRLEN *lenp,
-			SV **swashp, const char *normal, const char *special)
-{
-    STRLEN len_cp;
-    UV cp;
-    const U8 * e = p + UTF8SKIP(p);
-
-    PERL_ARGS_ASSERT_TO_UTF8_CASE;
-
-    cp = utf8n_to_uvchr(p, e - p, &len_cp, UTF8_CHECK_ONLY);
-    if (len_cp == (STRLEN) -1) {
-        _force_out_malformed_utf8_message(p, e,
-                                   _UTF8_NO_CONFIDENCE_IN_CURLEN, 1 /* Die */ );
-    }
-
-    return _to_utf8_case(cp, p, ustrp, lenp, swashp, normal, special);
-}
-
     /* change namve uv1 to 'from' */
 STATIC UV
 S__to_utf8_case(pTHX_ const UV uv1, const U8 *p, U8* ustrp, STRLEN *lenp,
@@ -2867,11 +2907,9 @@ S__to_utf8_case(pTHX_ const UV uv1, const U8 *p, U8* ustrp, STRLEN *lenp,
                 }
 
                 if (UNLIKELY(UNICODE_IS_SUPER(uv1))) {
-                    if (   UNLIKELY(uv1 > MAX_NON_DEPRECATED_CP)
-                        && ckWARN_d(WARN_DEPRECATED))
-                    {
-                        Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
-                                cp_above_legal_max, uv1, MAX_NON_DEPRECATED_CP);
+                    if (UNLIKELY(uv1 > MAX_NON_DEPRECATED_CP)) {
+                        Perl_croak(aTHX_ cp_above_legal_max, uv1,
+                                         MAX_NON_DEPRECATED_CP);
                     }
                     if (ckWARN_d(WARN_NON_UNICODE)) {
                         const char* desc = (PL_op) ? OP_DESC(PL_op) : normal;

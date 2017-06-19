@@ -385,6 +385,7 @@ Perl_gv_init_pvn(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, U32 flag
 	case SVt_PVIO:
             Perl_croak(aTHX_ "Cannot convert a reference to %s to typeglob",
 		       sv_reftype(has_constant, 0));
+            NOT_REACHED; /* NOTREACHED */
             break;
 
 	default: NOOP;
@@ -421,7 +422,7 @@ Perl_gv_init_pvn(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, U32 flag
 	/* Not actually a constant.  Just a regular sub.  */
 	CV * const cv = (CV *)has_constant;
 	GvCV_set(gv,cv);
-	if (CvSTASH(cv) == stash && (
+	if (CvNAMED(cv) && CvSTASH(cv) == stash && (
 	       CvNAME_HEK(cv) == GvNAME_HEK(gv)
 	    || (  HEK_LEN(CvNAME_HEK(cv)) == HEK_LEN(GvNAME_HEK(gv))
 	       && HEK_FLAGS(CvNAME_HEK(cv)) != HEK_FLAGS(GvNAME_HEK(gv))
@@ -1209,16 +1210,14 @@ Perl_gv_autoload_pvn(pTHX_ HV *stash, const char *name, STRLEN len, U32 flags)
 	return NULL;
 
     /*
-     * Inheriting AUTOLOAD for non-methods works ... for now.
+     * Inheriting AUTOLOAD for non-methods no longer works
      */
     if (
         !(flags & GV_AUTOLOAD_ISMETHOD)
      && (GvCVGEN(gv) || GvSTASH(gv) != stash)
     )
-	Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
-			 "Use of inherited AUTOLOAD for non-method %" SVf
-			 "::%" UTF8f "() is deprecated. This will be "
-                         "fatal in Perl 5.28",
+        Perl_croak(aTHX_ "Use of inherited AUTOLOAD for non-method %" SVf
+                         "::%" UTF8f "() is no longer allowed",
 			 SVfARG(packname),
                          UTF8fARG(is_utf8, len, name));
 
@@ -1338,6 +1337,7 @@ S_require_tie_mod(pTHX_ GV *gv, const char varname, const char * name,
       GV **gvp;
       dSP;
 
+      PUSHSTACKi(PERLSI_MAGIC);
       ENTER;
 
 #define HV_FETCH_TIE_FUNC (GV **)hv_fetchs(stash, "_tie_it", 0)
@@ -1367,6 +1367,7 @@ S_require_tie_mod(pTHX_ GV *gv, const char varname, const char * name,
       PUTBACK;
       call_sv((SV *)*gvp, G_VOID|G_DISCARD);
       LEAVE;
+      POPSTACK;
     }
 }
 
@@ -1994,9 +1995,9 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
                                 /* @{^CAPTURE} %{^CAPTURE} */
                 if (memEQs(name, len, "\003APTURE")) {
                     AV* const av = GvAVn(gv);
-                    UV uv= *name;
+                    const Size_t n = *name;
 
-                    sv_magic(MUTABLE_SV(av), (SV*)uv, PERL_MAGIC_regdata, NULL, 0);
+                    sv_magic(MUTABLE_SV(av), (SV*)n, PERL_MAGIC_regdata, NULL, 0);
                     SvREADONLY_on(av);
 
                     if (sv_type == SVt_PVHV || sv_type == SVt_PVGV)
@@ -2162,9 +2163,9 @@ S_gv_magicalize(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len,
             }
             {   /* @- @+ */
                 AV* const av = GvAVn(gv);
-                const UV uv = (UV)*name;
+                const Size_t n = *name;
 
-                sv_magic(MUTABLE_SV(av), (SV*)uv, PERL_MAGIC_regdata, NULL, 0);
+                sv_magic(MUTABLE_SV(av), (SV*)n, PERL_MAGIC_regdata, NULL, 0);
                 SvREADONLY_on(av);
             }
             break;

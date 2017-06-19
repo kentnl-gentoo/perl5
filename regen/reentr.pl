@@ -62,8 +62,8 @@ sub open_print_header {
 
 my $h = open_print_header('reentr.h');
 print $h <<EOF;
-#ifndef REENTR_H
-#define REENTR_H
+#ifndef PERL_REENTR_H_
+#define PERL_REENTR_H_
 
 /* If compiling for a threaded perl, we will macro-wrap the system/library
  * interfaces (e.g. getpwent()) which have threaded versions
@@ -104,6 +104,11 @@ print $h <<EOF;
 #   undef HAS_CRYPT_R
 #   undef HAS_STRERROR_R
 #   define NETDB_R_OBSOLETE
+#endif
+
+#if defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 24))
+#   undef HAS_READDIR_R
+#   undef HAS_READDIR64_R
 #endif
 
 /*

@@ -1814,11 +1814,6 @@ EOP
             ok($AE =~ $re, '/[\xE6\s]/i matches \xC6 when in UTF-8');
         }
 
-        {   # [perl #126606 crashed the interpreter
-            no warnings 'deprecated';
-            like("sS", qr/\N{}Ss|/i, "\N{} with empty branch alternation works");
-        }
-
         {
             is(0+("\n" =~ m'\n'), 1, q|m'\n' should interpolate escapes|);
         }
@@ -1911,6 +1906,17 @@ EOP
         # [perl #129281] buffer write overflow, detected by ASAN, valgrind
         fresh_perl_is('/0(?0)|^*0(?0)|^*(^*())0|/', '', {}, "don't bump whilem_c too much");
     }
+
+    {
+        # RT #131575 intuit skipping back from the end to find the highest
+        # possible start point, was potentially hopping back beyond pos()
+        # and crashing by calling fbm_instr with a negative length
+
+        my $text = "=t=\x{5000}";
+        pos($text) = 3;
+        ok(scalar($text !~ m{(~*=[a-z]=)}g), "RT #131575");
+    }
+
 } # End of sub run_tests
 
 1;

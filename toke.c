@@ -464,13 +464,6 @@ S_printbuf(pTHX_ const char *const fmt, const char *const s)
 
 #endif
 
-static int
-S_deprecate_commaless_var_list(pTHX) {
-    PL_expect = XTERM;
-    deprecate_fatal_in("5.28", "Use of comma-less variable list is deprecated");
-    return REPORT(','); /* grandfather non-comma-format format */
-}
-
 /*
  * S_ao
  *
@@ -2595,8 +2588,9 @@ S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
     PERL_ARGS_ASSERT_GET_AND_CHECK_BACKSLASH_N_NAME;
 
     if (!SvCUR(res)) {
-        deprecate_fatal_in("5.28", "Unknown charname '' is deprecated");
-        return res;
+        /* diag_listed_as: Unknown charname '%s' */
+        yyerror("Unknown charname ''");
+        return NULL;
     }
 
     res = new_constant( NULL, 0, "charnames", res, NULL, backslash_ptr,
@@ -5897,26 +5891,11 @@ Perl_yylex(pTHX)
 		    PL_lex_stuff = NULL;
 		}
 		else {
-		    if (len == 6 && strnEQ(SvPVX(sv), "unique", len)) {
-			sv_free(sv);
-			if (PL_in_my == KEY_our) {
-                            deprecate_disappears_in("5.28",
-                                "Attribute \"unique\" is deprecated");
-			}
-			else
-			    Perl_croak(aTHX_ "The 'unique' attribute may only be applied to 'our' variables");
-		    }
-
 		    /* NOTE: any CV attrs applied here need to be part of
 		       the CVf_BUILTIN_ATTRS define in cv.h! */
-		    else if (!PL_in_my && len == 6 && strnEQ(SvPVX(sv), "lvalue", len)) {
+		    if (!PL_in_my && len == 6 && strnEQ(SvPVX(sv), "lvalue", len)) {
 			sv_free(sv);
 			CvLVALUE_on(PL_compcv);
-		    }
-		    else if (!PL_in_my && len == 6 && strnEQ(SvPVX(sv), "locked", len)) {
-			sv_free(sv);
-                        deprecate_disappears_in("5.28",
-                            "Attribute \"locked\" is deprecated");
 		    }
 		    else if (!PL_in_my && len == 6 && strnEQ(SvPVX(sv), "method", len)) {
 			sv_free(sv);
@@ -6563,12 +6542,7 @@ Perl_yylex(pTHX)
     case '$':
 	CLINE;
 
-	if (PL_expect == XOPERATOR) {
-	    if (PL_lex_formbrack && PL_lex_brackets == PL_lex_formbrack) {
-		return deprecate_commaless_var_list();
-	    }
-	}
-	else if (PL_expect == XPOSTDEREF) {
+        if (PL_expect == XPOSTDEREF) {
 	    if (s[1] == '#') {
 		s++;
 		POSTDEREF(DOLSHARP);
@@ -6858,10 +6832,6 @@ Perl_yylex(pTHX)
 	TERM(THING);
 
     case '\'':
-	if (   PL_expect == XOPERATOR
-	    && (PL_lex_formbrack && PL_lex_brackets == PL_lex_formbrack))
-		return deprecate_commaless_var_list();
-
 	s = scan_str(s,FALSE,FALSE,FALSE,NULL);
 	if (!s)
 	    missingterm(NULL);
@@ -6874,10 +6844,6 @@ Perl_yylex(pTHX)
 	TERM(sublex_start());
 
     case '"':
-	if (   PL_expect == XOPERATOR
-	    && (PL_lex_formbrack && PL_lex_brackets == PL_lex_formbrack))
-		return deprecate_commaless_var_list();
-
 	s = scan_str(s,FALSE,FALSE,FALSE,NULL);
 	DEBUG_T( {
 	    if (s)
@@ -9880,7 +9846,7 @@ S_scan_heredoc(pTHX_ char *s)
 	else
 	    term = '"';
 	if (! isWORDCHAR_lazy_if_safe(s, PL_bufend, UTF))
-	    deprecate_fatal_in("5.28", "Use of bare << to mean <<\"\" is deprecated");
+	    Perl_croak(aTHX_ "Use of bare << to mean <<\"\" is forbidden");
 	peek = s;
         while (
                isWORDCHAR_lazy_if_safe(peek, PL_bufend, UTF))

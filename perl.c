@@ -308,27 +308,54 @@ perl_construct(pTHXx)
 #ifdef USE_REENTRANT_API
     Perl_reentrant_init(aTHX);
 #endif
-#if defined(USE_HASH_SEED) || defined(USE_HASH_SEED_EXPLICIT)
-        /* [perl #22371] Algorimic Complexity Attack on Perl 5.6.1, 5.8.0
-         * This MUST be done before any hash stores or fetches take place.
-         * If you set PL_hash_seed (and presumably also PL_hash_seed_set)
-         * yourself, it is your responsibility to provide a good random seed!
-         * You can also define PERL_HASH_SEED in compile time, see hv.h.
-         *
-         * XXX: fix this comment */
     if (PL_hash_seed_set == FALSE) {
+        /* Initialize the hash seed and state at startup. This must be
+         * done very early, before ANY hashes are constructed, and once
+         * setup is fixed for the lifetime of the process.
+         *
+         * If you decide to disable the seeding process you should choose
+         * a suitable seed yourself and define PERL_HASH_SEED to a well chosen
+         * string. See hv_func.h for details.
+         */
+#if defined(USE_HASH_SEED)
+        /* get the hash seed from the environment or from an RNG */
         Perl_get_hash_seed(aTHX_ PL_hash_seed);
+#else
+        /* they want a hard coded seed, check that it is long enough */
+        assert( strlen(PERL_HASH_SEED) >= PERL_HASH_SEED_BYTES );
+#endif
+
+        /* now we use the chosen seed to initialize the state -
+         * in some configurations this may be a relatively speaking
+         * expensive operation, but we only have to do it once at startup */
+        PERL_HASH_SEED_STATE(PERL_HASH_SEED,PL_hash_state);
+
+#ifdef PERL_USE_SINGLE_CHAR_HASH_CACHE
+        /* we can build a special cache for 0/1 byte keys, if people choose
+         * I suspect most of the time it is not worth it */
+        {
+            char str[2]="\0";
+            int i;
+            for (i=0;i<256;i++) {
+                str[0]= i;
+                PERL_HASH_WITH_STATE(PL_hash_state,PL_hash_chars[i],str,1);
+            }
+            PERL_HASH_WITH_STATE(PL_hash_state,PL_hash_chars[256],str,0);
+        }
+#endif
+        /* at this point we have initialezed the hash function, and we can start
+         * constructing hashes */
         PL_hash_seed_set= TRUE;
     }
-#endif /* #if defined(USE_HASH_SEED) || defined(USE_HASH_SEED_EXPLICIT) */
-
     /* Note that strtab is a rather special HV.  Assumptions are made
        about not iterating on it, and not adding tie magic to it.
        It is properly deallocated in perl_destruct() */
     PL_strtab = newHV();
 
+    /* SHAREKEYS tells us that the hash has its keys shared with PL_strtab,
+     * which is not the case with PL_strtab itself */
     HvSHAREKEYS_off(PL_strtab);			/* mandatory */
-    hv_ksplit(PL_strtab, 512);
+    hv_ksplit(PL_strtab, 1 << 11);
 
     Zero(PL_sv_consts, SV_CONSTS_COUNT, SV*);
 
@@ -1537,7 +1564,7 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
 #ifndef MULTIPLICITY
     PERL_UNUSED_ARG(my_perl);
 #endif
-#if (defined(USE_HASH_SEED) || defined(USE_HASH_SEED_EXPLICIT) || defined(USE_HASH_SEED_DEBUG)) && !defined(NO_PERL_HASH_SEED_DEBUG)
+#if (defined(USE_HASH_SEED) || defined(USE_HASH_SEED_DEBUG)) && !defined(NO_PERL_HASH_SEED_DEBUG)
     {
         const char * const s = PerlEnv_getenv("PERL_HASH_SEED_DEBUG");
 
@@ -1556,7 +1583,7 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
             PerlIO_printf(Perl_debug_log, "\n");
         }
     }
-#endif /* #if (defined(USE_HASH_SEED) || defined(USE_HASH_SEED_EXPLICIT) ... */
+#endif /* #if (defined(USE_HASH_SEED) ... */
 
 #ifdef __amigaos4__
     {
@@ -1842,9 +1869,6 @@ S_Internals_V(pTHX_ CV *cv)
 #  ifdef USE_FAST_STDIO
 			     " USE_FAST_STDIO"
 #  endif	       
-#  ifdef USE_HASH_SEED_EXPLICIT
-			     " USE_HASH_SEED_EXPLICIT"
-#  endif
 #  ifdef USE_LOCALE
 			     " USE_LOCALE"
 #  endif
