@@ -386,9 +386,8 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.88.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.92.tar.gz',
         'FILES'        => q[cpan/Encode],
-        'CUSTOMIZED'   => [ qw(Unicode/Unicode.pm) ],
     },
 
     'encoding::warnings' => {
@@ -750,7 +749,7 @@ use File::Glob qw(:case);
     },
 
     'Math::BigRat' => {
-        'DISTRIBUTION' => 'PJACKLAM/Math-BigRat-0.2611.tar.gz',
+        'DISTRIBUTION' => 'PJACKLAM/Math-BigRat-0.2613.tar.gz',
         'FILES'        => q[cpan/Math-BigRat],
         'EXCLUDED'     => [
             qr{^t/author-},
@@ -794,7 +793,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20170531.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20170715.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -959,17 +958,8 @@ use File::Glob qw(:case);
     },
 
     'Scalar-List-Utils' => {
-        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.46.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.48.tar.gz',
         'FILES'        => q[cpan/Scalar-List-Utils],
-        'CUSTOMIZED'   => [
-            'lib/List/Util.pm',    # CPAN RT 118470
-            'lib/List/Util/XS.pm', # CPAN RT 118470
-            'lib/Scalar/Util.pm',  # CPAN RT 118470
-            'lib/Sub/Util.pm',     # CPAN RT 118470
-            't/lln.t',             # CPAN RT 118470
-            't/uniq.t',            # CPAN RT 118470
-            't/tainted.t',         # CPAN RT 119169
-        ],
     },
 
     'Search::Dict' => {
@@ -1187,7 +1177,7 @@ use File::Glob qw(:case);
     },
 
     'Time::HiRes' => {
-        'DISTRIBUTION' => 'JHI/Time-HiRes-1.9741.tar.gz',
+        'DISTRIBUTION' => 'JHI/Time-HiRes-1.9742.tar.gz',
         'FILES'        => q[dist/Time-HiRes],
     },
 
@@ -1206,7 +1196,7 @@ use File::Glob qw(:case);
     },
 
     'Time::Piece' => {
-        'DISTRIBUTION' => 'ESAYM/Time-Piece-1.31.tar.gz',
+        'DISTRIBUTION' => 'ESAYM/Time-Piece-1.3201.tar.gz',
         'FILES'        => q[cpan/Time-Piece],
     },
 

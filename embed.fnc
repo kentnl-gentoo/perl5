@@ -744,7 +744,11 @@ ADMpR	|bool	|isALNUM_lazy	|NN const char* p
 #ifdef PERL_IN_UTF8_C
 snR	|U8	|to_lower_latin1|const U8 c|NULLOK U8 *p|NULLOK STRLEN *lenp  \
 		|const char dummy
-inR	|bool	|is_utf8_cp_above_31_bits|NN const U8 * const s|NN const U8 * const e
+#  ifndef UV_IS_QUAD
+snR	|int	|is_utf8_cp_above_31_bits|NN const U8 * const s		    \
+					 |NN const U8 * const e		    \
+					 |const bool consider_overlongs
+#  endif
 #endif
 #if defined(PERL_IN_UTF8_C) || defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_REGEXEC_C)
 EXp	|UV        |_to_fold_latin1|const U8 c|NN U8 *p|NN STRLEN *lenp|const unsigned int flags
@@ -1251,21 +1255,14 @@ ApdO	|AV*	|get_av		|NN const char *name|I32 flags
 ApdO	|HV*	|get_hv		|NN const char *name|I32 flags
 ApdO	|CV*	|get_cv		|NN const char* name|I32 flags
 Apd	|CV*	|get_cvn_flags	|NN const char* name|STRLEN len|I32 flags
-#ifdef WIN32
-ApM	|char*	|my_setlocale	|int category|NULLOK const char* locale
-#else
-AmM	|char*	|my_setlocale	|int category|NULLOK const char* locale
-#endif
+EXnpo	|char*	|setlocale	|int category|NULLOK const char* locale
 ApOM	|int	|init_i18nl10n	|int printwarn
 ApOM	|int	|init_i18nl14n	|int printwarn
-ApM	|char*	|my_strerror	|const int errnum
-ApOM	|void	|new_collate	|NULLOK const char* newcoll
-ApOM	|void	|new_ctype	|NN const char* newctype
-EXpMn	|void	|_warn_problematic_locale
-ApOM	|void	|new_numeric	|NULLOK const char* newcoll
-Ap	|void	|set_numeric_local
-Ap	|void	|set_numeric_radix
-Ap	|void	|set_numeric_standard
+p	|char*	|my_strerror	|const int errnum
+Xpn	|void	|_warn_problematic_locale
+p	|void	|new_numeric	|NULLOK const char* newcoll
+Xp	|void	|set_numeric_local
+Xp	|void	|set_numeric_standard
 ApM	|bool	|_is_in_locale_category|const bool compiling|const int category
 Apd	|void	|sync_locale
 ApdO	|void	|require_pv	|NN const char* pv
@@ -1715,14 +1712,17 @@ EXMp	|void	|_invlist_dump	|NN PerlIO *file|I32 level   \
 #endif
 Ap	|void	|taint_env
 Ap	|void	|taint_proper	|NULLOK const char* f|NN const char *const s
-pM	|char *	|_byte_dump_string					\
+EpM	|char *	|_byte_dump_string					\
 				|NN const U8 * s			\
 				|const STRLEN len			\
 				|const bool format
 #if defined(PERL_IN_UTF8_C)
-inR	|bool	|does_utf8_overflow|NN const U8 * const s|NN const U8 * e
-inR	|bool	|is_utf8_overlong_given_start_byte_ok|NN const U8 * const s|const STRLEN len
-inR	|bool	|isFF_OVERLONG	|NN const U8 * const s|const STRLEN len
+inR	|int	|does_utf8_overflow|NN const U8 * const s		\
+				   |NN const U8 * e			\
+				   |const bool consider_overlongs
+inR	|int	|is_utf8_overlong_given_start_byte_ok|NN const U8 * const s \
+						     |const STRLEN len
+inR	|int	|isFF_OVERLONG	|NN const U8 * const s|const STRLEN len
 sMR	|char *	|unexpected_non_continuation_text			\
 		|NN const U8 * const s					\
 		|STRLEN print_len					\
@@ -2080,7 +2080,7 @@ po	|SV*	|hfree_next_entry	|NN HV *hv|NN STRLEN *indexp
 
 #if defined(PERL_IN_HV_C)
 s	|void	|hsplit		|NN HV *hv|STRLEN const oldsize|STRLEN newsize
-s	|void	|hfreeentries	|NN HV *hv
+s	|void	|hv_free_entries|NN HV *hv
 s	|SV*	|hv_free_ent_ret|NN HV *hv|NN HE *entry
 sR	|HE*	|new_he
 sanR	|HEK*	|save_hek_flags	|NN const char *str|I32 len|U32 hash|int flags
@@ -2715,23 +2715,30 @@ s	|bool	|isa_lookup	|NN HV *stash|NN const char * const name \
 
 #if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
 s	|char*	|stdize_locale	|NN char* locs
+s	|void	|new_collate	|NULLOK const char* newcoll
+s	|void	|new_ctype	|NN const char* newctype
+s	|void	|set_numeric_radix
+#ifdef WIN32
+s	|char*	|my_setlocale	|int category|NULLOK const char* locale
+#endif
 #   ifdef DEBUGGING
 s	|void	|print_collxfrm_input_and_return		\
 			    |NN const char * const s		\
 			    |NN const char * const e		\
 			    |NULLOK const STRLEN * const xlen	\
 			    |const bool is_utf8
+s	|void	|print_bytes_for_locale	|NN const char * const s	\
+					|NN const char * const e	\
+					|const bool is_utf8
+snR	|char *	|setlocale_debug_string	|const int category		    \
+					|NULLOK const char* const locale    \
+					|NULLOK const char* const retval
 #   endif
 #endif
 
-#if defined(USE_LOCALE) \
+#if     defined(USE_LOCALE) \
     && (defined(PERL_IN_LOCALE_C) || defined (PERL_EXT_POSIX))
 ApM	|bool	|_is_cur_LC_category_utf8|int category
-#	ifdef DEBUGGING
-AMnpR	|char *	|_setlocale_debug_string|const int category		    \
-					|NULLOK const char* const locale    \
-					|NULLOK const char* const retval
-#	endif
 #endif
 
 

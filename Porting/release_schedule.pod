@@ -24,12 +24,14 @@ Code freezes (which happen in the 5.27.X series)
 =head2 Perl 5.26
 
   2017-05-30  5.26.0 ✓        Sawyer X
+  2017-08-??  5.26.1          Steve Hay
 
 =head2 Perl 5.24
 
   2016-05-09  5.24.0 ✓        Ricardo Signes
   2017-01-14  5.24.1 ✓        Steve Hay
-  2017-02-??  5.24.2          Steve Hay
+  2017-07-15  5.24.2 ✓        Steve Hay
+  2017-??-??  5.24.3          Steve Hay
 
 =head2 Perl 5.22
 
@@ -37,7 +39,7 @@ Code freezes (which happen in the 5.27.X series)
   2015-12-13  5.22.1 ✓        Steve Hay
   2016-04-29  5.22.2 ✓        Steve Hay
   2017-01-14  5.22.3 ✓        Steve Hay
-  2017-02-??  5.22.4          Steve Hay
+  2017-07-15  5.22.4 ✓        Steve Hay
 
 =head1 DEVELOPMENT RELEASE SCHEDULE
 
@@ -56,7 +58,7 @@ you should reset the version numbers to the next blead series.
 =head2 Perl 5.27
 
   2017-05-31  5.27.0 ✓        Sawyer X
-  2017-06-20  5.27.1          Eric Herman
+  2017-06-20  5.27.1 ✓        Eric Herman
   2017-07-20  5.27.2          Aaron Crane
   2017-08-20  5.27.3          Matthew Horsfall
   2017-09-20  5.27.4          John Anderson

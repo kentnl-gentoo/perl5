@@ -2363,10 +2363,6 @@ PERL_CALLCONV CV *	Perl_newXS_flags(pTHX_ const char *name, XSUBADDR_t subaddr, 
 PERL_CALLCONV CV *	Perl_newXS_len_flags(pTHX_ const char *name, STRLEN len, XSUBADDR_t subaddr, const char *const filename, const char *const proto, SV **const_svp, U32 flags);
 #define PERL_ARGS_ASSERT_NEWXS_LEN_FLAGS	\
 	assert(subaddr)
-PERL_CALLCONV void	Perl_new_collate(pTHX_ const char* newcoll);
-PERL_CALLCONV void	Perl_new_ctype(pTHX_ const char* newctype);
-#define PERL_ARGS_ASSERT_NEW_CTYPE	\
-	assert(newctype)
 PERL_CALLCONV void	Perl_new_numeric(pTHX_ const char* newcoll);
 PERL_CALLCONV PERL_SI*	Perl_new_stackinfo(pTHX_ I32 stitems, I32 cxitems)
 			__attribute__warn_unused_result__;
@@ -2915,11 +2911,11 @@ PERL_CALLCONV void	Perl_set_context(void *t);
 #define PERL_ARGS_ASSERT_SET_CONTEXT	\
 	assert(t)
 PERL_CALLCONV void	Perl_set_numeric_local(pTHX);
-PERL_CALLCONV void	Perl_set_numeric_radix(pTHX);
 PERL_CALLCONV void	Perl_set_numeric_standard(pTHX);
 PERL_CALLCONV void	Perl_setdefout(pTHX_ GV* gv);
 #define PERL_ARGS_ASSERT_SETDEFOUT	\
 	assert(gv)
+PERL_CALLCONV char*	Perl_setlocale(int category, const char* locale);
 PERL_CALLCONV HEK*	Perl_share_hek(pTHX_ const char* str, SSize_t len, U32 hash);
 #define PERL_ARGS_ASSERT_SHARE_HEK	\
 	assert(str)
@@ -3803,9 +3799,6 @@ PERL_CALLCONV void*	Perl_my_cxt_init(pTHX_ int *index, size_t size);
 	assert(index)
 #  endif
 #endif
-#if !(defined(WIN32))
-/* PERL_CALLCONV char*	my_setlocale(pTHX_ int category, const char* locale); */
-#endif
 #if !(defined(_MSC_VER))
 PERL_CALLCONV_NO_RET int	Perl_magic_regdatum_set(pTHX_ SV* sv, MAGIC* mg)
 			__attribute__noreturn__;
@@ -4078,6 +4071,15 @@ PERL_CALLCONV int	Perl_my_sprintf(char *buffer, const char *pat, ...);
 STATIC NV	S_mulexp10(NV value, I32 exponent);
 #  endif
 #endif
+#if !defined(UV_IS_QUAD)
+#  if defined(PERL_IN_UTF8_C)
+STATIC int	S_is_utf8_cp_above_31_bits(const U8 * const s, const U8 * const e, const bool consider_overlongs)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_IS_UTF8_CP_ABOVE_31_BITS	\
+	assert(s); assert(e)
+
+#  endif
+#endif
 #if !defined(WIN32)
 PERL_CALLCONV bool	Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report);
 #define PERL_ARGS_ASSERT_DO_EXEC3	\
@@ -4167,15 +4169,16 @@ STATIC int	S_tokereport(pTHX_ I32 rv, const YYSTYPE* lvalp);
 #define PERL_ARGS_ASSERT_TOKEREPORT	\
 	assert(lvalp)
 #  endif
-#  if defined(USE_LOCALE)     && (defined(PERL_IN_LOCALE_C) || defined (PERL_EXT_POSIX))
-PERL_CALLCONV char *	Perl__setlocale_debug_string(const int category, const char* const locale, const char* const retval)
-			__attribute__warn_unused_result__;
-
-#  endif
 #  if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
+STATIC void	S_print_bytes_for_locale(pTHX_ const char * const s, const char * const e, const bool is_utf8);
+#define PERL_ARGS_ASSERT_PRINT_BYTES_FOR_LOCALE	\
+	assert(s); assert(e)
 STATIC void	S_print_collxfrm_input_and_return(pTHX_ const char * const s, const char * const e, const STRLEN * const xlen, const bool is_utf8);
 #define PERL_ARGS_ASSERT_PRINT_COLLXFRM_INPUT_AND_RETURN	\
 	assert(s); assert(e)
+STATIC char *	S_setlocale_debug_string(const int category, const char* const locale, const char* const retval)
+			__attribute__warn_unused_result__;
+
 #  endif
 #endif
 #if defined(DEBUGGING) && defined(ENABLE_REGEX_SETS_DEBUGGING)
@@ -4537,9 +4540,6 @@ PERL_CALLCONV void	Perl_sv_add_backref(pTHX_ SV *const tsv, SV *const sv);
 STATIC void	S_clear_placeholders(pTHX_ HV *hv, U32 items);
 #define PERL_ARGS_ASSERT_CLEAR_PLACEHOLDERS	\
 	assert(hv)
-STATIC void	S_hfreeentries(pTHX_ HV *hv);
-#define PERL_ARGS_ASSERT_HFREEENTRIES	\
-	assert(hv)
 STATIC void	S_hsplit(pTHX_ HV *hv, STRLEN const oldsize, STRLEN newsize);
 #define PERL_ARGS_ASSERT_HSPLIT	\
 	assert(hv)
@@ -4553,6 +4553,9 @@ STATIC SV*	S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN k
 STATIC SV*	S_hv_free_ent_ret(pTHX_ HV *hv, HE *entry);
 #define PERL_ARGS_ASSERT_HV_FREE_ENT_RET	\
 	assert(hv); assert(entry)
+STATIC void	S_hv_free_entries(pTHX_ HV *hv);
+#define PERL_ARGS_ASSERT_HV_FREE_ENTRIES	\
+	assert(hv)
 STATIC void	S_hv_magic_check(HV *hv, bool *needs_copy, bool *needs_store);
 #define PERL_ARGS_ASSERT_HV_MAGIC_CHECK	\
 	assert(hv); assert(needs_copy); assert(needs_store)
@@ -5807,14 +5810,14 @@ STATIC UV	S_check_locale_boundary_crossing(pTHX_ const U8* const p, const UV res
 	assert(p); assert(ustrp); assert(lenp)
 
 #ifndef PERL_NO_INLINE_FUNCTIONS
-PERL_STATIC_INLINE bool	S_does_utf8_overflow(const U8 * const s, const U8 * e)
+PERL_STATIC_INLINE int	S_does_utf8_overflow(const U8 * const s, const U8 * e, const bool consider_overlongs)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_DOES_UTF8_OVERFLOW	\
 	assert(s); assert(e)
 #endif
 
 #ifndef PERL_NO_INLINE_FUNCTIONS
-PERL_STATIC_INLINE bool	S_isFF_OVERLONG(const U8 * const s, const STRLEN len)
+PERL_STATIC_INLINE int	S_isFF_OVERLONG(const U8 * const s, const STRLEN len)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_ISFF_OVERLONG	\
 	assert(s)
@@ -5835,14 +5838,7 @@ PERL_STATIC_INLINE bool	S_is_utf8_common_with_len(pTHX_ const U8 *const p, const
 #endif
 
 #ifndef PERL_NO_INLINE_FUNCTIONS
-PERL_STATIC_INLINE bool	S_is_utf8_cp_above_31_bits(const U8 * const s, const U8 * const e)
-			__attribute__warn_unused_result__;
-#define PERL_ARGS_ASSERT_IS_UTF8_CP_ABOVE_31_BITS	\
-	assert(s); assert(e)
-#endif
-
-#ifndef PERL_NO_INLINE_FUNCTIONS
-PERL_STATIC_INLINE bool	S_is_utf8_overlong_given_start_byte_ok(const U8 * const s, const STRLEN len)
+PERL_STATIC_INLINE int	S_is_utf8_overlong_given_start_byte_ok(const U8 * const s, const STRLEN len)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_IS_UTF8_OVERLONG_GIVEN_START_BYTE_OK	\
 	assert(s)
@@ -6053,9 +6049,17 @@ PERL_CALLCONV SV*	Perl_sv_dup_inc(pTHX_ const SV *const sstr, CLONE_PARAMS *cons
 PERL_CALLCONV bool	Perl__is_cur_LC_category_utf8(pTHX_ int category);
 #endif
 #if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
+STATIC void	S_new_collate(pTHX_ const char* newcoll);
+STATIC void	S_new_ctype(pTHX_ const char* newctype);
+#define PERL_ARGS_ASSERT_NEW_CTYPE	\
+	assert(newctype)
+STATIC void	S_set_numeric_radix(pTHX);
 STATIC char*	S_stdize_locale(pTHX_ char* locs);
 #define PERL_ARGS_ASSERT_STDIZE_LOCALE	\
 	assert(locs)
+#  if defined(WIN32)
+STATIC char*	S_my_setlocale(pTHX_ int category, const char* locale);
+#  endif
 #endif
 #if defined(USE_LOCALE_COLLATE)
 PERL_CALLCONV int	Perl_magic_setcollxfrm(pTHX_ SV* sv, MAGIC* mg);
@@ -6122,7 +6126,6 @@ PERL_CALLCONV const char*	Perl_quadmath_format_single(const char* format);
 	assert(format)
 #endif
 #if defined(WIN32)
-PERL_CALLCONV char*	Perl_my_setlocale(pTHX_ int category, const char* locale);
 PERL_CALLCONV_NO_RET void	win32_croak_not_implemented(const char * fname)
 			__attribute__noreturn__;
 #define PERL_ARGS_ASSERT_WIN32_CROAK_NOT_IMPLEMENTED	\

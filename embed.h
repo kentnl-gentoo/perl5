@@ -363,7 +363,6 @@
 #define my_popen_list(a,b,c)	Perl_my_popen_list(aTHX_ a,b,c)
 #define my_setenv(a,b)		Perl_my_setenv(aTHX_ a,b)
 #define my_socketpair		Perl_my_socketpair
-#define my_strerror(a)		Perl_my_strerror(aTHX_ a)
 #define my_strftime(a,b,c,d,e,f,g,h,i,j)	Perl_my_strftime(aTHX_ a,b,c,d,e,f,g,h,i,j)
 #define newANONATTRSUB(a,b,c,d)	Perl_newANONATTRSUB(aTHX_ a,b,c,d)
 #define newANONHASH(a)		Perl_newANONHASH(aTHX_ a)
@@ -429,9 +428,6 @@
 #define newWHILEOP(a,b,c,d,e,f,g)	Perl_newWHILEOP(aTHX_ a,b,c,d,e,f,g)
 #define newXS(a,b,c)		Perl_newXS(aTHX_ a,b,c)
 #define newXS_flags(a,b,c,d,e)	Perl_newXS_flags(aTHX_ a,b,c,d,e)
-#define new_collate(a)		Perl_new_collate(aTHX_ a)
-#define new_ctype(a)		Perl_new_ctype(aTHX_ a)
-#define new_numeric(a)		Perl_new_numeric(aTHX_ a)
 #define new_stackinfo(a,b)	Perl_new_stackinfo(aTHX_ a,b)
 #define new_version(a)		Perl_new_version(aTHX_ a)
 #define nothreadhook()		Perl_nothreadhook(aTHX)
@@ -579,9 +575,6 @@
 #define scan_vstring(a,b,c)	Perl_scan_vstring(aTHX_ a,b,c)
 #define seed()			Perl_seed(aTHX)
 #define set_context		Perl_set_context
-#define set_numeric_local()	Perl_set_numeric_local(aTHX)
-#define set_numeric_radix()	Perl_set_numeric_radix(aTHX)
-#define set_numeric_standard()	Perl_set_numeric_standard(aTHX)
 #define setdefout(a)		Perl_setdefout(aTHX_ a)
 #define share_hek(a,b,c)	Perl_share_hek(aTHX_ a,b,c)
 #define sortsv(a,b,c)		Perl_sortsv(aTHX_ a,b,c)
@@ -824,9 +817,6 @@
 #if defined(DEBUGGING)
 #define pad_setsv(a,b)		Perl_pad_setsv(aTHX_ a,b)
 #define pad_sv(a)		Perl_pad_sv(aTHX_ a)
-#  if defined(USE_LOCALE)     && (defined(PERL_IN_LOCALE_C) || defined (PERL_EXT_POSIX))
-#define _setlocale_debug_string	Perl__setlocale_debug_string
-#  endif
 #endif
 #if defined(HAS_SIGACTION) && defined(SA_SIGINFO)
 #define csighandler		Perl_csighandler
@@ -928,16 +918,13 @@
 #define quadmath_format_needed	Perl_quadmath_format_needed
 #define quadmath_format_single	Perl_quadmath_format_single
 #endif
-#if defined(WIN32)
-#define my_setlocale(a,b)	Perl_my_setlocale(aTHX_ a,b)
-#endif
 #if defined(WIN32) || defined(__SYMBIAN32__) || defined(VMS)
 #define do_aspawn(a,b,c)	Perl_do_aspawn(aTHX_ a,b,c)
 #define do_spawn(a)		Perl_do_spawn(aTHX_ a)
 #define do_spawn_nowait(a)	Perl_do_spawn_nowait(aTHX_ a)
 #endif
 #if defined(PERL_CORE) || defined(PERL_EXT)
-#define _warn_problematic_locale	Perl__warn_problematic_locale
+#define _byte_dump_string(a,b,c)	Perl__byte_dump_string(aTHX_ a,b,c)
 #define append_utf8_from_native_byte	S_append_utf8_from_native_byte
 #define av_reify(a)		Perl_av_reify(aTHX_ a)
 #define current_re_engine()	Perl_current_re_engine(aTHX)
@@ -1162,7 +1149,7 @@
 #ifdef PERL_CORE
 #define Slab_Alloc(a)		Perl_Slab_Alloc(aTHX_ a)
 #define Slab_Free(a)		Perl_Slab_Free(aTHX_ a)
-#define _byte_dump_string(a,b,c)	Perl__byte_dump_string(aTHX_ a,b,c)
+#define _warn_problematic_locale	Perl__warn_problematic_locale
 #define abort_execution(a,b)	Perl_abort_execution(aTHX_ a,b)
 #define alloc_LOGOP(a,b,c)	Perl_alloc_LOGOP(aTHX_ a,b,c)
 #define allocmy(a,b,c)		Perl_allocmy(aTHX_ a,b,c)
@@ -1343,12 +1330,14 @@
 #define my_clearenv()		Perl_my_clearenv(aTHX)
 #define my_lstat_flags(a)	Perl_my_lstat_flags(aTHX_ a)
 #define my_stat_flags(a)	Perl_my_stat_flags(aTHX_ a)
+#define my_strerror(a)		Perl_my_strerror(aTHX_ a)
 #define my_unexec()		Perl_my_unexec(aTHX)
 #define newATTRSUB_x(a,b,c,d,e,f)	Perl_newATTRSUB_x(aTHX_ a,b,c,d,e,f)
 #define newSTUB(a,b)		Perl_newSTUB(aTHX_ a,b)
 #define newSVavdefelem(a,b,c)	Perl_newSVavdefelem(aTHX_ a,b,c)
 #define newXS_deffile(a,b)	Perl_newXS_deffile(aTHX_ a,b)
 #define newXS_len_flags(a,b,c,d,e,f,g)	Perl_newXS_len_flags(aTHX_ a,b,c,d,e,f,g)
+#define new_numeric(a)		Perl_new_numeric(aTHX_ a)
 #define nextargv(a,b)		Perl_nextargv(aTHX_ a,b)
 #define noperl_die		Perl_noperl_die
 #define notify_parser_that_changed_to_utf8()	Perl_notify_parser_that_changed_to_utf8(aTHX)
@@ -1390,6 +1379,8 @@
 #define scalar(a)		Perl_scalar(aTHX_ a)
 #define scalarvoid(a)		Perl_scalarvoid(aTHX_ a)
 #define set_caret_X()		Perl_set_caret_X(aTHX)
+#define set_numeric_local()	Perl_set_numeric_local(aTHX)
+#define set_numeric_standard()	Perl_set_numeric_standard(aTHX)
 #define sub_crush_depth(a)	Perl_sub_crush_depth(aTHX_ a)
 #define sv_2num(a)		Perl_sv_2num(aTHX_ a)
 #define sv_clean_all()		Perl_sv_clean_all(aTHX)
@@ -1472,6 +1463,11 @@
 #define mulexp10		S_mulexp10
 #    endif
 #  endif
+#  if !defined(UV_IS_QUAD)
+#    if defined(PERL_IN_UTF8_C)
+#define is_utf8_cp_above_31_bits	S_is_utf8_cp_above_31_bits
+#    endif
+#  endif
 #  if !defined(WIN32)
 #define do_exec3(a,b,c)		Perl_do_exec3(aTHX_ a,b,c)
 #  endif
@@ -1489,7 +1485,9 @@
 #define tokereport(a,b)		S_tokereport(aTHX_ a,b)
 #    endif
 #    if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
+#define print_bytes_for_locale(a,b,c)	S_print_bytes_for_locale(aTHX_ a,b,c)
 #define print_collxfrm_input_and_return(a,b,c,d)	S_print_collxfrm_input_and_return(aTHX_ a,b,c,d)
+#define setlocale_debug_string	S_setlocale_debug_string
 #    endif
 #  endif
 #  if defined(DEBUG_LEAKING_SCALARS_FORK_DUMP)
@@ -1574,12 +1572,12 @@
 #  endif
 #  if defined(PERL_IN_HV_C)
 #define clear_placeholders(a,b)	S_clear_placeholders(aTHX_ a,b)
-#define hfreeentries(a)		S_hfreeentries(aTHX_ a)
 #define hsplit(a,b,c)		S_hsplit(aTHX_ a,b,c)
 #define hv_auxinit(a)		S_hv_auxinit(aTHX_ a)
 #define hv_auxinit_internal	S_hv_auxinit_internal
 #define hv_delete_common(a,b,c,d,e,f,g)	S_hv_delete_common(aTHX_ a,b,c,d,e,f,g)
 #define hv_free_ent_ret(a,b)	S_hv_free_ent_ret(aTHX_ a,b)
+#define hv_free_entries(a)	S_hv_free_entries(aTHX_ a)
 #define hv_magic_check		S_hv_magic_check
 #define hv_notallowed(a,b,c,d)	S_hv_notallowed(aTHX_ a,b,c,d)
 #define new_he()		S_new_he(aTHX)
@@ -1844,7 +1842,6 @@
 #define isFF_OVERLONG		S_isFF_OVERLONG
 #define is_utf8_common(a,b,c,d)	S_is_utf8_common(aTHX_ a,b,c,d)
 #define is_utf8_common_with_len(a,b,c,d,e)	S_is_utf8_common_with_len(aTHX_ a,b,c,d,e)
-#define is_utf8_cp_above_31_bits	S_is_utf8_cp_above_31_bits
 #define is_utf8_overlong_given_start_byte_ok	S_is_utf8_overlong_given_start_byte_ok
 #define swash_scan_list_line(a,b,c,d,e,f,g)	S_swash_scan_list_line(aTHX_ a,b,c,d,e,f,g)
 #define swatch_get(a,b,c)	S_swatch_get(aTHX_ a,b,c)
@@ -1882,7 +1879,13 @@
 #define padnamelist_dup(a,b)	Perl_padnamelist_dup(aTHX_ a,b)
 #  endif
 #  if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
+#define new_collate(a)		S_new_collate(aTHX_ a)
+#define new_ctype(a)		S_new_ctype(aTHX_ a)
+#define set_numeric_radix()	S_set_numeric_radix(aTHX)
 #define stdize_locale(a)	S_stdize_locale(aTHX_ a)
+#    if defined(WIN32)
+#define my_setlocale(a,b)	S_my_setlocale(aTHX_ a,b)
+#    endif
 #  endif
 #  if defined(USE_LOCALE_COLLATE)
 #define magic_setcollxfrm(a,b)	Perl_magic_setcollxfrm(aTHX_ a,b)
@@ -1931,9 +1934,6 @@
 #  define perl_get_sv(a,b)		get_sv(a,b)
 #  define perl_init_i18nl10n(a)		init_i18nl10n(a)
 #  define perl_init_i18nl14n(a)		init_i18nl14n(a)
-#  define perl_new_collate(a)		new_collate(a)
-#  define perl_new_ctype(a)		new_ctype(a)
-#  define perl_new_numeric(a)		new_numeric(a)
 #  define perl_require_pv(a)		require_pv(a)
 
 /* varargs functions can't be handled with CPP macros. :-(

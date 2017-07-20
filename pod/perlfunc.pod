@@ -4071,12 +4071,11 @@ X<map>
 =for Pod::Functions apply a change to a list to get back a new list with the changes
 
 Evaluates the BLOCK or EXPR for each element of LIST (locally setting
-L<C<$_>|perlvar/$_> to each element) and returns the list value composed
-of the
-results of each such evaluation.  In scalar context, returns the
-total number of elements so generated.  Evaluates BLOCK or EXPR in
-list context, so each element of LIST may produce zero, one, or
-more elements in the returned value.
+L<C<$_>|perlvar/$_> to each element) and composes a list of the results of
+each such evaluation.  Each element of LIST may produce zero, one, or more
+elements in the generated list, so the number of elements in the generated
+list may differ from that in LIST.  In scalar context, returns the total
+number of elements so generated.  In list context, returns the generated list.
 
     my @chars = map(chr, @numbers);
 
@@ -4529,6 +4528,13 @@ To (re)open C<STDOUT> or C<STDERR> as an in-memory file, close it first:
     close STDOUT;
     open(STDOUT, ">", \$variable)
 	or die "Can't open STDOUT: $!";
+
+The scalars for in-memory files are treated as octet strings: unless
+the file is being opened with truncation the scalar may not contain
+any code points over 0xFF.
+
+Opening in-memory files I<can> fail for a variety of reasons.  As with
+any other C<open>, check the return value for success.
 
 See L<perliol> for detailed info on PerlIO.
 
@@ -7615,6 +7621,14 @@ only a single space character to be a separator.  In earlier Perls this
 special case was restricted to the use of a plain S<C<" ">> as the
 pattern argument to split; in Perl 5.18.0 and later this special case is
 triggered by any expression which evaluates to the simple string S<C<" ">>.
+
+As of Perl 5.28, this special-cased whitespace splitting works as expected in
+the scope of L<< S<C<"use feature 'unicode_strings">>|feature/The
+'unicode_strings' feature >>. In previous versions, and outside the scope of
+that feature, it exhibits L<perlunicode/The "Unicode Bug">: characters that are
+whitespace according to Unicode rules but not according to ASCII rules can be
+treated as part of fields rather than as field separators, depending on the
+string's internal encoding.
 
 If omitted, PATTERN defaults to a single space, S<C<" ">>, triggering
 the previously described I<awk> emulation.

@@ -3826,9 +3826,9 @@ S_my_kid(pTHX_ OP *o, OP *attrs, OP **imopsp)
 	    PL_parser->in_my = FALSE;
 	    PL_parser->in_my_stash = NULL;
 	    apply_attrs(GvSTASH(gv),
-			(type == OP_RV2SV ? GvSV(gv) :
-			 type == OP_RV2AV ? MUTABLE_SV(GvAV(gv)) :
-			 type == OP_RV2HV ? MUTABLE_SV(GvHV(gv)) : MUTABLE_SV(gv)),
+			(type == OP_RV2SV ? GvSVn(gv) :
+			 type == OP_RV2AV ? MUTABLE_SV(GvAVn(gv)) :
+			 type == OP_RV2HV ? MUTABLE_SV(GvHVn(gv)) : MUTABLE_SV(gv)),
 			attrs);
 	}
 	o->op_private |= OPpOUR_INTRO;
@@ -4669,6 +4669,9 @@ S_gen_constant_list(pTHX_ OP *o)
 
     switch (ret) {
     case 0:
+#if defined DEBUGGING && !defined DEBUGGING_RE_ONLY
+        PL_curstackinfo->si_stack_hwm = 0; /* stop valgrind complaining */
+#endif
 	Perl_pp_pushmark(aTHX);
 	CALLRUNOPS(aTHX);
 	PL_op = curop;
@@ -13085,9 +13088,9 @@ S_maybe_multideref(pTHX_ OP *start, OP *orig_o, UV orig_action, U8 hints)
                 case OP_GV:
                     /* it may be a package var index */
 
-                    ASSUME(!(o->op_flags & ~(OPf_WANT|OPf_SPECIAL)));
+                    ASSUME(!(o->op_flags & ~(OPf_WANT|OPf_PARENS|OPf_SPECIAL)));
                     ASSUME(!(o->op_private & ~(OPpEARLY_CV)));
-                    if (  (o->op_flags &~ OPf_SPECIAL) != OPf_WANT_SCALAR
+                    if (  (o->op_flags & ~(OPf_PARENS|OPf_SPECIAL)) != OPf_WANT_SCALAR
                         || o->op_private != 0
                     )
                         break;
@@ -13492,7 +13495,7 @@ S_maybe_multideref(pTHX_ OP *start, OP *orig_o, UV orig_action, U8 hints)
  */
 
 static void
-S_check_for_bool_cxt(pTHX_ OP*o, U8 bool_flag, U8 maybe_flag)
+S_check_for_bool_cxt(OP*o, U8 bool_flag, U8 maybe_flag)
 {
     OP *lop;
 
@@ -14289,7 +14292,7 @@ Perl_rpeep(pTHX_ OP *o)
 	case OP_PADHV:
             /* see if %h is used in boolean context */
             if ((o->op_flags & OPf_WANT) == OPf_WANT_SCALAR)
-                S_check_for_bool_cxt(aTHX_ o, OPpTRUEBOOL, OPpMAYBE_TRUEBOOL);
+                S_check_for_bool_cxt(o, OPpTRUEBOOL, OPpMAYBE_TRUEBOOL);
             if (o->op_type != OP_PADHV)
                 break;
             /* FALLTHROUGH */
@@ -14787,7 +14790,7 @@ Perl_rpeep(pTHX_ OP *o)
         case OP_REF:
             /* see if ref() is used in boolean context */
             if ((o->op_flags & OPf_WANT) == OPf_WANT_SCALAR)
-                S_check_for_bool_cxt(aTHX_ o, OPpTRUEBOOL, OPpMAYBE_TRUEBOOL);
+                S_check_for_bool_cxt(o, OPpTRUEBOOL, OPpMAYBE_TRUEBOOL);
             break;
 
 	case OP_CUSTOM: {

@@ -5185,6 +5185,7 @@ PP(pp_list)
     if (GIMME_V != G_ARRAY) {
 	SV **mark = PL_stack_base + markidx;
 	dSP;
+        EXTEND(SP, 1);          /* in case no arguments, as in @empty */
 	if (++MARK <= SP)
 	    *MARK = *SP;		/* unwanted list, return last item */
 	else
@@ -5209,6 +5210,7 @@ PP(pp_lslice)
 
     if (GIMME_V != G_ARRAY) {
         if (lastlelem < firstlelem) {
+            EXTEND(SP, 1);
             *firstlelem = &PL_sv_undef;
         }
         else {
@@ -5682,8 +5684,11 @@ PP(pp_reverse)
 	SvUTF8_off(TARG);				/* decontaminate */
 	if (SP - MARK > 1)
 	    do_join(TARG, &PL_sv_no, MARK, SP);
-	else {
-	    sv_setsv(TARG, SP > MARK ? *SP : DEFSV);
+	else if (SP > MARK)
+	    sv_setsv(TARG, *SP);
+        else {
+	    sv_setsv(TARG, DEFSV);
+            EXTEND(SP, 1);
 	}
 
 	up = SvPV_force(TARG, len);
@@ -5738,6 +5743,7 @@ PP(pp_split)
     STRLEN len;
     const char *s = SvPV_const(sv, len);
     const bool do_utf8 = DO_UTF8(sv);
+    const bool in_uni_8_bit = IN_UNI_8_BIT;
     const char *strend = s + len;
     PMOP *pm = cPMOPx(PL_op);
     REGEXP *rx;
@@ -5824,6 +5830,10 @@ PP(pp_split)
 	    while (s < strend && isSPACE_LC(*s))
 		s++;
 	}
+        else if (in_uni_8_bit) {
+            while (s < strend && isSPACE_L1(*s))
+                s++;
+        }
 	else {
 	    while (s < strend && isSPACE(*s))
 		s++;
@@ -5855,6 +5865,10 @@ PP(pp_split)
             {
 	        while (m < strend && !isSPACE_LC(*m))
 		    ++m;
+            }
+            else if (in_uni_8_bit) {
+                while (m < strend && !isSPACE_L1(*m))
+                    ++m;
             } else {
                 while (m < strend && !isSPACE(*m))
                     ++m;
@@ -5889,6 +5903,10 @@ PP(pp_split)
             {
 	        while (s < strend && isSPACE_LC(*s))
 		    ++s;
+            }
+            else if (in_uni_8_bit) {
+                while (s < strend && isSPACE_L1(*s))
+                    ++s;
             } else {
                 while (s < strend && isSPACE(*s))
                     ++s;

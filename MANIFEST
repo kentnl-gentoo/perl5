@@ -984,11 +984,17 @@ cpan/Encode/t/rt76824.t			test script
 cpan/Encode/t/rt85489.t			test script
 cpan/Encode/t/rt86327.t			test script
 cpan/Encode/t/taint.t
+cpan/Encode/t/truncated_utf8.t
+cpan/Encode/t/undef.t
 cpan/Encode/t/unibench.pl		benchmark script
 cpan/Encode/t/Unicode.t			test script
+cpan/Encode/t/use-Encode-Alias.t
+cpan/Encode/t/utf8messages.t
 cpan/Encode/t/utf8ref.t			test script
 cpan/Encode/t/utf8strict.t		test script
 cpan/Encode/t/utf8warnings.t
+cpan/Encode/t/whatwg-aliases.json
+cpan/Encode/t/whatwg-aliases.t
 cpan/Encode/TW/Makefile.PL		Encode extension
 cpan/Encode/TW/TW.pm			Encode extension
 cpan/Encode/ucm/8859-1.ucm		Unicode Character Map
@@ -1815,6 +1821,7 @@ cpan/Math-BigRat/t/bitwise.t		Math::BigRat test
 cpan/Math-BigRat/t/hang.t		Math::BigRat test for bug #34584 - hang in exp()
 cpan/Math-BigRat/t/Math/BigRat/Test.pm	Math::BigRat test helper
 cpan/Math-BigRat/t/requirer.t		see if require works properly
+cpan/Math-BigRat/t/rt121139.t
 cpan/Math-BigRat/t/trap.t		see if trap_nan and trap_inf work
 cpan/Math-Complex/lib/Math/Complex.pm	A Complex package
 cpan/Math-Complex/lib/Math/Trig.pm	A simple interface to complex trigonometry
@@ -4320,7 +4327,6 @@ ext/XS-APItest/t/temp_lv_sub.t	XS::APItest: tests for lvalue subs returning temp
 ext/XS-APItest/t/underscore_length.t	Test find_rundefsv()
 ext/XS-APItest/t/utf16_to_utf8.t	Test behaviour of utf16_to_utf8{,reversed}
 ext/XS-APItest/t/utf8.t		Tests for code in utf8.c
-ext/XS-APItest/t/utf8_malformed.t	Tests for code in utf8.c
 ext/XS-APItest/t/utf8_setup.pl	Tests for code in utf8.c
 ext/XS-APItest/t/utf8_warn00.t	Tests for code in utf8.c
 ext/XS-APItest/t/utf8_warn01.t	Tests for code in utf8.c
@@ -4714,6 +4720,7 @@ lib/unicore/SpecialCasing.txt			Unicode character database
 lib/unicore/StandardizedVariants.txt		Unicode character database
 lib/unicore/UnicodeData.txt			Unicode character database
 lib/unicore/version				The version of the Unicode
+lib/unicore/VerticalOrientation.txt		Unicode character database
 lib/UNIVERSAL.pm		Base class for ALL classes
 lib/User/grent.pm		By-name interface to Perl's builtin getgr*
 lib/User/grent.t		See if User::grwent works
@@ -4949,10 +4956,13 @@ pod/perl5220delta.pod		Perl changes in version 5.22.0
 pod/perl5221delta.pod		Perl changes in version 5.22.1
 pod/perl5222delta.pod		Perl changes in version 5.22.2
 pod/perl5223delta.pod		Perl changes in version 5.22.3
+pod/perl5224delta.pod		Perl changes in version 5.22.4
 pod/perl5240delta.pod		Perl changes in version 5.24.0
 pod/perl5241delta.pod		Perl changes in version 5.24.1
+pod/perl5242delta.pod		Perl changes in version 5.24.2
 pod/perl5260delta.pod		Perl changes in version 5.26.0
 pod/perl5270delta.pod		Perl changes in version 5.27.0
+pod/perl5271delta.pod		Perl changes in version 5.27.1
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5740,7 +5750,13 @@ t/perf/taint.t			See if optimisations are keeping things fast (taint issues)
 t/perl.supp			Perl valgrind suppressions
 t/porting/args_assert.t		Check that all PERL_ARGS_ASSERT* macros are used
 t/porting/authors.t		Check that all authors have been acknowledged
-t/porting/bench.t		Check that Porting/bench.pl is okay
+t/porting/bench.t		Check Porting/bench.pl runs ok
+t/porting/bench/badversion.json	a test file for t/porting/bench.t
+t/porting/bench/callsub.json	a test file for t/porting/bench.t
+t/porting/bench/callsub2.json	a test file for t/porting/bench.t
+t/porting/bench/ret0		a test file for t/porting/bench.t
+t/porting/bench/synerr		a test file for t/porting/bench.t
+t/porting/bench_selftest.t	run Porting/bench.pl's selftest facility
 t/porting/bincompat.t		Check that {non_,}bincompat_options are ordered
 t/porting/checkcase.t		Check whether we are case-insensitive-fs-friendly
 t/porting/checkcfgvar.t		Check that all config.sh-like files are good

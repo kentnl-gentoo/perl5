@@ -33,7 +33,7 @@ Matt S Trout, David Golden, Florian Ragwitz, Tatsuhiko Miyagawa,
 Chris C<BinGOs> Williams, Zefram, Ævar Arnfjörð Bjarmason, Stevan
 Little, Dave Rolsky, Max Maischein, Abigail, Jesse Luehrs, Tony Cook,
 Dominic Hargreaves, Aaron Crane, Aristotle Pagaltzis, Matthew Horsfall,
-Peter Martini, Sawyer X, Chad 'Exodist' Granum, Renee Bäcke,
+Peter Martini, Sawyer X, Chad 'Exodist' Granum, Renee Bäcker,
 and Eric Herman.
 
 =head2 PUMPKIN?
@@ -574,6 +574,8 @@ the strings?).
  Steve     5.22.3-RC4   2016-Oct-12
  Steve     5.22.3-RC5   2017-Jan-02
  Steve     5.22.3       2017-Jan-14
+ Steve     5.22.4-RC1   2017-Jul-01
+ Steve     5.22.4       2017-Jul-15
 
  Ricardo   5.23.0       2015-Jun-20     The 5.23 development track
  Matthew   5.23.1       2015-Jul-20
@@ -598,6 +600,8 @@ the strings?).
  Steve     5.24.1-RC4   2016-Oct-12
  Steve     5.24.1-RC5   2017-Jan-02
  Steve     5.24.1       2017-Jan-14
+ Steve     5.24.2-RC1   2017-Jul-01
+ Steve     5.24.2       2017-Jul-15
 
  Ricardo   5.25.0       2016-May-09     The 5.25 development track
  Sawyer X  5.25.1       2016-May-20
@@ -619,6 +623,7 @@ the strings?).
 
  Sawyer X  5.27.0       2017-May-31     The 5.27 development track
  Eric      5.27.1       2017-Jun-20
+ Aaron     5.27.2       2017-Jul-20
 
 =head2 SELECTED RELEASE SIZES
 

@@ -1736,7 +1736,7 @@ PP(pp_aassign)
                     if (UNLIKELY(ix >= PL_tmps_max))
                         /* speculatively grow enough to cover other
                          * possible refs */
-                        ix = tmps_grow_p(ix + (lastlelem - lelem));
+                         (void)tmps_grow_p(ix + (lastlelem - lelem));
                     PL_tmps_stack[ix] = ref;
                 }
 
@@ -1954,10 +1954,12 @@ PP(pp_match)
 
     if (PL_op->op_flags & OPf_STACKED)
 	TARG = POPs;
-    else if (ARGTARG)
-	GETTARGET;
     else {
-	TARG = DEFSV;
+        if (ARGTARG)
+            GETTARGET;
+        else {
+            TARG = DEFSV;
+        }
 	EXTEND(SP,1);
     }
 
@@ -3035,7 +3037,7 @@ PP(pp_iter)
         retsv = &PL_sv_no;
     }
     /* pp_enteriter should have pre-extended the stack */
-    assert(PL_stack_sp < PL_stack_max);
+    EXTEND_SKIP(PL_stack_sp, 1);
     *++PL_stack_sp =retsv;
 
     return PL_op->op_next;
@@ -3142,10 +3144,12 @@ PP(pp_subst)
 
     if (PL_op->op_flags & OPf_STACKED)
 	TARG = POPs;
-    else if (ARGTARG)
-	GETTARGET;
     else {
-	TARG = DEFSV;
+        if (ARGTARG)
+            GETTARGET;
+        else {
+            TARG = DEFSV;
+        }
 	EXTEND(SP,1);
     }
 
