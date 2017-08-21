@@ -654,13 +654,16 @@ PERL_CALLCONV void	Perl_cv_forget_slab(pTHX_ CV *cv);
 PERL_CALLCONV void	Perl_cv_get_call_checker(pTHX_ CV *cv, Perl_call_checker *ckfun_p, SV **ckobj_p);
 #define PERL_ARGS_ASSERT_CV_GET_CALL_CHECKER	\
 	assert(cv); assert(ckfun_p); assert(ckobj_p)
+PERL_CALLCONV void	Perl_cv_get_call_checker_flags(pTHX_ CV *cv, U32 gflags, Perl_call_checker *ckfun_p, SV **ckobj_p, U32 *ckflags_p);
+#define PERL_ARGS_ASSERT_CV_GET_CALL_CHECKER_FLAGS	\
+	assert(cv); assert(ckfun_p); assert(ckobj_p); assert(ckflags_p)
 PERL_CALLCONV SV *	Perl_cv_name(pTHX_ CV *cv, SV *sv, U32 flags);
 #define PERL_ARGS_ASSERT_CV_NAME	\
 	assert(cv)
 PERL_CALLCONV void	Perl_cv_set_call_checker(pTHX_ CV *cv, Perl_call_checker ckfun, SV *ckobj);
 #define PERL_ARGS_ASSERT_CV_SET_CALL_CHECKER	\
 	assert(cv); assert(ckfun); assert(ckobj)
-PERL_CALLCONV void	Perl_cv_set_call_checker_flags(pTHX_ CV *cv, Perl_call_checker ckfun, SV *ckobj, U32 flags);
+PERL_CALLCONV void	Perl_cv_set_call_checker_flags(pTHX_ CV *cv, Perl_call_checker ckfun, SV *ckobj, U32 ckflags);
 #define PERL_ARGS_ASSERT_CV_SET_CALL_CHECKER_FLAGS	\
 	assert(cv); assert(ckfun); assert(ckobj)
 PERL_CALLCONV void	Perl_cv_undef(pTHX_ CV* cv);
@@ -1293,6 +1296,9 @@ PERL_CALLCONV SSize_t*	Perl_hv_placeholders_p(pTHX_ HV *hv)
 
 PERL_CALLCONV void	Perl_hv_placeholders_set(pTHX_ HV *hv, I32 ph);
 #define PERL_ARGS_ASSERT_HV_PLACEHOLDERS_SET	\
+	assert(hv)
+PERL_CALLCONV void	Perl_hv_pushkv(pTHX_ HV *hv, U32 flags);
+#define PERL_ARGS_ASSERT_HV_PUSHKV	\
 	assert(hv)
 PERL_CALLCONV void	Perl_hv_rand_set(pTHX_ HV *hv, U32 new_xhv_rand);
 #define PERL_ARGS_ASSERT_HV_RAND_SET	\
@@ -2667,9 +2673,9 @@ PERL_CALLCONV void	Perl_reg_numbered_buff_store(pTHX_ REGEXP * const rx, const I
 PERL_CALLCONV SV*	Perl_reg_qr_package(pTHX_ REGEXP * const rx);
 #define PERL_ARGS_ASSERT_REG_QR_PACKAGE	\
 	assert(rx)
-PERL_CALLCONV REGEXP*	Perl_reg_temp_copy(pTHX_ REGEXP* ret_x, REGEXP* rx);
+PERL_CALLCONV REGEXP*	Perl_reg_temp_copy(pTHX_ REGEXP* dsv, REGEXP* ssv);
 #define PERL_ARGS_ASSERT_REG_TEMP_COPY	\
-	assert(rx)
+	assert(ssv)
 PERL_CALLCONV SV*	Perl_regclass_swash(pTHX_ const regexp *prog, const struct regnode *node, bool doinit, SV **listsvp, SV **altsvp);
 #define PERL_ARGS_ASSERT_REGCLASS_SWASH	\
 	assert(node)
@@ -3379,6 +3385,7 @@ PERL_CALLCONV void	Perl_sv_setuv(pTHX_ SV *const sv, const UV num);
 PERL_CALLCONV void	Perl_sv_setuv_mg(pTHX_ SV *const sv, const UV u);
 #define PERL_ARGS_ASSERT_SV_SETUV_MG	\
 	assert(sv)
+PERL_CALLCONV SV*	Perl_sv_string_from_errnum(pTHX_ int errnum, SV* tgtsv);
 #ifndef NO_MATHOMS
 PERL_CALLCONV void	Perl_sv_taint(pTHX_ SV* sv);
 #define PERL_ARGS_ASSERT_SV_TAINT	\
@@ -6045,7 +6052,7 @@ PERL_CALLCONV SV*	Perl_sv_dup_inc(pTHX_ const SV *const sstr, CLONE_PARAMS *cons
 	assert(param)
 
 #endif
-#if defined(USE_LOCALE)     && (defined(PERL_IN_LOCALE_C) || defined (PERL_EXT_POSIX))
+#if defined(USE_LOCALE)		    && (   defined(PERL_IN_LOCALE_C)	        || defined(PERL_IN_MG_C)		|| defined (PERL_EXT_POSIX))
 PERL_CALLCONV bool	Perl__is_cur_LC_category_utf8(pTHX_ int category);
 #endif
 #if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)

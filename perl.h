@@ -4766,6 +4766,8 @@ EXTCONST char PL_Yes[]
   INIT("1");
 EXTCONST char PL_No[]
   INIT("");
+EXTCONST char PL_Zero[]
+  INIT("0");
 EXTCONST char PL_hexdigit[]
   INIT("0123456789abcdef0123456789ABCDEF");
 
@@ -5627,6 +5629,10 @@ struct tempsym; /* defined in pp_pack.c */
 START_EXTERN_C
 #  include "intrpvar.h"
 END_EXTERN_C
+#  define PL_sv_yes   (PL_sv_immortals[0])
+#  define PL_sv_undef (PL_sv_immortals[1])
+#  define PL_sv_no    (PL_sv_immortals[2])
+#  define PL_sv_zero  (PL_sv_immortals[3])
 #endif
 
 #ifdef PERL_CORE
@@ -5713,7 +5719,7 @@ PL_valid_types_IVX[]    = { 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0 };
 EXTCONST bool
 PL_valid_types_NVX[]    = { 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0 };
 EXTCONST bool
-PL_valid_types_PVX[]    = { 0, 0, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 0, 1, 1, 1 };
+PL_valid_types_PVX[]    = { 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1 };
 EXTCONST bool
 PL_valid_types_RV[]     = { 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1 };
 EXTCONST bool
@@ -5883,26 +5889,27 @@ typedef struct am_table_short AMTS;
 #ifdef USE_LOCALE
 /* These locale things are all subject to change */
 
-#  if      defined(USE_ITHREADS)                \
-      &&   defined(HAS_NEWLOCALE)               \
+
+#  if      defined(HAS_NEWLOCALE)               \
       &&   defined(LC_ALL_MASK)                 \
       &&   defined(HAS_FREELOCALE)              \
       &&   defined(HAS_USELOCALE)               \
-      && ! defined(NO_THREAD_SAFE_USELOCALE)
+      && ! defined(NO_POSIX_2008_LOCALE)
 
     /* The code is written for simplicity to assume that any platform advanced
      * enough to have the Posix 2008 locale functions has LC_ALL.  The test
      * above makes sure that assumption is valid */
 
-#    define USE_THREAD_SAFE_LOCALE
+#    define HAS_POSIX_2008_LOCALE
 #  endif
 
-#   define LOCALE_INIT   MUTEX_INIT(&PL_locale_mutex)
-
-#   ifdef USE_THREAD_SAFE_LOCALE
-#       define LOCALE_TERM                                                  \
+/* We create a C locale object unconditionally if we have the functions to do
+ * so; hence must destroy it unconditionally at the end */
+#  ifndef HAS_POSIX_2008_LOCALE
+#    define _LOCALE_TERM_POSIX_2008  NOOP
+#  else
+#    define _LOCALE_TERM_POSIX_2008                                         \
                     STMT_START {                                            \
-                        MUTEX_DESTROY(&PL_locale_mutex);                    \
                         if (PL_C_locale_obj) {                              \
                             /* Make sure we aren't using the locale         \
                              * space we are about to free */                \
@@ -5910,13 +5917,28 @@ typedef struct am_table_short AMTS;
                             freelocale(PL_C_locale_obj);                    \
                             PL_C_locale_obj = (locale_t) NULL;              \
                         }                                                   \
-                     } STMT_END
-#   else
-#       define LOCALE_TERM   MUTEX_DESTROY(&PL_locale_mutex)
-#   endif
+                    } STMT_END
+#  endif
 
-#   define LOCALE_LOCK   MUTEX_LOCK(&PL_locale_mutex)
-#   define LOCALE_UNLOCK MUTEX_UNLOCK(&PL_locale_mutex)
+#  ifndef USE_ITHREADS
+#    define LOCALE_INIT
+#    define LOCALE_LOCK
+#    define LOCALE_UNLOCK
+#    define LOCALE_TERM  STMT_START { _LOCALE_TERM_POSIX_2008; } STMT_END
+#  else /* Below is do use threads */
+#    define LOCALE_INIT         MUTEX_INIT(&PL_locale_mutex)
+#    define LOCALE_LOCK         MUTEX_LOCK(&PL_locale_mutex)
+#    define LOCALE_UNLOCK       MUTEX_UNLOCK(&PL_locale_mutex)
+#    define LOCALE_TERM                                                     \
+                    STMT_START {                                            \
+                        MUTEX_DESTROY(&PL_locale_mutex);                    \
+                        _LOCALE_TERM_POSIX_2008;                            \
+                    } STMT_END
+#    ifdef HAS_POSIX_2008_LOCALE
+#      define USE_POSIX_2008_LOCALE
+#      define USE_THREAD_SAFE_LOCALE
+#    endif
+#  endif
 
 /* Returns TRUE if the plain locale pragma without a parameter is in effect
  */
@@ -6263,7 +6285,7 @@ expression, but with an empty argument list, like this:
 #    ifdef __hpux
 #        define strtoll __strtoll	/* secret handshake */
 #    endif
-#    ifdef WIN64
+#    if defined(WIN64) && defined(_MSC_VER)
 #        define strtoll _strtoi64	/* secret handshake */
 #    endif
 #   if !defined(Strtol) && defined(HAS_STRTOLL)
@@ -6297,7 +6319,7 @@ expression, but with an empty argument list, like this:
 #    ifdef __hpux
 #        define strtoull __strtoull	/* secret handshake */
 #    endif
-#    ifdef WIN64
+#    if defined(WIN64) && defined(_MSC_VER)
 #        define strtoull _strtoui64	/* secret handshake */
 #    endif
 #    if !defined(Strtoul) && defined(HAS_STRTOULL)

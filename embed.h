@@ -104,6 +104,7 @@
 #define cv_clone(a)		Perl_cv_clone(aTHX_ a)
 #define cv_const_sv		Perl_cv_const_sv
 #define cv_get_call_checker(a,b,c)	Perl_cv_get_call_checker(aTHX_ a,b,c)
+#define cv_get_call_checker_flags(a,b,c,d,e)	Perl_cv_get_call_checker_flags(aTHX_ a,b,c,d,e)
 #define cv_name(a,b,c)		Perl_cv_name(aTHX_ a,b,c)
 #define cv_set_call_checker(a,b,c)	Perl_cv_set_call_checker(aTHX_ a,b,c)
 #define cv_set_call_checker_flags(a,b,c,d)	Perl_cv_set_call_checker_flags(aTHX_ a,b,c,d)
@@ -692,6 +693,7 @@
 #define sv_setsv_mg(a,b)	Perl_sv_setsv_mg(aTHX_ a,b)
 #define sv_setuv(a,b)		Perl_sv_setuv(aTHX_ a,b)
 #define sv_setuv_mg(a,b)	Perl_sv_setuv_mg(aTHX_ a,b)
+#define sv_string_from_errnum(a,b)	Perl_sv_string_from_errnum(aTHX_ a,b)
 #define sv_tainted(a)		Perl_sv_tainted(aTHX_ a)
 #define sv_true(a)		Perl_sv_true(aTHX_ a)
 #define sv_uni_display(a,b,c,d)	Perl_sv_uni_display(aTHX_ a,b,c,d)
@@ -884,7 +886,7 @@
 #define sv_dup(a,b)		Perl_sv_dup(aTHX_ a,b)
 #define sv_dup_inc(a,b)		Perl_sv_dup_inc(aTHX_ a,b)
 #endif
-#if defined(USE_LOCALE)     && (defined(PERL_IN_LOCALE_C) || defined (PERL_EXT_POSIX))
+#if defined(USE_LOCALE)		    && (   defined(PERL_IN_LOCALE_C)	        || defined(PERL_IN_MG_C)		|| defined (PERL_EXT_POSIX))
 #define _is_cur_LC_category_utf8(a)	Perl__is_cur_LC_category_utf8(aTHX_ a)
 #endif
 #if defined(USE_LOCALE_COLLATE)
@@ -1260,6 +1262,7 @@
 #define gv_try_downgrade(a)	Perl_gv_try_downgrade(aTHX_ a)
 #define hv_ename_add(a,b,c,d)	Perl_hv_ename_add(aTHX_ a,b,c,d)
 #define hv_ename_delete(a,b,c,d)	Perl_hv_ename_delete(aTHX_ a,b,c,d)
+#define hv_pushkv(a,b)		Perl_hv_pushkv(aTHX_ a,b)
 #define init_argv_symbols(a,b)	Perl_init_argv_symbols(aTHX_ a,b)
 #define init_constants()	Perl_init_constants(aTHX)
 #define init_debugger()		Perl_init_debugger(aTHX)

@@ -1029,6 +1029,7 @@ Apd	|int	|mg_copy	|NN SV *sv|NN SV *nsv|NULLOK const char *key \
 				|I32 klen
 : Defined in mg.c, used only in scope.c
 pd	|void	|mg_localize	|NN SV* sv|NN SV* nsv|bool setmagic
+Apd	|SV*	|sv_string_from_errnum|int errnum|NULLOK SV* tgtsv
 ApdRn	|MAGIC*	|mg_find	|NULLOK const SV* sv|int type
 ApdRn	|MAGIC*	|mg_findext	|NULLOK const SV* sv|int type|NULLOK const MGVTBL *vtbl
 : exported for re.pm
@@ -1178,10 +1179,11 @@ Apd	|OP*	|ck_entersub_args_proto_or_list|NN OP *entersubop|NN GV *namegv|NN SV *
 po	|OP*	|ck_entersub_args_core|NN OP *entersubop|NN GV *namegv \
 				      |NN SV *protosv
 Apd	|void	|cv_get_call_checker|NN CV *cv|NN Perl_call_checker *ckfun_p|NN SV **ckobj_p
+Apd	|void	|cv_get_call_checker_flags|NN CV *cv|U32 gflags|NN Perl_call_checker *ckfun_p|NN SV **ckobj_p|NN U32 *ckflags_p
 Apd	|void	|cv_set_call_checker|NN CV *cv|NN Perl_call_checker ckfun|NN SV *ckobj
 Apd	|void	|cv_set_call_checker_flags|NN CV *cv \
 					  |NN Perl_call_checker ckfun \
-					  |NN SV *ckobj|U32 flags
+					  |NN SV *ckobj|U32 ckflags
 Apd	|void	|wrap_op_checker|Optype opcode|NN Perl_check_t new_checker|NN Perl_check_t *old_checker_p
 ApR	|PERL_SI*|new_stackinfo|I32 stitems|I32 cxitems
 Ap	|char*	|scan_vstring	|NN const char *s|NN const char *const e \
@@ -1298,7 +1300,7 @@ Ap	|I32	|pregexec	|NN REGEXP * const prog|NN char* stringarg \
 Ap	|void	|pregfree	|NULLOK REGEXP* r
 Ap	|void	|pregfree2	|NN REGEXP *rx
 : FIXME - is anything in re using this now?
-EXp	|REGEXP*|reg_temp_copy	|NULLOK REGEXP* ret_x|NN REGEXP* rx
+EXp	|REGEXP*|reg_temp_copy	|NULLOK REGEXP* dsv|NN REGEXP* ssv
 Ap	|void	|regfree_internal|NN REGEXP *const rx
 #if defined(USE_ITHREADS)
 Ap	|void*	|regdupe_internal|NN REGEXP * const r|NN CLONE_PARAMS* param
@@ -2736,8 +2738,10 @@ snR	|char *	|setlocale_debug_string	|const int category		    \
 #   endif
 #endif
 
-#if     defined(USE_LOCALE) \
-    && (defined(PERL_IN_LOCALE_C) || defined (PERL_EXT_POSIX))
+#if        defined(USE_LOCALE)		\
+    && (   defined(PERL_IN_LOCALE_C)	\
+        || defined(PERL_IN_MG_C)	\
+	|| defined (PERL_EXT_POSIX))
 ApM	|bool	|_is_cur_LC_category_utf8|int category
 #endif
 
@@ -2943,6 +2947,7 @@ Apod	|void	|hv_assert	|NN HV *hv
 #endif
 
 ApdR	|SV*	|hv_scalar	|NN HV *hv
+p	|void	|hv_pushkv	|NN HV *hv|U32 flags
 ApdRM	|SV*	|hv_bucket_ratio|NN HV *hv
 ApoR	|I32*	|hv_riter_p	|NN HV *hv
 ApoR	|HE**	|hv_eiter_p	|NN HV *hv

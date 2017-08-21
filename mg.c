@@ -710,7 +710,7 @@ Perl_magic_regdatum_get(pTHX_ SV *sv, MAGIC *mg)
 		}
 	}
     }
-    sv_setsv(sv, NULL);
+    sv_set_undef(sv);
     return 0;
 }
 
@@ -787,15 +787,73 @@ S_fixup_errno_string(pTHX_ SV* sv)
          * UTF-8 validity test"
          * (http://en.wikipedia.org/wiki/Charset_detection).  There is a
          * potential that we will get it wrong however, especially on short
-         * error message text.  (If it turns out to be necessary, we could also
-         * keep track if the current LC_MESSAGES locale is UTF-8) */
-        if (! IN_BYTES  /* respect 'use bytes' */
+         * error message text, so do an additional check. */
+        if (   ! IN_BYTES  /* respect 'use bytes' */
             && ! is_utf8_invariant_string((U8*) SvPVX_const(sv), SvCUR(sv))
-            && is_utf8_string((U8*) SvPVX_const(sv), SvCUR(sv)))
-        {
+            &&   is_utf8_string((U8*) SvPVX_const(sv), SvCUR(sv))
+
+#ifdef USE_LOCALE_MESSAGES
+
+            &&   _is_cur_LC_category_utf8(LC_MESSAGES)
+
+#elif defined(USE_LOCLAE_CTYPE)
+
+                 /* For systems that don't have a separate message category,
+                  * this assumes that they follow the CTYPE one */
+            &&   _is_cur_LC_category_utf8(LC_CTYPE)
+
+#endif
+
+        ) {
             SvUTF8_on(sv);
         }
     }
+}
+
+/*
+=for apidoc Am|SV *|sv_string_from_errnum|int errnum|SV *tgtsv
+
+Generates the message string describing an OS error and returns it as
+an SV.  C<errnum> must be a value that C<errno> could take, identifying
+the type of error.
+
+If C<tgtsv> is non-null then the string will be written into that SV
+(overwriting existing content) and it will be returned.  If C<tgtsv>
+is a null pointer then the string will be written into a new mortal SV
+which will be returned.
+
+The message will be taken from whatever locale would be used by C<$!>,
+and will be encoded in the SV in whatever manner would be used by C<$!>.
+The details of this process are subject to future change.  Currently,
+the message is taken from the C locale by default (usually producing an
+English message), and from the currently selected locale when in the scope
+of the C<use locale> pragma.  A heuristic attempt is made to decode the
+message from the locale's character encoding, but it will only be decoded
+as either UTF-8 or ISO-8859-1.  It is always correctly decoded in a UTF-8
+locale, usually in an ISO-8859-1 locale, and never in any other locale.
+
+The SV is always returned containing an actual string, and with no other
+OK bits set.  Unlike C<$!>, a message is even yielded for C<errnum> zero
+(meaning success), and if no useful message is available then a useless
+string (currently empty) is returned.
+
+=cut
+*/
+
+SV *
+Perl_sv_string_from_errnum(pTHX_ int errnum, SV *tgtsv)
+{
+    char const *errstr;
+    if(!tgtsv)
+	tgtsv = sv_newmortal();
+    errstr = my_strerror(errnum);
+    if(errstr) {
+	sv_setpv(tgtsv, errstr);
+	fixup_errno_string(tgtsv);
+    } else {
+	SvPVCLEAR(tgtsv);
+    }
+    return tgtsv;
 }
 
 #ifdef VMS
@@ -849,7 +907,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
     case '\005':  /* ^E */
 	 if (nextchar != '\0') {
             if (strEQ(remaining, "NCODING"))
-                sv_setsv(sv, NULL);
+                sv_set_undef(sv);
             break;
         }
 
@@ -918,14 +976,12 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
                 SvPVCLEAR(sv);
             }
             else {
-
-                /* Strerror can return NULL on some platforms, which will
-                 * result in 'sv' not being considered SvOK.  The SvNOK_on()
+                sv_string_from_errnum(errno, sv);
+                /* If no useful string is available, don't
+                 * claim to have a string part.  The SvNOK_on()
                  * below will cause just the number part to be valid */
-                sv_setpv(sv, my_strerror(errno));
-                if (SvOK(sv)) {
-                    fixup_errno_string(sv);
-                }
+                if (!SvCUR(sv))
+                    SvPOK_off(sv);
             }
             RESTORE_ERRNO;
 	}
@@ -960,7 +1016,8 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 		SvROK_on(sv);
 		sv_rvweaken(sv);
 	    }
-	    else sv_setsv_nomg(sv, NULL);
+	    else
+                sv_set_undef(sv);
 	}
 	break;
     case '\017':		/* ^O & ^OPEN */
@@ -2061,7 +2118,7 @@ Perl_magic_getarylen(pTHX_ SV *sv, const MAGIC *mg)
     if (obj) {
 	sv_setiv(sv, AvFILL(obj));
     } else {
-	sv_setsv(sv, NULL);
+        sv_set_undef(sv);
     }
     return 0;
 }
@@ -2139,7 +2196,7 @@ Perl_magic_getpos(pTHX_ SV *sv, MAGIC *mg)
 	    sv_setuv(sv, i);
 	    return 0;
     }
-    sv_setsv(sv,NULL);
+    sv_set_undef(sv);
     return 0;
 }
 

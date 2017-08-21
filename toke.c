@@ -5158,12 +5158,23 @@ Perl_yylex(pTHX)
         else {
             c = Perl_form(aTHX_ "\\x%02X", (unsigned char)*s);
         }
-        len = UTF ? Perl_utf8_length(aTHX_ (U8 *) PL_linestart, (U8 *) s) : (STRLEN) (s - PL_linestart);
-        if (len > UNRECOGNIZED_PRECEDE_COUNT) {
-            d = UTF ? (char *) utf8_hop_back((U8 *) s, -UNRECOGNIZED_PRECEDE_COUNT, (U8 *)PL_linestart) : s - UNRECOGNIZED_PRECEDE_COUNT;
-        } else {
+
+        if (s >= PL_linestart) {
             d = PL_linestart;
         }
+        else {
+            /* somehow (probably due to a parse failure), PL_linestart has advanced
+             * pass PL_bufptr, get a reasonable beginning of line
+             */
+            d = s;
+            while (d > SvPVX(PL_linestr) && d[-1] && d[-1] != '\n')
+                --d;
+        }
+        len = UTF ? Perl_utf8_length(aTHX_ (U8 *) d, (U8 *) s) : (STRLEN) (s - d);
+        if (len > UNRECOGNIZED_PRECEDE_COUNT) {
+            d = UTF ? (char *) utf8_hop_back((U8 *) s, -UNRECOGNIZED_PRECEDE_COUNT, (U8 *)d) : s - UNRECOGNIZED_PRECEDE_COUNT;
+        }
+
         Perl_croak(aTHX_  "Unrecognized character %s; marked by <-- HERE after %" UTF8f "<-- HERE near column %d", c,
                           UTF8fARG(UTF, (s - d), d),
                          (int) len + 1);
@@ -11182,9 +11193,11 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
               || UNLIKELY(hexfp && isALPHA_FOLD_EQ(*s, 'p')))
             && strchr("+-0123456789_", s[1]))
         {
-            floatit = TRUE;
+            int exp_digits = 0;
+            const char *save_s = s;
+            char * save_d = d;
 
-	    /* regardless of whether user said 3E5 or 3e5, use lower 'e',
+            /* regardless of whether user said 3E5 or 3e5, use lower 'e',
                ditto for p (hexfloats) */
             if ((isALPHA_FOLD_EQ(*s, 'e'))) {
 		/* At least some Mach atof()s don't grok 'E' */
@@ -11216,6 +11229,7 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 	    /* read digits of exponent */
 	    while (isDIGIT(*s) || *s == '_') {
 	        if (isDIGIT(*s)) {
+                    ++exp_digits;
 		    if (d >= e)
 		        Perl_croak(aTHX_ "%s", number_too_long);
 		    *d++ = *s++;
@@ -11227,6 +11241,20 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 		   lastub = s++;
 		}
 	    }
+
+            if (!exp_digits) {
+                /* no exponent digits, the [eEpP] could be for something else,
+                 * though in practice we don't get here for p since that's preparsed
+                 * earlier, and results in only the 0xX being consumed, so behave similarly
+                 * for decimal floats and consume only the D.DD, leaving the [eE] to the
+                 * next token.
+                 */
+                s = save_s;
+                d = save_d;
+            }
+            else {
+                floatit = TRUE;
+            }
 	}
 
 

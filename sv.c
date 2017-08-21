@@ -1462,9 +1462,7 @@ Perl_sv_upgrade(pTHX_ SV *const sv, svtype new_type)
 	    SvSTASH_set(io, MUTABLE_HV(SvREFCNT_inc(GvHV(iogv))));
 	    IoPAGE_LEN(sv) = 60;
 	}
-	if (UNLIKELY(new_type == SVt_REGEXP))
-	    sv->sv_u.svu_rx = (regexp *)new_body;
-	else if (old_type < SVt_PV) {
+	if (old_type < SVt_PV) {
 	    /* referent will be NULL unless the old type was SVt_IV emulating
 	       SVt_RV */
 	    sv->sv_u.svu_rv = referent;
@@ -2463,7 +2461,7 @@ Perl_sv_2iv_flags(pTHX_ SV *const sv, const I32 flags)
 
 	   Regexps have no SvIVX and SvNVX fields.
 	*/
-	assert(isREGEXP(sv) || SvPOKp(sv));
+	assert(SvPOKp(sv));
 	{
 	    UV value;
 	    const char * const ptr =
@@ -2551,7 +2549,7 @@ Perl_sv_2uv_flags(pTHX_ SV *const sv, const I32 flags)
 	/* FBMs use the space for SvIVX and SvNVX for other purposes, and use
 	   the same flag bit as SVf_IVisUV, so must not let them cache IVs.  
 	   Regexps have no SvIVX and SvNVX fields. */
-	assert(isREGEXP(sv) || SvPOKp(sv));
+	assert(SvPOKp(sv));
 	{
 	    UV value;
 	    const char * const ptr =
@@ -2627,7 +2625,6 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
 	    return SvNVX(sv);
 	if (SvPOKp(sv) && !SvIOKp(sv)) {
 	    ptr = SvPVX_const(sv);
-	  grokpv:
 	    if (!SvIOKp(sv) && ckWARN(WARN_NUMERIC) &&
 		!grok_number(ptr, SvCUR(sv), NULL))
 		not_a_number(sv);
@@ -2641,10 +2638,6 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
 	}
         if (SvROK(sv)) {
 	    goto return_rok;
-	}
-	if (isREGEXP(sv)) {
-	    ptr = RX_WRAPPED((REGEXP *)sv);
-	    goto grokpv;
 	}
 	assert(SvTYPE(sv) >= SVt_PVMG);
 	/* This falls through to the report_uninit near the end of the
@@ -3191,10 +3184,6 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
 	    *lp = SvCUR(buffer);
 	return SvPVX(buffer);
     }
-    else if (isREGEXP(sv)) {
-	if (lp) *lp = RX_WRAPLEN((REGEXP *)sv);
-	return RX_WRAPPED((REGEXP *)sv);
-    }
     else {
 	if (lp)
 	    *lp = 0;
@@ -3371,11 +3360,16 @@ Perl_sv_2bool_flags(pTHX_ SV *sv, I32 flags)
                 return cBOOL(svb);
             }
 	}
-	return SvRV(sv) != 0;
+	assert(SvRV(sv));
+	return TRUE;
     }
     if (isREGEXP(sv))
 	return
 	  RX_WRAPLEN(sv) > 1 || (RX_WRAPLEN(sv) && *RX_WRAPPED(sv) != '0');
+
+    if (SvNOK(sv) && !SvPOK(sv))
+        return SvNVX(sv) != 0.0;
+
     return SvTRUE_common(sv, isGV_with_GP(sv) ? 1 : 0);
 }
 
@@ -3468,7 +3462,12 @@ Perl_sv_utf8_upgrade_flags_grow(pTHX_ SV *const sv, const I32 flags, STRLEN extr
 	}
     }
 
-    if (SvUTF8(sv)) {
+    /* SVt_REGEXP's shouldn't be upgraded to UTF8 - they're already
+     * compiled and individual nodes will remain non-utf8 even if the
+     * stringified version of the pattern gets upgraded. Whether the
+     * PVX of a REGEXP should be grown or we should just croak, I don't
+     * know - DAPM */
+    if (SvUTF8(sv) || isREGEXP(sv)) {
 	if (extra) SvGROW(sv, SvCUR(sv) + extra);
 	return SvCUR(sv);
     }
@@ -4446,15 +4445,7 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, SV* sstr, const I32 flags)
     case SVt_REGEXP:
       upgregexp:
 	if (dtype < SVt_REGEXP)
-	{
-	    if (dtype >= SVt_PV) {
-		SvPV_free(dstr);
-		SvPV_set(dstr, 0);
-		SvLEN_set(dstr, 0);
-		SvCUR_set(dstr, 0);
-	    }
 	    sv_upgrade(dstr, SVt_REGEXP);
-	}
 	break;
 
 	case SVt_INVLIST:
@@ -5336,7 +5327,7 @@ Perl_sv_force_normal_flags(pTHX_ SV *const sv, const U32 flags)
 	const svtype new_type =
 	  islv ? SVt_NULL : SvMAGIC(sv) || SvSTASH(sv) ? SVt_PVMG : SVt_PV;
 	SV *const temp = newSV_type(new_type);
-	regexp *const temp_p = ReANY((REGEXP *)sv);
+	regexp *old_rx_body;
 
 	if (new_type == SVt_PVMG) {
 	    SvMAGIC_set(temp, SvMAGIC(sv));
@@ -5344,15 +5335,26 @@ Perl_sv_force_normal_flags(pTHX_ SV *const sv, const U32 flags)
 	    SvSTASH_set(temp, SvSTASH(sv));
 	    SvSTASH_set(sv, NULL);
 	}
-	if (!islv) SvCUR_set(temp, SvCUR(sv));
-	/* Remember that SvPVX is in the head, not the body.  But
-	   RX_WRAPPED is in the body. */
+	if (!islv)
+            SvCUR_set(temp, SvCUR(sv));
+	/* Remember that SvPVX is in the head, not the body. */
 	assert(ReANY((REGEXP *)sv)->mother_re);
+
+        if (islv) {
+            /* LV-as-regex has sv->sv_any pointing to an XPVLV body,
+             * whose xpvlenu_rx field points to the regex body */
+            XPV *xpv = (XPV*)(SvANY(sv));
+            old_rx_body = xpv->xpv_len_u.xpvlenu_rx;
+            xpv->xpv_len_u.xpvlenu_rx = NULL;
+        }
+        else
+            old_rx_body = ReANY((REGEXP *)sv);
+
 	/* Their buffer is already owned by someone else. */
 	if (flags & SV_COW_DROP_PV) {
 	    /* SvLEN is already 0.  For SVt_REGEXP, we have a brand new
-	       zeroed body.  For SVt_PVLV, it should have been set to 0
-	       before turning into a regexp. */
+	       zeroed body.  For SVt_PVLV, we zeroed it above (len field
+               a union with xpvlenu_rx) */
 	    assert(!SvLEN(islv ? sv : temp));
 	    sv->sv_u.svu_pv = 0;
 	}
@@ -5373,8 +5375,7 @@ Perl_sv_force_normal_flags(pTHX_ SV *const sv, const U32 flags)
 
 	SvFLAGS(temp) &= ~(SVTYPEMASK);
 	SvFLAGS(temp) |= SVt_REGEXP|SVf_FAKE;
-	SvANY(temp) = temp_p;
-	temp->sv_u.svu_rx = (regexp *)temp_p;
+	SvANY(temp) = old_rx_body;
 
 	SvREFCNT_dec_NN(temp);
     }
@@ -6623,7 +6624,6 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 	    goto freescalar;
 	case SVt_REGEXP:
 	    /* FIXME for plugins */
-	  freeregexp:
 	    pregfree2((REGEXP*) sv);
 	    goto freescalar;
 	case SVt_PVCV:
@@ -6702,7 +6702,16 @@ Perl_sv_clear(pTHX_ SV *const orig_sv)
 	    }
 	    else if (LvTYPE(sv) != 't') /* unless tie: unrefcnted fake SV**  */
 		SvREFCNT_dec(LvTARG(sv));
-	    if (isREGEXP(sv)) goto freeregexp;
+	    if (isREGEXP(sv)) {
+                /* SvLEN points to a regex body. Free the body, then
+                 * set SvLEN to whatever value was in the now-freed
+                 * regex body. The PVX buffer is shared by multiple re's
+                 * and only freed once, by the re whose len in non-null */
+                STRLEN len = ReANY(sv)->xpv_len;
+                pregfree2((REGEXP*) sv);
+                SvLEN_set((sv), len);
+                goto freescalar;
+            }
             /* FALLTHROUGH */
 	case SVt_PVGV:
 	    if (isGV_with_GP(sv)) {
@@ -11758,10 +11767,9 @@ S_format_hexfp(pTHX_ char * const buf, const STRLEN bufsize, const char c,
 #ifndef USE_LOCALE_NUMERIC
             *p++ = '.';
 #else
-            if (PL_numeric_radix_sv) {
+            if (PL_numeric_radix_sv && IN_LC(LC_NUMERIC)) {
                 STRLEN n;
                 const char* r = SvPV(PL_numeric_radix_sv, n);
-                assert(IN_LC(LC_NUMERIC));
                 Copy(r, p, n, char);
                 p += n;
             }
@@ -12954,8 +12962,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                 lc_numeric_set = TRUE;
             }
 
-            if (PL_numeric_radix_sv) {
-                assert(IN_LC(LC_NUMERIC));
+            if (PL_numeric_radix_sv && IN_LC(LC_NUMERIC)) {
                 /* this can't wrap unless PL_numeric_radix_sv is a string
                  * consuming virtually all the 32-bit or 64-bit address
                  * space
@@ -14228,7 +14235,6 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 	    case SVt_REGEXP:
 	      duprex:
 		/* FIXME for plugins */
-		dstr->sv_u.svu_rx = ((REGEXP *)dstr)->sv_any;
 		re_dup_guts((REGEXP*) sstr, (REGEXP*) dstr, param);
 		break;
 	    case SVt_PVLV:
@@ -15407,6 +15413,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     init_constants();
     ptr_table_store(PL_ptr_table, &proto_perl->Isv_undef, &PL_sv_undef);
     ptr_table_store(PL_ptr_table, &proto_perl->Isv_no, &PL_sv_no);
+    ptr_table_store(PL_ptr_table, &proto_perl->Isv_zero, &PL_sv_zero);
     ptr_table_store(PL_ptr_table, &proto_perl->Isv_yes, &PL_sv_yes);
     ptr_table_store(PL_ptr_table, &proto_perl->Ipadname_const,
 		    &PL_padname_const);
@@ -15914,6 +15921,13 @@ Perl_init_constants(pTHX)
 				  |SVp_IOK|SVf_IOK|SVp_NOK|SVf_NOK
 				  |SVp_POK|SVf_POK;
 
+    SvANY(&PL_sv_zero)		= new_XPVNV();
+    SvREFCNT(&PL_sv_zero)	= SvREFCNT_IMMORTAL;
+    SvFLAGS(&PL_sv_zero)	= SVt_PVNV|SVf_READONLY|SVf_PROTECT
+				  |SVp_IOK|SVf_IOK|SVp_NOK|SVf_NOK
+				  |SVp_POK|SVf_POK
+                                  |SVs_PADTMP;
+
     SvPV_set(&PL_sv_no, (char*)PL_No);
     SvCUR_set(&PL_sv_no, 0);
     SvLEN_set(&PL_sv_no, 0);
@@ -15926,7 +15940,33 @@ Perl_init_constants(pTHX)
     SvIV_set(&PL_sv_yes, 1);
     SvNV_set(&PL_sv_yes, 1);
 
+    SvPV_set(&PL_sv_zero, (char*)PL_Zero);
+    SvCUR_set(&PL_sv_zero, 1);
+    SvLEN_set(&PL_sv_zero, 0);
+    SvIV_set(&PL_sv_zero, 0);
+    SvNV_set(&PL_sv_zero, 0);
+
     PadnamePV(&PL_padname_const) = (char *)PL_No;
+
+    assert(SvIMMORTAL_INTERP(&PL_sv_yes));
+    assert(SvIMMORTAL_INTERP(&PL_sv_undef));
+    assert(SvIMMORTAL_INTERP(&PL_sv_no));
+    assert(SvIMMORTAL_INTERP(&PL_sv_zero));
+
+    assert(SvIMMORTAL(&PL_sv_yes));
+    assert(SvIMMORTAL(&PL_sv_undef));
+    assert(SvIMMORTAL(&PL_sv_no));
+    assert(SvIMMORTAL(&PL_sv_zero));
+
+    assert( SvIMMORTAL_TRUE(&PL_sv_yes));
+    assert(!SvIMMORTAL_TRUE(&PL_sv_undef));
+    assert(!SvIMMORTAL_TRUE(&PL_sv_no));
+    assert(!SvIMMORTAL_TRUE(&PL_sv_zero));
+
+    assert( SvTRUE_nomg_NN(&PL_sv_yes));
+    assert(!SvTRUE_nomg_NN(&PL_sv_undef));
+    assert(!SvTRUE_nomg_NN(&PL_sv_no));
+    assert(!SvTRUE_nomg_NN(&PL_sv_zero));
 }
 
 /*

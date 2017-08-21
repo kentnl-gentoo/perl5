@@ -2661,9 +2661,12 @@ A special token that returns the name of the file in which it occurs.
 =item fileno FILEHANDLE
 X<fileno>
 
+=item fileno DIRHANDLE
+
 =for Pod::Functions return file descriptor from filehandle
 
-Returns the file descriptor for a filehandle, or undefined if the
+Returns the file descriptor for a filehandle or directory handle,
+or undefined if the
 filehandle is not open.  If there is no real file descriptor at the OS
 level, as can happen with filehandles connected to memory objects via
 L<C<open>|/open FILEHANDLE,EXPR> with a reference for the third
@@ -4781,7 +4784,8 @@ DIRHANDLE may be an expression whose value can be used as an indirect
 dirhandle, usually the real dirhandle name.  If DIRHANDLE is an undefined
 scalar variable (or array or hash element), the variable is assigned a
 reference to a new anonymous dirhandle; that is, it's autovivified.
-DIRHANDLEs have their own namespace separate from FILEHANDLEs.
+Dirhandles are the same objects as filehandles; an I/O object can only
+be open as one of these handle types at once.
 
 See the example at L<C<readdir>|/readdir DIRHANDLE>.
 

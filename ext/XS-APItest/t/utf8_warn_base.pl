@@ -121,7 +121,7 @@ my @tests;
         ],
         [ "overlong malformation, highest 2-byte",
             (isASCII) ? "\xc1\xbf" : I8_to_native("\xc4\xbf"),
-            (isASCII) ? 0x7F : utf8::unicode_to_native(0x9F),
+            (isASCII) ? 0x7F : 0xFF,
         ],
         [ "overlong malformation, lowest 3-byte",
             (isASCII) ? "\xe0\x80\x80" : I8_to_native("\xe0\xa0\xa0"),
@@ -524,6 +524,7 @@ my @tests;
                     I8_to_native(
                     "\xff\xa0\xa0\xa0\xa0\xa0\xa1\xa0\xa0\xa0\xa0\xa0\xa0\xa0"),
                     0x800000000,
+                      40000000
                 ],
                 [ "requires at least 32 bits",
                     I8_to_native(
@@ -1086,7 +1087,10 @@ foreach my $test (@tests) {
                         $correct_bytes_for_overlong
                                             = display_bytes_no_quotes($bytes);
                     }
-                    my $prefix = ($allowed_uv > 0x10FFFF) ? "0x" : "U+";
+                    my $prefix = (   $allowed_uv > 0x10FFFF
+                                  || ! isASCII && $allowed_uv < 256)
+                                 ? "0x"
+                                 : "U+";
                     push @expected_malformation_warnings,
                             qr/\QMalformed UTF-8 character: $wrong_bytes\E
                                \Q (overlong; instead use\E

@@ -2,22 +2,65 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.27.2
+perldelta - what is new for perl v5.27.3
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.27.1 release and the 5.27.2
+This document describes differences between the 5.27.2 release and the 5.27.3
 release.
 
-If you are upgrading from an earlier release such as 5.27.0, first read
-L<perl5271delta>, which describes differences between 5.27.0 and 5.27.1.
+If you are upgrading from an earlier release such as 5.27.1, first read
+L<perl5272delta>, which describes differences between 5.27.1 and 5.27.2.
 
-=head1 Core Enhancements
+=head1 Deprecations
 
-=head2 Unicode 10.0 is supported
+=head2 Module removals
 
-A list of changes is at
-L<http://www.unicode.org/versions/Unicode10.0.0>.
+The following modules will be removed from the core distribution in a
+future release, and will at that time need to be installed from CPAN.
+Distributions on CPAN which require these modules will need to list them as
+prerequisites.
+
+The core versions of these modules will now issue C<"deprecated">-category
+warnings to alert you to this fact.  To silence these deprecation warnings,
+install the modules in question from CPAN.
+
+Note that these are (with rare exceptions) fine modules that you are encouraged
+to continue to use.  Their disinclusion from core primarily hinges on their
+necessity to bootstrapping a fully functional, CPAN-capable Perl installation,
+not usually on concerns over their design.
+
+=over
+
+=item B::Debug
+
+=back
+
+=head1 Performance Enhancements
+
+=over 4
+
+=item *
+
+C<SvTRUE()> is now more efficient.
+
+=item *
+
+C<keys()> in void and scalar contexts is now more efficient.
+
+=item *
+
+Various integer-returning ops are now more efficient in scalar/boolean context.
+
+=item *
+
+C<< if (index(...) != -1) { ... } >> is now more efficient.
+
+=item *
+
+C<for()> loops and similar constructs are now more efficient in most cases.
+
+=back
 
 =head1 Modules and Pragmata
 
@@ -27,75 +70,79 @@ L<http://www.unicode.org/versions/Unicode10.0.0>.
 
 =item *
 
-L<arybase> has been upgraded from version 0.12 to 0.13.
+L<B> has been upgraded from version 1.68 to 1.69.
 
 =item *
 
-L<Carp> has been upgraded from version 1.42 to 1.43.
+L<B::Concise> has been upgraded from version 1.000 to 1.001.
 
 =item *
 
-L<Encode> has been upgraded from version 2.88 to 2.92.
+L<B::Debug> has been upgraded from version 1.24 to 1.25.
+NOTE: L<B::Debug> is deprecated and may be removed from a future version of Perl.
 
 =item *
 
-L<encoding> has been upgraded from version 2.19 to 2.20.
+L<B::Deparse> has been upgraded from version 1.41 to 1.42.
 
 =item *
 
-L<ExtUtils::CBuilder> has been upgraded from version 0.280225 to 0.280228.
+L<base> has been upgraded from version 2.25 to 2.26.
 
 =item *
 
-L<feature> has been upgraded from version 1.48 to 1.49.
+L<Data::Dumper> has been upgraded from version 2.167 to 2.167_02.
 
 =item *
 
-L<File::Glob> has been upgraded from version 1.28 to 1.29.
+L<Devel::Peek> has been upgraded from version 1.26 to 1.27.
 
 =item *
 
-L<File::Spec> and L<Cwd> have been upgraded from version 3.67 to 3.68.
+L<ExtUtils::Constant> has been upgraded from version 0.23 to 0.24.
 
 =item *
 
-L<List::Util> has been upgraded from version 1.46_02 to 1.48.
+L<ExtUtils::ParseXS> has been upgraded from version 3.34 to 3.35.
 
 =item *
 
-L<Math::BigRat> has been upgraded from version 0.2611 to 0.2613.
+L<ExtUtils::Typemaps> has been upgraded from version 3.34 to 3.35.
 
 =item *
 
-L<Module::CoreList> has been upgraded from version 5.20170621 to 5.20170720.
+L<Filter::Simple> has been upgraded from version 0.93 to 0.94.
 
 =item *
 
-L<Opcode> has been upgraded from version 1.39 to 1.40.
+L<Module::CoreList> has been upgraded from version 5.20170720 to 5.20170821.
 
 =item *
 
-L<PerlIO::scalar> has been upgraded from version 0.27 to 0.29.
+L<SelfLoader> has been upgraded from version 1.23 to 1.24.
 
 =item *
 
-L<POSIX> has been upgraded from version 1.76 to 1.77.
+L<Storable> has been upgraded from version 2.63 to 2.64.
 
 =item *
 
-L<re> has been upgraded from version 0.34 to 0.35.
+L<threads> has been upgraded from version 2.16 to 2.17.
 
 =item *
 
-L<Scalar::Util> has been upgraded from version 1.46_02 to 1.48.
+L<utf8> has been upgraded from version 1.19 to 1.20.
+
+=back
+
+=head1 Configuration and Compilation
+
+=over 4
 
 =item *
 
-L<Time::HiRes> has been upgraded from version 1.9741 to 1.9743.
-
-=item *
-
-L<Time::Piece> has been upgraded from version 1.31 to 1.3201.
+On GCC, C<-Werror=pointer-arith> is now enabled by default,
+disallowing arithmetic on void and function pointers.
 
 =back
 
@@ -105,64 +152,43 @@ L<Time::Piece> has been upgraded from version 1.31 to 1.3201.
 
 =item *
 
-List assignment (C<aassign>) could in some rare cases allocate an
-entry on the mortal stack and leave the entry uninitialized. [perl
-#131570]
+Fixed a duplicate symbol failure with C<-flto -mieee-fp> builds.
+F<pp.c> defined C<_LIB_VERSION> which C<-lieee> already defines. [perl
+#131786]
 
 =item *
 
-Attempting to apply an attribute to an C<our> variable where a
-function of that name already exists could result in a NULL pointer
-being supplied where an SV was expected, crashing perl.  [perl
-#131597]
+The tokenizer no longer consumes the exponent part of a floating
+point number if it's incomplete. [perl #131725]
 
 =item *
 
-C<split ' '> now correctly handles the argument being split when in the
-scope of the L<< C<unicode_strings>|feature/"The 'unicode_strings' feature"
->> feature. Previously, when a string using the single-byte internal
-representation contained characters that are whitespace by Unicode rules but
-not by ASCII rules, it treated those characters as part of fields rather
-than as field separators.  [perl #130907]
-
-=item *
-
-Several built-in functions previously had bugs that could cause them to
-write to the internal stack without allocating room for the item being
-written. In rare situations, this could have led to a crash. These bugs have
-now been fixed, and if any similar bugs are introduced in future, they will
-be detected automatically in debugging builds.
-
-=item *
-
-Using a symbolic ref with postderef syntax as the key in a hash lookup was
-yielding an assertion failure on debugging builds. [perl #131627]
-
-=item *
-
-Array and hash variables whose names begin with a caret now admit indexing
-inside their curlies when interpolated into strings, as in C<<
-"${^CAPTURE[0]}" >> to index C<@{^CAPTURE}>.  [perl #131664]
+On non-threaded builds, for C<m/$null/> where C<$null> is an empty
+string is no longer treated as if the C</o> flag was present when the
+previous matching match operator included the C</o> flag.  The
+rewriting used to implement this behavior could confuse the
+interpreter.  This matches the behaviour of threaded builds.  [perl
+#124368]
 
 =back
 
 =head1 Acknowledgements
 
-Perl 5.27.2 represents approximately 4 weeks of development since Perl 5.27.1
-and contains approximately 26,000 lines of changes across 290 files from 18
+Perl 5.27.3 represents approximately 5 weeks of development since Perl 5.27.2
+and contains approximately 5,600 lines of changes across 150 files from 19
 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 9,700 lines of changes to 150 .pm, .t, .c and .h files.
+approximately 4,000 lines of changes to 84 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant community
 of users and developers. The following people are known to have contributed the
-improvements that became Perl 5.27.2:
+improvements that became Perl 5.27.3:
 
-Aaron Crane, Alberto Simões, Chris 'BinGOs' Williams, Dagfinn Ilmari
-Mannsåker, David Mitchell, E. Choroba, Eric Herman, Father Chrysostomos, James
-E Keenan, Karl Williamson, Lukas Mai, Ricardo Signes, Sawyer X, Steve Hay, Tony
-Cook, Vitali Peil, Yves Orton, Zefram.
+Aaron Crane, Aristotle Pagaltzis, Chris 'BinGOs' Williams, Craig A. Berry,
+Dagfinn Ilmari Mannsåker, Daniel Dragan, David Mitchell, Father Chrysostomos,
+James E Keenan, Karl Williamson, Ken Brown, Lukas Mai, Matthew Horsfall,
+Nicholas Clark, Robin Barker, Steffen Müller, Steve Hay, Tony Cook, Zefram.
 
 The list above is almost certainly incomplete as it is automatically generated
 from version control history. In particular, it does not include the names of
