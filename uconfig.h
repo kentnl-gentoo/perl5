@@ -536,6 +536,13 @@
  */
 /*#define HAS_STRCOLL	/ **/
 
+/* USE_STRUCT_COPY:
+ *	This symbol, if defined, indicates that this C compiler knows how
+ *	to copy structures.  If undefined, you'll need to use a block copy
+ *	routine of some sort instead.
+ */
+/*#define	USE_STRUCT_COPY	/ **/
+
 /* HAS_STRTOD:
  *	This symbol, if defined, indicates that the strtod routine is
  *	available to provide better numeric string conversion than atof().
@@ -2140,13 +2147,6 @@
 /*#define USE_STAT_BLOCKS 	/ **/
 #endif
 
-/* USE_STRUCT_COPY:
- *	This symbol, if defined, indicates that this C compiler knows how
- *	to copy structures.  If undefined, you'll need to use a block copy
- *	routine of some sort instead.
- */
-/*#define	USE_STRUCT_COPY	/ **/
-
 /* HAS_STRERROR:
  *	This symbol, if defined, indicates that the strerror routine is
  *	available to translate error numbers to strings. See the writeup
@@ -2844,6 +2844,27 @@
  *	to do statfs() is supported.
  */
 /*#define HAS_STRUCT_FS_DATA	/ **/
+
+/* HAS_FCHMODAT:
+ *	This symbol is defined if the fchmodat() routine is available.
+ */
+/* HAS_LINKAT:
+ *	This symbol is defined if the linkat() routine is available.
+ */
+/* HAS_OPENAT:
+ *	This symbol is defined if the openat() routine is available.
+ */
+/* HAS_RENAMEAT:
+ *	This symbol is defined if the renameat() routine is available.
+ */
+/* HAS_UNLINKAT:
+ *	This symbol is defined if the unlinkat() routine is available.
+ */
+/*#define	HAS_FCHMODAT	/ **/
+/*#define	HAS_LINKAT	/ **/
+/*#define	HAS_OPENAT	/ **/
+/*#define	HAS_RENAMEAT	/ **/
+/*#define	HAS_UNLINKAT	/ **/
 
 /* HAS_FSEEKO:
  *	This symbol, if defined, indicates that the fseeko routine is
@@ -5354,6 +5375,6 @@
 #endif
 
 /* Generated from:
- * a0cea6273c16c1c5d8625665c84bda01926ce960c26873d4e5596b5b02a53e92 config_h.SH
- * 58f9d541683fff4dcacfd3cb2d9e1f444fd3c8e3f120ef92c21eb47e880ba924 uconfig.sh
+ * 2068b3888dbafff8fe3ae7aa6b8c5fb1f89db5b3931b89068053eb588d023b64 config_h.SH
+ * a088a21b0ddb63b48c794da959469ddb98da178e5b2d4ec568331a988d59e146 uconfig.sh
  * ex: set ro: */

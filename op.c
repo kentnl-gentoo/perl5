@@ -662,6 +662,7 @@ Perl_allocmy(pTHX_ const char *const name, const STRLEN len, const U32 flags)
 	if (!(flags & SVf_UTF8 && UTF8_IS_START(name[1]))
 	 && isASCII(name[1])
 	 && (!isPRINT(name[1]) || strchr("\t\n\r\f", name[1]))) {
+	    /* diag_listed_as: Can't use global %s in "%s" */
 	    yyerror(Perl_form(aTHX_ "Can't use global %c^%c%.*s in \"%s\"",
 			      name[0], toCTRL(name[1]), (int)(len - 2), name + 2,
 			      PL_parser->in_my == KEY_state ? "state" : "my"));
@@ -3686,7 +3687,8 @@ Perl_apply_attrs_string(pTHX_ const char *stashpv, CV *cv,
 }
 
 STATIC void
-S_move_proto_attr(pTHX_ OP **proto, OP **attrs, const GV * name)
+S_move_proto_attr(pTHX_ OP **proto, OP **attrs, const GV * name,
+                        bool curstash)
 {
     OP *new_proto = NULL;
     STRLEN pvlen;
@@ -3760,7 +3762,8 @@ S_move_proto_attr(pTHX_ OP **proto, OP **attrs, const GV * name)
         else
             svname = (SV *)name;
         if (ckWARN(WARN_ILLEGALPROTO))
-            (void)validate_proto(svname, cSVOPx_sv(new_proto), TRUE);
+            (void)validate_proto(svname, cSVOPx_sv(new_proto), TRUE,
+                                 curstash);
         if (*proto && ckWARN(WARN_PROTOTYPE)) {
             STRLEN old_len, new_len;
             const char * oldp = SvPV(cSVOPx_sv(*proto), old_len);
@@ -8226,7 +8229,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     spot = (CV **)svspot;
 
     if (!(PL_parser && PL_parser->error_count))
-        move_proto_attr(&proto, &attrs, (GV *)PadnameSV(name));
+        move_proto_attr(&proto, &attrs, (GV *)PadnameSV(name), 0);
 
     if (proto) {
 	assert(proto->op_type == OP_CONST);
@@ -8603,10 +8606,10 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 
     if (!ec) {
         if (isGV(gv)) {
-            move_proto_attr(&proto, &attrs, gv);
+            move_proto_attr(&proto, &attrs, gv, 0);
         } else {
             assert(cSVOPo);
-            move_proto_attr(&proto, &attrs, (GV *)cSVOPo->op_sv);
+            move_proto_attr(&proto, &attrs, (GV *)cSVOPo->op_sv, 1);
         }
     }
 
@@ -11166,6 +11169,8 @@ Perl_ck_sort(pTHX_ OP *o)
 		    o->op_private |= OPpSORT_QSORT;
 		if ((sorthints & HINT_SORT_STABLE) != 0)
 		    o->op_private |= OPpSORT_STABLE;
+		if ((sorthints & HINT_SORT_UNSTABLE) != 0)
+		    o->op_private |= OPpSORT_UNSTABLE;
 	    }
     }
 

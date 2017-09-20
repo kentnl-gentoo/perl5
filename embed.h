@@ -345,6 +345,7 @@
 #define mg_findext		Perl_mg_findext
 #define mg_free(a)		Perl_mg_free(aTHX_ a)
 #define mg_free_type(a,b)	Perl_mg_free_type(aTHX_ a,b)
+#define mg_freeext(a,b,c)	Perl_mg_freeext(aTHX_ a,b,c)
 #define mg_get(a)		Perl_mg_get(aTHX_ a)
 #define mg_length(a)		Perl_mg_length(aTHX_ a)
 #define mg_magical		Perl_mg_magical
@@ -663,6 +664,7 @@
 #define sv_replace(a,b)		Perl_sv_replace(aTHX_ a,b)
 #define sv_report_used()	Perl_sv_report_used(aTHX)
 #define sv_reset(a,b)		Perl_sv_reset(aTHX_ a,b)
+#define sv_rvunweaken(a)	Perl_sv_rvunweaken(aTHX_ a)
 #define sv_rvweaken(a)		Perl_sv_rvweaken(aTHX_ a)
 #define sv_set_undef(a)		Perl_sv_set_undef(aTHX_ a)
 #define sv_setiv(a,b)		Perl_sv_setiv(aTHX_ a,b)
@@ -948,7 +950,7 @@
 #define sv_only_taint_gmagic	S_sv_only_taint_gmagic
 #define swash_fetch(a,b,c)	Perl_swash_fetch(aTHX_ a,b,c)
 #define swash_init(a,b,c,d,e)	Perl_swash_init(aTHX_ a,b,c,d,e)
-#define validate_proto(a,b,c)	Perl_validate_proto(aTHX_ a,b,c)
+#define validate_proto(a,b,c,d)	Perl_validate_proto(aTHX_ a,b,c,d)
 #define vivify_defelem(a)	Perl_vivify_defelem(aTHX_ a)
 #define yylex()			Perl_yylex(aTHX)
 #  if !defined(PERL_EXT_RE_BUILD)
@@ -1477,6 +1479,13 @@
 #  if defined(DEBUGGING)
 #define get_debug_opts(a,b)	Perl_get_debug_opts(aTHX_ a,b)
 #define set_padlist		Perl_set_padlist
+#    if defined(PERL_IN_LOCALE_C)
+#      if defined(USE_LOCALE)
+#define print_bytes_for_locale(a,b,c)	S_print_bytes_for_locale(aTHX_ a,b,c)
+#define print_collxfrm_input_and_return(a,b,c,d)	S_print_collxfrm_input_and_return(aTHX_ a,b,c,d)
+#define setlocale_debug_string	S_setlocale_debug_string
+#      endif
+#    endif
 #    if defined(PERL_IN_PAD_C)
 #define cv_dump(a,b)		S_cv_dump(aTHX_ a,b)
 #    endif
@@ -1486,11 +1495,6 @@
 #    if defined(PERL_IN_TOKE_C)
 #define printbuf(a,b)		S_printbuf(aTHX_ a,b)
 #define tokereport(a,b)		S_tokereport(aTHX_ a,b)
-#    endif
-#    if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
-#define print_bytes_for_locale(a,b,c)	S_print_bytes_for_locale(aTHX_ a,b,c)
-#define print_collxfrm_input_and_return(a,b,c,d)	S_print_collxfrm_input_and_return(aTHX_ a,b,c,d)
-#define setlocale_debug_string	S_setlocale_debug_string
 #    endif
 #  endif
 #  if defined(DEBUG_LEAKING_SCALARS_FORK_DUMP)
@@ -1590,6 +1594,18 @@
 #define share_hek_flags(a,b,c,d)	S_share_hek_flags(aTHX_ a,b,c,d)
 #define unshare_hek_or_pvn(a,b,c,d)	S_unshare_hek_or_pvn(aTHX_ a,b,c,d)
 #  endif
+#  if defined(PERL_IN_LOCALE_C)
+#define save_to_buffer		S_save_to_buffer
+#    if defined(USE_LOCALE)
+#define new_collate(a)		S_new_collate(aTHX_ a)
+#define new_ctype(a)		S_new_ctype(aTHX_ a)
+#define set_numeric_radix()	S_set_numeric_radix(aTHX)
+#define stdize_locale(a)	S_stdize_locale(aTHX_ a)
+#      if defined(WIN32)
+#define my_setlocale(a,b)	S_my_setlocale(aTHX_ a,b)
+#      endif
+#    endif
+#  endif
 #  if defined(PERL_IN_LOCALE_C) || defined(PERL_IN_SV_C) || defined(PERL_IN_MATHOMS_C)
 #    if defined(USE_LOCALE_COLLATE)
 #define _mem_collxfrm(a,b,c,d)	Perl__mem_collxfrm(aTHX_ a,b,c,d)
@@ -1634,7 +1650,7 @@
 #define listkids(a)		S_listkids(aTHX_ a)
 #define looks_like_bool(a)	S_looks_like_bool(aTHX_ a)
 #define modkids(a,b)		S_modkids(aTHX_ a,b)
-#define move_proto_attr(a,b,c)	S_move_proto_attr(aTHX_ a,b,c)
+#define move_proto_attr(a,b,c,d)	S_move_proto_attr(aTHX_ a,b,c,d)
 #define my_kid(a,b,c)		S_my_kid(aTHX_ a,b,c)
 #define newGIVWHENOP(a,b,c,d,e)	S_newGIVWHENOP(aTHX_ a,b,c,d,e)
 #define newMETHOP_internal(a,b,c,d)	S_newMETHOP_internal(aTHX_ a,b,c,d)
@@ -1880,15 +1896,6 @@
 #define padlist_dup(a,b)	Perl_padlist_dup(aTHX_ a,b)
 #define padname_dup(a,b)	Perl_padname_dup(aTHX_ a,b)
 #define padnamelist_dup(a,b)	Perl_padnamelist_dup(aTHX_ a,b)
-#  endif
-#  if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
-#define new_collate(a)		S_new_collate(aTHX_ a)
-#define new_ctype(a)		S_new_ctype(aTHX_ a)
-#define set_numeric_radix()	S_set_numeric_radix(aTHX)
-#define stdize_locale(a)	S_stdize_locale(aTHX_ a)
-#    if defined(WIN32)
-#define my_setlocale(a,b)	S_my_setlocale(aTHX_ a,b)
-#    endif
 #  endif
 #  if defined(USE_LOCALE_COLLATE)
 #define magic_setcollxfrm(a,b)	Perl_magic_setcollxfrm(aTHX_ a,b)

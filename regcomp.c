@@ -5123,7 +5123,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		}
 		if (!scan) 		/* It was not CURLYX, but CURLY. */
 		    scan = next;
-		if (!(flags & SCF_TRIE_DOING_RESTUDY)
+		if (((flags & (SCF_TRIE_DOING_RESTUDY|SCF_DO_SUBSTR))==SCF_DO_SUBSTR)
 		    /* ? quantifier ok, except for (?{ ... }) */
 		    && (next_is_eval || !(mincount == 0 && maxcount == 1))
 		    && (minnext == 0) && (deltanext == 0)
@@ -11782,14 +11782,12 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
 	    if ((flags&SIMPLE)) {
                 if (min == 0 && max == REG_INFTY) {
                     reginsert(pRExC_state, STAR, ret, depth+1);
-                    ret->flags = 0;
                     MARK_NAUGHTY(4);
                     RExC_seen |= REG_UNBOUNDED_QUANTIFIER_SEEN;
                     goto nest_check;
                 }
                 if (min == 1 && max == REG_INFTY) {
                     reginsert(pRExC_state, PLUS, ret, depth+1);
-                    ret->flags = 0;
                     MARK_NAUGHTY(3);
                     RExC_seen |= REG_UNBOUNDED_QUANTIFIER_SEEN;
                     goto nest_check;
@@ -11902,7 +11900,6 @@ S_regpiece(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
         ender = reg_node(pRExC_state, SUCCEED);
         REGTAIL(pRExC_state, ret, ender);
         reginsert(pRExC_state, SUSPEND, ret, depth+1);
-        ret->flags = 0;
         ender = reg_node(pRExC_state, TAIL);
         REGTAIL(pRExC_state, ret, ender);
     }
@@ -12199,14 +12196,16 @@ S_grok_bslash_N(pTHX_ RExC_state_t *pRExC_state,
 	}
         sv_catpv(substitute_parse, ")");
 
-        RExC_parse = RExC_start = RExC_adjusted_start = SvPV(substitute_parse,
-                                                             len);
+        len = SvCUR(substitute_parse);
 
 	/* Don't allow empty number */
 	if (len < (STRLEN) 8) {
             RExC_parse = endbrace;
 	    vFAIL("Invalid hexadecimal number in \\N{U+...}");
 	}
+
+        RExC_parse = RExC_start = RExC_adjusted_start
+                                              = SvPV_nolen(substitute_parse);
 	RExC_end = RExC_parse + len;
 
         /* The values are Unicode, and therefore not subject to recoding, but
@@ -13321,6 +13320,7 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                             goto loopdone;
                         }
                         p = RExC_parse;
+                        RExC_parse = parse_start;
                         if (ender > 0xff) {
                             REQUIRE_UTF8(flagp);
                         }
@@ -18637,6 +18637,7 @@ S_reg2Lanode(pTHX_ RExC_state_t *pRExC_state, const U8 op, const U32 arg1, const
 * if (PASS2)
 *     NEXT_OFF(orig_emit) = regarglen[OPFAIL] + NODE_STEP_REGNODE;
 *
+* ALSO NOTE - operand->flags will be set to 0 as well.
 */
 STATIC void
 S_reginsert(pTHX_ RExC_state_t *pRExC_state, U8 op, regnode *operand, U32 depth)
@@ -18710,7 +18711,6 @@ S_reginsert(pTHX_ RExC_state_t *pRExC_state, U8 op, regnode *operand, U32 depth)
 #endif
     }
 
-
     place = operand;		/* Op node, where operand used to be. */
 #ifdef RE_TRACK_PATTERN_OFFSETS
     if (RExC_offsets) {         /* MJD */
@@ -18729,6 +18729,7 @@ S_reginsert(pTHX_ RExC_state_t *pRExC_state, U8 op, regnode *operand, U32 depth)
     }
 #endif
     src = NEXTOPER(place);
+    place->flags = 0;
     FILL_ADVANCE_NODE(place, op);
     Zero(src, offset, regnode);
 }
@@ -19440,8 +19441,11 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_
 
     /* add on the verb argument if there is one */
     if ( ( k == VERB || OP(o) == ACCEPT || OP(o) == OPFAIL ) && o->flags) {
-        Perl_sv_catpvf(aTHX_ sv, ":%" SVf,
+        if ( ARG(o) )
+            Perl_sv_catpvf(aTHX_ sv, ":%" SVf,
                        SVfARG((MUTABLE_SV(progi->data->data[ ARG( o ) ]))));
+        else
+            sv_catpvs(sv, ":NULL");
     }
 #else
     PERL_UNUSED_CONTEXT;

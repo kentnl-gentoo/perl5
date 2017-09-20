@@ -1036,6 +1036,7 @@ ApdRn	|MAGIC*	|mg_findext	|NULLOK const SV* sv|int type|NULLOK const MGVTBL *vtb
 EXpR	|MAGIC*	|mg_find_mglob	|NN SV* sv
 Apd	|int	|mg_free	|NN SV* sv
 Apd	|void	|mg_free_type	|NN SV* sv|int how
+Apd	|void	|mg_freeext	|NN SV* sv|int how|NULLOK const MGVTBL *vtbl
 Apd	|int	|mg_get		|NN SV* sv
 ApdD	|U32	|mg_length	|NN SV* sv
 Apdn	|void	|mg_magical	|NN SV* sv
@@ -1047,7 +1048,8 @@ poX	|OP*	|op_lvalue_flags|NULLOK OP* o|I32 type|U32 flags
 p	|void	|finalize_optree		|NN OP* o
 #if defined(PERL_IN_OP_C)
 s	|void	|finalize_op	|NN OP* o
-s	|void	|move_proto_attr|NN OP **proto|NN OP **attrs|NN const GV *name
+s	|void	|move_proto_attr|NN OP **proto|NN OP **attrs \
+				|NN const GV *name|bool curstash
 #endif
 : Used in op.c and pp_sys.c
 p	|int	|mode_from_discipline|NULLOK const char* s|STRLEN len
@@ -1258,6 +1260,11 @@ ApdO	|HV*	|get_hv		|NN const char *name|I32 flags
 ApdO	|CV*	|get_cv		|NN const char* name|I32 flags
 Apd	|CV*	|get_cvn_flags	|NN const char* name|STRLEN len|I32 flags
 EXnpo	|char*	|setlocale	|int category|NULLOK const char* locale
+#if defined(HAS_NL_LANGINFO) && defined(PERL_LANGINFO_H)
+Ando	|const char*|Perl_langinfo|const nl_item item
+#else
+Ando	|const char*|Perl_langinfo|const int item
+#endif
 ApOM	|int	|init_i18nl10n	|int printwarn
 ApOM	|int	|init_i18nl14n	|int printwarn
 p	|char*	|my_strerror	|const int errnum
@@ -1979,6 +1986,7 @@ Apdmb	|void	|sv_force_normal|NN SV *sv
 Apd	|void	|sv_force_normal_flags|NN SV *const sv|const U32 flags
 pX	|SSize_t|tmps_grow_p	|SSize_t ix
 Apd	|SV*	|sv_rvweaken	|NN SV *const sv
+Apd	|SV*	|sv_rvunweaken	|NN SV *const sv
 AnpMd	|SV*	|sv_get_backrefs|NN SV *const sv
 : This is indirectly referenced by globals.c. This is somewhat annoying.
 p	|int	|magic_killbackrefs|NN SV *sv|NN MAGIC *mg
@@ -2708,22 +2716,28 @@ s	|int	|tokereport	|I32 rv|NN const YYSTYPE* lvalp
 sf	|void	|printbuf	|NN const char *const fmt|NN const char *const s
 #  endif
 #endif
-EXMp	|bool	|validate_proto	|NN SV *name|NULLOK SV *proto|bool warn
+EXMp	|bool	|validate_proto	|NN SV *name|NULLOK SV *proto|bool warn \
+		|bool curstash
 
 #if defined(PERL_IN_UNIVERSAL_C)
 s	|bool	|isa_lookup	|NN HV *stash|NN const char * const name \
                                         |STRLEN len|U32 flags
 #endif
 
-#if defined(USE_LOCALE) && defined(PERL_IN_LOCALE_C)
+#if defined(PERL_IN_LOCALE_C)
+in	|const char *|save_to_buffer|NN const char * string	\
+				    |NULLOK char **buf		\
+				    |NN Size_t *buf_size	\
+				    |const Size_t offset
+#  if defined(USE_LOCALE)
 s	|char*	|stdize_locale	|NN char* locs
 s	|void	|new_collate	|NULLOK const char* newcoll
 s	|void	|new_ctype	|NN const char* newctype
 s	|void	|set_numeric_radix
-#ifdef WIN32
+#    ifdef WIN32
 s	|char*	|my_setlocale	|int category|NULLOK const char* locale
-#endif
-#   ifdef DEBUGGING
+#    endif
+#    ifdef DEBUGGING
 s	|void	|print_collxfrm_input_and_return		\
 			    |NN const char * const s		\
 			    |NN const char * const e		\
@@ -2735,7 +2749,8 @@ s	|void	|print_bytes_for_locale	|NN const char * const s	\
 snR	|char *	|setlocale_debug_string	|const int category		    \
 					|NULLOK const char* const locale    \
 					|NULLOK const char* const retval
-#   endif
+#    endif
+#  endif
 #endif
 
 #if        defined(USE_LOCALE)		\
@@ -3037,6 +3052,10 @@ Apnod	|Size_t	|my_strlcat	|NULLOK char *dst|NULLOK const char *src|Size_t size
 
 #ifndef HAS_STRLCPY
 Apnod	|Size_t |my_strlcpy     |NULLOK char *dst|NULLOK const char *src|Size_t size
+#endif
+
+#ifndef HAS_MKSTEMP
+pno	|int	|my_mkstemp	|NN char *templte
 #endif
 
 APpdn	|bool	|isinfnan	|NV nv

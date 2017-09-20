@@ -446,10 +446,7 @@ PP(pp_readline)
 	    PUTBACK;
 	    Perl_pp_rv2gv(aTHX);
 	    PL_last_in_gv = MUTABLE_GV(*PL_stack_sp--);
-	    if (PL_last_in_gv == (GV *)&PL_sv_undef)
-		PL_last_in_gv = NULL;
-	    else
-		assert(isGV_with_GP(PL_last_in_gv));
+            assert((SV*)PL_last_in_gv == &PL_sv_undef || isGV_with_GP(PL_last_in_gv));
 	}
     }
     return do_readline();
@@ -4333,7 +4330,8 @@ PP(pp_entersub)
                 AvARRAY(av) = ary;
             }
 
-	    Copy(MARK+1,AvARRAY(av),items,SV*);
+            if (items)
+                Copy(MARK+1,AvARRAY(av),items,SV*);
 	    AvFILLp(av) = items - 1;
 	}
 	if (UNLIKELY((cx->blk_u16 & OPpENTERSUB_LVAL_MASK) == OPpLVAL_INTRO &&
@@ -4423,6 +4421,21 @@ PP(pp_entersub)
 	assert(CvXSUB(cv));
 	CvXSUB(cv)(aTHX_ cv);
 
+#if defined DEBUGGING && !defined DEBUGGING_RE_ONLY
+        /* This duplicates the check done in runops_debug(), but provides more
+         * information in the common case of the fault being with an XSUB.
+         *
+         * It should also catch an XSUB pushing more than it extends
+         * in scalar context.
+        */
+        if (PL_curstackinfo->si_stack_hwm < PL_stack_sp - PL_stack_base)
+            Perl_croak_nocontext(
+                "panic: XSUB %s::%s (%s) failed to extend arg stack: "
+                "base=%p, sp=%p, hwm=%p\n",
+                    HvNAME(GvSTASH(CvGV(cv))), GvNAME(CvGV(cv)), CvFILE(cv),
+                    PL_stack_base, PL_stack_sp,
+                    PL_stack_base + PL_curstackinfo->si_stack_hwm);
+#endif
 	/* Enforce some sanity in scalar context. */
 	if (is_scalar) {
             SV **svp = PL_stack_base + markix + 1;

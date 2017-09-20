@@ -261,6 +261,22 @@ perl_construct(pTHXx)
 
     init_constants();
 
+#ifdef NO_PERL_INTERNAL_RAND_SEED
+    Perl_drand48_init_r(&PL_internal_random_state, seed());
+#else
+    {
+        UV seed;
+        const char *env_pv;
+        if (PerlProc_getuid() != PerlProc_geteuid() ||
+            PerlProc_getgid() != PerlProc_getegid() ||
+            !(env_pv = PerlEnv_getenv("PERL_INTERNAL_RAND_SEED")) ||
+            grok_number(env_pv, strlen(env_pv), &seed) != IS_NUMBER_IN_UV) {
+            seed = seed();
+        }
+        Perl_drand48_init_r(&PL_internal_random_state, (U32)seed);
+    }
+#endif
+
     SvREADONLY_on(&PL_sv_placeholder);
     SvREFCNT(&PL_sv_placeholder) = SvREFCNT_IMMORTAL;
 
@@ -1114,6 +1130,11 @@ perl_destruct(pTHXx)
     SvREFCNT_dec(PL_numeric_radix_sv);
     PL_numeric_radix_sv = NULL;
 #endif
+
+    if (PL_langinfo_buf) {
+        Safefree(PL_langinfo_buf);
+        PL_langinfo_buf = NULL;
+    }
 
     /* clear character classes  */
     for (i = 0; i < POSIX_SWASH_COUNT; i++) {
@@ -2196,6 +2217,21 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	}
     }
     }
+
+#ifndef NO_PERL_INTERNAL_RAND_SEED
+    /* If we're not set[ug]id, we might have honored
+       PERL_INTERNAL_RAND_SEED in perl_construct().
+       At this point command-line options have been parsed, so if
+       we're now tainting and not set[ug]id re-seed.
+       This could possibly be wasteful if PERL_INTERNAL_RAND_SEED is invalid,
+       but avoids duplicating the logic from perl_construct().
+    */
+    if (PL_tainting &&
+        PerlProc_getuid() == PerlProc_geteuid() &&
+        PerlProc_getgid() == PerlProc_getegid()) {
+        Perl_drand48_init_r(&PL_internal_random_state, seed());
+    }
+#endif
 
     /* Set $^X early so that it can be used for relocatable paths in @INC  */
     /* and for SITELIB_EXP in USE_SITECUSTOMIZE                            */
@@ -3371,12 +3407,6 @@ Perl_moreswitches(pTHX_ const char *s)
 
     case 'i':
 	Safefree(PL_inplace);
-#if defined(__CYGWIN__) /* do backup extension automagically */
-	if (*(s+1) == '\0') {
-	PL_inplace = savepvs(".bak");
-	return s+1;
-	}
-#endif /* __CYGWIN__ */
 	{
 	    const char * const start = ++s;
 	    while (*s && !isSPACE(*s))

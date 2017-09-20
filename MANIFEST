@@ -3669,6 +3669,7 @@ dist/Term-ReadLine/lib/Term/ReadLine.pm		Stub readline library
 dist/Term-ReadLine/t/AE.t			See if Term::ReadLine works
 dist/Term-ReadLine/t/AETk.t			See if Term::ReadLine works
 dist/Term-ReadLine/t/ReadLine.t			See if Term::ReadLine works
+dist/Term-ReadLine/t/ReadLine-STDERR.t		See if Term::ReadLine works
 dist/Term-ReadLine/t/Tk.t			See if Term::ReadLine works
 dist/Test/lib/Test.pm		A simple framework for writing test scripts
 dist/Test/t/05_about_verbose.t	See if Test works
@@ -4896,6 +4897,7 @@ parser.h			parser object header
 patchlevel.h			The current patch level of perl
 perl.c				main()
 perl.h				Global declarations
+perl_langinfo.h			Perl's version of <langinfo.h>
 perlapi.c			Perl API functions
 perlapi.h			Perl API function declarations
 perldtrace.d			D script for Perl probes
@@ -4967,6 +4969,7 @@ pod/perl5260delta.pod		Perl changes in version 5.26.0
 pod/perl5270delta.pod		Perl changes in version 5.27.0
 pod/perl5271delta.pod		Perl changes in version 5.27.1
 pod/perl5272delta.pod		Perl changes in version 5.27.2
+pod/perl5273delta.pod		Perl changes in version 5.27.3
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5698,6 +5701,7 @@ t/op/sprintf2.t			See if sprintf works
 t/op/srand.t			See if srand works
 t/op/sselect.t			See if 4 argument select works
 t/op/stash.t			See if %:: stashes work
+t/op/stash_parse_gv.t		See if parse_gv_stash_name works
 t/op/stat.t			See if stat works
 t/op/state.t			See if state variables work
 t/op/study.t			See if study works

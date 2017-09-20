@@ -1623,7 +1623,7 @@ Note that C<NULL> is a valid C<proto> and will always return C<true>.
  */
 
 bool
-Perl_validate_proto(pTHX_ SV *name, SV *proto, bool warn)
+Perl_validate_proto(pTHX_ SV *name, SV *proto, bool warn, bool curstash)
 {
     STRLEN len, origlen;
     char *p;
@@ -1684,6 +1684,13 @@ Perl_validate_proto(pTHX_ SV *name, SV *proto, bool warn)
 	    ? sv_uni_display(tmpsv, newSVpvn_flags(p, origlen, SVs_TEMP | SVf_UTF8),
 	                     origlen, UNI_DISPLAY_ISPRINT)
 	    : pv_pretty(tmpsv, p, origlen, 60, NULL, NULL, PERL_PV_ESCAPE_NONASCII);
+
+	if (curstash && !memchr(SvPVX(name), ':', SvCUR(name))) {
+	    SV *name2 = sv_2mortal(newSVsv(PL_curstname));
+	    sv_catpvs(name2, "::");
+	    sv_catsv(name2, (SV *)name);
+	    name = name2;
+	}
 
 	if (proto_after_greedy_proto)
 	    Perl_warner(aTHX_ packWARN(WARN_ILLEGALPROTO),
@@ -2702,6 +2709,9 @@ S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
         }
     }
     if (*(s-1) == ' ') {
+        /* diag_listed_as: charnames alias definitions may not contain
+                           trailing white-space; marked by <-- HERE in %s
+         */
         yyerror_pv(
             Perl_form(aTHX_
             "charnames alias definitions may not contain trailing "
@@ -2724,6 +2734,8 @@ S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
                                               (U8 *) PL_parser->bufend,
                                               0,
                                               0 /* 0 means don't die */ );
+            /* diag_listed_as: Malformed UTF-8 returned by \N{%s}
+                               immediately after '%s' */
             yyerror_pv(
               Perl_form(aTHX_
                 "Malformed UTF-8 returned by %.*s immediately after '%.*s'",
@@ -2741,6 +2753,8 @@ S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
 
         /* The final %.*s makes sure that should the trailing NUL be missing
          * that this print won't run off the end of the string */
+        /* diag_listed_as: Invalid character in \N{...}; marked by <-- HERE
+                           in \N{%s} */
         yyerror_pv(
           Perl_form(aTHX_
             "Invalid character in \\N{...}; marked by <-- HERE in %.*s<-- HERE %.*s",
@@ -2752,6 +2766,9 @@ S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
     }
 
   multi_spaces:
+        /* diag_listed_as: charnames alias definitions may not contain a
+                           sequence of multiple spaces; marked by <-- HERE
+                           in %s */
         yyerror_pv(
           Perl_form(aTHX_
             "charnames alias definitions may not contain a sequence of "
@@ -4613,6 +4630,7 @@ S_tokenize_use(pTHX_ int is_use, char *s) {
     PERL_ARGS_ASSERT_TOKENIZE_USE;
 
     if (PL_expect != XSTATE)
+	/* diag_listed_as: "use" not allowed in expression */
 	yyerror(Perl_form(aTHX_ "\"%s\" not allowed in expression",
 		    is_use ? "use" : "no"));
     PL_expect = XTERM;
@@ -5107,12 +5125,43 @@ Perl_yylex(pTHX)
                     0, cBOOL(UTF), FALSE);
                 *dest = '\0';
                 assert(PL_tokenbuf[1]); /* we have a variable name */
+            }
+            else {
+                *PL_tokenbuf = 0;
+                PL_in_my = 0;
+            }
+
+            s = skipspace(s);
+            /* parse the = for the default ourselves to avoid '+=' etc being accepted here
+             * as the ASSIGNOP, and exclude other tokens that start with =
+             */
+            if (*s == '=' && (!s[1] || strchr("=~>", s[1]) == 0)) {
+                /* save now to report with the same context as we did when
+                 * all ASSIGNOPS were accepted */
+                PL_oldbufptr = s;
+
+                ++s;
+                NEXTVAL_NEXTTOKE.ival = 0;
+                force_next(ASSIGNOP);
+                PL_expect = XTERM;
+            }
+            else if (*s == ',' || *s == ')') {
+                PL_expect = XOPERATOR;
+            }
+            else {
+                /* make sure the context shows the unexpected character and
+                 * hopefully a bit more */
+                if (*s) ++s;
+                while (*s && *s != '$' && *s != '@' && *s != '%' && *s != ')')
+                    s++;
+                PL_bufptr = s; /* for error reporting */
+                yyerror("Illegal operator following parameter in a subroutine signature");
+                PL_in_my = 0;
+            }
+            if (*PL_tokenbuf) {
                 NEXTVAL_NEXTTOKE.ival = sigil;
                 force_next('p'); /* force a signature pending identifier */
             }
-            else
-                PL_in_my = 0;
-            PL_expect = XOPERATOR;
             break;
 
         case ')':
@@ -6211,8 +6260,10 @@ Perl_yylex(pTHX)
 			break;
 		    }
 		    if (strEQs(s, "sub")) {
+                        PL_bufptr = s;
 			d = s + 3;
 			d = skipspace(d);
+                        s = PL_bufptr;
 			if (*d == ':') {
 			    PL_expect = XTERM;
 			    break;
@@ -8623,7 +8674,8 @@ Perl_yylex(pTHX)
 		    COPLINE_SET_FROM_MULTI_END;
 		    if (!s)
 			Perl_croak(aTHX_ "Prototype not terminated");
-		    (void)validate_proto(PL_subname, PL_lex_stuff, ckWARN(WARN_ILLEGALPROTO));
+		    (void)validate_proto(PL_subname, PL_lex_stuff,
+					 ckWARN(WARN_ILLEGALPROTO), 0);
 		    have_proto = TRUE;
 
 		    s = skipspace(s);
@@ -8858,6 +8910,8 @@ S_pending_ident(pTHX)
     if (PL_in_my) {
         if (PL_in_my == KEY_our) {	/* "our" is merely analogous to "my" */
             if (has_colon)
+                /* diag_listed_as: No package name allowed for variable %s
+                                   in "our" */
                 yyerror_pv(Perl_form(aTHX_ "No package name allowed for "
                                   "%se %s in \"our\"",
                                   *PL_tokenbuf=='&' ?"subroutin":"variabl",
@@ -9415,10 +9469,13 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
 
         if ( !tmp_copline )
             tmp_copline = CopLINE(PL_curcop);
-        if ((skip = s < PL_bufend && isSPACE(*s)))
+        if ((skip = s < PL_bufend && isSPACE(*s))) {
             /* Avoid incrementing line numbers or resetting PL_linestart,
                in case we have to back up.  */
+            STRLEN s_off = s - SvPVX(PL_linestr);
             s2 = peekspace(s);
+            s = SvPVX(PL_linestr) + s_off;
+        }
         else
             s2 = s;
 
@@ -9695,18 +9752,14 @@ S_scan_subst(pTHX_ char *start)
 
 	PL_multi_end = 0;
 	pm->op_pmflags |= PMf_EVAL;
-	while (es-- > 0) {
-	    if (es)
-		sv_catpvs(repl, "eval ");
-	    else
-		sv_catpvs(repl, "do ");
-	}
-	sv_catpvs(repl, "{");
+        for (; es > 1; es--) {
+            sv_catpvs(repl, "eval ");
+        }
+        sv_catpvs(repl, "do {");
 	sv_catsv(repl, PL_parser->lex_sub_repl);
 	sv_catpvs(repl, "}");
 	SvREFCNT_dec(PL_parser->lex_sub_repl);
 	PL_parser->lex_sub_repl = repl;
-        es = 1;
     }
 
 

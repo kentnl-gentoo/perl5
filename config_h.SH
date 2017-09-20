@@ -571,6 +571,13 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_strcoll HAS_STRCOLL	/**/
 
+/* USE_STRUCT_COPY:
+ *	This symbol, if defined, indicates that this C compiler knows how
+ *	to copy structures.  If undefined, you'll need to use a block copy
+ *	routine of some sort instead.
+ */
+#$d_strctcpy	USE_STRUCT_COPY	/**/
+
 /* HAS_STRTOD:
  *	This symbol, if defined, indicates that the strtod routine is
  *	available to provide better numeric string conversion than atof().
@@ -2175,13 +2182,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #$d_statblks USE_STAT_BLOCKS 	/**/
 #endif
 
-/* USE_STRUCT_COPY:
- *	This symbol, if defined, indicates that this C compiler knows how
- *	to copy structures.  If undefined, you'll need to use a block copy
- *	routine of some sort instead.
- */
-#$d_strctcpy	USE_STRUCT_COPY	/**/
-
 /* HAS_STRERROR:
  *	This symbol, if defined, indicates that the strerror routine is
  *	available to translate error numbers to strings. See the writeup
@@ -2879,6 +2879,27 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	to do statfs() is supported.
  */
 #$d_fs_data_s HAS_STRUCT_FS_DATA	/**/
+
+/* HAS_FCHMODAT:
+ *	This symbol is defined if the fchmodat() routine is available.
+ */
+/* HAS_LINKAT:
+ *	This symbol is defined if the linkat() routine is available.
+ */
+/* HAS_OPENAT:
+ *	This symbol is defined if the openat() routine is available.
+ */
+/* HAS_RENAMEAT:
+ *	This symbol is defined if the renameat() routine is available.
+ */
+/* HAS_UNLINKAT:
+ *	This symbol is defined if the unlinkat() routine is available.
+ */
+#$d_fchmodat	HAS_FCHMODAT	/**/
+#$d_linkat	HAS_LINKAT	/**/
+#$d_openat	HAS_OPENAT	/**/
+#$d_renameat	HAS_RENAMEAT	/**/
+#$d_unlinkat	HAS_UNLINKAT	/**/
 
 /* HAS_FSEEKO:
  *	This symbol, if defined, indicates that the fseeko routine is
