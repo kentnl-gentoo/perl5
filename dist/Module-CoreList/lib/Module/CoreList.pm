@@ -315,7 +315,8 @@ sub changes_between {
     5.024002 => '2017-07-15',
     5.027002 => '2017-07-20',
     5.027003 => '2017-08-21',
-    5.024003 => '????-??-??',
+    5.027004 => '2017-09-20',
+    5.024003 => '2017-09-22',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -14401,6 +14402,26 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         removed => {
         }
     },
+    5.027004 => {
+        delta_from => 5.027003,
+        changed => {
+            'B::Op_private'         => '5.027004',
+            'Config'                => '5.027004',
+            'File::Glob'            => '1.30',
+            'I18N::Langinfo'        => '0.14',
+            'Module::CoreList'      => '5.20170920',
+            'Module::CoreList::TieHashDelta'=> '5.20170920',
+            'Module::CoreList::Utils'=> '5.20170920',
+            'Term::ReadLine'        => '1.17',
+            'VMS::Stdio'            => '2.42',
+            'XS::APItest'           => '0.92',
+            'attributes'            => '0.31',
+            'sort'                  => '2.03',
+            'threads'               => '2.18',
+        },
+        removed => {
+        }
+    },
     5.024003 => {
         delta_from => 5.024002,
         changed => {
@@ -15219,6 +15240,13 @@ for my $version (sort { $a <=> $b } keys %delta) {
         delta_from => 5.027002,
         changed => {
             'B::Debug'              => '1',
+        },
+        removed => {
+        }
+    },
+    5.027004 => {
+        delta_from => 5.027003,
+        changed => {
         },
         removed => {
         }
