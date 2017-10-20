@@ -243,6 +243,7 @@ cpan/Config-Perl-V/t/28_plv52201w.t		Config::Perl::V
 cpan/Config-Perl-V/t/29_plv5235w.t		Config::Perl::V
 cpan/Config-Perl-V/t/30_plv5240.t		Config::Perl::V
 cpan/Config-Perl-V/t/31_plv52511.t		Config::Perl::V
+cpan/Config-Perl-V/t/32_plv5261rc1.t
 cpan/Config-Perl-V/V.pm				Config::Perl::V
 cpan/CPAN/lib/App/Cpan.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN.pm			Interface to Comprehensive Perl Archive Network
@@ -1721,6 +1722,7 @@ cpan/Math-BigInt/t/bdstr-mbf.t		Test Math::BigInt
 cpan/Math-BigInt/t/bdstr-mbi.t		Test Math::BigInt
 cpan/Math-BigInt/t/bestr-mbf.t		Test Math::BigInt
 cpan/Math-BigInt/t/bestr-mbi.t		Test Math::BigInt
+cpan/Math-BigInt/t/bfib-mbi.t
 cpan/Math-BigInt/t/big_pi_e.t		test bpi() and bexp()
 cpan/Math-BigInt/t/bigfltpm.inc		Shared tests for bigfltpm.t and sub_mbf.t
 cpan/Math-BigInt/t/bigfltpm.t		See if BigFloat.pm works
@@ -1730,6 +1732,7 @@ cpan/Math-BigInt/t/bigintpm.t		See if BigInt.pm works
 cpan/Math-BigInt/t/bigints.t		See if BigInt.pm works
 cpan/Math-BigInt/t/biglog.t		Test the log function
 cpan/Math-BigInt/t/bigroot.t		Test the broot function
+cpan/Math-BigInt/t/blucas-mbi.t
 cpan/Math-BigInt/t/bnstr-mbf.t		Test Math::BigInt
 cpan/Math-BigInt/t/bnstr-mbi.t		Test Math::BigInt
 cpan/Math-BigInt/t/bsstr-mbf.t		Test Math::BigInt
@@ -2638,15 +2641,27 @@ cpan/Test-Simple/lib/Test2/Event/Bail.pm
 cpan/Test-Simple/lib/Test2/Event/Diag.pm
 cpan/Test-Simple/lib/Test2/Event/Encoding.pm
 cpan/Test-Simple/lib/Test2/Event/Exception.pm
+cpan/Test-Simple/lib/Test2/Event/Fail.pm
 cpan/Test-Simple/lib/Test2/Event/Generic.pm
-cpan/Test-Simple/lib/Test2/Event/Info.pm
 cpan/Test-Simple/lib/Test2/Event/Note.pm
 cpan/Test-Simple/lib/Test2/Event/Ok.pm
+cpan/Test-Simple/lib/Test2/Event/Pass.pm
 cpan/Test-Simple/lib/Test2/Event/Plan.pm
 cpan/Test-Simple/lib/Test2/Event/Skip.pm
 cpan/Test-Simple/lib/Test2/Event/Subtest.pm
 cpan/Test-Simple/lib/Test2/Event/TAP/Version.pm
 cpan/Test-Simple/lib/Test2/Event/Waiting.pm
+cpan/Test-Simple/lib/Test2/EventFacet.pm
+cpan/Test-Simple/lib/Test2/EventFacet/About.pm
+cpan/Test-Simple/lib/Test2/EventFacet/Amnesty.pm
+cpan/Test-Simple/lib/Test2/EventFacet/Assert.pm
+cpan/Test-Simple/lib/Test2/EventFacet/Control.pm
+cpan/Test-Simple/lib/Test2/EventFacet/Error.pm
+cpan/Test-Simple/lib/Test2/EventFacet/Info.pm
+cpan/Test-Simple/lib/Test2/EventFacet/Meta.pm
+cpan/Test-Simple/lib/Test2/EventFacet/Parent.pm
+cpan/Test-Simple/lib/Test2/EventFacet/Plan.pm
+cpan/Test-Simple/lib/Test2/EventFacet/Trace.pm
 cpan/Test-Simple/lib/Test2/Formatter.pm
 cpan/Test-Simple/lib/Test2/Formatter/TAP.pm
 cpan/Test-Simple/lib/Test2/Hub.pm
@@ -2660,8 +2675,10 @@ cpan/Test-Simple/lib/Test2/Tools/Tiny.pm
 cpan/Test-Simple/lib/Test2/Transition.pod
 cpan/Test-Simple/lib/Test2/Util.pm
 cpan/Test-Simple/lib/Test2/Util/ExternalMeta.pm
+cpan/Test-Simple/lib/Test2/Util/Facets2Legacy.pm
 cpan/Test-Simple/lib/Test2/Util/HashBase.pm
 cpan/Test-Simple/lib/Test2/Util/Trace.pm
+cpan/Test-Simple/t/HashBase.t
 cpan/Test-Simple/t/Legacy/00test_harness_check.t
 cpan/Test-Simple/t/Legacy/01-basic.t
 cpan/Test-Simple/t/Legacy/478-cmp_ok_hash.t
@@ -2729,6 +2746,7 @@ cpan/Test-Simple/t/Legacy/is_deeply_with_threads.t
 cpan/Test-Simple/t/Legacy/missing.t
 cpan/Test-Simple/t/Legacy/More.t
 cpan/Test-Simple/t/Legacy/new_ok.t
+cpan/Test-Simple/t/Legacy/no_log_results.t
 cpan/Test-Simple/t/Legacy/no_plan.t
 cpan/Test-Simple/t/Legacy/no_tests.t
 cpan/Test-Simple/t/Legacy/note.t
@@ -2744,6 +2762,7 @@ cpan/Test-Simple/t/Legacy/Regression/637.t
 cpan/Test-Simple/t/Legacy/Regression/683_thread_todo.t
 cpan/Test-Simple/t/Legacy/Regression/6_cmp_ok.t
 cpan/Test-Simple/t/Legacy/Regression/736_use_ok.t
+cpan/Test-Simple/t/Legacy/Regression/789-read-only.t
 cpan/Test-Simple/t/Legacy/require_ok.t
 cpan/Test-Simple/t/Legacy/run_test.t
 cpan/Test-Simple/t/Legacy/simple.t
@@ -2789,6 +2808,7 @@ cpan/Test-Simple/t/Legacy/utf8.t
 cpan/Test-Simple/t/Legacy/versions.t
 cpan/Test-Simple/t/Legacy_And_Test2/builder_loaded_late.t
 cpan/Test-Simple/t/Legacy_And_Test2/hidden_warnings.t
+cpan/Test-Simple/t/Legacy_And_Test2/preload_diag_note.t
 cpan/Test-Simple/t/lib/Dev/Null.pm
 cpan/Test-Simple/t/lib/Dummy.pm
 cpan/Test-Simple/t/lib/MyOverload.pm
@@ -2822,7 +2842,13 @@ cpan/Test-Simple/t/regression/684-nested_todo_diag.t
 cpan/Test-Simple/t/regression/694_note_diag_return_values.t
 cpan/Test-Simple/t/regression/696-intercept_skip_all.t
 cpan/Test-Simple/t/regression/721-nested-streamed-subtest.t
+cpan/Test-Simple/t/regression/757-reset_in_subtest.t
+cpan/Test-Simple/t/regression/buffered_subtest_plan_buffered.t
+cpan/Test-Simple/t/regression/builder_does_not_init.t
+cpan/Test-Simple/t/regression/errors_facet.t
+cpan/Test-Simple/t/regression/inherit_trace.t
 cpan/Test-Simple/t/regression/no_name_in_subtest.t
+cpan/Test-Simple/t/regression/todo_and_facets.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_done_testing.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_fork.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_no_plan.t
@@ -2833,15 +2859,19 @@ cpan/Test-Simple/t/Test2/acceptance/try_it_todo.t
 cpan/Test-Simple/t/Test2/behavior/err_var.t
 cpan/Test-Simple/t/Test2/behavior/Formatter.t
 cpan/Test-Simple/t/Test2/behavior/init_croak.t
+cpan/Test-Simple/t/Test2/behavior/intercept.t
+cpan/Test-Simple/t/Test2/behavior/ipc_wait_timeout.t
 cpan/Test-Simple/t/Test2/behavior/nested_context_exception.t
 cpan/Test-Simple/t/Test2/behavior/no_load_api.t
 cpan/Test-Simple/t/Test2/behavior/run_subtest_inherit.t
 cpan/Test-Simple/t/Test2/behavior/special_names.t
+cpan/Test-Simple/t/Test2/behavior/subtest_bailout.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_buffer_formatter.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_events.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_plan.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_todo.t
 cpan/Test-Simple/t/Test2/behavior/Taint.t
+cpan/Test-Simple/t/Test2/behavior/trace_signature.t
 cpan/Test-Simple/t/Test2/legacy/TAP.t
 cpan/Test-Simple/t/Test2/modules/API.t
 cpan/Test-Simple/t/Test2/modules/API/Breakage.t
@@ -2851,15 +2881,29 @@ cpan/Test-Simple/t/Test2/modules/API/Stack.t
 cpan/Test-Simple/t/Test2/modules/Event.t
 cpan/Test-Simple/t/Test2/modules/Event/Bail.t
 cpan/Test-Simple/t/Test2/modules/Event/Diag.t
+cpan/Test-Simple/t/Test2/modules/Event/Encoding.t
 cpan/Test-Simple/t/Test2/modules/Event/Exception.t
+cpan/Test-Simple/t/Test2/modules/Event/Fail.t
 cpan/Test-Simple/t/Test2/modules/Event/Generic.t
-cpan/Test-Simple/t/Test2/modules/Event/Info.t
 cpan/Test-Simple/t/Test2/modules/Event/Note.t
 cpan/Test-Simple/t/Test2/modules/Event/Ok.t
+cpan/Test-Simple/t/Test2/modules/Event/Pass.t
 cpan/Test-Simple/t/Test2/modules/Event/Plan.t
 cpan/Test-Simple/t/Test2/modules/Event/Skip.t
 cpan/Test-Simple/t/Test2/modules/Event/Subtest.t
+cpan/Test-Simple/t/Test2/modules/Event/TAP/Version.t
 cpan/Test-Simple/t/Test2/modules/Event/Waiting.t
+cpan/Test-Simple/t/Test2/modules/EventFacet.t
+cpan/Test-Simple/t/Test2/modules/EventFacet/About.t
+cpan/Test-Simple/t/Test2/modules/EventFacet/Amnesty.t
+cpan/Test-Simple/t/Test2/modules/EventFacet/Assert.t
+cpan/Test-Simple/t/Test2/modules/EventFacet/Control.t
+cpan/Test-Simple/t/Test2/modules/EventFacet/Error.t
+cpan/Test-Simple/t/Test2/modules/EventFacet/Info.t
+cpan/Test-Simple/t/Test2/modules/EventFacet/Meta.t
+cpan/Test-Simple/t/Test2/modules/EventFacet/Parent.t
+cpan/Test-Simple/t/Test2/modules/EventFacet/Plan.t
+cpan/Test-Simple/t/Test2/modules/EventFacet/Trace.t
 cpan/Test-Simple/t/Test2/modules/Formatter/TAP.t
 cpan/Test-Simple/t/Test2/modules/Hub.t
 cpan/Test-Simple/t/Test2/modules/Hub/Interceptor.t
@@ -2871,9 +2915,10 @@ cpan/Test-Simple/t/Test2/modules/IPC/Driver/Files.t
 cpan/Test-Simple/t/Test2/modules/Tools/Tiny.t
 cpan/Test-Simple/t/Test2/modules/Util.t
 cpan/Test-Simple/t/Test2/modules/Util/ExternalMeta.t
-cpan/Test-Simple/t/Test2/modules/Util/HashBase.t
+cpan/Test-Simple/t/Test2/modules/Util/Facets2Legacy.t
 cpan/Test-Simple/t/Test2/modules/Util/Trace.t
 cpan/Test-Simple/t/Test2/regression/693_ipc_ordering.t
+cpan/Test-Simple/t/Test2/regression/746-forking-subtest.t
 cpan/Test-Simple/t/Test2/regression/gh_16.t
 cpan/Test-Simple/t/Test2/regression/ipc_files_abort_exit.t
 cpan/Text-Balanced/lib/Text/Balanced.pm	Text::Balanced
@@ -4166,7 +4211,6 @@ ext/re/t/regop.t		test RE optimizations by scraping debug output
 ext/re/t/strict.t		see if re 'strict' subpragma works
 ext/SDBM_File/biblio	SDBM kit
 ext/SDBM_File/CHANGES	SDBM kit
-ext/SDBM_File/COMPARE	SDBM kit
 ext/SDBM_File/dba.c	SDBM kit
 ext/SDBM_File/dbd.c	SDBM kit
 ext/SDBM_File/dbe.1	SDBM kit
@@ -4174,9 +4218,7 @@ ext/SDBM_File/dbe.c	SDBM kit
 ext/SDBM_File/dbu.c	SDBM kit
 ext/SDBM_File/grind	SDBM kit
 ext/SDBM_File/hash.c	SDBM kit
-ext/SDBM_File/linux.patches	SDBM kit
 ext/SDBM_File/Makefile.PL	SDBM extension makefile writer
-ext/SDBM_File/makefile.sdbm	SDBM kit
 ext/SDBM_File/pair.c	SDBM kit
 ext/SDBM_File/pair.h	SDBM kit
 ext/SDBM_File/README	SDBM kit
@@ -4605,6 +4647,7 @@ lib/perl5db/t/lvalue-bug	Tests for the Perl debugger
 lib/perl5db/t/MyModule.pm	Tests for the Perl debugger
 lib/perl5db/t/proxy-constants	Tests for the Perl debugger
 lib/perl5db/t/rt-104168		Tests for the Perl debugger
+lib/perl5db/t/rt-120174		Tests for the Perl debugger
 lib/perl5db/t/rt-121509-restart-after-chdir		Tests for the Perl debugger
 lib/perl5db/t/rt-61222		Tests for the Perl debugger
 lib/perl5db/t/rt-66110		Tests for the Perl debugger
@@ -4965,11 +5008,14 @@ pod/perl5224delta.pod		Perl changes in version 5.22.4
 pod/perl5240delta.pod		Perl changes in version 5.24.0
 pod/perl5241delta.pod		Perl changes in version 5.24.1
 pod/perl5242delta.pod		Perl changes in version 5.24.2
+pod/perl5243delta.pod		Perl changes in version 5.24.3
 pod/perl5260delta.pod		Perl changes in version 5.26.0
+pod/perl5261delta.pod		Perl changes in version 5.26.1
 pod/perl5270delta.pod		Perl changes in version 5.27.0
 pod/perl5271delta.pod		Perl changes in version 5.27.1
 pod/perl5272delta.pod		Perl changes in version 5.27.2
 pod/perl5273delta.pod		Perl changes in version 5.27.3
+pod/perl5274delta.pod		Perl changes in version 5.27.4
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5128,6 +5174,7 @@ Porting/makerel			Release making utility
 Porting/manicheck		Check against MANIFEST
 Porting/manifest_lib.pl		Library for checking and sorting the MANIFEST
 Porting/manisort		Sort the MANIFEST
+Porting/mksample		Generate Porting/config_H and Porting/config.sh
 Porting/new-perldelta.pl	Generate a new perldelta
 Porting/newtests-perldelta.pl	Generate Perldelta stub for newly added tests
 Porting/perldelta_template.pod	Template for creating new perldelta.pod files

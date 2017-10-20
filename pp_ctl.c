@@ -715,6 +715,7 @@ PP(pp_formline)
 		SvSETMAGIC(sv);
 		break;
 	    }
+            /* FALLTHROUGH */
 
 	case FF_LINESNGL: /* process ^*  */
 	    chopspace = 0;
@@ -3276,7 +3277,7 @@ Perl_find_runcv_where(pTHX_ U8 cond, IV arg, U32 *db_seqp)
 		    return cv;
 		case FIND_RUNCV_level_eq:
 		    if (level++ != arg) continue;
-		    /* GERONIMO! */
+                    /* FALLTHROUGH */
 		default:
 		    return cv;
 		}
@@ -3372,7 +3373,11 @@ S_doeval_compile(pTHX_ U8 gimme, CV* outside, U32 seq, HV *hh)
 	SAVEGENERICSV(PL_curstash);
 	PL_curstash = (HV *)CopSTASH(PL_curcop);
 	if (SvTYPE(PL_curstash) != SVt_PVHV) PL_curstash = NULL;
-	else SvREFCNT_inc_simple_void(PL_curstash);
+	else {
+	    SvREFCNT_inc_simple_void(PL_curstash);
+	    save_item(PL_curstname);
+	    sv_sethek(PL_curstname, HvNAME_HEK(PL_curstash));
+	}
     }
     /* XXX:ajgo do we really need to alloc an AV for begin/checkunit */
     SAVESPTR(PL_beginav);
@@ -3752,6 +3757,7 @@ S_require_file(pTHX_ SV *sv)
     I32 old_savestack_ix;
     const bool op_is_require = PL_op->op_type == OP_REQUIRE;
     const char *const op_name = op_is_require ? "require" : "do";
+    SV ** svp_cached = NULL;
 
     assert(op_is_require || PL_op->op_type == OP_DOFILE);
 
@@ -3760,6 +3766,15 @@ S_require_file(pTHX_ SV *sv)
     name = SvPV_nomg_const(sv, len);
     if (!(name && len > 0 && *name))
         DIE(aTHX_ "Missing or undefined argument to %s", op_name);
+
+#ifndef VMS
+	/* try to return earlier (save the SAFE_PATHNAME check) if INC already got the name */
+	if (op_is_require) {
+		/* can optimize to only perform one single lookup */
+		svp_cached = hv_fetch(GvHVn(PL_incgv), (char*) name, len, 0);
+		if ( svp_cached && *svp_cached != &PL_sv_undef ) RETPUSHYES;
+	}
+#endif
 
     if (!IS_SAFE_PATHNAME(name, len, op_name)) {
         if (!op_is_require) {
@@ -3799,8 +3814,8 @@ S_require_file(pTHX_ SV *sv)
 	unixlen = len;
     }
     if (op_is_require) {
-	SV * const * const svp = hv_fetch(GvHVn(PL_incgv),
-					  unixname, unixlen, 0);
+	/* reuse the previous hv_fetch result if possible */
+	SV * const * const svp = svp_cached ? svp_cached : hv_fetch(GvHVn(PL_incgv), unixname, unixlen, 0);
 	if ( svp ) {
 	    if (*svp != &PL_sv_undef)
 		RETPUSHYES;
@@ -5363,7 +5378,8 @@ S_doparseform(pTHX_ SV *sv)
 	    if (s < send) {
 	        skipspaces = 0;
                 continue;
-            } /* else FALL THROUGH */
+            }
+            /* FALLTHROUGH */
 	case '\n':
 	    arg = s - base;
 	    skipspaces++;

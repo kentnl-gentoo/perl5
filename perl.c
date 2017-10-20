@@ -261,6 +261,22 @@ perl_construct(pTHXx)
 
     init_constants();
 
+    SvREADONLY_on(&PL_sv_placeholder);
+    SvREFCNT(&PL_sv_placeholder) = SvREFCNT_IMMORTAL;
+
+    PL_sighandlerp = (Sighandler_t) Perl_sighandler;
+#ifdef PERL_USES_PL_PIDSTATUS
+    PL_pidstatus = newHV();
+#endif
+
+    PL_rs = newSVpvs("\n");
+
+    init_stacks();
+
+/* The PERL_INTERNAL_RAND_SEED set-up must be after init_stacks because it calls
+ * things that may put SVs on the stack.
+ */
+
 #ifdef NO_PERL_INTERNAL_RAND_SEED
     Perl_drand48_init_r(&PL_internal_random_state, seed());
 #else
@@ -276,18 +292,6 @@ perl_construct(pTHXx)
         Perl_drand48_init_r(&PL_internal_random_state, (U32)seed);
     }
 #endif
-
-    SvREADONLY_on(&PL_sv_placeholder);
-    SvREFCNT(&PL_sv_placeholder) = SvREFCNT_IMMORTAL;
-
-    PL_sighandlerp = (Sighandler_t) Perl_sighandler;
-#ifdef PERL_USES_PL_PIDSTATUS
-    PL_pidstatus = newHV();
-#endif
-
-    PL_rs = newSVpvs("\n");
-
-    init_stacks();
 
     init_ids();
 
@@ -3819,7 +3823,6 @@ S_init_main_stash(pTHX)
 #endif
     sv_grow(ERRSV, 240);	/* Preallocate - for immediate signals. */
     CLEAR_ERRSV();
-    SET_CURSTASH(PL_defstash);
     CopSTASH_set(&PL_compiling, PL_defstash);
     PL_debstash = GvHV(gv_fetchpvs("DB::", GV_ADDMULTI, SVt_PVHV));
     PL_globalstash = GvHV(gv_fetchpvs("CORE::GLOBAL::", GV_ADDMULTI,
@@ -3918,12 +3921,6 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
 		close(tmpfd);
 	    } else
 		Perl_croak(aTHX_ err);
-#else
-#  ifdef HAS_MKTEMP
-	    scriptname = mktemp(tmpname);
-	    if (!scriptname)
-		Perl_croak(aTHX_ err);
-#  endif
 #endif
 	}
 #endif

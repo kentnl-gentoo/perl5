@@ -373,6 +373,9 @@ Perl_gv_init_pvn(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, U32 flag
     const U32 proto_utf8  = proto ? SvUTF8(gv) : 0;
     SV *const has_constant = doproto && SvROK(gv) ? SvRV(gv) : NULL;
     const U32 exported_constant = has_constant ? SvPCS_IMPORTED(gv) : 0;
+    const bool really_sub =
+	has_constant && SvTYPE(has_constant) == SVt_PVCV;
+    COP * const old = PL_curcop;
 
     PERL_ARGS_ASSERT_GV_INIT_PVN;
     assert (!(proto && has_constant));
@@ -411,14 +414,19 @@ Perl_gv_init_pvn(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, U32 flag
     SvIOK_off(gv);
     isGV_with_GP_on(gv);
 
+    if (really_sub && !CvISXSUB(has_constant) && CvSTART(has_constant)
+     && (  CvSTART(has_constant)->op_type == OP_NEXTSTATE
+	|| CvSTART(has_constant)->op_type == OP_DBSTATE))
+	PL_curcop = (COP *)CvSTART(has_constant);
     GvGP_set(gv, Perl_newGP(aTHX_ gv));
+    PL_curcop = old;
     GvSTASH(gv) = stash;
     if (stash)
 	Perl_sv_add_backref(aTHX_ MUTABLE_SV(stash), MUTABLE_SV(gv));
     gv_name_set(gv, name, len, GV_ADD | ( flags & SVf_UTF8 ? SVf_UTF8 : 0 ));
     if (flags & GV_ADDMULTI || doproto)	/* doproto means it */
 	GvMULTI_on(gv);			/* _was_ mentioned */
-    if (has_constant && SvTYPE(has_constant) == SVt_PVCV) {
+    if (really_sub) {
 	/* Not actually a constant.  Just a regular sub.  */
 	CV * const cv = (CV *)has_constant;
 	GvCV_set(gv,cv);
@@ -639,7 +647,8 @@ Perl_gv_fetchmeth_sv(pTHX_ HV *stash, SV *namesv, I32 level, U32 flags)
     STRLEN namelen;
     PERL_ARGS_ASSERT_GV_FETCHMETH_SV;
     if (LIKELY(SvPOK_nog(namesv))) /* common case */
-        return gv_fetchmeth_internal(stash, namesv, NULL, 0, level, flags);
+        return gv_fetchmeth_internal(stash, namesv, NULL, 0, level,
+                                     flags | SvUTF8(namesv));
     namepv = SvPV(namesv, namelen);
     if (SvUTF8(namesv)) flags |= SVf_UTF8;
     return gv_fetchmeth_pvn(stash, namepv, namelen, level, flags);
@@ -1262,7 +1271,7 @@ Perl_gv_autoload_pvn(pTHX_ HV *stash, const char *name, STRLEN len, U32 flags)
 	    sv_setsv_nomg((SV *)cv, tmpsv);
 	    SvTEMP_off(tmpsv);
 	    SvREFCNT_dec_NN(tmpsv);
-	    SvLEN(cv) = SvCUR(cv) + 1;
+	    SvLEN_set(cv, SvCUR(cv) + 1);
 	    SvCUR(cv) = ulen;
 	}
 	else {
@@ -1341,11 +1350,16 @@ S_require_tie_mod(pTHX_ GV *gv, const char varname, const char * name,
       PUSHSTACKi(PERLSI_MAGIC);
       ENTER;
 
-#define HV_FETCH_TIE_FUNC (GV **)hv_fetchs(stash, "_tie_it", 0)
+#define GET_HV_FETCH_TIE_FUNC				 \
+    (  (gvp = (GV **)hv_fetchs(stash, "_tie_it", 0))	  \
+    && *gvp						   \
+    && (  (isGV(*gvp) && GvCV(*gvp))			    \
+       || (SvROK(*gvp) && SvTYPE(SvRV(*gvp)) == SVt_PVCV)  ) \
+    )
 
       /* Load the module if it is not loaded.  */
       if (!(stash = gv_stashpvn(name, len, 0))
-       || !(gvp = HV_FETCH_TIE_FUNC) || !*gvp || !GvCV(*gvp))
+       || ! GET_HV_FETCH_TIE_FUNC)
       {
 	SV * const module = newSVpvn(name, len);
 	const char type = varname == '[' ? '$' : '%';
@@ -1357,12 +1371,12 @@ S_require_tie_mod(pTHX_ GV *gv, const char varname, const char * name,
 	if (!stash)
 	    Perl_croak(aTHX_ "panic: Can't use %c%c because %s is not available",
 		    type, varname, name);
-	else if (!(gvp = HV_FETCH_TIE_FUNC) || !*gvp || !GvCV(*gvp))
+	else if (! GET_HV_FETCH_TIE_FUNC)
 	    Perl_croak(aTHX_ "panic: Can't use %c%c because %s does not define _tie_it",
 		    type, varname, name);
       }
       /* Now call the tie function.  It should be in *gvp.  */
-      assert(gvp); assert(*gvp); assert(GvCV(*gvp));
+      assert(gvp); assert(*gvp);
       PUSHMARK(SP);
       XPUSHs((SV *)gv);
       PUTBACK;
@@ -2799,8 +2813,7 @@ Perl_Gv_AMupdate(pTHX_ HV *stash, bool destructing)
 	gv = Perl_gv_fetchmeth_pvn(aTHX_ stash, cooky, l, -1, 0);
         cv = 0;
         if (gv && (cv = GvCV(gv)) && CvHASGV(cv)) {
-            const HEK * const gvhek =
-                CvNAMED(cv) ? CvNAME_HEK(cv) : GvNAME_HEK(CvGV(cv));
+            const HEK * const gvhek = CvGvNAME_HEK(cv);
             const HEK * const stashek =
                 HvNAME_HEK(CvNAMED(cv) ? CvSTASH(cv) : GvSTASH(CvGV(cv)));
             if (HEK_LEN(gvhek) == 3 && strEQ(HEK_KEY(gvhek), "nil")
@@ -3524,7 +3537,7 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
             res = &PL_sv_undef;
             SP = PL_stack_base + oldmark;
             break;
-        case G_ARRAY: {
+        case G_ARRAY:
             if (flags & AMGf_want_list) {
                 res = sv_2mortal((SV *)newAV());
                 av_extend((AV *)res, nret);
@@ -3533,7 +3546,6 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
                 break;
             }
             /* FALLTHROUGH */
-        }
         default:
             res = POPs;
             break;

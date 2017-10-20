@@ -31,14 +31,6 @@
 #include "reentr.h"
 #include "regcharclass.h"
 
-/* XXX I can't imagine anyone who doesn't have this actually _needs_
-   it, since pid_t is an integral type.
-   --AD  2/20/1998
-*/
-#ifdef NEED_GETPID_PROTO
-extern Pid_t getpid (void);
-#endif
-
 static const STRLEN small_mu_len = sizeof(GREEK_SMALL_LETTER_MU_UTF8) - 1;
 static const STRLEN capital_iota_len = sizeof(GREEK_CAPITAL_LETTER_IOTA_UTF8) - 1;
 
@@ -5045,7 +5037,7 @@ PP(pp_hslice)
                 DIE(aTHX_ PL_no_helem_sv, SVfARG(keysv));
             }
             if (localizing) {
-		if (HvNAME_get(hv) && isGV(*svp))
+		if (HvNAME_get(hv) && isGV_or_RVCV(*svp))
 		    save_gp(MUTABLE_GV(*svp), !(PL_op->op_flags & OPf_SPECIAL));
 		else if (preeminent)
 		    save_helem_flags(hv, keysv, svp,
@@ -5248,6 +5240,9 @@ PP(pp_splice)
 				    GIMME_V | TIED_METHOD_ARGUMENTS_ON_STACK,
 				    sp - mark);
     }
+
+    if (SvREADONLY(ary))
+        Perl_croak_no_modify();
 
     SP++;
 

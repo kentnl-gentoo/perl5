@@ -330,6 +330,17 @@ Perl_save_gp(pTHX_ GV *gv, I32 empty)
 {
     PERL_ARGS_ASSERT_SAVE_GP;
 
+    /* XXX For now, we just upgrade any coderef in the stash to a full GV
+           during localisation.  Maybe at some point we could make localis-
+           ation work without needing the upgrade.  (In which case our
+           callers should probably call a different function, not save_gp.)
+     */
+    if (!isGV(gv)) {
+        assert(isGV_or_RVCV(gv));
+        (void)CvGV(SvRV((SV *)gv)); /* CvGV does the upgrade */
+        assert(isGV(gv));
+    }
+
     save_pushptrptr(SvREFCNT_inc(gv), GvGP(gv), SAVEt_GP);
 
     if (empty) {
@@ -1194,10 +1205,7 @@ Perl_leave_scope(pTHX_ I32 base)
                         break;
                     case SVt_PVCV:
                     {
-                        HEK *hek =
-			      CvNAMED(sv)
-				? CvNAME_HEK((CV *)sv)
-				: GvNAME_HEK(CvGV(sv));
+                        HEK *hek = CvGvNAME_HEK(sv);
                         assert(hek);
                         (void)share_hek_hek(hek);
                         cv_undef((CV *)sv);
@@ -1223,9 +1231,7 @@ Perl_leave_scope(pTHX_ I32 base)
                     case SVt_PVHV:	*svp = MUTABLE_SV(newHV());	break;
                     case SVt_PVCV:
                     {
-                        HEK * const hek = CvNAMED(sv)
-                                             ? CvNAME_HEK((CV *)sv)
-                                             : GvNAME_HEK(CvGV(sv));
+                        HEK * const hek = CvGvNAME_HEK(sv);
 
                         /* Create a stub */
                         *svp = newSV_type(SVt_PVCV);

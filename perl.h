@@ -403,12 +403,12 @@
  * clang only pretends to be GCC 4.2, but still supports push/pop.
  *
  * Note on usage: on non-gcc (or lookalike, like clang) compilers
- * one cannot use these at file (global) level without warnings
- * since they are defined as empty, which leads into the terminating
+ * one cannot use these with a semicolon at file (global) level without
+ * warnings since they are defined as empty, which leads into the terminating
  * semicolon being left alone on a line:
  * ;
  * which makes compilers mildly cranky.  Therefore at file level one
- * should use the GCC_DIAG_IGNORE and GCC_DIAG_RESTORE_FILE *without*
+ * should use the GCC_DIAG_IGNORE and GCC_DIAG_RESTORE macros *without*
  * the semicolons.
  *
  * (A dead-on-arrival solution would be to try to define the macros as
@@ -3721,7 +3721,7 @@ EXTERN_C int perl_tsa_mutex_unlock(perl_mutex* mutex)
 /* We need this wrapper even in C11 because 'case X: static_assert(...);' is an
    error (static_assert is a declaration, and only statements can have labels).
 */
-#define STATIC_ASSERT_STMT(COND)      do { STATIC_ASSERT_DECL(COND); } while (0)
+#define STATIC_ASSERT_STMT(COND)      STMT_START { STATIC_ASSERT_DECL(COND); } STMT_END
 
 #ifndef __has_builtin
 #  define __has_builtin(x) 0 /* not a clang style compiler */
@@ -3755,6 +3755,9 @@ EXTERN_C int perl_tsa_mutex_unlock(perl_mutex* mutex)
 
 #if defined(__sun)      /* ASSUME() generates warnings on Solaris */
 #  define NOT_REACHED
+#elif defined(DEBUGGING) && (__has_builtin(__builtin_unreachable) \
+     || (__GNUC__ == 4 && __GNUC_MINOR__ >= 5 || __GNUC__ > 4)) /* 4.5 -> */
+#  define NOT_REACHED STMT_START { ASSUME(0); __builtin_unreachable(); } STMT_END
 #else
 #  define NOT_REACHED ASSUME(0)
 #endif
@@ -6890,6 +6893,26 @@ extern void moncontrol(int);
 #  ifdef LONGDOUBLE_VAX_ENDIAN
 #    define NV_VAX_ENDIAN
 #  endif
+#endif
+
+/* We have somehow managed not to define the denormal/subnormal
+ * detection.
+ *
+ * This may happen if the compiler doesn't expose the C99 math like
+ * the fpclassify() without some special switches.  Perl tries to
+ * stay C89, so for example -std=c99 is not an option.
+ *
+ * The Perl_isinf() and Perl_isnan() should have been defined even if
+ * the C99 isinf() and isnan() are unavailable, and the NV_MIN becomes
+ * from the C89 DBL_MIN or moral equivalent. */
+#if !defined(Perl_fp_class_denorm) && defined(Perl_isinf) && defined(Perl_isnan) && defined(NV_MIN)
+#  define Perl_fp_class_denorm(x) ((x) != 0.0 && !Perl_isinf(x) && !Perl_isnan(x) && PERL_ABS(x) < NV_MIN)
+#endif
+
+/* This is not a great fallback: subnormals tests will fail,
+ * but at least Perl will link and 99.999% of tests will work. */
+#if !defined(Perl_fp_class_denorm)
+#  define Perl_fp_class_denorm(x) FALSE
 #endif
 
 #ifdef DOUBLE_IS_IEEE_FORMAT
