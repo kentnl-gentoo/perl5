@@ -952,10 +952,10 @@ Perl__is_utf8_char_helper(const U8 * const s, const U8 * e, const U32 flags)
 }
 
 char *
-Perl__byte_dump_string(pTHX_ const U8 * s, const STRLEN len, const bool format)
+Perl__byte_dump_string(pTHX_ const U8 * const start, const STRLEN len, const bool format)
 {
     /* Returns a mortalized C string that is a displayable copy of the 'len'
-     * bytes starting at 's'.  'format' gives how to display each byte.
+     * bytes starting at 'start'.  'format' gives how to display each byte.
      * Currently, there are only two formats, so it is currently a bool:
      *      0   \xab
      *      1    ab         (that is a space between two hex digit bytes)
@@ -963,7 +963,8 @@ Perl__byte_dump_string(pTHX_ const U8 * s, const STRLEN len, const bool format)
 
     const STRLEN output_len = 4 * len + 1;  /* 4 bytes per each input, plus a
                                                trailing NUL */
-    const U8 * const e = s + len;
+    const U8 * s = start;
+    const U8 * const e = start + len;
     char * output;
     char * d;
 
@@ -973,12 +974,14 @@ Perl__byte_dump_string(pTHX_ const U8 * s, const STRLEN len, const bool format)
     SAVEFREEPV(output);
 
     d = output;
-    for (; s < e; s++) {
+    for (s = start; s < e; s++) {
         const unsigned high_nibble = (*s & 0xF0) >> 4;
         const unsigned low_nibble =  (*s & 0x0F);
 
         if (format) {
-            *d++ = ' ';
+            if (s > start) {
+                *d++ = ' ';
+            }
         }
         else {
             *d++ = '\\';
@@ -1995,7 +1998,6 @@ Perl_utf8_to_uvuni_buf(pTHX_ const U8 *s, const U8 *send, STRLEN *retlen)
 
     assert(send > s);
 
-    /* Call the low level routine, asking for checks */
     return NATIVE_TO_UNI(utf8_to_uvchr_buf(s, send, retlen));
 }
 
@@ -2003,8 +2005,8 @@ Perl_utf8_to_uvuni_buf(pTHX_ const U8 *s, const U8 *send, STRLEN *retlen)
 =for apidoc utf8_length
 
 Return the length of the UTF-8 char encoded string C<s> in characters.
-Stops at C<e> (inclusive).  If C<e E<lt> s> or if the scan would end
-up past C<e>, croaks.
+Stops at C<e> (i.e. the C<*e> byte does not form part of the character).
+If C<e E<lt> s> or if the scan would end up past C<e>, it croaks.
 
 =cut
 */
@@ -2351,16 +2353,30 @@ Perl_bytes_to_utf8(pTHX_ const U8 *s, STRLEN *lenp)
         append_utf8_from_native_byte(*s, &d);
         s++;
     }
+
     *d = '\0';
     *lenp = d-dst;
+
+    /* Trim unused space */
+    Renew(dst, *lenp + 1, U8);
+
     return dst;
 }
 
 /*
- * Convert native (big-endian) or reversed (little-endian) UTF-16 to UTF-8.
+ * Convert native (big-endian) UTF-16 to UTF-8.  For reversed (little-endian),
+ * use utf16_to_utf8_reversed().
  *
- * Destination must be pre-extended to 3/2 source.  Do not use in-place.
- * We optimize for native, for obvious reasons. */
+ * UTF-16 requires 2 bytes for every code point below 0x10000; otherwise 4 bytes.
+ * UTF-8 requires 1-3 bytes for every code point below 0x1000; otherwise 4 bytes.
+ * UTF-EBCDIC requires 1-4 bytes for every code point below 0x1000; otherwise 4-5 bytes.
+ *
+ * These functions don't check for overflow.  The worst case is every code
+ * point in the input is 2 bytes, and requires 4 bytes on output.  (If the code
+ * is never going to run in EBCDIC, it is 2 bytes requiring 3 on output.)  Therefore the
+ * destination must be pre-extended to 2 times the source length.
+ *
+ * Do not use in-place.  We optimize for native, for obvious reasons. */
 
 U8*
 Perl_utf16_to_utf8(pTHX_ U8* p, U8* d, I32 bytelen, I32 *newlen)
@@ -3590,17 +3606,12 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p,
 	if (flags & FOLD_FLAGS_LOCALE) {
 
 #           define LONG_S_T      LATIN_SMALL_LIGATURE_LONG_S_T_UTF8
-            const unsigned int long_s_t_len    = sizeof(LONG_S_T) - 1;
-
 #         ifdef LATIN_CAPITAL_LETTER_SHARP_S_UTF8
 #           define CAP_SHARP_S   LATIN_CAPITAL_LETTER_SHARP_S_UTF8
 
-            const unsigned int cap_sharp_s_len = sizeof(CAP_SHARP_S) - 1;
-
             /* Special case these two characters, as what normally gets
              * returned under locale doesn't work */
-            if (UTF8SKIP(p) == cap_sharp_s_len
-                && memEQ((char *) p, CAP_SHARP_S, cap_sharp_s_len))
+            if (memEQs((char *) p, UTF8SKIP(p), CAP_SHARP_S))
             {
                 /* diag_listed_as: Can't do %s("%s") on non-UTF-8 locale; resolved to "%s". */
                 Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),
@@ -3610,8 +3621,7 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p,
             }
             else
 #endif
-                 if (UTF8SKIP(p) == long_s_t_len
-                     && memEQ((char *) p, LONG_S_T, long_s_t_len))
+                 if (memEQs((char *) p, UTF8SKIP(p), LONG_S_T))
             {
                 /* diag_listed_as: Can't do %s("%s") on non-UTF-8 locale; resolved to "%s". */
                 Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),
@@ -3630,9 +3640,7 @@ Perl__to_utf8_fold_flags(pTHX_ const U8 *p,
              * 255/256 boundary which is forbidden under /l, and so the code
              * wouldn't catch that they are equivalent (which they are only in
              * this release) */
-            else if (UTF8SKIP(p) == sizeof(DOTTED_I) - 1
-                     && memEQ((char *) p, DOTTED_I, sizeof(DOTTED_I) - 1))
-            {
+            else if (memEQs((char *) p, UTF8SKIP(p), DOTTED_I)) {
                 /* diag_listed_as: Can't do %s("%s") on non-UTF-8 locale; resolved to "%s". */
                 Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),
                               "Can't do fc(\"\\x{0130}\") on non-UTF-8 locale; "
@@ -5079,7 +5087,7 @@ Perl__swash_to_invlist(pTHX_ SV* const swash)
          * size based on worst possible case, which is each line in the input
          * creates 2 elements in the inversion list: 1) the beginning of a
          * range in the list; 2) the beginning of a range not in the list.  */
-        while ((loc = (strchr(loc, '\n'))) != NULL) {
+        while ((loc = (char *) memchr(loc, '\n', lend - (U8 *) loc)) != NULL) {
             elements += 2;
             loc++;
         }

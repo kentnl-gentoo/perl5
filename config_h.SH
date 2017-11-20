@@ -63,24 +63,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_alarm HAS_ALARM		/**/
 
-/* HAS_BCMP:
- *	This symbol is defined if the bcmp() routine is available to
- *	compare blocks of memory.
- */
-#$d_bcmp HAS_BCMP	/**/
-
-/* HAS_BCOPY:
- *	This symbol is defined if the bcopy() routine is available to
- *	copy blocks of memory.
- */
-#$d_bcopy HAS_BCOPY	/**/
-
-/* HAS_BZERO:
- *	This symbol is defined if the bzero() routine is available to
- *	set a memory block to 0.
- */
-#$d_bzero HAS_BZERO	/**/
-
 /* HAS_CBRT:
  *	This symbol, if defined, indicates that the cbrt() (cube root)
  *	function is available.
@@ -122,14 +104,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	available to get character login names.
  */
 #$d_cuserid HAS_CUSERID		/**/
-
-/* HAS_DBL_DIG:
- *	This symbol, if defined, indicates that this system's <float.h>
- *	or <limits.h> defines the symbol DBL_DIG, which is the number
- *	of significant digits in a double precision number.  If this
- *	symbol is not defined, a guess of 15 is usually pretty good.
- */
-#$d_dbl_dig HAS_DBL_DIG 	/**/
 
 /* HAS_DIFFTIME:
  *	This symbol, if defined, indicates that the difftime routine is
@@ -297,32 +271,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_mbtowc HAS_MBTOWC		/**/
 
-/* HAS_MEMCMP:
- *	This symbol, if defined, indicates that the memcmp routine is available
- *	to compare blocks of memory.
- */
-#$d_memcmp HAS_MEMCMP	/**/
-
-/* HAS_MEMCPY:
- *	This symbol, if defined, indicates that the memcpy routine is available
- *	to copy blocks of memory.
- */
-#$d_memcpy HAS_MEMCPY	/**/
-
-/* HAS_MEMMOVE:
- *	This symbol, if defined, indicates that the memmove routine is available
- *	to copy potentially overlapping blocks of memory. This should be used
- *	only when HAS_SAFE_BCOPY is not defined. If neither is there, roll your
- *	own version.
- */
-#$d_memmove HAS_MEMMOVE	/**/
-
-/* HAS_MEMSET:
- *	This symbol, if defined, indicates that the memset routine is available
- *	to set blocks of memory.
- */
-#$d_memset HAS_MEMSET	/**/
-
 /* HAS_MKDIR:
  *	This symbol, if defined, indicates that the mkdir routine is available
  *	to create directories.  Otherwise you should fork off a new process to
@@ -343,6 +291,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	available.
  */
 #$d_mktime HAS_MKTIME		/**/
+
+/* HAS_MSG:
+ *	This symbol, if defined, indicates that the entire msg*(2) library is
+ *	supported (IPC mechanism based on message queues).
+ */
+#$d_msg HAS_MSG		/**/
 
 /* HAS_MSYNC:
  *	This symbol, if defined, indicates that the msync system call is
@@ -453,6 +407,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_select HAS_SELECT	/**/
 
+/* HAS_SEM:
+ *	This symbol, if defined, indicates that the entire sem*(2) library is
+ *	supported.
+ */
+#$d_sem HAS_SEM		/**/
+
 /* HAS_SETEGID:
  *	This symbol, if defined, indicates that the setegid routine is available
  *	to change the effective gid of the current program.
@@ -553,30 +513,11 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_stat HAS_STAT	/**/
 
-/* HAS_STRCHR:
- *	This symbol is defined to indicate that the strchr()/strrchr()
- *	functions are available for string searching. If not, try the
- *	index()/rindex() pair.
- */
-/* HAS_INDEX:
- *	This symbol is defined to indicate that the index()/rindex()
- *	functions are available for string searching.
- */
-#$d_strchr HAS_STRCHR	/**/
-#$d_index HAS_INDEX	/**/
-
 /* HAS_STRCOLL:
  *	This symbol, if defined, indicates that the strcoll routine is
  *	available to compare strings using collating information.
  */
 #$d_strcoll HAS_STRCOLL	/**/
-
-/* USE_STRUCT_COPY:
- *	This symbol, if defined, indicates that this C compiler knows how
- *	to copy structures.  If undefined, you'll need to use a block copy
- *	routine of some sort instead.
- */
-#$d_strctcpy	USE_STRUCT_COPY	/**/
 
 /* HAS_STRTOD:
  *	This symbol, if defined, indicates that the strtod routine is
@@ -720,25 +661,11 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$i_fcntl I_FCNTL	/**/
 
-/* I_FLOAT:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <float.h> to get definition of symbols like DBL_MAX or
- *	DBL_MIN, i.e. machine dependent floating point values.
- */
-#$i_float I_FLOAT		/**/
-
 /* I_GDBM:
  *	This symbol, if defined, indicates that <gdbm.h> exists and should
  *	be included.
  */
 #$i_gdbm I_GDBM	/**/
-
-/* I_LIMITS:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <limits.h> to get definition of symbols like WORD_BIT or
- *	LONG_MAX, i.e. machine dependant limitations.
- */
-#$i_limits I_LIMITS		/**/
 
 /* I_LOCALE:
  *	This symbol, if defined, indicates to the C program that it should
@@ -746,41 +673,11 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$i_locale	I_LOCALE		/**/
 
-/* I_MATH:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <math.h>.
- */
-#$i_math I_MATH		/**/
-
-/* I_MEMORY:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <memory.h>.
- */
-#$i_memory I_MEMORY		/**/
-
 /* I_NETINET_IN:
  *	This symbol, if defined, indicates to the C program that it should
  *	include <netinet/in.h>. Otherwise, you may try <sys/in.h>.
  */
 #$i_niin I_NETINET_IN	/**/
-
-/* I_STDDEF:
- *	This symbol, if defined, indicates that <stddef.h> exists and should
- *	be included.
- */
-#$i_stddef I_STDDEF	/**/
-
-/* I_STDLIB:
- *	This symbol, if defined, indicates that <stdlib.h> exists and should
- *	be included.
- */
-#$i_stdlib I_STDLIB		/**/
-
-/* I_STRING:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <string.h> (USG systems) instead of <strings.h> (BSD systems).
- */
-#$i_string I_STRING		/**/
 
 /* I_SYS_DIR:
  *	This symbol, if defined, indicates to the C program that it should
@@ -878,14 +775,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$i_utime I_UTIME		/**/
 
-/* I_VALUES:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <values.h> to get definition of symbols like MINFLOAT or
- *	MAXLONG, i.e. machine dependant limitations.  Probably, you
- *	should use <limits.h> instead, if it is available.
- */
-#$i_values I_VALUES		/**/
-
 /* I_VFORK:
  *	This symbol, if defined, indicates to the C program that it should
  *	include vfork.h.
@@ -897,28 +786,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	It has the values "unsigned char" or "char".
  */
 #define STDCHAR $stdchar	/**/
-
-/* CAN_VAPROTO:
- *	This variable is defined on systems supporting prototype declaration
- *	of functions with a variable number of arguments.
- */
-/* _V:
- *	This macro is used to declare function parameters in prototypes for
- *	functions with a variable number of parameters. Use double parentheses.
- *	For example:
- *
- *		int printf _V((char *fmt, ...));
- *
- *	Remember to use the plain simple _() macro when declaring a function
- *	with no variable number of arguments, since it might be possible to
- *	have a non-effect _V() macro and still get prototypes via _().
- */
-#$vaproto CAN_VAPROTO	/**/
-#ifdef CAN_VAPROTO
-#define	_V(args) args
-#else
-#define	_V(args) ()
-#endif
 
 /* INTSIZE:
  *	This symbol contains the value of sizeof(int) so that the C
@@ -1118,29 +985,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_open3 HAS_OPEN3		/**/
 
-/* HAS_SAFE_BCOPY:
- *	This symbol, if defined, indicates that the bcopy routine is available
- *	to copy potentially overlapping memory blocks. Normally, you should
- *	probably use memmove() or memcpy(). If neither is defined, roll your
- *	own version.
- */
-#$d_safebcpy HAS_SAFE_BCOPY	/**/
-
-/* HAS_SAFE_MEMCPY:
- *	This symbol, if defined, indicates that the memcpy routine is available
- *	to copy potentially overlapping memory blocks.  If you need to
- *	copy overlapping memory blocks, you should check HAS_MEMMOVE and
- *	use memmove() instead, if available.
- */
-#$d_safemcpy HAS_SAFE_MEMCPY	/**/
-
-/* HAS_SANE_MEMCMP:
- *	This symbol, if defined, indicates that the memcmp routine is available
- *	and can be used to compare relative magnitudes of chars with their high
- *	bits set.  If it is not defined, roll your own version.
- */
-#$d_sanemcmp HAS_SANE_MEMCMP	/**/
-
 /* HAS_SIGACTION:
  *	This symbol, if defined, indicates that Vr4's sigaction() routine
  *	is available.
@@ -1305,20 +1149,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define FILE_bufsiz(fp)	$stdio_bufsiz
 #endif
 
-/* HAS_VPRINTF:
- *	This symbol, if defined, indicates that the vprintf routine is available
- *	to printf with a pointer to an argument list.  If unavailable, you
- *	may need to write your own, probably in terms of _doprnt().
- */
-/* USE_CHAR_VSPRINTF:
- *	This symbol is defined if this system has vsprintf() returning type
- *	(char*).  The trend seems to be to declare it as "int vsprintf()".  It
- *	is up to the package author to declare vsprintf correctly based on the
- *	symbol.
- */
-#$d_vprintf HAS_VPRINTF	/**/
-#$d_charvspr USE_CHAR_VSPRINTF 	/**/
-
 /* DOUBLESIZE:
  *	This symbol contains the size of a double, so that the C preprocessor
  *	can make decisions based on it.
@@ -1326,8 +1156,8 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define DOUBLESIZE $doublesize		/**/
 
 /* I_TIME:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <time.h>.
+ *	This symbol is always defined, and indicates to the C program that
+ *	it should include <time.h>.
  */
 /* I_SYS_TIME:
  *	This symbol, if defined, indicates to the C program that it should
@@ -2015,12 +1845,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define LONGLONGSIZE $longlongsize		/**/
 #endif
 
-/* HAS_MEMCHR:
- *	This symbol, if defined, indicates that the memchr routine is available
- *	to locate characters within a C string.
- */
-#$d_memchr HAS_MEMCHR	/**/
-
 /* HAS_MKSTEMP:
  *	This symbol, if defined, indicates that the mkstemp routine is
  *	available to exclusively create and open a uniquely named
@@ -2039,18 +1863,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_mmap HAS_MMAP		/**/
 #define Mmap_t $mmaptype	/**/
-
-/* HAS_MSG:
- *	This symbol, if defined, indicates that the entire msg*(2) library is
- *	supported (IPC mechanism based on message queues).
- */
-#$d_msg HAS_MSG		/**/
-
-/* HAS_SEM:
- *	This symbol, if defined, indicates that the entire sem*(2) library is
- *	supported.
- */
-#$d_sem HAS_SEM		/**/
 
 /* HAS_SETGRENT:
  *	This symbol, if defined, indicates that the setgrent routine is
@@ -2182,24 +1994,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #$d_statblks USE_STAT_BLOCKS 	/**/
 #endif
 
-/* HAS_STRERROR:
- *	This symbol, if defined, indicates that the strerror routine is
- *	available to translate error numbers to strings. See the writeup
- *	of Strerror() in this file before you try to define your own.
- */
 /* HAS_SYS_ERRLIST:
  *	This symbol, if defined, indicates that the sys_errlist array is
  *	available to translate error numbers to strings. The extern int
  *	sys_nerr gives the size of that table.
  */
-/* Strerror:
- *	This preprocessor symbol is defined as a macro if strerror() is
- *	not available to translate error numbers to strings but sys_errlist[]
- *	array is there.
- */
-#$d_strerror HAS_STRERROR		/**/
 #$d_syserrlst HAS_SYS_ERRLIST	/**/
-#define Strerror(e) $d_strerrm
 
 /* HAS_STRTOUL:
  *	This symbol, if defined, indicates that the strtoul routine is
@@ -2247,15 +2047,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	handler using "Signal_t handler(sig)".
  */
 #define Signal_t $signal_t	/* Signal handler's return type */
-
-/* HASVOLATILE:
- *	This symbol, if defined, indicates that this C compiler knows about
- *	the volatile declaration.
- */
-#$d_volatile	HASVOLATILE	/**/
-#ifndef HASVOLATILE
-#define volatile
-#endif
 
 /* I_DIRENT:
  *	This symbol, if defined, indicates to the C program that it should
@@ -2417,17 +2208,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #$i_termios I_TERMIOS		/**/
 #$i_sgtty I_SGTTY		/**/
 
-/* I_STDARG:
- *	This symbol, if defined, indicates that <stdarg.h> exists and should
- *	be included.
- */
-/* I_VARARGS:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <varargs.h>.
- */
-#$i_stdarg I_STDARG		/**/
-#$i_varargs I_VARARGS	/**/
-
 /* Free_t:
  *	This variable contains the return type of free().  It is usually
  * void, but occasionally int.
@@ -2447,24 +2227,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	This symbol, if defined, indicates that we're using our own malloc.
  */
 #$d_mymalloc MYMALLOC			/**/
-
-/* CAN_PROTOTYPE:
- *	If defined, this macro indicates that the C compiler can handle
- *	function prototypes.
- */
-/* _:
- *	This macro is used to declare function parameters for folks who want
- *	to make declarations with prototypes using a different style than
- *	the above macros.  Use double parentheses.  For example:
- *
- *		int main _((int argc, char *argv[]));
- */
-#$prototype	CAN_PROTOTYPE	/**/
-#ifdef CAN_PROTOTYPE
-#define	_(args) args
-#else
-#define	_(args) ()
-#endif
 
 /* SH_PATH:
  *	This symbol contains the full pathname to the shell used on this
@@ -2585,6 +2347,22 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_builtin_expect HAS_BUILTIN_EXPECT	/**/
 #$d_builtin_choose_expr HAS_BUILTIN_CHOOSE_EXPR	/**/
+
+/* HAS_BUILTIN_ADD_OVERFLOW:
+ *	This symbol, if defined, indicates that the compiler supports
+ *	__builtin_add_overflow for adding integers with overflow checks.
+ */
+/* HAS_BUILTIN_SUB_OVERFLOW:
+ *	This symbol, if defined, indicates that the compiler supports
+ *	__builtin_sub_overflow for subtracting integers with overflow checks.
+ */
+/* HAS_BUILTIN_MUL_OVERFLOW:
+ *	This symbol, if defined, indicates that the compiler supports
+ *	__builtin_mul_overflow for multiplying integers with overflow checks.
+ */
+#$d_builtin_add_overflow HAS_BUILTIN_ADD_OVERFLOW	/**/
+#$d_builtin_sub_overflow HAS_BUILTIN_SUB_OVERFLOW	/**/
+#$d_builtin_mul_overflow HAS_BUILTIN_MUL_OVERFLOW	/**/
 
 /* HAS_C99_VARIADIC_MACROS:
  *	If defined, the compiler supports C99 variadic macros.
@@ -3292,6 +3070,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_nan HAS_NAN		/**/
 
+/* HAS_NANOSLEEP:
+ *	This symbol, if defined, indicates that the nanosleep
+ *	system call is available to sleep with 1E-9 sec accuracy.
+ */
+#$d_nanosleep HAS_NANOSLEEP		/**/
+
 /* HAS_NEARBYINT:
  *	This symbol, if defined, indicates that the nearbyint routine is
  *	available to return the integral value closest to (according to
@@ -3525,14 +3309,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_socks5_init HAS_SOCKS5_INIT		/**/
 
-/* SPRINTF_RETURNS_STRLEN:
- *	This variable defines whether sprintf returns the length of the string
- *	(as per the ANSI spec). Some C libraries retain compatibility with
- *	pre-ANSI C and return a pointer to the passed in buffer; for these
- *	this variable will be undef.
- */
-#$d_sprintf_returns_strlen SPRINTF_RETURNS_STRLEN	/**/
-
 /* HAS_SQRTL:
  *	This symbol, if defined, indicates that the sqrtl routine is
  *	available to do long double square roots.
@@ -3602,6 +3378,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	available to do string copying.
  */
 #$d_strlcpy HAS_STRLCPY		/**/
+
+/* HAS_STRNLEN:
+ *	This symbol, if defined, indicates that the strnlen () routine is
+ *	available to check the length of a string up to a maximum.
+ */
+#$d_strnlen HAS_STRNLEN		/**/
 
 /* HAS_STRTOLD:
  *	This symbol, if defined, indicates that the strtold routine is
@@ -3791,12 +3573,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$fflushNULL	FFLUSH_NULL 		/**/
 #$fflushall	FFLUSH_ALL 		/**/
-
-/* I_ASSERT:
- *	This symbol, if defined, indicates that <assert.h> exists and
- *	could be included by the C program to get the assert() macro.
- */
-#$i_assert	I_ASSERT		/**/
 
 /* I_BFD:
  *	This symbol, if defined, indicates that <bfd.h> exists and
@@ -3994,6 +3770,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	should be included.
  */
 #$i_ustat	I_USTAT		/**/
+
+/* I_WCHAR:
+ *     This symbol, if defined, indicates to the C program that <wchar.h>
+ *     is available for inclusion
+ */
+#$i_wchar   I_WCHAR	/**/
 
 /* DOUBLEINFBYTES:
  *	This symbol, if defined, is a comma-separated list of
@@ -4263,7 +4045,7 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define	NVSIZE		$nvsize		/**/
 #$d_nv_preserves_uv	NV_PRESERVES_UV
 #define	NV_PRESERVES_UV_BITS	$nv_preserves_uv_bits
-#define	NV_OVERFLOWS_INTEGERS_AT	$nv_overflows_integers_at
+#define	NV_OVERFLOWS_INTEGERS_AT	($nv_overflows_integers_at)
 #$d_nv_zero_is_allbits_zero	NV_ZERO_IS_ALLBITS_ZERO
 #if UVSIZE == 8
 #   ifdef BYTEORDER
@@ -5004,6 +4786,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #$d_gmtime_r HAS_GMTIME_R	   /**/
 #define GMTIME_R_PROTO $gmtime_r_proto	   /**/
 
+/* HAS_LOCALECONV_L:
+ *	This symbol, if defined, indicates that the localeconv_l routine is
+ *	available to query certain information about a locale.
+ */
+#$d_localeconv_l HAS_LOCALECONV_L		/**/
+
 /* HAS_LOCALTIME_R:
  *	This symbol, if defined, indicates that the localtime_r routine
  *	is available to localtime re-entrantly.
@@ -5029,6 +4817,24 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_localtime_r HAS_LOCALTIME_R	   /**/
 #define LOCALTIME_R_PROTO $localtime_r_proto	   /**/
+
+/* HAS_MBRLEN:
+ *	This symbol, if defined, indicates that the mbrlen routine is
+ *	available to get the length of multi-byte character strings.
+ */
+#$d_mbrlen HAS_MBRLEN	/**/
+
+/* HAS_MBRTOWC:
+ *	This symbol, if defined, indicates that the mbrtowc routine is
+ *	available to convert a multi-byte character into a wide character.
+ */
+#$d_mbrtowc HAS_MBRTOWC	/**/
+
+/* HAS_THREAD_SAFE_NL_LANGINFO_L:
+ *	This symbol, when defined, indicates presence of the nl_langinfo_l()
+ *	function, and that it is thread-safe.
+ */
+#$d_thread_safe_nl_langinfo_l HAS_THREAD_SAFE_NL_LANGINFO_L	/**/
 
 /* OLD_PTHREAD_CREATE_JOINABLE:
  *	This symbol, if defined, indicates how to create pthread
@@ -5233,6 +5039,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_strerror_r HAS_STRERROR_R	   /**/
 #define STRERROR_R_PROTO $strerror_r_proto	   /**/
+
+/* HAS_STRTOLD_L:
+ *	This symbol, if defined, indicates that the strtold_l routine is
+ *	available to convert strings to long doubles.
+ */
+#$d_strtold_l HAS_STRTOLD_L		/**/
 
 /* HAS_TMPNAM_R:
  *	This symbol, if defined, indicates that the tmpnam_r routine

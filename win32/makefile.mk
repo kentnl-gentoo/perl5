@@ -44,7 +44,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.27.5
+#INST_VER	*= \5.27.6
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -105,7 +105,15 @@ USE_LARGE_FILES	*= define
 # Uncomment this if you want to support the use of long doubles in GCC builds.
 # This option is not supported for MSVC builds.
 #
-#USE_LONG_DOUBLE *=define
+#USE_LONG_DOUBLE *= define
+
+#
+# Uncomment this if you want to build perl with __USE_MINGW_ANSI_STDIO defined.
+# (If you're building perl with USE_LONG_DOUBLE defined then
+# __USE_MINGW_ANSI_STDIO will be defined whether or not this is uncommented.)
+# This option is not supported for MSVC builds.
+#
+#USE_MINGW_ANSI_STDIO *= define
 
 #
 # Comment this out if you want the legacy default behavior of including '.' at
@@ -118,7 +126,7 @@ DEFAULT_INC_EXCLUDES_DOT *= define
 # HKEY_CURRENT_USER\Software\Perl and HKEY_LOCAL_MACHINE\Software\Perl in
 # the Registry.
 #
-#USE_NO_REGISTRY *=define
+#USE_NO_REGISTRY *= define
 
 #
 # uncomment exactly one of the following
@@ -503,7 +511,7 @@ LIB32		= $(ARCHPREFIX)ar rc
 IMPLIB		= $(ARCHPREFIX)dlltool
 RSC		= $(ARCHPREFIX)windres
 
-.IF "$(USE_LONG_DOUBLE)" == "define"
+.IF "$(USE_LONG_DOUBLE)" == "define" || "$(USE_MINGW_ANSI_STDIO)" == "define"
 BUILDOPT        += -D__USE_MINGW_ANSI_STDIO
 MINIBUILDOPT    += -D__USE_MINGW_ANSI_STDIO
 .ENDIF
@@ -1581,7 +1589,7 @@ utils: $(HAVEMINIPERL) ..\utils\Makefile
 	copy ..\README.tw       ..\pod\perltw.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perldelta.pod ..\pod\perl5275delta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5276delta.pod
 	$(MINIPERL) -I..\lib $(PL2BAT) $(UTILS)
 	$(MINIPERL) -I..\lib ..\autodoc.pl ..
 	$(MINIPERL) -I..\lib ..\pod\perlmodlib.PL -q ..
@@ -1679,7 +1687,7 @@ distclean: realclean
 	-if exist $(LIBDIR)\Win32API rmdir /s /q $(LIBDIR)\Win32API
 	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat roffitall \
-	    perl5275delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
+	    perl5276delta.pod perlaix.pod perlamiga.pod perlandroid.pod \
 	    perlapi.pod perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldos.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \

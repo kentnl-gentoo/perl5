@@ -395,6 +395,7 @@ Afp	|void	|deb		|NN const char* pat|...
 Ap	|void	|vdeb		|NN const char* pat|NULLOK va_list* args
 Ap	|void	|debprofdump
 EXp	|SV*	|multideref_stringify	|NN const OP* o|NULLOK CV *cv
+EXp	|SV*	|multiconcat_stringify	|NN const OP* o
 Ap	|I32	|debop		|NN const OP* o
 Ap	|I32	|debstack
 Ap	|I32	|debstackptrs
@@ -917,14 +918,18 @@ p	|OP*	|localize	|NN OP *o|I32 lex
 ApdR	|I32	|looks_like_number|NN SV *const sv
 Apd	|UV	|grok_bin	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV *result
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_IN_TOKE_C) || defined(PERL_IN_DQUOTE_C)
-EMpRX	|bool	|grok_bslash_x	|NN char** s|NN UV* uv           \
+EMpRX	|bool	|grok_bslash_x	|NN char** s		 \
+				|NN const char* const send	 \
+				|NN UV* uv			 \
 				|NN const char** error_msg       \
 				|const bool output_warning       \
 				|const bool strict               \
 				|const bool silence_non_portable \
 				|const bool utf8
 EMpRX	|char	|grok_bslash_c	|const char source|const bool output_warning
-EMpRX	|bool	|grok_bslash_o	|NN char** s|NN UV* uv           \
+EMpRX	|bool	|grok_bslash_o	|NN char** s		 \
+				|NN const char* const send	 \
+				|NN UV* uv			 \
 				|NN const char** error_msg       \
 				|const bool output_warning       \
 				|const bool strict               \
@@ -1046,7 +1051,9 @@ Apn	|void	|mini_mktime	|NN struct tm *ptm
 AMmd	|OP*	|op_lvalue	|NULLOK OP* o|I32 type
 poX	|OP*	|op_lvalue_flags|NULLOK OP* o|I32 type|U32 flags
 p	|void	|finalize_optree		|NN OP* o
+p	|void	|optimize_optree|NN OP* o
 #if defined(PERL_IN_OP_C)
+s	|void	|optimize_op	|NN OP* o
 s	|void	|finalize_op	|NN OP* o
 s	|void	|move_proto_attr|NN OP **proto|NN OP **attrs \
 				|NN const GV *name|bool curstash
@@ -1055,12 +1062,6 @@ s	|void	|move_proto_attr|NN OP **proto|NN OP **attrs \
 p	|int	|mode_from_discipline|NULLOK const char* s|STRLEN len
 Ap	|const char*	|moreswitches	|NN const char* s
 Ap	|NV	|my_atof	|NN const char *s
-#if !defined(HAS_MEMCPY) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY))
-Anp	|void*	|my_bcopy	|NN const void* vfrom|NN void* vto|size_t len
-#endif
-#if !defined(HAS_BZERO) && !defined(HAS_MEMSET)
-Anp	|void*	|my_bzero	|NN void* vloc|size_t len
-#endif
 Apr	|void	|my_exit	|U32 status
 Apr	|void	|my_failure_exit
 Ap	|I32	|my_fflush_all
@@ -1069,11 +1070,8 @@ Anp	|void	|atfork_lock
 Anp	|void	|atfork_unlock
 Apmb	|I32	|my_lstat
 pX	|I32	|my_lstat_flags	|NULLOK const U32 flags
-#if !defined(HAS_MEMCMP) || !defined(HAS_SANE_MEMCMP)
-AnpP	|int	|my_memcmp	|NN const void* vs1|NN const void* vs2|size_t len
-#endif
-#if !defined(HAS_MEMSET)
-Anp	|void*	|my_memset	|NN void* vloc|int ch|size_t len
+#if ! defined(HAS_MEMRCHR) && (defined(PERL_CORE) || defined(PERL_EXT))
+Exin	|void *	|my_memrchr	|NN const char * s|const char c|const STRLEN len
 #endif
 #if !defined(PERL_IMPLICIT_SYS)
 Ap	|I32	|my_pclose	|NULLOK PerlIO* ptr
@@ -1187,6 +1185,7 @@ Apd	|void	|cv_set_call_checker_flags|NN CV *cv \
 					  |NN Perl_call_checker ckfun \
 					  |NN SV *ckobj|U32 ckflags
 Apd	|void	|wrap_op_checker|Optype opcode|NN Perl_check_t new_checker|NN Perl_check_t *old_checker_p
+AMpd	|void	|wrap_keyword_plugin|NN Perl_keyword_plugin_t new_plugin|NN Perl_keyword_plugin_t *old_plugin_p
 ApR	|PERL_SI*|new_stackinfo|I32 stitems|I32 cxitems
 Ap	|char*	|scan_vstring	|NN const char *s|NN const char *const e \
 				|NN SV *sv
@@ -1249,7 +1248,7 @@ Ap	|void	|call_atexit	|ATEXIT_t fn|NULLOK void *ptr
 ApdO	|I32	|call_argv	|NN const char* sub_name|I32 flags|NN char** argv
 ApdO	|I32	|call_method	|NN const char* methname|I32 flags
 ApdO	|I32	|call_pv	|NN const char* sub_name|I32 flags
-ApdO	|I32	|call_sv	|NN SV* sv|VOL I32 flags
+ApdO	|I32	|call_sv	|NN SV* sv|volatile I32 flags
 Ap	|void	|despatch_signals
 Ap	|OP *	|doref		|NN OP *o|I32 type|bool set_op_ref
 ApdO	|SV*	|eval_pv	|NN const char* p|I32 croak_on_error
@@ -1270,9 +1269,9 @@ ApOM	|int	|init_i18nl14n	|int printwarn
 p	|char*	|my_strerror	|const int errnum
 Xpn	|void	|_warn_problematic_locale
 p	|void	|new_numeric	|NULLOK const char* newcoll
-Xp	|void	|set_numeric_local
+Xp	|void	|set_numeric_underlying
 Xp	|void	|set_numeric_standard
-ApM	|bool	|_is_in_locale_category|const bool compiling|const int category
+Xp	|bool	|_is_in_locale_category|const bool compiling|const int category
 Apd	|void	|sync_locale
 ApdO	|void	|require_pv	|NN const char* pv
 Apd	|void	|pack_cat	|NN SV *cat|NN const char *pat|NN const char *patend \
@@ -1722,7 +1721,7 @@ EXMp	|void	|_invlist_dump	|NN PerlIO *file|I32 level   \
 Ap	|void	|taint_env
 Ap	|void	|taint_proper	|NULLOK const char* f|NN const char *const s
 EpM	|char *	|_byte_dump_string					\
-				|NN const U8 * s			\
+				|NN const U8 * const start		\
 				|const STRLEN len			\
 				|const bool format
 #if defined(PERL_IN_UTF8_C)
@@ -1796,8 +1795,8 @@ p	|void	|utilize	|int aver|I32 floor|NULLOK OP* version|NN OP* idop|NULLOK OP* a
 ApM	|void	|_force_out_malformed_utf8_message			    \
 		|NN const U8 *const p|NN const U8 * const e|const U32 flags \
 		|const bool die_here
-Ap	|U8*	|utf16_to_utf8	|NN U8* p|NN U8 *d|I32 bytelen|NN I32 *newlen
-Ap	|U8*	|utf16_to_utf8_reversed|NN U8* p|NN U8 *d|I32 bytelen|NN I32 *newlen
+EXp	|U8*	|utf16_to_utf8	|NN U8* p|NN U8 *d|I32 bytelen|NN I32 *newlen
+EXp	|U8*	|utf16_to_utf8_reversed|NN U8* p|NN U8 *d|I32 bytelen|NN I32 *newlen
 AdpPR	|STRLEN	|utf8_length	|NN const U8* s|NN const U8 *e
 AipdR	|IV	|utf8_distance	|NN const U8 *a|NN const U8 *b
 AipdRn	|U8*	|utf8_hop	|NN const U8 *s|SSize_t off
@@ -2271,7 +2270,6 @@ s	|I32	|amagic_cmp_locale|NN SV *const str1|NN SV *const str2
 s	|I32	|sortcv		|NN SV *const a|NN SV *const b
 s	|I32	|sortcv_xsub	|NN SV *const a|NN SV *const b
 s	|I32	|sortcv_stacked	|NN SV *const a|NN SV *const b
-s	|void	|qsortsvu	|NULLOK SV** array|size_t num_elts|NN SVCOMPARE_t compare
 #endif
 
 #if defined(PERL_IN_PP_SYS_C)
@@ -2686,11 +2684,11 @@ s	|void	|checkcomma	|NN const char *s|NN const char *name \
 				|NN const char *what
 s	|void	|force_ident	|NN const char *s|int kind
 s	|void	|force_ident_maybe_lex|char pit
-s	|void	|incline	|NN const char *s
+s	|void	|incline	|NN const char *s|NN const char *end
 s	|int	|intuit_method	|NN char *s|NULLOK SV *ioname|NULLOK CV *cv
-s	|int	|intuit_more	|NN char *s
+s	|int	|intuit_more	|NN char *s|NN char *e
 s	|I32	|lop		|I32 f|U8 x|NN char *s
-rs	|void	|missingterm	|NULLOK char *s
+rs	|void	|missingterm	|NULLOK char *s|const STRLEN len
 s	|void	|no_op		|NN const char *const what|NULLOK char *s
 s	|int	|pending_ident
 sR	|I32	|sublex_done
@@ -2725,6 +2723,11 @@ s	|bool	|isa_lookup	|NN HV *stash|NN const char * const name \
 #endif
 
 #if defined(PERL_IN_LOCALE_C)
+#  ifdef HAS_NL_LANGINFO
+sn	|const char*|my_nl_langinfo|const nl_item item|bool toggle
+#  else
+sn	|const char*|my_nl_langinfo|const int item|bool toggle
+#  endif
 in	|const char *|save_to_buffer|NN const char * string	\
 				    |NULLOK char **buf		\
 				    |NN Size_t *buf_size	\
@@ -2733,9 +2736,9 @@ in	|const char *|save_to_buffer|NN const char * string	\
 s	|char*	|stdize_locale	|NN char* locs
 s	|void	|new_collate	|NULLOK const char* newcoll
 s	|void	|new_ctype	|NN const char* newctype
-s	|void	|set_numeric_radix
+s	|void	|set_numeric_radix|const bool use_locale
 #    ifdef WIN32
-s	|char*	|my_setlocale	|int category|NULLOK const char* locale
+s	|char*	|win32_setlocale|int category|NULLOK const char* locale
 #    endif
 #    ifdef DEBUGGING
 s	|void	|print_collxfrm_input_and_return		\
@@ -3017,10 +3020,6 @@ ApoP	|bool	|ckwarn_d	|U32 w
 XEopMR	|STRLEN *|new_warnings_bitfield|NULLOK STRLEN *buffer \
 				|NN const char *const bits|STRLEN size
 
-#ifndef SPRINTF_RETURNS_STRLEN
-Apnod	|int	|my_sprintf	|NN char *buffer|NN const char *pat|...
-#endif
-
 Apnodf	|int	|my_snprintf	|NN char *buffer|const Size_t len|NN const char *format|...
 Apnod	|int	|my_vsnprintf	|NN char *buffer|const Size_t len|NN const char *format|va_list ap
 #ifdef USE_QUADMATH
@@ -3052,6 +3051,10 @@ Apnod	|Size_t	|my_strlcat	|NULLOK char *dst|NULLOK const char *src|Size_t size
 
 #ifndef HAS_STRLCPY
 Apnod	|Size_t |my_strlcpy     |NULLOK char *dst|NULLOK const char *src|Size_t size
+#endif
+
+#ifndef HAS_STRNLEN
+Apnod	|Size_t |my_strnlen     |NN const char *str|Size_t maxlen
 #endif
 
 #ifndef HAS_MKSTEMP

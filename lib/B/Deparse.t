@@ -1996,7 +1996,7 @@ no warnings "experimental::lexical_subs";
 my sub f {}
 print f();
 >>>>
-BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55"}
+BEGIN {${^WARNING_BITS} = "\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55"}
 my sub f {
     
 }
@@ -2009,7 +2009,7 @@ no warnings 'experimental::lexical_subs';
 state sub f {}
 print f();
 >>>>
-BEGIN {${^WARNING_BITS} = "\x54\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55"}
+BEGIN {${^WARNING_BITS} = "\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x54\x55\x55\x55"}
 state sub f {
     
 }
@@ -2718,3 +2718,220 @@ $c = (index($a, $b) == -1);
 $c = (rindex($a, $b) == -1);
 $c = (index($a, $b) != -1);
 $c = (rindex($a, $b) != -1);
+####
+# plain multiconcat
+my($a, $b, $c, $d, @a);
+$d = length $a . $b . $c;
+$d = length($a) . $b . $c;
+print '' . $a;
+push @a, ($a . '') * $b;
+unshift @a, "$a" * ($b . '');
+print $a . 'x' . $b . $c;
+print $a . 'x' . $b . $c, $d;
+print $b . $c . ($a . $b);
+print $b . $c . ($a . $b);
+print $b . $c . @a;
+print $a . "\x{100}";
+####
+# double-quoted multiconcat
+my($a, $b, $c, $d, @a);
+print "${a}x\x{100}$b$c";
+print "$a\Q$b\E$c\Ua$a\E\Lb$b\uc$c\E$a${b}c$c";
+print "A=$a[length 'b' . $c . 'd'] b=$b";
+print "A=@a B=$b";
+print "\x{101}$a\x{100}";
+$a = qr/\Q
+$b $c
+\x80
+\x{100}
+\E$c
+/;
+####
+# sprintf multiconcat
+my($a, $b, $c, $d, @a);
+print sprintf("%s%s%%%sx%s\x{100}%s", $a, $b, $c, scalar @a, $d);
+####
+# multiconcat with lexical assign
+my($a, $b, $c, $d, $e, @a);
+$d = 'foo' . $a;
+$d = "foo$a";
+$d = $a . '';
+$d = 'foo' . $a . 'bar';
+$d = $a . $b;
+$d = $a . $b . $c;
+$d = $a . $b . $c . @a;
+$e = ($d = $a . $b . $c);
+$d = !$a . $b . $c;
+$a = $b . $c . ($a . $b);
+$e = f($d = !$a . $b) . $c;
+$d = "${a}x\x{100}$b$c";
+f($d = !$a . $b . $c);
+####
+# multiconcat with lexical my
+my($a, $b, $c, $d, $e, @a);
+my $d1 = 'foo' . $a;
+my $d2 = "foo$a";
+my $d3 = $a . '';
+my $d4 = 'foo' . $a . 'bar';
+my $d5 = $a . $b;
+my $d6 = $a . $b . $c;
+my $e7 = ($d = $a . $b . $c);
+my $d8 = !$a . $b . $c;
+my $d9 = $b . $c . ($a . $b);
+my $da = f($d = !$a . $b) . $c;
+my $dc = "${a}x\x{100}$b$c";
+f(my $db = !$a . $b . $c);
+my $dd = $a . $b . $c . @a;
+####
+# multiconcat with lexical append
+my($a, $b, $c, $d, $e, @a);
+$d .= '';
+$d .= $a;
+$d .= "$a";
+$d .= 'foo' . $a;
+$d .= "foo$a";
+$d .= $a . '';
+$d .= 'foo' . $a . 'bar';
+$d .= $a . $b;
+$d .= $a . $b . $c;
+$d .= $a . $b . @a;
+$e .= ($d = $a . $b . $c);
+$d .= !$a . $b . $c;
+$a .= $b . $c . ($a . $b);
+$e .= f($d .= !$a . $b) . $c;
+f($d .= !$a . $b . $c);
+$d .= "${a}x\x{100}$b$c";
+####
+# multiconcat with expression assign
+my($a, $b, $c, @a);
+our($d, $e);
+$d = 'foo' . $a;
+$d = "foo$a";
+$d = $a . '';
+$d = 'foo' . $a . 'bar';
+$d = $a . $b;
+$d = $a . $b . $c;
+$d = $a . $b . @a;
+$e = ($d = $a . $b . $c);
+$a["-$b-"] = !$a . $b . $c;
+$a[$b]{$c}{$d ? $a : $b . $c} = !$a . $b . $c;
+$a = $b . $c . ($a . $b);
+$e = f($d = !$a . $b) . $c;
+$d = "${a}x\x{100}$b$c";
+f($d = !$a . $b . $c);
+####
+# multiconcat with expression concat
+my($a, $b, $c, @a);
+our($d, $e);
+$d .= 'foo' . $a;
+$d .= "foo$a";
+$d .= $a . '';
+$d .= 'foo' . $a . 'bar';
+$d .= $a . $b;
+$d .= $a . $b . $c;
+$d .= $a . $b . @a;
+$e .= ($d .= $a . $b . $c);
+$a["-$b-"] .= !$a . $b . $c;
+$a[$b]{$c}{$d ? $a : $b . $c} .= !$a . $b . $c;
+$a .= $b . $c . ($a . $b);
+$e .= f($d .= !$a . $b) . $c;
+$d .= "${a}x\x{100}$b$c";
+f($d .= !$a . $b . $c);
+####
+# multiconcat with CORE::sprintf
+# CONTEXT sub sprintf {}
+my($a, $b);
+my $x = CORE::sprintf('%s%s', $a, $b);
+####
+# multiconcat with backticks
+my($a, $b);
+our $x;
+$x = `$a-$b`;
+####
+# multiconcat within qr//
+my($r, $a, $b);
+$r = qr/abc\Q$a-$b\Exyz/;
+####
+# tr with unprintable characters
+my $str;
+$str = 'foo';
+$str =~ tr/\cA//;
+####
+# CORE::foo special case in bareword parsing
+print $CORE::foo, $CORE::foo::bar;
+print @CORE::foo, @CORE::foo::bar;
+print %CORE::foo, %CORE::foo::bar;
+print $CORE::foo{'a'}, $CORE::foo::bar{'a'};
+print &CORE::foo, &CORE::foo::bar;
+print &CORE::foo(), &CORE::foo::bar();
+print \&CORE::foo, \&CORE::foo::bar;
+print *CORE::foo, *CORE::foo::bar;
+print stat CORE::foo::, stat CORE::foo::bar;
+print CORE::foo:: 1;
+print CORE::foo::bar 2;
+####
+# trailing colons on glob names
+no strict 'vars';
+$Foo::::baz = 1;
+print $foo, $foo::, $foo::::;
+print @foo, @foo::, @foo::::;
+print %foo, %foo::, %foo::::;
+print $foo{'a'}, $foo::{'a'}, $foo::::{'a'};
+print &foo, &foo::, &foo::::;
+print &foo(), &foo::(), &foo::::();
+print \&foo, \&foo::, \&foo::::;
+print *foo, *foo::, *foo::::;
+print stat Foo, stat Foo::::;
+print Foo 1;
+print Foo:::: 2;
+####
+# trailing colons mixed with CORE
+no strict 'vars';
+print $CORE, $CORE::, $CORE::::;
+print @CORE, @CORE::, @CORE::::;
+print %CORE, %CORE::, %CORE::::;
+print $CORE{'a'}, $CORE::{'a'}, $CORE::::{'a'};
+print &CORE, &CORE::, &CORE::::;
+print &CORE(), &CORE::(), &CORE::::();
+print \&CORE, \&CORE::, \&CORE::::;
+print *CORE, *CORE::, *CORE::::;
+print stat CORE, stat CORE::::;
+print CORE 1;
+print CORE:::: 2;
+print $CORE::foo, $CORE::foo::, $CORE::foo::::;
+print @CORE::foo, @CORE::foo::, @CORE::foo::::;
+print %CORE::foo, %CORE::foo::, %CORE::foo::::;
+print $CORE::foo{'a'}, $CORE::foo::{'a'}, $CORE::foo::::{'a'};
+print &CORE::foo, &CORE::foo::, &CORE::foo::::;
+print &CORE::foo(), &CORE::foo::(), &CORE::foo::::();
+print \&CORE::foo, \&CORE::foo::, \&CORE::foo::::;
+print *CORE::foo, *CORE::foo::, *CORE::foo::::;
+print stat CORE::foo::, stat CORE::foo::::;
+print CORE::foo:: 1;
+print CORE::foo:::: 2;
+####
+# \&foo
+my sub foo {
+    1;
+}
+no strict 'vars';
+print \&main::foo;
+print \&{foo};
+print \&bar;
+use strict 'vars';
+print \&main::foo;
+print \&{foo};
+print \&main::bar;
+####
+# exists(&foo)
+my sub foo {
+    1;
+}
+no strict 'vars';
+print exists &main::foo;
+print exists &{foo};
+print exists &bar;
+use strict 'vars';
+print exists &main::foo;
+print exists &{foo};
+print exists &main::bar;

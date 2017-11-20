@@ -1161,88 +1161,88 @@ static int THX_keyword_active(pTHX_ SV *hintkey_sv)
 static int my_keyword_plugin(pTHX_
     char *keyword_ptr, STRLEN keyword_len, OP **op_ptr)
 {
-    if(keyword_len == 3 && strEQs(keyword_ptr, "rpn") &&
+    if (memEQs(keyword_ptr, keyword_len, "rpn") &&
 		    keyword_active(hintkey_rpn_sv)) {
 	*op_ptr = parse_keyword_rpn();
 	return KEYWORD_PLUGIN_EXPR;
-    } else if(keyword_len == 7 && strEQs(keyword_ptr, "calcrpn") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "calcrpn") &&
 		    keyword_active(hintkey_calcrpn_sv)) {
 	*op_ptr = parse_keyword_calcrpn();
 	return KEYWORD_PLUGIN_STMT;
-    } else if(keyword_len == 9 && strEQs(keyword_ptr, "stufftest") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "stufftest") &&
 		    keyword_active(hintkey_stufftest_sv)) {
 	*op_ptr = parse_keyword_stufftest();
 	return KEYWORD_PLUGIN_STMT;
-    } else if(keyword_len == 12 &&
-		    strEQs(keyword_ptr, "swaptwostmts") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "swaptwostmts") &&
 		    keyword_active(hintkey_swaptwostmts_sv)) {
 	*op_ptr = parse_keyword_swaptwostmts();
 	return KEYWORD_PLUGIN_STMT;
-    } else if(keyword_len == 8 && strEQs(keyword_ptr, "looprest") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "looprest") &&
 		    keyword_active(hintkey_looprest_sv)) {
 	*op_ptr = parse_keyword_looprest();
 	return KEYWORD_PLUGIN_STMT;
-    } else if(keyword_len == 14 && strEQs(keyword_ptr, "scopelessblock") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "scopelessblock") &&
 		    keyword_active(hintkey_scopelessblock_sv)) {
 	*op_ptr = parse_keyword_scopelessblock();
 	return KEYWORD_PLUGIN_STMT;
-    } else if(keyword_len == 10 && strEQs(keyword_ptr, "stmtasexpr") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "stmtasexpr") &&
 		    keyword_active(hintkey_stmtasexpr_sv)) {
 	*op_ptr = parse_keyword_stmtasexpr();
 	return KEYWORD_PLUGIN_EXPR;
-    } else if(keyword_len == 11 && strEQs(keyword_ptr, "stmtsasexpr") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "stmtsasexpr") &&
 		    keyword_active(hintkey_stmtsasexpr_sv)) {
 	*op_ptr = parse_keyword_stmtsasexpr();
 	return KEYWORD_PLUGIN_EXPR;
-    } else if(keyword_len == 9 && strEQs(keyword_ptr, "loopblock") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "loopblock") &&
 		    keyword_active(hintkey_loopblock_sv)) {
 	*op_ptr = parse_keyword_loopblock();
 	return KEYWORD_PLUGIN_STMT;
-    } else if(keyword_len == 11 && strEQs(keyword_ptr, "blockasexpr") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "blockasexpr") &&
 		    keyword_active(hintkey_blockasexpr_sv)) {
 	*op_ptr = parse_keyword_blockasexpr();
 	return KEYWORD_PLUGIN_EXPR;
-    } else if(keyword_len == 9 && strEQs(keyword_ptr, "swaplabel") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "swaplabel") &&
 		    keyword_active(hintkey_swaplabel_sv)) {
 	*op_ptr = parse_keyword_swaplabel();
 	return KEYWORD_PLUGIN_STMT;
-    } else if(keyword_len == 10 && strEQs(keyword_ptr, "labelconst") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "labelconst") &&
 		    keyword_active(hintkey_labelconst_sv)) {
 	*op_ptr = parse_keyword_labelconst();
 	return KEYWORD_PLUGIN_EXPR;
-    } else if(keyword_len == 13 && strEQs(keyword_ptr, "arrayfullexpr") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "arrayfullexpr") &&
 		    keyword_active(hintkey_arrayfullexpr_sv)) {
 	*op_ptr = parse_keyword_arrayfullexpr();
 	return KEYWORD_PLUGIN_EXPR;
-    } else if(keyword_len == 13 && strEQs(keyword_ptr, "arraylistexpr") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "arraylistexpr") &&
 		    keyword_active(hintkey_arraylistexpr_sv)) {
 	*op_ptr = parse_keyword_arraylistexpr();
 	return KEYWORD_PLUGIN_EXPR;
-    } else if(keyword_len == 13 && strEQs(keyword_ptr, "arraytermexpr") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "arraytermexpr") &&
 		    keyword_active(hintkey_arraytermexpr_sv)) {
 	*op_ptr = parse_keyword_arraytermexpr();
 	return KEYWORD_PLUGIN_EXPR;
-    } else if(keyword_len == 14 && strEQs(keyword_ptr, "arrayarithexpr") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "arrayarithexpr") &&
 		    keyword_active(hintkey_arrayarithexpr_sv)) {
 	*op_ptr = parse_keyword_arrayarithexpr();
 	return KEYWORD_PLUGIN_EXPR;
-    } else if(keyword_len == 14 && strEQs(keyword_ptr, "arrayexprflags") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "arrayexprflags") &&
 		    keyword_active(hintkey_arrayexprflags_sv)) {
 	*op_ptr = parse_keyword_arrayexprflags();
 	return KEYWORD_PLUGIN_EXPR;
-    } else if(keyword_len == 5 && strEQs(keyword_ptr, "DEFSV") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "DEFSV") &&
 		    keyword_active(hintkey_DEFSV_sv)) {
 	*op_ptr = parse_keyword_DEFSV();
 	return KEYWORD_PLUGIN_EXPR;
-    } else if(keyword_len == 9 && strEQs(keyword_ptr, "with_vars") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "with_vars") &&
 		    keyword_active(hintkey_with_vars_sv)) {
 	*op_ptr = parse_keyword_with_vars();
 	return KEYWORD_PLUGIN_STMT;
-    } else if(keyword_len == 15 && strEQs(keyword_ptr, "join_with_space") &&
+    } else if (memEQs(keyword_ptr, keyword_len, "join_with_space") &&
 		    keyword_active(hintkey_join_with_space_sv)) {
 	*op_ptr = parse_join_with_space();
 	return KEYWORD_PLUGIN_EXPR;
     } else {
+        assert(next_keyword_plugin != my_keyword_plugin);
 	return next_keyword_plugin(aTHX_ keyword_ptr, keyword_len, op_ptr);
     }
 }
@@ -1422,7 +1422,6 @@ test_valid_utf8_to_uvchr(s)
     PREINIT:
         STRLEN retlen;
         UV ret;
-        STRLEN slen;
 
     CODE:
         /* Call utf8n_to_uvchr() with the inputs.  It always asks for the
@@ -1433,8 +1432,7 @@ test_valid_utf8_to_uvchr(s)
         RETVAL = newAV();
         sv_2mortal((SV*)RETVAL);
 
-        ret
-         = valid_utf8_to_uvchr((U8*) SvPV(s, slen), &retlen);
+        ret = valid_utf8_to_uvchr((U8*) SvPV_nolen(s), &retlen);
 
         /* Returns the return value in [0]; <retlen> in [1] */
         av_push(RETVAL, newSVuv(ret));
@@ -2315,6 +2313,7 @@ PREINIT:
     I32 retcnt;
     SV * errsv;
     char * errstr;
+    STRLEN errlen;
     SV * miscsv = sv_newmortal();
     HV * hv = (HV*)sv_2mortal((SV*)newHV());
 CODE:
@@ -2348,9 +2347,8 @@ CODE:
     SPAGAIN;
     SP -= retcnt;
     errsv = ERRSV;
-    errstr = SvPV_nolen(errsv);
-    if(strnEQ(errstr, "Undefined subroutine &main:: called at",
-              sizeof("Undefined subroutine &main:: called at") - 1)) {
+    errstr = SvPV(errsv, errlen);
+    if(memBEGINs(errstr, errlen, "Undefined subroutine &main:: called at")) {
         PUSHMARK(SP);
         retcnt = call_sv((SV*)i_sub, 0); /* call again to increase counter */
         SPAGAIN;
@@ -2361,9 +2359,8 @@ CODE:
     SPAGAIN;
     SP -= retcnt;
     errsv = ERRSV;
-    errstr = SvPV_nolen(errsv);
-    if(strnEQ(errstr, "Can't use an undefined value as a subroutine reference at",
-              sizeof("Can't use an undefined value as a subroutine reference at") - 1)) {
+    errstr = SvPV(errsv, errlen);
+    if(memBEGINs(errstr, errlen, "Can't use an undefined value as a subroutine reference at")) {
         PUSHMARK(SP);
         retcnt = call_sv((SV*)i_sub, 0); /* call again to increase counter */
         SPAGAIN;
@@ -2374,9 +2371,8 @@ CODE:
     SPAGAIN;
     SP -= retcnt;
     errsv = ERRSV;
-    errstr = SvPV_nolen(errsv);
-    if(strnEQ(errstr, "Not a CODE reference at",
-              sizeof("Not a CODE reference at") - 1)) {
+    errstr = SvPV(errsv, errlen);
+    if(memBEGINs(errstr, errlen, "Not a CODE reference at")) {
         PUSHMARK(SP);
         retcnt = call_sv((SV*)i_sub, 0); /* call again to increase counter */
         SPAGAIN;
@@ -2890,7 +2886,7 @@ utf16_to_utf8 (sv, ...)
 	    len = SvUV(ST(1));
  	}
 	/* Mortalise this right now, as we'll be testing croak()s  */
-	dest = sv_2mortal(newSV(len * 3 / 2 + 1));
+	dest = sv_2mortal(newSV(len * 2 + 1));
 	if (ix) {
 	    utf16_to_utf8_reversed(source, (U8 *)SvPVX(dest), len, &got);
 	} else {
@@ -3340,13 +3336,13 @@ test_coplabel()
         cop = &PL_compiling;
         Perl_cop_store_label(aTHX_ cop, "foo", 3, 0);
         label = Perl_cop_fetch_label(aTHX_ cop, &len, &utf8);
-        if (strcmp(label,"foo")) croak("fail # cop_fetch_label label");
+        if (strNE(label,"foo")) croak("fail # cop_fetch_label label");
         if (len != 3) croak("fail # cop_fetch_label len");
         if (utf8) croak("fail # cop_fetch_label utf8");
         /* SMALL GERMAN UMLAUT A */
         Perl_cop_store_label(aTHX_ cop, "fo\xc3\xa4", 4, SVf_UTF8);
         label = Perl_cop_fetch_label(aTHX_ cop, &len, &utf8);
-        if (strcmp(label,"fo\xc3\xa4")) croak("fail # cop_fetch_label label");
+        if (strNE(label,"fo\xc3\xa4")) croak("fail # cop_fetch_label label");
         if (len != 4) croak("fail # cop_fetch_label len");
         if (!utf8) croak("fail # cop_fetch_label utf8");
 
@@ -3477,7 +3473,7 @@ test_op_list()
 #define iv_op(iv) newSVOP(OP_CONST, 0, newSViv(iv))
 #define check_op(o, expect) \
     do { \
-	if (strcmp(test_op_list_describe(o), (expect))) \
+	if (strNE(test_op_list_describe(o), (expect))) \
 	    croak("fail %s %s", test_op_list_describe(o), (expect)); \
     } while(0)
 	a = op_append_elem(OP_LIST, NULL, NULL);
@@ -3898,8 +3894,7 @@ BOOT:
     hintkey_DEFSV_sv = newSVpvs_share("XS::APItest/DEFSV");
     hintkey_with_vars_sv = newSVpvs_share("XS::APItest/with_vars");
     hintkey_join_with_space_sv = newSVpvs_share("XS::APItest/join_with_space");
-    next_keyword_plugin = PL_keyword_plugin;
-    PL_keyword_plugin = my_keyword_plugin;
+    wrap_keyword_plugin(my_keyword_plugin, &next_keyword_plugin);
 }
 
 void
@@ -4273,6 +4268,28 @@ string_without_null(SV *sv)
         const char *s = SvPV(sv, len);
         RETVAL = newSVpvn_flags(s, len, SvUTF8(sv));
         *SvEND(RETVAL) = 0xff;
+    }
+    OUTPUT:
+        RETVAL
+
+CV *
+get_cv(SV *sv)
+    CODE:
+    {
+        STRLEN len;
+        const char *s = SvPV(sv, len);
+        RETVAL = get_cvn_flags(s, len, 0);
+    }
+    OUTPUT:
+        RETVAL
+
+CV *
+get_cv_flags(SV *sv, UV flags)
+    CODE:
+    {
+        STRLEN len;
+        const char *s = SvPV(sv, len);
+        RETVAL = get_cvn_flags(s, len, flags);
     }
     OUTPUT:
         RETVAL

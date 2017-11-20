@@ -19,6 +19,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
 	 OPpSORT_REVERSE OPpMULTIDEREF_EXISTS OPpMULTIDEREF_DELETE
          OPpSPLIT_ASSIGN OPpSPLIT_LEX
          OPpPADHV_ISKEYS OPpRV2HV_ISKEYS
+         OPpMULTICONCAT_APPEND OPpMULTICONCAT_STRINGIFY OPpMULTICONCAT_FAKE
          OPpTRUEBOOL OPpINDEX_BOOLNEG
 	 SVf_IOK SVf_NOK SVf_ROK SVf_POK SVpad_OUR SVf_FAKE SVs_RMG SVs_SMG
 	 SVs_PADTMP SVpad_TYPED
@@ -50,9 +51,9 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
         MDEREF_SHIFT
     );
 
-$VERSION = '1.43';
+$VERSION = '1.45';
 use strict;
-use vars qw/$AUTOLOAD/;
+our $AUTOLOAD;
 use warnings ();
 require feature;
 
@@ -72,104 +73,6 @@ BEGIN {
 	*{$_} = sub () {0} unless *{$_}{CODE};
     }
 }
-
-# Changes between 0.50 and 0.51:
-# - fixed nulled leave with live enter in sort { }
-# - fixed reference constants (\"str")
-# - handle empty programs gracefully
-# - handle infinite loops (for (;;) {}, while (1) {})
-# - differentiate between 'for my $x ...' and 'my $x; for $x ...'
-# - various minor cleanups
-# - moved globals into an object
-# - added '-u', like B::C
-# - package declarations using cop_stash
-# - subs, formats and code sorted by cop_seq
-# Changes between 0.51 and 0.52:
-# - added pp_threadsv (special variables under USE_5005THREADS)
-# - added documentation
-# Changes between 0.52 and 0.53:
-# - many changes adding precedence contexts and associativity
-# - added '-p' and '-s' output style options
-# - various other minor fixes
-# Changes between 0.53 and 0.54:
-# - added support for new 'for (1..100)' optimization,
-#   thanks to Gisle Aas
-# Changes between 0.54 and 0.55:
-# - added support for new qr// construct
-# - added support for new pp_regcreset OP
-# Changes between 0.55 and 0.56:
-# - tested on base/*.t, cmd/*.t, comp/*.t, io/*.t
-# - fixed $# on non-lexicals broken in last big rewrite
-# - added temporary fix for change in opcode of OP_STRINGIFY
-# - fixed problem in 0.54's for() patch in 'for (@ary)'
-# - fixed precedence in conditional of ?:
-# - tweaked list paren elimination in 'my($x) = @_'
-# - made continue-block detection trickier wrt. null ops
-# - fixed various prototype problems in pp_entersub
-# - added support for sub prototypes that never get GVs
-# - added unquoting for special filehandle first arg in truncate
-# - print doubled rv2gv (a bug) as '*{*GV}' instead of illegal '**GV'
-# - added semicolons at the ends of blocks
-# - added -l '#line' declaration option -- fixes cmd/subval.t 27,28
-# Changes between 0.56 and 0.561:
-# - fixed multiply-declared my var in pp_truncate (thanks to Sarathy)
-# - used new B.pm symbolic constants (done by Nick Ing-Simmons)
-# Changes between 0.561 and 0.57:
-# - stylistic changes to symbolic constant stuff
-# - handled scope in s///e replacement code
-# - added unquote option for expanding "" into concats, etc.
-# - split method and proto parts of pp_entersub into separate functions
-# - various minor cleanups
-# Changes after 0.57:
-# - added parens in \&foo (patch by Albert Dvornik)
-# Changes between 0.57 and 0.58:
-# - fixed '0' statements that weren't being printed
-# - added methods for use from other programs
-#   (based on patches from James Duncan and Hugo van der Sanden)
-# - added -si and -sT to control indenting (also based on a patch from Hugo)
-# - added -sv to print something else instead of '???'
-# - preliminary version of utf8 tr/// handling
-# Changes after 0.58:
-# - uses of $op->ppaddr changed to new $op->name (done by Sarathy)
-# - added support for Hugo's new OP_SETSTATE (like nextstate)
-# Changes between 0.58 and 0.59
-# - added support for Chip's OP_METHOD_NAMED
-# - added support for Ilya's OPpTARGET_MY optimization
-# - elided arrows before '()' subscripts when possible
-# Changes between 0.59 and 0.60
-# - support for method attributes was added
-# - some warnings fixed
-# - separate recognition of constant subs
-# - rewrote continue block handling, now recognizing for loops
-# - added more control of expanding control structures
-# Changes between 0.60 and 0.61 (mostly by Robin Houston)
-# - many bug-fixes
-# - support for pragmas and 'use'
-# - support for the little-used $[ variable
-# - support for __DATA__ sections
-# - UTF8 support
-# - BEGIN, CHECK, INIT and END blocks
-# - scoping of subroutine declarations fixed
-# - compile-time output from the input program can be suppressed, so that the
-#   output is just the deparsed code. (a change to O.pm in fact)
-# - our() declarations
-# - *all* the known bugs are now listed in the BUGS section
-# - comprehensive test mechanism (TEST -deparse)
-# Changes between 0.62 and 0.63 (mostly by Rafael Garcia-Suarez)
-# - bug-fixes
-# - new switch -P
-# - support for command-line switches (-l, -0, etc.)
-# Changes between 0.63 and 0.64
-# - support for //, CHECK blocks, and assertions
-# - improved handling of foreach loops and lexicals
-# - option to use Data::Dumper for constants
-# - more bug fixes
-# - discovered lots more bugs not yet fixed
-#
-# ...
-#
-# Changes between 0.72 and 0.73
-# - support new switch constructs
 
 # Todo:
 #  (See also BUGS section at the end of this file)
@@ -365,7 +268,7 @@ BEGIN {
 
 
 BEGIN { for (qw[ const stringify rv2sv list glob pushmark null aelem
-		 kvaslice kvhslice
+		 kvaslice kvhslice padsv
                  nextstate dbstate rv2av rv2hv helem custom ]) {
     eval "sub OP_\U$_ () { " . opnumber($_) . "}"
 }}
@@ -922,7 +825,6 @@ sub init {
 				? $self->{'ambient_warnings'} & WARN_MASK
 				: undef;
     $self->{'hints'}    = $self->{'ambient_hints'};
-    $self->{'hints'} &= 0xFF if $] < 5.009;
     $self->{'hinthash'} = $self->{'ambient_hinthash'};
 
     # also a convenient place to clear out subs_declared
@@ -1891,7 +1793,7 @@ sub gv_name {
 sub stash_variable {
     my ($self, $prefix, $name, $cx) = @_;
 
-    return "$prefix$name" if $name =~ /::/;
+    return $prefix.$self->maybe_qualify($prefix, $name) if $name =~ /::/;
 
     unless ($prefix eq '$' || $prefix eq '@' || $prefix eq '&' || #'
 	    $prefix eq '%' || $prefix eq '$#') {
@@ -1967,11 +1869,16 @@ sub stash_variable_name {
 sub maybe_qualify {
     my ($self,$prefix,$name) = @_;
     my $v = ($prefix eq '$#' ? '@' : $prefix) . $name;
-    return $name if !$prefix || $name =~ /::/;
+    if ($prefix eq "") {
+	$name .= "::" if $name =~ /(?:\ACORE::[^:]*|::)\z/;
+	return $name;
+    }
+    return $name if $name =~ /::/;
     return $self->{'curstash'}.'::'. $name
 	if
 	    $name =~ /^(?!\d)\w/         # alphabetic
 	 && $v    !~ /^\$[ab]\z/	 # not $a or $b
+	 && $v =~ /\A[\$\@\%\&]/         # scalar, array, hash, or sub
 	 && !$globalnames{$name}         # not a global name
 	 && $self->{hints} & $strict_bits{vars}  # strict vars
 	 && !$self->lex_in_scope($v,1)   # no "our"
@@ -2061,14 +1968,6 @@ sub find_scope {
 sub cop_subs {
     my ($self, $op, $out_seq) = @_;
     my $seq = $op->cop_seq;
-    if ($] < 5.021006) {
-      # If we have nephews, then our sequence number indicates
-      # the cop_seq of the end of some sort of scope.
-      if (class($op->sibling) ne "NULL" && $op->sibling->flags & OPf_KIDS
-	and my $nseq = $self->find_scope_st($op->sibling) ) {
-	$seq = $nseq;
-      }
-    }
     $seq = $out_seq if defined($out_seq) && $out_seq < $seq;
     return $self->seq_subs($seq);
 }
@@ -2150,7 +2049,7 @@ sub pragmata {
 	$self->{'warnings'} = $warning_bits;
     }
 
-    my $hints = $] < 5.008009 ? $op->private : $op->hints;
+    my $hints = $op->hints;
     my $old_hints = $self->{'hints'};
     if ($self->{'hints'} != $hints) {
 	push @text, $self->declare_hints($self->{'hints'}, $hints);
@@ -2158,11 +2057,9 @@ sub pragmata {
     }
 
     my $newhh;
-    if ($] > 5.009) {
-	$newhh = $op->hints_hash->HASH;
-    }
+    $newhh = $op->hints_hash->HASH;
 
-    if ($] >= 5.015006) {
+    {
 	# feature bundle hints
 	my $from = $old_hints & $feature::hint_mask;
 	my $to   = $    hints & $feature::hint_mask;
@@ -2187,7 +2084,7 @@ sub pragmata {
 	}
     }
 
-    if ($] > 5.009) {
+    {
 	push @text, $self->declare_hinthash(
 	    $self->{'hinthash'}, $newhh,
 	    $self->{indent_size}, $self->{hints},
@@ -2280,7 +2177,7 @@ sub declare_hinthash {
     my @unfeatures; # bugs?
     for my $key (sort keys %$to) {
 	next if $ignored_hints{$key};
-	my $is_feature = $key =~ /^feature_/ && $^V ge 5.15.6;
+	my $is_feature = $key =~ /^feature_/;
 	next if $is_feature and not $doing_features;
 	if (!exists $from->{$key} or $from->{$key} ne $to->{$key}) {
 	    push(@features, $key), next if $is_feature;
@@ -2296,7 +2193,7 @@ sub declare_hinthash {
     }
     for my $key (sort keys %$from) {
 	next if $ignored_hints{$key};
-	my $is_feature = $key =~ /^feature_/ && $^V ge 5.15.6;
+	my $is_feature = $key =~ /^feature_/;
 	next if $is_feature and not $doing_features;
 	if (!exists $to->{$key}) {
 	    push(@unfeatures, $key), next if $is_feature;
@@ -3117,7 +3014,7 @@ sub pp_aassign { binop(@_, "=", 7, SWAP_CHILDREN | LIST_CONTEXT) }
 
 sub pp_smartmatch {
     my ($self, $op, $cx) = @_;
-    if ($op->flags & OPf_SPECIAL) {
+    if (($op->flags & OPf_SPECIAL) && $self->{expand} < 2) {
 	return $self->deparse($op->last, $cx);
     }
     else {
@@ -4159,7 +4056,7 @@ sub pp_gv {
     my $self = shift;
     my($op, $cx) = @_;
     my $gv = $self->gv_or_padgv($op);
-    return $self->gv_name($gv);
+    return $self->maybe_qualify("", $self->gv_name($gv));
 }
 
 sub pp_aelemfast_lex {
@@ -4196,7 +4093,8 @@ sub rv2x {
     }
     my $kid = $op->first;
     if ($kid->name eq "gv") {
-	return $self->stash_variable($type, $self->deparse($kid, 0), $cx);
+	return $self->stash_variable($type,
+		    $self->gv_name($self->gv_or_padgv($kid)), $cx);
     } elsif (is_scalar $kid) {
 	my $str = $self->deparse($kid, 0);
 	if ($str =~ /^\$([^\w\d])\z/) {
@@ -4404,6 +4302,142 @@ sub multideref_var_name {
 }
 
 
+# deparse an OP_MULTICONCAT. If $in_dq is 1, we're within
+# a double-quoted string, so for example.
+#     "abc\Qdef$x\Ebar"
+# might get compiled as
+#    multiconcat("abc", metaquote(multiconcat("def", $x)), "bar")
+# and the inner multiconcat should be deparsed as C<def$x> rather than
+# the normal C<def . $x>
+# Ditto if  $in_dq is 2, handle qr/...\Qdef$x\E.../.
+
+sub do_multiconcat {
+    my $self = shift;
+    my($op, $cx, $in_dq) = @_;
+
+    my $kid;
+    my @kids;
+    my $assign;
+    my $append;
+    my $lhs = "";
+
+    for ($kid = $op->first; !null $kid; $kid = $kid->sibling) {
+        # skip the consts and/or padsv we've optimised away
+        push @kids, $kid
+            unless $kid->type == OP_NULL
+              && (   $kid->targ == OP_PADSV
+                  || $kid->targ == OP_CONST
+                  || $kid->targ == OP_PUSHMARK);
+    }
+
+    $append = ($op->private & OPpMULTICONCAT_APPEND);
+
+    if ($op->private & OPpTARGET_MY) {
+        # '$lex  = ...' or '$lex .= ....' or 'my $lex = '
+        $lhs = $self->padname($op->targ);
+        $lhs = "my $lhs" if ($op->private & OPpLVAL_INTRO);
+        $assign = 1;
+    }
+    elsif ($op->flags & OPf_STACKED) {
+        # 'expr  = ...' or 'expr .= ....'
+        my $expr = $append ? shift(@kids) : pop(@kids);
+        $lhs = $self->deparse($expr, 7);
+        $assign = 1;
+    }
+
+    if ($assign) {
+        $lhs .=  $append ? ' .= ' : ' = ';
+    }
+
+    my ($nargs, $const_str, @const_lens) = $op->aux_list($self->{curcv});
+
+    my @consts;
+    my $i = 0;
+    for (@const_lens) {
+        if ($_ == -1) {
+            push @consts, undef;
+        }
+        else {
+            push @consts, substr($const_str, $i, $_);
+        my @args;
+            $i += $_;
+        }
+    }
+
+    my $rhs = "";
+
+    if (   $in_dq
+        || (($op->private & OPpMULTICONCAT_STRINGIFY) && !$self->{'unquote'}))
+    {
+        # "foo=$foo bar=$bar "
+        my $not_first;
+        while (@consts) {
+            $rhs = dq_disambiguate($rhs, $self->dq(shift(@kids), 18))
+                if $not_first;
+            $not_first = 1;
+            my $c = shift @consts;
+            if (defined $c) {
+                if ($in_dq == 2) {
+                    # in pattern: don't convert newline to '\n' etc etc
+                    my $s = re_uninterp(escape_re(re_unback($c)));
+                    $rhs = re_dq_disambiguate($rhs, $s)
+                }
+                else {
+                    my $s = uninterp(escape_str(unback($c)));
+                    $rhs = dq_disambiguate($rhs, $s)
+                }
+            }
+        }
+        return $rhs if $in_dq;
+        $rhs = single_delim("qq", '"', $rhs, $self);
+    }
+    elsif ($op->private & OPpMULTICONCAT_FAKE) {
+        # sprintf("foo=%s bar=%s ", $foo, $bar)
+
+        my @all;
+        @consts = map { $_ //= ''; s/%/%%/g; $_ } @consts;
+        my $fmt = join '%s', @consts;
+        push @all, $self->quoted_const_str($fmt);
+
+        # the following is a stripped down copy of sub listop {}
+        my $parens = $assign || ($cx >= 5) || $self->{'parens'};
+        my $fullname = $self->keyword('sprintf');
+        push @all, map $self->deparse($_, 6), @kids;
+
+        $rhs = $parens
+                ? "$fullname(" . join(", ", @all) . ")"
+                : "$fullname " . join(", ", @all);
+    }
+    else {
+        # "foo=" . $foo . " bar=" . $bar
+        my @all;
+        my $not_first;
+        while (@consts) {
+            push @all, $self->deparse(shift(@kids), 18) if $not_first;
+            $not_first = 1;
+            my $c = shift @consts;
+            if (defined $c) {
+                push @all, $self->quoted_const_str($c);
+            }
+        }
+        $rhs .= join ' . ', @all;
+    }
+
+    my $text = $lhs . $rhs;
+
+    $text = "($text)" if     ($cx >= (($assign) ? 7 : 18+1))
+                          || $self->{'parens'};
+
+    return $text;
+}
+
+
+sub pp_multiconcat {
+    my $self = shift;
+    $self->do_multiconcat(@_, 0);
+}
+
+
 sub pp_multideref {
     my $self = shift;
     my($op, $cx) = @_;
@@ -4543,6 +4577,7 @@ sub pp_gelem {
     my $scope = is_scope($glob);
     $glob = $self->deparse($glob, 0);
     $part = $self->deparse($part, 1);
+    $glob =~ s/::\z// unless $scope;
     return "*" . ($scope ? "{$glob}" : $glob) . "{$part}";
 }
 
@@ -4786,7 +4821,7 @@ sub retscalar {
                  |study|pos|preinc|i_preinc|predec|i_predec|postinc
                  |i_postinc|postdec|i_postdec|pow|multiply|i_multiply
                  |divide|i_divide|modulo|i_modulo|add|i_add|subtract
-                 |i_subtract|concat|stringify|left_shift|right_shift|lt
+                 |i_subtract|concat|multiconcat|stringify|left_shift|right_shift|lt
                  |i_lt|gt|i_gt|le|i_le|ge|i_ge|eq|i_eq|ne|i_ne|ncmp|i_ncmp
                  |slt|sgt|sle|sge|seq|sne|scmp|[sn]?bit_(?:and|x?or)|negate
                  |i_negate|not|[sn]?complement|smartmatch|atan2|sin|cos
@@ -4848,7 +4883,7 @@ sub pp_entersub {
 	    $proto = $cv->PV if $cv->FLAGS & SVf_POK;
 	}
 	$simple = 1; # only calls of named functions can be prototyped
-	$kid = $self->deparse($kid, 24);
+	$kid = $self->maybe_qualify("!", $self->gv_name($gv));
 	my $fq;
 	# Fully qualify any sub name that conflicts with a lexical.
 	if ($self->lex_in_scope("&$kid")
@@ -5162,6 +5197,20 @@ sub split_float {
     return ($mantissa, $exponent);
 }
 
+
+# suitably single- or double-quote a literal constant string
+
+sub quoted_const_str {
+    my ($self, $str) =@_;
+    if ($str =~ /[[:^print:]]/a) {
+        return single_delim("qq", '"',
+                             uninterp(escape_str unback $str), $self);
+    } else {
+        return single_delim("q", "'", unback($str), $self);
+    }
+}
+
+
 sub const {
     my $self = shift;
     my($sv, $cx) = @_;
@@ -5247,13 +5296,8 @@ sub const {
 	    }
 	    return "{" . join(", ", @elts) . "}";
 	} elsif ($class eq "CV") {
-	    BEGIN {
-		if ($] > 5.0150051) {
-		    require overloading;
-		    unimport overloading;
-		}
-	    }
-	    if ($] > 5.0150051 && $self->{curcv} &&
+	    no overloading;
+	    if ($self->{curcv} &&
 		 $self->{curcv}->object_2svref == $ref->object_2svref) {
 		return $self->keyword("__SUB__");
 	    }
@@ -5275,12 +5319,7 @@ sub const {
 	return $self->maybe_parens("\\$const", $cx, 20);
     } elsif ($sv->FLAGS & SVf_POK) {
 	my $str = $sv->PV;
-	if ($str =~ /[[:^print:]]/a) {
-	    return single_delim("qq", '"',
-				 uninterp(escape_str unback $str), $self);
-	} else {
-	    return single_delim("q", "'", unback($str), $self);
-	}
+        return $self->quoted_const_str($str);
     } else {
 	return "undef";
     }
@@ -5340,6 +5379,25 @@ sub pp_const {
     return $self->const($sv, $cx);
 }
 
+
+# Join two components of a double-quoted string, disambiguating
+# "${foo}bar", "${foo}{bar}", "${foo}[1]", "$foo\::bar"
+
+sub dq_disambiguate {
+    my ($first, $last) = @_;
+    ($last =~ /^[A-Z\\\^\[\]_?]/ &&
+        $first =~ s/([\$@])\^$/${1}{^}/)  # "${^}W" etc
+        || ($last =~ /^[:'{\[\w_]/ && #'
+            $first =~ s/([\$@])([A-Za-z_]\w*)$/${1}{$2}/);
+    return $first . $last;
+}
+
+
+# Deparse a double-quoted optree. For example, "$a[0]\Q$b\Efo\"o" gets
+# compiled to concat(concat($[0],quotemeta($b)),const("fo\"o")), and this
+# sub deparses it back to $a[0]\Q$b\Efo"o
+# (It does not add delimiters)
+
 sub dq {
     my $self = shift;
     my $op = shift;
@@ -5348,16 +5406,9 @@ sub dq {
 	return '$[' if $op->private & OPpCONST_ARYBASE;
 	return uninterp(escape_str(unback($self->const_sv($op)->as_string)));
     } elsif ($type eq "concat") {
-	my $first = $self->dq($op->first);
-	my $last  = $self->dq($op->last);
-
-	# Disambiguate "${foo}bar", "${foo}{bar}", "${foo}[1]", "$foo\::bar"
-	($last =~ /^[A-Z\\\^\[\]_?]/ &&
-	    $first =~ s/([\$@])\^$/${1}{^}/)  # "${^}W" etc
-	    || ($last =~ /^[:'{\[\w_]/ && #'
-		$first =~ s/([\$@])([A-Za-z_]\w*)$/${1}{$2}/);
-
-	return $first . $last;
+        return dq_disambiguate($self->dq($op->first), $self->dq($op->last));
+    } elsif ($type eq "multiconcat") {
+        return $self->do_multiconcat($op, 26, 1);
     } elsif ($type eq "uc") {
 	return '\U' . $self->dq($op->first->sibling) . '\E';
     } elsif ($type eq "lc") {
@@ -5474,7 +5525,7 @@ sub pchr { # ASCII
     } elsif ($n == ord "\r") {
 	return '\\r';
     } elsif ($n >= ord("\cA") and $n <= ord("\cZ")) {
-	return '\\c' . unctrl{chr $n};
+	return '\\c' . $unctrl{chr $n};
     } else {
 #	return '\x' . sprintf("%02x", $n);
 	return '\\' . sprintf("%03o", $n);
@@ -5682,9 +5733,11 @@ sub pp_trans {
 
 sub pp_transr { push @_, 'r'; goto &pp_trans }
 
+# Join two components of a double-quoted re, disambiguating
+# "${foo}bar", "${foo}{bar}", "${foo}[1]".
+
 sub re_dq_disambiguate {
     my ($first, $last) = @_;
-    # Disambiguate "${foo}bar", "${foo}{bar}", "${foo}[1]"
     ($last =~ /^[A-Z\\\^\[\]_?]/ &&
 	$first =~ s/([\$@])\^$/${1}{^}/)  # "${^}W" etc
 	|| ($last =~ /^[{\[\w_]/ &&
@@ -5706,6 +5759,8 @@ sub re_dq {
 	my $first = $self->re_dq($op->first);
 	my $last  = $self->re_dq($op->last);
 	return re_dq_disambiguate($first, $last);
+    } elsif ($type eq "multiconcat") {
+        return $self->do_multiconcat($op, 26, 2);
     } elsif ($type eq "uc") {
 	return '\U' . $self->re_dq($op->first->sibling) . '\E';
     } elsif ($type eq "lc") {
@@ -5753,6 +5808,31 @@ sub pure_string {
     elsif ($type eq 'concat') {
 	return $self->pure_string($op->first)
             && $self->pure_string($op->last);
+    }
+    elsif ($type eq 'multiconcat') {
+        my ($kid, @kids);
+        for ($kid = $op->first; !null $kid; $kid = $kid->sibling) {
+            # skip the consts and/or padsv we've optimised away
+            push @kids, $kid
+                unless $kid->type == OP_NULL
+                  && (   $kid->targ == OP_PADSV
+                      || $kid->targ == OP_CONST
+                      || $kid->targ == OP_PUSHMARK);
+        }
+
+        if ($op->flags & OPf_STACKED) {
+            # remove expr from @kids where 'expr  = ...' or 'expr .= ....'
+            if ($op->private & OPpMULTICONCAT_APPEND) {
+                shift(@kids);
+            }
+            else {
+                pop(@kids);
+            }
+        }
+        for (@kids) {
+            return 0 unless $self->pure_string($_);
+        }
+        return 1;
     }
     elsif (is_scalar($op) || $type =~ /^[ah]elem$/) {
 	return 1;
@@ -6594,7 +6674,7 @@ expect.
 =item $[
 
 Takes a number, the value of the array base $[.
-Cannot be non-zero on Perl 5.15.3 or later.
+Obsolete: cannot be non-zero.
 
 =item bytes
 
@@ -6681,11 +6761,10 @@ the main:: package, the code will include a package declaration.
 
 =item *
 
-In Perl 5.20 and earlier, the only pragmas to
+The only pragmas to
 be completely supported are: C<use warnings>,
 C<use strict>, C<use bytes>, C<use integer>
-and C<use feature>.  (C<$[>, which
-behaves like a pragma, is also supported.)
+and C<use feature>.
 
 Excepting those listed above, we're currently unable to guarantee that
 B::Deparse will produce a pragma at the correct point in the program.
@@ -6702,9 +6781,6 @@ we can't guarantee to produce BEGIN blocks or C<use> declarations in
 exactly the right place.  So if you use a module which affects compilation
 (such as by over-riding keywords, overloading constants or whatever)
 then the output code might not work as intended.
-
-This is the most serious problem in Perl 5.20 and earlier.  Fixing this
-required internal changes in Perl 5.22.
 
 =item *
 
@@ -6750,12 +6826,6 @@ L<PadWalker> to serialize closures properly.
 =item *
 
 There are probably many more bugs on non-ASCII platforms (EBCDIC).
-
-=item *
-
-Prior to Perl 5.22, lexical C<my> subroutines were not deparsed properly.
-They were emitted as pure declarations, sometimes in the wrong place.
-Lexical C<state> subroutines were not deparsed at all.
 
 =back
 

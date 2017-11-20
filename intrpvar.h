@@ -557,7 +557,7 @@ PERLVAR(I, sighandlerp,	Sighandler_t)
 
 PERLVARA(I, body_roots,	PERL_ARENA_ROOTS_SIZE, void*) /* array of body roots */
 
-PERLVAR(I, debug,	VOL U32)	/* flags given to -D switch */
+PERLVAR(I, debug,	volatile U32)	/* flags given to -D switch */
 
 PERLVARI(I, padlist_generation, U32, 1)	/* id to identify padlist clones */
 
@@ -613,9 +613,9 @@ PERLVARI(I, perl_destruct_level, signed char,	0)
 #ifdef USE_LOCALE_NUMERIC
 
 PERLVARI(I, numeric_standard, int, TRUE)
-					/* Assume simple numerics */
-PERLVARI(I, numeric_local, bool, TRUE)
-					/* Assume local numerics */
+					/* Assume C locale numerics */
+PERLVARI(I, numeric_underlying, bool, TRUE)
+					/* Assume underlying locale numerics */
 PERLVAR(I, numeric_name, char *)	/* Name of current numeric locale */
 PERLVAR(I, numeric_radix_sv, SV *)	/* The radix separator if not '.' */
 
@@ -828,7 +828,7 @@ PERLVARA(I, op_exec_cnt, OP_max+2, UV)	/* Counts of executed OPs of the given ty
 
 PERLVAR(I, random_state, PL_RANDOM_STATE_TYPE)
 
-PERLVARI(I, dump_re_max_len, STRLEN, 0)
+PERLVARI(I, dump_re_max_len, STRLEN, 60)
 
 /* For internal uses of randomness, this ensures the sequence of
  * random numbers returned by rand() isn't modified by perl's internal

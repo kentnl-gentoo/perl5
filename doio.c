@@ -261,7 +261,7 @@ Perl_do_open6(pTHX_ GV *gv, const char *oname, STRLEN len,
             STRLEN nlen = 0;
 	    /* New style explicit name, type is just mode and layer info */
 #ifdef USE_STDIO
-	    if (SvROK(*svp) && !strchr(oname,'&')) {
+	    if (SvROK(*svp) && !memchr(oname, '&', len)) {
 		if (ckWARN(WARN_IO))
 		    Perl_warner(aTHX_ packWARN(WARN_IO),
 			    "Can't open a reference");
@@ -1150,10 +1150,8 @@ Perl_nextargv(pTHX_ GV *gv, bool nomagicopen)
                         /* XXX silently ignore failures */
 #ifdef HAS_FCHOWN
                         PERL_UNUSED_RESULT(fchown(PL_lastfd,fileuid,filegid));
-#else
-#ifdef HAS_CHOWN
+#elif defined(HAS_CHOWN)
                         PERL_UNUSED_RESULT(PerlLIO_chown(PL_oldname,fileuid,filegid));
-#endif
 #endif
                     }
 		}
@@ -1383,14 +1381,12 @@ Perl_do_close(pTHX_ GV *gv, bool not_implicit)
             }
 #endif
             if (
-#ifdef HAS_RENAME
-#  ifdef ARGV_USE_ATFUNCTIONS
-		S_my_renameat(dfd, SvPVX(*temp_psv), dfd, orig_pv) < 0
-#  else
-                PerlLIO_rename(SvPVX(*temp_psv), orig_pv) < 0
-#  endif
-#else
+#if !defined(HAS_RENAME)
                 link(SvPVX(*temp_psv), orig_pv) < 0
+#elif defined(ARGV_USE_ATFUNCTIONS)
+		S_my_renameat(dfd, SvPVX(*temp_psv), dfd, orig_pv) < 0
+#else
+                PerlLIO_rename(SvPVX(*temp_psv), orig_pv) < 0
 #endif
                 ) {
                 if (!not_implicit) {
@@ -1634,7 +1630,7 @@ Perl_mode_from_discipline(pTHX_ const char *s, STRLEN len)
 	    else {
 		const char *end;
   fail_discipline:
-		end = strchr(s+1, ':');
+		end = (char *) memchr(s+1, ':', len);
 		if (!end)
 		    end = s+len;
 #ifndef PERLIO_LAYERS
@@ -1783,8 +1779,11 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
     if (PL_op->op_flags & OPf_REF) {
 	gv = cGVOP_gv;
       do_fstat:
-        if (gv == PL_defgv)
+        if (gv == PL_defgv) {
+	    if (PL_laststatval < 0)
+		SETERRNO(EBADF,RMS_IFI);
             return PL_laststatval;
+	}
 	io = GvIO(gv);
         do_fstat_have_io:
         PL_laststype = OP_STAT;
@@ -1795,6 +1794,7 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
                 int fd = PerlIO_fileno(IoIFP(io));
                 if (fd < 0) {
                     /* E.g. PerlIO::scalar has no real fd. */
+		    SETERRNO(EBADF,RMS_IFI);
                     return (PL_laststatval = -1);
                 } else {
                     return (PL_laststatval = PerlLIO_fstat(fd, &PL_statcache));
@@ -1805,6 +1805,7 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
         }
 	PL_laststatval = -1;
 	report_evil_fh(gv);
+	SETERRNO(EBADF,RMS_IFI);
 	return -1;
     }
     else if ((PL_op->op_private & (OPpFT_STACKED|OPpFT_AFTER_t))
@@ -1812,7 +1813,7 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
 	return PL_laststatval;
     else {
 	SV* const sv = TOPs;
-	const char *s;
+	const char *s, *d;
 	STRLEN len;
 	if ((gv = MAYBE_DEREF_GV_flags(sv,flags))) {
 	    goto do_fstat;
@@ -1826,9 +1827,14 @@ Perl_my_stat_flags(pTHX_ const U32 flags)
 	s = SvPV_flags_const(sv, len, flags);
 	PL_statgv = NULL;
 	sv_setpvn(PL_statname, s, len);
-	s = SvPVX_const(PL_statname);		/* s now NUL-terminated */
+	d = SvPVX_const(PL_statname);		/* s now NUL-terminated */
 	PL_laststype = OP_STAT;
-	PL_laststatval = PerlLIO_stat(s, &PL_statcache);
+        if (!IS_SAFE_PATHNAME(s, len, OP_NAME(PL_op))) {
+            PL_laststatval = -1;
+        }
+        else {
+            PL_laststatval = PerlLIO_stat(d, &PL_statcache);
+        }
 	if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && should_warn_nl(s)) {
             GCC_DIAG_IGNORE(-Wformat-nonliteral); /* PL_warn_nl is constant */
 	    Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "stat");
@@ -1845,12 +1851,15 @@ Perl_my_lstat_flags(pTHX_ const U32 flags)
     static const char* const no_prev_lstat = "The stat preceding -l _ wasn't an lstat";
     dSP;
     const char *file;
+    STRLEN len;
     SV* const sv = TOPs;
     bool isio = FALSE;
     if (PL_op->op_flags & OPf_REF) {
 	if (cGVOP_gv == PL_defgv) {
 	    if (PL_laststype != OP_LSTAT)
 		Perl_croak(aTHX_ "%s", no_prev_lstat);
+	    if (PL_laststatval < 0)
+		SETERRNO(EBADF,RMS_IFI);
 	    return PL_laststatval;
 	}
 	PL_laststatval = -1;
@@ -1860,6 +1869,7 @@ Perl_my_lstat_flags(pTHX_ const U32 flags)
 		              "Use of -l on filehandle %" HEKf,
 			      HEKfARG(GvENAME_HEK(cGVOP_gv)));
 	}
+	SETERRNO(EBADF,RMS_IFI);
 	return -1;
     }
     if ((PL_op->op_private & (OPpFT_STACKED|OPpFT_AFTER_t))
@@ -1888,9 +1898,14 @@ Perl_my_lstat_flags(pTHX_ const U32 flags)
                               HEKfARG(GvENAME_HEK((const GV *)
                                           (SvROK(sv) ? SvRV(sv) : sv))));
     }
-    file = SvPV_flags_const_nolen(sv, flags);
+    file = SvPV_flags_const(sv, len, flags);
     sv_setpv(PL_statname,file);
-    PL_laststatval = PerlLIO_lstat(file,&PL_statcache);
+    if (!IS_SAFE_PATHNAME(file, len, OP_NAME(PL_op))) {
+        PL_laststatval = -1;
+    }
+    else {
+        PL_laststatval = PerlLIO_lstat(file,&PL_statcache);
+    }
     if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && should_warn_nl(file)) {
         GCC_DIAG_IGNORE(-Wformat-nonliteral); /* PL_warn_nl is constant */
         Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "lstat");
@@ -1996,7 +2011,7 @@ Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report)
     {
         char flags[PERL_FLAGS_MAX];
 	if (strnEQ(cmd,PL_cshname,PL_cshlen) &&
-	    strEQs(cmd+PL_cshlen," -c")) {
+	    strBEGINs(cmd+PL_cshlen," -c")) {
           my_strlcpy(flags, "-c", PERL_FLAGS_MAX);
 	  s = cmd+PL_cshlen+3;
 	  if (*s == 'f') {
@@ -2032,7 +2047,7 @@ Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report)
     if (*cmd == '.' && isSPACE(cmd[1]))
 	goto doshell;
 
-    if (strEQs(cmd,"exec") && isSPACE(cmd[4]))
+    if (strBEGINs(cmd,"exec") && isSPACE(cmd[4]))
 	goto doshell;
 
     s = cmd;
@@ -2928,33 +2943,29 @@ Perl_vms_start_glob
     fp = Perl_vms_start_glob(aTHX_ tmpglob, io);
 
 #else /* !VMS */
-#ifdef DOSISH
-#ifdef OS2
+# ifdef DOSISH
+#  if defined(OS2)
     sv_setpv(tmpcmd, "for a in ");
     sv_catsv(tmpcmd, tmpglob);
     sv_catpv(tmpcmd, "; do echo \"$a\\0\\c\"; done |");
-#else
-#ifdef DJGPP
+#  elif defined(DJGPP)
     sv_setpv(tmpcmd, "/dev/dosglob/"); /* File System Extension */
     sv_catsv(tmpcmd, tmpglob);
-#else
+#  else
     sv_setpv(tmpcmd, "perlglob ");
     sv_catsv(tmpcmd, tmpglob);
     sv_catpv(tmpcmd, " |");
-#endif /* !DJGPP */
-#endif /* !OS2 */
-#else /* !DOSISH */
-#if defined(CSH)
+#  endif
+# elif defined(CSH)
     sv_setpvn(tmpcmd, PL_cshname, PL_cshlen);
     sv_catpv(tmpcmd, " -cf 'set nonomatch; glob ");
     sv_catsv(tmpcmd, tmpglob);
     sv_catpv(tmpcmd, "' 2>/dev/null |");
-#else
+# else
     sv_setpv(tmpcmd, "echo ");
     sv_catsv(tmpcmd, tmpglob);
     sv_catpv(tmpcmd, "|tr -s ' \t\f\r' '\\n\\n\\n\\n'|");
-#endif /* !CSH */
-#endif /* !DOSISH */
+# endif /* !DOSISH && !CSH */
     {
         SV ** const svp = hv_fetchs(GvHVn(PL_envgv), "LS_COLORS", 0);
         if (svp && *svp)

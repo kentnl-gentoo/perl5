@@ -2,7 +2,7 @@
 use strict;
 require './regen/regen_lib.pl';
 require './Porting/pod_lib.pl';
-use vars qw($TAP $Verbose);
+our ($TAP, $Verbose);
 
 # For processing later
 my @ext;
@@ -161,6 +161,11 @@ foreach ('win32/Makefile', 'win32/makefile.mk') {
 # This must come last as it can exit early:
 if ($TAP && !-d '.git' && !-f 'lib/.gitignore') {
     print "ok # skip not being run from a git checkout, hence no lib/.gitignore\n";
+    exit 0;
+}
+
+if ($ENV{'PERL_BUILD_PACKAGING'}) {
+    print "ok # skip explicitly disabled git tests by PERL_BUILD_PACKAGING\n";
     exit 0;
 }
 

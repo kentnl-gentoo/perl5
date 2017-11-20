@@ -8,10 +8,11 @@
 
 require XSLoader;
 require Exporter;
-package Storable; @ISA = qw(Exporter);
+package Storable;
 
-@EXPORT = qw(store retrieve);
-@EXPORT_OK = qw(
+our @ISA = qw(Exporter);
+our @EXPORT = qw(store retrieve);
+our @EXPORT_OK = qw(
 	nstore store_fd nstore_fd fd_retrieve
 	freeze nfreeze thaw
 	dclone
@@ -20,9 +21,9 @@ package Storable; @ISA = qw(Exporter);
         file_magic read_magic
 );
 
-use vars qw($canonical $forgive_me $VERSION);
+our ($canonical, $forgive_me);
 
-$VERSION = '2.64';
+our $VERSION = '2.65';
 
 BEGIN {
     if (eval {
@@ -83,14 +84,7 @@ XSLoader::load('Storable', $Storable::VERSION);
 # Determine whether locking is possible, but only when needed.
 #
 
-sub CAN_FLOCK; my $CAN_FLOCK; sub CAN_FLOCK {
-	return $CAN_FLOCK if defined $CAN_FLOCK;
-	require Config; import Config;
-	return $CAN_FLOCK =
-		$Config{'d_flock'} ||
-		$Config{'d_fcntl_can_lock'} ||
-		$Config{'d_lockf'};
-}
+sub CAN_FLOCK; # TEMPLATE - replaced by Storable.pm.PL
 
 sub show_file_magic {
     print <<EOM;

@@ -76,18 +76,16 @@ extern int h_errno;
 #ifdef HAS_PASSWD
 # ifdef I_PWD
 #  include <pwd.h>
-# else
-#  if !defined(VMS)
+# elif !defined(VMS)
     struct passwd *getpwnam (char *);
     struct passwd *getpwuid (Uid_t);
-#  endif
 # endif
 # ifdef HAS_GETPWENT
-#ifndef getpwent
+#  ifndef getpwent
   struct passwd *getpwent (void);
-#elif defined (VMS) && defined (my_getpwent)
+#  elif defined (VMS) && defined (my_getpwent)
   struct passwd *Perl_my_getpwent (pTHX);
-#endif
+#  endif
 # endif
 #endif
 
@@ -99,9 +97,9 @@ extern int h_errno;
     struct group *getgrgid (Gid_t);
 # endif
 # ifdef HAS_GETGRENT
-#ifndef getgrent
+#  ifndef getgrent
     struct group *getgrent (void);
-#endif
+#  endif
 # endif
 #endif
 
@@ -118,12 +116,10 @@ extern int h_errno;
 #   undef my_chsize
 # endif
 # define my_chsize PerlLIO_chsize
+#elif defined(HAS_TRUNCATE)
+# define my_chsize PerlLIO_chsize
 #else
-# ifdef HAS_TRUNCATE
-#   define my_chsize PerlLIO_chsize
-# else
 I32 my_chsize(int fd, Off_t length);
-# endif
 #endif
 
 #ifdef HAS_FLOCK
@@ -141,12 +137,10 @@ I32 my_chsize(int fd, Off_t length);
 #  if defined(HAS_FCNTL) && defined(FCNTL_CAN_LOCK)
 #    define FLOCK fcntl_emulate_flock
 #    define FCNTL_EMULATE_FLOCK
-#  else /* no flock() or fcntl(F_SETLK,...) */
-#    ifdef HAS_LOCKF
-#      define FLOCK lockf_emulate_flock
-#      define LOCKF_EMULATE_FLOCK
-#    endif /* lockf */
-#  endif /* no flock() or fcntl(F_SETLK,...) */
+#  elif defined(HAS_LOCKF)
+#    define FLOCK lockf_emulate_flock
+#    define LOCKF_EMULATE_FLOCK
+#  endif
 
 #  ifdef FLOCK
      static int FLOCK (int, int);
@@ -240,13 +234,11 @@ S_emulate_eaccess(pTHX_ const char* path, Mode_t mode)
 #if !defined(HAS_SETREUID) && !defined(HAS_SETRESUID)
     Perl_croak(aTHX_ "switching effective uid is not implemented");
 #else
-#ifdef HAS_SETREUID
+#  ifdef HAS_SETREUID
     if (setreuid(euid, ruid))
-#else
-#ifdef HAS_SETRESUID
+#  elif defined(HAS_SETRESUID)
     if (setresuid(euid, ruid, (Uid_t)-1))
-#endif
-#endif
+#  endif
 	/* diag_listed_as: entering effective %s failed */
 	Perl_croak(aTHX_ "entering effective uid failed");
 #endif
@@ -254,13 +246,11 @@ S_emulate_eaccess(pTHX_ const char* path, Mode_t mode)
 #if !defined(HAS_SETREGID) && !defined(HAS_SETRESGID)
     Perl_croak(aTHX_ "switching effective gid is not implemented");
 #else
-#ifdef HAS_SETREGID
+#  ifdef HAS_SETREGID
     if (setregid(egid, rgid))
-#else
-#ifdef HAS_SETRESGID
+#  elif defined(HAS_SETRESGID)
     if (setresgid(egid, rgid, (Gid_t)-1))
-#endif
-#endif
+#  endif
 	/* diag_listed_as: entering effective %s failed */
 	Perl_croak(aTHX_ "entering effective gid failed");
 #endif
@@ -269,20 +259,16 @@ S_emulate_eaccess(pTHX_ const char* path, Mode_t mode)
 
 #ifdef HAS_SETREUID
     if (setreuid(ruid, euid))
-#else
-#ifdef HAS_SETRESUID
+#elif defined(HAS_SETRESUID)
     if (setresuid(ruid, euid, (Uid_t)-1))
-#endif
 #endif
 	/* diag_listed_as: leaving effective %s failed */
 	Perl_croak(aTHX_ "leaving effective uid failed");
 
 #ifdef HAS_SETREGID
     if (setregid(rgid, egid))
-#else
-#ifdef HAS_SETRESGID
+#elif defined(HAS_SETRESGID)
     if (setresgid(rgid, egid, (Gid_t)-1))
-#endif
 #endif
 	/* diag_listed_as: leaving effective %s failed */
 	Perl_croak(aTHX_ "leaving effective gid failed");
@@ -1031,7 +1017,7 @@ PP(pp_untie)
 
     if ((mg = SvTIED_mg(sv, how))) {
 	SV * const obj = SvRV(SvTIED_obj(sv, mg));
-        if (obj) {
+        if (obj && SvSTASH(obj)) {
 	    GV * const gv = gv_fetchmethod_autoload(SvSTASH(obj), "UNTIE", FALSE);
 	    CV *cv;
 	    if (gv && isGV(gv) && (cv = GvCV(gv))) {
@@ -1523,10 +1509,11 @@ PP(pp_leavewrite)
 	if (IoFLAGS(io) & IOf_DIDTOP) {	/* Oh dear.  It still doesn't fit. */
 	    I32 lines = IoLINES_LEFT(io);
 	    const char *s = SvPVX_const(PL_formtarget);
+            const char *e = SvEND(PL_formtarget);
 	    if (lines <= 0)		/* Yow, header didn't even fit!!! */
 		goto forget_top;
 	    while (lines-- > 0) {
-		s = strchr(s, '\n');
+		s = (char *) memchr(s, '\n', e - s);
 		if (!s)
 		    break;
 		s++;
@@ -2462,12 +2449,10 @@ PP(pp_ioctl)
     else
 #ifndef HAS_FCNTL
       DIE(aTHX_ "fcntl is not implemented");
-#else
-#if defined(OS2) && defined(__EMX__)
+#elif defined(OS2) && defined(__EMX__)
 	retval = fcntl(PerlIO_fileno(IoIFP(io)), func, (int)s);
 #else
 	retval = fcntl(PerlIO_fileno(IoIFP(io)), func, s);
-#endif
 #endif
 
 #if defined(HAS_IOCTL) || defined(HAS_FCNTL)
@@ -2930,10 +2915,11 @@ PP(pp_stat)
 		Perl_croak(aTHX_ "The stat preceding lstat() wasn't an lstat");
 	}
 
-	if (gv != PL_defgv) {
-	    bool havefp;
+	if (gv == PL_defgv) {
+	    if (PL_laststatval < 0)
+		SETERRNO(EBADF,RMS_IFI);
+	} else {
           do_fstat_have_io:
-	    havefp = FALSE;
 	    PL_laststype = OP_STAT;
 	    PL_statgv = gv ? gv : (GV *)io;
             SvPVCLEAR(PL_statname);
@@ -2944,22 +2930,25 @@ PP(pp_stat)
                     if (IoIFP(io)) {
                         int fd = PerlIO_fileno(IoIFP(io));
                         if (fd < 0) {
+			    report_evil_fh(gv);
                             PL_laststatval = -1;
                             SETERRNO(EBADF,RMS_IFI);
                         } else {
                             PL_laststatval = PerlLIO_fstat(fd, &PL_statcache);
-                            havefp = TRUE;
                         }
                     } else if (IoDIRP(io)) {
                         PL_laststatval =
                             PerlLIO_fstat(my_dirfd(IoDIRP(io)), &PL_statcache);
-                        havefp = TRUE;
                     } else {
+			report_evil_fh(gv);
                         PL_laststatval = -1;
+			SETERRNO(EBADF,RMS_IFI);
                     }
-            }
-	    else PL_laststatval = -1;
-	    if (PL_laststatval < 0 && !havefp) report_evil_fh(gv);
+            } else {
+		report_evil_fh(gv);
+		PL_laststatval = -1;
+		SETERRNO(EBADF,RMS_IFI);
+	    }
         }
 
 	if (PL_laststatval < 0) {
@@ -2968,19 +2957,24 @@ PP(pp_stat)
     }
     else {
         const char *file;
+        const char *temp;
+        STRLEN len;
 	if (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVIO) { 
             io = MUTABLE_IO(SvRV(sv));
             if (PL_op->op_type == OP_LSTAT)
                 goto do_fstat_warning_check;
             goto do_fstat_have_io; 
         }
-        
 	SvTAINTED_off(PL_statname); /* previous tainting irrelevant */
-	sv_setpv(PL_statname, SvPV_nomg_const_nolen(sv));
+        temp = SvPV_nomg_const(sv, len);
+	sv_setpv(PL_statname, temp);
 	PL_statgv = NULL;
 	PL_laststype = PL_op->op_type;
         file = SvPV_nolen_const(PL_statname);
-	if (PL_op->op_type == OP_LSTAT)
+        if (!IS_SAFE_PATHNAME(temp, len, OP_NAME(PL_op))) {
+            PL_laststatval = -1;
+        }
+	else if (PL_op->op_type == OP_LSTAT)
 	    PL_laststatval = PerlLIO_lstat(file, &PL_statcache);
 	else
 	    PL_laststatval = PerlLIO_stat(file, &PL_statcache);
@@ -3005,15 +2999,63 @@ PP(pp_stat)
 	EXTEND(SP, max);
 	EXTEND_MORTAL(max);
 	mPUSHi(PL_statcache.st_dev);
-#if ST_INO_SIZE > IVSIZE
-	mPUSHn(PL_statcache.st_ino);
-#else
-#   if ST_INO_SIGN <= 0
-	mPUSHi(PL_statcache.st_ino);
-#   else
-	mPUSHu(PL_statcache.st_ino);
-#   endif
-#endif
+	{
+	    /*
+	     * We try to represent st_ino as a native IV or UV where
+	     * possible, but fall back to a decimal string where
+	     * necessary.  The code to generate these decimal strings
+	     * is quite obtuse, because (a) we're portable to non-POSIX
+	     * platforms where st_ino might be signed; (b) we didn't
+	     * necessarily detect at Configure time whether st_ino is
+	     * signed; (c) we're portable to non-POSIX platforms where
+	     * ino_t isn't defined, so have no name for the type of
+	     * st_ino; and (d) sprintf() doesn't necessarily support
+	     * integers as large as st_ino.
+	     */
+	    bool neg;
+	    Stat_t s;
+	    CLANG_DIAG_IGNORE(-Wtautological-compare);
+	    GCC_DIAG_IGNORE(-Wtype-limits);
+	    neg = PL_statcache.st_ino < 0;
+	    GCC_DIAG_RESTORE;
+	    CLANG_DIAG_RESTORE;
+	    if (neg) {
+		s.st_ino = (IV)PL_statcache.st_ino;
+		if (LIKELY(s.st_ino == PL_statcache.st_ino)) {
+		    mPUSHi(s.st_ino);
+		} else {
+		    char buf[sizeof(s.st_ino)*3+1], *p;
+		    s.st_ino = PL_statcache.st_ino;
+		    for (p = buf + sizeof(buf); p != buf+1; ) {
+			Stat_t t;
+			t.st_ino = s.st_ino / 10;
+			*--p = '0' + (int)(t.st_ino*10 - s.st_ino);
+			s.st_ino = t.st_ino;
+		    }
+		    while (*p == '0')
+			p++;
+		    *--p = '-';
+		    mPUSHp(p, buf+sizeof(buf) - p);
+		}
+	    } else {
+		s.st_ino = (UV)PL_statcache.st_ino;
+		if (LIKELY(s.st_ino == PL_statcache.st_ino)) {
+		    mPUSHu(s.st_ino);
+		} else {
+		    char buf[sizeof(s.st_ino)*3], *p;
+		    s.st_ino = PL_statcache.st_ino;
+		    for (p = buf + sizeof(buf); p != buf; ) {
+			Stat_t t;
+			t.st_ino = s.st_ino / 10;
+			*--p = '0' + (int)(s.st_ino - t.st_ino*10);
+			s.st_ino = t.st_ino;
+		    }
+		    while (*p == '0')
+			p++;
+		    mPUSHp(p, buf+sizeof(buf) - p);
+		}
+	    }
+	}
 	mPUSHu(PL_statcache.st_mode);
 	mPUSHu(PL_statcache.st_nlink);
 	
@@ -3216,8 +3258,12 @@ PP(pp_ftrread)
 
     if (use_access) {
 #if defined(HAS_ACCESS) || defined (PERL_EFF_ACCESS)
-	const char *name = SvPV_nolen(*PL_stack_sp);
-	if (effective) {
+        STRLEN len;
+	const char *name = SvPV(*PL_stack_sp, len);
+        if (!IS_SAFE_PATHNAME(name, len, OP_NAME(PL_op))) {
+            result = -1;
+        }
+	else if (effective) {
 #  ifdef PERL_EFF_ACCESS
 	    result = PERL_EFF_ACCESS(name, access_mode);
 #  else
@@ -3328,24 +3374,6 @@ PP(pp_ftrowned)
     }
     tryAMAGICftest_MG(opchar);
 
-    /* I believe that all these three are likely to be defined on most every
-       system these days.  */
-#ifndef S_ISUID
-    if(PL_op->op_type == OP_FTSUID) {
-	FT_RETURNNO;
-    }
-#endif
-#ifndef S_ISGID
-    if(PL_op->op_type == OP_FTSGID) {
-	FT_RETURNNO;
-    }
-#endif
-#ifndef S_ISVTX
-    if(PL_op->op_type == OP_FTSVTX) {
-	FT_RETURNNO;
-    }
-#endif
-
     result = my_stat_flags(0);
     if (result < 0)
 	FT_RETURNUNDEF;
@@ -3447,7 +3475,7 @@ PP(pp_fttty)
     else if (name && isDIGIT(*name) && grok_atoUV(name, &uv, NULL) && uv <= PERL_INT_MAX)
         fd = (int)uv;
     else
-	FT_RETURNUNDEF;
+	fd = -1;
     if (fd < 0) {
         SETERRNO(EBADF,RMS_IFI);
 	FT_RETURNUNDEF;
@@ -3542,10 +3570,18 @@ PP(pp_fttext)
     }
     else {
         const char *file;
+        const char *temp;
+        STRLEN temp_len;
         int fd; 
 
         assert(sv);
-	sv_setpv(PL_statname, SvPV_nomg_const_nolen(sv));
+        temp = SvPV_nomg_const(sv, temp_len);
+	sv_setpv(PL_statname, temp);
+        if (!IS_SAFE_PATHNAME(temp, temp_len, OP_NAME(PL_op))) {
+            PL_laststatval = -1;
+            PL_laststype = OP_STAT;
+            FT_RETURNUNDEF;
+        }
       really_filename:
         file = SvPVX_const(PL_statname);
 	PL_statgv = NULL;
@@ -3815,20 +3851,16 @@ PP(pp_link)
 	const char * const tmps = SvPV_nolen_const(TOPs);
 	TAINT_PROPER(PL_op_desc[op_type]);
 	result =
-#  if defined(HAS_LINK)
-#    if defined(HAS_SYMLINK)
+#  if defined(HAS_LINK) && defined(HAS_SYMLINK)
 	    /* Both present - need to choose which.  */
 	    (op_type == OP_LINK) ?
 	    PerlLIO_link(tmps, tmps2) : symlink(tmps, tmps2);
-#    else
+#  elif defined(HAS_LINK)
     /* Only have link, so calls to pp_symlink will have DIE()d above.  */
 	PerlLIO_link(tmps, tmps2);
-#    endif
-#  else
-#    if defined(HAS_SYMLINK)
+#  elif defined(HAS_SYMLINK)
     /* Only have symlink, so calls to pp_link will have DIE()d above.  */
 	symlink(tmps, tmps2);
-#    endif
 #  endif
     }
 
@@ -4260,8 +4292,7 @@ PP(pp_fork)
     }
     PUSHi(childpid);
     RETURN;
-#else
-#  if (defined(USE_ITHREADS) && defined(PERL_IMPLICIT_SYS)) || defined(__amigaos4__)
+#elif (defined(USE_ITHREADS) && defined(PERL_IMPLICIT_SYS)) || defined(__amigaos4__)
     dSP; dTARGET;
     Pid_t childpid;
 
@@ -4272,9 +4303,8 @@ PP(pp_fork)
 	RETPUSHUNDEF;
     PUSHi(childpid);
     RETURN;
-#  else
+#else
     DIE(aTHX_ PL_no_func, "fork");
-#  endif
 #endif
 }
 
@@ -4701,8 +4731,7 @@ PP(pp_tms)
 	mPUSHn(((NV)timesbuf.tms_cstime)/(NV)PL_clocktick);
     }
     RETURN;
-#else
-#   ifdef PERL_MICRO
+#elif defined(PERL_MICRO)
     dSP;
     mPUSHn(0.0);
     EXTEND(SP, 4);
@@ -4712,9 +4741,8 @@ PP(pp_tms)
 	 mPUSHn(0.0);
     }
     RETURN;
-#   else
+#else
     DIE(aTHX_ "times not implemented");
-#   endif
 #endif /* HAS_TIMES */
 }
 
@@ -5560,30 +5588,24 @@ PP(pp_gpwent)
 	 * but we are accursed by our history, alas. --jhi.  */
 #   ifdef PWCHANGE
 	mPUSHi(pwent->pw_change);
-#   else
-#       ifdef PWQUOTA
+#   elif defined(PWQUOTA)
 	mPUSHi(pwent->pw_quota);
-#       else
-#           ifdef PWAGE
+#   elif defined(PWAGE)
 	mPUSHs(newSVpv(pwent->pw_age, 0));
-#	    else
+#   else
 	/* I think that you can never get this compiled, but just in case.  */
 	PUSHs(sv_mortalcopy(&PL_sv_no));
-#           endif
-#       endif
 #   endif
 
 	/* pw_class and pw_comment are mutually exclusive--.
 	 * see the above note for pw_change, pw_quota, and pw_age. */
 #   ifdef PWCLASS
 	mPUSHs(newSVpv(pwent->pw_class, 0));
-#   else
-#       ifdef PWCOMMENT
+#   elif defined(PWCOMMENT)
 	mPUSHs(newSVpv(pwent->pw_comment, 0));
-#	else
+#   else
 	/* I think that you can never get this compiled, but just in case.  */
 	PUSHs(sv_mortalcopy(&PL_sv_no));
-#       endif
 #   endif
 
 #   ifdef PWGECOS

@@ -92,6 +92,11 @@ Can't find string terminator "/" anywhere before EOF at - line 1.
 EXPECT
 Can't find string terminator "'" anywhere before EOF at - line 1.
 ########
+# NAME Unterminated ""
+"
+EXPECT
+Can't find string terminator '"' anywhere before EOF at - line 1.
+########
 # NAME Unterminated q// with non-ASCII delimiter, under utf8
 BEGIN { binmode STDERR, ":utf8" }
 use utf8;
@@ -412,4 +417,10 @@ sub foo ($a += 1)
 EXPECT
 Illegal operator following parameter in a subroutine signature at - line 3, near "($a += 1"
 syntax error at - line 3, near "($a += 1"
+Execution of - aborted due to compilation errors.
+########
+# NAME tr/// range with empty \N{} at the start
+tr//\N{}-0/;
+EXPECT
+Unknown charname '' at - line 1, within string
 Execution of - aborted due to compilation errors.

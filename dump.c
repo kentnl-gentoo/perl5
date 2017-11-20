@@ -1141,6 +1141,15 @@ S_do_op_dump_bar(pTHX_ I32 level, UV bar, PerlIO *file, const OP *o)
 	break;
     }
 
+    case OP_MULTICONCAT:
+	S_opdump_indent(aTHX_ o, level, bar, file, "NARGS = %" IVdf "\n",
+            (IV)cUNOP_AUXo->op_aux[PERL_MULTICONCAT_IX_NARGS].ssize);
+        /* XXX really ought to dump each field individually,
+         * but that's too much like hard work */
+	S_opdump_indent(aTHX_ o, level, bar, file, "CONSTS = (%" SVf ")\n",
+            SVfARG(multiconcat_stringify(o)));
+	break;
+
     case OP_CONST:
     case OP_HINTSEVAL:
     case OP_METHOD_NAMED:
@@ -2728,6 +2737,47 @@ Perl_multideref_stringify(pTHX_ const OP *o, CV *cv)
 }
 
 
+/* Return a temporary SV containing a stringified representation of
+ * the op_aux field of a MULTICONCAT op. Note that if the aux contains
+ * both plain and utf8 versions of the const string and indices, only
+ * the first is displayed.
+ */
+
+SV*
+Perl_multiconcat_stringify(pTHX_ const OP *o)
+{
+    UNOP_AUX_item *aux = cUNOP_AUXo->op_aux;
+    UNOP_AUX_item *lens;
+    STRLEN len;
+    SSize_t nargs;
+    char *s;
+    SV *out = newSVpvn_flags("", 0, SVs_TEMP);
+
+    PERL_ARGS_ASSERT_MULTICONCAT_STRINGIFY;
+
+    nargs = aux[PERL_MULTICONCAT_IX_NARGS].ssize;
+    s   = aux[PERL_MULTICONCAT_IX_PLAIN_PV].pv;
+    len = aux[PERL_MULTICONCAT_IX_PLAIN_LEN].ssize;
+    if (!s) {
+        s   = aux[PERL_MULTICONCAT_IX_UTF8_PV].pv;
+        len = aux[PERL_MULTICONCAT_IX_UTF8_LEN].ssize;
+        sv_catpvs(out, "UTF8 ");
+    }
+    pv_pretty(out, s, len, 50,
+                NULL, NULL,
+                (PERL_PV_PRETTY_NOCLEAR
+                |PERL_PV_PRETTY_QUOTE
+                |PERL_PV_PRETTY_ELLIPSES));
+
+    lens = aux + PERL_MULTICONCAT_IX_LENGTHS;
+    while (nargs-- >= 0) {
+        Perl_sv_catpvf(aTHX_ out, ",%" IVdf, (IV)lens->ssize);
+        lens++;
+    }
+    return out;
+}
+
+
 I32
 Perl_debop(pTHX_ const OP *o)
 {
@@ -2770,6 +2820,11 @@ Perl_debop(pTHX_ const OP *o)
     case OP_MULTIDEREF:
         PerlIO_printf(Perl_debug_log, "(%" SVf ")",
             SVfARG(multideref_stringify(o, deb_curcv(cxstack_ix))));
+        break;
+
+    case OP_MULTICONCAT:
+        PerlIO_printf(Perl_debug_log, "(%" SVf ")",
+            SVfARG(multiconcat_stringify(o)));
         break;
 
     default:

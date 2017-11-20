@@ -1013,7 +1013,7 @@ Perl_grok_number_flags(pTHX_ const char *pv, STRLEN len, UV *valuep, U32 flags)
     s++;
   if (s >= send)
     return numtype;
-  if (len == 10 && _memEQs(pv, "0 but true")) {
+  if (memEQs(pv, len, "0 but true")) {
     if (valuep)
       *valuep = 0;
     return IS_NUMBER_IN_UV;
@@ -1209,13 +1209,21 @@ S_mulexp10(NV value, I32 exponent)
 NV
 Perl_my_atof(pTHX_ const char* s)
 {
+    /* 's' must be NUL terminated */
+
     NV x = 0.0;
-#ifdef USE_QUADMATH
-    Perl_my_atof2(aTHX_ s, &x);
-    return x;
-#else
-#  ifdef USE_LOCALE_NUMERIC
+
     PERL_ARGS_ASSERT_MY_ATOF;
+
+#ifdef USE_QUADMATH
+
+    Perl_my_atof2(aTHX_ s, &x);
+
+#elif ! defined(USE_LOCALE_NUMERIC)
+
+    Perl_atof2(s, x);
+
+#else
 
     {
         DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
@@ -1228,9 +1236,11 @@ Perl_my_atof(pTHX_ const char* s)
              * that we have to determine this beforehand because on some
              * systems, Perl_atof2 is just a wrapper around the system's atof.
              * */
-            const char * const standard = strchr(s, '.');
-            const char * const local = strstr(s, SvPV_nolen(PL_numeric_radix_sv));
-            const bool use_standard_radix = standard && (!local || standard < local);
+            const char * const standard_pos = strchr(s, '.');
+            const char * const local_pos
+                                  = strstr(s, SvPV_nolen(PL_numeric_radix_sv));
+            const bool use_standard_radix
+                    = standard_pos && (!local_pos || standard_pos < local_pos);
 
             if (use_standard_radix)
                 SET_NUMERIC_STANDARD();
@@ -1244,10 +1254,9 @@ Perl_my_atof(pTHX_ const char* s)
             Perl_atof2(s, x);
         RESTORE_LC_NUMERIC();
     }
-#  else
-    Perl_atof2(s, x);
-#  endif
+
 #endif
+
     return x;
 }
 

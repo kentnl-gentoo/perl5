@@ -213,9 +213,9 @@ PP(pp_substcont)
 	SvGETMAGIC(TOPs); /* possibly clear taint on $1 etc: #67962 */
 
     	/* See "how taint works" above pp_subst() */
-	if (SvTAINTED(TOPs))
-	    cx->sb_rxtainted |= SUBST_TAINT_REPL;
 	sv_catsv_nomg(dstr, POPs);
+	if (UNLIKELY(TAINT_get))
+	    cx->sb_rxtainted |= SUBST_TAINT_REPL;
 	if (CxONCE(cx) || s < orig ||
                 !CALLREGEXEC(rx, s, cx->sb_strend, orig,
 			     (s == m), cx->sb_targ, NULL,
@@ -916,7 +916,7 @@ PP(pp_formline)
 			    *t++ = ' ';
 		    }
 		    s1 = t - 3;
-		    if (strnEQ(s1,"   ",3)) {
+		    if (strBEGINs(s1,"   ")) {
 			while (s1 > SvPVX_const(PL_formtarget) && isSPACE(s1[-1]))
 			    s1--;
 		    }
@@ -2007,16 +2007,7 @@ PP(pp_caller)
             mask = &PL_sv_undef ;
         else if (old_warnings == pWARN_ALL ||
 		  (old_warnings == pWARN_STD && PL_dowarn & G_WARN_ON)) {
-	    /* Get the bit mask for $warnings::Bits{all}, because
-	     * it could have been extended by warnings::register */
-	    SV **bits_all;
-	    HV * const bits = get_hv("warnings::Bits", 0);
-	    if (bits && (bits_all=hv_fetchs(bits, "all", FALSE))) {
-		mask = newSVsv(*bits_all);
-	    }
-	    else {
-		mask = newSVpvn(WARN_ALLstring, WARNsize) ;
-	    }
+	    mask = newSVpvn(WARN_ALLstring, WARNsize) ;
 	}
         else
             mask = newSVpvn((char *) (old_warnings + 1), old_warnings[0]);
@@ -3562,15 +3553,22 @@ S_check_type_and_open(pTHX_ SV *name)
        errno EACCES, so only do a stat to separate a dir from a real EACCES
        caused by user perms */
 #ifndef WIN32
-    /* we use the value of errno later to see how stat() or open() failed.
-     * We don't want it set if the stat succeeded but we still failed,
-     * such as if the name exists, but is a directory */
-    errno = 0;
-
     st_rc = PerlLIO_stat(p, &st);
 
-    if (st_rc < 0 || S_ISDIR(st.st_mode) || S_ISBLK(st.st_mode)) {
+    if (st_rc < 0)
 	return NULL;
+    else {
+	int eno;
+	if(S_ISBLK(st.st_mode)) {
+	    eno = EINVAL;
+	    goto not_file;
+	}
+	else if(S_ISDIR(st.st_mode)) {
+	    eno = EISDIR;
+	    not_file:
+	    errno = eno;
+	    return NULL;
+	}
     }
 #endif
 
@@ -3582,8 +3580,10 @@ S_check_type_and_open(pTHX_ SV *name)
 	int eno;
 	st_rc = PerlLIO_stat(p, &st);
 	if (st_rc >= 0) {
-	    if(S_ISDIR(st.st_mode) || S_ISBLK(st.st_mode))
-		eno = 0;
+	    if(S_ISDIR(st.st_mode))
+		eno = EISDIR;
+	    else if(S_ISBLK(st.st_mode))
+		eno = EINVAL;
 	    else
 		eno = EACCES;
 	    errno = eno;
@@ -3614,7 +3614,7 @@ S_doopen_pm(pTHX_ SV *name)
     if (!IS_SAFE_PATHNAME(p, namelen, "require"))
         return NULL;
 
-    if (namelen > 3 && memEQs(p + namelen - 3, 3, ".pm")) {
+    if (memENDPs(p, namelen, ".pm")) {
 	SV *const pmcsv = sv_newmortal();
 	PerlIO * pmcio;
 
@@ -3849,7 +3849,7 @@ S_require_file(pTHX_ SV *sv)
                    directory, or (*nix) hidden filenames.  Also sanity check
                    that the generated filename ends .pm  */
                 if (!path_searchable || len < 3 || name[0] == '.'
-                    || !memEQ(name + package_len, ".pm", 3))
+                    || !memEQs(name + package_len, len - package_len, ".pm"))
                     DIE(aTHX_ "Bareword in require maps to disallowed filename \"%" SVf "\"", sv);
                 if (memchr(name, 0, package_len)) {
                     /* diag_listed_as: Bareword in require contains "%s" */
@@ -4053,8 +4053,7 @@ S_require_file(pTHX_ SV *sv)
 			continue;
 		    sv_setpv(namesv, unixdir);
 		    sv_catpv(namesv, unixname);
-#else
-#  ifdef __SYMBIAN32__
+#elif defined(__SYMBIAN32__)
 		    if (PL_origfilename[0] &&
 			PL_origfilename[1] == ':' &&
 			!(dir[0] && dir[1] == ':'))
@@ -4066,7 +4065,7 @@ S_require_file(pTHX_ SV *sv)
 		        Perl_sv_setpvf(aTHX_ namesv,
 				       "%s\\%s",
 				       dir, name);
-#  else
+#else
 		    /* The equivalent of		    
 		       Perl_sv_setpvf(aTHX_ namesv, "%s/%s", dir, name);
 		       but without the need to parse the format string, or
@@ -4093,7 +4092,6 @@ S_require_file(pTHX_ SV *sv)
 			SvCUR_set(namesv, dirlen + len + 1);
 			SvPOK_on(namesv);
 		    }
-#  endif
 #endif
 		    TAINT_PROPER(op_name);
 		    tryname = SvPVX_const(namesv);
@@ -4135,12 +4133,12 @@ S_require_file(pTHX_ SV *sv)
 		    SSize_t i;
 		    SV *const msg = newSVpvs_flags("", SVs_TEMP);
 		    SV *const inc = newSVpvs_flags("", SVs_TEMP);
-                    const char *e = name + len - 3; /* possible .pm */
 		    for (i = 0; i <= AvFILL(ar); i++) {
 			sv_catpvs(inc, " ");
 			sv_catsv(inc, *av_fetch(ar, i, TRUE));
 		    }
-		    if (e > name && _memEQs(e, ".pm")) {
+		    if (memENDPs(name, len, ".pm")) {
+                        const char *e = name + len - (sizeof(".pm") - 1);
 			const char *c;
                         bool utf8 = cBOOL(SvUTF8(sv));
 
@@ -4182,10 +4180,10 @@ S_require_file(pTHX_ SV *sv)
                             sv_catpv(msg, " module)");
                         }
 		    }
-		    else if (len >= 2 && memEQ(name + len - 2, ".h", 3)) {
+		    else if (memENDs(name, len, ".h")) {
 			sv_catpv(msg, " (change .h to .ph maybe?) (did you run h2ph?)");
 		    }
-		    else if (len >= 3 && memEQ(name + len - 3, ".ph", 4)) {
+		    else if (memENDs(name, len, ".ph")) {
 			sv_catpv(msg, " (did you run h2ph?)");
 		    }
 

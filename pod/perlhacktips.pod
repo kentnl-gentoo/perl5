@@ -20,8 +20,7 @@ to do that first.
 
 =head1 COMMON PROBLEMS
 
-Perl source plays by ANSI C89 rules: no C99 (or C++) extensions.  In
-some cases we have to take pre-ANSI requirements into consideration.
+Perl source plays by ANSI C89 rules: no C99 (or C++) extensions.
 You don't care about some particular platform having broken Perl? I
 hear there is still a strong demand for J2EE programmers.
 

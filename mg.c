@@ -1111,14 +1111,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
                 goto set_undef;
 	    }
             else if (PL_compiling.cop_warnings == pWARN_ALL) {
-		/* Get the bit mask for $warnings::Bits{all}, because
-		 * it could have been extended by warnings::register */
-		HV * const bits = get_hv("warnings::Bits", 0);
-		SV ** const bits_all = bits ? hv_fetchs(bits, "all", FALSE) : NULL;
-		if (bits_all)
-		    sv_copypv(sv, *bits_all);
-	        else
-		    sv_setpvn(sv, WARN_ALLstring, WARNsize);
+		sv_setpvn(sv, WARN_ALLstring, WARNsize);
 	    }
             else {
 	        sv_setpvn(sv, (char *) (PL_compiling.cop_warnings + 1),
@@ -1750,7 +1743,7 @@ Perl_magic_setsig(pTHX_ SV *sv, MAGIC *mg)
 	     * access to a known hint bit in a known OP, we can't
 	     * tell whether HINT_STRICT_REFS is in force or not.
 	     */
-	    if (!strchr(s,':') && !strchr(s,'\''))
+	    if (!memchr(s, ':', len) && !memchr(s, '\'', len))
 		Perl_sv_insert_flags(aTHX_ sv, 0, 0, STR_WITH_LEN("main::"),
 				     SV_GMAGIC);
 	    if (i)
@@ -2184,12 +2177,12 @@ Perl_magic_cleararylen_p(pTHX_ SV *sv, MAGIC *mg)
     PERL_UNUSED_CONTEXT;
 
     /* Reset the iterator when the array is cleared */
-#if IVSIZE == I32SIZE
-    *((IV *) &(mg->mg_len)) = 0;
-#else
-    if (mg->mg_ptr)
-        *((IV *) mg->mg_ptr) = 0;
-#endif
+    if (sizeof(IV) == sizeof(SSize_t)) {
+	*((IV *) &(mg->mg_len)) = 0;
+    } else {
+	if (mg->mg_ptr)
+	    *((IV *) mg->mg_ptr) = 0;
+    }
 
     return 0;
 }
@@ -2775,7 +2768,8 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	FmLINES(PL_bodytarget) = 0;
 	if (SvPOK(PL_bodytarget)) {
 	    char *s = SvPVX(PL_bodytarget);
-	    while ( ((s = strchr(s, '\n'))) ) {
+            char *e = SvEND(PL_bodytarget);
+	    while ( ((s = (char *) memchr(s, '\n', e - s))) ) {
 		FmLINES(PL_bodytarget)++;
 		s++;
 	    }
@@ -2808,17 +2802,13 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	if (*(mg->mg_ptr+1) == '\0') {
 #ifdef VMS
 	    set_vaxc_errno(SvIV(sv));
-#else
-#  ifdef WIN32
+#elif defined(WIN32)
 	    SetLastError( SvIV(sv) );
-#  else
-#    ifdef OS2
+#elif defined(OS2)
 	    os2_setsyserrno(SvIV(sv));
-#    else
+#else
 	    /* will anyone ever use this? */
 	    SETERRNO(SvIV(sv), 4);
-#    endif
-#  endif
 #endif
 	}
 	else if (strEQ(mg->mg_ptr + 1, "NCODING") && SvOK(sv))
@@ -2912,25 +2902,18 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 		}
 		{
 		    STRLEN len, i;
-		    int accumulate = 0 ;
-		    int any_fatals = 0 ;
-		    const char * const ptr = SvPV_const(sv, len) ;
+		    int not_none = 0, not_all = 0;
+		    const U8 * const ptr = (const U8 *)SvPV_const(sv, len) ;
 		    for (i = 0 ; i < len ; ++i) {
-		        accumulate |= ptr[i] ;
-		        any_fatals |= (ptr[i] & 0xAA) ;
+			not_none |= ptr[i];
+			not_all |= ptr[i] ^ 0x55;
 		    }
-		    if (!accumulate) {
+		    if (!not_none) {
 		        if (!specialWARN(PL_compiling.cop_warnings))
 			    PerlMemShared_free(PL_compiling.cop_warnings);
 			PL_compiling.cop_warnings = pWARN_NONE;
-		    }
-		    /* Yuck. I can't see how to abstract this:  */
-		    else if (isWARN_on(
-                                ((STRLEN *)SvPV_nolen_const(sv)) - 1,
-                                WARN_ALL)
-                            && !any_fatals)
-                    {
-			if (!specialWARN(PL_compiling.cop_warnings))
+		    } else if (len >= WARNsize && !not_all) {
+		        if (!specialWARN(PL_compiling.cop_warnings))
 			    PerlMemShared_free(PL_compiling.cop_warnings);
 	                PL_compiling.cop_warnings = pWARN_ALL;
 	                PL_dowarn |= G_WARN_ONCE ;
@@ -3088,25 +3071,21 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	}
 #ifdef HAS_SETRUID
 	PERL_UNUSED_RESULT(setruid(new_uid));
-#else
-#ifdef HAS_SETREUID
+#elif defined(HAS_SETREUID)
         PERL_UNUSED_RESULT(setreuid(new_uid, (Uid_t)-1));
-#else
-#ifdef HAS_SETRESUID
+#elif defined(HAS_SETRESUID)
         PERL_UNUSED_RESULT(setresuid(new_uid, (Uid_t)-1, (Uid_t)-1));
 #else
 	if (new_uid == PerlProc_geteuid()) {		/* special case $< = $> */
-#ifdef PERL_DARWIN
+#  ifdef PERL_DARWIN
 	    /* workaround for Darwin's setuid peculiarity, cf [perl #24122] */
 	    if (new_uid != 0 && PerlProc_getuid() == 0)
                 PERL_UNUSED_RESULT(PerlProc_setuid(0));
-#endif
+#  endif
             PERL_UNUSED_RESULT(PerlProc_setuid(new_uid));
 	} else {
 	    Perl_croak(aTHX_ "setruid() not implemented");
 	}
-#endif
-#endif
 #endif
 	break;
 	}
@@ -3121,11 +3100,9 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	}
 #ifdef HAS_SETEUID
 	PERL_UNUSED_RESULT(seteuid(new_euid));
-#else
-#ifdef HAS_SETREUID
+#elif defined(HAS_SETREUID)
 	PERL_UNUSED_RESULT(setreuid((Uid_t)-1, new_euid));
-#else
-#ifdef HAS_SETRESUID
+#elif defined(HAS_SETRESUID)
 	PERL_UNUSED_RESULT(setresuid((Uid_t)-1, new_euid, (Uid_t)-1));
 #else
 	if (new_euid == PerlProc_getuid())		/* special case $> = $< */
@@ -3133,8 +3110,6 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	else {
 	    Perl_croak(aTHX_ "seteuid() not implemented");
 	}
-#endif
-#endif
 #endif
 	break;
 	}
@@ -3149,11 +3124,9 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	}
 #ifdef HAS_SETRGID
 	PERL_UNUSED_RESULT(setrgid(new_gid));
-#else
-#ifdef HAS_SETREGID
+#elif defined(HAS_SETREGID)
 	PERL_UNUSED_RESULT(setregid(new_gid, (Gid_t)-1));
-#else
-#ifdef HAS_SETRESGID
+#elif defined(HAS_SETRESGID)
         PERL_UNUSED_RESULT(setresgid(new_gid, (Gid_t)-1, (Gid_t) -1));
 #else
 	if (new_gid == PerlProc_getegid())			/* special case $( = $) */
@@ -3161,8 +3134,6 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	else {
 	    Perl_croak(aTHX_ "setrgid() not implemented");
 	}
-#endif
-#endif
 #endif
 	break;
 	}
@@ -3232,11 +3203,9 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	}
 #ifdef HAS_SETEGID
 	PERL_UNUSED_RESULT(setegid(new_egid));
-#else
-#ifdef HAS_SETREGID
+#elif defined(HAS_SETREGID)
 	PERL_UNUSED_RESULT(setregid((Gid_t)-1, new_egid));
-#else
-#ifdef HAS_SETRESGID
+#elif defined(HAS_SETRESGID)
 	PERL_UNUSED_RESULT(setresgid((Gid_t)-1, new_egid, (Gid_t)-1));
 #else
 	if (new_egid == PerlProc_getgid())			/* special case $) = $( */
@@ -3244,8 +3213,6 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	else {
 	    Perl_croak(aTHX_ "setegid() not implemented");
 	}
-#endif
-#endif
 #endif
 	break;
 	}

@@ -108,7 +108,6 @@ my $config_h = 'config.h';
 open(CFG, '<', $config_h) || die "Cannot open $config_h: $!\n";
 while (<CFG>) {
     $define{$1} = 1 if /^\s*\#\s*define\s+(MYMALLOC|MULTIPLICITY
-                                           |SPRINTF_RETURNS_STRLEN
                                            |KILL_BY_SIGPRC
                                            |(?:PERL|USE|HAS)_\w+)\b/x;
 }
@@ -359,6 +358,7 @@ unless ($define{'USE_ITHREADS'}) {
 
 unless ($define{'USE_ITHREADS'}) {
     ++$skip{$_} foreach qw(
+                    PL_keyword_plugin_mutex
 		    PL_check_mutex
 		    PL_op_mutex
 		    PL_regex_pad
@@ -465,10 +465,6 @@ unless ($define{'PERL_DONT_CREATE_GVSV'}) {
     ++$skip{Perl_gv_SVadd};
 }
 
-if ($define{'SPRINTF_RETURNS_STRLEN'}) {
-    ++$skip{Perl_my_sprintf};
-}
-
 unless ($define{'PERL_USES_PL_PIDSTATUS'}) {
     ++$skip{PL_pidstatus};
 }
@@ -520,6 +516,11 @@ if ($ARGS{PLATFORM} eq 'vms' && !$define{KILL_BY_SIGPRC}) {
     ++$skip{Perl_sig_to_vmscondition};
     ++$skip{PL_sig_defaulting};
     ++$skip{PL_sig_handlers_initted} unless !$define{HAS_SIGACTION};
+}
+
+if ($define{'HAS_STRNLEN'})
+{
+    ++$skip{Perl_my_strnlen};
 }
 
 unless ($define{USE_LOCALE_COLLATE}) {

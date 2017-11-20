@@ -62,10 +62,6 @@ union control_un {
 #  endif
 #endif
 
-#if !defined(STANDARD_C) && !defined(HAS_GETENV_PROTOTYPE) && !defined(PERL_MICRO)
-char *getenv (char *); /* Usually in <stdlib.h> */
-#endif
-
 static I32 read_e_script(pTHX_ int idx, SV *buf_sv, int maxlen);
 
 #ifdef SETUID_SCRIPTS_ARE_SECURE_NOW
@@ -96,6 +92,7 @@ S_init_tls_and_interp(PerlInterpreter *my_perl)
 	PERL_SET_THX(my_perl);
 	OP_REFCNT_INIT;
 	OP_CHECK_MUTEX_INIT;
+        KEYWORD_PLUGIN_MUTEX_INIT;
 	HINTS_REFCNT_INIT;
         LOCALE_INIT;
 	MUTEX_INIT(&PL_dollarzero_mutex);
@@ -375,15 +372,20 @@ perl_construct(pTHXx)
          * constructing hashes */
         PL_hash_seed_set= TRUE;
     }
-    /* Note that strtab is a rather special HV.  Assumptions are made
-       about not iterating on it, and not adding tie magic to it.
-       It is properly deallocated in perl_destruct() */
-    PL_strtab = newHV();
 
-    /* SHAREKEYS tells us that the hash has its keys shared with PL_strtab,
-     * which is not the case with PL_strtab itself */
-    HvSHAREKEYS_off(PL_strtab);			/* mandatory */
-    hv_ksplit(PL_strtab, 1 << 11);
+    /* Allow PL_strtab to be pre-initialized before calling perl_construct.
+    * can use a custom optimized PL_strtab hash before calling perl_construct */
+    if (!PL_strtab) {
+        /* Note that strtab is a rather special HV.  Assumptions are made
+           about not iterating on it, and not adding tie magic to it.
+           It is properly deallocated in perl_destruct() */
+        PL_strtab = newHV();
+
+        /* SHAREKEYS tells us that the hash has its keys shared with PL_strtab,
+         * which is not the case with PL_strtab itself */
+        HvSHAREKEYS_off(PL_strtab);			/* mandatory */
+        hv_ksplit(PL_strtab, 1 << 11);
+    }
 
     Zero(PL_sv_consts, SV_CONSTS_COUNT, SV*);
 
@@ -418,23 +420,14 @@ perl_construct(pTHXx)
 	PL_mmap_page_size = sysconf(_SC_MMAP_PAGE_SIZE);
 #   endif
 	if ((long) PL_mmap_page_size < 0) {
-	  if (errno) {
-	    SV * const error = ERRSV;
-	    SvUPGRADE(error, SVt_PV);
-	    Perl_croak(aTHX_ "panic: sysconf: %s", SvPV_nolen_const(error));
-	  }
-	  else
-	    Perl_croak(aTHX_ "panic: sysconf: pagesize unknown");
+	    Perl_croak(aTHX_ "panic: sysconf: %s",
+		errno ? Strerror(errno) : "pagesize unknown");
 	}
       }
-#else
-#   ifdef HAS_GETPAGESIZE
+#elif defined(HAS_GETPAGESIZE)
       PL_mmap_page_size = getpagesize();
-#   else
-#       if defined(I_SYS_PARAM) && defined(PAGESIZE)
+#elif defined(I_SYS_PARAM) && defined(PAGESIZE)
       PL_mmap_page_size = PAGESIZE;       /* compiletime, bad */
-#       endif
-#   endif
 #endif
       if (PL_mmap_page_size <= 0)
 	Perl_croak(aTHX_ "panic: bad pagesize %" IVdf,
@@ -611,7 +604,7 @@ int
 perl_destruct(pTHXx)
 {
     dVAR;
-    VOL signed char destruct_level;  /* see possible values in intrpvar.h */
+    volatile signed char destruct_level;  /* see possible values in intrpvar.h */
     HV *hv;
 #ifdef DEBUG_LEAKING_SCALARS_FORK_DUMP
     pid_t child;
@@ -2712,6 +2705,9 @@ Perl_get_cvn_flags(pTHX_ const char *name, STRLEN len, I32 flags)
 
     PERL_ARGS_ASSERT_GET_CVN_FLAGS;
 
+    if (gv && UNLIKELY(SvROK(gv)) && SvTYPE(SvRV((SV *)gv)) == SVt_PVCV)
+	return (CV*)SvRV((SV *)gv);
+
     /* XXX this is probably not what they think they're getting.
      * It has the same effect as "sub name;", i.e. just a forward
      * declaration! */
@@ -2838,14 +2834,14 @@ See L<perlcall>.
 */
 
 I32
-Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
+Perl_call_sv(pTHX_ SV *sv, volatile I32 flags)
           		/* See G_* flags in cop.h */
 {
     dVAR;
     LOGOP myop;		/* fake syntax tree node */
     METHOP method_op;
     I32 oldmark;
-    VOL I32 retval = 0;
+    volatile I32 retval = 0;
     bool oldcatch = CATCH_GET;
     int ret;
     OP* const oldop = PL_op;
@@ -2993,8 +2989,8 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
 {
     dVAR;
     UNOP myop;		/* fake syntax tree node */
-    VOL I32 oldmark;
-    VOL I32 retval = 0;
+    volatile I32 oldmark;
+    volatile I32 retval = 0;
     int ret;
     OP* const oldop = PL_op;
     dJMPENV;
@@ -3850,7 +3846,7 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
 	/* if find_script() returns, it returns a malloc()-ed value */
 	scriptname = PL_origfilename = find_script(scriptname, dosearch, NULL, 1);
 
-	if (strEQs(scriptname, "/dev/fd/")
+	if (strBEGINs(scriptname, "/dev/fd/")
             && isDIGIT(scriptname[8])
             && grok_atoUV(scriptname + 8, &uv, &s)
             && uv <= PERL_INT_MAX
@@ -3926,9 +3922,9 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
 #endif
 	rsfp = PerlIO_open(scriptname,PERL_SCRIPT_MODE);
 #ifdef FAKE_BIT_BUCKET
-	if (memEQ(scriptname, FAKE_BIT_BUCKET_PREFIX,
-		  sizeof(FAKE_BIT_BUCKET_PREFIX) - 1)
-	    && strlen(scriptname) == sizeof(tmpname) - 1) {
+        if (   strBEGINs(scriptname, FAKE_BIT_BUCKET_PREFIX)
+	    && strlen(scriptname) == sizeof(tmpname) - 1)
+        {
 	    unlink(scriptname);
 	}
 	scriptname = BIT_BUCKET;
@@ -3963,12 +3959,20 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
     return rsfp;
 }
 
-/* Mention
+/* In the days of suidperl, we refused to execute a setuid script stored on
+ * a filesystem mounted nosuid and/or noexec. This meant that we probed for the
+ * existence of the appropriate filesystem-statting function, and behaved
+ * accordingly. But even though suidperl is long gone, we must still include
+ * those probes for the benefit of modules like Filesys::Df, which expect the
+ * results of those probes to be stored in %Config; see RT#126368. So mention
+ * the relevant cpp symbols here, to ensure that metaconfig will include their
+ * probes in the generated Configure:
+ *
  * I_SYSSTATVFS	HAS_FSTATVFS
  * I_SYSMOUNT
  * I_STATFS	HAS_FSTATFS	HAS_GETFSSTAT
  * I_MNTENT	HAS_GETMNTENT	HAS_HASMNTOPT
- * here so that metaconfig picks them up. */
+ */
 
 
 #ifdef SETUID_SCRIPTS_ARE_SECURE_NOW
@@ -4025,7 +4029,7 @@ S_find_beginning(pTHX_ SV* linestr_sv, PerlIO *rsfp)
     if (*s++ == '-') {
 	while (isDIGIT(s2[-1]) || s2[-1] == '-' || s2[-1] == '.'
 	       || s2[-1] == '_') s2--;
-	if (strEQs(s2-4,"perl"))
+	if (strBEGINs(s2-4,"perl"))
 	    while ((s = moreswitches(s)))
 		;
     }
@@ -4577,136 +4581,24 @@ S_init_perllib(pTHX)
     /* miniperl gets just -I..., the split of $ENV{PERL5LIB}, and "." in @INC
        (and not the architecture specific directories from $ENV{PERL5LIB}) */
 
+#include "perl_inc_macro.h"
 /* Use the ~-expanded versions of APPLLIB (undocumented),
     SITEARCH, SITELIB, VENDORARCH, VENDORLIB, ARCHLIB and PRIVLIB
 */
-#ifdef APPLLIB_EXP
-    S_incpush_use_sep(aTHX_ STR_WITH_LEN(APPLLIB_EXP),
-		      INCPUSH_ADD_SUB_DIRS|INCPUSH_CAN_RELOCATE);
-#endif
+    INCPUSH_APPLLIB_EXP
+    INCPUSH_SITEARCH_EXP
+    INCPUSH_SITELIB_EXP
+    INCPUSH_PERL_VENDORARCH_EXP
+    INCPUSH_PERL_VENDORLIB_EXP
+    INCPUSH_ARCHLIB_EXP
+    INCPUSH_PRIVLIB_EXP
+    INCPUSH_PERL_OTHERLIBDIRS
+    INCPUSH_PERL5LIB
+    INCPUSH_APPLLIB_OLD_EXP
+    INCPUSH_SITELIB_STEM
+    INCPUSH_PERL_VENDORLIB_STEM
+    INCPUSH_PERL_OTHERLIBDIRS_ARCHONLY
 
-#ifdef SITEARCH_EXP
-    /* sitearch is always relative to sitelib on Windows for
-     * DLL-based path intuition to work correctly */
-#  if !defined(WIN32)
-	S_incpush_use_sep(aTHX_ STR_WITH_LEN(SITEARCH_EXP),
-			  INCPUSH_CAN_RELOCATE);
-#  endif
-#endif
-
-#ifdef SITELIB_EXP
-#  if defined(WIN32)
-    /* this picks up sitearch as well */
-	s = PerlEnv_sitelib_path(PERL_FS_VERSION, &len);
-	if (s)
-	    incpush_use_sep(s, len, INCPUSH_ADD_SUB_DIRS|INCPUSH_CAN_RELOCATE);
-#  else
-	S_incpush_use_sep(aTHX_ STR_WITH_LEN(SITELIB_EXP), INCPUSH_CAN_RELOCATE);
-#  endif
-#endif
-
-#ifdef PERL_VENDORARCH_EXP
-    /* vendorarch is always relative to vendorlib on Windows for
-     * DLL-based path intuition to work correctly */
-#  if !defined(WIN32)
-    S_incpush_use_sep(aTHX_ STR_WITH_LEN(PERL_VENDORARCH_EXP),
-		      INCPUSH_CAN_RELOCATE);
-#  endif
-#endif
-
-#ifdef PERL_VENDORLIB_EXP
-#  if defined(WIN32)
-    /* this picks up vendorarch as well */
-	s = PerlEnv_vendorlib_path(PERL_FS_VERSION, &len);
-	if (s)
-	    incpush_use_sep(s, len, INCPUSH_ADD_SUB_DIRS|INCPUSH_CAN_RELOCATE);
-#  else
-	S_incpush_use_sep(aTHX_ STR_WITH_LEN(PERL_VENDORLIB_EXP),
-			  INCPUSH_CAN_RELOCATE);
-#  endif
-#endif
-
-#ifdef ARCHLIB_EXP
-    S_incpush_use_sep(aTHX_ STR_WITH_LEN(ARCHLIB_EXP), INCPUSH_CAN_RELOCATE);
-#endif
-
-#ifndef PRIVLIB_EXP
-#  define PRIVLIB_EXP "/usr/local/lib/perl5:/usr/local/lib/perl"
-#endif
-
-#if defined(WIN32)
-    s = PerlEnv_lib_path(PERL_FS_VERSION, &len);
-    if (s)
-	incpush_use_sep(s, len, INCPUSH_ADD_SUB_DIRS|INCPUSH_CAN_RELOCATE);
-#else
-#  ifdef NETWARE
-    S_incpush_use_sep(aTHX_ PRIVLIB_EXP, 0, INCPUSH_CAN_RELOCATE);
-#  else
-    S_incpush_use_sep(aTHX_ STR_WITH_LEN(PRIVLIB_EXP), INCPUSH_CAN_RELOCATE);
-#  endif
-#endif
-
-#ifdef PERL_OTHERLIBDIRS
-    S_incpush_use_sep(aTHX_ STR_WITH_LEN(PERL_OTHERLIBDIRS),
-		      INCPUSH_ADD_VERSIONED_SUB_DIRS|INCPUSH_NOT_BASEDIR
-		      |INCPUSH_CAN_RELOCATE);
-#endif
-
-    if (!TAINTING_get) {
-#ifndef VMS
-/*
- * It isn't possible to delete an environment variable with
- * PERL_USE_SAFE_PUTENV set unless unsetenv() is also available, so in that
- * case we treat PERL5LIB as undefined if it has a zero-length value.
- */
-#if defined(PERL_USE_SAFE_PUTENV) && ! defined(HAS_UNSETENV)
-	if (perl5lib && *perl5lib != '\0')
-#else
-	if (perl5lib)
-#endif
-	    incpush_use_sep(perl5lib, 0,
-			    INCPUSH_ADD_OLD_VERS|INCPUSH_NOT_BASEDIR);
-#else /* VMS */
-	/* Treat PERL5?LIB as a possible search list logical name -- the
-	 * "natural" VMS idiom for a Unix path string.  We allow each
-	 * element to be a set of |-separated directories for compatibility.
-	 */
-	char buf[256];
-	int idx = 0;
-	if (vmstrnenv("PERL5LIB",buf,0,NULL,0))
-	    do {
-		incpush_use_sep(buf, 0,
-				INCPUSH_ADD_OLD_VERS|INCPUSH_NOT_BASEDIR);
-	    } while (vmstrnenv("PERL5LIB",buf,++idx,NULL,0));
-#endif /* VMS */
-    }
-
-/* Use the ~-expanded versions of APPLLIB (undocumented),
-    SITELIB and VENDORLIB for older versions
-*/
-#ifdef APPLLIB_EXP
-    S_incpush_use_sep(aTHX_ STR_WITH_LEN(APPLLIB_EXP), INCPUSH_ADD_OLD_VERS
-		      |INCPUSH_NOT_BASEDIR|INCPUSH_CAN_RELOCATE);
-#endif
-
-#if defined(SITELIB_STEM) && defined(PERL_INC_VERSION_LIST)
-    /* Search for version-specific dirs below here */
-    S_incpush_use_sep(aTHX_ STR_WITH_LEN(SITELIB_STEM),
-		      INCPUSH_ADD_OLD_VERS|INCPUSH_CAN_RELOCATE);
-#endif
-
-
-#if defined(PERL_VENDORLIB_STEM) && defined(PERL_INC_VERSION_LIST)
-    /* Search for version-specific dirs below here */
-    S_incpush_use_sep(aTHX_ STR_WITH_LEN(PERL_VENDORLIB_STEM),
-		      INCPUSH_ADD_OLD_VERS|INCPUSH_CAN_RELOCATE);
-#endif
-
-#ifdef PERL_OTHERLIBDIRS
-    S_incpush_use_sep(aTHX_ STR_WITH_LEN(PERL_OTHERLIBDIRS),
-		      INCPUSH_ADD_OLD_VERS|INCPUSH_ADD_ARCHONLY_SUB_DIRS
-		      |INCPUSH_CAN_RELOCATE);
-#endif
 #endif /* !PERL_IS_MINIPERL */
 
     if (!TAINTING_get) {
@@ -4720,12 +4612,10 @@ S_init_perllib(pTHX)
 
 #if defined(DOSISH) || defined(__SYMBIAN32__)
 #    define PERLLIB_SEP ';'
-#else
-#  if defined(__VMS)
+#elif defined(__VMS)
 #    define PERLLIB_SEP PL_perllib_sep
-#  else
+#else
 #    define PERLLIB_SEP ':'
-#  endif
 #endif
 #ifndef PERLLIB_MANGLE
 #  define PERLLIB_MANGLE(s,n) (s)
@@ -4808,7 +4698,7 @@ S_mayberelocate(pTHX_ const char *const dir, STRLEN len, U32 flags)
 	 */
 	    const char *libpath = SvPVX(libdir);
 	    STRLEN libpath_len = SvCUR(libdir);
-	    if (libpath_len >= 4 && memEQ (libpath, ".../", 4)) {
+	    if (memBEGINs(libpath, libpath_len, ".../")) {
 		/* Game on!  */
 		SV * const caret_X = get_sv("\030", 0);
 		/* Going to use the SV just as a scratch buffer holding a C
@@ -4834,12 +4724,9 @@ S_mayberelocate(pTHX_ const char *const dir, STRLEN len, U32 flags)
 		libpath = SvPVX(libdir);
 		libpath_len = SvCUR(libdir);
 
-		/* This would work more efficiently with memrchr, but as it's
-		   only a GNU extension we'd need to probe for it and
-		   implement our own. Not hard, but maybe not worth it?  */
-
 		prefix = SvPVX(prefix_sv);
-		lastslash = strrchr(prefix, '/');
+		lastslash = (char *) my_memrchr(prefix, '/',
+                             SvEND(prefix_sv) - prefix);
 
 		/* First time in with the *lastslash = '\0' we just wipe off
 		   the trailing /perl from (say) /usr/foo/bin/perl
@@ -4847,8 +4734,11 @@ S_mayberelocate(pTHX_ const char *const dir, STRLEN len, U32 flags)
 		if (lastslash) {
 		    SV *tempsv;
 		    while ((*lastslash = '\0'), /* Do that, come what may.  */
-                           (libpath_len >= 3 && _memEQs(libpath, "../")
-			    && (lastslash = strrchr(prefix, '/')))) {
+                           (   memBEGINs(libpath, libpath_len, "../")
+			    && (lastslash =
+                                  (char *) my_memrchr(prefix, '/',
+                                                   SvEND(prefix_sv) - prefix))))
+                    {
 			if (lastslash[1] == '\0'
 			    || (lastslash[1] == '.'
 				&& (lastslash[2] == '/' /* ends "/."  */
@@ -5051,7 +4941,7 @@ void
 Perl_call_list(pTHX_ I32 oldscope, AV *paramList)
 {
     SV *atsv;
-    VOL const line_t oldline = PL_curcop ? CopLINE(PL_curcop) : 0;
+    volatile const line_t oldline = PL_curcop ? CopLINE(PL_curcop) : 0;
     CV *cv;
     STRLEN len;
     int ret;
@@ -5226,8 +5116,9 @@ Perl_my_failure_exit(pTHX)
 
 #else
     int exitstatus;
-    if (errno & 255)
-	STATUS_UNIX_SET(errno);
+    int eno = errno;
+    if (eno & 255)
+	STATUS_UNIX_SET(eno);
     else {
 	exitstatus = STATUS_UNIX >> 8;
 	if (exitstatus & 255)
@@ -5269,12 +5160,13 @@ static I32
 read_e_script(pTHX_ int idx, SV *buf_sv, int maxlen)
 {
     const char * const p  = SvPVX_const(PL_e_script);
-    const char *nl = strchr(p, '\n');
+    const char * const e  = SvEND(PL_e_script);
+    const char *nl = (char *) memchr(p, '\n', e - p);
 
     PERL_UNUSED_ARG(idx);
     PERL_UNUSED_ARG(maxlen);
 
-    nl = (nl) ? nl+1 : SvEND(PL_e_script);
+    nl = (nl) ? nl+1 : e;
     if (nl-p == 0) {
 	filter_del(read_e_script);
 	return 0;

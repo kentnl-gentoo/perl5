@@ -98,7 +98,7 @@ do_spawn (char *cmd)
     while (*cmd && isSPACE(*cmd))
 	cmd++;
 
-    if (strnEQ (cmd,"/bin/sh",7) && isSPACE (cmd[7]))
+    if (strBEGINs (cmd,"/bin/sh") && isSPACE (cmd[7]))
         cmd+=5;
 
     /* save an extra exec if possible */
@@ -107,7 +107,7 @@ do_spawn (char *cmd)
 	goto doshell;
     if (*cmd=='.' && isSPACE (cmd[1]))
 	goto doshell;
-    if (strnEQ (cmd,"exec",4) && isSPACE (cmd[4]))
+    if (strBEGINs (cmd,"exec") && isSPACE (cmd[4]))
 	goto doshell;
     for (s=cmd; *s && isALPHA (*s); s++) ;	/* catch VAR=val gizmo */
 	if (*s=='=')
@@ -488,7 +488,7 @@ XS(XS_Cygwin_mount_flags)
 
     pathname = SvPV_nolen(ST(0));
 
-    if (!strcmp(pathname, "/cygdrive")) {
+    if (strEQ(pathname, "/cygdrive")) {
 	char user[PATH_MAX];
 	char system[PATH_MAX];
 	char user_flags[PATH_MAX];
@@ -511,7 +511,7 @@ XS(XS_Cygwin_mount_flags)
 	int found = 0;
 	setmntent (0, 0);
 	while ((mnt = getmntent (0))) {
-	    if (!strcmp(pathname, mnt->mnt_dir)) {
+	    if (strEQ(pathname, mnt->mnt_dir)) {
 		strcpy(flags, mnt->mnt_type);
 		if (strlen(mnt->mnt_opts) > 0) {
 		    strcat(flags, ",");
@@ -536,12 +536,12 @@ XS(XS_Cygwin_mount_flags)
 			     user_flags, system_flags);
 
 	    if (strlen(user) > 0) {
-		if (strcmp(user,pathname)) {
+		if (strNE(user,pathname)) {
 		    sprintf(flags, "%s,cygdrive,%s", user_flags, user);
 		    found++;
 		}
 	    } else {
-		if (strcmp(user,pathname)) {
+		if (strNE(user,pathname)) {
 		    sprintf(flags, "%s,cygdrive,%s", system_flags, system);
 		    found++;
 		}

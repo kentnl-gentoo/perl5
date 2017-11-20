@@ -11,7 +11,7 @@ print OUT <<'EOT';
 
 package XSLoader;
 
-$VERSION = "0.27";
+$VERSION = "0.28"; # remember to update version in POD!
 
 #use strict;
 
@@ -143,14 +143,8 @@ print OUT <<'EOT';
     my $bs = $file;
     $bs =~ s/(\.\w+)?(;\d*)?$/\.bs/; # look for .bs 'beside' the library
 
-    if (-s $bs) { # only read file if it's not empty
-#       print STDERR "BS: $bs ($^O, $dlsrc)\n" if $dl_debug;
-        eval { local @INC = ('.'); do $bs; };
-        warn "$bs: $@\n" if $@;
-	goto \&XSLoader::bootstrap_inherit;
-    }
-
-    goto \&XSLoader::bootstrap_inherit if not -f $file;
+    # This calls DynaLoader::bootstrap, which will load the .bs file if present
+    goto \&XSLoader::bootstrap_inherit if not -f $file or -s $bs;
 
     my $bootname = "boot_$module";
     $bootname =~ s/\W/_/g;
@@ -255,7 +249,7 @@ XSLoader - Dynamically load C libraries into Perl code
 
 =head1 VERSION
 
-Version 0.24
+Version 0.28
 
 =head1 SYNOPSIS
 
@@ -324,10 +318,9 @@ If you want to have your cake and eat it too, you need a more complicated
 boilerplate.
 
     package YourPackage;
-    use vars qw($VERSION @ISA);
 
-    @ISA = qw( OnePackage OtherPackage );
-    $VERSION = '0.01';
+    our @ISA = qw( OnePackage OtherPackage );
+    our $VERSION = '0.01';
     eval {
        require XSLoader;
        XSLoader::load('YourPackage', $VERSION);
@@ -393,7 +386,7 @@ boilerplate as
 
     package YourPackage;
     use XSLoader;
-    use vars qw($VERSION @ISA);
+    our ($VERSION, @ISA);
 
     BEGIN {
        @ISA = qw( OnePackage OtherPackage );
@@ -416,7 +409,7 @@ this:
 
     package YourPackage;
     use XSLoader;
-    use vars qw($VERSION @ISA);
+    our ($VERSION, @ISA);
 
     BEGIN {
        @ISA = qw( OnePackage OtherPackage );

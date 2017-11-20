@@ -3141,7 +3141,7 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
                     DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
                     STORE_LC_NUMERIC_SET_TO_NEEDED();
 
-                    local_radix = PL_numeric_local && PL_numeric_radix_sv;
+                    local_radix = PL_numeric_underlying && PL_numeric_radix_sv;
                     if (local_radix && SvCUR(PL_numeric_radix_sv) > 1) {
                         size += SvCUR(PL_numeric_radix_sv) - 1;
                         s = SvGROW_mutable(sv, size);
@@ -3919,15 +3919,14 @@ S_glob_assign_glob(pTHX_ SV *const dstr, SV *const sstr, const int dtype)
        glob to begin with. */
     if(dtype == SVt_PVGV) {
         const char * const name = GvNAME((const GV *)dstr);
-        if(
-            strEQ(name,"ISA")
+        const STRLEN len = GvNAMELEN(dstr);
+        if(memEQs(name, len, "ISA")
          /* The stash may have been detached from the symbol table, so
             check its name. */
          && GvSTASH(dstr) && HvENAME(GvSTASH(dstr))
         )
             mro_changes = 2;
         else {
-            const STRLEN len = GvNAMELEN(dstr);
             if ((len > 1 && name[len-2] == ':' && name[len-1] == ':')
              || (len == 1 && name[0] == ':')) {
                 mro_changes = 3;
@@ -4140,7 +4139,7 @@ Perl_gv_setref(pTHX_ SV *const dstr, SV *const sstr)
 	}
 	else if (
 	    stype == SVt_PVAV && sref != dref
-	 && strEQ(GvNAME((GV*)dstr), "ISA")
+	 && memEQs(GvNAME((GV*)dstr), GvNAMELEN((GV*)dstr), "ISA")
 	 /* The stash may have been detached from the symbol table, so
 	    check its name before doing anything. */
 	 && GvSTASH(dstr) && HvENAME(GvSTASH(dstr))
@@ -11642,8 +11641,7 @@ S_format_hexfp(pTHX_ char * const buf, const STRLEN bufsize, const char c,
     /* In this case there is an implicit bit,
      * and therefore the exponent is shifted by one. */
     exponent--;
-#  else
-#    ifdef NV_X86_80_BIT
+#  elif defined(NV_X86_80_BIT)
     if (subnormal) {
         /* The subnormals of the x86-80 have a base exponent of -16382,
          * (while the physical exponent bits are zero) but the frexp()
@@ -11657,7 +11655,6 @@ S_format_hexfp(pTHX_ char * const buf, const STRLEN bufsize, const char c,
     } else {
         exponent -= 4;
     }
-#    endif
     /* TBD: other non-implicit-bit platforms than the x86-80. */
 #  endif
 #endif
@@ -11924,7 +11921,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
     bool has_utf8 = DO_UTF8(sv);    /* has the result utf8? */
     const bool pat_utf8 = has_utf8; /* the pattern is in utf8? */
     /* Times 4: a decimal digit takes more than 3 binary digits.
-     * NV_DIG: mantissa takes than many decimal digits.
+     * NV_DIG: mantissa takes that many decimal digits.
      * Plus 32: Playing safe. */
     char ebuf[IV_DIG * 4 + NV_DIG + 32];
     bool no_redundant_warning = FALSE; /* did we use any explicit format parameter index? */
@@ -12378,7 +12375,10 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	    if (args) {
 		eptr = va_arg(*args, char*);
 		if (eptr)
-		    elen = strlen(eptr);
+                    if (has_precis)
+                        elen = my_strnlen(eptr, precis);
+                    else
+                        elen = strlen(eptr);
 		else {
 		    eptr = (char *)nullstr;
 		    elen = sizeof nullstr - 1;
@@ -13210,7 +13210,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                         ? my_snprintf(PL_efloatbuf, PL_efloatsize, ptr, fv)
                         : my_snprintf(PL_efloatbuf, PL_efloatsize, ptr, (double)fv));
 #else
-                elen = my_sprintf(PL_efloatbuf, ptr, fv);
+                elen = my_snprintf(PL_efloatbuf, PL_efloatsize, ptr, fv);
 #endif
                 GCC_DIAG_RESTORE;
 	    }
@@ -13503,13 +13503,6 @@ Perl_parser_dup(pTHX_ const yy_parser *const proto, CLONE_PARAMS *const param)
     Newxz(parser, 1, yy_parser);
     ptr_table_store(PL_ptr_table, proto, parser);
 
-    /* XXX these not yet duped */
-    parser->old_parser = NULL;
-    parser->stack = NULL;
-    parser->ps = NULL;
-    parser->stack_max1 = 0;
-    /* XXX parser->stack->state = 0; */
-
     /* XXX eventually, just Copy() most of the parser struct ? */
 
     parser->lex_brackets = proto->lex_brackets;
@@ -13551,7 +13544,6 @@ Perl_parser_dup(pTHX_ const yy_parser *const proto, CLONE_PARAMS *const param)
     parser->sig_optelems= proto->sig_optelems;
     parser->sig_slurpy  = proto->sig_slurpy;
     parser->recheck_utf8_validity = proto->recheck_utf8_validity;
-    parser->linestr	= sv_dup_inc(proto->linestr, param);
 
     {
 	char * const ols = SvPVX(proto->linestr);
@@ -14293,6 +14285,7 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 		else
 		    LvTARG(dstr) = sv_dup_inc(LvTARG(dstr), param);
 		if (isREGEXP(sstr)) goto duprex;
+		/* FALLTHROUGH */
 	    case SVt_PVGV:
 		/* non-GP case already handled above */
 		if(isGV_with_GP(sstr)) {
@@ -14346,7 +14339,7 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 		    SSize_t items = AvFILLp((const AV *)sstr) + 1;
 
 		    src_ary = AvARRAY((const AV *)sstr);
-		    Newxz(dst_ary, AvMAX((const AV *)sstr)+1, SV*);
+		    Newx(dst_ary, AvMAX((const AV *)sstr)+1, SV*);
 		    ptr_table_store(PL_ptr_table, src_ary, dst_ary);
 		    AvARRAY(MUTABLE_AV(dstr)) = dst_ary;
 		    AvALLOC((const AV *)dstr) = dst_ary;
@@ -14678,7 +14671,7 @@ Perl_si_dup(pTHX_ PERL_SI *si, CLONE_PARAMS* param)
 	return nsi;
 
     /* create anew and remember what it is */
-    Newxz(nsi, 1, PERL_SI);
+    Newx(nsi, 1, PERL_SI);
     ptr_table_store(PL_ptr_table, si, nsi);
 
     nsi->si_stack	= av_dup_inc(si->si_stack, param);
@@ -14689,6 +14682,9 @@ Perl_si_dup(pTHX_ PERL_SI *si, CLONE_PARAMS* param)
     nsi->si_prev	= si_dup(si->si_prev, param);
     nsi->si_next	= si_dup(si->si_next, param);
     nsi->si_markoff	= si->si_markoff;
+#if defined DEBUGGING && !defined DEBUGGING_RE_ONLY
+    nsi->si_stack_hwm   = 0;
+#endif
 
     return nsi;
 }
@@ -14770,7 +14766,7 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl, CLONE_PARAMS* param)
 
     PERL_ARGS_ASSERT_SS_DUP;
 
-    Newxz(nss, max, ANY);
+    Newx(nss, max, ANY);
 
     while (ix > 0) {
 	const UV uv = POPUV(ss,ix);
@@ -14973,8 +14969,8 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl, CLONE_PARAMS* param)
 	case SAVEt_AELEM:		/* array element */
 	    sv = (const SV *)POPPTR(ss,ix);
 	    TOPPTR(nss,ix) = SvREFCNT_inc(sv_dup_inc(sv, param));
-	    i = POPINT(ss,ix);
-	    TOPINT(nss,ix) = i;
+	    iv = POPIV(ss,ix);
+	    TOPIV(nss,ix) = iv;
 	    av = (const AV *)POPPTR(ss,ix);
 	    TOPPTR(nss,ix) = av_dup_inc(av, param);
 	    break;
@@ -15336,7 +15332,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
 #ifdef USE_LOCALE_NUMERIC
     PL_numeric_standard	= proto_perl->Inumeric_standard;
-    PL_numeric_local	= proto_perl->Inumeric_local;
+    PL_numeric_underlying	= proto_perl->Inumeric_underlying;
 #endif /* !USE_LOCALE_NUMERIC */
 
     /* Did the locale setup indicate UTF-8? */
@@ -15733,7 +15729,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
 	/* next PUSHMARK() sets *(PL_markstack_ptr+1) */
 	i = proto_perl->Imarkstack_max - proto_perl->Imarkstack;
-	Newxz(PL_markstack, i, I32);
+	Newx(PL_markstack, i, I32);
 	PL_markstack_max	= PL_markstack + (proto_perl->Imarkstack_max
 						  - proto_perl->Imarkstack);
 	PL_markstack_ptr	= PL_markstack + (proto_perl->Imarkstack_ptr
@@ -15743,11 +15739,11 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
 	/* next push_scope()/ENTER sets PL_scopestack[PL_scopestack_ix]
 	 * NOTE: unlike the others! */
-	Newxz(PL_scopestack, PL_scopestack_max, I32);
+	Newx(PL_scopestack, PL_scopestack_max, I32);
 	Copy(proto_perl->Iscopestack, PL_scopestack, PL_scopestack_ix, I32);
 
 #ifdef DEBUGGING
-	Newxz(PL_scopestack_name, PL_scopestack_max, const char *);
+	Newx(PL_scopestack_name, PL_scopestack_max, const char *);
 	Copy(proto_perl->Iscopestack_name, PL_scopestack_name, PL_scopestack_ix, const char *);
 #endif
         /* reset stack AV to correct length before its duped via
@@ -16994,6 +16990,9 @@ Perl_report_uninit(pTHX_ const SV *uninit_sv)
     if (PL_op) {
 	desc = PL_op->op_type == OP_STRINGIFY && PL_op->op_folded
 		? "join or string"
+                : PL_op->op_type == OP_MULTICONCAT
+                    && (PL_op->op_private & OPpMULTICONCAT_FAKE)
+                ? "sprintf"
 		: OP_DESC(PL_op);
 	if (uninit_sv && PL_curpad) {
 	    varname = find_uninit_var(PL_op, uninit_sv, 0, &desc);

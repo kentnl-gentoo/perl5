@@ -1,4 +1,5 @@
 #define PERL_EXT_POSIX
+#define PERL_EXT
 
 #ifdef NETWARE
 	#define _POSIX_
@@ -34,17 +35,13 @@ static int not_here(const char *s);
 #ifdef WIN32
 #include <sys/errno2.h>
 #endif
-#ifdef I_FLOAT
 #include <float.h>
-#endif
 #ifdef I_FENV
 #if !(defined(__vax__) && defined(__NetBSD__))
 #include <fenv.h>
 #endif
 #endif
-#ifdef I_LIMITS
 #include <limits.h>
-#endif
 #include <locale.h>
 #include <math.h>
 #ifdef I_PWD
@@ -53,10 +50,7 @@ static int not_here(const char *s);
 #include <setjmp.h>
 #include <signal.h>
 #include <stdarg.h>
-
-#ifdef I_STDDEF
 #include <stddef.h>
-#endif
 
 #ifdef I_UNISTD
 #include <unistd.h>
@@ -1336,9 +1330,7 @@ static NV_PAYLOAD_TYPE S_getpayload(NV nv)
 #if defined(I_TERMIOS)
 #include <termios.h>
 #endif
-#ifdef I_STDLIB
 #include <stdlib.h>
-#endif
 #ifndef __ultrix__
 #include <string.h>
 #endif
@@ -1800,7 +1792,7 @@ fix_win32_tzenv(void)
         perl_tz_env = "";
     if (crt_tz_env == NULL)
         crt_tz_env = "";
-    if (strcmp(perl_tz_env, crt_tz_env) != 0) {
+    if (strNE(perl_tz_env, crt_tz_env)) {
         newenv = (char*)malloc((strlen(perl_tz_env) + 4) * sizeof(char));
         if (newenv != NULL) {
             sprintf(newenv, "TZ=%s", perl_tz_env);
@@ -2133,14 +2125,29 @@ localeconv()
 #else
 	struct lconv *lcbuf;
 
+        DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+
         /* localeconv() deals with both LC_NUMERIC and LC_MONETARY, but
          * LC_MONETARY is already in the correct locale */
-        DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+#  ifdef USE_LOCALE_MONETARY
+
+        const bool is_monetary_utf8 = _is_cur_LC_category_utf8(LC_MONETARY);
+#  endif
+#  ifdef USE_LOCALE_NUMERIC
+
+        bool is_numeric_utf8;
+
         STORE_LC_NUMERIC_FORCE_TO_UNDERLYING();
+
+        is_numeric_utf8 = _is_cur_LC_category_utf8(LC_NUMERIC);
+#  endif
 
 	RETVAL = newHV();
 	sv_2mortal((SV*)RETVAL);
-	if ((lcbuf = localeconv())) {
+
+        lcbuf = localeconv();
+
+	if (lcbuf) {
 	    const struct lconv_offset *strings = lconv_strings;
 	    const struct lconv_offset *integers = lconv_integers;
 	    const char *ptr = (const char *) lcbuf;
@@ -2148,18 +2155,18 @@ localeconv()
 	    while (strings->name) {
                 /* This string may be controlled by either LC_NUMERIC, or
                  * LC_MONETARY */
-                bool is_utf8_locale
-#if defined(USE_LOCALE_NUMERIC) && defined(USE_LOCALE_MONETARY)
-                 = _is_cur_LC_category_utf8((isLC_NUMERIC_STRING(strings->name))
-                                             ? LC_NUMERIC
-                                             : LC_MONETARY);
-#elif defined(USE_LOCALE_NUMERIC)
-                 = _is_cur_LC_category_utf8(LC_NUMERIC);
-#elif defined(USE_LOCALE_MONETARY)
-                 = _is_cur_LC_category_utf8(LC_MONETARY);
-#else
-                 = FALSE;
-#endif
+                const bool is_utf8_locale =
+#  if defined(USE_LOCALE_NUMERIC) && defined(USE_LOCALE_MONETARY)
+                                        (isLC_NUMERIC_STRING(strings->name))
+                                        ? is_numeric_utf8
+                                        : is_monetary_utf8;
+#  elif defined(USE_LOCALE_NUMERIC)
+                                        is_numeric_utf8;
+#  elif defined(USE_LOCALE_MONETARY)
+                                        is_monetary_utf8;
+#  else
+                                        FALSE;
+#  endif
 
 		const char *value = *((const char **)(ptr + strings->offset));
 
@@ -2190,6 +2197,7 @@ localeconv()
                 integers++;
             }
 	}
+
         RESTORE_LC_NUMERIC_STANDARD();
 #endif  /* HAS_LOCALECONV */
     OUTPUT:
@@ -2928,7 +2936,7 @@ sigaction(sig, optaction, oldaction = 0)
 	        const char *s = SvPVX_const(ST(0));
 		int i = whichsig(s);
 
-	        if (i < 0 && _memEQs(s, "SIG"))
+	        if (i < 0 && memBEGINs(s, SvCUR(ST(0)), "SIG"))
 		    i = whichsig(s + 3);
 	        if (i < 0) {
 	            if (ckWARN(WARN_SIGNAL))

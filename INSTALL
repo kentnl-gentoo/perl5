@@ -609,7 +609,7 @@ The directories set up by Configure fall into three broad categories.
 
 =item Directories for the perl distribution
 
-By default, Configure will use the following directories for 5.27.5.
+By default, Configure will use the following directories for 5.27.6.
 $version is the full perl version number, including subversion, e.g.
 5.12.3, and $archname is a string like sun4-sunos,
 determined by Configure.  The full definitions of all Configure
@@ -789,6 +789,10 @@ are normally /usr/local/man/man1 and /usr/local/man/man3.  If you
 want to use a .3pm suffix for perl man pages, you can do that with
 
 	sh Configure -Dman3ext=3pm
+
+You can disable installation of man pages completely using
+
+	sh Configure -Dman1dir=none -Dman3dir=none
 
 =item HTML pages
 
@@ -1532,28 +1536,6 @@ PERL5LIB, and PERL5OPT will influence the behaviour of the test suite.
 So if you are getting strange test failures, you may want to try
 retesting with the various PERL variables unset.
 
-=item varargs
-
-If you get varargs problems with gcc, be sure that gcc is installed
-correctly and that you are not passing -I/usr/include to gcc.  When using
-gcc, you should probably have i_stdarg='define' and i_varargs='undef'
-in config.sh.  The problem is usually solved by installing gcc
-correctly.  If you do change config.sh, don't forget to propagate
-your changes (see L<"Propagating your changes to config.sh"> below).
-See also the L<"vsprintf"> item below.
-
-=item util.c
-
-If you get error messages such as the following (the exact line
-numbers and function name may vary in different versions of perl):
-
-    util.c: In function 'Perl_form':
-    util.c:1107: number of arguments doesn't match prototype
-    proto.h:125: prototype declaration
-
-it might well be a symptom of the gcc "varargs problem".  See the
-previous L<"varargs"> item.
-
 =item LD_LIBRARY_PATH
 
 If you run into dynamic loading problems, check your setting of
@@ -1581,20 +1563,6 @@ is probably that Configure couldn't find your umask() system call.
 Check your config.sh.  You should have d_umask='define'.  If you don't,
 this is probably the L<"nm extraction"> problem discussed above.  Also,
 try reading the hints file for your system for further information.
-
-=item vsprintf
-
-If you run into problems with vsprintf in compiling util.c, the
-problem is probably that Configure failed to detect your system's
-version of vsprintf().  Check whether your system has vprintf().
-(Virtually all modern Unix systems do.)  Then, check the variable
-d_vprintf in config.sh.  If your system has vprintf, it should be:
-
-	d_vprintf='define'
-
-If Configure guessed wrong, it is likely that Configure guessed wrong
-on a number of other common functions too.  This is probably
-the L<"nm extraction"> problem discussed above.
 
 =item do_aspawn
 
@@ -2472,7 +2440,7 @@ http://www.chiark.greenend.org.uk/~sgtatham/bugs.html
 
 =head1 Coexistence with earlier versions of perl 5
 
-Perl 5.27.5 is not binary compatible with earlier versions of Perl.
+Perl 5.27.6 is not binary compatible with earlier versions of Perl.
 In other words, you will have to recompile your XS modules.
 
 In general, you can usually safely upgrade from one version of Perl
@@ -2547,9 +2515,9 @@ won't interfere with another version.  (The defaults guarantee this for
 libraries after 5.6.0, but not for executables. TODO?)  One convenient
 way to do this is by using a separate prefix for each version, such as
 
-	sh Configure -Dprefix=/opt/perl5.27.5
+	sh Configure -Dprefix=/opt/perl5.27.6
 
-and adding /opt/perl5.27.5/bin to the shell PATH variable.  Such users
+and adding /opt/perl5.27.6/bin to the shell PATH variable.  Such users
 may also wish to add a symbolic link /usr/local/bin/perl so that
 scripts can still start with #!/usr/local/bin/perl.
 
@@ -2562,13 +2530,13 @@ seriously consider using a separate directory, since development
 subversions may not have all the compatibility wrinkles ironed out
 yet.
 
-=head2 Upgrading from 5.27.4 or earlier
+=head2 Upgrading from 5.27.5 or earlier
 
-B<Perl 5.27.5 may not be binary compatible with Perl 5.27.4 or
+B<Perl 5.27.6 may not be binary compatible with Perl 5.27.5 or
 earlier Perl releases.>  Perl modules having binary parts
 (meaning that a C compiler is used) will have to be recompiled to be
-used with 5.27.5.  If you find you do need to rebuild an extension with
-5.27.5, you may safely do so without disturbing the older
+used with 5.27.6.  If you find you do need to rebuild an extension with
+5.27.6, you may safely do so without disturbing the older
 installations.  (See L<"Coexistence with earlier versions of perl 5">
 above.)
 
@@ -2601,15 +2569,15 @@ Firstly, the bare minimum to run this script
      print("$f\n");
   }
 
-in Linux with perl-5.27.5 is as follows (under $Config{prefix}):
+in Linux with perl-5.27.6 is as follows (under $Config{prefix}):
 
   ./bin/perl
-  ./lib/perl5/5.27.5/strict.pm
-  ./lib/perl5/5.27.5/warnings.pm
-  ./lib/perl5/5.27.5/i686-linux/File/Glob.pm
-  ./lib/perl5/5.27.5/feature.pm
-  ./lib/perl5/5.27.5/XSLoader.pm
-  ./lib/perl5/5.27.5/i686-linux/auto/File/Glob/Glob.so
+  ./lib/perl5/5.27.6/strict.pm
+  ./lib/perl5/5.27.6/warnings.pm
+  ./lib/perl5/5.27.6/i686-linux/File/Glob.pm
+  ./lib/perl5/5.27.6/feature.pm
+  ./lib/perl5/5.27.6/XSLoader.pm
+  ./lib/perl5/5.27.6/i686-linux/auto/File/Glob/Glob.so
 
 Secondly, for perl-5.10.1, the Debian perl-base package contains 591
 files, (of which 510 are for lib/unicore) totaling about 3.5MB in its
@@ -2750,4 +2718,5 @@ This document is part of the Perl package and may be distributed under
 the same terms as perl itself, with the following additional request:
 If you are distributing a modified version of perl (perhaps as part of
 a larger package) please B<do> modify these installation instructions
-and the contact information to match your distribution.
+and the contact information to match your distribution. Additional
+information for packagers is in F<PACKAGING>.

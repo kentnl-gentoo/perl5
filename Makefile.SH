@@ -570,7 +570,7 @@ esac
 
 $spitshell >>$Makefile <<'!NO!SUBS!'
 
-perltoc_pod_prereqs = extra.pods pod/perl5275delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5276delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -1120,9 +1120,9 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) pod/perlmodlib.PL -q
 
-pod/perl5275delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl5275delta.pod
-	$(LNS) perldelta.pod pod/perl5275delta.pod
+pod/perl5276delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl5276delta.pod
+	$(LNS) perldelta.pod pod/perl5276delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1177,50 +1177,39 @@ EOT
 done
 
 if test "X$hostperl" != X; then
+	LOCAL_PERL='$(HOST_PERL)'
 	$spitshell >>$Makefile <<'!NO!SUBS!'
 install.perl:	$(INSTALL_DEPENDENCE) installperl
 	$(HOST_PERL) installperl --destdir=$(DESTDIR) $(INSTALLFLAGS) $(STRIPFLAGS)
 	-@test ! -s extras.lst || $(MAKE) extras.install
-
-install.man:	all installman
-	$(HOST_PERL) installman --destdir=$(DESTDIR) $(INSTALLFLAGS)
-
-# XXX Experimental. Hardwired values, but useful for testing.
-# Eventually Configure could ask for some of these values.
-install.html: all installhtml
-	-@test -f README.vms && cd vms && $(LNS) ../README.vms README_vms.pod && cd ..
-	$(HOST_PERL) installhtml   \
-      --podroot=. --podpath=. --recurse  \
-      --htmldir=$(privlib)/html   \
-      --htmlroot=$(privlib)/html  \
-      --splithead=pod/perlipc     \
-      --splititem=pod/perlfunc    \
-      --ignore=Porting/Maintainers.pm,Porting/pumpkin.pod,Porting/repository.pod \
-      --verbose
 !NO!SUBS!
 else
+	LOCAL_PERL='$(RUN_PERL)'
 	$spitshell >>$Makefile <<'!NO!SUBS!'
 install.perl:	$(INSTALL_DEPENDENCE) installperl
 	$(RUN_PERL) installperl --destdir=$(DESTDIR) $(INSTALLFLAGS) $(STRIPFLAGS)
 	-@test ! -s extras.lst || PATH="`pwd`:\${PATH}" PERL5LIB="`pwd`/lib" \$(RUN_PERL) -Ilib -MCPAN -e '@ARGV&&install(@ARGV)' `cat extras.lst`
 
+!NO!SUBS!
+fi
+
+$spitshell >>$Makefile <<!GROK!THIS!
 install.man:	all installman
-	$(RUN_PERL) installman --destdir=$(DESTDIR) $(INSTALLFLAGS)
+	${LOCAL_PERL} installman --destdir=\$(DESTDIR) \$(INSTALLFLAGS)
 
 # XXX Experimental. Hardwired values, but useful for testing.
 # Eventually Configure could ask for some of these values.
 install.html: all installhtml
-	-@test -f README.vms && cd vms && $(LNS) ../README.vms README_vms.pod && cd ..
-	$(RUN_PERL) installhtml   \
-      --podroot=. --podpath=. --recurse  \
-      --htmldir=$(privlib)/html   \
-      --htmlroot=$(privlib)/html  \
-      --splithead=pod/perlipc     \
-      --splititem=pod/perlfunc    \
-      --ignore=Porting/Maintainers.pm,Porting/pumpkin.pod,Porting/repository.pod \
+	-@test -f README.vms && cd vms && \$(LNS) ../README.vms README_vms.pod && cd ..
+	${LOCAL_PERL} installhtml   \\
+      --podroot=. --podpath=. --recurse  \\
+      --htmldir=\$(privlib)/html   \\
+      --htmlroot=\$(privlib)/html  \\
+      --splithead=pod/perlipc     \\
+      --splititem=pod/perlfunc    \\
+      --ignore=Porting/Maintainers.pm,Porting/pumpkin.pod,Porting/repository.pod \\
       --verbose
-!NO!SUBS!
-fi
+!GROK!THIS!
 
 $spitshell >>$Makefile <<'!NO!SUBS!'
 

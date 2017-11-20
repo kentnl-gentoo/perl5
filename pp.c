@@ -384,7 +384,7 @@ PP(pp_prototype)
     if (SvGMAGICAL(TOPs)) SETs(sv_mortalcopy(TOPs));
     if (SvPOK(TOPs) && SvCUR(TOPs) >= 7) {
 	const char * s = SvPVX_const(TOPs);
-	if (strnEQ(s, "CORE::", 6)) {
+        if (memBEGINs(s, SvCUR(TOPs), "CORE::")) {
 	    const int code = keyword(s + 6, SvCUR(TOPs) - 6, 1);
 	    if (!code)
 		DIE(aTHX_ "Can't find an opnumber for \"%" UTF8f "\"",
@@ -1440,15 +1440,9 @@ PP(pp_divide)
        can be too large to preserve, so don't need to compile the code to
        test the size of UVs.  */
 
-#ifdef SLOPPYDIVIDE
+#if defined(SLOPPYDIVIDE) || (defined(PERL_PRESERVE_IVUV) && !defined(NV_PRESERVES_UV))
 #  define PERL_TRY_UV_DIVIDE
     /* ensure that 20./5. == 4. */
-#else
-#  ifdef PERL_PRESERVE_IVUV
-#    ifndef NV_PRESERVES_UV
-#      define PERL_TRY_UV_DIVIDE
-#    endif
-#  endif
 #endif
 
 #ifdef PERL_TRY_UV_DIVIDE
@@ -5592,7 +5586,14 @@ PP(pp_reverse)
 			SV * const tmp = *begin;
 			*begin++ = *end;
 			*end--   = tmp;
+
+                        if (tmp && SvWEAKREF(tmp))
+                            sv_rvunweaken(tmp);
 		    }
+
+                    /* make sure we catch the middle element */
+                    if (begin == end && *begin && SvWEAKREF(*begin))
+                        sv_rvunweaken(*begin);
 		}
 	    }
 	}
