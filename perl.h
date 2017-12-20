@@ -391,26 +391,24 @@
 /* on gcc (and clang), specify that a warning should be temporarily
  * ignored; e.g.
  *
- *    GCC_DIAG_IGNORE(-Wmultichar);
+ *    GCC_DIAG_IGNORE_DECL(-Wmultichar);
  *    char b = 'ab';
- *    GCC_DIAG_RESTORE;
+ *    GCC_DIAG_RESTORE_DECL;
  *
  * based on http://dbp-consulting.com/tutorials/SuppressingGCCWarnings.html
  *
  * Note that "pragma GCC diagnostic push/pop" was added in GCC 4.6, Mar 2011;
  * clang only pretends to be GCC 4.2, but still supports push/pop.
  *
- * Note on usage: on non-gcc (or lookalike, like clang) compilers
- * one cannot use these with a semicolon at file (global) level without
- * warnings since they are defined as empty, which leads into the terminating
- * semicolon being left alone on a line:
- * ;
- * which makes compilers mildly cranky.  Therefore at file level one
- * should use the GCC_DIAG_IGNORE and GCC_DIAG_RESTORE macros *without*
- * the semicolons.
+ * Note on usage: all macros must be used at a place where a declaration
+ * or statement can occur, i.e., not in the middle of an expression.
+ * *_DIAG_IGNORE() and *_DIAG_RESTORE can be used in any such place, but
+ * must be used without a following semicolon.  *_DIAG_IGNORE_DECL() and
+ * *_DIAG_RESTORE_DECL must be used with a following semicolon, and behave
+ * syntactically as declarations (like dNOOP).  *_DIAG_IGNORE_STMT()
+ * and *_DIAG_RESTORE_STMT must be used with a following semicolon,
+ * and behave syntactically as statements (like NOOP).
  *
- * (A dead-on-arrival solution would be to try to define the macros as
- * NOOP or dNOOP, those don't work both inside functions and outside.)
  */
 
 #if defined(__clang__) || defined(__clang) || \
@@ -424,6 +422,10 @@
 #  define GCC_DIAG_IGNORE(w)
 #  define GCC_DIAG_RESTORE
 #endif
+#define GCC_DIAG_IGNORE_DECL(x) GCC_DIAG_IGNORE(x) dNOOP
+#define GCC_DIAG_RESTORE_DECL GCC_DIAG_RESTORE dNOOP
+#define GCC_DIAG_IGNORE_STMT(x) GCC_DIAG_IGNORE(x) NOOP
+#define GCC_DIAG_RESTORE_STMT GCC_DIAG_RESTORE NOOP
 /* for clang specific pragmas */
 #if defined(__clang__) || defined(__clang)
 #  define CLANG_DIAG_PRAGMA(x) _Pragma (#x)
@@ -434,18 +436,13 @@
 #  define CLANG_DIAG_IGNORE(w)
 #  define CLANG_DIAG_RESTORE
 #endif
+#define CLANG_DIAG_IGNORE_DECL(x) CLANG_DIAG_IGNORE(x) dNOOP
+#define CLANG_DIAG_RESTORE_DECL CLANG_DIAG_RESTORE dNOOP
+#define CLANG_DIAG_IGNORE_STMT(x) CLANG_DIAG_IGNORE(x) NOOP
+#define CLANG_DIAG_RESTORE_STMT CLANG_DIAG_RESTORE NOOP
 
 #define NOOP /*EMPTY*/(void)0
-/* cea2e8a9dd23747f accidentally lost the comment originally from the first
-   check in of thread.h, explaining why we need dNOOP at all:  */
-/* Rats: if dTHR is just blank then the subsequent ";" throws an error */
-/* Declaring a *function*, instead of a variable, ensures that we don't rely
-   on being able to suppress "unused" warnings.  */
-#ifdef __cplusplus
-#define dNOOP (void)0
-#else
-#define dNOOP extern int Perl___notused(void)
-#endif
+#define dNOOP struct Perl___notused_struct
 
 #ifndef pTHX
 /* Don't bother defining tTHX ; using it outside
@@ -686,7 +683,7 @@
   cewchar.h includes a correct definition of MB_CUR_MAX and it is copied here
   since cewchar.h can't be included this early */
 #if defined(UNDER_CE) && (_MSC_VER < 1300)
-#  define MB_CUR_MAX 1
+#  define MB_CUR_MAX 1uL
 #endif
 
 # include <stdarg.h>
@@ -798,56 +795,124 @@ EXTERN_C int syscall(int, ...);
 EXTERN_C int usleep(unsigned int);
 #endif
 
-#ifdef PERL_CORE
-
-/* macros for correct constant construction */
-# if INTSIZE >= 2
-#  define U16_CONST(x) ((U16)x##U)
-# else
-#  define U16_CONST(x) ((U16)x##UL)
-# endif
-
-# if INTSIZE >= 4
-#  define U32_CONST(x) ((U32)x##U)
-# else
-#  define U32_CONST(x) ((U32)x##UL)
-# endif
-
-# ifdef HAS_QUAD
-#  if INTSIZE >= 8
-#   define U64_CONST(x) ((U64)x##U)
-#  elif LONGSIZE >= 8
-#   define U64_CONST(x) ((U64)x##UL)
-#  elif QUADKIND == QUAD_IS_LONG_LONG
-#   define U64_CONST(x) ((U64)x##ULL)
-#  elif QUADKIND == QUAD_IS___INT64
-#   define U64_CONST(x) ((U64)x##UI64)
-#  else /* best guess we can make */
-#   define U64_CONST(x) ((U64)x##UL)
+/* macros for correct constant construction.  These are in C99 <stdint.h>
+ * (so they will not be available in strict C89 mode), but they are nice, so
+ * let's define them if necessary. */
+#ifndef UINT16_C
+#  if INTSIZE >= 2
+#    define UINT16_C(x) ((U16_TYPE)x##U)
+#  else
+#    define UINT16_C(x) ((U16_TYPE)x##UL)
 #  endif
-# endif
+#endif
+
+#ifndef UINT32_C
+#  if INTSIZE >= 4
+#    define UINT32_C(x) ((U32_TYPE)x##U)
+#  else
+#    define UINT32_C(x) ((U32_TYPE)x##UL)
+#  endif
+#endif
+
+#ifdef I_STDINT
+    typedef intmax_t  PERL_INTMAX_T;
+    typedef uintmax_t PERL_UINTMAX_T;
+#endif
+
+/* N.B.  We use QUADKIND here instead of HAS_QUAD here, because that doesn't
+ * actually mean what it has always been documented to mean (see RT #119753)
+ * and is explicitly turned off outside of core with dire warnings about
+ * removing the undef. */
+
+#if defined(QUADKIND)
+#  undef PeRl_INT64_C
+#  undef PeRl_UINT64_C
+/* Prefer the native integer types (int and long) over long long
+ * (which is not C89) and Win32-specific __int64. */
+#  if QUADKIND == QUAD_IS_INT && INTSIZE == 8
+#    define PeRl_INT64_C(c)	(c)
+#    define PeRl_UINT64_C(c)	CAT2(c,U)
+#  endif
+#  if QUADKIND == QUAD_IS_LONG && LONGSIZE == 8
+#    define PeRl_INT64_C(c)	CAT2(c,L)
+#    define PeRl_UINT64_C(c)	CAT2(c,UL)
+#  endif
+#  if QUADKIND == QUAD_IS_LONG_LONG && defined(HAS_LONG_LONG)
+#    define PeRl_INT64_C(c)	CAT2(c,LL)
+#    define PeRl_UINT64_C(c)	CAT2(c,ULL)
+#  endif
+#  if QUADKIND == QUAD_IS___INT64
+#    define PeRl_INT64_C(c)	CAT2(c,I64)
+#    define PeRl_UINT64_C(c)	CAT2(c,UI64)
+#  endif
+#  ifndef PeRl_INT64_C
+#    define PeRl_INT64_C(c)	((I64)(c)) /* last resort */
+#    define PeRl_UINT64_C(c)	((U64TYPE)(c))
+#  endif
+/* In OS X the INT64_C/UINT64_C are defined with LL/ULL, which will
+ * not fly with C89-pedantic gcc, so let's undefine them first so that
+ * we can redefine them with our native integer preferring versions. */
+#  if defined(PERL_DARWIN) && defined(PERL_GCC_PEDANTIC)
+#    undef INT64_C
+#    undef UINT64_C
+#  endif
+#  ifndef INT64_C
+#    define INT64_C(c) PeRl_INT64_C(c)
+#  endif
+#  ifndef UINT64_C
+#    define UINT64_C(c) PeRl_UINT64_C(c)
+#  endif
+
+#  ifndef I_STDINT
+    typedef I64TYPE PERL_INTMAX_T;
+    typedef U64TYPE PERL_UINTMAX_T;
+#  endif
+#  ifndef INTMAX_C
+#    define INTMAX_C(c) INT64_C(c)
+#  endif
+#  ifndef UINTMAX_C
+#    define UINTMAX_C(c) UINT64_C(c)
+#  endif
+
+#else  /* below QUADKIND is undefined */
+
+/* Perl doesn't work on 16 bit systems, so must be 32 bit */
+#  ifndef I_STDINT
+    typedef I32TYPE PERL_INTMAX_T;
+    typedef U32TYPE PERL_UINTMAX_T;
+#  endif
+#  ifndef INTMAX_C
+#    define INTMAX_C(c) INT32_C(c)
+#  endif
+#  ifndef UINTMAX_C
+#    define UINTMAX_C(c) UINT32_C(c)
+#  endif
+
+#endif  /* no QUADKIND */
+
+#ifdef PERL_CORE
 
 /* byte-swapping functions for big-/little-endian conversion */
 # define _swab_16_(x) ((U16)( \
-         (((U16)(x) & U16_CONST(0x00ff)) << 8) | \
-         (((U16)(x) & U16_CONST(0xff00)) >> 8) ))
+         (((U16)(x) & UINT16_C(0x00ff)) << 8) | \
+         (((U16)(x) & UINT16_C(0xff00)) >> 8) ))
 
 # define _swab_32_(x) ((U32)( \
-         (((U32)(x) & U32_CONST(0x000000ff)) << 24) | \
-         (((U32)(x) & U32_CONST(0x0000ff00)) <<  8) | \
-         (((U32)(x) & U32_CONST(0x00ff0000)) >>  8) | \
-         (((U32)(x) & U32_CONST(0xff000000)) >> 24) ))
+         (((U32)(x) & UINT32_C(0x000000ff)) << 24) | \
+         (((U32)(x) & UINT32_C(0x0000ff00)) <<  8) | \
+         (((U32)(x) & UINT32_C(0x00ff0000)) >>  8) | \
+         (((U32)(x) & UINT32_C(0xff000000)) >> 24) ))
 
 # ifdef HAS_QUAD
 #  define _swab_64_(x) ((U64)( \
-          (((U64)(x) & U64_CONST(0x00000000000000ff)) << 56) | \
-          (((U64)(x) & U64_CONST(0x000000000000ff00)) << 40) | \
-          (((U64)(x) & U64_CONST(0x0000000000ff0000)) << 24) | \
-          (((U64)(x) & U64_CONST(0x00000000ff000000)) <<  8) | \
-          (((U64)(x) & U64_CONST(0x000000ff00000000)) >>  8) | \
-          (((U64)(x) & U64_CONST(0x0000ff0000000000)) >> 24) | \
-          (((U64)(x) & U64_CONST(0x00ff000000000000)) >> 40) | \
-          (((U64)(x) & U64_CONST(0xff00000000000000)) >> 56) ))
+          (((U64)(x) & UINT64_C(0x00000000000000ff)) << 56) | \
+          (((U64)(x) & UINT64_C(0x000000000000ff00)) << 40) | \
+          (((U64)(x) & UINT64_C(0x0000000000ff0000)) << 24) | \
+          (((U64)(x) & UINT64_C(0x00000000ff000000)) <<  8) | \
+          (((U64)(x) & UINT64_C(0x000000ff00000000)) >>  8) | \
+          (((U64)(x) & UINT64_C(0x0000ff0000000000)) >> 24) | \
+          (((U64)(x) & UINT64_C(0x00ff000000000000)) >> 40) | \
+          (((U64)(x) & UINT64_C(0xff00000000000000)) >> 56) ))
 # endif
 
 /* The old value was hard coded at 1008. (4096-16) seems to be a bit faster,
@@ -2311,8 +2376,8 @@ typedef AV PAD;
 typedef struct padnamelist PADNAMELIST;
 typedef struct padname PADNAME;
 
-/* enable PERL_OP_PARENT by default */
-#if !defined(PERL_OP_PARENT) && !defined(PERL_NO_OP_PARENT)
+/* always enable PERL_OP_PARENT  */
+#if !defined(PERL_OP_PARENT)
 #  define PERL_OP_PARENT
 #endif
 
@@ -3770,7 +3835,7 @@ Gid_t getegid (void);
 #define DEBUG_C_FLAG		0x00200000 /*2097152 */
 #define DEBUG_A_FLAG		0x00400000 /*4194304 */
 #define DEBUG_q_FLAG		0x00800000 /*8388608 */
-#define DEBUG_M_FLAG		0x01000000 /*16777216*/
+/* spare                                     16777216*/
 #define DEBUG_B_FLAG		0x02000000 /*33554432*/
 #define DEBUG_L_FLAG		0x04000000 /*67108864*/
 #define DEBUG_i_FLAG		0x08000000 /*134217728*/
@@ -3802,7 +3867,6 @@ Gid_t getegid (void);
 #  define DEBUG_C_TEST_ UNLIKELY(PL_debug & DEBUG_C_FLAG)
 #  define DEBUG_A_TEST_ UNLIKELY(PL_debug & DEBUG_A_FLAG)
 #  define DEBUG_q_TEST_ UNLIKELY(PL_debug & DEBUG_q_FLAG)
-#  define DEBUG_M_TEST_ UNLIKELY(PL_debug & DEBUG_M_FLAG)
 #  define DEBUG_B_TEST_ UNLIKELY(PL_debug & DEBUG_B_FLAG)
 #  define DEBUG_L_TEST_ UNLIKELY(PL_debug & DEBUG_L_FLAG)
 #  define DEBUG_i_TEST_ UNLIKELY(PL_debug & DEBUG_i_FLAG)
@@ -3836,7 +3900,6 @@ Gid_t getegid (void);
 #  define DEBUG_C_TEST DEBUG_C_TEST_
 #  define DEBUG_A_TEST DEBUG_A_TEST_
 #  define DEBUG_q_TEST DEBUG_q_TEST_
-#  define DEBUG_M_TEST DEBUG_M_TEST_
 #  define DEBUG_B_TEST DEBUG_B_TEST_
 #  define DEBUG_L_TEST DEBUG_L_TEST_
 #  define DEBUG_i_TEST DEBUG_i_TEST_
@@ -3900,7 +3963,6 @@ Gid_t getegid (void);
 #  define DEBUG_C(a) DEBUG__(DEBUG_C_TEST, a)
 #  define DEBUG_A(a) DEBUG__(DEBUG_A_TEST, a)
 #  define DEBUG_q(a) DEBUG__(DEBUG_q_TEST, a)
-#  define DEBUG_M(a) DEBUG__(DEBUG_M_TEST, a)
 #  define DEBUG_B(a) DEBUG__(DEBUG_B_TEST, a)
 #  define DEBUG_L(a) DEBUG__(DEBUG_L_TEST, a)
 #  define DEBUG_i(a) DEBUG__(DEBUG_i_TEST, a)
@@ -3930,7 +3992,6 @@ Gid_t getegid (void);
 #  define DEBUG_C_TEST (0)
 #  define DEBUG_A_TEST (0)
 #  define DEBUG_q_TEST (0)
-#  define DEBUG_M_TEST (0)
 #  define DEBUG_B_TEST (0)
 #  define DEBUG_L_TEST (0)
 #  define DEBUG_i_TEST (0)
@@ -3964,7 +4025,6 @@ Gid_t getegid (void);
 #  define DEBUG_C(a)
 #  define DEBUG_A(a)
 #  define DEBUG_q(a)
-#  define DEBUG_M(a)
 #  define DEBUG_B(a)
 #  define DEBUG_L(a)
 #  define DEBUG_i(a)
@@ -4663,9 +4723,9 @@ EXTCONST unsigned char PL_freq[];
 #ifdef DOINIT
 EXTCONST char* const PL_block_type[] = {
 	"NULL",
-	"WHEN",
+	"WHERESO",
 	"BLOCK",
-	"GIVEN",
+	"LOOP_GIVEN",
 	"LOOP_ARY",
 	"LOOP_LAZYSV",
 	"LOOP_LAZYIV",
@@ -6485,7 +6545,7 @@ extern void moncontrol(int);
  */
 
 /* The quadmath literals are anon structs which -Wc++-compat doesn't like. */
-GCC_DIAG_IGNORE(-Wc++-compat)
+GCC_DIAG_IGNORE_DECL(-Wc++-compat);
 
 #  ifdef USE_QUADMATH
 /* Cannot use HUGE_VALQ for PL_inf because not a compile-time
@@ -6555,7 +6615,7 @@ INFNAN_NV_U8_DECL PL_nan = { 0.0/0.0 }; /* keep last */
 #    endif
 #  endif
 
-GCC_DIAG_RESTORE
+GCC_DIAG_RESTORE_DECL;
 
 #else
 

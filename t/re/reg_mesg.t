@@ -57,6 +57,14 @@ sub fixup_expect ($$) {
     return wantarray ? @new_expect : join "", @new_expect;
 }
 
+sub add_markers {
+    my ($element)= @_;
+    $element =~ s/ at .* line \d+\.?\n$//;
+    $element =~ s/in regex; marked by <-- HERE in/{#}/;
+    $element =~ s/ <-- HERE /{#}/;
+    return $element;
+}
+
 ## Because we don't "use utf8" in this file, we need to do some extra legwork
 ## for the utf8 tests: Prepend 'use utf8' to the pattern, and mark the strings
 ## to check against as UTF-8, but for this all to work properly, the character
@@ -218,11 +226,8 @@ my @death =
  '/\b{gc}/' => "'gc' is an unknown bound type {#} m/\\b{gc{#}}/",
  '/\B{gc}/' => "'gc' is an unknown bound type {#} m/\\B{gc{#}}/",
 
- '/(?[[[::]]])/' => "Syntax error in (?[...]) in regex m/(?[[[::]]])/",
- '/(?[[[:w:]]])/' => "Syntax error in (?[...]) in regex m/(?[[[:w:]]])/",
- '/(?[[:w:]])/' => "",
- '/([.].*)[.]/'   => "",    # [perl #127582]
- '/[.].*[.]/'     => "",    # [perl #127604]
+ '/(?[[[::]]])/' => "Unexpected ']' with no following ')' in (?[... {#} m/(?[[[::]]{#}])/",
+ '/(?[[[:w:]]])/' => "Unexpected ']' with no following ')' in (?[... {#} m/(?[[[:w:]]{#}])/",
  '/(?[a])/' =>  'Unexpected character {#} m/(?[a{#}])/',
  '/(?[ + \t ])/' => 'Unexpected binary operator \'+\' with no preceding operand {#} m/(?[ +{#} \t ])/',
  '/(?[ \cK - ( + \t ) ])/' => 'Unexpected binary operator \'+\' with no preceding operand {#} m/(?[ \cK - ( +{#} \t ) ])/',
@@ -242,11 +247,12 @@ my @death =
  '/(?[ \p{foo} ])/' => 'Can\'t find Unicode property definition "foo" {#} m/(?[ \p{foo}{#} ])/',
  '/(?[ \p{ foo = bar } ])/' => 'Can\'t find Unicode property definition "foo = bar" {#} m/(?[ \p{ foo = bar }{#} ])/',
  '/(?[ \8 ])/' => 'Unrecognized escape \8 in character class {#} m/(?[ \8{#} ])/',
- '/(?[ \t ]/' => 'Syntax error in (?[...]) in regex m/(?[ \t ]/',
- '/(?[ [ \t ]/' => 'Syntax error in (?[...]) in regex m/(?[ [ \t ]/',
- '/(?[ \t ] ]/' => 'Syntax error in (?[...]) in regex m/(?[ \t ] ]/',
- '/(?[ [ ] ]/' => 'Syntax error in (?[...]) in regex m/(?[ [ ] ]/',
- '/(?[ \t + \e # This was supposed to be a comment ])/' => 'Syntax error in (?[...]) in regex m/(?[ \t + \e # This was supposed to be a comment ])/',
+ '/(?[ \t ]/' => "Unexpected ']' with no following ')' in (?[... {#} m/(?[ \\t ]{#}/",
+ '/(?[ [ \t ]/' => "Syntax error in (?[...]) {#} m/(?[ [ \\t ]{#}/",
+ '/(?[ \t ] ]/' => "Unexpected ']' with no following ')' in (?[... {#} m/(?[ \\t ]{#} ]/",
+ '/(?[ [ ] ]/' => "Syntax error in (?[...]) {#} m/(?[ [ ] ]{#}/",
+ '/(?[ \t + \e # This was supposed to be a comment ])/' =>
+    "Syntax error in (?[...]) {#} m/(?[ \\t + \\e # This was supposed to be a comment ]){#}/",
  '/(?[ ])/' => 'Incomplete expression within \'(?[ ])\' {#} m/(?[ {#}])/',
  'm/(?[[a-\d]])/' => 'False [] range "a-\d" {#} m/(?[[a-\d{#}]])/',
  'm/(?[[\w-x]])/' => 'False [] range "\w-" {#} m/(?[[\w-{#}x]])/',
@@ -288,18 +294,15 @@ my @death =
  '/\w{/' => 'Unescaped left brace in regex is illegal here {#} m/\w{{#}/',
  '/\q{/' => 'Unescaped left brace in regex is illegal here {#} m/\q{{#}/',
  '/\A{/' => 'Unescaped left brace in regex is illegal here {#} m/\A{{#}/',
- '/abc/xix' => "",
- '/(?xmsixp:abc)/' => "",
- '/(?xmsixp)abc/' => "",
- '/(?xxxx:abc)/' => "",
  '/(?<=/' => 'Sequence (?... not terminated {#} m/(?<={#}/',                        # [perl #128170]
 
 );
 
-# These are messages that are warnings when not strict; death under 'use re
-# "strict".  See comment before @warnings as to why some have a \x{100} in
-# them.  This array has 3 elements per construct.  [0] is the regex to use;
-# [1] is the message under no strict, and [2] is under strict.
+# These are messages that are death under 'use re "strict"', and may or may
+# not warn otherwise.  See comment before @warning as to why some have a
+# \x{100} in them.  This array has 3 elements per construct.  [0] is the regex
+# to use; [1] is the message under no strict (empty to not warn), and [2] is
+# under strict.
 my @death_only_under_strict = (
     'm/\xABC/' => "",
                => 'Use \x{...} for more than two hex characters {#} m/\xABC{#}/',
@@ -380,6 +383,8 @@ my @death_only_under_strict = (
                              => 'Unescaped left brace in regex is illegal here {#} m/xa{{#}3\,4}y/',
   'default_on/\\${[^\\}]*}/' => 'Unescaped left brace in regex is deprecated here (and will be fatal in Perl 5.30), passed through {#} m/\\${{#}[^\\}]*}/',
                              => 'Unescaped left brace in regex is illegal here {#} m/\\${{#}[^\\}]*}/',
+    '/[ab]/'          => "",
+                        => 'Literal vertical space in [] is illegal except under /x {#} m/[a{#}b]/',
 );
 
 # These need the character 'ネ' as a marker for mark_as_utf8()
@@ -430,17 +435,15 @@ my @death_utf8 = mark_as_utf8(
  '/ネ[\x{ネ]/' => 'Missing right brace on \x{} {#} m/ネ[\x{{#}ネ]/',
 
  '/ネ\o{ネ/' => 'Missing right brace on \o{ {#} m/ネ\o{{#}ネ/',
- '/ネ[[:ネ:]]ネ/' => "",
 
  '/[ネ-a]ネ/' => 'Invalid [] range "ネ-a" {#} m/[ネ-a{#}]ネ/',
 
  '/ネ\p{}ネ/' => 'Empty \p{} {#} m/ネ\p{{#}}ネ/',
 
- '/ネ(?[[[:ネ]]])ネ/' => "Syntax error in (?[...]) in regex m/ネ(?[[[:ネ]]])ネ/",
- '/ネ(?[[[:ネ: ])ネ/' => "Syntax error in (?[...]) in regex m/ネ(?[[[:ネ: ])ネ/",
- '/ネ(?[[[::]]])ネ/' => "Syntax error in (?[...]) in regex m/ネ(?[[[::]]])ネ/",
- '/ネ(?[[[:ネ:]]])ネ/' => "Syntax error in (?[...]) in regex m/ネ(?[[[:ネ:]]])ネ/",
- '/ネ(?[[:ネ:]])ネ/' => "",
+ '/ネ(?[[[:ネ]]])ネ/' => "Unexpected ']' with no following ')' in (?[... {#} m/ネ(?[[[:ネ]]{#}])ネ/",
+ '/ネ(?[[[:ネ: ])ネ/' => "Syntax error in (?[...]) {#} m/ネ(?[[[:ネ: ])ネ{#}/",
+ '/ネ(?[[[::]]])ネ/' => "Unexpected ']' with no following ')' in (?[... {#} m/ネ(?[[[::]]{#}])ネ/",
+ '/ネ(?[[[:ネ:]]])ネ/' => "Unexpected ']' with no following ')' in (?[... {#} m/ネ(?[[[:ネ:]]{#}])ネ/",
  '/ネ(?[ネ])ネ/' =>  'Unexpected character {#} m/ネ(?[ネ{#}])ネ/',
  '/ネ(?[ + [ネ] ])/' => 'Unexpected binary operator \'+\' with no preceding operand {#} m/ネ(?[ +{#} [ネ] ])/',
  '/ネ(?[ \cK - ( + [ネ] ) ])/' => 'Unexpected binary operator \'+\' with no preceding operand {#} m/ネ(?[ \cK - ( +{#} [ネ] ) ])/',
@@ -452,8 +455,9 @@ my @death_utf8 = mark_as_utf8(
  '/(?[ \x{ネ} ])ネ/' => 'Non-hex character {#} m/(?[ \x{ネ{#}} ])ネ/',
  '/(?[ \p{ネ} ])/' => 'Can\'t find Unicode property definition "ネ" {#} m/(?[ \p{ネ}{#} ])/',
  '/(?[ \p{ ネ = bar } ])/' => 'Can\'t find Unicode property definition "ネ = bar" {#} m/(?[ \p{ ネ = bar }{#} ])/',
- '/ネ(?[ \t ]/' => 'Syntax error in (?[...]) in regex m/ネ(?[ \t ]/',
- '/(?[ \t + \e # ネ This was supposed to be a comment ])/' => 'Syntax error in (?[...]) in regex m/(?[ \t + \e # ネ This was supposed to be a comment ])/',
+ '/ネ(?[ \t ]/' => "Unexpected ']' with no following ')' in (?[... {#} m/ネ(?[ \\t ]{#}/",
+ '/(?[ \t + \e # ネ This was supposed to be a comment ])/' =>
+    "Syntax error in (?[...]) {#} m/(?[ \\t + \\e # ネ This was supposed to be a comment ]){#}/",
  'm/(*ネ)ネ/' => q<Unknown verb pattern 'ネ' {#} m/(*ネ){#}ネ/>,
  '/\cネ/' => "Character following \"\\c\" must be printable ASCII",
  '/\b{ネ}/' => "'ネ' is an unknown bound type {#} m/\\b{ネ{#}}/",
@@ -588,6 +592,14 @@ my @warning = (
                                 ],
    '/[][[:alpha:]]/' => "",        # [perl #127581]
    '/[][[:alpha:]\\@\\\\^_?]/' => "", # [perl #131522]
+    '/(?[[:w:]])/' => "",
+    '/([.].*)[.]/'   => "",    # [perl #127582]
+    '/[.].*[.]/'     => "",    # [perl #127604]
+    '/abc/xix' => "",
+    '/(?xmsixp:abc)/' => "",
+    '/(?xmsixp)abc/' => "",
+    '/(?xxxx:abc)/' => "",
+
 ); # See comments before this for why '\x{100}' is generally needed
 
 # These need the character 'ネ' as a marker for mark_as_utf8()
@@ -601,6 +613,8 @@ my @warnings_utf8 = mark_as_utf8(
         'Useless (?g) - use /g modifier {#} m/utf8 ネ (?og{#}c) ネ/',
         'Useless (?c) - use /gc modifier {#} m/utf8 ネ (?ogc{#}) ネ/',
     ],
+   '/ネ[[:ネ:]]ネ/' => "",
+   '/ネ(?[[:ネ:]])ネ/' => "",
 
 );
 
@@ -683,15 +697,29 @@ for my $strict ("", "use re 'strict';") {
     for (my $i = 0; $i < @death; $i += 2) {
         my $regex = $death[$i] =~ s/ default_ (on | off) //rx;
         my $expect = fixup_expect($death[$i+1], $strict);
-        no warnings 'experimental::regex_sets';
-        no warnings 'experimental::re_strict';
+        if ($expect eq "") {
+            fail("$0: Internal error: '$death[$i]' should have an error message");
+        }
+        else {
+            no warnings 'experimental::regex_sets';
+            no warnings 'experimental::re_strict';
 
-        warning_is(sub {
+            warning_is(sub {
+                    my $meaning_of_life;
                     my $eval_string = "$strict $regex";
                     $_ = "x";
-                    eval $eval_string;
-                    like($@, qr/\Q$expect/, $eval_string);
-                }, undef, "... and died without any other warnings");
+                    eval "$eval_string; \$meaning_of_life = 42";
+                    ok (! defined $meaning_of_life, "$eval_string died");
+                    my $error= $@;
+                    if ($error =~ qr/\Q$expect/) {
+                        ok(1, "... and gave expected message");
+                    } else {
+                        ok(0,$eval_string);
+                        diag("Have: " . _q(add_markers($error)));
+                        diag("Want: " . _q($death[$i+1]));
+                    }
+                }, undef, "... and no other warnings");
+        }
     }
 }
 

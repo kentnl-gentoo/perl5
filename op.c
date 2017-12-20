@@ -1832,7 +1832,7 @@ Perl_scalar(pTHX_ OP *o)
     do_kids:
 	while (kid) {
 	    OP *sib = OpSIBLING(kid);
-	    if (sib && kid->op_type != OP_LEAVEWHEN
+	    if (sib && kid->op_type != OP_LEAVEWHERESO
 	     && (  OpHAS_SIBLING(sib) || sib->op_type != OP_NULL
 		|| (  sib->op_targ != OP_NEXTSTATE
 		   && sib->op_targ != OP_DBSTATE  )))
@@ -1923,7 +1923,7 @@ Perl_scalarvoid(pTHX_ OP *arg)
         want = o->op_flags & OPf_WANT;
         if ((want && want != OPf_WANT_SCALAR)
             || (PL_parser && PL_parser->error_count)
-            || o->op_type == OP_RETURN || o->op_type == OP_REQUIRE || o->op_type == OP_LEAVEWHEN)
+            || o->op_type == OP_RETURN || o->op_type == OP_REQUIRE || o->op_type == OP_LEAVEWHERESO)
         {
             continue;
         }
@@ -1949,6 +1949,11 @@ Perl_scalarvoid(pTHX_ OP *arg)
             if (o->op_type == OP_REPEAT)
                 scalar(cBINOPo->op_first);
             goto func_ops;
+	case OP_CONCAT:
+            if ((o->op_flags & OPf_STACKED) &&
+		    !(o->op_private & OPpCONCAT_NESTED))
+                break;
+	    goto func_ops;
         case OP_SUBSTR:
             if (o->op_private == 4)
                 break;
@@ -2186,7 +2191,7 @@ Perl_scalarvoid(pTHX_ OP *arg)
         case OP_DOR:
         case OP_COND_EXPR:
         case OP_ENTERGIVEN:
-        case OP_ENTERWHEN:
+        case OP_ENTERWHERESO:
             for (kid = OpSIBLING(cUNOPo->op_first); kid; kid = OpSIBLING(kid))
                 if (!(kid->op_flags & OPf_KIDS))
                     scalarvoid(kid);
@@ -2210,8 +2215,7 @@ Perl_scalarvoid(pTHX_ OP *arg)
         case OP_LEAVETRY:
         case OP_LEAVELOOP:
         case OP_LINESEQ:
-        case OP_LEAVEGIVEN:
-        case OP_LEAVEWHEN:
+        case OP_LEAVEWHERESO:
         kids:
             for (kid = cLISTOPo->op_first; kid; kid = OpSIBLING(kid))
                 if (!(kid->op_flags & OPf_KIDS))
@@ -2351,7 +2355,7 @@ Perl_list(pTHX_ OP *o)
     do_kids:
 	while (kid) {
 	    OP *sib = OpSIBLING(kid);
-	    if (sib && kid->op_type != OP_LEAVEWHEN)
+	    if (sib && kid->op_type != OP_LEAVEWHERESO)
 		scalarvoid(kid);
 	    else
 		list(kid);
@@ -2694,6 +2698,8 @@ S_maybe_multiconcat(pTHX_ OP *o)
            || o->op_type == OP_SPRINTF
            || o->op_type == OP_STRINGIFY);
 
+    Zero(&sprintf_info, 1, struct sprintf_ismc_info);
+
     /* first see if, at the top of the tree, there is an assign,
      * append and/or stringify */
 
@@ -2713,7 +2719,9 @@ S_maybe_multiconcat(pTHX_ OP *o)
     }
     else if (   topop->op_type == OP_CONCAT
              && (topop->op_flags & OPf_STACKED)
-             && (cUNOPo->op_first->op_flags & OPf_MOD))
+             && (cUNOPo->op_first->op_flags & OPf_MOD)
+             && (!(topop->op_private & OPpCONCAT_NESTED))
+            )
     {
         /* expr .= ..... */
 
@@ -2930,6 +2938,33 @@ S_maybe_multiconcat(pTHX_ OP *o)
 
     if (stacked_last)
         return; /* we don't support ((A.=B).=C)...) */
+
+    /* look for two adjacent consts and don't fold them together:
+     *     $o . "a" . "b"
+     * should do
+     *     $o->concat("a")->concat("b")
+     * rather than
+     *     $o->concat("ab")
+     * (but $o .=  "a" . "b" should still fold)
+     */
+    {
+        bool seen_nonconst = FALSE;
+        for (argp = toparg; argp >= args; argp--) {
+            if (argp->p == NULL) {
+                seen_nonconst = TRUE;
+                continue;
+            }
+            if (!seen_nonconst)
+                continue;
+            if (argp[1].p) {
+                /* both previous and current arg were constants;
+                 * leave the current OP_CONST as-is */
+                argp->p = NULL;
+                nconst--;
+                nargs++;
+            }
+        }
+    }
 
     /* -----------------------------------------------------------------
      * Phase 2:
@@ -7550,11 +7585,24 @@ S_assignment_type(pTHX_ const OP *o)
     if (!o)
 	return TRUE;
 
-    if ((o->op_type == OP_NULL) && (o->op_flags & OPf_KIDS))
-	o = cUNOPo->op_first;
+    if (o->op_type == OP_SREFGEN)
+    {
+	OP * const kid = cUNOPx(cUNOPo->op_first)->op_first;
+	type = kid->op_type;
+	flags = o->op_flags | kid->op_flags;
+	if (!(flags & OPf_PARENS)
+	  && (kid->op_type == OP_RV2AV || kid->op_type == OP_PADAV ||
+	      kid->op_type == OP_RV2HV || kid->op_type == OP_PADHV ))
+	    return ASSIGN_REF;
+	ret = ASSIGN_REF;
+    } else {
+	if ((o->op_type == OP_NULL) && (o->op_flags & OPf_KIDS))
+	    o = cUNOPo->op_first;
+	flags = o->op_flags;
+	type = o->op_type;
+	ret = 0;
+    }
 
-    flags = o->op_flags;
-    type = o->op_type;
     if (type == OP_COND_EXPR) {
         OP * const sib = OpSIBLING(cLOGOPo->op_first);
         const I32 t = assignment_type(sib);
@@ -7566,19 +7614,6 @@ S_assignment_type(pTHX_ const OP *o)
 	    yyerror("Assignment to both a list and a scalar");
 	return FALSE;
     }
-
-    if (type == OP_SREFGEN)
-    {
-	OP * const kid = cUNOPx(cUNOPo->op_first)->op_first;
-	type = kid->op_type;
-	flags |= kid->op_flags;
-	if (!(flags & OPf_PARENS)
-	  && (kid->op_type == OP_RV2AV || kid->op_type == OP_PADAV ||
-	      kid->op_type == OP_RV2HV || kid->op_type == OP_PADHV ))
-	    return ASSIGN_REF;
-	ret = ASSIGN_REF;
-    }
-    else ret = 0;
 
     if (type == OP_LIST &&
 	(flags & OPf_WANT) == OPf_WANT_SCALAR &&
@@ -8604,16 +8639,6 @@ Perl_newFOROP(pTHX_ I32 flags, OP *sv, OP *expr, OP *block, OP *cont)
 	if (sv->op_type == OP_RV2SV) {	/* symbol table variable */
 	    iterpflags = sv->op_private & OPpOUR_INTRO; /* for our $x () */
             OpTYPE_set(sv, OP_RV2GV);
-
-	    /* The op_type check is needed to prevent a possible segfault
-	     * if the loop variable is undeclared and 'strict vars' is in
-	     * effect. This is illegal but is nonetheless parsed, so we
-	     * may reach this point with an OP_CONST where we're expecting
-	     * an OP_GV.
-	     */
-	    if (cUNOPx(sv)->op_first->op_type == OP_GV
-	     && cGVOPx_gv(cUNOPx(sv)->op_first) == PL_defgv)
-		iterpflags |= OPpITER_DEF;
 	}
 	else if (sv->op_type == OP_PADSV) { /* private variable */
 	    iterpflags = sv->op_private & OPpLVAL_INTRO; /* for my $x () */
@@ -8627,17 +8652,9 @@ Perl_newFOROP(pTHX_ I32 flags, OP *sv, OP *expr, OP *block, OP *cont)
 	    NOOP;
 	else
 	    Perl_croak(aTHX_ "Can't use %s for loop variable", PL_op_desc[sv->op_type]);
-	if (padoff) {
-	    PADNAME * const pn = PAD_COMPNAME(padoff);
-	    const char * const name = PadnamePV(pn);
-
-	    if (PadnameLEN(pn) == 2 && name[0] == '$' && name[1] == '_')
-		iterpflags |= OPpITER_DEF;
-	}
     }
     else {
 	sv = newGVOP(OP_GV, 0, PL_defgv);
-	iterpflags |= OPpITER_DEF;
     }
 
     if (expr->op_type == OP_RV2AV || expr->op_type == OP_PADAV) {
@@ -8766,179 +8783,12 @@ Perl_newLOOPEX(pTHX_ I32 type, OP *label)
     return o;
 }
 
-/* if the condition is a literal array or hash
-   (or @{ ... } etc), make a reference to it.
- */
-STATIC OP *
-S_ref_array_or_hash(pTHX_ OP *cond)
-{
-    if (cond
-    && (cond->op_type == OP_RV2AV
-    ||  cond->op_type == OP_PADAV
-    ||  cond->op_type == OP_RV2HV
-    ||  cond->op_type == OP_PADHV))
-
-	return newUNOP(OP_REFGEN, 0, op_lvalue(cond, OP_REFGEN));
-
-    else if(cond
-    && (cond->op_type == OP_ASLICE
-    ||  cond->op_type == OP_KVASLICE
-    ||  cond->op_type == OP_HSLICE
-    ||  cond->op_type == OP_KVHSLICE)) {
-
-	/* anonlist now needs a list from this op, was previously used in
-	 * scalar context */
-	cond->op_flags &= ~(OPf_WANT_SCALAR | OPf_REF);
-	cond->op_flags |= OPf_WANT_LIST;
-
-	return newANONLIST(op_lvalue(cond, OP_ANONLIST));
-    }
-
-    else
-	return cond;
-}
-
-/* These construct the optree fragments representing given()
-   and when() blocks.
-
-   entergiven and enterwhen are LOGOPs; the op_other pointer
-   points up to the associated leave op. We need this so we
-   can put it in the context and make break/continue work.
-   (Also, of course, pp_enterwhen will jump straight to
-   op_other if the match fails.)
- */
-
-STATIC OP *
-S_newGIVWHENOP(pTHX_ OP *cond, OP *block,
-		   I32 enter_opcode, I32 leave_opcode,
-		   PADOFFSET entertarg)
-{
-    dVAR;
-    LOGOP *enterop;
-    OP *o;
-
-    PERL_ARGS_ASSERT_NEWGIVWHENOP;
-    PERL_UNUSED_ARG(entertarg); /* used to indicate targ of lexical $_ */
-
-    enterop = alloc_LOGOP(enter_opcode, block, NULL);
-    enterop->op_targ = 0;
-    enterop->op_private = 0;
-
-    o = newUNOP(leave_opcode, 0, (OP *) enterop);
-
-    if (cond) {
-        /* prepend cond if we have one */
-        op_sibling_splice((OP*)enterop, NULL, 0, scalar(cond));
-
-	o->op_next = LINKLIST(cond);
-	cond->op_next = (OP *) enterop;
-    }
-    else {
-	/* This is a default {} block */
-	enterop->op_flags |= OPf_SPECIAL;
-	o      ->op_flags |= OPf_SPECIAL;
-
-	o->op_next = (OP *) enterop;
-    }
-
-    CHECKOP(enter_opcode, enterop); /* Currently does nothing, since
-    				       entergiven and enterwhen both
-    				       use ck_null() */
-
-    enterop->op_next = LINKLIST(block);
-    block->op_next = enterop->op_other = o;
-
-    return o;
-}
-
-/* Does this look like a boolean operation? For these purposes
-   a boolean operation is:
-     - a subroutine call [*]
-     - a logical connective
-     - a comparison operator
-     - a filetest operator, with the exception of -s -M -A -C
-     - defined(), exists() or eof()
-     - /$re/ or $foo =~ /$re/
-   
-   [*] possibly surprising
- */
-STATIC bool
-S_looks_like_bool(pTHX_ const OP *o)
-{
-    PERL_ARGS_ASSERT_LOOKS_LIKE_BOOL;
-
-    switch(o->op_type) {
-	case OP_OR:
-	case OP_DOR:
-	    return looks_like_bool(cLOGOPo->op_first);
-
-	case OP_AND:
-        {
-            OP* sibl = OpSIBLING(cLOGOPo->op_first);
-            ASSUME(sibl);
-	    return (
-	    	looks_like_bool(cLOGOPo->op_first)
-	     && looks_like_bool(sibl));
-        }
-
-	case OP_NULL:
-	case OP_SCALAR:
-	    return (
-		o->op_flags & OPf_KIDS
-	    && looks_like_bool(cUNOPo->op_first));
-
-	case OP_ENTERSUB:
-
-	case OP_NOT:	case OP_XOR:
-
-	case OP_EQ:	case OP_NE:	case OP_LT:
-	case OP_GT:	case OP_LE:	case OP_GE:
-
-	case OP_I_EQ:	case OP_I_NE:	case OP_I_LT:
-	case OP_I_GT:	case OP_I_LE:	case OP_I_GE:
-
-	case OP_SEQ:	case OP_SNE:	case OP_SLT:
-	case OP_SGT:	case OP_SLE:	case OP_SGE:
-	
-	case OP_SMARTMATCH:
-	
-	case OP_FTRREAD:  case OP_FTRWRITE: case OP_FTREXEC:
-	case OP_FTEREAD:  case OP_FTEWRITE: case OP_FTEEXEC:
-	case OP_FTIS:     case OP_FTEOWNED: case OP_FTROWNED:
-	case OP_FTZERO:   case OP_FTSOCK:   case OP_FTCHR:
-	case OP_FTBLK:    case OP_FTFILE:   case OP_FTDIR:
-	case OP_FTPIPE:   case OP_FTLINK:   case OP_FTSUID:
-	case OP_FTSGID:   case OP_FTSVTX:   case OP_FTTTY:
-	case OP_FTTEXT:   case OP_FTBINARY:
-	
-	case OP_DEFINED: case OP_EXISTS:
-	case OP_MATCH:	 case OP_EOF:
-
-	case OP_FLOP:
-
-	    return TRUE;
-	
-	case OP_CONST:
-	    /* Detect comparisons that have been optimized away */
-	    if (cSVOPo->op_sv == &PL_sv_yes
-	    ||  cSVOPo->op_sv == &PL_sv_no)
-	    
-		return TRUE;
-	    else
-		return FALSE;
-
-	/* FALLTHROUGH */
-	default:
-	    return FALSE;
-    }
-}
-
 /*
-=for apidoc Am|OP *|newGIVENOP|OP *cond|OP *block|PADOFFSET defsv_off
+=for apidoc Am|OP *|newGIVENOP|OP *topic|OP *block|PADOFFSET defsv_off
 
 Constructs, checks, and returns an op tree expressing a C<given> block.
-C<cond> supplies the expression that will be locally assigned to a lexical
-variable, and C<block> supplies the body of the C<given> construct; they
+C<topic> supplies the expression to whose value C<$_> will be locally
+aliased, and C<block> supplies the body of the C<given> construct; they
 are consumed by this function and become part of the constructed op tree.
 C<defsv_off> must be zero (it used to identity the pad slot of lexical $_).
 
@@ -8946,49 +8796,64 @@ C<defsv_off> must be zero (it used to identity the pad slot of lexical $_).
 */
 
 OP *
-Perl_newGIVENOP(pTHX_ OP *cond, OP *block, PADOFFSET defsv_off)
+Perl_newGIVENOP(pTHX_ OP *topic, OP *block, PADOFFSET defsv_off)
 {
+    OP *enterop, *leaveop;
     PERL_ARGS_ASSERT_NEWGIVENOP;
     PERL_UNUSED_ARG(defsv_off);
-
     assert(!defsv_off);
-    return newGIVWHENOP(
-    	ref_array_or_hash(cond),
-    	block,
-	OP_ENTERGIVEN, OP_LEAVEGIVEN,
-	0);
+
+    NewOpSz(1101, enterop, sizeof(LOOP));
+    OpTYPE_set(enterop, OP_ENTERGIVEN);
+    cLOOPx(enterop)->op_first = scalar(topic);
+    cLOOPx(enterop)->op_last = block;
+    OpMORESIB_set(topic, block);
+    OpLASTSIB_set(block, enterop);
+    enterop->op_flags = OPf_KIDS;
+
+    leaveop = newBINOP(OP_LEAVELOOP, 0, enterop, newOP(OP_NULL, 0));
+    leaveop->op_next = LINKLIST(topic);
+    topic->op_next = enterop;
+    enterop = CHECKOP(OP_ENTERGIVEN, enterop);
+    cLOOPx(enterop)->op_redoop = enterop->op_next = LINKLIST(block);
+    cLOOPx(enterop)->op_lastop = cLOOPx(enterop)->op_nextop = block->op_next =
+	leaveop;
+
+    return leaveop;
 }
 
 /*
-=for apidoc Am|OP *|newWHENOP|OP *cond|OP *block
+=for apidoc Am|OP *|newWHERESOOP|OP *cond|OP *block
 
-Constructs, checks, and returns an op tree expressing a C<when> block.
+Constructs, checks, and returns an op tree expressing a C<whereso> block.
 C<cond> supplies the test expression, and C<block> supplies the block
 that will be executed if the test evaluates to true; they are consumed
-by this function and become part of the constructed op tree.  C<cond>
-will be interpreted DWIMically, often as a comparison against C<$_>,
-and may be null to generate a C<default> block.
+by this function and become part of the constructed op tree.
 
 =cut
 */
 
 OP *
-Perl_newWHENOP(pTHX_ OP *cond, OP *block)
+Perl_newWHERESOOP(pTHX_ OP *cond, OP *block)
 {
-    const bool cond_llb = (!cond || looks_like_bool(cond));
-    OP *cond_op;
+    OP *enterop, *leaveop;
+    PERL_ARGS_ASSERT_NEWWHERESOOP;
 
-    PERL_ARGS_ASSERT_NEWWHENOP;
+    NewOpSz(1101, enterop, sizeof(LOGOP));
+    OpTYPE_set(enterop, OP_ENTERWHERESO);
+    cLOGOPx(enterop)->op_first = scalar(cond);
+    OpMORESIB_set(cond, block);
+    OpLASTSIB_set(block, enterop);
+    enterop->op_flags = OPf_KIDS;
 
-    if (cond_llb)
-	cond_op = cond;
-    else {
-	cond_op = newBINOP(OP_SMARTMATCH, OPf_SPECIAL,
-		newDEFSVOP(),
-		scalar(ref_array_or_hash(cond)));
-    }
-    
-    return newGIVWHENOP(cond_op, block, OP_ENTERWHEN, OP_LEAVEWHEN, 0);
+    leaveop = newUNOP(OP_LEAVEWHERESO, 0, enterop);
+    leaveop->op_next = LINKLIST(cond);
+    cond->op_next = enterop;
+    enterop = CHECKOP(OP_ENTERWHERESO, enterop);
+    enterop->op_next = LINKLIST(block);
+    cLOGOPx(enterop)->op_other = block->op_next = leaveop;
+
+    return leaveop;
 }
 
 /* must not conflict with SVf_UTF8 */
@@ -9573,6 +9438,85 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     return cv;
 }
 
+/*
+=for apidoc m|CV *|newATTRSUB_x|I32 floor|OP *o|OP *proto|OP *attrs|OP *block|bool o_is_gv
+
+Construct a Perl subroutine, also performing some surrounding jobs.
+
+This function is expected to be called in a Perl compilation context,
+and some aspects of the subroutine are taken from global variables
+associated with compilation.  In particular, C<PL_compcv> represents
+the subroutine that is currently being compiled.  It must be non-null
+when this function is called, and some aspects of the subroutine being
+constructed are taken from it.  The constructed subroutine may actually
+be a reuse of the C<PL_compcv> object, but will not necessarily be so.
+
+If C<block> is null then the subroutine will have no body, and for the
+time being it will be an error to call it.  This represents a forward
+subroutine declaration such as S<C<sub foo ($$);>>.  If C<block> is
+non-null then it provides the Perl code of the subroutine body, which
+will be executed when the subroutine is called.  This body includes
+any argument unwrapping code resulting from a subroutine signature or
+similar.  The pad use of the code must correspond to the pad attached
+to C<PL_compcv>.  The code is not expected to include a C<leavesub> or
+C<leavesublv> op; this function will add such an op.  C<block> is consumed
+by this function and will become part of the constructed subroutine.
+
+C<proto> specifies the subroutine's prototype, unless one is supplied
+as an attribute (see below).  If C<proto> is null, then the subroutine
+will not have a prototype.  If C<proto> is non-null, it must point to a
+C<const> op whose value is a string, and the subroutine will have that
+string as its prototype.  If a prototype is supplied as an attribute, the
+attribute takes precedence over C<proto>, but in that case C<proto> should
+preferably be null.  In any case, C<proto> is consumed by this function.
+
+C<attrs> supplies attributes to be applied the subroutine.  A handful of
+attributes take effect by built-in means, being applied to C<PL_compcv>
+immediately when seen.  Other attributes are collected up and attached
+to the subroutine by this route.  C<attrs> may be null to supply no
+attributes, or point to a C<const> op for a single attribute, or point
+to a C<list> op whose children apart from the C<pushmark> are C<const>
+ops for one or more attributes.  Each C<const> op must be a string,
+giving the attribute name optionally followed by parenthesised arguments,
+in the manner in which attributes appear in Perl source.  The attributes
+will be applied to the sub by this function.  C<attrs> is consumed by
+this function.
+
+If C<o_is_gv> is false and C<o> is null, then the subroutine will
+be anonymous.  If C<o_is_gv> is false and C<o> is non-null, then C<o>
+must point to a C<const> op, which will be consumed by this function,
+and its string value supplies a name for the subroutine.  The name may
+be qualified or unqualified, and if it is unqualified then a default
+stash will be selected in some manner.  If C<o_is_gv> is true, then C<o>
+doesn't point to an C<OP> at all, but is instead a cast pointer to a C<GV>
+by which the subroutine will be named.
+
+If there is already a subroutine of the specified name, then the new
+sub will either replace the existing one in the glob or be merged with
+the existing one.  A warning may be generated about redefinition.
+
+If the subroutine has one of a few special names, such as C<BEGIN> or
+C<END>, then it will be claimed by the appropriate queue for automatic
+running of phase-related subroutines.  In this case the relevant glob will
+be left not containing any subroutine, even if it did contain one before.
+In the case of C<BEGIN>, the subroutine will be executed and the reference
+to it disposed of before this function returns.
+
+The function returns a pointer to the constructed subroutine.  If the sub
+is anonymous then ownership of one counted reference to the subroutine
+is transferred to the caller.  If the sub is named then the caller does
+not get ownership of a reference.  In most such cases, where the sub
+has a non-phase name, the sub will be alive at the point it is returned
+by virtue of being contained in the glob that names it.  A phase-named
+subroutine will usually be alive by virtue of the reference owned by the
+phase's automatic run queue.  But a C<BEGIN> subroutine, having already
+been executed, will quite likely have been destroyed already by the
+time this function returns, making it erroneous for the caller to make
+any use of the returned pointer.  It is the caller's responsibility to
+ensure that it knows which of these situations applies.
+
+=cut
+*/
 
 /* _x = extended */
 CV *
@@ -9839,6 +9783,8 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 		    NULL, name, namlen, name_is_utf8 ? SVf_UTF8 : 0,
 		    const_sv
 		);
+		assert(cv);
+		assert(SvREFCNT((SV*)cv) != 0);
 		CvFLAGS(cv) |= CvMETHOD(PL_compcv);
 	    }
 	    else {
@@ -9941,6 +9887,8 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
 		mro_method_changed_in(PL_curstash);
 	}
     }
+    assert(cv);
+    assert(SvREFCNT((SV*)cv) != 0);
 
     if (!CvHASGV(cv)) {
 	if (isGV(gv))
@@ -10029,12 +9977,15 @@ Perl_newATTRSUB_x(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs,
                     process_special_blocks(floor, name, gv, cv);
         }
     }
+    assert(cv);
 
   done:
+    assert(!cv || evanescent || SvREFCNT((SV*)cv) != 0);
     if (PL_parser)
 	PL_parser->copline = NOLINE;
     LEAVE_SCOPE(floor);
 
+    assert(!cv || evanescent || SvREFCNT((SV*)cv) != 0);
     if (!evanescent) {
 #ifdef PERL_DEBUG_READONLY_OPS
     if (slab)
@@ -10149,9 +10100,11 @@ S_process_special_blocks(pTHX_ I32 floor, const char *const fullname,
 }
 
 /*
-=for apidoc newCONSTSUB
+=for apidoc Am|CV *|newCONSTSUB|HV *stash|const char *name|SV *sv
 
-See L</newCONSTSUB_flags>.
+Behaves like L</newCONSTSUB_flags>, except that C<name> is nul-terminated
+rather than of counted length, and no flags are set.  (This means that
+C<name> is always interpreted as Latin-1.)
 
 =cut
 */
@@ -10163,20 +10116,71 @@ Perl_newCONSTSUB(pTHX_ HV *stash, const char *name, SV *sv)
 }
 
 /*
-=for apidoc newCONSTSUB_flags
+=for apidoc Am|CV *|newCONSTSUB_flags|HV *stash|const char *name|STRLEN len|U32 flags|SV *sv
 
-Creates a constant sub equivalent to Perl S<C<sub FOO () { 123 }>> which is
-eligible for inlining at compile-time.
+Construct a constant subroutine, also performing some surrounding
+jobs.  A scalar constant-valued subroutine is eligible for inlining
+at compile-time, and in Perl code can be created by S<C<sub FOO () {
+123 }>>.  Other kinds of constant subroutine have other treatment.
 
-Currently, the only useful value for C<flags> is C<SVf_UTF8>.
+The subroutine will have an empty prototype and will ignore any arguments
+when called.  Its constant behaviour is determined by C<sv>.  If C<sv>
+is null, the subroutine will yield an empty list.  If C<sv> points to a
+scalar, the subroutine will always yield that scalar.  If C<sv> points
+to an array, the subroutine will always yield a list of the elements of
+that array in list context, or the number of elements in the array in
+scalar context.  This function takes ownership of one counted reference
+to the scalar or array, and will arrange for the object to live as long
+as the subroutine does.  If C<sv> points to a scalar then the inlining
+assumes that the value of the scalar will never change, so the caller
+must ensure that the scalar is not subsequently written to.  If C<sv>
+points to an array then no such assumption is made, so it is ostensibly
+safe to mutate the array or its elements, but whether this is really
+supported has not been determined.
 
-The newly created subroutine takes ownership of a reference to the passed in
-SV.
+The subroutine will have C<CvFILE> set according to C<PL_curcop>.
+Other aspects of the subroutine will be left in their default state.
+The caller is free to mutate the subroutine beyond its initial state
+after this function has returned.
 
-Passing C<NULL> for SV creates a constant sub equivalent to S<C<sub BAR () {}>>,
-which won't be called if used as a destructor, but will suppress the overhead
-of a call to C<AUTOLOAD>.  (This form, however, isn't eligible for inlining at
-compile time.)
+If C<name> is null then the subroutine will be anonymous, with its
+C<CvGV> referring to an C<__ANON__> glob.  If C<name> is non-null then the
+subroutine will be named accordingly, referenced by the appropriate glob.
+C<name> is a string of length C<len> bytes giving a sigilless symbol
+name, in UTF-8 if C<flags> has the C<SVf_UTF8> bit set and in Latin-1
+otherwise.  The name may be either qualified or unqualified.  If the
+name is unqualified then it defaults to being in the stash specified by
+C<stash> if that is non-null, or to C<PL_curstash> if C<stash> is null.
+The symbol is always added to the stash if necessary, with C<GV_ADDMULTI>
+semantics.
+
+C<flags> should not have bits set other than C<SVf_UTF8>.
+
+If there is already a subroutine of the specified name, then the new sub
+will replace the existing one in the glob.  A warning may be generated
+about the redefinition.
+
+If the subroutine has one of a few special names, such as C<BEGIN> or
+C<END>, then it will be claimed by the appropriate queue for automatic
+running of phase-related subroutines.  In this case the relevant glob will
+be left not containing any subroutine, even if it did contain one before.
+Execution of the subroutine will likely be a no-op, unless C<sv> was
+a tied array or the caller modified the subroutine in some interesting
+way before it was executed.  In the case of C<BEGIN>, the treatment is
+buggy: the sub will be executed when only half built, and may be deleted
+prematurely, possibly causing a crash.
+
+The function returns a pointer to the constructed subroutine.  If the sub
+is anonymous then ownership of one counted reference to the subroutine
+is transferred to the caller.  If the sub is named then the caller does
+not get ownership of a reference.  In most such cases, where the sub
+has a non-phase name, the sub will be alive at the point it is returned
+by virtue of being contained in the glob that names it.  A phase-named
+subroutine will usually be alive by virtue of the reference owned by
+the phase's automatic run queue.  A C<BEGIN> subroutine may have been
+destroyed already by the time this function returns, but currently bugs
+occur in that case before the caller gets control.  It is the caller's
+responsibility to ensure that it knows which of these situations applies.
 
 =cut
 */
@@ -10223,6 +10227,8 @@ Perl_newCONSTSUB_flags(pTHX_ HV *stash, const char *name, STRLEN len,
 			     : const_sv_xsub,
 			 file ? file : "", "",
 			 &sv, XS_DYNAMIC_FILENAME | flags);
+    assert(cv);
+    assert(SvREFCNT((SV*)cv) != 0);
     CvXSUBANY(cv).any_ptr = SvREFCNT_inc_simple(sv);
     CvCONST_on(cv);
 
@@ -10269,6 +10275,78 @@ Perl_newXS_deffile(pTHX_ const char *name, XSUBADDR_t subaddr)
     );
 }
 
+/*
+=for apidoc m|CV *|newXS_len_flags|const char *name|STRLEN len|XSUBADDR_t subaddr|const char *const filename|const char *const proto|SV **const_svp|U32 flags
+
+Construct an XS subroutine, also performing some surrounding jobs.
+
+The subroutine will have the entry point C<subaddr>.  It will have
+the prototype specified by the nul-terminated string C<proto>, or
+no prototype if C<proto> is null.  The prototype string is copied;
+the caller can mutate the supplied string afterwards.  If C<filename>
+is non-null, it must be a nul-terminated filename, and the subroutine
+will have its C<CvFILE> set accordingly.  By default C<CvFILE> is set to
+point directly to the supplied string, which must be static.  If C<flags>
+has the C<XS_DYNAMIC_FILENAME> bit set, then a copy of the string will
+be taken instead.
+
+Other aspects of the subroutine will be left in their default state.
+If anything else needs to be done to the subroutine for it to function
+correctly, it is the caller's responsibility to do that after this
+function has constructed it.  However, beware of the subroutine
+potentially being destroyed before this function returns, as described
+below.
+
+If C<name> is null then the subroutine will be anonymous, with its
+C<CvGV> referring to an C<__ANON__> glob.  If C<name> is non-null then the
+subroutine will be named accordingly, referenced by the appropriate glob.
+C<name> is a string of length C<len> bytes giving a sigilless symbol name,
+in UTF-8 if C<flags> has the C<SVf_UTF8> bit set and in Latin-1 otherwise.
+The name may be either qualified or unqualified, with the stash defaulting
+in the same manner as for C<gv_fetchpvn_flags>.  C<flags> may contain
+flag bits understood by C<gv_fetchpvn_flags> with the same meaning as
+they have there, such as C<GV_ADDWARN>.  The symbol is always added to
+the stash if necessary, with C<GV_ADDMULTI> semantics.
+
+If there is already a subroutine of the specified name, then the new sub
+will replace the existing one in the glob.  A warning may be generated
+about the redefinition.  If the old subroutine was C<CvCONST> then the
+decision about whether to warn is influenced by an expectation about
+whether the new subroutine will become a constant of similar value.
+That expectation is determined by C<const_svp>.  (Note that the call to
+this function doesn't make the new subroutine C<CvCONST> in any case;
+that is left to the caller.)  If C<const_svp> is null then it indicates
+that the new subroutine will not become a constant.  If C<const_svp>
+is non-null then it indicates that the new subroutine will become a
+constant, and it points to an C<SV*> that provides the constant value
+that the subroutine will have.
+
+If the subroutine has one of a few special names, such as C<BEGIN> or
+C<END>, then it will be claimed by the appropriate queue for automatic
+running of phase-related subroutines.  In this case the relevant glob will
+be left not containing any subroutine, even if it did contain one before.
+In the case of C<BEGIN>, the subroutine will be executed and the reference
+to it disposed of before this function returns, and also before its
+prototype is set.  If a C<BEGIN> subroutine would not be sufficiently
+constructed by this function to be ready for execution then the caller
+must prevent this happening by giving the subroutine a different name.
+
+The function returns a pointer to the constructed subroutine.  If the sub
+is anonymous then ownership of one counted reference to the subroutine
+is transferred to the caller.  If the sub is named then the caller does
+not get ownership of a reference.  In most such cases, where the sub
+has a non-phase name, the sub will be alive at the point it is returned
+by virtue of being contained in the glob that names it.  A phase-named
+subroutine will usually be alive by virtue of the reference owned by the
+phase's automatic run queue.  But a C<BEGIN> subroutine, having already
+been executed, will quite likely have been destroyed already by the
+time this function returns, making it erroneous for the caller to make
+any use of the returned pointer.  It is the caller's responsibility to
+ensure that it knows which of these situations applies.
+
+=cut
+*/
+
 CV *
 Perl_newXS_len_flags(pTHX_ const char *name, STRLEN len,
 			   XSUBADDR_t subaddr, const char *const filename,
@@ -10277,6 +10355,7 @@ Perl_newXS_len_flags(pTHX_ const char *name, STRLEN len,
 {
     CV *cv;
     bool interleave = FALSE;
+    bool evanescent = FALSE;
 
     PERL_ARGS_ASSERT_NEWXS_LEN_FLAGS;
 
@@ -10321,6 +10400,8 @@ Perl_newXS_len_flags(pTHX_ const char *name, STRLEN len,
                     gv_method_changed(gv); /* newXS */
             }
         }
+	assert(cv);
+	assert(SvREFCNT((SV*)cv) != 0);
 
         CvGV_set(cv, gv);
         if(filename) {
@@ -10348,14 +10429,17 @@ Perl_newXS_len_flags(pTHX_ const char *name, STRLEN len,
 #endif
 
         if (name)
-            process_special_blocks(0, name, gv, cv);
+            evanescent = process_special_blocks(0, name, gv, cv);
         else
             CvANON_on(cv);
     } /* <- not a conditional branch */
 
+    assert(cv);
+    assert(evanescent || SvREFCNT((SV*)cv) != 0);
 
-    sv_setpv(MUTABLE_SV(cv), proto);
+    if (!evanescent) sv_setpv(MUTABLE_SV(cv), proto);
     if (interleave) LEAVE;
+    assert(evanescent || SvREFCNT((SV*)cv) != 0);
     return cv;
 }
 
@@ -10657,6 +10741,7 @@ Perl_ck_backtick(pTHX_ OP *o)
     OP *newop = NULL;
     OP *sibl;
     PERL_ARGS_ASSERT_CK_BACKTICK;
+    o = ck_fun(o);
     /* qx and `` have a null pushmark; CORE::readpipe has only one kid. */
     if (o->op_flags & OPf_KIDS && (sibl = OpSIBLING(cUNOPo->op_first))
      && (gv = gv_override("readpipe",8)))
@@ -10850,7 +10935,10 @@ Perl_ck_concat(pTHX_ OP *o)
     /* reuse the padtmp returned by the concat child */
     if (kid->op_type == OP_CONCAT && !(kid->op_private & OPpTARGET_MY) &&
 	    !(kUNOP->op_first->op_flags & OPf_MOD))
+    {
         o->op_flags |= OPf_STACKED;
+        o->op_private |= OPpCONCAT_NESTED;
+    }
     return o;
 }
 
@@ -11689,40 +11777,6 @@ Perl_ck_listiob(pTHX_ OP *o)
     if (o->op_type == OP_PRTF) return modkids(listkids(o), OP_PRTF);
     return listkids(o);
 }
-
-OP *
-Perl_ck_smartmatch(pTHX_ OP *o)
-{
-    dVAR;
-    PERL_ARGS_ASSERT_CK_SMARTMATCH;
-    if (0 == (o->op_flags & OPf_SPECIAL)) {
-	OP *first  = cBINOPo->op_first;
-	OP *second = OpSIBLING(first);
-	
-	/* Implicitly take a reference to an array or hash */
-
-        /* remove the original two siblings, then add back the
-         * (possibly different) first and second sibs.
-         */
-        op_sibling_splice(o, NULL, 1, NULL);
-        op_sibling_splice(o, NULL, 1, NULL);
-	first  = ref_array_or_hash(first);
-	second = ref_array_or_hash(second);
-        op_sibling_splice(o, NULL, 0, second);
-        op_sibling_splice(o, NULL, 0, first);
-	
-	/* Implicitly take a reference to a regular expression */
-	if (first->op_type == OP_MATCH && !(first->op_flags & OPf_STACKED)) {
-            OpTYPE_set(first, OP_QR);
-	}
-	if (second->op_type == OP_MATCH && !(second->op_flags & OPf_STACKED)) {
-            OpTYPE_set(second, OP_QR);
-        }
-    }
-    
-    return o;
-}
-
 
 static OP *
 S_maybe_targlex(pTHX_ OP *o)
@@ -13383,7 +13437,10 @@ Perl_ck_substr(pTHX_ OP *o)
 	if (kid->op_type == OP_NULL)
 	    kid = OpSIBLING(kid);
 	if (kid)
-	    op_lvalue(kid, o->op_type);
+	    /* Historically, substr(delete $foo{bar},...) has been allowed
+	       with 4-arg substr.  Keep it working by applying entersub
+	       lvalue context.  */
+	    op_lvalue(kid, OP_ENTERSUB);
 
     }
     return o;
@@ -15545,7 +15602,7 @@ Perl_rpeep(pTHX_ OP *o)
                     o->op_flags   &= ~(OPf_REF|OPf_WANT);
                     o->op_flags   |= want;
                     o->op_private |= (o->op_type == OP_PADHV ?
-                                      OPpRV2HV_ISKEYS : OPpRV2HV_ISKEYS);
+                                      OPpPADHV_ISKEYS : OPpRV2HV_ISKEYS);
                     /* for keys(%lex), hold onto the OP_KEYS's targ
                      * since padhv doesn't have its own targ to return
                      * an int with */
@@ -15707,6 +15764,7 @@ Perl_rpeep(pTHX_ OP *o)
 
 	case OP_ENTERLOOP:
 	case OP_ENTERITER:
+	case OP_ENTERGIVEN:
 	    while (cLOOP->op_redoop->op_type == OP_NULL)
 		cLOOP->op_redoop = cLOOP->op_redoop->op_next;
 	    while (cLOOP->op_nextop->op_type == OP_NULL)

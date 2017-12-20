@@ -316,7 +316,6 @@ static struct debug_tokens {
     { BITOROP,		TOKENTYPE_OPNUM,	"BITOROP" },
     { COLONATTR,	TOKENTYPE_NONE,		"COLONATTR" },
     { CONTINUE,		TOKENTYPE_NONE,		"CONTINUE" },
-    { DEFAULT,		TOKENTYPE_NONE,		"DEFAULT" },
     { DO,		TOKENTYPE_NONE,		"DO" },
     { DOLSHARP,		TOKENTYPE_NONE,		"DOLSHARP" },
     { DORDOR,		TOKENTYPE_NONE,		"DORDOR" },
@@ -375,7 +374,7 @@ static struct debug_tokens {
     { UNLESS,		TOKENTYPE_IVAL,		"UNLESS" },
     { UNTIL,		TOKENTYPE_IVAL,		"UNTIL" },
     { USE,		TOKENTYPE_IVAL,		"USE" },
-    { WHEN,		TOKENTYPE_IVAL,		"WHEN" },
+    { WHERESO,		TOKENTYPE_IVAL,		"WHERESO" },
     { WHILE,		TOKENTYPE_IVAL,		"WHILE" },
     { BAREWORD,		TOKENTYPE_OPVAL,	"BAREWORD" },
     { YADAYADA,		TOKENTYPE_IVAL,		"YADAYADA" },
@@ -456,9 +455,9 @@ S_printbuf(pTHX_ const char *const fmt, const char *const s)
 
     PERL_ARGS_ASSERT_PRINTBUF;
 
-    GCC_DIAG_IGNORE(-Wformat-nonliteral); /* fmt checked by caller */
+    GCC_DIAG_IGNORE_STMT(-Wformat-nonliteral); /* fmt checked by caller */
     PerlIO_printf(Perl_debug_log, fmt, pv_display(tmp, s, strlen(s), 0, 60));
-    GCC_DIAG_RESTORE;
+    GCC_DIAG_RESTORE_STMT;
     SvREFCNT_dec(tmp);
 }
 
@@ -1035,13 +1034,7 @@ Perl_lex_stuff_pvn(pTHX_ const char *pv, STRLEN len, U32 flags)
 	    	SvCUR(PL_parser->linestr) + len+highhalf);
 	    PL_parser->bufend += len+highhalf;
 	    for (p = pv; p != e; p++) {
-		U8 c = (U8)*p;
-		if (! UTF8_IS_INVARIANT(c)) {
-		    *bufptr++ = UTF8_TWO_BYTE_HI(c);
-		    *bufptr++ = UTF8_TWO_BYTE_LO(c);
-		} else {
-		    *bufptr++ = (char)c;
-		}
+                append_utf8_from_native_byte(*p, (U8 **) &bufptr);
 	    }
 	}
     } else {
@@ -2014,7 +2007,7 @@ S_force_next(pTHX_ I32 type)
  * S_postderef
  *
  * This subroutine handles postfix deref syntax after the arrow has already
- * been emitted.  @* $* etc. are emitted as two separate token right here.
+ * been emitted.  @* $* etc. are emitted as two separate tokens right here.
  * @[ @{ %[ %{ *{ are emitted also as two tokens, but this function emits
  * only the first, leaving yylex to find the next.
  */
@@ -2069,10 +2062,9 @@ STATIC SV *
 S_newSV_maybe_utf8(pTHX_ const char *const start, STRLEN len)
 {
     SV * const sv = newSVpvn_utf8(start, len,
-                          !IN_BYTES
-                          && UTF
-                          && !is_utf8_invariant_string((const U8*)start, len)
-                          && is_utf8_string((const U8*)start, len));
+                    ! IN_BYTES
+                  &&  UTF
+                  &&  is_utf8_non_invariant_string((const U8*)start, len));
     return sv;
 }
 
@@ -2902,8 +2894,8 @@ S_scan_const(pTHX_ char *start)
                                            should we have to convert to
                                            UTF-8) */
     SV *res;		                /* result from charnames */
-    STRLEN offset_to_max;   /* The offset in the output to where the range
-                               high-end character is temporarily placed */
+    STRLEN offset_to_max = 0;   /* The offset in the output to where the range
+                                   high-end character is temporarily placed */
 
     /* Does something require special handling in tr/// ?  This avoids extra
      * work in a less likely case.  As such, khw didn't feel it was worth
@@ -5143,7 +5135,7 @@ Perl_yylex(pTHX)
                 /* read var name, including sigil, into PL_tokenbuf */
                 PL_tokenbuf[0] = sigil;
                 parse_ident(&s, &dest, dest + sizeof(PL_tokenbuf) - 1,
-                    0, cBOOL(UTF), FALSE);
+                    0, cBOOL(UTF), FALSE, FALSE);
                 *dest = '\0';
                 assert(PL_tokenbuf[1]); /* we have a variable name */
             }
@@ -7273,21 +7265,7 @@ Perl_yylex(pTHX)
 		int pkgname = 0;
 		const char lastchar = (PL_bufptr == PL_oldoldbufptr ? 0 : PL_bufptr[-1]);
 		bool safebw;
-
-
-		/* Get the rest if it looks like a package qualifier */
-
-		if (*s == '\'' || (*s == ':' && s[1] == ':')) {
-		    STRLEN morelen;
-		    s = scan_word(s, PL_tokenbuf + len, sizeof PL_tokenbuf - len,
-				  TRUE, &morelen);
-		    if (!morelen)
-			Perl_croak(aTHX_ "Bad name after %" UTF8f "%s",
-				UTF8fARG(UTF, len, PL_tokenbuf),
-				*s == '\'' ? "'" : "::");
-		    len += morelen;
-		    pkgname = 1;
-		}
+		bool no_op_error = FALSE;
 
 		if (PL_expect == XOPERATOR) {
 		    if (PL_bufptr == PL_linestart) {
@@ -7296,8 +7274,32 @@ Perl_yylex(pTHX)
 			CopLINE_inc(PL_curcop);
 		    }
 		    else
-			no_op("Bareword",s);
+			/* We want to call no_op with s pointing after the
+			   bareword, so defer it.  But we want it to come
+			   before the Bad name croak.  */
+			no_op_error = TRUE;
 		}
+
+		/* Get the rest if it looks like a package qualifier */
+
+		if (*s == '\'' || (*s == ':' && s[1] == ':')) {
+		    STRLEN morelen;
+		    s = scan_word(s, PL_tokenbuf + len, sizeof PL_tokenbuf - len,
+				  TRUE, &morelen);
+		    if (no_op_error) {
+			no_op("Bareword",s);
+			no_op_error = FALSE;
+		    }
+		    if (!morelen)
+			Perl_croak(aTHX_ "Bad name after %" UTF8f "%s",
+				UTF8fARG(UTF, len, PL_tokenbuf),
+				*s == '\'' ? "'" : "::");
+		    len += morelen;
+		    pkgname = 1;
+		}
+
+		if (no_op_error)
+			no_op("Bareword",s);
 
 		/* See if the name is "Foo::",
 		   in which case Foo is a bareword
@@ -7608,10 +7610,10 @@ Perl_yylex(pTHX)
 			    if (!*d && !gv_stashpv(PL_tokenbuf, UTF ? SVf_UTF8 : 0))
                             {
                                 /* PL_warn_reserved is constant */
-                                GCC_DIAG_IGNORE(-Wformat-nonliteral);
+                                GCC_DIAG_IGNORE_STMT(-Wformat-nonliteral);
 				Perl_warner(aTHX_ packWARN(WARN_RESERVED), PL_warn_reserved,
 				       PL_tokenbuf);
-                                GCC_DIAG_RESTORE;
+                                GCC_DIAG_RESTORE_STMT;
                             }
 			}
 		    }
@@ -7783,9 +7785,6 @@ Perl_yylex(pTHX)
 	case KEY_bless:
 	    LOP(OP_BLESS,XTERM);
 
-	case KEY_break:
-	    FUN0(OP_BREAK);
-
 	case KEY_chop:
 	    UNI(OP_CHOP);
 
@@ -7846,9 +7845,6 @@ Perl_yylex(pTHX)
 
 	case KEY_chroot:
 	    UNI(OP_CHROOT);
-
-	case KEY_default:
-	    PREBLOCK(DEFAULT);
 
 	case KEY_do:
 	    s = skipspace(s);
@@ -8851,14 +8847,16 @@ Perl_yylex(pTHX)
 	case KEY_vec:
 	    LOP(OP_VEC,XTERM);
 
-	case KEY_when:
+	case KEY_whereis:
+	case KEY_whereso:
 	    if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_NONEXPR)
 		return REPORT(0);
-	    pl_yylval.ival = CopLINE(PL_curcop);
+	    pl_yylval.ival = tmp == KEY_whereis;
+	    /* diag_listed_as: whereso is experimental */
             Perl_ck_warner_d(aTHX_
                 packWARN(WARN_EXPERIMENTAL__SMARTMATCH),
-                "when is experimental");
-	    OPERATOR(WHEN);
+                "%" UTF8f " is experimental", UTF8fARG(UTF, len, PL_tokenbuf));
+	    OPERATOR(WHERESO);
 
 	case KEY_while:
 	    if (!PL_lex_allbrackets && PL_lex_fakeeof >= LEX_FAKEEOF_NONEXPR)
@@ -8940,6 +8938,7 @@ S_pending_ident(pTHX)
 
     DEBUG_T({ PerlIO_printf(Perl_debug_log,
           "### Pending identifier '%s'\n", PL_tokenbuf); });
+    assert(tokenbuf_len >= 2);
 
     /* if we're in a my(), we can't allow dynamics here.
        $foo'bar has already been turned into $foo::bar, so
@@ -8963,13 +8962,13 @@ S_pending_ident(pTHX)
             if (has_colon) {
                 /* "my" variable %s can't be in a package */
                 /* PL_no_myglob is constant */
-                GCC_DIAG_IGNORE(-Wformat-nonliteral);
+                GCC_DIAG_IGNORE_STMT(-Wformat-nonliteral);
                 yyerror_pv(Perl_form(aTHX_ PL_no_myglob,
                             PL_in_my == KEY_my ? "my" : "state",
                             *PL_tokenbuf == '&' ? "subroutin" : "variabl",
                             PL_tokenbuf),
                             UTF ? SVf_UTF8 : 0);
-                GCC_DIAG_RESTORE;
+                GCC_DIAG_RESTORE_STMT;
             }
 
             if (PL_in_my == KEY_sigvar) {
@@ -9281,8 +9280,10 @@ S_new_constant(pTHX_ const char *s, STRLEN len, const char *key, STRLEN keylen,
 
 PERL_STATIC_INLINE void
 S_parse_ident(pTHX_ char **s, char **d, char * const e, int allow_package,
-                    bool is_utf8, bool check_dollar)
+                    bool is_utf8, bool check_dollar, bool tick_warn)
 {
+    int saw_tick = 0;
+    const char *olds = *s;
     PERL_ARGS_ASSERT_PARSE_IDENT;
 
     while (*s < PL_bufend) {
@@ -9316,6 +9317,7 @@ S_parse_ident(pTHX_ char **s, char **d, char * const e, int allow_package,
             *(*d)++ = ':';
             *(*d)++ = ':';
             (*s)++;
+            saw_tick++;
         }
         else if (allow_package && **s == ':' && (*s)[1] == ':'
            /* Disallow things like Foo::$bar. For the curious, this is
@@ -9328,6 +9330,30 @@ S_parse_ident(pTHX_ char **s, char **d, char * const e, int allow_package,
         }
         else
             break;
+    }
+    if (UNLIKELY(tick_warn && saw_tick && PL_lex_state == LEX_INTERPNORMAL
+              && !PL_lex_brackets && ckWARN(WARN_SYNTAX))) {
+        char *d;
+	char *d2;
+        Newx(d, *s - olds + saw_tick + 2, char); /* +2 for $# */
+        d2 = d;
+        SAVEFREEPV(d);
+        Perl_warner(aTHX_ packWARN(WARN_SYNTAX),
+                         "Old package separator used in string");
+        if (olds[-1] == '#')
+            *d2++ = olds[-2];
+        *d2++ = olds[-1];
+        while (olds < *s) {
+            if (*olds == '\'') {
+                *d2++ = '\\';
+                *d2++ = *olds++;
+            }
+	    else
+                *d2++ = *olds++;
+        }
+        Perl_warner(aTHX_ packWARN(WARN_SYNTAX),
+                         "\t(Did you mean \"%" UTF8f "\" instead?)\n",
+                          UTF8fARG(is_utf8, d2-d, d));
     }
     return;
 }
@@ -9344,7 +9370,7 @@ S_scan_word(pTHX_ char *s, char *dest, STRLEN destlen, int allow_package, STRLEN
 
     PERL_ARGS_ASSERT_SCAN_WORD;
 
-    parse_ident(&s, &d, e, allow_package, is_utf8, TRUE);
+    parse_ident(&s, &d, e, allow_package, is_utf8, TRUE, FALSE);
     *d = '\0';
     *slp = d - dest;
     return s;
@@ -9392,7 +9418,7 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
 	}
     }
     else {  /* See if it is a "normal" identifier */
-        parse_ident(&s, &d, e, 1, is_utf8, FALSE);
+        parse_ident(&s, &d, e, 1, is_utf8, FALSE, TRUE);
     }
     *d = '\0';
     d = dest;
@@ -9470,7 +9496,7 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
                    (the later check for } being at the expected point will trap
                    cases where this doesn't pan out.)  */
                 d += is_utf8 ? UTF8SKIP(d) : 1;
-                parse_ident(&s, &d, e, 1, is_utf8, TRUE);
+                parse_ident(&s, &d, e, 1, is_utf8, TRUE, TRUE);
                 *d = '\0';
             }
             else { /* caret word: ${^Foo} ${^CAPTURE[0]} */
@@ -10967,6 +10993,7 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 		  digit:
 		    just_zero = FALSE;
 		    if (!overflowed) {
+			assert(shift >= 0);
 			x = u << shift;	/* make room for the digit */
 
                         total_bits += shift;
@@ -11047,19 +11074,22 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
                     NV nv_mult = 1.0;
 #endif
                     bool accumulate = TRUE;
-                    for (h++; (isXDIGIT(*h) || *h == '_'); h++) {
+                    U8 b;
+                    int lim = 1 << shift;
+                    for (h++; ((isXDIGIT(*h) && (b = XDIGIT_VALUE(*h)) < lim) ||
+                               *h == '_'); h++) {
                         if (isXDIGIT(*h)) {
-                            U8 b = XDIGIT_VALUE(*h);
                             significant_bits += shift;
 #ifdef HEXFP_UQUAD
                             if (accumulate) {
                                 if (significant_bits < NV_MANT_DIG) {
                                     /* We are in the long "run" of xdigits,
                                      * accumulate the full four bits. */
+				    assert(shift >= 0);
                                     hexfp_uquad <<= shift;
                                     hexfp_uquad |= b;
                                     hexfp_frac_bits += shift;
-                                } else {
+                                } else if (significant_bits - shift < NV_MANT_DIG) {
                                     /* We are at a hexdigit either at,
                                      * or straddling, the edge of mantissa.
                                      * We will try grabbing as many as
@@ -11068,7 +11098,9 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
                                       significant_bits - NV_MANT_DIG;
                                     if (tail <= 0)
                                        tail += shift;
+				    assert(tail >= 0);
                                     hexfp_uquad <<= tail;
+				    assert((shift - tail) >= 0);
                                     hexfp_uquad |= b >> (shift - tail);
                                     hexfp_frac_bits += tail;
 
@@ -11107,7 +11139,7 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
                             }
 #else /* HEXFP_NV */
                             if (accumulate) {
-                                nv_mult /= 16.0;
+                                nv_mult /= nvshift[shift];
                                 if (nv_mult > 0.0)
                                     hexfp_nv += b * nv_mult;
                                 else

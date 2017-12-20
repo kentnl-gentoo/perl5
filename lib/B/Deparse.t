@@ -13,7 +13,7 @@ BEGIN {
 use warnings;
 use strict;
 
-my $tests = 49; # not counting those in the __DATA__ section
+my $tests = 52; # not counting those in the __DATA__ section
 
 use B::Deparse;
 my $deparse = B::Deparse->new();
@@ -546,6 +546,22 @@ unlike runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path, '-w' ],
        qr'Use of uninitialized value',
       'no warnings for undefined sub';
 
+is runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path ],
+    prog => 'sub f { 1; } BEGIN { *g = \&f; }'),
+    "sub f {\n    1;\n}\nsub BEGIN {\n    *g = \\&f;\n}\n",
+    "sub glob alias shouldn't impede emitting original sub";
+
+is runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path ],
+    prog => 'package Foo; sub f { 1; } BEGIN { *g = \&f; }'),
+    "package Foo;\nsub f {\n    1;\n}\nsub BEGIN {\n    *g = \\&f;\n}\n",
+    "sub glob alias outside main shouldn't impede emitting original sub";
+
+is runperl(stderr => 1, switches => [ '-MO=-qq,Deparse', $path ],
+    prog => 'package Foo; sub f { 1; } BEGIN { *Bar::f = \&f; }'),
+    "package Foo;\nsub f {\n    1;\n}\nsub BEGIN {\n    *Bar::f = \\&f;\n}\n",
+    "sub glob alias in separate package shouldn't impede emitting original sub";
+
+
 done_testing($tests);
 
 __DATA__
@@ -1023,13 +1039,14 @@ my $b = \{};
 my $c = [];
 my $d = \[];
 ####
-# SKIP ?$] < 5.010 && "smartmatch and given/when not implemented on this Perl version"
+# SKIP ?$] < 5.010 && "smartmatch and given/whereso not implemented on this Perl version"
 # CONTEXT use feature ':5.10'; no warnings 'experimental::smartmatch';
-# implicit smartmatch in given/when
+# implicit smartmatch in given/whereso
 given ('foo') {
-    when ('bar') { continue; }
-    when ($_ ~~ 'quux') { continue; }
-    default { 0; }
+    whereso ('bar') { continue; }
+    whereso ($_ == 3) { continue; }
+    whereis ('quux') { continue; }
+    0;
 }
 ####
 # conditions in elsifs (regression in change #33710 which fixed bug #37302)
@@ -1511,12 +1528,13 @@ $a[0] = 1;
 CORE::state $x;
 CORE::say $x;
 CORE::given ($x) {
-    CORE::when (3) {
+    CORE::whereso (3) {
         continue;
     }
-    CORE::default {
-        CORE::break;
+    CORE::whereis (5) {
+        continue;
     }
+    next;
 }
 CORE::evalbytes '';
 () = CORE::__SUB__;
@@ -1529,12 +1547,13 @@ use 1;
 CORE::say $_;
 CORE::state $x;
 CORE::given ($x) {
-    CORE::when (3) {
+    CORE::whereso (3) {
         continue;
     }
-    CORE::default {
-        CORE::break;
+    CORE::whereis (5) {
+        continue;
     }
+    next;
 }
 CORE::evalbytes '';
 () = CORE::__SUB__;
@@ -1542,12 +1561,13 @@ CORE::evalbytes '';
 CORE::say $_;
 CORE::state $x;
 CORE::given ($x) {
-    CORE::when (3) {
+    CORE::whereso (3) {
         continue;
     }
-    CORE::default {
-        CORE::break;
+    CORE::whereis (5) {
+        continue;
     }
+    next;
 }
 CORE::evalbytes '';
 () = CORE::__SUB__;
@@ -1560,12 +1580,13 @@ use 1;
 CORE::say $_;
 CORE::state $x;
 CORE::given ($x) {
-    CORE::when (3) {
+    CORE::whereso (3) {
         continue;
     }
-    CORE::default {
-        CORE::break;
+    CORE::whereis (5) {
+        continue;
     }
+    next;
 }
 CORE::evalbytes '';
 () = CORE::__SUB__;
@@ -1575,12 +1596,13 @@ use feature ':default';
 CORE::say $_;
 CORE::state $x;
 CORE::given ($x) {
-    CORE::when (3) {
+    CORE::whereso (3) {
         continue;
     }
-    CORE::default {
-        CORE::break;
+    CORE::whereis (5) {
+        continue;
     }
+    next;
 }
 CORE::evalbytes '';
 () = CORE::__SUB__;
@@ -1588,7 +1610,6 @@ CORE::evalbytes '';
 # SKIP ?$] < 5.017004 && "lexical subs not implemented on this Perl version"
 # lexical subroutines and keywords of the same name
 # CONTEXT use feature 'lexical_subs', 'switch'; no warnings 'experimental';
-my sub default;
 my sub else;
 my sub elsif;
 my sub for;
@@ -1609,9 +1630,9 @@ my sub tr;
 my sub unless;
 my sub until;
 my sub use;
-my sub when;
+my sub whereis;
+my sub whereso;
 my sub while;
-CORE::default { die; }
 CORE::if ($1) { die; }
 CORE::if ($1) { die; }
 CORE::elsif ($1) { die; }
@@ -1633,7 +1654,8 @@ CORE::unless ($1) { die; }
 CORE::until ($1) { die; }
 die CORE::until $1;
 CORE::use strict;
-CORE::when ($1 ~~ $2) { die; }
+CORE::whereis (5) { die; }
+CORE::whereso ($1 ~~ $2) { die; }
 CORE::while ($1) { die; }
 die CORE::while $1;
 ####
@@ -2935,3 +2957,54 @@ use strict 'vars';
 print exists &main::foo;
 print exists &{foo};
 print exists &main::bar;
+# precedence of optimised-away 'keys' (OPpPADHV_ISKEYS/OPpRV2HV_ISKEYS)
+my($r1, %h1, $res);
+our($r2, %h2);
+$res = keys %h1;
+$res = keys %h2;
+$res = keys %$r1;
+$res = keys %$r2;
+$res = keys(%h1) / 2 - 1;
+$res = keys(%h2) / 2 - 1;
+$res = keys(%$r1) / 2 - 1;
+$res = keys(%$r2) / 2 - 1;
+####
+# ditto in presence of sub keys {}
+# CONTEXT sub keys {}
+no warnings;
+my($r1, %h1, $res);
+our($r2, %h2);
+CORE::keys %h1;
+CORE::keys(%h1) / 2;
+$res = CORE::keys %h1;
+$res = CORE::keys %h2;
+$res = CORE::keys %$r1;
+$res = CORE::keys %$r2;
+$res = CORE::keys(%h1) / 2 - 1;
+$res = CORE::keys(%h2) / 2 - 1;
+$res = CORE::keys(%$r1) / 2 - 1;
+$res = CORE::keys(%$r2) / 2 - 1;
+####
+# concat: STACKED: ambiguity between .= and optimised nested
+my($a, $b);
+$b = $a . $a . $a;
+(($a .= $a) .= $a) .= $a;
+####
+# multiconcat: $$ within string
+my($a, $x);
+$x = "${$}abc";
+$x = "\$$a";
+####
+# single state aggregate assignment
+# CONTEXT use feature "state";
+state @a = (1, 2, 3);
+state %h = ('a', 1, 'b', 2);
+####
+# state var with attribute
+# CONTEXT use feature "state";
+state $x :shared;
+state $y :shared = 1;
+state @a :shared;
+state @b :shared = (1, 2);
+state %h :shared;
+state %i :shared = ('a', 1, 'b', 2);

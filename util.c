@@ -2300,7 +2300,6 @@ Perl_my_popen_list(pTHX_ const char *mode, int n, SV **args)
 #undef THAT
     }
     /* Parent */
-    do_execfree();	/* free any memory malloced by child on fork */
     if (did_pipes)
 	PerlLIO_close(pp[1]);
     /* Keep the lower of the two fd numbers */
@@ -2459,7 +2458,6 @@ Perl_my_popen(pTHX_ const char *cmd, const char *mode)
 #undef THIS
 #undef THAT
     }
-    do_execfree();	/* free any memory malloced by child on vfork */
     if (did_pipes)
 	PerlLIO_close(pp[1]);
     if (p[that] < p[This]) {
@@ -3793,9 +3791,9 @@ Perl_my_strftime(pTHX_ const char *fmt, int sec, int min, int hour, int mday, in
   buflen = 64;
   Newx(buf, buflen, char);
 
-  GCC_DIAG_IGNORE(-Wformat-nonliteral); /* fmt checked by caller */
+  GCC_DIAG_IGNORE_STMT(-Wformat-nonliteral); /* fmt checked by caller */
   len = strftime(buf, buflen, fmt, &mytm);
-  GCC_DIAG_RESTORE;
+  GCC_DIAG_RESTORE_STMT;
 
   /*
   ** The following is needed to handle to the situation where
@@ -3821,9 +3819,9 @@ Perl_my_strftime(pTHX_ const char *fmt, int sec, int min, int hour, int mday, in
     Renew(buf, bufsize, char);
     while (buf) {
 
-      GCC_DIAG_IGNORE(-Wformat-nonliteral); /* fmt checked by caller */
+      GCC_DIAG_IGNORE_STMT(-Wformat-nonliteral); /* fmt checked by caller */
       buflen = strftime(buf, bufsize, fmt, &mytm);
-      GCC_DIAG_RESTORE;
+      GCC_DIAG_RESTORE_STMT;
 
       if (buflen > 0 && buflen < bufsize)
 	break;
@@ -5714,9 +5712,9 @@ Perl_get_re_arg(pTHX_ SV *sv) {
 
 #ifdef PERL_DRAND48_QUAD
 
-#define DRAND48_MULT U64_CONST(0x5deece66d)
+#define DRAND48_MULT UINT64_C(0x5deece66d)
 #define DRAND48_ADD  0xb
-#define DRAND48_MASK U64_CONST(0xffffffffffff)
+#define DRAND48_MASK UINT64_C(0xffffffffffff)
 
 #else
 

@@ -156,8 +156,15 @@ use File::Glob qw(:case);
                 t/system.t
                 )
         ],
-        # CPAN RT 105344
-        'CUSTOMIZED'   => [ qw[ t/mkdir.t ] ],
+        'CUSTOMIZED'   => [
+	    # CPAN RT 105344
+	    't/mkdir.t',
+	    # smartmatch changes
+	    'lib/autodie/exception.pm',
+	    'lib/autodie/hints.pm',
+	    't/exceptions.t',
+	    't/lib/Hints_pod_examples.pm',
+        ],
     },
 
     'AutoLoader' => {
@@ -173,7 +180,7 @@ use File::Glob qw(:case);
     },
 
     'B::Debug' => {
-        'DISTRIBUTION' => 'RURBAN/B-Debug-1.25.tar.gz',
+        'DISTRIBUTION' => 'RURBAN/B-Debug-1.26.tar.gz',
         'FILES'        => q[cpan/B-Debug],
         'EXCLUDED'     => ['t/pod.t'],
         'DEPRECATED'   => '5.027003',
@@ -214,7 +221,7 @@ use File::Glob qw(:case);
     },
 
     'Compress::Raw::Zlib' => {
-        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.075.tar.gz',
+        'DISTRIBUTION' => 'PMQS/Compress-Raw-Zlib-2.076.tar.gz',
 
         'FILES'    => q[cpan/Compress-Raw-Zlib],
         'EXCLUDED' => [
@@ -248,7 +255,7 @@ use File::Glob qw(:case);
     },
 
     'CPAN' => {
-        'DISTRIBUTION' => 'ANDK/CPAN-2.18-TRIAL.tar.gz',
+        'DISTRIBUTION' => 'ANDK/CPAN-2.20-TRIAL.tar.gz',
         'FILES'        => q[cpan/CPAN],
         'EXCLUDED'     => [
             qr{^distroprefs/},
@@ -259,6 +266,7 @@ use File::Glob qw(:case);
             qw( lib/CPAN/Admin.pm
                 scripts/cpan-mirrors
                 PAUSE2015.pub
+                PAUSE2019.pub
                 SlayMakefile
                 t/00signature.t
                 t/04clean_load.t
@@ -369,7 +377,7 @@ use File::Glob qw(:case);
     },
 
     'Digest::SHA' => {
-        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-5.98.tar.gz',
+        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-6.00.tar.gz',
         'FILES'        => q[cpan/Digest-SHA],
         'EXCLUDED'     => [
             qw( t/pod.t
@@ -377,6 +385,32 @@ use File::Glob qw(:case);
                 examples/dups
                 ),
         ],
+        # https://rt.cpan.org/Public/Bug/Display.html?id=123863
+        CUSTOMIZED    => [qw[
+                t/allfcns.t
+                t/base64.t
+                t/bitbuf.t
+                t/bitorder.t
+                t/fips180-4.t
+                t/fips198.t
+                t/gg.t
+                t/gglong.t
+                t/hmacsha.t
+                t/inheritance.t
+                t/ireland.t
+                t/methods.t
+                t/nistbit.t
+                t/nistbyte.t
+                t/rfc2202.t
+                t/sha1.t
+                t/sha224.t
+                t/sha256.t
+                t/sha384.t
+                t/sha512.t
+                t/state.t
+                t/unicode.t
+                t/woodbury.t
+        ] ],
     },
 
     'Dumpvalue' => {
@@ -406,9 +440,17 @@ use File::Glob qw(:case);
     },
 
     'experimental' => {
-        'DISTRIBUTION' => 'LEONT/experimental-0.017.tar.gz',
+        'DISTRIBUTION' => 'LEONT/experimental-0.019.tar.gz',
         'FILES'        => q[cpan/experimental],
+        'EXCLUDED'     => [
+            qr{^xt/},
+            qr{nytprof.*}
+        ],
         'EXCLUDED'     => [qr{^xt/}],
+        'CUSTOMIZED'   => [
+	    # smartmatch changes
+	    't/basic.t',
+        ],
     },
 
     'Exporter' => {
@@ -422,7 +464,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::CBuilder' => {
-        'DISTRIBUTION' => 'AMBS/ExtUtils-CBuilder-0.280226.tar.gz',
+        'DISTRIBUTION' => 'AMBS/ExtUtils-CBuilder-0.280230.tar.gz',
         'FILES'        => q[dist/ExtUtils-CBuilder],
         'EXCLUDED'     => [
             qw(README.mkdn),
@@ -486,7 +528,7 @@ use File::Glob qw(:case);
     },
 
     'File::Fetch' => {
-        'DISTRIBUTION' => 'BINGOS/File-Fetch-0.54.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/File-Fetch-0.56.tar.gz',
         'FILES'        => q[cpan/File-Fetch],
     },
 
@@ -520,7 +562,7 @@ use File::Glob qw(:case);
     },
 
     'Filter::Util::Call' => {
-        'DISTRIBUTION' => 'RURBAN/Filter-1.57.tar.gz',
+        'DISTRIBUTION' => 'RURBAN/Filter-1.58.tar.gz',
         'FILES'        => q[cpan/Filter-Util-Call
                  pod/perlfilter.pod
                 ],
@@ -644,7 +686,7 @@ use File::Glob qw(:case);
     },
 
     'JSON::PP' => {
-        'DISTRIBUTION' => 'ISHIGAKI/JSON-PP-2.94.tar.gz',
+        'DISTRIBUTION' => 'ISHIGAKI/JSON-PP-2.97000.tar.gz',
         'FILES'        => q[cpan/JSON-PP],
     },
 
@@ -674,7 +716,7 @@ use File::Glob qw(:case);
     },
 
     'Locale-Codes' => {
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.54.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.55.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( README.first
@@ -792,7 +834,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20171020.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20171120.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -1071,7 +1113,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302111.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302120.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1082,7 +1124,6 @@ use File::Glob qw(:case);
                 t/zzz-check-breaks.t
                 ),
         ],
-
     },
 
     'Text::Abbrev' => {
@@ -1203,13 +1244,13 @@ use File::Glob qw(:case);
     },
 
     'Time::Piece' => {
-        'DISTRIBUTION' => 'ESAYM/Time-Piece-1.3202.tar.gz',
+        'DISTRIBUTION' => 'ESAYM/Time-Piece-1.3203.tar.gz',
         'FILES'        => q[cpan/Time-Piece],
         'EXCLUDED'     => [ qw[reverse_deps.txt] ],
     },
 
     'Unicode::Collate' => {
-        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.23.tar.gz',
+        'DISTRIBUTION' => 'SADAHIRO/Unicode-Collate-1.25.tar.gz',
         'FILES'        => q[cpan/Unicode-Collate],
         'EXCLUDED'     => [
             qr{N$},

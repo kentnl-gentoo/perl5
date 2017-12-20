@@ -661,6 +661,19 @@ PP(pp_multiconcat)
                  */
                 assert(!targ_chain);
                 dsv = newSVpvn_flags("", 0, SVs_TEMP);
+
+                if (   svpv_end == svpv_buf + 1
+                       /* no const string segments */
+                    && aux[PERL_MULTICONCAT_IX_LENGTHS].ssize == -1
+                ) {
+                    /* special case $overloaded .= $arg1:
+                     * avoid stringifying $arg1.
+                     * Similar to the $arg1 . $arg2 case in phase1
+                     */
+                    svpv_end--;
+                    SP--;
+                }
+
                 goto phase3;
             }
         }
@@ -801,8 +814,7 @@ PP(pp_multiconcat)
          * length on utf8 args (which was only needed to flag non-utf8
          * args in this loop */
         for (svpv_p = svpv_buf; svpv_p < svpv_end; svpv_p++) {
-            char *p;
-            SSize_t len, l, extra;
+            SSize_t len, extra;
 
             len = svpv_p->len;
             if (len <= 0) {
@@ -810,11 +822,8 @@ PP(pp_multiconcat)
                 continue;
             }
 
-            p = svpv_p->pv;
-            extra = 0;
-            l = len;
-            while (l--)
-                extra += !UTF8_IS_INVARIANT(*p++);
+            extra = variant_under_utf8_count((U8 *) svpv_p->pv,
+                                             (U8 *) svpv_p->pv + len);
             if (UNLIKELY(extra)) {
                 grow       += extra;
                               /* -ve len indicates special handling */
@@ -4181,8 +4190,8 @@ PP(pp_subst)
 	    (SvTAINTED(TARG) ? SUBST_TAINT_STR : 0)
 	  | (RXp_ISTAINTED(prog) ? SUBST_TAINT_PAT : 0)
 	  | ((pm->op_pmflags & PMf_RETAINT) ? SUBST_TAINT_RETAINT : 0)
-	  | ((once && !(rpm->op_pmflags & PMf_NONDESTRUCT))
-		? SUBST_TAINT_BOOLRET : 0));
+	  | ((  (once && !(rpm->op_pmflags & PMf_NONDESTRUCT))
+             || (PL_op->op_private & OPpTRUEBOOL)) ? SUBST_TAINT_BOOLRET : 0));
 	TAINT_NOT;
     }
 
@@ -4352,8 +4361,9 @@ PP(pp_subst)
 		Move(s, d, i+1, char);		/* include the NUL */
 	    }
 	    SPAGAIN;
+            assert(iters);
             if (PL_op->op_private & OPpTRUEBOOL)
-                PUSHs(iters ? &PL_sv_yes : &PL_sv_zero);
+                PUSHs(&PL_sv_yes);
             else
                 mPUSHi(iters);
 	}
@@ -4461,7 +4471,10 @@ PP(pp_subst)
 	    SvPV_set(dstr, NULL);
 
 	    SPAGAIN;
-	    mPUSHi(iters);
+            if (PL_op->op_private & OPpTRUEBOOL)
+                PUSHs(&PL_sv_yes);
+            else
+                mPUSHi(iters);
 	}
     }
 
@@ -4993,16 +5006,6 @@ PP(pp_entersub)
                 STRLEN len;
                 if (UNLIKELY(!SvOK(sv)))
                     DIE(aTHX_ PL_no_usym, "a subroutine");
-
-                if (UNLIKELY(sv == &PL_sv_yes)) { /* unfound import, ignore */
-                    if (PL_op->op_flags & OPf_STACKED) /* hasargs */
-                        SP = PL_stack_base + POPMARK;
-                    else
-                        (void)POPMARK;
-                    if (GIMME_V == G_SCALAR)
-                        PUSHs(&PL_sv_undef);
-                    RETURN;
-                }
 
                 sym = SvPV_nomg_const(sv, len);
                 if (PL_op->op_private & HINT_STRICT_REFS)

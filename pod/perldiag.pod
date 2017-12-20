@@ -726,6 +726,13 @@ which makes no sense.  Maybe you meant '%s', or just stringifying it?
 (F) C<caller> tried to set C<@DB::args>, but found it tied.  Tying C<@DB::args>
 is not supported.  (Before this error was added, it used to crash.)
 
+=item Cannot smart match without a matcher object
+
+(F) You tried to perform a smart match (C<~~>), but the right hand operand
+was not an object overloading the smart match operation.  Such a matcher
+object is required, in order to determine what kind of matching operation
+to apply to the left hand operand.
+
 =item Cannot tie unreifiable array
 
 (P) You somehow managed to call C<tie> on an array that does not
@@ -751,15 +758,6 @@ to compress something else.  See L<perlfunc/pack>.
 
 (F) Only hard references may be blessed.  This is how Perl "enforces"
 encapsulation of objects.  See L<perlobj>.
-
-=item Can't "break" in a loop topicalizer
-
-(F) You called C<break>, but you're in a C<foreach> block rather than
-a C<given> block.  You probably meant to use C<next> or C<last>.
-
-=item Can't "break" outside a given block
-
-(F) You called C<break>, but you're not inside a C<given> block.
 
 =item Can't call method "%s" on an undefined value
 
@@ -824,10 +822,10 @@ You CAN say
 
 but then $foo no longer contains a glob.
 
-=item Can't "continue" outside a when block
+=item Can't "continue" outside a whereso block
 
-(F) You called C<continue>, but you're not inside a C<when>
-or C<default> block.
+(F) You called C<continue>, but you're not inside a C<whereis> or
+C<whereso> block.
 
 =item Can't create pipe mailbox
 
@@ -838,13 +836,6 @@ quotas or other plumbing problems.
 
 (F) Only scalar, array, and hash variables may be declared as "my", "our" or
 "state" variables.  They must have ordinary identifiers as names.
-
-=item Can't "default" outside a topicalizer
-
-(F) You have used a C<default> block that is neither inside a
-C<foreach> loop nor a C<given> block.  (Note that this error is
-issued on exit from the C<default> block, so you won't get the
-error if you use an explicit C<continue>.)
 
 =item Can't determine class of operator %s, assuming BASEOP
 
@@ -1031,6 +1022,11 @@ pipe, Perl can't retrieve its name for later use.
 (P) An error peculiar to VMS.  Perl asked $GETSYI how big you want your
 mailbox buffers to be, and didn't get an answer.
 
+=item Can't "goto" into a "given" block
+
+(F) A "goto" statement was executed to jump into the middle of a C<given>
+block.  You can't get there from here.  See L<perlfunc/goto>.
+
 =item Can't "goto" into the middle of a foreach loop
 
 (F) A "goto" statement was executed to jump into the middle of a foreach
@@ -1085,6 +1081,17 @@ block, as doesn't a block given to sort(), map() or grep().  You can
 usually double the curlies to get the same effect though, because the
 inner curlies will be considered a block that loops once.  See
 L<perlfunc/last>.
+
+=item Can't leave "whereso" outside a loop block
+
+(F) Control reached the end of a C<whereis> or C<whereso> block that
+isn't inside any loop (including a C<given> block).  An implicit C<next>
+occurs here, which requires a loop to jump to.  You probably wanted the
+C<whereis> or C<whereso> to be inside a C<given> block.  Note that you
+won't get this error if the match controlling the C<whereis> or C<whereso>
+fails, or if you use an explicit C<continue> to avoid reaching the end
+of the block.  But if you rely on not reaching the implicit C<next>
+then you probably didn't want C<whereis> or C<whereso>, but rather C<if>.
 
 =item Can't linearize anonymous symbol table
 
@@ -1316,15 +1323,15 @@ loops once.  See L<perlfunc/redo>.
 file.  Perl was unable to remove the original file to replace it with
 the modified file.  The file was left unmodified.
 
-=item Can't rename %s to %s: %s, skipping file
-
-(F) The rename done by the B<-i> switch failed for some reason,
-probably because you don't have write permission to the directory.
-
 =item Can't rename in-place work file '%s' to '%s': %s
 
 (F) When closed implicitly, the temporary file for in-place editing
 couldn't be renamed to the original filename.
+
+=item Can't rename %s to %s: %s, skipping file
+
+(F) The rename done by the B<-i> switch failed for some reason,
+probably because you don't have write permission to the directory.
 
 =item Can't reopen input pipe (name: %s) in binary mode
 
@@ -1393,6 +1400,11 @@ with Perl, though, if you really want to do that.
 (F) You can't undefine a routine that's currently running.  You can,
 however, redefine it while it's running, and you can even undef the
 redefined subroutine while the old routine is running.  Go figure.
+
+=item Can't unweaken a nonreference
+
+(F) You attempted to unweaken something that was not a reference.  Only
+references can be unweakened.
 
 =item Can't upgrade %s (%d) to %d
 
@@ -1536,22 +1548,10 @@ expression pattern.  Trying to do this in ordinary Perl code produces a
 value that prints out looking like SCALAR(0xdecaf).  Use the $1 form
 instead.
 
-=item Can't unweaken a nonreference
-
-(F) You attempted to unweaken something that was not a reference.  Only
-references can be unweakened.
-
 =item Can't weaken a nonreference
 
 (F) You attempted to weaken something that was not a reference.  Only
 references can be weakened.
-
-=item Can't "when" outside a topicalizer
-
-(F) You have used a when() block that is neither inside a C<foreach>
-loop nor a C<given> block.  (Note that this error is issued on exit
-from the C<when> block, so you won't get the error if the match fails,
-or if you use an explicit C<continue>.)
 
 =item Can't x= to read-only value
 
@@ -2047,7 +2047,7 @@ some such.
 
 =item (Did you mean "local" instead of "our"?)
 
-(W misc) Remember that "our" does not localize the declared global
+(W shadow) Remember that "our" does not localize the declared global
 variable.  You have declared it again in the same lexical scope, which
 seems superfluous.
 
@@ -2271,6 +2271,26 @@ to denote a capturing group of the form
 L<C<(?I<PARNO>)>|perlre/(?PARNO) (?-PARNO) (?+PARNO) (?R) (?0)>,
 but omitted the C<")">.
 
+=item Expecting close paren for nested extended charclass in regex; marked
+by <-- HERE in m/%s/
+
+(F) While parsing a nested extended character class like:
+
+    (?[ ... (?flags:(?[ ... ])) ... ])
+                             ^
+
+we expected to see a close paren ')' (marked by ^) but did not.
+
+=item Expecting close paren for wrapper for nested extended charclass in
+regex; marked by <-- HERE in m/%s/
+
+(F) While parsing a nested extended character class like:
+
+    (?[ ... (?flags:(?[ ... ])) ... ])
+                              ^
+
+we expected to see a close paren ')' (marked by ^) but did not.
+
 =item Expecting '(?flags:(?[...' in regex; marked by S<<-- HERE> in m/%s/
 
 (F) The C<(?[...])> extended character class regular expression construct
@@ -2477,10 +2497,9 @@ L<perlfunc/getsockopt>.
 
 =item given is experimental
 
-(S experimental::smartmatch) C<given> depends on smartmatch, which
-is experimental, so its behavior may change or even be removed
-in any future release of perl.  See the explanation under
-L<perlsyn/Experimental Details on given and when>.
+(S experimental::smartmatch) C<given> is experimental, and its behavior
+may change or it may even be removed in any future release of perl.
+See the explanation under L<perlsyn/Switch Statements>.
 
 =item Global symbol "%s" requires explicit package name (did you forget to
 declare "my %s"?)
@@ -2652,17 +2671,6 @@ this error when Perl was built using standard options.  For some
 reason, your version of Perl appears to have been built without
 this support.  Talk to your Perl administrator.
 
-=item Illegal operator following parameter in a subroutine signature
-
-(F) A parameter in a subroutine signature, was followed by something
-other than C<=> introducing a default, C<,> or C<)>.
-
-    use feature 'signatures';
-    sub foo ($=1) {}           # legal
-    sub foo ($a = 1) {}        # legal
-    sub foo ($a += 1) {}       # illegal
-    sub foo ($a == 1) {}       # illegal
-
 =item Illegal character following sigil in a subroutine signature
 
 (F) A parameter in a subroutine signature contained an unexpected character
@@ -2726,6 +2734,17 @@ two from 1 to 32 (or 64, if your platform supports that).
 
 (W digit) You may have tried to use an 8 or 9 in an octal number.
 Interpretation of the octal number stopped before the 8 or 9.
+
+=item Illegal operator following parameter in a subroutine signature
+
+(F) A parameter in a subroutine signature, was followed by something
+other than C<=> introducing a default, C<,> or C<)>.
+
+    use feature 'signatures';
+    sub foo ($=1) {}           # legal
+    sub foo ($a = 1) {}        # legal
+    sub foo ($a += 1) {}       # illegal
+    sub foo ($a == 1) {}       # illegal
 
 =item Illegal pattern in regex; marked by S<<-- HERE> in m/%s/
 
@@ -3301,6 +3320,22 @@ L<perlfunc/listen>.
 form of C<open> does not support pipes, such as C<open($pipe, '|-', @args)>.
 Use the two-argument C<open($pipe, '|prog arg1 arg2...')> form instead.
 
+=item Literal vertical space in [] is illegal except under /x in regex;
+marked by S<<-- HERE> in m/%s/
+
+(F) (only under C<S<use re 'strict'>> or within C<(?[...])>)
+
+Likely you forgot the C</x> modifier or there was a typo in the pattern.
+For example, did you really mean to match a form-feed?  If so, all the
+ASCII vertical space control characters are representable by escape
+sequences which won't present such a jarring appearance as your pattern
+does when displayed.
+
+  \r    carriage return
+  \f    form feed
+  \n    line feed
+  \cK   vertical tab
+
 =item %s: loadable library and perl binaries are mismatched (got handshake key %p, needed %p)
 
 (P) A dynamic loading library C<.so> or C<.dll> was being loaded into the
@@ -3505,7 +3540,7 @@ not be portable
 
 (S non_unicode) Perl allows strings to contain a superset of
 Unicode code points; each code point may be as large as what is storable
-in an unsigned integer on your system, but these may not be accepted by
+in a signed integer on your system, but these may not be accepted by
 other languages/systems.  This message occurs when you matched a string
 containing such a code point against a regular expression pattern, and
 the code point was matched against a Unicode property, C<\p{...}> or
@@ -4315,6 +4350,13 @@ C<sysread()>ing a file, or when seeking past the end of a scalar opened
 for I/O (in anticipation of future reads and to imitate the behavior
 with real files).
 
+=item Old package separator used in string
+
+(W syntax) You used the old package separator, "'", in a variable
+named inside a double-quoted string; e.g., C<"In $name's house">.  This
+is equivalent to C<"In $name::s house">.  If you meant the former, put
+a backslash before the apostrophe (C<"In $name\'s house">).
+
 =item %s() on unopened %s
 
 (W unopened) An I/O operation was attempted on a filehandle that was
@@ -4395,7 +4437,7 @@ have a specific default.  You probably want "$a = undef".
 
 =item "our" variable %s redeclared
 
-(W misc) You seem to have already declared the same global once before
+(W shadow) You seem to have already declared the same global once before
 in the current lexical scope.
 
 =item Out of memory!
@@ -5666,20 +5708,12 @@ requested.
 hash) parameter.  The slurpy parameter takes all the available arguments,
 so there can't be any left to fill later parameters.
 
-=item Smart matching a non-overloaded object breaks encapsulation
-
-(F) You should not use the C<~~> operator on an object that does not
-overload it: Perl refuses to use the object's underlying structure
-for the smart match.
-
 =item Smartmatch is experimental
 
 (S experimental::smartmatch) This warning is emitted if you
 use the smartmatch (C<~~>) operator.  This is currently an experimental
 feature, and its details are subject to change in future releases of
-Perl.  Particularly, its current behavior is noticed for being
-unnecessarily complex and unintuitive, and is very likely to be
-overhauled.
+Perl.
 
 =item Sorry, hash keys must be smaller than 2**31 bytes
 
@@ -5790,7 +5824,7 @@ being executed, so its &a is not available for capture.
 
 =item "%s" subroutine &%s masks earlier declaration in same %s
 
-(W misc) A "my" or "state" subroutine has been redeclared in the
+(W shadow) A "my" or "state" subroutine has been redeclared in the
 current scope or statement, effectively eliminating all access to
 the previous instance.  This is almost always a typographical error.
 Note that the earlier subroutine will still exist until the end of
@@ -5938,7 +5972,7 @@ yourself.
 a perl4 interpreter, especially if the next 2 tokens are "use strict"
 or "my $var" or "our $var".
 
-=item Syntax error in (?[...]) in regex m/%s/
+=item Syntax error in (?[...]) in regex; marked by <-- HERE in m/%s/
 
 (F) Perl could not figure out what you meant inside this construct; this
 notifies you that it is giving up trying.
@@ -6483,6 +6517,14 @@ The C<")"> is out-of-place.  Something apparently was supposed to
 be combined with the digits, or the C<"+"> shouldn't be there, or
 something like that.  Perl can't figure out what was intended.
 
+=item Unexpected ']' with no following ')' in (?[... in regex; marked by
+<-- HERE in m/%s/
+
+(F) While parsing an extended character class a ']' character was
+encountered at a point in the definition where the only legal use of
+']' is to close the character class definition as part of a '])', you
+may have forgotten the close paren, or otherwise confused the parser.
+
 =item Unexpected '(' with no preceding operator in regex; marked by
 S<<-- HERE> in m/%s/
 
@@ -6964,10 +7006,12 @@ you can write it as C<push(@tied_array,())> to avoid this warning.
 (F) The "use" keyword is recognized and executed at compile time, and
 returns no useful value.  See L<perlmod>.
 
-=item Use of assignment to $[ is deprecated
+=item Use of assignment to $[ is deprecated, and will be fatal in 5.30
 
 (D deprecated) The C<$[> variable (index of the first element in an array)
-is deprecated.  See L<perlvar/"$[">.
+is deprecated since Perl 5.12, and setting it to a non-zero value will be
+fatal as of Perl 5.30.
+See L<perlvar/"$[">.
 
 =item Use of bare << to mean <<"" is forbidden
 
@@ -7317,7 +7361,7 @@ See L<re>.
 
 =item "%s" variable %s masks earlier declaration in same %s
 
-(W misc) A "my", "our" or "state" variable has been redeclared in the
+(W shadow) A "my", "our" or "state" variable has been redeclared in the
 current scope or statement, effectively eliminating all access to the
 previous instance.  This is almost always a typographical error.  Note
 that the earlier variable will still exist until the end of the scope
@@ -7430,13 +7474,17 @@ but in actual fact, you got
 
 So put in parentheses to say what you really mean.
 
-=item when is experimental
+=item whereis is experimental
 
-(S experimental::smartmatch) C<when> depends on smartmatch, which is
-experimental.  Additionally, it has several special cases that may
-not be immediately obvious, and their behavior may change or
-even be removed in any future release of perl.  See the explanation
-under L<perlsyn/Experimental Details on given and when>.
+(S experimental::smartmatch) C<whereis> is experimental, and its behavior
+may change or it may even be removed in any future release of perl.
+See the explanation under L<perlsyn/Switch Statements>.
+
+=item whereso is experimental
+
+(S experimental::smartmatch) C<whereso> is experimental, and its behavior
+may change or it may even be removed in any future release of perl.
+See the explanation under L<perlsyn/Switch Statements>.
 
 =item Wide character in %s
 
@@ -7504,8 +7552,10 @@ the end of the string being unpacked.  See L<perlfunc/pack>.
 
 (F) And you probably never will, because you probably don't have the
 sources to your kernel, and your vendor probably doesn't give a rip
-about what you want.  Your best bet is to put a setuid C wrapper around
-your script.
+about what you want.  There is a vulnerability anywhere that you have a
+set-id script, and to close it you need to remove the set-id bit from
+the script that you're attempting to run.  To actually run the script
+set-id, your best bet is to put a set-id C wrapper around your script.
 
 =item You need to quote "%s"
 

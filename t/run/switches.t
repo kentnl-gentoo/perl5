@@ -12,7 +12,7 @@ BEGIN {
 
 BEGIN { require "./test.pl";  require "./loc_tools.pl"; }
 
-plan(tests => 137);
+plan(tests => 136);
 
 use Config;
 
@@ -473,6 +473,9 @@ __EOF__
               && ($Config{d_dirfd} || $Config{d_dir_dd_fd})
               && $Config{d_linkat}
               && $Config{ccflags} !~ /-DNO_USE_ATFUNCTIONS\b/;
+        my ($osvers) = ($Config{osvers} =~ /^(\d+(?:\.\d+)?)/);
+        skip "NetBSD 6 libc defines at functions, but they're incomplete", 3
+            if $^O eq "netbsd" && $osvers < 7;
         fresh_perl_is(<<'CODE', "ok\n", { },
 @ARGV = ("tmpinplace/foo");
 $^I = "";
@@ -537,7 +540,7 @@ print "ok\n";
 CODE
                       "fork while in-place editing");
         ok(open($fh, "<", $work), "open out file");
-        is(scalar <$fh>, "yy\n", "file successfully saved after chdir");
+        is(scalar <$fh>, "yy\n", "file successfully saved after fork");
         close $fh;
     }
 
@@ -593,7 +596,7 @@ CODE
         chmod 0700, "tmpinplace" or die "Cannot make tmpinplace writable again: $!";
         skip "Cannot make tmpinplace read only", 1
           if $canwrite;
-        fresh_perl_like(<<'CODE', qr/Can't rename/, { stderr => 1 }, "fail final rename");
+        fresh_perl_like(<<'CODE', qr/failed to rename/, { stderr => 1 }, "fail final rename");
 @ARGV = ("tmpinplace/foo");
 $^I = "";
 while (<>) {
@@ -648,12 +651,7 @@ is( $r, "Hello, world!\n", "-E say" );
 
 
 $r = runperl(
-    switches	=> [ '-E', '"no warnings q{experimental::smartmatch}; undef ~~ undef and say q(Hello, world!)"']
-);
-is( $r, "Hello, world!\n", "-E ~~" );
-
-$r = runperl(
-    switches	=> [ '-E', '"no warnings q{experimental::smartmatch}; given(undef) {when(undef) { say q(Hello, world!)"}}']
+    switches	=> [ '-E', '"no warnings q{experimental::smartmatch}; given(undef) {whereso(!defined) { say q(Hello, world!)"}}']
 );
 is( $r, "Hello, world!\n", "-E given" );
 

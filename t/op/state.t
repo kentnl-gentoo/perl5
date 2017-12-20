@@ -5,6 +5,7 @@ BEGIN {
     chdir 't' if -d 't';
     require './test.pl';
     set_up_inc('../lib');
+    skip_all_if_miniperl("miniperl can't load attributes");
 }
 
 use strict;
@@ -341,8 +342,8 @@ my @spam = qw [spam ham bacon beans];
 foreach my $spam (@spam) {
     no warnings 'experimental::smartmatch';
     given (state $spam = $spam) {
-        when ($spam [0]) {ok 1, "given"}
-        default          {ok 0, "given"}
+        whereso ($spam [0]) {ok 1, "given"}
+        ok 0, "given";
     }
 }
 

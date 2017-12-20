@@ -626,7 +626,6 @@ addbits('rv2gv',
 
 addbits('enteriter',
                     1 => qw(OPpITER_REVERSED REVERSED),# for (reverse ...)
-                    3 => qw(OPpITER_DEF      DEF),     # 'for $_'
 );
 addbits('iter',     1 => qw(OPpITER_REVERSED REVERSED));
 
@@ -806,6 +805,17 @@ addbits('rv2hv',
 for (qw(index rindex)) {
     addbits($_, 6 => qw(OPpINDEX_BOOLNEG NEG));
 }
+
+
+addbits('concat',
+    # OPf_STACKED normally indicates .=; but it also gets set to optimise
+    # $a . $b . $c into ($a . $b) .= $c
+    # so that the first concat's PADTMP (which holds the result of $a.$b)
+    # can be reused. Set a flag in this case to help deparse and warn
+    # distinguish the cases.
+    6 => qw(OPpCONCAT_NESTED NESTED),
+);
+
 
 addbits('multiconcat',
   # 7       OPpLVAL_INTRO

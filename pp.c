@@ -129,20 +129,18 @@ S_rv2gv(pTHX_ SV *sv, const bool vivify_sv, const bool strict,
 		 */
 		if (vivify_sv && sv != &PL_sv_undef) {
 		    GV *gv;
+		    HV *stash;
 		    if (SvREADONLY(sv))
 			Perl_croak_no_modify();
+		    gv = MUTABLE_GV(newSV(0));
+		    stash = CopSTASH(PL_curcop);
+		    if (SvTYPE(stash) != SVt_PVHV) stash = NULL;
 		    if (cUNOP->op_targ) {
 			SV * const namesv = PAD_SV(cUNOP->op_targ);
-			HV *stash = CopSTASH(PL_curcop);
-			if (SvTYPE(stash) != SVt_PVHV) stash = NULL;
-			gv = MUTABLE_GV(newSV(0));
 			gv_init_sv(gv, stash, namesv, 0);
 		    }
 		    else {
-			const char * const name = CopSTASHPV(PL_curcop);
-			gv = newGVgen_flags(name,
-                                HvNAMEUTF8(CopSTASH(PL_curcop)) ? SVf_UTF8 : 0 );
-			SvREFCNT_inc_simple_void_NN(gv);
+			gv_init_pv(gv, stash, "__ANONIO__", 0);
 		    }
 		    prepare_SV_for_RV(sv);
 		    SvRV_set(sv, MUTABLE_SV(gv));
@@ -5615,13 +5613,16 @@ PP(pp_reverse)
 	STRLEN len;
 
 	SvUTF8_off(TARG);				/* decontaminate */
-	if (SP - MARK > 1)
+	if (SP - MARK > 1) {
 	    do_join(TARG, &PL_sv_no, MARK, SP);
-	else if (SP > MARK)
+	    SP = MARK + 1;
+	    SETs(TARG);
+	} else if (SP > MARK) {
 	    sv_setsv(TARG, *SP);
-        else {
+	    SETs(TARG);
+        } else {
 	    sv_setsv(TARG, DEFSV);
-            EXTEND(SP, 1);
+	    XPUSHs(TARG);
 	}
 
 	up = SvPV_force(TARG, len);
@@ -5659,8 +5660,6 @@ PP(pp_reverse)
 	    }
 	    (void)SvPOK_only_UTF8(TARG);
 	}
-	SP = MARK + 1;
-	SETTARG;
     }
     RETURN;
 }

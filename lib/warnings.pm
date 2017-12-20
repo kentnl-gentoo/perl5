@@ -5,7 +5,7 @@
 
 package warnings;
 
-our $VERSION = "1.38";
+our $VERSION = "1.39";
 
 # Verify that we're called correctly so that warnings will work.
 # Can't use Carp, since Carp uses us!
@@ -96,6 +96,9 @@ our %Offsets = (
 
     # Warnings Categories added in Perl 5.025
     'experimental::declared_refs'	=> 132,
+
+    # Warnings Categories added in Perl 5.027
+    'shadow'				=> 134,
 );
 
 our %Bits = (
@@ -153,6 +156,7 @@ our %Bits = (
     'reserved'				=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00\x00\x00\x00", # [37]
     'semicolon'				=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10\x00\x00\x00\x00\x00\x00\x00", # [38]
     'severe'				=> "\x00\x00\x00\x00\x00\x54\x05\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", # [21..25]
+    'shadow'				=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x40", # [67]
     'signal'				=> "\x00\x00\x00\x00\x00\x00\x10\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", # [26]
     'substr'				=> "\x00\x00\x00\x00\x00\x00\x40\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", # [27]
     'surrogate'				=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10\x00\x00\x00\x00", # [50]
@@ -223,6 +227,7 @@ our %DeadBits = (
     'reserved'				=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x08\x00\x00\x00\x00\x00\x00\x00", # [37]
     'semicolon'				=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x20\x00\x00\x00\x00\x00\x00\x00", # [38]
     'severe'				=> "\x00\x00\x00\x00\x00\xa8\x0a\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", # [21..25]
+    'shadow'				=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80", # [67]
     'signal'				=> "\x00\x00\x00\x00\x00\x00\x20\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", # [26]
     'substr'				=> "\x00\x00\x00\x00\x00\x00\x80\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", # [27]
     'surrogate'				=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x20\x00\x00\x00\x00", # [50]
@@ -241,7 +246,7 @@ our %DeadBits = (
 # These are used by various things, including our own tests
 our $NONE				=  "\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0";
 our $DEFAULT				=  "\x10\x01\x00\x00\x00\x50\x04\x00\x00\x00\x00\x00\x00\x55\x51\x55\x10", # [2,4,22,23,25,52..56,58..63,66]
-our $LAST_BIT				=  134 ;
+our $LAST_BIT				=  136 ;
 our $BYTES				=  17 ;
 
 sub Croaker
@@ -347,6 +352,7 @@ sub unimport
 
 my %builtin_type; @builtin_type{qw(SCALAR ARRAY HASH CODE REF GLOB LVALUE Regexp)} = ();
 
+sub LEVEL () { 8 };
 sub MESSAGE () { 4 };
 sub FATAL () { 2 };
 sub NORMAL () { 1 };
@@ -358,8 +364,18 @@ sub __chk
     my $isobj = 0 ;
     my $wanted = shift;
     my $has_message = $wanted & MESSAGE;
+    my $has_level   = $wanted & LEVEL  ;
 
-    unless (@_ == 1 || @_ == ($has_message ? 2 : 0)) {
+    if ($has_level) {
+	if (@_ != ($has_message ? 3 : 2)) {
+	    my $sub = (caller 1)[3];
+	    my $syntax = $has_message
+		? "category, level, 'message'"
+		: 'category, level';
+	    Croaker("Usage: $sub($syntax)");
+        }
+    }
+    elsif (not @_ == 1 || @_ == ($has_message ? 2 : 0)) {
 	my $sub = (caller 1)[3];
 	my $syntax = $has_message ? "[category,] 'message'" : '[category]';
 	Croaker("Usage: $sub($syntax)");
@@ -397,6 +413,9 @@ sub __chk
 	}
 	$i -= 2 ;
     }
+    elsif ($has_level) {
+	$i = 2 + shift;
+    }
     else {
 	$i = _error_loc(); # see where Carp will allocate the error
     }
@@ -419,8 +438,17 @@ sub __chk
     return $results[0] unless $has_message;
 
     # &warnif, and the category is neither enabled as warning nor as fatal
-    return if $wanted == (NORMAL | FATAL | MESSAGE)
+    return if ($wanted & (NORMAL | FATAL | MESSAGE))
+		      == (NORMAL | FATAL | MESSAGE)
 	&& !($results[0] || $results[1]);
+
+    # If we have an explicit level, bypass Carp.
+    if ($has_level and @callers_bitmask) {
+	my $stuff = " at " . join " line ", (caller $i)[1,2];
+	$stuff .= ", <" . *${^LAST_FH}{NAME} . "> line $." if ${^LAST_FH};
+	die "$message$stuff.\n" if $results[0];
+	return warn "$message$stuff.\n";
+    }
 
     require Carp;
     Carp::croak($message) if $results[0];
@@ -480,9 +508,29 @@ sub warnif
     return __chk(NORMAL | FATAL | MESSAGE, @_);
 }
 
+sub enabled_at_level
+{
+    return __chk(NORMAL | LEVEL, @_);
+}
+
+sub fatal_enabled_at_level
+{
+    return __chk(FATAL | LEVEL, @_);
+}
+
+sub warn_at_level
+{
+    return __chk(FATAL | MESSAGE | LEVEL, @_);
+}
+
+sub warnif_at_level
+{
+    return __chk(NORMAL | FATAL | MESSAGE | LEVEL, @_);
+}
+
 # These are not part of any public interface, so we can delete them to save
 # space.
-delete @warnings::{qw(NORMAL FATAL MESSAGE)};
+delete @warnings::{qw(NORMAL FATAL MESSAGE LEVEL)};
 
 1;
 __END__
@@ -810,6 +858,8 @@ The current hierarchy is:
          |                 +- internal
          |                 |
          |                 +- malloc
+         |
+         +- shadow
          |
          +- signal
          |
@@ -1147,6 +1197,9 @@ warnings::register like this:
 
 =head1 FUNCTIONS
 
+Note: The functions with names ending in C<_at_level> were added in Perl
+5.28.
+
 =over 4
 
 =item use warnings::register
@@ -1176,6 +1229,11 @@ Return TRUE if that warnings category is enabled in the first scope
 where the object is used.
 Otherwise returns FALSE.
 
+=item warnings::enabled_at_level($category, $level)
+
+Like C<warnings::enabled>, but $level specifies the exact call frame, 0
+being the immediate caller.
+
 =item warnings::fatal_enabled()
 
 Return TRUE if the warnings category with the same name as the current
@@ -1196,6 +1254,11 @@ warnings category.
 Return TRUE if that warnings category has been set to FATAL in the first
 scope where the object is used.
 Otherwise returns FALSE.
+
+=item warnings::fatal_enabled_at_level($category, $level)
+
+Like C<warnings::fatal_enabled>, but $level specifies the exact call frame,
+0 being the immediate caller.
 
 =item warnings::warn($message)
 
@@ -1223,6 +1286,10 @@ warnings category.
 If that warnings category has been set to "FATAL" in the scope where C<$object>
 is first used then die. Otherwise return.
 
+=item warnings::warn_at_level($category, $level, $message)
+
+Like C<warnings::warn>, but $level specifies the exact call frame,
+0 being the immediate caller.
 
 =item warnings::warnif($message)
 
@@ -1244,6 +1311,11 @@ Equivalent to:
 
     if (warnings::enabled($object))
       { warnings::warn($object, $message) }
+
+=item warnings::warnif_at_level($category, $level, $message)
+
+Like C<warnings::warnif>, but $level specifies the exact call frame,
+0 being the immediate caller.
 
 =item warnings::register_categories(@names)
 

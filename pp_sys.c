@@ -2981,9 +2981,9 @@ PP(pp_stat)
 	if (PL_laststatval < 0) {
 	    if (ckWARN(WARN_NEWLINE) && should_warn_nl(file)) {
                 /* PL_warn_nl is constant */
-                GCC_DIAG_IGNORE(-Wformat-nonliteral);
+                GCC_DIAG_IGNORE_STMT(-Wformat-nonliteral);
 		Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "stat");
-                GCC_DIAG_RESTORE;
+                GCC_DIAG_RESTORE_STMT;
             }
 	    max = 0;
 	}
@@ -3014,11 +3014,11 @@ PP(pp_stat)
 	     */
 	    bool neg;
 	    Stat_t s;
-	    CLANG_DIAG_IGNORE(-Wtautological-compare);
-	    GCC_DIAG_IGNORE(-Wtype-limits);
+	    CLANG_DIAG_IGNORE_STMT(-Wtautological-compare);
+	    GCC_DIAG_IGNORE_STMT(-Wtype-limits);
 	    neg = PL_statcache.st_ino < 0;
-	    GCC_DIAG_RESTORE;
-	    CLANG_DIAG_RESTORE;
+	    GCC_DIAG_RESTORE_STMT;
+	    CLANG_DIAG_RESTORE_STMT;
 	    if (neg) {
 		s.st_ino = (IV)PL_statcache.st_ino;
 		if (LIKELY(s.st_ino == PL_statcache.st_ino)) {
@@ -3116,7 +3116,7 @@ S_ft_return_false(pTHX_ SV *ret) {
     PUTBACK;
 
     if (PL_op->op_private & OPpFT_STACKING) {
-        while (OP_IS_FILETEST(next->op_type)
+        while (next && OP_IS_FILETEST(next->op_type)
                && next->op_private & OPpFT_STACKED)
             next = next->op_next;
     }
@@ -3499,6 +3499,7 @@ PP(pp_fttext)
     SV *sv = NULL;
     GV *gv;
     PerlIO *fp;
+    const U8 * first_variant;
 
     tryAMAGICftest_MG(PL_op->op_type == OP_FTTEXT ? 'T' : 'B');
 
@@ -3592,9 +3593,9 @@ PP(pp_fttext)
 	    }
 	    if (ckWARN(WARN_NEWLINE) && should_warn_nl(file)) {
                 /* PL_warn_nl is constant */
-                GCC_DIAG_IGNORE(-Wformat-nonliteral);
+                GCC_DIAG_IGNORE_STMT(-Wformat-nonliteral);
 		Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "open");
-                GCC_DIAG_RESTORE;
+                GCC_DIAG_RESTORE_STMT;
             }
 	    FT_RETURNUNDEF;
 	}
@@ -3632,11 +3633,14 @@ PP(pp_fttext)
 #endif
 
     assert(len);
-    if (! is_utf8_invariant_string((U8 *) s, len)) {
+    if (! is_utf8_invariant_string_loc((U8 *) s, len, &first_variant)) {
 
         /* Here contains a variant under UTF-8 .  See if the entire string is
          * UTF-8. */
-        if (is_utf8_fixed_width_buf_flags((U8 *) s, len, 0)) {
+        if (is_utf8_fixed_width_buf_flags(first_variant,
+                                          len - ((char *) first_variant - (char *) s),
+                                          0))
+        {
             if (PL_op->op_type == OP_FTTEXT) {
                 FT_RETURNYES;
             }
@@ -4388,14 +4392,18 @@ PP(pp_system)
     int result;
 # endif
 
+    while (++MARK <= SP) {
+	SV *origsv = *MARK;
+	STRLEN len;
+	char *pv;
+	pv = SvPV(origsv, len);
+	*MARK = newSVpvn_flags(pv, len,
+		    (SvFLAGS(origsv) & SVf_UTF8) | SVs_TEMP);
+    }
+    MARK = ORIGMARK;
+
     if (TAINTING_get) {
 	TAINT_ENV();
-	while (++MARK <= SP) {
-	    (void)SvPV_nolen_const(*MARK);      /* stringify for taint check */
-	    if (TAINT_get)
-		break;
-	}
-	MARK = ORIGMARK;
 	TAINT_PROPER("system");
     }
     PERL_FLUSHALL_FOR_CHILD;
@@ -4476,7 +4484,6 @@ PP(pp_system)
 	    (void)rsignal_restore(SIGQUIT, &qhand);
 #endif
 	    STATUS_NATIVE_CHILD_SET(result == -1 ? -1 : status);
-	    do_execfree();	/* free any memory child malloced on fork */
 	    SP = ORIGMARK;
 	    if (did_pipes) {
 		int errkid;
@@ -4555,7 +4562,6 @@ PP(pp_system)
     if (PL_statusvalue == -1)	/* hint that value must be returned as is */
 	result = 1;
     STATUS_NATIVE_CHILD_SET(value);
-    do_execfree();
     SP = ORIGMARK;
     XPUSHi(result ? value : STATUS_CURRENT);
 #endif /* !FORK or VMS or OS/2 */

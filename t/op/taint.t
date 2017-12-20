@@ -17,7 +17,7 @@ BEGIN {
 use strict;
 use Config;
 
-plan tests => 1040;
+plan tests => 1039;
 
 $| = 1;
 
@@ -2400,7 +2400,7 @@ end
     use feature 'switch';
     no warnings 'experimental::smartmatch';
 
-    my @descriptions = ('when', 'given end', 'default');
+    my @descriptions = ('whereso', 'given end', 'default');
 
     for (qw<x y z>) {
 	my $letter = "$_$TAINT";
@@ -2409,9 +2409,8 @@ end
 
 	my $res = do {
 	    given ($_) {
-		when ('x') { $letter }
-		when ('y') { goto leavegiven }
-		default    { $letter }
+		whereso ('x') { $letter }
+		whereso ('y') { goto leavegiven }
 		leavegiven:  $letter
 	    }
 	};
@@ -2430,14 +2429,6 @@ end
     ok(!tainted "", "tainting not broken yet");
     index(undef, C);
     ok(!tainted "", "tainting still works after index() of the constant");
-}
-
-# Tainted values with smartmatch
-# [perl #93590] S_do_smartmatch stealing its own string buffers
-{
-no warnings 'experimental::smartmatch';
-ok "M$TAINT" ~~ ['m', 'M'], '$tainted ~~ ["whatever", "match"]';
-ok !("M$TAINT" ~~ ['m', undef]), '$tainted ~~ ["whatever", undef]';
 }
 
 # Tainted values and ref()
@@ -2862,6 +2853,15 @@ is_tainted("$ovtaint", "overload preserves taint");
     is($s, 'hi' x 4,   "$desc: s value");
     is($res, 4,        "$desc: res value");
     is($one, 'd',      "$desc: \$1 value");
+}
+
+# RT #132385
+# It was trying to taint a boolean return from s/// (e.g. PL_sv_yes)
+# and was thus crashing with 'Modification of a read-only value'.
+
+{
+    my $s = "abcd" . $TAINT;
+    ok(!!($s =~ s/a/x/g), "RT #132385");
 }
 
 # This may bomb out with the alarm signal so keep it last

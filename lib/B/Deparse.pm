@@ -19,6 +19,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
 	 OPpSORT_REVERSE OPpMULTIDEREF_EXISTS OPpMULTIDEREF_DELETE
          OPpSPLIT_ASSIGN OPpSPLIT_LEX
          OPpPADHV_ISKEYS OPpRV2HV_ISKEYS
+         OPpCONCAT_NESTED
          OPpMULTICONCAT_APPEND OPpMULTICONCAT_STRINGIFY OPpMULTICONCAT_FAKE
          OPpTRUEBOOL OPpINDEX_BOOLNEG
 	 SVf_IOK SVf_NOK SVf_ROK SVf_POK SVpad_OUR SVf_FAKE SVs_RMG SVs_SMG
@@ -51,7 +52,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
         MDEREF_SHIFT
     );
 
-$VERSION = '1.45';
+$VERSION = '1.46';
 use strict;
 our $AUTOLOAD;
 use warnings ();
@@ -655,7 +656,8 @@ sub stash_subs {
 	if ($seen ||= {})->{
 	    $INC{"overload.pm"} ? overload::StrVal($stash) : $stash
 	   }++;
-    my %stash = svref_2object($stash)->ARRAY;
+    my $stashobj = svref_2object($stash);
+    my %stash = $stashobj->ARRAY;
     while (my ($key, $val) = each %stash) {
 	my $flags = $val->FLAGS;
 	if ($flags & SVf_ROK) {
@@ -696,7 +698,20 @@ sub stash_subs {
 	} elsif (class($val) eq "GV") {
 	    if (class(my $cv = $val->CV) ne "SPECIAL") {
 		next if $self->{'subs_done'}{$$val}++;
-		next if $$val != ${$cv->GV};   # Ignore imposters
+
+                # Ignore imposters (aliases etc)
+                my $name = $cv->NAME_HEK;
+                if(defined $name) {
+                    # avoid using $cv->GV here because if the $val GV is
+                    # an alias, CvGV() could upgrade the real stash entry
+                    # from an RV to a GV
+                    next unless $name eq $key;
+                    next unless $$stashobj == ${$cv->STASH};
+                }
+                else {
+                   next if $$val != ${$cv->GV};
+                }
+
 		$self->todo($cv, 0);
 	    }
 	    if (class(my $cv = $val->FORM) ne "SPECIAL") {
@@ -2130,12 +2145,18 @@ sub pp_nextstate {
 
 sub declare_warnings {
     my ($self, $from, $to) = @_;
-    if (($to & WARN_MASK) eq (warnings::bits("all") & WARN_MASK)) {
-	return $self->keyword("use") . " warnings;\n";
+    $from //= '';
+    my $all = (warnings::bits("all") & WARN_MASK);
+    unless ((($from & WARN_MASK) & ~$all) =~ /[^\0]/) {
+        # no FATAL bits need turning off
+        if (   ($to & WARN_MASK) eq $all) {
+            return $self->keyword("use") . " warnings;\n";
+        }
+        elsif (($to & WARN_MASK) eq ("\0"x length($to) & WARN_MASK)) {
+            return $self->keyword("no") . " warnings;\n";
+        }
     }
-    elsif (($to & WARN_MASK) eq ("\0"x length($to) & WARN_MASK)) {
-	return $self->keyword("no") . " warnings;\n";
-    }
+
     return "BEGIN {\${^WARNING_BITS} = \""
            . join("", map { sprintf("\\x%02x", ord $_) } split "", $to)
            . "\"}\n\cK";
@@ -2246,9 +2267,8 @@ my %feature_keywords = (
     state   => 'state',
     say     => 'say',
     given   => 'switch',
-    when    => 'switch',
-    default => 'switch',
-    break   => 'switch',
+    whereis => 'switch',
+    whereso => 'switch',
     evalbytes=>'evalbytes',
     __SUB__ => '__SUB__',
    fc       => 'fc',
@@ -2540,32 +2560,30 @@ sub pp_ggrgid { unop(@_, "getgrgid") }
 sub pp_lock { unop(@_, "lock") }
 
 sub pp_continue { unop(@_, "continue"); }
-sub pp_break { unop(@_, "break"); }
 
-sub givwhen {
-    my $self = shift;
-    my($op, $cx, $givwhen) = @_;
-
-    my $enterop = $op->first;
-    my ($head, $block);
-    if ($enterop->flags & OPf_SPECIAL) {
-	$head = $self->keyword("default");
-	$block = $self->deparse($enterop->first, 0);
-    }
-    else {
-	my $cond = $enterop->first;
-	my $cond_str = $self->deparse($cond, 1);
-	$head = "$givwhen ($cond_str)";
-	$block = $self->deparse($cond->sibling, 0);
-    }
-
-    return "$head {\n".
-	"\t$block\n".
-	"\b}\cK";
+sub _op_is_defsv {
+    my($self, $op) = @_;
+    $op->name eq "null" && !null($op->first) && null($op->first->sibling)
+	and $op = $op->first;
+    $op->name eq "gvsv" && $self->gv_name($self->gv_or_padgv($op)) eq "_";
 }
 
-sub pp_leavegiven { givwhen(@_, $_[0]->keyword("given")); }
-sub pp_leavewhen  { givwhen(@_, $_[0]->keyword("when")); }
+sub pp_leavewhereso {
+    my($self, $op, $cx) = @_;
+    my $enterop = $op->first;
+    my $cond = $enterop->first;
+    my $block = $cond->sibling;
+    my $keyword = "whereso";
+    if ($cond->name eq "smartmatch" && $self->{expand} < 2 &&
+		$self->_op_is_defsv($cond->first)) {
+	$cond = $cond->last;
+	$keyword = "whereis";
+    }
+    my $cond_str = $self->deparse($cond, 1);
+    $keyword = $self->keyword($keyword);
+    $block = $self->deparse($block, 0);
+    return "$keyword ($cond_str) {\n\t$block\n\b}\cK";
+}
 
 sub pp_exists {
     my $self = shift;
@@ -2950,7 +2968,7 @@ sub binop {
     my $leftop = $left;
     $left = $self->deparse_binop_left($op, $left, $prec);
     $left = "($left)" if $flags & LIST_CONTEXT
-		     and    $left !~ /^(my|our|local|)[\@\(]/
+		     and    $left !~ /^(my|our|local|state|)\s*[\@%\(]/
 			 || do {
 				# Parenthesize if the left argument is a
 				# lone repeat op.
@@ -3001,6 +3019,7 @@ sub pp_i_ge { binop(@_, ">=", 15) }
 sub pp_i_le { binop(@_, "<=", 15) }
 sub pp_i_ncmp { maybe_targmy(@_, \&binop, "<=>", 14) }
 
+sub pp_smartmatch { binop(@_, "~~", 14) }
 sub pp_seq { binop(@_, "eq", 14) }
 sub pp_sne { binop(@_, "ne", 14) }
 sub pp_slt { binop(@_, "lt", 15) }
@@ -3011,16 +3030,6 @@ sub pp_scmp { maybe_targmy(@_, \&binop, "cmp", 14) }
 
 sub pp_sassign { binop(@_, "=", 7, SWAP_CHILDREN) }
 sub pp_aassign { binop(@_, "=", 7, SWAP_CHILDREN | LIST_CONTEXT) }
-
-sub pp_smartmatch {
-    my ($self, $op, $cx) = @_;
-    if (($op->flags & OPf_SPECIAL) && $self->{expand} < 2) {
-	return $self->deparse($op->last, $cx);
-    }
-    else {
-	binop(@_, "~~", 14);
-    }
-}
 
 # '.' is special because concats-of-concats are optimized to save copying
 # by making all but the first concat stacked. The effect is as if the
@@ -3033,7 +3042,8 @@ sub real_concat {
     my $right = $op->last;
     my $eq = "";
     my $prec = 18;
-    if ($op->flags & OPf_STACKED and $op->first->name ne "concat") {
+    if (($op->flags & OPf_STACKED) and !($op->private & OPpCONCAT_NESTED)) {
+        # '.=' rather than optimised '.'
 	$eq = "=";
 	$prec = 7;
     }
@@ -3486,8 +3496,8 @@ BEGIN {
 }
 
 
-# Look for a my attribute declaration in a list or ex-list. Returns undef
-# if not found, 'my($x, @a) :Foo(bar)' etc otherwise.
+# Look for a my/state attribute declaration in a list or ex-list.
+# Returns undef if not found, 'my($x, @a) :Foo(bar)' etc otherwise.
 #
 # There are three basic tree structs that are expected:
 #
@@ -3532,7 +3542,7 @@ BEGIN {
 #           <$> const[PV "foo"] sM ->a
 #           <.> method_named[PV "import"] ->b
 
-sub maybe_my_attr {
+sub maybe_var_attr {
     my ($self, $op, $cx) = @_;
 
     my $kid = $op->first->sibling; # skip pushmark
@@ -3545,13 +3555,13 @@ sub maybe_my_attr {
     # @padops and @entersubops. Return if anything else seen.
     # Also determine what class (if any) all the pad vars belong to
     my $class;
+    my $decl; # 'my' or 'state'
     my (@padops, @entersubops);
     for ($lop = $kid; !null($lop); $lop = $lop->sibling) {
 	my $lopname = $lop->name;
 	my $loppriv = $lop->private;
         if ($lopname =~ /^pad[sah]v$/) {
             return unless $loppriv & OPpLVAL_INTRO;
-            return if     $loppriv & OPpPAD_STATE;
 
             my $padname = $self->padname_sv($lop->targ);
             my $thisclass = ($padname->FLAGS & SVpad_TYPED)
@@ -3560,6 +3570,14 @@ sub maybe_my_attr {
             # all pad vars must be in the same class
             $class //= $thisclass;
             return unless $thisclass eq $class;
+
+            # all pad vars must be the same sort of declaration
+            # (all my, all state, etc)
+            my $this = ($loppriv & OPpPAD_STATE) ? 'state' : 'my';
+            if (defined $decl) {
+                return unless $this eq $decl;
+            }
+            $decl = $this;
 
             push @padops, $lop;
         }
@@ -3625,7 +3643,7 @@ sub maybe_my_attr {
         return if $$kid;
     }
 
-    my $res = 'my';
+    my $res = $decl;
     $res .= " $class " if $class ne 'main';
     $res .=
             (@varnames > 1)
@@ -3642,7 +3660,7 @@ sub pp_list {
 
     {
         # might be my ($s,@a,%h) :Foo(bar);
-        my $my_attr = maybe_my_attr($self, $op, $cx);
+        my $my_attr = maybe_var_attr($self, $op, $cx);
         return $my_attr if defined $my_attr;
     }
 
@@ -3723,6 +3741,10 @@ sub pp_list {
 	push @exprs, $expr;
     }
     if ($local) {
+        if (@exprs == 1 && ($local eq 'state' || $local eq 'CORE::state')) {
+            # 'state @a = ...' is legal, while 'state(@a) = ...' currently isn't
+            return "$local $exprs[0]";
+        }
 	return "$local(" . join(", ", @exprs) . ")";
     } else {
 	return $self->maybe_parens( join(", ", @exprs), $cx, 6);	
@@ -3812,6 +3834,13 @@ sub loop_common {
 	    $bare = 1;
 	}
 	$body = $kid;
+    } elsif ($enter->name eq "entergiven") { # given
+	my $given = $self->keyword("given");
+	my $enterop = $op->first;
+	my $topic = $enterop->first;
+	my $topic_str = $self->deparse($topic, 1);
+	my $block = $self->deparse($topic->sibling, 0);
+	return "$given ($topic_str) {\n\t$block\n\b}\cK";
     } elsif ($enter->name eq "enteriter") { # foreach
 	my $ary = $enter->first->sibling; # first was pushmark
 	my $var = $ary->sibling;
@@ -3942,7 +3971,7 @@ sub pp_null {
 
     # might be 'my $s :Foo(bar);'
     if ($op->targ == OP_LIST) {
-        my $my_attr = maybe_my_attr($self, $op, $cx);
+        my $my_attr = maybe_var_attr($self, $op, $cx);
         return $my_attr if defined $my_attr;
     }
 
@@ -4023,15 +4052,29 @@ sub pp_padsv {
 
 sub pp_padav { pp_padsv(@_) }
 
+# prepend 'keys' where its been optimised away, with suitable handling
+# of CORE:: and parens
+
+sub add_keys_keyword {
+    my ($self, $str, $cx) = @_;
+    $str = $self->maybe_parens($str, $cx, 16);
+    # 'keys %h' versus 'keys(%h)'
+    $str = " $str" unless $str =~ /^\(/;
+    return $self->keyword("keys") . $str;
+}
+
 sub pp_padhv {
-    my $op = $_[1];
-    my $keys = '';
+    my ($self, $op, $cx) = @_;
+    my $str =  pp_padsv(@_);
     # with OPpPADHV_ISKEYS the keys op is optimised away, except
     # in scalar context the old op is kept (but not executed) so its targ
     # can be used.
-    $keys = 'keys ' if (     ($op->private & OPpPADHV_ISKEYS)
-                            && !(($op->flags & OPf_WANT) == OPf_WANT_SCALAR));
-    $keys . pp_padsv(@_);
+    if (     ($op->private & OPpPADHV_ISKEYS)
+        && !(($op->flags & OPf_WANT) == OPf_WANT_SCALAR))
+    {
+        $str = $self->add_keys_keyword($str, $cx);
+    }
+    $str;
 }
 
 sub gv_or_padgv {
@@ -4119,9 +4162,12 @@ sub pp_rv2sv { maybe_local(@_, rv2x(@_, "\$")) }
 sub pp_rv2gv { maybe_local(@_, rv2x(@_, "*")) }
 
 sub pp_rv2hv {
-    my $op = $_[1];
-    (($op->private & OPpRV2HV_ISKEYS) ? 'keys ' : '')
-        . maybe_local(@_, rv2x(@_, "%"))
+    my ($self, $op, $cx) = @_;
+    my $str = rv2x(@_, "%");
+    if ($op->private & OPpRV2HV_ISKEYS) {
+        $str = $self->add_keys_keyword($str, $cx);
+    }
+    return maybe_local(@_, $str);
 }
 
 # skip rv2av
@@ -4372,8 +4418,12 @@ sub do_multiconcat {
         # "foo=$foo bar=$bar "
         my $not_first;
         while (@consts) {
-            $rhs = dq_disambiguate($rhs, $self->dq(shift(@kids), 18))
-                if $not_first;
+            if ($not_first) {
+                my $s = $self->dq(shift(@kids), 18);
+                # don't deparse "a${$}b" as "a$$b"
+                $s = '${$}' if $s eq '$$';
+                $rhs = dq_disambiguate($rhs, $s);
+            }
             $not_first = 1;
             my $c = shift @consts;
             if (defined $c) {

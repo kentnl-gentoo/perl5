@@ -135,7 +135,7 @@ my $map_directory = 'To';        # Where map files go.
 # each one of the tens of thousands individually.
 #
 # In a match table, the value of a range is irrelevant (and hence the type as
-# well, which will always be 0), and arbitrarily set to the null string.
+# well, which will always be 0), and arbitrarily set to the empty string.
 # Using the example above, there would be two match tables for those two
 # entries, one named Upper would contain the 0x41..0x5A range, and the other
 # named Lower would contain 0x61..0x7A.
@@ -1143,8 +1143,9 @@ my $MAX_UNICODE_CODEPOINTS = $MAX_UNICODE_CODEPOINT + 1;
 # We work with above-Unicode code points, up to IV_MAX, but we may want to use
 # sentinels above that number.  Therefore for internal use, we use a much
 # smaller number, translating it to IV_MAX only for output.  The exact number
-# is immaterial (all Unicode code points are treated exactly the same), but
-# the algorithm requires it to be at least 2 * $MAX_UNICODE_CODEPOINTS + 1;
+# is immaterial (all above-Unicode code points are treated exactly the same),
+# but the algorithm requires it to be at least
+# 2 * $MAX_UNICODE_CODEPOINTS + 1
 my $MAX_WORKING_CODEPOINTS= $MAX_UNICODE_CODEPOINT * 8;
 my $MAX_WORKING_CODEPOINT = $MAX_WORKING_CODEPOINTS - 1;
 my $MAX_WORKING_CODEPOINT_STRING = sprintf("%X", $MAX_WORKING_CODEPOINT);
@@ -1453,6 +1454,7 @@ my $Assigned;   # All assigned characters in this Unicode release
 my $DI;         # Default_Ignorable_Code_Point property
 my $NChar;      # Noncharacter_Code_Point property
 my $script;
+my $scx;        # Script_Extensions property
 
 # Are there conflicting names because of beginning with 'In_', or 'Is_'
 my $has_In_conflicts = 0;
@@ -7808,6 +7810,12 @@ use parent '-norequire', '_Base_Table';
 #    version.  But manual intervention to decide what the actual behavior
 #    should be may be required should this happen.  The introductory comments
 #    have more to say about this.
+#
+# 4) Definition.  This is a string for human consumption that specifies the
+#    code points that this table matches.  This is used only for the generated
+#    pod file.  It may be specified explicitly, or automatically computed.
+#    Only the first portion of complicated definitions is computed and
+#    displayed.
 
 sub standardize { return main::standardize($_[0]); }
 sub trace { return main::trace(@_); }
@@ -7852,6 +7860,11 @@ sub trace { return main::trace(@_); }
     # none.
     main::set_access('complement', \%complement, 'r');
 
+    my %definition;
+    # Human readable string of the first few ranges of code points matched by
+    # this table
+    main::set_access('definition', \%definition, 'r', 's');
+
     sub new {
         my $class = shift;
 
@@ -7868,6 +7881,7 @@ sub trace { return main::trace(@_); }
         my $initialize = delete $args{'Initialize'};
         my $matches_all = delete $args{'Matches_All'} || 0;
         my $format = delete $args{'Format'};
+        my $definition = delete $args{'Definition'} // "";
         # Rest of parameters passed on.
 
         my $range_list = Range_List->new(Initialize => $initialize,
@@ -7902,6 +7916,7 @@ sub trace { return main::trace(@_); }
         $leader{$addr} = $self;
         $parent{$addr} = $self;
         $complement{$addr} = 0;
+        $definition{$addr} = $definition;
 
         if (defined $format && $format ne $EMPTY_FORMAT) {
             Carp::my_carp_bug("'Format' must be '$EMPTY_FORMAT' in a match table instead of '$format'.  Using '$EMPTY_FORMAT'");
@@ -8012,13 +8027,23 @@ sub trace { return main::trace(@_); }
         # complement's if it has one.
 
         my $self = shift;
-        my $complement;
-        if (($complement = $self->complement) != 0) {
-            return ~ $complement->_range_list;
+        my $complement = $self->complement;
+
+        # In order to avoid re-complementing on each access, only do the
+        # complement the first time, and store the result in this table's
+        # range list to use henceforth.  However, this wouldn't work if the
+        # controlling (complement) table changed after we do this, so lock it.
+        # Currently, the value of the complement isn't needed until after it
+        # is fully constructed, so this works.  If this were to change, the
+        # each_range iteration functionality would no longer work on this
+        # complement.
+        if ($complement != 0 && $self->SUPER::_range_list->count == 0) {
+            $self->_set_range_list($self->SUPER::_range_list
+                                + ~ $complement->_range_list);
+            $complement->lock;
         }
-        else {
-            return $self->SUPER::_range_list;
-        }
+
+        return $self->SUPER::_range_list;
     }
 
     sub add_alias {
@@ -8056,7 +8081,7 @@ sub trace { return main::trace(@_); }
         # disambiguate with).
         if (defined $conflicting_object) {
             foreach my $alias ($self->aliases) {
-                if ($alias->name eq $conflicting_name) {
+                if (standardize($alias->name) eq standardize($conflicting_name)) {
 
                     # Here, there is an exact match.  This results in
                     # ambiguous comments, so disambiguate by changing the
@@ -8149,7 +8174,19 @@ sub trace { return main::trace(@_); }
                                                             # add_alias()
                                                             # instead for same
                                                             # property
-                     && ! $other->perl_extension)
+                     && ! $other->perl_extension
+
+                         # We allow the sc and scx properties to be marked as
+                         # related.  They are in fact related, and this allows
+                         # the pod to show that better.  This test isn't valid
+                         # if this is an early Unicode release without the scx
+                         # property (having that also implies the sc property
+                         # exists, so don't have to test for no 'sc')
+                     && (   ! defined $scx
+                         && ! (   (   $self->property == $script
+                                   || $self->property == $scx)
+                               && (   $self->property == $script
+                                   || $self->property == $scx))))
             {
                 Carp::my_carp_bug("set_equivalent_to should have 'Related => 0 for equivalencing two Unicode properties.  Assuming $self is not related to $other");
                 $related = 0;
@@ -8270,6 +8307,235 @@ sub trace { return main::trace(@_); }
             $child->set_fate($fate, $reason);
         }
         return;
+    }
+
+    sub calculate_table_definition
+    {
+        # Returns a human-readable string showing some or all of the code
+        # points matched by this table.  The string will include a
+        # bracketed-character class for all characters matched in the 00-FF
+        # range, and the first few ranges matched beyond that.
+        my $max_ranges = 6;
+
+        my $self = shift;
+        my $definition = $self->definition || "";
+
+        # Skip this if already have a definition.
+        return $definition if $definition;
+
+        my $lows_string = "";   # The string representation of the 0-FF
+                                # characters
+        my $string_range = "";  # The string rep. of the above FF ranges
+        my $range_count = 0;    # How many ranges in $string_rage
+
+        my @lows_invlist;       # The inversion list of the 0-FF code points
+        my $first_non_control = ord(" ");   # Everything below this is a
+                                            # control, on ASCII or EBCDIC
+        my $max_table_code_point = $self->max;
+
+        # On ASCII platforms, the range 80-FF contains no printables.
+        my $highest_printable = ((main::NON_ASCII_PLATFORM) ? 255 : 126);
+
+
+        # Look through the first few ranges matched by this table.
+        $self->reset_each_range;    # Defensive programming
+        while (defined (my $range = $self->each_range())) {
+            my $start = $range->start;
+            my $end = $range->end;
+
+            # Accumulate an inversion list of the 00-FF code points
+            if ($start < 256 && ($start > 0 || $end < 256)) {
+                push @lows_invlist, $start;
+                push @lows_invlist, 1 + (($end < 256) ? $end : 255);
+
+                # Get next range if there are more ranges below 256
+                next if $end < 256 && $end < $max_table_code_point;
+
+                # If the range straddles the 255/256 boundary, we split it
+                # there.  We already added above the low portion to the
+                # inversion list
+                $start = 256 if $end > 256;
+            }
+
+            # Here, @lows_invlist contains the code points below 256, and
+            # there is no other range, or the current one starts at or above
+            # 256.  Generate the [char class] for the 0-255 ones.
+            while (@lows_invlist) {
+
+                # If this range (necessarily the first one, by the way) starts
+                # at 0 ...
+                if ($lows_invlist[0] == 0) {
+
+                    # If it ends within the block of controls, that means that
+                    # some controls are in it and some aren't.  Since Unicode
+                    # properties pretty much only know about a few of the
+                    # controls, like \n, \t, this means that its one of them
+                    # that isn't in the range.  Complement the inversion list
+                    # which will likely cause these to be output using their
+                    # mnemonics, hence being clearer.
+                    if ($lows_invlist[1] < $first_non_control) {
+                        $lows_string .= '^';
+                        shift @lows_invlist;
+                        push @lows_invlist, 256;
+                    }
+                    elsif ($lows_invlist[1] <= $highest_printable) {
+
+                        # Here, it extends into the printables block.  Split
+                        # into two ranges so that the controls are separate.
+                        $lows_string .= sprintf "\\x00-\\x%02x",
+                                                    $first_non_control - 1;
+                        $lows_invlist[0] = $first_non_control;
+                    }
+                }
+
+                # If the range completely contains the printables, don't
+                # individually spell out the printables.
+                if (    $lows_invlist[0] <= $first_non_control
+                    && $lows_invlist[1] > $highest_printable)
+                {
+                    $lows_string .= sprintf "\\x%02x-\\x%02x",
+                                        $lows_invlist[0], $lows_invlist[1] - 1;
+                    shift @lows_invlist;
+                    shift @lows_invlist;
+                    next;
+                }
+
+                # Here, the range may include some but not all printables.
+                # Look at each one individually
+                foreach my $ord (shift @lows_invlist .. shift(@lows_invlist) - 1) {
+                    my $char = chr $ord;
+
+                    # If there is already something in the list, an
+                    # alphanumeric char could be the next in sequence.  If so,
+                    # we start or extend a range.  That is, we could have so
+                    # far something like 'a-c', and the next char is a 'd', so
+                    # we change it to 'a-d'.  We use native_to_unicode()
+                    # because a-z on EBCDIC means 26 chars, and excludes the
+                    # gap ones.
+                    if ($lows_string ne "" && $char =~ /[[:alnum:]]/) {
+                        my $prev = substr($lows_string, -1);
+                        if (   $prev !~ /[[:alnum:]]/
+                            ||   utf8::native_to_unicode(ord $prev) + 1
+                              != utf8::native_to_unicode(ord $char))
+                        {
+                            # Not extending the range
+                            $lows_string .= $char;
+                        }
+                        elsif (   length $lows_string > 1
+                               && substr($lows_string, -2, 1) eq '-')
+                        {
+                            # We had a sequence like '-c' and the current
+                            # character is 'd'.  Extend the range.
+                            substr($lows_string, -1, 1) = $char;
+                        }
+                        else {
+                            # We had something like 'd' and this is 'e'.
+                            # Start a range.
+                            $lows_string .= "-$char";
+                        }
+                    }
+                    elsif ($char =~ /[[:graph:]]/) {
+
+                        # We output a graphic char as-is, preceded by a
+                        # backslash if it is a metacharacter
+                        $lows_string .= '\\'
+                                if $char =~ /[\\\^\$\@\%\|()\[\]\{\}\-\/"']/;
+                        $lows_string .= $char;
+                    } # Otherwise use mnemonic for any that have them
+                    elsif ($char =~ /[\a]/) {
+                        $lows_string .= '\a';
+                    }
+                    elsif ($char =~ /[\b]/) {
+                        $lows_string .= '\b';
+                    }
+                    elsif ($char eq "\e") {
+                        $lows_string .= '\e';
+                    }
+                    elsif ($char eq "\f") {
+                        $lows_string .= '\f';
+                    }
+                    elsif ($char eq "\cK") {
+                        $lows_string .= '\cK';
+                    }
+                    elsif ($char eq "\n") {
+                        $lows_string .= '\n';
+                    }
+                    elsif ($char eq "\r") {
+                        $lows_string .= '\r';
+                    }
+                    elsif ($char eq "\t") {
+                        $lows_string .= '\t';
+                    }
+                    else {
+
+                        # Here is a non-graphic without a mnemonic.  We use \x
+                        # notation.  But if the ordinal of this is one above
+                        # the previous, create or extend the range
+                        my $hex_representation = sprintf("%02x", ord $char);
+                        if (   length $lows_string >= 4
+                            && substr($lows_string, -4, 2) eq '\\x'
+                            && hex(substr($lows_string, -2)) + 1 == ord $char)
+                        {
+                            if (       length $lows_string >= 5
+                                &&     substr($lows_string, -5, 1) eq '-'
+                                && (   length $lows_string == 5
+                                    || substr($lows_string, -6, 1) ne '\\'))
+                            {
+                                substr($lows_string, -2) = $hex_representation;
+                            }
+                            else {
+                                $lows_string .= '-\\x' . $hex_representation;
+                            }
+                        }
+                        else {
+                            $lows_string .= '\\x' . $hex_representation;
+                        }
+                    }
+                }
+            }
+
+            # Done with assembling the string of all lows.  If there are only
+            # lows in the property, are completely done.
+            if ($max_table_code_point < 256) {
+                $self->reset_each_range;
+                last;
+            }
+
+            # Otherwise, quit if reached max number of non-lows ranges.  If
+            # there are lows, count them as one unit towards the maximum.
+            $range_count++;
+            if ($range_count > (($lows_string eq "") ? $max_ranges : $max_ranges - 1)) {
+                $string_range .= " ...";
+                $self->reset_each_range;
+                last;
+            }
+
+            # Otherwise add this range.
+            $string_range .= ", " if $string_range ne "";
+            if ($start == $end) {
+                $string_range .= sprintf("U+%04X", $start);
+            }
+            elsif ($end >= $MAX_WORKING_CODEPOINT)  {
+                $string_range .= sprintf("U+%04X..infinity", $start);
+            }
+            else  {
+                $string_range .= sprintf("U+%04X..%04X",
+                                        $start, $end);
+            }
+        }
+
+        # Done with all the ranges we're going to look at.  Assemble the
+        # definition from the lows + non-lows.
+
+        if ($lows_string ne "" || $string_range ne "") {
+            if ($lows_string ne "") {
+                $definition .= "[$lows_string]";
+                $definition .= ", " if $string_range;
+            }
+            $definition .= $string_range;
+        }
+
+        return $definition;
     }
 
     sub write {
@@ -9357,6 +9623,7 @@ sub trace { return main::trace(@_) if main::DEBUG && $to_trace }
                     containing_range
                     count
                     default_map
+                    definition
                     delete_range
                     description
                     each_range
@@ -13150,7 +13417,7 @@ sub setup_script_extensions {
     # The Script_Extensions property starts out with a clone of the Script
     # property.
 
-    my $scx = property_ref("Script_Extensions");
+    $scx = property_ref("Script_Extensions");
     $scx = Property->new("scx", Full_Name => "Script_Extensions")
                                                             if ! defined $scx;
     $scx->_set_format($STRING_WHITE_SPACE_LIST);
@@ -13745,7 +14012,6 @@ END
     # data is retained in the map table for reference, but the spurious match
     # tables are deleted.
 
-    my $scx = property_ref("Script_Extensions");
     if (defined $scx) {
         foreach my $table ($scx->tables) {
             next unless $table->name =~ /\s/;   # All the new and only the new
@@ -13757,6 +14023,21 @@ END
                 $script_table += $table;
             }
             $scx->delete_match_table($table);
+        }
+
+        # Mark the scx table as the parent of the corresponding sc table for
+        # those which are identical.  This causes the pod for the script table
+        # to refer to the corresponding scx one.
+        #
+        # This has to be in a separate loop from above, so as to wait until
+        # the tables are stabilized before checking for equivalency.
+        if (defined $pod_directory) {
+            foreach my $table ($scx->tables) {
+                my $plain_sc_equiv = $script->table($table->name);
+                if ($table->matches_identically_to($plain_sc_equiv)) {
+                    $plain_sc_equiv->set_equivalent_to($table, Related => 1);
+                }
+            }
         }
     }
 
@@ -14182,8 +14463,7 @@ sub compile_perl() {
     }
 
     my $Any = $perl->add_match_table('Any',
-                                     Description  => "All Unicode code points: [\\x{0000}-\\x{$MAX_UNICODE_CODEPOINT_STRING}]",
-                                     );
+                                    Description  => "All Unicode code points");
     $Any->add_range(0, $MAX_UNICODE_CODEPOINT);
     $Any->add_alias('Unicode');
 
@@ -14196,7 +14476,7 @@ sub compile_perl() {
             ->set_equivalent_to(property_ref('ccc')->table('Above'),
                                                                 Related => 1);
 
-    my $ASCII = $perl->add_match_table('ASCII', Description => '[[:ASCII:]]');
+    my $ASCII = $perl->add_match_table('ASCII');
     if (defined $block) {   # This is equivalent to the block if have it.
         my $Unicode_ASCII = $block->table('Basic_Latin');
         if (defined $Unicode_ASCII && ! $Unicode_ASCII->is_empty) {
@@ -14256,7 +14536,6 @@ sub compile_perl() {
         $Lower += $temp & $Assigned;
     }
     my $Posix_Lower = $perl->add_match_table("PosixLower",
-                            Description => "[a-z]",
                             Initialize => $Lower & $ASCII,
                             );
 
@@ -14274,7 +14553,6 @@ sub compile_perl() {
         $Upper->add_range(0x24B6, 0x24CF);  # Circled Latin upper case letters
     }
     my $Posix_Upper = $perl->add_match_table("PosixUpper",
-                            Description => "[A-Z]",
                             Initialize => $Upper & $ASCII,
                             );
 
@@ -14482,7 +14760,6 @@ sub compile_perl() {
         $Alpha->add_alias('Alphabetic');
     }
     my $Posix_Alpha = $perl->add_match_table("PosixAlpha",
-                            Description => "[A-Za-z]",
                             Initialize => $Alpha & $ASCII,
                             );
     $Posix_Upper->set_caseless_equivalent($Posix_Alpha);
@@ -14493,7 +14770,6 @@ sub compile_perl() {
                         Initialize => $Alpha + $gc->table('Decimal_Number'),
                         );
     $perl->add_match_table("PosixAlnum",
-                            Description => "[A-Za-z0-9]",
                             Initialize => $Alnum & $ASCII,
                             );
 
@@ -14520,7 +14796,7 @@ sub compile_perl() {
 
     # This is a Perl extension, so the name doesn't begin with Posix.
     my $PerlWord = $perl->add_match_table('PosixWord',
-                    Description => '\w, restricted to ASCII = [A-Za-z0-9_]',
+                    Description => '\w, restricted to ASCII',
                     Initialize => $Word & $ASCII,
                     );
     $PerlWord->add_alias('PerlWord');
@@ -14537,7 +14813,6 @@ sub compile_perl() {
                                 );
     $Blank->add_alias('HorizSpace');        # Another name for it.
     $perl->add_match_table("PosixBlank",
-                            Description => "\\t and ' '",
                             Initialize => $Blank & $ASCII,
                             );
 
@@ -14563,7 +14838,6 @@ sub compile_perl() {
     $Space->add_alias('Space') if $v_version lt v4.1.0;
 
     my $Posix_space = $perl->add_match_table("PosixSpace",
-                            Description => "\\t, \\n, \\cK, \\f, \\r, and ' '.  (\\cK is vertical tab)",
                             Initialize => $Space & $ASCII,
                             );
     $Posix_space->add_alias('PerlSpace'); # A pre-existing synonym
@@ -14572,7 +14846,12 @@ sub compile_perl() {
                                         Description => 'Control characters');
     $Cntrl->set_equivalent_to($gc->table('Cc'), Related => 1);
     $perl->add_match_table("PosixCntrl",
-                            Description => "ASCII control characters: NUL, SOH, STX, ETX, EOT, ENQ, ACK, BEL, BS, HT, LF, VT, FF, CR, SO, SI, DLE, DC1, DC2, DC3, DC4, NAK, SYN, ETB, CAN, EOM, SUB, ESC, FS, GS, RS, US, and DEL",
+                            Description => "ASCII control characters",
+                            Definition =>  "ACK, BEL, BS, CAN, CR, DC1, DC2,"
+                                         . " DC3, DC4, DEL, DLE, ENQ, EOM,"
+                                         . " EOT, ESC, ETB, ETX, FF, FS, GS,"
+                                         . " HT, LF, NAK, NUL, RS, SI, SO,"
+                                         . " SOH, STX, SUB, SYN, US, VT",
                             Initialize => $Cntrl & $ASCII,
                             );
 
@@ -14596,8 +14875,6 @@ sub compile_perl() {
                         Initialize => ~ ($Space + $controls),
                         );
     $perl->add_match_table("PosixGraph",
-                            Description =>
-                                '[-!"#$%&\'()*+,./:;<=>?@[\\\]^_`{|}~0-9A-Za-z]',
                             Initialize => $Graph & $ASCII,
                             );
 
@@ -14606,8 +14883,6 @@ sub compile_perl() {
                         Initialize => $Blank + $Graph - $gc->table('Control'),
                         );
     $perl->add_match_table("PosixPrint",
-                            Description =>
-                              '[- 0-9A-Za-z!"#$%&\'()*+,./:;<=>?@[\\\]^_`{|}~]',
                             Initialize => $print & $ASCII,
                             );
 
@@ -14622,7 +14897,6 @@ sub compile_perl() {
                                 Perl_Extension => 1
         );
     $perl->add_match_table('PosixPunct', Perl_Extension => 1,
-        Description => '[-!"#$%&\'()*+,./:;<=>?@[\\\]^_`{|}~]',
         Initialize => $ASCII & $XPosixPunct,
         );
 
@@ -14630,7 +14904,6 @@ sub compile_perl() {
                             Description => '[0-9] + all other decimal digits');
     $Digit->set_equivalent_to($gc->table('Decimal_Number'), Related => 1);
     my $PosixDigit = $perl->add_match_table("PosixDigit",
-                                            Description => '[0-9]',
                                             Initialize => $Digit & $ASCII,
                                             );
 
@@ -14645,7 +14918,6 @@ sub compile_perl() {
                               ord('A') .. ord('F'),
                               ord('a') .. ord('f'),
                               0xFF10..0xFF19, 0xFF21..0xFF26, 0xFF41..0xFF46]);
-        $Xdigit->add_description('[0-9A-Fa-f] and corresponding fullwidth versions, like U+FF10: FULLWIDTH DIGIT ZERO');
     }
 
     # AHex was not present in early releases
@@ -14659,7 +14931,6 @@ sub compile_perl() {
         $PosixXDigit->add_alias('AHex');
         $PosixXDigit->add_alias('Ascii_Hex_Digit');
     }
-    $PosixXDigit->add_description('[0-9A-Fa-f]');
 
     my $any_folds = $perl->add_match_table("_Perl_Any_Folds",
                     Description => "Code points that particpate in some fold",
@@ -15379,7 +15650,6 @@ sub add_perl_synonyms() {
 
     # If the version of Unicode includes the Script Extensions (preferably),
     # or Script property, add its tables
-    my $scx = property_ref("Script_Extensions");
     if (defined $scx) {
         push @tables, $scx->tables;
     }
@@ -16044,7 +16314,18 @@ sub make_re_pod_entries($) {
         $unicode_count = $count;
         $non_unicode_string = "";
     }
+
     my $string_count = clarify_number($unicode_count) . $non_unicode_string;
+
+    my $definition = $input_table->calculate_table_definition;
+    if ($definition) {
+
+        # Save the definition for later use.
+        $input_table->set_definition($definition);
+
+        $definition = ": $definition";
+    }
+
     my $status = $input_table->status;
     my $status_info = $input_table->status_info;
     my $caseless_equivalent = $input_table->caseless_equivalent;
@@ -16339,7 +16620,10 @@ sub make_re_pod_entries($) {
             if ($table_property != $perl && $table->perl_extension) {
                 push @info, '(Perl extension)';
             }
-            push @info, "($string_count)";
+            my $definition = $table->definition // "";
+            $definition = "" if $entry_for_first_alias;
+            $definition = ": $definition" if $definition;
+            push @info, "($string_count$definition)";
 
             # Now, we have both the entry and info so add them to the
             # list of all the properties.
@@ -16382,38 +16666,49 @@ sub make_ucd_table_pod_entries {
                    : $table->parent->property;
 
     my $perl_extension = $table->perl_extension;
+    my $is_perl_extension_match_table_but_not_dollar_perl
+                                                        = $property != $perl
+                                                       && $perl_extension
+                                                       && $property != $table;
 
     # Get the more official name for for perl extensions that aren't
     # stand-alone properties
-    if ($perl_extension && $property != $table) {
-        if ($property == $perl ||$property->type == $BINARY) {
-            $meaning = $table->complete_name;
+    if ($is_perl_extension_match_table_but_not_dollar_perl) {
+        if ($property->type == $BINARY) {
+            $meaning = $property->full_name;
         }
         else {
-            $meaning = $property->full_name . "=$full_name";
+            $meaning = $table->parent->complete_name;
         }
     }
 
     # There are three types of info column.  One for the short name, one for
     # the full name, and one for everything else.  They mostly are the same,
     # so initialize in the same loop.
+
     foreach my $info_ref (\$full_info, \$short_info, \$other_info) {
-        if ($perl_extension && $property != $table) {
+        if ($info_ref != \$full_info) {
+
+            # The non-full name columns include the full name
+            $$info_ref .= $full_name;
+        }
+
+
+        if ($is_perl_extension_match_table_but_not_dollar_perl) {
 
             # Add the synonymous name for the non-full name entries; and to
             # the full-name entry if it adds extra information
-            if ($info_ref == \$other_info
-                || ($info_ref == \$short_info
-                    && $standard_short_name ne $standard_full_name)
-                || standardize($meaning) ne $standard_full_name
-            ) {
-                $$info_ref .= "$meaning.";
+            if (   standardize($meaning) ne $standard_full_name
+                || $info_ref == \$other_info
+                || $info_ref == \$short_info)
+            {
+                my $parenthesized =  $info_ref != \$full_info;
+                $$info_ref .= " " if $$info_ref && $parenthesized;
+                $$info_ref .= "(=" if $parenthesized;
+                $$info_ref .= "$meaning";
+                $$info_ref .= ")" if $parenthesized;
+                $$info_ref .= ".";
             }
-        }
-        elsif ($info_ref != \$full_info) {
-
-            # Otherwise, the non-full name columns include the full name
-            $$info_ref .= $full_name;
         }
 
         # And the full-name entry includes the short name, if shorter
@@ -16432,8 +16727,23 @@ sub make_ucd_table_pod_entries {
         }
     }
 
+    my $definition;
+    my $definition_table;
+    my $type = $table->property->type;
+    if ($type == $BINARY || $type == $FORCED_BINARY) {
+        $definition_table = $table->property->table('Y');
+    }
+    elsif ($table->isa('Match_Table')) {
+        $definition_table = $table;
+    }
+
+    $definition = $definition_table->calculate_table_definition
+                                            if defined $definition_table
+                                                    && $definition_table != 0;
+
     # Add any extra annotations to the full name entry
     foreach my $more_info ($table->description,
+                            $definition,
                             $table->note,
                             $table->status_info)
     {
@@ -16571,27 +16881,69 @@ sub pod_alphanumeric_sort {
         return -1
     }
 
-    # Determine if the two operands are numeric property values or not.
-    # A numeric property will look like xyz: 3.  But the number
-    # can begin with an optional minus sign, and may have a
-    # fraction or rational component, like xyz: 3/2.  If either
-    # isn't numeric, use alphabetic sort.
-    my ($a_initial, $a_number) =
-        ($a =~ /^ ( [^:=]+ [:=] \s* ) (-? \d+ (?: [.\/] \d+)? )/ix);
-    return $a cmp $b unless defined $a_number;
-    my ($b_initial, $b_number) =
-        ($b =~ /^ ( [^:=]+ [:=] \s* ) (-? \d+ (?: [.\/] \d+)? )/ix);
-    return $a cmp $b unless defined $b_number;
+    # Determine if the two operands are compound or not, and if so if are
+    # "numeric" property values or not, like \p{Age: 3.0}.  But there are also
+    # things like \p{Canonical_Combining_Class: CCC133} and \p{Age: V10_0},
+    # all of which this considers numeric, and for sorting, looks just at the
+    # numeric parts.  It can also be a rational like \p{Numeric Value=-1/2}.
+    my $split_re = qr/
+        ^ ( [^:=]+ ) # $1 is undef if not a compound form, otherwise is the
+                     # property name
+        [:=] \s*     # The syntax for the compound form
+        (?:          # followed by ...
+            (        # $2 gets defined if what follows is a "numeric"
+                     # expression, which is ...
+              ( -? \d+ (?: [.\/] \d+)?  # An integer, float, or rational
+                                        # number, optionally signed
+               | [[:alpha:]]{2,} \d+ $ ) # or something like CCC131.  Either
+                                         # of these go into $3
+             | ( V \d+ _ \d+ )           # or a Unicode's Age property version
+                                         # number, into $4
+            )
+            | .* $    # If not "numeric", accept anything so that $1 gets
+                      # defined if it is any compound form
+        ) /ix;
+    my ($a_initial, $a_numeric, $a_number, $a_version) = ($a =~ $split_re);
+    my ($b_initial, $b_numeric, $b_number, $b_version) = ($b =~ $split_re);
 
-    # Here they are both numeric, but use alphabetic sort if the
-    # initial parts don't match
-    return $a cmp $b if $a_initial ne $b_initial;
+    # Sort alphabeticlly on the whole property name if either operand isn't
+    # compound, or they differ.
+    return $a cmp $b if   ! defined $a_initial
+                       || ! defined $b_initial
+                       || $a_initial ne $b_initial;
+
+    if (! defined $a_numeric) {
+
+        # If neither is numeric, use alpha sort
+        return $a cmp $b if ! defined $b_numeric;
+        return 1;  # Sort numeric ahead of alpha
+    }
+
+    # Here $a is numeric
+    return -1 if ! defined $b_numeric;  # Numeric sorts before alpha
+
+    # Here they are both numeric in the same property.
+    # Convert version numbers into regular numbers
+    if (defined $a_version) {
+        ($a_number = $a_version) =~ s/^V//i;
+        $a_number =~ s/_/./;
+    }
+    else {  # Otherwise get rid of the, e.g., CCC in CCC9 */
+        $a_number =~ s/ ^ [[:alpha:]]+ //x;
+    }
+    if (defined $b_version) {
+        ($b_number = $b_version) =~ s/^V//i;
+        $b_number =~ s/_/./;
+    }
+    else {
+        $b_number =~ s/ ^ [[:alpha:]]+ //x;
+    }
 
     # Convert rationals to floating for the comparison.
     $a_number = eval $a_number if $a_number =~ qr{/};
     $b_number = eval $b_number if $b_number =~ qr{/};
 
-    return $a_number <=> $b_number;
+    return $a_number <=> $b_number || $a cmp $b;
 }
 
 sub make_pod () {
@@ -16817,6 +17169,7 @@ END
     $ucd_pod =  format_pod_line($indent_info_column, 'NAME', '  INFO')
                 . "\n"
                 . $ucd_pod;
+    my $space_hex = sprintf("%02x", ord " ");
     local $" = "";
 
     # Everything is ready to assemble.
@@ -16877,14 +17230,16 @@ constructs, both single and compound forms.
 B<Compound forms> consist of two components, separated by an equals sign or a
 colon.  The first component is the property name, and the second component is
 the particular value of the property to match against, for example,
-C<\\p{Script: Greek}> and C<\\p{Script=Greek}> both mean to match characters
-whose Script property value is Greek.
+C<\\p{Script_Extensions: Greek}> and C<\\p{Script_Extensions=Greek}> both mean
+to match characters whose Script_Extensions property value is Greek.
+(C<Script_Extensions> is an improved version of the C<Script> property.)
 
 B<Single forms>, like C<\\p{Greek}>, are mostly Perl-defined shortcuts for
 their equivalent compound forms.  The table shows these equivalences.  (In our
-example, C<\\p{Greek}> is a just a shortcut for C<\\p{Script=Greek}>.)
-There are also a few Perl-defined single forms that are not shortcuts for a
-compound form.  One such is C<\\p{Word}>.  These are also listed in the table.
+example, C<\\p{Greek}> is a just a shortcut for
+C<\\p{Script_Extensions=Greek}>).  There are also a few Perl-defined single
+forms that are not shortcuts for a compound form.  One such is C<\\p{Word}>.
+These are also listed in the table.
 
 In parsing these constructs, Perl always ignores Upper/lower case differences
 everywhere within the {braces}.  Thus C<\\p{Greek}> means the same thing as
@@ -17008,8 +17363,16 @@ All single forms are Perl extensions; a few compound forms are as well, and
 are noted as such.
 
 Numbers in (parentheses) indicate the total number of Unicode code points
-matched by the property.  For emphasis, those properties that match no code
-points at all are listed as well in a separate section following the table.
+matched by the property.  For the entries that give the longest, most
+descriptive version of the property, the count is followed by a list of some
+of the code points matched by it.  The list includes all the matched
+characters in the 0-255 range, enclosed in the familiar [brackets] the same as
+a regular expression bracketed character class.  Following that, the next few
+higher matching ranges are also given.  To avoid visual ambiguity, the SPACE
+character is represented as C<\\x$space_hex>.
+
+For emphasis, those properties that match no code points at all are listed as
+well in a separate section following the table.
 
 Most properties match the same code points regardless of whether C<"/i">
 case-insensitive matching is specified or not.  But a few properties are
@@ -17114,7 +17477,11 @@ an alternative name, if any, plus possibly some annotations.  The alternative
 name is the property's full name, unless that would simply repeat the first
 column, in which case the second column indicates the property's short name
 (if different).  The annotations are given only in the entry for the full
-name.  If a property is obsolete, etc, the entry will be flagged with the same
+name.  The annotations for binary properties include a list of the first few
+ranges that the property matches.  To avoid any ambiguity, the SPACE character
+is represented as C<\\x$space_hex>.
+
+If a property is obsolete, etc, the entry will be flagged with the same
 characters used in the table in the L<section above|/Properties accessible
 through \\p{} and \\P{}>, like B<$DEPRECATED> or B<$STABILIZED>.
 
@@ -18068,18 +18435,19 @@ sub write_all_tables() {
                     make_re_pod_entries($table) if defined $pod_directory;
 
                     # See if the table matches identical code points with
-                    # something that has already been output.  In that case,
-                    # no need to have two files with the same code points in
-                    # them.  We use the table's hash() method to store these
-                    # in buckets, so that it is quite likely that if two
-                    # tables are in the same bucket they will be identical, so
-                    # don't have to compare tables frequently.  The tables
-                    # have to have the same status to share a file, so add
-                    # this to the bucket hash.  (The reason for this latter is
-                    # that Heavy.pl associates a status with a file.)
-                    # We don't check tables that are inverses of others, as it
-                    # would lead to some coding complications, and checking
-                    # all the regular ones should find everything.
+                    # something that has already been processed and is ready
+                    # for output.  In that case, no need to have two files
+                    # with the same code points in them.  We use the table's
+                    # hash() method to store these in buckets, so that it is
+                    # quite likely that if two tables are in the same bucket
+                    # they will be identical, so don't have to compare tables
+                    # frequently.  The tables have to have the same status to
+                    # share a file, so add this to the bucket hash.  (The
+                    # reason for this latter is that Heavy.pl associates a
+                    # status with a file.) We don't check tables that are
+                    # inverses of others, as it would lead to some coding
+                    # complications, and checking all the regular ones should
+                    # find everything.
                     if ($table->complement == 0) {
                         my $hash = $table->hash . ';' . $table->status;
 
@@ -18088,7 +18456,11 @@ sub write_all_tables() {
                         foreach my $comparison
                                             (@{$match_tables_to_write{$hash}})
                         {
-                            if ($table->matches_identically_to($comparison)) {
+                            # If the table doesn't point back to this one, we
+                            # see if it matches identically
+                            if (   $comparison->leader != $table
+                                && $table->matches_identically_to($comparison))
+                            {
                                 $table->set_equivalent_to($comparison,
                                                                 Related => 0);
                                 next TABLE;

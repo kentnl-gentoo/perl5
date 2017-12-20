@@ -1701,6 +1701,7 @@ S_ssc_and(pTHX_ const RExC_state_t *pRExC_state, regnode_ssc *ssc,
             regnode_charclass_posixl temp;
             int add = 1;    /* To calculate the index of the complement */
 
+            Zero(&temp, 1, regnode_charclass_posixl);
             ANYOF_POSIXL_ZERO(&temp);
             for (i = 0; i < ANYOF_MAX; i++) {
                 assert(i % 2 != 0
@@ -4142,7 +4143,7 @@ S_unwind_scan_frames(pTHX_ const void *p)
     } while (f);
 }
 
-
+/* the return from this sub is the minimum length that could possibly match */
 STATIC SSize_t
 S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
                         SSize_t *minlenp, SSize_t *deltap,
@@ -4178,6 +4179,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
     PERL_ARGS_ASSERT_STUDY_CHUNK;
     RExC_study_started= 1;
 
+    Zero(&data_fake, 1, scan_data_t);
 
     if ( depth == 0 ) {
         while (first_non_open && OP(first_non_open) == OPEN)
@@ -4285,6 +4287,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 
             /* we suppose the run is continuous, last=next...
              * NOTE we dont use the return here! */
+            /* DEFINEP study_chunk() recursion */
             (void)study_chunk(pRExC_state, &scan, &minlen,
                               &deltanext, next, &data_fake, stopparen,
                               recursed_depth, NULL, f, depth+1);
@@ -4352,6 +4355,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 			f |= SCF_WHILEM_VISITED_POS;
 
 		    /* we suppose the run is continuous, last=next...*/
+                    /* recurse study_chunk() for each BRANCH in an alternation */
 		    minnext = study_chunk(pRExC_state, &scan, minlenp,
                                       &deltanext, next, &data_fake, stopparen,
                                       recursed_depth, NULL, f,depth+1);
@@ -5088,6 +5092,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		    f &= ~SCF_WHILEM_VISITED_POS;
 
 		/* This will finish on WHILEM, setting scan, or on NULL: */
+                /* recurse study_chunk() on loop bodies */
 		minnext = study_chunk(pRExC_state, &scan, minlenp, &deltanext,
                                   last, data, stopparen, recursed_depth, NULL,
                                   (mincount == 0
@@ -5250,6 +5255,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 			}
 #endif
 			/* Optimize again: */
+                        /* recurse study_chunk() on optimised CURLYX => CURLYM */
 			study_chunk(pRExC_state, &nxt1, minlenp, &deltanext, nxt,
                                     NULL, stopparen, recursed_depth, NULL, 0,depth+1);
 		    }
@@ -5640,6 +5646,8 @@ Perl_re_printf( aTHX_  "LHS=%" UVuf " RHS=%" UVuf "\n",
                     f |= SCF_WHILEM_VISITED_POS;
                 next = regnext(scan);
                 nscan = NEXTOPER(NEXTOPER(scan));
+
+                /* recurse study_chunk() for lookahead body */
                 minnext = study_chunk(pRExC_state, &nscan, minlenp, &deltanext,
                                       last, &data_fake, stopparen,
                                       recursed_depth, NULL, f, depth+1);
@@ -5730,6 +5738,7 @@ Perl_re_printf( aTHX_  "LHS=%" UVuf " RHS=%" UVuf "\n",
                 next = regnext(scan);
                 nscan = NEXTOPER(NEXTOPER(scan));
 
+                /* positive lookahead study_chunk() recursion */
                 *minnextp = study_chunk(pRExC_state, &nscan, minnextp,
                                         &deltanext, last, &data_fake,
                                         stopparen, recursed_depth, NULL,
@@ -5891,6 +5900,7 @@ Perl_re_printf( aTHX_  "LHS=%" UVuf " RHS=%" UVuf "\n",
                         /* We go from the jump point to the branch that follows
                            it. Note this means we need the vestigal unused
                            branches even though they arent otherwise used. */
+                        /* optimise study_chunk() for TRIE */
                         minnext = study_chunk(pRExC_state, &scan, minlenp,
                             &deltanext, (regnode *)nextbranch, &data_fake,
                             stopparen, recursed_depth, NULL, f,depth+1);
@@ -5931,8 +5941,12 @@ Perl_re_printf( aTHX_  "LHS=%" UVuf " RHS=%" UVuf "\n",
                     data->cur_is_floating = 1; /* float */
             }
             min += min1;
-            if (delta != SSize_t_MAX)
-                delta += max1 - min1;
+            if (delta != SSize_t_MAX) {
+                if (SSize_t_MAX - (max1 - min1) >= delta)
+                    delta += max1 - min1;
+                else
+                    delta = SSize_t_MAX;
+            }
             if (flags & SCF_DO_STCLASS_OR) {
                 ssc_or(pRExC_state, data->start_class, (regnode_charclass *) &accum);
                 if (min1) {
@@ -7571,6 +7585,10 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 	data.last_closep = &last_close;
 
         DEBUG_RExC_seen();
+        /*
+         * MAIN ENTRY FOR study_chunk() FOR m/PATTERN/
+         * (NO top level branches)
+         */
 	minlen = study_chunk(pRExC_state, &first, &minlen, &fake,
                              scan + RExC_size, /* Up to end */
             &data, -1, 0, NULL,
@@ -7696,6 +7714,10 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 	data.last_closep = &last_close;
 
         DEBUG_RExC_seen();
+        /*
+         * MAIN ENTRY FOR study_chunk() FOR m/P1|P2|.../
+         * (patterns WITH top level branches)
+         */
 	minlen = study_chunk(pRExC_state,
             &scan, &minlen, &fake, scan + RExC_size, &data, -1, 0, NULL,
             SCF_DO_STCLASS_AND|SCF_WHILEM_VISITED_POS|(restudied
@@ -11314,7 +11336,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                 vFAIL("Unknown switch condition (?(...))");
 	    }
 	    case '[':           /* (?[ ... ]) */
-                return handle_regex_sets(pRExC_state, NULL, flagp, depth,
+                return handle_regex_sets(pRExC_state, NULL, flagp, depth+1,
                                          oregcomp_parse);
             case 0: /* A NUL */
 		RExC_parse--; /* for vFAIL to print correctly */
@@ -14897,6 +14919,8 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
 
     PERL_ARGS_ASSERT_HANDLE_REGEX_SETS;
 
+    DEBUG_PARSE("xcls");
+
     if (in_locale) {
         set_regex_charset(&RExC_flags, REGEX_UNICODE_CHARSET);
     }
@@ -14914,7 +14938,7 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
      * these things, we need to realize that something preceded by a backslash
      * is escaped, so we have to keep track of backslashes */
     if (SIZE_ONLY) {
-        UV depth = 0; /* how many nested (?[...]) constructs */
+        UV nest_depth = 0; /* how many nested (?[...]) constructs */
 
         while (RExC_parse < RExC_end) {
             SV* current = NULL;
@@ -14923,8 +14947,9 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                                     TRUE /* Force /x */ );
 
             switch (*RExC_parse) {
-                case '?':
-                    if (RExC_parse[1] == '[') depth++, RExC_parse++;
+                case '(':
+                    if (RExC_parse[1] == '?' && RExC_parse[2] == '[')
+                        nest_depth++, RExC_parse+=2;
                     /* FALLTHROUGH */
                 default:
                     break;
@@ -14981,9 +15006,9 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
                 }
 
                 case ']':
-                    if (depth--) break;
-                    RExC_parse++;
-                    if (*RExC_parse == ')') {
+                    if (RExC_parse[1] == ')') {
+                        RExC_parse++;
+                        if (nest_depth--) break;
                         node = reganode(pRExC_state, ANYOF, 0);
                         RExC_size += ANYOF_SKIP;
                         nextchar(pRExC_state);
@@ -14995,20 +15020,25 @@ S_handle_regex_sets(pTHX_ RExC_state_t *pRExC_state, SV** return_invlist,
 
                         return node;
                     }
-                    goto no_close;
+                    /* We output the messages even if warnings are off, because we'll fail
+                     * the very next thing, and these give a likely diagnosis for that */
+                    if (posix_warnings && av_tindex_skip_len_mg(posix_warnings) >= 0) {
+                        output_or_return_posix_warnings(pRExC_state, posix_warnings, NULL);
+                    }
+                    RExC_parse++;
+                    vFAIL("Unexpected ']' with no following ')' in (?[...");
             }
 
             RExC_parse += UTF ? UTF8SKIP(RExC_parse) : 1;
         }
 
-      no_close:
         /* We output the messages even if warnings are off, because we'll fail
          * the very next thing, and these give a likely diagnosis for that */
         if (posix_warnings && av_tindex_skip_len_mg(posix_warnings) >= 0) {
             output_or_return_posix_warnings(pRExC_state, posix_warnings, NULL);
         }
 
-        FAIL("Syntax error in (?[...])");
+        vFAIL("Syntax error in (?[...])");
     }
 
     /* Pass 2 only after this. */
@@ -15188,12 +15218,14 @@ redo_curchar:
                      * inversion list, and RExC_parse points to the trailing
                      * ']'; the next character should be the ')' */
                     RExC_parse++;
-                    assert(UCHARAT(RExC_parse) == ')');
+                    if (UCHARAT(RExC_parse) != ')')
+                        vFAIL("Expecting close paren for nested extended charclass");
 
                     /* Then the ')' matching the original '(' handled by this
                      * case: statement */
                     RExC_parse++;
-                    assert(UCHARAT(RExC_parse) == ')');
+                    if (UCHARAT(RExC_parse) != ')')
+                        vFAIL("Expecting close paren for wrapper for nested extended charclass");
 
                     RExC_parse++;
                     RExC_flags = save_flags;
@@ -16193,6 +16225,12 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                         do_posix_warnings ? &posix_warnings : NULL,
                         TRUE /* checking only */);
         }
+        else if (  strict && ! skip_white
+                 && (   _generic_isCC(value, _CC_VERTSPACE)
+                     || is_VERTWS_cp_high(value)))
+        {
+            vFAIL("Literal vertical space in [] is illegal except under /x");
+        }
         else if (value == '\\') {
             /* Is a backslash; get the code point of the char after it */
 
@@ -16973,7 +17011,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                                           " be some subset of \"0-9\","
                                           " \"A-Z\", or \"a-z\"");
                     }
-                    else if (prevvalue >= 0x660) { /* ARABIC_INDIC_DIGIT_ZERO */
+                    else if (prevvalue >= FIRST_NON_ASCII_DECIMAL_DIGIT) {
                         SSize_t index_start;
                         SSize_t index_final;
 
@@ -16981,8 +17019,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                          * can't do the same checks for above-ASCII ranges,
                          * except in the case of digit ones.  These should
                          * contain only digits from the same group of 10.  The
-                         * ASCII case is handled just above.  0x660 is the
-                         * first digit character beyond ASCII.  Hence here, the
+                         * ASCII case is handled just above.  Hence here, the
                          * range could be a range of digits.  First some
                          * unlikely special cases.  Grandfather in that a range
                          * ending in 19DA (NEW TAI LUE THAM DIGIT ONE) is bad
@@ -17689,6 +17726,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                 if (_invlist_len(only_non_utf8_list) != 0) {
                     ANYOF_FLAGS(ret) |= ANYOF_SHARED_d_MATCHES_ALL_NON_UTF8_NON_ASCII_non_d_WARN_SUPER;
                 }
+                SvREFCNT_dec_NN(only_non_utf8_list);
             }
             else {
                 /* Here there were no complemented posix classes.  That means
@@ -20304,9 +20342,9 @@ S_put_range(pTHX_ SV *sv, UV start, const UV end, const bool allow_literals)
 #else
         format = "\\x%02" UVXf "-\\x%02" UVXf;
 #endif
-        GCC_DIAG_IGNORE(-Wformat-nonliteral);
+        GCC_DIAG_IGNORE_STMT(-Wformat-nonliteral);
         Perl_sv_catpvf(aTHX_ sv, format, start, this_end);
-        GCC_DIAG_RESTORE;
+        GCC_DIAG_RESTORE_STMT;
         break;
     }
 }

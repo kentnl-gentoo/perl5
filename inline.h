@@ -244,17 +244,13 @@ S_sv_or_pv_pos_u2b(pTHX_ SV *sv, const char *pv, STRLEN pos, STRLEN *lenp)
 /* ------------------------------- handy.h ------------------------------- */
 
 /* saves machine code for a common noreturn idiom typically used in Newx*() */
-#ifdef GCC_DIAG_PRAGMA
-GCC_DIAG_IGNORE(-Wunused-function) /* Intentionally left semicolonless. */
-#endif
+GCC_DIAG_IGNORE_DECL(-Wunused-function);
 static void
 S_croak_memory_wrap(void)
 {
     Perl_croak_nocontext("%s",PL_memory_wrap);
 }
-#ifdef GCC_DIAG_PRAGMA
-GCC_DIAG_RESTORE /* Intentionally left semicolonless. */
-#endif
+GCC_DIAG_RESTORE_DECL;
 
 /* ------------------------------- utf8.h ------------------------------- */
 
@@ -370,33 +366,183 @@ UTF-8 invariant, this function does not change the contents of C<*ep>.
 
 =cut
 
-XXX On ASCII machines this could be sped up by doing word-at-a-time operations
-
 */
 
 PERL_STATIC_INLINE bool
-S_is_utf8_invariant_string_loc(const U8* const s, const STRLEN len, const U8 ** ep)
+S_is_utf8_invariant_string_loc(const U8* const s, STRLEN len, const U8 ** ep)
 {
-    const U8* const send = s + (len ? len : strlen((const char *)s));
+    const U8* send;
     const U8* x = s;
 
     PERL_ARGS_ASSERT_IS_UTF8_INVARIANT_STRING_LOC;
 
-    while (x < send) {
-	if (UTF8_IS_INVARIANT(*x)) {
+    if (len == 0) {
+        len = strlen((const char *)s);
+    }
+
+    send = s + len;
+
+#ifndef EBCDIC
+
+/* This looks like 0x010101... */
+#define PERL_COUNT_MULTIPLIER   (~ (UINTMAX_C(0)) / 0xFF)
+
+/* This looks like 0x808080... */
+#define PERL_VARIANTS_WORD_MASK (PERL_COUNT_MULTIPLIER * 0x80)
+#define PERL_WORDSIZE            sizeof(PERL_COUNT_MULTIPLIER)
+#define PERL_WORD_BOUNDARY_MASK (PERL_WORDSIZE - 1)
+
+/* Evaluates to 0 if 'x' is at a word boundary; otherwise evaluates to 1, by
+ * or'ing together the lowest bits of 'x'.  Hopefully the final term gets
+ * optimized out completely on a 32-bit system, and its mask gets optimized out
+ * on a 64-bit system */
+#define PERL_IS_SUBWORD_ADDR(x) (1 & (       PTR2nat(x)                       \
+                                      |   (  PTR2nat(x) >> 1)                 \
+                                      | ( ( (PTR2nat(x)                       \
+                                           & PERL_WORD_BOUNDARY_MASK) >> 2))))
+
+    /* Do the word-at-a-time iff there is at least one usable full word.  That
+     * means that after advancing to a word boundary, there still is at least a
+     * full word left.  The number of bytes needed to advance is 'wordsize -
+     * offset' unless offset is 0. */
+    if ((STRLEN) (send - x) >= PERL_WORDSIZE
+
+                            /* This term is wordsize if subword; 0 if not */
+                          + PERL_WORDSIZE * PERL_IS_SUBWORD_ADDR(x)
+
+                            /* 'offset' */
+                          - (PTR2nat(x) & PERL_WORD_BOUNDARY_MASK))
+    {
+
+        /* Process per-byte until reach word boundary.  XXX This loop could be
+         * eliminated if we knew that this platform had fast unaligned reads */
+        while (PTR2nat(x) & PERL_WORD_BOUNDARY_MASK) {
+            if (! UTF8_IS_INVARIANT(*x)) {
+                if (ep) {
+                    *ep = x;
+                }
+
+                return FALSE;
+            }
             x++;
-            continue;
         }
 
-        if (ep) {
-            *ep = x;
+        /* Here, we know we have at least one full word to process.  Process
+         * per-word as long as we have at least a full word left */
+        do {
+            if ((* (PERL_UINTMAX_T *) x) & PERL_VARIANTS_WORD_MASK)  {
+
+                /* Found a variant.  Just return if caller doesn't want its
+                 * exact position */
+                if (! ep) {
+                    return FALSE;
+                }
+
+                /* Otherwise fall into final loop to find which byte it is */
+                break;
+            }
+            x += PERL_WORDSIZE;
+        } while (x + PERL_WORDSIZE <= send);
+    }
+
+#endif
+
+    /* Process per-byte */
+    while (x < send) {
+	if (! UTF8_IS_INVARIANT(*x)) {
+            if (ep) {
+                *ep = x;
+            }
+
+            return FALSE;
         }
 
-        return FALSE;
+        x++;
     }
 
     return TRUE;
 }
+
+#if defined(PERL_CORE) || defined(PERL_EXT)
+
+/*
+=for apidoc variant_under_utf8_count
+
+This function looks at the sequence of bytes between C<s> and C<e>, which are
+assumed to be encoded in ASCII/Latin1, and returns how many of them would
+change should the string be translated into UTF-8.  Due to the nature of UTF-8,
+each of these would occupy two bytes instead of the single one in the input
+string.  Thus, this function returns the precise number of bytes the string
+would expand by when translated to UTF-8.
+
+Unlike most of the other functions that have C<utf8> in their name, the input
+to this function is NOT a UTF-8-encoded string.  The function name is slightly
+I<odd> to emphasize this.
+
+This function is internal to Perl because khw thinks that any XS code that
+would want this is probably operating too close to the internals.  Presenting a
+valid use case could change that.
+
+See also
+C<L<perlapi/is_utf8_invariant_string>>
+and
+C<L<perlapi/is_utf8_invariant_string_loc>>,
+
+=cut
+
+*/
+
+PERL_STATIC_INLINE Size_t
+S_variant_under_utf8_count(const U8* const s, const U8* const e)
+{
+    const U8* x = s;
+    Size_t count = 0;
+
+    PERL_ARGS_ASSERT_VARIANT_UNDER_UTF8_COUNT;
+
+#  ifndef EBCDIC
+
+    if ((STRLEN) (e - x) >= PERL_WORDSIZE
+                          + PERL_WORDSIZE * PERL_IS_SUBWORD_ADDR(x)
+                          - (PTR2nat(x) & PERL_WORD_BOUNDARY_MASK))
+    {
+
+        /* Process per-byte until reach word boundary.  XXX This loop could be
+         * eliminated if we knew that this platform had fast unaligned reads */
+        while (PTR2nat(x) & PERL_WORD_BOUNDARY_MASK) {
+            count += ! UTF8_IS_INVARIANT(*x++);
+        }
+
+        /* Process per-word as long as we have at least a full word left */
+        do {    /* Commit 03c1e4ab1d6ee9062fb3f94b0ba31db6698724b1 contains an
+                   explanation of how this works */
+            count += ((((* (PERL_UINTMAX_T *) x) & PERL_VARIANTS_WORD_MASK) >> 7)
+                      * PERL_COUNT_MULTIPLIER)
+                    >> ((PERL_WORDSIZE - 1) * CHARBITS);
+            x += PERL_WORDSIZE;
+        } while (x + PERL_WORDSIZE <= e);
+    }
+
+#  endif
+
+    /* Process per-byte */
+    while (x < e) {
+	if (! UTF8_IS_INVARIANT(*x)) {
+            count++;
+        }
+
+        x++;
+    }
+
+    return count;
+}
+
+#endif
+
+#undef PERL_WORDSIZE
+#undef PERL_COUNT_MULTIPLIER
+#undef PERL_WORD_BOUNDARY_MASK
+#undef PERL_VARIANTS_WORD_MASK
 
 /*
 =for apidoc is_utf8_string
@@ -425,27 +571,52 @@ C<L</is_utf8_fixed_width_buf_loclen_flags>>,
 =cut
 */
 
+#define is_utf8_string(s, len)  is_utf8_string_loclen(s, len, NULL, NULL)
+
+#if defined(PERL_CORE) || defined (PERL_EXT)
+
+/*
+=for apidoc is_utf8_non_invariant_string
+
+Returns TRUE if L<perlapi/is_utf8_invariant_string> returns FALSE for the first
+C<len> bytes of the string C<s>, but they are, nonetheless, legal Perl-extended
+UTF-8; otherwise returns FALSE.
+
+A TRUE return means that at least one code point represented by the sequence
+either is a wide character not representable as a single byte, or the
+representation differs depending on whether the sequence is encoded in UTF-8 or
+not.
+
+See also
+C<L<perlapi/is_utf8_invariant_string>>,
+C<L<perlapi/is_utf8_string>>
+
+=cut
+
+This is commonly used to determine if a SV's UTF-8 flag should be turned on.
+It needn't be if its string is entirely UTF-8 invariant, and it shouldn't be if
+it otherwise contains invalid UTF-8.
+
+It is an internal function because khw thinks that XS code shouldn't be working
+at this low a level.  A valid use case could change that.
+
+*/
+
 PERL_STATIC_INLINE bool
-Perl_is_utf8_string(const U8 *s, const STRLEN len)
+S_is_utf8_non_invariant_string(const U8* const s, STRLEN len)
 {
-    /* This is now marked pure in embed.fnc, because isUTF8_CHAR now is pure.
-     * Be aware of possible changes to that */
+    const U8 * first_variant;
 
-    const U8* const send = s + (len ? len : strlen((const char *)s));
-    const U8* x = s;
+    PERL_ARGS_ASSERT_IS_UTF8_NON_INVARIANT_STRING;
 
-    PERL_ARGS_ASSERT_IS_UTF8_STRING;
-
-    while (x < send) {
-        const STRLEN cur_len = isUTF8_CHAR(x, send);
-        if (UNLIKELY(! cur_len)) {
-            return FALSE;
-        }
-        x += cur_len;
+    if (is_utf8_invariant_string_loc(s, len, &first_variant)) {
+        return FALSE;
     }
 
-    return TRUE;
+    return is_utf8_string(first_variant, len - (first_variant - s));
 }
+
+#endif
 
 /*
 =for apidoc is_strict_utf8_string
@@ -483,24 +654,7 @@ C<L</is_c9strict_utf8_string_loclen>>.
 =cut
 */
 
-PERL_STATIC_INLINE bool
-S_is_strict_utf8_string(const U8 *s, const STRLEN len)
-{
-    const U8* const send = s + (len ? len : strlen((const char *)s));
-    const U8* x = s;
-
-    PERL_ARGS_ASSERT_IS_STRICT_UTF8_STRING;
-
-    while (x < send) {
-        const STRLEN cur_len = isSTRICT_UTF8_CHAR(x, send);
-        if (UNLIKELY(! cur_len)) {
-            return FALSE;
-        }
-        x += cur_len;
-    }
-
-    return TRUE;
-}
+#define is_strict_utf8_string(s, len)  is_strict_utf8_string_loclen(s, len, NULL, NULL)
 
 /*
 =for apidoc is_c9strict_utf8_string
@@ -540,28 +694,7 @@ C<L</is_c9strict_utf8_string_loclen>>.
 =cut
 */
 
-PERL_STATIC_INLINE bool
-S_is_c9strict_utf8_string(const U8 *s, const STRLEN len)
-{
-    const U8* const send = s + (len ? len : strlen((const char *)s));
-    const U8* x = s;
-
-    PERL_ARGS_ASSERT_IS_C9STRICT_UTF8_STRING;
-
-    while (x < send) {
-        const STRLEN cur_len = isC9_STRICT_UTF8_CHAR(x, send);
-        if (UNLIKELY(! cur_len)) {
-            return FALSE;
-        }
-        x += cur_len;
-    }
-
-    return TRUE;
-}
-
-/* The above 3 functions could have been moved into the more general one just
- * below, and made #defines that call it with the right 'flags'.  They are
- * currently kept separate to increase their chances of getting inlined */
+#define is_c9strict_utf8_string(s, len)  is_c9strict_utf8_string_loclen(s, len, NULL, 0)
 
 /*
 =for apidoc is_utf8_string_flags
@@ -604,14 +737,17 @@ C<L</is_c9strict_utf8_string_loclen>>.
 */
 
 PERL_STATIC_INLINE bool
-S_is_utf8_string_flags(const U8 *s, const STRLEN len, const U32 flags)
+S_is_utf8_string_flags(const U8 *s, STRLEN len, const U32 flags)
 {
-    const U8* const send = s + (len ? len : strlen((const char *)s));
-    const U8* x = s;
+    const U8 * first_variant;
 
     PERL_ARGS_ASSERT_IS_UTF8_STRING_FLAGS;
     assert(0 == (flags & ~(UTF8_DISALLOW_ILLEGAL_INTERCHANGE
                           |UTF8_DISALLOW_PERL_EXTENDED)));
+
+    if (len == 0) {
+        len = strlen((const char *)s);
+    }
 
     if (flags == 0) {
         return is_utf8_string(s, len);
@@ -629,12 +765,17 @@ S_is_utf8_string_flags(const U8 *s, const STRLEN len, const U32 flags)
         return is_c9strict_utf8_string(s, len);
     }
 
-    while (x < send) {
-        STRLEN cur_len = isUTF8_CHAR_flags(x, send, flags);
-        if (UNLIKELY(! cur_len)) {
-            return FALSE;
+    if (! is_utf8_invariant_string_loc(s, len, &first_variant)) {
+        const U8* const send = s + len;
+        const U8* x = first_variant;
+
+        while (x < send) {
+            STRLEN cur_len = isUTF8_CHAR_flags(x, send, flags);
+            if (UNLIKELY(! cur_len)) {
+                return FALSE;
+            }
+            x += cur_len;
         }
-        x += cur_len;
     }
 
     return TRUE;
@@ -670,31 +811,50 @@ See also C<L</is_utf8_string_loc>>.
 */
 
 PERL_STATIC_INLINE bool
-Perl_is_utf8_string_loclen(const U8 *s, const STRLEN len, const U8 **ep, STRLEN *el)
+Perl_is_utf8_string_loclen(const U8 *s, STRLEN len, const U8 **ep, STRLEN *el)
 {
-    const U8* const send = s + (len ? len : strlen((const char *)s));
-    const U8* x = s;
-    STRLEN outlen = 0;
+    const U8 * first_variant;
 
     PERL_ARGS_ASSERT_IS_UTF8_STRING_LOCLEN;
 
-    while (x < send) {
-        const STRLEN cur_len = isUTF8_CHAR(x, send);
-        if (UNLIKELY(! cur_len)) {
-            break;
+    if (len == 0) {
+        len = strlen((const char *) s);
+    }
+
+    if (is_utf8_invariant_string_loc(s, len, &first_variant)) {
+        if (el)
+            *el = len;
+
+        if (ep) {
+            *ep = s + len;
         }
-        x += cur_len;
-        outlen++;
+
+        return TRUE;
     }
 
-    if (el)
-        *el = outlen;
+    {
+        const U8* const send = s + len;
+        const U8* x = first_variant;
+        STRLEN outlen = first_variant - s;
 
-    if (ep) {
-        *ep = x;
+        while (x < send) {
+            const STRLEN cur_len = isUTF8_CHAR(x, send);
+            if (UNLIKELY(! cur_len)) {
+                break;
+            }
+            x += cur_len;
+            outlen++;
+        }
+
+        if (el)
+            *el = outlen;
+
+        if (ep) {
+            *ep = x;
+        }
+
+        return (x == send);
     }
-
-    return (x == send);
 }
 
 /*
@@ -728,31 +888,50 @@ See also C<L</is_strict_utf8_string_loc>>.
 */
 
 PERL_STATIC_INLINE bool
-S_is_strict_utf8_string_loclen(const U8 *s, const STRLEN len, const U8 **ep, STRLEN *el)
+S_is_strict_utf8_string_loclen(const U8 *s, STRLEN len, const U8 **ep, STRLEN *el)
 {
-    const U8* const send = s + (len ? len : strlen((const char *)s));
-    const U8* x = s;
-    STRLEN outlen = 0;
+    const U8 * first_variant;
 
     PERL_ARGS_ASSERT_IS_STRICT_UTF8_STRING_LOCLEN;
 
-    while (x < send) {
-        const STRLEN cur_len = isSTRICT_UTF8_CHAR(x, send);
-        if (UNLIKELY(! cur_len)) {
-            break;
+    if (len == 0) {
+        len = strlen((const char *) s);
+    }
+
+    if (is_utf8_invariant_string_loc(s, len, &first_variant)) {
+        if (el)
+            *el = len;
+
+        if (ep) {
+            *ep = s + len;
         }
-        x += cur_len;
-        outlen++;
+
+        return TRUE;
     }
 
-    if (el)
-        *el = outlen;
+    {
+        const U8* const send = s + len;
+        const U8* x = first_variant;
+        STRLEN outlen = first_variant - s;
 
-    if (ep) {
-        *ep = x;
+        while (x < send) {
+            const STRLEN cur_len = isSTRICT_UTF8_CHAR(x, send);
+            if (UNLIKELY(! cur_len)) {
+                break;
+            }
+            x += cur_len;
+            outlen++;
+        }
+
+        if (el)
+            *el = outlen;
+
+        if (ep) {
+            *ep = x;
+        }
+
+        return (x == send);
     }
-
-    return (x == send);
 }
 
 /*
@@ -786,31 +965,50 @@ See also C<L</is_c9strict_utf8_string_loc>>.
 */
 
 PERL_STATIC_INLINE bool
-S_is_c9strict_utf8_string_loclen(const U8 *s, const STRLEN len, const U8 **ep, STRLEN *el)
+S_is_c9strict_utf8_string_loclen(const U8 *s, STRLEN len, const U8 **ep, STRLEN *el)
 {
-    const U8* const send = s + (len ? len : strlen((const char *)s));
-    const U8* x = s;
-    STRLEN outlen = 0;
+    const U8 * first_variant;
 
     PERL_ARGS_ASSERT_IS_C9STRICT_UTF8_STRING_LOCLEN;
 
-    while (x < send) {
-        const STRLEN cur_len = isC9_STRICT_UTF8_CHAR(x, send);
-        if (UNLIKELY(! cur_len)) {
-            break;
+    if (len == 0) {
+        len = strlen((const char *) s);
+    }
+
+    if (is_utf8_invariant_string_loc(s, len, &first_variant)) {
+        if (el)
+            *el = len;
+
+        if (ep) {
+            *ep = s + len;
         }
-        x += cur_len;
-        outlen++;
+
+        return TRUE;
     }
 
-    if (el)
-        *el = outlen;
+    {
+        const U8* const send = s + len;
+        const U8* x = first_variant;
+        STRLEN outlen = first_variant - s;
 
-    if (ep) {
-        *ep = x;
+        while (x < send) {
+            const STRLEN cur_len = isC9_STRICT_UTF8_CHAR(x, send);
+            if (UNLIKELY(! cur_len)) {
+                break;
+            }
+            x += cur_len;
+            outlen++;
+        }
+
+        if (el)
+            *el = outlen;
+
+        if (ep) {
+            *ep = x;
+        }
+
+        return (x == send);
     }
-
-    return (x == send);
 }
 
 /*
@@ -849,15 +1047,17 @@ See also C<L</is_utf8_string_loc_flags>>.
 */
 
 PERL_STATIC_INLINE bool
-S_is_utf8_string_loclen_flags(const U8 *s, const STRLEN len, const U8 **ep, STRLEN *el, const U32 flags)
+S_is_utf8_string_loclen_flags(const U8 *s, STRLEN len, const U8 **ep, STRLEN *el, const U32 flags)
 {
-    const U8* const send = s + (len ? len : strlen((const char *)s));
-    const U8* x = s;
-    STRLEN outlen = 0;
+    const U8 * first_variant;
 
     PERL_ARGS_ASSERT_IS_UTF8_STRING_LOCLEN_FLAGS;
     assert(0 == (flags & ~(UTF8_DISALLOW_ILLEGAL_INTERCHANGE
                           |UTF8_DISALLOW_PERL_EXTENDED)));
+
+    if (len == 0) {
+        len = strlen((const char *) s);
+    }
 
     if (flags == 0) {
         return is_utf8_string_loclen(s, len, ep, el);
@@ -875,23 +1075,40 @@ S_is_utf8_string_loclen_flags(const U8 *s, const STRLEN len, const U8 **ep, STRL
         return is_c9strict_utf8_string_loclen(s, len, ep, el);
     }
 
-    while (x < send) {
-        const STRLEN cur_len = isUTF8_CHAR_flags(x, send, flags);
-        if (UNLIKELY(! cur_len)) {
-            break;
+    if (is_utf8_invariant_string_loc(s, len, &first_variant)) {
+        if (el)
+            *el = len;
+
+        if (ep) {
+            *ep = s + len;
         }
-        x += cur_len;
-        outlen++;
+
+        return TRUE;
     }
 
-    if (el)
-        *el = outlen;
+    {
+        const U8* send = s + len;
+        const U8* x = first_variant;
+        STRLEN outlen = first_variant - s;
 
-    if (ep) {
-        *ep = x;
+        while (x < send) {
+            const STRLEN cur_len = isUTF8_CHAR_flags(x, send, flags);
+            if (UNLIKELY(! cur_len)) {
+                break;
+            }
+            x += cur_len;
+            outlen++;
+        }
+
+        if (el)
+            *el = outlen;
+
+        if (ep) {
+            *ep = x;
+        }
+
+        return (x == send);
     }
-
-    return (x == send);
 }
 
 /*
@@ -947,9 +1164,9 @@ Perl_utf8_hop(const U8 *s, SSize_t off)
 		s--;
 	}
     }
-    GCC_DIAG_IGNORE(-Wcast-qual);
+    GCC_DIAG_IGNORE_STMT(-Wcast-qual);
     return (U8 *)s;
-    GCC_DIAG_RESTORE;
+    GCC_DIAG_RESTORE_STMT;
 }
 
 /*
@@ -984,16 +1201,16 @@ Perl_utf8_hop_forward(const U8 *s, SSize_t off, const U8 *end)
     while (off--) {
         STRLEN skip = UTF8SKIP(s);
         if ((STRLEN)(end - s) <= skip) {
-            GCC_DIAG_IGNORE(-Wcast-qual);
+            GCC_DIAG_IGNORE_STMT(-Wcast-qual);
             return (U8 *)end;
-            GCC_DIAG_RESTORE;
+            GCC_DIAG_RESTORE_STMT;
         }
         s += skip;
     }
 
-    GCC_DIAG_IGNORE(-Wcast-qual);
+    GCC_DIAG_IGNORE_STMT(-Wcast-qual);
     return (U8 *)s;
-    GCC_DIAG_RESTORE;
+    GCC_DIAG_RESTORE_STMT;
 }
 
 /*
@@ -1031,9 +1248,9 @@ Perl_utf8_hop_back(const U8 *s, SSize_t off, const U8 *start)
             s--;
     }
     
-    GCC_DIAG_IGNORE(-Wcast-qual);
+    GCC_DIAG_IGNORE_STMT(-Wcast-qual);
     return (U8 *)s;
-    GCC_DIAG_RESTORE;
+    GCC_DIAG_RESTORE_STMT;
 }
 
 /*
@@ -1189,7 +1406,7 @@ complete, valid characters found in the C<el> pointer.
 
 PERL_STATIC_INLINE bool
 S_is_utf8_fixed_width_buf_loclen_flags(const U8 * const s,
-                                       const STRLEN len,
+                                       STRLEN len,
                                        const U8 **ep,
                                        STRLEN *el,
                                        const U32 flags)
@@ -1596,6 +1813,17 @@ S_cx_pushloop_for(pTHX_ PERL_CONTEXT *cx, void *itervarp, SV* itersave)
 }
 
 
+PERL_STATIC_INLINE void
+S_cx_pushloop_given(pTHX_ PERL_CONTEXT *cx, SV *orig_defsv)
+{
+    PERL_ARGS_ASSERT_CX_PUSHLOOP_GIVEN;
+
+    cx->blk_loop.my_op = cLOOP;
+    cx->blk_loop.itervar_u.gv = PL_defgv;
+    cx->blk_loop.itersave = orig_defsv;
+}
+
+
 /* pop all loop types, including plain */
 
 PERL_STATIC_INLINE void
@@ -1632,49 +1860,25 @@ S_cx_poploop(pTHX_ PERL_CONTEXT *cx)
 
 
 PERL_STATIC_INLINE void
-S_cx_pushwhen(pTHX_ PERL_CONTEXT *cx)
+S_cx_pushwhereso(pTHX_ PERL_CONTEXT *cx)
 {
-    PERL_ARGS_ASSERT_CX_PUSHWHEN;
+    PERL_ARGS_ASSERT_CX_PUSHWHERESO;
 
-    cx->blk_givwhen.leave_op = cLOGOP->op_other;
+    cx->blk_whereso.leave_op = cLOGOP->op_other;
 }
 
 
 PERL_STATIC_INLINE void
-S_cx_popwhen(pTHX_ PERL_CONTEXT *cx)
+S_cx_popwhereso(pTHX_ PERL_CONTEXT *cx)
 {
-    PERL_ARGS_ASSERT_CX_POPWHEN;
-    assert(CxTYPE(cx) == CXt_WHEN);
+    PERL_ARGS_ASSERT_CX_POPWHERESO;
+    assert(CxTYPE(cx) == CXt_WHERESO);
 
     PERL_UNUSED_ARG(cx);
     PERL_UNUSED_CONTEXT;
     /* currently NOOP */
 }
 
-
-PERL_STATIC_INLINE void
-S_cx_pushgiven(pTHX_ PERL_CONTEXT *cx, SV *orig_defsv)
-{
-    PERL_ARGS_ASSERT_CX_PUSHGIVEN;
-
-    cx->blk_givwhen.leave_op = cLOGOP->op_other;
-    cx->blk_givwhen.defsv_save = orig_defsv;
-}
-
-
-PERL_STATIC_INLINE void
-S_cx_popgiven(pTHX_ PERL_CONTEXT *cx)
-{
-    SV *sv;
-
-    PERL_ARGS_ASSERT_CX_POPGIVEN;
-    assert(CxTYPE(cx) == CXt_GIVEN);
-
-    sv = GvSV(PL_defgv);
-    GvSV(PL_defgv) = cx->blk_givwhen.defsv_save;
-    cx->blk_givwhen.defsv_save = NULL;
-    SvREFCNT_dec(sv);
-}
 
 /* ------------------ util.h ------------------------------------------- */
 

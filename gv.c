@@ -521,7 +521,7 @@ S_maybe_add_coresub(pTHX_ HV * const stash, GV *gv,
         no support for funcs that do not parse like funcs */
     case KEY___DATA__: case KEY___END__: case KEY_and: case KEY_AUTOLOAD:
     case KEY_BEGIN   : case KEY_CHECK  : case KEY_cmp:
-    case KEY_default : case KEY_DESTROY:
+    case KEY_DESTROY:
     case KEY_do      : case KEY_dump   : case KEY_else  : case KEY_elsif  :
     case KEY_END     : case KEY_eq     : case KEY_eval  :
     case KEY_for     : case KEY_foreach: case KEY_format: case KEY_ge     :
@@ -535,7 +535,8 @@ S_maybe_add_coresub(pTHX_ HV * const stash, GV *gv,
     case KEY_s    : case KEY_say  : case KEY_sort   :
     case KEY_state: case KEY_sub  :
     case KEY_tr   : case KEY_UNITCHECK: case KEY_unless:
-    case KEY_until: case KEY_use  : case KEY_when     : case KEY_while :
+    case KEY_until: case KEY_use  :
+    case KEY_whereis: case KEY_whereso: case KEY_while:
     case KEY_x    : case KEY_xor  : case KEY_y        :
 	return NULL;
     case KEY_chdir:
@@ -1091,9 +1092,10 @@ Perl_gv_fetchmethod_pvn_flags(pTHX_ HV *stash, const char *name, const STRLEN le
 	/* This is the special case that exempts Foo->import and
 	   Foo->unimport from being an error even if there's no
 	  import/unimport subroutine */
-	if (strEQ(name,"import") || strEQ(name,"unimport"))
-	    gv = MUTABLE_GV(&PL_sv_yes);
-	else if (autoload)
+	if (strEQ(name,"import") || strEQ(name,"unimport")) {
+	    gv = (GV*)sv_2mortal((SV*)newCONSTSUB_flags(NULL,
+						NULL, 0, 0, NULL));
+	} else if (autoload)
 	    gv = gv_autoload_pvn(
 		ostash, name, name_end - name, GV_AUTOLOAD_ISMETHOD|flags
 	    );

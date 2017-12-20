@@ -640,11 +640,9 @@ Perl__warn_problematic_locale()
      * _CHECK_AND_WARN_PROBLEMATIC_LOCALE */
 
     if (PL_warn_locale) {
-        /*GCC_DIAG_IGNORE(-Wformat-security);   Didn't work */
         Perl_ck_warner(aTHX_ packWARN(WARN_LOCALE),
                              SvPVX(PL_warn_locale),
                              0 /* dummy to avoid compiler warning */ );
-        /* GCC_DIAG_RESTORE; */
         SvREFCNT_dec_NN(PL_warn_locale);
         PL_warn_locale = NULL;
     }
@@ -2939,7 +2937,7 @@ Perl__is_cur_LC_category_utf8(pTHX_ int category)
          * Unicode code point.  Since UTF-8 is the only non-single byte
          * encoding we handle, we just say any such encoding is UTF-8, and if
          * turns out to be wrong, other things will fail */
-        is_utf8 = MB_CUR_MAX >= STRLENs(MAX_UNICODE_UTF8);
+        is_utf8 = (unsigned) MB_CUR_MAX >= STRLENs(MAX_UNICODE_UTF8);
 
         DEBUG_L(PerlIO_printf(Perl_debug_log,
                               "\tMB_CUR_MAX=%d; ?UTF8 locale=%d\n",

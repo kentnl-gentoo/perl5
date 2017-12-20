@@ -1311,6 +1311,8 @@ cpan/Locale-Codes/t/currency_func.t	Locale::Codes tests
 cpan/Locale-Codes/t/currency_old.t	Locale::Codes tests
 cpan/Locale-Codes/t/currency_oo.t	Locale::Codes tests
 cpan/Locale-Codes/t/do_tests.pl	Locale::Codes tests
+cpan/Locale-Codes/t/errors.1.t	Locale::Codes tests
+cpan/Locale-Codes/t/errors.2.t	Locale::Codes tests
 cpan/Locale-Codes/t/langext_func.t	Locale::Codes tests
 cpan/Locale-Codes/t/langext_oo.t	Locale::Codes tests
 cpan/Locale-Codes/t/langfam_func.t	Locale::Codes tests
@@ -1326,6 +1328,7 @@ cpan/Locale-Codes/t/script_oo.t	Locale::Codes tests
 cpan/Locale-Codes/t/testfunc.pl			Locale::Codes tests
 cpan/Locale-Codes/t/vals_country.pl	Locale::Codes tests
 cpan/Locale-Codes/t/vals_currency.pl	Locale::Codes tests
+cpan/Locale-Codes/t/vals_error.pl	Locale::Codes tests
 cpan/Locale-Codes/t/vals_langext.pl	Locale::Codes tests
 cpan/Locale-Codes/t/vals_langfam.pl	Locale::Codes tests
 cpan/Locale-Codes/t/vals_language.pl	Locale::Codes tests
@@ -2406,6 +2409,7 @@ cpan/Test-Simple/t/Legacy/strays.t
 cpan/Test-Simple/t/Legacy/subtest/args.t
 cpan/Test-Simple/t/Legacy/subtest/bail_out.t
 cpan/Test-Simple/t/Legacy/subtest/basic.t
+cpan/Test-Simple/t/Legacy/subtest/callback.t
 cpan/Test-Simple/t/Legacy/subtest/die.t
 cpan/Test-Simple/t/Legacy/subtest/do.t
 cpan/Test-Simple/t/Legacy/subtest/events.t
@@ -2501,6 +2505,7 @@ cpan/Test-Simple/t/Test2/behavior/run_subtest_inherit.t
 cpan/Test-Simple/t/Test2/behavior/special_names.t
 cpan/Test-Simple/t/Test2/behavior/subtest_bailout.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_buffer_formatter.t
+cpan/Test-Simple/t/Test2/behavior/Subtest_callback.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_events.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_plan.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_todo.t
@@ -5030,6 +5035,7 @@ pod/perl5272delta.pod		Perl changes in version 5.27.2
 pod/perl5273delta.pod		Perl changes in version 5.27.3
 pod/perl5274delta.pod		Perl changes in version 5.27.4
 pod/perl5275delta.pod		Perl changes in version 5.27.5
+pod/perl5276delta.pod		Perl changes in version 5.27.6
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5663,6 +5669,7 @@ t/op/fork.t			See if fork works
 t/op/fresh_perl_utf8.t		UTF8 tests for pads and gvs
 t/op/getpid.t			See if $$ and getppid work with threads
 t/op/getppid.t			See if getppid works
+t/op/given.t			See if given works
 t/op/glob.t			See if <*> works
 t/op/gmagic.t			See if GMAGIC works
 t/op/goto.t			See if goto works
@@ -5804,6 +5811,8 @@ t/op/ver.t			See if v-strings and the %v format flag work
 t/op/waitpid.t			See if waitpid works
 t/op/wantarray.t		See if wantarray works
 t/op/warn.t			See if warn works
+t/op/whereis.t			See if whereis works
+t/op/whereso.t			See if whereso works
 t/op/while.t			See if while loops work
 t/op/write.t			See if write works (formats work)
 t/op/yadayada.t			See if ... works

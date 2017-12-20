@@ -414,7 +414,7 @@ eval { getgrgid 1 };	# OP_GGRGID
 eval { getpwnam 1 };	# OP_GPWNAM
 eval { getpwuid 1 };	# OP_GPWUID
 prototype "foo";	# OP_PROTOTYPE
-$a ~~ $b;		# OP_SMARTMATCH
+$a ~~ $b if rand(1)>2;	# OP_SMARTMATCH
 $a <=> $b;		# OP_NCMP
 "dsatrewq";
 "diatrewq";
@@ -1732,10 +1732,10 @@ no warnings 'deprecated';
 $[ = 3;
 ($[) = 3;
 EXPECT
-Use of assignment to $[ is deprecated at - line 2.
-Use of assignment to $[ is deprecated at - line 3.
-Use of assignment to $[ is deprecated at - line 5.
-Use of assignment to $[ is deprecated at - line 6.
+Use of assignment to $[ is deprecated, and will be fatal in Perl 5.30 at - line 2.
+Use of assignment to $[ is deprecated, and will be fatal in Perl 5.30 at - line 3.
+Use of assignment to $[ is deprecated, and will be fatal in Perl 5.30 at - line 5.
+Use of assignment to $[ is deprecated, and will be fatal in Perl 5.30 at - line 6.
 ########
 # op.c
 use warnings 'void';
@@ -2065,3 +2065,12 @@ use warnings;
 $_="3.14159";
 tr/0-9/\x{6F0}-\x{6F9}/;
 EXPECT
+########
+# Useless use of concatenation should appear for any number of args
+use warnings;
+($a, $b, $c) = (42)x3;
+$a.$b;
+$a.$b.$c;
+EXPECT
+Useless use of concatenation (.) or string in void context at - line 4.
+Useless use of concatenation (.) or string in void context at - line 5.

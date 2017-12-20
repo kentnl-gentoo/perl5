@@ -9,10 +9,15 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
+
+typedef FILE NativeFile;
+
 #include "fakesdio.h"   /* Causes us to use PerlIO below */
 
 typedef SV *SVREF;
 typedef PTR_TBL_t *XS__APItest__PtrTable;
+typedef PerlIO * InputStream;
+typedef PerlIO * OutputStream;
 
 #define croak_fail() croak("fail at " __FILE__ " line %d", __LINE__)
 #define croak_fail_nep(h, w) croak("fail %p!=%p at " __FILE__ " line %d", (h), (w), __LINE__)
@@ -2339,9 +2344,17 @@ CODE:
        only current internal behavior, these tests can be changed in the
        future if necessery */
     PUSHMARK(SP);
-    retcnt = call_sv(&PL_sv_yes, 0); /* does nothing */
+    retcnt = call_sv(&PL_sv_yes, G_EVAL);
     SPAGAIN;
     SP -= retcnt;
+    errsv = ERRSV;
+    errstr = SvPV(errsv, errlen);
+    if(memBEGINs(errstr, errlen, "Undefined subroutine &main::1 called at")) {
+        PUSHMARK(SP);
+        retcnt = call_sv((SV*)i_sub, 0); /* call again to increase counter */
+        SPAGAIN;
+        SP -= retcnt;
+    }
     PUSHMARK(SP);
     retcnt = call_sv(&PL_sv_no, G_EVAL);
     SPAGAIN;
@@ -4294,6 +4307,21 @@ get_cv_flags(SV *sv, UV flags)
     OUTPUT:
         RETVAL
 
+PerlIO *
+PerlIO_stderr()
+
+OutputStream
+PerlIO_stdout()
+
+InputStream
+PerlIO_stdin()
+
+#undef FILE
+#define FILE NativeFile
+
+FILE *
+PerlIO_exportFILE(PerlIO *f, const char *mode)
+
 MODULE = XS::APItest PACKAGE = XS::APItest::AUTOLOADtest
 
 int
@@ -6003,6 +6031,48 @@ test_is_utf8_string(char *s, STRLEN len)
         RETVAL = is_utf8_string((U8 *) s, len);
     OUTPUT:
         RETVAL
+
+#define WORDSIZE            sizeof(PERL_UINTMAX_T)
+
+AV *
+test_is_utf8_invariant_string_loc(unsigned char *s, STRLEN offset, STRLEN len)
+    PREINIT:
+        AV *av;
+        const U8 * ep = NULL;
+        PERL_UINTMAX_T* copy;
+    CODE:
+        /* 'offset' is number of bytes past a word boundary the testing of 's'
+         * is to start at.  Allocate space that does start at the word
+         * boundary, and copy 's' to the correct offset past it.  Then call the
+         * tested function with that position */
+        Newx(copy, 1 + ((len + WORDSIZE - 1) / WORDSIZE), PERL_UINTMAX_T);
+        Copy(s, (U8 *) copy + offset, len, U8);
+        av = newAV();
+        av_push(av, newSViv(is_utf8_invariant_string_loc((U8 *) copy + offset, len, &ep)));
+        av_push(av, newSViv(ep - ((U8 *) copy + offset)));
+        RETVAL = av;
+        Safefree(copy);
+    OUTPUT:
+        RETVAL
+
+STRLEN
+test_variant_under_utf8_count(unsigned char *s, STRLEN offset, STRLEN len)
+    PREINIT:
+        PERL_UINTMAX_T * copy;
+    CODE:
+        Newx(copy, 1 + ((len + WORDSIZE - 1) / WORDSIZE), PERL_UINTMAX_T);
+        Copy(s, (U8 *) copy + offset, len, U8);
+        RETVAL = variant_under_utf8_count((U8 *) copy + offset, (U8 *) copy + offset + len);
+        Safefree(copy);
+    OUTPUT:
+        RETVAL
+
+STRLEN
+test_utf8_length(unsigned char *s, STRLEN offset, STRLEN len)
+CODE:
+    RETVAL = utf8_length(s + offset, s + len);
+OUTPUT:
+    RETVAL
 
 AV *
 test_is_utf8_string_loc(char *s, STRLEN len)

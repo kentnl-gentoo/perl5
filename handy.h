@@ -165,52 +165,9 @@ typedef U16TYPE U16;
 typedef I32TYPE I32;
 typedef U32TYPE U32;
 
-#ifdef HAS_QUAD
+#ifdef QUADKIND
 typedef I64TYPE I64;
 typedef U64TYPE U64;
-#endif
-
-/* INT64_C/UINT64_C are C99 from <stdint.h> (so they will not be
- * available in strict C89 mode), but they are nice, so let's define
- * them if necessary. */
-#if defined(HAS_QUAD)
-#  undef PeRl_INT64_C
-#  undef PeRl_UINT64_C
-/* Prefer the native integer types (int and long) over long long
- * (which is not C89) and Win32-specific __int64. */
-#  if QUADKIND == QUAD_IS_INT && INTSIZE == 8
-#    define PeRl_INT64_C(c)	(c)
-#    define PeRl_UINT64_C(c)	CAT2(c,U)
-#  endif
-#  if QUADKIND == QUAD_IS_LONG && LONGSIZE == 8
-#    define PeRl_INT64_C(c)	CAT2(c,L)
-#    define PeRl_UINT64_C(c)	CAT2(c,UL)
-#  endif
-#  if QUADKIND == QUAD_IS_LONG_LONG && defined(HAS_LONG_LONG)
-#    define PeRl_INT64_C(c)	CAT2(c,LL)
-#    define PeRl_UINT64_C(c)	CAT2(c,ULL)
-#  endif
-#  if QUADKIND == QUAD_IS___INT64
-#    define PeRl_INT64_C(c)	CAT2(c,I64)
-#    define PeRl_UINT64_C(c)	CAT2(c,UI64)
-#  endif
-#  ifndef PeRl_INT64_C
-#    define PeRl_INT64_C(c)	((I64)(c)) /* last resort */
-#    define PeRl_UINT64_C(c)	((U64)(c))
-#  endif
-/* In OS X the INT64_C/UINT64_C are defined with LL/ULL, which will
- * not fly with C89-pedantic gcc, so let's undefine them first so that
- * we can redefine them with our native integer preferring versions. */
-#  if defined(PERL_DARWIN) && defined(PERL_GCC_PEDANTIC)
-#    undef INT64_C
-#    undef UINT64_C
-#  endif
-#  ifndef INT64_C
-#    define INT64_C(c) PeRl_INT64_C(c)
-#  endif
-#  ifndef UINT64_C
-#    define UINT64_C(c) PeRl_UINT64_C(c)
-#  endif
 #endif
 
 #if defined(UINT8_MAX) && defined(INT16_MAX) && defined(INT32_MAX)
@@ -258,6 +215,26 @@ typedef U64TYPE U64;
 # define U32_MIN PERL_ULONG_MIN
 #endif
 
+#endif
+
+/* These C99 typedefs are useful sometimes for, say, loop variables whose
+ * maximum values are small, but for which speed trumps size.  If we have a C99
+ * compiler, use that.  Otherwise, a plain 'int' should be good enough.
+ *
+ * Restrict these to core for now until we are more certain this is a good
+ * idea. */
+#if defined(PERL_CORE) || defined(PERL_EXT)
+#  ifdef I_STDINT
+    typedef  int_fast8_t  PERL_INT_FAST8_T;
+    typedef uint_fast8_t  PERL_UINT_FAST8_T;
+    typedef  int_fast16_t PERL_INT_FAST16_T;
+    typedef uint_fast16_t PERL_UINT_FAST16_T;
+#  else
+    typedef int           PERL_INT_FAST8_T;
+    typedef unsigned int  PERL_UINT_FAST8_T;
+    typedef int           PERL_INT_FAST16_T;
+    typedef unsigned int  PERL_UINT_FAST16_T;
+#  endif
 #endif
 
 /* log(2) (i.e., log base 10 of 2) is pretty close to 0.30103, just in case
@@ -358,7 +335,7 @@ string/length pair.
 Like C<hv_fetch>, but takes a literal string instead of a
 string/length pair.
 
-=for apidoc Am|SV**|hv_stores|HV* tb|"literal string" key|NULLOK SV* val
+=for apidoc Am|SV**|hv_stores|HV* tb|"literal string" key|SV* val
 Like C<hv_store>, but takes a literal string instead of a
 string/length pair
 and omits the hash parameter.
@@ -1082,11 +1059,9 @@ patched there.  The file as of this writing is cpan/Devel-PPPort/parts/inc/misc
 
 */
 
-/* Specify the widest unsigned type on the platform.  Use U64TYPE because U64
- * is known only in the perl core, and this macro can be called from outside
- * that */
-#ifdef HAS_QUAD
-#   define WIDEST_UTYPE U64TYPE
+/* Specify the widest unsigned type on the platform. */
+#ifdef QUADKIND
+#   define WIDEST_UTYPE U64
 #else
 #   define WIDEST_UTYPE U32
 #endif

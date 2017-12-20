@@ -3,7 +3,7 @@ use strict;
 use Exporter;
 
 
-our $VERSION = '3.70';
+our $VERSION = '3.71';
 my $xs_version = $VERSION;
 $VERSION =~ tr/_//d;
 
@@ -135,23 +135,6 @@ my %METHOD_MAP =
     realpath		=> 'fast_abs_path',
    },
 
-   epoc =>
-   {
-    cwd			=> '_epoc_cwd',
-    getcwd	        => '_epoc_cwd',
-    fastgetcwd		=> '_epoc_cwd',
-    fastcwd		=> '_epoc_cwd',
-    abs_path		=> 'fast_abs_path',
-   },
-
-   MacOS =>
-   {
-    getcwd		=> 'cwd',
-    fastgetcwd		=> 'cwd',
-    fastcwd		=> 'cwd',
-    abs_path		=> 'fast_abs_path',
-   },
-
    amigaos =>
    {
     getcwd              => '_backtick_pwd',
@@ -244,8 +227,7 @@ unless ($METHOD_MAP{$^O}{cwd} or defined &cwd) {
 	}
     }
 
-    # MacOS has some special magic to make `pwd` work.
-    if( $os eq 'MacOS' || $found_pwd_cmd )
+    if( $found_pwd_cmd )
     {
 	*cwd = \&_backtick_pwd;
     }
@@ -373,9 +355,6 @@ sub chdir {
 
     if ($^O eq 'VMS') {
 	return $ENV{'PWD'} = $ENV{'DEFAULT'}
-    }
-    elsif ($^O eq 'MacOS') {
-	return $ENV{'PWD'} = cwd();
     }
     elsif ($^O eq 'MSWin32') {
 	$ENV{'PWD'} = $newpwd;
@@ -665,11 +644,6 @@ sub _qnx_abs_path {
     chomp $realpath;
     return $realpath;
 }
-
-sub _epoc_cwd {
-    return $ENV{'PWD'} = EPOC::getcwd();
-}
-
 
 # Now that all the base-level functions are set up, alias the
 # user-level functions to the right places

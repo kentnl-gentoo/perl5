@@ -2,14 +2,13 @@ package File::Spec;
 
 use strict;
 
-our $VERSION = '3.69';
+our $VERSION = '3.71';
 $VERSION =~ tr/_//d;
 
-my %module = (MacOS   => 'Mac',
+my %module = (
 	      MSWin32 => 'Win32',
 	      os2     => 'OS2',
 	      VMS     => 'VMS',
-	      epoc    => 'Epoc',
 	      NetWare => 'Win32', # Yes, File::Spec::Win32 works on NetWare.
 	      symbian => 'Win32', # Yes, File::Spec::Win32 works on symbian.
 	      dos     => 'OS2',   # Yes, File::Spec::OS2 works on DJGPP.
