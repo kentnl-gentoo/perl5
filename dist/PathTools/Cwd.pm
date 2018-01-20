@@ -3,7 +3,7 @@ use strict;
 use Exporter;
 
 
-our $VERSION = '3.71';
+our $VERSION = '3.72';
 my $xs_version = $VERSION;
 $VERSION =~ tr/_//d;
 
@@ -387,8 +387,7 @@ sub _perl_abs_path
 
     unless (@cst = stat( $start ))
     {
-	_carp("stat($start): $!");
-	return '';
+	return undef;
     }
 
     unless (-d _) {
@@ -422,15 +421,14 @@ sub _perl_abs_path
 	local *PARENT;
 	unless (opendir(PARENT, $dotdots))
 	{
-	    # probably a permissions issue.  Try the native command.
-	    require File::Spec;
-	    return File::Spec->rel2abs( $start, _backtick_pwd() );
+	    return undef;
 	}
 	unless (@cst = stat($dotdots))
 	{
-	    _carp("stat($dotdots): $!");
+	    my $e = $!;
 	    closedir(PARENT);
-	    return '';
+	    $! = $e;
+	    return undef;
 	}
 	if ($pst[0] == $cst[0] && $pst[1] == $cst[1])
 	{
@@ -442,9 +440,10 @@ sub _perl_abs_path
 	    {
 		unless (defined ($dir = readdir(PARENT)))
 	        {
-		    _carp("readdir($dotdots): $!");
 		    closedir(PARENT);
-		    return '';
+		    require Errno;
+		    $! = Errno::ENOENT();
+		    return undef;
 		}
 		$tst[0] = $pst[0]+1 unless (@tst = lstat("$dotdots/$dir"))
 	    }
@@ -463,6 +462,7 @@ my $Curdir;
 sub fast_abs_path {
     local $ENV{PWD} = $ENV{PWD} || ''; # Guard against clobberage
     my $cwd = getcwd();
+    defined $cwd or return undef;
     require File::Spec;
     my $path = @_ ? shift : ($Curdir ||= File::Spec->curdir);
 
@@ -472,7 +472,9 @@ sub fast_abs_path {
     ($cwd)  = $cwd  =~ /(.*)/s;
 
     unless (-e $path) {
- 	_croak("$path: No such file or directory");
+	require Errno;
+	$! = Errno::ENOENT();
+	return undef;
     }
 
     unless (-d _) {
@@ -483,7 +485,7 @@ sub fast_abs_path {
 
 	if (-l $path) {
 	    my $link_target = readlink($path);
-	    die "Can't resolve link $path: $!" unless defined $link_target;
+	    defined $link_target or return undef;
 	    
 	    $link_target = File::Spec->catpath($vol, $dir, $link_target)
                 unless File::Spec->file_name_is_absolute($link_target);
@@ -497,7 +499,7 @@ sub fast_abs_path {
     }
 
     if (!CORE::chdir($path)) {
- 	_croak("Cannot chdir to $path: $!");
+	return undef;
     }
     my $realpath = getcwd();
     if (! ((-d $cwd) && (CORE::chdir($cwd)))) {
@@ -701,7 +703,8 @@ absolute path of the current working directory.
 
     my $cwd = getcwd();
 
-Returns the current working directory.
+Returns the current working directory.  On error returns C<undef>,
+with C<$!> set to indicate the error.
 
 Exposes the POSIX function getcwd(3) or re-implements it if it's not
 available.
@@ -764,7 +767,8 @@ given they'll use the current working directory.
 
 Uses the same algorithm as getcwd().  Symbolic links and relative-path
 components ("." and "..") are resolved to return the canonical
-pathname, just like realpath(3).
+pathname, just like realpath(3).  On error returns C<undef>, with C<$!>
+set to indicate the error.
 
 =item realpath
 

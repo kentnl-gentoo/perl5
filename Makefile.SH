@@ -570,7 +570,7 @@ esac
 
 $spitshell >>$Makefile <<'!NO!SUBS!'
 
-perltoc_pod_prereqs = extra.pods pod/perl5277delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl5278delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -1120,9 +1120,9 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) pod/perlmodlib.PL -q
 
-pod/perl5277delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl5277delta.pod
-	$(LNS) perldelta.pod pod/perl5277delta.pod
+pod/perl5278delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl5278delta.pod
+	$(LNS) perldelta.pod pod/perl5278delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1253,10 +1253,6 @@ CHMOD_W = chmod +w
 #       perl regen.pl
 # with your existing copy of perl
 # (make regen_headers is kept for backwards compatibility)
-
-AUTOGEN_FILES = opcode.h opnames.h pp_proto.h proto.h embed.h embedvar.h \
-		perlapi.h perlapi.c regnodes.h warnings.h lib/warnings.pm \
-		lib/feature.pm feature.h
 
 .PHONY: regen_headers regen_all
 

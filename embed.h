@@ -422,7 +422,7 @@
 #define newSVuv(a)		Perl_newSVuv(aTHX_ a)
 #define newUNOP(a,b,c)		Perl_newUNOP(aTHX_ a,b,c)
 #define newUNOP_AUX(a,b,c,d)	Perl_newUNOP_AUX(aTHX_ a,b,c,d)
-#define newWHERESOOP(a,b)	Perl_newWHERESOOP(aTHX_ a,b)
+#define newWHENOP(a,b)		Perl_newWHENOP(aTHX_ a,b)
 #define newWHILEOP(a,b,c,d,e,f,g)	Perl_newWHILEOP(aTHX_ a,b,c,d,e,f,g)
 #define newXS(a,b,c)		Perl_newXS(aTHX_ a,b,c)
 #define newXS_flags(a,b,c,d,e)	Perl_newXS_flags(aTHX_ a,b,c,d,e)
@@ -774,6 +774,9 @@
 #if !(defined(HAS_SIGACTION) && defined(SA_SIGINFO))
 #define csighandler		Perl_csighandler
 #endif
+#if !defined(EBCDIC)
+#define _variant_byte_number	S__variant_byte_number
+#endif
 #if !defined(HAS_TRUNCATE) && !defined(HAS_CHSIZE) && defined(F_FREESP)
 #define my_chsize(a,b)		Perl_my_chsize(aTHX_ a,b)
 #endif
@@ -785,19 +788,20 @@
 #define cx_popblock(a)		S_cx_popblock(aTHX_ a)
 #define cx_popeval(a)		S_cx_popeval(aTHX_ a)
 #define cx_popformat(a)		S_cx_popformat(aTHX_ a)
+#define cx_popgiven(a)		S_cx_popgiven(aTHX_ a)
 #define cx_poploop(a)		S_cx_poploop(aTHX_ a)
 #define cx_popsub(a)		S_cx_popsub(aTHX_ a)
 #define cx_popsub_args(a)	S_cx_popsub_args(aTHX_ a)
 #define cx_popsub_common(a)	S_cx_popsub_common(aTHX_ a)
-#define cx_popwhereso(a)	S_cx_popwhereso(aTHX_ a)
+#define cx_popwhen(a)		S_cx_popwhen(aTHX_ a)
 #define cx_pushblock(a,b,c,d)	S_cx_pushblock(aTHX_ a,b,c,d)
 #define cx_pusheval(a,b,c)	S_cx_pusheval(aTHX_ a,b,c)
 #define cx_pushformat(a,b,c,d)	S_cx_pushformat(aTHX_ a,b,c,d)
+#define cx_pushgiven(a,b)	S_cx_pushgiven(aTHX_ a,b)
 #define cx_pushloop_for(a,b,c)	S_cx_pushloop_for(aTHX_ a,b,c)
-#define cx_pushloop_given(a,b)	S_cx_pushloop_given(aTHX_ a,b)
 #define cx_pushloop_plain(a)	S_cx_pushloop_plain(aTHX_ a)
 #define cx_pushsub(a,b,c,d)	S_cx_pushsub(aTHX_ a,b,c,d)
-#define cx_pushwhereso(a)	S_cx_pushwhereso(aTHX_ a)
+#define cx_pushwhen(a)		S_cx_pushwhen(aTHX_ a)
 #define cx_topblock(a)		S_cx_topblock(aTHX_ a)
 #endif
 #if defined(DEBUGGING)
@@ -916,6 +920,7 @@
 #define current_re_engine()	Perl_current_re_engine(aTHX)
 #define cv_ckproto_len_flags(a,b,c,d,e)	Perl_cv_ckproto_len_flags(aTHX_ a,b,c,d,e)
 #define grok_atoUV		Perl_grok_atoUV
+#define isSCRIPT_RUN(a,b,c)	Perl_isSCRIPT_RUN(aTHX_ a,b,c)
 #define mg_find_mglob(a)	Perl_mg_find_mglob(aTHX_ a)
 #define multiconcat_stringify(a)	Perl_multiconcat_stringify(aTHX_ a)
 #define multideref_stringify(a,b)	Perl_multideref_stringify(aTHX_ a,b)
@@ -1113,6 +1118,8 @@
 #define backup_one_SB(a,b,c)	S_backup_one_SB(aTHX_ a,b,c)
 #define backup_one_WB(a,b,c,d)	S_backup_one_WB(aTHX_ a,b,c,d)
 #define find_byclass(a,b,c,d,e)	S_find_byclass(aTHX_ a,b,c,d,e)
+#define find_next_ascii		S_find_next_ascii
+#define find_next_non_ascii	S_find_next_non_ascii
 #define isFOO_utf8_lc(a,b)	S_isFOO_utf8_lc(aTHX_ a,b)
 #define isGCB(a,b,c,d,e)	S_isGCB(aTHX_ a,b,c,d,e)
 #define isLB(a,b,c,d,e,f)	S_isLB(aTHX_ a,b,c,d,e,f)
@@ -1143,6 +1150,10 @@
 #  endif
 #endif
 #ifdef PERL_CORE
+#define PerlLIO_dup2_cloexec(a,b)	Perl_PerlLIO_dup2_cloexec(aTHX_ a,b)
+#define PerlLIO_dup_cloexec(a)	Perl_PerlLIO_dup_cloexec(aTHX_ a)
+#define PerlLIO_open3_cloexec(a,b,c)	Perl_PerlLIO_open3_cloexec(aTHX_ a,b,c)
+#define PerlLIO_open_cloexec(a,b)	Perl_PerlLIO_open_cloexec(aTHX_ a,b)
 #define Slab_Alloc(a)		Perl_Slab_Alloc(aTHX_ a)
 #define Slab_Free(a)		Perl_Slab_Free(aTHX_ a)
 #define _is_in_locale_category(a,b)	Perl__is_in_locale_category(aTHX_ a,b)
@@ -1195,6 +1206,7 @@
 #define ck_sassign(a)		Perl_ck_sassign(aTHX_ a)
 #define ck_select(a)		Perl_ck_select(aTHX_ a)
 #define ck_shift(a)		Perl_ck_shift(aTHX_ a)
+#define ck_smartmatch(a)	Perl_ck_smartmatch(aTHX_ a)
 #define ck_sort(a)		Perl_ck_sort(aTHX_ a)
 #define ck_spair(a)		Perl_ck_spair(aTHX_ a)
 #define ck_split(a)		Perl_ck_split(aTHX_ a)
@@ -1378,6 +1390,11 @@
 #define set_caret_X()		Perl_set_caret_X(aTHX)
 #define set_numeric_standard()	Perl_set_numeric_standard(aTHX)
 #define set_numeric_underlying()	Perl_set_numeric_underlying(aTHX)
+#define setfd_cloexec		Perl_setfd_cloexec
+#define setfd_cloexec_for_nonsysfd(a)	Perl_setfd_cloexec_for_nonsysfd(aTHX_ a)
+#define setfd_cloexec_or_inhexec_by_sysfdness(a)	Perl_setfd_cloexec_or_inhexec_by_sysfdness(aTHX_ a)
+#define setfd_inhexec		Perl_setfd_inhexec
+#define setfd_inhexec_for_sysfd(a)	Perl_setfd_inhexec_for_sysfd(aTHX_ a)
 #define sub_crush_depth(a)	Perl_sub_crush_depth(aTHX_ a)
 #define sv_2num(a)		Perl_sv_2num(aTHX_ a)
 #define sv_clean_all()		Perl_sv_clean_all(aTHX)
@@ -1473,6 +1490,9 @@
 #  if !defined(WIN32)
 #define do_exec3(a,b,c)		Perl_do_exec3(aTHX_ a,b,c)
 #  endif
+#  if defined (HAS_SOCKETPAIR) ||     (defined (HAS_SOCKET) && defined(SOCK_DGRAM) && 	defined(AF_INET) && defined(PF_INET))
+#define PerlSock_socketpair_cloexec(a,b,c,d)	Perl_PerlSock_socketpair_cloexec(aTHX_ a,b,c,d)
+#  endif
 #  if defined(DEBUGGING)
 #define get_debug_opts(a,b)	Perl_get_debug_opts(aTHX_ a,b)
 #define set_padlist		Perl_set_padlist
@@ -1510,8 +1530,15 @@
 #define my_nl_langinfo		S_my_nl_langinfo
 #    endif
 #  endif
+#  if defined(HAS_PIPE)
+#define PerlProc_pipe_cloexec(a)	Perl_PerlProc_pipe_cloexec(aTHX_ a)
+#  endif
 #  if defined(HAS_SIGACTION) && defined(SA_SIGINFO)
 #define sighandler		Perl_sighandler
+#  endif
+#  if defined(HAS_SOCKET)
+#define PerlSock_accept_cloexec(a,b,c)	Perl_PerlSock_accept_cloexec(aTHX_ a,b,c)
+#define PerlSock_socket_cloexec(a,b,c)	Perl_PerlSock_socket_cloexec(aTHX_ a,b,c)
 #  endif
 #  if defined(MYMALLOC)
 #define malloc_good_size	Perl_malloc_good_size
@@ -1597,6 +1624,7 @@
 #define unshare_hek_or_pvn(a,b,c,d)	S_unshare_hek_or_pvn(aTHX_ a,b,c,d)
 #  endif
 #  if defined(PERL_IN_LOCALE_C)
+#define category_name		S_category_name
 #define save_to_buffer		S_save_to_buffer
 #    if defined(USE_LOCALE)
 #define new_collate(a)		S_new_collate(aTHX_ a)
@@ -1650,9 +1678,11 @@
 #define inplace_aassign(a)	S_inplace_aassign(aTHX_ a)
 #define is_handle_constructor	S_is_handle_constructor
 #define listkids(a)		S_listkids(aTHX_ a)
+#define looks_like_bool(a)	S_looks_like_bool(aTHX_ a)
 #define modkids(a,b)		S_modkids(aTHX_ a,b)
 #define move_proto_attr(a,b,c,d)	S_move_proto_attr(aTHX_ a,b,c,d)
 #define my_kid(a,b,c)		S_my_kid(aTHX_ a,b,c)
+#define newGIVWHENOP(a,b,c,d,e)	S_newGIVWHENOP(aTHX_ a,b,c,d,e)
 #define newMETHOP_internal(a,b,c,d)	S_newMETHOP_internal(aTHX_ a,b,c,d)
 #define new_logop(a,b,c,d)	S_new_logop(aTHX_ a,b,c,d)
 #define no_bareword_allowed(a)	S_no_bareword_allowed(aTHX_ a)
@@ -1662,6 +1692,7 @@
 #define optimize_op(a)		S_optimize_op(aTHX_ a)
 #define pmtrans(a,b,c)		S_pmtrans(aTHX_ a,b,c)
 #define process_special_blocks(a,b,c,d)	S_process_special_blocks(aTHX_ a,b,c,d)
+#define ref_array_or_hash(a)	S_ref_array_or_hash(aTHX_ a)
 #define refkids(a,b)		S_refkids(aTHX_ a,b)
 #define scalar_mod_type		S_scalar_mod_type
 #define scalarboolean(a)	S_scalarboolean(aTHX_ a)
@@ -1711,15 +1742,20 @@
 #  endif
 #  if defined(PERL_IN_PP_CTL_C)
 #define check_type_and_open(a)	S_check_type_and_open(aTHX_ a)
+#define destroy_matcher(a)	S_destroy_matcher(aTHX_ a)
+#define do_smartmatch(a,b,c)	S_do_smartmatch(aTHX_ a,b,c)
 #define docatch(a)		S_docatch(aTHX_ a)
 #define doeval_compile(a,b,c,d)	S_doeval_compile(aTHX_ a,b,c,d)
 #define dofindlabel(a,b,c,d,e,f)	S_dofindlabel(aTHX_ a,b,c,d,e,f)
 #define doparseform(a)		S_doparseform(aTHX_ a)
 #define dopoptoeval(a)		S_dopoptoeval(aTHX_ a)
+#define dopoptogivenfor(a)	S_dopoptogivenfor(aTHX_ a)
 #define dopoptolabel(a,b,c)	S_dopoptolabel(aTHX_ a,b,c)
 #define dopoptoloop(a)		S_dopoptoloop(aTHX_ a)
 #define dopoptosub_at(a,b)	S_dopoptosub_at(aTHX_ a,b)
-#define dopoptowhereso(a)	S_dopoptowhereso(aTHX_ a)
+#define dopoptowhen(a)		S_dopoptowhen(aTHX_ a)
+#define make_matcher(a)		S_make_matcher(aTHX_ a)
+#define matcher_matches_sv(a,b)	S_matcher_matches_sv(aTHX_ a,b)
 #define num_overflow		S_num_overflow
 #define path_is_searchable	S_path_is_searchable
 #define run_user_filter(a,b,c)	S_run_user_filter(aTHX_ a,b,c)

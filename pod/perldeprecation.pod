@@ -56,6 +56,24 @@ C<vec> views its string argument as a sequence of bits.  A string
 containing a code point over 0xFF is nonsensical.  This usage is
 deprecated in Perl 5.28, and will be removed in Perl 5.32.
 
+=head3 Use of code points over 0xFF in string bitwise operators
+
+The string bitwise operators, C<&>, C<|>, C<^>, and C<~>, treat their
+operands as strings of bytes. As such, values above 0xFF are
+nonsensical. Some instances of these have been deprecated since Perl
+5.24, and were made fatal in 5.28, but it turns out that in cases where
+the wide characters did not affect the end result, no deprecation
+notice was raised, and so remain legal.  Now, all occurrences either are
+fatal or raise a deprecation warning, so that the remaining legal
+occurrences will be fatal in 5.32.
+
+An example of this is
+
+ "" & "\x{100}"
+
+The wide character is not used in the C<&> operation because the left
+operand is shorter.  This now warns anyway.
+
 =head3 hostname() doesn't accept any arguments
 
 The function C<hostname()> in the L<Sys::Hostname> module has always
@@ -65,6 +83,31 @@ result, some users have got the mistaken impression that an argument does
 something useful.  To avoid these bugs, the function is being made strict.
 Passing arguments was deprecated in Perl 5.28, and will become fatal in
 Perl 5.32.
+
+=head3 Unescaped left braces in regular expressions
+
+The simple rule to remember, if you want to match a literal C<{>
+character (U+007B C<LEFT CURLY BRACKET>) in a regular expression
+pattern, is to escape each literal instance of it in some way.
+Generally easiest is to precede it with a backslash, like C<\{>
+or enclose it in square brackets (C<[{]>).  If the pattern
+delimiters are also braces, any matching right brace (C<}>) should
+also be escaped to avoid confusing the parser, for example,
+
+ qr{abc\{def\}ghi}
+
+Forcing literal C<{> characters to be escaped will enable the Perl
+language to be extended in various ways in future releases.  To avoid
+needlessly breaking existing code, the restriction is is not enforced in
+contexts where there are unlikely to ever be extensions that could
+conflict with the use there of C<{> as a literal.
+
+Literal uses of C<{> were deprecated in Perl 5.20, and some uses of it
+started to give deprecation warnings since. These cases were made fatal
+in Perl 5.26. Due to an oversight, not all cases of a use of a literal
+C<{> got a deprecation warning.  Some cases started warning in Perl 5.26,
+and they will be fatal by Perl 5.30.  Other case started in Perl 5.28,
+and will be made fatal in 5.32.
 
 =head2 Perl 5.30
 
@@ -114,30 +157,9 @@ disappear in Perl 5.30.
 Code using C<< File::Glob::glob() >> should call
 C<< File::Glob::bsd_glob() >> instead.
 
+=head3 Unescaped left braces in regular expressions (for 5.30)
 
-=head3 Unescaped left braces in regular expressions
-
-The simple rule to remember, if you want to match a literal C<{>
-character (U+007B C<LEFT CURLY BRACKET>) in a regular expression
-pattern, is to escape each literal instance of it in some way.
-Generally easiest is to precede it with a backslash, like C<\{>
-or enclose it in square brackets (C<[{]>).  If the pattern
-delimiters are also braces, any matching right brace (C<}>) should
-also be escaped to avoid confusing the parser, for example,
-
- qr{abc\{def\}ghi}
-
-Forcing literal C<{> characters to be escaped will enable the Perl
-language to be extended in various ways in future releases.  To avoid
-needlessly breaking existing code, the restriction is is not enforced in
-contexts where there are unlikely to ever be extensions that could
-conflict with the use there of C<{> as a literal.
-
-Literal uses of C<{> were deprecated in Perl 5.20, and some uses of it
-started to give deprecation warnings since. These cases were made fatal
-in Perl 5.26. Due to an oversight, not all cases of a use of a literal
-C<{> got a deprecation warning. These cases started warning in Perl 5.26,
-and they will be fatal by Perl 5.30.
+See L</Unescaped left braces in regular expressions> above.
 
 =head3 Unqualified C<dump()>
 

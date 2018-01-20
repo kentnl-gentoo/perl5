@@ -129,6 +129,9 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  On OP_DBSTATE, indicates breakpoint
 				 *    (runtime property) */
 				/*  On OP_REQUIRE, was seen as CORE::require */
+				/*  On OP_(ENTER|LEAVE)WHEN, there's
+				    no condition */
+				/*  On OP_SMARTMATCH, an implicit smartmatch */
 				/*  On OP_ANONHASH and OP_ANONLIST, create a
 				    reference to the new anon hash or array */
 				/*  On OP_HELEM, OP_MULTIDEREF and OP_HSLICE,
@@ -624,6 +627,15 @@ typedef enum {
 #define ref(o, type) doref(o, type, TRUE)
 #endif
 
+
+/* translation table attached to OP_TRANS/OP_TRANSR ops */
+
+typedef struct {
+    Size_t size; /* number of entries in map[], not including final slot */
+    short map[1]; /* Unwarranted chumminess */
+} OPtrans_map;
+
+
 /*
 =head1 Optree Manipulation Functions
 
@@ -1100,6 +1112,10 @@ C<sib> is non-null. For a higher-level interface, see C<L</op_sibling_splice>>.
 static const char * const fatal_above_ff_msg
     = "Use of strings with code points over 0xFF as arguments to "
       "%s operator is not allowed";
+static const char * const deprecated_above_ff_msg
+    = "Use of strings with code points over 0xFF as arguments to "
+      "%s operator is deprecated. This will be a fatal error in "
+      "Perl 5.32";
 #endif
 
 

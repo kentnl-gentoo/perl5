@@ -927,7 +927,7 @@ PP(pp_multiconcat)
                 targ_pv += offset;
                 Move(dsv_pv, targ_pv, targ_len, char);
                 /* a negative length implies don't Copy(), but do increment */
-                svpv_p->len = -targ_len;
+                svpv_p->len = -((SSize_t)targ_len);
                 slow_concat = TRUE;
             }
             else {
@@ -1164,14 +1164,24 @@ S_pushav(pTHX_ AV* const av)
         PADOFFSET i;
         for (i=0; i < (PADOFFSET)maxarg; i++) {
             SV ** const svp = av_fetch(av, i, FALSE);
-            SP[i+1] = svp ? *svp : &PL_sv_undef;
+            SP[i+1] = LIKELY(svp)
+                       ? *svp
+                       : UNLIKELY(PL_op->op_flags & OPf_MOD)
+                          ? newSVavdefelem(av,i,1)
+                          : &PL_sv_undef;
         }
     }
     else {
         PADOFFSET i;
         for (i=0; i < (PADOFFSET)maxarg; i++) {
-            SV * const sv = AvARRAY(av)[i];
-            SP[i+1] = LIKELY(sv) ? sv : &PL_sv_undef;
+            SV *sv = AvARRAY(av)[i];
+	    if (!LIKELY(sv))
+		AvARRAY(av)[i] = sv = newSV(0);
+	    SP[i+1] = LIKELY(sv)
+                       ? sv
+                       : UNLIKELY(PL_op->op_flags & OPf_MOD)
+                          ? newSVavdefelem(av,i,1)
+                          : &PL_sv_undef;
         }
     }
     SP += maxarg;

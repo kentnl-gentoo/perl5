@@ -72,6 +72,9 @@ NPOSIXU     NPOSIXD,    none 0 S   ; complement of POSIXU, [[:^class:]]
 NPOSIXA     NPOSIXD,    none 0 S   ; complement of POSIXA, [[:^class:]]
 # End of order is important
 
+ASCII       ASCII,      none 0 S   ; [[:ascii:]]
+NASCII      ASCII,      none 0 S   ; [[:^ascii:]]
+
 CLUMP       CLUMP,      no 0 V    ; Match any extended grapheme cluster sequence
 
 #* Alternation
@@ -132,6 +135,8 @@ WHILEM      WHILEM,     no 0 V    ; Do curly processing and see if rest matches.
 #*OPEN,CLOSE,GROUPP     ...are numbered at compile time.
 OPEN        OPEN,       num 1     ; Mark this point in input as start of #n.
 CLOSE       CLOSE,      num 1     ; Close corresponding OPEN of #n.
+SROPEN      SROPEN,     none      ; Same as OPEN, but for script run
+SRCLOSE     SRCLOSE,    none      ; Close preceding SROPEN
 
 REF         REF,        num 1 V   ; Match some already matched string
 REFF        REF,        num 1 V   ; Match already matched string, folded using native charset rules for non-utf8

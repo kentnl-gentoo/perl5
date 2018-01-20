@@ -5035,7 +5035,7 @@ giving it to C<sv_usepvn>, and neither should any pointers from "behind"
 that pointer (e.g. ptr + 1) be used.
 
 If S<C<flags & SV_SMAGIC>> is true, will call C<SvSETMAGIC>.  If
-S<C<flags> & SV_HAS_TRAILING_NUL>> is true, then C<ptr[len]> must be C<NUL>,
+S<C<flags & SV_HAS_TRAILING_NUL>> is true, then C<ptr[len]> must be C<NUL>,
 and the realloc
 will be skipped (i.e. the buffer is actually at least 1 byte longer than
 C<len>, and already meets the requirements for storing in C<SvPVX>).
@@ -9323,7 +9323,7 @@ Creates a new SV and copies a string into it, which may contain C<NUL> character
 (C<\0>) and other binary data.  The reference count for the SV is set to 1.
 Note that if C<len> is zero, Perl will create a zero length (Perl) string.  You
 are responsible for ensuring that the source buffer is at least
-C<len> bytes long.  If the C<buffer> argument is NULL the new SV will be
+C<len> bytes long.  If the C<s> argument is NULL the new SV will be
 undefined.
 
 =cut
@@ -11057,12 +11057,15 @@ S_F0convert(NV nv, char *const endbuf, STRLEN *const len)
     assert(!Perl_isinfnan(nv));
     if (neg)
 	nv = -nv;
-    if (nv < UV_MAX) {
+    if (nv != 0.0 && nv < UV_MAX) {
 	char *p = endbuf;
-	nv += 0.5;
 	uv = (UV)nv;
-	if (uv & 1 && uv == nv)
-	    uv--;			/* Round to even */
+	if (uv != nv) {
+	    nv += 0.5;
+	    uv = (UV)nv;
+	    if (uv & 1 && uv == nv)
+		uv--;			/* Round to even */
+	}
 	do {
 	    const unsigned dig = uv % 10;
 	    *--p = '0' + dig;
@@ -11814,7 +11817,6 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
     STRLEN origlen;
     Size_t svix = 0;
     static const char nullstr[] = "(null)";
-    SV *argsv = NULL;
     bool has_utf8 = DO_UTF8(sv);    /* has the result utf8? */
     const bool pat_utf8 = has_utf8; /* the pattern is in utf8? */
     /* Times 4: a decimal digit takes more than 3 binary digits.
@@ -11919,6 +11921,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 	Size_t efix      = 0;         /* explicit format parameter index */
 	const Size_t osvix  = svix;   /* original index in case of bad fmt */
 
+	SV *argsv        = NULL;
 	bool is_utf8     = FALSE;     /* is this item utf8?   */
         bool arg_missing = FALSE;     /* give "Missing argument" warning */
 	char esignbuf[4];             /* holds sign prefix, e.g. "-0x" */
@@ -14495,7 +14498,6 @@ Perl_cx_dup(pTHX_ PERL_CONTEXT *cxs, I32 ix, I32 max, CLONE_PARAMS* param)
                 /* FALLTHROUGH */
 	    case CXt_LOOP_LIST:
 	    case CXt_LOOP_LAZYIV:
-	    case CXt_LOOP_GIVEN:
                 /* code common to all 'for' CXt_LOOP_* types */
 		ncx->blk_loop.itersave =
                                     sv_dup_inc(ncx->blk_loop.itersave, param);
@@ -14528,9 +14530,13 @@ Perl_cx_dup(pTHX_ PERL_CONTEXT *cxs, I32 ix, I32 max, CLONE_PARAMS* param)
 		ncx->blk_format.dfoutgv	= gv_dup_inc(ncx->blk_format.dfoutgv,
 						     param);
 		break;
+	    case CXt_GIVEN:
+		ncx->blk_givwhen.defsv_save =
+                                sv_dup_inc(ncx->blk_givwhen.defsv_save, param);
+		break;
 	    case CXt_BLOCK:
 	    case CXt_NULL:
-	    case CXt_WHERESO:
+	    case CXt_WHEN:
 		break;
 	    }
 	}
@@ -15571,6 +15577,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     }
     PL_GCB_invlist = sv_dup_inc(proto_perl->IGCB_invlist, param);
     PL_SB_invlist = sv_dup_inc(proto_perl->ISB_invlist, param);
+    PL_SCX_invlist = sv_dup_inc(proto_perl->ISCX_invlist, param);
     PL_WB_invlist = sv_dup_inc(proto_perl->IWB_invlist, param);
     PL_seen_deprecated_macro = hv_dup_inc(proto_perl->Iseen_deprecated_macro, param);
     PL_utf8_mark	= sv_dup_inc(proto_perl->Iutf8_mark, param);

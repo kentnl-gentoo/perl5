@@ -3172,6 +3172,7 @@ dist/Devel-PPPort/parts/inc/HvNAME	Devel::PPPort include
 dist/Devel-PPPort/parts/inc/limits	Devel::PPPort include
 dist/Devel-PPPort/parts/inc/magic	Devel::PPPort include
 dist/Devel-PPPort/parts/inc/memory	Devel::PPPort include
+dist/Devel-PPPort/parts/inc/mess	Devel::PPPort include
 dist/Devel-PPPort/parts/inc/misc	Devel::PPPort include
 dist/Devel-PPPort/parts/inc/mPUSH	Devel::PPPort include
 dist/Devel-PPPort/parts/inc/MY_CXT	Devel::PPPort include
@@ -3352,6 +3353,7 @@ dist/Devel-PPPort/t/HvNAME.t		Devel::PPPort test file
 dist/Devel-PPPort/t/limits.t		Devel::PPPort test file
 dist/Devel-PPPort/t/magic.t		Devel::PPPort test file
 dist/Devel-PPPort/t/memory.t		Devel::PPPort test file
+dist/Devel-PPPort/t/mess.t		Devel::PPPort test file
 dist/Devel-PPPort/t/misc.t		Devel::PPPort test file
 dist/Devel-PPPort/t/mPUSH.t		Devel::PPPort test file
 dist/Devel-PPPort/t/MY_CXT.t		Devel::PPPort test file
@@ -3632,6 +3634,7 @@ dist/PathTools/Makefile.PL			makefile writer for Cwd
 dist/PathTools/t/abs2rel.t		See if File::Spec->abs2rel works
 dist/PathTools/t/crossplatform.t		See if File::Spec works crossplatform
 dist/PathTools/t/cwd.t			See if Cwd works
+dist/PathTools/t/cwd_enoent.t			See if getcwd errors correctly
 dist/PathTools/t/Functions.t			See if File::Spec::Functions works
 dist/PathTools/t/rel2abs2rel.t		See if File::Spec->rel2abs/abs2rel works
 dist/PathTools/t/Spec.t			See if File::Spec works
@@ -5036,6 +5039,7 @@ pod/perl5273delta.pod		Perl changes in version 5.27.3
 pod/perl5274delta.pod		Perl changes in version 5.27.4
 pod/perl5275delta.pod		Perl changes in version 5.27.5
 pod/perl5276delta.pod		Perl changes in version 5.27.6
+pod/perl5277delta.pod		Perl changes in version 5.27.7
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5442,6 +5446,7 @@ t/io/sem.t			See if SysV semaphores work
 t/io/semctl.t			See if SysV semaphore semctl works
 t/io/shm.t			See if SysV shared memory works
 t/io/socket.t			See if socket functions work
+t/io/socketpair.t		See if socketpair function works
 t/io/tell.t			See if file seeking works
 t/io/through.t			See if pipe passes data intact
 t/io/utf8.t			See if file seeking works
@@ -5669,7 +5674,6 @@ t/op/fork.t			See if fork works
 t/op/fresh_perl_utf8.t		UTF8 tests for pads and gvs
 t/op/getpid.t			See if $$ and getppid work with threads
 t/op/getppid.t			See if getppid works
-t/op/given.t			See if given works
 t/op/glob.t			See if <*> works
 t/op/gmagic.t			See if GMAGIC works
 t/op/goto.t			See if goto works
@@ -5811,8 +5815,6 @@ t/op/ver.t			See if v-strings and the %v format flag work
 t/op/waitpid.t			See if waitpid works
 t/op/wantarray.t		See if wantarray works
 t/op/warn.t			See if warn works
-t/op/whereis.t			See if whereis works
-t/op/whereso.t			See if whereso works
 t/op/while.t			See if while loops work
 t/op/write.t			See if write works (formats work)
 t/op/yadayada.t			See if ... works
@@ -5920,6 +5922,7 @@ t/re/regexp_unicode_prop.t	See if unicode properties work in regular expressions
 t/re/regexp_unicode_prop_thr.t	See if unicode properties work in regular expressions as expected under threads
 t/re/rt122747.t			Test rt122747 assert faile (requires DEBUGGING)
 t/re/rxcode.t			See if /(?{ code })/ works
+t/re/script_run.t		See if script runs works
 t/re/speed.t			See if optimisations are keeping things fast
 t/re/speed_thr.t		ditto under threads
 t/re/subst.t			See if substitution works

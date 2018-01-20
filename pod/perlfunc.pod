@@ -256,7 +256,7 @@ X<control flow>
 
 =for Pod::Functions =Flow
 
-L<C<caller>|/caller EXPR>,
+L<C<break>|/break>, L<C<caller>|/caller EXPR>,
 L<C<continue>|/continue BLOCK>, L<C<die>|/die LIST>, L<C<do>|/do BLOCK>,
 L<C<dump>|/dump LABEL>, L<C<eval>|/eval EXPR>,
 L<C<evalbytes>|/evalbytes EXPR>, L<C<exit>|/exit EXPR>,
@@ -267,9 +267,16 @@ L<C<redo>|/redo LABEL>, L<C<return>|/return EXPR>,
 L<C<sub>|/sub NAME BLOCK>, L<C<__SUB__>|/__SUB__>,
 L<C<wantarray>|/wantarray>
 
-In Perl v5.14 and earlier, L<C<continue>|/continue BLOCK>
-required the L<C<"switch"> feature|feature/The 'switch' feature> to
-be enabled.
+L<C<break>|/break> is available only if you enable the experimental
+L<C<"switch"> feature|feature/The 'switch' feature> or use the C<CORE::>
+prefix.  The L<C<"switch"> feature|feature/The 'switch' feature> also
+enables the C<default>, C<given> and C<when> statements, which are
+documented in L<perlsyn/"Switch Statements">.
+The L<C<"switch"> feature|feature/The 'switch' feature> is enabled
+automatically with a C<use v5.10> (or higher) declaration in the current
+scope.  In Perl v5.14 and earlier, L<C<continue>|/continue BLOCK>
+required the L<C<"switch"> feature|feature/The 'switch' feature>, like
+the other keywords.
 
 L<C<evalbytes>|/evalbytes EXPR> is only available with the
 L<C<"evalbytes"> feature|feature/The 'unicode_eval' and 'evalbytes' features>
@@ -420,10 +427,10 @@ L<C<time>|/time>, L<C<times>|/times>
 =for Pod::Functions =!Non-functions
 
 C<and>, C<AUTOLOAD>, C<BEGIN>, C<CHECK>, C<cmp>, C<CORE>, C<__DATA__>,
-C<DESTROY>, C<else>, C<elseif>, C<elsif>, C<END>, C<__END__>,
+C<default>, C<DESTROY>, C<else>, C<elseif>, C<elsif>, C<END>, C<__END__>,
 C<eq>, C<for>, C<foreach>, C<ge>, C<given>, C<gt>, C<if>, C<INIT>, C<le>,
-C<lt>, C<ne>, C<not>, C<or>, C<UNITCHECK>, C<unless>, C<until>,
-C<whereis>, C<whereso>, C<while>, C<x>, C<xor>
+C<lt>, C<ne>, C<not>, C<or>, C<UNITCHECK>, C<unless>, C<until>, C<when>,
+C<while>, C<x>, C<xor>
 
 =back
 
@@ -905,6 +912,19 @@ uses the result of L<C<ref>|/ref EXPR> as a truth value.
 
 See L<perlmod/"Perl Modules">.
 
+=item break
+
+=for Pod::Functions +switch break out of a C<given> block
+
+Break out of a C<given> block.
+
+L<C<break>|/break> is available only if the
+L<C<"switch"> feature|feature/The 'switch' feature> is enabled or if it
+is prefixed with C<CORE::>. The
+L<C<"switch"> feature|feature/The 'switch' feature> is enabled
+automatically with a C<use v5.10> (or higher) declaration in the current
+scope.
+
 =item caller EXPR
 X<caller> X<call stack> X<stack> X<stack trace>
 
@@ -1322,10 +1342,9 @@ using an empty one, logically enough, so L<C<next>|/next LABEL> goes
 directly back to check the condition at the top of the loop.
 
 When there is no BLOCK, L<C<continue>|/continue BLOCK> is a function
-that exits the current C<whereis> or C<whereso> block,
-avoiding the implicit C<next>
-that happens when execution reaches the end of such a block.
-In Perl 5.14 and earlier, this form of
+that falls through the current C<when> or C<default> block instead of
+iterating a dynamically enclosing C<foreach> or exiting a lexically
+enclosing C<given>.  In Perl 5.14 and earlier, this form of
 L<C<continue>|/continue BLOCK> was only available when the
 L<C<"switch"> feature|feature/The 'switch' feature> was enabled.  See
 L<feature> and L<perlsyn/"Switch Statements"> for more information.
@@ -1947,7 +1966,8 @@ its own internal iterator, accessed by L<C<each>|/each HASH>,
 L<C<keys>|/keys HASH>, and L<C<values>|/values HASH>.  The iterator is
 implicitly reset when L<C<each>|/each HASH> has reached the end as just
 described; it can be explicitly reset by calling L<C<keys>|/keys HASH>
-or L<C<values>|/values HASH> on the hash or array.  If you add or delete
+or L<C<values>|/values HASH> on the hash or array, or by referencing
+the hash (but not array) in list context.  If you add or delete
 a hash's elements while iterating over it, the effect on the iterator is
 unspecified; for example, entries may be skipped or duplicated--so don't
 do that.  Exception: It is always safe to delete the item most recently
@@ -1960,6 +1980,21 @@ returned by L<C<each>|/each HASH>, so the following code works properly:
 
 Tied hashes may have a different ordering behaviour to perl's hash
 implementation.
+
+The iterator used by C<each> is attached to the hash or array, and is
+shared between all iteration operations applied to the same hash or array.
+Thus all uses of C<each> on a single hash or array advance the same
+iterator location.  All uses of C<each> are also subject to having the
+iterator reset by any use of C<keys> or C<values> on the same hash or
+array, or by the hash (but not array) being referenced in list context.
+This makes C<each>-based loops quite fragile: it is easy to arrive at
+such a loop with the iterator already part way through the object, or to
+accidentally clobber the iterator state during execution of the loop body.
+It's easy enough to explicitly reset the iterator before starting a loop,
+but there is no way to insulate the iterator state used by a loop from
+the iterator state used by anything else that might execute during the
+loop body.  To avoid these problems, use a C<foreach> loop rather than
+C<while>-C<each>.
 
 This prints out your environment like the L<printenv(1)> program,
 but in a different order:
@@ -1974,6 +2009,10 @@ been deemed unsuccessful, and was removed as of Perl 5.24.
 
 As of Perl 5.18 you can use a bare L<C<each>|/each HASH> in a C<while>
 loop, which will set L<C<$_>|perlvar/$_> on every iteration.
+If either an C<each> expression or an explicit assignment of an C<each>
+expression to a scalar is used as a C<while>/C<for> condition, then
+the condition actually tests for definedness of the expression's value,
+not for its regular truth value.
 
     while (each %ENV) {
 	print "$_=$ENV{$_}\n";
@@ -3351,6 +3390,13 @@ See L<File::Glob> for details, including
 L<C<bsd_glob>|File::Glob/C<bsd_glob>>, which does not treat whitespace
 as a pattern separator.
 
+If a C<glob> expression is used as the condition of a C<while> or C<for>
+loop, then it will be implicitly assigned to C<$_>.  If either a C<glob>
+expression or an explicit assignment of a C<glob> expression to a scalar
+is used as a C<while>/C<for> condition, then the condition actually
+tests for definedness of the expression's value, not for its regular
+truth value.
+
 Portability issues: L<perlport/glob>.
 
 =item gmtime EXPR
@@ -3411,7 +3457,8 @@ Use of C<goto LABEL> or C<goto EXPR> to jump into a construct is
 deprecated and will issue a warning.  Even then, it may not be used to
 go into any construct that requires initialization, such as a
 subroutine, a C<foreach> loop, or a C<given>
-block.  It also can't be used to go into a
+block.  In general, it may not be used to jump into the parameter
+of a binary or list operator.  It also can't be used to go into a
 construct that is optimized away.
 
 The C<goto &NAME> form is quite different from the other forms of
@@ -3783,8 +3830,7 @@ value such as C<eval {}>, C<sub {}>, or C<do {}>, and should not be used
 to exit a L<C<grep>|/grep BLOCK LIST> or L<C<map>|/map BLOCK LIST>
 operation.
 
-Note that a block by itself or a C<given> construct
-is semantically identical to a loop
+Note that a block by itself is semantically identical to a loop
 that executes once.  Thus L<C<last>|/last LABEL> can be used to effect
 an early exit out of such a block.
 
@@ -4314,8 +4360,7 @@ value such as C<eval {}>, C<sub {}>, or C<do {}>, and should not be used
 to exit a L<C<grep>|/grep BLOCK LIST> or L<C<map>|/map BLOCK LIST>
 operation.
 
-Note that a block by itself or a C<given> construct
-is semantically identical to a loop
+Note that a block by itself is semantically identical to a loop
 that executes once.  Thus L<C<next>|/next LABEL> will exit such a block
 early.
 
@@ -6104,6 +6149,10 @@ it would have been testing the wrong file.
 
 As of Perl 5.12 you can use a bare L<C<readdir>|/readdir DIRHANDLE> in a
 C<while> loop, which will set L<C<$_>|perlvar/$_> on every iteration.
+If either a C<readdir> expression or an explicit assignment of a
+C<readdir> expression to a scalar is used as a C<while>/C<for> condition,
+then the condition actually tests for definedness of the expression's
+value, not for its regular truth value.
 
     opendir(my $dh, $some_dir) || die "Can't open $some_dir: $!";
     while (readdir $dh) {
@@ -6172,6 +6221,13 @@ L<C<eof>|/eof FILEHANDLE> handles C<ARGV> differently.
             ...
         }
     }
+
+Like the C<< <EXPR> >> operator, if a C<readline> expression is
+used as the condition of a C<while> or C<for> loop, then it will be
+implicitly assigned to C<$_>.  If either a C<readline> expression or
+an explicit assignment of a C<readline> expression to a scalar is used
+as a C<while>/C<for> condition, then the condition actually tests for
+definedness of the expression's value, not for its regular truth value.
 
 =item readlink EXPR
 X<readlink>
@@ -6268,8 +6324,7 @@ value such as C<eval {}>, C<sub {}>, or C<do {}>, and should not be used
 to exit a L<C<grep>|/grep BLOCK LIST> or L<C<map>|/map BLOCK LIST>
 operation.
 
-Note that a block by itself or a C<given> construct
-is semantically identical to a loop
+Note that a block by itself is semantically identical to a loop
 that executes once.  Thus L<C<redo>|/redo LABEL> inside such a block
 will effectively turn it into a looping construct.
 
@@ -10108,11 +10163,11 @@ Statements">.
 
 =over
 
+=item default
+
 =item given
 
-=item whereis
-
-=item whereso
+=item when
 
 These flow-control keywords related to the experimental switch feature are
 documented in L<perlsyn/"Switch Statements">.

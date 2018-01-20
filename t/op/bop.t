@@ -18,7 +18,7 @@ BEGIN {
 # If you find tests are failing, please try adding names to tests to track
 # down where the failure is, and supply your new names as a patch.
 # (Just-in-time test naming)
-plan tests => 477;
+plan tests => 504;
 
 # numerics
 ok ((0xdead & 0xbeef) == 0x9ead);
@@ -355,6 +355,38 @@ SKIP: {
  ok (($cusp >> 1) == ($cusp / 2) &&
     do { use integer; abs($cusp >> 1) } == ($cusp / 2));
 }
+# Repeat some of those, with 'use v5.27'
+{
+  use v5.27;
+
+  is "22" & "66", 2,    'numeric & with strings';
+  is "22" | "66", 86,   'numeric | with strings';
+  is "22" ^ "66", 84,   'numeric ^ with strings';
+  is ~"22" & 0xff, 233, 'numeric ~ with string';
+  is 22 &. 66, 22,     '&. with numbers';
+  is 22 |. 66, 66,     '|. with numbers';
+  is 22 ^. 66, "\4\4", '^. with numbers';
+  if ($::IS_EBCDIC) {
+    # ord('2') is 0xF2 on EBCDIC
+    is ~.22, "\x0d\x0d", '~. with number';
+  }
+  else {
+    # ord('2') is 0x32 on ASCII
+    is ~.22, "\xcd\xcd", '~. with number';
+  }
+  $_ = "22";
+  is $_ &= "66", 2,  'numeric &= with strings';
+  $_ = "22";
+  is $_ |= "66", 86, 'numeric |= with strings';
+  $_ = "22";
+  is $_ ^= "66", 84, 'numeric ^= with strings';
+  $_ = 22;
+  is $_ &.= 66, 22,     '&.= with numbers';
+  $_ = 22;
+  is $_ |.= 66, 66,     '|.= with numbers';
+  $_ = 22;
+  is $_ ^.= 66, "\4\4", '^.= with numbers';
+}
 
 # ref tests
 
@@ -580,9 +612,74 @@ foreach my $op_info ([and => "&"], [or => "|"], [xor => "^"]) {
          "(~) is not allowed";
 }
 
-is("abc" & "abc\x{100}", "abc", '"abc" & "abc\x{100}" works');
-is("abc" | "abc\x{100}", "abc\x{100}", '"abc" | "abc\x{100}" works');
-is("abc" ^ "abc\x{100}", "\0\0\0\x{100}", '"abc" ^ "abc\x{100}" works');
-is("abc\x{100}" & "abc", "abc", '"abc\x{100}" & "abc" works');
-is("abc\x{100}" | "abc", "abc\x{100}", '"abc\x{100}" | "abc" works');
-is("abc\x{100}" ^ "abc", "\0\0\0\x{100}", '"abc\x{100}" | "abc" works');
+{
+    # Since these are temporary, and it was a pain to make them into loops,
+    # the code is just rolled out.
+    local $SIG{__WARN__} = sub { push @warnings, @_; };
+
+    undef @warnings;
+    is("abc" & "abc\x{100}", "abc", '"abc" & "abc\x{100}" works');
+    if (! is(@warnings, 1, "... but returned a single warning")) {
+        diag join "\n", @warnings;
+    }
+    like ($warnings[0], qr /^Use of strings with code points over 0xFF as (?#
+                            )arguments to bitwise and \(&\) operator (?#
+                            )is deprecated/,
+                        "... which is the expected warning");
+    undef @warnings;
+    is("abc" | "abc\x{100}", "abc\x{100}", '"abc" | "abc\x{100}" works');
+    if (! is(@warnings, 1, "... but returned a single warning")) {
+        diag join "\n", @warnings;
+    }
+    like ($warnings[0], qr /^Use of strings with code points over 0xFF as (?#
+                            )arguments to bitwise or \(|\) operator (?#
+                            )is deprecated/,
+                        "... which is the expected warning");
+    undef @warnings;
+    is("abc" ^ "abc\x{100}", "\0\0\0\x{100}", '"abc" ^ "abc\x{100}" works');
+    if (! is(@warnings, 1, "... but returned a single warning")) {
+        diag join "\n", @warnings;
+    }
+    like ($warnings[0], qr /^Use of strings with code points over 0xFF as (?#
+                            )arguments to bitwise xor \(\^\) operator (?#
+                            )is deprecated/,
+                        "... which is the expected warning");
+    undef @warnings;
+    is("abc\x{100}" & "abc", "abc", '"abc\x{100}" & "abc" works');
+    if (! is(@warnings, 1, "... but returned a single warning")) {
+        diag join "\n", @warnings;
+    }
+    like ($warnings[0], qr /^Use of strings with code points over 0xFF as (?#
+                            )arguments to bitwise and \(&\) operator (?#
+                            )is deprecated/,
+                        "... which is the expected warning");
+    undef @warnings;
+    is("abc\x{100}" | "abc", "abc\x{100}", '"abc\x{100}" | "abc" works');
+    if (! is(@warnings, 1, "... but returned a single warning")) {
+        diag join "\n", @warnings;
+    }
+    like ($warnings[0], qr /^Use of strings with code points over 0xFF as (?#
+                            )arguments to bitwise or \(|\) operator (?#
+                            )is deprecated/,
+                        "... which is the expected warning");
+    undef @warnings;
+    is("abc\x{100}" ^ "abc", "\0\0\0\x{100}", '"abc\x{100}" ^ "abc" works');
+    if (! is(@warnings, 1, "... but returned a single warning")) {
+        diag join "\n", @warnings;
+    }
+    like ($warnings[0], qr /^Use of strings with code points over 0xFF as (?#
+                            )arguments to bitwise xor \(\^\) operator (?#
+                            )is deprecated/,
+                        "... which is the expected warning");
+    no warnings 'deprecated';
+    undef @warnings;
+    my $foo = "abc" & "abc\x{100}";
+    $foo = "abc" | "abc\x{100}";
+    $foo = "abc" ^ "abc\x{100}";
+    $foo = "abc\x{100}" & "abc";
+    $foo = "abc\x{100}" | "abc";
+    $foo = "abc\x{100}" ^ "abc";
+    if (! is(@warnings, 0, "... And none of the last 6 main tests warns when 'deprecated' is off")) {
+        diag join "\n", @warnings;
+    }
+}

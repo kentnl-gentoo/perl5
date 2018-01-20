@@ -3,7 +3,7 @@
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001
  *    2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012
- *    2013, 2014, 2015, 2016, 2017 by Larry Wall and others
+ *    2013, 2014, 2015, 2016, 2017, 2018 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -469,6 +469,7 @@ perl_construct(pTHXx)
     PL_WB_invlist = _new_invlist_C_array(_Perl_WB_invlist);
     PL_LB_invlist = _new_invlist_C_array(_Perl_LB_invlist);
     PL_Assigned_invlist = _new_invlist_C_array(Assigned_invlist);
+    PL_SCX_invlist = _new_invlist_C_array(_Perl_SCX_invlist);
 #ifdef HAS_POSIX_2008_LOCALE
     PL_C_locale_obj = newlocale(LC_ALL_MASK, "C", NULL);
 #endif
@@ -695,7 +696,7 @@ perl_destruct(pTHXx)
         if (*stdo && PerlIO_flush(stdo)) {
             PerlIO_restore_errno(stdo);
             if (errno)
-                PerlIO_printf(PerlIO_stderr(), "Unable to flush stdout: %s",
+                PerlIO_printf(PerlIO_stderr(), "Unable to flush stdout: %s\n",
                     Strerror(errno));
             if (!STATUS_UNIX)
                 STATUS_ALL_FAILURE;
@@ -742,7 +743,7 @@ perl_destruct(pTHXx)
 	   fail gracefully  */
 	int fd[2];
 
-	if(socketpair(AF_UNIX, SOCK_STREAM, 0, fd)) {
+	if(PerlSock_socketpair_cloexec(AF_UNIX, SOCK_STREAM, 0, fd)) {
 	    perror("Debug leaking scalars socketpair failed");
 	    abort();
 	}
@@ -841,7 +842,7 @@ perl_destruct(pTHXx)
 		   back into Perl_debug_log, as if we never actually closed it
 		*/
 		if(got_fd != debug_fd) {
-		    if (dup2(got_fd, debug_fd) == -1) {
+		    if (PerlLIO_dup2_cloexec(got_fd, debug_fd) == -1) {
 			where = "dup2";
 			goto abort;
 		    }
@@ -1204,6 +1205,7 @@ perl_destruct(pTHXx)
     PL_GCB_invlist = NULL;
     PL_LB_invlist = NULL;
     PL_SB_invlist = NULL;
+    PL_SCX_invlist = NULL;
     PL_WB_invlist = NULL;
     PL_Assigned_invlist = NULL;
 
@@ -1611,6 +1613,9 @@ interpreter, as would normally be passed to the C<main> function of
 a C program.  C<argv[argc]> must be null.  These arguments are where
 the script to parse is specified, either by naming a script file or by
 providing a script in a C<-e> option.
+If L<C<$0>|perlvar/$0> will be written to in the Perl interpreter, then
+the argument strings must be in writable memory, and so mustn't just be
+string constants.
 
 C<env> specifies a set of environment variables that will be used by
 this Perl interpreter.  If non-null, it must point to a null-terminated
@@ -1636,13 +1641,16 @@ For historical reasons, the non-zero return value also attempts to
 be a suitable value to pass to the C library function C<exit> (or to
 return from C<main>), to serve as an exit code indicating the nature
 of the way initialisation terminated.  However, this isn't portable,
-due to differing exit code conventions.  An attempt is made to return
-an exit code of the type required by the host operating system, but
-because it is constrained to be non-zero, it is not necessarily possible
-to indicate every type of exit.  It is only reliable on Unix, where a
-zero exit code can be augmented with a set bit that will be ignored.
-In any case, this function is not the correct place to acquire an exit
-code: one should get that from L</perl_destruct>.
+due to differing exit code conventions.  A historical bug is preserved
+for the time being: if the Perl built-in C<exit> is called during this
+function's execution, with a type of exit entailing a zero exit code
+under the host operating system's conventions, then this function
+returns zero rather than a non-zero value.  This bug, [perl #2754],
+leads to C<perl_run> being called (and therefore C<INIT> blocks and the
+main program running) despite a call to C<exit>.  It has been preserved
+because a popular module-installing module has come to rely on it and
+needs time to be fixed.  This issue is [perl #132577], and the original
+bug is due to be fixed in Perl 5.30.
 
 =cut
 */
@@ -1851,7 +1859,15 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
 	    call_list(oldscope, PL_checkav);
 	}
 	ret = STATUS_EXIT;
-	if (ret == 0) ret = 0x100;
+	if (ret == 0) {
+	    /*
+	     * At this point we should do
+	     *     ret = 0x100;
+	     * to avoid [perl #2754], but that bugfix has been postponed
+	     * because of the Module::Install breakage it causes
+	     * [perl #132577].
+	     */
+	}
 	break;
     case 3:
 	PerlIO_printf(Perl_error_log, "panic: top_env\n");
@@ -3783,7 +3799,7 @@ S_minus_v(pTHX)
 #endif
 
 	PerlIO_printf(PIO_stdout,
-		      "\n\nCopyright 1987-2017, Larry Wall\n");
+		      "\n\nCopyright 1987-2018, Larry Wall\n");
 #ifdef MSDOS
 	PerlIO_printf(PIO_stdout,
 		      "\nMS-DOS port Copyright (c) 1989, 1990, Diomidis Spinellis\n");
@@ -4032,16 +4048,12 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
 	};
 	const char * const err = "Failed to create a fake bit bucket";
 	if (strEQ(scriptname, BIT_BUCKET)) {
-#ifdef HAS_MKSTEMP /* Hopefully mkstemp() is safe here. */
-            int old_umask = umask(0177);
-	    int tmpfd = mkstemp(tmpname);
-            umask(old_umask);
+	    int tmpfd = Perl_my_mkstemp_cloexec(tmpname);
 	    if (tmpfd > -1) {
 		scriptname = tmpname;
 		close(tmpfd);
 	    } else
 		Perl_croak(aTHX_ err);
-#endif
 	}
 #endif
 	rsfp = PerlIO_open(scriptname,PERL_SCRIPT_MODE);
@@ -4063,15 +4075,6 @@ S_open_script(pTHX_ const char *scriptname, bool dosearch, bool *suidscript)
 		    CopFILE(PL_curcop), Strerror(errno));
     }
     fd = PerlIO_fileno(rsfp);
-#if defined(HAS_FCNTL) && defined(F_SETFD) && defined(FD_CLOEXEC)
-    if (fd >= 0) {
-        /* ensure close-on-exec */
-        if (fcntl(fd, F_SETFD, FD_CLOEXEC) < 0) {
-            Perl_croak(aTHX_ "Can't open perl script \"%s\": %s\n",
-                       CopFILE(PL_curcop), Strerror(errno));
-        }
-    }
-#endif
 
     if (fd < 0 ||
         (PerlLIO_fstat(fd, &tmpstatbuf) >= 0

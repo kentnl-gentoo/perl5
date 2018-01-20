@@ -63,7 +63,7 @@ my %feature_bundle = (
     "5.25"   =>	[qw(say state switch unicode_strings unicode_eval
 		    evalbytes current_sub fc postderef_qq)],
     "5.27"   =>	[qw(say state switch unicode_strings unicode_eval
-		    evalbytes current_sub fc postderef_qq)],
+		    evalbytes current_sub fc postderef_qq bitwise)],
 );
 
 my @noops = qw( postderef lexical_subs );
@@ -369,7 +369,7 @@ read_only_bottom_close_and_rename($h);
 __END__
 package feature;
 
-our $VERSION = '1.50';
+our $VERSION = '1.51';
 
 FEATURES
 
@@ -461,7 +461,7 @@ explicitly disabled the warning:
 
     no warnings "experimental::smartmatch";
 
-C<use feature 'switch'> tells the compiler to enable the
+C<use feature 'switch'> tells the compiler to enable the Perl 6
 given/when construct.
 
 See L<perlsyn/"Switch Statements"> for details.
@@ -626,13 +626,6 @@ This feature is available from Perl 5.22 onwards.
 
 =head2 The 'bitwise' feature
 
-B<WARNING>: This feature is still experimental and the implementation may
-change in future versions of Perl.  For this reason, Perl will
-warn when you use the feature, unless you have explicitly disabled the
-warning:
-
-    no warnings "experimental::bitwise";
-
 This makes the four standard bitwise operators (C<& | ^ ~>) treat their
 operands consistently as numbers, and introduces four new dotted operators
 (C<&. |. ^. ~.>) that treat their operands consistently as strings.  The
@@ -640,7 +633,10 @@ same applies to the assignment variants (C<&= |= ^= &.= |.= ^.=>).
 
 See L<perlop/Bitwise String Operators> for details.
 
-This feature is available from Perl 5.22 onwards.
+This feature is available from Perl 5.22 onwards.  Starting in Perl 5.28,
+C<use v5.28> will enable the feature.  Before 5.28, it was still
+experimental and would emit a warning in the "experimental::bitwise"
+category.
 
 =head2 The 'declared_refs' feature
 

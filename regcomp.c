@@ -149,7 +149,7 @@ struct RExC_state_t {
     I32		sawback;		/* Did we see \1, ...? */
     U32		seen;
     SSize_t	size;			/* Code size. */
-    I32                npar;            /* Capture buffer count, (OPEN) plus
+    I32         npar;                   /* Capture buffer count, (OPEN) plus
                                            one. ("par" 0 is the whole
                                            pattern)*/
     I32		nestroot;		/* root parens we are in - used by
@@ -212,6 +212,7 @@ struct RExC_state_t {
     bool        seen_unfolded_sharp_s;
     bool        strict;
     bool        study_started;
+    bool        in_script_run;
 };
 
 #define RExC_flags	(pRExC_state->flags)
@@ -278,6 +279,7 @@ struct RExC_state_t {
 #define RExC_strict (pRExC_state->strict)
 #define RExC_study_started      (pRExC_state->study_started)
 #define RExC_warn_text (pRExC_state->warn_text)
+#define RExC_in_script_run      (pRExC_state->in_script_run)
 
 /* Heuristic check on the complexity of the pattern: if TOO_NAUGHTY, we set
  * a flag to disable back-off on the fixed/floating substrings - if it's
@@ -5554,20 +5556,25 @@ Perl_re_printf( aTHX_  "LHS=%" UVuf " RHS=%" UVuf "\n",
                     }
                     break;
 
+                case NASCII:
+                    invert = 1;
+                    /* FALLTHROUGH */
+		case ASCII:
+                    my_invlist = invlist_clone(PL_XPosix_ptrs[_CC_ASCII]);
+
+                    /* This can be handled as a Posix class */
+                    goto join_posix_and_ascii;
+
                 case NPOSIXA:   /* For these, we always know the exact set of
                                    what's matched */
                     invert = 1;
                     /* FALLTHROUGH */
 		case POSIXA:
-                    if (FLAGS(scan) == _CC_ASCII) {
-                        my_invlist = invlist_clone(PL_XPosix_ptrs[_CC_ASCII]);
-                    }
-                    else {
-                        _invlist_intersection(PL_XPosix_ptrs[FLAGS(scan)],
-                                              PL_XPosix_ptrs[_CC_ASCII],
-                                              &my_invlist);
-                    }
-                    goto join_posix;
+                    assert(FLAGS(scan) != _CC_ASCII);
+                    _invlist_intersection(PL_XPosix_ptrs[FLAGS(scan)],
+                                          PL_XPosix_ptrs[_CC_ASCII],
+                                          &my_invlist);
+                    goto join_posix_and_ascii;
 
 		case NPOSIXD:
 		case NPOSIXU:
@@ -5587,7 +5594,7 @@ Perl_re_printf( aTHX_  "LHS=%" UVuf " RHS=%" UVuf "\n",
                                           &my_invlist);
                     }
 
-                  join_posix:
+                  join_posix_and_ascii:
 
                     if (flags & SCF_DO_STCLASS_AND) {
                         ssc_intersection(data->start_class, my_invlist, invert);
@@ -7037,6 +7044,7 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
     RExC_seen_unfolded_sharp_s = 0;
     RExC_contains_locale = 0;
     RExC_strict = cBOOL(pm_flags & RXf_PMf_STRICT);
+    RExC_in_script_run = 0;
     RExC_study_started = 0;
     pRExC_state->runtime_code_qr = NULL;
     RExC_frame_head= NULL;
@@ -10671,13 +10679,28 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
          * here (if paren ==2).  The forms '(*VERB' and '(?...' disallow such
          * intervening space, as the sequence is a token, and a token should be
          * indivisible */
-        bool has_intervening_patws = paren == 2 && *(RExC_parse - 1) != '(';
+        bool has_intervening_patws = (paren == 2 || paren == 's')
+                                  && *(RExC_parse - 1) != '(';
 
         if (RExC_parse >= RExC_end) {
 	    vFAIL("Unmatched (");
         }
 
-        if ( *RExC_parse == '*') { /* (*VERB:ARG) */
+        if (paren == 's') {
+
+            /* A nested script run  is a no-op besides clustering */
+            if (RExC_in_script_run) {
+                paren = ':';
+                nextchar(pRExC_state);
+                ret = NULL;
+                goto parse_rest;
+            }
+            RExC_in_script_run = 1;
+
+	    ret = reg_node(pRExC_state, SROPEN);
+            is_open = 1;
+        }
+        else if ( *RExC_parse == '*') { /* (*VERB:ARG) */
 	    char *start_verb = RExC_parse + 1;
 	    STRLEN verb_len;
 	    char *start_arg = NULL;
@@ -10701,6 +10724,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                 if (RExC_parse >= RExC_end) {
                     goto unterminated_verb_pattern;
                 }
+
 	        RExC_parse += UTF ? UTF8SKIP(RExC_parse) : 1;
 	        while ( RExC_parse < RExC_end && *RExC_parse != ')' )
                     RExC_parse += UTF ? UTF8SKIP(RExC_parse) : 1;
@@ -10787,6 +10811,45 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
             }
 	    nextchar(pRExC_state);
 	    return ret;
+        }
+        else if (*RExC_parse == '+') { /* (+...) */
+            RExC_parse++;
+
+            if (has_intervening_patws) {
+                /* XXX Note that a potential gotcha is that outside of /x '( +
+                 * ...)' means to match a space at least once ...   This is a
+                 * problem elsewhere too */
+                vFAIL("In '(+...)', the '(' and '+' must be adjacent");
+            }
+
+            if (! memBEGINPs(RExC_parse, (STRLEN) (RExC_end - RExC_parse),
+                             "script_run:"))
+            {
+                RExC_parse += strcspn(RExC_parse, ":)");
+                vFAIL("Unknown (+ pattern");
+            }
+            else {
+
+                /* This indicates Unicode rules. */
+                REQUIRE_UNI_RULES(flagp, NULL);
+
+                RExC_parse += sizeof("script_run:") - 1;
+
+                if (PASS2) {
+                    Perl_ck_warner_d(aTHX_
+                        packWARN(WARN_EXPERIMENTAL__SCRIPT_RUN),
+                        "The script_run feature is experimental"
+                        REPORT_LOCATION, REPORT_LOCATION_ARGS(RExC_parse));
+                }
+
+                ret = reg(pRExC_state, 's', &flags, depth+1);
+                if (flags & (RESTART_PASS1|NEED_UTF8)) {
+                    *flagp = flags & (RESTART_PASS1|NEED_UTF8);
+                    return NULL;
+                }
+
+                return ret;
+            }
         }
         else if (*RExC_parse == '?') { /* (?...) */
 	    bool is_logical = 0;
@@ -11358,7 +11421,16 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                 goto parse_rest;
             } /* end switch */
 	}
-	else if (!(RExC_flags & RXf_PMf_NOCAPTURE)) {   /* (...) */
+	else {
+            if (*RExC_parse == '{' && PASS2) {
+                ckWARNregdep(RExC_parse + 1,
+                            "Unescaped left brace in regex is "
+                            "deprecated here (and will be fatal "
+                            "in Perl 5.32), passed through");
+            }
+            /* Not bothering to indent here, as the above 'else' is temporary
+             * */
+        if (!(RExC_flags & RXf_PMf_NOCAPTURE)) {   /* (...) */
 	  capturing_parens:
 	    parno = RExC_npar;
 	    RExC_npar++;
@@ -11383,6 +11455,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
             /* with RXf_PMf_NOCAPTURE treat (...) as (?:...) */
             paren = ':';
 	    ret = NULL;
+	}
 	}
     }
     else                        /* ! paren */
@@ -11472,6 +11545,10 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 	    }
             Set_Node_Offset(ender,RExC_parse+1); /* MJD */
             Set_Node_Length(ender,1); /* MJD */
+	    break;
+	case 's':
+	    ender = reg_node(pRExC_state, SRCLOSE);
+            RExC_in_script_run = 0;
 	    break;
 	case '<':
 	case ',':
@@ -17313,14 +17390,20 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                 /* The actual POSIXish node for all the rest depends on the
                  * charset modifier.  The ones in the first set depend only on
                  * ASCII or, if available on this platform, also locale */
+
                 case ANYOF_ASCII:
                 case ANYOF_NASCII:
+
 #ifdef HAS_ISASCII
-                    op = (LOC) ? POSIXL : POSIXA;
-#else
-                    op = POSIXA;
+                    if (LOC) {
+                        op = POSIXL;
+                        goto join_posix;
+                    }
 #endif
-                    goto join_posix;
+                    /* (named_class - ANY_OF_ASCII) is 0 or 1. xor'ing with
+                     * invert converts that to 1 or 0 */
+                    op = ASCII + ((namedclass - ANYOF_ASCII) ^ invert);
+                    break;
 
                 /* The following don't have any matches in the upper Latin1
                  * range, hence /d is equivalent to /u for them.  Making it /u
@@ -17461,6 +17544,9 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                 alloc_maybe_populate_EXACT(pRExC_state, ret, flagp, 0, value,
                                            TRUE /* downgradable to EXACT */
                                            );
+            }
+            else {
+                *flagp |= HASWIDTH|SIMPLE;
             }
 
             RExC_parse = (char *) cur_parse;
@@ -18018,25 +18104,43 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
             const UV* cp_list_array = invlist_array(cp_list);
 
             /* Here, didn't find an optimization.  See if this matches any of
-             * the POSIX classes.  These run slightly faster for above-Unicode
-             * code points, so don't bother with POSIXA ones nor the 2 that
-             * have no above-Unicode matches.  We can avoid these checks unless
-             * the ANYOF matches at least as high as the lowest POSIX one
-             * (which was manually found to be \v.  The actual code point may
-             * increase in later Unicode releases, if a higher code point is
-             * assigned to be \v, but this code will never break.  It would
-             * just mean we could execute the checks for posix optimizations
-             * unnecessarily) */
+             * the POSIX classes.  First try ASCII */
 
-            if (cp_list_array[cp_list_len-1] > 0x2029) {
+            if (_invlistEQ(cp_list, PL_XPosix_ptrs[_CC_ASCII], 0)) {
+                op = ASCII;
+                *flagp |= HASWIDTH|SIMPLE;
+            }
+            else if (_invlistEQ(cp_list, PL_XPosix_ptrs[_CC_ASCII], 1)) {
+                op = NASCII;
+                *flagp |= HASWIDTH|SIMPLE;
+            }
+            else if (cp_list_array[cp_list_len-1] >= 0x2029) {
+
+                /* Then try the other POSIX classes.  The POSIXA ones are about
+                 * the same speed as ANYOF ops, but the ones that have
+                 * above-Latin1 code point matches are somewhat faster than
+                 * ANYOF.  So optimize those, but don't bother with the POSIXA
+                 * ones nor [:cntrl:] which has no above-Latin1 matches.  If
+                 * this ANYOF node has a lower highest possible matching code
+                 * point than any of the XPosix ones, we know that it can't
+                 * possibly be the same as any of them, so we can avoid
+                 * executing this code.  The 0x2029 above for the lowest max
+                 * was determined by manual inspection of the classes, and
+                 * comes from \v.  Suppose Unicode in a later version adds a
+                 * higher code point to \v.  All that means is that this code
+                 * can be executed unnecessarily.  It will still give the
+                 * correct answer. */
+
                 for (posix_class = 0;
                      posix_class <= _HIGHEST_REGCOMP_DOT_H_SYNC;
                      posix_class++)
                 {
                     int try_inverted;
-                    if (posix_class == _CC_ASCII || posix_class == _CC_CNTRL) {
+
+                    if (posix_class == _CC_CNTRL) {
                         continue;
                     }
+
                     for (try_inverted = 0; try_inverted < 2; try_inverted++) {
 
                         /* Check if matches normal or inverted */
@@ -19270,7 +19374,7 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o, const regmatch_
         if ( k == REF && reginfo) {
             U32 n = ARG(o);  /* which paren pair */
             I32 ln = prog->offs[n].start;
-            if (prog->lastparen < n || ln == -1)
+            if (prog->lastparen < n || ln == -1 || prog->offs[n].end == -1)
                 Perl_sv_catpvf(aTHX_ sv, ": FAIL");
             else if (ln == prog->offs[n].end)
                 Perl_sv_catpvf(aTHX_ sv, ": ACCEPT - EMPTY STRING");
@@ -20777,7 +20881,7 @@ S_dumpuntil(pTHX_ const regexp *r, const regnode *start, const regnode *node,
 	/* While that wasn't END last time... */
 	NODE_ALIGN(node);
 	op = OP(node);
-	if (op == CLOSE || op == WHILEM)
+	if (op == CLOSE || op == SRCLOSE || op == WHILEM)
 	    indent--;
 	next = regnext((regnode *)node);
 
@@ -20901,7 +21005,7 @@ S_dumpuntil(pTHX_ const regexp *r, const regnode *start, const regnode *node,
 	    node = NEXTOPER(node);
 	    node += regarglen[(U8)op];
 	}
-	if (op == CURLYX || op == OPEN)
+	if (op == CURLYX || op == OPEN || op == SROPEN)
 	    indent++;
     }
     CLEAR_OPTSTART;

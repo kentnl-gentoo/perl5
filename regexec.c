@@ -96,6 +96,12 @@ static const char* const non_utf8_target_but_utf8_required
                 = "Can't match, because target string needs to be in UTF-8\n";
 #endif
 
+/* Returns a boolean as to whether the input unsigned number is a power of 2
+ * (2**0, 2**1, etc).  In other words if it has just a single bit set.
+ * If not, subtracting 1 would leave the uppermost bit set, so the & would
+ * yield non-zero */
+#define isPOWER_OF_2(n) ((n & (n-1)) == 0)
+
 #define NON_UTF8_TARGET_BUT_UTF8_REQUIRED(target) STMT_START {           \
     DEBUG_EXECUTE_r(Perl_re_printf( aTHX_  "%s", non_utf8_target_but_utf8_required));\
     goto target;                                                         \
@@ -544,6 +550,130 @@ S_isFOO_utf8_lc(pTHX_ const U8 classnum, const U8* character)
     }
 
     return FALSE; /* Things like CNTRL are always below 256 */
+}
+
+STATIC char *
+S_find_next_ascii(char * s, const char * send, const bool utf8_target)
+{
+    /* Returns the position of the first ASCII byte in the sequence between 's'
+     * and 'send-1' inclusive; returns 'send' if none found */
+
+    PERL_ARGS_ASSERT_FIND_NEXT_ASCII;
+
+#ifndef EBCDIC
+
+    if ((STRLEN) (send - s) >= PERL_WORDSIZE
+
+                            /* This term is wordsize if subword; 0 if not */
+                          + PERL_WORDSIZE * PERL_IS_SUBWORD_ADDR(s)
+
+                            /* 'offset' */
+                          - (PTR2nat(s) & PERL_WORD_BOUNDARY_MASK))
+    {
+
+        /* Process per-byte until reach word boundary.  XXX This loop could be
+         * eliminated if we knew that this platform had fast unaligned reads */
+        while (PTR2nat(s) & PERL_WORD_BOUNDARY_MASK) {
+            if (isASCII(*s)) {
+                return s;
+            }
+            s++;    /* khw didn't bother creating a separate loop for
+                       utf8_target */
+        }
+
+        /* Here, we know we have at least one full word to process.  Process
+         * per-word as long as we have at least a full word left */
+        do {
+            PERL_UINTMAX_T complemented = ~ * (PERL_UINTMAX_T *) s;
+            if (complemented & PERL_VARIANTS_WORD_MASK)  {
+
+#if   BYTEORDER == 0x1234 || BYTEORDER == 0x12345678    \
+   || BYTEORDER == 0x4321 || BYTEORDER == 0x87654321
+
+                s += _variant_byte_number(complemented);
+                return s;
+
+#else   /* If weird byte order, drop into next loop to do byte-at-a-time
+           checks. */
+
+                break;
+#endif
+            }
+
+            s += PERL_WORDSIZE;
+
+        } while (s + PERL_WORDSIZE <= send);
+    }
+
+#endif
+
+    /* Process per-character */
+    if (utf8_target) {
+        while (s < send) {
+            if (isASCII(*s)) {
+                return s;
+            }
+            s += UTF8SKIP(s);
+        }
+    }
+    else {
+        while (s < send) {
+            if (isASCII(*s)) {
+                return s;
+            }
+            s++;
+        }
+    }
+
+    return s;
+}
+
+STATIC char *
+S_find_next_non_ascii(char * s, const char * send, const bool utf8_target)
+{
+    /* Returns the position of the first non-ASCII byte in the sequence between
+     * 's' and 'send-1' inclusive; returns 'send' if none found */
+
+#ifdef EBCDIC
+
+    PERL_ARGS_ASSERT_FIND_NEXT_NON_ASCII;
+
+    if (utf8_target) {
+        while (s < send) {
+            if ( ! isASCII(*s)) {
+                return s;
+            }
+            s += UTF8SKIP(s);
+        }
+    }
+    else {
+        while (s < send) {
+            if ( ! isASCII(*s)) {
+                return s;
+            }
+            s++;
+        }
+    }
+
+    return s;
+
+#else
+
+    const U8 * next_non_ascii = NULL;
+
+    PERL_ARGS_ASSERT_FIND_NEXT_NON_ASCII;
+    PERL_UNUSED_ARG(utf8_target);
+
+    /* On ASCII platforms invariants and ASCII are identical, so if the string
+     * is entirely invariants, there is no non-ASCII character */
+    return (is_utf8_invariant_string_loc((U8 *) s,
+                                         (STRLEN) (send - s),
+                                         &next_non_ascii))
+            ? (char *) send
+            : (char *) next_non_ascii;
+
+#endif
+
 }
 
 /*
@@ -2373,6 +2503,22 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
         );
         break;
 
+    case ASCII:
+        s = find_next_ascii(s, strend, utf8_target);
+        if (s < strend && (reginfo->intuit || regtry(reginfo, &s))) {
+            goto got_it;
+        }
+
+        break;
+
+    case NASCII:
+        s = find_next_non_ascii(s, strend, utf8_target);
+        if (s < strend && (reginfo->intuit || regtry(reginfo, &s))) {
+            goto got_it;
+        }
+
+        break;
+
     /* The argument to all the POSIX node types is the class number to pass to
      * _generic_isCC() to build a mask for searching in PL_charclass[] */
 
@@ -2406,12 +2552,19 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
         }
 
         to_complement = 1;
-        /* FALLTHROUGH */
+        goto posixa;
 
     case POSIXA:
-      posixa:
         /* Don't need to worry about utf8, as it can match only a single
-         * byte invariant character. */
+         * byte invariant character.  But we do anyway for performance reasons,
+         * as otherwise we would have to examine all the continuation
+         * characters */
+        if (utf8_target) {
+            REXEC_FBC_UTF8_CLASS_SCAN(_generic_isCC_A(*s, FLAGS(c)));
+            break;
+        }
+
+      posixa:
         REXEC_FBC_CLASS_SCAN(
                         to_complement ^ cBOOL(_generic_isCC_A(*s, FLAGS(c))));
         break;
@@ -5411,6 +5564,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
     bool is_utf8_pat = reginfo->is_utf8_pat;
     bool match = FALSE;
     I32 orig_savestack_ix = PL_savestack_ix;
+    U8 * script_run_begin = NULL;
 
 /* Solaris Studio 12.3 messes up fetching PL_charclass['\n'] */
 #if (defined(__SUNPRO_C) && (__SUNPRO_C == 0x5120) && defined(__x86_64) && defined(USE_64_BIT_ALL))
@@ -5444,8 +5598,6 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
     }));
 
     while (scan != NULL) {
-
-
 	next = scan + NEXT_OFF(scan);
 	if (next == scan)
 	    next = NULL;
@@ -6370,6 +6522,22 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	    }
 	    break;
 
+        case ASCII:
+            if (NEXTCHR_IS_EOS || ! isASCII(UCHARAT(locinput))) {
+                sayNO;
+            }
+
+            locinput++;     /* ASCII is always single byte */
+            break;
+
+        case NASCII:
+            if (NEXTCHR_IS_EOS || isASCII(UCHARAT(locinput))) {
+                sayNO;
+            }
+
+            goto increment_locinput;
+            break;
+
         /* The argument (FLAGS) to all the POSIX node types is the class number
          * */
 
@@ -7232,6 +7400,10 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
             lastopen = n;
 	    break;
 
+        case SROPEN: /*  (*SCRIPT_RUN:  */
+            script_run_begin = (U8 *) locinput;
+            break;
+
 /* XXX really need to log other places start/end are set too */
 #define CLOSE_CAPTURE                                                      \
     rex->offs[n].start = rex->offs[n].start_tmp;                           \
@@ -7256,6 +7428,16 @@ S_regmatch(pTHX_ regmatch_info *reginfo, char *startpos, regnode *prog)
 	        goto fake_end;
 
 	    break;
+
+        case SRCLOSE:  /*  (*SCRIPT_RUN: ... )   */
+
+            if (! isSCRIPT_RUN(script_run_begin, (U8 *) locinput, utf8_target))
+            {
+                sayNO;
+            }
+
+            break;
+
 
         case ACCEPT:  /*  (*ACCEPT)  */
             if (scan->flags)
@@ -8139,16 +8321,46 @@ NULL
 		}
 		else {  /* Not utf8_target */
 		    if (ST.c1 == ST.c2) {
-			while (locinput <= ST.maxpos &&
-			       UCHARAT(locinput) != ST.c1)
-			    locinput++;
+                        locinput = (char *) memchr(locinput,
+                                                   ST.c1,
+                                                   ST.maxpos + 1 - locinput);
+                        if (! locinput) {
+                            locinput = ST.maxpos + 1;
+                        }
 		    }
-		    else {
-			while (locinput <= ST.maxpos
-			       && UCHARAT(locinput) != ST.c1
-			       && UCHARAT(locinput) != ST.c2)
-			    locinput++;
-		    }
+                    else {
+                        U8 c1_c2_bits_differing = ST.c1 ^ ST.c2;
+
+                        if (! isPOWER_OF_2(c1_c2_bits_differing)) {
+                            while (   locinput <= ST.maxpos
+                                   && UCHARAT(locinput) != ST.c1
+                                   && UCHARAT(locinput) != ST.c2)
+                            {
+                                locinput++;
+                            }
+                        }
+                        else {
+                            /* If c1 and c2 only differ by a single bit, we can
+                             * avoid a conditional each time through the loop,
+                             * at the expense of a little preliminary setup and
+                             * an extra mask each iteration.  By masking out
+                             * that bit, we match exactly two characters, c1
+                             * and c2, and so we don't have to test for both.
+                             * On both ASCII and EBCDIC platforms, most of the
+                             * ASCII-range and Latin1-range folded equivalents
+                             * differ only in a single bit, so this is actually
+                             * the most common case. (e.g. 'A' 0x41 vs 'a'
+                             * 0x61). */
+                            U8 c1_masked = ST.c1 &~ c1_c2_bits_differing;
+                            U8 c1_c2_mask = ~ c1_c2_bits_differing;
+                            while (   locinput <= ST.maxpos
+                                   && (UCHARAT(locinput) & c1_c2_mask)
+                                                                != c1_masked)
+                            {
+                                locinput++;
+                            }
+                        }
+                    }
 		    n = locinput - ST.oldloc;
 		}
 		if (locinput > ST.maxpos)
@@ -8940,10 +9152,27 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
                 }
             }
             else {
-                while (scan < loceol &&
-                    (UCHARAT(scan) == c1 || UCHARAT(scan) == c2))
-                {
-                    scan++;
+                /* See comments in regmatch() CURLY_B_min_known_fail.  We avoid
+                 * a conditional each time through the loop if the characters
+                 * differ only in a single bit, as is the usual situation */
+                U8 c1_c2_bits_differing = c1 ^ c2;
+
+                if (isPOWER_OF_2(c1_c2_bits_differing)) {
+                    U8 c1_masked = c1 & ~ c1_c2_bits_differing;
+                    U8 c1_c2_mask = ~ c1_c2_bits_differing;
+
+                    while (   scan < loceol
+                           && (UCHARAT(scan) & c1_c2_mask) == c1_masked)
+                    {
+                        scan++;
+                    }
+                }
+                else {
+                    while (    scan < loceol
+                           && (UCHARAT(scan) == c1 || UCHARAT(scan) == c2))
+                    {
+                        scan++;
+                    }
                 }
             }
 	}
@@ -8975,6 +9204,33 @@ S_regrepeat(pTHX_ regexp *prog, char **startposp, const regnode *p,
         else {
 	    while (scan < loceol && ANYOF_BITMAP_TEST(p, *((U8*)scan)))
 		scan++;
+	}
+	break;
+
+    case ASCII:
+        if (utf8_target && loceol - scan > max) {
+
+            /* We didn't adjust <loceol> at the beginning of this routine
+             * because is UTF-8, but it is actually ok to do so, since here, to
+             * match, 1 char == 1 byte. */
+            loceol = scan + max;
+        }
+
+        scan = find_next_non_ascii(scan, loceol, utf8_target);
+	break;
+
+    case NASCII:
+	if (utf8_target) {
+	    while (     hardcount < max
+                   &&   scan < loceol
+		   && ! isASCII_utf8_safe(scan, loceol))
+	    {
+		scan += UTF8SKIP(scan);
+		hardcount++;
+	    }
+	}
+        else {
+            scan = find_next_ascii(scan, loceol, utf8_target);
 	}
 	break;
 
@@ -9824,9 +10080,375 @@ Perl__is_grapheme(pTHX_ const U8 * strbeg, const U8 * s, const U8 * strend, cons
     return isGCB(cp_gcb_val, next_cp_gcb_val, strbeg, s, TRUE);
 }
 
+bool
+Perl_isSCRIPT_RUN(pTHX_ const U8 * s, const U8 * send, const bool utf8_target)
+{
+    /* Checks that every character in the sequence from 's' to 'send' is one of
+     * three scripts: Common, Inherited, and possibly one other.  Additionally
+     * all decimal digits must come from the same consecutive sequence of 10.
+     * 'utf8_target' is TRUE iff the sequence is encoded in UTF-8.
+     *
+     * Basically, it looks at each character in the sequence to see if the
+     * above conditions are met; if not it fails.  It uses an inversion map to
+     * find the enum corresponding to the script of each character.  But this
+     * is complicated by the fact that a few code points can be in any of
+     * several scripts.  The data has been constructed so that there are
+     * additional enum values (all negative) for these situations.  The
+     * absolute value of those is an index into another table which contains
+     * pointers to auxiliary tables for each such situation.  Each aux array
+     * lists all the scripts for the given situation.  There is another,
+     * parallel, table that gives the number of entries in each aux table.
+     * These are all defined in charclass_invlists.h */
+
+    /* XXX Here are the additional things UTS 39 says could be done:
+     * Mark Chinese strings as “mixed script” if they contain both simplified
+     * (S) and traditional (T) Chinese characters, using the Unihan data in the
+     * Unicode Character Database [UCD].  The criterion can only be applied if
+     * the language of the string is known to be Chinese. So, for example, the
+     * string “写真だけの結婚式 ” is Japanese, and should not be marked as
+     * mixed script because of a mixture of S and T characters.  Testing for
+     * whether a character is S or T needs to be based not on whether the
+     * character has a S or T variant , but whether the character is an S or T
+     * variant. khw notes that the sample contains a Hiragana character, and it
+     * is unclear if absence of any foreign script marks the script as
+     * "Chinese"
+     *
+     * Forbid sequences of the same nonspacing mark
+     *
+     * Check to see that all the characters are in the sets of exemplar
+     * characters for at least one language in the Unicode Common Locale Data
+     * Repository [CLDR]. */
+
+
+    /* Things that match /\d/u */
+    SV * decimals_invlist = PL_XPosix_ptrs[_CC_DIGIT];
+    UV * decimals_array = invlist_array(decimals_invlist);
+
+    /* What code point is the digit '0' of the script run? */
+    UV zero_of_run = 0;
+    SCX_enum script_of_run  = SCX_INVALID;   /* Illegal value */
+    SCX_enum script_of_char = SCX_INVALID;
+
+    /* If the script remains not fully determined from iteration to iteration,
+     * this is the current intersection of the possiblities.  */
+    SCX_enum * intersection = NULL;
+    PERL_UINT_FAST8_T intersection_len = 0;
+
+    bool retval = TRUE;
+
+    assert(send > s);
+
+    PERL_ARGS_ASSERT_ISSCRIPT_RUN;
+
+    /* Look at each character in the sequence */
+    while (s < send) {
+        UV cp;
+
+        /* The code allows all scripts to use the ASCII digits.  This is
+         * because they are used in commerce even in scripts that have their
+         * own set.  Hence any ASCII ones found are ok, unless a digit from
+         * another set has already been encountered.  (The other digit ranges
+         * in Common are not similarly blessed */
+        if (UNLIKELY(isDIGIT(*s))) {
+            if (zero_of_run > 0) {
+                if (zero_of_run != '0') {
+                    retval = FALSE;
+                    break;
+                }
+            }
+            else {
+                zero_of_run = '0';
+            }
+            s++;
+            continue;
+        }
+
+        /* Here, isn't an ASCII digit.  Find the code point of the character */
+        if (utf8_target && ! UTF8_IS_INVARIANT(*s)) {
+            Size_t len;
+            cp = valid_utf8_to_uvchr((U8 *) s, &len);
+            s += len;
+        }
+        else {
+            cp = *(s++);
+        }
+
+        /* If is within the range [+0 .. +9] of the script's zero, it also is a
+         * digit in that script.  We can skip the rest of this code for this
+         * character. */
+        if (UNLIKELY(   zero_of_run > 0
+                     && cp >= zero_of_run
+                     && cp - zero_of_run <= 9))
+        {
+            continue;
+        }
+
+        /* Find the character's script.  The correct values are hard-coded here
+         * for small-enough code points. */
+        if (cp < 0x2B9) {   /* From inspection of Unicode db; extremely
+                               unlikely to change */
+            if (       cp > 255
+                || (   isALPHA_L1(cp)
+                    && LIKELY(cp != MICRO_SIGN_NATIVE)))
+            {
+                script_of_char = SCX_Latin;
+            }
+            else {
+                script_of_char = SCX_Common;
+            }
+        }
+        else {
+            script_of_char = _Perl_SCX_invmap[
+                                       _invlist_search(PL_SCX_invlist, cp)];
+        }
+
+        /* We arbitrarily accept a single unassigned character, but not in
+         * combination with anything else, and not a run of them. */
+        if (   UNLIKELY(script_of_run == SCX_Unknown)
+            || UNLIKELY(   script_of_run != SCX_INVALID
+                        && script_of_char == SCX_Unknown))
+        {
+            retval = FALSE;
+            break;
+        }
+
+        if (UNLIKELY(script_of_char == SCX_Unknown)) {
+                script_of_run = SCX_Unknown;
+                continue;
+        }
+
+        /* We accept 'inherited' script characters currently even at the
+         * beginning.  (We know that no characters in Inherited are digits, or
+         * we'd have to check for that) */
+        if (UNLIKELY(script_of_char == SCX_Inherited)) {
+            continue;
+        }
+
+        /* If unknown, the run's script is set to the char's */
+        if (UNLIKELY(script_of_run == SCX_INVALID)) {
+            script_of_run = script_of_char;
+        }
+
+        /* All decimal digits must be from the same sequence of 10.  Above, we
+         * handled any ASCII digits without descending to here.  We also
+         * handled the case where we already knew what digit sequence is the
+         * one to use, and the character is in that sequence.  Now that we know
+         * the script, we can use script_zeros[] to directly find which
+         * sequence the script uses, except in a few cases it returns 0 */
+        if (UNLIKELY(zero_of_run == 0) && script_of_char >= 0) {
+            zero_of_run = script_zeros[script_of_char];
+        }
+
+        /* Now we can see if the script of the character is the same as that of
+         * the run */
+        if (LIKELY(script_of_char == script_of_run)) {
+            /* By far the most common case */
+            goto scripts_match;
+        }
+
+        /* Here, the scripts of the run and the current character don't match
+         * exactly.  The run could so far have been entirely characters from
+         * Common.  It's now time to change its script to that of this
+         * non-Common character */
+        if (script_of_run == SCX_Common) {
+
+            /* But Common contains several sets of digits.  Only the '0' set
+             * can be part of another script. */
+            if (zero_of_run > 0 && zero_of_run != '0') {
+                retval = FALSE;
+                break;
+            }
+
+            script_of_run = script_of_char;
+            goto scripts_match;
+        }
+
+        /* Here, the script of the run isn't Common.  But characters in Common
+         * match any script */
+        if (script_of_char == SCX_Common) {
+            goto scripts_match;
+        }
+
+#ifndef HAS_SCX_AUX_TABLES
+
+        /* Too early a Unicode version to have a code point belonging to more
+         * than one script, so, if the scripts don't exactly match, fail */
+        retval = FALSE;
+        break;
+
+#else
+
+        /* Here there is no exact match between the character's script and the
+         * run's.  And we've handled the special cases of scripts Unknown,
+         * Inherited, and Common.
+         *
+         * Negative script numbers signify that the value may be any of several
+         * scripts, and we need to look at auxiliary information to make our
+         * deterimination.  But if both are non-negative, we can fail now */
+        if (LIKELY(script_of_char >= 0)) {
+            const SCX_enum * search_in;
+            PERL_UINT_FAST8_T search_in_len;
+            PERL_UINT_FAST8_T i;
+
+            if (LIKELY(script_of_run >= 0)) {
+                retval = FALSE;
+                break;
+            }
+
+            /* Use the previously constructed set of possible scripts, if any.
+             * */
+            if (intersection) {
+                search_in = intersection;
+                search_in_len = intersection_len;
+            }
+            else {
+                search_in = SCX_AUX_TABLE_ptrs[-script_of_run];
+                search_in_len = SCX_AUX_TABLE_lengths[-script_of_run];
+            }
+
+            for (i = 0; i < search_in_len; i++) {
+                if (search_in[i] == script_of_char) {
+                    script_of_run = script_of_char;
+                    goto scripts_match;
+                }
+            }
+
+            retval = FALSE;
+            break;
+        }
+        else if (LIKELY(script_of_run >= 0)) {
+            /* script of character could be one of several, but run is a single
+             * script */
+            const SCX_enum * search_in = SCX_AUX_TABLE_ptrs[-script_of_char];
+            const PERL_UINT_FAST8_T search_in_len
+                                     = SCX_AUX_TABLE_lengths[-script_of_char];
+            PERL_UINT_FAST8_T i;
+
+            for (i = 0; i < search_in_len; i++) {
+                if (search_in[i] == script_of_run) {
+                    script_of_char = script_of_run;
+                    goto scripts_match;
+                }
+            }
+
+            retval = FALSE;
+            break;
+        }
+        else {
+            /* Both run and char could be in one of several scripts.  If the
+             * intersection is empty, then this character isn't in this script
+             * run.  Otherwise, we need to calculate the intersection to use
+             * for future iterations of the loop, unless we are already at the
+             * final character */
+            const SCX_enum * search_char = SCX_AUX_TABLE_ptrs[-script_of_char];
+            const PERL_UINT_FAST8_T char_len
+                                      = SCX_AUX_TABLE_lengths[-script_of_char];
+            const SCX_enum * search_run;
+            PERL_UINT_FAST8_T run_len;
+
+            SCX_enum * new_overlap = NULL;
+            PERL_UINT_FAST8_T i, j;
+
+            if (intersection) {
+                search_run = intersection;
+                run_len = intersection_len;
+            }
+            else {
+                search_run = SCX_AUX_TABLE_ptrs[-script_of_run];
+                run_len = SCX_AUX_TABLE_lengths[-script_of_run];
+            }
+
+            intersection_len = 0;
+
+            for (i = 0; i < run_len; i++) {
+                for (j = 0; j < char_len; j++) {
+                    if (search_run[i] == search_char[j]) {
+
+                        /* Here, the script at i,j matches.  That means this
+                         * character is in the run.  But continue on to find
+                         * the complete intersection, for the next loop
+                         * iteration, and for the digit check after it.
+                         *
+                         * On the first found common script, we malloc space
+                         * for the intersection list for the worst case of the
+                         * intersection, which is the minimum of the number of
+                         * scripts remaining in each set. */
+                        if (intersection_len == 0) {
+                            Newx(new_overlap,
+                                 MIN(run_len - i, char_len - j),
+                                 SCX_enum);
+                        }
+                        new_overlap[intersection_len++] = search_run[i];
+                    }
+                }
+            }
+
+            /* Here we've looked through everything.  If they have no scripts
+             * in common, not a run */
+            if (intersection_len == 0) {
+                retval = FALSE;
+                break;
+            }
+
+            /* If there is only a single script in common, set to that.
+             * Otherwise, use the intersection going forward */
+            Safefree(intersection);
+            if (intersection_len == 1) {
+                script_of_run = script_of_char = new_overlap[0];
+                Safefree(new_overlap);
+            }
+            else {
+                intersection = new_overlap;
+            }
+        }
+
 #endif
 
+  scripts_match:
 
+        /* Here, the script of the character is compatible with that of the
+         * run.  Either they match exactly, or one or both can be any of
+         * several scripts, and the intersection is not empty.  If the
+         * character is not a decimal digit, we are done with it.  Otherwise,
+         * it could still fail if it is from a different set of 10 than seen
+         * already (or we may not have seen any, and we need to set the
+         * sequence).  If we have determined a single script and that script
+         * only has one set of digits (almost all scripts are like that), then
+         * this isn't a problem, as any digit must come from the same sequence.
+         * The only scripts that have multiple sequences have been constructed
+         * to be 0 in 'script_zeros[]'.
+         *
+         * Here we check if it is a digit. */
+        if (    cp >= FIRST_NON_ASCII_DECIMAL_DIGIT
+            && (   (          zero_of_run == 0
+                    || (  (   script_of_char >= 0
+                           && script_zeros[script_of_char] == 0)
+                        ||    intersection))))
+        {
+            SSize_t range_zero_index;
+            range_zero_index = _invlist_search(decimals_invlist, cp);
+            if (   LIKELY(range_zero_index >= 0)
+                && ELEMENT_RANGE_MATCHES_INVLIST(range_zero_index))
+            {
+                UV range_zero = decimals_array[range_zero_index];
+                if (zero_of_run) {
+                    if (zero_of_run != range_zero) {
+                        retval = FALSE;
+                        break;
+                    }
+                }
+                else {
+                    zero_of_run = range_zero;
+                }
+            }
+        }
+    } /* end of looping through CLOSESR text */
+
+    Safefree(intersection);
+    return retval;
+}
+
+#endif /* ifndef PERL_IN_XSUB_RE */
 
 /*
  * ex: set ts=8 sts=4 sw=4 et:

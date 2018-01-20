@@ -66,7 +66,7 @@ or resolved at compile time.  These don't have names by which they
 can be looked up from Perl code at run time through eval"" the way
 C<my>/C<our> variables can be.  Since they can't be looked up by "name"
 but only by their index allocated at compile time (which is usually
-in C<PL_op->op_targ>), wasting a name SV for them doesn't make sense.
+in C<< PL_op->op_targ >>), wasting a name SV for them doesn't make sense.
 
 The pad names in the PADNAMELIST have their PV holding the name of
 the variable.  The C<COP_SEQ_RANGE_LOW> and C<_HIGH> fields form a range
@@ -137,7 +137,7 @@ values for the pad for the currently-executing code.
 =for apidoc AmxU|SV **|PL_curpad
 
 Points directly to the body of the L</PL_comppad> array.
-(I.e., this is C<PAD_ARRAY(PL_comppad)>.)
+(I.e., this is C<PadARRAY(PL_comppad)>.)
 
 =cut
 */
@@ -395,9 +395,11 @@ Perl_cv_undef_flags(pTHX_ CV *cv, U32 flags)
 		if (name && PadnamePV(name) && *PadnamePV(name) == '&')
 		    {
 			CV * const innercv = MUTABLE_CV(curpad[ix]);
-			U32 inner_rc = SvREFCNT(innercv);
-			assert(inner_rc);
+			U32 inner_rc;
+			assert(innercv);
 			assert(SvTYPE(innercv) != SVt_PVFM);
+			inner_rc = SvREFCNT(innercv);
+			assert(inner_rc);
 
 			if (SvREFCNT(comppad) < 2) { /* allow for /(?{ sub{} })/  */
 			    curpad[ix] = NULL;

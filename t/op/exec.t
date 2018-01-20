@@ -114,7 +114,7 @@ unless( ok($rc == 255 << 8 or $rc == -1 or $rc == 256 or $rc == 512) ) {
 unless ( ok( $! == 2  or  $! =~ /\bno\b.*\bfile/i or  
              $! == 13 or  $! =~ /permission denied/i or
              $! == 22 or  $! =~ /invalid argument/i  ) ) {
-    printf "# \$! eq %d, '%s'\n", $!, $!;
+    diag sprintf "\$! eq %d, '%s'\n", $!, $!;
 }
 
 
@@ -181,15 +181,15 @@ TODO: {
     local $! = 0;
     ok !exec(), 'empty exec LIST fails';
     ok $! == 2 || $! =~ qr/\bno\b.*\bfile\b/i, 'errno = ENOENT'
-        or printf "# \$! eq %d, '%s'\n", $!, $!;
+        or diag sprintf "\$! eq %d, '%s'\n", $!, $!;
 
 }
 {
     local $! = 0;
     my $err = $!;
     ok !(exec {""} ()), 'empty exec PROGRAM LIST fails';
-    ok $! == 2 || $! =~ qr/\bno\b.*\bfile\b/, 'errno = ENOENT'
-        or printf "# \$! eq %d, '%s'\n", $!, $!;
+    ok $! == 2 || $! =~ qr/\bno\b.*\bfile\b/i, 'errno = ENOENT'
+        or diag sprintf "\$! eq %d, '%s'\n", $!, $!;
 }
 
 package CountRead {
@@ -198,11 +198,15 @@ package CountRead {
 }
 my $cr;
 tie $cr, "CountRead";
-is system($^X, "-e", "exit(\$ARGV[0] eq '1' ? 0 : 1)", $cr), 0,
+my $exit_statement = "exit(\$ARGV[0] eq '1' ? 0 : 1)";
+$exit_statement = qq/"$exit_statement"/ if $^O eq 'VMS';
+is system($^X, "-e", $exit_statement, $cr), 0,
     "system args have magic processed exactly once";
 is tied($cr)->{n}, 1, "system args have magic processed before fork";
 
-is system($^X, "-e", "exit(\$ARGV[0] eq \$ARGV[1] ? 0 : 1)", "$$", $$), 0,
+$exit_statement = "exit(\$ARGV[0] eq \$ARGV[1] ? 0 : 1)";
+$exit_statement = qq/"$exit_statement"/ if $^O eq 'VMS';
+is system($^X, "-e", $exit_statement, "$$", $$), 0,
     "system args have magic processed before fork";
 
 my $test = curr_test();

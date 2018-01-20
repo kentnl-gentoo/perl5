@@ -1,6 +1,5 @@
 # Common tools for test files files to find the locales which exist on the
-# system.  Caller should have defined ok() for the unlikely event that setup
-# here fails, and should have verified that this isn't miniperl before calling
+# system.  Caller should have verified that this isn't miniperl before calling
 # the functions.
 
 # Note that it's okay that some languages have their native names
@@ -29,7 +28,7 @@ my $max_bad_category_number = -1000000;
 # where 6 is the value of &POSIX::LC_CTYPE
 my %category_name;
 my %category_number;
-unless ($@) {
+if ($has_locale_h) {
     my $number_for_missing_category = $max_bad_category_number;
     foreach my $name (qw(ALL COLLATE CTYPE MESSAGES MONETARY NUMERIC TIME)) {
         my $number = eval "&POSIX::LC_$name";
@@ -51,6 +50,28 @@ unless ($@) {
 
         $category_name{$number} = "$name";
         $category_number{$name} = $number;
+    }
+}
+
+sub _my_diag($) {
+    my $message = shift;
+    if (defined &main::diag) {
+        diag($message);
+    }
+    else {
+        local($\, $", $,) = (undef, ' ', '');
+        print STDERR $message, "\n";
+    }
+}
+
+sub _my_fail($) {
+    my $message = shift;
+    if (defined &main::fail) {
+        fail($message);
+    }
+    else {
+        local($\, $", $,) = (undef, ' ', '');
+        print "not ok 0 $message\n";
     }
 }
 
@@ -99,7 +120,7 @@ sub _trylocale ($$$$) { # For use only by other functions in this file!
     }
 
     if ($badutf8) {
-        ok(0, "Verify locale name doesn't contain malformed utf8");
+        _my_fail("Verify locale name doesn't contain malformed utf8");
         return;
     }
     push @$list, $locale if $plays_well || $allow_incompatible;
@@ -339,12 +360,16 @@ sub find_locales ($;$) {
         # This is going to be slow.
         my @Data;
 
-        # Locales whose name differs if the utf8 bit is on are stored in these two
-        # files with appropriate encodings.
-        if ($^H & 0x08 || (${^OPEN} || "") =~ /:utf8/) {
-            @Data = do "./lib/locale/utf8";
-        } else {
-            @Data = do "./lib/locale/latin1";
+        # Locales whose name differs if the utf8 bit is on are stored in these
+        # two files with appropriate encodings.
+        my $data_file = ($^H & 0x08 || (${^OPEN} || "") =~ /:utf8/)
+                        ? _source_location() . "/lib/locale/utf8"
+                        : _source_location() . "/lib/locale/latin1";
+        if (-e $data_file) {
+            @Data = do $data_file;
+        }
+        else {
+            _my_diag(__FILE__ . ":" . __LINE__ . ": '$data_file' doesn't exist");
         }
 
         # The rest of the locales are in this file.
@@ -353,6 +378,8 @@ sub find_locales ($;$) {
         foreach my $line (@Data) {
             my ($locale_name, $language_codes, $country_codes, $encodings) =
                 split /:/, $line;
+            _my_diag(__FILE__ . ":" . __LINE__ . ": Unexpected syntax in '$line'")
+                                                     unless defined $locale_name;
             my @enc = _decode_encodings($encodings);
             foreach my $loc (split(/ /, $locale_name)) {
                 _trylocale($loc, $categories, \@Locale, $allow_incompatible);
@@ -458,6 +485,20 @@ sub find_utf8_ctype_locale (;$) { # Return the name of a locale that core Perl
     }
 
     return;
+}
+
+# returns full path to the directory containing the current source
+# file, inspired by mauke's Dir::Self
+sub _source_location {
+    require File::Spec;
+
+    my $caller_filename = (caller)[1];
+
+    return File::Spec->rel2abs(
+        File::Spec->catpath(
+            (File::Spec->splitpath($caller_filename))[0, 1]
+        )
+    );
 }
 
 1

@@ -377,7 +377,7 @@ use File::Glob qw(:case);
     },
 
     'Digest::SHA' => {
-        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-6.00.tar.gz',
+        'DISTRIBUTION' => 'MSHELOR/Digest-SHA-6.01.tar.gz',
         'FILES'        => q[cpan/Digest-SHA],
         'EXCLUDED'     => [
             qw( t/pod.t
@@ -385,32 +385,6 @@ use File::Glob qw(:case);
                 examples/dups
                 ),
         ],
-        # https://rt.cpan.org/Public/Bug/Display.html?id=123863
-        CUSTOMIZED    => [qw[
-                t/allfcns.t
-                t/base64.t
-                t/bitbuf.t
-                t/bitorder.t
-                t/fips180-4.t
-                t/fips198.t
-                t/gg.t
-                t/gglong.t
-                t/hmacsha.t
-                t/inheritance.t
-                t/ireland.t
-                t/methods.t
-                t/nistbit.t
-                t/nistbyte.t
-                t/rfc2202.t
-                t/sha1.t
-                t/sha224.t
-                t/sha256.t
-                t/sha384.t
-                t/sha512.t
-                t/state.t
-                t/unicode.t
-                t/woodbury.t
-        ] ],
     },
 
     'Dumpvalue' => {
@@ -420,7 +394,7 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.93.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.94.tar.gz',
         'FILES'        => q[cpan/Encode],
     },
 
@@ -686,7 +660,7 @@ use File::Glob qw(:case);
     },
 
     'JSON::PP' => {
-        'DISTRIBUTION' => 'ISHIGAKI/JSON-PP-2.97000.tar.gz',
+        'DISTRIBUTION' => 'ISHIGAKI/JSON-PP-2.97001.tar.gz',
         'FILES'        => q[cpan/JSON-PP],
     },
 
@@ -834,7 +808,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20171120.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20171220.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -990,7 +964,7 @@ use File::Glob qw(:case);
     },
 
     'podlators' => {
-        'DISTRIBUTION' => 'RRA/podlators-4.09.tar.gz',
+        'DISTRIBUTION' => 'RRA/podlators-4.10.tar.gz',
         'FILES'        => q[cpan/podlators pod/perlpodstyle.pod],
         'EXCLUDED'     => [
             qr{^docs/metadata/},
@@ -1027,13 +1001,8 @@ use File::Glob qw(:case);
     },
 
     'Socket' => {
-        'DISTRIBUTION' => 'PEVANS/Socket-2.020.tar.gz',
+        'DISTRIBUTION' => 'PEVANS/Socket-2.027.tar.gz',
         'FILES'        => q[cpan/Socket],
-
-        # https://rt.cpan.org/Ticket/Display.html?id=106797
-        # https://rt.cpan.org/Ticket/Display.html?id=107058
-        # https://rt.cpan.org/Ticket/Display.html?id=111707
-        'CUSTOMIZED'   => [ qw[ Socket.pm Socket.xs ] ],
     },
 
     'Storable' => {
@@ -1225,7 +1194,7 @@ use File::Glob qw(:case);
     },
 
     'Time::HiRes' => {
-        'DISTRIBUTION' => 'JHI/Time-HiRes-1.9746.tar.gz',
+        'DISTRIBUTION' => 'JHI/Time-HiRes-1.9752.tar.gz',
         'FILES'        => q[dist/Time-HiRes],
     },
 

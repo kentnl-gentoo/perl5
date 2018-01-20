@@ -35,6 +35,20 @@ PERL_CALLCONV UV	NATIVE_TO_NEED(const UV enc, const UV ch)
 #endif
 
 PERL_CALLCONV const char *	Perl_PerlIO_context_layers(pTHX_ const char *mode);
+PERL_CALLCONV int	Perl_PerlLIO_dup2_cloexec(pTHX_ int oldfd, int newfd);
+PERL_CALLCONV int	Perl_PerlLIO_dup_cloexec(pTHX_ int oldfd)
+			__attribute__warn_unused_result__;
+
+PERL_CALLCONV int	Perl_PerlLIO_open3_cloexec(pTHX_ const char *file, int flag, int perm)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_PERLLIO_OPEN3_CLOEXEC	\
+	assert(file)
+
+PERL_CALLCONV int	Perl_PerlLIO_open_cloexec(pTHX_ const char *file, int flag)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_PERLLIO_OPEN_CLOEXEC	\
+	assert(file)
+
 PERL_CALLCONV void*	Perl_Slab_Alloc(pTHX_ size_t sz)
 			__attribute__warn_unused_result__;
 
@@ -498,6 +512,11 @@ PERL_CALLCONV OP *	Perl_ck_shift(pTHX_ OP *o)
 #define PERL_ARGS_ASSERT_CK_SHIFT	\
 	assert(o)
 
+PERL_CALLCONV OP *	Perl_ck_smartmatch(pTHX_ OP *o)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_CK_SMARTMATCH	\
+	assert(o)
+
 PERL_CALLCONV OP *	Perl_ck_sort(pTHX_ OP *o)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_CK_SORT	\
@@ -803,7 +822,7 @@ PERL_CALLCONV Off_t	Perl_do_tell(pTHX_ GV* gv)
 #define PERL_ARGS_ASSERT_DO_TELL	\
 	assert(gv)
 
-PERL_CALLCONV I32	Perl_do_trans(pTHX_ SV* sv);
+PERL_CALLCONV Size_t	Perl_do_trans(pTHX_ SV* sv);
 #define PERL_ARGS_ASSERT_DO_TRANS	\
 	assert(sv)
 PERL_CALLCONV UV	Perl_do_vecget(pTHX_ SV* sv, STRLEN offset, int size);
@@ -1369,7 +1388,12 @@ PERL_CALLCONV bool	Perl_isIDFIRST_lazy(pTHX_ const char* p)
 #define PERL_ARGS_ASSERT_ISIDFIRST_LAZY	\
 	assert(p)
 
-/* PERL_CALLCONV bool	Perl_is_ascii_string(const U8* const s, const STRLEN len)
+PERL_CALLCONV bool	Perl_isSCRIPT_RUN(pTHX_ const U8 *s, const U8 *send, const bool utf8_target)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_ISSCRIPT_RUN	\
+	assert(s); assert(send)
+
+/* PERL_CALLCONV bool	Perl_is_ascii_string(const U8* const s, STRLEN len)
 			__attribute__warn_unused_result__
 			__attribute__pure__; */
 
@@ -2078,6 +2102,11 @@ PERL_CALLCONV Pid_t	Perl_my_fork(void);
 PERL_CALLCONV I32	Perl_my_lstat(pTHX);
 #endif
 PERL_CALLCONV I32	Perl_my_lstat_flags(pTHX_ const U32 flags);
+PERL_CALLCONV int	Perl_my_mkstemp_cloexec(char *templte)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_MY_MKSTEMP_CLOEXEC	\
+	assert(templte)
+
 PERL_CALLCONV PerlIO*	Perl_my_popen_list(pTHX_ const char* mode, int n, SV ** args);
 #define PERL_ARGS_ASSERT_MY_POPEN_LIST	\
 	assert(mode); assert(args)
@@ -2147,10 +2176,10 @@ PERL_CALLCONV OP*	Perl_newFOROP(pTHX_ I32 flags, OP* sv, OP* expr, OP* block, OP
 #define PERL_ARGS_ASSERT_NEWFOROP	\
 	assert(expr)
 
-PERL_CALLCONV OP*	Perl_newGIVENOP(pTHX_ OP* topic, OP* block, PADOFFSET defsv_off)
+PERL_CALLCONV OP*	Perl_newGIVENOP(pTHX_ OP* cond, OP* block, PADOFFSET defsv_off)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_NEWGIVENOP	\
-	assert(topic); assert(block)
+	assert(cond); assert(block)
 
 PERL_CALLCONV GP *	Perl_newGP(pTHX_ GV *const gv);
 #define PERL_ARGS_ASSERT_NEWGP	\
@@ -2337,10 +2366,10 @@ PERL_CALLCONV OP*	Perl_newUNOP(pTHX_ I32 type, I32 flags, OP* first)
 PERL_CALLCONV OP*	Perl_newUNOP_AUX(pTHX_ I32 type, I32 flags, OP* first, UNOP_AUX_item *aux)
 			__attribute__warn_unused_result__;
 
-PERL_CALLCONV OP*	Perl_newWHERESOOP(pTHX_ OP* cond, OP* block)
+PERL_CALLCONV OP*	Perl_newWHENOP(pTHX_ OP* cond, OP* block)
 			__attribute__warn_unused_result__;
-#define PERL_ARGS_ASSERT_NEWWHERESOOP	\
-	assert(cond); assert(block)
+#define PERL_ARGS_ASSERT_NEWWHENOP	\
+	assert(block)
 
 PERL_CALLCONV OP*	Perl_newWHILEOP(pTHX_ I32 flags, I32 debuggable, LOOP* loop, OP* expr, OP* block, OP* cont, I32 has_my)
 			__attribute__warn_unused_result__;
@@ -2912,6 +2941,11 @@ PERL_CALLCONV void	Perl_set_numeric_underlying(pTHX);
 PERL_CALLCONV void	Perl_setdefout(pTHX_ GV* gv);
 #define PERL_ARGS_ASSERT_SETDEFOUT	\
 	assert(gv)
+PERL_CALLCONV void	Perl_setfd_cloexec(int fd);
+PERL_CALLCONV void	Perl_setfd_cloexec_for_nonsysfd(pTHX_ int fd);
+PERL_CALLCONV void	Perl_setfd_cloexec_or_inhexec_by_sysfdness(pTHX_ int fd);
+PERL_CALLCONV void	Perl_setfd_inhexec(int fd);
+PERL_CALLCONV void	Perl_setfd_inhexec_for_sysfd(pTHX_ int fd);
 PERL_CALLCONV char*	Perl_setlocale(int category, const char* locale);
 PERL_CALLCONV HEK*	Perl_share_hek(pTHX_ const char* str, SSize_t len, U32 hash);
 #define PERL_ARGS_ASSERT_SHARE_HEK	\
@@ -3824,6 +3858,13 @@ PERL_CALLCONV_NO_RET int	Perl_magic_regdatum_set(pTHX_ SV* sv, MAGIC* mg)
 	assert(sv); assert(mg)
 
 #endif
+#if !defined(EBCDIC)
+#ifndef PERL_NO_INLINE_FUNCTIONS
+PERL_STATIC_INLINE unsigned int	S__variant_byte_number(PERL_UINTMAX_T word)
+			__attribute__warn_unused_result__;
+#endif
+
+#endif
 #if !defined(HAS_GETENV_LEN)
 PERL_CALLCONV char*	Perl_getenv_len(pTHX_ const char *env_elem, unsigned long *len);
 #define PERL_ARGS_ASSERT_GETENV_LEN	\
@@ -3837,6 +3878,11 @@ STATIC int	S_dooneliner(pTHX_ const char *cmd, const char *filename)
 	assert(cmd); assert(filename)
 
 #  endif
+#endif
+#if !defined(HAS_MKOSTEMP)
+PERL_CALLCONV int	Perl_my_mkostemp(char *templte, int flags);
+#define PERL_ARGS_ASSERT_MY_MKOSTEMP	\
+	assert(templte)
 #endif
 #if !defined(HAS_MKSTEMP)
 PERL_CALLCONV int	Perl_my_mkstemp(char *templte);
@@ -3974,6 +4020,11 @@ PERL_STATIC_INLINE void	S_cx_popformat(pTHX_ PERL_CONTEXT *cx);
 	assert(cx)
 #endif
 #ifndef PERL_NO_INLINE_FUNCTIONS
+PERL_STATIC_INLINE void	S_cx_popgiven(pTHX_ PERL_CONTEXT *cx);
+#define PERL_ARGS_ASSERT_CX_POPGIVEN	\
+	assert(cx)
+#endif
+#ifndef PERL_NO_INLINE_FUNCTIONS
 PERL_STATIC_INLINE void	S_cx_poploop(pTHX_ PERL_CONTEXT *cx);
 #define PERL_ARGS_ASSERT_CX_POPLOOP	\
 	assert(cx)
@@ -3994,8 +4045,8 @@ PERL_STATIC_INLINE void	S_cx_popsub_common(pTHX_ PERL_CONTEXT *cx);
 	assert(cx)
 #endif
 #ifndef PERL_NO_INLINE_FUNCTIONS
-PERL_STATIC_INLINE void	S_cx_popwhereso(pTHX_ PERL_CONTEXT *cx);
-#define PERL_ARGS_ASSERT_CX_POPWHERESO	\
+PERL_STATIC_INLINE void	S_cx_popwhen(pTHX_ PERL_CONTEXT *cx);
+#define PERL_ARGS_ASSERT_CX_POPWHEN	\
 	assert(cx)
 #endif
 #ifndef PERL_NO_INLINE_FUNCTIONS
@@ -4014,14 +4065,14 @@ PERL_STATIC_INLINE void	S_cx_pushformat(pTHX_ PERL_CONTEXT *cx, CV *cv, OP *reto
 	assert(cx); assert(cv)
 #endif
 #ifndef PERL_NO_INLINE_FUNCTIONS
+PERL_STATIC_INLINE void	S_cx_pushgiven(pTHX_ PERL_CONTEXT *cx, SV *orig_defsv);
+#define PERL_ARGS_ASSERT_CX_PUSHGIVEN	\
+	assert(cx)
+#endif
+#ifndef PERL_NO_INLINE_FUNCTIONS
 PERL_STATIC_INLINE void	S_cx_pushloop_for(pTHX_ PERL_CONTEXT *cx, void *itervarp, SV *itersave);
 #define PERL_ARGS_ASSERT_CX_PUSHLOOP_FOR	\
 	assert(cx); assert(itervarp)
-#endif
-#ifndef PERL_NO_INLINE_FUNCTIONS
-PERL_STATIC_INLINE void	S_cx_pushloop_given(pTHX_ PERL_CONTEXT *cx, SV *orig_defsv);
-#define PERL_ARGS_ASSERT_CX_PUSHLOOP_GIVEN	\
-	assert(cx)
 #endif
 #ifndef PERL_NO_INLINE_FUNCTIONS
 PERL_STATIC_INLINE void	S_cx_pushloop_plain(pTHX_ PERL_CONTEXT *cx);
@@ -4034,8 +4085,8 @@ PERL_STATIC_INLINE void	S_cx_pushsub(pTHX_ PERL_CONTEXT *cx, CV *cv, OP *retop, 
 	assert(cx); assert(cv)
 #endif
 #ifndef PERL_NO_INLINE_FUNCTIONS
-PERL_STATIC_INLINE void	S_cx_pushwhereso(pTHX_ PERL_CONTEXT *cx);
-#define PERL_ARGS_ASSERT_CX_PUSHWHERESO	\
+PERL_STATIC_INLINE void	S_cx_pushwhen(pTHX_ PERL_CONTEXT *cx);
+#define PERL_ARGS_ASSERT_CX_PUSHWHEN	\
 	assert(cx)
 #endif
 #ifndef PERL_NO_INLINE_FUNCTIONS
@@ -4079,6 +4130,13 @@ STATIC int	S_is_utf8_cp_above_31_bits(const U8 * const s, const U8 * const e, co
 PERL_CALLCONV bool	Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report);
 #define PERL_ARGS_ASSERT_DO_EXEC3	\
 	assert(incmd)
+#endif
+#if defined (HAS_SOCKETPAIR) ||     (defined (HAS_SOCKET) && defined(SOCK_DGRAM) && 	defined(AF_INET) && defined(PF_INET))
+PERL_CALLCONV int	Perl_PerlSock_socketpair_cloexec(pTHX_ int domain, int type, int protocol, int *pairfd)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_PERLSOCK_SOCKETPAIR_CLOEXEC	\
+	assert(pairfd)
+
 #endif
 #if defined(DEBUGGING)
 PERL_CALLCONV int	Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
@@ -4226,9 +4284,24 @@ STATIC const char*	S_my_nl_langinfo(const nl_item item, bool toggle);
 #if defined(HAS_NL_LANGINFO) && defined(PERL_LANGINFO_H)
 PERL_CALLCONV const char*	Perl_langinfo(const nl_item item);
 #endif
+#if defined(HAS_PIPE)
+PERL_CALLCONV int	Perl_PerlProc_pipe_cloexec(pTHX_ int *pipefd)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_PERLPROC_PIPE_CLOEXEC	\
+	assert(pipefd)
+
+#endif
 #if defined(HAS_SIGACTION) && defined(SA_SIGINFO)
 PERL_CALLCONV Signal_t	Perl_csighandler(int sig, siginfo_t *info, void *uap);
 PERL_CALLCONV Signal_t	Perl_sighandler(int sig, siginfo_t *info, void *uap);
+#endif
+#if defined(HAS_SOCKET)
+PERL_CALLCONV int	Perl_PerlSock_accept_cloexec(pTHX_ int listenfd, struct sockaddr *addr, Sock_size_t *addrlen)
+			__attribute__warn_unused_result__;
+
+PERL_CALLCONV int	Perl_PerlSock_socket_cloexec(pTHX_ int domain, int type, int protocol)
+			__attribute__warn_unused_result__;
+
 #endif
 #if defined(HAVE_INTERP_INTERN)
 PERL_CALLCONV void	Perl_sys_intern_clear(pTHX);
@@ -4469,32 +4542,32 @@ STATIC IO *	S_openn_setup(pTHX_ GV *gv, char *mode, PerlIO **saveifp, PerlIO **s
 	assert(gv); assert(mode); assert(saveifp); assert(saveofp); assert(savefd); assert(savetype)
 #endif
 #if defined(PERL_IN_DOOP_C)
-STATIC I32	S_do_trans_complex(pTHX_ SV * const sv)
+STATIC Size_t	S_do_trans_complex(pTHX_ SV * const sv)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_DO_TRANS_COMPLEX	\
 	assert(sv)
 
-STATIC I32	S_do_trans_complex_utf8(pTHX_ SV * const sv)
+STATIC Size_t	S_do_trans_complex_utf8(pTHX_ SV * const sv)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_DO_TRANS_COMPLEX_UTF8	\
 	assert(sv)
 
-STATIC I32	S_do_trans_count(pTHX_ SV * const sv)
+STATIC Size_t	S_do_trans_count(pTHX_ SV * const sv)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_DO_TRANS_COUNT	\
 	assert(sv)
 
-STATIC I32	S_do_trans_count_utf8(pTHX_ SV * const sv)
+STATIC Size_t	S_do_trans_count_utf8(pTHX_ SV * const sv)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_DO_TRANS_COUNT_UTF8	\
 	assert(sv)
 
-STATIC I32	S_do_trans_simple(pTHX_ SV * const sv)
+STATIC Size_t	S_do_trans_simple(pTHX_ SV * const sv)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_DO_TRANS_SIMPLE	\
 	assert(sv)
 
-STATIC I32	S_do_trans_simple_utf8(pTHX_ SV * const sv)
+STATIC Size_t	S_do_trans_simple_utf8(pTHX_ SV * const sv)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_DO_TRANS_SIMPLE_UTF8	\
 	assert(sv)
@@ -4618,6 +4691,7 @@ PERL_CALLCONV SV*	Perl_hfree_next_entry(pTHX_ HV *hv, STRLEN *indexp);
 	assert(hv); assert(indexp)
 #endif
 #if defined(PERL_IN_LOCALE_C)
+STATIC const char*	S_category_name(const int category);
 #ifndef PERL_NO_INLINE_FUNCTIONS
 PERL_STATIC_INLINE const char *	S_save_to_buffer(const char * string, char **buf, Size_t *buf_size, const Size_t offset);
 #define PERL_ARGS_ASSERT_SAVE_TO_BUFFER	\
@@ -4729,6 +4803,9 @@ STATIC bool	S_is_handle_constructor(const OP *o, I32 numargs)
 	assert(o)
 
 STATIC OP*	S_listkids(pTHX_ OP* o);
+STATIC bool	S_looks_like_bool(pTHX_ const OP* o);
+#define PERL_ARGS_ASSERT_LOOKS_LIKE_BOOL	\
+	assert(o)
 STATIC OP*	S_modkids(pTHX_ OP *o, I32 type);
 STATIC void	S_move_proto_attr(pTHX_ OP **proto, OP **attrs, const GV *name, bool curstash);
 #define PERL_ARGS_ASSERT_MOVE_PROTO_ATTR	\
@@ -4736,6 +4813,9 @@ STATIC void	S_move_proto_attr(pTHX_ OP **proto, OP **attrs, const GV *name, bool
 STATIC OP *	S_my_kid(pTHX_ OP *o, OP *attrs, OP **imopsp);
 #define PERL_ARGS_ASSERT_MY_KID	\
 	assert(imopsp)
+STATIC OP*	S_newGIVWHENOP(pTHX_ OP* cond, OP *block, I32 enter_opcode, I32 leave_opcode, PADOFFSET entertarg);
+#define PERL_ARGS_ASSERT_NEWGIVWHENOP	\
+	assert(block)
 #ifndef PERL_NO_INLINE_FUNCTIONS
 PERL_STATIC_INLINE OP*	S_newMETHOP_internal(pTHX_ I32 type, I32 flags, OP* dynamic_meth, SV* const_meth);
 #endif
@@ -4771,6 +4851,7 @@ STATIC OP*	S_pmtrans(pTHX_ OP* o, OP* expr, OP* repl);
 STATIC bool	S_process_special_blocks(pTHX_ I32 floor, const char *const fullname, GV *const gv, CV *const cv);
 #define PERL_ARGS_ASSERT_PROCESS_SPECIAL_BLOCKS	\
 	assert(fullname); assert(gv); assert(cv)
+STATIC OP*	S_ref_array_or_hash(pTHX_ OP* cond);
 STATIC OP*	S_refkids(pTHX_ OP* o, I32 type);
 STATIC bool	S_scalar_mod_type(const OP *o, I32 type)
 			__attribute__warn_unused_result__;
@@ -4885,6 +4966,10 @@ STATIC PerlIO *	S_check_type_and_open(pTHX_ SV *name)
 #define PERL_ARGS_ASSERT_CHECK_TYPE_AND_OPEN	\
 	assert(name)
 
+STATIC void	S_destroy_matcher(pTHX_ PMOP* matcher);
+#define PERL_ARGS_ASSERT_DESTROY_MATCHER	\
+	assert(matcher)
+STATIC OP*	S_do_smartmatch(pTHX_ HV* seen_this, HV* seen_other, const bool copied);
 STATIC OP*	S_docatch(pTHX_ Perl_ppaddr_t firstpp)
 			__attribute__warn_unused_result__;
 
@@ -4900,6 +4985,9 @@ STATIC MAGIC *	S_doparseform(pTHX_ SV *sv);
 STATIC I32	S_dopoptoeval(pTHX_ I32 startingblock)
 			__attribute__warn_unused_result__;
 
+STATIC I32	S_dopoptogivenfor(pTHX_ I32 startingblock)
+			__attribute__warn_unused_result__;
+
 STATIC I32	S_dopoptolabel(pTHX_ const char *label, STRLEN len, U32 flags)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_DOPOPTOLABEL	\
@@ -4913,8 +5001,18 @@ STATIC I32	S_dopoptosub_at(pTHX_ const PERL_CONTEXT* cxstk, I32 startingblock)
 #define PERL_ARGS_ASSERT_DOPOPTOSUB_AT	\
 	assert(cxstk)
 
-STATIC I32	S_dopoptowhereso(pTHX_ I32 startingblock)
+STATIC I32	S_dopoptowhen(pTHX_ I32 startingblock)
 			__attribute__warn_unused_result__;
+
+STATIC PMOP*	S_make_matcher(pTHX_ REGEXP* re)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_MAKE_MATCHER	\
+	assert(re)
+
+STATIC bool	S_matcher_matches_sv(pTHX_ PMOP* matcher, SV* sv)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_MATCHER_MATCHES_SV	\
+	assert(matcher); assert(sv)
 
 STATIC bool	S_num_overflow(NV value, I32 fldsize, I32 frcsize)
 			__attribute__warn_unused_result__;
@@ -5467,6 +5565,16 @@ STATIC char*	S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s, cons
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_FIND_BYCLASS	\
 	assert(prog); assert(c); assert(s); assert(strend)
+
+STATIC char *	S_find_next_ascii(char* s, const char * send, const bool is_utf8)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_FIND_NEXT_ASCII	\
+	assert(s); assert(send)
+
+STATIC char *	S_find_next_non_ascii(char* s, const char * send, const bool is_utf8)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_FIND_NEXT_NON_ASCII	\
+	assert(s); assert(send)
 
 STATIC bool	S_isFOO_utf8_lc(pTHX_ const U8 classnum, const U8* character)
 			__attribute__warn_unused_result__;
