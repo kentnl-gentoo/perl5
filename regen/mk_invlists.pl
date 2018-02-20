@@ -59,6 +59,8 @@ my %exceptions_to_where_to_define =
                           _Perl_IDStart              => 'PERL_IN_UTF8_C',
                           Currency_Symbol            => 'PERL_IN_LOCALE_C',
                         );
+my %where_to_define_enums = ( _Perl_SCX => [ qw(PERL_CORE PERL_EXT) ],
+                            );
 
 my %gcb_enums;
 my @gcb_short_enums;
@@ -99,17 +101,21 @@ sub end_file_pound_if {
 sub switch_pound_if ($$) {
     my $name = shift;
     my $new_pound_if = shift;
+    my @new_pound_if = ref ($new_pound_if)
+                       ? @$new_pound_if
+                       : $new_pound_if;
 
     # Switch to new #if given by the 2nd argument.  If there is an override
     # for this, it instead switches to that.  The 1st argument is the
     # static's name, used to look up the overrides
 
     if (exists $exceptions_to_where_to_define{$name}) {
-        $new_pound_if = $exceptions_to_where_to_define{$name};
+        @new_pound_if = $exceptions_to_where_to_define{$name};
     }
+    $new_pound_if = join "", @new_pound_if;
 
     # Exit current #if if the new one is different from the old
-    if ($in_file_pound_if
+    if (   $in_file_pound_if
         && $in_file_pound_if !~ /$new_pound_if/)
     {
         end_file_pound_if;
@@ -117,7 +123,10 @@ sub switch_pound_if ($$) {
 
     # Enter new #if, if not already in it.
     if (! $in_file_pound_if) {
-        $in_file_pound_if = "defined($new_pound_if)";
+        foreach my $element (@new_pound_if) {
+            $element = "defined($element)";
+        }
+        $in_file_pound_if = join " || ", @new_pound_if;
         print $out_fh "\n#if $in_file_pound_if\n";
     }
 }
@@ -343,8 +352,12 @@ sub output_invmap ($$$$$$$) {
             }
         }
 
-        # Inversion map stuff is currently used only by regexec
-        switch_pound_if($name, 'PERL_IN_REGEXEC_C');
+        # Inversion map stuff is used only by regexec, unless it is in the
+        # enum exception list
+        my $where = (exists $where_to_define_enums{$name})
+                    ? $where_to_define_enums{$name}
+                    : 'PERL_IN_REGEXEC_C';
+        switch_pound_if($name, $where);
 
         # The short names tend to be two lower case letters, but it looks
         # better for those if they are upper. XXX

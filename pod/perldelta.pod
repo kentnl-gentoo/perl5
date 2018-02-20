@@ -2,117 +2,71 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.27.8
+perldelta - what is new for perl v5.27.9
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.27.7 release and the 5.27.8
+This document describes differences between the 5.27.8 release and the 5.27.9
 release.
 
-If you are upgrading from an earlier release such as 5.27.6, first read
-L<perl5277delta>, which describes differences between 5.27.6 and 5.27.7.
+If you are upgrading from an earlier release such as 5.27.7, first read
+L<perl5278delta>, which describes differences between 5.27.7 and 5.27.8.
 
 =head1 Core Enhancements
 
-=head2 Close-on-exec flag set atomically
+=head2 New read-only predefined variable C<${^SAFE_LOCALES}>
 
-When opening a file descriptor, perl now generally opens it with its
-close-on-exec flag already set, on platforms that support doing so.
-This improves thread safety, because it means that an C<exec> initiated
-by one thread can no longer cause a file descriptor in the process
-of being opened by another thread to be accidentally passed to the
-executed program.
+This variable is 1 if the Perl interpreter is operating in an
+environment where it is safe to use and change locales (see
+L<perllocale>.)  This variable is true when the perl is
+unthreaded, or compiled in a platform that supports thread-safe locale
+operation (see next item).
 
-Additionally, perl now sets the close-on-exec flag more reliably, whether
-it does so atomically or not.  Most file descriptors were getting the
-flag set, but some were being missed.
+=head2 Locales are now thread-safe on systems that support them
 
-=head2 Mixed Unicode scripts are now detectable
+These systems include Windows starting with Visual Studio 2005, and in
+POSIX 2008 systems.
 
-A mixture of scripts, such as Cyrillic and Latin, in a string is often
-the sign of a spoofing attack.  A new regular expression construct
-now allows for easy detection of these.  For example, you can say
+The implication is that you are now free to use locales and changes them
+in a threaded environment.  Your changes affect only your thread.
+See L<perllocale/Multi-threaded operation>
 
- qr/(?script_run: \d+ \b )/x
+=head2 Script runs now are specified with a different syntax
 
-And the digits matched will all be from the same set of 10.  You won't
-get a look-alike digit from a different script that has a different
-value than what it appears to be.
+This isn't really an enhancement, but is being put in this category
+because it changes an enhancement from 5.27.8, and there is a new
+abbreviated form for it.  The syntax is now either of:
 
-=head2 String- and number-specific bitwise ops are no longer experimental
+ (*script_run:...)
+ (*sr:...)
 
-The new string-specific (C<&. |. ^. ~.>) and number-specific (C<& | ^ ~>)
-bitwise operators introduced in Perl 5.22 are no longer experimental.
-Because the number-specific ops are spelled the same way as the existing
-operators that choose their behaviour based on their operands, these
-operators must still be enabled via the "bitwise" feature, in either of
-these two ways:
+Previously a C<"+"> was used instead of the C<"*">.
 
-    use feature "bitwise";
+=head2 There is a new form for script runs which combines with
+C<(?E<gt>...)> (or C<*atomic:...)>)
 
-    use v5.28; # "bitwise" now included
+C<(*asr:...> is an easier way to write C<(*sr:(?E<gt>...))>,
+which is expected to be a commonly used idiom.
+C<(*atomic_script_run:...> is also available.  See
+L<perlre/Script Runs>.
 
-They are also now enabled by the B<-E> command-line switch.
+=head2 Experimentally, there are now alphabetic synonyms for some
+regular expression assertions
 
-The "bitwise" feature no longer emits a warning.  Existing code that
-disables the "experimental::bitwise" warning category that the feature
-previously used will continue to work.
+If you find it difficult to remember how to write certain of the pattern
+assertions, there are now alphabetic synonyms.
 
-One caveat that module authors ought to be aware of is that the numeric
-operators now pass a fifth TRUE argument to overload methods.  Any methods
-that check the number of operands may croak if they do not expect so many.
-XS authors in particular should be aware that this:
+ CURRENT                NEW SYNONYMS
+ ------                 ------------
+ (?=...)        (*pla:...) or (*positive_lookahead:...)
+ (?!...)        (*nla:...) or (*negative_lookahead:...)
+ (?<=...)       (*plb:...) or (*positive_lookbehind:...)
+ (?<!...)       (*nlb:...) or (*negative_lookbehind:...)
+ (?>...)        (*atomic:...)
 
-    SV *
-    bitop_handler (lobj, robj, swap)
-
-may need to be changed to this:
-
-    SV *
-    bitop_handler (lobj, robj, swap, ...)
-
-=head1 Incompatible Changes
-
-=head2 Smartmatch and switch reversion
-
-The changes to the experimental smart match operator (C<~~>) and switch
-(C<given>/C<when>) constructs that were made in Perl 5.27.7 have been
-reverted due to the extent of the trouble caused to CPAN modules.
-It is expected that smartmatch will be changed again in the future,
-but preceded by some kind of explicit deprecation.
-
-=head2 Subroutine attribute and signature order
-
-The experimental subroutine signatures feature has been changed so that
-subroutine attributes must now come before the signature rather than
-after. This is because attributes like C<:lvalue> can affect the
-compilation of code within the signature, for example:
-
-    sub f :lvalue ($a = do { $x = "abc"; return substr($x,0,1)}) { ...}
-
-Note that this the second time they have been flipped:
-
-    sub f :lvalue ($a, $b) { 1 }; # 5.20; 5.28 onwards
-    sub f ($a, $b) :lvalue { 1 }; # 5.22 - 5.26
-
-=head1 Deprecations
-
-=head2 Use of code points over 0xFF in string bitwise operators
-
-Some uses of these already are illegal after a previous deprecation
-cycle.  This deprecates the remaining uses.  See L<perldeprecation>.
-
-=head2 Use of unescaped C<"{"> immediately after a C<"("> in regular
-expression patterns
-
-Using unescaped left braces is officially deprecated everywhere, but it
-is not enforced in contexts where their use does not interfere with
-expected extensions to the language.  A deprecation is added in this
-release when the brace appears immediately after an opening parenthesis.
-Before this, even if the brace was part of a legal quantifier, it was
-not interpreted as such, but as the literal characters, unlike other
-quantifiers that follow a C<"("> which are considered errors.  Now,
-their use will raise a deprecation message, unless turned off.
+These are considered experimental, so using any of these will raise
+(unless turned off) a warning in the C<experimental::alpha_assertions>
+category.
 
 =head1 Performance Enhancements
 
@@ -120,8 +74,15 @@ their use will raise a deprecation message, unless turned off.
 
 =item *
 
-The performance of pattern matching C<[[:ascii:]]> and C<[[:^ascii:]]>
-has been improved significantly except on EBCDIC platforms.
+Various optimizations have been applied to matching regular expression
+patterns, so under the right circumstances, significant performance
+gains may be noticed.  But in an application with many varied patterns,
+little overall improvement likely will be seen.
+
+=item *
+
+Other optimizations have been applied to UTF-8 handling, but these are
+not typically a major factor in most applications.
 
 =back
 
@@ -133,168 +94,104 @@ has been improved significantly except on EBCDIC platforms.
 
 =item *
 
-L<B> has been upgraded from version 1.73 to 1.74.
+L<bignum> has been upgraded from version 0.47 to 0.49.
 
 =item *
 
-L<B::Deparse> has been upgraded from version 1.46 to 1.47.
+L<Carp> has been upgraded from version 1.45 to 1.46.
 
 =item *
 
-L<Data::Dumper> has been upgraded from version 2.169 to 2.170.
+L<Devel::PPPort> has been upgraded from version 3.38 to 3.39.
 
 =item *
 
-L<Devel::PPPort> has been upgraded from version 3.37 to 3.38.
+L<Encode> has been upgraded from version 2.94 to 2.96.
 
 =item *
 
-L<Digest::SHA> has been upgraded from version 6.00 to 6.01.
+L<encoding> has been upgraded from version 2.21 to 2.22.
 
 =item *
 
-L<Encode> has been upgraded from version 2.93 to 2.94.
+L<Errno> has been upgraded from version 1.28 to 1.29.
 
 =item *
 
-L<ExtUtils::Miniperl> has been upgraded from version 1.07 to 1.08.
+L<ExtUtils::MakeMaker> has been upgraded from version 7.30 to 7.32.
 
 =item *
 
-L<feature> has been upgraded from version 1.50 to 1.51.
+L<ExtUtils::ParseXS> has been upgraded from version 3.36 to 3.38.
 
 =item *
 
-L<File::Spec> has been upgraded from version 3.71 to 3.72.
+L<ExtUtils::Typemaps> has been upgraded from version 3.37 to 3.38.
 
 =item *
 
-L<JSON::PP> has been upgraded from version 2.97000 to 2.97001.
+L<File::Spec> has been upgraded from version 3.72 to 3.74.
 
 =item *
 
-L<Module::CoreList> has been upgraded from version 5.20171220 to 5.20180120.
+L<if> has been upgraded from version 0.0607 to 0.0608.
 
 =item *
 
-L<Opcode> has been upgraded from version 1.42 to 1.43.
+L<IPC::Cmd> has been upgraded from version 0.98 to 1.00.
 
 =item *
 
-L<overload> has been upgraded from version 1.29 to 1.30.
+L<Module::CoreList> has been upgraded from version 5.20180120 to 5.20180220.
 
 =item *
 
-L<Pod::Functions> has been upgraded from version 1.12 to 1.13.
+L<mro> has been upgraded from version 1.21 to 1.22.
 
 =item *
 
-L<Pod::Html> has been upgraded from version 1.23 to 1.24.
+L<PerlIO::encoding> has been upgraded from version 0.25 to 0.26.
 
 =item *
 
-The podlators bundle has been upgraded from version 4.09 to 4.10.
-
-Man page references and function names now follow the Linux man page
-formatting standards, instead of the Solaris standard.
+L<POSIX> has been upgraded from version 1.81 to 1.82.
 
 =item *
 
-L<Socket> has been upgraded from version 2.020_04 to 2.027.
+L<Storable> has been upgraded from version 2.65 to 3.06.
 
 =item *
 
-L<Time::HiRes> has been upgraded from version 1.9748 to 1.9752.
+L<Test::Simple> has been upgraded from version 1.302120 to 1.302122.
 
 =item *
 
-L<Unicode::UCD> has been upgraded from version 0.69 to 0.70.
-
-The function C<num> now accepts an optional parameter to help in
-diagnosing error returns.
+L<threads> has been upgraded from version 2.21 to 2.22.
 
 =item *
 
-L<utf8> has been upgraded from version 1.20 to 1.21.
+L<Time::HiRes> has been upgraded from version 1.9752 to 1.9753.
 
 =item *
 
-L<warnings> has been upgraded from version 1.39 to 1.40.
+L<warnings> has been upgraded from version 1.40 to 1.41.
 
 =item *
 
-L<XSLoader> has been upgraded from version 0.29 to 0.30.
+L<XXX> has been upgraded from version A.xx to B.yy.
 
-Platforms that use C<mod2fname> to edit the names of loadable
-libraries now look for bootstrap (.bs) files under the correct,
-non-edited name.
+If there was something important to note about this change, include that here.
 
 =back
 
 =head1 Documentation
+
 
 =head2 Changes to Existing Documentation
 
 We have attempted to update the documentation to reflect the changes
 listed in this document.  If you find any we have missed, send email
 to L<perlbug@perl.org|mailto:perlbug@perl.org>.
-
-Additionally, the following selected changes have been made:
-
-=head3 L<perlembed>
-
-=over 4
-
-=item *
-
-An example in L<perlembed> used the string value of C<ERRSV> as a
-format string when calling croak().  If that string contains format
-codes such as C<%s> this could crash the program.
-
-This has been changed to a call to croak_sv().
-
-An alternative could have been to supply a trivial format string:
-
-  croak("%s", SvPV_nolen(ERRSV));
-
-or as a special case for C<ERRSV> simply:
-
-  croak(NULL);
-
-=back
-
-=head3 L<perlfunc>
-
-=over 4
-
-=item *
-
-Improve the documentation of C<each> with a slightly more
-explicit description of the sharing of iterator state, and with
-caveats regarding the fragility of while-each loops. [perl #132644]
-
-=back
-
-=head3 L<perlfunc>, L<perlop>, L<perlsyn>
-
-=over 4
-
-=item *
-
-Improve the documentation of while condition magic in various
-places. [perl #132644]
-
-=back
-
-=head3 L<perlrun>
-
-=over 4
-
-=item *
-
-Clarify the documentation of B<< -m >>. [perl #131518]
-
-=back
 
 =head1 Diagnostics
 
@@ -304,27 +201,17 @@ diagnostic messages, see L<perldiag>.
 
 =head2 New Diagnostics
 
-=head3 New Errors
+=head3 New Warnings
 
 =over 4
 
 =item *
 
-L<Can't "goto" into a binary or list expression|perldiag/"Can't E<quot>gotoE<quot> into a binary or list expression">
-
-Use of C<goto> to jump into the parameter of a binary or list operator has
-been prohibited, to prevent crashes and stack corruption.  [perl #130936]
-
-=back
-
-=head2 Changes to Existing Diagnostics
-
-=over 4
-
-=item *
-
-The C<< Unable to flush stdout >> error message was missing a trailing
-newline. [debian #875361]
+L<Locale '%s' contains (at least) the following characters which have
+non-standard meanings: %s  The Perl program will use the standard
+meanings|perldiag/"Locale '%s' contains (at least) the following
+characters which have non-standard meanings: %s  The Perl program will
+use the standard meanings">.
 
 =back
 
@@ -338,36 +225,23 @@ made:
 
 =item *
 
-Allow override of watchdog timer count in F<re/pat_psycho.t>.
-
-This test can take a long time to run, so there is a timer to keep
-this in check (currently, 5 minutes). This commit adds checking
-the environment variable C<< PERL_TEST_TIME_OUT_FACTOR >>; if set,
-the time out setting is multiplied by its value.
+F<harness> no longer waits for 30 seconds when running
+F<t/io/openpid.t>.  [perl #121028][perl #132867]
 
 =back
 
 =head1 Platform Support
 
-=head2 Platform-Specific Notes
+=head2 New Platforms
 
 =over 4
 
-=item Cygwin
-
-A build with the quadmath library can now be done on Cygwin.
-
-=item FreeBSD
-
-FreeBSD's F<< /usr/share/mk/sys.mk >> specifies C<< -O2 >> for
-architectures other than arm and mips. By default, compile perl
-with the same optimization levels.
 
 =item VMS
 
-Several fix-ups for F<configure.com>, marking function VMS has
-(or doesn't have).
-
+CRTL features can now be set by embedders before invoking Perl by using the
+C<decc$feature_set> and C<decc$feature_set_value> functions.  Previously any attempt
+to set features after image initialization were ignored.
 
 =back
 
@@ -377,9 +251,32 @@ Several fix-ups for F<configure.com>, marking function VMS has
 
 =item *
 
-The format of the non-utf8 transliteration table attached to the C<op_pv>
-field of C<OP_TRANS>/C<OP_TRANSR> ops has changed. It's now a
-C<struct OPtrans_map>.
+A new compiler C<#define>, C<dTHX_DEBUGGING>. has been added.  This is
+useful for XS or C code that only need the thread context because their
+debugging statements that get compiled only under C<-DDEBUGGING> need
+one.
+
+=item *
+
+A new API function L<perlapi/Perl_setlocale> has been added.
+
+=item *
+
+L<perlapi/sync_locale> has been revised to return a boolean as to
+whether the system was using the global locale or not.
+
+=item *
+
+A new kind of magic scalar, called a "nonelem" scalar, has been introduced.
+It is stored in an array to denote a nonexistent element, whenever such an
+element is accessed in a potential lvalue context.  It replaces the
+existing "defelem" (deferred element) magic wherever this is possible,
+being significantly more efficient.  This means that
+C<some_sub($sparse_array[$nonelem])> no longer has to create a new magic
+defelem scalar each time, as long as the element is within the array.
+
+It partially fixes the rare bug of deferred elements getting out of synch
+with their arrays when the array is shifted or unshifted.  [perl #132729]
 
 =back
 
@@ -389,89 +286,44 @@ C<struct OPtrans_map>.
 
 =item *
 
-The C<printf> format specifier C<%.0f> no longer rounds incorrectly
-[perl #47602], and now shows the correct sign for a negative zero.
+Failures while compiling code within other constructs, such as with
+string interpolation and the right part of C<s///e> now cause
+compilation to abort earlier.
+
+Previously compilation could continue in order to report other errors,
+but the failed sub-parse could leave partly parsed constructs on the
+parser shift-reduce stack, confusing the parser, leading to perl
+crashes. [perl #125351]
 
 =item *
 
-Fixed a use after free bug in pp_list introduced in 5.27.1.  [perl #131954]
-
-=item *
-
-Don't stringify numeric first arguments to
-C<< system() >> on Windows or VMS. [perl #132633]
-
-=item * 
-
-Fixed an issue where the error C<< Scalar value @arrayname[0] better
-written as $arrayname >> would give an error C<< Cannot printf Inf with 'c' >>
-when arrayname starts with C<< Inf >>. [perl #132645]
-
-=item *
-
-The Perl implementation of C<< getcwd() >> in C<< Cwd >> in the PathTools
-distribution now behaves the same as XS implementation on errors: it
-returns an error, and sets C<< $! >>. [perl #132648]
-
-=item *
-
-Fixed argument counting in multiconcat when concatenating adjacent constants.
-[perl #132646]
-
-=item *
-
-Vivify array elements when putting them on the stack.
-Fixes [perl #8910] (reported in April 2002).
-
-=item *
-
-Fixed parsing of braced subscript after parens. Fixes [perl #8045]
-(reported in December 2001).
-
-=item *
-
-C<tr/non_utf8/long_non_utf8/c> could give the wrong results when the
-length of the replacement character list was greater than 0x7fff.
-
-=item *
-
-C<tr/non_utf8/non_utf8/cd> failed to add the implied
-C<\x{100}-\x{7fffffff}> to the search character list.
-
-=back
-
-=head1 Known Problems
-
-=over 4
-
-=item *
-
-The bugfix for [perl #2754] in Perl 5.27.7 turned out to cause so much
-trouble on CPAN [perl #132577] that it is being postponed.  The bug has
-been restored, so C<exit(0)> in a C<UNITCHECK> or C<CHECK> block now
-once again permits the main program to run, and C<exit(0)> in a C<BEGIN>
-block once again permits C<INIT> blocks to run before exiting.  The bug
-will be fixed again for Perl 5.30.
+On threaded perls where the decimal point (radix) character is not a
+dot, it has been possible for a race to occur between threads when one
+needs to use the real radix character.  This has now been fixed by use
+of a mutex on systems without thread-safe locales, and the problem just
+doesn't come up on those with thread-safe locales.
 
 =back
 
 =head1 Acknowledgements
 
-Perl 5.27.8 represents approximately 4 weeks of development since Perl
-5.27.7 and contains approximately 33,000 lines of changes across 290 files
-from 17 authors.
+Perl 5.27.9 represents approximately 5 weeks of development since Perl
+5.27.8 and contains approximately 29,000 lines of changes across 360 files
+from 26 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 25,000 lines of changes to 160 .pm, .t, .c and .h files.
+approximately 13,000 lines of changes to 250 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant
 community of users and developers. The following people are known to have
-contributed the improvements that became Perl 5.27.8:
+contributed the improvements that became Perl 5.27.9:
 
-Abigail, Chris 'BinGOs' Williams, Craig A. Berry, Dagfinn Ilmari Mannsåker,
-David Mitchell, Father Chrysostomos, James E Keenan, Karen Etheridge, Karl
-Williamson, Niko Tyni, Pali, Peter John Acklam, Scott Lanning, Tomasz
-Konojacki, Tom Hukins, Tony Cook, Zefram.
+, Aaron Crane, Abigail, Chris 'BinGOs' Williams, Craig A. Berry, Dagfinn
+Ilmari Mannsåker, David Mitchell, Father Chrysostomos, George Hartzell,
+H.Merijn Brand, Hugo van der Sanden, James E Keenan, Jerry D. Hedden, Karl
+Williamson, Matthew Horsfall, Pali, Reini Urban, Sawyer X, Slaven Rezic,
+Steve Hay, Todd Rinaldo, Tomasz Konojacki, Tom Wyant, Tony Cook, Yves Orton,
+Zefram.
 
 The list above is almost certainly incomplete as it is automatically
 generated from version control history. In particular, it does not include

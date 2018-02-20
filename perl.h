@@ -202,6 +202,12 @@
 #  undef PERL_TRACK_MEMPOOL
 #endif
 
+#ifdef DEBUGGING
+#  define dTHX_DEBUGGING dTHX
+#else
+#  define dTHX_DEBUGGING dNOOP
+#endif
+
 #define STATIC static
 
 #ifndef PERL_CORE
@@ -735,7 +741,46 @@
 #   if !defined(NO_LOCALE_TIME) && defined(LC_TIME)
 #	define USE_LOCALE_TIME
 #   endif
+#   if !defined(NO_LOCALE_ADDRESS) && defined(LC_ADDRESS)
+#	define USE_LOCALE_ADDRESS
+#   endif
+#   if !defined(NO_LOCALE_IDENTIFICATION) && defined(LC_IDENTIFICATION)
+#	define USE_LOCALE_IDENTIFICATION
+#   endif
+#   if !defined(NO_LOCALE_MEASUREMENT) && defined(LC_MEASUREMENT)
+#	define USE_LOCALE_MEASUREMENT
+#   endif
+#   if !defined(NO_LOCALE_PAPER) && defined(LC_PAPER)
+#	define USE_LOCALE_PAPER
+#   endif
+#   if !defined(NO_LOCALE_TELEPHONE) && defined(LC_TELEPHONE)
+#	define USE_LOCALE_TELEPHONE
+#   endif
 #endif /* !NO_LOCALE && HAS_SETLOCALE */
+
+#ifdef USE_LOCALE /* These locale things are all subject to change */
+#  if      defined(HAS_NEWLOCALE)               \
+      &&   defined(LC_ALL_MASK)                 \
+      &&   defined(HAS_FREELOCALE)              \
+      &&   defined(HAS_USELOCALE)               \
+      && ! defined(NO_POSIX_2008_LOCALE)
+
+    /* For simplicity, the code is written to assume that any platform advanced
+     * enough to have the Posix 2008 locale functions has LC_ALL.  The test
+     * above makes sure that assumption is valid */
+
+#    define HAS_POSIX_2008_LOCALE
+#  endif
+#  if     defined(USE_ITHREADS)                                             \
+      && (    defined(HAS_POSIX_2008_LOCALE)                                \
+          || (defined(WIN32) && defined(_MSC_VER) && _MSC_VER >= 1400))     \
+      && ! defined(NO_THREAD_SAFE_LOCALE)
+#    define USE_THREAD_SAFE_LOCALE
+#    ifdef HAS_POSIX_2008_LOCALE
+#      define USE_POSIX_2008_LOCALE
+#    endif
+#  endif
+#endif
 
 #include <setjmp.h>
 
@@ -5496,25 +5541,10 @@ typedef struct am_table_short AMTS;
 #  define KEYWORD_PLUGIN_MUTEX_TERM    NOOP
 #endif
 
-#ifdef USE_LOCALE
-/* These locale things are all subject to change */
+#ifdef USE_LOCALE /* These locale things are all subject to change */
 
-
-#  if      defined(HAS_NEWLOCALE)               \
-      &&   defined(LC_ALL_MASK)                 \
-      &&   defined(HAS_FREELOCALE)              \
-      &&   defined(HAS_USELOCALE)               \
-      && ! defined(NO_POSIX_2008_LOCALE)
-
-    /* The code is written for simplicity to assume that any platform advanced
-     * enough to have the Posix 2008 locale functions has LC_ALL.  The test
-     * above makes sure that assumption is valid */
-
-#    define HAS_POSIX_2008_LOCALE
-#  endif
-
-/* We create a C locale object unconditionally if we have the functions to do
- * so; hence must destroy it unconditionally at the end */
+    /* We create a C locale object unconditionally if we have the functions to
+     * do so; hence must destroy it unconditionally at the end */
 #  ifndef HAS_POSIX_2008_LOCALE
 #    define _LOCALE_TERM_POSIX_2008  NOOP
 #  else
@@ -5530,24 +5560,105 @@ typedef struct am_table_short AMTS;
                     } STMT_END
 #  endif
 
-#  ifndef USE_ITHREADS
+#  if ! defined(USE_ITHREADS) || defined(USE_THREAD_SAFE_LOCALE)
 #    define LOCALE_INIT
 #    define LOCALE_LOCK
 #    define LOCALE_UNLOCK
+#    define LC_NUMERIC_LOCK(cond)
+#    define LC_NUMERIC_UNLOCK
 #    define LOCALE_TERM  STMT_START { _LOCALE_TERM_POSIX_2008; } STMT_END
-#  else /* Below is do use threads */
-#    define LOCALE_INIT         MUTEX_INIT(&PL_locale_mutex)
-#    define LOCALE_LOCK         MUTEX_LOCK(&PL_locale_mutex)
-#    define LOCALE_UNLOCK       MUTEX_UNLOCK(&PL_locale_mutex)
+#  else
+#    define LOCALE_INIT         STMT_START {                                \
+                                    MUTEX_INIT(&PL_locale_mutex);           \
+                                    MUTEX_INIT(&PL_lc_numeric_mutex);       \
+                                } STMT_END
+
+/* This mutex is used to create critical sections where we want the LC_NUMERIC
+ * locale to be locked into either the C (standard) locale, or the underlying
+ * locale, so that other threads interrupting this one don't change it to the
+ * wrong state before we've had a chance to complete our operation.  It can
+ * stay locked over an entire printf operation, for example.  And so is made
+ * distinct from the LOCALE_LOCK mutex.
+ *
+ * This simulates kind of a general semaphore.  The current thread will lock
+ * the mutex if the per-thread variable is zero, and then increments that
+ * variable.  Each corresponding UNLOCK decrements the variable until it is 0,
+ * at which point it actually unlocks the mutex.  Since the variable is
+ * per-thread, there is no race with other threads.
+ *
+ * The single argument is a condition to test for, and if true, to panic, as
+ * this would be an attempt to complement the LC_NUMERIC state, and we're not
+ * supposed to because it's locked */
+#    define LC_NUMERIC_LOCK(cond_to_panic_if_already_locked)                \
+        STMT_START {                                                        \
+            if (PL_lc_numeric_mutex_depth <= 0) {                           \
+                MUTEX_LOCK(&PL_lc_numeric_mutex);                           \
+                PL_lc_numeric_mutex_depth = 1;                              \
+                DEBUG_Lv(PerlIO_printf(Perl_debug_log,                      \
+                         "%s: %d: locking lc_numeric; depth=1\n",           \
+                         __FILE__, __LINE__));                              \
+            }                                                               \
+            else {                                                          \
+                PL_lc_numeric_mutex_depth++;                                \
+                DEBUG_Lv(PerlIO_printf(Perl_debug_log,                      \
+                        "%s: %d: avoided lc_numeric_lock; depth=%d\n",      \
+                        __FILE__, __LINE__, PL_lc_numeric_mutex_depth));    \
+                if (cond_to_panic_if_already_locked) {                      \
+                    Perl_croak_nocontext("panic: %s: %d: Trying to change"  \
+                                         " LC_NUMERIC incompatibly",        \
+                                         __FILE__, __LINE__);               \
+                }                                                           \
+            }                                                               \
+        } STMT_END
+
+#    define LC_NUMERIC_UNLOCK                                               \
+        STMT_START {                                                        \
+            if (PL_lc_numeric_mutex_depth <= 1) {                           \
+                MUTEX_UNLOCK(&PL_lc_numeric_mutex);                         \
+                PL_lc_numeric_mutex_depth = 0;                              \
+                DEBUG_Lv(PerlIO_printf(Perl_debug_log,                      \
+                         "%s: %d: unlocking lc_numeric; depth=0\n",           \
+                         __FILE__, __LINE__));                              \
+            }                                                               \
+            else {                                                          \
+                PL_lc_numeric_mutex_depth--;                                \
+                DEBUG_Lv(PerlIO_printf(Perl_debug_log,                      \
+                        "%s: %d: avoided lc_numeric_unlock; depth=%d\n",    \
+                        __FILE__, __LINE__, PL_lc_numeric_mutex_depth));    \
+            }                                                               \
+        } STMT_END
+
+/* This is used as a generic lock for locale operations.  For example this is
+ * used when calling nl_langinfo() so that another thread won't zap the
+ * contents of its buffer before it gets saved; and it's called when changing
+ * the locale of LC_MESSAGES.  On some systems the latter can cause the
+ * nl_langinfo buffer to be zapped under a race condition.
+ *
+ * If combined with LC_NUMERIC_LOCK, calls to this and its corresponding unlock
+ * should be contained entirely within the locked portion of LC_NUMERIC.  This
+ * mutex should be used only in very short sections of code, while
+ * LC_NUMERIC_LOCK may span more operations.  By always following this
+ * convention, deadlock should be impossible.  But if necessary, the two
+ * mutexes could be combined */
+#    define LOCALE_LOCK                                                     \
+        STMT_START {                                                        \
+            DEBUG_Lv(PerlIO_printf(Perl_debug_log,                          \
+                    "%s: %d: locking locale\n", __FILE__, __LINE__));       \
+            MUTEX_LOCK(&PL_locale_mutex);                                   \
+        } STMT_END
+#    define LOCALE_UNLOCK                                                   \
+        STMT_START {                                                        \
+            DEBUG_Lv(PerlIO_printf(Perl_debug_log,                          \
+                   "%s: %d: unlocking locale\n", __FILE__, __LINE__));      \
+            MUTEX_UNLOCK(&PL_locale_mutex);                                 \
+        } STMT_END
+
 #    define LOCALE_TERM                                                     \
                     STMT_START {                                            \
                         MUTEX_DESTROY(&PL_locale_mutex);                    \
+                        MUTEX_DESTROY(&PL_lc_numeric_mutex);                \
                         _LOCALE_TERM_POSIX_2008;                            \
                     } STMT_END
-#    ifdef HAS_POSIX_2008_LOCALE
-#      define USE_POSIX_2008_LOCALE
-#      define USE_THREAD_SAFE_LOCALE
-#    endif
 #  endif
 
 /* Returns TRUE if the plain locale pragma without a parameter is in effect
@@ -5697,6 +5808,10 @@ argument list, like this:
 The private variable is used to save the current locale state, so
 that the requisite matching call to L</RESTORE_LC_NUMERIC> can restore it.
 
+On threaded perls not operating with thread-safe functionality, this macro uses
+a mutex to force a critical section.  Therefore the matching RESTORE should be
+close by, and guaranteed to be called.
+
 =for apidoc Am|void|STORE_LC_NUMERIC_SET_TO_NEEDED
 
 This is used to help wrap XS or C code that that is C<LC_NUMERIC> locale-aware.
@@ -5727,14 +5842,16 @@ argument list, like this:
      ...
  }
 
+On threaded perls not operating with thread-safe functionality, this macro uses
+a mutex to force a critical section.  Therefore the matching RESTORE should be
+close by, and guaranteed to be called.
+
 =for apidoc Am|void|RESTORE_LC_NUMERIC
 
 This is used in conjunction with one of the macros
 L</STORE_LC_NUMERIC_SET_TO_NEEDED>
-and
-L</STORE_LC_NUMERIC_FORCE_TO_UNDERLYING>
-
-to properly restore the C<LC_NUMERIC> state.
+and L</STORE_LC_NUMERIC_FORCE_TO_UNDERLYING> to properly restore the
+C<LC_NUMERIC> state.
 
 A call to L</DECLARATION_FOR_LC_NUMERIC_MANIPULATION> must have been made to
 declare at compile time a private variable used by this macro and the two
@@ -5752,102 +5869,134 @@ expression, but with an empty argument list, like this:
 
 */
 
+/* The numeric locale is generally kept in the C locale instead of the
+ * underlying locale.  The current status is known by looking at two words.
+ * One is non-zero if the current numeric locale is the standard C/POSIX one.
+ * The other is non-zero if the current locale is the underlying locale.  Both
+ * can be non-zero if, as often happens, the underlying locale is C.
+ *
+ * Its slightly more complicated than this, as the PL_numeric_standard variable
+ * is set if the current numeric locale is indistinguishable from the C locale.
+ * This happens when the radix character is a dot, and the thousands separator
+ * is the empty string.
+ *
+ * khw believes the reason for the variables instead of the bits in a single
+ * word is to avoid having to have masking instructions. */
+
 #  define _NOT_IN_NUMERIC_STANDARD (! PL_numeric_standard)
 
 /* We can lock the category to stay in the C locale, making requests to the
  * contrary be noops, in the dynamic scope by setting PL_numeric_standard to 2.
  * */
 #  define _NOT_IN_NUMERIC_UNDERLYING                                        \
-                        (! PL_numeric_underlying && PL_numeric_standard < 2)
+                    (! PL_numeric_underlying && PL_numeric_standard < 2)
 
 #  define DECLARATION_FOR_LC_NUMERIC_MANIPULATION                           \
     void (*_restore_LC_NUMERIC_function)(pTHX) = NULL
 
 #  define STORE_LC_NUMERIC_SET_TO_NEEDED()                                  \
-    if (IN_LC(LC_NUMERIC)) {                                                \
-        if (_NOT_IN_NUMERIC_UNDERLYING) {                                   \
-            Perl_set_numeric_underlying(aTHX);                              \
-            _restore_LC_NUMERIC_function = &Perl_set_numeric_standard;      \
-        }                                                                   \
-    }                                                                       \
-    else {                                                                  \
-        if (_NOT_IN_NUMERIC_STANDARD) {                                     \
-            SET_NUMERIC_STANDARD();                                         \
-            _restore_LC_NUMERIC_function = &Perl_set_numeric_underlying;    \
-        }                                                                   \
-    }
+        STMT_START {                                                        \
+            LC_NUMERIC_LOCK(                                                \
+                          (IN_LC(LC_NUMERIC) && _NOT_IN_NUMERIC_UNDERLYING) \
+                      || _NOT_IN_NUMERIC_STANDARD);                         \
+            if (IN_LC(LC_NUMERIC)) {                                        \
+                if (_NOT_IN_NUMERIC_UNDERLYING) {                           \
+                    Perl_set_numeric_underlying(aTHX);                      \
+                    _restore_LC_NUMERIC_function                            \
+                                            = &Perl_set_numeric_standard;   \
+                }                                                           \
+            }                                                               \
+            else {                                                          \
+                if (_NOT_IN_NUMERIC_STANDARD) {                             \
+                    Perl_set_numeric_standard(aTHX);                        \
+                    _restore_LC_NUMERIC_function                            \
+                                            = &Perl_set_numeric_underlying; \
+                }                                                           \
+            }                                                               \
+        } STMT_END
 
 #  define RESTORE_LC_NUMERIC()                                              \
-    if (_restore_LC_NUMERIC_function) {                                     \
-        _restore_LC_NUMERIC_function(aTHX);                                 \
-    }
+        STMT_START {                                                        \
+            if (_restore_LC_NUMERIC_function) {                             \
+                _restore_LC_NUMERIC_function(aTHX);                         \
+            }                                                               \
+            LC_NUMERIC_UNLOCK;                                              \
+        } STMT_END
 
 /* The next two macros set unconditionally.  These should be rarely used, and
  * only after being sure that this is what is needed */
 #  define SET_NUMERIC_STANDARD()                                            \
-	STMT_START { if (_NOT_IN_NUMERIC_STANDARD)                          \
-                                          Perl_set_numeric_standard(aTHX);  \
-                   } STMT_END
+	STMT_START {                                                        \
+            DEBUG_Lv(PerlIO_printf(Perl_debug_log,                          \
+                               "%s: %d: lc_numeric standard=%d\n",          \
+                                __FILE__, __LINE__, PL_numeric_standard));  \
+            Perl_set_numeric_standard(aTHX);                                \
+            DEBUG_Lv(PerlIO_printf(Perl_debug_log,                          \
+                                 "%s: %d: lc_numeric standard=%d\n",        \
+                                 __FILE__, __LINE__, PL_numeric_standard)); \
+        } STMT_END
 
 #  define SET_NUMERIC_UNDERLYING()                                          \
-	STMT_START { if (_NOT_IN_NUMERIC_UNDERLYING)                        \
-                            Perl_set_numeric_underlying(aTHX); } STMT_END
+	STMT_START {                                                        \
+            if (_NOT_IN_NUMERIC_UNDERLYING) {                               \
+                Perl_set_numeric_underlying(aTHX);                          \
+            }                                                               \
+        } STMT_END
 
 /* The rest of these LC_NUMERIC macros toggle to one or the other state, with
  * the RESTORE_foo ones called to switch back, but only if need be */
-#  define STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD()                        \
-	bool _was_underlying = _NOT_IN_NUMERIC_STANDARD;                         \
-	if (_was_underlying) Perl_set_numeric_standard(aTHX);
-
-/* Doesn't change to underlying locale unless within the scope of some form of
- * 'use locale'.  This is the usual desired behavior. */
-#  define STORE_LC_NUMERIC_STANDARD_SET_UNDERLYING()        \
-	bool _was_standard = _NOT_IN_NUMERIC_UNDERLYING                     \
-                            && IN_LC(LC_NUMERIC);                           \
-	if (_was_standard) Perl_set_numeric_underlying(aTHX);
+#  define STORE_LC_NUMERIC_SET_STANDARD()                                   \
+        STMT_START {                                                        \
+            LC_NUMERIC_LOCK(_NOT_IN_NUMERIC_STANDARD);                      \
+            if (_NOT_IN_NUMERIC_STANDARD) {                                 \
+                _restore_LC_NUMERIC_function = &Perl_set_numeric_underlying;\
+                Perl_set_numeric_standard(aTHX);                            \
+            }                                                               \
+        } STMT_END
 
 /* Rarely, we want to change to the underlying locale even outside of 'use
  * locale'.  This is principally in the POSIX:: functions */
-#  define STORE_LC_NUMERIC_FORCE_TO_UNDERLYING()            \
-    if (_NOT_IN_NUMERIC_UNDERLYING) {                                       \
-        Perl_set_numeric_underlying(aTHX);                                       \
-        _restore_LC_NUMERIC_function = &Perl_set_numeric_standard;          \
-    }
+#  define STORE_LC_NUMERIC_FORCE_TO_UNDERLYING()                            \
+	STMT_START {                                                        \
+            LC_NUMERIC_LOCK(_NOT_IN_NUMERIC_UNDERLYING);                    \
+            if (_NOT_IN_NUMERIC_UNDERLYING) {                               \
+                Perl_set_numeric_underlying(aTHX);                          \
+                _restore_LC_NUMERIC_function = &Perl_set_numeric_standard;  \
+            }                                                               \
+        } STMT_END
 
 /* Lock/unlock to the C locale until unlock is called.  This needs to be
  * recursively callable.  [perl #128207] */
-#  define LOCK_LC_NUMERIC_STANDARD()                        \
-        (__ASSERT_(PL_numeric_standard)                     \
-        PL_numeric_standard++)
-#  define UNLOCK_LC_NUMERIC_STANDARD()                      \
-            STMT_START {                                    \
-                if (PL_numeric_standard > 1) {              \
-                    PL_numeric_standard--;                  \
-                }                                           \
-                else {                                      \
-                    assert(0);                              \
-                }                                           \
-            } STMT_END
+#  define LOCK_LC_NUMERIC_STANDARD()                                        \
+        STMT_START {                                                        \
+            DEBUG_Lv(PerlIO_printf(Perl_debug_log,                          \
+                      "%s: %d: lock lc_numeric_standard: new depth=%d\n",   \
+                      __FILE__, __LINE__, PL_numeric_standard + 1));        \
+            __ASSERT_(PL_numeric_standard)                                  \
+            PL_numeric_standard++;                                          \
+        } STMT_END
 
-#  define RESTORE_LC_NUMERIC_UNDERLYING()                       \
-	if (_was_underlying) Perl_set_numeric_underlying(aTHX);
-
-#  define RESTORE_LC_NUMERIC_STANDARD()                     \
-    if (_restore_LC_NUMERIC_function) {                     \
-        _restore_LC_NUMERIC_function(aTHX);                 \
-    }
+#  define UNLOCK_LC_NUMERIC_STANDARD()                                      \
+        STMT_START {                                                        \
+            if (PL_numeric_standard > 1) {                                  \
+                PL_numeric_standard--;                                      \
+            }                                                               \
+            else {                                                          \
+                assert(0);                                                  \
+            }                                                               \
+            DEBUG_Lv(PerlIO_printf(Perl_debug_log,                          \
+            "%s: %d: lc_numeric_standard decrement lock, new depth=%d\n",   \
+            __FILE__, __LINE__, PL_numeric_standard));                      \
+        } STMT_END
 
 #else /* !USE_LOCALE_NUMERIC */
 
 #  define SET_NUMERIC_STANDARD()
 #  define SET_NUMERIC_UNDERLYING()
 #  define IS_NUMERIC_RADIX(a, b)		(0)
-#  define STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD()
-#  define STORE_LC_NUMERIC_STANDARD_SET_UNDERLYING()
-#  define STORE_LC_NUMERIC_FORCE_TO_UNDERLYING()
-#  define RESTORE_LC_NUMERIC_UNDERLYING()
-#  define RESTORE_LC_NUMERIC_STANDARD()
 #  define DECLARATION_FOR_LC_NUMERIC_MANIPULATION
+#  define STORE_LC_NUMERIC_SET_STANDARD()
+#  define STORE_LC_NUMERIC_FORCE_TO_UNDERLYING()
 #  define STORE_LC_NUMERIC_SET_TO_NEEDED()
 #  define RESTORE_LC_NUMERIC()
 #  define LOCK_LC_NUMERIC_STANDARD()
@@ -5856,26 +6005,6 @@ expression, but with an empty argument list, like this:
 #endif /* !USE_LOCALE_NUMERIC */
 
 #define Atof				my_atof
-
-/* Back-compat names */
-#define DECLARATION_FOR_STORE_LC_NUMERIC_SET_TO_NEEDED              \
-                        DECLARATION_FOR_LC_NUMERIC_MANIPULATION
-#define DECLARE_STORE_LC_NUMERIC_SET_TO_NEEDED()                    \
-                DECLARATION_FOR_STORE_LC_NUMERIC_SET_TO_NEEDED;     \
-                STORE_LC_NUMERIC_SET_TO_NEEDED();
-#define LOCK_NUMERIC_STANDARD() LOCK_LC_NUMERIC_STANDARD()
-#define RESTORE_NUMERIC_LOCAL() RESTORE_LC_NUMERIC_UNDERLYING()
-#define RESTORE_NUMERIC_STANDARD() RESTORE_LC_NUMERIC_STANDARD()
-#define SET_NUMERIC_LOCAL() SET_NUMERIC_UNDERLYING()
-#define STORE_NUMERIC_LOCAL_SET_STANDARD()                          \
-                    STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD()
-#define STORE_NUMERIC_STANDARD_SET_LOCAL()                          \
-                    STORE_LC_NUMERIC_STANDARD_SET_UNDERLYING()
-#define STORE_NUMERIC_STANDARD_FORCE_LOCAL()                        \
-                        STORE_LC_NUMERIC_FORCE_TO_UNDERLYING()
-#define UNLOCK_NUMERIC_STANDARD() UNLOCK_LC_NUMERIC_STANDARD()
-
-
 
 #ifdef USE_QUADMATH
 #  define Perl_strtod(s, e) strtoflt128(s, e)

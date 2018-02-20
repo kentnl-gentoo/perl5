@@ -2390,6 +2390,8 @@ S_sublex_start(pTHX)
     PL_parser->lex_super_state = PL_lex_state;
     PL_parser->lex_sub_inwhat = (U16)op_type;
     PL_parser->lex_sub_op = PL_lex_op;
+    PL_parser->sub_no_recover = FALSE;
+    PL_parser->sub_error_count = PL_error_count;
     PL_lex_state = LEX_INTERPPUSH;
 
     PL_expect = XTERM;
@@ -2569,6 +2571,20 @@ S_sublex_done(pTHX)
     else {
 	const line_t l = CopLINE(PL_curcop);
 	LEAVE;
+        if (PL_parser->sub_error_count != PL_error_count) {
+            const char * const name = OutCopFILE(PL_curcop);
+            if (PL_parser->sub_no_recover) {
+                const char * msg = "";
+                if (PL_in_eval) {
+                    SV *errsv = ERRSV;
+                    if (SvCUR(ERRSV)) {
+                        msg = Perl_form(aTHX_ "%" SVf, SVfARG(errsv));
+                    }
+                }
+                abort_execution(msg, name);
+                NOT_REACHED;
+            }
+        }
 	if (PL_multi_close == '<')
 	    PL_parser->herelines += l - PL_multi_end;
 	PL_bufend = SvPVX(PL_linestr);
@@ -4157,6 +4173,7 @@ S_intuit_more(pTHX_ char *s, char *e)
 	return TRUE;
     if (*s != '{' && *s != '[')
 	return FALSE;
+    PL_parser->sub_no_recover = TRUE;
     if (!PL_lex_inpat)
 	return TRUE;
 
@@ -9580,6 +9597,7 @@ S_scan_ident(pTHX_ char *s, char *dest, STRLEN destlen, I32 ck_uni)
             CopLINE_set(PL_curcop, orig_copline);
             PL_parser->herelines = herelines;
 	    *dest = '\0';
+            PL_parser->sub_no_recover = TRUE;
 	}
     }
     else if (   PL_lex_state == LEX_INTERPNORMAL
@@ -10563,7 +10581,7 @@ S_scan_str(pTHX_ char *start, int keep_bracketed_quoted, int keep_delims, int re
     I32 brackets = 1;		/* bracket nesting level */
     bool has_utf8 = FALSE;	/* is there any utf8 content? */
     IV termcode;		/* terminating char. code */
-    U8 termstr[UTF8_MAXBYTES];	/* terminating string */
+    U8 termstr[UTF8_MAXBYTES+1]; /* terminating string */
     STRLEN termlen;		/* length of terminating string */
     line_t herelines;
 
@@ -11405,7 +11423,6 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
               floatit = TRUE;
         }
 	if (floatit) {
-            STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD();
 	    /* terminate the string */
 	    *d = '\0';
             if (UNLIKELY(hexfp)) {
@@ -11422,7 +11439,6 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
             } else {
                 nv = Atof(PL_tokenbuf);
             }
-            RESTORE_LC_NUMERIC_UNDERLYING();
             sv = newSVnv(nv);
 	}
 

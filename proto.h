@@ -49,6 +49,7 @@ PERL_CALLCONV int	Perl_PerlLIO_open_cloexec(pTHX_ const char *file, int flag)
 #define PERL_ARGS_ASSERT_PERLLIO_OPEN_CLOEXEC	\
 	assert(file)
 
+PERL_CALLCONV const char*	Perl_setlocale(const int category, const char* locale);
 PERL_CALLCONV void*	Perl_Slab_Alloc(pTHX_ size_t sz)
 			__attribute__warn_unused_result__;
 
@@ -137,6 +138,11 @@ PERL_CALLCONV UV	Perl__to_utf8_title_flags(pTHX_ const U8 *p, const U8* e, U8* u
 PERL_CALLCONV UV	Perl__to_utf8_upper_flags(pTHX_ const U8 *p, const U8 *e, U8* ustrp, STRLEN *lenp, bool flags, const char * const file, const int line);
 #define PERL_ARGS_ASSERT__TO_UTF8_UPPER_FLAGS	\
 	assert(p); assert(ustrp); assert(file)
+#ifndef PERL_NO_INLINE_FUNCTIONS
+PERL_STATIC_INLINE unsigned int	S__variant_byte_number(PERL_UINTMAX_T word)
+			__attribute__warn_unused_result__;
+#endif
+
 PERL_CALLCONV void	Perl__warn_problematic_locale(void);
 PERL_CALLCONV_NO_RET void	Perl_abort_execution(pTHX_ const char * const msg, const char * const name)
 			__attribute__noreturn__;
@@ -214,6 +220,9 @@ PERL_CALLCONV AV*	Perl_av_make(pTHX_ SSize_t size, SV **strp)
 #define PERL_ARGS_ASSERT_AV_MAKE	\
 	assert(strp)
 
+PERL_CALLCONV SV*	Perl_av_nonelem(pTHX_ AV *av, SSize_t ix);
+#define PERL_ARGS_ASSERT_AV_NONELEM	\
+	assert(av)
 PERL_CALLCONV SV*	Perl_av_pop(pTHX_ AV *av);
 #define PERL_ARGS_ASSERT_AV_POP	\
 	assert(av)
@@ -1388,11 +1397,6 @@ PERL_CALLCONV bool	Perl_isIDFIRST_lazy(pTHX_ const char* p)
 #define PERL_ARGS_ASSERT_ISIDFIRST_LAZY	\
 	assert(p)
 
-PERL_CALLCONV bool	Perl_isSCRIPT_RUN(pTHX_ const U8 *s, const U8 *send, const bool utf8_target)
-			__attribute__warn_unused_result__;
-#define PERL_ARGS_ASSERT_ISSCRIPT_RUN	\
-	assert(s); assert(send)
-
 /* PERL_CALLCONV bool	Perl_is_ascii_string(const U8* const s, STRLEN len)
 			__attribute__warn_unused_result__
 			__attribute__pure__; */
@@ -1942,6 +1946,9 @@ PERL_CALLCONV int	Perl_magic_setmglob(pTHX_ SV* sv, MAGIC* mg);
 PERL_CALLCONV int	Perl_magic_setnkeys(pTHX_ SV* sv, MAGIC* mg);
 #define PERL_ARGS_ASSERT_MAGIC_SETNKEYS	\
 	assert(sv); assert(mg)
+PERL_CALLCONV int	Perl_magic_setnonelem(pTHX_ SV* sv, MAGIC* mg);
+#define PERL_ARGS_ASSERT_MAGIC_SETNONELEM	\
+	assert(sv); assert(mg)
 PERL_CALLCONV int	Perl_magic_setpack(pTHX_ SV* sv, MAGIC* mg);
 #define PERL_ARGS_ASSERT_MAGIC_SETPACK	\
 	assert(sv); assert(mg)
@@ -2386,7 +2393,6 @@ PERL_CALLCONV CV *	Perl_newXS_flags(pTHX_ const char *name, XSUBADDR_t subaddr, 
 PERL_CALLCONV CV *	Perl_newXS_len_flags(pTHX_ const char *name, STRLEN len, XSUBADDR_t subaddr, const char *const filename, const char *const proto, SV **const_svp, U32 flags);
 #define PERL_ARGS_ASSERT_NEWXS_LEN_FLAGS	\
 	assert(subaddr)
-PERL_CALLCONV void	Perl_new_numeric(pTHX_ const char* newcoll);
 PERL_CALLCONV PERL_SI*	Perl_new_stackinfo(pTHX_ I32 stitems, I32 cxitems)
 			__attribute__warn_unused_result__;
 
@@ -2946,7 +2952,6 @@ PERL_CALLCONV void	Perl_setfd_cloexec_for_nonsysfd(pTHX_ int fd);
 PERL_CALLCONV void	Perl_setfd_cloexec_or_inhexec_by_sysfdness(pTHX_ int fd);
 PERL_CALLCONV void	Perl_setfd_inhexec(int fd);
 PERL_CALLCONV void	Perl_setfd_inhexec_for_sysfd(pTHX_ int fd);
-PERL_CALLCONV char*	Perl_setlocale(int category, const char* locale);
 PERL_CALLCONV HEK*	Perl_share_hek(pTHX_ const char* str, SSize_t len, U32 hash);
 #define PERL_ARGS_ASSERT_SHARE_HEK	\
 	assert(str)
@@ -3514,7 +3519,8 @@ PERL_CALLCONV SV*	Perl_swash_init(pTHX_ const char* pkg, const char* name, SV* l
 #define PERL_ARGS_ASSERT_SWASH_INIT	\
 	assert(pkg); assert(name); assert(listsv)
 
-PERL_CALLCONV void	Perl_sync_locale(pTHX);
+PERL_CALLCONV void	Perl_switch_to_global_locale(void);
+PERL_CALLCONV bool	Perl_sync_locale(void);
 PERL_CALLCONV void	Perl_sys_init(int* argc, char*** argv);
 #define PERL_ARGS_ASSERT_SYS_INIT	\
 	assert(argc); assert(argv)
@@ -3526,6 +3532,8 @@ PERL_CALLCONV void	Perl_taint_env(pTHX);
 PERL_CALLCONV void	Perl_taint_proper(pTHX_ const char* f, const char *const s);
 #define PERL_ARGS_ASSERT_TAINT_PROPER	\
 	assert(s)
+PERL_CALLCONV void	Perl_thread_locale_init(void);
+PERL_CALLCONV void	Perl_thread_locale_term(void);
 PERL_CALLCONV OP *	Perl_tied_method(pTHX_ SV *methname, SV **sp, SV *const sv, const MAGIC *const mg, const U32 flags, U32 argc, ...);
 #define PERL_ARGS_ASSERT_TIED_METHOD	\
 	assert(methname); assert(sp); assert(sv); assert(mg)
@@ -3666,6 +3674,9 @@ PERL_CALLCONV UV	Perl_utf8n_to_uvchr(pTHX_ const U8 *s, STRLEN curlen, STRLEN *r
 PERL_CALLCONV UV	Perl_utf8n_to_uvchr_error(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, const U32 flags, U32 * errors);
 #define PERL_ARGS_ASSERT_UTF8N_TO_UVCHR_ERROR	\
 	assert(s)
+PERL_CALLCONV UV	Perl_utf8n_to_uvchr_msgs(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, const U32 flags, U32 * errors, AV ** msgs);
+#define PERL_ARGS_ASSERT_UTF8N_TO_UVCHR_MSGS	\
+	assert(s)
 PERL_CALLCONV UV	Perl_utf8n_to_uvuni(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags);
 #define PERL_ARGS_ASSERT_UTF8N_TO_UVUNI	\
 	assert(s)
@@ -3674,8 +3685,12 @@ PERL_CALLCONV void	Perl_utilize(pTHX_ int aver, I32 floor, OP* version, OP* idop
 	assert(idop)
 /* PERL_CALLCONV U8*	uvchr_to_utf8(pTHX_ U8 *d, UV uv); */
 /* PERL_CALLCONV U8*	uvchr_to_utf8_flags(pTHX_ U8 *d, UV uv, UV flags); */
+/* PERL_CALLCONV U8*	uvchr_to_utf8_flags_msgs(pTHX_ U8 *d, UV uv, UV flags, HV ** msgs); */
 PERL_CALLCONV U8*	Perl_uvoffuni_to_utf8_flags(pTHX_ U8 *d, UV uv, const UV flags);
 #define PERL_ARGS_ASSERT_UVOFFUNI_TO_UTF8_FLAGS	\
+	assert(d)
+PERL_CALLCONV U8*	Perl_uvoffuni_to_utf8_flags_msgs(pTHX_ U8 *d, UV uv, const UV flags, HV** msgs);
+#define PERL_ARGS_ASSERT_UVOFFUNI_TO_UTF8_FLAGS_MSGS	\
 	assert(d)
 PERL_CALLCONV U8*	Perl_uvuni_to_utf8(pTHX_ U8 *d, UV uv);
 #define PERL_ARGS_ASSERT_UVUNI_TO_UTF8	\
@@ -3856,13 +3871,6 @@ PERL_CALLCONV_NO_RET int	Perl_magic_regdatum_set(pTHX_ SV* sv, MAGIC* mg)
 			__attribute__noreturn__;
 #define PERL_ARGS_ASSERT_MAGIC_REGDATUM_SET	\
 	assert(sv); assert(mg)
-
-#endif
-#if !defined(EBCDIC)
-#ifndef PERL_NO_INLINE_FUNCTIONS
-PERL_STATIC_INLINE unsigned int	S__variant_byte_number(PERL_UINTMAX_T word)
-			__attribute__warn_unused_result__;
-#endif
 
 #endif
 #if !defined(HAS_GETENV_LEN)
@@ -4187,7 +4195,7 @@ STATIC const regnode*	S_dumpuntil(pTHX_ const regexp *r, const regnode *start, c
 	assert(r); assert(start); assert(node); assert(sv)
 STATIC bool	S_put_charclass_bitmap_innards(pTHX_ SV* sv, char* bitmap, SV* nonbitmap_invlist, SV* only_utf8_locale_invlist, const regnode * const node, const bool force_as_is_display);
 #define PERL_ARGS_ASSERT_PUT_CHARCLASS_BITMAP_INNARDS	\
-	assert(sv); assert(bitmap)
+	assert(sv)
 STATIC SV*	S_put_charclass_bitmap_innards_common(pTHX_ SV* invlist, SV* posixes, SV* only_utf8, SV* not_utf8, SV* only_utf8_locale, const bool invert);
 #define PERL_ARGS_ASSERT_PUT_CHARCLASS_BITMAP_INNARDS_COMMON	\
 	assert(invlist)
@@ -4377,6 +4385,11 @@ PERL_STATIC_INLINE STRLEN	S_sv_or_pv_pos_u2b(pTHX_ SV *sv, const char *pv, STRLE
 #endif
 #endif
 #if defined(PERL_CORE) || defined(PERL_EXT)
+PERL_CALLCONV bool	Perl_isSCRIPT_RUN(pTHX_ const U8 *s, const U8 *send, const bool utf8_target, SCX_enum * ret_script)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_ISSCRIPT_RUN	\
+	assert(s); assert(send)
+
 #ifndef PERL_NO_INLINE_FUNCTIONS
 PERL_STATIC_INLINE Size_t	S_variant_under_utf8_count(const U8* const s, const U8* const e)
 			__attribute__warn_unused_result__;
@@ -4692,20 +4705,26 @@ PERL_CALLCONV SV*	Perl_hfree_next_entry(pTHX_ HV *hv, STRLEN *indexp);
 #endif
 #if defined(PERL_IN_LOCALE_C)
 STATIC const char*	S_category_name(const int category);
+STATIC void	S_restore_switched_locale(pTHX_ const int category, const char * const original_locale);
 #ifndef PERL_NO_INLINE_FUNCTIONS
 PERL_STATIC_INLINE const char *	S_save_to_buffer(const char * string, char **buf, Size_t *buf_size, const Size_t offset);
 #define PERL_ARGS_ASSERT_SAVE_TO_BUFFER	\
 	assert(string); assert(buf_size)
 #endif
+STATIC const char*	S_switch_category_locale_to_template(pTHX_ const int switch_category, const int template_category, const char * template_locale);
 #  if defined(USE_LOCALE)
 STATIC void	S_new_collate(pTHX_ const char* newcoll);
 STATIC void	S_new_ctype(pTHX_ const char* newctype);
 #define PERL_ARGS_ASSERT_NEW_CTYPE	\
 	assert(newctype)
+STATIC void	S_new_numeric(pTHX_ const char* newnum);
 STATIC void	S_set_numeric_radix(pTHX_ const bool use_locale);
 STATIC char*	S_stdize_locale(pTHX_ char* locs);
 #define PERL_ARGS_ASSERT_STDIZE_LOCALE	\
 	assert(locs)
+#    if defined(USE_POSIX_2008_LOCALE)
+STATIC const char*	S_emulate_setlocale(const int category, const char* locale, unsigned int index, const bool is_index_valid);
+#    endif
 #    if defined(WIN32)
 STATIC char*	S_win32_setlocale(pTHX_ int category, const char* locale);
 #    endif
@@ -5178,6 +5197,11 @@ STATIC int	S_edit_distance(const UV *src, const UV *tgt, const STRLEN x, const S
 #define PERL_ARGS_ASSERT_EDIT_DISTANCE	\
 	assert(src); assert(tgt)
 
+STATIC SV *	S_get_ANYOFM_contents(pTHX_ const regnode * n)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_GET_ANYOFM_CONTENTS	\
+	assert(n)
+
 STATIC SV*	S_get_ANYOF_cp_list_for_ssc(pTHX_ const RExC_state_t *pRExC_state, const regnode_charclass* const node);
 #define PERL_ARGS_ASSERT_GET_ANYOF_CP_LIST_FOR_SSC	\
 	assert(pRExC_state); assert(node)
@@ -5571,9 +5595,24 @@ STATIC char *	S_find_next_ascii(char* s, const char * send, const bool is_utf8)
 #define PERL_ARGS_ASSERT_FIND_NEXT_ASCII	\
 	assert(s); assert(send)
 
+STATIC char *	S_find_next_masked(char * s, const char * send, const U8 byte, const U8 mask)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_FIND_NEXT_MASKED	\
+	assert(s); assert(send)
+
 STATIC char *	S_find_next_non_ascii(char* s, const char * send, const bool is_utf8)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_FIND_NEXT_NON_ASCII	\
+	assert(s); assert(send)
+
+STATIC char *	S_find_span_end(char* s, const char * send, const char span_byte)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_FIND_SPAN_END	\
+	assert(s); assert(send)
+
+STATIC U8 *	S_find_span_end_mask(U8 * s, const U8 * send, const U8 span_byte, const U8 mask)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_FIND_SPAN_END_MASK	\
 	assert(s); assert(send)
 
 STATIC bool	S_isFOO_utf8_lc(pTHX_ const U8 classnum, const U8* character)
@@ -5826,7 +5865,7 @@ STATIC int	S_intuit_more(pTHX_ char *s, char *e);
 STATIC I32	S_lop(pTHX_ I32 f, U8 x, char *s);
 #define PERL_ARGS_ASSERT_LOP	\
 	assert(s)
-PERL_STATIC_NO_RET void	S_missingterm(pTHX_ char *s, const STRLEN len)
+PERL_STATIC_NO_RET void	S_missingterm(pTHX_ char *s, STRLEN len)
 			__attribute__noreturn__;
 
 STATIC SV*	S_new_constant(pTHX_ const char *s, STRLEN len, const char *key, STRLEN keylen, SV *sv, SV *pv, const char *type, STRLEN typelen);
@@ -5968,6 +6007,11 @@ PERL_STATIC_INLINE int	S_is_utf8_overlong_given_start_byte_ok(const U8 * const s
 #define PERL_ARGS_ASSERT_IS_UTF8_OVERLONG_GIVEN_START_BYTE_OK	\
 	assert(s)
 #endif
+
+STATIC HV *	S_new_msg_hv(pTHX_ const char * const message, U32 categories, U32 flag)
+			__attribute__warn_unused_result__;
+#define PERL_ARGS_ASSERT_NEW_MSG_HV	\
+	assert(message)
 
 STATIC U8*	S_swash_scan_list_line(pTHX_ U8* l, U8* const lend, UV* min, UV* max, UV* val, const bool wants_value, const U8* const typestr)
 			__attribute__warn_unused_result__;

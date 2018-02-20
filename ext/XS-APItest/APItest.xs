@@ -1380,15 +1380,76 @@ bytes_cmp_utf8(bytes, utf8)
 	RETVAL
 
 AV *
-test_utf8n_to_uvchr_error(s, len, flags)
+test_utf8_to_bytes(bytes, len)
+        U8 * bytes
+        STRLEN len
+    PREINIT:
+        char * ret;
+    CODE:
+        RETVAL = newAV();
+        sv_2mortal((SV*)RETVAL);
 
-        SV *s
-        SV *len
-        SV *flags
+        ret = (char *) utf8_to_bytes(bytes, &len);
+        av_push(RETVAL, newSVpv(ret, 0));
+
+        /* utf8_to_bytes uses (STRLEN)-1 to signal errors, and we want to
+         * return that as -1 to perl, so cast to SSize_t in case
+         * sizeof(IV) > sizeof(STRLEN) */
+        av_push(RETVAL, newSViv((SSize_t)len));
+        av_push(RETVAL, newSVpv((const char *) bytes, 0));
+
+    OUTPUT:
+        RETVAL
+
+AV *
+test_utf8n_to_uvchr_msgs(s, len, flags)
+        char *s
+        STRLEN len
+        U32 flags
     PREINIT:
         STRLEN retlen;
         UV ret;
-        STRLEN slen;
+        U32 errors;
+        AV *msgs = NULL;
+
+    CODE:
+        RETVAL = newAV();
+        sv_2mortal((SV*)RETVAL);
+
+        ret = utf8n_to_uvchr_msgs((U8*)  s,
+                                         len,
+                                         &retlen,
+                                         flags,
+                                         &errors,
+                                         &msgs);
+
+        /* Returns the return value in [0]; <retlen> in [1], <errors> in [2] */
+        av_push(RETVAL, newSVuv(ret));
+        if (retlen == (STRLEN) -1) {
+            av_push(RETVAL, newSViv(-1));
+        }
+        else {
+            av_push(RETVAL, newSVuv(retlen));
+        }
+        av_push(RETVAL, newSVuv(errors));
+
+        /* And any messages in [3] */
+        if (msgs) {
+            av_push(RETVAL, newRV_noinc((SV*)msgs));
+        }
+
+    OUTPUT:
+        RETVAL
+
+AV *
+test_utf8n_to_uvchr_error(s, len, flags)
+
+        char *s
+        STRLEN len
+        U32 flags
+    PREINIT:
+        STRLEN retlen;
+        UV ret;
         U32 errors;
 
     CODE:
@@ -1401,10 +1462,10 @@ test_utf8n_to_uvchr_error(s, len, flags)
         RETVAL = newAV();
         sv_2mortal((SV*)RETVAL);
 
-        ret = utf8n_to_uvchr_error((U8*) SvPV(s, slen),
-                                         SvUV(len),
+        ret = utf8n_to_uvchr_error((U8*) s,
+                                         len,
                                          &retlen,
-                                         SvUV(flags),
+                                         flags,
                                          &errors);
 
         /* Returns the return value in [0]; <retlen> in [1], <errors> in [2] */
@@ -1452,7 +1513,7 @@ test_uvchr_to_utf8_flags(uv, flags)
         SV *uv
         SV *flags
     PREINIT:
-        U8 dest[UTF8_MAXBYTES];
+        U8 dest[UTF8_MAXBYTES + 1];
         U8 *ret;
 
     CODE:
@@ -1462,6 +1523,36 @@ test_uvchr_to_utf8_flags(uv, flags)
             XSRETURN_UNDEF;
         }
         RETVAL = newSVpvn((char *) dest, ret - dest);
+
+    OUTPUT:
+        RETVAL
+
+AV *
+test_uvchr_to_utf8_flags_msgs(uv, flags)
+
+        SV *uv
+        SV *flags
+    PREINIT:
+        U8 dest[UTF8_MAXBYTES + 1];
+        U8 *ret;
+
+    CODE:
+        HV *msgs = NULL;
+        RETVAL = newAV();
+        sv_2mortal((SV*)RETVAL);
+
+        ret = uvchr_to_utf8_flags_msgs(dest, SvUV(uv), SvUV(flags), &msgs);
+
+        if (ret) {
+            av_push(RETVAL, newSVpvn((char *) dest, ret - dest));
+        }
+        else {
+            av_push(RETVAL,  &PL_sv_undef);
+        }
+
+        if (msgs) {
+            av_push(RETVAL, newRV_noinc((SV*)msgs));
+        }
 
     OUTPUT:
         RETVAL
@@ -4307,6 +4398,13 @@ get_cv_flags(SV *sv, UV flags)
     OUTPUT:
         RETVAL
 
+void
+unshift_and_set_defav(SV *sv,...)
+    CODE:
+	av_unshift(GvAVn(PL_defgv), 1);
+	av_store(GvAV(PL_defgv), 0, newSVuv(42));
+	sv_setuv(sv, 43);
+
 PerlIO *
 PerlIO_stderr()
 
@@ -4486,9 +4584,9 @@ test_isBLANK_LC(UV ord)
         RETVAL
 
 bool
-test_isBLANK_utf8(unsigned char * p, int type)
+test_isBLANK_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
 
         /* In this function and those that follow, the boolean 'type'
@@ -4505,9 +4603,9 @@ test_isBLANK_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isBLANK_LC_utf8(unsigned char * p, int type)
+test_isBLANK_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4534,9 +4632,9 @@ test_isVERTWS_uvchr(UV ord)
         RETVAL
 
 bool
-test_isVERTWS_utf8(unsigned char * p, int type)
+test_isVERTWS_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4598,9 +4696,9 @@ test_isUPPER_LC(UV ord)
         RETVAL
 
 bool
-test_isUPPER_utf8(unsigned char * p, int type)
+test_isUPPER_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4613,9 +4711,9 @@ test_isUPPER_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isUPPER_LC_utf8(unsigned char * p, int type)
+test_isUPPER_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4677,9 +4775,9 @@ test_isLOWER_LC(UV ord)
         RETVAL
 
 bool
-test_isLOWER_utf8(unsigned char * p, int type)
+test_isLOWER_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4692,9 +4790,9 @@ test_isLOWER_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isLOWER_LC_utf8(unsigned char * p, int type)
+test_isLOWER_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4756,9 +4854,9 @@ test_isALPHA_LC(UV ord)
         RETVAL
 
 bool
-test_isALPHA_utf8(unsigned char * p, int type)
+test_isALPHA_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4771,9 +4869,9 @@ test_isALPHA_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isALPHA_LC_utf8(unsigned char * p, int type)
+test_isALPHA_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4835,9 +4933,9 @@ test_isWORDCHAR_LC(UV ord)
         RETVAL
 
 bool
-test_isWORDCHAR_utf8(unsigned char * p, int type)
+test_isWORDCHAR_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4850,9 +4948,9 @@ test_isWORDCHAR_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isWORDCHAR_LC_utf8(unsigned char * p, int type)
+test_isWORDCHAR_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4914,9 +5012,9 @@ test_isALPHANUMERIC_LC(UV ord)
         RETVAL
 
 bool
-test_isALPHANUMERIC_utf8(unsigned char * p, int type)
+test_isALPHANUMERIC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4929,9 +5027,9 @@ test_isALPHANUMERIC_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isALPHANUMERIC_LC_utf8(unsigned char * p, int type)
+test_isALPHANUMERIC_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4972,9 +5070,9 @@ test_isALNUM_LC(UV ord)
         RETVAL
 
 bool
-test_isALNUM_utf8(unsigned char * p, int type)
+test_isALNUM_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -4987,9 +5085,9 @@ test_isALNUM_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isALNUM_LC_utf8(unsigned char * p, int type)
+test_isALNUM_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5023,9 +5121,9 @@ test_isDIGIT_LC_uvchr(UV ord)
         RETVAL
 
 bool
-test_isDIGIT_utf8(unsigned char * p, int type)
+test_isDIGIT_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5038,9 +5136,9 @@ test_isDIGIT_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isDIGIT_LC_utf8(unsigned char * p, int type)
+test_isDIGIT_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5151,9 +5249,9 @@ test_isIDFIRST_LC(UV ord)
         RETVAL
 
 bool
-test_isIDFIRST_utf8(unsigned char * p, int type)
+test_isIDFIRST_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5166,9 +5264,9 @@ test_isIDFIRST_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isIDFIRST_LC_utf8(unsigned char * p, int type)
+test_isIDFIRST_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5230,9 +5328,9 @@ test_isIDCONT_LC(UV ord)
         RETVAL
 
 bool
-test_isIDCONT_utf8(unsigned char * p, int type)
+test_isIDCONT_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5245,9 +5343,9 @@ test_isIDCONT_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isIDCONT_LC_utf8(unsigned char * p, int type)
+test_isIDCONT_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5309,9 +5407,9 @@ test_isSPACE_LC(UV ord)
         RETVAL
 
 bool
-test_isSPACE_utf8(unsigned char * p, int type)
+test_isSPACE_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5324,9 +5422,9 @@ test_isSPACE_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isSPACE_LC_utf8(unsigned char * p, int type)
+test_isSPACE_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5388,9 +5486,9 @@ test_isASCII_LC(UV ord)
         RETVAL
 
 bool
-test_isASCII_utf8(unsigned char * p, int type)
+test_isASCII_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
 #ifndef DEBUGGING
         PERL_UNUSED_VAR(e);
@@ -5406,9 +5504,9 @@ test_isASCII_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isASCII_LC_utf8(unsigned char * p, int type)
+test_isASCII_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
 #ifndef DEBUGGING
         PERL_UNUSED_VAR(e);
@@ -5473,9 +5571,9 @@ test_isCNTRL_LC(UV ord)
         RETVAL
 
 bool
-test_isCNTRL_utf8(unsigned char * p, int type)
+test_isCNTRL_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5488,9 +5586,9 @@ test_isCNTRL_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isCNTRL_LC_utf8(unsigned char * p, int type)
+test_isCNTRL_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5552,9 +5650,9 @@ test_isPRINT_LC(UV ord)
         RETVAL
 
 bool
-test_isPRINT_utf8(unsigned char * p, int type)
+test_isPRINT_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5567,9 +5665,9 @@ test_isPRINT_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isPRINT_LC_utf8(unsigned char * p, int type)
+test_isPRINT_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5631,9 +5729,9 @@ test_isGRAPH_LC(UV ord)
         RETVAL
 
 bool
-test_isGRAPH_utf8(unsigned char * p, int type)
+test_isGRAPH_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5646,9 +5744,9 @@ test_isGRAPH_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isGRAPH_LC_utf8(unsigned char * p, int type)
+test_isGRAPH_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5710,9 +5808,9 @@ test_isPUNCT_LC(UV ord)
         RETVAL
 
 bool
-test_isPUNCT_utf8(unsigned char * p, int type)
+test_isPUNCT_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5725,9 +5823,9 @@ test_isPUNCT_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isPUNCT_LC_utf8(unsigned char * p, int type)
+test_isPUNCT_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5789,9 +5887,9 @@ test_isXDIGIT_LC(UV ord)
         RETVAL
 
 bool
-test_isXDIGIT_utf8(unsigned char * p, int type)
+test_isXDIGIT_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5804,9 +5902,9 @@ test_isXDIGIT_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isXDIGIT_LC_utf8(unsigned char * p, int type)
+test_isXDIGIT_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5868,9 +5966,9 @@ test_isPSXSPC_LC(UV ord)
         RETVAL
 
 bool
-test_isPSXSPC_utf8(unsigned char * p, int type)
+test_isPSXSPC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -5883,9 +5981,9 @@ test_isPSXSPC_utf8(unsigned char * p, int type)
         RETVAL
 
 bool
-test_isPSXSPC_LC_utf8(unsigned char * p, int type)
+test_isPSXSPC_LC_utf8(U8 * p, int type)
     PREINIT:
-	const unsigned char * e;
+	const U8 * e;
     CODE:
         if (type >= 0) {
             e = p + UTF8SKIP(p) - type;
@@ -6035,7 +6133,7 @@ test_is_utf8_string(char *s, STRLEN len)
 #define WORDSIZE            sizeof(PERL_UINTMAX_T)
 
 AV *
-test_is_utf8_invariant_string_loc(unsigned char *s, STRLEN offset, STRLEN len)
+test_is_utf8_invariant_string_loc(U8 *s, STRLEN offset, STRLEN len)
     PREINIT:
         AV *av;
         const U8 * ep = NULL;
@@ -6056,7 +6154,7 @@ test_is_utf8_invariant_string_loc(unsigned char *s, STRLEN offset, STRLEN len)
         RETVAL
 
 STRLEN
-test_variant_under_utf8_count(unsigned char *s, STRLEN offset, STRLEN len)
+test_variant_under_utf8_count(U8 *s, STRLEN offset, STRLEN len)
     PREINIT:
         PERL_UINTMAX_T * copy;
     CODE:
@@ -6068,7 +6166,7 @@ test_variant_under_utf8_count(unsigned char *s, STRLEN offset, STRLEN len)
         RETVAL
 
 STRLEN
-test_utf8_length(unsigned char *s, STRLEN offset, STRLEN len)
+test_utf8_length(U8 *s, STRLEN offset, STRLEN len)
 CODE:
     RETVAL = utf8_length(s + offset, s + len);
 OUTPUT:
@@ -6324,7 +6422,7 @@ test_toLOWER_utf8(SV * p, int type)
         STRLEN len;
         AV *av;
         SV *utf8;
-	const unsigned char * e;
+	const U8 * e;
         UV resultant_cp = UV_MAX;   /* Initialized because of dumb compilers */
     CODE:
         input = (U8 *) SvPV(p, len);
@@ -6414,7 +6512,7 @@ test_toFOLD_utf8(SV * p, int type)
         STRLEN len;
         AV *av;
         SV *utf8;
-	const unsigned char * e;
+	const U8 * e;
         UV resultant_cp = UV_MAX;
     CODE:
         input = (U8 *) SvPV(p, len);
@@ -6504,7 +6602,7 @@ test_toUPPER_utf8(SV * p, int type)
         STRLEN len;
         AV *av;
         SV *utf8;
-	const unsigned char * e;
+	const U8 * e;
         UV resultant_cp = UV_MAX;
     CODE:
         input = (U8 *) SvPV(p, len);
@@ -6587,7 +6685,7 @@ test_toTITLE_utf8(SV * p, int type)
         STRLEN len;
         AV *av;
         SV *utf8;
-	const unsigned char * e;
+	const U8 * e;
         UV resultant_cp = UV_MAX;
     CODE:
         input = (U8 *) SvPV(p, len);

@@ -518,13 +518,14 @@ Scan and skip for a numeric decimal separator (radix).
 bool
 Perl_grok_numeric_radix(pTHX_ const char **sp, const char *send)
 {
-#ifdef USE_LOCALE_NUMERIC
     PERL_ARGS_ASSERT_GROK_NUMERIC_RADIX;
+
+#ifdef USE_LOCALE_NUMERIC
 
     if (IN_LC(LC_NUMERIC)) {
         DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
-        STORE_LC_NUMERIC_SET_TO_NEEDED();
-        if (PL_numeric_radix_sv) {
+        STORE_LC_NUMERIC_FORCE_TO_UNDERLYING();
+        {
             STRLEN len;
             const char * const radix = SvPV(PL_numeric_radix_sv, len);
             if (*sp + len <= send && memEQ(*sp, radix, len)) {
@@ -538,8 +539,6 @@ Perl_grok_numeric_radix(pTHX_ const char **sp, const char *send)
     /* always try "." if numeric radix didn't match because
      * we may have data from different locales mixed */
 #endif
-
-    PERL_ARGS_ASSERT_GROK_NUMERIC_RADIX;
 
     if (*sp < send && **sp == '.') {
         ++*sp;
@@ -1242,13 +1241,17 @@ Perl_my_atof(pTHX_ const char* s)
             const bool use_standard_radix
                     = standard_pos && (!local_pos || standard_pos < local_pos);
 
-            if (use_standard_radix)
+            if (use_standard_radix) {
                 SET_NUMERIC_STANDARD();
+                LOCK_LC_NUMERIC_STANDARD();
+            }
 
             Perl_atof2(s, x);
 
-            if (use_standard_radix)
+            if (use_standard_radix) {
+                UNLOCK_LC_NUMERIC_STANDARD();
                 SET_NUMERIC_UNDERLYING();
+            }
         }
         else
             Perl_atof2(s, x);

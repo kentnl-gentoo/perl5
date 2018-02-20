@@ -2668,11 +2668,12 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
 	/* The logic to use SVt_PVNV if necessary is in sv_upgrade.  */
 	sv_upgrade(sv, SVt_NV);
 	DEBUG_c({
-	    STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD();
+            DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+            STORE_LC_NUMERIC_SET_STANDARD();
 	    PerlIO_printf(Perl_debug_log,
 			  "0x%" UVxf " num(%" NVgf ")\n",
 			  PTR2UV(sv), SvNVX(sv));
-	    RESTORE_LC_NUMERIC_UNDERLYING();
+            RESTORE_LC_NUMERIC();
 	});
     }
     else if (SvTYPE(sv) < SVt_PVNV)
@@ -2809,10 +2810,11 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
 	return 0.0;
     }
     DEBUG_c({
-	STORE_LC_NUMERIC_UNDERLYING_SET_STANDARD();
+        DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
+        STORE_LC_NUMERIC_SET_STANDARD();
 	PerlIO_printf(Perl_debug_log, "0x%" UVxf " 2nv(%" NVgf ")\n",
 		      PTR2UV(sv), SvNVX(sv));
-	RESTORE_LC_NUMERIC_UNDERLYING();
+        RESTORE_LC_NUMERIC();
     });
     return SvNVX(sv);
 }
@@ -3141,7 +3143,7 @@ Perl_sv_2pv_flags(pTHX_ SV *const sv, STRLEN *const lp, const I32 flags)
                     DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
                     STORE_LC_NUMERIC_SET_TO_NEEDED();
 
-                    local_radix = PL_numeric_underlying && PL_numeric_radix_sv;
+                    local_radix = _NOT_IN_NUMERIC_STANDARD;
                     if (local_radix && SvCUR(PL_numeric_radix_sv) > 1) {
                         size += SvCUR(PL_numeric_radix_sv) - 1;
                         s = SvGROW_mutable(sv, size);
@@ -11711,7 +11713,7 @@ S_format_hexfp(pTHX_ char * const buf, const STRLEN bufsize, const char c,
 #ifndef USE_LOCALE_NUMERIC
             *p++ = '.';
 #else
-            if (PL_numeric_radix_sv && IN_LC(LC_NUMERIC)) {
+            if (IN_LC(LC_NUMERIC)) {
                 STRLEN n;
                 const char* r = SvPV(PL_numeric_radix_sv, n);
                 Copy(r, p, n, char);
@@ -12903,7 +12905,7 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
                 lc_numeric_set = TRUE;
             }
 
-            if (PL_numeric_radix_sv && IN_LC(LC_NUMERIC)) {
+            if (IN_LC(LC_NUMERIC)) {
                 /* this can't wrap unless PL_numeric_radix_sv is a string
                  * consuming virtually all the 32-bit or 64-bit address
                  * space
@@ -13327,8 +13329,10 @@ Perl_sv_vcatpvfn_flags(pTHX_ SV *const sv, const char *const pat, const STRLEN p
 
     SvTAINT(sv);
 
-    RESTORE_LC_NUMERIC();   /* Done outside loop, so don't have to save/restore
-                               each iteration. */
+    if (lc_numeric_set) {
+        RESTORE_LC_NUMERIC();   /* Done outside loop, so don't have to
+                                   save/restore each iteration. */
+    }
 }
 
 /* =========================================================================
@@ -15223,12 +15227,15 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 #ifdef USE_LOCALE_NUMERIC
     PL_numeric_standard	= proto_perl->Inumeric_standard;
     PL_numeric_underlying	= proto_perl->Inumeric_underlying;
+    PL_numeric_underlying_is_standard	= proto_perl->Inumeric_underlying_is_standard;
 #endif /* !USE_LOCALE_NUMERIC */
 
     /* Did the locale setup indicate UTF-8? */
     PL_utf8locale	= proto_perl->Iutf8locale;
     PL_in_utf8_CTYPE_locale = proto_perl->Iin_utf8_CTYPE_locale;
     PL_in_utf8_COLLATE_locale = proto_perl->Iin_utf8_COLLATE_locale;
+    my_strlcpy(PL_locale_utf8ness, proto_perl->Ilocale_utf8ness, sizeof(PL_locale_utf8ness));
+    PL_lc_numeric_mutex_depth = 0;
     /* Unicode features (see perlrun/-C) */
     PL_unicode		= proto_perl->Iunicode;
 
@@ -15542,6 +15549,13 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     PL_subname		= sv_dup_inc(proto_perl->Isubname, param);
 
+#if   defined(USE_POSIX_2008_LOCALE)      \
+ &&   defined(USE_THREAD_SAFE_LOCALE)     \
+ && ! defined(HAS_QUERYLOCALE)
+    for (i = 0; i < (int) C_ARRAY_LENGTH(PL_curlocales); i++) {
+        PL_curlocales[i] = savepv("."); /* An illegal value */
+    }
+#endif
 #ifdef USE_LOCALE_CTYPE
     /* Should we warn if uses locale? */
     PL_warn_locale      = sv_dup_inc(proto_perl->Iwarn_locale, param);
@@ -15554,10 +15568,17 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 #ifdef USE_LOCALE_NUMERIC
     PL_numeric_name	= SAVEPV(proto_perl->Inumeric_name);
     PL_numeric_radix_sv	= sv_dup_inc(proto_perl->Inumeric_radix_sv, param);
+
+#  if defined(HAS_POSIX_2008_LOCALE)
+    PL_underlying_numeric_obj = NULL;
+#  endif
 #endif /* !USE_LOCALE_NUMERIC */
 
     PL_langinfo_buf = NULL;
     PL_langinfo_bufsize = 0;
+
+    PL_setlocale_buf = NULL;
+    PL_setlocale_bufsize = 0;
 
     /* Unicode inversion lists */
     PL_Latin1		= sv_dup_inc(proto_perl->ILatin1, param);

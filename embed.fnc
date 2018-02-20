@@ -282,6 +282,7 @@ ApdR	|SV**	|av_fetch	|NN AV *av|SSize_t key|I32 lval
 Apd	|void	|av_fill	|NN AV *av|SSize_t fill
 ApdR	|SSize_t|av_len		|NN AV *av
 ApdR	|AV*	|av_make	|SSize_t size|NN SV **strp
+p	|SV*	|av_nonelem	|NN AV *av|SSize_t ix
 Apd	|SV*	|av_pop		|NN AV *av
 ApdoxM	|void	|av_create_and_push|NN AV **const avp|NN SV *const val
 Apd	|void	|av_push	|NN AV *av|NN SV *val
@@ -806,9 +807,7 @@ AndmoR	|bool	|is_utf8_invariant_string|NN const U8* const s		    \
 AnidR	|bool	|is_utf8_invariant_string_loc|NN const U8* const s	    \
 		|STRLEN len						    \
 		|NULLOK const U8 ** ep
-#ifndef EBCDIC
 AniR	|unsigned int|_variant_byte_number|PERL_UINTMAX_T word
-#endif
 #if defined(PERL_CORE) || defined(PERL_EXT)
 EinR	|Size_t	|variant_under_utf8_count|NN const U8* const s		    \
 		|NN const U8* const e
@@ -898,8 +897,11 @@ ADMpR	|bool	|is_utf8_punct	|NN const U8 *p
 ADMpR	|bool	|is_utf8_xdigit	|NN const U8 *p
 AMpR	|bool	|_is_utf8_mark	|NN const U8 *p
 ADMpR	|bool	|is_utf8_mark	|NN const U8 *p
-EXdpR	|bool	|isSCRIPT_RUN	|NN const U8 *s|NN const U8 *send    \
-				|const bool utf8_target
+#if defined(PERL_CORE) || defined(PERL_EXT)
+EXdpR	|bool	|isSCRIPT_RUN	|NN const U8 *s|NN const U8 *send   \
+				|const bool utf8_target		    \
+				|NULLOK SCX_enum * ret_script
+#endif
 : Used in perly.y
 p	|OP*	|jmaybe		|NN OP *o
 : Used in pp.c 
@@ -1025,6 +1027,7 @@ p	|int	|magic_freearylen_p|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setdbline|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setdebugvar|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setdefelem|NN SV* sv|NN MAGIC* mg
+p	|int	|magic_setnonelem|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setenv	|NN SV* sv|NN MAGIC* mg
 dp	|int	|magic_sethint	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_setisa	|NN SV* sv|NN MAGIC* mg
@@ -1295,7 +1298,7 @@ ApdO	|AV*	|get_av		|NN const char *name|I32 flags
 ApdO	|HV*	|get_hv		|NN const char *name|I32 flags
 ApdO	|CV*	|get_cv		|NN const char* name|I32 flags
 Apd	|CV*	|get_cvn_flags	|NN const char* name|STRLEN len|I32 flags
-EXnpo	|char*	|setlocale	|int category|NULLOK const char* locale
+Ando	|const char*|Perl_setlocale|const int category|NULLOK const char* locale
 #if defined(HAS_NL_LANGINFO) && defined(PERL_LANGINFO_H)
 Ando	|const char*|Perl_langinfo|const nl_item item
 #else
@@ -1305,11 +1308,13 @@ ApOM	|int	|init_i18nl10n	|int printwarn
 ApOM	|int	|init_i18nl14n	|int printwarn
 p	|char*	|my_strerror	|const int errnum
 Xpn	|void	|_warn_problematic_locale
-p	|void	|new_numeric	|NULLOK const char* newcoll
 Xp	|void	|set_numeric_underlying
 Xp	|void	|set_numeric_standard
 Xp	|bool	|_is_in_locale_category|const bool compiling|const int category
-Apd	|void	|sync_locale
+Apdn	|void	|switch_to_global_locale
+Apdn	|bool	|sync_locale
+ApMn	|void	|thread_locale_init
+ApMn	|void	|thread_locale_term
 ApdO	|void	|require_pv	|NN const char* pv
 Apd	|void	|pack_cat	|NN SV *cat|NN const char *pat|NN const char *patend \
 				|NN SV **beglist|NN SV **endlist|NN SV ***next_in_list|U32 flags
@@ -1860,18 +1865,26 @@ Adop	|UV	|utf8n_to_uvchr	|NN const U8 *s				    \
 				|STRLEN curlen				    \
 				|NULLOK STRLEN *retlen			    \
 				|const U32 flags
-Adp	|UV	|utf8n_to_uvchr_error|NN const U8 *s			    \
+Adop	|UV	|utf8n_to_uvchr_error|NN const U8 *s			    \
 				|STRLEN curlen				    \
 				|NULLOK STRLEN *retlen			    \
 				|const U32 flags			    \
 				|NULLOK U32 * errors
+AMdp	|UV	|utf8n_to_uvchr_msgs|NN const U8 *s			    \
+				|STRLEN curlen				    \
+				|NULLOK STRLEN *retlen			    \
+				|const U32 flags			    \
+				|NULLOK U32 * errors			    \
+				|NULLOK AV ** msgs
 AipnR	|UV	|valid_utf8_to_uvchr	|NN const U8 *s|NULLOK STRLEN *retlen
 Ap	|UV	|utf8n_to_uvuni|NN const U8 *s|STRLEN curlen|NULLOK STRLEN *retlen|U32 flags
 
 Adm	|U8*	|uvchr_to_utf8	|NN U8 *d|UV uv
 Ap	|U8*	|uvuni_to_utf8	|NN U8 *d|UV uv
 Adm	|U8*	|uvchr_to_utf8_flags	|NN U8 *d|UV uv|UV flags
-Apd	|U8*	|uvoffuni_to_utf8_flags	|NN U8 *d|UV uv|const UV flags
+AdmM	|U8*	|uvchr_to_utf8_flags_msgs|NN U8 *d|UV uv|UV flags|NULLOK HV ** msgs
+Apod	|U8*	|uvoffuni_to_utf8_flags	|NN U8 *d|UV uv|const UV flags
+ApM	|U8*	|uvoffuni_to_utf8_flags_msgs|NN U8 *d|UV uv|const UV flags|NULLOK HV** msgs
 Ap	|U8*	|uvuni_to_utf8_flags	|NN U8 *d|UV uv|UV flags
 Apd	|char*	|pv_uni_display	|NN SV *dsv|NN const U8 *spv|STRLEN len|STRLEN pvlim|UV flags
 ApdR	|char*	|sv_uni_display	|NN SV *dsv|NN SV *ssv|STRLEN pvlim|UV flags
@@ -2453,6 +2466,7 @@ Es	|SSize_t|study_chunk	|NN RExC_state_t *pRExC_state \
                                 |I32 stopparen|U32 recursed_depth \
 				|NULLOK regnode_ssc *and_withp \
 				|U32 flags|U32 depth
+EsR	|SV *	|get_ANYOFM_contents|NN const regnode * n
 EsRn	|U32	|add_data	|NN RExC_state_t* const pRExC_state \
 				|NN const char* const s|const U32 n
 rs	|void	|re_croak2	|bool utf8|NN const char* pat1|NN const char* pat2|...
@@ -2485,7 +2499,7 @@ Es	|const regnode*|dumpuntil|NN const regexp *r|NN const regnode *start \
 				|NN SV* sv|I32 indent|U32 depth
 Es	|void	|put_code_point	|NN SV* sv|UV c
 Es	|bool	|put_charclass_bitmap_innards|NN SV* sv		    \
-				|NN char* bitmap		    \
+				|NULLOK char* bitmap		    \
 				|NULLOK SV* nonbitmap_invlist	    \
 				|NULLOK SV* only_utf8_locale_invlist\
 				|NULLOK const regnode * const node  \
@@ -2528,6 +2542,12 @@ ERp	|bool	|_is_grapheme	|NN const U8 * strbeg|NN const U8 * s|NN const U8 *stren
 ERs	|bool	|isFOO_utf8_lc	|const U8 classnum|NN const U8* character
 ERns	|char *|find_next_ascii|NN char* s|NN const char * send|const bool is_utf8
 ERns	|char *|find_next_non_ascii|NN char* s|NN const char * send|const bool is_utf8
+ERns	|char *	|find_next_masked|NN char * s				\
+				 |NN const char * send			\
+				 |const U8 byte|const U8 mask
+ERns	|char *|find_span_end	|NN char* s|NN const char * send|const char span_byte
+ERns	|U8 *|find_span_end_mask|NN U8 * s|NN const U8 * send	\
+				|const U8 span_byte|const U8 mask
 ERs	|SSize_t|regmatch	|NN regmatch_info *reginfo|NN char *startpos|NN regnode *prog
 WERs	|I32	|regrepeat	|NN regexp *prog|NN char **startposp \
 				|NN const regnode *p \
@@ -2727,7 +2747,7 @@ s	|void	|incline	|NN const char *s|NN const char *end
 s	|int	|intuit_method	|NN char *s|NULLOK SV *ioname|NULLOK CV *cv
 s	|int	|intuit_more	|NN char *s|NN char *e
 s	|I32	|lop		|I32 f|U8 x|NN char *s
-rs	|void	|missingterm	|NULLOK char *s|const STRLEN len
+rs	|void	|missingterm	|NULLOK char *s|STRLEN len
 s	|void	|no_op		|NN const char *const what|NULLOK char *s
 s	|int	|pending_ident
 sR	|I32	|sublex_done
@@ -2764,6 +2784,8 @@ s	|bool	|isa_lookup	|NN HV *stash|NN const char * const name \
 
 #if defined(PERL_IN_LOCALE_C)
 sn	|const char*|category_name |const int category
+s	|const char*|switch_category_locale_to_template|const int switch_category|const int template_category|NULLOK const char * template_locale
+s	|void	|restore_switched_locale|const int category|NULLOK const char * const original_locale
 #  ifdef HAS_NL_LANGINFO
 sn	|const char*|my_nl_langinfo|const nl_item item|bool toggle
 #  else
@@ -2778,6 +2800,13 @@ s	|char*	|stdize_locale	|NN char* locs
 s	|void	|new_collate	|NULLOK const char* newcoll
 s	|void	|new_ctype	|NN const char* newctype
 s	|void	|set_numeric_radix|const bool use_locale
+s	|void	|new_numeric	|NULLOK const char* newnum
+#    ifdef USE_POSIX_2008_LOCALE
+sn	|const char*|emulate_setlocale|const int category		\
+				    |NULLOK const char* locale		\
+				    |unsigned int index			\
+				    |const bool is_index_valid
+#    endif
 #    ifdef WIN32
 s	|char*	|win32_setlocale|int category|NULLOK const char* locale
 #    endif
@@ -2831,6 +2860,9 @@ sn	|NV|mulexp10	|NV value|I32 exponent
 #endif
 
 #if defined(PERL_IN_UTF8_C)
+sR	|HV *	|new_msg_hv |NN const char * const message		    \
+			    |U32 categories				    \
+			    |U32 flag
 sRM	|UV	|check_locale_boundary_crossing				    \
 		|NN const U8* const p					    \
 		|const UV result					    \

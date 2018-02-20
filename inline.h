@@ -458,7 +458,7 @@ S_is_utf8_invariant_string_loc(const U8* const s, STRLEN len, const U8 ** ep)
         } while (x + PERL_WORDSIZE <= send);
     }
 
-#endif
+#endif      /* End of ! EBCDIC */
 
     /* Process per-byte */
     while (x < send) {
@@ -476,8 +476,6 @@ S_is_utf8_invariant_string_loc(const U8* const s, STRLEN len, const U8 ** ep)
     return TRUE;
 }
 
-#ifndef EBCDIC
-
 PERL_STATIC_INLINE unsigned int
 S__variant_byte_number(PERL_UINTMAX_T word)
 {
@@ -490,7 +488,24 @@ S__variant_byte_number(PERL_UINTMAX_T word)
     /* Get just the msb bits of each byte */
     word &= PERL_VARIANTS_WORD_MASK;
 
-#  if BYTEORDER == 0x1234 || BYTEORDER == 0x12345678
+#  ifdef USING_MSVC6    /* VC6 has some issues with the normal code, and the
+                           easiest thing is to hide that from the callers */
+    {
+        unsigned int i;
+        const U8 * s = (U8 *) &word;
+        dTHX;
+
+        for (i = 0; i < sizeof(word); i++ ) {
+            if (s[i]) {
+                return i;
+            }
+        }
+
+        Perl_croak(aTHX_ "panic: %s: %d: unexpected zero word\n",
+                                 __FILE__, __LINE__);
+    }
+
+#  elif BYTEORDER == 0x1234 || BYTEORDER == 0x12345678
 
     /* Bytes are stored like
      *  Byte8 ... Byte2 Byte1
@@ -544,13 +559,15 @@ S__variant_byte_number(PERL_UINTMAX_T word)
 #    error Unexpected byte order
 #  endif
 
-    /* Here 'word' has a single bit set, the  msb is of the first byte which
-     * has it set.  Calculate that position in the word.  We can use this
+    /* Here 'word' has a single bit set: the  msb of the first byte in which it
+     * is set.  Calculate that position in the word.  We can use this
      * specialized solution: https://stackoverflow.com/a/32339674/1626653,
-     * assumes an 8-bit byte */
-    word = (word >> 7) * (( 7ULL << 56) | (15ULL << 48) | (23ULL << 40)
-                        | (31ULL << 32) | (39ULL << 24) | (47ULL << 16)
-                        | (55ULL <<  8) | (63ULL <<  0));
+     * assumes an 8-bit byte.  (On a 32-bit machine, the larger numbers should
+     * just get shifted off at compile time) */
+    word = (word >> 7) * ((UINTMAX_C( 7) << 56) | (UINTMAX_C(15) << 48)
+                        | (UINTMAX_C(23) << 40) | (UINTMAX_C(31) << 32)
+                        |           (39 <<  24) |           (47 <<  16)
+                        |           (55 <<   8) |           (63 <<   0));
     word >>= PERL_WORDSIZE * 7; /* >> by either 56 or 24 */
 
     /* Here, word contains the position 7..63 of that bit.  Convert to 0..7 */
@@ -566,7 +583,6 @@ S__variant_byte_number(PERL_UINTMAX_T word)
     return (unsigned int) word;
 }
 
-#endif /* ! EBCDIC */
 #if defined(PERL_CORE) || defined(PERL_EXT)
 
 /*

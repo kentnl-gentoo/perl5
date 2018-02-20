@@ -16,7 +16,7 @@
 #
 # This script is normally invoked from regen.pl.
 
-$VERSION = '1.40';
+$VERSION = '1.41';
 
 BEGIN {
     require './regen/regen_lib.pl';
@@ -108,6 +108,8 @@ my $tree = {
                                 'experimental::declared_refs' =>
                                     [ 5.025, DEFAULT_ON ],
                                 'experimental::script_run' =>
+                                    [ 5.027, DEFAULT_ON ],
+                                'experimental::alpha_assertions' =>
                                     [ 5.027, DEFAULT_ON ],
                         }],
 
@@ -765,7 +767,7 @@ sub __chk
     # If we have an explicit level, bypass Carp.
     if ($has_level and @callers_bitmask) {
 	my $stuff = " at " . join " line ", (caller $i)[1,2];
-	$stuff .= ", <" . *${^LAST_FH}{NAME} . "> line $." if ${^LAST_FH};
+	$stuff .= ", <" . *${^LAST_FH}{NAME} . "> line $." if $. && ${^LAST_FH};
 	die "$message$stuff.\n" if $results[0];
 	return warn "$message$stuff.\n";
     }

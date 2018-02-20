@@ -818,9 +818,9 @@ S_fixup_errno_string(pTHX_ SV* sv)
          * avoid as many possible backward compatibility issues as possible, we
          * don't turn on the flag unless we have to.  So the flag stays off for
          * an entirely invariant string.  We assume that if the string looks
-         * like UTF-8, it really is UTF-8:  "text in any other encoding that
-         * uses bytes with the high bit set is extremely unlikely to pass a
-         * UTF-8 validity test"
+         * like UTF-8 in a single script, it really is UTF-8:  "text in any
+         * other encoding that uses bytes with the high bit set is extremely
+         * unlikely to pass a UTF-8 validity test"
          * (http://en.wikipedia.org/wiki/Charset_detection).  There is a
          * potential that we will get it wrong however, especially on short
          * error message text, so do an additional check. */
@@ -829,14 +829,14 @@ S_fixup_errno_string(pTHX_ SV* sv)
 
 #ifdef USE_LOCALE_MESSAGES
 
-            &&   _is_cur_LC_category_utf8(LC_MESSAGES)
+            &&  _is_cur_LC_category_utf8(LC_MESSAGES)
 
-#elif defined(USE_LOCLAE_CTYPE)
+#else   /* If can't check directly, at least can see if script is consistent,
+           under UTF-8, which gives us an extra measure of confidence. */
 
-                 /* For systems that don't have a separate message category,
-                  * this assumes that they follow the CTYPE one */
-            &&   _is_cur_LC_category_utf8(LC_CTYPE)
-
+            && isSCRIPT_RUN((const U8 *) SvPVX_const(sv), (U8 *) SvEND(sv),
+                            TRUE, /* Means assume UTF-8 */
+                            NULL)
 #endif
 
         ) {
@@ -1069,7 +1069,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
         sv_setiv(sv, (IV)PL_perldb);
 	break;
     case '\023':		/* ^S */
-        {
+	if (nextchar == '\0') {
 	    if (PL_parser && PL_parser->lex_state != LEX_NOTPARSING)
 		SvOK_off(sv);
 	    else if (PL_in_eval)
@@ -1077,6 +1077,18 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	    else
 		sv_setiv(sv, 0);
 	}
+	else if (strEQ(remaining, "AFE_LOCALES")) {
+
+#if ! defined(USE_ITHREADS) || defined(USE_THREAD_SAFE_LOCALE)
+
+	    sv_setuv(sv, (UV) 1);
+
+#else
+	    sv_setuv(sv, (UV) 0);
+
+#endif
+
+        }
 	break;
     case '\024':		/* ^T */
 	if (nextchar == '\0') {
@@ -2513,6 +2525,15 @@ Perl_vivify_defelem(pTHX_ SV *sv)
     SvREFCNT_dec(mg->mg_obj);
     mg->mg_obj = NULL;
     mg->mg_flags &= ~MGf_REFCOUNTED;
+}
+
+int
+Perl_magic_setnonelem(pTHX_ SV *sv, MAGIC *mg)
+{
+    PERL_ARGS_ASSERT_MAGIC_SETNONELEM;
+    PERL_UNUSED_ARG(mg);
+    sv_unmagic(sv, PERL_MAGIC_nonelem);
+    return 0;
 }
 
 int

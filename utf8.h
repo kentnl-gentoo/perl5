@@ -66,14 +66,20 @@ the string is invariant.
 #define is_ascii_string(s, len)     is_utf8_invariant_string(s, len)
 #define is_invariant_string(s, len) is_utf8_invariant_string(s, len)
 
+#define uvoffuni_to_utf8_flags(d,uv,flags)                                     \
+                               uvoffuni_to_utf8_flags_msgs(d, uv, flags, 0)
 #define uvchr_to_utf8(a,b)          uvchr_to_utf8_flags(a,b,0)
 #define uvchr_to_utf8_flags(d,uv,flags)                                        \
-                            uvoffuni_to_utf8_flags(d,NATIVE_TO_UNI(uv),flags)
+                                    uvchr_to_utf8_flags_msgs(d,uv,flags, 0)
+#define uvchr_to_utf8_flags_msgs(d,uv,flags,msgs)                              \
+                uvoffuni_to_utf8_flags_msgs(d,NATIVE_TO_UNI(uv),flags, msgs)
 #define utf8_to_uvchr_buf(s, e, lenp)                                          \
                      utf8n_to_uvchr(s, (U8*)(e) - (U8*)(s), lenp,              \
                                     ckWARN_d(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY)
 #define utf8n_to_uvchr(s, len, lenp, flags)                                    \
                                 utf8n_to_uvchr_error(s, len, lenp, flags, 0)
+#define utf8n_to_uvchr_error(s, len, lenp, flags, errors)                      \
+                        utf8n_to_uvchr_msgs(s, len, lenp, flags, errors, 0)
 
 #define to_uni_fold(c, p, lenp) _to_uni_fold_flags(c, p, lenp, FOLD_FLAGS_FULL)
 
@@ -805,6 +811,7 @@ case any call to string overloading updates the internal UTF-8 encoding flag.
  * includes what they used to mean.  The first one's meaning was to allow the
  * just the single non-character 0xFFFF */
 #define UTF8_ALLOW_FFFF 0
+#define UTF8_ALLOW_FE_FF 0
 #define UTF8_ALLOW_SURROGATE 0
 
 /* C9 refers to Unicode Corrigendum #9: allows but discourages non-chars */
@@ -930,6 +937,12 @@ point's representation.
 #define UNICODE_DISALLOW_SUPER         0x0040
 #define UNICODE_DISALLOW_PERL_EXTENDED 0x0080
 #define UNICODE_DISALLOW_ABOVE_31_BIT  UNICODE_DISALLOW_PERL_EXTENDED
+
+#define UNICODE_GOT_SURROGATE       UNICODE_DISALLOW_SURROGATE
+#define UNICODE_GOT_NONCHAR         UNICODE_DISALLOW_NONCHAR
+#define UNICODE_GOT_SUPER           UNICODE_DISALLOW_SUPER
+#define UNICODE_GOT_PERL_EXTENDED   UNICODE_DISALLOW_PERL_EXTENDED
+
 #define UNICODE_WARN_ILLEGAL_C9_INTERCHANGE                                   \
                                   (UNICODE_WARN_SURROGATE|UNICODE_WARN_SUPER)
 #define UNICODE_WARN_ILLEGAL_INTERCHANGE                                      \

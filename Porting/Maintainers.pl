@@ -192,7 +192,7 @@ use File::Glob qw(:case);
     },
 
     'bignum' => {
-        'DISTRIBUTION' => 'PJACKLAM/bignum-0.47.tar.gz',
+        'DISTRIBUTION' => 'PJACKLAM/bignum-0.49.tar.gz',
         'FILES'        => q[cpan/bignum],
         'EXCLUDED'     => [
             qr{^t/author-},
@@ -394,7 +394,7 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.94.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.96.tar.gz',
         'FILES'        => q[cpan/Encode],
     },
 
@@ -473,7 +473,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::MakeMaker' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-7.30.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-7.32.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -645,7 +645,7 @@ use File::Glob qw(:case);
     },
 
     'IPC::Cmd' => {
-        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-0.98.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/IPC-Cmd-1.00.tar.gz',
         'FILES'        => q[cpan/IPC-Cmd],
     },
 
@@ -808,7 +808,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20171220.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20180120.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -1082,7 +1082,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302120.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302122.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1160,7 +1160,7 @@ use File::Glob qw(:case);
     },
 
     'threads' => {
-        'DISTRIBUTION' => 'JDHEDDEN/threads-2.16.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-2.21.tar.gz',
         'FILES'        => q[dist/threads],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1172,7 +1172,7 @@ use File::Glob qw(:case);
     },
 
     'threads::shared' => {
-        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.57.tar.gz',
+        'DISTRIBUTION' => 'JDHEDDEN/threads-shared-1.58.tar.gz',
         'FILES'        => q[dist/threads-shared],
         'EXCLUDED'     => [
             qw( examples/class.pl
@@ -1194,7 +1194,7 @@ use File::Glob qw(:case);
     },
 
     'Time::HiRes' => {
-        'DISTRIBUTION' => 'JHI/Time-HiRes-1.9752.tar.gz',
+        'DISTRIBUTION' => 'JHI/Time-HiRes-1.9753.tar.gz',
         'FILES'        => q[dist/Time-HiRes],
     },
 
