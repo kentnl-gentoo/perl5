@@ -196,6 +196,7 @@ uni/variables.t
 ../ext/XS-APItest/t/fetch_pad_names.t
 ../ext/XS-APItest/t/svpeek.t
 ../ext/XS-APItest/t/synthetic_scope.t
+../lib/Config.t                         # Config_heavy.pl fns getting output
 ../lib/charnames.t
 ../lib/dumpvar.t
 ../lib/English.t

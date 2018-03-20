@@ -4,6 +4,7 @@
 
 use Config;
 use Cwd;
+use File::Spec;
 use strict;
 
 my $fn = "lib/Storable/Limit.pm";
@@ -32,6 +33,13 @@ if (is_miniperl()) {
 }
 my $prefix = "";
 if ($^O eq "MSWin32") {
+    require Win32;
+    my ($str, $major, $minor) = Win32::GetOSVersion();
+    if ($major < 6 || $major == 6 && $minor < 1) {
+	print "Using defaults for older Win32\n";
+	write_limits(500, 256);
+	exit;
+    }
     # prevent Windows popping up a dialog each time we overflow
     # the stack
     require Win32API::File;
@@ -103,7 +111,7 @@ sub cmd {
 sub good {
     my $i = shift; # this passed
     my $j = $i + abs(int(($bad - $i) / 2));
-    print "$i passed, try more $j ...\n" unless QUIET;
+    print "Storable: determining recursion limit: $i passed, try more $j ...\n" unless QUIET;
     $good = $i;
     if ($j <= $i) {
         $found++;
@@ -114,7 +122,7 @@ sub good {
 sub bad {
     my $i = shift; # this failed
     my $j = $i - abs(int(($i - $good) / 2));
-    print "$i failed, try less $j ...\n" unless QUIET;
+    print "Storable: determining recursion limit: $i too big, try less $j ...\n" unless QUIET;
     $bad = $i;
     if ($j >= $i) {
         $j = $good;
@@ -123,6 +131,10 @@ sub bad {
     return $j;
 }
 
+unless ($ENV{STORABLE_NOISY}) {
+    # suppress Segmentation fault messages
+    open STDERR, ">", File::Spec->devnull;
+}
 while (!$found) {
     my $cmd = cmd($n, '$t=[$t]', 'recursion_limit');
     #print "$cmd\n" unless $QUIET;
@@ -187,9 +199,13 @@ else {
     $max_depth_hash = ($max_depth_hash >> 1) - $stack_reserve * 2;
 }
 
-my $f;
-open $f, ">", $fn or die "$fn $!";
-print $f <<EOS;
+write_limits($max_depth, $max_depth_hash);
+
+sub write_limits {
+    my ($max_depth, $max_depth_hash) = @_;
+    my $f;
+    open $f, ">", $fn or die "$fn $!";
+    print $f <<EOS;
 # bisected by stacksize
 \$Storable::recursion_limit = $max_depth
   unless defined \$Storable::recursion_limit;
@@ -197,4 +213,6 @@ print $f <<EOS;
   unless defined \$Storable::recursion_limit_hash;
 1;
 EOS
-close $f;
+    close $f
+      or die "Failed to close $fn: $!\n";
+}

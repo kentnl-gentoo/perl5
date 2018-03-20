@@ -6106,7 +6106,12 @@ static SV *retrieve_byte(pTHX_ stcxt_t *cxt, const char *cname)
     SV *sv;
     HV *stash;
     int siv;
+#ifdef _MSC_VER
+    /* MSVC 2017 doesn't handle the AIX workaround well */
+    int tmp;
+#else
     signed char tmp;	/* Workaround for AIX cc bug --H.Merijn Brand */
+#endif
 
     TRACEME(("retrieve_byte (#%d)", (int)cxt->tagnum));
 

@@ -320,7 +320,6 @@ perl_construct(pTHXx)
     PL_Assigned_invlist = _new_invlist_C_array(Assigned_invlist);
     PL_SCX_invlist = _new_invlist_C_array(_Perl_SCX_invlist);
 
-    init_i18nl10n(1);
 
 #if defined(LOCAL_PATCH_COUNT)
     PL_localpatches = local_patches;	/* For possible -v */
@@ -471,11 +470,12 @@ perl_construct(pTHXx)
     /* Start with 1 bucket, for DFS.  It's unlikely we'll need more.  */
     HvMAX(PL_registered_mros) = 0;
 
-#ifdef HAS_POSIX_2008_LOCALE
+#ifdef USE_POSIX_2008_LOCALE
     PL_C_locale_obj = newlocale(LC_ALL_MASK, "C", NULL);
 #endif
 
     ENTER;
+    init_i18nl10n(1);
 }
 
 /*
@@ -1154,20 +1154,27 @@ perl_destruct(pTHXx)
         PL_curlocales[i] = NULL;
     }
 #endif
+#ifdef HAS_POSIX_2008_LOCALE
+    {
+        /* This also makes sure we aren't using a locale object that gets freed
+         * below */
+        const locale_t old_locale = uselocale(LC_GLOBAL_LOCALE);
+        if (old_locale != LC_GLOBAL_LOCALE) {
+            freelocale(old_locale);
+        }
+    }
+#  ifdef USE_LOCALE_NUMERIC
+    if (PL_underlying_numeric_obj) {
+        freelocale(PL_underlying_numeric_obj);
+        PL_underlying_numeric_obj = (locale_t) NULL;
+    }
+#  endif
+#endif
 #ifdef USE_LOCALE_NUMERIC
     Safefree(PL_numeric_name);
     PL_numeric_name = NULL;
     SvREFCNT_dec(PL_numeric_radix_sv);
     PL_numeric_radix_sv = NULL;
-
-#  ifdef HAS_POSIX_2008_LOCALE
-    if (PL_underlying_numeric_obj) {
-        /* Make sure we aren't using the locale space we are about to free */
-        uselocale(LC_GLOBAL_LOCALE);
-        freelocale(PL_underlying_numeric_obj);
-        PL_underlying_numeric_obj = (locale_t) NULL;
-    }
-#  endif
 #endif
 
     if (PL_setlocale_buf) {
@@ -1190,16 +1197,8 @@ perl_destruct(pTHXx)
     SvREFCNT_dec(PL_utf8_totitle);
     SvREFCNT_dec(PL_utf8_tolower);
     SvREFCNT_dec(PL_utf8_tofold);
-    SvREFCNT_dec(PL_utf8_idstart);
-    SvREFCNT_dec(PL_utf8_idcont);
-    SvREFCNT_dec(PL_utf8_foldable);
     SvREFCNT_dec(PL_utf8_foldclosures);
-    SvREFCNT_dec(PL_AboveLatin1);
     SvREFCNT_dec(PL_InBitmap);
-    SvREFCNT_dec(PL_UpperLatin1);
-    SvREFCNT_dec(PL_Latin1);
-    SvREFCNT_dec(PL_NonL1NonFinalFold);
-    SvREFCNT_dec(PL_HasMultiCharFold);
 #ifdef USE_LOCALE_CTYPE
     SvREFCNT_dec(PL_warn_locale);
 #endif
@@ -1208,28 +1207,11 @@ perl_destruct(pTHXx)
     PL_utf8_totitle	= NULL;
     PL_utf8_tolower	= NULL;
     PL_utf8_tofold	= NULL;
-    PL_utf8_idstart	= NULL;
-    PL_utf8_idcont	= NULL;
     PL_utf8_foldclosures = NULL;
-    PL_AboveLatin1       = NULL;
     PL_InBitmap          = NULL;
-    PL_HasMultiCharFold  = NULL;
 #ifdef USE_LOCALE_CTYPE
     PL_warn_locale       = NULL;
 #endif
-    PL_Latin1            = NULL;
-    PL_NonL1NonFinalFold = NULL;
-    PL_UpperLatin1       = NULL;
-    for (i = 0; i < POSIX_CC_COUNT; i++) {
-        SvREFCNT_dec(PL_XPosix_ptrs[i]);
-        PL_XPosix_ptrs[i] = NULL;
-    }
-    PL_GCB_invlist = NULL;
-    PL_LB_invlist = NULL;
-    PL_SB_invlist = NULL;
-    PL_SCX_invlist = NULL;
-    PL_WB_invlist = NULL;
-    PL_Assigned_invlist = NULL;
 
     if (!specialWARN(PL_compiling.cop_warnings))
 	PerlMemShared_free(PL_compiling.cop_warnings);

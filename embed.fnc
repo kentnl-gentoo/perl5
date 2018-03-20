@@ -807,7 +807,9 @@ AndmoR	|bool	|is_utf8_invariant_string|NN const U8* const s		    \
 AnidR	|bool	|is_utf8_invariant_string_loc|NN const U8* const s	    \
 		|STRLEN len						    \
 		|NULLOK const U8 ** ep
+#ifndef EBCDIC
 AniR	|unsigned int|_variant_byte_number|PERL_UINTMAX_T word
+#endif
 #if defined(PERL_CORE) || defined(PERL_EXT)
 EinR	|Size_t	|variant_under_utf8_count|NN const U8* const s		    \
 		|NN const U8* const e
@@ -899,8 +901,7 @@ AMpR	|bool	|_is_utf8_mark	|NN const U8 *p
 ADMpR	|bool	|is_utf8_mark	|NN const U8 *p
 #if defined(PERL_CORE) || defined(PERL_EXT)
 EXdpR	|bool	|isSCRIPT_RUN	|NN const U8 *s|NN const U8 *send   \
-				|const bool utf8_target		    \
-				|NULLOK SCX_enum * ret_script
+				|const bool utf8_target
 #endif
 : Used in perly.y
 p	|OP*	|jmaybe		|NN OP *o
@@ -1512,6 +1513,7 @@ Anp	|Signal_t |csighandler	|int sig
 #endif
 Ap	|SV**	|stack_grow	|NN SV** sp|NN SV** p|SSize_t n
 Ap	|I32	|start_subparse	|I32 is_format|U32 flags
+Xp	|void	|init_named_cv	|NN CV *cv|NN OP *nameop
 : Used in pp_ctl.c
 p	|void	|sub_crush_depth|NN CV* cv
 Amd	|bool	|sv_2bool	|NN SV *const sv
@@ -2540,12 +2542,12 @@ ERp	|bool	|_is_grapheme	|NN const U8 * strbeg|NN const U8 * s|NN const U8 *stren
 
 #if defined(PERL_IN_REGEXEC_C)
 ERs	|bool	|isFOO_utf8_lc	|const U8 classnum|NN const U8* character
-ERns	|char *|find_next_ascii|NN char* s|NN const char * send|const bool is_utf8
-ERns	|char *|find_next_non_ascii|NN char* s|NN const char * send|const bool is_utf8
-ERns	|char *	|find_next_masked|NN char * s				\
-				 |NN const char * send			\
+ERns	|char *	|find_next_ascii|NN char* s|NN const char * send|const bool is_utf8
+ERns	|char *	|find_next_non_ascii|NN char* s|NN const char * send|const bool is_utf8
+ERns	|U8 *	|find_next_masked|NN U8 * s				\
+				 |NN const U8 * send			\
 				 |const U8 byte|const U8 mask
-ERns	|char *|find_span_end	|NN char* s|NN const char * send|const char span_byte
+ERns	|U8 *|find_span_end	|NN U8* s|NN const U8 * send|const U8 span_byte
 ERns	|U8 *|find_span_end_mask|NN U8 * s|NN const U8 * send	\
 				|const U8 span_byte|const U8 mask
 ERs	|SSize_t|regmatch	|NN regmatch_info *reginfo|NN char *startpos|NN regnode *prog
@@ -2791,7 +2793,7 @@ sn	|const char*|my_nl_langinfo|const nl_item item|bool toggle
 #  else
 sn	|const char*|my_nl_langinfo|const int item|bool toggle
 #  endif
-in	|const char *|save_to_buffer|NN const char * string	\
+inR	|const char *|save_to_buffer|NULLOK const char * string	\
 				    |NULLOK char **buf		\
 				    |NN Size_t *buf_size	\
 				    |const Size_t offset
@@ -2829,7 +2831,8 @@ snR	|char *	|setlocale_debug_string	|const int category		    \
 #if        defined(USE_LOCALE)		\
     && (   defined(PERL_IN_LOCALE_C)	\
         || defined(PERL_IN_MG_C)	\
-	|| defined (PERL_EXT_POSIX))
+	|| defined (PERL_EXT_POSIX)	\
+	|| defined (PERL_EXT_LANGINFO))
 ApM	|bool	|_is_cur_LC_category_utf8|int category
 #endif
 

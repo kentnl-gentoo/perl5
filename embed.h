@@ -46,7 +46,6 @@
 #define _to_utf8_lower_flags(a,b,c,d,e,f,g)	Perl__to_utf8_lower_flags(aTHX_ a,b,c,d,e,f,g)
 #define _to_utf8_title_flags(a,b,c,d,e,f,g)	Perl__to_utf8_title_flags(aTHX_ a,b,c,d,e,f,g)
 #define _to_utf8_upper_flags(a,b,c,d,e,f,g)	Perl__to_utf8_upper_flags(aTHX_ a,b,c,d,e,f,g)
-#define _variant_byte_number	S__variant_byte_number
 #define amagic_call(a,b,c,d)	Perl_amagic_call(aTHX_ a,b,c,d)
 #define amagic_deref_call(a,b)	Perl_amagic_deref_call(aTHX_ a,b)
 #define apply_attrs_string(a,b,c,d)	Perl_apply_attrs_string(aTHX_ a,b,c,d)
@@ -778,6 +777,9 @@
 #if !(defined(HAS_SIGACTION) && defined(SA_SIGINFO))
 #define csighandler		Perl_csighandler
 #endif
+#if !defined(EBCDIC)
+#define _variant_byte_number	S__variant_byte_number
+#endif
 #if !defined(HAS_TRUNCATE) && !defined(HAS_CHSIZE) && defined(F_FREESP)
 #define my_chsize(a,b)		Perl_my_chsize(aTHX_ a,b)
 #endif
@@ -875,7 +877,7 @@
 #define sv_dup(a,b)		Perl_sv_dup(aTHX_ a,b)
 #define sv_dup_inc(a,b)		Perl_sv_dup_inc(aTHX_ a,b)
 #endif
-#if defined(USE_LOCALE)		    && (   defined(PERL_IN_LOCALE_C)	        || defined(PERL_IN_MG_C)		|| defined (PERL_EXT_POSIX))
+#if defined(USE_LOCALE)		    && (   defined(PERL_IN_LOCALE_C)	        || defined(PERL_IN_MG_C)		|| defined (PERL_EXT_POSIX)		|| defined (PERL_EXT_LANGINFO))
 #define _is_cur_LC_category_utf8(a)	Perl__is_cur_LC_category_utf8(aTHX_ a)
 #endif
 #if defined(USE_LOCALE_COLLATE)
@@ -999,7 +1001,7 @@
 #define sv_or_pv_pos_u2b(a,b,c,d)	S_sv_or_pv_pos_u2b(aTHX_ a,b,c,d)
 #  endif
 #  if defined(PERL_CORE) || defined(PERL_EXT)
-#define isSCRIPT_RUN(a,b,c,d)	Perl_isSCRIPT_RUN(aTHX_ a,b,c,d)
+#define isSCRIPT_RUN(a,b,c)	Perl_isSCRIPT_RUN(aTHX_ a,b,c)
 #define variant_under_utf8_count	S_variant_under_utf8_count
 #  endif
 #  if defined(PERL_IN_REGCOMP_C)
@@ -1277,6 +1279,7 @@
 #define init_argv_symbols(a,b)	Perl_init_argv_symbols(aTHX_ a,b)
 #define init_constants()	Perl_init_constants(aTHX)
 #define init_debugger()		Perl_init_debugger(aTHX)
+#define init_named_cv(a,b)	Perl_init_named_cv(aTHX_ a,b)
 #define invert(a)		Perl_invert(aTHX_ a)
 #define io_close(a,b,c,d)	Perl_io_close(aTHX_ a,b,c,d)
 #define isinfnansv(a)		Perl_isinfnansv(aTHX_ a)

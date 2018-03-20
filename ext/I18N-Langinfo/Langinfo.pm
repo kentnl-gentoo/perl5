@@ -72,7 +72,7 @@ our @EXPORT_OK = qw(
 	YESSTR
 );
 
-our $VERSION = '0.15';
+our $VERSION = '0.16';
 
 XSLoader::load();
 
@@ -113,11 +113,11 @@ answers for a yes/no question in the current locale.
 In other words, in the "C" (or English) locale the above will probably
 print something like:
 
-    Sun? [yes/no] 
+    Sun? [yes/no]
 
 but under a French locale
 
-    dim? [oui/non] 
+    dim? [oui/non]
 
 The usually available constants are
 
@@ -140,12 +140,17 @@ for the date-time, date, and time formats used by the strftime() function
 for the locales for which it makes sense to have ante meridiem and post
 meridiem time formats,
 
-    CODESET CRNCYSTR RADIXCHAR
+    CODESET CRNCYSTR
 
 for the character code set being used (such as "ISO8859-1", "cp850",
-"koi8-r", "sjis", "utf8", etc.), for the currency string, for the
+"koi8-r", "sjis", "utf8", etc.), for the currency string
+
+    ALT_DIGITS RADIXCHAR THOUSEP
+
+for an alternate representation of digits, for the
 radix character used between the integer and the fractional part
-of decimal numbers (yes, this is redundant with POSIX::localeconv())
+of decimal numbers, the group separator string for large-ish floating point
+numbers  (yes, the final two are redundant with POSIX::localeconv())
 
     YESSTR YESEXPR NOSTR NOEXPR
 
@@ -153,22 +158,79 @@ for the affirmative and negative responses and expressions, and
 
     ERA ERA_D_FMT ERA_D_T_FMT ERA_T_FMT
 
-for the Japanese Emperor eras (naturally only defined under Japanese locales).
+for the eras based on typically some ruler, such as the Japanese Emperor
+(naturally only defined in the appropriate locales).
 
-See your L<langinfo(3)> for more information about the available
+Starting in Perl 5.28, this module is available even on systems that lack a
+nativeC<nl_langinfo>.  On such systems, it uses various methods to construct
+what that function, if present, would return.  But there are potential
+glitches.  These are the items that could be different:
+
+=over
+
+=item C<ERA>
+
+Unimplemented, so returns C<"">.
+
+=item C<CODESET>
+
+Unimplemented, except on Windows, due to the vagaries of vendor locale names,
+returning C<""> on non-Windows.
+
+=item C<YESEXPR>
+
+=item C<YESSTR>
+
+=item C<NOEXPR>
+
+=item C<NOSTR>
+
+Only the values for English are returned.  C<YESSTR> and C<NOSTR> have been
+removed from POSIX 2008, and are retained here for backwards compatibility.
+Your platform's C<nl_langinfo> may not support them.
+
+=item C<D_FMT>
+
+Always evaluates to C<%x>, the locale's appropriate date representation.
+
+=item C<T_FMT>
+
+Always evaluates to C<%X>, the locale's appropriate time representation.
+
+=item C<D_T_FMT>
+
+Always evaluates to C<%c>, the locale's appropriate date and time
+representation.
+
+=item C<CRNCYSTR>
+
+The return may be incorrect for those rare locales where the currency symbol
+replaces the radix character.
+Send email to L<mailto:perlbug@perl.org> if you have examples of it needing
+to work differently.
+
+=item C<ALT_DIGITS>
+
+Currently this gives the same results as Linux does.
+Send email to L<mailto:perlbug@perl.org> if you have examples of it needing
+to work differently.
+
+=item C<ERA_D_FMT>
+
+=item C<ERA_T_FMT>
+
+=item C<ERA_D_T_FMT>
+
+=item C<T_FMT_AMPM>
+
+These are derived by using C<strftime()>, and not all versions of that function
+know about them.  C<""> is returned for these on such systems.
+
+=back
+
+See your L<nl_langinfo(3)> for more information about the available
 constants.  (Often this means having to look directly at the
 F<langinfo.h> C header file.)
-
-Note that unfortunately none of the above constants are guaranteed
-to be available on a particular platform.  To be on the safe side
-you can wrap the import in an eval like this:
-
-    eval {
-        require I18N::Langinfo;
-        I18N::Langinfo->import(qw(langinfo CODESET));
-        $codeset = langinfo(CODESET()); # note the ()
-    };
-    if ($@) { ... failed ... }
 
 =head2 EXPORT
 
@@ -179,6 +241,15 @@ By default only the C<langinfo()> function is exported.
 Before Perl 5.28, the returned values are unreliable for the C<RADIXCHAR> and
 C<THOUSEP> locale constants.
 
+Starting in 5.28, changing locales on threaded builds is supported on systems
+that offer thread-safe locale functions.  These include POSIX 2008 systems and
+Windows starting with Visual Studio 2005, and this module will work properly
+in such situations.  However, on threaded builds on Windows prior to Visual
+Studio 2015, retrieving the items C<CRNCYSTR> and C<THOUSEP> can result in a
+race with a thread that has converted to use the global locale.  It is quite
+uncommon for a thread to have done this.  It would be possible to construct a
+workaround for this; patches welcome: see L<perlapi/switch_to_global_locale>.
+
 =head1 SEE ALSO
 
 L<perllocale>, L<POSIX/localeconv>, L<POSIX/setlocale>, L<nl_langinfo(3)>.
@@ -187,13 +258,13 @@ The langinfo() is just a wrapper for the C nl_langinfo() interface.
 
 =head1 AUTHOR
 
-Jarkko Hietaniemi, E<lt>jhi@hut.fiE<gt>
+Jarkko Hietaniemi, E<lt>jhi@hut.fiE<gt>.  Now maintained by Perl 5 porters.
 
 =head1 COPYRIGHT AND LICENSE
 
 Copyright 2001 by Jarkko Hietaniemi
 
 This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself. 
+it under the same terms as Perl itself.
 
 =cut

@@ -2676,6 +2676,7 @@ S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstac
 	  && o->op_type != OP_LINESEQ
 	  && o->op_type != OP_SREFGEN
 	  && o->op_type != OP_ENTEREVAL
+	  && o->op_type != OP_GLOB
 	  && o->op_type != OP_RV2CV) {
 	OP * const kid = cUNOPo->op_first;
 	if (OP_GIMME(kid, 0) != G_SCALAR || OpHAS_SIBLING(kid))
@@ -2687,6 +2688,7 @@ S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstac
     *ops = 0;
     if (o->op_flags & OPf_KIDS) {
 	OP *kid;
+	OP * const kid1 = cUNOPo->op_first;
 	/* First try all the kids at this level, since that's likeliest. */
 	for (kid = cUNOPo->op_first; kid; kid = OpSIBLING(kid)) {
 	    if (kid->op_type == OP_NEXTSTATE || kid->op_type == OP_DBSTATE) {
@@ -2709,6 +2711,7 @@ S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstac
 	    }
 	}
 	for (kid = cUNOPo->op_first; kid; kid = OpSIBLING(kid)) {
+	    bool first_kid_of_binary = FALSE;
 	    if (kid == PL_lastgotoprobe)
 		continue;
 	    if (kid->op_type == OP_NEXTSTATE || kid->op_type == OP_DBSTATE) {
@@ -2721,8 +2724,14 @@ S_dofindlabel(pTHX_ OP *o, const char *label, STRLEN len, U32 flags, OP **opstac
 		else
 		    *ops++ = kid;
 	    }
+	    if (kid == kid1 && ops != opstack && ops[-1] == UNENTERABLE) {
+		first_kid_of_binary = TRUE;
+		ops--;
+	    }
 	    if ((o = dofindlabel(kid, label, len, flags, ops, oplimit)))
 		return o;
+	    if (first_kid_of_binary)
+		*ops++ = UNENTERABLE;
 	}
     }
     *ops = 0;

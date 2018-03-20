@@ -394,7 +394,7 @@ use File::Glob qw(:case);
     },
 
     'Encode' => {
-        'DISTRIBUTION' => 'DANKOGAI/Encode-2.96.tar.gz',
+        'DISTRIBUTION' => 'DANKOGAI/Encode-2.97.tar.gz',
         'FILES'        => q[cpan/Encode],
     },
 
@@ -473,7 +473,7 @@ use File::Glob qw(:case);
     },
 
     'ExtUtils::MakeMaker' => {
-        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-7.32.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/ExtUtils-MakeMaker-7.34.tar.gz',
         'FILES'        => q[cpan/ExtUtils-MakeMaker],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -609,7 +609,7 @@ use File::Glob qw(:case);
     },
 
     'if' => {
-        'DISTRIBUTION' => 'RJBS/if-0.0606.tar.gz',
+        'DISTRIBUTION' => 'XSAWYERX/if-0.0608.tar.gz',
         'FILES'        => q[dist/if],
     },
 
@@ -690,7 +690,7 @@ use File::Glob qw(:case);
     },
 
     'Locale-Codes' => {
-        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.55.tar.gz',
+        'DISTRIBUTION' => 'SBECK/Locale-Codes-3.56.tar.gz',
         'FILES'        => q[cpan/Locale-Codes],
         'EXCLUDED'     => [
             qw( README.first
@@ -808,7 +808,7 @@ use File::Glob qw(:case);
     },
 
     'Module::CoreList' => {
-        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20180120.tar.gz',
+        'DISTRIBUTION' => 'BINGOS/Module-CoreList-5.20180220.tar.gz',
         'FILES'        => q[dist/Module-CoreList],
     },
 
@@ -876,7 +876,7 @@ use File::Glob qw(:case);
     },
 
     'PathTools' => {
-        'DISTRIBUTION' => 'RJBS/PathTools-3.62.tar.gz',
+        'DISTRIBUTION' => 'XSAWYERX/PathTools-3.74.tar.gz',
         'FILES'        => q[dist/PathTools],
         'EXCLUDED'     => [
             qr{^t/lib/Test/},
@@ -984,8 +984,8 @@ use File::Glob qw(:case);
         'FILES'        => q[dist/Safe],
     },
 
-    'Scalar-List-Utils' => {
-        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.49.tar.gz',
+    'Scalar::Util' => {
+        'DISTRIBUTION' => 'PEVANS/Scalar-List-Utils-1.50.tar.gz',
         'FILES'        => q[cpan/Scalar-List-Utils],
     },
 
@@ -1066,7 +1066,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Harness' => {
-        'DISTRIBUTION' => 'LEONT/Test-Harness-3.39.tar.gz',
+        'DISTRIBUTION' => 'LEONT/Test-Harness-3.42.tar.gz',
         'FILES'        => q[cpan/Test-Harness],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1082,7 +1082,7 @@ use File::Glob qw(:case);
     },
 
     'Test::Simple' => {
-        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302122.tar.gz',
+        'DISTRIBUTION' => 'EXODIST/Test-Simple-1.302133.tar.gz',
         'FILES'        => q[cpan/Test-Simple],
         'EXCLUDED'     => [
             qr{^examples/},
@@ -1194,7 +1194,7 @@ use File::Glob qw(:case);
     },
 
     'Time::HiRes' => {
-        'DISTRIBUTION' => 'JHI/Time-HiRes-1.9753.tar.gz',
+        'DISTRIBUTION' => 'JHI/Time-HiRes-1.9757.tar.gz',
         'FILES'        => q[dist/Time-HiRes],
     },
 
@@ -1213,7 +1213,7 @@ use File::Glob qw(:case);
     },
 
     'Time::Piece' => {
-        'DISTRIBUTION' => 'ESAYM/Time-Piece-1.3203.tar.gz',
+        'DISTRIBUTION' => 'ESAYM/Time-Piece-1.3204.tar.gz',
         'FILES'        => q[cpan/Time-Piece],
         'EXCLUDED'     => [ qw[reverse_deps.txt] ],
     },

@@ -52,7 +52,7 @@
 /* See L<perlguts/"The Perl API"> for detailed notes on
  * PERL_IMPLICIT_CONTEXT and PERL_IMPLICIT_SYS */
 
-/* Note that from here --> to <-- the same logic is
+/* XXX NOTE that from here --> to <-- the same logic is
  * repeated in makedef.pl, so be certain to update
  * both places when editing. */
 
@@ -108,7 +108,8 @@
 #endif
 
 /* Use the reentrant APIs like localtime_r and getpwent_r */
-/* Win32 has naturally threadsafe libraries, no need to use any _r variants. */
+/* Win32 has naturally threadsafe libraries, no need to use any _r variants.
+ * XXX KEEP makedef.pl copy of this code in sync */
 #if defined(USE_ITHREADS) && !defined(USE_REENTRANT_API) && !defined(NETWARE) && !defined(WIN32)
 #   define USE_REENTRANT_API
 #endif
@@ -758,6 +759,9 @@
 #   endif
 #endif /* !NO_LOCALE && HAS_SETLOCALE */
 
+/* XXX The next few defines are unfortunately duplicated in makedef.pl, and
+ * changes here MUST also be made there */
+
 #ifdef USE_LOCALE /* These locale things are all subject to change */
 #  if      defined(HAS_NEWLOCALE)               \
       &&   defined(LC_ALL_MASK)                 \
@@ -780,6 +784,16 @@
 #      define USE_POSIX_2008_LOCALE
 #    endif
 #  endif
+#endif
+
+/*  Microsoft documentation reads in the change log for VS 2015:
+ *     "The localeconv function declared in locale.h now works correctly when
+ *     per-thread locale is enabled. In previous versions of the library, this
+ *     function would return the lconv data for the global locale, not the
+ *     thread's locale."
+ */
+#if defined(WIN32) && defined(USE_THREAD_SAFE_LOCALE) && _MSC_VER < 1900
+#  define TS_W32_BROKEN_LOCALECONV
 #endif
 
 #include <setjmp.h>
@@ -4983,8 +4997,8 @@ typedef enum {
     XREF,
     XSTATE,
     XBLOCK,
-    XATTRBLOCK,
-    XATTRTERM,
+    XATTRBLOCK, /* next token should be an attribute or block */
+    XATTRTERM,  /* next token should be an attribute, or block in a term */
     XTERMBLOCK,
     XBLOCKTERM,
     XPOSTDEREF,
@@ -5543,9 +5557,114 @@ typedef struct am_table_short AMTS;
 
 #ifdef USE_LOCALE /* These locale things are all subject to change */
 
-    /* We create a C locale object unconditionally if we have the functions to
-     * do so; hence must destroy it unconditionally at the end */
-#  ifndef HAS_POSIX_2008_LOCALE
+   /* Returns TRUE if the plain locale pragma without a parameter is in effect.
+    * */
+#  define IN_LOCALE_RUNTIME	(PL_curcop                                  \
+                              && CopHINTS_get(PL_curcop) & HINT_LOCALE)
+
+   /* Returns TRUE if either form of the locale pragma is in effect */
+#  define IN_SOME_LOCALE_FORM_RUNTIME                                       \
+        cBOOL(CopHINTS_get(PL_curcop) & (HINT_LOCALE|HINT_LOCALE_PARTIAL))
+
+#  define IN_LOCALE_COMPILETIME	cBOOL(PL_hints & HINT_LOCALE)
+#  define IN_SOME_LOCALE_FORM_COMPILETIME                                   \
+                        cBOOL(PL_hints & (HINT_LOCALE|HINT_LOCALE_PARTIAL))
+
+#  define IN_LOCALE                                                         \
+        (IN_PERL_COMPILETIME ? IN_LOCALE_COMPILETIME : IN_LOCALE_RUNTIME)
+#  define IN_SOME_LOCALE_FORM                                               \
+                    (IN_PERL_COMPILETIME ? IN_SOME_LOCALE_FORM_COMPILETIME  \
+                                         : IN_SOME_LOCALE_FORM_RUNTIME)
+
+#  define IN_LC_ALL_COMPILETIME   IN_LOCALE_COMPILETIME
+#  define IN_LC_ALL_RUNTIME       IN_LOCALE_RUNTIME
+
+#  define IN_LC_PARTIAL_COMPILETIME   cBOOL(PL_hints & HINT_LOCALE_PARTIAL)
+#  define IN_LC_PARTIAL_RUNTIME                                             \
+              (PL_curcop && CopHINTS_get(PL_curcop) & HINT_LOCALE_PARTIAL)
+
+#  define IN_LC_COMPILETIME(category)                                       \
+       (       IN_LC_ALL_COMPILETIME                                        \
+        || (   IN_LC_PARTIAL_COMPILETIME                                    \
+            && Perl__is_in_locale_category(aTHX_ TRUE, (category))))
+#  define IN_LC_RUNTIME(category)                                           \
+      (IN_LC_ALL_RUNTIME || (IN_LC_PARTIAL_RUNTIME                          \
+                 && Perl__is_in_locale_category(aTHX_ FALSE, (category))))
+#  define IN_LC(category)  \
+                    (IN_LC_COMPILETIME(category) || IN_LC_RUNTIME(category))
+
+#  if defined (PERL_CORE) || defined (PERL_IN_XSUB_RE)
+
+     /* This internal macro should be called from places that operate under
+      * locale rules.  It there is a problem with the current locale that
+      * hasn't been raised yet, it will output a warning this time.  Because
+      * this will so rarely  be true, there is no point to optimize for time;
+      * instead it makes sense to minimize space used and do all the work in
+      * the rarely called function */
+#    ifdef USE_LOCALE_CTYPE
+#      define _CHECK_AND_WARN_PROBLEMATIC_LOCALE                              \
+                STMT_START {                                                  \
+                    if (UNLIKELY(PL_warn_locale)) {                           \
+                        Perl__warn_problematic_locale();                      \
+                    }                                                         \
+                }  STMT_END
+#    else
+#      define _CHECK_AND_WARN_PROBLEMATIC_LOCALE
+#    endif
+
+
+     /* These two internal macros are called when a warning should be raised,
+      * and will do so if enabled.  The first takes a single code point
+      * argument; the 2nd, is a pointer to the first byte of the UTF-8 encoded
+      * string, and an end position which it won't try to read past */
+#    define _CHECK_AND_OUTPUT_WIDE_LOCALE_CP_MSG(cp)                        \
+	STMT_START {                                                        \
+            if (! PL_in_utf8_CTYPE_locale && ckWARN(WARN_LOCALE)) {         \
+                Perl_warner(aTHX_ packWARN(WARN_LOCALE),                    \
+                                       "Wide character (U+%" UVXf ") in %s",\
+                                       (UV) cp, OP_DESC(PL_op));            \
+            }                                                               \
+        }  STMT_END
+
+#    define _CHECK_AND_OUTPUT_WIDE_LOCALE_UTF8_MSG(s, send)                 \
+	STMT_START { /* Check if to warn before doing the conversion work */\
+            if (! PL_in_utf8_CTYPE_locale && ckWARN(WARN_LOCALE)) {         \
+                UV cp = utf8_to_uvchr_buf((U8 *) s, (U8 *) send, NULL);     \
+                Perl_warner(aTHX_ packWARN(WARN_LOCALE),                    \
+                    "Wide character (U+%" UVXf ") in %s",                   \
+                    (cp == 0)                                               \
+                     ? UNICODE_REPLACEMENT                                  \
+                     : (UV) cp,                                             \
+                    OP_DESC(PL_op));                                        \
+            }                                                               \
+        }  STMT_END
+
+#  endif   /* PERL_CORE or PERL_IN_XSUB_RE */
+#else   /* No locale usage */
+#  define IN_LOCALE_RUNTIME                0
+#  define IN_SOME_LOCALE_FORM_RUNTIME      0
+#  define IN_LOCALE_COMPILETIME            0
+#  define IN_SOME_LOCALE_FORM_COMPILETIME  0
+#  define IN_LOCALE                        0
+#  define IN_SOME_LOCALE_FORM              0
+#  define IN_LC_ALL_COMPILETIME            0
+#  define IN_LC_ALL_RUNTIME                0
+#  define IN_LC_PARTIAL_COMPILETIME        0
+#  define IN_LC_PARTIAL_RUNTIME            0
+#  define IN_LC_COMPILETIME(category)      0
+#  define IN_LC_RUNTIME(category)          0
+#  define IN_LC(category)                  0
+#endif
+
+
+/* Locale/thread synchronization macros.  These aren't needed if using
+ * thread-safe locale operations, except if something is broken */
+#if    defined(USE_LOCALE)                                                  \
+ &&    defined(USE_ITHREADS)                                                \
+ && (! defined(USE_THREAD_SAFE_LOCALE) || defined(TS_W32_BROKEN_LOCALECONV))
+
+/* We have a locale object holding the 'C' locale for Posix 2008 */
+#ifndef USE_POSIX_2008_LOCALE
 #    define _LOCALE_TERM_POSIX_2008  NOOP
 #  else
 #    define _LOCALE_TERM_POSIX_2008                                         \
@@ -5560,36 +5679,83 @@ typedef struct am_table_short AMTS;
                     } STMT_END
 #  endif
 
-#  if ! defined(USE_ITHREADS) || defined(USE_THREAD_SAFE_LOCALE)
-#    define LOCALE_INIT
-#    define LOCALE_LOCK
-#    define LOCALE_UNLOCK
+/* This is used as a generic lock for locale operations.  For example this is
+ * used when calling nl_langinfo() so that another thread won't zap the
+ * contents of its buffer before it gets saved; and it's called when changing
+ * the locale of LC_MESSAGES.  On some systems the latter can cause the
+ * nl_langinfo buffer to be zapped under a race condition.
+ *
+ * If combined with LC_NUMERIC_LOCK, calls to this and its corresponding unlock
+ * should be contained entirely within the locked portion of LC_NUMERIC.  This
+ * mutex should be used only in very short sections of code, while
+ * LC_NUMERIC_LOCK may span more operations.  By always following this
+ * convention, deadlock should be impossible.  But if necessary, the two
+ * mutexes could be combined.
+ *
+ * Actually, the two macros just below with the '_V' suffixes are used in just
+ * a few places where there is a broken localeconv(), but otherwise things are
+ * thread safe, and hence don't need locking.  Just below LOCALE_LOCK and
+ * LOCALE_UNLOCK are defined in terms of these for use everywhere else */
+#  define LOCALE_LOCK_V                                                     \
+        STMT_START {                                                        \
+            DEBUG_Lv(PerlIO_printf(Perl_debug_log,                          \
+                    "%s: %d: locking locale\n", __FILE__, __LINE__));       \
+            MUTEX_LOCK(&PL_locale_mutex);                                   \
+        } STMT_END
+#  define LOCALE_UNLOCK_V                                                   \
+        STMT_START {                                                        \
+            DEBUG_Lv(PerlIO_printf(Perl_debug_log,                          \
+                   "%s: %d: unlocking locale\n", __FILE__, __LINE__));      \
+            MUTEX_UNLOCK(&PL_locale_mutex);                                 \
+        } STMT_END
+
+/* On windows, we just need the mutex for LOCALE_LOCK */
+#  ifdef TS_W32_BROKEN_LOCALECONV
+#    define LOCALE_LOCK     NOOP
+#    define LOCALE_UNLOCK   NOOP
+#    define LOCALE_INIT     MUTEX_INIT(&PL_locale_mutex);
+#    define LOCALE_TERM     MUTEX_DESTROY(&PL_locale_mutex)
 #    define LC_NUMERIC_LOCK(cond)
 #    define LC_NUMERIC_UNLOCK
-#    define LOCALE_TERM  STMT_START { _LOCALE_TERM_POSIX_2008; } STMT_END
 #  else
-#    define LOCALE_INIT         STMT_START {                                \
+#    define LOCALE_LOCK     LOCALE_LOCK_V
+#    define LOCALE_UNLOCK   LOCALE_UNLOCK_V
+
+     /* We also need to lock LC_NUMERIC for non-windows (hence Posix 2008)
+      * systems */
+#    define LOCALE_INIT          STMT_START {                               \
                                     MUTEX_INIT(&PL_locale_mutex);           \
                                     MUTEX_INIT(&PL_lc_numeric_mutex);       \
                                 } STMT_END
 
-/* This mutex is used to create critical sections where we want the LC_NUMERIC
- * locale to be locked into either the C (standard) locale, or the underlying
- * locale, so that other threads interrupting this one don't change it to the
- * wrong state before we've had a chance to complete our operation.  It can
- * stay locked over an entire printf operation, for example.  And so is made
- * distinct from the LOCALE_LOCK mutex.
- *
- * This simulates kind of a general semaphore.  The current thread will lock
- * the mutex if the per-thread variable is zero, and then increments that
- * variable.  Each corresponding UNLOCK decrements the variable until it is 0,
- * at which point it actually unlocks the mutex.  Since the variable is
- * per-thread, there is no race with other threads.
- *
- * The single argument is a condition to test for, and if true, to panic, as
- * this would be an attempt to complement the LC_NUMERIC state, and we're not
- * supposed to because it's locked */
+#    define LOCALE_TERM         STMT_START {                                \
+                                    MUTEX_DESTROY(&PL_locale_mutex);        \
+                                    MUTEX_DESTROY(&PL_lc_numeric_mutex);    \
+                                    _LOCALE_TERM_POSIX_2008;                \
+                                } STMT_END
+
+    /* This mutex is used to create critical sections where we want the
+     * LC_NUMERIC locale to be locked into either the C (standard) locale, or
+     * the underlying locale, so that other threads interrupting this one don't
+     * change it to the wrong state before we've had a chance to complete our
+     * operation.  It can stay locked over an entire printf operation, for
+     * example.  And so is made distinct from the LOCALE_LOCK mutex.
+     *
+     * This simulates kind of a general semaphore.  The current thread will
+     * lock the mutex if the per-thread variable is zero, and then increments
+     * that variable.  Each corresponding UNLOCK decrements the variable until
+     * it is 0, at which point it actually unlocks the mutex.  Since the
+     * variable is per-thread, there is no race with other threads.
+     *
+     * The single argument is a condition to test for, and if true, to panic,
+     * as this would be an attempt to complement the LC_NUMERIC state, and
+     * we're not supposed to because it's locked.
+     *
+     * Clang improperly gives warnings for this, if not silenced:
+     * https://clang.llvm.org/docs/ThreadSafetyAnalysis.html#conditional-locks
+     * */
 #    define LC_NUMERIC_LOCK(cond_to_panic_if_already_locked)                \
+        CLANG_DIAG_IGNORE(-Wthread-safety)	     	                    \
         STMT_START {                                                        \
             if (PL_lc_numeric_mutex_depth <= 0) {                           \
                 MUTEX_LOCK(&PL_lc_numeric_mutex);                           \
@@ -5617,7 +5783,7 @@ typedef struct am_table_short AMTS;
                 MUTEX_UNLOCK(&PL_lc_numeric_mutex);                         \
                 PL_lc_numeric_mutex_depth = 0;                              \
                 DEBUG_Lv(PerlIO_printf(Perl_debug_log,                      \
-                         "%s: %d: unlocking lc_numeric; depth=0\n",           \
+                         "%s: %d: unlocking lc_numeric; depth=0\n",         \
                          __FILE__, __LINE__));                              \
             }                                                               \
             else {                                                          \
@@ -5626,151 +5792,28 @@ typedef struct am_table_short AMTS;
                         "%s: %d: avoided lc_numeric_unlock; depth=%d\n",    \
                         __FILE__, __LINE__, PL_lc_numeric_mutex_depth));    \
             }                                                               \
-        } STMT_END
+        } STMT_END                                                          \
+        CLANG_DIAG_RESTORE
 
-/* This is used as a generic lock for locale operations.  For example this is
- * used when calling nl_langinfo() so that another thread won't zap the
- * contents of its buffer before it gets saved; and it's called when changing
- * the locale of LC_MESSAGES.  On some systems the latter can cause the
- * nl_langinfo buffer to be zapped under a race condition.
- *
- * If combined with LC_NUMERIC_LOCK, calls to this and its corresponding unlock
- * should be contained entirely within the locked portion of LC_NUMERIC.  This
- * mutex should be used only in very short sections of code, while
- * LC_NUMERIC_LOCK may span more operations.  By always following this
- * convention, deadlock should be impossible.  But if necessary, the two
- * mutexes could be combined */
-#    define LOCALE_LOCK                                                     \
-        STMT_START {                                                        \
-            DEBUG_Lv(PerlIO_printf(Perl_debug_log,                          \
-                    "%s: %d: locking locale\n", __FILE__, __LINE__));       \
-            MUTEX_LOCK(&PL_locale_mutex);                                   \
-        } STMT_END
-#    define LOCALE_UNLOCK                                                   \
-        STMT_START {                                                        \
-            DEBUG_Lv(PerlIO_printf(Perl_debug_log,                          \
-                   "%s: %d: unlocking locale\n", __FILE__, __LINE__));      \
-            MUTEX_UNLOCK(&PL_locale_mutex);                                 \
-        } STMT_END
-
-#    define LOCALE_TERM                                                     \
-                    STMT_START {                                            \
-                        MUTEX_DESTROY(&PL_locale_mutex);                    \
-                        MUTEX_DESTROY(&PL_lc_numeric_mutex);                \
-                        _LOCALE_TERM_POSIX_2008;                            \
-                    } STMT_END
-#  endif
-
-/* Returns TRUE if the plain locale pragma without a parameter is in effect
- */
-#   define IN_LOCALE_RUNTIME	(PL_curcop \
-                                && CopHINTS_get(PL_curcop) & HINT_LOCALE)
-
-/* Returns TRUE if either form of the locale pragma is in effect */
-#   define IN_SOME_LOCALE_FORM_RUNTIME   \
-           cBOOL(CopHINTS_get(PL_curcop) & (HINT_LOCALE|HINT_LOCALE_PARTIAL))
-
-#   define IN_LOCALE_COMPILETIME	cBOOL(PL_hints & HINT_LOCALE)
-#   define IN_SOME_LOCALE_FORM_COMPILETIME \
-                          cBOOL(PL_hints & (HINT_LOCALE|HINT_LOCALE_PARTIAL))
-
-#   define IN_LOCALE \
-	(IN_PERL_COMPILETIME ? IN_LOCALE_COMPILETIME : IN_LOCALE_RUNTIME)
-#   define IN_SOME_LOCALE_FORM \
-	(IN_PERL_COMPILETIME ? IN_SOME_LOCALE_FORM_COMPILETIME \
-	                     : IN_SOME_LOCALE_FORM_RUNTIME)
-
-#   define IN_LC_ALL_COMPILETIME   IN_LOCALE_COMPILETIME
-#   define IN_LC_ALL_RUNTIME       IN_LOCALE_RUNTIME
-
-#   define IN_LC_PARTIAL_COMPILETIME   cBOOL(PL_hints & HINT_LOCALE_PARTIAL)
-#   define IN_LC_PARTIAL_RUNTIME  \
-               (PL_curcop && CopHINTS_get(PL_curcop) & HINT_LOCALE_PARTIAL)
-
-#   define IN_LC_COMPILETIME(category)                                       \
-       (IN_LC_ALL_COMPILETIME || (IN_LC_PARTIAL_COMPILETIME                  \
-                  && Perl__is_in_locale_category(aTHX_ TRUE, (category))))
-#   define IN_LC_RUNTIME(category)                                           \
-       (IN_LC_ALL_RUNTIME || (IN_LC_PARTIAL_RUNTIME                          \
-                  && Perl__is_in_locale_category(aTHX_ FALSE, (category))))
-#   define IN_LC(category)  \
-                    (IN_LC_COMPILETIME(category) || IN_LC_RUNTIME(category))
-
-#   if defined (PERL_CORE) || defined (PERL_IN_XSUB_RE)
-
-        /* This internal macro should be called from places that operate under
-         * locale rules.  It there is a problem with the current locale that
-         * hasn't been raised yet, it will output a warning this time.  Because
-         * this will so rarely  be true, there is no point to optimize for
-         * time; instead it makes sense to minimize space used and do all the
-         * work in the rarely called function */
-#       ifdef USE_LOCALE_CTYPE
-#           define _CHECK_AND_WARN_PROBLEMATIC_LOCALE                         \
-                STMT_START {                                                  \
-                    if (UNLIKELY(PL_warn_locale)) {                           \
-                        Perl__warn_problematic_locale();                      \
-                    }                                                         \
-                }  STMT_END
-#       else
-#           define _CHECK_AND_WARN_PROBLEMATIC_LOCALE
-#       endif
-
-
-    /* These two internal macros are called when a warning should be raised,
-     * and will do so if enabled.  The first takes a single code point
-     * argument; the 2nd, is a pointer to the first byte of the UTF-8 encoded
-     * string, and an end position which it won't try to read past */
-#   define _CHECK_AND_OUTPUT_WIDE_LOCALE_CP_MSG(cp)                         \
-	STMT_START {                                                        \
-            if (! PL_in_utf8_CTYPE_locale && ckWARN(WARN_LOCALE)) {         \
-                Perl_warner(aTHX_ packWARN(WARN_LOCALE),                    \
-                                       "Wide character (U+%" UVXf ") in %s",\
-                                       (UV) cp, OP_DESC(PL_op));            \
-            }                                                               \
-        }  STMT_END
-
-#  define _CHECK_AND_OUTPUT_WIDE_LOCALE_UTF8_MSG(s, send)                   \
-	STMT_START { /* Check if to warn before doing the conversion work */\
-            if (! PL_in_utf8_CTYPE_locale && ckWARN(WARN_LOCALE)) {         \
-                UV cp = utf8_to_uvchr_buf((U8 *) s, (U8 *) send, NULL);     \
-                Perl_warner(aTHX_ packWARN(WARN_LOCALE),                    \
-                    "Wide character (U+%" UVXf ") in %s",                   \
-                    (cp == 0)                                               \
-                     ? UNICODE_REPLACEMENT                                  \
-                     : (UV) cp,                                             \
-                    OP_DESC(PL_op));                                        \
-            }                                                               \
-        }  STMT_END
-
-#   endif   /* PERL_CORE or PERL_IN_XSUB_RE */
-#else   /* No locale usage */
-#   define LOCALE_INIT
-#   define LOCALE_TERM
-#   define LOCALE_LOCK
-#   define LOCALE_UNLOCK
-#   define IN_LOCALE_RUNTIME                0
-#   define IN_SOME_LOCALE_FORM_RUNTIME      0
-#   define IN_LOCALE_COMPILETIME            0
-#   define IN_SOME_LOCALE_FORM_COMPILETIME  0
-#   define IN_LOCALE                        0
-#   define IN_SOME_LOCALE_FORM              0
-#   define IN_LC_ALL_COMPILETIME            0
-#   define IN_LC_ALL_RUNTIME                0
-#   define IN_LC_PARTIAL_COMPILETIME        0
-#   define IN_LC_PARTIAL_RUNTIME            0
-#   define IN_LC_COMPILETIME(category)      0
-#   define IN_LC_RUNTIME(category)          0
-#   define IN_LC(category)                  0
-
-#   define _CHECK_AND_WARN_PROBLEMATIC_LOCALE
-#   define _CHECK_AND_OUTPUT_WIDE_LOCALE_CP_MSG(a)
-#   define _CHECK_AND_OUTPUT_WIDE_LOCALE_UTF8_MSG(a,b)
+#  endif    /* End of needs locking LC_NUMERIC */
+#else   /* Below is no locale sync needed */
+#  define LOCALE_INIT
+#  define LOCALE_LOCK
+#  define LOCALE_LOCK_V
+#  define LOCALE_UNLOCK
+#  define LOCALE_UNLOCK_V
+#  define LC_NUMERIC_LOCK(cond)
+#  define LC_NUMERIC_UNLOCK
+#  define LOCALE_TERM
 #endif
 
 #ifdef USE_LOCALE_NUMERIC
 
 /* These macros are for toggling between the underlying locale (UNDERLYING or
- * LOCAL) and the C locale (STANDARD).
+ * LOCAL) and the C locale (STANDARD).  (Actually we don't have to use the C
+ * locale if the underlying locale is indistinguishable from it in the numeric
+ * operations used by Perl, namely the decimal point, and even the thousands
+ * separator.)
 
 =head1 Locale-related functions and macros
 
@@ -5814,10 +5857,11 @@ close by, and guaranteed to be called.
 
 =for apidoc Am|void|STORE_LC_NUMERIC_SET_TO_NEEDED
 
-This is used to help wrap XS or C code that that is C<LC_NUMERIC> locale-aware.
-This locale category is generally kept set to the C locale by Perl for
-backwards compatibility, and because most XS code that reads floating point
-values can cope only with the decimal radix character being a dot.
+This is used to help wrap XS or C code that is C<LC_NUMERIC> locale-aware.
+This locale category is generally kept set to a locale where the decimal radix
+character is a dot, and the separator between groups of digits is empty.  This
+is because most XS code that reads floating point numbers is expecting them to
+have this syntax.
 
 This macro makes sure the current C<LC_NUMERIC> state is set properly, to be
 aware of locale if the call to the XS or C code from the Perl program is
@@ -5869,16 +5913,14 @@ expression, but with an empty argument list, like this:
 
 */
 
-/* The numeric locale is generally kept in the C locale instead of the
- * underlying locale.  The current status is known by looking at two words.
- * One is non-zero if the current numeric locale is the standard C/POSIX one.
- * The other is non-zero if the current locale is the underlying locale.  Both
- * can be non-zero if, as often happens, the underlying locale is C.
- *
- * Its slightly more complicated than this, as the PL_numeric_standard variable
- * is set if the current numeric locale is indistinguishable from the C locale.
- * This happens when the radix character is a dot, and the thousands separator
- * is the empty string.
+/* If the underlying numeric locale has a non-dot decimal point or has a
+ * non-empty floating point thousands separator, the current locale is instead
+ * generally kept in the C locale instead of that underlying locale.  The
+ * current status is known by looking at two words.  One is non-zero if the
+ * current numeric locale is the standard C/POSIX one or is indistinguishable
+ * from C.  The other is non-zero if the current locale is the underlying
+ * locale.  Both can be non-zero if, as often happens, the underlying locale is
+ * C or indistinguishable from it.
  *
  * khw believes the reason for the variables instead of the bits in a single
  * word is to avoid having to have masking instructions. */

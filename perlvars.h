@@ -99,16 +99,15 @@ PERLVARI(G, mmap_page_size, IV, 0)
 
 #if defined(USE_ITHREADS)
 PERLVAR(G, hints_mutex, perl_mutex)    /* Mutex for refcounted he refcounting */
+#  if ! defined(USE_THREAD_SAFE_LOCALE) || defined(TS_W32_BROKEN_LOCALECONV)
 PERLVAR(G, locale_mutex, perl_mutex)   /* Mutex for setlocale() changing */
+#  endif
+#  ifndef USE_THREAD_SAFE_LOCALE
 PERLVAR(G, lc_numeric_mutex, perl_mutex)   /* Mutex for switching LC_NUMERIC */
-
+#  endif
 #endif
 
-/* Proxy for HAS_POSIX_2008_LOCALE, since that is not defined in time for this */
-#if   defined(HAS_NEWLOCALE)                    \
- &&   defined(HAS_FREELOCALE)                   \
- &&   defined(HAS_USELOCALE)                    \
- && ! defined(NO_POSIX_2008_LOCALE)
+#ifdef USE_POSIX_2008_LOCALE
 PERLVAR(G, C_locale_obj, locale_t)
 #endif
 
@@ -272,3 +271,27 @@ PERLVARA(G, hash_chars, (1+256) * sizeof(U32), unsigned char) /* perl.c and hv.h
 #ifdef __VMS
 PERLVAR(G, perllib_sep, char)
 #endif
+
+PERLVAR(G, AboveLatin1,	SV *)
+PERLVAR(G, Assigned_invlist, SV *)
+PERLVAR(G, GCB_invlist, SV *)
+PERLVAR(G, HasMultiCharFold,   SV *)
+PERLVAR(G, Latin1,	SV *)
+PERLVAR(G, LB_invlist, SV *)
+PERLVAR(G, NonL1NonFinalFold,   SV *)
+PERLVAR(G, SB_invlist, SV *)
+PERLVAR(G, SCX_invlist, SV *)
+PERLVAR(G, UpperLatin1,	SV *)   /* Code points 128 - 255 */
+
+/* List of characters that participate in folds (except marks, etc in
+ * multi-char folds) */
+PERLVARI(G, utf8_foldable, SV *, NULL)
+
+PERLVAR(G, utf8_idcont,	SV *)
+PERLVAR(G, utf8_idstart, SV *)
+PERLVAR(G, utf8_perl_idcont, SV *)
+PERLVAR(G, utf8_perl_idstart, SV *)
+PERLVAR(G, utf8_xidcont, SV *)
+PERLVAR(G, utf8_xidstart, SV *)
+PERLVAR(G, WB_invlist, SV *)
+PERLVARA(G, XPosix_ptrs, POSIX_CC_COUNT, SV *)

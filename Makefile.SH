@@ -575,7 +575,7 @@ esac
 
 $spitshell >>$Makefile <<'!NO!SUBS!'
 
-perltoc_pod_prereqs = extra.pods pod/perl5279delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
+perltoc_pod_prereqs = extra.pods pod/perl52710delta.pod pod/perlapi.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 generated_headers = uudmap.h bitcount.h mg_data.h
 
@@ -1125,9 +1125,9 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) pod/perlmodlib.PL -q
 
-pod/perl5279delta.pod: pod/perldelta.pod
-	$(RMS) pod/perl5279delta.pod
-	$(LNS) perldelta.pod pod/perl5279delta.pod
+pod/perl52710delta.pod: pod/perldelta.pod
+	$(RMS) pod/perl52710delta.pod
+	$(LNS) perldelta.pod pod/perl52710delta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`
@@ -1163,7 +1163,7 @@ if test "$storable_type" != "" ; then
 $spitshell >>$Makefile <<EOT
 
 dist/Storable/lib/Storable/Limit.pm : \$(PERL_EXE) dist/Storable/stacksize $storable_limit_dep
-	\$(RUN_PERL) dist/Storable/stacksize --core
+	cd dist/Storable ; \$(LDLIBPTH) \$(MAKE) lib/Storable/Limit.pm
 
 lib/Storable/Limit.pm : dist/Storable/lib/Storable/Limit.pm
 	test -d lib/Storable || mkdir lib/Storable

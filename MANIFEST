@@ -1988,8 +1988,10 @@ cpan/Scalar-List-Utils/t/00version.t		Scalar::Util
 cpan/Scalar-List-Utils/t/any-all.t		List::Util
 cpan/Scalar-List-Utils/t/blessed.t		Scalar::Util
 cpan/Scalar-List-Utils/t/dualvar.t		Scalar::Util
+cpan/Scalar-List-Utils/t/exotic_names.t
 cpan/Scalar-List-Utils/t/first.t		List::Util
 cpan/Scalar-List-Utils/t/getmagic-once.t
+cpan/Scalar-List-Utils/t/head-tail.t
 cpan/Scalar-List-Utils/t/isvstring.t		Scalar::Util
 cpan/Scalar-List-Utils/t/lln.t			Scalar::Util
 cpan/Scalar-List-Utils/t/max.t			List::Util
@@ -2120,6 +2122,7 @@ cpan/Test-Harness/t/console.t				Test::Harness test
 cpan/Test-Harness/t/data/catme.1			Test data for Test::Harness
 cpan/Test-Harness/t/data/proverc			Test data for Test::Harness
 cpan/Test-Harness/t/data/sample.yml			Test data for Test::Harness
+cpan/Test-Harness/t/env_opts.t
 cpan/Test-Harness/t/errors.t				Test::Harness test
 cpan/Test-Harness/t/file.t				Test::Harness test
 cpan/Test-Harness/t/glob-to-regexp.t			Test::Harness test
@@ -2164,6 +2167,7 @@ cpan/Test-Harness/t/proverun.t				Test::Harness test
 cpan/Test-Harness/t/proveversion.t				Test::Harness test
 cpan/Test-Harness/t/regression.t			Test::Harness test
 cpan/Test-Harness/t/results.t				Test::Harness test
+cpan/Test-Harness/t/rulesfile.t
 cpan/Test-Harness/t/sample-tests/bailout		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/bignum			Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/bignum_many		Test data for Test::Harness
@@ -2205,6 +2209,7 @@ cpan/Test-Harness/t/sample-tests/skipall		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/skipall_nomsg		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/skipall_v13		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/space_after_plan	Test data for Test::Harness
+cpan/Test-Harness/t/sample-tests/space_after_plan_v13
 cpan/Test-Harness/t/sample-tests/stdout_stderr		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/strict			Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/switches		Test data for Test::Harness
@@ -2238,6 +2243,7 @@ cpan/Test-Harness/t/source_tests/source.sh				Test::Harness test
 cpan/Test-Harness/t/source_tests/source.t				Test::Harness test
 cpan/Test-Harness/t/source_tests/source.tap				Test::Harness test
 cpan/Test-Harness/t/source_tests/source_args.sh				Test::Harness test
+cpan/Test-Harness/t/source_tests/test.tap
 cpan/Test-Harness/t/spool.t				Test::Harness test
 cpan/Test-Harness/t/state.t				Test::Harness test
 cpan/Test-Harness/t/state_results.t			Test::Harness test
@@ -2286,6 +2292,7 @@ cpan/Test-Simple/lib/Test2/Event/Plan.pm
 cpan/Test-Simple/lib/Test2/Event/Skip.pm
 cpan/Test-Simple/lib/Test2/Event/Subtest.pm
 cpan/Test-Simple/lib/Test2/Event/TAP/Version.pm
+cpan/Test-Simple/lib/Test2/Event/V2.pm
 cpan/Test-Simple/lib/Test2/Event/Waiting.pm
 cpan/Test-Simple/lib/Test2/EventFacet.pm
 cpan/Test-Simple/lib/Test2/EventFacet/About.pm
@@ -2293,6 +2300,7 @@ cpan/Test-Simple/lib/Test2/EventFacet/Amnesty.pm
 cpan/Test-Simple/lib/Test2/EventFacet/Assert.pm
 cpan/Test-Simple/lib/Test2/EventFacet/Control.pm
 cpan/Test-Simple/lib/Test2/EventFacet/Error.pm
+cpan/Test-Simple/lib/Test2/EventFacet/Hub.pm
 cpan/Test-Simple/lib/Test2/EventFacet/Info.pm
 cpan/Test-Simple/lib/Test2/EventFacet/Meta.pm
 cpan/Test-Simple/lib/Test2/EventFacet/Parent.pm
@@ -2495,6 +2503,10 @@ cpan/Test-Simple/t/Test2/acceptance/try_it_plan.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_skip.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_threads.t
 cpan/Test-Simple/t/Test2/acceptance/try_it_todo.t
+cpan/Test-Simple/t/Test2/behavior/disable_ipc_a.t
+cpan/Test-Simple/t/Test2/behavior/disable_ipc_b.t
+cpan/Test-Simple/t/Test2/behavior/disable_ipc_c.t
+cpan/Test-Simple/t/Test2/behavior/disable_ipc_d.t
 cpan/Test-Simple/t/Test2/behavior/err_var.t
 cpan/Test-Simple/t/Test2/behavior/Formatter.t
 cpan/Test-Simple/t/Test2/behavior/init_croak.t
@@ -2512,6 +2524,7 @@ cpan/Test-Simple/t/Test2/behavior/Subtest_plan.t
 cpan/Test-Simple/t/Test2/behavior/Subtest_todo.t
 cpan/Test-Simple/t/Test2/behavior/Taint.t
 cpan/Test-Simple/t/Test2/behavior/trace_signature.t
+cpan/Test-Simple/t/Test2/behavior/uuid.t
 cpan/Test-Simple/t/Test2/legacy/TAP.t
 cpan/Test-Simple/t/Test2/modules/API.t
 cpan/Test-Simple/t/Test2/modules/API/Breakage.t
@@ -2532,6 +2545,7 @@ cpan/Test-Simple/t/Test2/modules/Event/Plan.t
 cpan/Test-Simple/t/Test2/modules/Event/Skip.t
 cpan/Test-Simple/t/Test2/modules/Event/Subtest.t
 cpan/Test-Simple/t/Test2/modules/Event/TAP/Version.t
+cpan/Test-Simple/t/Test2/modules/Event/V2.t
 cpan/Test-Simple/t/Test2/modules/Event/Waiting.t
 cpan/Test-Simple/t/Test2/modules/EventFacet.t
 cpan/Test-Simple/t/Test2/modules/EventFacet/About.t
@@ -2966,11 +2980,16 @@ dist/Carp/t/arg_regexp.t		See if Carp formats regexp args OK in stack traces
 dist/Carp/t/arg_string.t		See if Carp formats string args OK in stack traces
 dist/Carp/t/baduni.t		See if Carp handles non-char Unicode
 dist/Carp/t/baduni_warnings.t		See if Carp handles non-char Unicode when loaded via warnings.pm
+dist/Carp/t/broken_can.t	Test Carp with bad can implementations
+dist/Carp/t/broken_univ_can.t	Test Carp with bad UNIVERSAL::can
 dist/Carp/t/Carp.t		See if Carp works
 dist/Carp/t/Carp_overload.t		See if Carp handles overloads
+dist/Carp/t/Carp_overloadless.t		See if Carp handles overloads that dont use overload.pm
 dist/Carp/t/errno.t		See if Carp preserves $! and $^E
 dist/Carp/t/heavy.t		See if Carp::Heavy works
 dist/Carp/t/heavy_mismatch.t		See if Carp::Heavy catches version mismatch
+dist/Carp/t/rt52610_crash.t		Test that we can gracefully handle serializing the stack with stack-refcounting bugs
+dist/Carp/t/stack_after_err.t	Test stack traces after syntax errors
 dist/Carp/t/stash_deletion.t		See if Carp handles stash deletion
 dist/Carp/t/swash.t		See if Carp avoids breaking swash loading
 dist/Carp/t/vivify_gv.t		See if Carp leaves utf8:: stuff alone
@@ -5056,6 +5075,7 @@ pod/perl5275delta.pod		Perl changes in version 5.27.5
 pod/perl5276delta.pod		Perl changes in version 5.27.6
 pod/perl5277delta.pod		Perl changes in version 5.27.7
 pod/perl5278delta.pod		Perl changes in version 5.27.8
+pod/perl5279delta.pod		Perl changes in version 5.27.9
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl581delta.pod		Perl changes in version 5.8.1
@@ -5479,6 +5499,7 @@ t/lib/croak/pp			Test croak calls from pp.c
 t/lib/croak/pp_ctl		Test croak calls from pp_ctl.c
 t/lib/croak/pp_hot		Test croak calls from pp_hot.c
 t/lib/croak/pp_sys		Test croak calls from pp_sys.c
+t/lib/croak/regcomp		Test croak calls from regcomp.c
 t/lib/croak/toke		Test croak calls from toke.c
 t/lib/croak/toke_l1		Test croak calls from toke.c; file is not UTF-8 encoded
 t/lib/cygwin.t			Builtin cygwin function tests

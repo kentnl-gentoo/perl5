@@ -1216,9 +1216,7 @@ typedef enum {
 #define POSIX_SWASH_COUNT _FIRST_NON_SWASH_CC
 #define POSIX_CC_COUNT    (_HIGHEST_REGCOMP_DOT_H_SYNC + 1)
 
-#if defined(PERL_IN_UTF8_C)                         \
- || defined(PERL_IN_REGCOMP_C)                      \
- || defined(PERL_IN_REGEXEC_C)
+#if defined(PERL_IN_UTF8_C)
 #   if _CC_WORDCHAR != 0 || _CC_DIGIT != 1 || _CC_ALPHA != 2 || _CC_LOWER != 3 \
        || _CC_UPPER != 4 || _CC_PUNCT != 5 || _CC_PRINT != 6                   \
        || _CC_ALPHANUMERIC != 7 || _CC_GRAPH != 8 || _CC_CASED != 9
@@ -2319,6 +2317,11 @@ PoisonWith(0xEF) for catching access to freed memory.
 	(void)(UNLIKELY(_MEM_WRAP_WILL_WRAP(n,t)) \
 	&& (Perl_croak_nocontext("%s",(a)),0))
 
+/* "a" arg must be a string literal */
+#  define MEM_WRAP_CHECK_s(n,t,a) \
+	(void)(UNLIKELY(_MEM_WRAP_WILL_WRAP(n,t)) \
+	&& (Perl_croak_nocontext("" a ""),0))
+
 #define MEM_WRAP_CHECK_(n,t) MEM_WRAP_CHECK(n,t),
 
 #define PERL_STRLEN_ROUNDUP(n) ((void)(((n) > MEM_SIZE_MAX - 2 * PERL_STRLEN_ROUNDUP_QUANTUM) ? (croak_memory_wrap(),0) : 0), _PERL_STRLEN_ROUNDUP_UNCHECKED(n))
@@ -2326,7 +2329,7 @@ PoisonWith(0xEF) for catching access to freed memory.
 
 #define MEM_WRAP_CHECK(n,t)
 #define MEM_WRAP_CHECK_1(n,t,a)
-#define MEM_WRAP_CHECK_2(n,t,a,b)
+#define MEM_WRAP_CHECK_s(n,t,a)
 #define MEM_WRAP_CHECK_(n,t)
 
 #define PERL_STRLEN_ROUNDUP(n) _PERL_STRLEN_ROUNDUP_UNCHECKED(n)

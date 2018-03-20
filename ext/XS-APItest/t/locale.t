@@ -42,9 +42,6 @@ my %correct_C_responses = (
                             ABDAY_6 => 'Fri',
                             ABDAY_7 => 'Sat',
                             ABMON_1 => 'Jan',
-                            ABMON_10 => 'Oct',
-                            ABMON_11 => 'Nov',
-                            ABMON_12 => 'Dec',
                             ABMON_2 => 'Feb',
                             ABMON_3 => 'Mar',
                             ABMON_4 => 'Apr',
@@ -53,7 +50,10 @@ my %correct_C_responses = (
                             ABMON_7 => 'Jul',
                             ABMON_8 => 'Aug',
                             ABMON_9 => 'Sep',
-                            ALT_DIGITS => '',
+                            ABMON_10 => 'Oct',
+                            ABMON_11 => 'Nov',
+                            ABMON_12 => 'Dec',
+                            ALT_DIGITS => undef,
                             AM_STR => 'AM',
                             CODESET => undef,
                             CRNCYSTR => undef,
@@ -71,9 +71,6 @@ my %correct_C_responses = (
                             ERA_D_T_FMT => undef,
                             ERA_T_FMT => undef,
                             MON_1 => 'January',
-                            MON_10 => 'October',
-                            MON_11 => 'November',
-                            MON_12 => 'December',
                             MON_2 => 'February',
                             MON_3 => 'March',
                             MON_4 => 'April',
@@ -82,6 +79,9 @@ my %correct_C_responses = (
                             MON_7 => 'July',
                             MON_8 => 'August',
                             MON_9 => 'September',
+                            MON_10 => 'October',
+                            MON_11 => 'November',
+                            MON_12 => 'December',
                             NOEXPR => undef,
                             NOSTR => undef,
                             PM_STR => 'PM',
@@ -113,11 +113,11 @@ SKIP: {
     # For non-nl_langinfo systems, those values are arbitrary negative numbers
     # set in the header.  Otherwise they are the nl_langinfo approved values,
     # which for the moment is the item name.
-    # The relevant lines look like: #  define PERL_YESSTR -54
+    # The relevant lines look like: #  define YESSTR -54
     while (<$fh>) {
         chomp;
         next unless / - \d+ $ /x;
-        s/ ^ .* PERL_ //x;
+        s/ ^ \# \s* define \s*//x;
         m/ (.*) \  (.*) /x;
         $items{$1} = ($has_nl_langinfo)
                      ? $1       # Yields 'YESSTR'
@@ -129,16 +129,17 @@ SKIP: {
 
     foreach my $formal_item (sort keys %items) {
         if (exists $correct_C_responses{$formal_item}) {
+            my $correct = $correct_C_responses{$formal_item};
             my $item = eval $items{$formal_item};
             skip "This platform apparently doesn't support $formal_item", 1 if $@;
-            if (defined $correct_C_responses{$formal_item}) {
-                is (test_Perl_langinfo($item),
-                    $correct_C_responses{$formal_item},
-                    "Returns expected value for $formal_item");
+            my $result = test_Perl_langinfo($item);
+            if (defined $correct) {
+                is ($result, $correct,
+                    "Returns expected value" . "('$correct') for $formal_item");
             }
             else {
-                ok (defined test_Perl_langinfo($item),
-                    "Returns a value for $formal_item");
+                ok (defined $result,
+                    "Returns a value (in this case '$result') for $formal_item");
             }
         }
     }

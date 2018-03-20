@@ -2,89 +2,15 @@
 
 =head1 NAME
 
-perldelta - what is new for perl v5.27.9
+perldelta - what is new for perl v5.27.10
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.27.8 release and the 5.27.9
+This document describes differences between the 5.27.9 release and the 5.27.10
 release.
 
-If you are upgrading from an earlier release such as 5.27.7, first read
-L<perl5278delta>, which describes differences between 5.27.7 and 5.27.8.
-
-=head1 Core Enhancements
-
-=head2 New read-only predefined variable C<${^SAFE_LOCALES}>
-
-This variable is 1 if the Perl interpreter is operating in an
-environment where it is safe to use and change locales (see
-L<perllocale>.)  This variable is true when the perl is
-unthreaded, or compiled in a platform that supports thread-safe locale
-operation (see next item).
-
-=head2 Locales are now thread-safe on systems that support them
-
-These systems include Windows starting with Visual Studio 2005, and in
-POSIX 2008 systems.
-
-The implication is that you are now free to use locales and changes them
-in a threaded environment.  Your changes affect only your thread.
-See L<perllocale/Multi-threaded operation>
-
-=head2 Script runs now are specified with a different syntax
-
-This isn't really an enhancement, but is being put in this category
-because it changes an enhancement from 5.27.8, and there is a new
-abbreviated form for it.  The syntax is now either of:
-
- (*script_run:...)
- (*sr:...)
-
-Previously a C<"+"> was used instead of the C<"*">.
-
-=head2 There is a new form for script runs which combines with
-C<(?E<gt>...)> (or C<*atomic:...)>)
-
-C<(*asr:...> is an easier way to write C<(*sr:(?E<gt>...))>,
-which is expected to be a commonly used idiom.
-C<(*atomic_script_run:...> is also available.  See
-L<perlre/Script Runs>.
-
-=head2 Experimentally, there are now alphabetic synonyms for some
-regular expression assertions
-
-If you find it difficult to remember how to write certain of the pattern
-assertions, there are now alphabetic synonyms.
-
- CURRENT                NEW SYNONYMS
- ------                 ------------
- (?=...)        (*pla:...) or (*positive_lookahead:...)
- (?!...)        (*nla:...) or (*negative_lookahead:...)
- (?<=...)       (*plb:...) or (*positive_lookbehind:...)
- (?<!...)       (*nlb:...) or (*negative_lookbehind:...)
- (?>...)        (*atomic:...)
-
-These are considered experimental, so using any of these will raise
-(unless turned off) a warning in the C<experimental::alpha_assertions>
-category.
-
-=head1 Performance Enhancements
-
-=over 4
-
-=item *
-
-Various optimizations have been applied to matching regular expression
-patterns, so under the right circumstances, significant performance
-gains may be noticed.  But in an application with many varied patterns,
-little overall improvement likely will be seen.
-
-=item *
-
-Other optimizations have been applied to UTF-8 handling, but these are
-not typically a major factor in most applications.
-
-=back
+If you are upgrading from an earlier release such as 5.27.8, first read
+L<perl5279delta>, which describes differences between 5.27.8 and 5.27.9.
 
 =head1 Modules and Pragmata
 
@@ -94,98 +20,99 @@ not typically a major factor in most applications.
 
 =item *
 
-L<bignum> has been upgraded from version 0.47 to 0.49.
+L<attributes> has been upgraded from version 0.32 to 0.33
 
 =item *
 
-L<Carp> has been upgraded from version 1.45 to 1.46.
+L<B::Deparse> has been upgraded from version 1.47 to 1.48.
 
 =item *
 
-L<Devel::PPPort> has been upgraded from version 3.38 to 3.39.
+L<Carp> has been upgraded from version 1.46 to 1.49.
+
+L<Carp>, when generating stack traces, now attempts to work around
+longstanding bugs resulting from Perl's non-reference-counted stack.
+[perl #52610]
+
+Carp has been modified to avoid assuming that objects cannot be
+overloaded without the L<overload> module loaded (this can happen with
+objects created by XS modules).  Previously, infinite recursion would
+result if an XS-defined overload method itself called Carp.  [perl #132828]
+
+Carp now avoids using C<overload::StrVal>, partly because older versions
+of L<overload> (included with perl 5.14 and earlier) load L<Scalar::Util>
+at run time, which will fail if Carp has been invoked after a syntax error.
+
+L<I18N::Langinfo> has been upgraded from version 0.15 to 0.16.
+
+This module is now available on all platforms, emulating the system
+L<nl_langinfo(3)> on systems that lack it.  Some caveats apply, as
+L<detailed in its documentation|I18N::Langinfo>, the most severe being
+that, except for MS Windows, the C<CODESET> item is not implemented on
+those systems, always returning C<"">.
+
+It now sets the UTF-8 flag in its returned scalar if the string contains
+legal non-ASCII UTF-8, and the locale is UTF-8 ([perl #127288].
 
 =item *
 
-L<Encode> has been upgraded from version 2.94 to 2.96.
+L<Encode> has been upgraded from version 2.96 to 2.97.
 
 =item *
 
-L<encoding> has been upgraded from version 2.21 to 2.22.
+L<ExtUtils::MakeMaker> has been upgraded from version 7.32 to 7.34.
 
 =item *
 
-L<Errno> has been upgraded from version 1.28 to 1.29.
+L<ExtUtils::ParseXS> has been upgraded from version 3.38 to 3.39
 
 =item *
 
-L<ExtUtils::MakeMaker> has been upgraded from version 7.30 to 7.32.
+L<File::Glob> has been upgraded from version 1.30 to 1.31.
 
 =item *
 
-L<ExtUtils::ParseXS> has been upgraded from version 3.36 to 3.38.
+L<I18N::Langinfo> has been upgraded from version 0.15 to 0.16.
 
 =item *
 
-L<ExtUtils::Typemaps> has been upgraded from version 3.37 to 3.38.
+L<Locale::Codes> has been upgraded from version 3.55 to 3.56.
 
 =item *
 
-L<File::Spec> has been upgraded from version 3.72 to 3.74.
+L<Module::CoreList> has been upgraded from version 5.20180220 to 5.20180221.
 
 =item *
 
-L<if> has been upgraded from version 0.0607 to 0.0608.
+L<POSIX> has been upgraded from version 1.82 to 1.83.
 
 =item *
 
-L<IPC::Cmd> has been upgraded from version 0.98 to 1.00.
+L<Scalar::Util> has been upgraded from version 1.49 to 1.50.
 
 =item *
 
-L<Module::CoreList> has been upgraded from version 5.20180120 to 5.20180220.
+L<Test::Harness> has been upgraded from version 3.39 to 3.42.
 
 =item *
 
-L<mro> has been upgraded from version 1.21 to 1.22.
+L<Test::Simple> has been upgraded from version 1.302122 to 1.302133.
 
 =item *
 
-L<PerlIO::encoding> has been upgraded from version 0.25 to 0.26.
+L<Time::HiRes> has been upgraded from version 1.9753 to 1.9757.
 
 =item *
 
-L<POSIX> has been upgraded from version 1.81 to 1.82.
+L<Time::Piece> has been upgraded from version 1.3203 to 1.3204.
 
 =item *
 
-L<Storable> has been upgraded from version 2.65 to 3.06.
-
-=item *
-
-L<Test::Simple> has been upgraded from version 1.302120 to 1.302122.
-
-=item *
-
-L<threads> has been upgraded from version 2.21 to 2.22.
-
-=item *
-
-L<Time::HiRes> has been upgraded from version 1.9752 to 1.9753.
-
-=item *
-
-L<warnings> has been upgraded from version 1.40 to 1.41.
-
-=item *
-
-L<XXX> has been upgraded from version A.xx to B.yy.
-
-If there was something important to note about this change, include that here.
+L<warnings> has been upgraded from version 1.41 to 1.42.
 
 =back
 
 =head1 Documentation
-
 
 =head2 Changes to Existing Documentation
 
@@ -193,57 +120,103 @@ We have attempted to update the documentation to reflect the changes
 listed in this document.  If you find any we have missed, send email
 to L<perlbug@perl.org|mailto:perlbug@perl.org>.
 
-=head1 Diagnostics
+Additionally, the following selected changes have been made:
 
-The following additions or changes have been made to diagnostic output,
-including warnings and fatal error messages.  For the complete list of
-diagnostic messages, see L<perldiag>.
-
-=head2 New Diagnostics
-
-=head3 New Warnings
+=head3 L<perlfunc>
 
 =over 4
 
 =item *
 
-L<Locale '%s' contains (at least) the following characters which have
-non-standard meanings: %s  The Perl program will use the standard
-meanings|perldiag/"Locale '%s' contains (at least) the following
-characters which have non-standard meanings: %s  The Perl program will
-use the standard meanings">.
+Clarification to require was added to show that
+
+        require "Foo/Bar.pm";
+
+is equivalent to:
+
+        eval "require Foo::Bar";
+
+=back
+
+=head3 L<perlguts>
+
+=over 4
+
+=item *
+
+Improve documentation related to UTF-8 multibytes.
+
+=back
+
+=head3 L<perlrequick>
+
+=over 4
+
+=item *
+
+Clarifications on metacharacters and character classes
+
+=back
+
+=head3 L<perlretut>
+
+=over 4
+
+=item *
+
+Clarify metacharacters.
+
+=back
+
+=head1 Diagnostics
+
+=head2 Changes to Existing Diagnostics
+
+=over 4
+
+=item *
+
+The new (as of 5.27.8) restriction forbidding use of C<goto> to enter the
+argument of a binary or list expression (see L<perldiag/"Can't
+E<quot>gotoE<quot> into a binary or list expression">) has been relaxed to
+allow entering the I<first> argument of an operator that takes a fixed
+number of arguments, since this is a case that will not cause stack
+corruption.  [perl #132854]
+
+=item *
+
+The warning added in 5.27.8 concerning UTF-8 locale compatibility was
+misleading.  The new wording and explanation are at
+L<perldiag/Locale '%s' contains (at least) the following characters which
+have unexpected meanings: %s  The Perl program will use the expected
+meanings>
+
+=back
+
+=head1 Configuration and Compilation
+
+=over 4
+
+=item *
+
+F<lib/unicore/mktables> now correctly canonicalizes the names of the
+dependencies stored in the files it generates.
+
+F<regen/mk_invlists.pl>, unlike the other F<regen/*.pl> scripts, used
+C<$0> to name itself in the dependencies stored in the files it
+generates.  It now uses a literal so that the path stored in the
+generated files doesn't depend on how F<regen/mk_invlists.pl> is
+invoked.
+
+This lack of canonical names could cause test failures in
+F<t/porting/regen.t>.  [perl #132925]
 
 =back
 
 =head1 Testing
 
 Tests were added and changed to reflect the other additions and
-changes in this release.  Furthermore, these significant changes were
-made:
-
-=over 4
-
-=item *
-
-F<harness> no longer waits for 30 seconds when running
-F<t/io/openpid.t>.  [perl #121028][perl #132867]
-
-=back
-
-=head1 Platform Support
-
-=head2 New Platforms
-
-=over 4
-
-
-=item VMS
-
-CRTL features can now be set by embedders before invoking Perl by using the
-C<decc$feature_set> and C<decc$feature_set_value> functions.  Previously any attempt
-to set features after image initialization were ignored.
-
-=back
+changes in this release.
 
 =head1 Internal Changes
 
@@ -251,32 +224,10 @@ to set features after image initialization were ignored.
 
 =item *
 
-A new compiler C<#define>, C<dTHX_DEBUGGING>. has been added.  This is
-useful for XS or C code that only need the thread context because their
-debugging statements that get compiled only under C<-DDEBUGGING> need
-one.
-
-=item *
-
-A new API function L<perlapi/Perl_setlocale> has been added.
-
-=item *
-
-L<perlapi/sync_locale> has been revised to return a boolean as to
-whether the system was using the global locale or not.
-
-=item *
-
-A new kind of magic scalar, called a "nonelem" scalar, has been introduced.
-It is stored in an array to denote a nonexistent element, whenever such an
-element is accessed in a potential lvalue context.  It replaces the
-existing "defelem" (deferred element) magic wherever this is possible,
-being significantly more efficient.  This means that
-C<some_sub($sparse_array[$nonelem])> no longer has to create a new magic
-defelem scalar each time, as long as the element is within the array.
-
-It partially fixes the rare bug of deferred elements getting out of synch
-with their arrays when the array is shifted or unshifted.  [perl #132729]
+The item names passed to the function L<perlapi/Perl_langinfo>,
+introduced in 5.27.4, may no longer be prefixed with C<PERL_>.  For
+example, if you want the current floating point radix character, you
+must call it like C<Perl_langinfo(RADIXCHAR)>.
 
 =back
 
@@ -286,44 +237,47 @@ with their arrays when the array is shifted or unshifted.  [perl #132729]
 
 =item *
 
-Failures while compiling code within other constructs, such as with
-string interpolation and the right part of C<s///e> now cause
-compilation to abort earlier.
-
-Previously compilation could continue in order to report other errors,
-but the failed sub-parse could leave partly parsed constructs on the
-parser shift-reduce stack, confusing the parser, leading to perl
-crashes. [perl #125351]
+Blead Breaks CPAN: FELIPE/Crypt-Perl [perl #132900]
 
 =item *
 
-On threaded perls where the decimal point (radix) character is not a
-dot, it has been possible for a race to occur between threads when one
-needs to use the real radix character.  This has now been fixed by use
-of a mutex on systems without thread-safe locales, and the problem just
-doesn't come up on those with thread-safe locales.
+Prevent duplicate Config.pm vars [perl #132834]
+
+=item *
+
+Regex assertion failure [perl #132163]
+
+=item *
+
+fix line numbers in multi-line s///
+
+=item *
+
+add an empty file (to be removed next commit)
+
+=item *
+
+warnings.pm: sprintf is faster than concat
 
 =back
 
 =head1 Acknowledgements
 
-Perl 5.27.9 represents approximately 5 weeks of development since Perl
-5.27.8 and contains approximately 29,000 lines of changes across 360 files
-from 26 authors.
+Perl 5.27.10 represents approximately 4 weeks of development since Perl
+5.27.9 and contains approximately 80,000 lines of changes across 380 files
+from 18 authors.
 
 Excluding auto-generated files, documentation and release tools, there were
-approximately 13,000 lines of changes to 250 .pm, .t, .c and .h files.
+approximately 75,000 lines of changes to 270 .pm, .t, .c and .h files.
 
 Perl continues to flourish into its third decade thanks to a vibrant
 community of users and developers. The following people are known to have
-contributed the improvements that became Perl 5.27.9:
+contributed the improvements that became Perl 5.27.10:
 
-, Aaron Crane, Abigail, Chris 'BinGOs' Williams, Craig A. Berry, Dagfinn
-Ilmari Mannsåker, David Mitchell, Father Chrysostomos, George Hartzell,
-H.Merijn Brand, Hugo van der Sanden, James E Keenan, Jerry D. Hedden, Karl
-Williamson, Matthew Horsfall, Pali, Reini Urban, Sawyer X, Slaven Rezic,
-Steve Hay, Todd Rinaldo, Tomasz Konojacki, Tom Wyant, Tony Cook, Yves Orton,
-Zefram.
+Aaron Crane, Chris 'BinGOs' Williams, Craig A. Berry, Daniel Dragan, David
+Mitchell, Father Chrysostomos, H.Merijn Brand, James E Keenan, Karl
+Williamson, Pali, Renee Baecker, Sawyer X, Shoichi Kaji, Steve Hay, Todd
+Rinaldo, Tony Cook, Yves Orton, Zefram.
 
 The list above is almost certainly incomplete as it is automatically
 generated from version control history. In particular, it does not include

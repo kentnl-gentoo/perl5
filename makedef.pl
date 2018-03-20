@@ -125,8 +125,34 @@ $define{PERL_IMPLICIT_CONTEXT} ||=
     $define{USE_ITHREADS} ||
     $define{MULTIPLICITY} ;
 
-if ($define{USE_ITHREADS} && $ARGS{PLATFORM} ne 'win32' && $^O ne 'darwin') {
+if ($define{USE_ITHREADS} && $ARGS{PLATFORM} ne 'win32' && $ARGS{PLATFORM} ne 'netware') {
     $define{USE_REENTRANT_API} = 1;
+}
+
+if (     $define{USE_ITHREADS}
+    &&   $define{HAS_SETLOCALE}
+    && ! $define{NO_LOCALE}
+    && ! $define{NO_POSIX_2008_LOCALE})
+{
+    $define{HAS_POSIX_2008_LOCALE} = 1 if $define{HAS_NEWLOCALE}
+                                       && $define{HAS_FREELOCALE}
+                                       && $define{HAS_USELOCALE};
+    my $cctype = $ARGS{CCTYPE} =~ s/MSVC//r;
+    if (    ! $define{NO_THREAD_SAFE_LOCALE}
+        && (  $define{HAS_POSIX_2008_LOCALE}
+            || ($ARGS{PLATFORM} eq 'win32' && (   $cctype !~ /\D/
+                                               && $cctype >= 80))))
+    {
+        $define{USE_THREAD_SAFE_LOCALE} = 1;
+        $define{USE_POSIX_2008_LOCALE} = 1 if $define{HAS_POSIX_2008_LOCALE};
+    }
+
+    if (   $ARGS{PLATFORM} eq 'win32'
+        && $define{USE_THREAD_SAFE_LOCALE}
+        && $cctype < 140)
+    {
+        $define{TS_W32_BROKEN_LOCALECONV} = 1;
+    }
 }
 
 # perl.h logic duplication ends
@@ -368,6 +394,7 @@ unless ($define{'USE_ITHREADS'}) {
 		    PL_hints_mutex
 		    PL_locale_mutex
 		    PL_lc_numeric_mutex
+		    PL_lc_numeric_mutex_depth
 		    PL_my_ctx_mutex
 		    PL_perlio_mutex
 		    PL_stashpad
@@ -398,6 +425,7 @@ unless ($define{'USE_ITHREADS'}) {
 		    Perl_stashpv_hvname_match
 		    Perl_regdupe_internal
 		    Perl_newPADOP
+                    PL_C_locale_obj
 			 );
 }
 
@@ -434,6 +462,14 @@ unless ($define{'PERL_IMPLICIT_CONTEXT'}) {
 		    Perl_my_cxt_init
 		    Perl_my_cxt_index
 			 );
+}
+
+if ($define{USE_THREAD_SAFE_LOCALE}) {
+    ++$skip{PL_lc_numeric_mutex};
+    ++$skip{PL_lc_numeric_mutex_depth};
+    if (! $define{TS_W32_BROKEN_LOCALECONV}) {
+        ++$skip{PL_locale_mutex};
+    }
 }
 
 unless ($define{'PERL_OP_PARENT'}) {

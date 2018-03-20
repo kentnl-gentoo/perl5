@@ -2667,6 +2667,7 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
     if (SvTYPE(sv) < SVt_NV) {
 	/* The logic to use SVt_PVNV if necessary is in sv_upgrade.  */
 	sv_upgrade(sv, SVt_NV);
+        CLANG_DIAG_IGNORE_STMT(-Wthread-safety);
 	DEBUG_c({
             DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
             STORE_LC_NUMERIC_SET_STANDARD();
@@ -2675,6 +2676,8 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
 			  PTR2UV(sv), SvNVX(sv));
             RESTORE_LC_NUMERIC();
 	});
+        CLANG_DIAG_RESTORE_STMT;
+
     }
     else if (SvTYPE(sv) < SVt_PVNV)
 	sv_upgrade(sv, SVt_PVNV);
@@ -2809,6 +2812,7 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
 	   and ideally should be fixed.  */
 	return 0.0;
     }
+    CLANG_DIAG_IGNORE_STMT(-Wthread-safety);
     DEBUG_c({
         DECLARATION_FOR_LC_NUMERIC_MANIPULATION;
         STORE_LC_NUMERIC_SET_STANDARD();
@@ -2816,6 +2820,7 @@ Perl_sv_2nv_flags(pTHX_ SV *const sv, const I32 flags)
 		      PTR2UV(sv), SvNVX(sv));
         RESTORE_LC_NUMERIC();
     });
+    CLANG_DIAG_RESTORE_STMT;
     return SvNVX(sv);
 }
 
@@ -7802,8 +7807,6 @@ Perl_sv_eq_flags(pTHX_ SV *sv1, SV *sv2, const U32 flags)
     STRLEN cur1;
     const char *pv2;
     STRLEN cur2;
-    I32  eq     = 0;
-    SV* svrecode = NULL;
 
     if (!sv1) {
 	pv1 = "";
@@ -7843,11 +7846,9 @@ Perl_sv_eq_flags(pTHX_ SV *sv1, SV *sv2, const U32 flags)
     }
 
     if (cur1 == cur2)
-	eq = (pv1 == pv2) || memEQ(pv1, pv2, cur1);
-	
-    SvREFCNT_dec(svrecode);
-
-    return eq;
+	return (pv1 == pv2) || memEQ(pv1, pv2, cur1);
+    else
+	return 0;
 }
 
 /*
@@ -15235,7 +15236,9 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_in_utf8_CTYPE_locale = proto_perl->Iin_utf8_CTYPE_locale;
     PL_in_utf8_COLLATE_locale = proto_perl->Iin_utf8_COLLATE_locale;
     my_strlcpy(PL_locale_utf8ness, proto_perl->Ilocale_utf8ness, sizeof(PL_locale_utf8ness));
+#if defined(USE_ITHREADS) && ! defined(USE_THREAD_SAFE_LOCALE)
     PL_lc_numeric_mutex_depth = 0;
+#endif
     /* Unicode features (see perlrun/-C) */
     PL_unicode		= proto_perl->Iunicode;
 
@@ -15581,38 +15584,18 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_setlocale_bufsize = 0;
 
     /* Unicode inversion lists */
-    PL_Latin1		= sv_dup_inc(proto_perl->ILatin1, param);
-    PL_UpperLatin1	= sv_dup_inc(proto_perl->IUpperLatin1, param);
-    PL_AboveLatin1	= sv_dup_inc(proto_perl->IAboveLatin1, param);
     PL_InBitmap         = sv_dup_inc(proto_perl->IInBitmap, param);
-
-    PL_NonL1NonFinalFold = sv_dup_inc(proto_perl->INonL1NonFinalFold, param);
-    PL_HasMultiCharFold = sv_dup_inc(proto_perl->IHasMultiCharFold, param);
 
     /* utf8 character class swashes */
     for (i = 0; i < POSIX_SWASH_COUNT; i++) {
         PL_utf8_swash_ptrs[i] = sv_dup_inc(proto_perl->Iutf8_swash_ptrs[i], param);
     }
-    for (i = 0; i < POSIX_CC_COUNT; i++) {
-        PL_XPosix_ptrs[i] = sv_dup_inc(proto_perl->IXPosix_ptrs[i], param);
-    }
-    PL_GCB_invlist = sv_dup_inc(proto_perl->IGCB_invlist, param);
-    PL_SB_invlist = sv_dup_inc(proto_perl->ISB_invlist, param);
-    PL_SCX_invlist = sv_dup_inc(proto_perl->ISCX_invlist, param);
-    PL_WB_invlist = sv_dup_inc(proto_perl->IWB_invlist, param);
     PL_seen_deprecated_macro = hv_dup_inc(proto_perl->Iseen_deprecated_macro, param);
     PL_utf8_mark	= sv_dup_inc(proto_perl->Iutf8_mark, param);
     PL_utf8_toupper	= sv_dup_inc(proto_perl->Iutf8_toupper, param);
     PL_utf8_totitle	= sv_dup_inc(proto_perl->Iutf8_totitle, param);
     PL_utf8_tolower	= sv_dup_inc(proto_perl->Iutf8_tolower, param);
     PL_utf8_tofold	= sv_dup_inc(proto_perl->Iutf8_tofold, param);
-    PL_utf8_idstart	= sv_dup_inc(proto_perl->Iutf8_idstart, param);
-    PL_utf8_xidstart	= sv_dup_inc(proto_perl->Iutf8_xidstart, param);
-    PL_utf8_perl_idstart = sv_dup_inc(proto_perl->Iutf8_perl_idstart, param);
-    PL_utf8_perl_idcont = sv_dup_inc(proto_perl->Iutf8_perl_idcont, param);
-    PL_utf8_idcont	= sv_dup_inc(proto_perl->Iutf8_idcont, param);
-    PL_utf8_xidcont	= sv_dup_inc(proto_perl->Iutf8_xidcont, param);
-    PL_utf8_foldable	= sv_dup_inc(proto_perl->Iutf8_foldable, param);
     PL_utf8_charname_begin = sv_dup_inc(proto_perl->Iutf8_charname_begin, param);
     PL_utf8_charname_continue = sv_dup_inc(proto_perl->Iutf8_charname_continue, param);
 

@@ -20393,7 +20393,7 @@ static const UV _Perl_SCX_invlist[] = { /* for ASCII/Latin1 */
 
 #endif	/* defined(PERL_IN_PERL_C) */
 
-#if defined(PERL_CORE) || defined(PERL_EXT)
+#if defined(PERL_IN_REGEXEC_C)
 
 /* Negative enum values indicate the need to use an auxiliary table
  * consisting of the list of enums this one expands to.  The absolute
@@ -22754,7 +22754,7 @@ static const SCX_enum _Perl_SCX_invmap[] = { /* for ASCII/Latin1 */
 	SCX_Unknown
 };
 
-#endif	/* defined(PERL_CORE) || defined(PERL_EXT) */
+#endif	/* defined(PERL_IN_REGEXEC_C) */
 
 #if defined(PERL_IN_PERL_C)
 
@@ -56784,7 +56784,7 @@ static const UV _Perl_SCX_invlist[] = { /* for EBCDIC 1047 */
 
 #endif	/* defined(PERL_IN_PERL_C) */
 
-#if defined(PERL_CORE) || defined(PERL_EXT)
+#if defined(PERL_IN_REGEXEC_C)
 
 /* Negative enum values indicate the need to use an auxiliary table
  * consisting of the list of enums this one expands to.  The absolute
@@ -59171,7 +59171,7 @@ static const SCX_enum _Perl_SCX_invmap[] = { /* for EBCDIC 1047 */
 	SCX_Unknown
 };
 
-#endif	/* defined(PERL_CORE) || defined(PERL_EXT) */
+#endif	/* defined(PERL_IN_REGEXEC_C) */
 
 #if defined(PERL_IN_PERL_C)
 
@@ -93385,7 +93385,7 @@ static const UV _Perl_SCX_invlist[] = { /* for EBCDIC 037 */
 
 #endif	/* defined(PERL_IN_PERL_C) */
 
-#if defined(PERL_CORE) || defined(PERL_EXT)
+#if defined(PERL_IN_REGEXEC_C)
 
 /* Negative enum values indicate the need to use an auxiliary table
  * consisting of the list of enums this one expands to.  The absolute
@@ -95768,7 +95768,7 @@ static const SCX_enum _Perl_SCX_invmap[] = { /* for EBCDIC 037 */
 	SCX_Unknown
 };
 
-#endif	/* defined(PERL_CORE) || defined(PERL_EXT) */
+#endif	/* defined(PERL_IN_REGEXEC_C) */
 
 #if defined(PERL_IN_PERL_C)
 
@@ -109534,8 +109534,8 @@ static const U8 WB_table[24][24] = {
  * be0f129691d479aa38646e4ca0ec1ee576ae7f75b0300a5624a7fa862fa8abba lib/unicore/extracted/DLineBreak.txt
  * 92449d354d9f6b6f2f97a292ebb59f6344ffdeb83d120d7d23e569c43ba67cd5 lib/unicore/extracted/DNumType.txt
  * e3a319527153b0c6c0c549b40fc6f3a01a7a0dcd6620784391db25901df3b154 lib/unicore/extracted/DNumValues.txt
- * 5671c3de473b25e7ea47097e4906260624dfabe3e9b1739f490aecbc3d858459 lib/unicore/mktables
+ * 823b41f276979dd5e2df12f0c7339f3d1aa2c805848958f31ddc549cb11bed9f lib/unicore/mktables
  * 21653d2744fdd071f9ef138c805393901bb9547cf3e777ebf50215a191f986ea lib/unicore/version
  * 913d2f93f3cb6cdf1664db888bf840bc4eb074eef824e082fceda24a9445e60c regen/charset_translations.pl
- * 4898ec84e2b81e8bf948dcdb1c015c14f258cc652337122719885a276ea46d7b regen/mk_invlists.pl
+ * 320fca42ad27e06f90c9ea242cd22d7fcf9ccfde7d21a3a0eda01b3c13ad25e2 regen/mk_invlists.pl
  * ex: set ro: */

@@ -138,11 +138,6 @@ PERL_CALLCONV UV	Perl__to_utf8_title_flags(pTHX_ const U8 *p, const U8* e, U8* u
 PERL_CALLCONV UV	Perl__to_utf8_upper_flags(pTHX_ const U8 *p, const U8 *e, U8* ustrp, STRLEN *lenp, bool flags, const char * const file, const int line);
 #define PERL_ARGS_ASSERT__TO_UTF8_UPPER_FLAGS	\
 	assert(p); assert(ustrp); assert(file)
-#ifndef PERL_NO_INLINE_FUNCTIONS
-PERL_STATIC_INLINE unsigned int	S__variant_byte_number(PERL_UINTMAX_T word)
-			__attribute__warn_unused_result__;
-#endif
-
 PERL_CALLCONV void	Perl__warn_problematic_locale(void);
 PERL_CALLCONV_NO_RET void	Perl_abort_execution(pTHX_ const char * const msg, const char * const name)
 			__attribute__noreturn__;
@@ -1366,6 +1361,9 @@ PERL_CALLCONV void	Perl_init_dbargs(pTHX);
 PERL_CALLCONV void	Perl_init_debugger(pTHX);
 PERL_CALLCONV int	Perl_init_i18nl10n(pTHX_ int printwarn);
 PERL_CALLCONV int	Perl_init_i18nl14n(pTHX_ int printwarn);
+PERL_CALLCONV void	Perl_init_named_cv(pTHX_ CV *cv, OP *nameop);
+#define PERL_ARGS_ASSERT_INIT_NAMED_CV	\
+	assert(cv); assert(nameop)
 PERL_CALLCONV void	Perl_init_stacks(pTHX);
 PERL_CALLCONV void	Perl_init_tm(pTHX_ struct tm *ptm);
 #define PERL_ARGS_ASSERT_INIT_TM	\
@@ -3873,6 +3871,13 @@ PERL_CALLCONV_NO_RET int	Perl_magic_regdatum_set(pTHX_ SV* sv, MAGIC* mg)
 	assert(sv); assert(mg)
 
 #endif
+#if !defined(EBCDIC)
+#ifndef PERL_NO_INLINE_FUNCTIONS
+PERL_STATIC_INLINE unsigned int	S__variant_byte_number(PERL_UINTMAX_T word)
+			__attribute__warn_unused_result__;
+#endif
+
+#endif
 #if !defined(HAS_GETENV_LEN)
 PERL_CALLCONV char*	Perl_getenv_len(pTHX_ const char *env_elem, unsigned long *len);
 #define PERL_ARGS_ASSERT_GETENV_LEN	\
@@ -4385,7 +4390,7 @@ PERL_STATIC_INLINE STRLEN	S_sv_or_pv_pos_u2b(pTHX_ SV *sv, const char *pv, STRLE
 #endif
 #endif
 #if defined(PERL_CORE) || defined(PERL_EXT)
-PERL_CALLCONV bool	Perl_isSCRIPT_RUN(pTHX_ const U8 *s, const U8 *send, const bool utf8_target, SCX_enum * ret_script)
+PERL_CALLCONV bool	Perl_isSCRIPT_RUN(pTHX_ const U8 *s, const U8 *send, const bool utf8_target)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_ISSCRIPT_RUN	\
 	assert(s); assert(send)
@@ -4707,10 +4712,12 @@ PERL_CALLCONV SV*	Perl_hfree_next_entry(pTHX_ HV *hv, STRLEN *indexp);
 STATIC const char*	S_category_name(const int category);
 STATIC void	S_restore_switched_locale(pTHX_ const int category, const char * const original_locale);
 #ifndef PERL_NO_INLINE_FUNCTIONS
-PERL_STATIC_INLINE const char *	S_save_to_buffer(const char * string, char **buf, Size_t *buf_size, const Size_t offset);
+PERL_STATIC_INLINE const char *	S_save_to_buffer(const char * string, char **buf, Size_t *buf_size, const Size_t offset)
+			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_SAVE_TO_BUFFER	\
-	assert(string); assert(buf_size)
+	assert(buf_size)
 #endif
+
 STATIC const char*	S_switch_category_locale_to_template(pTHX_ const int switch_category, const int template_category, const char * template_locale);
 #  if defined(USE_LOCALE)
 STATIC void	S_new_collate(pTHX_ const char* newcoll);
@@ -5595,7 +5602,7 @@ STATIC char *	S_find_next_ascii(char* s, const char * send, const bool is_utf8)
 #define PERL_ARGS_ASSERT_FIND_NEXT_ASCII	\
 	assert(s); assert(send)
 
-STATIC char *	S_find_next_masked(char * s, const char * send, const U8 byte, const U8 mask)
+STATIC U8 *	S_find_next_masked(U8 * s, const U8 * send, const U8 byte, const U8 mask)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_FIND_NEXT_MASKED	\
 	assert(s); assert(send)
@@ -5605,7 +5612,7 @@ STATIC char *	S_find_next_non_ascii(char* s, const char * send, const bool is_ut
 #define PERL_ARGS_ASSERT_FIND_NEXT_NON_ASCII	\
 	assert(s); assert(send)
 
-STATIC char *	S_find_span_end(char* s, const char * send, const char span_byte)
+STATIC U8 *	S_find_span_end(U8* s, const U8 * send, const U8 span_byte)
 			__attribute__warn_unused_result__;
 #define PERL_ARGS_ASSERT_FIND_SPAN_END	\
 	assert(s); assert(send)
@@ -6214,7 +6221,7 @@ PERL_CALLCONV SV*	Perl_sv_dup_inc(pTHX_ const SV *const sstr, CLONE_PARAMS *cons
 	assert(param)
 
 #endif
-#if defined(USE_LOCALE)		    && (   defined(PERL_IN_LOCALE_C)	        || defined(PERL_IN_MG_C)		|| defined (PERL_EXT_POSIX))
+#if defined(USE_LOCALE)		    && (   defined(PERL_IN_LOCALE_C)	        || defined(PERL_IN_MG_C)		|| defined (PERL_EXT_POSIX)		|| defined (PERL_EXT_LANGINFO))
 PERL_CALLCONV bool	Perl__is_cur_LC_category_utf8(pTHX_ int category);
 #endif
 #if defined(USE_LOCALE_COLLATE)

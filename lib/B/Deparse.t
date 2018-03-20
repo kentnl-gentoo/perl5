@@ -1438,11 +1438,34 @@ s/X//r;
 use feature 'unicode_strings';
 s/X//d;
 ####
-# all the flags (tr///)
-tr/X/Y/c;
-tr/X//d;
-tr/X//s;
-tr/X//r;
+# tr/// with all the flags: empty replacement
+tr/B-G//;
+tr/B-G//c;
+tr/B-G//d;
+tr/B-G//s;
+tr/B-G//cd;
+tr/B-G//ds;
+tr/B-G//cs;
+tr/B-G//cds;
+tr/B-G//r;
+####
+# tr/// with all the flags: short replacement
+tr/B-G/b/;
+tr/B-G/b/c;
+tr/B-G/b/d;
+tr/B-G/b/s;
+tr/B-G/b/cd;
+tr/B-G/b/ds;
+tr/B-G/b/cs;
+tr/B-G/b/cds;
+tr/B-G/b/r;
+####
+# tr/// with all the flags: equal length replacement
+tr/B-G/b-g/;
+tr/B-G/b-g/c;
+tr/B-G/b-g/s;
+tr/B-G/b-g/cs;
+tr/B-G/b-g/r;
 ####
 # tr with extended table (/c)
 tr/\000-\375/AB/c;
@@ -3016,3 +3039,27 @@ state @a :shared;
 state @b :shared = (1, 2);
 state %h :shared;
 state %i :shared = ('a', 1, 'b', 2);
+####
+# \our @a shouldn't be a list
+my $r = \our @a;
+my(@l) = \our((@b));
+@l = \our(@c, @d);
+####
+# postfix $#
+our(@b, $s, $l);
+$l = (\my @a)->$#*;
+(\@b)->$#* = 1;
+++(\my @c)->$#*;
+$l = $#a;
+$#a = 1;
+$l = $#b;
+$#b = 1;
+my $r;
+$l = $r->$#*;
+$r->$#* = 1;
+$l = $#{@$r;};
+$#{$r;} = 1;
+$l = $s->$#*;
+$s->$#* = 1;
+$l = $#{@$s;};
+$#{$s;} = 1;

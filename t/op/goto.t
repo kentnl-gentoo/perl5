@@ -10,7 +10,7 @@ BEGIN {
 
 use warnings;
 use strict;
-plan tests => 122;
+plan tests => 124;
 our $TODO;
 
 my $deprecated = 0;
@@ -858,7 +858,11 @@ is sub { goto z; exit do { z: return "foo" } }->(), 'foo',
    'goto into exit';
 is sub { goto z; eval do { z: "'foo'" } }->(), 'foo',
    'goto into eval';
-
+TODO: {
+    local $TODO = "glob() does not currently return a list on VMS" if $^O eq 'VMS';
+    is join(",",sub { goto z; glob do { z: "foo bar" } }->()), 'foo,bar',
+       'goto into glob';
+}
 # [perl #132799]
 # Erroneous inward goto warning, followed by crash.
 # The eval must be in an assignment.
@@ -870,3 +874,13 @@ sub _routine {
 }
 _routine();
 pass("bug 132799");
+
+# [perl #132854]
+# Goto the *first* parameter of a binary expression, which is harmless.
+eval {
+    goto __GEN_2;
+    my $sent = do {
+        __GEN_2:
+    };
+};
+is $@,'', 'goto the first parameter of a binary expression [perl #132854]';
