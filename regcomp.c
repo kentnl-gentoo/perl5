@@ -13323,6 +13323,18 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                          * /u.  This includes the multi-char fold SHARP S to
                          * 'ss' */
                         if (UNLIKELY(ender == LATIN_SMALL_LETTER_SHARP_S)) {
+
+                            /* If the node started out having uni rules, we
+                             * wouldn't have gotten here.  So this means
+                             * something in the middle has changed it, but
+                             * didn't think it needed to reparse.  But this
+                             * sharp s now does indicate the need for
+                             * reparsing. */
+                            if (RExC_uni_semantics) {
+                                p = oldp;
+                                goto loopdone;
+                            }
+
                             RExC_seen_unfolded_sharp_s = 1;
                             maybe_exactfu = FALSE;
                         }
@@ -15913,6 +15925,8 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 	    case 'P':
 		{
 		char *e;
+                char *i;
+
 
                 /* We will handle any undefined properties ourselves */
                 U8 swash_init_flags = _CORE_SWASH_INIT_RETURN_IF_UNDEF
@@ -15956,6 +15970,14 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 		    n = e - RExC_parse;
 		    while (isSPACE(*(RExC_parse + n - 1)))
 		        n--;
+
+                    for (i = RExC_parse; i < RExC_parse + n; i++) {
+                        if (isCNTRL(*i) && *i != '\t') {
+                            char * name = Perl_form(aTHX_ "%.*s", (int)n, RExC_parse);
+                            RExC_parse = e + 1;
+                            vFAIL2("Can't find Unicode property definition \"%s\"", name);
+                        }
+                    }
 		}   /* The \p isn't immediately followed by a '{' */
 		else if (! isALPHA(*RExC_parse)) {
                     RExC_parse += (UTF) ? UTF8SKIP(RExC_parse) : 1;
