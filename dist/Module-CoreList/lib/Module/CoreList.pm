@@ -4,7 +4,7 @@ use strict;
 our ( %released, %version, %families, %upstream, %bug_tracker, %deprecated, %delta );
 
 use version;
-our $VERSION = '5.20180221';
+our $VERSION = '5.20180420';
 
 sub PKG_PATTERN () { q#\A[a-zA-Z_][0-9a-zA-Z_]*(?:(::|')[0-9a-zA-Z_]+)*\z# }
 sub _looks_like_invocant ($) { local $@; !!eval { $_[0]->isa(__PACKAGE__) } }
@@ -330,6 +330,9 @@ sub changes_between {
     5.027008 => '2018-01-20',
     5.027009 => '2018-02-20',
     5.027010 => '2018-03-20',
+    5.024004 => '2018-04-14',
+    5.026002 => '2018-04-14',
+    5.027011 => '2018-04-20',
   );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -15366,6 +15369,70 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         removed => {
         }
     },
+    5.024004 => {
+        delta_from => 5.024003,
+        changed => {
+            'B::Op_private'         => '5.024004',
+            'Config'                => '5.024004',
+            'Module::CoreList'      => '5.20180414_24',
+            'Module::CoreList::TieHashDelta'=> '5.20180414_24',
+            'Module::CoreList::Utils'=> '5.20180414_24',
+        },
+        removed => {
+        }
+    },
+    5.026002 => {
+        delta_from => 5.026001,
+        changed => {
+            'B::Op_private'         => '5.026002',
+            'Config'                => '5.026002',
+            'Module::CoreList'      => '5.20180414_26',
+            'Module::CoreList::TieHashDelta'=> '5.20180414_26',
+            'Module::CoreList::Utils'=> '5.20180414_26',
+            'PerlIO::via'           => '0.17',
+            'Term::ReadLine'        => '1.17',
+            'Unicode::UCD'          => '0.69',
+        },
+        removed => {
+        }
+    },
+    5.027011 => {
+        delta_from => 5.027010,
+        changed => {
+            'B::Op_private'         => '5.027011',
+            'Carp'                  => '1.50',
+            'Carp::Heavy'           => '1.50',
+            'Config'                => '5.027011',
+            'Devel::PPPort'         => '3.40',
+            'Exporter'              => '5.73',
+            'Exporter::Heavy'       => '5.73',
+            'ExtUtils::Constant'    => '0.25',
+            'I18N::Langinfo'        => '0.17',
+            'IO'                    => '1.39',
+            'IO::Dir'               => '1.39',
+            'IO::File'              => '1.39',
+            'IO::Handle'            => '1.39',
+            'IO::Pipe'              => '1.39',
+            'IO::Poll'              => '1.39',
+            'IO::Seekable'          => '1.39',
+            'IO::Select'            => '1.39',
+            'IO::Socket'            => '1.39',
+            'IO::Socket::INET'      => '1.39',
+            'IO::Socket::UNIX'      => '1.39',
+            'Module::CoreList'      => '5.20180420',
+            'Module::CoreList::Utils'=> '5.20180420',
+            'POSIX'                 => '1.84',
+            'Time::HiRes'           => '1.9759',
+            'XS::APItest'           => '0.97',
+            'bytes'                 => '1.06',
+            'subs'                  => '1.03',
+            'vars'                  => '1.04',
+            'version'               => '0.9923',
+            'version::regex'        => '0.9923',
+        },
+        removed => {
+        }
+    },
 );
 
 sub is_core
@@ -16229,6 +16296,27 @@ sub is_core
     },
     5.027010 => {
         delta_from => 5.027009,
+        changed => {
+        },
+        removed => {
+        }
+    },
+    5.024004 => {
+        delta_from => 5.024003,
+        changed => {
+        },
+        removed => {
+        }
+    },
+    5.026002 => {
+        delta_from => 5.026001,
+        changed => {
+        },
+        removed => {
+        }
+    },
+    5.027011 => {
+        delta_from => 5.02701,
         changed => {
         },
         removed => {

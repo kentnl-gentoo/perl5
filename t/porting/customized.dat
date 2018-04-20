@@ -3,6 +3,7 @@
 #     ./perl -I../lib porting/customized.t --regen
 Devel::PPPort dist/Devel-PPPort/parts/embed.fnc e030719d9c6921810554a8e2d398543348b4878c
 Digest cpan/Digest/Digest.pm 43f7f544cb11842b2f55c73e28930da50774e081
+Encode cpan/Encode/t/truncated_utf8.t 36e6780c20f1d22ed7c97b1a388a63629617451f
 Locale::Maketext::Simple cpan/Locale-Maketext-Simple/lib/Locale/Maketext/Simple.pm 57ed38905791a17c150210cd6f42ead22a7707b6
 Math::Complex cpan/Math-Complex/lib/Math/Complex.pm 198ea6c6c584f5ea79a0fd7e9d411d0878f3b2af
 Math::Complex cpan/Math-Complex/t/Complex.t 4f307ed6fc59f1e5fb0e6b11103fc631b6bdb335
@@ -27,5 +28,5 @@ experimental cpan/experimental/t/basic.t a073ea03ccc98dec496569f3648ab01a5fe1c7a
 perlfaq cpan/perlfaq/lib/perlfaq5.pod bcc1b6af3b6dff3973643acf8d5e741463374123
 perlfaq cpan/perlfaq/lib/perlfaq8.pod bffbc0c8fa828aead24e0891a5e789369a8e0743
 podlators pod/perlpodstyle.pod c6500c9950b46e8228d4adbc09a3ee2ef23de2d0
-version cpan/version/lib/version.pm bee369df1bd84e09107a90d72ec12c38bcb97cce
-version vxs.inc 8498104713e5ce189602dda55dca38bee780c297
+version cpan/version/lib/version.pm a61f969d55dd73ae2d7a604f2c9bbef1ea82b820
+version vxs.inc f26c23f0279fb64c77ad814af906c04930cff81c

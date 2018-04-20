@@ -3680,7 +3680,8 @@ may behave differently to Perl's hashes with respect to changes in order on
 insertion and deletion of items.
 
 As a side effect, calling L<C<keys>|/keys HASH> resets the internal
-iterator of the HASH or ARRAY (see L<C<each>|/each HASH>).  In
+iterator of the HASH or ARRAY (see L<C<each>|/each HASH>) before
+yielding the keys.  In
 particular, calling L<C<keys>|/keys HASH> in void context resets the
 iterator with no other overhead.
 
@@ -3828,9 +3829,10 @@ L<C<continue>|/continue BLOCK> block, if any, is not executed:
         #...
     }
 
-L<C<last>|/last LABEL> cannot be used to exit a block that returns a
-value such as C<eval {}>, C<sub {}>, or C<do {}>, and should not be used
-to exit a L<C<grep>|/grep BLOCK LIST> or L<C<map>|/map BLOCK LIST>
+L<C<last>|/last LABEL> cannot return a value from a block that typically
+returns a value, such as C<eval {}>, C<sub {}>, or C<do {}>. It will perform
+its flow control behavior, which precludes any return value. It should not be
+used to exit a L<C<grep>|/grep BLOCK LIST> or L<C<map>|/map BLOCK LIST>
 operation.
 
 Note that a block by itself is semantically identical to a loop
@@ -4358,9 +4360,10 @@ refers to the innermost enclosing loop.  The C<next EXPR> form, available
 as of Perl 5.18.0, allows a label name to be computed at run time, being
 otherwise identical to C<next LABEL>.
 
-L<C<next>|/next LABEL> cannot be used to exit a block which returns a
-value such as C<eval {}>, C<sub {}>, or C<do {}>, and should not be used
-to exit a L<C<grep>|/grep BLOCK LIST> or L<C<map>|/map BLOCK LIST>
+L<C<next>|/next LABEL> cannot return a value from a block that typically
+returns a value, such as C<eval {}>, C<sub {}>, or C<do {}>. It will perform
+its flow control behavior, which precludes any return value. It should not be
+used to exit a L<C<grep>|/grep BLOCK LIST> or L<C<map>|/map BLOCK LIST>
 operation.
 
 Note that a block by itself is semantically identical to a loop
@@ -6322,9 +6325,10 @@ normally use this command:
         print;
     }
 
-L<C<redo>|/redo LABEL> cannot be used to retry a block that returns a
-value such as C<eval {}>, C<sub {}>, or C<do {}>, and should not be used
-to exit a L<C<grep>|/grep BLOCK LIST> or L<C<map>|/map BLOCK LIST>
+L<C<redo>|/redo LABEL> cannot return a value from a block that typically
+returns a value, such as C<eval {}>, C<sub {}>, or C<do {}>. It will perform
+its flow control behavior, which precludes any return value. It should not be
+used to exit a L<C<grep>|/grep BLOCK LIST> or L<C<map>|/map BLOCK LIST>
 operation.
 
 Note that a block by itself is semantically identical to a loop
@@ -7535,7 +7539,7 @@ With proper care you may mix package and my (or state) C<$a> and/or C<$b>:
 
    # prints tinysmallnormalbighuge
 
-C<$a> and C<$b> are implicitely local to the sort() execution and regain their
+C<$a> and C<$b> are implicitly local to the sort() execution and regain their
 former values upon completing the sort.
 
 Sort subroutines written using C<$a> and C<$b> are bound to their calling
@@ -9394,7 +9398,7 @@ want a version of Perl older than the specified one.
 Specifying VERSION as a numeric argument of the form 5.024001 should
 generally be avoided as older less readable syntax compared to
 v5.24.1. Before perl 5.8.0 released in 2002 the more verbose numeric
-orm was the only supported syntax, which is why you might see it in
+form was the only supported syntax, which is why you might see it in
 
     use v5.24.1;    # compile time version check
     use 5.24.1;     # ditto
@@ -9597,9 +9601,12 @@ may behave differently to Perl's hashes with respect to changes in order on
 insertion and deletion of items.
 
 As a side effect, calling L<C<values>|/values HASH> resets the HASH or
-ARRAY's internal iterator, see L<C<each>|/each HASH>.  (In particular,
+ARRAY's internal iterator (see L<C<each>|/each HASH>) before yielding the
+values.  In particular,
 calling L<C<values>|/values HASH> in void context resets the iterator
-with no other overhead.  Apart from resetting the iterator,
+with no other overhead.
+
+Apart from resetting the iterator,
 C<values @array> in list context is the same as plain C<@array>.
 (We recommend that you use void context C<keys @array> for this, but
 reasoned that taking C<values @array> out would require more

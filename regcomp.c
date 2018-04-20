@@ -5476,7 +5476,9 @@ Perl_re_printf( aTHX_  "LHS=%" UVuf " RHS=%" UVuf "\n",
                 /* Cannot expect anything... */
                 scan_commit(pRExC_state, data, minlenp, is_inf);
     	        data->pos_min += 1;
-	        data->pos_delta += 1;
+                if (data->pos_delta != SSize_t_MAX) {
+                    data->pos_delta += 1;
+                }
 		data->cur_is_floating = 1; /* float */
     	    }
 	}
@@ -6952,17 +6954,10 @@ Perl_re_op_compile(pTHX_ SV ** const patternp, int pat_count,
 
     /* Initialize these here instead of as-needed, as is quick and avoids
      * having to test them each time otherwise */
-    if (! PL_AboveLatin1) {
+    if (! PL_InBitmap) {
 #ifdef DEBUGGING
         char * dump_len_string;
 #endif
-
-	PL_AboveLatin1 = _new_invlist_C_array(AboveLatin1_invlist);
-	PL_Latin1 = _new_invlist_C_array(Latin1_invlist);
-	PL_UpperLatin1 = _new_invlist_C_array(UpperLatin1_invlist);
-        PL_utf8_foldable = _new_invlist_C_array(_Perl_Any_Folds_invlist);
-        PL_HasMultiCharFold =
-                       _new_invlist_C_array(_Perl_Folds_To_Multi_Char_invlist);
 
         /* This is calculated here, because the Perl program that generates the
          * static global ones doesn't currently have access to
@@ -10182,23 +10177,6 @@ Perl__invlist_dump(pTHX_ PerlIO *file, I32 level,
     }
 }
 
-void
-Perl__load_PL_utf8_foldclosures (pTHX)
-{
-    assert(! PL_utf8_foldclosures);
-
-    /* If the folds haven't been read in, call a fold function
-     * to force that */
-    if (! PL_utf8_tofold) {
-        U8 dummy[UTF8_MAXBYTES_CASE+1];
-        const U8 hyphen[] = HYPHEN_UTF8;
-
-        /* This string is just a short named one above \xff */
-        toFOLD_utf8_safe(hyphen, hyphen + sizeof(hyphen) - 1, dummy, NULL);
-        assert(PL_utf8_tofold); /* Verify that worked */
-    }
-    PL_utf8_foldclosures = _swash_inversion_hash(PL_utf8_tofold);
-}
 #endif
 
 #if defined(PERL_ARGS_ASSERT__INVLISTEQ) && !defined(PERL_IN_XSUB_RE)
@@ -10308,11 +10286,10 @@ S__make_exactf_invlist(pTHX_ RExC_state_t *pRExC_state, regnode *node)
     }
     else {  /* Pattern is UTF-8 */
         U8 folded[UTF8_MAX_FOLD_CHAR_EXPAND * UTF8_MAXBYTES_CASE + 1] = { '\0' };
-        STRLEN foldlen = UTF8SKIP(s);
         const U8* e = s + bytelen;
-        SV** listp;
+        IV fc;
 
-        uc = utf8_to_uvchr_buf(s, s + bytelen, NULL);
+        fc = uc = utf8_to_uvchr_buf(s, s + bytelen, NULL);
 
         /* The only code points that aren't folded in a UTF EXACTFish
          * node are are the problematic ones in EXACTFL nodes */
@@ -10324,14 +10301,21 @@ S__make_exactf_invlist(pTHX_ RExC_state_t *pRExC_state, regnode *node)
             U8 *d = folded;
             int i;
 
+            fc = -1;
             for (i = 0; i < UTF8_MAX_FOLD_CHAR_EXPAND && s < e; i++) {
                 if (isASCII(*s)) {
                     *(d++) = (U8) toFOLD(*s);
+                    if (fc < 0) {       /* Save the first fold */
+                        fc = *(d-1);
+                    }
                     s++;
                 }
                 else {
                     STRLEN len;
-                    toFOLD_utf8_safe(s, e, d, &len);
+                    UV fold = toFOLD_utf8_safe(s, e, d, &len);
+                    if (fc < 0) {       /* Save the first fold */
+                        fc = fold;
+                    }
                     d += len;
                     s += UTF8SKIP(s);
                 }
@@ -10340,15 +10324,13 @@ S__make_exactf_invlist(pTHX_ RExC_state_t *pRExC_state, regnode *node)
             /* And set up so the code below that looks in this folded
              * buffer instead of the node's string */
             e = d;
-            foldlen = UTF8SKIP(folded);
             s = folded;
         }
 
         /* When we reach here 's' points to the fold of the first
          * character(s) of the node; and 'e' points to far enough along
          * the folded string to be just past any possible multi-char
-         * fold. 'foldlen' is the length in bytes of the first
-         * character in 's'
+         * fold.
          *
          * Unlike the non-UTF-8 case, the macro for determining if a
          * string is a multi-char fold requires all the characters to
@@ -10361,33 +10343,29 @@ S__make_exactf_invlist(pTHX_ RExC_state_t *pRExC_state, regnode *node)
             invlist = _add_range_to_invlist(invlist, 0, UV_MAX);
         }
         else {  /* Single char fold */
+            unsigned int k;
+            unsigned int first_folds_to;
+            const unsigned int * remaining_folds_to_list;
+            Size_t folds_to_count;
 
-            /* It matches all the things that fold to it, which are
-             * found in PL_utf8_foldclosures (including itself) */
-            invlist = add_cp_to_invlist(invlist, uc);
-            if (! PL_utf8_foldclosures)
-                _load_PL_utf8_foldclosures();
-            if ((listp = hv_fetch(PL_utf8_foldclosures,
-                                (char *) s, foldlen, FALSE)))
-            {
-                AV* list = (AV*) *listp;
-                IV k;
-                for (k = 0; k <= av_tindex_skip_len_mg(list); k++) {
-                    SV** c_p = av_fetch(list, k, FALSE);
-                    UV c;
-                    assert(c_p);
+            /* It matches itself */
+            invlist = add_cp_to_invlist(invlist, fc);
 
-                    c = SvUV(*c_p);
+            /* ... plus all the things that fold to it, which are found in
+             * PL_utf8_foldclosures */
+            folds_to_count = _inverse_folds(fc, &first_folds_to,
+                                                &remaining_folds_to_list);
+            for (k = 0; k < folds_to_count; k++) {
+                UV c = (k == 0) ? first_folds_to : remaining_folds_to_list[k-1];
 
-                    /* /aa doesn't allow folds between ASCII and non- */
-                    if ((OP(node) == EXACTFAA || OP(node) == EXACTFAA_NO_TRIE)
-                        && isASCII(c) != isASCII(uc))
-                    {
-                        continue;
-                    }
-
-                    invlist = add_cp_to_invlist(invlist, c);
+                /* /aa doesn't allow folds between ASCII and non- */
+                if (   (OP(node) == EXACTFAA || OP(node) == EXACTFAA_NO_TRIE)
+                    && isASCII(c) != isASCII(fc))
+                {
+                    continue;
                 }
+
+                invlist = add_cp_to_invlist(invlist, c);
             }
         }
     }
@@ -13992,6 +13970,24 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                                 ender = 's';
                                 added_len = 2;
                             }
+                            else if (RExC_uni_semantics) {
+
+                                /* Here, we are supossed to be using Unicode
+                                 * rules, but this folding node is not.  This
+                                 * happens during pass 1 when the node started
+                                 * out not under Unicode rules, but a \N{} was
+                                 * encountered during the processing of it,
+                                 * causing Unicode rules to be switched into.
+                                 * Pass 1 continues uninterrupted, as by the
+                                 * time we get to pass 2, we will know enough
+                                 * to generate the correct folds.  Except in
+                                 * this one case, we need to restart the node,
+                                 * because the fold of the sharp s requires 2
+                                 * characters, and the sizing needs to account
+                                 * for that. */
+                                p = oldp;
+                                goto loopdone;
+                            }
                             else {
                                 RExC_seen_unfolded_sharp_s = 1;
                                 maybe_exactfu = FALSE;
@@ -14147,10 +14143,6 @@ S_regatom(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth)
                     len = s - s0 + 1;
 		}
                 else {
-                    if (!  PL_NonL1NonFinalFold) {
-                        PL_NonL1NonFinalFold = _new_invlist_C_array(
-                                        NonL1_Perl_Non_Final_Folds_invlist);
-                    }
 
                     /* Point to the first byte of the final character */
                     s = (char *) utf8_hop((U8 *) s, -1);
@@ -15717,7 +15709,7 @@ redo_curchar:
                  * fence.  Get rid of it */
                 fence_ptr = av_pop(fence_stack);
                 assert(fence_ptr);
-                fence = SvIV(fence_ptr) - 1;
+                fence = SvIV(fence_ptr);
                 SvREFCNT_dec_NN(fence_ptr);
                 fence_ptr = NULL;
 
@@ -16108,25 +16100,19 @@ S_dump_regex_sets_structures(pTHX_ RExC_state_t *pRExC_state,
 STATIC void
 S_add_above_Latin1_folds(pTHX_ RExC_state_t *pRExC_state, const U8 cp, SV** invlist)
 {
-    /* This hard-codes the Latin1/above-Latin1 folding rules, so that an
-     * innocent-looking character class, like /[ks]/i won't have to go out to
-     * disk to find the possible matches.
+    /* This adds the Latin1/above-Latin1 folding rules.
      *
      * This should be called only for a Latin1-range code points, cp, which is
      * known to be involved in a simple fold with other code points above
      * Latin1.  It would give false results if /aa has been specified.
      * Multi-char folds are outside the scope of this, and must be handled
-     * specially.
-     *
-     * XXX It would be better to generate these via regen, in case a new
-     * version of the Unicode standard adds new mappings, though that is not
-     * really likely, and may be caught by the default: case of the switch
-     * below. */
+     * specially. */
 
     PERL_ARGS_ASSERT_ADD_ABOVE_LATIN1_FOLDS;
 
     assert(HAS_NONLATIN1_SIMPLE_FOLD_CLOSURE(cp));
 
+    /* The rules that are valid for all Unicode versions are hard-coded in */
     switch (cp) {
         case 'k':
         case 'K':
@@ -16150,36 +16136,54 @@ S_add_above_Latin1_folds(pTHX_ RExC_state_t *pRExC_state, const U8 cp, SV** invl
                                         LATIN_CAPITAL_LETTER_Y_WITH_DIAERESIS);
             break;
 
-#ifdef LATIN_CAPITAL_LETTER_SHARP_S /* not defined in early Unicode releases */
+        default:    /* Other code points are checked against the data for the
+                       current Unicode version */
+          {
+            Size_t folds_to_count;
+            unsigned int first_folds_to;
+            const unsigned int * remaining_folds_to_list;
+            UV folded_cp;
 
-        case LATIN_SMALL_LETTER_SHARP_S:
-          *invlist = add_cp_to_invlist(*invlist, LATIN_CAPITAL_LETTER_SHARP_S);
-            break;
+            if (isASCII(cp)) {
+                folded_cp = toFOLD(cp);
+            }
+            else {
+                U8 dummy_fold[UTF8_MAXBYTES_CASE+1];
+                Size_t dummy_len;
+                folded_cp = _to_fold_latin1(cp, dummy_fold, &dummy_len, 0);
+            }
 
-#endif
+            if (folded_cp > 255) {
+                *invlist = add_cp_to_invlist(*invlist, folded_cp);
+            }
 
-#if    UNICODE_MAJOR_VERSION < 3                                        \
-   || (UNICODE_MAJOR_VERSION == 3 && UNICODE_DOT_VERSION == 0)
+            folds_to_count = _inverse_folds(folded_cp, &first_folds_to,
+                                                    &remaining_folds_to_list);
+            if (folds_to_count == 0) {
 
-        /* In 3.0 and earlier, U+0130 folded simply to 'i'; and in 3.0.1 so did
-         * U+0131.  */
-        case 'i':
-        case 'I':
-          *invlist =
-             add_cp_to_invlist(*invlist, LATIN_CAPITAL_LETTER_I_WITH_DOT_ABOVE);
-#   if UNICODE_DOT_DOT_VERSION == 1
-          *invlist = add_cp_to_invlist(*invlist, LATIN_SMALL_LETTER_DOTLESS_I);
-#   endif
-            break;
-#endif
+                /* Use deprecated warning to increase the chances of this being
+                 * output */
+                if (PASS2) {
+                    ckWARN2reg_d(RExC_parse,
+                        "Perl folding rules are not up-to-date for 0x%02X;"
+                        " please use the perlbug utility to report;", cp);
+                }
+            }
+            else {
+                unsigned int i;
 
-        default:
-            /* Use deprecated warning to increase the chances of this being
-             * output */
-            if (PASS2) {
-                ckWARN2reg_d(RExC_parse, "Perl folding rules are not up-to-date for 0x%02X; please use the perlbug utility to report;", cp);
+                if (first_folds_to > 255) {
+                    *invlist = add_cp_to_invlist(*invlist, first_folds_to);
+                }
+                for (i = 0; i < folds_to_count - 1; i++) {
+                    if (remaining_folds_to_list[i] > 255) {
+                        *invlist = add_cp_to_invlist(*invlist,
+                                                    remaining_folds_to_list[i]);
+                    }
+                }
             }
             break;
+         }
     }
 }
 
@@ -16706,6 +16710,8 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 	    case 'P':
 		{
 		char *e;
+                char *i;
+
 
                 /* We will handle any undefined properties ourselves */
                 U8 swash_init_flags = _CORE_SWASH_INIT_RETURN_IF_UNDEF
@@ -16715,6 +16721,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                                         * anyway, to save a little time */
                                       |_CORE_SWASH_INIT_ACCEPT_INVLIST;
 
+                SvREFCNT_dec(swash); /* Free any left-overs */
 		if (RExC_parse >= RExC_end)
 		    vFAIL2("Empty \\%c", (U8)value);
 		if (*RExC_parse == '{') {
@@ -16749,6 +16756,7 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 		    n = e - RExC_parse;
 		    while (isSPACE(*(RExC_parse + n - 1)))
 		        n--;
+
 		}   /* The \p isn't immediately followed by a '{' */
 		else if (! isALPHA(*RExC_parse)) {
                     RExC_parse += (UTF) ? UTF8SKIP(RExC_parse) : 1;
@@ -16761,11 +16769,19 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 		    n = 1;
 		}
 		if (!SIZE_ONLY) {
-                    SV* invlist;
-                    char* name;
+                    char* name = RExC_parse;
                     char* base_name;    /* name after any packages are stripped */
                     char* lookup_name = NULL;
                     const char * const colon_colon = "::";
+                    bool invert;
+
+                    SV* invlist = parse_uniprop_string(name, n, FOLD, &invert);
+                    if (invlist) {
+                        if (invert) {
+                            value ^= 'P' ^ 'p';
+                        }
+                    }
+                    else {
 
                     /* Try to get the definition of the property into
                      * <invlist>.  If /i is in effect, the effective property
@@ -16774,6 +16790,14 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                      * 2f833f5208e26b208886e51e09e2c072b5eabb46 */
                     name = savepv(Perl_form(aTHX_ "%.*s", (int)n, RExC_parse));
                     SAVEFREEPV(name);
+
+                    for (i = RExC_parse; i < RExC_parse + n; i++) {
+                        if (isCNTRL(*i) && *i != '\t') {
+                            RExC_parse = e + 1;
+                            vFAIL2("Can't find Unicode property definition \"%s\"", name);
+                        }
+                    }
+
                     if (FOLD) {
                         lookup_name = savepv(Perl_form(aTHX_ "__%s_i", name));
 
@@ -16784,7 +16808,6 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
 
                     /* Look up the property name, and get its swash and
                      * inversion list, if the property is found  */
-                    SvREFCNT_dec(swash); /* Free any left-overs */
                     swash = _core_swash_init("utf8",
                                              (lookup_name)
                                               ? lookup_name
@@ -16884,18 +16907,20 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                         {
                             has_user_defined_property = TRUE;
                         }
-                        else if
+                    }
+                    }
+                    if (invlist) {
+                        if (! has_user_defined_property &&
                             /* We warn on matching an above-Unicode code point
                              * if the match would return true, except don't
                              * warn for \p{All}, which has exactly one element
                              * = 0 */
                             (_invlist_contains_cp(invlist, 0x110000)
                                 && (! (_invlist_len(invlist) == 1
-                                       && *invlist_array(invlist) == 0)))
+                                       && *invlist_array(invlist) == 0))))
                         {
                             warn_super = TRUE;
                         }
-
 
                         /* Invert if asking for the complement */
                         if (value == 'P') {
@@ -16906,14 +16931,20 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                             /* The swash can't be used as-is, because we've
 			     * inverted things; delay removing it to here after
 			     * have copied its invlist above */
-                            SvREFCNT_dec_NN(swash);
+                            if (! swash) {
+                                SvREFCNT_dec_NN(invlist);
+                            }
+                            SvREFCNT_dec(swash);
                             swash = NULL;
                         }
                         else {
                             _invlist_union(properties, invlist, &properties);
+                            if (! swash) {
+                                SvREFCNT_dec_NN(invlist);
+                            }
 			}
-		    }
-		}
+                    }
+                }
 		RExC_parse = e + 1;
                 namedclass = ANYOF_UNIPROP;  /* no official name, but it's
                                                 named */
@@ -17882,27 +17913,20 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
             _invlist_intersection(PL_utf8_foldable, cp_foldable_list,
                                   &fold_intersection);
 
-            /* The folds for all the Latin1 characters are hard-coded into this
-             * program, but we have to go out to disk to get the others. */
-            if (invlist_highest(cp_foldable_list) >= 256) {
-
-                /* This is a hash that for a particular fold gives all
-                 * characters that are involved in it */
-                if (! PL_utf8_foldclosures) {
-                    _load_PL_utf8_foldclosures();
-                }
-            }
-
             /* Now look at the foldable characters in this class individually */
             invlist_iterinit(fold_intersection);
             while (invlist_iternext(fold_intersection, &start, &end)) {
                 UV j;
+                UV folded;
 
                 /* Look at every character in the range */
                 for (j = start; j <= end; j++) {
                     U8 foldbuf[UTF8_MAXBYTES_CASE+1];
                     STRLEN foldlen;
-                    SV** listp;
+                    unsigned int k;
+                    Size_t folds_to_count;
+                    unsigned int first_folds_to;
+                    const unsigned int * remaining_folds_to_list;
 
                     if (j < 256) {
 
@@ -17937,57 +17961,51 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, I32 *flagp, U32 depth,
                      * rules hard-coded for it.  First, get its fold.  This is
                      * the simple fold, as the multi-character folds have been
                      * handled earlier and separated out */
-                    _to_uni_fold_flags(j, foldbuf, &foldlen,
+                    folded = _to_uni_fold_flags(j, foldbuf, &foldlen,
                                                         (ASCII_FOLD_RESTRICTED)
                                                         ? FOLD_FLAGS_NOMIX_ASCII
                                                         : 0);
 
-                    /* Single character fold of above Latin1.  Add everything in
-                    * its fold closure to the list that this node should match.
-                    * The fold closures data structure is a hash with the keys
-                    * being the UTF-8 of every character that is folded to, like
-                    * 'k', and the values each an array of all code points that
-                    * fold to its key.  e.g. [ 'k', 'K', KELVIN_SIGN ].
-                    * Multi-character folds are not included */
-                    if ((listp = hv_fetch(PL_utf8_foldclosures,
-                                        (char *) foldbuf, foldlen, FALSE)))
-                    {
-                        AV* list = (AV*) *listp;
-                        IV k;
-                        for (k = 0; k <= av_tindex_skip_len_mg(list); k++) {
-                            SV** c_p = av_fetch(list, k, FALSE);
-                            UV c;
-                            assert(c_p);
+                    /* Single character fold of above Latin1.  Add everything
+                     * in its fold closure to the list that this node should
+                     * match. */
+                    folds_to_count = _inverse_folds(folded, &first_folds_to,
+                                                    &remaining_folds_to_list);
+                    for (k = 0; k <= folds_to_count; k++) {
+                        UV c = (k == 0)     /* First time through use itself */
+                                ? folded
+                                : (k == 1)  /* 2nd time use, the first fold */
+                                   ? first_folds_to
 
-                            c = SvUV(*c_p);
+                                     /* Then the remaining ones */
+                                   : remaining_folds_to_list[k-2];
 
-                            /* /aa doesn't allow folds between ASCII and non- */
-                            if ((ASCII_FOLD_RESTRICTED
-                                && (isASCII(c) != isASCII(j))))
-                            {
-                                continue;
-                            }
+                        /* /aa doesn't allow folds between ASCII and non- */
+                        if ((   ASCII_FOLD_RESTRICTED
+                            && (isASCII(c) != isASCII(j))))
+                        {
+                            continue;
+                        }
 
-                            /* Folds under /l which cross the 255/256 boundary
-                             * are added to a separate list.  (These are valid
-                             * only when the locale is UTF-8.) */
-                            if (c < 256 && LOC) {
-                                *use_list = add_cp_to_invlist(*use_list, c);
-                                continue;
-                            }
+                        /* Folds under /l which cross the 255/256 boundary are
+                         * added to a separate list.  (These are valid only
+                         * when the locale is UTF-8.) */
+                        if (c < 256 && LOC) {
+                            *use_list = add_cp_to_invlist(*use_list, c);
+                            continue;
+                        }
 
-                            if (isASCII(c) || c > 255 || AT_LEAST_UNI_SEMANTICS)
-                            {
-                                cp_list = add_cp_to_invlist(cp_list, c);
-                            }
-                            else {
-                                /* Similarly folds involving non-ascii Latin1
-                                * characters under /d are added to their list */
-                                has_upper_latin1_only_utf8_matches
-                                        = add_cp_to_invlist(
-                                           has_upper_latin1_only_utf8_matches,
-                                           c);
-                            }
+                        if (isASCII(c) || c > 255 || AT_LEAST_UNI_SEMANTICS)
+                        {
+                            cp_list = add_cp_to_invlist(cp_list, c);
+                        }
+                        else {
+                            /* Similarly folds involving non-ascii Latin1
+                             * characters under /d are added to their list */
+                            has_upper_latin1_only_utf8_matches
+                                = add_cp_to_invlist(
+                                            has_upper_latin1_only_utf8_matches,
+                                            c);
                         }
                     }
                 }

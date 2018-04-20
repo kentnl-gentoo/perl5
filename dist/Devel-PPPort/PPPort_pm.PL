@@ -293,9 +293,9 @@ sub expand_pp_expr
          . "extern $proto;\n"
          . "#endif\n"
          . "\n"
-         . "$embed\n"
+         . "#if defined(NEED_$func) || defined(NEED_${func}_GLOBAL)\n"
          . "\n"
-         . "#if defined(NEED_$func) || defined(NEED_${func}_GLOBAL)";
+         . "$embed\n";
   }
 
   die "cannot expand preprocessor expression '$expr'\n";
@@ -492,8 +492,8 @@ __UNSUPPORTED_API__
 =head1 BUGS
 
 If you find any bugs, C<Devel::PPPort> doesn't seem to build on your
-system, or any of its tests fail, please file an issue here:
-L<https://github.com/mhx/Devel-PPPort/issues/>
+system, or any of its tests fail, please send a bug report to
+L<perlbug@perl.org|mailto:perlbug@perl.org>.
 
 =head1 AUTHORS
 
@@ -539,7 +539,7 @@ package Devel::PPPort;
 use strict;
 use vars qw($VERSION $data);
 
-$VERSION = '3.39';
+$VERSION = '3.40';
 
 sub _init_data
 {

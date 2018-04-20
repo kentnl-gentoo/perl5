@@ -244,7 +244,8 @@ cpan/Config-Perl-V/t/28_plv52201w.t		Config::Perl::V
 cpan/Config-Perl-V/t/29_plv5235w.t		Config::Perl::V
 cpan/Config-Perl-V/t/30_plv5240.t		Config::Perl::V
 cpan/Config-Perl-V/t/31_plv52511.t		Config::Perl::V
-cpan/Config-Perl-V/t/32_plv5261rc1.t
+cpan/Config-Perl-V/t/32_plv5261rc1.t		Config::Perl::V
+cpan/Config-Perl-V/t/33_plv52711r.t		Config::Perl::V
 cpan/Config-Perl-V/V.pm				Config::Perl::V
 cpan/CPAN/lib/App/Cpan.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN.pm			Interface to Comprehensive Perl Archive Network
@@ -2988,7 +2989,6 @@ dist/Carp/t/Carp_overloadless.t		See if Carp handles overloads that dont use ove
 dist/Carp/t/errno.t		See if Carp preserves $! and $^E
 dist/Carp/t/heavy.t		See if Carp::Heavy works
 dist/Carp/t/heavy_mismatch.t		See if Carp::Heavy catches version mismatch
-dist/Carp/t/rt52610_crash.t		Test that we can gracefully handle serializing the stack with stack-refcounting bugs
 dist/Carp/t/stack_after_err.t	Test stack traces after syntax errors
 dist/Carp/t/stash_deletion.t		See if Carp handles stash deletion
 dist/Carp/t/swash.t		See if Carp avoids breaking swash loading
@@ -5064,9 +5064,12 @@ pod/perl5240delta.pod		Perl changes in version 5.24.0
 pod/perl5241delta.pod		Perl changes in version 5.24.1
 pod/perl5242delta.pod		Perl changes in version 5.24.2
 pod/perl5243delta.pod		Perl changes in version 5.24.3
+pod/perl5244delta.pod		Perl changes in version 5.24.4
 pod/perl5260delta.pod		Perl changes in version 5.26.0
 pod/perl5261delta.pod		Perl changes in version 5.26.1
+pod/perl5262delta.pod		Perl changes in version 5.26.2
 pod/perl5270delta.pod		Perl changes in version 5.27.0
+pod/perl52710delta.pod		Perl changes in version 5.27.10
 pod/perl5271delta.pod		Perl changes in version 5.27.1
 pod/perl5272delta.pod		Perl changes in version 5.27.2
 pod/perl5273delta.pod		Perl changes in version 5.27.3
@@ -5322,6 +5325,7 @@ regen/mg_vtable.pl		generate mg_vtable.h
 regen/miniperlmain.pl		generate miniperlmain.c
 regen/mk_invlists.pl		Generates charclass_invlists.h
 regen/mk_PL_charclass.pl	Populate the PL_charclass table
+regen/mph.pl			Generate perfect hashes
 regen/op_private		Definitions of bits in an OP's op_private field
 regen/opcode.pl			Opcode header generator
 regen/opcodes			Opcode data
@@ -6065,6 +6069,7 @@ toke.c				The tokener
 uconfig.h			Configuration header for microperl
 uconfig.sh			Configuration script for microperl
 uconfig64.sh			Configuration script for microperl for LP64
+uni_keywords.h			Map unicode property names to numbers
 unicode_constants.h		compile-time macros for Unicode code points
 universal.c			The default UNIVERSAL package methods
 unixish.h			Defines that are assumed on Unix

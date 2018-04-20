@@ -17,6 +17,17 @@ Consult your favorite dictionary for details.
 
 =head1 EPIGRAPHS
 
+=head2 v5.27.10 - Robert A. Heinlein, Time Enough for Love, p. 248
+
+L<Announced on 2018-03-20 by Todd Rinaldo|https://www.nntp.perl.org/group/perl.perl5.porters/2018/03/msg250042.html>
+
+  A human being should be able to change a diaper, plan an invasion, butcher
+  a hog, conn a ship, design a building, write a sonnet, balance accounts,
+  build a wall, set a bone, comfort the dying, take orders, give orders,
+  cooperate, act alone, solve equations, analyze a new problem, pitch manure,
+  program a computer, cook a tasty meal, fight efficiently, die gallantly.
+  Specialization is for insects.
+
 =head2 v5.27.9 - Agatha Christie, "The Mysterious Affair at Styles"
 
 L<Announced on 2018-02-20 by Renee Bäcker|https://www.nntp.perl.org/group/perl.perl5.porters/2018/02/msg249549.html>
@@ -245,6 +256,34 @@ L<Announced on 2017-05-31 by Sawyer X|http://www.nntp.perl.org/group/perl.perl5.
   pleasure brings no happiness, but only a deeper despair.
 
     -- Bertrand Russell, The Road to Happiness
+
+=head2 v5.26.2 - Desmond Morris, "Catwatching: The Essential Guide to Cat Behaviour"
+
+L<Announced on 2018-04-14 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2018/04/msg250440.html>
+
+How does a cat use its whiskers?  The usual answer is that the whiskers
+are feelers that enable a cat to tell whether a gap is wide enough for
+it to squeeze through, but the truth is more complicated and more
+remarkable.  In addition to their obvious role as feelers sensitive to
+touch, the whiskers also operate as air-current detectors.  As the cat
+moves along in the dark it needs to manoeuvre past solid objects without
+touching them.  Each solid object it approaches causes slight eddies in
+the air, minute disturbances in the currents of air movements, and the
+cat's whiskers are so amazingly sensitive that they can read these air
+changes and respond to the presence of solid obstacles even without
+touching them.
+
+=head2 v5.26.2-RC1 - Desmond Morris, "Catwatching: The Essential Guide to Cat Behaviour"
+
+L<Announced on 2018-03-24 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2018/03/msg250103.html>
+
+Cats have a way of endearing themselves to their owners, not just by
+their 'kittenoid' behaviour, which stimulates strong parental feelings,
+but also by their sheer gracefulness. There is an elegance and a
+composure about them that captivates the human eye. To the sensitive
+human being it becomes a privilege to share a room with a cat, exchange
+its glance, feel its greeting rub, or watch it gently luxuriate itself
+into a snoozing ball on a soft cushion.
 
 =head2 v5.26.1 - Samuel Taylor Coleridge, "The Rime of the Ancient Mariner"
 
@@ -533,6 +572,32 @@ L<Announced on 2016-05-09 by Ricardo Signes|http://www.nntp.perl.org/group/perl.
     Wide fields of asphodel fore’er,
   To find that the utmost reward
     Of daring should be still to dare.
+
+=head2 v5.24.4 - Desmond Morris, "Catwatching: The Essential Guide to Cat Behaviour"
+
+L<Announced on 2018-04-14 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2018/04/msg250439.html>
+
+Cats hate doors.  Doors simply do not register in the evolutionary story
+of the cat family.  They constantly block patrolling activities and
+prevent cats from exploring their home range and then returning to their
+central, secure base at will.  Humans often do not understand that a cat
+needs to make only a brief survey of its territory before returning with
+all the necessary information about the activities of other cats in the
+vicinity.  It likes to make these tours of inspection at frequent
+intervals, but does not want to stay outside for very long, unless there
+has been some special and unexpected change in the condition of the
+local feline population.
+
+=head2 v5.24.4-RC1 - Desmond Morris, "Catwatching: The Essential Guide to Cat Behaviour"
+
+L<Announced on 2018-03-24 by Steve Hay|http://www.nntp.perl.org/group/perl.perl5.porters/2018/03/msg250102.html>
+
+The domestic cat is a contradiction. No animal has developed such an
+intimate relationship with mankind, while at the same time demanding and
+getting such independence of movement and action. The dog may be man's
+best friend, but it is rarely allowed out on its own to wander from
+garden to garden or street to street. The obedient dog has to be taken
+for a walk. The headstrong cat walks alone.
 
 =head2 v5.24.3 - Samuel Taylor Coleridge, "The Rime of the Ancient Mariner"
 

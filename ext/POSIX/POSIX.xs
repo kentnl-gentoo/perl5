@@ -1897,8 +1897,9 @@ getattr(termios_ref, fd = 0)
     OUTPUT:
 	RETVAL
 
-# If we define TCSANOW here then both a found and not found constant sub
-# are created causing a Constant subroutine TCSANOW redefined warning
+    # If we define TCSANOW here then both a found and not found constant sub
+    # are created causing a Constant subroutine TCSANOW redefined warning
+
 #ifndef TCSANOW
 #  define DEF_SETATTR_ACTION 0
 #else
@@ -2128,7 +2129,7 @@ localeconv()
    && defined(HAS_POSIX_2008_LOCALE)                                    \
    && defined(HAS_LOCALECONV_L) /* Prefer this thread-safe version */
         bool do_free = FALSE;
-        locale_t cur;
+        locale_t cur = NULL;
 #  elif defined(TS_W32_BROKEN_LOCALECONV)
         const char * save_global;
         const char * save_thread;

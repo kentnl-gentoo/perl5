@@ -205,8 +205,14 @@ END_EXTERN_C
 #define PL_timesbase		(*Perl_Gtimesbase_ptr(NULL))
 #undef  PL_use_safe_putenv
 #define PL_use_safe_putenv	(*Perl_Guse_safe_putenv_ptr(NULL))
+#undef  PL_utf8_charname_begin
+#define PL_utf8_charname_begin	(*Perl_Gutf8_charname_begin_ptr(NULL))
+#undef  PL_utf8_charname_continue
+#define PL_utf8_charname_continue	(*Perl_Gutf8_charname_continue_ptr(NULL))
 #undef  PL_utf8_foldable
 #define PL_utf8_foldable	(*Perl_Gutf8_foldable_ptr(NULL))
+#undef  PL_utf8_foldclosures
+#define PL_utf8_foldclosures	(*Perl_Gutf8_foldclosures_ptr(NULL))
 #undef  PL_utf8_idcont
 #define PL_utf8_idcont		(*Perl_Gutf8_idcont_ptr(NULL))
 #undef  PL_utf8_idstart
@@ -215,6 +221,16 @@ END_EXTERN_C
 #define PL_utf8_perl_idcont	(*Perl_Gutf8_perl_idcont_ptr(NULL))
 #undef  PL_utf8_perl_idstart
 #define PL_utf8_perl_idstart	(*Perl_Gutf8_perl_idstart_ptr(NULL))
+#undef  PL_utf8_tofold
+#define PL_utf8_tofold		(*Perl_Gutf8_tofold_ptr(NULL))
+#undef  PL_utf8_tolower
+#define PL_utf8_tolower		(*Perl_Gutf8_tolower_ptr(NULL))
+#undef  PL_utf8_tosimplefold
+#define PL_utf8_tosimplefold	(*Perl_Gutf8_tosimplefold_ptr(NULL))
+#undef  PL_utf8_totitle
+#define PL_utf8_totitle		(*Perl_Gutf8_totitle_ptr(NULL))
+#undef  PL_utf8_toupper
+#define PL_utf8_toupper		(*Perl_Gutf8_toupper_ptr(NULL))
 #undef  PL_utf8_xidcont
 #define PL_utf8_xidcont		(*Perl_Gutf8_xidcont_ptr(NULL))
 #undef  PL_utf8_xidstart

@@ -229,7 +229,7 @@ extensions=''
 known_extensions=''
 nonxs_ext=''
 static_ext=''
-usei18n_lang=''
+uselanginfo=''
 useopcode=''
 useposix=''
 extras=''
@@ -873,6 +873,7 @@ d_strlcat=''
 d_strlcpy=''
 d_strnlen=''
 d_strtod=''
+d_strtod_l=''
 d_strtol=''
 d_strtold=''
 d_strtold_l=''
@@ -1465,12 +1466,12 @@ ignore_versioned_solibs=''
 ccname=''
 ccversion=''
 perllibs=''
-: set usei18n_lang=false in your hint file to disable the I18N_Langinfo extension.
-usei18n_lang=true
 : set useposix=false in your hint file to disable the POSIX extension.
 useposix=true
 : set useopcode=false in your hint file to disable the Opcode extension.
 useopcode=true
+: set uselanginfo=false in your hint file to disable the I18N::Langinfo extension.
+uselanginfo=true
 archname64=''
 ccflags_uselargefiles=''
 ldflags_uselargefiles=''
@@ -3509,8 +3510,8 @@ EOM
 			;;
 		nonstop-ux) osname=nonstopux ;;
 		openbsd) osname=openbsd
-                	osvers="$3"
-                	;;
+			osvers="$3"
+			;;
 		os2)	osname=os2
 			osvers="$4"
 			;;
@@ -5209,7 +5210,7 @@ EOM
 rp='Try to use long doubles if available?'
 . ./myread
 case "$ans" in
-y|Y) 	val="$define"	;;
+y|Y)	val="$define"	;;
 *)      val="$undef"	;;
 esac
 set uselongdouble
@@ -7797,7 +7798,6 @@ EOM
 	;;
 esac
 
-
 : determine whether to use malloc wrapping
 echo " "
 case "$usemallocwrap" in
@@ -8961,8 +8961,8 @@ if (echo hi >$first) 2>/dev/null; then
 		echo 'You cannot have filenames longer than 14 characters.  Sigh.' >&4
 		val="$undef"
 	else
- 		echo 'You can have filenames longer than 14 characters.'>&4
- 		val="$define"
+		echo 'You can have filenames longer than 14 characters.'>&4
+		val="$define"
 	fi
 else
 	$cat <<'EOM'
@@ -9207,7 +9207,7 @@ case "$myhostname" in
 			$test -s hosts
 		} || {
 			test "X$hostcat" != "X" &&
-		     	$hostcat | $sed -n -e "s/[	 ]*#.*//; s/\$/ /
+			$hostcat | $sed -n -e "s/[	 ]*#.*//; s/\$/ /
 					/[	 ]$myhostname[	. ]/p" > hosts
 		}
 		tmp_re="[	. ]"
@@ -9240,7 +9240,7 @@ case "$myhostname" in
 				.) dflt=.`$sed -n -e 's/	/ /g' \
 				     -e 's/^domain  *\([^ ]*\).*/\1/p' $tans \
 				     -e 1q 2>/dev/null`
-  					;;
+					;;
 				esac
 			fi
 			;;
@@ -9649,7 +9649,6 @@ esac
 set usefaststdio
 eval $setvar
 
-
 : define an is-a-typedef? function
 typedef='type=$1; var=$2; def=$3; shift; shift; shift; inclist=$@;
 case "$inclist" in
@@ -9812,8 +9811,8 @@ EOM
    rp='Try to understand large files, if available?'
    . ./myread
    case "$ans" in
-   y|Y) 	val="$define" ;;
-   *)   	val="$undef"  ;;
+   y|Y)	val="$define" ;;
+   *)	val="$undef"  ;;
    esac
    ;;
 esac
@@ -10925,7 +10924,7 @@ case "$d_asctime_r" in
 	esac
 	case "$asctime_r_proto" in
 	''|0)	d_asctime_r=undef
- 	        asctime_r_proto=0
+		asctime_r_proto=0
 		echo "Disabling asctime_r, cannot determine prototype." >&4 ;;
 	* )	case "$asctime_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -11002,8 +11001,15 @@ $cat >attrib.c <<EOCP
 #ifdef I_STDLIB
 #include <stdlib.h>
 #endif
+#$i_inttypes I_INTTYPES
+#ifdef I_INTTYPES
+#include <inttypes.h>
+#endif
+#ifndef INTPTR_MAX
+#define intptr_t int
+#endif
 int null_printf (char* pat,...) __attribute__((__format__(__printf__,1,2)));
-int null_printf (char* pat,...) { return (int)pat; }
+int null_printf (char* pat,...) { return (int)(intptr_t)pat; }
 int main () { exit(null_printf(NULL)); }
 EOCP
 	if $cc $ccflags -o attrib attrib.c >attrib.out 2>&1 ; then
@@ -12045,7 +12051,6 @@ case "$d_cmsghdr_s" in
 *)              echo "No, it doesn't." ;;
 esac
 
-
 : check for const keyword
 echo " "
 echo 'Checking to see if your C compiler knows about "const"...' >&4
@@ -12142,7 +12147,7 @@ case "$d_crypt_r" in
 	esac
 	case "$crypt_r_proto" in
 	''|0)	d_crypt_r=undef
- 	        crypt_r_proto=0
+		crypt_r_proto=0
 		echo "Disabling crypt_r, cannot determine prototype." >&4 ;;
 	* )	case "$crypt_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -12199,7 +12204,7 @@ case "$d_ctermid_r" in
 	esac
 	case "$ctermid_r_proto" in
 	''|0)	d_ctermid_r=undef
- 	        ctermid_r_proto=0
+		ctermid_r_proto=0
 		echo "Disabling ctermid_r, cannot determine prototype." >&4 ;;
 	* )	case "$ctermid_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -12252,7 +12257,7 @@ case "$d_ctime_r" in
 	esac
 	case "$ctime_r_proto" in
 	''|0)	d_ctime_r=undef
- 	        ctime_r_proto=0
+		ctime_r_proto=0
 		echo "Disabling ctime_r, cannot determine prototype." >&4 ;;
 	* )	case "$ctime_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -12620,7 +12625,7 @@ case "$d_drand48_r" in
 	esac
 	case "$drand48_r_proto" in
 	''|0)	d_drand48_r=undef
- 	        drand48_r_proto=0
+		drand48_r_proto=0
 		echo "Disabling drand48_r, cannot determine prototype." >&4 ;;
 	* )	case "$drand48_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -12652,6 +12657,30 @@ eval $inlibc
 
 : see if dup3 exists
 set dup3 d_dup3
+eval $inlibc
+
+: see if this is an xlocale.h system
+set xlocale.h i_xlocale
+eval $inhdr
+
+: see if newlocale exists
+set newlocale d_newlocale
+eval $inlibc
+
+: see if freelocale exists
+set freelocale d_freelocale
+eval $inlibc
+
+: see if uselocale exists
+set uselocale d_uselocale
+eval $inlibc
+
+: see if duplocale exists
+set duplocale d_duplocale
+eval $inlibc
+
+: see if querylocale exists
+set querylocale d_querylocale
 eval $inlibc
 
 : see if eaccess exists
@@ -12711,7 +12740,7 @@ case "$d_endgrent_r" in
 	esac
 	case "$endgrent_r_proto" in
 	''|0)	d_endgrent_r=undef
- 	        endgrent_r_proto=0
+		endgrent_r_proto=0
 		echo "Disabling endgrent_r, cannot determine prototype." >&4 ;;
 	* )	case "$endgrent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -12764,7 +12793,7 @@ case "$d_endhostent_r" in
 	esac
 	case "$endhostent_r_proto" in
 	''|0)	d_endhostent_r=undef
- 	        endhostent_r_proto=0
+		endhostent_r_proto=0
 		echo "Disabling endhostent_r, cannot determine prototype." >&4 ;;
 	* )	case "$endhostent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -12813,7 +12842,7 @@ case "$d_endnetent_r" in
 	esac
 	case "$endnetent_r_proto" in
 	''|0)	d_endnetent_r=undef
- 	        endnetent_r_proto=0
+		endnetent_r_proto=0
 		echo "Disabling endnetent_r, cannot determine prototype." >&4 ;;
 	* )	case "$endnetent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -12862,7 +12891,7 @@ case "$d_endprotoent_r" in
 	esac
 	case "$endprotoent_r_proto" in
 	''|0)	d_endprotoent_r=undef
- 	        endprotoent_r_proto=0
+		endprotoent_r_proto=0
 		echo "Disabling endprotoent_r, cannot determine prototype." >&4 ;;
 	* )	case "$endprotoent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -12999,7 +13028,7 @@ case "$d_endpwent_r" in
 	esac
 	case "$endpwent_r_proto" in
 	''|0)	d_endpwent_r=undef
- 	        endpwent_r_proto=0
+		endpwent_r_proto=0
 		echo "Disabling endpwent_r, cannot determine prototype." >&4 ;;
 	* )	case "$endpwent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -13048,7 +13077,7 @@ case "$d_endservent_r" in
 	esac
 	case "$endservent_r_proto" in
 	''|0)	d_endservent_r=undef
- 	        endservent_r_proto=0
+		endservent_r_proto=0
 		echo "Disabling endservent_r, cannot determine prototype." >&4 ;;
 	* )	case "$endservent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -13634,7 +13663,7 @@ int main() {
 EOP
 	set try
 	if eval $compile && $to try.c; then
- 		case `$run ./try` in
+		case `$run ./try` in
 		Pass_changed)
 			echo "Increasing ptr in your stdio decreases cnt by the same amount.  Good." >&4
 			d_stdio_ptr_lval_sets_cnt="$define" ;;
@@ -13707,8 +13736,6 @@ case "$d_stdstdio:$d_stdio_ptr_lval" in
 esac
 set d_faststdio
 eval $setvar
-
-
 
 : see if fchdir exists
 set fchdir d_fchdir
@@ -14003,30 +14030,6 @@ $rm_try
 set d_fpos64_t
 eval $setvar
 
-: see if this is an xlocale.h system
-set xlocale.h i_xlocale
-eval $inhdr
-
-: see if newlocale exists
-set newlocale d_newlocale
-eval $inlibc
-
-: see if freelocale exists
-set freelocale d_freelocale
-eval $inlibc
-
-: see if uselocale exists
-set uselocale d_uselocale
-eval $inlibc
-
-: see if duplocale exists
-set duplocale d_duplocale
-eval $inlibc
-
-: see if querylocale exists
-set querylocale d_querylocale
-eval $inlibc
-
 : see if frexpl exists
 set frexpl d_frexpl
 eval $inlibc
@@ -14071,7 +14074,6 @@ eval $inlibc
 : see if fstatvfs exists
 set fstatvfs d_fstatvfs
 eval $inlibc
-
 
 : see if fsync exists
 set fsync d_fsync
@@ -14261,7 +14263,7 @@ case "$d_getgrent_r" in
 	esac
 	case "$getgrent_r_proto" in
 	''|0)	d_getgrent_r=undef
- 	        getgrent_r_proto=0
+		getgrent_r_proto=0
 		echo "Disabling getgrent_r, cannot determine prototype." >&4 ;;
 	* )	case "$getgrent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -14314,7 +14316,7 @@ case "$d_getgrgid_r" in
 	esac
 	case "$getgrgid_r_proto" in
 	''|0)	d_getgrgid_r=undef
- 	        getgrgid_r_proto=0
+		getgrgid_r_proto=0
 		echo "Disabling getgrgid_r, cannot determine prototype." >&4 ;;
 	* )	case "$getgrgid_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -14371,7 +14373,7 @@ case "$d_getgrnam_r" in
 	esac
 	case "$getgrnam_r_proto" in
 	''|0)	d_getgrnam_r=undef
- 	        getgrnam_r_proto=0
+		getgrnam_r_proto=0
 		echo "Disabling getgrnam_r, cannot determine prototype." >&4 ;;
 	* )	case "$getgrnam_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -14549,7 +14551,7 @@ case "$d_gethostbyaddr_r" in
 	esac
 	case "$gethostbyaddr_r_proto" in
 	''|0)	d_gethostbyaddr_r=undef
- 	        gethostbyaddr_r_proto=0
+		gethostbyaddr_r_proto=0
 		echo "Disabling gethostbyaddr_r, cannot determine prototype." >&4 ;;
 	* )	case "$gethostbyaddr_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -14598,7 +14600,7 @@ case "$d_gethostbyname_r" in
 	esac
 	case "$gethostbyname_r_proto" in
 	''|0)	d_gethostbyname_r=undef
- 	        gethostbyname_r_proto=0
+		gethostbyname_r_proto=0
 		echo "Disabling gethostbyname_r, cannot determine prototype." >&4 ;;
 	* )	case "$gethostbyname_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -14659,7 +14661,7 @@ case "$d_gethostent_r" in
 	esac
 	case "$gethostent_r_proto" in
 	''|0)	d_gethostent_r=undef
- 	        gethostent_r_proto=0
+		gethostent_r_proto=0
 		echo "Disabling gethostent_r, cannot determine prototype." >&4 ;;
 	* )	case "$gethostent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -14725,7 +14727,7 @@ case "$d_getlogin_r" in
 	esac
 	case "$getlogin_r_proto" in
 	''|0)	d_getlogin_r=undef
- 	        getlogin_r_proto=0
+		getlogin_r_proto=0
 		echo "Disabling getlogin_r, cannot determine prototype." >&4 ;;
 	* )	case "$getlogin_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -14818,7 +14820,7 @@ case "$d_getnetbyaddr_r" in
 	esac
 	case "$getnetbyaddr_r_proto" in
 	''|0)	d_getnetbyaddr_r=undef
- 	        getnetbyaddr_r_proto=0
+		getnetbyaddr_r_proto=0
 		echo "Disabling getnetbyaddr_r, cannot determine prototype." >&4 ;;
 	* )	case "$getnetbyaddr_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -14871,7 +14873,7 @@ case "$d_getnetbyname_r" in
 	esac
 	case "$getnetbyname_r_proto" in
 	''|0)	d_getnetbyname_r=undef
- 	        getnetbyname_r_proto=0
+		getnetbyname_r_proto=0
 		echo "Disabling getnetbyname_r, cannot determine prototype." >&4 ;;
 	* )	case "$getnetbyname_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -14932,7 +14934,7 @@ case "$d_getnetent_r" in
 	esac
 	case "$getnetent_r_proto" in
 	''|0)	d_getnetent_r=undef
- 	        getnetent_r_proto=0
+		getnetent_r_proto=0
 		echo "Disabling getnetent_r, cannot determine prototype." >&4 ;;
 	* )	case "$getnetent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -15020,7 +15022,7 @@ case "$d_getprotobyname_r" in
 	esac
 	case "$getprotobyname_r_proto" in
 	''|0)	d_getprotobyname_r=undef
- 	        getprotobyname_r_proto=0
+		getprotobyname_r_proto=0
 		echo "Disabling getprotobyname_r, cannot determine prototype." >&4 ;;
 	* )	case "$getprotobyname_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -15069,7 +15071,7 @@ case "$d_getprotobynumber_r" in
 	esac
 	case "$getprotobynumber_r_proto" in
 	''|0)	d_getprotobynumber_r=undef
- 	        getprotobynumber_r_proto=0
+		getprotobynumber_r_proto=0
 		echo "Disabling getprotobynumber_r, cannot determine prototype." >&4 ;;
 	* )	case "$getprotobynumber_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -15122,7 +15124,7 @@ case "$d_getprotoent_r" in
 	esac
 	case "$getprotoent_r_proto" in
 	''|0)	d_getprotoent_r=undef
- 	        getprotoent_r_proto=0
+		getprotoent_r_proto=0
 		echo "Disabling getprotoent_r, cannot determine prototype." >&4 ;;
 	* )	case "$getprotoent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -15196,7 +15198,7 @@ case "$d_getpwent_r" in
 	esac
 	case "$getpwent_r_proto" in
 	''|0)	d_getpwent_r=undef
- 	        getpwent_r_proto=0
+		getpwent_r_proto=0
 		echo "Disabling getpwent_r, cannot determine prototype." >&4 ;;
 	* )	case "$getpwent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -15249,7 +15251,7 @@ case "$d_getpwnam_r" in
 	esac
 	case "$getpwnam_r_proto" in
 	''|0)	d_getpwnam_r=undef
- 	        getpwnam_r_proto=0
+		getpwnam_r_proto=0
 		echo "Disabling getpwnam_r, cannot determine prototype." >&4 ;;
 	* )	case "$getpwnam_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -15302,7 +15304,7 @@ case "$d_getpwuid_r" in
 	esac
 	case "$getpwuid_r_proto" in
 	''|0)	d_getpwuid_r=undef
- 	        getpwuid_r_proto=0
+		getpwuid_r_proto=0
 		echo "Disabling getpwuid_r, cannot determine prototype." >&4 ;;
 	* )	case "$getpwuid_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -15365,7 +15367,7 @@ case "$d_getservbyname_r" in
 	esac
 	case "$getservbyname_r_proto" in
 	''|0)	d_getservbyname_r=undef
- 	        getservbyname_r_proto=0
+		getservbyname_r_proto=0
 		echo "Disabling getservbyname_r, cannot determine prototype." >&4 ;;
 	* )	case "$getservbyname_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -15414,7 +15416,7 @@ case "$d_getservbyport_r" in
 	esac
 	case "$getservbyport_r_proto" in
 	''|0)	d_getservbyport_r=undef
- 	        getservbyport_r_proto=0
+		getservbyport_r_proto=0
 		echo "Disabling getservbyport_r, cannot determine prototype." >&4 ;;
 	* )	case "$getservbyport_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -15467,7 +15469,7 @@ case "$d_getservent_r" in
 	esac
 	case "$getservent_r_proto" in
 	''|0)	d_getservent_r=undef
- 	        getservent_r_proto=0
+		getservent_r_proto=0
 		echo "Disabling getservent_r, cannot determine prototype." >&4 ;;
 	* )	case "$getservent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -15525,7 +15527,7 @@ case "$d_getspnam_r" in
 	esac
 	case "$getspnam_r_proto" in
 	''|0)	d_getspnam_r=undef
- 	        getspnam_r_proto=0
+		getspnam_r_proto=0
 		echo "Disabling getspnam_r, cannot determine prototype." >&4 ;;
 	* )	case "$getspnam_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -15589,7 +15591,7 @@ case "$d_gmtime_r" in
 	esac
 	case "$gmtime_r_proto" in
 	''|0)	d_gmtime_r=undef
- 	        gmtime_r_proto=0
+		gmtime_r_proto=0
 		echo "Disabling gmtime_r, cannot determine prototype." >&4 ;;
 	* )	case "$gmtime_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -16008,7 +16010,7 @@ case "$d_localtime_r" in
 	esac
 	case "$localtime_r_proto" in
 	''|0)	d_localtime_r=undef
- 	        localtime_r_proto=0
+		localtime_r_proto=0
 		echo "Disabling localtime_r, cannot determine prototype." >&4 ;;
 	* )	case "$localtime_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -16232,8 +16234,6 @@ END
 	;;
 esac
 
-
-
 : see if sqrtl exists
 set sqrtl d_sqrtl
 eval $inlibc
@@ -16362,7 +16362,6 @@ case "$d_msghdr_s" in
 "$define")      echo "Yes, it does."   ;;
 *)              echo "No, it doesn't." ;;
 esac
-
 
 : see if msync exists
 set msync d_msync
@@ -17209,7 +17208,7 @@ case "$d_random_r" in
 	esac
 	case "$random_r_proto" in
 	''|0)	d_random_r=undef
- 	        random_r_proto=0
+		random_r_proto=0
 		echo "Disabling random_r, cannot determine prototype." >&4 ;;
 	* )	case "$random_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -17264,7 +17263,7 @@ case "$d_readdir64_r" in
 	esac
 	case "$readdir64_r_proto" in
 	''|0)	d_readdir64_r=undef
- 	        readdir64_r_proto=0
+		readdir64_r_proto=0
 		echo "Disabling readdir64_r, cannot determine prototype." >&4 ;;
 	* )	case "$readdir64_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -17309,7 +17308,7 @@ case "$d_readdir_r" in
 	esac
 	case "$readdir_r_proto" in
 	''|0)	d_readdir_r=undef
- 	        readdir_r_proto=0
+		readdir_r_proto=0
 		echo "Disabling readdir_r, cannot determine prototype." >&4 ;;
 	* )	case "$readdir_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -17583,21 +17582,31 @@ END
 extern int errno;
 #endif
 int main() {
-    struct semid_ds arg;
+    union semun
+#ifndef HAS_UNION_SEMUN
+    {
+	int val;
+	struct semid_ds *buf;
+	unsigned short *array;
+    }
+#endif
+    arg;
+    struct semid_ds argbuf;
     int sem, st;
 
 #if defined(IPC_PRIVATE) && defined(S_IRWXU) && defined(S_IRWXG) &&  defined(S_IRWXO) && defined(IPC_CREAT)
     sem = semget(IPC_PRIVATE, 1, S_IRWXU|S_IRWXG|S_IRWXO|IPC_CREAT);
     if (sem > -1) {
+	arg.buf = &argbuf;
 #	ifdef IPC_STAT
-	st = semctl(sem, 0, IPC_STAT, &arg);
+	st = semctl(sem, 0, IPC_STAT, arg);
 	if (st == 0)
 	    printf("semid_ds\n");
 	else
 #	endif /* IPC_STAT */
 	    printf("semctl IPC_STAT failed: errno = %d\n", errno);
 #	ifdef IPC_RMID
-	if (semctl(sem, 0, IPC_RMID, &arg) != 0)
+	if (semctl(sem, 0, IPC_RMID, arg) != 0)
 #	endif /* IPC_RMID */
 	    printf("semctl IPC_RMID failed: errno = %d\n", errno);
     } else
@@ -17681,7 +17690,7 @@ case "$d_setgrent_r" in
 	esac
 	case "$setgrent_r_proto" in
 	''|0)	d_setgrent_r=undef
- 	        setgrent_r_proto=0
+		setgrent_r_proto=0
 		echo "Disabling setgrent_r, cannot determine prototype." >&4 ;;
 	* )	case "$setgrent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -17730,7 +17739,7 @@ case "$d_sethostent_r" in
 	esac
 	case "$sethostent_r_proto" in
 	''|0)	d_sethostent_r=undef
- 	        sethostent_r_proto=0
+		sethostent_r_proto=0
 		echo "Disabling sethostent_r, cannot determine prototype." >&4 ;;
 	* )	case "$sethostent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -17787,7 +17796,7 @@ case "$d_setlocale_r" in
 	esac
 	case "$setlocale_r_proto" in
 	''|0)	d_setlocale_r=undef
- 	        setlocale_r_proto=0
+		setlocale_r_proto=0
 		echo "Disabling setlocale_r, cannot determine prototype." >&4 ;;
 	* )	case "$setlocale_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -17836,7 +17845,7 @@ case "$d_setnetent_r" in
 	esac
 	case "$setnetent_r_proto" in
 	''|0)	d_setnetent_r=undef
- 	        setnetent_r_proto=0
+		setnetent_r_proto=0
 		echo "Disabling setnetent_r, cannot determine prototype." >&4 ;;
 	* )	case "$setnetent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -17901,7 +17910,7 @@ case "$d_setprotoent_r" in
 	esac
 	case "$setprotoent_r_proto" in
 	''|0)	d_setprotoent_r=undef
- 	        setprotoent_r_proto=0
+		setprotoent_r_proto=0
 		echo "Disabling setprotoent_r, cannot determine prototype." >&4 ;;
 	* )	case "$setprotoent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -17950,7 +17959,7 @@ case "$d_setpwent_r" in
 	esac
 	case "$setpwent_r_proto" in
 	''|0)	d_setpwent_r=undef
- 	        setpwent_r_proto=0
+		setpwent_r_proto=0
 		echo "Disabling setpwent_r, cannot determine prototype." >&4 ;;
 	* )	case "$setpwent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -18019,7 +18028,7 @@ case "$d_setservent_r" in
 	esac
 	case "$setservent_r_proto" in
 	''|0)	d_setservent_r=undef
- 	        setservent_r_proto=0
+		setservent_r_proto=0
 		echo "Disabling setservent_r, cannot determine prototype." >&4 ;;
 	* )	case "$setservent_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -18453,7 +18462,7 @@ case "$d_srand48_r" in
 	esac
 	case "$srand48_r_proto" in
 	''|0)	d_srand48_r=undef
- 	        srand48_r_proto=0
+		srand48_r_proto=0
 		echo "Disabling srand48_r, cannot determine prototype." >&4 ;;
 	* )	case "$srand48_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -18494,7 +18503,7 @@ case "$d_srandom_r" in
 	esac
 	case "$srandom_r_proto" in
 	''|0)	d_srandom_r=undef
- 	        srandom_r_proto=0
+		srandom_r_proto=0
 		echo "Disabling srandom_r, cannot determine prototype." >&4 ;;
 	* )	case "$srandom_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -18556,7 +18565,6 @@ case "$d_statfs_s" in
 "$define")      echo "Yes, it does."   ;;
 *)              echo "No, it doesn't." ;;
 esac
-
 
 : see if struct statfs knows about f_flags
 case "$d_statfs_s" in
@@ -18687,7 +18695,7 @@ $cat >&4 <<EOM
 Checking how to access stdio streams by file descriptor number...
 EOM
 case "$stdio_stream_array" in
-'') 	$cat >try.c <<EOCP
+'')	$cat >try.c <<EOCP
 #include <stdio.h>
 int main() {
   if (&STDIO_STREAM_ARRAY[fileno(stdin)] == stdin)
@@ -18698,7 +18706,7 @@ EOCP
 	do
 	        set try -DSTDIO_STREAM_ARRAY=$s
 		if eval $compile; then
-		    	case "`$run ./try`" in
+			case "`$run ./try`" in
 			yes)	stdio_stream_array=$s; break ;;
 			esac
 		fi
@@ -18754,7 +18762,7 @@ case "$d_strerror_r" in
 	esac
 	case "$strerror_r_proto" in
 	''|0)	d_strerror_r=undef
- 	        strerror_r_proto=0
+		strerror_r_proto=0
 		echo "Disabling strerror_r, cannot determine prototype." >&4 ;;
 	* )	case "$strerror_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -18793,6 +18801,10 @@ eval $inlibc
 
 : see if strtod exists
 set strtod d_strtod
+eval $inlibc
+
+: see if strtod_l exists
+set strtod_l d_strtod_l
 eval $inlibc
 
 : see if strtol exists
@@ -18904,7 +18916,7 @@ EOCP
 	check("-1", 18446744073709551615UL, 0);
 	check("-18446744073709551614", 2, 0);
 	check("-18446744073709551615", 1, 0);
-       	check("-18446744073709551616", 18446744073709551615UL, ERANGE);
+	check("-18446744073709551616", 18446744073709551615UL, ERANGE);
 	check("-18446744073709551617", 18446744073709551615UL, ERANGE);
 #endif
 EOCP
@@ -18917,7 +18929,7 @@ EOCP
 	check("-1", 4294967295UL, 0);
 	check("-4294967294", 2, 0);
 	check("-4294967295", 1, 0);
-       	check("-4294967296", 4294967295UL, ERANGE);
+	check("-4294967296", 4294967295UL, ERANGE);
 	check("-4294967297", 4294967295UL, ERANGE);
 #endif
 EOCP
@@ -18983,7 +18995,7 @@ int main() {
 	check("-1",                    18446744073709551615ULL, 0);
 	check("-18446744073709551614",                     2LL, 0);
 	check("-18446744073709551615",                     1LL, 0);
-       	check("-18446744073709551616", 18446744073709551615ULL, ERANGE);
+	check("-18446744073709551616", 18446744073709551615ULL, ERANGE);
 	check("-18446744073709551617", 18446744073709551615ULL, ERANGE);
 #endif
 	if (!bad)
@@ -19037,7 +19049,7 @@ int main() {
 	check("-1",                    18446744073709551615ULL, 0);
 	check("-18446744073709551614",                     2LL, 0);
 	check("-18446744073709551615",                     1LL, 0);
-       	check("-18446744073709551616", 18446744073709551615ULL, ERANGE);
+	check("-18446744073709551616", 18446744073709551615ULL, ERANGE);
 	check("-18446744073709551617", 18446744073709551615ULL, ERANGE);
 #endif
 	if (!bad)
@@ -19264,7 +19276,7 @@ case "$d_tmpnam_r" in
 	esac
 	case "$tmpnam_r_proto" in
 	''|0)	d_tmpnam_r=undef
- 	        tmpnam_r_proto=0
+		tmpnam_r_proto=0
 		echo "Disabling tmpnam_r, cannot determine prototype." >&4 ;;
 	* )	case "$tmpnam_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -19321,7 +19333,7 @@ case "$d_ttyname_r" in
 	esac
 	case "$ttyname_r_proto" in
 	''|0)	d_ttyname_r=undef
- 	        ttyname_r_proto=0
+		ttyname_r_proto=0
 		echo "Disabling ttyname_r, cannot determine prototype." >&4 ;;
 	* )	case "$ttyname_r_proto" in
 		REENTRANT_PROTO*) ;;
@@ -20533,7 +20545,7 @@ if $test "X$fflushNULL" = X -o "X$fflushall" = X; then
 fi
 : check for fflush NULL behavior
 case "$fflushNULL" in
-'') 	set try -DTRY_FFLUSH_NULL $output
+'')	set try -DTRY_FFLUSH_NULL $output
 	if eval $compile; then
 		$run ./try 2>/dev/null
 		code="$?"
@@ -20667,7 +20679,7 @@ Good, at least fflush(stdin) seems to behave okay when stdin is a pipe.
 EOM
 		: now check for fflushall behaviour
 		case "$fflushall" in
-		'') 	set try -DTRY_FFLUSH_ALL $output
+		'')	set try -DTRY_FFLUSH_ALL $output
 			if eval $compile; then
 				$cat >&4 <<EOM
 (Now testing the other method--but note that this also may fail.)
@@ -20799,7 +20811,6 @@ else
 	echo "(I can't compile the test program--guessing $gidsize.)" >&4
 fi
 
-
 : Check if GID is signed
 echo " "
 case "$gidtype" in
@@ -20837,7 +20848,6 @@ else
 	echo "(I can't compile the test program--guessing unsigned.)" >&4
 fi
 
-
 : Check 64bit sizes
 echo " "
 
@@ -20860,7 +20870,7 @@ EOCP
 		case "$yyy" in
 		12345678901)
 			sPRId64='"d"'; sPRIi64='"i"'; sPRIu64='"u"';
-                	sPRIo64='"o"'; sPRIx64='"x"'; sPRIXU64='"X"';
+			sPRIo64='"o"'; sPRIx64='"x"'; sPRIXU64='"X"';
 			echo "We will use %d."
 			;;
 		esac
@@ -20882,7 +20892,7 @@ EOCP
 		case "$yyy" in
 		12345678901)
 			sPRId64='"ld"'; sPRIi64='"li"'; sPRIu64='"lu"';
-                	sPRIo64='"lo"'; sPRIx64='"lx"'; sPRIXU64='"lX"';
+			sPRIo64='"lo"'; sPRIx64='"lx"'; sPRIXU64='"lX"';
 			echo "We will use %ld."
 			;;
 		esac
@@ -20905,7 +20915,7 @@ EOCP
 		case "$yyy" in
 		12345678901)
 			sPRId64=PRId64; sPRIi64=PRIi64; sPRIu64=PRIu64;
-                	sPRIo64=PRIo64; sPRIx64=PRIx64; sPRIXU64=PRIXU64;
+			sPRIo64=PRIo64; sPRIx64=PRIx64; sPRIXU64=PRIXU64;
 			echo "We will use the C9X style."
 			;;
 		esac
@@ -20927,7 +20937,7 @@ EOCP
 		case "$yyy" in
 		12345678901)
 			sPRId64='"Ld"'; sPRIi64='"Li"'; sPRIu64='"Lu"';
-                	sPRIo64='"Lo"'; sPRIx64='"Lx"'; sPRIXU64='"LX"';
+			sPRIo64='"Lo"'; sPRIx64='"Lx"'; sPRIXU64='"LX"';
 			echo "We will use %Ld."
 			;;
 		esac
@@ -20949,7 +20959,7 @@ EOCP
 		case "$yyy" in
 		12345678901)
 			sPRId64='"lld"'; sPRIi64='"lli"'; sPRIu64='"llu"';
-                	sPRIo64='"llo"'; sPRIx64='"llx"'; sPRIXU64='"llX"';
+			sPRIo64='"llo"'; sPRIx64='"llx"'; sPRIXU64='"llX"';
 			echo "We will use the %lld style."
 			;;
 		esac
@@ -20971,7 +20981,7 @@ EOCP
 		case "$yyy" in
 		12345678901)
 			sPRId64='"qd"'; sPRIi64='"qi"'; sPRIu64='"qu"';
-                	sPRIo64='"qo"'; sPRIx64='"qx"'; sPRIXU64='"qX"';
+			sPRIo64='"qo"'; sPRIx64='"qx"'; sPRIXU64='"qX"';
 			echo "We will use %qd."
 			;;
 		esac
@@ -21983,17 +21993,17 @@ case "$doinit" in
 yes)
 	echo "Generating a list of signal names and numbers..." >&4
 	. ./signal_cmd
- 	sig_count=`$awk '/^NSIG/ { printf "%d", $2 }' signal.lst`
- 	sig_name=`$awk 'BEGIN { printf "ZERO " }
- 			!/^NSIG/ { printf "%s ", $1 }' signal.lst`
- 	sig_num=`$awk  'BEGIN { printf "0 " }
- 			!/^NSIG/ { printf "%d ", $2 }' signal.lst`
- 	sig_name_init=`$awk 'BEGIN	{ printf "\"ZERO\", " }
- 			     !/^NSIG/	{ printf "\"%s\", ", $1 }
- 			     END	{ printf "0\n" }' signal.lst`
- 	sig_num_init=`$awk  'BEGIN	{ printf "0, " }
- 			     !/^NSIG/	{ printf "%d, ", $2}
- 			     END	{ printf "0\n"}' signal.lst`
+	sig_count=`$awk '/^NSIG/ { printf "%d", $2 }' signal.lst`
+	sig_name=`$awk 'BEGIN { printf "ZERO " }
+			!/^NSIG/ { printf "%s ", $1 }' signal.lst`
+	sig_num=`$awk  'BEGIN { printf "0 " }
+			!/^NSIG/ { printf "%d ", $2 }' signal.lst`
+	sig_name_init=`$awk 'BEGIN	{ printf "\"ZERO\", " }
+			     !/^NSIG/	{ printf "\"%s\", ", $1 }
+			     END	{ printf "0\n" }' signal.lst`
+	sig_num_init=`$awk  'BEGIN	{ printf "0, " }
+			     !/^NSIG/	{ printf "%d, ", $2}
+			     END	{ printf "0\n"}' signal.lst`
 	;;
 esac
 echo "The following $sig_count signals are available:"
@@ -22051,7 +22061,6 @@ else
 	sizesize=4
 	echo "(I can't compile the test program--guessing $sizesize.)" >&4
 fi
-
 
 : check for socklen_t
 echo " "
@@ -22324,7 +22333,6 @@ else
 	uidsign=1
 	echo "(I can't compile the test program--guessing unsigned.)" >&4
 fi
-
 
 : Check format string for UID
 echo " "
@@ -22843,7 +22851,7 @@ cat <<'EOSH' >> Cppsym.try
     printf "#ifdef _%s\nprintf(\"_%s=%%s\\n\", STRINGIFY(_%s));\n#endif\n", $1, $1, $1
     printf "#ifdef __%s\nprintf(\"__%s=%%s\\n\", STRINGIFY(__%s));\n#endif\n", $1, $1, $1
     printf "#ifdef __%s__\nprintf(\"__%s__=%%s\\n\", STRINGIFY(__%s__));\n#endif\n", $1, $1, $1
-}'	 >> try.c
+}' >> try.c
 echo 'return 0;}' >> try.c
 EOSH
 cat <<EOSH >> Cppsym.try
@@ -23275,11 +23283,6 @@ for xxx in $xs_extensions ; do
 		$define) avail_ext="$avail_ext $xxx" ;;
 		esac
 		;;
-	I18N/Langinfo|i18n_lan)
-		case "$usei18n_lang" in
-		true|define|y) avail_ext="$avail_ext $xxx" ;;
-		esac
-		;;
 	IPC/SysV|ipc/sysv)
 		: XXX Do we need a useipcsysv variable here
 		case "${d_msg}${d_sem}${d_shm}" in
@@ -23331,6 +23334,11 @@ for xxx in $xs_extensions ; do
 	Socket|socket)
 		case "$d_socket" in
 		true|$define|y) avail_ext="$avail_ext $xxx" ;;
+		esac
+		;;
+	I18N/Langinfo|langinfo)
+		case "$uselanginfo" in
+		true|define|y) avail_ext="$avail_ext $xxx" ;;
 		esac
 		;;
 	Sys/Syslog|sys/syslog)
@@ -24257,6 +24265,7 @@ d_strlcat='$d_strlcat'
 d_strlcpy='$d_strlcpy'
 d_strnlen='$d_strnlen'
 d_strtod='$d_strtod'
+d_strtod_l='$d_strtod_l'
 d_strtol='$d_strtol'
 d_strtold='$d_strtold'
 d_strtold_l='$d_strtold_l'
@@ -24823,9 +24832,9 @@ usedevel='$usedevel'
 usedl='$usedl'
 usedtrace='$usedtrace'
 usefaststdio='$usefaststdio'
-usei18n_lang='$i18n_lang'
 useithreads='$useithreads'
 usekernprocpathname='$usekernprocpathname'
+uselanginfo='$uselanginfo'
 uselargefiles='$uselargefiles'
 uselongdouble='$uselongdouble'
 usemallocwrap='$usemallocwrap'

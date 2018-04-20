@@ -39,6 +39,7 @@ Individual members of C<PL_parser> have their own documentation.
 #define PERL_IN_TOKE_C
 #include "perl.h"
 #include "dquote_inline.h"
+#include "invlist_inline.h"
 
 #define new_constant(a,b,c,d,e,f,g)	\
 	S_new_constant(aTHX_ a,b,STR_WITH_LEN(c),d,e,f, g)
@@ -2683,14 +2684,11 @@ S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
             s += 2;
         }
         else {
-            if (! PL_utf8_charname_begin) {
-                U8 flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;
-                PL_utf8_charname_begin = _core_swash_init("utf8",
-                                                        "_Perl_Charname_Begin",
-                                                        &PL_sv_undef,
-                                                        1, 0, NULL, &flags);
-            }
-            if (! swash_fetch(PL_utf8_charname_begin, (U8 *) s, TRUE)) {
+            if (! _invlist_contains_cp(PL_utf8_charname_begin,
+                                       utf8_to_uvchr_buf((U8 *) s,
+                                                         (U8 *) e,
+                                                         NULL)))
+            {
                 goto bad_charname;
             }
             s += UTF8SKIP(s);
@@ -2714,14 +2712,11 @@ S_get_and_check_backslash_N_name(pTHX_ const char* s, const char* const e)
                 s += 2;
             }
             else {
-                if (! PL_utf8_charname_continue) {
-                    U8 flags = _CORE_SWASH_INIT_ACCEPT_INVLIST;
-                    PL_utf8_charname_continue = _core_swash_init("utf8",
-                                                "_Perl_Charname_Continue",
-                                                &PL_sv_undef,
-                                                1, 0, NULL, &flags);
-                }
-                if (! swash_fetch(PL_utf8_charname_continue, (U8 *) s, TRUE)) {
+                if (! _invlist_contains_cp(PL_utf8_charname_continue,
+                                           utf8_to_uvchr_buf((U8 *) s,
+                                                             (U8 *) e,
+                                                             NULL)))
+                {
                     goto bad_charname;
                 }
                 s += UTF8SKIP(s);
@@ -9057,7 +9052,7 @@ S_pending_ident(pTHX)
 		HEK * const stashname = HvNAME_HEK(stash);
 		SV *  const sym = newSVhek(stashname);
                 sv_catpvs(sym, "::");
-                sv_catpvn_flags(sym, PL_tokenbuf+1, tokenbuf_len - 1, (UTF ? SV_CATUTF8 : SV_CATBYTES ));
+                sv_catpvn_flags(sym, PL_tokenbuf+1, tokenbuf_len > 0 ? tokenbuf_len - 1 : 0, (UTF ? SV_CATUTF8 : SV_CATBYTES ));
                 pl_yylval.opval = newSVOP(OP_CONST, 0, sym);
                 pl_yylval.opval->op_private = OPpCONST_ENTERED;
                 if (pit != '&')
@@ -9085,7 +9080,7 @@ S_pending_ident(pTHX)
         && PL_lex_state != LEX_NORMAL
         && !PL_lex_brackets)
     {
-        GV *const gv = gv_fetchpvn_flags(PL_tokenbuf + 1, tokenbuf_len - 1,
+        GV *const gv = gv_fetchpvn_flags(PL_tokenbuf + 1, tokenbuf_len > 0 ? tokenbuf_len - 1 : 0,
                                          ( UTF ? SVf_UTF8 : 0 ) | GV_ADDMG,
                                          SVt_PVAV);
         if ((!gv || ((PL_tokenbuf[0] == '@') ? !GvAV(gv) : !GvHV(gv)))
@@ -9102,11 +9097,11 @@ S_pending_ident(pTHX)
     /* build ops for a bareword */
     pl_yylval.opval = newSVOP(OP_CONST, 0,
 				   newSVpvn_flags(PL_tokenbuf + 1,
-						      tokenbuf_len - 1,
+                                                      tokenbuf_len > 0 ? tokenbuf_len - 1 : 0,
                                                       UTF ? SVf_UTF8 : 0 ));
     pl_yylval.opval->op_private = OPpCONST_ENTERED;
     if (pit != '&')
-	gv_fetchpvn_flags(PL_tokenbuf+1, tokenbuf_len - 1,
+        gv_fetchpvn_flags(PL_tokenbuf+1, tokenbuf_len > 0 ? tokenbuf_len - 1 : 0,
 		     (PL_in_eval ? GV_ADDMULTI : GV_ADD)
                      | ( UTF ? SVf_UTF8 : 0 ),
 		     ((PL_tokenbuf[0] == '$') ? SVt_PV

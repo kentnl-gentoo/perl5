@@ -3899,7 +3899,7 @@ See L<perlfunc/pack>.
 
 (F) Transliteration (C<tr///> and C<y///>) transliterates individual
 characters.  But a named sequence by definition is more than an
-individual charater, and hence doing this operation on it doesn't make
+individual character, and hence doing this operation on it doesn't make
 sense.
 
 =item "my sub" not yet implemented
@@ -4273,7 +4273,7 @@ find out what kind of ref it really was.  See L<perlref>.
 =item '#' not allowed immediately following a sigil in a subroutine signature
 
 (F) In a subroutine signature definition, a comment following a sigil
-(C<$>, C<@> or C<%>), needs to be separated by whitespace or a commma etc., in
+(C<$>, C<@> or C<%>), needs to be separated by whitespace or a comma etc., in
 particular to avoid confusion with the C<$#> variable.  For example:
 
     # bad
@@ -5875,10 +5875,10 @@ C<can> may break this.
 
 (F) When subroutine signatures are enabled, any subroutine attributes must
 come before the signature. Note that this order was the opposite in
-versions 5.20..5.26. So:
+versions 5.22..5.26. So:
 
-    sub foo :lvalue ($a, $b) { ... }  # 5.18 and 5.28 +
-    sub foo ($a, $b) :lvalue { ... }  # 5.20 .. 5.26
+    sub foo :lvalue ($a, $b) { ... }  # 5.20 and 5.28 +
+    sub foo ($a, $b) :lvalue { ... }  # 5.22 .. 5.26
 
 =item Subroutine "&%s" is not available
 
@@ -7220,6 +7220,12 @@ scope is deprecated and should be avoided.
 
 This was deprecated in Perl 5.12.
 
+=item Use of '%s' in \p{} or \P{} is deprecated because: %s
+
+(D deprecated) Certain properties are deprecated by Unicode, and may
+eventually be removed from the Standard, at which time Perl will follow
+along.  In the meantime, this message is raised to notify you.
+
 =item Use of inherited AUTOLOAD for non-method %s::%s() is no longer allowed
 
 (F) As an accidental feature, C<AUTOLOAD> subroutines were looked up as
@@ -7359,7 +7365,7 @@ of the returned sequence, which is not likely what you want.
 (W regexp) You used a Unicode boundary (C<\b{...}> or C<\B{...}>) in a
 portion of a regular expression where the character set modifiers C</a>
 or C</aa> are in effect.  These two modifiers indicate an ASCII
-interpretation, and this doesn't make sense for a Unicode defintion.
+interpretation, and this doesn't make sense for a Unicode definition.
 The generated regular expression will compile so that the boundary uses
 all of Unicode.  No other portion of the regular expression is affected.
 
@@ -7606,13 +7612,20 @@ under L<perlsyn/Experimental Details on given and when>.
 
 =item Wide character in %s
 
-(S utf8) Perl met a wide character (>255) when it wasn't expecting
-one.  This warning is by default on for I/O (like print).  The easiest
-way to quiet this warning is simply to add the C<:utf8> layer to the
-output, e.g. C<binmode STDOUT, ':utf8'>.  Another way to turn off the
-warning is to add C<no warnings 'utf8';> but that is often closer to
+(S utf8) Perl met a wide character (ordinal >255) when it wasn't
+expecting one.  This warning is by default on for I/O (like print).
+
+If this warning does come from I/O, the easiest
+way to quiet it is simply to add the C<:utf8> layer, I<e.g.>,
+S<C<binmode STDOUT, ':utf8'>>.  Another way to turn off the warning is
+to add S<C<no warnings 'utf8';>> but that is often closer to
 cheating.  In general, you are supposed to explicitly mark the
 filehandle with an encoding, see L<open> and L<perlfunc/binmode>.
+
+If the warning comes from other than I/O, this diagnostic probably
+indicates that incorrect results are being obtained.  You should examine
+your code to determine how a wide character is getting to an operation
+that doesn't handle them.
 
 =item Wide character (U+%X) in %s
 
